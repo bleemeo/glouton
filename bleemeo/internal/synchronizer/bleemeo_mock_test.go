@@ -366,7 +366,7 @@ func (wcm *wrapperClientMock) UpdateMetric(_ context.Context, id string, payload
 		MetricPayload: metric,
 	}
 
-	// A DecoderHook is needed to convert the {"active": "True"} into a boolean
+	// A DecoderHook is necessary to convert the {"active": "True"} into a boolean
 	err := newMapstructJSONDecoder(&metricW, func(from, to reflect.Kind, v any) (any, error) {
 		if from == reflect.String && to == reflect.Bool {
 			return strconv.ParseBool(v.(string)) //nolint: forcetypeassert
@@ -394,7 +394,15 @@ func (wcm *wrapperClientMock) UpdateMetric(_ context.Context, id string, payload
 	return wcm.resources.metrics.applyPatchHook(metric, &wcm.errorsCount)
 }
 
-func (wcm *wrapperClientMock) ListActiveMetrics(_ context.Context, active bool) ([]bleemeoapi.MetricPayload, error) {
+func (wcm *wrapperClientMock) ListActiveMetrics(ctx context.Context) ([]bleemeoapi.MetricPayload, error) {
+	return wcm.listMetrics(ctx, true, nil)
+}
+
+func (wcm *wrapperClientMock) ListInactiveMetrics(ctx context.Context, stopSearchingPredicate func(string) bool) ([]bleemeoapi.MetricPayload, error) {
+	return wcm.listMetrics(ctx, false, stopSearchingPredicate)
+}
+
+func (wcm *wrapperClientMock) listMetrics(_ context.Context, active bool, _ func(string) bool) ([]bleemeoapi.MetricPayload, error) {
 	wcm.requestCounts[mockAPIResourceMetric]++
 
 	metrics := wcm.resources.metrics.filterResources(func(m bleemeoapi.MetricPayload) bool {

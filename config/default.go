@@ -321,6 +321,7 @@ func DefaultConfig() Config { //nolint:maintidx
 			Timeout: 5,
 		},
 		ServiceAbsentDeactivationDelay: 7 * 24 * time.Hour,
+		ServiceIgnore:                  []NameInstance{},
 		ServiceIgnoreCheck:             []NameInstance{},
 		ServiceIgnoreMetrics:           []NameInstance{},
 		Services:                       []Service{},

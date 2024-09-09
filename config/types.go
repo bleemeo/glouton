@@ -43,10 +43,11 @@ type Config struct {
 	NetworkInterfaceDenylist       []string             `yaml:"network_interface_denylist"`
 	NRPE                           NRPE                 `yaml:"nrpe"`
 	NvidiaSMI                      NvidiaSMI            `yaml:"nvidia_smi"`
-	ServiceAbsentDeactivationDelay time.Duration        `yaml:"service_absent_deactivation_delay"`
-	ServiceIgnoreCheck             []NameInstance       `yaml:"service_ignore_check"`
-	ServiceIgnoreMetrics           []NameInstance       `yaml:"service_ignore_metrics"`
 	Services                       []Service            `yaml:"service"`
+	ServiceAbsentDeactivationDelay time.Duration        `yaml:"service_absent_deactivation_delay"`
+	ServiceIgnore                  []NameInstance       `yaml:"service_ignore"`
+	ServiceIgnoreMetrics           []NameInstance       `yaml:"service_ignore_metrics"`
+	ServiceIgnoreCheck             []NameInstance       `yaml:"service_ignore_check"`
 	Smart                          Smart                `yaml:"smart"`
 	Tags                           []string             `yaml:"tags"`
 	Telegraf                       Telegraf             `yaml:"telegraf"`

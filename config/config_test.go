@@ -311,6 +311,12 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			},
 		},
 		ServiceAbsentDeactivationDelay: 7 * 24 * time.Hour,
+		ServiceIgnore: []NameInstance{
+			{
+				Name:     "nginx",
+				Instance: "container:*",
+			},
+		},
 		ServiceIgnoreMetrics: []NameInstance{
 			{
 				Name:     "redis",

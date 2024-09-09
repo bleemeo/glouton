@@ -1,8 +1,8 @@
 $versionUrl = "https://packages.bleemeo.com/bleemeo-agent/VERSION"
 $baseMsiUrl = "https://packages.bleemeo.com/bleemeo-agent/windows/"
 $localPackageName = "Glouton"
-$tempPath = [System.IO.Path]::GetTempPath()
 $logOutFile = "C:\ProgramData\glouton\auto_update.txt"
+$autoUpgradeMarker = "C:\ProgramData\glouton\auto_update"
 $logTmpFile = New-TemporaryFile
 Out-File -FilePath $logTmpFile -Encoding ascii
 Add-Content -Path $logTmpFile -Value "Auto update started at $(Get-Date)"
@@ -59,6 +59,7 @@ Add-Content -Path $logTmpFile -Value "Local version: $localVersion"
 if ($remoteVersion -and $localVersion -and ([Version]($remoteVersion) -gt [Version]($localVersion))) {
     Write-Output "New version available. Updating package..."
     Add-Content -Path $logTmpFile -Value "New version available. Updating package..."
+    New-Item -Path $autoUpgradeMarker
     $msiPath = Download-MSI -version $remoteVersion
     Update-Package -msiPath $msiPath
     Remove-Item $msiPath
@@ -67,6 +68,7 @@ if ($remoteVersion -and $localVersion -and ([Version]($remoteVersion) -gt [Versi
 } elseif ($remoteVersion -and -not $localVersion) {
     Write-Output "Local version not found. Installing package..."
     Add-Content -Path $logTmpFile -Value "Local version not found. Installing package..."
+    New-Item -Path $autoUpgradeMarker
     $msiPath = Download-MSI -version $remoteVersion
     Update-Package -msiPath $msiPath
     Remove-Item $msiPath

@@ -22,7 +22,7 @@ import (
 	"github.com/bleemeo/glouton/config"
 )
 
-func TestIsCheckIgnored(t *testing.T) { //nolint:maintidx
+func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 	checksIgnored := []config.NameInstance{
 		{
 			Name: "mysql",

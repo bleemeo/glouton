@@ -464,7 +464,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 				}
 			}
 
-			if exists, _ := pp.ps.PidExists(int32(p.PID)); !exists {
+			if exists, _ := pp.ps.PidExists(int32(p.PID)); !exists { //nolint:gosec
 				logger.V(2).Printf("Skipping process %d (%s) terminated recently", p.PID, p.Name)
 				delete(newProcessesMap, p.PID)
 
@@ -483,7 +483,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 					newProcessesDiscoveryInfoMap[p.PID] = processDiscoveryInfo{cgroupHash: cgroupHash}
 				default:
 					// Check another time because the process may have terminated while findContainerOfProcess is running
-					if exists, _ := pp.ps.PidExists(int32(p.PID)); !exists {
+					if exists, _ := pp.ps.PidExists(int32(p.PID)); !exists { //nolint:gosec
 						logger.V(2).Printf("Skipping process %d (%s) terminated very recently (2nd check)", p.PID, p.Name)
 						delete(newProcessesMap, p.PID)
 
@@ -717,7 +717,7 @@ func (pp *ProcessProvider) baseTopinfo() (result TopInfo, err error) {
 		return result, err
 	}
 
-	result.Uptime = int(uptime)
+	result.Uptime = int(uptime) //nolint:gosec
 
 	result.Loads, err = getCPULoads()
 	if err != nil {

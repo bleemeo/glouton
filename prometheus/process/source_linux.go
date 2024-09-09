@@ -169,7 +169,7 @@ func (c *Processes) Processes(ctx context.Context, maxAge time.Duration) (proces
 
 		executable, ok := exeCache[p.ID]
 		if !ok {
-			psProc, err := process.NewProcess(int32(p.ID.Pid))
+			psProc, err := process.NewProcess(int32(p.ID.Pid)) //nolint:gosec
 			if err == nil {
 				executable, _ = psProc.ExeWithContext(ctx)
 			}
@@ -187,8 +187,8 @@ func (c *Processes) Processes(ctx context.Context, maxAge time.Duration) (proces
 
 		newUserCache[p.ID] = username
 
-		startTime := time.Unix(int64(c.source.BootTime), 0).UTC()
-		startTime = startTime.Add(time.Second / userHZ * time.Duration(p.procStat.Starttime))
+		startTime := time.Unix(int64(c.source.BootTime), 0).UTC()                             //nolint:gosec
+		startTime = startTime.Add(time.Second / userHZ * time.Duration(p.procStat.Starttime)) //nolint:gosec
 
 		cmdline, err := p.getCmdline()
 		if err != nil {
@@ -360,7 +360,7 @@ func getProcCache(p proc.Proc) (unsafe.Pointer, error) {
 		return nil, fmt.Errorf("%w, expected proccache, got %v", errChangedInternal, value.Type().Name())
 	}
 
-	ptr := unsafe.Pointer(value.UnsafeAddr())
+	ptr := unsafe.Pointer(value.UnsafeAddr()) //nolint:gosec
 	if uintptr(ptr) == 0 {
 		return nil, errNullPointer
 	}
