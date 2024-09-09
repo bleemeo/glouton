@@ -321,6 +321,7 @@ func DefaultConfig() Config { //nolint:maintidx
 			BinPath: "/usr/bin/nvidia-smi",
 			Timeout: 5,
 		},
+		ServiceIgnore:        []NameInstance{},
 		ServiceIgnoreCheck:   []NameInstance{},
 		ServiceIgnoreMetrics: []NameInstance{},
 		Services:             []Service{},

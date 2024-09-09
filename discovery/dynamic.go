@@ -49,6 +49,7 @@ type Option struct {
 	Netstat            netstatProvider
 	ContainerInfo      containerInfoProvider
 	IsContainerIgnored func(facts.Container) bool
+	IsServiceIgnored   func(Service) bool
 	FileReader         fileReader
 	DefaultStack       string
 }
@@ -428,6 +429,10 @@ func (dd *DynamicDiscovery) serviceFromProcess(process facts.Process, netstat ma
 		if !ok || dd.option.IsContainerIgnored(service.container) {
 			return Service{}, false
 		}
+	}
+
+	if dd.option.IsServiceIgnored != nil && dd.option.IsServiceIgnored(service) {
+		return Service{}, false
 	}
 
 	di := getDiscoveryInfo(dd.now(), &service, netstat, process.PID)

@@ -467,6 +467,7 @@ func serviceDeactivate(ctx context.Context, execution types.SynchronizationExecu
 				Instance:        service.Instance,
 				ListenAddresses: service.ListenAddresses,
 				ExePath:         service.ExePath,
+				Tags:            service.Tags,
 			},
 			AgentID: agentID,
 		},

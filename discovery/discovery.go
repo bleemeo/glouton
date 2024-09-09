@@ -47,9 +47,9 @@ const localhostIP = "127.0.0.1"
 // discoveryTimeout is the time limit for a discovery.
 const discoveryTimeout = time.Minute
 
-// Discovery implement the full discovery mecanisme. It will take information
-// from both the dynamic discovery (service currently running) and previously
-// detected services.
+// Discovery implements the full discovery mechanism.
+// It will take information from both the dynamic discovery
+// (service currently running) and previously detected services.
 // It will configure metrics input and add them to a Collector.
 type Discovery struct {
 	l sync.Mutex
@@ -67,6 +67,7 @@ type Discovery struct {
 	containerInfo         containerInfoProvider
 	state                 State
 	servicesOverride      map[NameInstance]config.Service
+	isServiceIgnored      func(Service) bool
 	isCheckIgnored        func(Service) bool
 	isInputIgnored        func(Service) bool
 	isContainerIgnored    func(facts.Container) bool
@@ -104,6 +105,7 @@ func New(
 	state State,
 	containerInfo containerInfoProvider,
 	servicesOverride []config.Service,
+	isServiceIgnored func(Service) bool,
 	isCheckIgnored func(Service) bool,
 	isInputIgnored func(Service) bool,
 	isContainerIgnored func(c facts.Container) bool,
@@ -133,6 +135,7 @@ func New(
 		activeCheck:                    make(map[NameInstance]CheckDetails),
 		state:                          state,
 		servicesOverride:               servicesOverrideMap,
+		isServiceIgnored:               isServiceIgnored,
 		isCheckIgnored:                 isCheckIgnored,
 		isInputIgnored:                 isInputIgnored,
 		isContainerIgnored:             isContainerIgnored,
@@ -469,6 +472,12 @@ func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) error {
 	}
 
 	for _, service := range r {
+		if d.isServiceIgnored != nil && d.isServiceIgnored(service) {
+			logger.V(2).Printf("Fully ignoring service %s/%s", service.Name, service.Instance)
+
+			continue
+		}
+
 		key := NameInstance{
 			Name:     service.Name,
 			Instance: service.Instance,
@@ -757,6 +766,12 @@ func (d *Discovery) ignoreServicesAndPorts() {
 
 		if d.isInputIgnored != nil {
 			service.MetricsIgnored = d.isInputIgnored(service)
+		}
+
+		if d.isServiceIgnored != nil && d.isServiceIgnored(service) {
+			delete(d.servicesMap, nameContainer)
+
+			continue
 		}
 
 		if len(service.IgnoredPorts) > 0 {

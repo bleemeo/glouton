@@ -44,6 +44,7 @@ type Config struct {
 	NRPE                     NRPE                 `yaml:"nrpe"`
 	NvidiaSMI                NvidiaSMI            `yaml:"nvidia_smi"`
 	Services                 []Service            `yaml:"service"`
+	ServiceIgnore            []NameInstance       `yaml:"service_ignore"`
 	ServiceIgnoreMetrics     []NameInstance       `yaml:"service_ignore_metrics"`
 	ServiceIgnoreCheck       []NameInstance       `yaml:"service_ignore_check"`
 	Smart                    Smart                `yaml:"smart"`
