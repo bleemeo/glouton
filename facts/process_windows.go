@@ -165,7 +165,7 @@ func retrieveCmdLine(h windows.Handle) (cmdline string, err error) {
 
 	str := *(*UnicodeString)(unsafe.Pointer(&buf[0]))
 
-	return windows.UTF16PtrToString((*uint16)(str.Buffer)), nil
+	return windows.UTF16PtrToString((*uint16)(str.Buffer)), nil //nolint: gosec
 }
 
 func retrieveUsername(h windows.Handle) (string, error) {
@@ -195,21 +195,21 @@ func parseProcessData(process *SystemProcessInformationStruct) (res Process, ok 
 	}
 
 	res = Process{
-		PID: int(process.UniqueProcessID),
+		PID: int(process.UniqueProcessID), //nolint: gosec
 	}
 
 	res.CreateTime = windowsTimeToTime(process.CreateTime)
 	res.CreateTimestamp = res.CreateTime.Unix()
 
 	// this is the best approximation of the parent process we can get cheaply
-	res.PPID = int(process.InheritedFromUniqueProcessID)
+	res.PPID = int(process.InheritedFromUniqueProcessID) //nolint: gosec
 
 	res.MemoryRSS = uint64(process.WorkingSetSize) / 1024
 
 	// increments of 100ns -> convert to seconds
 	res.CPUTime = (float64(process.UserTime) + float64(process.KernelTime)) / 10000000.
 
-	imageName := (*uint16)(process.ImageName.Buffer)
+	imageName := (*uint16)(process.ImageName.Buffer) //nolint: gosec
 	if imageName != nil {
 		res.Executable = windows.UTF16PtrToString(imageName)
 	}
@@ -219,7 +219,7 @@ func parseProcessData(process *SystemProcessInformationStruct) (res Process, ok 
 		res.Name = exec[len(exec)-1]
 	}
 
-	if processHandle, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(process.UniqueProcessID)); err == nil {
+	if processHandle, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(process.UniqueProcessID)); err == nil { //nolint: gosec
 		if user, err := retrieveUsername(processHandle); err == nil {
 			res.Username = user
 		}
@@ -243,7 +243,7 @@ func parseProcessData(process *SystemProcessInformationStruct) (res Process, ok 
 			var i int32
 
 			for i = range argc {
-				res.CmdLineList = append(res.CmdLineList, windows.UTF16PtrToString((*uint16)(unsafe.Pointer(&argv[i][0]))))
+				res.CmdLineList = append(res.CmdLineList, windows.UTF16PtrToString((*uint16)(unsafe.Pointer(&argv[i][0])))) //nolint: gosec
 			}
 		} else {
 			res.CmdLineList = []string{res.CmdLine}

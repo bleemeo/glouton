@@ -291,7 +291,7 @@ func (d *Data) Processes(w http.ResponseWriter, r *http.Request) {
 				CreateTime:  process.CreateTime,
 				Cmdline:     process.CmdLine,
 				Name:        process.Name,
-				MemoryRss:   int(process.MemoryRSS),
+				MemoryRss:   int64(process.MemoryRSS), //nolint:gosec
 				CPUPercent:  process.CPUPercent,
 				CPUTime:     process.CPUTime,
 				Status:      string(process.Status),

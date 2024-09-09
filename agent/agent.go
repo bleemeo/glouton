@@ -744,7 +744,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	if err != nil {
 		logger.V(2).Printf("failed to get uptime: %v", err)
 	} else {
-		uptime := time.Duration(uptimeRaw) * time.Second
+		uptime := time.Duration(uptimeRaw) * time.Second //nolint:gosec
 		boottime := time.Now().Add(-uptime)
 		logger.V(2).Printf("uptime: system booted %s ago, at %s", uptime, boottime.Format(time.RFC3339))
 	}
@@ -753,7 +753,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	if err != nil {
 		logger.V(2).Printf("failed to get bootime: %v", err)
 	} else {
-		boottime := time.UnixMilli(int64(boottimeRaw) * 1000)
+		boottime := time.Unix(int64(boottimeRaw), 0) //nolint:gosec
 		uptime := time.Since(boottime).Truncate(time.Second)
 		logger.V(2).Printf("bootime: system booted at %s, %s ago", boottime.Format(time.RFC3339), uptime)
 	}
@@ -1027,7 +1027,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 		a.jmx = &jmxtrans.JMX{
 			OutputConfigurationFile:       a.config.JMXTrans.ConfigFile,
-			OutputConfigurationPermission: os.FileMode(perm),
+			OutputConfigurationPermission: os.FileMode(perm), //nolint:gosec
 			ContactPort:                   a.config.JMXTrans.GraphitePort,
 			Pusher:                        a.gathererRegistry.WithTTL(5 * time.Minute),
 		}

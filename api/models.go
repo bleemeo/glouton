@@ -103,7 +103,7 @@ type Process struct {
 	CreateTime  time.Time `json:"create_time"`
 	Cmdline     string    `json:"cmdline"`
 	Name        string    `json:"name"`
-	MemoryRss   int       `json:"memory_rss"`
+	MemoryRss   int64     `json:"memory_rss"`
 	CPUPercent  float64   `json:"cpu_percent"`
 	CPUTime     float64   `json:"cpu_time"`
 	Status      string    `json:"status"`
