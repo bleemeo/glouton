@@ -62,8 +62,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				Enable:  true,
 				Address: "http://example.com",
 			},
-			MetricsFormat:                  "prometheus",
-			AbsentServiceDeactivationDelay: 7 * 24 * time.Hour,
+			MetricsFormat: "prometheus",
 		},
 		Blackbox: Blackbox{
 			Enable:          true,
@@ -311,6 +310,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				ExcludedItems: []string{"excluded"},
 			},
 		},
+		ServiceAbsentDeactivationDelay: 7 * 24 * time.Hour,
 		ServiceIgnore: []NameInstance{
 			{
 				Name:     "nginx",
@@ -907,6 +907,16 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
+			Name:  "deprecated_service_absent_deactivation_delay",
+			Files: []string{"testdata/deprecated_service_absent_deactivation_delay.conf"},
+			WantWarnings: []string{
+				"testdata/deprecated_service_absent_deactivation_delay.conf: setting is deprecated: agent.absent_service_deactivation_delay, use service_absent_deactivation_delay instead",
+			},
+			WantConfig: Config{
+				ServiceAbsentDeactivationDelay: 42 * time.Hour,
+			},
+		},
+		{
 			Name:  "multiple_deprecated_same_file",
 			Files: []string{"testdata/multiple_deprecated_same_file.conf", "testdata/multiple_deprecated_same_file2.conf"},
 			WantWarnings: []string{
@@ -1000,15 +1010,14 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 func TestStateLoading(t *testing.T) {
 	defaultAgentCfg := DefaultConfig().Agent
 	agentCfg := Agent{ // Avoids repeating all these lines in every test case
-		EnableCrashReporting:           defaultAgentCfg.EnableCrashReporting,
-		MaxCrashReportsCount:           defaultAgentCfg.MaxCrashReportsCount,
-		ProcessExporter:                defaultAgentCfg.ProcessExporter,
-		PublicIPIndicator:              defaultAgentCfg.PublicIPIndicator,
-		NodeExporter:                   defaultAgentCfg.NodeExporter,
-		WindowsExporter:                defaultAgentCfg.WindowsExporter,
-		Telemetry:                      defaultAgentCfg.Telemetry,
-		MetricsFormat:                  defaultAgentCfg.MetricsFormat,
-		AbsentServiceDeactivationDelay: defaultAgentCfg.AbsentServiceDeactivationDelay,
+		EnableCrashReporting: defaultAgentCfg.EnableCrashReporting,
+		MaxCrashReportsCount: defaultAgentCfg.MaxCrashReportsCount,
+		ProcessExporter:      defaultAgentCfg.ProcessExporter,
+		PublicIPIndicator:    defaultAgentCfg.PublicIPIndicator,
+		NodeExporter:         defaultAgentCfg.NodeExporter,
+		WindowsExporter:      defaultAgentCfg.WindowsExporter,
+		Telemetry:            defaultAgentCfg.Telemetry,
+		MetricsFormat:        defaultAgentCfg.MetricsFormat,
 	}
 
 	cases := []struct {
