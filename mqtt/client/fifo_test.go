@@ -110,8 +110,6 @@ func doesTimeout[T any](duration time.Duration, fn func(), queue *fifo[T]) (time
 
 func TestMethods(t *testing.T) {
 	t.Run("Put", func(t *testing.T) {
-		t.Parallel()
-
 		queue := newFifo[string](2)
 		ctx, cancel := context.WithCancel(context.Background())
 
