@@ -381,22 +381,22 @@ func isMultiUnwrap(err error) bool {
 // movedKeys return all keys that were moved. The map is old key => new key.
 func movedKeys() map[string]string {
 	keys := map[string]string{
-		"agent.windows_exporter.enabled":  "agent.windows_exporter.enable",
-		"agent.http_debug.enabled":        "web.endpoints.debug_enable",
 		"agent.http_debug.enable":         "web.endpoints.debug_enable",
-		"kubernetes.enabled":              "kubernetes.enable",
-		"blackbox.enabled":                "blackbox.enable",
+		"agent.http_debug.enabled":        "web.endpoints.debug_enable",
+		"agent.node_exporter.enabled":     "agent.node_exporter.enable",
 		"agent.process_exporter.enabled":  "agent.process_exporter.enable",
-		"web.enabled":                     "web.enable",
+		"agent.telemetry.enabled":         "agent.telemetry.enable",
+		"agent.windows_exporter.enabled":  "agent.windows_exporter.enable",
+		"blackbox.enabled":                "blackbox.enable",
 		"bleemeo.enabled":                 "bleemeo.enable",
 		"jmx.enabled":                     "jmx.enable",
-		"nrpe.enabled":                    "nrpe.enable",
-		"zabbix.enabled":                  "zabbix.enable",
-		"telegraf.statsd.enabled":         "telegraf.statsd.enable",
-		"agent.telemetry.enabled":         "agent.telemetry.enable",
-		"agent.node_exporter.enabled":     "agent.node_exporter.enable",
-		"telegraf.docker_metrics_enabled": "telegraf.docker_metrics_enable",
+		"kubernetes.enabled":              "kubernetes.enable",
 		"network_interface_blacklist":     "network_interface_denylist",
+		"nrpe.enabled":                    "nrpe.enable",
+		"telegraf.docker_metrics_enabled": "telegraf.docker_metrics_enable",
+		"telegraf.statsd.enabled":         "telegraf.statsd.enable",
+		"web.enabled":                     "web.enable",
+		"zabbix.enabled":                  "zabbix.enable",
 	}
 
 	return keys
