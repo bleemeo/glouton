@@ -29,6 +29,7 @@ import (
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
+	gloutonTypes "github.com/bleemeo/glouton/types"
 )
 
 const (
@@ -377,7 +378,15 @@ func (cl *wrapperClient) UpdateMetric(ctx context.Context, id string, payload an
 	return cl.Update(ctx, bleemeo.ResourceMetric, id, payload, fields, nil)
 }
 
-func (cl *wrapperClient) ListActiveMetrics(ctx context.Context, active bool) ([]bleemeoapi.MetricPayload, error) {
+func (cl *wrapperClient) ListActiveMetrics(ctx context.Context) ([]bleemeoapi.MetricPayload, error) {
+	return cl.listMetrics(ctx, true, nil)
+}
+
+func (cl *wrapperClient) ListInactiveMetrics(ctx context.Context, stopSearchingPredicate func(labelsText string) bool) ([]bleemeoapi.MetricPayload, error) {
+	return cl.listMetrics(ctx, false, stopSearchingPredicate)
+}
+
+func (cl *wrapperClient) listMetrics(ctx context.Context, active bool, stopSearchingPredicate func(labelsText string) bool) ([]bleemeoapi.MetricPayload, error) {
 	params := url.Values{
 		"fields": {metricFields},
 	}
@@ -399,6 +408,17 @@ func (cl *wrapperClient) ListActiveMetrics(ctx context.Context, active bool) ([]
 		}
 
 		metrics = append(metrics, metric)
+
+		if stopSearchingPredicate != nil {
+			labelsText := metric.LabelsText
+			if labelsText == "" {
+				labelsText = gloutonTypes.LabelsToText(metric.Labels)
+			}
+
+			if stopSearchingPredicate(labelsText) {
+				break
+			}
+		}
 	}
 
 	return metrics, iter.Err()
