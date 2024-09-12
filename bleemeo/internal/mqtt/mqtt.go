@@ -388,6 +388,7 @@ func (c *Client) HealthCheck() bool {
 	defer c.l.Unlock()
 
 	lastAckAge := time.Since(c.lastAck)
+
 	if c.lastAck.IsZero() {
 		startAge := time.Since(c.startedAt)
 		logger.V(1).Printf("Never received ack from Bleemeo and agent is running since %s (%s ago)", c.startedAt.Format(time.RFC3339), startAge)
