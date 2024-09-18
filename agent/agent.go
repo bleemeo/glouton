@@ -1385,6 +1385,10 @@ func (a *agent) registerInputs(ctx context.Context) {
 	if a.config.Smart.Enable {
 		input, opts, err := smart.New(a.config.Smart)
 		a.registerInput("SMART", input, opts, err)
+
+		a.factProvider.SetFact("smartctl_installed", strconv.FormatBool(err == nil))
+	} else {
+		a.factProvider.SetFact("smartctl_installed", "false")
 	}
 
 	if a.config.Mdstat.Enable {
@@ -1393,7 +1397,11 @@ func (a *agent) registerInputs(ctx context.Context) {
 	}
 
 	if a.config.IPMI.Enable {
-		gatherer := ipmi.New(a.config.IPMI)
+		factStatusFn := func(enable bool) {
+			a.factProvider.SetFact("ipmi_installed", strconv.FormatBool(enable))
+		}
+
+		gatherer := ipmi.New(a.config.IPMI, factStatusFn)
 
 		_, err := a.gathererRegistry.RegisterGatherer(
 			registry.RegistrationOption{
@@ -1406,6 +1414,8 @@ func (a *agent) registerInputs(ctx context.Context) {
 		if err != nil {
 			logger.V(1).Printf("unable to add IPMI input: %v", err)
 		}
+	} else {
+		a.factProvider.SetFact("ipmi_installed", "false")
 	}
 
 	input, opts, err := temp.New()

@@ -381,7 +381,7 @@ func Test_GatherWithState(t *testing.T) { //nolint:maintidx
 				return os.ReadFile(cmd[1])
 			}
 
-			g := newGatherer(tt.config, testRunCMD)
+			g := newGatherer(tt.config, testRunCMD, func(bool) {})
 
 			mfs, err := g.Gather()
 			if err != nil {

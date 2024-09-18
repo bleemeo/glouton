@@ -68,12 +68,13 @@ const (
 )
 
 type Gatherer struct {
-	l              sync.Mutex
-	cfg            config.IPMI
-	lastOutput     []byte
-	initFullOutput []byte
-	runCmd         runFunction
-	usedMethod     ipmiMethod
+	l                  sync.Mutex
+	cfg                config.IPMI
+	lastOutput         []byte
+	initFullOutput     []byte
+	runCmd             runFunction
+	usedMethod         ipmiMethod
+	factStatusCallback func(bool)
 }
 
 type sensorData struct {
@@ -96,8 +97,8 @@ type powerReading struct {
 // New returns a new IPMI gatherer.
 // The Gatherer will probe for IPMI availability on first call and if unavailable will
 // do nothing on subsequent calls. It will use either freeipmi (preferred) or ipmitool.
-func New(cfg config.IPMI) *Gatherer {
-	return newGatherer(cfg, runCmd)
+func New(cfg config.IPMI, factStatusCallback func(enabled bool)) *Gatherer {
+	return newGatherer(cfg, runCmd, factStatusCallback)
 }
 
 func (g *Gatherer) Gather() ([]*dto.MetricFamily, error) {
@@ -154,6 +155,8 @@ func (g *Gatherer) GatherWithState(ctx context.Context, _ registry.GatherState) 
 
 		logger.V(1).Printf("All IPMI method failed or timed-out. IPMI metrics are not available")
 
+		g.factStatusCallback(false)
+
 		return nil, nil
 	}
 
@@ -198,6 +201,8 @@ func (g *Gatherer) gatherWithMethod(ctx context.Context, method ipmiMethod, isIn
 
 	switch method { //nolint:exhaustive
 	case methodNoIPMIAvailable:
+		g.factStatusCallback(false)
+
 		return nil, nil
 	case methodFreeIPMISensors:
 		cmd = freeipmiSensorsCmd
@@ -207,11 +212,11 @@ func (g *Gatherer) gatherWithMethod(ctx context.Context, method ipmiMethod, isIn
 		cmd = freeipmiDCMISimple
 	case methodIPMITool:
 		cmd = ipmitoolDCMI
-	}
-
-	if cmd == nil {
+	default:
 		return nil, ErrUnknownMethod
 	}
+
+	g.factStatusCallback(true)
 
 	g.lastOutput, err = g.runCmd(ctx, g.cfg.BinarySearchPath, g.cfg.UseSudo, cmd)
 
@@ -287,7 +292,7 @@ func methodName(method ipmiMethod) string {
 	}
 }
 
-func newGatherer(cfg config.IPMI, runCmd runFunction) *Gatherer {
+func newGatherer(cfg config.IPMI, runCmd runFunction, factStatusCallback func(enabled bool)) *Gatherer {
 	// we never use sudo if we already are root
 	if os.Getuid() == 0 {
 		cfg.UseSudo = false
@@ -297,7 +302,12 @@ func newGatherer(cfg config.IPMI, runCmd runFunction) *Gatherer {
 		cfg.Timeout = int(defaultTimeout.Seconds())
 	}
 
-	return &Gatherer{cfg: cfg, runCmd: runCmd, usedMethod: methodNotInitialized}
+	return &Gatherer{
+		cfg:                cfg,
+		runCmd:             runCmd,
+		usedMethod:         methodNotInitialized,
+		factStatusCallback: factStatusCallback,
+	}
 }
 
 func runCmd(ctx context.Context, searchPath string, useSudo bool, args []string) ([]byte, error) {
