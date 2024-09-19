@@ -1377,16 +1377,20 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 // Registers inputs that are not associated to a service.
 func (a *agent) registerInputs(ctx context.Context) {
+	makeFactCallback := func(name string) func(enable bool) {
+		return func(enable bool) {
+			a.factProvider.SetFact(name, strconv.FormatBool(enable))
+		}
+	}
+
 	if a.config.NvidiaSMI.Enable {
 		input, opts, err := nvidia.New(a.config.NvidiaSMI.BinPath, a.config.NvidiaSMI.Timeout)
 		a.registerInput("NVIDIA SMI", input, opts, err)
 	}
 
 	if a.config.Smart.Enable {
-		input, opts, err := smart.New(a.config.Smart)
+		input, opts, err := smart.New(a.config.Smart, makeFactCallback("smartctl_installed"))
 		a.registerInput("SMART", input, opts, err)
-
-		a.factProvider.SetFact("smartctl_installed", strconv.FormatBool(err == nil))
 	} else {
 		a.factProvider.SetFact("smartctl_installed", "false")
 	}
@@ -1397,11 +1401,7 @@ func (a *agent) registerInputs(ctx context.Context) {
 	}
 
 	if a.config.IPMI.Enable {
-		factStatusFn := func(enable bool) {
-			a.factProvider.SetFact("ipmi_installed", strconv.FormatBool(enable))
-		}
-
-		gatherer := ipmi.New(a.config.IPMI, factStatusFn)
+		gatherer := ipmi.New(a.config.IPMI, makeFactCallback("ipmi_installed"))
 
 		_, err := a.gathererRegistry.RegisterGatherer(
 			registry.RegistrationOption{

@@ -113,6 +113,10 @@ func (g *Gatherer) GatherWithState(ctx context.Context, _ registry.GatherState) 
 		// ensure init is not called twice
 		g.usedMethod = methodNoIPMIAvailable
 
+		defer func() {
+			g.factStatusCallback(g.usedMethod > methodNoIPMIAvailable)
+		}()
+
 		// we do an initialization because the first call we need to decide which method to use (ipmi-sensors vs ipmi-dcmi).
 		// Also very first call of ipmi-sensor could be rather long (because a cache is created).
 		// In addition on system without IPMI (like qemu VM), ipmi commands will hang during 1 minutes.
@@ -154,8 +158,6 @@ func (g *Gatherer) GatherWithState(ctx context.Context, _ registry.GatherState) 
 		}
 
 		logger.V(1).Printf("All IPMI method failed or timed-out. IPMI metrics are not available")
-
-		g.factStatusCallback(false)
 
 		return nil, nil
 	}
@@ -201,8 +203,6 @@ func (g *Gatherer) gatherWithMethod(ctx context.Context, method ipmiMethod, isIn
 
 	switch method { //nolint:exhaustive
 	case methodNoIPMIAvailable:
-		g.factStatusCallback(false)
-
 		return nil, nil
 	case methodFreeIPMISensors:
 		cmd = freeipmiSensorsCmd
@@ -215,8 +215,6 @@ func (g *Gatherer) gatherWithMethod(ctx context.Context, method ipmiMethod, isIn
 	default:
 		return nil, ErrUnknownMethod
 	}
-
-	g.factStatusCallback(true)
 
 	g.lastOutput, err = g.runCmd(ctx, g.cfg.BinarySearchPath, g.cfg.UseSudo, cmd)
 
