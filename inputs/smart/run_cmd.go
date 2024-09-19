@@ -19,6 +19,7 @@ package smart
 import (
 	"context"
 	"encoding/json"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -30,6 +31,8 @@ import (
 )
 
 const maxBuckets = 6
+
+var exitCodeRegexp = regexp.MustCompile(`exit status (\d+)`) // The parentheses are mandatory to detect a submatch.
 
 type runCmdType func(timeout config.Duration, sudo bool, command string, args ...string) ([]byte, error)
 
@@ -152,6 +155,18 @@ func (w *wrappedRunCmd) runCmd(timeout config.Duration, sudo bool, command strin
 		waitDuration:      execStart.Sub(start),
 		errorStr:          errStr,
 	})
+
+	if err != nil {
+		// If the error is due to an exit code != 0,
+		// we only want to stop if it is code 1;
+		// which means that the command line didn't parse.
+		// For more information, see the EXIT STATUS section
+		// of the manpage smartctl(8).
+		matches := exitCodeRegexp.FindStringSubmatch(errStr)
+		if len(matches) == 2 && matches[1] != "1" {
+			err = nil
+		}
+	}
 
 	return output, err
 }
