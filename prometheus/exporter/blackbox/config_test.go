@@ -169,6 +169,11 @@ func TestProcessRegexp(t *testing.T) {
 			expectedMatching: []string{"maintenance", "Maintenance"},
 		},
 		{
+			input:               "abc?",
+			expectedMatching:    []string{"abc?", "aBc?", "ABC?"},
+			expectedNotMatching: []string{"abcd", "abc"},
+		},
+		{
 			input: "plain string with ( closed range ]",
 			// For this case, we just ensure not error is thrown.
 		},

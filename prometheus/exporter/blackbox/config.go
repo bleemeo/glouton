@@ -23,7 +23,7 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"regexp"
+	"regexp/syntax"
 	"time"
 
 	"github.com/bleemeo/glouton/config"
@@ -38,9 +38,6 @@ import (
 var errUnknownModule = errors.New("unknown blackbox module found in your configuration")
 
 const defaultTimeout = 12 * time.Second
-
-// escapeRegexp detects the characters that are considered as special tokens in a regexp.
-var escapeRegexp = regexp.MustCompile(`([$()*+.?\[\\^{|])`)
 
 func defaultModule(userAgent string) bbConf.Module {
 	return bbConf.Module{
@@ -177,9 +174,12 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*co
 // in a case-insensitive way, while ensuring each one of its chars
 // are considered as a normal character and not a joker.
 func processRegexp(input string) (bbConf.Regexp, error) {
-	escapedInput := escapeRegexp.ReplaceAllString(input, "\\${1}")
+	literalRegexp, err := syntax.Parse(input, syntax.Literal|syntax.FoldCase)
+	if err != nil {
+		return bbConf.Regexp{}, err
+	}
 
-	return bbConf.NewRegexp("(?i)" + escapedInput)
+	return bbConf.NewRegexp(literalRegexp.String())
 }
 
 func preprocessHTTPTarget(targetURL *url.URL, module bbConf.Module) (string, bbConf.Module) {
