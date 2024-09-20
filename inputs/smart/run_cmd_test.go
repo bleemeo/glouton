@@ -18,12 +18,15 @@ package smart
 
 import (
 	"math"
+	"os/exec"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
 	_ "unsafe"
 
 	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/version"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/influxdata/telegraf/config"
@@ -285,5 +288,41 @@ func Test_addStats(t *testing.T) {
 
 	if wrapper.globalStats.lastWithError.output != outputValue {
 		t.Error("globalStats.lastWithError is unset")
+	}
+}
+
+func TestIsExitCode1(t *testing.T) {
+	if version.IsWindows() {
+		t.Skip("This test only makes sense on Unix-like systems.")
+	}
+
+	t.Parallel()
+
+	testCases := []struct {
+		err         error
+		expectCode1 bool
+	}{
+		{
+			err:         nil, // successful command
+			expectCode1: false,
+		},
+		{
+			err:         exec.Command("false").Run(),
+			expectCode1: true,
+		},
+		{
+			err:         exec.Command("sh", "-c", "exit 8").Run(),
+			expectCode1: false,
+		},
+	}
+
+	for i, tc := range testCases {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			t.Parallel()
+
+			if isCode1 := isExitCode1(tc.err); isCode1 != tc.expectCode1 {
+				t.Errorf("isExitCode1(%q) = %t, want %t", tc.err, isCode1, tc.expectCode1)
+			}
+		})
 	}
 }

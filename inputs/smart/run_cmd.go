@@ -19,7 +19,8 @@ package smart
 import (
 	"context"
 	"encoding/json"
-	"regexp"
+	"errors"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -31,8 +32,6 @@ import (
 )
 
 const maxBuckets = 6
-
-var exitCodeRegexp = regexp.MustCompile(`exit status (\d+)`) // The parentheses are mandatory to detect a submatch.
 
 type runCmdType func(timeout config.Duration, sudo bool, command string, args ...string) ([]byte, error)
 
@@ -162,8 +161,7 @@ func (w *wrappedRunCmd) runCmd(timeout config.Duration, sudo bool, command strin
 		// which means that the command line didn't parse.
 		// For more information, see the EXIT STATUS section
 		// of the manpage smartctl(8).
-		matches := exitCodeRegexp.FindStringSubmatch(errStr)
-		if len(matches) == 2 && matches[1] != "1" {
+		if isExitCode1(err) {
 			err = nil
 		}
 	}
@@ -172,7 +170,7 @@ func (w *wrappedRunCmd) runCmd(timeout config.Duration, sudo bool, command strin
 }
 
 func (w *wrappedRunCmd) addStats(run smartExecution) {
-	// --scan execution are not added to stats
+	// --scan executions are not added to stats
 	if len(run.args) > 0 && run.args[0] == "--scan" { //nolint: goconst
 		return
 	}
@@ -189,7 +187,7 @@ func (w *wrappedRunCmd) addStats(run smartExecution) {
 	w.buckets[bucketKey] = bucket
 
 	if len(w.buckets) > maxBuckets {
-		// drop olest bucket
+		// drop oldest bucket
 		smallestKey := ""
 		for key := range w.buckets {
 			if smallestKey == "" || key < smallestKey {
@@ -298,4 +296,13 @@ func (e smartExecution) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(state)
+}
+
+func isExitCode1(err error) bool {
+	errExit := new(exec.ExitError)
+	if errors.As(err, &errExit) {
+		return errExit.ExitCode() == 1
+	}
+
+	return false
 }
