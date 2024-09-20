@@ -40,7 +40,7 @@ import (
 var megaraidRegexp = regexp.MustCompile(`^megaraid,(\d+)$`)
 
 // New returns a SMART input.
-func New(config config.Smart, factStatusCallback func(enabled bool)) (telegraf.Input, registry.RegistrationOption, error) {
+func New(config config.Smart, factStatusCallback func(binaryInstalled bool)) (telegraf.Input, registry.RegistrationOption, error) {
 	SetupGlobalWrapper()
 	globalRunCmd.SetConcurrency(config.MaxConcurrency)
 

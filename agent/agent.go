@@ -1377,9 +1377,9 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 // Registers inputs that are not associated to a service.
 func (a *agent) registerInputs(ctx context.Context) {
-	makeFactCallback := func(name string) func(enable bool) {
-		return func(enable bool) {
-			a.factProvider.SetFact(name, strconv.FormatBool(enable))
+	makeFactCallback := func(name string) func(binaryInstalled bool) {
+		return func(binaryInstalled bool) {
+			a.factProvider.SetFact(name, strconv.FormatBool(binaryInstalled))
 		}
 	}
 
@@ -1391,8 +1391,6 @@ func (a *agent) registerInputs(ctx context.Context) {
 	if a.config.Smart.Enable {
 		input, opts, err := smart.New(a.config.Smart, makeFactCallback("smartctl_installed"))
 		a.registerInput("SMART", input, opts, err)
-	} else {
-		a.factProvider.SetFact("smartctl_installed", "false")
 	}
 
 	if a.config.Mdstat.Enable {
@@ -1414,8 +1412,6 @@ func (a *agent) registerInputs(ctx context.Context) {
 		if err != nil {
 			logger.V(1).Printf("unable to add IPMI input: %v", err)
 		}
-	} else {
-		a.factProvider.SetFact("ipmi_installed", "false")
 	}
 
 	input, opts, err := temp.New()
