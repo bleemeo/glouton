@@ -40,7 +40,7 @@ import (
 var megaraidRegexp = regexp.MustCompile(`^megaraid,(\d+)$`)
 
 // New returns a SMART input.
-func New(config config.Smart) (telegraf.Input, registry.RegistrationOption, error) {
+func New(config config.Smart, factStatusCallback func(binaryInstalled bool)) (telegraf.Input, registry.RegistrationOption, error) {
 	SetupGlobalWrapper()
 	globalRunCmd.SetConcurrency(config.MaxConcurrency)
 
@@ -61,11 +61,15 @@ func New(config config.Smart) (telegraf.Input, registry.RegistrationOption, erro
 	if !strings.ContainsRune(config.PathSmartctl, os.PathSeparator) {
 		fullPath, err := exec.LookPath(config.PathSmartctl)
 		if err != nil {
+			factStatusCallback(false)
+
 			return nil, registry.RegistrationOption{}, fmt.Errorf("%w: \"%s\" not found in $PATH", inputs.ErrMissingCommand, config.PathSmartctl)
 		}
 
 		config.PathSmartctl = fullPath
 	}
+
+	factStatusCallback(true)
 
 	// Don't use sudo if we are already root. This is mandatory on TrueNAS... because root isn't allowed
 	// to sudo on TrueNAS

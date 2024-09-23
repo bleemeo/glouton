@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/bleemeo/glouton/config"
@@ -68,12 +69,13 @@ const (
 )
 
 type Gatherer struct {
-	l              sync.Mutex
-	cfg            config.IPMI
-	lastOutput     []byte
-	initFullOutput []byte
-	runCmd         runFunction
-	usedMethod     ipmiMethod
+	l                  sync.Mutex
+	cfg                config.IPMI
+	lastOutput         []byte
+	initFullOutput     []byte
+	runCmd             runFunction
+	usedMethod         ipmiMethod
+	factStatusCallback func(binaryInstalled bool)
 }
 
 type sensorData struct {
@@ -96,8 +98,8 @@ type powerReading struct {
 // New returns a new IPMI gatherer.
 // The Gatherer will probe for IPMI availability on first call and if unavailable will
 // do nothing on subsequent calls. It will use either freeipmi (preferred) or ipmitool.
-func New(cfg config.IPMI) *Gatherer {
-	return newGatherer(cfg, runCmd)
+func New(cfg config.IPMI, factStatusCallback func(binaryInstalled bool)) *Gatherer {
+	return newGatherer(cfg, runCmd, factStatusCallback)
 }
 
 func (g *Gatherer) Gather() ([]*dto.MetricFamily, error) {
@@ -111,6 +113,12 @@ func (g *Gatherer) GatherWithState(ctx context.Context, _ registry.GatherState) 
 	if g.usedMethod == methodNotInitialized {
 		// ensure init is not called twice
 		g.usedMethod = methodNoIPMIAvailable
+
+		isIPMIInstalled := false
+
+		defer func() {
+			g.factStatusCallback(isIPMIInstalled)
+		}()
 
 		// we do an initialization because the first call we need to decide which method to use (ipmi-sensors vs ipmi-dcmi).
 		// Also very first call of ipmi-sensor could be rather long (because a cache is created).
@@ -142,11 +150,16 @@ func (g *Gatherer) GatherWithState(ctx context.Context, _ registry.GatherState) 
 			switch {
 			case err != nil:
 				logger.V(2).Printf("IPMI method %s failed: %v", methodName(method), err)
+
+				isIPMIInstalled = isIPMIInstalled || !(errors.Is(err, exec.ErrNotFound) || strings.HasSuffix(err.Error(), syscall.ENOENT.Error()))
 			case len(points) == 0:
 				logger.V(2).Printf("IPMI method %s returned 0 points", methodName(method))
+
+				isIPMIInstalled = true
 			default:
 				logger.V(2).Printf("IPMI method %s returned %d points. It will be used in future gather", methodName(method), len(points))
 				g.usedMethod = method
+				isIPMIInstalled = true
 
 				return model.MetricPointsToFamilies(points), nil
 			}
@@ -207,9 +220,7 @@ func (g *Gatherer) gatherWithMethod(ctx context.Context, method ipmiMethod, isIn
 		cmd = freeipmiDCMISimple
 	case methodIPMITool:
 		cmd = ipmitoolDCMI
-	}
-
-	if cmd == nil {
+	default:
 		return nil, ErrUnknownMethod
 	}
 
@@ -287,7 +298,7 @@ func methodName(method ipmiMethod) string {
 	}
 }
 
-func newGatherer(cfg config.IPMI, runCmd runFunction) *Gatherer {
+func newGatherer(cfg config.IPMI, runCmd runFunction, factStatusCallback func(binaryInstalled bool)) *Gatherer {
 	// we never use sudo if we already are root
 	if os.Getuid() == 0 {
 		cfg.UseSudo = false
@@ -297,7 +308,12 @@ func newGatherer(cfg config.IPMI, runCmd runFunction) *Gatherer {
 		cfg.Timeout = int(defaultTimeout.Seconds())
 	}
 
-	return &Gatherer{cfg: cfg, runCmd: runCmd, usedMethod: methodNotInitialized}
+	return &Gatherer{
+		cfg:                cfg,
+		runCmd:             runCmd,
+		usedMethod:         methodNotInitialized,
+		factStatusCallback: factStatusCallback,
+	}
 }
 
 func runCmd(ctx context.Context, searchPath string, useSudo bool, args []string) ([]byte, error) {
