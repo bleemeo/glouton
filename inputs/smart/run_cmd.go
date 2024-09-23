@@ -19,6 +19,8 @@ package smart
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -153,11 +155,22 @@ func (w *wrappedRunCmd) runCmd(timeout config.Duration, sudo bool, command strin
 		errorStr:          errStr,
 	})
 
+	if err != nil {
+		// If the error is due to an exit code != 0,
+		// we only want to stop if it is code 1;
+		// which means that the command line didn't parse.
+		// For more information, see the EXIT STATUS section
+		// of the manpage smartctl(8).
+		if isExitCode1(err) {
+			err = nil
+		}
+	}
+
 	return output, err
 }
 
 func (w *wrappedRunCmd) addStats(run smartExecution) {
-	// --scan execution are not added to stats
+	// --scan executions are not added to stats
 	if len(run.args) > 0 && run.args[0] == "--scan" { //nolint: goconst
 		return
 	}
@@ -174,7 +187,7 @@ func (w *wrappedRunCmd) addStats(run smartExecution) {
 	w.buckets[bucketKey] = bucket
 
 	if len(w.buckets) > maxBuckets {
-		// drop olest bucket
+		// drop oldest bucket
 		smallestKey := ""
 		for key := range w.buckets {
 			if smallestKey == "" || key < smallestKey {
@@ -283,4 +296,13 @@ func (e smartExecution) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(state)
+}
+
+func isExitCode1(err error) bool {
+	errExit := new(exec.ExitError)
+	if errors.As(err, &errExit) {
+		return errExit.ExitCode() == 1
+	}
+
+	return false
 }

@@ -90,10 +90,19 @@ func TestParseScanOutput(t *testing.T) {
 		expectedScanSmartctlInvocations int
 	}{
 		{
-			name:                            "firewall",
+			name:                            "firewall1",
 			sgDevices:                       []string{"/dev/sg0", "/dev/sg1", "/dev/sg2", "/dev/sg3"},
 			expectedInitSmartctlInvocations: 6, // 1 scan + 1 info /dev/sda + 4 info /dev/sg_
-			//                               /dev/sda is unusable, but the telegraf input with deal with it.
+			//                               /dev/sda is unusable, but the telegraf input will deal with it.
+			expectedDevices:                 []string{"/dev/sda", "/dev/sg2", "/dev/sg3"},
+			expectedToIgnoreStorageDevices:  false,
+			expectedScanSmartctlInvocations: 1,
+		},
+		{
+			name:                            "firewall2",
+			sgDevices:                       []string{"/dev/sg0", "/dev/sg1", "/dev/sg2", "/dev/sg3"},
+			expectedInitSmartctlInvocations: 6, // 1 scan + 1 info /dev/sda + 4 info /dev/sg_
+			//                               /dev/sda is unusable, but the telegraf input will deal with it.
 			expectedDevices:                 []string{"/dev/sda", "/dev/sg2", "/dev/sg3"},
 			expectedToIgnoreStorageDevices:  false,
 			expectedScanSmartctlInvocations: 1,
@@ -277,7 +286,7 @@ func (smartctlData *SmartctlData) makeRunCmdFor(t *testing.T) runCmdType {
 
 		var err error
 
-		if deviceData.RC != 0 {
+		if deviceData.RC == 1 { // only exit code 1 is fatal
 			// we want to build an &exec.ExitError{ProcessState: &os.ProcessState{}}
 			// but we can't because ProcessState{} only had private field
 			err = errors.New("This should be ExitError with rc=" + strconv.Itoa(deviceData.RC)) //nolint: goerr113 // we can't use the true ExitError. This error shouldn't be re-used

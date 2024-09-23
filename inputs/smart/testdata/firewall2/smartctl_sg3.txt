@@ -1,0 +1,41 @@
+smartctl 7.3 2022-02-28 r5338 [x86_64-linux-6.5.13-1-pve] (local build)
+Copyright (C) 2002-22, Bruce Allen, Christian Franke, www.smartmontools.org
+
+=== START OF INFORMATION SECTION ===
+Vendor:               SEAGATE
+Product:              ST3300657SS
+Revision:             ES64
+Compliance:           SPC-3
+User Capacity:        300,000,000,000 bytes [300 GB]
+Logical block size:   512 bytes
+Rotation Rate:        15000 rpm
+Form Factor:          3.5 inches
+Logical Unit id:      0x5000c50164c6410f
+Serial number:        6SJ3QRQ3
+Device type:          disk
+Transport protocol:   SAS (SPL-4)
+Local Time is:        Mon Sep 16 12:50:42 2024 CEST
+SMART support is:     Available - device has SMART capability.
+SMART support is:     Enabled
+Temperature Warning:  Disabled or Not Supported
+Power mode is:        ACTIVE
+
+=== START OF READ SMART DATA SECTION ===
+SMART Health Status: FAILURE PREDICTION THRESHOLD EXCEEDED: ascq=0x5 [asc=5d, ascq=5]
+
+Current Drive Temperature:     36 C
+Drive Trip Temperature:        68 C
+
+Accumulated power on time, hours:minutes 18404:46
+Elements in grown defect list: 2048
+
+Vendor (Seagate Cache) information
+  Blocks sent to initiator = 3501443830
+  Blocks received from initiator = 1992975332
+  Blocks read from cache and sent to initiator = 3205134124
+  Number of read and write commands whose size <= segment size = 1397584310
+  Number of read and write commands whose size > segment size = 1610047
+
+Vendor (Seagate/Hitachi) factory information
+  number of hours powered up = 18404.78
+  number of minutes until next internal SMART test = 11
