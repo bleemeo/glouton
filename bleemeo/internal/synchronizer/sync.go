@@ -55,7 +55,7 @@ var (
 	errFQDNNotSet                 = errors.New("unable to register, fqdn is not set")
 	errConnectorTemporaryDisabled = errors.New("bleemeo connector temporary disabled")
 	errBleemeoUndefined           = errors.New("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see  https://go.bleemeo.com/l/agent-configuration-bleemeo-account ")
-	errIncorrectStatusCode        = errors.New("registration status code is")
+	errRegistrationFailed         = errors.New("registration failed")
 	errUninitialized              = errors.New("uninitialized")
 	errNotExist                   = errors.New("does not exist")
 )

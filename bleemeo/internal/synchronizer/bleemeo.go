@@ -17,12 +17,14 @@
 package synchronizer
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/bleemeo/bleemeo-go"
@@ -90,7 +92,7 @@ func (cl *wrapperClient) RegisterSelf(ctx context.Context, accountID, password, 
 	}()
 
 	if resp.StatusCode != http.StatusCreated {
-		return "", fmt.Errorf("%w: got %v, want 201", errIncorrectStatusCode, resp.StatusCode)
+		return "", parseRegistrationError(resp.StatusCode, resp.Body)
 	}
 
 	var objectID struct {
@@ -103,6 +105,39 @@ func (cl *wrapperClient) RegisterSelf(ctx context.Context, accountID, password, 
 	}
 
 	return objectID.ID, nil
+}
+
+func parseRegistrationError(code int, body io.Reader) error {
+	content, err := io.ReadAll(io.LimitReader(body, 1024))
+	if err != nil {
+		return fmt.Errorf("%w: response code %d - can't read response: %v", errRegistrationFailed, code, err)
+	}
+
+	// apiRespList may represent a 400 error
+	var apiRespList []string
+
+	dec := json.NewDecoder(bytes.NewReader(content))
+	dec.DisallowUnknownFields()
+
+	err = dec.Decode(&apiRespList)
+	if err == nil {
+		return fmt.Errorf("%w: response code %d: %s", errRegistrationFailed, code, strings.Join(apiRespList, ", "))
+	}
+
+	// apiRespDetail may represent a 401 error
+	var apiRespDetail struct {
+		Detail string `json:"detail"`
+	}
+
+	dec = json.NewDecoder(bytes.NewReader(content))
+	dec.DisallowUnknownFields()
+
+	err = dec.Decode(&apiRespDetail)
+	if err == nil {
+		return fmt.Errorf("%w: response code %d: %s", errRegistrationFailed, code, apiRespDetail.Detail)
+	}
+
+	return fmt.Errorf("%w: response code %d: <%s>", errRegistrationFailed, code, content)
 }
 
 func (cl *wrapperClient) ListApplications(ctx context.Context) ([]bleemeoTypes.Application, error) {
