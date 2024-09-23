@@ -157,3 +157,60 @@ func TestNoTargetsConfigParsing(t *testing.T) {
 		t.Fatalf("TestConfigParsing() = %+v, want %+v", bbManager.targets, []collectorWithLabels{})
 	}
 }
+
+func TestProcessRegexp(t *testing.T) {
+	testCases := []struct {
+		input               string
+		expectedMatching    []string
+		expectedNotMatching []string
+	}{
+		{
+			input:            "maintenance",
+			expectedMatching: []string{"maintenance", "Maintenance"},
+		},
+		{
+			input:               "abc?",
+			expectedMatching:    []string{"abc?", "aBc?", "ABC?"},
+			expectedNotMatching: []string{"abcd", "abc"},
+		},
+		{
+			input: "plain string with ( closed range ]",
+			// For this case, we just ensure not error is thrown.
+		},
+		{
+			input:               "some regex tokens ...",
+			expectedMatching:    []string{"some regex tokens ..."},
+			expectedNotMatching: []string{"some regex tokens !!!"},
+		},
+		{
+			input: " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~",
+			expectedMatching: []string{
+				" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~",
+			},
+			expectedNotMatching: []string{
+				" !\"#$%&'()*+,-A/0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~",
+			}, //               ^ the difference is here: if the '.' hadn't been escaped, 'A' would have been a match.
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.input, func(t *testing.T) {
+			re, err := processRegexp(tc.input)
+			if err != nil {
+				t.Fatal("Failed to process regexp:", err)
+			}
+
+			for _, s := range tc.expectedMatching {
+				if !re.MatchString(s) {
+					t.Errorf("%q should have matched %s", s, re.String())
+				}
+			}
+
+			for _, s := range tc.expectedNotMatching {
+				if re.MatchString(s) {
+					t.Errorf("%q should not have matched %s", s, re.String())
+				}
+			}
+		})
+	}
+}

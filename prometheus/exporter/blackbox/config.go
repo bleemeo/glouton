@@ -23,6 +23,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"regexp/syntax"
 	"time"
 
 	"github.com/bleemeo/glouton/config"
@@ -36,7 +37,7 @@ import (
 
 var errUnknownModule = errors.New("unknown blackbox module found in your configuration")
 
-const defaultTimeout time.Duration = 12 * time.Second
+const defaultTimeout = 12 * time.Second
 
 func defaultModule(userAgent string) bbConf.Module {
 	return bbConf.Module{
@@ -83,12 +84,12 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*co
 
 	uri := monitor.URL
 
-	expectedContentRegex, err := bbConf.NewRegexp(monitor.ExpectedContent)
+	expectedContentRegex, err := processRegexp(monitor.ExpectedContent)
 	if err != nil {
 		return nil, err
 	}
 
-	forbiddenContentRegex, err := bbConf.NewRegexp(monitor.ForbiddenContent)
+	forbiddenContentRegex, err := processRegexp(monitor.ForbiddenContent)
 	if err != nil {
 		return nil, err
 	}
@@ -167,6 +168,18 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*co
 			types.LabelMetaBleemeoTargetAgentUUID: monitor.BleemeoAgentID,
 		},
 	}, nil
+}
+
+// processRegexp returns a regexp matching the given string
+// in a case-insensitive way, while ensuring each one of its chars
+// are considered as a normal character and not a joker.
+func processRegexp(input string) (bbConf.Regexp, error) {
+	literalRegexp, err := syntax.Parse(input, syntax.Literal|syntax.FoldCase)
+	if err != nil {
+		return bbConf.Regexp{}, err
+	}
+
+	return bbConf.NewRegexp(literalRegexp.String())
 }
 
 func preprocessHTTPTarget(targetURL *url.URL, module bbConf.Module) (string, bbConf.Module) {
