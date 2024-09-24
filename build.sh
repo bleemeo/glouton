@@ -38,7 +38,7 @@ case "$1" in
 esac
 
 if [ "$2" != "" ]; then
-   echo "This script don't support multiple option"
+   echo "This script doesn't support multiple options"
    exit 1
 fi
 
@@ -47,8 +47,8 @@ if docker volume ls | grep -q glouton-buildcache; then
    NODE_MOUNT_CACHE="-v glouton-buildcache:/go/pkg"
 fi
 
-if [ "${ONLY_GO}" = "1" -o "${ONLY_DOCKER_FAST}" = "1" ]; then
-   echo "Skip cleaning workspace because only Go binary build is enabled or Docker fast is enabled"
+if [ "${ONLY_GO}" = "1" ] || [ "${ONLY_DOCKER_FAST}" = "1" ] || [ "${SKIP_JS}" = "1" ]; then
+   echo "Skip cleaning workspace because only Go binary build is enabled, or Docker fast is enabled, or JS skipping is enabled"
 else
    echo "Cleanup workspace"
    rm -fr webui/dist webui/node_modules api/static/assets/css/ api/static/assets/js/ api/api-bindata.go api/api-packr.go api/packrd/
