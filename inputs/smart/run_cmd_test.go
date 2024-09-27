@@ -323,6 +323,16 @@ func TestIsExitCode1(t *testing.T) {
 			expectExitErr: true,
 			expectCode1:   false,
 		},
+  		{
+			err:           testExitError(1),
+			expectExitErr: true,
+			expectCode1:   true,
+		},
+        {
+			err:           testExitError(8),
+			expectExitErr: true,
+			expectCode1:   false,
+		},
 	}
 
 	for i, tc := range testCases {
