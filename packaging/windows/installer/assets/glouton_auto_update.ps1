@@ -2,7 +2,7 @@ $versionUrl = "https://packages.bleemeo.com/bleemeo-agent/VERSION"
 $baseMsiUrl = "https://packages.bleemeo.com/bleemeo-agent/windows/"
 $localPackageName = "Glouton"
 $logOutFile = "C:\ProgramData\glouton\auto_update.txt"
-$autoUpgradeMarker = "C:\ProgramData\glouton\auto_update"
+$autoUpgradeMarker = "C:\ProgramData\glouton\auto_upgrade"
 $logTmpFile = New-TemporaryFile
 Out-File -FilePath $logTmpFile -Encoding ascii
 Add-Content -Path $logTmpFile -Value "Auto update started at $(Get-Date)"
