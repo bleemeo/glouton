@@ -1,8 +1,13 @@
 package synchronizer
 
 import (
+	"net/url"
+	"strconv"
+	"syscall"
 	"testing"
 
+	"github.com/bleemeo/bleemeo-go"
+	"github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
 
 	"github.com/google/go-cmp/cmp"
@@ -85,4 +90,46 @@ func deepCopyValue(value any) any {
 	}
 
 	return value
+}
+
+func TestTryImproveRegisterError(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		err              error
+		expectedErrorStr string
+	}{
+		{
+			err:              &url.Error{Op: "GET", URL: "url", Err: syscall.ECONNREFUSED},
+			expectedErrorStr: "GET \"url\": connection refused",
+		},
+		{
+			err: &bleemeo.APIError{
+				Response: []byte("[{\"value\":[\"This field may not be null.\"]}, {}]"),
+			},
+			expectedErrorStr: "can't register the following item:\n- a.b: This field may not be null.",
+		},
+		{
+			err: &bleemeo.APIError{
+				Response: []byte("[{\"value\":[\"This field may not something.\"]},{\"value\":[\"This field may not be null.\", \"Something else.\"]}]"),
+			},
+			expectedErrorStr: "can't register the following items:\n- a.b: This field may not something.\n- 1.2.3: This field may not be null. / Something else.",
+		},
+	}
+
+	configItems := []types.GloutonConfigItem{
+		{Key: "a.b"},
+		{Key: "1.2.3"},
+	}
+
+	for i, tc := range testCases {
+		t.Run(strconv.Itoa(i+1), func(t *testing.T) {
+			t.Parallel()
+
+			outputErr := tryImproveRegisterError(tc.err, configItems)
+			if diff := cmp.Diff(outputErr.Error(), tc.expectedErrorStr); diff != "" {
+				t.Fatal("Unexpected error (-want +got):\n", diff)
+			}
+		})
+	}
 }

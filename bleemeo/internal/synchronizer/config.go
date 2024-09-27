@@ -18,8 +18,11 @@ package synchronizer
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
@@ -31,6 +34,8 @@ import (
 
 // The number of item Glouton can register in a single request.
 const gloutonConfigItemBatchSize = 100
+
+var errRegisterConfigItem = errors.New("can't register the following item")
 
 // comparableConfigItem is a modified GloutonConfigItem without the
 // `any` value to make it comparable.
@@ -232,7 +237,7 @@ func (s *Synchronizer) registerLocalConfigItems(
 
 		err := apiClient.RegisterGloutonConfigItems(ctx, itemsToRegister[start:end])
 		if err != nil {
-			return err
+			return tryImproveRegisterError(err, itemsToRegister[start:end])
 		}
 	}
 
@@ -277,4 +282,36 @@ func (s *Synchronizer) removeRemoteConfigItems(
 	}
 
 	return nil
+}
+
+func tryImproveRegisterError(err error, configItems []bleemeoTypes.GloutonConfigItem) error {
+	apiErr := new(bleemeo.APIError)
+	if !errors.As(err, &apiErr) {
+		return err // can't do anything with this
+	}
+
+	var messages []struct {
+		Value []string `json:"value"`
+	}
+
+	if jsonErr := json.Unmarshal(apiErr.Response, &messages); jsonErr == nil {
+		errorItems := make([]string, 0, len(messages)/2) // guesstimate
+
+		for i, message := range messages {
+			if len(message.Value) != 0 {
+				errMsg := fmt.Sprintf("- %s: %s", configItems[i].Key, strings.Join(message.Value, " / "))
+				errorItems = append(errorItems, errMsg)
+			}
+		}
+
+		var s string
+
+		if len(errorItems) > 1 {
+			s = "s"
+		}
+
+		return fmt.Errorf("%w%s:\n%s", errRegisterConfigItem, s, strings.Join(errorItems, "\n"))
+	}
+
+	return fmt.Errorf("%w: <%s>", errRegisterConfigItem, apiErr.Response)
 }
