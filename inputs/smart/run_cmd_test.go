@@ -299,20 +299,39 @@ func TestIsExitCode1(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		err         error
-		expectCode1 bool
+		err           error
+		expectExitErr bool
+		expectCode1   bool
 	}{
 		{
-			err:         nil, // successful command
-			expectCode1: false,
+			err:           nil, // successful command
+			expectExitErr: false,
+			expectCode1:   false,
 		},
 		{
-			err:         exec.Command("false").Run(),
-			expectCode1: true,
+			err:           exec.ErrNotFound,
+			expectExitErr: false,
+			expectCode1:   false,
 		},
 		{
-			err:         exec.Command("sh", "-c", "exit 8").Run(),
-			expectCode1: false,
+			err:           exec.Command("false").Run(),
+			expectExitErr: true,
+			expectCode1:   true,
+		},
+		{
+			err:           exec.Command("sh", "-c", "exit 8").Run(),
+			expectExitErr: true,
+			expectCode1:   false,
+		},
+		{
+			err:           testExitError(1),
+			expectExitErr: true,
+			expectCode1:   true,
+		},
+		{
+			err:           testExitError(8),
+			expectExitErr: true,
+			expectCode1:   false,
 		},
 	}
 
@@ -320,8 +339,77 @@ func TestIsExitCode1(t *testing.T) {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			t.Parallel()
 
-			if isCode1 := isExitCode1(tc.err); isCode1 != tc.expectCode1 {
-				t.Errorf("isExitCode1(%q) = %t, want %t", tc.err, isCode1, tc.expectCode1)
+			isExitErr, isCode1 := isExitCode1(tc.err)
+			if isExitErr != tc.expectExitErr {
+				t.Errorf("For err = %q, isExitErr = %t, want %t", tc.err, isExitErr, tc.expectExitErr)
+			}
+
+			if isCode1 != tc.expectCode1 {
+				t.Errorf("For err = %q, isCode1 = %t, want %t", tc.err, isCode1, tc.expectCode1)
+			}
+		})
+	}
+}
+
+func TestRunCmdError(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		cmd            runCmdType
+		expectedErrStr string
+	}{
+		{
+			cmd: func(config.Duration, bool, string, ...string) ([]byte, error) {
+				return []byte("normal content"), nil
+			},
+			expectedErrStr: "",
+		},
+		{
+			cmd: func(config.Duration, bool, string, ...string) ([]byte, error) {
+				return []byte("error content"), testExitError(1)
+			},
+			expectedErrStr: "exit status 1",
+		},
+		{
+			cmd: func(config.Duration, bool, string, ...string) ([]byte, error) {
+				return []byte("low-power"), testExitError(2)
+			},
+			expectedErrStr: "",
+		},
+		{
+			cmd: func(config.Duration, bool, string, ...string) ([]byte, error) {
+				return []byte("disk failing"), testExitError(8)
+			},
+			expectedErrStr: "",
+		},
+		{
+			cmd: func(config.Duration, bool, string, ...string) ([]byte, error) {
+				return nil, exec.ErrNotFound
+			},
+			expectedErrStr: "executable file not found in $PATH",
+		},
+	}
+
+	for i, tc := range testCases {
+		t.Run(strconv.Itoa(i+1), func(t *testing.T) {
+			t.Parallel()
+
+			wrc := &wrappedRunCmd{
+				originalRunCmd: tc.cmd,
+				maxConcurrency: 1,
+			}
+			wrc.cond = sync.NewCond(&wrc.l)
+
+			// Giving "--scan" as first arg will cause w.addStats() to return immediately.
+			_, err := wrc.runCmd(0, false, "not used", "--scan")
+			if err == nil {
+				if tc.expectedErrStr != "" {
+					t.Fatalf("Expected error %q, got none", tc.expectedErrStr)
+				}
+			} else {
+				if errStr := err.Error(); errStr != tc.expectedErrStr {
+					t.Fatalf("Expected error %q, got %q", tc.expectedErrStr, errStr)
+				}
 			}
 		})
 	}
