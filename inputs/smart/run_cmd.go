@@ -20,7 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os/exec"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -161,7 +161,7 @@ func (w *wrappedRunCmd) runCmd(timeout config.Duration, sudo bool, command strin
 		// which means that the command line didn't parse.
 		// For more information, see the EXIT STATUS section
 		// of the manpage smartctl(8).
-		if isExitCode1(err) {
+		if isExitErr, isCode1 := isExitCode1(err); isExitErr && !isCode1 {
 			err = nil
 		}
 	}
@@ -298,11 +298,28 @@ func (e smartExecution) MarshalJSON() ([]byte, error) {
 	return json.Marshal(state)
 }
 
-func isExitCode1(err error) bool {
-	errExit := new(exec.ExitError)
-	if errors.As(err, &errExit) {
-		return errExit.ExitCode() == 1
+// testExitError represents an *exec.ExitError,
+// since we can't instantiate the latter ourselves.
+type testExitError uint8
+
+func (tee testExitError) ExitCode() int {
+	return int(tee)
+}
+
+func (tee testExitError) Error() string {
+	return fmt.Sprintf("exit status %d", uint8(tee))
+}
+
+// isExitCode1 returns whether the given error is an exec.ExitError,
+// and if so, whether its status code is 1 or not.
+func isExitCode1(err error) (isExitErr, isCode1 bool) {
+	var errExitCode interface {
+		ExitCode() int
 	}
 
-	return false
+	if errors.As(err, &errExitCode) {
+		return true, errExitCode.ExitCode() == 1
+	}
+
+	return false, false
 }
