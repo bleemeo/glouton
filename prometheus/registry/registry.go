@@ -162,12 +162,11 @@ type RegistrationOption struct {
 	Description  string
 	JitterSeed   uint64
 	Interval     time.Duration
-	MinInterval  time.Duration
 	Timeout      time.Duration
 	StopCallback func() `json:"-"`
-	// ExtraLabels are labels added. If a labels already exists, extraLabels take precedence.
+	// ExtraLabels are labels added. If a labels already exists, extraLabels takes precedence.
 	ExtraLabels map[string]string
-	// NoLabelsAlteration disable (most) alteration of labels. It don't apply to PushPoints.
+	// NoLabelsAlteration disable (most) alteration of labels. It doesn't apply to PushPoints.
 	// Meta labels (starting with __) are still dropped and (if applicable) converted to annotations.
 	NoLabelsAlteration bool
 	// CompatibilityNameItem enable renaming metrics labels to just name + item (from Annotations.BleemeoItem).
@@ -188,12 +187,12 @@ type RegistrationOption struct {
 	// IsEssential tells whether the corresponding gatherer is considered as 'essential' regarding the agent dashboard.
 	// When all 'essentials' gatherers are stuck, Glouton kills himself (see Registry.HealthCheck).
 	IsEssential bool
-	// AcceptAllowedMetricsOnly will only kept metrics allowed at ends of Gather(), so the
+	// AcceptAllowedMetricsOnly will only keep metrics allowed at ends of Gather(), so the
 	// metric not allowed by allow_list (or metric denied) will be dropped. Metrics that are
 	// needed by SimpleRule will still be allowed.
 	// Currently (until Registry.renamer is dropped), this shouldn't be activated on SNMP gatherer.
 	AcceptAllowedMetricsOnly bool
-	// HonorTimestamp indicate whether timestamp associated with each metric points is used or if a timestamp
+	// HonorTimestamp indicate whether timestamp associated with each metric point is used or if a timestamp
 	// decided by the Registry is used. Using the timestamp of the registry is preferred as its more stable.
 	// If you need mixed timestamp decided by the Registry and timestamp associated with some points, use a
 	// zero time (time.Time{}, Unix epoc or nil) on point that need to use the Registry's timestamp.
@@ -1050,10 +1049,6 @@ func (r *Registry) restartScrapeLoop(reg *registration, registryCurrentDelay tim
 	interval := reg.option.Interval
 	if interval == 0 {
 		interval = registryCurrentDelay
-	}
-
-	if reg.option.MinInterval != 0 && interval < reg.option.MinInterval {
-		interval = reg.option.MinInterval
 	}
 
 	timeout := interval * 8 / 10

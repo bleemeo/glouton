@@ -1159,7 +1159,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		registry.RegistrationOption{
 			Description: "miscAppenderMinute",
 			JitterSeed:  baseJitter,
-			MinInterval: time.Minute,
+			Interval:    time.Minute,
 			// Container metrics contain meta labels that needs to be relabeled.
 			ApplyDynamicRelabel: true,
 		},
@@ -1405,7 +1405,7 @@ func (a *agent) registerInputs(ctx context.Context) {
 			registry.RegistrationOption{
 				Description: "IPMI metrics",
 				JitterSeed:  0,
-				MinInterval: time.Minute,
+				Interval:    time.Minute,
 			},
 			gatherer,
 		)

@@ -359,7 +359,7 @@ func (vSphere *vSphere) makeRealtimeGatherer(ctx context.Context) (registry.Gath
 	noMetricsSince := make(map[string]int)
 	opt := registry.RegistrationOption{
 		Description:         fmt.Sprint(vSphere, " ", gatherRT),
-		MinInterval:         time.Minute,
+		Interval:            time.Minute,
 		StopCallback:        gatherer.stop,
 		ApplyDynamicRelabel: true,
 		GatherModifier: func(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
@@ -427,7 +427,7 @@ func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (regist
 	noMetricsSince := make(map[string]int)
 	opt := registry.RegistrationOption{
 		Description:         fmt.Sprint(vSphere, " ", gatherHist30m),
-		MinInterval:         1 * time.Minute, // 4 times out of 5, we will re-use the previous point
+		Interval:            time.Minute, // 4 times out of 5, we will re-use the previous point
 		StopCallback:        gatherer.stop,
 		ApplyDynamicRelabel: true,
 		GatherModifier: func(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {

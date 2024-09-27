@@ -51,7 +51,7 @@ func New() (telegraf.Input, registry.RegistrationOption, error) {
 
 	options := registry.RegistrationOption{
 		// The input uses an external command with sudo so we gather metrics less often.
-		MinInterval: 60 * time.Second,
+		Interval: 60 * time.Second,
 	}
 
 	return internalInput, options, nil

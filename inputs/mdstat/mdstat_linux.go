@@ -76,7 +76,7 @@ func New(cfg config.Mdstat) (telegraf.Input, registry.RegistrationOption, error)
 	}
 
 	options := registry.RegistrationOption{
-		MinInterval:    60 * time.Second,
+		Interval:       60 * time.Second,
 		GatherModifier: gatherModifier(cfg.PathMdadm, cfg.UseSudo, time.Now, callMdadm),
 	}
 
