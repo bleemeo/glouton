@@ -208,7 +208,7 @@ func (c *Processes) Processes(ctx context.Context, maxAge time.Duration) (proces
 			CmdLineList:     cmdline,
 			CmdLine:         strings.Join(cmdline, " "),
 			Name:            p.procStat.Comm,
-			MemoryRSS:       uint64(p.procStat.ResidentMemory()) / 1024,
+			MemoryRSS:       uint64(p.procStat.ResidentMemory()) / 1024, //nolint: gosec
 			CPUTime:         float64(p.procStat.UTime+p.procStat.STime) / userHZ,
 			Status:          status,
 			Username:        username,
@@ -360,7 +360,7 @@ func getProcCache(p proc.Proc) (unsafe.Pointer, error) {
 		return nil, fmt.Errorf("%w, expected proccache, got %v", errChangedInternal, value.Type().Name())
 	}
 
-	ptr := unsafe.Pointer(value.UnsafeAddr()) //nolint:gosec
+	ptr := unsafe.Pointer(value.UnsafeAddr())
 	if uintptr(ptr) == 0 {
 		return nil, errNullPointer
 	}

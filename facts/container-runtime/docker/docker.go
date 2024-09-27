@@ -1427,7 +1427,7 @@ func decodeDocker(top container.ContainerTopOKBody, c facts.Container) []facts.P
 		if rssIndex != -1 {
 			v, err := strconv.ParseInt(row[rssIndex], 10, 0)
 			if err == nil {
-				process.MemoryRSS = uint64(v)
+				process.MemoryRSS = uint64(v) //nolint: gosec
 			}
 		}
 
