@@ -38,6 +38,7 @@ import (
 	"sync"
 	"time"
 
+	bleemeoSDK "github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/agent/state"
 	"github.com/bleemeo/glouton/api"
 	"github.com/bleemeo/glouton/bleemeo"
@@ -548,6 +549,7 @@ func (a *agent) updateSNMPResolution(resolution time.Duration) {
 			registry.RegistrationOption{
 				Description: "snmp target " + target.Address,
 				JitterSeed:  hash,
+				AgentType:   bleemeoSDK.AgentType_SNMP,
 				Interval:    resolution,
 				Timeout:     40 * time.Second,
 				ExtraLabels: target.ExtraLabels,
@@ -571,9 +573,10 @@ func (a *agent) updateSNMPResolution(resolution time.Duration) {
 func (a *agent) updateMetricResolution(ctx context.Context, defaultResolution time.Duration, snmpResolution time.Duration) {
 	a.l.Lock()
 	a.metricResolution = defaultResolution
+	metricResolutionPerAgentType := a.bleemeoConnector.GetMetricResolutionPerAgentType()
 	a.l.Unlock()
 
-	a.gathererRegistry.UpdateDelay(defaultResolution)
+	a.gathererRegistry.UpdateDelay(defaultResolution, metricResolutionPerAgentType)
 
 	services, err := a.discovery.Discovery(ctx, time.Hour)
 	if err != nil {
@@ -1137,11 +1140,17 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		}
 	}
 
+	agentType := bleemeoSDK.AgentType_Agent
+	if _, isK8s := a.containerRuntime.(*kubernetes.Kubernetes); isK8s {
+		agentType = bleemeoSDK.AgentType_K8s
+	}
+
 	// Register misc appender to gather some container metrics.
 	_, err = a.gathererRegistry.RegisterAppenderCallback(
 		registry.RegistrationOption{
 			Description: "miscAppender",
 			JitterSeed:  baseJitter,
+			AgentType:   agentType,
 			// Container metrics contain meta labels that needs to be relabeled.
 			ApplyDynamicRelabel: true,
 		},
@@ -1159,6 +1168,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		registry.RegistrationOption{
 			Description: "miscAppenderMinute",
 			JitterSeed:  baseJitter,
+			AgentType:   agentType,
 			Interval:    time.Minute,
 			// Container metrics contain meta labels that needs to be relabeled.
 			ApplyDynamicRelabel: true,

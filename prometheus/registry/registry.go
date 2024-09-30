@@ -33,6 +33,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/delay"
 	"github.com/bleemeo/glouton/inputs"
@@ -143,6 +144,10 @@ type Registry struct {
 	currentDelay            time.Duration
 	relabelHook             RelabelHook
 	renamer                 *renamer.Renamer
+	// metricResolutionPerAgentType represents the minimum interval
+	// for the metrics that are produced by each agent type.
+	// The interval is in seconds.
+	metricResolutionPerAgentType map[bleemeo.AgentType]int
 }
 
 type Option struct {
@@ -159,8 +164,11 @@ type Option struct {
 }
 
 type RegistrationOption struct {
-	Description  string
-	JitterSeed   uint64
+	Description string
+	JitterSeed  uint64
+	// AgentType indicates how the corresponding gatherer should be considered.
+	// If not specified, it defaults to bleemeo.AgentType_Agent (classic agent).
+	AgentType    bleemeo.AgentType
 	Interval     time.Duration
 	Timeout      time.Duration
 	StopCallback func() `json:"-"`
@@ -509,11 +517,12 @@ func (r *Registry) startLoopsInner() {
 	}
 
 	currentDelay := r.currentDelay
+	metricResolutionPerAgentType := r.metricResolutionPerAgentType
 
 	r.l.Unlock()
 
 	for _, reg := range regToStart {
-		r.restartScrapeLoop(reg, currentDelay)
+		r.restartScrapeLoop(reg, currentDelay, metricResolutionPerAgentType)
 	}
 }
 
@@ -1003,6 +1012,12 @@ func (r *Registry) addRegistration(reg *registration) (int, error) {
 
 	reg.addedAt = time.Now()
 
+	if reg.option.AgentType == "" {
+		// Since we defined RegistrationOption.AgentType's default to be bleemeo.AgentType_Agent,
+		// we need to handle the case where the default value has been used.
+		reg.option.AgentType = bleemeo.AgentType_Agent
+	}
+
 	r.registrations[id] = reg
 
 	if !reg.option.DisablePeriodicGather {
@@ -1013,7 +1028,7 @@ func (r *Registry) addRegistration(reg *registration) (int, error) {
 		}
 
 		if r.running {
-			r.restartScrapeLoop(reg, r.currentDelay)
+			r.restartScrapeLoop(reg, r.currentDelay, r.metricResolutionPerAgentType)
 		}
 	}
 
@@ -1023,7 +1038,7 @@ func (r *Registry) addRegistration(reg *registration) (int, error) {
 // restartScrapeLoop start a scrapeLoop for this registration after stop previous loop if it exists.
 // reg.l must NOT be held.
 // r.l lock should NOT be held or a deadlock could occur during stop.
-func (r *Registry) restartScrapeLoop(reg *registration, registryCurrentDelay time.Duration) {
+func (r *Registry) restartScrapeLoop(reg *registration, registryCurrentDelay time.Duration, resolutionPerAgentType map[bleemeo.AgentType]int) {
 	reg.l.Lock()
 	defer reg.l.Unlock()
 
@@ -1046,10 +1061,8 @@ func (r *Registry) restartScrapeLoop(reg *registration, registryCurrentDelay tim
 		reg.l.Lock()
 	}
 
-	interval := reg.option.Interval
-	if interval == 0 {
-		interval = registryCurrentDelay
-	}
+	agentMetricResolution := time.Duration(resolutionPerAgentType[reg.option.AgentType]) * time.Second
+	interval := max(reg.option.Interval, agentMetricResolution, registryCurrentDelay)
 
 	timeout := interval * 8 / 10
 	if reg.option.Timeout != 0 && reg.option.Timeout < interval {
@@ -1455,15 +1468,17 @@ func (r *Registry) WithTTL(ttl time.Duration) types.PointPusher {
 }
 
 // UpdateDelay change the delay between metric gather.
-func (r *Registry) UpdateDelay(delay time.Duration) {
-	if r.updateDelay(delay) {
+func (r *Registry) UpdateDelay(delay time.Duration, metricResolutionPerAgentType map[bleemeo.AgentType]int) {
+	if r.updateDelay(delay, metricResolutionPerAgentType) {
 		r.restartLoops(func() {})
 	}
 }
 
-func (r *Registry) updateDelay(delay time.Duration) bool {
+func (r *Registry) updateDelay(delay time.Duration, metricResolutionPerAgentType map[bleemeo.AgentType]int) bool {
 	r.l.Lock()
 	defer r.l.Unlock()
+
+	r.metricResolutionPerAgentType = metricResolutionPerAgentType
 
 	if r.currentDelay == delay {
 		return false

@@ -537,6 +537,23 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 	return labels, false
 }
 
+func (c *Connector) GetMetricResolutionPerAgentType() map[bleemeo.AgentType]int {
+	agentTypes := c.cache.AgentTypes()
+	agentConfigs := c.cache.AgentConfigs()
+
+	resolutionByAgentType := make(map[bleemeo.AgentType]int, len(agentTypes))
+
+	for _, agentType := range agentTypes {
+		for _, config := range agentConfigs {
+			if config.AgentType == agentType.ID {
+				resolutionByAgentType[agentType.Name] = config.MetricResolution
+			}
+		}
+	}
+
+	return resolutionByAgentType
+}
+
 func (c *Connector) kubernetesAgentID(clusterName string) (string, error) {
 	kubernetesAgentType, err := c.agentTypeID(bleemeo.AgentType_K8s)
 	if err != nil {
