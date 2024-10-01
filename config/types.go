@@ -24,6 +24,7 @@ import (
 
 // Config is the structured configuration of the agent.
 type Config struct {
+	POC                            POC                  `yaml:"poc"` // TODO: remove
 	Agent                          Agent                `yaml:"agent"`
 	Blackbox                       Blackbox             `yaml:"blackbox"`
 	Bleemeo                        Bleemeo              `yaml:"bleemeo"`
@@ -55,6 +56,12 @@ type Config struct {
 	VSphere                        []VSphere            `yaml:"vsphere"`
 	Web                            Web                  `yaml:"web"`
 	Zabbix                         Zabbix               `yaml:"zabbix"`
+}
+
+type POC struct {
+	GRPCAddress   string   `yaml:"grpc_address"`
+	LogFile       []string `yaml:"log_files"`
+	OperatorsYAML string   `yaml:"operators"` // TODO: because koanf don't use UnmarshalYAML, we can't use operator.Config as we should
 }
 
 type Log struct {

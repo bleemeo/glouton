@@ -146,17 +146,35 @@ func (c *Client) setupMQTT(ctx context.Context) (paho.Client, error) {
 	return paho.NewClient(opts), err
 }
 
-// Publish sends the payload to MQTT on the given topic.
+// PublishAsJSON sends the payload to MQTT on the given topic after encoding it as JSON.
 // If retry is set to true and MQTT is currently unreachable, the client will
 // retry to send the message later, else it will be dropped.
-func (c *Client) Publish(topic string, payload interface{}, retry bool) error {
-	payloadBuffer, err := c.encoder.Encode(payload)
+func (c *Client) PublishAsJSON(topic string, payload interface{}, retry bool) error {
+	payloadBuffer, err := c.encoder.EncodeObject(payload)
 	if err != nil {
 		c.encoder.PutBuffer(payloadBuffer)
 
 		return err
 	}
 
+	return c.publishWrapper(topic, payloadBuffer, retry)
+}
+
+// PublishBytes sends the payload to MQTT on the given topic.
+// If retry is set to true and MQTT is currently unreachable, the client will
+// retry to send the message later, else it will be dropped.
+func (c *Client) PublishBytes(topic string, payload []byte, retry bool) error {
+	payloadBuffer, err := c.encoder.EncodeBytes(payload)
+	if err != nil {
+		c.encoder.PutBuffer(payloadBuffer)
+
+		return err
+	}
+
+	return c.publishWrapper(topic, payloadBuffer, retry)
+}
+
+func (c *Client) publishWrapper(topic string, payloadBuffer []byte, retry bool) error {
 	if len(payloadBuffer) > maxPayloadSize {
 		c.encoder.PutBuffer(payloadBuffer)
 

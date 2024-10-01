@@ -56,6 +56,11 @@ func DefaultConfig() Config { //nolint:maintidx
 	defaultBlackboxModule.DNS.QueryName = "default"
 
 	return Config{
+		POC: POC{
+			GRPCAddress:   "localhost:4317",
+			LogFile:       []string{},
+			OperatorsYAML: "",
+		},
 		Agent: Agent{
 			CloudImageCreationFile: "cloudimage_creation",
 			FactsFile:              "facts.yaml",

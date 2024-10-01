@@ -465,7 +465,7 @@ func (c *Client) shutdownTimeDrift() {
 	if c.mqtt.IsConnectionOpen() {
 		payload := map[string]string{"disconnect-cause": "Clean shutdown, time drift"}
 
-		if err := c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/disconnect", c.opts.AgentID), payload, true); err != nil {
+		if err := c.mqtt.PublishAsJSON(fmt.Sprintf("v1/agent/%s/disconnect", c.opts.AgentID), payload, true); err != nil {
 			logger.V(1).Printf("Unable to publish on disconnect topic: %v", err)
 		}
 	}
@@ -555,7 +555,7 @@ func (c *Client) run(ctx context.Context) error {
 func (c *Client) sendPing() {
 	ts := time.Now().Format(time.RFC3339)
 
-	err := c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/ping", c.opts.AgentID), ts, false)
+	err := c.mqtt.PublishAsJSON(fmt.Sprintf("v1/agent/%s/ping", c.opts.AgentID), ts, false)
 	if err != nil {
 		logger.V(1).Printf("Failed to send ping message on MQTT: %v", err)
 	}
@@ -610,7 +610,7 @@ func (c *Client) PushLogs(_ context.Context, payload []byte) error {
 		return ErrBackPressureSignal
 	}
 
-	if err := c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/logs", c.opts.AgentID), payload, true); err != nil {
+	if err := c.mqtt.PublishBytes(fmt.Sprintf("v1/agent/%s/logs", c.opts.AgentID), payload, true); err != nil {
 		return nil
 	}
 
@@ -629,7 +629,7 @@ func (c *Client) sendPoints() {
 				end = len(agentPayload)
 			}
 
-			if err := c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/data", agentID), agentPayload[i:end], true); err != nil {
+			if err := c.mqtt.PublishAsJSON(fmt.Sprintf("v1/agent/%s/data", agentID), agentPayload[i:end], true); err != nil {
 				logger.V(1).Printf("Unable to publish points: %v", err)
 			}
 		}
@@ -821,7 +821,7 @@ func (c *Client) sendConnectMessage() {
 
 	payload := map[string]string{"public_ip": facts["public_ip"]}
 
-	if err := c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/connect", c.opts.AgentID), payload, true); err != nil {
+	if err := c.mqtt.PublishAsJSON(fmt.Sprintf("v1/agent/%s/connect", c.opts.AgentID), payload, true); err != nil {
 		logger.V(1).Printf("Unable to publish on connect topic: %v", err)
 	}
 }
@@ -922,7 +922,7 @@ func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.GloutonAccoun
 
 	topic := fmt.Sprintf("v1/agent/%s/top_info", c.opts.AgentID)
 
-	if err := c.mqtt.Publish(topic, topinfo, false); err != nil {
+	if err := c.mqtt.PublishAsJSON(topic, topinfo, false); err != nil {
 		logger.V(1).Printf("Unable to publish on topinfo topic: %v", err)
 	}
 }

@@ -67,6 +67,7 @@ import (
 	"github.com/bleemeo/glouton/mqtt"
 	"github.com/bleemeo/glouton/mqtt/client"
 	"github.com/bleemeo/glouton/nrpe"
+	"github.com/bleemeo/glouton/otel/poc"
 	"github.com/bleemeo/glouton/prometheus/exporter/blackbox"
 	"github.com/bleemeo/glouton/prometheus/exporter/ipmi"
 	"github.com/bleemeo/glouton/prometheus/exporter/snmp"
@@ -1082,6 +1083,9 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.bleemeoConnector = connector
 		a.l.Unlock()
 
+		if err := poc.MakePipeline(ctx, a.config.POC, connector.PushLogs); err != nil {
+			logger.Printf("ERROR: %v", err)
+		}
 		a.gathererRegistry.UpdateRegistrationHooks(a.bleemeoConnector.RelabelHook, a.bleemeoConnector.UpdateDelayHook)
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 

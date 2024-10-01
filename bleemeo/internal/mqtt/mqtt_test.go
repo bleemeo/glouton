@@ -101,7 +101,7 @@ type mockMQTTClient struct {
 	publishedPoints []metricPayload
 }
 
-func (m *mockMQTTClient) Publish(topic string, payload any, retry bool) error {
+func (m *mockMQTTClient) PublishAsJSON(topic string, payload any, retry bool) error {
 	_ = topic
 	_ = retry
 
@@ -114,6 +114,14 @@ func (m *mockMQTTClient) Publish(topic string, payload any, retry bool) error {
 	m.publishedPoints = append(m.publishedPoints, metrics...)
 
 	return nil
+}
+
+func (m *mockMQTTClient) PublishBytes(topic string, payload []byte, retry bool) error {
+	_ = topic
+	_ = retry
+	_ = payload
+
+	return fmt.Errorf("%w: Payload is not a list of metrics", errors.ErrUnsupported)
 }
 
 func (*mockMQTTClient) Run(context.Context)    {}
