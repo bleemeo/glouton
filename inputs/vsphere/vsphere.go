@@ -26,7 +26,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bleemeo/bleemeo-go"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/inputs"
@@ -361,8 +360,7 @@ func (vSphere *vSphere) makeRealtimeGatherer(ctx context.Context) (registry.Gath
 	opt := registry.RegistrationOption{
 		Description: fmt.Sprint(vSphere, " ", gatherRT),
 		// We use the VM agent type because it has the smallest resolution.
-		AgentType:           bleemeo.AgentType_vSphereVM,
-		Interval:            time.Minute,
+		MinInterval:         time.Minute,
 		StopCallback:        gatherer.stop,
 		ApplyDynamicRelabel: true,
 		GatherModifier: func(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
@@ -430,8 +428,7 @@ func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (regist
 	noMetricsSince := make(map[string]int)
 	opt := registry.RegistrationOption{
 		Description:         fmt.Sprint(vSphere, " ", gatherHist30m),
-		AgentType:           bleemeo.AgentType_vSphereCluster, // Datastore metrics are associated to a cluster
-		Interval:            time.Minute,                      // 4 times out of 5, we will re-use the previous point
+		MinInterval:         time.Minute, // 4 times out of 5, we will re-use the previous point
 		StopCallback:        gatherer.stop,
 		ApplyDynamicRelabel: true,
 		GatherModifier: func(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {

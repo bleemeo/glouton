@@ -33,7 +33,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/delay"
 	"github.com/bleemeo/glouton/inputs"
@@ -144,10 +143,12 @@ type Registry struct {
 	currentDelay            time.Duration
 	relabelHook             RelabelHook
 	renamer                 *renamer.Renamer
-	// metricResolutionPerAgentType represents the minimum interval
-	// for the metrics that are produced by each agent type.
-	// The interval is in seconds.
-	metricResolutionPerAgentType map[bleemeo.AgentType]int
+	// planMetricResolution represents the minimum interval
+	// allowed for the current Bleemeo plan.
+	// If this agent doesn't belong to a Bleemeo account,
+	// the value is ignored.
+	// The resolution is in seconds.
+	planMetricResolution int
 }
 
 type Option struct {
@@ -164,12 +165,9 @@ type Option struct {
 }
 
 type RegistrationOption struct {
-	Description string
-	JitterSeed  uint64
-	// AgentType indicates how the corresponding gatherer should be considered.
-	// If not specified, it defaults to bleemeo.AgentType_Agent (classic agent).
-	AgentType    bleemeo.AgentType
-	Interval     time.Duration
+	Description  string
+	JitterSeed   uint64
+	MinInterval  time.Duration
 	Timeout      time.Duration
 	StopCallback func() `json:"-"`
 	// ExtraLabels are labels added. If a labels already exists, extraLabels takes precedence.
@@ -183,7 +181,7 @@ type RegistrationOption struct {
 	// name + item. If dropped, we should be careful to don't change existing metrics.
 	CompatibilityNameItem bool
 	// DisablePeriodicGather skip the periodic calls which forward gathered points to r.PushPoint.
-	// The periodic call use the Interval. When Interval is 0, the dynamic interval set by UpdateDelay is used.
+	// The periodic call uses the MinInterval. When MinInterval is 0, the dynamic interval set by UpdateDelay is used.
 	DisablePeriodicGather bool
 	// ApplyDynamicRelabel controls whether the metrics should go through the relabel hook.
 	ApplyDynamicRelabel bool
@@ -254,7 +252,7 @@ func (opt *RegistrationOption) String() string {
 
 	return fmt.Sprintf(
 		"\"%s\" with labels %v; interval=%v, seed=%d, timeout=%v, %s",
-		opt.Description, opt.ExtraLabels, opt.Interval, opt.JitterSeed, opt.Timeout, hasStop,
+		opt.Description, opt.ExtraLabels, opt.MinInterval, opt.JitterSeed, opt.Timeout, hasStop,
 	)
 }
 
@@ -517,12 +515,12 @@ func (r *Registry) startLoopsInner() {
 	}
 
 	currentDelay := r.currentDelay
-	metricResolutionPerAgentType := r.metricResolutionPerAgentType
+	planMetricResolution := r.planMetricResolution
 
 	r.l.Unlock()
 
 	for _, reg := range regToStart {
-		r.restartScrapeLoop(reg, currentDelay, metricResolutionPerAgentType)
+		r.restartScrapeLoop(reg, currentDelay, planMetricResolution)
 	}
 }
 
@@ -1012,12 +1010,6 @@ func (r *Registry) addRegistration(reg *registration) (int, error) {
 
 	reg.addedAt = time.Now()
 
-	if reg.option.AgentType == "" {
-		// Since we defined RegistrationOption.AgentType's default to be bleemeo.AgentType_Agent,
-		// we need to handle the case where the default value has been used.
-		reg.option.AgentType = bleemeo.AgentType_Agent
-	}
-
 	r.registrations[id] = reg
 
 	if !reg.option.DisablePeriodicGather {
@@ -1028,7 +1020,7 @@ func (r *Registry) addRegistration(reg *registration) (int, error) {
 		}
 
 		if r.running {
-			r.restartScrapeLoop(reg, r.currentDelay, r.metricResolutionPerAgentType)
+			r.restartScrapeLoop(reg, r.currentDelay, r.planMetricResolution)
 		}
 	}
 
@@ -1038,7 +1030,7 @@ func (r *Registry) addRegistration(reg *registration) (int, error) {
 // restartScrapeLoop start a scrapeLoop for this registration after stop previous loop if it exists.
 // reg.l must NOT be held.
 // r.l lock should NOT be held or a deadlock could occur during stop.
-func (r *Registry) restartScrapeLoop(reg *registration, registryCurrentDelay time.Duration, resolutionPerAgentType map[bleemeo.AgentType]int) {
+func (r *Registry) restartScrapeLoop(reg *registration, registryCurrentDelay time.Duration, planMetricResolution int) {
 	reg.l.Lock()
 	defer reg.l.Unlock()
 
@@ -1061,8 +1053,8 @@ func (r *Registry) restartScrapeLoop(reg *registration, registryCurrentDelay tim
 		reg.l.Lock()
 	}
 
-	agentMetricResolution := time.Duration(resolutionPerAgentType[reg.option.AgentType]) * time.Second
-	interval := max(reg.option.Interval, agentMetricResolution, registryCurrentDelay)
+	agentMetricResolution := time.Duration(planMetricResolution) * time.Second
+	interval := max(reg.option.MinInterval, agentMetricResolution, registryCurrentDelay)
 
 	timeout := interval * 8 / 10
 	if reg.option.Timeout != 0 && reg.option.Timeout < interval {
@@ -1426,7 +1418,7 @@ func (r *Registry) AddDefaultCollector() {
 		RegistrationOption{
 			Description: "go & process collector",
 			JitterSeed:  baseJitter,
-			Interval:    defaultInterval,
+			MinInterval: defaultInterval,
 		},
 		r.internalRegistry,
 	)
@@ -1451,7 +1443,7 @@ func (r *Registry) Exporter() http.Handler {
 		RegistrationOption{
 			Description:           "/metrics collector",
 			JitterSeed:            baseJitter,
-			Interval:              defaultInterval,
+			MinInterval:           defaultInterval,
 			DisablePeriodicGather: r.option.MetricFormat != types.MetricFormatPrometheus,
 		},
 		reg,
@@ -1468,17 +1460,17 @@ func (r *Registry) WithTTL(ttl time.Duration) types.PointPusher {
 }
 
 // UpdateDelay change the delay between metric gather.
-func (r *Registry) UpdateDelay(delay time.Duration, metricResolutionPerAgentType map[bleemeo.AgentType]int) {
-	if r.updateDelay(delay, metricResolutionPerAgentType) {
+func (r *Registry) UpdateDelay(delay time.Duration, planMetricResolution int) {
+	if r.updateDelay(delay, planMetricResolution) {
 		r.restartLoops(func() {})
 	}
 }
 
-func (r *Registry) updateDelay(delay time.Duration, metricResolutionPerAgentType map[bleemeo.AgentType]int) bool {
+func (r *Registry) updateDelay(delay time.Duration, planMetricResolution int) bool {
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	r.metricResolutionPerAgentType = metricResolutionPerAgentType
+	r.planMetricResolution = planMetricResolution
 
 	if r.currentDelay == delay {
 		return false

@@ -101,7 +101,7 @@ func New(config config.Smart, factStatusCallback func(binaryInstalled bool)) (te
 
 	options := registry.RegistrationOption{
 		// smartctl might take some time to gather, especially with a large number of disks.
-		Interval: 5 * 60 * time.Second,
+		MinInterval: 5 * 60 * time.Second,
 	}
 
 	return internalInput, options, nil

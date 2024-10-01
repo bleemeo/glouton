@@ -69,7 +69,7 @@ func New(config config.Service) (telegraf.Input, registry.RegistrationOption, er
 	}
 
 	options := registry.RegistrationOption{
-		Interval: 60 * time.Second,
+		MinInterval: 60 * time.Second,
 		Rules: []types.SimpleRule{
 			{
 				TargetName:  "jenkins_job_duration_seconds",

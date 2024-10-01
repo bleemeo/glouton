@@ -38,7 +38,6 @@ import (
 	"sync"
 	"time"
 
-	bleemeoSDK "github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/agent/state"
 	"github.com/bleemeo/glouton/api"
 	"github.com/bleemeo/glouton/bleemeo"
@@ -549,8 +548,7 @@ func (a *agent) updateSNMPResolution(resolution time.Duration) {
 			registry.RegistrationOption{
 				Description: "snmp target " + target.Address,
 				JitterSeed:  hash,
-				AgentType:   bleemeoSDK.AgentType_SNMP,
-				Interval:    resolution,
+				MinInterval: resolution,
 				Timeout:     40 * time.Second,
 				ExtraLabels: target.ExtraLabels,
 				Rules:       registry.DefaultSNMPRules(resolution),
@@ -571,12 +569,17 @@ func (a *agent) updateSNMPResolution(resolution time.Duration) {
 }
 
 func (a *agent) updateMetricResolution(ctx context.Context, defaultResolution time.Duration, snmpResolution time.Duration) {
+	var planMetricResolution int
+
 	a.l.Lock()
 	a.metricResolution = defaultResolution
-	metricResolutionPerAgentType := a.bleemeoConnector.GetMetricResolutionPerAgentType()
+
+	if a.bleemeoConnector != nil {
+		planMetricResolution = a.bleemeoConnector.GetMetricResolution()
+	}
 	a.l.Unlock()
 
-	a.gathererRegistry.UpdateDelay(defaultResolution, metricResolutionPerAgentType)
+	a.gathererRegistry.UpdateDelay(defaultResolution, planMetricResolution)
 
 	services, err := a.discovery.Discovery(ctx, time.Hour)
 	if err != nil {
@@ -1099,7 +1102,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			registry.RegistrationOption{
 				Description:    "Bleemeo connector",
 				JitterSeed:     baseJitter,
-				Interval:       defaultInterval,
+				MinInterval:    defaultInterval,
 				HonorTimestamp: true, // time_drift metric emit point with the time from Bleemeo API
 			},
 			registry.AppenderFunc(a.bleemeoConnector.EmitInternalMetric),
@@ -1140,17 +1143,11 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		}
 	}
 
-	agentType := bleemeoSDK.AgentType_Agent
-	if _, isK8s := a.containerRuntime.(*kubernetes.Kubernetes); isK8s {
-		agentType = bleemeoSDK.AgentType_K8s
-	}
-
 	// Register misc appender to gather some container metrics.
 	_, err = a.gathererRegistry.RegisterAppenderCallback(
 		registry.RegistrationOption{
 			Description: "miscAppender",
 			JitterSeed:  baseJitter,
-			AgentType:   agentType,
 			// Container metrics contain meta labels that needs to be relabeled.
 			ApplyDynamicRelabel: true,
 		},
@@ -1168,8 +1165,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		registry.RegistrationOption{
 			Description: "miscAppenderMinute",
 			JitterSeed:  baseJitter,
-			AgentType:   agentType,
-			Interval:    time.Minute,
+			MinInterval: time.Minute,
 			// Container metrics contain meta labels that needs to be relabeled.
 			ApplyDynamicRelabel: true,
 		},
@@ -1211,7 +1207,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			registry.RegistrationOption{
 				Description:              "Prom exporter " + target.URL.String(),
 				JitterSeed:               labels.FromMap(target.ExtraLabels).Hash(),
-				Interval:                 defaultInterval,
+				MinInterval:              defaultInterval,
 				ExtraLabels:              target.ExtraLabels,
 				AcceptAllowedMetricsOnly: true,
 				HonorTimestamp:           true,
@@ -1415,7 +1411,7 @@ func (a *agent) registerInputs(ctx context.Context) {
 			registry.RegistrationOption{
 				Description: "IPMI metrics",
 				JitterSeed:  0,
-				Interval:    time.Minute,
+				MinInterval: time.Minute,
 			},
 			gatherer,
 		)

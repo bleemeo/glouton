@@ -77,7 +77,7 @@ func (d *Discovery) createPrometheusMemcached(service Service) error {
 		registry.RegistrationOption{
 			Description:           "memcached exporter",
 			JitterSeed:            hash,
-			Interval:              defaultInterval,
+			MinInterval:           defaultInterval,
 			StopCallback:          stopCallback,
 			ExtraLabels:           lbls,
 			DisablePeriodicGather: d.metricFormat != types.MetricFormatPrometheus,

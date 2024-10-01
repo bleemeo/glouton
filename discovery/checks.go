@@ -23,7 +23,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/check"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
@@ -344,8 +343,7 @@ func (d *Discovery) addCheck(serviceCheck checker, service Service) {
 
 	options := registry.RegistrationOption{
 		Description:  "check for " + service.Name,
-		AgentType:    bleemeo.AgentType_Monitor,
-		Interval:     max(service.Interval, time.Minute),
+		MinInterval:  max(service.Interval, time.Minute),
 		ExtraLabels:  lbls,
 		JitterSeed:   labels.FromMap(lbls).Hash(),
 		StopCallback: checkGatherer.Close,

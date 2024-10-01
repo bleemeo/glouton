@@ -358,7 +358,7 @@ func TestRegistryDiagnostic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	reg.UpdateDelay(250*time.Millisecond, nil)
+	reg.UpdateDelay(250*time.Millisecond, 0)
 
 	gather1 := &fakeGatherer{
 		name: "gather1",
@@ -835,7 +835,7 @@ func TestRegistry_slowGather(t *testing.T) { //nolint:maintidx
 	})
 
 	grp.Go(func() error {
-		reg.UpdateDelay(100*time.Millisecond, nil)
+		reg.UpdateDelay(100*time.Millisecond, 0)
 
 		return nil
 	})
@@ -899,7 +899,7 @@ func TestRegistry_slowGather(t *testing.T) { //nolint:maintidx
 		t.Errorf("gather2 was never called")
 	}
 
-	reg.UpdateDelay(50*time.Millisecond, nil)
+	reg.UpdateDelay(50*time.Millisecond, 0)
 
 	waitPointAndGatherCall(t, true, "name1")
 
@@ -1029,7 +1029,7 @@ func TestRegistry_run(t *testing.T) {
 
 			const delay = 100 * time.Millisecond
 
-			reg.UpdateDelay(delay, nil)
+			reg.UpdateDelay(delay, 0)
 
 			gather1 := &fakeGatherer{name: "name1"}
 			gather1.fillResponse()
