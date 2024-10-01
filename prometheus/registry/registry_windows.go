@@ -44,7 +44,6 @@ func (r *Registry) AddWindowsExporter(collectors []string, options inputs.Collec
 		RegistrationOption{
 			Description:           "windows_exporter",
 			JitterSeed:            baseJitter,
-			MinInterval:           defaultInterval,
 			DisablePeriodicGather: r.option.MetricFormat != types.MetricFormatPrometheus,
 		},
 		reg,

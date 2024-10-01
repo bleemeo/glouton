@@ -1102,7 +1102,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			registry.RegistrationOption{
 				Description:    "Bleemeo connector",
 				JitterSeed:     baseJitter,
-				MinInterval:    defaultInterval,
 				HonorTimestamp: true, // time_drift metric emit point with the time from Bleemeo API
 			},
 			registry.AppenderFunc(a.bleemeoConnector.EmitInternalMetric),
@@ -1207,7 +1206,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			registry.RegistrationOption{
 				Description:              "Prom exporter " + target.URL.String(),
 				JitterSeed:               labels.FromMap(target.ExtraLabels).Hash(),
-				MinInterval:              defaultInterval,
 				ExtraLabels:              target.ExtraLabels,
 				AcceptAllowedMetricsOnly: true,
 				HonorTimestamp:           true,

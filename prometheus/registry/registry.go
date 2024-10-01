@@ -63,7 +63,6 @@ const (
 	hookRetryDelay              = 2 * time.Minute
 	relabelTimeout              = 20 * time.Second
 	baseJitter                  = 0
-	defaultInterval             = 0
 	maxLastScrape               = 10
 )
 
@@ -251,7 +250,7 @@ func (opt *RegistrationOption) String() string {
 	}
 
 	return fmt.Sprintf(
-		"\"%s\" with labels %v; interval=%v, seed=%d, timeout=%v, %s",
+		"%q with labels %v; min_interval=%v, seed=%d, timeout=%v, %s",
 		opt.Description, opt.ExtraLabels, opt.MinInterval, opt.JitterSeed, opt.Timeout, hasStop,
 	)
 }
@@ -1418,7 +1417,6 @@ func (r *Registry) AddDefaultCollector() {
 		RegistrationOption{
 			Description: "go & process collector",
 			JitterSeed:  baseJitter,
-			MinInterval: defaultInterval,
 		},
 		r.internalRegistry,
 	)
@@ -1443,7 +1441,6 @@ func (r *Registry) Exporter() http.Handler {
 		RegistrationOption{
 			Description:           "/metrics collector",
 			JitterSeed:            baseJitter,
-			MinInterval:           defaultInterval,
 			DisablePeriodicGather: r.option.MetricFormat != types.MetricFormatPrometheus,
 		},
 		reg,

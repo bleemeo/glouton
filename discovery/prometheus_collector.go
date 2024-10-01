@@ -32,8 +32,6 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 )
 
-const defaultInterval = 0
-
 func (d *Discovery) createPrometheusMemcached(service Service) error {
 	ip, port := service.AddressPort()
 
@@ -77,7 +75,6 @@ func (d *Discovery) createPrometheusMemcached(service Service) error {
 		registry.RegistrationOption{
 			Description:           "memcached exporter",
 			JitterSeed:            hash,
-			MinInterval:           defaultInterval,
 			StopCallback:          stopCallback,
 			ExtraLabels:           lbls,
 			DisablePeriodicGather: d.metricFormat != types.MetricFormatPrometheus,
