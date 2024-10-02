@@ -537,14 +537,26 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 	return labels, false
 }
 
-func (c *Connector) GetMetricResolution() int {
-	agentConfigID := c.cache.Agent().CurrentConfigID
+func (c *Connector) UpdateDelayHook(labels map[string]string) time.Duration {
+	agentID, ok := labels[gloutonTypes.LabelMetaBleemeoUUID]
+	if !ok {
+		return 0
+	}
+
+	agent, ok := c.cache.AgentsByUUID()[agentID]
+	if !ok {
+		logger.V(1).Printf("Can't find metric resolution for agent %s (agent not found in cache)", agentID)
+
+		return 0
+	}
 
 	for _, cfg := range c.cache.AgentConfigs() {
-		if cfg.ID == agentConfigID {
-			return cfg.MetricResolution
+		if cfg.AccountConfig == agent.CurrentConfigID {
+			return time.Duration(cfg.MetricResolution) * time.Second
 		}
 	}
+
+	logger.V(1).Printf("Can't find metric resolution for agent %s (agent config not found in cache)", agentID)
 
 	return 0
 }

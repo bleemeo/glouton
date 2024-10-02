@@ -201,6 +201,12 @@ func (cb fakeInput) Gather(acc telegraf.Accumulator) error {
 	return nil
 }
 
+func makeDelayHook(delay time.Duration) UpdateDelayHook {
+	return func(map[string]string) time.Duration {
+		return delay
+	}
+}
+
 func TestRegistry_Register(t *testing.T) {
 	reg, err := New(Option{})
 	if err != nil {
@@ -288,11 +294,12 @@ func TestRegistry_Register(t *testing.T) {
 		t.Errorf("re-reg.RegisterGatherer(gather2) failed: %v", err)
 	}
 
-	reg.UpdateRelabelHook(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
+	reg.SetDefaultInterval(gloutonMinimalInterval)
+	reg.UpdateRegistrationHooks(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
 		labels[types.LabelMetaBleemeoUUID] = testAgentID
 
 		return labels, false
-	})
+	}, makeDelayHook(gloutonMinimalInterval))
 
 	now := time.Now()
 
@@ -358,8 +365,6 @@ func TestRegistryDiagnostic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	reg.UpdateDelay(250*time.Millisecond, 0)
-
 	gather1 := &fakeGatherer{
 		name: "gather1",
 	}
@@ -387,11 +392,12 @@ func TestRegistryDiagnostic(t *testing.T) {
 		t.Errorf("re-reg.RegisterGatherer(gather2) failed: %v", err)
 	}
 
-	reg.UpdateRelabelHook(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
+	reg.SetDefaultInterval(250 * time.Millisecond)
+	reg.UpdateRegistrationHooks(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
 		labels[types.LabelMetaBleemeoUUID] = testAgentID
 
 		return labels, false
-	})
+	}, makeDelayHook(250*time.Millisecond))
 
 	// After this delay, registry should have run at least once.
 	time.Sleep(300 * time.Millisecond)
@@ -497,11 +503,12 @@ func TestRegistry_pushPoint(t *testing.T) {
 		t.Errorf("Gather() mismatch: (-want +got):\n%s", diff)
 	}
 
-	reg.UpdateRelabelHook(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
+	reg.SetDefaultInterval(gloutonMinimalInterval)
+	reg.UpdateRegistrationHooks(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
 		labels[types.LabelMetaBleemeoUUID] = testAgentID
 
 		return labels, false
-	})
+	}, makeDelayHook(gloutonMinimalInterval))
 
 	got, err = reg.Gather()
 	if err != nil {
@@ -825,17 +832,12 @@ func TestRegistry_slowGather(t *testing.T) { //nolint:maintidx
 	})
 
 	grp.Go(func() error {
-		reg.UpdateRelabelHook(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
+		reg.SetDefaultInterval(100 * time.Millisecond)
+		reg.UpdateRegistrationHooks(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
 			labels[types.LabelMetaBleemeoUUID] = testAgentID
 
 			return labels, false
-		})
-
-		return nil
-	})
-
-	grp.Go(func() error {
-		reg.UpdateDelay(100*time.Millisecond, 0)
+		}, makeDelayHook(100*time.Millisecond))
 
 		return nil
 	})
@@ -899,7 +901,12 @@ func TestRegistry_slowGather(t *testing.T) { //nolint:maintidx
 		t.Errorf("gather2 was never called")
 	}
 
-	reg.UpdateDelay(50*time.Millisecond, 0)
+	reg.SetDefaultInterval(50 * time.Millisecond)
+	reg.UpdateRegistrationHooks(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
+		labels[types.LabelMetaBleemeoUUID] = testAgentID
+
+		return labels, false
+	}, makeDelayHook(50*time.Millisecond))
 
 	waitPointAndGatherCall(t, true, "name1")
 
@@ -1021,15 +1028,14 @@ func TestRegistry_run(t *testing.T) {
 
 			go reg.Run(ctx) //nolint: errcheck
 
-			reg.UpdateRelabelHook(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
+			const delay = 100 * time.Millisecond
+
+			reg.SetDefaultInterval(delay)
+			reg.UpdateRegistrationHooks(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
 				labels[types.LabelMetaBleemeoUUID] = testAgentID
 
 				return labels, false
-			})
-
-			const delay = 100 * time.Millisecond
-
-			reg.UpdateDelay(delay, 0)
+			}, makeDelayHook(delay))
 
 			gather1 := &fakeGatherer{name: "name1"}
 			gather1.fillResponse()

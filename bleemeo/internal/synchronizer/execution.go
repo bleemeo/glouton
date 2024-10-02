@@ -372,8 +372,8 @@ func (e *Execution) run(ctx context.Context) error {
 // current execution run() or directly forwarded to Synchronizer.forceSync.
 func (e *Execution) executePostRunCalls(ctx context.Context) {
 	if e.callUpdateLabels {
-		if e.synchronizer.option.NotifyLabelsUpdate != nil {
-			e.synchronizer.option.NotifyLabelsUpdate()
+		if e.synchronizer.option.NotifyHooksUpdate != nil {
+			e.synchronizer.option.NotifyHooksUpdate()
 		}
 	}
 

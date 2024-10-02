@@ -111,6 +111,7 @@ type AccountConfig struct {
 type AgentConfig struct {
 	ID               string `json:"id"`
 	MetricsAllowlist string `json:"metrics_allowlist"`
+	// MetricResolution is given in seconds.
 	MetricResolution int    `json:"metrics_resolution"`
 	AccountConfig    string `json:"account_config"`
 	AgentType        string `json:"agent_type"`

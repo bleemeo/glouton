@@ -64,6 +64,7 @@ const (
 	relabelTimeout              = 20 * time.Second
 	baseJitter                  = 0
 	maxLastScrape               = 10
+	gloutonMinimalInterval      = 10 * time.Second
 )
 
 // RelabelHook is a hook called just before applying relabeling.
@@ -73,6 +74,10 @@ const (
 // If the hook return retryLater, it means that hook can not processed the labels currently
 // and it registry should retry later. Points or gatherer associated will be dropped.
 type RelabelHook func(ctx context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool)
+
+// UpdateDelayHook returns the minimal gathering interval
+// according to the Bleemeo plan that matches the given labels.
+type UpdateDelayHook func(labels map[string]string) time.Duration
 
 var (
 	errInvalidName = errors.New("invalid metric name or label name")
@@ -141,13 +146,8 @@ type Registry struct {
 	lastPushedPointsCleanup time.Time
 	currentDelay            time.Duration
 	relabelHook             RelabelHook
+	updateDelayHook         UpdateDelayHook
 	renamer                 *renamer.Renamer
-	// planMetricResolution represents the minimum interval
-	// allowed for the current Bleemeo plan.
-	// If this agent doesn't belong to a Bleemeo account,
-	// the value is ignored.
-	// The resolution is in seconds.
-	planMetricResolution int
 }
 
 type Option struct {
@@ -282,6 +282,7 @@ type registration struct {
 	annotations          types.MetricAnnotations
 	relabelHookSkip      bool
 	lastRelabelHookRetry time.Time
+	interval             time.Duration
 }
 
 // RunNow will trigger an run of the scrapeLoop. If the registry isn't running,
@@ -443,7 +444,7 @@ func (r *Registry) init() {
 	r.internalRegistry = prometheus.NewRegistry()
 	r.pushedPoints = make(map[string]types.MetricPoint)
 	r.pushedPointsExpiration = make(map[string]time.Time)
-	r.currentDelay = 10 * time.Second
+	r.currentDelay = gloutonMinimalInterval
 	r.relabelConfigs = getDefaultRelabelConfig()
 	r.renamer = renamer.LoadRules(renamer.GetDefaultRules())
 }
@@ -513,13 +514,10 @@ func (r *Registry) startLoopsInner() {
 		}
 	}
 
-	currentDelay := r.currentDelay
-	planMetricResolution := r.planMetricResolution
-
 	r.l.Unlock()
 
 	for _, reg := range regToStart {
-		r.restartScrapeLoop(reg, currentDelay, planMetricResolution)
+		r.restartScrapeLoop(reg)
 	}
 }
 
@@ -684,15 +682,22 @@ func (r *Registry) RegisterInput(
 	return r.addRegistration(reg)
 }
 
-// UpdateRelabelHook change the hook used just before relabeling and wait for all pending metrics emission.
-// When this function return, it's guaratee that all call to Option.PushPoint will use new labels.
-// The hook is assumed to be idempotent, that is for a given labels input the result is the same.
-// If the hook want break this idempotence, UpdateRelabelHook() should be re-called to force update of existings Gatherer.
-func (r *Registry) UpdateRelabelHook(hook RelabelHook) {
-	r.restartLoops(func() { r.updateRelabelHook(hook) })
+func (r *Registry) SetDefaultInterval(delay time.Duration) {
+	r.l.Lock()
+	defer r.l.Unlock()
+
+	r.currentDelay = delay
 }
 
-func (r *Registry) updateRelabelHook(hook RelabelHook) {
+// UpdateRegistrationHooks change the hook used just before relabeling and wait for all pending metrics emission.
+// When this function return, it's guaratee that all call to Option.PushPoint will use new labels.
+// The hook is assumed to be idempotent, that is for a given labels input the result is the same.
+// If the hook want break this idempotence, UpdateRegistrationHooks() should be re-called to force update of existings Gatherer.
+func (r *Registry) UpdateRegistrationHooks(relabelHook RelabelHook, updateDelayHook UpdateDelayHook) {
+	r.restartLoops(func() { r.updateHooks(relabelHook, updateDelayHook) })
+}
+
+func (r *Registry) updateHooks(relabelHook RelabelHook, updateDelayHook UpdateDelayHook) {
 	r.l.Lock()
 	defer r.l.Unlock()
 
@@ -703,7 +708,8 @@ func (r *Registry) updateRelabelHook(hook RelabelHook) {
 		r.condition.Wait()
 	}
 
-	r.relabelHook = hook
+	r.relabelHook = relabelHook
+	r.updateDelayHook = updateDelayHook
 
 	// Since the updated Agent ID may change metrics labels, drop pushed points
 	r.pushedPoints = make(map[string]types.MetricPoint)
@@ -873,6 +879,7 @@ func (r *Registry) diagnosticScrapeLoop(ctx context.Context, archive types.Archi
 		Description        string
 		AddedAt            time.Time
 		LastScrape         []scrapeRun
+		RegInterval        string
 		ScrapeInterval     string
 		Option             RegistrationOption
 		UnexportableOption unexportableOption
@@ -894,6 +901,7 @@ func (r *Registry) diagnosticScrapeLoop(ctx context.Context, archive types.Archi
 			Description: reg.option.Description,
 			AddedAt:     reg.addedAt,
 			LastScrape:  reg.lastScrapes,
+			RegInterval: reg.interval.String(),
 			Option:      reg.option,
 			LabelUsed:   dtoLabelToMap(reg.gatherer.labels),
 		}
@@ -1019,7 +1027,7 @@ func (r *Registry) addRegistration(reg *registration) (int, error) {
 		}
 
 		if r.running {
-			r.restartScrapeLoop(reg, r.currentDelay, r.planMetricResolution)
+			r.restartScrapeLoop(reg)
 		}
 	}
 
@@ -1029,7 +1037,7 @@ func (r *Registry) addRegistration(reg *registration) (int, error) {
 // restartScrapeLoop start a scrapeLoop for this registration after stop previous loop if it exists.
 // reg.l must NOT be held.
 // r.l lock should NOT be held or a deadlock could occur during stop.
-func (r *Registry) restartScrapeLoop(reg *registration, registryCurrentDelay time.Duration, planMetricResolution int) {
+func (r *Registry) restartScrapeLoop(reg *registration) {
 	reg.l.Lock()
 	defer reg.l.Unlock()
 
@@ -1052,16 +1060,13 @@ func (r *Registry) restartScrapeLoop(reg *registration, registryCurrentDelay tim
 		reg.l.Lock()
 	}
 
-	agentMetricResolution := time.Duration(planMetricResolution) * time.Second
-	interval := max(reg.option.MinInterval, agentMetricResolution, registryCurrentDelay)
-
-	timeout := interval * 8 / 10
-	if reg.option.Timeout != 0 && reg.option.Timeout < interval {
+	timeout := reg.interval * 8 / 10
+	if reg.option.Timeout != 0 && reg.option.Timeout < reg.interval {
 		timeout = reg.option.Timeout
 	}
 
 	reg.loop = startScrapeLoop(
-		interval,
+		reg.interval,
 		timeout,
 		reg.option.JitterSeed,
 		func(ctx context.Context, loopCtx context.Context, t0 time.Time) {
@@ -1456,30 +1461,6 @@ func (r *Registry) WithTTL(ttl time.Duration) types.PointPusher {
 	})
 }
 
-// UpdateDelay change the delay between metric gather.
-func (r *Registry) UpdateDelay(delay time.Duration, planMetricResolution int) {
-	if r.updateDelay(delay, planMetricResolution) {
-		r.restartLoops(func() {})
-	}
-}
-
-func (r *Registry) updateDelay(delay time.Duration, planMetricResolution int) bool {
-	r.l.Lock()
-	defer r.l.Unlock()
-
-	r.planMetricResolution = planMetricResolution
-
-	if r.currentDelay == delay {
-		return false
-	}
-
-	logger.V(2).Printf("Change metric collector delay to %v", delay)
-
-	r.currentDelay = delay
-
-	return true
-}
-
 // InternalRunScrape run a scrape/gathering on given registration id (from RegisterGatherer & co).
 // Points gatherer are processed at if a periodic gather occurred.
 // This should only be used in test.
@@ -1602,7 +1583,14 @@ func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registrat
 	reg.l.Lock()
 
 	if reg.relabelHookSkip && time.Since(reg.lastRelabelHookRetry) > hookRetryDelay {
-		r.setupGatherer(reg, reg.gatherer.getSource())
+		restartNeeded := r.setupGatherer(reg, reg.gatherer.getSource())
+		if restartNeeded {
+			go func() {
+				defer crashreport.ProcessPanic()
+
+				r.restartLoop(reg)
+			}()
+		}
 	}
 
 	r.l.Unlock()
@@ -1644,6 +1632,39 @@ func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registrat
 	}
 
 	return mfs, time.Since(start), err
+}
+
+func (r *Registry) restartLoop(reg *registration) {
+	r.startStopLock.Lock()
+	defer r.startStopLock.Unlock()
+
+	reg.l.Lock()
+	defer reg.l.Unlock()
+
+	if reg.loop != nil {
+		loop := reg.loop
+		reg.loop = nil
+
+		reg.l.Unlock()
+		loop.stop()
+		reg.l.Lock()
+	}
+
+	timeout := reg.interval * 8 / 10
+	if reg.option.Timeout != 0 && reg.option.Timeout < reg.interval {
+		timeout = reg.option.Timeout
+	}
+
+	reg.loop = startScrapeLoop(
+		reg.interval,
+		timeout,
+		reg.option.JitterSeed,
+		func(ctx context.Context, loopCtx context.Context, t0 time.Time) {
+			r.scrapeFromLoop(ctx, loopCtx, t0, reg)
+		},
+		reg.option.Description,
+		reg.runOnStart,
+	)
 }
 
 // pushPoint add a new point to the list of pushed point with a specified TTL.
@@ -1819,14 +1840,15 @@ func (r *Registry) applyRelabel(
 }
 
 // setupGatherer assume reg.l and r.l locks are held.
-func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) {
+func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) (restartNeeded bool) {
 	var (
+		extraLabels map[string]string
 		promLabels  labels.Labels
 		annotations types.MetricAnnotations
 	)
 
 	if !reg.option.NoLabelsAlteration {
-		extraLabels := r.addMetaLabels(reg.option.ExtraLabels)
+		extraLabels = r.addMetaLabels(reg.option.ExtraLabels)
 
 		reg.relabelHookSkip = false
 
@@ -1840,9 +1862,14 @@ func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) 
 		promLabels, annotations, reg.relabelHookSkip = r.applyRelabel(ctxTimeout, extraLabels)
 	}
 
+	hookMinimalInterval := r.minimalIntervalHook(extraLabels)
+	reg.interval = max(reg.option.MinInterval, hookMinimalInterval, r.currentDelay)
+
 	g := newWrappedGatherer(source, promLabels, reg.option)
 	reg.annotations = annotations
 	reg.gatherer = g
+
+	return reg.loop == nil || reg.loop.interval != reg.interval
 }
 
 // Collect collect pushed points.
@@ -1869,6 +1896,18 @@ func (r *Registry) getPushedPoints() []types.MetricPoint {
 	}
 
 	return pts
+}
+
+// minimalIntervalHook returns the minimal gathering interval
+// according to the current Bleemeo plan.
+// If the agent is not connected to Bleemeo, it returns 0.
+// It assumes that the r.l lock is held.
+func (r *Registry) minimalIntervalHook(promLabels map[string]string) time.Duration {
+	if r.updateDelayHook != nil {
+		return r.updateDelayHook(promLabels)
+	}
+
+	return gloutonMinimalInterval
 }
 
 func fixLabels(lbls map[string]string) (map[string]string, error) {

@@ -173,7 +173,7 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 			Process:                    mockProcessLister{},
 			SNMP:                       helper.SNMP,
 			SNMPOnlineTarget:           func() int { return len(helper.SNMP) },
-			NotifyLabelsUpdate:         helper.NotifyLabelsUpdate,
+			NotifyHooksUpdate:          helper.NotifyLabelsUpdate,
 			VSphereDevices:             func(context.Context, time.Duration) []bleemeoTypes.VSphereDevice { return helper.devices },
 			LastVSphereChange:          func(_ context.Context) time.Time { return time.Time{} },
 			VSphereEndpointsInError:    func() map[string]bool { return map[string]bool{} },
