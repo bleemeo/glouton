@@ -294,7 +294,6 @@ func TestRegistry_Register(t *testing.T) {
 		t.Errorf("re-reg.RegisterGatherer(gather2) failed: %v", err)
 	}
 
-	reg.SetDefaultInterval(gloutonMinimalInterval)
 	reg.UpdateRegistrationHooks(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
 		labels[types.LabelMetaBleemeoUUID] = testAgentID
 
@@ -392,7 +391,6 @@ func TestRegistryDiagnostic(t *testing.T) {
 		t.Errorf("re-reg.RegisterGatherer(gather2) failed: %v", err)
 	}
 
-	reg.SetDefaultInterval(250 * time.Millisecond)
 	reg.UpdateRegistrationHooks(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
 		labels[types.LabelMetaBleemeoUUID] = testAgentID
 
@@ -503,7 +501,6 @@ func TestRegistry_pushPoint(t *testing.T) {
 		t.Errorf("Gather() mismatch: (-want +got):\n%s", diff)
 	}
 
-	reg.SetDefaultInterval(gloutonMinimalInterval)
 	reg.UpdateRegistrationHooks(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
 		labels[types.LabelMetaBleemeoUUID] = testAgentID
 
@@ -832,7 +829,6 @@ func TestRegistry_slowGather(t *testing.T) { //nolint:maintidx
 	})
 
 	grp.Go(func() error {
-		reg.SetDefaultInterval(100 * time.Millisecond)
 		reg.UpdateRegistrationHooks(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
 			labels[types.LabelMetaBleemeoUUID] = testAgentID
 
@@ -850,8 +846,9 @@ func TestRegistry_slowGather(t *testing.T) { //nolint:maintidx
 	waitPointAndGatherCall := func(t *testing.T, expectPoint bool, expectedName string) {
 		t.Helper()
 
-		// We don't know the schedule of scraper... wait until we see point from gather1
-		deadline := time.Now().Add(time.Second)
+		// We don't know the schedule of scraper... wait until we see point from gather1.
+		// Since scrapeLoopOffset(...) may return a time up to now+gloutonMinimalInterval, it may take a while.
+		deadline := time.Now().Add(gloutonMinimalInterval).Truncate(gloutonMinimalInterval).Add(time.Second)
 
 		l.Lock()
 		defer l.Unlock()
@@ -901,7 +898,6 @@ func TestRegistry_slowGather(t *testing.T) { //nolint:maintidx
 		t.Errorf("gather2 was never called")
 	}
 
-	reg.SetDefaultInterval(50 * time.Millisecond)
 	reg.UpdateRegistrationHooks(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
 		labels[types.LabelMetaBleemeoUUID] = testAgentID
 
@@ -1030,7 +1026,6 @@ func TestRegistry_run(t *testing.T) {
 
 			const delay = 100 * time.Millisecond
 
-			reg.SetDefaultInterval(delay)
 			reg.UpdateRegistrationHooks(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
 				labels[types.LabelMetaBleemeoUUID] = testAgentID
 
@@ -1073,8 +1068,9 @@ func TestRegistry_run(t *testing.T) {
 				t.Error(err)
 			}
 
-			// We don't know the schedule of scraper... wait until we have the expected number of points
-			deadline := time.Now().Add(time.Second)
+			// We don't know the schedule of scraper... wait until we have the expected number of points.
+			// Since scrapeLoopOffset(...) may return a time up to now+gloutonMinimalInterval, it may take a while.
+			deadline := time.Now().Add(gloutonMinimalInterval).Truncate(gloutonMinimalInterval).Add(time.Second)
 
 			l.Lock()
 

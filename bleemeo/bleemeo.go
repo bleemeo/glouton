@@ -551,7 +551,7 @@ func (c *Connector) UpdateDelayHook(labels map[string]string) time.Duration {
 	}
 
 	for _, cfg := range c.cache.AgentConfigs() {
-		if cfg.AccountConfig == agent.CurrentConfigID {
+		if cfg.AccountConfig == agent.CurrentConfigID && cfg.AgentType == agent.AgentType {
 			return time.Duration(cfg.MetricResolution) * time.Second
 		}
 	}

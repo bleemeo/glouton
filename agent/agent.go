@@ -573,8 +573,6 @@ func (a *agent) updateMetricResolution(ctx context.Context, defaultResolution ti
 	a.metricResolution = defaultResolution
 	a.l.Unlock()
 
-	a.gathererRegistry.SetDefaultInterval(defaultResolution)
-
 	// No need to check whether the connector is nil or not, since we were called from it.
 	a.gathererRegistry.UpdateRegistrationHooks(a.bleemeoConnector.RelabelHook, a.bleemeoConnector.UpdateDelayHook)
 

@@ -76,7 +76,7 @@ const (
 type RelabelHook func(ctx context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool)
 
 // UpdateDelayHook returns the minimal gathering interval
-// according to the Bleemeo plan that matches the given labels.
+// for the given labels. For example, according to the Bleemeo plan.
 type UpdateDelayHook func(labels map[string]string) time.Duration
 
 var (
@@ -84,13 +84,13 @@ var (
 	ErrBadArgument = errors.New("bad argument")
 )
 
-type pushFunction func(ctx context.Context, points []types.MetricPoint)
-
 type diagnosticer interface {
 	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error
 }
 
-// AddMetricPoints implement PointAdder.
+// pushFunction implement types.PointPusher.
+type pushFunction func(ctx context.Context, points []types.MetricPoint)
+
 func (f pushFunction) PushPoints(ctx context.Context, points []types.MetricPoint) {
 	f(ctx, points)
 }
@@ -144,7 +144,6 @@ type Registry struct {
 	pushedPoints            map[string]types.MetricPoint
 	pushedPointsExpiration  map[string]time.Time
 	lastPushedPointsCleanup time.Time
-	currentDelay            time.Duration
 	relabelHook             RelabelHook
 	updateDelayHook         UpdateDelayHook
 	renamer                 *renamer.Renamer
@@ -444,7 +443,6 @@ func (r *Registry) init() {
 	r.internalRegistry = prometheus.NewRegistry()
 	r.pushedPoints = make(map[string]types.MetricPoint)
 	r.pushedPointsExpiration = make(map[string]time.Time)
-	r.currentDelay = gloutonMinimalInterval
 	r.relabelConfigs = getDefaultRelabelConfig()
 	r.renamer = renamer.LoadRules(renamer.GetDefaultRules())
 }
@@ -682,13 +680,6 @@ func (r *Registry) RegisterInput(
 	return r.addRegistration(reg)
 }
 
-func (r *Registry) SetDefaultInterval(delay time.Duration) {
-	r.l.Lock()
-	defer r.l.Unlock()
-
-	r.currentDelay = delay
-}
-
 // UpdateRegistrationHooks change the hook used just before relabeling and wait for all pending metrics emission.
 // When this function return, it's guaratee that all call to Option.PushPoint will use new labels.
 // The hook is assumed to be idempotent, that is for a given labels input the result is the same.
@@ -778,7 +769,6 @@ func (r *Registry) diagnosticState(archive types.ArchiveWriter) error {
 		BlockPushPoint          bool
 		Reschedules             []reschedule
 		LastPushedPointsCleanup time.Time
-		CurrentDelaySeconds     float64
 		PushedPointsCount       int
 		TooSlowConsecutiveError int
 	}{
@@ -788,7 +778,6 @@ func (r *Registry) diagnosticState(archive types.ArchiveWriter) error {
 		BlockPushPoint:          r.blockPushPoint,
 		Reschedules:             r.reschedules,
 		LastPushedPointsCleanup: r.lastPushedPointsCleanup,
-		CurrentDelaySeconds:     r.currentDelay.Seconds(),
 		PushedPointsCount:       len(r.pushedPoints),
 		TooSlowConsecutiveError: r.tooSlowConsecutiveError,
 	}
@@ -1588,6 +1577,8 @@ func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registrat
 			go func() {
 				defer crashreport.ProcessPanic()
 
+				// Run restartLoop in a goroutine because restartLoop will wait
+				// for scrape() to terminate before returning.
 				r.restartLoop(reg)
 			}()
 		}
@@ -1863,7 +1854,7 @@ func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) 
 	}
 
 	hookMinimalInterval := r.minimalIntervalHook(extraLabels)
-	reg.interval = max(reg.option.MinInterval, hookMinimalInterval, r.currentDelay)
+	reg.interval = max(reg.option.MinInterval, hookMinimalInterval, gloutonMinimalInterval)
 
 	g := newWrappedGatherer(source, promLabels, reg.option)
 	reg.annotations = annotations
@@ -1899,15 +1890,15 @@ func (r *Registry) getPushedPoints() []types.MetricPoint {
 }
 
 // minimalIntervalHook returns the minimal gathering interval
-// according to the current Bleemeo plan.
-// If the agent is not connected to Bleemeo, it returns 0.
+// according to the current updateDelayHook.
+// If the updateDelayHook is not defined, it returns 0.
 // It assumes that the r.l lock is held.
 func (r *Registry) minimalIntervalHook(promLabels map[string]string) time.Duration {
 	if r.updateDelayHook != nil {
 		return r.updateDelayHook(promLabels)
 	}
 
-	return gloutonMinimalInterval
+	return 0
 }
 
 func fixLabels(lbls map[string]string) (map[string]string, error) {
