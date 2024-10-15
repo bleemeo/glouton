@@ -1577,15 +1577,6 @@ func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registrat
 			go func() {
 				defer crashreport.ProcessPanic()
 
-				r.l.Lock()
-				stopping := !r.running
-				r.l.Unlock()
-
-				// Ensure the registry didn't shut down since the goroutine was created
-				if stopping {
-					return
-				}
-
 				// Run restartLoop in a goroutine because restartLoop will wait
 				// for scrape() to terminate before returning.
 				r.restartLoop(reg)
@@ -1638,6 +1629,10 @@ func (r *Registry) restartLoop(reg *registration) {
 	r.startStopLock.Lock()
 	defer r.startStopLock.Unlock()
 
+	r.l.Lock()
+	stopping := !r.running
+	r.l.Unlock()
+
 	reg.l.Lock()
 	defer reg.l.Unlock()
 
@@ -1648,6 +1643,10 @@ func (r *Registry) restartLoop(reg *registration) {
 		reg.l.Unlock()
 		loop.stop()
 		reg.l.Lock()
+	}
+
+	if stopping {
+		return
 	}
 
 	timeout := reg.interval * 8 / 10
