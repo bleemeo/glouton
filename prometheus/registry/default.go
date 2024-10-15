@@ -86,11 +86,11 @@ func DefaultSNMPRules(resolution time.Duration) []types.SimpleRule {
 		},
 		{
 			TargetName:  "mem_used",
-			PromQLQuery: "sum without (ciscoMemoryPoolName, ciscoMemoryPoolType) (ciscoMemoryPoolUsed)",
+			PromQLQuery: `sum without (ciscoMemoryPoolName, ciscoMemoryPoolType) (ciscoMemoryPoolUsed{ciscoMemoryPoolName=~"(Processor|System memory)"})`,
 		},
 		{
 			TargetName:  "mem_free",
-			PromQLQuery: "sum without (ciscoMemoryPoolName, ciscoMemoryPoolType) (ciscoMemoryPoolFree)",
+			PromQLQuery: `sum without (ciscoMemoryPoolName, ciscoMemoryPoolType) (ciscoMemoryPoolFree{ciscoMemoryPoolName=~"(Processor|System memory)"})`,
 		},
 		{
 			TargetName:  "temperature",
@@ -98,7 +98,7 @@ func DefaultSNMPRules(resolution time.Duration) []types.SimpleRule {
 		},
 		{
 			TargetName:  "temperature",
-			PromQLQuery: `sum without (rlPhdUnitEnvParamStackUnit) (label_replace(rlPhdUnitEnvParamTempSensorValue, "sensor", "CPU", "rlPhdUnitEnvParamStackUnit", ".*"))`,
+			PromQLQuery: `sum without (rlPhdUnitEnvParamStackUnit) (label_replace(rlPhdUnitEnvParamTempSensorValue{rlPhdUnitEnvParamStackUnit="1"}, "sensor", "CPU", "rlPhdUnitEnvParamStackUnit", ".*"))`,
 		},
 	}
 

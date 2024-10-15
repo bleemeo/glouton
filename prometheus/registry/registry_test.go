@@ -2476,34 +2476,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					},
 					TimeOnGather: now,
 				},
-				{
-					Labels: map[string]string{
-						types.LabelName:       "mem_free",
-						types.LabelInstance:   "server.bleemeo.com:8016",
-						types.LabelSNMPTarget: "192.168.1.2",
-						"uniqueValue":         "5",
-					},
-					Annotations: types.MetricAnnotations{SNMPTarget: "192.168.1.2"},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
-					TimeOnGather: now,
-				},
-				{
-					Labels: map[string]string{
-						types.LabelName:       "mem_used",
-						types.LabelInstance:   "server.bleemeo.com:8016",
-						types.LabelSNMPTarget: "192.168.1.2",
-						"uniqueValue":         "2",
-					},
-					Annotations: types.MetricAnnotations{SNMPTarget: "192.168.1.2"},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
-					TimeOnGather: now,
-				},
 				{ // This metric will be dropped by the metric filter.
 					Labels: map[string]string{
 						types.LabelName:       "rlCpuUtilDuringLastMinute",
