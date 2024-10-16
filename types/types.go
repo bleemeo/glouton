@@ -121,6 +121,7 @@ const (
 	LabelMetaKubernetesCluster      = "__meta_kubernetes_cluster"
 	LabelMetaVSphere                = "__meta_vsphere"
 	LabelMetaVSphereMOID            = "__meta_vsphere_moid"
+	LabelMeta2StrokeGatherer        = "__meta_2_stroke_gatherer"
 	LabelMetaBleemeoTargetAgent     = "__meta_bleemeo_target_agent"
 	LabelMetaBleemeoTargetAgentUUID = "__meta_bleemeo_target_agent_uuid"
 	LabelMetaBleemeoUUID            = "__meta_bleemeo_uuid"

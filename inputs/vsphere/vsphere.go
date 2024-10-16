@@ -340,12 +340,15 @@ func (vSphere *vSphere) makeRealtimeGatherer(ctx context.Context) (registry.Gath
 
 	vsphereInput.ObjectDiscoveryInterval = telegraf_config.Duration(2 * time.Minute)
 
-	vsphereInput.Log = logger.NewTelegrafLog(vSphere.String() + " realtime")
+	gathererName := vSphere.String() + " " + string(gatherRT)
+	gathererCode := vSphere.host + "-" + string(gatherRT)
+
+	vsphereInput.Log = logger.NewTelegrafLog(gathererName)
 
 	acc := &internal.Accumulator{
 		RenameMetrics:    renameMetrics,
 		TransformMetrics: vSphere.transformMetrics,
-		RenameGlobal:     vSphere.renameGlobal,
+		RenameGlobal:     vSphere.makeRenameGlobal(gathererCode),
 	}
 
 	gatherer, err := newGatherer(ctx, gatherRT, &vSphere.opts, vsphereInput, acc, vSphere.hierarchy, vSphere.devicePropsCache)
@@ -358,11 +361,14 @@ func (vSphere *vSphere) makeRealtimeGatherer(ctx context.Context) (registry.Gath
 	noMetricsSinceIterations := 0
 	noMetricsSince := make(map[string]int)
 	opt := registry.RegistrationOption{
-		Description: fmt.Sprint(vSphere, " ", gatherRT),
-		// We use the VM agent type because it has the smallest resolution.
+		Description: gathererName,
+		// We use the interval of VMs type because it has the smallest resolution.
 		MinInterval:         time.Minute,
 		StopCallback:        gatherer.stop,
 		ApplyDynamicRelabel: true,
+		ExtraLabels: map[string]string{
+			types.LabelMeta2StrokeGatherer: gathererCode,
+		},
 		GatherModifier: func(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
 			vSphere.purgeNoMetricsSinceMap(noMetricsSince, &noMetricsSinceIterations)
 
@@ -409,12 +415,15 @@ func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (regist
 	vsphereInput.HistoricalInterval = telegraf_config.Duration(30 * time.Minute)
 	vsphereInput.ObjectDiscoveryInterval = telegraf_config.Duration(5 * time.Minute)
 
-	vsphereInput.Log = logger.NewTelegrafLog(vSphere.String() + " historical 30min")
+	gathererName := vSphere.String() + " " + string(gatherHist30m)
+	gathererCode := vSphere.host + "-" + string(gatherHist30m)
+
+	vsphereInput.Log = logger.NewTelegrafLog(gathererName)
 
 	acc := &internal.Accumulator{
 		RenameMetrics:    renameMetrics,
 		TransformMetrics: vSphere.transformMetrics,
-		RenameGlobal:     vSphere.renameGlobal,
+		RenameGlobal:     vSphere.makeRenameGlobal(gathererCode),
 	}
 
 	gatherer, err := newGatherer(ctx, gatherHist30m, &vSphere.opts, vsphereInput, acc, vSphere.hierarchy, vSphere.devicePropsCache)
@@ -427,10 +436,13 @@ func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (regist
 	noMetricsSinceIterations := 0
 	noMetricsSince := make(map[string]int)
 	opt := registry.RegistrationOption{
-		Description:         fmt.Sprint(vSphere, " ", gatherHist30m),
+		Description:         gathererName,
 		MinInterval:         time.Minute, // 4 times out of 5, we will re-use the previous point
 		StopCallback:        gatherer.stop,
 		ApplyDynamicRelabel: true,
+		ExtraLabels: map[string]string{
+			types.LabelMeta2StrokeGatherer: gathererCode,
+		},
 		GatherModifier: func(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
 			vSphere.purgeNoMetricsSinceMap(noMetricsSince, &noMetricsSinceIterations)
 
@@ -696,40 +708,43 @@ func starLabelReplacer(labelPair *dto.LabelPair, m map[string]string) {
 	}
 }
 
-func (vSphere *vSphere) renameGlobal(gatherContext internal.GatherContext) (result internal.GatherContext, drop bool) {
-	tags := maps.Clone(gatherContext.Tags) // Prevents labels from being unexpectedly removed
+func (vSphere *vSphere) makeRenameGlobal(gatherer string) func(internal.GatherContext) (internal.GatherContext, bool) {
+	return func(gatherContext internal.GatherContext) (result internal.GatherContext, drop bool) {
+		tags := maps.Clone(gatherContext.Tags) // Prevents labels from being unexpectedly removed
 
-	tags[types.LabelMetaVSphere] = vSphere.host
-	tags[types.LabelMetaVSphereMOID] = tags["moid"]
+		tags[types.LabelMeta2StrokeGatherer] = gatherer
+		tags[types.LabelMetaVSphere] = vSphere.host
+		tags[types.LabelMetaVSphereMOID] = tags["moid"]
 
-	if tags["cpu"] == "*" { // Special case (vcsim)
-		tags["cpu"] = instanceTotal
+		if tags["cpu"] == "*" { // Special case (vcsim)
+			tags["cpu"] = instanceTotal
+		}
+
+		// Only keep the total of CPUs
+		if value, ok := tags["cpu"]; ok && value != instanceTotal {
+			return gatherContext, true
+		}
+
+		delete(tags, "cpu")
+		delete(tags, "guest")
+		delete(tags, "guesthostname")
+		delete(tags, "instance")
+		delete(tags, "moid")
+		delete(tags, "rpname")
+		delete(tags, "source")
+		delete(tags, "uuid")
+		delete(tags, "vcenter")
+
+		if value, ok := tags["dsname"]; ok {
+			delete(tags, "dsname")
+
+			tags["item"] = value
+		}
+
+		gatherContext.Tags = tags
+
+		return gatherContext, false
 	}
-
-	// Only keep the total of CPUs
-	if value, ok := tags["cpu"]; ok && value != instanceTotal {
-		return gatherContext, true
-	}
-
-	delete(tags, "cpu")
-	delete(tags, "guest")
-	delete(tags, "guesthostname")
-	delete(tags, "instance")
-	delete(tags, "moid")
-	delete(tags, "rpname")
-	delete(tags, "source")
-	delete(tags, "uuid")
-	delete(tags, "vcenter")
-
-	if value, ok := tags["dsname"]; ok {
-		delete(tags, "dsname")
-
-		tags["item"] = value
-	}
-
-	gatherContext.Tags = tags
-
-	return gatherContext, false
 }
 
 func (vSphere *vSphere) transformMetrics(currentContext internal.GatherContext, fields map[string]float64, _ map[string]interface{}) map[string]float64 {

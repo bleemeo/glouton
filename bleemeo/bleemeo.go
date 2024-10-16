@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"math/rand"
 	"runtime"
 	"sort"
@@ -49,6 +50,8 @@ import (
 	"github.com/prometheus/prometheus/storage"
 	"golang.org/x/oauth2"
 )
+
+const gathererToAgentConfigCacheTTL = time.Hour
 
 var (
 	errBadOption         = errors.New("bad option")
@@ -116,12 +119,14 @@ type Connector struct {
 	mqtt         *mqtt.Client
 	mqttRestart  chan interface{}
 
-	l                          sync.RWMutex
-	lastKnownReport            time.Time
-	lastMQTTRestart            time.Time
-	mqttReportConsecutiveError int
-	disabledUntil              time.Time
-	disableReason              types.DisableReason
+	l                           sync.RWMutex
+	lastKnownReport             time.Time
+	lastMQTTRestart             time.Time
+	mqttReportConsecutiveError  int
+	disabledUntil               time.Time
+	disableReason               types.DisableReason
+	gathererToAgentTypeIDsCache map[string]map[string]time.Time
+	lastGathererCachePurge      time.Time
 
 	// initialized indicates whether the mqtt connector can be started
 	initialized bool
@@ -130,10 +135,12 @@ type Connector struct {
 // New creates a new Connector.
 func New(option types.GlobalOption) (c *Connector, err error) {
 	c = &Connector{
-		option:       option,
-		cache:        cache.Load(option.State),
-		mqttRestart:  make(chan interface{}, 1),
-		pushAppender: model.NewBufferAppender(),
+		option:                      option,
+		cache:                       cache.Load(option.State),
+		mqttRestart:                 make(chan interface{}, 1),
+		pushAppender:                model.NewBufferAppender(),
+		gathererToAgentTypeIDsCache: make(map[string]map[string]time.Time),
+		lastGathererCachePurge:      time.Now(),
 	}
 
 	c.sync = synchronizer.New(synchronizerTypes.Option{
@@ -532,15 +539,49 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 		}
 
 		labels[gloutonTypes.LabelMetaBleemeoTargetAgentUUID] = agent.ID
+
+		if gatherer, is2StrokeGatherer := labels[gloutonTypes.LabelMeta2StrokeGatherer]; is2StrokeGatherer {
+			c.l.Lock()
+			if _, found := c.gathererToAgentTypeIDsCache[gatherer]; !found {
+				c.gathererToAgentTypeIDsCache[gatherer] = make(map[string]time.Time)
+			}
+
+			c.gathererToAgentTypeIDsCache[gatherer][vSphereAgentTypeID] = time.Now()
+			c.l.Unlock()
+		}
+
+		go func() {
+			defer crashreport.ProcessPanic()
+
+			c.l.Lock()
+			defer c.l.Unlock()
+
+			if time.Since(c.lastGathererCachePurge) < gathererToAgentConfigCacheTTL {
+				return
+			}
+
+			c.lastGathererCachePurge = time.Now()
+
+			for gatherer, cfgs := range c.gathererToAgentTypeIDsCache {
+				for cfg, lastUpdate := range cfgs {
+					if time.Since(lastUpdate) > gathererToAgentConfigCacheTTL {
+						delete(c.gathererToAgentTypeIDsCache[gatherer], cfg)
+					}
+				}
+			}
+		}()
 	}
 
 	return labels, false
 }
 
 func (c *Connector) UpdateDelayHook(labels map[string]string) time.Duration {
-	agentID, ok := labels[gloutonTypes.LabelMetaBleemeoUUID]
+	agentID, ok := labels[gloutonTypes.LabelMetaBleemeoTargetAgentUUID]
 	if !ok {
-		return 0
+		agentID, ok = labels[gloutonTypes.LabelMetaBleemeoUUID]
+		if !ok {
+			return 0
+		}
 	}
 
 	agent, ok := c.cache.AgentsByUUID()[agentID]
@@ -550,7 +591,35 @@ func (c *Connector) UpdateDelayHook(labels map[string]string) time.Duration {
 		return 0
 	}
 
-	for _, cfg := range c.cache.AgentConfigs() {
+	agentConfigs := c.cache.AgentConfigs()
+
+	if gatherer, is2StrokeGatherer := labels[gloutonTypes.LabelMeta2StrokeGatherer]; is2StrokeGatherer {
+		c.l.Lock()
+		possibleAgentTypeIDs := maps.Clone(c.gathererToAgentTypeIDsCache[gatherer])
+		c.l.Unlock()
+
+		var (
+			minInterval int
+			found       bool
+		)
+
+		if len(possibleAgentTypeIDs) > 0 {
+			for _, cfg := range agentConfigs {
+				if t, ok := possibleAgentTypeIDs[cfg.AgentType]; ok && time.Since(t) < gathererToAgentConfigCacheTTL {
+					if !found || cfg.MetricResolution < minInterval {
+						minInterval = cfg.MetricResolution
+						found = true
+					}
+				}
+			}
+		}
+
+		if found {
+			return time.Duration(minInterval) * time.Second
+		}
+	}
+
+	for _, cfg := range agentConfigs {
 		if cfg.AccountConfig == agent.CurrentConfigID && cfg.AgentType == agent.AgentType {
 			return time.Duration(cfg.MetricResolution) * time.Second
 		}
@@ -720,6 +789,22 @@ func (c *Connector) DiagnosticArchive(ctx context.Context, archive gloutonTypes.
 	}
 
 	c.diagnosticCache(file)
+
+	file, err = archive.Create("2-stroke-gatherers-cache.json")
+	if err != nil {
+		return err
+	}
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	c.l.Lock()
+	err = enc.Encode(c.gathererToAgentTypeIDsCache)
+	c.l.Unlock()
+
+	if err != nil {
+		return err
+	}
 
 	return c.sync.DiagnosticArchive(ctx, archive)
 }
