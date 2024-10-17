@@ -538,9 +538,12 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 }
 
 func (c *Connector) UpdateDelayHook(labels map[string]string) time.Duration {
-	agentID, ok := labels[gloutonTypes.LabelMetaBleemeoUUID]
+	agentID, ok := labels[gloutonTypes.LabelMetaBleemeoTargetAgentUUID]
 	if !ok {
-		return 0
+		agentID, ok = labels[gloutonTypes.LabelMetaBleemeoUUID]
+		if !ok {
+			return 0
+		}
 	}
 
 	agent, ok := c.cache.AgentsByUUID()[agentID]
@@ -550,15 +553,39 @@ func (c *Connector) UpdateDelayHook(labels map[string]string) time.Duration {
 		return 0
 	}
 
+	possibleAgentTypes := make(map[string]bool)
+
+	if strTypes, hasAgentTypes := labels[gloutonTypes.LabelMetaAgentTypes]; hasAgentTypes {
+		// The related gatherer handles agent of multiple types,
+		// so we need to find the metric resolution of each.
+		agentTypes := strings.Split(strTypes, ",")
+
+		for _, agentType := range c.cache.AgentTypes() {
+			for _, agentTypeStr := range agentTypes {
+				if agentTypeStr == string(agentType.Name) {
+					possibleAgentTypes[agentType.ID] = true
+				}
+			}
+		}
+	} else {
+		possibleAgentTypes[agent.AgentType] = true
+	}
+
+	var minResolution int
+
 	for _, cfg := range c.cache.AgentConfigs() {
-		if cfg.AccountConfig == agent.CurrentConfigID && cfg.AgentType == agent.AgentType {
-			return time.Duration(cfg.MetricResolution) * time.Second
+		if cfg.AccountConfig == agent.CurrentConfigID && possibleAgentTypes[cfg.AgentType] {
+			if minResolution == 0 || cfg.MetricResolution < minResolution {
+				minResolution = cfg.MetricResolution
+			}
 		}
 	}
 
-	logger.V(1).Printf("Can't find metric resolution for agent %s (agent config not found in cache)", agentID)
+	if minResolution == 0 {
+		logger.V(1).Printf("Can't find metric resolution for agent %s (agent config not found in cache)", agentID)
+	}
 
-	return 0
+	return time.Duration(minResolution) * time.Second
 }
 
 func (c *Connector) kubernetesAgentID(clusterName string) (string, error) {

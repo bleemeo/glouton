@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"runtime"
 	"sort"
@@ -33,6 +34,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/delay"
 	"github.com/bleemeo/glouton/inputs"
@@ -166,6 +168,7 @@ type RegistrationOption struct {
 	Description  string
 	JitterSeed   uint64
 	MinInterval  time.Duration
+	AgentTypes   []bleemeo.AgentType
 	Timeout      time.Duration
 	StopCallback func() `json:"-"`
 	// ExtraLabels are labels added. If a labels already exists, extraLabels takes precedence.
@@ -1711,7 +1714,7 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 			ctx, cancel := context.WithTimeout(ctx, relabelTimeout)
 			defer cancel()
 
-			newLabels, _, skip = r.applyRelabel(ctx, point.Labels)
+			newLabels, _, _, skip = r.applyRelabel(ctx, point.Labels)
 			point.Labels = newLabels.Map()
 		} else {
 			point.Labels = r.addMetaLabels(point.Labels)
@@ -1719,7 +1722,7 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 			ctx, cancel := context.WithTimeout(ctx, relabelTimeout)
 			defer cancel()
 
-			newLabels, newAnnotations, skip = r.applyRelabel(ctx, point.Labels)
+			newLabels, _, newAnnotations, skip = r.applyRelabel(ctx, point.Labels)
 			point.Labels = newLabels.Map()
 			point.Annotations = point.Annotations.Merge(newAnnotations)
 		}
@@ -1769,10 +1772,11 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 	r.l.Unlock()
 }
 
-func (r *Registry) addMetaLabels(input map[string]string) map[string]string {
-	result := make(map[string]string)
-	for k, v := range input {
-		result[k] = v
+func (r *Registry) addMetaLabels(input map[string]string) (result map[string]string) {
+	if input == nil {
+		result = make(map[string]string)
+	} else {
+		result = maps.Clone(input)
 	}
 
 	result[types.LabelMetaGloutonFQDN] = r.option.FQDN
@@ -1799,7 +1803,7 @@ func (r *Registry) relabelPoints(ctx context.Context, points []types.MetricPoint
 		ctx, cancel := context.WithTimeout(ctx, relabelTimeout)
 		defer cancel()
 
-		newLabels, newAnnotations, skip := r.applyRelabel(ctx, point.Labels)
+		newLabels, _, newAnnotations, skip := r.applyRelabel(ctx, point.Labels)
 		point.Labels = newLabels.Map()
 		point.Annotations = point.Annotations.Merge(newAnnotations)
 
@@ -1815,9 +1819,7 @@ func (r *Registry) relabelPoints(ctx context.Context, points []types.MetricPoint
 func (r *Registry) applyRelabel(
 	ctx context.Context,
 	input map[string]string,
-) (labels.Labels, types.MetricAnnotations, bool) {
-	var retryLater bool
-
+) (promLabels labels.Labels, labelsWithMeta map[string]string, annotations types.MetricAnnotations, retryLater bool) {
 	if r.relabelHook != nil {
 		ctx, cancel := context.WithTimeout(ctx, relabelTimeout)
 		input, retryLater = r.relabelHook(ctx, input)
@@ -1825,29 +1827,30 @@ func (r *Registry) applyRelabel(
 		cancel()
 	}
 
-	promLabels := labels.FromMap(input)
-	annotations := gloutonModel.MetaLabelsToAnnotation(promLabels)
+	promLabels = labels.FromMap(input)
+	labelsWithMeta = maps.Clone(input)
+	annotations = gloutonModel.MetaLabelsToAnnotation(promLabels)
 
 	promLabels, keep := relabel.Process(promLabels, r.relabelConfigs...)
 	if !keep {
-		return promLabels, annotations, retryLater
+		return promLabels, labelsWithMeta, annotations, retryLater
 	}
 
 	promLabels = gloutonModel.DropMetaLabels(promLabels)
 
-	return promLabels, annotations, retryLater
+	return promLabels, labelsWithMeta, annotations, retryLater
 }
 
 // setupGatherer assume reg.l and r.l locks are held.
 func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) (restartNeeded bool) {
 	var (
-		extraLabels map[string]string
-		promLabels  labels.Labels
-		annotations types.MetricAnnotations
+		promLabels     labels.Labels
+		labelsWithMeta map[string]string
+		annotations    types.MetricAnnotations
 	)
 
 	if !reg.option.NoLabelsAlteration {
-		extraLabels = r.addMetaLabels(reg.option.ExtraLabels)
+		extraLabels := r.addMetaLabels(reg.option.ExtraLabels)
 
 		reg.relabelHookSkip = false
 
@@ -1858,10 +1861,24 @@ func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) 
 		ctxTimeout, cancel := context.WithTimeout(context.Background(), relabelTimeout)
 		defer cancel()
 
-		promLabels, annotations, reg.relabelHookSkip = r.applyRelabel(ctxTimeout, extraLabels)
+		promLabels, labelsWithMeta, annotations, reg.relabelHookSkip = r.applyRelabel(ctxTimeout, extraLabels)
 	}
 
-	hookMinimalInterval := r.minimalIntervalHook(extraLabels)
+	if len(reg.option.AgentTypes) != 0 {
+		// When a gatherer handles agents of multiple types,
+		// we need to take into account the metric resolution of each.
+		// Therefor, by passing these types to r.minimalIntervalHook (and so to Connector.UpdateDelayHook),
+		// we're able to pick the right interval (a.k.a the smallest) between them all.
+		strsAgentTypes := make([]string, len(reg.option.AgentTypes))
+
+		for i, agentType := range reg.option.AgentTypes {
+			strsAgentTypes[i] = string(agentType)
+		}
+
+		labelsWithMeta[types.LabelMetaAgentTypes] = strings.Join(strsAgentTypes, ",")
+	}
+
+	hookMinimalInterval := r.minimalIntervalHook(labelsWithMeta)
 	reg.interval = max(reg.option.MinInterval, hookMinimalInterval, gloutonMinimalInterval)
 
 	g := newWrappedGatherer(source, promLabels, reg.option)
@@ -1901,9 +1918,9 @@ func (r *Registry) getPushedPoints() []types.MetricPoint {
 // according to the current updateDelayHook.
 // If the updateDelayHook is not defined, it returns 0.
 // It assumes that the r.l lock is held.
-func (r *Registry) minimalIntervalHook(promLabels map[string]string) time.Duration {
+func (r *Registry) minimalIntervalHook(labels map[string]string) time.Duration {
 	if r.updateDelayHook != nil {
-		return r.updateDelayHook(promLabels)
+		return r.updateDelayHook(labels)
 	}
 
 	return 0

@@ -571,8 +571,10 @@ func TestRegistry_applyRelabel(t *testing.T) {
 	tests := []struct {
 		name            string
 		fields          fields
+		relabelHook     RelabelHook
 		args            args
 		want            labels.Labels
+		wantWithMeta    map[string]string
 		wantAnnotations types.MetricAnnotations
 	}{
 		{
@@ -670,6 +672,32 @@ func TestRegistry_applyRelabel(t *testing.T) {
 				BleemeoAgentID: "c571f9cf-6f07-492a-9e86-b8d5f5027557",
 			},
 		},
+		{
+			name:   "vSphere_realtime_gatherer",
+			fields: fields{relabelConfigs: getDefaultRelabelConfig()},
+			relabelHook: func(_ context.Context, labels map[string]string) (result map[string]string, retryLater bool) {
+				labels["__meta_additional_info"] = "some value"
+
+				return labels, false
+			},
+			args: args{map[string]string{
+				types.LabelMetaGloutonFQDN:     "some-instance",
+				types.LabelMetaGloutonPort:     "8015",
+				types.LabelMetaPort:            "8015",
+				types.LabelMetaSendScraperUUID: "yes",
+			}},
+			want: labels.FromMap(map[string]string{
+				types.LabelInstance: "some-instance:8015",
+			}),
+			wantWithMeta: map[string]string{
+				types.LabelMetaGloutonFQDN:     "some-instance",
+				types.LabelMetaGloutonPort:     "8015",
+				types.LabelMetaPort:            "8015",
+				types.LabelMetaSendScraperUUID: "yes",
+				"__meta_additional_info":       "some value",
+			},
+			wantAnnotations: types.MetricAnnotations{},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -679,10 +707,18 @@ func TestRegistry_applyRelabel(t *testing.T) {
 			}
 
 			r.relabelConfigs = tt.fields.relabelConfigs
+			r.relabelHook = tt.relabelHook
 
-			promLabels, annotations, _ := r.applyRelabel(context.Background(), tt.args.input)
+			promLabels, labelsWithMeta, annotations, _ := r.applyRelabel(context.Background(), tt.args.input)
 			if !reflect.DeepEqual(promLabels, tt.want) {
 				t.Errorf("Registry.applyRelabel() promLabels = %+v, want %+v", promLabels, tt.want)
+			}
+
+			if tt.relabelHook != nil {
+				// For our current use case, labels with meta are only useful in combination with the relabel-hook.
+				if diff := cmp.Diff(tt.wantWithMeta, labelsWithMeta); diff != "" {
+					t.Errorf("Registry.applyRelabel() labelsWithMeta (-want +got):\n%s", diff)
+				}
 			}
 
 			if !reflect.DeepEqual(annotations, tt.wantAnnotations) {
