@@ -282,7 +282,6 @@ type registration struct {
 	relabelHookSkip      bool
 	lastRelabelHookRetry time.Time
 	interval             time.Duration
-	hasSetupBeenDelayed  bool
 }
 
 // RunNow will trigger an run of the scrapeLoop. If the registry isn't running,
@@ -1862,33 +1861,8 @@ func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) 
 		promLabels, annotations, reg.relabelHookSkip = r.applyRelabel(ctxTimeout, extraLabels)
 	}
 
-	agentConfigInterval := r.minimalIntervalHook(extraLabels)
-	if agentConfigInterval == 0 {
-		if _, is2StrokeGatherer := extraLabels[types.LabelMeta2StrokeGatherer]; is2StrokeGatherer {
-			var waitDelay time.Duration
-
-			if reg.hasSetupBeenDelayed {
-				waitDelay = time.Hour
-			} else {
-				waitDelay = max(reg.option.MinInterval, gloutonMinimalInterval)
-			}
-
-			logger.V(2).Printf("Registration %q is not fully ready yet; will retry in %s", reg.option.Description, waitDelay)
-
-			go func() {
-				defer crashreport.ProcessPanic()
-
-				time.Sleep(waitDelay)
-
-				reg.l.Lock()
-				reg.relabelHookSkip = true
-				reg.hasSetupBeenDelayed = true
-				reg.l.Unlock()
-			}()
-		}
-	}
-
-	reg.interval = max(reg.option.MinInterval, agentConfigInterval, gloutonMinimalInterval)
+	hookMinimalInterval := r.minimalIntervalHook(extraLabels)
+	reg.interval = max(reg.option.MinInterval, hookMinimalInterval, gloutonMinimalInterval)
 
 	g := newWrappedGatherer(source, promLabels, reg.option)
 	reg.annotations = annotations
