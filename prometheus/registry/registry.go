@@ -280,8 +280,10 @@ type registration struct {
 	lastScrapes          []scrapeRun
 	gatherer             *wrappedGatherer
 	annotations          types.MetricAnnotations
+	relabelWithMeta      map[string]string
 	relabelHookSkip      bool
 	lastRelabelHookRetry time.Time
+	hookMinimalInterval  time.Duration
 	interval             time.Duration
 }
 
@@ -865,16 +867,20 @@ func (r *Registry) diagnosticScrapeLoop(ctx context.Context, archive types.Archi
 	}
 
 	type loopInfo struct {
-		ID                 int
-		Description        string
-		AddedAt            time.Time
-		LastScrape         []scrapeRun
-		RegInterval        string
-		ScrapeInterval     string
-		Option             RegistrationOption
-		UnexportableOption unexportableOption
-		LabelUsed          map[string]string
-		subDiagnostic      func(ctx context.Context, archive types.ArchiveWriter) error
+		ID                  int
+		Description         string
+		AddedAt             time.Time
+		LastScrape          []scrapeRun
+		RegInterval         string
+		HookMinimalInterval string
+		ScrapeInterval      string
+		Option              RegistrationOption
+		UnexportableOption  unexportableOption
+		LabelUsed           map[string]string
+		RelabelWithMeta     map[string]string
+		RelabelHookSkip     bool
+		RelabelHookLastTry  time.Time
+		subDiagnostic       func(ctx context.Context, archive types.ArchiveWriter) error
 	}
 
 	activeResult := []loopInfo{}
@@ -887,13 +893,17 @@ func (r *Registry) diagnosticScrapeLoop(ctx context.Context, archive types.Archi
 		copy(copySlice, reg.lastScrapes)
 
 		info := loopInfo{
-			ID:          id,
-			Description: reg.option.Description,
-			AddedAt:     reg.addedAt,
-			LastScrape:  reg.lastScrapes,
-			RegInterval: reg.interval.String(),
-			Option:      reg.option,
-			LabelUsed:   dtoLabelToMap(reg.gatherer.labels),
+			ID:                  id,
+			Description:         reg.option.Description,
+			AddedAt:             reg.addedAt,
+			LastScrape:          reg.lastScrapes,
+			RegInterval:         reg.interval.String(),
+			HookMinimalInterval: reg.hookMinimalInterval.String(),
+			Option:              reg.option,
+			LabelUsed:           dtoLabelToMap(reg.gatherer.labels),
+			RelabelWithMeta:     reg.relabelWithMeta,
+			RelabelHookSkip:     reg.relabelHookSkip,
+			RelabelHookLastTry:  reg.lastRelabelHookRetry,
 		}
 
 		if reg.option.StopCallback != nil {
@@ -1860,10 +1870,11 @@ func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) 
 		defer cancel()
 
 		promLabels, labelsWithMeta, annotations, reg.relabelHookSkip = r.applyRelabel(ctxTimeout, extraLabels)
+		reg.relabelWithMeta = labelsWithMeta
 	}
 
-	hookMinimalInterval := r.minimalIntervalHook(labelsWithMeta)
-	reg.interval = max(reg.option.MinInterval, hookMinimalInterval, gloutonMinimalInterval)
+	reg.hookMinimalInterval = r.minimalIntervalHook(labelsWithMeta)
+	reg.interval = max(reg.option.MinInterval, reg.hookMinimalInterval, gloutonMinimalInterval)
 
 	g := newWrappedGatherer(source, promLabels, reg.option)
 	reg.annotations = annotations
