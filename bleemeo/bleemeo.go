@@ -575,7 +575,7 @@ func (c *Connector) UpdateDelayHook(labels map[string]string) time.Duration {
 	var minResolution int
 
 	for _, cfg := range c.cache.AgentConfigs() {
-		if cfg.AccountConfig == agent.CurrentConfigID && possibleAgentTypes[cfg.AgentType] {
+		if cfg.AccountConfig == agent.CurrentAccountConfigID && possibleAgentTypes[cfg.AgentType] {
 			if minResolution == 0 || cfg.MetricResolution < minResolution {
 				minResolution = cfg.MetricResolution
 			}
@@ -793,7 +793,7 @@ func (c *Connector) diagnosticCache(file io.Writer) {
 			}
 		}
 
-		fmt.Fprintf(file, "id=%s fqdn=%s type=%s (%s) accountID=%s, config=%s\n", a.ID, a.FQDN, agentTypeName, a.AgentType, a.AccountID, a.CurrentConfigID)
+		fmt.Fprintf(file, "id=%s fqdn=%s type=%s (%s) accountID=%s, config=%s\n", a.ID, a.FQDN, agentTypeName, a.AgentType, a.AccountID, a.CurrentAccountConfigID)
 	}
 
 	fmt.Fprintf(file, "\n# Cache known %d agent types\n", len(agentTypes))

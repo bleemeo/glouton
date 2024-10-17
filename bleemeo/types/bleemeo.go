@@ -64,15 +64,15 @@ type AgentFact struct {
 
 // Agent is an Agent object on Bleemeo API.
 type Agent struct {
-	ID              string    `json:"id"`
-	CreatedAt       time.Time `json:"created_at"`
-	AccountID       string    `json:"account"`
-	NextConfigAt    time.Time `json:"next_config_at"`
-	CurrentConfigID string    `json:"current_config"`
-	Tags            []Tag     `json:"tags"`
-	AgentType       string    `json:"agent_type"`
-	FQDN            string    `json:"fqdn"`
-	DisplayName     string    `json:"display_name"`
+	ID                     string    `json:"id"`
+	CreatedAt              time.Time `json:"created_at"`
+	AccountID              string    `json:"account"`
+	NextConfigAt           time.Time `json:"next_config_at"`
+	CurrentAccountConfigID string    `json:"current_config"`
+	Tags                   []Tag     `json:"tags"`
+	AgentType              string    `json:"agent_type"`
+	FQDN                   string    `json:"fqdn"`
+	DisplayName            string    `json:"display_name"`
 	// If the agent is running in Kubernetes, is he the current cluster leader?
 	// Only the cluster leader gather global metrics for the cluster.
 	IsClusterLeader bool `json:"is_cluster_leader"`

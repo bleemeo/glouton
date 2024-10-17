@@ -38,7 +38,7 @@ type Filter struct {
 
 func NewFilter(cache *cache.Cache) *Filter {
 	return &Filter{
-		defaultConfigID: cache.Agent().CurrentConfigID,
+		defaultConfigID: cache.Agent().CurrentAccountConfigID,
 		accountConfigs:  cache.AccountConfigsByUUID(),
 		agents:          cache.AgentsByUUID(),
 		monitors:        cache.MonitorsByAgentUUID(),
@@ -104,9 +104,9 @@ func allowListForMetric(
 				return nil, fmt.Errorf("%w: missing agent ID=%s", ErrConfigNotFound, annotations.BleemeoAgentID)
 			}
 
-			accountConfig, present := configs[agent.CurrentConfigID]
+			accountConfig, present := configs[agent.CurrentAccountConfigID]
 			if !present {
-				return nil, fmt.Errorf("%w for agent with config ID=%s", ErrConfigNotFound, agent.CurrentConfigID)
+				return nil, fmt.Errorf("%w for agent with config ID=%s", ErrConfigNotFound, agent.CurrentAccountConfigID)
 			}
 
 			ac, ok := accountConfig.AgentConfigByID[agent.AgentType]
