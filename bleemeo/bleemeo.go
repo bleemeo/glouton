@@ -556,8 +556,9 @@ func (c *Connector) UpdateDelayHook(labels map[string]string) time.Duration {
 	possibleAgentTypes := make(map[string]bool)
 
 	if strTypes, hasAgentTypes := labels[gloutonTypes.LabelMetaAgentTypes]; hasAgentTypes {
-		// The related gatherer handles agent of multiple types,
-		// so we need to find the metric resolution of each.
+		// When a gatherer handles agents of multiple types,
+		// we need to retrieve the metric resolution of each.
+		// Therefore, we're able to pick the right interval (a.k.a the smallest) between them all.
 		agentTypes := strings.Split(strTypes, ",")
 
 		for _, agentType := range c.cache.AgentTypes() {

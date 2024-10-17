@@ -34,7 +34,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/delay"
 	"github.com/bleemeo/glouton/inputs"
@@ -168,7 +167,6 @@ type RegistrationOption struct {
 	Description  string
 	JitterSeed   uint64
 	MinInterval  time.Duration
-	AgentTypes   []bleemeo.AgentType
 	Timeout      time.Duration
 	StopCallback func() `json:"-"`
 	// ExtraLabels are labels added. If a labels already exists, extraLabels takes precedence.
@@ -1862,20 +1860,6 @@ func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) 
 		defer cancel()
 
 		promLabels, labelsWithMeta, annotations, reg.relabelHookSkip = r.applyRelabel(ctxTimeout, extraLabels)
-	}
-
-	if len(reg.option.AgentTypes) != 0 {
-		// When a gatherer handles agents of multiple types,
-		// we need to take into account the metric resolution of each.
-		// Therefor, by passing these types to r.minimalIntervalHook (and so to Connector.UpdateDelayHook),
-		// we're able to pick the right interval (a.k.a the smallest) between them all.
-		strsAgentTypes := make([]string, len(reg.option.AgentTypes))
-
-		for i, agentType := range reg.option.AgentTypes {
-			strsAgentTypes[i] = string(agentType)
-		}
-
-		labelsWithMeta[types.LabelMetaAgentTypes] = strings.Join(strsAgentTypes, ",")
 	}
 
 	hookMinimalInterval := r.minimalIntervalHook(labelsWithMeta)
