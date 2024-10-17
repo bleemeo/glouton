@@ -534,23 +534,29 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 		labels[gloutonTypes.LabelMetaBleemeoTargetAgentUUID] = agent.ID
 	}
 
+	// Tells UpdateDelayHook that labels are good
+	labels[gloutonTypes.LabelMetaBleemeoRelabelHookOk] = "1"
+
 	return labels, false
 }
 
-func (c *Connector) UpdateDelayHook(labels map[string]string) time.Duration {
-	agentID, ok := labels[gloutonTypes.LabelMetaBleemeoTargetAgentUUID]
+func (c *Connector) UpdateDelayHook(labels map[string]string) (time.Duration, bool) {
+	if _, ok := labels[gloutonTypes.LabelMetaBleemeoRelabelHookOk]; !ok {
+		return 0, true
+	}
+
+	agentID, ok := labels[gloutonTypes.LabelInstanceUUID]
 	if !ok {
-		agentID, ok = labels[gloutonTypes.LabelMetaBleemeoUUID]
-		if !ok {
-			return 0
-		}
+		logger.V(1).Printf("Can't find metric resolution for gatherer with labels %v", labels)
+
+		return 0, true
 	}
 
 	agent, ok := c.cache.AgentsByUUID()[agentID]
 	if !ok {
 		logger.V(1).Printf("Can't find metric resolution for agent %s (agent not found in cache)", agentID)
 
-		return 0
+		return 0, true
 	}
 
 	possibleAgentTypes := make(map[string]bool)
@@ -586,7 +592,7 @@ func (c *Connector) UpdateDelayHook(labels map[string]string) time.Duration {
 		logger.V(1).Printf("Can't find metric resolution for agent %s (agent config not found in cache)", agentID)
 	}
 
-	return time.Duration(minResolution) * time.Second
+	return time.Duration(minResolution) * time.Second, false
 }
 
 func (c *Connector) kubernetesAgentID(clusterName string) (string, error) {

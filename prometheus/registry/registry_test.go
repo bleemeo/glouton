@@ -202,8 +202,8 @@ func (cb fakeInput) Gather(acc telegraf.Accumulator) error {
 }
 
 func makeDelayHook(delay time.Duration) UpdateDelayHook {
-	return func(map[string]string) time.Duration {
-		return delay
+	return func(map[string]string) (time.Duration, bool) {
+		return delay, false
 	}
 }
 
@@ -690,6 +690,7 @@ func TestRegistry_applyRelabel(t *testing.T) {
 				types.LabelInstance: "some-instance:8015",
 			}),
 			wantWithMeta: map[string]string{
+				types.LabelInstance:            "some-instance:8015",
 				types.LabelMetaGloutonFQDN:     "some-instance",
 				types.LabelMetaGloutonPort:     "8015",
 				types.LabelMetaPort:            "8015",

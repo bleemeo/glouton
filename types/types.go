@@ -112,6 +112,7 @@ const (
 	LabelMetaGloutonFQDN            = "__meta__fqdn"
 	LabelMetaGloutonPort            = "__meta_glouton_port"
 	LabelMetaBleemeoItem            = "__meta_bleemeo_item"
+	LabelMetaBleemeoRelabelHookOk   = "__meta_bleemeo_hook_ok"
 	LabelMetaServicePort            = "__meta_service_port"
 	LabelMetaStatusOf               = "__meta_status_of"
 	LabelMetaPort                   = "__meta_port"

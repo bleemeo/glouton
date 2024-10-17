@@ -78,7 +78,7 @@ type RelabelHook func(ctx context.Context, labels map[string]string) (newLabel m
 
 // UpdateDelayHook returns the minimal gathering interval
 // for the given labels. For example, according to the Bleemeo plan.
-type UpdateDelayHook func(labels map[string]string) time.Duration
+type UpdateDelayHook func(labels map[string]string) (minInterval time.Duration, retryLater bool)
 
 var (
 	errInvalidName = errors.New("invalid metric name or label name")
@@ -1836,13 +1836,14 @@ func (r *Registry) applyRelabel(
 	}
 
 	promLabels = labels.FromMap(input)
-	labelsWithMeta = maps.Clone(input)
 	annotations = gloutonModel.MetaLabelsToAnnotation(promLabels)
 
 	promLabels, keep := relabel.Process(promLabels, r.relabelConfigs...)
 	if !keep {
 		return promLabels, labelsWithMeta, annotations, retryLater
 	}
+
+	labelsWithMeta = promLabels.Map()
 
 	promLabels = gloutonModel.DropMetaLabels(promLabels)
 
@@ -1873,8 +1874,11 @@ func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) 
 		reg.relabelWithMeta = labelsWithMeta
 	}
 
-	reg.hookMinimalInterval = r.minimalIntervalHook(labelsWithMeta)
+	var retryLater bool
+
+	reg.hookMinimalInterval, retryLater = r.minimalIntervalHook(labelsWithMeta)
 	reg.interval = max(reg.option.MinInterval, reg.hookMinimalInterval, gloutonMinimalInterval)
+	reg.relabelHookSkip = reg.relabelHookSkip || retryLater
 
 	g := newWrappedGatherer(source, promLabels, reg.option)
 	reg.annotations = annotations
@@ -1913,12 +1917,12 @@ func (r *Registry) getPushedPoints() []types.MetricPoint {
 // according to the current updateDelayHook.
 // If the updateDelayHook is not defined, it returns 0.
 // It assumes that the r.l lock is held.
-func (r *Registry) minimalIntervalHook(labels map[string]string) time.Duration {
+func (r *Registry) minimalIntervalHook(labels map[string]string) (time.Duration, bool) {
 	if r.updateDelayHook != nil {
 		return r.updateDelayHook(labels)
 	}
 
-	return 0
+	return 0, false
 }
 
 func fixLabels(lbls map[string]string) (map[string]string, error) {
