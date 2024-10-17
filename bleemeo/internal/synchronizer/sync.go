@@ -641,6 +641,10 @@ func (s *Synchronizer) UpdateMonitor(op string, uuid string) {
 	}
 
 	s.pendingMonitorsUpdate = append(s.pendingMonitorsUpdate, mu)
+	// ideally we only want to (re)fetch the agent associated with the monitor, but
+	// 1) at this point, we don't know which agent
+	// 2) currently the agent synchronized don't support updating only one agent
+	s.requestSynchronizationLocked(types.EntityAgent, true)
 	s.requestSynchronizationLocked(types.EntityMonitor, false)
 }
 
