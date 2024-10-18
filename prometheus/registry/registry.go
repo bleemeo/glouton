@@ -280,7 +280,7 @@ type registration struct {
 	lastScrapes          []scrapeRun
 	gatherer             *wrappedGatherer
 	annotations          types.MetricAnnotations
-	relabelWithMeta      map[string]string
+	labelsWithMeta       map[string]string
 	relabelHookSkip      bool
 	lastRelabelHookRetry time.Time
 	hookMinimalInterval  time.Duration
@@ -877,7 +877,7 @@ func (r *Registry) diagnosticScrapeLoop(ctx context.Context, archive types.Archi
 		Option              RegistrationOption
 		UnexportableOption  unexportableOption
 		LabelUsed           map[string]string
-		RelabelWithMeta     map[string]string
+		LabelsWithMeta      map[string]string
 		RelabelHookSkip     bool
 		RelabelHookLastTry  time.Time
 		subDiagnostic       func(ctx context.Context, archive types.ArchiveWriter) error
@@ -901,7 +901,7 @@ func (r *Registry) diagnosticScrapeLoop(ctx context.Context, archive types.Archi
 			HookMinimalInterval: reg.hookMinimalInterval.String(),
 			Option:              reg.option,
 			LabelUsed:           dtoLabelToMap(reg.gatherer.labels),
-			RelabelWithMeta:     reg.relabelWithMeta,
+			LabelsWithMeta:      reg.labelsWithMeta,
 			RelabelHookSkip:     reg.relabelHookSkip,
 			RelabelHookLastTry:  reg.lastRelabelHookRetry,
 		}
@@ -1871,7 +1871,7 @@ func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) 
 		defer cancel()
 
 		promLabels, labelsWithMeta, annotations, reg.relabelHookSkip = r.applyRelabel(ctxTimeout, extraLabels)
-		reg.relabelWithMeta = labelsWithMeta
+		reg.labelsWithMeta = labelsWithMeta
 	}
 
 	var retryLater bool
