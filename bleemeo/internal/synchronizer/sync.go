@@ -401,10 +401,19 @@ func (s *Synchronizer) Run(ctx context.Context) error { //nolint:maintidx
 				deadline := exec.client.ThrottleDeadline().Add(delay.JitterDelay(15*time.Second, 0.3))
 				s.Disable(deadline, bleemeoTypes.DisableTooManyRequests)
 			default:
-				disableDelay := delay.JitterDelay(
-					delay.Exponential(15*time.Second, 1.55, s.successiveErrors, 15*time.Minute),
-					0.1,
-				)
+				var disableDelay time.Duration
+
+				if stateHasValue(agentBrokenCacheKey, s.option.State) {
+					s.l.Lock()
+					disableDelay = delay.Exponential(10*time.Minute, 3, s.successiveErrors, 60*time.Hour)
+					s.l.Unlock()
+				} else {
+					disableDelay = delay.JitterDelay(
+						delay.Exponential(15*time.Second, 1.55, s.successiveErrors, 15*time.Minute),
+						0.1,
+					)
+				}
+
 				s.Disable(s.now().Add(disableDelay), bleemeoTypes.DisableTooManyErrors)
 
 				if IsAuthError(err) && successiveAuthErrors == 1 {
