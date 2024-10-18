@@ -51,6 +51,11 @@ import (
 	"github.com/getsentry/sentry-go"
 )
 
+const (
+	agentBrokenCacheKey  = "AgentBroken"
+	agentDeletedCacheKey = "AgentDeleted"
+)
+
 var (
 	errFQDNNotSet                 = errors.New("unable to register, fqdn is not set")
 	errConnectorTemporaryDisabled = errors.New("bleemeo connector temporary disabled")
@@ -82,6 +87,7 @@ type Synchronizer struct {
 	lastSync                  time.Time
 	lastVSphereAgentsPurge    time.Time
 	successiveErrors          int
+	firstErrorAt              time.Time
 	warnAccountMismatchDone   bool
 	maintenanceMode           bool
 	suspendedMode             bool
@@ -210,6 +216,7 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 		LastMetricActivation       time.Time
 		LastFactUpdatedAt          string
 		SuccessiveErrors           int
+		FirstErrorAt               time.Time
 		WarnAccountMismatchDone    bool
 		MaintenanceMode            bool
 		LastMetricCount            int
@@ -236,6 +243,7 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 		LastFactUpdatedAt:          s.state.lastFactUpdatedAt,
 		LastMetricActivation:       s.state.lastMetricActivation,
 		SuccessiveErrors:           s.successiveErrors,
+		FirstErrorAt:               s.firstErrorAt,
 		WarnAccountMismatchDone:    s.warnAccountMismatchDone,
 		MaintenanceMode:            s.maintenanceMode,
 		LastMetricCount:            s.state.lastMetricCount,
@@ -265,7 +273,7 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 }
 
 // Run runs the Synchronizer.
-func (s *Synchronizer) Run(ctx context.Context) error {
+func (s *Synchronizer) Run(ctx context.Context) error { //nolint:maintidx
 	s.startedAt = s.now()
 
 	firstSync := true
@@ -305,9 +313,11 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 
 	s.l.Lock()
 	s.successiveErrors = 0
+	s.firstErrorAt = time.Time{}
 	s.l.Unlock()
 
 	successiveAuthErrors := 0
+	firstAuthErrorAt := time.Time{}
 
 	// We schedule a metric synchronization for in a few minutes to permit
 	// the deactivation of metrics whose item has disappeared between
@@ -333,30 +343,69 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 
 		_, err := s.runOnce(ctx, firstSync)
 		if err != nil {
+			var shouldSetAgentBrokenFlagTo time.Time
+
 			s.l.Lock()
 			s.successiveErrors++
+
+			if s.firstErrorAt.IsZero() {
+				s.firstErrorAt = s.now()
+			} else if s.now().Sub(s.firstErrorAt) > 36*time.Hour {
+				shouldSetAgentBrokenFlagTo = s.firstErrorAt
+			}
+
 			s.l.Unlock()
 
 			if IsAuthError(err) {
 				successiveAuthErrors++
+
+				if firstAuthErrorAt.IsZero() {
+					firstAuthErrorAt = s.now()
+				} else if s.now().Sub(firstAuthErrorAt) > 2*time.Hour {
+					shouldSetAgentBrokenFlagTo = firstAuthErrorAt
+				}
+			}
+
+			if !shouldSetAgentBrokenFlagTo.IsZero() && !stateHasValue(agentBrokenCacheKey, s.option.State) {
+				err := s.option.State.Set(agentBrokenCacheKey, shouldSetAgentBrokenFlagTo.Format(time.RFC3339))
+				if err != nil {
+					logger.V(1).Printf("Failed to write agent broken flag to state cache: %v", err)
+				}
 			}
 
 			switch {
 			case IsAuthError(err) && successiveAuthErrors >= 3:
-				delay := delay.JitterDelay(
-					delay.Exponential(60*time.Second, 1.55, successiveAuthErrors, 6*time.Hour),
-					0.1,
-				)
-				s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, s.now().Add(delay))
+				var disableDelay time.Duration
+
+				hasStateDeletionFlag := stateHasValue(agentDeletedCacheKey, s.option.State)
+				if hasStateDeletionFlag {
+					// The agent is known to have auth issues for a long time,
+					// it may be deleted so we disable it for a longer period.
+					disableDelay = delay.Exponential(10*time.Minute, 3, successiveAuthErrors, 5*24*time.Hour)
+				} else {
+					disableDelay = delay.JitterDelay(
+						delay.Exponential(60*time.Second, 1.55, successiveAuthErrors, 6*time.Hour),
+						0.1,
+					)
+				}
+
+				s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, s.now().Add(disableDelay))
+
+				if successiveAuthErrors >= 10 && !hasStateDeletionFlag {
+					err := s.option.State.Set(agentDeletedCacheKey, s.now().Format(time.RFC3339))
+					if err != nil {
+						logger.V(1).Printf("Failed to write agent deletion flag to state cache: %v", err)
+					}
+				}
 			case IsThrottleError(err):
 				deadline := exec.client.ThrottleDeadline().Add(delay.JitterDelay(15*time.Second, 0.3))
 				s.Disable(deadline, bleemeoTypes.DisableTooManyRequests)
 			default:
-				delay := delay.JitterDelay(
+				disableDelay := delay.JitterDelay(
 					delay.Exponential(15*time.Second, 1.55, s.successiveErrors, 15*time.Minute),
 					0.1,
 				)
-				s.Disable(s.now().Add(delay), bleemeoTypes.DisableTooManyErrors)
+				s.Disable(s.now().Add(disableDelay), bleemeoTypes.DisableTooManyErrors)
 
 				if IsAuthError(err) && successiveAuthErrors == 1 {
 					// we disable only to trigger a reconnection on MQTT
@@ -401,9 +450,21 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		} else {
 			s.l.Lock()
 			s.successiveErrors = 0
+			s.firstErrorAt = time.Time{}
 			s.l.Unlock()
 
 			successiveAuthErrors = 0
+			firstAuthErrorAt = time.Time{}
+
+			err = s.option.State.Delete(agentBrokenCacheKey)
+			if err != nil {
+				logger.V(1).Printf("Failed to delete agent broken flag from state cache: %v", err)
+			}
+
+			err = s.option.State.Delete(agentDeletedCacheKey)
+			if err != nil {
+				logger.V(1).Printf("Failed to delete agent deletion flag from state cache: %v", err)
+			}
 		}
 
 		minimalDelay = delay.JitterDelay(15*time.Second, 0.05)
@@ -1200,4 +1261,17 @@ func (s *Synchronizer) requestSynchronizationLocked(entityName types.EntityName,
 	} else if s.forceSync[entityName] == types.SyncTypeNone {
 		s.forceSync[entityName] = types.SyncTypeNormal
 	}
+}
+
+// stateHasValue returns whether the given state has a value for the given key.
+// If an error occurs, it returns false.
+func stateHasValue(key string, state bleemeoTypes.State) bool {
+	var value json.RawMessage
+
+	err := state.Get(key, &value)
+	if err != nil {
+		return false
+	}
+
+	return value != nil
 }
