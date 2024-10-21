@@ -270,7 +270,7 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 }
 
 // Run runs the Synchronizer.
-func (s *Synchronizer) Run(ctx context.Context) error { //nolint:maintidx
+func (s *Synchronizer) Run(ctx context.Context) error {
 	s.startedAt = s.now()
 
 	firstSync := true
