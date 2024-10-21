@@ -233,11 +233,20 @@ func (errIter errorIterator) Err() error {
 	return errIter.err
 }
 
-// IsAuthError returns true if the error is an APIError due to authentication failure.
+// IsAuthError returns true if the error is an APIError 401 or 403.
 func IsAuthError(err error) bool {
-	apiError := new(bleemeo.AuthError)
+	authError := new(bleemeo.AuthError)
 
-	return errors.As(err, &apiError)
+	if errors.As(err, &authError) {
+		return true
+	}
+
+	apiError := new(bleemeo.APIError)
+	if errors.As(err, &apiError) {
+		return apiError.StatusCode == http.StatusForbidden
+	}
+
+	return false
 }
 
 // IsNotFound returns true if the error is an APIError due to 404.

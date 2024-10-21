@@ -51,10 +51,7 @@ import (
 	"github.com/getsentry/sentry-go"
 )
 
-const (
-	agentBrokenCacheKey  = "AgentBroken"
-	agentDeletedCacheKey = "AgentDeleted"
-)
+const agentBrokenCacheKey = "AgentBroken"
 
 var (
 	errFQDNNotSet                 = errors.New("unable to register, fqdn is not set")
@@ -364,6 +361,8 @@ func (s *Synchronizer) Run(ctx context.Context) error { //nolint:maintidx
 				} else if s.now().Sub(firstAuthErrorAt) > 2*time.Hour {
 					shouldSetAgentBrokenFlagTo = firstAuthErrorAt
 				}
+			} else {
+				firstAuthErrorAt = time.Time{}
 			}
 
 			if !shouldSetAgentBrokenFlagTo.IsZero() && !stateHasValue(agentBrokenCacheKey, s.option.State) {
@@ -373,41 +372,20 @@ func (s *Synchronizer) Run(ctx context.Context) error { //nolint:maintidx
 				}
 			}
 
-			switch {
-			case IsAuthError(err) && successiveAuthErrors >= 3:
-				var disableDelay time.Duration
-
-				hasStateDeletionFlag := stateHasValue(agentDeletedCacheKey, s.option.State)
-				if hasStateDeletionFlag {
-					// The agent is known to have auth issues for a long time,
-					// it may be deleted so we disable it for a longer period.
-					disableDelay = delay.Exponential(10*time.Minute, 3, successiveAuthErrors, 5*24*time.Hour)
-				} else {
-					disableDelay = delay.JitterDelay(
-						delay.Exponential(60*time.Second, 1.55, successiveAuthErrors, 6*time.Hour),
-						0.1,
-					)
-				}
-
-				s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, s.now().Add(disableDelay))
-
-				if successiveAuthErrors >= 10 && !hasStateDeletionFlag {
-					err := s.option.State.Set(agentDeletedCacheKey, s.now().Format(time.RFC3339))
-					if err != nil {
-						logger.V(1).Printf("Failed to write agent deletion flag to state cache: %v", err)
-					}
-				}
-			case IsThrottleError(err):
+			if IsThrottleError(err) {
 				deadline := exec.client.ThrottleDeadline().Add(delay.JitterDelay(15*time.Second, 0.3))
 				s.Disable(deadline, bleemeoTypes.DisableTooManyRequests)
-			default:
+			} else {
 				var disableDelay time.Duration
 
-				if stateHasValue(agentBrokenCacheKey, s.option.State) {
+				switch {
+				case stateHasValue(agentBrokenCacheKey, s.option.State):
 					s.l.Lock()
 					disableDelay = delay.Exponential(10*time.Minute, 3, s.successiveErrors, 60*time.Hour)
 					s.l.Unlock()
-				} else {
+				case IsAuthError(err) && successiveAuthErrors >= 3:
+					disableDelay = delay.Exponential(10*time.Minute, 3, successiveAuthErrors, 5*24*time.Hour)
+				default:
 					disableDelay = delay.JitterDelay(
 						delay.Exponential(15*time.Second, 1.55, s.successiveErrors, 15*time.Minute),
 						0.1,
@@ -468,11 +446,6 @@ func (s *Synchronizer) Run(ctx context.Context) error { //nolint:maintidx
 			err = s.option.State.Delete(agentBrokenCacheKey)
 			if err != nil {
 				logger.V(1).Printf("Failed to delete agent broken flag from state cache: %v", err)
-			}
-
-			err = s.option.State.Delete(agentDeletedCacheKey)
-			if err != nil {
-				logger.V(1).Printf("Failed to delete agent deletion flag from state cache: %v", err)
 			}
 		}
 
