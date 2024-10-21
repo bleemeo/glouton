@@ -414,3 +414,74 @@ func TestRunCmdError(t *testing.T) {
 		})
 	}
 }
+
+func TestFindDeviceInArgs(t *testing.T) {
+	var (
+		l       sync.Mutex
+		device  string
+		ok      bool
+		calls   int
+		runArgs []string
+	)
+
+	runCmd := func(_ config.Duration, _ bool, _ string, args ...string) ([]byte, error) {
+		if args[0] == "--scan" {
+			return []byte("/dev/nvme0 -d nvme # /dev/nvme0, NVMe device"), nil
+		}
+
+		l.Lock()
+		defer l.Unlock()
+
+		device, ok = findDeviceInArgs(args)
+		calls++
+		runArgs = args
+
+		return nil, nil
+	}
+
+	testUsingGlobalRunCmd.Lock()
+	defer testUsingGlobalRunCmd.Unlock()
+
+	SetupGlobalWrapper()
+
+	trueOriginalCmd := globalRunCmd.originalRunCmd
+	globalRunCmd.originalRunCmd = runCmd
+
+	defer func() {
+		globalRunCmd.originalRunCmd = trueOriginalCmd
+	}()
+
+	input, ok := telegraf_inputs.Inputs["smart"]
+	if !ok {
+		t.Fatal("smart input not found in telegraf_inputs.Inputs")
+	}
+
+	smartInput, ok := input().(*smart.Smart)
+	if !ok {
+		t.Fatal("unexpected input type")
+	}
+
+	expectedDevice := "/dev/nvme0 -d nvme"
+	smartInput.Devices = []string{expectedDevice}
+
+	acc := &internal.StoreAccumulator{}
+	_ = smartInput.Gather(acc)
+
+	l.Lock()
+	defer l.Unlock()
+
+	if calls != 1 {
+		t.Fatalf("Unexpected calls count: want 1, got %d", calls)
+	}
+
+	// Does the structure of args in smart.Smart.gatherDisk() have changed ?
+	// If so, the way we seek for the device identifier in findDeviceInArgs() needs to be adapted.
+
+	if !ok {
+		t.Fatalf("Didn't find device in run args %+v", runArgs)
+	}
+
+	if device != expectedDevice {
+		t.Fatalf("Found incorrect device identifier: want %q, got %q", expectedDevice, device)
+	}
+}
