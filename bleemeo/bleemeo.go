@@ -32,6 +32,7 @@ import (
 
 	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
+	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	"github.com/bleemeo/glouton/bleemeo/internal/filter"
 	"github.com/bleemeo/glouton/bleemeo/internal/mqtt"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer"
@@ -532,6 +533,22 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 		}
 
 		labels[gloutonTypes.LabelMetaBleemeoTargetAgentUUID] = agent.ID
+	}
+
+	// Add ServiceUUID if metrics is associated with a service.
+	// TODO: jmx don't work (I guess, because meta-labels seems removed before passing in this hook)
+	// TODO: should monitor metrics be associated with a service ?
+	if srvName, ok := labels[gloutonTypes.LabelMetaServiceName]; ok {
+		srvKey := common.ServiceNameInstance{Name: srvName, Instance: labels[gloutonTypes.LabelMetaServiceInstance]}
+
+		servicesByKey := c.cache.ServiceLookupFromList()
+
+		service, ok := servicesByKey[srvKey]
+		if !ok {
+			return labels, true
+		}
+
+		labels[gloutonTypes.LabelMetaServiceUUID] = service.ID
 	}
 
 	// Tells UpdateDelayHook that labels are good

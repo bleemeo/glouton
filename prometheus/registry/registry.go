@@ -328,6 +328,14 @@ func getDefaultRelabelConfig() []*relabel.Config {
 		{
 			Action:       relabel.Replace,
 			Separator:    ";",
+			Regex:        relabel.MustNewRegexp("(.+)"),
+			SourceLabels: model.LabelNames{types.LabelMetaServiceUUID},
+			TargetLabel:  types.LabelServiceUUID,
+			Replacement:  "$1",
+		},
+		{
+			Action:       relabel.Replace,
+			Separator:    ";",
 			Regex:        relabel.MustNewRegexp("(.+);(.+)"),
 			SourceLabels: model.LabelNames{types.LabelMetaGloutonFQDN, types.LabelMetaPort},
 			TargetLabel:  types.LabelInstance,
@@ -1625,7 +1633,7 @@ func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registrat
 
 	mfs, err := gatherMethod(ctx, state)
 
-	if reg.option.CompatibilityNameItem {
+	if reg.option.CompatibilityNameItem && false { // TODO: need more work.
 		gloutonModel.FamiliesToNameAndItem(mfs)
 	}
 
