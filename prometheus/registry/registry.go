@@ -402,11 +402,19 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			Replacement:  "$2",
 		},
 		// when the metric comes from a probe, the 'instance_uuid' label is the uuid of the service watched
+		// and 'service_uuid' also.
 		{
 			Action:       relabel.Replace,
 			Regex:        relabel.MustNewRegexp("(.+)"),
 			SourceLabels: model.LabelNames{types.LabelMetaBleemeoTargetAgentUUID},
 			TargetLabel:  types.LabelInstanceUUID,
+			Replacement:  "$1",
+		},
+		{
+			Action:       relabel.Replace,
+			Regex:        relabel.MustNewRegexp("(.+)"),
+			SourceLabels: model.LabelNames{types.LabelMetaProbeServiceUUID},
+			TargetLabel:  types.LabelServiceUUID,
 			Replacement:  "$1",
 		},
 		// when the metric comes from a probe, the 'instance' label is the target URI

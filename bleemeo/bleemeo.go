@@ -537,7 +537,6 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 
 	// Add ServiceUUID if metrics is associated with a service.
 	// TODO: jmx don't work (I guess, because meta-labels seems removed before passing in this hook)
-	// TODO: should monitor metrics be associated with a service ?
 	if srvName, ok := labels[gloutonTypes.LabelMetaServiceName]; ok {
 		srvKey := common.ServiceNameInstance{Name: srvName, Instance: labels[gloutonTypes.LabelMetaServiceInstance]}
 

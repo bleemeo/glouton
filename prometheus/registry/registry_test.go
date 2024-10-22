@@ -644,6 +644,7 @@ func TestRegistry_applyRelabel(t *testing.T) {
 				types.LabelScraper:      "test",
 				types.LabelInstanceUUID: "c571f9cf-6f07-492a-9e86-b8d5f5027557",
 				types.LabelScraperUUID:  "a39e5a8e-34cf-4b15-87bd-4b9cdaa59c42",
+				types.LabelServiceUUID:  "dcb8e864-0a1f-4a67-b470-327ceb461b4e",
 			}),
 			wantAnnotations: types.MetricAnnotations{
 				BleemeoAgentID: "c571f9cf-6f07-492a-9e86-b8d5f5027557",
@@ -667,6 +668,7 @@ func TestRegistry_applyRelabel(t *testing.T) {
 				types.LabelScraper:      "super-instance",
 				types.LabelInstanceUUID: "c571f9cf-6f07-492a-9e86-b8d5f5027557",
 				types.LabelScraperUUID:  "a39e5a8e-34cf-4b15-87bd-4b9cdaa59c42",
+				types.LabelServiceUUID:  "dcb8e864-0a1f-4a67-b470-327ceb461b4e",
 			}),
 			wantAnnotations: types.MetricAnnotations{
 				BleemeoAgentID: "c571f9cf-6f07-492a-9e86-b8d5f5027557",
