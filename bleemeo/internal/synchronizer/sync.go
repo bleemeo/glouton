@@ -353,7 +353,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 
 			s.l.Unlock()
 
-			if IsAuthError(err) {
+			if IsAuthenticationError(err) {
 				successiveAuthErrors++
 
 				if firstAuthErrorAt.IsZero() {
@@ -381,10 +381,8 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 				switch {
 				case stateHasValue(agentBrokenCacheKey, s.option.State):
 					s.l.Lock()
-					disableDelay = delay.Exponential(10*time.Minute, 3, s.successiveErrors, 60*time.Hour)
+					disableDelay = delay.Exponential(10*time.Minute, 3, s.successiveErrors, 5*24*time.Hour)
 					s.l.Unlock()
-				case IsAuthError(err) && successiveAuthErrors >= 3:
-					disableDelay = delay.Exponential(10*time.Minute, 3, successiveAuthErrors, 5*24*time.Hour)
 				default:
 					disableDelay = delay.JitterDelay(
 						delay.Exponential(15*time.Second, 1.55, s.successiveErrors, 15*time.Minute),
@@ -394,14 +392,14 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 
 				s.Disable(s.now().Add(disableDelay), bleemeoTypes.DisableTooManyErrors)
 
-				if IsAuthError(err) && successiveAuthErrors == 1 {
+				if IsAuthenticationError(err) && successiveAuthErrors == 1 {
 					// we disable only to trigger a reconnection on MQTT
 					s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, s.now().Add(10*time.Second))
 				}
 			}
 
 			switch {
-			case IsAuthError(err) && s.agentID != "":
+			case IsAuthenticationError(err) && s.agentID != "":
 				fqdnMessage := ""
 
 				fqdn := s.option.Cache.FactsByKey()[s.agentID]["fqdn"].Value
@@ -414,7 +412,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 					s.agentID,
 					fqdnMessage,
 				)
-			case IsAuthError(err):
+			case IsAuthenticationError(err):
 				registrationKey := []rune(s.option.Config.Bleemeo.RegistrationKey)
 				for i := range registrationKey {
 					if i >= 6 && i < len(registrationKey)-4 {

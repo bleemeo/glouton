@@ -233,20 +233,11 @@ func (errIter errorIterator) Err() error {
 	return errIter.err
 }
 
-// IsAuthError returns true if the error is an APIError 401 or 403.
-func IsAuthError(err error) bool {
+// IsAuthenticationError returns whether the error is a bleemeo.AuthError or not.
+func IsAuthenticationError(err error) bool {
 	authError := new(bleemeo.AuthError)
 
-	if errors.As(err, &authError) {
-		return true
-	}
-
-	apiError := new(bleemeo.APIError)
-	if errors.As(err, &apiError) {
-		return apiError.StatusCode == http.StatusForbidden
-	}
-
-	return false
+	return errors.As(err, &authError)
 }
 
 // IsNotFound returns true if the error is an APIError due to 404.
