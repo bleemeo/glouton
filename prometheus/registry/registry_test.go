@@ -1909,6 +1909,21 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					},
 					TimeOnGather: now,
 				},
+				{ // This metric will be dropped by the metric filter.
+					Labels: map[string]string{
+						types.LabelName:       "hrProcessorLoad",
+						"hrDeviceDescr":       "CPU Pkg/ID/Node: 0/0/0 Intel Xeon E3-12xx v2 (Ivy Bridge, IBRS)",
+						"hrDeviceIndex":       "1",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Annotations: types.MetricAnnotations{SNMPTarget: "192.168.1.2"},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: now,
+				},
 				{
 					Labels: map[string]string{
 						types.LabelName:       "hrStorageAllocationUnits",
@@ -1991,94 +2006,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:         "metric-rename-simple-pushpoint",
-			kindToTest:   kindPushPointCallback,
-			metricFormat: types.MetricFormatPrometheus,
-			opt: RegistrationOption{
-				ExtraLabels: map[string]string{
-					types.LabelMetaSNMPTarget: "192.168.1.2",
-					"extranLabels":            "are ignored by pushpoints. So snmp target will be ignored, like rules",
-				},
-				Rules:                 DefaultSNMPRules(time.Minute),
-				DisablePeriodicGather: true,
-				HonorTimestamp:        true,
-			},
-			input: []types.MetricPoint{
-				{
-					Labels: map[string]string{
-						types.LabelName: "hrProcessorLoad",
-						"hrDeviceDescr": "CPU Pkg/ID/Node: 0/0/0 Intel Xeon E3-12xx v2 (Ivy Bridge, IBRS)",
-						"hrDeviceIndex": "1",
-					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
-				},
-				{
-					Labels: map[string]string{
-						types.LabelName:  "hrStorageUsed",
-						"hrStorageDescr": "Real Memory",
-					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
-				},
-				{
-					Labels: map[string]string{
-						types.LabelName:  "hrStorageUsed",
-						"hrStorageDescr": "Unreal Memory",
-					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
-				},
-			},
-			want: []metricPointTimeOverride{
-				{
-					Labels: map[string]string{
-						types.LabelName:     "cpu_used",
-						"core":              "1",
-						types.LabelInstance: "server.bleemeo.com:8016",
-					},
-					Annotations: types.MetricAnnotations{},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
-					TimeOnGather: now,
-				},
-				{
-					Labels: map[string]string{
-						types.LabelName:     "hrStorageUsed",
-						"hrStorageDescr":    "Real Memory",
-						types.LabelInstance: "server.bleemeo.com:8016",
-					},
-					Annotations: types.MetricAnnotations{},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
-					TimeOnGather: now,
-				},
-				{
-					Labels: map[string]string{
-						types.LabelName:     "hrStorageUsed",
-						"hrStorageDescr":    "Unreal Memory",
-						types.LabelInstance: "server.bleemeo.com:8016",
-					},
-					Annotations: types.MetricAnnotations{},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
-					TimeOnGather: now,
-				},
-			},
-		},
-		{
 			name:         "metric-rename-simple-2",
 			kindToTest:   kindGatherer,
 			metricFormat: types.MetricFormatBleemeo,
@@ -2155,6 +2082,21 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					},
 					TimeOnGather: now,
 				},
+				{ // This metric will be dropped by the metric filter.
+					Labels: map[string]string{
+						types.LabelName:       "cpmCPUTotal1minRev",
+						"cpmCPUTotalIndex":    "1",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Annotations: types.MetricAnnotations{SNMPTarget: "192.168.1.2"},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: now,
+				},
+
 				{
 					Labels: map[string]string{
 						types.LabelName:       "cpmCPUMemoryFree",
@@ -2255,6 +2197,36 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				},
 			},
 			want: []metricPointTimeOverride{
+				{ // This metric will be dropped by the metric filter.
+					Labels: map[string]string{
+						types.LabelName:       "ciscoMemoryPoolUsed",
+						"ciscoMemoryPoolName": "Processor",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"uniqueValue":         "1",
+					},
+					Annotations: types.MetricAnnotations{SNMPTarget: "192.168.1.2"},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: now,
+				},
+				{ // This metric will be dropped by the metric filter.
+					Labels: map[string]string{
+						types.LabelName:       "ciscoMemoryPoolUsed",
+						"ciscoMemoryPoolName": "Processor",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"uniqueValue":         "2",
+					},
+					Annotations: types.MetricAnnotations{SNMPTarget: "192.168.1.2"},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: now,
+				},
 				{
 					Labels: map[string]string{
 						types.LabelName:       "mem_used",
@@ -2402,6 +2374,51 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				},
 			},
 			want: []metricPointTimeOverride{
+				{ // This metric will be dropped by the metric filter.
+					Labels: map[string]string{
+						types.LabelName:                     "ciscoEnvMonTemperatureStatusValue",
+						"ciscoEnvMonTemperatureStatusDescr": "CPU",
+						types.LabelInstance:                 "server.bleemeo.com:8016",
+						types.LabelSNMPTarget:               "192.168.1.2",
+						"uniqueValue":                       "7",
+					},
+					Annotations: types.MetricAnnotations{SNMPTarget: "192.168.1.2"},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: now,
+				},
+				{ // This metric will be dropped by the metric filter.
+					Labels: map[string]string{
+						types.LabelName:       "ciscoMemoryPoolFree",
+						"ciscoMemoryPoolName": "Processor",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"uniqueValue":         "3",
+					},
+					Annotations: types.MetricAnnotations{SNMPTarget: "192.168.1.2"},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: now,
+				},
+				{ // This metric will be dropped by the metric filter.
+					Labels: map[string]string{
+						types.LabelName:       "ciscoMemoryPoolFree",
+						"ciscoMemoryPoolName": "System memory",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"uniqueValue":         "1",
+					},
+					Annotations: types.MetricAnnotations{SNMPTarget: "192.168.1.2"},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: now,
+				},
 				{
 					Labels: map[string]string{
 						types.LabelName:       "mem_used",
@@ -2428,6 +2445,21 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: "192.168.1.2",
 					},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: now,
+				},
+				{ // This metric will be dropped by the metric filter.
+					Labels: map[string]string{
+						types.LabelName:       "ciscoMemoryPoolUsed",
+						"ciscoMemoryPoolName": "System memory",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"uniqueValue":         "1",
+					},
+					Annotations: types.MetricAnnotations{SNMPTarget: "192.168.1.2"},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -2477,6 +2509,35 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: "192.168.1.2",
 					},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: now,
+				},
+				{ // This metric will be dropped by the metric filter.
+					Labels: map[string]string{
+						types.LabelName:       "rlCpuUtilDuringLastMinute",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"uniqueValue":         "8",
+					},
+					Annotations: types.MetricAnnotations{SNMPTarget: "192.168.1.2"},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: now,
+				},
+				{ // This metric will be dropped by the metric filter.
+					Labels: map[string]string{
+						types.LabelName:              "rlPhdUnitEnvParamTempSensorValue",
+						types.LabelInstance:          "server.bleemeo.com:8016",
+						"rlPhdUnitEnvParamStackUnit": "1",
+						types.LabelSNMPTarget:        "192.168.1.2",
+						"uniqueValue":                "9",
+					},
+					Annotations: types.MetricAnnotations{SNMPTarget: "192.168.1.2"},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,

@@ -101,7 +101,7 @@ func getUnexportedField(object interface{}, fieldName string) (field interface{}
 	}()
 
 	val := reflect.ValueOf(object).Elem().FieldByName(fieldName)
-	field = reflect.NewAt(val.Type(), unsafe.Pointer(val.UnsafeAddr())).Elem().Interface() //nolint:gosec
+	field = reflect.NewAt(val.Type(), unsafe.Pointer(val.UnsafeAddr())).Elem().Interface()
 
 	return
 }

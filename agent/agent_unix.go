@@ -68,5 +68,5 @@ func getResidentMemoryOfSelf() uint64 {
 		return 0
 	}
 
-	return uint64(s.ResidentMemory())
+	return uint64(s.ResidentMemory()) //nolint: gosec
 }

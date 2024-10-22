@@ -145,7 +145,7 @@ func (m *Manager) needConfigChange(inputs []input) bool {
 		return true
 	}
 
-	for i := range len(inputs) {
+	for i := range inputs {
 		if inputs[i].Path != m.loadedInputs[i].Path {
 			return true
 		}

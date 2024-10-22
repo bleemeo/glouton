@@ -23,7 +23,7 @@ import (
 )
 
 // Exponential return an exponential delay. N should be the number of successive iteration/errors (counting from 1).
-// The value retuned is "base * powerFactor ^ n". The value is capped at max.
+// The value returned is "base * powerFactor ^ n". The value is capped at max.
 // powerFactor should be > 1 (or the delay will be smaller and smaller).
 // Exponential works at seconds resolution. Base should be > of few seconds.
 func Exponential(base time.Duration, powerFactor float64, n int, max time.Duration) time.Duration { //nolint: predeclared

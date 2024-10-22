@@ -59,12 +59,6 @@ const config string = `
     Measurement = "win_system"
 
   [[inputs.win_perf_counters.object]]
-    ObjectName = "Processor"
-    Instances = ["_Total"]
-    Counters = ["% Idle Time"]
-    Measurement = "win_processor"
-
-  [[inputs.win_perf_counters.object]]
     ObjectName = "PhysicalDisk"
     Instances = ["*"]
     Counters = [
@@ -106,7 +100,7 @@ type winCollector struct {
 
 var errInvalidType = errors.New("invalid type")
 
-// New initialise win_perf_counters.Input.
+// New initialize win_perf_counters.Input.
 func New(inputsConfig inputs.CollectorConfig) (result telegraf.Input, err error) {
 	input, ok := telegraf_inputs.Inputs["win_perf_counters"]
 	if !ok {
@@ -182,6 +176,7 @@ func New(inputsConfig inputs.CollectorConfig) (result telegraf.Input, err error)
 func (c *winCollector) renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
 	// unnecessary data from the telegraf input
 	delete(originalContext.Tags, "objectname")
+	delete(originalContext.Tags, "source")
 
 	if originalContext.Measurement != diskIOModuleName {
 		return originalContext, false
@@ -201,7 +196,7 @@ func (c *winCollector) renameGlobal(originalContext internal.GatherContext) (new
 
 	// 'instance' has a pattern '<DISK_NUMBER> (<PARTITION_NAME> )+', e.g. "0 C:" or "0 C: D:"
 	// (here we have two partitions on the same disk). We keep the lowest letter, as it is more
-	// probably an essential device).
+	// probably an essential device.
 	splitInstance := strings.Split(instance, " ")
 	if len(splitInstance) < 2 {
 		return originalContext, false
@@ -261,16 +256,8 @@ func (c *winCollector) transformMetrics(currentContext internal.GatherContext, f
 		}
 	}
 
-	if currentContext.Measurement == processorModuleName {
-		if val, present := fields["Percent_Idle_Time"]; present {
-			// Reproduce the behavior exhibited in the python agent: we estimate the load to be
-			// the current cpu_usage + Processor Queue Length (the number of starved threads).
-			res["load1"] = 1. - val/100. + c.runLength
-		}
-	}
-
 	if currentContext.Measurement == systemModuleName {
-		// we will have a offset of up to 10s, depending on the order of collection.
+		// we will have an offset of up to 10s, depending on the order of collection.
 		// However, 'System' should be collected prior to the processor, so it should be pretty accurate.
 		// And 10s of delay is probably ok too.
 		if val, present := fields["Processor_Queue_Length"]; present {
@@ -281,7 +268,7 @@ func (c *winCollector) transformMetrics(currentContext internal.GatherContext, f
 	return res
 }
 
-func (c winCollector) renameMetrics(currentContext internal.GatherContext, metricName string) (string, string) {
+func (c *winCollector) renameMetrics(currentContext internal.GatherContext, metricName string) (string, string) {
 	newMeasurement := currentContext.Measurement
 
 	switch currentContext.Measurement {
