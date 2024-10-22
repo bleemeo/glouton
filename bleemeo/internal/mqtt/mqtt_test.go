@@ -155,9 +155,9 @@ func mockClient(t *testing.T) *Client {
 
 	cache.SetAgentList([]bleemeoTypes.Agent{
 		{
-			ID:              agentID,
-			CurrentConfigID: accountConfigID,
-			AgentType:       agentTypeID,
+			ID:                     agentID,
+			CurrentAccountConfigID: accountConfigID,
+			AgentType:              agentTypeID,
 		},
 	})
 

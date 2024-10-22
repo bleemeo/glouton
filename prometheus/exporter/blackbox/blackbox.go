@@ -516,7 +516,7 @@ func (m *RegisterManager) updateRegistrations() error {
 				registry.RegistrationOption{
 					Description: "blackbox for " + collectorFromConfig.Collector.URL,
 					JitterSeed:  hash,
-					Interval:    collectorFromConfig.Collector.RefreshRate,
+					MinInterval: collectorFromConfig.Collector.RefreshRate,
 					ExtraLabels: collectorFromConfig.Labels,
 				},
 				g,

@@ -47,7 +47,7 @@ type GlobalOption struct {
 	MonitorManager          MonitorManager
 	MetricFormat            types.MetricFormat
 	NotifyFirstRegistration func()
-	NotifyLabelsUpdate      func()
+	NotifyHooksUpdate       func()
 	BlackboxScraperName     string
 	ReloadState             BleemeoReloadState
 	WriteDiagnosticArchive  func(ctx context.Context, archive types.ArchiveWriter) error

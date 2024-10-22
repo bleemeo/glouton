@@ -499,14 +499,14 @@ func (a *agent) UpdateThresholds(ctx context.Context, thresholds map[string]thre
 // notifyBleemeoFirstRegistration is called when Glouton is registered with Bleemeo Cloud platform for the first time
 // This means that when this function is called, BleemeoAgentID and BleemeoAccountID are set.
 func (a *agent) notifyBleemeoFirstRegistration() {
-	a.gathererRegistry.UpdateRelabelHook(a.bleemeoConnector.RelabelHook)
+	a.gathererRegistry.UpdateRegistrationHooks(a.bleemeoConnector.RelabelHook, a.bleemeoConnector.UpdateDelayHook)
 	a.store.DropAllMetrics()
 }
 
-// notifyBleemeoUpdateLabels is called when Labels might change for some metrics.
+// notifyBleemeoUpdateHooks is called when Labels might change for some metrics.
 // This likely happen when SNMP target are deleted/recreated.
-func (a *agent) notifyBleemeoUpdateLabels() {
-	a.gathererRegistry.UpdateRelabelHook(a.bleemeoConnector.RelabelHook)
+func (a *agent) notifyBleemeoUpdateHooks() {
+	a.gathererRegistry.UpdateRegistrationHooks(a.bleemeoConnector.RelabelHook, a.bleemeoConnector.UpdateDelayHook)
 }
 
 func (a *agent) updateSNMPResolution(resolution time.Duration) {
@@ -548,7 +548,7 @@ func (a *agent) updateSNMPResolution(resolution time.Duration) {
 			registry.RegistrationOption{
 				Description: "snmp target " + target.Address,
 				JitterSeed:  hash,
-				Interval:    resolution,
+				MinInterval: resolution,
 				Timeout:     40 * time.Second,
 				ExtraLabels: target.ExtraLabels,
 				Rules:       registry.DefaultSNMPRules(resolution),
@@ -573,7 +573,8 @@ func (a *agent) updateMetricResolution(ctx context.Context, defaultResolution ti
 	a.metricResolution = defaultResolution
 	a.l.Unlock()
 
-	a.gathererRegistry.UpdateDelay(defaultResolution)
+	// No need to check whether the connector is nil or not, since we were called from it.
+	a.gathererRegistry.UpdateRegistrationHooks(a.bleemeoConnector.RelabelHook, a.bleemeoConnector.UpdateDelayHook)
 
 	services, err := a.discovery.Discovery(ctx, time.Hour)
 	if err != nil {
@@ -1065,7 +1066,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			UpdateUnits:                    a.threshold.SetUnits,
 			MetricFormat:                   a.metricFormat,
 			NotifyFirstRegistration:        a.notifyBleemeoFirstRegistration,
-			NotifyLabelsUpdate:             a.notifyBleemeoUpdateLabels,
+			NotifyHooksUpdate:              a.notifyBleemeoUpdateHooks,
 			BlackboxScraperName:            scaperName,
 			ReloadState:                    a.reloadState.Bleemeo(),
 			WriteDiagnosticArchive:         a.writeDiagnosticArchive,
@@ -1089,14 +1090,13 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.bleemeoConnector = connector
 		a.l.Unlock()
 
-		a.gathererRegistry.UpdateRelabelHook(a.bleemeoConnector.RelabelHook)
+		a.gathererRegistry.UpdateRegistrationHooks(a.bleemeoConnector.RelabelHook, a.bleemeoConnector.UpdateDelayHook)
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 
 		_, err = a.gathererRegistry.RegisterAppenderCallback(
 			registry.RegistrationOption{
 				Description:    "Bleemeo connector",
 				JitterSeed:     baseJitter,
-				Interval:       defaultInterval,
 				HonorTimestamp: true, // time_drift metric emit point with the time from Bleemeo API
 			},
 			registry.AppenderFunc(a.bleemeoConnector.EmitInternalMetric),
@@ -1201,7 +1201,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			registry.RegistrationOption{
 				Description:              "Prom exporter " + target.URL.String(),
 				JitterSeed:               labels.FromMap(target.ExtraLabels).Hash(),
-				Interval:                 defaultInterval,
 				ExtraLabels:              target.ExtraLabels,
 				AcceptAllowedMetricsOnly: true,
 				HonorTimestamp:           true,

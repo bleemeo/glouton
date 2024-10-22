@@ -48,7 +48,6 @@ func (r *Registry) AddNodeExporter(option node.Option, vethProvider *veth.Provid
 		RegistrationOption{
 			Description:           "node_exporter",
 			JitterSeed:            baseJitter,
-			Interval:              defaultInterval,
 			DisablePeriodicGather: r.option.MetricFormat != types.MetricFormatPrometheus,
 		},
 		nodeGatherer{

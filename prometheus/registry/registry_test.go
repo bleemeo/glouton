@@ -201,6 +201,12 @@ func (cb fakeInput) Gather(acc telegraf.Accumulator) error {
 	return nil
 }
 
+func makeDelayHook(delay time.Duration) UpdateDelayHook {
+	return func(map[string]string) (time.Duration, bool) {
+		return delay, false
+	}
+}
+
 func TestRegistry_Register(t *testing.T) {
 	reg, err := New(Option{})
 	if err != nil {
@@ -288,11 +294,11 @@ func TestRegistry_Register(t *testing.T) {
 		t.Errorf("re-reg.RegisterGatherer(gather2) failed: %v", err)
 	}
 
-	reg.UpdateRelabelHook(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
+	reg.UpdateRegistrationHooks(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
 		labels[types.LabelMetaBleemeoUUID] = testAgentID
 
 		return labels, false
-	})
+	}, makeDelayHook(gloutonMinimalInterval))
 
 	now := time.Now()
 
@@ -358,8 +364,6 @@ func TestRegistryDiagnostic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	reg.UpdateDelay(250 * time.Millisecond)
-
 	gather1 := &fakeGatherer{
 		name: "gather1",
 	}
@@ -387,11 +391,11 @@ func TestRegistryDiagnostic(t *testing.T) {
 		t.Errorf("re-reg.RegisterGatherer(gather2) failed: %v", err)
 	}
 
-	reg.UpdateRelabelHook(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
+	reg.UpdateRegistrationHooks(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
 		labels[types.LabelMetaBleemeoUUID] = testAgentID
 
 		return labels, false
-	})
+	}, makeDelayHook(250*time.Millisecond))
 
 	// After this delay, registry should have run at least once.
 	time.Sleep(300 * time.Millisecond)
@@ -497,11 +501,11 @@ func TestRegistry_pushPoint(t *testing.T) {
 		t.Errorf("Gather() mismatch: (-want +got):\n%s", diff)
 	}
 
-	reg.UpdateRelabelHook(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
+	reg.UpdateRegistrationHooks(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
 		labels[types.LabelMetaBleemeoUUID] = testAgentID
 
 		return labels, false
-	})
+	}, makeDelayHook(gloutonMinimalInterval))
 
 	got, err = reg.Gather()
 	if err != nil {
@@ -567,8 +571,10 @@ func TestRegistry_applyRelabel(t *testing.T) {
 	tests := []struct {
 		name            string
 		fields          fields
+		relabelHook     RelabelHook
 		args            args
 		want            labels.Labels
+		wantWithMeta    map[string]string
 		wantAnnotations types.MetricAnnotations
 	}{
 		{
@@ -666,6 +672,33 @@ func TestRegistry_applyRelabel(t *testing.T) {
 				BleemeoAgentID: "c571f9cf-6f07-492a-9e86-b8d5f5027557",
 			},
 		},
+		{
+			name:   "vSphere_realtime_gatherer",
+			fields: fields{relabelConfigs: getDefaultRelabelConfig()},
+			relabelHook: func(_ context.Context, labels map[string]string) (result map[string]string, retryLater bool) {
+				labels["__meta_additional_info"] = "some value"
+
+				return labels, false
+			},
+			args: args{map[string]string{
+				types.LabelMetaGloutonFQDN:     "some-instance",
+				types.LabelMetaGloutonPort:     "8015",
+				types.LabelMetaPort:            "8015",
+				types.LabelMetaSendScraperUUID: "yes",
+			}},
+			want: labels.FromMap(map[string]string{
+				types.LabelInstance: "some-instance:8015",
+			}),
+			wantWithMeta: map[string]string{
+				types.LabelInstance:            "some-instance:8015",
+				types.LabelMetaGloutonFQDN:     "some-instance",
+				types.LabelMetaGloutonPort:     "8015",
+				types.LabelMetaPort:            "8015",
+				types.LabelMetaSendScraperUUID: "yes",
+				"__meta_additional_info":       "some value",
+			},
+			wantAnnotations: types.MetricAnnotations{},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -675,10 +708,18 @@ func TestRegistry_applyRelabel(t *testing.T) {
 			}
 
 			r.relabelConfigs = tt.fields.relabelConfigs
+			r.relabelHook = tt.relabelHook
 
-			promLabels, annotations, _ := r.applyRelabel(context.Background(), tt.args.input)
+			promLabels, labelsWithMeta, annotations, _ := r.applyRelabel(context.Background(), tt.args.input)
 			if !reflect.DeepEqual(promLabels, tt.want) {
 				t.Errorf("Registry.applyRelabel() promLabels = %+v, want %+v", promLabels, tt.want)
+			}
+
+			if tt.relabelHook != nil {
+				// For our current use case, labels with meta are only useful in combination with the relabel-hook.
+				if diff := cmp.Diff(tt.wantWithMeta, labelsWithMeta); diff != "" {
+					t.Errorf("Registry.applyRelabel() labelsWithMeta (-want +got):\n%s", diff)
+				}
 			}
 
 			if !reflect.DeepEqual(annotations, tt.wantAnnotations) {
@@ -825,17 +866,11 @@ func TestRegistry_slowGather(t *testing.T) { //nolint:maintidx
 	})
 
 	grp.Go(func() error {
-		reg.UpdateRelabelHook(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
+		reg.UpdateRegistrationHooks(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
 			labels[types.LabelMetaBleemeoUUID] = testAgentID
 
 			return labels, false
-		})
-
-		return nil
-	})
-
-	grp.Go(func() error {
-		reg.UpdateDelay(100 * time.Millisecond)
+		}, makeDelayHook(100*time.Millisecond))
 
 		return nil
 	})
@@ -848,8 +883,9 @@ func TestRegistry_slowGather(t *testing.T) { //nolint:maintidx
 	waitPointAndGatherCall := func(t *testing.T, expectPoint bool, expectedName string) {
 		t.Helper()
 
-		// We don't know the schedule of scraper... wait until we see point from gather1
-		deadline := time.Now().Add(time.Second)
+		// We don't know the schedule of scraper... wait until we see point from gather1.
+		// Since scrapeLoopOffset(...) may return a time up to now+gloutonMinimalInterval, it may take a while.
+		deadline := time.Now().Add(gloutonMinimalInterval).Truncate(gloutonMinimalInterval).Add(time.Second)
 
 		l.Lock()
 		defer l.Unlock()
@@ -899,7 +935,11 @@ func TestRegistry_slowGather(t *testing.T) { //nolint:maintidx
 		t.Errorf("gather2 was never called")
 	}
 
-	reg.UpdateDelay(50 * time.Millisecond)
+	reg.UpdateRegistrationHooks(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
+		labels[types.LabelMetaBleemeoUUID] = testAgentID
+
+		return labels, false
+	}, makeDelayHook(50*time.Millisecond))
 
 	waitPointAndGatherCall(t, true, "name1")
 
@@ -1021,15 +1061,13 @@ func TestRegistry_run(t *testing.T) {
 
 			go reg.Run(ctx) //nolint: errcheck
 
-			reg.UpdateRelabelHook(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
+			const delay = 100 * time.Millisecond
+
+			reg.UpdateRegistrationHooks(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
 				labels[types.LabelMetaBleemeoUUID] = testAgentID
 
 				return labels, false
-			})
-
-			const delay = 100 * time.Millisecond
-
-			reg.UpdateDelay(delay)
+			}, makeDelayHook(delay))
 
 			gather1 := &fakeGatherer{name: "name1"}
 			gather1.fillResponse()
@@ -1067,8 +1105,9 @@ func TestRegistry_run(t *testing.T) {
 				t.Error(err)
 			}
 
-			// We don't know the schedule of scraper... wait until we have the expected number of points
-			deadline := time.Now().Add(time.Second)
+			// We don't know the schedule of scraper... wait until we have the expected number of points.
+			// Since scrapeLoopOffset(...) may return a time up to now+gloutonMinimalInterval, it may take a while.
+			deadline := time.Now().Add(gloutonMinimalInterval).Truncate(gloutonMinimalInterval).Add(time.Second)
 
 			l.Lock()
 

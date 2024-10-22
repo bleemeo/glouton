@@ -62,7 +62,6 @@ func RegisterExporter(
 		_, err = reg.RegisterGatherer(
 			registry.RegistrationOption{
 				Description:           "process-exporter metrics",
-				Interval:              defaultInterval,
 				JitterSeed:            defaultJitter,
 				DisablePeriodicGather: bleemeoFormat,
 			},
@@ -78,7 +77,6 @@ func RegisterExporter(
 		_, err := reg.RegisterAppenderCallback(
 			registry.RegistrationOption{
 				Description: "Bleemeo process-exporter metrics",
-				Interval:    defaultInterval,
 				JitterSeed:  defaultJitter,
 			},
 			&bleemeoExporter{exporter: processExporter},

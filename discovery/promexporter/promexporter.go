@@ -36,8 +36,6 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 )
 
-const defaultInterval = 0
-
 // listExporters return list of exporters based on containers labels/annotations.
 func (d *DynamicScrapper) listExporters(containers []facts.Container) []*scrapper.Target {
 	result := make([]*scrapper.Target, 0)
@@ -167,7 +165,6 @@ func (d *DynamicScrapper) update(containers []facts.Container) {
 			registry.RegistrationOption{
 				Description:              "Prometheus exporter " + t.URL.String(),
 				JitterSeed:               hash,
-				Interval:                 defaultInterval,
 				Rules:                    t.Rules,
 				ExtraLabels:              t.ExtraLabels,
 				AcceptAllowedMetricsOnly: true,

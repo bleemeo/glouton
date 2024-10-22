@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/inputs"
@@ -358,10 +359,14 @@ func (vSphere *vSphere) makeRealtimeGatherer(ctx context.Context) (registry.Gath
 	noMetricsSinceIterations := 0
 	noMetricsSince := make(map[string]int)
 	opt := registry.RegistrationOption{
-		Description:         fmt.Sprint(vSphere, " ", gatherRT),
+		Description: fmt.Sprint(vSphere, " ", gatherRT),
+		// We use the VM agent type because it has the smallest resolution.
 		MinInterval:         time.Minute,
 		StopCallback:        gatherer.stop,
 		ApplyDynamicRelabel: true,
+		ExtraLabels: map[string]string{
+			types.LabelMetaAgentTypes: fmt.Sprintf("%s,%s,%s", bleemeo.AgentType_vSphereVM, bleemeo.AgentType_vSphereHost, bleemeo.AgentType_vSphereCluster),
+		},
 		GatherModifier: func(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
 			vSphere.purgeNoMetricsSinceMap(noMetricsSince, &noMetricsSinceIterations)
 
@@ -427,9 +432,12 @@ func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (regist
 	noMetricsSince := make(map[string]int)
 	opt := registry.RegistrationOption{
 		Description:         fmt.Sprint(vSphere, " ", gatherHist30m),
-		MinInterval:         1 * time.Minute, // 4 times out of 5, we will re-use the previous point
+		MinInterval:         time.Minute, // 4 times out of 5, we will re-use the previous point
 		StopCallback:        gatherer.stop,
 		ApplyDynamicRelabel: true,
+		ExtraLabels: map[string]string{
+			types.LabelMetaAgentTypes: string(bleemeo.AgentType_vSphereCluster),
+		},
 		GatherModifier: func(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
 			vSphere.purgeNoMetricsSinceMap(noMetricsSince, &noMetricsSinceIterations)
 

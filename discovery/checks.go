@@ -343,11 +343,10 @@ func (d *Discovery) addCheck(serviceCheck checker, service Service) {
 
 	options := registry.RegistrationOption{
 		Description:  "check for " + service.Name,
-		Interval:     service.Interval,
+		MinInterval:  max(service.Interval, time.Minute),
 		ExtraLabels:  lbls,
 		JitterSeed:   labels.FromMap(lbls).Hash(),
 		StopCallback: checkGatherer.Close,
-		MinInterval:  time.Minute,
 	}
 
 	id, err := d.metricRegistry.RegisterGatherer(options, checkGatherer)

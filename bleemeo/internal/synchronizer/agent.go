@@ -68,7 +68,7 @@ func (s *Synchronizer) syncMainAgent(ctx context.Context, apiClient types.AgentC
 
 	s.option.Cache.SetAgent(agent)
 
-	if agent.CurrentConfigID == "" {
+	if agent.CurrentAccountConfigID == "" {
 		return errNoConfig
 	}
 

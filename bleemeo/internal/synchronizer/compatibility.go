@@ -138,7 +138,7 @@ func compatibilitySyncToPerform(ctx context.Context, execution types.Synchroniza
 		execution.RequestSynchronizationForAll(true)
 	}
 
-	if state.currentConfigNotified != agent.CurrentConfigID {
+	if state.currentConfigNotified != agent.CurrentAccountConfigID {
 		execution.RequestSynchronization(types.EntityAccountConfig, true)
 	}
 

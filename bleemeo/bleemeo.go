@@ -534,7 +534,65 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 		labels[gloutonTypes.LabelMetaBleemeoTargetAgentUUID] = agent.ID
 	}
 
+	// Tells UpdateDelayHook that labels are good
+	labels[gloutonTypes.LabelMetaBleemeoRelabelHookOk] = "1"
+
 	return labels, false
+}
+
+func (c *Connector) UpdateDelayHook(labels map[string]string) (time.Duration, bool) {
+	if _, ok := labels[gloutonTypes.LabelMetaBleemeoRelabelHookOk]; !ok {
+		return 0, true
+	}
+
+	agentID, ok := labels[gloutonTypes.LabelInstanceUUID]
+	if !ok {
+		logger.V(1).Printf("Can't find metric resolution for gatherer with labels %v", labels)
+
+		return 0, true
+	}
+
+	agent, ok := c.cache.AgentsByUUID()[agentID]
+	if !ok {
+		logger.V(1).Printf("Can't find metric resolution for agent %s (agent not found in cache)", agentID)
+
+		return 0, true
+	}
+
+	possibleAgentTypes := make(map[string]bool)
+
+	if strTypes, hasAgentTypes := labels[gloutonTypes.LabelMetaAgentTypes]; hasAgentTypes {
+		// When a gatherer handles agents of multiple types,
+		// we need to retrieve the metric resolution of each.
+		// Therefore, we're able to pick the right interval (a.k.a the smallest) between them all.
+		agentTypes := strings.Split(strTypes, ",")
+
+		for _, agentType := range c.cache.AgentTypes() {
+			for _, agentTypeStr := range agentTypes {
+				if agentTypeStr == string(agentType.Name) {
+					possibleAgentTypes[agentType.ID] = true
+				}
+			}
+		}
+	} else {
+		possibleAgentTypes[agent.AgentType] = true
+	}
+
+	var minResolution int
+
+	for _, cfg := range c.cache.AgentConfigs() {
+		if cfg.AccountConfig == agent.CurrentAccountConfigID && possibleAgentTypes[cfg.AgentType] {
+			if minResolution == 0 || cfg.MetricResolution < minResolution {
+				minResolution = cfg.MetricResolution
+			}
+		}
+	}
+
+	if minResolution == 0 {
+		logger.V(1).Printf("Can't find metric resolution for agent %s (agent config not found in cache)", agentID)
+	}
+
+	return time.Duration(minResolution) * time.Second, false
 }
 
 func (c *Connector) kubernetesAgentID(clusterName string) (string, error) {
@@ -741,7 +799,7 @@ func (c *Connector) diagnosticCache(file io.Writer) {
 			}
 		}
 
-		fmt.Fprintf(file, "id=%s fqdn=%s type=%s (%s) accountID=%s, config=%s\n", a.ID, a.FQDN, agentTypeName, a.AgentType, a.AccountID, a.CurrentConfigID)
+		fmt.Fprintf(file, "id=%s fqdn=%s type=%s (%s) accountID=%s, config=%s\n", a.ID, a.FQDN, agentTypeName, a.AgentType, a.AccountID, a.CurrentAccountConfigID)
 	}
 
 	fmt.Fprintf(file, "\n# Cache known %d agent types\n", len(agentTypes))

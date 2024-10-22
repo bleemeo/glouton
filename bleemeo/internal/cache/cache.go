@@ -183,7 +183,7 @@ func (c *Cache) CurrentAccountConfig() (bleemeoTypes.GloutonAccountConfig, bool)
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	result, ok := searchMap[c.data.Agent.CurrentConfigID]
+	result, ok := searchMap[c.data.Agent.CurrentAccountConfigID]
 
 	if _, ok := result.AgentConfigByName[bleemeo.AgentType_Agent]; !ok {
 		return result, false

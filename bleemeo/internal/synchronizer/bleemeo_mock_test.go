@@ -102,7 +102,7 @@ func newClientMock(helper *syncTestHelper) *wrapperClientMock {
 			clientMock.password = agent.InitialPassword
 		}
 
-		agent.CurrentConfigID = clientMock.accountConfigNewAgent
+		agent.CurrentAccountConfigID = clientMock.accountConfigNewAgent
 		agent.InitialPassword = "password already set"
 		agent.CreatedAt = helper.Now()
 
