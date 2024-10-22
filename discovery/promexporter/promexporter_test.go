@@ -73,7 +73,7 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 						"prometheus.io/scrape": "true",
 					},
 					ExtraLabels: map[string]string{
-						types.LabelContainerName:      "my_container",
+						types.LabelMetaContainerName:  "my_container",
 						types.LabelMetaScrapeJob:      fakeJobName,
 						types.LabelMetaScrapeInstance: "sample:9102",
 					},
@@ -100,6 +100,7 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 						"prometheus.io/scrape": "true",
 					},
 					ExtraLabels: map[string]string{
+						// K8S don't use meta label, because registry don't convert them to normal label unlike container_name label
 						types.LabelK8SNamespace:       fakePodNamespace,
 						types.LabelK8SPODName:         "my_pod-1234",
 						types.LabelMetaScrapeJob:      fakeJobName,
@@ -153,7 +154,7 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 						"prometheus.io/scrape": "true",
 					},
 					ExtraLabels: map[string]string{
-						types.LabelContainerName:      "sample1_1",
+						types.LabelMetaContainerName:  "sample1_1",
 						types.LabelMetaScrapeJob:      fakeJobName,
 						types.LabelMetaScrapeInstance: "sample1:9102",
 					},
@@ -195,7 +196,7 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 						"prometheus.io/path":   "/metrics.txt",
 					},
 					ExtraLabels: map[string]string{
-						types.LabelContainerName:      "testname",
+						types.LabelMetaContainerName:  "testname",
 						types.LabelMetaScrapeJob:      fakeJobName,
 						types.LabelMetaScrapeInstance: "sample:8080",
 					},
@@ -222,7 +223,7 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 						"prometheus.io/path":   "metrics.txt",
 					},
 					ExtraLabels: map[string]string{
-						types.LabelContainerName:      "testname",
+						types.LabelMetaContainerName:  "testname",
 						types.LabelMetaScrapeJob:      fakeJobName,
 						types.LabelMetaScrapeInstance: "sample:9102",
 					},
@@ -247,7 +248,7 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 						"prometheus.io/scrape": "true",
 					},
 					ExtraLabels: map[string]string{
-						types.LabelContainerName:      "my_container",
+						types.LabelMetaContainerName:  "my_container",
 						types.LabelMetaScrapeJob:      fakeJobName,
 						types.LabelMetaScrapeInstance: "sample:9102",
 					},
@@ -278,7 +279,7 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 						"glouton.include_default_metrics": "no",
 					},
 					ExtraLabels: map[string]string{
-						types.LabelContainerName:      "my_container",
+						types.LabelMetaContainerName:  "my_container",
 						types.LabelMetaScrapeJob:      fakeJobName,
 						types.LabelMetaScrapeInstance: "sample:9102",
 					},
@@ -309,7 +310,7 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 						"glouton.include_default_metrics": "false",
 					},
 					ExtraLabels: map[string]string{
-						types.LabelContainerName:      "my_container",
+						types.LabelMetaContainerName:  "my_container",
 						types.LabelMetaScrapeJob:      fakeJobName,
 						types.LabelMetaScrapeInstance: "sample:9102",
 					},
