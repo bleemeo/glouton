@@ -275,6 +275,10 @@ func (g *wrappedGatherer) GatherWithState(ctx context.Context, state GatherState
 		mfs = g.opt.GatherModifier(mfs, err)
 	}
 
+	if g.opt.CompatibilityNameItem {
+		model.FamiliesToNameAndItem(mfs)
+	}
+
 	if len(g.labels) == 0 {
 		return mfs, err
 	}

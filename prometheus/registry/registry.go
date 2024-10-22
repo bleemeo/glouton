@@ -176,6 +176,9 @@ type RegistrationOption struct {
 	// This should eventually be dropped once all metrics are produced with right name + item directly rather than using
 	// Annotations.BleemeoItem. This compatibility was mostly needed when Bleemeo didn't supported labels and only had
 	// name + item. If dropped, we should be careful to don't change existing metrics.
+	// Note: it doesn't impact labels from ExtraLabels (including relabeling processing), it only drop labels
+	// from each points from the gatherer itself, the ExtraLabels after relabeling (a.k.a "LabelUsed" in diagnostic) are still
+	// added.
 	CompatibilityNameItem bool
 	// DisablePeriodicGather skip the periodic calls which forward gathered points to r.PushPoint.
 	// The periodic call uses the MinInterval. When MinInterval is 0, the dynamic interval set by UpdateDelay is used.
@@ -1674,10 +1677,6 @@ func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registrat
 	start := time.Now()
 
 	mfs, err := gatherMethod(ctx, state)
-
-	if reg.option.CompatibilityNameItem && false { // TODO: need more work.
-		gloutonModel.FamiliesToNameAndItem(mfs)
-	}
 
 	return mfs, time.Since(start), err
 }
