@@ -378,14 +378,15 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 			} else {
 				var disableDelay time.Duration
 
-				switch {
-				case stateHasValue(agentBrokenCacheKey, s.option.State):
-					s.l.Lock()
-					disableDelay = delay.Exponential(10*time.Minute, 3, s.successiveErrors, 5*24*time.Hour)
-					s.l.Unlock()
-				default:
+				s.l.Lock()
+				successiveErrors := s.successiveErrors
+				s.l.Unlock()
+
+				if stateHasValue(agentBrokenCacheKey, s.option.State) {
+					disableDelay = delay.Exponential(10*time.Minute, 3, successiveErrors, 5*24*time.Hour)
+				} else {
 					disableDelay = delay.JitterDelay(
-						delay.Exponential(15*time.Second, 1.55, s.successiveErrors, 15*time.Minute),
+						delay.Exponential(15*time.Second, 1.55, successiveErrors, 15*time.Minute),
 						0.1,
 					)
 				}
