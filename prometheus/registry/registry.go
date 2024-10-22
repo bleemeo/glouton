@@ -207,6 +207,30 @@ type RegistrationOption struct {
 	rrules                 []*rules.RecordingRule
 }
 
+type registrationType int
+
+const (
+	registrationGatherer           registrationType = iota
+	registrationAppenderCallback   registrationType = iota
+	registrationInput              registrationType = iota
+	registrationPushPointsCallback registrationType = iota
+)
+
+func (rt registrationType) String() string {
+	switch rt {
+	case registrationGatherer:
+		return "RegisterGatherer"
+	case registrationAppenderCallback:
+		return "RegisterAppenderCallback"
+	case registrationInput:
+		return "RegisterInput"
+	case registrationPushPointsCallback:
+		return "RegisterPushPointsCallback"
+	default:
+		return "unknown"
+	}
+}
+
 type AppenderCallback interface {
 	// Collect collects point and write them into Appender. The appender must not be used once Collect returned.
 	// If you omit to Commit() on the appender, it will be automatically done when Collect return without error.
@@ -254,21 +278,24 @@ func (opt *RegistrationOption) String() string {
 }
 
 type scrapeRun struct {
-	ScrapeAt       time.Time
-	ScrapeDuration time.Duration
+	ScrapeAt           time.Time
+	ScrapeDuration     time.Duration
+	ScrapedPointsCount int
 }
 
 func (s scrapeRun) MarshalJSON() ([]byte, error) {
 	tmp := struct {
-		ScrapeAt       time.Time
-		ScrapeDuration string
-	}{s.ScrapeAt, s.ScrapeDuration.String()}
+		ScrapeAt           time.Time
+		ScrapeDuration     string
+		ScrapedPointsCount int
+	}{s.ScrapeAt, s.ScrapeDuration.String(), s.ScrapedPointsCount}
 
 	return json.Marshal(tmp)
 }
 
 type registration struct {
 	l                    sync.Mutex
+	regType              registrationType
 	option               RegistrationOption
 	addedAt              time.Time
 	removalRequested     bool
@@ -580,7 +607,8 @@ func (r *Registry) RegisterGatherer(opt RegistrationOption, gatherer prometheus.
 	defer r.l.Unlock()
 
 	reg := &registration{
-		option: opt,
+		option:  opt,
+		regType: registrationGatherer,
 	}
 	r.setupGatherer(reg, gatherer)
 
@@ -611,7 +639,10 @@ func (r *Registry) registerPushPointsCallback(opt RegistrationOption, f func(con
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	reg := &registration{option: opt}
+	reg := &registration{
+		option:  opt,
+		regType: registrationPushPointsCallback,
+	}
 	r.setupGatherer(reg, pushGatherer{fun: f})
 
 	return r.addRegistration(reg)
@@ -634,7 +665,10 @@ func (r *Registry) RegisterAppenderCallback(
 	appOpt := opt
 	opt.HonorTimestamp = true
 
-	reg := &registration{option: opt}
+	reg := &registration{
+		option:  opt,
+		regType: registrationAppenderCallback,
+	}
 	r.setupGatherer(reg, &appenderGatherer{cb: cb, opt: appOpt})
 
 	return r.addRegistration(reg)
@@ -681,7 +715,8 @@ func (r *Registry) RegisterInput(
 	defer r.l.Unlock()
 
 	reg := &registration{
-		option: opt,
+		option:  opt,
+		regType: registrationInput,
 	}
 	r.setupGatherer(reg, newInputGatherer(input))
 
@@ -880,6 +915,7 @@ func (r *Registry) diagnosticScrapeLoop(ctx context.Context, archive types.Archi
 		HookMinimalInterval string
 		ScrapeInterval      string
 		Option              RegistrationOption
+		RegistrationType    string
 		UnexportableOption  unexportableOption
 		LabelUsed           map[string]string
 		LabelsWithMeta      map[string]string
@@ -901,10 +937,11 @@ func (r *Registry) diagnosticScrapeLoop(ctx context.Context, archive types.Archi
 			ID:                  id,
 			Description:         reg.option.Description,
 			AddedAt:             reg.addedAt,
-			LastScrape:          reg.lastScrapes,
+			LastScrape:          copySlice,
 			RegInterval:         reg.interval.String(),
 			HookMinimalInterval: reg.hookMinimalInterval.String(),
 			Option:              reg.option,
+			RegistrationType:    reg.regType.String(),
 			LabelUsed:           dtoLabelToMap(reg.gatherer.labels),
 			LabelsWithMeta:      reg.labelsWithMeta,
 			RelabelHookSkip:     reg.relabelHookSkip,
@@ -1545,7 +1582,7 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, loopCtx context.Context, 
 	}
 
 	reg.l.Lock()
-	reg.lastScrapes = append(reg.lastScrapes, scrapeRun{ScrapeAt: t0, ScrapeDuration: duration})
+	reg.lastScrapes = append(reg.lastScrapes, scrapeRun{ScrapeAt: t0, ScrapeDuration: duration, ScrapedPointsCount: len(mfs)})
 
 	if len(reg.lastScrapes) > maxLastScrape {
 		reg.lastScrapes = reg.lastScrapes[len(reg.lastScrapes)-maxLastScrape:]
