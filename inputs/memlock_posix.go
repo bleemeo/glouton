@@ -32,5 +32,5 @@ func getLockedMemoryLimit() uint64 {
 		return 0
 	}
 
-	return uint64(limit.Max) //nolint:unconvert, nolintlint // required for e.g., FreeBSD that has the field as int64
+	return uint64(limit.Max) //nolint:unconvert,gosec,nolintlint // required for e.g., FreeBSD that has the field as int64
 }

@@ -39,7 +39,6 @@ import (
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/logger"
 	gloutonModel "github.com/bleemeo/glouton/prometheus/model"
-	"github.com/bleemeo/glouton/prometheus/registry/internal/renamer"
 	"github.com/bleemeo/glouton/types"
 	"github.com/bleemeo/glouton/utils/archivewriter"
 
@@ -147,7 +146,6 @@ type Registry struct {
 	lastPushedPointsCleanup time.Time
 	relabelHook             RelabelHook
 	updateDelayHook         UpdateDelayHook
-	renamer                 *renamer.Renamer
 }
 
 type Option struct {
@@ -228,10 +226,10 @@ type ThresholdHandler interface {
 func (opt *RegistrationOption) buildRules() error {
 	rrules := make([]*rules.RecordingRule, 0, len(opt.Rules))
 
-	for _, r := range opt.Rules {
+	for i, r := range opt.Rules {
 		expr, err := parser.ParseExpr(r.PromQLQuery)
 		if err != nil {
-			return fmt.Errorf("rule %s: %w", r.TargetName, err)
+			return fmt.Errorf("rule %s (n°%d): %w", r.TargetName, i+1, err)
 		}
 
 		rr := rules.NewRecordingRule(r.TargetName, expr, nil)
@@ -447,7 +445,6 @@ func (r *Registry) init() {
 	r.pushedPoints = make(map[string]types.MetricPoint)
 	r.pushedPointsExpiration = make(map[string]time.Time)
 	r.relabelConfigs = getDefaultRelabelConfig()
-	r.renamer = renamer.LoadRules(renamer.GetDefaultRules())
 }
 
 func (r *Registry) Run(ctx context.Context) error {
@@ -1629,10 +1626,6 @@ func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registrat
 		gloutonModel.FamiliesToNameAndItem(mfs)
 	}
 
-	if !reg.option.NoLabelsAlteration {
-		mfs = r.renamer.RenameMFS(mfs)
-	}
-
 	return mfs, time.Since(start), err
 }
 
@@ -1742,7 +1735,6 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 	}
 
 	points = points[:n]
-	points = r.renamer.Rename(points)
 
 	// Apply the thresholds after the relabel hook to get the instance UUID in the labels.
 	if r.option.ThresholdHandler != nil {

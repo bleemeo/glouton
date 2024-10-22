@@ -20,12 +20,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os/exec"
+	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 	_ "unsafe" // using hack with go linkname to access private variable :)
 
+	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
 
 	"github.com/influxdata/telegraf/config"
@@ -39,15 +41,18 @@ type runCmdType func(timeout config.Duration, sudo bool, command string, args ..
 var runCmd runCmdType //nolint:gochecknoglobals
 
 type wrappedRunCmd struct {
-	l                sync.Mutex
-	cond             *sync.Cond
-	originalRunCmd   runCmdType
-	maxConcurrency   int
-	currentExecCount int
-	timeoutCount     int
-	allExecCount     int
-	buckets          map[string]bucketStats
-	globalStats      bucketStats
+	l                     sync.Mutex
+	cond                  *sync.Cond
+	originalRunCmd        runCmdType
+	maxConcurrency        int
+	currentExecCount      int
+	timeoutCount          int
+	allExecCount          int
+	buckets               map[string]bucketStats
+	globalStats           bucketStats
+	latestResultPerDevice map[string]string
+	firstScanOutput       string
+	latestScanOutput      string
 }
 
 type bucketStats struct {
@@ -96,6 +101,7 @@ func (w *wrappedRunCmd) reset(cmd runCmdType) {
 	w.cond = sync.NewCond(&w.l)
 	w.buckets = make(map[string]bucketStats)
 	w.globalStats = bucketStats{}
+	w.latestResultPerDevice = make(map[string]string)
 }
 
 func (w *wrappedRunCmd) SetConcurrency(maxConcurrency int) {
@@ -161,7 +167,7 @@ func (w *wrappedRunCmd) runCmd(timeout config.Duration, sudo bool, command strin
 		// which means that the command line didn't parse.
 		// For more information, see the EXIT STATUS section
 		// of the manpage smartctl(8).
-		if isExitCode1(err) {
+		if isExitErr, isCode1 := isExitCode1(err); isExitErr && !isCode1 {
 			err = nil
 		}
 	}
@@ -170,9 +176,14 @@ func (w *wrappedRunCmd) runCmd(timeout config.Duration, sudo bool, command strin
 }
 
 func (w *wrappedRunCmd) addStats(run smartExecution) {
-	// --scan executions are not added to stats
 	if len(run.args) > 0 && run.args[0] == "--scan" { //nolint: goconst
-		return
+		if w.firstScanOutput == "" {
+			w.firstScanOutput = run.output
+		}
+
+		w.latestScanOutput = run.output
+
+		return // --scan executions aren't added to stats
 	}
 
 	w.globalStats.addStats(run)
@@ -197,6 +208,13 @@ func (w *wrappedRunCmd) addStats(run smartExecution) {
 
 		delete(w.buckets, smallestKey)
 	}
+
+	device, found := findDeviceInArgs(run.args)
+	if found {
+		w.latestResultPerDevice[device] = run.output
+	} else {
+		logger.V(2).Printf("Can't find device in smartctl args %+v", run.args)
+	}
 }
 
 func (w *wrappedRunCmd) diagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
@@ -215,6 +233,9 @@ func (w *wrappedRunCmd) diagnosticArchive(_ context.Context, archive types.Archi
 		CurrentExecRunning     int
 		GlobalStats            bucketStats
 		Buckets                map[string]bucketStats
+		LatestResultPerDevice  map[string]string
+		FirstScanOutput        string
+		LatestScanOutput       string
 	}{
 		ExecutionWithScanCount: w.allExecCount,
 		TimeoutCount:           w.timeoutCount,
@@ -222,6 +243,9 @@ func (w *wrappedRunCmd) diagnosticArchive(_ context.Context, archive types.Archi
 		CurrentExecRunning:     w.currentExecCount,
 		GlobalStats:            w.globalStats,
 		Buckets:                w.buckets,
+		LatestResultPerDevice:  w.latestResultPerDevice,
+		FirstScanOutput:        w.firstScanOutput,
+		LatestScanOutput:       w.latestScanOutput,
 	}
 
 	enc := json.NewEncoder(file)
@@ -284,7 +308,7 @@ func (e smartExecution) MarshalJSON() ([]byte, error) {
 		WaitDuration      string
 		ExecutionDuration string
 		Args              string
-		Error             string
+		Error             string `json:",omitempty"`
 		Output            string
 	}{
 		ExecutionAt:       e.executionAt.Format(time.RFC3339Nano),
@@ -298,11 +322,49 @@ func (e smartExecution) MarshalJSON() ([]byte, error) {
 	return json.Marshal(state)
 }
 
-func isExitCode1(err error) bool {
-	errExit := new(exec.ExitError)
-	if errors.As(err, &errExit) {
-		return errExit.ExitCode() == 1
+// findDeviceInArgs	looks for the device identifier in the given gather command args.
+// It also returns whether it was successfully retrieved or not.
+//
+// Note that the way we search for the device is somewhat fragile,
+// as it only relies on the fact that "--format=brief" precedes it.
+// (Though, this behavior is tested in TestFindDeviceInArgs.)
+// The code where the arguments list if built up is (currently)
+// located in the smart.Smart.gatherDisk() method.
+func findDeviceInArgs(args []string) (string, bool) {
+	// "--format=brief" is the latest arg before the device identifier.
+	// We can't just take the last arg, because it may be a compound name, e.g., "/dev/nvme0 -d nvme".
+	formatArgPos := slices.Index(args, "--format=brief")
+	if formatArgPos < 0 {
+		return "", false
 	}
 
-	return false
+	device := strings.Join(args[formatArgPos+1:], " ")
+
+	return device, device != ""
+}
+
+// testExitError represents an *exec.ExitError,
+// since we can't instantiate the latter ourselves.
+type testExitError uint8
+
+func (tee testExitError) ExitCode() int {
+	return int(tee)
+}
+
+func (tee testExitError) Error() string {
+	return fmt.Sprintf("exit status %d", uint8(tee))
+}
+
+// isExitCode1 returns whether the given error is an exec.ExitError,
+// and if so, whether its status code is 1 or not.
+func isExitCode1(err error) (isExitErr, isCode1 bool) {
+	var errExitCode interface {
+		ExitCode() int
+	}
+
+	if errors.As(err, &errExitCode) {
+		return true, errExitCode.ExitCode() == 1
+	}
+
+	return false, false
 }

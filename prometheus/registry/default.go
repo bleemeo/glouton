@@ -70,6 +70,36 @@ func DefaultSNMPRules(resolution time.Duration) []types.SimpleRule {
 			TargetName:  "net_err_out",
 			PromQLQuery: "rate(ifOutErrors[$__rate_interval])",
 		},
+		// SNMP ex-"rename" rules
+		// `label_replace` doesn't remove the source label, so we need to explicitly drop it using the `without` clause.
+		{
+			TargetName:  "cpu_used",
+			PromQLQuery: `sum without (hrDeviceDescr, hrDeviceIndex) (label_replace(hrProcessorLoad, "core", "$1", "hrDeviceIndex", "(.*)"))`,
+		},
+		{
+			TargetName:  "cpu_used",
+			PromQLQuery: `sum without (cpmCPUTotalIndex) (label_replace(cpmCPUTotal1minRev, "core", "$1", "cpmCPUTotalIndex", "(.*)"))`,
+		},
+		{
+			TargetName:  "cpu_used",
+			PromQLQuery: "rlCpuUtilDuringLastMinute",
+		},
+		{
+			TargetName:  "mem_used",
+			PromQLQuery: `sum without (ciscoMemoryPoolName, ciscoMemoryPoolType) (ciscoMemoryPoolUsed{ciscoMemoryPoolName=~"(Processor|System memory)"})`,
+		},
+		{
+			TargetName:  "mem_free",
+			PromQLQuery: `sum without (ciscoMemoryPoolName, ciscoMemoryPoolType) (ciscoMemoryPoolFree{ciscoMemoryPoolName=~"(Processor|System memory)"})`,
+		},
+		{
+			TargetName:  "temperature",
+			PromQLQuery: `sum without (ciscoEnvMonTemperatureStatusDescr) (label_replace(ciscoEnvMonTemperatureStatusValue, "sensor", "$1", "ciscoEnvMonTemperatureStatusDescr", "(.*)"))`,
+		},
+		{
+			TargetName:  "temperature",
+			PromQLQuery: `sum without (rlPhdUnitEnvParamStackUnit) (label_replace(rlPhdUnitEnvParamTempSensorValue{rlPhdUnitEnvParamStackUnit="1"}, "sensor", "CPU", "rlPhdUnitEnvParamStackUnit", ".*"))`,
+		},
 	}
 
 	rateInterval := 4 * int(resolution.Seconds())

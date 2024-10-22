@@ -7,8 +7,21 @@ metadata:
   name: glouton-credentials
 type:
 stringData:
+  # ${VARIABLE} are expected to be replaced by envsubt before the YAML is used by kubectl.
+  # For example doing "curl -s https://packages.bleemeo.com/bleemeo-agent/kubernetes/k8s.yaml | envsubst | kubectl apply -f -"
   GLOUTON_BLEEMEO_ACCOUNT_ID: ${GLOUTON_BLEEMEO_ACCOUNT_ID}
   GLOUTON_BLEEMEO_REGISTRATION_KEY: ${GLOUTON_BLEEMEO_REGISTRATION_KEY}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: glouton-default-config
+data:
+  10-default.conf: |
+    # Avoid modifying this config. Modify the glouton-config present below, and we recommend using
+    # another YAML file (see comment below).
+    kubernetes:
+      clustername: "${GLOUTON_KUBERNETES_CLUSTERNAME}"
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -23,6 +36,25 @@ data:
     # then apply with:
     # curl -s https://packages.bleemeo.com/bleemeo-agent/kubernetes/k8s.yaml | envsubst | kubectl apply -f -,./glouton-custom.yaml
     # Note: it's not a typo. The "-,./glouton-custom.yaml" is correct: we read from stdin ("-") then from the file.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: glouton-environment
+data:
+  # This configmap allow to set environment variable to configure Glouton,
+  # to use Glouton configuration files, see glouton-config above.
+  #
+  # We recommend using another Kubernetes YAML file to make change of glouton-environment.
+  # This will allow to use latest version of this k8s.yaml file without needs to merge your
+  # local change in the newer version.
+  # Example: have another file "glouton-custom.yaml" which only contains a glouton-environment ConfigMap
+  # then apply with:
+  # curl -s https://packages.bleemeo.com/bleemeo-agent/kubernetes/k8s.yaml | envsubst | kubectl apply -f -,./glouton-custom.yaml
+  # Note: it's not a typo. The "-,./glouton-custom.yaml" is correct: we read from stdin ("-") then from the file.
+  #
+  # Example of settings:
+  # GLOUTON_BLEEMEO_INITIAL_AGENT_NAME: my_name
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -125,8 +157,6 @@ spec:
           value: "/etc/glouton/glouton.conf,/etc/glouton/glouton-k8s-default.conf,/etc/glouton/conf.d,/etc/glouton/conf-k8s.d"
         - name: GLOUTON_KUBERNETES_ENABLE
           value: "True"
-        - name: GLOUTON_KUBERNETES_CLUSTERNAME
-          value: "${GLOUTON_KUBERNETES_CLUSTERNAME}"
         - name: GLOUTON_KUBERNETES_NODENAME
           valueFrom:
             fieldRef:
@@ -134,6 +164,8 @@ spec:
         envFrom:
         - secretRef:
             name: glouton-credentials
+        - configMapRef:
+            name: glouton-environment
         resources:
           requests:
             cpu: 0.05
@@ -147,5 +179,9 @@ spec:
         hostPath:
           path: /
       - name: glouton-config
-        configMap:
-          name: glouton-config
+        projected:
+          sources:
+            - configMap:
+                name: glouton-default-config
+            - configMap:
+                name: glouton-config
