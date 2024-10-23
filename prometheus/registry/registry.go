@@ -1755,6 +1755,11 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 
 		point.Labels = r.addMetaLabels(point.Labels)
 
+		// Add annotation to meta-label, which allow relabel to work correctly.
+		for _, lbl := range gloutonModel.AnnotationToMetaLabels(nil, point.Annotations) {
+			point.Labels[lbl.Name] = lbl.Value
+		}
+
 		if format == types.MetricFormatBleemeo {
 			newLabelsMap := map[string]string{
 				types.LabelName: point.Labels[types.LabelName],
