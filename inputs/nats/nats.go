@@ -46,6 +46,12 @@ func New(url string) (telegraf.Input, registry.RegistrationOption, error) {
 	internalInput := &internal.Input{
 		Input: natsInput,
 		Accumulator: internal.Accumulator{
+			RenameGlobal: func(gatherContext internal.GatherContext) (result internal.GatherContext, drop bool) {
+				// Remove the IP address of the server. Glouton will add item and/or container to identify the source
+				delete(gatherContext.Tags, "server")
+
+				return gatherContext, false
+			},
 			DerivatedMetrics: []string{"in_bytes", "out_bytes", "in_msgs", "out_msgs"},
 		},
 		Name: "nats",
