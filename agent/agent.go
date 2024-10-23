@@ -36,6 +36,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/bleemeo/glouton/agent/state"
@@ -866,10 +867,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		if clusterName == "" && clusterNameState != "" {
 			logger.V(1).Printf("kubernetes.clustername is unset, using previous value of %s", clusterNameState)
 			clusterName = clusterNameState
-		}
-
-		if clusterName != "" && clusterNameState != clusterName {
-			err = a.state.Set(state.KeyKubernetesCluster, clusterNameState)
+		} else if clusterName != "" && clusterNameState != clusterName {
+			err = a.state.Set(state.KeyKubernetesCluster, clusterName)
 			if err != nil {
 				logger.V(2).Printf("failed to set %s: %v", state.KeyKubernetesCluster, err)
 			}
@@ -1078,6 +1077,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			IsMetricAllowed:                a.metricFilter.isAllowedAndNotDeniedMap,
 			PahoLastPingCheckAt:            a.pahoLogWrapper.LastPingAt,
 			LastMetricAnnotationChange:     a.store.LastAnnotationChange,
+			ClusterNeedsCacheRefresh:       new(atomic.Bool),
 		})
 		if err != nil {
 			logger.Printf("unable to start Bleemeo SAAS connector: %v", err)

@@ -142,6 +142,10 @@ func compatibilitySyncToPerform(ctx context.Context, execution types.Synchroniza
 		execution.RequestSynchronization(types.EntityAccountConfig, true)
 	}
 
+	if option.ClusterNeedsCacheRefresh.Swap(false) {
+		execution.RequestSynchronization(types.EntityAgent, true)
+	}
+
 	if state.lastFactUpdatedAt != localFacts[facts.FactUpdatedAt] {
 		execution.RequestSynchronization(types.EntityFact, false)
 	}

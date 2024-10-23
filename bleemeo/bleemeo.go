@@ -503,6 +503,12 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 		if err != nil {
 			logger.V(1).Printf("Kubernetes agent not found: %s", err)
 
+			if errors.Is(err, errAgentIDNotFound) {
+				// The cluster may have been renamed,
+				// and the cache may not yet contain an agent with the new FQDN.
+				c.option.ClusterNeedsCacheRefresh.Store(true)
+			}
+
 			// Kubernetes agent not found, retry later.
 			return labels, true
 		}
