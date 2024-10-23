@@ -1753,6 +1753,8 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 			continue
 		}
 
+		point.Labels = r.addMetaLabels(point.Labels)
+
 		if format == types.MetricFormatBleemeo {
 			newLabelsMap := map[string]string{
 				types.LabelName: point.Labels[types.LabelName],
@@ -1762,6 +1764,13 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 				newLabelsMap[types.LabelItem] = point.Annotations.BleemeoItem
 			}
 
+			// Kept meta-labels
+			for k, v := range point.Labels {
+				if strings.HasPrefix(k, model.ReservedLabelPrefix) {
+					newLabelsMap[k] = v
+				}
+			}
+
 			point.Labels = newLabelsMap
 
 			ctx, cancel := context.WithTimeout(ctx, relabelTimeout)
@@ -1769,9 +1778,13 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 
 			newLabels, _, _, skip = r.applyRelabel(ctx, point.Labels)
 			point.Labels = newLabels.Map()
-		} else {
-			point.Labels = r.addMetaLabels(point.Labels)
 
+			// It's possible to have container_name and item labels that both exists and contains the same value.
+			// If that the case, drop the container_name label.
+			if point.Labels[types.LabelContainerName] == point.Labels[types.LabelItem] && point.Labels[types.LabelContainerName] != "" {
+				delete(point.Labels, types.LabelContainerName)
+			}
+		} else {
 			ctx, cancel := context.WithTimeout(ctx, relabelTimeout)
 			defer cancel()
 
