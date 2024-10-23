@@ -616,6 +616,8 @@ func TestRegistry_applyRelabel(t *testing.T) {
 				types.LabelMetaGloutonPort:     "8015",
 				types.LabelMetaServicePort:     "3306",
 				types.LabelMetaPort:            "3306",
+				// addMetaLabels should add this meta-label
+				types.LabelMetaInstanceUseContainerName: "yes",
 			}},
 			want: labels.FromMap(map[string]string{
 				types.LabelContainerName: "mysql_1",
@@ -2946,7 +2948,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName:     "container_cpu_used",
 						types.LabelItem:     "myredis",
-						types.LabelInstance: "server.bleemeo.com-myredis:8016",
+						types.LabelInstance: "server.bleemeo.com:8016",
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoItem: "myredis",

@@ -164,6 +164,7 @@ func (d *DynamicScrapper) update(containers []facts.Container) {
 		id, err := d.Registry.RegisterGatherer(
 			registry.RegistrationOption{
 				Description:              "Prometheus exporter " + t.URL.String(),
+				InstanceUseContainerName: true,
 				JitterSeed:               hash,
 				Rules:                    t.Rules,
 				ExtraLabels:              t.ExtraLabels,

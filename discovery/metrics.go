@@ -487,6 +487,10 @@ func (d *Discovery) registerInput(input telegraf.Input, opts registry.Registrati
 		types.LabelMetaContainerID:     service.ContainerID,
 	}
 
+	if !opts.CompatibilityNameItem {
+		opts.InstanceUseContainerName = true
+	}
+
 	if _, port := service.AddressPort(); port != 0 {
 		extraLabels[types.LabelMetaServicePort] = strconv.Itoa(port)
 	}

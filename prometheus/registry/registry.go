@@ -207,7 +207,9 @@ type RegistrationOption struct {
 	// CallForMetricsEndpoint indicate whether the callback must be called for /metrics or
 	// cached result from last periodic collection is used.
 	CallForMetricsEndpoint bool
-	rrules                 []*rules.RecordingRule
+	// If labels has a container name (in the meta-labels), use it when building the "instance" label
+	InstanceUseContainerName bool
+	rrules                   []*rules.RecordingRule
 }
 
 type registrationType int
@@ -372,8 +374,8 @@ func getDefaultRelabelConfig() []*relabel.Config {
 		{
 			Action:       relabel.Replace,
 			Separator:    ";",
-			Regex:        relabel.MustNewRegexp("(.+);(.+);(.+)"),
-			SourceLabels: model.LabelNames{types.LabelMetaGloutonFQDN, types.LabelMetaContainerName, types.LabelMetaPort},
+			Regex:        relabel.MustNewRegexp("(.+);(.+);(.+);yes"),
+			SourceLabels: model.LabelNames{types.LabelMetaGloutonFQDN, types.LabelMetaContainerName, types.LabelMetaPort, types.LabelMetaInstanceUseContainerName},
 			TargetLabel:  types.LabelInstance,
 			Replacement:  "$1-$2:$3",
 		},
@@ -1753,7 +1755,7 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 			continue
 		}
 
-		point.Labels = r.addMetaLabels(point.Labels)
+		point.Labels = r.addMetaLabels(point.Labels, RegistrationOption{})
 
 		// Add annotation to meta-label, which allow relabel to work correctly.
 		for _, lbl := range gloutonModel.AnnotationToMetaLabels(nil, point.Annotations) {
@@ -1842,7 +1844,7 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 	r.l.Unlock()
 }
 
-func (r *Registry) addMetaLabels(input map[string]string) (result map[string]string) {
+func (r *Registry) addMetaLabels(input map[string]string, opts RegistrationOption) (result map[string]string) {
 	if input == nil {
 		result = make(map[string]string)
 	} else {
@@ -1861,6 +1863,10 @@ func (r *Registry) addMetaLabels(input map[string]string) (result map[string]str
 
 	if r.option.BlackboxSendScraperID {
 		result[types.LabelMetaSendScraperUUID] = "yes"
+	}
+
+	if opts.InstanceUseContainerName {
+		result[types.LabelMetaInstanceUseContainerName] = "yes"
 	}
 
 	return result
@@ -1921,7 +1927,7 @@ func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) 
 	)
 
 	if !reg.option.NoLabelsAlteration {
-		extraLabels := r.addMetaLabels(reg.option.ExtraLabels)
+		extraLabels := r.addMetaLabels(reg.option.ExtraLabels, reg.option)
 
 		reg.relabelHookSkip = false
 
