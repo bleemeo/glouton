@@ -540,21 +540,36 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 	return labels, false
 }
 
+func (c *Connector) getAccountConfigAndAgentType(labels map[string]string) (string, string, error) {
+	if agentID, ok := labels[gloutonTypes.LabelInstanceUUID]; ok {
+		if agent, ok := c.cache.AgentsByUUID()[agentID]; ok {
+			return agent.CurrentAccountConfigID, agent.AgentType, nil
+		}
+
+		// For private probe, we don't have access to the Agent, so try accessing the AccountConfig from the Service itself
+		if monitor, ok := c.cache.MonitorsByAgentUUID()[types.AgentID(agentID)]; ok {
+			typeID, err := c.agentTypeID(bleemeo.AgentType_Monitor)
+			if err != nil {
+				return "", "", err
+			}
+
+			return monitor.AccountConfig, typeID, nil
+		}
+
+		return "", "", fmt.Errorf("%w: %s is not in the cache", errAgentIDNotFound, agentID)
+	}
+
+	return "", "", fmt.Errorf("%w: missing LabelInstanceUUID in labels %v", errBadOption, labels)
+}
+
 func (c *Connector) UpdateDelayHook(labels map[string]string) (time.Duration, bool) {
 	if _, ok := labels[gloutonTypes.LabelMetaBleemeoRelabelHookOk]; !ok {
 		return 0, true
 	}
 
-	agentID, ok := labels[gloutonTypes.LabelInstanceUUID]
-	if !ok {
-		logger.V(1).Printf("Can't find metric resolution for gatherer with labels %v", labels)
-
-		return 0, true
-	}
-
-	agent, ok := c.cache.AgentsByUUID()[agentID]
-	if !ok {
-		logger.V(1).Printf("Can't find metric resolution for agent %s (agent not found in cache)", agentID)
+	accountConfig, agentType, err := c.getAccountConfigAndAgentType(labels)
+	if err != nil {
+		logger.V(1).Printf("Can't find metric resolution for gatherer: %v", err)
 
 		return 0, true
 	}
@@ -575,13 +590,13 @@ func (c *Connector) UpdateDelayHook(labels map[string]string) (time.Duration, bo
 			}
 		}
 	} else {
-		possibleAgentTypes[agent.AgentType] = true
+		possibleAgentTypes[agentType] = true
 	}
 
 	var minResolution int
 
 	for _, cfg := range c.cache.AgentConfigs() {
-		if cfg.AccountConfig == agent.CurrentAccountConfigID && possibleAgentTypes[cfg.AgentType] {
+		if cfg.AccountConfig == accountConfig && possibleAgentTypes[cfg.AgentType] {
 			if minResolution == 0 || cfg.MetricResolution < minResolution {
 				minResolution = cfg.MetricResolution
 			}
@@ -589,7 +604,7 @@ func (c *Connector) UpdateDelayHook(labels map[string]string) (time.Duration, bo
 	}
 
 	if minResolution == 0 {
-		logger.V(1).Printf("Can't find metric resolution for agent %s (agent config not found in cache)", agentID)
+		logger.V(1).Printf("Can't find metric resolution for account config %s & agent type %s (not found in cache)", accountConfig, agentType)
 	}
 
 	return time.Duration(minResolution) * time.Second, false
