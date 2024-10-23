@@ -288,7 +288,7 @@ func (m *Manager) createFluentBitScrapper() error {
 
 	_, err = m.registry.RegisterGatherer(
 		registry.RegistrationOption{
-			Description: "Prom exporter " + promScrapper.URL.String(),
+			Description: "Prom exporter for fluentbit " + promScrapper.URL.String(),
 		},
 		promScrapper,
 	)

@@ -1114,7 +1114,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	_, err = a.gathererRegistry.RegisterPushPointsCallback(
 		registry.RegistrationOption{
-			Description:    "system & services metrics",
+			Description:    "statsd & docker metrics",
 			JitterSeed:     baseJitter,
 			HonorTimestamp: true,
 		},
