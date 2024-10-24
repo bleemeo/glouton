@@ -506,7 +506,7 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 			if errors.Is(err, errAgentIDNotFound) {
 				// The cluster may have been renamed,
 				// and the cache may not yet contain an agent with the new FQDN.
-				c.option.ClusterNeedsCacheRefresh.Store(true)
+				c.sync.UpdateK8SAgentList()
 			}
 
 			// Kubernetes agent not found, retry later.

@@ -1192,6 +1192,15 @@ func (s *Synchronizer) SetMQTTConnected(isConnected bool) {
 	}
 }
 
+// UpdateK8SAgentList requests to update list of Kubernetes agents.
+func (s *Synchronizer) UpdateK8SAgentList() {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	// Today we don't support updating only some agents, so update all.
+	s.requestSynchronizationLocked(types.EntityAgent, true)
+}
+
 // requestSynchronizationLocked request specified entity to be synchronized on next synchronization execution.
 // Caller must hold the lock s.l.
 func (s *Synchronizer) requestSynchronizationLocked(entityName types.EntityName, forceCacheRefresh bool) {

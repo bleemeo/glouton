@@ -18,7 +18,6 @@ package types
 
 import (
 	"context"
-	"sync/atomic"
 	"time"
 
 	"github.com/bleemeo/bleemeo-go"
@@ -65,8 +64,7 @@ type GlobalOption struct {
 	PahoLastPingCheckAt            func() time.Time
 	LastMetricAnnotationChange     func() time.Time
 	// IsMetricAllowed returns whether a metric is allowed or not in the config files.
-	IsMetricAllowed          func(lbls map[string]string) bool
-	ClusterNeedsCacheRefresh *atomic.Bool
+	IsMetricAllowed func(lbls map[string]string) bool
 }
 
 // MonitorManager is the interface used by Bleemeo to update the dynamic monitors list.

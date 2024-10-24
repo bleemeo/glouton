@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"net/http/httptest"
 	"sort"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -182,7 +181,6 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 			IsMetricAllowed:            func(_ map[string]string) bool { return true },
 			BlackboxScraperName:        helper.cfg.Blackbox.ScraperName,
 			LastMetricAnnotationChange: func() time.Time { return time.Time{} },
-			ClusterNeedsCacheRefresh:   new(atomic.Bool),
 		},
 	}, helper.Now)
 
