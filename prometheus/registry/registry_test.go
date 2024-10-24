@@ -616,6 +616,8 @@ func TestRegistry_applyRelabel(t *testing.T) {
 				types.LabelMetaGloutonPort:     "8015",
 				types.LabelMetaServicePort:     "3306",
 				types.LabelMetaPort:            "3306",
+				// addMetaLabels should add this meta-label
+				types.LabelMetaInstanceUseContainerName: "yes",
 			}},
 			want: labels.FromMap(map[string]string{
 				types.LabelContainerName: "mysql_1",
@@ -644,6 +646,7 @@ func TestRegistry_applyRelabel(t *testing.T) {
 				types.LabelScraper:      "test",
 				types.LabelInstanceUUID: "c571f9cf-6f07-492a-9e86-b8d5f5027557",
 				types.LabelScraperUUID:  "a39e5a8e-34cf-4b15-87bd-4b9cdaa59c42",
+				types.LabelServiceUUID:  "dcb8e864-0a1f-4a67-b470-327ceb461b4e",
 			}),
 			wantAnnotations: types.MetricAnnotations{
 				BleemeoAgentID: "c571f9cf-6f07-492a-9e86-b8d5f5027557",
@@ -667,6 +670,7 @@ func TestRegistry_applyRelabel(t *testing.T) {
 				types.LabelScraper:      "super-instance",
 				types.LabelInstanceUUID: "c571f9cf-6f07-492a-9e86-b8d5f5027557",
 				types.LabelScraperUUID:  "a39e5a8e-34cf-4b15-87bd-4b9cdaa59c42",
+				types.LabelServiceUUID:  "dcb8e864-0a1f-4a67-b470-327ceb461b4e",
 			}),
 			wantAnnotations: types.MetricAnnotations{
 				BleemeoAgentID: "c571f9cf-6f07-492a-9e86-b8d5f5027557",
@@ -1129,7 +1133,7 @@ func TestRegistry_run(t *testing.T) {
 
 			if format == types.MetricFormatBleemeo {
 				want = []types.MetricPoint{
-					{Point: types.Point{Time: t0, Value: 42.0}, Labels: map[string]string{"__name__": "push", "item": "/home", "instance_uuid": testAgentID}, Annotations: types.MetricAnnotations{BleemeoItem: "/home"}},
+					{Point: types.Point{Time: t0, Value: 42.0}, Labels: map[string]string{"__name__": "push", "item": "/home", "instance": "example.com:1234", "instance_uuid": testAgentID}, Annotations: types.MetricAnnotations{BleemeoItem: "/home"}},
 					{Point: types.Point{Time: t0, Value: 1.0}, Labels: map[string]string{"__name__": "name2", "instance": "example.com:1234", "instance_uuid": testAgentID}},
 				}
 			} else if format == types.MetricFormatPrometheus {
@@ -1301,7 +1305,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			want: []metricPointTimeOverride{
 				{
 					Labels: map[string]string{
-						types.LabelName: "cpu_used",
+						types.LabelName:     "cpu_used",
+						types.LabelInstance: "server.bleemeo.com:8016",
 					},
 					Point: types.Point{
 						Time:  now,
@@ -1311,8 +1316,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName: "disk_used",
-						types.LabelItem: "/home",
+						types.LabelName:     "disk_used",
+						types.LabelItem:     "/home",
+						types.LabelInstance: "server.bleemeo.com:8016",
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoItem: "/home",
@@ -1325,8 +1331,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName: "disk_used_perc",
-						types.LabelItem: "/srv",
+						types.LabelName:     "disk_used_perc",
+						types.LabelItem:     "/srv",
+						types.LabelInstance: "server.bleemeo.com:8016",
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoItem: "/srv",
@@ -1386,7 +1393,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			want: []metricPointTimeOverride{
 				{
 					Labels: map[string]string{
-						types.LabelName: "cpu_used",
+						types.LabelName:     "cpu_used",
+						types.LabelInstance: "server.bleemeo.com:8016",
 					},
 					Point: types.Point{
 						Time:  now,
@@ -1396,8 +1404,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName: "disk_used",
-						types.LabelItem: "/home",
+						types.LabelName:     "disk_used",
+						types.LabelItem:     "/home",
+						types.LabelInstance: "server.bleemeo.com:8016",
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoItem: "/home",
@@ -1410,8 +1419,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName: "disk_used_perc",
-						types.LabelItem: "/srv",
+						types.LabelName:     "disk_used_perc",
+						types.LabelItem:     "/srv",
+						types.LabelInstance: "server.bleemeo.com:8016",
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoItem: "/srv",
@@ -2895,7 +2905,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			want: []metricPointTimeOverride{
 				{
 					Labels: map[string]string{
-						types.LabelName: "cpu_used",
+						types.LabelName:     "cpu_used",
+						types.LabelInstance: "server.bleemeo.com:8016",
 					},
 					Point: types.Point{
 						Time:  now,
@@ -2905,8 +2916,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName: "disk_used",
-						types.LabelItem: "/home",
+						types.LabelName:     "disk_used",
+						types.LabelItem:     "/home",
+						types.LabelInstance: "server.bleemeo.com:8016",
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoItem: "/home",
@@ -2919,8 +2931,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName: "io_utilization",
-						types.LabelItem: "sda",
+						types.LabelName:     "io_utilization",
+						types.LabelItem:     "sda",
+						types.LabelInstance: "server.bleemeo.com:8016",
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoItem: "sda",
@@ -2933,8 +2946,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName: "container_cpu_used",
-						types.LabelItem: "myredis",
+						types.LabelName:     "container_cpu_used",
+						types.LabelItem:     "myredis",
+						types.LabelInstance: "server.bleemeo.com:8016",
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoItem: "myredis",

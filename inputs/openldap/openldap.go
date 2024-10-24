@@ -59,6 +59,14 @@ func New(host string, port int, config config.Service) (telegraf.Input, registry
 	internalInput := &internal.Input{
 		Input: ldapInput,
 		Accumulator: internal.Accumulator{
+			RenameGlobal: func(gatherContext internal.GatherContext) (result internal.GatherContext, drop bool) {
+				// Remove the IP address of the server. Glouton will add item and/or container to identify the source
+				delete(gatherContext.Tags, "server")
+				// Remove the port, Glouton store them in a Service object.
+				delete(gatherContext.Tags, "port")
+
+				return gatherContext, false
+			},
 			DerivatedMetrics: []string{
 				"statistics_bytes",
 				"statistics_entries",

@@ -176,6 +176,9 @@ type RegistrationOption struct {
 	// This should eventually be dropped once all metrics are produced with right name + item directly rather than using
 	// Annotations.BleemeoItem. This compatibility was mostly needed when Bleemeo didn't supported labels and only had
 	// name + item. If dropped, we should be careful to don't change existing metrics.
+	// Note: it doesn't impact labels from ExtraLabels (including relabeling processing), it only drop labels
+	// from each points from the gatherer itself, the ExtraLabels after relabeling (a.k.a "LabelUsed" in diagnostic) are still
+	// added.
 	CompatibilityNameItem bool
 	// DisablePeriodicGather skip the periodic calls which forward gathered points to r.PushPoint.
 	// The periodic call uses the MinInterval. When MinInterval is 0, the dynamic interval set by UpdateDelay is used.
@@ -204,7 +207,33 @@ type RegistrationOption struct {
 	// CallForMetricsEndpoint indicate whether the callback must be called for /metrics or
 	// cached result from last periodic collection is used.
 	CallForMetricsEndpoint bool
-	rrules                 []*rules.RecordingRule
+	// If labels has a container name (in the meta-labels), use it when building the "instance" label
+	InstanceUseContainerName bool
+	rrules                   []*rules.RecordingRule
+}
+
+type registrationType int
+
+const (
+	registrationGatherer           registrationType = iota
+	registrationAppenderCallback   registrationType = iota
+	registrationInput              registrationType = iota
+	registrationPushPointsCallback registrationType = iota
+)
+
+func (rt registrationType) String() string {
+	switch rt {
+	case registrationGatherer:
+		return "RegisterGatherer"
+	case registrationAppenderCallback:
+		return "RegisterAppenderCallback"
+	case registrationInput:
+		return "RegisterInput"
+	case registrationPushPointsCallback:
+		return "RegisterPushPointsCallback"
+	default:
+		return "unknown"
+	}
 }
 
 type AppenderCallback interface {
@@ -254,21 +283,24 @@ func (opt *RegistrationOption) String() string {
 }
 
 type scrapeRun struct {
-	ScrapeAt       time.Time
-	ScrapeDuration time.Duration
+	ScrapeAt           time.Time
+	ScrapeDuration     time.Duration
+	ScrapedPointsCount int
 }
 
 func (s scrapeRun) MarshalJSON() ([]byte, error) {
 	tmp := struct {
-		ScrapeAt       time.Time
-		ScrapeDuration string
-	}{s.ScrapeAt, s.ScrapeDuration.String()}
+		ScrapeAt           time.Time
+		ScrapeDuration     string
+		ScrapedPointsCount int
+	}{s.ScrapeAt, s.ScrapeDuration.String(), s.ScrapedPointsCount}
 
 	return json.Marshal(tmp)
 }
 
 type registration struct {
 	l                    sync.Mutex
+	regType              registrationType
 	option               RegistrationOption
 	addedAt              time.Time
 	removalRequested     bool
@@ -326,6 +358,14 @@ func getDefaultRelabelConfig() []*relabel.Config {
 		{
 			Action:       relabel.Replace,
 			Separator:    ";",
+			Regex:        relabel.MustNewRegexp("(.+)"),
+			SourceLabels: model.LabelNames{types.LabelMetaServiceUUID},
+			TargetLabel:  types.LabelServiceUUID,
+			Replacement:  "$1",
+		},
+		{
+			Action:       relabel.Replace,
+			Separator:    ";",
 			Regex:        relabel.MustNewRegexp("(.+);(.+)"),
 			SourceLabels: model.LabelNames{types.LabelMetaGloutonFQDN, types.LabelMetaPort},
 			TargetLabel:  types.LabelInstance,
@@ -334,8 +374,8 @@ func getDefaultRelabelConfig() []*relabel.Config {
 		{
 			Action:       relabel.Replace,
 			Separator:    ";",
-			Regex:        relabel.MustNewRegexp("(.+);(.+);(.+)"),
-			SourceLabels: model.LabelNames{types.LabelMetaGloutonFQDN, types.LabelMetaContainerName, types.LabelMetaPort},
+			Regex:        relabel.MustNewRegexp("(.+);(.+);(.+);yes"),
+			SourceLabels: model.LabelNames{types.LabelMetaGloutonFQDN, types.LabelMetaContainerName, types.LabelMetaPort, types.LabelMetaInstanceUseContainerName},
 			TargetLabel:  types.LabelInstance,
 			Replacement:  "$1-$2:$3",
 		},
@@ -367,11 +407,19 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			Replacement:  "$2",
 		},
 		// when the metric comes from a probe, the 'instance_uuid' label is the uuid of the service watched
+		// and 'service_uuid' also.
 		{
 			Action:       relabel.Replace,
 			Regex:        relabel.MustNewRegexp("(.+)"),
 			SourceLabels: model.LabelNames{types.LabelMetaBleemeoTargetAgentUUID},
 			TargetLabel:  types.LabelInstanceUUID,
+			Replacement:  "$1",
+		},
+		{
+			Action:       relabel.Replace,
+			Regex:        relabel.MustNewRegexp("(.+)"),
+			SourceLabels: model.LabelNames{types.LabelMetaProbeServiceUUID},
+			TargetLabel:  types.LabelServiceUUID,
 			Replacement:  "$1",
 		},
 		// when the metric comes from a probe, the 'instance' label is the target URI
@@ -572,7 +620,8 @@ func (r *Registry) RegisterGatherer(opt RegistrationOption, gatherer prometheus.
 	defer r.l.Unlock()
 
 	reg := &registration{
-		option: opt,
+		option:  opt,
+		regType: registrationGatherer,
 	}
 	r.setupGatherer(reg, gatherer)
 
@@ -603,7 +652,10 @@ func (r *Registry) registerPushPointsCallback(opt RegistrationOption, f func(con
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	reg := &registration{option: opt}
+	reg := &registration{
+		option:  opt,
+		regType: registrationPushPointsCallback,
+	}
 	r.setupGatherer(reg, pushGatherer{fun: f})
 
 	return r.addRegistration(reg)
@@ -626,7 +678,10 @@ func (r *Registry) RegisterAppenderCallback(
 	appOpt := opt
 	opt.HonorTimestamp = true
 
-	reg := &registration{option: opt}
+	reg := &registration{
+		option:  opt,
+		regType: registrationAppenderCallback,
+	}
 	r.setupGatherer(reg, &appenderGatherer{cb: cb, opt: appOpt})
 
 	return r.addRegistration(reg)
@@ -673,7 +728,8 @@ func (r *Registry) RegisterInput(
 	defer r.l.Unlock()
 
 	reg := &registration{
-		option: opt,
+		option:  opt,
+		regType: registrationInput,
 	}
 	r.setupGatherer(reg, newInputGatherer(input))
 
@@ -872,6 +928,7 @@ func (r *Registry) diagnosticScrapeLoop(ctx context.Context, archive types.Archi
 		HookMinimalInterval string
 		ScrapeInterval      string
 		Option              RegistrationOption
+		RegistrationType    string
 		UnexportableOption  unexportableOption
 		LabelUsed           map[string]string
 		LabelsWithMeta      map[string]string
@@ -893,10 +950,11 @@ func (r *Registry) diagnosticScrapeLoop(ctx context.Context, archive types.Archi
 			ID:                  id,
 			Description:         reg.option.Description,
 			AddedAt:             reg.addedAt,
-			LastScrape:          reg.lastScrapes,
+			LastScrape:          copySlice,
 			RegInterval:         reg.interval.String(),
 			HookMinimalInterval: reg.hookMinimalInterval.String(),
 			Option:              reg.option,
+			RegistrationType:    reg.regType.String(),
 			LabelUsed:           dtoLabelToMap(reg.gatherer.labels),
 			LabelsWithMeta:      reg.labelsWithMeta,
 			RelabelHookSkip:     reg.relabelHookSkip,
@@ -1537,7 +1595,7 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, loopCtx context.Context, 
 	}
 
 	reg.l.Lock()
-	reg.lastScrapes = append(reg.lastScrapes, scrapeRun{ScrapeAt: t0, ScrapeDuration: duration})
+	reg.lastScrapes = append(reg.lastScrapes, scrapeRun{ScrapeAt: t0, ScrapeDuration: duration, ScrapedPointsCount: len(mfs)})
 
 	if len(reg.lastScrapes) > maxLastScrape {
 		reg.lastScrapes = reg.lastScrapes[len(reg.lastScrapes)-maxLastScrape:]
@@ -1622,10 +1680,6 @@ func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registrat
 
 	mfs, err := gatherMethod(ctx, state)
 
-	if reg.option.CompatibilityNameItem {
-		gloutonModel.FamiliesToNameAndItem(mfs)
-	}
-
 	return mfs, time.Since(start), err
 }
 
@@ -1701,6 +1755,13 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 			continue
 		}
 
+		point.Labels = r.addMetaLabels(point.Labels, RegistrationOption{})
+
+		// Add annotation to meta-label, which allow relabel to work correctly.
+		for _, lbl := range gloutonModel.AnnotationToMetaLabels(nil, point.Annotations) {
+			point.Labels[lbl.Name] = lbl.Value
+		}
+
 		if format == types.MetricFormatBleemeo {
 			newLabelsMap := map[string]string{
 				types.LabelName: point.Labels[types.LabelName],
@@ -1710,6 +1771,13 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 				newLabelsMap[types.LabelItem] = point.Annotations.BleemeoItem
 			}
 
+			// Kept meta-labels
+			for k, v := range point.Labels {
+				if strings.HasPrefix(k, model.ReservedLabelPrefix) {
+					newLabelsMap[k] = v
+				}
+			}
+
 			point.Labels = newLabelsMap
 
 			ctx, cancel := context.WithTimeout(ctx, relabelTimeout)
@@ -1717,9 +1785,13 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 
 			newLabels, _, _, skip = r.applyRelabel(ctx, point.Labels)
 			point.Labels = newLabels.Map()
-		} else {
-			point.Labels = r.addMetaLabels(point.Labels)
 
+			// It's possible to have container_name and item labels that both exists and contains the same value.
+			// If that the case, drop the container_name label.
+			if point.Labels[types.LabelContainerName] == point.Labels[types.LabelItem] && point.Labels[types.LabelContainerName] != "" {
+				delete(point.Labels, types.LabelContainerName)
+			}
+		} else {
 			ctx, cancel := context.WithTimeout(ctx, relabelTimeout)
 			defer cancel()
 
@@ -1772,7 +1844,7 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 	r.l.Unlock()
 }
 
-func (r *Registry) addMetaLabels(input map[string]string) (result map[string]string) {
+func (r *Registry) addMetaLabels(input map[string]string, opts RegistrationOption) (result map[string]string) {
 	if input == nil {
 		result = make(map[string]string)
 	} else {
@@ -1791,6 +1863,10 @@ func (r *Registry) addMetaLabels(input map[string]string) (result map[string]str
 
 	if r.option.BlackboxSendScraperID {
 		result[types.LabelMetaSendScraperUUID] = "yes"
+	}
+
+	if opts.InstanceUseContainerName {
+		result[types.LabelMetaInstanceUseContainerName] = "yes"
 	}
 
 	return result
@@ -1851,7 +1927,7 @@ func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) 
 	)
 
 	if !reg.option.NoLabelsAlteration {
-		extraLabels := r.addMetaLabels(reg.option.ExtraLabels)
+		extraLabels := r.addMetaLabels(reg.option.ExtraLabels, reg.option)
 
 		reg.relabelHookSkip = false
 

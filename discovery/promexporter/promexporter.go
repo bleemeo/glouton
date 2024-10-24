@@ -70,7 +70,7 @@ func (d *DynamicScrapper) listExporters(containers []facts.Container) []*scrappe
 			labels[types.LabelK8SNamespace] = ns
 			labels[types.LabelK8SPODName] = podName
 		} else {
-			labels[types.LabelContainerName] = c.ContainerName()
+			labels[types.LabelMetaContainerName] = c.ContainerName()
 		}
 
 		cLabelsAnnotations := facts.LabelsAndAnnotations(c)
@@ -124,7 +124,7 @@ type DynamicScrapper struct {
 	FluentBitInputs  []config.LogInput
 }
 
-// Update updates the scrappers targets using new containers informations.
+// Update updates the scrappers targets using new containers information.
 func (d *DynamicScrapper) Update(containers []facts.Container) {
 	d.l.Lock()
 	defer d.l.Unlock()
@@ -164,6 +164,7 @@ func (d *DynamicScrapper) update(containers []facts.Container) {
 		id, err := d.Registry.RegisterGatherer(
 			registry.RegistrationOption{
 				Description:              "Prometheus exporter " + t.URL.String(),
+				InstanceUseContainerName: true,
 				JitterSeed:               hash,
 				Rules:                    t.Rules,
 				ExtraLabels:              t.ExtraLabels,

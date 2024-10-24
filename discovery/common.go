@@ -26,7 +26,9 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/model"
 	"github.com/bleemeo/glouton/types"
+	"github.com/prometheus/prometheus/model/labels"
 
 	"dario.cat/mergo"
 )
@@ -213,16 +215,18 @@ func (s Service) AddressPort() (string, int) {
 
 // LabelsOfStatus returns the labels for the status metrics of this service.
 func (s Service) LabelsOfStatus() map[string]string {
-	labels := map[string]string{
-		types.LabelName:    types.MetricServiceStatus,
-		types.LabelService: s.Name,
+	lbls := labels.Labels{
+		labels.Label{Name: types.LabelName, Value: types.MetricServiceStatus},
+		labels.Label{Name: types.LabelService, Value: s.Name},
 	}
 
 	if s.Instance != "" {
-		labels[types.LabelServiceInstance] = s.Instance
+		lbls = append(lbls, labels.Label{Name: types.LabelServiceInstance, Value: s.Instance})
 	}
 
-	return labels
+	lbls = model.AnnotationToMetaLabels(lbls, s.AnnotationsOfStatus())
+
+	return lbls.Map()
 }
 
 // AnnotationsOfStatus returns the annotations for the status metrics of this service.

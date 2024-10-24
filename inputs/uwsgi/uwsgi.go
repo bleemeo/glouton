@@ -44,6 +44,12 @@ func New(url string) (telegraf.Input, registry.RegistrationOption, error) {
 	internalInput := &internal.Input{
 		Input: uwsgiInput,
 		Accumulator: internal.Accumulator{
+			RenameGlobal: func(gatherContext internal.GatherContext) (result internal.GatherContext, drop bool) {
+				// Remove the IP address of the server. Glouton will add item and/or container to identify the source
+				delete(gatherContext.Tags, "source")
+
+				return gatherContext, false
+			},
 			DerivatedMetrics: []string{
 				"requests",
 				"exceptions",
