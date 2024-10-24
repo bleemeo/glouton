@@ -867,10 +867,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		if clusterName == "" && clusterNameState != "" {
 			logger.V(1).Printf("kubernetes.clustername is unset, using previous value of %s", clusterNameState)
 			clusterName = clusterNameState
-		}
-
-		if clusterName != "" && clusterNameState != clusterName {
-			err = a.state.Set(state.KeyKubernetesCluster, clusterNameState)
+		} else if clusterName != "" && clusterNameState != clusterName {
+			err = a.state.Set(state.KeyKubernetesCluster, clusterName)
 			if err != nil {
 				logger.V(2).Printf("failed to set %s: %v", state.KeyKubernetesCluster, err)
 			}
