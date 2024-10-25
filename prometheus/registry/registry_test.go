@@ -1096,7 +1096,7 @@ func TestRegistry_run(t *testing.T) {
 				t.Error(err)
 			}
 
-			id3, err := reg.RegisterPushPointsCallback(RegistrationOption{HonorTimestamp: true}, func(_ context.Context, t time.Time) {
+			id3, err := reg.RegisterPushPointsCallback(RegistrationOption{HonorTimestamp: true}, func(_ context.Context, t time.Time) error {
 				l.Lock()
 				t0 = t
 				l.Unlock()
@@ -1104,6 +1104,8 @@ func TestRegistry_run(t *testing.T) {
 				reg.WithTTL(5*time.Minute).PushPoints(ctx, []types.MetricPoint{
 					{Point: types.Point{Time: t, Value: 42.0}, Labels: map[string]string{"__name__": "push", "something": "value"}, Annotations: types.MetricAnnotations{BleemeoItem: "/home"}},
 				})
+
+				return nil
 			})
 			if err != nil {
 				t.Error(err)
@@ -1179,8 +1181,10 @@ func registryRunOnce(t *testing.T, now time.Time, reg *Registry, kindToTest sour
 	case kindPushPointCallback:
 		id, err := reg.registerPushPointsCallback(
 			opt,
-			func(c context.Context, _ time.Time) {
+			func(c context.Context, _ time.Time) error {
 				reg.WithTTL(5*time.Minute).PushPoints(c, input)
+
+				return nil
 			},
 		)
 		if err != nil {
