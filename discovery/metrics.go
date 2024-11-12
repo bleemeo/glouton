@@ -287,21 +287,16 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		return nil
 	}
 
-	if d.metricFormat == types.MetricFormatPrometheus {
-		err := d.createPrometheusCollector(service)
-		if !errors.Is(err, errNotSupported) {
-			logger.V(2).Printf("Add collector for service %v on container %s", service.Name, service.ContainerID)
+	err := d.createPrometheusCollector(service)
+	if err != nil && !errors.Is(err, errNotSupported) {
+		logger.V(2).Printf("Add collector for service %v on container %s", service.Name, service.ContainerID)
 
-			return err
-		}
+		return err
 	}
 
-	var (
-		err   error
-		input telegraf.Input
-		// Inputs that return gatherer options will use an input gatherer instead of the collector,
-		// this means all labels will be kept and not only the item.
-	)
+	var input telegraf.Input
+	// Inputs that return gatherer options will use an input gatherer instead of the collector,
+	// this means all labels will be kept and not only the item.
 
 	// Most input use the compatibility naming with only name + item.
 	// Inputs that what more flexibility could return their own gathererOptions.

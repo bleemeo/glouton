@@ -386,16 +386,16 @@ func TestMQTTPointOrder(t *testing.T) {
 	}
 
 	// Verify that the points are ordered correctly.
-	lastTimestampByLabels := make(map[string]int64)
+	lastTimestampByID := make(map[string]int64)
 	for _, metric := range mqtt.publishedPoints {
-		if metric.TimestampMS < lastTimestampByLabels[metric.LabelsText] {
+		if metric.TimestampMS < lastTimestampByID[metric.UUID] {
 			t.Fatalf(
 				"Published points are not ordered, point with timestamp %s received before timestamp %s",
-				time.UnixMilli(lastTimestampByLabels[metric.LabelsText]), time.UnixMilli(metric.TimestampMS),
+				time.UnixMilli(lastTimestampByID[metric.UUID]), time.UnixMilli(metric.TimestampMS),
 			)
 		}
 
-		lastTimestampByLabels[metric.LabelsText] = metric.TimestampMS
+		lastTimestampByID[metric.UUID] = metric.TimestampMS
 	}
 }
 

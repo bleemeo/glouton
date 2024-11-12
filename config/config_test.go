@@ -62,7 +62,6 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				Enable:  true,
 				Address: "http://example.com",
 			},
-			MetricsFormat: "prometheus",
 		},
 		Blackbox: Blackbox{
 			Enable:          true,
@@ -543,7 +542,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			},
 			WantConfig: Config{
 				Agent: Agent{
-					MetricsFormat: "prometheus",
+					FactsFile: "facts.yaml",
 				},
 				Bleemeo: Bleemeo{
 					APIBase: "base",
@@ -1017,7 +1016,6 @@ func TestStateLoading(t *testing.T) {
 		NodeExporter:         defaultAgentCfg.NodeExporter,
 		WindowsExporter:      defaultAgentCfg.WindowsExporter,
 		Telemetry:            defaultAgentCfg.Telemetry,
-		MetricsFormat:        defaultAgentCfg.MetricsFormat,
 	}
 
 	cases := []struct {

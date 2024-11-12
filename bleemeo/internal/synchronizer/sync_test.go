@@ -112,7 +112,6 @@ func TestSyncWithSNMP(t *testing.T) {
 	helper.SNMP = []*snmp.Target{
 		snmp.NewMock(config.SNMPTarget{InitialName: "Z-The-Initial-Name", Target: snmpAddress}, map[string]string{}),
 	}
-	helper.MetricFormat = gloutonTypes.MetricFormatPrometheus
 
 	helper.initSynchronizer(t)
 
@@ -198,10 +197,6 @@ func TestSyncWithSNMP(t *testing.T) {
 			Metric: bleemeoTypes.Metric{
 				ID:      "1",
 				AgentID: idAgentMain,
-				LabelsText: fmt.Sprintf(
-					`__name__="agent_status",instance_uuid="%s"`,
-					idAgentMain,
-				),
 			},
 			Name: "agent_status",
 		},
@@ -209,10 +204,6 @@ func TestSyncWithSNMP(t *testing.T) {
 			Metric: bleemeoTypes.Metric{
 				ID:      "2",
 				AgentID: idAgentMain,
-				LabelsText: fmt.Sprintf(
-					`__name__="cpu_used",instance_uuid="%s"`,
-					idAgentMain,
-				),
 			},
 			Name: "cpu_used",
 		},
@@ -282,21 +273,13 @@ func TestSyncWithSNMP(t *testing.T) {
 			Metric: bleemeoTypes.Metric{
 				ID:      "1",
 				AgentID: idAgentMain,
-				LabelsText: fmt.Sprintf(
-					`__name__="agent_status",instance_uuid="%s"`,
-					idAgentMain,
-				),
 			},
 			Name: "agent_status",
 		},
 		{
 			Metric: bleemeoTypes.Metric{
-				ID:      "2",
-				AgentID: idAgentMain,
-				LabelsText: fmt.Sprintf(
-					`__name__="cpu_used",instance_uuid="%s"`,
-					idAgentMain,
-				),
+				ID:            "2",
+				AgentID:       idAgentMain,
 				DeactivatedAt: helper.Now(),
 			},
 			Name: "cpu_used",
@@ -338,7 +321,6 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 	helper.SNMP = []*snmp.Target{
 		snmp.NewMock(config.SNMPTarget{InitialName: "Z-The-Initial-Name", Target: snmpAddress}, map[string]string{}),
 	}
-	helper.MetricFormat = gloutonTypes.MetricFormatPrometheus
 	helper.NotifyLabelsUpdate = func() {
 		l.Lock()
 		defer l.Unlock()
@@ -433,10 +415,6 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 			Metric: bleemeoTypes.Metric{
 				ID:      "1",
 				AgentID: idAgentMain,
-				LabelsText: fmt.Sprintf(
-					`__name__="agent_status",instance_uuid="%s"`,
-					idAgentMain,
-				),
 			},
 			Name: "agent_status",
 		},
@@ -444,10 +422,6 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 			Metric: bleemeoTypes.Metric{
 				ID:      "2",
 				AgentID: idAgentMain,
-				LabelsText: fmt.Sprintf(
-					`__name__="cpu_used",instance_uuid="%s"`,
-					idAgentMain,
-				),
 			},
 			Name: "cpu_used",
 		},

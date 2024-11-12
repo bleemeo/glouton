@@ -856,12 +856,12 @@ func matchersForScrapperTarget(targetFilterList []string, extraLabels map[string
 	return matchersList
 }
 
-func getDefaultMetrics(format types.MetricFormat, hasSwap bool) []string {
+func getDefaultMetrics(forBleemeo bool, hasSwap bool) []string {
 	res := commonDefaultSystemMetrics
 	res = append(res, inputMetrics...)
 
 	switch {
-	case format == types.MetricFormatBleemeo:
+	case forBleemeo:
 		res = append(res, bleemeoDefaultSystemMetrics...)
 		if hasSwap {
 			res = append(res, bleemeoSwapMetrics...)
@@ -929,7 +929,7 @@ func printSortedMapOfList(file io.Writer, matchersMap map[labels.Matcher][]match
 	}
 }
 
-func newMetricFilter(config config.Config, hasSNMP, hasSwap bool, format types.MetricFormat) (*metricFilter, error) {
+func newMetricFilter(config config.Config, hasSNMP, hasSwap, forBleemeo bool) (*metricFilter, error) {
 	rawAllowList := config.Metric.AllowMetrics
 
 	if hasSNMP {
@@ -937,7 +937,7 @@ func newMetricFilter(config config.Config, hasSNMP, hasSwap bool, format types.M
 	}
 
 	if config.Metric.IncludeDefaultMetrics {
-		rawAllowList = append(rawAllowList, getDefaultMetrics(format, hasSwap)...)
+		rawAllowList = append(rawAllowList, getDefaultMetrics(forBleemeo, hasSwap)...)
 	}
 
 	var warnings prometheus.MultiError

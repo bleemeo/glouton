@@ -23,8 +23,6 @@ import (
 
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/prometheus/registry"
-	"github.com/bleemeo/glouton/types"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	bbConf "github.com/prometheus/blackbox_exporter/config"
@@ -46,7 +44,7 @@ func TestConfigParsing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	bbManager, err := New(registry, config.Blackbox, types.MetricFormatPrometheus)
+	bbManager, err := New(registry, config.Blackbox)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +146,7 @@ func TestNoTargetsConfigParsing(t *testing.T) {
 		t.Fatalf("Got warnings loading config: %v", warnings)
 	}
 
-	bbManager, err := New(nil, config.Blackbox, types.MetricFormatPrometheus)
+	bbManager, err := New(nil, config.Blackbox)
 	if err != nil {
 		t.Fatal(err)
 	}

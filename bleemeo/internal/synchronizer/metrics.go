@@ -161,7 +161,7 @@ type metricComparator struct {
 	isGoodItem        *regexp.Regexp
 }
 
-func newComparator(format gloutonTypes.MetricFormat) *metricComparator {
+func newComparator() *metricComparator {
 	essentials := []string{
 		"node_cpu_seconds_global",
 		"node_cpu_seconds_total",
@@ -214,16 +214,14 @@ func newComparator(format gloutonTypes.MetricFormat) *metricComparator {
 		}
 	}
 
-	if format == gloutonTypes.MetricFormatBleemeo {
-		essentials = []string{
-			"cpu_idle", "cpu_wait", "cpu_nice", "cpu_user", "cpu_system", "cpu_interrupt", "cpu_softirq", "cpu_steal", "cpu_guest_nice", "cpu_guest",
-			"mem_free", "mem_cached", "mem_buffered", "mem_used",
-			"io_utilization", "io_read_bytes", "io_write_bytes", "io_reads",
-			"io_writes", "net_bits_recv", "net_bits_sent", "net_packets_recv",
-			"net_packets_sent", "net_err_in", "net_err_out", "disk_used_perc",
-			"swap_used_perc", "cpu_used", "mem_used_perc", "agent_config_warning", agentStatusName,
-		}
-	}
+	essentials = append(essentials,
+		"cpu_idle", "cpu_wait", "cpu_nice", "cpu_user", "cpu_system", "cpu_interrupt", "cpu_softirq", "cpu_steal", "cpu_guest_nice", "cpu_guest",
+		"mem_free", "mem_cached", "mem_buffered", "mem_used",
+		"io_utilization", "io_read_bytes", "io_write_bytes", "io_reads",
+		"io_writes", "net_bits_recv", "net_bits_sent", "net_packets_recv",
+		"net_packets_sent", "net_err_in", "net_err_out", "disk_used_perc",
+		"swap_used_perc", "cpu_used", "mem_used_perc", "agent_config_warning", agentStatusName,
+	)
 
 	highCard := []string{
 		"node_filesystem_avail_bytes",
@@ -359,8 +357,8 @@ func (m *metricComparator) isLess(metricA map[string]string, metricB map[string]
 	}
 }
 
-func prioritizeAndFilterMetrics(format gloutonTypes.MetricFormat, metrics []gloutonTypes.Metric, onlyEssential bool) []gloutonTypes.Metric {
-	cmp := newComparator(format)
+func prioritizeAndFilterMetrics(metrics []gloutonTypes.Metric, onlyEssential bool) []gloutonTypes.Metric {
+	cmp := newComparator()
 
 	if onlyEssential {
 		i := 0
@@ -558,7 +556,7 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, syncType types.SyncType,
 	}
 
 	filteredMetrics = s.filterMetrics(localMetrics)
-	filteredMetrics = prioritizeAndFilterMetrics(s.option.MetricFormat, filteredMetrics, execution.IsOnlyEssential())
+	filteredMetrics = prioritizeAndFilterMetrics(filteredMetrics, execution.IsOnlyEssential())
 
 	if err = newMetricRegisterer(s, apiClient).registerMetrics(ctx, filteredMetrics); err != nil {
 		return updateThresholds, err
@@ -811,7 +809,7 @@ func (s *Synchronizer) metricUpdateList(ctx context.Context, apiClient types.Met
 			"fields":      {metricFields},
 		}
 
-		if s.option.MetricFormat == gloutonTypes.MetricFormatBleemeo && metricutils.MetricOnlyHasItem(metric.Labels(), agentID) {
+		if metricutils.MetricOnlyHasItem(metric.Labels(), agentID) {
 			annotations := metric.Annotations()
 			params.Set("label", metric.Labels()[gloutonTypes.LabelName])
 			params.Set("item", annotations.BleemeoItem)
@@ -1236,16 +1234,14 @@ func (s *Synchronizer) prepareMetricPayload(
 		Name: labels[gloutonTypes.LabelName],
 	}
 
-	if s.option.MetricFormat == gloutonTypes.MetricFormatBleemeo {
-		agentID := s.agentID
-		if metric.Annotations().BleemeoAgentID != "" {
-			agentID = metric.Annotations().BleemeoAgentID
-		}
+	agentID := s.agentID
+	if metric.Annotations().BleemeoAgentID != "" {
+		agentID = metric.Annotations().BleemeoAgentID
+	}
 
-		if metricutils.MetricOnlyHasItem(labels, agentID) {
-			payload.Item = annotations.BleemeoItem
-			payload.LabelsText = ""
-		}
+	if metricutils.MetricOnlyHasItem(labels, agentID) {
+		payload.Item = annotations.BleemeoItem
+		payload.LabelsText = ""
 	}
 
 	if annotations.StatusOf != "" {

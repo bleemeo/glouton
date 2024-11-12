@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//nolint:scopelint,goconst,dupl
+//nolint:scopelint,goconst
 package synchronizer
 
 import (
@@ -95,8 +95,8 @@ func TestPrioritizeAndFilterMetrics(t *testing.T) {
 		}
 	}
 
-	metrics = prioritizeAndFilterMetrics(gloutonTypes.MetricFormatBleemeo, metrics, false)
-	metrics2 = prioritizeAndFilterMetrics(gloutonTypes.MetricFormatBleemeo, metrics2, true)
+	metrics = prioritizeAndFilterMetrics(metrics, false)
+	metrics2 = prioritizeAndFilterMetrics(metrics2, true)
 
 	for i, m := range metrics {
 		if !isHighPriority[m.Labels()[gloutonTypes.LabelName]] && i < countHighPriority {
@@ -124,7 +124,6 @@ func TestPrioritizeAndFilterMetrics2(t *testing.T) {
 	cases := []struct {
 		name   string
 		inputs []string
-		format gloutonTypes.MetricFormat
 		order  []order
 	}{
 		{
@@ -135,7 +134,6 @@ func TestPrioritizeAndFilterMetrics2(t *testing.T) {
 				`__name__="net_bits_sent",item="eth0"`,
 				`__name__="mem_used"`,
 			},
-			format: gloutonTypes.MetricFormatBleemeo,
 			order: []order{
 				{LabelBefore: `__name__="cpu_used"`, LabelAfter: `__name__="net_bits_recv",item="eth0"`},
 				{LabelBefore: `__name__="cpu_used"`, LabelAfter: `__name__="net_bits_sent",item="eth0"`},
@@ -153,7 +151,6 @@ func TestPrioritizeAndFilterMetrics2(t *testing.T) {
 				`__name__="disk_used_perc",item="the_item"`,
 				`__name__="io_utilization",item="the_item"`,
 			},
-			format: gloutonTypes.MetricFormatBleemeo,
 			order: []order{
 				{LabelBefore: `__name__="io_reads",item="the_item"`, LabelAfter: `__name__="net_bits_recv",item="the_item"`},
 				{LabelBefore: `__name__="io_writes",item="the_item"`, LabelAfter: `__name__="net_bits_recv",item="the_item"`},
@@ -176,7 +173,6 @@ func TestPrioritizeAndFilterMetrics2(t *testing.T) {
 				`__name__="io_reads",item="the_item"`,
 				`__name__="custom_metric2"`,
 			},
-			format: gloutonTypes.MetricFormatBleemeo,
 			order: []order{
 				{LabelBefore: `__name__="cpu_used"`, LabelAfter: `__name__="custom_metric_item",item="the_item"`},
 				{LabelBefore: `__name__="cpu_used"`, LabelAfter: `__name__="custom_metric2"`},
@@ -205,7 +201,6 @@ func TestPrioritizeAndFilterMetrics2(t *testing.T) {
 				`__name__="net_bits_recv",item="br-1"`,
 				`__name__="net_bits_recv",item="br-0"`,
 			},
-			format: gloutonTypes.MetricFormatBleemeo,
 			order: []order{
 				{LabelBefore: `__name__="net_bits_recv",item="eth0"`, LabelAfter: `__name__="net_bits_recv",item="the_item"`},
 				{LabelBefore: `__name__="net_bits_recv",item="eth0"`, LabelAfter: `__name__="net_bits_recv",item="br-0"`},
@@ -240,7 +235,6 @@ func TestPrioritizeAndFilterMetrics2(t *testing.T) {
 				`__name__="container_net_bits_sent",item="my_memcached"`,
 				`__name__="container_net_bits_sent",item="my_rabbitmq"`,
 			},
-			format: gloutonTypes.MetricFormatBleemeo,
 			order: []order{
 				// What we only want is the item are together. Currently item are sorted in lexical order
 				{LabelBefore: `__name__="container_net_bits_sent",item="my_memcached"`, LabelAfter: `__name__="container_net_bits_sent",item="my_redis"`},
@@ -277,7 +271,7 @@ func TestPrioritizeAndFilterMetrics2(t *testing.T) {
 				metrics = append(metrics, mockMetric{labels: gloutonTypes.TextToLabels(lbls)})
 			}
 
-			result := prioritizeAndFilterMetrics(tt.format, metrics, false)
+			result := prioritizeAndFilterMetrics(metrics, false)
 
 			for _, ord := range tt.order {
 				firstIdx := -1
@@ -389,7 +383,7 @@ func Test_metricComparator_IsSignificantItem(t *testing.T) {
 		t.Run(tt.item, func(t *testing.T) {
 			t.Parallel()
 
-			m := newComparator(gloutonTypes.MetricFormatBleemeo)
+			m := newComparator()
 			if got := m.IsSignificantItem(tt.item); got != tt.want {
 				t.Errorf("metricComparator.IsSignificantItem() = %v, want %v", got, tt.want)
 			}
@@ -400,37 +394,31 @@ func Test_metricComparator_IsSignificantItem(t *testing.T) {
 func Test_metricComparator_SkipInOnlyEssential(t *testing.T) {
 	tests := []struct {
 		name                string
-		format              gloutonTypes.MetricFormat
 		metric              string
 		keepInOnlyEssential bool
 	}{
 		{
 			name:                "default dashboard metrics are essential 1",
-			format:              gloutonTypes.MetricFormatBleemeo,
 			metric:              `__name__="cpu_used"`,
 			keepInOnlyEssential: true,
 		},
 		{
 			name:                "default dashboard metrics are essential 2",
-			format:              gloutonTypes.MetricFormatBleemeo,
 			metric:              `__name__="io_reads",item="nvme0"`,
 			keepInOnlyEssential: true,
 		},
 		{
 			name:                "default dashboard metrics are essential 3",
-			format:              gloutonTypes.MetricFormatBleemeo,
 			metric:              `__name__="net_bits_recv",item="eth0"`,
 			keepInOnlyEssential: true,
 		},
 		{
 			name:                "high cardinality aren't essential",
-			format:              gloutonTypes.MetricFormatBleemeo,
 			metric:              `__name__="net_bits_recv",item="the_item"`,
 			keepInOnlyEssential: false,
 		},
 		{
 			name:                "high cardinality aren't essential",
-			format:              gloutonTypes.MetricFormatBleemeo,
 			metric:              `__name__="net_bits_recv",item="br-2a4d1a465acd"`,
 			keepInOnlyEssential: false,
 		},
@@ -439,7 +427,7 @@ func Test_metricComparator_SkipInOnlyEssential(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			m := newComparator(tt.format)
+			m := newComparator()
 			metric := gloutonTypes.TextToLabels(tt.metric)
 
 			if got := m.KeepInOnlyEssential(metric); got != tt.keepInOnlyEssential {
@@ -452,79 +440,66 @@ func Test_metricComparator_SkipInOnlyEssential(t *testing.T) {
 func Test_metricComparator_importanceWeight(t *testing.T) {
 	tests := []struct {
 		name         string
-		format       gloutonTypes.MetricFormat
 		metricBefore string
 		metricAfter  string
 	}{
 		{
 			name:         "metric of system dashboard are first 1",
-			format:       gloutonTypes.MetricFormatBleemeo,
 			metricBefore: `__name__="cpu_used"`,
 			metricAfter:  `__name__="custom_metric"`,
 		},
 		{
 			name:         "metric of system dashboard are first 2",
-			format:       gloutonTypes.MetricFormatBleemeo,
 			metricBefore: `__name__="net_bits_recv",item="eth0"`,
 			metricAfter:  `__name__="custom_metric"`,
 		},
 		{
 			name:         "metric of system dashboard are first 3",
-			format:       gloutonTypes.MetricFormatBleemeo,
 			metricBefore: `__name__="net_bits_recv",item="the_item"`,
 			metricAfter:  `__name__="custom_metric"`,
 		},
 		{
 			name:         "metric of system dashboard are first 4",
-			format:       gloutonTypes.MetricFormatBleemeo,
 			metricBefore: `__name__="io_reads",item="nvme0"`,
 			metricAfter:  `__name__="custom_metric"`,
 		},
-		{
+		{ // Old Prometheus format
 			name:         "metric of system dashboard are first 5",
-			format:       gloutonTypes.MetricFormatPrometheus,
 			metricBefore: `__name__="node_cpu_seconds_global",mode="idle"`,
 			metricAfter:  `__name__="custom_metric"`,
 		},
 		{
 			name:         "high cardinality after important",
-			format:       gloutonTypes.MetricFormatBleemeo,
 			metricBefore: `__name__="system_pending_security_updates"`,
 			metricAfter:  `__name__="disk_used_perc",item="/random-value"`,
 		},
 		{
 			name:         "good item before important",
-			format:       gloutonTypes.MetricFormatBleemeo,
 			metricBefore: `__name__="disk_used_perc",item="/home"`,
 			metricAfter:  `__name__="system_pending_security_updates"`,
 		},
 		{
 			name:         "high cardinality after status",
-			format:       gloutonTypes.MetricFormatBleemeo,
 			metricBefore: `__name__="service_status"`,
 			metricAfter:  `__name__="net_bits_recv",item="tap150"`,
 		},
 		{
 			name:         "good item before status",
-			format:       gloutonTypes.MetricFormatBleemeo,
 			metricBefore: `__name__="net_bits_recv",item="eth0"`,
 			metricAfter:  `__name__="service_status"`,
 		},
 		{
 			name:         "high cardinality before custom",
-			format:       gloutonTypes.MetricFormatBleemeo,
 			metricBefore: `__name__="net_bits_recv",item="tap150"`,
 			metricAfter:  `__name__="custom_metric"`,
 		},
 		{
 			name:         "essential without item first",
-			format:       gloutonTypes.MetricFormatBleemeo,
 			metricBefore: `__name__="cpu_used"`,
 			metricAfter:  `__name__="cpu_used",item="value"`,
 		},
 		{
 			name:         "essential without item first 2",
-			format:       gloutonTypes.MetricFormatBleemeo,
 			metricBefore: `__name__="cpu_used"`,
 			metricAfter:  `__name__="io_reads",item="/dev/sda"`,
 		},
@@ -533,7 +508,7 @@ func Test_metricComparator_importanceWeight(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			m := newComparator(tt.format)
+			m := newComparator()
 
 			metricA := gloutonTypes.TextToLabels(tt.metricBefore)
 			metricB := gloutonTypes.TextToLabels(tt.metricAfter)

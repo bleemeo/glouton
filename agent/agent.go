@@ -140,7 +140,6 @@ type agent struct {
 	snmpRegistration       []int
 	store                  *store.Store
 	gathererRegistry       *registry.Registry
-	metricFormat           types.MetricFormat
 	dynamicScrapper        *promexporter.DynamicScrapper
 	lastHealthCheck        time.Time
 	lastContainerEventTime time.Time
@@ -762,12 +761,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	_ = os.Remove(a.config.Agent.UpgradeFile)
 	_ = os.Remove(a.config.Agent.AutoUpgradeFile)
 
-	a.metricFormat = types.StringToMetricFormat(a.config.Agent.MetricsFormat)
-	if a.metricFormat == types.MetricFormatUnknown {
-		logger.Printf("Invalid metric format %#v. Supported option are \"Bleemeo\" and \"Prometheus\". Falling back to Bleemeo", a.config.Agent.MetricsFormat)
-		a.metricFormat = types.MetricFormatBleemeo
-	}
-
 	apiBindAddress := fmt.Sprintf("%s:%d", a.config.Web.Listener.Address, a.config.Web.Listener.Port)
 
 	var warnings prometheus.MultiError
@@ -784,21 +777,21 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	hasSwap := factsMap["swap_present"] == "true"
 
-	mFilter, err := newMetricFilter(a.config, len(a.snmpManager.Targets()) > 0, hasSwap, a.metricFormat)
+	bleemeoFilter, err := newMetricFilter(a.config, len(a.snmpManager.Targets()) > 0, hasSwap, true)
 	if err != nil {
 		logger.Printf("An error occurred while building the metric filter, allow/deny list may be partial: %v", err)
 	}
 
-	a.metricFilter = mFilter
+	a.metricFilter = bleemeoFilter
 
 	a.store = store.New(3*time.Minute, 2*time.Hour)
 
-	filteredStore := store.NewFilteredStore(
+	bleemeoFilteredStore := store.NewFilteredStore(
 		a.store,
 		func(m []types.MetricPoint) []types.MetricPoint {
-			return mFilter.FilterPoints(m, false)
+			return bleemeoFilter.FilterPoints(m, false)
 		},
-		mFilter.filterMetrics,
+		bleemeoFilter.filterMetrics,
 	)
 	a.threshold = threshold.New(a.state)
 
@@ -810,9 +803,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			ThresholdHandler:      a.threshold,
 			FQDN:                  fqdn,
 			GloutonPort:           strconv.Itoa(a.config.Web.Listener.Port),
-			MetricFormat:          a.metricFormat,
 			BlackboxSendScraperID: a.config.Blackbox.ScraperSendUUID,
-			Filter:                mFilter,
+			Filter:                bleemeoFilter,
 			Queryable:             a.store,
 			SecretInputsGate:      secretInputsGate,
 			ShutdownDeadline:      15 * time.Second,
@@ -950,7 +942,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		isCheckIgnored,
 		metricsIgnored.IsServiceIgnored,
 		a.containerFilter.ContainerIgnored,
-		a.metricFormat,
 		psFact,
 		a.config.ServiceAbsentDeactivationDelay,
 	)
@@ -967,7 +958,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	if a.config.Blackbox.Enable {
 		logger.V(1).Println("Starting blackbox_exporter...")
 
-		a.monitorManager, err = blackbox.New(a.gathererRegistry, a.config.Blackbox, a.metricFormat)
+		a.monitorManager, err = blackbox.New(a.gathererRegistry, a.config.Blackbox)
 		if err != nil {
 			logger.V(0).Printf("Couldn't start blackbox_exporter: %v\nMonitors will not be able to run on this agent.", err)
 		}
@@ -986,12 +977,11 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		BindAddress:        apiBindAddress,
 		Discovery:          a.discovery,
 		AgentInfo:          a,
-		PrometheurExporter: promExporter,
+		PrometheusExporter: promExporter,
 		Threshold:          a.threshold,
 		StaticCDNURL:       a.config.Web.StaticCDNURL,
 		DiagnosticPage:     a.DiagnosticPage,
 		DiagnosticArchive:  a.writeDiagnosticArchive,
-		MetricFormat:       a.metricFormat,
 		LocalUIDisabled:    !a.config.Web.LocalUI.Enable,
 	}
 
@@ -1054,7 +1044,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			Facts:                          a.factProvider,
 			Process:                        psFact,
 			Docker:                         a.containerRuntime,
-			Store:                          filteredStore,
+			Store:                          bleemeoFilteredStore,
 			SNMP:                           a.snmpManager.Targets(),
 			SNMPOnlineTarget:               a.snmpManager.OnlineCount,
 			Discovery:                      a.discovery,
@@ -1062,7 +1052,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			UpdateMetricResolution:         a.updateMetricResolution,
 			UpdateThresholds:               a.UpdateThresholds,
 			UpdateUnits:                    a.threshold.SetUnits,
-			MetricFormat:                   a.metricFormat,
 			NotifyFirstRegistration:        a.notifyBleemeoFirstRegistration,
 			NotifyHooksUpdate:              a.notifyBleemeoUpdateHooks,
 			BlackboxScraperName:            scaperName,
@@ -1122,17 +1111,15 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		logger.Printf("unable to add system metrics: %v", err)
 	}
 
-	if a.metricFormat == types.MetricFormatBleemeo {
-		_, err = a.gathererRegistry.RegisterAppenderCallback(
-			registry.RegistrationOption{
-				Description: "process status metrics",
-				JitterSeed:  baseJitter,
-			},
-			processSource.NewStatusSource(psFact),
-		)
-		if err != nil {
-			logger.Printf("unable to add processes metrics: %v", err)
-		}
+	_, err = a.gathererRegistry.RegisterAppenderCallback(
+		registry.RegistrationOption{
+			Description: "process status metrics",
+			JitterSeed:  baseJitter,
+		},
+		processSource.NewStatusSource(psFact),
+	)
+	if err != nil {
+		logger.Printf("unable to add processes metrics: %v", err)
 	}
 
 	// Register misc appender to gather some container metrics.
@@ -1186,7 +1173,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 
 	if a.config.Agent.ProcessExporter.Enable {
-		processSource.RegisterExporter(ctx, a.gathererRegistry, psLister, dynamicDiscovery, metricsIgnored, serviceIgnored, a.metricFormat == types.MetricFormatBleemeo)
+		processSource.RegisterExporter(ctx, a.gathererRegistry, psLister, dynamicDiscovery, metricsIgnored, serviceIgnored)
 	}
 
 	prometheusTargets, warnings := prometheusConfigToURLs(a.config.Metric.Prometheus.Targets)
@@ -1244,12 +1231,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.bleemeoConnector.ApplyCachedConfiguration(ctx)
 	}
 
-	if !reflect.DeepEqual(a.config.DiskMonitor, config.DefaultConfig().DiskMonitor) {
-		if a.metricFormat == types.MetricFormatBleemeo && len(a.config.DiskIgnore) > 0 {
-			logger.Printf("Warning: both \"disk_monitor\" and \"disk_ignore\" are set. Only \"disk_ignore\" will be used")
-		} else if a.metricFormat != types.MetricFormatBleemeo {
-			logger.Printf("Warning: configuration \"disk_monitor\" is not used in Prometheus mode. Use \"disk_ignore\"")
-		}
+	if !reflect.DeepEqual(a.config.DiskMonitor, config.DefaultConfig().DiskMonitor) && len(a.config.DiskIgnore) > 0 {
+		logger.Printf("Warning: both \"disk_monitor\" and \"disk_ignore\" are set. Only \"disk_ignore\" will be used")
 	}
 
 	if len(a.config.Log.Inputs) > 0 {
@@ -1315,13 +1298,25 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 
 	a.factProvider.SetFact("statsd_enable", strconv.FormatBool(a.config.Telegraf.StatsD.Enable))
-	a.factProvider.SetFact("metrics_format", a.metricFormat.String())
 
 	if a.config.MQTT.Enable {
+		promFilter, err := newMetricFilter(a.config, len(a.snmpManager.Targets()) > 0, hasSwap, false)
+		if err != nil {
+			logger.Printf("An error occurred while building the Prometheus metric filter, allow/deny list may be partial: %v", err)
+		}
+
+		promFilteredStore := store.NewFilteredStore(
+			a.store,
+			func(m []types.MetricPoint) []types.MetricPoint {
+				return promFilter.FilterPoints(m, false)
+			},
+			promFilter.filterMetrics,
+		)
+
 		a.mqtt = mqtt.New(mqtt.Options{
 			ReloadState:         a.reloadState.MQTT(),
 			Config:              a.config.MQTT,
-			Store:               filteredStore,
+			Store:               promFilteredStore,
 			FQDN:                fqdn,
 			PahoLastPingCheckAt: a.pahoLogWrapper.LastPingAt,
 		})

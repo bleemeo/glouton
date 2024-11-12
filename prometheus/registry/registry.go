@@ -154,7 +154,6 @@ type Option struct {
 	Queryable             storage.Queryable
 	FQDN                  string
 	GloutonPort           string
-	MetricFormat          types.MetricFormat
 	BlackboxSendScraperID bool
 	Filter                metricFilter
 	SecretInputsGate      *gate.Gate
@@ -180,9 +179,6 @@ type RegistrationOption struct {
 	// from each points from the gatherer itself, the ExtraLabels after relabeling (a.k.a "LabelUsed" in diagnostic) are still
 	// added.
 	CompatibilityNameItem bool
-	// DisablePeriodicGather skip the periodic calls which forward gathered points to r.PushPoint.
-	// The periodic call uses the MinInterval. When MinInterval is 0, the dynamic interval set by UpdateDelay is used.
-	DisablePeriodicGather bool
 	// ApplyDynamicRelabel controls whether the metrics should go through the relabel hook.
 	ApplyDynamicRelabel bool
 	Rules               []types.SimpleRule
@@ -324,11 +320,6 @@ type registration struct {
 func (reg *registration) RunNow() {
 	reg.l.Lock()
 	defer reg.l.Unlock()
-
-	if reg.option.DisablePeriodicGather {
-		// RunNow is only supported with a scapeLoop
-		return
-	}
 
 	if reg.loop == nil {
 		reg.runOnStart = true
@@ -555,9 +546,7 @@ func (r *Registry) startLoopsInner() {
 	regToStart := make([]*registration, 0, len(r.registrations))
 
 	for _, reg := range r.registrations {
-		if !reg.option.DisablePeriodicGather {
-			regToStart = append(regToStart, reg)
-		}
+		regToStart = append(regToStart, reg)
 	}
 
 	r.l.Unlock()
@@ -1074,16 +1063,14 @@ func (r *Registry) addRegistration(reg *registration) (int, error) {
 
 	r.registrations[id] = reg
 
-	if !reg.option.DisablePeriodicGather {
-		if g, ok := reg.gatherer.getSource().(GathererWithScheduleUpdate); ok {
-			g.SetScheduleUpdate(func(runAt time.Time) {
-				r.scheduleUpdate(id, reg, runAt)
-			})
-		}
+	if g, ok := reg.gatherer.getSource().(GathererWithScheduleUpdate); ok {
+		g.SetScheduleUpdate(func(runAt time.Time) {
+			r.scheduleUpdate(id, reg, runAt)
+		})
+	}
 
-		if r.running {
-			r.restartScrapeLoop(reg)
-		}
+	if r.running {
+		r.restartScrapeLoop(reg)
 	}
 
 	return id, nil
@@ -1486,7 +1473,7 @@ func (r *Registry) AddDefaultCollector() {
 func (r *Registry) Exporter() http.Handler {
 	reg := prometheus.NewRegistry()
 	handler := promhttp.InstrumentMetricHandler(reg, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		wrapper := NewGathererWithStateWrapper(req.Context(), r, r.option.Filter)
+		wrapper := NewGathererWithStateWrapper(req.Context(), r)
 
 		state := GatherStateFromMap(req.URL.Query())
 
@@ -1499,9 +1486,8 @@ func (r *Registry) Exporter() http.Handler {
 	}))
 	_, _ = r.RegisterGatherer(
 		RegistrationOption{
-			Description:           "/metrics collector",
-			JitterSeed:            baseJitter,
-			DisablePeriodicGather: r.option.MetricFormat != types.MetricFormatPrometheus,
+			Description: "/metrics collector",
+			JitterSeed:  baseJitter,
 		},
 		reg,
 	)
@@ -1512,7 +1498,7 @@ func (r *Registry) Exporter() http.Handler {
 // WithTTL return a AddMetricPointFunction with TTL on pushed points.
 func (r *Registry) WithTTL(ttl time.Duration) types.PointPusher {
 	return pushFunction(func(ctx context.Context, points []types.MetricPoint) {
-		r.pushPoint(ctx, points, ttl, r.option.MetricFormat)
+		r.pushPoint(ctx, points, ttl)
 	})
 }
 
@@ -1726,7 +1712,7 @@ func (r *Registry) restartLoop(reg *registration) {
 
 // pushPoint add a new point to the list of pushed point with a specified TTL.
 // As for AddMetricPointFunction, points should not be mutated after the call.
-func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, ttl time.Duration, format types.MetricFormat) {
+func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, ttl time.Duration) {
 	r.l.Lock()
 
 	for r.blockPushPoint {
@@ -1742,10 +1728,9 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 
 	for _, point := range points {
 		var (
-			err            error
-			skip           bool
-			newLabels      labels.Labels
-			newAnnotations types.MetricAnnotations
+			err       error
+			skip      bool
+			newLabels labels.Labels
 		)
 
 		point.Labels, err = fixLabels(point.Labels)
@@ -1762,42 +1747,33 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 			point.Labels[lbl.Name] = lbl.Value
 		}
 
-		if format == types.MetricFormatBleemeo {
-			newLabelsMap := map[string]string{
-				types.LabelName: point.Labels[types.LabelName],
+		newLabelsMap := map[string]string{
+			types.LabelName: point.Labels[types.LabelName],
+		}
+
+		if point.Annotations.BleemeoItem != "" {
+			newLabelsMap[types.LabelItem] = point.Annotations.BleemeoItem
+		}
+
+		// Kept meta-labels
+		for k, v := range point.Labels {
+			if strings.HasPrefix(k, model.ReservedLabelPrefix) {
+				newLabelsMap[k] = v
 			}
+		}
 
-			if point.Annotations.BleemeoItem != "" {
-				newLabelsMap[types.LabelItem] = point.Annotations.BleemeoItem
-			}
+		point.Labels = newLabelsMap
 
-			// Kept meta-labels
-			for k, v := range point.Labels {
-				if strings.HasPrefix(k, model.ReservedLabelPrefix) {
-					newLabelsMap[k] = v
-				}
-			}
+		ctx, cancel := context.WithTimeout(ctx, relabelTimeout)
+		defer cancel()
 
-			point.Labels = newLabelsMap
+		newLabels, _, _, skip = r.applyRelabel(ctx, point.Labels)
+		point.Labels = newLabels.Map()
 
-			ctx, cancel := context.WithTimeout(ctx, relabelTimeout)
-			defer cancel()
-
-			newLabels, _, _, skip = r.applyRelabel(ctx, point.Labels)
-			point.Labels = newLabels.Map()
-
-			// It's possible to have container_name and item labels that both exists and contains the same value.
-			// If that the case, drop the container_name label.
-			if point.Labels[types.LabelContainerName] == point.Labels[types.LabelItem] && point.Labels[types.LabelContainerName] != "" {
-				delete(point.Labels, types.LabelContainerName)
-			}
-		} else {
-			ctx, cancel := context.WithTimeout(ctx, relabelTimeout)
-			defer cancel()
-
-			newLabels, _, newAnnotations, skip = r.applyRelabel(ctx, point.Labels)
-			point.Labels = newLabels.Map()
-			point.Annotations = point.Annotations.Merge(newAnnotations)
+		// It's possible to have container_name and item labels that both exists and contains the same value.
+		// If that the case, drop the container_name label.
+		if point.Labels[types.LabelContainerName] == point.Labels[types.LabelItem] && point.Labels[types.LabelContainerName] != "" {
+			delete(point.Labels, types.LabelContainerName)
 		}
 
 		if !skip {
@@ -2023,7 +1999,7 @@ func fixLabels(lbls map[string]string) (map[string]string, error) {
 	return lbls, nil
 }
 
-// WaitForSecrets hold the current goroutine until the given number of slots are taken.
+// WaitForSecrets hold the current goroutine until the given number of slots is taken.
 // This is to ensure that too many inputs with secrets don't run at the same time,
 // which would result in exceeding the locked memory limit.
 // WaitForSecrets returns a callback to release all the slots taken once the gathering is done,

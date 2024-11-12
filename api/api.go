@@ -63,14 +63,13 @@ type API struct {
 	StaticCDNURL       string
 	LocalUIDisabled    bool
 	Endpoints          config.WebEndpoints
-	MetricFormat       types.MetricFormat
 	DB                 metricQueryable
 	ContainerRuntime   containerInterface
 	PsFact             *facts.ProcessProvider
 	FactProvider       *facts.FactProvider
 	Discovery          *discovery.Discovery
 	AgentInfo          agentInterface
-	PrometheurExporter http.Handler
+	PrometheusExporter http.Handler
 	Threshold          *threshold.Registry
 	DiagnosticPage     func(ctx context.Context) string
 	DiagnosticArchive  func(ctx context.Context, w types.ArchiveWriter) error
@@ -159,7 +158,7 @@ func (api *API) init() {
 
 	promql := promql.PromQL{}
 	router.Mount("/api/v1", promql.Register(api.DB))
-	router.Handle("/metrics", api.PrometheurExporter)
+	router.Handle("/metrics", api.PrometheusExporter)
 
 	// Register the API endpoints for data fetching
 	data := Data{api}
