@@ -513,7 +513,7 @@ func TestSMARTStatus(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			store := store.New(time.Minute, time.Minute)
+			store := store.New("test store", time.Minute, time.Minute)
 
 			store.PushPoints(context.Background(), test.points)
 
@@ -809,7 +809,7 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			store := store.New(time.Minute, time.Minute)
+			store := store.New("test store", time.Minute, time.Minute)
 
 			store.PushPoints(context.Background(), test.points)
 
