@@ -185,6 +185,8 @@ func (s *Store) DropMetrics(labelsList []map[string]string) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
+	previousMetricCount := len(s.metrics)
+
 	for i, m := range s.metrics {
 		for _, l := range labelsList {
 			if reflect.DeepEqual(m.labels, l) {
@@ -193,12 +195,26 @@ func (s *Store) DropMetrics(labelsList []map[string]string) {
 			}
 		}
 	}
+
+	logger.V(2).Printf(
+		"store %s was requested to delete %d metrics. Actually deleted %d metrics, new metrics count is %d",
+		s.displayName,
+		len(labelsList),
+		previousMetricCount-len(s.metrics),
+		len(s.metrics),
+	)
 }
 
 // DropAllMetrics clear the full content of the store.
 func (s *Store) DropAllMetrics() {
 	s.lock.Lock()
 	defer s.lock.Unlock()
+
+	logger.V(2).Printf(
+		"store %s was requested to delete all %d metrics.",
+		s.displayName,
+		len(s.metrics),
+	)
 
 	s.metrics = make(map[uint64]metric)
 	s.points = newEncodedPoints()
@@ -392,7 +408,10 @@ func (s *Store) metricGet(lbls map[string]string, annotations types.MetricAnnota
 func (s *Store) PushPoints(_ context.Context, points []types.MetricPoint) {
 	dedupPoints := make([]types.MetricPoint, 0, len(points))
 
-	var newMetrics []types.LabelsAndAnnotation
+	var (
+		newMetrics        []types.LabelsAndAnnotation
+		deletedByStaleNaN int
+	)
 
 	s.lock.Lock()
 	for _, point := range points {
@@ -407,6 +426,8 @@ func (s *Store) PushPoints(_ context.Context, points []types.MetricPoint) {
 			// Metric is inactive, delete it
 			delete(s.metrics, metric.metricID)
 			s.points.dropPoints(metric.metricID)
+
+			deletedByStaleNaN++
 
 			continue
 		}
@@ -428,6 +449,10 @@ func (s *Store) PushPoints(_ context.Context, points []types.MetricPoint) {
 		}
 
 		dedupPoints = append(dedupPoints, point)
+	}
+
+	if deletedByStaleNaN > 0 {
+		logger.V(2).Printf("store %s deleted %d metrics due to StaleNaN point being received. New metric count: %d", s.displayName, deletedByStaleNaN, len(s.metrics))
 	}
 
 	s.lock.Unlock()
