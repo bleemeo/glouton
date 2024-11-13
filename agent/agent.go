@@ -777,7 +777,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	hasSwap := factsMap["swap_present"] == "true"
 
-	bleemeoFilter, err := newMetricFilter(a.config, len(a.snmpManager.Targets()) > 0, hasSwap, true)
+	bleemeoFilter, err := newMetricFilter(a.config.Metric, len(a.snmpManager.Targets()) > 0, hasSwap, true)
 	if err != nil {
 		logger.Printf("An error occurred while building the metric filter, allow/deny list may be partial: %v", err)
 	}
@@ -795,6 +795,11 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	)
 	a.threshold = threshold.New(a.state)
 
+	promFilter, err := newMetricFilter(a.config.Metric, len(a.snmpManager.Targets()) > 0, hasSwap, false)
+	if err != nil {
+		logger.Printf("An error occurred while building the Prometheus metric filter, allow/deny list may be partial: %v", err)
+	}
+
 	secretInputsGate := gate.New(inputs.MaxParallelSecrets())
 
 	a.gathererRegistry, err = registry.New(
@@ -804,7 +809,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			FQDN:                  fqdn,
 			GloutonPort:           strconv.Itoa(a.config.Web.Listener.Port),
 			BlackboxSendScraperID: a.config.Blackbox.ScraperSendUUID,
-			Filter:                bleemeoFilter,
+			Filter:                mergeMetricFilters(promFilter, bleemeoFilter),
 			Queryable:             a.store,
 			SecretInputsGate:      secretInputsGate,
 			ShutdownDeadline:      15 * time.Second,
@@ -1300,11 +1305,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	a.factProvider.SetFact("statsd_enable", strconv.FormatBool(a.config.Telegraf.StatsD.Enable))
 
 	if a.config.MQTT.Enable {
-		promFilter, err := newMetricFilter(a.config, len(a.snmpManager.Targets()) > 0, hasSwap, false)
-		if err != nil {
-			logger.Printf("An error occurred while building the Prometheus metric filter, allow/deny list may be partial: %v", err)
-		}
-
 		promFilteredStore := store.NewFilteredStore(
 			a.store,
 			func(m []types.MetricPoint) []types.MetricPoint {
