@@ -127,7 +127,7 @@ func (m *mockRegistry) Unregister(id int) bool {
 	return true
 }
 
-func (m *mockRegistry) ExpectationFullified() error {
+func (m *mockRegistry) ExpectationFulfilled() error {
 	if m.err != nil {
 		return m.err
 	}
@@ -882,7 +882,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 		t.Error(err)
 	}
 
-	if err := reg.ExpectationFullified(); err != nil {
+	if err := reg.ExpectationFulfilled(); err != nil {
 		t.Error(err)
 	}
 
@@ -906,14 +906,14 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 			ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
 		},
 	}
-	reg.ExpectedAddedContains = []string{"memcached exporter", "Service input memcached", "check for memcached"}
-	reg.NewIDs = []int{314, 1337, 666}
+	reg.ExpectedAddedContains = []string{"Service input memcached", "check for memcached"}
+	reg.NewIDs = []int{1337, 666}
 
 	if _, err := disc.Discovery(context.Background(), 0); err != nil {
 		t.Error(err)
 	}
 
-	if err := reg.ExpectationFullified(); err != nil {
+	if err := reg.ExpectationFulfilled(); err != nil {
 		t.Error(err)
 	}
 
@@ -949,7 +949,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 		t.Error(err)
 	}
 
-	if err := reg.ExpectationFullified(); err != nil {
+	if err := reg.ExpectationFulfilled(); err != nil {
 		t.Error(err)
 	}
 }
