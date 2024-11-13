@@ -879,6 +879,8 @@ func (c *Client) onNotification(ctx context.Context, msg paho.Message) {
 			return
 		}
 
+		originalTS := ts
+
 		if ts.After(time.Now()) {
 			ts = time.Now()
 		}
@@ -890,7 +892,8 @@ func (c *Client) onNotification(ctx context.Context, msg paho.Message) {
 		c.logsStreamAvailable = payload.LogsStreamAvailable
 
 		logger.V(2).Printf(
-			"Received ack with dataStreamAvailable=%v, topinfoStreamAvailable=%v, logsStreamAvailable=%v",
+			"Received ack with ts=%s with dataStreamAvailable=%v, topinfoStreamAvailable=%v, logsStreamAvailable=%v",
+			originalTS,
 			payload.DataStreamAvailable,
 			payload.TopInfoStreamAvailable,
 			payload.LogsStreamAvailable,
