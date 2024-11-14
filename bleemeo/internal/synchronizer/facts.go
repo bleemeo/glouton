@@ -40,7 +40,6 @@ func getEssentialFacts() map[string]bool {
 		"os_pretty_name":      true,
 		"public_ip":           true,
 		"virtual":             true,
-		"metrics_format":      true,
 	}
 }
 

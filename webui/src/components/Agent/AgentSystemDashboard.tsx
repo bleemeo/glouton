@@ -4,40 +4,15 @@ import WidgetDashboardItem from "../UI/WidgetDashboardItem";
 import MetricGaugeItem from "../Metric/MetricGaugeItem";
 
 import {
-  GaugeBar,
   gaugesBarBLEEMEO,
-  gaugesBarPrometheusLinux,
-  gaugesBarPrometheusWindows,
-  NumberMetric,
   numberMetricsBLEEMEO,
 } from "../Metric/DefaultDashboardMetrics";
 import { chartTypes, useIntersection } from "../utils";
-import { Fact } from "../Data/data.interface";
 import { Box, Container, Flex, Grid, SimpleGrid } from "@chakra-ui/react";
 import { ServicesList } from "../UI/ServicesList";
 import { LastLogsList } from "../UI/LastLogsList";
 
-type AgentSystemDashboardProps = {
-  facts: Fact[];
-};
-
-const AgentSystemDashboard: FC<AgentSystemDashboardProps> = ({ facts }) => {
-  let gaugesBar: GaugeBar[] = [];
-  let numberMetrics: NumberMetric[] = [];
-
-  if (facts.find((f) => f.name === "metrics_format")?.value === "Bleemeo") {
-    gaugesBar = gaugesBarBLEEMEO;
-    numberMetrics = numberMetricsBLEEMEO;
-  } else if (
-    facts.find((f) => f.name === "metrics_format")?.value == "Prometheus"
-  ) {
-    if (facts.find((f) => f.name === "kernel")?.value == "Linux") {
-      gaugesBar = gaugesBarPrometheusLinux;
-    } else {
-      gaugesBar = gaugesBarPrometheusWindows;
-    }
-  }
-
+const AgentSystemDashboard: FC = () => {
   const triggerRef = useRef<HTMLDivElement>(null);
   const isVisible = useIntersection(triggerRef, "0px");
   const otherMetricsWidgetMaxHeight = "40vh";
@@ -50,8 +25,8 @@ const AgentSystemDashboard: FC<AgentSystemDashboardProps> = ({ facts }) => {
     <>
       <Container h="100%">
         <Flex direction="column" h="100%">
-          <SimpleGrid columns={gaugesBar.length} spacing={5}>
-            {gaugesBar.map((gaugeItem) => (
+          <SimpleGrid columns={gaugesBarBLEEMEO.length} spacing={5}>
+            {gaugesBarBLEEMEO.map((gaugeItem) => (
               <Box ref={triggerRef} key={gaugeItem.title}>
                 {isVisible ? (
                   <WidgetDashboardItem
@@ -68,8 +43,8 @@ const AgentSystemDashboard: FC<AgentSystemDashboardProps> = ({ facts }) => {
             ))}
           </SimpleGrid>
 
-          <SimpleGrid columns={numberMetrics.length} spacing={5} mt={5}>
-            {numberMetrics.map((numberMetric) => (
+          <SimpleGrid columns={numberMetricsBLEEMEO.length} spacing={5} mt={5}>
+            {numberMetricsBLEEMEO.map((numberMetric) => (
               <Box ref={triggerRef} key={numberMetric.title}>
                 {isVisible ? (
                   numberMetric.metrics?.length > 1 ? (
