@@ -17,8 +17,11 @@
 package agent
 
 import (
+	"bytes"
 	"math/rand"
+	"os"
 	"reflect"
+	"slices"
 	"sort"
 	"sync"
 	"testing"
@@ -1528,11 +1531,12 @@ func Test_MergeMetricFilters(t *testing.T) {
 	metricCfg := config.Metric{
 		IncludeDefaultMetrics: false,
 		AllowMetrics:          []string{"m1", "m2"},
+		DenyMetrics:           []string{"no1"},
 	}
 	mf1, _ := newMetricFilter(metricCfg, false, false, false)
 
 	metricCfg.AllowMetrics = []string{"m3", "m4"}
-	metricCfg.DenyMetrics = []string{"no"}
+	metricCfg.DenyMetrics = []string{"no1", "no2"}
 	mf2, _ := newMetricFilter(metricCfg, false, false, false)
 
 	mergedFilter := mergeMetricFilters(mf1, mf2)
@@ -1540,7 +1544,7 @@ func Test_MergeMetricFilters(t *testing.T) {
 	expectedFilter := &metricFilter{
 		includeDefaultMetrics: false,
 		staticAllowList:       []matcher.Matchers{mustMatchers("m1"), mustMatchers("m2"), mustMatchers("m3"), mustMatchers("m4")},
-		staticDenyList:        []matcher.Matchers{mustMatchers("no")},
+		staticDenyList:        []matcher.Matchers{mustMatchers("no1")},
 		allowList: map[labels.Matcher][]matcher.Matchers{
 			*labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "m1"): {mustMatchers("m1")},
 			*labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "m2"): {mustMatchers("m2")},
@@ -1548,7 +1552,7 @@ func Test_MergeMetricFilters(t *testing.T) {
 			*labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "m4"): {mustMatchers("m4")},
 		},
 		denyList: map[labels.Matcher][]matcher.Matchers{
-			*labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "no"): {mustMatchers("no")},
+			*labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "no1"): {mustMatchers("no1")},
 		},
 	}
 
@@ -1556,4 +1560,80 @@ func Test_MergeMetricFilters(t *testing.T) {
 	if diff := cmp.Diff(expectedFilter, mergedFilter, cmpOpts); diff != "" {
 		t.Fatalf("Unexpected filter merge result: (-want +got):\n%s", diff)
 	}
+}
+
+func Benchmark_MultipleFilters(b *testing.B) {
+	rawData, err := os.ReadFile("../prometheus/scrapper/testdata/large.txt")
+	if err != nil {
+		b.Fatal("Failed to read data file:", err)
+	}
+
+	lines := bytes.Split(rawData, []byte("\n"))
+	metrics := make([]labels.Labels, 0, len(lines))
+
+	for _, line := range lines {
+		if len(line) == 0 {
+			continue
+		}
+
+		spaceIdx := bytes.Index(line, []byte(" "))
+		metric := string(line[:spaceIdx])
+
+		lbls, err := promParser.ParseMetric(metric)
+		if err != nil {
+			b.Fatalf("Failed to parse %q: %v", metric, err)
+		}
+
+		metrics = append(metrics, lbls)
+	}
+
+	metrics = slices.Repeat(metrics, 10)
+
+	b.Logf("Successfully loaded %d metrics", len(metrics))
+
+	metricCfg := config.Metric{
+		IncludeDefaultMetrics: true,
+		AllowMetrics:          []string{"lotus_chain_basefee", "lotus_chain_height", "lotus_miner_deadline_active_partition_sector"},
+		DenyMetrics:           []string{"lotus_miner_deadline_active_partition_sector"},
+	}
+
+	mf1, warns := newMetricFilter(metricCfg, false, true, false)
+	if warns != nil {
+		b.Fatal("Unexpected warns when building filter n°1:", warns)
+	}
+
+	metricCfg.AllowMetrics = []string{"lotus_miner_deadline_active_partition_sector"}
+
+	mf2, warns := newMetricFilter(metricCfg, true, true, true)
+	if warns != nil {
+		b.Fatal("Unexpected warns when building filter n°2:", warns)
+	}
+
+	mergedMF := mergeMetricFilters(mf1, mf2)
+
+	b.ResetTimer()
+
+	b.Run("or", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			var allowed int
+
+			for _, lbls := range metrics {
+				if mf1.IsMetricAllowed(lbls, false) || mf2.IsMetricAllowed(lbls, false) {
+					allowed++
+				}
+			}
+		}
+	})
+
+	b.Run("merge", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			var allowed int
+
+			for _, lbls := range metrics {
+				if mergedMF.IsMetricAllowed(lbls, false) {
+					allowed++
+				}
+			}
+		}
+	})
 }

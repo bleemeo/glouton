@@ -970,16 +970,54 @@ func newMetricFilter(metricCfg config.Metric, hasSNMP, hasSwap, forBleemeo bool)
 	return filter, warnings.MaybeUnwrap()
 }
 
-// mergeMetricFilters returns a new metricFilter that contains
-// the combination of properties from both the given filters.
+// mergeMetricFilters returns a new metricFilter
+// that represents the union of both the given filters.
 func mergeMetricFilters(f1, f2 *metricFilter) *metricFilter {
+	// Merging logic:
+	// - to be allowed, a metric only needs to be present in the allowlist of one of the filters
+	// - to be denied, a metric needs to be present in the deny-list of both the filters
+	var staticDenyList []matcher.Matchers
+
+	for _, m1 := range f1.staticDenyList {
+		for _, m2 := range f2.staticDenyList {
+			if matchersEqual(m1, m2) {
+				staticDenyList = append(staticDenyList, m1)
+
+				break
+			}
+		}
+	}
+
+	denyList := make(map[labels.Matcher][]matcher.Matchers)
+
+	for k1, v := range f1.denyList {
+		if _, found := f2.denyList[k1]; found {
+			denyList[k1] = v
+		}
+	}
+
 	return &metricFilter{
 		includeDefaultMetrics: f1.includeDefaultMetrics || f2.includeDefaultMetrics,
 		staticAllowList:       slices.Concat(f1.staticAllowList, f2.staticAllowList),
-		staticDenyList:        slices.Concat(f1.staticDenyList, f2.staticDenyList),
+		staticDenyList:        staticDenyList,
 		allowList:             mergeMaps(f1.allowList, f2.allowList),
-		denyList:              mergeMaps(f1.denyList, f2.denyList),
+		denyList:              denyList,
 	}
+}
+
+func matchersEqual(m1, m2 matcher.Matchers) bool {
+	if len(m1) != len(m2) {
+		return false
+	}
+
+	for i, mt1 := range m1 {
+		mt2 := m2[i]
+		if mt1.Type != mt2.Type || mt1.Name != mt2.Name || mt1.Value != mt2.Value {
+			return false
+		}
+	}
+
+	return true
 }
 
 func mergeMaps[K comparable, V any](m1, m2 map[K]V) map[K]V {
