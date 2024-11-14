@@ -463,11 +463,6 @@ func Test_metricComparator_importanceWeight(t *testing.T) {
 			metricBefore: `__name__="io_reads",item="nvme0"`,
 			metricAfter:  `__name__="custom_metric"`,
 		},
-		{ // Old Prometheus format
-			name:         "metric of system dashboard are first 5",
-			metricBefore: `__name__="node_cpu_seconds_global",mode="idle"`,
-			metricAfter:  `__name__="custom_metric"`,
-		},
 		{
 			name:         "high cardinality after important",
 			metricBefore: `__name__="system_pending_security_updates"`,

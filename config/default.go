@@ -76,7 +76,7 @@ func DefaultConfig() Config { //nolint:maintidx
 			AutoUpgradeFile:      "auto_upgrade",
 			NodeExporter: NodeExporter{
 				Enable:     true,
-				Collectors: []string{"cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev", "uname"},
+				Collectors: []string{"cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev", "pressure", "stat", "time", "uname"},
 			},
 			WindowsExporter: NodeExporter{
 				Enable:     true,

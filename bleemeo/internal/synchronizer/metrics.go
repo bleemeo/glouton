@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
-	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -163,83 +162,15 @@ type metricComparator struct {
 
 func newComparator() *metricComparator {
 	essentials := []string{
-		"node_cpu_seconds_global",
-		"node_cpu_seconds_total",
-		"node_memory_MemTotal_bytes",
-		"node_memory_MemAvailable_bytes",
-		"node_memory_MemFree_bytes",
-		"node_memory_Buffers_bytes",
-		"node_memory_Cached_bytes",
-		"node_memory_SwapFree_bytes",
-		"node_memory_SwapTotal_bytes",
-		"node_disk_io_time_seconds_total",
-		"node_disk_read_bytes_total",
-		"node_disk_written_bytes_total",
-		"node_disk_reads_completed_total",
-		"node_disk_writes_completed_total",
-		"node_filesystem_avail_bytes",
-		"node_filesystem_size_bytes",
-		"node_network_receive_bytes_total",
-		"node_network_transmit_bytes_total",
-		"node_network_receive_packets_total",
-		"node_network_transmit_packets_total",
-		"node_network_receive_errs_total",
-		"node_network_transmit_errs_total",
-		"agent_config_warning",
-		agentStatusName,
-	}
-
-	if runtime.GOOS == "windows" {
-		essentials = []string{
-			"windows_cpu_time_global",
-			"windows_cs_physical_memory_bytes",
-			"windows_memory_available_bytes",
-			"windows_memory_standby_cache_bytes",
-			"windows_os_paging_free_bytes",
-			"windows_os_paging_limit_bytes",
-			"windows_logical_disk_idle_seconds_total",
-			"windows_logical_disk_read_bytes_total",
-			"windows_logical_disk_write_bytes_total",
-			"windows_logical_disk_reads_total",
-			"windows_logical_disk_writes_total",
-			"windows_logical_disk_free_bytes",
-			"windows_logical_disk_size_bytes",
-			"windows_net_bytes_received_total",
-			"windows_net_bytes_sent_total",
-			"windows_net_packets_received_total",
-			"windows_net_packets_sent_total",
-			"windows_net_packets_received_errors",
-			"windows_net_packets_outbound_errors",
-			agentStatusName,
-		}
-	}
-
-	essentials = append(essentials,
 		"cpu_idle", "cpu_wait", "cpu_nice", "cpu_user", "cpu_system", "cpu_interrupt", "cpu_softirq", "cpu_steal", "cpu_guest_nice", "cpu_guest",
 		"mem_free", "mem_cached", "mem_buffered", "mem_used",
 		"io_utilization", "io_read_bytes", "io_write_bytes", "io_reads",
 		"io_writes", "net_bits_recv", "net_bits_sent", "net_packets_recv",
 		"net_packets_sent", "net_err_in", "net_err_out", "disk_used_perc",
 		"swap_used_perc", "cpu_used", "mem_used_perc", "agent_config_warning", agentStatusName,
-	)
+	}
 
 	highCard := []string{
-		"node_filesystem_avail_bytes",
-		"node_filesystem_size_bytes",
-		"node_network_receive_bytes_total",
-		"node_network_transmit_bytes_total",
-		"node_network_receive_packets_total",
-		"node_network_transmit_packets_total",
-		"node_network_receive_errs_total",
-		"node_network_transmit_errs_total",
-		"windows_logical_disk_free_bytes",
-		"windows_logical_disk_size_bytes",
-		"windows_net_bytes_received_total",
-		"windows_net_bytes_sent_total",
-		"windows_net_packets_received_total",
-		"windows_net_packets_sent_total",
-		"windows_net_packets_received_errors",
-		"windows_net_packets_outbound_errors",
 		"net_bits_recv",
 		"net_bits_sent",
 		"net_packets_recv",
