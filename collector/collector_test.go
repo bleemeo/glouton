@@ -19,6 +19,7 @@ package collector
 import (
 	"context"
 	"errors"
+	"io"
 	"math"
 	"sync"
 	"testing"
@@ -104,7 +105,7 @@ type shallowAcc struct {
 	l           sync.Mutex
 }
 
-func (sa *shallowAcc) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (sa *shallowAcc) AddFields(measurement string, fields map[string]any, tags map[string]string, t ...time.Time) {
 	if t == nil {
 		t = []time.Time{time.Now()} // normally unused
 	}
@@ -125,19 +126,19 @@ func (sa *shallowAcc) AddFields(measurement string, fields map[string]interface{
 	}
 }
 
-func (sa *shallowAcc) AddGauge(string, map[string]interface{}, map[string]string, ...time.Time) {
+func (sa *shallowAcc) AddGauge(string, map[string]any, map[string]string, ...time.Time) {
 }
 
-func (sa *shallowAcc) AddCounter(string, map[string]interface{}, map[string]string, ...time.Time) {
+func (sa *shallowAcc) AddCounter(string, map[string]any, map[string]string, ...time.Time) {
 }
 
-func (sa *shallowAcc) AddSummary(string, map[string]interface{}, map[string]string, ...time.Time) {
+func (sa *shallowAcc) AddSummary(string, map[string]any, map[string]string, ...time.Time) {
 }
 
-func (sa *shallowAcc) AddHistogram(string, map[string]interface{}, map[string]string, ...time.Time) {
+func (sa *shallowAcc) AddHistogram(string, map[string]any, map[string]string, ...time.Time) {
 }
 
-func (sa *shallowAcc) AddFieldsWithAnnotations(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time) {
+func (sa *shallowAcc) AddFieldsWithAnnotations(measurement string, fields map[string]any, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time) {
 	sa.l.Lock()
 
 	func() {
@@ -161,16 +162,71 @@ func (sa *shallowAcc) AddError(error) {}
 
 func (sa *shallowAcc) WithTracking(int) telegraf.TrackingAccumulator { return nil }
 
+// assertValue ensures the given value exists for the given timestamp, measurement, field and tag.
+// If not, it fails the test.
+func (sa *shallowAcc) assertValue(t *testing.T, ts time.Time, measurement, field, tag string, val any) { //nolint:unparam
+	t.Helper()
+
+	atT, ok := sa.fields[ts]
+	if !ok {
+		t.Fatalf("No measurement found at %s", ts)
+	}
+
+	fields, ok := atT[measurement]
+	if !ok {
+		t.Fatalf("No measurement %q found", measurement)
+	}
+
+	v, ok := fields[field+"__"+tag]
+	if !ok {
+		t.Fatalf("No field %q with tag %q found", field, tag)
+	}
+
+	// Special case for NaN comparison
+	vFloat, okV := v.(float64)
+	valFloat, okVal := val.(float64)
+
+	if okV && okVal && value.IsStaleNaN(vFloat) && value.IsStaleNaN(valFloat) {
+		return
+	}
+
+	if v != val {
+		t.Fatalf("Expected value %#v, got %#v", val, v)
+	}
+}
+
+// assertNoValue ensures no measurement has been done for the given TS.
+// If it happens to be the case, it fails the test.
+func (sa *shallowAcc) assertNoValue(t *testing.T, ts time.Time, measurement, field, tag string) {
+	t.Helper()
+
+	atT, ok := sa.fields[ts]
+	if !ok {
+		return
+	}
+
+	fields, ok := atT[measurement]
+	if !ok {
+		return
+	}
+
+	_, ok = fields[field+"__"+tag]
+	if ok {
+		t.Fatalf("Found unexpected value at %s, for measurement %q / field %q / tag %q", ts, measurement, field, tag)
+	}
+}
+
 type shallowInput struct {
 	measurement string
 	tag         string
 	fields      map[string]float64
 	annotations types.MetricAnnotations
+	retErr      error
 }
 
 func (s shallowInput) Gather(acc telegraf.Accumulator) error {
-	if len(s.fields) == 0 {
-		return nil // Nothing to gather
+	if len(s.fields) == 0 { // Nothing to gather
+		return s.retErr
 	}
 
 	fields := make(map[string]any, len(s.fields))
@@ -192,7 +248,7 @@ func (s shallowInput) Gather(acc telegraf.Accumulator) error {
 		acc.AddFields(s.measurement, fields, tags)
 	}
 
-	return nil
+	return s.retErr
 }
 
 func (s shallowInput) SampleConfig() string {
@@ -433,4 +489,79 @@ func TestMarkInactiveWhileDroppingInput(t *testing.T) {
 	}
 
 	t.Log("The goroutine did not panic on a nil map assignment - success !")
+}
+
+func TestMarkInactiveWithErrors(t *testing.T) {
+	acc := shallowAcc{fields: make(map[time.Time]msmsa), annotations: make(map[time.Time]map[string]types.MetricAnnotations)}
+	c := New(&acc, gate.New(0))
+
+	input := shallowInput{
+		measurement: "i1",
+		tag:         "i1",
+		fields:      map[string]float64{"f1": 1, "f2": 0.2, "f3": 333},
+	}
+
+	id, err := c.AddInput(&input, "input")
+	if err != nil {
+		t.Fatal("Failed to add input to collector:", err)
+	}
+
+	t0 := time.Now().Round(time.Second)
+	t1 := t0.Add(10 * time.Second)
+	t2 := t1.Add(keepMetricBecauseOfGatherErrorGraceDelay)
+
+	c.RunGather(context.Background(), t0)
+
+	acc.assertValue(t, t0, "i1", "f1", `name="i1"`, 1.)
+
+	expectedCache := map[int]map[string]map[string]map[string]fieldCache{
+		id: {
+			"i1": {
+				"f1": {`name="i1"`: fieldCache{}},
+				"f2": {`name="i1"`: fieldCache{}},
+				"f3": {`name="i1"`: fieldCache{}},
+			},
+		},
+	}
+	if diff := cmp.Diff(expectedCache, c.fieldCaches, cmpopts.IgnoreTypes(fieldCache{})); diff != "" {
+		t.Fatalf("Unexpected field cache state at t0:\n%v", diff)
+	}
+
+	input.fields = map[string]float64{"f2": 0.22, "f3": 33} // no value for f1
+	input.retErr = io.ErrUnexpectedEOF                      // perhaps because of this error
+
+	c.RunGather(context.Background(), t1)
+
+	// We expected no value for f1, because the input has returned an error (and thus no value),
+	// but no NaN neither since we're within the grace period.
+	acc.assertNoValue(t, t1, "i1", "f1", `name="i1"`)
+	acc.assertValue(t, t1, "i1", "f2", `name="i1"`, 0.22)
+
+	// We expected the cache to still be the same, since t1 is within the grace period.
+	if diff := cmp.Diff(expectedCache, c.fieldCaches, cmpopts.IgnoreTypes(fieldCache{})); diff != "" {
+		t.Fatalf("Unexpected field cache state at t1:\n%v", diff)
+	}
+
+	input.fields = map[string]float64{"f3": 3, "f4": 4.4} // no more value for f2 neither, a new metric appears
+	// and the error is still present
+
+	c.RunGather(context.Background(), t2)
+
+	// The grace period has ended, the metric is now marked as inactive -> StaleNaN.
+	acc.assertValue(t, t2, "i1", "f1", `name="i1"`, math.Float64frombits(value.StaleNaN))
+	acc.assertValue(t, t2, "i1", "f2", `name="i1"`, math.Float64frombits(value.StaleNaN))
+	acc.assertValue(t, t2, "i1", "f3", `name="i1"`, 3.)
+	acc.assertValue(t, t2, "i1", "f4", `name="i1"`, 4.4)
+
+	expectedCache = map[int]map[string]map[string]map[string]fieldCache{
+		id: {
+			"i1": {
+				"f3": {`name="i1"`: fieldCache{}},
+				"f4": {`name="i1"`: fieldCache{}},
+			},
+		},
+	}
+	if diff := cmp.Diff(expectedCache, c.fieldCaches, cmpopts.IgnoreTypes(fieldCache{})); diff != "" {
+		t.Fatalf("Unexpected field cache state at t2:\n%v", diff)
+	}
 }
