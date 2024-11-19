@@ -51,4 +51,4 @@ func (md *MockDiscoverer) LastUpdate() time.Time {
 }
 
 // RemoveIfNonRunning implements PersistentDiscoverer.
-func (md MockDiscoverer) RemoveIfNonRunning(context.Context, []Service) {}
+func (md *MockDiscoverer) RemoveIfNonRunning(context.Context, []Service) {}

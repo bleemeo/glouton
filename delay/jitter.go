@@ -23,10 +23,10 @@ import (
 )
 
 // Exponential return an exponential delay. N should be the number of successive iteration/errors (counting from 1).
-// The value returned is "base * powerFactor ^ n". The value is capped at max.
+// The value returned is "base * powerFactor ^ n". The value is capped at maxDur.
 // powerFactor should be > 1 (or the delay will be smaller and smaller).
 // Exponential works at seconds resolution. Base should be > of few seconds.
-func Exponential(base time.Duration, powerFactor float64, n int, max time.Duration) time.Duration { //nolint: predeclared
+func Exponential(base time.Duration, powerFactor float64, n int, maxDur time.Duration) time.Duration {
 	n--
 	if n < 0 {
 		n = 0
@@ -35,15 +35,14 @@ func Exponential(base time.Duration, powerFactor float64, n int, max time.Durati
 	baseSeconds := base.Seconds()
 	seconds := baseSeconds * math.Pow(powerFactor, float64(n))
 
-	if seconds > max.Seconds() {
-		seconds = max.Seconds()
+	if seconds > maxDur.Seconds() {
+		seconds = maxDur.Seconds()
 	}
 
 	return time.Duration(seconds) * time.Second
 }
 
-// JitterDelay return a number between value * [1-factor; 1+factor[
-// If the valueSecond exceed max, max is used instead of valueSecond.
+// JitterDelay return a number between value * [1-factor; 1+factor[.
 // factor should be less than 1.
 func JitterDelay(baseDelay time.Duration, factor float64) time.Duration {
 	valueSecond := baseDelay.Seconds()

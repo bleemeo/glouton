@@ -34,7 +34,7 @@ func (s *mockStore) PushPoints(_ context.Context, points []types.MetricPoint) {
 	s.points = append(s.points, points...)
 }
 
-func (s mockStore) getByName(name string) []types.MetricPoint {
+func (s *mockStore) getByName(name string) []types.MetricPoint {
 	result := make([]types.MetricPoint, 0, 1)
 
 	for _, p := range s.points {

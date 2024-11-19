@@ -280,7 +280,7 @@ func (b *bucketStats) addStats(run smartExecution) {
 	}
 }
 
-func (b bucketStats) MarshalJSON() ([]byte, error) {
+func (b *bucketStats) MarshalJSON() ([]byte, error) {
 	state := struct {
 		ExecutionCount         int
 		TotalExecutionDuration string
