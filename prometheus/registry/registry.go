@@ -29,6 +29,7 @@ import (
 	"maps"
 	"net/http"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -65,6 +66,7 @@ const (
 	baseJitter                  = 0
 	maxLastScrape               = 10
 	gloutonMinimalInterval      = 10 * time.Second
+	scrapeErrLogMinInterval     = 5 * time.Minute
 )
 
 // RelabelHook is a hook called just before applying relabeling.
@@ -282,6 +284,7 @@ type scrapeRun struct {
 	ScrapeAt           time.Time
 	ScrapeDuration     time.Duration
 	ScrapedPointsCount int
+	Error              error
 }
 
 func (s scrapeRun) MarshalJSON() ([]byte, error) {
@@ -289,7 +292,16 @@ func (s scrapeRun) MarshalJSON() ([]byte, error) {
 		ScrapeAt           time.Time
 		ScrapeDuration     string
 		ScrapedPointsCount int
-	}{s.ScrapeAt, s.ScrapeDuration.String(), s.ScrapedPointsCount}
+		Error              string `json:",omitempty"`
+	}{
+		ScrapeAt:           s.ScrapeAt,
+		ScrapeDuration:     s.ScrapeDuration.String(),
+		ScrapedPointsCount: s.ScrapedPointsCount,
+	}
+
+	if s.Error != nil {
+		tmp.Error = s.Error.Error()
+	}
 
 	return json.Marshal(tmp)
 }
@@ -311,9 +323,10 @@ type registration struct {
 	lastRelabelHookRetry time.Time
 	hookMinimalInterval  time.Duration
 	interval             time.Duration
+	lastErrorLogAt       time.Time
 }
 
-// RunNow will trigger an run of the scrapeLoop. If the registry isn't running,
+// RunNow will trigger a run of the scrapeLoop. If the registry isn't running,
 // the run will be delayed until the registry is started. In other case it will be run
 // as quickly as possible.
 // Only registration using the periodic gather are handler, other are ignored.
@@ -625,11 +638,11 @@ func (r *Registry) RegisterGatherer(opt RegistrationOption, gatherer prometheus.
 //   - support for "GathererWithScheduleUpdate-like" on RegisterAppenderCallback (needed by service check, when they trigger check on TCP close)
 //   - support for conversion of all annotation to meta-label and vise-vera (model/convert.go)
 //   - support for TTL ?
-func (r *Registry) RegisterPushPointsCallback(opt RegistrationOption, f func(context.Context, time.Time)) (int, error) {
+func (r *Registry) RegisterPushPointsCallback(opt RegistrationOption, f pushGatherFunction) (int, error) {
 	return r.registerPushPointsCallback(opt, f)
 }
 
-func (r *Registry) registerPushPointsCallback(opt RegistrationOption, f func(context.Context, time.Time)) (int, error) {
+func (r *Registry) registerPushPointsCallback(opt RegistrationOption, f pushGatherFunction) (int, error) {
 	if !opt.HonorTimestamp {
 		return 0, fmt.Errorf("%w: PushPoint will always HonorTimestamp", errors.ErrUnsupported)
 	}
@@ -645,7 +658,7 @@ func (r *Registry) registerPushPointsCallback(opt RegistrationOption, f func(con
 		option:  opt,
 		regType: registrationPushPointsCallback,
 	}
-	r.setupGatherer(reg, pushGatherer{fun: f})
+	r.setupGatherer(reg, &pushGatherer{fun: f})
 
 	return r.addRegistration(reg)
 }
@@ -932,14 +945,11 @@ func (r *Registry) diagnosticScrapeLoop(ctx context.Context, archive types.Archi
 	for id, reg := range r.registrations {
 		reg.l.Lock()
 
-		copySlice := make([]scrapeRun, len(reg.lastScrapes))
-		copy(copySlice, reg.lastScrapes)
-
 		info := loopInfo{
 			ID:                  id,
 			Description:         reg.option.Description,
 			AddedAt:             reg.addedAt,
-			LastScrape:          copySlice,
+			LastScrape:          slices.Clone(reg.lastScrapes),
 			RegInterval:         reg.interval.String(),
 			HookMinimalInterval: reg.hookMinimalInterval.String(),
 			Option:              reg.option,
@@ -1570,18 +1580,26 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, loopCtx context.Context, 
 		}
 	}
 
+	reg.l.Lock()
+
 	if err != nil {
+		logLvl := 2
+
+		if time.Since(reg.lastErrorLogAt) >= scrapeErrLogMinInterval {
+			logLvl = 1
+			reg.lastErrorLogAt = time.Now().Truncate(time.Second)
+		}
+
 		if len(mfs) == 0 {
-			logger.V(1).Printf("Gather of metrics failed on %s: %v", reg.option.Description, err)
+			logger.V(logLvl).Printf("Gather of metrics failed on %s: %v", reg.option.Description, err)
 		} else {
-			// When there is points, log at lower level because we known that some gatherer always
-			// fail on some setup. node_exporter may sent "node_rapl_package_joules_total" duplicated.
-			logger.V(1).Printf("Gather of metrics failed on %s, some metrics may be missing: %v", reg.option.Description, err)
+			// When there is points, log at lower level because we know that some gatherers always
+			// fail on some setup. Also, node_exporter may send "node_rapl_package_joules_total" duplicated.
+			logger.V(logLvl).Printf("Gather of metrics failed on %s, some metrics may be missing: %v", reg.option.Description, err)
 		}
 	}
 
-	reg.l.Lock()
-	reg.lastScrapes = append(reg.lastScrapes, scrapeRun{ScrapeAt: t0, ScrapeDuration: duration, ScrapedPointsCount: len(mfs)})
+	reg.lastScrapes = append(reg.lastScrapes, scrapeRun{ScrapeAt: t0, ScrapeDuration: duration, ScrapedPointsCount: len(mfs), Error: err})
 
 	if len(reg.lastScrapes) > maxLastScrape {
 		reg.lastScrapes = reg.lastScrapes[len(reg.lastScrapes)-maxLastScrape:]

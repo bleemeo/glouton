@@ -784,7 +784,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	a.metricFilter = bleemeoFilter
 
-	a.store = store.New(3*time.Minute, 2*time.Hour)
+	a.store = store.New("agent store", 3*time.Minute, 2*time.Hour)
 
 	bleemeoFilteredStore := store.NewFilteredStore(
 		a.store,

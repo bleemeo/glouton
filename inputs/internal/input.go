@@ -17,6 +17,8 @@
 package internal
 
 import (
+	"errors"
+
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/logger"
 
@@ -41,14 +43,12 @@ func (i *Input) Gather(acc telegraf.Accumulator) error {
 	i.Accumulator.PrepareGather()
 
 	err := i.Input.Gather(&i.Accumulator)
-	if err != nil {
-		// Use the telegraf logger which limits log spamming.
-		i.logger.Error(err)
 
-		return err
+	if errAcc, isErrAcc := acc.(inputs.ErrorAccumulator); isErrAcc {
+		err = errors.Join(append(errAcc.Errors(), err)...)
 	}
 
-	return nil
+	return err
 }
 
 // Start the ServiceInput.  The Accumulator may be retained and used until

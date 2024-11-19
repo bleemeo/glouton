@@ -1427,15 +1427,21 @@ func (s *Synchronizer) metricDeactivate(ctx context.Context, apiClient types.Met
 		key := v.LabelsText
 		metric, ok := localByMetricKey[key]
 
+		deactivateReason := "not found in local store, searched key: " + key
+
 		if ok && !duplicatedKey[key] {
 			duplicatedKey[key] = true
+
+			deactivateReason = "found in local store, but last point received is too old: " + metric.LastPointReceivedAt().String()
 
 			if s.now().Sub(metric.LastPointReceivedAt()) < 70*time.Minute {
 				continue
 			}
+		} else if ok {
+			deactivateReason = "found in local store, but was duplicate of another identical metric"
 		}
 
-		logger.V(2).Printf("Mark inactive the metric %v (uuid %s)", key, v.ID)
+		logger.V(2).Printf("Mark inactive the metric %v (uuid %s). Reason: %s", key, v.ID, deactivateReason)
 
 		err := apiClient.SetMetricActive(ctx, v.ID, false)
 		if err != nil && IsNotFound(err) {

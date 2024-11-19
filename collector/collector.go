@@ -35,6 +35,8 @@ import (
 	"github.com/prometheus/prometheus/util/gate"
 )
 
+const keepMetricBecauseOfGatherErrorGraceDelay = 5 * time.Minute
+
 var errTooManyInputs = errors.New("too many inputs in the collectors. Unable to find new slot")
 
 // Collector implement running Gather on inputs every fixed time interval.
@@ -45,8 +47,9 @@ type Collector struct {
 	updateDelayC chan interface{}
 	l            sync.Mutex
 	// map inputID -> measurement -> field name -> tags key/value -> fieldCache
-	fieldCaches      map[int]map[string]map[string]map[string]fieldCache
-	secretInputsGate *gate.Gate
+	fieldCaches          map[int]map[string]map[string]map[string]fieldCache
+	secretInputsGate     *gate.Gate
+	lastSuccessfulGather map[int]time.Time
 }
 
 // New returns a Collector with default option
@@ -55,12 +58,13 @@ type Collector struct {
 // 10 seconds.
 func New(acc telegraf.Accumulator, secretInputsGate *gate.Gate) *Collector {
 	c := &Collector{
-		acc:              acc,
-		inputs:           make(map[int]telegraf.Input),
-		currentDelay:     10 * time.Second,
-		updateDelayC:     make(chan interface{}),
-		fieldCaches:      make(map[int]map[string]map[string]map[string]fieldCache),
-		secretInputsGate: secretInputsGate,
+		acc:                  acc,
+		inputs:               make(map[int]telegraf.Input),
+		currentDelay:         10 * time.Second,
+		updateDelayC:         make(chan interface{}),
+		fieldCaches:          make(map[int]map[string]map[string]map[string]fieldCache),
+		secretInputsGate:     secretInputsGate,
+		lastSuccessfulGather: make(map[int]time.Time),
 	}
 
 	return c
@@ -119,6 +123,7 @@ func (c *Collector) RemoveInput(id int) {
 
 	delete(c.inputs, id)
 	delete(c.fieldCaches, id)
+	delete(c.lastSuccessfulGather, id)
 }
 
 // Close stops all inputs.
@@ -134,8 +139,14 @@ func (c *Collector) Close() {
 }
 
 // RunGather run one gather and send metric through the accumulator.
-func (c *Collector) RunGather(ctx context.Context, t0 time.Time) {
+func (c *Collector) RunGather(ctx context.Context, t0 time.Time) error {
 	c.runOnce(ctx, t0)
+
+	if errAcc, isErrAcc := c.acc.(inputs.ErrorAccumulator); isErrAcc {
+		return errors.Join(errAcc.Errors()...)
+	}
+
+	return nil
 }
 
 func (c *Collector) runOnce(ctx context.Context, t0 time.Time) {
@@ -150,6 +161,7 @@ func (c *Collector) runOnce(ctx context.Context, t0 time.Time) {
 
 	for id, input := range c.inputs {
 		fieldCaches := c.fieldCaches[id]
+		lastSuccess, hasSucceeded := c.lastSuccessfulGather[id]
 
 		wg.Add(1)
 
@@ -172,10 +184,23 @@ func (c *Collector) runOnce(ctx context.Context, t0 time.Time) {
 				latestValues:         make(map[string]map[string]map[string]fieldCache),
 				fieldCaches:          fieldCaches,
 			}
-			// Errors are already logged by the input.
-			_ = input.Gather(ima)
 
-			ima.deactivateUnseenMetrics()
+			var skipDeactivation bool
+
+			// Errors are already logged/stored by the input.
+			err := input.Gather(ima)
+			if err != nil {
+				if !hasSucceeded || t0.Sub(lastSuccess) < keepMetricBecauseOfGatherErrorGraceDelay {
+					// Allow the input not to send metrics if it has been in error for a few minutes.
+					skipDeactivation = true
+				}
+			}
+
+			ima.deactivateUnseenMetrics(skipDeactivation)
+
+			c.l.Lock()
+			c.lastSuccessfulGather[id] = t0
+			c.l.Unlock()
 		}()
 	}
 
@@ -199,42 +224,44 @@ type inactiveMarkerAccumulator struct {
 	l            sync.Mutex
 }
 
-func (ima *inactiveMarkerAccumulator) deactivateUnseenMetrics() {
+func (ima *inactiveMarkerAccumulator) deactivateUnseenMetrics(skipDeactivation bool) {
 	ima.l.Lock()
 	defer ima.l.Unlock()
 
-	// Check if a metric has been seen for each measurement, field and tags "pair".
-	for oldMeasurement, oldFields := range ima.fieldCaches {
-		for oldField, oldTags := range oldFields {
-			for oldTag, cache := range oldTags {
-				if _, ok := ima.latestValues[oldMeasurement]; ok {
-					if _, ok = ima.latestValues[oldMeasurement][oldField]; ok {
-						if _, ok = ima.latestValues[oldMeasurement][oldField][oldTag]; ok {
-							continue // This metric has been seen, everything's all right
+	if !skipDeactivation {
+		// Check if a metric has been seen for each measurement, field and tags "pair".
+		for oldMeasurement, oldFields := range ima.fieldCaches {
+			for oldField, oldTags := range oldFields {
+				for oldTag, cache := range oldTags {
+					if _, ok := ima.latestValues[oldMeasurement]; ok {
+						if _, ok = ima.latestValues[oldMeasurement][oldField]; ok {
+							if _, ok = ima.latestValues[oldMeasurement][oldField][oldTag]; ok {
+								continue // This metric has been seen, everything's all right
+							}
 						}
 					}
-				}
-				// Publish the StaleNaN value to mark the metric as inactive.
-				fieldsMap := map[string]any{
-					// We need to convert the StaleNaN value to a float this way to avoid
-					// the conversion float64(value.StaleNaN) which gives an unexpected result.
-					// This would have resulted in the value not being handled as StaleNaN later.
-					oldField: math.Float64frombits(value.StaleNaN),
-				}
-				tagsMap := types.TextToLabels(oldTag)
+					// Publish the StaleNaN value to mark the metric as inactive.
+					fieldsMap := map[string]any{
+						// We need to convert the StaleNaN value to a float this way to avoid
+						// the conversion float64(value.StaleNaN) which gives an unexpected result.
+						// This would have resulted in the value not being handled as StaleNaN later.
+						oldField: math.Float64frombits(value.StaleNaN),
+					}
+					tagsMap := types.TextToLabels(oldTag)
 
-				if cache.callback != nil {
-					cache.callback(ima.FixedTimeAccumulator, oldMeasurement, fieldsMap, tagsMap, ima.Time)
-				} else {
-					ima.FixedTimeAccumulator.AddFieldsWithAnnotations(oldMeasurement, fieldsMap, tagsMap, cache.annotations, ima.Time)
+					if cache.callback != nil {
+						cache.callback(ima.FixedTimeAccumulator, oldMeasurement, fieldsMap, tagsMap, ima.Time)
+					} else {
+						ima.FixedTimeAccumulator.AddFieldsWithAnnotations(oldMeasurement, fieldsMap, tagsMap, cache.annotations, ima.Time)
+					}
 				}
 			}
 		}
-	}
 
-	// Deleting all entries to prepare for the update with the latest metrics
-	for k := range ima.fieldCaches {
-		delete(ima.fieldCaches, k)
+		// Deleting all entries to prepare for the update with the latest metrics
+		for k := range ima.fieldCaches {
+			delete(ima.fieldCaches, k)
+		}
 	}
 
 	// Update the cache with the metrics that are existing right now;

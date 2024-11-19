@@ -448,7 +448,7 @@ func (c *Containerd) Exec(ctx context.Context, containerID string, cmd []string)
 		return nil, fmt.Errorf("container %w: %s", errNotFound, containerID)
 	}
 
-	// general worklow for exec is inspired by ctr tasks exec command.
+	// general workflow for exec is inspired by ctr tasks exec command.
 
 	ctx = namespaces.WithNamespace(ctx, cont.namespace)
 
@@ -792,6 +792,12 @@ func (c *Containerd) updateContainers(ctx context.Context) error {
 	}
 
 	if len(deletedContainerID) > 0 && c.DeletedContainersCallback != nil {
+		logger.V(2).Printf(
+			"ContainerD runtime request to delete %d containers (previous container count was %d, new containers count is %d)",
+			len(deletedContainerID),
+			len(c.containers),
+			len(containers),
+		)
 		c.DeletedContainersCallback(deletedContainerID)
 	}
 

@@ -18,6 +18,7 @@ package registry
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -70,7 +71,7 @@ func (i *inputGatherer) GatherWithState(ctx context.Context, state GatherState) 
 
 		i.l.Lock()
 		i.lastPoints = i.buffer.Points()
-		i.lastErr = err
+		i.lastErr = errors.Join(append(acc.Errors(), err)...)
 		i.l.Unlock()
 	}
 

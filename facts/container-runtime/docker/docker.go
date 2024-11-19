@@ -701,6 +701,12 @@ func (d *Docker) updateContainers(ctx context.Context) error {
 	}
 
 	if len(deletedContainerID) > 0 && d.DeletedContainersCallback != nil {
+		logger.V(2).Printf(
+			"Docker runtime request to delete %d containers (previous container count was %d, new containers count is %d)",
+			len(deletedContainerID),
+			len(d.containers),
+			len(containers),
+		)
 		d.DeletedContainersCallback(deletedContainerID)
 	}
 

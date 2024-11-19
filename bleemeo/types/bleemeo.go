@@ -28,7 +28,7 @@ import (
 	"github.com/bleemeo/glouton/threshold"
 )
 
-type NullTime time.Time
+type NullTime time.Time //nolint: recvcheck
 
 // MarshalJSON marshall the time.Time as usual BUT zero time is sent as "null".
 func (t NullTime) MarshalJSON() ([]byte, error) {

@@ -21,6 +21,8 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
+	"sync"
 	"time"
 
 	"github.com/bleemeo/glouton/logger"
@@ -41,10 +43,18 @@ type AnnotationAccumulator interface {
 	AddError(err error)
 }
 
+type ErrorAccumulator interface {
+	Errors() []error
+}
+
 // Accumulator implement telegraf.Accumulator (+AddFieldsWithAnnotations) and emit the metric points.
+// Gathering errors can be added and retrieved concurrently, using AddError() and Errors().
 type Accumulator struct {
 	Pusher  types.PointPusher
 	Context context.Context //nolint:containedctx
+
+	l    sync.Mutex
+	errs []error
 }
 
 // AddFields adds a metric to the accumulator with the given measurement
@@ -98,9 +108,17 @@ func (a *Accumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator 
 
 // AddError add an error to the Accumulator.
 func (a *Accumulator) AddError(err error) {
-	if err != nil {
-		logger.V(1).Printf("Add error called with: %v", err)
-	}
+	a.l.Lock()
+	defer a.l.Unlock()
+
+	a.errs = append(a.errs, err)
+}
+
+func (a *Accumulator) Errors() []error {
+	a.l.Lock()
+	defer a.l.Unlock()
+
+	return slices.Clone(a.errs)
 }
 
 // AddFieldsWithAnnotations have extra fields for the annotations attached to the measurement and fields
@@ -255,9 +273,7 @@ func (a FixedTimeAccumulator) WithTracking(maxTracked int) telegraf.TrackingAccu
 
 // AddError add an error to the Accumulator.
 func (a FixedTimeAccumulator) AddError(err error) {
-	if err != nil {
-		logger.V(1).Printf("Add error called with: %v", err)
-	}
+	a.Acc.AddError(err)
 }
 
 // AddFieldsWithAnnotations have extra fields for the annotations attached to the measurement and fields

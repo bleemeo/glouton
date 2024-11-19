@@ -97,14 +97,12 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 
 	// Do the gather only in the scrape loop and reuse the last points on /metrics.
 	if state.FromScrapeLoop {
-		errAcc := errorAccumulator{
-			Accumulator: &inputs.Accumulator{
-				// Gather metric points in the buffer.
-				Pusher:  gatherer.buffer,
-				Context: ctx,
-			},
+		acc := inputs.Accumulator{
+			// Gather metric points in the buffer.
+			Pusher:  gatherer.buffer,
+			Context: ctx,
 		}
-		gatherer.acc.Accumulator = &errAcc
+		gatherer.acc.Accumulator = &acc
 
 		retAcc := &retainAccumulator{
 			Accumulator: gatherer.acc,
@@ -130,7 +128,7 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 		}
 
 		errAddMetrics := gatherer.collectAdditionalMetrics(ctx, state, gatherer.acc, retAcc.retainedPerMeasurement)
-		allErrs := errors.Join(filterErrors(append(errAcc.errs, err, errAddMetrics))...)
+		allErrs := errors.Join(filterErrors(append(acc.Errors(), err, errAddMetrics))...)
 
 		gatherer.lastPoints = gatherer.buffer.Points()
 		gatherer.lastErr = allErrs
@@ -307,18 +305,6 @@ func newGatherer(ctx context.Context, kind gatherKind, cfg *config.VSphere, inpu
 	gatherer.createEndpoint(ctx, input)
 
 	return gatherer, nil
-}
-
-// errorAccumulator embeds a real accumulator while collecting
-// all the errors given to it, instead of logging them.
-type errorAccumulator struct {
-	telegraf.Accumulator
-
-	errs []error
-}
-
-func (errAcc *errorAccumulator) AddError(err error) {
-	errAcc.errs = append(errAcc.errs, err)
 }
 
 type addedField struct {

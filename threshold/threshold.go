@@ -154,7 +154,7 @@ func (r *Registry) SetUnits(units map[string]Unit) {
 	logger.V(2).Printf("Units contains %d definitions", len(units))
 }
 
-type statusState struct {
+type statusState struct { //nolint: recvcheck
 	CurrentStatus types.Status
 	CriticalSince time.Time
 	WarningSince  time.Time
