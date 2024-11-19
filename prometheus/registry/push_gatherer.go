@@ -23,24 +23,28 @@ import (
 	dto "github.com/prometheus/client_model/go"
 )
 
-// pushGatherer call a function an nothing more. It also only call the function
-// (a pushPoint callback) when state specify "FromScrapeLoop".
+type pushGatherFunction func(context.Context, time.Time) error
+
+// pushGatherer calls a function and nothing more.
+// It only calls the function (a pushPoint callback)
+// when the given state specifies "FromScrapeLoop".
 type pushGatherer struct {
-	fun func(context.Context, time.Time)
+	fun     pushGatherFunction
+	lastErr error
 }
 
-// Gather implements prometheus.Gatherer .
-func (g pushGatherer) Gather() ([]*dto.MetricFamily, error) {
+// Gather implements prometheus.Gatherer.
+func (g *pushGatherer) Gather() ([]*dto.MetricFamily, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultGatherTimeout)
 	defer cancel()
 
 	return g.GatherWithState(ctx, GatherState{T0: time.Now()})
 }
 
-func (g pushGatherer) GatherWithState(ctx context.Context, state GatherState) ([]*dto.MetricFamily, error) {
+func (g *pushGatherer) GatherWithState(ctx context.Context, state GatherState) ([]*dto.MetricFamily, error) {
 	if state.FromScrapeLoop {
-		g.fun(ctx, state.T0)
+		g.lastErr = g.fun(ctx, state.T0)
 	}
 
-	return nil, nil
+	return nil, g.lastErr
 }

@@ -709,14 +709,14 @@ type realClient struct {
 	useLocalAPI bool
 }
 
-func (cl realClient) GetNode(ctx context.Context, nodeName string) (*corev1.Node, error) {
+func (cl *realClient) GetNode(ctx context.Context, nodeName string) (*corev1.Node, error) {
 	opts := metav1.GetOptions{}
 	node, err := cl.client.CoreV1().Nodes().Get(ctx, nodeName, opts)
 
 	return node, err
 }
 
-func (cl realClient) GetNodes(ctx context.Context) ([]corev1.Node, error) {
+func (cl *realClient) GetNodes(ctx context.Context) ([]corev1.Node, error) {
 	nodes, err := cl.client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, err
@@ -725,7 +725,7 @@ func (cl realClient) GetNodes(ctx context.Context) ([]corev1.Node, error) {
 	return nodes.Items, nil
 }
 
-func (cl realClient) GetPODs(ctx context.Context, nodeName string) ([]corev1.Pod, error) {
+func (cl *realClient) GetPODs(ctx context.Context, nodeName string) ([]corev1.Pod, error) {
 	opts := metav1.ListOptions{}
 
 	if nodeName != "" {
@@ -740,7 +740,7 @@ func (cl realClient) GetPODs(ctx context.Context, nodeName string) ([]corev1.Pod
 	return list.Items, nil
 }
 
-func (cl realClient) GetNamespaces(ctx context.Context) ([]corev1.Namespace, error) {
+func (cl *realClient) GetNamespaces(ctx context.Context) ([]corev1.Namespace, error) {
 	ns, err := cl.client.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, err
@@ -749,7 +749,7 @@ func (cl realClient) GetNamespaces(ctx context.Context) ([]corev1.Namespace, err
 	return ns.Items, nil
 }
 
-func (cl realClient) GetReplicasets(ctx context.Context) ([]appsv1.ReplicaSet, error) {
+func (cl *realClient) GetReplicasets(ctx context.Context) ([]appsv1.ReplicaSet, error) {
 	rs, err := cl.client.AppsV1().ReplicaSets("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, err
@@ -758,7 +758,7 @@ func (cl realClient) GetReplicasets(ctx context.Context) ([]appsv1.ReplicaSet, e
 	return rs.Items, nil
 }
 
-func (cl realClient) GetServerVersion(ctx context.Context) (*version.Info, error) {
+func (cl *realClient) GetServerVersion(ctx context.Context) (*version.Info, error) {
 	// This is cl.client.ServerVersion() but with a context.
 	body, err := cl.client.RESTClient().Get().AbsPath("/version").Do(ctx).Raw()
 	if err != nil {
@@ -775,11 +775,11 @@ func (cl realClient) GetServerVersion(ctx context.Context) (*version.Info, error
 	return &info, nil
 }
 
-func (cl realClient) IsUsingLocalAPI() bool {
+func (cl *realClient) IsUsingLocalAPI() bool {
 	return cl.useLocalAPI
 }
 
-func (cl realClient) Config() *rest.Config {
+func (cl *realClient) Config() *rest.Config {
 	return cl.config
 }
 
@@ -823,7 +823,7 @@ func openConnection(ctx context.Context, kubeConfig string, localNode string) (k
 		logger.V(1).Printf("Glouton is running on a Kubernetes worker node")
 	}
 
-	return client, nil
+	return &client, nil
 }
 
 func (cl *realClient) switchToLocalAPI(ctx context.Context, localNode string) (bool, error) {

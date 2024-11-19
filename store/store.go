@@ -42,6 +42,7 @@ var errDeletedMetric = errors.New("metric was deleted")
 //
 // See methods GetMetrics and GetMetricPoints.
 type Store struct {
+	displayName          string
 	metrics              map[uint64]metric
 	points               *encodedPoints
 	notifyCallbacks      map[int]func([]types.MetricPoint)
@@ -57,8 +58,9 @@ type Store struct {
 }
 
 // New create a return a store. Store should be Close()d before leaving.
-func New(maxPointsAge time.Duration, maxMetricsAge time.Duration) *Store {
+func New(displayName string, maxPointsAge time.Duration, maxMetricsAge time.Duration) *Store {
 	s := &Store{
+		displayName:     displayName,
 		metrics:         make(map[uint64]metric),
 		points:          newEncodedPoints(),
 		notifyCallbacks: make(map[int]func([]types.MetricPoint)),
@@ -102,7 +104,7 @@ func (s *Store) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter
 
 	s.lock.Unlock()
 
-	fmt.Fprintln(file, "Metric store:")
+	fmt.Fprintf(file, "Metric store with display name %s:\n", s.displayName)
 	fmt.Fprintf(file, "metrics count: %d\n", metricsCount)
 	fmt.Fprintf(file, "points count: %d\n", pointsCount)
 	fmt.Fprintf(file, "points time range: %v to %v\n", oldestTime, youngestTime)
@@ -161,7 +163,7 @@ func (s *Store) AddNotifiee(cb func([]types.MetricPoint)) int {
 
 // RemoveNotifiee remove a callback that was notified
 // Note: RemoveNotifiee should not be called while in the callback.
-// Once RemoveNotifiee() returns, the callbacl won't be called anymore.
+// Once RemoveNotifiee() returns, the callback won't be called anymore.
 func (s *Store) RemoveNotifiee(id int) {
 	s.notifeeLock.Lock()
 	defer s.notifeeLock.Unlock()
@@ -183,6 +185,8 @@ func (s *Store) DropMetrics(labelsList []map[string]string) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
+	previousMetricCount := len(s.metrics)
+
 	for i, m := range s.metrics {
 		for _, l := range labelsList {
 			if reflect.DeepEqual(m.labels, l) {
@@ -191,12 +195,26 @@ func (s *Store) DropMetrics(labelsList []map[string]string) {
 			}
 		}
 	}
+
+	logger.V(2).Printf(
+		"store %s was requested to delete %d metrics. Actually deleted %d metrics, new metrics count is %d",
+		s.displayName,
+		len(labelsList),
+		previousMetricCount-len(s.metrics),
+		len(s.metrics),
+	)
 }
 
 // DropAllMetrics clear the full content of the store.
 func (s *Store) DropAllMetrics() {
 	s.lock.Lock()
 	defer s.lock.Unlock()
+
+	logger.V(2).Printf(
+		"store %s was requested to delete all %d metrics.",
+		s.displayName,
+		len(s.metrics),
+	)
 
 	s.metrics = make(map[uint64]metric)
 	s.points = newEncodedPoints()
@@ -331,7 +349,14 @@ func (s *Store) run(now time.Time) {
 		s.points.dropPoints(metricID)
 	}
 
-	logger.V(2).Printf("Store: deleted %d points. Total point: %d", deletedPoints, totalPoints)
+	logger.V(2).Printf(
+		"Store %s: deleted %d points and %d metrics. Total point: %d, total metric: %d",
+		s.displayName,
+		deletedPoints,
+		len(metricToDelete),
+		totalPoints,
+		len(s.metrics),
+	)
 }
 
 // metricGet will return the metric that exactly match given labels.
@@ -383,7 +408,10 @@ func (s *Store) metricGet(lbls map[string]string, annotations types.MetricAnnota
 func (s *Store) PushPoints(_ context.Context, points []types.MetricPoint) {
 	dedupPoints := make([]types.MetricPoint, 0, len(points))
 
-	var newMetrics []types.LabelsAndAnnotation
+	var (
+		newMetrics        []types.LabelsAndAnnotation
+		deletedByStaleNaN int
+	)
 
 	s.lock.Lock()
 	for _, point := range points {
@@ -398,6 +426,8 @@ func (s *Store) PushPoints(_ context.Context, points []types.MetricPoint) {
 			// Metric is inactive, delete it
 			delete(s.metrics, metric.metricID)
 			s.points.dropPoints(metric.metricID)
+
+			deletedByStaleNaN++
 
 			continue
 		}
@@ -419,6 +449,10 @@ func (s *Store) PushPoints(_ context.Context, points []types.MetricPoint) {
 		}
 
 		dedupPoints = append(dedupPoints, point)
+	}
+
+	if deletedByStaleNaN > 0 {
+		logger.V(2).Printf("store %s deleted %d metrics due to StaleNaN point being received. New metric count: %d", s.displayName, deletedByStaleNaN, len(s.metrics))
 	}
 
 	s.lock.Unlock()

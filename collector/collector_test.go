@@ -19,8 +19,10 @@ package collector
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"math"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -102,6 +104,7 @@ type msmsa map[string]map[string]any
 type shallowAcc struct {
 	fields      map[time.Time]msmsa
 	annotations map[time.Time]map[string]types.MetricAnnotations
+	errs        []error
 	l           sync.Mutex
 }
 
@@ -158,7 +161,19 @@ func (sa *shallowAcc) AddMetric(telegraf.Metric) {}
 
 func (sa *shallowAcc) SetPrecision(time.Duration) {}
 
-func (sa *shallowAcc) AddError(error) {}
+func (sa *shallowAcc) AddError(err error) {
+	sa.l.Lock()
+	defer sa.l.Unlock()
+
+	sa.errs = append(sa.errs, err)
+}
+
+func (sa *shallowAcc) Errors() []error {
+	sa.l.Lock()
+	defer sa.l.Unlock()
+
+	return sa.errs
+}
 
 func (sa *shallowAcc) WithTracking(int) telegraf.TrackingAccumulator { return nil }
 
@@ -255,6 +270,16 @@ func (s shallowInput) SampleConfig() string {
 	return "shallow"
 }
 
+type inputFunc func(telegraf.Accumulator) error
+
+func (iFn inputFunc) SampleConfig() string {
+	return "func"
+}
+
+func (iFn inputFunc) Gather(acc telegraf.Accumulator) error {
+	return iFn(acc)
+}
+
 func TestMarkInactive(t *testing.T) {
 	acc := shallowAcc{fields: make(map[time.Time]msmsa), annotations: make(map[time.Time]map[string]types.MetricAnnotations)}
 	c := New(&acc, gate.New(0))
@@ -282,7 +307,10 @@ func TestMarkInactive(t *testing.T) {
 	t1 := t0.Add(10 * time.Second)
 	t2 := t1.Add(10 * time.Second)
 
-	c.RunGather(context.Background(), t0)
+	err := c.RunGather(context.Background(), t0)
+	if err != nil {
+		t.Fatalf("Unexpected c.RunGather() error: %v", err)
+	}
 
 	expectedCache := map[int]map[string]map[string]map[string]fieldCache{
 		1: {
@@ -318,7 +346,10 @@ func TestMarkInactive(t *testing.T) {
 
 	input2.tag = "I2" // Tags have changed
 
-	c.RunGather(context.Background(), t1)
+	err = c.RunGather(context.Background(), t1)
+	if err != nil {
+		t.Fatalf("Unexpected c.RunGather() error: %v", err)
+	}
 
 	expectedCache = map[int]map[string]map[string]map[string]fieldCache{
 		1: {
@@ -354,7 +385,10 @@ func TestMarkInactive(t *testing.T) {
 
 	input2bis.fields["f"] = 22.22
 
-	c.RunGather(context.Background(), t2)
+	err = c.RunGather(context.Background(), t2)
+	if err != nil {
+		t.Fatalf("Unexpected c.RunGather() error: %v", err)
+	}
 
 	// Since StaleNaN is directly given as a float to avoid conversions with a loss of precision,
 	// expected values should also be represented as floats.
@@ -477,7 +511,10 @@ func TestMarkInactiveWhileDroppingInput(t *testing.T) {
 		wg.Done()
 	}()
 
-	c.RunGather(context.Background(), time.Now())
+	err = c.RunGather(context.Background(), time.Now())
+	if err != nil {
+		t.Fatalf("Unexpected c.RunGather() error: %v", err)
+	}
 
 	wg.Wait() // Wait for the goroutine removing the input to complete
 
@@ -563,5 +600,43 @@ func TestMarkInactiveWithErrors(t *testing.T) {
 	}
 	if diff := cmp.Diff(expectedCache, c.fieldCaches, cmpopts.IgnoreTypes(fieldCache{})); diff != "" {
 		t.Fatalf("Unexpected field cache state at t2:\n%v", diff)
+	}
+}
+
+func TestErrorHandling(t *testing.T) {
+	t.Parallel()
+
+	acc := shallowAcc{fields: make(map[time.Time]msmsa), annotations: make(map[time.Time]map[string]types.MetricAnnotations)}
+	c := New(&acc, gate.New(0))
+
+	inpt1 := inputFunc(func(acc telegraf.Accumulator) error {
+		acc.AddError(os.ErrNotExist)
+
+		return nil
+	})
+	inpt2 := inputFunc(func(telegraf.Accumulator) error {
+		return nil
+	})
+	inpt3 := inputFunc(func(acc telegraf.Accumulator) error {
+		acc.AddError(os.ErrPermission)
+		acc.AddError(io.ErrUnexpectedEOF)
+
+		return nil
+	})
+
+	for i, input := range []telegraf.Input{inpt1, inpt2, inpt3} {
+		_, err := c.AddInput(input, fmt.Sprint("input-", i+1))
+		if err != nil {
+			t.Fatalf("Failed to add input n°%d to collector: %v", i+1, err)
+		}
+	}
+
+	err := c.RunGather(context.Background(), time.Now())
+	expectedErrors := []error{os.ErrPermission, os.ErrPermission, io.ErrUnexpectedEOF}
+
+	for _, expectedErr := range expectedErrors {
+		if !errors.Is(err, expectedErr) {
+			t.Errorf("Expected gather error to contain error %q", expectedErr)
+		}
 	}
 }

@@ -147,7 +147,7 @@ func (helper *syncTestHelper) addMonitorOnAPI(t *testing.T) bleemeoapi.ServicePa
 func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 	t.Helper()
 
-	helper.store = store.New(time.Hour, 2*time.Hour)
+	helper.store = store.New("test store", time.Hour, 2*time.Hour)
 
 	helper.store.InternalSetNowAndRunOnce(helper.Now)
 

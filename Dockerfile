@@ -9,7 +9,7 @@ FROM --platform=$BUILDPLATFORM alpine:3.20 AS build
 ARG TARGETARCH
 
 COPY dist/glouton_linux_amd64_v1/glouton /glouton.amd64
-COPY dist/glouton_linux_arm64/glouton /glouton.arm64
+COPY dist/glouton_linux_arm64_v8.0/glouton /glouton.arm64
 COPY dist/glouton_linux_arm_6/glouton /glouton.arm
 
 RUN cp -p /glouton.$TARGETARCH /glouton
