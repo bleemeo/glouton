@@ -791,7 +791,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	a.metricFilter = mFilter
 
-	a.store = store.New(3*time.Minute, 2*time.Hour)
+	a.store = store.New("agent store", 3*time.Minute, 2*time.Hour)
 
 	filteredStore := store.NewFilteredStore(
 		a.store,

@@ -206,7 +206,7 @@ func TestManager(t *testing.T) {
 }
 
 func storeFromPoints(pts []types.MetricPoint) *store.Store {
-	st := store.New(time.Hour, time.Hour)
+	st := store.New("test store", time.Hour, time.Hour)
 	st.PushPoints(context.Background(), pts)
 
 	return st

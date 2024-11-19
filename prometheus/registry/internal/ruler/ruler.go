@@ -64,7 +64,7 @@ func New(input []*rules.RecordingRule) *SimpleRuler {
 		LookbackDelta:      5 * time.Minute,
 	})
 
-	st := store.New(pointsMaxAge, pointsMaxAge)
+	st := store.New("store for ruler", pointsMaxAge, pointsMaxAge)
 
 	return &SimpleRuler{
 		st:       st,
