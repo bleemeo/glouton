@@ -134,8 +134,14 @@ func (c *Collector) Close() {
 }
 
 // RunGather run one gather and send metric through the accumulator.
-func (c *Collector) RunGather(ctx context.Context, t0 time.Time) {
+func (c *Collector) RunGather(ctx context.Context, t0 time.Time) error {
 	c.runOnce(ctx, t0)
+
+	if errAcc, isErrAcc := c.acc.(inputs.ErrorAccumulator); isErrAcc {
+		return errors.Join(errAcc.Errors()...)
+	}
+
+	return nil
 }
 
 func (c *Collector) runOnce(ctx context.Context, t0 time.Time) {
@@ -172,7 +178,7 @@ func (c *Collector) runOnce(ctx context.Context, t0 time.Time) {
 				latestValues:         make(map[string]map[string]map[string]fieldCache),
 				fieldCaches:          fieldCaches,
 			}
-			// Errors are already logged by the input.
+			// Errors are already logged/stored by the input.
 			_ = input.Gather(ima)
 
 			ima.deactivateUnseenMetrics()
