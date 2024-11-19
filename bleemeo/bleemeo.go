@@ -278,6 +278,8 @@ func (c *Connector) mqttRestarter(ctx context.Context) error {
 	c.l.RUnlock()
 
 	if mqttRestart == nil {
+		cancel() // just a matter of principle
+
 		return nil
 	}
 

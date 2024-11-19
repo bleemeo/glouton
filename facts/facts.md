@@ -56,7 +56,6 @@ kubelet_version
 kubernetes_cluster_name
 kubernetes_version
 memory
-metrics_format
 os_codename
 os_family
 os_name

@@ -50,7 +50,7 @@ const MyRoutes = () => {
                   <Routes>
                     <Route
                       path="/dashboard"
-                      element={<AgentSystemDashboard facts={facts} />}
+                      element={<AgentSystemDashboard />}
                     />
                     <Route
                       path="/docker"

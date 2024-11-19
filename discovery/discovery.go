@@ -71,7 +71,6 @@ type Discovery struct {
 	isCheckIgnored        func(Service) bool
 	isInputIgnored        func(Service) bool
 	isContainerIgnored    func(facts.Container) bool
-	metricFormat          types.MetricFormat
 	processFact           processFact
 	pendingUpdateCond     *sync.Cond
 	pendingUpdate         bool
@@ -109,7 +108,6 @@ func New(
 	isCheckIgnored func(Service) bool,
 	isInputIgnored func(Service) bool,
 	isContainerIgnored func(c facts.Container) bool,
-	metricFormat types.MetricFormat,
 	processFact processFact,
 	absentServiceDeactivationDelay time.Duration,
 ) (*Discovery, prometheus.MultiError) {
@@ -139,7 +137,6 @@ func New(
 		isCheckIgnored:                 isCheckIgnored,
 		isInputIgnored:                 isInputIgnored,
 		isContainerIgnored:             isContainerIgnored,
-		metricFormat:                   metricFormat,
 		processFact:                    processFact,
 		absentServiceDeactivationDelay: absentServiceDeactivationDelay,
 	}

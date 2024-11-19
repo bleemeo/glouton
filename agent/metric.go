@@ -20,7 +20,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -856,12 +858,12 @@ func matchersForScrapperTarget(targetFilterList []string, extraLabels map[string
 	return matchersList
 }
 
-func getDefaultMetrics(format types.MetricFormat, hasSwap bool) []string {
+func getDefaultMetrics(forBleemeo bool, hasSwap bool) []string {
 	res := commonDefaultSystemMetrics
 	res = append(res, inputMetrics...)
 
 	switch {
-	case format == types.MetricFormatBleemeo:
+	case forBleemeo:
 		res = append(res, bleemeoDefaultSystemMetrics...)
 		if hasSwap {
 			res = append(res, bleemeoSwapMetrics...)
@@ -929,15 +931,15 @@ func printSortedMapOfList(file io.Writer, matchersMap map[labels.Matcher][]match
 	}
 }
 
-func newMetricFilter(config config.Config, hasSNMP, hasSwap bool, format types.MetricFormat) (*metricFilter, error) {
-	rawAllowList := config.Metric.AllowMetrics
+func newMetricFilter(metricCfg config.Metric, hasSNMP, hasSwap, forBleemeo bool) (*metricFilter, error) {
+	rawAllowList := metricCfg.AllowMetrics
 
 	if hasSNMP {
 		rawAllowList = append(rawAllowList, snmpMetrics...)
 	}
 
-	if config.Metric.IncludeDefaultMetrics {
-		rawAllowList = append(rawAllowList, getDefaultMetrics(format, hasSwap)...)
+	if metricCfg.IncludeDefaultMetrics {
+		rawAllowList = append(rawAllowList, getDefaultMetrics(forBleemeo, hasSwap)...)
 	}
 
 	var warnings prometheus.MultiError
@@ -947,12 +949,12 @@ func newMetricFilter(config config.Config, hasSNMP, hasSwap bool, format types.M
 		warnings = append(warnings, warn...)
 	}
 
-	staticDenyList, warn := buildMatchersList(config.Metric.DenyMetrics)
+	staticDenyList, warn := buildMatchersList(metricCfg.DenyMetrics)
 	if warn != nil {
 		warnings = append(warnings, warn...)
 	}
 
-	scrapperAllowList, scrapperDenyList := staticScrapperLists(config.Metric.Prometheus.Targets)
+	scrapperAllowList, scrapperDenyList := staticScrapperLists(metricCfg.Prometheus.Targets)
 
 	staticAllowList = append(staticAllowList, scrapperAllowList...)
 	staticDenyList = append(staticDenyList, scrapperDenyList...)
@@ -962,10 +964,71 @@ func newMetricFilter(config config.Config, hasSNMP, hasSwap bool, format types.M
 		staticDenyList:        staticDenyList,
 		allowList:             matchersToMap(staticAllowList),
 		denyList:              matchersToMap(staticDenyList),
-		includeDefaultMetrics: config.Metric.IncludeDefaultMetrics,
+		includeDefaultMetrics: metricCfg.IncludeDefaultMetrics,
 	}
 
 	return filter, warnings.MaybeUnwrap()
+}
+
+// mergeMetricFilters returns a new metricFilter
+// that represents the union of both the given filters.
+// This only works if the deny-list uses equal comparison (no regexp), or is identical.
+func mergeMetricFilters(f1, f2 *metricFilter) *metricFilter {
+	// Merging logic:
+	// - to be allowed, a metric only needs to be present in the allowlist of one of the filters
+	// - to be denied, a metric needs to be present in the deny-list of both the filters
+	var staticDenyList []matcher.Matchers
+
+	for _, m1 := range f1.staticDenyList {
+		for _, m2 := range f2.staticDenyList {
+			if matchersEqual(m1, m2) {
+				staticDenyList = append(staticDenyList, m1)
+
+				break
+			}
+		}
+	}
+
+	denyList := make(map[labels.Matcher][]matcher.Matchers)
+
+	for k1, v := range f1.denyList {
+		if _, found := f2.denyList[k1]; found {
+			denyList[k1] = v
+		}
+	}
+
+	return &metricFilter{
+		includeDefaultMetrics: f1.includeDefaultMetrics || f2.includeDefaultMetrics,
+		staticAllowList:       slices.Concat(f1.staticAllowList, f2.staticAllowList),
+		staticDenyList:        staticDenyList,
+		allowList:             mergeMaps(f1.allowList, f2.allowList),
+		denyList:              denyList,
+	}
+}
+
+func matchersEqual(m1, m2 matcher.Matchers) bool {
+	if len(m1) != len(m2) {
+		return false
+	}
+
+	for i, mt1 := range m1 {
+		mt2 := m2[i]
+		if mt1.Type != mt2.Type || mt1.Name != mt2.Name || mt1.Value != mt2.Value {
+			return false
+		}
+	}
+
+	return true
+}
+
+func mergeMaps[K comparable, V any](m1, m2 map[K]V) map[K]V {
+	result := maps.Clone(m1)
+
+	for k, v := range m2 {
+		result[k] = v
+	}
+
+	return result
 }
 
 func getMatchersList(list map[labels.Matcher][]matcher.Matchers, labelName string) []matcher.Matchers {

@@ -45,7 +45,6 @@ type GlobalOption struct {
 	Store                   Store
 	Discovery               discovery.PersistentDiscoverer
 	MonitorManager          MonitorManager
-	MetricFormat            types.MetricFormat
 	NotifyFirstRegistration func()
 	NotifyHooksUpdate       func()
 	BlackboxScraperName     string

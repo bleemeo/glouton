@@ -71,7 +71,6 @@ type syncTestHelper struct {
 
 	// Following fields are options used by some method
 	SNMP               []*snmp.Target
-	MetricFormat       gloutonTypes.MetricFormat
 	NotifyLabelsUpdate func()
 }
 
@@ -90,7 +89,6 @@ func newHelper(t *testing.T) *syncTestHelper {
 		discovery: &discovery.MockDiscoverer{
 			UpdatedAt: now.Now(),
 		},
-		MetricFormat: gloutonTypes.MetricFormatBleemeo,
 		cfg: config.Config{
 			Logging: config.Logging{
 				Level: "debug",
@@ -169,7 +167,6 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 			Store:                      helper.store,
 			MonitorManager:             mockMonitorManager{},
 			NotifyFirstRegistration:    func() {},
-			MetricFormat:               helper.MetricFormat,
 			Process:                    mockProcessLister{},
 			SNMP:                       helper.SNMP,
 			SNMPOnlineTarget:           func() int { return len(helper.SNMP) },

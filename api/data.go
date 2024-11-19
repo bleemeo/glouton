@@ -203,13 +203,6 @@ func (d *Data) containerInformation(container facts.Container, c *Container) (*C
 			types.LabelName: m,
 		}
 
-		if d.api.MetricFormat == types.MetricFormatPrometheus {
-			metricFilters = map[string]string{
-				types.LabelContainerName: container.ContainerName(),
-				types.LabelName:          m,
-			}
-		}
-
 		metrics, err := d.api.DB.Metrics(metricFilters)
 		if err != nil {
 			logger.V(2).Printf("Can not retrieve metrics: %v", err)

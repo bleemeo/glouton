@@ -33,10 +33,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-const (
-	defaultJitter   = 0
-	defaultInterval = 0
-)
+const defaultJitter = 0
 
 // RegisterExporter will create a new prometheus exporter using the specified parameters and adds it to the registry.
 func RegisterExporter(
@@ -45,7 +42,6 @@ func RegisterExporter(
 	psLister interface{},
 	dynamicDiscovery *discovery.DynamicDiscovery,
 	metricsIgnore, serviceIgnore discovery.IgnoredService,
-	bleemeoFormat bool,
 ) {
 	processExporter := newExporter(psLister, dynamicDiscovery, metricsIgnore, serviceIgnore)
 	if processExporter == nil {
@@ -61,9 +57,8 @@ func RegisterExporter(
 	} else {
 		_, err = reg.RegisterGatherer(
 			registry.RegistrationOption{
-				Description:           "process-exporter metrics",
-				JitterSeed:            defaultJitter,
-				DisablePeriodicGather: bleemeoFormat,
+				Description: "process-exporter metrics",
+				JitterSeed:  defaultJitter,
 			},
 			processGatherer,
 		)
@@ -73,17 +68,15 @@ func RegisterExporter(
 		}
 	}
 
-	if bleemeoFormat {
-		_, err := reg.RegisterAppenderCallback(
-			registry.RegistrationOption{
-				Description: "Bleemeo process-exporter metrics",
-				JitterSeed:  defaultJitter,
-			},
-			&bleemeoExporter{exporter: processExporter},
-		)
-		if err != nil {
-			logger.Printf("unable to add processes metrics: %v", err)
-		}
+	_, err = reg.RegisterAppenderCallback(
+		registry.RegistrationOption{
+			Description: "Bleemeo process-exporter metrics",
+			JitterSeed:  defaultJitter,
+		},
+		&bleemeoExporter{exporter: processExporter},
+	)
+	if err != nil {
+		logger.Printf("unable to add processes metrics: %v", err)
 	}
 }
 

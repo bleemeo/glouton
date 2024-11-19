@@ -74,10 +74,9 @@ func DefaultConfig() Config { //nolint:maintidx
 			MaxCrashReportsCount: 2,
 			UpgradeFile:          "upgrade",
 			AutoUpgradeFile:      "auto_upgrade",
-			MetricsFormat:        "Bleemeo",
 			NodeExporter: NodeExporter{
 				Enable:     true,
-				Collectors: []string{"cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev", "uname"},
+				Collectors: []string{"cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev", "pressure", "stat", "time", "uname"},
 			},
 			WindowsExporter: NodeExporter{
 				Enable:     true,

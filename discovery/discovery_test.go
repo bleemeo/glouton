@@ -29,8 +29,6 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/prometheus/registry"
-	"github.com/bleemeo/glouton/types"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/influxdata/telegraf"
@@ -129,7 +127,7 @@ func (m *mockRegistry) Unregister(id int) bool {
 	return true
 }
 
-func (m *mockRegistry) ExpectationFullified() error {
+func (m *mockRegistry) ExpectationFulfilled() error {
 	if m.err != nil {
 		return m.err
 	}
@@ -274,7 +272,7 @@ func TestDiscoverySingle(t *testing.T) {
 		state := mockState{
 			DiscoveredService: previousService,
 		}
-		disc, _ := New(&MockDiscoverer{result: []Service{c.dynamicResult}}, nil, state, mockContainerInfo{}, nil, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, types.MetricFormatBleemeo, nil, time.Hour)
+		disc, _ := New(&MockDiscoverer{result: []Service{c.dynamicResult}}, nil, state, mockContainerInfo{}, nil, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, nil, time.Hour)
 
 		srv, err := disc.Discovery(ctx, 0)
 		if err != nil {
@@ -864,7 +862,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 	}
 	state := mockState{}
 
-	disc, _ := New(mockDynamic, reg, state, nil, nil, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, types.MetricFormatBleemeo, nil, time.Hour)
+	disc, _ := New(mockDynamic, reg, state, nil, nil, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, nil, time.Hour)
 	disc.containerInfo = docker
 
 	mockDynamic.result = []Service{
@@ -884,7 +882,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 		t.Error(err)
 	}
 
-	if err := reg.ExpectationFullified(); err != nil {
+	if err := reg.ExpectationFulfilled(); err != nil {
 		t.Error(err)
 	}
 
@@ -915,7 +913,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 		t.Error(err)
 	}
 
-	if err := reg.ExpectationFullified(); err != nil {
+	if err := reg.ExpectationFulfilled(); err != nil {
 		t.Error(err)
 	}
 
@@ -951,7 +949,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 		t.Error(err)
 	}
 
-	if err := reg.ExpectationFullified(); err != nil {
+	if err := reg.ExpectationFulfilled(); err != nil {
 		t.Error(err)
 	}
 }

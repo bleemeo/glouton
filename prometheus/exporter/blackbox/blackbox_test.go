@@ -2241,8 +2241,7 @@ func runTest(t *testing.T, test testCase, usePlainTCPOrSSL bool, monitorID, agen
 	}
 
 	id, err := reg.RegisterGatherer(registry.RegistrationOption{
-		DisablePeriodicGather: true,
-		ExtraLabels:           target.Labels,
+		ExtraLabels: target.Labels,
 	}, gatherer)
 	if err != nil {
 		t.Fatal(err)

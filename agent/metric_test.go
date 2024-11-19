@@ -17,9 +17,13 @@
 package agent
 
 import (
+	"bytes"
 	"math/rand"
+	"os"
 	"reflect"
+	"slices"
 	"sort"
+	"sync"
 	"testing"
 	"time"
 
@@ -173,7 +177,7 @@ func Test_Basic_Build(t *testing.T) {
 		},
 	}
 
-	filter, err := newMetricFilter(basicConf, false, true, types.MetricFormatBleemeo)
+	filter, err := newMetricFilter(basicConf.Metric, false, true, true)
 	if err != nil {
 		t.Error(err)
 
@@ -198,7 +202,7 @@ func Test_Basic_Build(t *testing.T) {
 }
 
 func Test_basic_build_default(t *testing.T) {
-	filter, err := newMetricFilter(defaultConf, true, true, types.MetricFormatBleemeo)
+	filter, err := newMetricFilter(defaultConf.Metric, true, true, true)
 	if err != nil {
 		t.Error(err)
 	}
@@ -314,7 +318,7 @@ func Test_basic_build_default(t *testing.T) {
 }
 
 func Test_Basic_FilterPoints(t *testing.T) {
-	filter, err := newMetricFilter(basicConf, false, true, types.MetricFormatBleemeo)
+	filter, err := newMetricFilter(basicConf.Metric, false, true, true)
 	if err != nil {
 		t.Error(err)
 
@@ -376,7 +380,7 @@ func Test_Basic_FilterPoints(t *testing.T) {
 }
 
 func Test_Basic_FilterFamilies(t *testing.T) {
-	filter, err := newMetricFilter(basicConf, false, true, types.MetricFormatBleemeo)
+	filter, err := newMetricFilter(basicConf.Metric, false, true, true)
 	if err != nil {
 		t.Error(err)
 
@@ -544,7 +548,7 @@ func (f *fakeScrapper) GetRegisteredLabels() map[string]map[string]string {
 }
 
 func Test_RebuildDynamicList(t *testing.T) {
-	mf, _ := newMetricFilter(basicConf, false, true, types.MetricFormatBleemeo)
+	mf, _ := newMetricFilter(basicConf.Metric, false, true, true)
 
 	d := fakeScrapper{
 		name: "jobname",
@@ -643,19 +647,17 @@ func Test_RebuildDynamicList(t *testing.T) {
 }
 
 func TestDontDuplicateKeys(t *testing.T) {
-	cfg := config.Config{
-		Metric: config.Metric{
-			IncludeDefaultMetrics: false,
-			AllowMetrics: []string{
-				"cpu*",
-				"cpu*",
-				"pro",
-				"pro",
-			},
+	metricCfg := config.Metric{
+		IncludeDefaultMetrics: false,
+		AllowMetrics: []string{
+			"cpu*",
+			"cpu*",
+			"pro",
+			"pro",
 		},
 	}
 
-	mf, _ := newMetricFilter(cfg, false, true, types.MetricFormatBleemeo)
+	mf, _ := newMetricFilter(metricCfg, false, true, true)
 
 	if len(mf.allowList) != 2 {
 		t.Errorf("Unexpected number of matchers: expected 2, got %d", len(mf.allowList))
@@ -668,7 +670,6 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 		configAllow          []string
 		configDeny           []string
 		configIncludeDefault bool
-		metricFormat         types.MetricFormat
 		metrics              []labels.Labels
 		rulesMatchers        []matcher.Matchers
 		allowNeededByRules   bool
@@ -681,7 +682,6 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 				`{__name__=~"cpu_.*"}`,
 			},
 			configIncludeDefault: false,
-			metricFormat:         types.MetricFormatBleemeo,
 			metrics: []labels.Labels{
 				labels.FromMap(map[string]string{
 					"__name__": "cpu_used",
@@ -699,7 +699,6 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 				`{__name__=~"cpu_.*"}`,
 			},
 			configIncludeDefault: true,
-			metricFormat:         types.MetricFormatBleemeo,
 			metrics: []labels.Labels{
 				labels.FromMap(map[string]string{
 					"__name__": "cpu_used",
@@ -718,7 +717,6 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 				`{__name__="cpu_used", item="/home"}`,
 			},
 			configIncludeDefault: false,
-			metricFormat:         types.MetricFormatBleemeo,
 			metrics: []labels.Labels{
 				labels.FromMap(map[string]string{
 					"__name__": "cpu_used",
@@ -750,7 +748,6 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 				`{__name__=~"cpu_.*", item="/home"}`,
 			},
 			configIncludeDefault: false,
-			metricFormat:         types.MetricFormatBleemeo,
 			metrics: []labels.Labels{
 				labels.FromMap(map[string]string{
 					"__name__": "cpu_used",
@@ -786,7 +783,6 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 				`{__name__!~"cpu_.*", item="/home"}`,
 			},
 			configIncludeDefault: false,
-			metricFormat:         types.MetricFormatBleemeo,
 			metrics: []labels.Labels{
 				labels.FromMap(map[string]string{
 					"__name__": "cpu_used",
@@ -818,7 +814,6 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 				`{__name__!="cpu_used", item="/home"}`,
 			},
 			configIncludeDefault: false,
-			metricFormat:         types.MetricFormatBleemeo,
 			metrics: []labels.Labels{
 				labels.FromMap(map[string]string{
 					"__name__": "cpu_used",
@@ -856,7 +851,6 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 				"process_count",
 			},
 			configIncludeDefault: false,
-			metricFormat:         types.MetricFormatBleemeo,
 			metrics: []labels.Labels{
 				labels.FromMap(map[string]string{
 					"__name__": "cpu_used",
@@ -929,7 +923,6 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 					labels.MustNewMatcher(labels.MatchEqual, types.LabelItem, "/dev/sdb"),
 				},
 			},
-			metricFormat: types.MetricFormatBleemeo,
 			metrics: []labels.Labels{
 				labels.FromMap(map[string]string{
 					"__name__": "cpu_used",
@@ -1013,7 +1006,6 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 					labels.MustNewMatcher(labels.MatchEqual, types.LabelItem, "/dev/sdb"),
 				},
 			},
-			metricFormat: types.MetricFormatBleemeo,
 			metrics: []labels.Labels{
 				labels.FromMap(map[string]string{
 					"__name__": "cpu_used",
@@ -1093,15 +1085,13 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cfg := config.Config{
-				Metric: config.Metric{
-					AllowMetrics:          tt.configAllow,
-					DenyMetrics:           tt.configDeny,
-					IncludeDefaultMetrics: tt.configIncludeDefault,
-				},
+			metricCfg := config.Metric{
+				AllowMetrics:          tt.configAllow,
+				DenyMetrics:           tt.configDeny,
+				IncludeDefaultMetrics: tt.configIncludeDefault,
 			}
 
-			filter, err := newMetricFilter(cfg, false, true, tt.metricFormat)
+			filter, err := newMetricFilter(metricCfg, false, true, true)
 			if err != nil {
 				t.Errorf("newMetricFilter() error = %v", err)
 
@@ -1253,7 +1243,7 @@ var badPoint = map[string]string{
 }
 
 func Benchmark_filters_no_match(b *testing.B) {
-	metricFilter, _ := newMetricFilter(basicConf, false, true, types.MetricFormatPrometheus)
+	metricFilter, _ := newMetricFilter(basicConf.Metric, false, true, false)
 
 	list100 := generatePoints(100, badPoint)
 
@@ -1305,7 +1295,7 @@ func Benchmark_filters_no_match(b *testing.B) {
 }
 
 func Benchmark_filters_one_match_first(b *testing.B) {
-	metricFilter, _ := newMetricFilter(basicConf, false, true, types.MetricFormatPrometheus)
+	metricFilter, _ := newMetricFilter(basicConf.Metric, false, true, false)
 
 	list100 := []types.MetricPoint{
 		{
@@ -1369,7 +1359,7 @@ func Benchmark_filters_one_match_first(b *testing.B) {
 }
 
 func Benchmark_filters_one_match_middle(b *testing.B) {
-	metricFilter, _ := newMetricFilter(basicConf, false, true, types.MetricFormatPrometheus)
+	metricFilter, _ := newMetricFilter(basicConf.Metric, false, true, false)
 
 	list100 := generatePoints(49, badPoint)
 
@@ -1415,7 +1405,7 @@ func Benchmark_filters_one_match_middle(b *testing.B) {
 }
 
 func Benchmark_filters_one_match_last(b *testing.B) {
-	metricFilter, _ := newMetricFilter(basicConf, false, true, types.MetricFormatPrometheus)
+	metricFilter, _ := newMetricFilter(basicConf.Metric, false, true, false)
 
 	list100 := generatePoints(99, badPoint)
 
@@ -1457,7 +1447,7 @@ func Benchmark_filters_one_match_last(b *testing.B) {
 }
 
 func Benchmark_filters_all(b *testing.B) {
-	metricFilter, _ := newMetricFilter(basicConf, false, true, types.MetricFormatPrometheus)
+	metricFilter, _ := newMetricFilter(basicConf.Metric, false, true, false)
 
 	list100 := generatePoints(100, goodPoint)
 
@@ -1491,13 +1481,11 @@ func Benchmark_filters_all(b *testing.B) {
 }
 
 func Test_RebuildDefaultMetrics(t *testing.T) {
-	cfg := config.Config{
-		Metric: config.Metric{
-			IncludeDefaultMetrics: true,
-		},
+	metricCfg := config.Metric{
+		IncludeDefaultMetrics: true,
 	}
 
-	metricFilter, _ := newMetricFilter(cfg, false, true, types.MetricFormatPrometheus)
+	metricFilter, _ := newMetricFilter(metricCfg, false, true, false)
 
 	services := []discovery.Service{
 		{
@@ -1526,4 +1514,126 @@ func Test_RebuildDefaultMetrics(t *testing.T) {
 	if res != "" {
 		t.Errorf("rebuildDefaultMetrics():\n%s", res)
 	}
+}
+
+func Test_MergeMetricFilters(t *testing.T) {
+	t.Parallel()
+
+	mustMatchers := func(s string) matcher.Matchers {
+		matchers, err := matcher.NormalizeMetric(s)
+		if err != nil {
+			t.Fatalf("Can't normalize metric %q: %v", s, err)
+		}
+
+		return matchers
+	}
+
+	metricCfg := config.Metric{
+		IncludeDefaultMetrics: false,
+		AllowMetrics:          []string{"m1", "m2"},
+		DenyMetrics:           []string{"no1"},
+	}
+	mf1, _ := newMetricFilter(metricCfg, false, false, false)
+
+	metricCfg.AllowMetrics = []string{"m3", "m4"}
+	metricCfg.DenyMetrics = []string{"no1", "no2"}
+	mf2, _ := newMetricFilter(metricCfg, false, false, false)
+
+	mergedFilter := mergeMetricFilters(mf1, mf2)
+
+	expectedFilter := &metricFilter{
+		includeDefaultMetrics: false,
+		staticAllowList:       []matcher.Matchers{mustMatchers("m1"), mustMatchers("m2"), mustMatchers("m3"), mustMatchers("m4")},
+		staticDenyList:        []matcher.Matchers{mustMatchers("no1")},
+		allowList: map[labels.Matcher][]matcher.Matchers{
+			*labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "m1"): {mustMatchers("m1")},
+			*labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "m2"): {mustMatchers("m2")},
+			*labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "m3"): {mustMatchers("m3")},
+			*labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "m4"): {mustMatchers("m4")},
+		},
+		denyList: map[labels.Matcher][]matcher.Matchers{
+			*labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "no1"): {mustMatchers("no1")},
+		},
+	}
+
+	cmpOpts := cmp.Options{cmp.AllowUnexported(metricFilter{}), cmpopts.IgnoreTypes(sync.Mutex{}), cmpopts.IgnoreFields(labels.Matcher{}, "re")}
+	if diff := cmp.Diff(expectedFilter, mergedFilter, cmpOpts); diff != "" {
+		t.Fatalf("Unexpected filter merge result: (-want +got):\n%s", diff)
+	}
+}
+
+func Benchmark_MultipleFilters(b *testing.B) {
+	rawData, err := os.ReadFile("../prometheus/scrapper/testdata/large.txt")
+	if err != nil {
+		b.Fatal("Failed to read data file:", err)
+	}
+
+	lines := bytes.Split(rawData, []byte("\n"))
+	metrics := make([]labels.Labels, 0, len(lines))
+
+	for _, line := range lines {
+		if len(line) == 0 {
+			continue
+		}
+
+		spaceIdx := bytes.Index(line, []byte(" "))
+		metric := string(line[:spaceIdx])
+
+		lbls, err := promParser.ParseMetric(metric)
+		if err != nil {
+			b.Fatalf("Failed to parse %q: %v", metric, err)
+		}
+
+		metrics = append(metrics, lbls)
+	}
+
+	metrics = slices.Repeat(metrics, 10)
+
+	b.Logf("Successfully loaded %d metrics", len(metrics))
+
+	metricCfg := config.Metric{
+		IncludeDefaultMetrics: true,
+		AllowMetrics:          []string{"lotus_chain_basefee", "lotus_chain_height", "lotus_miner_deadline_active_partition_sector"},
+		DenyMetrics:           []string{"lotus_miner_deadline_active_partition_sector"},
+	}
+
+	mf1, warns := newMetricFilter(metricCfg, false, true, false)
+	if warns != nil {
+		b.Fatal("Unexpected warns when building filter n°1:", warns)
+	}
+
+	metricCfg.AllowMetrics = []string{"lotus_miner_deadline_active_partition_sector"}
+
+	mf2, warns := newMetricFilter(metricCfg, true, true, true)
+	if warns != nil {
+		b.Fatal("Unexpected warns when building filter n°2:", warns)
+	}
+
+	mergedMF := mergeMetricFilters(mf1, mf2)
+
+	b.ResetTimer()
+
+	b.Run("or", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			var allowed int
+
+			for _, lbls := range metrics {
+				if mf1.IsMetricAllowed(lbls, false) || mf2.IsMetricAllowed(lbls, false) {
+					allowed++
+				}
+			}
+		}
+	})
+
+	b.Run("merge", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			var allowed int
+
+			for _, lbls := range metrics {
+				if mergedMF.IsMetricAllowed(lbls, false) {
+					allowed++
+				}
+			}
+		}
+	})
 }

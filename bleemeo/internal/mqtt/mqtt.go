@@ -756,7 +756,7 @@ func (c *Client) preparePoints(
 		}
 
 		// Don't send labels text if the metric only has a name and an item.
-		if c.opts.MetricFormat == types.MetricFormatBleemeo && metricutils.MetricOnlyHasItem(metric.Labels, metric.AgentID) {
+		if metricutils.MetricOnlyHasItem(metric.Labels, metric.AgentID) {
 			// The metric ID is not used when labels text are present
 			// because they already uniquely identify the metric.
 			payload.UUID = metric.ID

@@ -65,8 +65,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-var errNotSupported = errors.New("service not supported by Prometheus collector")
-
 // AddDefaultInputs adds system inputs to a collector.
 func AddDefaultInputs(metricRegistry GathererRegistry, inputsConfig inputs.CollectorConfig, vethProvider *veth.Provider) error {
 	input, err := system.New()
@@ -266,16 +264,6 @@ func (d *Discovery) removeInput(key NameInstance) {
 	}
 }
 
-// createPrometheusCollector create a Prometheus collector for given service
-// Return errNotSupported if no Prometheus collector exists for this service.
-func (d *Discovery) createPrometheusCollector(service Service) error {
-	if service.ServiceType == MemcachedService {
-		return d.createPrometheusMemcached(service)
-	}
-
-	return errNotSupported
-}
-
 func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 	if !service.Active {
 		return nil
@@ -287,18 +275,9 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		return nil
 	}
 
-	if d.metricFormat == types.MetricFormatPrometheus {
-		err := d.createPrometheusCollector(service)
-		if !errors.Is(err, errNotSupported) {
-			logger.V(2).Printf("Add collector for service %v on container %s", service.Name, service.ContainerID)
-
-			return err
-		}
-	}
-
 	var (
-		err   error
 		input telegraf.Input
+		err   error
 		// Inputs that return gatherer options will use an input gatherer instead of the collector,
 		// this means all labels will be kept and not only the item.
 	)

@@ -21,7 +21,6 @@ package registry
 import (
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/prometheus/exporter/windows"
-	"github.com/bleemeo/glouton/types"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -42,9 +41,8 @@ func (r *Registry) AddWindowsExporter(collectors []string, options inputs.Collec
 
 	_, err = r.RegisterGatherer(
 		RegistrationOption{
-			Description:           "windows_exporter",
-			JitterSeed:            baseJitter,
-			DisablePeriodicGather: r.option.MetricFormat != types.MetricFormatPrometheus,
+			Description: "windows_exporter",
+			JitterSeed:  baseJitter,
 		},
 		reg,
 	)

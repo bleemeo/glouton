@@ -241,7 +241,6 @@ type Agent struct {
 	NodeExporter           NodeExporter    `yaml:"node_exporter"`
 	WindowsExporter        NodeExporter    `yaml:"windows_exporter"`
 	Telemetry              Telemetry       `yaml:"telemetry"`
-	MetricsFormat          string          `yaml:"metrics_format"`
 }
 
 type Telemetry struct {

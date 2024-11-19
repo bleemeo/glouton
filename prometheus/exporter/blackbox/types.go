@@ -22,8 +22,6 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/prometheus/registry"
-	"github.com/bleemeo/glouton/types"
-
 	bbConf "github.com/prometheus/blackbox_exporter/config"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -61,7 +59,6 @@ type RegisterManager struct {
 	scraperName   string
 	registrations map[int]gathererWithConfigTarget
 	registry      *registry.Registry
-	metricFormat  types.MetricFormat
 	userAgent     string
 	l             sync.Mutex
 }

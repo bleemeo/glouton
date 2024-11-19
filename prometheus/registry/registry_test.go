@@ -228,7 +228,7 @@ func TestRegistry_Register(t *testing.T) {
 	}
 	gather2.fillResponse()
 
-	if id1, err = reg.RegisterGatherer(RegistrationOption{DisablePeriodicGather: true}, gather1); err != nil {
+	if id1, err = reg.RegisterGatherer(RegistrationOption{}, gather1); err != nil {
 		t.Errorf("reg.RegisterGatherer(gather1) failed: %v", err)
 	}
 
@@ -248,11 +248,11 @@ func TestRegistry_Register(t *testing.T) {
 		t.Errorf("gather1.callCount = %v, want 1", gather1.callCount)
 	}
 
-	if id1, err = reg.RegisterGatherer(RegistrationOption{ExtraLabels: map[string]string{"name": "value"}, DisablePeriodicGather: true}, gather1); err != nil {
+	if id1, err = reg.RegisterGatherer(RegistrationOption{ExtraLabels: map[string]string{"name": "value"}}, gather1); err != nil {
 		t.Errorf("re-reg.RegisterGatherer(gather1) failed: %v", err)
 	}
 
-	if id2, err = reg.RegisterGatherer(RegistrationOption{DisablePeriodicGather: true}, gather2); err != nil {
+	if id2, err = reg.RegisterGatherer(RegistrationOption{}, gather2); err != nil {
 		t.Errorf("re-reg.RegisterGatherer(gather2) failed: %v", err)
 	}
 
@@ -286,11 +286,11 @@ func TestRegistry_Register(t *testing.T) {
 
 	stopCallCount := 0
 
-	if id1, err = reg.RegisterGatherer(RegistrationOption{StopCallback: func() { stopCallCount++ }, ExtraLabels: map[string]string{"dummy": "value", "empty-value-to-dropped": ""}, DisablePeriodicGather: true}, gather1); err != nil {
+	if id1, err = reg.RegisterGatherer(RegistrationOption{StopCallback: func() { stopCallCount++ }, ExtraLabels: map[string]string{"dummy": "value", "empty-value-to-dropped": ""}}, gather1); err != nil {
 		t.Errorf("reg.RegisterGatherer(gather1) failed: %v", err)
 	}
 
-	if _, err = reg.RegisterGatherer(RegistrationOption{DisablePeriodicGather: true}, gather2); err != nil {
+	if _, err = reg.RegisterGatherer(RegistrationOption{}, gather2); err != nil {
 		t.Errorf("re-reg.RegisterGatherer(gather2) failed: %v", err)
 	}
 
@@ -387,7 +387,7 @@ func TestRegistryDiagnostic(t *testing.T) {
 		t.Errorf("reg.RegisterGatherer(gather1) failed: %v", err)
 	}
 
-	if _, err := reg.RegisterGatherer(RegistrationOption{DisablePeriodicGather: true}, gather2); err != nil {
+	if _, err := reg.RegisterGatherer(RegistrationOption{}, gather2); err != nil {
 		t.Errorf("re-reg.RegisterGatherer(gather2) failed: %v", err)
 	}
 
@@ -450,10 +450,6 @@ func TestRegistry_pushPoint(t *testing.T) {
 	metricName1 := "point1"
 	metricName2 := "fixable_name_0"
 	helpText := ""
-	dummyName := "dummy"
-	dummyValue := "value"
-	extraName := "extra"
-	extraValue := "label"
 	instanceIDName := types.LabelInstanceUUID
 	instanceIDValue := testAgentID
 	value1 := 1.0
@@ -465,9 +461,6 @@ func TestRegistry_pushPoint(t *testing.T) {
 			Type: dto.MetricType_UNTYPED.Enum(),
 			Metric: []*dto.Metric{
 				{
-					Label: []*dto.LabelPair{
-						{Name: &extraName, Value: &extraValue},
-					},
 					Untyped: &dto.Untyped{
 						Value: &value2,
 					},
@@ -481,9 +474,6 @@ func TestRegistry_pushPoint(t *testing.T) {
 			Type: dto.MetricType_UNTYPED.Enum(),
 			Metric: []*dto.Metric{
 				{
-					Label: []*dto.LabelPair{
-						{Name: &dummyName, Value: &dummyValue},
-					},
 					Untyped: &dto.Untyped{
 						Value: &value1,
 					},
@@ -542,7 +532,6 @@ func TestRegistry_pushPoint(t *testing.T) {
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: &dummyName, Value: &dummyValue},
 						{Name: &instanceIDName, Value: &instanceIDValue},
 					},
 					Untyped: &dto.Untyped{
@@ -803,7 +792,6 @@ func TestRegistry_slowGather(t *testing.T) { //nolint:maintidx
 	)
 
 	reg, err := New(Option{
-		MetricFormat: types.MetricFormatBleemeo,
 		PushPoint: pushFunction(func(_ context.Context, pts []types.MetricPoint) {
 			l.Lock()
 			points = append(points, pts...)
@@ -1034,132 +1022,117 @@ func TestRegistry_slowGather(t *testing.T) { //nolint:maintidx
 func TestRegistry_run(t *testing.T) {
 	t.Parallel()
 
-	for _, format := range []types.MetricFormat{types.MetricFormatBleemeo, types.MetricFormatPrometheus}[:1] {
-		t.Run(format.String(), func(t *testing.T) {
-			t.Parallel()
+	var (
+		l      sync.Mutex
+		t0     time.Time
+		points []types.MetricPoint
+	)
 
-			var (
-				l      sync.Mutex
-				t0     time.Time
-				points []types.MetricPoint
-			)
-
-			reg, err := New(Option{
-				MetricFormat: format,
-				PushPoint: pushFunction(func(_ context.Context, pts []types.MetricPoint) {
-					l.Lock()
-					points = append(points, pts...)
-					l.Unlock()
-				}),
-				FQDN:        "example.com",
-				GloutonPort: "1234",
-				Filter:      &fakeFilter{},
-			},
-			)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
-			go reg.Run(ctx) //nolint: errcheck
-
-			const delay = 100 * time.Millisecond
-
-			reg.UpdateRegistrationHooks(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
-				labels[types.LabelMetaBleemeoUUID] = testAgentID
-
-				return labels, false
-			}, makeDelayHook(delay))
-
-			gather1 := &fakeGatherer{name: "name1"}
-			gather1.fillResponse()
-
-			gather2 := &fakeGatherer{name: "name2"}
-			gather2.fillResponse()
-
-			// Sleep until the next rounded 250 millisecond.
-			// Then sleep another millisecond.
-			// We do this because the 3 gatherer added below should start at the same time, so we
-			// must ensure the first isn't registered just before a rounded 250ms and other are resgistered after.
-			// If this occur, the first will run while the other aren't yet registered.
-			time.Sleep(time.Until(time.Now().Truncate(delay).Add(delay).Add(time.Millisecond)))
-
-			id1, err := reg.RegisterGatherer(RegistrationOption{DisablePeriodicGather: true}, gather1)
-			if err != nil {
-				t.Error(err)
-			}
-
-			id2, err := reg.RegisterGatherer(RegistrationOption{DisablePeriodicGather: false}, gather2)
-			if err != nil {
-				t.Error(err)
-			}
-
-			id3, err := reg.RegisterPushPointsCallback(RegistrationOption{HonorTimestamp: true}, func(_ context.Context, t time.Time) error {
-				l.Lock()
-				t0 = t
-				l.Unlock()
-
-				reg.WithTTL(5*time.Minute).PushPoints(ctx, []types.MetricPoint{
-					{Point: types.Point{Time: t, Value: 42.0}, Labels: map[string]string{"__name__": "push", "something": "value"}, Annotations: types.MetricAnnotations{BleemeoItem: "/home"}},
-				})
-
-				return nil
-			})
-			if err != nil {
-				t.Error(err)
-			}
-
-			// We don't know the schedule of scraper... wait until we have the expected number of points.
-			// Since scrapeLoopOffset(...) may return a time up to now+gloutonMinimalInterval, it may take a while.
-			deadline := time.Now().Add(gloutonMinimalInterval).Truncate(gloutonMinimalInterval).Add(time.Second)
-
+	reg, err := New(Option{
+		PushPoint: pushFunction(func(_ context.Context, pts []types.MetricPoint) {
 			l.Lock()
-
-			for time.Now().Before(deadline) {
-				l.Unlock()
-				time.Sleep(10 * time.Millisecond)
-				l.Lock()
-
-				if len(points) >= 2 {
-					break
-				}
-			}
-
-			if len(points) == 0 {
-				t.Log("breakpoint")
-			}
-
-			var want []types.MetricPoint
-
-			if format == types.MetricFormatBleemeo {
-				want = []types.MetricPoint{
-					{Point: types.Point{Time: t0, Value: 42.0}, Labels: map[string]string{"__name__": "push", "item": "/home", "instance": "example.com:1234", "instance_uuid": testAgentID}, Annotations: types.MetricAnnotations{BleemeoItem: "/home"}},
-					{Point: types.Point{Time: t0, Value: 1.0}, Labels: map[string]string{"__name__": "name2", "instance": "example.com:1234", "instance_uuid": testAgentID}},
-				}
-			} else if format == types.MetricFormatPrometheus {
-				want = []types.MetricPoint{
-					{Point: types.Point{Time: t0, Value: 42.0}, Labels: map[string]string{"__name__": "push", "instance": "example.com:1234", "instance_uuid": testAgentID, "something": "value"}, Annotations: types.MetricAnnotations{BleemeoItem: "/home"}},
-					{Point: types.Point{Time: t0, Value: 1.0}, Labels: map[string]string{"__name__": "name2", "instance": "example.com:1234", "instance_uuid": testAgentID}},
-				}
-			}
-
-			pointLess := func(x, y types.MetricPoint) bool {
-				return x.Labels[types.LabelName] < y.Labels[types.LabelName]
-			}
-
-			if diff := cmp.Diff(want, points, cmpopts.SortSlices(pointLess), cmpopts.EquateApproxTime(50*time.Millisecond)); diff != "" {
-				t.Errorf("points mismatch (-want +got)\n%s", diff)
-			}
-
+			points = append(points, pts...)
 			l.Unlock()
-
-			reg.Unregister(id1)
-			reg.Unregister(id2)
-			reg.Unregister(id3)
-		})
+		}),
+		FQDN:        "example.com",
+		GloutonPort: "1234",
+		Filter:      &fakeFilter{},
+	},
+	)
+	if err != nil {
+		t.Fatal(err)
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go reg.Run(ctx) //nolint: errcheck
+
+	const delay = 100 * time.Millisecond
+
+	reg.UpdateRegistrationHooks(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
+		labels[types.LabelMetaBleemeoUUID] = testAgentID
+
+		return labels, false
+	}, makeDelayHook(delay))
+
+	gather1 := &fakeGatherer{name: "name1"}
+	gather1.fillResponse()
+
+	gather2 := &fakeGatherer{name: "name2"}
+	gather2.fillResponse()
+
+	// Sleep until the next rounded 250 millisecond.
+	// Then sleep another millisecond.
+	// We do this because the 3 gatherer added below should start at the same time, so we
+	// must ensure the first isn't registered just before a rounded 250ms and other are resgistered after.
+	// If this occur, the first will run while the other aren't yet registered.
+	time.Sleep(time.Until(time.Now().Truncate(delay).Add(delay).Add(time.Millisecond)))
+
+	id1, err := reg.RegisterGatherer(RegistrationOption{}, gather1)
+	if err != nil {
+		t.Error(err)
+	}
+
+	id2, err := reg.RegisterGatherer(RegistrationOption{}, gather2)
+	if err != nil {
+		t.Error(err)
+	}
+
+	id3, err := reg.RegisterPushPointsCallback(RegistrationOption{HonorTimestamp: true}, func(_ context.Context, t time.Time) error {
+		l.Lock()
+		t0 = t
+		l.Unlock()
+
+		reg.WithTTL(5*time.Minute).PushPoints(ctx, []types.MetricPoint{
+			{Point: types.Point{Time: t, Value: 42.0}, Labels: map[string]string{"__name__": "push", "something": "value"}, Annotations: types.MetricAnnotations{BleemeoItem: "/home"}},
+		})
+
+		return nil
+	})
+	if err != nil {
+		t.Error(err)
+	}
+
+	// We don't know the schedule of scraper... wait until we have the expected number of points.
+	// Since scrapeLoopOffset(...) may return a time up to now+gloutonMinimalInterval, it may take a while.
+	deadline := time.Now().Add(gloutonMinimalInterval).Truncate(gloutonMinimalInterval).Add(time.Second)
+
+	l.Lock()
+
+	for time.Now().Before(deadline) {
+		l.Unlock()
+		time.Sleep(10 * time.Millisecond)
+		l.Lock()
+
+		if len(points) >= 3 {
+			break
+		}
+	}
+
+	if len(points) == 0 {
+		t.Log("breakpoint")
+	}
+
+	want := []types.MetricPoint{
+		{Point: types.Point{Time: t0, Value: 42.0}, Labels: map[string]string{"__name__": "push", "item": "/home", "instance": "example.com:1234", "instance_uuid": testAgentID}, Annotations: types.MetricAnnotations{BleemeoItem: "/home"}},
+		{Point: types.Point{Time: t0, Value: 1.0}, Labels: map[string]string{"__name__": "name1", "instance": "example.com:1234", "instance_uuid": testAgentID}},
+		{Point: types.Point{Time: t0, Value: 1.0}, Labels: map[string]string{"__name__": "name2", "instance": "example.com:1234", "instance_uuid": testAgentID}},
+	}
+
+	pointLess := func(x, y types.MetricPoint) bool {
+		return x.Labels[types.LabelName] < y.Labels[types.LabelName]
+	}
+
+	if diff := cmp.Diff(want, points, cmpopts.SortSlices(pointLess), cmpopts.EquateApproxTime(50*time.Millisecond)); diff != "" {
+		t.Errorf("points mismatch (-want +got)\n%s", diff)
+	}
+
+	l.Unlock()
+
+	reg.Unregister(id1)
+	reg.Unregister(id2)
+	reg.Unregister(id3)
 }
 
 type sourceKind string
@@ -1258,18 +1231,16 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 	now := time.Date(2021, 12, 7, 10, 11, 13, 0, time.UTC)
 
 	tests := []struct {
-		name         string
-		input        []types.MetricPoint
-		opt          RegistrationOption
-		kindToTest   sourceKind
-		metricFormat types.MetricFormat
-		want         []metricPointTimeOverride
+		name       string
+		input      []types.MetricPoint
+		opt        RegistrationOption
+		kindToTest sourceKind
+		want       []metricPointTimeOverride
 	}{
 		{
-			name:         "pushpoint-bleemeo",
-			kindToTest:   kindPushPoint,
-			metricFormat: types.MetricFormatBleemeo,
-			opt:          RegistrationOption{}, // unused for pushpoint
+			name:       "pushpoint-bleemeo",
+			kindToTest: kindPushPoint,
+			opt:        RegistrationOption{}, // unused for pushpoint
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -1351,12 +1322,10 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:         "pushpointCallback-bleemeo",
-			kindToTest:   kindPushPointCallback,
-			metricFormat: types.MetricFormatBleemeo,
+			name:       "pushpointCallback-bleemeo",
+			kindToTest: kindPushPointCallback,
 			opt: RegistrationOption{
-				DisablePeriodicGather: true,
-				HonorTimestamp:        true,
+				HonorTimestamp: true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -1439,100 +1408,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:         "pushpoint-prometheus",
-			kindToTest:   kindPushPoint,
-			metricFormat: types.MetricFormatPrometheus,
-			opt:          RegistrationOption{}, // unused for pushpoint
-			input: []types.MetricPoint{
-				{
-					Labels: map[string]string{
-						types.LabelName: "cpu_used",
-						"anyOther":      "label",
-					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
-				},
-				{
-					Labels: map[string]string{
-						types.LabelName: "disk_used",
-						types.LabelItem: "/home",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "/home",
-					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
-				},
-				{
-					Labels: map[string]string{
-						types.LabelName: "disk_used_perc",
-						types.LabelItem: "/srv",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "/srv",
-					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
-				},
-			},
-			want: []metricPointTimeOverride{
-				{
-					Labels: map[string]string{
-						types.LabelName:     "cpu_used",
-						"anyOther":          "label",
-						types.LabelInstance: "server.bleemeo.com:8016",
-					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
-					TimeOnGather: now,
-				},
-				{
-					Labels: map[string]string{
-						types.LabelName:     "disk_used",
-						types.LabelItem:     "/home",
-						types.LabelInstance: "server.bleemeo.com:8016",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "/home",
-					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
-					TimeOnGather: now,
-				},
-				{
-					Labels: map[string]string{
-						types.LabelName:     "disk_used_perc",
-						types.LabelItem:     "/srv",
-						types.LabelInstance: "server.bleemeo.com:8016",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "/srv",
-					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
-					TimeOnGather: now,
-				},
-			},
-		},
-		{
-			name:         "appender",
-			kindToTest:   kindAppenderCallback,
-			metricFormat: types.MetricFormatBleemeo,
-			opt: RegistrationOption{
-				DisablePeriodicGather: true,
-			},
+			name:       "appender",
+			kindToTest: kindAppenderCallback,
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -1617,12 +1494,10 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:         "gatherer-bleemeo",
-			kindToTest:   kindGatherer,
-			metricFormat: types.MetricFormatBleemeo,
+			name:       "gatherer-bleemeo",
+			kindToTest: kindGatherer,
 			opt: RegistrationOption{
-				DisablePeriodicGather: true,
-				HonorTimestamp:        true,
+				HonorTimestamp: true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -1706,12 +1581,10 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:         "input",
-			kindToTest:   kindInput,
-			metricFormat: types.MetricFormatBleemeo,
+			name:       "input",
+			kindToTest: kindInput,
 			opt: RegistrationOption{
-				DisablePeriodicGather: true,
-				HonorTimestamp:        true,
+				HonorTimestamp: true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -1797,17 +1670,15 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:         "gatherer-extralabels",
-			kindToTest:   kindGatherer,
-			metricFormat: types.MetricFormatBleemeo,
+			name:       "gatherer-extralabels",
+			kindToTest: kindGatherer,
 			opt: RegistrationOption{
 				ExtraLabels: map[string]string{
 					types.LabelMetaSNMPTarget: "1.2.3.4:8080",
 					"another":                 "value",
 				},
-				Rules:                 DefaultSNMPRules(time.Minute),
-				DisablePeriodicGather: true,
-				HonorTimestamp:        true,
+				Rules:          DefaultSNMPRules(time.Minute),
+				HonorTimestamp: true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -1842,16 +1713,14 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:         "metric-rename-simple-gatherer",
-			kindToTest:   kindGatherer,
-			metricFormat: types.MetricFormatBleemeo,
+			name:       "metric-rename-simple-gatherer",
+			kindToTest: kindGatherer,
 			opt: RegistrationOption{
 				ExtraLabels: map[string]string{
 					types.LabelMetaSNMPTarget: "192.168.1.2",
 				},
-				Rules:                 DefaultSNMPRules(time.Minute),
-				DisablePeriodicGather: true,
-				HonorTimestamp:        true,
+				Rules:          DefaultSNMPRules(time.Minute),
+				HonorTimestamp: true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -2020,16 +1889,14 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:         "metric-rename-simple-2",
-			kindToTest:   kindGatherer,
-			metricFormat: types.MetricFormatBleemeo,
+			name:       "metric-rename-simple-2",
+			kindToTest: kindGatherer,
 			opt: RegistrationOption{
 				ExtraLabels: map[string]string{
 					types.LabelMetaSNMPTarget: "192.168.1.2",
 				},
-				Rules:                 DefaultSNMPRules(time.Minute),
-				DisablePeriodicGather: true,
-				HonorTimestamp:        true,
+				Rules:          DefaultSNMPRules(time.Minute),
+				HonorTimestamp: true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -2175,16 +2042,14 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:         "metric-rename-multiple-1",
-			kindToTest:   kindGatherer,
-			metricFormat: types.MetricFormatBleemeo,
+			name:       "metric-rename-multiple-1",
+			kindToTest: kindGatherer,
 			opt: RegistrationOption{
 				ExtraLabels: map[string]string{
 					types.LabelMetaSNMPTarget: "192.168.1.2",
 				},
-				Rules:                 DefaultSNMPRules(time.Minute),
-				DisablePeriodicGather: true,
-				HonorTimestamp:        true,
+				Rules:          DefaultSNMPRules(time.Minute),
+				HonorTimestamp: true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -2276,16 +2141,14 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:         "metric-rename-multiple-2",
-			kindToTest:   kindGatherer,
-			metricFormat: types.MetricFormatBleemeo,
+			name:       "metric-rename-multiple-2",
+			kindToTest: kindGatherer,
 			opt: RegistrationOption{
 				ExtraLabels: map[string]string{
 					types.LabelMetaSNMPTarget: "192.168.1.2",
 				},
-				Rules:                 DefaultSNMPRules(time.Minute),
-				DisablePeriodicGather: true,
-				HonorTimestamp:        true,
+				Rules:          DefaultSNMPRules(time.Minute),
+				HonorTimestamp: true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -2661,16 +2524,14 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:         "metric-rule-and-rename",
-			kindToTest:   kindGatherer,
-			metricFormat: types.MetricFormatBleemeo,
+			name:       "metric-rule-and-rename",
+			kindToTest: kindGatherer,
 			opt: RegistrationOption{
 				ExtraLabels: map[string]string{
 					types.LabelMetaSNMPTarget: "192.168.1.2",
 				},
-				Rules:                 DefaultSNMPRules(time.Minute),
-				DisablePeriodicGather: true,
-				HonorTimestamp:        true,
+				Rules:          DefaultSNMPRules(time.Minute),
+				HonorTimestamp: true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -2807,13 +2668,11 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:         "gatherer-with-relabel",
-			kindToTest:   kindGatherer,
-			metricFormat: types.MetricFormatBleemeo,
+			name:       "gatherer-with-relabel",
+			kindToTest: kindGatherer,
 			opt: RegistrationOption{
-				DisablePeriodicGather: true,
-				ApplyDynamicRelabel:   true,
-				HonorTimestamp:        true,
+				ApplyDynamicRelabel: true,
+				HonorTimestamp:      true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -2848,12 +2707,10 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 		},
 		{
 			// Test output from our telegraf-input. input should match what plugin really send.
-			name:         "telegraf-input",
-			kindToTest:   kindPushPointCallback,
-			metricFormat: types.MetricFormatBleemeo,
+			name:       "telegraf-input",
+			kindToTest: kindPushPointCallback,
 			opt: RegistrationOption{
-				DisablePeriodicGather: true,
-				HonorTimestamp:        true,
+				HonorTimestamp: true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -2971,8 +2828,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			name:       "miscAppender",
 			kindToTest: kindAppenderCallback,
 			opt: RegistrationOption{
-				DisablePeriodicGather: true,
-				ApplyDynamicRelabel:   true,
+				ApplyDynamicRelabel: true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -3036,8 +2892,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			name:       "node_exporter",
 			kindToTest: kindGatherer,
 			opt: RegistrationOption{
-				DisablePeriodicGather: true,
-				HonorTimestamp:        true,
+				HonorTimestamp: true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -3101,12 +2956,10 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:         "appender-time",
-			kindToTest:   kindAppenderCallback,
-			metricFormat: types.MetricFormatBleemeo,
+			name:       "appender-time",
+			kindToTest: kindAppenderCallback,
 			opt: RegistrationOption{
-				DisablePeriodicGather: true,
-				HonorTimestamp:        true,
+				HonorTimestamp: true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -3254,12 +3107,10 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:         "gatherer-bleemeo-time",
-			kindToTest:   kindGatherer,
-			metricFormat: types.MetricFormatBleemeo,
+			name:       "gatherer-bleemeo-time",
+			kindToTest: kindGatherer,
 			opt: RegistrationOption{
-				DisablePeriodicGather: true,
-				HonorTimestamp:        true,
+				HonorTimestamp: true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -3407,12 +3258,10 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:         "input-time",
-			kindToTest:   kindInput,
-			metricFormat: types.MetricFormatBleemeo,
+			name:       "input-time",
+			kindToTest: kindInput,
 			opt: RegistrationOption{
-				DisablePeriodicGather: true,
-				HonorTimestamp:        true,
+				HonorTimestamp: true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -3560,12 +3409,10 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:         "appender-time-no-honor-timestamp",
-			kindToTest:   kindAppenderCallback,
-			metricFormat: types.MetricFormatBleemeo,
+			name:       "appender-time-no-honor-timestamp",
+			kindToTest: kindAppenderCallback,
 			opt: RegistrationOption{
-				DisablePeriodicGather: true,
-				HonorTimestamp:        false,
+				HonorTimestamp: false,
 			},
 			input: []types.MetricPoint{
 				{
@@ -3713,12 +3560,10 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:         "gatherer-bleemeo-time-no-honor-timestamp",
-			kindToTest:   kindGatherer,
-			metricFormat: types.MetricFormatBleemeo,
+			name:       "gatherer-bleemeo-time-no-honor-timestamp",
+			kindToTest: kindGatherer,
 			opt: RegistrationOption{
-				DisablePeriodicGather: true,
-				HonorTimestamp:        false,
+				HonorTimestamp: false,
 			},
 			input: []types.MetricPoint{
 				{
@@ -3866,12 +3711,10 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:         "input-time-no-honor-timestamp",
-			kindToTest:   kindInput,
-			metricFormat: types.MetricFormatBleemeo,
+			name:       "input-time-no-honor-timestamp",
+			kindToTest: kindInput,
 			opt: RegistrationOption{
-				DisablePeriodicGather: true,
-				HonorTimestamp:        false,
+				HonorTimestamp: false,
 			},
 			input: []types.MetricPoint{
 				{
@@ -4036,9 +3879,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						gotPoints = append(gotPoints, pts...)
 						l.Unlock()
 					}),
-					FQDN:         "server.bleemeo.com",
-					GloutonPort:  "8016",
-					MetricFormat: tt.metricFormat,
+					FQDN:        "server.bleemeo.com",
+					GloutonPort: "8016",
 				},
 			)
 			if err != nil {

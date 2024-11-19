@@ -33,6 +33,5 @@ func RegisterExporter(
 	*discovery.DynamicDiscovery,
 	discovery.IgnoredService,
 	discovery.IgnoredService,
-	bool,
 ) {
 }

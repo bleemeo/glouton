@@ -131,13 +131,12 @@ type GathererWithScheduleUpdate interface {
 type GathererWithStateWrapper struct {
 	gatherState GatherState
 	gatherer    GathererWithState
-	filter      metricFilter
 	ctx         context.Context //nolint:containedctx
 }
 
 // NewGathererWithStateWrapper creates a new wrapper around GathererWithState.
-func NewGathererWithStateWrapper(ctx context.Context, g GathererWithState, filter metricFilter) *GathererWithStateWrapper {
-	return &GathererWithStateWrapper{gatherer: g, filter: filter, ctx: ctx}
+func NewGathererWithStateWrapper(ctx context.Context, g GathererWithState) *GathererWithStateWrapper {
+	return &GathererWithStateWrapper{gatherer: g, ctx: ctx}
 }
 
 // SetState updates the state the wrapper will provide to its internal gatherer when called.
