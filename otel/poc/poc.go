@@ -59,7 +59,7 @@ func MakePipeline(ctx context.Context, cfg config.POC, f func(context.Context, [
 		Resource:             pcommon.NewResource(),
 	}
 
-	logExporter, err := exporterhelper.NewLogsExporter(
+	logExporter, err := exporterhelper.NewLogs(
 		ctx,
 		exporter.Settings{TelemetrySettings: telemetry},
 		"unused",
@@ -90,7 +90,7 @@ func MakePipeline(ctx context.Context, cfg config.POC, f func(context.Context, [
 		return err
 	}
 
-	logBatcher, err := factoryBatch.CreateLogsProcessor(
+	logBatcher, err := factoryBatch.CreateLogs(
 		ctx,
 		processor.Settings{TelemetrySettings: telemetry},
 		factoryBatch.CreateDefaultConfig(),
@@ -108,7 +108,7 @@ func MakePipeline(ctx context.Context, cfg config.POC, f func(context.Context, [
 	expCfg.Protocols.GRPC.NetAddr.Endpoint = cfg.GRPCAddress               // TODO: config
 	// expCfg.Protocols.HTTP.Endpoint = "localhost:4318"
 
-	otlpLogReceiver, err := factoryReceiver.CreateLogsReceiver(
+	otlpLogReceiver, err := factoryReceiver.CreateLogs(
 		ctx,
 		receiver.Settings{TelemetrySettings: telemetry},
 		expCfg,
@@ -135,7 +135,7 @@ func MakePipeline(ctx context.Context, cfg config.POC, f func(context.Context, [
 
 		flCfg.Operators = ops
 
-		filelogReceiver, err := factoryFileLog.CreateLogsReceiver(
+		filelogReceiver, err := factoryFileLog.CreateLogs(
 			ctx,
 			receiver.Settings{TelemetrySettings: telemetry},
 			flCfg,
