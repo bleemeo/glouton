@@ -145,6 +145,8 @@ type agent struct {
 	lastContainerEventTime time.Time
 	watchdogRunAt          []time.Time
 	metricFilter           *metricFilter
+	promFilter             *metricFilter
+	mergeMetricFilter      *metricFilter
 	monitorManager         *blackbox.RegisterManager
 	rulesManager           *rules.Manager
 	reloadState            ReloadState
@@ -648,7 +650,7 @@ func (a *agent) updateThresholds(ctx context.Context, thresholds map[string]thre
 	if err != nil {
 		logger.V(2).Printf("An error occurred while running discoveries for updateThresholds: %v", err)
 	} else {
-		err = a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), a.rulesManager.MetricNames())
+		err = a.rebuildDynamicMetricAllowDenyList(services)
 		if err != nil {
 			logger.V(2).Printf("An error occurred while rebuilding dynamic list for updateThresholds: %v", err)
 		}
@@ -669,6 +671,24 @@ func (a *agent) updateThresholds(ctx context.Context, thresholds map[string]thre
 			}
 		}
 	}
+}
+
+func (a *agent) rebuildDynamicMetricAllowDenyList(services []discovery.Service) error {
+	var errs []error
+
+	errs = append(
+		errs,
+		a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), a.rulesManager.MetricNames()),
+	)
+
+	errs = append(
+		errs,
+		a.promFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), a.rulesManager.MetricNames()),
+	)
+
+	a.mergeMetricFilter.mergeInPlace(a.metricFilter, a.promFilter)
+
+	return errors.Join(errs...)
 }
 
 // Run will start the agent. It will terminate when sigquit/sigterm/sigint is received.
@@ -800,6 +820,9 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		logger.Printf("An error occurred while building the Prometheus metric filter, allow/deny list may be partial: %v", err)
 	}
 
+	a.promFilter = promFilter
+	a.mergeMetricFilter = mergeMetricFilters(a.promFilter, bleemeoFilter)
+
 	secretInputsGate := gate.New(inputs.MaxParallelSecrets())
 
 	a.gathererRegistry, err = registry.New(
@@ -809,7 +832,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			FQDN:                  fqdn,
 			GloutonPort:           strconv.Itoa(a.config.Web.Listener.Port),
 			BlackboxSendScraperID: a.config.Blackbox.ScraperSendUUID,
-			Filter:                mergeMetricFilters(promFilter, bleemeoFilter),
+			Filter:                a.mergeMetricFilter,
 			Queryable:             a.store,
 			SecretInputsGate:      secretInputsGate,
 			ShutdownDeadline:      15 * time.Second,
@@ -1943,7 +1966,7 @@ func (a *agent) handleTrigger(ctx context.Context) {
 				}
 			}
 
-			err := a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), a.rulesManager.MetricNames())
+			err := a.rebuildDynamicMetricAllowDenyList(services)
 			if err != nil {
 				logger.V(2).Printf("Error during dynamic Filter rebuild: %v", err)
 			}

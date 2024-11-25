@@ -1562,6 +1562,62 @@ func Test_MergeMetricFilters(t *testing.T) {
 	}
 }
 
+// Test_MergeMetricFiltersMutation ensure that it's possible to modify in place
+// the merge filter. This is required because filter get updated by RebuildDynamicLists.
+func Test_MergeMetricFiltersMutation(t *testing.T) {
+	t.Parallel()
+
+	mustMatchers := func(s string) matcher.Matchers {
+		matchers, err := matcher.NormalizeMetric(s)
+		if err != nil {
+			t.Fatalf("Can't normalize metric %q: %v", s, err)
+		}
+
+		return matchers
+	}
+
+	metricCfg := config.Metric{
+		IncludeDefaultMetrics: false,
+		AllowMetrics:          []string{"m1", "m2"},
+		DenyMetrics:           []string{"no1"},
+	}
+	mf1, _ := newMetricFilter(metricCfg, false, false, false)
+
+	metricCfg.AllowMetrics = []string{"m3", "m4"}
+	metricCfg.DenyMetrics = []string{"no1", "no2"}
+	mf2, _ := newMetricFilter(metricCfg, false, false, false)
+
+	mergedFilter := mergeMetricFilters(mf1, mf2)
+	shallowCopy := mergedFilter
+
+	metricCfg2 := config.Metric{
+		IncludeDefaultMetrics: false,
+		AllowMetrics:          []string{"m1", "m2"},
+		DenyMetrics:           []string{"m4"},
+	}
+	mf1b, _ := newMetricFilter(metricCfg2, false, false, false)
+
+	mergedFilter.mergeInPlace(mf1b, mf2)
+
+	expectedFilter := &metricFilter{
+		includeDefaultMetrics: false,
+		staticAllowList:       []matcher.Matchers{mustMatchers("m1"), mustMatchers("m2"), mustMatchers("m3"), mustMatchers("m4")},
+		staticDenyList:        nil,
+		allowList: map[labels.Matcher][]matcher.Matchers{
+			*labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "m1"): {mustMatchers("m1")},
+			*labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "m2"): {mustMatchers("m2")},
+			*labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "m3"): {mustMatchers("m3")},
+			*labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "m4"): {mustMatchers("m4")},
+		},
+		denyList: map[labels.Matcher][]matcher.Matchers{},
+	}
+
+	cmpOpts := cmp.Options{cmp.AllowUnexported(metricFilter{}), cmpopts.IgnoreTypes(sync.Mutex{}), cmpopts.IgnoreFields(labels.Matcher{}, "re")}
+	if diff := cmp.Diff(expectedFilter, shallowCopy, cmpOpts); diff != "" {
+		t.Fatalf("Unexpected filter merge result: (-want +got):\n%s", diff)
+	}
+}
+
 func Benchmark_MultipleFilters(b *testing.B) {
 	rawData, err := os.ReadFile("../prometheus/scrapper/testdata/large.txt")
 	if err != nil {
