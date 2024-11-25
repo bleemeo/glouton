@@ -974,6 +974,18 @@ func newMetricFilter(metricCfg config.Metric, hasSNMP, hasSwap, forBleemeo bool)
 // that represents the union of both the given filters.
 // This only works if the deny-list uses equal comparison (no regexp), or is identical.
 func mergeMetricFilters(f1, f2 *metricFilter) *metricFilter {
+	result := &metricFilter{}
+	result.mergeInPlace(f1, f2)
+
+	return result
+}
+
+// mergeInPlace merge the two input filter (f1 & f2) and update the filter m.
+// All previous content of m is overwrite, the result only depend on f1 & f2.
+// The merge result is the union of both result the given filters (metrics that are allowed by
+// one of the filter).
+// This only works if the deny-list uses equal comparison (no regexp), or is identical.
+func (m *metricFilter) mergeInPlace(f1, f2 *metricFilter) {
 	// Merging logic:
 	// - to be allowed, a metric only needs to be present in the allowlist of one of the filters
 	// - to be denied, a metric needs to be present in the deny-list of both the filters
@@ -997,7 +1009,7 @@ func mergeMetricFilters(f1, f2 *metricFilter) *metricFilter {
 		}
 	}
 
-	return &metricFilter{
+	*m = metricFilter{
 		includeDefaultMetrics: f1.includeDefaultMetrics || f2.includeDefaultMetrics,
 		staticAllowList:       slices.Concat(f1.staticAllowList, f2.staticAllowList),
 		staticDenyList:        staticDenyList,
