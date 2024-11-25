@@ -94,7 +94,7 @@ To run with this configuration, start webpack-dev-server:
 docker run --rm -ti -u $UID -e HOME=/tmp/home \
    -v $(pwd):/src -w /src/webui \
    -p 127.0.0.1:3015:3015 \
-   node:18 \
+   node:22 \
    sh -c 'npm install && npm start'
 ```
 
