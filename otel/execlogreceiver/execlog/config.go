@@ -1,0 +1,88 @@
+package execlog
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/cenkalti/backoff/v4"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/decode"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/helper"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/split"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/trim"
+	"go.opentelemetry.io/collector/component"
+)
+
+const operatorType = "exec_input"
+
+func init() { //nolint:gochecknoinits
+	operator.Register(operatorType, func() operator.Builder { return NewConfig() })
+}
+
+// NewConfig creates a new input config with default values.
+func NewConfig() *Config {
+	return NewConfigWithID(operatorType)
+}
+
+// NewConfigWithID creates a new input config with default values.
+func NewConfigWithID(operatorID string) *Config {
+	return &Config{
+		InputConfig: helper.NewInputConfig(operatorID, operatorType),
+		BaseConfig: BaseConfig{
+			Encoding:   "utf8",
+			MaxLogSize: 1024 * 1024,
+		},
+	}
+}
+
+// Config is the configuration of a stdin input operator.
+type Config struct {
+	helper.InputConfig `mapstructure:",squash"`
+	BaseConfig         `mapstructure:",squash"`
+}
+
+type BaseConfig struct {
+	Argv        []string     `mapstructure:"path"`
+	Encoding    string       `mapstructure:"encoding"`
+	SplitConfig split.Config `mapstructure:"multiline,omitempty"`
+	TrimConfig  trim.Config  `mapstructure:",squash"`
+	MaxLogSize  int          `mapstructure:"max_log_size"`
+}
+
+// Build will build a exec input operator.
+func (c *Config) Build(set component.TelemetrySettings) (operator.Operator, error) {
+	inputOperator, err := c.InputConfig.Build(set)
+	if err != nil {
+		return nil, err
+	}
+
+	enc, err := decode.LookupEncoding(c.Encoding)
+	if err != nil {
+		return nil, fmt.Errorf("failed to lookup encoding %q: %w", c.Encoding, err)
+	}
+
+	splitFunc, err := c.SplitConfig.Func(enc, true, c.BaseConfig.MaxLogSize)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create split function: %w", err)
+	}
+
+	expBackoff := backoff.ExponentialBackOff{
+		MaxElapsedTime:      15 * time.Minute,
+		MaxInterval:         time.Minute,
+		RandomizationFactor: backoff.DefaultRandomizationFactor,
+		Multiplier:          backoff.DefaultMultiplier,
+		Stop:                backoff.Stop,
+		Clock:               backoff.SystemClock,
+	}
+	expBackoff.Reset()
+
+	return &Input{
+		InputOperator: inputOperator,
+
+		buffer:    make([]byte, c.BaseConfig.MaxLogSize),
+		argv:      c.Argv,
+		splitFunc: splitFunc,
+		trimFunc:  c.TrimConfig.Func(),
+		backoff:   &expBackoff,
+	}, nil
+}

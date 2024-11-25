@@ -21,8 +21,8 @@ import (
 
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/otel/execlogreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configtelemetry"
 	"go.opentelemetry.io/collector/exporter"
@@ -36,7 +36,6 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	noopM "go.opentelemetry.io/otel/metric/noop"
 	"go.opentelemetry.io/otel/trace/noop"
-	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
 
@@ -51,7 +50,7 @@ func MakePipeline(ctx context.Context, cfg config.POC, f func(context.Context, [
 	factoryBatch := batchprocessor.NewFactory()
 
 	telemetry := component.TelemetrySettings{
-		Logger:               zap.L(),
+		Logger:               logger.ZapLogger(),
 		TracerProvider:       noop.NewTracerProvider(),
 		MeterProvider:        noopM.NewMeterProvider(),
 		LeveledMeterProvider: func(_ configtelemetry.Level) metric.MeterProvider { return noopM.NewMeterProvider() },
@@ -123,9 +122,10 @@ func MakePipeline(ctx context.Context, cfg config.POC, f func(context.Context, [
 	}
 
 	if len(cfg.LogFile) > 0 {
-		factoryFileLog := filelogreceiver.NewFactory()
-		flCfg := factoryFileLog.CreateDefaultConfig().(*filelogreceiver.FileLogConfig) //nolint: forcetypeassert // TODO type assertion check
-		flCfg.InputConfig.Include = cfg.LogFile
+		// TODO: use filelogreceiver if Glouton had access to the file
+		factoryExecLog := execlogreceiver.NewFactory()
+		execCfg := factoryExecLog.CreateDefaultConfig().(*execlogreceiver.ExecLogConfig) //nolint: forcetypeassert // TODO type assertion check
+		execCfg.InputConfig.Argv = []string{"tail", "-f", cfg.LogFile[0]}
 
 		var ops []operator.Config
 
@@ -133,12 +133,12 @@ func MakePipeline(ctx context.Context, cfg config.POC, f func(context.Context, [
 			return err
 		}
 
-		flCfg.Operators = ops
+		execCfg.Operators = ops
 
-		filelogReceiver, err := factoryFileLog.CreateLogs(
+		filelogReceiver, err := factoryExecLog.CreateLogs(
 			ctx,
 			receiver.Settings{TelemetrySettings: telemetry},
-			flCfg,
+			execCfg,
 			logBatcher,
 		)
 		if err != nil {
