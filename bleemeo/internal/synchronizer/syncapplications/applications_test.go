@@ -76,8 +76,9 @@ func Test_syncRemoteAndLocal(t *testing.T) {
 			name: "application",
 			localServices: []discovery.Service{
 				{
-					Name: "redis",
-					Tags: []string{"user-tag"},
+					Name:   "redis",
+					Active: true,
+					Tags:   []string{"user-tag"},
 					Applications: []discovery.Application{
 						{
 							Name: "my-compose",
@@ -175,6 +176,24 @@ func Test_syncRemoteAndLocal(t *testing.T) {
 					},
 				},
 			},
+			remoteApplication:     []bleemeoTypes.Application{},
+			wantCreateApplication: []bleemeoTypes.Application{},
+		},
+		{
+			name: "inactive application",
+			localServices: []discovery.Service{
+				{
+					Name:   "redis",
+					Active: false,
+					Applications: []discovery.Application{
+						{
+							Name: "my-compose",
+							Type: discovery.ApplicationDockerCompose,
+						},
+					},
+				},
+			},
+			remoteServices:        []bleemeoTypes.Service{},
 			remoteApplication:     []bleemeoTypes.Application{},
 			wantCreateApplication: []bleemeoTypes.Application{},
 		},
