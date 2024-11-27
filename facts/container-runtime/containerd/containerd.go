@@ -844,24 +844,39 @@ func convertToContainerObject(ctx context.Context, ns string, cont containerd.Co
 		imageID: imgDigest,
 	}
 
-	task, err := cont.Task(ctx, nil)
-	if err == nil {
-		obj.pid = int(task.Pid())
-
-		status, err := task.Status(ctx)
-		if err == nil {
-			obj.state = string(status.Status)
-			obj.exitTime = status.ExitTime
-		}
-	}
-
 	if spec.Process != nil {
 		obj.args = spec.Process.Args
 	}
 
+	task, err := cont.Task(ctx, nil)
 	if err != nil {
 		logger.V(2).Printf("container %s/%s, ignore error while fetching task status: %v", ns, cont.ID(), err)
+
+		return obj, nil
 	}
+
+	obj.pid = int(task.Pid())
+
+	status, err := task.Status(ctx)
+	if err == nil {
+		obj.state = string(status.Status)
+		obj.exitTime = status.ExitTime
+	}
+
+	// To get the container's start time, we need to rely on the corresponding process.
+	// Due to syscall implementations differing across platforms,
+	// we need to handle 3 different cases:
+	// - syscall.Stat_t has a Ctim field (linux, ...)
+	// - syscall.Stat_t has a Ctimespec field (darwin, freebsd, netbsd)
+	// - syscall.Stat_t doesn't exist at all (windows)
+	startTime, err := getStartTime(obj.pid)
+	if err != nil {
+		logger.V(2).Printf("container %s/%s, ignore error while trying to stat process %d: %v", ns, cont.ID(), obj.pid, err)
+
+		return obj, nil
+	}
+
+	obj.startTime = startTime
 
 	return obj, nil
 }
@@ -1007,6 +1022,7 @@ type containerObject struct {
 	pid       int
 	state     string
 	args      []string
+	startTime time.Time
 	exitTime  time.Time
 	imageID   string
 }
@@ -1132,7 +1148,7 @@ func (c containerObject) PrimaryAddress() string {
 }
 
 func (c containerObject) StartedAt() time.Time {
-	return time.Time{}
+	return c.startTime
 }
 
 func (c containerObject) State() facts.ContainerState {
