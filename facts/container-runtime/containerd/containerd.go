@@ -863,20 +863,21 @@ func convertToContainerObject(ctx context.Context, ns string, cont containerd.Co
 		obj.exitTime = status.ExitTime
 	}
 
-	// To get the container's start time, we need to rely on the corresponding process.
-	// Due to syscall implementations differing across platforms,
-	// we need to handle 3 different cases:
-	// - syscall.Stat_t has a Ctim field (linux, ...)
-	// - syscall.Stat_t has a Ctimespec field (darwin, freebsd, netbsd)
-	// - syscall.Stat_t doesn't exist at all (windows)
-	startTime, err := getStartTime(obj.pid)
+	proc, err := process.NewProcess(int32(obj.pid)) //nolint:gosec
 	if err != nil {
-		logger.V(2).Printf("container %s/%s, ignore error while trying to stat process %d: %v", ns, cont.ID(), obj.pid, err)
+		logger.Printf("container %s/%s, ignore error while retrieving corresponding process: %v", ns, cont.ID(), err)
 
 		return obj, nil
 	}
 
-	obj.startTime = startTime
+	startTimeMs, err := proc.CreateTimeWithContext(ctx)
+	if err != nil {
+		logger.Printf("container %s/%s, ignore error while retrieving process creation time: %v", ns, cont.ID(), err)
+
+		return obj, nil
+	}
+
+	obj.startTime = time.UnixMilli(startTimeMs)
 
 	return obj, nil
 }
