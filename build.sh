@@ -59,7 +59,7 @@ if [ "${SKIP_JS}" != "1" -a "${ONLY_GO}" != "1" ]; then
    mkdir -p api/static/assets/css/ api/static/assets/js/ webui/node_modules
    docker run --rm -e HOME=/go/pkg/node \
       -v $(pwd):/src --tmpfs /src/webui/node_modules:exec -w /src/webui ${NODE_MOUNT_CACHE} \
-      node:18 \
+      node:22 \
       sh -exc "
       mkdir -p /go/pkg/node
       chown node -R /go/pkg/node
