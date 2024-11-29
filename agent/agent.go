@@ -1084,7 +1084,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.l.Unlock()
 
 		if err := poc.MakePipeline(ctx, a.config.POC, connector.PushLogs); err != nil {
-			logger.Printf("ERROR: %v", err)
+			logger.Printf("unable to setup log processing: %v", err)
 		}
 
 		a.gathererRegistry.UpdateRegistrationHooks(a.bleemeoConnector.RelabelHook, a.bleemeoConnector.UpdateDelayHook)

@@ -58,7 +58,7 @@ func DefaultConfig() Config { //nolint:maintidx
 	return Config{
 		POC: POC{
 			GRPCAddress:   "localhost:4317",
-			LogFile:       []string{},
+			LogFiles:      []string{},
 			OperatorsYAML: "",
 		},
 		Agent: Agent{

@@ -60,7 +60,7 @@ type Config struct {
 
 type POC struct {
 	GRPCAddress   string   `yaml:"grpc_address"`
-	LogFile       []string `yaml:"log_files"`
+	LogFiles      []string `yaml:"log_files"`
 	OperatorsYAML string   `yaml:"operators"` // TODO: because koanf don't use UnmarshalYAML, we can't use operator.Config as we should
 }
 
