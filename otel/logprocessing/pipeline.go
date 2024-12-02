@@ -14,14 +14,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package poc
+package logprocessing
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/bleemeo/glouton/config"
@@ -51,15 +53,12 @@ const shutdownTimeout = 5 * time.Second
 
 var errUnexpectedType = errors.New("unexpected type")
 
-func MakePipeline(ctx context.Context, cfg config.POC, pushLogs func(context.Context, []byte) error) error {
+func MakePipeline(ctx context.Context, cfg config.OpenTelemetry, pushLogs func(context.Context, []byte) error) error {
 	// TODO: no logs & metrics at the same time
 	// TODO: buffering / back pressure not implemented (we don't send the ErrBackPressureSignal back to client that send us logs)
 
 	// startedComponents represents all the components that must be shut down at the end of the context's lifecycle.
-	startedComponents := make([]component.Component, 0, 4)
-
-	factoryReceiver := otlpreceiver.NewFactory()
-	factoryBatch := batchprocessor.NewFactory()
+	startedComponents := make([]component.Component, 0, 3+len(cfg.LogFiles)) // 3 == 1 exporter + 1 GRPC receiver + 1 HTTP receiver.
 
 	telemetry := component.TelemetrySettings{
 		Logger:               logger.ZapLogger(),
@@ -105,6 +104,8 @@ func MakePipeline(ctx context.Context, cfg config.POC, pushLogs func(context.Con
 
 	startedComponents = append(startedComponents, logExporter)
 
+	factoryBatch := batchprocessor.NewFactory()
+
 	logBatcher, err := factoryBatch.CreateLogs(
 		ctx,
 		processor.Settings{TelemetrySettings: telemetry},
@@ -125,35 +126,47 @@ func MakePipeline(ctx context.Context, cfg config.POC, pushLogs func(context.Con
 
 	startedComponents = append(startedComponents, logBatcher)
 
-	receiverCfg := factoryReceiver.CreateDefaultConfig()
+	if cfg.GRPC.Enable || cfg.HTTP.Enable {
+		factoryReceiver := otlpreceiver.NewFactory()
+		receiverCfg := factoryReceiver.CreateDefaultConfig()
 
-	receiverTypedCfg, ok := receiverCfg.(*otlpreceiver.Config)
-	if !ok {
-		return fmt.Errorf("%w for receiver default config: %T", errUnexpectedType, receiverCfg)
+		receiverTypedCfg, ok := receiverCfg.(*otlpreceiver.Config)
+		if !ok {
+			return fmt.Errorf("%w for receiver default config: %T", errUnexpectedType, receiverCfg)
+		}
+
+		if cfg.GRPC.Enable {
+			receiverTypedCfg.Protocols.GRPC.NetAddr.Endpoint = net.JoinHostPort(cfg.GRPC.Address, strconv.Itoa(cfg.GRPC.Port))
+		} else {
+			receiverTypedCfg.Protocols.GRPC = nil
+		}
+
+		if cfg.HTTP.Enable {
+			receiverTypedCfg.Protocols.HTTP.Endpoint = net.JoinHostPort(cfg.HTTP.Address, strconv.Itoa(cfg.HTTP.Port))
+		} else {
+			receiverTypedCfg.Protocols.HTTP = nil
+		}
+
+		otlpLogReceiver, err := factoryReceiver.CreateLogs(
+			ctx,
+			receiver.Settings{TelemetrySettings: telemetry},
+			receiverTypedCfg,
+			logBatcher,
+		)
+		if err != nil {
+			shutdownAll(startedComponents)
+
+			return fmt.Errorf("setup OTLP receiver: %w", err)
+		}
+
+		if err = otlpLogReceiver.Start(ctx, nil); err != nil {
+			shutdownAll(startedComponents)
+
+			return fmt.Errorf("start OTLP receiver: %w", err)
+		}
+
+		startedComponents = append(startedComponents, otlpLogReceiver)
 	}
-
-	receiverTypedCfg.Protocols.GRPC.NetAddr.Endpoint = cfg.GRPCAddress // TODO: config
-	// receiverTypedCfg.Protocols.HTTP.Endpoint = "localhost:4318"
-
-	otlpLogReceiver, err := factoryReceiver.CreateLogs(
-		ctx,
-		receiver.Settings{TelemetrySettings: telemetry},
-		receiverTypedCfg,
-		logBatcher,
-	)
-	if err != nil {
-		shutdownAll(startedComponents)
-
-		return fmt.Errorf("setup OTLP receiver: %w", err)
-	}
-
-	if err = otlpLogReceiver.Start(ctx, nil); err != nil {
-		shutdownAll(startedComponents)
-
-		return fmt.Errorf("start OTLP receiver: %w", err)
-	}
-
-	startedComponents = append(startedComponents, otlpLogReceiver)
 
 	if len(cfg.LogFiles) > 0 {
 		logReceiverFactory, logReceiverCfg, err := chooseLogReceiver(cfg.LogFiles[0], []byte(cfg.OperatorsYAML))
@@ -255,6 +268,7 @@ func chooseLogReceiver(file string, operatorsYaml []byte) (factory receiver.Fact
 }
 
 // shutdownAll stops all the given components (in reverse order).
+// It should be called before every unsuccessful return of the log pipeline initialization.
 func shutdownAll(components []component.Component) {
 	logger.Printf("Shutting down %d log processing components: %s", len(components), formatTypes(components)) // TODO: remove
 

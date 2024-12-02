@@ -24,7 +24,6 @@ import (
 
 // Config is the structured configuration of the agent.
 type Config struct {
-	POC                            POC                  `yaml:"poc"` // TODO: remove
 	Agent                          Agent                `yaml:"agent"`
 	Blackbox                       Blackbox             `yaml:"blackbox"`
 	Bleemeo                        Bleemeo              `yaml:"bleemeo"`
@@ -58,16 +57,11 @@ type Config struct {
 	Zabbix                         Zabbix               `yaml:"zabbix"`
 }
 
-type POC struct {
-	GRPCAddress   string   `yaml:"grpc_address"`
-	LogFiles      []string `yaml:"log_files"`
-	OperatorsYAML string   `yaml:"operators"` // TODO: because koanf don't use UnmarshalYAML, we can't use operator.Config as we should
-}
-
 type Log struct {
-	FluentBitURL   string     `yaml:"fluentbit_url"`
-	HostRootPrefix string     `yaml:"hostroot_prefix"`
-	Inputs         []LogInput `yaml:"inputs"`
+	FluentBitURL   string        `yaml:"fluentbit_url"`
+	HostRootPrefix string        `yaml:"hostroot_prefix"`
+	Inputs         []LogInput    `yaml:"inputs"`
+	OpenTelemetry  OpenTelemetry `yaml:"opentelemetry"`
 }
 
 type LogInput struct {
@@ -80,6 +74,21 @@ type LogInput struct {
 type LogFilter struct {
 	Metric string `yaml:"metric"`
 	Regex  string `yaml:"regex"`
+}
+
+type OpenTelemetry struct {
+	Enable        bool           `yaml:"enable"`
+	GRPC          EnableListener `yaml:"grpc"`
+	HTTP          EnableListener `yaml:"http"`
+	LogFiles      []string       `yaml:"log_files"`
+	AutoDiscovery bool           `yaml:"auto_discovery"`
+	OperatorsYAML string         `yaml:"operators"` // TODO: because koanf don't use UnmarshalYAML, we can't use operator.Config as we should
+}
+
+type EnableListener struct {
+	Enable  bool   `yaml:"enable"`
+	Address string `yaml:"address"`
+	Port    int    `yaml:"port"`
 }
 
 type Smart struct {

@@ -56,11 +56,6 @@ func DefaultConfig() Config { //nolint:maintidx
 	defaultBlackboxModule.DNS.QueryName = "default"
 
 	return Config{
-		POC: POC{
-			GRPCAddress:   "localhost:4317",
-			LogFiles:      []string{},
-			OperatorsYAML: "",
-		},
 		Agent: Agent{
 			CloudImageCreationFile: "cloudimage_creation",
 			FactsFile:              "facts.yaml",
@@ -256,6 +251,22 @@ func DefaultConfig() Config { //nolint:maintidx
 			FluentBitURL:   "",
 			HostRootPrefix: "/hostroot",
 			Inputs:         []LogInput{},
+			OpenTelemetry: OpenTelemetry{
+				Enable: false,
+				GRPC: EnableListener{
+					Enable:  true,
+					Address: "localhost",
+					Port:    4317,
+				},
+				HTTP: EnableListener{
+					Enable:  true,
+					Address: "localhost",
+					Port:    4318,
+				},
+				LogFiles:      []string{},
+				AutoDiscovery: true,
+				OperatorsYAML: "",
+			},
 		},
 		Logging: Logging{
 			Buffer: LoggingBuffer{
