@@ -53,7 +53,6 @@ var errUnexpectedType = errors.New("unexpected type")
 
 func MakePipeline(ctx context.Context, cfg config.POC, pushLogs func(context.Context, []byte) error) error {
 	// TODO: no logs & metrics at the same time
-	// TODO: probably issue when configuration is reloaded (might be fixed when shutdown is correctly implemented)
 	// TODO: buffering / back pressure not implemented (we don't send the ErrBackPressureSignal back to client that send us logs)
 
 	// startedComponents represents all the components that must be shut down at the end of the context's lifecycle.
@@ -93,10 +92,14 @@ func MakePipeline(ctx context.Context, cfg config.POC, pushLogs func(context.Con
 		},
 	)
 	if err != nil {
+		shutdownAll(startedComponents)
+
 		return fmt.Errorf("setup exporter: %w", err)
 	}
 
 	if err = logExporter.Start(ctx, nil); err != nil {
+		shutdownAll(startedComponents)
+
 		return fmt.Errorf("start exporter: %w", err)
 	}
 
@@ -109,10 +112,14 @@ func MakePipeline(ctx context.Context, cfg config.POC, pushLogs func(context.Con
 		logExporter,
 	)
 	if err != nil {
+		shutdownAll(startedComponents)
+
 		return fmt.Errorf("setup batcher: %w", err)
 	}
 
 	if err = logBatcher.Start(ctx, nil); err != nil {
+		shutdownAll(startedComponents)
+
 		return fmt.Errorf("start batcher: %w", err)
 	}
 
@@ -135,10 +142,14 @@ func MakePipeline(ctx context.Context, cfg config.POC, pushLogs func(context.Con
 		logBatcher,
 	)
 	if err != nil {
+		shutdownAll(startedComponents)
+
 		return fmt.Errorf("setup OTLP receiver: %w", err)
 	}
 
 	if err = otlpLogReceiver.Start(ctx, nil); err != nil {
+		shutdownAll(startedComponents)
+
 		return fmt.Errorf("start OTLP receiver: %w", err)
 	}
 
@@ -147,7 +158,9 @@ func MakePipeline(ctx context.Context, cfg config.POC, pushLogs func(context.Con
 	if len(cfg.LogFiles) > 0 {
 		logReceiverFactory, logReceiverCfg, err := chooseLogReceiver(cfg.LogFiles[0], []byte(cfg.OperatorsYAML))
 		if err != nil {
-			return err
+			shutdownAll(startedComponents)
+
+			return fmt.Errorf("chosing log receiver: %w", err)
 		}
 
 		logReceiver, err := logReceiverFactory.CreateLogs(
@@ -157,17 +170,28 @@ func MakePipeline(ctx context.Context, cfg config.POC, pushLogs func(context.Con
 			logBatcher,
 		)
 		if err != nil {
+			shutdownAll(startedComponents)
+
 			return fmt.Errorf("setup log receiver: %w", err)
 		}
 
 		if err = logReceiver.Start(ctx, nil); err != nil {
+			shutdownAll(startedComponents)
+
 			return fmt.Errorf("start log receiver: %w", err)
 		}
 
 		startedComponents = append(startedComponents, logReceiver)
 	}
 
-	go waitThenShutdown(ctx, startedComponents)
+	// Scheduling the shutdown of all the components we've started
+	go func() {
+		defer crashreport.ProcessPanic()
+
+		<-ctx.Done()
+
+		shutdownAll(startedComponents)
+	}()
 
 	return nil
 }
@@ -205,8 +229,11 @@ func chooseLogReceiver(file string, operatorsYaml []byte) (factory receiver.Fact
 		}
 
 		fileTypedCfg.InputConfig.Include = []string{file}
+		fileTypedCfg.Operators = ops
 
 		cfg = fileTypedCfg
+
+		logger.Printf("Chose file log receiver for file %q", file) // TODO: remove
 	} else {
 		factory = execlogreceiver.NewFactory()
 		execCfg := factory.CreateDefaultConfig()
@@ -220,20 +247,16 @@ func chooseLogReceiver(file string, operatorsYaml []byte) (factory receiver.Fact
 		execTypedCfg.Operators = ops
 
 		cfg = execTypedCfg
+
+		logger.Printf("Chose exec log receiver for file %q", file) // TODO: remove
 	}
 
 	return factory, cfg, nil
 }
 
-// waitThenShutdown waits for the given context to expire,
-// then stops all the given components (starting by the last one).
-// It must be started in a new goroutine.
-func waitThenShutdown(ctx context.Context, components []component.Component) {
-	defer crashreport.ProcessPanic()
-
-	<-ctx.Done()
-
-	logger.Printf("Shutting down %d log processing components ...", len(components)) // TODO: remove
+// shutdownAll stops all the given components (in reverse order).
+func shutdownAll(components []component.Component) {
+	logger.Printf("Shutting down %d log processing components: %s", len(components), formatTypes(components)) // TODO: remove
 
 	// Shutting down first the components that are at the beginning of the log production chain.
 	for _, comp := range slices.Backward(components) {
@@ -249,4 +272,19 @@ func waitThenShutdown(ctx context.Context, components []component.Component) {
 			}
 		}()
 	}
+}
+
+// formatTypes acts like a mix of %T and %v, on a slice.
+func formatTypes[E any](a []E) string {
+	result := "["
+
+	for i, e := range a {
+		result += fmt.Sprintf("%T", e)
+
+		if i < len(a)-1 {
+			result += " "
+		}
+	}
+
+	return result + "]"
 }
