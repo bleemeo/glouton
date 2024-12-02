@@ -168,14 +168,14 @@ func MakePipeline(ctx context.Context, cfg config.OpenTelemetry, pushLogs func(c
 		startedComponents = append(startedComponents, otlpLogReceiver)
 	}
 
-	if len(cfg.LogFiles) > 0 {
-		logReceiverFactory, logReceiverCfg, err := chooseLogReceiver(cfg.LogFiles[0], []byte(cfg.OperatorsYAML))
-		if err != nil {
-			shutdownAll(startedComponents)
+	fileLogReceiverFactories, err := setupLogReceiverFactories(cfg.LogFiles, []byte(cfg.OperatorsYAML))
+	if err != nil {
+		shutdownAll(startedComponents)
 
-			return fmt.Errorf("chosing log receiver: %w", err)
-		}
+		return fmt.Errorf("setup file log receiver factories: %w", err)
+	}
 
+	for logReceiverFactory, logReceiverCfg := range fileLogReceiverFactories {
 		logReceiver, err := logReceiverFactory.CreateLogs(
 			ctx,
 			receiver.Settings{TelemetrySettings: telemetry},
@@ -209,62 +209,75 @@ func MakePipeline(ctx context.Context, cfg config.OpenTelemetry, pushLogs func(c
 	return nil
 }
 
-func chooseLogReceiver(file string, operatorsYaml []byte) (factory receiver.Factory, cfg component.Config, err error) {
-	canReadFile := true
-
-	f, err := os.OpenFile(file, os.O_RDONLY, 0) // the mode perm isn't needed for read
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil, err
-		}
-
-		canReadFile = false
-	} else {
-		err = f.Close()
-		if err != nil {
-			logger.Printf("Failed to close log file %q: %v", file, err)
-		}
-	}
-
+// setupLogReceiverFactories builds receiver factories for the given log files,
+// accordingly to whether the file is directly readable or not.
+// Files that don't exist at the time of the call to this function will be ignored.
+func setupLogReceiverFactories(logFiles []string, operatorsYaml []byte) (map[receiver.Factory]component.Config, error) {
 	var ops []operator.Config
 
-	if err = yaml.Unmarshal(operatorsYaml, &ops); err != nil {
-		return nil, nil, fmt.Errorf("log receiver operators: %w", err)
+	if err := yaml.Unmarshal(operatorsYaml, &ops); err != nil {
+		return nil, fmt.Errorf("log receiver operators: %w", err)
 	}
 
-	if canReadFile {
-		factory = filelogreceiver.NewFactory()
+	var readableFiles, otherFiles []string
+
+	for _, logFile := range logFiles {
+		f, err := os.OpenFile(logFile, os.O_RDONLY, 0) // the mode perm isn't needed for read
+		if err != nil {
+			if os.IsNotExist(err) {
+				logger.V(0).Printf("Log file %q does not exist, ignoring it.", logFile)
+
+				continue
+			}
+
+			otherFiles = append(otherFiles, logFile) // assuming the error will not occur using "sudo tail ..."
+		} else {
+			err = f.Close()
+			if err != nil {
+				logger.V(1).Printf("Failed to close log file %q: %v", logFile, err)
+			}
+
+			readableFiles = append(readableFiles, logFile)
+		}
+	}
+
+	factories := make(map[receiver.Factory]component.Config)
+
+	if len(readableFiles) > 0 {
+		factory := filelogreceiver.NewFactory()
 		fileCfg := factory.CreateDefaultConfig()
 
 		fileTypedCfg, ok := fileCfg.(*filelogreceiver.FileLogConfig)
 		if !ok {
-			return nil, nil, fmt.Errorf("%w for file log receiver: %T", errUnexpectedType, fileCfg)
+			return nil, fmt.Errorf("%w for file log receiver: %T", errUnexpectedType, fileCfg)
 		}
 
-		fileTypedCfg.InputConfig.Include = []string{file}
+		fileTypedCfg.InputConfig.Include = readableFiles
 		fileTypedCfg.Operators = ops
 
-		cfg = fileTypedCfg
+		factories[factory] = fileTypedCfg
 
-		logger.Printf("Chose file log receiver for file %q", file) // TODO: remove
-	} else {
-		factory = execlogreceiver.NewFactory()
+		logger.Printf("Chose file log receiver for file(s) %v", readableFiles) // TODO: remove
+	}
+
+	for _, logFile := range otherFiles {
+		factory := execlogreceiver.NewFactory()
 		execCfg := factory.CreateDefaultConfig()
 
 		execTypedCfg, ok := execCfg.(*execlogreceiver.ExecLogConfig)
 		if !ok {
-			return nil, nil, fmt.Errorf("%w for exec log receiver: %T", errUnexpectedType, execCfg)
+			return nil, fmt.Errorf("%w for exec log receiver: %T", errUnexpectedType, execCfg)
 		}
 
-		execTypedCfg.InputConfig.Argv = []string{"sudo", "tail", "--follow=name", file}
+		execTypedCfg.InputConfig.Argv = []string{"sudo", "tail", "--follow=name", logFile}
 		execTypedCfg.Operators = ops
 
-		cfg = execTypedCfg
+		factories[factory] = execTypedCfg
 
-		logger.Printf("Chose exec log receiver for file %q", file) // TODO: remove
+		logger.Printf("Chose exec log receiver for file %q", logFile) // TODO: remove
 	}
 
-	return factory, cfg, nil
+	return factories, nil
 }
 
 // shutdownAll stops all the given components (in reverse order).
@@ -282,7 +295,7 @@ func shutdownAll(components []component.Component) {
 
 			err := comp.Shutdown(shutdownCtx)
 			if err != nil {
-				logger.Printf("Failed to shutdown log processing component %T: %v", comp, err)
+				logger.V(1).Printf("Failed to shutdown log processing component %T: %v", comp, err)
 			}
 		}()
 	}
