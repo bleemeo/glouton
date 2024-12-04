@@ -30,7 +30,9 @@ import (
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/otel/execlogreceiver"
+	"github.com/bleemeo/glouton/types"
 
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver"
 	"go.opentelemetry.io/collector/component"
@@ -41,6 +43,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/processor"
 	"go.opentelemetry.io/collector/processor/batchprocessor"
+	"go.opentelemetry.io/collector/processor/processorhelper"
 	"go.opentelemetry.io/collector/receiver"
 	"go.opentelemetry.io/collector/receiver/otlpreceiver"
 	"go.opentelemetry.io/otel/metric"
@@ -53,9 +56,13 @@ const shutdownTimeout = 5 * time.Second
 
 var errUnexpectedType = errors.New("unexpected type")
 
-func MakePipeline(ctx context.Context, cfg config.OpenTelemetry, pushLogs func(context.Context, []byte) error) error {
+func MakePipeline(
+	ctx context.Context,
+	cfg config.OpenTelemetry,
+	pushLogs func(context.Context, []byte) error,
+	applyBackPressureFn func() bool,
+) error {
 	// TODO: no logs & metrics at the same time
-	// TODO: buffering / back pressure not implemented (we don't send the ErrBackPressureSignal back to client that send us logs)
 
 	// startedComponents represents all the components that must be shut down at the end of the context's lifecycle.
 	startedComponents := make([]component.Component, 0, 3+len(cfg.LogFiles)) // 3 == 1 exporter + 1 GRPC receiver + 1 HTTP receiver.
@@ -78,8 +85,6 @@ func MakePipeline(ctx context.Context, cfg config.OpenTelemetry, pushLogs func(c
 			if err != nil {
 				return err
 			}
-
-			logger.Printf("Pushing logs using %p", pushLogs) // TODO: remove
 
 			if err = pushLogs(ctx, b); err != nil {
 				logger.V(1).Printf("Failed to push logs: %v", err)
@@ -124,6 +129,17 @@ func MakePipeline(ctx context.Context, cfg config.OpenTelemetry, pushLogs func(c
 		return fmt.Errorf("start batcher: %w", err)
 	}
 
+	logBackPressureEnforcer, err := processorhelper.NewLogs(
+		ctx,
+		processor.Settings{TelemetrySettings: telemetry},
+		nil,
+		logBatcher,
+		makeEnforceBackPressureFn(applyBackPressureFn),
+	)
+	if err != nil {
+		return fmt.Errorf("setup log back-pressure enforcer: %w", err)
+	}
+
 	startedComponents = append(startedComponents, logBatcher)
 
 	if cfg.GRPC.Enable || cfg.HTTP.Enable {
@@ -151,7 +167,7 @@ func MakePipeline(ctx context.Context, cfg config.OpenTelemetry, pushLogs func(c
 			ctx,
 			receiver.Settings{TelemetrySettings: telemetry},
 			receiverTypedCfg,
-			logBatcher,
+			logBackPressureEnforcer,
 		)
 		if err != nil {
 			shutdownAll(startedComponents)
@@ -180,7 +196,7 @@ func MakePipeline(ctx context.Context, cfg config.OpenTelemetry, pushLogs func(c
 			ctx,
 			receiver.Settings{TelemetrySettings: telemetry},
 			logReceiverCfg,
-			logBatcher,
+			logBackPressureEnforcer,
 		)
 		if err != nil {
 			shutdownAll(startedComponents)
@@ -207,6 +223,33 @@ func MakePipeline(ctx context.Context, cfg config.OpenTelemetry, pushLogs func(c
 	}()
 
 	return nil
+}
+
+func makeEnforceBackPressureFn(applyBackPressureFn func() bool) func(context.Context, plog.Logs) (plog.Logs, error) {
+	// Since applyBackPressureFn needs to acquire a lock, we want to avoid calling it too frequently.
+	const cacheLifetime = 5 * time.Second
+
+	var (
+		lastCacheValue  bool
+		lastCacheUpdate time.Time
+	)
+
+	applyBackPressureDebounced := func() bool {
+		if time.Since(lastCacheUpdate) > cacheLifetime {
+			lastCacheValue = applyBackPressureFn()
+			lastCacheUpdate = time.Now()
+		}
+
+		return lastCacheValue
+	}
+
+	return func(_ context.Context, logs plog.Logs) (plog.Logs, error) {
+		if applyBackPressureDebounced() {
+			return logs, types.ErrBackPressureSignal
+		}
+
+		return logs, nil
+	}
 }
 
 // setupLogReceiverFactories builds receiver factories for the given log files,
@@ -241,6 +284,20 @@ func setupLogReceiverFactories(logFiles []string, operatorsYaml []byte) (map[rec
 		}
 	}
 
+	// Since github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal/consumerretry is internal,
+	// we recreate its config type and mapstructure.Decode() it into the receivers' options.
+	retryCfg := struct {
+		Enabled         bool          `mapstructure:"enabled"`
+		InitialInterval time.Duration `mapstructure:"initial_interval"`
+		MaxInterval     time.Duration `mapstructure:"max_interval"`
+		MaxElapsedTime  time.Duration `mapstructure:"max_elapsed_time"`
+	}{
+		Enabled:         true,
+		InitialInterval: 1 * time.Second,  // default value
+		MaxInterval:     30 * time.Second, // default value
+		MaxElapsedTime:  1 * time.Hour,
+	}
+
 	factories := make(map[receiver.Factory]component.Config)
 
 	if len(readableFiles) > 0 {
@@ -254,6 +311,11 @@ func setupLogReceiverFactories(logFiles []string, operatorsYaml []byte) (map[rec
 
 		fileTypedCfg.InputConfig.Include = readableFiles
 		fileTypedCfg.Operators = ops
+
+		err := mapstructure.Decode(retryCfg, &fileTypedCfg.RetryOnFailure)
+		if err != nil {
+			return nil, fmt.Errorf("failed to define consumerretry config for filelogreceiver: %w", err)
+		}
 
 		factories[factory] = fileTypedCfg
 
@@ -271,6 +333,11 @@ func setupLogReceiverFactories(logFiles []string, operatorsYaml []byte) (map[rec
 
 		execTypedCfg.InputConfig.Argv = []string{"sudo", "tail", "--follow=name", logFile}
 		execTypedCfg.Operators = ops
+
+		err := mapstructure.Decode(retryCfg, &execTypedCfg.RetryOnFailure)
+		if err != nil {
+			return nil, fmt.Errorf("failed to define consumerretry config for execlogreceiver: %w", err)
+		}
 
 		factories[factory] = execTypedCfg
 

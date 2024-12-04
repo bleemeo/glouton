@@ -49,6 +49,8 @@ const (
 	StatusUnknown
 )
 
+var ErrBackPressureSignal = errors.New("back-pressure signal")
+
 //nolint:gochecknoglobals
 var quoter = strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`)
 

@@ -1084,7 +1084,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.l.Unlock()
 
 		if a.config.Log.OpenTelemetry.Enable {
-			if err := logprocessing.MakePipeline(ctx, a.config.Log.OpenTelemetry, connector.PushLogs); err != nil {
+			err = logprocessing.MakePipeline(ctx, a.config.Log.OpenTelemetry, connector.PushLogs, connector.ShouldApplyLogBackPressure)
+			if err != nil {
 				logger.Printf("unable to setup log processing: %v", err)
 			}
 		}

@@ -56,10 +56,7 @@ const (
 	logsAckBackPressureDelay    = 1*time.Minute + 10*time.Second
 )
 
-var (
-	ErrNotConnected       = errors.New("currently not connected to MQTT")
-	ErrBackPressureSignal = errors.New("back-pressure signal")
-)
+var ErrNotConnected = errors.New("currently not connected to MQTT")
 
 // Option are parameter for the MQTT client.
 type Option struct {
@@ -607,7 +604,7 @@ func (c *Client) PushLogs(_ context.Context, payload []byte) error {
 	}
 
 	if !c.logsStreamAvailable || time.Since(c.lastAck) > logsAckBackPressureDelay {
-		return ErrBackPressureSignal
+		return types.ErrBackPressureSignal
 	}
 
 	if err := c.mqtt.PublishBytes(fmt.Sprintf("v1/agent/%s/logs", c.opts.AgentID), payload, true); err != nil {
@@ -615,6 +612,21 @@ func (c *Client) PushLogs(_ context.Context, payload []byte) error {
 	}
 
 	return nil
+}
+
+func (c *Client) CanSendLogs() bool {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	if !c.connected() {
+		return false
+	}
+
+	if !c.logsStreamAvailable {
+		return false
+	}
+
+	return time.Since(c.lastAck) < logsAckBackPressureDelay
 }
 
 func (c *Client) sendPoints() {
