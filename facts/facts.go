@@ -25,7 +25,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -35,6 +34,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 	"github.com/bleemeo/glouton/version"
 
 	"github.com/shirou/gopsutil/v3/cpu"
@@ -72,6 +72,7 @@ type FactProvider struct {
 	factPath       string
 	hostRootPath   string
 	ipIndicatorURL string
+	runner         *gloutonexec.Runner
 
 	manualFact map[string]string
 	callbacks  []FactCallback
@@ -95,11 +96,12 @@ type FactCallback func(ctx context.Context, currentFact map[string]string) map[s
 // where host root is mounted.
 //
 // ipIndicatorURL is and URL which return the public IP.
-func NewFacter(factPath, hostRootPath, ipIndicatorURL string) *FactProvider {
+func NewFacter(runner *gloutonexec.Runner, factPath, hostRootPath, ipIndicatorURL string) *FactProvider {
 	return &FactProvider{
 		factPath:       factPath,
 		hostRootPath:   hostRootPath,
 		ipIndicatorURL: ipIndicatorURL,
+		runner:         runner,
 	}
 }
 
@@ -200,7 +202,7 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 		}
 	}
 
-	for k, v := range f.platformFacts() {
+	for k, v := range f.platformFacts(ctx) {
 		newFacts[k] = v
 	}
 
@@ -264,7 +266,7 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	newFacts[FactUpdatedAt] = time.Now().UTC().Format(time.RFC3339)
 	newFacts["glouton_pid"] = strconv.FormatInt(int64(os.Getpid()), 10)
 
-	autoUpgradeEnabled, err := autoUpgradeIsEnabled(ctx)
+	autoUpgradeEnabled, err := autoUpgradeIsEnabled(ctx, f.runner)
 	if !errors.Is(err, errAutoUpgradeNotSupported) {
 		if err != nil {
 			logger.V(1).Printf("Failed to check auto-upgrade status: %v", err)
@@ -557,7 +559,7 @@ func ByteCountDecimal(b uint64) string {
 	return fmt.Sprintf("%.2f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }
 
-func autoUpgradeIsEnabled(ctx context.Context) (bool, error) {
+func autoUpgradeIsEnabled(ctx context.Context, runner *gloutonexec.Runner) (bool, error) {
 	if version.IsFreeBSD() {
 		_, err := os.Stat("/etc/cron.d/glouton-auto-upgrade")
 
@@ -588,10 +590,10 @@ func autoUpgradeIsEnabled(ctx context.Context) (bool, error) {
 		return false, errAutoUpgradeNotSupported
 	}
 
-	out, err := exec.CommandContext(ctx, "systemctl", "list-timers", "glouton-auto-upgrade.timer").Output()
+	out, err := runner.Run(ctx, gloutonexec.Option{SkipInContainer: true}, "systemctl", "list-timers", "glouton-auto-upgrade.timer")
 	if err != nil {
 		// The auto upgrade is not supported on systems without systemctl (this includes containers).
-		if commandNotFoundRegex.MatchString(err.Error()) {
+		if commandNotFoundRegex.MatchString(err.Error()) || errors.Is(err, gloutonexec.ErrExecutionSkipped) {
 			return false, errAutoUpgradeNotSupported
 		}
 

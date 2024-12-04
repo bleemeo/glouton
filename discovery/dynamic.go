@@ -75,7 +75,7 @@ type containerInfoProvider interface {
 }
 
 type fileReader interface {
-	ReadFile(filename string) ([]byte, error)
+	ReadFile(ctx context.Context, filename string) ([]byte, error)
 }
 
 // NewDynamic create a new dynamic service discovery which use information from
@@ -350,7 +350,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 			continue
 		}
 
-		service, ok := dd.serviceFromProcess(process, netstat)
+		service, ok := dd.serviceFromProcess(ctx, process, netstat)
 		if !ok {
 			continue
 		}
@@ -403,7 +403,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 	return nil
 }
 
-func (dd *DynamicDiscovery) serviceFromProcess(process facts.Process, netstat map[int][]facts.ListenAddress) (Service, bool) {
+func (dd *DynamicDiscovery) serviceFromProcess(ctx context.Context, process facts.Process, netstat map[int][]facts.ListenAddress) (Service, bool) {
 	if process.Status == "zombie" {
 		return Service{}, false
 	}
@@ -439,7 +439,7 @@ func (dd *DynamicDiscovery) serviceFromProcess(process facts.Process, netstat ma
 
 	dd.updateListenAddresses(&service, di)
 
-	dd.fillConfig(&service)
+	dd.fillConfig(ctx, &service)
 	dd.fillConfigFromLabels(&service)
 	dd.discoveryFromLabels(&service)
 	dd.guessJMX(&service, process.CmdLineList)
@@ -537,7 +537,7 @@ func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discovery
 }
 
 // fillConfig fills the service config with information found inside the container.
-func (dd *DynamicDiscovery) fillConfig(service *Service) {
+func (dd *DynamicDiscovery) fillConfig(ctx context.Context, service *Service) {
 	if service.ServiceType == MySQLService {
 		if service.container != nil {
 			for k, v := range service.container.Environment() {
@@ -547,7 +547,7 @@ func (dd *DynamicDiscovery) fillConfig(service *Service) {
 				}
 			}
 		} else if dd.option.FileReader != nil {
-			if debianCnfRaw, err := dd.option.FileReader.ReadFile("/etc/mysql/debian.cnf"); err == nil {
+			if debianCnfRaw, err := dd.option.FileReader.ReadFile(ctx, "/etc/mysql/debian.cnf"); err == nil {
 				if debianCnf, err := ini.Load(debianCnfRaw); err == nil {
 					section := debianCnf.Section("client")
 					if section != nil {

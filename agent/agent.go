@@ -79,6 +79,7 @@ import (
 	"github.com/bleemeo/glouton/telemetry"
 	"github.com/bleemeo/glouton/threshold"
 	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 	"github.com/bleemeo/glouton/version"
 	"github.com/bleemeo/glouton/zabbix"
 
@@ -125,6 +126,7 @@ type agent struct {
 	context      context.Context //nolint:containedctx
 
 	hostRootPath           string
+	commandRunner          *gloutonexec.Runner
 	discovery              *discovery.Discovery
 	dockerRuntime          *dockerRuntime.Docker
 	containerFilter        facts.ContainerFilter
@@ -708,6 +710,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		setupContainer(a.hostRootPath)
 	}
 
+	a.commandRunner = gloutonexec.New(a.hostRootPath)
+
 	a.triggerHandler = debouncer.New(
 		ctx,
 		a.handleTrigger,
@@ -716,6 +720,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	)
 
 	a.factProvider = facts.NewFacter(
+		a.commandRunner,
 		a.config.Agent.FactsFile,
 		a.hostRootPath,
 		a.config.Agent.PublicIPIndicator,
@@ -957,11 +962,12 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		ContainerInfo:      a.containerRuntime,
 		IsContainerIgnored: a.containerFilter.ContainerIgnored,
 		IsServiceIgnored:   serviceIgnored.IsServiceIgnored,
-		FileReader:         discovery.SudoFileReader{HostRootPath: a.hostRootPath},
+		FileReader:         discovery.SudoFileReader{HostRootPath: a.hostRootPath, Runner: a.commandRunner},
 	})
 
 	a.discovery, warnings = discovery.New(
 		dynamicDiscovery,
+		a.commandRunner,
 		a.gathererRegistry,
 		a.state,
 		a.containerRuntime,
@@ -1180,7 +1186,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			containerRuntime:  a.containerRuntime,
 			discovery:         a.discovery,
 			store:             a.store,
-			hostRootPath:      a.hostRootPath,
+			runner:            a.commandRunner,
 			getConfigWarnings: a.getWarnings,
 		},
 	)
@@ -1264,7 +1270,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 
 	if len(a.config.Log.Inputs) > 0 {
-		a.fluentbitManager, warnings = fluentbit.New(a.config.Log, a.gathererRegistry, a.containerRuntime)
+		a.fluentbitManager, warnings = fluentbit.New(a.config.Log, a.gathererRegistry, a.containerRuntime, a.commandRunner)
 		if warnings != nil {
 			a.addWarnings(warnings...)
 		}
@@ -1280,6 +1286,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	a.vethProvider = &veth.Provider{
 		HostRootPath: a.hostRootPath,
 		Runtime:      a.containerRuntime,
+		Runner:       a.commandRunner,
 	}
 
 	conf, err := a.buildCollectorsConfig()
@@ -1289,7 +1296,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		return
 	}
 
-	if err = discovery.AddDefaultInputs(a.gathererRegistry, conf, a.vethProvider); err != nil {
+	if err = discovery.AddDefaultInputs(a.commandRunner, a.gathererRegistry, conf, a.vethProvider); err != nil {
 		logger.Printf("Unable to initialize system collector: %v", err)
 
 		return
@@ -1414,7 +1421,7 @@ func (a *agent) registerInputs(ctx context.Context) {
 	}
 
 	if a.config.IPMI.Enable {
-		gatherer := ipmi.New(a.config.IPMI, makeFactCallback("ipmi_installed"))
+		gatherer := ipmi.New(a.config.IPMI, a.commandRunner, makeFactCallback("ipmi_installed"))
 
 		_, err := a.gathererRegistry.RegisterGatherer(
 			registry.RegistrationOption{
@@ -1512,6 +1519,7 @@ func (a *agent) waitAndRefreshPendingUpdates(ctx context.Context) {
 
 		updatedAt := facts.PendingSystemUpdateFreshness(
 			ctx,
+			a.commandRunner,
 			a.config.Container.Type != "",
 			a.hostRootPath,
 		)
@@ -2004,6 +2012,7 @@ func (a *agent) handleTrigger(ctx context.Context) {
 func systemUpdateMetric(ctx context.Context, a *agent) {
 	pendingUpdate, pendingSecurityUpdate := facts.PendingSystemUpdate(
 		ctx,
+		a.commandRunner,
 		a.config.Container.Type != "",
 		a.hostRootPath,
 	)

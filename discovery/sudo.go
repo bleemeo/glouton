@@ -17,20 +17,22 @@
 package discovery
 
 import (
+	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 )
 
 // SudoFileReader read file using sudo cat (or direct read if running as root).
 type SudoFileReader struct {
 	HostRootPath string
+	Runner       *gloutonexec.Runner
 }
 
 // ReadFile does the same as os.ReadFile but use sudo cat.
-func (s SudoFileReader) ReadFile(path string) ([]byte, error) {
+func (s SudoFileReader) ReadFile(ctx context.Context, path string) ([]byte, error) {
 	path = filepath.Join(s.HostRootPath, path)
 
 	if s.HostRootPath == "" {
@@ -43,9 +45,5 @@ func (s SudoFileReader) ReadFile(path string) ([]byte, error) {
 
 	logger.V(1).Printf("Running sudo -n cat %#v", path)
 
-	cmd := exec.Command(
-		"sudo", "-n", "cat", path,
-	)
-
-	return cmd.Output()
+	return s.Runner.Run(ctx, gloutonexec.Option{RunAsRoot: true}, "cat", path)
 }

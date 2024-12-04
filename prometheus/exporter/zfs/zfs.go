@@ -17,10 +17,10 @@
 package zfs
 
 import (
-	"bytes"
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -29,6 +29,7 @@ import (
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/model"
 	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	dto "github.com/prometheus/client_model/go"
 )
@@ -41,47 +42,86 @@ var ErrZFSNotAvailable = errors.New("ZFS isn't available on this server")
 type Gatherer struct {
 	l sync.Mutex
 
-	zpoolPath  string
-	minDelay   time.Duration
-	lastGather time.Time
-	lastPoints []types.MetricPoint
-	lastErr    error
+	zpoolPath    string
+	runner       *gloutonexec.Runner
+	runnerOption gloutonexec.Option
+	minDelay     time.Duration
+	lastGather   time.Time
+	lastPoints   []types.MetricPoint
+	lastErr      error
 }
 
 // New initializes a ZFS source.
-func New(minDelay time.Duration) (*Gatherer, error) {
-	path, err := exec.LookPath("zpool")
+func New(runner *gloutonexec.Runner, minDelay time.Duration) (*Gatherer, error) {
+	runnerOption := gloutonexec.Option{
+		RunAsRoot: true,
+		RunOnHost: true,
+	}
+
+	path, err := runner.LookPath("zpool", runnerOption)
 	if err != nil {
 		return nil, fmt.Errorf("%w: while looking for zpool: %v", ErrZFSNotAvailable, err)
 	}
 
 	gatherer := &Gatherer{
-		zpoolPath: path,
-		minDelay:  minDelay,
+		zpoolPath:    path,
+		runnerOption: runnerOption,
+		runner:       runner,
+		minDelay:     minDelay,
 	}
 
 	return gatherer, nil
 }
 
-func runZpool(zpoolPath string) (string, error) {
-	var outbuf bytes.Buffer
+func (z *Gatherer) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("zfs.json")
+	if err != nil {
+		return err
+	}
 
-	cmd := exec.Command(zpoolPath, "list", "-Hp", "-o", "name,health,size,alloc,free")
-	cmd.Stdout = &outbuf
+	z.l.Lock()
+	defer z.l.Unlock()
 
-	err := cmd.Run()
+	obj := struct {
+		ZPoolPath  string
+		MinDelay   string
+		LastGather string
+		LastErr    string
+		LastPoints []string
+	}{
+		ZPoolPath:  z.zpoolPath,
+		MinDelay:   z.minDelay.String(),
+		LastGather: z.lastGather.String(),
+	}
+
+	if z.lastErr != nil {
+		obj.LastErr = z.lastErr.Error()
+	}
+
+	for _, pts := range z.lastPoints {
+		obj.LastPoints = append(obj.LastPoints, fmt.Sprintf("%s = %f", types.LabelsToText(pts.Labels), pts.Value))
+	}
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(obj)
+}
+
+func (z *Gatherer) runZpool(ctx context.Context) (string, error) {
+	output, err := z.runner.Run(ctx, z.runnerOption, z.zpoolPath, "list", "-Hp", "-o", "name,health,size,alloc,free")
 	if err != nil {
 		return "", fmt.Errorf("zpool error: %w", err)
 	}
 
-	return outbuf.String(), nil
+	return string(output), nil
 }
 
-func (z *Gatherer) update() {
+func (z *Gatherer) update(ctx context.Context) {
 	z.lastGather = time.Now()
 	z.lastPoints = nil
 
-	zpool, err := runZpool(z.zpoolPath)
+	zpool, err := z.runZpool(ctx)
 	if err != nil {
 		z.lastErr = err
 
@@ -96,8 +136,11 @@ func (z *Gatherer) Gather() ([]*dto.MetricFamily, error) {
 	z.l.Lock()
 	defer z.l.Unlock()
 
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
 	if time.Since(z.lastGather) >= z.minDelay {
-		z.update()
+		z.update(ctx)
 	}
 
 	return model.MetricPointsToFamilies(z.lastPoints), z.lastErr

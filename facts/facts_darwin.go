@@ -24,7 +24,7 @@ import (
 
 const dmiDir = "/sys/devices/virtual/dmi/id/"
 
-func (f *FactProvider) platformFacts() map[string]string {
+func (f *FactProvider) platformFacts(context.Context) map[string]string {
 	return nil
 }
 
@@ -32,7 +32,7 @@ func (f *FactProvider) platformFacts() map[string]string {
 //
 // This should be the IP address that this server use to communicate
 // on internet. It may be the private IP if the box is NATed.
-func (f *FactProvider) primaryAddress(ctx context.Context) (ipAddress string, macAddress string) {
+func (f *FactProvider) primaryAddress(context.Context) (ipAddress string, macAddress string) {
 	return "", ""
 }
 

@@ -127,7 +127,7 @@ func getWindowsVersionName(major uint64, minor uint64, isServer bool, servicePac
 	return res
 }
 
-func (f *FactProvider) platformFacts() map[string]string {
+func (f *FactProvider) platformFacts(_ context.Context) map[string]string {
 	facts := make(map[string]string)
 
 	facts["kernel"] = "Windows"
