@@ -1411,7 +1411,7 @@ func (a *agent) registerInputs(ctx context.Context) {
 	}
 
 	if a.config.Smart.Enable {
-		input, opts, err := smart.New(a.config.Smart, makeFactCallback("smartctl_installed"))
+		input, opts, err := smart.New(a.config.Smart, a.commandRunner, a.hostRootPath, makeFactCallback("smartctl_installed"))
 		a.registerInput("SMART", input, opts, err)
 	}
 

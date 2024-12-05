@@ -23,6 +23,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+	"syscall"
+	"time"
 
 	"github.com/bleemeo/glouton/logger"
 )
@@ -36,6 +39,8 @@ type Runner struct {
 	gloutonRunAsRoot bool
 }
 
+var ErrTimeout = errors.New("command timed out")
+
 func New(hostRootPath string) *Runner {
 	return &Runner{
 		hostRootPath:     hostRootPath,
@@ -48,7 +53,10 @@ type Option struct {
 	RunOnHost       bool
 	SkipInContainer bool
 	CombinedOutput  bool
-	Environ         []string
+	// If GraceDelay is > 0, send TERM signal when Run() context expire and wait for GraceDelay before send KILL signal.
+	// When GraceDelay is == 0, KILL signal is sent as soon as context expire.
+	GraceDelay time.Duration
+	Environ    []string
 }
 
 var (
@@ -122,7 +130,9 @@ func (r *Runner) Run(ctx context.Context, option Option, name string, arg ...str
 		name = "sudo"
 	}
 
-	logger.V(2).Printf("running command %s %s", name, strings.Join(arg, " "))
+	fullCommand := name + " " + strings.Join(arg, " ")
+
+	logger.V(2).Printf("running command %s %s", fullCommand)
 
 	cmd := exec.CommandContext(ctx, name, arg...)
 
@@ -130,9 +140,46 @@ func (r *Runner) Run(ctx context.Context, option Option, name string, arg ...str
 		cmd.Env = option.Environ
 	}
 
-	if option.CombinedOutput {
-		return cmd.CombinedOutput()
+	var (
+		out      []byte
+		err      error
+		l        sync.Mutex
+		termSent bool
+	)
+
+	if option.GraceDelay > 0 {
+		cmd.Cancel = func() error {
+			logger.V(2).Printf("command %s timeout, killing with SIGTERM")
+
+			if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
+				logger.V(2).Printf("command %s: unable to send term signal: %v", err)
+			}
+
+			l.Lock()
+			termSent = true
+			l.Unlock()
+
+			return os.ErrProcessDone
+		}
+		cmd.WaitDelay = option.GraceDelay
 	}
 
-	return cmd.Output()
+	if option.CombinedOutput {
+		out, err = cmd.CombinedOutput()
+	} else {
+		out, err = cmd.Output()
+	}
+
+	if option.GraceDelay > 0 {
+		l.Lock()
+		defer l.Unlock()
+
+		// If program was killed and didn't finished successfully, use ErrTimeout.
+		// If kept err == nil if program successfully completed after receiving a sig term.
+		if err != nil && termSent {
+			err = ErrTimeout
+		}
+	}
+
+	return out, err
 }
