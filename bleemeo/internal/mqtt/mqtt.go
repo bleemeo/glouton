@@ -387,10 +387,10 @@ func (c *Client) HealthCheck() bool {
 	lastAckAge := time.Since(c.lastAck)
 
 	if c.lastAck.IsZero() {
-		startAge := time.Since(c.startedAt)
-		logger.V(1).Printf("Never received ack from Bleemeo and agent is running since %s (%s ago)", c.startedAt.Format(time.RFC3339), startAge)
+		startAge := time.Since(c.startedAt).Round(time.Second)
+		logger.V(1).Printf("Never received an ack from Bleemeo, and the agent is running since %s (%s ago)", c.startedAt.Format(time.RFC3339), startAge)
 	} else if lastAckAge > dataAckBackPressureDelay || lastAckAge > topinfoAckBackPressureDelay || lastAckAge > logsAckBackPressureDelay {
-		logger.V(1).Printf("Didn't received recent ack from Bleemeo, latest ack received at %s (%s ago)", c.lastAck.Format(time.RFC3339), lastAckAge)
+		logger.V(1).Printf("Didn't receive a recent ack from Bleemeo, the last one was received at %s (%s ago)", c.lastAck.Format(time.RFC3339), lastAckAge.Round(time.Second))
 	}
 
 	failedPointsCount := c.failedPoints.Len()
