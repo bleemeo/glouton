@@ -154,6 +154,7 @@ type agent struct {
 	pahoLogWrapper         *client.LogWrapper
 	fluentbitManager       *fluentbit.Manager
 	vSphereManager         *vsphere.Manager
+	logProcessDiagnosticFn func(context.Context, types.ArchiveWriter) error
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -1084,7 +1085,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.l.Unlock()
 
 		if a.config.Log.OpenTelemetry.Enable {
-			err = logprocessing.MakePipeline(ctx, a.config.Log.OpenTelemetry, connector.PushLogs, connector.ShouldApplyLogBackPressure)
+			a.logProcessDiagnosticFn, err = logprocessing.MakePipeline(ctx, a.config.Log.OpenTelemetry, connector.PushLogs, connector.ShouldApplyLogBackPressure)
 			if err != nil {
 				logger.Printf("unable to setup log processing: %v", err)
 			}
@@ -2171,6 +2172,10 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 
 	if a.fluentbitManager != nil {
 		modules = append(modules, a.fluentbitManager.DiagnosticArchive)
+	}
+
+	if a.logProcessDiagnosticFn != nil {
+		modules = append(modules, a.logProcessDiagnosticFn)
 	}
 
 	for _, f := range modules {

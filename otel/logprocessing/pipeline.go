@@ -18,12 +18,14 @@ package logprocessing
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"os"
 	"slices"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/bleemeo/glouton/config"
@@ -61,7 +63,7 @@ func MakePipeline(
 	cfg config.OpenTelemetry,
 	pushLogs func(context.Context, []byte) error,
 	applyBackPressureFn func() bool,
-) error {
+) (diagnosticFn func(context.Context, types.ArchiveWriter) error, err error) {
 	// TODO: no logs & metrics at the same time
 
 	// startedComponents represents all the components that must be shut down at the end of the context's lifecycle.
@@ -75,6 +77,8 @@ func MakePipeline(
 		MetricsLevel:         configtelemetry.LevelBasic,
 		Resource:             pcommon.NewResource(),
 	}
+
+	var logProcessedCount atomic.Int64
 
 	logExporter, err := exporterhelper.NewLogs(
 		ctx,
@@ -92,19 +96,21 @@ func MakePipeline(
 				return err
 			}
 
+			logProcessedCount.Add(int64(ld.ResourceLogs().Len())) // FIXME: ensure it's really what it is
+
 			return nil
 		},
 	)
 	if err != nil {
 		shutdownAll(startedComponents)
 
-		return fmt.Errorf("setup exporter: %w", err)
+		return nil, fmt.Errorf("setup exporter: %w", err)
 	}
 
 	if err = logExporter.Start(ctx, nil); err != nil {
 		shutdownAll(startedComponents)
 
-		return fmt.Errorf("start exporter: %w", err)
+		return nil, fmt.Errorf("start exporter: %w", err)
 	}
 
 	startedComponents = append(startedComponents, logExporter)
@@ -120,13 +126,13 @@ func MakePipeline(
 	if err != nil {
 		shutdownAll(startedComponents)
 
-		return fmt.Errorf("setup batcher: %w", err)
+		return nil, fmt.Errorf("setup batcher: %w", err)
 	}
 
 	if err = logBatcher.Start(ctx, nil); err != nil {
 		shutdownAll(startedComponents)
 
-		return fmt.Errorf("start batcher: %w", err)
+		return nil, fmt.Errorf("start batcher: %w", err)
 	}
 
 	logBackPressureEnforcer, err := processorhelper.NewLogs(
@@ -137,7 +143,7 @@ func MakePipeline(
 		makeEnforceBackPressureFn(applyBackPressureFn),
 	)
 	if err != nil {
-		return fmt.Errorf("setup log back-pressure enforcer: %w", err)
+		return nil, fmt.Errorf("setup log back-pressure enforcer: %w", err)
 	}
 
 	startedComponents = append(startedComponents, logBatcher)
@@ -148,7 +154,7 @@ func MakePipeline(
 
 		receiverTypedCfg, ok := receiverCfg.(*otlpreceiver.Config)
 		if !ok {
-			return fmt.Errorf("%w for receiver default config: %T", errUnexpectedType, receiverCfg)
+			return nil, fmt.Errorf("%w for receiver default config: %T", errUnexpectedType, receiverCfg)
 		}
 
 		if cfg.GRPC.Enable {
@@ -172,23 +178,23 @@ func MakePipeline(
 		if err != nil {
 			shutdownAll(startedComponents)
 
-			return fmt.Errorf("setup OTLP receiver: %w", err)
+			return nil, fmt.Errorf("setup OTLP receiver: %w", err)
 		}
 
 		if err = otlpLogReceiver.Start(ctx, nil); err != nil {
 			shutdownAll(startedComponents)
 
-			return fmt.Errorf("start OTLP receiver: %w", err)
+			return nil, fmt.Errorf("start OTLP receiver: %w", err)
 		}
 
 		startedComponents = append(startedComponents, otlpLogReceiver)
 	}
 
-	fileLogReceiverFactories, err := setupLogReceiverFactories(cfg.LogFiles, []byte(cfg.OperatorsYAML))
+	fileLogReceiverFactories, readFiles, execFiles, ignoredFiles, err := setupLogReceiverFactories(cfg.LogFiles, []byte(cfg.OperatorsYAML))
 	if err != nil {
 		shutdownAll(startedComponents)
 
-		return fmt.Errorf("setup file log receiver factories: %w", err)
+		return nil, fmt.Errorf("setup file log receiver factories: %w", err)
 	}
 
 	for logReceiverFactory, logReceiverCfg := range fileLogReceiverFactories {
@@ -201,13 +207,13 @@ func MakePipeline(
 		if err != nil {
 			shutdownAll(startedComponents)
 
-			return fmt.Errorf("setup log receiver: %w", err)
+			return nil, fmt.Errorf("setup log receiver: %w", err)
 		}
 
 		if err = logReceiver.Start(ctx, nil); err != nil {
 			shutdownAll(startedComponents)
 
-			return fmt.Errorf("start log receiver: %w", err)
+			return nil, fmt.Errorf("start log receiver: %w", err)
 		}
 
 		startedComponents = append(startedComponents, logReceiver)
@@ -222,7 +228,19 @@ func MakePipeline(
 		shutdownAll(startedComponents)
 	}()
 
-	return nil
+	diagnosticFn = func(_ context.Context, writer types.ArchiveWriter) error {
+		diagInfo := diagnosticInformation{
+			LogProcessedCount:    logProcessedCount.Load(),
+			BackPressureBlocking: applyBackPressureFn(),
+			FileLogReceiverPaths: readFiles,
+			ExecLogReceiverPaths: execFiles,
+			IgnoredLogPaths:      ignoredFiles,
+		}
+
+		return diagInfo.writeToArchive(writer)
+	}
+
+	return diagnosticFn, nil
 }
 
 func makeEnforceBackPressureFn(applyBackPressureFn func() bool) func(context.Context, plog.Logs) (plog.Logs, error) {
@@ -236,7 +254,16 @@ func makeEnforceBackPressureFn(applyBackPressureFn func() bool) func(context.Con
 
 	applyBackPressureDebounced := func() bool {
 		if time.Since(lastCacheUpdate) > cacheLifetime {
-			lastCacheValue = applyBackPressureFn()
+			newState := applyBackPressureFn()
+			if newState != lastCacheValue {
+				if newState {
+					logger.V(1).Printf("Logs back-pressure blocking is now enabled") // TODO: V(2)
+				} else {
+					logger.V(1).Printf("Logs back-pressure blocking is now disabled") // TODO: V(2)
+				}
+			}
+
+			lastCacheValue = newState
 			lastCacheUpdate = time.Now()
 		}
 
@@ -255,25 +282,29 @@ func makeEnforceBackPressureFn(applyBackPressureFn func() bool) func(context.Con
 // setupLogReceiverFactories builds receiver factories for the given log files,
 // accordingly to whether the file is directly readable or not.
 // Files that don't exist at the time of the call to this function will be ignored.
-func setupLogReceiverFactories(logFiles []string, operatorsYaml []byte) (map[receiver.Factory]component.Config, error) {
+func setupLogReceiverFactories(logFiles []string, operatorsYaml []byte) (
+	factories map[receiver.Factory]component.Config,
+	readableFiles, execFiles, ignoredFiles []string,
+	err error,
+) {
 	var ops []operator.Config
 
 	if err := yaml.Unmarshal(operatorsYaml, &ops); err != nil {
-		return nil, fmt.Errorf("log receiver operators: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("log receiver operators: %w", err)
 	}
-
-	var readableFiles, otherFiles []string
 
 	for _, logFile := range logFiles {
 		f, err := os.OpenFile(logFile, os.O_RDONLY, 0) // the mode perm isn't needed for read
 		if err != nil {
 			if os.IsNotExist(err) {
-				logger.V(0).Printf("Log file %q does not exist, ignoring it.", logFile)
+				logger.V(0).Printf("Log file %q does not exist, ignoring it.", logFile) // TODO: V(2)
+
+				ignoredFiles = append(ignoredFiles, logFile)
 
 				continue
 			}
 
-			otherFiles = append(otherFiles, logFile) // assuming the error will not occur using "sudo tail ..."
+			execFiles = append(execFiles, logFile) // assuming the error will not occur using "sudo tail ..."
 		} else {
 			err = f.Close()
 			if err != nil {
@@ -298,7 +329,7 @@ func setupLogReceiverFactories(logFiles []string, operatorsYaml []byte) (map[rec
 		MaxElapsedTime:  1 * time.Hour,
 	}
 
-	factories := make(map[receiver.Factory]component.Config)
+	factories = make(map[receiver.Factory]component.Config)
 
 	if len(readableFiles) > 0 {
 		factory := filelogreceiver.NewFactory()
@@ -306,7 +337,7 @@ func setupLogReceiverFactories(logFiles []string, operatorsYaml []byte) (map[rec
 
 		fileTypedCfg, ok := fileCfg.(*filelogreceiver.FileLogConfig)
 		if !ok {
-			return nil, fmt.Errorf("%w for file log receiver: %T", errUnexpectedType, fileCfg)
+			return nil, nil, nil, nil, fmt.Errorf("%w for file log receiver: %T", errUnexpectedType, fileCfg)
 		}
 
 		fileTypedCfg.InputConfig.Include = readableFiles
@@ -314,7 +345,7 @@ func setupLogReceiverFactories(logFiles []string, operatorsYaml []byte) (map[rec
 
 		err := mapstructure.Decode(retryCfg, &fileTypedCfg.RetryOnFailure)
 		if err != nil {
-			return nil, fmt.Errorf("failed to define consumerretry config for filelogreceiver: %w", err)
+			return nil, nil, nil, nil, fmt.Errorf("failed to define consumerretry config for filelogreceiver: %w", err)
 		}
 
 		factories[factory] = fileTypedCfg
@@ -322,13 +353,13 @@ func setupLogReceiverFactories(logFiles []string, operatorsYaml []byte) (map[rec
 		logger.Printf("Chose file log receiver for file(s) %v", readableFiles) // TODO: remove
 	}
 
-	for _, logFile := range otherFiles {
+	for _, logFile := range execFiles {
 		factory := execlogreceiver.NewFactory()
 		execCfg := factory.CreateDefaultConfig()
 
 		execTypedCfg, ok := execCfg.(*execlogreceiver.ExecLogConfig)
 		if !ok {
-			return nil, fmt.Errorf("%w for exec log receiver: %T", errUnexpectedType, execCfg)
+			return nil, nil, nil, nil, fmt.Errorf("%w for exec log receiver: %T", errUnexpectedType, execCfg)
 		}
 
 		execTypedCfg.InputConfig.Argv = []string{"sudo", "tail", "--follow=name", logFile}
@@ -336,7 +367,7 @@ func setupLogReceiverFactories(logFiles []string, operatorsYaml []byte) (map[rec
 
 		err := mapstructure.Decode(retryCfg, &execTypedCfg.RetryOnFailure)
 		if err != nil {
-			return nil, fmt.Errorf("failed to define consumerretry config for execlogreceiver: %w", err)
+			return nil, nil, nil, nil, fmt.Errorf("failed to define consumerretry config for execlogreceiver: %w", err)
 		}
 
 		factories[factory] = execTypedCfg
@@ -344,7 +375,7 @@ func setupLogReceiverFactories(logFiles []string, operatorsYaml []byte) (map[rec
 		logger.Printf("Chose exec log receiver for file %q", logFile) // TODO: remove
 	}
 
-	return factories, nil
+	return factories, readableFiles, execFiles, ignoredFiles, nil
 }
 
 // shutdownAll stops all the given components (in reverse order).
@@ -381,4 +412,24 @@ func formatTypes[E any](a []E) string {
 	}
 
 	return result + "]"
+}
+
+type diagnosticInformation struct {
+	LogProcessedCount    int64
+	BackPressureBlocking bool
+	FileLogReceiverPaths []string
+	ExecLogReceiverPaths []string
+	IgnoredLogPaths      []string
+}
+
+func (diagInfo diagnosticInformation) writeToArchive(writer types.ArchiveWriter) error {
+	file, err := writer.Create("log-processing.json")
+	if err != nil {
+		return err
+	}
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(diagInfo)
 }
