@@ -80,6 +80,9 @@ func MakePipeline(
 
 	var logProcessedCount atomic.Int64
 
+	// We want to measure the throughput over the last minute (60s)
+	logThroughputMeter := newRingCounter(60)
+
 	logExporter, err := exporterhelper.NewLogs(
 		ctx,
 		exporter.Settings{TelemetrySettings: telemetry},
@@ -96,7 +99,8 @@ func MakePipeline(
 				return err
 			}
 
-			logProcessedCount.Add(int64(ld.ResourceLogs().Len())) // FIXME: ensure it's really what it is
+			logProcessedCount.Add(int64(ld.LogRecordCount()))
+			logThroughputMeter.Inc(ld.LogRecordCount())
 
 			return nil
 		},
@@ -230,11 +234,12 @@ func MakePipeline(
 
 	diagnosticFn = func(_ context.Context, writer types.ArchiveWriter) error {
 		diagInfo := diagnosticInformation{
-			LogProcessedCount:    logProcessedCount.Load(),
-			BackPressureBlocking: applyBackPressureFn(),
-			FileLogReceiverPaths: readFiles,
-			ExecLogReceiverPaths: execFiles,
-			IgnoredLogPaths:      ignoredFiles,
+			LogProcessedCount:      logProcessedCount.Load(),
+			LogThroughputPerMinute: logThroughputMeter.Total(),
+			BackPressureBlocking:   applyBackPressureFn(),
+			FileLogReceiverPaths:   readFiles,
+			ExecLogReceiverPaths:   execFiles,
+			IgnoredLogPaths:        ignoredFiles,
 		}
 
 		return diagInfo.writeToArchive(writer)
@@ -415,11 +420,12 @@ func formatTypes[E any](a []E) string {
 }
 
 type diagnosticInformation struct {
-	LogProcessedCount    int64
-	BackPressureBlocking bool
-	FileLogReceiverPaths []string
-	ExecLogReceiverPaths []string
-	IgnoredLogPaths      []string
+	LogProcessedCount      int64
+	LogThroughputPerMinute int
+	BackPressureBlocking   bool
+	FileLogReceiverPaths   []string
+	ExecLogReceiverPaths   []string
+	IgnoredLogPaths        []string
 }
 
 func (diagInfo diagnosticInformation) writeToArchive(writer types.ArchiveWriter) error {
