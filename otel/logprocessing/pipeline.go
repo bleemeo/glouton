@@ -217,7 +217,7 @@ func MakePipeline(
 				ctx,
 				receiver.Settings{TelemetrySettings: telemetry},
 				logReceiverCfg,
-				wrapWithCounters(ctx, logBackPressureEnforcer, logCounter.Int64, throughputMeter, telemetry),
+				wrapWithCounters(logBackPressureEnforcer, logCounter.Int64, throughputMeter),
 			)
 			if err != nil {
 				shutdownAll(startedComponents)
@@ -401,20 +401,14 @@ func setupLogReceiverFactories(logFiles []string, operatorsYaml []byte) (
 	return factories, readableFiles, execFiles, ignoredFiles, nil
 }
 
-func wrapWithCounters(ctx context.Context, next consumer.Logs, counter *atomic.Int64, throughputMeter *ringCounter, telemetry component.TelemetrySettings) consumer.Logs {
-	logCounter, err := processorhelper.NewLogs(
-		ctx,
-		processor.Settings{TelemetrySettings: telemetry},
-		nil,
-		next,
-		func(_ context.Context, logs plog.Logs) (plog.Logs, error) {
-			count := logs.LogRecordCount()
-			counter.Add(int64(count))
-			throughputMeter.Inc(count)
+func wrapWithCounters(next consumer.Logs, counter *atomic.Int64, throughputMeter *ringCounter) consumer.Logs {
+	logCounter, err := consumer.NewLogs(func(ctx context.Context, ld plog.Logs) error {
+		count := ld.LogRecordCount()
+		counter.Add(int64(count))
+		throughputMeter.Inc(count)
 
-			return logs, nil
-		},
-	)
+		return next.ConsumeLogs(ctx, ld)
+	})
 	if err != nil {
 		logger.V(1).Printf("Failed to wrap component with log counters: %v", err)
 
