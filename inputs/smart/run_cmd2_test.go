@@ -40,7 +40,7 @@ func TestTimeoutDetection(t *testing.T) {
 	wrapper := &wrappedRunCmd{}
 	wrapper.reset(realRunner)
 
-	_, err := wrapper.runCmd(config.Duration(time.Millisecond), false, "sleep", "30")
+	_, err := wrapper.runCmd(config.Duration(50*time.Millisecond), false, "sleep", "30")
 
 	if err == nil {
 		t.Errorf("error is nil, want TimeoutError")

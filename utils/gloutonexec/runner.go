@@ -132,7 +132,7 @@ func (r *Runner) Run(ctx context.Context, option Option, name string, arg ...str
 
 	fullCommand := name + " " + strings.Join(arg, " ")
 
-	logger.V(2).Printf("running command %s %s", fullCommand)
+	logger.V(2).Printf("running command %s", fullCommand)
 
 	cmd := exec.CommandContext(ctx, name, arg...)
 
@@ -149,13 +149,14 @@ func (r *Runner) Run(ctx context.Context, option Option, name string, arg ...str
 
 	if option.GraceDelay > 0 {
 		cmd.Cancel = func() error {
-			logger.V(2).Printf("command %s timeout, killing with SIGTERM")
-
-			if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
-				logger.V(2).Printf("command %s: unable to send term signal: %v", err)
-			}
+			logger.V(2).Printf("command %s timeout, killing with SIGTERM", fullCommand)
 
 			l.Lock()
+
+			if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
+				logger.V(2).Printf("command %s: unable to send term signal: %v", fullCommand, err)
+			}
+
 			termSent = true
 			l.Unlock()
 
