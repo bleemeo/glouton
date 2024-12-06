@@ -78,17 +78,21 @@ type LogFilter struct {
 
 type OpenTelemetry struct {
 	Enable        bool           `yaml:"enable"`
+	AutoDiscovery bool           `yaml:"auto_discovery"`
 	GRPC          EnableListener `yaml:"grpc"`
 	HTTP          EnableListener `yaml:"http"`
-	LogFiles      []string       `yaml:"log_files"`
-	AutoDiscovery bool           `yaml:"auto_discovery"`
-	OperatorsYAML string         `yaml:"operators"` // TODO: because koanf don't use UnmarshalYAML, we can't use operator.Config as we should
+	Receivers     []OTLPReceiver `yaml:"receivers"`
 }
 
 type EnableListener struct {
 	Enable  bool   `yaml:"enable"`
 	Address string `yaml:"address"`
 	Port    int    `yaml:"port"`
+}
+
+type OTLPReceiver struct {
+	Include       []string `yaml:"include"`
+	OperatorsYAML string   `yaml:"operators"` // TODO: because koanf don't use UnmarshalYAML, we can't use operator.Config as we should
 }
 
 type Smart struct {

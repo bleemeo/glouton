@@ -17,15 +17,24 @@
 package logprocessing
 
 import (
+	"strconv"
 	"sync"
 	"time"
 )
 
+// ringCounter is kind of a ring-buffer, but serves for storing
+// a count for each second of a sliding time window.
+// Its precision is hard-coded (1s), but its size is configurable.
+// When the Inc method is called, the given delta is added
+// to the bucket that corresponds to the current second.
+// The buckets can be represented as a ring, so when we want to increment
+// the counter for, say, the 61st second after the first call, we start
+// a new loop over the buckets and replace the content of the 1st one.
 type ringCounter struct {
-	l            sync.Mutex
 	size         int
 	t0           int64
-	cells        []int
+	l            sync.Mutex
+	buckets      []int
 	lastUpdateAt int64
 }
 
@@ -34,13 +43,16 @@ type ringCounter struct {
 // The Total method will then return the sum of the data recorded in a sliding time window of this width.
 func newRingCounter(size int) *ringCounter {
 	return &ringCounter{
-		size:  size,
-		cells: make([]int, size),
+		size:    size,
+		buckets: make([]int, size),
 	}
 }
 
 // Inc records the given delta for the current second.
 func (rc *ringCounter) Inc(delta int) {
+	// We want to insert the delta for the time when the method was called,
+	// so storing the time now rather than after acquiring the lock
+	// avoids distorting the measurement.
 	now := time.Now().Unix()
 
 	rc.l.Lock()
@@ -54,7 +66,7 @@ func (rc *ringCounter) Inc(delta int) {
 	rc.resetOutdatedValues(now)
 
 	idx := int(now-rc.t0) % rc.size
-	rc.cells[idx] += delta
+	rc.buckets[idx] += delta
 	rc.lastUpdateAt = now
 }
 
@@ -64,18 +76,24 @@ func (rc *ringCounter) Total() int {
 	defer rc.l.Unlock()
 
 	now := time.Now().Unix()
-
+	// If no data has been recorded for a moment until now,
+	// we need to flush the buckets corresponding to this period
+	// before evaluating the buckets' sum.
 	rc.resetOutdatedValues(now)
 
 	rc.lastUpdateAt = now
 
 	var total int
 
-	for i := range rc.cells {
-		total += rc.cells[i]
+	for i := range rc.buckets {
+		total += rc.buckets[i]
 	}
 
 	return total
+}
+
+func (rc *ringCounter) MarshalJSON() ([]byte, error) {
+	return []byte(strconv.Itoa(rc.Total())), nil
 }
 
 func (rc *ringCounter) resetOutdatedValues(now int64) {
@@ -97,7 +115,7 @@ func (rc *ringCounter) resetRange(from, to int) {
 		rc.resetRange(0, to)
 	} else {
 		for i := from; i <= to; i++ {
-			rc.cells[i] = 0
+			rc.buckets[i] = 0
 		}
 	}
 }

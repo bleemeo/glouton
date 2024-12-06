@@ -39,6 +39,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configtelemetry"
+	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -54,7 +55,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const shutdownTimeout = 5 * time.Second
+const (
+	throughputMeterResolutionSecs = 60
+	shutdownTimeout               = 5 * time.Second
+)
 
 var errUnexpectedType = errors.New("unexpected type")
 
@@ -67,7 +71,7 @@ func MakePipeline(
 	// TODO: no logs & metrics at the same time
 
 	// startedComponents represents all the components that must be shut down at the end of the context's lifecycle.
-	startedComponents := make([]component.Component, 0, 3+len(cfg.LogFiles)) // 3 == 1 exporter + 1 GRPC receiver + 1 HTTP receiver.
+	startedComponents := make([]component.Component, 0, 4) // 4 should be the minimum number of components
 
 	telemetry := component.TelemetrySettings{
 		Logger:               logger.ZapLogger(),
@@ -81,7 +85,7 @@ func MakePipeline(
 	var logProcessedCount atomic.Int64
 
 	// We want to measure the throughput over the last minute (60s)
-	logThroughputMeter := newRingCounter(60)
+	logThroughputMeter := newRingCounter(throughputMeterResolutionSecs)
 
 	logExporter, err := exporterhelper.NewLogs(
 		ctx,
@@ -99,8 +103,9 @@ func MakePipeline(
 				return err
 			}
 
-			logProcessedCount.Add(int64(ld.LogRecordCount()))
-			logThroughputMeter.Inc(ld.LogRecordCount())
+			count := ld.LogRecordCount()
+			logProcessedCount.Add(int64(count))
+			logThroughputMeter.Inc(count)
 
 			return nil
 		},
@@ -194,33 +199,48 @@ func MakePipeline(
 		startedComponents = append(startedComponents, otlpLogReceiver)
 	}
 
-	fileLogReceiverFactories, readFiles, execFiles, ignoredFiles, err := setupLogReceiverFactories(cfg.LogFiles, []byte(cfg.OperatorsYAML))
-	if err != nil {
-		shutdownAll(startedComponents)
+	receiversInfo := make([]receiverDiagnosticInformation, len(cfg.Receivers))
 
-		return nil, fmt.Errorf("setup file log receiver factories: %w", err)
-	}
-
-	for logReceiverFactory, logReceiverCfg := range fileLogReceiverFactories {
-		logReceiver, err := logReceiverFactory.CreateLogs(
-			ctx,
-			receiver.Settings{TelemetrySettings: telemetry},
-			logReceiverCfg,
-			logBackPressureEnforcer,
-		)
+	for i, rcvr := range cfg.Receivers {
+		fileLogReceiverFactories, readFiles, execFiles, ignoredFiles, err := setupLogReceiverFactories(rcvr.Include, []byte(rcvr.OperatorsYAML))
 		if err != nil {
 			shutdownAll(startedComponents)
 
-			return nil, fmt.Errorf("setup log receiver: %w", err)
+			return nil, fmt.Errorf("setup log receiver n°%d factories: %w", i+1, err)
 		}
 
-		if err = logReceiver.Start(ctx, nil); err != nil {
-			shutdownAll(startedComponents)
+		logCounter := marshallableInt64{new(atomic.Int64)}
+		throughputMeter := newRingCounter(throughputMeterResolutionSecs)
 
-			return nil, fmt.Errorf("start log receiver: %w", err)
+		for logReceiverFactory, logReceiverCfg := range fileLogReceiverFactories {
+			logReceiver, err := logReceiverFactory.CreateLogs(
+				ctx,
+				receiver.Settings{TelemetrySettings: telemetry},
+				logReceiverCfg,
+				wrapWithCounters(ctx, logBackPressureEnforcer, logCounter.Int64, throughputMeter, telemetry),
+			)
+			if err != nil {
+				shutdownAll(startedComponents)
+
+				return nil, fmt.Errorf("setup log receiver n°%d: %w", i+1, err)
+			}
+
+			if err = logReceiver.Start(ctx, nil); err != nil {
+				shutdownAll(startedComponents)
+
+				return nil, fmt.Errorf("start log receiver n°%d: %w", i+1, err)
+			}
+
+			startedComponents = append(startedComponents, logReceiver)
 		}
 
-		startedComponents = append(startedComponents, logReceiver)
+		receiversInfo[i] = receiverDiagnosticInformation{
+			LogProcessedCount:      logCounter,
+			LogThroughputPerMinute: throughputMeter,
+			FileLogReceiverPaths:   readFiles,
+			ExecLogReceiverPaths:   execFiles,
+			IgnoredLogPaths:        ignoredFiles,
+		}
 	}
 
 	// Scheduling the shutdown of all the components we've started
@@ -237,9 +257,7 @@ func MakePipeline(
 			LogProcessedCount:      logProcessedCount.Load(),
 			LogThroughputPerMinute: logThroughputMeter.Total(),
 			BackPressureBlocking:   applyBackPressureFn(),
-			FileLogReceiverPaths:   readFiles,
-			ExecLogReceiverPaths:   execFiles,
-			IgnoredLogPaths:        ignoredFiles,
+			Receivers:              receiversInfo,
 		}
 
 		return diagInfo.writeToArchive(writer)
@@ -248,8 +266,8 @@ func MakePipeline(
 	return diagnosticFn, nil
 }
 
-func makeEnforceBackPressureFn(applyBackPressureFn func() bool) func(context.Context, plog.Logs) (plog.Logs, error) {
-	// Since applyBackPressureFn needs to acquire a lock, we want to avoid calling it too frequently.
+func makeEnforceBackPressureFn(shouldApplyBackPressureFn func() bool) processorhelper.ProcessLogsFunc {
+	// Since shouldApplyBackPressureFn needs to acquire a lock, we want to avoid calling it too frequently.
 	const cacheLifetime = 5 * time.Second
 
 	var (
@@ -259,7 +277,7 @@ func makeEnforceBackPressureFn(applyBackPressureFn func() bool) func(context.Con
 
 	applyBackPressureDebounced := func() bool {
 		if time.Since(lastCacheUpdate) > cacheLifetime {
-			newState := applyBackPressureFn()
+			newState := shouldApplyBackPressureFn()
 			if newState != lastCacheValue {
 				if newState {
 					logger.V(1).Printf("Logs back-pressure blocking is now enabled") // TODO: V(2)
@@ -383,6 +401,29 @@ func setupLogReceiverFactories(logFiles []string, operatorsYaml []byte) (
 	return factories, readableFiles, execFiles, ignoredFiles, nil
 }
 
+func wrapWithCounters(ctx context.Context, next consumer.Logs, counter *atomic.Int64, throughputMeter *ringCounter, telemetry component.TelemetrySettings) consumer.Logs {
+	logCounter, err := processorhelper.NewLogs(
+		ctx,
+		processor.Settings{TelemetrySettings: telemetry},
+		nil,
+		next,
+		func(_ context.Context, logs plog.Logs) (plog.Logs, error) {
+			count := logs.LogRecordCount()
+			counter.Add(int64(count))
+			throughputMeter.Inc(count)
+
+			return logs, nil
+		},
+	)
+	if err != nil {
+		logger.V(1).Printf("Failed to wrap component with log counters: %v", err)
+
+		return next // give up wrapping it and just use it like so
+	}
+
+	return logCounter
+}
+
 // shutdownAll stops all the given components (in reverse order).
 // It should be called before every unsuccessful return of the log pipeline initialization.
 func shutdownAll(components []component.Component) {
@@ -419,13 +460,27 @@ func formatTypes[E any](a []E) string {
 	return result + "]"
 }
 
+type marshallableInt64 struct {
+	*atomic.Int64
+}
+
+func (x marshallableInt64) MarshalJSON() ([]byte, error) {
+	return []byte(strconv.FormatInt(x.Load(), 10)), nil
+}
+
+type receiverDiagnosticInformation struct {
+	LogProcessedCount      marshallableInt64
+	LogThroughputPerMinute *ringCounter
+	FileLogReceiverPaths   []string
+	ExecLogReceiverPaths   []string
+	IgnoredLogPaths        []string
+}
+
 type diagnosticInformation struct {
 	LogProcessedCount      int64
 	LogThroughputPerMinute int
 	BackPressureBlocking   bool
-	FileLogReceiverPaths   []string
-	ExecLogReceiverPaths   []string
-	IgnoredLogPaths        []string
+	Receivers              []receiverDiagnosticInformation
 }
 
 func (diagInfo diagnosticInformation) writeToArchive(writer types.ArchiveWriter) error {

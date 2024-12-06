@@ -192,6 +192,26 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
+			OpenTelemetry: OpenTelemetry{
+				Enable:        true,
+				AutoDiscovery: true,
+				GRPC: EnableListener{
+					Enable:  true,
+					Address: "localhost",
+					Port:    4317,
+				},
+				HTTP: EnableListener{
+					Enable:  true,
+					Address: "localhost",
+					Port:    4318,
+				},
+				Receivers: []OTLPReceiver{
+					{
+						Include:       []string{"/var/log/apache/access.log", "/var/log/apache/error.log"},
+						OperatorsYAML: "- type: add\n  field: resource['service.name']\n  value: 'apache_server'\n",
+					},
+				},
+			},
 		},
 		Logging: Logging{
 			Buffer: LoggingBuffer{

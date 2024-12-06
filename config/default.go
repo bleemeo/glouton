@@ -252,7 +252,8 @@ func DefaultConfig() Config { //nolint:maintidx
 			HostRootPrefix: "/hostroot",
 			Inputs:         []LogInput{},
 			OpenTelemetry: OpenTelemetry{
-				Enable: false,
+				Enable:        false,
+				AutoDiscovery: true,
 				GRPC: EnableListener{
 					Enable:  true,
 					Address: "localhost",
@@ -263,9 +264,7 @@ func DefaultConfig() Config { //nolint:maintidx
 					Address: "localhost",
 					Port:    4318,
 				},
-				LogFiles:      []string{},
-				AutoDiscovery: true,
-				OperatorsYAML: "",
+				Receivers: []OTLPReceiver{},
 			},
 		},
 		Logging: Logging{
