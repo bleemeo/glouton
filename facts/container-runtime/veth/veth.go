@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
 	"sort"
 	"strconv"
@@ -32,6 +31,7 @@ import (
 	ctypes "github.com/bleemeo/glouton/facts/container-runtime/types"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 )
 
 const cacheUpdateInterval = 10 * time.Minute
@@ -39,6 +39,7 @@ const cacheUpdateInterval = 10 * time.Minute
 // Provider provides a mapping between containers and host network interfaces.
 type Provider struct {
 	HostRootPath string
+	Runner       *gloutonexec.Runner
 	Runtime      ctypes.RuntimeInterface
 
 	// Keep container and interface mapping in cache.
@@ -147,17 +148,7 @@ func (p *Provider) updateCache() error {
 	}
 
 	// Get the container interface indexes.
-	// Use sudo only if not currently running as root.
-	// The Glouton docker container uses busybox which doesn't have sudo.
-	var args []string
-	if os.Getuid() != 0 {
-		args = append(args, "sudo", "-n")
-	}
-
-	args = append(args, append([]string{"/usr/lib/glouton/glouton-veths"}, pids...)...)
-	cmd := exec.CommandContext(ctx, args[0], args[1:]...) //nolint:gosec
-
-	stdout, err := cmd.Output()
+	stdout, err := p.Runner.Run(ctx, gloutonexec.Option{RunAsRoot: true}, "/usr/lib/glouton/glouton-veths", pids...)
 	if err != nil {
 		stderr := ""
 		if exitErr := &(exec.ExitError{}); errors.As(err, &exitErr) {

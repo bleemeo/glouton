@@ -32,6 +32,7 @@ import (
 	"github.com/bleemeo/glouton/prometheus/registry"
 	"github.com/bleemeo/glouton/task"
 	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	"dario.cat/mergo"
 	"github.com/influxdata/telegraf"
@@ -54,6 +55,7 @@ const discoveryTimeout = time.Minute
 type Discovery struct {
 	l sync.Mutex
 
+	commandRunner    *gloutonexec.Runner
 	dynamicDiscovery Discoverer
 
 	discoveredServicesMap map[NameInstance]Service
@@ -100,6 +102,7 @@ type GathererRegistry interface {
 // New returns a new Discovery and some warnings.
 func New(
 	dynamicDiscovery Discoverer,
+	commandRunner *gloutonexec.Runner,
 	metricRegistry GathererRegistry,
 	state State,
 	containerInfo containerInfoProvider,
@@ -126,6 +129,7 @@ func New(
 
 	discovery := &Discovery{
 		dynamicDiscovery:               dynamicDiscovery,
+		commandRunner:                  commandRunner,
 		discoveredServicesMap:          discoveredServicesMap,
 		metricRegistry:                 metricRegistry,
 		containerInfo:                  containerInfo,

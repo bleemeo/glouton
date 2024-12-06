@@ -30,6 +30,7 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	"github.com/google/shlex"
 )
@@ -45,6 +46,7 @@ type checkRegistry interface {
 
 // Responder is used to build the NRPE answer.
 type Responder struct {
+	runner         *gloutonexec.Runner
 	discovery      checkRegistry
 	customCheck    map[string]discovery.NameInstance
 	nrpeCommands   map[string]string
@@ -126,8 +128,7 @@ func (r Responder) responseNRPEConf(ctx context.Context, requestArgs []string) (
 	defer cancel()
 
 	// nrpeCommand[0] is not remote controlled. It come from local configuration files.
-	cmd := exec.CommandContext(ctx, nrpeCommand[0], nrpeCommand[1:]...) //nolint:gosec
-	out, err := cmd.CombinedOutput()
+	out, err := r.runner.Run(ctx, gloutonexec.Option{CombinedOutput: true}, nrpeCommand[0], nrpeCommand[1:]...)
 	nagiosCode := 0
 
 	if exitError, ok := err.(*exec.ExitError); ok {

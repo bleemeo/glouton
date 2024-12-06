@@ -23,15 +23,17 @@ import (
 
 	"github.com/bleemeo/glouton/config"
 	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 )
 
 var errNotSupported = errors.New("log inputs are not supported on Windows")
 
 // New returns an initialized Fluent Bit manager and config warnings.
-func New(cfg config.Log, reg registerer, runtime crTypes.RuntimeInterface) (*Manager, []error) {
+func New(cfg config.Log, reg registerer, runtime crTypes.RuntimeInterface, runner *gloutonexec.Runner) (*Manager, []error) {
 	_ = validateConfig(cfg) // Fix unused function warning.
 	_ = reg
 	_ = runtime
+	_ = runner
 
 	return nil, []error{errNotSupported}
 }

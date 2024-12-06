@@ -30,6 +30,7 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/prometheus/model"
 	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	"github.com/google/go-cmp/cmp"
 )
@@ -327,6 +328,9 @@ func Test_GatherWithState(t *testing.T) { //nolint:maintidx
 				cmdDoesNotExists       = []string{"this-command-does-not-exists"}
 			)
 
+			realRunner := gloutonexec.New("/")
+			realRunCmd := runCmdWithRunner(realRunner)
+
 			testRunCMD := func(ctx context.Context, searchPath string, _ bool, args []string) ([]byte, error) {
 				var (
 					cmd      []string
@@ -368,10 +372,10 @@ func Test_GatherWithState(t *testing.T) { //nolint:maintidx
 
 				if tt.useCatAndRunCmd {
 					if disabled {
-						return runCmd(ctx, searchPath, false, cmdDoesNotExists)
+						return realRunCmd(ctx, searchPath, false, cmdDoesNotExists)
 					}
 
-					return runCmd(ctx, searchPath, false, cmd)
+					return realRunCmd(ctx, searchPath, false, cmd)
 				}
 
 				if disabled {
@@ -489,6 +493,9 @@ func Test_runCmd(t *testing.T) {
 		},
 	}
 
+	realRunner := gloutonexec.New("/")
+	realRunCmd := runCmdWithRunner(realRunner)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -502,7 +509,7 @@ func Test_runCmd(t *testing.T) {
 				defer cancel()
 			}
 
-			output, err := runCmd(ctx, tt.searchPath, false, tt.args)
+			output, err := realRunCmd(ctx, tt.searchPath, false, tt.args)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("err = %v, wantErr = %v", err, tt.wantErr)
 			}
@@ -690,7 +697,7 @@ func Test_readingToPoints(t *testing.T) {
 					Minimum:      1,
 					Maximum:      999,
 					Timestamp:    timestamp1,
-					ReportPeriod: 1 * time.Second, // this happen on some Dell. I thing this means "cummulative since last reset of counters"
+					ReportPeriod: 1 * time.Second, // this happen on some Dell. I thing this means "cumulative since last reset of counters"
 				},
 			},
 			want: []types.MetricPoint{
@@ -713,7 +720,7 @@ func Test_readingToPoints(t *testing.T) {
 					Minimum:      1,
 					Maximum:      999,
 					Timestamp:    timestamp1,
-					ReportPeriod: 0 * time.Second, // this happen on some Dell. I thing this means "cummulative since last reset of counters"
+					ReportPeriod: 0 * time.Second, // this happen on some Dell. I thing this means "cumulative since last reset of counters"
 				},
 			},
 			want: []types.MetricPoint{

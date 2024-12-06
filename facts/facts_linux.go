@@ -20,13 +20,14 @@ package facts
 
 import (
 	"context"
+	"errors"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	"github.com/shirou/gopsutil/v3/load"
 	psutilNet "github.com/shirou/gopsutil/v3/net"
@@ -36,7 +37,7 @@ import (
 
 const dmiDir = "/sys/devices/virtual/dmi/id/"
 
-func (f *FactProvider) platformFacts() map[string]string {
+func (f *FactProvider) platformFacts(ctx context.Context) map[string]string {
 	facts := make(map[string]string)
 
 	if f.hostRootPath != "" {
@@ -58,18 +59,16 @@ func (f *FactProvider) platformFacts() map[string]string {
 		}
 	}
 
-	if f.hostRootPath == "/" {
-		out, err := exec.Command("lsb_release", "--codename", "--short").Output()
-		if err != nil {
-			logger.V(1).Printf("unable to run lsb_release: %v", err)
-		} else {
-			facts["os_codename"] = strings.TrimSpace(string(out))
-		}
+	out, err := f.runner.Run(ctx, gloutonexec.Option{SkipInContainer: true}, "lsb_release", "--codename", "--short")
+	if err != nil && !errors.Is(err, gloutonexec.ErrExecutionSkipped) {
+		logger.V(1).Printf("unable to run lsb_release: %v", err)
+	} else if err == nil {
+		facts["os_codename"] = strings.TrimSpace(string(out))
 	}
 
 	var utsName unix.Utsname
 
-	err := unix.Uname(&utsName)
+	err = unix.Uname(&utsName)
 	if err == nil {
 		facts["kernel"] = bytesToString(utsName.Sysname[:])
 		facts["kernel_release"] = bytesToString(utsName.Release[:])

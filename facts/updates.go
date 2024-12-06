@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -29,6 +28,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 	"github.com/bleemeo/glouton/version"
 )
 
@@ -37,6 +37,7 @@ const maxAge = 2 * 24 * time.Hour
 var errOutDated = errors.New("cache is too old")
 
 type updateFacter struct {
+	Runner       *gloutonexec.Runner
 	HostRootPath string
 	Environ      []string
 	InContainer  bool
@@ -44,12 +45,13 @@ type updateFacter struct {
 
 // PendingSystemUpdateFreshness return the indicative value for last update of the preferred method.
 // It could be zero if the preferred method don't have any cache or we can't determine the freshness value.
-func PendingSystemUpdateFreshness(_ context.Context, inContainer bool, hostRootPath string) time.Time {
+func PendingSystemUpdateFreshness(_ context.Context, runner *gloutonexec.Runner, inContainer bool, hostRootPath string) time.Time {
 	if hostRootPath == "" && inContainer {
 		return time.Time{}
 	}
 
 	uf := updateFacter{
+		Runner:       runner,
 		HostRootPath: hostRootPath,
 		InContainer:  inContainer,
 	}
@@ -63,12 +65,13 @@ func PendingSystemUpdateFreshness(_ context.Context, inContainer bool, hostRootP
 
 // PendingSystemUpdate return the number of pending update & pending security update for the system.
 // If the value of a field is -1, it means that value is unknown.
-func PendingSystemUpdate(ctx context.Context, inContainer bool, hostRootPath string) (pendingUpdates int, pendingSecurityUpdates int) {
+func PendingSystemUpdate(ctx context.Context, runner *gloutonexec.Runner, inContainer bool, hostRootPath string) (pendingUpdates int, pendingSecurityUpdates int) {
 	if hostRootPath == "" && inContainer {
 		return -1, -1
 	}
 
 	uf := updateFacter{
+		Runner:       runner,
 		HostRootPath: hostRootPath,
 		InContainer:  inContainer,
 	}
@@ -225,10 +228,7 @@ func (uf updateFacter) fromUpdateNotifierFile(context.Context) (pendingUpdates i
 }
 
 func (uf updateFacter) fromAPTCheck(ctx context.Context) (pendingUpdates int, pendingSecurityUpdates int, err error) {
-	cmd := exec.CommandContext(ctx, "/usr/lib/update-notifier/apt-check")
-	cmd.Env = uf.Environ
-
-	content, err := cmd.CombinedOutput()
+	content, err := uf.Runner.Run(ctx, gloutonexec.Option{Environ: uf.Environ, SkipInContainer: true, CombinedOutput: true}, "/usr/lib/update-notifier/apt-check")
 	if err != nil {
 		return -1, -1, fmt.Errorf("unable to execute apt-check: %w", err)
 	}
@@ -239,10 +239,7 @@ func (uf updateFacter) fromAPTCheck(ctx context.Context) (pendingUpdates int, pe
 }
 
 func (uf updateFacter) fromAPTGet(ctx context.Context) (pendingUpdates int, pendingSecurityUpdates int, err error) {
-	cmd := exec.CommandContext(ctx, "apt-get", "--simulate", "-o", "Debug::NoLocking=true", "--quiet", "--quiet", "dist-upgrade")
-	cmd.Env = uf.Environ
-
-	content, err := cmd.CombinedOutput()
+	content, err := uf.Runner.Run(ctx, gloutonexec.Option{Environ: uf.Environ, SkipInContainer: true, CombinedOutput: true}, "apt-get", "--simulate", "-o", "Debug::NoLocking=true", "--quiet", "--quiet", "dist-upgrade")
 	if err != nil {
 		logger.V(2).Printf("Unable to execute apt-get: %v", err)
 
@@ -255,10 +252,7 @@ func (uf updateFacter) fromAPTGet(ctx context.Context) (pendingUpdates int, pend
 }
 
 func (uf updateFacter) fromDNF(ctx context.Context) (pendingUpdates int, pendingSecurityUpdates int, err error) {
-	cmd := exec.CommandContext(ctx, "dnf", "--cacheonly", "--quiet", "updateinfo", "--list")
-	cmd.Env = uf.Environ
-
-	content, err := cmd.CombinedOutput()
+	content, err := uf.Runner.Run(ctx, gloutonexec.Option{Environ: uf.Environ, SkipInContainer: true, CombinedOutput: true}, "dnf", "--cacheonly", "--quiet", "updateinfo", "--list")
 	if err != nil {
 		return -1, -1, fmt.Errorf("unable to execute dnf: %w", err)
 	}
@@ -269,18 +263,12 @@ func (uf updateFacter) fromDNF(ctx context.Context) (pendingUpdates int, pending
 }
 
 func (uf updateFacter) fromYUM(ctx context.Context) (pendingUpdates int, pendingSecurityUpdates int, err error) {
-	cmd := exec.CommandContext(ctx, "yum", "--cacheonly", "--quiet", "list", "updates")
-	cmd.Env = uf.Environ
-
-	content, err := cmd.CombinedOutput()
+	content, err := uf.Runner.Run(ctx, gloutonexec.Option{Environ: uf.Environ, SkipInContainer: true, CombinedOutput: true}, "yum", "--cacheonly", "--quiet", "list", "updates")
 	if err != nil {
 		return -1, -1, fmt.Errorf("unable to execute yum: %w", err)
 	}
 
-	cmd = exec.CommandContext(ctx, "yum", "--cacheonly", "--quiet", "--security", "list", "updates")
-	cmd.Env = uf.Environ
-
-	contentSecurity, err := cmd.CombinedOutput()
+	contentSecurity, err := uf.Runner.Run(ctx, gloutonexec.Option{Environ: uf.Environ, SkipInContainer: true, CombinedOutput: true}, "yum", "--cacheonly", "--quiet", "--security", "list", "updates")
 	if err != nil {
 		return -1, -1, fmt.Errorf("unable to execute yum: %w", err)
 	}

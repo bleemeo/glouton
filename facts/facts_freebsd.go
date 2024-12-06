@@ -21,15 +21,15 @@ package facts
 import (
 	"context"
 	"os"
-	"os/exec"
 
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	"github.com/shirou/gopsutil/v3/load"
 	"golang.org/x/sys/unix"
 )
 
-func (f *FactProvider) platformFacts() map[string]string {
+func (f *FactProvider) platformFacts(_ context.Context) map[string]string {
 	var utsName unix.Utsname
 
 	err := unix.Uname(&utsName)
@@ -66,7 +66,7 @@ func (f *FactProvider) platformFacts() map[string]string {
 // This should be the IP address that this server use to communicate
 // on internet. It may be the private IP if the box is NATed.
 func (f *FactProvider) primaryAddress(ctx context.Context) (ipAddress string, macAddress string) {
-	out, err := exec.CommandContext(ctx, "route", "-nv", "get", "8.8.8.8").Output()
+	out, err := f.runner.Run(ctx, gloutonexec.Option{}, "route", "-nv", "get", "8.8.8.8")
 	if err != nil {
 		logger.V(1).Printf("unable to run route get: %v", err)
 

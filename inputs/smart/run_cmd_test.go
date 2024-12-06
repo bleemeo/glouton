@@ -17,6 +17,7 @@
 package smart
 
 import (
+	"context"
 	"math"
 	"os/exec"
 	"strconv"
@@ -26,6 +27,7 @@ import (
 	_ "unsafe"
 
 	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 	"github.com/bleemeo/glouton/version"
 
 	"github.com/google/go-cmp/cmp"
@@ -35,6 +37,12 @@ import (
 )
 
 var testUsingGlobalRunCmd sync.Mutex //nolint:gochecknoglobals
+
+type runnerFunction func(ctx context.Context, option gloutonexec.Option, name string, arg ...string) ([]byte, error)
+
+func (f runnerFunction) Run(ctx context.Context, option gloutonexec.Option, name string, arg ...string) ([]byte, error) {
+	return f(ctx, option, name, arg...)
+}
 
 // TestAccessPrivateField make sure that our hack to hijack runCmd (private global of telegraf) works
 // (our function is called) and don't cause build error / panic.
@@ -87,7 +95,7 @@ Temperature Sensor 2:               43 Celsius
 Temperature Sensor 8:               36 Celsius
 `
 
-	runCmd := func(_ config.Duration, _ bool, _ string, args ...string) ([]byte, error) {
+	runCmd := runnerFunction(func(_ context.Context, _ gloutonexec.Option, _ string, args ...string) ([]byte, error) {
 		l.Lock()
 		defer l.Unlock()
 
@@ -102,18 +110,18 @@ Temperature Sensor 8:               36 Celsius
 		}
 
 		return nil, nil
-	}
+	})
 
 	testUsingGlobalRunCmd.Lock()
 	defer testUsingGlobalRunCmd.Unlock()
 
-	SetupGlobalWrapper()
+	SetupGlobalWrapper(gloutonexec.New("/"))
 
-	trueOriginalCmd := globalRunCmd.originalRunCmd
-	globalRunCmd.originalRunCmd = runCmd
+	trueOriginalRunner := globalRunCmd.runner
+	globalRunCmd.runner = runCmd
 
 	defer func() {
-		globalRunCmd.originalRunCmd = trueOriginalCmd
+		globalRunCmd.runner = trueOriginalRunner
 	}()
 
 	input, ok := telegraf_inputs.Inputs["smart"]
@@ -179,7 +187,7 @@ func TestLimitedConcurrentcy(t *testing.T) {
 
 	const maxConcurrency = 5
 
-	runCmd := func(_ config.Duration, _ bool, _ string, _ ...string) ([]byte, error) {
+	runCmd := runnerFunction(func(_ context.Context, _ gloutonexec.Option, _ string, _ ...string) ([]byte, error) {
 		l.Lock()
 		execution++
 
@@ -195,7 +203,7 @@ func TestLimitedConcurrentcy(t *testing.T) {
 		l.Unlock()
 
 		return nil, nil
-	}
+	})
 
 	wrapper := &wrappedRunCmd{}
 	wrapper.reset(runCmd)
@@ -250,9 +258,9 @@ func TestLimitedConcurrentcy(t *testing.T) {
 
 func Test_addStats(t *testing.T) {
 	wrapper := &wrappedRunCmd{}
-	wrapper.reset(func(_ config.Duration, _ bool, _ string, _ ...string) ([]byte, error) {
+	wrapper.reset(runnerFunction(func(_ context.Context, _ gloutonexec.Option, _ string, _ ...string) ([]byte, error) {
 		return nil, nil
-	})
+	}))
 
 	currentTime := time.Now()
 
@@ -355,37 +363,37 @@ func TestRunCmdError(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		cmd            runCmdType
+		cmd            Runner
 		expectedErrStr string
 	}{
 		{
-			cmd: func(config.Duration, bool, string, ...string) ([]byte, error) {
+			cmd: runnerFunction(func(_ context.Context, _ gloutonexec.Option, _ string, _ ...string) ([]byte, error) {
 				return []byte("normal content"), nil
-			},
+			}),
 			expectedErrStr: "",
 		},
 		{
-			cmd: func(config.Duration, bool, string, ...string) ([]byte, error) {
+			cmd: runnerFunction(func(_ context.Context, _ gloutonexec.Option, _ string, _ ...string) ([]byte, error) {
 				return []byte("error content"), testExitError(1)
-			},
+			}),
 			expectedErrStr: "exit status 1",
 		},
 		{
-			cmd: func(config.Duration, bool, string, ...string) ([]byte, error) {
+			cmd: runnerFunction(func(_ context.Context, _ gloutonexec.Option, _ string, _ ...string) ([]byte, error) {
 				return []byte("low-power"), testExitError(2)
-			},
+			}),
 			expectedErrStr: "",
 		},
 		{
-			cmd: func(config.Duration, bool, string, ...string) ([]byte, error) {
+			cmd: runnerFunction(func(_ context.Context, _ gloutonexec.Option, _ string, _ ...string) ([]byte, error) {
 				return []byte("disk failing"), testExitError(8)
-			},
+			}),
 			expectedErrStr: "",
 		},
 		{
-			cmd: func(config.Duration, bool, string, ...string) ([]byte, error) {
+			cmd: runnerFunction(func(_ context.Context, _ gloutonexec.Option, _ string, _ ...string) ([]byte, error) {
 				return nil, exec.ErrNotFound
-			},
+			}),
 			expectedErrStr: "executable file not found in $PATH",
 		},
 	}
@@ -395,7 +403,7 @@ func TestRunCmdError(t *testing.T) {
 			t.Parallel()
 
 			wrc := &wrappedRunCmd{
-				originalRunCmd: tc.cmd,
+				runner:         tc.cmd,
 				maxConcurrency: 1,
 			}
 			wrc.cond = sync.NewCond(&wrc.l)
@@ -424,7 +432,7 @@ func TestFindDeviceInArgs(t *testing.T) {
 		runArgs []string
 	)
 
-	runCmd := func(_ config.Duration, _ bool, _ string, args ...string) ([]byte, error) {
+	runCmd := runnerFunction(func(_ context.Context, _ gloutonexec.Option, _ string, args ...string) ([]byte, error) {
 		if args[0] == "--scan" {
 			return []byte("/dev/nvme0 -d nvme # /dev/nvme0, NVMe device"), nil
 		}
@@ -437,18 +445,18 @@ func TestFindDeviceInArgs(t *testing.T) {
 		runArgs = args
 
 		return nil, nil
-	}
+	})
 
 	testUsingGlobalRunCmd.Lock()
 	defer testUsingGlobalRunCmd.Unlock()
 
-	SetupGlobalWrapper()
+	SetupGlobalWrapper(gloutonexec.New("/"))
 
-	trueOriginalCmd := globalRunCmd.originalRunCmd
-	globalRunCmd.originalRunCmd = runCmd
+	trueOriginalRunner := globalRunCmd.runner
+	globalRunCmd.runner = runCmd
 
 	defer func() {
-		globalRunCmd.originalRunCmd = trueOriginalCmd
+		globalRunCmd.runner = trueOriginalRunner
 	}()
 
 	input, ok := telegraf_inputs.Inputs["smart"]

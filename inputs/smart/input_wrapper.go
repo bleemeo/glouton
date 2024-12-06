@@ -46,6 +46,7 @@ type inputWrapper struct {
 type inputWrapperOptions struct {
 	input         *smart.Smart
 	runCmd        runCmdType
+	hostRootPath  string
 	findSGDevices func() ([]string, error)
 
 	configDevices []string
@@ -66,7 +67,15 @@ func newInputWrapper(opts inputWrapperOptions) (*inputWrapper, error) {
 	if opts.findSGDevices != nil {
 		iw.findSGDevices = opts.findSGDevices
 	} else {
-		iw.findSGDevices = func() ([]string, error) { return filepath.Glob(sgDevicesPattern) }
+		if opts.hostRootPath == "/" {
+			iw.findSGDevices = func() ([]string, error) { return filepath.Glob(sgDevicesPattern) }
+		} else {
+			iw.findSGDevices = func() ([]string, error) {
+				return filepath.Glob(
+					filepath.Join(opts.hostRootPath, sgDevicesPattern),
+				)
+			}
+		}
 	}
 
 	if len(iw.configDevices) != 0 {

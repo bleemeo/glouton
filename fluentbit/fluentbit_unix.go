@@ -21,15 +21,17 @@ package fluentbit
 import (
 	"github.com/bleemeo/glouton/config"
 	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 )
 
 // New returns an initialized Fluent Bit manager and config warnings.
-func New(cfg config.Log, reg registerer, runtime crTypes.RuntimeInterface) (*Manager, []error) {
+func New(cfg config.Log, reg registerer, runtime crTypes.RuntimeInterface, runner *gloutonexec.Runner) (*Manager, []error) {
 	warnings := validateConfig(cfg)
 	manager := &Manager{
 		config:              cfg,
 		registry:            reg,
 		runtime:             runtime,
+		runner:              runner,
 		errorLoggedForInput: make(map[string]bool),
 	}
 

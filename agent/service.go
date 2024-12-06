@@ -19,12 +19,12 @@ package agent
 import (
 	"context"
 	"errors"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/bleemeo/glouton/discovery"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 )
 
 var (
@@ -45,7 +45,7 @@ type dockerExecuter interface {
 	Exec(ctx context.Context, containerID string, cmd []string) ([]byte, error)
 }
 
-func postfixQueueSize(ctx context.Context, srv discovery.Service, hostRootPath string, docker dockerExecuter) (float64, error) {
+func postfixQueueSize(ctx context.Context, srv discovery.Service, runner *gloutonexec.Runner, docker dockerExecuter) (float64, error) {
 	if srv.ContainerID != "" {
 		out, err := docker.Exec(ctx, srv.ContainerID, []string{"postqueue", "-p"})
 		if err != nil {
@@ -53,16 +53,16 @@ func postfixQueueSize(ctx context.Context, srv discovery.Service, hostRootPath s
 		}
 
 		return parsePostfix(out)
-	} else if hostRootPath == "/" {
-		out, err := exec.Command("postqueue", "-p").Output()
-		if err != nil {
-			return 0, err
-		}
-
-		return parsePostfix(out)
 	}
 
-	return 0, errRunInContainer
+	out, err := runner.Run(ctx, gloutonexec.Option{RunOnHost: true}, "postqueue", "-p")
+	if errors.Is(err, gloutonexec.ErrExecutionSkipped) {
+		return 0, errRunInContainer
+	} else if err != nil {
+		return 0, err
+	}
+
+	return parsePostfix(out)
 }
 
 func parsePostfix(output []byte) (n float64, err error) {
@@ -78,7 +78,7 @@ func parsePostfix(output []byte) (n float64, err error) {
 	return strconv.ParseFloat(string(result[1]), 64)
 }
 
-func eximQueueSize(ctx context.Context, srv discovery.Service, hostRootPath string, docker dockerExecuter) (float64, error) {
+func eximQueueSize(ctx context.Context, srv discovery.Service, runner *gloutonexec.Runner, docker dockerExecuter) (float64, error) {
 	if srv.ContainerID != "" {
 		out, err := docker.Exec(ctx, srv.ContainerID, []string{"exim4", "-bpc"})
 		if err != nil {
@@ -86,14 +86,14 @@ func eximQueueSize(ctx context.Context, srv discovery.Service, hostRootPath stri
 		}
 
 		return strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
-	} else if hostRootPath == "/" {
-		out, err := exec.Command("exim4", "-bpc").Output()
-		if err != nil {
-			return 0, err
-		}
-
-		return strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
 	}
 
-	return 0, errRunInContainer
+	out, err := runner.Run(ctx, gloutonexec.Option{RunOnHost: true}, "exim4", "-bpc")
+	if errors.Is(err, gloutonexec.ErrExecutionSkipped) {
+		return 0, errRunInContainer
+	} else if err != nil {
+		return 0, err
+	}
+
+	return strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
 }
