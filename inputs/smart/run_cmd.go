@@ -29,6 +29,7 @@ import (
 
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	"github.com/influxdata/telegraf/config"
 )
@@ -43,7 +44,7 @@ var runCmd runCmdType //nolint:gochecknoglobals
 type wrappedRunCmd struct {
 	l                     sync.Mutex
 	cond                  *sync.Cond
-	originalRunCmd        runCmdType
+	runner                Runner
 	maxConcurrency        int
 	currentExecCount      int
 	timeoutCount          int
@@ -53,6 +54,10 @@ type wrappedRunCmd struct {
 	latestResultPerDevice map[string]string
 	firstScanOutput       string
 	latestScanOutput      string
+}
+
+type Runner interface {
+	Run(ctx context.Context, option gloutonexec.Option, name string, arg ...string) ([]byte, error)
 }
 
 type bucketStats struct {
@@ -76,27 +81,19 @@ type smartExecution struct {
 
 var globalRunCmd wrappedRunCmd //nolint:gochecknoglobals
 
-func SetupGlobalWrapper() {
-	globalRunCmd.l.Lock()
-	cmd := globalRunCmd.originalRunCmd
-	globalRunCmd.l.Unlock()
-
-	if cmd == nil {
-		cmd = runCmd
-	}
-
-	globalRunCmd.reset(cmd)
+func SetupGlobalWrapper(runner *gloutonexec.Runner) {
+	globalRunCmd.reset(runner)
 
 	globalRunCmd.l.Lock()
 	runCmd = globalRunCmd.runCmd
 	globalRunCmd.l.Unlock()
 }
 
-func (w *wrappedRunCmd) reset(cmd runCmdType) {
+func (w *wrappedRunCmd) reset(runner Runner) {
 	w.l.Lock()
 	defer w.l.Unlock()
 
-	w.originalRunCmd = cmd
+	w.runner = runner
 	w.maxConcurrency = 1
 	w.cond = sync.NewCond(&w.l)
 	w.buckets = make(map[string]bucketStats)
@@ -121,7 +118,7 @@ func (w *wrappedRunCmd) runCmd(timeout config.Duration, sudo bool, command strin
 	start := time.Now()
 
 	w.l.Lock()
-	originalRunCmd := w.originalRunCmd
+	runner := w.runner
 
 	for w.currentExecCount >= w.maxConcurrency {
 		w.cond.Wait()
@@ -132,7 +129,11 @@ func (w *wrappedRunCmd) runCmd(timeout config.Duration, sudo bool, command strin
 	w.l.Unlock()
 
 	execStart := time.Now()
-	output, err := originalRunCmd(timeout, sudo, command, args...)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout))
+	defer cancel()
+
+	output, err := runner.Run(ctx, gloutonexec.Option{RunAsRoot: sudo, RunOnHost: true, CombinedOutput: true, GraceDelay: 5 * time.Second}, command, args...)
 	end := time.Now()
 
 	w.l.Lock()

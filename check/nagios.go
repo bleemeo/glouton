@@ -22,6 +22,7 @@ import (
 	"os/exec"
 
 	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	"github.com/google/shlex"
 )
@@ -31,6 +32,7 @@ type NagiosCheck struct {
 	*baseCheck
 
 	nagiosCommand string
+	runner        *gloutonexec.Runner
 }
 
 // NewNagios create a new Nagios check.
@@ -43,9 +45,11 @@ func NewNagios(
 	persistentConnection bool,
 	labels map[string]string,
 	annotations types.MetricAnnotations,
+	runner *gloutonexec.Runner,
 ) *NagiosCheck {
 	nc := &NagiosCheck{
 		nagiosCommand: nagiosCommand,
+		runner:        runner,
 	}
 
 	var mainTCPAddress string
@@ -59,7 +63,7 @@ func NewNagios(
 	return nc
 }
 
-func (nc *NagiosCheck) nagiosMainCheck(context.Context) types.StatusDescription {
+func (nc *NagiosCheck) nagiosMainCheck(ctx context.Context) types.StatusDescription {
 	part, err := shlex.Split(nc.nagiosCommand)
 	if err != nil {
 		return types.StatusDescription{
@@ -75,8 +79,7 @@ func (nc *NagiosCheck) nagiosMainCheck(context.Context) types.StatusDescription 
 		}
 	}
 
-	cmd := exec.Command(part[0], part[1:]...) //nolint:gosec
-	output, err := cmd.CombinedOutput()
+	output, err := nc.runner.Run(ctx, gloutonexec.Option{CombinedOutput: true}, part[0], part[1:]...)
 	result := types.StatusDescription{
 		CurrentStatus:     types.StatusOk,
 		StatusDescription: string(output),

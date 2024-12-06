@@ -547,8 +547,9 @@ func TestMarkInactiveWithErrors(t *testing.T) {
 	t1 := t0.Add(10 * time.Second)
 	t2 := t1.Add(keepMetricBecauseOfGatherErrorGraceDelay)
 
-	if err := c.RunGather(context.Background(), t0); err != nil {
-		t.Error(err)
+	err = c.RunGather(context.Background(), t0)
+	if err != nil {
+		t.Fatal("Gathering failed:", err)
 	}
 
 	acc.assertValue(t, t0, "i1", "f1", `name="i1"`, 1.)
@@ -569,8 +570,9 @@ func TestMarkInactiveWithErrors(t *testing.T) {
 	input.fields = map[string]float64{"f2": 0.22, "f3": 33} // no value for f1
 	input.retErr = io.ErrUnexpectedEOF                      // perhaps because of this error
 
-	if err := c.RunGather(context.Background(), t1); err != nil {
-		t.Error(err)
+	err = c.RunGather(context.Background(), t1)
+	if err != nil {
+		t.Fatal("Gathering failed:", err)
 	}
 
 	// We expected no value for f1, because the input has returned an error (and thus no value),
@@ -583,11 +585,12 @@ func TestMarkInactiveWithErrors(t *testing.T) {
 		t.Fatalf("Unexpected field cache state at t1:\n%v", diff)
 	}
 
-	input.fields = map[string]float64{"f3": 3, "f4": 4.4} // no more value for f2 neither, a new metric appears
-	// and the error is still present
+	input.fields = map[string]float64{"f3": 3, "f4": 4.4} // no more value for f2 neither; a new metric appears;
+	// the error is still present
 
-	if err := c.RunGather(context.Background(), t2); err != nil {
-		t.Error(err)
+	err = c.RunGather(context.Background(), t2)
+	if err != nil {
+		t.Fatal("Gathering failed:", err)
 	}
 
 	// The grace period has ended, the metric is now marked as inactive -> StaleNaN.

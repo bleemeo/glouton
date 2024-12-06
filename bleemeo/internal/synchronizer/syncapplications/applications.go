@@ -160,6 +160,10 @@ func syncRemoteAndLocal(ctx context.Context, localServices []discovery.Service, 
 	applicationsNeedCreate := make([]discovery.Application, 0)
 
 	for _, srv := range localServices {
+		if !srv.Active {
+			continue
+		}
+
 		for _, localApp := range srv.Applications {
 			appName, appTag := types.AutomaticApplicationName(localApp)
 
@@ -191,7 +195,7 @@ func syncRemoteAndLocal(ctx context.Context, localServices []discovery.Service, 
 			return err
 		}
 
-		logger.V(2).Printf("created application %s with UUID %s", appName, apiApp.ID)
+		logger.V(2).Printf("Created application %s with UUID %s", appName, apiApp.ID)
 
 		applications = append(applications, apiApp)
 	}

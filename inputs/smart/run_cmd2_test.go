@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 	"github.com/influxdata/telegraf/config"
 )
 
@@ -32,12 +33,14 @@ func TestTimeoutDetection(t *testing.T) {
 	testUsingGlobalRunCmd.Lock()
 	defer testUsingGlobalRunCmd.Unlock()
 
-	SetupGlobalWrapper()
+	realRunner := gloutonexec.New("/")
+
+	SetupGlobalWrapper(realRunner)
 
 	wrapper := &wrappedRunCmd{}
-	wrapper.reset(globalRunCmd.originalRunCmd)
+	wrapper.reset(realRunner)
 
-	_, err := wrapper.runCmd(config.Duration(time.Millisecond), false, "sleep", "30")
+	_, err := wrapper.runCmd(config.Duration(50*time.Millisecond), false, "sleep", "30")
 
 	if err == nil {
 		t.Errorf("error is nil, want TimeoutError")

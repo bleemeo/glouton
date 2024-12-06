@@ -29,6 +29,7 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/influxdata/telegraf"
@@ -272,7 +273,20 @@ func TestDiscoverySingle(t *testing.T) {
 		state := mockState{
 			DiscoveredService: previousService,
 		}
-		disc, _ := New(&MockDiscoverer{result: []Service{c.dynamicResult}}, nil, state, mockContainerInfo{}, nil, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, nil, time.Hour)
+		disc, _ := New(
+			&MockDiscoverer{result: []Service{c.dynamicResult}},
+			gloutonexec.New("/"),
+			nil,
+			state,
+			mockContainerInfo{},
+			nil,
+			nil,
+			nil,
+			nil,
+			facts.ContainerFilter{}.ContainerIgnored,
+			nil,
+			time.Hour,
+		)
 
 		srv, err := disc.Discovery(ctx, 0)
 		if err != nil {
@@ -862,7 +876,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 	}
 	state := mockState{}
 
-	disc, _ := New(mockDynamic, reg, state, nil, nil, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, nil, time.Hour)
+	disc, _ := New(mockDynamic, gloutonexec.New("/"), reg, state, nil, nil, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, nil, time.Hour)
 	disc.containerInfo = docker
 
 	mockDynamic.result = []Service{

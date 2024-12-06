@@ -29,6 +29,7 @@ import (
 	"github.com/bleemeo/glouton/prometheus/registry"
 	"github.com/bleemeo/glouton/store"
 	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/storage"
@@ -80,7 +81,7 @@ type miscAppenderMinute struct {
 	containerRuntime  crTypes.RuntimeInterface
 	discovery         *discovery.Discovery
 	store             *store.Store
-	hostRootPath      string
+	runner            *gloutonexec.Runner
 	getConfigWarnings func() prometheus.MultiError
 }
 
@@ -104,7 +105,7 @@ func (ma miscAppenderMinute) CollectWithState(ctx context.Context, state registr
 
 		switch srv.ServiceType { //nolint:exhaustive,nolintlint
 		case discovery.PostfixService:
-			n, err := postfixQueueSize(ctx, srv, ma.hostRootPath, ma.containerRuntime)
+			n, err := postfixQueueSize(ctx, srv, ma.runner, ma.containerRuntime)
 			if err != nil {
 				logger.V(1).Printf("Unabled to gather postfix queue size on %s: %v", srv, err)
 
@@ -132,7 +133,7 @@ func (ma miscAppenderMinute) CollectWithState(ctx context.Context, state registr
 				},
 			})
 		case discovery.EximService:
-			n, err := eximQueueSize(ctx, srv, ma.hostRootPath, ma.containerRuntime)
+			n, err := eximQueueSize(ctx, srv, ma.runner, ma.containerRuntime)
 			if err != nil {
 				logger.V(1).Printf("Unabled to gather exim queue size on %s: %v", srv, err)
 

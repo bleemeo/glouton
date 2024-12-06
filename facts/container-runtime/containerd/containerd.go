@@ -844,24 +844,40 @@ func convertToContainerObject(ctx context.Context, ns string, cont containerd.Co
 		imageID: imgDigest,
 	}
 
-	task, err := cont.Task(ctx, nil)
-	if err == nil {
-		obj.pid = int(task.Pid())
-
-		status, err := task.Status(ctx)
-		if err == nil {
-			obj.state = string(status.Status)
-			obj.exitTime = status.ExitTime
-		}
-	}
-
 	if spec.Process != nil {
 		obj.args = spec.Process.Args
 	}
 
+	task, err := cont.Task(ctx, nil)
 	if err != nil {
 		logger.V(2).Printf("container %s/%s, ignore error while fetching task status: %v", ns, cont.ID(), err)
+
+		return obj, nil
 	}
+
+	obj.pid = int(task.Pid())
+
+	status, err := task.Status(ctx)
+	if err == nil {
+		obj.state = string(status.Status)
+		obj.exitTime = status.ExitTime
+	}
+
+	proc, err := process.NewProcess(int32(obj.pid)) //nolint:gosec
+	if err != nil {
+		logger.Printf("container %s/%s, ignore error while retrieving corresponding process: %v", ns, cont.ID(), err)
+
+		return obj, nil
+	}
+
+	startTimeMs, err := proc.CreateTimeWithContext(ctx)
+	if err != nil {
+		logger.Printf("container %s/%s, ignore error while retrieving process creation time: %v", ns, cont.ID(), err)
+
+		return obj, nil
+	}
+
+	obj.startTime = time.UnixMilli(startTimeMs)
 
 	return obj, nil
 }
@@ -1007,6 +1023,7 @@ type containerObject struct {
 	pid       int
 	state     string
 	args      []string
+	startTime time.Time
 	exitTime  time.Time
 	imageID   string
 }
@@ -1132,7 +1149,7 @@ func (c containerObject) PrimaryAddress() string {
 }
 
 func (c containerObject) StartedAt() time.Time {
-	return time.Time{}
+	return c.startTime
 }
 
 func (c containerObject) State() facts.ContainerState {

@@ -36,6 +36,7 @@ import (
 	"github.com/bleemeo/glouton/prometheus/registry"
 	"github.com/bleemeo/glouton/prometheus/scrapper"
 	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -50,6 +51,7 @@ type Manager struct {
 	config   config.Log
 	registry registerer
 	runtime  crTypes.RuntimeInterface
+	runner   *gloutonexec.Runner
 	// Whether an error has been logged for an input.
 	errorLoggedForInput map[string]bool
 
@@ -127,7 +129,7 @@ func (m *Manager) update(ctx context.Context) error {
 			return err
 		}
 
-		err = reloadFluentBit(ctx)
+		err = reloadFluentBit(ctx, m.runner)
 		if err != nil {
 			return err
 		}
@@ -250,16 +252,18 @@ func labelsMatchSelectors(labels map[string]string, selectors map[string]string)
 // Reload Fluent Bit to apply the configuration.
 // Currently the only way to reload the configuration when Fluent Bit is installed as a package
 // is to restart it, see https://github.com/fluent/fluent-bit/issues/365 for updated information.
-func reloadFluentBit(ctx context.Context) error {
+func reloadFluentBit(ctx context.Context, runner *gloutonexec.Runner) error {
+	runOption := gloutonexec.Option{RunAsRoot: true}
+
 	// Skip reloading on systems without systemctl.
 	// In Docker and Kubernetes, Fluent Bit will detect the config change and reload by itself.
-	if _, err := exec.LookPath("systemctl"); err != nil {
+	if _, err := runner.LookPath("systemctl", runOption); err != nil {
 		logger.V(2).Printf("Skipping Fluent Bit reload because systemctl is not present: %s", err)
 
 		return nil
 	}
 
-	_, err := exec.CommandContext(ctx, "sudo", "-n", "systemctl", "restart", "bleemeo-agent-logs").Output()
+	_, err := runner.Run(ctx, runOption, "systemctl", "restart", "bleemeo-agent-logs")
 	if err != nil {
 		if exitErr := &(exec.ExitError{}); errors.As(err, &exitErr) {
 			err = fmt.Errorf("%w: %s", err, string(exitErr.Stderr))

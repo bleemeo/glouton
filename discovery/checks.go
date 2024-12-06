@@ -28,6 +28,7 @@ import (
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/registry"
 	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	"github.com/prometheus/prometheus/model/labels"
 )
@@ -172,20 +173,20 @@ func (d *Discovery) createCheck(service Service) {
 		// We can't rely on a process check since the process may be running
 		// even if the NFS share failed to be mounted.
 	case CustomService:
-		createCheckType(service, d, di, primaryAddress, tcpAddresses, labels, annotations)
+		createCheckType(d.commandRunner, service, d, di, primaryAddress, tcpAddresses, labels, annotations)
 	default:
 		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
 	}
 }
 
-func createCheckType(service Service, d *Discovery, di discoveryInfo, primaryAddress string, tcpAddresses []string, labels map[string]string, annotations types.MetricAnnotations) {
+func createCheckType(commandRunner *gloutonexec.Runner, service Service, d *Discovery, di discoveryInfo, primaryAddress string, tcpAddresses []string, labels map[string]string, annotations types.MetricAnnotations) {
 	switch service.Config.CheckType {
 	case customCheckTCP:
 		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
 	case customCheckHTTP:
 		d.createHTTPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
 	case customCheckNagios:
-		d.createNagiosCheck(service, primaryAddress, labels, annotations)
+		d.createNagiosCheck(service, primaryAddress, labels, annotations, commandRunner)
 	case customCheckProcess:
 		d.createProcessCheck(service, labels, annotations)
 	default:
@@ -310,6 +311,7 @@ func (d *Discovery) createNagiosCheck(
 	primaryAddress string,
 	labels map[string]string,
 	annotations types.MetricAnnotations,
+	runner *gloutonexec.Runner,
 ) {
 	var tcpAddress []string
 
@@ -323,6 +325,7 @@ func (d *Discovery) createNagiosCheck(
 		true,
 		labels,
 		annotations,
+		runner,
 	)
 
 	d.addCheck(nagiosCheck, service)

@@ -34,6 +34,7 @@ import (
 	"github.com/bleemeo/glouton/prometheus/model"
 	"github.com/bleemeo/glouton/prometheus/registry"
 	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	dto "github.com/prometheus/client_model/go"
 )
@@ -98,8 +99,8 @@ type powerReading struct {
 // New returns a new IPMI gatherer.
 // The Gatherer will probe for IPMI availability on first call and if unavailable will
 // do nothing on subsequent calls. It will use either freeipmi (preferred) or ipmitool.
-func New(cfg config.IPMI, factStatusCallback func(binaryInstalled bool)) *Gatherer {
-	return newGatherer(cfg, runCmd, factStatusCallback)
+func New(cfg config.IPMI, runner *gloutonexec.Runner, factStatusCallback func(binaryInstalled bool)) *Gatherer {
+	return newGatherer(cfg, runCmdWithRunner(runner), factStatusCallback)
 }
 
 func (g *Gatherer) Gather() ([]*dto.MetricFamily, error) {
@@ -316,41 +317,35 @@ func newGatherer(cfg config.IPMI, runCmd runFunction, factStatusCallback func(bi
 	}
 }
 
-func runCmd(ctx context.Context, searchPath string, useSudo bool, args []string) ([]byte, error) {
-	if searchPath != "" {
-		args = append([]string{filepath.Join(searchPath, args[0])}, args[1:]...)
-	}
-
-	fullPath, err := exec.LookPath(args[0])
-	if err != nil {
-		return nil, err
-	}
-
-	args = append([]string{fullPath}, args[1:]...)
-
-	if useSudo {
-		args = append([]string{"sudo", "-n"}, args...)
-	}
-
-	cmd := exec.CommandContext(ctx, args[0], args[1:]...) //nolint:gosec
-
-	currentEnv := os.Environ()
-	newEnv := make([]string, 0, len(currentEnv))
-
-	for _, row := range currentEnv {
-		if strings.HasPrefix(row, "LANG=") || strings.HasPrefix(row, "TZ=") {
-			continue
+func runCmdWithRunner(runner *gloutonexec.Runner) runFunction {
+	return func(ctx context.Context, searchPath string, useSudo bool, args []string) ([]byte, error) {
+		if searchPath != "" {
+			args = append([]string{filepath.Join(searchPath, args[0])}, args[1:]...)
 		}
 
-		newEnv = append(newEnv, row)
+		currentEnv := os.Environ()
+		newEnv := make([]string, 0, len(currentEnv))
+
+		for _, row := range currentEnv {
+			if strings.HasPrefix(row, "LANG=") || strings.HasPrefix(row, "TZ=") {
+				continue
+			}
+
+			newEnv = append(newEnv, row)
+		}
+
+		newEnv = append(newEnv, "LANG=C")
+		newEnv = append(newEnv, "TZ=UTC")
+
+		runOption := gloutonexec.Option{RunAsRoot: useSudo, Environ: newEnv, CombinedOutput: true, RunOnHost: true}
+
+		fullPath, err := runner.LookPath(args[0], runOption)
+		if err != nil {
+			return nil, err
+		}
+
+		return runner.Run(ctx, runOption, fullPath, args[1:]...)
 	}
-
-	newEnv = append(newEnv, "LANG=C")
-	newEnv = append(newEnv, "TZ=UTC")
-
-	cmd.Env = newEnv
-
-	return cmd.CombinedOutput()
 }
 
 func sdrToPoints(sdr []sensorData) []types.MetricPoint {

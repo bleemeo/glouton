@@ -86,7 +86,7 @@ type mockFileReader struct {
 	contents map[string]string
 }
 
-func (mfr mockFileReader) ReadFile(path string) ([]byte, error) {
+func (mfr mockFileReader) ReadFile(_ context.Context, path string) ([]byte, error) {
 	content, ok := mfr.contents[path]
 	if !ok {
 		return nil, os.ErrNotExist

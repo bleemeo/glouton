@@ -59,6 +59,7 @@ import (
 	"github.com/bleemeo/glouton/prometheus/exporter/zfs"
 	"github.com/bleemeo/glouton/prometheus/registry"
 	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 	"github.com/bleemeo/glouton/version"
 
 	"github.com/influxdata/telegraf"
@@ -66,7 +67,7 @@ import (
 )
 
 // AddDefaultInputs adds system inputs to a collector.
-func AddDefaultInputs(metricRegistry GathererRegistry, inputsConfig inputs.CollectorConfig, vethProvider *veth.Provider) error {
+func AddDefaultInputs(commandRunner *gloutonexec.Runner, metricRegistry GathererRegistry, inputsConfig inputs.CollectorConfig, vethProvider *veth.Provider) error {
 	input, err := system.New()
 	if err != nil {
 		return err
@@ -105,7 +106,7 @@ func AddDefaultInputs(metricRegistry GathererRegistry, inputsConfig inputs.Colle
 		}
 	}
 
-	source, err := zfs.New(time.Minute)
+	source, err := zfs.New(commandRunner, time.Minute)
 
 	switch {
 	case errors.Is(err, zfs.ErrZFSNotAvailable):

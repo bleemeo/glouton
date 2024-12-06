@@ -31,6 +31,7 @@ import (
 	"github.com/bleemeo/glouton/inputs/internal"
 	"github.com/bleemeo/glouton/prometheus/registry"
 	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -40,8 +41,8 @@ import (
 var megaraidRegexp = regexp.MustCompile(`^megaraid,(\d+)$`)
 
 // New returns a SMART input.
-func New(config config.Smart, factStatusCallback func(binaryInstalled bool)) (telegraf.Input, registry.RegistrationOption, error) {
-	SetupGlobalWrapper()
+func New(config config.Smart, runner *gloutonexec.Runner, hostroot string, factStatusCallback func(binaryInstalled bool)) (telegraf.Input, registry.RegistrationOption, error) {
+	SetupGlobalWrapper(runner)
 	globalRunCmd.SetConcurrency(config.MaxConcurrency)
 
 	input, ok := telegraf_inputs.Inputs["smart"]
@@ -81,6 +82,7 @@ func New(config config.Smart, factStatusCallback func(binaryInstalled bool)) (te
 	smartInput.TagWithDeviceType = true
 
 	wrapperOpts := inputWrapperOptions{
+		hostRootPath:  hostroot,
 		input:         smartInput,
 		configDevices: config.Devices,
 	}
