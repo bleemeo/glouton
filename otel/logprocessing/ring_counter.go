@@ -25,7 +25,7 @@ import (
 // ringCounter is kind of a ring-buffer, but serves for storing
 // a count for each second of a sliding time window.
 // Its precision is hard-coded (1s), but its size is configurable.
-// When the Inc method is called, the given delta is added
+// When the Add method is called, the given delta is added
 // to the bucket that corresponds to the current second.
 // The buckets can be represented as a ring, so when we want to increment
 // the counter for, say, the 61st second after the first call, we start
@@ -48,8 +48,8 @@ func newRingCounter(size int) *ringCounter {
 	}
 }
 
-// Inc records the given delta for the current second.
-func (rc *ringCounter) Inc(delta int) {
+// Add records the given delta for the current second.
+func (rc *ringCounter) Add(delta int) {
 	// We want to insert the delta for the time when the method was called,
 	// so storing the time now rather than after acquiring the lock
 	// avoids distorting the measurement.
