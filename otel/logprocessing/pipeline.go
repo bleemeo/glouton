@@ -26,6 +26,7 @@ import (
 	"os"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -371,6 +372,19 @@ func setupLogReceiverFactories(logFiles []string, operatorsYaml []byte) (
 	}
 
 	for _, logFile := range logFiles {
+		if strings.Contains(logFile, "*") {
+			// Assuming the "*" is in the base of the path, we check if we can list files in the parent dir.
+			if f, err := os.OpenFile(filepath.Dir(logFile), os.O_RDONLY, 0); err != nil {
+				logger.V(1).Printf("Unable to handle glob for log files %q", logFile)
+			} else {
+				_ = f.Close()
+
+				readableFiles = append(readableFiles, logFile)
+			}
+
+			continue
+		}
+
 		f, err := os.OpenFile(logFile, os.O_RDONLY, 0) // the mode perm isn't needed for read
 		if err != nil {
 			if os.IsNotExist(err) {
