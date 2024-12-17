@@ -24,6 +24,7 @@ import (
 	"maps"
 	"net"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -256,14 +257,14 @@ func MakePipeline( //nolint:maintidx
 
 	diagnosticFn = func(_ context.Context, writer types.ArchiveWriter) error {
 		pipeline.l.Lock()
-		receiversInfo := pipeline.receiversInfo
+		receiversInfo := slices.Collect(maps.Values(pipeline.receiversInfo))
 		pipeline.l.Unlock()
 
 		diagInfo := diagnosticInformation{
 			LogProcessedCount:      pipeline.logProcessedCount.Load(),
 			LogThroughputPerMinute: pipeline.logThroughputMeter.Total(),
 			BackPressureBlocking:   applyBackPressureFn(),
-			Receivers:              slices.Collect(maps.Values(receiversInfo)),
+			Receivers:              receiversInfo,
 		}
 
 		return diagInfo.writeToArchive(writer)
@@ -480,7 +481,7 @@ func wrapWithCounters(next consumer.Logs, counter *atomic.Int64, throughputMeter
 	if err != nil {
 		logger.V(1).Printf("Failed to wrap component with log counters: %v", err)
 
-		return next // give up wrapping it and just use it like so
+		return next // give up wrapping it and just use it as is
 	}
 
 	return logCounter
