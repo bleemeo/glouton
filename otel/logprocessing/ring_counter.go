@@ -40,8 +40,13 @@ type ringCounter struct {
 
 // newRingCounter initialises a new "throughput meter".
 // Since its granularity is 1 second, the size must be given as seconds as well.
+// The size must be strictly positive, otherwise it panics.
 // The Total method will then return the sum of the data recorded in a sliding time window of this width.
 func newRingCounter(size int) *ringCounter {
+	if size < 1 {
+		panic("ring counter size must be strictly positive")
+	}
+
 	return &ringCounter{
 		size:    size,
 		buckets: make([]int, size),

@@ -18,32 +18,25 @@ package logprocessing
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
 	"net"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/logger"
-	"github.com/bleemeo/glouton/otel/execlogreceiver"
 	"github.com/bleemeo/glouton/types"
 
-	"github.com/go-viper/mapstructure/v2"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configtelemetry"
-	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -55,7 +48,6 @@ import (
 	"go.opentelemetry.io/collector/receiver/otlpreceiver"
 	noopM "go.opentelemetry.io/otel/metric/noop"
 	"go.opentelemetry.io/otel/trace/noop"
-	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -67,17 +59,15 @@ const (
 var errUnexpectedType = errors.New("unexpected type")
 
 type pipelineContext struct {
-	config    config.OpenTelemetry
-	telemetry component.TelemetrySettings
+	config        config.OpenTelemetry
+	lastFileSizes map[string]int64
+	telemetry     component.TelemetrySettings
 
 	l sync.Mutex
 	// startedComponents represents all the components that must be shut down at the end of the context's lifecycle.
 	startedComponents []component.Component
-	// receiversToRetry is a map[receiver index] -> files not handled yet
-	receiversToRetry           map[int][]string
-	logCounterPerReceiver      map[int]*marshallableInt64
-	throughputMeterPerReceiver map[int]*ringCounter
-	receiversInfo              map[int]receiverDiagnosticInformation
+	// receivers is a map that links the config index to the actual receiver
+	receivers []*logReceiver
 
 	logProcessedCount  atomic.Int64
 	logThroughputMeter *ringCounter
@@ -86,13 +76,15 @@ type pipelineContext struct {
 func MakePipeline( //nolint:maintidx
 	ctx context.Context,
 	cfg config.OpenTelemetry,
+	state bleemeoTypes.State,
 	pushLogs func(context.Context, []byte) error,
 	applyBackPressureFn func() bool,
 ) (diagnosticFn func(context.Context, types.ArchiveWriter) error, err error) {
 	// TODO: no logs & metrics at the same time
 
 	pipeline := &pipelineContext{
-		config: cfg,
+		lastFileSizes: getLastFileSizesFromCache(state),
+		config:        cfg,
 		telemetry: component.TelemetrySettings{
 			Logger:         logger.ZapLogger(),
 			TracerProvider: noop.NewTracerProvider(),
@@ -100,12 +92,9 @@ func MakePipeline( //nolint:maintidx
 			MetricsLevel:   configtelemetry.LevelBasic,
 			Resource:       pcommon.NewResource(),
 		},
-		startedComponents:          make([]component.Component, 0, 4), // 4 should be the minimum number of components
-		receiversToRetry:           make(map[int][]string),
-		logCounterPerReceiver:      make(map[int]*marshallableInt64),
-		throughputMeterPerReceiver: make(map[int]*ringCounter),
-		receiversInfo:              make(map[int]receiverDiagnosticInformation, len(cfg.Receivers)),
-		logThroughputMeter:         newRingCounter(throughputMeterResolutionSecs), // we want to measure the throughput over the last minute (60s)
+		startedComponents:  make([]component.Component, 0, 4), // 4 should be the minimum number of components
+		receivers:          make([]*logReceiver, len(cfg.Receivers)),
+		logThroughputMeter: newRingCounter(throughputMeterResolutionSecs), // we want to measure the throughput over the last minute (60s)
 	}
 
 	pipeline.l.Lock()
@@ -223,25 +212,44 @@ func MakePipeline( //nolint:maintidx
 		pipeline.startedComponents = append(pipeline.startedComponents, otlpLogReceiver)
 	}
 
-	for i, rcvr := range cfg.Receivers {
-		pipeline.logCounterPerReceiver[i] = &marshallableInt64{new(atomic.Int64)}
-		pipeline.throughputMeterPerReceiver[i] = newRingCounter(throughputMeterResolutionSecs)
-
-		notExistFiles, err := setupLogReceivers(ctx, pipeline, logBackPressureEnforcer, i, rcvr.Include, []byte(rcvr.OperatorsYAML))
+	for i, rcvrCfg := range cfg.Receivers {
+		pipeline.receivers[i], err = newLogReceiver(rcvrCfg, logBackPressureEnforcer)
 		if err != nil {
 			shutdownAll(pipeline.startedComponents)
 
-			return nil, fmt.Errorf("setup log receiver n°%d factories: %w", i+1, err)
+			return nil, fmt.Errorf("setup log receiver n°%d: %w", i+1, err)
 		}
 
-		if len(notExistFiles) > 0 {
-			pipeline.receiversToRetry[i] = notExistFiles
+		err = pipeline.receivers[i].update(ctx, pipeline)
+		if err != nil {
+			shutdownAll(pipeline.startedComponents)
+
+			return nil, fmt.Errorf("start log receiver n°%d: %w", i+1, err)
 		}
 	}
 
-	if len(pipeline.receiversToRetry) > 0 {
-		go retrySetupFileReceivers(ctx, pipeline, logBackPressureEnforcer)
-	}
+	go func() {
+		ticker := time.NewTicker(retrySetupFileReceiversPeriod)
+		defer ticker.Stop()
+
+		for ctx.Err() == nil {
+			select {
+			case <-ticker.C:
+				pipeline.l.Lock()
+
+				for i, rcvr := range pipeline.receivers {
+					err = rcvr.update(ctx, pipeline)
+					if err != nil {
+						logger.V(1).Printf("Failed to update log receiver n°%d: %v", i+1, err)
+					}
+				}
+
+				pipeline.l.Unlock()
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 
 	// Scheduling the shutdown of all the components we've started
 	go func() {
@@ -253,11 +261,18 @@ func MakePipeline( //nolint:maintidx
 		defer pipeline.l.Unlock()
 
 		shutdownAll(pipeline.startedComponents)
+
+		saveLastFileSizesToCache(state, pipeline.receivers)
 	}()
 
 	diagnosticFn = func(_ context.Context, writer types.ArchiveWriter) error {
 		pipeline.l.Lock()
-		receiversInfo := slices.Collect(maps.Values(pipeline.receiversInfo))
+		receiversInfo := make([]receiverDiagnosticInformation, len(pipeline.receivers))
+
+		for i, rcvr := range pipeline.receivers {
+			receiversInfo[i] = rcvr.diagnosticInfo // FIXME: make it a method ?
+		}
+
 		pipeline.l.Unlock()
 
 		diagInfo := diagnosticInformation{
@@ -309,228 +324,6 @@ func makeEnforceBackPressureFn(shouldApplyBackPressureFn func() bool) processorh
 	}
 }
 
-func setupLogReceivers(
-	ctx context.Context,
-	pipeline *pipelineContext,
-	logBackPressureEnforcer consumer.Logs,
-	recvIdx int,
-	logFiles []string,
-	operatorsYaml []byte,
-) (notExistFiles []string, err error) {
-	fileLogReceiverFactories, readFiles, execFiles, notExistFiles, err := setupLogReceiverFactories(logFiles, operatorsYaml)
-	if err != nil {
-		return nil, fmt.Errorf("setup log receiver n°%d factories: %w", recvIdx+1, err)
-	}
-
-	for logReceiverFactory, logReceiverCfg := range fileLogReceiverFactories {
-		logReceiver, err := logReceiverFactory.CreateLogs(
-			ctx,
-			receiver.Settings{TelemetrySettings: pipeline.telemetry},
-			logReceiverCfg,
-			wrapWithCounters(logBackPressureEnforcer, pipeline.logCounterPerReceiver[recvIdx].Int64, pipeline.throughputMeterPerReceiver[recvIdx]),
-		)
-		if err != nil {
-			return nil, fmt.Errorf("setup log receiver n°%d: %w", recvIdx+1, err)
-		}
-
-		if err = logReceiver.Start(ctx, nil); err != nil {
-			return nil, fmt.Errorf("start log receiver n°%d: %w", recvIdx+1, err)
-		}
-
-		pipeline.startedComponents = append(pipeline.startedComponents, logReceiver)
-	}
-
-	if recvInfo, exists := pipeline.receiversInfo[recvIdx]; exists {
-		recvInfo.FileLogReceiverPaths = append(recvInfo.FileLogReceiverPaths, readFiles...)
-		recvInfo.ExecLogReceiverPaths = append(recvInfo.ExecLogReceiverPaths, execFiles...)
-		recvInfo.IgnoredLogPaths = notExistFiles
-		pipeline.receiversInfo[recvIdx] = recvInfo
-	} else {
-		pipeline.receiversInfo[recvIdx] = receiverDiagnosticInformation{
-			LogProcessedCount:      pipeline.logCounterPerReceiver[recvIdx],
-			LogThroughputPerMinute: pipeline.throughputMeterPerReceiver[recvIdx],
-			FileLogReceiverPaths:   readFiles,
-			ExecLogReceiverPaths:   execFiles,
-			IgnoredLogPaths:        notExistFiles,
-		}
-	}
-
-	return notExistFiles, nil
-}
-
-// setupLogReceiverFactories builds receiver factories for the given log files,
-// accordingly to whether the file is directly readable or not.
-// Files that don't exist at the time of the call to this function will be ignored.
-func setupLogReceiverFactories(logFiles []string, operatorsYaml []byte) (
-	factories map[receiver.Factory]component.Config,
-	readableFiles, execFiles, notExistFiles []string,
-	err error,
-) {
-	var ops []operator.Config
-
-	if err = yaml.Unmarshal(operatorsYaml, &ops); err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("log receiver operators: %w", err)
-	}
-
-	for _, logFile := range logFiles {
-		if strings.Contains(logFile, "*") {
-			// Assuming the "*" is in the base of the path, we check if we can list files in the parent dir.
-			if f, err := os.OpenFile(filepath.Dir(logFile), os.O_RDONLY, 0); err != nil {
-				logger.V(1).Printf("Unable to handle glob for log files %q", logFile)
-			} else {
-				_ = f.Close()
-
-				readableFiles = append(readableFiles, logFile)
-			}
-
-			continue
-		}
-
-		f, err := os.OpenFile(logFile, os.O_RDONLY, 0) // the mode perm isn't needed for read
-		if err != nil {
-			if os.IsNotExist(err) {
-				logger.V(0).Printf("Log file %q does not exist, will retry in %s", logFile, retrySetupFileReceiversPeriod) // TODO: V(2)
-
-				notExistFiles = append(notExistFiles, logFile)
-
-				continue
-			}
-
-			execFiles = append(execFiles, logFile) // assuming the error will not occur using "sudo tail ..."
-		} else {
-			err = f.Close()
-			if err != nil {
-				logger.V(1).Printf("Failed to close log file %q: %v", logFile, err)
-			}
-
-			readableFiles = append(readableFiles, logFile)
-		}
-	}
-
-	// Since github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal/consumerretry is internal,
-	// we recreate its config type and mapstructure.Decode() it into the receivers' options.
-	retryCfg := struct {
-		Enabled         bool          `mapstructure:"enabled"`
-		InitialInterval time.Duration `mapstructure:"initial_interval"`
-		MaxInterval     time.Duration `mapstructure:"max_interval"`
-		MaxElapsedTime  time.Duration `mapstructure:"max_elapsed_time"`
-	}{
-		Enabled:         true,
-		InitialInterval: 1 * time.Second,  // default value
-		MaxInterval:     30 * time.Second, // default value
-		MaxElapsedTime:  1 * time.Hour,
-	}
-
-	factories = make(map[receiver.Factory]component.Config)
-
-	if len(readableFiles) > 0 {
-		factory := filelogreceiver.NewFactory()
-		fileCfg := factory.CreateDefaultConfig()
-
-		fileTypedCfg, ok := fileCfg.(*filelogreceiver.FileLogConfig)
-		if !ok {
-			return nil, nil, nil, nil, fmt.Errorf("%w for file log receiver: %T", errUnexpectedType, fileCfg)
-		}
-
-		fileTypedCfg.InputConfig.Include = readableFiles
-		fileTypedCfg.Operators = ops
-
-		err := mapstructure.Decode(retryCfg, &fileTypedCfg.RetryOnFailure)
-		if err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("failed to define consumerretry config for filelogreceiver: %w", err)
-		}
-
-		factories[factory] = fileTypedCfg
-
-		logger.Printf("Chose file log receiver for file(s) %v", readableFiles) // TODO: remove
-	}
-
-	for _, logFile := range execFiles {
-		factory := execlogreceiver.NewFactory()
-		execCfg := factory.CreateDefaultConfig()
-
-		execTypedCfg, ok := execCfg.(*execlogreceiver.ExecLogConfig)
-		if !ok {
-			return nil, nil, nil, nil, fmt.Errorf("%w for exec log receiver: %T", errUnexpectedType, execCfg)
-		}
-
-		execTypedCfg.InputConfig.Argv = []string{"sudo", "tail", "--follow=name", logFile}
-		execTypedCfg.Operators = ops
-
-		err := mapstructure.Decode(retryCfg, &execTypedCfg.RetryOnFailure)
-		if err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("failed to define consumerretry config for execlogreceiver: %w", err)
-		}
-
-		factories[factory] = execTypedCfg
-
-		logger.Printf("Chose exec log receiver for file %q", logFile) // TODO: remove
-	}
-
-	return factories, readableFiles, execFiles, notExistFiles, nil
-}
-
-func wrapWithCounters(next consumer.Logs, counter *atomic.Int64, throughputMeter *ringCounter) consumer.Logs {
-	logCounter, err := consumer.NewLogs(func(ctx context.Context, ld plog.Logs) error {
-		count := ld.LogRecordCount()
-		counter.Add(int64(count))
-		throughputMeter.Add(count)
-
-		return next.ConsumeLogs(ctx, ld)
-	})
-	if err != nil {
-		logger.V(1).Printf("Failed to wrap component with log counters: %v", err)
-
-		return next // give up wrapping it and just use it as is
-	}
-
-	return logCounter
-}
-
-func retrySetupFileReceivers(ctx context.Context, pipeline *pipelineContext, logBackPressureEnforcer consumer.Logs) {
-	ticker := time.NewTicker(retrySetupFileReceiversPeriod)
-	defer ticker.Stop()
-
-	for ctx.Err() == nil {
-		var shouldReturn bool
-
-		select {
-		case <-ticker.C:
-			pipeline.l.Lock()
-
-			for recvIdx, files := range pipeline.receiversToRetry {
-				operatorsYaml := pipeline.config.Receivers[recvIdx].OperatorsYAML
-
-				notExistFiles, err := setupLogReceivers(ctx, pipeline, logBackPressureEnforcer, recvIdx, files, []byte(operatorsYaml))
-				if err != nil {
-					logger.V(1).Printf("Failed to %v", err)
-
-					continue
-				}
-
-				if len(notExistFiles) == 0 {
-					delete(pipeline.receiversToRetry, recvIdx)
-				} else {
-					pipeline.receiversToRetry[recvIdx] = notExistFiles
-				}
-			}
-
-			if len(pipeline.receiversToRetry) == 0 {
-				// All log files are being handled, this function has fulfilled its duty.
-				shouldReturn = true
-			}
-
-			pipeline.l.Unlock()
-		case <-ctx.Done():
-			return
-		}
-
-		if shouldReturn {
-			return
-		}
-	}
-}
-
 // shutdownAll stops all the given components (in reverse order).
 // It should be called before every unsuccessful return of the log pipeline initialization.
 func shutdownAll(components []component.Component) {
@@ -550,54 +343,4 @@ func shutdownAll(components []component.Component) {
 			}
 		}()
 	}
-}
-
-// formatTypes acts like a mix of %T and %v, on a slice.
-func formatTypes[E any](a []E) string {
-	result := "["
-
-	for i, e := range a {
-		result += fmt.Sprintf("%T", e)
-
-		if i < len(a)-1 {
-			result += " "
-		}
-	}
-
-	return result + "]"
-}
-
-type marshallableInt64 struct {
-	*atomic.Int64
-}
-
-func (x marshallableInt64) MarshalJSON() ([]byte, error) {
-	return []byte(strconv.FormatInt(x.Load(), 10)), nil
-}
-
-type receiverDiagnosticInformation struct {
-	LogProcessedCount      *marshallableInt64
-	LogThroughputPerMinute *ringCounter
-	FileLogReceiverPaths   []string
-	ExecLogReceiverPaths   []string
-	IgnoredLogPaths        []string
-}
-
-type diagnosticInformation struct {
-	LogProcessedCount      int64
-	LogThroughputPerMinute int
-	BackPressureBlocking   bool
-	Receivers              []receiverDiagnosticInformation
-}
-
-func (diagInfo diagnosticInformation) writeToArchive(writer types.ArchiveWriter) error {
-	file, err := writer.Create("log-processing.json")
-	if err != nil {
-		return err
-	}
-
-	enc := json.NewEncoder(file)
-	enc.SetIndent("", "  ")
-
-	return enc.Encode(diagInfo)
 }
