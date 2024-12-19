@@ -5,9 +5,10 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os/exec"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
@@ -19,18 +20,20 @@ import (
 type Input struct {
 	helper.InputOperator
 
-	buffer    []byte
-	argv      []string
-	splitFunc bufio.SplitFunc
-	trimFunc  trim.Func
-	backoff   backoff.BackOff
-	cancel    context.CancelFunc
-	wg        sync.WaitGroup
+	commandRunner Runner
+	runAsRoot     bool
+	buffer        []byte
+	argv          []string
+	splitFunc     bufio.SplitFunc
+	trimFunc      trim.Func
+	backoff       backoff.BackOff
+	cancel        context.CancelFunc
+	wg            sync.WaitGroup
 
-	l      sync.Mutex
-	cmd    *exec.Cmd
-	stdout io.ReadCloser
-	stderr io.ReadCloser
+	l       sync.Mutex
+	stdout  io.ReadCloser
+	stderr  io.ReadCloser
+	cmdWait func() error
 }
 
 func (i *Input) Start(_ operator.Persister) error {
@@ -63,21 +66,13 @@ func (i *Input) startProcess(ctx context.Context) error {
 	i.l.Lock()
 	defer i.l.Unlock()
 
+	runOpts := gloutonexec.Option{
+		RunAsRoot: i.runAsRoot,
+	}
+
 	i.Logger().Debug("starting command", zap.Strings("argv", i.argv))
 
-	i.cmd = exec.CommandContext(ctx, i.argv[0], i.argv[1:]...) //nolint:gosec
-
-	i.stdout, err = i.cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-
-	i.stderr, err = i.cmd.StderrPipe()
-	if err != nil {
-		return err
-	}
-
-	err = i.cmd.Start()
+	i.stdout, i.stderr, i.cmdWait, err = i.commandRunner.StartWithPipes(ctx, runOpts, i.argv[0], i.argv[1:]...)
 	if err != nil {
 		return err
 	}
@@ -146,7 +141,7 @@ func (i *Input) processStderr(buffer []byte) {
 		i.Logger().Debug("reading stderr failed", zap.Error(err))
 	}
 
-	err := i.cmd.Wait()
+	err := i.cmdWait()
 	i.Logger().Debug("process terminated", zap.Error(err))
 }
 

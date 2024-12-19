@@ -1,8 +1,12 @@
 package execlog
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"time"
+
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/decode"
@@ -35,6 +39,14 @@ func NewConfigWithID(operatorID string) *Config {
 	}
 }
 
+type Runner interface {
+	StartWithPipes(ctx context.Context, option gloutonexec.Option, name string, arg ...string) (
+		stdoutPipe, stderrPipe io.ReadCloser,
+		wait func() error,
+		err error,
+	)
+}
+
 // Config is the configuration of a stdin input operator.
 type Config struct {
 	helper.InputConfig `mapstructure:",squash"`
@@ -42,11 +54,13 @@ type Config struct {
 }
 
 type BaseConfig struct {
-	Argv        []string     `mapstructure:"path"`
-	Encoding    string       `mapstructure:"encoding"`
-	SplitConfig split.Config `mapstructure:"multiline,omitempty"`
-	TrimConfig  trim.Config  `mapstructure:",squash"`
-	MaxLogSize  int          `mapstructure:"max_log_size"`
+	Argv          []string     `mapstructure:"path"`
+	Encoding      string       `mapstructure:"encoding"`
+	SplitConfig   split.Config `mapstructure:"multiline,omitempty"`
+	TrimConfig    trim.Config  `mapstructure:",squash"`
+	MaxLogSize    int          `mapstructure:"max_log_size"`
+	CommandRunner Runner       `mapstructure:"command_runner"`
+	RunAsRoot     bool         `mapstructure:"run_as_root"`
 }
 
 // Build will build a exec input operator.
@@ -79,10 +93,12 @@ func (c *Config) Build(set component.TelemetrySettings) (operator.Operator, erro
 	return &Input{
 		InputOperator: inputOperator,
 
-		buffer:    make([]byte, c.BaseConfig.MaxLogSize),
-		argv:      c.Argv,
-		splitFunc: splitFunc,
-		trimFunc:  c.TrimConfig.Func(),
-		backoff:   &expBackoff,
+		commandRunner: c.CommandRunner,
+		runAsRoot:     c.RunAsRoot,
+		buffer:        make([]byte, c.BaseConfig.MaxLogSize),
+		argv:          c.Argv,
+		splitFunc:     splitFunc,
+		trimFunc:      c.TrimConfig.Func(),
+		backoff:       &expBackoff,
 	}, nil
 }

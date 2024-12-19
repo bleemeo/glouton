@@ -19,6 +19,8 @@ package gloutonexec
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -110,13 +112,13 @@ func (r *Runner) LookPath(file string, option Option) (string, error) {
 	return "", &exec.Error{Name: file, Err: exec.ErrNotFound}
 }
 
-func (r *Runner) Run(ctx context.Context, option Option, name string, arg ...string) ([]byte, error) {
+func (r *Runner) makeCmd(ctx context.Context, option Option, name string, arg ...string) (*exec.Cmd, func(error) error, error) {
 	if r.hostRootPath != "/" && option.SkipInContainer {
-		return nil, ErrExecutionSkipped
+		return nil, nil, ErrExecutionSkipped
 	}
 
 	if r.hostRootPath == "" && option.RunOnHost {
-		return nil, ErrUnknownHostroot
+		return nil, nil, ErrUnknownHostroot
 	}
 
 	if r.hostRootPath != "/" && option.RunOnHost {
@@ -141,8 +143,6 @@ func (r *Runner) Run(ctx context.Context, option Option, name string, arg ...str
 	}
 
 	var (
-		out      []byte
-		err      error
 		l        sync.Mutex
 		termSent bool
 	)
@@ -165,22 +165,62 @@ func (r *Runner) Run(ctx context.Context, option Option, name string, arg ...str
 		cmd.WaitDelay = option.GraceDelay
 	}
 
+	handleErrorFn := func(err error) error {
+		if option.GraceDelay > 0 {
+			l.Lock()
+			defer l.Unlock()
+
+			// If the program was killed and didn't finish successfully, use ErrTimeout.
+			// If kept err == nil if program successfully completed after receiving a sig term.
+			if err != nil && termSent {
+				err = ErrTimeout
+			}
+		}
+
+		return err
+	}
+
+	return cmd, handleErrorFn, nil
+}
+
+func (r *Runner) Run(ctx context.Context, option Option, name string, arg ...string) ([]byte, error) {
+	cmd, handleError, err := r.makeCmd(ctx, option, name, arg...)
+	if err != nil {
+		return nil, err
+	}
+
+	var out []byte
+
 	if option.CombinedOutput {
 		out, err = cmd.CombinedOutput()
 	} else {
 		out, err = cmd.Output()
 	}
 
-	if option.GraceDelay > 0 {
-		l.Lock()
-		defer l.Unlock()
-
-		// If program was killed and didn't finished successfully, use ErrTimeout.
-		// If kept err == nil if program successfully completed after receiving a sig term.
-		if err != nil && termSent {
-			err = ErrTimeout
-		}
-	}
+	err = handleError(err)
 
 	return out, err
+}
+
+func (r *Runner) StartWithPipes(ctx context.Context, option Option, name string, arg ...string) (
+	stdoutPipe, stderrPipe io.ReadCloser,
+	wait func() error,
+	err error,
+) {
+	cmd, _, err := r.makeCmd(ctx, option, name, arg...)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	stdoutPipe, err = cmd.StdoutPipe()
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("can't get stdout pipe: %w", err)
+	}
+
+	stderrPipe, err = cmd.StderrPipe()
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("can't get stderr pipe: %w", err)
+	}
+
+	return stdoutPipe, stderrPipe, cmd.Wait, cmd.Start()
 }

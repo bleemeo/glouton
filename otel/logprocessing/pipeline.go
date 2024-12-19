@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"sync"
@@ -34,6 +33,7 @@ import (
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configtelemetry"
@@ -62,6 +62,7 @@ type pipelineContext struct {
 	config        config.OpenTelemetry
 	lastFileSizes map[string]int64
 	telemetry     component.TelemetrySettings
+	commandRunner *gloutonexec.Runner
 
 	l sync.Mutex
 	// startedComponents represents all the components that must be shut down at the end of the context's lifecycle.
@@ -77,6 +78,7 @@ func MakePipeline( //nolint:maintidx
 	ctx context.Context,
 	cfg config.OpenTelemetry,
 	state bleemeoTypes.State,
+	commandRunner *gloutonexec.Runner,
 	pushLogs func(context.Context, []byte) error,
 	applyBackPressureFn func() bool,
 ) (diagnosticFn func(context.Context, types.ArchiveWriter) error, err error) {
@@ -92,6 +94,7 @@ func MakePipeline( //nolint:maintidx
 			MetricsLevel:   configtelemetry.LevelBasic,
 			Resource:       pcommon.NewResource(),
 		},
+		commandRunner:      commandRunner,
 		startedComponents:  make([]component.Component, 0, 4), // 4 should be the minimum number of components
 		receivers:          make([]*logReceiver, len(cfg.Receivers)),
 		logThroughputMeter: newRingCounter(throughputMeterResolutionSecs), // we want to measure the throughput over the last minute (60s)

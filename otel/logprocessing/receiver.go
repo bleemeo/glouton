@@ -26,6 +26,7 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/otel/execlogreceiver"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/go-viper/mapstructure/v2"
@@ -94,7 +95,7 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext) err
 		return nil
 	}
 
-	fileLogReceiverFactories, readFiles, execFiles, err := setupLogReceiverFactories(logFiles, r.operators, pipeline.lastFileSizes)
+	fileLogReceiverFactories, readFiles, execFiles, err := setupLogReceiverFactories(logFiles, r.operators, pipeline.lastFileSizes, pipeline.commandRunner)
 	if err != nil {
 		return fmt.Errorf("setting up receiver factories: %w", err)
 	}
@@ -138,7 +139,7 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext) err
 // setupLogReceiverFactories builds receiver factories for the given log files,
 // accordingly to whether the file is directly readable or not.
 // Files that don't exist at the time of the call to this function will be ignored.
-func setupLogReceiverFactories(logFiles []string, operators []operator.Config, lastFileSizes map[string]int64) (
+func setupLogReceiverFactories(logFiles []string, operators []operator.Config, lastFileSizes map[string]int64, commandRunner *gloutonexec.Runner) (
 	factories map[receiver.Factory]component.Config,
 	readableFiles, execFiles []string,
 	err error,
@@ -186,7 +187,7 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 		MaxElapsedTime:  1 * time.Hour,
 	}
 
-	factories = make(map[receiver.Factory]component.Config, 1+len(execFiles)) // 1 for the filelogreceiver component
+	factories = make(map[receiver.Factory]component.Config, len(readableFiles)+len(execFiles))
 
 	for _, logFile := range readableFiles {
 		factory := filelogreceiver.NewFactory()
@@ -197,7 +198,7 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 			return nil, nil, nil, fmt.Errorf("%w for file log receiver: %T", errUnexpectedType, fileCfg)
 		}
 
-		fileTypedCfg.InputConfig.Include = logFiles
+		fileTypedCfg.InputConfig.Include = []string{logFile}
 		fileTypedCfg.Operators = operators
 
 		if lastSize, ok := lastFileSizes[logFile]; ok {
@@ -227,7 +228,7 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 			return nil, nil, nil, fmt.Errorf("%w for exec log receiver: %T", errUnexpectedType, execCfg)
 		}
 
-		tailArgs := []string{"sudo", "-n", "tail", "--follow=name"}
+		tailArgs := []string{"tail", "--follow=name"}
 
 		if lastSize, ok := lastFileSizes[logFile]; ok {
 			if lastSize > sizeByFile[logFile] {
@@ -238,6 +239,8 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 		}
 
 		execTypedCfg.InputConfig.Argv = append(tailArgs, logFile) //nolint: gocritic
+		execTypedCfg.InputConfig.CommandRunner = commandRunner
+		execTypedCfg.InputConfig.RunAsRoot = true
 		execTypedCfg.Operators = operators
 
 		logger.Printf("Tail command for file %q: %v", logFile, execTypedCfg.InputConfig.Argv) // TODO: remove
