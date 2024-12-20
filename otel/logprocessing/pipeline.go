@@ -273,7 +273,7 @@ func MakePipeline( //nolint:maintidx
 		receiversInfo := make([]receiverDiagnosticInformation, len(pipeline.receivers))
 
 		for i, rcvr := range pipeline.receivers {
-			receiversInfo[i] = rcvr.diagnosticInfo // FIXME: make it a method ?
+			receiversInfo[i] = rcvr.diagnosticInfo()
 		}
 
 		pipeline.l.Unlock()

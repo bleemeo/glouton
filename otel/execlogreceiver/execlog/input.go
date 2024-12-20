@@ -134,7 +134,7 @@ func (i *Input) processStderr(buffer []byte) {
 			continue
 		}
 
-		i.Logger().Debug("process send stderr message", zap.String("stderr", line))
+		i.Logger().Warn("process send stderr message", zap.String("stderr", line))
 	}
 
 	if err := scan.Err(); err != nil {

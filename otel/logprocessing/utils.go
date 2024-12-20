@@ -20,8 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strconv"
-	"sync/atomic"
 
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
@@ -45,7 +43,7 @@ func saveLastFileSizesToCache(state bleemeoTypes.State, receivers []*logReceiver
 	lastFileSizes := make(map[string]int64)
 
 	for _, recv := range receivers {
-		for logFile := range recv.watching {
+		for _, logFile := range recv.currentlyWatching() {
 			stat, err := os.Stat(logFile)
 			if err != nil {
 				logger.V(1).Printf("Failed to stat log file %q: %v", logFile, err)
@@ -78,19 +76,12 @@ func formatTypes[E any](a []E) string {
 	return result + "]"
 }
 
-type marshallableInt64 struct {
-	*atomic.Int64
-}
-
-func (x marshallableInt64) MarshalJSON() ([]byte, error) {
-	return []byte(strconv.FormatInt(x.Load(), 10)), nil
-}
-
 type receiverDiagnosticInformation struct {
-	LogProcessedCount      *marshallableInt64
-	LogThroughputPerMinute *ringCounter
+	LogProcessedCount      int64
+	LogThroughputPerMinute int
 	FileLogReceiverPaths   []string
 	ExecLogReceiverPaths   []string
+	IgnoredFilePaths       []string
 }
 
 type diagnosticInformation struct {

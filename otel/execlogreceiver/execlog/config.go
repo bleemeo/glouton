@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"time"
 
 	"github.com/bleemeo/glouton/utils/gloutonexec"
 
@@ -80,16 +79,6 @@ func (c *Config) Build(set component.TelemetrySettings) (operator.Operator, erro
 		return nil, fmt.Errorf("failed to create split function: %w", err)
 	}
 
-	expBackoff := backoff.ExponentialBackOff{
-		MaxElapsedTime:      15 * time.Minute,
-		MaxInterval:         time.Minute,
-		RandomizationFactor: backoff.DefaultRandomizationFactor,
-		Multiplier:          backoff.DefaultMultiplier,
-		Stop:                backoff.Stop,
-		Clock:               backoff.SystemClock,
-	}
-	expBackoff.Reset()
-
 	return &Input{
 		InputOperator: inputOperator,
 
@@ -99,6 +88,6 @@ func (c *Config) Build(set component.TelemetrySettings) (operator.Operator, erro
 		argv:          c.Argv,
 		splitFunc:     splitFunc,
 		trimFunc:      c.TrimConfig.Func(),
-		backoff:       &expBackoff,
+		backoff:       backoff.NewExponentialBackOff(),
 	}, nil
 }

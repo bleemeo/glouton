@@ -19,7 +19,11 @@ package logprocessing
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
+	"slices"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -40,6 +44,20 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Since github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal/consumerretry is internal,
+// we recreate its config type and mapstructure.Decode() it into the receivers' options.
+var retryCfg = struct { //nolint:gochecknoglobals
+	Enabled         bool          `mapstructure:"enabled"`
+	InitialInterval time.Duration `mapstructure:"initial_interval"`
+	MaxInterval     time.Duration `mapstructure:"max_interval"`
+	MaxElapsedTime  time.Duration `mapstructure:"max_elapsed_time"`
+}{
+	Enabled:         true,
+	InitialInterval: 1 * time.Second,  // default value
+	MaxInterval:     30 * time.Second, // default value
+	MaxElapsedTime:  1 * time.Hour,
+}
+
 type consumerKind string
 
 const (
@@ -52,10 +70,12 @@ type logReceiver struct {
 	logConsumer processor.Logs
 	operators   []operator.Config
 
-	watching        map[string]consumerKind
-	logCounter      *marshallableInt64
+	// l should always be acquired after the pipeline lock
+	l        sync.Mutex
+	watching map[string]consumerKind
+
+	logCounter      *atomic.Int64
 	throughputMeter *ringCounter
-	diagnosticInfo  receiverDiagnosticInformation
 }
 
 func newLogReceiver(cfg config.OTLPReceiver, logConsumer processor.Logs) (*logReceiver, error) {
@@ -70,16 +90,24 @@ func newLogReceiver(cfg config.OTLPReceiver, logConsumer processor.Logs) (*logRe
 		logConsumer:     logConsumer,
 		operators:       ops,
 		watching:        make(map[string]consumerKind, len(cfg.Include)),
-		logCounter:      &marshallableInt64{new(atomic.Int64)},
+		logCounter:      new(atomic.Int64),
 		throughputMeter: newRingCounter(throughputMeterResolutionSecs),
 	}, nil
 }
 
+// update tries to create a log receiver for each file from the config
+// that hasn't been handled yet.
+//
+// Passing the pipelineContext at each call rather than storing it in logReceiver
+// makes explicit the fact that its lock must be acquired during the call to update().
 func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext) error {
+	r.l.Lock()
+	defer r.l.Unlock()
+
 	logFiles := make([]string, 0, len(r.cfg.Include))
 
 	for _, filePattern := range r.cfg.Include {
-		matching, err := doublestar.FilepathGlob(filePattern)
+		matching, err := doublestar.FilepathGlob(filePattern, doublestar.WithFailOnIOErrors())
 		if err != nil {
 			return fmt.Errorf("file %q: %w", filePattern, err)
 		}
@@ -105,7 +133,7 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext) err
 			ctx,
 			receiver.Settings{TelemetrySettings: pipeline.telemetry},
 			logReceiverCfg,
-			wrapWithCounters(r.logConsumer, r.logCounter.Int64, r.throughputMeter),
+			wrapWithCounters(r.logConsumer, r.logCounter, r.throughputMeter),
 		)
 		if err != nil {
 			return fmt.Errorf("setup receiver: %w", err)
@@ -126,14 +154,61 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext) err
 		r.watching[logFile] = consumerExecLog
 	}
 
-	r.diagnosticInfo = receiverDiagnosticInformation{
-		LogProcessedCount:      r.logCounter,
-		LogThroughputPerMinute: r.throughputMeter,
-		FileLogReceiverPaths:   readFiles,
-		ExecLogReceiverPaths:   execFiles,
+	return nil
+}
+
+// currentlyWatching returns the list of files that are being processed.
+func (r *logReceiver) currentlyWatching() []string {
+	r.l.Lock()
+	defer r.l.Unlock()
+
+	return slices.Collect(maps.Keys(r.watching))
+}
+
+func (r *logReceiver) diagnosticInfo() receiverDiagnosticInformation {
+	info := receiverDiagnosticInformation{
+		LogProcessedCount:      r.logCounter.Load(),
+		LogThroughputPerMinute: r.throughputMeter.Total(),
+		FileLogReceiverPaths:   []string{},
+		ExecLogReceiverPaths:   []string{},
+		IgnoredFilePaths:       make([]string, 0, len(r.cfg.Include)-len(r.watching)),
 	}
 
-	return nil
+	r.l.Lock()
+	defer r.l.Unlock()
+
+	for logFile, kind := range r.watching {
+		switch kind {
+		case consumerFileLog:
+			info.FileLogReceiverPaths = append(info.FileLogReceiverPaths, logFile)
+		case consumerExecLog:
+			info.ExecLogReceiverPaths = append(info.ExecLogReceiverPaths, logFile)
+		default:
+			logger.V(1).Printf("Unknown log receiver kind %q", kind)
+		}
+	}
+
+FilesFromConfig:
+	for _, logFilePattern := range r.cfg.Include {
+		if strings.ContainsRune(logFilePattern, '*') {
+			for watching := range r.watching {
+				// Since the pattern is known to be valid, we can safely ignore this error.
+				if matches, _ := doublestar.PathMatch(logFilePattern, watching); matches {
+					// We're currently watching a file that matches this pattern, so it isn't ignored.
+					continue FilesFromConfig
+				}
+			}
+
+			// The pattern matched no file being watched; it is thus unused.
+			info.IgnoredFilePaths = append(info.IgnoredFilePaths, logFilePattern)
+		} else {
+			if _, found := r.watching[logFilePattern]; !found {
+				info.IgnoredFilePaths = append(info.IgnoredFilePaths, logFilePattern)
+			}
+		}
+	}
+
+	return info
 }
 
 // setupLogReceiverFactories builds receiver factories for the given log files,
@@ -171,20 +246,6 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 		}
 
 		sizeByFile[logFile] = stat.Size()
-	}
-
-	// Since github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal/consumerretry is internal,
-	// we recreate its config type and mapstructure.Decode() it into the receivers' options.
-	retryCfg := struct {
-		Enabled         bool          `mapstructure:"enabled"`
-		InitialInterval time.Duration `mapstructure:"initial_interval"`
-		MaxInterval     time.Duration `mapstructure:"max_interval"`
-		MaxElapsedTime  time.Duration `mapstructure:"max_elapsed_time"`
-	}{
-		Enabled:         true,
-		InitialInterval: 1 * time.Second,  // default value
-		MaxInterval:     30 * time.Second, // default value
-		MaxElapsedTime:  1 * time.Hour,
 	}
 
 	factories = make(map[receiver.Factory]component.Config, len(readableFiles)+len(execFiles))
