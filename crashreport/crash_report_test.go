@@ -323,7 +323,7 @@ func TestGenerateDiagnostic(t *testing.T) {
 }
 
 func TestBundleCrashReportFiles(t *testing.T) { //nolint:maintidx
-	// fileCmp allows comparing a filename and
+	// fileCmp allows comparing a filename to
 	// a pattern while knowing which is which.
 	type fileCmp struct {
 		filenameOrPattern string
@@ -380,6 +380,20 @@ func TestBundleCrashReportFiles(t *testing.T) { //nolint:maintidx
 			wantReportPath:        true,
 			wantArchiveFiles: map[string]string{
 				"stderr.log":           "panic: something went wrong",
+				"diagnostic/file.json": `{"some": "data"}`,
+			},
+			wantFilesInStateDir: []fileCmp{{filenameOrPattern: "crashreport_*.zip"}},
+		},
+		{
+			name:                  "Stderr file reporting a fatal error",
+			previousStderr:        true,
+			previousStderrContent: "fatal error: sync: unlock of unlocked mutex",
+			previousDiagnostic:    false,
+			diagnosticContent:     map[string]string{"file.json": `{"some": "data"}`},
+			reportingEnabled:      true,
+			wantReportPath:        true,
+			wantArchiveFiles: map[string]string{
+				"stderr.log":           "fatal error: sync: unlock of unlocked mutex",
 				"diagnostic/file.json": `{"some": "data"}`,
 			},
 			wantFilesInStateDir: []fileCmp{{filenameOrPattern: "crashreport_*.zip"}},
@@ -498,7 +512,7 @@ func TestBundleCrashReportFiles(t *testing.T) { //nolint:maintidx
 			}
 
 			filepathComparer := cmp.Comparer(func(x, y fileCmp) bool {
-				// As x and y are given in an unknown order, we need to know
+				// x and y are given in an unknown order, but we need to know
 				// which one is the filename to test and which one is the pattern to match.
 				var pattern, value string
 				if x.toBeTested {
