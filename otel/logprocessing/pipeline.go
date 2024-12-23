@@ -232,6 +232,8 @@ func MakePipeline( //nolint:maintidx
 	}
 
 	go func() {
+		defer crashreport.ProcessPanic()
+
 		ticker := time.NewTicker(retrySetupFileReceiversPeriod)
 		defer ticker.Stop()
 

@@ -17,7 +17,6 @@
 package logprocessing
 
 import (
-	"strconv"
 	"sync"
 	"time"
 )
@@ -95,10 +94,6 @@ func (rc *ringCounter) Total() int {
 	}
 
 	return total
-}
-
-func (rc *ringCounter) MarshalJSON() ([]byte, error) {
-	return []byte(strconv.Itoa(rc.Total())), nil
 }
 
 func (rc *ringCounter) resetOutdatedValues(now int64) {

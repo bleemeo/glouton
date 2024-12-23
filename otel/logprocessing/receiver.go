@@ -58,11 +58,11 @@ var retryCfg = struct { //nolint:gochecknoglobals
 	MaxElapsedTime:  1 * time.Hour,
 }
 
-type consumerKind string
+type receiverKind string
 
 const (
-	consumerFileLog consumerKind = "filelogreceiver"
-	consumerExecLog consumerKind = "execlogreceiver"
+	receiverFileLog receiverKind = "filelogreceiver"
+	receiverExecLog receiverKind = "execlogreceiver"
 )
 
 type logReceiver struct {
@@ -72,7 +72,7 @@ type logReceiver struct {
 
 	// l should always be acquired after the pipeline lock
 	l        sync.Mutex
-	watching map[string]consumerKind
+	watching map[string]receiverKind
 
 	logCounter      *atomic.Int64
 	throughputMeter *ringCounter
@@ -89,7 +89,7 @@ func newLogReceiver(cfg config.OTLPReceiver, logConsumer processor.Logs) (*logRe
 		cfg:             cfg,
 		logConsumer:     logConsumer,
 		operators:       ops,
-		watching:        make(map[string]consumerKind, len(cfg.Include)),
+		watching:        make(map[string]receiverKind, len(cfg.Include)),
 		logCounter:      new(atomic.Int64),
 		throughputMeter: newRingCounter(throughputMeterResolutionSecs),
 	}, nil
@@ -104,7 +104,7 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext) err
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	logFiles := make([]string, 0, len(r.cfg.Include))
+	logFiles := make(map[string]bool, len(r.cfg.Include))
 
 	for _, filePattern := range r.cfg.Include {
 		matching, err := doublestar.FilepathGlob(filePattern, doublestar.WithFailOnIOErrors())
@@ -113,8 +113,10 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext) err
 		}
 
 		for _, file := range matching {
-			if _, found := r.watching[file]; !found {
-				logFiles = append(logFiles, file)
+			// Ensure we're not already watching it,
+			// as well as it hasn't been matched by multiple patterns.
+			if _, found := r.watching[file]; !found && !logFiles[file] {
+				logFiles[file] = true
 			}
 		}
 	}
@@ -123,7 +125,12 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext) err
 		return nil
 	}
 
-	fileLogReceiverFactories, readFiles, execFiles, err := setupLogReceiverFactories(logFiles, r.operators, pipeline.lastFileSizes, pipeline.commandRunner)
+	fileLogReceiverFactories, readFiles, execFiles, err := setupLogReceiverFactories(
+		slices.Collect(maps.Keys(logFiles)),
+		r.operators,
+		pipeline.lastFileSizes,
+		pipeline.commandRunner,
+	)
 	if err != nil {
 		return fmt.Errorf("setting up receiver factories: %w", err)
 	}
@@ -147,11 +154,11 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext) err
 	}
 
 	for _, logFile := range readFiles {
-		r.watching[logFile] = consumerFileLog
+		r.watching[logFile] = receiverFileLog
 	}
 
 	for _, logFile := range execFiles {
-		r.watching[logFile] = consumerExecLog
+		r.watching[logFile] = receiverExecLog
 	}
 
 	return nil
@@ -179,9 +186,9 @@ func (r *logReceiver) diagnosticInfo() receiverDiagnosticInformation {
 
 	for logFile, kind := range r.watching {
 		switch kind {
-		case consumerFileLog:
+		case receiverFileLog:
 			info.FileLogReceiverPaths = append(info.FileLogReceiverPaths, logFile)
-		case consumerExecLog:
+		case receiverExecLog:
 			info.ExecLogReceiverPaths = append(info.ExecLogReceiverPaths, logFile)
 		default:
 			logger.V(1).Printf("Unknown log receiver kind %q", kind)
@@ -303,8 +310,6 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 		execTypedCfg.InputConfig.CommandRunner = commandRunner
 		execTypedCfg.InputConfig.RunAsRoot = true
 		execTypedCfg.Operators = operators
-
-		logger.Printf("Tail command for file %q: %v", logFile, execTypedCfg.InputConfig.Argv) // TODO: remove
 
 		err = mapstructure.Decode(retryCfg, &execTypedCfg.RetryOnFailure)
 		if err != nil {
