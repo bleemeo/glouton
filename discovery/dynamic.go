@@ -183,37 +183,38 @@ func (dd *DynamicDiscovery) ProcessServiceInfo(cmdLine []string, pid int, create
 //nolint:gochecknoglobals
 var (
 	knownProcesses = map[string]ServiceName{
-		"apache2":      ApacheService,
-		"asterisk":     AsteriskService,
-		"dovecot":      DovecotService,
-		"exim4":        EximService,
-		"exim":         EximService,
-		"freeradius":   FreeradiusService,
-		"haproxy":      HAProxyService,
-		"httpd":        ApacheService,
-		"influxd":      InfluxDBService,
-		"libvirtd":     LibvirtService,
-		"master":       PostfixService,
-		"memcached":    MemcachedService,
-		"mongod":       MongoDBService,
-		"mosquitto":    MosquittoService, //nolint:misspell
-		"mysqld":       MySQLService,
-		"named":        BindService,
-		"nats-server":  NatsService,
-		"nfsiod":       NfsService,
-		"nginx":        NginxService,
-		"ntpd":         NTPService,
-		"openvpn":      OpenVPNService,
-		"php-fpm":      PHPFPMService,
-		"postgres":     PostgreSQLService,
-		"redis-server": RedisService,
-		"slapd":        OpenLDAPService,
-		"squid3":       SquidService,
-		"squid":        SquidService,
-		"upsd":         UPSDService,
-		"uwsgi":        UWSGIService,
-		"uWSGI":        UWSGIService,
-		"varnishd":     VarnishService,
+		"apache2":       ApacheService,
+		"asterisk":      AsteriskService,
+		"dovecot":       DovecotService,
+		"exim4":         EximService,
+		"exim":          EximService,
+		"freeradius":    FreeradiusService,
+		"haproxy":       HAProxyService,
+		"httpd":         ApacheService,
+		"influxd":       InfluxDBService,
+		"libvirtd":      LibvirtService,
+		"master":        PostfixService,
+		"memcached":     MemcachedService,
+		"mongod":        MongoDBService,
+		"mosquitto":     MosquittoService, //nolint:misspell
+		"mysqld":        MySQLService,
+		"named":         BindService,
+		"nats-server":   NatsService,
+		"nfsiod":        NfsService,
+		"nginx":         NginxService,
+		"ntpd":          NTPService,
+		"openvpn":       OpenVPNService,
+		"php-fpm":       PHPFPMService,
+		"postgres":      PostgreSQLService,
+		"redis-server":  RedisService,
+		"slapd":         OpenLDAPService,
+		"squid3":        SquidService,
+		"squid":         SquidService,
+		"upsd":          UPSDService,
+		"uwsgi":         UWSGIService,
+		"uWSGI":         UWSGIService,
+		"valkey-server": RedisService, // Valkey is a fork of Redis
+		"varnishd":      VarnishService,
 	}
 	knownInterpretedProcess = []struct {
 		CmdLineMustContains []string
@@ -422,6 +423,10 @@ func (dd *DynamicDiscovery) serviceFromProcess(ctx context.Context, process fact
 		ExePath:       process.Executable,
 		Active:        true,
 		LastTimeSeen:  dd.now(),
+	}
+
+	if serviceType == RedisService && strings.Contains(process.CmdLine, "valkey-server") {
+		service.Name = "valkey"
 	}
 
 	if service.ContainerID != "" {
