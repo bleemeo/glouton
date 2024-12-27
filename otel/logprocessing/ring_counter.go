@@ -67,7 +67,7 @@ func (rc *ringCounter) Add(delta int) {
 		rc.lastUpdateAt = now
 	}
 
-	rc.resetOutdatedValues(now)
+	rc.discardOutdatedValues(now)
 
 	idx := int(now-rc.t0) % rc.size
 	rc.buckets[idx] += delta
@@ -83,7 +83,7 @@ func (rc *ringCounter) Total() int {
 	// If no data has been recorded for a moment until now,
 	// we need to flush the buckets corresponding to this period
 	// before evaluating the buckets' sum.
-	rc.resetOutdatedValues(now)
+	rc.discardOutdatedValues(now)
 
 	rc.lastUpdateAt = now
 
@@ -96,7 +96,7 @@ func (rc *ringCounter) Total() int {
 	return total
 }
 
-func (rc *ringCounter) resetOutdatedValues(now int64) {
+func (rc *ringCounter) discardOutdatedValues(now int64) {
 	idx := int(now-rc.t0) % rc.size
 	lastIdx := int(rc.lastUpdateAt-rc.t0) % rc.size
 

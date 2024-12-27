@@ -39,7 +39,6 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/plog"
-	"go.opentelemetry.io/collector/processor"
 	"go.opentelemetry.io/collector/receiver"
 	"gopkg.in/yaml.v3"
 )
@@ -67,7 +66,7 @@ const (
 
 type logReceiver struct {
 	cfg         config.OTLPReceiver
-	logConsumer processor.Logs
+	logConsumer consumer.Logs
 	operators   []operator.Config
 
 	// l should always be acquired after the pipeline lock
@@ -78,7 +77,7 @@ type logReceiver struct {
 	throughputMeter *ringCounter
 }
 
-func newLogReceiver(cfg config.OTLPReceiver, logConsumer processor.Logs) (*logReceiver, error) {
+func newLogReceiver(cfg config.OTLPReceiver, logConsumer consumer.Logs) (*logReceiver, error) {
 	var ops []operator.Config
 
 	if err := yaml.Unmarshal([]byte(cfg.OperatorsYAML), &ops); err != nil {
@@ -178,7 +177,7 @@ func (r *logReceiver) diagnosticInfo() receiverDiagnosticInformation {
 		LogThroughputPerMinute: r.throughputMeter.Total(),
 		FileLogReceiverPaths:   []string{},
 		ExecLogReceiverPaths:   []string{},
-		IgnoredFilePaths:       make([]string, 0, len(r.cfg.Include)-len(r.watching)),
+		IgnoredFilePaths:       []string{},
 	}
 
 	r.l.Lock()
