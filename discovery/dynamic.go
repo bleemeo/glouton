@@ -213,7 +213,7 @@ var (
 		"upsd":          UPSDService,
 		"uwsgi":         UWSGIService,
 		"uWSGI":         UWSGIService,
-		"valkey-server": RedisService, // Valkey is a fork of Redis
+		"valkey-server": ValkeyService,
 		"varnishd":      VarnishService,
 	}
 	knownInterpretedProcess = []struct {
@@ -423,10 +423,6 @@ func (dd *DynamicDiscovery) serviceFromProcess(ctx context.Context, process fact
 		ExePath:       process.Executable,
 		Active:        true,
 		LastTimeSeen:  dd.now(),
-	}
-
-	if serviceType == RedisService && strings.Contains(process.CmdLine, "valkey-server") {
-		service.Name = "valkey"
 	}
 
 	if service.ContainerID != "" {

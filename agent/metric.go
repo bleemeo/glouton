@@ -719,6 +719,26 @@ var (
 			"uwsgi_harakiri_count",
 		},
 
+		discovery.ValkeyService: { // Valkey is a fork of Redis
+			"redis_current_connections_clients",
+			"redis_current_connections_slaves",
+			"redis_evicted_keys",
+			"redis_expired_keys",
+			"redis_keyspace_hits",
+			"redis_keyspace_misses",
+			"redis_keyspace_hitrate",
+			"redis_memory",
+			"redis_memory_lua",
+			"redis_memory_peak",
+			"redis_memory_rss",
+			"redis_pubsub_channels",
+			"redis_pubsub_patterns",
+			"redis_total_connections",
+			"redis_total_operations",
+			"redis_uptime",
+			"redis_volatile_changes",
+		},
+
 		discovery.ZookeeperService: {
 			"zookeeper_connections",
 			"zookeeper_packets_received",

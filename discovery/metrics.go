@@ -388,7 +388,7 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(mgmtPort))
 			input, err = rabbitmq.New(url, username, password)
 		}
-	case RedisService:
+	case RedisService, ValkeyService:
 		if ip, port := service.AddressPort(); ip != "" {
 			input, err = redis.New("tcp://"+net.JoinHostPort(ip, strconv.Itoa(port)), service.Config.Password)
 		}

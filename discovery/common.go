@@ -102,6 +102,7 @@ const (
 	SaltMasterService    ServiceName = "salt_master"
 	SquidService         ServiceName = "squid"
 	UWSGIService         ServiceName = "uwsgi"
+	ValkeyService        ServiceName = "valkey"
 	VarnishService       ServiceName = "varnish"
 	UPSDService          ServiceName = "upsd"
 	ZookeeperService     ServiceName = "zookeeper"
@@ -428,6 +429,10 @@ var (
 		},
 		UWSGIService: {
 			IgnoreHighPort: true,
+		},
+		ValkeyService: {
+			ServicePort:     6379,
+			ServiceProtocol: "tcp",
 		},
 		VarnishService: {
 			ServicePort:     6082,
