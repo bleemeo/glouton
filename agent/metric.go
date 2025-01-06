@@ -989,6 +989,15 @@ func (m *metricFilter) mergeInPlace(f1, f2 *metricFilter) {
 	// Merging logic:
 	// - to be allowed, a metric only needs to be present in the allowlist of one of the filters
 	// - to be denied, a metric needs to be present in the deny-list of both the filters
+	m.l.Lock()
+	defer m.l.Unlock()
+
+	f1.l.Lock()
+	defer f1.l.Unlock()
+
+	f2.l.Lock()
+	defer f2.l.Unlock()
+
 	var staticDenyList []matcher.Matchers
 
 	for _, m1 := range f1.staticDenyList {
@@ -1009,13 +1018,12 @@ func (m *metricFilter) mergeInPlace(f1, f2 *metricFilter) {
 		}
 	}
 
-	*m = metricFilter{
-		includeDefaultMetrics: f1.includeDefaultMetrics || f2.includeDefaultMetrics,
-		staticAllowList:       slices.Concat(f1.staticAllowList, f2.staticAllowList),
-		staticDenyList:        staticDenyList,
-		allowList:             mergeMaps(f1.allowList, f2.allowList),
-		denyList:              denyList,
-	}
+	m.includeDefaultMetrics = f1.includeDefaultMetrics || f2.includeDefaultMetrics
+	m.staticAllowList = slices.Concat(f1.staticAllowList, f2.staticAllowList)
+	m.staticDenyList = staticDenyList
+	m.rulerMatchers = slices.Concat(f1.rulerMatchers, f2.rulerMatchers)
+	m.allowList = mergeMaps(f1.allowList, f2.allowList)
+	m.denyList = denyList
 }
 
 func matchersEqual(m1, m2 matcher.Matchers) bool {
