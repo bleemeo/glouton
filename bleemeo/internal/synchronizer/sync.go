@@ -1001,17 +1001,17 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (*Execut
 
 		wasCreation = true
 
-		s.option.NotifyFirstRegistration()
-
 		execution := s.newLimitedExecution(
-			true,
+			false,
 			map[types.EntityName]types.SyncType{
 				types.EntityAccountConfig: types.SyncTypeForceCacheRefresh,
 				types.EntityMetric:        types.SyncTypeNormal,
-				types.EntityAgent:         types.SyncTypeNormal,
+				types.EntityAgent:         types.SyncTypeForceCacheRefresh,
 			},
 		)
 		_ = execution.run(ctx)
+
+		s.option.NotifyFirstRegistration()
 
 		// Then wait CPU (which should arrive the all other system metrics)
 		// before continuing to process.
