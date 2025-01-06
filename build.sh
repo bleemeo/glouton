@@ -123,7 +123,7 @@ else
       goreleaser check
       go generate ./...
       go test ./...
-      goreleaser --clean --snapshot --parallelism 2
+      goreleaser --clean --snapshot --parallelism 2 --timeout 45m
       chown -R $USER_UID dist
       "
 
