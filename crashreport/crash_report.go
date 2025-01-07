@@ -1,4 +1,4 @@
-// Copyright 2015-2024 Bleemeo
+// Copyright 2015-2025 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -271,7 +271,7 @@ func bundleCrashReportFiles(ctx context.Context, maxReportCount int, stateDir st
 
 	_, err = lastStderrFile.Read(lastStderrFileContent)
 	if err == nil || errors.Is(err, io.EOF) {
-		if bytes.Contains(lastStderrFileContent, []byte("panic:")) {
+		if bytes.Contains(lastStderrFileContent, []byte("panic:")) || bytes.Contains(lastStderrFileContent, []byte("fatal error:")) {
 			foundStderrLog = true
 		}
 	}

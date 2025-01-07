@@ -2,7 +2,7 @@
 
 set -e
 
-GORELEASER_VERSION="v2.4.5"
+GORELEASER_VERSION="v2.5.1"
 USER_UID=$(id -u)
 
 rm -fr work
@@ -123,7 +123,7 @@ else
       goreleaser check
       go generate ./...
       go test ./...
-      goreleaser --clean --snapshot --parallelism 2
+      goreleaser --clean --snapshot --parallelism 2 --timeout 45m
       chown -R $USER_UID dist
       "
 

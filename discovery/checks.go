@@ -1,4 +1,4 @@
-// Copyright 2015-2024 Bleemeo
+// Copyright 2015-2025 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -137,7 +137,7 @@ func (d *Discovery) createCheck(service Service) {
 	}
 
 	switch service.ServiceType { //nolint:exhaustive
-	case DovecotService, MemcachedService, RabbitMQService, RedisService, ZookeeperService, NatsService:
+	case DovecotService, MemcachedService, RabbitMQService, RedisService, ValkeyService, ZookeeperService, NatsService:
 		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
 	case ApacheService, InfluxDBService, NginxService, SquidService:
 		d.createHTTPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
@@ -208,7 +208,7 @@ func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryAdd
 	case RabbitMQService:
 		tcpSend = []byte("PINGAMQP")
 		tcpExpect = []byte("AMQP")
-	case RedisService:
+	case RedisService, ValkeyService:
 		tcpSend = []byte("PING\n")
 
 		if service.Config.Password != "" {

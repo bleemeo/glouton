@@ -1,4 +1,4 @@
-// Copyright 2015-2024 Bleemeo
+// Copyright 2015-2025 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -20,6 +20,7 @@ package facts
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net"
 	"os"
@@ -37,9 +38,7 @@ import (
 
 const dmiDir = "/sys/devices/virtual/dmi/id/"
 
-func (f *FactProvider) platformFacts(ctx context.Context) map[string]string {
-	facts := make(map[string]string)
-
+func (f *FactProvider) osFacts(ctx context.Context, facts map[string]string) map[string]string {
 	if f.hostRootPath != "" {
 		osReleasePath := filepath.Join(f.hostRootPath, "etc/os-release")
 		if osReleaseData, err := os.ReadFile(osReleasePath); err != nil {
@@ -48,6 +47,13 @@ func (f *FactProvider) platformFacts(ctx context.Context) map[string]string {
 			osRelease, err := decodeOsRelease(string(osReleaseData))
 			if err != nil {
 				logger.V(1).Printf("os-release file is invalid: %v", err)
+			}
+
+			if osRelease["ID"] == "debian" {
+				trueNASMarker := filepath.Join(f.hostRootPath, "lib/systemd/system/truenas.target")
+				if _, err := os.Stat(trueNASMarker); err == nil {
+					return f.trueNasScaleOSFact(facts)
+				}
 			}
 
 			facts["os_family"] = osRelease["ID_LIKE"]
@@ -66,9 +72,57 @@ func (f *FactProvider) platformFacts(ctx context.Context) map[string]string {
 		facts["os_codename"] = strings.TrimSpace(string(out))
 	}
 
+	return facts
+}
+
+func (f *FactProvider) trueNasScaleOSFact(facts map[string]string) map[string]string {
+	facts["os_name"] = "TrueNAS"
+
+	var manifest struct {
+		Codename string `json:"codename"`
+		Version  string `json:"version"`
+	}
+
+	manifestFile := filepath.Join(f.hostRootPath, "data/manifest.json")
+	if manifestData, err := os.ReadFile(manifestFile); err != nil {
+		logger.V(1).Printf("unable to read manifest.json file: %v", err)
+	} else {
+		err := json.Unmarshal(manifestData, &manifest)
+		if err != nil {
+			logger.V(1).Printf("unable to decode manifest.json file: %v", err)
+		}
+	}
+
+	if manifest.Version == "" {
+		versionFile := filepath.Join(f.hostRootPath, "etc/version")
+		if versionData, err := os.ReadFile(versionFile); err != nil {
+			logger.V(1).Printf("unable to read version file: %v", err)
+		} else {
+			manifest.Version = string(versionData)
+		}
+	}
+
+	facts["os_codename"] = manifest.Codename
+
+	if manifest.Version != "" {
+		facts["os_pretty_name"] = "TrueNAS SCALE " + manifest.Version
+	} else {
+		facts["os_pretty_name"] = "TrueNAS SCALE"
+	}
+
+	facts["os_version"] = manifest.Version
+
+	return facts
+}
+
+func (f *FactProvider) platformFacts(ctx context.Context) map[string]string {
+	facts := make(map[string]string)
+
+	facts = f.osFacts(ctx, facts)
+
 	var utsName unix.Utsname
 
-	err = unix.Uname(&utsName)
+	err := unix.Uname(&utsName)
 	if err == nil {
 		facts["kernel"] = bytesToString(utsName.Sysname[:])
 		facts["kernel_release"] = bytesToString(utsName.Release[:])

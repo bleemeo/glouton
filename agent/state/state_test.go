@@ -1,4 +1,4 @@
-// Copyright 2015-2024 Bleemeo
+// Copyright 2015-2025 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -249,8 +249,8 @@ func TestTelemetryFieldMigration(t *testing.T) {
 		t.Fatal("Failed to load state:", err)
 	}
 
-	persistentFile, errP := os.CreateTemp("", "persistent")
-	cacheFile, errC := os.CreateTemp("", "cache")
+	persistentFile, errP := os.CreateTemp(t.TempDir(), "persistent")
+	cacheFile, errC := os.CreateTemp(t.TempDir(), "cache")
 
 	if errP != nil || errC != nil {
 		t.Skip("Failed to setup test:\n", errors.Join(errP, errC))

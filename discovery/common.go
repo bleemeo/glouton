@@ -1,4 +1,4 @@
-// Copyright 2015-2024 Bleemeo
+// Copyright 2015-2025 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -102,6 +102,7 @@ const (
 	SaltMasterService    ServiceName = "salt_master"
 	SquidService         ServiceName = "squid"
 	UWSGIService         ServiceName = "uwsgi"
+	ValkeyService        ServiceName = "valkey"
 	VarnishService       ServiceName = "varnish"
 	UPSDService          ServiceName = "upsd"
 	ZookeeperService     ServiceName = "zookeeper"
@@ -428,6 +429,10 @@ var (
 		},
 		UWSGIService: {
 			IgnoreHighPort: true,
+		},
+		ValkeyService: {
+			ServicePort:     6379,
+			ServiceProtocol: "tcp",
 		},
 		VarnishService: {
 			ServicePort:     6082,
