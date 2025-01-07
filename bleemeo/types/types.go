@@ -227,7 +227,7 @@ type MQTTReloadState interface {
 
 type MQTTClient interface {
 	PublishAsJSON(topic string, payload any, retry bool) error
-	PublishBytes(topic string, payload []byte, retry bool) error
+	PublishBytes(ctx context.Context, topic string, payload []byte, retry bool) error
 	Run(ctx context.Context)
 	IsConnectionOpen() bool
 	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error

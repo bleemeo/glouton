@@ -157,13 +157,13 @@ func (c *Client) PublishAsJSON(topic string, payload interface{}, retry bool) er
 		return err
 	}
 
-	return c.publishWrapper(topic, payloadBuffer, retry)
+	return c.publishWrapper(context.Background(), topic, payloadBuffer, retry)
 }
 
 // PublishBytes sends the payload to MQTT on the given topic.
 // If retry is set to true and MQTT is currently unreachable, the client will
 // retry to send the message later, else it will be dropped.
-func (c *Client) PublishBytes(topic string, payload []byte, retry bool) error {
+func (c *Client) PublishBytes(ctx context.Context, topic string, payload []byte, retry bool) error {
 	payloadBuffer, err := c.encoder.EncodeBytes(payload)
 	if err != nil {
 		c.encoder.PutBuffer(payloadBuffer)
@@ -171,10 +171,10 @@ func (c *Client) PublishBytes(topic string, payload []byte, retry bool) error {
 		return err
 	}
 
-	return c.publishWrapper(topic, payloadBuffer, retry)
+	return c.publishWrapper(ctx, topic, payloadBuffer, retry)
 }
 
-func (c *Client) publishWrapper(topic string, payloadBuffer []byte, retry bool) error {
+func (c *Client) publishWrapper(ctx context.Context, topic string, payloadBuffer []byte, retry bool) error {
 	if len(payloadBuffer) > maxPayloadSize {
 		c.encoder.PutBuffer(payloadBuffer)
 
@@ -184,7 +184,7 @@ func (c *Client) publishWrapper(topic string, payloadBuffer []byte, retry bool) 
 	msg, ok := c.publish(topic, payloadBuffer, retry)
 
 	if ok {
-		c.opts.ReloadState.AddPendingMessage(context.Background(), msg, true)
+		c.opts.ReloadState.AddPendingMessage(ctx, msg, true)
 	} else {
 		c.encoder.PutBuffer(payloadBuffer)
 	}

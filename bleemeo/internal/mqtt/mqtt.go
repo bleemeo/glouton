@@ -595,7 +595,7 @@ func (c *Client) PopPoints(includeFailedPoints bool) []types.MetricPoint {
 	return points
 }
 
-func (c *Client) PushLogs(_ context.Context, payload []byte) error {
+func (c *Client) PushLogs(ctx context.Context, payload []byte) error {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -607,7 +607,7 @@ func (c *Client) PushLogs(_ context.Context, payload []byte) error {
 		return types.ErrBackPressureSignal
 	}
 
-	if err := c.mqtt.PublishBytes(fmt.Sprintf("v1/agent/%s/logs", c.opts.AgentID), payload, true); err != nil {
+	if err := c.mqtt.PublishBytes(ctx, fmt.Sprintf("v1/agent/%s/logs", c.opts.AgentID), payload, true); err != nil {
 		return nil
 	}
 

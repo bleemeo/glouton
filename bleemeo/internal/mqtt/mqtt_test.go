@@ -116,7 +116,8 @@ func (m *mockMQTTClient) PublishAsJSON(topic string, payload any, retry bool) er
 	return nil
 }
 
-func (m *mockMQTTClient) PublishBytes(topic string, payload []byte, retry bool) error {
+func (m *mockMQTTClient) PublishBytes(ctx context.Context, topic string, payload []byte, retry bool) error {
+	_ = ctx
 	_ = topic
 	_ = retry
 	_ = payload
