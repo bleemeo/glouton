@@ -111,6 +111,20 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext) err
 	for _, filePattern := range r.cfg.Include {
 		matching, err := doublestar.FilepathGlob(filePattern, doublestar.WithFailOnIOErrors())
 		if err != nil {
+			if errors.Is(err, doublestar.ErrBadPattern) {
+				return fmt.Errorf("file %q: %w", filePattern, err)
+			}
+
+			if errors.Is(err, fs.ErrPermission) {
+				if unwrapped := errors.Unwrap(err); unwrapped != nil {
+					// Getting rid of the operation that failed (stat, open, ...)
+					// to only show the actual error (e.g. "permission denied").
+					err = unwrapped
+				}
+
+				return fmt.Errorf("file %q: %w - Note that Glouton could read protected log file using sudo tail, but you need to use explicit path (no glob pattern)", filePattern, err)
+			}
+
 			return fmt.Errorf("file %q: %w", filePattern, err)
 		}
 
@@ -267,7 +281,7 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 		}
 
 		if lastSize, ok := lastFileSizes[logFile]; ok {
-			if lastSize > sizeByFile[logFile] {
+			if lastSize > size {
 				fileTypedCfg.InputConfig.StartAt = "beginning"
 
 				logger.Printf("Start to read file %q from beginning", logFile) // TODO: remove
@@ -281,7 +295,7 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 
 		factories[factory] = fileTypedCfg
 
-		logger.Printf("Chose file log receiver for file(s) %v", readableFiles) // TODO: remove
+		logger.Printf("Chose file log receiver for file %v", logFile) // TODO: remove
 	}
 
 	for _, logFile := range execFiles {
@@ -291,6 +305,13 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 		execTypedCfg, ok := execCfg.(*execlogreceiver.ExecLogConfig)
 		if !ok {
 			return nil, nil, nil, fmt.Errorf("%w for exec log receiver: %T", errUnexpectedType, execCfg)
+		}
+
+		size, err := sizeFnByFile[logFile]()
+		if err != nil {
+			logger.Printf("Error getting size of file %q (ignoring it): %v", logFile, err)
+
+			continue
 		}
 
 		tailArgs := []string{"tail", "--follow=name"}

@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
 	"slices"
 	"strconv"
 	"sync"
@@ -53,6 +52,7 @@ import (
 const (
 	throughputMeterResolutionSecs = 60
 	retrySetupFileReceiversPeriod = 1 * time.Minute
+	saveFileSizesToCachePeriod    = 1 * time.Minute
 	shutdownTimeout               = 5 * time.Second
 )
 
@@ -96,12 +96,18 @@ func MakePipeline( //nolint:maintidx
 		},
 		commandRunner:      commandRunner,
 		startedComponents:  make([]component.Component, 0, 4), // 4 should be the minimum number of components
-		receivers:          make([]*logReceiver, len(cfg.Receivers)),
+		receivers:          make([]*logReceiver, 0, len(cfg.Receivers)),
 		logThroughputMeter: newRingCounter(throughputMeterResolutionSecs), // we want to measure the throughput over the last minute (60s)
 	}
 
 	pipeline.l.Lock()
 	defer pipeline.l.Unlock()
+
+	defer func() {
+		if err != nil {
+			shutdownAll(pipeline.startedComponents)
+		}
+	}()
 
 	logExporter, err := exporterhelper.NewLogs(
 		ctx,
@@ -127,14 +133,10 @@ func MakePipeline( //nolint:maintidx
 		},
 	)
 	if err != nil {
-		shutdownAll(pipeline.startedComponents)
-
 		return nil, fmt.Errorf("setup exporter: %w", err)
 	}
 
 	if err = logExporter.Start(ctx, nil); err != nil {
-		shutdownAll(pipeline.startedComponents)
-
 		return nil, fmt.Errorf("start exporter: %w", err)
 	}
 
@@ -145,18 +147,19 @@ func MakePipeline( //nolint:maintidx
 	logBatcher, err := factoryBatch.CreateLogs(
 		ctx,
 		processor.Settings{TelemetrySettings: pipeline.telemetry},
-		factoryBatch.CreateDefaultConfig(),
+		&batchprocessor.Config{
+			Timeout:                  10 * time.Second,
+			SendBatchSize:            1 << 16, // 64KiB
+			SendBatchMaxSize:         1 << 21, // 2MiB
+			MetadataCardinalityLimit: 1000,    // config default
+		},
 		logExporter,
 	)
 	if err != nil {
-		shutdownAll(pipeline.startedComponents)
-
 		return nil, fmt.Errorf("setup batcher: %w", err)
 	}
 
 	if err = logBatcher.Start(ctx, nil); err != nil {
-		shutdownAll(pipeline.startedComponents)
-
 		return nil, fmt.Errorf("start batcher: %w", err)
 	}
 
@@ -201,14 +204,10 @@ func MakePipeline( //nolint:maintidx
 			logBackPressureEnforcer,
 		)
 		if err != nil {
-			shutdownAll(pipeline.startedComponents)
-
 			return nil, fmt.Errorf("setup OTLP receiver: %w", err)
 		}
 
 		if err = otlpLogReceiver.Start(ctx, nil); err != nil {
-			shutdownAll(pipeline.startedComponents)
-
 			return nil, fmt.Errorf("start OTLP receiver: %w", err)
 		}
 
@@ -216,18 +215,34 @@ func MakePipeline( //nolint:maintidx
 	}
 
 	for i, rcvrCfg := range cfg.Receivers {
-		pipeline.receivers[i], err = newLogReceiver(rcvrCfg, logBackPressureEnforcer)
+		recv, err := newLogReceiver(rcvrCfg, logBackPressureEnforcer)
 		if err != nil {
-			shutdownAll(pipeline.startedComponents)
+			logger.V(1).Printf("Failed to setup log receiver n°%d (ignoring it): %v", i+1, err)
 
-			return nil, fmt.Errorf("setup log receiver n°%d: %w", i+1, err)
+			continue
 		}
 
-		err = pipeline.receivers[i].update(ctx, pipeline)
+		err = recv.update(ctx, pipeline)
 		if err != nil {
+			logger.V(1).Printf("Failed to start log receiver n°%d (ignoring it): %v", i+1, err)
+
+			continue
+		}
+
+		pipeline.receivers = append(pipeline.receivers, recv)
+	}
+
+	if len(pipeline.receivers) == 0 {
+		if len(cfg.Receivers) > 0 {
+			logger.V(1).Printf("None of the %d configured log receiver(s) is valid.", len(cfg.Receivers))
+		}
+
+		if !cfg.HTTP.Enable && !cfg.GRPC.Enable {
+			logger.V(1).Printf("No receiver to start; disabling log processing.")
+
 			shutdownAll(pipeline.startedComponents)
 
-			return nil, fmt.Errorf("start log receiver n°%d: %w", i+1, err)
+			return nil, nil //nolint:nilnil
 		}
 	}
 
@@ -248,6 +263,27 @@ func MakePipeline( //nolint:maintidx
 						logger.V(1).Printf("Failed to update log receiver n°%d: %v", i+1, err)
 					}
 				}
+
+				pipeline.l.Unlock()
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	// Scheduling the save of file sizes to cache
+	go func() {
+		defer crashreport.ProcessPanic()
+
+		ticker := time.NewTicker(saveFileSizesToCachePeriod)
+		defer ticker.Stop()
+
+		for ctx.Err() == nil {
+			select {
+			case <-ticker.C:
+				pipeline.l.Lock()
+
+				saveLastFileSizesToCache(state, pipeline.receivers)
 
 				pipeline.l.Unlock()
 			case <-ctx.Done():
