@@ -18,10 +18,13 @@ package logprocessing
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -225,33 +228,21 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 	readableFiles, execFiles []string,
 	err error,
 ) {
-	sizeByFile := make(map[string]int64, len(logFiles))
+	sizeFnByFile := make(map[string]func() (int64, error), len(logFiles))
 
 	for _, logFile := range logFiles {
-		stat, err := os.Stat(logFile)
-		if err != nil {
-			logger.V(1).Printf("Can't stat log file %q (ignoring it): %v", logFile, err)
-
+		ignore, needSudo, sizeFn := statFile(logFile, commandRunner)
+		if ignore {
 			continue
 		}
 
-		f, err := os.OpenFile(logFile, os.O_RDONLY, 0) // the mode perm isn't needed for read
-		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
+		sizeFnByFile[logFile] = sizeFn
 
-			execFiles = append(execFiles, logFile) // assuming the error will not occur using "sudo tail ..."
+		if needSudo {
+			execFiles = append(execFiles, logFile)
 		} else {
-			err = f.Close()
-			if err != nil {
-				logger.V(1).Printf("Failed to close log file %q: %v", logFile, err)
-			}
-
 			readableFiles = append(readableFiles, logFile)
 		}
-
-		sizeByFile[logFile] = stat.Size()
 	}
 
 	factories = make(map[receiver.Factory]component.Config, len(readableFiles)+len(execFiles))
@@ -267,6 +258,13 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 
 		fileTypedCfg.InputConfig.Include = []string{logFile}
 		fileTypedCfg.Operators = operators
+
+		size, err := sizeFnByFile[logFile]()
+		if err != nil {
+			logger.Printf("Error getting size of file %q (ignoring it): %v", logFile, err)
+
+			continue
+		}
 
 		if lastSize, ok := lastFileSizes[logFile]; ok {
 			if lastSize > sizeByFile[logFile] {
@@ -298,10 +296,10 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 		tailArgs := []string{"tail", "--follow=name"}
 
 		if lastSize, ok := lastFileSizes[logFile]; ok {
-			if lastSize > sizeByFile[logFile] {
-				tailArgs = append(tailArgs, "--bytes=+0") // +0 -> start at byte 0
-			} else if sizeByFile[logFile] > lastSize {
-				tailArgs = append(tailArgs, fmt.Sprintf("--bytes=%d", sizeByFile[logFile]-lastSize)) // start '%d' bytes before the end
+			if lastSize > size {
+				tailArgs = append(tailArgs, "--bytes=+0") // start at byte 0
+			} else if size > lastSize {
+				tailArgs = append(tailArgs, fmt.Sprintf("--bytes=+%d", lastSize)) // start at byte 'lastSize'
 			}
 		}
 
@@ -338,4 +336,65 @@ func wrapWithCounters(next consumer.Logs, counter *atomic.Int64, throughputMeter
 	}
 
 	return logCounter
+}
+
+func statFile(logFile string, commandRunner *gloutonexec.Runner) (ignore, needSudo bool, sizeFn func() (int64, error)) {
+	f, err := os.OpenFile(logFile, os.O_RDONLY, 0) // the mode perm isn't needed for read
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return true, false, nil
+		}
+
+		if !errors.Is(err, fs.ErrPermission) {
+			logger.V(1).Printf("Failed to open log file %q (ignoring it): %v", logFile, err)
+
+			return true, false, nil
+		}
+
+		needSudo = true
+		sizeFn = func() (int64, error) {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+
+			runOpt := gloutonexec.Option{
+				RunAsRoot:      true,
+				CombinedOutput: true,
+			}
+
+			out, err := commandRunner.Run(ctx, runOpt, "stat", "--printf=%s", logFile)
+			if err != nil {
+				strOut := strings.TrimSpace(string(out))
+
+				if strOut != "" {
+					strOut = " / " + strOut
+				}
+
+				return 0, fmt.Errorf("%w%s", err, strOut)
+			}
+
+			size, err := strconv.ParseInt(string(out), 10, 64)
+			if err != nil {
+				return 0, fmt.Errorf("unexpected stat output %q: %w", out, err)
+			}
+
+			return size, nil
+		}
+	} else {
+		err = f.Close()
+		if err != nil {
+			logger.V(1).Printf("Failed to close log file %q: %v", logFile, err)
+		}
+
+		needSudo = false
+		sizeFn = func() (int64, error) {
+			stat, err := os.Stat(logFile)
+			if err != nil {
+				return 0, err
+			}
+
+			return stat.Size(), nil
+		}
+	}
+
+	return false, needSudo, sizeFn
 }
