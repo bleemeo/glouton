@@ -196,6 +196,19 @@ func TestFileLogReceiver(t *testing.T) {
 		t.Fatal("Unexpected log lines (-want, +got):", diff)
 	}
 
+	fileSizes, err := recv.sizesByFile()
+	if err != nil {
+		t.Fatal("Failed to get file sizes:", err)
+	}
+
+	expectedFileSizes := map[string]int64{
+		f1.Name(): 8,
+		f2.Name(): 8,
+	}
+	if diff := cmp.Diff(expectedFileSizes, fileSizes); diff != "" {
+		t.Fatal("Unexpected file sizes (-want, +got):", diff)
+	}
+
 	expectedDiagnosticInfo := receiverDiagnosticInformation{
 		LogProcessedCount:      2,
 		LogThroughputPerMinute: 2,

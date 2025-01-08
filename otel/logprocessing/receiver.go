@@ -73,8 +73,9 @@ type logReceiver struct {
 	operators   []operator.Config
 
 	// l should always be acquired after the pipeline lock
-	l        sync.Mutex
-	watching map[string]receiverKind
+	l            sync.Mutex
+	watching     map[string]receiverKind
+	sizeFnByFile map[string]func() (int64, error)
 
 	logCounter      *atomic.Int64
 	throughputMeter *ringCounter
@@ -92,6 +93,7 @@ func newLogReceiver(cfg config.OTLPReceiver, logConsumer consumer.Logs) (*logRec
 		logConsumer:     logConsumer,
 		operators:       ops,
 		watching:        make(map[string]receiverKind, len(cfg.Include)),
+		sizeFnByFile:    make(map[string]func() (int64, error), len(cfg.Include)),
 		logCounter:      new(atomic.Int64),
 		throughputMeter: newRingCounter(throughputMeterResolutionSecs),
 	}, nil
@@ -141,7 +143,7 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext) err
 		return nil
 	}
 
-	fileLogReceiverFactories, readFiles, execFiles, err := setupLogReceiverFactories(
+	fileLogReceiverFactories, readFiles, execFiles, sizeFnByFile, err := setupLogReceiverFactories(
 		slices.Collect(maps.Keys(logFiles)),
 		r.operators,
 		pipeline.lastFileSizes,
@@ -177,6 +179,8 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext) err
 		r.watching[logFile] = receiverExecLog
 	}
 
+	maps.Insert(r.sizeFnByFile, maps.All(sizeFnByFile))
+
 	return nil
 }
 
@@ -186,6 +190,31 @@ func (r *logReceiver) currentlyWatching() []string {
 	defer r.l.Unlock()
 
 	return slices.Collect(maps.Keys(r.watching))
+}
+
+// sizesByFile returns the size of each log file watched by this receiver.
+func (r *logReceiver) sizesByFile() (map[string]int64, error) {
+	r.l.Lock()
+	defer r.l.Unlock()
+
+	sizes := make(map[string]int64, len(r.sizeFnByFile))
+
+	for logFile, sizeFn := range r.sizeFnByFile {
+		size, err := sizeFn()
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				// We may not catch errors produced by the "sudo stat" cmd,
+				// but this would not really be convenient ...
+				continue
+			}
+
+			return nil, err
+		}
+
+		sizes[logFile] = size
+	}
+
+	return sizes, nil
 }
 
 func (r *logReceiver) diagnosticInfo() receiverDiagnosticInformation {
@@ -240,9 +269,10 @@ FilesFromConfig:
 func setupLogReceiverFactories(logFiles []string, operators []operator.Config, lastFileSizes map[string]int64, commandRunner *gloutonexec.Runner) (
 	factories map[receiver.Factory]component.Config,
 	readableFiles, execFiles []string,
+	sizeFnByFile map[string]func() (int64, error),
 	err error,
 ) {
-	sizeFnByFile := make(map[string]func() (int64, error), len(logFiles))
+	sizeFnByFile = make(map[string]func() (int64, error), len(logFiles))
 
 	for _, logFile := range logFiles {
 		ignore, needSudo, sizeFn := statFile(logFile, commandRunner)
@@ -267,7 +297,7 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 
 		fileTypedCfg, ok := fileCfg.(*filelogreceiver.FileLogConfig)
 		if !ok {
-			return nil, nil, nil, fmt.Errorf("%w for file log receiver: %T", errUnexpectedType, fileCfg)
+			return nil, nil, nil, nil, fmt.Errorf("%w for file log receiver: %T", errUnexpectedType, fileCfg)
 		}
 
 		fileTypedCfg.InputConfig.Include = []string{logFile}
@@ -290,7 +320,7 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 
 		err = mapstructure.Decode(retryCfg, &fileTypedCfg.RetryOnFailure)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to define consumerretry config for filelogreceiver: %w", err)
+			return nil, nil, nil, nil, fmt.Errorf("failed to define consumerretry config for filelogreceiver: %w", err)
 		}
 
 		factories[factory] = fileTypedCfg
@@ -304,7 +334,7 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 
 		execTypedCfg, ok := execCfg.(*execlogreceiver.ExecLogConfig)
 		if !ok {
-			return nil, nil, nil, fmt.Errorf("%w for exec log receiver: %T", errUnexpectedType, execCfg)
+			return nil, nil, nil, nil, fmt.Errorf("%w for exec log receiver: %T", errUnexpectedType, execCfg)
 		}
 
 		size, err := sizeFnByFile[logFile]()
@@ -331,7 +361,7 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 
 		err = mapstructure.Decode(retryCfg, &execTypedCfg.RetryOnFailure)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to define consumerretry config for execlogreceiver: %w", err)
+			return nil, nil, nil, nil, fmt.Errorf("failed to define consumerretry config for execlogreceiver: %w", err)
 		}
 
 		factories[factory] = execTypedCfg
@@ -339,7 +369,7 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 		logger.Printf("Chose exec log receiver for file %q", logFile) // TODO: remove
 	}
 
-	return factories, readableFiles, execFiles, nil
+	return factories, readableFiles, execFiles, sizeFnByFile, nil
 }
 
 func wrapWithCounters(next consumer.Logs, counter *atomic.Int64, throughputMeter *ringCounter) consumer.Logs {

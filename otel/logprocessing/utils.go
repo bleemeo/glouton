@@ -19,7 +19,6 @@ package logprocessing
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
@@ -43,15 +42,15 @@ func saveLastFileSizesToCache(state bleemeoTypes.State, receivers []*logReceiver
 	lastFileSizes := make(map[string]int64)
 
 	for _, recv := range receivers {
-		for _, logFile := range recv.currentlyWatching() {
-			stat, err := os.Stat(logFile)
-			if err != nil {
-				logger.V(1).Printf("Failed to stat log file %q: %v", logFile, err)
+		sizesByFile, err := recv.sizesByFile()
+		if err != nil {
+			logger.V(1).Printf("Can't get log file sizes: %v", err)
 
-				continue
-			}
+			continue
+		}
 
-			lastFileSizes[logFile] = stat.Size()
+		for logFile, size := range sizesByFile {
+			lastFileSizes[logFile] = size
 		}
 	}
 

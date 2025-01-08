@@ -50,7 +50,7 @@ import (
 )
 
 const (
-	throughputMeterResolutionSecs = 60
+	throughputMeterResolutionSecs = 60 // we want to measure the throughput over the last minute (60s)
 	retrySetupFileReceiversPeriod = 1 * time.Minute
 	saveFileSizesToCachePeriod    = 1 * time.Minute
 	shutdownTimeout               = 5 * time.Second
@@ -81,7 +81,7 @@ func MakePipeline( //nolint:maintidx
 	commandRunner *gloutonexec.Runner,
 	pushLogs func(context.Context, []byte) error,
 	applyBackPressureFn func() bool,
-) (diagnosticFn func(context.Context, types.ArchiveWriter) error, err error) {
+) (diagnosticFn func(context.Context, types.ArchiveWriter) error, err error) { //nolint:wsl
 	// TODO: no logs & metrics at the same time
 
 	pipeline := &pipelineContext{
@@ -97,7 +97,7 @@ func MakePipeline( //nolint:maintidx
 		commandRunner:      commandRunner,
 		startedComponents:  make([]component.Component, 0, 4), // 4 should be the minimum number of components
 		receivers:          make([]*logReceiver, 0, len(cfg.Receivers)),
-		logThroughputMeter: newRingCounter(throughputMeterResolutionSecs), // we want to measure the throughput over the last minute (60s)
+		logThroughputMeter: newRingCounter(throughputMeterResolutionSecs),
 	}
 
 	pipeline.l.Lock()
@@ -330,15 +330,22 @@ func MakePipeline( //nolint:maintidx
 }
 
 func makeEnforceBackPressureFn(shouldApplyBackPressureFn func() bool) processorhelper.ProcessLogsFunc {
-	// Since shouldApplyBackPressureFn needs to acquire a lock, we want to avoid calling it too frequently.
+	// Since shouldApplyBackPressureFn needs to acquire the connector lock, we want to avoid calling it too frequently.
 	const cacheLifetime = 5 * time.Second
 
 	var (
+		l sync.Mutex
+		// Well ... we still need to prevent concurrent access to these variables,
+		// since the back-pressure function we return can be called
+		// simultaneously by multiple log emitters.
 		lastCacheValue  bool
 		lastCacheUpdate time.Time
 	)
 
 	applyBackPressureDebounced := func() bool {
+		l.Lock()
+		defer l.Unlock()
+
 		if time.Since(lastCacheUpdate) > cacheLifetime {
 			newState := shouldApplyBackPressureFn()
 			if newState != lastCacheValue {
