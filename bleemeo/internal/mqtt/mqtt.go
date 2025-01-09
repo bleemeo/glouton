@@ -17,7 +17,6 @@
 package mqtt
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -887,15 +886,6 @@ func (c *Client) onNotification(ctx context.Context, msg paho.Message) {
 		c.dataStreamAvailable = payload.DataStreamAvailable
 		c.topinfoStreamAvailable = payload.TopInfoStreamAvailable
 		c.logsStreamAvailability = payload.LogsStreamAvailabilityStatus
-
-		if c.logsStreamAvailability == 0 { // TODO: remove once consumer is updated
-			if bytes.Contains(msg.Payload(), []byte(`"logs_stream_available": true`)) {
-				c.logsStreamAvailability = bleemeoTypes.LogsAvailabilityOk
-			} else {
-				c.logsStreamAvailability = bleemeoTypes.LogsAvailabilityShouldBuffer
-			}
-		}
-
 		c.l.Unlock()
 
 		logger.V(2).Printf(

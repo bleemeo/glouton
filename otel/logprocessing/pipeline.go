@@ -95,7 +95,7 @@ func MakePipeline( //nolint:maintidx
 			Resource:       pcommon.NewResource(),
 		},
 		commandRunner:      commandRunner,
-		startedComponents:  make([]component.Component, 0, 4), // 4 should be the minimum number of components
+		startedComponents:  make([]component.Component, 0, 3), // 3 should be the minimum number of components
 		receivers:          make([]*logReceiver, 0, len(cfg.Receivers)),
 		logThroughputMeter: newRingCounter(throughputMeterResolutionSecs),
 	}
