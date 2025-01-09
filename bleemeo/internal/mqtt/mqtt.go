@@ -17,6 +17,7 @@
 package mqtt
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -108,7 +109,7 @@ type Client struct {
 	lastAck                time.Time
 	dataStreamAvailable    bool
 	topinfoStreamAvailable bool
-	logsStreamAvailable    bool
+	logsStreamAvailability bleemeoTypes.LogsAvailability
 }
 
 type metricPayload struct {
@@ -346,7 +347,7 @@ func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWri
 		LastAck                    time.Time
 		DataStreamAvailable        bool
 		TopinfoStreamAvailable     bool
-		LogsStreamAvailable        bool
+		LogsStreamAvailability     bleemeoTypes.LogsAvailability
 	}{
 		StartedAt:                  c.startedAt,
 		LastRegisteredMetricsCount: c.lastRegisteredMetricsCount,
@@ -357,7 +358,7 @@ func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWri
 		LastAck:                    c.lastAck,
 		DataStreamAvailable:        c.dataStreamAvailable,
 		TopinfoStreamAvailable:     c.topinfoStreamAvailable,
-		LogsStreamAvailable:        c.logsStreamAvailable,
+		LogsStreamAvailability:     c.logsStreamAvailability,
 	}
 
 	enc := json.NewEncoder(file)
@@ -603,7 +604,7 @@ func (c *Client) PushLogs(ctx context.Context, payload []byte) error {
 		return ErrNotConnected
 	}
 
-	if !c.logsStreamAvailable || time.Since(c.lastAck) > logsAckBackPressureDelay {
+	if c.logsStreamAvailability != bleemeoTypes.LogsAvailabilityOk || time.Since(c.lastAck) > logsAckBackPressureDelay {
 		return types.ErrBackPressureSignal
 	}
 
@@ -614,19 +615,15 @@ func (c *Client) PushLogs(ctx context.Context, payload []byte) error {
 	return nil
 }
 
-func (c *Client) CanSendLogs() bool {
+func (c *Client) LogsBackPressureStatus() bleemeoTypes.LogsAvailability {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	if !c.connected() {
-		return false
+	if !c.connected() || time.Since(c.lastAck) > logsAckBackPressureDelay {
+		return bleemeoTypes.LogsAvailabilityShouldBuffer
 	}
 
-	if !c.logsStreamAvailable {
-		return false
-	}
-
-	return time.Since(c.lastAck) < logsAckBackPressureDelay
+	return c.logsStreamAvailability
 }
 
 func (c *Client) sendPoints() {
@@ -838,18 +835,6 @@ func (c *Client) sendConnectMessage() {
 	}
 }
 
-type notificationPayload struct {
-	MessageType            string `json:"message_type"`
-	MetricUUID             string `json:"metric_uuid,omitempty"`
-	MonitorUUID            string `json:"monitor_uuid,omitempty"`
-	MonitorOperationType   string `json:"monitor_operation_type,omitempty"`
-	DiagnosticRequestToken string `json:"request_token,omitempty"`
-	AckTimestamp           string `json:"ack_timestamp,omitempty"`
-	DataStreamAvailable    bool   `json:"data_stream_available,omitempty"`
-	TopInfoStreamAvailable bool   `json:"topinfo_stream_available,omitempty"`
-	LogsStreamAvailable    bool   `json:"logs_stream_available,omitempty"`
-}
-
 func (c *Client) onNotification(ctx context.Context, msg paho.Message) {
 	if len(msg.Payload()) > 1024*60 {
 		logger.V(1).Printf("Ignoring abnormally big MQTT message")
@@ -901,17 +886,25 @@ func (c *Client) onNotification(ctx context.Context, msg paho.Message) {
 		c.lastAck = ts
 		c.dataStreamAvailable = payload.DataStreamAvailable
 		c.topinfoStreamAvailable = payload.TopInfoStreamAvailable
-		c.logsStreamAvailable = payload.LogsStreamAvailable
+		c.logsStreamAvailability = payload.LogsStreamAvailability
+
+		if c.logsStreamAvailability == 0 { // TODO: remove once consumer is updated
+			if bytes.Contains(msg.Payload(), []byte(`"logs_stream_available": true`)) {
+				c.logsStreamAvailability = bleemeoTypes.LogsAvailabilityOk
+			} else {
+				c.logsStreamAvailability = bleemeoTypes.LogsAvailabilityShouldBuffer
+			}
+		}
+
+		c.l.Unlock()
 
 		logger.V(2).Printf(
-			"Received ack with ts=%s with dataStreamAvailable=%v, topinfoStreamAvailable=%v, logsStreamAvailable=%v",
+			"Received ack with ts=%s with dataStreamAvailable=%v, topinfoStreamAvailable=%v, logsStreamAvailability=%v",
 			originalTS,
 			payload.DataStreamAvailable,
 			payload.TopInfoStreamAvailable,
-			payload.LogsStreamAvailable,
+			payload.LogsStreamAvailability,
 		)
-
-		c.l.Unlock()
 	}
 }
 

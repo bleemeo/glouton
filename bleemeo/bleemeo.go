@@ -1214,14 +1214,14 @@ func (c *Connector) PushLogs(ctx context.Context, payload []byte) error {
 	return nil
 }
 
-func (c *Connector) ShouldApplyLogBackPressure() bool {
+func (c *Connector) ShouldApplyLogBackPressure() types.LogsAvailability {
 	c.l.Lock()
 	mqttClient := c.mqtt
 	c.l.Unlock()
 
 	if mqttClient != nil {
-		return !mqttClient.CanSendLogs()
+		return mqttClient.LogsBackPressureStatus()
 	}
 
-	return true
+	return types.LogsAvailabilityShouldDiscard
 }

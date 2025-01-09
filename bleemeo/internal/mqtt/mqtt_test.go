@@ -27,9 +27,8 @@ import (
 	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/agent/state"
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
-	"github.com/bleemeo/glouton/types"
-
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/types"
 )
 
 func TestFailedPointsCache(t *testing.T) {

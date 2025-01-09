@@ -236,7 +236,7 @@ func (r *logReceiver) diagnosticInfo() receiverDiagnosticInformation {
 		case receiverExecLog:
 			info.ExecLogReceiverPaths = append(info.ExecLogReceiverPaths, logFile)
 		default:
-			logger.V(1).Printf("Unknown log receiver kind %q", kind)
+			logger.V(1).Printf("Unknown log receiver kind %q for file %q", kind, logFile)
 		}
 	}
 
@@ -325,7 +325,7 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 
 		factories[factory] = fileTypedCfg
 
-		logger.Printf("Chose file log receiver for file %v", logFile) // TODO: remove
+		logger.Printf("Chose file log receiver for file %q", logFile) // TODO: remove
 	}
 
 	for _, logFile := range execFiles {
@@ -347,9 +347,12 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 		tailArgs := []string{"tail", "--follow=name"}
 
 		if lastSize, ok := lastFileSizes[logFile]; ok {
-			if lastSize > size {
+			switch {
+			case lastSize > size: // the file has been truncated
 				tailArgs = append(tailArgs, "--bytes=+0") // start at byte 0
-			} else if size > lastSize {
+			case size == lastSize: // the file hasn't changed
+				tailArgs = append(tailArgs, "--bytes=0") // start at the end of the file
+			case size > lastSize: // the file has been written since the last time
 				tailArgs = append(tailArgs, fmt.Sprintf("--bytes=+%d", lastSize)) // start at byte 'lastSize'
 			}
 		}
@@ -366,7 +369,7 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 
 		factories[factory] = execTypedCfg
 
-		logger.Printf("Chose exec log receiver for file %q", logFile) // TODO: remove
+		logger.Printf("Chose exec log receiver for file %q. Tail args: %s", logFile, tailArgs) // TODO: remove
 	}
 
 	return factories, readableFiles, execFiles, sizeFnByFile, nil

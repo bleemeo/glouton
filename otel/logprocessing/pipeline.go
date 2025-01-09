@@ -80,7 +80,7 @@ func MakePipeline( //nolint:maintidx
 	state bleemeoTypes.State,
 	commandRunner *gloutonexec.Runner,
 	pushLogs func(context.Context, []byte) error,
-	applyBackPressureFn func() bool,
+	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability,
 ) (diagnosticFn func(context.Context, types.ArchiveWriter) error, err error) { //nolint:wsl
 	// TODO: no logs & metrics at the same time
 
@@ -168,7 +168,7 @@ func MakePipeline( //nolint:maintidx
 		processor.Settings{TelemetrySettings: pipeline.telemetry},
 		nil,
 		logBatcher,
-		makeEnforceBackPressureFn(applyBackPressureFn),
+		makeEnforceBackPressureFn(streamAvailabilityStatusFn),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("setup log back-pressure enforcer: %w", err)
@@ -319,7 +319,7 @@ func MakePipeline( //nolint:maintidx
 		diagInfo := diagnosticInformation{
 			LogProcessedCount:      pipeline.logProcessedCount.Load(),
 			LogThroughputPerMinute: pipeline.logThroughputMeter.Total(),
-			BackPressureBlocking:   applyBackPressureFn(),
+			ProcessingStatus:       streamAvailabilityStatusFn().String(),
 			Receivers:              receiversInfo,
 		}
 
@@ -329,8 +329,9 @@ func MakePipeline( //nolint:maintidx
 	return diagnosticFn, nil
 }
 
-func makeEnforceBackPressureFn(shouldApplyBackPressureFn func() bool) processorhelper.ProcessLogsFunc {
-	// Since shouldApplyBackPressureFn needs to acquire the connector lock, we want to avoid calling it too frequently.
+func makeEnforceBackPressureFn(streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability) processorhelper.ProcessLogsFunc {
+	// Since streamAvailabilityStatusFn needs to acquire both the connector and the MQTT client locks,
+	// we want to avoid calling it too frequently.
 	const cacheLifetime = 5 * time.Second
 
 	var (
@@ -338,21 +339,21 @@ func makeEnforceBackPressureFn(shouldApplyBackPressureFn func() bool) processorh
 		// Well ... we still need to prevent concurrent access to these variables,
 		// since the back-pressure function we return can be called
 		// simultaneously by multiple log emitters.
-		lastCacheValue  bool
+		lastCacheValue  bleemeoTypes.LogsAvailability
 		lastCacheUpdate time.Time
 	)
 
-	applyBackPressureDebounced := func() bool {
+	applyBackPressureDebounced := func() bleemeoTypes.LogsAvailability {
 		l.Lock()
 		defer l.Unlock()
 
 		if time.Since(lastCacheUpdate) > cacheLifetime {
-			newState := shouldApplyBackPressureFn()
+			newState := streamAvailabilityStatusFn()
 			if newState != lastCacheValue {
-				if newState {
-					logger.V(1).Printf("Logs back-pressure blocking is now enabled") // TODO: V(2)
-				} else {
+				if newState == bleemeoTypes.LogsAvailabilityOk {
 					logger.V(1).Printf("Logs back-pressure blocking is now disabled") // TODO: V(2)
+				} else {
+					logger.V(1).Printf("Logs back-pressure blocking is now enabled") // TODO: V(2)
 				}
 			}
 
@@ -364,8 +365,15 @@ func makeEnforceBackPressureFn(shouldApplyBackPressureFn func() bool) processorh
 	}
 
 	return func(_ context.Context, logs plog.Logs) (plog.Logs, error) {
-		if applyBackPressureDebounced() {
+		switch status := applyBackPressureDebounced(); status {
+		case bleemeoTypes.LogsAvailabilityOk:
+			return logs, nil
+		case bleemeoTypes.LogsAvailabilityShouldBuffer:
 			return logs, types.ErrBackPressureSignal
+		case bleemeoTypes.LogsAvailabilityShouldDiscard:
+			return logs, processorhelper.ErrSkipProcessingData
+		default:
+			logger.V(1).Printf("Bad logs availability status: %s", status)
 		}
 
 		return logs, nil

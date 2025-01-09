@@ -86,7 +86,7 @@ type receiverDiagnosticInformation struct {
 type diagnosticInformation struct {
 	LogProcessedCount      int64
 	LogThroughputPerMinute int
-	BackPressureBlocking   bool
+	ProcessingStatus       string
 	Receivers              []receiverDiagnosticInformation
 }
 
