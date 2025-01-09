@@ -350,11 +350,7 @@ func makeEnforceBackPressureFn(streamAvailabilityStatusFn func() bleemeoTypes.Lo
 		if time.Since(lastCacheUpdate) > cacheLifetime {
 			newState := streamAvailabilityStatusFn()
 			if newState != lastCacheValue {
-				if newState == bleemeoTypes.LogsAvailabilityOk {
-					logger.V(1).Printf("Logs back-pressure blocking is now disabled") // TODO: V(2)
-				} else {
-					logger.V(1).Printf("Logs back-pressure blocking is now enabled") // TODO: V(2)
-				}
+				logger.V(1).Printf("Logs stream availability status is now %[1]d (policy: %[1]s)", newState) // TODO: V(2)
 			}
 
 			lastCacheValue = newState

@@ -32,8 +32,8 @@ func TestNotificationCompatibility(t *testing.T) {
 	// Every time a new payload format is designed on the Bleemeo side,
 	// it should be added to this list to ensure its compatibility against older Glouton versions.
 	payloadVersions := [][]byte{
-		[]byte(`{"message_type": "ack", "ack_timestamp": "2025-01-09T08:57:40+00:00", "data_stream_available": true, "topinfo_stream_available": true, "logs_stream_available": true}`),
-		[]byte(`{"message_type": "ack", "ack_timestamp": "2025-01-09T08:57:40+00:00", "data_stream_available": true, "topinfo_stream_available": true, "logs_stream_available": true, "logs_stream_availability": 1}`),
+		[]byte(`{"message_type": "ack", "ack_timestamp": "2025-01-09T08:57:40+00:00", "data_stream_available": true, "topinfo_stream_available": true, "logs_stream_available": false}`),
+		[]byte(`{"message_type": "ack", "ack_timestamp": "2025-01-09T08:57:40+00:00", "data_stream_available": true, "topinfo_stream_available": true, "logs_stream_availability_status": 1}`),
 	}
 
 	typeVersions := []any{ // any -> notificationPayloadV1, notificationPayload, ...
@@ -42,14 +42,14 @@ func TestNotificationCompatibility(t *testing.T) {
 			AckTimestamp:           "2025-01-09T08:57:40+00:00",
 			DataStreamAvailable:    true,
 			TopInfoStreamAvailable: true,
-			LogsStreamAvailable:    true,
+			LogsStreamAvailable:    false, // Logs weren't actually used at this moment, so this field should always resolve to false.
 		},
 		notificationPayload{
-			MessageType:            "ack",
-			AckTimestamp:           "2025-01-09T08:57:40+00:00",
-			DataStreamAvailable:    true,
-			TopInfoStreamAvailable: true,
-			LogsStreamAvailability: bleemeoTypes.LogsAvailabilityOk,
+			MessageType:                  "ack",
+			AckTimestamp:                 "2025-01-09T08:57:40+00:00",
+			DataStreamAvailable:          true,
+			TopInfoStreamAvailable:       true,
+			LogsStreamAvailabilityStatus: bleemeoTypes.LogsAvailabilityOk,
 		},
 	}
 

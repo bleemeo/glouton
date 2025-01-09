@@ -1223,5 +1223,5 @@ func (c *Connector) ShouldApplyLogBackPressure() types.LogsAvailability {
 		return mqttClient.LogsBackPressureStatus()
 	}
 
-	return types.LogsAvailabilityShouldDiscard
+	return types.LogsAvailabilityShouldBuffer
 }

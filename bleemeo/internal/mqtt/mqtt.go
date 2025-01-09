@@ -886,7 +886,7 @@ func (c *Client) onNotification(ctx context.Context, msg paho.Message) {
 		c.lastAck = ts
 		c.dataStreamAvailable = payload.DataStreamAvailable
 		c.topinfoStreamAvailable = payload.TopInfoStreamAvailable
-		c.logsStreamAvailability = payload.LogsStreamAvailability
+		c.logsStreamAvailability = payload.LogsStreamAvailabilityStatus
 
 		if c.logsStreamAvailability == 0 { // TODO: remove once consumer is updated
 			if bytes.Contains(msg.Payload(), []byte(`"logs_stream_available": true`)) {
@@ -899,11 +899,11 @@ func (c *Client) onNotification(ctx context.Context, msg paho.Message) {
 		c.l.Unlock()
 
 		logger.V(2).Printf(
-			"Received ack with ts=%s with dataStreamAvailable=%v, topinfoStreamAvailable=%v, logsStreamAvailability=%v",
+			"Received ack with ts=%s with dataStreamAvailable=%v, topinfoStreamAvailable=%v, logsStreamAvailabilityStatus=%v",
 			originalTS,
 			payload.DataStreamAvailable,
 			payload.TopInfoStreamAvailable,
-			payload.LogsStreamAvailability,
+			payload.LogsStreamAvailabilityStatus,
 		)
 	}
 }

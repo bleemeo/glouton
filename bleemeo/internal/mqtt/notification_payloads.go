@@ -34,13 +34,13 @@ type notificationPayloadV1 struct {
 // When a new one replaces it, it should be renamed to notificationPayloadV<X>,
 // and checked for compatibility with TestNotificationCompatibility.
 type notificationPayload struct {
-	MessageType            string                        `json:"message_type"`
-	MetricUUID             string                        `json:"metric_uuid,omitempty"`
-	MonitorUUID            string                        `json:"monitor_uuid,omitempty"`
-	MonitorOperationType   string                        `json:"monitor_operation_type,omitempty"`
-	DiagnosticRequestToken string                        `json:"request_token,omitempty"`
-	AckTimestamp           string                        `json:"ack_timestamp,omitempty"`
-	DataStreamAvailable    bool                          `json:"data_stream_available,omitempty"`
-	TopInfoStreamAvailable bool                          `json:"topinfo_stream_available,omitempty"`
-	LogsStreamAvailability bleemeoTypes.LogsAvailability `json:"logs_stream_availability,omitempty"`
+	MessageType                  string                        `json:"message_type"`
+	MetricUUID                   string                        `json:"metric_uuid,omitempty"`
+	MonitorUUID                  string                        `json:"monitor_uuid,omitempty"`
+	MonitorOperationType         string                        `json:"monitor_operation_type,omitempty"`
+	DiagnosticRequestToken       string                        `json:"request_token,omitempty"`
+	AckTimestamp                 string                        `json:"ack_timestamp,omitempty"`
+	DataStreamAvailable          bool                          `json:"data_stream_available,omitempty"`
+	TopInfoStreamAvailable       bool                          `json:"topinfo_stream_available,omitempty"`
+	LogsStreamAvailabilityStatus bleemeoTypes.LogsAvailability `json:"logs_stream_availability_status,omitempty"`
 }
