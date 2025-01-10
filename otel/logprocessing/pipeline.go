@@ -63,10 +63,9 @@ type pipelineContext struct {
 	commandRunner CommandRunner
 
 	l sync.Mutex
-	// startedComponents represents all the components that must be shut down at the end of the context's lifecycle.
+	// startedComponents represents all the components that must be shut down at the end of the context's lifetime.
 	startedComponents []component.Component
-	// receivers is a map that links the config index to the actual receiver
-	receivers []*logReceiver
+	receivers         []*logReceiver
 
 	logProcessedCount  atomic.Int64
 	logThroughputMeter *ringCounter
@@ -314,14 +313,14 @@ func MakePipeline( //nolint:maintidx
 
 		pipeline.l.Unlock()
 
-		diagInfo := diagnosticInformation{
+		diagnosticInfo := diagnosticInformation{
 			LogProcessedCount:      pipeline.logProcessedCount.Load(),
 			LogThroughputPerMinute: pipeline.logThroughputMeter.Total(),
 			ProcessingStatus:       streamAvailabilityStatusFn().String(),
 			Receivers:              receiversInfo,
 		}
 
-		return diagInfo.writeToArchive(writer)
+		return diagnosticInfo.writeToArchive(writer)
 	}
 
 	return diagnosticFn, nil
@@ -348,7 +347,7 @@ func makeEnforceBackPressureFn(streamAvailabilityStatusFn func() bleemeoTypes.Lo
 		if time.Since(lastCacheUpdate) > cacheLifetime {
 			newState := streamAvailabilityStatusFn()
 			if newState != lastCacheValue {
-				logger.V(1).Printf("Logs stream availability status is now %[1]d (policy: %[1]s)", newState) // TODO: V(2)
+				logger.V(2).Printf("Logs stream availability status is now %[1]d (policy: %[1]s)", newState)
 			}
 
 			lastCacheValue = newState
@@ -377,8 +376,6 @@ func makeEnforceBackPressureFn(streamAvailabilityStatusFn func() bleemeoTypes.Lo
 // shutdownAll stops all the given components (in reverse order).
 // It should be called before every unsuccessful return of the log pipeline initialization.
 func shutdownAll(components []component.Component) {
-	logger.Printf("Shutting down %d log processing components: %s", len(components), formatTypes(components)) // TODO: remove
-
 	// Shutting down first the components that are at the beginning of the log production chain.
 	for _, comp := range slices.Backward(components) {
 		go func() {

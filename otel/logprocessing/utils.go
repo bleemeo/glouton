@@ -19,7 +19,6 @@ package logprocessing
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
@@ -35,8 +34,6 @@ func getLastFileSizesFromCache(state bleemeoTypes.State) (lastFileSizes map[stri
 	if err != nil {
 		logger.V(1).Printf("Can't find log file sizes in cache: %v", err)
 	}
-
-	logger.Printf("Last file sizes: %v", lastFileSizes) // TODO: remove
 
 	return lastFileSizes
 }
@@ -61,21 +58,6 @@ func saveLastFileSizesToCache(state bleemeoTypes.State, receivers []*logReceiver
 	if err != nil {
 		logger.V(1).Printf("Failed to save last log file sizes to cache: %v", err)
 	}
-}
-
-// formatTypes acts like a mix of %T and %v, on a slice.
-func formatTypes[E any](a []E) string {
-	result := "["
-
-	for i, e := range a {
-		result += fmt.Sprintf("%T", e)
-
-		if i < len(a)-1 {
-			result += " "
-		}
-	}
-
-	return result + "]"
 }
 
 type CommandRunner interface {

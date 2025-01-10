@@ -306,7 +306,7 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 
 		size, err := sizeFnByFile[logFile]()
 		if err != nil {
-			logger.Printf("Error getting size of file %q (ignoring it): %v", logFile, err)
+			logger.V(1).Printf("Error getting size of file %q (ignoring it): %v", logFile, err)
 
 			continue
 		}
@@ -314,19 +314,15 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 		if lastSize, ok := lastFileSizes[logFile]; ok {
 			if lastSize > size {
 				fileTypedCfg.InputConfig.StartAt = "beginning"
-
-				logger.Printf("Start to read file %q from beginning", logFile) // TODO: remove
 			}
 		}
 
 		err = mapstructure.Decode(retryCfg, &fileTypedCfg.RetryOnFailure)
 		if err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("failed to define consumerretry config for filelogreceiver: %w", err)
+			return nil, nil, nil, nil, fmt.Errorf("failed to define consumerretry config on file log receiver: %w", err)
 		}
 
 		factories[factory] = fileTypedCfg
-
-		logger.Printf("Chose file log receiver for file %q", logFile) // TODO: remove
 	}
 
 	for _, logFile := range execFiles {
@@ -340,7 +336,7 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 
 		size, err := sizeFnByFile[logFile]()
 		if err != nil {
-			logger.Printf("Error getting size of file %q (ignoring it): %v", logFile, err)
+			logger.V(1).Printf("Error getting size of file %q (ignoring it): %v", logFile, err)
 
 			continue
 		}
@@ -365,12 +361,10 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 
 		err = mapstructure.Decode(retryCfg, &execTypedCfg.RetryOnFailure)
 		if err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("failed to define consumerretry config for execlogreceiver: %w", err)
+			return nil, nil, nil, nil, fmt.Errorf("failed to define consumerretry config on exec log receiver: %w", err)
 		}
 
 		factories[factory] = execTypedCfg
-
-		logger.Printf("Chose exec log receiver for file %q. Tail args: %s", logFile, tailArgs) // TODO: remove
 	}
 
 	return factories, readableFiles, execFiles, sizeFnByFile, nil

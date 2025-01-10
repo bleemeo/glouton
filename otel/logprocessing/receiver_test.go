@@ -22,7 +22,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -97,16 +96,16 @@ func makeBufferConsumer(t *testing.T, buf *logBuffer) consumer.Logs {
 }
 
 type dummyRunner struct {
-	run            func(ctx context.Context, option gloutonexec.Option, name string, arg ...string) ([]byte, error)
-	startWithPipes func(ctx context.Context, option gloutonexec.Option, name string, arg ...string) (stdoutPipe io.ReadCloser, stderrPipe io.ReadCloser, wait func() error, err error)
+	run            func(ctx context.Context, option gloutonexec.Option, cmd string, args ...string) ([]byte, error)
+	startWithPipes func(ctx context.Context, option gloutonexec.Option, cmd string, args ...string) (stdoutPipe io.ReadCloser, stderrPipe io.ReadCloser, wait func() error, err error)
 }
 
-func (dr dummyRunner) Run(ctx context.Context, option gloutonexec.Option, name string, arg ...string) ([]byte, error) {
-	return dr.run(ctx, option, name, arg...)
+func (dr dummyRunner) Run(ctx context.Context, option gloutonexec.Option, cmd string, args ...string) ([]byte, error) {
+	return dr.run(ctx, option, cmd, args...)
 }
 
-func (dr dummyRunner) StartWithPipes(ctx context.Context, option gloutonexec.Option, name string, arg ...string) (stdoutPipe io.ReadCloser, stderrPipe io.ReadCloser, wait func() error, err error) {
-	return dr.startWithPipes(ctx, option, name, arg...)
+func (dr dummyRunner) StartWithPipes(ctx context.Context, option gloutonexec.Option, cmd string, args ...string) (stdoutPipe io.ReadCloser, stderrPipe io.ReadCloser, wait func() error, err error) {
+	return dr.startWithPipes(ctx, option, cmd, args...)
 }
 
 var sortStringsOpt = cmpopts.SortSlices(func(x, y string) bool { return x < y }) //nolint:gochecknoglobals
@@ -266,38 +265,6 @@ func TestExecLogReceiver(t *testing.T) {
 		statFile = statFileImpl
 	})
 
-	cases := []struct {
-		name             string
-		previousFileSize int64
-		currentFileSize  int64
-		expectedTailArgs []string // without the filename
-	}{
-		{
-			name:             "new file",
-			previousFileSize: -1, // -1 for no history
-			currentFileSize:  7,
-			expectedTailArgs: []string{"--follow=name"},
-		},
-		{
-			name:             "file has not changed",
-			previousFileSize: 7,
-			currentFileSize:  7,
-			expectedTailArgs: []string{"--follow=name", "--bytes=0"},
-		},
-		{
-			name:             "file has grown",
-			previousFileSize: 7,
-			currentFileSize:  10,
-			expectedTailArgs: []string{"--follow=name", "--bytes=+7"},
-		},
-		{
-			name:             "file has been truncated",
-			previousFileSize: 10,
-			currentFileSize:  3,
-			expectedTailArgs: []string{"--follow=name", "--bytes=+0"},
-		},
-	}
-
 	tmpDir := t.TempDir()
 	// Using the same file for all subtests, we won't open it anyway.
 	file, err := os.Create(filepath.Join(tmpDir, "file.log"))
@@ -306,6 +273,38 @@ func TestExecLogReceiver(t *testing.T) {
 	}
 
 	defer file.Close()
+
+	cases := []struct {
+		name             string
+		previousFileSize int64
+		currentFileSize  int64
+		expectedTailArgs []string
+	}{
+		{
+			name:             "new file",
+			previousFileSize: -1, // -1 for no history
+			currentFileSize:  7,
+			expectedTailArgs: []string{"--follow=name", file.Name()},
+		},
+		{
+			name:             "file has not changed",
+			previousFileSize: 7,
+			currentFileSize:  7,
+			expectedTailArgs: []string{"--follow=name", "--bytes=0", file.Name()},
+		},
+		{
+			name:             "file has grown",
+			previousFileSize: 7,
+			currentFileSize:  10,
+			expectedTailArgs: []string{"--follow=name", "--bytes=+7", file.Name()},
+		},
+		{
+			name:             "file has been truncated",
+			previousFileSize: 10,
+			currentFileSize:  3,
+			expectedTailArgs: []string{"--follow=name", "--bytes=+0", file.Name()},
+		},
+	}
 
 	cfg := config.OTLPReceiver{
 		Include: []string{file.Name()},
@@ -332,20 +331,11 @@ func TestExecLogReceiver(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Replacing the statFile function with a mock to force the use of the CommandRunner.
+			// Replacing the statFile function with a mock to force the use of "sudo".
 			statFile = func(string, CommandRunner) (ignore, needSudo bool, sizeFn func() (int64, error)) {
 				return false, true, func() (int64, error) {
 					return tc.currentFileSize, nil
 				}
-			}
-
-			logBuf := logBuffer{
-				buf: make([]plog.Logs, 0),
-			}
-
-			recv, err := newLogReceiver(cfg, makeBufferConsumer(t, &logBuf))
-			if err != nil {
-				t.Fatal("Failed to initialize log receiver:", err)
 			}
 
 			var startCmdCallsCount int
@@ -363,19 +353,13 @@ func TestExecLogReceiver(t *testing.T) {
 					startWithPipes: func(_ context.Context, _ gloutonexec.Option, _ string, args ...string) (stdoutPipe io.ReadCloser, stderrPipe io.ReadCloser, wait func() error, err error) {
 						startCmdCallsCount++
 
-						// Removing the filename from arguments, so they're easier to compare
-						fileIdx := slices.Index(args, file.Name())
-						if fileIdx >= 0 {
-							args = append(args[:fileIdx], args[fileIdx+1:]...)
-						}
-
 						if diff := cmp.Diff(tc.expectedTailArgs, args); diff != "" {
 							t.Error("Unexpected tail args (-want, +got):", diff)
 						}
 
-						nopReader := io.NopCloser(bytes.NewReader(nil))
+						nopReadCloser := io.NopCloser(bytes.NewReader(nil))
 
-						return nopReader, nopReader, func() error { return nil }, nil
+						return nopReadCloser, nopReadCloser, func() error { return nil }, nil
 					},
 				},
 			}
@@ -387,6 +371,11 @@ func TestExecLogReceiver(t *testing.T) {
 			defer func() {
 				shutdownAll(pipeline.startedComponents)
 			}()
+
+			recv, err := newLogReceiver(cfg, makeBufferConsumer(t, &logBuffer{buf: []plog.Logs{}}))
+			if err != nil {
+				t.Fatal("Failed to initialize log receiver:", err)
+			}
 
 			err = recv.update(ctx, &pipeline)
 			if err != nil {
