@@ -17,12 +17,15 @@
 package logprocessing
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 )
 
 const logFileSizesCacheKey = "LogFileSizes"
@@ -73,6 +76,11 @@ func formatTypes[E any](a []E) string {
 	}
 
 	return result + "]"
+}
+
+type CommandRunner interface {
+	Run(ctx context.Context, option gloutonexec.Option, name string, arg ...string) ([]byte, error)
+	StartWithPipes(ctx context.Context, option gloutonexec.Option, name string, arg ...string) (stdoutPipe io.ReadCloser, stderrPipe io.ReadCloser, wait func() error, err error)
 }
 
 type receiverDiagnosticInformation struct {

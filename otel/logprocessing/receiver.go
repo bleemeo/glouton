@@ -34,6 +34,7 @@ import (
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/otel/execlogreceiver"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
+	"github.com/bleemeo/glouton/version"
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/go-viper/mapstructure/v2"
@@ -266,7 +267,7 @@ FilesFromConfig:
 // setupLogReceiverFactories builds receiver factories for the given log files,
 // accordingly to whether the file is directly readable or not.
 // Files that don't exist at the time of the call to this function will be ignored.
-func setupLogReceiverFactories(logFiles []string, operators []operator.Config, lastFileSizes map[string]int64, commandRunner *gloutonexec.Runner) (
+func setupLogReceiverFactories(logFiles []string, operators []operator.Config, lastFileSizes map[string]int64, commandRunner CommandRunner) (
 	factories map[receiver.Factory]component.Config,
 	readableFiles, execFiles []string,
 	sizeFnByFile map[string]func() (int64, error),
@@ -392,7 +393,10 @@ func wrapWithCounters(next consumer.Logs, counter *atomic.Int64, throughputMeter
 	return logCounter
 }
 
-func statFile(logFile string, commandRunner *gloutonexec.Runner) (ignore, needSudo bool, sizeFn func() (int64, error)) {
+// Using statFile instead of the function allows us to mock it during tests.
+var statFile = statFileImpl //nolint:gochecknoglobals
+
+func statFileImpl(logFile string, commandRunner CommandRunner) (ignore, needSudo bool, sizeFn func() (int64, error)) {
 	f, err := os.OpenFile(logFile, os.O_RDONLY, 0) // the mode perm isn't needed for read
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -401,6 +405,12 @@ func statFile(logFile string, commandRunner *gloutonexec.Runner) (ignore, needSu
 
 		if !errors.Is(err, fs.ErrPermission) {
 			logger.V(1).Printf("Failed to open log file %q (ignoring it): %v", logFile, err)
+
+			return true, false, nil
+		}
+
+		if version.IsWindows() {
+			logger.V(1).Printf("Can't open protected log file on Windows, ignoring %q.", logFile)
 
 			return true, false, nil
 		}

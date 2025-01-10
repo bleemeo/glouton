@@ -32,8 +32,6 @@ import (
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
-	"github.com/bleemeo/glouton/utils/gloutonexec"
-
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configtelemetry"
 	"go.opentelemetry.io/collector/exporter"
@@ -62,7 +60,7 @@ type pipelineContext struct {
 	config        config.OpenTelemetry
 	lastFileSizes map[string]int64
 	telemetry     component.TelemetrySettings
-	commandRunner *gloutonexec.Runner
+	commandRunner CommandRunner
 
 	l sync.Mutex
 	// startedComponents represents all the components that must be shut down at the end of the context's lifecycle.
@@ -78,7 +76,7 @@ func MakePipeline( //nolint:maintidx
 	ctx context.Context,
 	cfg config.OpenTelemetry,
 	state bleemeoTypes.State,
-	commandRunner *gloutonexec.Runner,
+	commandRunner CommandRunner,
 	pushLogs func(context.Context, []byte) error,
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability,
 ) (diagnosticFn func(context.Context, types.ArchiveWriter) error, err error) { //nolint:wsl
