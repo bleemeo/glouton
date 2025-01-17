@@ -75,8 +75,8 @@ func (r renamer) renameGlobal(gatherContext internal.GatherContext) (internal.Ga
 	gatherContext.Tags = make(map[string]string)
 
 	if name, ok := gatherContext.OriginalTags["container_name"]; ok {
-		gatherContext.Annotations.BleemeoItem = name
 		gatherContext.Tags[types.LabelMetaContainerName] = name
+		gatherContext.Tags[types.LabelItem] = name
 	}
 
 	if id, ok := gatherContext.OriginalFields["container_id"]; ok {

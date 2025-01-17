@@ -228,7 +228,6 @@ func (c *jmxtransClient) processLine(ctx context.Context, line string) {
 		}
 
 		annotations := types.MetricAnnotations{
-			BleemeoItem:     item,
 			ServiceName:     service.Name,
 			ServiceInstance: service.Instance,
 			ContainerID:     service.ContainerID,
@@ -249,7 +248,6 @@ func (c *jmxtransClient) processLine(ctx context.Context, line string) {
 		case metric.Sum:
 			// we are summing over typesName, drop them from item
 			item = service.Instance
-			annotations.BleemeoItem = item
 
 			if item != "" {
 				labels[types.LabelItem] = item

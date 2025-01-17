@@ -38,6 +38,7 @@ import (
 	"github.com/bleemeo/glouton/inputs/jenkins"
 	"github.com/bleemeo/glouton/inputs/mem"
 	"github.com/bleemeo/glouton/inputs/memcached"
+	"github.com/bleemeo/glouton/inputs/modify"
 	"github.com/bleemeo/glouton/inputs/mongodb"
 	"github.com/bleemeo/glouton/inputs/mysql"
 	"github.com/bleemeo/glouton/inputs/nats"
@@ -476,7 +477,7 @@ func (d *Discovery) registerInput(input telegraf.Input, opts registry.Registrati
 	}
 
 	if service.Instance != "" {
-		extraLabels[types.LabelItem] = service.Instance
+		input = modify.AddInstance(input, service.Instance)
 	}
 
 	if opts.Description == "" {

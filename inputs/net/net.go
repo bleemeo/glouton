@@ -75,7 +75,6 @@ func (nt netTransformer) renameGlobal(gatherContext internal.GatherContext) (int
 		return gatherContext, true
 	}
 
-	gatherContext.Annotations.BleemeoItem = item
 	gatherContext.Tags[types.LabelItem] = item
 
 	return gatherContext, false
@@ -102,7 +101,7 @@ func (nt netTransformer) renameCallback(
 	labels map[string]string,
 	annotations types.MetricAnnotations,
 ) (map[string]string, types.MetricAnnotations) {
-	containerID, err := nt.vethProvider.ContainerID(annotations.BleemeoItem)
+	containerID, err := nt.vethProvider.ContainerID(labels[types.LabelItem])
 	if err != nil {
 		logger.V(1).Printf("Failed to get container interfaces: %s", err)
 

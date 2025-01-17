@@ -363,9 +363,6 @@ func TestAccumulatorThreshold(t *testing.T) {
 	t0 := time.Date(2020, 2, 24, 15, 1, 0, 0, time.UTC)
 	wantPoints := map[string]types.MetricPoint{
 		`__name__="cpu_idle"`: {
-			Annotations: types.MetricAnnotations{
-				BleemeoItem: "some-item",
-			},
 			Labels: map[string]string{types.LabelName: "cpu_idle"},
 			Point: types.Point{
 				Time:  t0,
@@ -374,7 +371,6 @@ func TestAccumulatorThreshold(t *testing.T) {
 		},
 		`__name__="cpu_used"`: {
 			Annotations: types.MetricAnnotations{
-				BleemeoItem: "some-item",
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusWarning,
 					StatusDescription: "Current value: 88.00 threshold (80.00) exceeded over last 5 minutes",
@@ -388,7 +384,6 @@ func TestAccumulatorThreshold(t *testing.T) {
 		},
 		`__name__="cpu_used_status"`: {
 			Annotations: types.MetricAnnotations{
-				BleemeoItem: "some-item",
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusWarning,
 					StatusDescription: "Current value: 88.00 threshold (80.00) exceeded over last 5 minutes",
@@ -408,15 +403,13 @@ func TestAccumulatorThreshold(t *testing.T) {
 			Labels: map[string]string{
 				"__name__": "cpu_used",
 			},
-			Annotations: types.MetricAnnotations{BleemeoItem: "some-item"},
-			Point:       types.Point{Time: t0, Value: 88.0},
+			Point: types.Point{Time: t0, Value: 88.0},
 		},
 		{
 			Labels: map[string]string{
 				"__name__": "cpu_idle",
 			},
-			Annotations: types.MetricAnnotations{BleemeoItem: "some-item"},
-			Point:       types.Point{Time: t0, Value: 20.0},
+			Point: types.Point{Time: t0, Value: 20.0},
 		},
 	}
 
@@ -731,9 +724,6 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 			points = append(points, types.MetricPoint{
 				Labels: lbls,
 				Point:  types.Point{Time: currentTime, Value: value},
-				Annotations: types.MetricAnnotations{
-					BleemeoItem: lbls[types.LabelItem],
-				},
 			})
 		}
 
@@ -965,9 +955,6 @@ func TestThresholdRestart(t *testing.T) {
 			points = append(points, types.MetricPoint{
 				Labels: lbls,
 				Point:  types.Point{Time: currentTime, Value: value},
-				Annotations: types.MetricAnnotations{
-					BleemeoItem: lbls[types.LabelItem],
-				},
 			})
 		}
 

@@ -519,7 +519,6 @@ func TestRenameCallback(t *testing.T) {
 			func(labels map[string]string, annotations types.MetricAnnotations) (map[string]string, types.MetricAnnotations) {
 				labels["service_name"] = "mysql_1"
 				labels["service"] = "mysql"
-				annotations.BleemeoItem = "somevalue"
 
 				return labels, annotations
 			},
@@ -558,8 +557,8 @@ func TestRenameCallback2(t *testing.T) {
 		"db":                     "dbname",
 	}
 	wantAnnotation := types.MetricAnnotations{
-		BleemeoItem: "postgres_1_dbname",
-		ContainerID: "1234",
+		ContainerID:     "1234",
+		ServiceInstance: "changed",
 	}
 	finalFunc := func(_ string, _ map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, _ ...time.Time) {
 		if !reflect.DeepEqual(tags, want) {
@@ -567,7 +566,7 @@ func TestRenameCallback2(t *testing.T) {
 		}
 
 		if !reflect.DeepEqual(annotations, wantAnnotation) {
-			t.Errorf("annotaions == %v, want %v", annotations, wantAnnotation)
+			t.Errorf("annotations == %v, want %v", annotations, wantAnnotation)
 		}
 
 		called++
@@ -577,7 +576,7 @@ func TestRenameCallback2(t *testing.T) {
 	acc := Accumulator{
 		RenameGlobal: func(gatherContext GatherContext) (GatherContext, bool) {
 			gatherContext.Annotations = types.MetricAnnotations{
-				BleemeoItem: "dbname",
+				ServiceInstance: "changed",
 			}
 
 			return gatherContext, false
@@ -586,11 +585,6 @@ func TestRenameCallback2(t *testing.T) {
 			func(labels map[string]string, annotations types.MetricAnnotations) (map[string]string, types.MetricAnnotations) {
 				labels[types.LabelContainerName] = "postgres_1"
 				annotations.ContainerID = "1234"
-				if annotations.BleemeoItem != "" {
-					annotations.BleemeoItem = labels[types.LabelContainerName] + "_" + annotations.BleemeoItem
-				} else {
-					annotations.BleemeoItem = labels[types.LabelContainerName]
-				}
 
 				return labels, annotations
 			},

@@ -51,3 +51,18 @@ func AddRenameCallback(input telegraf.Input, f RenameCallback) telegraf.Input {
 
 	return internalInput
 }
+
+// AddInstance will add the instance into item label. If item already exists, it will prefix is with instance.
+func AddInstance(input telegraf.Input, instance string) telegraf.Input {
+	input = AddRenameCallback(input, func(labels map[string]string, annotations types.MetricAnnotations) (newLabels map[string]string, newAnnotations types.MetricAnnotations) {
+		if labels[types.LabelItem] == "" {
+			labels[types.LabelItem] = instance
+		} else {
+			labels[types.LabelItem] = instance + "_" + labels[types.LabelItem]
+		}
+
+		return labels, annotations
+	})
+
+	return input
+}

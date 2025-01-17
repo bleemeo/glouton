@@ -118,7 +118,6 @@ func (ma miscAppenderMinute) CollectWithState(ctx context.Context, state registr
 			}
 
 			annotations := types.MetricAnnotations{
-				BleemeoItem:     srv.Instance,
 				ContainerID:     srv.ContainerID,
 				ServiceName:     srv.Name,
 				ServiceInstance: srv.Instance,
@@ -146,7 +145,6 @@ func (ma miscAppenderMinute) CollectWithState(ctx context.Context, state registr
 			}
 
 			annotations := types.MetricAnnotations{
-				BleemeoItem:     srv.Instance,
 				ContainerID:     srv.ContainerID,
 				ServiceName:     srv.Name,
 				ServiceInstance: srv.Instance,

@@ -741,9 +741,8 @@ func (s *Synchronizer) metricUpdateList(ctx context.Context, apiClient types.Met
 		}
 
 		if metricutils.MetricOnlyHasItem(metric.Labels(), agentID) {
-			annotations := metric.Annotations()
 			params.Set("label", metric.Labels()[gloutonTypes.LabelName])
-			params.Set("item", annotations.BleemeoItem)
+			params.Set("item", metric.Labels()[gloutonTypes.LabelItem])
 			params.Del("labels_text")
 		}
 
@@ -1171,7 +1170,7 @@ func (s *Synchronizer) prepareMetricPayload(
 	}
 
 	if metricutils.MetricOnlyHasItem(labels, agentID) {
-		payload.Item = annotations.BleemeoItem
+		payload.Item = labels[gloutonTypes.LabelItem]
 		payload.LabelsText = ""
 	}
 

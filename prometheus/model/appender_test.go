@@ -77,9 +77,6 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 								types.LabelName: "metric_name",
 								types.LabelItem: "item",
 							},
-							Annotations: types.MetricAnnotations{
-								BleemeoItem: "item", // item labels is alaways upgraded to Annotation
-							},
 						},
 					},
 				},

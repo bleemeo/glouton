@@ -23,6 +23,7 @@ import (
 
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -79,7 +80,9 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 		return gatherContext, true
 	}
 
-	gatherContext.Annotations.BleemeoItem = gatherContext.Tags["proxy"]
+	gatherContext.Tags = map[string]string{
+		types.LabelItem: gatherContext.Tags["proxy"],
+	}
 
 	return gatherContext, false
 }

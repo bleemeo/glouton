@@ -1874,12 +1874,12 @@ func (a *agent) sendDockerContainerHealth(ctx context.Context, container facts.C
 			Labels: map[string]string{
 				types.LabelName:              "container_health_status",
 				types.LabelMetaContainerName: container.ContainerName(),
+				types.LabelItem:              container.ContainerName(),
 				types.LabelMetaContainerID:   container.ID(),
 			},
 			Annotations: types.MetricAnnotations{
 				Status:      status,
 				ContainerID: container.ID(),
-				BleemeoItem: container.ContainerName(),
 			},
 			Point: types.Point{
 				Time:  time.Now(),
