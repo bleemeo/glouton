@@ -80,12 +80,6 @@ type Discovery struct {
 	absentServiceDeactivationDelay time.Duration
 }
 
-// Collector will gather metrics for added inputs.
-type Collector interface {
-	AddInput(input telegraf.Input, shortName string) (int, error)
-	RemoveInput(id int)
-}
-
 // Registry will contains checks.
 type Registry interface {
 	AddTask(task task.Runner, shortName string) (int, error)
