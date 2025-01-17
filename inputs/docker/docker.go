@@ -48,9 +48,9 @@ func New(dockerAddress string, dockerRuntime crTypes.RuntimeInterface, isContain
 			i = &internal.Input{
 				Input: dockerInput,
 				Accumulator: internal.Accumulator{
-					RenameGlobal:     r.renameGlobal,
-					DerivatedMetrics: []string{"usage_total", "rx_bytes", "tx_bytes", "io_service_bytes_recursive_read", "io_service_bytes_recursive_write"},
-					TransformMetrics: transformMetrics,
+					RenameGlobal:          r.renameGlobal,
+					DifferentiatedMetrics: []string{"usage_total", "rx_bytes", "tx_bytes", "io_service_bytes_recursive_read", "io_service_bytes_recursive_write"},
+					TransformMetrics:      transformMetrics,
 				},
 				Name: "docker",
 			}

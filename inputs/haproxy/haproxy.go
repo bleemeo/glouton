@@ -62,9 +62,9 @@ func New(url string) (i telegraf.Input, err error) {
 		i = &internal.Input{
 			Input: haproxyInput,
 			Accumulator: internal.Accumulator{
-				RenameGlobal:     renameGlobal,
-				DerivatedMetrics: []string{"stot", "bin", "bout", "dreq", "dresp", "ereq", "econ", "eresp", "req_tot"},
-				TransformMetrics: transformMetrics,
+				RenameGlobal:          renameGlobal,
+				DifferentiatedMetrics: []string{"stot", "bin", "bout", "dreq", "dresp", "ereq", "econ", "eresp", "req_tot"},
+				TransformMetrics:      transformMetrics,
 			},
 			Name: "haproxy",
 		}

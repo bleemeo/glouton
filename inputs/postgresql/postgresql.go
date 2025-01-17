@@ -49,7 +49,7 @@ func New(address string, detailedDatabases []string) (telegraf.Input, error) {
 		Input: globalMetricsInput,
 		Accumulator: internal.Accumulator{
 			RenameGlobal: renameGlobal(detailedDatabases),
-			DerivatedMetrics: []string{
+			DifferentiatedMetrics: []string{
 				"xact_commit", "xact_rollback", "blks_read", "blks_hit", "tup_returned", "tup_fetched",
 				"tup_inserted", "tup_updated", "tup_deleted", "temp_files", "temp_bytes", "blk_read_time",
 				"blk_write_time",

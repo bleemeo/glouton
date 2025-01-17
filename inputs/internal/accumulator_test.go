@@ -205,7 +205,7 @@ func TestDerive(t *testing.T) {
 	t0 := time.Now()
 	t1 := t0.Add(10 * time.Second)
 	acc := Accumulator{
-		DerivatedMetrics: []string{"metricDeriveFloat", "metricDeriveInt", "metricDeriveUint", "metricDeriveBack", "metricDeriveBack2"},
+		DifferentiatedMetrics: []string{"metricDeriveFloat", "metricDeriveInt", "metricDeriveUint", "metricDeriveBack", "metricDeriveBack2"},
 	}
 	acc.PrepareGather()
 	acc.processMetrics(
@@ -294,14 +294,14 @@ func TestDeriveFunc(t *testing.T) {
 
 		called2 = true
 	}
-	shouldDerivateMetrics := func(_ GatherContext, metricName string) bool {
+	shouldDifferentiateMetrics := func(_ GatherContext, metricName string) bool {
 		return strings.HasSuffix(metricName, "nt")
 	}
 	t0 := time.Now()
 	t1 := t0.Add(10 * time.Second)
 	acc := Accumulator{
-		DerivatedMetrics:      []string{"metricDeriveFloat"},
-		ShouldDerivateMetrics: shouldDerivateMetrics,
+		DifferentiatedMetrics:      []string{"metricDeriveFloat"},
+		ShouldDifferentiateMetrics: shouldDifferentiateMetrics,
 	}
 	acc.PrepareGather()
 	acc.processMetrics(
@@ -375,7 +375,7 @@ func TestDeriveMultipleTag(t *testing.T) {
 	t0 := time.Now()
 	t1 := t0.Add(20 * time.Second)
 	acc := Accumulator{
-		DerivatedMetrics: []string{"io_reads"},
+		DifferentiatedMetrics: []string{"io_reads"},
 	}
 
 	acc.PrepareGather()
@@ -719,7 +719,7 @@ func BenchmarkProcessMetrics(b *testing.B) {
 func BenchmarkDeriveFunc(b *testing.B) {
 	finalFunc := func(_ string, _ map[string]interface{}, _ map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 	}
-	shouldDerivateMetrics := func(_ GatherContext, metricName string) bool {
+	shouldDerivativeMetrics := func(_ GatherContext, metricName string) bool {
 		return strings.HasSuffix(metricName, "int")
 	}
 
@@ -741,8 +741,8 @@ func BenchmarkDeriveFunc(b *testing.B) {
 			}
 
 			acc := Accumulator{
-				DerivatedMetrics:      derivatedMetrics,
-				ShouldDerivateMetrics: shouldDerivateMetrics,
+				DifferentiatedMetrics:      derivatedMetrics,
+				ShouldDifferentiateMetrics: shouldDerivativeMetrics,
 			}
 			t0 := time.Date(2020, 1, 2, 3, 4, 5, 0, time.UTC)
 

@@ -40,7 +40,7 @@ func New(url string) (i telegraf.Input, err error) {
 				Input: elasticsearchInput,
 				Accumulator: internal.Accumulator{
 					RenameGlobal: renameGlobal,
-					DerivatedMetrics: []string{
+					DifferentiatedMetrics: []string{
 						"search_query_total",
 						"search_query_time_in_millis",
 						"gc_collectors_old_collection_count",

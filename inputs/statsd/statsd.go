@@ -69,9 +69,9 @@ func New(bindAddress string) (i telegraf.Input, err error) {
 			i = &internal.Input{
 				Input: statsdInput,
 				Accumulator: internal.Accumulator{
-					RenameGlobal:          renameGlobal,
-					ShouldDerivateMetrics: shouldDerivateMetrics,
-					TransformMetrics:      transformMetrics,
+					RenameGlobal:               renameGlobal,
+					ShouldDifferentiateMetrics: shouldDerivativeMetrics,
+					TransformMetrics:           transformMetrics,
 				},
 				Name: "statsd",
 			}
@@ -93,7 +93,7 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 	return gatherContext, false
 }
 
-func shouldDerivateMetrics(currentContext internal.GatherContext, metricName string) bool {
+func shouldDerivativeMetrics(currentContext internal.GatherContext, metricName string) bool {
 	_ = metricName
 
 	return currentContext.OriginalTags["metric_type"] == "counter"

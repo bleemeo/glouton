@@ -48,10 +48,10 @@ func New(filter types.Matcher, vethProvider *veth.Provider) (i telegraf.Input, e
 		i = &internal.Input{
 			Input: netInput,
 			Accumulator: internal.Accumulator{
-				RenameGlobal:     nt.renameGlobal,
-				DerivatedMetrics: []string{"bytes_sent", "bytes_recv", "drop_in", "drop_out", "packets_recv", "packets_sent", "err_out", "err_in"},
-				TransformMetrics: nt.transformMetrics,
-				RenameCallbacks:  []internal.RenameCallback{nt.renameCallback},
+				RenameGlobal:          nt.renameGlobal,
+				DifferentiatedMetrics: []string{"bytes_sent", "bytes_recv", "drop_in", "drop_out", "packets_recv", "packets_sent", "err_out", "err_in"},
+				TransformMetrics:      nt.transformMetrics,
+				RenameCallbacks:       []internal.RenameCallback{nt.renameCallback},
 			},
 			Name: "net",
 		}

@@ -36,8 +36,8 @@ func New(url string) (i telegraf.Input, err error) {
 			i = &internal.Input{
 				Input: zkInput,
 				Accumulator: internal.Accumulator{
-					DerivatedMetrics: []string{"packets_received", "packets_sent"},
-					TransformMetrics: transformMetrics,
+					DifferentiatedMetrics: []string{"packets_received", "packets_sent"},
+					TransformMetrics:      transformMetrics,
 				},
 				Name: "zookeeper",
 			}

@@ -47,11 +47,11 @@ func New(server string) (telegraf.Input, error) {
 	i := &internal.Input{
 		Input: mysqlWrapper{mysqlInput},
 		Accumulator: internal.Accumulator{
-			DerivatedMetrics: []string{
+			DifferentiatedMetrics: []string{
 				"bytes_received", "bytes_sent", "threads_created", "queries", "slow_queries",
 			},
-			ShouldDerivateMetrics: shouldDerivateMetrics,
-			TransformMetrics:      transformMetrics,
+			ShouldDifferentiateMetrics: shouldDerivativeMetrics,
+			TransformMetrics:           transformMetrics,
 		},
 		Name: "mysql",
 	}
@@ -84,7 +84,7 @@ func (m mysqlWrapper) Start(telegraf.Accumulator) (err error) {
 func (m mysqlWrapper) Stop() {
 }
 
-func shouldDerivateMetrics(currentContext internal.GatherContext, metricName string) bool {
+func shouldDerivativeMetrics(currentContext internal.GatherContext, metricName string) bool {
 	_ = currentContext
 
 	if strings.HasPrefix(metricName, "qcache_") {
