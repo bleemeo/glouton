@@ -200,11 +200,11 @@ func (c *winCollector) renameGlobal(originalContext internal.GatherContext) (new
 	// probably an essential device.
 	splitInstance := strings.Split(instance, " ")
 	if len(splitInstance) < 2 {
-		return originalContext, false
+		return originalContext, true
 	}
 
 	if _, err := strconv.Atoi(splitInstance[0]); err != nil {
-		return originalContext, false
+		return originalContext, true
 	}
 
 	partitions := splitInstance[1:]
