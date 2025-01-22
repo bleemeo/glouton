@@ -602,7 +602,6 @@ func TestMetricSimpleSync(t *testing.T) {
 			labels.New(
 				labels.Label{Name: gloutonTypes.LabelName, Value: "metric"},
 				labels.Label{Name: gloutonTypes.LabelItem, Value: strconv.FormatInt(int64(n), 10)},
-				labels.Label{Name: gloutonTypes.LabelMetaBleemeoItem, Value: strconv.FormatInt(int64(n), 10)},
 				labels.Label{Name: gloutonTypes.LabelInstanceUUID, Value: idAgentMain},
 			),
 		})
@@ -656,7 +655,6 @@ func TestMetricSimpleSync(t *testing.T) {
 		labels.New(
 			labels.Label{Name: gloutonTypes.LabelName, Value: "disk_used"},
 			labels.Label{Name: gloutonTypes.LabelItem, Value: "/home"},
-			labels.Label{Name: gloutonTypes.LabelMetaBleemeoItem, Value: "/home"},
 			labels.Label{Name: gloutonTypes.LabelInstanceUUID, Value: idAgentMain},
 		),
 	})
@@ -1822,7 +1820,6 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 						labels.New(
 							labels.Label{Name: gloutonTypes.LabelName, Value: "nginx_status"},
 							labels.Label{Name: gloutonTypes.LabelItem, Value: "container1"},
-							labels.Label{Name: gloutonTypes.LabelMetaBleemeoItem, Value: "container1"},
 						),
 						gloutonTypes.MetricAnnotations{
 							ServiceName:     srvNginx.Name,

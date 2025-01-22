@@ -37,8 +37,8 @@ func New(url string) (i telegraf.Input, err error) {
 			i = &internal.Input{
 				Input: nginxInput,
 				Accumulator: internal.Accumulator{
-					DerivatedMetrics: []string{"requests", "accepts", "handled"},
-					TransformMetrics: transformMetrics,
+					DifferentiatedMetrics: []string{"requests", "accepts", "handled"},
+					TransformMetrics:      transformMetrics,
 				},
 				Name: "nginx",
 			}

@@ -92,7 +92,6 @@ func (dt diskTransformer) renameGlobal(gatherContext internal.GatherContext) (in
 		return gatherContext, true
 	}
 
-	gatherContext.Annotations.BleemeoItem = item
 	gatherContext.Tags[types.LabelItem] = item
 
 	return gatherContext, false

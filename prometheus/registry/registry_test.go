@@ -1085,7 +1085,7 @@ func TestRegistry_run(t *testing.T) {
 		l.Unlock()
 
 		reg.WithTTL(5*time.Minute).PushPoints(ctx, []types.MetricPoint{
-			{Point: types.Point{Time: t, Value: 42.0}, Labels: map[string]string{"__name__": "push", "something": "value"}, Annotations: types.MetricAnnotations{BleemeoItem: "/home"}},
+			{Point: types.Point{Time: t, Value: 42.0}, Labels: map[string]string{"__name__": "push", "something": "value", types.LabelItem: "/home"}},
 		})
 
 		return nil
@@ -1115,7 +1115,7 @@ func TestRegistry_run(t *testing.T) {
 	}
 
 	want := []types.MetricPoint{
-		{Point: types.Point{Time: t0, Value: 42.0}, Labels: map[string]string{"__name__": "push", "item": "/home", "instance": "example.com:1234", "instance_uuid": testAgentID}, Annotations: types.MetricAnnotations{BleemeoItem: "/home"}},
+		{Point: types.Point{Time: t0, Value: 42.0}, Labels: map[string]string{"__name__": "push", "item": "/home", "instance": "example.com:1234", "instance_uuid": testAgentID}},
 		{Point: types.Point{Time: t0, Value: 1.0}, Labels: map[string]string{"__name__": "name1", "instance": "example.com:1234", "instance_uuid": testAgentID}},
 		{Point: types.Point{Time: t0, Value: 1.0}, Labels: map[string]string{"__name__": "name2", "instance": "example.com:1234", "instance_uuid": testAgentID}},
 	}
@@ -1256,9 +1256,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: "disk_used",
 						types.LabelItem: "/home",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "/home",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 0.1,
@@ -1267,9 +1264,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				{
 					Labels: map[string]string{
 						types.LabelName: "disk_used_perc",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "/srv",
+						types.LabelItem: "/srv",
 					},
 					Point: types.Point{
 						Time:  now,
@@ -1295,9 +1290,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "/home",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "/home",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 0.1,
@@ -1309,9 +1301,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName:     "disk_used_perc",
 						types.LabelItem:     "/srv",
 						types.LabelInstance: "server.bleemeo.com:8016",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "/srv",
 					},
 					Point: types.Point{
 						Time:  now,
@@ -1342,9 +1331,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: "disk_used",
 						types.LabelItem: "/home",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "/home",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -1353,9 +1339,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				{
 					Labels: map[string]string{
 						types.LabelName: "disk_used_perc",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "/srv",
+						types.LabelItem: "/srv",
 					},
 					Point: types.Point{
 						Time:  now,
@@ -1381,9 +1365,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "/home",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "/home",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -1395,9 +1376,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName:     "disk_used_perc",
 						types.LabelItem:     "/srv",
 						types.LabelInstance: "server.bleemeo.com:8016",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "/srv",
 					},
 					Point: types.Point{
 						Time:  now,
@@ -1426,9 +1404,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: "disk_used",
 						types.LabelItem: "/home",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "/home",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -1438,9 +1413,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName: "disk_used_perc",
 						types.LabelItem: "/srv",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "annotation are kept in appender mode",
 					},
 					Point: types.Point{
 						Time:  now,
@@ -1467,9 +1439,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "/home",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "/home",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -1481,9 +1450,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName:     "disk_used_perc",
 						types.LabelItem:     "/srv",
 						types.LabelInstance: "server.bleemeo.com:8016",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "annotation are kept in appender mode",
 					},
 					Point: types.Point{
 						Time:  now,
@@ -1514,9 +1480,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: "disk_used",
 						types.LabelItem: "/home",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "/home",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -1526,9 +1489,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName: "disk_used_perc",
 						types.LabelItem: "/srv",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "/srv",
 					},
 					Point: types.Point{
 						Time:  now,
@@ -1554,9 +1514,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "/home",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "/home",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -1568,9 +1525,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName:     "disk_used_perc",
 						types.LabelItem:     "/srv",
 						types.LabelInstance: "server.bleemeo.com:8016",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "/srv",
 					},
 					Point: types.Point{
 						Time:  now,
@@ -1602,9 +1556,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: "disk_used",
 						types.LabelItem: "/home",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "/home",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -1614,9 +1565,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName: "disk_used_perc",
 						types.LabelItem: "/srv",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "annotation are ignored in input mode in the test",
 					},
 					Point: types.Point{
 						Time:  now,
@@ -1643,9 +1591,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "/home",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "/home",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -1657,9 +1602,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName:     "disk_used_perc",
 						types.LabelItem:     "/srv",
 						types.LabelInstance: "server.bleemeo.com:8016",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "/srv",
 					},
 					Point: types.Point{
 						Time:  now,
@@ -2727,9 +2669,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: "disk_used",
 						"item":          "/home",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "/home",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -2740,9 +2679,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: "io_utilization",
 						"item":          "sda",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "sda",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -2752,9 +2688,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName:              "container_cpu_used",
 						types.LabelMetaContainerName: "myredis",
+						types.LabelItem:              "myredis",
 					},
 					Annotations: types.MetricAnnotations{
-						BleemeoItem: "myredis",
 						ContainerID: "1234",
 					},
 					Point: types.Point{
@@ -2781,9 +2717,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "/home",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "/home",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -2795,9 +2728,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName:     "io_utilization",
 						types.LabelItem:     "sda",
 						types.LabelInstance: "server.bleemeo.com:8016",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "sda",
 					},
 					Point: types.Point{
 						Time:  now,
@@ -2812,7 +2742,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
 					Annotations: types.MetricAnnotations{
-						BleemeoItem: "myredis",
 						ContainerID: "1234",
 					},
 					Point: types.Point{
@@ -2848,7 +2777,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelMetaContainerID: "1234",
 					},
 					Annotations: types.MetricAnnotations{
-						BleemeoItem: "myredis",
 						ContainerID: "1234",
 					},
 					Point: types.Point{
@@ -2876,7 +2804,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
 					Annotations: types.MetricAnnotations{
-						BleemeoItem: "myredis",
 						ContainerID: "1234",
 					},
 					Point: types.Point{
@@ -2967,9 +2894,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: "metric_time",
 						types.LabelItem: "zero",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "zero",
-					},
 					Point: types.Point{
 						Time:  time.Time{},
 						Value: 42,
@@ -2979,9 +2903,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName: "metric_time",
 						types.LabelItem: "epoc",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "epoc",
 					},
 					Point: types.Point{
 						Time:  time.UnixMilli(0),
@@ -2993,9 +2914,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: "metric_time",
 						types.LabelItem: "now",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "now",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -3006,9 +2924,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: "metric_time",
 						types.LabelItem: "future",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "future",
-					},
 					Point: types.Point{
 						Time:  now.Add(42 * time.Minute),
 						Value: 42,
@@ -3018,9 +2933,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName: "metric_time",
 						types.LabelItem: "past",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "past",
 					},
 					Point: types.Point{
 						Time:  now.Add(-42 * time.Minute),
@@ -3035,9 +2947,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "zero",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "zero",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -3049,9 +2958,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName:     "metric_time",
 						types.LabelItem:     "epoc",
 						types.LabelInstance: "server.bleemeo.com:8016",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "epoc",
 					},
 					Point: types.Point{
 						Time:  now,
@@ -3065,9 +2971,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "now",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "now",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -3080,9 +2983,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "future",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "future",
-					},
 					Point: types.Point{
 						Time:  now.Add(42 * time.Minute),
 						Value: 42,
@@ -3094,9 +2994,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName:     "metric_time",
 						types.LabelItem:     "past",
 						types.LabelInstance: "server.bleemeo.com:8016",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "past",
 					},
 					Point: types.Point{
 						Time:  now.Add(-42 * time.Minute),
@@ -3118,9 +3015,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: "metric_time",
 						types.LabelItem: "zero",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "zero",
-					},
 					Point: types.Point{
 						Time:  time.Time{},
 						Value: 42,
@@ -3130,9 +3024,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName: "metric_time",
 						types.LabelItem: "epoc",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "epoc",
 					},
 					Point: types.Point{
 						Time:  time.UnixMilli(0),
@@ -3144,9 +3035,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: "metric_time",
 						types.LabelItem: "now",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "now",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -3157,9 +3045,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: "metric_time",
 						types.LabelItem: "future",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "future",
-					},
 					Point: types.Point{
 						Time:  now.Add(42 * time.Minute),
 						Value: 42,
@@ -3169,9 +3054,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName: "metric_time",
 						types.LabelItem: "past",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "past",
 					},
 					Point: types.Point{
 						Time:  now.Add(-42 * time.Minute),
@@ -3186,9 +3068,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "zero",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "zero",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -3200,9 +3079,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName:     "metric_time",
 						types.LabelItem:     "epoc",
 						types.LabelInstance: "server.bleemeo.com:8016",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "epoc",
 					},
 					Point: types.Point{
 						Time:  now,
@@ -3216,9 +3092,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "now",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "now",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -3231,9 +3104,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "future",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "future",
-					},
 					Point: types.Point{
 						Time:  now.Add(42 * time.Minute),
 						Value: 42,
@@ -3245,9 +3115,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName:     "metric_time",
 						types.LabelItem:     "past",
 						types.LabelInstance: "server.bleemeo.com:8016",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "past",
 					},
 					Point: types.Point{
 						Time:  now.Add(-42 * time.Minute),
@@ -3269,9 +3136,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: "metric_time",
 						types.LabelItem: "zero",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "zero",
-					},
 					Point: types.Point{
 						Time:  time.Time{},
 						Value: 42,
@@ -3281,9 +3145,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName: "metric_time",
 						types.LabelItem: "epoc",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "epoc",
 					},
 					Point: types.Point{
 						Time:  time.UnixMilli(0),
@@ -3295,9 +3156,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: "metric_time",
 						types.LabelItem: "now",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "now",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -3308,9 +3166,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: "metric_time",
 						types.LabelItem: "future",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "future",
-					},
 					Point: types.Point{
 						Time:  now.Add(42 * time.Minute),
 						Value: 42,
@@ -3320,9 +3175,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName: "metric_time",
 						types.LabelItem: "past",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "past",
 					},
 					Point: types.Point{
 						Time:  now.Add(-42 * time.Minute),
@@ -3337,9 +3189,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "zero",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "zero",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -3351,9 +3200,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName:     "metric_time",
 						types.LabelItem:     "epoc",
 						types.LabelInstance: "server.bleemeo.com:8016",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "epoc",
 					},
 					Point: types.Point{
 						Time:  now,
@@ -3367,9 +3213,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "now",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "now",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -3382,9 +3225,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "future",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "future",
-					},
 					Point: types.Point{
 						Time:  now.Add(42 * time.Minute),
 						Value: 42,
@@ -3396,9 +3236,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName:     "metric_time",
 						types.LabelItem:     "past",
 						types.LabelInstance: "server.bleemeo.com:8016",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "past",
 					},
 					Point: types.Point{
 						Time:  now.Add(-42 * time.Minute),
@@ -3420,9 +3257,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: "metric_time",
 						types.LabelItem: "zero",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "zero",
-					},
 					Point: types.Point{
 						Time:  time.Time{},
 						Value: 42,
@@ -3432,9 +3266,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName: "metric_time",
 						types.LabelItem: "epoc",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "epoc",
 					},
 					Point: types.Point{
 						Time:  time.UnixMilli(0),
@@ -3446,9 +3277,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: "metric_time",
 						types.LabelItem: "now",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "now",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -3459,9 +3287,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: "metric_time",
 						types.LabelItem: "future",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "future",
-					},
 					Point: types.Point{
 						Time:  now.Add(42 * time.Minute),
 						Value: 42,
@@ -3471,9 +3296,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName: "metric_time",
 						types.LabelItem: "past",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "past",
 					},
 					Point: types.Point{
 						Time:  now.Add(-42 * time.Minute),
@@ -3488,9 +3310,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "zero",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "zero",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -3502,9 +3321,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName:     "metric_time",
 						types.LabelItem:     "epoc",
 						types.LabelInstance: "server.bleemeo.com:8016",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "epoc",
 					},
 					Point: types.Point{
 						Time:  now,
@@ -3518,9 +3334,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "now",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "now",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -3533,9 +3346,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "future",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "future",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -3547,9 +3357,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName:     "metric_time",
 						types.LabelItem:     "past",
 						types.LabelInstance: "server.bleemeo.com:8016",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "past",
 					},
 					Point: types.Point{
 						Time:  now,
@@ -3571,9 +3378,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: "metric_time",
 						types.LabelItem: "zero",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "zero",
-					},
 					Point: types.Point{
 						Time:  time.Time{},
 						Value: 42,
@@ -3583,9 +3387,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName: "metric_time",
 						types.LabelItem: "epoc",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "epoc",
 					},
 					Point: types.Point{
 						Time:  time.UnixMilli(0),
@@ -3597,9 +3398,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: "metric_time",
 						types.LabelItem: "now",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "now",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -3610,9 +3408,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: "metric_time",
 						types.LabelItem: "future",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "future",
-					},
 					Point: types.Point{
 						Time:  now.Add(42 * time.Minute),
 						Value: 42,
@@ -3622,9 +3417,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName: "metric_time",
 						types.LabelItem: "past",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "past",
 					},
 					Point: types.Point{
 						Time:  now.Add(-42 * time.Minute),
@@ -3639,9 +3431,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "zero",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "zero",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -3653,9 +3442,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName:     "metric_time",
 						types.LabelItem:     "epoc",
 						types.LabelInstance: "server.bleemeo.com:8016",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "epoc",
 					},
 					Point: types.Point{
 						Time:  now,
@@ -3669,9 +3455,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "now",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "now",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -3684,9 +3467,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "future",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "future",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -3698,9 +3478,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName:     "metric_time",
 						types.LabelItem:     "past",
 						types.LabelInstance: "server.bleemeo.com:8016",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "past",
 					},
 					Point: types.Point{
 						Time:  now,
@@ -3722,9 +3499,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: "metric_time",
 						types.LabelItem: "zero",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "zero",
-					},
 					Point: types.Point{
 						Time:  time.Time{},
 						Value: 42,
@@ -3734,9 +3508,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName: "metric_time",
 						types.LabelItem: "epoc",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "epoc",
 					},
 					Point: types.Point{
 						Time:  time.UnixMilli(0),
@@ -3748,9 +3519,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: "metric_time",
 						types.LabelItem: "now",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "now",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -3761,9 +3529,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: "metric_time",
 						types.LabelItem: "future",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "future",
-					},
 					Point: types.Point{
 						Time:  now.Add(42 * time.Minute),
 						Value: 42,
@@ -3773,9 +3538,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName: "metric_time",
 						types.LabelItem: "past",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "past",
 					},
 					Point: types.Point{
 						Time:  now.Add(-42 * time.Minute),
@@ -3790,9 +3552,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "zero",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "zero",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -3804,9 +3563,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName:     "metric_time",
 						types.LabelItem:     "epoc",
 						types.LabelInstance: "server.bleemeo.com:8016",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "epoc",
 					},
 					Point: types.Point{
 						Time:  now,
@@ -3820,9 +3576,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "now",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "now",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -3835,9 +3588,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "future",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "future",
-					},
 					Point: types.Point{
 						Time:  now,
 						Value: 42,
@@ -3849,9 +3599,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName:     "metric_time",
 						types.LabelItem:     "past",
 						types.LabelInstance: "server.bleemeo.com:8016",
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "past",
 					},
 					Point: types.Point{
 						Time:  now,

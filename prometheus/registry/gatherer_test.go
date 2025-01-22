@@ -197,9 +197,6 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 			want: []types.MetricPoint{
 				{
 					Point: types.Point{Time: time.Unix(0, timestampMS*1e6), Value: floatValue1},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: "/home",
-					},
 					Labels: map[string]string{
 						types.LabelName: "up",
 						strItem:         strHome,
@@ -260,7 +257,6 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 				{
 					Point: types.Point{Time: time.Unix(0, timestampMS*1e6), Value: floatValue1},
 					Annotations: types.MetricAnnotations{
-						BleemeoItem: strJob,
 						ServiceName: "service-name",
 					},
 					Labels: map[string]string{
@@ -271,7 +267,6 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 				{
 					Point: types.Point{Time: time.Unix(0, timestampMS*1e6), Value: floatValue2},
 					Annotations: types.MetricAnnotations{
-						BleemeoItem: strJob,
 						ServiceName: "service-name",
 					},
 					Labels: map[string]string{

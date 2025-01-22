@@ -104,7 +104,6 @@ func TestConversionLoop(t *testing.T) {
 							CurrentStatus:     types.StatusUnknown,
 							StatusDescription: "disk absent",
 						},
-						BleemeoItem: "/home",
 					},
 				},
 				{
@@ -115,7 +114,6 @@ func TestConversionLoop(t *testing.T) {
 							CurrentStatus:     types.StatusOk,
 							StatusDescription: "LGTM",
 						},
-						BleemeoItem: "/srv",
 					},
 				},
 				{
@@ -126,7 +124,6 @@ func TestConversionLoop(t *testing.T) {
 							CurrentStatus:     types.StatusCritical,
 							StatusDescription: "110% is more than 100%",
 						},
-						BleemeoItem: "/",
 					},
 				},
 				{
@@ -523,7 +520,6 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 						"zlabel":        "test2",
 					},
 					Annotations: types.MetricAnnotations{
-						BleemeoItem: "value1",
 						ContainerID: "123456",
 						ServiceName: "apache",
 						Status: types.StatusDescription{
@@ -539,7 +535,6 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 						"alabel":        "test3",
 					},
 					Annotations: types.MetricAnnotations{
-						BleemeoItem: "value2",
 						ContainerID: "7890",
 						ServiceName: "apache",
 						Status: types.StatusDescription{
@@ -558,7 +553,6 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 						{
 							TimestampMs: proto.Int64(now.UnixMilli()),
 							Label: []*dto.LabelPair{
-								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("value1")},
 								{Name: proto.String(types.LabelMetaContainerID), Value: proto.String("123456")},
 								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("description")},
 								{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String("critical")},
@@ -573,7 +567,6 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 						{
 							TimestampMs: proto.Int64(now.UnixMilli()),
 							Label: []*dto.LabelPair{
-								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("value2")},
 								{Name: proto.String(types.LabelMetaContainerID), Value: proto.String("7890")},
 								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("description")},
 								{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String("critical")},
@@ -592,7 +585,6 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 					types.LabelName:                   "cpu_used",
 					"alabel":                          "test",
 					"zlabel":                          "test2",
-					types.LabelMetaBleemeoItem:        "value1",
 					types.LabelMetaContainerID:        "123456",
 					types.LabelMetaCurrentDescription: "description",
 					types.LabelMetaCurrentStatus:      "critical",
@@ -601,7 +593,6 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 				labels.FromMap(map[string]string{
 					types.LabelName:                   "cpu_used",
 					"alabel":                          "test3",
-					types.LabelMetaBleemeoItem:        "value2",
 					types.LabelMetaContainerID:        "7890",
 					types.LabelMetaCurrentDescription: "description",
 					types.LabelMetaCurrentStatus:      "critical",
@@ -617,7 +608,6 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 						"zlabel":        "test2",
 					},
 					Annotations: types.MetricAnnotations{
-						BleemeoItem: "value1",
 						ContainerID: "123456",
 						ServiceName: "apache",
 						Status: types.StatusDescription{
@@ -633,7 +623,6 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 						"alabel":        "test3",
 					},
 					Annotations: types.MetricAnnotations{
-						BleemeoItem: "value2",
 						ContainerID: "7890",
 						ServiceName: "apache",
 						Status: types.StatusDescription{
@@ -654,7 +643,6 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 						types.LabelName:                   "cpu_used",
 						"alabel":                          "test",
 						"zlabel":                          "test2",
-						types.LabelMetaBleemeoItem:        "value1",
 						types.LabelMetaContainerID:        "123456",
 						types.LabelMetaCurrentDescription: "description",
 						types.LabelMetaCurrentStatus:      "critical",
@@ -666,7 +654,6 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 					Labels: map[string]string{
 						types.LabelName:                   "cpu_used",
 						"alabel":                          "test3",
-						types.LabelMetaBleemeoItem:        "value2",
 						types.LabelMetaContainerID:        "7890",
 						types.LabelMetaCurrentDescription: "description",
 						types.LabelMetaCurrentStatus:      "critical",
@@ -683,7 +670,6 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 						{
 							TimestampMs: proto.Int64(now.UnixMilli()),
 							Label: []*dto.LabelPair{
-								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("value1")},
 								{Name: proto.String(types.LabelMetaContainerID), Value: proto.String("123456")},
 								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("description")},
 								{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String("critical")},
@@ -698,7 +684,6 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 						{
 							TimestampMs: proto.Int64(now.UnixMilli()),
 							Label: []*dto.LabelPair{
-								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("value2")},
 								{Name: proto.String(types.LabelMetaContainerID), Value: proto.String("7890")},
 								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("description")},
 								{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String("critical")},
@@ -717,7 +702,6 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 					types.LabelName:                   "cpu_used",
 					"alabel":                          "test",
 					"zlabel":                          "test2",
-					types.LabelMetaBleemeoItem:        "value1",
 					types.LabelMetaContainerID:        "123456",
 					types.LabelMetaCurrentDescription: "description",
 					types.LabelMetaCurrentStatus:      "critical",
@@ -726,7 +710,6 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 				labels.FromMap(map[string]string{
 					types.LabelName:                   "cpu_used",
 					"alabel":                          "test3",
-					types.LabelMetaBleemeoItem:        "value2",
 					types.LabelMetaContainerID:        "7890",
 					types.LabelMetaCurrentDescription: "description",
 					types.LabelMetaCurrentStatus:      "critical",
@@ -742,7 +725,6 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 						"zlabel":        "test2",
 					},
 					Annotations: types.MetricAnnotations{
-						BleemeoItem: "value1",
 						ContainerID: "123456",
 						ServiceName: "apache",
 						Status: types.StatusDescription{
@@ -758,7 +740,6 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 						"alabel":        "test3",
 					},
 					Annotations: types.MetricAnnotations{
-						BleemeoItem: "value2",
 						ContainerID: "7890",
 						ServiceName: "apache",
 						Status: types.StatusDescription{
@@ -953,83 +934,6 @@ func TestFamiliesToNameAndItem(t *testing.T) {
 			},
 		},
 		{
-			name: "annotation-with-over-item",
-			input: []*dto.MetricFamily{
-				{
-					Name: proto.String("disk_used"),
-					Help: proto.String(""),
-					Type: dto.MetricType_UNTYPED.Enum(),
-					Metric: []*dto.Metric{
-						{
-							Label: []*dto.LabelPair{
-								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("/srv")},
-								{Name: proto.String(types.LabelItem), Value: proto.String("/home")},
-							},
-							Untyped: &dto.Untyped{
-								Value: proto.Float64(42.1),
-							},
-						},
-					},
-				},
-			},
-			want: []*dto.MetricFamily{
-				{
-					Name: proto.String("disk_used"),
-					Help: proto.String(""),
-					Type: dto.MetricType_UNTYPED.Enum(),
-					Metric: []*dto.Metric{
-						{
-							Label: []*dto.LabelPair{
-								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("/srv")},
-								{Name: proto.String(types.LabelItem), Value: proto.String("/srv")},
-							},
-							Untyped: &dto.Untyped{
-								Value: proto.Float64(42.1),
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "annotation-is-enough",
-			input: []*dto.MetricFamily{
-				{
-					Name: proto.String("disk_used"),
-					Help: proto.String(""),
-					Type: dto.MetricType_UNTYPED.Enum(),
-					Metric: []*dto.Metric{
-						{
-							Label: []*dto.LabelPair{
-								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("/srv")},
-							},
-							Untyped: &dto.Untyped{
-								Value: proto.Float64(42.1),
-							},
-						},
-					},
-				},
-			},
-			want: []*dto.MetricFamily{
-				{
-					Name: proto.String("disk_used"),
-					Help: proto.String(""),
-					Type: dto.MetricType_UNTYPED.Enum(),
-					Metric: []*dto.Metric{
-						{
-							Label: []*dto.LabelPair{
-								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("/srv")},
-								{Name: proto.String(types.LabelItem), Value: proto.String("/srv")},
-							},
-							Untyped: &dto.Untyped{
-								Value: proto.Float64(42.1),
-							},
-						},
-					},
-				},
-			},
-		},
-		{
 			name: "only_meta_labels_are_kept",
 			input: []*dto.MetricFamily{
 				{
@@ -1039,12 +943,12 @@ func TestFamiliesToNameAndItem(t *testing.T) {
 					Metric: []*dto.Metric{
 						{
 							Label: []*dto.LabelPair{
-								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("/srv")},
 								{Name: proto.String(types.LabelMetaBleemeoUUID), Value: proto.String("kept")},
 								{Name: proto.String(types.LabelMetaProbeScraperName), Value: proto.String("kept2")},
 								{Name: proto.String(types.LabelDevice), Value: proto.String("remove")},
 								{Name: proto.String(types.LabelInstance), Value: proto.String("remove2")},
 								{Name: proto.String(types.LabelInstanceUUID), Value: proto.String("remove3")},
+								{Name: proto.String(types.LabelItem), Value: proto.String("/srv")},
 							},
 							Untyped: &dto.Untyped{
 								Value: proto.Float64(42.1),
@@ -1061,7 +965,6 @@ func TestFamiliesToNameAndItem(t *testing.T) {
 					Metric: []*dto.Metric{
 						{
 							Label: []*dto.LabelPair{
-								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("/srv")},
 								{Name: proto.String(types.LabelMetaBleemeoUUID), Value: proto.String("kept")},
 								{Name: proto.String(types.LabelMetaProbeScraperName), Value: proto.String("kept2")},
 								{Name: proto.String(types.LabelItem), Value: proto.String("/srv")},

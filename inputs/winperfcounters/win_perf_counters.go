@@ -28,6 +28,7 @@ import (
 
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -199,18 +200,18 @@ func (c *winCollector) renameGlobal(originalContext internal.GatherContext) (new
 	// probably an essential device.
 	splitInstance := strings.Split(instance, " ")
 	if len(splitInstance) < 2 {
-		return originalContext, false
+		return originalContext, true
 	}
 
 	if _, err := strconv.Atoi(splitInstance[0]); err != nil {
-		return originalContext, false
+		return originalContext, true
 	}
 
 	partitions := splitInstance[1:]
 	sort.Strings(partitions)
 
 	instance = partitions[0]
-	originalContext.Annotations.BleemeoItem = instance
+	originalContext.Tags[types.LabelItem] = instance
 	drop = !c.option.IODiskMatcher.Match(instance)
 
 	return originalContext, drop

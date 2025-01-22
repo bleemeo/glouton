@@ -318,50 +318,22 @@ func FamiliesDeepCopy(families []*dto.MetricFamily) []*dto.MetricFamily {
 // meta-label unchanged.
 // The input is modified.
 func FamiliesToNameAndItem(families []*dto.MetricFamily) {
-	builder := labels.NewBuilder(nil)
-
 	for _, mf := range families {
 		for _, m := range mf.GetMetric() {
-			builder.Reset(nil)
-
-			for _, lblPair := range m.GetLabel() {
-				builder.Set(lblPair.GetName(), lblPair.GetValue())
-			}
-
-			lbls := builder.Labels()
-			annotation := MetaLabelsToAnnotation(lbls)
-
-			if annotation.BleemeoItem == "" {
-				annotation.BleemeoItem = lbls.Get(types.LabelItem)
-			}
-
-			m.Label = itemAndMetaLabel(m.GetLabel(), annotation.BleemeoItem)
+			m.Label = itemAndMetaLabel(m.GetLabel())
 		}
 	}
 }
 
-func itemAndMetaLabel(lbls []*dto.LabelPair, itemAnnotation string) []*dto.LabelPair {
+func itemAndMetaLabel(lbls []*dto.LabelPair) []*dto.LabelPair {
 	i := 0
 
 	for _, l := range lbls {
-		if !strings.HasPrefix(l.GetName(), model.ReservedLabelPrefix) {
+		if !strings.HasPrefix(l.GetName(), model.ReservedLabelPrefix) && l.GetName() != types.LabelItem {
 			continue
 		}
 
 		lbls[i] = l
-		i++
-	}
-
-	if itemAnnotation != "" {
-		if len(lbls) == i {
-			lbls = append(lbls, nil)
-		}
-
-		lbls[i] = &dto.LabelPair{
-			Name:  proto.String(types.LabelItem),
-			Value: &itemAnnotation,
-		}
-
 		i++
 	}
 
@@ -467,10 +439,6 @@ func AnnotationToMetaLabels(lbls labels.Labels, annotation types.MetricAnnotatio
 		builder.Set(types.LabelMetaSNMPTarget, annotation.SNMPTarget)
 	}
 
-	if annotation.BleemeoItem != "" {
-		builder.Set(types.LabelMetaBleemeoItem, annotation.BleemeoItem)
-	}
-
 	if annotation.StatusOf != "" {
 		builder.Set(types.LabelMetaStatusOf, annotation.StatusOf)
 	}
@@ -492,7 +460,6 @@ func MetaLabelsToAnnotation(lbls labels.Labels) types.MetricAnnotations {
 		ContainerID:     lbls.Get(types.LabelMetaContainerID),
 		BleemeoAgentID:  lbls.Get(types.LabelMetaBleemeoTargetAgentUUID),
 		SNMPTarget:      lbls.Get(types.LabelMetaSNMPTarget),
-		BleemeoItem:     lbls.Get(types.LabelMetaBleemeoItem),
 		StatusOf:        lbls.Get(types.LabelMetaStatusOf),
 	}
 
@@ -501,36 +468,7 @@ func MetaLabelsToAnnotation(lbls labels.Labels) types.MetricAnnotations {
 		annotations.Status.StatusDescription = lbls.Get(types.LabelMetaCurrentDescription)
 	}
 
-	// For item, if the only non-meta label is just item & instance, convert it to an annotation item.
-	// It not supported to have only item which isn't an annotation.
-	// But we don't override the annotation if it's already filled.
-	item := lbls.Get(types.LabelItem)
-	if item != "" && annotations.BleemeoItem == "" {
-		if metricOnlyHasItem(lbls) {
-			annotations.BleemeoItem = item
-		}
-	}
-
 	return annotations
-}
-
-// metricOnlyHasItem is the same as bleemeo/internal/common.MetricOnlyHasItem but works on labels.Labels.
-// Since here the meta label could still be present, ignore them.
-// Unlike MetricOnlyHasItem we don't check for LabelInstanceUUID value. If a false positive is made the worse
-// case is that the BleemeoItem annotation is set, but then bleemeo connector won't use it since MetricOnlyHasItem will
-// not have this false positive.
-func metricOnlyHasItem(lbsl labels.Labels) bool {
-	for _, lbl := range lbsl {
-		if strings.HasPrefix(lbl.Name, model.ReservedLabelPrefix) {
-			continue
-		}
-
-		if lbl.Name != types.LabelName && lbl.Name != types.LabelItem && lbl.Name != types.LabelInstanceUUID && lbl.Name != types.LabelInstance {
-			return false
-		}
-	}
-
-	return true
 }
 
 func DTO2Labels(name string, input []*dto.LabelPair) map[string]string {

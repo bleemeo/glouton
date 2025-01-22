@@ -52,7 +52,7 @@ func New(url string) (telegraf.Input, registry.RegistrationOption, error) {
 
 				return gatherContext, false
 			},
-			DerivatedMetrics: []string{"in_bytes", "out_bytes", "in_msgs", "out_msgs"},
+			DifferentiatedMetrics: []string{"in_bytes", "out_bytes", "in_msgs", "out_msgs"},
 		},
 		Name: "nats",
 	}

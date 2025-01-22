@@ -138,9 +138,6 @@ func (b *bleemeoExporter) points(t0 time.Time) ([]types.MetricPoint, error) {
 						Time:  t0,
 						Value: value,
 					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: gname,
-					},
 				},
 			)
 		}

@@ -39,8 +39,8 @@ func New(url string) (i telegraf.Input, err error) {
 			i = &internal.Input{
 				Input: apacheInput,
 				Accumulator: internal.Accumulator{
-					DerivatedMetrics: []string{"TotalAccesses", "TotalkBytes", "handled"},
-					TransformMetrics: transformMetrics,
+					DifferentiatedMetrics: []string{"TotalAccesses", "TotalkBytes", "handled"},
+					TransformMetrics:      transformMetrics,
 				},
 				Name: "apache",
 			}

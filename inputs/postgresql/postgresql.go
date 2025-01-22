@@ -19,6 +19,7 @@ package postgresql
 import (
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/influxdata/telegraf"
 	telegraf_config "github.com/influxdata/telegraf/config"
@@ -48,7 +49,7 @@ func New(address string, detailedDatabases []string) (telegraf.Input, error) {
 		Input: globalMetricsInput,
 		Accumulator: internal.Accumulator{
 			RenameGlobal: renameGlobal(detailedDatabases),
-			DerivatedMetrics: []string{
+			DifferentiatedMetrics: []string{
 				"xact_commit", "xact_rollback", "blks_read", "blks_hit", "tup_returned", "tup_fetched",
 				"tup_inserted", "tup_updated", "tup_deleted", "temp_files", "temp_bytes", "blk_read_time",
 				"blk_write_time",
@@ -70,7 +71,7 @@ func renameGlobal(detailedDatabases []string) func(internal.GatherContext) (inte
 
 		for _, db := range detailedDatabases {
 			if db == gatherContext.Tags["db"] {
-				gatherContext.Annotations.BleemeoItem = gatherContext.Tags["db"]
+				gatherContext.Tags[types.LabelItem] = gatherContext.Tags["db"]
 
 				return gatherContext, false
 			}

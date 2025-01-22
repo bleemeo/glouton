@@ -48,9 +48,9 @@ func New(dockerAddress string, dockerRuntime crTypes.RuntimeInterface, isContain
 			i = &internal.Input{
 				Input: dockerInput,
 				Accumulator: internal.Accumulator{
-					RenameGlobal:     r.renameGlobal,
-					DerivatedMetrics: []string{"usage_total", "rx_bytes", "tx_bytes", "io_service_bytes_recursive_read", "io_service_bytes_recursive_write"},
-					TransformMetrics: transformMetrics,
+					RenameGlobal:          r.renameGlobal,
+					DifferentiatedMetrics: []string{"usage_total", "rx_bytes", "tx_bytes", "io_service_bytes_recursive_read", "io_service_bytes_recursive_write"},
+					TransformMetrics:      transformMetrics,
 				},
 				Name: "docker",
 			}
@@ -75,8 +75,8 @@ func (r renamer) renameGlobal(gatherContext internal.GatherContext) (internal.Ga
 	gatherContext.Tags = make(map[string]string)
 
 	if name, ok := gatherContext.OriginalTags["container_name"]; ok {
-		gatherContext.Annotations.BleemeoItem = name
 		gatherContext.Tags[types.LabelMetaContainerName] = name
+		gatherContext.Tags[types.LabelItem] = name
 	}
 
 	if id, ok := gatherContext.OriginalFields["container_id"]; ok {

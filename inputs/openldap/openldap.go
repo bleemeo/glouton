@@ -67,7 +67,7 @@ func New(host string, port int, config config.Service) (telegraf.Input, registry
 
 				return gatherContext, false
 			},
-			DerivatedMetrics: []string{
+			DifferentiatedMetrics: []string{
 				"statistics_bytes",
 				"statistics_entries",
 				"operations_add_completed",

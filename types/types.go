@@ -74,7 +74,6 @@ const (
 	LabelMetaServiceUUID              = "__meta_service_uuid"
 	LabelMetaGloutonFQDN              = "__meta__fqdn"
 	LabelMetaGloutonPort              = "__meta_glouton_port"
-	LabelMetaBleemeoItem              = "__meta_bleemeo_item"
 	LabelMetaBleemeoRelabelHookOk     = "__meta_bleemeo_hook_ok"
 	LabelMetaServicePort              = "__meta_service_port"
 	LabelMetaStatusOf                 = "__meta_status_of"
@@ -211,7 +210,6 @@ type Metric interface {
 
 // MetricAnnotations contains additional information about a metrics.
 type MetricAnnotations struct {
-	BleemeoItem     string
 	ContainerID     string
 	ServiceName     string
 	ServiceInstance string
@@ -253,10 +251,6 @@ type StatusDescription struct {
 
 // Merge merge two annotations. Annotations from other when set win.
 func (a MetricAnnotations) Merge(other MetricAnnotations) MetricAnnotations {
-	if other.BleemeoItem != "" {
-		a.BleemeoItem = other.BleemeoItem
-	}
-
 	if other.ContainerID != "" {
 		a.ContainerID = other.ContainerID
 	}
@@ -290,8 +284,7 @@ func (a MetricAnnotations) Merge(other MetricAnnotations) MetricAnnotations {
 
 // Changed tells whether two annotation are different or not. Status isn't considered when comparing the annotations.
 func (a MetricAnnotations) Changed(other MetricAnnotations) bool {
-	return (a.BleemeoItem != other.BleemeoItem ||
-		a.ContainerID != other.ContainerID ||
+	return (a.ContainerID != other.ContainerID ||
 		a.ServiceName != other.ServiceName ||
 		a.ServiceInstance != other.ServiceInstance ||
 		a.StatusOf != other.StatusOf ||
