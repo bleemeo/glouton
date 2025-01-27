@@ -119,16 +119,20 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext) err
 			}
 
 			if errors.Is(err, fs.ErrPermission) {
-				if unwrapped := errors.Unwrap(err); unwrapped != nil {
-					// Getting rid of the operation that failed (stat, open, ...)
-					// to only show the actual error (e.g. "permission denied").
-					err = unwrapped
+				if strings.Contains(filePattern, "*") {
+					if unwrapped := errors.Unwrap(err); unwrapped != nil {
+						// Getting rid of the operation that failed (stat, open, ...)
+						// to only show the actual error (e.g. "permission denied").
+						err = unwrapped
+					}
+
+					return fmt.Errorf("resolving file %q: %w - Note that Glouton could read protected log file using sudo tail, but you need to use explicit path (no glob pattern)", filePattern, err)
 				}
-
-				return fmt.Errorf("file %q: %w - Note that Glouton could read protected log file using sudo tail, but you need to use explicit path (no glob pattern)", filePattern, err)
+				// We still have a chance to handle it with sudo commands.
+				matching = []string{filePattern}
+			} else {
+				return fmt.Errorf("resolving file %q: %w", filePattern, err)
 			}
-
-			return fmt.Errorf("file %q: %w", filePattern, err)
 		}
 
 		for _, file := range matching {
@@ -409,6 +413,12 @@ func statFileImpl(logFile string, commandRunner CommandRunner) (ignore, needSudo
 			return true, false, nil
 		}
 
+		if !canSudoTailFile(logFile, commandRunner) {
+			logger.V(1).Printf("Can't `sudo tail` log file %q, ignoring it", logFile)
+
+			return true, false, nil
+		}
+
 		needSudo = true
 		sizeFn = func() (int64, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -455,4 +465,17 @@ func statFileImpl(logFile string, commandRunner CommandRunner) (ignore, needSudo
 	}
 
 	return false, needSudo, sizeFn
+}
+
+func canSudoTailFile(logFile string, commandRunner CommandRunner) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	runOpt := gloutonexec.Option{
+		RunAsRoot: true,
+	}
+
+	_, err := commandRunner.Run(ctx, runOpt, "tail", "--bytes=1", logFile)
+
+	return err == nil
 }
