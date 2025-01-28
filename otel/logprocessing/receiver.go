@@ -17,6 +17,7 @@
 package logprocessing
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -350,7 +351,7 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 		if lastSize, ok := lastFileSizes[logFile]; ok {
 			switch {
 			case lastSize > size: // the file has been truncated
-				tailArgs = append(tailArgs, "--bytes=+0") // start at byte 0
+				tailArgs = append(tailArgs, "--bytes=+0") // start at the beginning of the file
 			case size == lastSize: // the file hasn't changed
 				tailArgs = append(tailArgs, "--bytes=0") // start at the end of the file
 			case size > lastSize: // the file has been written since the last time
@@ -413,36 +414,22 @@ func statFileImpl(logFile string, commandRunner CommandRunner) (ignore, needSudo
 			return true, false, nil
 		}
 
-		if !canSudoTailFile(logFile, commandRunner) {
-			logger.V(1).Printf("Can't `sudo tail` log file %q, ignoring it", logFile)
+		if _, err = sudoStatFile(logFile, commandRunner); err != nil {
+			logger.V(1).Printf("Can't `sudo stat` log file %q (ignoring it): %v", logFile, err)
 
 			return true, false, nil
 		}
 
 		needSudo = true
 		sizeFn = func() (int64, error) {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-
-			runOpt := gloutonexec.Option{
-				RunAsRoot:      true,
-				CombinedOutput: true,
+			statOutput, err := sudoStatFile(logFile, commandRunner)
+			if err != nil {
+				return 0, err
 			}
 
-			out, err := commandRunner.Run(ctx, runOpt, "stat", "--printf=%s", logFile)
+			size, err := strconv.ParseInt(string(statOutput), 10, 64)
 			if err != nil {
-				strOut := strings.TrimSpace(string(out))
-
-				if strOut != "" {
-					strOut = " / " + strOut
-				}
-
-				return 0, fmt.Errorf("%w%s", err, strOut)
-			}
-
-			size, err := strconv.ParseInt(string(out), 10, 64)
-			if err != nil {
-				return 0, fmt.Errorf("unexpected stat output %q: %w", out, err)
+				return 0, fmt.Errorf("unexpected stat output %q: %w", statOutput, err)
 			}
 
 			return size, nil
@@ -467,15 +454,27 @@ func statFileImpl(logFile string, commandRunner CommandRunner) (ignore, needSudo
 	return false, needSudo, sizeFn
 }
 
-func canSudoTailFile(logFile string, commandRunner CommandRunner) bool {
+// sudoStatFile executes a `sudo stat` on the given file and returns its (trimmed) output.
+func sudoStatFile(logFile string, commandRunner CommandRunner) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
 	runOpt := gloutonexec.Option{
-		RunAsRoot: true,
+		RunAsRoot:      true,
+		CombinedOutput: true,
 	}
 
-	_, err := commandRunner.Run(ctx, runOpt, "tail", "--bytes=1", logFile)
+	out, err := commandRunner.Run(ctx, runOpt, "stat", "--printf=%s", logFile)
+	trimmedOutput := bytes.TrimSpace(out)
 
-	return err == nil
+	if err != nil {
+		strOut := string(trimmedOutput)
+		if strOut != "" {
+			strOut = ": " + strOut
+		}
+
+		return nil, fmt.Errorf("%w%s", err, strOut)
+	}
+
+	return trimmedOutput, nil
 }
