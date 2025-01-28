@@ -24,6 +24,7 @@ import (
 	"io/fs"
 	"maps"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -36,6 +37,8 @@ import (
 	"github.com/bleemeo/glouton/otel/execlogreceiver"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
 	"github.com/bleemeo/glouton/version"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/attrs"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/helper"
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/go-viper/mapstructure/v2"
@@ -307,6 +310,8 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 		}
 
 		fileTypedCfg.InputConfig.Include = []string{logFile}
+		fileTypedCfg.InputConfig.IncludeFileName = true
+		fileTypedCfg.InputConfig.IncludeFilePath = true
 		fileTypedCfg.Operators = operators
 
 		size, err := sizeFnByFile[logFile]()
@@ -362,6 +367,10 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 		execTypedCfg.InputConfig.Argv = append(tailArgs, logFile) //nolint: gocritic
 		execTypedCfg.InputConfig.CommandRunner = commandRunner
 		execTypedCfg.InputConfig.RunAsRoot = true
+		execTypedCfg.InputConfig.Attributes = map[string]helper.ExprStringConfig{
+			attrs.LogFileName: helper.ExprStringConfig(filepath.Base(logFile)),
+			attrs.LogFilePath: helper.ExprStringConfig(logFile),
+		}
 		execTypedCfg.Operators = operators
 
 		err = mapstructure.Decode(retryCfg, &execTypedCfg.RetryOnFailure)
