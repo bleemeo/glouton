@@ -179,7 +179,9 @@ func MakePipeline( //nolint:maintidx
 
 		receiverTypedCfg, ok := receiverCfg.(*otlpreceiver.Config)
 		if !ok {
-			return nil, fmt.Errorf("%w for receiver default config: %T", errUnexpectedType, receiverCfg)
+			logger.V(1).Printf("Unexpected config type for receiver default config: %T", receiverCfg)
+
+			goto AfterOTLPReceiversSetup
 		}
 
 		if cfg.GRPC.Enable {
@@ -201,15 +203,20 @@ func MakePipeline( //nolint:maintidx
 			logBackPressureEnforcer,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("setup OTLP receiver: %w", err)
+			logger.V(1).Printf("Failed to setup OTLP receiver: %v", err)
+
+			goto AfterOTLPReceiversSetup
 		}
 
 		if err = otlpLogReceiver.Start(ctx, nil); err != nil {
-			return nil, fmt.Errorf("start OTLP receiver: %w", err)
+			logger.V(1).Printf("Failed to start OTLP receiver: %v", err)
+
+			goto AfterOTLPReceiversSetup
 		}
 
 		pipeline.startedComponents = append(pipeline.startedComponents, otlpLogReceiver)
 	}
+AfterOTLPReceiversSetup: // this line needs to be right after the OTLP receivers block
 
 	for i, rcvrCfg := range cfg.Receivers {
 		recv, err := newLogReceiver(rcvrCfg, logBackPressureEnforcer)
