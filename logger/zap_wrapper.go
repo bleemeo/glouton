@@ -18,9 +18,16 @@ package logger
 
 import (
 	"strings"
+	"sync"
+	"time"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+)
+
+const (
+	logDebouncePeriod      = 30 * time.Second
+	logDebouncePurgePeriod = 10 * time.Minute
 )
 
 func ZapLogger() *zap.Logger {
@@ -30,20 +37,45 @@ func ZapLogger() *zap.Logger {
 	return zap.New(
 		zapcore.NewCore(
 			zapcore.NewConsoleEncoder(encoderConfig),
-			zapWrapper{},
+			&zapWrapper{
+				lastPurge: time.Now(),
+				m:         make(map[string]time.Time),
+			},
 			zap.DebugLevel,
 		),
 	)
 }
 
-type zapWrapper struct{}
+type zapWrapper struct {
+	l         sync.Mutex
+	lastPurge time.Time
+	m         map[string]time.Time
+}
 
-func (zapWrapper) Sync() error {
+func (*zapWrapper) Sync() error {
 	return nil
 }
 
-func (zapWrapper) Write(buffer []byte) (int, error) {
+func (z *zapWrapper) Write(buffer []byte) (int, error) {
 	msg := strings.TrimRight(string(buffer), "\n\r")
+
+	z.l.Lock()
+
+	if time.Since(z.lastPurge) >= logDebouncePurgePeriod {
+		z.purgeDebounceCache(time.Now())
+	}
+
+	lastPrint, found := z.m[msg]
+	if found && time.Since(lastPrint) < logDebouncePeriod {
+		z.l.Unlock()
+
+		return len(buffer), nil
+	}
+
+	z.m[msg] = time.Now()
+
+	z.l.Unlock()
+
 	if strings.HasPrefix(msg, "debug") {
 		V(2).Println(msg)
 	} else {
@@ -51,4 +83,14 @@ func (zapWrapper) Write(buffer []byte) (int, error) {
 	}
 
 	return len(buffer), nil
+}
+
+func (z *zapWrapper) purgeDebounceCache(now time.Time) {
+	z.lastPurge = now
+
+	for msg, ts := range z.m {
+		if now.Sub(ts) > logDebouncePeriod {
+			delete(z.m, msg)
+		}
+	}
 }
