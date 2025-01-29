@@ -121,6 +121,7 @@ var (
 	logBuffer          = &buffer{}
 	logCurrLevelBuffer = &buffer{} // buffer for current level of logs
 	cfg                = config{
+		level:     1, // useful for tests; will be overridden during normal runs
 		writer:    os.Stdout,
 		teeWriter: io.MultiWriter(logBuffer, logCurrLevelBuffer, os.Stdout),
 	}
