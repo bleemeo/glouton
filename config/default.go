@@ -264,7 +264,7 @@ func DefaultConfig() Config { //nolint:maintidx
 					Address: "localhost",
 					Port:    4318,
 				},
-				Receivers: []OTLPReceiver{},
+				Receivers: map[string]OTLPReceiver{},
 			},
 		},
 		Logging: Logging{

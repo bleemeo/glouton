@@ -77,11 +77,11 @@ type LogFilter struct {
 }
 
 type OpenTelemetry struct {
-	Enable        bool           `yaml:"enable"`
-	AutoDiscovery bool           `yaml:"auto_discovery"`
-	GRPC          EnableListener `yaml:"grpc"`
-	HTTP          EnableListener `yaml:"http"`
-	Receivers     []OTLPReceiver `yaml:"receivers"`
+	Enable        bool                    `yaml:"enable"`
+	AutoDiscovery bool                    `yaml:"auto_discovery"`
+	GRPC          EnableListener          `yaml:"grpc"`
+	HTTP          EnableListener          `yaml:"http"`
+	Receivers     map[string]OTLPReceiver `yaml:"receivers"`
 }
 
 type EnableListener struct {

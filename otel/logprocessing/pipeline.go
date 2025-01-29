@@ -61,6 +61,7 @@ type pipelineContext struct {
 	lastFileSizes map[string]int64
 	telemetry     component.TelemetrySettings
 	commandRunner CommandRunner
+	persister     *persistHost
 
 	l sync.Mutex
 	// startedComponents represents all the components that must be shut down at the end of the context's lifetime.
@@ -91,7 +92,11 @@ func MakePipeline( //nolint:maintidx
 			MetricsLevel:   configtelemetry.LevelBasic,
 			Resource:       pcommon.NewResource(),
 		},
-		commandRunner:      commandRunner,
+		commandRunner: commandRunner,
+		persister: &persistHost{
+			state:      state,
+			extensions: make(map[component.ID]component.Component),
+		},
 		startedComponents:  make([]component.Component, 0, 3), // 3 should be the minimum number of components
 		receivers:          make([]*logReceiver, 0, len(cfg.Receivers)),
 		logThroughputMeter: newRingCounter(throughputMeterResolutionSecs),
@@ -118,7 +123,7 @@ func MakePipeline( //nolint:maintidx
 
 			if err = pushLogs(ctx, b); err != nil {
 				logger.V(1).Printf("Failed to push logs: %v", err)
-				// returning error goes nowhere (not visible anywhere), that why we do the log
+				// returning error goes nowhere (not visible anywhere), that's why we log it here
 				return err
 			}
 
@@ -216,19 +221,19 @@ func MakePipeline( //nolint:maintidx
 
 		pipeline.startedComponents = append(pipeline.startedComponents, otlpLogReceiver)
 	}
-AfterOTLPReceiversSetup: // this line needs to be right after the OTLP receivers block
+AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers block
 
-	for i, rcvrCfg := range cfg.Receivers {
-		recv, err := newLogReceiver(rcvrCfg, logBackPressureEnforcer)
+	for name, rcvrCfg := range cfg.Receivers {
+		recv, err := newLogReceiver(name, rcvrCfg, logBackPressureEnforcer)
 		if err != nil {
-			logger.V(1).Printf("Failed to setup log receiver n°%d (ignoring it): %v", i+1, err)
+			logger.V(1).Printf("Failed to setup log receiver %q (ignoring it): %v", name, err)
 
 			continue
 		}
 
 		err = recv.update(ctx, pipeline)
 		if err != nil {
-			logger.V(1).Printf("Failed to start log receiver n°%d (ignoring it): %v", i+1, err)
+			logger.V(1).Printf("Failed to start log receiver %q (ignoring it): %v", name, err)
 
 			continue
 		}
@@ -288,6 +293,7 @@ AfterOTLPReceiversSetup: // this line needs to be right after the OTLP receivers
 				pipeline.l.Lock()
 
 				saveLastFileSizesToCache(state, pipeline.receivers)
+				// TODO: also save receivers metadata to cache
 
 				pipeline.l.Unlock()
 			case <-ctx.Done():
@@ -312,10 +318,10 @@ AfterOTLPReceiversSetup: // this line needs to be right after the OTLP receivers
 
 	diagnosticFn = func(_ context.Context, writer types.ArchiveWriter) error {
 		pipeline.l.Lock()
-		receiversInfo := make([]receiverDiagnosticInformation, len(pipeline.receivers))
+		receiversInfo := make(map[string]receiverDiagnosticInformation, len(pipeline.receivers))
 
-		for i, rcvr := range pipeline.receivers {
-			receiversInfo[i] = rcvr.diagnosticInfo()
+		for _, rcvr := range pipeline.receivers {
+			receiversInfo[rcvr.name] = rcvr.diagnosticInfo()
 		}
 
 		pipeline.l.Unlock()

@@ -27,7 +27,10 @@ import (
 	"github.com/bleemeo/glouton/utils/gloutonexec"
 )
 
-const logFileSizesCacheKey = "LogFileSizes"
+const (
+	logFileSizesCacheKey    = "LogFileSizes"
+	logFileMetadataCacheKey = "LogFileMetadata"
+)
 
 func getLastFileSizesFromCache(state bleemeoTypes.State) (lastFileSizes map[string]int64) {
 	err := state.Get(logFileSizesCacheKey, &lastFileSizes)
@@ -60,6 +63,25 @@ func saveLastFileSizesToCache(state bleemeoTypes.State, receivers []*logReceiver
 	}
 }
 
+func getFileMetadataFromCache(state bleemeoTypes.State) (map[string][]byte, error) {
+	var metadataMap map[string][]byte
+
+	err := state.Get(logFileMetadataCacheKey, &metadataMap)
+	if err != nil {
+		return nil, err
+	}
+
+	if metadataMap == nil { // it doesn't exist in the state cache yet
+		metadataMap = make(map[string][]byte)
+	}
+
+	return metadataMap, nil
+}
+
+func saveFileMetadataToCache(state bleemeoTypes.State, metadata map[string][]byte) error {
+	return state.Set(logFileMetadataCacheKey, metadata)
+}
+
 type CommandRunner interface {
 	Run(ctx context.Context, option gloutonexec.Option, name string, arg ...string) ([]byte, error)
 	StartWithPipes(ctx context.Context, option gloutonexec.Option, name string, arg ...string) (stdoutPipe io.ReadCloser, stderrPipe io.ReadCloser, wait func() error, err error)
@@ -77,7 +99,7 @@ type diagnosticInformation struct {
 	LogProcessedCount      int64
 	LogThroughputPerMinute int
 	ProcessingStatus       string
-	Receivers              []receiverDiagnosticInformation
+	Receivers              map[string]receiverDiagnosticInformation
 }
 
 func (diagInfo diagnosticInformation) writeToArchive(writer types.ArchiveWriter) error {

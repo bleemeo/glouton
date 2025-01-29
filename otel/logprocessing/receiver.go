@@ -37,12 +37,12 @@ import (
 	"github.com/bleemeo/glouton/otel/execlogreceiver"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
 	"github.com/bleemeo/glouton/version"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/attrs"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/helper"
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/go-viper/mapstructure/v2"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/attrs"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/helper"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
@@ -73,6 +73,7 @@ const (
 )
 
 type logReceiver struct {
+	name        string
 	cfg         config.OTLPReceiver
 	logConsumer consumer.Logs
 	operators   []operator.Config
@@ -86,7 +87,7 @@ type logReceiver struct {
 	throughputMeter *ringCounter
 }
 
-func newLogReceiver(cfg config.OTLPReceiver, logConsumer consumer.Logs) (*logReceiver, error) {
+func newLogReceiver(name string, cfg config.OTLPReceiver, logConsumer consumer.Logs) (*logReceiver, error) {
 	var ops []operator.Config
 
 	if err := yaml.Unmarshal([]byte(cfg.OperatorsYAML), &ops); err != nil {
@@ -94,6 +95,7 @@ func newLogReceiver(cfg config.OTLPReceiver, logConsumer consumer.Logs) (*logRec
 	}
 
 	return &logReceiver{
+		name:            name,
 		cfg:             cfg,
 		logConsumer:     logConsumer,
 		operators:       ops,
@@ -152,11 +154,17 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext) err
 		return nil
 	}
 
+	storageID, err := pipeline.persister.newPersistentExt(ctx, r.name)
+	if err != nil {
+		return fmt.Errorf("could not create persister for %q: %w", r.name, err)
+	}
+
 	fileLogReceiverFactories, readFiles, execFiles, sizeFnByFile, err := setupLogReceiverFactories(
 		slices.Collect(maps.Keys(logFiles)),
 		r.operators,
 		pipeline.lastFileSizes,
 		pipeline.commandRunner,
+		&storageID,
 	)
 	if err != nil {
 		return fmt.Errorf("setting up receiver factories: %w", err)
@@ -173,7 +181,7 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext) err
 			return fmt.Errorf("setup receiver: %w", err)
 		}
 
-		if err = logRcvr.Start(ctx, nil); err != nil {
+		if err = logRcvr.Start(ctx, pipeline.persister); err != nil {
 			return fmt.Errorf("start receiver: %w", err)
 		}
 
@@ -275,7 +283,7 @@ FilesFromConfig:
 // setupLogReceiverFactories builds receiver factories for the given log files,
 // accordingly to whether the file is directly readable or not.
 // Files that don't exist at the time of the call to this function will be ignored.
-func setupLogReceiverFactories(logFiles []string, operators []operator.Config, lastFileSizes map[string]int64, commandRunner CommandRunner) (
+func setupLogReceiverFactories(logFiles []string, operators []operator.Config, lastFileSizes map[string]int64, commandRunner CommandRunner, storageID *component.ID) (
 	factories map[receiver.Factory]component.Config,
 	readableFiles, execFiles []string,
 	sizeFnByFile map[string]func() (int64, error),
@@ -313,6 +321,7 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 		fileTypedCfg.InputConfig.IncludeFileName = true
 		fileTypedCfg.InputConfig.IncludeFilePath = true
 		fileTypedCfg.Operators = operators
+		fileTypedCfg.BaseConfig.StorageID = storageID
 
 		size, err := sizeFnByFile[logFile]()
 		if err != nil {
@@ -323,9 +332,11 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 
 		if lastSize, ok := lastFileSizes[logFile]; ok {
 			if lastSize > size {
-				fileTypedCfg.InputConfig.StartAt = "beginning"
+				fileTypedCfg.InputConfig.StartAt = "beginning" // FIXME
 			}
 		}
+
+		logger.Printf("Resuming filerecv %q at %s", logFile, fileTypedCfg.InputConfig.StartAt) // TODO: remove
 
 		err = mapstructure.Decode(retryCfg, &fileTypedCfg.RetryOnFailure)
 		if err != nil {
@@ -363,6 +374,8 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 				tailArgs = append(tailArgs, fmt.Sprintf("--bytes=+%d", lastSize)) // start at byte 'lastSize'
 			}
 		}
+
+		logger.Printf("Resuming execrecv %q at %s", logFile, tailArgs[len(tailArgs)-1]) // TODO: remove
 
 		execTypedCfg.InputConfig.Argv = append(tailArgs, logFile) //nolint: gocritic
 		execTypedCfg.InputConfig.CommandRunner = commandRunner

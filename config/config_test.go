@@ -205,8 +205,8 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 					Address: "localhost",
 					Port:    4318,
 				},
-				Receivers: []OTLPReceiver{
-					{
+				Receivers: map[string]OTLPReceiver{
+					"filelog/recv": {
 						Include:       []string{"/var/log/apache/access.log", "/var/log/apache/error.log"},
 						OperatorsYAML: "- type: add\n  field: resource['service.name']\n  value: 'apache_server'\n",
 					},

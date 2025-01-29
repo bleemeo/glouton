@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bleemeo/glouton/agent/state"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
 	"github.com/bleemeo/glouton/version"
@@ -108,6 +110,17 @@ func (dr dummyRunner) StartWithPipes(ctx context.Context, option gloutonexec.Opt
 	return dr.startWithPipes(ctx, option, cmd, args...)
 }
 
+func newState(t *testing.T) bleemeoTypes.State {
+	t.Helper()
+
+	st, err := state.LoadReadOnly("not", "used")
+	if err != nil {
+		t.Fatal("Can't instantiate state:", err)
+	}
+
+	return st
+}
+
 var sortStringsOpt = cmpopts.SortSlices(func(x, y string) bool { return x < y }) //nolint:gochecknoglobals
 
 func TestFileLogReceiver(t *testing.T) {
@@ -148,7 +161,7 @@ func TestFileLogReceiver(t *testing.T) {
 		buf: make([]plog.Logs, 0, 2), // we plan to write 2 log lines
 	}
 
-	recv, err := newLogReceiver(cfg, makeBufferConsumer(t, &logBuf))
+	recv, err := newLogReceiver("filelog/recv", cfg, makeBufferConsumer(t, &logBuf))
 	if err != nil {
 		t.Fatal("Failed to initialize log receiver:", err)
 	}
@@ -171,6 +184,10 @@ func TestFileLogReceiver(t *testing.T) {
 
 				return nil, nil, nil, nil
 			},
+		},
+		persister: &persistHost{
+			state:      newState(t),
+			extensions: make(map[component.ID]component.Component),
 		},
 	}
 
@@ -362,6 +379,10 @@ func TestExecLogReceiver(t *testing.T) {
 						return nopReadCloser, nopReadCloser, func() error { return nil }, nil
 					},
 				},
+				persister: &persistHost{
+					state:      newState(t),
+					extensions: make(map[component.ID]component.Component),
+				},
 			}
 
 			if tc.previousFileSize >= 0 {
@@ -372,7 +393,7 @@ func TestExecLogReceiver(t *testing.T) {
 				shutdownAll(pipeline.startedComponents)
 			}()
 
-			recv, err := newLogReceiver(cfg, makeBufferConsumer(t, &logBuffer{buf: []plog.Logs{}}))
+			recv, err := newLogReceiver("root_files", cfg, makeBufferConsumer(t, &logBuffer{buf: []plog.Logs{}}))
 			if err != nil {
 				t.Fatal("Failed to initialize log receiver:", err)
 			}
