@@ -55,12 +55,6 @@ type NameInstance struct {
 	Instance string
 }
 
-type ServiceOverride struct {
-	IgnoredPorts   []int
-	Interval       time.Duration
-	ExtraAttribute map[string]string
-}
-
 // ServiceName is the name of a supported service.
 type ServiceName string
 
