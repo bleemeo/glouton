@@ -224,7 +224,7 @@ func itemTypeFromValue(key string, value interface{}) ItemType {
 		return TypeLogInputs
 	}
 
-	logger.V(1).Printf("Unsupported item type %T", value)
+	logger.V(1).Printf("Unsupported item type %T (key %q)", value, key)
 
 	return TypeAny
 }

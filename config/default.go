@@ -42,6 +42,7 @@ func mapKeys() []string {
 	return []string{
 		"thresholds",
 		"metric.softstatus_period",
+		"log.opentelemetry.receivers",
 	}
 }
 
