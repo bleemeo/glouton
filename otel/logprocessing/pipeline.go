@@ -82,6 +82,11 @@ func MakePipeline( //nolint:maintidx
 ) (diagnosticFn func(context.Context, types.ArchiveWriter) error, err error) { //nolint:wsl
 	// TODO: no logs & metrics at the same time
 
+	persister, err := newPersistHost(state)
+	if err != nil {
+		return nil, fmt.Errorf("can't create persist host: %w", err)
+	}
+
 	pipeline := &pipelineContext{
 		lastFileSizes: getLastFileSizesFromCache(state),
 		config:        cfg,
@@ -92,11 +97,8 @@ func MakePipeline( //nolint:maintidx
 			MetricsLevel:   configtelemetry.LevelBasic,
 			Resource:       pcommon.NewResource(),
 		},
-		commandRunner: commandRunner,
-		persister: &persistHost{
-			state:      state,
-			extensions: make(map[component.ID]component.Component),
-		},
+		commandRunner:      commandRunner,
+		persister:          persister,
 		startedComponents:  make([]component.Component, 0, 3), // 3 should be the minimum number of components
 		receivers:          make([]*logReceiver, 0, len(cfg.Receivers)),
 		logThroughputMeter: newRingCounter(throughputMeterResolutionSecs),
@@ -293,7 +295,7 @@ AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers bl
 				pipeline.l.Lock()
 
 				saveLastFileSizesToCache(state, pipeline.receivers)
-				// TODO: also save receivers metadata to cache
+				saveFileMetadataToCache(state, pipeline.persister.getAllMetadata())
 
 				pipeline.l.Unlock()
 			case <-ctx.Done():
@@ -314,6 +316,7 @@ AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers bl
 		shutdownAll(pipeline.startedComponents)
 
 		saveLastFileSizesToCache(state, pipeline.receivers)
+		saveFileMetadataToCache(state, pipeline.persister.getAllMetadata())
 	}()
 
 	diagnosticFn = func(_ context.Context, writer types.ArchiveWriter) error {

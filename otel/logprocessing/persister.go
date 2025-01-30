@@ -18,34 +18,93 @@ package logprocessing
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
+	"time"
 
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
-	"github.com/bleemeo/glouton/logger"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/extension/xextension/storage"
 )
 
+const storageType = "glouton_log_metadata_storage"
+
+var errStorageClientNotFound = errors.New("storage client not found")
+
 type persistHost struct {
-	state      bleemeoTypes.State
-	extensions map[component.ID]component.Component
+	state bleemeoTypes.State
+
+	l                   sync.Mutex
+	extensions          map[component.ID]component.Component
+	metadataPerReceiver map[string]map[string][]byte
+	updatedKeys         map[string]struct{}
 }
 
-func (h *persistHost) newPersistentExt(ctx context.Context, name string) (component.ID, error) {
-	id := component.NewIDWithName(component.MustNewType("glouton_log_metadata_storage"), name)
+func newPersistHost(state bleemeoTypes.State) (*persistHost, error) {
+	metadata, err := getFileMetadataFromCache(state)
+	if err != nil {
+		return nil, err
+	}
+
+	return &persistHost{
+		state:               state,
+		extensions:          make(map[component.ID]component.Component),
+		metadataPerReceiver: metadata,
+		updatedKeys:         make(map[string]struct{}),
+	}, nil
+}
+
+func (h *persistHost) newPersistentExt(name string) component.ID {
+	h.l.Lock()
+	defer h.l.Unlock()
+
+	id := component.NewIDWithName(component.MustNewType(storageType), name)
+
+	receiverMetadata, found := h.metadataPerReceiver[name]
+	if !found {
+		receiverMetadata = make(map[string][]byte)
+	}
+
 	h.extensions[id] = persistExtension{
 		client: &storageClient{
-			prefix:      name,
-			state:       h.state,
+			name:        name,
+			host:        h,
+			dirty:       receiverMetadata,
 			updatedKeys: make(map[string]struct{}),
+			lastSave:    time.Now(),
 		},
 	}
 
-	return id, h.extensions[id].Start(ctx, h)
+	return id
+}
+
+func (h *persistHost) storeMetadata(recvName string, metadata map[string][]byte) {
+	h.l.Lock()
+	defer h.l.Unlock()
+
+	h.metadataPerReceiver[recvName] = metadata
+	h.updatedKeys[recvName] = struct{}{}
+}
+
+func (h *persistHost) getAllMetadata() map[string]map[string][]byte {
+	h.l.Lock()
+	defer h.l.Unlock()
+
+	updatedData := make(map[string]map[string][]byte, len(h.updatedKeys))
+
+	for key := range h.updatedKeys {
+		updatedData[key] = h.metadataPerReceiver[key]
+	}
+
+	return updatedData
 }
 
 func (h *persistHost) GetExtensions() map[component.ID]component.Component {
+	h.l.Lock()
+	defer h.l.Unlock()
+
 	return h.extensions
 }
 
@@ -54,7 +113,7 @@ type persistExtension struct {
 }
 
 func (e persistExtension) Start(context.Context, component.Host) error {
-	return e.client.load()
+	return nil
 }
 
 func (e persistExtension) Shutdown(ctx context.Context) error {
@@ -66,38 +125,20 @@ func (e persistExtension) GetClient(_ context.Context, kind component.Kind, _ co
 		return e.client, nil
 	}
 
-	return nil, nil //nolint:nilnil
+	return nil, fmt.Errorf("%w for kind %q", errStorageClientNotFound, kind)
 }
 
 type storageClient struct {
-	prefix string
-	state  bleemeoTypes.State
+	name string
+	host *persistHost
 
 	l           sync.Mutex
 	dirty       map[string][]byte
 	updatedKeys map[string]struct{}
-	sets        int
-}
-
-func (s *storageClient) load() error {
-	s.l.Lock()
-	defer s.l.Unlock()
-
-	m, err := getFileMetadataFromCache(s.state)
-	if err != nil {
-		return err
-	}
-
-	s.dirty = m
-
-	return nil
+	lastSave    time.Time
 }
 
 func (s *storageClient) Get(_ context.Context, key string) ([]byte, error) {
-	key = s.prefix + "." + key
-
-	logger.V(1).Printf("=> storageClient.Get(ctx, %q)", key) // TODO: remove
-
 	s.l.Lock()
 	defer s.l.Unlock()
 
@@ -105,36 +146,32 @@ func (s *storageClient) Get(_ context.Context, key string) ([]byte, error) {
 }
 
 func (s *storageClient) Set(_ context.Context, key string, value []byte) error {
-	key = s.prefix + "." + key
-
-	// logger.V(1).Printf("=> storageClient.Set(ctx, %q, %s)", key, string(value)) // TODO: remove
-
 	s.l.Lock()
 	defer s.l.Unlock()
 
 	s.dirty[key] = value
 	s.updatedKeys[key] = struct{}{}
-	s.sets++ // TODO: remove
+
+	if time.Since(s.lastSave) >= saveFileSizesToCachePeriod {
+		s.saveMetadata()
+
+		s.lastSave = time.Now()
+	}
 
 	return nil
 }
 
 func (s *storageClient) Delete(_ context.Context, key string) error {
-	key = s.prefix + "." + key
-
-	logger.V(1).Printf("=> storageClient.Delete(ctx, %q)", key) // TODO: remove
-
 	s.l.Lock()
 	defer s.l.Unlock()
 
 	delete(s.dirty, key)
+	delete(s.updatedKeys, key)
 
 	return nil
 }
 
 func (s *storageClient) Batch(ctx context.Context, ops ...*storage.Operation) error {
-	logger.V(1).Printf("=> storageClient.Batch(ctx, %v)", ops) // TODO: remove
-
 	for _, op := range ops {
 		switch op.Type {
 		case storage.Get:
@@ -154,12 +191,17 @@ func (s *storageClient) Batch(ctx context.Context, ops ...*storage.Operation) er
 	return nil
 }
 
+// Close is called by the storageClient's related filelogreceiver when it shuts down.
 func (s *storageClient) Close(_ context.Context) error {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	logger.V(1).Printf("=> storageClient.Close(ctx) -> did %d calls to Set()", s.sets) // TODO: remove
+	s.saveMetadata()
 
+	return nil
+}
+
+func (s *storageClient) saveMetadata() {
 	updatedData := make(map[string][]byte, len(s.updatedKeys))
 	// Only keeping the values that have been updated during this run,
 	// so as to discard the ones that correspond to files that no longer exist.
@@ -167,5 +209,5 @@ func (s *storageClient) Close(_ context.Context) error {
 		updatedData[key] = s.dirty[key]
 	}
 
-	return saveFileMetadataToCache(s.state, updatedData)
+	s.host.storeMetadata(s.name, updatedData)
 }

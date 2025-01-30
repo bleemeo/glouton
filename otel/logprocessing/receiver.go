@@ -154,9 +154,10 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext) err
 		return nil
 	}
 
-	storageID, err := pipeline.persister.newPersistentExt(ctx, r.name)
-	if err != nil {
-		return fmt.Errorf("could not create persister for %q: %w", r.name, err)
+	makeStorageFn := func(logFile string) *component.ID {
+		id := pipeline.persister.newPersistentExt(r.name + "." + logFile)
+
+		return &id
 	}
 
 	fileLogReceiverFactories, readFiles, execFiles, sizeFnByFile, err := setupLogReceiverFactories(
@@ -164,7 +165,7 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext) err
 		r.operators,
 		pipeline.lastFileSizes,
 		pipeline.commandRunner,
-		&storageID,
+		makeStorageFn,
 	)
 	if err != nil {
 		return fmt.Errorf("setting up receiver factories: %w", err)
@@ -283,7 +284,13 @@ FilesFromConfig:
 // setupLogReceiverFactories builds receiver factories for the given log files,
 // accordingly to whether the file is directly readable or not.
 // Files that don't exist at the time of the call to this function will be ignored.
-func setupLogReceiverFactories(logFiles []string, operators []operator.Config, lastFileSizes map[string]int64, commandRunner CommandRunner, storageID *component.ID) (
+func setupLogReceiverFactories(
+	logFiles []string,
+	operators []operator.Config,
+	lastFileSizes map[string]int64,
+	commandRunner CommandRunner,
+	makeStorageFn func(logFile string) *component.ID,
+) (
 	factories map[receiver.Factory]component.Config,
 	readableFiles, execFiles []string,
 	sizeFnByFile map[string]func() (int64, error),
@@ -321,22 +328,20 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 		fileTypedCfg.InputConfig.IncludeFileName = true
 		fileTypedCfg.InputConfig.IncludeFilePath = true
 		fileTypedCfg.Operators = operators
-		fileTypedCfg.BaseConfig.StorageID = storageID
+		fileTypedCfg.BaseConfig.StorageID = makeStorageFn(logFile)
 
-		size, err := sizeFnByFile[logFile]()
+		_, err := sizeFnByFile[logFile]()
 		if err != nil {
 			logger.V(1).Printf("Error getting size of file %q (ignoring it): %v", logFile, err)
 
 			continue
 		}
 
-		if lastSize, ok := lastFileSizes[logFile]; ok {
-			if lastSize > size {
-				fileTypedCfg.InputConfig.StartAt = "beginning" // FIXME
-			}
+		// For filelogreceivers the offset is stored separately, so we don't really care about the size here.
+		// However, if it is the first time we've seen this file, we want to read it from zero.
+		if _, ok := lastFileSizes[logFile]; !ok {
+			fileTypedCfg.InputConfig.StartAt = "beginning"
 		}
-
-		logger.Printf("Resuming filerecv %q at %s", logFile, fileTypedCfg.InputConfig.StartAt) // TODO: remove
 
 		err = mapstructure.Decode(retryCfg, &fileTypedCfg.RetryOnFailure)
 		if err != nil {
@@ -374,8 +379,6 @@ func setupLogReceiverFactories(logFiles []string, operators []operator.Config, l
 				tailArgs = append(tailArgs, fmt.Sprintf("--bytes=+%d", lastSize)) // start at byte 'lastSize'
 			}
 		}
-
-		logger.Printf("Resuming execrecv %q at %s", logFile, tailArgs[len(tailArgs)-1]) // TODO: remove
 
 		execTypedCfg.InputConfig.Argv = append(tailArgs, logFile) //nolint: gocritic
 		execTypedCfg.InputConfig.CommandRunner = commandRunner

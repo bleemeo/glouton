@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/agent/state"
-	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
 	"github.com/bleemeo/glouton/version"
@@ -110,7 +109,8 @@ func (dr dummyRunner) StartWithPipes(ctx context.Context, option gloutonexec.Opt
 	return dr.startWithPipes(ctx, option, cmd, args...)
 }
 
-func newState(t *testing.T) bleemeoTypes.State {
+// mustNewPersistHost is a shorthand to instantiate both a state and a persist host.
+func mustNewPersistHost(t *testing.T) *persistHost {
 	t.Helper()
 
 	st, err := state.LoadReadOnly("not", "used")
@@ -118,7 +118,12 @@ func newState(t *testing.T) bleemeoTypes.State {
 		t.Fatal("Can't instantiate state:", err)
 	}
 
-	return st
+	host, err := newPersistHost(st)
+	if err != nil {
+		t.Fatal("Can't instantiate persist host:", err)
+	}
+
+	return host
 }
 
 var sortStringsOpt = cmpopts.SortSlices(func(x, y string) bool { return x < y }) //nolint:gochecknoglobals
@@ -185,10 +190,7 @@ func TestFileLogReceiver(t *testing.T) {
 				return nil, nil, nil, nil
 			},
 		},
-		persister: &persistHost{
-			state:      newState(t),
-			extensions: make(map[component.ID]component.Component),
-		},
+		persister: mustNewPersistHost(t),
 	}
 
 	defer func() {
@@ -379,10 +381,7 @@ func TestExecLogReceiver(t *testing.T) {
 						return nopReadCloser, nopReadCloser, func() error { return nil }, nil
 					},
 				},
-				persister: &persistHost{
-					state:      newState(t),
-					extensions: make(map[component.ID]component.Component),
-				},
+				persister: mustNewPersistHost(t),
 			}
 
 			if tc.previousFileSize >= 0 {

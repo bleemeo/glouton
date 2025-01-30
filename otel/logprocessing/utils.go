@@ -63,23 +63,26 @@ func saveLastFileSizesToCache(state bleemeoTypes.State, receivers []*logReceiver
 	}
 }
 
-func getFileMetadataFromCache(state bleemeoTypes.State) (map[string][]byte, error) {
-	var metadataMap map[string][]byte
+func getFileMetadataFromCache(state bleemeoTypes.State) (map[string]map[string][]byte, error) {
+	var metadataMap map[string]map[string][]byte
 
 	err := state.Get(logFileMetadataCacheKey, &metadataMap)
 	if err != nil {
 		return nil, err
 	}
 
-	if metadataMap == nil { // it doesn't exist in the state cache yet
-		metadataMap = make(map[string][]byte)
+	if metadataMap == nil { // it may not exist in the state cache yet
+		metadataMap = make(map[string]map[string][]byte)
 	}
 
 	return metadataMap, nil
 }
 
-func saveFileMetadataToCache(state bleemeoTypes.State, metadata map[string][]byte) error {
-	return state.Set(logFileMetadataCacheKey, metadata)
+func saveFileMetadataToCache(state bleemeoTypes.State, metadata map[string]map[string][]byte) {
+	err := state.Set(logFileMetadataCacheKey, metadata)
+	if err != nil {
+		logger.V(1).Printf("Failed to save log file metadata to cache: %v", err)
+	}
 }
 
 type CommandRunner interface {
