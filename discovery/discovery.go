@@ -21,12 +21,14 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/registry"
@@ -58,10 +60,13 @@ type Discovery struct {
 	commandRunner    *gloutonexec.Runner
 	dynamicDiscovery Discoverer
 
+	lastDynamicService    []Service
 	discoveredServicesMap map[NameInstance]Service
 	servicesMap           map[NameInstance]Service
 	lastDiscoveryUpdate   time.Time
 
+	triggerDiscovery      chan interface{}
+	subscribers           []*subscriber
 	lastConfigservicesMap map[NameInstance]Service
 	activeCollector       map[NameInstance]collectorDetails
 	activeCheck           map[NameInstance]CheckDetails
@@ -74,10 +79,14 @@ type Discovery struct {
 	isInputIgnored        func(Service) bool
 	isContainerIgnored    func(facts.Container) bool
 	processFact           processFact
-	pendingUpdateCond     *sync.Cond
-	pendingUpdate         bool
 
 	absentServiceDeactivationDelay time.Duration
+}
+
+type subscriber struct {
+	closed  bool
+	channel chan []Service
+	l       sync.Mutex
 }
 
 // Registry will contains checks.
@@ -129,6 +138,7 @@ func New(
 		containerInfo:                  containerInfo,
 		activeCollector:                make(map[NameInstance]collectorDetails),
 		activeCheck:                    make(map[NameInstance]CheckDetails),
+		triggerDiscovery:               make(chan interface{}),
 		state:                          state,
 		servicesOverride:               servicesOverrideMap,
 		isServiceIgnored:               isServiceIgnored,
@@ -138,8 +148,6 @@ func New(
 		processFact:                    processFact,
 		absentServiceDeactivationDelay: absentServiceDeactivationDelay,
 	}
-
-	discovery.pendingUpdateCond = sync.NewCond(&discovery.l)
 
 	return discovery, warnings
 }
@@ -241,22 +249,96 @@ func (d *Discovery) Close() {
 	d.configureChecks(d.servicesMap, nil)
 }
 
-// Discovery detect service on the system and return a list of Service object.
-//
-// It may trigger an update of metric inputs present in the Collector.
-func (d *Discovery) Discovery(ctx context.Context, maxAge time.Duration) (services []Service, err error) {
+// GetLatestDiscovery return list of services detected on the system with date of latest update.
+func (d *Discovery) GetLatestDiscovery() ([]Service, time.Time) {
 	d.l.Lock()
 	defer d.l.Unlock()
 
-	return d.discovery(ctx, maxAge)
+	services := make([]Service, 0, len(d.servicesMap))
+
+	for _, v := range d.servicesMap {
+		services = append(services, v)
+	}
+
+	return services, d.lastDiscoveryUpdate
 }
 
-// LastUpdate return when the last update occurred.
-func (d *Discovery) LastUpdate() time.Time {
+// Subscribe return a channel that will receive all update of services after a
+// discovery run.
+//
+// On subscribe a list of current discovered service will be sent, unless no discovery have yet run.
+//
+// The channel will be closed when ctx expire. You must drain the full channel or discovery could be blocked.
+func (d *Discovery) Subscribe(ctx context.Context) <-chan []Service {
+	sub := &subscriber{
+		channel: make(chan []Service),
+	}
+
 	d.l.Lock()
 	defer d.l.Unlock()
 
-	return d.lastDiscoveryUpdate
+	d.subscribers = append(d.subscribers, sub)
+
+	go func() {
+		defer crashreport.ProcessPanic()
+
+		services, lastUpdate := d.GetLatestDiscovery()
+		if !lastUpdate.IsZero() {
+			sub.channel <- services
+		}
+
+		<-ctx.Done()
+
+		sub.l.Lock()
+
+		close(sub.channel)
+		sub.closed = true
+
+		sub.l.Unlock()
+
+		d.l.Lock()
+		defer d.l.Unlock()
+
+		i := 0
+
+		for _, row := range d.subscribers {
+			if row == sub {
+				continue
+			}
+
+			d.subscribers[i] = row
+			i++
+		}
+
+		// Make nil value remove to ensure channel get GC'ed
+		for j := i; j < len(d.subscribers); j++ {
+			d.subscribers[j] = nil
+		}
+
+		d.subscribers = d.subscribers[:i]
+	}()
+
+	return sub.channel
+}
+
+// TriggerUpdate ask for a new discovery to be run. This function as asynchronous
+// and the discovery might not have finished when TriggerUpdate return.
+//
+// Use Subscribe to get notified after every change in discovery.
+func (d *Discovery) TriggerUpdate() {
+	d.triggerDiscovery <- nil
+}
+
+// Run execute the discovery thread that will update the discovery when needed.
+func (d *Discovery) Run(ctx context.Context) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-d.triggerDiscovery:
+			d.discoveryAndNotify(ctx)
+		}
+	}
 }
 
 // DiagnosticArchive add to a zipfile useful diagnostic information.
@@ -317,11 +399,11 @@ func (d *Discovery) DiagnosticArchive(ctx context.Context, zipFile types.Archive
 			fmt.Fprintf(file, "PID %d with service %v on container %s\n", p.PID, serviceType, p.ContainerName)
 		}
 
-		fmt.Fprintf(file, "\n# Last dynamic discovery (count=%d, last update=%s)\n", len(dd.services), dd.lastDiscoveryUpdate.Format(time.RFC3339))
+		fmt.Fprintf(file, "\n# Last dynamic discovery (count=%d)\n", len(d.lastDynamicService))
 
-		services := make([]Service, len(dd.services))
+		services := make([]Service, len(d.lastDynamicService))
 
-		copy(services, dd.services)
+		copy(services, d.lastDynamicService)
 
 		sort.Slice(services, func(i, j int) bool {
 			if services[j].Active != services[i].Active && services[i].Active {
@@ -362,40 +444,48 @@ func (d *Discovery) DiagnosticArchive(ctx context.Context, zipFile types.Archive
 	return nil
 }
 
-func (d *Discovery) discovery(ctx context.Context, maxAge time.Duration) (services []Service, err error) {
+func (d *Discovery) discoveryAndNotify(ctx context.Context) {
+	services, err := d.discovery(ctx)
+	if err != nil {
+		logger.V(1).Printf("error during discovery: %v", err)
+	}
+
+	d.l.Lock()
+	subCopy := slices.Clone(d.subscribers)
+	d.l.Unlock()
+
+	for _, sub := range subCopy {
+		sub.l.Lock()
+
+		if !sub.closed {
+			sub.channel <- services
+		}
+
+		sub.l.Unlock()
+	}
+}
+
+func (d *Discovery) discovery(ctx context.Context) ([]Service, error) {
 	ctx, cancel := context.WithTimeout(ctx, discoveryTimeout)
 	defer cancel()
 
-	if time.Since(d.lastDiscoveryUpdate) >= maxAge {
-		for d.pendingUpdate {
-			d.pendingUpdateCond.Wait()
-		}
+	err := d.updateDiscovery(ctx, time.Now())
 
-		d.pendingUpdate = true
-		defer func() {
-			d.pendingUpdate = false
-			d.pendingUpdateCond.Signal()
-		}()
+	d.l.Lock()
+	defer d.l.Unlock()
 
-		if time.Since(d.lastDiscoveryUpdate) >= maxAge {
-			d.l.Unlock()
-			err := d.updateDiscovery(ctx, time.Now())
-			d.l.Lock()
-
-			if err != nil {
-				return nil, err
-			}
-
-			if ctx.Err() == nil {
-				saveState(d.state, d.discoveredServicesMap)
-				d.reconfigure()
-
-				d.lastDiscoveryUpdate = time.Now()
-			}
-		}
+	if err != nil {
+		return nil, err
 	}
 
-	services = make([]Service, 0, len(d.servicesMap))
+	if ctx.Err() == nil {
+		saveState(d.state, d.discoveredServicesMap)
+		d.reconfigure()
+
+		d.lastDiscoveryUpdate = time.Now()
+	}
+
+	services := make([]Service, 0, len(d.servicesMap))
 
 	for _, v := range d.servicesMap {
 		services = append(services, v)
@@ -404,10 +494,12 @@ func (d *Discovery) discovery(ctx context.Context, maxAge time.Duration) (servic
 	return services, ctx.Err()
 }
 
-// RemoveIfNonRunning remove a service if the service is not running
+// RemoveIfNonRunning remove a service if the service is not running.
 //
 // This is useful to remove persisted service that no longer run.
-func (d *Discovery) RemoveIfNonRunning(ctx context.Context, services []Service) {
+// The service will immediately be remove from next call to GetLatestDiscovery and a
+// next discovery will be run asynchroniously if from entry were deleted.
+func (d *Discovery) RemoveIfNonRunning(services []Service) {
 	d.l.Lock()
 	defer d.l.Unlock()
 
@@ -424,9 +516,7 @@ func (d *Discovery) RemoveIfNonRunning(ctx context.Context, services []Service) 
 	}
 
 	if deleted {
-		if _, err := d.discovery(ctx, 0); err != nil {
-			logger.V(2).Printf("Error during discovery during RemoveIfNonRunning: %v", err)
-		}
+		d.TriggerUpdate()
 	}
 }
 
@@ -441,7 +531,8 @@ func (d *Discovery) reconfigure() {
 	d.lastConfigservicesMap = d.servicesMap
 }
 
-// Only one updateDiscovery should be running at a time (the pendingUpdateCond ensure this).
+// Only one updateDiscovery should be running at a time (since discovery is called for Run gorouting the
+// requirement is fulified).
 // The lock should not be held, updateDiscovery take care of taking lock before access to mutable fields.
 func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) error {
 	// Make sure we have a container list. This is important for startup, so
@@ -453,7 +544,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) error {
 		logger.V(1).Printf("error while updating containers: %v", err)
 	}
 
-	r, err := d.dynamicDiscovery.Discovery(ctx, 0)
+	r, err := d.dynamicDiscovery.Discovery(ctx)
 	if err != nil {
 		return err
 	}
@@ -497,6 +588,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) error {
 	d.l.Lock()
 	defer d.l.Unlock()
 
+	d.lastDynamicService = r
 	d.discoveredServicesMap = servicesMap
 	serviceMapWithOverride := copyAndMergeServiceWithOverride(servicesMap, d.servicesOverride)
 

@@ -171,7 +171,7 @@ func (c *Connector) isInitialized() bool {
 }
 
 // ApplyCachedConfiguration reload metrics units & threshold & monitors from the cache.
-func (c *Connector) ApplyCachedConfiguration(ctx context.Context) {
+func (c *Connector) ApplyCachedConfiguration() {
 	c.l.RLock()
 	disabledUntil := c.disabledUntil
 	c.l.RUnlock()
@@ -180,7 +180,7 @@ func (c *Connector) ApplyCachedConfiguration(ctx context.Context) {
 		return
 	}
 
-	c.sync.UpdateUnitsAndThresholds(ctx, true)
+	c.sync.UpdateUnitsAndThresholds(true)
 
 	if c.option.Config.Blackbox.Enable {
 		if err := c.sync.ApplyMonitorUpdate(); err != nil {
@@ -192,7 +192,7 @@ func (c *Connector) ApplyCachedConfiguration(ctx context.Context) {
 	currentConfig, ok := c.cache.CurrentAccountConfig()
 
 	if ok && c.option.UpdateMetricResolution != nil && currentConfig.AgentConfigByName[bleemeo.AgentType_Agent].MetricResolution != 0 {
-		c.option.UpdateMetricResolution(ctx, currentConfig.AgentConfigByName[bleemeo.AgentType_Agent].MetricResolution, currentConfig.AgentConfigByName[bleemeo.AgentType_SNMP].MetricResolution)
+		c.option.UpdateMetricResolution(currentConfig.AgentConfigByName[bleemeo.AgentType_Agent].MetricResolution, currentConfig.AgentConfigByName[bleemeo.AgentType_SNMP].MetricResolution)
 	}
 }
 
@@ -1093,7 +1093,7 @@ func (c *Connector) IsMetricAllowed(metric gloutonTypes.LabelsAndAnnotation) (bo
 	return f.IsAllowed(metric.Labels, metric.Annotations)
 }
 
-func (c *Connector) updateConfig(ctx context.Context, nameChanged bool) {
+func (c *Connector) updateConfig(nameChanged bool) {
 	currentConfig, ok := c.cache.CurrentAccountConfig()
 	if !ok || currentConfig.AgentConfigByName[bleemeo.AgentType_Agent].MetricResolution == 0 {
 		return
@@ -1104,7 +1104,7 @@ func (c *Connector) updateConfig(ctx context.Context, nameChanged bool) {
 	}
 
 	if c.option.UpdateMetricResolution != nil {
-		c.option.UpdateMetricResolution(ctx, currentConfig.AgentConfigByName[bleemeo.AgentType_Agent].MetricResolution, currentConfig.AgentConfigByName[bleemeo.AgentType_SNMP].MetricResolution)
+		c.option.UpdateMetricResolution(currentConfig.AgentConfigByName[bleemeo.AgentType_Agent].MetricResolution, currentConfig.AgentConfigByName[bleemeo.AgentType_SNMP].MetricResolution)
 	}
 }
 

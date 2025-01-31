@@ -304,7 +304,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		logger.V(1).Printf("bleemeo: pre-run checks: couldn't sync the global config: %v", err)
 	}
 
-	exec.executePostRunCalls(ctx)
+	exec.executePostRunCalls()
 
 	s.option.SetInitialized()
 

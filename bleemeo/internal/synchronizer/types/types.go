@@ -278,7 +278,7 @@ type Option struct {
 	DisableCallback func(reason bleemeoTypes.DisableReason, until time.Time)
 
 	// UpdateConfigCallback is a function called when Synchronizer detected a AccountConfiguration change
-	UpdateConfigCallback func(ctx context.Context, nameChanged bool)
+	UpdateConfigCallback func(nameChanged bool)
 
 	// ProvideClient may be used to provide an alternative Bleemeo API client.
 	ProvideClient func() Client

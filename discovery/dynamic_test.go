@@ -150,7 +150,7 @@ func TestDynamicDiscoverySimple(t *testing.T) {
 
 	ctx := context.Background()
 
-	srv, err := dd.Discovery(ctx, 0)
+	srv, err := dd.Discovery(ctx)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1127,7 +1127,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 		})
 		dd.now = func() time.Time { return t0 }
 
-		srv, err := dd.Discovery(ctx, 0)
+		srv, err := dd.Discovery(ctx)
 		if err != nil {
 			t.Error(err)
 		}
@@ -1996,7 +1996,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 			})
 			dd.now = func() time.Time { return t0 }
 
-			srv, err := dd.Discovery(ctx, 0)
+			srv, err := dd.Discovery(ctx)
 			if err != nil {
 				t.Error(err)
 			}

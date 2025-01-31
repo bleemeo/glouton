@@ -393,18 +393,7 @@ func (d *Data) Services(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	services, err := d.api.Discovery.Discovery(r.Context(), time.Hour)
-	if err != nil {
-		logger.V(2).Printf("Can not retrieve facts: %v", err)
-
-		err := render.Render(w, r, ErrInternalServerError(errFacts))
-		if err != nil {
-			logger.V(2).Printf("Can not render error: %v", err)
-		}
-
-		return
-	}
-
+	services, _ := d.api.Discovery.GetLatestDiscovery()
 	servicesRes := []render.Renderer{}
 
 	for _, service := range services {
@@ -454,7 +443,7 @@ func (d *Data) Services(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// AgentInformation returns some informations about agent registration to Bleemeo Cloud.
+// AgentInformation returns some information about agent registration to Bleemeo Cloud.
 func (d *Data) AgentInformation(w http.ResponseWriter, r *http.Request) {
 	if d.api.AgentInfo == nil {
 		err := render.Render(w, r, ErrInternalServerError(errAgentInformation))
