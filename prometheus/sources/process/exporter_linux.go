@@ -25,8 +25,8 @@ import (
 
 	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/logger"
-	"github.com/bleemeo/glouton/prometheus/process"
 	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/types"
 
 	common "github.com/ncabatoff/process-exporter"
 	"github.com/ncabatoff/process-exporter/proc"
@@ -39,7 +39,7 @@ const defaultJitter = 0
 func RegisterExporter(
 	_ context.Context,
 	reg *registry.Registry,
-	psLister interface{},
+	psLister func() types.ProcIter,
 	dynamicDiscovery *discovery.DynamicDiscovery,
 	metricsIgnore, serviceIgnore discovery.IgnoredService,
 ) {
@@ -81,17 +81,13 @@ func RegisterExporter(
 }
 
 // newExporter creates a new Prometheus exporter using the specified parameters.
-func newExporter(psLister interface{}, processQuerier *discovery.DynamicDiscovery, metricsIgnore, serviceIgnore discovery.IgnoredService) *Exporter {
-	if source, ok := psLister.(*process.Processes); ok {
-		return &Exporter{
-			Source:         source,
-			ProcessQuerier: processQuerier,
-			metricsIgnore:  metricsIgnore,
-			serviceIgnore:  serviceIgnore,
-		}
+func newExporter(psLister func() types.ProcIter, processQuerier *discovery.DynamicDiscovery, metricsIgnore, serviceIgnore discovery.IgnoredService) *Exporter {
+	return &Exporter{
+		Source:         psLister,
+		ProcessQuerier: processQuerier,
+		metricsIgnore:  metricsIgnore,
+		serviceIgnore:  serviceIgnore,
 	}
-
-	return nil
 }
 
 type processorQuerier interface {
@@ -102,7 +98,7 @@ type processorQuerier interface {
 // It based on github.com/ncabatoff/process-exporter.
 type Exporter struct {
 	ProcessQuerier processorQuerier
-	Source         proc.Source
+	Source         func() types.ProcIter
 
 	metricsIgnore, serviceIgnore discovery.IgnoredService
 
@@ -265,7 +261,14 @@ func (e *Exporter) init() {
 		false,
 	)
 
-	colErrs, _, err := e.grouper.Update(e.Source.AllProcs())
+	iter, ok := e.Source().(proc.Iter)
+	if !ok {
+		logger.V(1).Printf("Unable to read processes information: iter isn't a proc.Iter")
+
+		return
+	}
+
+	colErrs, _, err := e.grouper.Update(iter)
 	if err != nil {
 		logger.V(1).Printf("Unable to read processes information: %v", err)
 
@@ -305,7 +308,14 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	e.l.Lock()
 	defer e.l.Unlock()
 
-	permErrs, groups, err := e.grouper.Update(e.Source.AllProcs())
+	iter, ok := e.Source().(proc.Iter)
+	if !ok {
+		e.scrapeErrors++
+
+		return
+	}
+
+	permErrs, groups, err := e.grouper.Update(iter)
 
 	e.scrapePartialErrors += permErrs.Partial
 

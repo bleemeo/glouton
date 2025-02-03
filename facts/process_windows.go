@@ -27,6 +27,7 @@ import (
 	"unsafe"
 
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
 
 	"golang.org/x/sys/windows"
 )
@@ -65,7 +66,7 @@ func windowsTimeToTime(t int64) time.Time {
 	return time.Unix(t/10000000, (t%10000000)*100)
 }
 
-func (z PsutilLister) Processes(context.Context, time.Duration) ([]Process, error) {
+func (z PsutilLister) Processes(context.Context) ([]Process, func() types.ProcIter, error) {
 	// In order to retrieve process information on windows, given the fact that LocalService has limited privileges,
 	// we prefer to iterate over processes via the NtQuerySystemInformation syscall
 	var (
@@ -88,13 +89,13 @@ func (z PsutilLister) Processes(context.Context, time.Duration) ([]Process, erro
 		if ret >= 0x80000000 && ret != StatusInfoLengthMismatch && ret != StatusBufferTooSmall {
 			logger.V(1).Printf("facts/process: NtQuerySystemInformation failed (error code %d): %v", ret, err)
 
-			return nil, nil
+			return nil, nil, nil
 		}
 
 		if bufLen == 0 {
 			logger.V(1).Printf("facts/process: NtQuerySystemInformation failed: empty buffer requested")
 
-			return nil, nil
+			return nil, nil, nil
 		}
 
 		if ret == StatusInfoLengthMismatch || ret == StatusBufferTooSmall {
@@ -107,7 +108,7 @@ func (z PsutilLister) Processes(context.Context, time.Duration) ([]Process, erro
 	if ret >= 0x80000000 {
 		logger.V(1).Printf("facts/process: NtQuerySystemInformation failed (error code %d): %v", ret, err)
 
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	// We use the maximum theoretical number of processes that could be contained in a buffer of size 'bufLen'
@@ -123,7 +124,7 @@ func (z PsutilLister) Processes(context.Context, time.Duration) ([]Process, erro
 
 		offset := process.NextEntryOffset
 		if offset == 0 {
-			return processes, nil
+			return processes, nil, nil
 		}
 
 		buf = buf[offset:]

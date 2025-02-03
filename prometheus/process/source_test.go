@@ -25,53 +25,63 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/bleemeo/glouton/facts"
+	gloutonTypes "github.com/bleemeo/glouton/types"
 
 	"github.com/ncabatoff/process-exporter/proc"
 )
 
 func Test_reflection(t *testing.T) {
-	source := &Processes{
-		HostRootPath:    "/",
-		DefaultValidity: 10 * time.Second,
+	ps := &Processes{
+		HostRootPath: "/",
 	}
 
-	testAllProcs(t, source)
-	testProcesses(t, source, 0)
-	testAllProcs(t, source)
+	procs, factory, err := ps.Processes(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	for _, maxAge := range []time.Duration{0, time.Hour} {
-		for _, testName := range []string{"AllProcs", "Processes", "mixed"} {
-			for n := range 5 {
-				source := &Processes{
-					HostRootPath:    "/",
-					DefaultValidity: 10 * time.Second,
+	testAllProcs(t, factory())
+	testProcesses(t, procs)
+	testAllProcs(t, factory())
+
+	for _, testName := range []string{"AllProcs", "Processes", "mixed"} {
+		for n := range 5 {
+			ps := &Processes{
+				HostRootPath: "/",
+			}
+
+			t.Run(testName, func(t *testing.T) {
+				t.Parallel()
+
+				procs, factory, err := ps.Processes(context.Background())
+				if err != nil {
+					t.Fatal(err)
 				}
 
-				t.Run(testName, func(t *testing.T) {
-					t.Parallel()
-
-					switch {
-					case testName == "AllProcs" || (testName == "mixed" && n%2 == 0):
-						testAllProcs(t, source)
-					default:
-						testProcesses(t, source, maxAge)
-					}
-				})
-			}
+				switch {
+				case testName == "AllProcs" || (testName == "mixed" && n%2 == 0):
+					testAllProcs(t, factory())
+				default:
+					testProcesses(t, procs)
+				}
+			})
 		}
 	}
 }
 
-func testAllProcs(t *testing.T, source proc.Source) {
+func testAllProcs(t *testing.T, procsIntf gloutonTypes.ProcIter) {
 	t.Helper()
+
+	procs, ok := procsIntf.(proc.Iter)
+	if !ok {
+		t.Fatal("wrong interface for procsIntf")
+	}
 
 	myPID := os.Getpid()
 	foundMyself := false
 
-	procs := source.AllProcs()
 	for procs.Next() {
 		testProc(t, procs)
 
@@ -89,16 +99,11 @@ func testAllProcs(t *testing.T, source proc.Source) {
 	}
 }
 
-func testProcesses(t *testing.T, source facts.ProcessLister, maxAge time.Duration) {
+func testProcesses(t *testing.T, procs []facts.Process) {
 	t.Helper()
 
 	myPID := os.Getpid()
 	foundMyself := false
-
-	procs, err := source.Processes(context.Background(), maxAge)
-	if err != nil {
-		t.Error(err)
-	}
 
 	for _, p := range procs {
 		if p.PID == myPID {

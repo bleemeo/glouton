@@ -85,7 +85,8 @@ func NewDynamic(opts Option) *DynamicDiscovery {
 }
 
 // Discovery detect service running on the system and return a list of Service object.
-func (dd *DynamicDiscovery) Discovery(ctx context.Context) ([]Service, error) {
+// It also return a date for wanted next update.
+func (dd *DynamicDiscovery) Discovery(ctx context.Context) ([]Service, time.Time, error) {
 	if version.IsFreeBSD() {
 		// Disable service discovery on FreeBSD for now. Glouton only support TrueNAS which don't have lots
 		// of services (especially not lots of service we support).
@@ -93,7 +94,7 @@ func (dd *DynamicDiscovery) Discovery(ctx context.Context) ([]Service, error) {
 		// * We don't use correct option in netstat
 		// * The gopsutil Connections() isn't tested at all
 		// * On TrueNAS service run in jail, so we must handle them (probably similar to what we do for Docker).
-		return nil, nil
+		return nil, time.Time{}, nil
 	}
 
 	dd.l.Lock()
@@ -109,15 +110,7 @@ func (dd *DynamicDiscovery) ProcessServiceInfo(cmdLine []string, pid int, create
 		return "", ""
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	processes, err := dd.option.PS.Processes(ctx, time.Since(createTime))
-	if err != nil {
-		logger.V(1).Printf("unable to list processes: %v", err)
-
-		return "", ""
-	}
+	processes := dd.option.PS.GetLatest()
 
 	// gopsutil round create time to second. So we do equality at second precision only
 	createTime = createTime.Truncate(time.Second)
@@ -248,7 +241,8 @@ var (
 )
 
 type processFact interface {
-	Processes(ctx context.Context, maxAge time.Duration) (processes map[int]facts.Process, err error)
+	GetLatest() map[int]facts.Process
+	UpdateProcesses(ctx context.Context) (processes map[int]facts.Process, nextUpdate time.Time, err error)
 }
 
 type netstatProvider interface {
@@ -256,10 +250,10 @@ type netstatProvider interface {
 }
 
 // Only one updateDiscovery should be running at a time.
-func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context) ([]Service, error) {
-	processes, err := dd.option.PS.Processes(ctx, 0)
+func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context) ([]Service, time.Time, error) {
+	processes, nextUpdate, err := dd.option.PS.UpdateProcesses(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nextUpdate, err
 	}
 
 	netstat, err := dd.option.Netstat.Netstat(ctx, processes)
@@ -268,7 +262,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context) ([]Service, err
 	}
 
 	if ctx.Err() != nil {
-		return nil, ctx.Err()
+		return nil, nextUpdate, ctx.Err()
 	}
 
 	// Process PID present in netstat output before other PID, because
@@ -344,7 +338,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context) ([]Service, err
 	}
 
 	if ctx.Err() != nil {
-		return nil, ctx.Err()
+		return nil, nextUpdate, ctx.Err()
 	}
 
 	// Resolve possible conflict of listen address. If two services are discovered in the same containers, it's
@@ -352,7 +346,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context) ([]Service, err
 	// When a conflict occur, only kept port that are associated with the standard port of the service.
 	services := fixListenAddressConflict(servicesMap)
 
-	return services, nil
+	return services, nextUpdate, nil
 }
 
 func (dd *DynamicDiscovery) serviceFromProcess(ctx context.Context, process facts.Process, netstat map[int][]facts.ListenAddress) (Service, bool) {

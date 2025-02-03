@@ -89,8 +89,7 @@ type FactProvider interface {
 
 // ProcessProvider is the interface used by Bleemeo to access processes.
 type ProcessProvider interface {
-	Processes(ctx context.Context, maxAge time.Duration) (processes map[int]facts.Process, err error)
-	TopInfo(ctx context.Context, maxAge time.Duration) (topinfo facts.TopInfo, err error)
+	TopInfo() facts.TopInfo
 }
 
 // DockerProvider is the interface used by Bleemeo to access Docker containers.

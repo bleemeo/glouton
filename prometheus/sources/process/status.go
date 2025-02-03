@@ -19,7 +19,6 @@ package process
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
@@ -30,10 +29,8 @@ import (
 	"github.com/prometheus/prometheus/storage"
 )
 
-const maxAge = 1 * time.Second
-
 type processProvider interface {
-	Processes(ctx context.Context, maxAge time.Duration) (processes map[int]facts.Process, err error)
+	GetLatest() map[int]facts.Process
 }
 
 // StatusSource collects process status metrics.
@@ -47,11 +44,8 @@ func NewStatusSource(ps processProvider) StatusSource {
 }
 
 // CollectWithState sends process metrics to the Appender.
-func (s StatusSource) CollectWithState(ctx context.Context, state registry.GatherState, app storage.Appender) error {
-	proc, err := s.ps.Processes(ctx, maxAge)
-	if err != nil {
-		return fmt.Errorf("unable to gather process metrics: %w", err)
-	}
+func (s StatusSource) CollectWithState(_ context.Context, state registry.GatherState, app storage.Appender) error {
+	proc := s.ps.GetLatest()
 
 	// Glouton should always send those counters.
 	counts := map[string]int{
@@ -128,7 +122,7 @@ func (s StatusSource) CollectWithState(ctx context.Context, state registry.Gathe
 		})
 	}
 
-	err = model.SendPointsToAppender(points, app)
+	err := model.SendPointsToAppender(points, app)
 	if err != nil {
 		return fmt.Errorf("send points to appender: %w", err)
 	}

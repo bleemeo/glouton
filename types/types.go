@@ -538,3 +538,11 @@ func DiffMetricFamilies(want []*dto.MetricFamily, got []*dto.MetricFamily, appro
 
 	return cmp.Diff(want, got, opts...)
 }
+
+type ProcIter interface {
+	// Next returns true if the iterator is not exhausted.
+	Next() bool
+	// Close releases any resources the iterator uses.
+	Close() error
+	// The interface also have "Proc" interface... but this interface use architecture depedend type
+}

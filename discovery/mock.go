@@ -35,8 +35,8 @@ func (md *MockDiscoverer) SetResult(services []Service, err error) {
 }
 
 // Discovery implements Discoverer.
-func (md *MockDiscoverer) Discovery(_ context.Context) (services []Service, err error) {
-	return md.result, md.err
+func (md *MockDiscoverer) Discovery(_ context.Context) (services []Service, wantedNextUpdate time.Time, err error) {
+	return md.result, time.Time{}, md.err
 }
 
 // GetLatestDiscovery implements Discoverer.

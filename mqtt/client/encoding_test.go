@@ -17,7 +17,6 @@
 package client
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -30,11 +29,7 @@ import (
 // getTopinfo return a topinfo from the system running the test.
 func getTopinfo() facts.TopInfo {
 	provider := facts.NewProcess(facts.NewPsUtilLister(""), nil)
-
-	topinfo, err := provider.TopInfo(context.Background(), 0)
-	if err != nil {
-		panic(err)
-	}
+	topinfo := provider.TopInfo()
 
 	// not all field are encoded by JSON. Do one json encode/decode pass to
 	// drop field not sent

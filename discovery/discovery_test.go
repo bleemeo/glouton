@@ -288,7 +288,7 @@ func TestDiscoverySingle(t *testing.T) {
 			time.Hour,
 		)
 
-		srv, err := disc.discovery(ctx)
+		srv, _, err := disc.discovery(ctx)
 		if err != nil {
 			t.Error(err)
 		}
@@ -892,7 +892,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 		},
 	}
 
-	if _, err := disc.discovery(context.Background()); err != nil {
+	if _, _, err := disc.discovery(context.Background()); err != nil {
 		t.Error(err)
 	}
 
@@ -923,7 +923,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 	reg.ExpectedAddedContains = []string{"Service input memcached", "check for memcached"}
 	reg.NewIDs = []int{1337, 666}
 
-	if _, err := disc.discovery(context.Background()); err != nil {
+	if _, _, err := disc.discovery(context.Background()); err != nil {
 		t.Error(err)
 	}
 
@@ -959,7 +959,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 	reg.NewIDs = []int{9999, 99999}
 	reg.ExpectedRemoveIDs = []int{42, 43}
 
-	if _, err := disc.discovery(context.Background()); err != nil {
+	if _, _, err := disc.discovery(context.Background()); err != nil {
 		t.Error(err)
 	}
 

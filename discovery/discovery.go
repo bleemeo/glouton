@@ -331,18 +331,52 @@ func (d *Discovery) TriggerUpdate() {
 
 // Run execute the discovery thread that will update the discovery when needed.
 func (d *Discovery) Run(ctx context.Context) error {
+	var (
+		wantedNextUpdate            time.Time
+		consecutiveNonTriggerUpdate int
+	)
+
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-d.triggerDiscovery:
-			d.discoveryAndNotify(ctx)
+			wantedNextUpdate = d.discoveryAndNotify(ctx, "trigger")
+			consecutiveNonTriggerUpdate = 0
+		case <-ticker.C:
+			if wantedNextUpdate.IsZero() || time.Now().Before(wantedNextUpdate) {
+				continue
+			}
+
+			wantedNextUpdate = d.discoveryAndNotify(ctx, "re-update for processes & container")
+			consecutiveNonTriggerUpdate++
+
+			if wantedNextUpdate.IsZero() {
+				continue
+			}
+
+			switch consecutiveNonTriggerUpdate {
+			case 1:
+				// A discovery (due to a trigger) set the wantedNextUpdate.
+				// That discovery due to the wantedNextUpdate once more wanted another update
+				// honor it, BUT ensure at least 30 seconds elapse
+				if time.Until(wantedNextUpdate) < 30*time.Second {
+					wantedNextUpdate = time.Now().Add(30 * time.Second)
+				}
+			default:
+				// Another case means that 2 or more update were done due to wantedNextUpdate.
+				// To avoid infinite loop, skip them
+				wantedNextUpdate = time.Time{}
+			}
 		}
 	}
 }
 
 // DiagnosticArchive add to a zipfile useful diagnostic information.
-func (d *Discovery) DiagnosticArchive(ctx context.Context, zipFile types.ArchiveWriter) error {
+func (d *Discovery) DiagnosticArchive(_ context.Context, zipFile types.ArchiveWriter) error {
 	d.l.Lock()
 	defer d.l.Unlock()
 
@@ -383,10 +417,7 @@ func (d *Discovery) DiagnosticArchive(ctx context.Context, zipFile types.Archive
 	}
 
 	if dd, ok := d.dynamicDiscovery.(*DynamicDiscovery); ok {
-		procs, err := dd.option.PS.Processes(ctx, time.Hour)
-		if err != nil {
-			return err
-		}
+		procs := dd.option.PS.GetLatest()
 
 		fmt.Fprintf(file, "\n# Processes (filteted to only show ones associated with a service)\n")
 
@@ -444,10 +475,20 @@ func (d *Discovery) DiagnosticArchive(ctx context.Context, zipFile types.Archive
 	return nil
 }
 
-func (d *Discovery) discoveryAndNotify(ctx context.Context) {
-	services, err := d.discovery(ctx)
+func (d *Discovery) discoveryAndNotify(ctx context.Context, updateReason string) time.Time {
+	startedAt := time.Now()
+
+	services, nextUpdate, err := d.discovery(ctx)
 	if err != nil {
 		logger.V(1).Printf("error during discovery: %v", err)
+	}
+
+	activeServices := 0
+
+	for _, srv := range services {
+		if srv.Active {
+			activeServices++
+		}
 	}
 
 	d.l.Lock()
@@ -463,19 +504,35 @@ func (d *Discovery) discoveryAndNotify(ctx context.Context) {
 
 		sub.l.Unlock()
 	}
+
+	extraMessage := ""
+
+	if !nextUpdate.IsZero() {
+		extraMessage = fmt.Sprintf(" want another discovery at %s", nextUpdate)
+	}
+
+	logger.V(2).Printf(
+		"discovery run due to %s in %s and found %d active services%s",
+		updateReason,
+		time.Since(startedAt),
+		activeServices,
+		extraMessage,
+	)
+
+	return nextUpdate
 }
 
-func (d *Discovery) discovery(ctx context.Context) ([]Service, error) {
+func (d *Discovery) discovery(ctx context.Context) ([]Service, time.Time, error) {
 	ctx, cancel := context.WithTimeout(ctx, discoveryTimeout)
 	defer cancel()
 
-	err := d.updateDiscovery(ctx, time.Now())
+	nextUpdate, err := d.updateDiscovery(ctx, time.Now())
 
 	d.l.Lock()
 	defer d.l.Unlock()
 
 	if err != nil {
-		return nil, err
+		return nil, nextUpdate, err
 	}
 
 	if ctx.Err() == nil {
@@ -491,7 +548,7 @@ func (d *Discovery) discovery(ctx context.Context) ([]Service, error) {
 		services = append(services, v)
 	}
 
-	return services, ctx.Err()
+	return services, nextUpdate, ctx.Err()
 }
 
 // RemoveIfNonRunning remove a service if the service is not running.
@@ -534,7 +591,7 @@ func (d *Discovery) reconfigure() {
 // Only one updateDiscovery should be running at a time (since discovery is called for Run gorouting the
 // requirement is fulified).
 // The lock should not be held, updateDiscovery take care of taking lock before access to mutable fields.
-func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) error {
+func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) (time.Time, error) {
 	// Make sure we have a container list. This is important for startup, so
 	// that previously known service could get associated with container.
 	// Without this, a service in a stopped container (which should be shown
@@ -544,9 +601,9 @@ func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) error {
 		logger.V(1).Printf("error while updating containers: %v", err)
 	}
 
-	r, err := d.dynamicDiscovery.Discovery(ctx)
+	r, nextUpdate, err := d.dynamicDiscovery.Discovery(ctx)
 	if err != nil {
-		return err
+		return nextUpdate, err
 	}
 
 	servicesMap := make(map[NameInstance]Service)
@@ -582,7 +639,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) error {
 	}
 
 	if ctx.Err() != nil {
-		return ctx.Err()
+		return nextUpdate, ctx.Err()
 	}
 
 	d.l.Lock()
@@ -598,7 +655,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) error {
 
 	d.ignoreServicesAndPorts()
 
-	return nil
+	return nextUpdate, nil
 }
 
 func usePreviousNetstat(now time.Time, previousService Service, newService Service) bool {

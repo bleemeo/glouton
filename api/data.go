@@ -261,18 +261,7 @@ func (d *Data) Processes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	topInfo, err := d.api.PsFact.TopInfo(r.Context(), time.Second*15)
-	if err != nil {
-		logger.V(2).Printf("Can not retrieve processes: %v", err)
-
-		err := render.Render(w, r, ErrInternalServerError(errProcesses))
-		if err != nil {
-			logger.V(2).Printf("Can not render error: %v", err)
-		}
-
-		return
-	}
-
+	topInfo := d.api.PsFact.TopInfo()
 	processes := topInfo.Processes
 	processesRes := []*Process{}
 
@@ -321,7 +310,7 @@ func (d *Data) Processes(w http.ResponseWriter, r *http.Request) {
 		Used:  topInfo.Swap.Used,
 	}
 
-	err = render.Render(w, r, &Topinfo{
+	err := render.Render(w, r, &Topinfo{
 		Time: time.Unix(topInfo.Time, topInfo.Time), Uptime: topInfo.Uptime, Loads: topInfo.Loads, Users: topInfo.Users,
 		CPU: cpuRes, Memory: memoryRes, Swap: swapRes, Processes: processesRes,
 	})

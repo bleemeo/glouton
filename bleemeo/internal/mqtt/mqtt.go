@@ -532,7 +532,7 @@ func (c *Client) run(ctx context.Context) error {
 		if !c.IsSendingSuspended() && ok && cfg.LiveProcess && time.Since(topinfoSendAt) >= cfg.LiveProcessResolution {
 			topinfoSendAt = time.Now()
 
-			c.sendTopinfo(ctx, cfg)
+			c.sendTopinfo()
 		}
 
 		select {
@@ -903,13 +903,8 @@ func (c *Client) onNotification(ctx context.Context, msg paho.Message) {
 	}
 }
 
-func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.GloutonAccountConfig) {
-	topinfo, err := c.opts.Process.TopInfo(ctx, cfg.LiveProcessResolution-time.Second)
-	if err != nil {
-		logger.V(1).Printf("Unable to get topinfo: %v", err)
-
-		return
-	}
+func (c *Client) sendTopinfo() {
+	topinfo := c.opts.Process.TopInfo()
 
 	c.l.Lock()
 	topinfoStreamAvailable := c.topinfoStreamAvailable

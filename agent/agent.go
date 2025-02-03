@@ -924,18 +924,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		logger.V(1).Printf("The agent is running in a container and \"container.pid_namespace_host\", is not true. Not all processes will be seen")
 	}
 
-	var psLister facts.ProcessLister
+	psFact := a.processesLister()
 
-	if version.IsLinux() {
-		psLister = process.NewProcessLister(a.hostRootPath, 9*time.Second)
-	} else {
-		psLister = facts.NewPsUtilLister("")
-	}
-
-	psFact := facts.NewProcess(
-		psLister,
-		a.containerRuntime,
-	)
 	netstat := &facts.NetstatProvider{FilePath: a.config.Agent.NetstatFile}
 
 	a.factProvider.AddCallback(a.containerRuntime.RuntimeFact)
@@ -1027,6 +1017,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		{a.threshold.Run, "Threshold state"},
 		{a.processUpdateMessage, "processUpdateMessage"},
 		{a.discovery.Run, "discovery"},
+		{psFact.Run, "processes lister"},
 	}
 
 	if a.config.Agent.EnableCrashReporting {
@@ -1203,7 +1194,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 
 	if a.config.Agent.ProcessExporter.Enable {
-		processSource.RegisterExporter(ctx, a.gathererRegistry, psLister, dynamicDiscovery, metricsIgnored, serviceIgnored)
+		processSource.RegisterExporter(ctx, a.gathererRegistry, psFact.AllProcs, dynamicDiscovery, metricsIgnored, serviceIgnored)
 	}
 
 	prometheusTargets, warnings := prometheusConfigToURLs(a.config.Metric.Prometheus.Targets)
@@ -2092,6 +2083,21 @@ func (a *agent) deletedContainersCallback(containersID []string) {
 func (a *agent) migrateState() {
 	// This "secret" was only present in Bleemeo agent and not really used.
 	_ = a.state.Delete("web_secret_key")
+}
+
+func (a *agent) processesLister() *facts.ProcessProvider {
+	var psLister facts.ProcessLister
+
+	if version.IsLinux() {
+		psLister = process.NewProcessLister(a.hostRootPath)
+	} else {
+		psLister = facts.NewPsUtilLister("")
+	}
+
+	return facts.NewProcess(
+		psLister,
+		a.containerRuntime,
+	)
 }
 
 // DiagnosticPage return useful information to troubleshoot issue.
