@@ -91,12 +91,7 @@ func (ma miscAppenderMinute) CollectWithState(ctx context.Context, state registr
 		logger.V(2).Printf("container Runtime metrics gather failed: %v", err)
 	}
 
-	service, err := ma.discovery.Discovery(ctx, 2*time.Hour)
-	if err != nil {
-		logger.V(1).Printf("get service failed to every-minute metrics: %v", err)
-
-		service = nil
-	}
+	service, _ := ma.discovery.GetLatestDiscovery()
 
 	for _, srv := range service {
 		if !srv.Active {

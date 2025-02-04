@@ -23,13 +23,14 @@ import (
 
 	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/types"
 )
 
 // RegisterExporter does nothing, process_exporter is not supported on this platform.
 func RegisterExporter(
 	context.Context,
 	*registry.Registry,
-	interface{},
+	func() types.ProcIter,
 	*discovery.DynamicDiscovery,
 	discovery.IgnoredService,
 	discovery.IgnoredService,

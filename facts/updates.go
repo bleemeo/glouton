@@ -32,8 +32,6 @@ import (
 	"github.com/bleemeo/glouton/version"
 )
 
-const maxAge = 2 * 24 * time.Hour
-
 var errOutDated = errors.New("cache is too old")
 
 type updateFacter struct {
@@ -206,6 +204,8 @@ func (uf updateFacter) freshnessLinux() time.Time {
 }
 
 func (uf updateFacter) fromUpdateNotifierFile(context.Context) (pendingUpdates int, pendingSecurityUpdates int, err error) {
+	const maxAge = 2 * 24 * time.Hour
+
 	updateFile := filepath.Join(uf.HostRootPath, "var/lib/update-notifier/updates-available")
 
 	stat, err := os.Stat(updateFile)

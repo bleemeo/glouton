@@ -20,18 +20,13 @@ import (
 	"context"
 	"fmt"
 	"regexp"
-	"time"
 
 	"github.com/bleemeo/glouton/facts"
-	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
 )
 
-// Processes are updated only if they are older than processMaxAge.
-const processMaxAge = 10 * time.Second
-
 type processProvider interface {
-	Processes(ctx context.Context, maxAge time.Duration) (processes map[int]facts.Process, err error)
+	GetLatest() map[int]facts.Process
 }
 
 type ProcessCheck struct {
@@ -63,11 +58,8 @@ func NewProcess(
 
 // processMainCheck returns StatusOk if at least one of the process that matched wasn't in
 // a zombie state, else it returns StatusCritical.
-func (pc *ProcessCheck) processMainCheck(ctx context.Context) types.StatusDescription {
-	procs, err := pc.ps.Processes(ctx, processMaxAge)
-	if err != nil {
-		logger.V(1).Printf("Failed to get processes: %v", err)
-	}
+func (pc *ProcessCheck) processMainCheck(context.Context) types.StatusDescription {
+	procs := pc.ps.GetLatest()
 
 	var zombieProc facts.Process
 

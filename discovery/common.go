@@ -37,14 +37,13 @@ const tcpProtocol = "tcp"
 
 // Discoverer allow to discover services. See DynamicDiscovery and Discovery.
 type Discoverer interface {
-	Discovery(ctx context.Context, maxAge time.Duration) (services []Service, err error)
-	LastUpdate() time.Time
+	Discovery(ctx context.Context) ([]Service, time.Time, error)
 }
 
-// PersistentDiscoverer also allow to remove a non-running service.
+// PersistentDiscoverer also allow to remove a non-running service and get latest discovery done.
 type PersistentDiscoverer interface {
-	Discoverer
-	RemoveIfNonRunning(ctx context.Context, services []Service)
+	GetLatestDiscovery() ([]Service, time.Time)
+	RemoveIfNonRunning(services []Service)
 }
 
 // NameInstance contains the service and instance names.
@@ -53,12 +52,6 @@ type PersistentDiscoverer interface {
 type NameInstance struct {
 	Name     string
 	Instance string
-}
-
-type ServiceOverride struct {
-	IgnoredPorts   []int
-	Interval       time.Duration
-	ExtraAttribute map[string]string
 }
 
 // ServiceName is the name of a supported service.

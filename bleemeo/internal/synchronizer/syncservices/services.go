@@ -82,7 +82,7 @@ func (s *syncServicesExecution) NeedSynchronization(_ context.Context) (bool, er
 		return false, fmt.Errorf("%w: currentExecution is nil", types.ErrUnexpectedWorkflow)
 	}
 
-	lastDiscovery := s.currentExecution.Option().Discovery.LastUpdate()
+	_, lastDiscovery := s.currentExecution.Option().Discovery.GetLatestDiscovery()
 	_, minDelayed := s.currentExecution.GlobalState().DelayedContainers()
 
 	if s.currentExecution.LastSync().Before(lastDiscovery) || (!minDelayed.IsZero() && s.currentExecution.StartedAt().After(minDelayed)) {
@@ -176,25 +176,17 @@ func getListenAddress(addresses []facts.ListenAddress) string {
 }
 
 func (s *syncServicesExecution) syncRemoteAndLocal(ctx context.Context, execution types.SynchronizationExecution) error {
-	localServices, err := execution.Option().Discovery.Discovery(ctx, 24*time.Hour)
-	if err != nil {
-		return err
-	}
-
+	localServices, _ := execution.Option().Discovery.GetLatestDiscovery()
 	localServices = ServiceExcludeUnregistrable(localServices, s.parent.logThrottle)
 
-	serviceRemoveDeletedFromRemote(ctx, execution, localServices, s.previousKnownService)
+	serviceRemoveDeletedFromRemote(execution, localServices, s.previousKnownService)
 
 	if execution.IsOnlyEssential() {
 		// no essential services, skip registering.
 		return nil
 	}
 
-	localServices, err = execution.Option().Discovery.Discovery(ctx, 24*time.Hour)
-	if err != nil {
-		return err
-	}
-
+	localServices, _ = execution.Option().Discovery.GetLatestDiscovery()
 	localServices = ServiceExcludeUnregistrable(localServices, s.parent.logThrottle)
 
 	if err := s.serviceRegisterAndUpdate(ctx, execution, localServices); err != nil {
@@ -221,7 +213,7 @@ func serviceUpdateList(ctx context.Context, execution types.SynchronizationExecu
 }
 
 // serviceRemoveDeletedFromRemote removes the local services that were deleted on the API.
-func serviceRemoveDeletedFromRemote(ctx context.Context, execution types.SynchronizationExecution, localServices []discovery.Service, previousServices map[string]bleemeoTypes.Service) {
+func serviceRemoveDeletedFromRemote(execution types.SynchronizationExecution, localServices []discovery.Service, previousServices map[string]bleemeoTypes.Service) {
 	newServices := execution.Option().Cache.ServicesByUUID()
 
 	deletedServiceNameInstance := make(map[common.ServiceNameInstance]bool)
@@ -245,7 +237,7 @@ func serviceRemoveDeletedFromRemote(ctx context.Context, execution types.Synchro
 		}
 	}
 
-	execution.Option().Discovery.RemoveIfNonRunning(ctx, localServiceToDelete)
+	execution.Option().Discovery.RemoveIfNonRunning(localServiceToDelete)
 }
 
 func (s *syncServicesExecution) serviceRegisterAndUpdate(ctx context.Context, execution types.SynchronizationExecution, localServices []discovery.Service) error {

@@ -35,6 +35,7 @@ import (
 
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/AstromechZA/etcpwdparse"
 	"github.com/ncabatoff/process-exporter/proc"
@@ -60,15 +61,12 @@ func getStatPrivateMethod(unsafe.Pointer) (procfs.ProcStat, error)
 // Processes allows to list processes and keep the last values in cache.
 // It allows to query a list of processes for multiple usages without re-doing the list.
 type Processes struct {
-	HostRootPath    string
-	DefaultValidity time.Duration
+	HostRootPath string
 
-	l          sync.Mutex
-	source     *proc.FS
-	cache      []*procValue
-	exeCache   map[proc.ID]string
-	userCache  map[proc.ID]string
-	lastUpdate time.Time
+	l         sync.Mutex
+	source    *proc.FS
+	exeCache  map[proc.ID]string
+	userCache map[proc.ID]string
 }
 
 func expectedError(expected string) error {
@@ -76,20 +74,9 @@ func expectedError(expected string) error {
 }
 
 // NewProcessLister creates a new ProcessLister using the specified parameters.
-func NewProcessLister(hostRootPath string, defaultValidity time.Duration) facts.ProcessLister {
+func NewProcessLister(hostRootPath string) facts.ProcessLister {
 	return &Processes{
-		HostRootPath:    hostRootPath,
-		DefaultValidity: defaultValidity,
-	}
-}
-
-// AllProcs return all processes.
-func (c *Processes) AllProcs() proc.Iter {
-	procs, err := c.getProcs(c.DefaultValidity)
-
-	return &iter{
-		err:  err,
-		list: procs,
+		HostRootPath: hostRootPath,
 	}
 }
 
@@ -134,16 +121,23 @@ func isProcNotExist(err error) bool {
 }
 
 // Processes lists all the processes.
-func (c *Processes) Processes(ctx context.Context, maxAge time.Duration) (processes []facts.Process, err error) {
-	procs, err := c.getProcs(maxAge)
+func (c *Processes) Processes(ctx context.Context) (processes []facts.Process, factory func() types.ProcIter, err error) {
+	procs, err := c.getProcs()
 
 	c.l.Lock()
 	exeCache := c.exeCache
 	userCache := c.userCache
 	c.l.Unlock()
 
+	factory = func() types.ProcIter {
+		return &iter{
+			err:  err,
+			list: procs,
+		}
+	}
+
 	if err != nil {
-		return nil, err
+		return nil, factory, err
 	}
 
 	newExeCache := make(map[proc.ID]string, len(exeCache))
@@ -226,10 +220,10 @@ func (c *Processes) Processes(ctx context.Context, maxAge time.Duration) (proces
 	c.exeCache = newExeCache
 	c.l.Unlock()
 
-	return result, nil
+	return result, factory, nil
 }
 
-func (c *Processes) getProcs(validity time.Duration) ([]*procValue, error) {
+func (c *Processes) getProcs() ([]*procValue, error) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -250,10 +244,6 @@ func (c *Processes) getProcs(validity time.Duration) ([]*procValue, error) {
 		c.source = fs
 	}
 
-	if time.Since(c.lastUpdate) < validity {
-		return c.cache, nil
-	}
-
 	procIter := c.source.AllProcs()
 
 	var procs []*procValue
@@ -263,12 +253,6 @@ func (c *Processes) getProcs(validity time.Duration) ([]*procValue, error) {
 	}
 
 	err := procIter.Close()
-
-	if err == nil {
-		c.cache = procs
-		c.lastUpdate = start
-	}
-
 	if err != nil {
 		logger.V(1).Printf("listing process failed: %v", err)
 	}

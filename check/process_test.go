@@ -19,7 +19,6 @@ package check
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/types"
@@ -27,9 +26,7 @@ import (
 
 type mockProcessProvider struct{}
 
-func (ps mockProcessProvider) Processes(_ context.Context, maxAge time.Duration) (processes map[int]facts.Process, err error) {
-	_ = maxAge
-
+func (ps mockProcessProvider) GetLatest() map[int]facts.Process {
 	procs := map[int]facts.Process{
 		354: {
 			CmdLine: "",
@@ -61,7 +58,7 @@ func (ps mockProcessProvider) Processes(_ context.Context, maxAge time.Duration)
 		},
 	}
 
-	return procs, nil
+	return procs
 }
 
 func Test_processMainCheck(t *testing.T) {
