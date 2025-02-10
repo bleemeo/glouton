@@ -155,6 +155,8 @@ func (s *storageClient) Set(_ context.Context, key string, value []byte) error {
 	if time.Since(s.lastSave) >= saveFileSizesToCachePeriod {
 		s.saveMetadata()
 
+		s.updatedKeys = make(map[string]struct{}) // No keys have been updated since last save.
+		// However, we don't reset s.dirty because we might need it through s.Get().
 		s.lastSave = time.Now()
 	}
 

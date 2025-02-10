@@ -90,6 +90,13 @@ type CommandRunner interface {
 	StartWithPipes(ctx context.Context, option gloutonexec.Option, name string, arg ...string) (stdoutPipe io.ReadCloser, stderrPipe io.ReadCloser, wait func() error, err error)
 }
 
+type otlpReceiverDiagnosticInformation struct {
+	GRPCEnabled            bool
+	HTTPEnabled            bool
+	LogProcessedCount      int64
+	LogThroughputPerMinute int
+}
+
 type receiverDiagnosticInformation struct {
 	LogProcessedCount      int64
 	LogThroughputPerMinute int
@@ -102,6 +109,7 @@ type diagnosticInformation struct {
 	LogProcessedCount      int64
 	LogThroughputPerMinute int
 	ProcessingStatus       string
+	OTLPReceiver           *otlpReceiverDiagnosticInformation
 	Receivers              map[string]receiverDiagnosticInformation
 }
 

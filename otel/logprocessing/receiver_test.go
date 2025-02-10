@@ -30,6 +30,8 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
 	"github.com/bleemeo/glouton/version"
+	"github.com/go-viper/mapstructure/v2"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/adapter"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -410,5 +412,33 @@ func TestExecLogReceiver(t *testing.T) {
 				t.Fatalf("Starting command should have been called once, but has been %d times.", startCmdCallsCount)
 			}
 		})
+	}
+}
+
+func TestRetryConfigIsUpToDate(t *testing.T) {
+	consumerretryConfig := adapter.BaseConfig{}.RetryOnFailure
+
+	err := mapstructure.Decode(retryCfg, &consumerretryConfig)
+	if err != nil {
+		t.Fatal("Failed to define consumerretry config:", err)
+	}
+
+	// Converting both consumerretryConfig and retryCfg to maps,
+	// so we can compare them easily.
+
+	var consumerretryCfgMap, retryCfgMap map[string]any
+
+	err = mapstructure.Decode(consumerretryConfig, &consumerretryCfgMap)
+	if err != nil {
+		t.Fatal("Failed to convert consumerretry config to a map:", err)
+	}
+
+	err = mapstructure.Decode(retryCfg, &retryCfgMap)
+	if err != nil {
+		t.Fatal("Failed to convert retry config to a map:", err)
+	}
+
+	if diff := cmp.Diff(retryCfgMap, consumerretryCfgMap); diff != "" {
+		t.Fatal("Unexpected consumerretry config (-want, +got):", diff)
 	}
 }

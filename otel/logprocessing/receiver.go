@@ -479,7 +479,7 @@ func statFileImpl(logFile string, commandRunner CommandRunner) (ignore, needSudo
 	return false, needSudo, sizeFn
 }
 
-// sudoStatFile executes a `sudo stat` on the given file and returns its (trimmed) output.
+// sudoStatFile executes a `sudo stat --printf=%s` on the given file and returns its (trimmed) output.
 func sudoStatFile(logFile string, commandRunner CommandRunner) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()

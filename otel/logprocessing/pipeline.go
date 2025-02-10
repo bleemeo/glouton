@@ -180,6 +180,11 @@ func MakePipeline( //nolint:maintidx
 
 	pipeline.startedComponents = append(pipeline.startedComponents, logBatcher)
 
+	var (
+		otlpRecvCounter         *atomic.Int64
+		otlpRecvThroughputMeter *ringCounter
+	)
+
 	if cfg.GRPC.Enable || cfg.HTTP.Enable {
 		factoryReceiver := otlpreceiver.NewFactory()
 		receiverCfg := factoryReceiver.CreateDefaultConfig()
@@ -203,11 +208,14 @@ func MakePipeline( //nolint:maintidx
 			receiverTypedCfg.Protocols.HTTP = nil
 		}
 
+		otlpRecvCounter = new(atomic.Int64)
+		otlpRecvThroughputMeter = newRingCounter(throughputMeterResolutionSecs)
+
 		otlpLogReceiver, err := factoryReceiver.CreateLogs(
 			ctx,
 			receiver.Settings{TelemetrySettings: pipeline.telemetry},
 			receiverTypedCfg,
-			logBackPressureEnforcer,
+			wrapWithCounters(logBackPressureEnforcer, otlpRecvCounter, otlpRecvThroughputMeter),
 		)
 		if err != nil {
 			logger.V(1).Printf("Failed to setup OTLP receiver: %v", err)
@@ -334,6 +342,15 @@ AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers bl
 			LogThroughputPerMinute: pipeline.logThroughputMeter.Total(),
 			ProcessingStatus:       streamAvailabilityStatusFn().String(),
 			Receivers:              receiversInfo,
+		}
+
+		if otlpRecvCounter != nil {
+			diagnosticInfo.OTLPReceiver = &otlpReceiverDiagnosticInformation{
+				GRPCEnabled:            cfg.GRPC.Enable,
+				HTTPEnabled:            cfg.HTTP.Enable,
+				LogProcessedCount:      otlpRecvCounter.Load(),
+				LogThroughputPerMinute: otlpRecvThroughputMeter.Total(),
+			}
 		}
 
 		return diagnosticInfo.writeToArchive(writer)
