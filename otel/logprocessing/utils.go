@@ -19,12 +19,18 @@ package logprocessing
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
+	"reflect"
 
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
+
+	"github.com/go-viper/mapstructure/v2"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -83,6 +89,60 @@ func saveFileMetadataToCache(state bleemeoTypes.State, metadata map[string]map[s
 	if err != nil {
 		logger.V(1).Printf("Failed to save log file metadata to cache: %v", err)
 	}
+}
+
+type obsoleteUnmarshaler interface {
+	UnmarshalYAML(unmarshal func(interface{}) error) error
+}
+
+// TODO: ensure default values are applied (confmap.Unmarshaler) and move to config/hooks.go.
+func yamlToMapstructHook(from reflect.Value, to reflect.Value) (any, error) {
+	if om, ok := to.Addr().Interface().(obsoleteUnmarshaler); ok {
+		err := om.UnmarshalYAML(func(v any) error {
+			decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+				Result:     v,
+				DecodeHook: yamlToMapstructHook,
+			})
+			if err != nil {
+				return fmt.Errorf("error creating decoder: %w", err)
+			}
+
+			return decoder.Decode(from.Interface())
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		return to.Interface(), nil
+	}
+
+	return from.Interface(), nil
+}
+
+func buildOperatorsFromYaml(operatorsYAML []byte) ([]operator.Config, error) {
+	var m []any
+
+	err := yaml.Unmarshal(operatorsYAML, &m)
+	if err != nil {
+		return nil, err
+	}
+
+	var operators []operator.Config
+
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		Result:     &operators,
+		DecodeHook: yamlToMapstructHook,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating decoder: %w", err)
+	}
+
+	err = decoder.Decode(m)
+	if err != nil {
+		return nil, err
+	}
+
+	return operators, nil
 }
 
 type CommandRunner interface {

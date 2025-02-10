@@ -48,7 +48,6 @@ import (
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/receiver"
-	"gopkg.in/yaml.v3"
 )
 
 // Since github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal/consumerretry is internal,
@@ -88,10 +87,9 @@ type logReceiver struct {
 }
 
 func newLogReceiver(name string, cfg config.OTLPReceiver, logConsumer consumer.Logs) (*logReceiver, error) {
-	var ops []operator.Config
-
-	if err := yaml.Unmarshal([]byte(cfg.OperatorsYAML), &ops); err != nil {
-		return nil, fmt.Errorf("invalid receiver operators: %w", err)
+	ops, err := buildOperatorsFromYaml([]byte(cfg.OperatorsYAML))
+	if err != nil {
+		return nil, fmt.Errorf("building operators: %w", err)
 	}
 
 	return &logReceiver{
