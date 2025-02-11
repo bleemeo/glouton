@@ -83,7 +83,8 @@ func (i *Input) startProcess(ctx context.Context) error {
 	defer i.l.Unlock()
 
 	runOpts := gloutonexec.Option{
-		RunAsRoot: i.runAsRoot,
+		RunAsRoot:  i.runAsRoot,
+		GraceDelay: 1 * time.Second,
 	}
 
 	i.Logger().Debug("starting command", zap.Strings("argv", i.argv))

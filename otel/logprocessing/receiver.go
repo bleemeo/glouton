@@ -342,9 +342,9 @@ func setupLogReceiverFactories(
 		}
 
 		// For filelogreceivers the offset is stored separately, so we don't really care about the size here.
-		// However, if it is the first time we've seen this file, we want to read it from zero.
+		// However, if this is the first time we've seen this file, we want to read starting at the end.
 		if _, ok := lastFileSizes[logFile]; !ok {
-			fileTypedCfg.InputConfig.StartAt = "beginning"
+			fileTypedCfg.InputConfig.StartAt = "end"
 		}
 
 		err = mapstructure.Decode(retryCfg, &fileTypedCfg.RetryOnFailure)
@@ -374,14 +374,13 @@ func setupLogReceiverFactories(
 		tailArgs := []string{"tail", "--follow=name"}
 
 		if lastSize, ok := lastFileSizes[logFile]; ok {
-			switch {
-			case lastSize > size: // the file has been truncated
+			if lastSize > size { // the file has been truncated since the last time
 				tailArgs = append(tailArgs, "--bytes=+0") // start at the beginning of the file
-			case size == lastSize: // the file hasn't changed
-				tailArgs = append(tailArgs, "--bytes=0") // start at the end of the file
-			case size > lastSize: // the file has been written since the last time
-				tailArgs = append(tailArgs, fmt.Sprintf("--bytes=+%d", lastSize)) // start at byte 'lastSize'
+			} else { // the file has at least the same size as the last time
+				tailArgs = append(tailArgs, fmt.Sprintf("--bytes=+%d", lastSize)) // start where we were the last time
 			}
+		} else {
+			tailArgs = append(tailArgs, "--bytes=0") // start at the end of the file
 		}
 
 		execTypedCfg.InputConfig.Argv = append(tailArgs, logFile) //nolint: gocritic
