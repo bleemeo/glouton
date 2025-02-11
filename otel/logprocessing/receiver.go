@@ -40,6 +40,7 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/go-viper/mapstructure/v2"
+	stanzaErrors "github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/errors"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/attrs"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/helper"
@@ -87,7 +88,7 @@ type logReceiver struct {
 }
 
 func newLogReceiver(name string, cfg config.OTLPReceiver, logConsumer consumer.Logs) (*logReceiver, error) {
-	ops, err := buildOperatorsFromYaml([]byte(cfg.OperatorsYAML))
+	ops, err := buildOperators(cfg.Operators)
 	if err != nil {
 		return nil, fmt.Errorf("building operators: %w", err)
 	}
@@ -177,6 +178,11 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext) err
 			wrapWithCounters(r.logConsumer, r.logCounter, r.throughputMeter),
 		)
 		if err != nil {
+			var agentErr stanzaErrors.AgentError
+			if errors.As(err, &agentErr) && agentErr.Suggestion != "" {
+				return fmt.Errorf("setup receiver: %w (%s)", err, agentErr.Suggestion)
+			}
+
 			return fmt.Errorf("setup receiver: %w", err)
 		}
 

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"strings"
 
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
@@ -30,7 +31,6 @@ import (
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
-	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -91,17 +91,45 @@ func saveFileMetadataToCache(state bleemeoTypes.State, metadata map[string]map[s
 	}
 }
 
-type obsoleteUnmarshaler interface {
-	UnmarshalYAML(unmarshal func(interface{}) error) error
+func shouldUnmarshalYamlToMapstructure(t reflect.Type) bool {
+	const otelPackagePrefix = "github.com/open-telemetry/opentelemetry-collector-contrib/"
+
+	for t.Kind() == reflect.Ptr || t.Kind() == reflect.Slice || t.Kind() == reflect.Array {
+		t = t.Elem()
+	}
+
+	switch pkgPath := t.PkgPath(); {
+	case strings.HasPrefix(pkgPath, otelPackagePrefix):
+		// We only want to apply this particular way of unmarshalling to types that come from OpenTelemetry...
+		return true
+	case pkgPath == "":
+		// ...but we also need to apply it to builtin types that may contain OpenTelemetry types.
+		return true
+	default:
+		return false
+	}
 }
 
-// TODO: ensure default values are applied (confmap.Unmarshaler) and move to config/hooks.go.
-func yamlToMapstructHook(from reflect.Value, to reflect.Value) (any, error) {
-	if om, ok := to.Addr().Interface().(obsoleteUnmarshaler); ok {
-		err := om.UnmarshalYAML(func(v any) error {
+// obsoleteUnmarshaler is a copy of gopkg.in/yaml.v3.obsoleteUnmarshaler
+// and is implemented by types that bring their own unmarshalling logic,
+// like github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator.Config.
+type obsoleteUnmarshaler interface {
+	UnmarshalYAML(unmarshal func(any) error) error
+}
+
+func unmarshalMapstructureHook(from reflect.Value, to reflect.Value) (any, error) {
+	// The purpose of this mapstructure hook is to call the UnmarshalYAML() method
+	// on types that define it in order to construct themselves correctly,
+	// while being not unmarshalling YAML, but decoding a slice of maps to a slice of [operator.Config].
+	if !shouldUnmarshalYamlToMapstructure(to.Type()) {
+		return from.Interface(), nil // returning the data as-is
+	}
+
+	if yamlUnmarshaler, ok := to.Addr().Interface().(obsoleteUnmarshaler); ok {
+		err := yamlUnmarshaler.UnmarshalYAML(func(v any) error {
 			decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 				Result:     v,
-				DecodeHook: yamlToMapstructHook,
+				DecodeHook: unmarshalMapstructureHook,
 			})
 			if err != nil {
 				return fmt.Errorf("error creating decoder: %w", err)
@@ -116,28 +144,21 @@ func yamlToMapstructHook(from reflect.Value, to reflect.Value) (any, error) {
 		return to.Interface(), nil
 	}
 
-	return from.Interface(), nil
+	return from.Interface(), nil // returning the data as-is
 }
 
-func buildOperatorsFromYaml(operatorsYAML []byte) ([]operator.Config, error) {
-	var m []any
-
-	err := yaml.Unmarshal(operatorsYAML, &m)
-	if err != nil {
-		return nil, err
-	}
-
+func buildOperators(rawOperators []map[string]any) ([]operator.Config, error) {
 	var operators []operator.Config
 
 	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 		Result:     &operators,
-		DecodeHook: yamlToMapstructHook,
+		DecodeHook: unmarshalMapstructureHook,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error creating decoder: %w", err)
 	}
 
-	err = decoder.Decode(m)
+	err = decoder.Decode(rawOperators)
 	if err != nil {
 		return nil, err
 	}

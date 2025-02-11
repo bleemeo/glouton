@@ -146,9 +146,13 @@ func TestFileLogReceiver(t *testing.T) {
 		Include: []string{
 			filepath.Join(tmpDir, "*.log"),
 		},
-		OperatorsYAML: `- type: add
-  field: resource['service.name']
-  value: 'test'`,
+		Operators: []map[string]any{
+			{
+				"type":  "add",
+				"field": "resource['service.name']",
+				"value": "apache_server",
+			},
+		},
 	}
 
 	logger, err := zap.NewDevelopment(zap.IncreaseLevel(zap.InfoLevel))
@@ -329,9 +333,13 @@ func TestExecLogReceiver(t *testing.T) {
 
 	cfg := config.OTLPReceiver{
 		Include: []string{file.Name()},
-		OperatorsYAML: `- type: add
-  field: resource['service.name']
-  value: 'test'`,
+		Operators: []map[string]any{
+			{
+				"type":  "add",
+				"field": "resource['service.name']",
+				"value": "apache_server",
+			},
+		},
 	}
 
 	logger, err := zap.NewDevelopment(zap.IncreaseLevel(zap.InfoLevel))

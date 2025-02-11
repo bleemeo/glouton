@@ -91,8 +91,8 @@ type EnableListener struct {
 }
 
 type OTLPReceiver struct {
-	Include       []string `yaml:"include"`
-	OperatorsYAML string   `yaml:"operators"` // TODO: because koanf don't use UnmarshalYAML, we can't use operator.Config as we should
+	Include   []string         `yaml:"include"`
+	Operators []map[string]any `yaml:"operators"`
 }
 
 type Smart struct {
