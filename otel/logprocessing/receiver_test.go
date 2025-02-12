@@ -30,13 +30,12 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
 	"github.com/bleemeo/glouton/version"
-	"github.com/go-viper/mapstructure/v2"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/adapter"
 
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/adapter"
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/config/configtelemetry"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
@@ -164,7 +163,6 @@ func TestFileLogReceiver(t *testing.T) {
 		Logger:         logger,
 		TracerProvider: noop.NewTracerProvider(),
 		MeterProvider:  noopM.NewMeterProvider(),
-		MetricsLevel:   configtelemetry.LevelBasic,
 		Resource:       pcommon.NewResource(),
 	}
 
@@ -309,13 +307,13 @@ func TestExecLogReceiver(t *testing.T) {
 			name:             "new file",
 			previousFileSize: -1, // -1 for no history
 			currentFileSize:  7,
-			expectedTailArgs: []string{"--follow=name", file.Name()},
+			expectedTailArgs: []string{"--follow=name", "--bytes=0", file.Name()},
 		},
 		{
 			name:             "file has not changed",
 			previousFileSize: 7,
 			currentFileSize:  7,
-			expectedTailArgs: []string{"--follow=name", "--bytes=0", file.Name()},
+			expectedTailArgs: []string{"--follow=name", "--bytes=+7", file.Name()},
 		},
 		{
 			name:             "file has grown",
@@ -351,7 +349,6 @@ func TestExecLogReceiver(t *testing.T) {
 		Logger:         logger,
 		TracerProvider: noop.NewTracerProvider(),
 		MeterProvider:  noopM.NewMeterProvider(),
-		MetricsLevel:   configtelemetry.LevelBasic,
 		Resource:       pcommon.NewResource(),
 	}
 

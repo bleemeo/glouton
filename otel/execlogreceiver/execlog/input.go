@@ -61,7 +61,11 @@ func (i *Input) Start(_ operator.Persister) error {
 	}
 
 	i.wg.Add(1)
-	go i.processWatcher(ctx)
+
+	go func() {
+		defer i.wg.Done()
+		i.processWatcher(ctx)
+	}()
 
 	return nil
 }
@@ -98,30 +102,33 @@ func (i *Input) startProcess(ctx context.Context) error {
 }
 
 func (i *Input) processWatcher(ctx context.Context) {
-	defer i.wg.Done()
-
-	var wg sync.WaitGroup
-
+	stdoutDone := make(chan struct{}, 1) // allowing a small buffer,
+	// to avoid getting the goroutine stuck on writing to the channel if ctx.Done occurs before.
 	buffer := make([]byte, len(i.buffer))
 
 	for ctx.Err() == nil {
 		startTime := time.Now()
 
-		wg.Add(1)
-
+		// We need to start both i.processStdout and i.processStderr in new goroutines,
+		// because they can be stuck indefinitely scanning the pipe.
+		// The only way to make them quit is to close the pipe,
+		// which obviously can't be done from the same goroutine.
 		go func() {
-			defer wg.Done()
 			i.processStdout(ctx)
+			stdoutDone <- struct{}{}
 		}()
 
-		i.processStderr(buffer)
+		go i.processStderr(buffer)
+
+		select {
+		case <-stdoutDone:
+		case <-ctx.Done():
+		}
 
 		processDuration := time.Since(startTime)
 		if processDuration > time.Minute {
 			i.backoff.Reset()
 		}
-
-		wg.Wait()
 
 		i.stderr.Close()
 		i.stdout.Close()

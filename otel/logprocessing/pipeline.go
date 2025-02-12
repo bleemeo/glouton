@@ -32,8 +32,8 @@ import (
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
+
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/config/configtelemetry"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -94,7 +94,6 @@ func MakePipeline( //nolint:maintidx
 			Logger:         logger.ZapLogger(),
 			TracerProvider: noop.NewTracerProvider(),
 			MeterProvider:  noopM.NewMeterProvider(),
-			MetricsLevel:   configtelemetry.LevelBasic,
 			Resource:       pcommon.NewResource(),
 		},
 		commandRunner:      commandRunner,
