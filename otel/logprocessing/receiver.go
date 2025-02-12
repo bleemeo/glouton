@@ -119,7 +119,9 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext) err
 		matching, err := doublestar.FilepathGlob(filePattern, doublestar.WithFailOnIOErrors())
 		if err != nil {
 			if errors.Is(err, doublestar.ErrBadPattern) {
-				return fmt.Errorf("file %q: %w", filePattern, err)
+				logger.V(1).Printf("Log receiver %q: file %q: %v", r.name, filePattern, err)
+
+				continue // ignoring this file
 			}
 
 			if errors.Is(err, fs.ErrPermission) {
@@ -130,12 +132,20 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext) err
 						err = unwrapped
 					}
 
-					return fmt.Errorf("resolving file %q: %w - Note that Glouton could read protected log file using sudo tail, but you need to use explicit path (no glob pattern)", filePattern, err)
+					logger.V(1).Printf(
+						"Log receiver %q: resolving file pattern %q: %v (ignoring it).\n%s",
+						r.name, filePattern, err,
+						"Note that Glouton may be able to read protected log file using sudo tail, but you need to use explicit path (no glob pattern).",
+					)
+
+					continue // ignoring this pattern
 				}
 				// We still have a chance to handle it with sudo commands.
 				matching = []string{filePattern}
 			} else {
-				return fmt.Errorf("resolving file %q: %w", filePattern, err)
+				logger.V(1).Printf("Log receiver %q: file %q: %v", r.name, filePattern, err)
+
+				continue // ignoring this file
 			}
 		}
 
