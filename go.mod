@@ -58,7 +58,6 @@ require (
 	github.com/vmware/govmomi v0.48.0
 	github.com/yusufpapurcu/wmi v1.2.4
 	go.opentelemetry.io/collector/component v0.119.0
-	go.opentelemetry.io/collector/config/configtelemetry v0.119.0
 	go.opentelemetry.io/collector/consumer v1.25.0
 	go.opentelemetry.io/collector/exporter v0.119.0
 	go.opentelemetry.io/collector/extension/xextension v0.119.0
@@ -268,6 +267,7 @@ require (
 	go.opentelemetry.io/collector/config/confignet v1.25.0 // indirect
 	go.opentelemetry.io/collector/config/configopaque v1.25.0 // indirect
 	go.opentelemetry.io/collector/config/configretry v1.25.0 // indirect
+	go.opentelemetry.io/collector/config/configtelemetry v0.119.0 // indirect
 	go.opentelemetry.io/collector/config/configtls v1.25.0 // indirect
 	go.opentelemetry.io/collector/confmap v1.25.0 // indirect
 	go.opentelemetry.io/collector/consumer/consumererror v0.119.0 // indirect
@@ -284,7 +284,6 @@ require (
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.59.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.59.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.34.0 // indirect
-	go.opentelemetry.io/otel/trace v1.34.0 // indirect
 	go.step.sm/crypto v0.57.1 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
