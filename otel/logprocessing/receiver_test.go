@@ -60,7 +60,7 @@ func (logBuf *logBuffer) getAllAsStrings() []string {
 	logBuf.l.Lock()
 	defer logBuf.l.Unlock()
 
-	result := make([]string, 0, len(logBuf.buf)) // There may be more than 1 log message per plog.Logs object
+	result := make([]string, 0, len(logBuf.buf)) // - there may be more than 1 log message per plog.Logs object
 
 	for _, ld := range logBuf.buf {
 		for i := range ld.ResourceLogs().Len() {
