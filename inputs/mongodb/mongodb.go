@@ -37,8 +37,8 @@ func New(url string) (i telegraf.Input, err error) {
 			i = &internal.Input{
 				Input: mongodbInput,
 				Accumulator: internal.Accumulator{
-					DerivatedMetrics: []string{"net_out_bytes", "net_in_bytes"},
-					TransformMetrics: transformMetrics,
+					DifferentiatedMetrics: []string{"net_out_bytes", "net_in_bytes"},
+					TransformMetrics:      transformMetrics,
 				},
 				Name: "mongodb",
 			}

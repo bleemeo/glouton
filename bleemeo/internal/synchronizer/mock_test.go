@@ -156,20 +156,10 @@ func (m mockMonitorManager) UpdateDynamicTargets([]gloutonTypes.Monitor) error {
 
 // mockProcessLister is a process lister that returns fake processes.
 // TopInfo is not implemented.
-type mockProcessLister struct {
-	processes map[int]facts.Process
-}
+type mockProcessLister struct{}
 
-func (m mockProcessLister) Processes(_ context.Context, maxAge time.Duration) (processes map[int]facts.Process, err error) {
-	_ = maxAge
-
-	return m.processes, nil
-}
-
-func (m mockProcessLister) TopInfo(_ context.Context, maxAge time.Duration) (topinfo facts.TopInfo, err error) {
-	_ = maxAge
-
-	return facts.TopInfo{}, errNotImplemented
+func (m mockProcessLister) TopInfo() facts.TopInfo {
+	return facts.TopInfo{}
 }
 
 func newStateMock() *stateMock {

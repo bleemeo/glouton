@@ -20,6 +20,7 @@ package process
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -30,6 +31,8 @@ import (
 	"github.com/ncabatoff/process-exporter/proc"
 	"github.com/prometheus/prometheus/storage"
 )
+
+var errNotProcIter = errors.New("iter isn't a proc.Iter")
 
 // bleemeoExporter is similar to process exporter with metrics renamed.
 type bleemeoExporter struct {
@@ -66,7 +69,15 @@ func (b *bleemeoExporter) points(t0 time.Time) ([]types.MetricPoint, error) {
 	}
 
 	now := time.Now()
-	permErrs, groups, err := b.exporter.grouper.Update(b.exporter.Source.AllProcs())
+
+	iter, ok := b.exporter.Source().(proc.Iter)
+	if !ok {
+		b.exporter.scrapeErrors++
+
+		return nil, errNotProcIter
+	}
+
+	permErrs, groups, err := b.exporter.grouper.Update(iter)
 
 	b.exporter.scrapePartialErrors += permErrs.Partial
 
@@ -137,9 +148,6 @@ func (b *bleemeoExporter) points(t0 time.Time) ([]types.MetricPoint, error) {
 					Point: types.Point{
 						Time:  t0,
 						Value: value,
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoItem: gname,
 					},
 				},
 			)

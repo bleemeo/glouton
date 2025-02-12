@@ -24,18 +24,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bleemeo/glouton/types"
 	"github.com/bleemeo/glouton/version"
 
 	"github.com/shirou/gopsutil/v3/process"
 )
 
 // Processes retrieves the list of all the current processes and their respective information.
-func (z PsutilLister) Processes(ctx context.Context, maxAge time.Duration) (processes []Process, err error) {
-	_ = maxAge
-
+func (z PsutilLister) Processes(ctx context.Context) (processes []Process, factory func() types.ProcIter, err error) {
 	psutilProcesses, err := process.Processes()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	processes = make([]Process, 0)
@@ -127,5 +126,5 @@ func (z PsutilLister) Processes(ctx context.Context, maxAge time.Duration) (proc
 		processes = append(processes, res)
 	}
 
-	return processes, nil
+	return processes, nil, nil
 }

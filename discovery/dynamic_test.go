@@ -34,15 +34,18 @@ type mockProcess struct {
 	result []facts.Process
 }
 
-func (mp mockProcess) Processes(_ context.Context, maxAge time.Duration) (processes map[int]facts.Process, err error) {
-	_ = maxAge
+func (mp mockProcess) UpdateProcesses(context.Context) (processes map[int]facts.Process, nextUpdate time.Time, err error) {
+	return mp.GetLatest(), time.Time{}, nil
+}
+
+func (mp mockProcess) GetLatest() map[int]facts.Process {
 	m := make(map[int]facts.Process)
 
 	for _, p := range mp.result {
 		m[p.PID] = p
 	}
 
-	return m, nil
+	return m
 }
 
 type mockNetstat struct {
@@ -150,7 +153,7 @@ func TestDynamicDiscoverySimple(t *testing.T) {
 
 	ctx := context.Background()
 
-	srv, err := dd.Discovery(ctx, 0)
+	srv, _, err := dd.Discovery(ctx)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1127,7 +1130,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 		})
 		dd.now = func() time.Time { return t0 }
 
-		srv, err := dd.Discovery(ctx, 0)
+		srv, _, err := dd.Discovery(ctx)
 		if err != nil {
 			t.Error(err)
 		}
@@ -1996,7 +1999,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 			})
 			dd.now = func() time.Time { return t0 }
 
-			srv, err := dd.Discovery(ctx, 0)
+			srv, _, err := dd.Discovery(ctx)
 			if err != nil {
 				t.Error(err)
 			}

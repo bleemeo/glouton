@@ -1769,8 +1769,8 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 			types.LabelName: point.Labels[types.LabelName],
 		}
 
-		if point.Annotations.BleemeoItem != "" {
-			newLabelsMap[types.LabelItem] = point.Annotations.BleemeoItem
+		if point.Labels[types.LabelItem] != "" {
+			newLabelsMap[types.LabelItem] = point.Labels[types.LabelItem]
 		}
 
 		// Kept meta-labels

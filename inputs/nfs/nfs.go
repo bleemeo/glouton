@@ -47,7 +47,7 @@ func New() (telegraf.Input, registry.RegistrationOption, error) {
 		Input: nfsInput,
 		Accumulator: internal.Accumulator{
 			RenameGlobal: renameGlobal,
-			DerivatedMetrics: []string{
+			DifferentiatedMetrics: []string{
 				"bytes",
 				"ops",
 				"retrans",

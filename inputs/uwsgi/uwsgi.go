@@ -50,7 +50,7 @@ func New(url string) (telegraf.Input, registry.RegistrationOption, error) {
 
 				return gatherContext, false
 			},
-			DerivatedMetrics: []string{
+			DifferentiatedMetrics: []string{
 				"requests",
 				"exceptions",
 				"tx",

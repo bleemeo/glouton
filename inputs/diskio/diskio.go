@@ -44,9 +44,9 @@ func New(diskMatcher types.Matcher) (i telegraf.Input, err error) {
 		i = &internal.Input{
 			Input: diskioInput,
 			Accumulator: internal.Accumulator{
-				RenameGlobal:     dt.renameGlobal,
-				DerivatedMetrics: []string{"merged_reads", "read_bytes", "read_time", "reads", "merged_writes", "write_bytes", "writes", "write_time", "io_time"},
-				TransformMetrics: dt.transformMetrics,
+				RenameGlobal:          dt.renameGlobal,
+				DifferentiatedMetrics: []string{"merged_reads", "read_bytes", "read_time", "reads", "merged_writes", "write_bytes", "writes", "write_time", "io_time"},
+				TransformMetrics:      dt.transformMetrics,
 			},
 			Name: "diskio",
 		}
@@ -70,7 +70,6 @@ func (dt diskIOTransformer) renameGlobal(gatherContext internal.GatherContext) (
 		return gatherContext, true
 	}
 
-	gatherContext.Annotations.BleemeoItem = item
 	gatherContext.Tags[types.LabelItem] = item
 
 	return gatherContext, false

@@ -23,6 +23,7 @@ import (
 
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -61,9 +62,9 @@ func New(url string) (i telegraf.Input, err error) {
 		i = &internal.Input{
 			Input: haproxyInput,
 			Accumulator: internal.Accumulator{
-				RenameGlobal:     renameGlobal,
-				DerivatedMetrics: []string{"stot", "bin", "bout", "dreq", "dresp", "ereq", "econ", "eresp", "req_tot"},
-				TransformMetrics: transformMetrics,
+				RenameGlobal:          renameGlobal,
+				DifferentiatedMetrics: []string{"stot", "bin", "bout", "dreq", "dresp", "ereq", "econ", "eresp", "req_tot"},
+				TransformMetrics:      transformMetrics,
 			},
 			Name: "haproxy",
 		}
@@ -79,7 +80,9 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 		return gatherContext, true
 	}
 
-	gatherContext.Annotations.BleemeoItem = gatherContext.Tags["proxy"]
+	gatherContext.Tags = map[string]string{
+		types.LabelItem: gatherContext.Tags["proxy"],
+	}
 
 	return gatherContext, false
 }

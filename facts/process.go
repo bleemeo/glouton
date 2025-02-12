@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/logger"
+	gloutonTypes "github.com/bleemeo/glouton/types"
 	"github.com/bleemeo/glouton/version"
 
 	"github.com/AstromechZA/etcpwdparse"
@@ -65,14 +66,15 @@ type ProcessProvider struct {
 	containerRuntime containerRuntime
 	startedAt        time.Time
 	ps               processQuerier
+	triggerChan      chan chan<- error
 
+	wantedNextUpdate       time.Time
 	processes              map[int]Process
+	iterFactory            func() gloutonTypes.ProcIter
 	processesDiscoveryInfo map[int]processDiscoveryInfo
 	topinfo                TopInfo
 	lastCPUtimes           cpu.TimesStat
 	lastProcessesUpdate    time.Time
-	pendingUpdateCond      *sync.Cond
-	pendingUpdate          bool
 }
 
 // Process describe one Process.
@@ -172,89 +174,99 @@ func NewProcess(pslister ProcessLister, cr containerRuntime) *ProcessProvider {
 		ps: psListerWrapper{
 			ProcessLister: pslister,
 		},
-		startedAt: time.Now(),
+		startedAt:   time.Now(),
+		triggerChan: make(chan chan<- error),
 	}
-
-	pp.pendingUpdateCond = sync.NewCond(&pp.l)
 
 	return pp
 }
 
-// Processes returns the list of processes present on this system.
-//
-// It may use a cached value as old as maxAge.
-func (pp *ProcessProvider) Processes(ctx context.Context, maxAge time.Duration) (processes map[int]Process, err error) {
-	processes, _, err = pp.ProcessesWithTime(ctx, maxAge)
-
-	return
-}
-
-// TopInfo returns a topinfo object
-//
-// It may use a cached value as old as maxAge.
-func (pp *ProcessProvider) TopInfo(ctx context.Context, maxAge time.Duration) (topinfo TopInfo, err error) {
+// GetLatest returns the list of processes present on this system.
+func (pp *ProcessProvider) GetLatest() map[int]Process {
 	pp.l.Lock()
 	defer pp.l.Unlock()
 
-	if time.Since(pp.lastProcessesUpdate) >= maxAge {
-		for pp.pendingUpdate {
-			pp.pendingUpdateCond.Wait()
-		}
-
-		pp.pendingUpdate = true
-		defer func() {
-			pp.pendingUpdate = false
-			pp.pendingUpdateCond.Signal()
-		}()
-
-		if time.Since(pp.lastProcessesUpdate) >= maxAge {
-			pp.l.Unlock()
-			err = pp.updateProcesses(ctx, time.Now(), maxAge, defaultLowProcessThreshold)
-			pp.l.Lock()
-
-			if err != nil {
-				return
-			}
-		}
-	}
-
-	return pp.topinfo, nil
+	return pp.processes
 }
 
-// ProcessesWithTime returns the list of processes present on this system and the date of last update
-//
-// It the same as Processes but also return the date of last update.
-func (pp *ProcessProvider) ProcessesWithTime(ctx context.Context, maxAge time.Duration) (processes map[int]Process, updateAt time.Time, err error) {
+// TopInfo returns a topinfo object.
+func (pp *ProcessProvider) TopInfo() TopInfo {
 	pp.l.Lock()
 	defer pp.l.Unlock()
 
-	if time.Since(pp.lastProcessesUpdate) >= maxAge {
-		for pp.pendingUpdate {
-			pp.pendingUpdateCond.Wait()
-		}
+	return pp.topinfo
+}
 
-		pp.pendingUpdate = true
-		defer func() {
-			pp.pendingUpdate = false
-			pp.pendingUpdateCond.Signal()
-		}()
+// AllProcs return all processes.
+func (pp *ProcessProvider) AllProcs() gloutonTypes.ProcIter {
+	pp.l.Lock()
+	defer pp.l.Unlock()
 
-		if time.Since(pp.lastProcessesUpdate) >= maxAge {
-			pp.l.Unlock()
-			err = pp.updateProcesses(ctx, time.Now(), maxAge, defaultLowProcessThreshold)
-			pp.l.Lock()
-
-			if err != nil {
-				return nil, time.Time{}, err
-			}
-		}
+	if pp.iterFactory != nil {
+		return pp.iterFactory()
 	}
 
-	if ctx.Err() != nil {
+	return notImplementedIter{}
+}
+
+// UpdateProcesses trigger an update of processes list and return the list once update finished.
+//
+// It could also return a suggested time for next update, because processes listing could be incompleted for processes that
+// could belong to a containers.
+func (pp *ProcessProvider) UpdateProcesses(ctx context.Context) (processes map[int]Process, wantedNextUpdate time.Time, err error) {
+	replyChan := make(chan error)
+
+	select {
+	case pp.triggerChan <- replyChan:
+	case <-ctx.Done():
 		return nil, time.Time{}, ctx.Err()
 	}
 
-	return pp.processes, pp.lastProcessesUpdate, nil
+	select {
+	case err = <-replyChan:
+	case <-ctx.Done():
+		return nil, time.Time{}, ctx.Err()
+	}
+
+	pp.l.Lock()
+	defer pp.l.Unlock()
+
+	if pp.wantedNextUpdate.Before(time.Now()) {
+		pp.wantedNextUpdate = time.Time{}
+	}
+
+	return pp.processes, pp.wantedNextUpdate, err
+}
+
+func (pp *ProcessProvider) Run(ctx context.Context) error {
+	const updateDelay = 10 * time.Second
+
+	ticker := time.NewTicker(updateDelay)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case reply := <-pp.triggerChan:
+			err := pp.updateProcesses(ctx, time.Now(), defaultLowProcessThreshold)
+			select {
+			case reply <- err:
+			default:
+			}
+		case <-ticker.C:
+			pp.l.Lock()
+			lastProcessesUpdate := pp.lastProcessesUpdate
+			pp.l.Unlock()
+
+			if time.Since(lastProcessesUpdate) > updateDelay {
+				err := pp.updateProcesses(ctx, time.Now(), defaultLowProcessThreshold)
+				if err != nil {
+					logger.V(2).Printf("Can not retrieve processes: %v", err)
+				}
+			}
+		}
+	}
 }
 
 // PsStat2Status convert status (value in ps output - or in /proc/pid/stat) to human status.
@@ -306,9 +318,10 @@ func convertPSStatusOneChar(letter byte) ProcessStatus {
 	}
 }
 
-// Only one updateProcesses should be running at a time (the pendingUpdateCond ensure this).
+// Only one updateProcesses should be running at a time (since this is only called from Run gorouting, this
+// requirements is fulified).
 // The lock should not be held, updateDiscovery take care of taking lock before access to mutable fields.
-func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, maxAge time.Duration, lowProcessesThreshold int) error { //nolint:maintidx
+func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, lowProcessesThreshold int) error { //nolint:maintidx
 	// Process creation time is accurate up to 1/SC_CLK_TCK seconds,
 	// usually 1/100th of seconds.
 	// Process must be started at least 1/100th before t0.
@@ -321,6 +334,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 	onlyStartedBefore := now.Add(1 * time.Second)
 	newProcessesMap := make(map[int]Process, len(pp.processes))
 	newProcessesDiscoveryInfoMap := make(map[int]processDiscoveryInfo, len(pp.processesDiscoveryInfo))
+	newWantedNextUpdateDelay := time.Duration(0)
 
 	var queryContainerRuntime ContainerRuntimeProcessQuerier
 
@@ -328,8 +342,10 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 		queryContainerRuntime = pp.containerRuntime.ProcessWithCache()
 	}
 
+	var iterFactory func() gloutonTypes.ProcIter
+
 	if pp.ps != nil {
-		psProcesses, err := pp.ps.Processes(ctx, maxAge)
+		psProcesses, tmp, err := pp.ps.Processes(ctx)
 		if err != nil {
 			return err
 		}
@@ -341,6 +357,8 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 
 			newProcessesMap[p.PID] = p
 		}
+
+		iterFactory = tmp
 	}
 
 	if queryContainerRuntime != nil && len(newProcessesMap) < lowProcessesThreshold {
@@ -362,7 +380,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 		}
 	}
 
-	// Complet ContainerID/ContainerName
+	// Complete ContainerID/ContainerName
 	if pp.containerRuntime != nil && pp.ps != nil {
 		newProcesses := make([]Process, 0, len(newProcessesMap))
 		pid2Cgroup := make(map[int]string)
@@ -442,12 +460,42 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 					}
 				}
 
+				// From here, we will query container runtime to find the container associated with our process.
+				// This is a bit complex because:
+				//  * we want to avoid using ContainerFromPID immediately as this one is expensive
+				//  * ContainerFromCGroup should be cheaper, but could fail to known the container
+				//  * both ContainerFromPID and ContainerFromCGroup could (temporary) fail
+				//
+				// That why if we have reasonable doubt that a process might belong to a container, we will ignore it and
+				// a later discovery will process it.
+				// It rather important to skip process in that case, because if a service's process that belong to a container
+				// and we mark it as outside any container, the service will ends up being discovered twice:
+				//  * once outside the container (while processes listing failed to find association)
+				//  * once inside the container (once processes listing work)
+				//
+				// Finally because Glouton re-use previous service discovery (because we must be remove a service only because the
+				// associated process terminated !), the two services will continue to exists. This point could be improved because
+				// if a service were discovered outside a container due to a process that "move" into a container, we could update the
+				// service rather than create a new service. This might be easier to say than to implement...
 				container, err := queryContainerRuntime.ContainerFromCGroup(ctx, cgroupData)
 				fromCgroupErr = err
 
-				if errors.Is(fromCgroupErr, ErrContainerDoesNotExists) && (now.Sub(p.CreateTime) < time.Minute || now.Sub(pp.startedAt) < 5*time.Minute) {
+				// ErrContainerDoesNotExists means that ContainerFromCGroup think it belong to a container and strongly believe the container is
+				// unknown to runtime (i.e. strongly believe ContainerFromPID will not help)
+				if errors.Is(fromCgroupErr, ErrContainerDoesNotExists) && now.Sub(p.CreateTime) < time.Minute {
 					logger.V(2).Printf("Skipping process %d (%s) created recently and seems to belong to a container", p.PID, p.Name)
 					delete(newProcessesMap, p.PID)
+
+					newWantedNextUpdateDelay = max(newWantedNextUpdateDelay, time.Minute)
+
+					continue
+				}
+
+				if errors.Is(fromCgroupErr, ErrContainerDoesNotExists) && now.Sub(pp.startedAt) < 5*time.Minute {
+					logger.V(2).Printf("Skipping process %d (%s) Glouton started recently and seems to belong to a container", p.PID, p.Name)
+					delete(newProcessesMap, p.PID)
+
+					newWantedNextUpdateDelay = max(newWantedNextUpdateDelay, 5*time.Minute)
 
 					continue
 				}
@@ -499,43 +547,55 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 					case fromCgroupErr == nil && fromPIDErr == nil:
 						// no error, this process doesn't belong to a container
 					case (errors.As(fromCgroupErr, &NoRuntimeError{}) || fromCgroupErr == nil) && errors.As(fromPIDErr, &NoRuntimeError{}):
-						// Wait a bit to be sure on reboot some process don't get wrongly detected.
+						// We do NOT ignore process if the error is NoRuntimeError (e.g. Docker uninstalled), unless process or glouton is very young.
+						//   * We still ignore for very young process because it could be the container runtime that just started.
+						//   * We still ignore for very young glouton because glouton have more change to wrongly return NoRuntimeError just after a restart,
+						//     because it never yet connected to the container runtime.
 						// This mostly means that any process will be delayed by 10 seconds when Docker isn't used.
 						if age < 10*time.Second {
-							logger.V(2).Printf("Skipping process %d (%s) because FromCgroup & FromPID fail with NoRuntime: %v", p.PID, p.Name, fromPIDErr)
+							logger.V(2).Printf("Skipping process %d (%s) because FromPID fail with NoRuntime: %v", p.PID, p.Name, fromPIDErr)
 							delete(newProcessesMap, p.PID)
+
+							newWantedNextUpdateDelay = max(newWantedNextUpdateDelay, 10*time.Second)
 
 							continue
 						}
 					case fromCgroupErr == nil && fromPIDErr != nil:
-						// ContainerFromCGroup could not fail even if fromPID does, because based on cgroup data it
-						// could "know" that the process doesn't belong to a container.
-						// Because this knowledge isn't guaranteed, we still delay the discovery a bit.
+						// ContainerFromCGroup == nil means that ContainerFromCGroup think that process don't belong
+						// to a container. Since ContainerFromCGroup only use cgroup data, this could provide this information without
+						// need to talk to the container-runtime.
+						// ContainerFromCGroup could be imperfect (it could have false negative, wrongly thinking that
+						// process don't belong to a container), so information from ContainerFromPID is still valuable.
+						//
+						// If ContainerFromCGroup think no container but ContainerFromPID fail, allow ContainerFromPID to fail for 20 seconds
+						// before trusting ContainerFromCGroup.
 						if age < 20*time.Second {
 							logger.V(2).Printf("Skipping process %d (%s) because FromPID failed with %v", p.PID, p.Name, fromPIDErr)
 							delete(newProcessesMap, p.PID)
 
-							continue
-						}
-					case errors.As(fromCgroupErr, &NoRuntimeError{}) || errors.As(fromPIDErr, &NoRuntimeError{}):
-						// Not sure this case could happen. Wait more than previous, since it means another error happened.
-						if age < time.Minute {
-							logger.V(2).Printf("Skipping process %d (%s) because FromCgroup OR FromPID failed with NoRuntime: %v / %s", p.PID, p.Name, fromCgroupErr, fromPIDErr)
-							delete(newProcessesMap, p.PID)
+							newWantedNextUpdateDelay = max(newWantedNextUpdateDelay, 20*time.Second)
 
 							continue
 						}
 					case errors.Is(fromCgroupErr, context.DeadlineExceeded) || errors.Is(fromPIDErr, context.DeadlineExceeded):
+						// The timeout error is very like a true error, means that we might want to ignore this process until timeout resolve...
+						// but to avoid unpredicted Glouton bug, kept a delay after which we include this process.
 						if age < 5*time.Minute {
 							logger.V(2).Printf("Skipping process %d (%s) because FromCgroup or FromPID failed with timeout: %v / %s", p.PID, p.Name, fromCgroupErr, fromPIDErr)
 							delete(newProcessesMap, p.PID)
 
+							newWantedNextUpdateDelay = max(newWantedNextUpdateDelay, 5*time.Minute)
+
 							continue
 						}
 					default:
+						// All other error kind (mostly FromCgroup failed) means that from cgroup we think it's a container process
+						// and we failed to communicate with container runtime.
 						if age < time.Minute {
-							logger.V(2).Printf("Skipping process %d (%s) because FromCgroup / FromPID failed: %v / %s", p.PID, p.Name, fromCgroupErr, fromPIDErr)
+							logger.V(2).Printf("Skipping process %d (%s) because FromCgroup or FromPID failed: %v / %s", p.PID, p.Name, fromCgroupErr, fromPIDErr)
 							delete(newProcessesMap, p.PID)
+
+							newWantedNextUpdateDelay = max(newWantedNextUpdateDelay, time.Minute)
 
 							continue
 						}
@@ -611,6 +671,8 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 
 	pp.topinfo = topinfo
 	pp.processes = newProcessesMap
+	pp.wantedNextUpdate = now.Add(newWantedNextUpdateDelay)
+	pp.iterFactory = iterFactory
 	pp.processesDiscoveryInfo = newProcessesDiscoveryInfoMap
 	pp.lastProcessesUpdate = now
 
@@ -659,11 +721,11 @@ func sortParentFirst(processes []Process) []Process {
 	return addChildrens(indexToChildrens, processes, make([]Process, 0, len(processes)), rootIdx)
 }
 
-func addChildrens(childrens [][]int, proccesses []Process, result []Process, indexes []int) []Process {
+func addChildrens(childrens [][]int, processes []Process, result []Process, indexes []int) []Process {
 	for _, childI := range indexes {
-		result = append(result, proccesses[childI])
+		result = append(result, processes[childI])
 
-		result = addChildrens(childrens, proccesses, result, childrens[childI])
+		result = addChildrens(childrens, processes, result, childrens[childI])
 	}
 
 	return result
@@ -865,11 +927,11 @@ func (p *Process) Update(other Process) {
 // ProcessLister return a list of Process. Some fields won't be used and will be filled by ProcessProvider.
 // For example Container or CPUPercent.
 type ProcessLister interface {
-	Processes(ctx context.Context, maxAge time.Duration) (processes []Process, err error)
+	Processes(ctx context.Context) (processes []Process, factory func() gloutonTypes.ProcIter, err error)
 }
 
 type processQuerier interface {
-	Processes(ctx context.Context, maxAge time.Duration) (processes []Process, err error)
+	Processes(ctx context.Context) (processes []Process, factory func() gloutonTypes.ProcIter, err error)
 	CGroupFromPID(pid int) (string, error)
 	PidExists(pid int32) (bool, error)
 }
@@ -940,4 +1002,18 @@ type SystemProcessInformationStruct struct {
 	ReadTransferCount            int64
 	WriteTransferCount           int64
 	OtherTransferCount           int64
+}
+
+type notImplementedIter struct{}
+
+func (notImplementedIter) Next() bool {
+	return false
+}
+
+func (notImplementedIter) Close() error {
+	return errNotAvailable
+}
+
+func (notImplementedIter) GetPid() int {
+	return 0
 }

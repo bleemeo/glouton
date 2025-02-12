@@ -205,7 +205,7 @@ func TestDerive(t *testing.T) {
 	t0 := time.Now()
 	t1 := t0.Add(10 * time.Second)
 	acc := Accumulator{
-		DerivatedMetrics: []string{"metricDeriveFloat", "metricDeriveInt", "metricDeriveUint", "metricDeriveBack", "metricDeriveBack2"},
+		DifferentiatedMetrics: []string{"metricDeriveFloat", "metricDeriveInt", "metricDeriveUint", "metricDeriveBack", "metricDeriveBack2"},
 	}
 	acc.PrepareGather()
 	acc.processMetrics(
@@ -294,14 +294,14 @@ func TestDeriveFunc(t *testing.T) {
 
 		called2 = true
 	}
-	shouldDerivateMetrics := func(_ GatherContext, metricName string) bool {
+	shouldDifferentiateMetrics := func(_ GatherContext, metricName string) bool {
 		return strings.HasSuffix(metricName, "nt")
 	}
 	t0 := time.Now()
 	t1 := t0.Add(10 * time.Second)
 	acc := Accumulator{
-		DerivatedMetrics:      []string{"metricDeriveFloat"},
-		ShouldDerivateMetrics: shouldDerivateMetrics,
+		DifferentiatedMetrics:      []string{"metricDeriveFloat"},
+		ShouldDifferentiateMetrics: shouldDifferentiateMetrics,
 	}
 	acc.PrepareGather()
 	acc.processMetrics(
@@ -375,7 +375,7 @@ func TestDeriveMultipleTag(t *testing.T) {
 	t0 := time.Now()
 	t1 := t0.Add(20 * time.Second)
 	acc := Accumulator{
-		DerivatedMetrics: []string{"io_reads"},
+		DifferentiatedMetrics: []string{"io_reads"},
 	}
 
 	acc.PrepareGather()
@@ -519,7 +519,6 @@ func TestRenameCallback(t *testing.T) {
 			func(labels map[string]string, annotations types.MetricAnnotations) (map[string]string, types.MetricAnnotations) {
 				labels["service_name"] = "mysql_1"
 				labels["service"] = "mysql"
-				annotations.BleemeoItem = "somevalue"
 
 				return labels, annotations
 			},
@@ -558,8 +557,8 @@ func TestRenameCallback2(t *testing.T) {
 		"db":                     "dbname",
 	}
 	wantAnnotation := types.MetricAnnotations{
-		BleemeoItem: "postgres_1_dbname",
-		ContainerID: "1234",
+		ContainerID:     "1234",
+		ServiceInstance: "changed",
 	}
 	finalFunc := func(_ string, _ map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, _ ...time.Time) {
 		if !reflect.DeepEqual(tags, want) {
@@ -567,7 +566,7 @@ func TestRenameCallback2(t *testing.T) {
 		}
 
 		if !reflect.DeepEqual(annotations, wantAnnotation) {
-			t.Errorf("annotaions == %v, want %v", annotations, wantAnnotation)
+			t.Errorf("annotations == %v, want %v", annotations, wantAnnotation)
 		}
 
 		called++
@@ -577,7 +576,7 @@ func TestRenameCallback2(t *testing.T) {
 	acc := Accumulator{
 		RenameGlobal: func(gatherContext GatherContext) (GatherContext, bool) {
 			gatherContext.Annotations = types.MetricAnnotations{
-				BleemeoItem: "dbname",
+				ServiceInstance: "changed",
 			}
 
 			return gatherContext, false
@@ -586,11 +585,6 @@ func TestRenameCallback2(t *testing.T) {
 			func(labels map[string]string, annotations types.MetricAnnotations) (map[string]string, types.MetricAnnotations) {
 				labels[types.LabelContainerName] = "postgres_1"
 				annotations.ContainerID = "1234"
-				if annotations.BleemeoItem != "" {
-					annotations.BleemeoItem = labels[types.LabelContainerName] + "_" + annotations.BleemeoItem
-				} else {
-					annotations.BleemeoItem = labels[types.LabelContainerName]
-				}
 
 				return labels, annotations
 			},
@@ -725,7 +719,7 @@ func BenchmarkProcessMetrics(b *testing.B) {
 func BenchmarkDeriveFunc(b *testing.B) {
 	finalFunc := func(_ string, _ map[string]interface{}, _ map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 	}
-	shouldDerivateMetrics := func(_ GatherContext, metricName string) bool {
+	shouldDerivativeMetrics := func(_ GatherContext, metricName string) bool {
 		return strings.HasSuffix(metricName, "int")
 	}
 
@@ -747,8 +741,8 @@ func BenchmarkDeriveFunc(b *testing.B) {
 			}
 
 			acc := Accumulator{
-				DerivatedMetrics:      derivatedMetrics,
-				ShouldDerivateMetrics: shouldDerivateMetrics,
+				DifferentiatedMetrics:      derivatedMetrics,
+				ShouldDifferentiateMetrics: shouldDerivativeMetrics,
 			}
 			t0 := time.Date(2020, 1, 2, 3, 4, 5, 0, time.UTC)
 

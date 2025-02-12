@@ -65,7 +65,7 @@ func New(url string) (i telegraf.Input, err error) {
 		i = &internal.Input{
 			Input: phpfpmInput,
 			Accumulator: internal.Accumulator{
-				DerivatedMetrics: []string{"accepted_conn", "slow_requests"},
+				DifferentiatedMetrics: []string{"accepted_conn", "slow_requests"},
 			},
 			Name: "phpfpm",
 		}

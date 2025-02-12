@@ -497,8 +497,8 @@ func (a *agent) Tags() []string {
 
 // UpdateThresholds update the thresholds definition.
 // This method will merge with threshold definition present in configuration file.
-func (a *agent) UpdateThresholds(ctx context.Context, thresholds map[string]threshold.Threshold, firstUpdate bool) {
-	a.updateThresholds(ctx, thresholds, firstUpdate)
+func (a *agent) UpdateThresholds(thresholds map[string]threshold.Threshold, firstUpdate bool) {
+	a.updateThresholds(thresholds, firstUpdate)
 }
 
 // notifyBleemeoFirstRegistration is called when Glouton is registered with Bleemeo Cloud platform for the first time
@@ -573,7 +573,7 @@ func (a *agent) updateSNMPResolution(resolution time.Duration) {
 	a.snmpRegistration = append(a.snmpRegistration, newRegistration...)
 }
 
-func (a *agent) updateMetricResolution(ctx context.Context, defaultResolution time.Duration, snmpResolution time.Duration) {
+func (a *agent) updateMetricResolution(defaultResolution time.Duration, snmpResolution time.Duration) {
 	a.l.Lock()
 	a.metricResolution = defaultResolution
 	a.l.Unlock()
@@ -581,10 +581,8 @@ func (a *agent) updateMetricResolution(ctx context.Context, defaultResolution ti
 	// No need to check whether the connector is nil or not, since we were called from it.
 	a.gathererRegistry.UpdateRegistrationHooks(a.bleemeoConnector.RelabelHook, a.bleemeoConnector.UpdateDelayHook)
 
-	services, err := a.discovery.Discovery(ctx, time.Hour)
-	if err != nil {
-		logger.V(1).Printf("error during discovery: %v", err)
-	} else if a.jmx != nil {
+	services, _ := a.discovery.GetLatestDiscovery()
+	if a.jmx != nil {
 		if err := a.jmx.UpdateConfig(services, defaultResolution); err != nil {
 			logger.V(1).Printf("failed to update JMX configuration: %v", err)
 		}
@@ -634,7 +632,7 @@ func (a *agent) newMetricsCallback(newMetrics []types.LabelsAndAnnotation) {
 	}
 }
 
-func (a *agent) updateThresholds(ctx context.Context, thresholds map[string]threshold.Threshold, firstUpdate bool) {
+func (a *agent) updateThresholds(thresholds map[string]threshold.Threshold, firstUpdate bool) {
 	configThreshold := a.getConfigThreshold()
 
 	oldThresholds := map[string]threshold.Threshold{}
@@ -649,15 +647,11 @@ func (a *agent) updateThresholds(ctx context.Context, thresholds map[string]thre
 
 	a.threshold.SetThresholds(a.BleemeoAgentID(), thresholds, configThreshold)
 
-	services, err := a.discovery.Discovery(ctx, 1*time.Hour)
+	services, _ := a.discovery.GetLatestDiscovery()
 
+	err := a.rebuildDynamicMetricAllowDenyList(services)
 	if err != nil {
-		logger.V(2).Printf("An error occurred while running discoveries for updateThresholds: %v", err)
-	} else {
-		err = a.rebuildDynamicMetricAllowDenyList(services)
-		if err != nil {
-			logger.V(2).Printf("An error occurred while rebuilding dynamic list for updateThresholds: %v", err)
-		}
+		logger.V(2).Printf("An error occurred while rebuilding dynamic list for updateThresholds: %v", err)
 	}
 
 	for _, name := range []string{"system_pending_updates", "system_pending_security_updates", "time_drift"} {
@@ -932,18 +926,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		logger.V(1).Printf("The agent is running in a container and \"container.pid_namespace_host\", is not true. Not all processes will be seen")
 	}
 
-	var psLister facts.ProcessLister
+	psFact := a.processesLister()
 
-	if version.IsLinux() {
-		psLister = process.NewProcessLister(a.hostRootPath, 9*time.Second)
-	} else {
-		psLister = facts.NewPsUtilLister("")
-	}
-
-	psFact := facts.NewProcess(
-		psLister,
-		a.containerRuntime,
-	)
 	netstat := &facts.NetstatProvider{FilePath: a.config.Agent.NetstatFile}
 
 	a.factProvider.AddCallback(a.containerRuntime.RuntimeFact)
@@ -1033,6 +1017,9 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		{a.miscTasks, "Miscelanous tasks"},
 		{a.sendToTelemetry, "Send Facts information to our telemetry tool"},
 		{a.threshold.Run, "Threshold state"},
+		{a.processUpdateMessage, "processUpdateMessage"},
+		{a.discovery.Run, "discovery"},
+		{psFact.Run, "processes lister"},
 	}
 
 	if a.config.Agent.EnableCrashReporting {
@@ -1223,7 +1210,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 
 	if a.config.Agent.ProcessExporter.Enable {
-		processSource.RegisterExporter(ctx, a.gathererRegistry, psLister, dynamicDiscovery, metricsIgnored, serviceIgnored)
+		processSource.RegisterExporter(ctx, a.gathererRegistry, psFact.AllProcs, dynamicDiscovery, metricsIgnored, serviceIgnored)
 	}
 
 	prometheusTargets, warnings := prometheusConfigToURLs(a.config.Metric.Prometheus.Targets)
@@ -1276,9 +1263,9 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 
 	if a.bleemeoConnector == nil {
-		a.updateThresholds(ctx, nil, true)
+		a.updateThresholds(nil, true)
 	} else {
-		a.bleemeoConnector.ApplyCachedConfiguration(ctx)
+		a.bleemeoConnector.ApplyCachedConfiguration()
 	}
 
 	if !reflect.DeepEqual(a.config.DiskMonitor, config.DefaultConfig().DiskMonitor) && len(a.config.DiskIgnore) > 0 {
@@ -1750,6 +1737,29 @@ func (a *agent) doesTaskCrashed(ctx context.Context, name string) (bool, error) 
 	return false, nil
 }
 
+func (a *agent) processUpdateMessage(ctx context.Context) error {
+	var wg sync.WaitGroup
+
+	chanDiscovery := a.discovery.Subscribe(ctx)
+
+	wg.Add(1)
+
+	go func() {
+		defer crashreport.ProcessPanic()
+		defer wg.Done()
+
+		for services := range chanDiscovery {
+			a.updatedDiscovery(ctx, services)
+		}
+	}()
+
+	<-ctx.Done()
+
+	wg.Wait()
+
+	return nil
+}
+
 func (a *agent) hourlyDiscovery(ctx context.Context) error {
 	a.waitAndRefreshPendingUpdates(ctx)
 
@@ -1890,12 +1900,12 @@ func (a *agent) sendDockerContainerHealth(ctx context.Context, container facts.C
 			Labels: map[string]string{
 				types.LabelName:              "container_health_status",
 				types.LabelMetaContainerName: container.ContainerName(),
+				types.LabelItem:              container.ContainerName(),
 				types.LabelMetaContainerID:   container.ID(),
 			},
 			Annotations: types.MetricAnnotations{
 				Status:      status,
 				ContainerID: container.ID(),
-				BleemeoItem: container.ContainerName(),
 			},
 			Point: types.Point{
 				Time:  time.Now(),
@@ -1967,34 +1977,33 @@ func (a *agent) cleanTrigger() (discovery bool, sendFacts bool, systemUpdateMetr
 	return
 }
 
+func (a *agent) updatedDiscovery(ctx context.Context, services []discovery.Service) {
+	if a.jmx != nil {
+		a.l.Lock()
+		resolution := a.metricResolution
+		a.l.Unlock()
+
+		if err := a.jmx.UpdateConfig(services, resolution); err != nil {
+			logger.V(1).Printf("failed to update JMX configuration: %v", err)
+		}
+	}
+
+	if a.dynamicScrapper != nil {
+		if containers, err := a.containerRuntime.Containers(ctx, time.Hour, false); err == nil {
+			a.dynamicScrapper.Update(containers)
+		}
+	}
+
+	err := a.rebuildDynamicMetricAllowDenyList(services)
+	if err != nil {
+		logger.V(2).Printf("Error during dynamic Filter rebuild: %v", err)
+	}
+}
+
 func (a *agent) handleTrigger(ctx context.Context) {
 	runDiscovery, runFact, runSystemUpdateMetric := a.cleanTrigger()
 	if runDiscovery {
-		services, err := a.discovery.Discovery(ctx, 0)
-		if err != nil {
-			logger.V(1).Printf("error during discovery: %v", err)
-		} else {
-			if a.jmx != nil {
-				a.l.Lock()
-				resolution := a.metricResolution
-				a.l.Unlock()
-
-				if err := a.jmx.UpdateConfig(services, resolution); err != nil {
-					logger.V(1).Printf("failed to update JMX configuration: %v", err)
-				}
-			}
-
-			if a.dynamicScrapper != nil {
-				if containers, err := a.containerRuntime.Containers(ctx, time.Hour, false); err == nil {
-					a.dynamicScrapper.Update(containers)
-				}
-			}
-
-			err := a.rebuildDynamicMetricAllowDenyList(services)
-			if err != nil {
-				logger.V(2).Printf("Error during dynamic Filter rebuild: %v", err)
-			}
-		}
+		a.discovery.TriggerUpdate()
 
 		hasConnection := a.dockerRuntime.IsRuntimeRunning(ctx)
 		if hasConnection && !a.dockerInputPresent && a.config.Telegraf.DockerMetricsEnable {
@@ -2090,6 +2099,21 @@ func (a *agent) deletedContainersCallback(containersID []string) {
 func (a *agent) migrateState() {
 	// This "secret" was only present in Bleemeo agent and not really used.
 	_ = a.state.Delete("web_secret_key")
+}
+
+func (a *agent) processesLister() *facts.ProcessProvider {
+	var psLister facts.ProcessLister
+
+	if version.IsLinux() {
+		psLister = process.NewProcessLister(a.hostRootPath)
+	} else {
+		psLister = facts.NewPsUtilLister("")
+	}
+
+	return facts.NewProcess(
+		psLister,
+		a.containerRuntime,
+	)
 }
 
 // DiagnosticPage return useful information to troubleshoot issue.

@@ -51,7 +51,7 @@ func (s *Synchronizer) syncAccountConfig(ctx context.Context, syncType types.Syn
 			}
 
 			if hasChanged {
-				s.option.UpdateConfigCallback(ctx, nameHasChanged)
+				s.option.UpdateConfigCallback(nameHasChanged)
 			}
 		}
 

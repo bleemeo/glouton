@@ -30,6 +30,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bleemeo/glouton/types"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
@@ -72,10 +73,8 @@ type mockProcessQuerier struct {
 	CGroupCalls []int
 }
 
-func (m *mockProcessQuerier) Processes(_ context.Context, maxAge time.Duration) (processes []Process, err error) {
-	_ = maxAge
-
-	return m.processesResult, nil
+func (m *mockProcessQuerier) Processes(_ context.Context) (processes []Process, factory func() types.ProcIter, err error) {
+	return m.processesResult, nil, nil
 }
 
 func (m *mockProcessQuerier) PidExists(pid int32) (bool, error) {
@@ -252,7 +251,7 @@ func TestUpdateProcesses(t *testing.T) {
 
 	cr.makePID2Containers()
 
-	err := pp.updateProcesses(context.Background(), now, 0, defaultLowProcessThreshold)
+	err := pp.updateProcesses(context.Background(), now, defaultLowProcessThreshold)
 	if err != nil {
 		t.Error(err)
 	}
@@ -433,7 +432,7 @@ func TestUpdateProcessesWithTerminated(t *testing.T) {
 		ps:               psutil,
 	}
 
-	err := pp.updateProcesses(context.Background(), now, 0, defaultLowProcessThreshold)
+	err := pp.updateProcesses(context.Background(), now, defaultLowProcessThreshold)
 	if err != nil {
 		t.Error(err)
 	}
@@ -563,7 +562,7 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:maintidx
 		ps:               psutil,
 	}
 
-	err := pp.updateProcesses(context.Background(), now, 0, defaultLowProcessThreshold)
+	err := pp.updateProcesses(context.Background(), now, defaultLowProcessThreshold)
 	if err != nil {
 		t.Error(err)
 	}
@@ -786,7 +785,7 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:maintidx
 		},
 	}
 
-	err = pp.updateProcesses(context.Background(), t1.Add(20*time.Second), 0, defaultLowProcessThreshold)
+	err = pp.updateProcesses(context.Background(), t1.Add(20*time.Second), defaultLowProcessThreshold)
 	if err != nil {
 		t.Error(err)
 	}
@@ -989,7 +988,7 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:maintidx
 		},
 	}
 
-	err = pp.updateProcesses(context.Background(), t2.Add(time.Minute).Add(20*time.Second), 0, defaultLowProcessThreshold)
+	err = pp.updateProcesses(context.Background(), t2.Add(time.Minute).Add(20*time.Second), defaultLowProcessThreshold)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1034,7 +1033,7 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:maintidx
 	cr.ContainerFromCGroupCalls = nil
 	cr.ContainerFromPIDCalls = nil
 
-	err = pp.updateProcesses(context.Background(), t2.Add(time.Hour), 0, defaultLowProcessThreshold)
+	err = pp.updateProcesses(context.Background(), t2.Add(time.Hour), defaultLowProcessThreshold)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1105,7 +1104,7 @@ func TestDeltaCPUPercent(t *testing.T) {
 			},
 			4: {
 				PID:        4,
-				Name:       "disapear",
+				Name:       "disappear",
 				CreateTime: t0,
 				CPUTime:    75.6,
 			},
@@ -1140,7 +1139,7 @@ func TestDeltaCPUPercent(t *testing.T) {
 		},
 	}
 
-	err := pp.updateProcesses(context.Background(), now, 0, defaultLowProcessThreshold)
+	err := pp.updateProcesses(context.Background(), now, defaultLowProcessThreshold)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1197,9 +1196,9 @@ func TestDeltaCPUPercent(t *testing.T) {
 	}
 }
 
-// TestUpdateProccesesTime tests that update_processes behave as expected in the times.
+// TestUpdateProcessesTime tests that update_processes behave as expected in the times.
 // For example it ensure that container is correctly associated in case of error with container runtime.
-func TestUpdateProccesesTime(t *testing.T) { //nolint: maintidx
+func TestUpdateProcessesTime(t *testing.T) { //nolint: maintidx
 	type addRemoveProcess struct {
 		proc      Process
 		cgroup    string
@@ -2014,7 +2013,7 @@ func TestUpdateProccesesTime(t *testing.T) { //nolint: maintidx
 				cr.ContainerFromPIDCalls = nil
 				cr.ProcessesCallCount = 0
 
-				err := pp.updateProcesses(context.Background(), currentTime, 0, step.lowProcessesThreshold)
+				err := pp.updateProcesses(context.Background(), currentTime, step.lowProcessesThreshold)
 				if err != nil {
 					// This error is only an issue if container runtime don't return errors
 					if step.fromCGroupErr == nil && step.fromPIDErr == nil && step.otherErr == nil {
@@ -2477,7 +2476,7 @@ func makeProcesses(count int, seed int64, sameTime bool, sorted bool) []Process 
 	}
 
 	if len(result) != count {
-		panic("result size missmatch")
+		panic("result size mismatch")
 	}
 
 	return result

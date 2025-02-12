@@ -362,7 +362,7 @@ func (e *Execution) run(ctx context.Context) error {
 		)
 	}
 
-	e.executePostRunCalls(ctx)
+	e.executePostRunCalls()
 
 	return errors.Join(errs...)
 }
@@ -370,7 +370,7 @@ func (e *Execution) run(ctx context.Context) error {
 // executePostRunCalls runs any RequestXXX called on Execution (like RequestUpdateThresholds).
 // RequestSynchronization aren't handled by this function, they're always either applied in
 // current execution run() or directly forwarded to Synchronizer.forceSync.
-func (e *Execution) executePostRunCalls(ctx context.Context) {
+func (e *Execution) executePostRunCalls() {
 	if e.callUpdateLabels {
 		if e.synchronizer.option.NotifyHooksUpdate != nil {
 			e.synchronizer.option.NotifyHooksUpdate()
@@ -378,9 +378,9 @@ func (e *Execution) executePostRunCalls(ctx context.Context) {
 	}
 
 	if e.isNewAgent {
-		e.synchronizer.UpdateUnitsAndThresholds(ctx, true)
+		e.synchronizer.UpdateUnitsAndThresholds(true)
 	} else if e.updateThresholds {
-		e.synchronizer.UpdateUnitsAndThresholds(ctx, false)
+		e.synchronizer.UpdateUnitsAndThresholds(false)
 	}
 }
 

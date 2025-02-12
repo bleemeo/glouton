@@ -537,7 +537,7 @@ func (s *Synchronizer) metricUpdatePendingOrSync(ctx context.Context, apiClient 
 }
 
 // UpdateUnitsAndThresholds update metrics units & threshold (from cache).
-func (s *Synchronizer) UpdateUnitsAndThresholds(ctx context.Context, firstUpdate bool) {
+func (s *Synchronizer) UpdateUnitsAndThresholds(firstUpdate bool) {
 	thresholds := make(map[string]threshold.Threshold)
 	units := make(map[string]threshold.Unit)
 	defaultSoftPeriod := time.Duration(s.option.Config.Metric.SoftStatusPeriodDefault) * time.Second
@@ -590,7 +590,7 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(ctx context.Context, firstUpdate
 	}
 
 	if s.option.UpdateThresholds != nil {
-		s.option.UpdateThresholds(ctx, thresholds, firstUpdate)
+		s.option.UpdateThresholds(thresholds, firstUpdate)
 	}
 
 	if s.option.UpdateUnits != nil {
@@ -741,9 +741,8 @@ func (s *Synchronizer) metricUpdateList(ctx context.Context, apiClient types.Met
 		}
 
 		if metricutils.MetricOnlyHasItem(metric.Labels(), agentID) {
-			annotations := metric.Annotations()
 			params.Set("label", metric.Labels()[gloutonTypes.LabelName])
-			params.Set("item", annotations.BleemeoItem)
+			params.Set("item", metric.Labels()[gloutonTypes.LabelItem])
 			params.Del("labels_text")
 		}
 
@@ -1171,7 +1170,7 @@ func (s *Synchronizer) prepareMetricPayload(
 	}
 
 	if metricutils.MetricOnlyHasItem(labels, agentID) {
-		payload.Item = annotations.BleemeoItem
+		payload.Item = labels[gloutonTypes.LabelItem]
 		payload.LabelsText = ""
 	}
 
@@ -1302,10 +1301,7 @@ func (s *Synchronizer) metricUpdateOne(ctx context.Context, apiClient types.Metr
 
 // metricDeleteIgnoredServices deletes the metrics $SERVICE_NAME_status from services in service_ignore_check.
 func (s *Synchronizer) metricDeleteIgnoredServices(ctx context.Context, apiClient types.MetricClient) error {
-	localServices, err := s.option.Discovery.Discovery(ctx, 24*time.Hour)
-	if err != nil {
-		return err
-	}
+	localServices, _ := s.option.Discovery.GetLatestDiscovery()
 
 	registeredMetrics := s.option.Cache.MetricsByUUID()
 	registeredMetricsByKey := s.option.Cache.MetricLookupFromList()
@@ -1319,7 +1315,7 @@ func (s *Synchronizer) metricDeleteIgnoredServices(ctx context.Context, apiClien
 		metricKey := s.metricKey(labels, srv.AnnotationsOfStatus())
 
 		if metric, ok := registeredMetricsByKey[metricKey]; ok {
-			err = apiClient.DeleteMetric(ctx, metric.ID)
+			err := apiClient.DeleteMetric(ctx, metric.ID)
 
 			// If the metric wasn't found, it has already been deleted.
 			if err != nil && !IsNotFound(err) {

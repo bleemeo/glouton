@@ -123,7 +123,7 @@ func compatibilitySyncToPerform(ctx context.Context, execution types.Synchroniza
 	localFacts, _ := option.Facts.Facts(ctx, 24*time.Hour)
 	currentSNMPCount := option.SNMPOnlineTarget()
 	lastVSphereChange := option.LastVSphereChange(ctx)
-	lastDiscovery := option.Discovery.LastUpdate()
+	_, lastDiscovery := option.Discovery.GetLatestDiscovery()
 	currentMetricCount := option.Store.MetricsCount()
 	mqttIsConnected := option.IsMqttConnected()
 	lastAnnotationChange := option.LastMetricAnnotationChange()

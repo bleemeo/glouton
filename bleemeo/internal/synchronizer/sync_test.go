@@ -1098,7 +1098,6 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 					labels.Label{Name: gloutonTypes.LabelMetaServiceName, Value: "redis"},
 					labels.Label{Name: gloutonTypes.LabelMetaServiceInstance, Value: "short-redis-container-name"},
 					labels.Label{Name: gloutonTypes.LabelMetaContainerID, Value: "1234"},
-					labels.Label{Name: gloutonTypes.LabelMetaBleemeoItem, Value: "short-redis-container-name"},
 					labels.Label{Name: gloutonTypes.LabelItem, Value: "short-redis-container-name"},
 				),
 			})

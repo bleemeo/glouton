@@ -40,9 +40,9 @@ func New(url string, username string, password string) (telegraf.Input, error) {
 			i := &internal.Input{
 				Input: rabbitmqInput,
 				Accumulator: internal.Accumulator{
-					RenameGlobal:     renameGlobal,
-					DerivatedMetrics: []string{"messages_published", "messages_delivered", "messages_acked"},
-					TransformMetrics: transformMetrics,
+					RenameGlobal:          renameGlobal,
+					DifferentiatedMetrics: []string{"messages_published", "messages_delivered", "messages_acked"},
+					TransformMetrics:      transformMetrics,
 				},
 				Name: "rabbitmq",
 			}

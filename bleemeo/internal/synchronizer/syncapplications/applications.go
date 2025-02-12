@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
@@ -92,14 +91,9 @@ func (s *SyncApplications) SyncRemoteAndLocal(ctx context.Context, syncType type
 		return fmt.Errorf("%w: currentExecution is nil", types.ErrUnexpectedWorkflow)
 	}
 
-	localServices, err := s.currentExecution.Option().Discovery.Discovery(ctx, 24*time.Hour)
-	if err != nil {
-		s.currentExecution.FailOtherEntity(types.EntityService, ErrApplicationFirst)
+	localServices, _ := s.currentExecution.Option().Discovery.GetLatestDiscovery()
 
-		return err
-	}
-
-	err = syncRemoteAndLocal(ctx, localServices, s.currentExecution.BleemeoAPIClient(), s.currentExecution.Option().Cache)
+	err := syncRemoteAndLocal(ctx, localServices, s.currentExecution.BleemeoAPIClient(), s.currentExecution.Option().Cache)
 	if err != nil {
 		s.currentExecution.FailOtherEntity(types.EntityService, ErrApplicationFirst)
 

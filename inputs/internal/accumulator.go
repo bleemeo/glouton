@@ -58,7 +58,7 @@ type RenameCallback func(labels map[string]string, annotations types.MetricAnnot
 // The processing will be the following:
 //   - PrepareGather must be called.
 //   - The Gather() method should be called
-//   - If TransformGlobal is set, it's applied. RenameTransform allow to rename measurement and alter tags. It could also completly drop
+//   - If TransformGlobal is set, it's applied. RenameTransform allow to rename measurement and alter tags. It could also completely drop
 //     a batch of metrics
 //   - Any metrics matching DerivatedMetrics are derivated. Metric seen for the first time are dropped.
 //     Derivation is only applied to Counter values, that is something that only go upward. If value does downward, it's skipped.
@@ -70,16 +70,16 @@ type Accumulator struct {
 	// It may:
 	// * change the measurement name (prefix of metric name)
 	// * alter tags
-	// * completly drop this base (e.g. blocking a disk/network interface/...))
+	// * completely drop this base (e.g. blocking a disk/network interface/...))
 	// You should return a modified version of originalContext to kept all non-modified field from originalContext.
 	RenameGlobal func(gatherContext GatherContext) (result GatherContext, drop bool)
 
-	// DerivatedMetrics is the list of metric counter to derive
-	DerivatedMetrics []string
+	// DifferentiatedMetrics is the list of metric counter to derive
+	DifferentiatedMetrics []string
 
-	// ShouldDerivateMetrics indicate if a metric should be derivated. It's an alternate way to DerivatedMetrics.
-	// If both ShouldDerivateMetrics and DerivatedMetrics are set, only metrics not found in DerivatedMetrics are passed to ShouldDerivateMetrics
-	ShouldDerivateMetrics func(currentContext GatherContext, metricName string) bool
+	// ShouldDifferentiateMetrics indicate if a metric should be derivated. It's an alternate way to DerivatedMetrics.
+	// If both ShouldDifferentiateMetrics and DerivatedMetrics are set, only metrics not found in DerivatedMetrics are passed to ShouldDifferentiateMetrics
+	ShouldDifferentiateMetrics func(currentContext GatherContext, metricName string) bool
 
 	// TransformMetrics take a list of metrics and could change the name/value or even add/delete some points.
 	// tags & measurement are given as indication and should not be mutated.
@@ -158,8 +158,8 @@ func (a *Accumulator) flattenTag(tags map[string]string) string {
 	return strings.Join(a.workStringBuffer, ",")
 }
 
-// doDerivated compute the derivated value for metrics in DerivatedMetrics (or matching ShouldDerivateMetrics).
-func (a *Accumulator) doDerivated(result map[string]float64, flatTag string, fieldsLength int, metricName string, value interface{}, metricTime time.Time) {
+// doDifferentiate compute the derivated value for metrics in DerivatedMetrics (or matching ShouldDerivativeMetrics).
+func (a *Accumulator) doDifferentiate(result map[string]float64, flatTag string, fieldsLength int, metricName string, value interface{}, metricTime time.Time) {
 	if a.currentValues == nil {
 		a.currentValues = make(map[string]map[string]metricPoint)
 	}
@@ -193,9 +193,9 @@ func (a *Accumulator) convertToFloatFields(currentContext GatherContext, fields 
 		delete(a.workResult, k)
 	}
 
-	for _, m := range a.DerivatedMetrics {
+	for _, m := range a.DifferentiatedMetrics {
 		if searchMetrics == nil {
-			searchMetrics = make(map[string]bool, len(a.DerivatedMetrics))
+			searchMetrics = make(map[string]bool, len(a.DifferentiatedMetrics))
 		}
 
 		searchMetrics[m] = true
@@ -212,17 +212,17 @@ func (a *Accumulator) convertToFloatFields(currentContext GatherContext, fields 
 			continue
 		}
 
-		derive := false
+		differentiate := false
 
 		if _, ok := searchMetrics[metricName]; ok {
-			derive = true
+			differentiate = true
 		}
 
-		if !derive && a.ShouldDerivateMetrics != nil && a.ShouldDerivateMetrics(currentContext, metricName) {
-			derive = true
+		if !differentiate && a.ShouldDifferentiateMetrics != nil && a.ShouldDifferentiateMetrics(currentContext, metricName) {
+			differentiate = true
 		}
 
-		if !derive {
+		if !differentiate {
 			valueFloat, err := inputs.ConvertToFloat(value)
 			if err == nil {
 				a.workResult[metricName] = valueFloat
@@ -237,7 +237,7 @@ func (a *Accumulator) convertToFloatFields(currentContext GatherContext, fields 
 			flatTag = a.flattenTag(currentContext.Tags)
 		}
 
-		a.doDerivated(a.workResult, flatTag, len(fields), metricName, value, metricTime)
+		a.doDifferentiate(a.workResult, flatTag, len(fields), metricName, value, metricTime)
 	}
 
 	return a.workResult

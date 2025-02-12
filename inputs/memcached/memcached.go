@@ -38,9 +38,9 @@ func New(url string) (i telegraf.Input, err error) {
 			i = &internal.Input{
 				Input: memcachedInput,
 				Accumulator: internal.Accumulator{
-					DerivatedMetrics:      []string{"bytes_read", "bytes_written", "evictions", "memcached_get_misses", "memcached_get_hits"},
-					ShouldDerivateMetrics: shouldDerivateMetrics,
-					TransformMetrics:      transformMetrics,
+					DifferentiatedMetrics:      []string{"bytes_read", "bytes_written", "evictions", "memcached_get_misses", "memcached_get_hits"},
+					ShouldDifferentiateMetrics: shouldDerivativeMetrics,
+					TransformMetrics:           transformMetrics,
 				},
 				Name: "memcached",
 			}
@@ -54,7 +54,7 @@ func New(url string) (i telegraf.Input, err error) {
 	return
 }
 
-func shouldDerivateMetrics(currentContext internal.GatherContext, metricName string) bool {
+func shouldDerivativeMetrics(currentContext internal.GatherContext, metricName string) bool {
 	_ = currentContext
 
 	if strings.HasPrefix(metricName, "cmd_") {
