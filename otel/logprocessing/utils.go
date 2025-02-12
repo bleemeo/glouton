@@ -23,6 +23,7 @@ import (
 	"io"
 	"reflect"
 	"strings"
+	"sync/atomic"
 
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
@@ -31,6 +32,8 @@ import (
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
+	"go.opentelemetry.io/collector/consumer"
+	"go.opentelemetry.io/collector/pdata/plog"
 )
 
 const (
@@ -91,7 +94,7 @@ func saveFileMetadataToCache(state bleemeoTypes.State, metadata map[string]map[s
 	}
 }
 
-func shouldUnmarshalYamlToMapstructure(t reflect.Type) bool {
+func shouldUnmarshalYAMLToMapstructure(t reflect.Type) bool {
 	const otelPackagePrefix = "github.com/open-telemetry/opentelemetry-collector-contrib/"
 
 	for t.Kind() == reflect.Ptr || t.Kind() == reflect.Slice || t.Kind() == reflect.Array {
@@ -121,7 +124,7 @@ func unmarshalMapstructureHook(from reflect.Value, to reflect.Value) (any, error
 	// The purpose of this mapstructure hook is to call the UnmarshalYAML() method
 	// on types that define it in order to construct themselves correctly,
 	// while being not unmarshalling YAML, but decoding a slice of maps to a slice of [operator.Config].
-	if !shouldUnmarshalYamlToMapstructure(to.Type()) {
+	if !shouldUnmarshalYAMLToMapstructure(to.Type()) {
 		return from.Interface(), nil // returning the data as-is
 	}
 
@@ -164,6 +167,23 @@ func buildOperators(rawOperators []map[string]any) ([]operator.Config, error) {
 	}
 
 	return operators, nil
+}
+
+func wrapWithCounters(next consumer.Logs, counter *atomic.Int64, throughputMeter *ringCounter) consumer.Logs {
+	logCounter, err := consumer.NewLogs(func(ctx context.Context, ld plog.Logs) error {
+		count := ld.LogRecordCount()
+		counter.Add(int64(count))
+		throughputMeter.Add(count)
+
+		return next.ConsumeLogs(ctx, ld)
+	})
+	if err != nil {
+		logger.V(1).Printf("Failed to wrap component with log counters: %v", err)
+
+		return next // give up wrapping it and just use it as is
+	}
+
+	return logCounter
 }
 
 type CommandRunner interface {

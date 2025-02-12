@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/otel/execlogreceiver/execlog"
+
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/adapter"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
 	"go.opentelemetry.io/collector/component"

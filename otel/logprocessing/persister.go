@@ -34,8 +34,6 @@ const storageType = "glouton_log_metadata_storage"
 var errStorageClientNotFound = errors.New("storage client not found")
 
 type persistHost struct {
-	state bleemeoTypes.State
-
 	l                   sync.Mutex
 	extensions          map[component.ID]component.Component
 	metadataPerReceiver map[string]map[string][]byte
@@ -49,7 +47,6 @@ func newPersistHost(state bleemeoTypes.State) (*persistHost, error) {
 	}
 
 	return &persistHost{
-		state:               state,
 		extensions:          make(map[component.ID]component.Component),
 		metadataPerReceiver: metadata,
 		updatedKeys:         make(map[string]struct{}),
@@ -149,6 +146,12 @@ func (s *storageClient) Set(_ context.Context, key string, value []byte) error {
 	s.l.Lock()
 	defer s.l.Unlock()
 
+	s.set(key, value)
+
+	return nil
+}
+
+func (s *storageClient) set(key string, value []byte) {
 	s.dirty[key] = value
 	s.updatedKeys[key] = struct{}{}
 
@@ -159,34 +162,34 @@ func (s *storageClient) Set(_ context.Context, key string, value []byte) error {
 		// However, we don't reset s.dirty because we might need it through s.Get().
 		s.lastSave = time.Now()
 	}
-
-	return nil
 }
 
 func (s *storageClient) Delete(_ context.Context, key string) error {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	delete(s.dirty, key)
-	delete(s.updatedKeys, key)
+	s.delete(key)
 
 	return nil
 }
 
-func (s *storageClient) Batch(ctx context.Context, ops ...*storage.Operation) error {
+func (s *storageClient) delete(key string) {
+	delete(s.dirty, key)
+	delete(s.updatedKeys, key)
+}
+
+func (s *storageClient) Batch(_ context.Context, ops ...*storage.Operation) error {
+	s.l.Lock()
+	defer s.l.Unlock()
+
 	for _, op := range ops {
 		switch op.Type {
 		case storage.Get:
-			value, err := s.Get(ctx, op.Key)
-			if err != nil {
-				return err
-			}
-
-			op.Value = value
+			op.Value = s.dirty[op.Key]
 		case storage.Set:
-			return s.Set(ctx, op.Key, op.Value)
+			s.set(op.Key, op.Value)
 		case storage.Delete:
-			return s.Delete(ctx, op.Key)
+			s.delete(op.Key)
 		}
 	}
 
@@ -205,7 +208,7 @@ func (s *storageClient) Close(_ context.Context) error {
 
 func (s *storageClient) saveMetadata() {
 	updatedData := make(map[string][]byte, len(s.updatedKeys))
-	// Only keeping the values that have been updated during this run,
+	// Only saving the values that have been updated during this run,
 	// so as to discard the ones that correspond to files that no longer exist.
 	for key := range s.updatedKeys {
 		updatedData[key] = s.dirty[key]

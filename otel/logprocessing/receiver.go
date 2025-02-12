@@ -47,7 +47,6 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
-	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/receiver"
 )
 
@@ -401,23 +400,6 @@ func setupLogReceiverFactories(
 	}
 
 	return factories, readableFiles, execFiles, sizeFnByFile, nil
-}
-
-func wrapWithCounters(next consumer.Logs, counter *atomic.Int64, throughputMeter *ringCounter) consumer.Logs {
-	logCounter, err := consumer.NewLogs(func(ctx context.Context, ld plog.Logs) error {
-		count := ld.LogRecordCount()
-		counter.Add(int64(count))
-		throughputMeter.Add(count)
-
-		return next.ConsumeLogs(ctx, ld)
-	})
-	if err != nil {
-		logger.V(1).Printf("Failed to wrap component with log counters: %v", err)
-
-		return next // give up wrapping it and just use it as is
-	}
-
-	return logCounter
 }
 
 // Using statFile instead of the function allows us to mock it during tests.
