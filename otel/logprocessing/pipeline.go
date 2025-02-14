@@ -79,6 +79,7 @@ func MakePipeline( //nolint:maintidx
 	commandRunner CommandRunner,
 	pushLogs func(context.Context, []byte) error,
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability,
+	addWarnings func(...error),
 ) (diagnosticFn func(context.Context, types.ArchiveWriter) error, err error) { //nolint:wsl
 	// TODO: no logs & metrics at the same time
 
@@ -190,7 +191,7 @@ func MakePipeline( //nolint:maintidx
 
 		receiverTypedCfg, ok := receiverCfg.(*otlpreceiver.Config)
 		if !ok {
-			logger.V(1).Printf("Unexpected config type for receiver default config: %T", receiverCfg)
+			addWarnings(errorf("unexpected config type for receiver default config: %T", receiverCfg))
 
 			goto AfterOTLPReceiversSetup
 		}
@@ -217,13 +218,13 @@ func MakePipeline( //nolint:maintidx
 			wrapWithCounters(logBackPressureEnforcer, otlpRecvCounter, otlpRecvThroughputMeter),
 		)
 		if err != nil {
-			logger.V(1).Printf("Failed to setup OTLP receiver: %v", err)
+			addWarnings(errorf("failed to setup OTLP receiver: %w", err))
 
 			goto AfterOTLPReceiversSetup
 		}
 
 		if err = otlpLogReceiver.Start(ctx, nil); err != nil {
-			logger.V(1).Printf("Failed to start OTLP receiver: %v", err)
+			addWarnings(errorf("failed to start OTLP receiver: %w", err))
 
 			goto AfterOTLPReceiversSetup
 		}
@@ -235,14 +236,14 @@ AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers bl
 	for name, rcvrCfg := range cfg.Receivers {
 		recv, err := newLogReceiver(name, rcvrCfg, logBackPressureEnforcer)
 		if err != nil {
-			logger.V(1).Printf("Failed to setup log receiver %q (ignoring it): %v", name, err)
+			addWarnings(errorf("failed to setup log receiver %q (ignoring it): %w", name, err))
 
 			continue
 		}
 
-		err = recv.update(ctx, pipeline)
+		err = recv.update(ctx, pipeline, addWarnings)
 		if err != nil {
-			logger.V(1).Printf("Failed to start log receiver %q (ignoring it): %v", name, err)
+			addWarnings(errorf("failed to start log receiver %q (ignoring it): %w", name, err))
 
 			continue
 		}
@@ -252,11 +253,11 @@ AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers bl
 
 	if len(pipeline.receivers) == 0 {
 		if len(cfg.Receivers) > 0 {
-			logger.V(1).Printf("None of the %d configured log receiver(s) is valid.", len(cfg.Receivers))
+			addWarnings(errorf("None of the %d configured log receiver(s) is valid.", len(cfg.Receivers)))
 		}
 
 		if !cfg.HTTP.Enable && !cfg.GRPC.Enable {
-			logger.V(1).Printf("No receiver to start; disabling log processing.")
+			addWarnings(errorf("no receiver to start; disabling log processing."))
 
 			shutdownAll(pipeline.startedComponents)
 
@@ -276,7 +277,10 @@ AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers bl
 				pipeline.l.Lock()
 
 				for i, rcvr := range pipeline.receivers {
-					err = rcvr.update(ctx, pipeline)
+					// Here we use logWarnings instead of addWarnings,
+					// because that would make the description of
+					// agent_config_warning grow indefinitely.
+					err = rcvr.update(ctx, pipeline, logWarnings)
 					if err != nil {
 						logger.V(1).Printf("Failed to update log receiver n°%d: %v", i+1, err)
 					}

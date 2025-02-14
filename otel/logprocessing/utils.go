@@ -94,6 +94,14 @@ func saveFileMetadataToCache(state bleemeoTypes.State, metadata map[string]map[s
 	}
 }
 
+func errorf(format string, a ...any) error {
+	return fmt.Errorf(format, a...) //nolint:err113
+}
+
+func logWarnings(errs ...error) {
+	logger.V(1).Printf("Log processing warning: %v", errs)
+}
+
 func shouldUnmarshalYAMLToMapstructure(t reflect.Type) bool {
 	const otelPackagePrefix = "github.com/open-telemetry/opentelemetry-collector-contrib/"
 

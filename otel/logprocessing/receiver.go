@@ -109,7 +109,7 @@ func newLogReceiver(name string, cfg config.OTLPReceiver, logConsumer consumer.L
 //
 // Passing the pipelineContext at each call rather than storing it in logReceiver
 // makes explicit the fact that its lock must be acquired during the call to update().
-func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext) error {
+func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, addWarnings func(...error)) error {
 	r.l.Lock()
 	defer r.l.Unlock()
 
@@ -119,7 +119,7 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext) err
 		matching, err := doublestar.FilepathGlob(filePattern, doublestar.WithFailOnIOErrors())
 		if err != nil {
 			if errors.Is(err, doublestar.ErrBadPattern) {
-				logger.V(1).Printf("Log receiver %q: file %q: %v", r.name, filePattern, err)
+				addWarnings(errorf("log receiver %q: file %q: %w", r.name, filePattern, err))
 
 				continue // ignoring this file
 			}
@@ -132,18 +132,18 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext) err
 						err = unwrapped
 					}
 
-					logger.V(1).Printf(
-						"Log receiver %q: resolving file pattern %q: %v (ignoring it).\n%s",
+					addWarnings(errorf(
+						"log receiver %q: resolving file pattern %q: %w (ignoring it)\n%s",
 						r.name, filePattern, err,
-						"Note that Glouton may be able to read protected log file using sudo tail, but you need to use explicit path (no glob pattern).",
-					)
+						"(Note that Glouton may be able to read protected log file using sudo tail, but you need to use explicit path (no glob pattern).)",
+					))
 
 					continue // ignoring this pattern
 				}
 				// We still have a chance to handle it with sudo commands.
 				matching = []string{filePattern}
 			} else {
-				logger.V(1).Printf("Log receiver %q: file %q: %v", r.name, filePattern, err)
+				addWarnings(errorf("log receiver %q: file %q: %w", r.name, filePattern, err))
 
 				continue // ignoring this file
 			}
@@ -388,7 +388,7 @@ func setupLogReceiverFactories(
 			} else { // the file has at least the same size as the last time
 				tailArgs = append(tailArgs, fmt.Sprintf("--bytes=+%d", lastSize)) // start where we were the last time
 			}
-		} else {
+		} else { // the file has never been seen before
 			tailArgs = append(tailArgs, "--bytes=0") // start at the end of the file
 		}
 

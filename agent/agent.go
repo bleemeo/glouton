@@ -1108,6 +1108,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 				a.commandRunner,
 				connector.PushLogs,
 				connector.ShouldApplyLogBackPressure,
+				a.addWarnings,
 			)
 			if err != nil {
 				logger.Printf("unable to setup log processing: %v", err)

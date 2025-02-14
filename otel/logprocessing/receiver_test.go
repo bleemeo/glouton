@@ -127,6 +127,16 @@ func mustNewPersistHost(t *testing.T) *persistHost {
 	return host
 }
 
+func addWarningsFn(t *testing.T) func(errs ...error) {
+	t.Helper()
+
+	return func(errs ...error) {
+		t.Helper()
+
+		t.Log("Warnings:", errs)
+	}
+}
+
 var sortStringsOpt = cmpopts.SortSlices(func(x, y string) bool { return x < y }) //nolint:gochecknoglobals
 
 func TestFileLogReceiver(t *testing.T) {
@@ -201,7 +211,7 @@ func TestFileLogReceiver(t *testing.T) {
 		shutdownAll(pipeline.startedComponents)
 	}()
 
-	err = recv.update(ctx, &pipeline)
+	err = recv.update(ctx, &pipeline, addWarningsFn(t))
 	if err != nil {
 		t.Fatal("Failed to update pipeline:", err)
 	}
@@ -217,7 +227,7 @@ func TestFileLogReceiver(t *testing.T) {
 
 	defer f2.Close()
 
-	err = recv.update(ctx, &pipeline)
+	err = recv.update(ctx, &pipeline, addWarningsFn(t))
 	if err != nil {
 		t.Fatal("Failed to update pipeline:", err)
 	}
@@ -404,7 +414,7 @@ func TestExecLogReceiver(t *testing.T) {
 				t.Fatal("Failed to initialize log receiver:", err)
 			}
 
-			err = recv.update(ctx, &pipeline)
+			err = recv.update(ctx, &pipeline, addWarningsFn(t))
 			if err != nil {
 				t.Fatal("Failed to update pipeline:", err)
 			}
