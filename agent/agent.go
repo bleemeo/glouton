@@ -286,6 +286,8 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 		if oldState.IsEmpty() {
 			oldStatePath = ""
 		} else {
+			a.state.Close()
+
 			a.state = oldState
 		}
 	}

@@ -211,20 +211,12 @@ func (s *State) FileSizes() (int, int) {
 
 // Close wait for any background write.
 func (s *State) Close() {
-	// To avoid dead-lock, it's important to acquire the read-lock before.
-	// It's also important that calls to triggerCacheWrite() acquire the write lock before.
-	// Without those conditions, the following could occur:
-	// * Close() acquire backgroundLock
-	// * A modification (like Set()) acquire the write lock and block inside triggerCacheWrite
-	//   trying to acquire backgroundLock
-	// * background writer block on read lock, and never finish
-	// * Close() block on waiting background writer. Dead-lock is reached.
 	s.l.RLock()
 	s.backgroundLock.Lock()
 
 	close(s.backgroundWriteTrigger)
 	// We need to explicitly mark the channel as closed,
-	// otherwise we wouldn't know if we can write to it.
+	// otherwise we wouldn't know if we can still write to it.
 	s.closed = true
 
 	s.backgroundLock.Unlock()
@@ -302,6 +294,13 @@ func (s *State) savePersistent() error {
 }
 
 // Caller of triggerCacheWrite must hold the writer lock (s.l.Lock).
+// If triggerCacheWrite is called while the state is closed, the message will be dropped.
+//
+// If `blocking` is set to true, triggerCacheWrite will wait for the channel
+// to accept the message before returning. When set to false, the message may be dropped.
+//
+// If `onlyIfFileExists` is set to true, the cache will only be written if the file already exists.
+// When set to false, the file will be written without any pre-existence check.
 func (s *State) triggerCacheWrite(blocking, onlyIfFileExists bool) {
 	s.backgroundLock.Lock()
 	defer s.backgroundLock.Unlock()
