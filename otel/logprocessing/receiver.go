@@ -137,7 +137,7 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 		)
 		if err != nil {
 			if errors.Is(err, doublestar.ErrBadPattern) {
-				addWarnings(errorf("log receiver %q: file %q: %w", r.name, filePattern, err))
+				addWarnings(errorf("Log receiver %q: file %q: %w", r.name, filePattern, err))
 
 				continue // ignoring this file
 			}
@@ -145,7 +145,7 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 			if errors.Is(err, fs.ErrPermission) {
 				if hasHostRoot {
 					// We don't support execlogreceiver from a container
-					addWarnings(errorf("log receiver %q: resolving file %q: %w (ignoring it)", r.name, filePattern, err))
+					addWarnings(errorf("Log receiver %q: resolving file %q: %w (ignoring it)", r.name, filePattern, err))
 
 					continue // ignoring this file
 				}
@@ -158,7 +158,7 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 					}
 
 					addWarnings(errorf(
-						"log receiver %q: resolving file pattern %q: %w (ignoring it)\n%s",
+						"Log receiver %q: resolving file pattern %q: %w (ignoring it)\n%s",
 						r.name, filePattern, err,
 						"(Note that Glouton may be able to read protected log file using sudo tail, but you need to use explicit path (no glob pattern).)",
 					))
@@ -168,7 +168,7 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 				// We still have a chance to handle it with sudo commands.
 				matching = []string{filePattern}
 			} else {
-				addWarnings(errorf("log receiver %q: file %q: %w", r.name, filePattern, err))
+				logger.V(1).Printf("Log receiver %q: file %q: %v", r.name, filePattern, err)
 
 				continue // ignoring this file
 			}
