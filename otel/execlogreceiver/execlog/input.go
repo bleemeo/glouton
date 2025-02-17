@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	"github.com/cenkalti/backoff/v4"
@@ -63,7 +64,9 @@ func (i *Input) Start(_ operator.Persister) error {
 	i.wg.Add(1)
 
 	go func() {
+		defer crashreport.ProcessPanic()
 		defer i.wg.Done()
+
 		i.processWatcher(ctx)
 	}()
 
@@ -114,11 +117,17 @@ func (i *Input) processWatcher(ctx context.Context) {
 		// The only way to make them quit is to close the pipe,
 		// which obviously can't be done from the same goroutine.
 		go func() {
+			defer crashreport.ProcessPanic()
+
 			i.processStdout(ctx)
 			stdoutDone <- struct{}{}
 		}()
 
-		go i.processStderr(buffer)
+		go func() {
+			defer crashreport.ProcessPanic()
+
+			i.processStderr(buffer)
+		}()
 
 		select {
 		case <-stdoutDone:

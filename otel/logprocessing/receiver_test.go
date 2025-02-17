@@ -180,7 +180,7 @@ func TestFileLogReceiver(t *testing.T) {
 		buf: make([]plog.Logs, 0, 2), // we plan to write 2 log lines
 	}
 
-	recv, err := newLogReceiver("filelog/recv", cfg, makeBufferConsumer(t, &logBuf))
+	recv, err := newLogReceiver("filelog/recv", cfg, string(os.PathSeparator), makeBufferConsumer(t, &logBuf))
 	if err != nil {
 		t.Fatal("Failed to initialize log receiver:", err)
 	}
@@ -286,6 +286,130 @@ func TestFileLogReceiver(t *testing.T) {
 	}
 }
 
+func TestFileLogReceiverWithHostroot(t *testing.T) {
+	t.Parallel()
+
+	// In this test, we ensure hostroot is handled correctly.
+	// It shouldn't appear anywhere, as it is internal logic.
+	const watchedFile = "/file.log"
+	// We'll act as if this temp dir was the mountpoint of the host filesystem,
+	// and the file we watch is at its root.
+	hostRootPath := t.TempDir()
+
+	file, err := os.Create(filepath.Join(hostRootPath, watchedFile))
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer file.Close()
+
+	cfg := config.OTLPReceiver{
+		Include: []string{
+			watchedFile,
+		},
+		Operators: []map[string]any{
+			{
+				"type":  "add",
+				"field": "resource['service.name']",
+				"value": "apache_server",
+			},
+		},
+	}
+
+	logger, err := zap.NewDevelopment(zap.IncreaseLevel(zap.InfoLevel))
+	if err != nil {
+		t.Fatalf("Failed to create logger: %v", err)
+	}
+
+	telSet := component.TelemetrySettings{
+		Logger:         logger,
+		TracerProvider: noop.NewTracerProvider(),
+		MeterProvider:  noopM.NewMeterProvider(),
+		Resource:       pcommon.NewResource(),
+	}
+
+	logBuf := logBuffer{
+		buf: make([]plog.Logs, 0, 1), // we plan to write 1 log line
+	}
+
+	recv, err := newLogReceiver("recv-from-container", cfg, hostRootPath, makeBufferConsumer(t, &logBuf))
+	if err != nil {
+		t.Fatal("Failed to initialize log receiver:", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	pipeline := pipelineContext{
+		lastFileSizes:     make(map[string]int64),
+		telemetry:         telSet,
+		startedComponents: []component.Component{},
+		commandRunner: dummyRunner{
+			run: func(_ context.Context, _ gloutonexec.Option, cmd string, args ...string) ([]byte, error) {
+				t.Errorf("No command should have been executed during this test, but: %s %s", cmd, args)
+
+				return nil, nil
+			},
+			startWithPipes: func(_ context.Context, _ gloutonexec.Option, cmd string, args ...string) (io.ReadCloser, io.ReadCloser, func() error, error) {
+				t.Errorf("No command should have been executed during this test, but: %s %s", cmd, args)
+
+				return nil, nil, nil, nil
+			},
+		},
+		persister: mustNewPersistHost(t),
+	}
+
+	defer func() {
+		shutdownAll(pipeline.startedComponents)
+	}()
+
+	err = recv.update(ctx, &pipeline, addWarningsFn(t))
+	if err != nil {
+		t.Fatal("Failed to update pipeline:", err)
+	}
+
+	if diff := cmp.Diff([]string{watchedFile}, recv.currentlyWatching(), sortStringsOpt); diff != "" {
+		t.Error("Unexpected watched log files (-want, +got):", diff)
+	}
+
+	time.Sleep(time.Second)
+
+	_, err = file.WriteString("file log 1")
+	if err != nil {
+		t.Fatal("Failed to write to log file:", err)
+	}
+
+	time.Sleep(2 * time.Second)
+
+	expectedLogLines := []string{"file log 1"}
+	if diff := cmp.Diff(expectedLogLines, logBuf.getAllAsStrings(), sortStringsOpt); diff != "" {
+		t.Fatal("Unexpected log lines (-want, +got):", diff)
+	}
+
+	fileSizes, err := recv.sizesByFile()
+	if err != nil {
+		t.Fatal("Failed to get file sizes:", err)
+	}
+
+	expectedFileSizes := map[string]int64{
+		watchedFile: 10,
+	}
+	if diff := cmp.Diff(expectedFileSizes, fileSizes); diff != "" {
+		t.Fatal("Unexpected file sizes (-want, +got):", diff)
+	}
+
+	expectedDiagnosticInfo := receiverDiagnosticInformation{
+		LogProcessedCount:      1,
+		LogThroughputPerMinute: 1,
+		FileLogReceiverPaths:   []string{watchedFile},
+		ExecLogReceiverPaths:   []string{},
+		IgnoredFilePaths:       []string{},
+	}
+	if diff := cmp.Diff(expectedDiagnosticInfo, recv.diagnosticInfo(), sortStringsOpt); diff != "" {
+		t.Fatal("Unexpected diagnostic information (-want, +got):", diff)
+	}
+}
+
 func TestExecLogReceiver(t *testing.T) {
 	if version.IsWindows() {
 		t.Skip("We currently don't support accessing protected files on Windows.")
@@ -368,7 +492,7 @@ func TestExecLogReceiver(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Replacing the statFile function with a mock to force the use of "sudo".
-			statFile = func(string, CommandRunner) (ignore, needSudo bool, sizeFn func() (int64, error)) {
+			statFile = func(string, string, CommandRunner) (ignore, needSudo bool, sizeFn func() (int64, error)) {
 				return false, true, func() (int64, error) {
 					return tc.currentFileSize, nil
 				}
@@ -409,7 +533,7 @@ func TestExecLogReceiver(t *testing.T) {
 				shutdownAll(pipeline.startedComponents)
 			}()
 
-			recv, err := newLogReceiver("root_files", cfg, makeBufferConsumer(t, &logBuffer{buf: []plog.Logs{}}))
+			recv, err := newLogReceiver("root_files", cfg, string(os.PathSeparator), makeBufferConsumer(t, &logBuffer{buf: []plog.Logs{}}))
 			if err != nil {
 				t.Fatal("Failed to initialize log receiver:", err)
 			}

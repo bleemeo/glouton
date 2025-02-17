@@ -75,6 +75,7 @@ type pipelineContext struct {
 func MakePipeline( //nolint:maintidx
 	ctx context.Context,
 	cfg config.OpenTelemetry,
+	hostroot string,
 	state bleemeoTypes.State,
 	commandRunner CommandRunner,
 	pushLogs func(context.Context, []byte) error,
@@ -234,7 +235,7 @@ func MakePipeline( //nolint:maintidx
 AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers block
 
 	for name, rcvrCfg := range cfg.Receivers {
-		recv, err := newLogReceiver(name, rcvrCfg, logBackPressureEnforcer)
+		recv, err := newLogReceiver(name, rcvrCfg, hostroot, logBackPressureEnforcer)
 		if err != nil {
 			addWarnings(errorf("failed to setup log receiver %q (ignoring it): %w", name, err))
 

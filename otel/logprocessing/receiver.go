@@ -25,6 +25,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -50,6 +51,17 @@ import (
 	"go.opentelemetry.io/collector/receiver"
 )
 
+type receiverKind string
+
+const (
+	receiverFileLog receiverKind = "filelogreceiver"
+	receiverExecLog receiverKind = "execlogreceiver"
+)
+
+var receiverNameRegex = regexp.MustCompile(`^(filelog/)?[^/]+$`)
+
+var errInvalidReceiverName = errors.New("invalid receiver name")
+
 // Since github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal/consumerretry is internal,
 // we recreate its config type and mapstructure.Decode() it into the receivers' options.
 var retryCfg = struct { //nolint:gochecknoglobals
@@ -64,16 +76,12 @@ var retryCfg = struct { //nolint:gochecknoglobals
 	MaxElapsedTime:  1 * time.Hour,
 }
 
-type receiverKind string
-
-const (
-	receiverFileLog receiverKind = "filelogreceiver"
-	receiverExecLog receiverKind = "execlogreceiver"
-)
+const metadataKeySeparator = "/"
 
 type logReceiver struct {
 	name        string
 	cfg         config.OTLPReceiver
+	hostroot    string
 	logConsumer consumer.Logs
 	operators   []operator.Config
 
@@ -86,7 +94,11 @@ type logReceiver struct {
 	throughputMeter *ringCounter
 }
 
-func newLogReceiver(name string, cfg config.OTLPReceiver, logConsumer consumer.Logs) (*logReceiver, error) {
+func newLogReceiver(name string, cfg config.OTLPReceiver, hostroot string, logConsumer consumer.Logs) (*logReceiver, error) {
+	if !receiverNameRegex.MatchString(name) {
+		return nil, fmt.Errorf("%w: %q. It must be of the form 'my-receiver' or 'filelog/my-receiver', contain one slash a most, and not start with a slash", errInvalidReceiverName, name)
+	}
+
 	ops, err := buildOperators(cfg.Operators)
 	if err != nil {
 		return nil, fmt.Errorf("building operators: %w", err)
@@ -95,6 +107,7 @@ func newLogReceiver(name string, cfg config.OTLPReceiver, logConsumer consumer.L
 	return &logReceiver{
 		name:            name,
 		cfg:             cfg,
+		hostroot:        hostroot,
 		logConsumer:     logConsumer,
 		operators:       ops,
 		watching:        make(map[string]receiverKind, len(cfg.Include)),
@@ -113,10 +126,15 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 	r.l.Lock()
 	defer r.l.Unlock()
 
+	hasHostRoot := len(r.hostroot) > len(string(os.PathSeparator))
 	logFiles := make(map[string]bool, len(r.cfg.Include))
 
 	for _, filePattern := range r.cfg.Include {
-		matching, err := doublestar.FilepathGlob(filePattern, doublestar.WithFailOnIOErrors())
+		matching, err := doublestar.FilepathGlob(
+			filepath.Join(r.hostroot, filePattern),
+			doublestar.WithFilesOnly(),
+			doublestar.WithFailOnIOErrors(),
+		)
 		if err != nil {
 			if errors.Is(err, doublestar.ErrBadPattern) {
 				addWarnings(errorf("log receiver %q: file %q: %w", r.name, filePattern, err))
@@ -125,6 +143,13 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 			}
 
 			if errors.Is(err, fs.ErrPermission) {
+				if hasHostRoot {
+					// We don't support execlogreceiver from a container
+					addWarnings(errorf("log receiver %q: resolving file %q: %w (ignoring it)", r.name, filePattern, err))
+
+					continue // ignoring this file
+				}
+
 				if strings.Contains(filePattern, "*") {
 					if unwrapped := errors.Unwrap(err); unwrapped != nil {
 						// Getting rid of the operation that failed (stat, open, ...)
@@ -147,6 +172,12 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 
 				continue // ignoring this file
 			}
+		} else if hasHostRoot {
+			// Dropping the hostroot from each log file path, if necessary.
+			// We'll re-add it only where it is needed (stat, tail, ...)
+			for i, logFile := range matching {
+				matching[i] = strings.TrimPrefix(logFile, r.hostroot)
+			}
 		}
 
 		for _, file := range matching {
@@ -163,13 +194,14 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 	}
 
 	makeStorageFn := func(logFile string) *component.ID {
-		id := pipeline.persister.newPersistentExt(r.name + "." + logFile)
+		id := pipeline.persister.newPersistentExt(r.name + metadataKeySeparator + logFile)
 
 		return &id
 	}
 
 	fileLogReceiverFactories, readFiles, execFiles, sizeFnByFile, err := setupLogReceiverFactories(
 		slices.Collect(maps.Keys(logFiles)),
+		r.hostroot,
 		r.operators,
 		pipeline.lastFileSizes,
 		pipeline.commandRunner,
@@ -299,6 +331,7 @@ FilesFromConfig:
 // Files that don't exist at the time of the call to this function will be ignored.
 func setupLogReceiverFactories(
 	logFiles []string,
+	hostroot string,
 	operators []operator.Config,
 	lastFileSizes map[string]int64,
 	commandRunner CommandRunner,
@@ -312,7 +345,7 @@ func setupLogReceiverFactories(
 	sizeFnByFile = make(map[string]func() (int64, error), len(logFiles))
 
 	for _, logFile := range logFiles {
-		ignore, needSudo, sizeFn := statFile(logFile, commandRunner)
+		ignore, needSudo, sizeFn := statFile(logFile, hostroot, commandRunner)
 		if ignore {
 			continue
 		}
@@ -337,9 +370,12 @@ func setupLogReceiverFactories(
 			return nil, nil, nil, nil, fmt.Errorf("%w for file log receiver: %T", errUnexpectedType, fileCfg)
 		}
 
-		fileTypedCfg.InputConfig.Include = []string{logFile}
+		fileTypedCfg.InputConfig.Include = []string{filepath.Join(hostroot, logFile)}
 		fileTypedCfg.InputConfig.IncludeFileName = true
-		fileTypedCfg.InputConfig.IncludeFilePath = true
+		fileTypedCfg.InputConfig.IncludeFilePath = false // set manually
+		fileTypedCfg.InputConfig.Attributes = map[string]helper.ExprStringConfig{
+			attrs.LogFilePath: helper.ExprStringConfig(logFile), // so as to avoid the hostroot prefix
+		}
 		fileTypedCfg.Operators = operators
 		fileTypedCfg.BaseConfig.StorageID = makeStorageFn(logFile)
 
@@ -392,7 +428,7 @@ func setupLogReceiverFactories(
 			tailArgs = append(tailArgs, "--bytes=0") // start at the end of the file
 		}
 
-		execTypedCfg.InputConfig.Argv = append(tailArgs, logFile) //nolint: gocritic
+		execTypedCfg.InputConfig.Argv = append(tailArgs, filepath.Join(hostroot, logFile)) //nolint: gocritic
 		execTypedCfg.InputConfig.CommandRunner = commandRunner
 		execTypedCfg.InputConfig.RunAsRoot = true
 		execTypedCfg.InputConfig.Attributes = map[string]helper.ExprStringConfig{
@@ -415,8 +451,10 @@ func setupLogReceiverFactories(
 // Using statFile instead of the function allows us to mock it during tests.
 var statFile = statFileImpl //nolint:gochecknoglobals
 
-func statFileImpl(logFile string, commandRunner CommandRunner) (ignore, needSudo bool, sizeFn func() (int64, error)) {
-	f, err := os.OpenFile(logFile, os.O_RDONLY, 0) // the mode perm isn't needed for read
+func statFileImpl(logFile, hostroot string, commandRunner CommandRunner) (ignore, needSudo bool, sizeFn func() (int64, error)) {
+	logFilePath := filepath.Join(hostroot, logFile)
+
+	f, err := os.OpenFile(logFilePath, os.O_RDONLY, 0) // the mode perm isn't needed for read
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return true, false, nil
@@ -434,7 +472,7 @@ func statFileImpl(logFile string, commandRunner CommandRunner) (ignore, needSudo
 			return true, false, nil
 		}
 
-		if _, err = sudoStatFile(logFile, commandRunner); err != nil {
+		if _, err = sudoStatFile(logFilePath, commandRunner); err != nil {
 			logger.V(1).Printf("Can't `sudo stat` log file %q (ignoring it): %v", logFile, err)
 
 			return true, false, nil
@@ -442,7 +480,7 @@ func statFileImpl(logFile string, commandRunner CommandRunner) (ignore, needSudo
 
 		needSudo = true
 		sizeFn = func() (int64, error) {
-			statOutput, err := sudoStatFile(logFile, commandRunner)
+			statOutput, err := sudoStatFile(logFilePath, commandRunner)
 			if err != nil {
 				return 0, err
 			}
@@ -462,7 +500,7 @@ func statFileImpl(logFile string, commandRunner CommandRunner) (ignore, needSudo
 
 		needSudo = false
 		sizeFn = func() (int64, error) {
-			stat, err := os.Stat(logFile)
+			stat, err := os.Stat(logFilePath)
 			if err != nil {
 				return 0, err
 			}

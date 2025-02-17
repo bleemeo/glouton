@@ -703,6 +703,12 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	if a.config.Container.Type != "" {
 		a.hostRootPath = a.config.DF.HostMountPoint
+		// Removing potential trailing slash from hostroot path
+		if len(a.hostRootPath) > len(string(os.PathSeparator)) {
+			// Yes, len(string(os.PathSeparator)) == 1, but it's more understandable like this.
+			a.hostRootPath = strings.TrimSuffix(a.hostRootPath, string(os.PathSeparator))
+		}
+
 		setupContainer(a.hostRootPath)
 	}
 
@@ -1104,6 +1110,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			a.logProcessDiagnosticFn, err = logprocessing.MakePipeline(
 				ctx,
 				a.config.Log.OpenTelemetry,
+				a.hostRootPath,
 				a.state,
 				a.commandRunner,
 				connector.PushLogs,
