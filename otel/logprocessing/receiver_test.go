@@ -30,6 +30,7 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
 	"github.com/bleemeo/glouton/version"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/attrs"
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/google/go-cmp/cmp"
@@ -80,6 +81,33 @@ func (logBuf *logBuffer) getAllAsStrings() []string {
 	}
 
 	return result
+}
+
+// walkLogs calls the given function with each log received,
+// the returns the count of logs that was walked through.
+func (logBuf *logBuffer) walkLogs(walkFn func(logRecord plog.LogRecord)) (count int) {
+	logBuf.l.Lock()
+	defer logBuf.l.Unlock()
+
+	for _, ld := range logBuf.buf {
+		for i := range ld.ResourceLogs().Len() {
+			resourceLog := ld.ResourceLogs().At(i)
+			scopeLogs := resourceLog.ScopeLogs()
+
+			for j := range scopeLogs.Len() {
+				scopeLog := scopeLogs.At(j)
+				logRecords := scopeLog.LogRecords()
+
+				for k := range logRecords.Len() {
+					walkFn(logRecords.At(k))
+
+					count++
+				}
+			}
+		}
+	}
+
+	return count
 }
 
 func makeBufferConsumer(t *testing.T, buf *logBuffer) consumer.Logs {
@@ -374,16 +402,33 @@ func TestFileLogReceiverWithHostroot(t *testing.T) {
 
 	time.Sleep(time.Second)
 
-	_, err = file.WriteString("file log 1")
+	const logLine = "file log 1"
+
+	_, err = file.WriteString(logLine)
 	if err != nil {
 		t.Fatal("Failed to write to log file:", err)
 	}
 
 	time.Sleep(2 * time.Second)
 
-	expectedLogLines := []string{"file log 1"}
-	if diff := cmp.Diff(expectedLogLines, logBuf.getAllAsStrings(), sortStringsOpt); diff != "" {
-		t.Fatal("Unexpected log lines (-want, +got):", diff)
+	expectedAttributes := map[string]any{
+		attrs.LogFileName: "file.log",  // base name
+		attrs.LogFilePath: watchedFile, // absolute path
+	}
+
+	logsCount := logBuf.walkLogs(func(log plog.LogRecord) {
+		if body := log.Body().Str(); body != logLine {
+			t.Errorf("Unexpected log body want %q, got %q", logLine, body)
+		}
+
+		attributes := log.Attributes().AsRaw()
+		if diff := cmp.Diff(expectedAttributes, attributes); diff != "" {
+			t.Errorf("Unexpected log attributes (-want +got):\n%s", diff)
+		}
+	})
+
+	if logsCount != 1 {
+		t.Fatalf("Expected 1 log line, got %d", logsCount)
 	}
 
 	fileSizes, err := recv.sizesByFile()
