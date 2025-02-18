@@ -26,7 +26,7 @@ import (
 )
 
 type deduplicator struct {
-	Input    *disk.DiskStats
+	Input    *disk.Disk
 	hostroot string
 }
 

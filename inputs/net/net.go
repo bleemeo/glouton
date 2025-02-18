@@ -39,7 +39,7 @@ type netTransformer struct {
 func New(filter types.Matcher, vethProvider *veth.Provider) (i telegraf.Input, err error) {
 	input, ok := telegraf_inputs.Inputs["net"]
 	if ok {
-		netInput, _ := input().(*net.NetIOStats)
+		netInput, _ := input().(*net.Net)
 		netInput.IgnoreProtocolStats = true
 		nt := netTransformer{
 			filter:       filter,

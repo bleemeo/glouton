@@ -25,7 +25,7 @@ import (
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
 
-	"github.com/shirou/gopsutil/v3/load"
+	"github.com/shirou/gopsutil/v4/load"
 	"golang.org/x/sys/unix"
 )
 

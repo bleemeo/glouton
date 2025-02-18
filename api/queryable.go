@@ -110,15 +110,17 @@ func (q apiQuerier) Close() error {
 }
 
 // LabelValues is not implemented.
-func (q apiQuerier) LabelValues(_ context.Context, name string, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func (q apiQuerier) LabelValues(_ context.Context, name string, hints *storage.LabelHints, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	_ = name
+	_ = hints
 	_ = matchers
 
 	return nil, nil, errNotImplemented
 }
 
 // LabelNames is not implemented.
-func (q apiQuerier) LabelNames(_ context.Context, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func (q apiQuerier) LabelNames(_ context.Context, hints *storage.LabelHints, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+	_ = hints
 	_ = matchers
 
 	return nil, nil, errNotImplemented

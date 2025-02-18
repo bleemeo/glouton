@@ -1086,8 +1086,8 @@ func TestValidateServices(t *testing.T) {
 			CheckCommand: "command-to-run",
 		},
 		{
-			Type:         " not fixable@",
-			CheckType:    "nagios",
+			Type:         " not fixable@", // Metric names are no longer restricted to a small set of characters,
+			CheckType:    "nagios",        // and now the whole UTF-8 range is valid.
 			CheckCommand: "azerty",
 		},
 		{
@@ -1119,8 +1119,6 @@ func TestValidateServices(t *testing.T) {
 		"invalid config value: a service override is duplicated for 'apache'",
 		"invalid config value: a service override is duplicated for 'apache' on instance 'CONTAINER_NAME'",
 		"invalid config value: the key \"type\" is missing in one of your service override",
-		"invalid config value: service type \" not fixable@\" can only contains letters, digits and underscore",
-		"invalid config value: service type \"custom-bad.name\" can not contains dot (.) or dash (-). Changed to \"custom_bad_name\"",
 		"invalid config value: service 'ssl_and_starttls' can't set both SSL and StartTLS, StartTLS will be used",
 		"invalid config value: service 'bad_stats_protocol' has an unsupported stats protocol: 'bad'",
 	}
@@ -1158,6 +1156,13 @@ func TestValidateServices(t *testing.T) {
 			CheckCommand: "command-to-run",
 		},
 		{
+			Name: " not fixable@",
+		}: {
+			Type:         " not fixable@",
+			CheckType:    "nagios",
+			CheckCommand: "azerty",
+		},
+		{
 			Name:     "custom_webserver",
 			Instance: "",
 		}: {
@@ -1166,10 +1171,10 @@ func TestValidateServices(t *testing.T) {
 			CheckType: "http",
 		},
 		{
-			Name:     "custom_bad_name",
+			Name:     "custom-bad.name",
 			Instance: "",
 		}: {
-			Type:         "custom_bad_name",
+			Type:         "custom-bad.name",
 			CheckType:    "nagios",
 			CheckCommand: "azerty",
 		},

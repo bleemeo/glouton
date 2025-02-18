@@ -49,8 +49,8 @@ import (
 	"github.com/containerd/typeurl/v2"
 	"github.com/mitchellh/copystructure"
 	"github.com/opencontainers/runtime-spec/specs-go"
-	"github.com/shirou/gopsutil/v3/mem"
-	"github.com/shirou/gopsutil/v3/process"
+	"github.com/shirou/gopsutil/v4/mem"
+	"github.com/shirou/gopsutil/v4/process"
 )
 
 var (

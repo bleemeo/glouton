@@ -83,12 +83,12 @@ outerLoop:
 
 // LabelValues returns all potential values for a label name.
 // It is not safe to use the strings beyond the lifefime of the querier.
-func (q querier) LabelValues(context.Context, string, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func (q querier) LabelValues(context.Context, string, *storage.LabelHints, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	return nil, nil, errNotImplemented
 }
 
 // LabelNames returns all the unique label names present in the block in sorted order.
-func (q querier) LabelNames(context.Context, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func (q querier) LabelNames(context.Context, *storage.LabelHints, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	return nil, nil, errNotImplemented
 }
 

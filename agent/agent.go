@@ -86,7 +86,7 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/influxdata/telegraf"
 	"github.com/prometheus/prometheus/util/gate"
-	"github.com/shirou/gopsutil/v3/host"
+	"github.com/shirou/gopsutil/v4/host"
 
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 

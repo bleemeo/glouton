@@ -33,7 +33,7 @@ func New(url string) (i telegraf.Input, err error) {
 		if ok {
 			slice := append(make([]string, 0), url)
 			mongodbInput.Servers = slice
-			mongodbInput.Log = internal.Logger{}
+			mongodbInput.Log = internal.NewLogger()
 			i = &internal.Input{
 				Input: mongodbInput,
 				Accumulator: internal.Accumulator{
