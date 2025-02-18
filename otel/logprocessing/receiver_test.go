@@ -30,12 +30,12 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
 	"github.com/bleemeo/glouton/version"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/attrs"
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/adapter"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/attrs"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -44,6 +44,11 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
 )
+
+type logRecord struct {
+	Body       string
+	Attributes map[string]any
+}
 
 type logBuffer struct {
 	l   sync.Mutex
@@ -57,11 +62,11 @@ func (logBuf *logBuffer) add(ld plog.Logs) {
 	logBuf.buf = append(logBuf.buf, ld)
 }
 
-func (logBuf *logBuffer) getAllAsStrings() []string {
+func (logBuf *logBuffer) getAllRecords() []logRecord {
 	logBuf.l.Lock()
 	defer logBuf.l.Unlock()
 
-	result := make([]string, 0, len(logBuf.buf)) // - there may be more than 1 log message per plog.Logs object
+	result := make([]logRecord, 0, len(logBuf.buf)) // - there may be more than 1 log message per plog.Logs object
 
 	for _, ld := range logBuf.buf {
 		for i := range ld.ResourceLogs().Len() {
@@ -73,41 +78,17 @@ func (logBuf *logBuffer) getAllAsStrings() []string {
 				logRecords := scopeLog.LogRecords()
 
 				for k := range logRecords.Len() {
-					logRecord := logRecords.At(k)
-					result = append(result, logRecord.Body().AsString())
+					logRec := logRecords.At(k)
+					result = append(result, logRecord{
+						Body:       logRec.Body().Str(),
+						Attributes: logRec.Attributes().AsRaw(),
+					})
 				}
 			}
 		}
 	}
 
 	return result
-}
-
-// walkLogs calls the given function with each log received,
-// the returns the count of logs that was walked through.
-func (logBuf *logBuffer) walkLogs(walkFn func(logRecord plog.LogRecord)) (count int) {
-	logBuf.l.Lock()
-	defer logBuf.l.Unlock()
-
-	for _, ld := range logBuf.buf {
-		for i := range ld.ResourceLogs().Len() {
-			resourceLog := ld.ResourceLogs().At(i)
-			scopeLogs := resourceLog.ScopeLogs()
-
-			for j := range scopeLogs.Len() {
-				scopeLog := scopeLogs.At(j)
-				logRecords := scopeLog.LogRecords()
-
-				for k := range logRecords.Len() {
-					walkFn(logRecords.At(k))
-
-					count++
-				}
-			}
-		}
-	}
-
-	return count
 }
 
 func makeBufferConsumer(t *testing.T, buf *logBuffer) consumer.Logs {
@@ -165,7 +146,7 @@ func addWarningsFn(t *testing.T) func(errs ...error) {
 	}
 }
 
-var sortStringsOpt = cmpopts.SortSlices(func(x, y string) bool { return x < y }) //nolint:gochecknoglobals
+var sortLinesOpt = cmpopts.SortSlices(func(x, y logRecord) bool { return x.Body < y.Body }) //nolint:gochecknoglobals
 
 func TestFileLogReceiver(t *testing.T) {
 	t.Parallel()
@@ -244,8 +225,8 @@ func TestFileLogReceiver(t *testing.T) {
 		t.Fatal("Failed to update pipeline:", err)
 	}
 
-	if diff := cmp.Diff([]string{f1.Name()}, recv.currentlyWatching(), sortStringsOpt); diff != "" {
-		t.Error("Unexpected watched log files (-want, +got):", diff)
+	if diff := cmp.Diff([]string{f1.Name()}, recv.currentlyWatching(), sortLinesOpt); diff != "" {
+		t.Errorf("Unexpected watched log files (-want, +got):\n%s", diff)
 	}
 
 	f2, err := os.Create(filepath.Join(tmpDir, "f2.log"))
@@ -260,8 +241,8 @@ func TestFileLogReceiver(t *testing.T) {
 		t.Fatal("Failed to update pipeline:", err)
 	}
 
-	if diff := cmp.Diff([]string{f1.Name(), f2.Name()}, recv.currentlyWatching(), sortStringsOpt); diff != "" {
-		t.Error("Unexpected watched log files (-want, +got):", diff)
+	if diff := cmp.Diff([]string{f1.Name(), f2.Name()}, recv.currentlyWatching(), sortLinesOpt); diff != "" {
+		t.Errorf("Unexpected watched log files (-want, +got):\n%s", diff)
 	}
 
 	time.Sleep(time.Second)
@@ -278,12 +259,24 @@ func TestFileLogReceiver(t *testing.T) {
 
 	time.Sleep(2 * time.Second)
 
-	expectedLogLines := []string{
-		"f1 log 1",
-		"f2 log 1",
+	expectedLogLines := []logRecord{
+		{
+			Body: "f1 log 1",
+			Attributes: map[string]any{
+				attrs.LogFileName: "f1.log",
+				attrs.LogFilePath: f1.Name(),
+			},
+		},
+		{
+			Body: "f2 log 1",
+			Attributes: map[string]any{
+				attrs.LogFileName: "f2.log",
+				attrs.LogFilePath: f2.Name(),
+			},
+		},
 	}
-	if diff := cmp.Diff(expectedLogLines, logBuf.getAllAsStrings(), sortStringsOpt); diff != "" {
-		t.Fatal("Unexpected log lines (-want, +got):", diff)
+	if diff := cmp.Diff(expectedLogLines, logBuf.getAllRecords(), sortLinesOpt); diff != "" {
+		t.Fatalf("Unexpected log lines (-want, +got):\n%s", diff)
 	}
 
 	fileSizes, err := recv.sizesByFile()
@@ -296,7 +289,7 @@ func TestFileLogReceiver(t *testing.T) {
 		f2.Name(): 8,
 	}
 	if diff := cmp.Diff(expectedFileSizes, fileSizes); diff != "" {
-		t.Fatal("Unexpected file sizes (-want, +got):", diff)
+		t.Fatalf("Unexpected file sizes (-want, +got):\n%s", diff)
 	}
 
 	expectedDiagnosticInfo := receiverDiagnosticInformation{
@@ -309,8 +302,8 @@ func TestFileLogReceiver(t *testing.T) {
 		ExecLogReceiverPaths: []string{},
 		IgnoredFilePaths:     []string{},
 	}
-	if diff := cmp.Diff(expectedDiagnosticInfo, recv.diagnosticInfo(), sortStringsOpt); diff != "" {
-		t.Fatal("Unexpected diagnostic information (-want, +got):", diff)
+	if diff := cmp.Diff(expectedDiagnosticInfo, recv.diagnosticInfo(), sortLinesOpt); diff != "" {
+		t.Fatalf("Unexpected diagnostic information (-want, +got):\n%s", diff)
 	}
 }
 
@@ -396,8 +389,8 @@ func TestFileLogReceiverWithHostroot(t *testing.T) {
 		t.Fatal("Failed to update pipeline:", err)
 	}
 
-	if diff := cmp.Diff([]string{watchedFile}, recv.currentlyWatching(), sortStringsOpt); diff != "" {
-		t.Error("Unexpected watched log files (-want, +got):", diff)
+	if diff := cmp.Diff([]string{watchedFile}, recv.currentlyWatching(), sortLinesOpt); diff != "" {
+		t.Errorf("Unexpected watched log files (-want, +got):\n%s", diff)
 	}
 
 	time.Sleep(time.Second)
@@ -411,24 +404,17 @@ func TestFileLogReceiverWithHostroot(t *testing.T) {
 
 	time.Sleep(2 * time.Second)
 
-	expectedAttributes := map[string]any{
-		attrs.LogFileName: "file.log",  // base name
-		attrs.LogFilePath: watchedFile, // absolute path
+	expectedLogLines := []logRecord{
+		{
+			Body: logLine,
+			Attributes: map[string]any{
+				attrs.LogFileName: "file.log",  // base name
+				attrs.LogFilePath: watchedFile, // absolute path
+			},
+		},
 	}
-
-	logsCount := logBuf.walkLogs(func(log plog.LogRecord) {
-		if body := log.Body().Str(); body != logLine {
-			t.Errorf("Unexpected log body want %q, got %q", logLine, body)
-		}
-
-		attributes := log.Attributes().AsRaw()
-		if diff := cmp.Diff(expectedAttributes, attributes); diff != "" {
-			t.Errorf("Unexpected log attributes (-want +got):\n%s", diff)
-		}
-	})
-
-	if logsCount != 1 {
-		t.Fatalf("Expected 1 log line, got %d", logsCount)
+	if diff := cmp.Diff(expectedLogLines, logBuf.getAllRecords(), sortLinesOpt); diff != "" {
+		t.Fatalf("Unexpected log lines (-want, +got):\n%s", diff)
 	}
 
 	fileSizes, err := recv.sizesByFile()
@@ -450,8 +436,8 @@ func TestFileLogReceiverWithHostroot(t *testing.T) {
 		ExecLogReceiverPaths:   []string{},
 		IgnoredFilePaths:       []string{},
 	}
-	if diff := cmp.Diff(expectedDiagnosticInfo, recv.diagnosticInfo(), sortStringsOpt); diff != "" {
-		t.Fatal("Unexpected diagnostic information (-want, +got):", diff)
+	if diff := cmp.Diff(expectedDiagnosticInfo, recv.diagnosticInfo(), sortLinesOpt); diff != "" {
+		t.Fatalf("Unexpected diagnostic information (-want, +got):\n%s", diff)
 	}
 }
 
@@ -559,7 +545,7 @@ func TestExecLogReceiver(t *testing.T) {
 						startCmdCallsCount++
 
 						if diff := cmp.Diff(tc.expectedTailArgs, args); diff != "" {
-							t.Error("Unexpected tail args (-want, +got):", diff)
+							t.Errorf("Unexpected tail args (-want, +got):\n%s", diff)
 						}
 
 						nopReadCloser := io.NopCloser(bytes.NewReader(nil))
@@ -588,8 +574,8 @@ func TestExecLogReceiver(t *testing.T) {
 				t.Fatal("Failed to update pipeline:", err)
 			}
 
-			if diff := cmp.Diff([]string{file.Name()}, recv.currentlyWatching(), sortStringsOpt); diff != "" {
-				t.Error("Unexpected watched log files (-want, +got):", diff)
+			if diff := cmp.Diff([]string{file.Name()}, recv.currentlyWatching(), sortLinesOpt); diff != "" {
+				t.Errorf("Unexpected watched log files (-want, +got):\n%s", diff)
 			}
 
 			if startCmdCallsCount != 1 {
@@ -623,6 +609,6 @@ func TestRetryConfigIsUpToDate(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(retryCfgMap, consumerretryCfgMap); diff != "" {
-		t.Fatal("Unexpected consumerretry config (-want, +got):", diff)
+		t.Fatalf("Unexpected consumerretry config (-want, +got):\n%s", diff)
 	}
 }
