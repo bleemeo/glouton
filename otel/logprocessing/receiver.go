@@ -81,7 +81,6 @@ const metadataKeySeparator = "/"
 type logReceiver struct {
 	name        string
 	cfg         config.OTLPReceiver
-	hostroot    string
 	logConsumer consumer.Logs
 	operators   []operator.Config
 
@@ -94,7 +93,7 @@ type logReceiver struct {
 	throughputMeter *ringCounter
 }
 
-func newLogReceiver(name string, cfg config.OTLPReceiver, hostroot string, logConsumer consumer.Logs) (*logReceiver, error) {
+func newLogReceiver(name string, cfg config.OTLPReceiver, logConsumer consumer.Logs) (*logReceiver, error) {
 	if !receiverNameRegex.MatchString(name) {
 		return nil, fmt.Errorf("%w: %q. It must be of the form 'my-receiver' or 'filelog/my-receiver', contain one slash a most, and not start with a slash", errInvalidReceiverName, name)
 	}
@@ -107,7 +106,6 @@ func newLogReceiver(name string, cfg config.OTLPReceiver, hostroot string, logCo
 	return &logReceiver{
 		name:            name,
 		cfg:             cfg,
-		hostroot:        hostroot,
 		logConsumer:     logConsumer,
 		operators:       ops,
 		watching:        make(map[string]receiverKind, len(cfg.Include)),
@@ -126,12 +124,12 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	hasHostRoot := len(r.hostroot) > len(string(os.PathSeparator))
+	hasHostRoot := len(pipeline.hostroot) > len(string(os.PathSeparator))
 	logFiles := make(map[string]bool, len(r.cfg.Include))
 
 	for _, filePattern := range r.cfg.Include {
 		matching, err := doublestar.FilepathGlob(
-			filepath.Join(r.hostroot, filePattern),
+			filepath.Join(pipeline.hostroot, filePattern),
 			doublestar.WithFilesOnly(),
 			doublestar.WithFailOnIOErrors(),
 		)
@@ -176,7 +174,7 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 			// Dropping the hostroot from each log file path, if necessary.
 			// We'll re-add it only where it is needed (stat, tail, ...)
 			for i, logFile := range matching {
-				matching[i] = strings.TrimPrefix(logFile, r.hostroot)
+				matching[i] = strings.TrimPrefix(logFile, pipeline.hostroot)
 			}
 		}
 
@@ -201,7 +199,7 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 
 	fileLogReceiverFactories, readFiles, execFiles, sizeFnByFile, err := setupLogReceiverFactories(
 		slices.Collect(maps.Keys(logFiles)),
-		r.hostroot,
+		pipeline.hostroot,
 		r.operators,
 		pipeline.lastFileSizes,
 		pipeline.commandRunner,

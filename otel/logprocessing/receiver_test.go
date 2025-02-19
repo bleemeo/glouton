@@ -189,7 +189,7 @@ func TestFileLogReceiver(t *testing.T) {
 		buf: make([]plog.Logs, 0, 2), // we plan to write 2 log lines
 	}
 
-	recv, err := newLogReceiver("filelog/recv", cfg, string(os.PathSeparator), makeBufferConsumer(t, &logBuf))
+	recv, err := newLogReceiver("filelog/recv", cfg, makeBufferConsumer(t, &logBuf))
 	if err != nil {
 		t.Fatal("Failed to initialize log receiver:", err)
 	}
@@ -198,6 +198,7 @@ func TestFileLogReceiver(t *testing.T) {
 	defer cancel()
 
 	pipeline := pipelineContext{
+		hostroot:          string(os.PathSeparator),
 		lastFileSizes:     make(map[string]int64),
 		telemetry:         telSet,
 		startedComponents: []component.Component{},
@@ -353,7 +354,7 @@ func TestFileLogReceiverWithHostroot(t *testing.T) {
 		buf: make([]plog.Logs, 0, 1), // we plan to write 1 log line
 	}
 
-	recv, err := newLogReceiver("recv-from-container", cfg, hostRootPath, makeBufferConsumer(t, &logBuf))
+	recv, err := newLogReceiver("recv-from-container", cfg, makeBufferConsumer(t, &logBuf))
 	if err != nil {
 		t.Fatal("Failed to initialize log receiver:", err)
 	}
@@ -362,6 +363,7 @@ func TestFileLogReceiverWithHostroot(t *testing.T) {
 	defer cancel()
 
 	pipeline := pipelineContext{
+		hostroot:          hostRootPath,
 		lastFileSizes:     make(map[string]int64),
 		telemetry:         telSet,
 		startedComponents: []component.Component{},
@@ -532,6 +534,7 @@ func TestExecLogReceiver(t *testing.T) {
 			var startCmdCallsCount int
 
 			pipeline := pipelineContext{
+				hostroot:          string(os.PathSeparator),
 				lastFileSizes:     make(map[string]int64),
 				telemetry:         telSet,
 				startedComponents: []component.Component{},
@@ -564,7 +567,7 @@ func TestExecLogReceiver(t *testing.T) {
 				shutdownAll(pipeline.startedComponents)
 			}()
 
-			recv, err := newLogReceiver("root_files", cfg, string(os.PathSeparator), makeBufferConsumer(t, &logBuffer{buf: []plog.Logs{}}))
+			recv, err := newLogReceiver("root_files", cfg, makeBufferConsumer(t, &logBuffer{buf: []plog.Logs{}}))
 			if err != nil {
 				t.Fatal("Failed to initialize log receiver:", err)
 			}

@@ -53,7 +53,7 @@ require (
 	github.com/prometheus/prometheus v0.53.3
 	github.com/redis/go-redis/v9 v9.7.0
 	github.com/rs/cors v1.11.1
-	github.com/shirou/gopsutil/v3 v3.24.5 // TODO: migrate to v4 (see breaking changes)
+	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/vishvananda/netlink v1.3.0
 	github.com/vmware/govmomi v0.48.0
 	github.com/yusufpapurcu/wmi v1.2.4

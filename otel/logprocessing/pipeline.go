@@ -58,6 +58,7 @@ var errUnexpectedType = errors.New("unexpected type")
 
 type pipelineContext struct {
 	config        config.OpenTelemetry
+	hostroot      string
 	lastFileSizes map[string]int64
 	telemetry     component.TelemetrySettings
 	commandRunner CommandRunner
@@ -92,6 +93,7 @@ func MakePipeline( //nolint:maintidx
 	pipeline := &pipelineContext{
 		lastFileSizes: getLastFileSizesFromCache(state),
 		config:        cfg,
+		hostroot:      hostroot,
 		telemetry: component.TelemetrySettings{
 			Logger:         logger.ZapLogger(),
 			TracerProvider: noop.NewTracerProvider(),
@@ -194,7 +196,7 @@ func MakePipeline( //nolint:maintidx
 		if !ok {
 			logger.V(1).Printf("Unexpected config type for receiver default config: %T", receiverCfg)
 
-			goto AfterOTLPReceiversSetup
+			goto AfterOTLPReceiversSetup // avoid adding it to the list of started components
 		}
 
 		if cfg.GRPC.Enable {
@@ -221,13 +223,13 @@ func MakePipeline( //nolint:maintidx
 		if err != nil {
 			logger.V(1).Printf("Failed to setup OTLP receiver: %v", err)
 
-			goto AfterOTLPReceiversSetup
+			goto AfterOTLPReceiversSetup // avoid adding it to the list of started components
 		}
 
 		if err = otlpLogReceiver.Start(ctx, nil); err != nil {
 			logger.V(1).Printf("Failed to start OTLP receiver: %v", err)
 
-			goto AfterOTLPReceiversSetup
+			goto AfterOTLPReceiversSetup // avoid adding it to the list of started components
 		}
 
 		pipeline.startedComponents = append(pipeline.startedComponents, otlpLogReceiver)
@@ -235,7 +237,7 @@ func MakePipeline( //nolint:maintidx
 AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers block
 
 	for name, rcvrCfg := range cfg.Receivers {
-		recv, err := newLogReceiver(name, rcvrCfg, hostroot, logBackPressureEnforcer)
+		recv, err := newLogReceiver(name, rcvrCfg, logBackPressureEnforcer)
 		if err != nil {
 			addWarnings(errorf("Failed to setup log receiver %q (ignoring it): %w", name, err))
 
