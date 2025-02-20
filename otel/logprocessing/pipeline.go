@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"slices"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -82,12 +81,16 @@ func MakePipeline( //nolint:maintidx
 	pushLogs func(context.Context, []byte) error,
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability,
 	addWarnings func(...error),
-) (diagnosticFn func(context.Context, types.ArchiveWriter) error, err error) { //nolint:wsl
+) (
+	handleContainersLogsFn func(context.Context, []ContainerLogFiles),
+	diagnosticFn func(context.Context, types.ArchiveWriter) error,
+	err error,
+) { //nolint:wsl
 	// TODO: no logs & metrics at the same time
 
 	persister, err := newPersistHost(state)
 	if err != nil {
-		return nil, fmt.Errorf("can't create persist host: %w", err)
+		return nil, nil, fmt.Errorf("can't create persist host: %w", err)
 	}
 
 	pipeline := &pipelineContext{
@@ -140,11 +143,11 @@ func MakePipeline( //nolint:maintidx
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("setup exporter: %w", err)
+		return nil, nil, fmt.Errorf("setup exporter: %w", err)
 	}
 
 	if err = logExporter.Start(ctx, nil); err != nil {
-		return nil, fmt.Errorf("start exporter: %w", err)
+		return nil, nil, fmt.Errorf("start exporter: %w", err)
 	}
 
 	pipeline.startedComponents = append(pipeline.startedComponents, logExporter)
@@ -163,11 +166,11 @@ func MakePipeline( //nolint:maintidx
 		logExporter,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("setup batcher: %w", err)
+		return nil, nil, fmt.Errorf("setup batcher: %w", err)
 	}
 
 	if err = logBatcher.Start(ctx, nil); err != nil {
-		return nil, fmt.Errorf("start batcher: %w", err)
+		return nil, nil, fmt.Errorf("start batcher: %w", err)
 	}
 
 	logBackPressureEnforcer, err := processorhelper.NewLogs(
@@ -178,10 +181,12 @@ func MakePipeline( //nolint:maintidx
 		makeEnforceBackPressureFn(streamAvailabilityStatusFn),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("setup log back-pressure enforcer: %w", err)
+		return nil, nil, fmt.Errorf("setup log back-pressure enforcer: %w", err)
 	}
 
 	pipeline.startedComponents = append(pipeline.startedComponents, logBatcher)
+
+	containerRecv := newContainerReceiver(pipeline, logBackPressureEnforcer)
 
 	var (
 		otlpRecvCounter         *atomic.Int64
@@ -259,13 +264,14 @@ AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers bl
 			logger.V(1).Printf("None of the %d configured log receiver(s) is valid.", len(cfg.Receivers))
 		}
 
-		if !cfg.HTTP.Enable && !cfg.GRPC.Enable {
+		// We may still want the pipeline to be running, to handle logs from containers
+		/*if !cfg.HTTP.Enable && !cfg.GRPC.Enable {
 			logger.V(1).Printf("No receiver to start; disabling log processing.")
 
 			shutdownAll(pipeline.startedComponents)
 
-			return nil, nil //nolint:nilnil
-		}
+			return nil, nil, nil
+		}*/
 	}
 
 	go func() {
@@ -324,6 +330,8 @@ AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers bl
 
 		<-ctx.Done()
 
+		containerRecv.stop()
+
 		pipeline.l.Lock()
 		defer pipeline.l.Unlock()
 
@@ -348,6 +356,7 @@ AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers bl
 			LogThroughputPerMinute: pipeline.logThroughputMeter.Total(),
 			ProcessingStatus:       streamAvailabilityStatusFn().String(),
 			Receivers:              receiversInfo,
+			ContainerReceivers:     containerRecv.diagnostic(),
 		}
 
 		if otlpRecvCounter != nil {
@@ -362,7 +371,7 @@ AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers bl
 		return diagnosticInfo.writeToArchive(writer)
 	}
 
-	return diagnosticFn, nil
+	return containerRecv.handleContainersLogs, diagnosticFn, nil
 }
 
 func makeEnforceBackPressureFn(streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability) processorhelper.ProcessLogsFunc {
@@ -409,24 +418,5 @@ func makeEnforceBackPressureFn(streamAvailabilityStatusFn func() bleemeoTypes.Lo
 		}
 
 		return logs, nil
-	}
-}
-
-// shutdownAll stops all the given components (in reverse order).
-// It should be called before every unsuccessful return of the log pipeline initialization.
-func shutdownAll(components []component.Component) {
-	// Shutting down first the components that are at the beginning of the log production chain.
-	for _, comp := range slices.Backward(components) {
-		go func() {
-			defer crashreport.ProcessPanic()
-
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-			defer cancel()
-
-			err := comp.Shutdown(shutdownCtx)
-			if err != nil {
-				logger.V(1).Printf("Failed to shutdown log processing component %T: %v", comp, err)
-			}
-		}()
 	}
 }

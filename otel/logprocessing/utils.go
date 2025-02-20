@@ -22,16 +22,20 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
+	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/plog"
 )
@@ -92,6 +96,31 @@ func saveFileMetadataToCache(state bleemeoTypes.State, metadata map[string]map[s
 	if err != nil {
 		logger.V(1).Printf("Failed to save log file metadata to cache: %v", err)
 	}
+}
+
+// shutdownAll stops all the given components (in reverse order).
+// It should be called before every unsuccessful return of the log pipeline initialization.
+func shutdownAll(components []component.Component) {
+	wg := new(sync.WaitGroup)
+	wg.Add(len(components))
+
+	// Shutting down first the components that are at the beginning of the log production chain.
+	for _, comp := range slices.Backward(components) {
+		go func() {
+			defer crashreport.ProcessPanic()
+			defer wg.Done()
+
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+			defer cancel()
+
+			err := comp.Shutdown(shutdownCtx)
+			if err != nil {
+				logger.V(1).Printf("Failed to shutdown log processing component %T: %v", comp, err)
+			}
+		}()
+	}
+
+	wg.Wait()
 }
 
 func errorf(format string, a ...any) error {
@@ -214,12 +243,19 @@ type receiverDiagnosticInformation struct {
 	IgnoredFilePaths       []string
 }
 
+type containerReceiverDiagnosticInformation struct {
+	LogProcessedCount      int64
+	LogThroughputPerMinute int
+	LogFilesByContainers   map[string][]string
+}
+
 type diagnosticInformation struct {
 	LogProcessedCount      int64
 	LogThroughputPerMinute int
 	ProcessingStatus       string
 	OTLPReceiver           *otlpReceiverDiagnosticInformation
 	Receivers              map[string]receiverDiagnosticInformation
+	ContainerReceivers     containerReceiverDiagnosticInformation
 }
 
 func (diagInfo diagnosticInformation) writeToArchive(writer types.ArchiveWriter) error {

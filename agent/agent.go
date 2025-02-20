@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"math"
 	"net"
 	"net/url"
@@ -32,6 +33,7 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1107,7 +1109,9 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.l.Unlock()
 
 		if a.config.Log.OpenTelemetry.Enable {
-			a.logProcessDiagnosticFn, err = logprocessing.MakePipeline(
+			var handleContainersLogsFn func(context.Context, []logprocessing.ContainerLogFiles)
+
+			handleContainersLogsFn, a.logProcessDiagnosticFn, err = logprocessing.MakePipeline(
 				ctx,
 				a.config.Log.OpenTelemetry,
 				a.hostRootPath,
@@ -1120,6 +1124,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			if err != nil {
 				logger.Printf("unable to setup log processing: %v", err)
 			}
+
+			go a.watchForContainerLogs(ctx, handleContainersLogsFn)
 		}
 
 		a.gathererRegistry.UpdateRegistrationHooks(a.bleemeoConnector.RelabelHook, a.bleemeoConnector.UpdateDelayHook)
@@ -2124,6 +2130,90 @@ func (a *agent) processesLister() *facts.ProcessProvider {
 	)
 }
 
+func (a *agent) watchForContainerLogs(ctx context.Context, handleContainersLogs func(ctx context.Context, containerLogFilesBatch []logprocessing.ContainerLogFiles)) {
+	const refreshInterval = 1 * time.Minute
+
+	runtimeKind, ok := a.containerRuntime.RuntimeFact(ctx, nil)["container_runtime"]
+	if !ok {
+		logger.V(1).Printf("Could not determine container runtime kind, disabling container logs.")
+
+		return
+	}
+
+	_, isK8s := a.containerRuntime.(*kubernetes.Kubernetes)
+
+	alreadyWatching := make(map[string]time.Time) // map[ID] -> last time seen
+	// Once every 5 iterations, we'll remove containers that haven't been seen for a while from the map.
+	var purgeCounter int
+
+	ticker := time.NewTicker(10 * time.Second) // After the first tick, the interval will be set to `refreshInterval`;
+	// we just don't want to wait for too long before the first run.
+	defer ticker.Stop()
+
+	firstRun := true
+
+	for ctx.Err() == nil {
+		select {
+		case <-ticker.C:
+			if firstRun {
+				firstRun = false
+
+				ticker.Reset(refreshInterval)
+			}
+
+			containers, err := a.containerRuntime.Containers(ctx, refreshInterval, false)
+			if err != nil {
+				logger.V(1).Printf("Failed to list containers: %v", err)
+
+				continue
+			}
+
+			var containerLogFiles []logprocessing.ContainerLogFiles
+
+			for _, container := range containers {
+				_, found := alreadyWatching[container.ID()]
+				alreadyWatching[container.ID()] = time.Now()
+
+				if found {
+					continue
+				}
+
+				potentialLogFilePaths := containerLogFilePathsFor(container, runtimeKind, isK8s)
+				if len(potentialLogFilePaths) == 0 {
+					continue
+				}
+
+				containerLogFiles = append(containerLogFiles, logprocessing.ContainerLogFiles{
+					PotentialLogFilePaths: potentialLogFilePaths,
+					Attributes: logprocessing.ContainerAttributes{
+						ID:    container.ID(),
+						Name:  container.ContainerName(),
+						Image: container.ImageName(),
+					},
+				})
+			}
+
+			if len(containerLogFiles) > 0 {
+				handleContainersLogs(ctx, containerLogFiles)
+			}
+
+			if purgeCounter%5 == 0 {
+				for id, lastTimeSeen := range alreadyWatching {
+					if time.Since(lastTimeSeen) > 2*refreshInterval {
+						delete(alreadyWatching, id)
+					}
+				}
+
+				purgeCounter = 0
+			} else {
+				purgeCounter++
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
 // DiagnosticPage return useful information to troubleshoot issue.
 func (a *agent) DiagnosticPage(ctx context.Context) string {
 	builder := &strings.Builder{}
@@ -2834,4 +2924,34 @@ func prometheusConfigToURLs(configTargets []config.PrometheusTarget) ([]*scrappe
 	}
 
 	return targets, warnings
+}
+
+func containerLogFilePathsFor(container facts.Container, runtimeKind string, isK8s bool) []string {
+	if logPath := container.LogPath(); logPath != "" {
+		return []string{logPath}
+	}
+
+	ctrID := container.ID()
+	paths := make(map[string]struct{}) // using a map to avoid duplicates
+
+	if strings.Contains(runtimeKind, "Docker") {
+		// Docker should have already given us the path through `container.LogPath()`, but anyway ...
+		paths[fmt.Sprintf("/var/lib/docker/containers/%[1]s/%[1]s-json.log", ctrID)] = struct{}{}
+	}
+
+	if strings.Contains(runtimeKind, "containerd") {
+		paths[fmt.Sprintf("/var/log/containers/%s.log", ctrID)] = struct{}{}
+	}
+
+	if isK8s {
+		labels := container.Labels()
+		namespace := labels["io.kubernetes.pod.namespace"]
+		pod := labels["io.kubernetes.pod.name"]
+
+		if namespace != "" && pod != "" {
+			paths[fmt.Sprintf("/var/log/pods/%s_%s_%s.log", namespace, pod, ctrID)] = struct{}{}
+		}
+	}
+
+	return slices.Collect(maps.Keys(paths))
 }
