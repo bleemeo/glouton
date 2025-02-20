@@ -36,18 +36,27 @@ import (
 
 	"github.com/bleemeo/glouton/prometheus/model"
 	"github.com/bleemeo/glouton/types"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/influxdata/telegraf"
 	dto "github.com/prometheus/client_model/go"
+	commonmodel "github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/gate"
 	"golang.org/x/sync/errgroup"
 )
+
+//nolint:gochecknoinits
+func init() {
+	// We want to keep the strict name validation.
+	// It is done globally in agent/agent.go,
+	// but since the agent package isn't loaded during these tests,
+	// we must do it here too.
+	commonmodel.NameValidationScheme = commonmodel.LegacyValidation
+}
 
 const testAgentID = "fcdc81a8-5bce-4305-8108-8e1e75439329"
 
@@ -429,8 +438,8 @@ func TestRegistry_pushPoint(t *testing.T) {
 			{
 				Point: types.Point{Value: 2.0, Time: t0},
 				Labels: map[string]string{
-					"__name__": "unfixable-name#~", // Metric names are no longer restricted to a small set of characters,
-					"item":     "something",        // and now the whole UTF-8 range is valid.
+					"__name__": "unfixable-name#~",
+					"item":     "something",
 				},
 			},
 			{
@@ -449,14 +458,12 @@ func TestRegistry_pushPoint(t *testing.T) {
 	}
 
 	metricName1 := "point1"
-	metricName2 := "fixable-name.0"
-	metricName3 := "unfixable-name#~"
+	metricName2 := "fixable_name_0"
 	helpText := ""
 	instanceIDName := types.LabelInstanceUUID
 	instanceIDValue := testAgentID
 	value1 := 1.0
 	value2 := 3.0
-	value3 := 2.0
 	want := []*dto.MetricFamily{
 		{
 			Name: &metricName2,
@@ -479,25 +486,6 @@ func TestRegistry_pushPoint(t *testing.T) {
 				{
 					Untyped: &dto.Untyped{
 						Value: &value1,
-					},
-					TimestampMs: &t0MS,
-				},
-			},
-		},
-		{
-			Name: &metricName3,
-			Help: &helpText,
-			Type: dto.MetricType_UNTYPED.Enum(),
-			Metric: []*dto.Metric{
-				{
-					Label: []*dto.LabelPair{
-						{
-							Name:  proto.String("item"),
-							Value: proto.String("something"),
-						},
-					},
-					Untyped: &dto.Untyped{
-						Value: &value3,
 					},
 					TimestampMs: &t0MS,
 				},

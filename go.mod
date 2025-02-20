@@ -41,7 +41,7 @@ require (
 	github.com/opencontainers/runtime-spec v1.2.0
 	github.com/prometheus-community/windows_exporter v0.24.0
 	github.com/prometheus/blackbox_exporter v0.25.0
-	github.com/prometheus/client_golang v1.21.0-rc.0
+	github.com/prometheus/client_golang v1.21.0
 	github.com/prometheus/client_model v0.6.1
 	github.com/prometheus/common v0.62.0
 	github.com/prometheus/node_exporter v1.9.0
