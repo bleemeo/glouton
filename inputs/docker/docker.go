@@ -44,7 +44,7 @@ func New(dockerAddress string, dockerRuntime crTypes.RuntimeInterface, isContain
 
 			dockerInput.PerDevice = false
 			dockerInput.Total = true
-			dockerInput.Log = internal.Logger{}
+			dockerInput.Log = internal.NewLogger()
 			i = &internal.Input{
 				Input: dockerInput,
 				Accumulator: internal.Accumulator{

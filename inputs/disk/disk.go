@@ -42,7 +42,7 @@ func New(mountPoint string, pathMatcher types.Matcher, ignoreFSTypes []string) (
 	input, ok := telegraf_inputs.Inputs["disk"]
 
 	if ok {
-		diskInput, _ := input().(*disk.DiskStats)
+		diskInput, _ := input().(*disk.Disk)
 		diskInput.IgnoreFS = ignoreFSTypes
 
 		diskDeduplicateInput := deduplicator{

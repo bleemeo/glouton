@@ -32,7 +32,7 @@ import (
 func New() (i telegraf.Input, err error) {
 	input, ok := telegraf_inputs.Inputs["mem"]
 	if ok {
-		memInput, _ := input().(*mem.MemStats)
+		memInput, _ := input().(*mem.Mem)
 
 		if err := memInput.Init(); err != nil {
 			return nil, fmt.Errorf("init: %w", err)

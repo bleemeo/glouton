@@ -29,7 +29,7 @@ import (
 
 	"github.com/bleemeo/glouton/logger"
 
-	psutilNet "github.com/shirou/gopsutil/v3/net"
+	psutilNet "github.com/shirou/gopsutil/v4/net"
 )
 
 // NetstatProvider provide netstat information from both a file (output of netstat command) and using gopsutil

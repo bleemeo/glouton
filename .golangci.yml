@@ -14,7 +14,7 @@ linters:
     - nonamedreturns # Warn for every named return, not useful.
     - interfacebloat # Warn when an interface has too many methods, not useful.
     # Deprecated and replaced linter.
-    - exportloopref
+    - tenv
     # We use maintidx to lint function complexity.
     - gocyclo
     - cyclop

@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	psutilNet "github.com/shirou/gopsutil/v3/net"
+	psutilNet "github.com/shirou/gopsutil/v4/net"
 )
 
 // (partial) output of sudo netstat -lnp with LANG=fr_FR.UTF-8.

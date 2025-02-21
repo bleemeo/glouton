@@ -55,7 +55,7 @@ func New(cfg config.Mdstat) (telegraf.Input, registry.RegistrationOption, error)
 		return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
 	}
 
-	mdstatConfig, ok := input().(*mdstat.MdstatConf)
+	mdstatConfig, ok := input().(*mdstat.Mdstat)
 	if !ok {
 		return nil, registry.RegistrationOption{}, inputs.ErrUnexpectedType
 	}

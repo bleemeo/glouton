@@ -43,7 +43,7 @@ func New(server string) (telegraf.Input, error) {
 	secretServer := telegraf_config.NewSecret([]byte(server))
 	mysqlInput.Servers = []*telegraf_config.Secret{&secretServer}
 	mysqlInput.GatherInnoDBMetrics = true
-	mysqlInput.Log = internal.Logger{}
+	mysqlInput.Log = internal.NewLogger()
 	i := &internal.Input{
 		Input: mysqlWrapper{mysqlInput},
 		Accumulator: internal.Accumulator{

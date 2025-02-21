@@ -37,9 +37,9 @@ import (
 	"github.com/bleemeo/glouton/utils/gloutonexec"
 	"github.com/bleemeo/glouton/version"
 
-	"github.com/shirou/gopsutil/v3/cpu"
-	"github.com/shirou/gopsutil/v3/host"
-	"github.com/shirou/gopsutil/v3/mem"
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/host"
+	"github.com/shirou/gopsutil/v4/mem"
 	"gopkg.in/yaml.v3"
 )
 

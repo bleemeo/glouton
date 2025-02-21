@@ -30,8 +30,8 @@ import (
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
 
-	"github.com/shirou/gopsutil/v3/load"
-	psutilNet "github.com/shirou/gopsutil/v3/net"
+	"github.com/shirou/gopsutil/v4/load"
+	psutilNet "github.com/shirou/gopsutil/v4/net"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 )

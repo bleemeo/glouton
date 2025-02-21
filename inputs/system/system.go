@@ -30,7 +30,7 @@ func New() (i telegraf.Input, err error) {
 	input, ok := telegraf_inputs.Inputs["system"]
 	if ok {
 		systemInput, _ := input().(*system.SystemStats)
-		systemInput.Log = internal.Logger{}
+		systemInput.Log = internal.NewLogger()
 		i = &internal.Input{
 			Input: systemInput,
 			Accumulator: internal.Accumulator{

@@ -37,7 +37,7 @@ func New(diskMatcher types.Matcher) (i telegraf.Input, err error) {
 
 	if ok {
 		diskioInput, _ := input().(*diskio.DiskIO)
-		diskioInput.Log = internal.Logger{}
+		diskioInput.Log = internal.NewLogger()
 		dt := diskIOTransformer{
 			matcher: diskMatcher,
 		}
