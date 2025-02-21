@@ -58,14 +58,16 @@ type State struct {
 	persistent persistedState
 	cache      map[string]json.RawMessage
 
-	// When multiple lock are acquired, they must be in the order of declaration
+	// When multiple locks are acquired,
+	// it must be in the order of declaration.
 	l                      sync.RWMutex
 	backgroundLock         sync.Mutex
 	backgroundWriterWG     sync.WaitGroup
-	backgroundWriteTrigger chan interface{}
+	backgroundWriteTrigger chan bool
 	persistentPath         string
 	cachePath              string
 	isInMemory             bool
+	closed                 bool
 }
 
 func DefaultCachePath(persistentPath string) string {
@@ -91,10 +93,11 @@ func LoadReadOnly(persistentPath string, cachePath string) (*State, error) {
 // load loads state.json file.
 func load(readOnly bool, persistentPath string, cachePath string) (*State, error) {
 	state := State{
-		persistentPath: persistentPath,
-		cachePath:      cachePath,
-		cache:          make(map[string]json.RawMessage),
-		isInMemory:     readOnly,
+		persistentPath:         persistentPath,
+		cachePath:              cachePath,
+		cache:                  make(map[string]json.RawMessage),
+		backgroundWriteTrigger: make(chan bool, 1),
+		isInMemory:             readOnly,
 	}
 
 	if readOnly {
@@ -108,7 +111,7 @@ func load(readOnly bool, persistentPath string, cachePath string) (*State, error
 			state.persistent.Version = stateVersion
 			state.persistent.dirty = true
 
-			return &state, nil
+			return state.withBackgroundWriter(), nil
 		} else if err != nil {
 			return nil, err
 		}
@@ -162,7 +165,19 @@ func load(readOnly bool, persistentPath string, cachePath string) (*State, error
 		}
 	}
 
-	return &state, nil
+	return state.withBackgroundWriter(), nil
+}
+
+func (s *State) withBackgroundWriter() *State {
+	s.backgroundWriterWG.Add(1)
+
+	go func() {
+		defer s.backgroundWriterWG.Done()
+
+		s.backgroundWriter()
+	}()
+
+	return s
 }
 
 // IsEmpty return true is the state is empty. This usually only happen when the state file does not exists.
@@ -196,29 +211,18 @@ func (s *State) FileSizes() (int, int) {
 
 // Close wait for any background write.
 func (s *State) Close() {
-	// To avoid dead-lock, it's important to acquire the read-lock before.
-	// It's also important that calls to triggerCacheWrite() acquire the write lock before.
-	// Without those conditions, the following could occur:
-	// * Close() acquire backgroundLock
-	// * A modification (like Set()) acquire the write lock and block inside triggerCacheWrite
-	//   trying to acquire backgroundLock
-	// * background writer block on read lock, and never finish
-	// * Close() block on waiting background writer. Dead-lock is reached.
 	s.l.RLock()
-	defer s.l.RUnlock()
-
 	s.backgroundLock.Lock()
-	defer s.backgroundLock.Unlock()
-
-	if s.backgroundWriteTrigger == nil {
-		// background writer never started, nothing to do
-		return
-	}
 
 	close(s.backgroundWriteTrigger)
-	s.backgroundWriterWG.Wait()
+	// We need to explicitly mark the channel as closed,
+	// otherwise we wouldn't know if we can still write to it.
+	s.closed = true
 
-	s.backgroundWriteTrigger = nil
+	s.backgroundLock.Unlock()
+	s.l.RUnlock()
+
+	s.backgroundWriterWG.Wait()
 }
 
 // KeepOnlyPersistent will delete everything from state but persistent information.
@@ -228,9 +232,7 @@ func (s *State) KeepOnlyPersistent() {
 
 	s.cache = make(map[string]json.RawMessage)
 
-	if err := s.saveCacheIfFileNotDeleted(); err != nil {
-		logger.Printf("Unable to save state.json: %v", err)
-	}
+	s.saveCacheIfFileNotDeleted()
 }
 
 // SaveTo will write back the State to specified filename and following auto-save will use the same file.
@@ -246,33 +248,17 @@ func (s *State) SaveTo(persistentPath string, cachePath string) error {
 		return err
 	}
 
-	s.triggerCacheWrite()
+	s.triggerCacheWrite(true, false)
 
 	return nil
 }
 
-func (s *State) saveCacheIfFileNotDeleted() error {
+func (s *State) saveCacheIfFileNotDeleted() {
 	if s.isInMemory {
-		return nil
+		return
 	}
 
-	file, err := os.Open(s.cachePath)
-	if errors.Is(err, os.ErrNotExist) {
-		// This case happens when the state.cache.json is deleted at runtime.
-		// While this is not a regular use case it is checked in order to prevent
-		// recreating the state on shutdown.
-		return nil
-	}
-
-	if err != nil {
-		return err
-	}
-
-	file.Close()
-
-	s.triggerCacheWrite()
-
-	return nil
+	s.triggerCacheWrite(false, true)
 }
 
 func (s *State) savePersistent() error {
@@ -308,42 +294,40 @@ func (s *State) savePersistent() error {
 }
 
 // Caller of triggerCacheWrite must hold the writer lock (s.l.Lock).
-func (s *State) triggerCacheWrite() {
+// If triggerCacheWrite is called while the state is closed, the message will be dropped.
+//
+// If `blocking` is set to true, triggerCacheWrite will wait for the channel
+// to accept the message before returning. When set to false, the message may be dropped.
+//
+// If `onlyIfFileExists` is set to true, the cache will only be written if the file already exists.
+// When set to false, the file will be written without any pre-existence check.
+func (s *State) triggerCacheWrite(blocking, onlyIfFileExists bool) {
 	s.backgroundLock.Lock()
 	defer s.backgroundLock.Unlock()
 
-	if s.backgroundWriteTrigger == nil {
-		// Start the background gorouting
-		// The channel had a buffer size of one, allowing to submit a write request while one is ongoing
-		s.backgroundWriteTrigger = make(chan interface{}, 1)
-
-		s.backgroundWriterWG.Add(1)
-
-		go func() {
-			defer s.backgroundWriterWG.Done()
-
-			s.backgroundWriter()
-		}()
+	if s.closed {
+		return
 	}
 
-	select {
-	case s.backgroundWriteTrigger <- nil:
-	default:
+	if blocking {
+		s.backgroundWriteTrigger <- onlyIfFileExists
+	} else {
+		select {
+		case s.backgroundWriteTrigger <- onlyIfFileExists:
+		default:
+		}
 	}
 }
 
 func (s *State) backgroundWriter() {
-	for range s.backgroundWriteTrigger {
-		if err := s.writeCache(); err != nil {
+	for onlyIfFileExists := range s.backgroundWriteTrigger {
+		if err := s.writeCache(onlyIfFileExists); err != nil {
 			logger.V(1).Printf("writing cache.json failed: %v", err)
 		}
 	}
 }
 
 func (s *State) serializeCache() ([]byte, error) {
-	s.l.RLock()
-	defer s.l.RUnlock()
-
 	buffer := bytes.NewBuffer(nil)
 	if err := s.saveCacheTo(buffer); err != nil {
 		return nil, err
@@ -352,22 +336,42 @@ func (s *State) serializeCache() ([]byte, error) {
 	return buffer.Bytes(), nil
 }
 
-func (s *State) writeCache() error {
-	data, err := s.serializeCache()
-	if err != nil {
-		return err
+func (s *State) writeCache(onlyIfFileExists bool) error {
+	if onlyIfFileExists {
+		_, err := os.Stat(s.cachePath)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				// This case happens when the state.cache.json is deleted at runtime.
+				// While this is not a regular use case, it is checked in order to prevent
+				// recreating the state on shutdown.
+				return nil
+			}
+
+			return err
+		}
 	}
 
 	s.l.RLock()
-	cachePath := s.cachePath
-	isInMemory := s.isInMemory
-	s.l.RUnlock()
 
-	if isInMemory {
+	if s.isInMemory {
+		s.l.RUnlock()
+
 		return nil
 	}
 
-	w, err := os.OpenFile(cachePath+tmpExt, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	data, err := s.serializeCache()
+	if err != nil {
+		s.l.RUnlock()
+
+		return err
+	}
+
+	cachePath := s.cachePath
+	tmpCachePath := cachePath + tmpExt
+
+	s.l.RUnlock()
+
+	w, err := os.OpenFile(tmpCachePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err
 	}
@@ -381,7 +385,7 @@ func (s *State) writeCache() error {
 
 	w.Close()
 
-	err = os.Rename(cachePath+tmpExt, cachePath)
+	err = os.Rename(tmpCachePath, cachePath)
 
 	return err
 }
@@ -417,10 +421,7 @@ func (s *State) Set(key string, object interface{}) error {
 		return nil
 	}
 
-	err = s.saveCacheIfFileNotDeleted()
-	if err != nil {
-		logger.Printf("Unable to save state.json: %v", err)
-	}
+	s.saveCacheIfFileNotDeleted()
 
 	return nil
 }
@@ -450,9 +451,7 @@ func (s *State) Delete(key string) error {
 
 	delete(s.cache, key)
 
-	if err := s.saveCacheIfFileNotDeleted(); err != nil {
-		logger.Printf("Unable to save state.json: %v", err)
-	}
+	s.saveCacheIfFileNotDeleted()
 
 	return nil
 }
