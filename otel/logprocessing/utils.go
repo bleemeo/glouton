@@ -45,6 +45,10 @@ const (
 	logFileMetadataCacheKey = "LogFileMetadata"
 )
 
+type fileSizer interface {
+	sizesByFile() (map[string]int64, error)
+}
+
 func getLastFileSizesFromCache(state bleemeoTypes.State) (lastFileSizes map[string]int64) {
 	err := state.Get(logFileSizesCacheKey, &lastFileSizes)
 	if err != nil {
@@ -54,10 +58,10 @@ func getLastFileSizesFromCache(state bleemeoTypes.State) (lastFileSizes map[stri
 	return lastFileSizes
 }
 
-func saveLastFileSizesToCache(state bleemeoTypes.State, receivers []*logReceiver) {
+func saveLastFileSizesToCache[FS fileSizer](state bleemeoTypes.State, sizers []FS) {
 	lastFileSizes := make(map[string]int64)
 
-	for _, recv := range receivers {
+	for _, recv := range sizers {
 		sizesByFile, err := recv.sizesByFile()
 		if err != nil {
 			logger.V(1).Printf("Can't get log file sizes: %v", err)
@@ -96,6 +100,18 @@ func saveFileMetadataToCache(state bleemeoTypes.State, metadata map[string]map[s
 	if err != nil {
 		logger.V(1).Printf("Failed to save log file metadata to cache: %v", err)
 	}
+}
+
+func mergeLastFileSizes(receivers []*logReceiver, containerRecv *containerReceiver) []fileSizer {
+	sizers := make([]fileSizer, len(receivers), len(receivers)+1)
+
+	for i, recv := range receivers {
+		sizers[i] = recv
+	}
+
+	sizers[len(sizers)-1] = containerRecv
+
+	return sizers
 }
 
 // shutdownAll stops all the given components (in reverse order).
@@ -246,7 +262,7 @@ type receiverDiagnosticInformation struct {
 type containerReceiverDiagnosticInformation struct {
 	LogProcessedCount      int64
 	LogThroughputPerMinute int
-	LogFilesByContainers   map[string][]string
+	Containers             map[string]Container
 }
 
 type diagnosticInformation struct {

@@ -29,6 +29,7 @@ import (
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/crashreport"
+	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
 
@@ -82,7 +83,7 @@ func MakePipeline( //nolint:maintidx
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability,
 	addWarnings func(...error),
 ) (
-	handleContainersLogsFn func(context.Context, []ContainerLogFiles),
+	handleContainersLogsFn func(context.Context, []facts.Container),
 	diagnosticFn func(context.Context, types.ArchiveWriter) error,
 	err error,
 ) { //nolint:wsl
@@ -186,8 +187,6 @@ func MakePipeline( //nolint:maintidx
 
 	pipeline.startedComponents = append(pipeline.startedComponents, logBatcher)
 
-	containerRecv := newContainerReceiver(pipeline, logBackPressureEnforcer)
-
 	var (
 		otlpRecvCounter         *atomic.Int64
 		otlpRecvThroughputMeter *ringCounter
@@ -259,20 +258,11 @@ AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers bl
 		pipeline.receivers = append(pipeline.receivers, recv)
 	}
 
-	if len(pipeline.receivers) == 0 {
-		if len(cfg.Receivers) > 0 {
-			logger.V(1).Printf("None of the %d configured log receiver(s) is valid.", len(cfg.Receivers))
-		}
-
-		// We may still want the pipeline to be running, to handle logs from containers
-		/*if !cfg.HTTP.Enable && !cfg.GRPC.Enable {
-			logger.V(1).Printf("No receiver to start; disabling log processing.")
-
-			shutdownAll(pipeline.startedComponents)
-
-			return nil, nil, nil
-		}*/
+	if len(pipeline.receivers) == 0 && len(cfg.Receivers) > 0 {
+		logger.V(1).Printf("None of the %d configured log receiver(s) are valid.", len(cfg.Receivers))
 	}
+
+	containerRecv := newContainerReceiver(pipeline, logBackPressureEnforcer)
 
 	go func() {
 		defer crashreport.ProcessPanic()
@@ -314,7 +304,7 @@ AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers bl
 			case <-ticker.C:
 				pipeline.l.Lock()
 
-				saveLastFileSizesToCache(state, pipeline.receivers)
+				saveLastFileSizesToCache(state, mergeLastFileSizes(pipeline.receivers, containerRecv))
 				saveFileMetadataToCache(state, pipeline.persister.getAllMetadata())
 
 				pipeline.l.Unlock()
@@ -337,7 +327,7 @@ AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers bl
 
 		shutdownAll(pipeline.startedComponents)
 
-		saveLastFileSizesToCache(state, pipeline.receivers)
+		saveLastFileSizesToCache(state, mergeLastFileSizes(pipeline.receivers, containerRecv))
 		saveFileMetadataToCache(state, pipeline.persister.getAllMetadata())
 	}()
 

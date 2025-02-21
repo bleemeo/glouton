@@ -204,6 +204,7 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 		pipeline.lastFileSizes,
 		pipeline.commandRunner,
 		makeStorageFn,
+		nil,
 	)
 	if err != nil {
 		return fmt.Errorf("setting up receiver factories: %w", err)
@@ -334,6 +335,7 @@ func setupLogReceiverFactories(
 	lastFileSizes map[string]int64,
 	commandRunner CommandRunner,
 	makeStorageFn func(logFile string) *component.ID,
+	extraAttributes map[string]helper.ExprStringConfig,
 ) (
 	factories map[receiver.Factory]component.Config,
 	readableFiles, execFiles []string,
@@ -376,6 +378,10 @@ func setupLogReceiverFactories(
 		}
 		fileTypedCfg.Operators = operators
 		fileTypedCfg.BaseConfig.StorageID = makeStorageFn(logFile)
+
+		if extraAttributes != nil {
+			maps.Insert(fileTypedCfg.InputConfig.Attributes, maps.All(extraAttributes))
+		}
 
 		_, err := sizeFnByFile[logFile]()
 		if err != nil {
@@ -434,6 +440,10 @@ func setupLogReceiverFactories(
 			attrs.LogFilePath: helper.ExprStringConfig(logFile),
 		}
 		execTypedCfg.Operators = operators
+
+		if extraAttributes != nil {
+			maps.Insert(execTypedCfg.InputConfig.Attributes, maps.All(extraAttributes))
+		}
 
 		err = mapstructure.Decode(retryCfg, &execTypedCfg.RetryOnFailure)
 		if err != nil {

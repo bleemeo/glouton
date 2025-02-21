@@ -146,7 +146,11 @@ func addWarningsFn(t *testing.T) func(errs ...error) {
 	}
 }
 
-var sortLinesOpt = cmpopts.SortSlices(func(x, y logRecord) bool { return x.Body < y.Body }) //nolint:gochecknoglobals
+//nolint:gochecknoglobals
+var (
+	sortLogsOpt  = cmpopts.SortSlices(func(x, y logRecord) bool { return x.Body < y.Body })
+	sortFilesOpt = cmpopts.SortSlices(func(x, y string) bool { return x < y })
+)
 
 func TestFileLogReceiver(t *testing.T) {
 	t.Parallel()
@@ -226,7 +230,7 @@ func TestFileLogReceiver(t *testing.T) {
 		t.Fatal("Failed to update pipeline:", err)
 	}
 
-	if diff := cmp.Diff([]string{f1.Name()}, recv.currentlyWatching(), sortLinesOpt); diff != "" {
+	if diff := cmp.Diff([]string{f1.Name()}, recv.currentlyWatching(), sortFilesOpt); diff != "" {
 		t.Errorf("Unexpected watched log files (-want, +got):\n%s", diff)
 	}
 
@@ -242,7 +246,7 @@ func TestFileLogReceiver(t *testing.T) {
 		t.Fatal("Failed to update pipeline:", err)
 	}
 
-	if diff := cmp.Diff([]string{f1.Name(), f2.Name()}, recv.currentlyWatching(), sortLinesOpt); diff != "" {
+	if diff := cmp.Diff([]string{f1.Name(), f2.Name()}, recv.currentlyWatching(), sortFilesOpt); diff != "" {
 		t.Errorf("Unexpected watched log files (-want, +got):\n%s", diff)
 	}
 
@@ -276,7 +280,7 @@ func TestFileLogReceiver(t *testing.T) {
 			},
 		},
 	}
-	if diff := cmp.Diff(expectedLogLines, logBuf.getAllRecords(), sortLinesOpt); diff != "" {
+	if diff := cmp.Diff(expectedLogLines, logBuf.getAllRecords(), sortLogsOpt); diff != "" {
 		t.Fatalf("Unexpected log lines (-want, +got):\n%s", diff)
 	}
 
@@ -303,7 +307,7 @@ func TestFileLogReceiver(t *testing.T) {
 		ExecLogReceiverPaths: []string{},
 		IgnoredFilePaths:     []string{},
 	}
-	if diff := cmp.Diff(expectedDiagnosticInfo, recv.diagnosticInfo(), sortLinesOpt); diff != "" {
+	if diff := cmp.Diff(expectedDiagnosticInfo, recv.diagnosticInfo(), sortFilesOpt); diff != "" {
 		t.Fatalf("Unexpected diagnostic information (-want, +got):\n%s", diff)
 	}
 }
@@ -391,7 +395,7 @@ func TestFileLogReceiverWithHostroot(t *testing.T) {
 		t.Fatal("Failed to update pipeline:", err)
 	}
 
-	if diff := cmp.Diff([]string{watchedFile}, recv.currentlyWatching(), sortLinesOpt); diff != "" {
+	if diff := cmp.Diff([]string{watchedFile}, recv.currentlyWatching(), sortFilesOpt); diff != "" {
 		t.Errorf("Unexpected watched log files (-want, +got):\n%s", diff)
 	}
 
@@ -415,7 +419,7 @@ func TestFileLogReceiverWithHostroot(t *testing.T) {
 			},
 		},
 	}
-	if diff := cmp.Diff(expectedLogLines, logBuf.getAllRecords(), sortLinesOpt); diff != "" {
+	if diff := cmp.Diff(expectedLogLines, logBuf.getAllRecords(), sortLogsOpt); diff != "" {
 		t.Fatalf("Unexpected log lines (-want, +got):\n%s", diff)
 	}
 
@@ -438,7 +442,7 @@ func TestFileLogReceiverWithHostroot(t *testing.T) {
 		ExecLogReceiverPaths:   []string{},
 		IgnoredFilePaths:       []string{},
 	}
-	if diff := cmp.Diff(expectedDiagnosticInfo, recv.diagnosticInfo(), sortLinesOpt); diff != "" {
+	if diff := cmp.Diff(expectedDiagnosticInfo, recv.diagnosticInfo(), sortFilesOpt); diff != "" {
 		t.Fatalf("Unexpected diagnostic information (-want, +got):\n%s", diff)
 	}
 }
@@ -577,7 +581,7 @@ func TestExecLogReceiver(t *testing.T) {
 				t.Fatal("Failed to update pipeline:", err)
 			}
 
-			if diff := cmp.Diff([]string{file.Name()}, recv.currentlyWatching(), sortLinesOpt); diff != "" {
+			if diff := cmp.Diff([]string{file.Name()}, recv.currentlyWatching(), sortFilesOpt); diff != "" {
 				t.Errorf("Unexpected watched log files (-want, +got):\n%s", diff)
 			}
 
