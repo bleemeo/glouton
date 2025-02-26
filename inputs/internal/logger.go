@@ -17,68 +17,107 @@
 package internal
 
 import (
+	"fmt"
+	"sync"
+
 	"github.com/bleemeo/glouton/logger"
+
+	"github.com/influxdata/telegraf"
 )
 
 // Logger is an implementation of telegraf.Logger.
 type Logger struct {
-	// error callback functions
-	onError []func()
+	l          sync.Mutex
+	attributes map[string]any
 }
 
-/* Will be useful once telegraf is updated (and so is prometheus/procfs)
-func (l Logger) Level() telegraf.LogLevel {
+func NewLogger() *Logger {
+	return &Logger{
+		attributes: make(map[string]any),
+	}
+}
+
+func (l *Logger) Level() telegraf.LogLevel {
 	return telegraf.Debug
 }
 
-func (l Logger) RegisterErrorCallback(f func()) {
-	l.onError = append(l.onError, f)
-}*/
+func (l *Logger) AddAttribute(key string, value interface{}) {
+	l.l.Lock()
+	defer l.l.Unlock()
+
+	l.attributes[key] = value
+}
 
 // Errorf logs an error message, patterned after log.Printf.
-func (l Logger) Errorf(format string, args ...interface{}) {
-	logger.Printf(format, args...)
-
-	for _, f := range l.onError {
-		f()
-	}
+func (l *Logger) Errorf(format string, args ...interface{}) {
+	logger.Printf(l.formatWithAttrs(format), args...)
 }
 
 // Error logs an error message, patterned after log.Print.
-func (l Logger) Error(args ...interface{}) {
-	for _, f := range l.onError {
-		f()
-	}
-
-	logger.V(0).Println(args...)
-}
-
-// Debugf logs a debug message, patterned after log.Printf.
-func (l Logger) Debugf(format string, args ...interface{}) {
-	logger.V(2).Printf(format, args...)
-}
-
-// Debug logs a debug message, patterned after log.Print.
-func (l Logger) Debug(args ...interface{}) {
-	logger.V(2).Println(args...)
+func (l *Logger) Error(args ...interface{}) {
+	logger.V(0).Println(l.argsWithAttrs(args))
 }
 
 // Warnf logs a warning message, patterned after log.Printf.
-func (l Logger) Warnf(format string, args ...interface{}) {
-	logger.Printf(format, args...)
+func (l *Logger) Warnf(format string, args ...interface{}) {
+	logger.Printf(l.formatWithAttrs(format), args...)
 }
 
 // Warn logs a warning message, patterned after log.Print.
-func (l Logger) Warn(args ...interface{}) {
-	logger.V(0).Println(args...)
+func (l *Logger) Warn(args ...interface{}) {
+	logger.V(0).Println(l.argsWithAttrs(args))
 }
 
 // Infof logs an information message, patterned after log.Printf.
-func (l Logger) Infof(format string, args ...interface{}) {
-	logger.V(1).Printf(format, args...)
+func (l *Logger) Infof(format string, args ...interface{}) {
+	logger.V(1).Printf(l.formatWithAttrs(format), args...)
 }
 
 // Info logs an information message, patterned after log.Print.
-func (l Logger) Info(args ...interface{}) {
-	logger.V(1).Println(args...)
+func (l *Logger) Info(args ...interface{}) {
+	logger.V(1).Println(l.argsWithAttrs(args))
+}
+
+// Debugf logs a debug message, patterned after log.Printf.
+func (l *Logger) Debugf(format string, args ...interface{}) {
+	logger.V(2).Printf(l.formatWithAttrs(format), args...)
+}
+
+// Debug logs a debug message, patterned after log.Print.
+func (l *Logger) Debug(args ...interface{}) {
+	logger.V(2).Println(l.argsWithAttrs(args))
+}
+
+// Tracef logs a trace message, patterned after log.Printf.
+func (l *Logger) Tracef(format string, args ...interface{}) {
+	logger.V(3).Printf(l.formatWithAttrs(format), args...)
+}
+
+// Trace logs a trace message, patterned after log.Print.
+func (l *Logger) Trace(args ...interface{}) {
+	logger.V(3).Println(l.argsWithAttrs(args))
+}
+
+func (l *Logger) argsWithAttrs(args []any) string {
+	l.l.Lock()
+	defer l.l.Unlock()
+
+	log := fmt.Sprint(args)
+
+	for key, value := range l.attributes {
+		log += fmt.Sprintf(" %s=%v", key, value)
+	}
+
+	return log
+}
+
+func (l *Logger) formatWithAttrs(format string) string {
+	l.l.Lock()
+	defer l.l.Unlock()
+
+	for key, value := range l.attributes {
+		format += fmt.Sprintf(" %s=%v", key, value)
+	}
+
+	return format
 }

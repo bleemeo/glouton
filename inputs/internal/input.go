@@ -33,7 +33,7 @@ type Input struct {
 	Name        string
 
 	startError error
-	logger     *logger.TelegrafLogger
+	logger     telegraf.Logger
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input

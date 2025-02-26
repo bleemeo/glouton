@@ -27,7 +27,7 @@ import (
 	"github.com/bleemeo/glouton/types"
 	"github.com/bleemeo/glouton/version"
 
-	"github.com/shirou/gopsutil/v3/process"
+	"github.com/shirou/gopsutil/v4/process"
 )
 
 // Processes retrieves the list of all the current processes and their respective information.

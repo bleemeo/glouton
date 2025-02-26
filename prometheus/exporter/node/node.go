@@ -18,6 +18,8 @@ package node
 
 import (
 	"fmt"
+	"io"
+	"log/slog"
 	"strings"
 	_ "unsafe" // using hack with go linkname to access private variable :)
 
@@ -28,7 +30,6 @@ import (
 	"github.com/bleemeo/glouton/version"
 
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/node_exporter/collector"
 )
@@ -138,9 +139,7 @@ func newCollector(option Option) (*collector.NodeCollector, error) {
 		return nil, err
 	}
 
-	l := log.NewNopLogger()
-
-	c, err := collector.NewNodeCollector(l)
+	c, err := collector.NewNodeCollector(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		return nil, err
 	}

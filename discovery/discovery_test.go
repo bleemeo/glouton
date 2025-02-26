@@ -30,11 +30,22 @@ import (
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/prometheus/registry"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/influxdata/telegraf"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/common/model"
 )
+
+//nolint:gochecknoinits
+func init() {
+	// We want to keep the strict name validation.
+	// It is done globally in agent/agent.go,
+	// but since the agent package isn't loaded during these tests,
+	// we must do it here too.
+	model.NameValidationScheme = model.LegacyValidation
+}
 
 var (
 	errNotImplemented = errors.New("not implemented")

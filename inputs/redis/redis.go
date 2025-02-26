@@ -18,9 +18,6 @@ package redis
 
 import (
 	"errors"
-	"fmt"
-	"reflect"
-	"unsafe"
 
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
@@ -29,13 +26,9 @@ import (
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/redis"
-	goredis "github.com/redis/go-redis/v9"
 )
 
-var (
-	errTypeAssertion      = errors.New("failed type assertion")
-	errGetUnexportedField = errors.New("failed to get unexported field")
-)
+var errTypeAssertion = errors.New("failed type assertion")
 
 // The telegraf Redis plugin doesn't implement ServiceInput, so there is no Close function,
 // the clients have to be manually closed by accessing private struct fields.
@@ -59,51 +52,9 @@ func (r redisServiceInput) stop() error {
 		return errTypeAssertion
 	}
 
-	clientsField, err := getUnexportedField(redisInput, "clients")
-	if err != nil {
-		return errTypeAssertion
-	}
-
-	clientsInterface, ok := clientsField.([]redis.Client)
-	if !ok {
-		return errTypeAssertion
-	}
-
-	for _, clientInterface := range clientsInterface {
-		redisClient, ok := clientInterface.(*redis.RedisClient)
-		if !ok {
-			return errTypeAssertion
-		}
-
-		clientField, err := getUnexportedField(redisClient, "client")
-		if err != nil {
-			return err
-		}
-
-		client, ok := clientField.(*goredis.Client)
-		if !ok {
-			return errTypeAssertion
-		}
-
-		if err := client.Close(); err != nil {
-			return err
-		}
-	}
+	redisInput.Stop()
 
 	return nil
-}
-
-func getUnexportedField(object interface{}, fieldName string) (field interface{}, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("%w: %v", errGetUnexportedField, r)
-		}
-	}()
-
-	val := reflect.ValueOf(object).Elem().FieldByName(fieldName)
-	field = reflect.NewAt(val.Type(), unsafe.Pointer(val.UnsafeAddr())).Elem().Interface()
-
-	return
 }
 
 // New initialise redis.Input.
@@ -114,7 +65,7 @@ func New(url string, password string) (i telegraf.Input, err error) {
 		if ok {
 			slice := append(make([]string, 0), url)
 			redisInput.Servers = slice
-			redisInput.Log = internal.Logger{}
+			redisInput.Log = internal.NewLogger()
 			redisInput.Password = password
 			i = &internal.Input{
 				Input: redisServiceInput{redisInput},

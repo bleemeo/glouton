@@ -87,7 +87,7 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/influxdata/telegraf"
 	"github.com/prometheus/prometheus/util/gate"
-	"github.com/shirou/gopsutil/v3/host"
+	"github.com/shirou/gopsutil/v4/host"
 
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 
@@ -98,9 +98,16 @@ import (
 	processSource "github.com/bleemeo/glouton/prometheus/sources/process"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"gopkg.in/yaml.v3"
 )
+
+//nolint:gochecknoinits
+func init() {
+	// We want to keep Prometheus's strict name validation.
+	model.NameValidationScheme = model.LegacyValidation
+}
 
 // Jitter define the aligned timestamp used for scrapping.
 // System collector use 0 (baseJitter here and in registry.go).
@@ -288,6 +295,8 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 		if oldState.IsEmpty() {
 			oldStatePath = ""
 		} else {
+			a.state.Close()
+
 			a.state = oldState
 		}
 	}

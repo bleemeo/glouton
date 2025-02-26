@@ -93,16 +93,19 @@ func Test_newCollector(t *testing.T) {
 		value := reflect.ValueOf(fsCollectors)
 		value = value.Elem()
 
-		fieldValue := value.FieldByName("excludedMountPointsPattern")
-		if fieldValue.Type() != reflect.TypeOf(&regexp.Regexp{}) {
-			t.Errorf("excludedMountPointsPattern is a %t, want a *regexp.Regexp", fieldValue.Interface())
+		mountPointFilter := value.FieldByName("mountPointFilter")
+		if mountPointFilter.Type().String() != "collector.deviceFilter" {
+			t.Errorf("mountPointFilter is a %s, want a collector.deviceFilter", mountPointFilter.Type())
 		}
 
-		ptr := fieldValue.UnsafePointer()
+		ignorePattern := mountPointFilter.FieldByName("ignorePattern")
+		if ignorePattern.Type() != reflect.TypeOf(&regexp.Regexp{}) {
+			t.Errorf("ignorePattern is a %s, want a *regexp.Regexp", ignorePattern.Type())
+		}
 
-		excludedMountPointsPattern := (*regexp.Regexp)(ptr)
-		if excludedMountPointsPattern.String() != fullOptions.FilesystemIgnoredMountPoints {
-			t.Errorf("excludedMountPointsPattern = %s, want a %s", excludedMountPointsPattern.String(), fullOptions.FilesystemIgnoredMountPoints)
+		mountPointFilterIgnorePattern := (*regexp.Regexp)(ignorePattern.UnsafePointer())
+		if mountPointFilterIgnorePattern.String() != fullOptions.FilesystemIgnoredMountPoints {
+			t.Errorf("mountPointFilterIgnorePattern = %s, want a %s", mountPointFilterIgnorePattern.String(), fullOptions.FilesystemIgnoredMountPoints)
 		}
 	}
 

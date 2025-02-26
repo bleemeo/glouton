@@ -99,7 +99,7 @@ func setupMdstatTest(t *testing.T, name string) (input telegraf.Input, mdadmDeta
 		t.Fatal("Failed to initialize mdstat input:", err)
 	}
 
-	underlyingInput := mdstatInput.(*internal.Input).Input.(*mdstat.MdstatConf) //nolint: forcetypeassert
+	underlyingInput := mdstatInput.(*internal.Input).Input.(*mdstat.Mdstat) //nolint: forcetypeassert
 	underlyingInput.FileName = mdstatFilePath
 
 	if initInput, ok := mdstatInput.(telegraf.Initializer); ok {

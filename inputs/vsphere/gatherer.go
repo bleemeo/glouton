@@ -59,8 +59,8 @@ type vSphereGatherer struct {
 	soapURL             *url.URL
 	endpointCreateTimer *time.Timer
 
-	endpoint *vsphere.Endpoint
-	cancel   context.CancelFunc
+	input  *vsphere.VSphere
+	cancel context.CancelFunc
 
 	acc        *internal.Accumulator
 	buffer     *registry.PointBuffer
@@ -91,7 +91,7 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 	gatherer.l.Lock()
 	defer gatherer.l.Unlock()
 
-	if gatherer.endpoint == nil {
+	if gatherer.input == nil {
 		return nil, nil
 	}
 
@@ -121,7 +121,7 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 			// a point every minute. But for historical metrics, we don't need to do the real call every minute:
 			// every 5 minutes is enough. We prefer 5 minutes rather than 30 minutes, to get the last data point
 			// a bit sooner (we don't know the delay before that point is available).
-			err = gatherer.endpoint.Collect(ctx, retAcc)
+			err = gatherer.input.Gather(retAcc)
 			if gatherer.kind == gatherHist30m && err == nil {
 				gatherer.lastInputCollect = state.T0
 			}
@@ -212,8 +212,8 @@ func (gatherer *vSphereGatherer) stop() {
 
 	gatherer.cancel()
 
-	if gatherer.endpoint != nil {
-		gatherer.endpoint.Close()
+	if gatherer.input != nil {
+		gatherer.input.Stop()
 	} else if gatherer.endpointCreateTimer != nil {
 		// Case where the endpoint still has not been created.
 		gatherer.endpointCreateTimer.Stop()
@@ -229,9 +229,11 @@ func (gatherer *vSphereGatherer) createEndpoint(ctx context.Context, input *vsph
 	}
 
 	newEP := func(epURL *url.URL) error {
-		ep, err := vsphere.NewEndpoint(ctx, input, epURL, input.Log)
+		input.Vcenters = []string{epURL.String()}
+
+		err := input.Start(nil)
 		if err == nil {
-			gatherer.endpoint = ep
+			gatherer.input = input
 		}
 
 		return err

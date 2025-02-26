@@ -5,134 +5,53 @@ snapshot:
   # Our version is based on the date.
   version_template: '{{ .Env.GLOUTON_VERSION }}'
 builds:
-- env:
-  - CGO_ENABLED=0
-  targets:
-  - linux_amd64
-  - linux_386
-  - linux_arm_6
-  - linux_arm64
-  - windows_amd64
-  - windows_386
-  - freebsd_amd64
-  overrides:
-  - goos: freebsd
-    goarch: amd64
-    goamd64: v1
-    tags:
-      # flag to disable some node_exporter module that require CGO_ENABLED=1
-      - noexec,nomeminfo,nozfs,nonetdev,nonetisr
+  - env:
+      - CGO_ENABLED=0
+    targets:
+      - linux_amd64
+      - linux_386
+      - linux_arm_6
+      - linux_arm64
+      - windows_amd64
+      - windows_386
+      - freebsd_amd64
+    overrides:
+      - goos: freebsd
+        goarch: amd64
+        goamd64: v1
+        tags:
+          # flag to disable some node_exporter module that require CGO_ENABLED=1
+          - noexec,nomeminfo,nozfs,nonetdev,nonetisr
 archives:
-- format: binary
-  format_overrides:
-    - goos: freebsd
-      format: tar.gz
-  files:
-  - src: "packaging/truenas/glouton_install.py"
-    dst: ./
-    strip_parent: true
-  - src: "packaging/truenas/cron_upgrade.sh"
-    dst: ./
-    strip_parent: true
-  - src: "packaging/truenas/glouton.init"
-    dst: ./
-    strip_parent: true
-  - src: "etc/glouton.conf"
-    dst: ./etc
-    strip_parent: true
-  - src: "packaging/common/05-system.conf"
-    dst: ./etc/conf.d/
-    strip_parent: true
-  - src: "packaging/truenas/06-distribution.conf"
-    dst: ./etc/conf.d/
-    strip_parent: true
-  wrap_in_directory: "glouton_{{ .Version }}"
+  - formats: [ binary ]
+    format_overrides:
+      - goos: freebsd
+        formats: [ tar.gz ]
+    files:
+      - src: "packaging/truenas/glouton_install.py"
+        dst: ./
+        strip_parent: true
+      - src: "packaging/truenas/cron_upgrade.sh"
+        dst: ./
+        strip_parent: true
+      - src: "packaging/truenas/glouton.init"
+        dst: ./
+        strip_parent: true
+      - src: "etc/glouton.conf"
+        dst: ./etc
+        strip_parent: true
+      - src: "packaging/common/05-system.conf"
+        dst: ./etc/conf.d/
+        strip_parent: true
+      - src: "packaging/truenas/06-distribution.conf"
+        dst: ./etc/conf.d/
+        strip_parent: true
+    wrap_in_directory: "glouton_{{ .Version }}"
 nfpms:
-- vendor: Bleemeo
-  homepage: https://bleemeo.com
-  maintainer: "Bleemeo Packaging Team <jenkins@bleemeo.com>"
-  recommends:
-  - sudo
-  - ca-certificates
-  - net-tools
-  - cron
-  - util-linux
-  - iproute2
-  - procps-ng
-  description: |
-    Bleemeo agent
-      Bleemeo is a solution of Monitoring as a Service.
-      This package contains the agent which sends metrics to
-      the SaaS platform.
-  license: Apache 2.0
-  formats:
-  - deb
-  - rpm
-  bindir: /usr/sbin
-  contents:
-  # Files
-  - src: packaging/common/glouton.service
-    dst: /lib/systemd/system/glouton.service
-  - src: packaging/common/glouton-auto-upgrade.service
-    dst: /lib/systemd/system/glouton-auto-upgrade.service
-  - src: packaging/common/glouton-auto-upgrade.timer
-    dst: /lib/systemd/system/glouton-auto-upgrade.timer
-  - src: packaging/common/glouton-hook-package-modified
-    dst: /usr/lib/glouton/glouton-hook-package-modified
-  - src: packaging/common/glouton-auto-upgrade
-    dst: /usr/lib/glouton/glouton-auto-upgrade
-  - src: bin/glouton-veths
-    dst: /usr/lib/glouton/glouton-veths
-  - src: bin/glouton-netstat
-    dst: /usr/sbin/glouton-netstat
-  - src: bin/glouton-gather-facts
-    dst: /usr/sbin/glouton-gather-facts
-  - type: dir
-    dst: /etc/glouton/conf.d
-  - type: dir
-    dst: /var/lib/glouton
-  # Global config files
-  - src: etc/glouton.conf
-    dst: /etc/glouton/glouton.conf
-    type: config
-  - src: packaging/common/05-system.conf
-    dst: /etc/glouton/conf.d/05-system.conf
-    type: config
-  - src: packaging/common/glouton.sudoers
-    dst: /etc/sudoers.d/glouton
-    type: config
-  - src: packaging/common/glouton.cron.hourly
-    dst: /etc/cron.hourly/glouton
-    type: config
-  # Debian config files
-  - src: packaging/deb/glouton-06-distribution.conf
-    dst: /etc/glouton/conf.d/06-distribution.conf
-    type: config
-    packager: deb
-  - src: packaging/deb/glouton.apt.conf
-    dst: /etc/apt/apt.conf.d/05glouton
-    type: config
-    packager: deb
-  # RPM config files
-  - src: packaging/rpm/glouton.yum.action
-    dst: /etc/yum/post-actions/glouton.action
-    type: config
-    packager: rpm
-  - src: packaging/rpm/glouton-06-distribution.conf
-    dst: /etc/glouton/conf.d/06-distribution.conf
-    type: config
-    packager: rpm
-  - src: packaging/rpm/glouton-dnf-plugin.py
-    dst: /usr/lib/python3.6/site-packages/dnf-plugins/glouton.py
-    type: config
-    packager: rpm
-  scripts:
-    postinstall: "packaging/scripts/postinstall.sh"
-    preremove: "packaging/scripts/preremove.sh"
-    postremove: "packaging/scripts/postremove.sh"
-  overrides:
-    rpm:
-      recommends:
+  - vendor: Bleemeo
+    homepage: https://bleemeo.com
+    maintainer: "Bleemeo Packaging Team <jenkins@bleemeo.com>"
+    recommends:
       - sudo
       - ca-certificates
       - net-tools
@@ -140,15 +59,96 @@ nfpms:
       - util-linux
       - iproute2
       - procps-ng
-      - yum-plugin-post-transaction-actions
+    description: |
+      Bleemeo agent
+        Bleemeo is a solution of Monitoring as a Service.
+        This package contains the agent which sends metrics to
+        the SaaS platform.
+    license: Apache 2.0
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/sbin
+    contents:
+      # Files
+      - src: packaging/common/glouton.service
+        dst: /lib/systemd/system/glouton.service
+      - src: packaging/common/glouton-auto-upgrade.service
+        dst: /lib/systemd/system/glouton-auto-upgrade.service
+      - src: packaging/common/glouton-auto-upgrade.timer
+        dst: /lib/systemd/system/glouton-auto-upgrade.timer
+      - src: packaging/common/glouton-hook-package-modified
+        dst: /usr/lib/glouton/glouton-hook-package-modified
+      - src: packaging/common/glouton-auto-upgrade
+        dst: /usr/lib/glouton/glouton-auto-upgrade
+      - src: bin/glouton-veths
+        dst: /usr/lib/glouton/glouton-veths
+      - src: bin/glouton-netstat
+        dst: /usr/sbin/glouton-netstat
+      - src: bin/glouton-gather-facts
+        dst: /usr/sbin/glouton-gather-facts
+      - type: dir
+        dst: /etc/glouton/conf.d
+      - type: dir
+        dst: /var/lib/glouton
+      # Global config files
+      - src: etc/glouton.conf
+        dst: /etc/glouton/glouton.conf
+        type: config
+      - src: packaging/common/05-system.conf
+        dst: /etc/glouton/conf.d/05-system.conf
+        type: config
+      - src: packaging/common/glouton.sudoers
+        dst: /etc/sudoers.d/glouton
+        type: config
+      - src: packaging/common/glouton.cron.hourly
+        dst: /etc/cron.hourly/glouton
+        type: config
+      # Debian config files
+      - src: packaging/deb/glouton-06-distribution.conf
+        dst: /etc/glouton/conf.d/06-distribution.conf
+        type: config
+        packager: deb
+      - src: packaging/deb/glouton.apt.conf
+        dst: /etc/apt/apt.conf.d/05glouton
+        type: config
+        packager: deb
+      # RPM config files
+      - src: packaging/rpm/glouton.yum.action
+        dst: /etc/yum/post-actions/glouton.action
+        type: config
+        packager: rpm
+      - src: packaging/rpm/glouton-06-distribution.conf
+        dst: /etc/glouton/conf.d/06-distribution.conf
+        type: config
+        packager: rpm
+      - src: packaging/rpm/glouton-dnf-plugin.py
+        dst: /usr/lib/python3.6/site-packages/dnf-plugins/glouton.py
+        type: config
+        packager: rpm
+    scripts:
+      postinstall: "packaging/scripts/postinstall.sh"
+      preremove: "packaging/scripts/preremove.sh"
+      postremove: "packaging/scripts/postremove.sh"
+    overrides:
+      rpm:
+        recommends:
+          - sudo
+          - ca-certificates
+          - net-tools
+          - cron
+          - util-linux
+          - iproute2
+          - procps-ng
+          - yum-plugin-post-transaction-actions
 checksum:
   name_template: 'checksums.txt'
 changelog:
   sort: asc
   filters:
     exclude:
-    - '^docs:'
-    - '^test:'
+      - '^docs:'
+      - '^test:'
 release:
   # Don't try to modify Github
   disable: true
