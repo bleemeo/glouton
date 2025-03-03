@@ -30,6 +30,7 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/facts"
+	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
 
@@ -83,7 +84,7 @@ func MakePipeline( //nolint:maintidx
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability,
 	addWarnings func(...error),
 ) (
-	handleContainersLogsFn func(context.Context, []facts.Container),
+	handleContainersLogsFn func(context.Context, crTypes.RuntimeInterface, []facts.Container),
 	diagnosticFn func(context.Context, types.ArchiveWriter) error,
 	err error,
 ) { //nolint:wsl

@@ -1116,7 +1116,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.l.Unlock()
 
 		if a.config.Log.OpenTelemetry.Enable {
-			var handleContainersLogsFn func(context.Context, []facts.Container)
+			var handleContainersLogsFn func(context.Context, crTypes.RuntimeInterface, []facts.Container)
 
 			handleContainersLogsFn, a.logProcessDiagnosticFn, err = logprocessing.MakePipeline(
 				ctx,
@@ -2137,7 +2137,7 @@ func (a *agent) processesLister() *facts.ProcessProvider {
 	)
 }
 
-func (a *agent) watchForContainersLogs(ctx context.Context, handleContainersLogs func(ctx context.Context, containers []facts.Container)) {
+func (a *agent) watchForContainersLogs(ctx context.Context, handleContainersLogs func(ctx context.Context, crRuntime crTypes.RuntimeInterface, containers []facts.Container)) {
 	const refreshInterval = 1 * time.Minute
 
 	alreadyWatching := make(map[string]time.Time) // map[ID] -> last time seen
@@ -2186,7 +2186,7 @@ func (a *agent) watchForContainersLogs(ctx context.Context, handleContainersLogs
 			}
 
 			if len(logContainers) > 0 {
-				handleContainersLogs(ctx, logContainers)
+				handleContainersLogs(ctx, a.containerRuntime, logContainers)
 			}
 
 			if purgeCounter%5 == 0 {

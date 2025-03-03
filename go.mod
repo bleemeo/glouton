@@ -13,7 +13,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/containerd/cgroups/v3 v3.0.5
-	github.com/containerd/containerd v1.7.25
+	github.com/containerd/containerd v1.7.25 // TODO: upgrade to v2 (https://github.com/containerd/containerd/blob/main/docs/containerd-2.0.md)
 	github.com/containerd/containerd/api v1.8.0
 	github.com/containerd/errdefs v1.0.0
 	github.com/containerd/platforms v0.2.1

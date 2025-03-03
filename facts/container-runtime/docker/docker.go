@@ -57,6 +57,7 @@ var (
 	ErrDockerUnexcepted = errors.New("unexcepted data")
 	errUnknownFormat    = errors.New("unknown pstime format")
 	errNilJSON          = errors.New("ContainerJSONBase is nil. Assume container is deleted")
+	errNoImageTagsFound = errors.New("no tags found")
 )
 
 // dockerTimeout is the time limit for requests made by the docker client.
@@ -445,6 +446,33 @@ func (d *Docker) IsContainerNameRecentlyDeleted(name string) bool {
 	_, ok := d.lastDestroyedName[name]
 
 	return ok
+}
+
+func (d *Docker) ImageTags(ctx context.Context, imageID, _ string) ([]string, error) {
+	d.l.Lock()
+	defer d.l.Unlock()
+
+	img, _, err := d.client.ImageInspectWithRaw(ctx, imageID) // FIXME: switch to ImageInspect() in docker v28
+	if err != nil {
+		return nil, err
+	}
+
+	if len(img.RepoTags) == 0 {
+		return nil, fmt.Errorf("%w on image %s", errNoImageTagsFound, imageID)
+	}
+
+	tags := make([]string, len(img.RepoTags))
+
+	for i, tag := range img.RepoTags {
+		tagSplit := strings.SplitN(tag, ":", 2)
+		if len(tagSplit) == 1 {
+			tags[i] = "latest"
+		} else {
+			tags[i] = tagSplit[1]
+		}
+	}
+
+	return tags, nil
 }
 
 // similar to getClient but also check that connection works.
@@ -849,6 +877,7 @@ type dockerClient interface {
 	ContainerList(ctx context.Context, options container.ListOptions) ([]dockerTypes.Container, error)
 	ContainerTop(ctx context.Context, container string, arguments []string) (container.ContainerTopOKBody, error)
 	Events(ctx context.Context, options events.ListOptions) (<-chan events.Message, <-chan error)
+	ImageInspectWithRaw(ctx context.Context, imageID string) (dockerTypes.ImageInspect, []byte, error)
 	NetworkInspect(ctx context.Context, network string, options network.InspectOptions) (network.Inspect, error)
 	NetworkList(ctx context.Context, options network.ListOptions) ([]network.Summary, error)
 	Ping(ctx context.Context) (dockerTypes.Ping, error)

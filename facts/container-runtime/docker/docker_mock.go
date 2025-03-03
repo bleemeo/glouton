@@ -138,6 +138,10 @@ func (cl *MockDockerClient) Events(context.Context, events.ListOptions) (<-chan 
 	return nil, ch
 }
 
+func (cl *MockDockerClient) ImageInspectWithRaw(context.Context, string) (dockerTypes.ImageInspect, []byte, error) {
+	return dockerTypes.ImageInspect{}, nil, errNotImplemented
+}
+
 // NetworkInspect is not implemented.
 func (cl *MockDockerClient) NetworkInspect(context.Context, string, network.InspectOptions) (network.Inspect, error) {
 	return network.Inspect{}, fmt.Errorf("NetworkInspect %w", errNotImplemented)

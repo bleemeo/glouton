@@ -18,6 +18,7 @@ package logprocessing
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -43,40 +44,46 @@ import (
 )
 
 const (
-	attrContainerID        = "log.container.id"
-	attrContainerName      = "log.container.name"
-	attrContainerImage     = "log.container.image"
-	attrContainerNamespace = "log.container.namespace"
-	attrContainerPod       = "log.container.pod"
+	attrContainerID        = "container.id"
+	attrContainerImageName = "container.image.name"
+	attrContainerImageTags = "container.image.tags"
+	attrContainerName      = "container.name"
+	attrContainerRuntime   = "container.runtime"
+
+	attrContainerNamespace = "k8s.namespace.name"
+	attrContainerPod       = "k8s.pod.name"
 )
 
 const containerFileSizePrefix = "container://"
 
-var errUnsupportedContainerRuntime = errors.New("unsupported container runtime")
+var errContainerLogFileUnavailable = errors.New("no log file available")
 
 type Container struct {
 	LogFilePath  string
 	ReceiverKind receiverKind
 	Attributes   ContainerAttributes
 
-	potentialLogFilePaths []string
-	AdditionalOperators   []operator.Config // TODO: unexport
+	potentialLogFilePath string
+	AdditionalOperators  []operator.Config // TODO: unexport
 }
 
 type ContainerAttributes struct {
 	Runtime   string
 	ID        string
 	Name      string
-	Image     string
+	ImageName string
+	ImageTags string
 	Namespace string `json:",omitempty"`
 	Pod       string `json:",omitempty"`
 }
 
 func (ctrAttrs ContainerAttributes) asMap() map[string]helper.ExprStringConfig {
 	attrs := map[string]helper.ExprStringConfig{
-		attrContainerID:    helper.ExprStringConfig(ctrAttrs.ID),
-		attrContainerName:  helper.ExprStringConfig(ctrAttrs.Name),
-		attrContainerImage: helper.ExprStringConfig(ctrAttrs.Image),
+		attrContainerID:        helper.ExprStringConfig(ctrAttrs.ID),
+		attrContainerImageName: helper.ExprStringConfig(ctrAttrs.ImageName),
+		attrContainerImageTags: helper.ExprStringConfig(ctrAttrs.ImageTags),
+		attrContainerName:      helper.ExprStringConfig(ctrAttrs.Name),
+		attrContainerRuntime:   helper.ExprStringConfig(ctrAttrs.Runtime),
 	}
 
 	if ctrAttrs.Namespace != "" {
@@ -125,7 +132,7 @@ func newContainerReceiver(pipeline *pipelineContext, logConsumer consumer.Logs) 
 	}
 }
 
-func (cr *containerReceiver) handleContainersLogs(ctx context.Context, containers []facts.Container) {
+func (cr *containerReceiver) handleContainersLogs(ctx context.Context, crRuntime crTypes.RuntimeInterface, containers []facts.Container) {
 	cr.l.Lock()
 	defer cr.l.Unlock()
 
@@ -134,14 +141,14 @@ func (cr *containerReceiver) handleContainersLogs(ctx context.Context, container
 			continue
 		}
 
-		logCtr, err := makeLogContainer(ctr)
+		logCtr, err := makeLogContainer(ctx, crRuntime, ctr)
 		if err != nil {
 			logger.V(1).Printf("Can't create a log receiver for container %s (%s): %v", ctr.ContainerName(), ctr.ID(), err)
 
 			continue
 		}
 
-		logCtr.AdditionalOperators = makeOperatorsForContainer(logCtr.Attributes)
+		// logCtr.AdditionalOperators = makeOperatorsForContainer(logCtr.Attributes)
 
 		logger.Printf("Handling container logs from %s (attributes: %v) ...", logCtr.Attributes.Name, logCtr.Attributes) // TODO: remove
 
@@ -166,7 +173,7 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 	}
 
 	factories, readFiles, execFiles, sizeFnByFile, err := setupLogReceiverFactories(
-		ctr.potentialLogFilePaths,
+		[]string{ctr.potentialLogFilePath},
 		cr.pipeline.hostroot,
 		ops,
 		cr.lastFileSizes,
@@ -260,49 +267,32 @@ func (cr *containerReceiver) stop() {
 	shutdownAll(cr.startedComponents)
 }
 
-func makeLogContainer(container facts.Container) (Container, error) {
-	runtimeName := container.RuntimeName()
-	ctrID := container.ID()
-	ctrName := container.ContainerName()
-	ctrImage := container.ImageName()
-	namespace := container.PodNamespace()
-	pod := container.PodName()
+func makeLogContainer(ctx context.Context, crRuntime crTypes.RuntimeInterface, container facts.Container) (Container, error) {
+	logFilePath := container.LogPath()
+	if logFilePath == "" {
+		return Container{}, errContainerLogFileUnavailable
+	}
 
-	var potentialLogFilePaths []string
+	imageTags, err := crRuntime.ImageTags(ctx, container.ImageID(), container.ImageName())
+	if err != nil {
+		return Container{}, fmt.Errorf("can't get tags for image %q (%s): %w", container.ImageName(), container.ImageID(), err)
+	}
 
-	if logFilePath := container.LogPath(); logFilePath != "" {
-		potentialLogFilePaths = []string{logFilePath}
-	} else {
-		if namespace != "" && pod != "" { // K8s
-			if rc, hasRestartCount := container.(interface{ RestartCount() int }); hasRestartCount {
-				potentialLogFilePaths = []string{
-					fmt.Sprintf("/var/log/pods/%s_%s_%s/%s/%d.log", namespace, pod, ctrID, ctrName, rc.RestartCount()),
-				}
-			} else {
-				potentialLogFilePaths = []string{fmt.Sprintf("/var/log/pods/%s_%s_%s.log", namespace, pod, ctrID)}
-			}
-		} else {
-			switch runtimeName {
-			case crTypes.DockerRuntime:
-				// Docker should have already given us the path through `container.LogPath()`, but anyway ...
-				potentialLogFilePaths = []string{fmt.Sprintf("/var/lib/docker/containers/%[1]s/%[1]s-json.log", ctrID)}
-			case crTypes.ContainerDRuntime:
-				potentialLogFilePaths = []string{
-					fmt.Sprintf("/var/log/containers/%s.log", ctrID),
-					fmt.Sprintf("/var/log/pods/%s.log", ctrID),
-				}
-			default:
-				return Container{}, fmt.Errorf("%w %q", errUnsupportedContainerRuntime, runtimeName)
-			}
-		}
+	imageTagsJSON, err := json.Marshal(imageTags)
+	if err != nil {
+		return Container{}, fmt.Errorf("can't marshal tags for image %q (%s): %w", container.ImageName(), container.ImageID(), err)
 	}
 
 	attributes := ContainerAttributes{
-		Runtime: runtimeName,
-		ID:      ctrID,
-		Name:    ctrName,
-		Image:   ctrImage,
+		Runtime:   container.RuntimeName(),
+		ID:        container.ID(),
+		Name:      container.ContainerName(),
+		ImageName: strings.SplitN(container.ImageName(), ":", 2)[0],
+		ImageTags: string(imageTagsJSON),
 	}
+
+	namespace := container.PodNamespace()
+	pod := container.PodName()
 
 	if namespace != "" && pod != "" {
 		attributes.Namespace = namespace
@@ -310,8 +300,8 @@ func makeLogContainer(container facts.Container) (Container, error) {
 	}
 
 	return Container{
-		potentialLogFilePaths: potentialLogFilePaths,
-		Attributes:            attributes,
+		potentialLogFilePath: logFilePath,
+		Attributes:           attributes,
 	}, nil
 }
 
@@ -328,7 +318,7 @@ func makeOperatorsForContainer(attributes ContainerAttributes) []operator.Config
 	// since they are older than 1h :d
 	// Postgres is one of the few that display the timezone in the timestamp.
 
-	switch attributes.Image {
+	switch attributes.ImageName {
 	case "squirreldb":
 		attributeTimeField := entry.NewAttributeField("time")
 
@@ -342,7 +332,7 @@ func makeOperatorsForContainer(attributes ContainerAttributes) []operator.Config
 		opTime.TimeParser = &timeParser
 
 		ops = append(ops, operator.Config{Builder: opTime})
-	case "postgres:16.1":
+	case "postgres":
 		attributeTimeField := entry.NewAttributeField("time")
 
 		timeParser := helper.NewTimeParser()

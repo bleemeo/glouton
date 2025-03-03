@@ -103,7 +103,7 @@ func saveFileMetadataToCache(state bleemeoTypes.State, metadata map[string]map[s
 }
 
 func mergeLastFileSizes(receivers []*logReceiver, containerRecv *containerReceiver) []fileSizer {
-	sizers := make([]fileSizer, len(receivers), len(receivers)+1)
+	sizers := make([]fileSizer, len(receivers)+1)
 
 	for i, recv := range receivers {
 		sizers[i] = recv
