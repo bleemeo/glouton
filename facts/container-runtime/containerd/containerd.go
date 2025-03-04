@@ -1144,7 +1144,7 @@ func (c containerObject) ListenAddresses() []facts.ListenAddress {
 }
 
 func (c containerObject) LogPath() string {
-	return ""
+	return fmt.Sprintf("/var/log/pods/%s.log", c.ID()) // FIXME
 }
 
 func (c containerObject) PodName() string {

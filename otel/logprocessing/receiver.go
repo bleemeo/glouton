@@ -93,7 +93,7 @@ type logReceiver struct {
 	throughputMeter *ringCounter
 }
 
-func newLogReceiver(name string, cfg config.OTLPReceiver, logConsumer consumer.Logs) (*logReceiver, error) {
+func newLogReceiver(name string, cfg config.OTLPReceiver, logConsumer consumer.Logs, globalOps map[string]config.OTELOperator) (*logReceiver, error) {
 	if !receiverNameRegex.MatchString(name) {
 		return nil, fmt.Errorf("%w: %q. It must be of the form 'my-receiver' or 'filelog/my-receiver', contain one slash a most, and not start with a slash", errInvalidReceiverName, name)
 	}
@@ -103,11 +103,26 @@ func newLogReceiver(name string, cfg config.OTLPReceiver, logConsumer consumer.L
 		return nil, fmt.Errorf("building operators: %w", err)
 	}
 
+	operatorRefs := make([]string, 0, len(cfg.OperatorRefs))
+
+	for _, opRef := range cfg.OperatorRefs {
+		if globalOps[opRef] == nil {
+			logger.V(1).Printf("Receiver %q requires the log processing operator %q, which is not defined", name, opRef)
+		} else {
+			operatorRefs = append(operatorRefs, opRef)
+		}
+	}
+
+	referencedOps, err := buildGlobalOperators(globalOps, operatorRefs)
+	if err != nil {
+		return nil, fmt.Errorf("building globally-defined operators: %w", err)
+	}
+
 	return &logReceiver{
 		name:            name,
 		cfg:             cfg,
 		logConsumer:     logConsumer,
-		operators:       ops,
+		operators:       append(ops, referencedOps...),
 		watching:        make(map[string]receiverKind, len(cfg.Include)),
 		sizeFnByFile:    make(map[string]func() (int64, error), len(cfg.Include)),
 		logCounter:      new(atomic.Int64),

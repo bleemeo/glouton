@@ -76,12 +76,19 @@ type LogFilter struct {
 	Regex  string `yaml:"regex"`
 }
 
+// OTELOperator represents an OpenTelemetry operator as plain YAML,
+// which is meant to be built to an operator.Config before use.
+type OTELOperator = map[string]any
+
 type OpenTelemetry struct {
-	Enable        bool                    `yaml:"enable"`
-	AutoDiscovery bool                    `yaml:"auto_discovery"`
-	GRPC          EnableListener          `yaml:"grpc"`
-	HTTP          EnableListener          `yaml:"http"`
-	Receivers     map[string]OTLPReceiver `yaml:"receivers"`
+	Enable          bool                    `yaml:"enable"`
+	AutoDiscovery   bool                    `yaml:"auto_discovery"`
+	GRPC            EnableListener          `yaml:"grpc"`
+	HTTP            EnableListener          `yaml:"http"`
+	GlobalOperators map[string]OTELOperator `yaml:"global_operators"`
+	Receivers       map[string]OTLPReceiver `yaml:"receivers"`
+	// map: container name -> operators to apply
+	ContainerOperators map[string][]string `yaml:"container_operators"`
 }
 
 type EnableListener struct {
@@ -91,8 +98,9 @@ type EnableListener struct {
 }
 
 type OTLPReceiver struct {
-	Include   []string         `yaml:"include"`
-	Operators []map[string]any `yaml:"operators"`
+	Include      []string       `yaml:"include"`
+	Operators    []OTELOperator `yaml:"operators"`
+	OperatorRefs []string       `yaml:"operator_refs"`
 }
 
 type Smart struct {

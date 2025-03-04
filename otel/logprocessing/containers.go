@@ -31,13 +31,10 @@ import (
 	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
 	"github.com/bleemeo/glouton/logger"
 
-	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/entry"
 	stanzaErrors "github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/errors"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/helper"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/parser/container"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/parser/regex"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/transformer/add"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/receiver"
@@ -64,7 +61,8 @@ type Container struct {
 	Attributes   ContainerAttributes
 
 	potentialLogFilePath string
-	AdditionalOperators  []operator.Config // TODO: unexport
+
+	UserDefinedOperators []string
 }
 
 type ContainerAttributes struct {
@@ -98,9 +96,10 @@ func (ctrAttrs ContainerAttributes) asMap() map[string]helper.ExprStringConfig {
 }
 
 type containerReceiver struct {
-	pipeline      *pipelineContext
-	logConsumer   consumer.Logs
-	lastFileSizes map[string]int64
+	pipeline           *pipelineContext
+	logConsumer        consumer.Logs
+	lastFileSizes      map[string]int64
+	containerOperators map[string][]string
 
 	l                 sync.Mutex
 	startedComponents []component.Component
@@ -111,7 +110,7 @@ type containerReceiver struct {
 	throughputMeter *ringCounter
 }
 
-func newContainerReceiver(pipeline *pipelineContext, logConsumer consumer.Logs) *containerReceiver {
+func newContainerReceiver(pipeline *pipelineContext, logConsumer consumer.Logs, containerOperators map[string][]string) *containerReceiver {
 	lastFileSizes := make(map[string]int64)
 
 	for filePath, size := range pipeline.lastFileSizes {
@@ -121,14 +120,15 @@ func newContainerReceiver(pipeline *pipelineContext, logConsumer consumer.Logs) 
 	}
 
 	return &containerReceiver{
-		pipeline:          pipeline,
-		logConsumer:       logConsumer,
-		lastFileSizes:     lastFileSizes,
-		startedComponents: make([]component.Component, 0),
-		containers:        make(map[string]Container),
-		sizeFnByFile:      make(map[string]func() (int64, error)),
-		logCounter:        new(atomic.Int64),
-		throughputMeter:   newRingCounter(throughputMeterResolutionSecs),
+		pipeline:           pipeline,
+		logConsumer:        logConsumer,
+		lastFileSizes:      lastFileSizes,
+		containerOperators: containerOperators,
+		startedComponents:  make([]component.Component, 0),
+		containers:         make(map[string]Container),
+		sizeFnByFile:       make(map[string]func() (int64, error)),
+		logCounter:         new(atomic.Int64),
+		throughputMeter:    newRingCounter(throughputMeterResolutionSecs),
 	}
 }
 
@@ -141,14 +141,12 @@ func (cr *containerReceiver) handleContainersLogs(ctx context.Context, crRuntime
 			continue
 		}
 
-		logCtr, err := makeLogContainer(ctx, crRuntime, ctr)
+		logCtr, err := makeLogContainer(ctx, crRuntime, ctr, cr.containerOperators)
 		if err != nil {
 			logger.V(1).Printf("Can't create a log receiver for container %s (%s): %v", ctr.ContainerName(), ctr.ID(), err)
 
 			continue
 		}
-
-		// logCtr.AdditionalOperators = makeOperatorsForContainer(logCtr.Attributes)
 
 		logger.Printf("Handling container logs from %s (attributes: %v) ...", logCtr.Attributes.Name, logCtr.Attributes) // TODO: remove
 
@@ -165,7 +163,12 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 	containerOpCfg := container.NewConfig()
 	containerOpCfg.AddMetadataFromFilePath = false
 
-	ops := append([]operator.Config{{Builder: containerOpCfg}}, ctr.AdditionalOperators...)
+	globalOperators, err := buildGlobalOperators(cr.pipeline.config.GlobalOperators, ctr.UserDefinedOperators)
+	if err != nil {
+		return fmt.Errorf("building globally-defined operators: %w", err)
+	}
+
+	ops := append([]operator.Config{{Builder: containerOpCfg}}, globalOperators...)
 	makeStorageFn := func(logFile string) *component.ID {
 		id := cr.pipeline.persister.newPersistentExt("container/" + ctr.Attributes.ID + metadataKeySeparator + logFile)
 
@@ -267,7 +270,7 @@ func (cr *containerReceiver) stop() {
 	shutdownAll(cr.startedComponents)
 }
 
-func makeLogContainer(ctx context.Context, crRuntime crTypes.RuntimeInterface, container facts.Container) (Container, error) {
+func makeLogContainer(ctx context.Context, crRuntime crTypes.RuntimeInterface, container facts.Container, containerOperators map[string][]string) (Container, error) {
 	logFilePath := container.LogPath()
 	if logFilePath == "" {
 		return Container{}, errContainerLogFileUnavailable
@@ -302,51 +305,6 @@ func makeLogContainer(ctx context.Context, crRuntime crTypes.RuntimeInterface, c
 	return Container{
 		potentialLogFilePath: logFilePath,
 		Attributes:           attributes,
+		UserDefinedOperators: containerOperators[attributes.Name],
 	}, nil
-}
-
-// NOTE: all the content in this function is temporary.
-func makeOperatorsForContainer(attributes ContainerAttributes) []operator.Config {
-	opService := add.NewConfigWithID("op_add_service")
-	opService.Field = entry.NewResourceField("service.name")
-	opService.Value = "container:" + attributes.Runtime
-
-	ops := []operator.Config{{Builder: opService}}
-
-	// FIXME: timestamps from containers are in UTC, but the timezone isn't printed ...
-	// so they are considered as from the local TZ, then dropped by the consumer
-	// since they are older than 1h :d
-	// Postgres is one of the few that display the timezone in the timestamp.
-
-	switch attributes.ImageName {
-	case "squirreldb":
-		attributeTimeField := entry.NewAttributeField("time")
-
-		timeParser := helper.NewTimeParser()
-		timeParser.ParseFrom = &attributeTimeField
-		timeParser.Layout = "2006-01-02 15:04:05.000"
-		timeParser.LayoutType = helper.GotimeKey
-
-		opTime := regex.NewConfigWithID("op_regex_squirreldb")
-		opTime.Regex = `^.*(?P<time>\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3})`
-		opTime.TimeParser = &timeParser
-
-		ops = append(ops, operator.Config{Builder: opTime})
-	case "postgres":
-		attributeTimeField := entry.NewAttributeField("time")
-
-		timeParser := helper.NewTimeParser()
-		timeParser.ParseFrom = &attributeTimeField
-		timeParser.Layout = "2006-01-02 15:04:05.000 MST"
-		timeParser.LayoutType = helper.GotimeKey
-
-		opTime := regex.NewConfigWithID("op_regex_postgres")
-		opTime.Regex = `^(?P<time>\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3}\s\w+)`
-		opTime.TimeParser = &timeParser
-		opTime.OnError = helper.DropOnError // TODO: remove (this avoids flooding the db)
-
-		ops = append(ops, operator.Config{Builder: opTime})
-	}
-
-	return ops
 }

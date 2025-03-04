@@ -48,6 +48,7 @@ import (
 type logRecord struct {
 	Body       string
 	Attributes map[string]any
+	Resource   map[string]any
 }
 
 type logBuffer struct {
@@ -73,6 +74,14 @@ func (logBuf *logBuffer) getAllRecords() []logRecord {
 			resourceLog := ld.ResourceLogs().At(i)
 			scopeLogs := resourceLog.ScopeLogs()
 
+			// resourceAttrs defaults to nil when they are no attributes,
+			// to avoid declaring `Resource: map[string]any{}` in the diff expectation.
+			var resourceAttrs map[string]any
+
+			if resourceLog.Resource().Attributes().Len() > 0 {
+				resourceAttrs = resourceLog.Resource().Attributes().AsRaw()
+			}
+
 			for j := range scopeLogs.Len() {
 				scopeLog := scopeLogs.At(j)
 				logRecords := scopeLog.LogRecords()
@@ -82,6 +91,7 @@ func (logBuf *logBuffer) getAllRecords() []logRecord {
 					result = append(result, logRecord{
 						Body:       logRec.Body().Str(),
 						Attributes: logRec.Attributes().AsRaw(),
+						Resource:   resourceAttrs,
 					})
 				}
 			}
@@ -164,6 +174,14 @@ func TestFileLogReceiver(t *testing.T) {
 
 	defer f1.Close()
 
+	globalOperators := map[string]config.OTELOperator{
+		"key_res_attr": {
+			"type":  "add",
+			"field": "resource.key",
+			"value": "key attribute value",
+		},
+	}
+
 	cfg := config.OTLPReceiver{
 		Include: []string{
 			filepath.Join(tmpDir, "*.log"),
@@ -175,6 +193,7 @@ func TestFileLogReceiver(t *testing.T) {
 				"value": "apache_server",
 			},
 		},
+		OperatorRefs: []string{"key_res_attr"},
 	}
 
 	logger, err := zap.NewDevelopment(zap.IncreaseLevel(zap.InfoLevel))
@@ -189,19 +208,10 @@ func TestFileLogReceiver(t *testing.T) {
 		Resource:       pcommon.NewResource(),
 	}
 
-	logBuf := logBuffer{
-		buf: make([]plog.Logs, 0, 2), // we plan to write 2 log lines
-	}
-
-	recv, err := newLogReceiver("filelog/recv", cfg, makeBufferConsumer(t, &logBuf))
-	if err != nil {
-		t.Fatal("Failed to initialize log receiver:", err)
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	pipeline := pipelineContext{
+		config: config.OpenTelemetry{
+			GlobalOperators: globalOperators,
+		},
 		hostroot:          string(os.PathSeparator),
 		lastFileSizes:     make(map[string]int64),
 		telemetry:         telSet,
@@ -224,6 +234,18 @@ func TestFileLogReceiver(t *testing.T) {
 	defer func() {
 		shutdownAll(pipeline.startedComponents)
 	}()
+
+	logBuf := logBuffer{
+		buf: make([]plog.Logs, 0, 2), // we plan to write 2 log lines
+	}
+
+	recv, err := newLogReceiver("filelog/recv", cfg, makeBufferConsumer(t, &logBuf), pipeline.config.GlobalOperators)
+	if err != nil {
+		t.Fatal("Failed to initialize log receiver:", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	err = recv.update(ctx, &pipeline, addWarningsFn(t))
 	if err != nil {
@@ -271,12 +293,20 @@ func TestFileLogReceiver(t *testing.T) {
 				attrs.LogFileName: "f1.log",
 				attrs.LogFilePath: f1.Name(),
 			},
+			Resource: map[string]any{
+				"service.name": "apache_server",
+				"key":          "key attribute value",
+			},
 		},
 		{
 			Body: "f2 log 1",
 			Attributes: map[string]any{
 				attrs.LogFileName: "f2.log",
 				attrs.LogFilePath: f2.Name(),
+			},
+			Resource: map[string]any{
+				"service.name": "apache_server",
+				"key":          "key attribute value",
 			},
 		},
 	}
@@ -358,7 +388,7 @@ func TestFileLogReceiverWithHostroot(t *testing.T) {
 		buf: make([]plog.Logs, 0, 1), // we plan to write 1 log line
 	}
 
-	recv, err := newLogReceiver("recv-from-container", cfg, makeBufferConsumer(t, &logBuf))
+	recv, err := newLogReceiver("recv-from-container", cfg, makeBufferConsumer(t, &logBuf), map[string]config.OTELOperator{})
 	if err != nil {
 		t.Fatal("Failed to initialize log receiver:", err)
 	}
@@ -416,6 +446,9 @@ func TestFileLogReceiverWithHostroot(t *testing.T) {
 			Attributes: map[string]any{
 				attrs.LogFileName: "file.log",  // base name
 				attrs.LogFilePath: watchedFile, // absolute path
+			},
+			Resource: map[string]any{
+				"service.name": "apache_server",
 			},
 		},
 	}
@@ -571,7 +604,7 @@ func TestExecLogReceiver(t *testing.T) {
 				shutdownAll(pipeline.startedComponents)
 			}()
 
-			recv, err := newLogReceiver("root_files", cfg, makeBufferConsumer(t, &logBuffer{buf: []plog.Logs{}}))
+			recv, err := newLogReceiver("root_files", cfg, makeBufferConsumer(t, &logBuffer{buf: []plog.Logs{}}), map[string]config.OTELOperator{})
 			if err != nil {
 				t.Fatal("Failed to initialize log receiver:", err)
 			}

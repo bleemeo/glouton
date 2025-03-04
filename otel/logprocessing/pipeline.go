@@ -242,7 +242,7 @@ func MakePipeline( //nolint:maintidx
 AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers block
 
 	for name, rcvrCfg := range cfg.Receivers {
-		recv, err := newLogReceiver(name, rcvrCfg, logBackPressureEnforcer)
+		recv, err := newLogReceiver(name, rcvrCfg, logBackPressureEnforcer, cfg.GlobalOperators)
 		if err != nil {
 			addWarnings(errorf("Failed to setup log receiver %q (ignoring it): %w", name, err))
 
@@ -263,7 +263,7 @@ AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers bl
 		logger.V(1).Printf("None of the %d configured log receiver(s) are valid.", len(cfg.Receivers))
 	}
 
-	containerRecv := newContainerReceiver(pipeline, logBackPressureEnforcer)
+	containerRecv := newContainerReceiver(pipeline, logBackPressureEnforcer, validateContainerOperators(cfg.ContainerOperators, cfg.GlobalOperators))
 
 	go func() {
 		defer crashreport.ProcessPanic()

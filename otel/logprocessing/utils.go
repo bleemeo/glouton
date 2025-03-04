@@ -28,6 +28,7 @@ import (
 	"sync/atomic"
 
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
@@ -112,6 +113,24 @@ func mergeLastFileSizes(receivers []*logReceiver, containerRecv *containerReceiv
 	sizers[len(sizers)-1] = containerRecv
 
 	return sizers
+}
+
+func validateContainerOperators(containerOps map[string][]string, opsConfigs map[string]config.OTELOperator) map[string][]string {
+	for ctrName, ops := range containerOps {
+		finalOps := make([]string, 0, len(ops))
+
+		for _, opName := range ops {
+			if opsConfigs[opName] == nil {
+				logger.V(1).Printf("Container %q requires the log processing operator %q, which is not defined", ctrName, opName)
+			} else {
+				finalOps = append(finalOps, opName)
+			}
+		}
+
+		containerOps[ctrName] = finalOps
+	}
+
+	return containerOps
 }
 
 // shutdownAll stops all the given components (in reverse order).
@@ -203,7 +222,7 @@ func unmarshalMapstructureHook(from reflect.Value, to reflect.Value) (any, error
 	return from.Interface(), nil // returning the data as-is
 }
 
-func buildOperators(rawOperators []map[string]any) ([]operator.Config, error) {
+func buildOperators(rawOperators []config.OTELOperator) ([]operator.Config, error) {
 	var operators []operator.Config
 
 	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
@@ -220,6 +239,16 @@ func buildOperators(rawOperators []map[string]any) ([]operator.Config, error) {
 	}
 
 	return operators, nil
+}
+
+func buildGlobalOperators(opsConfigs map[string]config.OTELOperator, opsNames []string) ([]operator.Config, error) {
+	rawOps := make([]config.OTELOperator, len(opsNames))
+
+	for i, opName := range opsNames {
+		rawOps[i] = opsConfigs[opName]
+	}
+
+	return buildOperators(rawOps)
 }
 
 func wrapWithCounters(next consumer.Logs, counter *atomic.Int64, throughputMeter *ringCounter) consumer.Logs {

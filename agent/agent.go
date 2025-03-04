@@ -1130,9 +1130,13 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			)
 			if err != nil {
 				logger.Printf("unable to setup log processing: %v", err)
-			}
+			} else {
+				go func() {
+					defer crashreport.ProcessPanic()
 
-			go a.watchForContainersLogs(ctx, handleContainersLogsFn)
+					a.watchForContainersLogs(ctx, handleContainersLogsFn)
+				}()
+			}
 		}
 
 		a.gathererRegistry.UpdateRegistrationHooks(a.bleemeoConnector.RelabelHook, a.bleemeoConnector.UpdateDelayHook)
@@ -2138,13 +2142,17 @@ func (a *agent) processesLister() *facts.ProcessProvider {
 }
 
 func (a *agent) watchForContainersLogs(ctx context.Context, handleContainersLogs func(ctx context.Context, crRuntime crTypes.RuntimeInterface, containers []facts.Container)) {
-	const refreshInterval = 1 * time.Minute
+	const (
+		firstRunDelay    = 10 * time.Second
+		refreshInterval  = 1 * time.Minute
+		containersMaxAge = 1 * time.Hour
+	)
 
 	alreadyWatching := make(map[string]time.Time) // map[ID] -> last time seen
 	// Once every 5 iterations, we'll remove containers that haven't been seen for a while from the map.
 	var purgeCounter int
 
-	ticker := time.NewTicker(10 * time.Second) // After the first tick, the interval will be set to `refreshInterval`;
+	ticker := time.NewTicker(firstRunDelay) // After the first tick, the interval will be set to `refreshInterval`;
 	// we just don't want to wait for too long before the first run.
 	defer ticker.Stop()
 
@@ -2159,7 +2167,7 @@ func (a *agent) watchForContainersLogs(ctx context.Context, handleContainersLogs
 				ticker.Reset(refreshInterval)
 			}
 
-			containers, err := a.containerRuntime.Containers(ctx, refreshInterval, false)
+			containers, err := a.containerRuntime.Containers(ctx, containersMaxAge, false)
 			if err != nil {
 				logger.V(1).Printf("Failed to list containers: %v", err)
 
