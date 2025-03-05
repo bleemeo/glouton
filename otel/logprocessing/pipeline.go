@@ -156,7 +156,10 @@ func MakePipeline( //nolint:maintidx
 
 	logBatcher, err := factoryBatch.CreateLogs(
 		ctx,
-		processor.Settings{TelemetrySettings: pipeline.telemetry},
+		processor.Settings{
+			ID:                component.NewIDWithName(factoryBatch.Type(), "log-batcher"),
+			TelemetrySettings: pipeline.telemetry,
+		},
 		&batchprocessor.Config{
 			Timeout:                  10 * time.Second,
 			SendBatchSize:            1 << 16, // 64KiB
@@ -219,7 +222,10 @@ func MakePipeline( //nolint:maintidx
 
 		otlpLogReceiver, err := factoryReceiver.CreateLogs(
 			ctx,
-			receiver.Settings{TelemetrySettings: pipeline.telemetry},
+			receiver.Settings{
+				ID:                component.NewIDWithName(factoryReceiver.Type(), "otlp-receiver"),
+				TelemetrySettings: pipeline.telemetry,
+			},
 			receiverTypedCfg,
 			wrapWithCounters(logBackPressureEnforcer, otlpRecvCounter, otlpRecvThroughputMeter),
 		)

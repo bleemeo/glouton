@@ -24,7 +24,6 @@ import (
 	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/decode"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/helper"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/split"
@@ -85,7 +84,7 @@ func (c *Config) Build(set component.TelemetrySettings) (operator.Operator, erro
 		return nil, err
 	}
 
-	enc, err := decode.LookupEncoding(c.Encoding)
+	enc, err := lookupEncoding(c.Encoding)
 	if err != nil {
 		return nil, fmt.Errorf("failed to lookup encoding %q: %w", c.Encoding, err)
 	}

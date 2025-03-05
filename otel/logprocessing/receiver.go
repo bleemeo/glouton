@@ -41,6 +41,7 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/go-viper/mapstructure/v2"
+	"github.com/google/uuid"
 	stanzaErrors "github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/errors"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/attrs"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
@@ -226,9 +227,14 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 	}
 
 	for logReceiverFactory, logReceiverCfg := range fileLogReceiverFactories {
+		settings := receiver.Settings{
+			ID:                component.NewIDWithName(logReceiverFactory.Type(), uuid.NewString()),
+			TelemetrySettings: pipeline.telemetry,
+		}
+
 		logRcvr, err := logReceiverFactory.CreateLogs(
 			ctx,
-			receiver.Settings{TelemetrySettings: pipeline.telemetry},
+			settings,
 			logReceiverCfg,
 			wrapWithCounters(r.logConsumer, r.logCounter, r.throughputMeter),
 		)

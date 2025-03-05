@@ -31,6 +31,7 @@ import (
 	"github.com/bleemeo/glouton/facts"
 	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
 	"github.com/bleemeo/glouton/logger"
+	"github.com/google/uuid"
 
 	stanzaErrors "github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/errors"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
@@ -209,9 +210,14 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 	maps.Insert(cr.sizeFnByFile, maps.All(sizeFnByFile))
 
 	for logReceiverFactory, logReceiverCfg := range factories {
+		settings := receiver.Settings{
+			ID:                component.NewIDWithName(logReceiverFactory.Type(), uuid.NewString()),
+			TelemetrySettings: cr.pipeline.telemetry,
+		}
+
 		logRcvr, err := logReceiverFactory.CreateLogs(
 			ctx,
-			receiver.Settings{TelemetrySettings: cr.pipeline.telemetry},
+			settings,
 			logReceiverCfg,
 			wrapWithCounters(cr.logConsumer, ctr.logCounter, ctr.throughputMeter),
 		)
