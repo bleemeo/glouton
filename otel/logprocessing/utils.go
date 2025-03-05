@@ -288,10 +288,12 @@ type receiverDiagnosticInformation struct {
 	IgnoredFilePaths       []string
 }
 
-type containerReceiverDiagnosticInformation struct {
+type containerDiagnosticInformation struct {
 	LogProcessedCount      int64
 	LogThroughputPerMinute int
-	Containers             map[string]Container
+	LogFilePath            string
+	ReceiverKind           receiverKind
+	Attributes             ContainerAttributes
 }
 
 type diagnosticInformation struct {
@@ -300,7 +302,7 @@ type diagnosticInformation struct {
 	ProcessingStatus       string
 	OTLPReceiver           *otlpReceiverDiagnosticInformation
 	Receivers              map[string]receiverDiagnosticInformation
-	ContainerReceivers     containerReceiverDiagnosticInformation
+	ContainerReceivers     map[string]containerDiagnosticInformation
 }
 
 func (diagInfo diagnosticInformation) writeToArchive(writer types.ArchiveWriter) error {

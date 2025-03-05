@@ -1116,9 +1116,9 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.l.Unlock()
 
 		if a.config.Log.OpenTelemetry.Enable {
-			var handleContainersLogsFn func(context.Context, crTypes.RuntimeInterface, []facts.Container)
+			var containerReceiver logprocessing.ContainerReceiver
 
-			handleContainersLogsFn, a.logProcessDiagnosticFn, err = logprocessing.MakePipeline(
+			containerReceiver, a.logProcessDiagnosticFn, err = logprocessing.MakePipeline(
 				ctx,
 				a.config.Log.OpenTelemetry,
 				a.hostRootPath,
@@ -1134,7 +1134,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 				go func() {
 					defer crashreport.ProcessPanic()
 
-					a.watchForContainersLogs(ctx, handleContainersLogsFn)
+					a.watchForContainersLogs(ctx, containerReceiver)
 				}()
 			}
 		}
@@ -2141,7 +2141,7 @@ func (a *agent) processesLister() *facts.ProcessProvider {
 	)
 }
 
-func (a *agent) watchForContainersLogs(ctx context.Context, handleContainersLogs func(ctx context.Context, crRuntime crTypes.RuntimeInterface, containers []facts.Container)) {
+func (a *agent) watchForContainersLogs(ctx context.Context, containerReceiver logprocessing.ContainerReceiver) {
 	const (
 		firstRunDelay    = 10 * time.Second
 		refreshInterval  = 1 * time.Minute
@@ -2160,6 +2160,8 @@ func (a *agent) watchForContainersLogs(ctx context.Context, handleContainersLogs
 
 	for ctx.Err() == nil {
 		select {
+		case <-ctx.Done():
+			return
 		case <-ticker.C:
 			if firstRun {
 				firstRun = false
@@ -2177,7 +2179,10 @@ func (a *agent) watchForContainersLogs(ctx context.Context, handleContainersLogs
 			var logContainers []facts.Container
 
 			for _, ctr := range containers {
-				if ctr.ImageName() != "squirreldb" && ctr.ImageName() != "postgres:16.1" { // TODO: remove
+				switch ctr.ImageName() { // TODO: remove
+				case "squirreldb", "busybox":
+				// process
+				default:
 					continue
 				}
 
@@ -2194,22 +2199,28 @@ func (a *agent) watchForContainersLogs(ctx context.Context, handleContainersLogs
 			}
 
 			if len(logContainers) > 0 {
-				handleContainersLogs(ctx, a.containerRuntime, logContainers)
+				containerReceiver.HandleContainersLogs(ctx, a.containerRuntime, logContainers)
 			}
 
 			if purgeCounter%5 == 0 {
+				var noLongerExisting []string
+
 				for id, lastTimeSeen := range alreadyWatching {
 					if time.Since(lastTimeSeen) > 2*refreshInterval {
 						delete(alreadyWatching, id)
+
+						noLongerExisting = append(noLongerExisting, id)
 					}
 				}
 
 				purgeCounter = 0
+
+				if len(noLongerExisting) != 0 {
+					containerReceiver.StopWatchingForContainers(ctx, noLongerExisting)
+				}
 			} else {
 				purgeCounter++
 			}
-		case <-ctx.Done():
-			return
 		}
 	}
 }

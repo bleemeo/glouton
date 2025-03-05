@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -60,9 +61,10 @@ type Container struct {
 	ReceiverKind receiverKind
 	Attributes   ContainerAttributes
 
-	potentialLogFilePath string
-
 	UserDefinedOperators []string
+
+	logCounter      *atomic.Int64
+	throughputMeter *ringCounter
 }
 
 type ContainerAttributes struct {
@@ -95,19 +97,21 @@ func (ctrAttrs ContainerAttributes) asMap() map[string]helper.ExprStringConfig {
 	return attrs
 }
 
+type ContainerReceiver interface {
+	HandleContainersLogs(ctx context.Context, crRuntime crTypes.RuntimeInterface, containers []facts.Container)
+	StopWatchingForContainers(ctx context.Context, ids []string)
+}
+
 type containerReceiver struct {
 	pipeline           *pipelineContext
 	logConsumer        consumer.Logs
-	lastFileSizes      map[string]int64
-	containerOperators map[string][]string
+	lastFileSizes      map[string]int64    // map key: log file path
+	containerOperators map[string][]string // map key: container name
 
 	l                 sync.Mutex
-	startedComponents []component.Component
-	containers        map[string]Container
-	sizeFnByFile      map[string]func() (int64, error)
-
-	logCounter      *atomic.Int64
-	throughputMeter *ringCounter
+	startedComponents map[string]component.Component   // map key: container ID
+	containers        map[string]Container             // map key: container ID
+	sizeFnByFile      map[string]func() (int64, error) // map key: log file path
 }
 
 func newContainerReceiver(pipeline *pipelineContext, logConsumer consumer.Logs, containerOperators map[string][]string) *containerReceiver {
@@ -124,15 +128,13 @@ func newContainerReceiver(pipeline *pipelineContext, logConsumer consumer.Logs, 
 		logConsumer:        logConsumer,
 		lastFileSizes:      lastFileSizes,
 		containerOperators: containerOperators,
-		startedComponents:  make([]component.Component, 0),
+		startedComponents:  make(map[string]component.Component),
 		containers:         make(map[string]Container),
 		sizeFnByFile:       make(map[string]func() (int64, error)),
-		logCounter:         new(atomic.Int64),
-		throughputMeter:    newRingCounter(throughputMeterResolutionSecs),
 	}
 }
 
-func (cr *containerReceiver) handleContainersLogs(ctx context.Context, crRuntime crTypes.RuntimeInterface, containers []facts.Container) {
+func (cr *containerReceiver) HandleContainersLogs(ctx context.Context, crRuntime crTypes.RuntimeInterface, containers []facts.Container) {
 	cr.l.Lock()
 	defer cr.l.Unlock()
 
@@ -148,14 +150,14 @@ func (cr *containerReceiver) handleContainersLogs(ctx context.Context, crRuntime
 			continue
 		}
 
-		logger.Printf("Handling container logs from %s (attributes: %v) ...", logCtr.Attributes.Name, logCtr.Attributes) // TODO: remove
-
 		err = cr.setupContainerLogReceiver(ctx, logCtr)
 		if err != nil {
 			logger.V(1).Printf("Can't create a log receiver for container %s (%s): %v", logCtr.Attributes.Name, logCtr.Attributes.ID, err)
 
 			continue
 		}
+
+		logger.V(1).Printf("Successfully set up log receiver for container %s (%s)", logCtr.Attributes.Name, logCtr.Attributes.ID) // TODO: V(2)
 	}
 }
 
@@ -176,7 +178,7 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 	}
 
 	factories, readFiles, execFiles, sizeFnByFile, err := setupLogReceiverFactories(
-		[]string{ctr.potentialLogFilePath},
+		[]string{ctr.LogFilePath},
 		cr.pipeline.hostroot,
 		ops,
 		cr.lastFileSizes,
@@ -188,12 +190,16 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 		return fmt.Errorf("setting up receiver factories: %w", err)
 	}
 
+	if len(factories) != 1 {
+		logger.V(1).Printf("Container %s (%s) should have a single log file, but has %d; ignoring it", ctr.Attributes.Name, ctr.Attributes.ID, len(factories))
+
+		return nil
+	}
+
 	switch {
 	case len(readFiles) == 1:
-		ctr.LogFilePath = readFiles[0]
 		ctr.ReceiverKind = receiverFileLog
 	case len(execFiles) == 1:
-		ctr.LogFilePath = execFiles[0]
 		ctr.ReceiverKind = receiverExecLog
 	default:
 		logger.V(1).Printf("No log file found for container %s (%s)", ctr.Attributes.Name, ctr.Attributes.ID)
@@ -207,7 +213,7 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 			ctx,
 			receiver.Settings{TelemetrySettings: cr.pipeline.telemetry},
 			logReceiverCfg,
-			wrapWithCounters(cr.logConsumer, cr.logCounter, cr.throughputMeter),
+			wrapWithCounters(cr.logConsumer, ctr.logCounter, ctr.throughputMeter),
 		)
 		if err != nil {
 			var agentErr stanzaErrors.AgentError
@@ -222,7 +228,7 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 			return fmt.Errorf("start receiver: %w", err)
 		}
 
-		cr.startedComponents = append(cr.startedComponents, logRcvr)
+		cr.startedComponents[ctr.Attributes.ID] = logRcvr
 	}
 
 	return nil
@@ -252,22 +258,60 @@ func (cr *containerReceiver) sizesByFile() (map[string]int64, error) {
 	return sizes, nil
 }
 
-func (cr *containerReceiver) diagnostic() containerReceiverDiagnosticInformation {
+func (cr *containerReceiver) StopWatchingForContainers(ctx context.Context, ids []string) {
 	cr.l.Lock()
 	defer cr.l.Unlock()
 
-	return containerReceiverDiagnosticInformation{
-		LogProcessedCount:      cr.logCounter.Load(),
-		LogThroughputPerMinute: cr.throughputMeter.Total(),
-		Containers:             cr.containers,
+	shutdownCtx, cancel := context.WithTimeout(ctx, shutdownTimeout)
+	defer cancel()
+
+	for _, ctrID := range ids {
+		recv, ok := cr.startedComponents[ctrID]
+		if !ok {
+			logger.V(1).Printf("Can't stop log receiver for container %s: it doesn't have one ...", ctrID)
+
+			continue
+		}
+
+		err := recv.Shutdown(shutdownCtx)
+		if err != nil {
+			logger.V(1).Printf("Failed to stop log receiver for container %s: %v", ctrID, err)
+		} else {
+			logFilePath := cr.containers[ctrID].LogFilePath
+
+			delete(cr.startedComponents, ctrID)
+			delete(cr.containers, ctrID)
+			delete(cr.sizeFnByFile, logFilePath)
+
+			logger.Printf("Successfully shutdowned log receiver for container %s", ctrID) // TODO: remove
+		}
 	}
+}
+
+func (cr *containerReceiver) diagnostic() map[string]containerDiagnosticInformation {
+	cr.l.Lock()
+	defer cr.l.Unlock()
+
+	infos := make(map[string]containerDiagnosticInformation, len(cr.containers))
+
+	for ctrID, ctr := range cr.containers {
+		infos[ctrID] = containerDiagnosticInformation{
+			LogProcessedCount:      ctr.logCounter.Load(),
+			LogThroughputPerMinute: ctr.throughputMeter.Total(),
+			LogFilePath:            ctr.LogFilePath,
+			ReceiverKind:           ctr.ReceiverKind,
+			Attributes:             ctr.Attributes,
+		}
+	}
+
+	return infos
 }
 
 func (cr *containerReceiver) stop() {
 	cr.l.Lock()
 	defer cr.l.Unlock()
 
-	shutdownAll(cr.startedComponents)
+	shutdownAll(slices.Collect(maps.Values(cr.startedComponents)))
 }
 
 func makeLogContainer(ctx context.Context, crRuntime crTypes.RuntimeInterface, container facts.Container, containerOperators map[string][]string) (Container, error) {
@@ -303,8 +347,10 @@ func makeLogContainer(ctx context.Context, crRuntime crTypes.RuntimeInterface, c
 	}
 
 	return Container{
-		potentialLogFilePath: logFilePath,
+		LogFilePath:          logFilePath,
 		Attributes:           attributes,
 		UserDefinedOperators: containerOperators[attributes.Name],
+		logCounter:           new(atomic.Int64),
+		throughputMeter:      newRingCounter(throughputMeterResolutionSecs),
 	}, nil
 }

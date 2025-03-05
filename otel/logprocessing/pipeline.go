@@ -29,8 +29,6 @@ import (
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/crashreport"
-	"github.com/bleemeo/glouton/facts"
-	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
 
@@ -84,7 +82,7 @@ func MakePipeline( //nolint:maintidx
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability,
 	addWarnings func(...error),
 ) (
-	handleContainersLogsFn func(context.Context, crTypes.RuntimeInterface, []facts.Container),
+	containerReceiver ContainerReceiver,
 	diagnosticFn func(context.Context, types.ArchiveWriter) error,
 	err error,
 ) { //nolint:wsl
@@ -362,7 +360,7 @@ AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers bl
 		return diagnosticInfo.writeToArchive(writer)
 	}
 
-	return containerRecv.handleContainersLogs, diagnosticFn, nil
+	return containerRecv, diagnosticFn, nil
 }
 
 func makeEnforceBackPressureFn(streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability) processorhelper.ProcessLogsFunc {

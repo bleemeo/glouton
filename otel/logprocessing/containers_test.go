@@ -230,7 +230,7 @@ func TestHandleContainersLogs(t *testing.T) {
 		},
 	}
 
-	containerRecv.handleContainersLogs(ctx, crRuntime, ctrs)
+	containerRecv.HandleContainersLogs(ctx, crRuntime, ctrs)
 
 	time.Sleep(time.Second)
 
