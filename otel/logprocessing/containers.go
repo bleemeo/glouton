@@ -28,6 +28,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts"
 	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
 	"github.com/bleemeo/glouton/logger"
@@ -61,8 +62,6 @@ type Container struct {
 	LogFilePath  string
 	ReceiverKind receiverKind
 	Attributes   ContainerAttributes
-
-	UserDefinedOperators []string
 
 	logCounter      *atomic.Int64
 	throughputMeter *ringCounter
@@ -104,6 +103,7 @@ type ContainerReceiver interface {
 }
 
 type containerReceiver struct {
+	globalOperators    map[string]config.OTELOperator
 	pipeline           *pipelineContext
 	logConsumer        consumer.Logs
 	lastFileSizes      map[string]int64    // map key: log file path
@@ -115,7 +115,7 @@ type containerReceiver struct {
 	sizeFnByFile      map[string]func() (int64, error) // map key: log file path
 }
 
-func newContainerReceiver(pipeline *pipelineContext, logConsumer consumer.Logs, containerOperators map[string][]string) *containerReceiver {
+func newContainerReceiver(pipeline *pipelineContext, containerOperators map[string][]string, globalOperators map[string]config.OTELOperator) *containerReceiver {
 	lastFileSizes := make(map[string]int64)
 
 	for filePath, size := range pipeline.lastFileSizes {
@@ -125,10 +125,11 @@ func newContainerReceiver(pipeline *pipelineContext, logConsumer consumer.Logs, 
 	}
 
 	return &containerReceiver{
+		globalOperators:    globalOperators,
 		pipeline:           pipeline,
-		logConsumer:        logConsumer,
+		logConsumer:        pipeline.getInput(),
 		lastFileSizes:      lastFileSizes,
-		containerOperators: containerOperators,
+		containerOperators: validateContainerOperators(containerOperators, globalOperators),
 		startedComponents:  make(map[string]component.Component),
 		containers:         make(map[string]Container),
 		sizeFnByFile:       make(map[string]func() (int64, error)),
@@ -144,38 +145,59 @@ func (cr *containerReceiver) HandleContainersLogs(ctx context.Context, crRuntime
 			continue
 		}
 
-		logCtr, err := makeLogContainer(ctx, crRuntime, ctr, cr.containerOperators)
+		operators, err := buildGlobalOperators(cr.globalOperators, cr.containerOperators[ctr.ContainerName()])
 		if err != nil {
-			logger.V(1).Printf("Can't create a log receiver for container %s (%s): %v", ctr.ContainerName(), ctr.ID(), err)
+			logger.V(1).Printf("Can't build globally-defined operators for container %s (%s): %v", ctr.ContainerName(), ctr.ID(), err)
 
 			continue
 		}
 
-		err = cr.setupContainerLogReceiver(ctx, logCtr)
+		err = cr.handleContainerLogs(ctx, crRuntime, ctr, operators)
 		if err != nil {
-			logger.V(1).Printf("Can't create a log receiver for container %s (%s): %v", logCtr.Attributes.Name, logCtr.Attributes.ID, err)
+			logger.V(1).Printf("Can't handle logs for container %s (%s): %v", ctr.ContainerName(), ctr.ID(), err)
 
 			continue
 		}
 
-		logger.V(1).Printf("Successfully set up log receiver for container %s (%s)", logCtr.Attributes.Name, logCtr.Attributes.ID) // TODO: V(2)
+		logger.V(1).Printf("Successfully set up log receiver for container %s (%s)", ctr.ContainerName(), ctr.ID()) // TODO: V(2)
 	}
 }
 
-func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr Container) error {
+func (cr *containerReceiver) handleContainerLogs(ctx context.Context, crRuntime crTypes.RuntimeInterface, ctr facts.Container, operators []operator.Config) error {
+	logFilePath := ctr.LogPath()
+	if logFilePath == "" {
+		return errContainerLogFileUnavailable
+	}
+
+	logCtr, err := makeLogContainer(ctx, crRuntime, ctr, logFilePath)
+	if err != nil {
+		return err
+	}
+
+	err = cr.setupContainerLogReceiver(ctx, logCtr, operators)
+	if err != nil {
+		return fmt.Errorf("setting up log receiver: %w", err)
+	}
+
+	return nil
+}
+
+func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr Container, operators []operator.Config) error {
 	containerOpCfg := container.NewConfig()
 	containerOpCfg.AddMetadataFromFilePath = false
 
-	globalOperators, err := buildGlobalOperators(cr.pipeline.config.GlobalOperators, ctr.UserDefinedOperators)
-	if err != nil {
-		return fmt.Errorf("building globally-defined operators: %w", err)
-	}
-
-	ops := append([]operator.Config{{Builder: containerOpCfg}}, globalOperators...)
+	ops := append([]operator.Config{{Builder: containerOpCfg}}, operators...)
 	makeStorageFn := func(logFile string) *component.ID {
 		id := cr.pipeline.persister.newPersistentExt("container/" + ctr.Attributes.ID + metadataKeySeparator + logFile)
 
 		return &id
+	}
+
+	opsJSON, err := json.MarshalIndent(ops, "", "  ")
+	if err != nil {
+		logger.Printf("Can't marshal ops: %v", err)
+	} else {
+		logger.Printf("Operators for container %s:\n%s", ctr.Attributes.Name, string(opsJSON))
 	}
 
 	factories, readFiles, execFiles, sizeFnByFile, err := setupLogReceiverFactories(
@@ -192,7 +214,7 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 	}
 
 	if len(factories) != 1 {
-		logger.V(1).Printf("Container %s (%s) should have a single log file, but has %d; ignoring it", ctr.Attributes.Name, ctr.Attributes.ID, len(factories))
+		logger.V(1).Printf("Container %s (%s) should have a single log file but has %d; ignoring it", ctr.Attributes.Name, ctr.Attributes.ID, len(factories))
 
 		return nil
 	}
@@ -320,12 +342,7 @@ func (cr *containerReceiver) stop() {
 	shutdownAll(slices.Collect(maps.Values(cr.startedComponents)))
 }
 
-func makeLogContainer(ctx context.Context, crRuntime crTypes.RuntimeInterface, container facts.Container, containerOperators map[string][]string) (Container, error) {
-	logFilePath := container.LogPath()
-	if logFilePath == "" {
-		return Container{}, errContainerLogFileUnavailable
-	}
-
+func makeLogContainer(ctx context.Context, crRuntime crTypes.RuntimeInterface, container facts.Container, logFilePath string) (Container, error) {
 	imageTags, err := crRuntime.ImageTags(ctx, container.ImageID(), container.ImageName())
 	if err != nil {
 		return Container{}, fmt.Errorf("can't get tags for image %q (%s): %w", container.ImageName(), container.ImageID(), err)
@@ -353,10 +370,9 @@ func makeLogContainer(ctx context.Context, crRuntime crTypes.RuntimeInterface, c
 	}
 
 	return Container{
-		LogFilePath:          logFilePath,
-		Attributes:           attributes,
-		UserDefinedOperators: containerOperators[attributes.Name],
-		logCounter:           new(atomic.Int64),
-		throughputMeter:      newRingCounter(throughputMeterResolutionSecs),
+		LogFilePath:     logFilePath,
+		Attributes:      attributes,
+		logCounter:      new(atomic.Int64),
+		throughputMeter: newRingCounter(throughputMeterResolutionSecs),
 	}, nil
 }

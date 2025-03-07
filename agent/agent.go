@@ -165,7 +165,7 @@ type agent struct {
 	pahoLogWrapper         *client.LogWrapper
 	fluentbitManager       *fluentbit.Manager
 	vSphereManager         *vsphere.Manager
-	logProcessDiagnosticFn func(context.Context, types.ArchiveWriter) error
+	logProcessManager      *logprocessing.Manager
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -958,12 +958,14 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	metricsIgnored := discovery.NewIgnoredService(a.config.ServiceIgnoreMetrics)
 	isCheckIgnored := discovery.NewIgnoredService(a.config.ServiceIgnoreCheck).IsServiceIgnored
 	dynamicDiscovery := discovery.NewDynamic(discovery.Option{
-		PS:                 psFact,
-		Netstat:            netstat,
-		ContainerInfo:      a.containerRuntime,
-		IsContainerIgnored: a.containerFilter.ContainerIgnored,
-		IsServiceIgnored:   serviceIgnored.IsServiceIgnored,
-		FileReader:         discovery.SudoFileReader{HostRootPath: a.hostRootPath, Runner: a.commandRunner},
+		PS:                  psFact,
+		Netstat:             netstat,
+		ContainerInfo:       a.containerRuntime,
+		IsContainerIgnored:  a.containerFilter.ContainerIgnored,
+		IsServiceIgnored:    serviceIgnored.IsServiceIgnored,
+		FileReader:          discovery.SudoFileReader{HostRootPath: a.hostRootPath, Runner: a.commandRunner},
+		LogDiscoveryEnabled: a.config.Log.OpenTelemetry.Enable && a.config.Log.OpenTelemetry.AutoDiscovery, // TODO: && a.config.Bleemeo.Enable ?
+		LogGlobalOperators:  a.config.Log.OpenTelemetry.GlobalOperators,
 	})
 
 	a.discovery, warnings = discovery.New(
@@ -1116,14 +1118,13 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.l.Unlock()
 
 		if a.config.Log.OpenTelemetry.Enable {
-			var containerReceiver logprocessing.ContainerReceiver
-
-			containerReceiver, a.logProcessDiagnosticFn, err = logprocessing.MakePipeline(
+			a.logProcessManager, err = logprocessing.New(
 				ctx,
 				a.config.Log.OpenTelemetry,
 				a.hostRootPath,
 				a.state,
 				a.commandRunner,
+				a.containerRuntime,
 				connector.PushLogs,
 				connector.ShouldApplyLogBackPressure,
 				a.addWarnings,
@@ -1131,11 +1132,11 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			if err != nil {
 				logger.Printf("unable to setup log processing: %v", err)
 			} else {
-				go func() {
+				/*go func() {
 					defer crashreport.ProcessPanic()
 
-					a.watchForContainersLogs(ctx, containerReceiver)
-				}()
+					a.watchForContainersLogs(ctx, a.logProcessManager.ContainerReceiver())
+				}()*/
 			}
 		}
 
@@ -2023,6 +2024,20 @@ func (a *agent) updatedDiscovery(ctx context.Context, services []discovery.Servi
 	if err != nil {
 		logger.V(2).Printf("Error during dynamic Filter rebuild: %v", err)
 	}
+
+	if a.logProcessManager != nil {
+		var servicesWithLogs []discovery.Service
+
+		for _, service := range services {
+			if service.LogProcessing != nil {
+				servicesWithLogs = append(servicesWithLogs, service)
+			}
+		}
+
+		if len(servicesWithLogs) > 0 {
+			a.logProcessManager.HandleLogFromServices(ctx, servicesWithLogs)
+		}
+	}
 }
 
 func (a *agent) handleTrigger(ctx context.Context) {
@@ -2143,9 +2158,10 @@ func (a *agent) processesLister() *facts.ProcessProvider {
 
 func (a *agent) watchForContainersLogs(ctx context.Context, containerReceiver logprocessing.ContainerReceiver) {
 	const (
-		firstRunDelay    = 10 * time.Second
-		refreshInterval  = 1 * time.Minute
-		containersMaxAge = 1 * time.Hour
+		firstRunDelay              = 10 * time.Second
+		refreshInterval            = 1 * time.Minute
+		containersMaxAge           = 1 * time.Hour
+		containerMinAgeBeforeWatch = 30 * time.Second
 	)
 
 	alreadyWatching := make(map[string]time.Time) // map[ID] -> last time seen
@@ -2180,9 +2196,14 @@ func (a *agent) watchForContainersLogs(ctx context.Context, containerReceiver lo
 
 			for _, ctr := range containers {
 				switch ctr.ImageName() { // TODO: remove
-				case "squirreldb", "busybox":
+				case "squirreldb", "busybox", "nginx":
 				// process
 				default:
+					continue
+				}
+
+				startedAt := ctr.StartedAt()
+				if startedAt.IsZero() || time.Since(startedAt) < containerMinAgeBeforeWatch {
 					continue
 				}
 
@@ -2346,8 +2367,8 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		modules = append(modules, a.fluentbitManager.DiagnosticArchive)
 	}
 
-	if a.logProcessDiagnosticFn != nil {
-		modules = append(modules, a.logProcessDiagnosticFn)
+	if a.logProcessManager != nil {
+		modules = append(modules, a.logProcessManager.DiagnosticArchive)
 	}
 
 	for _, f := range modules {

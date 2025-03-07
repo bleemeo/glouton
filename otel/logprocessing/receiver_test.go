@@ -209,9 +209,6 @@ func TestFileLogReceiver(t *testing.T) {
 	}
 
 	pipeline := pipelineContext{
-		config: config.OpenTelemetry{
-			GlobalOperators: globalOperators,
-		},
 		hostroot:          string(os.PathSeparator),
 		lastFileSizes:     make(map[string]int64),
 		telemetry:         telSet,
@@ -239,7 +236,7 @@ func TestFileLogReceiver(t *testing.T) {
 		buf: make([]plog.Logs, 0, 2), // we plan to write 2 log lines
 	}
 
-	recv, err := newLogReceiver("filelog/recv", cfg, makeBufferConsumer(t, &logBuf), pipeline.config.GlobalOperators)
+	recv, err := newLogReceiver("filelog/recv", cfg, makeBufferConsumer(t, &logBuf), globalOperators)
 	if err != nil {
 		t.Fatal("Failed to initialize log receiver:", err)
 	}

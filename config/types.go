@@ -399,6 +399,9 @@ type Service struct {
 	// IncludedItems or exclude specific items (for instance Jenkins jobs).
 	IncludedItems []string `yaml:"included_items"`
 	ExcludedItems []string `yaml:"excluded_items"`
+	// Log processing config.
+	LogFile   string `yaml:"log_file"`   // TODO:
+	LogParser string `yaml:"log_parser"` // specify multiple files
 }
 
 type JmxMetric struct {

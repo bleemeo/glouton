@@ -57,7 +57,10 @@ func (h *persistHost) newPersistentExt(name string) component.ID {
 	h.l.Lock()
 	defer h.l.Unlock()
 
-	id := component.NewIDWithName(component.MustNewType(storageType), name)
+	// We don't have to care about handling any error,
+	// since the type is known to be correct (otherwise TestPersistHost would have failed),
+	// and the name doesn't have any format restriction.
+	id := component.MustNewIDWithName(storageType, name)
 
 	receiverMetadata, found := h.metadataPerReceiver[name]
 	if !found {

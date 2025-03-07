@@ -44,7 +44,7 @@ func TestPersistHost(t *testing.T) { //nolint:maintidx
 	)
 
 	ctx := context.Background()
-	compID := component.NewID(component.MustNewType("unused"))
+	compID := component.MustNewID("unused")
 
 	st, err := state.LoadReadOnly("not", "used")
 	if err != nil {

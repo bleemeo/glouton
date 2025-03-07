@@ -171,14 +171,15 @@ func TestHandleContainersLogs(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	logBuf := logBuffer{
+		buf: make([]plog.Logs, 0, 2), // we plan to write 2 log lines
+	}
+
 	pipeline := pipelineContext{
-		config: config.OpenTelemetry{
-			GlobalOperators: globalOperators,
-		},
-		hostroot:          string(os.PathSeparator),
-		lastFileSizes:     make(map[string]int64),
-		telemetry:         telSet,
-		startedComponents: []component.Component{},
+		hostroot:      string(os.PathSeparator),
+		lastFileSizes: make(map[string]int64),
+		telemetry:     telSet,
+		inputConsumer: makeBufferConsumer(t, &logBuf),
 		commandRunner: dummyRunner{
 			run: func(_ context.Context, _ gloutonexec.Option, cmd string, args ...string) ([]byte, error) {
 				t.Errorf("No command should have been executed during this test, but: %s %s", cmd, args)
@@ -194,10 +195,6 @@ func TestHandleContainersLogs(t *testing.T) {
 		persister: mustNewPersistHost(t),
 	}
 
-	logBuf := logBuffer{
-		buf: make([]plog.Logs, 0, 2), // we plan to write 2 log lines
-	}
-
 	crRuntime := dummyRuntime{
 		imageTags: map[string][]string{
 			"img-1": {"v1.2.3", "latest"},
@@ -205,7 +202,7 @@ func TestHandleContainersLogs(t *testing.T) {
 		},
 	}
 
-	containerRecv := newContainerReceiver(&pipeline, makeBufferConsumer(t, &logBuf), validateContainerOperators(containerOperators, pipeline.config.GlobalOperators))
+	containerRecv := newContainerReceiver(&pipeline, containerOperators, globalOperators)
 
 	defer containerRecv.stop()
 

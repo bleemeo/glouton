@@ -33,6 +33,7 @@ import (
 	"github.com/bleemeo/glouton/types"
 
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -56,7 +57,6 @@ const (
 var errUnexpectedType = errors.New("unexpected type")
 
 type pipelineContext struct {
-	config        config.OpenTelemetry
 	hostroot      string
 	lastFileSizes map[string]int64
 	telemetry     component.TelemetrySettings
@@ -68,34 +68,33 @@ type pipelineContext struct {
 	startedComponents []component.Component
 	receivers         []*logReceiver
 
+	inputConsumer consumer.Logs
+
+	otlpRecvCounter         *atomic.Int64
+	otlpRecvThroughputMeter *ringCounter
+
 	logProcessedCount  atomic.Int64
 	logThroughputMeter *ringCounter
 }
 
-func MakePipeline( //nolint:maintidx
+func makePipeline( //nolint:maintidx
 	ctx context.Context,
 	cfg config.OpenTelemetry,
 	hostroot string,
-	state bleemeoTypes.State,
 	commandRunner CommandRunner,
 	pushLogs func(context.Context, []byte) error,
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability,
+	persister *persistHost,
 	addWarnings func(...error),
+	lastFileSizes map[string]int64,
 ) (
-	containerReceiver ContainerReceiver,
-	diagnosticFn func(context.Context, types.ArchiveWriter) error,
+	pipeline *pipelineContext,
 	err error,
 ) { //nolint:wsl
 	// TODO: no logs & metrics at the same time
 
-	persister, err := newPersistHost(state)
-	if err != nil {
-		return nil, nil, fmt.Errorf("can't create persist host: %w", err)
-	}
-
-	pipeline := &pipelineContext{
-		lastFileSizes: getLastFileSizesFromCache(state),
-		config:        cfg,
+	pipeline = &pipelineContext{
+		lastFileSizes: lastFileSizes,
 		hostroot:      hostroot,
 		telemetry: component.TelemetrySettings{
 			Logger:         logger.ZapLogger(),
@@ -109,9 +108,6 @@ func MakePipeline( //nolint:maintidx
 		receivers:          make([]*logReceiver, 0, len(cfg.Receivers)),
 		logThroughputMeter: newRingCounter(throughputMeterResolutionSecs),
 	}
-
-	pipeline.l.Lock()
-	defer pipeline.l.Unlock()
 
 	defer func() {
 		if err != nil {
@@ -143,11 +139,11 @@ func MakePipeline( //nolint:maintidx
 		},
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("setup exporter: %w", err)
+		return nil, fmt.Errorf("setup exporter: %w", err)
 	}
 
 	if err = logExporter.Start(ctx, nil); err != nil {
-		return nil, nil, fmt.Errorf("start exporter: %w", err)
+		return nil, fmt.Errorf("start exporter: %w", err)
 	}
 
 	pipeline.startedComponents = append(pipeline.startedComponents, logExporter)
@@ -169,12 +165,14 @@ func MakePipeline( //nolint:maintidx
 		logExporter,
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("setup batcher: %w", err)
+		return nil, fmt.Errorf("setup batcher: %w", err)
 	}
 
 	if err = logBatcher.Start(ctx, nil); err != nil {
-		return nil, nil, fmt.Errorf("start batcher: %w", err)
+		return nil, fmt.Errorf("start batcher: %w", err)
 	}
+
+	pipeline.startedComponents = append(pipeline.startedComponents, logBatcher)
 
 	logBackPressureEnforcer, err := processorhelper.NewLogs(
 		ctx,
@@ -184,15 +182,11 @@ func MakePipeline( //nolint:maintidx
 		makeEnforceBackPressureFn(streamAvailabilityStatusFn),
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("setup log back-pressure enforcer: %w", err)
+		return nil, fmt.Errorf("setup log back-pressure enforcer: %w", err)
 	}
 
-	pipeline.startedComponents = append(pipeline.startedComponents, logBatcher)
-
-	var (
-		otlpRecvCounter         *atomic.Int64
-		otlpRecvThroughputMeter *ringCounter
-	)
+	pipeline.startedComponents = append(pipeline.startedComponents, logBackPressureEnforcer)
+	pipeline.inputConsumer = logBackPressureEnforcer
 
 	if cfg.GRPC.Enable || cfg.HTTP.Enable {
 		factoryReceiver := otlpreceiver.NewFactory()
@@ -217,8 +211,8 @@ func MakePipeline( //nolint:maintidx
 			receiverTypedCfg.Protocols.HTTP = nil
 		}
 
-		otlpRecvCounter = new(atomic.Int64)
-		otlpRecvThroughputMeter = newRingCounter(throughputMeterResolutionSecs)
+		pipeline.otlpRecvCounter = new(atomic.Int64)
+		pipeline.otlpRecvThroughputMeter = newRingCounter(throughputMeterResolutionSecs)
 
 		otlpLogReceiver, err := factoryReceiver.CreateLogs(
 			ctx,
@@ -227,7 +221,7 @@ func MakePipeline( //nolint:maintidx
 				TelemetrySettings: pipeline.telemetry,
 			},
 			receiverTypedCfg,
-			wrapWithCounters(logBackPressureEnforcer, otlpRecvCounter, otlpRecvThroughputMeter),
+			wrapWithCounters(pipeline.inputConsumer, pipeline.otlpRecvCounter, pipeline.otlpRecvThroughputMeter),
 		)
 		if err != nil {
 			logger.V(1).Printf("Failed to setup OTLP receiver: %v", err)
@@ -246,28 +240,12 @@ func MakePipeline( //nolint:maintidx
 AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers block
 
 	for name, rcvrCfg := range cfg.Receivers {
-		recv, err := newLogReceiver(name, rcvrCfg, logBackPressureEnforcer, cfg.GlobalOperators)
-		if err != nil {
-			addWarnings(errorf("Failed to setup log receiver %q (ignoring it): %w", name, err))
-
-			continue
-		}
-
-		err = recv.update(ctx, pipeline, addWarnings)
-		if err != nil {
-			logger.V(1).Printf("Failed to start log receiver %q (ignoring it): %v", name, err)
-
-			continue
-		}
-
-		pipeline.receivers = append(pipeline.receivers, recv)
+		pipeline.addReceiver(ctx, name, rcvrCfg, cfg.GlobalOperators, addWarnings)
 	}
 
 	if len(pipeline.receivers) == 0 && len(cfg.Receivers) > 0 {
 		logger.V(1).Printf("None of the %d configured log receiver(s) are valid.", len(cfg.Receivers))
 	}
-
-	containerRecv := newContainerReceiver(pipeline, logBackPressureEnforcer, validateContainerOperators(cfg.ContainerOperators, cfg.GlobalOperators))
 
 	go func() {
 		defer crashreport.ProcessPanic()
@@ -297,76 +275,33 @@ AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers bl
 		}
 	}()
 
-	// Scheduling the save of file sizes to cache
-	go func() {
-		defer crashreport.ProcessPanic()
+	return pipeline, nil
+}
 
-		ticker := time.NewTicker(saveFileSizesToCachePeriod)
-		defer ticker.Stop()
+// getInput returns a log consumer which can be used to append logs into the pipeline.
+func (p *pipelineContext) getInput() consumer.Logs {
+	return p.inputConsumer
+}
 
-		for ctx.Err() == nil {
-			select {
-			case <-ticker.C:
-				pipeline.l.Lock()
+func (p *pipelineContext) addReceiver(ctx context.Context, name string, recvCfg config.OTLPReceiver, globalOps map[string]config.OTELOperator, addWarnings func(...error)) {
+	recv, err := newLogReceiver(name, recvCfg, p.inputConsumer, globalOps)
+	if err != nil {
+		addWarnings(errorf("Failed to setup log receiver %q (ignoring it): %w", name, err))
 
-				saveLastFileSizesToCache(state, mergeLastFileSizes(pipeline.receivers, containerRecv))
-				saveFileMetadataToCache(state, pipeline.persister.getAllMetadata())
-
-				pipeline.l.Unlock()
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
-	// Scheduling the shutdown of all the components we've started
-	go func() {
-		defer crashreport.ProcessPanic()
-
-		<-ctx.Done()
-
-		containerRecv.stop()
-
-		pipeline.l.Lock()
-		defer pipeline.l.Unlock()
-
-		shutdownAll(pipeline.startedComponents)
-
-		saveLastFileSizesToCache(state, mergeLastFileSizes(pipeline.receivers, containerRecv))
-		saveFileMetadataToCache(state, pipeline.persister.getAllMetadata())
-	}()
-
-	diagnosticFn = func(_ context.Context, writer types.ArchiveWriter) error {
-		pipeline.l.Lock()
-		receiversInfo := make(map[string]receiverDiagnosticInformation, len(pipeline.receivers))
-
-		for _, rcvr := range pipeline.receivers {
-			receiversInfo[rcvr.name] = rcvr.diagnosticInfo()
-		}
-
-		pipeline.l.Unlock()
-
-		diagnosticInfo := diagnosticInformation{
-			LogProcessedCount:      pipeline.logProcessedCount.Load(),
-			LogThroughputPerMinute: pipeline.logThroughputMeter.Total(),
-			ProcessingStatus:       streamAvailabilityStatusFn().String(),
-			Receivers:              receiversInfo,
-			ContainerReceivers:     containerRecv.diagnostic(),
-		}
-
-		if otlpRecvCounter != nil {
-			diagnosticInfo.OTLPReceiver = &otlpReceiverDiagnosticInformation{
-				GRPCEnabled:            cfg.GRPC.Enable,
-				HTTPEnabled:            cfg.HTTP.Enable,
-				LogProcessedCount:      otlpRecvCounter.Load(),
-				LogThroughputPerMinute: otlpRecvThroughputMeter.Total(),
-			}
-		}
-
-		return diagnosticInfo.writeToArchive(writer)
+		return
 	}
 
-	return containerRecv, diagnosticFn, nil
+	p.l.Lock()
+	defer p.l.Unlock()
+
+	err = recv.update(ctx, p, addWarnings)
+	if err != nil {
+		logger.V(1).Printf("Failed to start log receiver %q (ignoring it): %v", name, err)
+
+		return
+	}
+
+	p.receivers = append(p.receivers, recv)
 }
 
 func makeEnforceBackPressureFn(streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability) processorhelper.ProcessLogsFunc {

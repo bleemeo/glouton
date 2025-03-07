@@ -30,6 +30,7 @@ import (
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/crashreport"
+	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
@@ -203,8 +204,14 @@ func unmarshalMapstructureHook(from reflect.Value, to reflect.Value) (any, error
 	if yamlUnmarshaler, ok := to.Addr().Interface().(obsoleteUnmarshaler); ok {
 		err := yamlUnmarshaler.UnmarshalYAML(func(v any) error {
 			decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
-				Result:     v,
-				DecodeHook: unmarshalMapstructureHook,
+				Result: v,
+				// We aim to align the decoding behavior with opentelemetry-collector:
+				// https://github.com/open-telemetry/opentelemetry-collector/blob/8cf42f3cf789bceca4149180737ac9a5b26684e8/confmap/confmap.go#L221
+				DecodeHook: mapstructure.ComposeDecodeHookFunc(
+					mapstructure.StringToSliceHookFunc(","),
+					mapstructure.StringToTimeDurationHookFunc(),
+					unmarshalMapstructureHook,
+				),
 			})
 			if err != nil {
 				return fmt.Errorf("error creating decoder: %w", err)
@@ -226,8 +233,10 @@ func buildOperators(rawOperators []config.OTELOperator) ([]operator.Config, erro
 	var operators []operator.Config
 
 	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
-		Result:     &operators,
-		DecodeHook: unmarshalMapstructureHook,
+		Result: &operators,
+		DecodeHook: mapstructure.ComposeDecodeHookFunc(
+			unmarshalMapstructureHook,
+		),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error creating decoder: %w", err)
@@ -303,6 +312,8 @@ type diagnosticInformation struct {
 	OTLPReceiver           *otlpReceiverDiagnosticInformation
 	Receivers              map[string]receiverDiagnosticInformation
 	ContainerReceivers     map[string]containerDiagnosticInformation
+	WatchedServices        map[string][]discovery.ServiceLogReceiver // TODO: remove
+	GlobalOperators        map[string]config.OTELOperator
 }
 
 func (diagInfo diagnosticInformation) writeToArchive(writer types.ArchiveWriter) error {
