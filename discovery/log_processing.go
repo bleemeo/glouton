@@ -27,7 +27,8 @@ type logProcessingInfo struct {
 	DockerRouter     config.OTELOperator
 }
 
-var servicesLogInfo = map[ServiceName]logProcessingInfo{ // TODO: helper functions to bootstrap operators
+// TODO: helper functions to bootstrap operators
+var servicesLogInfo = map[ServiceName]logProcessingInfo{ //nolint: gochecknoglobals
 	NginxService: {
 		Operators: []config.OTELOperator{
 			// Start: nginx_access
@@ -38,8 +39,9 @@ var servicesLogInfo = map[ServiceName]logProcessingInfo{ // TODO: helper functio
 				"value": "stdout",
 			},
 			{
+				"id":     "nginx_access_parser",
 				"type":   "regex_parser",
-				"regex":  `^(?<host>(\d{1,3}\.){3}\d{1,3})\s-\s(-|[\w-]+)\s\[(?<time>\d{1,2}\/\w{1,15}\/\d{4}(:\d{2}){3}\s\+\d{4})\]\s(?<request>.+)$`,
+				"regex":  `^(?<host>(\d{1,3}\.){3}\d{1,3})\s-\s(-|[\w-]+)\s\[(?<time>\d{1,2}\/\w{1,15}\/\d{4}(:\d{2}){3}\s\+\d{4})\]\s(?<request>.+)\n*$`,
 				"output": "add_service_name",
 			},
 			// End: nginx_access
@@ -51,8 +53,9 @@ var servicesLogInfo = map[ServiceName]logProcessingInfo{ // TODO: helper functio
 				"value": "stderr",
 			},
 			{
+				"id":     "nginx_error_parser",
 				"type":   "regex_parser",
-				"regex":  `(?<time>^\d{4}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2})\s\[\w+]\s\d+#\d+:\s.*$`,
+				"regex":  `(?<time>^\d{4}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2})\s\[\w+]\s\d+#\d+:\s.*\n*$`,
 				"output": "add_service_name",
 			},
 			// End: nginx_error
@@ -71,11 +74,11 @@ var servicesLogInfo = map[ServiceName]logProcessingInfo{ // TODO: helper functio
 			"type": "router",
 			"routes": []map[string]any{
 				{
-					"expr":   `body matches "^(\\d{1,3}\\.){3}\\d{1,3}\\s-\\s(-|[\\w-]+)\\s"`,
+					"expr":   `body matches "^(\\d{1,3}\\.){3}\\d{1,3}\\s-\\s(-|[\\w-]+)\\s"`, // <- not regexp, but expr-lang
 					"output": "nginx_access",
 				},
 				{
-					"expr":   `body matches "^\\d{4}\\/\\d{2}\\/\\d{2}\\s\\d{2}:\\d{2}:\\d{2}\\s\\[error]"`,
+					"expr":   `body matches "^\\d{4}\\/\\d{2}\\/\\d{2}\\s\\d{2}:\\d{2}:\\d{2}\\s\\[error]"`, // <- not regexp, but expr-lang
 					"output": "nginx_error",
 				},
 			},
@@ -88,9 +91,9 @@ type ServiceLogReceiver struct {
 	Operators   []config.OTELOperator
 }
 
-func inferLogProcessingConfig(service *Service, globalOperators map[string]config.OTELOperator) {
+func inferLogProcessingConfig(service *Service, globalOperators map[string][]config.OTELOperator) {
 	if service.Config.LogParser != "" {
-		operator, ok := globalOperators[service.Config.LogParser]
+		operators, ok := globalOperators[service.Config.LogParser]
 		if !ok {
 			logger.V(1).Printf("Service %q requires an unknown log parser: %q", service.Name, service.Config.LogParser)
 
@@ -106,7 +109,7 @@ func inferLogProcessingConfig(service *Service, globalOperators map[string]confi
 		service.LogProcessing = []ServiceLogReceiver{
 			{
 				LogFilePath: service.Config.LogFile, // ignored if in a container
-				Operators:   []config.OTELOperator{operator},
+				Operators:   operators,
 			},
 		}
 

@@ -144,16 +144,18 @@ func TestHandleContainersLogs(t *testing.T) {
 
 	defer f2.Close()
 
-	globalOperators := map[string]config.OTELOperator{
+	globalOperators := map[string][]config.OTELOperator{
 		"key_res_attr": {
-			"type":  "add",
-			"field": "resource.key",
-			"value": "key attribute value",
+			{
+				"type":  "add",
+				"field": "resource.key",
+				"value": "key attribute value",
+			},
 		},
 	}
 
-	containerOperators := map[string][]string{
-		"ctr-1": {"key_res_attr"},
+	containerOperators := map[string]string{
+		"ctr-1": "key_res_attr",
 	}
 
 	logger, err := zap.NewDevelopment(zap.IncreaseLevel(zap.InfoLevel))

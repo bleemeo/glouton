@@ -32,8 +32,8 @@ import (
 	"github.com/bleemeo/glouton/facts"
 	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
 	"github.com/bleemeo/glouton/logger"
-	"github.com/google/uuid"
 
+	"github.com/google/uuid"
 	stanzaErrors "github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/errors"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/helper"
@@ -103,11 +103,11 @@ type ContainerReceiver interface {
 }
 
 type containerReceiver struct {
-	globalOperators    map[string]config.OTELOperator
+	globalOperators    map[string][]config.OTELOperator
 	pipeline           *pipelineContext
 	logConsumer        consumer.Logs
-	lastFileSizes      map[string]int64    // map key: log file path
-	containerOperators map[string][]string // map key: container name
+	lastFileSizes      map[string]int64  // map key: log file path
+	containerOperators map[string]string // map key: container name
 
 	l                 sync.Mutex
 	startedComponents map[string]component.Component   // map key: container ID
@@ -115,7 +115,7 @@ type containerReceiver struct {
 	sizeFnByFile      map[string]func() (int64, error) // map key: log file path
 }
 
-func newContainerReceiver(pipeline *pipelineContext, containerOperators map[string][]string, globalOperators map[string]config.OTELOperator) *containerReceiver {
+func newContainerReceiver(pipeline *pipelineContext, containerOperators map[string]string, globalOperators map[string][]config.OTELOperator) *containerReceiver {
 	lastFileSizes := make(map[string]int64)
 
 	for filePath, size := range pipeline.lastFileSizes {
@@ -145,7 +145,7 @@ func (cr *containerReceiver) HandleContainersLogs(ctx context.Context, crRuntime
 			continue
 		}
 
-		operators, err := buildGlobalOperators(cr.globalOperators, cr.containerOperators[ctr.ContainerName()])
+		operators, err := buildOperators(cr.globalOperators[cr.containerOperators[ctr.ContainerName()]])
 		if err != nil {
 			logger.V(1).Printf("Can't build globally-defined operators for container %s (%s): %v", ctr.ContainerName(), ctr.ID(), err)
 
@@ -191,13 +191,6 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 		id := cr.pipeline.persister.newPersistentExt("container/" + ctr.Attributes.ID + metadataKeySeparator + logFile)
 
 		return &id
-	}
-
-	opsJSON, err := json.MarshalIndent(ops, "", "  ")
-	if err != nil {
-		logger.Printf("Can't marshal ops: %v", err)
-	} else {
-		logger.Printf("Operators for container %s:\n%s", ctr.Attributes.Name, string(opsJSON))
 	}
 
 	factories, readFiles, execFiles, sizeFnByFile, err := setupLogReceiverFactories(

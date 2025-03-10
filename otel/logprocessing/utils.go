@@ -116,19 +116,13 @@ func mergeLastFileSizes(receivers []*logReceiver, containerRecv *containerReceiv
 	return sizers
 }
 
-func validateContainerOperators(containerOps map[string][]string, opsConfigs map[string]config.OTELOperator) map[string][]string {
-	for ctrName, ops := range containerOps {
-		finalOps := make([]string, 0, len(ops))
+func validateContainerOperators(containerOps map[string]string, opsConfigs map[string][]config.OTELOperator) map[string]string {
+	for ctrName, opName := range containerOps {
+		if opsConfigs[opName] == nil {
+			logger.V(1).Printf("Container %q requires the log processing operator %q, which is not defined", ctrName, opName)
 
-		for _, opName := range ops {
-			if opsConfigs[opName] == nil {
-				logger.V(1).Printf("Container %q requires the log processing operator %q, which is not defined", ctrName, opName)
-			} else {
-				finalOps = append(finalOps, opName)
-			}
+			delete(containerOps, ctrName)
 		}
-
-		containerOps[ctrName] = finalOps
 	}
 
 	return containerOps
@@ -250,16 +244,6 @@ func buildOperators(rawOperators []config.OTELOperator) ([]operator.Config, erro
 	return operators, nil
 }
 
-func buildGlobalOperators(opsConfigs map[string]config.OTELOperator, opsNames []string) ([]operator.Config, error) {
-	rawOps := make([]config.OTELOperator, len(opsNames))
-
-	for i, opName := range opsNames {
-		rawOps[i] = opsConfigs[opName]
-	}
-
-	return buildOperators(rawOps)
-}
-
 func wrapWithCounters(next consumer.Logs, counter *atomic.Int64, throughputMeter *ringCounter) consumer.Logs {
 	logCounter, err := consumer.NewLogs(func(ctx context.Context, ld plog.Logs) error {
 		count := ld.LogRecordCount()
@@ -313,7 +297,7 @@ type diagnosticInformation struct {
 	Receivers              map[string]receiverDiagnosticInformation
 	ContainerReceivers     map[string]containerDiagnosticInformation
 	WatchedServices        map[string][]discovery.ServiceLogReceiver // TODO: remove
-	GlobalOperators        map[string]config.OTELOperator
+	GlobalOperators        map[string][]config.OTELOperator
 }
 
 func (diagInfo diagnosticInformation) writeToArchive(writer types.ArchiveWriter) error {

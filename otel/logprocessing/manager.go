@@ -26,6 +26,7 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/discovery"
+	"github.com/bleemeo/glouton/facts"
 	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
@@ -147,20 +148,33 @@ func (man *Manager) HandleLogFromServices(ctx context.Context, services []discov
 			continue
 		}
 
+		var serviceCtr facts.Container
+
+		if service.ContainerID != "" {
+			ctr, found := man.crRuntime.CachedContainer(service.ContainerID)
+			if !found {
+				logger.V(1).Printf("Can't find container with id %q (related to service %q)", service.ContainerID, service.Name)
+
+				continue
+			}
+
+			serviceCtr = ctr
+		}
+
 		logger.Printf("Handling logs for service %q", service.Name) // TODO: remove
 
-		man.setupProcessingForService(ctx, service.Name, service.LogProcessing, service.ContainerID)
+		man.setupProcessingForService(ctx, service.Name, service.LogProcessing, serviceCtr)
 
 		man.watchedServices[key] = service.LogProcessing
 	}
 }
 
-func (man *Manager) setupProcessingForService(ctx context.Context, serviceName string, serviceLogReceivers []discovery.ServiceLogReceiver, ctrID string) {
+func (man *Manager) setupProcessingForService(ctx context.Context, serviceName string, serviceLogReceivers []discovery.ServiceLogReceiver, ctr facts.Container) {
 	for _, serviceRecv := range serviceLogReceivers {
 		operators, err := buildOperators(serviceRecv.Operators)
 		if err != nil {
-			if ctrID != "" {
-				logger.V(1).Printf("Can't build operators for service %q on container %s: %v", serviceName, ctrID, err)
+			if ctr != nil {
+				logger.V(1).Printf("Can't build operators for service %q on container %s (%s): %v", serviceName, ctr.ContainerName(), ctr.ID(), err)
 			} else {
 				logger.V(1).Printf("Can't build operators for service %q file %q: %v", serviceName, serviceRecv.LogFilePath, err)
 			}
@@ -168,14 +182,7 @@ func (man *Manager) setupProcessingForService(ctx context.Context, serviceName s
 			continue
 		}
 
-		if ctrID != "" {
-			ctr, found := man.crRuntime.CachedContainer(ctrID)
-			if !found {
-				logger.V(1).Printf("Can't find container with id %q (related to service %q)", ctrID, serviceName)
-
-				continue
-			}
-
+		if ctr != nil {
 			err = man.containerRecv.handleContainerLogs(ctx, man.crRuntime, ctr, operators)
 			if err != nil {
 				logger.V(1).Printf("Can't handle logs for service %q on container %s (%s): %v", serviceName, ctr.ContainerName(), ctr.ID(), err)

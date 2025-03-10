@@ -35,44 +35,31 @@ import (
 func TestValidateContainerOperators(t *testing.T) {
 	t.Parallel()
 
-	globalOpsConfig := map[string]config.OTELOperator{
+	globalOpsConfig := map[string][]config.OTELOperator{
 		"op-1": {},
 		"op-2": {},
 	}
 
 	testCases := []struct {
-		ctrOps         map[string][]string
-		expectedCtrOps map[string][]string
+		ctrOps         map[string]string
+		expectedCtrOps map[string]string
 	}{
 		{
-			ctrOps: map[string][]string{
-				"ctr-1": {"op-1"},
-				"ctr-2": {"op-2"},
+			ctrOps: map[string]string{
+				"ctr-1": "op-1",
+				"ctr-2": "op-2",
 			},
-			expectedCtrOps: map[string][]string{
-				"ctr-1": {"op-1"},
-				"ctr-2": {"op-2"},
-			},
-		},
-		{
-			ctrOps: map[string][]string{
-				"ctr-1": {"op-1", "op-2"},
-				"ctr-2": {"op-2", "op-3"},
-			},
-			expectedCtrOps: map[string][]string{
-				"ctr-1": {"op-1", "op-2"},
-				"ctr-2": {"op-2"},
+			expectedCtrOps: map[string]string{
+				"ctr-1": "op-1",
+				"ctr-2": "op-2",
 			},
 		},
 		{
-			ctrOps: map[string][]string{
-				"ctr-1": {},
-				"ctr-2": {"op-3"},
+			ctrOps: map[string]string{
+				"ctr-1": "",
+				"ctr-2": "op-3",
 			},
-			expectedCtrOps: map[string][]string{
-				"ctr-1": {},
-				"ctr-2": {},
-			},
+			expectedCtrOps: map[string]string{},
 		},
 	}
 

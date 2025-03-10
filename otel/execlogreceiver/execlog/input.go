@@ -193,7 +193,7 @@ func (i *Input) processStdout(ctx context.Context) {
 		}
 
 		if err := i.sendEntry(ctx, line); err != nil {
-			i.Logger().Error("failed to process exec input", zap.Error(err))
+			i.Logger().Error("failed to send exec entry", zap.Error(err))
 		}
 	}
 

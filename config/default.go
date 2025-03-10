@@ -265,7 +265,9 @@ func DefaultConfig() Config { //nolint:maintidx
 					Address: "localhost",
 					Port:    4318,
 				},
-				Receivers: map[string]OTLPReceiver{},
+				GlobalOperators:    map[string][]OTELOperator{},
+				Receivers:          map[string]OTLPReceiver{},
+				ContainerOperators: map[string]string{},
 			},
 		},
 		Logging: Logging{

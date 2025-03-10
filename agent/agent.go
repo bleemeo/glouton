@@ -178,6 +178,7 @@ type agent struct {
 	dockerInputID      int
 
 	l                sync.Mutex
+	startTime        time.Time
 	cond             *sync.Cond
 	taskIDs          map[string]int
 	metricResolution time.Duration
@@ -205,6 +206,7 @@ type taskInfo struct {
 
 func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (ok bool) {
 	a.l.Lock()
+	a.startTime = time.Now()
 	a.cond = sync.NewCond(&a.l)
 	a.lastHealthCheck = time.Now()
 	a.l.Unlock()
@@ -2026,10 +2028,14 @@ func (a *agent) updatedDiscovery(ctx context.Context, services []discovery.Servi
 	}
 
 	if a.logProcessManager != nil {
+		a.l.Lock()
+		startTime := a.startTime
+		a.l.Unlock()
+
 		var servicesWithLogs []discovery.Service
 
 		for _, service := range services {
-			if service.LogProcessing != nil {
+			if service.LogProcessing != nil && service.LastTimeSeen.After(startTime) {
 				servicesWithLogs = append(servicesWithLogs, service)
 			}
 		}

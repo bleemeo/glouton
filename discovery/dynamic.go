@@ -53,7 +53,7 @@ type Option struct {
 	FileReader          fileReader
 	DefaultStack        string
 	LogDiscoveryEnabled bool
-	LogGlobalOperators  map[string]config.OTELOperator
+	LogGlobalOperators  map[string][]config.OTELOperator
 }
 
 // DynamicDiscovery implement the dynamic discovery. It will only return

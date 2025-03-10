@@ -77,7 +77,7 @@ type pipelineContext struct {
 	logThroughputMeter *ringCounter
 }
 
-func makePipeline( //nolint:maintidx
+func makePipeline(
 	ctx context.Context,
 	cfg config.OpenTelemetry,
 	hostroot string,
@@ -283,7 +283,7 @@ func (p *pipelineContext) getInput() consumer.Logs {
 	return p.inputConsumer
 }
 
-func (p *pipelineContext) addReceiver(ctx context.Context, name string, recvCfg config.OTLPReceiver, globalOps map[string]config.OTELOperator, addWarnings func(...error)) {
+func (p *pipelineContext) addReceiver(ctx context.Context, name string, recvCfg config.OTLPReceiver, globalOps map[string][]config.OTELOperator, addWarnings func(...error)) {
 	recv, err := newLogReceiver(name, recvCfg, p.inputConsumer, globalOps)
 	if err != nil {
 		addWarnings(errorf("Failed to setup log receiver %q (ignoring it): %w", name, err))

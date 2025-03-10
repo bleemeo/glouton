@@ -205,6 +205,15 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 					Address: "localhost",
 					Port:    4318,
 				},
+				GlobalOperators: map[string][]OTELOperator{
+					"group-1": {
+						{
+							"type":  "add",
+							"field": "resource['service.name']",
+							"value": "apache_server",
+						},
+					},
+				},
 				Receivers: map[string]OTLPReceiver{
 					"filelog/recv": {
 						Include: []string{"/var/log/apache/access.log", "/var/log/apache/error.log"},
@@ -216,6 +225,9 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 							},
 						},
 					},
+				},
+				ContainerOperators: map[string]string{
+					"ctr-1": "group-1",
 				},
 			},
 		},
