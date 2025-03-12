@@ -1,0 +1,17 @@
+# HELP windows_diskdrive_info General drive information
+# TYPE windows_diskdrive_info gauge
+windows_diskdrive_info{caption="SAMSUNG MZVL2512HCJQ-00B07",device_id="PHYSICALDRIVE0",model="ST1000LM035",name="\\\\.\\PHYSICALDRIVE0"} 1
+# HELP windows_diskdrive_status Status of the drive
+# TYPE windows_diskdrive_status gauge
+windows_diskdrive_status{name="PHYSICALDRIVE0",status="Degraded"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE0",status="Error"} 1
+windows_diskdrive_status{name="PHYSICALDRIVE0",status="Lost Comm"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE0",status="No Contact"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE0",status="Nonrecover"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE0",status="OK"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE0",status="Pred fail"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE0",status="Service"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE0",status="Starting"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE0",status="Stopping"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE0",status="Stressed"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE0",status="Unknown"} 0
