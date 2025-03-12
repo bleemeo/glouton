@@ -205,12 +205,17 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 					Address: "localhost",
 					Port:    4318,
 				},
-				GlobalOperators: map[string][]OTELOperator{
-					"group-1": {
+				KnownLogFormats: map[string][]OTELOperator{
+					"format-1": {
 						{
 							"type":  "add",
 							"field": "resource['service.name']",
 							"value": "apache_server",
+						},
+					},
+					"app_format": {
+						{
+							"type": "noop",
 						},
 					},
 				},
@@ -226,8 +231,8 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 						},
 					},
 				},
-				ContainerOperators: map[string]string{
-					"ctr-1": "group-1",
+				ContainerFormat: map[string]string{
+					"ctr-1": "format-1",
 				},
 			},
 		},
@@ -345,6 +350,13 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				KeyFile:       "/mykey.pem",
 				IncludedItems: []string{"included"},
 				ExcludedItems: []string{"excluded"},
+				LogFiles: []ServiceLogFile{
+					{
+						FilePath:  "/var/log/app.log",
+						LogFormat: "app_format",
+					},
+				},
+				LogFormat: "nginx_combined",
 			},
 		},
 		ServiceAbsentDeactivationDelay: 7 * 24 * time.Hour,

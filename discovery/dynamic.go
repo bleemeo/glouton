@@ -53,7 +53,7 @@ type Option struct {
 	FileReader          fileReader
 	DefaultStack        string
 	LogDiscoveryEnabled bool
-	LogGlobalOperators  map[string][]config.OTELOperator
+	KnownLogFormats     map[string][]config.OTELOperator
 }
 
 // DynamicDiscovery implement the dynamic discovery. It will only return
@@ -393,7 +393,7 @@ func (dd *DynamicDiscovery) serviceFromProcess(ctx context.Context, process fact
 	dd.guessJMX(&service, process.CmdLineList)
 
 	if dd.option.LogDiscoveryEnabled {
-		inferLogProcessingConfig(&service, dd.option.LogGlobalOperators)
+		inferLogProcessingConfig(&service, dd.option.KnownLogFormats)
 	}
 
 	return service, true

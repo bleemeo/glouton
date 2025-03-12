@@ -22,99 +22,91 @@ import (
 )
 
 type logProcessingInfo struct {
-	Operators        []config.OTELOperator
-	FirstOpByLogFile map[string]string
-	DockerRouter     config.OTELOperator
+	FileFormats  []ServiceLogReceiver
+	DockerFormat string
 }
 
-// TODO: helper functions to bootstrap operators
+// TODO: create test to check if all formats referenced here actually exist in the default config
 var servicesLogInfo = map[ServiceName]logProcessingInfo{ //nolint: gochecknoglobals
 	NginxService: {
-		Operators: []config.OTELOperator{
-			// Start: nginx_access
-			{
-				"id":    "nginx_access",
-				"type":  "add",
-				"field": "attributes['log.iostream']",
-				"value": "stdout",
-			},
-			{
-				"id":     "nginx_access_parser",
-				"type":   "regex_parser",
-				"regex":  `^(?<host>(\d{1,3}\.){3}\d{1,3})\s-\s(-|[\w-]+)\s\[(?<time>\d{1,2}\/\w{1,15}\/\d{4}(:\d{2}){3}\s\+\d{4})\]\s(?<request>.+)\n*$`,
-				"output": "add_service_name",
-			},
-			// End: nginx_access
-			// Start: nginx_error
-			{
-				"id":    "nginx_error",
-				"type":  "add",
-				"field": "attributes['log.iostream']",
-				"value": "stderr",
-			},
-			{
-				"id":     "nginx_error_parser",
-				"type":   "regex_parser",
-				"regex":  `(?<time>^\d{4}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2})\s\[\w+]\s\d+#\d+:\s.*\n*$`,
-				"output": "add_service_name",
-			},
-			// End: nginx_error
-			{
-				"id":    "add_service_name",
-				"type":  "add",
-				"field": "resource['service.name']",
-				"value": "nginx",
-			},
+		FileFormats: []ServiceLogReceiver{
+			{"/var/log/nginx/access.log", "nginx_access"},
+			{"/var/log/nginx/error.log", "nginx_error"},
 		},
-		FirstOpByLogFile: map[string]string{
-			"/var/log/nginx/access.log": "nginx_access",
-			"/var/log/nginx/error.log":  "nginx_error",
-		},
-		DockerRouter: config.OTELOperator{
-			"type": "router",
-			"routes": []map[string]any{
-				{
-					"expr":   `body matches "^(\\d{1,3}\\.){3}\\d{1,3}\\s-\\s(-|[\\w-]+)\\s"`, // <- not regexp, but expr-lang
-					"output": "nginx_access",
-				},
-				{
-					"expr":   `body matches "^\\d{4}\\/\\d{2}\\/\\d{2}\\s\\d{2}:\\d{2}:\\d{2}\\s\\[error]"`, // <- not regexp, but expr-lang
-					"output": "nginx_error",
-				},
-			},
-		},
+		DockerFormat: "nginx_combined",
 	},
 }
 
 type ServiceLogReceiver struct {
-	LogFilePath string // only required if not in a container
-	Operators   []config.OTELOperator
+	FilePath string // ignored if in a container
+	Format   string
 }
 
-func inferLogProcessingConfig(service *Service, globalOperators map[string][]config.OTELOperator) {
-	if service.Config.LogParser != "" {
-		operators, ok := globalOperators[service.Config.LogParser]
-		if !ok {
-			logger.V(1).Printf("Service %q requires an unknown log parser: %q", service.Name, service.Config.LogParser)
+func inferLogProcessingConfig(service *Service, knownLogFormats map[string][]config.OTELOperator) {
+	switch {
+	case len(service.Config.LogFiles) > 0:
+		if service.container != nil {
+			logger.V(1).Printf("Can't watch specific log files on service %q: it runs in a container", service.Name)
 
 			return
 		}
 
-		if service.container == nil && service.Config.LogFile == "" {
-			logger.V(1).Printf("Service %q has no log file specified to run the specified parser on", service.Name)
+		service.LogProcessing = make([]ServiceLogReceiver, 0, len(service.Config.LogFiles))
+
+		for i, logFile := range service.Config.LogFiles {
+			if logFile.FilePath == "" {
+				logger.V(1).Printf("No path provided for log file n°%d on service %q", i+1, service.Name)
+
+				continue
+			}
+
+			logFormat := service.Config.LogFormat
+			if logFormat == "" {
+				if service.Config.LogFormat != "" {
+					logFormat = service.Config.LogFormat
+				} else {
+					logger.V(1).Printf("No log format specified for log file %q on service %q", logFile.FilePath, service.Name)
+
+					continue
+				}
+			}
+
+			_, ok := knownLogFormats[logFormat]
+			if !ok {
+				logger.V(1).Printf("Service %q requires an unknown log format: %q", service.Name, logFormat)
+
+				return
+			}
+
+			service.LogProcessing = append(service.LogProcessing, ServiceLogReceiver{
+				FilePath: logFile.FilePath,
+				Format:   logFormat,
+			})
+		}
+
+		logger.Printf("Using user-defined formats for service %q: %v", service.Name, service.LogProcessing) // TODO: remove
+	case service.Config.LogFormat != "":
+		if service.container == nil {
+			logger.V(1).Printf("Service %q only provides a log format but doesn't run in a container", service.Name)
+
+			return
+		}
+
+		_, ok := knownLogFormats[service.Config.LogFormat]
+		if !ok {
+			logger.V(1).Printf("Service %q requires an unknown log format: %q", service.Name, service.Config.LogFormat)
 
 			return
 		}
 
 		service.LogProcessing = []ServiceLogReceiver{
 			{
-				LogFilePath: service.Config.LogFile, // ignored if in a container
-				Operators:   operators,
+				Format: service.Config.LogFormat,
 			},
 		}
 
-		logger.Printf("Using global parser %q for service %q", service.Config.LogParser, service.Name) // TODO: remove
-	} else {
+		logger.Printf("Using known log format %q for service %q", service.Config.LogFormat, service.Name) // TODO: remove
+	default:
 		logProcessInfo, found := servicesLogInfo[service.ServiceType]
 		if !found {
 			return
@@ -123,31 +115,15 @@ func inferLogProcessingConfig(service *Service, globalOperators map[string][]con
 		if service.container != nil {
 			service.LogProcessing = []ServiceLogReceiver{
 				{
-					Operators: append(
-						[]config.OTELOperator{logProcessInfo.DockerRouter},
-						logProcessInfo.Operators...,
-					),
+					Format: logProcessInfo.DockerFormat,
 				},
 			}
 		} else {
-			service.LogProcessing = make([]ServiceLogReceiver, 0, len(logProcessInfo.FirstOpByLogFile))
+			service.LogProcessing = make([]ServiceLogReceiver, len(logProcessInfo.FileFormats))
 
-			for logFilePath, firstOpName := range logProcessInfo.FirstOpByLogFile {
-				firstOp := config.OTELOperator{
-					"type":   "noop",
-					"output": firstOpName,
-				}
-				logReceiver := ServiceLogReceiver{
-					LogFilePath: logFilePath,
-					Operators: append(
-						[]config.OTELOperator{firstOp},
-						logProcessInfo.Operators...,
-					),
-				}
-				service.LogProcessing = append(service.LogProcessing, logReceiver)
-			}
+			copy(service.LogProcessing, logProcessInfo.FileFormats)
 		}
 
-		logger.V(1).Printf("Using default log processing config for service %q", service.Name) // TODO: V(2)
+		logger.V(1).Printf("Using default log processing config for service %q: %v", service.Name, service.LogProcessing)
 	}
 }

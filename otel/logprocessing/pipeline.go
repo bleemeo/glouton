@@ -240,7 +240,7 @@ func makePipeline(
 AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers block
 
 	for name, rcvrCfg := range cfg.Receivers {
-		pipeline.addReceiver(ctx, name, rcvrCfg, cfg.GlobalOperators, addWarnings)
+		pipeline.addReceiver(ctx, name, rcvrCfg, cfg.KnownLogFormats, addWarnings)
 	}
 
 	if len(pipeline.receivers) == 0 && len(cfg.Receivers) > 0 {
@@ -283,8 +283,8 @@ func (p *pipelineContext) getInput() consumer.Logs {
 	return p.inputConsumer
 }
 
-func (p *pipelineContext) addReceiver(ctx context.Context, name string, recvCfg config.OTLPReceiver, globalOps map[string][]config.OTELOperator, addWarnings func(...error)) {
-	recv, err := newLogReceiver(name, recvCfg, p.inputConsumer, globalOps)
+func (p *pipelineContext) addReceiver(ctx context.Context, name string, recvCfg config.OTLPReceiver, knownLogFormats map[string][]config.OTELOperator, addWarnings func(...error)) {
+	recv, err := newLogReceiver(name, recvCfg, p.inputConsumer, knownLogFormats)
 	if err != nil {
 		addWarnings(errorf("Failed to setup log receiver %q (ignoring it): %w", name, err))
 

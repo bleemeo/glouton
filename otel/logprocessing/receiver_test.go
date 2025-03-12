@@ -174,7 +174,7 @@ func TestFileLogReceiver(t *testing.T) {
 
 	defer f1.Close()
 
-	globalOperators := map[string][]config.OTELOperator{
+	knownLogFormats := map[string][]config.OTELOperator{
 		"key_res_attr": {
 			{
 				"type":  "add",
@@ -195,7 +195,7 @@ func TestFileLogReceiver(t *testing.T) {
 				"value": "apache_server",
 			},
 		},
-		OperatorsRef: "key_res_attr",
+		LogFormat: "key_res_attr",
 	}
 
 	logger, err := zap.NewDevelopment(zap.IncreaseLevel(zap.InfoLevel))
@@ -238,7 +238,7 @@ func TestFileLogReceiver(t *testing.T) {
 		buf: make([]plog.Logs, 0, 2), // we plan to write 2 log lines
 	}
 
-	recv, err := newLogReceiver("filelog/recv", cfg, makeBufferConsumer(t, &logBuf), globalOperators)
+	recv, err := newLogReceiver("filelog/recv", cfg, makeBufferConsumer(t, &logBuf), knownLogFormats)
 	if err != nil {
 		t.Fatal("Failed to initialize log receiver:", err)
 	}

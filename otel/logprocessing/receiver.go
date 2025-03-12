@@ -94,7 +94,7 @@ type logReceiver struct {
 	throughputMeter *ringCounter
 }
 
-func newLogReceiver(name string, cfg config.OTLPReceiver, logConsumer consumer.Logs, globalOps map[string][]config.OTELOperator) (*logReceiver, error) {
+func newLogReceiver(name string, cfg config.OTLPReceiver, logConsumer consumer.Logs, knownLogFormats map[string][]config.OTELOperator) (*logReceiver, error) {
 	if !receiverNameRegex.MatchString(name) {
 		return nil, fmt.Errorf("%w: %q. It must be of the form 'my-receiver' or 'filelog/my-receiver', contain one slash a most, and not start with a slash", errInvalidReceiverName, name)
 	}
@@ -104,10 +104,10 @@ func newLogReceiver(name string, cfg config.OTLPReceiver, logConsumer consumer.L
 		return nil, fmt.Errorf("building operators: %w", err)
 	}
 
-	if cfg.OperatorsRef != "" {
-		opsGroup, found := globalOps[cfg.OperatorsRef]
+	if cfg.LogFormat != "" {
+		opsGroup, found := knownLogFormats[cfg.LogFormat]
 		if !found {
-			logger.V(1).Printf("Log receiver %q requires the operator group %q, which is not defined", name, cfg.OperatorsRef)
+			logger.V(1).Printf("Log receiver %q requires the log format %q, which is not defined", name, cfg.LogFormat)
 		} else {
 			referencedOps, err := buildOperators(opsGroup)
 			if err != nil {

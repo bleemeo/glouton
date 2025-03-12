@@ -967,7 +967,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		IsServiceIgnored:    serviceIgnored.IsServiceIgnored,
 		FileReader:          discovery.SudoFileReader{HostRootPath: a.hostRootPath, Runner: a.commandRunner},
 		LogDiscoveryEnabled: a.config.Log.OpenTelemetry.Enable && a.config.Log.OpenTelemetry.AutoDiscovery, // TODO: && a.config.Bleemeo.Enable ?
-		LogGlobalOperators:  a.config.Log.OpenTelemetry.GlobalOperators,
+		KnownLogFormats:     a.config.Log.OpenTelemetry.KnownLogFormats,
 	})
 
 	a.discovery, warnings = discovery.New(
@@ -2028,21 +2028,12 @@ func (a *agent) updatedDiscovery(ctx context.Context, services []discovery.Servi
 	}
 
 	if a.logProcessManager != nil {
-		a.l.Lock()
-		startTime := a.startTime
-		a.l.Unlock()
-
-		var servicesWithLogs []discovery.Service
-
-		for _, service := range services {
-			if service.LogProcessing != nil && service.LastTimeSeen.After(startTime) {
-				servicesWithLogs = append(servicesWithLogs, service)
-			}
+		containers, err := a.containerRuntime.Containers(ctx, time.Hour, false)
+		if err != nil {
+			logger.V(1).Printf("Failed to retrieve containers: %v", err)
 		}
 
-		if len(servicesWithLogs) > 0 {
-			a.logProcessManager.HandleLogFromServices(ctx, servicesWithLogs)
-		}
+		a.logProcessManager.HandleLogsFromDynamicSources(ctx, services, containers)
 	}
 }
 

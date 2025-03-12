@@ -85,10 +85,10 @@ type OpenTelemetry struct {
 	AutoDiscovery   bool                      `yaml:"auto_discovery"`
 	GRPC            EnableListener            `yaml:"grpc"`
 	HTTP            EnableListener            `yaml:"http"`
-	GlobalOperators map[string][]OTELOperator `yaml:"global_operators"`
+	KnownLogFormats map[string][]OTELOperator `yaml:"known_log_formats"`
 	Receivers       map[string]OTLPReceiver   `yaml:"receivers"`
-	// map: container name -> operator group to apply
-	ContainerOperators map[string]string `yaml:"container_operators"`
+	// map: container name -> format to apply
+	ContainerFormat map[string]string `yaml:"container_format"`
 }
 
 type EnableListener struct {
@@ -98,9 +98,9 @@ type EnableListener struct {
 }
 
 type OTLPReceiver struct {
-	Include      []string       `yaml:"include"`
-	Operators    []OTELOperator `yaml:"operators"`
-	OperatorsRef string         `yaml:"operators_ref"`
+	Include   []string       `yaml:"include"`
+	Operators []OTELOperator `yaml:"operators"`
+	LogFormat string         `yaml:"log_format"`
 }
 
 type Smart struct {
@@ -400,8 +400,8 @@ type Service struct {
 	IncludedItems []string `yaml:"included_items"`
 	ExcludedItems []string `yaml:"excluded_items"`
 	// Log processing config.
-	LogFile   string `yaml:"log_file"`   // TODO:
-	LogParser string `yaml:"log_parser"` // specify multiple files
+	LogFiles  []ServiceLogFile `yaml:"log_files"`
+	LogFormat string           `yaml:"log_format"`
 }
 
 type JmxMetric struct {
@@ -414,6 +414,11 @@ type JmxMetric struct {
 	Sum       bool     `yaml:"sum"`
 	TypeNames []string `yaml:"type_names"`
 	Ratio     string   `yaml:"ratio"`
+}
+
+type ServiceLogFile struct {
+	FilePath  string `yaml:"file_path"`
+	LogFormat string `yaml:"log_format"`
 }
 
 type Container struct {

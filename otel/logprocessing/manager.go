@@ -19,6 +19,8 @@ package logprocessing
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"sync"
 	"time"
 
@@ -32,18 +34,28 @@ import (
 	"github.com/bleemeo/glouton/types"
 )
 
+type LogSource struct {
+	container   facts.Container
+	serviceName string
+	logFilePath string
+
+	operators []config.OTELOperator
+}
+
 type Manager struct {
 	config                     config.OpenTelemetry
 	state                      bleemeoTypes.State
 	crRuntime                  crTypes.RuntimeInterface
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability
 
+	startTime     time.Time
 	persister     *persistHost
 	pipeline      *pipelineContext
 	containerRecv *containerReceiver
 
-	l               sync.Mutex
-	watchedServices map[discovery.NameInstance][]discovery.ServiceLogReceiver // TODO: revert
+	l                 sync.Mutex
+	watchedServices   map[discovery.NameInstance]struct{}
+	watchedContainers map[string]struct{} // map key: container ID
 }
 
 func New(
@@ -77,9 +89,10 @@ func New(
 		return nil, fmt.Errorf("building pipeline: %w", err)
 	}
 
-	containerRecv := newContainerReceiver(pipeline, cfg.ContainerOperators, cfg.GlobalOperators)
+	containerRecv := newContainerReceiver(pipeline, cfg.ContainerFormat, cfg.KnownLogFormats)
 
 	processingManager := &Manager{
+		startTime:                  time.Now(),
 		config:                     cfg,
 		state:                      state,
 		crRuntime:                  crRuntime,
@@ -87,7 +100,8 @@ func New(
 		persister:                  persister,
 		pipeline:                   pipeline,
 		containerRecv:              containerRecv,
-		watchedServices:            make(map[discovery.NameInstance][]discovery.ServiceLogReceiver),
+		watchedServices:            make(map[discovery.NameInstance]struct{}),
+		watchedContainers:          make(map[string]struct{}),
 	}
 
 	go processingManager.handleProcessingLifecycle(ctx)
@@ -133,12 +147,55 @@ func (man *Manager) ContainerReceiver() ContainerReceiver { // temporary
 	return man.containerRecv
 }
 
-// TODO: remove receivers for services that no longer exist
-func (man *Manager) HandleLogFromServices(ctx context.Context, services []discovery.Service) {
+func (man *Manager) HandleLogsFromDynamicSources(ctx context.Context, services []discovery.Service, containers []facts.Container) {
 	man.l.Lock()
 	defer man.l.Unlock()
 
+	man.removeOldSources(ctx, services, containers)
+
+	logSources := man.processLogSources(services, containers)
+
+	for _, logSource := range logSources {
+		err := man.setupProcessingForSource(ctx, logSource)
+		if err != nil {
+			if logSource.serviceName != "" {
+				if logSource.container != nil {
+					logger.V(1).Printf(
+						"Failed to set up log processing for service %q on container %s (%s): %v",
+						logSource.serviceName, logSource.container.ContainerName(), logSource.container.ID(), err,
+					)
+				} else {
+					logger.V(1).Printf(
+						"Failed to set up log processing for service %q file %q: %v",
+						logSource.serviceName, logSource.logFilePath, err,
+					)
+				}
+			} else {
+				logger.V(1).Printf(
+					"Failed to set up log processing for container %s (%s): %v",
+					logSource.container.ContainerName(), logSource.container.ID(), err,
+				)
+			}
+		}
+	}
+}
+
+func (man *Manager) processLogSources(services []discovery.Service, containers []facts.Container) []LogSource {
+	const gloutonContainerLabelPrefix = "glouton."
+
+	containersByID := make(map[string]facts.Container, len(containers))
+
+	for _, ctr := range containers {
+		containersByID[ctr.ID()] = ctr
+	}
+
+	var logSources []LogSource //nolint:prealloc
+
 	for _, service := range services {
+		if service.LogProcessing == nil || service.LastTimeSeen.Before(man.startTime) {
+			continue
+		}
+
 		key := discovery.NameInstance{
 			Name:     service.Name,
 			Instance: service.Instance,
@@ -148,53 +205,132 @@ func (man *Manager) HandleLogFromServices(ctx context.Context, services []discov
 			continue
 		}
 
-		var serviceCtr facts.Container
-
-		if service.ContainerID != "" {
-			ctr, found := man.crRuntime.CachedContainer(service.ContainerID)
-			if !found {
-				logger.V(1).Printf("Can't find container with id %q (related to service %q)", service.ContainerID, service.Name)
-
-				continue
+		for _, serviceLogProcessing := range service.LogProcessing {
+			logSource := LogSource{
+				logFilePath: serviceLogProcessing.FilePath, // ignored if in a container
+				serviceName: service.Name,
+				operators:   man.config.KnownLogFormats[serviceLogProcessing.Format],
 			}
 
-			serviceCtr = ctr
+			if service.ContainerID != "" {
+				ctr, found := containersByID[service.ContainerID]
+				if !found {
+					logger.V(1).Printf("Can't find container with id %q (related to service %q)", service.ContainerID, service.Name)
+
+					continue
+				}
+
+				logSource.container = ctr
+				man.watchedContainers[service.ContainerID] = struct{}{}
+			} else {
+				logSource.logFilePath = serviceLogProcessing.FilePath
+			}
+
+			logSources = append(logSources, logSource)
+			man.watchedServices[key] = struct{}{}
 		}
 
-		logger.Printf("Handling logs for service %q", service.Name) // TODO: remove
-
-		man.setupProcessingForService(ctx, service.Name, service.LogProcessing, serviceCtr)
-
-		man.watchedServices[key] = service.LogProcessing
+		if _, watched := man.watchedServices[key]; watched { // TODO: remove
+			logger.Printf("Handling logs for service %q", service.Name)
+		}
 	}
-}
 
-func (man *Manager) setupProcessingForService(ctx context.Context, serviceName string, serviceLogReceivers []discovery.ServiceLogReceiver, ctr facts.Container) {
-	for _, serviceRecv := range serviceLogReceivers {
-		operators, err := buildOperators(serviceRecv.Operators)
-		if err != nil {
-			if ctr != nil {
-				logger.V(1).Printf("Can't build operators for service %q on container %s (%s): %v", serviceName, ctr.ContainerName(), ctr.ID(), err)
-			} else {
-				logger.V(1).Printf("Can't build operators for service %q file %q: %v", serviceName, serviceRecv.LogFilePath, err)
-			}
-
+	for ctrID, ctr := range containersByID {
+		switch ctr.ImageName() { // TODO: remove
+		case "squirreldb", "busybox", "nginx":
+		// process
+		default:
 			continue
 		}
 
-		if ctr != nil {
-			err = man.containerRecv.handleContainerLogs(ctx, man.crRuntime, ctr, operators)
-			if err != nil {
-				logger.V(1).Printf("Can't handle logs for service %q on container %s (%s): %v", serviceName, ctr.ContainerName(), ctr.ID(), err)
-			}
-		} else {
-			recvName := fmt.Sprintf("service-%q_file-%q", serviceName, serviceRecv.LogFilePath)
-			recvConfig := config.OTLPReceiver{
-				Include:   []string{serviceRecv.LogFilePath},
-				Operators: serviceRecv.Operators,
-			}
+		if _, alreadyWatching := man.watchedContainers[ctrID]; alreadyWatching {
+			continue
+		}
 
-			man.pipeline.addReceiver(ctx, recvName, recvConfig, nil, logWarnings)
+		logSource := LogSource{
+			container: ctr,
+		}
+
+		ctrFacts := facts.LabelsAndAnnotations(ctr)
+
+		logFormat, found := ctrFacts[gloutonContainerLabelPrefix+"log_format"]
+		if found {
+			ops, found := man.config.KnownLogFormats[logFormat]
+			if found {
+				logSource.operators = ops
+			} else {
+				logger.V(1).Printf("Container %s (%s) requires an unknown log format: %q", ctr.ContainerName(), ctrID, logFormat)
+			}
+		}
+
+		logSources = append(logSources, logSource)
+		man.watchedContainers[ctrID] = struct{}{}
+
+		logger.Printf("Handling logs for container %s (%s)", ctr.ContainerName(), ctrID) // TODO: remove
+	}
+
+	return logSources
+}
+
+func (man *Manager) setupProcessingForSource(ctx context.Context, logSource LogSource) error {
+	operators, err := buildOperators(logSource.operators)
+	if err != nil {
+		return fmt.Errorf("building operators: %w", err)
+	}
+
+	if logSource.container != nil {
+		err = man.containerRecv.handleContainerLogs(ctx, man.crRuntime, logSource.container, operators)
+		if err != nil {
+			return err
+		}
+	} else {
+		// FIXME: also include service type to avoid potential conflicts ?
+		recvName := fmt.Sprintf("service-%q_file-%q", logSource.serviceName, logSource.logFilePath)
+		recvConfig := config.OTLPReceiver{
+			Include:   []string{logSource.logFilePath},
+			Operators: logSource.operators,
+		}
+
+		man.pipeline.addReceiver(ctx, recvName, recvConfig, nil, logWarnings)
+	}
+
+	return nil
+}
+
+func (man *Manager) removeOldSources(ctx context.Context, services []discovery.Service, containers []facts.Container) {
+	watchedServices := slices.Collect(maps.Keys(man.watchedServices))
+	watchedContainers := slices.Collect(maps.Keys(man.watchedContainers))
+	nameInstances := make(map[discovery.NameInstance]struct{}, len(services))
+	containerIDs := make(map[string]struct{}, len(containers))
+
+	for _, service := range services {
+		if service.LogProcessing != nil && service.ContainerID == "" { // containers will be handled below
+			nameInstances[discovery.NameInstance{Name: service.Name, Instance: service.Instance}] = struct{}{}
+		}
+	}
+
+	for _, ctr := range containers {
+		containerIDs[ctr.ID()] = struct{}{}
+	}
+
+	servicesNoLongerExisting := sliceDiff(watchedServices, nameInstances)
+	containersNoLongerExisting := sliceDiff(watchedContainers, containerIDs)
+
+	logger.Printf("Services to unwatch: %s / containers to unwatch: %s", servicesNoLongerExisting, containersNoLongerExisting) // TODO: remove
+
+	if len(servicesNoLongerExisting) > 0 {
+		// TODO
+
+		for _, service := range servicesNoLongerExisting {
+			delete(man.watchedServices, service)
+		}
+	}
+
+	if len(containersNoLongerExisting) > 0 {
+		man.containerRecv.StopWatchingForContainers(ctx, containersNoLongerExisting)
+
+		for _, ctrID := range containersNoLongerExisting {
+			delete(man.watchedContainers, ctrID)
 		}
 	}
 }
@@ -208,13 +344,13 @@ func (man *Manager) DiagnosticArchive(_ context.Context, writer types.ArchiveWri
 		receiversInfo[rcvr.name] = rcvr.diagnosticInfo()
 	}
 
-	man.pipeline.l.Unlock()
+	wServices := make([]string, 0, len(man.watchedServices))
 
-	wServices := make(map[string][]discovery.ServiceLogReceiver, len(man.watchedServices))
-
-	for serv, recvs := range man.watchedServices {
-		wServices[serv.Name] = recvs
+	for serv := range man.watchedServices {
+		wServices = append(wServices, serv.Name+"/"+serv.Instance)
 	}
+
+	man.pipeline.l.Unlock()
 
 	diagnosticInfo := diagnosticInformation{
 		LogProcessedCount:      man.pipeline.logProcessedCount.Load(),
@@ -223,7 +359,7 @@ func (man *Manager) DiagnosticArchive(_ context.Context, writer types.ArchiveWri
 		Receivers:              receiversInfo,
 		ContainerReceivers:     man.containerRecv.diagnostic(),
 		WatchedServices:        wServices,
-		GlobalOperators:        man.config.GlobalOperators,
+		KnownLogFormats:        man.config.KnownLogFormats,
 	}
 
 	if man.pipeline.otlpRecvCounter != nil {

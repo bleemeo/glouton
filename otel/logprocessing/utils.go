@@ -30,7 +30,6 @@ import (
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/crashreport"
-	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
@@ -261,6 +260,22 @@ func wrapWithCounters(next consumer.Logs, counter *atomic.Int64, throughputMeter
 	return logCounter
 }
 
+// sliceDiff returns the elements from s1 that are absent from m2.
+func sliceDiff[E comparable](s1 []E, m2 map[E]struct{}) []E {
+	var diff []E
+
+loop1:
+	for _, e1 := range s1 {
+		if _, found := m2[e1]; found {
+			continue loop1
+		}
+
+		diff = append(diff, e1)
+	}
+
+	return diff
+}
+
 type CommandRunner interface {
 	Run(ctx context.Context, option gloutonexec.Option, name string, arg ...string) ([]byte, error)
 	StartWithPipes(ctx context.Context, option gloutonexec.Option, name string, arg ...string) (stdoutPipe io.ReadCloser, stderrPipe io.ReadCloser, wait func() error, err error)
@@ -296,8 +311,8 @@ type diagnosticInformation struct {
 	OTLPReceiver           *otlpReceiverDiagnosticInformation
 	Receivers              map[string]receiverDiagnosticInformation
 	ContainerReceivers     map[string]containerDiagnosticInformation
-	WatchedServices        map[string][]discovery.ServiceLogReceiver // TODO: remove
-	GlobalOperators        map[string][]config.OTELOperator
+	WatchedServices        []string
+	KnownLogFormats        map[string][]config.OTELOperator
 }
 
 func (diagInfo diagnosticInformation) writeToArchive(writer types.ArchiveWriter) error {
