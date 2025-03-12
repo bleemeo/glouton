@@ -16,18 +16,18 @@
 
 //go:build windows
 
-package registry
+package windows
 
 import (
 	"github.com/bleemeo/glouton/inputs"
-	"github.com/bleemeo/glouton/prometheus/exporter/windows"
+	"github.com/bleemeo/glouton/prometheus/registry"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
 
 // AddWindowsExporter add a node_exporter to collector.
-func (r *Registry) AddWindowsExporter(collectors []string, options inputs.CollectorConfig) error {
-	collector, err := windows.NewCollector(collectors, options)
+func AddWindowsExporter(gloutonRegistry *registry.Registry, collectors []string, options inputs.CollectorConfig) error {
+	collector, err := NewCollector(collectors, options)
 	if err != nil {
 		return err
 	}
@@ -39,10 +39,10 @@ func (r *Registry) AddWindowsExporter(collectors []string, options inputs.Collec
 		return err
 	}
 
-	_, err = r.RegisterGatherer(
-		RegistrationOption{
+	_, err = gloutonRegistry.RegisterGatherer(
+		registry.RegistrationOption{
 			Description: "windows_exporter",
-			JitterSeed:  baseJitter,
+			JitterSeed:  0,
 		},
 		reg,
 	)
