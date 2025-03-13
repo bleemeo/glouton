@@ -550,6 +550,7 @@ func (dd *DynamicDiscovery) fillConfigFromLabels(service *Service) {
 	decoderConfig := &mapstructure.DecoderConfig{
 		DecodeHook: mapstructure.ComposeDecodeHookFunc(
 			mapstructure.StringToSliceHookFunc(","),
+			config.StringToIntSliceHookFunc(","),
 		),
 		Result:           &override,
 		WeaklyTypedInput: true,

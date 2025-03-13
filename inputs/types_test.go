@@ -59,7 +59,7 @@ func TestAccumulator(t *testing.T) {
 	}
 
 	db := &mockStore{}
-	acc := &Accumulator{Pusher: db, Context: context.Background()}
+	acc := &Accumulator{Pusher: db, Context: t.Context()}
 
 	if len(db.points) != 0 {
 		t.Errorf("len(db.points) == %v, want %v", len(db.points), 0)
@@ -171,7 +171,7 @@ func TestStoreAccumulatorWithStatus(t *testing.T) {
 	}
 
 	db := &mockStore{}
-	acc := &Accumulator{Pusher: db, Context: context.Background()}
+	acc := &Accumulator{Pusher: db, Context: t.Context()}
 
 	if len(db.points) != 0 {
 		t.Errorf("len(db.metrics) == %v, want %v", len(db.points), 0)

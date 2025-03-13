@@ -218,7 +218,7 @@ func TestHandleConnection(t *testing.T) {
 
 		copy(rndBytes[:], c.ReplyRaw[len(c.ReplyRaw)-2:])
 		handleConnection(
-			context.TODO(),
+			t.Context(),
 			socket,
 			func(_ context.Context, _ string) (string, int16, error) {
 				return c.ReplyString, c.ReplyCode, c.ReplyError //nolint:scopelint

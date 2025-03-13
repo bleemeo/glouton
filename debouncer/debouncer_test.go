@@ -131,7 +131,7 @@ func TestDebouncer_Trigger(t *testing.T) {
 				}
 			}
 
-			ctx := context.Background()
+			ctx := t.Context()
 			t0 := time.Now()
 			testDeadline := t0.Add(2 * tt.period).Add(maxDuration)
 			target := func(_ context.Context) {

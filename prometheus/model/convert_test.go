@@ -17,7 +17,6 @@
 package model
 
 import (
-	"context"
 	"maps"
 	"testing"
 	"time"
@@ -196,7 +195,7 @@ func TestConversionLoop(t *testing.T) {
 				app := NewBufferAppender()
 
 				if useAppendable {
-					app2 = NewFromAppender(app).Appender(context.Background())
+					app2 = NewFromAppender(app).Appender(t.Context())
 				} else {
 					app2 = app
 				}

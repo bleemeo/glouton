@@ -143,3 +143,36 @@ func ParseBool(value string) (bool, error) {
 
 	return result, err
 }
+
+func StringToIntSliceHookFunc(sep string) mapstructure.DecodeHookFunc {
+	expectedToType := reflect.SliceOf(reflect.TypeFor[int]())
+
+	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
+		if f.Kind() != reflect.String {
+			return data, nil
+		}
+
+		if t != expectedToType {
+			return data, nil
+		}
+
+		raw, _ := data.(string)
+		if raw == "" {
+			return []int{}, nil
+		}
+
+		split := strings.Split(raw, sep)
+		ints := make([]int, len(split))
+
+		for i, s := range split {
+			n, err := strconv.Atoi(s)
+			if err != nil {
+				return nil, err
+			}
+
+			ints[i] = n
+		}
+
+		return ints, nil
+	}
+}

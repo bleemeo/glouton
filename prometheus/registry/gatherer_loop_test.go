@@ -56,7 +56,7 @@ func Test_startScrapeLoop(t *testing.T) {
 				l           sync.Mutex
 			)
 
-			deadlineCtx, cancel := context.WithTimeout(context.Background(), testDuration)
+			deadlineCtx, cancel := context.WithTimeout(t.Context(), testDuration)
 			defer cancel()
 
 			callback := func(_ context.Context, _ context.Context, t0 time.Time) {

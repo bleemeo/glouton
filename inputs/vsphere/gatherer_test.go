@@ -38,7 +38,7 @@ func setupGathering(t *testing.T, dirName string) (mfs []*dto.MetricFamily, defe
 	t.Helper()
 
 	vSphereCfg, vSphereDeferFn := setupVSphereAPITest(t, dirName)
-	ctx, cancel := context.WithTimeout(context.Background(), commonTimeout)
+	ctx, cancel := context.WithTimeout(t.Context(), commonTimeout)
 	deferFn = func() { cancel(); vSphereDeferFn() }
 
 	manager := new(Manager)

@@ -397,7 +397,7 @@ func TestExecution_LinkedSynchronization(t *testing.T) { //nolint:maintidx
 					}
 				}
 
-				e.applyNeedSynchronization(context.Background())
+				e.applyNeedSynchronization(t.Context())
 
 				for _, request := range tt.callsToRequestSynchronizationBefore {
 					e.RequestSynchronization(request.name, request.requestFull)

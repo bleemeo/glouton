@@ -23,26 +23,21 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"strings"
 	"time"
-	"unsafe"
+	_ "unsafe" // for go:linkname
 
 	"github.com/bleemeo/glouton/logger"
 
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
+	"github.com/prometheus/blackbox_exporter/config"
 	"github.com/prometheus/client_golang/prometheus"
 	pconfig "github.com/prometheus/common/config"
-
-	"github.com/prometheus/blackbox_exporter/config"
 )
 
-// Prevent gofmt from removing "unsafe", //go:linkname is only allowed in Go files that import "unsafe".
-var _ unsafe.Pointer
-
 //go:linkname dialTCP github.com/prometheus/blackbox_exporter/prober.dialTCP
-func dialTCP(ctx context.Context, target string, module config.Module, registry *prometheus.Registry, logger log.Logger) (net.Conn, error)
+func dialTCP(ctx context.Context, target string, module config.Module, registry *prometheus.Registry, logger *slog.Logger) (net.Conn, error)
 
 //go:linkname getEarliestCertExpiry github.com/prometheus/blackbox_exporter/prober.getEarliestCertExpiry
 func getEarliestCertExpiry(state *tls.ConnectionState) time.Time
@@ -60,7 +55,7 @@ func getTLSVersion(state *tls.ConnectionState) string
 // by ourselves because it's empty when we set insecure_skip_verify to true.
 //
 // We also added a way to distinguish TLS errors from TCP errors with the metric "probe_failed_due_to_tls_error".
-func ProbeTCP(ctx context.Context, target string, module config.Module, registry *prometheus.Registry, logger log.Logger) bool {
+func ProbeTCP(ctx context.Context, target string, module config.Module, registry *prometheus.Registry, logger *slog.Logger) bool {
 	probeSSLEarliestCertExpiry := prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "probe_ssl_earliest_cert_expiry",
 		Help: "Returns earliest SSL cert expiry date",
@@ -111,19 +106,19 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 			}
 		}
 
-		_ = level.Error(logger).Log("msg", "Error dialing TCP", "err", err)
+		logger.Error("Error dialing TCP", "err", err)
 
 		return false
 	}
 	defer conn.Close()
 
-	_ = level.Info(logger).Log("msg", "Successfully dialed")
+	logger.Info("Successfully dialed")
 
 	// Set a deadline to prevent the following code from blocking forever.
 	// If a deadline cannot be set, better fail the probe by returning an error
 	// now rather than blocking forever.
 	if err := conn.SetDeadline(deadline); err != nil {
-		_ = level.Error(logger).Log("msg", "Error setting deadline", "err", err)
+		logger.Error("Error setting deadline", "err", err)
 
 		return false
 	}
@@ -144,7 +139,7 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 	scanner := bufio.NewScanner(conn)
 
 	for i, qr := range module.TCP.QueryResponse {
-		_ = level.Info(logger).Log("msg", "Processing query response entry", "entry_number", i)
+		logger.Info("Processing query response entry", "entry_number", i)
 
 		send := qr.Send
 
@@ -152,18 +147,18 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 			var match []int
 			// Read lines until one of them matches the configured regexp.
 			for scanner.Scan() {
-				_ = level.Debug(logger).Log("msg", "Read line", "line", scanner.Text())
+				logger.Debug("Read line", "line", scanner.Text())
 
 				match = qr.Expect.Regexp.FindSubmatchIndex(scanner.Bytes())
 				if match != nil {
-					_ = level.Info(logger).Log("msg", "Regexp matched", "regexp", qr.Expect.Regexp, "line", scanner.Text())
+					logger.Info("Regexp matched", "regexp", qr.Expect.Regexp, "line", scanner.Text())
 
 					break
 				}
 			}
 
 			if scanner.Err() != nil {
-				_ = level.Error(logger).Log("msg", "Error reading from connection", "err", scanner.Err().Error())
+				logger.Error("Error reading from connection", "err", scanner.Err())
 
 				return false
 			}
@@ -171,7 +166,7 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 			if match == nil {
 				probeFailedDueToRegex.Set(1)
 
-				_ = level.Error(logger).Log("msg", "Regexp did not match", "regexp", qr.Expect.Regexp, "line", scanner.Text())
+				logger.Error("Regexp did not match", "regexp", qr.Expect.Regexp, "line", scanner.Text())
 
 				return false
 			}
@@ -182,10 +177,10 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 		}
 
 		if send != "" {
-			_ = level.Debug(logger).Log("msg", "Sending line", "line", send)
+			logger.Debug("Sending line", "line", send)
 
 			if _, err := fmt.Fprintf(conn, "%s\n", send); err != nil {
-				_ = level.Error(logger).Log("msg", "Failed to send", "err", err)
+				logger.Error("Failed to send", "err", err)
 
 				return false
 			}
@@ -195,7 +190,7 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 			// Upgrade TCP connection to TLS.
 			tlsConfig, err := pconfig.NewTLSConfig(&module.TCP.TLSConfig)
 			if err != nil {
-				_ = level.Error(logger).Log("msg", "Failed to create TLS configuration", "err", err)
+				logger.Error("Failed to create TLS configuration", "err", err)
 
 				return false
 			}
@@ -211,12 +206,12 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 
 			// Initiate TLS handshake (required here to get TLS state).
 			if err := tlsConn.Handshake(); err != nil {
-				_ = level.Error(logger).Log("msg", "TLS Handshake (client) failed", "err", err)
+				logger.Error("TLS Handshake (client) failed", "err", err)
 
 				return false
 			}
 
-			_ = level.Info(logger).Log("msg", "TLS Handshake (client) succeeded.")
+			logger.Info("TLS Handshake (client) succeeded.")
 
 			conn = net.Conn(tlsConn)
 			scanner = bufio.NewScanner(conn)

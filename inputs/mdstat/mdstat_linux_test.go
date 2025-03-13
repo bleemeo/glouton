@@ -19,7 +19,6 @@
 package mdstat
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -463,7 +462,7 @@ func TestGather(t *testing.T) { //nolint:maintidx
 			pointBuffer := new(registry.PointBuffer)
 			acc := inputs.Accumulator{
 				Pusher:  pointBuffer,
-				Context: context.Background(),
+				Context: t.Context(),
 			}
 
 			err := input.Gather(&acc)

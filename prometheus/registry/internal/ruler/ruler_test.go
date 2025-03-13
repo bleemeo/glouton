@@ -1,7 +1,6 @@
 package ruler
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -162,7 +161,7 @@ func TestApplyRulesMFS(t *testing.T) {
 	}
 
 	ruler := New(rrules)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	resultMfs := ruler.ApplyRulesMFS(ctx, now, mfs)
 

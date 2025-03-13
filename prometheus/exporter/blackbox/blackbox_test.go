@@ -2201,7 +2201,7 @@ func runTest(t *testing.T, test testCase, usePlainTCPOrSSL bool, monitorID, agen
 		wantPoints = append(wantPoints, newPoint)
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	var (
 		resPoints []types.MetricPoint
@@ -2247,7 +2247,7 @@ func runTest(t *testing.T, test testCase, usePlainTCPOrSSL bool, monitorID, agen
 		t.Fatal(err)
 	}
 
-	reg.InternalRunScrape(test.target.RequestContext(ctx), context.Background(), t0, id)
+	reg.InternalRunScrape(test.target.RequestContext(ctx), t.Context(), t0, id)
 
 	gotMap := make(map[string]int, len(resPoints))
 	for i, got := range resPoints {
