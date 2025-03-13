@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mitchellh/mapstructure"
+	"github.com/go-viper/mapstructure/v2"
 	bbConf "github.com/prometheus/blackbox_exporter/config"
 	"gopkg.in/yaml.v3"
 )

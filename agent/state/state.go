@@ -30,8 +30,8 @@ import (
 
 	"github.com/bleemeo/glouton/logger"
 
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/google/uuid"
-	"github.com/mitchellh/mapstructure"
 )
 
 const stateVersion = 1

@@ -35,7 +35,7 @@ import (
 	"github.com/bleemeo/glouton/version"
 
 	"dario.cat/mergo"
-	"github.com/mitchellh/mapstructure"
+	"github.com/go-viper/mapstructure/v2"
 	"gopkg.in/ini.v1"
 )
 

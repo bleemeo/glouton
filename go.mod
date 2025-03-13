@@ -35,7 +35,6 @@ require (
 	github.com/knadh/koanf v1.5.0
 	github.com/knadh/koanf/v2 v2.1.2
 	github.com/mitchellh/copystructure v1.2.0
-	github.com/mitchellh/mapstructure v1.5.1-0.20220423185008-bf980b35cac4
 	github.com/ncabatoff/process-exporter v0.8.5
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.0
