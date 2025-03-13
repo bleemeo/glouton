@@ -35,16 +35,17 @@ import (
 	containerTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
+
 	v1 "github.com/containerd/cgroups/v3/cgroup1/stats"
 	v2 "github.com/containerd/cgroups/v3/cgroup2/stats"
-	"github.com/containerd/containerd"
 	pbEvents "github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/api/services/tasks/v1"
-	"github.com/containerd/containerd/cio"
-	"github.com/containerd/containerd/containers"
-	"github.com/containerd/containerd/events"
-	"github.com/containerd/containerd/namespaces"
-	"github.com/containerd/containerd/oci"
+	"github.com/containerd/containerd/v2/client"
+	"github.com/containerd/containerd/v2/core/containers"
+	"github.com/containerd/containerd/v2/core/events"
+	"github.com/containerd/containerd/v2/pkg/cio"
+	"github.com/containerd/containerd/v2/pkg/namespaces"
+	"github.com/containerd/containerd/v2/pkg/oci"
 	"github.com/containerd/errdefs"
 	"github.com/containerd/typeurl/v2"
 	"github.com/mitchellh/copystructure"
@@ -491,7 +492,7 @@ func (c *Containerd) Exec(ctx context.Context, containerID string, cmd []string)
 		return nil, err
 	}
 
-	var status containerd.ExitStatus
+	var status client.ExitStatus
 
 	select {
 	case status = <-statusC:
@@ -808,8 +809,8 @@ func (c *Containerd) updateContainers(ctx context.Context) error {
 	return nil
 }
 
-func convertToContainerObject(ctx context.Context, ns string, cont containerd.Container) (containerObject, error) {
-	info, err := cont.Info(ctx, containerd.WithoutRefreshedMetadata)
+func convertToContainerObject(ctx context.Context, ns string, cont client.Container) (containerObject, error) {
+	info, err := cont.Info(ctx, client.WithoutRefreshedMetadata)
 	if err != nil {
 		return containerObject{}, fmt.Errorf("Info() on %s/%s failed: %w", ns, cont.ID(), err)
 	}
@@ -840,7 +841,7 @@ func convertToContainerObject(ctx context.Context, ns string, cont containerd.Co
 			Container: info,
 			Spec:      &spec,
 		},
-		state:   string(containerd.Unknown),
+		state:   string(client.Unknown),
 		imageID: imgDigest,
 	}
 
@@ -955,9 +956,9 @@ func (c *Containerd) getClient(ctx context.Context) (containerdClient, error) {
 }
 
 type containerdClient interface {
-	LoadContainer(ctx context.Context, id string) (containerd.Container, error)
-	Containers(ctx context.Context) ([]containerd.Container, error)
-	Version(ctx context.Context) (containerd.Version, error)
+	LoadContainer(ctx context.Context, id string) (client.Container, error)
+	Containers(ctx context.Context) ([]client.Container, error)
+	Version(ctx context.Context) (client.Version, error)
 	Namespaces(ctx context.Context) ([]string, error)
 	Events(ctx context.Context) (ch <-chan *events.Envelope, errs <-chan error)
 	Metrics(ctx context.Context, filters []string) (*tasks.MetricsResponse, error)
@@ -972,27 +973,27 @@ func openConnection(_ context.Context, address string) (containerdClient, error)
 		}
 	}
 
-	client, err := containerd.New(address)
+	cl, err := client.New(address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to containerd at address %s: %w", address, err)
 	}
 
-	return realClient{client: client}, nil
+	return realClient{client: cl}, nil
 }
 
 type realClient struct {
-	client *containerd.Client
+	client *client.Client
 }
 
-func (cl realClient) Containers(ctx context.Context) ([]containerd.Container, error) {
+func (cl realClient) Containers(ctx context.Context) ([]client.Container, error) {
 	return cl.client.Containers(ctx)
 }
 
-func (cl realClient) LoadContainer(ctx context.Context, id string) (containerd.Container, error) {
+func (cl realClient) LoadContainer(ctx context.Context, id string) (client.Container, error) {
 	return cl.client.LoadContainer(ctx, id)
 }
 
-func (cl realClient) Version(ctx context.Context) (containerd.Version, error) {
+func (cl realClient) Version(ctx context.Context) (client.Version, error) {
 	return cl.client.Version(ctx)
 }
 
@@ -1153,18 +1154,18 @@ func (c containerObject) StartedAt() time.Time {
 }
 
 func (c containerObject) State() facts.ContainerState {
-	switch containerd.ProcessStatus(c.state) {
-	case containerd.Created:
+	switch client.ProcessStatus(c.state) {
+	case client.Created:
 		return facts.ContainerCreated
-	case containerd.Paused:
+	case client.Paused:
 		return facts.ContainerRunning
-	case containerd.Pausing:
+	case client.Pausing:
 		return facts.ContainerRunning
-	case containerd.Running:
+	case client.Running:
 		return facts.ContainerRunning
-	case containerd.Stopped:
+	case client.Stopped:
 		return facts.ContainerStopped
-	case containerd.Unknown:
+	case client.Unknown:
 		return facts.ContainerUnknown
 	default:
 		return facts.ContainerUnknown
@@ -1205,7 +1206,7 @@ var cgroupRE = regexp.MustCompile(
 
 type namespaceContainer struct {
 	namespace string
-	container containerd.Container
+	container client.Container
 }
 
 type containerdProcessQuerier struct {

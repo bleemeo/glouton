@@ -11,10 +11,11 @@ require (
 	github.com/bleemeo/bleemeo-go v0.3.0
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/containerd/cgroups/v3 v3.0.5
-	github.com/containerd/containerd v1.7.25
+	github.com/containerd/containerd v1.7.26
 	github.com/containerd/containerd/api v1.8.0
+	github.com/containerd/containerd/v2 v2.0.3
 	github.com/containerd/errdefs v1.0.0
-	github.com/containerd/platforms v0.2.1
+	github.com/containerd/platforms v1.0.0-rc.1
 	github.com/containerd/typeurl/v2 v2.2.3
 	github.com/docker/docker v27.5.1+incompatible
 	github.com/eclipse/paho.mqtt.golang v1.5.0
