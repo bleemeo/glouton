@@ -19,49 +19,92 @@
 package windows
 
 import (
+	"reflect"
+	"regexp"
 	"testing"
 
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/inputs"
-
-	"github.com/alecthomas/kingpin/v2"
 )
 
-// Test_optionsToFlags ensure the option still existing in node_exporter.
-func Test_optionsToFlags(t *testing.T) {
-	diskFilter, err := config.NewDiskIOMatcher(config.DefaultConfig())
+func compareRE(t *testing.T, gotRE *regexp.Regexp, wantRE *regexp.Regexp, values []string) {
+	t.Helper()
+
+	for _, value := range values {
+		got := gotRE.MatchString(value)
+		want := wantRE.MatchString(value)
+
+		if got != want {
+			t.Errorf("gotRE.Match(%s) = %v, want %v", value, got, want)
+		}
+	}
+}
+
+// Test_newCollector ensure that settings kingpin options works.
+func Test_newCollector(t *testing.T) {
+	diskFilter, err := config.NewDiskIOMatcher(config.Config{
+		DiskIgnore: []string{"D:"},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	tests := []struct {
-		name   string
-		option inputs.CollectorConfig
-	}{
-		{
-			name:   "empty-option",
-			option: inputs.CollectorConfig{},
-		},
-		{
-			name: "full-option",
-			option: inputs.CollectorConfig{
-				DFRootPath:      "something",
-				DFPathMatcher:   config.NewDFPathMatcher(config.DefaultConfig()),
-				DFIgnoreFSTypes: []string{"something"},
-				NetIfMatcher:    config.NewNetworkInterfaceMatcher(config.DefaultConfig()),
-				IODiskMatcher:   diskFilter,
-			},
-		},
+	// We can't directly compare RE (i.e. volumeExcludePatternRE.String() value), because
+	// windows_exporter will slightly change it (e.g. wrap the RE inside `(?:%s)`).
+	// It result in RE that match the same thing, but can't compare it string representation,
+	// so this is a list of value that must either match both REs or not match both REs.
+	valuesToTest := []string{
+		"C:",
+		"D:",
+		"eth0",
+		"lo",
+		"eth1",
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := optionsToFlags(tt.option)
 
-			for k := range got {
-				if flag := kingpin.CommandLine.GetFlag(k); flag == nil {
-					t.Errorf("flag --%s does not exists", k)
-				}
-			}
-		})
+	// We can't have multiple test case. Parsing argument only works once (at very least
+	// second call to Parse() won't do the same, because some code are already initialized).
+	fullOptions := inputs.CollectorConfig{
+		DFRootPath:      "/hostroot",
+		DFPathMatcher:   config.NewDFPathMatcher(config.DefaultConfig()),
+		DFIgnoreFSTypes: []string{"something"},
+		NetIfMatcher:    config.NewNetworkInterfaceMatcher(config.Config{NetworkInterfaceDenylist: []string{"eth0"}}),
+		IODiskMatcher:   diskFilter,
+	}
+
+	c, err := newCollector([]string{"logical_disk", "net"}, fullOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ldCollectors := c.collectors["logical_disk"]
+	if ldCollectors == nil {
+		t.Error("logical_disk collectors isn't present")
+	} else {
+		value := reflect.ValueOf(ldCollectors)
+		value = value.Elem()
+
+		volumeExcludePattern := value.FieldByName("volumeExcludePattern")
+		if volumeExcludePattern.Type() != reflect.TypeOf(&regexp.Regexp{}) {
+			t.Errorf("volumeExcludePattern is a %s, want a *regexp.Regexp", volumeExcludePattern.Type())
+		}
+
+		volumeExcludePatternRE := (*regexp.Regexp)(volumeExcludePattern.UnsafePointer())
+		compareRE(t, volumeExcludePatternRE, regexp.MustCompile(diskFilter.AsDenyRegexp()), valuesToTest)
+	}
+
+	netCollectors := c.collectors["net"]
+	if netCollectors == nil {
+		t.Error("net collectors isn't present")
+	} else {
+		value := reflect.ValueOf(netCollectors)
+		value = value.Elem()
+
+		nicExcludePattern := value.FieldByName("nicExcludePattern")
+		if nicExcludePattern.Type() != reflect.TypeOf(&regexp.Regexp{}) {
+			t.Errorf("nicExcludePattern is a %s, want a *regexp.Regexp", nicExcludePattern.Type())
+		}
+
+		nicExcludePatternRE := (*regexp.Regexp)(nicExcludePattern.UnsafePointer())
+		compareRE(t, nicExcludePatternRE, regexp.MustCompile(fullOptions.NetIfMatcher.AsDenyRegexp()), valuesToTest)
 	}
 }
