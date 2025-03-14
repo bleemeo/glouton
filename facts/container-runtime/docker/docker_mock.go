@@ -28,6 +28,7 @@ import (
 	"github.com/bleemeo/glouton/facts"
 
 	dockerTypes "github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/common"
 	containerTypes "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/network"
@@ -36,10 +37,10 @@ import (
 // MockDockerClient is a fake Docker client that could be used during test.
 type MockDockerClient struct {
 	EventChanMaker func() <-chan events.Message
-	Containers     []dockerTypes.ContainerJSON
+	Containers     []containerTypes.InspectResponse
 	Version        dockerTypes.Version
-	Top            map[string]containerTypes.ContainerTopOKBody
-	TopWaux        map[string]containerTypes.ContainerTopOKBody
+	Top            map[string]containerTypes.TopResponse
+	TopWaux        map[string]containerTypes.TopResponse
 	ReturnError    error
 
 	TopCallCount int
@@ -57,14 +58,14 @@ func (cl *MockDockerClient) ContainerExecAttach(context.Context, string, contain
 }
 
 // ContainerExecCreate is not implemented.
-func (cl *MockDockerClient) ContainerExecCreate(context.Context, string, containerTypes.ExecOptions) (dockerTypes.IDResponse, error) {
-	return dockerTypes.IDResponse{}, errNotImplemented
+func (cl *MockDockerClient) ContainerExecCreate(context.Context, string, containerTypes.ExecOptions) (common.IDResponse, error) {
+	return common.IDResponse{}, errNotImplemented
 }
 
 // ContainerInspect return inspect for in-memory list of containers.
-func (cl *MockDockerClient) ContainerInspect(_ context.Context, container string) (dockerTypes.ContainerJSON, error) {
+func (cl *MockDockerClient) ContainerInspect(_ context.Context, container string) (containerTypes.InspectResponse, error) {
 	if cl.ReturnError != nil {
-		return dockerTypes.ContainerJSON{}, cl.ReturnError
+		return containerTypes.InspectResponse{}, cl.ReturnError
 	}
 
 	for _, c := range cl.Containers {
@@ -73,11 +74,11 @@ func (cl *MockDockerClient) ContainerInspect(_ context.Context, container string
 		}
 	}
 
-	return dockerTypes.ContainerJSON{}, errNotFound
+	return containerTypes.InspectResponse{}, errNotFound
 }
 
 // ContainerList list containers from in-memory list.
-func (cl *MockDockerClient) ContainerList(_ context.Context, options containerTypes.ListOptions) ([]dockerTypes.Container, error) {
+func (cl *MockDockerClient) ContainerList(_ context.Context, options containerTypes.ListOptions) ([]containerTypes.Summary, error) {
 	if cl.ReturnError != nil {
 		return nil, cl.ReturnError
 	}
@@ -90,9 +91,9 @@ func (cl *MockDockerClient) ContainerList(_ context.Context, options containerTy
 		return nil, fmt.Errorf("ContainerList %w", errNotImplemented)
 	}
 
-	result := make([]dockerTypes.Container, len(cl.Containers))
+	result := make([]containerTypes.Summary, len(cl.Containers))
 	for i, c := range cl.Containers {
-		result[i] = dockerTypes.Container{
+		result[i] = containerTypes.Summary{
 			ID: c.ID,
 		}
 	}
@@ -101,11 +102,11 @@ func (cl *MockDockerClient) ContainerList(_ context.Context, options containerTy
 }
 
 // ContainerTop return hard-coded value for top.
-func (cl *MockDockerClient) ContainerTop(_ context.Context, container string, arguments []string) (containerTypes.ContainerTopOKBody, error) {
+func (cl *MockDockerClient) ContainerTop(_ context.Context, container string, arguments []string) (containerTypes.TopResponse, error) {
 	cl.TopCallCount++
 
 	if cl.ReturnError != nil {
-		return containerTypes.ContainerTopOKBody{}, cl.ReturnError
+		return containerTypes.TopResponse{}, cl.ReturnError
 	}
 
 	if len(arguments) == 0 {
@@ -116,7 +117,7 @@ func (cl *MockDockerClient) ContainerTop(_ context.Context, container string, ar
 		return cl.TopWaux[container], nil
 	}
 
-	return containerTypes.ContainerTopOKBody{}, errContainerTopMissingArg
+	return containerTypes.TopResponse{}, errContainerTopMissingArg
 }
 
 // Events do events.

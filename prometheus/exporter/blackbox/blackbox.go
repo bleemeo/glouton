@@ -22,6 +22,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http/httptrace"
 	"net/url"
@@ -33,7 +34,6 @@ import (
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/registry"
 
-	"github.com/go-kit/log"
 	"github.com/prometheus/blackbox_exporter/prober"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
@@ -171,7 +171,7 @@ func (target configTarget) CollectWithContext(ctx context.Context, ch chan<- pro
 
 	registry := prometheus.NewRegistry()
 
-	extLogger := log.With(logger.GoKitLoggerWrapper(logger.V(2)), "url", target.URL)
+	extLogger := logger.NewSlog().With("url", target.URL)
 
 	ctx, cancel := context.WithTimeout(ctx, target.Module.Timeout)
 	// Let's ensure we don't end up with stray queries running somewhere
@@ -227,7 +227,8 @@ func (target configTarget) CollectWithContext(ctx context.Context, ch chan<- pro
 
 	end := time.Now()
 	duration := end.Sub(start)
-	_ = extLogger.Log("msg", fmt.Sprintf("check started at %s, ended at %s (duration %s); success=%v", start, end, duration, success))
+
+	extLogger.Log(ctx, slog.LevelInfo, fmt.Sprintf("check started at %s, ended at %s (duration %s)", start, end, duration), "success", success)
 
 	mfs, err := registry.Gather()
 	if err != nil {
@@ -314,10 +315,10 @@ func (target configTarget) CollectWithContext(ctx context.Context, ch chan<- pro
 }
 
 // verifyTLS returns the last round-trip TLS expiration and whether all TLS round-trip were trusted.
-func (target configTarget) verifyTLS(extLogger log.Logger, roundTrips []roundTrip) roundTripTLSVerifyList {
+func (target configTarget) verifyTLS(extLogger *slog.Logger, roundTrips []roundTrip) roundTripTLSVerifyList {
 	start := time.Now()
 	defer func() {
-		_ = extLogger.Log("verifyTLS took", time.Since(start))
+		extLogger.Info("verifyTLS took " + time.Since(start).String())
 	}()
 
 	if len(roundTrips) == 0 {
@@ -326,7 +327,7 @@ func (target configTarget) verifyTLS(extLogger log.Logger, roundTrips []roundTri
 
 	firstHost, _, err := net.SplitHostPort(roundTrips[0].HostPort)
 	if err != nil {
-		_ = extLogger.Log("net.SplitHostPort fail", err)
+		extLogger.Info("net.SplitHostPort failed: " + err.Error())
 
 		return nil
 	}
@@ -360,7 +361,7 @@ func (target configTarget) verifyTLS(extLogger log.Logger, roundTrips []roundTri
 
 		currentHost, _, err := net.SplitHostPort(rt.HostPort)
 		if err != nil {
-			_ = extLogger.Log("net.SplitHostPort fail", err)
+			extLogger.Info("net.SplitHostPort failed: " + err.Error())
 
 			result = append(result, roundTripTLSVerify{
 				hadTLS: false,
@@ -377,7 +378,7 @@ func (target configTarget) verifyTLS(extLogger log.Logger, roundTrips []roundTri
 			// the hostname of the target.
 			tmp, err := url.Parse(target.URL)
 			if err != nil {
-				_ = extLogger.Log("url.Parse fail", err)
+				extLogger.Info("url.Parse failed: " + err.Error())
 
 				result = append(result, roundTripTLSVerify{
 					hadTLS: false,
@@ -389,11 +390,11 @@ func (target configTarget) verifyTLS(extLogger log.Logger, roundTrips []roundTri
 			httpClientConfig.TLSConfig.ServerName = tmp.Hostname()
 		}
 
-		_ = extLogger.Log("Using ServerName", httpClientConfig.TLSConfig.ServerName, "firstHost", firstHost, "currentHostPort", currentHost)
+		extLogger.Info(fmt.Sprintf("Using ServerName %q, firstHost %q, currentHostPort %q", httpClientConfig.TLSConfig.ServerName, firstHost, currentHost))
 
 		cfg, err := config.NewTLSConfig(&httpClientConfig.TLSConfig)
 		if err != nil {
-			_ = extLogger.Log("config.NewTLSConfig fail", err)
+			extLogger.Info("config.NewTLSConfig failed: " + err.Error())
 
 			result = append(result, roundTripTLSVerify{
 				hadTLS: false,
@@ -423,7 +424,7 @@ func (target configTarget) verifyTLS(extLogger log.Logger, roundTrips []roundTri
 
 		verifiedChains, err := rt.TLSState.PeerCertificates[0].Verify(opts)
 		expiry := getLastChainExpiry(verifiedChains)
-		_ = extLogger.Log("numberVerifiedChains", len(verifiedChains), "expiry", expiry, "err", err)
+		extLogger.Info(fmt.Sprintf("numberVerifiedChains %d, expiry: %s, err: %v", len(verifiedChains), expiry, err))
 
 		result = append(result, roundTripTLSVerify{
 			hadTLS:     true,

@@ -17,7 +17,6 @@
 package model
 
 import (
-	"context"
 	"strconv"
 	"testing"
 	"time"
@@ -612,7 +611,7 @@ func TestBufferAppender_Race(t *testing.T) {
 	target := NewBufferAppender()
 
 	ptsChannel := make(chan []types.MetricPoint)
-	grp, ctx := errgroup.WithContext(context.Background())
+	grp, ctx := errgroup.WithContext(t.Context())
 
 	for range 5 {
 		grp.Go(func() error {

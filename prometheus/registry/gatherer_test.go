@@ -18,7 +18,6 @@
 package registry
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -281,7 +280,7 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			g := newWrappedGatherer(tt.fields.source, tt.fields.labels, RegistrationOption{HonorTimestamp: true})
 
-			mfs, err := g.GatherWithState(context.Background(), GatherState{T0: time.Now(), NoFilter: true})
+			mfs, err := g.GatherWithState(t.Context(), GatherState{T0: time.Now(), NoFilter: true})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("labeledGatherer.GatherPoints() error = %v, wantErr %v", err, tt.wantErr)
 

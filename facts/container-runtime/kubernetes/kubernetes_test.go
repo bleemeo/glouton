@@ -803,12 +803,12 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 				IsContainerIgnored: facts.ContainerFilter{}.ContainerIgnored,
 			}
 
-			containers, err := k.Containers(context.Background(), 0, true)
+			containers, err := k.Containers(t.Context(), 0, true)
 			if err != nil {
 				t.Error(err)
 			}
 
-			containersWithoutExclude, err := k.Containers(context.Background(), 0, false)
+			containersWithoutExclude, err := k.Containers(t.Context(), 0, false)
 			if err != nil {
 				t.Error(err)
 			}
@@ -870,11 +870,11 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 				}
 			}
 
-			facts := k.RuntimeFact(context.Background(), nil)
+			facts := k.RuntimeFact(t.Context(), nil)
 
 			// Add facts coming from container runtime. We only test that those facts
 			// are passed as-is.
-			want := k.Runtime.RuntimeFact(context.Background(), nil)
+			want := k.Runtime.RuntimeFact(t.Context(), nil)
 			for k, v := range tt.wantFacts {
 				want[k] = v
 			}
@@ -931,7 +931,7 @@ func TestClusterMetrics(t *testing.T) {
 
 	now := time.Date(2022, time.April, 1, 0, 0, 0, 0, time.UTC)
 
-	gotPoints, err := getGlobalMetrics(context.Background(), mockClient, now, clusterName)
+	gotPoints, err := getGlobalMetrics(t.Context(), mockClient, now, clusterName)
 	if err != nil {
 		t.Fatal(err)
 

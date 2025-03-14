@@ -311,7 +311,7 @@ func TestGenerateDiagnostic(t *testing.T) {
 				return tc.diagnosticError
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), tc.ctxTimeout)
+			ctx, cancel := context.WithTimeout(t.Context(), tc.ctxTimeout)
 			defer cancel()
 
 			err := generateDiagnostic(ctx, nil, diagnosticFn)
@@ -491,7 +491,7 @@ func TestBundleCrashReportFiles(t *testing.T) { //nolint:maintidx
 				return nil
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 			defer cancel()
 
 			reportPath := bundleCrashReportFiles(ctx, 2, stateDir, tc.reportingEnabled, diagnosticFn)

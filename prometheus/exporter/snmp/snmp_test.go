@@ -17,7 +17,6 @@
 package snmp
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -224,7 +223,7 @@ func Test_factFromPoints(t *testing.T) {
 			result := model.FamiliesToMetricPoints(time.Now(), tmp, true)
 			got := factFromPoints(result, now, tt.scraperFacts)
 
-			got2, err := tgt.Facts(context.Background(), 0)
+			got2, err := tgt.Facts(t.Context(), 0)
 			if err != nil {
 				t.Error(err)
 			}
@@ -624,7 +623,7 @@ func TestNewMock(t *testing.T) {
 
 			tgt := NewMock(tt.opt, tt.mockFacts)
 
-			got, err := tgt.Facts(context.Background(), 0)
+			got, err := tgt.Facts(t.Context(), 0)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -686,7 +685,7 @@ func TestTarget_Module(t *testing.T) {
 				snmpDiscoveryModule: body,
 			}
 
-			got, err := tr.module(context.Background())
+			got, err := tr.module(t.Context())
 			if err != nil {
 				t.Error(err)
 			}

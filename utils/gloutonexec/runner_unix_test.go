@@ -114,7 +114,7 @@ func TestGraceDelay(t *testing.T) {
 		t.Run(tt.Name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithTimeout(context.Background(), tt.ContextDelay)
+			ctx, cancel := context.WithTimeout(t.Context(), tt.ContextDelay)
 			defer cancel()
 
 			out, err := runner.Run(

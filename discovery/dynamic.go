@@ -35,7 +35,7 @@ import (
 	"github.com/bleemeo/glouton/version"
 
 	"dario.cat/mergo"
-	"github.com/mitchellh/mapstructure"
+	"github.com/go-viper/mapstructure/v2"
 	"gopkg.in/ini.v1"
 )
 
@@ -550,6 +550,7 @@ func (dd *DynamicDiscovery) fillConfigFromLabels(service *Service) {
 	decoderConfig := &mapstructure.DecoderConfig{
 		DecodeHook: mapstructure.ComposeDecodeHookFunc(
 			mapstructure.StringToSliceHookFunc(","),
+			config.StringToIntSliceHookFunc(","),
 		),
 		Result:           &override,
 		WeaklyTypedInput: true,

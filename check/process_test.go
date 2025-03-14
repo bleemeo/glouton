@@ -17,7 +17,6 @@
 package check
 
 import (
-	"context"
 	"testing"
 
 	"github.com/bleemeo/glouton/facts"
@@ -120,7 +119,7 @@ func Test_processMainCheck(t *testing.T) {
 				t.Errorf("Failed to create process: %v", err)
 			}
 
-			status := pc.processMainCheck(context.Background())
+			status := pc.processMainCheck(t.Context())
 			if status.CurrentStatus != test.expectedStatus.CurrentStatus {
 				t.Errorf("Expected status %v, got %v", test.expectedStatus.CurrentStatus, status.CurrentStatus)
 			} else if status.StatusDescription != test.expectedStatus.StatusDescription {

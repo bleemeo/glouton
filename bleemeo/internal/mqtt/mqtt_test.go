@@ -424,7 +424,7 @@ func BenchmarkFailedPointsDropping(b *testing.B) {
 
 	b.ResetTimer()
 
-	for range b.N {
+	for b.Loop() {
 		// Add 100 more points for each metric
 		for i := 1; i <= 10; i++ {
 			labels := map[string]string{labelID: strconv.Itoa(i)}

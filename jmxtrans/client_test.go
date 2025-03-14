@@ -736,10 +736,10 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 			c.init()
 
 			for _, line := range tt.lines {
-				c.processLine(context.Background(), line)
+				c.processLine(t.Context(), line)
 			}
 
-			c.flush(context.Background())
+			c.flush(t.Context())
 
 			if diff := types.DiffMetricPoints(tt.want, store.Points, true); diff != "" {
 				t.Errorf("points mismatch (-want +got):\n%s", diff)

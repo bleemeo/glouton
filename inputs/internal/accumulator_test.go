@@ -690,7 +690,7 @@ func BenchmarkProcessMetrics(b *testing.B) {
 
 			b.ResetTimer()
 
-			for range b.N {
+			for b.Loop() {
 				t0 = t0.Add(time.Second)
 
 				acc.PrepareGather()
@@ -748,7 +748,7 @@ func BenchmarkDeriveFunc(b *testing.B) {
 
 			b.ResetTimer()
 
-			for range b.N {
+			for b.Loop() {
 				t0 = t0.Add(time.Second)
 
 				acc.PrepareGather()

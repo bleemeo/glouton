@@ -500,7 +500,7 @@ func Test_runCmd(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx := context.Background()
+			ctx := t.Context()
 
 			if tt.ctxTimeout > 0 {
 				var cancel context.CancelFunc

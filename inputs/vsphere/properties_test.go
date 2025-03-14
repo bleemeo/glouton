@@ -17,7 +17,6 @@
 package vsphere
 
 import (
-	"context"
 	"net/url"
 	"testing"
 
@@ -43,7 +42,7 @@ func TestPropsCaches(t *testing.T) { //nolint:maintidx
 		}
 	}()
 
-	vSphere.devices(context.Background(), devChan)
+	vSphere.devices(t.Context(), devChan)
 	close(devChan)
 
 	expectedClusters := map[string]clusterLightProps{

@@ -517,7 +517,7 @@ func Benchmark_parserReader(b *testing.B) {
 
 				b.ResetTimer()
 
-				for range b.N {
+				for b.Loop() {
 					if useRef {
 						_, err = parserReaderReference(data, nil)
 					} else {

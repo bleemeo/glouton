@@ -210,7 +210,7 @@ func Test_syncRemoteAndLocal(t *testing.T) {
 				ListResponse: tt.remoteApplication,
 			}
 
-			if err := syncRemoteAndLocal(context.Background(), tt.localServices, apiClient, cache); err != nil {
+			if err := syncRemoteAndLocal(t.Context(), tt.localServices, apiClient, cache); err != nil {
 				t.Errorf("syncRemoteAndLocal() error = %v", err)
 			}
 

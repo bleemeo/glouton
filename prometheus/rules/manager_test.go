@@ -191,9 +191,9 @@ func TestManager(t *testing.T) {
 
 			app := &mockAppendable{forceTS: t1}
 
-			mgr := NewManager(context.Background(), tt.queryable, nil)
+			mgr := NewManager(t.Context(), tt.queryable, nil)
 
-			err := mgr.CollectWithState(context.Background(), registry.GatherState{T0: time.Now()}, app.Appender(context.Background()))
+			err := mgr.CollectWithState(t.Context(), registry.GatherState{T0: time.Now()}, app.Appender(t.Context()))
 			if err != nil {
 				t.Error(err)
 			}

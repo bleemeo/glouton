@@ -220,7 +220,7 @@ func (helper *syncTestHelper) pushPoints(t *testing.T, metrics []labels.Labels) 
 		t.Fatal("pushPoints called before store is initialized")
 	}
 
-	helper.store.PushPoints(context.Background(), points)
+	helper.store.PushPoints(t.Context(), points)
 }
 
 func (helper *syncTestHelper) Close() {
@@ -274,7 +274,7 @@ func (helper *syncTestHelper) runOnceWithResult(t *testing.T) runOnceResult {
 func (helper *syncTestHelper) runOnceNoReset(t *testing.T) runOnceResult {
 	t.Helper()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	result := runOnceResult{}
 

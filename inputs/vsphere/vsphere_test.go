@@ -17,7 +17,6 @@
 package vsphere
 
 import (
-	"context"
 	"crypto/tls"
 	"testing"
 
@@ -197,12 +196,12 @@ func setupVSphereTest(t *testing.T, hostsCount int) (vsphereRealtimeGatherer, vs
 		},
 	}
 
-	realtimeGatherer, _, err := vSphere.makeRealtimeGatherer(context.Background())
+	realtimeGatherer, _, err := vSphere.makeRealtimeGatherer(t.Context())
 	if err != nil {
 		t.Fatal("Failed to create vSphere realtime gatherer:", err)
 	}
 
-	historical30minGatherer, _, err := vSphere.makeHistorical30minGatherer(context.Background())
+	historical30minGatherer, _, err := vSphere.makeHistorical30minGatherer(t.Context())
 	if err != nil {
 		t.Fatal("Failed to create vSphere historical 30min gatherer:", err)
 	}

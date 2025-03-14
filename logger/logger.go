@@ -28,6 +28,8 @@ import (
 	"time"
 )
 
+const timeLayout = "2006-01-02 15:04:05.000"
+
 // Logger allow to print message.
 type Logger bool
 
@@ -83,7 +85,7 @@ func loggerPrintf(fmtArg string, a ...interface{}) {
 
 	if !cfg.useSyslog {
 		// Add timestamp to the default writer if not using syslog
-		_, _ = fmt.Fprintf(cfg.writer, "%s ", time.Now().Format("2006-01-02 15:04:05.000"))
+		_, _ = fmt.Fprintf(cfg.writer, "%s ", time.Now().Format(timeLayout))
 	}
 
 	_, _ = fmt.Fprintf(cfg.teeWriter, fmtArg+"\n", a...)
@@ -95,7 +97,7 @@ func loggerPrintln(v ...interface{}) {
 
 	if !cfg.useSyslog {
 		// Add timestamp to the default writer if not using syslog
-		_, _ = fmt.Fprintf(cfg.writer, "%s ", time.Now().Format("2006-01-02 15:04:05.000"))
+		_, _ = fmt.Fprintf(cfg.writer, "%s ", time.Now().Format(timeLayout))
 	}
 
 	_, _ = fmt.Fprintln(cfg.teeWriter, v...)
