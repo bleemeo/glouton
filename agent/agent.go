@@ -1133,12 +1133,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			)
 			if err != nil {
 				logger.Printf("unable to setup log processing: %v", err)
-			} else {
-				/*go func() {
-					defer crashreport.ProcessPanic()
-
-					a.watchForContainersLogs(ctx, a.logProcessManager.ContainerReceiver())
-				}()*/
 			}
 		}
 
@@ -2151,96 +2145,6 @@ func (a *agent) processesLister() *facts.ProcessProvider {
 		psLister,
 		a.containerRuntime,
 	)
-}
-
-func (a *agent) watchForContainersLogs(ctx context.Context, containerReceiver logprocessing.ContainerReceiver) {
-	const (
-		firstRunDelay              = 10 * time.Second
-		refreshInterval            = 1 * time.Minute
-		containersMaxAge           = 1 * time.Hour
-		containerMinAgeBeforeWatch = 30 * time.Second
-	)
-
-	alreadyWatching := make(map[string]time.Time) // map[ID] -> last time seen
-	// Once every 5 iterations, we'll remove containers that haven't been seen for a while from the map.
-	var purgeCounter int
-
-	ticker := time.NewTicker(firstRunDelay) // After the first tick, the interval will be set to `refreshInterval`;
-	// we just don't want to wait for too long before the first run.
-	defer ticker.Stop()
-
-	firstRun := true
-
-	for ctx.Err() == nil {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			if firstRun {
-				firstRun = false
-
-				ticker.Reset(refreshInterval)
-			}
-
-			containers, err := a.containerRuntime.Containers(ctx, containersMaxAge, false)
-			if err != nil {
-				logger.V(1).Printf("Failed to list containers: %v", err)
-
-				continue
-			}
-
-			var logContainers []facts.Container
-
-			for _, ctr := range containers {
-				switch ctr.ImageName() { // TODO: remove
-				case "squirreldb", "busybox", "nginx":
-				// process
-				default:
-					continue
-				}
-
-				startedAt := ctr.StartedAt()
-				if startedAt.IsZero() || time.Since(startedAt) < containerMinAgeBeforeWatch {
-					continue
-				}
-
-				_, found := alreadyWatching[ctr.ID()]
-				alreadyWatching[ctr.ID()] = time.Now()
-
-				if found {
-					continue
-				}
-
-				logger.Printf("Container %s runs on %s", ctr.ContainerName(), ctr.RuntimeName()) // TODO: remove
-
-				logContainers = append(logContainers, ctr)
-			}
-
-			if len(logContainers) > 0 {
-				containerReceiver.HandleContainersLogs(ctx, a.containerRuntime, logContainers)
-			}
-
-			if purgeCounter%5 == 0 {
-				var noLongerExisting []string
-
-				for id, lastTimeSeen := range alreadyWatching {
-					if time.Since(lastTimeSeen) > 2*refreshInterval {
-						delete(alreadyWatching, id)
-
-						noLongerExisting = append(noLongerExisting, id)
-					}
-				}
-
-				purgeCounter = 0
-
-				if len(noLongerExisting) != 0 {
-					containerReceiver.StopWatchingForContainers(ctx, noLongerExisting)
-				}
-			} else {
-				purgeCounter++
-			}
-		}
-	}
 }
 
 // DiagnosticPage return useful information to troubleshoot issue.

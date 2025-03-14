@@ -265,7 +265,7 @@ func DefaultConfig() Config { //nolint:maintidx
 					Address: "localhost",
 					Port:    4318,
 				},
-				KnownLogFormats: defaultKnownLogFormats,
+				KnownLogFormats: DefaultKnownLogFormats,
 				Receivers:       map[string]OTLPReceiver{},
 				ContainerFormat: map[string]string{},
 			},
@@ -384,7 +384,7 @@ func DefaultConfig() Config { //nolint:maintidx
 	}
 }
 
-var defaultKnownLogFormats = map[string][]OTELOperator{ //nolint:gochecknoglobals    // TODO: move to a separate file
+var DefaultKnownLogFormats = map[string][]OTELOperator{ //nolint:gochecknoglobals    // TODO: move to a separate file
 	"nginx_access": {
 		{
 			"id":    "nginx_access",

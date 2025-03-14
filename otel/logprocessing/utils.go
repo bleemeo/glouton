@@ -260,8 +260,8 @@ func wrapWithCounters(next consumer.Logs, counter *atomic.Int64, throughputMeter
 	return logCounter
 }
 
-// sliceDiff returns the elements from s1 that are absent from m2.
-func sliceDiff[E comparable](s1 []E, m2 map[E]struct{}) []E {
+// diffBetween returns the elements from s1 that are absent from m2.
+func diffBetween[E comparable](s1 []E, m2 map[E]struct{}) []E {
 	var diff []E
 
 loop1:
@@ -311,7 +311,7 @@ type diagnosticInformation struct {
 	OTLPReceiver           *otlpReceiverDiagnosticInformation
 	Receivers              map[string]receiverDiagnosticInformation
 	ContainerReceivers     map[string]containerDiagnosticInformation
-	WatchedServices        []string
+	WatchedServices        map[string][]receiverDiagnosticInformation
 	KnownLogFormats        map[string][]config.OTELOperator
 }
 

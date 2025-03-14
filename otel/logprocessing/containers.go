@@ -97,11 +97,6 @@ func (ctrAttrs ContainerAttributes) asMap() map[string]helper.ExprStringConfig {
 	return attrs
 }
 
-type ContainerReceiver interface {
-	HandleContainersLogs(ctx context.Context, crRuntime crTypes.RuntimeInterface, containers []facts.Container)
-	StopWatchingForContainers(ctx context.Context, ids []string)
-}
-
 type containerReceiver struct {
 	globalOperators    map[string][]config.OTELOperator
 	pipeline           *pipelineContext
@@ -136,34 +131,10 @@ func newContainerReceiver(pipeline *pipelineContext, containerOperators map[stri
 	}
 }
 
-func (cr *containerReceiver) HandleContainersLogs(ctx context.Context, crRuntime crTypes.RuntimeInterface, containers []facts.Container) {
+func (cr *containerReceiver) handleContainerLogs(ctx context.Context, crRuntime crTypes.RuntimeInterface, ctr facts.Container, operators []operator.Config) error {
 	cr.l.Lock()
 	defer cr.l.Unlock()
 
-	for _, ctr := range containers {
-		if _, alreadyWatching := cr.containers[ctr.ID()]; alreadyWatching {
-			continue
-		}
-
-		operators, err := buildOperators(cr.globalOperators[cr.containerOperators[ctr.ContainerName()]])
-		if err != nil {
-			logger.V(1).Printf("Can't build globally-defined operators for container %s (%s): %v", ctr.ContainerName(), ctr.ID(), err)
-
-			continue
-		}
-
-		err = cr.handleContainerLogs(ctx, crRuntime, ctr, operators)
-		if err != nil {
-			logger.V(1).Printf("Can't handle logs for container %s (%s): %v", ctr.ContainerName(), ctr.ID(), err)
-
-			continue
-		}
-
-		logger.V(1).Printf("Successfully set up log receiver for container %s (%s)", ctr.ContainerName(), ctr.ID()) // TODO: V(2)
-	}
-}
-
-func (cr *containerReceiver) handleContainerLogs(ctx context.Context, crRuntime crTypes.RuntimeInterface, ctr facts.Container, operators []operator.Config) error {
 	logFilePath := ctr.LogPath()
 	if logFilePath == "" {
 		return errContainerLogFileUnavailable
@@ -279,7 +250,7 @@ func (cr *containerReceiver) sizesByFile() (map[string]int64, error) {
 	return sizes, nil
 }
 
-func (cr *containerReceiver) StopWatchingForContainers(ctx context.Context, ids []string) {
+func (cr *containerReceiver) stopWatchingForContainers(ctx context.Context, ids []string) {
 	cr.l.Lock()
 	defer cr.l.Unlock()
 

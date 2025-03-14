@@ -26,7 +26,6 @@ type logProcessingInfo struct {
 	DockerFormat string
 }
 
-// TODO: create test to check if all formats referenced here actually exist in the default config
 var servicesLogInfo = map[ServiceName]logProcessingInfo{ //nolint: gochecknoglobals
 	NginxService: {
 		FileFormats: []ServiceLogReceiver{

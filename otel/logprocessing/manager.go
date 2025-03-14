@@ -32,11 +32,13 @@ import (
 	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
+
+	"github.com/google/uuid"
 )
 
 type LogSource struct {
 	container   facts.Container
-	serviceName string
+	serviceID   *discovery.NameInstance
 	logFilePath string
 
 	operators []config.OTELOperator
@@ -56,6 +58,8 @@ type Manager struct {
 	l                 sync.Mutex
 	watchedServices   map[discovery.NameInstance]struct{}
 	watchedContainers map[string]struct{} // map key: container ID
+	// serviceReceivers only contains services that don't run in a container
+	serviceReceivers map[discovery.NameInstance][]*logReceiver
 }
 
 func New(
@@ -102,6 +106,7 @@ func New(
 		containerRecv:              containerRecv,
 		watchedServices:            make(map[discovery.NameInstance]struct{}),
 		watchedContainers:          make(map[string]struct{}),
+		serviceReceivers:           make(map[discovery.NameInstance][]*logReceiver),
 	}
 
 	go processingManager.handleProcessingLifecycle(ctx)
@@ -110,7 +115,7 @@ func New(
 }
 
 // handleProcessingLifecycle periodically saves file sizes to the state cache,
-// and closes shutdowns all the started components when the given context expires.
+// and shutdowns all the started components when the given context expires.
 func (man *Manager) handleProcessingLifecycle(ctx context.Context) {
 	defer crashreport.ProcessPanic()
 
@@ -120,6 +125,8 @@ func (man *Manager) handleProcessingLifecycle(ctx context.Context) {
 ctxLoop:
 	for ctx.Err() == nil {
 		select {
+		case <-ctx.Done():
+			break ctxLoop
 		case <-ticker.C:
 			man.pipeline.l.Lock()
 			fileSizers := mergeLastFileSizes(man.pipeline.receivers, man.containerRecv)
@@ -127,8 +134,6 @@ ctxLoop:
 
 			saveLastFileSizesToCache(man.state, fileSizers)
 			saveFileMetadataToCache(man.state, man.persister.getAllMetadata())
-		case <-ctx.Done():
-			break ctxLoop
 		}
 	}
 
@@ -143,10 +148,6 @@ ctxLoop:
 	saveFileMetadataToCache(man.state, man.persister.getAllMetadata())
 }
 
-func (man *Manager) ContainerReceiver() ContainerReceiver { // temporary
-	return man.containerRecv
-}
-
 func (man *Manager) HandleLogsFromDynamicSources(ctx context.Context, services []discovery.Service, containers []facts.Container) {
 	man.l.Lock()
 	defer man.l.Unlock()
@@ -158,16 +159,16 @@ func (man *Manager) HandleLogsFromDynamicSources(ctx context.Context, services [
 	for _, logSource := range logSources {
 		err := man.setupProcessingForSource(ctx, logSource)
 		if err != nil {
-			if logSource.serviceName != "" {
+			if logSource.serviceID != nil {
 				if logSource.container != nil {
 					logger.V(1).Printf(
 						"Failed to set up log processing for service %q on container %s (%s): %v",
-						logSource.serviceName, logSource.container.ContainerName(), logSource.container.ID(), err,
+						logSource.serviceID.Name, logSource.container.ContainerName(), logSource.container.ID(), err,
 					)
 				} else {
 					logger.V(1).Printf(
 						"Failed to set up log processing for service %q file %q: %v",
-						logSource.serviceName, logSource.logFilePath, err,
+						logSource.serviceID.Name, logSource.logFilePath, err,
 					)
 				}
 			} else {
@@ -207,15 +208,15 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 
 		for _, serviceLogProcessing := range service.LogProcessing {
 			logSource := LogSource{
+				serviceID:   &key,
 				logFilePath: serviceLogProcessing.FilePath, // ignored if in a container
-				serviceName: service.Name,
 				operators:   man.config.KnownLogFormats[serviceLogProcessing.Format],
 			}
 
 			if service.ContainerID != "" {
 				ctr, found := containersByID[service.ContainerID]
 				if !found {
-					logger.V(1).Printf("Can't find container with id %q (related to service %q)", service.ContainerID, service.Name)
+					logger.V(1).Printf("Can't find container with id %q (related to service %q); ignoring it", service.ContainerID, service.Name)
 
 					continue
 				}
@@ -236,13 +237,6 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 	}
 
 	for ctrID, ctr := range containersByID {
-		switch ctr.ImageName() { // TODO: remove
-		case "squirreldb", "busybox", "nginx":
-		// process
-		default:
-			continue
-		}
-
 		if _, alreadyWatching := man.watchedContainers[ctrID]; alreadyWatching {
 			continue
 		}
@@ -284,14 +278,26 @@ func (man *Manager) setupProcessingForSource(ctx context.Context, logSource LogS
 			return err
 		}
 	} else {
-		// FIXME: also include service type to avoid potential conflicts ?
-		recvName := fmt.Sprintf("service-%q_file-%q", logSource.serviceName, logSource.logFilePath)
+		recvName := fmt.Sprintf("service_%s-%q_%s", logSource.serviceID.Name, logSource.serviceID.Instance, uuid.NewString())
 		recvConfig := config.OTLPReceiver{
 			Include:   []string{logSource.logFilePath},
 			Operators: logSource.operators,
 		}
 
-		man.pipeline.addReceiver(ctx, recvName, recvConfig, nil, logWarnings)
+		recv, err := newLogReceiver(recvName, recvConfig, true, man.pipeline.getInput(), nil)
+		if err != nil {
+			return err
+		}
+
+		man.pipeline.l.Lock()
+		defer man.pipeline.l.Unlock()
+
+		err = recv.update(ctx, man.pipeline, logWarnings)
+		if err != nil {
+			return err
+		}
+
+		man.serviceReceivers[*logSource.serviceID] = append(man.serviceReceivers[*logSource.serviceID], recv)
 	}
 
 	return nil
@@ -300,12 +306,12 @@ func (man *Manager) setupProcessingForSource(ctx context.Context, logSource LogS
 func (man *Manager) removeOldSources(ctx context.Context, services []discovery.Service, containers []facts.Container) {
 	watchedServices := slices.Collect(maps.Keys(man.watchedServices))
 	watchedContainers := slices.Collect(maps.Keys(man.watchedContainers))
-	nameInstances := make(map[discovery.NameInstance]struct{}, len(services))
+	serviceKeys := make(map[discovery.NameInstance]struct{}, len(services))
 	containerIDs := make(map[string]struct{}, len(containers))
 
 	for _, service := range services {
 		if service.LogProcessing != nil && service.ContainerID == "" { // containers will be handled below
-			nameInstances[discovery.NameInstance{Name: service.Name, Instance: service.Instance}] = struct{}{}
+			serviceKeys[discovery.NameInstance{Name: service.Name, Instance: service.Instance}] = struct{}{}
 		}
 	}
 
@@ -313,23 +319,30 @@ func (man *Manager) removeOldSources(ctx context.Context, services []discovery.S
 		containerIDs[ctr.ID()] = struct{}{}
 	}
 
-	servicesNoLongerExisting := sliceDiff(watchedServices, nameInstances)
-	containersNoLongerExisting := sliceDiff(watchedContainers, containerIDs)
+	noLongerExistingServices := diffBetween(watchedServices, serviceKeys)
+	noLongerExistingContainers := diffBetween(watchedContainers, containerIDs)
 
-	logger.Printf("Services to unwatch: %s / containers to unwatch: %s", servicesNoLongerExisting, containersNoLongerExisting) // TODO: remove
+	logger.Printf("Services to unwatch: %s / containers to unwatch: %s", noLongerExistingServices, noLongerExistingContainers) // TODO: remove
 
-	if len(servicesNoLongerExisting) > 0 {
-		// TODO
+	for _, service := range noLongerExistingServices {
+		receivers, found := man.serviceReceivers[service]
+		if found {
+			for _, recv := range receivers {
+				recv.l.Lock()
+				shutdownAll(recv.startedComponents)
+				recv.l.Unlock()
+			}
 
-		for _, service := range servicesNoLongerExisting {
-			delete(man.watchedServices, service)
+			delete(man.serviceReceivers, service)
 		}
+
+		delete(man.watchedServices, service)
 	}
 
-	if len(containersNoLongerExisting) > 0 {
-		man.containerRecv.StopWatchingForContainers(ctx, containersNoLongerExisting)
+	if len(noLongerExistingContainers) > 0 {
+		man.containerRecv.stopWatchingForContainers(ctx, noLongerExistingContainers)
 
-		for _, ctrID := range containersNoLongerExisting {
+		for _, ctrID := range noLongerExistingContainers {
 			delete(man.watchedContainers, ctrID)
 		}
 	}
@@ -344,10 +357,18 @@ func (man *Manager) DiagnosticArchive(_ context.Context, writer types.ArchiveWri
 		receiversInfo[rcvr.name] = rcvr.diagnosticInfo()
 	}
 
-	wServices := make([]string, 0, len(man.watchedServices))
+	wServices := make(map[string][]receiverDiagnosticInformation, len(man.watchedServices))
 
 	for serv := range man.watchedServices {
-		wServices = append(wServices, serv.Name+"/"+serv.Instance)
+		receivers, found := man.serviceReceivers[serv]
+		if found {
+			key := serv.Name + "/" + serv.Instance
+			wServices[key] = make([]receiverDiagnosticInformation, len(receivers))
+
+			for i, recv := range receivers {
+				wServices[key][i] = recv.diagnosticInfo()
+			}
+		}
 	}
 
 	man.pipeline.l.Unlock()

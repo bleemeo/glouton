@@ -77,7 +77,7 @@ type pipelineContext struct {
 	logThroughputMeter *ringCounter
 }
 
-func makePipeline(
+func makePipeline( //nolint:maintidx
 	ctx context.Context,
 	cfg config.OpenTelemetry,
 	hostroot string,
@@ -108,6 +108,9 @@ func makePipeline(
 		receivers:          make([]*logReceiver, 0, len(cfg.Receivers)),
 		logThroughputMeter: newRingCounter(throughputMeterResolutionSecs),
 	}
+
+	pipeline.l.Lock()
+	defer pipeline.l.Unlock()
 
 	defer func() {
 		if err != nil {
@@ -240,7 +243,21 @@ func makePipeline(
 AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers block
 
 	for name, rcvrCfg := range cfg.Receivers {
-		pipeline.addReceiver(ctx, name, rcvrCfg, cfg.KnownLogFormats, addWarnings)
+		recv, err := newLogReceiver(name, rcvrCfg, false, pipeline.inputConsumer, cfg.KnownLogFormats)
+		if err != nil {
+			addWarnings(errorf("Failed to setup log receiver %q (ignoring it): %w", name, err))
+
+			continue
+		}
+
+		err = recv.update(ctx, pipeline, addWarnings)
+		if err != nil {
+			logger.V(1).Printf("Failed to start log receiver %q (ignoring it): %v", name, err)
+
+			continue
+		}
+
+		pipeline.receivers = append(pipeline.receivers, recv)
 	}
 
 	if len(pipeline.receivers) == 0 && len(cfg.Receivers) > 0 {
@@ -281,27 +298,6 @@ AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers bl
 // getInput returns a log consumer which can be used to append logs into the pipeline.
 func (p *pipelineContext) getInput() consumer.Logs {
 	return p.inputConsumer
-}
-
-func (p *pipelineContext) addReceiver(ctx context.Context, name string, recvCfg config.OTLPReceiver, knownLogFormats map[string][]config.OTELOperator, addWarnings func(...error)) {
-	recv, err := newLogReceiver(name, recvCfg, p.inputConsumer, knownLogFormats)
-	if err != nil {
-		addWarnings(errorf("Failed to setup log receiver %q (ignoring it): %w", name, err))
-
-		return
-	}
-
-	p.l.Lock()
-	defer p.l.Unlock()
-
-	err = recv.update(ctx, p, addWarnings)
-	if err != nil {
-		logger.V(1).Printf("Failed to start log receiver %q (ignoring it): %v", name, err)
-
-		return
-	}
-
-	p.receivers = append(p.receivers, recv)
 }
 
 func makeEnforceBackPressureFn(streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability) processorhelper.ProcessLogsFunc {

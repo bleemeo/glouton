@@ -80,21 +80,24 @@ var retryCfg = struct { //nolint:gochecknoglobals
 const metadataKeySeparator = "/"
 
 type logReceiver struct {
-	name        string
-	cfg         config.OTLPReceiver
-	logConsumer consumer.Logs
-	operators   []operator.Config
+	name          string
+	cfg           config.OTLPReceiver
+	isFromService bool
+	logConsumer   consumer.Logs
+	operators     []operator.Config
 
 	// l should always be acquired after the pipeline lock
 	l            sync.Mutex
 	watching     map[string]receiverKind
 	sizeFnByFile map[string]func() (int64, error)
+	// startedComponents is only used if the receiver is from a service
+	startedComponents []component.Component
 
 	logCounter      *atomic.Int64
 	throughputMeter *ringCounter
 }
 
-func newLogReceiver(name string, cfg config.OTLPReceiver, logConsumer consumer.Logs, knownLogFormats map[string][]config.OTELOperator) (*logReceiver, error) {
+func newLogReceiver(name string, cfg config.OTLPReceiver, isFromService bool, logConsumer consumer.Logs, knownLogFormats map[string][]config.OTELOperator) (*logReceiver, error) {
 	if !receiverNameRegex.MatchString(name) {
 		return nil, fmt.Errorf("%w: %q. It must be of the form 'my-receiver' or 'filelog/my-receiver', contain one slash a most, and not start with a slash", errInvalidReceiverName, name)
 	}
@@ -121,6 +124,7 @@ func newLogReceiver(name string, cfg config.OTLPReceiver, logConsumer consumer.L
 	return &logReceiver{
 		name:            name,
 		cfg:             cfg,
+		isFromService:   isFromService,
 		logConsumer:     logConsumer,
 		operators:       operators,
 		watching:        make(map[string]receiverKind, len(cfg.Include)),
@@ -250,7 +254,11 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 			return fmt.Errorf("start receiver: %w", err)
 		}
 
-		pipeline.startedComponents = append(pipeline.startedComponents, logRcvr)
+		if r.isFromService {
+			r.startedComponents = append(r.startedComponents, logRcvr)
+		} else {
+			pipeline.startedComponents = append(pipeline.startedComponents, logRcvr)
+		}
 	}
 
 	for _, logFile := range readFiles {

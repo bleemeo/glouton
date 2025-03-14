@@ -238,7 +238,7 @@ func TestFileLogReceiver(t *testing.T) {
 		buf: make([]plog.Logs, 0, 2), // we plan to write 2 log lines
 	}
 
-	recv, err := newLogReceiver("filelog/recv", cfg, makeBufferConsumer(t, &logBuf), knownLogFormats)
+	recv, err := newLogReceiver("filelog/recv", cfg, false, makeBufferConsumer(t, &logBuf), knownLogFormats)
 	if err != nil {
 		t.Fatal("Failed to initialize log receiver:", err)
 	}
@@ -387,7 +387,7 @@ func TestFileLogReceiverWithHostroot(t *testing.T) {
 		buf: make([]plog.Logs, 0, 1), // we plan to write 1 log line
 	}
 
-	recv, err := newLogReceiver("recv-from-container", cfg, makeBufferConsumer(t, &logBuf), map[string][]config.OTELOperator{})
+	recv, err := newLogReceiver("recv-from-container", cfg, false, makeBufferConsumer(t, &logBuf), map[string][]config.OTELOperator{})
 	if err != nil {
 		t.Fatal("Failed to initialize log receiver:", err)
 	}
@@ -603,7 +603,7 @@ func TestExecLogReceiver(t *testing.T) {
 				shutdownAll(pipeline.startedComponents)
 			}()
 
-			recv, err := newLogReceiver("root_files", cfg, makeBufferConsumer(t, &logBuffer{buf: []plog.Logs{}}), map[string][]config.OTELOperator{})
+			recv, err := newLogReceiver("root_files", cfg, false, makeBufferConsumer(t, &logBuffer{buf: []plog.Logs{}}), map[string][]config.OTELOperator{})
 			if err != nil {
 				t.Fatal("Failed to initialize log receiver:", err)
 			}

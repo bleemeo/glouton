@@ -24,7 +24,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -71,6 +70,8 @@ type dummyContainer struct {
 	podName      string
 	podNamespace string
 	runtimeName  string
+	labels       map[string]string
+	annotations  map[string]string
 }
 
 func (c dummyContainer) ID() string {
@@ -105,6 +106,14 @@ func (c dummyContainer) RuntimeName() string {
 	return c.runtimeName
 }
 
+func (c dummyContainer) Labels() map[string]string {
+	return c.labels
+}
+
+func (c dummyContainer) Annotations() map[string]string {
+	return c.annotations
+}
+
 func makeCtrLog(t *testing.T, body string) []byte {
 	t.Helper()
 
@@ -126,7 +135,7 @@ func makeCtrLog(t *testing.T, body string) []byte {
 	return jsonLog
 }
 
-func TestHandleContainersLogs(t *testing.T) {
+func TestHandleContainerLogs(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -150,7 +159,7 @@ func TestHandleContainersLogs(t *testing.T) {
 			{
 				"type":  "add",
 				"field": "resource.key",
-				"value": "key attribute value",
+				"value": "val from op",
 			},
 		},
 	}
@@ -230,7 +239,17 @@ func TestHandleContainersLogs(t *testing.T) {
 		},
 	}
 
-	containerRecv.HandleContainersLogs(ctx, crRuntime, ctrs)
+	for _, ctr := range ctrs {
+		ops, err := buildOperators(globalOperators[containerOperators[ctr.ContainerName()]])
+		if err != nil {
+			t.Fatalf("Failed to build operators for container %s: %v", ctr.ContainerName(), err)
+		}
+
+		err = containerRecv.handleContainerLogs(ctx, crRuntime, ctr, ops)
+		if err != nil {
+			t.Fatalf("Failed to handle logs for container %s: %v", ctr.ContainerName(), err)
+		}
+	}
 
 	time.Sleep(time.Second)
 
@@ -260,7 +279,7 @@ func TestHandleContainersLogs(t *testing.T) {
 				"log.iostream":         "stdout",
 			},
 			Resource: map[string]any{
-				"key": "key attribute value",
+				"key": "val from op",
 			},
 		},
 		{
@@ -282,69 +301,4 @@ func TestHandleContainersLogs(t *testing.T) {
 	if diff := cmp.Diff(expectedLogLines, logBuf.getAllRecords(), sortLogsOpt); diff != "" {
 		t.Fatalf("Unexpected log lines (-want, +got):\n%s", diff)
 	}
-}
-
-func TestName(t *testing.T) {
-	t.Skip()
-
-	ops, err := buildOperators([]config.OTELOperator{
-		{
-			"type":  "regex_parser",
-			"regex": `^(?<host>(\d{1,3}\.){3}\d{1,3})\s-\s(-|[\w-]+)\s\[(?<time>\d{1,2}\/\w{1,15}\/\d{4}(:\d{2}){3}\s\+\d{4})\]\s(?<request>.+)\n*$`,
-		},
-	})
-	if err != nil {
-		t.Fatal("Failed to build operators:", err)
-	}
-
-	logger, err := zap.NewDevelopment(zap.IncreaseLevel(zap.InfoLevel))
-	if err != nil {
-		t.Fatalf("Failed to create logger: %v", err)
-	}
-
-	telSet := component.TelemetrySettings{
-		Logger:         logger,
-		TracerProvider: noop.NewTracerProvider(),
-		MeterProvider:  noopM.NewMeterProvider(),
-		Resource:       pcommon.NewResource(),
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	logBuf := logBuffer{
-		buf: make([]plog.Logs, 0, 10),
-	}
-
-	pipeline := pipelineContext{
-		hostroot:      string(os.PathSeparator),
-		lastFileSizes: make(map[string]int64),
-		telemetry:     telSet,
-		inputConsumer: makeBufferConsumer(t, &logBuf),
-		commandRunner: gloutonexec.New(""),
-		persister:     mustNewPersistHost(t),
-	}
-
-	containerRecv := newContainerReceiver(&pipeline, nil, nil)
-	defer containerRecv.stop()
-
-	logCtr := Container{
-		LogFilePath: "/var/lib/docker/containers/487c1f5ada0a07eed8985a18206054d1289a0bdde7d7e5bdb50c23f0f58854ab/487c1f5ada0a07eed8985a18206054d1289a0bdde7d7e5bdb50c23f0f58854ab-json.log",
-		Attributes: ContainerAttributes{
-			Runtime:   crTypes.DockerRuntime,
-			ID:        "487c1f5ada0a07eed8985a18206054d1289a0bdde7d7e5bdb50c23f0f58854ab",
-			Name:      "sharp_poitras",
-			ImageName: "nginx",
-			ImageTags: `["latest"]`,
-		},
-		logCounter:      new(atomic.Int64),
-		throughputMeter: newRingCounter(60),
-	}
-
-	err = containerRecv.setupContainerLogReceiver(ctx, logCtr, ops)
-	if err != nil {
-		t.Fatal("Setting up log receiver:", err)
-	}
-
-	time.Sleep(time.Hour)
 }
