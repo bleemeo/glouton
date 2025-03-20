@@ -27,16 +27,16 @@ import (
 
 	"github.com/bleemeo/glouton/facts"
 
+	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/api/services/tasks/v1"
 	containerdTypes "github.com/containerd/containerd/api/types"
-	"github.com/containerd/containerd/v2/client"
-	"github.com/containerd/containerd/v2/core/containers"
-	"github.com/containerd/containerd/v2/core/content"
-	"github.com/containerd/containerd/v2/core/events"
-	"github.com/containerd/containerd/v2/core/images"
-	"github.com/containerd/containerd/v2/pkg/cio"
-	"github.com/containerd/containerd/v2/pkg/namespaces"
-	"github.com/containerd/containerd/v2/pkg/oci"
+	"github.com/containerd/containerd/cio"
+	"github.com/containerd/containerd/containers"
+	"github.com/containerd/containerd/content"
+	"github.com/containerd/containerd/events"
+	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/namespaces"
+	"github.com/containerd/containerd/oci"
 	"github.com/containerd/platforms"
 	"github.com/containerd/typeurl/v2"
 	"github.com/google/go-cmp/cmp"
@@ -65,7 +65,7 @@ type MockClient struct {
 // MockJSON store all information that MockClient can provide.
 type MockJSON struct {
 	Namespaces []MockNamespace
-	Version    client.Version
+	Version    containerd.Version
 }
 
 // MockNamespace contains namespaced information.
@@ -83,18 +83,18 @@ type MockContainer struct {
 	namespace string
 }
 
-// MockImage is an implementation of client.Image.
+// MockImage is an implementation of containerd.Image.
 type MockImage struct {
 	MockName   string
 	MockTarget ocispec.Descriptor
 }
 
-// MockTask is an implementation of client.Task.
+// MockTask is an implementation of containerd.Task.
 type MockTask struct {
 	MockID     string
 	MockPID    uint32
-	MockStatus client.Status
-	MockPids   []client.ProcessInfo
+	MockStatus containerd.Status
+	MockPids   []containerd.ProcessInfo
 
 	namespace string
 }
@@ -102,7 +102,7 @@ type MockTask struct {
 // DumpToJSON dump to a json all information required to build a MockClient.
 // It will dump from all namespace: containers and their task + PIDs.
 func DumpToJSON(ctx context.Context, address string) ([]byte, error) {
-	client, err := client.New(address)
+	client, err := containerd.New(address)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +149,7 @@ func DumpToJSON(ctx context.Context, address string) ([]byte, error) {
 	return json.MarshalIndent(result, "", "  ")
 }
 
-func (j *MockNamespace) fill(ctx context.Context, client *client.Client) error {
+func (j *MockNamespace) fill(ctx context.Context, client *containerd.Client) error {
 	ctx = namespaces.WithNamespace(ctx, j.MockNamespace)
 
 	containers, err := client.Containers(ctx)
@@ -231,7 +231,7 @@ func (j *MockNamespace) fill(ctx context.Context, client *client.Client) error {
 	return nil
 }
 
-func getTaskInfo(ctx context.Context, err error, task client.Task, mi MockTask) (MockTask, error) {
+func getTaskInfo(ctx context.Context, err error, task containerd.Task, mi MockTask) (MockTask, error) {
 	if err == nil {
 		status, err := task.Status(ctx)
 		if err != nil {
@@ -280,7 +280,7 @@ func FakeContainerd(client *MockClient, isContainerIgnored func(facts.Container)
 }
 
 // Containers do Containers.
-func (m *MockClient) Containers(ctx context.Context) ([]client.Container, error) {
+func (m *MockClient) Containers(ctx context.Context) ([]containerd.Container, error) {
 	if m.closed {
 		panic("already closed")
 	}
@@ -292,7 +292,7 @@ func (m *MockClient) Containers(ctx context.Context) ([]client.Container, error)
 
 	for _, d := range m.Data.Namespaces {
 		if d.MockNamespace == namespace {
-			result := make([]client.Container, len(d.MockContainers))
+			result := make([]containerd.Container, len(d.MockContainers))
 
 			for i, c := range d.MockContainers {
 				c.namespace = d.MockNamespace
@@ -308,7 +308,7 @@ func (m *MockClient) Containers(ctx context.Context) ([]client.Container, error)
 }
 
 // LoadContainer do LoadContainer.
-func (m *MockClient) LoadContainer(ctx context.Context, id string) (client.Container, error) {
+func (m *MockClient) LoadContainer(ctx context.Context, id string) (containerd.Container, error) {
 	if m.closed {
 		panic("already closed")
 	}
@@ -334,7 +334,7 @@ func (m *MockClient) LoadContainer(ctx context.Context, id string) (client.Conta
 }
 
 // Version do version.
-func (m *MockClient) Version(context.Context) (client.Version, error) {
+func (m *MockClient) Version(context.Context) (containerd.Version, error) {
 	if m.closed {
 		panic("already closed")
 	}
@@ -391,13 +391,13 @@ func (m *MockClient) Close() error {
 	return nil
 }
 
-// ID implement client.Container.
+// ID implement containerd.Container.
 func (c MockContainer) ID() string {
 	return c.MockInfo.ID
 }
 
-// Info implement client.Container.
-func (c MockContainer) Info(ctx context.Context, _ ...client.InfoOpts) (containers.Container, error) {
+// Info implement containerd.Container.
+func (c MockContainer) Info(ctx context.Context, _ ...containerd.InfoOpts) (containers.Container, error) {
 	ns, err := namespaces.NamespaceRequired(ctx)
 	if err != nil {
 		return containers.Container{}, err
@@ -421,17 +421,17 @@ func (c MockContainer) Info(ctx context.Context, _ ...client.InfoOpts) (containe
 	return info, nil
 }
 
-// Delete implement client.Container.
-func (c MockContainer) Delete(context.Context, ...client.DeleteOpts) error {
+// Delete implement containerd.Container.
+func (c MockContainer) Delete(context.Context, ...containerd.DeleteOpts) error {
 	return ErrMockNotImplemented
 }
 
-// NewTask implement client.Container.
-func (c MockContainer) NewTask(context.Context, cio.Creator, ...client.NewTaskOpts) (client.Task, error) {
+// NewTask implement containerd.Container.
+func (c MockContainer) NewTask(context.Context, cio.Creator, ...containerd.NewTaskOpts) (containerd.Task, error) {
 	return nil, ErrMockNotImplemented
 }
 
-// Spec implement client.Container.
+// Spec implement containerd.Container.
 func (c MockContainer) Spec(ctx context.Context) (*oci.Spec, error) {
 	ns, err := namespaces.NamespaceRequired(ctx)
 	if err != nil {
@@ -445,8 +445,8 @@ func (c MockContainer) Spec(ctx context.Context) (*oci.Spec, error) {
 	return c.MockInfo.Spec, nil
 }
 
-// Task implement client.Container.
-func (c MockContainer) Task(ctx context.Context, _ cio.Attach) (client.Task, error) {
+// Task implement containerd.Container.
+func (c MockContainer) Task(ctx context.Context, _ cio.Attach) (containerd.Task, error) {
 	ns, err := namespaces.NamespaceRequired(ctx)
 	if err != nil {
 		return nil, err
@@ -465,8 +465,8 @@ func (c MockContainer) Task(ctx context.Context, _ cio.Attach) (client.Task, err
 	return c.MockTask, nil
 }
 
-// Image implement client.Container.
-func (c MockContainer) Image(ctx context.Context) (client.Image, error) {
+// Image implement containerd.Container.
+func (c MockContainer) Image(ctx context.Context) (containerd.Image, error) {
 	ns, err := namespaces.NamespaceRequired(ctx)
 	if err != nil {
 		return nil, err
@@ -479,7 +479,7 @@ func (c MockContainer) Image(ctx context.Context) (client.Image, error) {
 	return MockImage{MockName: c.MockInfo.Image, MockTarget: c.MockImageOCI}, nil
 }
 
-// Labels implement client.Container.
+// Labels implement containerd.Container.
 func (c MockContainer) Labels(ctx context.Context) (map[string]string, error) {
 	ns, err := namespaces.NamespaceRequired(ctx)
 	if err != nil {
@@ -493,167 +493,167 @@ func (c MockContainer) Labels(ctx context.Context) (map[string]string, error) {
 	return c.MockInfo.Labels, nil
 }
 
-// SetLabels implement client.Container.
+// SetLabels implement containerd.Container.
 func (c MockContainer) SetLabels(context.Context, map[string]string) (map[string]string, error) {
 	return nil, ErrMockNotImplemented
 }
 
-// Extensions implement client.Container.
+// Extensions implement containerd.Container.
 func (c MockContainer) Extensions(context.Context) (map[string]typeurl.Any, error) {
 	return nil, ErrMockNotImplemented
 }
 
-// Update implement client.Container.
-func (c MockContainer) Update(context.Context, ...client.UpdateContainerOpts) error {
+// Update implement containerd.Container.
+func (c MockContainer) Update(context.Context, ...containerd.UpdateContainerOpts) error {
 	return ErrMockNotImplemented
 }
 
-// Checkpoint implement client.Container.
-func (c MockContainer) Checkpoint(context.Context, string, ...client.CheckpointOpts) (client.Image, error) {
+// Checkpoint implement containerd.Container.
+func (c MockContainer) Checkpoint(context.Context, string, ...containerd.CheckpointOpts) (containerd.Image, error) {
 	return nil, ErrMockNotImplemented
 }
 
-// Name implement client.Image.
+// Name implement containerd.Image.
 func (i MockImage) Name() string {
 	return i.MockName
 }
 
-// Target implement client.Image.
+// Target implement containerd.Image.
 func (i MockImage) Target() ocispec.Descriptor {
 	return i.MockTarget
 }
 
-// Labels implement client.Image.
+// Labels implement containerd.Image.
 func (i MockImage) Labels() map[string]string {
 	panic(ErrMockNotImplemented)
 }
 
-// Unpack implement client.Image.
-func (i MockImage) Unpack(context.Context, string, ...client.UnpackOpt) error {
+// Unpack implement containerd.Image.
+func (i MockImage) Unpack(context.Context, string, ...containerd.UnpackOpt) error {
 	return ErrMockNotImplemented
 }
 
-// RootFS implement client.Image.
+// RootFS implement containerd.Image.
 func (i MockImage) RootFS(_ context.Context) ([]digest.Digest, error) {
 	return nil, ErrMockNotImplemented
 }
 
-// Size implement client.Image.
+// Size implement containerd.Image.
 func (i MockImage) Size(_ context.Context) (int64, error) {
 	return 0, ErrMockNotImplemented
 }
 
-// Spec implement client.Image.
+// Spec implement containerd.Image.
 func (i MockImage) Spec(_ context.Context) (ocispec.Image, error) {
 	return ocispec.Image{}, ErrMockNotImplemented
 }
 
-// Usage implement client.Image.
-func (i MockImage) Usage(context.Context, ...client.UsageOpt) (int64, error) {
+// Usage implement containerd.Image.
+func (i MockImage) Usage(context.Context, ...containerd.UsageOpt) (int64, error) {
 	return 0, ErrMockNotImplemented
 }
 
-// Config implement client.Image.
+// Config implement containerd.Image.
 func (i MockImage) Config(_ context.Context) (ocispec.Descriptor, error) {
 	return ocispec.Descriptor{}, ErrMockNotImplemented
 }
 
-// IsUnpacked implement client.Image.
+// IsUnpacked implement containerd.Image.
 func (i MockImage) IsUnpacked(context.Context, string) (bool, error) {
 	return false, ErrMockNotImplemented
 }
 
-// ContentStore implement client.Image.
+// ContentStore implement containerd.Image.
 func (i MockImage) ContentStore() content.Store {
 	return nil
 }
 
-// Metadata implement client.Image.
+// Metadata implement containerd.Image.
 func (i MockImage) Metadata() images.Image {
 	panic(ErrMockNotImplemented)
 }
 
-// Platform implement client.Image.
+// Platform implement containerd.Image.
 func (i MockImage) Platform() platforms.MatchComparer {
 	panic(ErrMockNotImplemented)
 }
 
-// ID implements client.Task.
+// ID implements containerd.Task.
 func (t MockTask) ID() string {
 	return t.MockID
 }
 
-// Pid implements client.Task.
+// Pid implements containerd.Task.
 func (t MockTask) Pid() uint32 {
 	return t.MockPID
 }
 
-// Start implements client.Task.
+// Start implements containerd.Task.
 func (t MockTask) Start(context.Context) error {
 	return ErrMockNotImplemented
 }
 
-// Delete implements client.Task.
-func (t MockTask) Delete(context.Context, ...client.ProcessDeleteOpts) (*client.ExitStatus, error) {
+// Delete implements containerd.Task.
+func (t MockTask) Delete(context.Context, ...containerd.ProcessDeleteOpts) (*containerd.ExitStatus, error) {
 	return nil, ErrMockNotImplemented
 }
 
-// Kill implements client.Task.
-func (t MockTask) Kill(context.Context, syscall.Signal, ...client.KillOpts) error {
+// Kill implements containerd.Task.
+func (t MockTask) Kill(context.Context, syscall.Signal, ...containerd.KillOpts) error {
 	return ErrMockNotImplemented
 }
 
-// Wait implements client.Task.
-func (t MockTask) Wait(context.Context) (<-chan client.ExitStatus, error) {
+// Wait implements containerd.Task.
+func (t MockTask) Wait(context.Context) (<-chan containerd.ExitStatus, error) {
 	return nil, ErrMockNotImplemented
 }
 
-// CloseIO implements client.Task.
-func (t MockTask) CloseIO(context.Context, ...client.IOCloserOpts) error {
+// CloseIO implements containerd.Task.
+func (t MockTask) CloseIO(context.Context, ...containerd.IOCloserOpts) error {
 	return ErrMockNotImplemented
 }
 
-// Resize implements client.Task.
+// Resize implements containerd.Task.
 func (t MockTask) Resize(_ context.Context, _, _ uint32) error {
 	return ErrMockNotImplemented
 }
 
-// IO implements client.Task.
+// IO implements containerd.Task.
 func (t MockTask) IO() cio.IO {
 	return nil
 }
 
-// Status implements client.Task.
-func (t MockTask) Status(ctx context.Context) (client.Status, error) {
+// Status implements containerd.Task.
+func (t MockTask) Status(ctx context.Context) (containerd.Status, error) {
 	ns, err := namespaces.NamespaceRequired(ctx)
 	if err != nil {
-		return client.Status{}, err
+		return containerd.Status{}, err
 	}
 
 	if ns != t.namespace {
-		return client.Status{}, fmt.Errorf("%w: %s != %s", ErrWrongNamespace, ns, t.namespace)
+		return containerd.Status{}, fmt.Errorf("%w: %s != %s", ErrWrongNamespace, ns, t.namespace)
 	}
 
 	return t.MockStatus, nil
 }
 
-// Pause implements client.Task.
+// Pause implements containerd.Task.
 func (t MockTask) Pause(context.Context) error {
 	return ErrMockNotImplemented
 }
 
-// Resume implements client.Task.
+// Resume implements containerd.Task.
 func (t MockTask) Resume(context.Context) error {
 	return ErrMockNotImplemented
 }
 
-// Exec implements client.Task.
-func (t MockTask) Exec(context.Context, string, *specs.Process, cio.Creator) (client.Process, error) {
+// Exec implements containerd.Task.
+func (t MockTask) Exec(context.Context, string, *specs.Process, cio.Creator) (containerd.Process, error) {
 	return nil, ErrMockNotImplemented
 }
 
-// Pids implements client.Task.
-func (t MockTask) Pids(ctx context.Context) ([]client.ProcessInfo, error) {
+// Pids implements containerd.Task.
+func (t MockTask) Pids(ctx context.Context) ([]containerd.ProcessInfo, error) {
 	ns, err := namespaces.NamespaceRequired(ctx)
 	if err != nil {
 		return nil, err
@@ -666,27 +666,27 @@ func (t MockTask) Pids(ctx context.Context) ([]client.ProcessInfo, error) {
 	return t.MockPids, nil
 }
 
-// Checkpoint implements client.Task.
-func (t MockTask) Checkpoint(context.Context, ...client.CheckpointTaskOpts) (client.Image, error) {
+// Checkpoint implements containerd.Task.
+func (t MockTask) Checkpoint(context.Context, ...containerd.CheckpointTaskOpts) (containerd.Image, error) {
 	return nil, ErrMockNotImplemented
 }
 
-// Update implements client.Task.
-func (t MockTask) Update(context.Context, ...client.UpdateTaskOpts) error {
+// Update implements containerd.Task.
+func (t MockTask) Update(context.Context, ...containerd.UpdateTaskOpts) error {
 	return ErrMockNotImplemented
 }
 
-// LoadProcess implements client.Task.
-func (t MockTask) LoadProcess(context.Context, string, cio.Attach) (client.Process, error) {
+// LoadProcess implements containerd.Task.
+func (t MockTask) LoadProcess(context.Context, string, cio.Attach) (containerd.Process, error) {
 	return nil, ErrMockNotImplemented
 }
 
-// Metrics implements client.Task.
+// Metrics implements containerd.Task.
 func (t MockTask) Metrics(context.Context) (*containerdTypes.Metric, error) {
 	return nil, ErrMockNotImplemented
 }
 
-// Spec implements client.Task.
+// Spec implements containerd.Task.
 func (t MockTask) Spec(context.Context) (*oci.Spec, error) {
 	return nil, ErrMockNotImplemented
 }
