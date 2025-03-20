@@ -24,10 +24,10 @@ import (
 
 	gloutonContainerd "github.com/bleemeo/glouton/facts/container-runtime/containerd"
 
-	"github.com/containerd/containerd/v2/client"
-	"github.com/containerd/containerd/v2/pkg/cio"
-	"github.com/containerd/containerd/v2/pkg/namespaces"
-	"github.com/containerd/containerd/v2/pkg/oci"
+	"github.com/containerd/containerd"
+	"github.com/containerd/containerd/cio"
+	"github.com/containerd/containerd/namespaces"
+	"github.com/containerd/containerd/oci"
 )
 
 var createRedis = flag.Bool("create-redis", false, "Create a Redis container in example namespace")
@@ -53,28 +53,28 @@ func main() {
 
 func redisExample() error {
 	// create a new client connected to the default socket path for containerd
-	cl, err := client.New("/run/containerd/containerd.sock")
+	client, err := containerd.New("/run/containerd/containerd.sock")
 	if err != nil {
 		return err
 	}
-	defer cl.Close()
+	defer client.Close()
 
 	// create a new context with an "example" namespace
 	ctx := namespaces.WithNamespace(context.Background(), "example")
 
 	// pull the redis image from DockerHub
-	image, err := cl.Pull(ctx, "docker.io/library/redis:alpine", client.WithPullUnpack)
+	image, err := client.Pull(ctx, "docker.io/library/redis:alpine", containerd.WithPullUnpack)
 	if err != nil {
 		return err
 	}
 
 	// create a container
-	container, err := cl.NewContainer(
+	container, err := client.NewContainer(
 		ctx,
 		"redis-server",
-		client.WithImage(image),
-		client.WithNewSnapshot("redis-server-snapshot", image),
-		client.WithNewSpec(oci.WithImageConfig(image)),
+		containerd.WithImage(image),
+		containerd.WithNewSnapshot("redis-server-snapshot", image),
+		containerd.WithNewSpec(oci.WithImageConfig(image)),
 	)
 	if err != nil {
 		return err
