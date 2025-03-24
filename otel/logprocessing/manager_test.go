@@ -136,7 +136,16 @@ func TestProcessLogSources(t *testing.T) {
 				{
 					container: ctrNgx1,
 					serviceID: &discovery.NameInstance{Name: "nginx", Instance: "Nginx-1"},
-					operators: knownLogFormats["nginx_combined"],
+					operators: append(
+						[]config.OTELOperator{
+							{
+								"field": "resource['service.name']",
+								"type":  "add",
+								"value": "nginx",
+							},
+						},
+						knownLogFormats["nginx_combined"]...,
+					),
 				},
 			},
 			expectedWatchedServices: map[discovery.NameInstance]struct{}{
@@ -185,12 +194,30 @@ func TestProcessLogSources(t *testing.T) {
 				{
 					serviceID:   &discovery.NameInstance{Name: "apache", Instance: ""},
 					logFilePath: "/var/log/apache2/access.log",
-					operators:   knownLogFormats["apache_access"],
+					operators: append(
+						[]config.OTELOperator{
+							{
+								"field": "resource['service.name']",
+								"type":  "add",
+								"value": "apache",
+							},
+						},
+						knownLogFormats["apache_access"]...,
+					),
 				},
 				{
 					serviceID:   &discovery.NameInstance{Name: "apache", Instance: ""},
 					logFilePath: "/var/log/apache2/error.log",
-					operators:   knownLogFormats["apache_error"],
+					operators: append(
+						[]config.OTELOperator{
+							{
+								"field": "resource['service.name']",
+								"type":  "add",
+								"value": "apache",
+							},
+						},
+						knownLogFormats["apache_error"]...,
+					),
 				},
 			},
 			expectedWatchedServices: map[discovery.NameInstance]struct{}{

@@ -265,7 +265,7 @@ func DefaultConfig() Config { //nolint:maintidx
 					Address: "localhost",
 					Port:    4318,
 				},
-				KnownLogFormats: DefaultKnownLogFormats,
+				KnownLogFormats: DefaultKnownLogFormats(),
 				Receivers:       map[string]OTLPReceiver{},
 				ContainerFormat: map[string]string{},
 			},
@@ -382,95 +382,4 @@ func DefaultConfig() Config { //nolint:maintidx
 			Port:    10050,
 		},
 	}
-}
-
-var DefaultKnownLogFormats = map[string][]OTELOperator{ //nolint:gochecknoglobals    // TODO: move to a separate file
-	"nginx_access": {
-		{
-			"id":    "nginx_access",
-			"type":  "add",
-			"field": "attributes['log.iostream']",
-			"value": "stdout",
-		},
-		{
-			"id":    "nginx_access_parser",
-			"type":  "regex_parser",
-			"regex": `^(?<host>(\d{1,3}\.){3}\d{1,3})\s-\s(-|[\w-]+)\s\[(?<time>\d{1,2}\/\w{1,15}\/\d{4}(:\d{2}){3}\s\+\d{4})\]\s(?<request>.+)\n*$`,
-		},
-		{
-			"id":    "add_service_name",
-			"type":  "add",
-			"field": "resource['service.name']",
-			"value": "nginx",
-		},
-	},
-	"nginx_error": {
-		{
-			"id":    "nginx_error",
-			"type":  "add",
-			"field": "attributes['log.iostream']",
-			"value": "stderr",
-		},
-		{
-			"id":     "nginx_error_parser",
-			"type":   "regex_parser",
-			"regex":  `(?<time>^\d{4}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2})\s\[\w+]\s\d+#\d+:\s.*\n*$`,
-			"output": "add_service_name",
-		},
-		{
-			"id":    "add_service_name",
-			"type":  "add",
-			"field": "resource['service.name']",
-			"value": "nginx",
-		},
-	},
-	"nginx_combined": {
-		{
-			"type": "router",
-			"routes": []any{
-				map[string]any{
-					"expr":   `body matches "^(\\d{1,3}\\.){3}\\d{1,3}\\s-\\s(-|[\\w-]+)\\s"`, // <- not regexp, but expr-lang
-					"output": "nginx_access",
-				},
-				map[string]any{
-					"expr":   `body matches "^\\d{4}\\/\\d{2}\\/\\d{2}\\s\\d{2}:\\d{2}:\\d{2}\\s\\[error]"`, // <- not regexp, but expr-lang
-					"output": "nginx_error",
-				},
-			},
-		},
-		// Start: nginx_access
-		{
-			"id":    "nginx_access",
-			"type":  "add",
-			"field": "attributes['log.iostream']",
-			"value": "stdout",
-		},
-		{
-			"id":     "nginx_access_parser",
-			"type":   "regex_parser",
-			"regex":  `^(?<host>(\d{1,3}\.){3}\d{1,3})\s-\s(-|[\w-]+)\s\[(?<time>\d{1,2}\/\w{1,15}\/\d{4}(:\d{2}){3}\s\+\d{4})\]\s(?<request>.+)\n*$`,
-			"output": "add_service_name",
-		},
-		// End: nginx_access
-		// Start: nginx_error
-		{
-			"id":    "nginx_error",
-			"type":  "add",
-			"field": "attributes['log.iostream']",
-			"value": "stderr",
-		},
-		{
-			"id":     "nginx_error_parser",
-			"type":   "regex_parser",
-			"regex":  `(?<time>^\d{4}\/\d{2}\/\d{2}\s\d{2}:\d{2}:\d{2})\s\[\w+]\s\d+#\d+:\s.*\n*$`,
-			"output": "add_service_name",
-		},
-		// End: nginx_error
-		{
-			"id":    "add_service_name",
-			"type":  "add",
-			"field": "resource['service.name']",
-			"value": "nginx",
-		},
-	},
 }

@@ -178,7 +178,6 @@ type agent struct {
 	dockerInputID      int
 
 	l                sync.Mutex
-	startTime        time.Time
 	cond             *sync.Cond
 	taskIDs          map[string]int
 	metricResolution time.Duration
@@ -206,7 +205,6 @@ type taskInfo struct {
 
 func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (ok bool) {
 	a.l.Lock()
-	a.startTime = time.Now()
 	a.cond = sync.NewCond(&a.l)
 	a.lastHealthCheck = time.Now()
 	a.l.Unlock()

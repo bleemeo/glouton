@@ -26,18 +26,20 @@ import (
 func TestDefaultLogProcessingConfigs(t *testing.T) {
 	t.Parallel()
 
+	defaultKnownLogFormats := config.DefaultKnownLogFormats()
+
 	for service, info := range servicesLogInfo {
 		for _, fileFormat := range info.FileFormats {
 			if _, err := filepath.Match(fileFormat.FilePath, "value"); err != nil {
 				t.Errorf("File path %q for service %s is invalid: %v", fileFormat.FilePath, service, err)
 			}
 
-			if _, ok := config.DefaultKnownLogFormats[fileFormat.Format]; !ok {
+			if _, ok := defaultKnownLogFormats[fileFormat.Format]; !ok {
 				t.Errorf("Log format %q for service %s on file %s in not referenced in the default known log formats", fileFormat.Format, service, fileFormat.FilePath)
 			}
 		}
 
-		if _, ok := config.DefaultKnownLogFormats[info.DockerFormat]; !ok {
+		if _, ok := defaultKnownLogFormats[info.DockerFormat]; !ok {
 			t.Errorf("Log format %q for service %s with docker in not referenced in the default known log formats", info.DockerFormat, service)
 		}
 	}

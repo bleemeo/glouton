@@ -210,7 +210,7 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 			logSource := LogSource{
 				serviceID:   &key,
 				logFilePath: serviceLogProcessing.FilePath, // ignored if in a container
-				operators:   man.config.KnownLogFormats[serviceLogProcessing.Format],
+				operators:   append(operatorsForService(service), man.config.KnownLogFormats[serviceLogProcessing.Format]...),
 			}
 
 			if service.ContainerID != "" {
@@ -393,4 +393,14 @@ func (man *Manager) DiagnosticArchive(_ context.Context, writer types.ArchiveWri
 	}
 
 	return diagnosticInfo.writeToArchive(writer)
+}
+
+func operatorsForService(service discovery.Service) []config.OTELOperator {
+	return []config.OTELOperator{
+		{
+			"type":  "add",
+			"field": "resource['service.name']",
+			"value": service.Name,
+		},
+	}
 }
