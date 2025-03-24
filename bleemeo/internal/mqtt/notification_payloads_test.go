@@ -26,6 +26,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+// TestNotificationCompatibility ensures that newer payload from Bleemeo could be decoded into older struct.
+// This is used to ensure non-updated Glouton continues to work even if Bleemeo side is updated.
 func TestNotificationCompatibility(t *testing.T) {
 	t.Parallel()
 

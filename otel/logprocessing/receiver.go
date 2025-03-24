@@ -99,7 +99,7 @@ type logReceiver struct {
 
 func newLogReceiver(name string, cfg config.OTLPReceiver, isFromService bool, logConsumer consumer.Logs, knownLogFormats map[string][]config.OTELOperator) (*logReceiver, error) {
 	if !receiverNameRegex.MatchString(name) {
-		return nil, fmt.Errorf("%w: %q. It must be of the form 'my-receiver' or 'filelog/my-receiver', contain one slash a most, and not start with a slash", errInvalidReceiverName, name)
+		return nil, fmt.Errorf("%w: %q. It must be of the form 'my-receiver' or 'filelog/my-receiver'", errInvalidReceiverName, name)
 	}
 
 	operators, err := buildOperators(cfg.Operators)
