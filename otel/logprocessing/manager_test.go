@@ -27,17 +27,9 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func ctr(id, name string, labels, annotations map[string]string) facts.Container {
-	return dummyContainer{
-		id:          id,
-		name:        name,
-		labels:      labels,
-		annotations: annotations,
-	}
-}
-
 func svc(
 	name, instance, containerID string,
+	active bool,
 	lastTimeSeen time.Time,
 	logProcessing ...discovery.ServiceLogReceiver,
 ) discovery.Service {
@@ -45,8 +37,18 @@ func svc(
 		Name:          name,
 		Instance:      instance,
 		ContainerID:   containerID,
+		Active:        active,
 		LogProcessing: logProcessing,
 		LastTimeSeen:  lastTimeSeen,
+	}
+}
+
+func ctr(id, name string, labels, annotations map[string]string) facts.Container {
+	return dummyContainer{
+		id:          id,
+		name:        name,
+		labels:      labels,
+		annotations: annotations,
 	}
 }
 
@@ -113,6 +115,8 @@ func TestProcessLogSources(t *testing.T) {
 		},
 	}
 
+	svcNginx := svc("nginx", "Nginx-1", "ngx-1", true, time.Now(), discovery.ServiceLogReceiver{Format: "nginx_combined"})
+
 	ctrNgx1 := ctr("ngx-1", "Nginx-1", nil, nil)
 	ctrApp1 := ctr("app-1", "Custom-App-1", map[string]string{"glouton.log_format": "custom_app_fmt"}, nil)
 
@@ -130,7 +134,7 @@ func TestProcessLogSources(t *testing.T) {
 				ctrNgx1,
 			},
 			services: []discovery.Service{
-				svc("nginx", "Nginx-1", "ngx-1", time.Now(), discovery.ServiceLogReceiver{Format: "nginx_combined"}),
+				svcNginx,
 			},
 			expectedLogSources: []LogSource{
 				{
@@ -162,7 +166,7 @@ func TestProcessLogSources(t *testing.T) {
 				ctrApp1, // new
 			},
 			services: []discovery.Service{
-				svc("nginx", "Nginx-1", "ngx-1", time.Now(), discovery.ServiceLogReceiver{Format: "nginx_combined"}),
+				svcNginx,
 			},
 			expectedLogSources: []LogSource{
 				{
@@ -179,13 +183,32 @@ func TestProcessLogSources(t *testing.T) {
 			},
 		},
 		{
+			name: "with a non-active service",
+			containers: []facts.Container{
+				ctrNgx1,
+				ctrApp1,
+			},
+			services: []discovery.Service{
+				svcNginx,
+				svc("old", "outdated", "", false, time.Now().Add(-365*24*time.Hour)),
+			},
+			expectedLogSources: nil, // thus nothing
+			expectedWatchedServices: map[discovery.NameInstance]struct{}{
+				{Name: "nginx", Instance: "Nginx-1"}: {}, // still present
+			},
+			expectedWatchedContainers: map[string]struct{}{
+				"ngx-1": {}, // still present
+				"app-1": {}, // still present
+			},
+		},
+		{
 			name: "no more nginx but an apache running on the host",
 			containers: []facts.Container{
 				ctrApp1,
 			},
 			services: []discovery.Service{
 				svc(
-					"apache", "", "", time.Now(),
+					"apache", "", "", true, time.Now(),
 					discovery.ServiceLogReceiver{FilePath: "/var/log/apache2/access.log", Format: "apache_access"},
 					discovery.ServiceLogReceiver{FilePath: "/var/log/apache2/error.log", Format: "apache_error"},
 				),

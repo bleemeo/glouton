@@ -50,7 +50,7 @@ type Manager struct {
 	crRuntime                  crTypes.RuntimeInterface
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability
 
-	startTime     time.Time
+	startTime     time.Time // TODO: remove, now that we no longer rely on Service.LastTimeSeen
 	persister     *persistHost
 	pipeline      *pipelineContext
 	containerRecv *containerReceiver
@@ -142,6 +142,10 @@ ctxLoop:
 	man.pipeline.l.Lock()
 	defer man.pipeline.l.Unlock()
 
+	for _, receivers := range man.serviceReceivers {
+		stopReceivers(receivers)
+	}
+
 	shutdownAll(man.pipeline.startedComponents)
 
 	saveLastFileSizesToCache(man.state, mergeLastFileSizes(man.pipeline.receivers, man.containerRecv))
@@ -193,7 +197,7 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 	var logSources []LogSource //nolint:prealloc
 
 	for _, service := range services {
-		if service.LogProcessing == nil || service.LastTimeSeen.Before(man.startTime) {
+		if service.LogProcessing == nil || !service.Active {
 			continue
 		}
 
@@ -322,17 +326,14 @@ func (man *Manager) removeOldSources(ctx context.Context, services []discovery.S
 	noLongerExistingServices := diffBetween(watchedServices, serviceKeys)
 	noLongerExistingContainers := diffBetween(watchedContainers, containerIDs)
 
-	logger.Printf("Services to unwatch: %s / containers to unwatch: %s", noLongerExistingServices, noLongerExistingContainers) // TODO: remove
+	if len(noLongerExistingServices)+len(noLongerExistingContainers) > 0 {
+		logger.Printf("Removing sources from log processing: services=%s / containers=%s", noLongerExistingServices, noLongerExistingContainers) // TODO: V(2)
+	}
 
 	for _, service := range noLongerExistingServices {
 		receivers, found := man.serviceReceivers[service]
 		if found {
-			for _, recv := range receivers {
-				recv.l.Lock()
-				shutdownAll(recv.startedComponents)
-				recv.l.Unlock()
-			}
-
+			stopReceivers(receivers)
 			delete(man.serviceReceivers, service)
 		}
 

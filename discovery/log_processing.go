@@ -41,13 +41,13 @@ type ServiceLogReceiver struct {
 	Format   string
 }
 
-func inferLogProcessingConfig(service *Service, knownLogFormats map[string][]config.OTELOperator) {
+func inferLogProcessingConfig(service Service, knownLogFormats map[string][]config.OTELOperator) Service {
 	switch {
 	case len(service.Config.LogFiles) > 0:
 		if service.container != nil {
 			logger.V(1).Printf("Can't watch specific log files on service %q: it runs in a container", service.Name)
 
-			return
+			return service
 		}
 
 		service.LogProcessing = make([]ServiceLogReceiver, 0, len(service.Config.LogFiles))
@@ -59,7 +59,7 @@ func inferLogProcessingConfig(service *Service, knownLogFormats map[string][]con
 				continue
 			}
 
-			logFormat := service.Config.LogFormat
+			logFormat := logFile.LogFormat
 			if logFormat == "" {
 				if service.Config.LogFormat != "" {
 					logFormat = service.Config.LogFormat
@@ -74,7 +74,7 @@ func inferLogProcessingConfig(service *Service, knownLogFormats map[string][]con
 			if !ok {
 				logger.V(1).Printf("Service %q requires an unknown log format: %q", service.Name, logFormat)
 
-				return
+				return service
 			}
 
 			service.LogProcessing = append(service.LogProcessing, ServiceLogReceiver{
@@ -88,14 +88,14 @@ func inferLogProcessingConfig(service *Service, knownLogFormats map[string][]con
 		if service.container == nil {
 			logger.V(1).Printf("Service %q only provides a log format but doesn't run in a container", service.Name)
 
-			return
+			return service
 		}
 
 		_, ok := knownLogFormats[service.Config.LogFormat]
 		if !ok {
 			logger.V(1).Printf("Service %q requires an unknown log format: %q", service.Name, service.Config.LogFormat)
 
-			return
+			return service
 		}
 
 		service.LogProcessing = []ServiceLogReceiver{
@@ -108,7 +108,7 @@ func inferLogProcessingConfig(service *Service, knownLogFormats map[string][]con
 	default:
 		logProcessInfo, found := servicesLogInfo[service.ServiceType]
 		if !found {
-			return
+			return service
 		}
 
 		if service.container != nil {
@@ -125,4 +125,6 @@ func inferLogProcessingConfig(service *Service, knownLogFormats map[string][]con
 
 		logger.V(1).Printf("Using default log processing config for service %q: %v", service.Name, service.LogProcessing)
 	}
+
+	return service
 }

@@ -152,6 +152,16 @@ func shutdownAll(components []component.Component) {
 	wg.Wait()
 }
 
+// stopReceivers shutdowns all the components started by the given receivers,
+// while taking care of the receivers lock synchronization.
+func stopReceivers(receivers []*logReceiver) {
+	for _, recv := range receivers {
+		recv.l.Lock()
+		shutdownAll(recv.startedComponents)
+		recv.l.Unlock()
+	}
+}
+
 func errorf(format string, a ...any) error {
 	return fmt.Errorf(format, a...) //nolint:err113
 }

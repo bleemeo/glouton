@@ -958,14 +958,12 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	metricsIgnored := discovery.NewIgnoredService(a.config.ServiceIgnoreMetrics)
 	isCheckIgnored := discovery.NewIgnoredService(a.config.ServiceIgnoreCheck).IsServiceIgnored
 	dynamicDiscovery := discovery.NewDynamic(discovery.Option{
-		PS:                  psFact,
-		Netstat:             netstat,
-		ContainerInfo:       a.containerRuntime,
-		IsContainerIgnored:  a.containerFilter.ContainerIgnored,
-		IsServiceIgnored:    serviceIgnored.IsServiceIgnored,
-		FileReader:          discovery.SudoFileReader{HostRootPath: a.hostRootPath, Runner: a.commandRunner},
-		LogDiscoveryEnabled: a.config.Log.OpenTelemetry.Enable && a.config.Log.OpenTelemetry.AutoDiscovery, // TODO: && a.config.Bleemeo.Enable ?
-		KnownLogFormats:     a.config.Log.OpenTelemetry.KnownLogFormats,
+		PS:                 psFact,
+		Netstat:            netstat,
+		ContainerInfo:      a.containerRuntime,
+		IsContainerIgnored: a.containerFilter.ContainerIgnored,
+		IsServiceIgnored:   serviceIgnored.IsServiceIgnored,
+		FileReader:         discovery.SudoFileReader{HostRootPath: a.hostRootPath, Runner: a.commandRunner},
 	})
 
 	a.discovery, warnings = discovery.New(
@@ -981,6 +979,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.containerFilter.ContainerIgnored,
 		psFact,
 		a.config.ServiceAbsentDeactivationDelay,
+		a.config.Log.OpenTelemetry,
 	)
 	if warnings != nil {
 		a.addWarnings(warnings...)

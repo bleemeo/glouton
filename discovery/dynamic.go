@@ -45,15 +45,13 @@ const (
 )
 
 type Option struct {
-	PS                  processFact
-	Netstat             netstatProvider
-	ContainerInfo       containerInfoProvider
-	IsContainerIgnored  func(facts.Container) bool
-	IsServiceIgnored    func(Service) bool
-	FileReader          fileReader
-	DefaultStack        string
-	LogDiscoveryEnabled bool
-	KnownLogFormats     map[string][]config.OTELOperator
+	PS                 processFact
+	Netstat            netstatProvider
+	ContainerInfo      containerInfoProvider
+	IsContainerIgnored func(facts.Container) bool
+	IsServiceIgnored   func(Service) bool
+	FileReader         fileReader
+	DefaultStack       string
 }
 
 // DynamicDiscovery implement the dynamic discovery. It will only return
@@ -391,10 +389,6 @@ func (dd *DynamicDiscovery) serviceFromProcess(ctx context.Context, process fact
 	dd.fillConfigFromLabels(&service)
 	dd.discoveryFromLabels(&service)
 	dd.guessJMX(&service, process.CmdLineList)
-
-	if dd.option.LogDiscoveryEnabled {
-		inferLogProcessingConfig(&service, dd.option.KnownLogFormats)
-	}
 
 	return service, true
 }

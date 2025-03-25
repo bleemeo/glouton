@@ -81,6 +81,7 @@ type Discovery struct {
 	processFact           processFact
 
 	absentServiceDeactivationDelay time.Duration
+	logProcessingCfg               config.OpenTelemetry
 }
 
 type subscriber struct {
@@ -116,6 +117,7 @@ func New(
 	isContainerIgnored func(c facts.Container) bool,
 	processFact processFact,
 	absentServiceDeactivationDelay time.Duration,
+	logProcessingCfg config.OpenTelemetry,
 ) (*Discovery, prometheus.MultiError) {
 	initialServices := servicesFromState(state)
 	discoveredServicesMap := make(map[NameInstance]Service, len(initialServices))
@@ -147,6 +149,7 @@ func New(
 		isContainerIgnored:             isContainerIgnored,
 		processFact:                    processFact,
 		absentServiceDeactivationDelay: absentServiceDeactivationDelay,
+		logProcessingCfg:               logProcessingCfg,
 	}
 
 	return discovery, warnings
@@ -589,7 +592,7 @@ func (d *Discovery) reconfigure() {
 }
 
 // Only one updateDiscovery should be running at a time (since discovery is called for Run gorouting the
-// requirement is fulified).
+// requirement is fulfilled).
 // The lock should not be held, updateDiscovery take care of taking lock before access to mutable fields.
 func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) (time.Time, error) {
 	// Make sure we have a container list. This is important for startup, so
@@ -654,6 +657,12 @@ func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) (time.Ti
 	d.servicesMap = serviceMapWithOverride
 
 	d.ignoreServicesAndPorts()
+
+	if d.logProcessingCfg.Enable && d.logProcessingCfg.AutoDiscovery { // TODO: && config.Bleemeo.Enable ?
+		for key, service := range d.servicesMap {
+			d.servicesMap[key] = inferLogProcessingConfig(service, d.logProcessingCfg.KnownLogFormats)
+		}
+	}
 
 	return nextUpdate, nil
 }
