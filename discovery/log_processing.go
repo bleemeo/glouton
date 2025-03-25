@@ -83,7 +83,7 @@ func inferLogProcessingConfig(service Service, knownLogFormats map[string][]conf
 			})
 		}
 
-		logger.Printf("Using user-defined formats for service %q: %v", service.Name, service.LogProcessing) // TODO: remove
+		logger.Printf("Using user-defined formats for service %q/%q: %v", service.Name, service.Instance, service.LogProcessing) // TODO: remove
 	case service.Config.LogFormat != "":
 		if service.container == nil {
 			logger.V(1).Printf("Service %q only provides a log format but doesn't run in a container", service.Name)
@@ -104,7 +104,7 @@ func inferLogProcessingConfig(service Service, knownLogFormats map[string][]conf
 			},
 		}
 
-		logger.Printf("Using known log format %q for service %q", service.Config.LogFormat, service.Name) // TODO: remove
+		logger.Printf("Using known log format %q for service %q/%q", service.Config.LogFormat, service.Name, service.Instance) // TODO: remove
 	default:
 		logProcessInfo, found := servicesLogInfo[service.ServiceType]
 		if !found {
@@ -123,7 +123,7 @@ func inferLogProcessingConfig(service Service, knownLogFormats map[string][]conf
 			copy(service.LogProcessing, logProcessInfo.FileFormats)
 		}
 
-		logger.V(1).Printf("Using default log processing config for service %q: %v", service.Name, service.LogProcessing)
+		logger.V(1).Printf("Using default log processing config for service %q/%q: %v", service.Name, service.Instance, service.LogProcessing)
 	}
 
 	return service

@@ -64,8 +64,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator {
 				"type": "router",
 				"routes": []any{
 					map[string]any{
-						// "expr":   `body matches "^(\\d{1,3}\\.){3}\\d{1,3}\\s-\\s(-|[\\w-]+)\\s"`, // <- not regexp, but expr-lang
-						"expr":   `body matches "^$"`,
+						"expr":   `body matches "^(\\d{1,3}\\.){3}\\d{1,3}\\s-\\s(-|[\\w-]+)\\s"`, // <- not regexp, but expr-lang
 						"output": "nginx_access",
 					},
 					map[string]any{

@@ -271,8 +271,8 @@ func wrapWithCounters(next consumer.Logs, counter *atomic.Int64, throughputMeter
 }
 
 // diffBetween returns the elements from s1 that are absent from m2.
-func diffBetween[E comparable](s1 []E, m2 map[E]struct{}) []E {
-	var diff []E
+func diffBetween[K comparable, V any](s1 []K, m2 map[K]V) []K {
+	var diff []K
 
 loop1:
 	for _, e1 := range s1 {

@@ -310,27 +310,31 @@ func (man *Manager) setupProcessingForSource(ctx context.Context, logSource LogS
 func (man *Manager) removeOldSources(ctx context.Context, services []discovery.Service, containers []facts.Container) {
 	watchedServices := slices.Collect(maps.Keys(man.watchedServices))
 	watchedContainers := slices.Collect(maps.Keys(man.watchedContainers))
-	serviceKeys := make(map[discovery.NameInstance]struct{}, len(services))
-	containerIDs := make(map[string]struct{}, len(containers))
+	latestServices := make(map[discovery.NameInstance]bool, len(services)) // map[service] -> is a container
+	latestContainers := make(map[string]struct{}, len(containers))         // map key: container ID
 
 	for _, service := range services {
-		if service.LogProcessing != nil && service.ContainerID == "" { // containers will be handled below
-			serviceKeys[discovery.NameInstance{Name: service.Name, Instance: service.Instance}] = struct{}{}
+		if service.LogProcessing != nil {
+			latestServices[discovery.NameInstance{Name: service.Name, Instance: service.Instance}] = service.ContainerID != ""
 		}
 	}
 
 	for _, ctr := range containers {
-		containerIDs[ctr.ID()] = struct{}{}
+		latestContainers[ctr.ID()] = struct{}{}
 	}
 
-	noLongerExistingServices := diffBetween(watchedServices, serviceKeys)
-	noLongerExistingContainers := diffBetween(watchedContainers, containerIDs)
+	noLongerExistingServices := diffBetween(watchedServices, latestServices)
+	noLongerExistingContainers := diffBetween(watchedContainers, latestContainers)
 
 	if len(noLongerExistingServices)+len(noLongerExistingContainers) > 0 {
 		logger.Printf("Removing sources from log processing: services=%s / containers=%s", noLongerExistingServices, noLongerExistingContainers) // TODO: V(2)
 	}
 
 	for _, service := range noLongerExistingServices {
+		if latestServices[service] {
+			continue // containers will be handled below
+		}
+
 		receivers, found := man.serviceReceivers[service]
 		if found {
 			stopReceivers(receivers)
