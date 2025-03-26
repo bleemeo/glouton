@@ -39,7 +39,7 @@ func flattenOps(ops ...any) []OTELOperator {
 }
 
 // renameAttr returns an operator that renames the given attribute field to the desired name.
-// Its main utility is to allow dots (.) in attribute names that come from regexp named groups.
+// Its main purpose is to allow dots (.) in attribute names that come from regexp named groups.
 func renameAttr(from, to string) OTELOperator {
 	return OTELOperator{
 		"type": "move",
@@ -68,7 +68,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator {
 		{
 			"id":    "nginx_error_parser",
 			"type":  "regex_parser",
-			"regex": `(?P<time>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) \[\w+] \d+#\d+: \*\d+ .*?, client: (?P<client_address>[\d\.]+), server: (?P<server_address>\S+), request: "(?P<http_request_method>\S+) (?P<http_route>\S+) \S+", host: "(?P<network_local_address>(\d{1,3}\.){3}\d{1,3}):(?<server_port>\d+)"`,
+			"regex": `^(?P<time>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) \[\w+] \d+#\d+: \*\d+ .*?, client: (?P<client_address>[\d\.]+), server: (?P<server_address>\S+), request: "(?P<http_request_method>\S+) (?P<http_route>\S+) \S+", host: "(?P<network_local_address>(\d{1,3}\.){3}\d{1,3}):(?<server_port>\d+)"`,
 		},
 		renameAttr("client_address", "client.address"),
 		renameAttr("server_address", "server.address"),
@@ -76,6 +76,31 @@ func DefaultKnownLogFormats() map[string][]OTELOperator {
 		renameAttr("http_route", "http.route"),
 		renameAttr("network_local_address", "network.local.address"),
 		renameAttr("server_port", "server.port"),
+	}
+
+	apacheAccessParser := []OTELOperator{
+		{
+			"id":    "apache_access_parser",
+			"type":  "regex_parser",
+			"regex": `^(?P<client_address>\S+) \S+ (?P<user_name>\S+) \[(?P<time>[^\]]+)] "(?P<http_request_method>\S+) (?P<http_route>\S+) \S+" (?P<http_response_status_code>\d+) (?P<http_response_size>\S+)`,
+		},
+		renameAttr("client_address", "client.address"),
+		renameAttr("user_name", "user.name"),
+		renameAttr("http_request_method", "http.request.method"),
+		renameAttr("http_route", "http.route"),
+		renameAttr("http_response_status_code", "http.response.status_code"),
+		renameAttr("http_response_size", "http.response.size"),
+	}
+	apacheErrorParser := []OTELOperator{
+		{
+			"id":    "apache_error_parser",
+			"type":  "regex_parser",
+			"regex": `^\[(?P<time>[\w :/\.]+)\] \[[^\]]+]( \[pid (?P<process_id>\d+):tid (?P<thread_id>\d+)\])?( \[client (?P<client_address>[\d\.]+)(:(?<client_port>\d+))?\])? .*`,
+		},
+		renameAttr("process_id", "process.id"),
+		renameAttr("thread_id", "thread.id"),
+		renameAttr("client_address", "client.address"),
+		renameAttr("client_port", "client.port"),
 	}
 
 	return map[string][]OTELOperator{
@@ -154,6 +179,69 @@ func DefaultKnownLogFormats() map[string][]OTELOperator {
 			// End: nginx_error
 			OTELOperator{
 				"id":   "nginx_combined_end",
+				"type": "noop",
+			},
+		),
+		"apache_access": flattenOps(
+			OTELOperator{
+				"id":    "apache_access",
+				"type":  "add",
+				"field": "attributes['log.iostream']",
+				"value": "stdout",
+			},
+			apacheAccessParser,
+		),
+		"apache_error": flattenOps(
+			OTELOperator{
+				"id":    "apache_error",
+				"type":  "add",
+				"field": "attributes['log.iostream']",
+				"value": "stderr",
+			},
+			apacheErrorParser,
+		),
+		"apache_combined": flattenOps(
+			OTELOperator{
+				"type": "router",
+				"routes": []any{
+					map[string]any{
+						"expr":   `body matches "^(\\d{1,3}\\.){3}\\d{1,3}\\s\\S+\\s\\S+\\s\\[[^\\]]+\\]\\s"`, // <- not regexp, but expr-lang
+						"output": "apache_access",
+					},
+					map[string]any{
+						"expr":   `body matches "^\\[[\\w :\\.]+\\]\\s(\\[[^\\]]+\\])+\\s"`, // <- not regexp, but expr-lang
+						"output": "apache_error",
+					},
+				},
+			},
+			// Start: apache_access
+			OTELOperator{
+				"id":    "apache_access",
+				"type":  "add",
+				"field": "attributes['log.iostream']",
+				"value": "stdout",
+			},
+			apacheAccessParser,
+			OTELOperator{
+				"type":   "noop",
+				"output": "apache_combined_end",
+			},
+			// End: apache_access
+			// Start: apache_error
+			OTELOperator{
+				"id":    "apache_error",
+				"type":  "add",
+				"field": "attributes['log.iostream']",
+				"value": "stderr",
+			},
+			apacheErrorParser,
+			OTELOperator{
+				"type":   "noop",
+				"output": "apache_combined_end",
+			},
+			// End: apache_error
+			OTELOperator{
+				"id":   "apache_combined_end",
 				"type": "noop",
 			},
 		),

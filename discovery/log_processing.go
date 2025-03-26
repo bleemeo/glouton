@@ -27,6 +27,12 @@ type logProcessingInfo struct {
 }
 
 var servicesLogInfo = map[ServiceName]logProcessingInfo{ //nolint: gochecknoglobals
+	ApacheService: {
+		FileFormats: []ServiceLogReceiver{
+			// TODO
+		},
+		DockerFormat: "apache_combined",
+	},
 	NginxService: {
 		FileFormats: []ServiceLogReceiver{
 			{"/var/log/nginx/access.log", "nginx_access"},
