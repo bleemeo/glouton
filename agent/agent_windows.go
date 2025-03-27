@@ -24,6 +24,7 @@ import (
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/facts/container-runtime/veth"
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/exporter/windows"
 
 	"github.com/yusufpapurcu/wmi"
 	"golang.org/x/sys/windows/svc"
@@ -107,7 +108,7 @@ func (a *agent) registerOSSpecificComponents(*veth.Provider) {
 		}
 
 		collectors := a.config.Agent.WindowsExporter.Collectors
-		if err := a.gathererRegistry.AddWindowsExporter(collectors, conf); err != nil {
+		if err := windows.AddWindowsExporter(a.gathererRegistry, collectors, conf); err != nil {
 			logger.Printf("Unable to start windows_exporter, system metrics will be missing: %v", err)
 		}
 	}

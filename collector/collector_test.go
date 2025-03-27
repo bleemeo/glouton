@@ -17,7 +17,6 @@
 package collector
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -75,7 +74,7 @@ func TestAddRemove(t *testing.T) {
 }
 
 func TestRun(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	c := New(nil, gate.New(0))
 	c.runOnce(ctx, time.Now())
 
@@ -307,7 +306,7 @@ func TestMarkInactive(t *testing.T) {
 	t1 := t0.Add(10 * time.Second)
 	t2 := t1.Add(10 * time.Second)
 
-	err := c.RunGather(context.Background(), t0)
+	err := c.RunGather(t.Context(), t0)
 	if err != nil {
 		t.Fatalf("Unexpected c.RunGather() error: %v", err)
 	}
@@ -346,7 +345,7 @@ func TestMarkInactive(t *testing.T) {
 
 	input2.tag = "I2" // Tags have changed
 
-	err = c.RunGather(context.Background(), t1)
+	err = c.RunGather(t.Context(), t1)
 	if err != nil {
 		t.Fatalf("Unexpected c.RunGather() error: %v", err)
 	}
@@ -385,7 +384,7 @@ func TestMarkInactive(t *testing.T) {
 
 	input2bis.fields["f"] = 22.22
 
-	err = c.RunGather(context.Background(), t2)
+	err = c.RunGather(t.Context(), t2)
 	if err != nil {
 		t.Fatalf("Unexpected c.RunGather() error: %v", err)
 	}
@@ -511,7 +510,7 @@ func TestMarkInactiveWhileDroppingInput(t *testing.T) {
 		wg.Done()
 	}()
 
-	err = c.RunGather(context.Background(), time.Now())
+	err = c.RunGather(t.Context(), time.Now())
 	if err != nil {
 		t.Fatalf("Unexpected c.RunGather() error: %v", err)
 	}
@@ -547,7 +546,7 @@ func TestMarkInactiveWithErrors(t *testing.T) {
 	t1 := t0.Add(10 * time.Second)
 	t2 := t1.Add(keepMetricBecauseOfGatherErrorGraceDelay)
 
-	err = c.RunGather(context.Background(), t0)
+	err = c.RunGather(t.Context(), t0)
 	if err != nil {
 		t.Fatal("Gathering failed:", err)
 	}
@@ -570,7 +569,7 @@ func TestMarkInactiveWithErrors(t *testing.T) {
 	input.fields = map[string]float64{"f2": 0.22, "f3": 33} // no value for f1
 	input.retErr = io.ErrUnexpectedEOF                      // perhaps because of this error
 
-	err = c.RunGather(context.Background(), t1)
+	err = c.RunGather(t.Context(), t1)
 	if err != nil {
 		t.Fatal("Gathering failed:", err)
 	}
@@ -588,7 +587,7 @@ func TestMarkInactiveWithErrors(t *testing.T) {
 	input.fields = map[string]float64{"f3": 3, "f4": 4.4} // no more value for f2 neither; a new metric appears;
 	// the error is still present
 
-	err = c.RunGather(context.Background(), t2)
+	err = c.RunGather(t.Context(), t2)
 	if err != nil {
 		t.Fatal("Gathering failed:", err)
 	}
@@ -640,7 +639,7 @@ func TestErrorHandling(t *testing.T) {
 		}
 	}
 
-	err := c.RunGather(context.Background(), time.Now())
+	err := c.RunGather(t.Context(), time.Now())
 	expectedErrors := []error{os.ErrPermission, os.ErrPermission, io.ErrUnexpectedEOF}
 
 	for _, expectedErr := range expectedErrors {

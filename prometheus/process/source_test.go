@@ -19,7 +19,6 @@
 package process
 
 import (
-	"context"
 	"os"
 	"reflect"
 	"runtime"
@@ -37,7 +36,7 @@ func Test_reflection(t *testing.T) {
 		HostRootPath: "/",
 	}
 
-	procs, factory, err := ps.Processes(context.Background())
+	procs, factory, err := ps.Processes(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +54,7 @@ func Test_reflection(t *testing.T) {
 			t.Run(testName, func(t *testing.T) {
 				t.Parallel()
 
-				procs, factory, err := ps.Processes(context.Background())
+				procs, factory, err := ps.Processes(t.Context())
 				if err != nil {
 					t.Fatal(err)
 				}

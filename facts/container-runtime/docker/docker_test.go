@@ -63,15 +63,15 @@ func TestDocker_RuntimeFact(t *testing.T) {
 
 			d := FakeDocker(cl, facts.ContainerFilter{}.ContainerIgnored)
 
-			if got := d.RuntimeFact(context.Background(), nil); !reflect.DeepEqual(got, tt.want) {
+			if got := d.RuntimeFact(t.Context(), nil); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Docker.RuntimeFact() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-func string2TopBody(input string) containerTypes.ContainerTopOKBody {
-	procList := containerTypes.ContainerTopOKBody{}
+func string2TopBody(input string) containerTypes.TopResponse {
+	procList := containerTypes.TopResponse{}
 
 	lines := strings.Split(testutil.Unindent(input), "\n")
 	procList.Titles = strings.Fields(lines[0])
@@ -182,12 +182,12 @@ func TestDocker_Containers(t *testing.T) {
 
 			d := FakeDocker(cl, facts.ContainerFilter{}.ContainerIgnored)
 
-			containers, err := d.Containers(context.Background(), 0, true)
+			containers, err := d.Containers(t.Context(), 0, true)
 			if err != nil {
 				t.Error(err)
 			}
 
-			containersWithoutExclude, err := d.Containers(context.Background(), 0, false)
+			containersWithoutExclude, err := d.Containers(t.Context(), 0, false)
 			if err != nil {
 				t.Error(err)
 			}
@@ -238,7 +238,7 @@ func TestDocker_Containers(t *testing.T) {
 				}
 			}
 
-			if !d.IsRuntimeRunning(context.Background()) {
+			if !d.IsRuntimeRunning(t.Context()) {
 				t.Errorf("IsRuntimeRunning = false, want true")
 			}
 		})
@@ -262,7 +262,7 @@ func TestDocker_Run(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 
 			cl, err := NewDockerMock(tt.dir)
@@ -348,7 +348,7 @@ func TestDocker_Run(t *testing.T) {
 				}
 			}
 
-			if !d.IsRuntimeRunning(context.Background()) {
+			if !d.IsRuntimeRunning(t.Context()) {
 				t.Errorf("IsRuntimeRunning = false, want true")
 			}
 
@@ -685,7 +685,7 @@ func TestDocker_ContainerFromCGroup(t *testing.T) { //nolint: maintidx
 
 			sharedClient := FakeDocker(cl, facts.ContainerFilter{}.ContainerIgnored)
 
-			ctx := context.Background()
+			ctx := t.Context()
 
 			sharedQuerier := sharedClient.ProcessWithCache()
 
@@ -748,7 +748,7 @@ func TestDocker_ContainerFromCGroup(t *testing.T) { //nolint: maintidx
 					case 7:
 						dockerClient = FakeDocker(cl, facts.ContainerFilter{}.ContainerIgnored)
 						querier = dockerClient.ProcessWithCache()
-						cl.ReturnError = docker.ErrorConnectionFailed("value")
+						cl.ReturnError = makeErrConnectionFailed(t)
 						wantErr = true
 					}
 
@@ -995,8 +995,8 @@ func TestDocker_Processes(t *testing.T) {
 				}
 
 				cl.ReturnError = subTT.haveError
-				cl.Top = make(map[string]containerTypes.ContainerTopOKBody)
-				cl.TopWaux = make(map[string]containerTypes.ContainerTopOKBody)
+				cl.Top = make(map[string]containerTypes.TopResponse)
+				cl.TopWaux = make(map[string]containerTypes.TopResponse)
 
 				for id, s := range tt.top {
 					cl.Top[id] = string2TopBody(s)
@@ -1008,7 +1008,7 @@ func TestDocker_Processes(t *testing.T) {
 
 				d := FakeDocker(cl, facts.ContainerFilter{}.ContainerIgnored)
 
-				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+				ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 				defer cancel()
 
 				querier := d.ProcessWithCache()
@@ -1179,7 +1179,7 @@ func TestContainer_ListenAddresses(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 			defer cancel()
 
 			d := FakeDocker(tt.dockerClient, facts.ContainerFilter{}.ContainerIgnored)
@@ -1219,7 +1219,7 @@ func TestDecodeDocker(t *testing.T) {
 	//     bleemeo/bleemeo-agent \
 	//     python3 -c 'import docker;
 	//     print(docker.APIClient(version="1.21").top("test"))'
-	cases := []containerTypes.ContainerTopOKBody{
+	cases := []containerTypes.TopResponse{
 		// Boot2Docker 1.12.3 first boot
 		{
 			Processes: [][]string{
@@ -1306,10 +1306,7 @@ func TestPsTime2Second(t *testing.T) {
 }
 
 func Test_maybeWrapError(t *testing.T) {
-	var (
-		errNoConnection1 = docker.ErrorConnectionFailed("unix:///var/run/docker.sock")
-		errNoConnection2 = docker.ErrorConnectionFailed("tcp://1.2.3.4:7945/")
-	)
+	errNoConnection := makeErrConnectionFailed(t)
 
 	tests := []struct {
 		name          string
@@ -1333,20 +1330,14 @@ func Test_maybeWrapError(t *testing.T) {
 			workedOnce: true,
 		},
 		{
-			name:          "no runtime 1",
-			errInput:      errNoConnection1,
-			workedOnce:    false,
-			wantNoRuntime: true,
-		},
-		{
-			name:          "no runtime 2",
-			errInput:      errNoConnection2,
+			name:          "no runtime",
+			errInput:      errNoConnection,
 			workedOnce:    false,
 			wantNoRuntime: true,
 		},
 		{
 			name:          "not no runtime",
-			errInput:      errNoConnection1,
+			errInput:      errNoConnection,
 			workedOnce:    true,
 			wantNoRuntime: false,
 		},
@@ -1364,4 +1355,20 @@ func Test_maybeWrapError(t *testing.T) {
 			}
 		})
 	}
+}
+
+func makeErrConnectionFailed(t *testing.T) error {
+	t.Helper()
+
+	cl, err := docker.NewClientWithOpts(docker.WithHost("unix://bad/host/so_we_get_an_errConnectionFailed"))
+	if err != nil {
+		t.Fatal("Creating client:", err)
+	}
+
+	_, errNoConnection := cl.Ping(t.Context())
+	if errNoConnection == nil {
+		t.Fatal("Expected ping to failed, but didn't ...")
+	}
+
+	return errNoConnection
 }

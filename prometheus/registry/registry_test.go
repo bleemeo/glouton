@@ -312,7 +312,7 @@ func TestRegistry_Register(t *testing.T) {
 
 	now := time.Now()
 
-	result, err := reg.GatherWithState(context.Background(), GatherState{T0: now})
+	result, err := reg.GatherWithState(t.Context(), GatherState{T0: now})
 	if err != nil {
 		t.Error(err)
 	}
@@ -410,7 +410,7 @@ func TestRegistryDiagnostic(t *testing.T) {
 	// After this delay, registry should have run at least once.
 	time.Sleep(300 * time.Millisecond)
 
-	if err := reg.DiagnosticArchive(context.Background(), &fakeArchive{}); err != nil {
+	if err := reg.DiagnosticArchive(t.Context(), &fakeArchive{}); err != nil {
 		t.Error(err)
 	}
 }
@@ -426,7 +426,7 @@ func TestRegistry_pushPoint(t *testing.T) {
 
 	pusher := reg.WithTTL(24 * time.Hour)
 	pusher.PushPoints(
-		context.Background(),
+		t.Context(),
 		[]types.MetricPoint{
 			{
 				Point: types.Point{Value: 1.0, Time: t0},
@@ -517,7 +517,7 @@ func TestRegistry_pushPoint(t *testing.T) {
 	}
 
 	pusher.PushPoints(
-		context.Background(),
+		t.Context(),
 		[]types.MetricPoint{
 			{
 				Point: types.Point{Value: 1.0, Time: t0},
@@ -713,7 +713,7 @@ func TestRegistry_applyRelabel(t *testing.T) {
 			r.relabelConfigs = tt.fields.relabelConfigs
 			r.relabelHook = tt.relabelHook
 
-			promLabels, labelsWithMeta, annotations, _ := r.applyRelabel(context.Background(), tt.args.input)
+			promLabels, labelsWithMeta, annotations, _ := r.applyRelabel(t.Context(), tt.args.input)
 			if !reflect.DeepEqual(promLabels, tt.want) {
 				t.Errorf("Registry.applyRelabel() promLabels = %+v, want %+v", promLabels, tt.want)
 			}
@@ -785,8 +785,8 @@ func BenchmarkRegistry_applyRelabel(b *testing.B) {
 
 			b.ResetTimer()
 
-			for range b.N {
-				r.applyRelabel(context.Background(), tt.labels)
+			for b.Loop() {
+				r.applyRelabel(b.Context(), tt.labels)
 			}
 		})
 	}
@@ -816,7 +816,7 @@ func TestRegistry_slowGather(t *testing.T) { //nolint:maintidx
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	var registryWG sync.WaitGroup
@@ -832,13 +832,13 @@ func TestRegistry_slowGather(t *testing.T) { //nolint:maintidx
 	gather1 := &fakeGatherer{name: "name1"}
 	gather1.fillResponse()
 
-	slowCtx, cancelSlow := context.WithCancel(context.Background())
+	slowCtx, cancelSlow := context.WithCancel(t.Context())
 	defer cancelSlow()
 
 	gather2 := &fakeGatherer{name: "verySlow", hangCtx: slowCtx}
 	gather2.fillResponse()
 
-	grp, _ := errgroup.WithContext(context.Background())
+	grp, _ := errgroup.WithContext(t.Context())
 
 	var (
 		id1 int
@@ -1002,7 +1002,7 @@ func TestRegistry_slowGather(t *testing.T) { //nolint:maintidx
 	waitPointAndGatherCall(t, false, "name2")
 
 	// We will restart the full registry. This is normally not something we do. But for completeness let's do it.
-	ctx, cancel = context.WithCancel(context.Background())
+	ctx, cancel = context.WithCancel(t.Context())
 	defer cancel()
 
 	registryWG.Add(1)
@@ -1053,7 +1053,7 @@ func TestRegistry_run(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	go reg.Run(ctx) //nolint: errcheck
@@ -1160,7 +1160,7 @@ func registryRunOnce(t *testing.T, now time.Time, reg *Registry, kindToTest sour
 
 	switch kindToTest {
 	case kindPushPoint:
-		reg.WithTTL(5*time.Minute).PushPoints(context.Background(), input)
+		reg.WithTTL(5*time.Minute).PushPoints(t.Context(), input)
 	case kindPushPointCallback:
 		id, err := reg.registerPushPointsCallback(
 			opt,
@@ -1174,7 +1174,7 @@ func registryRunOnce(t *testing.T, now time.Time, reg *Registry, kindToTest sour
 			return err
 		}
 
-		reg.InternalRunScrape(context.Background(), context.Background(), now, id)
+		reg.InternalRunScrape(t.Context(), t.Context(), now, id)
 	case kindAppenderCallback:
 		id, err := reg.RegisterAppenderCallback(
 			opt,
@@ -1186,7 +1186,7 @@ func registryRunOnce(t *testing.T, now time.Time, reg *Registry, kindToTest sour
 			return err
 		}
 
-		reg.InternalRunScrape(context.Background(), context.Background(), now, id)
+		reg.InternalRunScrape(t.Context(), t.Context(), now, id)
 	case kindGatherer:
 		id, err := reg.RegisterGatherer(
 			opt,
@@ -1198,7 +1198,7 @@ func registryRunOnce(t *testing.T, now time.Time, reg *Registry, kindToTest sour
 			return err
 		}
 
-		reg.InternalRunScrape(context.Background(), context.Background(), now, id)
+		reg.InternalRunScrape(t.Context(), t.Context(), now, id)
 	case kindInput:
 		id, err := reg.RegisterInput(
 			opt,
@@ -1210,7 +1210,7 @@ func registryRunOnce(t *testing.T, now time.Time, reg *Registry, kindToTest sour
 			return err
 		}
 
-		reg.InternalRunScrape(context.Background(), context.Background(), now, id)
+		reg.InternalRunScrape(t.Context(), t.Context(), now, id)
 	default:
 		t.Fatalf("unknown kind: %s", kindToTest)
 	}
@@ -3657,7 +3657,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				t.Errorf("gotPoints mismatch (-want +got):\n%s", diff)
 			}
 
-			got, err := reg.GatherWithState(context.Background(), GatherState{T0: now})
+			got, err := reg.GatherWithState(t.Context(), GatherState{T0: now})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -3713,7 +3713,7 @@ func TestWaitForSecrets(t *testing.T) {
 
 			secretsGate := gate.New(tc.gateSize)
 
-			ctx, cancel := context.WithTimeout(context.Background(), tc.maxAllowedDuration)
+			ctx, cancel := context.WithTimeout(t.Context(), tc.maxAllowedDuration)
 			defer cancel()
 
 			var (

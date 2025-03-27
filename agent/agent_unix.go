@@ -51,7 +51,7 @@ func (a *agent) registerOSSpecificComponents(vethProvider *veth.Provider) {
 		nodeOption.WithDiskIgnore(a.config.DiskIgnore)
 		nodeOption.WithPathIgnoreFSType(filter)
 
-		if err := a.gathererRegistry.AddNodeExporter(nodeOption, vethProvider); err != nil {
+		if err := node.AddNodeExporter(a.gathererRegistry, nodeOption, vethProvider); err != nil {
 			logger.Printf("Unable to start node_exporter, system metrics will be missing: %v", err)
 		}
 	}

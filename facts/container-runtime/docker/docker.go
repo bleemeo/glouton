@@ -39,11 +39,12 @@ import (
 	containerTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
-	"github.com/docker/docker/api/types/network"
 
 	dockerTypes "github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/common"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
+	"github.com/docker/docker/api/types/network"
 	docker "github.com/docker/docker/client"
 	"github.com/docker/docker/errdefs"
 	"github.com/docker/docker/pkg/stdcopy"
@@ -783,7 +784,7 @@ func (d *Docker) updateContainer(ctx context.Context, cl dockerClient, container
 	return d.containers[containerID], nil
 }
 
-func (d *Docker) primaryAddress(inspect dockerTypes.ContainerJSON, bridgeNetworks map[string]interface{}, containerAddressOnDockerBridge map[string]string) string {
+func (d *Docker) primaryAddress(inspect container.InspectResponse, bridgeNetworks map[string]interface{}, containerAddressOnDockerBridge map[string]string) string {
 	if inspect.NetworkSettings != nil && inspect.NetworkSettings.IPAddress != "" {
 		return inspect.NetworkSettings.IPAddress
 	}
@@ -872,10 +873,10 @@ func (d *Docker) getClient(ctx context.Context) (cl dockerClient, err error) {
 
 type dockerClient interface {
 	ContainerExecAttach(ctx context.Context, execID string, config container.ExecAttachOptions) (dockerTypes.HijackedResponse, error)
-	ContainerExecCreate(ctx context.Context, container string, config container.ExecOptions) (dockerTypes.IDResponse, error)
-	ContainerInspect(ctx context.Context, container string) (dockerTypes.ContainerJSON, error)
-	ContainerList(ctx context.Context, options container.ListOptions) ([]dockerTypes.Container, error)
-	ContainerTop(ctx context.Context, container string, arguments []string) (container.ContainerTopOKBody, error)
+	ContainerExecCreate(ctx context.Context, container string, config container.ExecOptions) (common.IDResponse, error)
+	ContainerInspect(ctx context.Context, container string) (container.InspectResponse, error)
+	ContainerList(ctx context.Context, options container.ListOptions) ([]container.Summary, error)
+	ContainerTop(ctx context.Context, container string, arguments []string) (container.TopResponse, error)
 	Events(ctx context.Context, options events.ListOptions) (<-chan events.Message, <-chan error)
 	ImageInspectWithRaw(ctx context.Context, imageID string) (dockerTypes.ImageInspect, []byte, error)
 	NetworkInspect(ctx context.Context, network string, options network.InspectOptions) (network.Inspect, error)
@@ -953,7 +954,7 @@ func isDockerRunning() bool {
 	return false
 }
 
-func sortInspect(inspect dockerTypes.ContainerJSON) {
+func sortInspect(inspect container.InspectResponse) {
 	// Sort the docker inspect to have consistent hash value
 	// Mounts order does not matter but is not consistent between call to docker inspect.
 	if len(inspect.Mounts) > 0 {
@@ -974,7 +975,7 @@ func sortInspect(inspect dockerTypes.ContainerJSON) {
 // dockerContainer wraps the Docker inspect values and provide facts.Container implementation.
 type dockerContainer struct {
 	primaryAddress string
-	inspect        dockerTypes.ContainerJSON
+	inspect        container.InspectResponse
 	stopped        bool
 }
 
@@ -1367,7 +1368,7 @@ func (d *dockerProcessQuerier) processesContainerMap(ctx context.Context, c fact
 	return nil
 }
 
-func (d *dockerProcessQuerier) top(ctx context.Context, c facts.Container) (container.ContainerTopOKBody, container.ContainerTopOKBody, error) {
+func (d *dockerProcessQuerier) top(ctx context.Context, c facts.Container) (container.TopResponse, container.TopResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, dockerTimeout)
 	defer cancel()
 
@@ -1382,12 +1383,12 @@ func (d *dockerProcessQuerier) top(ctx context.Context, c facts.Container) (cont
 	d.d.l.Unlock()
 
 	if err != nil || cl == nil {
-		return container.ContainerTopOKBody{}, container.ContainerTopOKBody{}, err
+		return container.TopResponse{}, container.TopResponse{}, err
 	}
 
 	top, err := cl.ContainerTop(ctx, c.ID(), nil)
 	if err != nil {
-		return top, container.ContainerTopOKBody{}, err
+		return top, container.TopResponse{}, err
 	}
 
 	topWaux, err := cl.ContainerTop(ctx, c.ID(), []string{"waux"})
@@ -1395,7 +1396,7 @@ func (d *dockerProcessQuerier) top(ctx context.Context, c facts.Container) (cont
 	return top, topWaux, err
 }
 
-func decodeDocker(top container.ContainerTopOKBody, c facts.Container) []facts.Process {
+func decodeDocker(top container.TopResponse, c facts.Container) []facts.Process {
 	userIndex := -1
 	pidIndex := -1
 	pcpuIndex := -1

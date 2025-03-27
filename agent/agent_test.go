@@ -18,7 +18,6 @@
 package agent
 
 import (
-	"context"
 	"net/url"
 	"testing"
 	"time"
@@ -515,7 +514,7 @@ func TestSMARTStatus(t *testing.T) {
 
 			store := store.New("test store", time.Minute, time.Minute)
 
-			store.PushPoints(context.Background(), test.points)
+			store.PushPoints(t.Context(), test.points)
 
 			gotMetric := statusFromLastPoint(now, store, "smart_device_health_ok", map[string]string{types.LabelName: "smart_device_health_status"}, smartHealthStatus)
 
@@ -811,7 +810,7 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 
 			store := store.New("test store", time.Minute, time.Minute)
 
-			store.PushPoints(context.Background(), test.points)
+			store.PushPoints(t.Context(), test.points)
 
 			gotMetric := statusFromLastPoint(now, store, "upsd_status_flags", map[string]string{types.LabelName: "upsd_battery_status"}, upsdBatteryStatus)
 

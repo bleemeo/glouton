@@ -17,7 +17,6 @@
 package discovery
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -272,7 +271,7 @@ func TestDiscoverySingle(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for i, c := range cases {
 		var previousService []Service
@@ -904,7 +903,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 		},
 	}
 
-	if _, _, err := disc.discovery(context.Background()); err != nil {
+	if _, _, err := disc.discovery(t.Context()); err != nil {
 		t.Error(err)
 	}
 
@@ -935,7 +934,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 	reg.ExpectedAddedContains = []string{"Service input memcached", "check for memcached"}
 	reg.NewIDs = []int{1337, 666}
 
-	if _, _, err := disc.discovery(context.Background()); err != nil {
+	if _, _, err := disc.discovery(t.Context()); err != nil {
 		t.Error(err)
 	}
 
@@ -971,7 +970,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 	reg.NewIDs = []int{9999, 99999}
 	reg.ExpectedRemoveIDs = []int{42, 43}
 
-	if _, _, err := disc.discovery(context.Background()); err != nil {
+	if _, _, err := disc.discovery(t.Context()); err != nil {
 		t.Error(err)
 	}
 

@@ -33,7 +33,7 @@ func TestSize(t *testing.T) {
 	for size := 1; size < 1e6; size *= 10 {
 		t.Run(fmt.Sprintf("%d sized fifo queue", size), func(t *testing.T) {
 			queue := newFifo[int](size)
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(t.Context())
 
 			length := queue.Len()
 			if length != 0 {
@@ -111,7 +111,7 @@ func doesTimeout[T any](duration time.Duration, fn func(), queue *fifo[T]) (time
 func TestMethods(t *testing.T) {
 	t.Run("Put", func(t *testing.T) {
 		queue := newFifo[string](2)
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 
 		if doesTimeout(time.Millisecond, func() { queue.Put(ctx, "a") }, queue) {
 			cancel()
@@ -135,7 +135,7 @@ func TestMethods(t *testing.T) {
 		t.Parallel()
 
 		queue := newFifo[string](2)
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 
 		getFn := func(expectedValue string, expectedOk bool) func() {
 			return func() {
@@ -204,7 +204,7 @@ func TestClose(t *testing.T) {
 
 	t.Run("ThroughMethod", func(t *testing.T) {
 		queue := newFifo[float64](2)
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 
 		queue.Put(ctx, math.Pi)
 
@@ -240,7 +240,7 @@ func TestClose(t *testing.T) {
 
 	t.Run("ThroughContext", func(t *testing.T) {
 		queue := newFifo[float64](2)
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 
 		queue.Put(ctx, math.Pi)
 
@@ -279,7 +279,7 @@ func TestRacing(t *testing.T) {
 
 	t.Run("MultiWriter", func(t *testing.T) {
 		queue := newFifo[time.Time](1000)
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		g, errCtx := errgroup.WithContext(ctx)
 
 		for range 10 {
@@ -325,7 +325,7 @@ func TestRacing(t *testing.T) {
 
 	t.Run("MultiReader", func(t *testing.T) {
 		queue := newFifo[time.Time](1000)
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		g, errCtx := errgroup.WithContext(ctx)
 
 		g.Go(func() error {

@@ -79,7 +79,7 @@ func TestVSphereSteps(t *testing.T) {
 		t.Fatalf("Failed to parse vSphere URL %q: %v", vSphereCfg.URL, err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), commonTimeout)
+	ctx, cancel := context.WithTimeout(t.Context(), commonTimeout)
 	defer cancel()
 
 	finder, client, err := newDeviceFinder(ctx, vSphereCfg)
@@ -479,7 +479,7 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 			vSphereCfg, deferFn := setupVSphereAPITest(t, tc.dirName)
 			defer deferFn()
 
-			ctx, cancel := context.WithTimeout(context.Background(), commonTimeout)
+			ctx, cancel := context.WithTimeout(t.Context(), commonTimeout)
 			defer cancel()
 
 			manager := new(Manager)

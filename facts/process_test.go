@@ -251,7 +251,7 @@ func TestUpdateProcesses(t *testing.T) {
 
 	cr.makePID2Containers()
 
-	err := pp.updateProcesses(context.Background(), now, defaultLowProcessThreshold)
+	err := pp.updateProcesses(t.Context(), now, defaultLowProcessThreshold)
 	if err != nil {
 		t.Error(err)
 	}
@@ -432,7 +432,7 @@ func TestUpdateProcessesWithTerminated(t *testing.T) {
 		ps:               psutil,
 	}
 
-	err := pp.updateProcesses(context.Background(), now, defaultLowProcessThreshold)
+	err := pp.updateProcesses(t.Context(), now, defaultLowProcessThreshold)
 	if err != nil {
 		t.Error(err)
 	}
@@ -562,7 +562,7 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:maintidx
 		ps:               psutil,
 	}
 
-	err := pp.updateProcesses(context.Background(), now, defaultLowProcessThreshold)
+	err := pp.updateProcesses(t.Context(), now, defaultLowProcessThreshold)
 	if err != nil {
 		t.Error(err)
 	}
@@ -785,7 +785,7 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:maintidx
 		},
 	}
 
-	err = pp.updateProcesses(context.Background(), t1.Add(20*time.Second), defaultLowProcessThreshold)
+	err = pp.updateProcesses(t.Context(), t1.Add(20*time.Second), defaultLowProcessThreshold)
 	if err != nil {
 		t.Error(err)
 	}
@@ -988,7 +988,7 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:maintidx
 		},
 	}
 
-	err = pp.updateProcesses(context.Background(), t2.Add(time.Minute).Add(20*time.Second), defaultLowProcessThreshold)
+	err = pp.updateProcesses(t.Context(), t2.Add(time.Minute).Add(20*time.Second), defaultLowProcessThreshold)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1033,7 +1033,7 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:maintidx
 	cr.ContainerFromCGroupCalls = nil
 	cr.ContainerFromPIDCalls = nil
 
-	err = pp.updateProcesses(context.Background(), t2.Add(time.Hour), defaultLowProcessThreshold)
+	err = pp.updateProcesses(t.Context(), t2.Add(time.Hour), defaultLowProcessThreshold)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1139,7 +1139,7 @@ func TestDeltaCPUPercent(t *testing.T) {
 		},
 	}
 
-	err := pp.updateProcesses(context.Background(), now, defaultLowProcessThreshold)
+	err := pp.updateProcesses(t.Context(), now, defaultLowProcessThreshold)
 	if err != nil {
 		t.Error(err)
 	}
@@ -2013,7 +2013,7 @@ func TestUpdateProcessesTime(t *testing.T) { //nolint: maintidx
 				cr.ContainerFromPIDCalls = nil
 				cr.ProcessesCallCount = 0
 
-				err := pp.updateProcesses(context.Background(), currentTime, step.lowProcessesThreshold)
+				err := pp.updateProcesses(t.Context(), currentTime, step.lowProcessesThreshold)
 				if err != nil {
 					// This error is only an issue if container runtime don't return errors
 					if step.fromCGroupErr == nil && step.fromPIDErr == nil && step.otherErr == nil {
@@ -2408,7 +2408,7 @@ func Benchmark_sortParentFirst(b *testing.B) {
 
 	for _, tt := range tests {
 		b.Run(tt.name, func(b *testing.B) {
-			for range b.N {
+			for b.Loop() {
 				b.StopTimer()
 
 				processes := tt.processesFactory(b)

@@ -16,14 +16,14 @@
 
 //go:build !windows
 
-package registry
+package node
 
 import (
 	"strings"
 
 	"github.com/bleemeo/glouton/facts/container-runtime/veth"
 	"github.com/bleemeo/glouton/logger"
-	"github.com/bleemeo/glouton/prometheus/exporter/node"
+	"github.com/bleemeo/glouton/prometheus/registry"
 	"github.com/bleemeo/glouton/types"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -31,8 +31,8 @@ import (
 )
 
 // AddNodeExporter add a node_exporter to collector.
-func (r *Registry) AddNodeExporter(option node.Option, vethProvider *veth.Provider) error {
-	collector, err := node.NewCollector(option)
+func AddNodeExporter(gloutonRegistry *registry.Registry, option Option, vethProvider *veth.Provider) error {
+	collector, err := NewCollector(option)
 	if err != nil {
 		return err
 	}
@@ -44,10 +44,10 @@ func (r *Registry) AddNodeExporter(option node.Option, vethProvider *veth.Provid
 		return err
 	}
 
-	_, err = r.RegisterGatherer(
-		RegistrationOption{
+	_, err = gloutonRegistry.RegisterGatherer(
+		registry.RegistrationOption{
 			Description: "node_exporter",
-			JitterSeed:  baseJitter,
+			JitterSeed:  0,
 		},
 		nodeGatherer{
 			gatherer:     reg,

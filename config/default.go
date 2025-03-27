@@ -81,7 +81,7 @@ func DefaultConfig() Config { //nolint:maintidx
 			},
 			WindowsExporter: NodeExporter{
 				Enable:     true,
-				Collectors: []string{"cpu", "cs", "logical_disk", "logon", "memory", "net", "os", "system", "tcp"},
+				Collectors: []string{"cpu", "cs", "logical_disk", "logon", "memory", "net", "os", "system", "tcp", "diskdrive"},
 			},
 			Telemetry: Telemetry{
 				Enable:  true,

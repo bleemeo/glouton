@@ -1,0 +1,164 @@
+# HELP windows_diskdrive_info General drive information
+# TYPE windows_diskdrive_info gauge
+windows_diskdrive_info{caption="SAMSUNG MZVL2512HCJQ-00B07",device_id="PHYSICALDRIVE0",model="DD1",name="\\\\.\\PHYSICALDRIVE0"} 1
+windows_diskdrive_info{caption="SAMSUNG MZVL2512HCJQ-00B07",device_id="PHYSICALDRIVE1",model="DD2",name="\\\\.\\PHYSICALDRIVE1"} 1
+windows_diskdrive_info{caption="SAMSUNG MZVL2512HCJQ-00B07",device_id="PHYSICALDRIVE2",model="DD3",name="\\\\.\\PHYSICALDRIVE2"} 1
+windows_diskdrive_info{caption="SAMSUNG MZVL2512HCJQ-00B07",device_id="PHYSICALDRIVE3",model="DD4",name="\\\\.\\PHYSICALDRIVE3"} 1
+# HELP windows_diskdrive_status Status of the drive
+# TYPE windows_diskdrive_status gauge
+windows_diskdrive_status{name="PHYSICALDRIVE0",status="Degraded"} 1
+windows_diskdrive_status{name="PHYSICALDRIVE0",status="Error"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE0",status="Lost Comm"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE0",status="No Contact"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE0",status="Nonrecover"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE0",status="OK"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE0",status="Pred fail"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE0",status="Service"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE0",status="Starting"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE0",status="Stopping"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE0",status="Stressed"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE0",status="Unknown"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE1",status="Degraded"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE1",status="Error"} 1
+windows_diskdrive_status{name="PHYSICALDRIVE1",status="Lost Comm"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE1",status="No Contact"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE1",status="Nonrecover"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE1",status="OK"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE1",status="Pred fail"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE1",status="Service"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE1",status="Starting"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE1",status="Stopping"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE1",status="Stressed"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE1",status="Unknown"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE2",status="Degraded"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE2",status="Error"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE2",status="Lost Comm"} 1
+windows_diskdrive_status{name="PHYSICALDRIVE2",status="No Contact"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE2",status="Nonrecover"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE2",status="OK"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE2",status="Pred fail"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE2",status="Service"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE2",status="Starting"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE2",status="Stopping"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE2",status="Stressed"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE2",status="Unknown"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE3",status="Degraded"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE3",status="Error"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE3",status="Lost Comm"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE3",status="No Contact"} 1
+windows_diskdrive_status{name="PHYSICALDRIVE3",status="Nonrecover"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE3",status="OK"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE3",status="Pred fail"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE3",status="Service"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE3",status="Starting"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE3",status="Stopping"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE3",status="Stressed"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE3",status="Unknown"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE4",status="Degraded"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE4",status="Error"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE4",status="Lost Comm"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE4",status="No Contact"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE4",status="Nonrecover"} 1
+windows_diskdrive_status{name="PHYSICALDRIVE4",status="OK"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE4",status="Pred fail"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE4",status="Service"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE4",status="Starting"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE4",status="Stopping"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE4",status="Stressed"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE4",status="Unknown"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE5",status="Degraded"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE5",status="Error"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE5",status="Lost Comm"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE5",status="No Contact"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE5",status="Nonrecover"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE5",status="OK"} 1
+windows_diskdrive_status{name="PHYSICALDRIVE5",status="Pred fail"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE5",status="Service"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE5",status="Starting"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE5",status="Stopping"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE5",status="Stressed"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE5",status="Unknown"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE6",status="Degraded"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE6",status="Error"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE6",status="Lost Comm"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE6",status="No Contact"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE6",status="Nonrecover"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE6",status="OK"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE6",status="Pred fail"} 1
+windows_diskdrive_status{name="PHYSICALDRIVE6",status="Service"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE6",status="Starting"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE6",status="Stopping"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE6",status="Stressed"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE6",status="Unknown"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE7",status="Degraded"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE7",status="Error"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE7",status="Lost Comm"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE7",status="No Contact"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE7",status="Nonrecover"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE7",status="OK"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE7",status="Pred fail"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE7",status="Service"} 1
+windows_diskdrive_status{name="PHYSICALDRIVE7",status="Starting"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE7",status="Stopping"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE7",status="Stressed"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE7",status="Unknown"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE8",status="Degraded"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE8",status="Error"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE8",status="Lost Comm"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE8",status="No Contact"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE8",status="Nonrecover"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE8",status="OK"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE8",status="Pred fail"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE8",status="Service"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE8",status="Starting"} 1
+windows_diskdrive_status{name="PHYSICALDRIVE8",status="Stopping"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE8",status="Stressed"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE8",status="Unknown"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE9",status="Degraded"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE9",status="Error"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE9",status="Lost Comm"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE9",status="No Contact"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE9",status="Nonrecover"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE9",status="OK"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE9",status="Pred fail"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE9",status="Service"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE9",status="Starting"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE9",status="Stopping"} 1
+windows_diskdrive_status{name="PHYSICALDRIVE9",status="Stressed"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE9",status="Unknown"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE10",status="Degraded"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE10",status="Error"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE10",status="Lost Comm"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE10",status="No Contact"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE10",status="Nonrecover"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE10",status="OK"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE10",status="Pred fail"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE10",status="Service"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE10",status="Starting"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE10",status="Stopping"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE10",status="Stressed"} 1
+windows_diskdrive_status{name="PHYSICALDRIVE10",status="Unknown"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE11",status="Degraded"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE11",status="Error"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE11",status="Lost Comm"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE11",status="No Contact"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE11",status="Nonrecover"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE11",status="OK"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE11",status="Pred fail"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE11",status="Service"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE11",status="Starting"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE11",status="Stopping"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE11",status="Stressed"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE11",status="Unknown"} 1
+windows_diskdrive_status{name="PHYSICALDRIVE12",status="Degraded"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE12",status="Error"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE12",status="Lost Comm"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE12",status="No Contact"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE12",status="Nonrecover"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE12",status="OK"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE12",status="Pred fail"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE12",status="Service"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE12",status="Starting"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE12",status="Stopping"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE12",status="Stressed"} 0
+windows_diskdrive_status{name="PHYSICALDRIVE12",status="Unknown"} 0

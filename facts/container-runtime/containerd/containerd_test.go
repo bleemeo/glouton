@@ -71,7 +71,7 @@ func TestContainerd_RuntimeFact(t *testing.T) {
 
 			c := FakeContainerd(cl, facts.ContainerFilter{}.ContainerIgnored)
 
-			if got := c.RuntimeFact(context.Background(), nil); !reflect.DeepEqual(got, tt.want) {
+			if got := c.RuntimeFact(t.Context(), nil); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Containerd.RuntimeFact() = %v, want %v", got, tt.want)
 			}
 		})
@@ -155,12 +155,12 @@ func TestContainerd_Containers(t *testing.T) {
 
 			c := FakeContainerd(cl, facts.ContainerFilter{}.ContainerIgnored)
 
-			containers, err := c.Containers(context.Background(), 0, true)
+			containers, err := c.Containers(t.Context(), 0, true)
 			if err != nil {
 				t.Error(err)
 			}
 
-			containersWithoutExclude, err := c.Containers(context.Background(), 0, false)
+			containersWithoutExclude, err := c.Containers(t.Context(), 0, false)
 			if err != nil {
 				t.Error(err)
 			}
@@ -211,7 +211,7 @@ func TestContainerd_Containers(t *testing.T) {
 				}
 			}
 
-			if !c.IsRuntimeRunning(context.Background()) {
+			if !c.IsRuntimeRunning(t.Context()) {
 				t.Errorf("IsRuntimeRunning = false, want true")
 			}
 		})
@@ -233,7 +233,7 @@ func TestContainerd_Run(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 
 			cl, err := NewMockFromFile(filepath.Join(tt.dir, "containerd.json"))
@@ -356,7 +356,7 @@ func TestContainerd_Run(t *testing.T) {
 				}
 			}
 
-			if !c.IsRuntimeRunning(context.Background()) {
+			if !c.IsRuntimeRunning(t.Context()) {
 				t.Errorf("IsRuntimeRunning = false, want true")
 			}
 
@@ -493,7 +493,7 @@ func TestContainerd_ContainerFromCGroup(t *testing.T) {
 
 			c := FakeContainerd(cl, facts.ContainerFilter{}.ContainerIgnored)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 			defer cancel()
 
 			for _, ttt := range tt.wants {
@@ -578,7 +578,7 @@ func TestContainerd_ContainerFromPID(t *testing.T) {
 
 			c := FakeContainerd(cl, facts.ContainerFilter{}.ContainerIgnored)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 			defer cancel()
 
 			querier := c.ProcessWithCache()

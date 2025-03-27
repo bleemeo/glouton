@@ -24,11 +24,11 @@ import (
 
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/logger"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/go-kit/log"
 	"github.com/prometheus-community/windows_exporter/collector"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 const maxScrapeDuration time.Duration = 9500 * time.Millisecond
@@ -36,13 +36,22 @@ const maxScrapeDuration time.Duration = 9500 * time.Millisecond
 func optionsToFlags(option inputs.CollectorConfig) map[string]string {
 	result := make(map[string]string)
 
-	result["collector.logical_disk.volume-exclude"] = option.IODiskMatcher.AsDenyRegexp()
-	result["collector.net.nic-exclude"] = option.NetIfMatcher.AsDenyRegexp()
+	if option.IODiskMatcher != nil {
+		result["collector.logical_disk.volume-exclude"] = option.IODiskMatcher.AsDenyRegexp()
+	}
+
+	if option.NetIfMatcher != nil {
+		result["collector.net.nic-exclude"] = option.NetIfMatcher.AsDenyRegexp()
+	}
 
 	return result
 }
 
 func setKingpinOptions(option inputs.CollectorConfig) error {
+	// For option, it's now required to call RegisterCollectorsFlags
+	app := kingpin.New("windows_exporter", "A metrics collector for Windows.")
+	collector.RegisterCollectorsFlags(app)
+
 	optionMap := optionsToFlags(option)
 	args := make([]string, 0, len(optionMap))
 
@@ -52,7 +61,7 @@ func setKingpinOptions(option inputs.CollectorConfig) error {
 
 	logger.V(2).Printf("Starting node_exporter with %v as args", args)
 
-	if _, err := kingpin.CommandLine.Parse(args); err != nil {
+	if _, err := app.Parse(args); err != nil {
 		return fmt.Errorf("kingpin initialization: %w", err)
 	}
 
@@ -60,6 +69,10 @@ func setKingpinOptions(option inputs.CollectorConfig) error {
 }
 
 func NewCollector(enabledCollectors []string, options inputs.CollectorConfig) (prometheus.Collector, error) {
+	return newCollector(enabledCollectors, options)
+}
+
+func newCollector(enabledCollectors []string, options inputs.CollectorConfig) (*windowsCollector, error) {
 	if err := setKingpinOptions(options); err != nil {
 		return nil, err
 	}
@@ -67,6 +80,8 @@ func NewCollector(enabledCollectors []string, options inputs.CollectorConfig) (p
 	extLogger := log.With(logger.GoKitLoggerWrapper(logger.V(2)), "collector", "windows_exporter")
 
 	collectors := map[string]collector.Collector{}
+
+	collector.RegisterCollectors(extLogger)
 
 	for _, name := range enabledCollectors {
 		c, err := collector.Build(name, extLogger)

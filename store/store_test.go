@@ -17,7 +17,6 @@
 package store
 
 import (
-	"context"
 	"fmt"
 	"math"
 	"math/rand"
@@ -290,7 +289,7 @@ func TestPoints(t *testing.T) {
 	p1 := types.Point{Time: t1, Value: -88}
 	p2 := types.Point{Time: t2, Value: 13.37}
 
-	db.PushPoints(context.Background(), []types.MetricPoint{
+	db.PushPoints(t.Context(), []types.MetricPoint{
 		{Point: p0, Labels: labels},
 	})
 
@@ -307,10 +306,10 @@ func TestPoints(t *testing.T) {
 		t.Errorf("Unexpected value for db.points[%v][0]:\n%v", m.metricID, diff)
 	}
 
-	db.PushPoints(context.Background(), []types.MetricPoint{
+	db.PushPoints(t.Context(), []types.MetricPoint{
 		{Point: p1, Labels: labels},
 	})
-	db.PushPoints(context.Background(), []types.MetricPoint{
+	db.PushPoints(t.Context(), []types.MetricPoint{
 		{Point: p2, Labels: labels},
 	})
 
@@ -568,7 +567,7 @@ func Benchmark_metricGetOrCreate(b *testing.B) {
 
 			b.ResetTimer()
 
-			for range b.N {
+			for b.Loop() {
 				for _, lbls := range metricsLabels {
 					db.metricGetOrCreate(lbls)
 				}
@@ -756,7 +755,7 @@ func TestStore_run(t *testing.T) {
 			store.nowFunc = func() time.Time {
 				return tt.now
 			}
-			store.PushPoints(context.Background(), tt.pushPoints)
+			store.PushPoints(t.Context(), tt.pushPoints)
 			store.run(tt.now)
 
 			for _, want := range tt.want {

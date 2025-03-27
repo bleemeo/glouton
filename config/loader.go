@@ -267,6 +267,7 @@ func convertTypes(
 				blackboxModuleHookFunc(),
 				stringToMapHookFunc(),
 				stringToBoolHookFunc(),
+				StringToIntSliceHookFunc(","),
 			),
 			Metadata:         nil,
 			ErrorUnused:      true,
