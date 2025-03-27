@@ -180,7 +180,7 @@ func TestHandleContainerLogs(t *testing.T) {
 		Resource:       pcommon.NewResource(),
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	logBuf := logBuffer{

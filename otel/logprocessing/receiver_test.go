@@ -243,7 +243,7 @@ func TestFileLogReceiver(t *testing.T) {
 		t.Fatal("Failed to initialize log receiver:", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	err = recv.update(ctx, &pipeline, addWarningsFn(t))
@@ -392,7 +392,7 @@ func TestFileLogReceiverWithHostroot(t *testing.T) {
 		t.Fatal("Failed to initialize log receiver:", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	pipeline := pipelineContext{
@@ -555,7 +555,7 @@ func TestExecLogReceiver(t *testing.T) {
 		Resource:       pcommon.NewResource(),
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	for _, tc := range cases {

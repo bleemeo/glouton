@@ -44,6 +44,7 @@ import (
 	"github.com/docker/docker/api/types/common"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	docker "github.com/docker/docker/client"
 	"github.com/docker/docker/errdefs"
@@ -878,7 +879,7 @@ type dockerClient interface {
 	ContainerList(ctx context.Context, options container.ListOptions) ([]container.Summary, error)
 	ContainerTop(ctx context.Context, container string, arguments []string) (container.TopResponse, error)
 	Events(ctx context.Context, options events.ListOptions) (<-chan events.Message, <-chan error)
-	ImageInspectWithRaw(ctx context.Context, imageID string) (dockerTypes.ImageInspect, []byte, error)
+	ImageInspectWithRaw(ctx context.Context, imageID string) (image.InspectResponse, []byte, error)
 	NetworkInspect(ctx context.Context, network string, options network.InspectOptions) (network.Inspect, error)
 	NetworkList(ctx context.Context, options network.ListOptions) ([]network.Summary, error)
 	Ping(ctx context.Context) (dockerTypes.Ping, error)

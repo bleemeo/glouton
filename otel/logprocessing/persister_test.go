@@ -18,7 +18,6 @@ package logprocessing
 
 import (
 	"bytes"
-	"context"
 	"log"
 	"testing"
 
@@ -43,7 +42,7 @@ func TestPersistHost(t *testing.T) { //nolint:maintidx
 		val2 = "val2"
 	)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	compID := component.MustNewID("unused")
 
 	st, err := state.LoadReadOnly("not", "used")

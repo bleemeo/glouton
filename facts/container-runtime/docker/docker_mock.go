@@ -31,6 +31,7 @@ import (
 	"github.com/docker/docker/api/types/common"
 	containerTypes "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 )
 
@@ -139,8 +140,8 @@ func (cl *MockDockerClient) Events(context.Context, events.ListOptions) (<-chan 
 	return nil, ch
 }
 
-func (cl *MockDockerClient) ImageInspectWithRaw(context.Context, string) (dockerTypes.ImageInspect, []byte, error) {
-	return dockerTypes.ImageInspect{}, nil, errNotImplemented
+func (cl *MockDockerClient) ImageInspectWithRaw(context.Context, string) (image.InspectResponse, []byte, error) {
+	return image.InspectResponse{}, nil, errNotImplemented
 }
 
 // NetworkInspect is not implemented.
