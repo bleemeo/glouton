@@ -127,6 +127,12 @@ func DefaultKnownLogFormats() map[string][]OTELOperator {
 				"value": "stdout",
 			},
 			nginxAccessParser,
+			OTELOperator{
+				"type":        "time_parser",
+				"parse_from":  "attributes.time",
+				"layout":      "%d/%b/%Y:%H:%M:%S %z",
+				"layout_type": "strptime",
+			},
 		),
 		"nginx_error": flattenOps(
 			OTELOperator{
@@ -136,6 +142,12 @@ func DefaultKnownLogFormats() map[string][]OTELOperator {
 				"value": "stderr",
 			},
 			nginxErrorParser,
+			OTELOperator{
+				"type":        "time_parser",
+				"parse_from":  "attributes.time",
+				"layout":      "%Y/%m/%d %H:%M:%S",
+				"layout_type": "strptime",
+			},
 		),
 		"nginx_combined": flattenOps(
 			OTELOperator{
@@ -190,6 +202,12 @@ func DefaultKnownLogFormats() map[string][]OTELOperator {
 				"value": "stdout",
 			},
 			apacheAccessParser,
+			OTELOperator{
+				"type":        "time_parser",
+				"parse_from":  "attributes.time",
+				"layout":      "%d/%b/%Y:%H:%M:%S %z",
+				"layout_type": "strptime",
+			},
 		),
 		"apache_error": flattenOps(
 			OTELOperator{
@@ -199,6 +217,12 @@ func DefaultKnownLogFormats() map[string][]OTELOperator {
 				"value": "stderr",
 			},
 			apacheErrorParser,
+			OTELOperator{
+				"type":        "time_parser",
+				"parse_from":  "attributes.time",
+				"layout":      "%a %b %d %H:%M:%S %Y",
+				"layout_type": "strptime",
+			},
 		),
 		"apache_combined": flattenOps(
 			OTELOperator{
