@@ -103,6 +103,15 @@ func DefaultKnownLogFormats() map[string][]OTELOperator {
 		renameAttr("client_port", "client.port"),
 	}
 
+	kafkaParser := []OTELOperator{
+		{
+			"id":    "kafka_parser",
+			"type":  "regex_parser",
+			"regex": `^\[(?P<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})] \w+( \[[^\]]*(partition=(?P<message_destination_partition_id>[\w-]+))[^\]]*\])? .+ \([\w\.]+\)`,
+		},
+		renameAttr("message_destination_partition_id", "messaging.destination.partition.id"),
+	}
+
 	return map[string][]OTELOperator{
 		"json": {
 			{
@@ -269,5 +278,15 @@ func DefaultKnownLogFormats() map[string][]OTELOperator {
 				"type": "noop",
 			},
 		),
+		"kafka": flattenOps(
+			kafkaParser,
+			OTELOperator{
+				"type":        "time_parser",
+				"parse_from":  "attributes.time",
+				"layout":      "%Y-%m-%d %H:%M:%S,%f",
+				"layout_type": "strptime",
+			},
+		),
+		"kafka_docker": kafkaParser, // we'll rely on the timestamp provided by the runtime
 	}
 }

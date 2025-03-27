@@ -40,6 +40,12 @@ var servicesLogInfo = map[ServiceName]logProcessingInfo{ //nolint: gochecknoglob
 		},
 		DockerFormat: "nginx_combined",
 	},
+	KafkaService: {
+		FileFormats: []ServiceLogReceiver{
+			// TODO
+		},
+		DockerFormat: "kafka_docker",
+	},
 }
 
 type ServiceLogReceiver struct {
