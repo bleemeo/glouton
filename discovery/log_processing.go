@@ -52,6 +52,12 @@ var servicesLogInfo = map[ServiceName]logProcessingInfo{ //nolint: gochecknoglob
 		},
 		DockerFormat: "redis_docker",
 	},
+	HAProxyService: {
+		FileFormats: []ServiceLogReceiver{
+			// TODO
+		},
+		DockerFormat: "haproxy",
+	},
 }
 
 type ServiceLogReceiver struct {

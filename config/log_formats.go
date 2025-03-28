@@ -120,6 +120,15 @@ func DefaultKnownLogFormats() map[string][]OTELOperator {
 		},
 	}
 
+	haproxyParser := []OTELOperator{
+		{
+			"id":    "haproxy_parser",
+			"type":  "regex_parser",
+			"regex": `^\[[A-Z]+\]\s+\((?<process_id>\d+)\)\s*:\s*.+`,
+		},
+		renameAttr("process_id", "process.id"),
+	}
+
 	return map[string][]OTELOperator{
 		"json": {
 			{
@@ -306,5 +315,6 @@ func DefaultKnownLogFormats() map[string][]OTELOperator {
 			},
 		),
 		"redis_docker": redisParser, // we'll rely on the timestamp provided by the runtime
+		"haproxy":      haproxyParser,
 	}
 }
