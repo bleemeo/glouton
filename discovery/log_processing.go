@@ -46,6 +46,12 @@ var servicesLogInfo = map[ServiceName]logProcessingInfo{ //nolint: gochecknoglob
 		},
 		DockerFormat: "kafka_docker",
 	},
+	RedisService: {
+		FileFormats: []ServiceLogReceiver{
+			// TODO
+		},
+		DockerFormat: "redis_docker",
+	},
 }
 
 type ServiceLogReceiver struct {

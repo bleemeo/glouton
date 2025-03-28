@@ -112,6 +112,14 @@ func DefaultKnownLogFormats() map[string][]OTELOperator {
 		renameAttr("message_destination_partition_id", "messaging.destination.partition.id"),
 	}
 
+	redisParser := []OTELOperator{
+		{
+			"id":    "redis_parser",
+			"type":  "regex_parser",
+			"regex": `^\d+:[A-Z] (?<time>\d{2} \w{3} \d{4} \d{2}:\d{2}:\d{2}\.\d{3}) [.\-*#] .+`,
+		},
+	}
+
 	return map[string][]OTELOperator{
 		"json": {
 			{
@@ -288,5 +296,15 @@ func DefaultKnownLogFormats() map[string][]OTELOperator {
 			},
 		),
 		"kafka_docker": kafkaParser, // we'll rely on the timestamp provided by the runtime
+		"redis": flattenOps(
+			redisParser,
+			OTELOperator{
+				"type":        "time_parser",
+				"parse_from":  "attributes.time",
+				"layout":      "%d %b %Y %H:%M:%S.%L",
+				"layout_type": "strptime",
+			},
+		),
+		"redis_docker": redisParser, // we'll rely on the timestamp provided by the runtime
 	}
 }
