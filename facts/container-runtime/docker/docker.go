@@ -454,7 +454,7 @@ func (d *Docker) ImageTags(ctx context.Context, imageID, _ string) ([]string, er
 	d.l.Lock()
 	defer d.l.Unlock()
 
-	img, _, err := d.client.ImageInspectWithRaw(ctx, imageID) // FIXME: switch to ImageInspect() in docker v28
+	img, err := d.client.ImageInspect(ctx, imageID)
 	if err != nil {
 		return nil, err
 	}
@@ -879,7 +879,7 @@ type dockerClient interface {
 	ContainerList(ctx context.Context, options container.ListOptions) ([]container.Summary, error)
 	ContainerTop(ctx context.Context, container string, arguments []string) (container.TopResponse, error)
 	Events(ctx context.Context, options events.ListOptions) (<-chan events.Message, <-chan error)
-	ImageInspectWithRaw(ctx context.Context, imageID string) (image.InspectResponse, []byte, error)
+	ImageInspect(ctx context.Context, imageID string, inspectOpts ...docker.ImageInspectOption) (image.InspectResponse, error)
 	NetworkInspect(ctx context.Context, network string, options network.InspectOptions) (network.Inspect, error)
 	NetworkList(ctx context.Context, options network.ListOptions) ([]network.Summary, error)
 	Ping(ctx context.Context) (dockerTypes.Ping, error)

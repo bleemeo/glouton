@@ -1047,16 +1047,6 @@ func (c wrappedContainer) StoppedAndReplaced() bool {
 	return false
 }
 
-func (c wrappedContainer) RestartCount() int {
-	for _, status := range c.pod.Status.ContainerStatuses {
-		if status.ContainerID == c.ID() {
-			return int(status.RestartCount)
-		}
-	}
-
-	return 0
-}
-
 type wrapProcessQuerier struct {
 	facts.ContainerRuntimeProcessQuerier
 	k *Kubernetes

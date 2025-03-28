@@ -26,6 +26,7 @@ import (
 	"reflect"
 
 	"github.com/bleemeo/glouton/facts"
+	docker "github.com/docker/docker/client"
 
 	dockerTypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/common"
@@ -140,8 +141,8 @@ func (cl *MockDockerClient) Events(context.Context, events.ListOptions) (<-chan 
 	return nil, ch
 }
 
-func (cl *MockDockerClient) ImageInspectWithRaw(context.Context, string) (image.InspectResponse, []byte, error) {
-	return image.InspectResponse{}, nil, errNotImplemented
+func (cl *MockDockerClient) ImageInspect(context.Context, string, ...docker.ImageInspectOption) (image.InspectResponse, error) {
+	return image.InspectResponse{}, errNotImplemented
 }
 
 // NetworkInspect is not implemented.
