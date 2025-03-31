@@ -40,11 +40,13 @@ func flattenOps(ops ...any) []OTELOperator {
 
 // renameAttr returns an operator that renames the given attribute field to the desired name.
 // Its main purpose is to allow dots (.) in attribute names that come from regexp named groups.
+// If the source attribute doesn't exist, the operator is a no-op.
 func renameAttr(from, to string) OTELOperator {
 	return OTELOperator{
 		"type": "move",
 		"from": "attributes." + from,
 		"to":   "attributes['" + to + "']",
+		"if":   `"` + from + `" in attributes`,
 	}
 }
 
@@ -52,6 +54,14 @@ func removeAttr(name string) OTELOperator {
 	return OTELOperator{
 		"type":  "remove",
 		"field": "attributes." + name,
+	}
+}
+
+func removeAttrWhenUndefined(name string) OTELOperator {
+	return OTELOperator{
+		"type":  "remove",
+		"field": "attributes." + name,
+		"if":    `get(attributes, "` + name + `") in [nil, ""]`,
 	}
 }
 
@@ -86,7 +96,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		{
 			"id":    "nginx_error_parser",
 			"type":  "regex_parser",
-			"regex": `^(?P<time>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) \[(?P<severity>\w+)] \d+#\d+: \*\d+ .*?, client: (?P<client_address>[\d\.]+), server: (?P<server_address>\S+), request: "(?P<http_request_method>\S+) (?P<http_route>\S+) \S+", host: "(?P<network_local_address>\w+):(?<server_port>\d+)"`,
+			"regex": `^(?P<time>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) \[(?P<severity>\w+)] \d+#\d+: [^,]+(, client: (?P<client_address>[\d.]+), server: (?P<server_address>\S+), request: "(?P<http_request_method>\S+) (?P<http_route>\S+) \S+", host: "(?P<network_local_address>[\w.]+):(?<server_port>\d+)")?`,
 			"severity": map[string]any{
 				"parse_from": "attributes.severity",
 				// Log level reference can be found at https://nginx.org/en/docs/ngx_core_module.html#error_log
@@ -103,6 +113,12 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 				},
 			},
 		},
+		removeAttrWhenUndefined("client_address"),
+		removeAttrWhenUndefined("server_address"),
+		removeAttrWhenUndefined("http_request_method"),
+		removeAttrWhenUndefined("http_route"),
+		removeAttrWhenUndefined("network_local_address"),
+		removeAttrWhenUndefined("server_port"),
 		renameAttr("client_address", "client.address"),
 		renameAttr("server_address", "server.address"),
 		renameAttr("http_request_method", "http.request.method"),
@@ -116,9 +132,12 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		{
 			"id":       "apache_access_parser",
 			"type":     "regex_parser",
-			"regex":    `^(?P<client_address>\S+) \S+ (?P<user_name>\S+) \[(?P<time>[^\]]+)] "(?P<http_request_method>\S+) (?P<http_route>\S+) \S+" (?P<http_response_status_code>\d+) (?P<http_response_size>\S+)`,
+			"regex":    `^(?P<client_address>\S+) \S+ (?P<user_name>\S+) \[(?P<time>[^\]]+)] "(((?P<http_request_method>\S+) (?P<http_route>\S+) \S+)|-)" (?P<http_response_status_code>\d+) ((?P<http_response_size>\d+)|-)`,
 			"severity": severityFromHTTPStatusCode,
 		},
+		removeAttrWhenUndefined("http_request_method"),
+		removeAttrWhenUndefined("http_route"),
+		removeAttrWhenUndefined("http_response_size"),
 		renameAttr("client_address", "client.address"),
 		renameAttr("user_name", "user.name"),
 		renameAttr("http_request_method", "http.request.method"),
@@ -130,7 +149,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		{
 			"id":    "apache_error_parser",
 			"type":  "regex_parser",
-			"regex": `^\[(?P<time>[\w :/\.]+)\] \[\w+:(?P<severity>\w+)]( \[pid (?P<process_pid>\d+):tid (?P<thread_id>\d+)\])?( \[client (?P<client_address>[\d\.]+)(:(?<client_port>\d+))?\])? .*`,
+			"regex": `^\[(?P<time>[\w :/.]+)\] \[\w+:(?P<severity>\w+)]( \[pid (?P<process_pid>\d+):tid (?P<thread_id>\d+)\])?( \[client (?P<client_address>[\d.]+)(:(?<client_port>\d+))?\])? .*`,
 			"severity": map[string]any{
 				"parse_from": "attributes.severity",
 				// Log level reference can be found at https://httpd.apache.org/docs/current/mod/core.html#loglevel
@@ -152,6 +171,10 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 				},
 			},
 		},
+		removeAttrWhenUndefined("process_pid"),
+		removeAttrWhenUndefined("thread_id"),
+		removeAttrWhenUndefined("client_address"),
+		removeAttrWhenUndefined("client_port"),
 		renameAttr("process_pid", "process.pid"),
 		renameAttr("thread_id", "thread.id"),
 		renameAttr("client_address", "client.address"),
@@ -163,7 +186,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		{
 			"id":    "kafka_parser",
 			"type":  "regex_parser",
-			"regex": `^\[(?P<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})] (?P<severity>\w+)( \[[^\]]*(partition=(?P<message_destination_partition_id>[\w-]+))[^\]]*\])? .+ \([\w\.]+\)`,
+			"regex": `^\[(?P<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})] (?P<severity>\w+)( \[[^\]]*(partition=(?P<message_destination_partition_id>[\w-]+))[^\]]*\])? .+ \([\w.]+\)`,
 			"severity": map[string]any{
 				"parse_from": "attributes.severity",
 				// Log level reference can be found at https://logging.apache.org/log4j/2.x/javadoc/log4j-api/org/apache/logging/log4j/Level.html
@@ -178,6 +201,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 				},
 			},
 		},
+		removeAttrWhenUndefined("message_destination_partition_id"),
 		renameAttr("message_destination_partition_id", "messaging.destination.partition.id"),
 		removeAttr("severity"),
 	}
@@ -358,7 +382,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 						"output": "apache_access",
 					},
 					map[string]any{
-						"expr":   `body matches "^\\[[\\w :\\.]+\\]\\s(\\[[^\\]]+\\])+\\s"`, // <- not regexp, but expr-lang
+						"expr":   `body matches "^\\[[\\w :.]+\\]\\s(\\[[^\\]]+\\])+\\s"`, // <- not regexp, but expr-lang
 						"output": "apache_error",
 					},
 				},
