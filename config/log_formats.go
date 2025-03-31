@@ -48,12 +48,30 @@ func renameAttr(from, to string) OTELOperator {
 	}
 }
 
-func DefaultKnownLogFormats() map[string][]OTELOperator {
+func removeAttr(name string) OTELOperator {
+	return OTELOperator{
+		"type":  "remove",
+		"field": "attributes." + name,
+	}
+}
+
+func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
+	severityFromHTTPStatusCode := map[string]any{
+		"parse_from": "attributes.http_response_status_code",
+		"mapping": map[string]any{
+			"error": "5xx",
+			"warn":  "4xx",
+			"info":  "3xx", // FIXME: debug level too ?
+			"debug": "2xx",
+		},
+	}
+
 	nginxAccessParser := []OTELOperator{
 		{
-			"id":    "nginx_access_parser",
-			"type":  "regex_parser",
-			"regex": `^(?P<client_address>\S+) \S+ (?P<user_name>\S+) \[(?P<time>[^\]]+)] "(?P<http_request_method>\S+) (?P<http_route>\S+) \S+" (?P<http_response_status_code>\d+) (?P<http_response_size>\S+) "(?P<http_connection_state>[^"]*)" "(?P<user_agent_original>[^"]*)"`,
+			"id":       "nginx_access_parser",
+			"type":     "regex_parser",
+			"regex":    `^(?P<client_address>\S+) \S+ (?P<user_name>\S+) \[(?P<time>[^\]]+)] "(?P<http_request_method>\S+) (?P<http_route>\S+) \S+" (?P<http_response_status_code>\d+) (?P<http_response_size>\S+) "(?P<http_connection_state>[^"]*)" "(?P<user_agent_original>[^"]*)"`,
+			"severity": severityFromHTTPStatusCode,
 		},
 		renameAttr("client_address", "client.address"),
 		renameAttr("user_name", "user.name"),
@@ -68,7 +86,22 @@ func DefaultKnownLogFormats() map[string][]OTELOperator {
 		{
 			"id":    "nginx_error_parser",
 			"type":  "regex_parser",
-			"regex": `^(?P<time>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) \[\w+] \d+#\d+: \*\d+ .*?, client: (?P<client_address>[\d\.]+), server: (?P<server_address>\S+), request: "(?P<http_request_method>\S+) (?P<http_route>\S+) \S+", host: "(?P<network_local_address>(\d{1,3}\.){3}\d{1,3}):(?<server_port>\d+)"`,
+			"regex": `^(?P<time>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) \[(?P<severity>\w+)] \d+#\d+: \*\d+ .*?, client: (?P<client_address>[\d\.]+), server: (?P<server_address>\S+), request: "(?P<http_request_method>\S+) (?P<http_route>\S+) \S+", host: "(?P<network_local_address>\w+):(?<server_port>\d+)"`,
+			"severity": map[string]any{
+				"parse_from": "attributes.severity",
+				// Log level reference can be found at https://nginx.org/en/docs/ngx_core_module.html#error_log
+				// Mapping is OTEL severity -> Nginx level
+				"mapping": map[string]any{
+					"fatal":  "emerg",
+					"error3": "alert",
+					"error2": "crit",
+					"error":  "error",
+					"warn":   "warn",
+					"info2":  "notice",
+					"info":   "info",
+					"debug":  "debug",
+				},
+			},
 		},
 		renameAttr("client_address", "client.address"),
 		renameAttr("server_address", "server.address"),
@@ -76,13 +109,15 @@ func DefaultKnownLogFormats() map[string][]OTELOperator {
 		renameAttr("http_route", "http.route"),
 		renameAttr("network_local_address", "network.local.address"),
 		renameAttr("server_port", "server.port"),
+		removeAttr("severity"),
 	}
 
 	apacheAccessParser := []OTELOperator{
 		{
-			"id":    "apache_access_parser",
-			"type":  "regex_parser",
-			"regex": `^(?P<client_address>\S+) \S+ (?P<user_name>\S+) \[(?P<time>[^\]]+)] "(?P<http_request_method>\S+) (?P<http_route>\S+) \S+" (?P<http_response_status_code>\d+) (?P<http_response_size>\S+)`,
+			"id":       "apache_access_parser",
+			"type":     "regex_parser",
+			"regex":    `^(?P<client_address>\S+) \S+ (?P<user_name>\S+) \[(?P<time>[^\]]+)] "(?P<http_request_method>\S+) (?P<http_route>\S+) \S+" (?P<http_response_status_code>\d+) (?P<http_response_size>\S+)`,
+			"severity": severityFromHTTPStatusCode,
 		},
 		renameAttr("client_address", "client.address"),
 		renameAttr("user_name", "user.name"),
@@ -95,38 +130,102 @@ func DefaultKnownLogFormats() map[string][]OTELOperator {
 		{
 			"id":    "apache_error_parser",
 			"type":  "regex_parser",
-			"regex": `^\[(?P<time>[\w :/\.]+)\] \[[^\]]+]( \[pid (?P<process_id>\d+):tid (?P<thread_id>\d+)\])?( \[client (?P<client_address>[\d\.]+)(:(?<client_port>\d+))?\])? .*`,
+			"regex": `^\[(?P<time>[\w :/\.]+)\] \[\w+:(?P<severity>\w+)]( \[pid (?P<process_pid>\d+):tid (?P<thread_id>\d+)\])?( \[client (?P<client_address>[\d\.]+)(:(?<client_port>\d+))?\])? .*`,
+			"severity": map[string]any{
+				"parse_from": "attributes.severity",
+				// Log level reference can be found at https://httpd.apache.org/docs/current/mod/core.html#loglevel
+				// Mapping is OTEL severity -> Apache level
+				"mapping": map[string]any{
+					"fatal":  "emerg",
+					"error3": "alert",
+					"error2": "crit",
+					"error":  "error",
+					"warn":   "warn",
+					"info2":  "notice",
+					"info":   "info",
+					"debug":  "debug",
+					"trace4": "trace1",
+					"trace3": "trace2",
+					"trace2": "trace3",
+					"trace":  "trace4",
+					// ignoring Apache trace levels 5 to 8
+				},
+			},
 		},
-		renameAttr("process_id", "process.id"),
+		renameAttr("process_pid", "process.pid"),
 		renameAttr("thread_id", "thread.id"),
 		renameAttr("client_address", "client.address"),
 		renameAttr("client_port", "client.port"),
+		removeAttr("severity"),
 	}
 
 	kafkaParser := []OTELOperator{
 		{
 			"id":    "kafka_parser",
 			"type":  "regex_parser",
-			"regex": `^\[(?P<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})] \w+( \[[^\]]*(partition=(?P<message_destination_partition_id>[\w-]+))[^\]]*\])? .+ \([\w\.]+\)`,
+			"regex": `^\[(?P<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})] (?P<severity>\w+)( \[[^\]]*(partition=(?P<message_destination_partition_id>[\w-]+))[^\]]*\])? .+ \([\w\.]+\)`,
+			"severity": map[string]any{
+				"parse_from": "attributes.severity",
+				// Log level reference can be found at https://logging.apache.org/log4j/2.x/javadoc/log4j-api/org/apache/logging/log4j/Level.html
+				// Mapping is OTEL severity -> Log4j level
+				"mapping": map[string]any{
+					"emerg": "FATAL",
+					"error": "ERROR",
+					"warn":  "WARN",
+					"info":  "INFO",
+					"debug": "DEBUG",
+					"trace": "TRACE",
+				},
+			},
 		},
 		renameAttr("message_destination_partition_id", "messaging.destination.partition.id"),
+		removeAttr("severity"),
 	}
 
 	redisParser := []OTELOperator{
 		{
 			"id":    "redis_parser",
 			"type":  "regex_parser",
-			"regex": `^\d+:[A-Z] (?<time>\d{2} \w{3} \d{4} \d{2}:\d{2}:\d{2}\.\d{3}) [.\-*#] .+`,
+			"regex": `^(?P<process_pid>\d+):[A-Z] (?<time>\d{2} \w{3} \d{4} \d{2}:\d{2}:\d{2}\.\d{3}) (?P<severity>[.\-*#]) .+`,
+			"severity": map[string]any{
+				"parse_from": "attributes.severity",
+				// Log level 'reference' can be 'found' at https://github.com/redis/redis/blob/aa8e2d171232218364857ee8528f1af092b9e5b7/src/server.h#L554
+				// Mapping is OTEL severity -> Redis level
+				"mapping": map[string]any{
+					"warn":   "#",
+					"info":   "*",
+					"debug":  "-",
+					"debug2": ".",
+				},
+			},
 		},
+		renameAttr("process_pid", "process.pid"),
+		removeAttr("severity"),
 	}
 
 	haproxyParser := []OTELOperator{
 		{
 			"id":    "haproxy_parser",
 			"type":  "regex_parser",
-			"regex": `^\[[A-Z]+\]\s+\((?<process_id>\d+)\)\s*:\s*.+`,
+			"regex": `^\[(?P<severity>[A-Z]+)\]\s+\((?<process_pid>\d+)\)\s*:\s*.+`,
+			"severity": map[string]any{
+				"parse_from": "attributes.severity",
+				// Log level reference can be found at https://docs.haproxy.org/3.0/configuration.html#4.2-log
+				// Mapping is OTEL severity -> HAProxy level
+				"mapping": map[string]any{
+					"fatal":  "EMERG",
+					"error3": "ALERT",
+					"error2": "CRIT",
+					"error":  "ERR",
+					"warn":   "WARNING",
+					"info2":  "NOTICE",
+					"info":   "INFO",
+					"debug":  "DEBUG",
+				},
+			},
 		},
-		renameAttr("process_id", "process.id"),
+		renameAttr("process_pid", "process.pid"),
+		removeAttr("severity"),
 	}
 
 	return map[string][]OTELOperator{
