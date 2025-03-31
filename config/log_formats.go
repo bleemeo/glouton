@@ -50,7 +50,7 @@ func renameAttr(from, to string) OTELOperator {
 	}
 }
 
-func removeAttr(name string) OTELOperator {
+func removeAttr(name string) OTELOperator { //nolint:unparam
 	return OTELOperator{
 		"type":  "remove",
 		"field": "attributes." + name,
@@ -227,28 +227,31 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		removeAttr("severity"),
 	}
 
-	haproxyParser := []OTELOperator{
+	postgreSQLParser := []OTELOperator{
 		{
-			"id":    "haproxy_parser",
+			"id":    "postgresql_parser",
 			"type":  "regex_parser",
-			"regex": `^\[(?P<severity>[A-Z]+)\]\s+\((?<process_pid>\d+)\)\s*:\s*.+`,
+			"regex": `^(?<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+ \w+) \[(?<process_pid>\d+)\] (?<severity>[A-Z]+):\s+(.+statement: (?<db_query_text>.+)|.+)`,
 			"severity": map[string]any{
 				"parse_from": "attributes.severity",
-				// Log level reference can be found at https://docs.haproxy.org/3.0/configuration.html#4.2-log
-				// Mapping is OTEL severity -> HAProxy level
+				// Log level reference can be found at https://www.postgresql.org/docs/current/runtime-config-logging.html#RUNTIME-CONFIG-SEVERITY-LEVELS
+				// Mapping is OTEL severity -> PostgreSQL level
 				"mapping": map[string]any{
-					"fatal":  "EMERG",
-					"error3": "ALERT",
-					"error2": "CRIT",
-					"error":  "ERR",
+					"fatal":  "PANIC",
+					"error":  "FATAL",
 					"warn":   "WARNING",
 					"info2":  "NOTICE",
 					"info":   "INFO",
-					"debug":  "DEBUG",
+					"debug4": "DEBUG",
+					"debug3": "DEBUG2",
+					"debug2": "DEBUG3",
+					"debug":  "DEBUG4",
 				},
 			},
 		},
+		removeAttrWhenUndefined("db_query_text"),
 		renameAttr("process_pid", "process.pid"),
+		renameAttr("db_query_text", "db.query.text"), // FIXME: sanitize or drop ?
 		removeAttr("severity"),
 	}
 
@@ -438,6 +441,39 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 			},
 		),
 		"redis_docker": redisParser, // we'll rely on the timestamp provided by the runtime
-		"haproxy":      haproxyParser,
+		"haproxy": {
+			{
+				"id":    "haproxy_parser",
+				"type":  "regex_parser",
+				"regex": `^\[(?P<severity>[A-Z]+)\]\s+\((?<process_pid>\d+)\)\s*:\s*.+`,
+				"severity": map[string]any{
+					"parse_from": "attributes.severity",
+					// Log level reference can be found at https://docs.haproxy.org/3.0/configuration.html#4.2-log
+					// Mapping is OTEL severity -> HAProxy level
+					"mapping": map[string]any{
+						"fatal":  "EMERG",
+						"error3": "ALERT",
+						"error2": "CRIT",
+						"error":  "ERR",
+						"warn":   "WARNING",
+						"info2":  "NOTICE",
+						"info":   "INFO",
+						"debug":  "DEBUG",
+					},
+				},
+			},
+			renameAttr("process_pid", "process.pid"),
+			removeAttr("severity"),
+		},
+		"postgresql": postgreSQLParser,
+		"postgresql_docker": flattenOps(
+			postgreSQLParser,
+			OTELOperator{
+				"type":        "time_parser",
+				"parse_from":  "attributes.time",
+				"layout":      "%Y-%m-%d %H:%M:%S.%L %Z",
+				"layout_type": "strptime",
+			},
+		),
 	}
 }

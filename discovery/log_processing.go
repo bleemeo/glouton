@@ -58,6 +58,12 @@ var servicesLogInfo = map[ServiceName]logProcessingInfo{ //nolint: gochecknoglob
 		},
 		DockerFormat: "haproxy",
 	},
+	PostgreSQLService: {
+		FileFormats: []ServiceLogReceiver{
+			// TODO
+		},
+		DockerFormat: "postgresql_docker",
+	},
 }
 
 type ServiceLogReceiver struct {
