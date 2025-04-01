@@ -88,7 +88,7 @@ func TestProcessLogSources(t *testing.T) {
 	t.Parallel()
 
 	knownLogFormats := map[string][]config.OTELOperator{
-		"nginx_combined": {
+		"nginx_both": {
 			{
 				"type": "op",
 				"prop": "value",
@@ -115,7 +115,7 @@ func TestProcessLogSources(t *testing.T) {
 		},
 	}
 
-	svcNginx := svc("nginx", "Nginx-1", "ngx-1", true, time.Now(), discovery.ServiceLogReceiver{Format: "nginx_combined"})
+	svcNginx := svc("nginx", "Nginx-1", "ngx-1", true, time.Now(), discovery.ServiceLogReceiver{Format: "nginx_both"})
 
 	ctrNgx1 := ctr("ngx-1", "Nginx-1", nil, nil)
 	ctrApp1 := ctr("app-1", "Custom-App-1", map[string]string{"glouton.log_format": "custom_app_fmt"}, nil)
@@ -148,7 +148,7 @@ func TestProcessLogSources(t *testing.T) {
 								"value": "nginx",
 							},
 						},
-						knownLogFormats["nginx_combined"]...,
+						knownLogFormats["nginx_both"]...,
 					),
 				},
 			},

@@ -356,7 +356,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 						LogFormat: "app_format",
 					},
 				},
-				LogFormat: "nginx_combined",
+				LogFormat: "nginx_both",
 			},
 		},
 		ServiceAbsentDeactivationDelay: 7 * 24 * time.Hour,

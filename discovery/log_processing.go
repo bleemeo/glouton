@@ -29,16 +29,17 @@ type logProcessingInfo struct {
 var servicesLogInfo = map[ServiceName]logProcessingInfo{ //nolint: gochecknoglobals
 	ApacheService: {
 		FileFormats: []ServiceLogReceiver{
-			// TODO
+			{"/var/log/apache2/access.log", "apache_access"},
+			{"/var/log/apache2/error.log", "apache_error"},
 		},
-		DockerFormat: "apache_combined",
+		DockerFormat: "apache_both",
 	},
 	NginxService: {
 		FileFormats: []ServiceLogReceiver{
 			{"/var/log/nginx/access.log", "nginx_access"},
 			{"/var/log/nginx/error.log", "nginx_error"},
 		},
-		DockerFormat: "nginx_combined",
+		DockerFormat: "nginx_both",
 	},
 	KafkaService: {
 		FileFormats: []ServiceLogReceiver{
@@ -56,7 +57,7 @@ var servicesLogInfo = map[ServiceName]logProcessingInfo{ //nolint: gochecknoglob
 		FileFormats: []ServiceLogReceiver{
 			// TODO
 		},
-		DockerFormat: "haproxy",
+		DockerFormat: "haproxy", // no need for a container-specific behavior
 	},
 	PostgreSQLService: {
 		FileFormats: []ServiceLogReceiver{

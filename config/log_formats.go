@@ -301,7 +301,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 				"layout_type": "strptime",
 			},
 		),
-		"nginx_combined": flattenOps(
+		"nginx_both": flattenOps(
 			OTELOperator{
 				"type": "router",
 				"routes": []any{
@@ -325,7 +325,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 			nginxAccessParser,
 			OTELOperator{
 				"type":   "noop",
-				"output": "nginx_combined_end",
+				"output": "nginx_both_end",
 			},
 			// End: nginx_access
 			// Start: nginx_error
@@ -338,11 +338,11 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 			nginxErrorParser,
 			OTELOperator{
 				"type":   "noop",
-				"output": "nginx_combined_end",
+				"output": "nginx_both_end",
 			},
 			// End: nginx_error
 			OTELOperator{
-				"id":   "nginx_combined_end",
+				"id":   "nginx_both_end",
 				"type": "noop",
 			},
 		),
@@ -376,7 +376,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 				"layout_type": "strptime",
 			},
 		),
-		"apache_combined": flattenOps(
+		"apache_both": flattenOps(
 			OTELOperator{
 				"type": "router",
 				"routes": []any{
@@ -400,7 +400,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 			apacheAccessParser,
 			OTELOperator{
 				"type":   "noop",
-				"output": "apache_combined_end",
+				"output": "apache_both_end",
 			},
 			// End: apache_access
 			// Start: apache_error
@@ -413,11 +413,11 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 			apacheErrorParser,
 			OTELOperator{
 				"type":   "noop",
-				"output": "apache_combined_end",
+				"output": "apache_both_end",
 			},
 			// End: apache_error
 			OTELOperator{
-				"id":   "apache_combined_end",
+				"id":   "apache_both_end",
 				"type": "noop",
 			},
 		),
@@ -465,8 +465,20 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 			renameAttr("process_pid", "process.pid"),
 			removeAttr("severity"),
 		},
-		"postgresql": postgreSQLParser,
+		"postgresql": flattenOps(
+			OTELOperator{
+				"type":  "add",
+				"field": "attributes['db.system.name']",
+				"value": "postgresql",
+			},
+			postgreSQLParser,
+		),
 		"postgresql_docker": flattenOps(
+			OTELOperator{
+				"type":  "add",
+				"field": "attributes['db.system.name']",
+				"value": "postgresql",
+			},
 			postgreSQLParser,
 			OTELOperator{
 				"type":        "time_parser",
