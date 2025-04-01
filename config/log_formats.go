@@ -50,7 +50,7 @@ func renameAttr(from, to string) OTELOperator {
 	}
 }
 
-func removeAttr(name string) OTELOperator { //nolint:unparam
+func removeAttr(name string) OTELOperator {
 	return OTELOperator{
 		"type":  "remove",
 		"field": "attributes." + name,
@@ -227,7 +227,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		removeAttr("severity"),
 	}
 
-	postgreSQLParser := []OTELOperator{
+	postgresqlParser := []OTELOperator{
 		{
 			"id":    "postgresql_parser",
 			"type":  "regex_parser",
@@ -251,7 +251,29 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		},
 		removeAttrWhenUndefined("db_query_text"),
 		renameAttr("process_pid", "process.pid"),
-		renameAttr("db_query_text", "db.query.text"), // FIXME: sanitize or drop ?
+		renameAttr("db_query_text", "db.query.text"), // FIXME: sanitize or drop
+		removeAttr("severity"),
+	}
+
+	mysqlParser := []OTELOperator{
+		{
+			"id":    "mysql_parser",
+			"type":  "regex_parser",
+			"regex": `^(?<time>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+\S+) (?<thread_id>\d+) \[(?<severity>\w+)\] \[(?<db_response_status_code>MY-\d+)\] \[[^\]]+\] .+`,
+			"severity": map[string]any{
+				"parse_from": "attributes.severity",
+				// Log level reference can perhaps be found somewhere ...
+				// Mapping is OTEL severity -> MySQL priority
+				"mapping": map[string]any{
+					"error": "Error",
+					"warn":  "Warning",
+					"info":  "System",
+					"debug": "Note",
+				},
+			},
+		},
+		renameAttr("thread_id", "thread.id"),
+		renameAttr("db_response_status_code", "db.response.status_code"),
 		removeAttr("severity"),
 	}
 
@@ -270,6 +292,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 					"layout_type": "strptime",
 				},
 			},
+			removeAttr("time"),
 		},
 		"nginx_access": flattenOps(
 			OTELOperator{
@@ -285,6 +308,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 				"layout":      "%d/%b/%Y:%H:%M:%S %z",
 				"layout_type": "strptime",
 			},
+			removeAttr("time"),
 		),
 		"nginx_error": flattenOps(
 			OTELOperator{
@@ -300,6 +324,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 				"layout":      "%Y/%m/%d %H:%M:%S",
 				"layout_type": "strptime",
 			},
+			removeAttr("time"),
 		),
 		"nginx_both": flattenOps(
 			OTELOperator{
@@ -345,6 +370,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 				"id":   "nginx_both_end",
 				"type": "noop",
 			},
+			removeAttr("time"),
 		),
 		"apache_access": flattenOps(
 			OTELOperator{
@@ -360,6 +386,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 				"layout":      "%d/%b/%Y:%H:%M:%S %z",
 				"layout_type": "strptime",
 			},
+			removeAttr("time"),
 		),
 		"apache_error": flattenOps(
 			OTELOperator{
@@ -375,6 +402,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 				"layout":      "%a %b %d %H:%M:%S %Y",
 				"layout_type": "strptime",
 			},
+			removeAttr("time"),
 		),
 		"apache_both": flattenOps(
 			OTELOperator{
@@ -420,6 +448,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 				"id":   "apache_both_end",
 				"type": "noop",
 			},
+			removeAttr("time"),
 		),
 		"kafka": flattenOps(
 			kafkaParser,
@@ -429,8 +458,12 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 				"layout":      "%Y-%m-%d %H:%M:%S,%f",
 				"layout_type": "strptime",
 			},
+			removeAttr("time"),
 		),
-		"kafka_docker": kafkaParser, // we'll rely on the timestamp provided by the runtime
+		"kafka_docker": flattenOps(
+			kafkaParser, // we'll rely on the timestamp provided by the runtime
+			removeAttr("time"),
+		),
 		"redis": flattenOps(
 			redisParser,
 			OTELOperator{
@@ -439,8 +472,12 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 				"layout":      "%d %b %Y %H:%M:%S.%L",
 				"layout_type": "strptime",
 			},
+			removeAttr("time"),
 		),
-		"redis_docker": redisParser, // we'll rely on the timestamp provided by the runtime
+		"redis_docker": flattenOps(
+			redisParser, // we'll rely on the timestamp provided by the runtime
+			removeAttr("time"),
+		),
 		"haproxy": {
 			{
 				"id":    "haproxy_parser",
@@ -463,6 +500,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 				},
 			},
 			renameAttr("process_pid", "process.pid"),
+			removeAttr("time"),
 			removeAttr("severity"),
 		},
 		"postgresql": flattenOps(
@@ -471,7 +509,14 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 				"field": "attributes['db.system.name']",
 				"value": "postgresql",
 			},
-			postgreSQLParser,
+			postgresqlParser,
+			OTELOperator{
+				"type":        "time_parser",
+				"parse_from":  "attributes.time",
+				"layout":      "%Y-%m-%d %H:%M:%S.%L %Z",
+				"layout_type": "strptime",
+			},
+			removeAttr("time"),
 		),
 		"postgresql_docker": flattenOps(
 			OTELOperator{
@@ -479,13 +524,32 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 				"field": "attributes['db.system.name']",
 				"value": "postgresql",
 			},
-			postgreSQLParser,
+			postgresqlParser, // we'll rely on the timestamp provided by the runtime
+			removeAttr("time"),
+		),
+		"mysql": flattenOps(
+			OTELOperator{
+				"type":  "add",
+				"field": "attributes['db.system.name']",
+				"value": "mysql",
+			},
+			mysqlParser,
 			OTELOperator{
 				"type":        "time_parser",
 				"parse_from":  "attributes.time",
-				"layout":      "%Y-%m-%d %H:%M:%S.%L %Z",
+				"layout":      "%Y-%m-%dT%H:%M:%S.%f%z",
 				"layout_type": "strptime",
 			},
+			removeAttr("time"),
+		),
+		"mysql_docker": flattenOps(
+			OTELOperator{
+				"type":  "add",
+				"field": "attributes['db.system.name']",
+				"value": "mysql",
+			},
+			mysqlParser, // we'll rely on the timestamp provided by the runtime
+			removeAttr("time"),
 		),
 	}
 }

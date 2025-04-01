@@ -65,6 +65,12 @@ var servicesLogInfo = map[ServiceName]logProcessingInfo{ //nolint: gochecknoglob
 		},
 		DockerFormat: "postgresql_docker",
 	},
+	MySQLService: {
+		FileFormats: []ServiceLogReceiver{
+			// TODO
+		},
+		DockerFormat: "mysql_docker",
+	},
 }
 
 type ServiceLogReceiver struct {
