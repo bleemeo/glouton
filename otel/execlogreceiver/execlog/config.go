@@ -20,10 +20,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/bleemeo/glouton/utils/gloutonexec"
 
-	"github.com/cenkalti/backoff/v4"
+	"github.com/cenkalti/backoff/v5"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/helper"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/split"
@@ -94,6 +95,10 @@ func (c *Config) Build(set component.TelemetrySettings) (operator.Operator, erro
 		return nil, fmt.Errorf("failed to create split function: %w", err)
 	}
 
+	backOff := backoff.NewExponentialBackOff()
+	backOff.RandomizationFactor = 0.1
+	backOff.MaxInterval = 30 * time.Second
+
 	return &Input{
 		InputOperator: inputOperator,
 
@@ -103,6 +108,6 @@ func (c *Config) Build(set component.TelemetrySettings) (operator.Operator, erro
 		argv:          c.Argv,
 		splitFunc:     splitFunc,
 		trimFunc:      c.TrimConfig.Func(),
-		backoff:       backoff.NewExponentialBackOff(),
+		backoff:       backOff,
 	}, nil
 }

@@ -10,7 +10,7 @@ require (
 	github.com/alecthomas/kingpin/v2 v2.4.0
 	github.com/bleemeo/bleemeo-go v0.3.0
 	github.com/bmatcuk/doublestar/v4 v4.8.1
-	github.com/cenkalti/backoff/v4 v4.3.0
+	github.com/cenkalti/backoff/v5 v5.0.2
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/containerd/cgroups/v3 v3.0.5
 	github.com/containerd/containerd v1.7.25
@@ -109,7 +109,7 @@ require (
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bmatcuk/doublestar/v3 v3.0.0 // indirect
-	github.com/cenkalti/backoff/v5 v5.0.2 // indirect
+	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20250121191232-2f005788dc42 // indirect
 	github.com/compose-spec/compose-go v1.20.2 // indirect
 	github.com/containerd/continuity v0.4.5 // indirect

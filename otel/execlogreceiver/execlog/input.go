@@ -27,7 +27,7 @@ import (
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
 
-	"github.com/cenkalti/backoff/v4"
+	"github.com/cenkalti/backoff/v5"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/helper"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/trim"
