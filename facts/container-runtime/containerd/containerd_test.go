@@ -28,10 +28,10 @@ import (
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/facts/container-runtime/internal/testutil"
 
-	"github.com/containerd/containerd"
 	pbEvents "github.com/containerd/containerd/api/events"
-	"github.com/containerd/containerd/events"
 	"github.com/containerd/containerd/protobuf"
+	"github.com/containerd/containerd/v2/client"
+	"github.com/containerd/containerd/v2/core/events"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -294,7 +294,7 @@ func TestContainerd_Run(t *testing.T) {
 
 				// on tasks exit, containerd will check is the container is really exited.
 				// Update status of the container.
-				cl.Data.Namespaces[0].MockContainers[0].MockTask.MockStatus = containerd.Status{Status: "stopped", ExitStatus: 0, ExitTime: t0}
+				cl.Data.Namespaces[0].MockContainers[0].MockTask.MockStatus = client.Status{Status: "stopped", ExitStatus: 0, ExitTime: t0}
 
 				ch <- &events.Envelope{
 					Timestamp: t0,
