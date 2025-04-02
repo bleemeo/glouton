@@ -786,7 +786,7 @@ func TestDocker_ContainerFromCGroup(t *testing.T) { //nolint: maintidx
 									t.Errorf("err = %v want ErrContainerDoesNotExists", err)
 								}
 							}
-						} else if err != nil && !(c.mustErrDoesNotExist && errors.Is(err, facts.ErrContainerDoesNotExists)) {
+						} else if err != nil && (!c.mustErrDoesNotExist || !errors.Is(err, facts.ErrContainerDoesNotExists)) {
 							t.Errorf("err = %v want nil", err)
 						}
 

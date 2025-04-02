@@ -250,7 +250,7 @@ func shouldIgnoreDevice(info deviceInfo) bool {
 	case strings.Contains(info.deviceType, "CD/DVD"):
 		return true
 	case (strings.Contains(info.smartSupport, "Unavailable") ||
-		!(strings.Contains(info.smartSupport, "Available") || strings.Contains(info.smartSupport, "Enabled"))) &&
+		(!strings.Contains(info.smartSupport, "Available") && !strings.Contains(info.smartSupport, "Enabled"))) &&
 		!strings.Contains(info.overallHealthTest, "PASSED"):
 		return true
 	default:

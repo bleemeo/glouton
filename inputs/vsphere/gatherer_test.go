@@ -1075,7 +1075,7 @@ func makeVirtualDiskMetricComparer(opts []cmp.Option) cmp.Option {
 }
 
 func TestRetainedMetricsSort(t *testing.T) {
-	t0 := time.Date(2024, time.January, 8, 14, 0, 0, 0, time.Local)
+	t0 := time.Date(2024, time.January, 8, 14, 0, 0, 0, time.Local) //nolint: gosmopolitan
 	retained := retainedMetrics{
 		"vsphere_host_cpu": []addedField{
 			{

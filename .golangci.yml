@@ -1,71 +1,86 @@
+version: "2"
 run:
   go: "1.24"
   timeout: 5m
 
 linters:
-  enable-all: true
+  default: all
   disable:
-    # Base linters disabled for all projects.
-    - funlen
-    - mnd # Same as above
-    - exhaustruct # This linter is meant to be used only for special cases. It is not recommended to use it for all files in a project.
-    - gci # Conflicts with gofumpt.
-    - ireturn # Complain that interface A implementation method return an interface B... it's a requirement of interface A that is unavoidable.
-    - nonamedreturns # Warn for every named return, not useful.
-    - interfacebloat # Warn when an interface has too many methods, not useful.
-    # Deprecated and replaced linter.
-    - tenv
-    # We use maintidx to lint function complexity.
-    - gocyclo
-    - cyclop
-    - gocognit
-
-    # Project specific disable.
-    - lll
-    - varnamelen # I think there is too many false-positive.
-    - godox # too many TODO in code, but should be removed and TODO fixed :)
-    - nestif # Too many error for now, which would require significant refactor.
-    - tagliatelle # Check struct tags. Too many errors we can't fix.
-    - wrapcheck # Too many errors, which would require to refactor most returned errors.
-    - errorlint # Should be enabled, but it's difficult to test that we keep the same behavior with errors.As.
     - contextcheck # Requires to change a lot of code to pass a context everywhere.
+    - cyclop # We use maintidx to lint function complexity.
+    - errorlint # Should be enabled, but it's difficult to test that we keep the same behavior with errors.As.
+    - exhaustruct # This linter is meant to be used only for special cases. It is not recommended to use it for all files in a project.
+    - funlen
+    - gocognit # We use maintidx to lint function complexity.
+    - gocyclo # We use maintidx to lint function complexity.
+    - godox # Too many TODO in code, but should be removed and TODO fixed :)
     - gomoddirectives # We sometimes need to use mod replacements to fix upgrades.
-    - musttag # json tags must be added public fields used in JSON. Disabled because it also report errors on dependencies.
-    # Requires to review all our tests. Should be done.
-    - paralleltest
-    - tparallel
-    - testpackage
+    - interfacebloat # Warn when an interface has too many methods, not useful.
+    - ireturn # Complain that interface A implementation method return an interface B... it's a requirement of interface A that is unavoidable.
+    - lll
+    - mnd # Too picky.
+    - musttag # json tags must be added public fields used in JSON. Disabled because it also reports errors on dependencies.
+    - nestif # Too many error for now, which would require significant refactor.
+    - nonamedreturns # Warn for every named return, not useful.
+    - paralleltest # Requires reviewing all our tests. Should be done.
+    - tagliatelle # Check struct tags. Too many errors we can't fix.
+    - testpackage # Requires reviewing all our tests. Should be done.
+    - tparallel # Requires reviewing all our tests. Should be done.
+    - varnamelen # I think there is too many false-positive.
+    - wrapcheck # Too many errors, which would require to refactor most returned errors.
 
-linters-settings:
-  nolintlint:
-    # Require nolint directives to mention the specific linter being suppressed.
-    require-specific: true
-
-  tagliatelle:
-    # Check struct tag name case.
-    case:
-      # Use the struct field name to check the name of the struct tag.
+  settings:
+    depguard:
       rules:
-        json: snake
-        yaml: snake
+        main:
+          deny:
+            - pkg: io/ioutil
+              desc: ioutil is deprecated starting with Go 1.16
+    nolintlint:
+      # Require nolint directives to mention the specific linter being suppressed.
+      require-specific: true
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+    staticcheck:
+      checks:
+        - "all"
+        - "-QF1008" # Omit embedded fields from selector expression
+        - "-ST1000" # Incorrect or missing package comment
+    tagliatelle:
+      # Check struct tag name case.
+      case:
+        # Use the struct field name to check the name of the struct tag.
+        rules:
+          json: snake
+          yaml: snake
 
-  depguard:
-    rules:
-      main:
-        deny:
-          - pkg: "io/ioutil"
-            desc: "ioutil is deprecated starting with Go 1.16"
+  exclusions:
+    generated: lax
+    presets:
+      - common-false-positives
+      - std-error-handling
+    paths:
+      - work
+      - third_party$
+      - builtin$
+      - examples$
 
 issues:
-  include: # the list of ids of default excludes to include
-    - EXC0005 # ineffective break statement
-    - EXC0009 # create files/directories with minimum permissions
-    # - EXC0011 # TODO: should have a package comment|comment should be of the form
-    # - EXC0012 # TODO: exported var/functions should have a comment
-    - EXC0013 # package comment should be of the form
-    - EXC0014 # comment on exported var should be of the form
-
   max-issues-per-linter: 0
   max-same-issues: 0
-  exclude-dirs:
-    - work
+
+formatters:
+  enable:
+    - gofmt
+    - gofumpt
+    - goimports
+
+  exclusions:
+    generated: lax
+    paths:
+      - work
+      - third_party$
+      - builtin$
+      - examples$

@@ -286,12 +286,11 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context) ([]Service, tim
 		_, inNetstatI := netstat[pidI]
 		_, inNetstatJ := netstat[pidJ]
 
-		switch {
-		case inNetstatI == inNetstatJ:
+		if inNetstatI == inNetstatJ {
 			return pidI < pidJ
-		default:
-			return inNetstatI
 		}
+
+		return inNetstatI
 	})
 
 	servicesMap := make(map[NameInstance]Service)

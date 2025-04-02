@@ -198,7 +198,7 @@ func (b *buffer) Content() []byte {
 	b.l.Lock()
 	defer b.l.Unlock()
 
-	b.writer.Flush()
+	_ = b.writer.Flush()
 
 	switch b.state {
 	case stateWriteHead:
@@ -217,7 +217,7 @@ func (b *buffer) Content() []byte {
 
 		_, err := io.Copy(results, r) //nolint:gosec
 		if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
-			results.WriteString(fmt.Sprintf("\ndecode err in closed head: %v\n", err))
+			fmt.Fprintf(results, "\ndecode err in closed head: %v\n", err)
 
 			return results.Bytes()
 		}
@@ -237,7 +237,7 @@ func (b *buffer) Content() []byte {
 
 			_, err := io.Copy(results, r) //nolint: gosec
 			if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
-				results.WriteString(fmt.Sprintf("\ndecode err in tail: %v\n", err))
+				fmt.Fprintf(results, "\ndecode err in tail: %v\n", err)
 
 				return results.Bytes()
 			}

@@ -105,7 +105,7 @@ func (pc *propsCache[propsType]) get(moid string, bypassStaleness ...bool) (valu
 		return value, false
 	}
 
-	if time.Since(props.lastUpdate) > maxCachedPropertiesValidity && !(len(bypassStaleness) == 1 && bypassStaleness[0]) {
+	if time.Since(props.lastUpdate) > maxCachedPropertiesValidity && (len(bypassStaleness) != 1 || !bypassStaleness[0]) {
 		return value, false
 	}
 
@@ -263,6 +263,8 @@ var (
 // This approach has two goals:
 // - reduce the size of the request/response to the vSphere API
 // - reduce the memory used by the cache to store the properties.
+//
+//nolint: staticcheck,gofmt,gofumpt,goimports
 type (
 	// Lightweight version of mo.ClusterComputeResource.
 	clusterLightProps struct {
@@ -284,8 +286,8 @@ type (
 	}
 
 	clusterLightComputeResourceSummaryComputeResourceSummary struct {
-		NumCpuCores int16 //nolint: revive,stylecheck
-		TotalCpu    int32 //nolint: revive,stylecheck
+		NumCpuCores int16
+		TotalCpu    int32
 		TotalMemory int64
 	}
 
@@ -325,7 +327,7 @@ type (
 	hostLightSummaryHardware struct {
 		Vendor   string
 		Model    string
-		CpuModel string //nolint: revive,stylecheck
+		CpuModel string
 	}
 
 	hostLightSummaryConfig struct {
@@ -334,12 +336,12 @@ type (
 	}
 
 	hostLightHardware struct {
-		CpuInfo    hostLightHardwareCpuInfo //nolint: revive,stylecheck
+		CpuInfo    hostLightHardwareCpuInfo
 		MemorySize int64
 	}
 
-	hostLightHardwareCpuInfo struct { //nolint: revive,stylecheck
-		NumCpuCores int16 //nolint: revive,stylecheck
+	hostLightHardwareCpuInfo struct {
+		NumCpuCores int16
 	}
 
 	hostLightConfig struct {
@@ -355,8 +357,8 @@ type (
 
 	hostLightConfigNetwork struct {
 		Vnic        []hostLightConfigNetworkVnic
-		DnsConfig   types.BaseHostDnsConfig //nolint: revive,stylecheck
-		IpV6Enabled *bool                   //nolint: revive,stylecheck
+		DnsConfig   types.BaseHostDnsConfig
+		IpV6Enabled *bool
 	}
 
 	hostLightConfigNetworkVnic struct {
@@ -364,11 +366,11 @@ type (
 	}
 
 	hostLightConfigNetworkVnicSpec struct {
-		Ip *hostLightConfigNetworkVnicSpecIp //nolint: revive,stylecheck
+		Ip *hostLightConfigNetworkVnicSpecIp
 	}
 
-	hostLightConfigNetworkVnicSpecIp struct { //nolint: revive,stylecheck
-		IpAddress string //nolint: revive,stylecheck
+	hostLightConfigNetworkVnicSpecIp struct {
+		IpAddress string
 	}
 
 	hostLightConfigDateTimeInfo struct {
@@ -393,7 +395,7 @@ type (
 		GuestFullName string
 		Version       string
 		Hardware      vmLightConfigHardware
-		DatastoreUrl  []vmLightConfigDatastoreUrl //nolint: revive,stylecheck
+		DatastoreUrl  []vmLightConfigDatastoreUrl
 	}
 
 	vmLightConfigHardware struct {
@@ -402,9 +404,9 @@ type (
 		Device   object.VirtualDeviceList
 	}
 
-	vmLightConfigDatastoreUrl struct { //nolint: revive,stylecheck
+	vmLightConfigDatastoreUrl struct {
 		Name string
-		Url  string //nolint: revive,stylecheck
+		Url  string
 	}
 
 	vmLightRuntime struct {
@@ -415,7 +417,7 @@ type (
 	vmLightGuest struct {
 		GuestFullName string
 		HostName      string
-		IpAddress     string //nolint: revive,stylecheck
+		IpAddress     string
 		Disk          []vmLightGuestDisk
 	}
 
@@ -426,7 +428,7 @@ type (
 	}
 
 	vmLightSummary struct {
-		Vm     *types.ManagedObjectReference //nolint: revive,stylecheck
+		Vm     *types.ManagedObjectReference
 		Config vmLightSummaryConfig
 	}
 

@@ -71,9 +71,10 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 
 	for metricName, value := range fields {
 		finalMetricName := strings.ReplaceAll(metricName, "usage_", "")
-		if finalMetricName == "irq" {
+		switch finalMetricName {
+		case "irq":
 			finalMetricName = "interrupt"
-		} else if finalMetricName == "iowait" {
+		case "iowait":
 			finalMetricName = "wait"
 		}
 

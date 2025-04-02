@@ -2465,7 +2465,7 @@ func (t *httpTestTarget) Start() {
 				panic("can't hijack, so can test broken connection")
 			}
 
-			conn.Close()
+			_ = conn.Close()
 
 			return
 		}
@@ -2493,7 +2493,7 @@ func (t *httpTestTarget) Start() {
 			}
 
 			if t.CloseInTLSHandshake {
-				chi.Conn.Close()
+				_ = chi.Conn.Close()
 			}
 
 			return &t.TLSCert[0], nil

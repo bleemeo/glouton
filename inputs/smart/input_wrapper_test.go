@@ -266,7 +266,7 @@ func (smartctlData *SmartctlData) makeRunCmdFor(t *testing.T) runCmdType {
 		default:
 			t.Fatalf("unexpected call to runCmd(%v, %v, %v, %s)", timeout, sudo, command, args)
 
-			return nil, errors.New("unreachable code") //nolint: goerr113 // we purposely make this error not re-usable
+			return nil, errors.New("unreachable code") //nolint: err113 // we purposely make this error not re-usable
 		}
 
 		var device string
@@ -281,7 +281,7 @@ func (smartctlData *SmartctlData) makeRunCmdFor(t *testing.T) runCmdType {
 		if !found {
 			t.Fatalf("Info about device %q not found.", device)
 
-			return nil, errors.New("unreachable code") //nolint: goerr113 // we purposely make this error not re-usable
+			return nil, errors.New("unreachable code") //nolint: err113 // we purposely make this error not re-usable
 		}
 
 		var err error
@@ -289,7 +289,7 @@ func (smartctlData *SmartctlData) makeRunCmdFor(t *testing.T) runCmdType {
 		if deviceData.RC == 1 { // only exit code 1 is fatal
 			// we want to build an &exec.ExitError{ProcessState: &os.ProcessState{}}
 			// but we can't because ProcessState{} only had private field
-			err = errors.New("This should be ExitError with rc=" + strconv.Itoa(deviceData.RC)) //nolint: goerr113 // we can't use the true ExitError. This error shouldn't be re-used
+			err = errors.New("This should be ExitError with rc=" + strconv.Itoa(deviceData.RC)) //nolint: err113 // we can't use the true ExitError. This error shouldn't be re-used
 		}
 
 		return deviceData.fileContent, err

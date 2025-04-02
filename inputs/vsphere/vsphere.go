@@ -663,7 +663,7 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 				break
 			}
 
-			labels["item"] = &dto.LabelPair{Name: proto.String("item"), Value: interfaceLabel.Value} //nolint:protogetter
+			labels["item"] = &dto.LabelPair{Name: proto.String("item"), Value: interfaceLabel.Value}
 			delete(labels, "interface")
 
 			break
@@ -697,7 +697,7 @@ func starLabelReplacer(labelPair *dto.LabelPair, m map[string]string) {
 	}
 
 	for k := range m {
-		labelPair.Value = &k //nolint:exportloopref
+		labelPair.Value = &k
 
 		break
 	}
@@ -855,11 +855,12 @@ func renameMetrics(currentContext internal.GatherContext, metricName string) (ne
 			newMetricName = strings.Replace(newMetricName, "active", "used_perc", 1)
 		}
 	case "disk", "virtualDisk", "datastore":
-		if newMetricName == "read" || newMetricName == "write" {
+		switch newMetricName {
+		case "read", "write":
 			newMeasurement = "io"
 			newMetricName = strings.Replace(newMetricName, "read", "read_bytes", 1)
 			newMetricName = strings.Replace(newMetricName, "write", "write_bytes", 1)
-		} else if newMetricName == "capacity" {
+		case "capacity":
 			newMetricName = "total"
 		}
 	case "net":

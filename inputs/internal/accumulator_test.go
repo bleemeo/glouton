@@ -353,9 +353,10 @@ func TestDeriveMultipleTag(t *testing.T) {
 	finalFunc2 := func(_ string, fields map[string]interface{}, tags map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 		var want float64
 
-		if tags["item"] == "sda" {
+		switch tags["item"] {
+		case "sda":
 			want = 4.2
-		} else if tags["item"] == "nvme0n1" {
+		case "nvme0n1":
 			want = 1204.0
 		}
 

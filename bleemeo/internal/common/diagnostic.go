@@ -105,7 +105,8 @@ func diagnosticTLS(builder io.Writer, tlsConfig *tls.Config, host string, hostPo
 			rawConn.LocalAddr().String(),
 			err,
 		)
-		rawConn.Close()
+
+		_ = rawConn.Close()
 	} else {
 		fmt.Fprintf(
 			builder,
@@ -113,7 +114,8 @@ func diagnosticTLS(builder io.Writer, tlsConfig *tls.Config, host string, hostPo
 			hostPort,
 			rawConn.RemoteAddr().String(),
 		)
-		tlsConn.Close()
+
+		_ = tlsConn.Close()
 	}
 }
 

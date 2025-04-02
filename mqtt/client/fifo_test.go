@@ -302,7 +302,7 @@ func TestRacing(t *testing.T) {
 				}
 
 				if ts.Before(prev) {
-					return fmt.Errorf("unordered values: got %v, expected more than %v", ts, prev) //nolint:goerr113
+					return fmt.Errorf("unordered values: got %v, expected more than %v", ts, prev) //nolint:err113
 				}
 			}
 
@@ -347,7 +347,7 @@ func TestRacing(t *testing.T) {
 					}
 
 					if ts.Before(prev) {
-						return fmt.Errorf("unordered values: got %v, expected more than %v", ts, prev) //nolint:goerr113
+						return fmt.Errorf("unordered values: got %v, expected more than %v", ts, prev) //nolint:err113
 					}
 				}
 

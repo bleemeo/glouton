@@ -17,8 +17,8 @@ import (
 )
 
 func TestApplyRulesMFS(t *testing.T) {
-	t0 := time.Date(2024, time.January, 3, 15, 0, 0, 0, time.Local)
-	now := t0.Add(5 * time.Minute) // 5min because we have 5 samples 1min apart each
+	t0 := time.Date(2024, time.January, 3, 15, 0, 0, 0, time.Local) //nolint: gosmopolitan
+	now := t0.Add(5 * time.Minute)                                  // 5min because we have 5 samples 1min apart each
 
 	mfs := []*dto.MetricFamily{
 		{

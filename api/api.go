@@ -121,7 +121,7 @@ func (api *API) init() {
 	indexFile, err := staticFolder.Open(indexFileName)
 	if err == nil {
 		indexBody, err = io.ReadAll(indexFile)
-		indexFile.Close()
+		_ = indexFile.Close()
 	}
 
 	if err != nil {
@@ -142,7 +142,7 @@ func (api *API) init() {
 	diagnosticFile, err := staticFolder.Open("static/diagnostic.html")
 	if err == nil {
 		diagnosticBody, err = io.ReadAll(diagnosticFile)
-		diagnosticFile.Close()
+		_ = diagnosticFile.Close()
 	}
 
 	if err != nil {

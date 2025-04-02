@@ -277,7 +277,7 @@ func (c *Cache) AccountConfigsByUUID() map[string]bleemeoTypes.GloutonAccountCon
 		_, isHost := config.AgentConfigByName[bleemeo.AgentType_vSphereHost]
 		_, isCluster := config.AgentConfigByName[bleemeo.AgentType_vSphereCluster]
 
-		if !(isVM || isHost || isCluster) {
+		if !isVM && !isHost && !isCluster {
 			config.VSphereIntegration = false
 		}
 
