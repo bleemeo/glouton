@@ -135,7 +135,7 @@ func TestApplyRulesMFS(t *testing.T) {
 							Value: proto.String("softwareLoopback"),
 						},
 					},
-					Untyped:     &dto.Untyped{Value: proto.Float64(13420.4)},
+					Untyped:     &dto.Untyped{Value: proto.Float64(13556.177777777777)},
 					TimestampMs: proto.Int64(now.UnixMilli()),
 				},
 			},

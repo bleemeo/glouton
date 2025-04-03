@@ -74,6 +74,13 @@ func (a *childrenAppender) Rollback() error {
 	return a.parent.app.Rollback()
 }
 
+func (a *childrenAppender) SetOptions(opts *storage.AppendOptions) {
+	a.parent.l.Lock()
+	defer a.parent.l.Unlock()
+
+	a.parent.app.SetOptions(opts)
+}
+
 func (a *childrenAppender) AppendExemplar(ref storage.SeriesRef, l labels.Labels, e exemplar.Exemplar) (storage.SeriesRef, error) {
 	a.parent.l.Lock()
 	defer a.parent.l.Unlock()
@@ -86,6 +93,13 @@ func (a *childrenAppender) AppendHistogram(ref storage.SeriesRef, l labels.Label
 	defer a.parent.l.Unlock()
 
 	return a.parent.app.AppendHistogram(ref, l, t, h, fh)
+}
+
+func (a *childrenAppender) AppendHistogramCTZeroSample(ref storage.SeriesRef, l labels.Labels, t, ct int64, h *histogram.Histogram, fh *histogram.FloatHistogram) (storage.SeriesRef, error) {
+	a.parent.l.Lock()
+	defer a.parent.l.Unlock()
+
+	return a.parent.app.AppendHistogramCTZeroSample(ref, l, t, ct, h, fh)
 }
 
 func (a *childrenAppender) UpdateMetadata(ref storage.SeriesRef, l labels.Labels, m metadata.Metadata) (storage.SeriesRef, error) {

@@ -27,7 +27,7 @@ import (
 )
 
 func TestSlog(t *testing.T) {
-	// No parallel for this test since we modify the logger config
+	// No parallelism for this test since we modify the logger config
 	logBuf := new(bytes.Buffer)
 
 	err := setLogger(func() error {

@@ -89,6 +89,8 @@ func (a *BufferAppender) rollback() {
 	a.temp = nil
 }
 
+func (a *BufferAppender) SetOptions(*storage.AppendOptions) {}
+
 func (a *BufferAppender) FixSampleTimestamp(ts time.Time) {
 	a.l.Lock()
 	defer a.l.Unlock()
@@ -173,6 +175,10 @@ func (a *BufferAppender) AppendExemplar(storage.SeriesRef, labels.Labels, exempl
 }
 
 func (a *BufferAppender) AppendHistogram(storage.SeriesRef, labels.Labels, int64, *histogram.Histogram, *histogram.FloatHistogram) (storage.SeriesRef, error) {
+	return 0, errNotImplemented
+}
+
+func (a *BufferAppender) AppendHistogramCTZeroSample(storage.SeriesRef, labels.Labels, int64, int64, *histogram.Histogram, *histogram.FloatHistogram) (storage.SeriesRef, error) {
 	return 0, errNotImplemented
 }
 
