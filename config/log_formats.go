@@ -41,19 +41,26 @@ func flattenOps(ops ...any) []OTELOperator {
 // renameAttr returns an operator that renames the given attribute field to the desired name.
 // Its main purpose is to allow dots (.) in attribute names that come from regexp named groups.
 // If the source attribute doesn't exist, the operator is a no-op.
-func renameAttr(from, to string) OTELOperator {
-	return OTELOperator{
+func renameAttr(from, to string, cond ...string) OTELOperator {
+	op := OTELOperator{
 		"type": "move",
 		"from": "attributes." + from,
 		"to":   "attributes['" + to + "']",
 		"if":   `"` + from + `" in attributes`,
 	}
+
+	if len(cond) == 1 {
+		op["if"] = cond[0]
+	}
+
+	return op
 }
 
 func removeAttr(name string) OTELOperator {
 	return OTELOperator{
 		"type":  "remove",
 		"field": "attributes." + name,
+		"if":    `"` + name + `" in attributes`,
 	}
 }
 
@@ -166,7 +173,12 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 					"trace4": "trace1",
 					"trace3": "trace2",
 					"trace2": "trace3",
-					"trace":  "trace4",
+					"trace": []string{
+						"trace4",
+						"trace5",
+						"trace6",
+						// levels 7 & 8 are data dumps
+					},
 					// ignoring Apache trace levels 5 to 8
 				},
 			},
@@ -208,6 +220,11 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 
 	redisParser := []OTELOperator{
 		{
+			"type":  "add",
+			"field": "attributes['db.system.name']",
+			"value": "redis",
+		},
+		{
 			"id":    "redis_parser",
 			"type":  "regex_parser",
 			"regex": `^(?P<process_pid>\d+):[A-Z] (?<time>\d{2} \w{3} \d{4} \d{2}:\d{2}:\d{2}\.\d{3}) (?P<severity>[.\-*#]) .+`,
@@ -229,6 +246,11 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 
 	postgresqlParser := []OTELOperator{
 		{
+			"type":  "add",
+			"field": "attributes['db.system.name']",
+			"value": "postgresql",
+		},
+		{
 			"id":    "postgresql_parser",
 			"type":  "regex_parser",
 			"regex": `^(?<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+ \w+) \[(?<process_pid>\d+)\] (?<severity>[A-Z]+):\s+(.+statement: (?<db_query_text>.+)|.+)`,
@@ -245,7 +267,10 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 					"debug4": "DEBUG",
 					"debug3": "DEBUG2",
 					"debug2": "DEBUG3",
-					"debug":  "DEBUG4",
+					"debug": []string{
+						"DEBUG4",
+						"DEBUG5",
+					},
 				},
 			},
 		},
@@ -256,6 +281,11 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 	}
 
 	mysqlParser := []OTELOperator{
+		{
+			"type":  "add",
+			"field": "attributes['db.system.name']",
+			"value": "mysql",
+		},
 		{
 			"id":    "mysql_parser",
 			"type":  "regex_parser",
@@ -275,6 +305,48 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		renameAttr("thread_id", "thread.id"),
 		renameAttr("db_response_status_code", "db.response.status_code"),
 		removeAttr("severity"),
+	}
+
+	mongodbParser := []OTELOperator{
+		{
+			"type":  "add",
+			"field": "attributes['db.system.name']",
+			"value": "mongodb",
+		},
+		{
+			"id":   "mongodb_parser",
+			"type": "json_parser",
+			"severity": map[string]any{
+				"parse_from": "attributes.s",
+				// Log level reference can be found at https://www.mongodb.com/docs/manual/reference/log-messages/#std-label-log-severity-levels
+				// Mapping is OTEL severity -> MongoDB severity
+				"mapping": map[string]any{
+					"fatal":  "F",
+					"error":  "E",
+					"warn":   "W",
+					"info":   "I",
+					"debug4": "D1",
+					"debug3": "D2",
+					"debug2": "D3",
+					"debug": []string{
+						"D4",
+						"D5",
+						"D", // previous versions
+					},
+				},
+			},
+		},
+		renameAttr("attr.namespace", "db.collection.name", `"attr" in attributes && "namespace" in attributes["attr"]`),
+		removeAttr("s"),
+		removeAttr("c"),
+		removeAttr("id"),
+		removeAttr("ctx"),
+		removeAttr("svc"),
+		removeAttr("msg"),
+		removeAttr("attr"),
+		removeAttr("tags"),
+		removeAttr("truncated"),
+		removeAttr("size"),
 	}
 
 	return map[string][]OTELOperator{
@@ -504,11 +576,6 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 			removeAttr("severity"),
 		},
 		"postgresql": flattenOps(
-			OTELOperator{
-				"type":  "add",
-				"field": "attributes['db.system.name']",
-				"value": "postgresql",
-			},
 			postgresqlParser,
 			OTELOperator{
 				"type":        "time_parser",
@@ -519,20 +586,10 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 			removeAttr("time"),
 		),
 		"postgresql_docker": flattenOps(
-			OTELOperator{
-				"type":  "add",
-				"field": "attributes['db.system.name']",
-				"value": "postgresql",
-			},
 			postgresqlParser, // we'll rely on the timestamp provided by the runtime
 			removeAttr("time"),
 		),
 		"mysql": flattenOps(
-			OTELOperator{
-				"type":  "add",
-				"field": "attributes['db.system.name']",
-				"value": "mysql",
-			},
 			mysqlParser,
 			OTELOperator{
 				"type":        "time_parser",
@@ -543,13 +600,22 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 			removeAttr("time"),
 		),
 		"mysql_docker": flattenOps(
-			OTELOperator{
-				"type":  "add",
-				"field": "attributes['db.system.name']",
-				"value": "mysql",
-			},
 			mysqlParser, // we'll rely on the timestamp provided by the runtime
 			removeAttr("time"),
+		),
+		"mongodb": flattenOps(
+			mongodbParser,
+			OTELOperator{
+				"type":        "time_parser",
+				"parse_from":  "attributes['t.$date']",
+				"layout":      "%Y-%m-%dT%H:%M:%S.%f%z",
+				"layout_type": "strptime",
+			},
+			removeAttr("t"),
+		),
+		"mongodb_docker": flattenOps(
+			mongodbParser, // we'll rely on the timestamp provided by the runtime
+			removeAttr("t"),
 		),
 	}
 }

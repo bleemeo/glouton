@@ -139,5 +139,5 @@ func TestLogFormatsRegexps(t *testing.T) {
 		}
 	}
 
-	t.Logf("Successfully compiled %d regexps", compiled)
+	t.Logf("Compiled %d regexps successfully", compiled)
 }
