@@ -17,6 +17,9 @@
 package config
 
 import (
+	"iter"
+	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -482,13 +485,6 @@ func TestOverrideDefault(t *testing.T) {
 	if diff := compareConfig(expectedConfig, config); diff != "" {
 		t.Fatalf("Default value modified:\n%s", diff)
 	}
-}
-
-func compareConfig(expected, got Config, opts ...cmp.Option) string {
-	ignoreUnexported := cmpopts.IgnoreUnexported(bbConf.Module{}.HTTP.HTTPClientConfig.ProxyConfig)
-	opts = append(opts, ignoreUnexported)
-
-	return cmp.Diff(expected, got, opts...)
 }
 
 // TestMergeWithDefault tests that the config files and the environment variables
@@ -1398,4 +1394,69 @@ func Test_migrate(t *testing.T) {
 			}
 		})
 	}
+}
+
+func compareConfig(expected, got Config, opts ...cmp.Option) string {
+	ignoreUnexported := cmpopts.IgnoreUnexported(bbConf.Module{}.HTTP.HTTPClientConfig.ProxyConfig)
+	opts = append(opts, ignoreUnexported)
+	opts = append(opts, makeOTELOperatorSliceComparer(slices.Clone(opts)))
+
+	return cmp.Diff(expected, got, opts...)
+}
+
+// makeOTELOperatorSliceComparer returns a cmp.Option that handles
+// OTEL operators in a way that makes []string{"a", "b"} == []any{"a", "b"}.
+func makeOTELOperatorSliceComparer(opts []cmp.Option) cmp.Option {
+	return cmp.FilterPath(filterType[OTELOperator], cmp.Comparer(makeCompareOTELOpSlices(opts)))
+}
+
+// filterType returns true if the given path
+// represents a slice contained within the specified Type.
+func filterType[Type any](path cmp.Path) bool {
+	isInType := false
+
+	for _, step := range path {
+		if step.Type() == reflect.TypeFor[Type]() {
+			isInType = true
+
+			break
+		}
+	}
+
+	if !isInType {
+		return false
+	}
+
+	x, y := path.Last().Values()
+
+	return isSlice(x) && isSlice(y)
+}
+
+func isSlice(refV reflect.Value) bool {
+	for refV.Kind() == reflect.Interface || refV.Kind() == reflect.Ptr {
+		refV = refV.Elem()
+	}
+
+	return refV.Kind() == reflect.Slice
+}
+
+func makeCompareOTELOpSlices(opts []cmp.Option) func(any, any) bool {
+	return func(x, y any) bool {
+		// Both x and y are slices
+		xRef := reflect.ValueOf(x)
+		yRef := reflect.ValueOf(y)
+
+		return cmp.Equal(collectSeq(xRef.Seq2(), xRef.Len()), collectSeq(yRef.Seq2(), yRef.Len()), opts...)
+	}
+}
+
+// collectSeq flattens the given sequence to a []any of the given length.
+func collectSeq(elems iter.Seq2[reflect.Value, reflect.Value], length int) []any {
+	res := make([]any, 0, length)
+
+	for _, e := range elems {
+		res = append(res, e.Interface())
+	}
+
+	return res
 }
