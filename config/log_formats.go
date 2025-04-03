@@ -607,8 +607,8 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 			mongodbParser,
 			OTELOperator{
 				"type":        "time_parser",
-				"parse_from":  "attributes['t.$date']",
-				"layout":      "%Y-%m-%dT%H:%M:%S.%f%z",
+				"parse_from":  "attributes.t.$date",
+				"layout":      "%Y-%m-%dT%H:%M:%S.%L%j",
 				"layout_type": "strptime",
 			},
 			removeAttr("t"),
