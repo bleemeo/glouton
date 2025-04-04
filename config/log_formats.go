@@ -349,6 +349,32 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		removeAttr("size"),
 	}
 
+	rabbitMQParser := []OTELOperator{
+		{
+			"type":  "add",
+			"field": "attributes['messaging.system']",
+			"value": "rabbitmq",
+		},
+		{
+			"id":    "rabbitmq_parser",
+			"type":  "regex_parser",
+			"regex": `^(?P<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+\+\d{2}:\d{2}) \[(?P<severity>\w+)\]\s+<\d+\.\d+\.\d+> .+`,
+			"severity": map[string]any{
+				"parse_from": "attributes.severity",
+				// Log level reference can be found at https://www.rabbitmq.com/docs/logging#log-levels
+				// Mapping is OTEL severity -> RabbitMQ level
+				"mapping": map[string]any{
+					"fatal": "critical",
+					"error": "error",
+					"warn":  "warning",
+					"info":  "info",
+					"debug": "debug",
+				},
+			},
+		},
+		removeAttr("severity"),
+	}
+
 	return map[string][]OTELOperator{
 		"json": {
 			{
@@ -616,6 +642,20 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		"mongodb_docker": flattenOps(
 			mongodbParser, // we'll rely on the timestamp provided by the runtime
 			removeAttr("t"),
+		),
+		"rabbitmq": flattenOps(
+			rabbitMQParser,
+			OTELOperator{
+				"type":        "time_parser",
+				"parse_from":  "attributes.time",
+				"layout":      "%Y-%m-%d %H:%M:%S.%f%j",
+				"layout_type": "strptime",
+			},
+			removeAttr("time"),
+		),
+		"rabbitmq_docker": flattenOps(
+			rabbitMQParser,
+			removeAttr("time"),
 		),
 	}
 }
