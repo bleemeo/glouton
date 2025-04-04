@@ -2,7 +2,7 @@
 
 set -e
 
-GORELEASER_VERSION="v2.8.0"
+GORELEASER_VERSION="v2.8.2"
 USER_UID=$(id -u)
 
 rm -fr work
@@ -54,7 +54,7 @@ else
    rm -fr webui/dist webui/node_modules api/static/assets/css/ api/static/assets/js/ api/api-bindata.go api/api-packr.go api/packrd/
 fi
 
-if [ "${SKIP_JS}" != "1" -a "${ONLY_GO}" != "1" ]; then
+if [ "${SKIP_JS}" != "1" ] && [ "${ONLY_GO}" != "1" ]; then
    echo "Building webui"
    mkdir -p api/static/assets/css/ api/static/assets/js/ webui/node_modules
    docker run --rm -e HOME=/go/pkg/node \
@@ -79,8 +79,7 @@ fi
 
 export GLOUTON_VERSION
 
-COMMIT=`git rev-parse --short HEAD || echo "unknown"`
-
+COMMIT=$(git rev-parse --short HEAD || echo "unknown")
 
 if [ "${ONLY_JS}" = "1" ]; then
    exit 0
@@ -90,21 +89,23 @@ echo "Building Go binary"
 if [ "${ONLY_DOCKER_FAST}" = "1" ]; then
    echo "Building a Docker image using ./glouton"
    sed 's@COPY dist/glouton_linux_.*/glouton /glouton.@COPY glouton /glouton.@' Dockerfile | docker buildx build ${GLOUTON_BUILDX_OPTION} -f - .
-elif [ "${ONLY_GO}" = "1" -a "${WITH_RACE}" != "1" ]; then
+elif [ "${ONLY_GO}" = "1" ] && [ "${WITH_RACE}" != "1" ]; then
    docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=0 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
       --entrypoint '' \
       goreleaser/goreleaser:${GORELEASER_VERSION} \
       tini -g -- sh -exc "
+      git config --global --add safe.directory /src
       go build -ldflags='-X main.version=${GLOUTON_VERSION} -X main.commit=${COMMIT}' .
       chown $USER_UID glouton
       "
-elif [ "${ONLY_GO}" = "1" -a "${WITH_RACE}" = "1" ]; then
+elif [ "${ONLY_GO}" = "1" ] && [ "${WITH_RACE}" = "1" ]; then
    docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=1 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
       --entrypoint '' \
       goreleaser/goreleaser:${GORELEASER_VERSION} \
       tini -g -- sh -exc "
+      git config --global --add safe.directory /src
       go build -ldflags='-X main.version=${GLOUTON_VERSION} -X main.commit=${COMMIT} -linkmode external -extldflags=-static' -race .
       chown $USER_UID glouton
       "

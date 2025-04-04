@@ -99,7 +99,7 @@ func (rs *ReloadState) Close() {
 
 	// Consume all events on channel to make sure the paho client is not blocked.
 	go func() {
-		for range rs.connectionLostChannel { //nolint: revive
+		for range rs.connectionLostChannel {
 		}
 	}()
 

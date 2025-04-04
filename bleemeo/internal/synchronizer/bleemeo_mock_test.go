@@ -228,13 +228,13 @@ func (wcm *wrapperClientMock) ListGloutonConfigItems(_ context.Context, agentID 
 	return wcm.resources.gloutonConfigItems.filterResources(func(i bleemeoTypes.GloutonConfigItem) bool { return i.Agent == agentID }), nil
 }
 
-func (wcm *wrapperClientMock) RegisterGloutonConfigItems(ctx context.Context, items []bleemeoTypes.GloutonConfigItem) error { //nolint: revive
+func (wcm *wrapperClientMock) RegisterGloutonConfigItems(ctx context.Context, items []bleemeoTypes.GloutonConfigItem) error {
 	wcm.requestCounts[mockAPIGloutonConfigItem]++
 
 	panic("implement me")
 }
 
-func (wcm *wrapperClientMock) DeleteGloutonConfigItem(ctx context.Context, id string) error { //nolint: revive
+func (wcm *wrapperClientMock) DeleteGloutonConfigItem(ctx context.Context, id string) error {
 	wcm.requestCounts[mockAPIGloutonConfigItem]++
 
 	panic("implement me")
@@ -314,7 +314,7 @@ func (wcm *wrapperClientMock) ListDiagnostics(context.Context) ([]bleemeoapi.Rem
 	return wcm.resources.gloutonDiagnostics.clone(), nil
 }
 
-func (wcm *wrapperClientMock) UploadDiagnostic(ctx context.Context, contentType string, content io.Reader) error { //nolint: revive
+func (wcm *wrapperClientMock) UploadDiagnostic(ctx context.Context, contentType string, content io.Reader) error {
 	wcm.requestCounts[mockAPIGloutonDiagnostic]++
 
 	panic("implement me")
@@ -342,7 +342,7 @@ func (wcm *wrapperClientMock) RegisterFact(_ context.Context, payload bleemeoTyp
 	return result, err
 }
 
-func (wcm *wrapperClientMock) DeleteFact(ctx context.Context, id string) error { //nolint: revive
+func (wcm *wrapperClientMock) DeleteFact(ctx context.Context, id string) error {
 	wcm.requestCounts[mockAPIResourceAgentFact]++
 
 	panic("implement me")
@@ -449,7 +449,7 @@ func (wcm *wrapperClientMock) ListMetricsBy(_ context.Context, params url.Values
 	return result, nil
 }
 
-func (wcm *wrapperClientMock) GetMetricByID(ctx context.Context, id string) (bleemeoapi.MetricPayload, error) { //nolint: revive
+func (wcm *wrapperClientMock) GetMetricByID(ctx context.Context, id string) (bleemeoapi.MetricPayload, error) {
 	wcm.requestCounts[mockAPIResourceMetric]++
 
 	panic("implement me")
@@ -471,7 +471,7 @@ func (wcm *wrapperClientMock) RegisterMetric(_ context.Context, payload bleemeoa
 	return result, err
 }
 
-func (wcm *wrapperClientMock) DeleteMetric(ctx context.Context, id string) error { //nolint: revive
+func (wcm *wrapperClientMock) DeleteMetric(ctx context.Context, id string) error {
 	wcm.requestCounts[mockAPIResourceMetric]++
 
 	panic("implement me")
@@ -515,7 +515,7 @@ func (wcm *wrapperClientMock) ListMonitors(context.Context) ([]bleemeoTypes.Moni
 	return wcm.resources.monitors.clone(), nil
 }
 
-func (wcm *wrapperClientMock) GetMonitorByID(ctx context.Context, id string) (bleemeoTypes.Monitor, error) { //nolint: revive
+func (wcm *wrapperClientMock) GetMonitorByID(ctx context.Context, id string) (bleemeoTypes.Monitor, error) {
 	wcm.requestCounts[mockAPIResourceService]++
 
 	panic("implement me")
@@ -577,13 +577,13 @@ func (wcm *wrapperClientMock) RegisterSNMPAgent(_ context.Context, payload bleem
 	return payload.Agent, wcm.resources.agents.createResource(&payload, &wcm.errorsCount)
 }
 
-func (wcm *wrapperClientMock) UpdateAgentLastDuplicationDate(ctx context.Context, agentID string, lastDuplicationDate time.Time) error { //nolint: revive
+func (wcm *wrapperClientMock) UpdateAgentLastDuplicationDate(ctx context.Context, agentID string, lastDuplicationDate time.Time) error {
 	wcm.requestCounts[mockAPIResourceAgent]++
 
 	panic("implement me")
 }
 
-func (wcm *wrapperClientMock) RegisterVSphereAgent(ctx context.Context, payload bleemeoapi.AgentPayload) (bleemeoTypes.Agent, error) { //nolint: revive
+func (wcm *wrapperClientMock) RegisterVSphereAgent(ctx context.Context, payload bleemeoapi.AgentPayload) (bleemeoTypes.Agent, error) {
 	wcm.requestCounts[mockAPIResourceAgent]++
 
 	panic("implement me")

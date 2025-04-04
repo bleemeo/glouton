@@ -300,7 +300,7 @@ func makeBundle(ctx context.Context, stateDir string, diagnosticFn diagnosticFun
 		return ""
 	}
 
-	f.Close()
+	_ = f.Close()
 
 	crashReportPath := filepath.Join(stateDir, time.Now().Format(crashReportArchiveFormat))
 
@@ -339,14 +339,14 @@ func makeBundle(ctx context.Context, stateDir string, diagnosticFn diagnosticFun
 			logger.V(1).Println("Failed create stderr log file in zip:", err)
 		}
 
-		stderrFile.Close()
+		_ = stderrFile.Close()
 	}
 
 	// If a diagnostic has been generated when crashing, copy it into the archive
 	crashDiagnosticFile, err := os.Open(filepath.Join(stateDir, panicDiagnosticArchive))
 	if err == nil {
 		defer func() {
-			crashDiagnosticFile.Close()
+			_ = crashDiagnosticFile.Close()
 
 			err := os.Remove(crashDiagnosticFile.Name())
 			if err != nil {
@@ -459,7 +459,7 @@ func (d diagnosticFile) Reader() (types.ReaderWithLen, error) {
 
 	stat, err := diagnosticFile.Stat()
 	if err != nil {
-		diagnosticFile.Close()
+		_ = diagnosticFile.Close()
 
 		return nil, err
 	}

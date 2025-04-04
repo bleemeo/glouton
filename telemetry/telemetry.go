@@ -90,6 +90,6 @@ func PostInformation(ctx context.Context, telemetryID string, url string, agenti
 		// Ensure we read the whole response to avoid "Connection reset by peer" on server
 		// and ensure HTTP connection can be resused
 		_, _ = io.Copy(io.Discard, resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 	}()
 }

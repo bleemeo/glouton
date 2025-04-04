@@ -14,9 +14,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Disable stylecheck because is complain on error message (should not be capitalized)
-// but we prefer keeping the exact message used by Prometheus.
-
 package promql
 
 import (

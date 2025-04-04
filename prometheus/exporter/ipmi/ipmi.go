@@ -152,7 +152,7 @@ func (g *Gatherer) GatherWithState(ctx context.Context, _ registry.GatherState) 
 			case err != nil:
 				logger.V(2).Printf("IPMI method %s failed: %v", methodName(method), err)
 
-				isIPMIInstalled = isIPMIInstalled || !(errors.Is(err, exec.ErrNotFound) || strings.HasSuffix(err.Error(), syscall.ENOENT.Error()))
+				isIPMIInstalled = isIPMIInstalled || !errors.Is(err, exec.ErrNotFound) && !strings.HasSuffix(err.Error(), syscall.ENOENT.Error())
 			case len(points) == 0:
 				logger.V(2).Printf("IPMI method %s returned 0 points", methodName(method))
 

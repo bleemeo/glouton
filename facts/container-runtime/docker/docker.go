@@ -355,7 +355,7 @@ func (d *Docker) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			d.l.Lock()
 			if d.client != nil {
-				d.client.Close()
+				_ = d.client.Close()
 			}
 			d.l.Unlock()
 

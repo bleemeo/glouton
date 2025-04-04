@@ -179,7 +179,7 @@ func (s *seriesSample) Next() chunkenc.ValueType {
 // If current sample found by previous `Next` or `Seek` operation already has this property, Seek has no effect.
 // Seek returns true, if such sample exists, false otherwise.
 // Iterator is exhausted when the Seek returns false.
-func (s *seriesSample) Seek(t int64) chunkenc.ValueType {
+func (s *seriesSample) Seek(t int64) chunkenc.ValueType { //nolint: govet
 	for ; s.offset < len(s.data); s.offset++ {
 		if s.data[s.offset].Time.UnixMilli() >= t {
 			return chunkenc.ValFloat

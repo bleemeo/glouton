@@ -95,7 +95,7 @@ func (r Responder) Response(ctx context.Context, request string) (string, int16,
 	}
 
 	// this error has been disabled as we want to closely match the nrpe server output
-	return "", 0, fmt.Errorf("NRPE: Command '%s' not defined", requestArgs[0]) //nolint:goerr113
+	return "", 0, fmt.Errorf("NRPE: Command '%s' not defined", requestArgs[0]) //nolint:err113
 }
 
 func (r Responder) responseCustomCheck(ctx context.Context, request string) (string, int16, error) {
@@ -104,7 +104,7 @@ func (r Responder) responseCustomCheck(ctx context.Context, request string) (str
 	checkNow, err := r.discovery.GetCheckNow(nameContainer)
 	if err != nil {
 		// this error has been disabled as we want to closely match the nrpe server output
-		return "", 0, fmt.Errorf("NRPE: Command '%s' exists but does not have an associated check", request) //nolint:goerr113
+		return "", 0, fmt.Errorf("NRPE: Command '%s' exists but does not have an associated check", request) //nolint:err113
 	}
 
 	statusDescription := checkNow(ctx)

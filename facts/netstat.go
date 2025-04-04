@@ -82,10 +82,10 @@ func (np NetstatProvider) mergeNetstats(netstat map[int][]ListenAddress, dynamic
 
 		var protocol string
 
-		switch {
-		case c.Type == syscall.SOCK_STREAM:
+		switch c.Type {
+		case syscall.SOCK_STREAM:
 			protocol = "tcp"
-		case c.Type == syscall.SOCK_DGRAM:
+		case syscall.SOCK_DGRAM:
 			protocol = "udp"
 		default:
 			continue

@@ -132,10 +132,11 @@ func ParseBool(value string) (bool, error) {
 	result, err := strconv.ParseBool(value)
 	if err != nil {
 		// We also support "yes" and "no"
-		if value == "yes" {
+		switch value {
+		case "yes":
 			result = true
 			err = nil
-		} else if value == "no" {
+		case "no":
 			result = false
 			err = nil
 		}

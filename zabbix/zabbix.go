@@ -71,7 +71,8 @@ func handleConnection(c io.ReadWriteCloser, cb callback) {
 	decodedRequest, err := decode(c)
 	if err != nil {
 		logger.V(1).Printf("Unable to decode Zabbix packet: %v", err)
-		c.Close()
+
+		_ = c.Close()
 
 		return
 	}
@@ -83,7 +84,8 @@ func handleConnection(c io.ReadWriteCloser, cb callback) {
 	encodedAnswer, err = encodeReply(answer, err)
 	if err != nil {
 		logger.V(1).Printf("Failed to encode Zabbix packet: %v", err)
-		c.Close()
+
+		_ = c.Close()
 
 		return
 	}
@@ -93,7 +95,7 @@ func handleConnection(c io.ReadWriteCloser, cb callback) {
 		logger.V(1).Printf("Failed to write Zabbix packet: %v", err)
 	}
 
-	c.Close()
+	_ = c.Close()
 }
 
 func decode(r io.Reader) (packetStruct, error) {

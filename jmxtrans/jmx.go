@@ -106,10 +106,9 @@ func (j *JMX) Run(ctx context.Context) error {
 		j.triggerConfigUpdate = make(chan updateRequest)
 	}
 
-	switch {
-	case j.ContactAddress == "":
+	if j.ContactAddress == "" {
 		j.jmxConfig.UpdateTarget("127.0.0.1", j.ContactPort)
-	default:
+	} else {
 		j.jmxConfig.UpdateTarget(j.ContactAddress, j.ContactPort)
 	}
 

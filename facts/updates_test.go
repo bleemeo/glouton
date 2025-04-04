@@ -18,6 +18,7 @@ package facts
 
 import "testing"
 
+//nolint: gosmopolitan,gofmt,gofumpt,goimports
 func TestDecodeFile(t *testing.T) { //nolint:maintidx
 	// cases could be produced by reading /var/lib/update-notifier/updates-available or
 	// running LANGUAGE=fr /usr/lib/update-notifier/apt-check --human-readable

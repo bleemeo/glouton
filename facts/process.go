@@ -964,9 +964,7 @@ type PsutilLister struct {
 	pwdCache *etcpwdparse.EtcPasswdCache
 }
 
-// SystemProcessInformationStruct is windows-specific, necessary for running assertions on its size
-//
-//nolint:maligned
+// SystemProcessInformationStruct is windows-specific, necessary for running assertions on its size.
 type SystemProcessInformationStruct struct {
 	NextEntryOffset              uint32
 	NumberOfThreads              uint32

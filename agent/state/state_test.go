@@ -607,7 +607,7 @@ func TestSkipCacheWriteIfRemoved(t *testing.T) {
 	}
 
 	// user now remove the state.cache.json
-	os.Remove(cachePath)
+	_ = os.Remove(cachePath)
 
 	_ = state.SetBleemeoCredentials(agentID, password2)
 	_ = state.Set("key2", cacheKeyString2)

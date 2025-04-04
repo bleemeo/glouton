@@ -242,7 +242,7 @@ func (c *winCollector) transformMetrics(currentContext internal.GatherContext, f
 		cacheNormal, p2 := fields["Standby_Cache_Normal_Priority_Bytes"]
 		cacheCore, p3 := fields["Standby_Cache_Core_Bytes"]
 
-		if !(p1 && p2 && p3) {
+		if !p1 || !p2 || !p3 {
 			return res
 		}
 

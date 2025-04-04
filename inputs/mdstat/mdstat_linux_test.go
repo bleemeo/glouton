@@ -46,7 +46,7 @@ var errArrayMdadmDetailsNotFound = errors.New("mdadm details not found")
 
 // timeNow always returns the same timestamp: February 13, 2024, at 10:35am.
 func timeNow() time.Time {
-	return time.Date(2024, 2, 13, 10, 35, 0, 0, time.Local)
+	return time.Date(2024, 2, 13, 10, 35, 0, 0, time.Local) //nolint: gosmopolitan
 }
 
 func setupMdstatTest(t *testing.T, name string) (input telegraf.Input, mdadmDetailsFn mdadmDetailsFunc) {

@@ -38,7 +38,7 @@ func TestPropsCaches(t *testing.T) { //nolint:maintidx
 	devChan := make(chan bleemeoTypes.VSphereDevice)
 
 	go func() {
-		for range devChan { //nolint: revive
+		for range devChan {
 		}
 	}()
 

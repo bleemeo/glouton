@@ -2222,6 +2222,7 @@ func Test_sortParentFirst(t *testing.T) {
 	}
 }
 
+//nolint: gosmopolitan,gofmt,gofumpt,goimports
 func TestSortProcessesArbitrarily(t *testing.T) {
 	const (
 		gloutonPID = 7

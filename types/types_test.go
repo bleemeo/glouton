@@ -102,7 +102,7 @@ func TestLabelsToText(t *testing.T) {
 			},
 		},
 	}
-	//nolint:scopelint
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := LabelsToText(tt.args.labels)
