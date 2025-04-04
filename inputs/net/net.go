@@ -85,10 +85,11 @@ func (nt netTransformer) transformMetrics(currentContext internal.GatherContext,
 	_ = originalFields
 
 	for metricName, value := range fields {
-		if metricName == "bytes_sent" {
+		switch metricName {
+		case "bytes_sent":
 			delete(fields, "bytes_sent")
 			fields["bits_sent"] = value * 8
-		} else if metricName == "bytes_recv" {
+		case "bytes_recv":
 			delete(fields, "bytes_recv")
 			fields["bits_recv"] = value * 8
 		}

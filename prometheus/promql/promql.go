@@ -14,9 +14,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Disable stylecheck because is complain on error message (should not be capitalized)
-// but we prefer keeping the exact message used by Prometheus.
-
 package promql
 
 import (
@@ -31,7 +28,6 @@ import (
 	"github.com/bleemeo/glouton/logger"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-kit/log"
 	"github.com/grafana/regexp"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/prometheus/common/model"
@@ -80,7 +76,6 @@ var (
 type PromQL struct {
 	CORSOrigin *regexp.Regexp
 
-	logger      log.Logger
 	queryEngine *promql.Engine
 }
 
@@ -130,9 +125,8 @@ func (p *PromQL) Register(st storage.Queryable) http.Handler {
 }
 
 func (p *PromQL) init() {
-	p.logger = logger.GoKitLoggerWrapper(logger.V(1))
 	opts := promql.EngineOpts{
-		Logger:             log.With(p.logger, "component", "query engine"),
+		Logger:             logger.NewSlog().With("component", "query engine"),
 		Reg:                nil,
 		MaxSamples:         50000000,
 		Timeout:            2 * time.Minute,
@@ -310,7 +304,7 @@ func (p *PromQL) respond(w http.ResponseWriter, data interface{}, warnings annot
 		Warnings: warningStrings,
 	})
 	if err != nil {
-		_ = p.logger.Log("msg", "error marshaling json response", "err", err)
+		logger.V(1).Printf("Error marshaling PromQL json response: %v", err)
 
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 
@@ -321,7 +315,7 @@ func (p *PromQL) respond(w http.ResponseWriter, data interface{}, warnings annot
 	w.WriteHeader(http.StatusOK)
 
 	if _, err := w.Write(b); err != nil {
-		_ = p.logger.Log("msg", "error writing response", "err", err)
+		logger.V(1).Printf("Error writing PromQL response: %v", err)
 	}
 }
 
@@ -335,7 +329,7 @@ func (p *PromQL) respondError(w http.ResponseWriter, apiErr *apiError, data inte
 		Data:      data,
 	})
 	if err != nil {
-		_ = p.logger.Log("msg", "error marshaling json response", "err", err)
+		logger.V(1).Printf("Error marshaling PromQL error json response: %v", err)
 
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 
@@ -363,6 +357,6 @@ func (p *PromQL) respondError(w http.ResponseWriter, apiErr *apiError, data inte
 	w.WriteHeader(code)
 
 	if _, err := w.Write(b); err != nil {
-		_ = p.logger.Log("msg", "error writing response", "err", err)
+		logger.V(1).Printf("Error writing PromQL error response: %v", err)
 	}
 }

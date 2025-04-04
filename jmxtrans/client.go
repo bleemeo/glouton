@@ -132,7 +132,7 @@ func (c *jmxtransClient) Run(ctx context.Context) {
 	c.flush(ctx)
 
 	logger.V(2).Printf("Closing jmxtrans connection from %s", c.Connection.RemoteAddr())
-	c.Connection.Close()
+	_ = c.Connection.Close()
 }
 
 func (c *jmxtransClient) processLine(ctx context.Context, line string) {

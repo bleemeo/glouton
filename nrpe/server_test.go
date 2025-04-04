@@ -124,9 +124,10 @@ func TestDecodeEncode(t *testing.T) {
 
 		var inter []byte
 
-		if c.Version == 3 {
+		switch c.Version {
+		case 3:
 			inter, _ = encodeV3(packet)
-		} else if c.Version == 2 {
+		case 2:
 			var rndBytes [2]byte
 
 			copy(rndBytes[:], c.ReplyRaw[len(c.ReplyRaw)-2:])
@@ -168,13 +169,14 @@ func TestEncode(t *testing.T) {
 			inPacket.buffer = c.ReplyError.Error()
 		}
 
-		if c.Version == 2 {
+		switch c.Version {
+		case 2:
 			var rndBytes [2]byte
 
 			copy(rndBytes[:], c.ReplyRaw[len(c.ReplyRaw)-2:])
 
 			got, err = encodeV2(inPacket, rndBytes)
-		} else if c.Version == 3 {
+		case 3:
 			got, err = encodeV3(inPacket)
 		}
 
@@ -221,7 +223,7 @@ func TestHandleConnection(t *testing.T) {
 			t.Context(),
 			socket,
 			func(_ context.Context, _ string) (string, int16, error) {
-				return c.ReplyString, c.ReplyCode, c.ReplyError //nolint:scopelint
+				return c.ReplyString, c.ReplyCode, c.ReplyError
 			},
 			rndBytes,
 		)

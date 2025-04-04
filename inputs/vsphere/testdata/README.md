@@ -2,7 +2,10 @@
 
 ## Generating test data
 
-1. Get a running ESXI/vSphere (with vCenter)/vcsim
+1. Get a running ESXI/vSphere (with vCenter)/vcsim, e.g.:
+   ```shell
+   docker run --rm -it -p 8989:8989 -v ./inputs/vsphere/testdata/esxi_1:/tmp/esxi_1 vmware/vcsim -load /tmp/esxi_1 -l 0.0.0.0:8989
+   ```
 2. Dump its structure using the `govc` utility:
    ```shell
    ~/go/bin/govc object.save -u='https://<user>:<passwd>@<host>/sdk' -k -d <output dir>

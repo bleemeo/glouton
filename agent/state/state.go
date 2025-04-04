@@ -119,7 +119,7 @@ func load(readOnly bool, persistentPath string, cachePath string) (*State, error
 		decoder := json.NewDecoder(f)
 		err = decoder.Decode(&state.persistent)
 
-		f.Close()
+		_ = f.Close()
 
 		if err != nil {
 			return nil, err
@@ -146,7 +146,7 @@ func load(readOnly bool, persistentPath string, cachePath string) (*State, error
 				logger.V(1).Printf("unable to load state cache: %v", err)
 			}
 
-			f.Close()
+			_ = f.Close()
 		} else {
 			logger.V(1).Printf("unable to load state cache: %v", err)
 		}
@@ -274,13 +274,13 @@ func (s *State) savePersistent() error {
 
 		err = s.savePersistentTo(w)
 		if err != nil {
-			w.Close()
+			_ = w.Close()
 
 			return err
 		}
 
 		_ = w.Sync()
-		w.Close()
+		_ = w.Close()
 
 		err = os.Rename(s.persistentPath+tmpExt, s.persistentPath)
 		if err != nil {
@@ -378,12 +378,12 @@ func (s *State) writeCache(onlyIfFileExists bool) error {
 
 	_, err = w.Write(data)
 	if err != nil {
-		w.Close()
+		_ = w.Close()
 
 		return err
 	}
 
-	w.Close()
+	_ = w.Close()
 
 	err = os.Rename(tmpCachePath, cachePath)
 

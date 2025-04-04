@@ -130,11 +130,11 @@ func (rs *reloadState) SetPendingPoints(points []gloutonTypes.MetricPoint) {
 func (rs *reloadState) Close() {
 	// Consume all events on channels to make sure the paho client is not blocked.
 	go func() {
-		for range rs.notificationChannel { //nolint:revive
+		for range rs.notificationChannel {
 		}
 	}()
 	go func() {
-		for range rs.connectChannel { //nolint:revive
+		for range rs.connectChannel {
 		}
 	}()
 

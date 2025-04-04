@@ -19,7 +19,7 @@
 // It support both pushed metrics (using AddMetricPointFunction) and pulled
 // metrics thought Collector or Gatherer
 //
-//nolint:scopelint,dupl
+//nolint:dupl
 package registry
 
 import (
@@ -826,7 +826,7 @@ func TestRegistry_slowGather(t *testing.T) { //nolint:maintidx
 	go func() {
 		defer registryWG.Done()
 
-		reg.Run(ctx) //nolint: errcheck
+		_ = reg.Run(ctx)
 	}()
 
 	gather1 := &fakeGatherer{name: "name1"}
@@ -1010,7 +1010,7 @@ func TestRegistry_slowGather(t *testing.T) { //nolint:maintidx
 	go func() {
 		defer registryWG.Done()
 
-		reg.Run(ctx) //nolint: errcheck
+		_ = reg.Run(ctx)
 	}()
 
 	// During shutdow, all gatherer get Unregistered, we will need to re-register them.

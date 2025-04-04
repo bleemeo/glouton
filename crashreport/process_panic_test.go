@@ -118,7 +118,7 @@ func TestTryToGenerateDiagnostic(t *testing.T) {
 	})
 
 	t.Run("Diagnostic error", func(t *testing.T) {
-		diagnosticErr := errors.New("some diagnostic generation error") //nolint:goerr113
+		diagnosticErr := errors.New("some diagnostic generation error") //nolint:err113
 		diagnosticFn := func(_ context.Context, _ types.ArchiveWriter) error {
 			return diagnosticErr
 		}

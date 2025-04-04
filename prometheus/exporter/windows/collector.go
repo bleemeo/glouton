@@ -223,7 +223,7 @@ func (coll windowsCollector) Collect(ch chan<- prometheus.Metric) {
 
 func execute(name string, c collector.Collector, ctx *collector.ScrapeContext, ch chan<- prometheus.Metric) collectorOutcome {
 	t := time.Now()
-	err := c.Collect(ctx, ch) //nolint:ifshort
+	err := c.Collect(ctx, ch)
 	duration := time.Since(t).Seconds()
 	ch <- prometheus.MustNewConstMetric(
 		scrapeDurationDesc,

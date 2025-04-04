@@ -33,13 +33,13 @@ import (
 
 var errNoResults = errors.New("the WMI request returned 0 result")
 
-//nolint:revive,stylecheck
+//nolint:staticcheck
 type Win32_ComputerSystem struct {
 	Model        string
 	Manufacturer string
 }
 
-//nolint:revive,stylecheck
+//nolint:staticcheck
 type Win32_BIOS struct {
 	Manufacturer string
 	Version      string
@@ -47,18 +47,18 @@ type Win32_BIOS struct {
 	SerialNumber int
 }
 
-//nolint:revive,stylecheck
+//nolint:staticcheck
 type Win32_IP4RouteTable struct {
 	InterfaceIndex int
 	NextHop        string
 }
 
-//nolint:revive,stylecheck
+//nolint:staticcheck
 type Win32_PerfFormattedData_PerfOS_System struct {
 	ProcessorQueueLength int
 }
 
-//nolint:revive,stylecheck
+//nolint:staticcheck
 type Win32_PerfFormattedData_PerfOS_Processor struct {
 	PercentIdleTime int
 }

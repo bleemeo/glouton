@@ -254,7 +254,7 @@ func (s shallowInput) Gather(acc telegraf.Accumulator) error {
 	if s.annotations.ServiceName != "" {
 		annotAcc, ok := acc.(inputs.AnnotationAccumulator)
 		if !ok {
-			return errors.New("expected shallowAcc to accept annotations") //nolint:goerr113
+			return errors.New("expected shallowAcc to accept annotations") //nolint:err113
 		}
 
 		annotAcc.AddFieldsWithAnnotations(s.measurement, fields, tags, s.annotations)

@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"testing"
 
 	"github.com/bleemeo/glouton/types"
@@ -36,7 +37,7 @@ import (
 
 func Test_Host_Port(t *testing.T) {
 	url, _ := url.Parse("https://example.com:8080")
-	want := "example.com:8080" //nolint:ifshort
+	want := "example.com:8080"
 
 	if got := HostPort(url); got != want {
 		t.Errorf("An error occurred: expected %s, got %s", want, got)
@@ -422,7 +423,7 @@ func flattenHistogramAndSummary(mfs []*dto.MetricFamily) []*dto.MetricFamily {
 						metric.GetLabel(),
 						&dto.LabelPair{
 							Name:  proto.String("le"),
-							Value: proto.String(fmt.Sprint(b.GetUpperBound())),
+							Value: proto.String(formatFloat(b.GetUpperBound())),
 						},
 					),
 					Untyped: &dto.Untyped{
@@ -498,6 +499,15 @@ func flattenHistogramAndSummary(mfs []*dto.MetricFamily) []*dto.MetricFamily {
 	sortLabels(flatMFS)
 
 	return flatMFS
+}
+
+func formatFloat(f float64) string {
+	res := strconv.FormatFloat(f, 'f', -1, 64)
+	if math.Round(f) != f || math.IsInf(f, 1) || math.IsInf(f, -1) {
+		return res
+	}
+
+	return res + ".0"
 }
 
 func Benchmark_parserReader(b *testing.B) {

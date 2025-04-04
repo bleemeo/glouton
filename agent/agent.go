@@ -26,6 +26,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -120,7 +121,7 @@ const (
 
 var (
 	// We want to reply with capitalized U to match output from a Zabbix agent.
-	errUnsupportedKey     = errors.New("Unsupported item key") //nolint:stylecheck
+	errUnsupportedKey     = errors.New("Unsupported item key") //nolint:staticcheck
 	errFeatureUnavailable = errors.New("some features are unavailable")
 )
 
@@ -1401,7 +1402,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		go func() {
 			defer lateTasks.Done()
 
-			if err := api.Run(lateCtx); err != nil {
+			if err := api.Run(lateCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				logger.V(1).Printf("Error while stopping api: %v", err)
 			}
 		}()
@@ -2784,39 +2785,39 @@ func setupContainer(hostRootPath string) {
 		if os.Getenv("HOST_VAR") == "" {
 			// gopsutil will use HOST_VAR as prefix to host /var
 			// It's used at least for reading the number of connected user from /var/run/utmp
-			os.Setenv("HOST_VAR", filepath.Join(hostRootPath, "var"))
+			_ = os.Setenv("HOST_VAR", filepath.Join(hostRootPath, "var"))
 
 			// ... but /var/run is usually a symlink to /run.
 			varRun := filepath.Join(hostRootPath, "var/run")
 			target, err := os.Readlink(varRun)
 
 			if err == nil && target == "/run" {
-				os.Setenv("HOST_VAR", hostRootPath)
+				_ = os.Setenv("HOST_VAR", hostRootPath)
 			}
 		}
 
 		if os.Getenv("HOST_ETC") == "" {
-			os.Setenv("HOST_ETC", filepath.Join(hostRootPath, "etc"))
+			_ = os.Setenv("HOST_ETC", filepath.Join(hostRootPath, "etc"))
 		}
 
 		if os.Getenv("HOST_PROC") == "" {
-			os.Setenv("HOST_PROC", filepath.Join(hostRootPath, "proc"))
+			_ = os.Setenv("HOST_PROC", filepath.Join(hostRootPath, "proc"))
 		}
 
 		if os.Getenv("HOST_SYS") == "" {
-			os.Setenv("HOST_SYS", filepath.Join(hostRootPath, "sys"))
+			_ = os.Setenv("HOST_SYS", filepath.Join(hostRootPath, "sys"))
 		}
 
 		if os.Getenv("HOST_RUN") == "" {
-			os.Setenv("HOST_RUN", filepath.Join(hostRootPath, "run"))
+			_ = os.Setenv("HOST_RUN", filepath.Join(hostRootPath, "run"))
 		}
 
 		if os.Getenv("HOST_DEV") == "" {
-			os.Setenv("HOST_DEV", filepath.Join(hostRootPath, "dev"))
+			_ = os.Setenv("HOST_DEV", filepath.Join(hostRootPath, "dev"))
 		}
 
 		if os.Getenv("HOST_MOUNT_PREFIX") == "" {
-			os.Setenv("HOST_MOUNT_PREFIX", hostRootPath)
+			_ = os.Setenv("HOST_MOUNT_PREFIX", hostRootPath)
 		}
 	}
 }

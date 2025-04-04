@@ -72,7 +72,8 @@ func handleConnection(ctx context.Context, c io.ReadWriteCloser, cb callback, rn
 	decodedRequest, err := decode(c)
 	if err != nil {
 		logger.V(1).Printf("Unable to decode NRPE packet: %v", err)
-		c.Close()
+
+		_ = c.Close()
 
 		return
 	}
@@ -102,7 +103,8 @@ func handleConnection(ctx context.Context, c io.ReadWriteCloser, cb callback, rn
 
 	if err != nil {
 		logger.V(1).Printf("Failed to encode NRPE packet: %s", err)
-		c.Close()
+
+		_ = c.Close()
 
 		return
 	}
@@ -112,7 +114,7 @@ func handleConnection(ctx context.Context, c io.ReadWriteCloser, cb callback, rn
 		logger.V(1).Printf("Failed to write NRPE packet: %s", err)
 	}
 
-	c.Close()
+	_ = c.Close()
 }
 
 func decode(r io.Reader) (reducedPacket, error) {
@@ -471,7 +473,8 @@ func (s Server) Run(ctx context.Context) error {
 		err = c.SetDeadline(time.Now().Add(time.Second * 10))
 		if err != nil {
 			logger.V(1).Printf("setDeadline on NRPE connection failed: %v", err)
-			c.Close()
+
+			_ = c.Close()
 
 			continue
 		}

@@ -165,7 +165,7 @@ func Test_Add_Same_Type(t *testing.T) {
 
 func Test_Add_Different_Type(t *testing.T) {
 	m, _ := NormalizeMetric("cpu")
-	before := len(m) //nolint:ifshort
+	before := len(m)
 
 	err := m.Add(types.LabelName, "cpu2", labels.MatchRegexp)
 	if err != nil {

@@ -97,11 +97,17 @@ func (a *mockAppender) Rollback() error {
 	return nil
 }
 
+func (a *mockAppender) SetOptions(*storage.AppendOptions) {}
+
 func (a *mockAppender) AppendExemplar(storage.SeriesRef, labels.Labels, exemplar.Exemplar) (storage.SeriesRef, error) {
 	return 0, errNotImplemented
 }
 
 func (a *mockAppender) AppendHistogram(storage.SeriesRef, labels.Labels, int64, *histogram.Histogram, *histogram.FloatHistogram) (storage.SeriesRef, error) {
+	return 0, errNotImplemented
+}
+
+func (a *mockAppender) AppendHistogramCTZeroSample(storage.SeriesRef, labels.Labels, int64, int64, *histogram.Histogram, *histogram.FloatHistogram) (storage.SeriesRef, error) {
 	return 0, errNotImplemented
 }
 

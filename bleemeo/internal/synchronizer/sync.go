@@ -550,22 +550,24 @@ func (s *Synchronizer) DiagnosticPage() string {
 	if !s.lastInfo.FetchedAt.IsZero() {
 		bleemeoTime := s.lastInfo.BleemeoTime()
 		delta := s.lastInfo.TimeDrift()
-		builder.WriteString(fmt.Sprintf(
+		fmt.Fprintf(
+			builder,
 			"Bleemeo /v1/info/ fetched at %v. At this moment, time_drift was %v (time expected was %v)\n",
 			s.lastInfo.FetchedAt.Format(time.RFC3339),
 			delta.Truncate(time.Second),
 			bleemeoTime.Format(time.RFC3339),
-		))
+		)
 	}
 	s.l.Unlock()
 
 	count := s.requestCounter.Load()
-	builder.WriteString(fmt.Sprintf(
+	fmt.Fprintf(
+		builder,
 		"Did %d requests since start time at %s (%v ago). Avg of %.2f request/minute\n",
 		count,
 		s.startedAt.Format(time.RFC3339),
 		time.Since(s.startedAt).Round(time.Second),
-		float64(count)/time.Since(s.startedAt).Minutes()),
+		float64(count)/time.Since(s.startedAt).Minutes(),
 	)
 
 	return builder.String()

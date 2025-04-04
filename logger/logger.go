@@ -135,7 +135,7 @@ func setLogger(cb func() error) error {
 	defer cfg.l.Unlock()
 
 	if closer, ok := cfg.writer.(io.WriteCloser); ok && cfg.writer != os.Stdout {
-		closer.Close()
+		_ = closer.Close()
 	}
 
 	cfg.writer = nil

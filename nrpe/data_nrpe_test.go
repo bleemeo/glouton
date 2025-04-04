@@ -1192,7 +1192,7 @@ var checkBigV2 = packetCapture{
 		0x66, 0x00, 0x58, 0x31,
 	},
 	// This error has been disabled as it represents a raw nrpe response
-	ReplyError: fmt.Errorf("NRPE: Command '%s' not defined", longString), //nolint:goerr113
+	ReplyError: fmt.Errorf("NRPE: Command '%s' not defined", longString), //nolint:err113
 }
 
 var checkDoesNotExists = packetCapture{
@@ -1342,5 +1342,5 @@ var checkDoesNotExists = packetCapture{
 		0x6e, 0x65, 0x64, 0x00, 0x00, 0x00,
 	},
 	// This error has been disabled as it represents a raw nrpe response
-	ReplyError: errors.New("NRPE: Command 'does_not_exists' not defined"), //nolint:goerr113
+	ReplyError: errors.New("NRPE: Command 'does_not_exists' not defined"), //nolint:err113
 }

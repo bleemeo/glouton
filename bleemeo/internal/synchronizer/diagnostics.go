@@ -161,7 +161,7 @@ func (s *Synchronizer) uploadDiagnostic(ctx context.Context, apiClient types.Dia
 		return err
 	}
 
-	multipartWriter.Close()
+	_ = multipartWriter.Close()
 
 	err = apiClient.UploadDiagnostic(ctx, multipartWriter.FormDataContentType(), buf)
 	if err != nil {

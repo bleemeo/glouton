@@ -176,8 +176,8 @@ func newWrappedGatherer(g prometheus.Gatherer, extraLabels labels.Labels, opt Re
 	for _, l := range extraLabels {
 		if !strings.HasPrefix(l.Name, prometheusModel.ReservedLabelPrefix) {
 			labels = append(labels, &dto.LabelPair{
-				Name:  &l.Name,  //nolint: exportloopref
-				Value: &l.Value, //nolint: exportloopref
+				Name:  &l.Name,
+				Value: &l.Value,
 			})
 		}
 	}
@@ -402,13 +402,13 @@ func mergeMFS(mfs []*dto.MetricFamily) ([]*dto.MetricFamily, error) {
 			case existingMF.GetType() == mf.GetType():
 				// Nothing to do.
 			case existingMF.GetType() == dto.MetricType_UNTYPED:
-				existingMF.Type = mf.Type //nolint:protogetter
+				existingMF.Type = mf.Type
 				for i, metric := range existingMF.GetMetric() {
 					model.FixType(metric, *mf.GetType().Enum())
 					existingMF.Metric[i] = metric
 				}
 			case mf.GetType() == dto.MetricType_UNTYPED:
-				mf.Type = existingMF.Type //nolint:protogetter
+				mf.Type = existingMF.Type
 				for i, metric := range mf.GetMetric() {
 					model.FixType(metric, *existingMF.GetType().Enum())
 					mf.Metric[i] = metric
@@ -425,7 +425,7 @@ func mergeMFS(mfs []*dto.MetricFamily) ([]*dto.MetricFamily, error) {
 			existingMF = &dto.MetricFamily{}
 			existingMF.Name = proto.String(mf.GetName())
 			existingMF.Help = proto.String(mf.GetHelp())
-			existingMF.Type = mf.Type //nolint:protogetter
+			existingMF.Type = mf.Type
 			metricFamiliesByName[mf.GetName()] = existingMF
 		}
 

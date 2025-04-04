@@ -28,7 +28,6 @@ import (
 	"github.com/bleemeo/glouton/store"
 	"github.com/bleemeo/glouton/types"
 
-	"github.com/go-kit/log"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/rules"
@@ -54,9 +53,8 @@ func New(input []*rules.RecordingRule) *SimpleRuler {
 		matchers = append(matchers, matcher.MatchersFromQuery(rr.Query())...)
 	}
 
-	promLogger := logger.GoKitLoggerWrapper(logger.V(1))
 	engine := promql.NewEngine(promql.EngineOpts{
-		Logger:             log.With(promLogger, "component", "query engine"),
+		Logger:             logger.NewSlog().With("component", "query engine"),
 		Reg:                nil,
 		MaxSamples:         50000000,
 		Timeout:            2 * time.Minute,

@@ -148,7 +148,7 @@ func retrieveCmdLine(h windows.Handle) (cmdline string, err error) {
 
 	if bufLen == 0 {
 		// This errors represents a windows specific error realated to the NtQueryInformationProcess
-		return "", errors.New("NtQueryInformationProcess: empty buffer requested") //nolint:goerr113
+		return "", errors.New("NtQueryInformationProcess: empty buffer requested") //nolint:err113
 	}
 
 	buf := make([]byte, bufLen)
@@ -230,7 +230,7 @@ func parseProcessData(process *SystemProcessInformationStruct) (res Process, ok 
 			res.CmdLine = res.Name
 		}
 
-		windows.CloseHandle(processHandle) //nolint:errcheck // there is nothing we could do
+		windows.CloseHandle(processHandle) //nolint:errcheck,gosec // there is nothing we could do
 	}
 
 	// Split the input arguments.
@@ -250,7 +250,7 @@ func parseProcessData(process *SystemProcessInformationStruct) (res Process, ok 
 			res.CmdLineList = []string{res.CmdLine}
 		}
 
-		windows.LocalFree(windows.Handle(uintptr(unsafe.Pointer(argv)))) //nolint:errcheck // there is nothing we could do
+		windows.LocalFree(windows.Handle(uintptr(unsafe.Pointer(argv)))) //nolint:errcheck,gosec // there is nothing we could do
 	} else {
 		res.CmdLineList = []string{res.CmdLine}
 	}

@@ -98,7 +98,7 @@ func TestIsWriteInProgress(t *testing.T) {
 			t.Fatal("Failed to create write-in-progress flag file:", err)
 		}
 
-		f.Close()
+		_ = f.Close()
 
 		if !IsWriteInProgress(testDir) {
 			t.Fatal("Write is in progress but was not considered as such.")
@@ -164,7 +164,7 @@ func TestPurgeCrashReports(t *testing.T) {
 				t.Fatal("Failed to create fake crash report:", err)
 			}
 
-			f.Close()
+			_ = f.Close()
 
 			if i < keep {
 				mostRecentReports[i] = crashReportPath // Save it for later check
@@ -210,7 +210,7 @@ func TestPurgeCrashReports(t *testing.T) {
 				t.Fatal("Failed to create fake crash report:", err)
 			}
 
-			f.Close()
+			_ = f.Close()
 
 			if i%3 == 0 {
 				reportsToKeep = append(reportsToKeep, crashReportPath)
@@ -250,7 +250,7 @@ func TestMarkAsDone(t *testing.T) {
 		t.Fatal("Failed to create write-in-progress flag:", err)
 	}
 
-	f.Close()
+	_ = f.Close()
 
 	errs := markAsDone(testDir)
 	if errs != nil {
@@ -442,7 +442,7 @@ func TestBundleCrashReportFiles(t *testing.T) { //nolint:maintidx
 				}
 
 				fmt.Fprint(stderrFile, tc.previousStderrContent)
-				stderrFile.Close()
+				_ = stderrFile.Close()
 			}
 
 			if tc.previousDiagnostic {
@@ -466,7 +466,7 @@ func TestBundleCrashReportFiles(t *testing.T) { //nolint:maintidx
 					t.Fatal("Failed to close diagnostic archive:", err)
 				}
 
-				diagnosticFile.Close()
+				_ = diagnosticFile.Close()
 			}
 
 			if tc.writeAlreadyInProgress {
@@ -475,7 +475,7 @@ func TestBundleCrashReportFiles(t *testing.T) { //nolint:maintidx
 					t.Fatal("Failed to create write-in-progress file:", err)
 				}
 
-				f.Close()
+				_ = f.Close()
 			}
 
 			diagnosticFn := func(_ context.Context, writer types.ArchiveWriter) error {
@@ -569,7 +569,7 @@ func TestBundleCrashReportFiles(t *testing.T) { //nolint:maintidx
 					t.Fatal("Failed to read content of stderr file from report archive:", err)
 				}
 
-				reportStderr.Close()
+				_ = reportStderr.Close()
 
 				if diff := cmp.Diff(tc.previousStderrContent, string(stderrContent)); diff != "" {
 					t.Fatal("Unexpected stderr file content:\n", diff)
@@ -592,7 +592,9 @@ func TestBundleCrashReportFiles(t *testing.T) { //nolint:maintidx
 						t.Fatalf("Failed to read content of %q from report archive: %v", reportFile.Name, err)
 					}
 
-					fileReader.Close()
+					if err = fileReader.Close(); err != nil {
+						t.Fatalf("Failed to close reader %q: %v", reportFile.Name, err)
+					}
 
 					archiveFiles[reportFile.Name] = string(fileContent)
 				}
