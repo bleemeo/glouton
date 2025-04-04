@@ -26,6 +26,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -1375,7 +1376,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		go func() {
 			defer lateTasks.Done()
 
-			if err := api.Run(lateCtx); err != nil {
+			if err := api.Run(lateCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				logger.V(1).Printf("Error while stopping api: %v", err)
 			}
 		}()

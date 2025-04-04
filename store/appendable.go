@@ -68,11 +68,17 @@ func (a appender) Rollback() error {
 	return errNotImplemented
 }
 
+func (a appender) SetOptions(*storage.AppendOptions) {}
+
 func (a appender) AppendExemplar(storage.SeriesRef, labels.Labels, exemplar.Exemplar) (storage.SeriesRef, error) {
 	return 0, errNotImplemented
 }
 
 func (a appender) AppendHistogram(storage.SeriesRef, labels.Labels, int64, *histogram.Histogram, *histogram.FloatHistogram) (storage.SeriesRef, error) {
+	return 0, errNotImplemented
+}
+
+func (a appender) AppendHistogramCTZeroSample(storage.SeriesRef, labels.Labels, int64, int64, *histogram.Histogram, *histogram.FloatHistogram) (storage.SeriesRef, error) {
 	return 0, errNotImplemented
 }
 

@@ -29,7 +29,6 @@ import (
 	"github.com/bleemeo/glouton/prometheus/registry"
 	"github.com/bleemeo/glouton/types"
 
-	"github.com/go-kit/log"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
@@ -45,7 +44,6 @@ type Manager struct {
 	appendable *dynamicAppendable
 	queryable  storage.Queryable
 	engine     *promql.Engine
-	logger     log.Logger
 
 	l            sync.Mutex
 	agentStarted time.Time
@@ -76,9 +74,8 @@ func NewManager(ctx context.Context, queryable storage.Queryable, baseRules map[
 }
 
 func newManager(ctx context.Context, queryable storage.Queryable, defaultRules map[string]string, created time.Time) *Manager {
-	promLogger := logger.GoKitLoggerWrapper(logger.V(1))
 	engine := promql.NewEngine(promql.EngineOpts{
-		Logger:             log.With(promLogger, "component", "query engine"),
+		Logger:             logger.NewSlog().With("component", "query engine"),
 		Reg:                nil,
 		MaxSamples:         50000000,
 		Timeout:            2 * time.Minute,
@@ -110,7 +107,7 @@ func newManager(ctx context.Context, queryable storage.Queryable, defaultRules m
 		ShouldRestore: true,
 		Opts: &rules.ManagerOptions{
 			Context:    ctx,
-			Logger:     log.With(promLogger, "component", "rules manager"),
+			Logger:     logger.NewSlog().With("component", "rules manager"),
 			Appendable: app,
 			Queryable:  queryable,
 			QueryFunc:  rules.EngineQueryFunc(engine, queryable),
@@ -128,7 +125,6 @@ func newManager(ctx context.Context, queryable storage.Queryable, defaultRules m
 		engine:         engine,
 		recordingRules: []*rules.Group{defaultGroup},
 		matchers:       matchers,
-		logger:         promLogger,
 		agentStarted:   created,
 	}
 

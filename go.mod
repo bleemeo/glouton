@@ -44,9 +44,9 @@ require (
 	github.com/prometheus/client_golang v1.21.1
 	github.com/prometheus/client_model v0.6.1
 	github.com/prometheus/common v0.62.0
-	github.com/prometheus/node_exporter v1.9.0
+	github.com/prometheus/node_exporter v1.9.1
 	github.com/prometheus/procfs v0.16.0
-	github.com/prometheus/prometheus v0.55.1
+	github.com/prometheus/prometheus v0.302.1
 	github.com/rs/cors v1.11.1
 	github.com/shirou/gopsutil/v4 v4.25.3
 	github.com/vishvananda/netlink v1.3.1-0.20250221194427-0af32151e72b
@@ -67,7 +67,7 @@ require (
 )
 
 require (
-	cel.dev/expr v0.22.1 // indirect
+	cel.dev/expr v0.23.0 // indirect
 	cloud.google.com/go/auth v0.15.0 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
@@ -76,7 +76,7 @@ require (
 	github.com/AdamKorcz/go-118-fuzz-build v0.0.0-20231105174938-2b5cbb29f3e2 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.17.1 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.8.2 // indirect
-	github.com/Azure/azure-sdk-for-go/sdk/internal v1.10.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/internal v1.11.0 // indirect
 	github.com/Azure/go-ntlmssp v0.0.0-20221128193559-754e69321358 // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.4.2 // indirect
 	github.com/Masterminds/semver/v3 v3.3.1 // indirect
@@ -218,7 +218,7 @@ require (
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/prometheus-community/go-runit v0.1.0 // indirect
 	github.com/prometheus/alertmanager v0.28.1 // indirect
-	github.com/prometheus/common/sigv4 v0.1.0 // indirect
+	github.com/prometheus/sigv4 v0.1.2 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/robbiet480/go.nut v0.0.0-20240622015809-60e196249c53 // indirect
 	github.com/safchain/ethtool v0.5.10 // indirect
