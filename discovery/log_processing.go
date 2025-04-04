@@ -103,21 +103,17 @@ func inferLogProcessingConfig(service Service, knownLogFormats map[string][]conf
 			}
 
 			logFormat := logFile.LogFormat
-			if logFormat == "" {
-				if service.Config.LogFormat != "" {
-					logFormat = service.Config.LogFormat
-				} else {
-					logger.V(1).Printf("No log format specified for log file %q on service %q", logFile.FilePath, service.Name)
-
-					continue
-				}
+			if logFormat == "" && service.Config.LogFormat != "" {
+				logFormat = service.Config.LogFormat
 			}
 
-			_, ok := knownLogFormats[logFormat]
-			if !ok {
-				logger.V(1).Printf("Service %q requires an unknown log format: %q", service.Name, logFormat)
+			if logFormat != "" {
+				_, ok := knownLogFormats[logFormat]
+				if !ok {
+					logger.V(1).Printf("Service %q requires an unknown log format: %q", service.Name, logFormat)
 
-				return service
+					return service
+				}
 			}
 
 			service.LogProcessing = append(service.LogProcessing, ServiceLogReceiver{
