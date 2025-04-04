@@ -139,8 +139,8 @@ func (i *Input) processWatcher(ctx context.Context) {
 			i.backoff.Reset()
 		}
 
-		i.stderr.Close()
-		i.stdout.Close()
+		_ = i.stderr.Close()
+		_ = i.stdout.Close()
 
 		next := i.backoff.NextBackOff()
 

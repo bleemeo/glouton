@@ -114,7 +114,7 @@ func (c dummyContainer) Annotations() map[string]string {
 	return c.annotations
 }
 
-func makeCtrLog(t *testing.T, body string) []byte {
+func makeCtrLog(t *testing.T, ts time.Time, body string) []byte {
 	t.Helper()
 
 	var ctrLog = struct { //nolint:gofumpt
@@ -124,7 +124,7 @@ func makeCtrLog(t *testing.T, body string) []byte {
 	}{
 		Log:    body,
 		Stream: "stdout",
-		Time:   time.Now().Format("2006-01-02T15:04:05.999999999Z"),
+		Time:   ts.Format("2006-01-02T15:04:05.999999999Z"),
 	}
 
 	jsonLog, err := json.Marshal(ctrLog)
@@ -253,12 +253,16 @@ func TestHandleContainerLogs(t *testing.T) {
 
 	time.Sleep(time.Second)
 
-	_, err = f1.Write(makeCtrLog(t, "f1 log 1"))
+	now := time.Now().In(time.UTC)
+	tsLog1 := now.Add(1 * time.Second)
+	tsLog2 := now.Add(2 * time.Second)
+
+	_, err = f1.Write(makeCtrLog(t, tsLog1, "f1 log 1"))
 	if err != nil {
 		t.Fatal("Failed to write to log file n°1:", err)
 	}
 
-	_, err = f2.Write(makeCtrLog(t, "f2 log 1"))
+	_, err = f2.Write(makeCtrLog(t, tsLog2, "f2 log 1"))
 	if err != nil {
 		t.Fatal("Failed to write to log file n°2:", err)
 	}
@@ -267,7 +271,8 @@ func TestHandleContainerLogs(t *testing.T) {
 
 	expectedLogLines := []logRecord{
 		{
-			Body: "f1 log 1",
+			Timestamp: tsLog1,
+			Body:      "f1 log 1",
 			Attributes: map[string]any{
 				attrContainerID:        "id-1",
 				attrContainerImageName: "img-1",
@@ -283,7 +288,8 @@ func TestHandleContainerLogs(t *testing.T) {
 			},
 		},
 		{
-			Body: "f2 log 1",
+			Timestamp: tsLog2,
+			Body:      "f2 log 1",
 			Attributes: map[string]any{
 				attrContainerID:        "id-2",
 				attrContainerImageName: "img-2",

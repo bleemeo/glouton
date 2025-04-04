@@ -78,8 +78,15 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		"mapping": map[string]any{
 			"error": "5xx",
 			"warn":  "4xx",
-			"info":  "3xx", // FIXME: debug level too ?
-			"debug": "2xx",
+			"info":  "3xx",
+			"debug": []any{
+				"2xx",
+				// no range alias is defined for 1xx ...
+				/*map[string]any{
+					"min": 100,
+					"max": 199,
+				},*/
+			},
 		},
 	}
 
@@ -170,16 +177,22 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 					"info2":  "notice",
 					"info":   "info",
 					"debug":  "debug",
-					"trace4": "trace1",
-					"trace3": "trace2",
-					"trace2": "trace3",
-					"trace": []string{
+					"trace4": []any{
+						"trace1",
+						"trace2",
+					},
+					"trace3": []any{
+						"trace3",
 						"trace4",
+					},
+					"trace2": []any{
 						"trace5",
 						"trace6",
-						// levels 7 & 8 are data dumps
 					},
-					// ignoring Apache trace levels 5 to 8
+					"trace": []any{
+						"trace7",
+						"trace8",
+					},
 				},
 			},
 		},
@@ -196,9 +209,14 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 
 	kafkaParser := []OTELOperator{
 		{
+			"type":  "add",
+			"field": "attributes['messaging.system']",
+			"value": "kafka",
+		},
+		{
 			"id":    "kafka_parser",
 			"type":  "regex_parser",
-			"regex": `^\[(?P<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})] (?P<severity>\w+)( \[[^\]]*(partition=(?P<message_destination_partition_id>[\w-]+))[^\]]*\])? .+ \([\w.]+\)`,
+			"regex": `^\[(?P<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})] (?P<severity>\w+)( \[[^\]]*(partition=((?P<messaging_destination_partition_id>\d+)|(?P<messaging_destination_name>[\w-]+)))[^\]]*\])? .+ \([\w.]+\)`,
 			"severity": map[string]any{
 				"parse_from": "attributes.severity",
 				// Log level reference can be found at https://logging.apache.org/log4j/2.x/javadoc/log4j-api/org/apache/logging/log4j/Level.html
@@ -213,8 +231,10 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 				},
 			},
 		},
-		removeAttrWhenUndefined("message_destination_partition_id"),
-		renameAttr("message_destination_partition_id", "messaging.destination.partition.id"),
+		removeAttrWhenUndefined("messaging_destination_partition_id"),
+		removeAttrWhenUndefined("messaging_destination_name"),
+		renameAttr("messaging_destination_partition_id", "messaging.destination.partition.id"),
+		renameAttr("messaging_destination_name", "messaging.destination.name"),
 		removeAttr("severity"),
 	}
 
@@ -267,7 +287,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 					"debug4": "DEBUG",
 					"debug3": "DEBUG2",
 					"debug2": "DEBUG3",
-					"debug": []string{
+					"debug": []any{
 						"DEBUG4",
 						"DEBUG5",
 					},
@@ -328,7 +348,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 					"debug4": "D1",
 					"debug3": "D2",
 					"debug2": "D3",
-					"debug": []string{
+					"debug": []any{
 						"D4",
 						"D5",
 						"D", // previous versions
@@ -386,7 +406,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 				"type": "json_parser",
 				"timestamp": map[string]any{
 					"parse_from":  "attributes.time",
-					"layout":      "%Y-%m-%dT%H:%M:%S.%L%z",
+					"layout":      "%Y-%m-%dT%H:%M:%S.%L%j",
 					"layout_type": "strptime",
 				},
 			},
@@ -617,6 +637,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		),
 		"mysql": flattenOps(
 			mysqlParser,
+			// FIXME: logs from the [Entrypoint] component have a different timestamp format ...
 			OTELOperator{
 				"type":        "time_parser",
 				"parse_from":  "attributes.time",

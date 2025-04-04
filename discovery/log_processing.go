@@ -59,12 +59,12 @@ var servicesLogInfo = map[ServiceName]logProcessingInfo{ //nolint: gochecknoglob
 		},
 		DockerFormat: "haproxy", // no need for a container-specific behavior
 	},
-	/*PostgreSQLService: {
+	PostgreSQLService: {
 		FileFormats: []ServiceLogReceiver{
 			// TODO
 		},
 		DockerFormat: "postgresql_docker",
-	},*/
+	},
 	MySQLService: {
 		FileFormats: []ServiceLogReceiver{
 			// TODO
@@ -76,6 +76,12 @@ var servicesLogInfo = map[ServiceName]logProcessingInfo{ //nolint: gochecknoglob
 			// TODO
 		},
 		DockerFormat: "mongodb_docker",
+	},
+	RabbitMQService: {
+		FileFormats: []ServiceLogReceiver{
+			// TODO
+		},
+		DockerFormat: "rabbitmq_docker",
 	},
 }
 

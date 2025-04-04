@@ -236,10 +236,8 @@ func buildOperators(rawOperators []config.OTELOperator) ([]operator.Config, erro
 	var operators []operator.Config
 
 	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
-		Result: &operators,
-		DecodeHook: mapstructure.ComposeDecodeHookFunc(
-			unmarshalMapstructureHook,
-		),
+		Result:     &operators,
+		DecodeHook: unmarshalMapstructureHook,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error creating decoder: %w", err)

@@ -46,9 +46,11 @@ import (
 )
 
 type logRecord struct {
+	Timestamp  time.Time
 	Body       string
 	Attributes map[string]any
 	Resource   map[string]any
+	Severity   int32
 }
 
 type logBuffer struct {
@@ -89,9 +91,11 @@ func (logBuf *logBuffer) getAllRecords() []logRecord {
 				for k := range logRecords.Len() {
 					logRec := logRecords.At(k)
 					result = append(result, logRecord{
+						Timestamp:  logRec.Timestamp().AsTime(),
 						Body:       logRec.Body().Str(),
 						Attributes: logRec.Attributes().AsRaw(),
 						Resource:   resourceAttrs,
+						Severity:   int32(logRec.SeverityNumber()),
 					})
 				}
 			}
@@ -287,7 +291,8 @@ func TestFileLogReceiver(t *testing.T) {
 
 	expectedLogLines := []logRecord{
 		{
-			Body: "f1 log 1",
+			Timestamp: time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC),
+			Body:      "f1 log 1",
 			Attributes: map[string]any{
 				attrs.LogFileName: "f1.log",
 				attrs.LogFilePath: f1.Name(),
@@ -298,7 +303,8 @@ func TestFileLogReceiver(t *testing.T) {
 			},
 		},
 		{
-			Body: "f2 log 1",
+			Timestamp: time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC),
+			Body:      "f2 log 1",
 			Attributes: map[string]any{
 				attrs.LogFileName: "f2.log",
 				attrs.LogFilePath: f2.Name(),
@@ -441,7 +447,8 @@ func TestFileLogReceiverWithHostroot(t *testing.T) {
 
 	expectedLogLines := []logRecord{
 		{
-			Body: logLine,
+			Timestamp: time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC),
+			Body:      logLine,
 			Attributes: map[string]any{
 				attrs.LogFileName: "file.log",  // base name
 				attrs.LogFilePath: watchedFile, // absolute path
