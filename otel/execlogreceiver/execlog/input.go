@@ -105,8 +105,10 @@ func (i *Input) startProcess(ctx context.Context) error {
 }
 
 func (i *Input) processWatcher(ctx context.Context) {
-	stdoutDone := make(chan struct{}, 1) // allowing a small buffer,
-	// to avoid getting the goroutine stuck on writing to the channel if ctx.Done occurs before.
+	// Allowing a small buffer, to avoid getting the goroutines stuck on writing to the channel if ctx.Done occurs before.
+	stdoutDone := make(chan struct{}, 1)
+	stderrDone := make(chan struct{}, 1)
+
 	buffer := make([]byte, len(i.buffer))
 
 	for ctx.Err() == nil {
@@ -127,12 +129,10 @@ func (i *Input) processWatcher(ctx context.Context) {
 			defer crashreport.ProcessPanic()
 
 			i.processStderr(buffer)
+			stderrDone <- struct{}{}
 		}()
 
-		select {
-		case <-stdoutDone:
-		case <-ctx.Done():
-		}
+		waitForBoth(ctx, stdoutDone, stderrDone)
 
 		processDuration := time.Since(startTime)
 		if processDuration > time.Minute {
@@ -157,7 +157,10 @@ func (i *Input) processWatcher(ctx context.Context) {
 }
 
 func (i *Input) processStderr(buffer []byte) {
+	i.l.Lock()
 	scan := bufio.NewScanner(i.stderr)
+	i.l.Unlock()
+
 	scan.Split(i.splitFunc)
 	scan.Buffer(buffer, len(buffer))
 
@@ -179,10 +182,7 @@ func (i *Input) processStderr(buffer []byte) {
 }
 
 func (i *Input) processStdout(ctx context.Context) {
-	i.l.Lock()
 	scan := bufio.NewScanner(i.stdout)
-	i.l.Unlock()
-
 	scan.Split(i.splitFunc)
 	scan.Buffer(i.buffer, len(i.buffer))
 
@@ -215,4 +215,24 @@ func (i *Input) sendEntry(ctx context.Context, bytes []byte) error {
 	}
 
 	return i.Write(ctx, entry)
+}
+
+// waitForBoth blocks until both c1 and c2 send values, or ctx expires.
+func waitForBoth(ctx context.Context, c1, c2 <-chan struct{}) {
+	var total int8
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-c1:
+			total++
+		case <-c2:
+			total++
+		}
+
+		if total >= 2 {
+			return
+		}
+	}
 }
