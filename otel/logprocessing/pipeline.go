@@ -209,7 +209,7 @@ func makePipeline( //nolint:maintidx
 		}
 
 		if cfg.HTTP.Enable {
-			receiverTypedCfg.Protocols.HTTP.Endpoint = net.JoinHostPort(cfg.HTTP.Address, strconv.Itoa(cfg.HTTP.Port))
+			receiverTypedCfg.Protocols.HTTP.ServerConfig.Endpoint = net.JoinHostPort(cfg.HTTP.Address, strconv.Itoa(cfg.HTTP.Port))
 		} else {
 			receiverTypedCfg.Protocols.HTTP = nil
 		}

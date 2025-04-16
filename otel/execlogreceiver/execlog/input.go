@@ -105,7 +105,7 @@ func (i *Input) startProcess(ctx context.Context) error {
 }
 
 func (i *Input) processWatcher(ctx context.Context) {
-	// Allowing a small buffer, to avoid getting the goroutines stuck on writing to the channel if ctx.Done occurs before.
+	// Allowing a small buffer to avoid getting the goroutines stuck on writing to the channel if ctx.Done occurs before.
 	stdoutDone := make(chan struct{}, 1)
 	stderrDone := make(chan struct{}, 1)
 
