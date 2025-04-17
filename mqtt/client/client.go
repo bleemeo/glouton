@@ -420,9 +420,9 @@ func (c *Client) ackOne(msg types.Message, timeout time.Duration) error {
 	var err error
 
 	// The token is nil when publishing failed.
-	shouldWaitAgain := false
+	shouldWaitForACKAgain := false
 	if msg.Token != nil {
-		shouldWaitAgain = !msg.Token.WaitTimeout(timeout)
+		shouldWaitForACKAgain = !msg.Token.WaitTimeout(timeout)
 
 		err = msg.Token.Error()
 		if err != nil {
@@ -449,7 +449,7 @@ func (c *Client) ackOne(msg types.Message, timeout time.Duration) error {
 		publishFailed := mqtt == nil || msg.Token.Error() != nil
 
 		// The Token will be awaited later.
-		shouldWaitAgain = true
+		shouldWaitForACKAgain = true
 
 		// It's possible for Publish to return instantly with an error,
 		// in this case we need to wait a bit to avoid consuming too much resources.
@@ -460,7 +460,7 @@ func (c *Client) ackOne(msg types.Message, timeout time.Duration) error {
 		}
 	}
 
-	if shouldWaitAgain {
+	if shouldWaitForACKAgain { // Note: we don't care about the context here: we won't wait anyway.
 		ok := c.opts.ReloadState.AddPendingMessage(context.Background(), msg, false)
 
 		if !ok {

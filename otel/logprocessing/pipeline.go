@@ -162,7 +162,7 @@ func makePipeline( //nolint:maintidx
 		&batchprocessor.Config{
 			Timeout:                  10 * time.Second,
 			SendBatchSize:            1 << 16, // 64KiB
-			SendBatchMaxSize:         1 << 21, // 2MiB
+			SendBatchMaxSize:         1 << 20, // 1MiB (same as mqtt.client's maxPayloadSize)
 			MetadataCardinalityLimit: 1000,    // config default
 		},
 		logExporter,

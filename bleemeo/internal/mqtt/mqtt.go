@@ -51,6 +51,8 @@ const (
 
 	pointsBatchSize = 1000
 
+	maxMQTTPendingMessagesToAllowLogsThreshold = 50
+
 	dataAckBackPressureDelay    = 6*time.Minute + 10*time.Second
 	topinfoAckBackPressureDelay = 6*time.Minute + 10*time.Second
 	logsAckBackPressureDelay    = 1*time.Minute + 10*time.Second
@@ -595,6 +597,19 @@ func (c *Client) PopPoints(includeFailedPoints bool) []types.MetricPoint {
 	return points
 }
 
+// canSendLogs returns whether the current state of MQTT allows sending logs or not.
+func (c *Client) canSendLogs() bool {
+	if time.Since(c.lastAck) > logsAckBackPressureDelay {
+		return false
+	}
+
+	if c.opts.ReloadState.MQTTReloadState().ClientState().PendingMessagesCount() > maxMQTTPendingMessagesToAllowLogsThreshold {
+		return false
+	}
+
+	return true
+}
+
 func (c *Client) PushLogs(ctx context.Context, payload []byte) error {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -603,22 +618,18 @@ func (c *Client) PushLogs(ctx context.Context, payload []byte) error {
 		return ErrNotConnected
 	}
 
-	if c.logsStreamAvailability != bleemeoTypes.LogsAvailabilityOk || time.Since(c.lastAck) > logsAckBackPressureDelay {
+	if !c.canSendLogs() {
 		return types.ErrBackPressureSignal
 	}
 
-	if err := c.mqtt.PublishBytes(ctx, fmt.Sprintf("v1/agent/%s/logs", c.opts.AgentID), payload, true); err != nil {
-		return nil
-	}
-
-	return nil
+	return c.mqtt.PublishBytes(ctx, fmt.Sprintf("v1/agent/%s/logs", c.opts.AgentID), payload, true)
 }
 
 func (c *Client) LogsBackPressureStatus() bleemeoTypes.LogsAvailability {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	if !c.connected() || time.Since(c.lastAck) > logsAckBackPressureDelay {
+	if !c.connected() || !c.canSendLogs() {
 		return bleemeoTypes.LogsAvailabilityShouldBuffer
 	}
 
