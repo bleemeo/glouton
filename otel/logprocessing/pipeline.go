@@ -118,17 +118,17 @@ func makePipeline( //nolint:maintidx
 		}
 	}()
 
+	chunker := logChunker{
+		maxChunkSize: types.MaxMQTTPayloadSize,
+		pushLogsFn:   pushLogs,
+	}
+
 	logExporter, err := exporterhelper.NewLogs(
 		ctx,
 		exporter.Settings{TelemetrySettings: pipeline.telemetry},
 		"unused",
 		func(ctx context.Context, ld plog.Logs) error {
-			b, err := new(plog.ProtoMarshaler).MarshalLogs(ld)
-			if err != nil {
-				return err
-			}
-
-			if err = pushLogs(ctx, b); err != nil {
+			if err = chunker.push(ctx, ld); err != nil {
 				logger.V(1).Printf("Failed to push logs: %v", err)
 				// returning error goes nowhere (not visible anywhere), that's why we log it here
 				return err
@@ -161,9 +161,8 @@ func makePipeline( //nolint:maintidx
 		},
 		&batchprocessor.Config{
 			Timeout:                  10 * time.Second,
-			SendBatchSize:            1 << 16, // 64KiB
-			SendBatchMaxSize:         1 << 20, // 1MiB (same as mqtt.client's maxPayloadSize)
-			MetadataCardinalityLimit: 1000,    // config default
+			SendBatchSize:            8192, // config default
+			MetadataCardinalityLimit: 1000, // config default
 		},
 		logExporter,
 	)

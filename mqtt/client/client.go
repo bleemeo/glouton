@@ -43,7 +43,6 @@ const (
 	// If we stayed connected to MQTT for more stableConnection, the connection is considered stable,
 	// and we won't wait long to reconnect in case of a disconnection.
 	stableConnection    = 5 * time.Minute
-	maxPayloadSize      = 1024 * 1024
 	maxDelayWithoutPing = 90 * time.Second
 )
 
@@ -176,9 +175,10 @@ func (c *Client) PublishBytes(ctx context.Context, topic string, payload []byte,
 
 func (c *Client) publishWrapper(ctx context.Context, topic string, payloadBuffer []byte, retry bool) error {
 	if len(payloadBuffer) > maxPayloadSize {
+	if len(payloadBuffer) > types.MaxMQTTPayloadSize {
 		c.encoder.PutBuffer(payloadBuffer)
 
-		return fmt.Errorf("%w: size is %d which is > %d", ErrPayloadTooLarge, len(payloadBuffer), maxPayloadSize)
+		return fmt.Errorf("%w: size is %d which is > %d", ErrPayloadTooLarge, len(payloadBuffer), types.MaxMQTTPayloadSize)
 	}
 
 	msg, ok := c.publish(topic, payloadBuffer, retry)

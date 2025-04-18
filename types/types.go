@@ -49,6 +49,8 @@ const (
 	StatusUnknown
 )
 
+const MaxMQTTPayloadSize = 1024 * 1024 // 1MiB
+
 var ErrBackPressureSignal = errors.New("back-pressure signal")
 
 //nolint:gochecknoglobals

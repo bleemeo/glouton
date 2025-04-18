@@ -255,8 +255,6 @@ func TestProcessLogSources(t *testing.T) {
 	}
 
 	logMan := &Manager{
-		// Subtracting 1s to enforce the fact that the manager is meant to be initialized before the above resources.
-		startTime:         time.Now().Add(-time.Second),
 		config:            config.OpenTelemetry{KnownLogFormats: knownLogFormats},
 		watchedServices:   make(map[discovery.NameInstance]struct{}),
 		watchedContainers: make(map[string]struct{}),

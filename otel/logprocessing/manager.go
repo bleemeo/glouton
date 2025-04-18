@@ -50,7 +50,6 @@ type Manager struct {
 	crRuntime                  crTypes.RuntimeInterface
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability
 
-	startTime     time.Time // TODO: remove, now that we no longer rely on Service.LastTimeSeen
 	persister     *persistHost
 	pipeline      *pipelineContext
 	containerRecv *containerReceiver
@@ -96,7 +95,6 @@ func New(
 	containerRecv := newContainerReceiver(pipeline, cfg.ContainerFormat, cfg.KnownLogFormats)
 
 	processingManager := &Manager{
-		startTime:                  time.Now(),
 		config:                     cfg,
 		state:                      state,
 		crRuntime:                  crRuntime,
