@@ -48,21 +48,23 @@ func (lc logChunker) split(ld plog.Logs) (plog.Logs, plog.Logs) {
 	firstHalf := plog.NewLogs()
 	secondHalf := plog.NewLogs()
 
-	for i := 0; i < ld.ResourceLogs().Len(); i++ {
+	for i := range ld.ResourceLogs().Len() {
 		origResourceLogs := ld.ResourceLogs().At(i)
 
 		// Attributes
 		firstResourceLogs := firstHalf.ResourceLogs().AppendEmpty()
 		secondResourceLogs := secondHalf.ResourceLogs().AppendEmpty()
+
 		origResourceLogs.Resource().CopyTo(firstResourceLogs.Resource())
 		origResourceLogs.Resource().CopyTo(secondResourceLogs.Resource())
 
-		for j := 0; j < origResourceLogs.ScopeLogs().Len(); j++ {
+		for j := range origResourceLogs.ScopeLogs().Len() {
 			origScopeLogs := origResourceLogs.ScopeLogs().At(j)
 
 			// Scope
 			firstScopeLogs := firstResourceLogs.ScopeLogs().AppendEmpty()
 			secondScopeLogs := secondResourceLogs.ScopeLogs().AppendEmpty()
+
 			origScopeLogs.Scope().CopyTo(firstScopeLogs.Scope())
 			origScopeLogs.Scope().CopyTo(secondScopeLogs.Scope())
 
