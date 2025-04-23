@@ -174,7 +174,6 @@ func (c *Client) PublishBytes(ctx context.Context, topic string, payload []byte,
 }
 
 func (c *Client) publishWrapper(ctx context.Context, topic string, payloadBuffer []byte, retry bool) error {
-	if len(payloadBuffer) > maxPayloadSize {
 	if len(payloadBuffer) > types.MaxMQTTPayloadSize {
 		c.encoder.PutBuffer(payloadBuffer)
 
