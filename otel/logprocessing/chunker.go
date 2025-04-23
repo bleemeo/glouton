@@ -19,6 +19,7 @@ package logprocessing
 import (
 	"context"
 	"errors"
+	"sync"
 
 	"go.opentelemetry.io/collector/pdata/plog"
 )
@@ -45,40 +46,48 @@ func (lc logChunker) push(ctx context.Context, ld plog.Logs) error {
 }
 
 func (lc logChunker) split(ld plog.Logs) (plog.Logs, plog.Logs) {
+	totalRecords := ld.LogRecordCount()
+	recordIdx := 0
+
 	firstHalf := plog.NewLogs()
 	secondHalf := plog.NewLogs()
 
-	for i := range ld.ResourceLogs().Len() {
-		origResourceLogs := ld.ResourceLogs().At(i)
+	for _, origResourceLogs := range ld.ResourceLogs().All() {
+		var (
+			firstResourceLogs, secondResourceLogs plog.ResourceLogs
+			copyResOnce1, copyResOnce2            sync.Once
+		)
 
-		// Attributes
-		firstResourceLogs := firstHalf.ResourceLogs().AppendEmpty()
-		secondResourceLogs := secondHalf.ResourceLogs().AppendEmpty()
+		for _, origScopeLogs := range origResourceLogs.ScopeLogs().All() {
+			var (
+				firstScopeLogs, secondScopeLogs plog.ScopeLogs
+				copyScopeOnce1, copyScopeOnce2  sync.Once
+			)
 
-		origResourceLogs.Resource().CopyTo(firstResourceLogs.Resource())
-		origResourceLogs.Resource().CopyTo(secondResourceLogs.Resource())
+			for _, origRecord := range origScopeLogs.LogRecords().All() {
+				if recordIdx < totalRecords/2 {
+					copyResOnce1.Do(func() {
+						firstResourceLogs = firstHalf.ResourceLogs().AppendEmpty()
+						origResourceLogs.Resource().CopyTo(firstResourceLogs.Resource())
+					})
+					copyScopeOnce1.Do(func() {
+						firstScopeLogs = firstResourceLogs.ScopeLogs().AppendEmpty()
+						origScopeLogs.Scope().CopyTo(firstScopeLogs.Scope())
+					})
+					origRecord.CopyTo(firstScopeLogs.LogRecords().AppendEmpty())
+				} else {
+					copyResOnce2.Do(func() {
+						secondResourceLogs = secondHalf.ResourceLogs().AppendEmpty()
+						origResourceLogs.Resource().CopyTo(secondResourceLogs.Resource())
+					})
+					copyScopeOnce2.Do(func() {
+						secondScopeLogs = secondResourceLogs.ScopeLogs().AppendEmpty()
+						origScopeLogs.Scope().CopyTo(secondScopeLogs.Scope())
+					})
+					origRecord.CopyTo(secondScopeLogs.LogRecords().AppendEmpty())
+				}
 
-		for j := range origResourceLogs.ScopeLogs().Len() {
-			origScopeLogs := origResourceLogs.ScopeLogs().At(j)
-
-			// Scope
-			firstScopeLogs := firstResourceLogs.ScopeLogs().AppendEmpty()
-			secondScopeLogs := secondResourceLogs.ScopeLogs().AppendEmpty()
-
-			origScopeLogs.Scope().CopyTo(firstScopeLogs.Scope())
-			origScopeLogs.Scope().CopyTo(secondScopeLogs.Scope())
-
-			// Records
-			origRecords := origScopeLogs.LogRecords()
-			total := origRecords.Len()
-			mid := total / 2
-
-			for k := range mid {
-				origRecords.At(k).CopyTo(firstScopeLogs.LogRecords().AppendEmpty())
-			}
-
-			for k := mid; k < total; k++ {
-				origRecords.At(k).CopyTo(secondScopeLogs.LogRecords().AppendEmpty())
+				recordIdx++
 			}
 		}
 	}

@@ -23,14 +23,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
 )
 
-func makeLogs(t *testing.T, recordCount int, bodySizeFactor int) plog.Logs {
+func makeLogs(t *testing.T, res1RecordCount, res2RecordCount int, bodySizeFactor int) plog.Logs {
 	t.Helper()
 
-	if recordCount > 999 {
+	if res1RecordCount > 999 || res2RecordCount > 999 {
 		t.Fatal("Too many log records, you'll need to update the padding in the log body below to increase this limit.")
 	}
 
@@ -39,31 +40,39 @@ func makeLogs(t *testing.T, recordCount int, bodySizeFactor int) plog.Logs {
 	}
 
 	logs := plog.NewLogs()
-	resourceLogs := logs.ResourceLogs().AppendEmpty()
 
-	resource := resourceLogs.Resource()
-	resource.Attributes().PutStr("service.name", "srv")
+	for resIdx, recordCount := range []int{res1RecordCount, res2RecordCount} {
+		if recordCount == 0 {
+			continue
+		}
 
-	scopeLogs := resourceLogs.ScopeLogs().AppendEmpty()
+		resourceLogs := logs.ResourceLogs().AppendEmpty()
 
-	scope := scopeLogs.Scope()
-	scope.SetName("logger")
-	scope.SetVersion("v1.0.0")
+		resource := resourceLogs.Resource()
+		resource.Attributes().PutStr("service.name", fmt.Sprintf("srv-%d", resIdx+1))
 
-	for i := range recordCount {
-		logRec := scopeLogs.LogRecords().AppendEmpty()
+		scopeLogs := resourceLogs.ScopeLogs().AppendEmpty()
 
-		// Padding the log number with leading zeroes enables us to get log records of the same size, regardless of their index.
-		bodySample := fmt.Sprintf("Log message n°%03d.", i+1)
-		logRec.Body().SetStr(strings.Repeat(bodySample, bodySizeFactor))
+		scope := scopeLogs.Scope()
+		scope.SetName("logger")
+		scope.SetVersion("v1.0.0")
 
-		logRec.SetSeverityText("INFO")
-		logRec.SetSeverityNumber(plog.SeverityNumberInfo)
+		for i := range recordCount {
+			logRec := scopeLogs.LogRecords().AppendEmpty()
 
-		logRec.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
+			// Padding the log number with leading zeroes enables us to get
+			// log records of the same size, regardless of their index.
+			bodySample := fmt.Sprintf("Log message n°%03d.", i+1)
+			logRec.Body().SetStr(strings.Repeat(bodySample, bodySizeFactor))
 
-		attrs := logRec.Attributes()
-		attrs.PutStr("key", "value")
+			logRec.SetSeverityText("INFO")
+			logRec.SetSeverityNumber(plog.SeverityNumberInfo)
+
+			logRec.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
+
+			attrs := logRec.Attributes()
+			attrs.PutStr("key", "value")
+		}
 	}
 
 	return logs
@@ -85,35 +94,35 @@ func TestChunker(t *testing.T) {
 			recordCount:         1,
 			bodySizeFactor:      1,
 			expectedChunksCount: 1,
-			expectedTotalSize:   109,
+			expectedTotalSize:   111,
 		},
 		{
 			maxSize:             256,
 			recordCount:         3,
 			bodySizeFactor:      1,
 			expectedChunksCount: 1,
-			expectedTotalSize:   235,
+			expectedTotalSize:   237,
 		},
 		{
 			maxSize:             512,
 			recordCount:         15,
 			bodySizeFactor:      5,
 			expectedChunksCount: 7,
-			expectedTotalSize:   2428,
+			expectedTotalSize:   2442,
 		},
 		{
 			maxSize:             128,
 			recordCount:         50,
 			bodySizeFactor:      1,
 			expectedChunksCount: 50,
-			expectedTotalSize:   5450,
+			expectedTotalSize:   5550,
 		},
 		{
 			maxSize:             64,
 			recordCount:         1,
 			bodySizeFactor:      10,
 			expectedChunksCount: 1,
-			expectedTotalSize:   285,
+			expectedTotalSize:   287,
 			allowExceed:         true, // we can't split a single record
 		},
 	}
@@ -146,7 +155,7 @@ func TestChunker(t *testing.T) {
 				},
 			}
 
-			err := chunker.push(t.Context(), makeLogs(t, tc.recordCount, tc.bodySizeFactor))
+			err := chunker.push(t.Context(), makeLogs(t, tc.recordCount, 0, tc.bodySizeFactor))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -164,4 +173,437 @@ func TestChunker(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
+	t.Parallel()
+
+	type resourceSummary struct {
+		Records    int
+		Attributes map[string]any
+	}
+
+	type chunkSummary struct {
+		Size              int
+		Records           int
+		ResourceSummaries []resourceSummary
+	}
+
+	runChunker := func(t *testing.T, maxSize int, ld plog.Logs) (recordCount int, chunkSummaries []chunkSummary) {
+		t.Helper()
+
+		unmarshaler := new(plog.ProtoUnmarshaler)
+		chunker := logChunker{
+			maxChunkSize: maxSize,
+			pushLogsFn: func(_ context.Context, b []byte) error {
+				logs, err := unmarshaler.UnmarshalLogs(b)
+				if err != nil {
+					t.Fatal("Failed to unmarshal logs:", err)
+				}
+
+				chunkRecCount := logs.LogRecordCount()
+				recordCount += chunkRecCount
+				summary := chunkSummary{
+					Size:              len(b),
+					Records:           chunkRecCount,
+					ResourceSummaries: make([]resourceSummary, logs.ResourceLogs().Len()),
+				}
+
+				for i, res := range logs.ResourceLogs().All() {
+					recordsCount := 0
+
+					for _, scope := range res.ScopeLogs().All() {
+						recordsCount += scope.LogRecords().Len()
+					}
+
+					summary.ResourceSummaries[i] = resourceSummary{
+						Records:    recordsCount,
+						Attributes: res.Resource().Attributes().AsRaw(),
+					}
+				}
+
+				chunkSummaries = append(chunkSummaries, summary)
+
+				return nil
+			},
+		}
+
+		err := chunker.push(t.Context(), ld)
+		if err != nil {
+			t.Fatal("Failed to push logs:", err)
+		}
+
+		return recordCount, chunkSummaries
+	}
+
+	t.Run("uniform distribution normal", func(t *testing.T) {
+		t.Parallel()
+
+		const totalRecordCount = 100
+
+		recordCount, chunkSummaries := runChunker(t, 1024, makeLogs(t, totalRecordCount/2, totalRecordCount/2, 1))
+
+		if recordCount != totalRecordCount {
+			t.Errorf("Expected %d records, got %d", totalRecordCount, recordCount)
+		}
+
+		expectedChunks := []chunkSummary{
+			{
+				Size:    795,
+				Records: 12,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    12,
+						Attributes: map[string]any{"service.name": "srv-1"},
+					},
+				},
+			},
+			{
+				Size:    857,
+				Records: 13,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    13,
+						Attributes: map[string]any{"service.name": "srv-1"},
+					},
+				},
+			},
+			{
+				Size:    795,
+				Records: 12,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    12,
+						Attributes: map[string]any{"service.name": "srv-1"},
+					},
+				},
+			},
+			{
+				Size:    857,
+				Records: 13,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    13,
+						Attributes: map[string]any{"service.name": "srv-1"},
+					},
+				},
+			},
+			{
+				Size:    795,
+				Records: 12,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    12,
+						Attributes: map[string]any{"service.name": "srv-2"},
+					},
+				},
+			},
+			{
+				Size:    857,
+				Records: 13,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    13,
+						Attributes: map[string]any{"service.name": "srv-2"},
+					},
+				},
+			},
+			{
+				Size:    795,
+				Records: 12,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    12,
+						Attributes: map[string]any{"service.name": "srv-2"},
+					},
+				},
+			},
+			{
+				Size:    857,
+				Records: 13,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    13,
+						Attributes: map[string]any{"service.name": "srv-2"},
+					},
+				},
+			},
+		}
+
+		if diff := cmp.Diff(expectedChunks, chunkSummaries); diff != "" {
+			t.Errorf("Unexpected chunks (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("uniform distribution big", func(t *testing.T) {
+		t.Parallel()
+
+		recordCount, chunkSummaries := runChunker(t, 512, makeLogs(t, 1, 1, 10))
+
+		if recordCount != 2 {
+			t.Errorf("Expected 2 records, got %d", recordCount)
+		}
+
+		expectedChunks := []chunkSummary{
+			{
+				Size:    287,
+				Records: 1,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    1,
+						Attributes: map[string]any{"service.name": "srv-1"},
+					},
+				},
+			},
+			{
+				Size:    287,
+				Records: 1,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    1,
+						Attributes: map[string]any{"service.name": "srv-2"},
+					},
+				},
+			},
+		}
+		if diff := cmp.Diff(expectedChunks, chunkSummaries); diff != "" {
+			t.Errorf("Unexpected chunks (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("uniform distribution too big", func(t *testing.T) {
+		t.Parallel()
+
+		recordCount, chunkSummaries := runChunker(t, 512, makeLogs(t, 1, 1, 50))
+
+		if recordCount != 2 {
+			t.Errorf("Expected 2 records, got %d", recordCount)
+		}
+
+		expectedChunks := []chunkSummary{
+			{
+				Size:    1047,
+				Records: 1,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    1,
+						Attributes: map[string]any{"service.name": "srv-1"},
+					},
+				},
+			},
+			{
+				Size:    1047,
+				Records: 1,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    1,
+						Attributes: map[string]any{"service.name": "srv-2"},
+					},
+				},
+			},
+		}
+		if diff := cmp.Diff(expectedChunks, chunkSummaries); diff != "" {
+			t.Errorf("Unexpected chunks (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("diverse distribution 1", func(t *testing.T) {
+		t.Parallel()
+
+		recordCount, chunkSummaries := runChunker(t, 1024, makeLogs(t, 20, 80, 1))
+
+		if recordCount != 100 {
+			t.Errorf("Expected 100 records, got %d", recordCount)
+		}
+
+		expectedChunks := []chunkSummary{
+			{
+				Size:    795,
+				Records: 12,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    12,
+						Attributes: map[string]any{"service.name": "srv-1"},
+					},
+				},
+			},
+			{
+				Size:    908,
+				Records: 13,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    8,
+						Attributes: map[string]any{"service.name": "srv-1"},
+					},
+					{
+						Records:    5,
+						Attributes: map[string]any{"service.name": "srv-2"},
+					},
+				},
+			},
+			{
+				Size:    795,
+				Records: 12,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    12,
+						Attributes: map[string]any{"service.name": "srv-2"},
+					},
+				},
+			},
+			{
+				Size:    857,
+				Records: 13,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    13,
+						Attributes: map[string]any{"service.name": "srv-2"},
+					},
+				},
+			},
+			{
+				Size:    795,
+				Records: 12,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    12,
+						Attributes: map[string]any{"service.name": "srv-2"},
+					},
+				},
+			},
+			{
+				Size:    857,
+				Records: 13,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    13,
+						Attributes: map[string]any{"service.name": "srv-2"},
+					},
+				},
+			},
+			{
+				Size:    795,
+				Records: 12,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    12,
+						Attributes: map[string]any{"service.name": "srv-2"},
+					},
+				},
+			},
+			{
+				Size:    857,
+				Records: 13,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    13,
+						Attributes: map[string]any{"service.name": "srv-2"},
+					},
+				},
+			},
+		}
+		if diff := cmp.Diff(expectedChunks, chunkSummaries); diff != "" {
+			t.Errorf("Unexpected chunks (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("diverse distribution 2", func(t *testing.T) {
+		t.Parallel()
+
+		recordCount, chunkSummaries := runChunker(t, 1024, makeLogs(t, 80, 20, 1))
+
+		if recordCount != 100 {
+			t.Errorf("Expected 100 records, got %d", recordCount)
+		}
+
+		expectedChunks := []chunkSummary{
+			{
+				Size:    795,
+				Records: 12,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    12,
+						Attributes: map[string]any{"service.name": "srv-1"},
+					},
+				},
+			},
+			{
+				Size:    857,
+				Records: 13,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    13,
+						Attributes: map[string]any{"service.name": "srv-1"},
+					},
+				},
+			},
+			{
+				Size:    795,
+				Records: 12,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    12,
+						Attributes: map[string]any{"service.name": "srv-1"},
+					},
+				},
+			},
+			{
+				Size:    857,
+				Records: 13,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    13,
+						Attributes: map[string]any{"service.name": "srv-1"},
+					},
+				},
+			},
+			{
+				Size:    795,
+				Records: 12,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    12,
+						Attributes: map[string]any{"service.name": "srv-1"},
+					},
+				},
+			},
+			{
+				Size:    857,
+				Records: 13,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    13,
+						Attributes: map[string]any{"service.name": "srv-1"},
+					},
+				},
+			},
+			{
+				Size:    846,
+				Records: 12,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    5,
+						Attributes: map[string]any{"service.name": "srv-1"},
+					},
+					{
+						Records:    7,
+						Attributes: map[string]any{"service.name": "srv-2"},
+					},
+				},
+			},
+			{
+				Size:    857,
+				Records: 13,
+				ResourceSummaries: []resourceSummary{
+					{
+						Records:    13,
+						Attributes: map[string]any{"service.name": "srv-2"},
+					},
+				},
+			},
+		}
+		if diff := cmp.Diff(expectedChunks, chunkSummaries); diff != "" {
+			t.Errorf("Unexpected chunks (-want +got):\n%s", diff)
+		}
+	})
 }
