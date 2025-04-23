@@ -255,6 +255,9 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 		}
 
 		if r.isFromService {
+			// If this receiver is related to a service, it may disappear at any moment due to the deletion of the said service.
+			// We don't store it in the logReceiver rather than in pipeline.startedComponents
+			// to be able to find it easily to stop and delete it when the service won't exist anymore.
 			r.startedComponents = append(r.startedComponents, logRcvr)
 		} else {
 			pipeline.startedComponents = append(pipeline.startedComponents, logRcvr)

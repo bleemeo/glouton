@@ -49,7 +49,7 @@ import (
 
 const (
 	throughputMeterResolutionSecs = 60 // we want to measure the throughput over the last minute (60s)
-	retrySetupFileReceiversPeriod = 1 * time.Minute
+	receiversUpdatePeriod         = 1 * time.Minute
 	saveFileSizesToCachePeriod    = 1 * time.Minute
 	shutdownTimeout               = 5 * time.Second
 )
@@ -128,7 +128,7 @@ func makePipeline( //nolint:maintidx
 		exporter.Settings{TelemetrySettings: pipeline.telemetry},
 		"unused",
 		func(ctx context.Context, ld plog.Logs) error {
-			if err = chunker.push(ctx, ld); err != nil {
+			if err := chunker.push(ctx, ld); err != nil {
 				logger.V(1).Printf("Failed to push logs: %v", err)
 				// returning error goes nowhere (not visible anywhere), that's why we log it here
 				return err
@@ -266,7 +266,7 @@ AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers bl
 	go func() {
 		defer crashreport.ProcessPanic()
 
-		ticker := time.NewTicker(retrySetupFileReceiversPeriod)
+		ticker := time.NewTicker(receiversUpdatePeriod)
 		defer ticker.Stop()
 
 		for ctx.Err() == nil {
@@ -278,7 +278,7 @@ AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers bl
 					// Here we use logWarnings instead of addWarnings,
 					// because that would make the description of
 					// agent_config_warning grow indefinitely.
-					err = rcvr.update(ctx, pipeline, logWarnings)
+					err := rcvr.update(ctx, pipeline, logWarnings)
 					if err != nil {
 						logger.V(1).Printf("Failed to update log receiver n°%d: %v", i+1, err)
 					}

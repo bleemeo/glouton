@@ -34,6 +34,7 @@ import (
 	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/uuid"
+	"golang.org/x/sync/errgroup"
 )
 
 type LogSource struct {
@@ -117,15 +118,27 @@ func New(
 func (man *Manager) handleProcessingLifecycle(ctx context.Context) {
 	defer crashreport.ProcessPanic()
 
-	ticker := time.NewTicker(saveFileSizesToCachePeriod)
-	defer ticker.Stop()
+	recvUpdateTicker := time.NewTicker(receiversUpdatePeriod)
+	defer recvUpdateTicker.Stop()
+
+	saveFileSizesTicker := time.NewTicker(saveFileSizesToCachePeriod)
+	defer saveFileSizesTicker.Stop()
 
 ctxLoop:
 	for ctx.Err() == nil {
 		select {
 		case <-ctx.Done():
 			break ctxLoop
-		case <-ticker.C:
+		case <-recvUpdateTicker.C:
+			man.l.Lock()
+
+			err := man.updateServiceReceivers(ctx)
+			if err != nil {
+				logger.V(1).Printf("Failed to update service receivers: %v", err)
+			}
+
+			man.l.Unlock()
+		case <-saveFileSizesTicker.C:
 			man.pipeline.l.Lock()
 			fileSizers := mergeLastFileSizes(man.pipeline.receivers, man.containerRecv)
 			man.pipeline.l.Unlock()
@@ -148,6 +161,30 @@ ctxLoop:
 
 	saveLastFileSizesToCache(man.state, mergeLastFileSizes(man.pipeline.receivers, man.containerRecv))
 	saveFileMetadataToCache(man.state, man.persister.getAllMetadata())
+}
+
+func (man *Manager) updateServiceReceivers(ctx context.Context) error {
+	man.pipeline.l.Lock()
+	defer man.pipeline.l.Unlock()
+
+	errGrp := new(errgroup.Group)
+
+	for _, receivers := range man.serviceReceivers {
+		for _, recv := range receivers {
+			// We can run several logReceiver.update() in parallel without taking the pipeline lock in each,
+			// since they only do read-access to the lock-protected fields.
+			errGrp.Go(func() error {
+				err := recv.update(ctx, man.pipeline, logWarnings)
+				if err != nil {
+					return fmt.Errorf("log receiver %q: %w", recv.name, err)
+				}
+
+				return nil
+			})
+		}
+	}
+
+	return errGrp.Wait()
 }
 
 func (man *Manager) HandleLogsFromDynamicSources(ctx context.Context, services []discovery.Service, containers []facts.Container) {
