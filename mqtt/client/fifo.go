@@ -34,6 +34,8 @@ type fifo[T any] struct {
 	l                 *sync.Mutex
 	notEmpty, notFull *sync.Cond
 	closed            bool
+
+	zero T
 }
 
 // newFifo returns an initialized fifo queue.
@@ -127,6 +129,7 @@ func (fifo *fifo[T]) Get(ctx context.Context) (v T, open bool) {
 
 	fifo.writeReadDiff--
 	v = fifo.queue[fifo.readIdx]
+	fifo.queue[fifo.readIdx] = fifo.zero // remove the reference to the value we stored here
 	fifo.readIdx++
 
 	fifo.notFull.Signal()
