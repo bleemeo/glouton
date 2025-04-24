@@ -224,7 +224,7 @@ func parserReader(data []byte, filter func(lbls labels.Labels) bool) ([]*dto.Met
 			metricHelp = string(tmp2)
 		case textparse.EntrySeries:
 			_, seriesTS, seriesFloat = p.Series()
-			p.Metric(&lset)
+			p.Labels(&lset)
 			metricName = lset.Get(types.LabelName)
 		case textparse.EntryHistogram:
 			// This is native histogram which we don't support
