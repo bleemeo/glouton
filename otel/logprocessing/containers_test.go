@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -30,7 +29,6 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts"
 	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
-	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/attrs"
@@ -192,19 +190,8 @@ func TestHandleContainerLogs(t *testing.T) {
 		lastFileSizes: make(map[string]int64),
 		telemetry:     telSet,
 		inputConsumer: makeBufferConsumer(t, &logBuf),
-		commandRunner: dummyRunner{
-			run: func(_ context.Context, _ gloutonexec.Option, cmd string, args ...string) ([]byte, error) {
-				t.Errorf("No command should have been executed during this test, but: %s %s", cmd, args)
-
-				return nil, nil
-			},
-			startWithPipes: func(_ context.Context, _ gloutonexec.Option, cmd string, args ...string) (io.ReadCloser, io.ReadCloser, func() error, error) {
-				t.Errorf("No command should have been executed during this test, but: %s %s", cmd, args)
-
-				return nil, nil, nil, nil
-			},
-		},
-		persister: mustNewPersistHost(t),
+		commandRunner: noExecRunner(t),
+		persister:     mustNewPersistHost(t),
 	}
 
 	crRuntime := dummyRuntime{

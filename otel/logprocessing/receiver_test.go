@@ -133,6 +133,24 @@ func (dr dummyRunner) StartWithPipes(ctx context.Context, option gloutonexec.Opt
 	return dr.startWithPipes(ctx, option, cmd, args...)
 }
 
+// noExecRunner returns a CommandRunner that marks the given test as fail if any command is executed.
+func noExecRunner(t *testing.T) dummyRunner {
+	t.Helper()
+
+	return dummyRunner{
+		run: func(_ context.Context, _ gloutonexec.Option, cmd string, args ...string) ([]byte, error) {
+			t.Errorf("No command should have been executed during this test, but: %s %s", cmd, args)
+
+			return nil, nil
+		},
+		startWithPipes: func(_ context.Context, _ gloutonexec.Option, cmd string, args ...string) (io.ReadCloser, io.ReadCloser, func() error, error) {
+			t.Errorf("No command should have been executed during this test, but: %s %s", cmd, args)
+
+			return nil, nil, nil, nil
+		},
+	}
+}
+
 // mustNewPersistHost is a shorthand to instantiate both a state and a persist host.
 func mustNewPersistHost(t *testing.T) *persistHost {
 	t.Helper()
@@ -219,19 +237,8 @@ func TestFileLogReceiver(t *testing.T) {
 		lastFileSizes:     make(map[string]int64),
 		telemetry:         telSet,
 		startedComponents: []component.Component{},
-		commandRunner: dummyRunner{
-			run: func(_ context.Context, _ gloutonexec.Option, cmd string, args ...string) ([]byte, error) {
-				t.Errorf("No command should have been executed during this test, but: %s %s", cmd, args)
-
-				return nil, nil
-			},
-			startWithPipes: func(_ context.Context, _ gloutonexec.Option, cmd string, args ...string) (io.ReadCloser, io.ReadCloser, func() error, error) {
-				t.Errorf("No command should have been executed during this test, but: %s %s", cmd, args)
-
-				return nil, nil, nil, nil
-			},
-		},
-		persister: mustNewPersistHost(t),
+		commandRunner:     noExecRunner(t),
+		persister:         mustNewPersistHost(t),
 	}
 
 	defer func() {
@@ -406,19 +413,8 @@ func TestFileLogReceiverWithHostroot(t *testing.T) {
 		lastFileSizes:     make(map[string]int64),
 		telemetry:         telSet,
 		startedComponents: []component.Component{},
-		commandRunner: dummyRunner{
-			run: func(_ context.Context, _ gloutonexec.Option, cmd string, args ...string) ([]byte, error) {
-				t.Errorf("No command should have been executed during this test, but: %s %s", cmd, args)
-
-				return nil, nil
-			},
-			startWithPipes: func(_ context.Context, _ gloutonexec.Option, cmd string, args ...string) (io.ReadCloser, io.ReadCloser, func() error, error) {
-				t.Errorf("No command should have been executed during this test, but: %s %s", cmd, args)
-
-				return nil, nil, nil, nil
-			},
-		},
-		persister: mustNewPersistHost(t),
+		commandRunner:     noExecRunner(t),
+		persister:         mustNewPersistHost(t),
 	}
 
 	defer func() {
