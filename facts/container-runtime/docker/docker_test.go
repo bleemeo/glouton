@@ -368,7 +368,7 @@ func TestDocker_Run(t *testing.T) {
 			wg.Wait()
 
 			if runErr != nil {
-				t.Error(err)
+				t.Error(runErr)
 			}
 
 			if eventSeen != 5 {
