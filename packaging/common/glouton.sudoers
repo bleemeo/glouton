@@ -20,3 +20,11 @@ glouton     ALL=(ALL) NOPASSWD: /usr/sbin/ipmi-sensors -W discretereading --sdr-
 
 # Allow Glouton to get details about multi-disks arrays.
 glouton     ALL=(ALL) NOPASSWD: /sbin/mdadm --detail *, /usr/sbin/mdadm --detail *
+
+# Allow Glouton to read container logs
+glouton     ALL=(ALL) NOPASSWD: /usr/bin/tail --follow=name --bytes=* /var/lib/docker/containers/*/*-json.log
+glouton     ALL=(ALL) NOPASSWD: /usr/bin/stat --printf=%s /var/lib/docker/containers/*/*-json.log
+
+# Allow Glouton to read application logs
+glouton     ALL=(ALL) NOPASSWD: /usr/bin/tail --follow=name --bytes=* /var/log/*/*.log
+glouton     ALL=(ALL) NOPASSWD: /usr/bin/stat --printf=%s /var/log/*/*.log
