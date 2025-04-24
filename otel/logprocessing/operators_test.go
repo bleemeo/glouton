@@ -76,9 +76,8 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Body:      `{"time":"2025-01-20T15:22:11.377443+01:00","level":"INFO","msg":"starting","go_version":"go1.23.5"}`,
 					Attributes: map[string]any{
 						"go_version": "go1.23.5",
-						"level":      "INFO",
-						"msg":        "starting",
 					},
+					Severity: 9,
 				},
 			},
 		},

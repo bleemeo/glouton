@@ -410,7 +410,33 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 					"layout_type": "strptime",
 				},
 			},
+			{
+				"type":       "severity_parser",
+				"parse_from": "attributes.level",
+				// Log level reference can be 'found' at https://pkg.go.dev/log/slog#Level
+				// Mapping is OTEL severity -> slog level
+				"mapping": map[string]any{
+					"error4": "ERROR+3",
+					"error3": "ERROR+2",
+					"error2": "ERROR+1",
+					"error":  "ERROR",
+					"warn4":  "WARN+3",
+					"warn3":  "WARN+2",
+					"warn2":  "WARN+1",
+					"warn":   "WARN",
+					"info4":  "INFO+3",
+					"info3":  "INFO+2",
+					"info2":  "INFO+1",
+					"info":   "INFO",
+					"debug4": "DEBUG+3",
+					"debug3": "DEBUG+2",
+					"debug2": "DEBUG+1",
+					"debug":  "DEBUG",
+				},
+			},
 			removeAttr("time"),
+			removeAttr("level"),
+			removeAttr("msg"),
 		},
 		"nginx_access": flattenOps(
 			OTELOperator{

@@ -45,12 +45,18 @@ func (lc logChunker) push(ctx context.Context, ld plog.Logs) error {
 	return lc.pushLogsFn(ctx, b)
 }
 
+// split returns two plog.Logs object, each containing a half of the records of the given one.
 func (lc logChunker) split(ld plog.Logs) (plog.Logs, plog.Logs) {
-	totalRecords := ld.LogRecordCount()
+	recordsMid := ld.LogRecordCount() / 2
 	recordIdx := 0
 
 	firstHalf := plog.NewLogs()
 	secondHalf := plog.NewLogs()
+
+	// The goal is to produce two plog.Logs objects with the same number of records in each.
+	// To achieve this, we base our iteration index solely on the total number of records we ranged through,
+	// regardless of the resource or the scope. This is why we initialize these as late as possible,
+	// only when we're about to append a record to the final objects.
 
 	for _, origResourceLogs := range ld.ResourceLogs().All() {
 		var (
@@ -65,7 +71,7 @@ func (lc logChunker) split(ld plog.Logs) (plog.Logs, plog.Logs) {
 			)
 
 			for _, origRecord := range origScopeLogs.LogRecords().All() {
-				if recordIdx < totalRecords/2 {
+				if recordIdx < recordsMid {
 					copyResOnce1.Do(func() {
 						firstResourceLogs = firstHalf.ResourceLogs().AppendEmpty()
 						origResourceLogs.Resource().CopyTo(firstResourceLogs.Resource())
