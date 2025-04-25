@@ -1,3 +1,19 @@
+// Copyright 2015-2025 Bleemeo
+//
+// bleemeo.com an infrastructure monitoring solution in the Cloud
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package logprocessing
 
 import (
@@ -6,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -20,15 +37,15 @@ import (
 
 //nolint: gochecknoglobals,gofmt,goimports,gofumpt
 var (
-	epochTS    = time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
-	erasedTime = time.Date(2025, 04, 24, 17, 28, 37, 0, time.UTC)
+	epochTS  = time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
+	erasedTS = time.Date(2025, 04, 24, 17, 28, 37, 0, time.UTC)
 )
 
-// eraseTimeOpt provides a cmp.Option that makes logs comparison easier,
+// makeTimeEraserOpt provides a cmp.Option that makes logs comparison easier,
 // by erasing the timestamps from the logRecord objects. It works the following way:
-// - if the Timestamp field is defined (not zero or epoch), it is replaced by erasedTime (an arbitrarily chosen value)
+// - if the Timestamp field is defined (not zero or epoch), it is replaced by erasedTS (an arbitrarily chosen value)
 // - it replaces all the occurrences of patterns matching the given timeRe with the string "<time erased>".
-func eraseTimeOpt(timeRe string) cmp.Option {
+func makeTimeEraserOpt(timeRe string) cmp.Option {
 	eraseTimeRe := regexp.MustCompile(timeRe)
 
 	filter := func(x, y logRecord) bool {
@@ -37,7 +54,7 @@ func eraseTimeOpt(timeRe string) cmp.Option {
 
 	transformer := cmpopts.AcyclicTransformer("TimeEraser", func(v logRecord) logRecord {
 		if !v.Timestamp.IsZero() && !v.Timestamp.Equal(epochTS) {
-			v.Timestamp = erasedTime
+			v.Timestamp = erasedTS
 		}
 
 		v.Body = eraseTimeRe.ReplaceAllString(v.Body, "<time erased>")
@@ -109,6 +126,9 @@ func TestPipeline(t *testing.T) {
 		buf: make([]plog.Logs, 0, 2), // we plan to write 2 log lines
 	}
 
+	currentAvailability := new(atomic.Value)
+	currentAvailability.Store(bleemeoTypes.LogsAvailabilityOk)
+
 	pipeline, err := makePipeline(
 		t.Context(),
 		cfg,
@@ -125,13 +145,17 @@ func TestPipeline(t *testing.T) {
 			return nil
 		},
 		func() bleemeoTypes.LogsAvailability {
-			return bleemeoTypes.LogsAvailabilityOk
+			return currentAvailability.Load().(bleemeoTypes.LogsAvailability) //nolint: forcetypeassert
 		},
 		persister,
 		func(errs ...error) {
 			t.Errorf("Warnings were reported: %v", errs)
 		},
 		getLastFileSizesFromCache(st),
+		pipelineOptions{
+			batcherTimeout:           100 * time.Millisecond,
+			logsAvailabilityCacheTTL: 100 * time.Millisecond,
+		},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -141,6 +165,7 @@ func TestPipeline(t *testing.T) {
 		shutdownAll(pipeline.startedComponents)
 	}()
 
+	t.Log("Setting up fileconsumers ...")
 	time.Sleep(time.Second)
 
 	_, err = customLogFile.WriteString("This is a custom log line.")
@@ -160,7 +185,8 @@ func TestPipeline(t *testing.T) {
 		t.Fatal("Failed to sync log file:", err)
 	}
 
-	time.Sleep(10 * time.Second) // batcher timeout ...
+	t.Log("Waiting for batcher ...")
+	time.Sleep(time.Second)
 
 	if throughput := pipeline.logThroughputMeter.Total(); throughput != 2 {
 		t.Errorf("Expected a throughput of 2 logs/min, got %d", throughput)
@@ -168,7 +194,7 @@ func TestPipeline(t *testing.T) {
 
 	expectedLogLines := []logRecord{
 		{
-			Timestamp: erasedTime,
+			Timestamp: erasedTS,
 			Body:      `{"time":"<time erased>","level":"INFO","msg":"This is a json log line."}`,
 			Attributes: map[string]any{
 				"log.file.name": filepath.Base(jsonLogFile.Name()),
@@ -190,9 +216,62 @@ func TestPipeline(t *testing.T) {
 		},
 	}
 
-	const jsonSlogTimeRe = `\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d+\+\d{2}:\d{2}`
+	// slog JSON handler uses the RFC3339Nano layout to represent timestamps
+	const jsonSlogTimeRe = `\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d+((\+\d{2}:\d{2})|Z(\d{2}:\d{2})?)`
 
-	if diff := cmp.Diff(expectedLogLines, logBuf.getAllRecords(), eraseTimeOpt(jsonSlogTimeRe)); diff != "" {
+	timeEraserOpt := makeTimeEraserOpt(jsonSlogTimeRe)
+	if diff := cmp.Diff(expectedLogLines, logBuf.getAllRecords(), timeEraserOpt); diff != "" {
+		t.Fatalf("Unexpected logs (-want +got):\n%s", diff)
+	}
+
+	logBuf.reset()
+
+	currentAvailability.Store(bleemeoTypes.LogsAvailabilityShouldBuffer) // temporarily block logs
+
+	_, err = customLogFile.WriteString("This is a another log line.")
+	if err != nil {
+		t.Fatal("Failed to write log line:", err)
+	}
+
+	if err = customLogFile.Sync(); err != nil {
+		t.Fatal("Failed to sync log file:", err)
+	}
+
+	t.Log("Waiting for batcher ...")
+	time.Sleep(time.Second)
+
+	if throughput := pipeline.logThroughputMeter.Total(); throughput != 2 { // still 2
+		t.Errorf("Expected a throughput of 2 logs/min, got %d", throughput)
+	}
+
+	if diff := cmp.Diff([]logRecord{}, logBuf.getAllRecords(), timeEraserOpt); diff != "" {
+		t.Fatalf("No logs should have been written, but:\n%s", diff)
+	}
+
+	currentAvailability.Store(bleemeoTypes.LogsAvailabilityOk) // re-allow logs
+
+	t.Log("Waiting for retry ...")
+	time.Sleep(5 * time.Second)
+
+	if throughput := pipeline.logThroughputMeter.Total(); throughput != 3 {
+		t.Errorf("Expected a throughput of 3 logs/min, got %d", throughput)
+	}
+
+	expectedLogLines = []logRecord{
+		{
+			Timestamp: epochTS,
+			Body:      "This is a another log line.",
+			Attributes: map[string]any{
+				"log.file.name": filepath.Base(customLogFile.Name()),
+				"log.file.path": customLogFile.Name(),
+			},
+			Resource: map[string]any{
+				"key":          "custom-res",
+				"service.name": "custom-svc",
+			},
+		},
+	}
+	if diff := cmp.Diff(expectedLogLines, logBuf.getAllRecords(), timeEraserOpt); diff != "" {
 		t.Fatalf("Unexpected logs (-want +got):\n%s", diff)
 	}
 }

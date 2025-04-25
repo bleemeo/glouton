@@ -77,6 +77,11 @@ type pipelineContext struct {
 	logThroughputMeter *ringCounter
 }
 
+type pipelineOptions struct {
+	batcherTimeout           time.Duration
+	logsAvailabilityCacheTTL time.Duration
+}
+
 func makePipeline( //nolint:maintidx
 	ctx context.Context,
 	cfg config.OpenTelemetry,
@@ -87,6 +92,7 @@ func makePipeline( //nolint:maintidx
 	persister *persistHost,
 	addWarnings func(...error),
 	lastFileSizes map[string]int64,
+	opts pipelineOptions,
 ) (
 	pipeline *pipelineContext,
 	err error,
@@ -160,7 +166,7 @@ func makePipeline( //nolint:maintidx
 			TelemetrySettings: pipeline.telemetry,
 		},
 		&batchprocessor.Config{
-			Timeout:                  10 * time.Second,
+			Timeout:                  opts.batcherTimeout,
 			SendBatchSize:            8192, // config default
 			MetadataCardinalityLimit: 1000, // config default
 		},
@@ -181,7 +187,7 @@ func makePipeline( //nolint:maintidx
 		processor.Settings{TelemetrySettings: pipeline.telemetry},
 		nil,
 		logBatcher,
-		makeEnforceBackPressureFn(streamAvailabilityStatusFn),
+		makeEnforceBackPressureFn(streamAvailabilityStatusFn, opts.logsAvailabilityCacheTTL),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("setup log back-pressure enforcer: %w", err)
@@ -299,10 +305,12 @@ func (p *pipelineContext) getInput() consumer.Logs {
 	return p.inputConsumer
 }
 
-func makeEnforceBackPressureFn(streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability) processorhelper.ProcessLogsFunc {
+func makeEnforceBackPressureFn(
+	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability,
+	logsAvailabilityCacheTTL time.Duration,
+) processorhelper.ProcessLogsFunc { //nolint: wsl
 	// Since streamAvailabilityStatusFn needs to acquire both the connector and the MQTT client locks,
 	// we want to avoid calling it too frequently.
-	const cacheLifetime = 5 * time.Second
 
 	var (
 		l sync.Mutex
@@ -317,7 +325,7 @@ func makeEnforceBackPressureFn(streamAvailabilityStatusFn func() bleemeoTypes.Lo
 		l.Lock()
 		defer l.Unlock()
 
-		if time.Since(lastCacheUpdate) > cacheLifetime {
+		if time.Since(lastCacheUpdate) > logsAvailabilityCacheTTL {
 			newState := streamAvailabilityStatusFn()
 			if newState != lastCacheValue {
 				logger.V(2).Printf("Logs stream availability status is now %[1]d (policy: %[1]s)", newState)

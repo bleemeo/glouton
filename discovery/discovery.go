@@ -658,7 +658,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) (time.Ti
 
 	d.ignoreServicesAndPorts()
 
-	if d.logProcessingCfg.Enable && d.logProcessingCfg.AutoDiscovery { // TODO: && config.Bleemeo.Enable ?
+	if d.logProcessingCfg.Enable && d.logProcessingCfg.AutoDiscovery {
 		for key, service := range d.servicesMap {
 			d.servicesMap[key] = inferLogProcessingConfig(service, d.logProcessingCfg.KnownLogFormats)
 		}

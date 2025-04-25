@@ -274,8 +274,6 @@ func (cr *containerReceiver) stopWatchingForContainers(ctx context.Context, ids 
 			delete(cr.startedComponents, ctrID)
 			delete(cr.containers, ctrID)
 			delete(cr.sizeFnByFile, logFilePath)
-
-			logger.Printf("Successfully shutdowned log receiver for container %s", ctrID) // TODO: remove
 		}
 	}
 }

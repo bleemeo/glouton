@@ -105,6 +105,13 @@ func (logBuf *logBuffer) getAllRecords() []logRecord {
 	return result
 }
 
+func (logBuf *logBuffer) reset() {
+	logBuf.l.Lock()
+	defer logBuf.l.Unlock()
+
+	logBuf.buf = logBuf.buf[:0]
+}
+
 func makeBufferConsumer(t *testing.T, buf *logBuffer) consumer.Logs {
 	t.Helper()
 

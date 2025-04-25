@@ -78,6 +78,11 @@ func New(
 		return nil, fmt.Errorf("can't create persist host: %w", err)
 	}
 
+	pipelineOpts := pipelineOptions{
+		batcherTimeout:           10 * time.Second,
+		logsAvailabilityCacheTTL: 5 * time.Second,
+	}
+
 	pipeline, err := makePipeline(
 		ctx,
 		cfg,
@@ -88,6 +93,7 @@ func New(
 		persister,
 		addWarnings,
 		getLastFileSizesFromCache(state),
+		pipelineOpts,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("building pipeline: %w", err)
@@ -269,10 +275,6 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 			logSources = append(logSources, logSource)
 			man.watchedServices[key] = struct{}{}
 		}
-
-		if _, watched := man.watchedServices[key]; watched { // TODO: remove
-			logger.Printf("Handling logs for service %q", service.Name)
-		}
 	}
 
 	for ctrID, ctr := range containersByID {
@@ -298,8 +300,6 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 
 		logSources = append(logSources, logSource)
 		man.watchedContainers[ctrID] = struct{}{}
-
-		logger.Printf("Handling logs for container %s (%s)", ctr.ContainerName(), ctrID) // TODO: remove
 	}
 
 	return logSources
@@ -362,7 +362,7 @@ func (man *Manager) removeOldSources(ctx context.Context, services []discovery.S
 	noLongerExistingContainers := diffBetween(watchedContainers, latestContainers)
 
 	if len(noLongerExistingServices)+len(noLongerExistingContainers) > 0 {
-		logger.Printf("Removing sources from log processing: services=%s / containers=%s", noLongerExistingServices, noLongerExistingContainers) // TODO: V(2)
+		logger.V(2).Printf("Removing sources from log processing: services=%s / containers=%s", noLongerExistingServices, noLongerExistingContainers)
 	}
 
 	for _, service := range noLongerExistingServices {

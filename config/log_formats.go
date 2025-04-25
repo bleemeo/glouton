@@ -406,8 +406,8 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 				"type": "json_parser",
 				"timestamp": map[string]any{
 					"parse_from":  "attributes.time",
-					"layout":      "%Y-%m-%dT%H:%M:%S.%L%j",
-					"layout_type": "strptime",
+					"layout":      "2006-01-02T15:04:05.999999999Z07:00",
+					"layout_type": "gotime", // '07:00' as no strptime equivalent
 				},
 			},
 			{
