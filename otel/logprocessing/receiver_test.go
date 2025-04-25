@@ -217,7 +217,7 @@ func TestFileLogReceiver(t *testing.T) {
 		Include: []string{
 			filepath.Join(tmpDir, "*.log"),
 		},
-		Operators: []map[string]any{
+		Operators: []config.OTELOperator{
 			{
 				"type":  "add",
 				"field": "resource['service.name']",
@@ -382,7 +382,7 @@ func TestFileLogReceiverWithHostroot(t *testing.T) {
 		Include: []string{
 			watchedFile,
 		},
-		Operators: []map[string]any{
+		Operators: []config.OTELOperator{
 			{
 				"type":  "add",
 				"field": "resource['service.name']",
@@ -544,7 +544,7 @@ func TestExecLogReceiver(t *testing.T) {
 
 	cfg := config.OTLPReceiver{
 		Include: []string{file.Name()},
-		Operators: []map[string]any{
+		Operators: []config.OTELOperator{
 			{
 				"type":  "add",
 				"field": "resource['service.name']",

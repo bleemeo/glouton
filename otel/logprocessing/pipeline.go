@@ -229,7 +229,7 @@ func makePipeline( //nolint:maintidx
 				TelemetrySettings: pipeline.telemetry,
 			},
 			receiverTypedCfg,
-			wrapWithCounters(pipeline.inputConsumer, pipeline.otlpRecvCounter, pipeline.otlpRecvThroughputMeter),
+			wrapWithInstrumentation(pipeline.inputConsumer, pipeline.otlpRecvCounter, pipeline.otlpRecvThroughputMeter),
 		)
 		if err != nil {
 			logger.V(1).Printf("Failed to setup OTLP receiver: %v", err)

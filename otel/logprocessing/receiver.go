@@ -102,7 +102,12 @@ func newLogReceiver(name string, cfg config.OTLPReceiver, isFromService bool, lo
 		return nil, fmt.Errorf("%w: %q. It must be of the form 'my-receiver' or 'filelog/my-receiver'", errInvalidReceiverName, name)
 	}
 
-	operators, err := buildOperators(cfg.Operators)
+	rawOps, err := expandOperators(cfg.Operators, knownLogFormats)
+	if err != nil {
+		return nil, fmt.Errorf("expanding operators: %w", err)
+	}
+
+	operators, err := buildOperators(rawOps)
 	if err != nil {
 		return nil, fmt.Errorf("building operators: %w", err)
 	}
@@ -112,6 +117,7 @@ func newLogReceiver(name string, cfg config.OTLPReceiver, isFromService bool, lo
 		if !found {
 			logger.V(1).Printf("Log receiver %q requires the log format %q, which is not defined", name, cfg.LogFormat)
 		} else {
+			// Operators from known log formats have already been expanded.
 			referencedOps, err := buildOperators(opsGroup)
 			if err != nil {
 				return nil, fmt.Errorf("building globally-defined operators: %w", err)
@@ -239,7 +245,7 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 			ctx,
 			settings,
 			logReceiverCfg,
-			wrapWithCounters(r.logConsumer, r.logCounter, r.throughputMeter),
+			wrapWithInstrumentation(r.logConsumer, r.logCounter, r.throughputMeter),
 		)
 		if err != nil {
 			var agentErr stanzaErrors.AgentError

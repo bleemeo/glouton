@@ -73,6 +73,16 @@ func New(
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability,
 	addWarnings func(...error),
 ) (*Manager, error) {
+	// Expanding known log formats, allowing one level of cross-referencing.
+	for name, ops := range cfg.KnownLogFormats {
+		expanded, err := expandOperators(ops, cfg.KnownLogFormats)
+		if err != nil {
+			return nil, fmt.Errorf("can't expand known log format %q: %w", name, err)
+		}
+
+		cfg.KnownLogFormats[name] = expanded
+	}
+
 	persister, err := newPersistHost(state)
 	if err != nil {
 		return nil, fmt.Errorf("can't create persist host: %w", err)
@@ -306,7 +316,12 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 }
 
 func (man *Manager) setupProcessingForSource(ctx context.Context, logSource LogSource) error {
-	operators, err := buildOperators(logSource.operators)
+	rawOps, err := expandOperators(logSource.operators, man.config.KnownLogFormats)
+	if err != nil {
+		return fmt.Errorf("expanding operators: %w", err)
+	}
+
+	operators, err := buildOperators(rawOps)
 	if err != nil {
 		return fmt.Errorf("building operators: %w", err)
 	}

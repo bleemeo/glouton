@@ -75,10 +75,65 @@ func TestValidateContainerOperators(t *testing.T) {
 	}
 }
 
+func TestExpandOperators(t *testing.T) {
+	t.Parallel()
+
+	knownIncludes := map[string][]config.OTELOperator{
+		"regex_time": {
+			{
+				"type":  "regex_parser",
+				"regex": `^(?P<time>\[.*?\])$`,
+			},
+			{
+				"type":       "time_parser",
+				"parse_from": "attributes.time",
+				"layout":     "[%d/%b/%Y:%H:%M:%S %z]",
+			},
+		},
+	}
+
+	opsConfig := []config.OTELOperator{
+		{
+			"type":  "add",
+			"field": "resource['service.name']",
+			"value": "apache_server",
+		},
+		{
+			"include": "regex_time",
+		},
+	}
+
+	ops, err := expandOperators(opsConfig, knownIncludes)
+	if err != nil {
+		t.Fatal("Failed to expand operators:", err)
+	}
+
+	expectedOperators := []config.OTELOperator{
+		{
+			"type":  "add",
+			"field": "resource['service.name']",
+			"value": "apache_server",
+		},
+		{
+			"type":  "regex_parser",
+			"regex": `^(?P<time>\[.*?\])$`,
+		},
+		{
+			"type":       "time_parser",
+			"parse_from": "attributes.time",
+			"layout":     "[%d/%b/%Y:%H:%M:%S %z]",
+		},
+	}
+
+	if diff := cmp.Diff(expectedOperators, ops); diff != "" {
+		t.Fatalf("Unexpected operators (-want +got):\n%s", diff)
+	}
+}
+
 func TestBuildOperators(t *testing.T) {
 	t.Parallel()
 
-	rawOperators := []map[string]any{
+	rawOperators := []config.OTELOperator{
 		{
 			"type":  "add",
 			"field": "resource['service.name']",

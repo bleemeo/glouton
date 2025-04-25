@@ -205,7 +205,7 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 			ctx,
 			settings,
 			logReceiverCfg,
-			wrapWithCounters(cr.logConsumer, ctr.logCounter, ctr.throughputMeter),
+			wrapWithInstrumentation(cr.logConsumer, ctr.logCounter, ctr.throughputMeter),
 		)
 		if err != nil {
 			var agentErr stanzaErrors.AgentError

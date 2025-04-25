@@ -19,6 +19,7 @@ package logprocessing
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -44,6 +45,11 @@ import (
 const (
 	logFileSizesCacheKey    = "LogFileSizes"
 	logFileMetadataCacheKey = "LogFileMetadata"
+)
+
+var (
+	errIncludeNotStr = errors.New("include value must be a string")
+	errIsUnknown     = errors.New("is unknown")
 )
 
 type fileSizer interface {
@@ -170,6 +176,32 @@ func logWarnings(errs ...error) {
 	logger.V(1).Printf("Log processing warning: %v", errs)
 }
 
+// expandOperators replaces 'template' operators with the well-known format they reference.
+// These 'template' operators must define a single "include" key, like so:
+//
+// {
+// 		"include": "some-format"
+// }
+func expandOperators(ops []config.OTELOperator, knownIncludes map[string][]config.OTELOperator) ([]config.OTELOperator, error) {
+	for i, rawOp := range ops {
+		if include, ok := rawOp["include"]; ok && len(rawOp) == 1 {
+			includeStr, ok := include.(string)
+			if !ok {
+				return nil, fmt.Errorf("%w, not %T", errIncludeNotStr, include)
+			}
+
+			included, ok := knownIncludes[includeStr]
+			if !ok {
+				return nil, fmt.Errorf("include value %q %w", includeStr, errIsUnknown)
+			}
+
+			ops = slices.Replace(ops, i, i+1, included...)
+		}
+	}
+
+	return ops, nil
+}
+
 func shouldUnmarshalYAMLToMapstructure(t reflect.Type) bool {
 	const otelPackagePrefix = "github.com/open-telemetry/opentelemetry-collector-contrib/"
 
@@ -209,7 +241,7 @@ func unmarshalMapstructureHook(from reflect.Value, to reflect.Value) (any, error
 			decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 				Result: v,
 				// We aim to align the decoding behavior with opentelemetry-collector:
-				// https://github.com/open-telemetry/opentelemetry-collector/blob/8cf42f3cf789bceca4149180737ac9a5b26684e8/confmap/confmap.go#L221
+				// https://github.com/open-telemetry/opentelemetry-collector/blob/ac7c0f2f4cd8fa05ccc7def96e997eabc2c44f33/confmap/confmap.go#L226
 				DecodeHook: mapstructure.ComposeDecodeHookFunc(
 					mapstructure.StringToSliceHookFunc(","),
 					mapstructure.StringToTimeDurationHookFunc(),
@@ -229,18 +261,18 @@ func unmarshalMapstructureHook(from reflect.Value, to reflect.Value) (any, error
 		return to.Interface(), nil
 	}
 
-	return from.Interface(), nil // returning the data as-is
+	return from.Interface(), nil // return the data as-is
 }
 
 func buildOperators(rawOperators []config.OTELOperator) ([]operator.Config, error) {
-	var operators []operator.Config
+	operators := make([]operator.Config, 0, len(rawOperators))
 
 	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 		Result:     &operators,
 		DecodeHook: unmarshalMapstructureHook,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("error creating decoder: %w", err)
+		return nil, fmt.Errorf("creating decoder: %w", err)
 	}
 
 	err = decoder.Decode(rawOperators)
@@ -251,7 +283,7 @@ func buildOperators(rawOperators []config.OTELOperator) ([]operator.Config, erro
 	return operators, nil
 }
 
-func wrapWithCounters(next consumer.Logs, counter *atomic.Int64, throughputMeter *ringCounter) consumer.Logs {
+func wrapWithInstrumentation(next consumer.Logs, counter *atomic.Int64, throughputMeter *ringCounter) consumer.Logs {
 	logCounter, err := consumer.NewLogs(func(ctx context.Context, ld plog.Logs) error {
 		count := ld.LogRecordCount()
 		counter.Add(int64(count))

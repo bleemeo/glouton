@@ -229,7 +229,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				Receivers: map[string]OTLPReceiver{
 					"filelog/recv": {
 						Include: []string{"/var/log/apache/access.log", "/var/log/apache/error.log"},
-						Operators: []map[string]any{
+						Operators: []OTELOperator{
 							{
 								"type":  "add",
 								"field": "resource['service.name']",
