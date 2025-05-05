@@ -74,6 +74,7 @@ func New(
 	addWarnings func(...error),
 ) (*Manager, error) {
 	// Expanding known log formats, allowing one level of cross-referencing.
+	// Referenced formats must be defined above references to them.
 	for name, ops := range cfg.KnownLogFormats {
 		expanded, err := expandOperators(ops, cfg.KnownLogFormats)
 		if err != nil {
