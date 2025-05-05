@@ -163,6 +163,8 @@ ctxLoop:
 		stopReceivers(receivers)
 	}
 
+	man.containerRecv.stop()
+
 	shutdownAll(man.pipeline.startedComponents)
 
 	saveLastFileSizesToCache(man.state, mergeLastFileSizes(man.pipeline.receivers, man.containerRecv))
