@@ -46,9 +46,11 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/attrs"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/helper"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
+	"go.opentelemetry.io/collector/processor"
 	"go.opentelemetry.io/collector/receiver"
 )
 
@@ -80,11 +82,13 @@ var retryCfg = struct { //nolint:gochecknoglobals
 const metadataKeySeparator = "/"
 
 type logReceiver struct {
-	name          string
-	cfg           config.OTLPReceiver
-	isFromService bool
-	logConsumer   consumer.Logs
-	operators     []operator.Config
+	name            string
+	cfg             config.OTLPReceiver
+	isFromService   bool
+	logConsumer     consumer.Logs
+	operators       []operator.Config
+	filterCfg       *filterprocessor.Config
+	setupFilterDone bool
 
 	// l should always be acquired after the pipeline lock
 	l            sync.Mutex
@@ -127,12 +131,18 @@ func newLogReceiver(name string, cfg config.OTLPReceiver, isFromService bool, lo
 		}
 	}
 
+	filterCfg, err := buildLogFilterConfig(cfg.Filters)
+	if err != nil {
+		return nil, fmt.Errorf("building filters: %w", err)
+	}
+
 	return &logReceiver{
 		name:            name,
 		cfg:             cfg,
 		isFromService:   isFromService,
 		logConsumer:     logConsumer,
 		operators:       operators,
+		filterCfg:       filterCfg,
 		watching:        make(map[string]receiverKind, len(cfg.Include)),
 		sizeFnByFile:    make(map[string]func() (int64, error), len(cfg.Include)),
 		logCounter:      new(atomic.Int64),
@@ -235,6 +245,15 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 		return fmt.Errorf("setting up receiver factories: %w", err)
 	}
 
+	if !r.setupFilterDone {
+		r.setupFilterDone = true
+
+		err = r.setupFilters(ctx, pipeline)
+		if err != nil {
+			return err
+		}
+	}
+
 	for logReceiverFactory, logReceiverCfg := range fileLogReceiverFactories {
 		settings := receiver.Settings{
 			ID:                component.NewIDWithName(logReceiverFactory.Type(), uuid.NewString()),
@@ -314,6 +333,37 @@ func (r *logReceiver) sizesByFile() (map[string]int64, error) {
 	}
 
 	return sizes, nil
+}
+
+func (r *logReceiver) setupFilters(ctx context.Context, pipeline *pipelineContext) error {
+	factoryFilter := filterprocessor.NewFactory()
+
+	logFilter, err := factoryFilter.CreateLogs(
+		ctx,
+		processor.Settings{
+			ID:                component.NewIDWithName(factoryFilter.Type(), "log-filter"),
+			TelemetrySettings: pipeline.telemetry,
+		},
+		r.filterCfg,
+		r.logConsumer,
+	)
+	if err != nil {
+		return fmt.Errorf("setup log filter: %w", err)
+	}
+
+	if err = logFilter.Start(ctx, nil); err != nil {
+		return fmt.Errorf("start log filter: %w", err)
+	}
+
+	if r.isFromService {
+		r.startedComponents = append(r.startedComponents, logFilter)
+	} else {
+		pipeline.startedComponents = append(pipeline.startedComponents, logFilter)
+	}
+
+	r.logConsumer = logFilter
+
+	return nil
 }
 
 func (r *logReceiver) diagnosticInfo() receiverDiagnosticInformation {

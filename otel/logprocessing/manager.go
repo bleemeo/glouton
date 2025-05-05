@@ -43,6 +43,7 @@ type LogSource struct {
 	logFilePath string
 
 	operators []config.OTELOperator
+	filters   config.OTELFilters
 }
 
 type Manager struct {
@@ -269,6 +270,7 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 				serviceID:   &key,
 				logFilePath: serviceLogProcessing.FilePath, // ignored if in a container
 				operators:   append(operatorsForService(service), man.config.KnownLogFormats[serviceLogProcessing.Format]...),
+				filters:     man.config.KnownLogFilters[serviceLogProcessing.Filter],
 			}
 
 			if service.ContainerID != "" {
@@ -308,6 +310,16 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 				logSource.operators = ops
 			} else {
 				logger.V(1).Printf("Container %s (%s) requires an unknown log format: %q", ctr.ContainerName(), ctrID, logFormat)
+			}
+		}
+
+		logFilter, found := ctrFacts[gloutonContainerLabelPrefix+"log_filter"]
+		if found {
+			filters, found := man.config.KnownLogFilters[logFilter]
+			if found {
+				logSource.filters = filters
+			} else {
+				logger.V(1).Printf("Container %s (%s) requires an unknown log filter: %q", ctr.ContainerName(), ctrID, logFilter)
 			}
 		}
 

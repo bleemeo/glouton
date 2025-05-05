@@ -29,15 +29,27 @@ type logProcessingInfo struct {
 var servicesLogInfo = map[ServiceName]logProcessingInfo{ //nolint: gochecknoglobals
 	ApacheService: {
 		FileFormats: []ServiceLogReceiver{
-			{"/var/log/apache2/access.log", "apache_access"},
-			{"/var/log/apache2/error.log", "apache_error"},
+			{
+				FilePath: "/var/log/apache2/access.log",
+				Format:   "apache_access",
+			},
+			{
+				FilePath: "/var/log/apache2/error.log",
+				Format:   "apache_error",
+			},
 		},
 		DockerFormat: "apache_both",
 	},
 	NginxService: {
 		FileFormats: []ServiceLogReceiver{
-			{"/var/log/nginx/access.log", "nginx_access"},
-			{"/var/log/nginx/error.log", "nginx_error"},
+			{
+				FilePath: "/var/log/nginx/access.log",
+				Format:   "nginx_access",
+			},
+			{
+				FilePath: "/var/log/nginx/error.log",
+				Format:   "nginx_error",
+			},
 		},
 		DockerFormat: "nginx_both",
 	},
@@ -88,9 +100,10 @@ var servicesLogInfo = map[ServiceName]logProcessingInfo{ //nolint: gochecknoglob
 type ServiceLogReceiver struct {
 	FilePath string // ignored if in a container
 	Format   string
+	Filter   string
 }
 
-func inferLogProcessingConfig(service Service, knownLogFormats map[string][]config.OTELOperator) Service {
+func inferLogProcessingConfig(service Service, knownLogFormats map[string][]config.OTELOperator, knownLogFilters map[string]config.OTELFilters) Service {
 	switch {
 	case len(service.Config.LogFiles) > 0:
 		if service.container != nil {
@@ -122,9 +135,24 @@ func inferLogProcessingConfig(service Service, knownLogFormats map[string][]conf
 				}
 			}
 
+			logFilter := logFile.LogFilter
+			if logFilter == "" && service.Config.LogFilter != "" {
+				logFilter = service.Config.LogFilter
+			}
+
+			if logFilter != "" {
+				_, ok := knownLogFilters[logFilter]
+				if !ok {
+					logger.V(1).Printf("Service %q requires an unknown log filter: %q", service.Name, logFilter)
+
+					return service
+				}
+			}
+
 			service.LogProcessing = append(service.LogProcessing, ServiceLogReceiver{
 				FilePath: logFile.FilePath,
 				Format:   logFormat,
+				Filter:   logFilter,
 			})
 		}
 	case service.Config.LogFormat != "":
@@ -139,6 +167,15 @@ func inferLogProcessingConfig(service Service, knownLogFormats map[string][]conf
 			logger.V(1).Printf("Service %q requires an unknown log format: %q", service.Name, service.Config.LogFormat)
 
 			return service
+		}
+
+		if service.Config.LogFilter != "" {
+			_, ok = knownLogFilters[service.Config.LogFilter]
+			if !ok {
+				logger.V(1).Printf("Service %q requires an unknown log filter: %q", service.Name, service.Config.LogFilter)
+
+				return service
+			}
 		}
 
 		service.LogProcessing = []ServiceLogReceiver{

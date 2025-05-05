@@ -37,6 +37,7 @@ import (
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/plog"
@@ -174,6 +175,21 @@ func errorf(format string, a ...any) error {
 
 func logWarnings(errs ...error) {
 	logger.V(1).Printf("Log processing warning: %v", errs)
+}
+
+func buildLogFilterConfig(filtersCfg config.OTELFilters) (*filterprocessor.Config, error) {
+	var filterProcCfg filterprocessor.Config
+
+	if len(filtersCfg) == 0 {
+		return &filterProcCfg, nil
+	}
+
+	err := mapstructure.Decode(filtersCfg, &filterProcCfg.Logs)
+	if err != nil {
+		return &filterprocessor.Config{}, err
+	}
+
+	return &filterProcCfg, nil
 }
 
 // expandOperators replaces 'template' operators with the well-known format they reference.

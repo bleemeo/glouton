@@ -660,7 +660,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) (time.Ti
 
 	if d.logProcessingCfg.Enable && d.logProcessingCfg.AutoDiscovery {
 		for key, service := range d.servicesMap {
-			d.servicesMap[key] = inferLogProcessingConfig(service, d.logProcessingCfg.KnownLogFormats)
+			d.servicesMap[key] = inferLogProcessingConfig(service, d.logProcessingCfg.KnownLogFormats, d.logProcessingCfg.KnownLogFilters)
 		}
 	}
 

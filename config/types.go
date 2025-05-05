@@ -80,6 +80,10 @@ type LogFilter struct {
 // which is meant to be built to an operator.Config before use.
 type OTELOperator = map[string]any
 
+// OTELFilters represents an OpenTelemetry filter as plain YAML,
+// which is meant to be decoded to a filterprocessor.LogFilters before use.
+type OTELFilters = map[string]any
+
 type OpenTelemetry struct {
 	Enable          bool                      `yaml:"enable"`
 	AutoDiscovery   bool                      `yaml:"auto_discovery"`
@@ -88,7 +92,10 @@ type OpenTelemetry struct {
 	KnownLogFormats map[string][]OTELOperator `yaml:"known_log_formats"`
 	Receivers       map[string]OTLPReceiver   `yaml:"receivers"`
 	// map: container name -> format to apply
-	ContainerFormat map[string]string `yaml:"container_format"`
+	ContainerFormat  map[string]string      `yaml:"container_format"`
+	GlobalFilters    OTELFilters            `yaml:"global_filters"`
+	KnownLogFilters  map[string]OTELFilters `yaml:"known_log_filters"`
+	ContainerFilters map[string]string      `yaml:"container_filters"`
 }
 
 type EnableListener struct {
@@ -101,6 +108,7 @@ type OTLPReceiver struct {
 	Include   []string       `yaml:"include"`
 	Operators []OTELOperator `yaml:"operators"`
 	LogFormat string         `yaml:"log_format"`
+	Filters   OTELFilters    `yaml:"filters"`
 }
 
 type Smart struct {
@@ -402,6 +410,7 @@ type Service struct {
 	// Log processing config.
 	LogFiles  []ServiceLogFile `yaml:"log_files"`
 	LogFormat string           `yaml:"log_format"`
+	LogFilter string           `yaml:"log_filters"`
 }
 
 type JmxMetric struct {
@@ -419,6 +428,7 @@ type JmxMetric struct {
 type ServiceLogFile struct {
 	FilePath  string `yaml:"file_path"`
 	LogFormat string `yaml:"log_format"`
+	LogFilter string `yaml:"log_filters"`
 }
 
 type Container struct {

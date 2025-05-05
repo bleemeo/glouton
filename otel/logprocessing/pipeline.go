@@ -32,6 +32,7 @@ import (
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
 
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/exporter"
@@ -194,7 +195,34 @@ func makePipeline( //nolint:maintidx
 	}
 
 	pipeline.startedComponents = append(pipeline.startedComponents, logBackPressureEnforcer)
-	pipeline.inputConsumer = logBackPressureEnforcer
+
+	factoryFilter := filterprocessor.NewFactory()
+
+	logFilterConfig, err := buildLogFilterConfig(cfg.GlobalFilters)
+	if err != nil {
+		return nil, fmt.Errorf("build log filter config: %w", err)
+	}
+
+	logFilter, err := factoryFilter.CreateLogs(
+		ctx,
+		processor.Settings{
+			ID:                component.NewIDWithName(factoryFilter.Type(), "log-filter"),
+			TelemetrySettings: pipeline.telemetry,
+		},
+		logFilterConfig,
+		logBackPressureEnforcer,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("setup log filter: %w", err)
+	}
+
+	if err = logFilter.Start(ctx, nil); err != nil {
+		return nil, fmt.Errorf("start log filter: %w", err)
+	}
+
+	pipeline.startedComponents = append(pipeline.startedComponents, logFilter)
+
+	pipeline.inputConsumer = logFilter
 
 	if cfg.GRPC.Enable || cfg.HTTP.Enable {
 		factoryReceiver := otlpreceiver.NewFactory()
