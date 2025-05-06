@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
-	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -38,8 +37,10 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/helper"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/parser/container"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
+	"go.opentelemetry.io/collector/processor"
 	"go.opentelemetry.io/collector/receiver"
 )
 
@@ -98,19 +99,25 @@ func (ctrAttrs ContainerAttributes) asMap() map[string]helper.ExprStringConfig {
 }
 
 type containerReceiver struct {
-	globalOperators    map[string][]config.OTELOperator
 	pipeline           *pipelineContext
 	logConsumer        consumer.Logs
 	lastFileSizes      map[string]int64  // map key: log file path
 	containerOperators map[string]string // map key: container name
+	containerFilters   map[string]string // map key: container name
 
 	l                 sync.Mutex
-	startedComponents map[string]component.Component   // map key: container ID
+	startedComponents map[string][]component.Component // map key: container ID
 	containers        map[string]Container             // map key: container ID
 	sizeFnByFile      map[string]func() (int64, error) // map key: log file path
 }
 
-func newContainerReceiver(pipeline *pipelineContext, containerOperators map[string]string, globalOperators map[string][]config.OTELOperator) *containerReceiver {
+func newContainerReceiver(
+	pipeline *pipelineContext,
+	containerOperators map[string]string,
+	knownOperators map[string][]config.OTELOperator,
+	containerFilter map[string]string,
+	knownFilters map[string]config.OTELFilters,
+) *containerReceiver {
 	lastFileSizes := make(map[string]int64)
 
 	for filePath, size := range pipeline.lastFileSizes {
@@ -120,20 +127,31 @@ func newContainerReceiver(pipeline *pipelineContext, containerOperators map[stri
 	}
 
 	return &containerReceiver{
-		globalOperators:    globalOperators,
 		pipeline:           pipeline,
 		logConsumer:        pipeline.getInput(),
 		lastFileSizes:      lastFileSizes,
-		containerOperators: validateContainerOperators(containerOperators, globalOperators),
-		startedComponents:  make(map[string]component.Component),
+		containerOperators: validateContainerOperators(containerOperators, knownOperators),
+		containerFilters:   validateContainerFilters(containerFilter, knownFilters),
+		startedComponents:  make(map[string][]component.Component),
 		containers:         make(map[string]Container),
 		sizeFnByFile:       make(map[string]func() (int64, error)),
 	}
 }
 
-func (cr *containerReceiver) handleContainerLogs(ctx context.Context, crRuntime crTypes.RuntimeInterface, ctr facts.Container, operators []operator.Config) error {
+func (cr *containerReceiver) handleContainerLogs(
+	ctx context.Context,
+	crRuntime crTypes.RuntimeInterface,
+	ctr facts.Container,
+	operators []operator.Config,
+	filters config.OTELFilters,
+) error {
 	cr.l.Lock()
 	defer cr.l.Unlock()
+
+	logFilterConfig, err := buildLogFilterConfig(filters)
+	if err != nil {
+		return err
+	}
 
 	logFilePath := ctr.LogPath()
 	if logFilePath == "" {
@@ -145,7 +163,7 @@ func (cr *containerReceiver) handleContainerLogs(ctx context.Context, crRuntime 
 		return err
 	}
 
-	err = cr.setupContainerLogReceiver(ctx, logCtr, operators)
+	err = cr.setupContainerLogReceiver(ctx, logCtr, operators, logFilterConfig)
 	if err != nil {
 		return fmt.Errorf("setting up log receiver: %w", err)
 	}
@@ -153,7 +171,7 @@ func (cr *containerReceiver) handleContainerLogs(ctx context.Context, crRuntime 
 	return nil
 }
 
-func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr Container, operators []operator.Config) error {
+func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr Container, operators []operator.Config, filtersCfg *filterprocessor.Config) error {
 	containerOpCfg := container.NewConfig()
 	containerOpCfg.AddMetadataFromFilePath = false
 
@@ -192,6 +210,26 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 		logger.V(1).Printf("No log file found for container %s (%s)", ctr.Attributes.Name, ctr.Attributes.ID)
 	}
 
+	factoryFilter := filterprocessor.NewFactory()
+
+	logFilter, err := factoryFilter.CreateLogs(
+		ctx,
+		processor.Settings{
+			ID:                component.NewIDWithName(factoryFilter.Type(), "log-filter-ctnr-"+ctr.Attributes.ID),
+			TelemetrySettings: cr.pipeline.telemetry,
+		},
+		filtersCfg,
+		wrapWithInstrumentation(cr.logConsumer, ctr.logCounter, ctr.throughputMeter),
+	)
+	if err != nil {
+		return fmt.Errorf("setup log filter: %w", err)
+	}
+
+	if err = logFilter.Start(ctx, nil); err != nil {
+		return fmt.Errorf("start log filter: %w", err)
+	}
+
+	cr.startedComponents[ctr.Attributes.ID] = append(cr.startedComponents[ctr.Attributes.ID], logFilter)
 	cr.containers[ctr.Attributes.ID] = ctr
 	maps.Insert(cr.sizeFnByFile, maps.All(sizeFnByFile))
 
@@ -201,12 +239,7 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 			TelemetrySettings: cr.pipeline.telemetry,
 		}
 
-		logRcvr, err := logReceiverFactory.CreateLogs(
-			ctx,
-			settings,
-			logReceiverCfg,
-			wrapWithInstrumentation(cr.logConsumer, ctr.logCounter, ctr.throughputMeter),
-		)
+		logRcvr, err := logReceiverFactory.CreateLogs(ctx, settings, logReceiverCfg, logFilter)
 		if err != nil {
 			var agentErr stanzaErrors.AgentError
 			if errors.As(err, &agentErr) && agentErr.Suggestion != "" {
@@ -220,7 +253,7 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 			return fmt.Errorf("start receiver: %w", err)
 		}
 
-		cr.startedComponents[ctr.Attributes.ID] = logRcvr
+		cr.startedComponents[ctr.Attributes.ID] = append(cr.startedComponents[ctr.Attributes.ID], logRcvr)
 	}
 
 	return nil
@@ -258,23 +291,25 @@ func (cr *containerReceiver) stopWatchingForContainers(ctx context.Context, ids 
 	defer cancel()
 
 	for _, ctrID := range ids {
-		recv, ok := cr.startedComponents[ctrID]
+		recvComponents, ok := cr.startedComponents[ctrID]
 		if !ok {
 			logger.V(1).Printf("Can't stop log receiver for container %s: it doesn't have one ...", ctrID)
 
 			continue
 		}
 
-		err := recv.Shutdown(shutdownCtx)
-		if err != nil {
-			logger.V(1).Printf("Failed to stop log receiver for container %s: %v", ctrID, err)
-		} else {
-			logFilePath := cr.containers[ctrID].LogFilePath
-
-			delete(cr.startedComponents, ctrID)
-			delete(cr.containers, ctrID)
-			delete(cr.sizeFnByFile, logFilePath)
+		for _, comp := range recvComponents {
+			err := comp.Shutdown(shutdownCtx)
+			if err != nil {
+				logger.V(1).Printf("Failed to stop log receiver component for container %s: %v", ctrID, err)
+			}
 		}
+
+		logFilePath := cr.containers[ctrID].LogFilePath
+
+		delete(cr.startedComponents, ctrID)
+		delete(cr.containers, ctrID)
+		delete(cr.sizeFnByFile, logFilePath)
 	}
 }
 
@@ -301,7 +336,17 @@ func (cr *containerReceiver) stop() {
 	cr.l.Lock()
 	defer cr.l.Unlock()
 
-	shutdownAll(slices.Collect(maps.Values(cr.startedComponents)))
+	wg := new(sync.WaitGroup)
+	wg.Add(len(cr.startedComponents))
+
+	for _, components := range cr.startedComponents {
+		go func() {
+			shutdownAll(components)
+			wg.Done()
+		}()
+	}
+
+	wg.Wait()
 }
 
 func makeLogContainer(ctx context.Context, crRuntime crTypes.RuntimeInterface, container facts.Container, logFilePath string) (Container, error) {

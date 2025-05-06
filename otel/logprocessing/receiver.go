@@ -264,7 +264,7 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 			ctx,
 			settings,
 			logReceiverCfg,
-			wrapWithInstrumentation(r.logConsumer, r.logCounter, r.throughputMeter),
+			r.logConsumer,
 		)
 		if err != nil {
 			var agentErr stanzaErrors.AgentError
@@ -341,11 +341,11 @@ func (r *logReceiver) setupFilters(ctx context.Context, pipeline *pipelineContex
 	logFilter, err := factoryFilter.CreateLogs(
 		ctx,
 		processor.Settings{
-			ID:                component.NewIDWithName(factoryFilter.Type(), "log-filter"),
+			ID:                component.NewIDWithName(factoryFilter.Type(), "log-filter-recv-"+r.name),
 			TelemetrySettings: pipeline.telemetry,
 		},
 		r.filterCfg,
-		r.logConsumer,
+		wrapWithInstrumentation(r.logConsumer, r.logCounter, r.throughputMeter),
 	)
 	if err != nil {
 		return fmt.Errorf("setup log filter: %w", err)

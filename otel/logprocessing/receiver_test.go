@@ -19,6 +19,7 @@ package logprocessing
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -225,6 +226,14 @@ func TestFileLogReceiver(t *testing.T) {
 			},
 		},
 		LogFormat: "key_res_attr",
+		Filters: config.OTELFilters{
+			"include": map[string]any{
+				"match_type": "regexp",
+				"bodies": []string{
+					"log [13579]",
+				},
+			},
+		},
 	}
 
 	logger, err := zap.NewDevelopment(zap.IncreaseLevel(zap.InfoLevel))
@@ -253,7 +262,7 @@ func TestFileLogReceiver(t *testing.T) {
 	}()
 
 	logBuf := logBuffer{
-		buf: make([]plog.Logs, 0, 2), // we plan to write 2 log lines
+		buf: make([]plog.Logs, 0, 2), // we plan to write 2 log lines (in fact 4, but half of them will be filtered)
 	}
 
 	recv, err := newLogReceiver("filelog/recv", cfg, false, makeBufferConsumer(t, &logBuf), knownLogFormats)
@@ -291,14 +300,16 @@ func TestFileLogReceiver(t *testing.T) {
 
 	time.Sleep(time.Second)
 
-	_, err = f1.WriteString("f1 log 1")
-	if err != nil {
-		t.Fatal("Failed to write to log file n°1:", err)
-	}
+	for i := 1; i <= 2; i++ {
+		_, err = fmt.Fprintf(f1, "f1 log %d\n", i)
+		if err != nil {
+			t.Fatal("Failed to write to log file n°1:", err)
+		}
 
-	_, err = f2.WriteString("f2 log 1")
-	if err != nil {
-		t.Fatal("Failed to write to log file n°2:", err)
+		_, err = fmt.Fprintf(f2, "f2 log %d\n", i)
+		if err != nil {
+			t.Fatal("Failed to write to log file n°2:", err)
+		}
 	}
 
 	time.Sleep(2 * time.Second)
@@ -339,8 +350,8 @@ func TestFileLogReceiver(t *testing.T) {
 	}
 
 	expectedFileSizes := map[string]int64{
-		f1.Name(): 8,
-		f2.Name(): 8,
+		f1.Name(): 18,
+		f2.Name(): 18,
 	}
 	if diff := cmp.Diff(expectedFileSizes, fileSizes); diff != "" {
 		t.Fatalf("Unexpected file sizes (-want, +got):\n%s", diff)

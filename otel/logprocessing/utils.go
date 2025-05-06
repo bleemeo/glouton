@@ -134,6 +134,18 @@ func validateContainerOperators(containerOps map[string]string, opsConfigs map[s
 	return containerOps
 }
 
+func validateContainerFilters(containerFilter map[string]string, filtersConfigs map[string]config.OTELFilters) map[string]string {
+	for ctrName, filterName := range containerFilter {
+		if filtersConfigs[filterName] == nil {
+			logger.V(1).Printf("Container %q requires the log processing filter %q, which is not defined", ctrName, filterName)
+
+			delete(containerFilter, ctrName)
+		}
+	}
+
+	return containerFilter
+}
+
 // shutdownAll stops all the given components (in reverse order).
 // It should be called before every unsuccessful return of the log pipeline initialization.
 func shutdownAll(components []component.Component) {
@@ -186,12 +198,14 @@ func buildLogFilterConfig(filtersCfg config.OTELFilters) (*filterprocessor.Confi
 
 	err := mapstructure.Decode(filtersCfg, &filterProcCfg.Logs)
 	if err != nil {
-		return &filterprocessor.Config{}, err
+		return nil, err
 	}
 
-	return &filterProcCfg, nil
+	return &filterProcCfg, filterProcCfg.Validate()
 }
 
+//nolint: godot,gofmt,gofumpt,goimports
+//
 // expandOperators replaces 'template' operators with the well-known format they reference.
 // These 'template' operators must define a single "include" key, like so:
 //
@@ -370,6 +384,7 @@ type diagnosticInformation struct {
 	ContainerReceivers            map[string]containerDiagnosticInformation
 	WatchedServices               map[string][]receiverDiagnosticInformation
 	KnownLogFormats               map[string][]config.OTELOperator
+	KnownLogFilters               map[string]config.OTELFilters
 }
 
 func (diagInfo diagnosticInformation) writeToArchive(writer types.ArchiveWriter) error {

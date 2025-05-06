@@ -111,7 +111,7 @@ func New(
 		return nil, fmt.Errorf("building pipeline: %w", err)
 	}
 
-	containerRecv := newContainerReceiver(pipeline, cfg.ContainerFormat, cfg.KnownLogFormats)
+	containerRecv := newContainerReceiver(pipeline, cfg.ContainerFormat, cfg.KnownLogFormats, cfg.ContainerFilter, cfg.KnownLogFilters)
 
 	processingManager := &Manager{
 		config:                     cfg,
@@ -302,14 +302,23 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 		}
 
 		ctrFacts := facts.LabelsAndAnnotations(ctr)
+		hasOpsFromFacts, hasFilterFromFacts := false, false
 
 		logFormat, found := ctrFacts[gloutonContainerLabelPrefix+"log_format"]
 		if found {
 			ops, found := man.config.KnownLogFormats[logFormat]
 			if found {
 				logSource.operators = ops
+				hasOpsFromFacts = true
 			} else {
 				logger.V(1).Printf("Container %s (%s) requires an unknown log format: %q", ctr.ContainerName(), ctrID, logFormat)
+			}
+		}
+
+		if !hasOpsFromFacts {
+			ops, found := man.config.KnownLogFormats[man.containerRecv.containerOperators[ctr.ContainerName()]]
+			if found {
+				logSource.operators = ops
 			}
 		}
 
@@ -318,8 +327,16 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 			filters, found := man.config.KnownLogFilters[logFilter]
 			if found {
 				logSource.filters = filters
+				hasFilterFromFacts = true
 			} else {
 				logger.V(1).Printf("Container %s (%s) requires an unknown log filter: %q", ctr.ContainerName(), ctrID, logFilter)
+			}
+		}
+
+		if !hasFilterFromFacts {
+			filters, found := man.config.KnownLogFilters[man.containerRecv.containerFilters[ctr.ContainerName()]]
+			if found {
+				logSource.filters = filters
 			}
 		}
 
@@ -342,7 +359,7 @@ func (man *Manager) setupProcessingForSource(ctx context.Context, logSource LogS
 	}
 
 	if logSource.container != nil {
-		err = man.containerRecv.handleContainerLogs(ctx, man.crRuntime, logSource.container, operators)
+		err = man.containerRecv.handleContainerLogs(ctx, man.crRuntime, logSource.container, operators, logSource.filters)
 		if err != nil {
 			return err
 		}
@@ -351,6 +368,7 @@ func (man *Manager) setupProcessingForSource(ctx context.Context, logSource LogS
 		recvConfig := config.OTLPReceiver{
 			Include:   []string{logSource.logFilePath},
 			Operators: logSource.operators,
+			Filters:   logSource.filters,
 		}
 
 		recv, err := newLogReceiver(recvName, recvConfig, true, man.pipeline.getInput(), nil)
@@ -451,6 +469,7 @@ func (man *Manager) DiagnosticArchive(_ context.Context, writer types.ArchiveWri
 		ContainerReceivers:     man.containerRecv.diagnostic(),
 		WatchedServices:        wServices,
 		KnownLogFormats:        man.config.KnownLogFormats,
+		KnownLogFilters:        man.config.KnownLogFilters,
 	}
 
 	if man.pipeline.otlpRecvCounter != nil {

@@ -189,6 +189,7 @@ func TestLoader(t *testing.T) {
 					"key_file":            "",
 					"username":            "",
 					"log_files":           []any{},
+					"log_filter":          "",
 					"log_format":          "",
 				},
 			},

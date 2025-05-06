@@ -152,7 +152,7 @@ func TestHandleContainerLogs(t *testing.T) {
 
 	defer f2.Close()
 
-	globalOperators := map[string][]config.OTELOperator{
+	knownOperators := map[string][]config.OTELOperator{
 		"key_res_attr": {
 			{
 				"type":  "add",
@@ -165,6 +165,9 @@ func TestHandleContainerLogs(t *testing.T) {
 	containerOperators := map[string]string{
 		"ctr-1": "key_res_attr",
 	}
+
+	knownFilters := map[string]config.OTELFilters{}
+	containerFilter := map[string]string{}
 
 	logger, err := zap.NewDevelopment(zap.IncreaseLevel(zap.InfoLevel))
 	if err != nil {
@@ -201,7 +204,7 @@ func TestHandleContainerLogs(t *testing.T) {
 		},
 	}
 
-	containerRecv := newContainerReceiver(&pipeline, containerOperators, globalOperators)
+	containerRecv := newContainerReceiver(&pipeline, containerOperators, knownOperators, containerFilter, knownFilters)
 
 	defer containerRecv.stop()
 
@@ -227,12 +230,12 @@ func TestHandleContainerLogs(t *testing.T) {
 	}
 
 	for _, ctr := range ctrs {
-		ops, err := buildOperators(globalOperators[containerOperators[ctr.ContainerName()]])
+		ops, err := buildOperators(knownOperators[containerOperators[ctr.ContainerName()]])
 		if err != nil {
 			t.Fatalf("Failed to build operators for container %s: %v", ctr.ContainerName(), err)
 		}
 
-		err = containerRecv.handleContainerLogs(ctx, crRuntime, ctr, ops)
+		err = containerRecv.handleContainerLogs(ctx, crRuntime, ctr, ops, knownFilters[containerFilter[ctr.ContainerName()]])
 		if err != nil {
 			t.Fatalf("Failed to handle logs for container %s: %v", ctr.ContainerName(), err)
 		}
