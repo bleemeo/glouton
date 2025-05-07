@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -65,7 +66,7 @@ func makeTimeEraserOpt(timeRe string) cmp.Option {
 	return cmp.FilterValues(filter, transformer)
 }
 
-func TestPipeline(t *testing.T) {
+func TestPipeline(t *testing.T) { //nolint: maintidx
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -101,6 +102,17 @@ func TestPipeline(t *testing.T) {
 			"filelog/later": {
 				Include:   []string{jsonLogFile.Name()},
 				LogFormat: "json_golang_slog",
+				Filters: config.OTELFilters{
+					"exclude": map[string]any{
+						"match_type": "strict",
+						"record_attributes": []map[string]any{
+							{
+								"key":   "dyn",
+								"value": 2.,
+							},
+						},
+					},
+				},
 			},
 		},
 	}
@@ -123,7 +135,7 @@ func TestPipeline(t *testing.T) {
 	}
 
 	logBuf := logBuffer{
-		buf: make([]plog.Logs, 0, 2), // we plan to write 2 log lines
+		buf: make([]plog.Logs, 0, 2), // we plan to write 2 log lines (at a time)
 	}
 
 	currentAvailability := new(atomic.Value)
@@ -173,9 +185,9 @@ func TestPipeline(t *testing.T) {
 		t.Fatal("Failed to write log line:", err)
 	}
 
-	slogger := slog.NewLogLogger(slog.NewJSONHandler(jsonLogFile, nil), slog.LevelInfo)
+	slogger := slog.New(slog.NewJSONHandler(jsonLogFile, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
-	slogger.Println("This is a json log line.")
+	slogger.Info("This is a json log line.")
 
 	if err = customLogFile.Sync(); err != nil {
 		t.Fatal("Failed to sync log file:", err)
@@ -269,6 +281,50 @@ func TestPipeline(t *testing.T) {
 				"key":          "custom-res",
 				"service.name": "custom-svc",
 			},
+		},
+	}
+	if diff := cmp.Diff(expectedLogLines, logBuf.getAllRecords(), timeEraserOpt); diff != "" {
+		t.Fatalf("Unexpected logs (-want +got):\n%s", diff)
+	}
+
+	logBuf.reset()
+
+	for dyn := 1; dyn <= 3; dyn++ {
+		slogger.Warn("With dyn value "+strconv.Itoa(dyn), "dyn", dyn)
+	}
+
+	t.Log("Waiting for batcher ...")
+	time.Sleep(time.Second)
+
+	if throughput := pipeline.logThroughputMeter.Total(); throughput != 5 {
+		t.Errorf("Expected a throughput of 5 logs/min, got %d", throughput)
+	}
+
+	if total := pipeline.logProcessedCount.Load(); total != 5 {
+		t.Errorf("Expected a total of 5 logs records, got %d", total)
+	}
+
+	expectedLogLines = []logRecord{
+		{
+			Timestamp: erasedTS,
+			Body:      `{"time":"<time erased>","level":"WARN","msg":"With dyn value 1","dyn":1}`,
+			Attributes: map[string]any{
+				"dyn":           1.,
+				"log.file.name": filepath.Base(jsonLogFile.Name()),
+				"log.file.path": jsonLogFile.Name(),
+			},
+			Severity: 13, // warn
+		},
+		// Log record with dyn=2 is filtered
+		{
+			Timestamp: erasedTS,
+			Body:      `{"time":"<time erased>","level":"WARN","msg":"With dyn value 3","dyn":3}`,
+			Attributes: map[string]any{
+				"dyn":           3.,
+				"log.file.name": filepath.Base(jsonLogFile.Name()),
+				"log.file.path": jsonLogFile.Name(),
+			},
+			Severity: 13, // warn
 		},
 	}
 	if diff := cmp.Diff(expectedLogLines, logBuf.getAllRecords(), timeEraserOpt); diff != "" {

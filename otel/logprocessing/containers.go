@@ -28,6 +28,7 @@ import (
 	"sync/atomic"
 
 	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/facts"
 	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
 	"github.com/bleemeo/glouton/logger"
@@ -341,8 +342,10 @@ func (cr *containerReceiver) stop() {
 
 	for _, components := range cr.startedComponents {
 		go func() {
+			defer crashreport.ProcessPanic()
+			defer wg.Done()
+
 			shutdownAll(components)
-			wg.Done()
 		}()
 	}
 
