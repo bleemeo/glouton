@@ -181,6 +181,7 @@ func inferLogProcessingConfig(service Service, knownLogFormats map[string][]conf
 		service.LogProcessing = []ServiceLogReceiver{
 			{
 				Format: service.Config.LogFormat,
+				Filter: service.Config.LogFilter, // maybe empty
 			},
 		}
 	default:

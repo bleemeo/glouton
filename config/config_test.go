@@ -378,6 +378,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 					{
 						FilePath:  "/var/log/app.log",
 						LogFormat: "app_format",
+						LogFilter: "min_level_info",
 					},
 				},
 				LogFormat: "nginx_both",

@@ -429,7 +429,7 @@ type JmxMetric struct {
 type ServiceLogFile struct {
 	FilePath  string `yaml:"file_path"`
 	LogFormat string `yaml:"log_format"`
-	LogFilter string `yaml:"log_filters"`
+	LogFilter string `yaml:"log_filter"`
 }
 
 type Container struct {
