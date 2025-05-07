@@ -207,7 +207,7 @@ func makePipeline( //nolint:maintidx
 		ctx,
 		processor.Settings{
 			ID:                component.NewIDWithName(factoryFilter.Type(), "log-filter"),
-			TelemetrySettings: pipeline.telemetry,
+			TelemetrySettings: withoutDebugLogs(pipeline.telemetry),
 		},
 		logFilterConfig,
 		logBackPressureEnforcer,

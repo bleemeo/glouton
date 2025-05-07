@@ -342,7 +342,7 @@ func (r *logReceiver) setupFilters(ctx context.Context, pipeline *pipelineContex
 		ctx,
 		processor.Settings{
 			ID:                component.NewIDWithName(factoryFilter.Type(), "log-filter-recv-"+r.name),
-			TelemetrySettings: pipeline.telemetry,
+			TelemetrySettings: withoutDebugLogs(pipeline.telemetry),
 		},
 		r.filterCfg,
 		wrapWithInstrumentation(r.logConsumer, r.logCounter, r.throughputMeter),

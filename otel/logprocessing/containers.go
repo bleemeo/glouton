@@ -217,7 +217,7 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 		ctx,
 		processor.Settings{
 			ID:                component.NewIDWithName(factoryFilter.Type(), "log-filter-ctnr-"+ctr.Attributes.ID),
-			TelemetrySettings: cr.pipeline.telemetry,
+			TelemetrySettings: withoutDebugLogs(cr.pipeline.telemetry),
 		},
 		filtersCfg,
 		wrapWithInstrumentation(cr.logConsumer, ctr.logCounter, ctr.throughputMeter),

@@ -34,6 +34,8 @@ import (
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
@@ -187,6 +189,14 @@ func errorf(format string, a ...any) error {
 
 func logWarnings(errs ...error) {
 	logger.V(1).Printf("Log processing warning: %v", errs)
+}
+
+// withoutDebugLogs increases the level of the logger to "info" so as to avoid debug logs.
+// (especially those from the ottl package, which occur for each record going through the component).
+func withoutDebugLogs(telSet component.TelemetrySettings) component.TelemetrySettings {
+	telSet.Logger = telSet.Logger.WithOptions(zap.IncreaseLevel(zapcore.InfoLevel))
+
+	return telSet
 }
 
 func buildLogFilterConfig(filtersCfg config.OTELFilters) (*filterprocessor.Config, error) {
