@@ -259,6 +259,68 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		removeAttr("severity"),
 	}
 
+	haproxyParser := []OTELOperator{
+		{
+			"type": "router",
+			"routes": []any{
+				map[string]any{
+					"expr":   `body startsWith "["`,
+					"output": "haproxy_state_parser",
+				},
+			},
+			"default": "haproxy_access_parser",
+		},
+		// Start: haproxy_state_parser
+		{
+			"id":    "haproxy_state_parser",
+			"type":  "regex_parser",
+			"regex": `^\[(?P<severity>[A-Z]+)\]\s+\((?<process_pid>\d+)\)\s*:\s*.+`,
+			"severity": map[string]any{
+				"parse_from": "attributes.severity",
+				// Log level reference can be found at https://docs.haproxy.org/3.0/configuration.html#4.2-log
+				// Mapping is OTEL severity -> HAProxy level
+				"mapping": map[string]any{
+					"fatal":  "EMERG",
+					"error3": "ALERT",
+					"error2": "CRIT",
+					"error":  "ERR",
+					"warn":   "WARNING",
+					"info2":  "NOTICE",
+					"info":   "INFO",
+					"debug":  "DEBUG",
+				},
+			},
+		},
+		renameAttr("process_pid", "process.pid"),
+		removeAttr("severity"),
+		{
+			"type":   "noop",
+			"output": "haproxy_end",
+		},
+		// End: haproxy_state_parser
+		// Start: haproxy_access_parser
+		{
+			"id":       "haproxy_access_parser",
+			"type":     "regex_parser",
+			"regex":    `^(?P<client_address>[a-fA-F0-9.:]+):(?<client_port>\d+) \[(?P<time>[^\]]+)].+ (\d+/){4}\d+ (?P<http_response_status_code>\d+) (?P<http_response_size>\d+) .+ (\d+/){4}\d+ \d+/\d+ "(?P<http_request_method>\S+) \S+ \S+"`,
+			"severity": severityFromHTTPStatusCode,
+		},
+		renameAttr("client_address", "client.address"),
+		renameAttr("client_port", "client.port"),
+		renameAttr("http_response_status_code", "http.response.status_code"),
+		renameAttr("http_response_size", "http.response.size"),
+		renameAttr("http_request_method", "http.request.method"),
+		{
+			"type":   "noop",
+			"output": "haproxy_end",
+		},
+		// End: haproxy_access_parser
+		{
+			"id":   "haproxy_end",
+			"type": "noop",
+		},
+	}
+
 	postgresqlParser := []OTELOperator{
 		{
 			"type":  "add",
@@ -617,31 +679,21 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 			redisParser, // we'll rely on the timestamp provided by the runtime
 			removeAttr("time"),
 		),
-		"haproxy": {
-			{
-				"id":    "haproxy_parser",
-				"type":  "regex_parser",
-				"regex": `^\[(?P<severity>[A-Z]+)\]\s+\((?<process_pid>\d+)\)\s*:\s*.+`,
-				"severity": map[string]any{
-					"parse_from": "attributes.severity",
-					// Log level reference can be found at https://docs.haproxy.org/3.0/configuration.html#4.2-log
-					// Mapping is OTEL severity -> HAProxy level
-					"mapping": map[string]any{
-						"fatal":  "EMERG",
-						"error3": "ALERT",
-						"error2": "CRIT",
-						"error":  "ERR",
-						"warn":   "WARNING",
-						"info2":  "NOTICE",
-						"info":   "INFO",
-						"debug":  "DEBUG",
-					},
-				},
+		"haproxy": flattenOps(
+			haproxyParser,
+			OTELOperator{
+				"type":        "time_parser",
+				"parse_from":  "attributes.time",
+				"layout":      "%d/%b/%Y:%H:%M:%S.%L",
+				"layout_type": "strptime",
+				"if":          `"time" in attributes`, // time is not provided by the haproxy_state_parser
 			},
-			renameAttr("process_pid", "process.pid"),
 			removeAttr("time"),
-			removeAttr("severity"),
-		},
+		),
+		"haproxy_docker": flattenOps(
+			haproxyParser, // we'll rely on the timestamp provided by the runtime
+			removeAttr("time"),
+		),
 		"postgresql": flattenOps(
 			postgresqlParser,
 			OTELOperator{

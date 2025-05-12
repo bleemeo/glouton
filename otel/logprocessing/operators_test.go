@@ -294,6 +294,8 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 				`[NOTICE]   (1) : Loading success.`,
 				`[WARNING]  (8) : Server http_back/api is DOWN, reason: Layer4 connection problem, info: "Connection refused", check duration: 0ms. 0 active and 0 backup servers left. 0 sessions active, 0 requeued, 0 remaining in queue.`,
 				`[ALERT]    (8) : backend 'http_back' has no server available!`,
+				`::ffff:241.1.2.3:1685 [05/May/2025:15:24:34.006] http-in~ be_ingest/10.75.1.2 0/0/1/88/89 200 188 - - ---- 8/4/0/0/0 0/0 "POST /cloud/api/v2/iot/someid/telemetry HTTP/1.1"`,
+				`127.0.0.1:38074 [12/May/2025:09:52:07.313] web_front web_back/web1 0/0/0/2/2 404 466 - - ---- 1/1/0/1/0 0/0 "GET /some-route HTTP/1.1"`,
 			},
 			expectedRecords: []logRecord{
 				{
@@ -319,6 +321,30 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 						"process.pid": "8",
 					},
 					Severity: 19,
+				},
+				{
+					Timestamp: time.Date(2025, 5, 5, 15, 24, 34, 6000000, time.Local),
+					Body:      `::ffff:241.1.2.3:1685 [05/May/2025:15:24:34.006] http-in~ be_ingest/10.75.1.2 0/0/1/88/89 200 188 - - ---- 8/4/0/0/0 0/0 "POST /cloud/api/v2/iot/someid/telemetry HTTP/1.1"`,
+					Attributes: map[string]any{
+						"client.address":            "::ffff:241.1.2.3",
+						"client.port":               "1685",
+						"http.response.status_code": "200",
+						"http.response.size":        "188",
+						"http.request.method":       "POST",
+					},
+					Severity: 5,
+				},
+				{
+					Timestamp: time.Date(2025, 5, 12, 9, 52, 7, 313000000, time.Local),
+					Body:      `127.0.0.1:38074 [12/May/2025:09:52:07.313] web_front web_back/web1 0/0/0/2/2 404 466 - - ---- 1/1/0/1/0 0/0 "GET /some-route HTTP/1.1"`,
+					Attributes: map[string]any{
+						"client.address":            "127.0.0.1",
+						"client.port":               "38074",
+						"http.response.status_code": "404",
+						"http.response.size":        "466",
+						"http.request.method":       "GET",
+					},
+					Severity: 13,
 				},
 			},
 		},
