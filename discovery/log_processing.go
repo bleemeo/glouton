@@ -49,7 +49,7 @@ var servicesLogInfo = map[ServiceName]logProcessingInfo{ //nolint: gochecknoglob
 	},
 	RedisService: {
 		FileFormats: []ServiceLogReceiver{
-			// TODO
+			{"/var/log/redis/redis-server.log", "redis"},
 		},
 		DockerFormat: "redis_docker",
 	},
@@ -57,17 +57,17 @@ var servicesLogInfo = map[ServiceName]logProcessingInfo{ //nolint: gochecknoglob
 		FileFormats: []ServiceLogReceiver{
 			// TODO
 		},
-		DockerFormat: "haproxy", // no need for a container-specific behavior
+		DockerFormat: "haproxy_docker",
 	},
 	PostgreSQLService: {
 		FileFormats: []ServiceLogReceiver{
-			// TODO
+			{"/var/log/postgresql/postgresql-*-main.log", "postgresql"},
 		},
 		DockerFormat: "postgresql_docker",
 	},
 	MySQLService: {
 		FileFormats: []ServiceLogReceiver{
-			// TODO
+			{"/var/log/mysql/error.log", "mysql"},
 		},
 		DockerFormat: "mysql_docker",
 	},
