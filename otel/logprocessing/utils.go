@@ -191,7 +191,7 @@ func logWarnings(errs ...error) {
 	logger.V(1).Printf("Log processing warning: %v", errs)
 }
 
-// withoutDebugLogs increases the level of the logger to "info" so as to avoid debug logs.
+// withoutDebugLogs increases the level of the logger to "info", so as to avoid debug logs
 // (especially those from the ottl package, which occur for each record going through the component).
 func withoutDebugLogs(telSet component.TelemetrySettings) component.TelemetrySettings {
 	telSet.Logger = telSet.Logger.WithOptions(zap.IncreaseLevel(zapcore.InfoLevel))
@@ -220,7 +220,7 @@ func buildLogFilterConfig(filtersCfg config.OTELFilters) (*filterprocessor.Confi
 // These 'template' operators must define a single "include" key, like so:
 //
 // {
-// 		"include": "some-format"
+// 	   "include": "some-format"
 // }
 func expandOperators(ops []config.OTELOperator, knownIncludes map[string][]config.OTELOperator) ([]config.OTELOperator, error) {
 	for i, rawOp := range ops {
