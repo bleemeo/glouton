@@ -141,9 +141,19 @@ glouton-netstat 2> /dev/null
 if [ "$1" = "configure" ] ; then
     # Installation or upgrade on Debian-like system
     test -e /lib/init/upstart-job && start --quiet glouton
-    test -x /usr/bin/systemctl -o -x /bin/systemctl && systemctl daemon-reload
-    test -x /usr/bin/systemctl -o -x /bin/systemctl && systemctl enable --quiet glouton.service
-    test -x /usr/bin/systemctl -o -x /bin/systemctl && systemctl start --quiet glouton.service
+
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload
+
+        if deb-systemd-helper --quiet was-enabled 'glouton.service'; then
+            deb-systemd-helper enable 'glouton.service' >/dev/null || true
+        fi
+
+        if deb-systemd-helper --quiet was-enabled glouton.service; then
+            deb-systemd-invoke restart glouton.service
+        fi
+    fi
+
 
     # Glouton version before 20.09.14.12xxxx had the cron.hourly/glouton script not
     # marked as executable. Fix it.
