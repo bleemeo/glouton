@@ -18,7 +18,6 @@ package node
 
 import (
 	"fmt"
-	"io"
 	"log/slog"
 	"strings"
 	_ "unsafe" // using hack with go linkname to access private variable :)
@@ -139,7 +138,7 @@ func newCollector(option Option) (*collector.NodeCollector, error) {
 		return nil, err
 	}
 
-	c, err := collector.NewNodeCollector(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	c, err := collector.NewNodeCollector(slog.New(slog.DiscardHandler))
 	if err != nil {
 		return nil, err
 	}
