@@ -163,6 +163,7 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 		func(errs ...error) {
 			t.Errorf("Warnings were reported: %v", errs)
 		},
+		cfg.KnownLogFormats, // nothing to expand
 		getLastFileSizesFromCache(st),
 		pipelineOptions{
 			batcherTimeout:           100 * time.Millisecond,

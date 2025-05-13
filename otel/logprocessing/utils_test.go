@@ -103,7 +103,7 @@ func TestExpandOperators(t *testing.T) {
 		},
 	}
 
-	ops, err := expandOperators(opsConfig, knownIncludes)
+	ops, err := expandOperators(opsConfig, knownIncludes, false)
 	if err != nil {
 		t.Fatal("Failed to expand operators:", err)
 	}
@@ -127,6 +127,146 @@ func TestExpandOperators(t *testing.T) {
 
 	if diff := cmp.Diff(expectedOperators, ops); diff != "" {
 		t.Fatalf("Unexpected operators (-want +got):\n%s", diff)
+	}
+}
+
+func TestExpandLogFormats(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		sourceLogFormats   map[string][]config.OTELOperator
+		expectedLogFormats map[string][]config.OTELOperator
+		expectedErrMsg     string
+	}{
+		{
+			sourceLogFormats: map[string][]config.OTELOperator{
+				"fmt-1": {
+					{
+						"type":  "add",
+						"field": "resource['service_name']",
+						"value": "apache_server",
+					},
+				},
+				"fmt-2": {
+					{
+						"include": "fmt-1",
+					},
+					{
+						"type": "move",
+						"from": "resource['service_name']",
+						"to":   "resource['service.name']",
+					},
+				},
+			},
+			expectedLogFormats: map[string][]config.OTELOperator{
+				"fmt-1": {
+					{
+						"type":  "add",
+						"field": "resource['service_name']",
+						"value": "apache_server",
+					},
+				},
+				"fmt-2": {
+					{
+						"type":  "add",
+						"field": "resource['service_name']",
+						"value": "apache_server",
+					},
+					{
+						"type": "move",
+						"from": "resource['service_name']",
+						"to":   "resource['service.name']",
+					},
+				},
+			},
+		},
+		{
+			sourceLogFormats: map[string][]config.OTELOperator{
+				"fmt-1": {
+					{
+						"type":  "add",
+						"field": "resource.env",
+						"value": `EXPR(env("KEY")`,
+					},
+					{
+						"include": "fmt-2",
+					},
+				},
+				"fmt-2": {
+					{
+						"type":  "add",
+						"field": "resource['service_name']",
+						"value": "apache_server",
+					},
+				},
+			},
+			expectedLogFormats: map[string][]config.OTELOperator{
+				"fmt-1": {
+					{
+						"type":  "add",
+						"field": "resource.env",
+						"value": `EXPR(env("KEY")`,
+					},
+					{
+						"type":  "add",
+						"field": "resource['service_name']",
+						"value": "apache_server",
+					},
+				},
+				"fmt-2": {
+					{
+						"type":  "add",
+						"field": "resource['service_name']",
+						"value": "apache_server",
+					},
+				},
+			},
+		},
+		{
+			sourceLogFormats: map[string][]config.OTELOperator{
+				"fmt-1": {
+					{
+						"include": "fmt-2",
+					},
+				},
+				"fmt-2": {
+					{
+						"include": "fmt-3",
+					},
+				},
+				"fmt-3": {
+					{
+						"type":  "add",
+						"field": "resource['service.name']",
+						"value": "apache_server",
+					},
+				},
+			},
+			expectedErrMsg: "\"fmt-1\": include reference \"fmt-2\" is recursive",
+		},
+	}
+
+	for i, tc := range testCases {
+		t.Run(strconv.Itoa(i+1), func(t *testing.T) {
+			t.Parallel()
+
+			result, err := expandLogFormats(tc.sourceLogFormats)
+			if err != nil {
+				if tc.expectedErrMsg == "" {
+					t.Fatalf("Unexpected error: %v", err)
+				} else if err.Error() != tc.expectedErrMsg {
+					t.Fatalf("Unexpected error message: want %q, got %q", tc.expectedErrMsg, err.Error())
+				}
+
+				return
+			} else if tc.expectedErrMsg != "" {
+				t.Fatalf("Expected error %q, but got none", tc.expectedErrMsg)
+			}
+
+			if diff := cmp.Diff(tc.expectedLogFormats, result); diff != "" {
+				t.Fatalf("Unexpected result (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 

@@ -48,6 +48,7 @@ type LogSource struct {
 
 type Manager struct {
 	config                     config.OpenTelemetry
+	knownLogFormats            map[string][]config.OTELOperator
 	state                      bleemeoTypes.State
 	crRuntime                  crTypes.RuntimeInterface
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability
@@ -76,13 +77,11 @@ func New(
 ) (*Manager, error) {
 	// Expanding known log formats, allowing one level of cross-referencing.
 	// Referenced formats must be defined above references to them.
-	for name, ops := range cfg.KnownLogFormats {
-		expanded, err := expandOperators(ops, cfg.KnownLogFormats)
-		if err != nil {
-			return nil, fmt.Errorf("can't expand known log format %q: %w", name, err)
-		}
+	knownLogFormats, err := expandLogFormats(cfg.KnownLogFormats)
+	if err != nil {
+		addWarnings(err)
 
-		cfg.KnownLogFormats[name] = expanded
+		return nil, fmt.Errorf("can't expand known log formats: %w", err)
 	}
 
 	persister, err := newPersistHost(state)
@@ -104,6 +103,7 @@ func New(
 		streamAvailabilityStatusFn,
 		persister,
 		addWarnings,
+		knownLogFormats,
 		getLastFileSizesFromCache(state),
 		pipelineOpts,
 	)
@@ -111,10 +111,11 @@ func New(
 		return nil, fmt.Errorf("building pipeline: %w", err)
 	}
 
-	containerRecv := newContainerReceiver(pipeline, cfg.ContainerFormat, cfg.KnownLogFormats, cfg.ContainerFilter, cfg.KnownLogFilters)
+	containerRecv := newContainerReceiver(pipeline, cfg.ContainerFormat, knownLogFormats, cfg.ContainerFilter, cfg.KnownLogFilters)
 
 	processingManager := &Manager{
 		config:                     cfg,
+		knownLogFormats:            knownLogFormats,
 		state:                      state,
 		crRuntime:                  crRuntime,
 		streamAvailabilityStatusFn: streamAvailabilityStatusFn,
@@ -269,7 +270,7 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 			logSource := LogSource{
 				serviceID:   &key,
 				logFilePath: serviceLogProcessing.FilePath, // ignored if in a container
-				operators:   append(operatorsForService(service), man.config.KnownLogFormats[serviceLogProcessing.Format]...),
+				operators:   append(operatorsForService(service), man.knownLogFormats[serviceLogProcessing.Format]...),
 				filters:     man.config.KnownLogFilters[serviceLogProcessing.Filter],
 			}
 
@@ -306,7 +307,7 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 
 		logFormat, found := ctrFacts[gloutonContainerLabelPrefix+"log_format"]
 		if found {
-			ops, found := man.config.KnownLogFormats[logFormat]
+			ops, found := man.knownLogFormats[logFormat]
 			if found {
 				logSource.operators = ops
 				hasOpsFromFacts = true
@@ -316,7 +317,7 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 		}
 
 		if !hasOpsFromFacts {
-			ops, found := man.config.KnownLogFormats[man.containerRecv.containerOperators[ctr.ContainerName()]]
+			ops, found := man.knownLogFormats[man.containerRecv.containerOperators[ctr.ContainerName()]]
 			if found {
 				logSource.operators = ops
 			}
@@ -348,7 +349,7 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 }
 
 func (man *Manager) setupProcessingForSource(ctx context.Context, logSource LogSource) error {
-	rawOps, err := expandOperators(logSource.operators, man.config.KnownLogFormats)
+	rawOps, err := expandOperators(logSource.operators, man.knownLogFormats, false)
 	if err != nil {
 		return fmt.Errorf("expanding operators: %w", err)
 	}
@@ -468,7 +469,7 @@ func (man *Manager) DiagnosticArchive(_ context.Context, writer types.ArchiveWri
 		Receivers:              receiversInfo,
 		ContainerReceivers:     man.containerRecv.diagnostic(),
 		WatchedServices:        wServices,
-		KnownLogFormats:        man.config.KnownLogFormats,
+		KnownLogFormats:        man.knownLogFormats,
 		KnownLogFilters:        man.config.KnownLogFilters,
 	}
 

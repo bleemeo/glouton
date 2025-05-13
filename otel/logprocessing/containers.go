@@ -340,6 +340,8 @@ func (cr *containerReceiver) stop() {
 	wg := new(sync.WaitGroup)
 	wg.Add(len(cr.startedComponents))
 
+	// Stopping all the container receivers in parallel,
+	// since they don't depend on each other.
 	for _, components := range cr.startedComponents {
 		go func() {
 			defer crashreport.ProcessPanic()

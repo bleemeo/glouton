@@ -319,6 +319,7 @@ func TestProcessLogSources(t *testing.T) {
 			KnownLogFilters: knownLogFilters,
 			ContainerFilter: containerFilters,
 		},
+		knownLogFormats:   knownLogFormats,
 		containerRecv:     newContainerReceiver(&pipelineContext{}, containerOperators, knownLogFormats, containerFilters, knownLogFilters),
 		watchedServices:   make(map[discovery.NameInstance]struct{}),
 		watchedContainers: make(map[string]struct{}),

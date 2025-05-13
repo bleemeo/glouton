@@ -92,6 +92,7 @@ func makePipeline( //nolint:maintidx
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability,
 	persister *persistHost,
 	addWarnings func(...error),
+	knownLogFormats map[string][]config.OTELOperator,
 	lastFileSizes map[string]int64,
 	opts pipelineOptions,
 ) (
@@ -276,7 +277,7 @@ func makePipeline( //nolint:maintidx
 AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers block
 
 	for name, rcvrCfg := range cfg.Receivers {
-		recv, err := newLogReceiver(name, rcvrCfg, false, pipeline.inputConsumer, cfg.KnownLogFormats)
+		recv, err := newLogReceiver(name, rcvrCfg, false, pipeline.inputConsumer, knownLogFormats)
 		if err != nil {
 			addWarnings(errorf("Failed to setup log receiver %q (ignoring it): %w", name, err))
 

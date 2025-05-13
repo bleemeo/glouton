@@ -34,8 +34,6 @@ import (
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
@@ -43,6 +41,8 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/plog"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 const (
@@ -53,6 +53,7 @@ const (
 var (
 	errIncludeNotStr = errors.New("include value must be a string")
 	errIsUnknown     = errors.New("is unknown")
+	errIsRecursive   = errors.New("is recursive")
 )
 
 type fileSizer interface {
@@ -222,8 +223,10 @@ func buildLogFilterConfig(filtersCfg config.OTELFilters) (*filterprocessor.Confi
 // {
 // 	   "include": "some-format"
 // }
-func expandOperators(ops []config.OTELOperator, knownIncludes map[string][]config.OTELOperator) ([]config.OTELOperator, error) {
-	for i, rawOp := range ops {
+func expandOperators(ops []config.OTELOperator, knownIncludes map[string][]config.OTELOperator, denyRecursiveInclude bool) ([]config.OTELOperator, error) {
+	result := make([]config.OTELOperator, 0, len(ops))
+
+	for _, rawOp := range ops {
 		if include, ok := rawOp["include"]; ok && len(rawOp) == 1 {
 			includeStr, ok := include.(string)
 			if !ok {
@@ -232,14 +235,39 @@ func expandOperators(ops []config.OTELOperator, knownIncludes map[string][]confi
 
 			included, ok := knownIncludes[includeStr]
 			if !ok {
-				return nil, fmt.Errorf("include value %q %w", includeStr, errIsUnknown)
+				return nil, fmt.Errorf("include reference %q %w", includeStr, errIsUnknown)
 			}
 
-			ops = slices.Replace(ops, i, i+1, included...)
+			if denyRecursiveInclude {
+				for _, op := range included {
+					if _, hasInclude := op["include"]; hasInclude {
+						return nil, fmt.Errorf("include reference %q %w", includeStr, errIsRecursive)
+					}
+				}
+			}
+
+			result = append(result, included...)
+		} else {
+			result = append(result, rawOp)
 		}
 	}
 
-	return ops, nil
+	return result, nil
+}
+
+func expandLogFormats(formats map[string][]config.OTELOperator) (map[string][]config.OTELOperator, error) {
+	result := make(map[string][]config.OTELOperator, len(formats))
+
+	var err error
+
+	for format, ops := range formats {
+		result[format], err = expandOperators(ops, formats, true)
+		if err != nil {
+			return nil, fmt.Errorf("%q: %w", format, err)
+		}
+	}
+
+	return result, nil
 }
 
 func shouldUnmarshalYAMLToMapstructure(t reflect.Type) bool {

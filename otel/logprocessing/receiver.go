@@ -106,7 +106,7 @@ func newLogReceiver(name string, cfg config.OTLPReceiver, isFromService bool, lo
 		return nil, fmt.Errorf("%w: %q. It must be of the form 'my-receiver' or 'filelog/my-receiver'", errInvalidReceiverName, name)
 	}
 
-	rawOps, err := expandOperators(cfg.Operators, knownLogFormats)
+	rawOps, err := expandOperators(cfg.Operators, knownLogFormats, false)
 	if err != nil {
 		return nil, fmt.Errorf("expanding operators: %w", err)
 	}
