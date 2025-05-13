@@ -35,12 +35,18 @@ func TestDefaultLogProcessingConfigs(t *testing.T) {
 			}
 
 			if _, ok := defaultKnownLogFormats[fileFormat.Format]; !ok {
-				t.Errorf("Log format %q for service %s on file %s in not referenced in the default known log formats", fileFormat.Format, service, fileFormat.FilePath)
+				t.Errorf("Log format %q for service %s on file %s is not referenced in the default known log formats", fileFormat.Format, service, fileFormat.FilePath)
+			}
+		}
+
+		if info.DefaultFormat != "" {
+			if _, ok := defaultKnownLogFormats[info.DefaultFormat]; !ok {
+				t.Errorf("Default log format %q for service %s is not referenced in the default known log formats", info.DefaultFormat, service)
 			}
 		}
 
 		if _, ok := defaultKnownLogFormats[info.DockerFormat]; !ok {
-			t.Errorf("Log format %q for service %s with docker in not referenced in the default known log formats", info.DockerFormat, service)
+			t.Errorf("Log format %q for service %s with docker is not referenced in the default known log formats", info.DockerFormat, service)
 		}
 	}
 }

@@ -22,8 +22,9 @@ import (
 )
 
 type logProcessingInfo struct {
-	FileFormats  []ServiceLogReceiver
-	DockerFormat string
+	FileFormats   []ServiceLogReceiver
+	DefaultFormat string
+	DockerFormat  string
 }
 
 var servicesLogInfo = map[ServiceName]logProcessingInfo{ //nolint: gochecknoglobals
@@ -45,43 +46,50 @@ var servicesLogInfo = map[ServiceName]logProcessingInfo{ //nolint: gochecknoglob
 		FileFormats: []ServiceLogReceiver{
 			// TODO
 		},
-		DockerFormat: "kafka_docker",
+		DefaultFormat: "kafka",
+		DockerFormat:  "kafka_docker",
 	},
 	RedisService: {
 		FileFormats: []ServiceLogReceiver{
 			{"/var/log/redis/redis-server.log", "redis"},
 		},
-		DockerFormat: "redis_docker",
+		DefaultFormat: "redis",
+		DockerFormat:  "redis_docker",
 	},
 	HAProxyService: {
 		FileFormats: []ServiceLogReceiver{
 			// TODO
 		},
-		DockerFormat: "haproxy_docker",
+		DefaultFormat: "haproxy",
+		DockerFormat:  "haproxy_docker",
 	},
 	PostgreSQLService: {
 		FileFormats: []ServiceLogReceiver{
 			{"/var/log/postgresql/postgresql-*-main.log", "postgresql"},
 		},
-		DockerFormat: "postgresql_docker",
+		DefaultFormat: "postgresql",
+		DockerFormat:  "postgresql_docker",
 	},
 	MySQLService: {
 		FileFormats: []ServiceLogReceiver{
 			{"/var/log/mysql/error.log", "mysql"},
 		},
-		DockerFormat: "mysql_docker",
+		DefaultFormat: "mysql",
+		DockerFormat:  "mysql_docker",
 	},
 	MongoDBService: {
 		FileFormats: []ServiceLogReceiver{
 			// TODO
 		},
-		DockerFormat: "mongodb_docker",
+		DefaultFormat: "mongodb",
+		DockerFormat:  "mongodb_docker",
 	},
 	RabbitMQService: {
 		FileFormats: []ServiceLogReceiver{
 			// TODO
 		},
-		DockerFormat: "rabbitmq_docker",
+		DefaultFormat: "rabbitmq",
+		DockerFormat:  "rabbitmq_docker",
 	},
 }
 
@@ -120,6 +128,8 @@ func inferLogProcessingConfig(service Service, knownLogFormats map[string][]conf
 
 					return service
 				}
+			} else { // final fallback
+				logFormat = servicesLogInfo[service.ServiceType].DefaultFormat
 			}
 
 			service.LogProcessing = append(service.LogProcessing, ServiceLogReceiver{
