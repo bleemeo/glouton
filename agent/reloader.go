@@ -195,6 +195,8 @@ func StartReloadManager(configFilesFromFlag []string, reloadDisabled bool) {
 		a.reloadState.setWatcherError(err)
 	}
 
+	logger.SetLevel(0) // limit the verbosity until we load the level from the config
+
 	a.run()
 }
 
