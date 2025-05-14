@@ -859,7 +859,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			servicesOverrideMap, warnings := validateServices(tt.args.servicesOverride)
+			servicesOverrideMap, warnings := validateServices(tt.args.servicesOverride, config.OpenTelemetry{})
 			if warnings != nil {
 				t.Errorf("validateServices had warning: %s", warnings)
 			}
@@ -1053,6 +1053,17 @@ func Test_usePreviousNetstat(t *testing.T) {
 }
 
 func TestValidateServices(t *testing.T) {
+	otelCfg := config.OpenTelemetry{
+		Enable:        true,
+		AutoDiscovery: true,
+		KnownLogFormats: map[string][]config.OTELOperator{
+			"noop-fmt": {},
+		},
+		KnownLogFilters: map[string]config.OTELFilters{
+			"noop-flt": {},
+		},
+	}
+
 	services := []config.Service{
 		{
 			Type:     "apache",
@@ -1095,6 +1106,8 @@ func TestValidateServices(t *testing.T) {
 			Port:         80,
 			CheckType:    "nagios",
 			CheckCommand: "command-to-run",
+			LogFormat:    "noop-fmt",
+			LogFilter:    "noop-flt",
 		},
 		{
 			Type:         " not fixable@",
@@ -1124,6 +1137,21 @@ func TestValidateServices(t *testing.T) {
 			Type:          "bad_stats_protocol",
 			StatsProtocol: "bad",
 		},
+		{
+			Type:      "bad_log_cfg",
+			LogFormat: "bad-fmt",
+			LogFilter: "bad-flt",
+		},
+		{
+			Type: "bad_log_files",
+			LogFiles: []config.ServiceLogFile{
+				{
+					FilePath:  "",
+					LogFormat: "another-bad-format",
+					LogFilter: "another-bad-filter",
+				},
+			},
+		},
 	}
 
 	wantWarnings := []string{
@@ -1134,6 +1162,9 @@ func TestValidateServices(t *testing.T) {
 		"invalid config value: service type \"custom-bad.name\" can not contains dot (.) or dash (-). Changed to \"custom_bad_name\"",
 		"invalid config value: service 'ssl_and_starttls' can't set both SSL and StartTLS, StartTLS will be used",
 		"invalid config value: service 'bad_stats_protocol' has an unsupported stats protocol: 'bad'",
+		"invalid config value: service 'bad_log_cfg': requires an unknown log format \"bad-fmt\"",
+		"invalid config value: service 'bad_log_cfg': requires an unknown log filter \"bad-flt\"",
+		"invalid config value: service 'bad_log_files': no path provided for log file n°1",
 	}
 
 	wantServices := map[NameInstance]config.Service{
@@ -1167,6 +1198,8 @@ func TestValidateServices(t *testing.T) {
 			Port:         80,
 			CheckType:    "nagios",
 			CheckCommand: "command-to-run",
+			LogFormat:    "noop-fmt",
+			LogFilter:    "noop-flt",
 		},
 		{
 			Name:     "custom_webserver",
@@ -1203,9 +1236,28 @@ func TestValidateServices(t *testing.T) {
 			Type:          "bad_stats_protocol",
 			StatsProtocol: "",
 		},
+		{
+			Name: "bad_log_cfg",
+		}: {
+			Type:      "bad_log_cfg",
+			LogFormat: "bad-fmt",
+			LogFilter: "bad-flt",
+		},
+		{
+			Name: "bad_log_files",
+		}: {
+			Type: "bad_log_files",
+			LogFiles: []config.ServiceLogFile{
+				{
+					FilePath:  "",
+					LogFormat: "another-bad-format",
+					LogFilter: "another-bad-filter",
+				},
+			},
+		},
 	}
 
-	gotServices, gotWarnings := validateServices(services)
+	gotServices, gotWarnings := validateServices(services, otelCfg)
 
 	if diff := cmp.Diff(gotServices, wantServices); diff != "" {
 		t.Fatalf("Validate returned unexpected services:\n%s", diff)

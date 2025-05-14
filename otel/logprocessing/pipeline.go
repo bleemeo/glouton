@@ -286,7 +286,7 @@ AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers bl
 
 		err = recv.update(ctx, pipeline, addWarnings)
 		if err != nil {
-			logger.V(1).Printf("Failed to start log receiver %q (ignoring it): %v", name, err)
+			addWarnings(errorf("Failed to start log receiver %q (ignoring it): %w", name, err))
 
 			continue
 		}

@@ -18,6 +18,7 @@ package execlog
 
 import (
 	"testing"
+
 	// The fileconsumer package depends on the textutils one, so it makes it available for linkname.
 	_ "github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer"
 	"golang.org/x/text/encoding"

@@ -17,6 +17,8 @@
 package discovery
 
 import (
+	"fmt"
+
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/logger"
 )
@@ -225,4 +227,59 @@ func inferLogProcessingConfig(service Service, knownLogFormats map[string][]conf
 	}
 
 	return service
+}
+
+//nolint: err113,gofmt,gofumpt,goimports
+func validateServiceLogConfig(svcCfg config.Service, knownLogFormats map[string][]config.OTELOperator, knownLogFilters map[string]config.OTELFilters) (warnings []error) {
+	if len(svcCfg.LogFiles) > 0 {
+		for i, logFile := range svcCfg.LogFiles {
+			if logFile.FilePath == "" {
+				warnings = append(warnings, fmt.Errorf("no path provided for log file n°%d", i+1))
+
+				continue
+			}
+
+			if svcCfg.LogFormat != "" {
+				_, ok := knownLogFormats[svcCfg.LogFormat]
+				if !ok {
+					warnings = append(warnings, fmt.Errorf("requires an unknown log format %q", svcCfg.LogFormat))
+				}
+			}
+
+			if logFile.LogFormat != "" {
+				_, ok := knownLogFormats[logFile.LogFormat]
+				if !ok {
+					warnings = append(warnings, fmt.Errorf("requires an unknown log format %q", logFile.LogFormat))
+				}
+			}
+
+			if svcCfg.LogFilter != "" {
+				_, ok := knownLogFilters[svcCfg.LogFilter]
+				if !ok {
+					warnings = append(warnings, fmt.Errorf("requires an unknown log filter %q", svcCfg.LogFilter))
+				}
+			}
+
+			if logFile.LogFilter != "" {
+				_, ok := knownLogFilters[logFile.LogFilter]
+				if !ok {
+					warnings = append(warnings, fmt.Errorf("requires an unknown log filter %q", logFile.LogFilter))
+				}
+			}
+		}
+	} else if svcCfg.LogFormat != "" {
+		_, ok := knownLogFormats[svcCfg.LogFormat]
+		if !ok {
+			warnings = append(warnings, fmt.Errorf("requires an unknown log format %q", svcCfg.LogFormat))
+		}
+
+		if svcCfg.LogFilter != "" {
+			_, ok = knownLogFilters[svcCfg.LogFilter]
+			if !ok {
+				warnings = append(warnings, fmt.Errorf("requires an unknown log filter %q", svcCfg.LogFilter))
+			}
+		}
+	}
+
+	return warnings
 }
