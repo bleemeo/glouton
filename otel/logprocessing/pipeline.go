@@ -96,12 +96,14 @@ func makePipeline( //nolint:maintidx
 	lastFileSizes map[string]int64,
 	opts pipelineOptions,
 ) (
-	pipeline *pipelineContext,
+	pipelineCtx *pipelineContext,
 	err error,
 ) { //nolint:wsl
 	// TODO: no logs & metrics at the same time
 
-	pipeline = &pipelineContext{
+	// Avoid using the return parameter 'pipelineCtx' because it will be set to <nil> when returning an error,
+	// and we won't be able to access its fields anymore, e.g., startedComponents in deferred function.
+	pipeline := &pipelineContext{
 		lastFileSizes: lastFileSizes,
 		hostroot:      hostroot,
 		telemetry: component.TelemetrySettings{
