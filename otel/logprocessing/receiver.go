@@ -101,19 +101,25 @@ type logReceiver struct {
 	throughputMeter *ringCounter
 }
 
-func newLogReceiver(name string, cfg config.OTLPReceiver, isFromService bool, logConsumer consumer.Logs, knownLogFormats map[string][]config.OTELOperator) (*logReceiver, error) {
+func newLogReceiver(
+	name string,
+	cfg config.OTLPReceiver,
+	isFromService bool,
+	logConsumer consumer.Logs,
+	knownLogFormats map[string][]config.OTELOperator,
+) (*logReceiver, error, error) {
 	if !receiverNameRegex.MatchString(name) {
-		return nil, fmt.Errorf("%w: %q. It must be of the form 'my-receiver' or 'filelog/my-receiver'", errInvalidReceiverName, name)
+		return nil, nil, fmt.Errorf("%w: %q. It must be of the form 'my-receiver' or 'filelog/my-receiver'", errInvalidReceiverName, name) //nolint: nilnil
 	}
 
 	rawOps, err := expandOperators(cfg.Operators, knownLogFormats, false)
 	if err != nil {
-		return nil, fmt.Errorf("expanding operators: %w", err)
+		return nil, nil, fmt.Errorf("expanding operators: %w", err) //nolint: nilnil
 	}
 
 	operators, err := buildOperators(rawOps)
 	if err != nil {
-		return nil, fmt.Errorf("building operators: %w", err)
+		return nil, nil, fmt.Errorf("building operators: %w", err) //nolint: nilnil
 	}
 
 	if cfg.LogFormat != "" {
@@ -124,16 +130,20 @@ func newLogReceiver(name string, cfg config.OTLPReceiver, isFromService bool, lo
 			// Operators from known log formats have already been expanded.
 			referencedOps, err := buildOperators(opsGroup)
 			if err != nil {
-				return nil, fmt.Errorf("building globally-defined operators: %w", err)
+				return nil, nil, fmt.Errorf("building globally-defined operators: %w", err) //nolint: nilnil
 			}
 
 			operators = append(operators, referencedOps...)
 		}
 	}
 
-	filterCfg, err := buildLogFilterConfig(cfg.Filters)
+	filterCfg, warn, err := buildLogFilterConfig(cfg.Filters)
 	if err != nil {
-		return nil, fmt.Errorf("building filters: %w", err)
+		return nil, nil, fmt.Errorf("building filters: %w", err) //nolint: nilnil
+	}
+
+	if warn != nil {
+		warn = fmt.Errorf("building filters: %w", warn)
 	}
 
 	return &logReceiver{
@@ -147,7 +157,7 @@ func newLogReceiver(name string, cfg config.OTLPReceiver, isFromService bool, lo
 		sizeFnByFile:    make(map[string]func() (int64, error), len(cfg.Include)),
 		logCounter:      new(atomic.Int64),
 		throughputMeter: newRingCounter(throughputMeterResolutionSecs),
-	}, nil
+	}, warn, nil
 }
 
 // update tries to create a log receiver for each file from the config

@@ -372,9 +372,13 @@ func (man *Manager) setupProcessingForSource(ctx context.Context, logSource LogS
 			Filters:   logSource.filters,
 		}
 
-		recv, err := newLogReceiver(recvName, recvConfig, true, man.pipeline.getInput(), nil)
+		recv, warn, err := newLogReceiver(recvName, recvConfig, true, man.pipeline.getInput(), nil)
 		if err != nil {
 			return err
+		}
+
+		if warn != nil {
+			logWarnings(errorf("A warning occurred while setting up log receiver for service %s / %s: %w", logSource.serviceID.Name, logSource.serviceID.Instance, warn))
 		}
 
 		man.pipeline.l.Lock()

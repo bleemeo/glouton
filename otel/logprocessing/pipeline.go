@@ -201,9 +201,13 @@ func makePipeline( //nolint:maintidx
 
 	factoryFilter := filterprocessor.NewFactory()
 
-	logFilterConfig, err := buildLogFilterConfig(cfg.GlobalFilters)
+	logFilterConfig, warn, err := buildLogFilterConfig(cfg.GlobalFilters)
 	if err != nil {
 		return nil, fmt.Errorf("build log filter config: %w", err)
+	}
+
+	if warn != nil {
+		addWarnings(errorf("Global log filters warning: %w", warn))
 	}
 
 	logFilter, err := factoryFilter.CreateLogs(
@@ -279,11 +283,15 @@ func makePipeline( //nolint:maintidx
 AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers block
 
 	for name, rcvrCfg := range cfg.Receivers {
-		recv, err := newLogReceiver(name, rcvrCfg, false, pipeline.inputConsumer, knownLogFormats)
+		recv, warn, err := newLogReceiver(name, rcvrCfg, false, pipeline.inputConsumer, knownLogFormats)
 		if err != nil {
 			addWarnings(errorf("Failed to setup log receiver %q (ignoring it): %w", name, err))
 
 			continue
+		}
+
+		if warn != nil {
+			addWarnings(errorf("Warning while setting up log receiver %q: %w", name, warn))
 		}
 
 		err = recv.update(ctx, pipeline, addWarnings)

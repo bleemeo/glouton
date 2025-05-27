@@ -149,9 +149,13 @@ func (cr *containerReceiver) handleContainerLogs(
 	cr.l.Lock()
 	defer cr.l.Unlock()
 
-	logFilterConfig, err := buildLogFilterConfig(filters)
+	logFilterConfig, warn, err := buildLogFilterConfig(filters)
 	if err != nil {
 		return err
+	}
+
+	if warn != nil {
+		logWarnings(errorf("Containers log processing warning: %w", warn))
 	}
 
 	logFilePath := ctr.LogPath()

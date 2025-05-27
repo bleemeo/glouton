@@ -51,6 +51,7 @@ const (
 )
 
 var (
+	errUnknownField  = errors.New("some unknown field(s) were found")
 	errIncludeNotStr = errors.New("include value must be a string")
 	errIsUnknown     = errors.New("is unknown")
 	errIsRecursive   = errors.New("is recursive")
@@ -200,19 +201,35 @@ func withoutDebugLogs(telSet component.TelemetrySettings) component.TelemetrySet
 	return telSet
 }
 
-func buildLogFilterConfig(filtersCfg config.OTELFilters) (*filterprocessor.Config, error) {
+func buildLogFilterConfig(filtersCfg config.OTELFilters) (*filterprocessor.Config, error, error) {
 	var filterProcCfg filterprocessor.Config
 
 	if len(filtersCfg) == 0 {
-		return &filterProcCfg, nil
+		return &filterProcCfg, nil, nil
 	}
 
-	err := mapstructure.Decode(filtersCfg, &filterProcCfg.Logs)
+	var decoderMeta mapstructure.Metadata
+
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		Metadata: &decoderMeta,
+		Result:   &filterProcCfg.Logs,
+	})
 	if err != nil {
-		return nil, err
+		return nil, nil, fmt.Errorf("initializing decoder: %w", err) //nolint: nilnil
 	}
 
-	return &filterProcCfg, filterProcCfg.Validate()
+	err = decoder.Decode(filtersCfg)
+	if err != nil {
+		return nil, nil, err //nolint: nilnil
+	}
+
+	var warning error
+
+	if len(decoderMeta.Unused) != 0 {
+		warning = fmt.Errorf("%w: %s", errUnknownField, strings.Join(decoderMeta.Unused, ", "))
+	}
+
+	return &filterProcCfg, warning, filterProcCfg.Validate()
 }
 
 //nolint: godot,gofmt,gofumpt,goimports

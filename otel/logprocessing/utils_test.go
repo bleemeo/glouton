@@ -30,6 +30,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/parser/regex"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/parser/time"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/transformer/add"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
 )
 
 func TestValidateContainerOperators(t *testing.T) {
@@ -69,6 +70,97 @@ func TestValidateContainerOperators(t *testing.T) {
 
 			res := validateContainerOperators(tc.ctrOps, globalOpsConfig)
 			if diff := cmp.Diff(tc.expectedCtrOps, res); diff != "" {
+				t.Fatalf("Unexpected result (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestBuildLogFilterConfig(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		input           config.OTELFilters
+		expectedOutput  filterprocessor.LogFilters
+		expectedWarning string
+		expectedError   string
+	}{
+		{
+			input: config.OTELFilters{
+				"exclude": map[string]any{
+					"match_type": "regexp",
+					"bodies": []string{
+						"GET",
+					},
+				},
+			},
+			expectedOutput: filterprocessor.LogFilters{
+				Exclude: &filterprocessor.LogMatchProperties{
+					LogMatchType: filterprocessor.LogMatchType("regexp"),
+					LogBodies: []string{
+						"GET",
+					},
+				},
+			},
+		},
+		{
+			input: config.OTELFilters{
+				"include": map[string]any{
+					"match_type": "strict",
+					"severity_texts": []string{
+						"error",
+					},
+				},
+				"excluded": map[string]any{}, // bad property name
+			},
+			expectedOutput: filterprocessor.LogFilters{
+				Include: &filterprocessor.LogMatchProperties{
+					LogMatchType: filterprocessor.LogMatchType("strict"),
+					SeverityTexts: []string{
+						"error",
+					},
+				},
+			},
+			expectedWarning: "some unknown field(s) were found: excluded",
+		},
+		{
+			input: config.OTELFilters{
+				"include":    map[string]any{},
+				"exclude":    map[string]any{},
+				"log_record": []string{},
+			},
+			expectedError: "cannot use ottl conditions and include/exclude for logs at the same time",
+		},
+	}
+
+	for i, tc := range testCases {
+		t.Run(strconv.Itoa(i+1), func(t *testing.T) {
+			t.Parallel()
+
+			output, warn, err := buildLogFilterConfig(tc.input)
+			if err != nil {
+				if tc.expectedError == "" {
+					t.Fatal("Unexpected error:", err)
+				}
+
+				if err.Error() != tc.expectedError {
+					t.Fatalf("Unexpected error: want %q, got %q", tc.expectedError, err.Error())
+				}
+
+				return
+			}
+
+			if warn != nil {
+				if tc.expectedWarning == "" {
+					t.Fatal("Unexpected warning:", warn)
+				}
+
+				if warn.Error() != tc.expectedWarning {
+					t.Fatalf("Unexpected warning: want %q, got %q", tc.expectedWarning, warn.Error())
+				}
+			}
+
+			if diff := cmp.Diff(tc.expectedOutput, output.Logs); diff != "" {
 				t.Fatalf("Unexpected result (-want +got):\n%s", diff)
 			}
 		})
