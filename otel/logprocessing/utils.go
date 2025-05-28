@@ -430,16 +430,15 @@ type containerDiagnosticInformation struct {
 }
 
 type diagnosticInformation struct {
-	LogProcessedCount             int64
-	LogThroughputPerMinute        int
-	PushErrorsThroughputPerMinute int
-	ProcessingStatus              string
-	OTLPReceiver                  *otlpReceiverDiagnosticInformation
-	Receivers                     map[string]receiverDiagnosticInformation
-	ContainerReceivers            map[string]containerDiagnosticInformation
-	WatchedServices               map[string][]receiverDiagnosticInformation
-	KnownLogFormats               map[string][]config.OTELOperator
-	KnownLogFilters               map[string]config.OTELFilters
+	LogProcessedCount      int64
+	LogThroughputPerMinute int
+	ProcessingStatus       string
+	OTLPReceiver           *otlpReceiverDiagnosticInformation
+	Receivers              map[string]receiverDiagnosticInformation
+	ContainerReceivers     map[string]containerDiagnosticInformation
+	WatchedServices        map[string][]receiverDiagnosticInformation
+	KnownLogFormats        map[string][]config.OTELOperator
+	KnownLogFilters        map[string]config.OTELFilters
 }
 
 func (diagInfo diagnosticInformation) writeToArchive(writer types.ArchiveWriter) error {
