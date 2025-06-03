@@ -49,11 +49,11 @@ const (
 )
 
 type response struct {
-	Status    status      `json:"status"`
-	Data      interface{} `json:"data,omitempty"`
-	ErrorType errorType   `json:"errorType,omitempty"`
-	Error     string      `json:"error,omitempty"`
-	Warnings  []string    `json:"warnings,omitempty"`
+	Status    status    `json:"status"`
+	Data      any       `json:"data,omitempty"`
+	ErrorType errorType `json:"errorType,omitempty"`
+	Error     string    `json:"error,omitempty"`
+	Warnings  []string  `json:"warnings,omitempty"`
 }
 
 const (
@@ -137,7 +137,7 @@ func (p *PromQL) init() {
 }
 
 type apiFuncResult struct {
-	data      interface{}
+	data      any
 	err       *apiError
 	warnings  annotations.Annotations
 	finalizer func()
@@ -288,7 +288,7 @@ func (p *PromQL) queryRange(r *http.Request, st storage.Queryable) (result apiFu
 	}, nil, res.Warnings, qry.Close}
 }
 
-func (p *PromQL) respond(w http.ResponseWriter, data interface{}, warnings annotations.Annotations) {
+func (p *PromQL) respond(w http.ResponseWriter, data any, warnings annotations.Annotations) {
 	statusMessage := statusSuccess
 	warningStrings := make([]string, 0, len(warnings))
 
@@ -319,7 +319,7 @@ func (p *PromQL) respond(w http.ResponseWriter, data interface{}, warnings annot
 	}
 }
 
-func (p *PromQL) respondError(w http.ResponseWriter, apiErr *apiError, data interface{}) {
+func (p *PromQL) respondError(w http.ResponseWriter, apiErr *apiError, data any) {
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
 
 	b, err := json.Marshal(&response{

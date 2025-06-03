@@ -34,7 +34,7 @@ import (
 var errNotImplemented = errors.New("not implemented")
 
 type metricPoint struct {
-	Value interface{} // could be uint64 or int64
+	Value any // could be uint64 or int64
 	Time  time.Time
 }
 
@@ -45,7 +45,7 @@ type GatherContext struct {
 	OriginalTags        map[string]string // OriginalTags had to be filled by RenameGlobal callback
 	Tags                map[string]string
 	Annotations         types.MetricAnnotations
-	OriginalFields      map[string]interface{}
+	OriginalFields      map[string]any
 }
 
 // RenameCallback is a function which can mutate labels & annotations.
@@ -83,7 +83,7 @@ type Accumulator struct {
 
 	// TransformMetrics take a list of metrics and could change the name/value or even add/delete some points.
 	// tags & measurement are given as indication and should not be mutated.
-	TransformMetrics func(currentContext GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64
+	TransformMetrics func(currentContext GatherContext, fields map[string]float64, originalFields map[string]any) map[string]float64
 
 	// RenameMetrics apply a per-metric rename of metric name and measurement. tags can't be mutated
 	RenameMetrics func(currentContext GatherContext, metricName string) (newMeasurement string, newMetricName string)
@@ -159,7 +159,7 @@ func (a *Accumulator) flattenTag(tags map[string]string) string {
 }
 
 // doDifferentiate compute the derivated value for metrics in DerivatedMetrics (or matching ShouldDerivativeMetrics).
-func (a *Accumulator) doDifferentiate(result map[string]float64, flatTag string, fieldsLength int, metricName string, value interface{}, metricTime time.Time) {
+func (a *Accumulator) doDifferentiate(result map[string]float64, flatTag string, fieldsLength int, metricName string, value any, metricTime time.Time) {
 	if a.currentValues == nil {
 		a.currentValues = make(map[string]map[string]metricPoint)
 	}
@@ -179,7 +179,7 @@ func (a *Accumulator) doDifferentiate(result map[string]float64, flatTag string,
 	}
 }
 
-func (a *Accumulator) convertToFloatFields(currentContext GatherContext, fields map[string]interface{}, metricTime time.Time) map[string]float64 {
+func (a *Accumulator) convertToFloatFields(currentContext GatherContext, fields map[string]any, metricTime time.Time) map[string]float64 {
 	var (
 		searchMetrics map[string]bool
 		flatTag       string
@@ -260,7 +260,7 @@ func (a *Accumulator) getDerivativeValue(pastMetricPoint metricPoint, currentPoi
 
 type accumulatorFunc func(
 	measurement string,
-	fields map[string]interface{},
+	fields map[string]any,
 	tags map[string]string,
 	annotations types.MetricAnnotations,
 	t ...time.Time,
@@ -269,7 +269,7 @@ type accumulatorFunc func(
 func (a *Accumulator) processMetrics(
 	finalFunc accumulatorFunc,
 	measurement string,
-	fields map[string]interface{},
+	fields map[string]any,
 	tags map[string]string,
 	t ...time.Time,
 ) {
@@ -311,19 +311,19 @@ func (a *Accumulator) processMetrics(
 		floatFields = a.TransformMetrics(currentContext, floatFields, fields)
 	}
 
-	fieldsPerMeasurements := make(map[string]map[string]interface{})
+	fieldsPerMeasurements := make(map[string]map[string]any)
 
 	if a.RenameMetrics != nil {
 		for metricName, value := range floatFields {
 			newMeasurement, newMetricName := a.RenameMetrics(currentContext, metricName)
 			if _, ok := fieldsPerMeasurements[newMeasurement]; !ok {
-				fieldsPerMeasurements[newMeasurement] = make(map[string]interface{}, len(floatFields))
+				fieldsPerMeasurements[newMeasurement] = make(map[string]any, len(floatFields))
 			}
 
 			fieldsPerMeasurements[newMeasurement][newMetricName] = value
 		}
 	} else {
-		currentMap := make(map[string]interface{})
+		currentMap := make(map[string]any)
 		for k, v := range floatFields {
 			currentMap[k] = v
 		}
@@ -361,7 +361,7 @@ func (a *Accumulator) wrapAdd(metricType string) accumulatorFunc {
 		fallbackMethod = a.Accumulator.AddHistogram
 	}
 
-	return func(measurement string, fields map[string]interface{}, tags map[string]string, _ types.MetricAnnotations, t ...time.Time) {
+	return func(measurement string, fields map[string]any, tags map[string]string, _ types.MetricAnnotations, t ...time.Time) {
 		fallbackMethod(measurement, fields, tags, t...)
 	}
 }
@@ -371,27 +371,27 @@ func (a *Accumulator) wrapAdd(metricType string) accumulatorFunc {
 // AddFields adds a metric to the accumulator with the given measurement
 // name, fields, and tags (and timestamp). If a timestamp is not provided,
 // then the accumulator sets it to "now".
-func (a *Accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *Accumulator) AddFields(measurement string, fields map[string]any, tags map[string]string, t ...time.Time) {
 	a.processMetrics(a.wrapAdd("fields"), measurement, fields, tags, t...)
 }
 
 // AddGauge is the same as AddFields, but will add the metric as a "Gauge" type.
-func (a *Accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *Accumulator) AddGauge(measurement string, fields map[string]any, tags map[string]string, t ...time.Time) {
 	a.processMetrics(a.wrapAdd("gauge"), measurement, fields, tags, t...)
 }
 
 // AddCounter is the same as AddFields, but will add the metric as a "Counter" type.
-func (a *Accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *Accumulator) AddCounter(measurement string, fields map[string]any, tags map[string]string, t ...time.Time) {
 	a.processMetrics(a.wrapAdd("counter"), measurement, fields, tags, t...)
 }
 
 // AddSummary is the same as AddFields, but will add the metric as a "Summary" type.
-func (a *Accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *Accumulator) AddSummary(measurement string, fields map[string]any, tags map[string]string, t ...time.Time) {
 	a.processMetrics(a.wrapAdd("summary"), measurement, fields, tags, t...)
 }
 
 // AddHistogram is the same as AddFields, but will add the metric as a "Histogram" type.
-func (a *Accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *Accumulator) AddHistogram(measurement string, fields map[string]any, tags map[string]string, t ...time.Time) {
 	a.processMetrics(a.wrapAdd("histogram"), measurement, fields, tags, t...)
 }
 

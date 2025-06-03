@@ -739,7 +739,7 @@ func (vSphere *vSphere) renameGlobal(gatherContext internal.GatherContext) (resu
 	return gatherContext, false
 }
 
-func (vSphere *vSphere) transformMetrics(currentContext internal.GatherContext, fields map[string]float64, _ map[string]interface{}) map[string]float64 {
+func (vSphere *vSphere) transformMetrics(currentContext internal.GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {
 	// map is: measurement -> field -> factor
 	factors := map[string]map[string]float64{
 		// VM metrics

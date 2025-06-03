@@ -30,7 +30,7 @@ import (
 type fixedInput struct {
 	measurementName string
 	tags            map[string]string
-	fields          map[string]interface{}
+	fields          map[string]any
 	now             time.Time
 }
 
@@ -52,7 +52,7 @@ func TestAddInstance(t *testing.T) {
 		measurementName = "fixed_measure"
 	)
 
-	fields := map[string]interface{}{"cpu": 4.2}
+	fields := map[string]any{"cpu": 4.2}
 	now := time.Now()
 
 	tests := []struct {

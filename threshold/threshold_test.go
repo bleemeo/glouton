@@ -33,7 +33,7 @@ type mockState struct {
 	jsonList []jsonState
 }
 
-func (m mockState) Get(key string, result interface{}) error {
+func (m mockState) Get(key string, result any) error {
 	if key == statusCacheKey {
 		res, ok := result.(*[]jsonState)
 		if ok && res != nil {
@@ -44,7 +44,7 @@ func (m mockState) Get(key string, result interface{}) error {
 	return nil
 }
 
-func (m mockState) Set(key string, object interface{}) error {
+func (m mockState) Set(key string, object any) error {
 	_ = key
 	_ = object
 

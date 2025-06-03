@@ -65,7 +65,7 @@ type Discovery struct {
 	servicesMap           map[NameInstance]Service
 	lastDiscoveryUpdate   time.Time
 
-	triggerDiscovery      chan interface{}
+	triggerDiscovery      chan any
 	subscribers           []*subscriber
 	lastConfigservicesMap map[NameInstance]Service
 	activeCollector       map[NameInstance]collectorDetails
@@ -138,7 +138,7 @@ func New(
 		containerInfo:                  containerInfo,
 		activeCollector:                make(map[NameInstance]collectorDetails),
 		activeCheck:                    make(map[NameInstance]CheckDetails),
-		triggerDiscovery:               make(chan interface{}),
+		triggerDiscovery:               make(chan any),
 		state:                          state,
 		servicesOverride:               servicesOverrideMap,
 		isServiceIgnored:               isServiceIgnored,

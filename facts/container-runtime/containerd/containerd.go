@@ -298,7 +298,7 @@ func (c *Containerd) Metrics(ctx context.Context, now time.Time) ([]types.Metric
 	return points, nil
 }
 
-func convertMetric(data interface{}) (map[string]uint64, error) {
+func convertMetric(data any) (map[string]uint64, error) {
 	valueMap := make(map[string]uint64)
 
 	switch value := data.(type) {

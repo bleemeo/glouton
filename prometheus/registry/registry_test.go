@@ -195,13 +195,13 @@ func (cb fakeInput) Gather(acc telegraf.Accumulator) error {
 		if pts.Time.Equal(nilTime) {
 			acc.AddGauge(
 				measurement,
-				map[string]interface{}{fieldName: pts.Value},
+				map[string]any{fieldName: pts.Value},
 				pts.Labels, // no meta-label. No Input send meta-label today
 			)
 		} else {
 			acc.AddGauge(
 				measurement,
-				map[string]interface{}{fieldName: pts.Value},
+				map[string]any{fieldName: pts.Value},
 				pts.Labels, // no meta-label. No Input send meta-label today
 				pts.Time,
 			)

@@ -257,7 +257,7 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	a.pahoLogWrapper = client.GetOrCreateWrapper()
 
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
-		scope.SetContext("agent", map[string]interface{}{
+		scope.SetContext("agent", map[string]any{
 			"glouton_version": version.Version,
 		})
 	})
@@ -1231,7 +1231,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	a.gathererRegistry.AddDefaultCollector()
 
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
-		scope.SetContext("agent", map[string]interface{}{
+		scope.SetContext("agent", map[string]any{
 			"agent_id":        a.BleemeoAgentID(),
 			"glouton_version": version.Version,
 		})
