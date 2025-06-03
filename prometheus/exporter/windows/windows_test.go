@@ -22,9 +22,12 @@ import (
 	"reflect"
 	"regexp"
 	"testing"
+	"unsafe"
 
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/inputs"
+
+	"github.com/prometheus-community/windows_exporter/pkg/collector"
 )
 
 func compareRE(t *testing.T, gotRE *regexp.Regexp, wantRE *regexp.Regexp, values []string) {
@@ -76,7 +79,12 @@ func Test_newCollector(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ldCollectors := c.collectors["logical_disk"]
+	rc := reflect.ValueOf(&c).Elem()
+	rf := rc.FieldByName("collectors")
+	rf = reflect.NewAt(rf.Type(), unsafe.Pointer(rf.UnsafeAddr())).Elem()
+	collectors := rf.Interface().(collector.Map) //nolint: forcetypeassert
+
+	ldCollectors := collectors["logical_disk"]
 	if ldCollectors == nil {
 		t.Error("logical_disk collectors isn't present")
 	} else {
@@ -92,7 +100,7 @@ func Test_newCollector(t *testing.T) {
 		compareRE(t, volumeExcludePatternRE, regexp.MustCompile(diskFilter.AsDenyRegexp()), valuesToTest)
 	}
 
-	netCollectors := c.collectors["net"]
+	netCollectors := collectors["net"]
 	if netCollectors == nil {
 		t.Error("net collectors isn't present")
 	} else {
