@@ -74,7 +74,7 @@ func Test_newCollector(t *testing.T) {
 		IODiskMatcher:   diskFilter,
 	}
 
-	c, err := newCollector([]string{"logical_disk", "net"}, fullOptions)
+	c, err := newCollector(t.Context(), []string{"logical_disk", "net"}, fullOptions)
 	if err != nil {
 		t.Fatal(err)
 	}

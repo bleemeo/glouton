@@ -1303,7 +1303,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	a.registerInputs(ctx)
 
 	// Register components only available on a given system, like node_exporter for unixes.
-	a.registerOSSpecificComponents(a.vethProvider)
+	a.registerOSSpecificComponents(ctx, a.vethProvider)
 
 	tasks = append(tasks, taskInfo{
 		a.gathererRegistry.Run,

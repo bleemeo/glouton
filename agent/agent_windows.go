@@ -19,6 +19,7 @@
 package agent
 
 import (
+	"context"
 	"os"
 
 	"github.com/bleemeo/glouton/crashreport"
@@ -98,7 +99,7 @@ func initOSSpecificParts(stop chan<- os.Signal) {
 	wmi.DefaultClient.SWbemServicesClient = s
 }
 
-func (a *agent) registerOSSpecificComponents(*veth.Provider) {
+func (a *agent) registerOSSpecificComponents(ctx context.Context, _ *veth.Provider) {
 	if a.config.Agent.WindowsExporter.Enable {
 		conf, err := a.buildCollectorsConfig()
 		if err != nil {
@@ -108,7 +109,7 @@ func (a *agent) registerOSSpecificComponents(*veth.Provider) {
 		}
 
 		collectors := a.config.Agent.WindowsExporter.Collectors
-		if err := windows.AddWindowsExporter(a.gathererRegistry, collectors, conf); err != nil {
+		if err := windows.AddWindowsExporter(ctx, a.gathererRegistry, collectors, conf); err != nil {
 			logger.Printf("Unable to start windows_exporter, system metrics will be missing: %v", err)
 		}
 	}

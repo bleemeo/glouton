@@ -19,6 +19,8 @@
 package windows
 
 import (
+	"context"
+	"fmt"
 	"maps"
 	"reflect"
 	"regexp"
@@ -36,27 +38,37 @@ import (
 const maxScrapeDuration = 9500 * time.Millisecond
 
 func makeColConfig(options inputs.CollectorConfig) collector.Config {
-	var collConfig collector.Config
+	var colConfig collector.Config
 
 	if options.IODiskMatcher != nil {
-		collConfig.LogicalDisk.VolumeExclude = regexp.MustCompile(options.IODiskMatcher.AsDenyRegexp())
+		colConfig.LogicalDisk.VolumeExclude = regexp.MustCompile(options.IODiskMatcher.AsDenyRegexp())
 	}
 
 	if options.NetIfMatcher != nil {
-		collConfig.Net.NicExclude = regexp.MustCompile(options.NetIfMatcher.AsDenyRegexp())
+		colConfig.Net.NicExclude = regexp.MustCompile(options.NetIfMatcher.AsDenyRegexp())
 	}
 
-	return collConfig
+	return colConfig
 }
 
-func NewCollector(enabledCollectors []string, options inputs.CollectorConfig) (prometheus.Collector, error) {
-	return newCollector(enabledCollectors, options)
+func NewCollector(ctx context.Context, enabledCollectors []string, options inputs.CollectorConfig) (prometheus.Collector, error) {
+	return newCollector(ctx, enabledCollectors, options)
 }
 
-func newCollector(enabledCollectors []string, options inputs.CollectorConfig) (*collector.Handler, error) {
+func newCollector(ctx context.Context, enabledCollectors []string, options inputs.CollectorConfig) (*collector.Handler, error) {
 	collection := collector.NewWithConfig(makeColConfig(options))
 
+	err := collection.Enable(enabledCollectors)
+	if err != nil {
+		return nil, fmt.Errorf("failed to enable collectors: %w", err)
+	}
+
 	slogger := logger.NewSlog().With("collector", "windows_exporter")
+
+	err = collection.Build(ctx, slogger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build collectors: %w", err)
+	}
 
 	handler, err := collection.NewHandler(maxScrapeDuration, slogger, enabledCollectors)
 	if err != nil {
@@ -65,10 +77,10 @@ func newCollector(enabledCollectors []string, options inputs.CollectorConfig) (*
 		return nil, err
 	}
 
-	rh := reflect.ValueOf(handler).Elem()
-	rfn := rh.FieldByName("collection").Elem()
+	rh := reflect.ValueOf(handler).Elem()      // rh represents a `collector.Handler`
+	rfn := rh.FieldByName("collection").Elem() // rfn represents a `collector.Collection`
 	rfn = reflect.NewAt(rfn.Type(), unsafe.Pointer(rfn.UnsafeAddr())).Elem()
-	rfs := rfn.FieldByName("collectors")
+	rfs := rfn.FieldByName("collectors") // rfs represents a `collector.Map`
 	rfs = reflect.NewAt(rfs.Type(), unsafe.Pointer(rfs.UnsafeAddr())).Elem()
 
 	if collectors, ok := rfs.Interface().(collector.Map); ok {
