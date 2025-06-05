@@ -51,9 +51,9 @@ var ErrPayloadTooLarge = errors.New("payload is too large")
 
 type Client struct {
 	opts           Options
-	connectionLost chan interface{}
+	connectionLost chan any
 	stats          *mqttStats
-	disableNotify  chan interface{}
+	disableNotify  chan any
 	encoder        *encoder
 
 	l    sync.Mutex
@@ -84,8 +84,8 @@ func New(opts Options) *Client {
 		opts:           opts,
 		mqtt:           opts.ReloadState.Client(),
 		stats:          newMQTTStats(),
-		disableNotify:  make(chan interface{}),
-		connectionLost: make(chan interface{}),
+		disableNotify:  make(chan any),
+		connectionLost: make(chan any),
 		encoder:        &encoder{},
 	}
 
@@ -149,7 +149,7 @@ func (c *Client) setupMQTT(ctx context.Context) (paho.Client, error) {
 // Publish sends the payload to MQTT on the given topic.
 // If retry is set to true and MQTT is currently unreachable, the client will
 // retry to send the message later, else it will be dropped.
-func (c *Client) Publish(topic string, payload interface{}, retry bool) error {
+func (c *Client) Publish(topic string, payload any, retry bool) error {
 	payloadBuffer, err := c.encoder.Encode(payload)
 	if err != nil {
 		c.encoder.PutBuffer(payloadBuffer)

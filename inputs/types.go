@@ -39,7 +39,7 @@ var (
 
 // AnnotationAccumulator is a similar to an telegraf.Accumulator but allow to send metric with annocations.
 type AnnotationAccumulator interface {
-	AddFieldsWithAnnotations(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time)
+	AddFieldsWithAnnotations(measurement string, fields map[string]any, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time)
 	AddError(err error)
 }
 
@@ -63,27 +63,27 @@ type Accumulator struct {
 // Create a point with a value, decorating it with tags
 // NOTE: tags is expected to be owned by the caller, don't mutate
 // it after passing to Add.
-func (a *Accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *Accumulator) AddFields(measurement string, fields map[string]any, tags map[string]string, t ...time.Time) {
 	a.addMetrics(measurement, fields, tags, types.MetricAnnotations{}, t...)
 }
 
 // AddGauge is the same as AddFields, but will add the metric as a "Gauge" type.
-func (a *Accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *Accumulator) AddGauge(measurement string, fields map[string]any, tags map[string]string, t ...time.Time) {
 	a.addMetrics(measurement, fields, tags, types.MetricAnnotations{}, t...)
 }
 
 // AddCounter is the same as AddFields, but will add the metric as a "Counter" type.
-func (a *Accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *Accumulator) AddCounter(measurement string, fields map[string]any, tags map[string]string, t ...time.Time) {
 	a.addMetrics(measurement, fields, tags, types.MetricAnnotations{}, t...)
 }
 
 // AddSummary is the same as AddFields, but will add the metric as a "Summary" type.
-func (a *Accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *Accumulator) AddSummary(measurement string, fields map[string]any, tags map[string]string, t ...time.Time) {
 	a.addMetrics(measurement, fields, tags, types.MetricAnnotations{}, t...)
 }
 
 // AddHistogram is the same as AddFields, but will add the metric as a "Histogram" type.
-func (a *Accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *Accumulator) AddHistogram(measurement string, fields map[string]any, tags map[string]string, t ...time.Time) {
 	a.addMetrics(measurement, fields, tags, types.MetricAnnotations{}, t...)
 }
 
@@ -130,12 +130,12 @@ func (a *Accumulator) Errors() []error {
 // you must to multiple call to AddFieldsWithAnnotations
 //
 // If a status is set in the annotation, not threshold will be applied on the metrics.
-func (a *Accumulator) AddFieldsWithAnnotations(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time) {
+func (a *Accumulator) AddFieldsWithAnnotations(measurement string, fields map[string]any, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time) {
 	a.addMetrics(measurement, fields, tags, annotations, t...)
 }
 
 // ConvertToFloat convert the interface type in float64.
-func ConvertToFloat(value interface{}) (float64, error) {
+func ConvertToFloat(value any) (float64, error) {
 	switch value := value.(type) {
 	case float64:
 		return value, nil
@@ -166,7 +166,7 @@ func ConvertToFloat(value interface{}) (float64, error) {
 	}
 }
 
-func (a *Accumulator) addMetrics(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time) {
+func (a *Accumulator) addMetrics(measurement string, fields map[string]any, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time) {
 	var ts time.Time
 
 	if len(t) == 1 {
@@ -228,27 +228,27 @@ type FixedTimeAccumulator struct {
 // Create a point with a value, decorating it with tags
 // NOTE: tags is expected to be owned by the caller, don't mutate
 // it after passing to Add.
-func (a FixedTimeAccumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, _ ...time.Time) {
+func (a FixedTimeAccumulator) AddFields(measurement string, fields map[string]any, tags map[string]string, _ ...time.Time) {
 	a.Acc.AddFields(measurement, fields, tags, a.Time)
 }
 
 // AddGauge is the same as AddFields, but will add the metric as a "Gauge" type.
-func (a FixedTimeAccumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, _ ...time.Time) {
+func (a FixedTimeAccumulator) AddGauge(measurement string, fields map[string]any, tags map[string]string, _ ...time.Time) {
 	a.Acc.AddGauge(measurement, fields, tags, a.Time)
 }
 
 // AddCounter is the same as AddFields, but will add the metric as a "Counter" type.
-func (a FixedTimeAccumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, _ ...time.Time) {
+func (a FixedTimeAccumulator) AddCounter(measurement string, fields map[string]any, tags map[string]string, _ ...time.Time) {
 	a.Acc.AddCounter(measurement, fields, tags, a.Time)
 }
 
 // AddSummary is the same as AddFields, but will add the metric as a "Summary" type.
-func (a FixedTimeAccumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, _ ...time.Time) {
+func (a FixedTimeAccumulator) AddSummary(measurement string, fields map[string]any, tags map[string]string, _ ...time.Time) {
 	a.Acc.AddSummary(measurement, fields, tags, a.Time)
 }
 
 // AddHistogram is the same as AddFields, but will add the metric as a "Histogram" type.
-func (a FixedTimeAccumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, _ ...time.Time) {
+func (a FixedTimeAccumulator) AddHistogram(measurement string, fields map[string]any, tags map[string]string, _ ...time.Time) {
 	a.Acc.AddHistogram(measurement, fields, tags, a.Time)
 }
 
@@ -279,7 +279,7 @@ func (a FixedTimeAccumulator) AddError(err error) {
 // AddFieldsWithAnnotations have extra fields for the annotations attached to the measurement and fields
 //
 // This method call AddFieldsWithAnnotations() is available and call AddGauge + AddError otherwise.
-func (a FixedTimeAccumulator) AddFieldsWithAnnotations(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, _ ...time.Time) {
+func (a FixedTimeAccumulator) AddFieldsWithAnnotations(measurement string, fields map[string]any, tags map[string]string, annotations types.MetricAnnotations, _ ...time.Time) {
 	if annocationAcc, ok := a.Acc.(AnnotationAccumulator); ok {
 		annocationAcc.AddFieldsWithAnnotations(measurement, fields, tags, annotations, a.Time)
 

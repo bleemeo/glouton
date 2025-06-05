@@ -396,7 +396,7 @@ type retainAccumulator struct {
 	l                      sync.Mutex
 }
 
-func (retAcc *retainAccumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (retAcc *retainAccumulator) AddFields(measurement string, fields map[string]any, tags map[string]string, t ...time.Time) {
 	if retFields, ok := retAcc.mustRetain[measurement]; ok {
 		retAcc.l.Lock()
 

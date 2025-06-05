@@ -87,7 +87,7 @@ type Docker struct {
 	lastDestroyedName              map[string]time.Time
 	ignoredID                      map[string]bool
 	lastUpdate                     time.Time
-	bridgeNetworks                 map[string]interface{}
+	bridgeNetworks                 map[string]any
 	containerAddressOnDockerBridge map[string]string
 }
 
@@ -123,7 +123,7 @@ func newWithOpenner(
 		lastDestroyedName:         make(map[string]time.Time),
 		containers:                make(map[string]dockerContainer),
 		ignoredID:                 make(map[string]bool),
-		bridgeNetworks:            make(map[string]interface{}),
+		bridgeNetworks:            make(map[string]any),
 		openConnection:            openConnection,
 	}
 }
@@ -628,7 +628,7 @@ func (d *Docker) updateContainers(ctx context.Context) error {
 		return err
 	}
 
-	bridgeNetworks := make(map[string]interface{})
+	bridgeNetworks := make(map[string]any)
 	containerAddressOnDockerBridge := make(map[string]string)
 
 	if networks, err := cl.NetworkList(ctx, network.ListOptions{}); err == nil {
@@ -756,7 +756,7 @@ func (d *Docker) updateContainer(ctx context.Context, cl dockerClient, container
 	return d.containers[containerID], nil
 }
 
-func (d *Docker) primaryAddress(inspect container.InspectResponse, bridgeNetworks map[string]interface{}, containerAddressOnDockerBridge map[string]string) string {
+func (d *Docker) primaryAddress(inspect container.InspectResponse, bridgeNetworks map[string]any, containerAddressOnDockerBridge map[string]string) string {
 	if inspect.NetworkSettings != nil && inspect.NetworkSettings.IPAddress != "" {
 		return inspect.NetworkSettings.IPAddress
 	}

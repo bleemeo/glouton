@@ -62,7 +62,7 @@ func V(level int) Logger {
 }
 
 // Printf behave like fmt.Printf.
-func (l Logger) Printf(fmtArg string, a ...interface{}) {
+func (l Logger) Printf(fmtArg string, a ...any) {
 	if l {
 		loggerPrintf(fmtArg, a...)
 	} else {
@@ -71,7 +71,7 @@ func (l Logger) Printf(fmtArg string, a ...interface{}) {
 }
 
 // Println behave like fmt.Println.
-func (l Logger) Println(v ...interface{}) {
+func (l Logger) Println(v ...any) {
 	if l {
 		loggerPrintln(v...)
 	} else {
@@ -79,7 +79,7 @@ func (l Logger) Println(v ...interface{}) {
 	}
 }
 
-func loggerPrintf(fmtArg string, a ...interface{}) {
+func loggerPrintf(fmtArg string, a ...any) {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
 
@@ -91,7 +91,7 @@ func loggerPrintf(fmtArg string, a ...interface{}) {
 	_, _ = fmt.Fprintf(cfg.teeWriter, fmtArg+"\n", a...)
 }
 
-func loggerPrintln(v ...interface{}) {
+func loggerPrintln(v ...any) {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
 
@@ -104,7 +104,7 @@ func loggerPrintln(v ...interface{}) {
 }
 
 // Printf behave like fmt.Printf.
-func Printf(fmt string, a ...interface{}) {
+func Printf(fmt string, a ...any) {
 	loggerPrintf(fmt, a...)
 }
 
@@ -237,7 +237,7 @@ func SetPkgLevels(levels string) {
 type GoKitLoggerWrapper Logger
 
 // Log implements the go-kit/log.Logger interface.
-func (wrapper GoKitLoggerWrapper) Log(keyvals ...interface{}) error {
+func (wrapper GoKitLoggerWrapper) Log(keyvals ...any) error {
 	if len(keyvals)%2 == 1 {
 		V(2).Printf("logger: Invalid number of arguments, received an odd number of arguments, '%v' unexpected", keyvals...)
 	}

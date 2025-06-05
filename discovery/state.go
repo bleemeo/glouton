@@ -41,8 +41,8 @@ const (
 
 // State allow to persite object.
 type State interface {
-	Get(key string, result interface{}) error
-	Set(key string, object interface{}) error
+	Get(key string, result any) error
+	Set(key string, object any) error
 }
 
 type oldServiceKeyValue []json.RawMessage

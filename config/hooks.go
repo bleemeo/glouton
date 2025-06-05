@@ -33,13 +33,13 @@ import (
 // Blackbox implements its own yaml marshaller that sets default values,
 // so we need to unmarshal it to set the default values.
 func blackboxModuleHookFunc() mapstructure.DecodeHookFuncType {
-	return func(_ reflect.Type, target reflect.Type, data interface{}) (interface{}, error) {
+	return func(_ reflect.Type, target reflect.Type, data any) (any, error) {
 		module, ok := reflect.New(target).Interface().(*bbConf.Module)
 		if !ok {
 			return data, nil
 		}
 
-		srcModule, ok := data.(map[string]interface{})
+		srcModule, ok := data.(map[string]any)
 		if !ok {
 			return data, nil
 		}
@@ -67,7 +67,7 @@ func blackboxModuleHookFunc() mapstructure.DecodeHookFuncType {
 // It assumes the following format: "k1=v1,k2=v2".
 // This is used to override map settings from environment variables.
 func stringToMapHookFunc() mapstructure.DecodeHookFuncType {
-	return func(source reflect.Type, target reflect.Type, data interface{}) (interface{}, error) {
+	return func(source reflect.Type, target reflect.Type, data any) (any, error) {
 		if source.Kind() != reflect.String || target.Kind() != reflect.Map {
 			return data, nil
 		}
@@ -80,10 +80,10 @@ func stringToMapHookFunc() mapstructure.DecodeHookFuncType {
 
 // parseMap parses a map from a string.
 // It assumes the following format: "k1=v1,k2=v2".
-func parseMap(strMap string) (map[string]interface{}, error) {
+func parseMap(strMap string) (map[string]any, error) {
 	// keyValues = ["k1=v1", "k2=v2"]
 	keyValues := strings.Split(strMap, ",")
-	result := make(map[string]interface{}, len(keyValues))
+	result := make(map[string]any, len(keyValues))
 
 	for _, keyValue := range keyValues {
 		// keyValue = "k1=v1"
@@ -92,7 +92,7 @@ func parseMap(strMap string) (map[string]interface{}, error) {
 		if len(values) < 2 {
 			err := fmt.Errorf("%w: '%s'", errWrongMapFormat, strMap)
 
-			return make(map[string]interface{}), err
+			return make(map[string]any), err
 		}
 
 		// Handle case where the string ends with a ','.
@@ -114,7 +114,7 @@ func parseMap(strMap string) (map[string]interface{}, error) {
 // It supports "true", "yes" and "1" as true and "false", "no", "0" as false.
 // The conversion is case insensitive.
 func stringToBoolHookFunc() mapstructure.DecodeHookFuncType {
-	return func(source reflect.Type, target reflect.Type, data interface{}) (interface{}, error) {
+	return func(source reflect.Type, target reflect.Type, data any) (any, error) {
 		if source.Kind() != reflect.String || target.Kind() != reflect.Bool {
 			return data, nil
 		}

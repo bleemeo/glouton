@@ -137,7 +137,7 @@ func (r *Registry) AddTask(task Runner, shortName string) (int, error) {
 	}
 
 	ctx, cancel := context.WithCancel(r.ctx)
-	waitC := make(chan interface{})
+	waitC := make(chan any)
 	cancelWait := func() {
 		cancel()
 		<-waitC

@@ -1455,8 +1455,8 @@ func removeMetaLabels(mfs []*dto.MetricFamily) []*dto.MetricFamily {
 
 type prefixLogger string
 
-func (l prefixLogger) Println(v ...interface{}) {
-	all := make([]interface{}, 0, len(v)+1)
+func (l prefixLogger) Println(v ...any) {
+	all := make([]any, 0, len(v)+1)
 	all = append(all, l)
 	all = append(all, v...)
 
@@ -1548,7 +1548,7 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, loopCtx context.Context, 
 		}
 	}
 
-	goroutingFinished := make(chan interface{})
+	goroutingFinished := make(chan any)
 
 	var (
 		mfs      []*dto.MetricFamily

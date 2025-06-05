@@ -36,7 +36,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func mustMarshalAny(v interface{}) *anypb.Any {
+func mustMarshalAny(v any) *anypb.Any {
 	r, err := protobuf.MarshalAnyToProto(v)
 	if err != nil {
 		panic(err)

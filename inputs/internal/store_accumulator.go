@@ -24,7 +24,7 @@ import (
 
 type Measurement struct {
 	Name   string
-	Fields map[string]interface{}
+	Fields map[string]any
 	Tags   map[string]string
 	T      []time.Time
 }
@@ -47,7 +47,7 @@ func (a *StoreAccumulator) Send(acc telegraf.Accumulator) {
 	}
 }
 
-func (a *StoreAccumulator) processMetrics(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *StoreAccumulator) processMetrics(measurement string, fields map[string]any, tags map[string]string, t ...time.Time) {
 	a.Measurement = append(a.Measurement, Measurement{
 		Name:   measurement,
 		Fields: fields,
@@ -59,27 +59,27 @@ func (a *StoreAccumulator) processMetrics(measurement string, fields map[string]
 // AddFields adds a metric to the accumulator with the given measurement
 // name, fields, and tags (and timestamp). If a timestamp is not provided,
 // then the accumulator sets it to "now".
-func (a *StoreAccumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *StoreAccumulator) AddFields(measurement string, fields map[string]any, tags map[string]string, t ...time.Time) {
 	a.processMetrics(measurement, fields, tags, t...)
 }
 
 // AddGauge is the same as AddFields, but will add the metric as a "Gauge" type.
-func (a *StoreAccumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *StoreAccumulator) AddGauge(measurement string, fields map[string]any, tags map[string]string, t ...time.Time) {
 	a.processMetrics(measurement, fields, tags, t...)
 }
 
 // AddCounter is the same as AddFields, but will add the metric as a "Counter" type.
-func (a *StoreAccumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *StoreAccumulator) AddCounter(measurement string, fields map[string]any, tags map[string]string, t ...time.Time) {
 	a.processMetrics(measurement, fields, tags, t...)
 }
 
 // AddSummary is the same as AddFields, but will add the metric as a "Summary" type.
-func (a *StoreAccumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *StoreAccumulator) AddSummary(measurement string, fields map[string]any, tags map[string]string, t ...time.Time) {
 	a.processMetrics(measurement, fields, tags, t...)
 }
 
 // AddHistogram is the same as AddFields, but will add the metric as a "Histogram" type.
-func (a *StoreAccumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *StoreAccumulator) AddHistogram(measurement string, fields map[string]any, tags map[string]string, t ...time.Time) {
 	a.processMetrics(measurement, fields, tags, t...)
 }
 

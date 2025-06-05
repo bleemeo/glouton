@@ -332,7 +332,7 @@ type GloutonConfigItem struct {
 	ID       string                   `json:"id"`
 	Agent    string                   `json:"agent"`
 	Key      string                   `json:"key"`
-	Value    interface{}              `json:"value"`
+	Value    any                      `json:"value"`
 	Priority int                      `json:"priority"`
 	Source   bleemeo.ConfigItemSource `json:"source"`
 	Path     string                   `json:"path"`

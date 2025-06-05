@@ -30,7 +30,7 @@ func TestSum(t *testing.T) {
 			{
 				Name: "postgresql",
 				Tags: map[string]string{"db": "bleemeo"},
-				Fields: map[string]interface{}{
+				Fields: map[string]any{
 					"xact_commit":    1.2,
 					"xact_rollback":  3,
 					"blk_write_time": 8,
@@ -39,7 +39,7 @@ func TestSum(t *testing.T) {
 			{
 				Name: "postgresql",
 				Tags: map[string]string{"db": "postgres"},
-				Fields: map[string]interface{}{
+				Fields: map[string]any{
 					"xact_commit":   1.8,
 					"xact_rollback": 7,
 					"temp_files":    7.4,
@@ -53,7 +53,7 @@ func TestSum(t *testing.T) {
 			{
 				Name: "postgresql",
 				Tags: map[string]string{"db": "bleemeo"},
-				Fields: map[string]interface{}{
+				Fields: map[string]any{
 					"xact_commit":    1.2,
 					"xact_rollback":  3,
 					"blk_write_time": 8,
@@ -62,7 +62,7 @@ func TestSum(t *testing.T) {
 			{
 				Name: "postgresql",
 				Tags: map[string]string{"db": "postgres"},
-				Fields: map[string]interface{}{
+				Fields: map[string]any{
 					"xact_commit":   1.8,
 					"xact_rollback": 7,
 					"temp_files":    7.4,
@@ -71,7 +71,7 @@ func TestSum(t *testing.T) {
 			{
 				Name: "postgresql",
 				Tags: map[string]string{"sum": "true"},
-				Fields: map[string]interface{}{
+				Fields: map[string]any{
 					"xact_commit":    3.,
 					"xact_rollback":  10.,
 					"blk_write_time": 8.,

@@ -74,8 +74,8 @@ type MonitorManager interface {
 
 // State is the interface used by Bleemeo to access State.
 type State interface {
-	Set(key string, object interface{}) error
-	Get(key string, result interface{}) error
+	Set(key string, object any) error
+	Get(key string, result any) error
 	GetByPrefix(keyPrefix string, resultType any) (map[string]any, error)
 	Delete(key string) error
 	BleemeoCredentials() (string, string)

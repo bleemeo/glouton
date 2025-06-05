@@ -30,7 +30,7 @@ import (
 
 func TestDefault(t *testing.T) {
 	called := false
-	finalFunc := func(_ string, fields map[string]interface{}, tags map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
+	finalFunc := func(_ string, fields map[string]any, tags map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 		if len(fields) != 1 {
 			t.Errorf("len(fields) = %v, want %v", len(fields), 1)
 		}
@@ -50,7 +50,7 @@ func TestDefault(t *testing.T) {
 	acc.processMetrics(
 		finalFunc,
 		"cpu",
-		map[string]interface{}{
+		map[string]any{
 			"usage_user": 64.2,
 		},
 		map[string]string{},
@@ -63,7 +63,7 @@ func TestDefault(t *testing.T) {
 
 func TestRename(t *testing.T) {
 	called := false
-	transformMetrics := func(currentContext GatherContext, fields map[string]float64, _ map[string]interface{}) map[string]float64 {
+	transformMetrics := func(currentContext GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {
 		if currentContext.Tags["newTag"] != "value" {
 			t.Errorf("tags[newTag] == %#v, want %#v", currentContext.Tags["newTag"], "value")
 		}
@@ -98,7 +98,7 @@ func TestRename(t *testing.T) {
 			},
 		}, false
 	}
-	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
+	finalFunc := func(measurement string, fields map[string]any, tags map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 		if measurement != "cpu2" {
 			t.Errorf("measurement == %#v, want %#v", measurement, "cpu2")
 		}
@@ -138,7 +138,7 @@ func TestRename(t *testing.T) {
 	acc.processMetrics(
 		finalFunc,
 		"cpu",
-		map[string]interface{}{
+		map[string]any{
 			"metricDouble":    20.0,
 			"metricRename":    42,
 			"metricDrop":      42.0,
@@ -157,7 +157,7 @@ func TestRename(t *testing.T) {
 func TestDerive(t *testing.T) {
 	called1 := false
 	called2 := false
-	finalFunc1 := func(_ string, fields map[string]interface{}, _ map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
+	finalFunc1 := func(_ string, fields map[string]any, _ map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 		cases := []struct {
 			name  string
 			value float64
@@ -177,7 +177,7 @@ func TestDerive(t *testing.T) {
 		called1 = true
 	}
 
-	finalFunc2 := func(_ string, fields map[string]interface{}, _ map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
+	finalFunc2 := func(_ string, fields map[string]any, _ map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 		cases := []struct {
 			name  string
 			value float64
@@ -211,7 +211,7 @@ func TestDerive(t *testing.T) {
 	acc.processMetrics(
 		finalFunc1,
 		"cpu",
-		map[string]interface{}{
+		map[string]any{
 			"metricNoDerive":    42.0,
 			"metricDeriveFloat": 10.0,
 			"metricDeriveInt":   0,
@@ -226,7 +226,7 @@ func TestDerive(t *testing.T) {
 	acc.processMetrics(
 		finalFunc2,
 		"cpu",
-		map[string]interface{}{
+		map[string]any{
 			"metricNoDerive":    12.0,
 			"metricDeriveFloat": 23.0,
 			"metricDeriveInt":   10,
@@ -250,7 +250,7 @@ func TestDerive(t *testing.T) {
 func TestDeriveFunc(t *testing.T) {
 	called1 := false
 	called2 := false
-	finalFunc1 := func(_ string, fields map[string]interface{}, _ map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
+	finalFunc1 := func(_ string, fields map[string]any, _ map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 		cases := []struct {
 			name  string
 			value float64
@@ -270,7 +270,7 @@ func TestDeriveFunc(t *testing.T) {
 
 		called1 = true
 	}
-	finalFunc2 := func(_ string, fields map[string]interface{}, _ map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
+	finalFunc2 := func(_ string, fields map[string]any, _ map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 		cases := []struct {
 			name  string
 			value float64
@@ -307,7 +307,7 @@ func TestDeriveFunc(t *testing.T) {
 	acc.processMetrics(
 		finalFunc1,
 		"cpu",
-		map[string]interface{}{
+		map[string]any{
 			"metricNoDerive":    42.0,
 			"metricDeriveFloat": 10.0,
 			"metricDeriveInt":   0,
@@ -320,7 +320,7 @@ func TestDeriveFunc(t *testing.T) {
 	acc.processMetrics(
 		finalFunc2,
 		"cpu",
-		map[string]interface{}{
+		map[string]any{
 			"metricNoDerive":    12.0,
 			"metricDeriveFloat": 23.0,
 			"metricDeriveInt":   10,
@@ -342,7 +342,7 @@ func TestDeriveFunc(t *testing.T) {
 func TestDeriveMultipleTag(t *testing.T) {
 	called1 := 0
 	called2 := 0
-	finalFunc1 := func(_ string, fields map[string]interface{}, _ map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
+	finalFunc1 := func(_ string, fields map[string]any, _ map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 		called1++
 
 		if len(fields) != 0 {
@@ -350,7 +350,7 @@ func TestDeriveMultipleTag(t *testing.T) {
 		}
 	}
 
-	finalFunc2 := func(_ string, fields map[string]interface{}, tags map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
+	finalFunc2 := func(_ string, fields map[string]any, tags map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 		var want float64
 
 		switch tags["item"] {
@@ -383,7 +383,7 @@ func TestDeriveMultipleTag(t *testing.T) {
 	acc.processMetrics(
 		finalFunc1,
 		"cpu",
-		map[string]interface{}{
+		map[string]any{
 			"io_reads": 100,
 		},
 		map[string]string{
@@ -394,7 +394,7 @@ func TestDeriveMultipleTag(t *testing.T) {
 	acc.processMetrics(
 		finalFunc1,
 		"cpu",
-		map[string]interface{}{
+		map[string]any{
 			"io_reads": 5748,
 		},
 		map[string]string{
@@ -406,7 +406,7 @@ func TestDeriveMultipleTag(t *testing.T) {
 	acc.processMetrics(
 		finalFunc2,
 		"cpu",
-		map[string]interface{}{
+		map[string]any{
 			"io_reads": 100 + int(4.2*20),
 		},
 		map[string]string{
@@ -417,7 +417,7 @@ func TestDeriveMultipleTag(t *testing.T) {
 	acc.processMetrics(
 		finalFunc2,
 		"cpu",
-		map[string]interface{}{
+		map[string]any{
 			"io_reads": 5748 + int(1204*20),
 		},
 		map[string]string{
@@ -437,7 +437,7 @@ func TestDeriveMultipleTag(t *testing.T) {
 
 func TestMeasurementMap(t *testing.T) {
 	called := 0
-	finalFunc := func(measurement string, fields map[string]interface{}, _ map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
+	finalFunc := func(measurement string, fields map[string]any, _ map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 		if len(fields) != 1 {
 			t.Errorf("len(fields) == %v, want 1", len(fields))
 		}
@@ -487,7 +487,7 @@ func TestMeasurementMap(t *testing.T) {
 	acc.processMetrics(
 		finalFunc,
 		"sys",
-		map[string]interface{}{
+		map[string]any{
 			"load1":    20.0,
 			"n_logged": 42,
 			"no_match": 42.0,
@@ -506,7 +506,7 @@ func TestRenameCallback(t *testing.T) {
 		"service":      "mysql",
 		"service_name": "mysql_1",
 	}
-	finalFunc := func(_ string, _ map[string]interface{}, tags map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
+	finalFunc := func(_ string, _ map[string]any, tags map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 		if !reflect.DeepEqual(tags, want) {
 			t.Errorf("tags == %v, want %v", tags, want)
 		}
@@ -529,7 +529,7 @@ func TestRenameCallback(t *testing.T) {
 	acc.processMetrics(
 		finalFunc,
 		"mysql",
-		map[string]interface{}{
+		map[string]any{
 			"requests": 42.0,
 		},
 		nil,
@@ -539,7 +539,7 @@ func TestRenameCallback(t *testing.T) {
 	acc.processMetrics(
 		finalFunc,
 		"mysql",
-		map[string]interface{}{
+		map[string]any{
 			"requests": 1337.0,
 		},
 		nil,
@@ -561,7 +561,7 @@ func TestRenameCallback2(t *testing.T) {
 		ContainerID:     "1234",
 		ServiceInstance: "changed",
 	}
-	finalFunc := func(_ string, _ map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, _ ...time.Time) {
+	finalFunc := func(_ string, _ map[string]any, tags map[string]string, annotations types.MetricAnnotations, _ ...time.Time) {
 		if !reflect.DeepEqual(tags, want) {
 			t.Errorf("tags == %v, want %v", tags, want)
 		}
@@ -598,7 +598,7 @@ func TestRenameCallback2(t *testing.T) {
 	acc.processMetrics(
 		finalFunc,
 		"postgresql",
-		map[string]interface{}{
+		map[string]any{
 			"requests": 42.0,
 		},
 		tags,
@@ -608,7 +608,7 @@ func TestRenameCallback2(t *testing.T) {
 	acc.processMetrics(
 		finalFunc,
 		"postgresql",
-		map[string]interface{}{
+		map[string]any{
 			"requests": 1337.0,
 		},
 		tags,
@@ -627,7 +627,7 @@ func TestLabelsMutation(t *testing.T) {
 		types.LabelContainerName: "name",
 		"db":                     "dbname",
 	}
-	finalFunc := func(_ string, _ map[string]interface{}, tags map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
+	finalFunc := func(_ string, _ map[string]any, tags map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 		if !reflect.DeepEqual(tags, want) {
 			t.Errorf("tags == %v, want %v", tags, want)
 		}
@@ -656,7 +656,7 @@ func TestLabelsMutation(t *testing.T) {
 	acc.processMetrics(
 		finalFunc,
 		"postgresql",
-		map[string]interface{}{
+		map[string]any{
 			"requests": 42.0,
 		},
 		tags,
@@ -669,7 +669,7 @@ func TestLabelsMutation(t *testing.T) {
 }
 
 func BenchmarkProcessMetrics(b *testing.B) {
-	finalFunc := func(_ string, _ map[string]interface{}, _ map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
+	finalFunc := func(_ string, _ map[string]any, _ map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 	}
 	renameGlobal := func(gatherContext GatherContext) (GatherContext, bool) {
 		gatherContext.Tags["added"] = "new"
@@ -677,7 +677,7 @@ func BenchmarkProcessMetrics(b *testing.B) {
 
 		return gatherContext, false
 	}
-	transformMetrics := func(_ GatherContext, fields map[string]float64, _ map[string]interface{}) map[string]float64 {
+	transformMetrics := func(_ GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {
 		return fields
 	}
 
@@ -700,7 +700,7 @@ func BenchmarkProcessMetrics(b *testing.B) {
 					acc.processMetrics(
 						finalFunc,
 						"cpu",
-						map[string]interface{}{
+						map[string]any{
 							"metricA": 20.0,
 							"metricB": 42,
 							"metricC": uint64(5),
@@ -718,7 +718,7 @@ func BenchmarkProcessMetrics(b *testing.B) {
 }
 
 func BenchmarkDeriveFunc(b *testing.B) {
-	finalFunc := func(_ string, _ map[string]interface{}, _ map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
+	finalFunc := func(_ string, _ map[string]any, _ map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 	}
 	shouldDerivativeMetrics := func(_ GatherContext, metricName string) bool {
 		return strings.HasSuffix(metricName, "int")
@@ -726,7 +726,7 @@ func BenchmarkDeriveFunc(b *testing.B) {
 
 	for _, metricCount := range []int{3, 30, 300} {
 		b.Run(fmt.Sprintf("metricCount-%d", metricCount), func(b *testing.B) {
-			metrics := make(map[string]interface{}, metricCount)
+			metrics := make(map[string]any, metricCount)
 			derivatedMetrics := make([]string, 0, metricCount/3)
 
 			for i := range metricCount / 3 {
