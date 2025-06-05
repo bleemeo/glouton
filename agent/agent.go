@@ -2266,7 +2266,7 @@ func (a *agent) diagnosticGlobalInfo(ctx context.Context, archive types.ArchiveW
 
 	err = crashreport.AddStderrLogToArchive(archive)
 	if err != nil {
-		logger.V(0).Printf("Can't add stderr log to archive: %v", err)
+		logger.V(1).Printf("Can't add stderr log to archive: %v", err)
 	}
 
 	file, err = archive.Create("log.txt")
