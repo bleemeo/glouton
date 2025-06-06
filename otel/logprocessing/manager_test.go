@@ -44,7 +44,7 @@ func svc(
 	}
 }
 
-func ctr(id, name string, labels, annotations map[string]string) facts.Container {
+func ctr(id, name string, labels, annotations map[string]string) facts.Container { //nolint: unparam
 	return dummyContainer{
 		id:          id,
 		name:        name,
@@ -150,6 +150,7 @@ func TestProcessLogSources(t *testing.T) {
 	svcNginx := svc("nginx", "Nginx-1", "ngx-1", true, time.Now(), discovery.ServiceLogReceiver{Format: "nginx_both", Filter: "drop_get"})
 
 	ctrNgx1 := ctr("ngx-1", "Nginx-1", nil, nil)
+	ctrDisabled := ctr("disabled", "Disabled", map[string]string{"glouton.log_enable": "False"}, nil)
 	ctrApp1 := ctr("app-1", "Custom-App-1", map[string]string{"glouton.log_format": "custom_app_fmt", "glouton.log_filter": "no_password"}, nil)
 	ctrApp2 := ctr("app-2", "Custom-App-2", nil, nil)
 
@@ -162,9 +163,10 @@ func TestProcessLogSources(t *testing.T) {
 		expectedWatchedContainers map[string]struct{} // map key: container ID
 	}{
 		{
-			name: "an nginx service in a container",
+			name: "an nginx service in a container and a container with log disabled",
 			containers: []facts.Container{
 				ctrNgx1,
+				ctrDisabled,
 			},
 			services: []discovery.Service{
 				svcNginx,

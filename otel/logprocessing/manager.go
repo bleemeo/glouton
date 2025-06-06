@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -266,6 +268,23 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 			continue
 		}
 
+		if service.ContainerID != "" {
+			ctr, found := containersByID[service.ContainerID]
+			if found {
+				logEnableStr, found := facts.LabelsAndAnnotations(ctr)[gloutonContainerLabelPrefix+"log_enable"]
+				if found {
+					logEnable, err := strconv.ParseBool(strings.ToLower(logEnableStr))
+					if err != nil {
+						logger.V(1).Printf("Failed to parse value of 'glouton.log_enable' for container %s (%s): %v", ctr.ContainerName(), ctr.ID(), err)
+					} else if !logEnable {
+						logger.V(2).Printf("Ignoring logs of service %q, because its container has 'glouton.log_enable' set to false", service.Name)
+
+						continue
+					}
+				}
+			}
+		}
+
 		for _, serviceLogProcessing := range service.LogProcessing {
 			logSource := LogSource{
 				serviceID:   &key,
@@ -298,11 +317,23 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 			continue
 		}
 
+		ctrFacts := facts.LabelsAndAnnotations(ctr)
+
+		logEnableStr, found := ctrFacts[gloutonContainerLabelPrefix+"log_enable"]
+		if found {
+			logEnable, err := strconv.ParseBool(strings.ToLower(logEnableStr))
+			if err != nil {
+				logger.V(1).Printf("Failed to parse value of 'glouton.log_enable' for container %s (%s): %v", ctr.ContainerName(), ctr.ID(), err)
+			} else if !logEnable {
+				logger.V(2).Printf("Ignoring logs of container %s (%s), for which 'glouton.log_enable' is set to false", ctr.ContainerName(), ctr.ID())
+
+				continue
+			}
+		}
+
 		logSource := LogSource{
 			container: ctr,
 		}
-
-		ctrFacts := facts.LabelsAndAnnotations(ctr)
 		hasOpsFromFacts, hasFilterFromFacts := false, false
 
 		logFormat, found := ctrFacts[gloutonContainerLabelPrefix+"log_format"]
