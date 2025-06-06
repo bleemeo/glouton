@@ -73,6 +73,16 @@ var servicesLogInfo = map[ServiceName]logProcessingInfo{ //nolint: gochecknoglob
 		DefaultFormat: "redis",
 		DockerFormat:  "redis_docker",
 	},
+	ValkeyService: {
+		FileFormats: []ServiceLogReceiver{
+			{
+				FilePath: "/var/log/valkey/valkey-server.log",
+				Format:   "valkey",
+			},
+		},
+		DefaultFormat: "valkey",
+		DockerFormat:  "valkey_docker",
+	},
 	HAProxyService: {
 		FileFormats: []ServiceLogReceiver{
 			// TODO

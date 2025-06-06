@@ -679,6 +679,29 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 			redisParser, // we'll rely on the timestamp provided by the runtime
 			removeAttr("time"),
 		),
+		"valkey": flattenOps(
+			redisParser,
+			OTELOperator{
+				"type":  "add",
+				"field": "attributes['db.system.name']",
+				"value": "valkey",
+			},
+			OTELOperator{
+				"type":        "time_parser",
+				"parse_from":  "attributes.time",
+				"layout":      "%d %b %Y %H:%M:%S.%L",
+				"layout_type": "strptime",
+			},
+		),
+		"valkey_docker": flattenOps(
+			redisParser, // we'll rely on the timestamp provided by the runtime
+			OTELOperator{
+				"type":  "add",
+				"field": "attributes['db.system.name']",
+				"value": "valkey",
+			},
+			removeAttr("time"),
+		),
 		"haproxy": flattenOps(
 			haproxyParser,
 			OTELOperator{
