@@ -256,15 +256,15 @@ func DefaultConfig() Config { //nolint:maintidx
 			HostRootPrefix: "/hostroot",
 			Inputs:         []LogInput{},
 			OpenTelemetry: OpenTelemetry{
-				Enable:        false,
-				AutoDiscovery: true,
+				Enable:        true,
+				AutoDiscovery: false,
 				GRPC: EnableListener{
-					Enable:  true,
+					Enable:  false,
 					Address: "localhost",
 					Port:    4317,
 				},
 				HTTP: EnableListener{
-					Enable:  true,
+					Enable:  false,
 					Address: "localhost",
 					Port:    4318,
 				},
