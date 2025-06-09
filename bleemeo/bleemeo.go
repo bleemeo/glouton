@@ -115,7 +115,7 @@ type Connector struct {
 	pushAppender *model.BufferAppender
 	sync         *synchronizer.Synchronizer
 	mqtt         *mqtt.Client
-	mqttRestart  chan interface{}
+	mqttRestart  chan any
 
 	l                          sync.RWMutex
 	lastKnownReport            time.Time
@@ -133,7 +133,7 @@ func New(option types.GlobalOption) (c *Connector, err error) {
 	c = &Connector{
 		option:       option,
 		cache:        cache.Load(option.State),
-		mqttRestart:  make(chan interface{}, 1),
+		mqttRestart:  make(chan any, 1),
 		pushAppender: model.NewBufferAppender(),
 	}
 

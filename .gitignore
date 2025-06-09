@@ -30,3 +30,4 @@ __debug_bin
 /crashreport_*.zip
 /crash_diagnostic.tar
 vendor/
+/webui/dist/

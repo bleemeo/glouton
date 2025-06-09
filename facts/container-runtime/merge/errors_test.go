@@ -32,7 +32,7 @@ func Test_fixMultiError(t *testing.T) {
 		errs    error
 		isNil   bool
 		errorIs error
-		errorAs interface{}
+		errorAs any
 	}{
 		{
 			name:  "nil",

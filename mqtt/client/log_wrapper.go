@@ -74,7 +74,7 @@ func (w *LogWrapper) LastPingAt() time.Time {
 	return w.lastPingCheckSeen
 }
 
-func (p *printWrapper) Println(v ...interface{}) {
+func (p *printWrapper) Println(v ...any) {
 	logger.V(2).Println(v...)
 	// hack to track if keepalive gorouting is running.
 	// We track the log DEBUG.Println(PNG, "keepalive stopped")
@@ -83,6 +83,6 @@ func (p *printWrapper) Println(v ...interface{}) {
 	}
 }
 
-func (p *printWrapper) Printf(format string, v ...interface{}) {
+func (p *printWrapper) Printf(format string, v ...any) {
 	logger.V(2).Printf(format, v...)
 }

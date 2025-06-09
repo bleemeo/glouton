@@ -217,7 +217,7 @@ func (c *winCollector) renameGlobal(originalContext internal.GatherContext) (new
 	return originalContext, drop
 }
 
-func (c *winCollector) transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+func (c *winCollector) transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]any) map[string]float64 {
 	_ = originalFields
 	res := make(map[string]float64, len(fields))
 

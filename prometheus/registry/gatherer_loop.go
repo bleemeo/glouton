@@ -30,7 +30,7 @@ import (
 type scrapeLoop struct {
 	cancel   context.CancelFunc
 	stopped  chan struct{}
-	trigger  chan interface{}
+	trigger  chan any
 	callback func(ctx context.Context, loopCtx context.Context, t0 time.Time)
 	interval time.Duration
 	// description is useful for debugging.
@@ -51,7 +51,7 @@ func startScrapeLoop(
 		callback:    callback,
 		interval:    interval,
 		stopped:     make(chan struct{}),
-		trigger:     make(chan interface{}, 1),
+		trigger:     make(chan any, 1),
 		description: description,
 	}
 

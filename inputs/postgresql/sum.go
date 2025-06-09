@@ -55,7 +55,7 @@ func sum(acc *internal.StoreAccumulator) {
 	}
 
 	// Convert the sum metrics to interfaces.
-	newFields := make(map[string]interface{}, len(sumMetrics))
+	newFields := make(map[string]any, len(sumMetrics))
 
 	for name, value := range sumMetrics {
 		newFields[name] = value

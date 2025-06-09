@@ -137,7 +137,7 @@ func TestLoad(t *testing.T) {
 		args           args
 		wantPersistent persistedState
 		wantCache      map[string]json.RawMessage
-		wantKeys       map[string]interface{}
+		wantKeys       map[string]any
 		wantErr        bool
 	}{
 		{
@@ -153,7 +153,7 @@ func TestLoad(t *testing.T) {
 				BleemeoPassword: "theSecretPassword",
 				TelemetryID:     "78946",
 			},
-			wantKeys: map[string]interface{}{
+			wantKeys: map[string]any{
 				"CacheBleemeoConnector": fakeBleemeoCache{
 					Version: 6,
 					Facts:   []fakeFactType{{ID: "e3f3ef05-b112-440e-b7c0-44768901c99c", Key: "cpu_model_name"}},
@@ -173,7 +173,7 @@ func TestLoad(t *testing.T) {
 				BleemeoPassword: "theSecretPassword",
 				TelemetryID:     "78946",
 			},
-			wantKeys: map[string]interface{}{
+			wantKeys: map[string]any{
 				"CacheBleemeoConnector": fakeBleemeoCache{
 					Version: 7,
 					Facts:   []fakeFactType{{ID: "e3f3ef05-b112-440e-b7c0-44768901c99c", Key: "cpu_model_name_v2"}},
@@ -193,7 +193,7 @@ func TestLoad(t *testing.T) {
 				BleemeoPassword: "theSecretPassword",
 				TelemetryID:     "78946",
 			},
-			wantKeys: map[string]interface{}{
+			wantKeys: map[string]any{
 				"CacheBleemeoConnector": fakeBleemeoCache{
 					Version: 6,
 					Facts:   []fakeFactType{{ID: "e3f3ef05-b112-440e-b7c0-44768901c99c", Key: "cpu_model_name"}},
@@ -220,7 +220,7 @@ func TestLoad(t *testing.T) {
 			}
 
 			for k, v := range tt.wantKeys {
-				var got interface{}
+				var got any
 
 				switch v.(type) {
 				case fakeBleemeoCache:

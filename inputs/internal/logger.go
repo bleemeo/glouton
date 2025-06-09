@@ -41,7 +41,7 @@ func (l *Logger) Level() telegraf.LogLevel {
 	return telegraf.Debug
 }
 
-func (l *Logger) AddAttribute(key string, value interface{}) {
+func (l *Logger) AddAttribute(key string, value any) {
 	l.l.Lock()
 	defer l.l.Unlock()
 
@@ -49,52 +49,52 @@ func (l *Logger) AddAttribute(key string, value interface{}) {
 }
 
 // Errorf logs an error message, patterned after log.Printf.
-func (l *Logger) Errorf(format string, args ...interface{}) {
+func (l *Logger) Errorf(format string, args ...any) {
 	logger.Printf(l.formatWithAttrs(format), args...)
 }
 
 // Error logs an error message, patterned after log.Print.
-func (l *Logger) Error(args ...interface{}) {
+func (l *Logger) Error(args ...any) {
 	logger.V(0).Println(l.argsWithAttrs(args))
 }
 
 // Warnf logs a warning message, patterned after log.Printf.
-func (l *Logger) Warnf(format string, args ...interface{}) {
+func (l *Logger) Warnf(format string, args ...any) {
 	logger.Printf(l.formatWithAttrs(format), args...)
 }
 
 // Warn logs a warning message, patterned after log.Print.
-func (l *Logger) Warn(args ...interface{}) {
+func (l *Logger) Warn(args ...any) {
 	logger.V(0).Println(l.argsWithAttrs(args))
 }
 
 // Infof logs an information message, patterned after log.Printf.
-func (l *Logger) Infof(format string, args ...interface{}) {
+func (l *Logger) Infof(format string, args ...any) {
 	logger.V(1).Printf(l.formatWithAttrs(format), args...)
 }
 
 // Info logs an information message, patterned after log.Print.
-func (l *Logger) Info(args ...interface{}) {
+func (l *Logger) Info(args ...any) {
 	logger.V(1).Println(l.argsWithAttrs(args))
 }
 
 // Debugf logs a debug message, patterned after log.Printf.
-func (l *Logger) Debugf(format string, args ...interface{}) {
+func (l *Logger) Debugf(format string, args ...any) {
 	logger.V(2).Printf(l.formatWithAttrs(format), args...)
 }
 
 // Debug logs a debug message, patterned after log.Print.
-func (l *Logger) Debug(args ...interface{}) {
+func (l *Logger) Debug(args ...any) {
 	logger.V(2).Println(l.argsWithAttrs(args))
 }
 
 // Tracef logs a trace message, patterned after log.Printf.
-func (l *Logger) Tracef(format string, args ...interface{}) {
+func (l *Logger) Tracef(format string, args ...any) {
 	logger.V(3).Printf(l.formatWithAttrs(format), args...)
 }
 
 // Trace logs a trace message, patterned after log.Print.
-func (l *Logger) Trace(args ...interface{}) {
+func (l *Logger) Trace(args ...any) {
 	logger.V(3).Println(l.argsWithAttrs(args))
 }
 

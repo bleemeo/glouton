@@ -690,3 +690,8 @@ func (t MockTask) Metrics(context.Context) (*containerdTypes.Metric, error) {
 func (t MockTask) Spec(context.Context) (*oci.Spec, error) {
 	return nil, ErrMockNotImplemented
 }
+
+// Restore implements client.Restore.
+func (c MockContainer) Restore(context.Context, cio.Creator, string) (int, error) {
+	return 0, ErrMockNotImplemented
+}

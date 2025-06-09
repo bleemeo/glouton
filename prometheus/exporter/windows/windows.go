@@ -19,92 +19,75 @@
 package windows
 
 import (
+	"context"
 	"fmt"
+	"maps"
+	"reflect"
+	"regexp"
+	"slices"
 	"time"
+	"unsafe"
 
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/logger"
-	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
-	"github.com/prometheus-community/windows_exporter/collector"
+	"github.com/prometheus-community/windows_exporter/pkg/collector"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
-const maxScrapeDuration time.Duration = 9500 * time.Millisecond
+const maxScrapeDuration = 9500 * time.Millisecond
 
-func optionsToFlags(option inputs.CollectorConfig) map[string]string {
-	result := make(map[string]string)
+func makeColConfig(options inputs.CollectorConfig) collector.Config {
+	var colConfig collector.Config
 
-	if option.IODiskMatcher != nil {
-		result["collector.logical_disk.volume-exclude"] = option.IODiskMatcher.AsDenyRegexp()
+	if options.IODiskMatcher != nil {
+		colConfig.LogicalDisk.VolumeExclude = regexp.MustCompile(options.IODiskMatcher.AsDenyRegexp())
 	}
 
-	if option.NetIfMatcher != nil {
-		result["collector.net.nic-exclude"] = option.NetIfMatcher.AsDenyRegexp()
+	if options.NetIfMatcher != nil {
+		colConfig.Net.NicExclude = regexp.MustCompile(options.NetIfMatcher.AsDenyRegexp())
 	}
 
-	return result
+	return colConfig
 }
 
-func setKingpinOptions(option inputs.CollectorConfig) error {
-	// For option, it's now required to call RegisterCollectorsFlags
-	app := kingpin.New("windows_exporter", "A metrics collector for Windows.")
-	collector.RegisterCollectorsFlags(app)
-
-	optionMap := optionsToFlags(option)
-	args := make([]string, 0, len(optionMap))
-
-	for key, value := range optionMap {
-		args = append(args, fmt.Sprintf("--%s=%s", key, value))
-	}
-
-	logger.V(2).Printf("Starting node_exporter with %v as args", args)
-
-	if _, err := app.Parse(args); err != nil {
-		return fmt.Errorf("kingpin initialization: %w", err)
-	}
-
-	return nil
+func NewCollector(ctx context.Context, enabledCollectors []string, options inputs.CollectorConfig) (prometheus.Collector, error) {
+	return newCollector(ctx, enabledCollectors, options)
 }
 
-func NewCollector(enabledCollectors []string, options inputs.CollectorConfig) (prometheus.Collector, error) {
-	return newCollector(enabledCollectors, options)
-}
+func newCollector(ctx context.Context, enabledCollectors []string, options inputs.CollectorConfig) (*collector.Handler, error) {
+	collection := collector.NewWithConfig(makeColConfig(options))
 
-func newCollector(enabledCollectors []string, options inputs.CollectorConfig) (*windowsCollector, error) {
-	if err := setKingpinOptions(options); err != nil {
+	err := collection.Enable(enabledCollectors)
+	if err != nil {
+		return nil, fmt.Errorf("failed to enable collectors: %w", err)
+	}
+
+	slogger := logger.NewSlog().With("collector", "windows_exporter")
+
+	err = collection.Build(ctx, slogger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build collectors: %w", err)
+	}
+
+	handler, err := collection.NewHandler(maxScrapeDuration, slogger, enabledCollectors)
+	if err != nil {
+		logger.V(0).Printf("windows_exporter: couldn't build the list of collectors: %s", err)
+
 		return nil, err
 	}
 
-	extLogger := log.With(logger.GoKitLoggerWrapper(logger.V(2)), "collector", "windows_exporter")
+	rh := reflect.ValueOf(handler).Elem()      // rh represents a `collector.Handler`
+	rfn := rh.FieldByName("collection").Elem() // rfn represents a `collector.Collection`
+	rfn = reflect.NewAt(rfn.Type(), unsafe.Pointer(rfn.UnsafeAddr())).Elem()
+	rfs := rfn.FieldByName("collectors") // rfs represents a `collector.Map`
+	rfs = reflect.NewAt(rfs.Type(), unsafe.Pointer(rfs.UnsafeAddr())).Elem()
 
-	collectors := map[string]collector.Collector{}
-
-	collector.RegisterCollectors(extLogger)
-
-	for _, name := range enabledCollectors {
-		c, err := collector.Build(name, extLogger)
-		if err != nil {
-			logger.V(0).Printf("windows_exporter: couldn't build the list of collectors: %s", err)
-
-			return nil, err
-		}
-
-		collectors[name] = c
+	if collectors, ok := rfs.Interface().(collector.Map); ok {
+		logger.V(2).Printf("windows_exporter: the enabled collectors are %v", slices.Collect(maps.Keys(collectors)))
+	} else {
+		logger.V(0).Printf("Unexpected collectors type: %T", rfs.Interface())
 	}
 
-	logger.V(2).Printf("windows_exporter: the enabled collectors are %v", keys(collectors))
-
-	return &windowsCollector{collectors: collectors, maxScrapeDuration: maxScrapeDuration}, nil
-}
-
-func keys(m map[string]collector.Collector) []string {
-	ret := make([]string, 0, len(m))
-
-	for key := range m {
-		ret = append(ret, key)
-	}
-
-	return ret
+	return handler, nil
 }

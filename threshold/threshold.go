@@ -40,8 +40,8 @@ const (
 
 // State store information about current firing threshold.
 type State interface {
-	Get(key string, result interface{}) error
-	Set(key string, object interface{}) error
+	Get(key string, result any) error
+	Set(key string, object any) error
 }
 
 // Registry keep track of threshold states to update metrics if the exceed a threshold for a period

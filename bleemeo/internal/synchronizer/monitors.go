@@ -65,6 +65,9 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 
 	pendingMonitorsUpdate := s.pendingMonitorsUpdate
 	s.pendingMonitorsUpdate = nil
+
+	s.l.Unlock()
+
 	// 5 is definitely a random heuristic, but we consider more than five simultaneous updates as more
 	// costly that a single full sync, due to the cost of updateMonitorManager()
 	if len(pendingMonitorsUpdate) > 5 {
@@ -72,8 +75,6 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 		// force metric synchronization
 		execution.RequestSynchronization(types.EntityMetric, false)
 	}
-
-	s.l.Unlock()
 
 	if syncType != types.SyncTypeForceCacheRefresh && len(pendingMonitorsUpdate) == 0 {
 		return false, nil

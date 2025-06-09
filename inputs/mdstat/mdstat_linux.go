@@ -94,7 +94,7 @@ var fieldsNameMapping = map[string]string{ //nolint:gochecknoglobals
 	"DisksTotal":             "disks_total_count",
 }
 
-func transformMetrics(_ internal.GatherContext, fields map[string]float64, _ map[string]interface{}) map[string]float64 {
+func transformMetrics(_ internal.GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {
 	finalFields := make(map[string]float64, len(fieldsNameMapping))
 
 	for field, value := range fields {

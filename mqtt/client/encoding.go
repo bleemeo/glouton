@@ -32,7 +32,7 @@ type encoder struct {
 }
 
 // Encode is thread-safe.
-func (e *encoder) EncodeObject(obj interface{}) ([]byte, error) {
+func (e *encoder) EncodeObject(obj any) ([]byte, error) {
 	backingBuffer := e.getBuffer()
 	buffer := bytes.NewBuffer(backingBuffer)
 
@@ -112,7 +112,7 @@ func (e *encoder) PutBuffer(v []byte) {
 	e.bufferPool.Put(&v)
 }
 
-func decode(input []byte, obj interface{}) error {
+func decode(input []byte, obj any) error {
 	decoder, err := zlib.NewReader(bytes.NewReader(input))
 	if err != nil {
 		return err

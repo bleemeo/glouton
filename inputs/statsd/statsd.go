@@ -99,7 +99,7 @@ func shouldDerivativeMetrics(currentContext internal.GatherContext, metricName s
 	return currentContext.OriginalTags["metric_type"] == "counter"
 }
 
-func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]any) map[string]float64 {
 	_ = originalFields
 
 	newFields := make(map[string]float64)
