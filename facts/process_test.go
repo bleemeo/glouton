@@ -2324,7 +2324,7 @@ func TestSortProcessesArbitrarily(t *testing.T) {
 
 type bOrT interface {
 	Helper()
-	Fatal(args ...interface{})
+	Fatal(args ...any)
 }
 
 // loadProcessTestData convert CSV testdata file to list of Process.

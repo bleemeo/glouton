@@ -425,7 +425,7 @@ func migrate(k *koanf.Koanf) (*koanf.Koanf, prometheus.MultiError) {
 }
 
 // migrateMovedKeys migrate the config settings that were simply moved.
-func migrateMovedKeys(k *koanf.Koanf, config map[string]interface{}) prometheus.MultiError {
+func migrateMovedKeys(k *koanf.Koanf, config map[string]any) prometheus.MultiError {
 	var warnings prometheus.MultiError
 
 	keys := movedKeys()
@@ -446,7 +446,7 @@ func migrateMovedKeys(k *koanf.Koanf, config map[string]interface{}) prometheus.
 }
 
 // migrateLogging migrates the logging settings.
-func migrateLogging(k *koanf.Koanf, config map[string]interface{}) prometheus.MultiError {
+func migrateLogging(k *koanf.Koanf, config map[string]any) prometheus.MultiError {
 	var warnings prometheus.MultiError
 
 	for _, name := range []string{"tail_size", "head_size"} {
@@ -468,7 +468,7 @@ func migrateLogging(k *koanf.Koanf, config map[string]interface{}) prometheus.Mu
 }
 
 // migrateMetricsPrometheus migrates Prometheus settings.
-func migrateMetricsPrometheus(k *koanf.Koanf, config map[string]interface{}) prometheus.MultiError {
+func migrateMetricsPrometheus(k *koanf.Koanf, config map[string]any) prometheus.MultiError {
 	// metrics.prometheus was renamed metrics.prometheus.targets
 	// We guess that old path was used when metrics.prometheus.*.url exist and is a string
 	v := k.Get("metric.prometheus")
@@ -478,16 +478,16 @@ func migrateMetricsPrometheus(k *koanf.Koanf, config map[string]interface{}) pro
 
 	var ( //nolint:prealloc // False positive.
 		warnings        prometheus.MultiError
-		migratedTargets []interface{}
+		migratedTargets []any
 	)
 
-	vMap, ok := v.(map[string]interface{})
+	vMap, ok := v.(map[string]any)
 	if !ok {
 		return nil
 	}
 
 	for key, dict := range vMap {
-		tmp, ok := dict.(map[string]interface{})
+		tmp, ok := dict.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -499,7 +499,7 @@ func migrateMetricsPrometheus(k *koanf.Koanf, config map[string]interface{}) pro
 
 		warnings.Append(fmt.Errorf("%w: metrics.prometheus. See https://go.bleemeo.com/l/doc-prometheus", errSettingsDeprecated))
 
-		migratedTargets = append(migratedTargets, map[string]interface{}{
+		migratedTargets = append(migratedTargets, map[string]any{
 			"url":  u,
 			"name": key,
 		})
@@ -511,7 +511,7 @@ func migrateMetricsPrometheus(k *koanf.Koanf, config map[string]interface{}) pro
 
 	if len(migratedTargets) > 0 {
 		existing := k.Get("metric.prometheus.targets")
-		targets, _ := existing.([]interface{})
+		targets, _ := existing.([]any)
 		targets = append(targets, migratedTargets...)
 
 		config["metric.prometheus.targets"] = targets
@@ -524,7 +524,7 @@ func migrateMetricsPrometheus(k *koanf.Koanf, config map[string]interface{}) pro
 	return warnings
 }
 
-func migrateScrapperMetrics(k *koanf.Koanf, config map[string]interface{}) prometheus.MultiError {
+func migrateScrapperMetrics(k *koanf.Koanf, config map[string]any) prometheus.MultiError {
 	var warnings prometheus.MultiError
 
 	warnings = append(warnings, migrateScrapper(k, config, "metric.prometheus.allow_metrics", "metric.allow_metrics")...)
@@ -535,7 +535,7 @@ func migrateScrapperMetrics(k *koanf.Koanf, config map[string]interface{}) prome
 	return warnings
 }
 
-func migrateScrapper(k *koanf.Koanf, config map[string]interface{}, deprecatedPath string, correctPath string) prometheus.MultiError {
+func migrateScrapper(k *koanf.Koanf, config map[string]any, deprecatedPath string, correctPath string) prometheus.MultiError {
 	migratedTargets := []string{}
 	v := k.Get(deprecatedPath)
 
@@ -543,7 +543,7 @@ func migrateScrapper(k *koanf.Koanf, config map[string]interface{}, deprecatedPa
 		return nil
 	}
 
-	vTab, ok := v.([]interface{})
+	vTab, ok := v.([]any)
 	if !ok {
 		return nil
 	}
@@ -563,7 +563,7 @@ func migrateScrapper(k *koanf.Koanf, config map[string]interface{}, deprecatedPa
 
 	if len(migratedTargets) > 0 {
 		existing := k.Get(correctPath)
-		targets, _ := existing.([]interface{})
+		targets, _ := existing.([]any)
 
 		for _, val := range migratedTargets {
 			targets = append(targets, val)
@@ -577,7 +577,7 @@ func migrateScrapper(k *koanf.Koanf, config map[string]interface{}, deprecatedPa
 }
 
 // migrateServices migrates deprecated service options.
-func migrateServices(config map[string]interface{}) prometheus.MultiError {
+func migrateServices(config map[string]any) prometheus.MultiError {
 	migratedOptions := map[string]string{
 		"cassandra_detailed_tables": "detailed_items",
 		"id":                        "type",
@@ -588,13 +588,13 @@ func migrateServices(config map[string]interface{}) prometheus.MultiError {
 
 	servicesInt := config["service"]
 
-	servicesList, ok := servicesInt.([]interface{})
+	servicesList, ok := servicesInt.([]any)
 	if !ok {
 		return nil
 	}
 
 	for _, serviceInt := range servicesList {
-		serviceMap, ok := serviceInt.(map[string]interface{})
+		serviceMap, ok := serviceInt.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -633,15 +633,15 @@ func migrateServices(config map[string]interface{}) prometheus.MultiError {
 
 // Dump return a copy of the whole configuration, with secrets retracted.
 // secret is any key containing "key", "secret", "password" or "passwd".
-func Dump(config Config) map[string]interface{} {
+func Dump(config Config) map[string]any {
 	k := koanf.New(delimiter)
 	_ = k.Load(structs.Provider(config, Tag), nil)
 
 	return dumpMap(k.Raw())
 }
 
-func dumpMap(root map[string]interface{}) map[string]interface{} {
-	censored := make(map[string]interface{}, len(root))
+func dumpMap(root map[string]any) map[string]any {
+	censored := make(map[string]any, len(root))
 
 	for k, v := range root {
 		censored[k] = CensorSecretItem(k, v)
@@ -652,7 +652,7 @@ func dumpMap(root map[string]interface{}) map[string]interface{} {
 
 // CensorSecretItem returns the censored item value with secrets
 // and password removed for safe external use.
-func CensorSecretItem(key string, value interface{}) interface{} {
+func CensorSecretItem(key string, value any) any {
 	if isSecret(key) {
 		// Don't censor unset secrets.
 		if valueStr, ok := value.(string); ok && valueStr == "" {
@@ -663,9 +663,9 @@ func CensorSecretItem(key string, value interface{}) interface{} {
 	}
 
 	switch value := value.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		return dumpMap(value)
-	case []interface{}:
+	case []any:
 		return dumpList(value)
 	default:
 		return value
@@ -683,12 +683,12 @@ func isSecret(key string) bool {
 	return false
 }
 
-func dumpList(root []interface{}) []interface{} {
+func dumpList(root []any) []any {
 	for i, v := range root {
 		switch v := v.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			root[i] = dumpMap(v)
-		case []interface{}:
+		case []any:
 			root[i] = dumpList(v)
 		default:
 			root[i] = v

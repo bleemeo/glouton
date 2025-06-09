@@ -48,7 +48,7 @@ func (s *mockStore) getByName(name string) []types.MetricPoint {
 
 func TestAccumulator(t *testing.T) {
 	t0 := time.Now()
-	fields := map[string]interface{}{
+	fields := map[string]any{
 		"fieldFloat":  42.6,
 		"fieldInt":    -42,
 		"fieldUint64": uint64(42),
@@ -126,17 +126,17 @@ func TestAccumulator(t *testing.T) {
 
 func TestStoreAccumulatorWithStatus(t *testing.T) {
 	t0 := time.Now()
-	fields1 := map[string]interface{}{
+	fields1 := map[string]any{
 		"system": 16.0,
 		"idle":   3.0,
 	}
-	fields2 := map[string]interface{}{
+	fields2 := map[string]any{
 		"used": 97.0,
 	}
-	fields3 := map[string]interface{}{
+	fields3 := map[string]any{
 		"user": 81.0,
 	}
-	fields4 := map[string]interface{}{
+	fields4 := map[string]any{
 		"user_status": 1.0,
 	}
 	statusUsed := types.StatusDescription{CurrentStatus: types.StatusCritical, StatusDescription: "CPU 97%"}

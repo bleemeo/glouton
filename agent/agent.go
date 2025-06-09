@@ -259,7 +259,7 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	a.pahoLogWrapper = client.GetOrCreateWrapper()
 
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
-		scope.SetContext("agent", map[string]interface{}{
+		scope.SetContext("agent", map[string]any{
 			"glouton_version": version.Version,
 		})
 	})
@@ -1257,7 +1257,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	a.gathererRegistry.AddDefaultCollector()
 
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
-		scope.SetContext("agent", map[string]interface{}{
+		scope.SetContext("agent", map[string]any{
 			"agent_id":        a.BleemeoAgentID(),
 			"glouton_version": version.Version,
 		})
@@ -1329,7 +1329,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	a.registerInputs(ctx)
 
 	// Register components only available on a given system, like node_exporter for unixes.
-	a.registerOSSpecificComponents(a.vethProvider)
+	a.registerOSSpecificComponents(ctx, a.vethProvider)
 
 	tasks = append(tasks, taskInfo{
 		a.gathererRegistry.Run,

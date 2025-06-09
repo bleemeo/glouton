@@ -44,7 +44,7 @@ type Collector struct {
 	acc          telegraf.Accumulator
 	inputs       map[int]telegraf.Input
 	currentDelay time.Duration
-	updateDelayC chan interface{}
+	updateDelayC chan any
 	l            sync.Mutex
 	// map inputID -> measurement -> field name -> tags key/value -> fieldCache
 	fieldCaches          map[int]map[string]map[string]map[string]fieldCache
@@ -61,7 +61,7 @@ func New(acc telegraf.Accumulator, secretInputsGate *gate.Gate) *Collector {
 		acc:                  acc,
 		inputs:               make(map[int]telegraf.Input),
 		currentDelay:         10 * time.Second,
-		updateDelayC:         make(chan interface{}),
+		updateDelayC:         make(chan any),
 		fieldCaches:          make(map[int]map[string]map[string]map[string]fieldCache),
 		secretInputsGate:     secretInputsGate,
 		lastSuccessfulGather: make(map[int]time.Time),
@@ -209,7 +209,7 @@ func (c *Collector) runOnce(ctx context.Context, t0 time.Time) {
 	wg.Wait()
 }
 
-type accCallback func(acc inputs.FixedTimeAccumulator, measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time)
+type accCallback func(acc inputs.FixedTimeAccumulator, measurement string, fields map[string]any, tags map[string]string, t ...time.Time)
 
 type fieldCache struct {
 	annotations types.MetricAnnotations
@@ -286,7 +286,7 @@ func (ima *inactiveMarkerAccumulator) deactivateUnseenMetrics(skipDeactivation b
 	// ima.latestValues will be dropped as the inactiveMarkerAccumulator itself will be.
 } //nolint:wsl
 
-func (ima *inactiveMarkerAccumulator) doAdd(accCb accCallback, measurement string, fields map[string]interface{}, tags map[string]string, t []time.Time, annotations ...types.MetricAnnotations) {
+func (ima *inactiveMarkerAccumulator) doAdd(accCb accCallback, measurement string, fields map[string]any, tags map[string]string, t []time.Time, annotations ...types.MetricAnnotations) {
 	ima.l.Lock()
 
 	// Using a closure to make the deferred call to unlock happening before the call
@@ -330,27 +330,27 @@ func (ima *inactiveMarkerAccumulator) doAdd(accCb accCallback, measurement strin
 	}
 }
 
-func (ima *inactiveMarkerAccumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (ima *inactiveMarkerAccumulator) AddFields(measurement string, fields map[string]any, tags map[string]string, t ...time.Time) {
 	ima.doAdd(inputs.FixedTimeAccumulator.AddFields, measurement, fields, tags, t)
 }
 
-func (ima *inactiveMarkerAccumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (ima *inactiveMarkerAccumulator) AddGauge(measurement string, fields map[string]any, tags map[string]string, t ...time.Time) {
 	ima.doAdd(inputs.FixedTimeAccumulator.AddGauge, measurement, fields, tags, t)
 }
 
-func (ima *inactiveMarkerAccumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (ima *inactiveMarkerAccumulator) AddCounter(measurement string, fields map[string]any, tags map[string]string, t ...time.Time) {
 	ima.doAdd(inputs.FixedTimeAccumulator.AddCounter, measurement, fields, tags, t)
 }
 
-func (ima *inactiveMarkerAccumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (ima *inactiveMarkerAccumulator) AddSummary(measurement string, fields map[string]any, tags map[string]string, t ...time.Time) {
 	ima.doAdd(inputs.FixedTimeAccumulator.AddSummary, measurement, fields, tags, t)
 }
 
-func (ima *inactiveMarkerAccumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (ima *inactiveMarkerAccumulator) AddHistogram(measurement string, fields map[string]any, tags map[string]string, t ...time.Time) {
 	ima.doAdd(inputs.FixedTimeAccumulator.AddHistogram, measurement, fields, tags, t)
 }
 
-func (ima *inactiveMarkerAccumulator) AddFieldsWithAnnotations(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time) {
+func (ima *inactiveMarkerAccumulator) AddFieldsWithAnnotations(measurement string, fields map[string]any, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time) {
 	// When given a nil callback but annotations, doAdd() will call ima.FixedTimeAccumulator.AddFieldsWithAnnotations()
 	ima.doAdd(nil, measurement, fields, tags, t, annotations)
 }

@@ -56,14 +56,14 @@ type mockState struct {
 	DiscoveredService []Service
 }
 
-func (ms mockState) Set(key string, object interface{}) error {
+func (ms mockState) Set(key string, object any) error {
 	_ = key
 	_ = object
 
 	return errNotImplemented
 }
 
-func (ms mockState) Get(key string, object interface{}) error {
+func (ms mockState) Get(key string, object any) error {
 	_ = key
 
 	if services, ok := object.(*[]Service); ok {

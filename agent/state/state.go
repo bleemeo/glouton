@@ -408,7 +408,7 @@ func (s *State) savePersistentTo(w io.Writer) error {
 }
 
 // Set save an object.
-func (s *State) Set(key string, object interface{}) error {
+func (s *State) Set(key string, object any) error {
 	s.l.Lock()
 	defer s.l.Unlock()
 
@@ -426,7 +426,7 @@ func (s *State) Set(key string, object interface{}) error {
 	return nil
 }
 
-func (s *State) set(key string, object interface{}) (bool, error) {
+func (s *State) set(key string, object any) (bool, error) {
 	buffer, err := json.Marshal(object)
 	if err != nil {
 		return false, err
@@ -457,7 +457,7 @@ func (s *State) Delete(key string) error {
 }
 
 // Get return an object.
-func (s *State) Get(key string, result interface{}) error {
+func (s *State) Get(key string, result any) error {
 	s.l.RLock()
 	defer s.l.RUnlock()
 

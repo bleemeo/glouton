@@ -97,7 +97,7 @@ func (dt diskTransformer) renameGlobal(gatherContext internal.GatherContext) (in
 	return gatherContext, false
 }
 
-func (dt diskTransformer) transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+func (dt diskTransformer) transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]any) map[string]float64 {
 	_ = currentContext
 	_ = originalFields
 

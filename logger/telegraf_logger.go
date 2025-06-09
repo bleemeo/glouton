@@ -59,7 +59,7 @@ func (t *TelegrafLogger) Level() telegraf.LogLevel {
 	return telegraf.Debug
 }
 
-func (t *TelegrafLogger) AddAttribute(key string, value interface{}) {
+func (t *TelegrafLogger) AddAttribute(key string, value any) {
 	t.l.Lock()
 	defer t.l.Unlock()
 
@@ -67,50 +67,50 @@ func (t *TelegrafLogger) AddAttribute(key string, value interface{}) {
 }
 
 // Errorf logs an error message, patterned after log.Printf.
-func (t *TelegrafLogger) Errorf(format string, args ...interface{}) {
+func (t *TelegrafLogger) Errorf(format string, args ...any) {
 	V(t.errorLogLevel()).Printf(t.addNameAndAttrsToFormat(format), args...)
 }
 
 // Error logs an error message, patterned after log.Print.
-func (t *TelegrafLogger) Error(args ...interface{}) {
+func (t *TelegrafLogger) Error(args ...any) {
 	V(t.errorLogLevel()).Println(t.addNameAndAttrsToArgs(args...))
 }
 
 // Warnf logs a warning message, patterned after log.Printf.
-func (t *TelegrafLogger) Warnf(format string, args ...interface{}) {
+func (t *TelegrafLogger) Warnf(format string, args ...any) {
 	V(1).Printf(t.addNameAndAttrsToFormat(format), args...)
 }
 
 // Warn logs a warning message, patterned after log.Print.
-func (t *TelegrafLogger) Warn(args ...interface{}) {
+func (t *TelegrafLogger) Warn(args ...any) {
 	V(1).Println(t.addNameAndAttrsToArgs(args...))
 }
 
 // Infof logs an information message, patterned after log.Printf.
-func (t *TelegrafLogger) Infof(format string, args ...interface{}) {
+func (t *TelegrafLogger) Infof(format string, args ...any) {
 	V(2).Printf(t.addNameAndAttrsToFormat(format), args...)
 }
 
 // Info logs an information message, patterned after log.Print.
-func (t *TelegrafLogger) Info(args ...interface{}) {
+func (t *TelegrafLogger) Info(args ...any) {
 	V(2).Println(t.addNameAndAttrsToArgs(args...))
 }
 
 // Debugf logs a debug message, patterned after log.Printf.
-func (t *TelegrafLogger) Debugf(format string, args ...interface{}) {
+func (t *TelegrafLogger) Debugf(format string, args ...any) {
 	V(3).Printf(t.addNameAndAttrsToFormat(format), args...)
 }
 
 // Debug logs a debug message, patterned after log.Print.
-func (t *TelegrafLogger) Debug(args ...interface{}) {
+func (t *TelegrafLogger) Debug(args ...any) {
 	V(3).Println(t.addNameAndAttrsToArgs(args...))
 }
 
-func (t *TelegrafLogger) Tracef(format string, args ...interface{}) {
+func (t *TelegrafLogger) Tracef(format string, args ...any) {
 	V(4).Printf(t.addNameAndAttrsToFormat(format), args...)
 }
 
-func (t *TelegrafLogger) Trace(args ...interface{}) {
+func (t *TelegrafLogger) Trace(args ...any) {
 	V(4).Println(t.addNameAndAttrsToArgs(args...))
 }
 

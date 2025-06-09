@@ -19,6 +19,8 @@
 package windows
 
 import (
+	"context"
+
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/prometheus/model"
 	"github.com/bleemeo/glouton/prometheus/registry"
@@ -28,8 +30,8 @@ import (
 )
 
 // AddWindowsExporter add a node_exporter to collector.
-func AddWindowsExporter(gloutonRegistry *registry.Registry, collectors []string, options inputs.CollectorConfig) error {
-	collector, err := NewCollector(collectors, options)
+func AddWindowsExporter(ctx context.Context, gloutonRegistry *registry.Registry, collectors []string, options inputs.CollectorConfig) error {
+	collector, err := NewCollector(ctx, collectors, options)
 	if err != nil {
 		return err
 	}

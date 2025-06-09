@@ -84,7 +84,7 @@ func renameGlobal(detailedDatabases []string) func(internal.GatherContext) (inte
 func transformMetrics(
 	currentContext internal.GatherContext,
 	fields map[string]float64,
-	originalFields map[string]interface{},
+	originalFields map[string]any,
 ) map[string]float64 {
 	_ = originalFields
 	newFields := make(map[string]float64)

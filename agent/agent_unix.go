@@ -19,6 +19,7 @@
 package agent
 
 import (
+	"context"
 	"os"
 
 	"github.com/bleemeo/glouton/config"
@@ -32,7 +33,7 @@ import (
 func initOSSpecificParts(chan<- os.Signal) {
 }
 
-func (a *agent) registerOSSpecificComponents(vethProvider *veth.Provider) {
+func (a *agent) registerOSSpecificComponents(_ context.Context, vethProvider *veth.Provider) {
 	if a.config.Agent.NodeExporter.Enable {
 		filter, err := config.NewDFFSTypeMatcher(a.config)
 		if err != nil {

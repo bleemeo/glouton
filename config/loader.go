@@ -50,7 +50,7 @@ type Item struct {
 	// The config Key (e.g. "bleemeo.enable").
 	Key string
 	// The Value for this config key.
-	Value interface{}
+	Value any
 	// Type of the value.
 	Type ItemType
 	// Source of the config key (can be a default value, an environment variable or a file).
@@ -186,7 +186,7 @@ func isNil(v any) bool {
 	return refV.IsNil()
 }
 
-func itemTypeFromValue(key string, value interface{}) ItemType {
+func itemTypeFromValue(key string, value any) ItemType {
 	// Detect base types.
 	switch value.(type) {
 	case int, time.Duration:
@@ -232,13 +232,13 @@ func itemTypeFromValue(key string, value interface{}) ItemType {
 
 // convertToJSONTypes convert the value to only use JSON types.
 // It converts int to float64, structs to map, []T to []any...
-func convertToJSONTypes(value interface{}) (interface{}, error) {
+func convertToJSONTypes(value any) (any, error) {
 	jsonBytes, err := json.Marshal(value)
 	if err != nil {
 		return nil, err
 	}
 
-	var jsonValue interface{}
+	var jsonValue any
 
 	err = json.Unmarshal(jsonBytes, &jsonValue)
 	if err != nil {
@@ -251,7 +251,7 @@ func convertToJSONTypes(value interface{}) (interface{}, error) {
 // convertTypes converts config keys to the right type and returns warnings.
 func convertTypes(
 	baseKoanf *koanf.Koanf,
-) (map[string]interface{}, prometheus.MultiError) {
+) (map[string]any, prometheus.MultiError) {
 	var warnings prometheus.MultiError
 
 	// Unmarshal the config to a struct, this does all needed type conversions
@@ -319,7 +319,7 @@ func convertTypes(
 // Map keys are fixed: instead of returning map keys separately
 // ("metric.softstatus_period.cpu_used",  "metric.softstatus_period.disk_used"),
 // return a single key per map ("metric.softstatus_period").
-func allKeys(k *koanf.Koanf) map[string]interface{} {
+func allKeys(k *koanf.Koanf) map[string]any {
 	all := k.All()
 
 	for key := range all {
@@ -338,7 +338,7 @@ func allKeys(k *koanf.Koanf) map[string]interface{} {
 // When the value is a map or an array, the items may have the same priority, in
 // this case the arrays are appended to each other, and the maps are merged.
 // It panics on unknown providers.
-func priority(provider ItemSource, key string, value interface{}, loadCount int) int {
+func priority(provider ItemSource, key string, value any, loadCount int) int {
 	const (
 		priorityDefault         = -1
 		priorityMapAndArrayFile = 1
@@ -401,7 +401,7 @@ func isMapKey(key string) (bool, string) {
 func (c *configLoader) Build() (*koanf.Koanf, prometheus.MultiError) {
 	var warnings prometheus.MultiError
 
-	config := make(map[string]interface{})
+	config := make(map[string]any)
 	priorities := make(map[string]int)
 
 	for _, item := range c.items {
@@ -434,17 +434,17 @@ func (c *configLoader) Build() (*koanf.Koanf, prometheus.MultiError) {
 }
 
 // Merge maps and append slices.
-func merge(dst interface{}, src interface{}) (interface{}, error) {
+func merge(dst any, src any) (any, error) {
 	switch dstType := dst.(type) {
-	case []interface{}:
-		srcSlice, ok := src.([]interface{})
+	case []any:
+		srcSlice, ok := src.([]any)
 		if !ok {
 			return nil, fmt.Errorf("%w: []interface{} with %T", errCannotMerge, src)
 		}
 
 		return append(dstType, srcSlice...), nil
-	case map[string]interface{}:
-		srcMap, ok := src.(map[string]interface{})
+	case map[string]any:
+		srcMap, ok := src.(map[string]any)
 		if !ok {
 			return nil, fmt.Errorf("%w: map[string]interface{} with %T", errCannotMerge, src)
 		}
