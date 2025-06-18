@@ -19,8 +19,13 @@
 package nats
 
 import (
+	"net/http"
+	"reflect"
+	"unsafe"
+
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/registry"
 	"github.com/bleemeo/glouton/types"
 
@@ -44,7 +49,7 @@ func New(url string) (telegraf.Input, registry.RegistrationOption, error) {
 	natsInput.Server = url
 
 	internalInput := &internal.Input{
-		Input: natsInput,
+		Input: natsInputStopper{natsInput},
 		Accumulator: internal.Accumulator{
 			RenameGlobal: func(gatherContext internal.GatherContext) (result internal.GatherContext, drop bool) {
 				// Remove the IP address of the server. Glouton will add item and/or container to identify the source
@@ -67,4 +72,28 @@ func New(url string) (telegraf.Input, registry.RegistrationOption, error) {
 	}
 
 	return internalInput, options, nil
+}
+
+type natsInputStopper struct {
+	*nats.Nats
+}
+
+func (n natsInputStopper) Start(telegraf.Accumulator) error {
+	return nil
+}
+
+func (n natsInputStopper) Stop() {
+	// Closing Nats' underlying http client to stop its goroutines
+	nv := reflect.ValueOf(n.Nats).Elem()
+	clf := nv.FieldByName("client")
+	clv := reflect.NewAt(clf.Type(), unsafe.Pointer(clf.UnsafeAddr())).Elem()
+
+	cl, ok := clv.Interface().(*http.Client)
+	if !ok {
+		logger.V(1).Printf("Can't close NATS http client: unexpected type %T", clv.Interface())
+
+		return
+	}
+
+	cl.CloseIdleConnections()
 }
