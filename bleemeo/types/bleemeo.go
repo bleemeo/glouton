@@ -21,6 +21,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"math"
 	"time"
 
@@ -353,5 +354,26 @@ func FormatConfigItemSource(c bleemeo.ConfigItemSource) string {
 		return "unknown"
 	default:
 		return "unknown"
+	}
+}
+
+type LogsAvailability int
+
+const (
+	LogsAvailabilityOk LogsAvailability = iota + 1
+	LogsAvailabilityShouldBuffer
+	LogsAvailabilityShouldDiscard
+)
+
+func (la LogsAvailability) String() string {
+	switch la {
+	case LogsAvailabilityOk:
+		return "ok"
+	case LogsAvailabilityShouldBuffer:
+		return "buffer"
+	case LogsAvailabilityShouldDiscard:
+		return "discard"
+	default:
+		return fmt.Sprintf("unknown (%d)", int(la))
 	}
 }

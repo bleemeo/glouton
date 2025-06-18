@@ -51,15 +51,14 @@ const (
 
 	pointsBatchSize = 1000
 
+	maxMQTTPendingMessagesToAllowLogsThreshold = 50
+
 	dataAckBackPressureDelay    = 6*time.Minute + 10*time.Second
 	topinfoAckBackPressureDelay = 6*time.Minute + 10*time.Second
 	logsAckBackPressureDelay    = 1*time.Minute + 10*time.Second
 )
 
-var (
-	ErrNotConnected       = errors.New("currently not connected to MQTT")
-	ErrBackPressureSignal = errors.New("back-pressure signal")
-)
+var ErrNotConnected = errors.New("currently not connected to MQTT")
 
 // Option are parameter for the MQTT client.
 type Option struct {
@@ -111,7 +110,7 @@ type Client struct {
 	lastAck                time.Time
 	dataStreamAvailable    bool
 	topinfoStreamAvailable bool
-	logsStreamAvailable    bool
+	logsStreamAvailability bleemeoTypes.LogsAvailability
 }
 
 type metricPayload struct {
@@ -349,7 +348,7 @@ func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWri
 		LastAck                    time.Time
 		DataStreamAvailable        bool
 		TopinfoStreamAvailable     bool
-		LogsStreamAvailable        bool
+		LogsStreamAvailability     bleemeoTypes.LogsAvailability
 	}{
 		StartedAt:                  c.startedAt,
 		LastRegisteredMetricsCount: c.lastRegisteredMetricsCount,
@@ -360,7 +359,7 @@ func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWri
 		LastAck:                    c.lastAck,
 		DataStreamAvailable:        c.dataStreamAvailable,
 		TopinfoStreamAvailable:     c.topinfoStreamAvailable,
-		LogsStreamAvailable:        c.logsStreamAvailable,
+		LogsStreamAvailability:     c.logsStreamAvailability,
 	}
 
 	enc := json.NewEncoder(file)
@@ -390,10 +389,10 @@ func (c *Client) HealthCheck() bool {
 	lastAckAge := time.Since(c.lastAck)
 
 	if c.lastAck.IsZero() {
-		startAge := time.Since(c.startedAt)
-		logger.V(1).Printf("Never received ack from Bleemeo and agent is running since %s (%s ago)", c.startedAt.Format(time.RFC3339), startAge)
+		startAge := time.Since(c.startedAt).Round(time.Second)
+		logger.V(1).Printf("Never received an ack from Bleemeo, and the agent is running since %s (%s ago)", c.startedAt.Format(time.RFC3339), startAge)
 	} else if lastAckAge > dataAckBackPressureDelay || lastAckAge > topinfoAckBackPressureDelay || lastAckAge > logsAckBackPressureDelay {
-		logger.V(1).Printf("Didn't received recent ack from Bleemeo, latest ack received at %s (%s ago)", c.lastAck.Format(time.RFC3339), lastAckAge)
+		logger.V(1).Printf("Didn't receive a recent ack from Bleemeo, the last one was received at %s (%s ago)", c.lastAck.Format(time.RFC3339), lastAckAge.Round(time.Second))
 	}
 
 	failedPointsCount := c.failedPoints.Len()
@@ -465,7 +464,7 @@ func (c *Client) shutdownTimeDrift() {
 	if c.mqtt.IsConnectionOpen() {
 		payload := map[string]string{"disconnect-cause": "Clean shutdown, time drift"}
 
-		if err := c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/disconnect", c.opts.AgentID), payload, true); err != nil {
+		if err := c.mqtt.PublishAsJSON(fmt.Sprintf("v1/agent/%s/disconnect", c.opts.AgentID), payload, true); err != nil {
 			logger.V(1).Printf("Unable to publish on disconnect topic: %v", err)
 		}
 	}
@@ -555,7 +554,7 @@ func (c *Client) run(ctx context.Context) error {
 func (c *Client) sendPing() {
 	ts := time.Now().Format(time.RFC3339)
 
-	err := c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/ping", c.opts.AgentID), ts, false)
+	err := c.mqtt.PublishAsJSON(fmt.Sprintf("v1/agent/%s/ping", c.opts.AgentID), ts, false)
 	if err != nil {
 		logger.V(1).Printf("Failed to send ping message on MQTT: %v", err)
 	}
@@ -598,7 +597,20 @@ func (c *Client) PopPoints(includeFailedPoints bool) []types.MetricPoint {
 	return points
 }
 
-func (c *Client) PushLogs(_ context.Context, payload []byte) error {
+// canSendLogs returns whether the current state of MQTT allows sending logs or not.
+func (c *Client) canSendLogs() bool {
+	if time.Since(c.lastAck) > logsAckBackPressureDelay {
+		return false
+	}
+
+	if c.opts.ReloadState.MQTTReloadState().ClientState().PendingMessagesCount() > maxMQTTPendingMessagesToAllowLogsThreshold {
+		return false
+	}
+
+	return true
+}
+
+func (c *Client) PushLogs(ctx context.Context, payload []byte) error {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -606,15 +618,22 @@ func (c *Client) PushLogs(_ context.Context, payload []byte) error {
 		return ErrNotConnected
 	}
 
-	if !c.logsStreamAvailable || time.Since(c.lastAck) > logsAckBackPressureDelay {
-		return ErrBackPressureSignal
+	if !c.canSendLogs() {
+		return types.ErrBackPressureSignal
 	}
 
-	if err := c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/logs", c.opts.AgentID), payload, true); err != nil {
-		return nil
+	return c.mqtt.PublishBytes(ctx, fmt.Sprintf("v1/agent/%s/logs", c.opts.AgentID), payload, true)
+}
+
+func (c *Client) LogsBackPressureStatus() bleemeoTypes.LogsAvailability {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	if !c.connected() || !c.canSendLogs() {
+		return bleemeoTypes.LogsAvailabilityShouldBuffer
 	}
 
-	return nil
+	return c.logsStreamAvailability
 }
 
 func (c *Client) sendPoints() {
@@ -629,7 +648,7 @@ func (c *Client) sendPoints() {
 				end = len(agentPayload)
 			}
 
-			if err := c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/data", agentID), agentPayload[i:end], true); err != nil {
+			if err := c.mqtt.PublishAsJSON(fmt.Sprintf("v1/agent/%s/data", agentID), agentPayload[i:end], true); err != nil {
 				logger.V(1).Printf("Unable to publish points: %v", err)
 			}
 		}
@@ -821,21 +840,9 @@ func (c *Client) sendConnectMessage() {
 
 	payload := map[string]string{"public_ip": facts["public_ip"]}
 
-	if err := c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/connect", c.opts.AgentID), payload, true); err != nil {
+	if err := c.mqtt.PublishAsJSON(fmt.Sprintf("v1/agent/%s/connect", c.opts.AgentID), payload, true); err != nil {
 		logger.V(1).Printf("Unable to publish on connect topic: %v", err)
 	}
-}
-
-type notificationPayload struct {
-	MessageType            string `json:"message_type"`
-	MetricUUID             string `json:"metric_uuid,omitempty"`
-	MonitorUUID            string `json:"monitor_uuid,omitempty"`
-	MonitorOperationType   string `json:"monitor_operation_type,omitempty"`
-	DiagnosticRequestToken string `json:"request_token,omitempty"`
-	AckTimestamp           string `json:"ack_timestamp,omitempty"`
-	DataStreamAvailable    bool   `json:"data_stream_available,omitempty"`
-	TopInfoStreamAvailable bool   `json:"topinfo_stream_available,omitempty"`
-	LogsStreamAvailable    bool   `json:"logs_stream_available,omitempty"`
 }
 
 func (c *Client) onNotification(ctx context.Context, msg paho.Message) {
@@ -889,17 +896,16 @@ func (c *Client) onNotification(ctx context.Context, msg paho.Message) {
 		c.lastAck = ts
 		c.dataStreamAvailable = payload.DataStreamAvailable
 		c.topinfoStreamAvailable = payload.TopInfoStreamAvailable
-		c.logsStreamAvailable = payload.LogsStreamAvailable
+		c.logsStreamAvailability = payload.LogsStreamAvailabilityStatus
+		c.l.Unlock()
 
 		logger.V(2).Printf(
-			"Received ack with ts=%s with dataStreamAvailable=%v, topinfoStreamAvailable=%v, logsStreamAvailable=%v",
+			"Received ack with ts=%s with dataStreamAvailable=%v, topinfoStreamAvailable=%v, logsStreamAvailabilityStatus=%v",
 			originalTS,
 			payload.DataStreamAvailable,
 			payload.TopInfoStreamAvailable,
-			payload.LogsStreamAvailable,
+			payload.LogsStreamAvailabilityStatus,
 		)
-
-		c.l.Unlock()
 	}
 }
 
@@ -917,7 +923,7 @@ func (c *Client) sendTopinfo() {
 
 	topic := fmt.Sprintf("v1/agent/%s/top_info", c.opts.AgentID)
 
-	if err := c.mqtt.Publish(topic, topinfo, false); err != nil {
+	if err := c.mqtt.PublishAsJSON(topic, topinfo, false); err != nil {
 		logger.V(1).Printf("Unable to publish on topinfo topic: %v", err)
 	}
 }

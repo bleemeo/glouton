@@ -58,9 +58,10 @@ type Config struct {
 }
 
 type Log struct {
-	FluentBitURL   string     `yaml:"fluentbit_url"`
-	HostRootPrefix string     `yaml:"hostroot_prefix"`
-	Inputs         []LogInput `yaml:"inputs"`
+	FluentBitURL   string        `yaml:"fluentbit_url"`
+	HostRootPrefix string        `yaml:"hostroot_prefix"`
+	Inputs         []LogInput    `yaml:"inputs"`
+	OpenTelemetry  OpenTelemetry `yaml:"opentelemetry"`
 }
 
 type LogInput struct {
@@ -73,6 +74,33 @@ type LogInput struct {
 type LogFilter struct {
 	Metric string `yaml:"metric"`
 	Regex  string `yaml:"regex"`
+}
+
+// OTELOperator represents an OpenTelemetry operator as plain YAML,
+// which is meant to be built to an operator.Config before use.
+type OTELOperator = map[string]any
+
+type OpenTelemetry struct {
+	Enable          bool                      `yaml:"enable"`
+	AutoDiscovery   bool                      `yaml:"auto_discovery"`
+	GRPC            EnableListener            `yaml:"grpc"`
+	HTTP            EnableListener            `yaml:"http"`
+	KnownLogFormats map[string][]OTELOperator `yaml:"known_log_formats"`
+	Receivers       map[string]OTLPReceiver   `yaml:"receivers"`
+	// map: container name -> format to apply
+	ContainerFormat map[string]string `yaml:"container_format"`
+}
+
+type EnableListener struct {
+	Enable  bool   `yaml:"enable"`
+	Address string `yaml:"address"`
+	Port    int    `yaml:"port"`
+}
+
+type OTLPReceiver struct {
+	Include   []string       `yaml:"include"`
+	Operators []OTELOperator `yaml:"operators"`
+	LogFormat string         `yaml:"log_format"`
 }
 
 type Smart struct {
@@ -371,6 +399,9 @@ type Service struct {
 	// IncludedItems or exclude specific items (for instance Jenkins jobs).
 	IncludedItems []string `yaml:"included_items"`
 	ExcludedItems []string `yaml:"excluded_items"`
+	// Log processing config.
+	LogFiles  []ServiceLogFile `yaml:"log_files"`
+	LogFormat string           `yaml:"log_format"`
 }
 
 type JmxMetric struct {
@@ -383,6 +414,11 @@ type JmxMetric struct {
 	Sum       bool     `yaml:"sum"`
 	TypeNames []string `yaml:"type_names"`
 	Ratio     string   `yaml:"ratio"`
+}
+
+type ServiceLogFile struct {
+	FilePath  string `yaml:"file_path"`
+	LogFormat string `yaml:"log_format"`
 }
 
 type Container struct {

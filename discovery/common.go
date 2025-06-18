@@ -134,6 +134,8 @@ type Service struct {
 	MetricsIgnored  bool
 	// The interval of the check, used only for custom checks.
 	Interval time.Duration
+	// May be nil if no log processing should be applied.
+	LogProcessing []ServiceLogReceiver
 
 	HasNetstatInfo  bool
 	LastNetstatInfo time.Time

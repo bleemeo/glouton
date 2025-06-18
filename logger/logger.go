@@ -123,6 +123,7 @@ var (
 	logBuffer          = &buffer{}
 	logCurrLevelBuffer = &buffer{} // buffer for current level of logs
 	cfg                = config{
+		level:     1, // useful for tests; will be overridden during normal runs
 		writer:    os.Stdout,
 		teeWriter: io.MultiWriter(logBuffer, logCurrLevelBuffer, os.Stdout),
 	}
@@ -233,7 +234,7 @@ func SetPkgLevels(levels string) {
 	cfg.pkgLevels = pkgLevels
 }
 
-// GoKitLoggerWrapper wraps a logger objet and can be used wherever a go-kit compatible logger is expected.
+// GoKitLoggerWrapper wraps a logger object and can be used wherever a go-kit compatible logger is expected.
 type GoKitLoggerWrapper Logger
 
 // Log implements the go-kit/log.Logger interface.

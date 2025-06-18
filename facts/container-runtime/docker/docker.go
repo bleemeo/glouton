@@ -44,6 +44,7 @@ import (
 	"github.com/docker/docker/api/types/common"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	docker "github.com/docker/docker/client"
 	"github.com/docker/docker/errdefs"
@@ -58,6 +59,7 @@ var (
 	ErrDockerUnexcepted = errors.New("unexcepted data")
 	errUnknownFormat    = errors.New("unknown pstime format")
 	errNilJSON          = errors.New("ContainerJSONBase is nil. Assume container is deleted")
+	errNoImageTagsFound = errors.New("no tags found")
 )
 
 // dockerTimeout is the time limit for requests made by the docker client.
@@ -446,6 +448,33 @@ func (d *Docker) IsContainerNameRecentlyDeleted(name string) bool {
 	_, ok := d.lastDestroyedName[name]
 
 	return ok
+}
+
+func (d *Docker) ImageTags(ctx context.Context, imageID, _ string) ([]string, error) {
+	d.l.Lock()
+	defer d.l.Unlock()
+
+	img, err := d.client.ImageInspect(ctx, imageID)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(img.RepoTags) == 0 {
+		return nil, fmt.Errorf("%w on image %s", errNoImageTagsFound, imageID)
+	}
+
+	tags := make([]string, len(img.RepoTags))
+
+	for i, tag := range img.RepoTags {
+		tagSplit := strings.SplitN(tag, ":", 2)
+		if len(tagSplit) == 1 {
+			tags[i] = "latest"
+		} else {
+			tags[i] = tagSplit[1]
+		}
+	}
+
+	return tags, nil
 }
 
 // similar to getClient but also check that connection works.
@@ -850,6 +879,7 @@ type dockerClient interface {
 	ContainerList(ctx context.Context, options container.ListOptions) ([]container.Summary, error)
 	ContainerTop(ctx context.Context, container string, arguments []string) (container.TopResponse, error)
 	Events(ctx context.Context, options events.ListOptions) (<-chan events.Message, <-chan error)
+	ImageInspect(ctx context.Context, imageID string, inspectOpts ...docker.ImageInspectOption) (image.InspectResponse, error)
 	NetworkInspect(ctx context.Context, network string, options network.InspectOptions) (network.Inspect, error)
 	NetworkList(ctx context.Context, options network.ListOptions) ([]network.Summary, error)
 	Ping(ctx context.Context) (dockerTypes.Ping, error)

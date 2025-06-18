@@ -149,7 +149,7 @@ func (rs *reloadState) Close() {
 			cause = "Auto upgrade"
 		}
 
-		if err := rs.mqtt.Publish(fmt.Sprintf("v1/agent/%s/disconnect", rs.agentID), disconnectCause{cause}, false); err != nil {
+		if err := rs.mqtt.PublishAsJSON(fmt.Sprintf("v1/agent/%s/disconnect", rs.agentID), disconnectCause{cause}, false); err != nil {
 			logger.V(1).Printf("Unable to publish on disconnect topic: %v", err)
 		}
 

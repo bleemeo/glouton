@@ -43,7 +43,6 @@ const (
 	// If we stayed connected to MQTT for more stableConnection, the connection is considered stable,
 	// and we won't wait long to reconnect in case of a disconnection.
 	stableConnection    = 5 * time.Minute
-	maxPayloadSize      = 1024 * 1024
 	maxDelayWithoutPing = 90 * time.Second
 )
 
@@ -146,27 +145,45 @@ func (c *Client) setupMQTT(ctx context.Context) (paho.Client, error) {
 	return paho.NewClient(opts), err
 }
 
-// Publish sends the payload to MQTT on the given topic.
+// PublishAsJSON sends the payload to MQTT on the given topic after encoding it as JSON.
 // If retry is set to true and MQTT is currently unreachable, the client will
 // retry to send the message later, else it will be dropped.
-func (c *Client) Publish(topic string, payload any, retry bool) error {
-	payloadBuffer, err := c.encoder.Encode(payload)
+func (c *Client) PublishAsJSON(topic string, payload any, retry bool) error {
+	payloadBuffer, err := c.encoder.EncodeObject(payload)
 	if err != nil {
 		c.encoder.PutBuffer(payloadBuffer)
 
 		return err
 	}
 
-	if len(payloadBuffer) > maxPayloadSize {
+	return c.publishWrapper(context.Background(), topic, payloadBuffer, retry)
+}
+
+// PublishBytes sends the payload to MQTT on the given topic.
+// If retry is set to true and MQTT is currently unreachable, the client will
+// retry to send the message later, else it will be dropped.
+func (c *Client) PublishBytes(ctx context.Context, topic string, payload []byte, retry bool) error {
+	payloadBuffer, err := c.encoder.EncodeBytes(payload)
+	if err != nil {
 		c.encoder.PutBuffer(payloadBuffer)
 
-		return fmt.Errorf("%w: size is %d which is > %d", ErrPayloadTooLarge, len(payloadBuffer), maxPayloadSize)
+		return err
+	}
+
+	return c.publishWrapper(ctx, topic, payloadBuffer, retry)
+}
+
+func (c *Client) publishWrapper(ctx context.Context, topic string, payloadBuffer []byte, retry bool) error {
+	if len(payloadBuffer) > types.MaxMQTTPayloadSize {
+		c.encoder.PutBuffer(payloadBuffer)
+
+		return fmt.Errorf("%w: size is %d which is > %d", ErrPayloadTooLarge, len(payloadBuffer), types.MaxMQTTPayloadSize)
 	}
 
 	msg, ok := c.publish(topic, payloadBuffer, retry)
 
 	if ok {
-		c.opts.ReloadState.AddPendingMessage(context.Background(), msg, true)
+		c.opts.ReloadState.AddPendingMessage(ctx, msg, true)
 	} else {
 		c.encoder.PutBuffer(payloadBuffer)
 	}
@@ -402,9 +419,9 @@ func (c *Client) ackOne(msg types.Message, timeout time.Duration) error {
 	var err error
 
 	// The token is nil when publishing failed.
-	shouldWaitAgain := false
+	shouldWaitForACKAgain := false
 	if msg.Token != nil {
-		shouldWaitAgain = !msg.Token.WaitTimeout(timeout)
+		shouldWaitForACKAgain = !msg.Token.WaitTimeout(timeout)
 
 		err = msg.Token.Error()
 		if err != nil {
@@ -431,7 +448,7 @@ func (c *Client) ackOne(msg types.Message, timeout time.Duration) error {
 		publishFailed := mqtt == nil || msg.Token.Error() != nil
 
 		// The Token will be awaited later.
-		shouldWaitAgain = true
+		shouldWaitForACKAgain = true
 
 		// It's possible for Publish to return instantly with an error,
 		// in this case we need to wait a bit to avoid consuming too much resources.
@@ -442,7 +459,7 @@ func (c *Client) ackOne(msg types.Message, timeout time.Duration) error {
 		}
 	}
 
-	if shouldWaitAgain {
+	if shouldWaitForACKAgain { // Note: we don't care about the context here: we won't wait anyway.
 		ok := c.opts.ReloadState.AddPendingMessage(context.Background(), msg, false)
 
 		if !ok {

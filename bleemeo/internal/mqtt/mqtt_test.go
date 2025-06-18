@@ -27,9 +27,8 @@ import (
 	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/agent/state"
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
-	"github.com/bleemeo/glouton/types"
-
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/types"
 )
 
 func TestFailedPointsCache(t *testing.T) {
@@ -101,7 +100,7 @@ type mockMQTTClient struct {
 	publishedPoints []metricPayload
 }
 
-func (m *mockMQTTClient) Publish(topic string, payload any, retry bool) error {
+func (m *mockMQTTClient) PublishAsJSON(topic string, payload any, retry bool) error {
 	_ = topic
 	_ = retry
 
@@ -114,6 +113,15 @@ func (m *mockMQTTClient) Publish(topic string, payload any, retry bool) error {
 	m.publishedPoints = append(m.publishedPoints, metrics...)
 
 	return nil
+}
+
+func (m *mockMQTTClient) PublishBytes(ctx context.Context, topic string, payload []byte, retry bool) error {
+	_ = ctx
+	_ = topic
+	_ = retry
+	_ = payload
+
+	return fmt.Errorf("%w: Payload is not a list of metrics", errors.ErrUnsupported)
 }
 
 func (*mockMQTTClient) Run(context.Context)    {}

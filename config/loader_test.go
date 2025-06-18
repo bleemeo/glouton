@@ -188,6 +188,8 @@ func TestLoader(t *testing.T) {
 					"jmx_username":        "",
 					"key_file":            "",
 					"username":            "",
+					"log_files":           []any{},
+					"log_format":          "",
 				},
 			},
 			Type:     TypeServices,

@@ -29,6 +29,13 @@ import (
 	"github.com/prometheus/common/config"
 )
 
+func compareConfig(expected, got Config, opts ...cmp.Option) string {
+	ignoreUnexported := cmpopts.IgnoreUnexported(bbConf.Module{}.HTTP.HTTPClientConfig.ProxyConfig)
+	opts = append(opts, ignoreUnexported)
+
+	return cmp.Diff(expected, got, opts...)
+}
+
 // TestStructuredConfig tests loading the full configuration file.
 func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 	expectedConfig := Config{
@@ -192,6 +199,49 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
+			OpenTelemetry: OpenTelemetry{
+				Enable:        true,
+				AutoDiscovery: true,
+				GRPC: EnableListener{
+					Enable:  true,
+					Address: "localhost",
+					Port:    4317,
+				},
+				HTTP: EnableListener{
+					Enable:  true,
+					Address: "localhost",
+					Port:    4318,
+				},
+				KnownLogFormats: map[string][]OTELOperator{
+					"format-1": {
+						{
+							"type":  "add",
+							"field": "resource['service.name']",
+							"value": "apache_server",
+						},
+					},
+					"app_format": {
+						{
+							"type": "noop",
+						},
+					},
+				},
+				Receivers: map[string]OTLPReceiver{
+					"filelog/recv": {
+						Include: []string{"/var/log/apache/access.log", "/var/log/apache/error.log"},
+						Operators: []map[string]any{
+							{
+								"type":  "add",
+								"field": "resource['service.name']",
+								"value": "apache_server",
+							},
+						},
+					},
+				},
+				ContainerFormat: map[string]string{
+					"ctr-1": "format-1",
+				},
+			},
 		},
 		Logging: Logging{
 			Buffer: LoggingBuffer{
@@ -307,6 +357,13 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				KeyFile:       "/mykey.pem",
 				IncludedItems: []string{"included"},
 				ExcludedItems: []string{"excluded"},
+				LogFiles: []ServiceLogFile{
+					{
+						FilePath:  "/var/log/app.log",
+						LogFormat: "app_format",
+					},
+				},
+				LogFormat: "nginx_both",
 			},
 		},
 		ServiceAbsentDeactivationDelay: 7 * 24 * time.Hour,
@@ -432,13 +489,6 @@ func TestOverrideDefault(t *testing.T) {
 	if diff := compareConfig(expectedConfig, config); diff != "" {
 		t.Fatalf("Default value modified:\n%s", diff)
 	}
-}
-
-func compareConfig(expected, got Config, opts ...cmp.Option) string {
-	ignoreUnexported := cmpopts.IgnoreUnexported(bbConf.Module{}.HTTP.HTTPClientConfig.ProxyConfig)
-	opts = append(opts, ignoreUnexported)
-
-	return cmp.Diff(expected, got, opts...)
 }
 
 // TestMergeWithDefault tests that the config files and the environment variables

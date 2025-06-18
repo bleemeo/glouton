@@ -179,7 +179,7 @@ func (m *MQTT) sendPoints() {
 			end = len(payload)
 		}
 
-		if err := m.client.Publish(fmt.Sprintf("v1/agent/%s/data", m.opts.FQDN), payload[i:end], true); err != nil {
+		if err := m.client.PublishAsJSON(fmt.Sprintf("v1/agent/%s/data", m.opts.FQDN), payload[i:end], true); err != nil {
 			logger.V(1).Printf("Unable to publish points: %v", err)
 		}
 	}

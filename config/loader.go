@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"reflect"
 	"strings"
@@ -224,7 +225,7 @@ func itemTypeFromValue(key string, value any) ItemType {
 		return TypeLogInputs
 	}
 
-	logger.V(1).Printf("Unsupported item type %T", value)
+	logger.V(1).Printf("Unsupported item type %T (key %q)", value, key)
 
 	return TypeAny
 }
@@ -423,6 +424,8 @@ func (c *configLoader) Build() (*koanf.Koanf, prometheus.MultiError) {
 		}
 	}
 
+	warnings.Append(mergeKnownLogFormats(config))
+
 	k := koanf.New(delimiter)
 	err := k.Load(confmap.Provider(config, delimiter), nil)
 	warnings.Append(err)
@@ -454,4 +457,54 @@ func merge(dst any, src any) (any, error) {
 	default:
 		return nil, fmt.Errorf("%w: unsupported type %T", errCannotMerge, dst)
 	}
+}
+
+// mergeKnownLogFormats seeks for all items like log.opentelemetry.known_log_formats.*,
+// and merge them into the log.opentelemetry.known_log_formats map.
+func mergeKnownLogFormats(config map[string]any) error {
+	var (
+		topMap        map[string][]OTELOperator
+		detachedItems = make(map[string][]OTELOperator)
+	)
+
+	for key, item := range config {
+		if key == "log.opentelemetry.known_log_formats" {
+			err := mapstructure.Decode(item, &topMap)
+			if err != nil {
+				return fmt.Errorf("merging known log formats: failed to decode %T into %T: %w", item, topMap, err)
+			}
+		} else if strings.HasPrefix(key, "log.opentelemetry.known_log_formats.") {
+			formatName := strings.TrimPrefix(key, "log.opentelemetry.known_log_formats.")
+			if strings.Contains(formatName, delimiter) {
+				logger.V(1).Printf("Unexpected config item %q", key)
+
+				continue
+			}
+
+			var operators []OTELOperator
+
+			err := mapstructure.Decode(item, &operators)
+			if err != nil {
+				return fmt.Errorf("merging known log formats: failed to decode %T into %T: %w", item, operators, err)
+			}
+
+			detachedItems[formatName] = operators
+
+			delete(config, key)
+		}
+	}
+
+	if len(detachedItems) == 0 {
+		return nil
+	}
+
+	if topMap == nil {
+		topMap = detachedItems
+	} else {
+		maps.Insert(topMap, maps.All(detachedItems))
+	}
+
+	config["log.opentelemetry.known_log_formats"] = topMap
+
+	return nil
 }

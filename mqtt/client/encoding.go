@@ -21,6 +21,7 @@ import (
 	"compress/zlib"
 	"encoding/json"
 	"io"
+	"os"
 	"sync"
 )
 
@@ -31,7 +32,7 @@ type encoder struct {
 }
 
 // Encode is thread-safe.
-func (e *encoder) Encode(obj any) ([]byte, error) {
+func (e *encoder) EncodeObject(obj any) ([]byte, error) {
 	backingBuffer := e.getBuffer()
 	buffer := bytes.NewBuffer(backingBuffer)
 
@@ -47,6 +48,36 @@ func (e *encoder) Encode(obj any) ([]byte, error) {
 	err := json.NewEncoder(e.zlibWriter).Encode(obj)
 	if err != nil {
 		return buffer.Bytes(), err
+	}
+
+	err = e.zlibWriter.Close()
+	if err != nil {
+		return buffer.Bytes(), err
+	}
+
+	return buffer.Bytes(), nil
+}
+
+func (e *encoder) EncodeBytes(payload []byte) ([]byte, error) {
+	backingBuffer := e.getBuffer()
+	buffer := bytes.NewBuffer(backingBuffer)
+
+	e.l.Lock()
+	defer e.l.Unlock()
+
+	if e.zlibWriter == nil {
+		e.zlibWriter = zlib.NewWriter(buffer)
+	} else {
+		e.zlibWriter.Reset(buffer)
+	}
+
+	n, err := e.zlibWriter.Write(payload)
+	if err != nil {
+		return buffer.Bytes(), err
+	}
+
+	if n != len(payload) {
+		return buffer.Bytes(), os.ErrClosed
 	}
 
 	err = e.zlibWriter.Close()

@@ -604,6 +604,17 @@ func (c *Containerd) ContainerLastKill(containerID string) time.Time {
 	return time.Time{}
 }
 
+func (c *Containerd) ImageTags(_ context.Context, _, imageName string) ([]string, error) {
+	// containerd doesn't have the concept of image ID,
+	// so the tag is simply deduced from the image ref.
+	nameSplit := strings.SplitN(imageName, ":", 2)
+	if len(nameSplit) < 2 {
+		return []string{"latest"}, nil
+	}
+
+	return []string{nameSplit[1]}, nil
+}
+
 func (c *Containerd) run(ctx context.Context) error {
 	c.l.Lock()
 
@@ -1136,7 +1147,7 @@ func (c containerObject) ListenAddresses() []facts.ListenAddress {
 }
 
 func (c containerObject) LogPath() string {
-	return ""
+	return fmt.Sprintf("/var/log/pods/%s.log", c.ID()) // FIXME
 }
 
 func (c containerObject) PodName() string {

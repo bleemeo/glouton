@@ -365,6 +365,23 @@ func (r *Runtime) MetricsMinute(ctx context.Context, now time.Time) ([]types.Met
 	return points, fixMultiError(errors)
 }
 
+func (r *Runtime) ImageTags(ctx context.Context, imageID, imageName string) ([]string, error) {
+	var lastErr error
+
+	for _, runtime := range r.Runtimes {
+		tags, err := runtime.ImageTags(ctx, imageID, imageName)
+		if err != nil {
+			lastErr = err
+
+			continue
+		}
+
+		return tags, nil
+	}
+
+	return nil, lastErr
+}
+
 type mergeProcessQuerier struct {
 	r        *Runtime
 	queriers []facts.ContainerRuntimeProcessQuerier

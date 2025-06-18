@@ -68,6 +68,7 @@ import (
 	"github.com/bleemeo/glouton/mqtt"
 	"github.com/bleemeo/glouton/mqtt/client"
 	"github.com/bleemeo/glouton/nrpe"
+	"github.com/bleemeo/glouton/otel/logprocessing"
 	"github.com/bleemeo/glouton/prometheus/exporter/blackbox"
 	"github.com/bleemeo/glouton/prometheus/exporter/ipmi"
 	"github.com/bleemeo/glouton/prometheus/exporter/snmp"
@@ -165,6 +166,7 @@ type agent struct {
 	pahoLogWrapper         *client.LogWrapper
 	fluentbitManager       *fluentbit.Manager
 	vSphereManager         *vsphere.Manager
+	logProcessManager      *logprocessing.Manager
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -711,6 +713,12 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	if a.config.Container.Type != "" {
 		a.hostRootPath = a.config.DF.HostMountPoint
+		// Removing potential trailing slash from hostroot path
+		if len(a.hostRootPath) > len(string(os.PathSeparator)) {
+			// Yes, len(string(os.PathSeparator)) == 1, but it's more understandable like this.
+			a.hostRootPath = strings.TrimSuffix(a.hostRootPath, string(os.PathSeparator))
+		}
+
 		setupContainer(a.hostRootPath)
 	}
 
@@ -972,6 +980,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.containerFilter.ContainerIgnored,
 		psFact,
 		a.config.ServiceAbsentDeactivationDelay,
+		a.config.Log.OpenTelemetry,
 	)
 	if warnings != nil {
 		a.addWarnings(warnings...)
@@ -1107,6 +1116,23 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.l.Lock()
 		a.bleemeoConnector = connector
 		a.l.Unlock()
+
+		if a.config.Log.OpenTelemetry.Enable {
+			a.logProcessManager, err = logprocessing.New(
+				ctx,
+				a.config.Log.OpenTelemetry,
+				a.hostRootPath,
+				a.state,
+				a.commandRunner,
+				a.containerRuntime,
+				connector.PushLogs,
+				connector.ShouldApplyLogBackPressure,
+				a.addWarnings,
+			)
+			if err != nil {
+				logger.Printf("unable to setup log processing: %v", err)
+			}
+		}
 
 		a.gathererRegistry.UpdateRegistrationHooks(a.bleemeoConnector.RelabelHook, a.bleemeoConnector.UpdateDelayHook)
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
@@ -1992,6 +2018,15 @@ func (a *agent) updatedDiscovery(ctx context.Context, services []discovery.Servi
 	if err != nil {
 		logger.V(2).Printf("Error during dynamic Filter rebuild: %v", err)
 	}
+
+	if a.logProcessManager != nil {
+		containers, err := a.containerRuntime.Containers(ctx, time.Hour, false)
+		if err != nil {
+			logger.V(1).Printf("Failed to retrieve containers: %v", err)
+		}
+
+		a.logProcessManager.HandleLogsFromDynamicSources(ctx, services, containers)
+	}
 }
 
 func (a *agent) handleTrigger(ctx context.Context) {
@@ -2229,6 +2264,10 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 
 	if a.fluentbitManager != nil {
 		modules = append(modules, a.fluentbitManager.DiagnosticArchive)
+	}
+
+	if a.logProcessManager != nil {
+		modules = append(modules, a.logProcessManager.DiagnosticArchive)
 	}
 
 	for _, f := range modules {

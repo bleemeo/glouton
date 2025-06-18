@@ -71,7 +71,7 @@ func TestTopinfoEncoding(t *testing.T) {
 			t.Run(name, func(t *testing.T) {
 				var decoded facts.TopInfo
 
-				encoded, err := enc.Encode(value)
+				encoded, err := enc.EncodeObject(value)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -102,7 +102,7 @@ func BenchmarkTopinfoEncoding(b *testing.B) {
 	b.ResetTimer()
 
 	for b.Loop() {
-		result, err := enc.Encode(topinfo)
+		result, err := enc.EncodeObject(topinfo)
 		if err != nil {
 			b.Error(err)
 		}
@@ -115,7 +115,7 @@ func BenchmarkTopinfoDecoding(b *testing.B) {
 	topinfo := getTopinfo()
 	enc := &encoder{}
 
-	encoded, err := enc.Encode(topinfo)
+	encoded, err := enc.EncodeObject(topinfo)
 	if err != nil {
 		b.Fatal(err)
 	}
