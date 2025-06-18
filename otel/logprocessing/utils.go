@@ -19,6 +19,7 @@ package logprocessing
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -36,14 +37,24 @@ import (
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/plog"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 const (
 	logFileSizesCacheKey    = "LogFileSizes"
 	logFileMetadataCacheKey = "LogFileMetadata"
+)
+
+var (
+	errUnknownField  = errors.New("some unknown field(s) were found")
+	errIncludeNotStr = errors.New("include value must be a string")
+	errIsUnknown     = errors.New("is unknown")
+	errIsRecursive   = errors.New("is recursive")
 )
 
 type fileSizer interface {
@@ -127,6 +138,18 @@ func validateContainerOperators(containerOps map[string]string, opsConfigs map[s
 	return containerOps
 }
 
+func validateContainerFilters(containerFilter map[string]string, filtersConfigs map[string]config.OTELFilters) map[string]string {
+	for ctrName, filterName := range containerFilter {
+		if filtersConfigs[filterName] == nil {
+			logger.V(1).Printf("Container %q requires the log processing filter %q, which is not defined", ctrName, filterName)
+
+			delete(containerFilter, ctrName)
+		}
+	}
+
+	return containerFilter
+}
+
 // shutdownAll stops all the given components (in reverse order).
 // It should be called before every unsuccessful return of the log pipeline initialization.
 func shutdownAll(components []component.Component) {
@@ -170,6 +193,100 @@ func logWarnings(errs ...error) {
 	logger.V(1).Printf("Log processing warning: %v", errs)
 }
 
+// withoutDebugLogs increases the level of the logger to "info", so as to avoid debug logs
+// (especially those from the ottl package, which occur for each record going through the component).
+func withoutDebugLogs(telSet component.TelemetrySettings) component.TelemetrySettings {
+	telSet.Logger = telSet.Logger.WithOptions(zap.IncreaseLevel(zapcore.InfoLevel))
+
+	return telSet
+}
+
+func buildLogFilterConfig(filtersCfg config.OTELFilters) (*filterprocessor.Config, error, error) {
+	var filterProcCfg filterprocessor.Config
+
+	if len(filtersCfg) == 0 {
+		return &filterProcCfg, nil, nil
+	}
+
+	var decoderMeta mapstructure.Metadata
+
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		Metadata: &decoderMeta,
+		Result:   &filterProcCfg.Logs,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("initializing decoder: %w", err) //nolint: nilnil
+	}
+
+	err = decoder.Decode(filtersCfg)
+	if err != nil {
+		return nil, nil, err //nolint: nilnil
+	}
+
+	var warning error
+
+	if len(decoderMeta.Unused) != 0 {
+		warning = fmt.Errorf("%w: %s", errUnknownField, strings.Join(decoderMeta.Unused, ", "))
+	}
+
+	return &filterProcCfg, warning, filterProcCfg.Validate()
+}
+
+//nolint: godot,gofmt,gofumpt,goimports
+//
+// expandOperators replaces 'template' operators with the well-known format they reference.
+// These 'template' operators must define a single "include" key, like so:
+//
+// {
+// 	   "include": "some-format"
+// }
+func expandOperators(ops []config.OTELOperator, knownIncludes map[string][]config.OTELOperator, denyRecursiveInclude bool) ([]config.OTELOperator, error) {
+	result := make([]config.OTELOperator, 0, len(ops))
+
+	for _, rawOp := range ops {
+		if include, ok := rawOp["include"]; ok && len(rawOp) == 1 {
+			includeStr, ok := include.(string)
+			if !ok {
+				return nil, fmt.Errorf("%w, not %T", errIncludeNotStr, include)
+			}
+
+			included, ok := knownIncludes[includeStr]
+			if !ok {
+				return nil, fmt.Errorf("include reference %q %w", includeStr, errIsUnknown)
+			}
+
+			if denyRecursiveInclude {
+				for _, op := range included {
+					if _, hasInclude := op["include"]; hasInclude {
+						return nil, fmt.Errorf("include reference %q %w", includeStr, errIsRecursive)
+					}
+				}
+			}
+
+			result = append(result, included...)
+		} else {
+			result = append(result, rawOp)
+		}
+	}
+
+	return result, nil
+}
+
+func expandLogFormats(formats map[string][]config.OTELOperator) (map[string][]config.OTELOperator, error) {
+	result := make(map[string][]config.OTELOperator, len(formats))
+
+	var err error
+
+	for format, ops := range formats {
+		result[format], err = expandOperators(ops, formats, true)
+		if err != nil {
+			return nil, fmt.Errorf("%q: %w", format, err)
+		}
+	}
+
+	return result, nil
+}
+
 func shouldUnmarshalYAMLToMapstructure(t reflect.Type) bool {
 	const otelPackagePrefix = "github.com/open-telemetry/opentelemetry-collector-contrib/"
 
@@ -209,7 +326,7 @@ func unmarshalMapstructureHook(from reflect.Value, to reflect.Value) (any, error
 			decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 				Result: v,
 				// We aim to align the decoding behavior with opentelemetry-collector:
-				// https://github.com/open-telemetry/opentelemetry-collector/blob/8cf42f3cf789bceca4149180737ac9a5b26684e8/confmap/confmap.go#L221
+				// https://github.com/open-telemetry/opentelemetry-collector/blob/ac7c0f2f4cd8fa05ccc7def96e997eabc2c44f33/confmap/confmap.go#L226
 				DecodeHook: mapstructure.ComposeDecodeHookFunc(
 					mapstructure.StringToSliceHookFunc(","),
 					mapstructure.StringToTimeDurationHookFunc(),
@@ -229,18 +346,18 @@ func unmarshalMapstructureHook(from reflect.Value, to reflect.Value) (any, error
 		return to.Interface(), nil
 	}
 
-	return from.Interface(), nil // returning the data as-is
+	return from.Interface(), nil // return the data as-is
 }
 
 func buildOperators(rawOperators []config.OTELOperator) ([]operator.Config, error) {
-	var operators []operator.Config
+	operators := make([]operator.Config, 0, len(rawOperators))
 
 	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 		Result:     &operators,
 		DecodeHook: unmarshalMapstructureHook,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("error creating decoder: %w", err)
+		return nil, fmt.Errorf("creating decoder: %w", err)
 	}
 
 	err = decoder.Decode(rawOperators)
@@ -251,7 +368,7 @@ func buildOperators(rawOperators []config.OTELOperator) ([]operator.Config, erro
 	return operators, nil
 }
 
-func wrapWithCounters(next consumer.Logs, counter *atomic.Int64, throughputMeter *ringCounter) consumer.Logs {
+func wrapWithInstrumentation(next consumer.Logs, counter *atomic.Int64, throughputMeter *ringCounter) consumer.Logs {
 	logCounter, err := consumer.NewLogs(func(ctx context.Context, ld plog.Logs) error {
 		count := ld.LogRecordCount()
 		counter.Add(int64(count))
@@ -313,15 +430,15 @@ type containerDiagnosticInformation struct {
 }
 
 type diagnosticInformation struct {
-	LogProcessedCount             int64
-	LogThroughputPerMinute        int
-	PushErrorsThroughputPerMinute int
-	ProcessingStatus              string
-	OTLPReceiver                  *otlpReceiverDiagnosticInformation
-	Receivers                     map[string]receiverDiagnosticInformation
-	ContainerReceivers            map[string]containerDiagnosticInformation
-	WatchedServices               map[string][]receiverDiagnosticInformation
-	KnownLogFormats               map[string][]config.OTELOperator
+	LogProcessedCount      int64
+	LogThroughputPerMinute int
+	ProcessingStatus       string
+	OTLPReceiver           *otlpReceiverDiagnosticInformation
+	Receivers              map[string]receiverDiagnosticInformation
+	ContainerReceivers     map[string]containerDiagnosticInformation
+	WatchedServices        map[string][]receiverDiagnosticInformation
+	KnownLogFormats        map[string][]config.OTELOperator
+	KnownLogFilters        map[string]config.OTELFilters
 }
 
 func (diagInfo diagnosticInformation) writeToArchive(writer types.ArchiveWriter) error {

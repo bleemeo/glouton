@@ -130,7 +130,7 @@ func New(
 		discoveredServicesMap[key] = v
 	}
 
-	servicesOverrideMap, warnings := validateServices(servicesOverride)
+	servicesOverrideMap, warnings := validateServices(servicesOverride, logProcessingCfg)
 
 	discovery := &Discovery{
 		dynamicDiscovery:               dynamicDiscovery,
@@ -157,7 +157,7 @@ func New(
 
 // validateServices validates the service config.
 // It returns the services as a map and some warnings.
-func validateServices(services []config.Service) (map[NameInstance]config.Service, prometheus.MultiError) {
+func validateServices(services []config.Service, logProcessingCfg config.OpenTelemetry) (map[NameInstance]config.Service, prometheus.MultiError) {
 	var warnings prometheus.MultiError
 
 	serviceMap := make(map[NameInstance]config.Service, len(services))
@@ -232,6 +232,17 @@ func validateServices(services []config.Service) (map[NameInstance]config.Servic
 			}
 
 			warnings.Append(fmt.Errorf("%w: %s", config.ErrInvalidValue, warning))
+		}
+
+		if logProcessingCfg.Enable && logProcessingCfg.AutoDiscovery {
+			warns := validateServiceLogConfig(srv, logProcessingCfg.KnownLogFormats, logProcessingCfg.KnownLogFilters)
+			for _, warn := range warns {
+				if srv.Instance != "" {
+					warnings.Append(fmt.Errorf("%w: service '%s'/'%s': %w", config.ErrInvalidValue, srv.Type, srv.Instance, warn))
+				} else {
+					warnings.Append(fmt.Errorf("%w: service '%s': %w", config.ErrInvalidValue, srv.Type, warn))
+				}
+			}
 		}
 
 		serviceMap[key] = srv
@@ -660,7 +671,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) (time.Ti
 
 	if d.logProcessingCfg.Enable && d.logProcessingCfg.AutoDiscovery {
 		for key, service := range d.servicesMap {
-			d.servicesMap[key] = inferLogProcessingConfig(service, d.logProcessingCfg.KnownLogFormats)
+			d.servicesMap[key] = inferLogProcessingConfig(service, d.logProcessingCfg.KnownLogFormats, d.logProcessingCfg.KnownLogFilters)
 		}
 	}
 

@@ -43,6 +43,9 @@ func mapKeys() []string {
 		"thresholds",
 		"metric.softstatus_period",
 		"log.opentelemetry.receivers",
+		"log.opentelemetry.global_filters",
+		"log.opentelemetry.known_log_filters",
+		"log.opentelemetry.container_filter",
 	}
 }
 
@@ -253,21 +256,24 @@ func DefaultConfig() Config { //nolint:maintidx
 			HostRootPrefix: "/hostroot",
 			Inputs:         []LogInput{},
 			OpenTelemetry: OpenTelemetry{
-				Enable:        false,
-				AutoDiscovery: true,
+				Enable:        true,
+				AutoDiscovery: false,
 				GRPC: EnableListener{
-					Enable:  true,
+					Enable:  false,
 					Address: "localhost",
 					Port:    4317,
 				},
 				HTTP: EnableListener{
-					Enable:  true,
+					Enable:  false,
 					Address: "localhost",
 					Port:    4318,
 				},
 				KnownLogFormats: DefaultKnownLogFormats(),
 				Receivers:       map[string]OTLPReceiver{},
 				ContainerFormat: map[string]string{},
+				GlobalFilters:   OTELFilters{},
+				KnownLogFilters: map[string]OTELFilters{},
+				ContainerFilter: map[string]string{},
 			},
 		},
 		Logging: Logging{

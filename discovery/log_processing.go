@@ -17,6 +17,8 @@
 package discovery
 
 import (
+	"fmt"
+
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/logger"
 )
@@ -30,15 +32,27 @@ type logProcessingInfo struct {
 var servicesLogInfo = map[ServiceName]logProcessingInfo{ //nolint: gochecknoglobals
 	ApacheService: {
 		FileFormats: []ServiceLogReceiver{
-			{"/var/log/apache2/access.log", "apache_access"},
-			{"/var/log/apache2/error.log", "apache_error"},
+			{
+				FilePath: "/var/log/apache2/access.log",
+				Format:   "apache_access",
+			},
+			{
+				FilePath: "/var/log/apache2/error.log",
+				Format:   "apache_error",
+			},
 		},
 		DockerFormat: "apache_both",
 	},
 	NginxService: {
 		FileFormats: []ServiceLogReceiver{
-			{"/var/log/nginx/access.log", "nginx_access"},
-			{"/var/log/nginx/error.log", "nginx_error"},
+			{
+				FilePath: "/var/log/nginx/access.log",
+				Format:   "nginx_access",
+			},
+			{
+				FilePath: "/var/log/nginx/error.log",
+				Format:   "nginx_error",
+			},
 		},
 		DockerFormat: "nginx_both",
 	},
@@ -51,10 +65,23 @@ var servicesLogInfo = map[ServiceName]logProcessingInfo{ //nolint: gochecknoglob
 	},
 	RedisService: {
 		FileFormats: []ServiceLogReceiver{
-			{"/var/log/redis/redis-server.log", "redis"},
+			{
+				FilePath: "/var/log/redis/redis-server.log",
+				Format:   "redis",
+			},
 		},
 		DefaultFormat: "redis",
 		DockerFormat:  "redis_docker",
+	},
+	ValkeyService: {
+		FileFormats: []ServiceLogReceiver{
+			{
+				FilePath: "/var/log/valkey/valkey-server.log",
+				Format:   "valkey",
+			},
+		},
+		DefaultFormat: "valkey",
+		DockerFormat:  "valkey_docker",
 	},
 	HAProxyService: {
 		FileFormats: []ServiceLogReceiver{
@@ -65,14 +92,20 @@ var servicesLogInfo = map[ServiceName]logProcessingInfo{ //nolint: gochecknoglob
 	},
 	PostgreSQLService: {
 		FileFormats: []ServiceLogReceiver{
-			{"/var/log/postgresql/postgresql-*-main.log", "postgresql"},
+			{
+				FilePath: "/var/log/postgresql/postgresql-*-main.log",
+				Format:   "postgresql",
+			},
 		},
 		DefaultFormat: "postgresql",
 		DockerFormat:  "postgresql_docker",
 	},
 	MySQLService: {
 		FileFormats: []ServiceLogReceiver{
-			{"/var/log/mysql/error.log", "mysql"},
+			{
+				FilePath: "/var/log/mysql/error.log",
+				Format:   "mysql",
+			},
 		},
 		DefaultFormat: "mysql",
 		DockerFormat:  "mysql_docker",
@@ -96,9 +129,10 @@ var servicesLogInfo = map[ServiceName]logProcessingInfo{ //nolint: gochecknoglob
 type ServiceLogReceiver struct {
 	FilePath string // ignored if in a container
 	Format   string
+	Filter   string
 }
 
-func inferLogProcessingConfig(service Service, knownLogFormats map[string][]config.OTELOperator) Service {
+func inferLogProcessingConfig(service Service, knownLogFormats map[string][]config.OTELOperator, knownLogFilters map[string]config.OTELFilters) Service {
 	switch {
 	case len(service.Config.LogFiles) > 0:
 		if service.container != nil {
@@ -132,9 +166,24 @@ func inferLogProcessingConfig(service Service, knownLogFormats map[string][]conf
 				logFormat = servicesLogInfo[service.ServiceType].DefaultFormat
 			}
 
+			logFilter := logFile.LogFilter
+			if logFilter == "" && service.Config.LogFilter != "" {
+				logFilter = service.Config.LogFilter
+			}
+
+			if logFilter != "" {
+				_, ok := knownLogFilters[logFilter]
+				if !ok {
+					logger.V(1).Printf("Service %q requires an unknown log filter: %q", service.Name, logFilter)
+
+					return service
+				}
+			}
+
 			service.LogProcessing = append(service.LogProcessing, ServiceLogReceiver{
 				FilePath: logFile.FilePath,
 				Format:   logFormat,
+				Filter:   logFilter,
 			})
 		}
 	case service.Config.LogFormat != "":
@@ -151,9 +200,19 @@ func inferLogProcessingConfig(service Service, knownLogFormats map[string][]conf
 			return service
 		}
 
+		if service.Config.LogFilter != "" {
+			_, ok = knownLogFilters[service.Config.LogFilter]
+			if !ok {
+				logger.V(1).Printf("Service %q requires an unknown log filter: %q", service.Name, service.Config.LogFilter)
+
+				return service
+			}
+		}
+
 		service.LogProcessing = []ServiceLogReceiver{
 			{
 				Format: service.Config.LogFormat,
+				Filter: service.Config.LogFilter, // maybe empty
 			},
 		}
 	default:
@@ -178,4 +237,59 @@ func inferLogProcessingConfig(service Service, knownLogFormats map[string][]conf
 	}
 
 	return service
+}
+
+//nolint: err113,gofmt,gofumpt,goimports
+func validateServiceLogConfig(svcCfg config.Service, knownLogFormats map[string][]config.OTELOperator, knownLogFilters map[string]config.OTELFilters) (warnings []error) {
+	if len(svcCfg.LogFiles) > 0 {
+		for i, logFile := range svcCfg.LogFiles {
+			if logFile.FilePath == "" {
+				warnings = append(warnings, fmt.Errorf("no path provided for log file n°%d", i+1))
+
+				continue
+			}
+
+			if svcCfg.LogFormat != "" {
+				_, ok := knownLogFormats[svcCfg.LogFormat]
+				if !ok {
+					warnings = append(warnings, fmt.Errorf("requires an unknown log format %q", svcCfg.LogFormat))
+				}
+			}
+
+			if logFile.LogFormat != "" {
+				_, ok := knownLogFormats[logFile.LogFormat]
+				if !ok {
+					warnings = append(warnings, fmt.Errorf("requires an unknown log format %q", logFile.LogFormat))
+				}
+			}
+
+			if svcCfg.LogFilter != "" {
+				_, ok := knownLogFilters[svcCfg.LogFilter]
+				if !ok {
+					warnings = append(warnings, fmt.Errorf("requires an unknown log filter %q", svcCfg.LogFilter))
+				}
+			}
+
+			if logFile.LogFilter != "" {
+				_, ok := knownLogFilters[logFile.LogFilter]
+				if !ok {
+					warnings = append(warnings, fmt.Errorf("requires an unknown log filter %q", logFile.LogFilter))
+				}
+			}
+		}
+	} else if svcCfg.LogFormat != "" {
+		_, ok := knownLogFormats[svcCfg.LogFormat]
+		if !ok {
+			warnings = append(warnings, fmt.Errorf("requires an unknown log format %q", svcCfg.LogFormat))
+		}
+
+		if svcCfg.LogFilter != "" {
+			_, ok = knownLogFilters[svcCfg.LogFilter]
+			if !ok {
+				warnings = append(warnings, fmt.Errorf("requires an unknown log filter %q", svcCfg.LogFilter))
+			}
+		}
+	}
+
+	return warnings
 }

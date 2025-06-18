@@ -32,6 +32,7 @@ import (
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
 
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/exporter"
@@ -91,15 +92,18 @@ func makePipeline( //nolint:maintidx
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability,
 	persister *persistHost,
 	addWarnings func(...error),
+	knownLogFormats map[string][]config.OTELOperator,
 	lastFileSizes map[string]int64,
 	opts pipelineOptions,
 ) (
-	pipeline *pipelineContext,
+	pipelineCtx *pipelineContext,
 	err error,
 ) { //nolint:wsl
 	// TODO: no logs & metrics at the same time
 
-	pipeline = &pipelineContext{
+	// Avoid using the return parameter 'pipelineCtx' because it will be set to <nil> when returning an error,
+	// and we won't be able to access its fields anymore, e.g., startedComponents in deferred function.
+	pipeline := &pipelineContext{
 		lastFileSizes: lastFileSizes,
 		hostroot:      hostroot,
 		telemetry: component.TelemetrySettings{
@@ -194,7 +198,38 @@ func makePipeline( //nolint:maintidx
 	}
 
 	pipeline.startedComponents = append(pipeline.startedComponents, logBackPressureEnforcer)
-	pipeline.inputConsumer = logBackPressureEnforcer
+
+	factoryFilter := filterprocessor.NewFactory()
+
+	logFilterConfig, warn, err := buildLogFilterConfig(cfg.GlobalFilters)
+	if err != nil {
+		return nil, fmt.Errorf("build log filter config: %w", err)
+	}
+
+	if warn != nil {
+		addWarnings(errorf("Global log filters warning: %w", warn))
+	}
+
+	logFilter, err := factoryFilter.CreateLogs(
+		ctx,
+		processor.Settings{
+			ID:                component.NewIDWithName(factoryFilter.Type(), "log-filter"),
+			TelemetrySettings: withoutDebugLogs(pipeline.telemetry),
+		},
+		logFilterConfig,
+		logBackPressureEnforcer,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("setup log filter: %w", err)
+	}
+
+	if err = logFilter.Start(ctx, nil); err != nil {
+		return nil, fmt.Errorf("start log filter: %w", err)
+	}
+
+	pipeline.startedComponents = append(pipeline.startedComponents, logFilter)
+
+	pipeline.inputConsumer = logFilter
 
 	if cfg.GRPC.Enable || cfg.HTTP.Enable {
 		factoryReceiver := otlpreceiver.NewFactory()
@@ -229,7 +264,7 @@ func makePipeline( //nolint:maintidx
 				TelemetrySettings: pipeline.telemetry,
 			},
 			receiverTypedCfg,
-			wrapWithCounters(pipeline.inputConsumer, pipeline.otlpRecvCounter, pipeline.otlpRecvThroughputMeter),
+			wrapWithInstrumentation(pipeline.inputConsumer, pipeline.otlpRecvCounter, pipeline.otlpRecvThroughputMeter),
 		)
 		if err != nil {
 			logger.V(1).Printf("Failed to setup OTLP receiver: %v", err)
@@ -248,16 +283,20 @@ func makePipeline( //nolint:maintidx
 AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers block
 
 	for name, rcvrCfg := range cfg.Receivers {
-		recv, err := newLogReceiver(name, rcvrCfg, false, pipeline.inputConsumer, cfg.KnownLogFormats)
+		recv, warn, err := newLogReceiver(name, rcvrCfg, false, pipeline.inputConsumer, knownLogFormats)
 		if err != nil {
 			addWarnings(errorf("Failed to setup log receiver %q (ignoring it): %w", name, err))
 
 			continue
 		}
 
+		if warn != nil {
+			addWarnings(errorf("Warning while setting up log receiver %q: %w", name, warn))
+		}
+
 		err = recv.update(ctx, pipeline, addWarnings)
 		if err != nil {
-			logger.V(1).Printf("Failed to start log receiver %q (ignoring it): %v", name, err)
+			addWarnings(errorf("Failed to start log receiver %q (ignoring it): %w", name, err))
 
 			continue
 		}

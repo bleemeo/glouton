@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -43,10 +45,12 @@ type LogSource struct {
 	logFilePath string
 
 	operators []config.OTELOperator
+	filters   config.OTELFilters
 }
 
 type Manager struct {
 	config                     config.OpenTelemetry
+	knownLogFormats            map[string][]config.OTELOperator
 	state                      bleemeoTypes.State
 	crRuntime                  crTypes.RuntimeInterface
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability
@@ -73,6 +77,15 @@ func New(
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability,
 	addWarnings func(...error),
 ) (*Manager, error) {
+	// Expanding known log formats, allowing one level of cross-referencing.
+	// Referenced formats must be defined above references to them.
+	knownLogFormats, err := expandLogFormats(cfg.KnownLogFormats)
+	if err != nil {
+		addWarnings(err)
+
+		return nil, fmt.Errorf("can't expand known log formats: %w", err)
+	}
+
 	persister, err := newPersistHost(state)
 	if err != nil {
 		return nil, fmt.Errorf("can't create persist host: %w", err)
@@ -92,6 +105,7 @@ func New(
 		streamAvailabilityStatusFn,
 		persister,
 		addWarnings,
+		knownLogFormats,
 		getLastFileSizesFromCache(state),
 		pipelineOpts,
 	)
@@ -99,10 +113,11 @@ func New(
 		return nil, fmt.Errorf("building pipeline: %w", err)
 	}
 
-	containerRecv := newContainerReceiver(pipeline, cfg.ContainerFormat, cfg.KnownLogFormats)
+	containerRecv := newContainerReceiver(pipeline, cfg.ContainerFormat, knownLogFormats, cfg.ContainerFilter, cfg.KnownLogFilters)
 
 	processingManager := &Manager{
 		config:                     cfg,
+		knownLogFormats:            knownLogFormats,
 		state:                      state,
 		crRuntime:                  crRuntime,
 		streamAvailabilityStatusFn: streamAvailabilityStatusFn,
@@ -253,11 +268,29 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 			continue
 		}
 
+		if service.ContainerID != "" {
+			ctr, found := containersByID[service.ContainerID]
+			if found {
+				logEnableStr, found := facts.LabelsAndAnnotations(ctr)[gloutonContainerLabelPrefix+"log_enable"]
+				if found {
+					logEnable, err := strconv.ParseBool(strings.ToLower(logEnableStr))
+					if err != nil {
+						logger.V(1).Printf("Failed to parse value of 'glouton.log_enable' for container %s (%s): %v", ctr.ContainerName(), ctr.ID(), err)
+					} else if !logEnable {
+						logger.V(2).Printf("Ignoring logs of service %q, because its container has 'glouton.log_enable' set to false", service.Name)
+
+						continue
+					}
+				}
+			}
+		}
+
 		for _, serviceLogProcessing := range service.LogProcessing {
 			logSource := LogSource{
 				serviceID:   &key,
 				logFilePath: serviceLogProcessing.FilePath, // ignored if in a container
-				operators:   append(operatorsForService(service), man.config.KnownLogFormats[serviceLogProcessing.Format]...),
+				operators:   append(operatorsForService(service), man.knownLogFormats[serviceLogProcessing.Format]...),
+				filters:     man.config.KnownLogFilters[serviceLogProcessing.Filter],
 			}
 
 			if service.ContainerID != "" {
@@ -284,19 +317,58 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 			continue
 		}
 
+		ctrFacts := facts.LabelsAndAnnotations(ctr)
+
+		logEnableStr, found := ctrFacts[gloutonContainerLabelPrefix+"log_enable"]
+		if found {
+			logEnable, err := strconv.ParseBool(strings.ToLower(logEnableStr))
+			if err != nil {
+				logger.V(1).Printf("Failed to parse value of 'glouton.log_enable' for container %s (%s): %v", ctr.ContainerName(), ctr.ID(), err)
+			} else if !logEnable {
+				logger.V(2).Printf("Ignoring logs of container %s (%s), for which 'glouton.log_enable' is set to false", ctr.ContainerName(), ctr.ID())
+
+				continue
+			}
+		}
+
 		logSource := LogSource{
 			container: ctr,
 		}
-
-		ctrFacts := facts.LabelsAndAnnotations(ctr)
+		hasOpsFromFacts, hasFilterFromFacts := false, false
 
 		logFormat, found := ctrFacts[gloutonContainerLabelPrefix+"log_format"]
 		if found {
-			ops, found := man.config.KnownLogFormats[logFormat]
+			ops, found := man.knownLogFormats[logFormat]
 			if found {
 				logSource.operators = ops
+				hasOpsFromFacts = true
 			} else {
 				logger.V(1).Printf("Container %s (%s) requires an unknown log format: %q", ctr.ContainerName(), ctrID, logFormat)
+			}
+		}
+
+		if !hasOpsFromFacts {
+			ops, found := man.knownLogFormats[man.containerRecv.containerOperators[ctr.ContainerName()]]
+			if found {
+				logSource.operators = ops
+			}
+		}
+
+		logFilter, found := ctrFacts[gloutonContainerLabelPrefix+"log_filter"]
+		if found {
+			filters, found := man.config.KnownLogFilters[logFilter]
+			if found {
+				logSource.filters = filters
+				hasFilterFromFacts = true
+			} else {
+				logger.V(1).Printf("Container %s (%s) requires an unknown log filter: %q", ctr.ContainerName(), ctrID, logFilter)
+			}
+		}
+
+		if !hasFilterFromFacts {
+			filters, found := man.config.KnownLogFilters[man.containerRecv.containerFilters[ctr.ContainerName()]]
+			if found {
+				logSource.filters = filters
 			}
 		}
 
@@ -308,13 +380,18 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 }
 
 func (man *Manager) setupProcessingForSource(ctx context.Context, logSource LogSource) error {
-	operators, err := buildOperators(logSource.operators)
+	rawOps, err := expandOperators(logSource.operators, man.knownLogFormats, false)
+	if err != nil {
+		return fmt.Errorf("expanding operators: %w", err)
+	}
+
+	operators, err := buildOperators(rawOps)
 	if err != nil {
 		return fmt.Errorf("building operators: %w", err)
 	}
 
 	if logSource.container != nil {
-		err = man.containerRecv.handleContainerLogs(ctx, man.crRuntime, logSource.container, operators)
+		err = man.containerRecv.handleContainerLogs(ctx, man.crRuntime, logSource.container, operators, logSource.filters)
 		if err != nil {
 			return err
 		}
@@ -323,11 +400,16 @@ func (man *Manager) setupProcessingForSource(ctx context.Context, logSource LogS
 		recvConfig := config.OTLPReceiver{
 			Include:   []string{logSource.logFilePath},
 			Operators: logSource.operators,
+			Filters:   logSource.filters,
 		}
 
-		recv, err := newLogReceiver(recvName, recvConfig, true, man.pipeline.getInput(), nil)
+		recv, warn, err := newLogReceiver(recvName, recvConfig, true, man.pipeline.getInput(), nil)
 		if err != nil {
 			return err
+		}
+
+		if warn != nil {
+			logWarnings(errorf("A warning occurred while setting up log receiver for service %s / %s: %w", logSource.serviceID.Name, logSource.serviceID.Instance, warn))
 		}
 
 		man.pipeline.l.Lock()
@@ -422,7 +504,8 @@ func (man *Manager) DiagnosticArchive(_ context.Context, writer types.ArchiveWri
 		Receivers:              receiversInfo,
 		ContainerReceivers:     man.containerRecv.diagnostic(),
 		WatchedServices:        wServices,
-		KnownLogFormats:        man.config.KnownLogFormats,
+		KnownLogFormats:        man.knownLogFormats,
+		KnownLogFilters:        man.config.KnownLogFilters,
 	}
 
 	if man.pipeline.otlpRecvCounter != nil {

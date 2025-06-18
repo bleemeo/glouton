@@ -2025,7 +2025,33 @@ func (a *agent) updatedDiscovery(ctx context.Context, services []discovery.Servi
 			logger.V(1).Printf("Failed to retrieve containers: %v", err)
 		}
 
-		a.logProcessManager.HandleLogsFromDynamicSources(ctx, services, containers)
+		var (
+			logServices   []discovery.Service
+			logContainers []facts.Container
+		)
+
+		if a.config.Log.OpenTelemetry.AutoDiscovery {
+			logServices = services
+			logContainers = containers
+		} else {
+			for _, ctr := range containers {
+				logEnableStr, found := facts.LabelsAndAnnotations(ctr)["glouton.log_enable"]
+				if found {
+					logEnable, err := strconv.ParseBool(strings.ToLower(logEnableStr))
+					if err != nil {
+						logger.V(1).Printf("Failed to parse value of 'glouton.log_enable' for container %s (%s): %v", ctr.ContainerName(), ctr.ID(), err)
+
+						continue
+					}
+
+					if logEnable {
+						logContainers = append(logContainers, ctr)
+					}
+				}
+			}
+		}
+
+		a.logProcessManager.HandleLogsFromDynamicSources(ctx, logServices, logContainers)
 	}
 }
 

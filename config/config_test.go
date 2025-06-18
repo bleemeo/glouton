@@ -229,7 +229,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				Receivers: map[string]OTLPReceiver{
 					"filelog/recv": {
 						Include: []string{"/var/log/apache/access.log", "/var/log/apache/error.log"},
-						Operators: []map[string]any{
+						Operators: []OTELOperator{
 							{
 								"type":  "add",
 								"field": "resource['service.name']",
@@ -240,6 +240,23 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				},
 				ContainerFormat: map[string]string{
 					"ctr-1": "format-1",
+				},
+				GlobalFilters: OTELFilters{
+					"log_record": []any{
+						`HasPrefix(resource.attributes["service.name"], "private_")`,
+					},
+				},
+				KnownLogFilters: map[string]OTELFilters{
+					"min_level_info": {
+						"include": map[string]any{
+							"severity_number": map[string]any{
+								"min": "9",
+							},
+						},
+					},
+				},
+				ContainerFilter: map[string]string{
+					"ctr-1": "min_level_info",
 				},
 			},
 		},
@@ -361,6 +378,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 					{
 						FilePath:  "/var/log/app.log",
 						LogFormat: "app_format",
+						LogFilter: "min_level_info",
 					},
 				},
 				LogFormat: "nginx_both",
@@ -1304,7 +1322,7 @@ func TestDump(t *testing.T) {
 
 	dump := Dump(config)
 
-	if diff := cmp.Diff(wantMap, dump); diff != "" {
+	if diff := cmp.Diff(wantMap, dump, cmpopts.EquateEmpty()); diff != "" {
 		t.Fatalf("Config dump didn't redact secrets correctly:\n%s", diff)
 	}
 }

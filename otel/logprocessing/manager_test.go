@@ -24,6 +24,7 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/facts"
+
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -43,7 +44,7 @@ func svc(
 	}
 }
 
-func ctr(id, name string, labels, annotations map[string]string) facts.Container {
+func ctr(id, name string, labels, annotations map[string]string) facts.Container { //nolint: unparam
 	return dummyContainer{
 		id:          id,
 		name:        name,
@@ -81,6 +82,10 @@ func logSourceComparer(x, y LogSource) bool {
 		return false
 	}
 
+	if !reflect.DeepEqual(x.filters, y.filters) {
+		return false
+	}
+
 	return true
 }
 
@@ -114,11 +119,40 @@ func TestProcessLogSources(t *testing.T) {
 			},
 		},
 	}
+	knownLogFilters := map[string]config.OTELFilters{
+		"drop_get": {
+			"exclude": map[string]any{
+				"match_type": "regexp",
+				"bodies": []string{
+					"GET",
+				},
+			},
+		},
+		"no_password": {
+			"log_record": []string{
+				".*password.*",
+			},
+		},
+		"min_level_info": {
+			"include": map[string]any{
+				"severity_number": map[string]any{
+					"min": "9",
+				},
+			},
+		},
+	}
 
-	svcNginx := svc("nginx", "Nginx-1", "ngx-1", true, time.Now(), discovery.ServiceLogReceiver{Format: "nginx_both"})
+	containerOperators := map[string]string{}
+	containerFilters := map[string]string{
+		"Custom-App-2": "min_level_info",
+	}
+
+	svcNginx := svc("nginx", "Nginx-1", "ngx-1", true, time.Now(), discovery.ServiceLogReceiver{Format: "nginx_both", Filter: "drop_get"})
 
 	ctrNgx1 := ctr("ngx-1", "Nginx-1", nil, nil)
-	ctrApp1 := ctr("app-1", "Custom-App-1", map[string]string{"glouton.log_format": "custom_app_fmt"}, nil)
+	ctrDisabled := ctr("disabled", "Disabled", map[string]string{"glouton.log_enable": "False"}, nil)
+	ctrApp1 := ctr("app-1", "Custom-App-1", map[string]string{"glouton.log_format": "custom_app_fmt", "glouton.log_filter": "no_password"}, nil)
+	ctrApp2 := ctr("app-2", "Custom-App-2", nil, nil)
 
 	executionSteps := []struct {
 		name                      string
@@ -129,9 +163,10 @@ func TestProcessLogSources(t *testing.T) {
 		expectedWatchedContainers map[string]struct{} // map key: container ID
 	}{
 		{
-			name: "an nginx service in a container",
+			name: "an nginx service in a container and a container with log disabled",
 			containers: []facts.Container{
 				ctrNgx1,
+				ctrDisabled,
 			},
 			services: []discovery.Service{
 				svcNginx,
@@ -150,6 +185,7 @@ func TestProcessLogSources(t *testing.T) {
 						},
 						knownLogFormats["nginx_both"]...,
 					),
+					filters: knownLogFilters["drop_get"],
 				},
 			},
 			expectedWatchedServices: map[discovery.NameInstance]struct{}{
@@ -172,6 +208,7 @@ func TestProcessLogSources(t *testing.T) {
 				{
 					container: ctrApp1,
 					operators: knownLogFormats["custom_app_fmt"],
+					filters:   knownLogFilters["no_password"],
 				},
 			},
 			expectedWatchedServices: map[discovery.NameInstance]struct{}{
@@ -252,10 +289,40 @@ func TestProcessLogSources(t *testing.T) {
 				"app-1": {}, // still present
 			},
 		},
+		{
+			name: "no more apache but another custom application in a container",
+			containers: []facts.Container{
+				ctrApp1,
+				ctrApp2,
+			},
+			services: []discovery.Service{},
+			expectedLogSources: []LogSource{
+				{
+					container: ctrApp2,
+					filters:   knownLogFilters["min_level_info"],
+				},
+			},
+			expectedWatchedServices: map[discovery.NameInstance]struct{}{
+				{Name: "nginx", Instance: "Nginx-1"}: {}, // would've been removed if removeOldSources() had been run
+				{Name: "apache", Instance: ""}:       {}, // same
+			},
+			expectedWatchedContainers: map[string]struct{}{
+				"ngx-1": {}, // would've been removed if removeOldSources() had been run
+				"app-1": {}, // still present
+				"app-2": {},
+			},
+		},
 	}
 
 	logMan := &Manager{
-		config:            config.OpenTelemetry{KnownLogFormats: knownLogFormats},
+		config: config.OpenTelemetry{
+			KnownLogFormats: knownLogFormats,
+			ContainerFormat: containerOperators,
+			KnownLogFilters: knownLogFilters,
+			ContainerFilter: containerFilters,
+		},
+		knownLogFormats:   knownLogFormats,
+		containerRecv:     newContainerReceiver(&pipelineContext{}, containerOperators, knownLogFormats, containerFilters, knownLogFilters),
 		watchedServices:   make(map[discovery.NameInstance]struct{}),
 		watchedContainers: make(map[string]struct{}),
 	}
