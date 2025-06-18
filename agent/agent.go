@@ -2329,6 +2329,11 @@ func (a *agent) diagnosticGlobalInfo(ctx context.Context, archive types.ArchiveW
 		return err
 	}
 
+	err = crashreport.AddStderrLogToArchive(archive)
+	if err != nil {
+		logger.V(1).Printf("Can't add stderr log to archive: %v", err)
+	}
+
 	file, err = archive.Create("log.txt")
 	if err != nil {
 		return err

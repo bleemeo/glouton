@@ -67,9 +67,9 @@ var (
 
 // SetOptions defines multiple things related to crash reporting:
 // - enabled: whether crash reports should be created or not
-// - stateDir: the directory where crash reports should be created
-// - maxDirCount: the maximum number of crash reports we should keep in dir
-// - diagnosticFn: a callback to generate diagnostics (might be nil if no diagnostic should be created).
+// - stateDir: the directory where crash reports will be created
+// - maxDirCount: the maximum number of crash reports we should keep in stateDir
+// - diagnosticFn: a callback to generate diagnostics (can be nil if no diagnostic should be created).
 func SetOptions(enabled bool, stateDir string, diagnosticFn diagnosticFunc) {
 	lock.Lock()
 	defer lock.Unlock()
@@ -90,6 +90,28 @@ func IsWriteInProgress(stateDir string) bool {
 	_, err := os.Stat(filepath.Join(stateDir, writeInProgressFlag))
 
 	return err == nil
+}
+
+func AddStderrLogToArchive(archive types.ArchiveWriter) error {
+	archiveFile, err := archive.Create(stderrFileName)
+	if err != nil {
+		return err
+	}
+
+	lock.Lock()
+	stateDir := dir
+	lock.Unlock()
+
+	stderrFile, err := os.Open(filepath.Join(stateDir, stderrFileName))
+	if err != nil {
+		return err
+	}
+
+	defer stderrFile.Close()
+
+	_, err = io.Copy(archiveFile, stderrFile)
+
+	return err
 }
 
 func createWorkDirIfNotExist(stateDir string) error {
