@@ -36,10 +36,10 @@ import (
 	"go.opentelemetry.io/collector/pdata/plog"
 )
 
-//nolint:gochecknoglobals,gofmt,goimports,gofumpt
+//nolint:gochecknoglobals
 var (
 	epochTS  = time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
-	erasedTS = time.Date(2025, 04, 24, 17, 28, 37, 0, time.UTC)
+	erasedTS = time.Date(2025, 4, 24, 17, 28, 37, 0, time.UTC)
 )
 
 // makeTimeEraserOpt provides a cmp.Option that makes logs comparison easier,

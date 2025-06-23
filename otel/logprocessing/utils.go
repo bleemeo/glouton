@@ -239,8 +239,6 @@ func buildLogFilterConfig(filtersCfg config.OTELFilters) (*filterprocessor.Confi
 //	{
 //		   "include": "some-format"
 //	}
-//
-//nolint:godot,gofmt,gofumpt,goimports
 func expandOperators(ops []config.OTELOperator, knownIncludes map[string][]config.OTELOperator, denyRecursiveInclude bool) ([]config.OTELOperator, error) {
 	result := make([]config.OTELOperator, 0, len(ops))
 
