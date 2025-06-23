@@ -108,7 +108,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		{
 			"id":    "nginx_error_parser",
 			"type":  "regex_parser",
-			"regex": `^(?P<time>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) \[(?P<severity>\w+)] \d+#\d+: [^,]+(, client: (?P<client_address>[\d.]+), server: (?P<server_address>\S+), request: "(?P<http_request_method>\S+) \S+ \S+", host: "(?P<network_local_address>[\w.]+):(?<server_port>\d+)")?`,
+			"regex": `^(?P<time>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) \[(?P<severity>\w+)] \d+#\d+: [^,]+(, client: (?P<client_address>[\d.]+), server: (?P<server_address>\S+), request: "(?P<http_request_method>\S+) \S+ \S+", host: "[\w.]+:(?<server_port>\d+)")?`,
 			"severity": map[string]any{
 				"parse_from": "attributes.severity",
 				// Log level reference can be found at https://nginx.org/en/docs/ngx_core_module.html#error_log
@@ -128,12 +128,10 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		removeAttrWhenUndefined("client_address"),
 		removeAttrWhenUndefined("server_address"),
 		removeAttrWhenUndefined("http_request_method"),
-		removeAttrWhenUndefined("network_local_address"),
 		removeAttrWhenUndefined("server_port"),
 		renameAttr("client_address", "client.address"),
 		renameAttr("server_address", "server.address"),
 		renameAttr("http_request_method", "http.request.method"),
-		renameAttr("network_local_address", "network.local.address"),
 		renameAttr("server_port", "server.port"),
 		removeAttr("severity"),
 	}
