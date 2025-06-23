@@ -27,6 +27,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
@@ -232,14 +233,14 @@ func buildLogFilterConfig(filtersCfg config.OTELFilters) (*filterprocessor.Confi
 	return &filterProcCfg, warning, filterProcCfg.Validate()
 }
 
-//nolint: godot,gofmt,gofumpt,goimports
-//
 // expandOperators replaces 'template' operators with the well-known format they reference.
 // These 'template' operators must define a single "include" key, like so:
 //
-// {
-// 	   "include": "some-format"
-// }
+//	{
+//		   "include": "some-format"
+//	}
+//
+//nolint:godot,gofmt,gofumpt,goimports
 func expandOperators(ops []config.OTELOperator, knownIncludes map[string][]config.OTELOperator, denyRecursiveInclude bool) ([]config.OTELOperator, error) {
 	result := make([]config.OTELOperator, 0, len(ops))
 
@@ -404,6 +405,10 @@ loop1:
 type CommandRunner interface {
 	Run(ctx context.Context, option gloutonexec.Option, name string, arg ...string) ([]byte, error)
 	StartWithPipes(ctx context.Context, option gloutonexec.Option, name string, arg ...string) (stdoutPipe io.ReadCloser, stderrPipe io.ReadCloser, wait func() error, err error)
+}
+
+type Facter interface {
+	Facts(ctx context.Context, maxAge time.Duration) (facts map[string]string, err error)
 }
 
 type otlpReceiverDiagnosticInformation struct {

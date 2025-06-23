@@ -1124,6 +1124,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 				a.hostRootPath,
 				a.state,
 				a.commandRunner,
+				a.factProvider,
 				a.containerRuntime,
 				connector.PushLogs,
 				connector.ShouldApplyLogBackPressure,

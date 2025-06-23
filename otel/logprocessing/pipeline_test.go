@@ -36,7 +36,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/plog"
 )
 
-//nolint: gochecknoglobals,gofmt,goimports,gofumpt
+//nolint:gochecknoglobals,gofmt,goimports,gofumpt
 var (
 	epochTS  = time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
 	erasedTS = time.Date(2025, 04, 24, 17, 28, 37, 0, time.UTC)
@@ -146,6 +146,7 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 		cfg,
 		"/",
 		noExecRunner(t),
+		fakeFacter(),
 		func(_ context.Context, b []byte) error {
 			logs, err := new(plog.ProtoUnmarshaler).UnmarshalLogs(b)
 			if err != nil {
@@ -213,6 +214,7 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 				"log.file.name": filepath.Base(jsonLogFile.Name()),
 				"log.file.path": jsonLogFile.Name(),
 			},
+			Resource: map[string]any{"host.name": "myhostname"},
 			Severity: 9, // info
 		},
 		{
@@ -223,6 +225,7 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 				"log.file.path": customLogFile.Name(),
 			},
 			Resource: map[string]any{
+				"host.name":    "myhostname",
 				"key":          "custom-res",
 				"service.name": "custom-svc",
 			},
@@ -279,6 +282,7 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 				"log.file.path": customLogFile.Name(),
 			},
 			Resource: map[string]any{
+				"host.name":    "myhostname",
 				"key":          "custom-res",
 				"service.name": "custom-svc",
 			},
@@ -314,6 +318,7 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 				"log.file.name": filepath.Base(jsonLogFile.Name()),
 				"log.file.path": jsonLogFile.Name(),
 			},
+			Resource: map[string]any{"host.name": "myhostname"},
 			Severity: 13, // warn
 		},
 		// Log record with dyn=2 is filtered
@@ -325,6 +330,7 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 				"log.file.name": filepath.Base(jsonLogFile.Name()),
 				"log.file.path": jsonLogFile.Name(),
 			},
+			Resource: map[string]any{"host.name": "myhostname"},
 			Severity: 13, // warn
 		},
 	}
