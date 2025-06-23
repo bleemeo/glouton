@@ -124,6 +124,7 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 			logFormat: "nginx_error",
 			inputLogs: []string{
 				`2025/04/04 11:48:45 [error] 29#29: *1 open() "/usr/share/nginx/html/favicon.ico" failed (2: No such file or directory), client: 172.17.0.1, server: localhost, request: "GET /favicon.ico HTTP/1.1", host: "localhost:8080", referrer: "http://localhost:8080/50x.html"`,
+				`2025/06/05 21:02:21 [error] 3862819#3862819: *5145928 writev() failed (32: Broken pipe) while sending request to upstream, client: 1.2.34.254, server: backup.example.com, request: "PUT /backup/wal_005/000000090000279400000009.lz4 HTTP/2.0", upstream: "http://127.0.0.1:9000/backup/wal_005/000000090000279400000009.lz4", host: "backup.example.com"`,
 			},
 			expectedRecords: []logRecord{
 				{
@@ -135,6 +136,17 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 						"log.iostream":        "stderr",
 						"server.address":      "localhost",
 						"server.port":         "8080",
+					},
+					Severity: 17,
+				},
+				{
+					Timestamp: time.Date(2025, 6, 5, 21, 2, 21, 0, time.Local),
+					Body:      `2025/06/05 21:02:21 [error] 3862819#3862819: *5145928 writev() failed (32: Broken pipe) while sending request to upstream, client: 1.2.34.254, server: backup.example.com, request: "PUT /backup/wal_005/000000090000279400000009.lz4 HTTP/2.0", upstream: "http://127.0.0.1:9000/backup/wal_005/000000090000279400000009.lz4", host: "backup.example.com"`,
+					Attributes: map[string]any{
+						"client.address":      "1.2.34.254",
+						"http.request.method": "PUT",
+						"log.iostream":        "stderr",
+						"server.address":      "backup.example.com",
 					},
 					Severity: 17,
 				},

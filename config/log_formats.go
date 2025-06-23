@@ -108,7 +108,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		{
 			"id":    "nginx_error_parser",
 			"type":  "regex_parser",
-			"regex": `^(?P<time>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) \[(?P<severity>\w+)] \d+#\d+: [^,]+(, client: (?P<client_address>[\d.]+), server: (?P<server_address>\S+), request: "(?P<http_request_method>\S+) \S+ \S+", host: "[\w.]+:(?<server_port>\d+)")?`,
+			"regex": `^(?P<time>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) \[(?P<severity>\w+)] \d+#\d+:(.*?, client: (?P<client_address>[\d.]+))?(.*?, server: (?P<server_address>[^,]+))?(.*?, request: "(?P<http_request_method>[^,]+) [^,]+ [^,]+")?(.*?, host: "[\w.]+(:(?<server_port>\d+))?")?.*$`,
 			"severity": map[string]any{
 				"parse_from": "attributes.severity",
 				// Log level reference can be found at https://nginx.org/en/docs/ngx_core_module.html#error_log
