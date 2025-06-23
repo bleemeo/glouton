@@ -36,7 +36,7 @@ import (
 	"go.uber.org/zap"
 )
 
-//nolint: gosmopolitan,gofmt,gofumpt,goimports
+//nolint:gosmopolitan
 func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 	t.Parallel()
 
@@ -94,7 +94,6 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Body:      `127.0.0.1 - - [04/Apr/2025:11:14:50 +0200] "GET / HTTP/1.1" 200 396 "-" "Glouton 0.1"`,
 					Attributes: map[string]any{
 						"client.address":            "127.0.0.1",
-						"http.connection.state":     "-",
 						"http.request.method":       "GET",
 						"http.response.size":        "396",
 						"http.response.status_code": "200",
@@ -109,7 +108,6 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Body:      `127.0.0.1 - user [04/Apr/2025:11:15:18 +0200] "GET /favicon.ico HTTP/1.1" 404 134 "http://localhost" "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:137.0) Gecko/20100101 Firefox/137.0"`,
 					Attributes: map[string]any{
 						"client.address":            "127.0.0.1",
-						"http.connection.state":     "http://localhost",
 						"http.request.method":       "GET",
 						"http.response.size":        "134",
 						"http.response.status_code": "404",

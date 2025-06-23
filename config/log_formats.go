@@ -94,7 +94,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		{
 			"id":       "nginx_access_parser",
 			"type":     "regex_parser",
-			"regex":    `^(?P<client_address>\S+) \S+ (?P<user_name>\S+) \[(?P<time>[^\]]+)] "(?P<http_request_method>\S+) \S+ \S+" (?P<http_response_status_code>\d+) (?P<http_response_size>\S+) "(?P<http_connection_state>[^"]*)" "(?P<user_agent_original>[^"]*)"`,
+			"regex":    `^(?P<client_address>\S+) \S+ (?P<user_name>\S+) \[(?P<time>[^\]]+)] "(?P<http_request_method>\S+) \S+ \S+" (?P<http_response_status_code>\d+) (?P<http_response_size>\S+) "[^"]*" "(?P<user_agent_original>[^"]*)"`,
 			"severity": severityFromHTTPStatusCode,
 		},
 		renameAttr("client_address", "client.address"),
@@ -102,7 +102,6 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		renameAttr("http_request_method", "http.request.method"),
 		renameAttr("http_response_status_code", "http.response.status_code"),
 		renameAttr("http_response_size", "http.response.size"),
-		renameAttr("http_connection_state", "http.connection.state"),
 		renameAttr("user_agent_original", "user_agent.original"),
 	}
 	nginxErrorParser := []OTELOperator{
