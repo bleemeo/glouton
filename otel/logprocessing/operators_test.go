@@ -159,6 +159,7 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 				`172.17.0.1 - - [04/Apr/2025:09:53:14 +0000] "GET / HTTP/1.1" 200 45`,
 				`172.17.0.1 - - [04/Apr/2025:09:53:21 +0000] "GET /nginx_status HTTP/1.1" 404 196`,
 				`172.17.0.1 - - [04/Apr/2025:09:53:22 +0000] "-" 408 -`,
+				`127.0.0.1 - - [23/Jun/2025:14:40:45 +0000] "GET /apache_404 HTTP/1.1" 404 490 "-" "python-requests/2.31.0"`,
 			},
 			expectedRecords: []logRecord{
 				{
@@ -195,6 +196,20 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 						"http.response.status_code": "408",
 						"log.iostream":              "stdout",
 						"user.name":                 "-",
+					},
+					Severity: 13,
+				},
+				{
+					Timestamp: time.Date(2025, 6, 23, 14, 40, 45, 0, time.UTC),
+					Body:      `127.0.0.1 - - [23/Jun/2025:14:40:45 +0000] "GET /apache_404 HTTP/1.1" 404 490 "-" "python-requests/2.31.0"`,
+					Attributes: map[string]any{
+						"client.address":            "127.0.0.1",
+						"http.request.method":       "GET",
+						"http.response.status_code": "404",
+						"http.response.size":        "490",
+						"log.iostream":              "stdout",
+						"user.name":                 "-",
+						"user_agent.original":       "python-requests/2.31.0",
 					},
 					Severity: 13,
 				},

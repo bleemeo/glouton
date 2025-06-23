@@ -140,9 +140,10 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		{
 			"id":       "apache_access_parser",
 			"type":     "regex_parser",
-			"regex":    `^(?P<client_address>\S+) \S+ (?P<user_name>\S+) \[(?P<time>[^\]]+)] "(((?P<http_request_method>\S+) \S+ \S+)|-)" (?P<http_response_status_code>\d+) ((?P<http_response_size>\d+)|-)`,
+			"regex":    `^(?P<client_address>\S+) \S+ (?P<user_name>\S+) \[(?P<time>[^\]]+)] "(((?P<http_request_method>\S+) \S+ \S+)|-)" (?P<http_response_status_code>\d+) ((?P<http_response_size>\d+)|-)( "[^"]*" "(?P<user_agent_original>[^"]*)")?`,
 			"severity": severityFromHTTPStatusCode,
 		},
+		removeAttrWhenUndefined("user_agent_original"),
 		removeAttrWhenUndefined("http_request_method"),
 		removeAttrWhenUndefined("http_response_size"),
 		renameAttr("client_address", "client.address"),
@@ -150,6 +151,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		renameAttr("http_request_method", "http.request.method"),
 		renameAttr("http_response_status_code", "http.response.status_code"),
 		renameAttr("http_response_size", "http.response.size"),
+		renameAttr("user_agent_original", "user_agent.original"),
 	}
 	apacheErrorParser := []OTELOperator{
 		{
