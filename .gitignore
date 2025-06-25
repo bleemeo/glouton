@@ -31,3 +31,5 @@ __debug_bin
 /crash_diagnostic.tar
 vendor/
 /webui/dist/
+/webui/node_modules/
+/webui/npm-debug.log
