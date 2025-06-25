@@ -95,5 +95,7 @@ func (n natsInputStopper) Stop() {
 		return
 	}
 
-	cl.CloseIdleConnections()
+	if cl != nil {
+		cl.CloseIdleConnections()
+	}
 }
