@@ -42,8 +42,8 @@ func New(dockerAddress string, dockerRuntime crTypes.RuntimeInterface, isContain
 
 			r := renamer{dockerRuntime: dockerRuntime, isContainerIgnored: isContainerIgnored}
 
-			dockerInput.PerDevice = false
-			dockerInput.Total = true
+			dockerInput.PerDeviceInclude = []string{}
+			dockerInput.TotalInclude = []string{"cpu", "blkio", "network"}
 			dockerInput.Log = internal.NewLogger()
 			i = &internal.Input{
 				Input: dockerInput,

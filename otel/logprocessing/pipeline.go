@@ -34,6 +34,10 @@ import (
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/config/configgrpc"
+	"go.opentelemetry.io/collector/config/confighttp"
+	"go.opentelemetry.io/collector/config/confignet"
+	"go.opentelemetry.io/collector/config/configoptional"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
@@ -261,15 +265,19 @@ func makePipeline( //nolint:maintidx
 		}
 
 		if cfg.GRPC.Enable {
-			receiverTypedCfg.Protocols.GRPC.NetAddr.Endpoint = net.JoinHostPort(cfg.GRPC.Address, strconv.Itoa(cfg.GRPC.Port))
+			receiverTypedCfg.Protocols.GRPC = configoptional.Some(configgrpc.ServerConfig{
+				NetAddr: confignet.AddrConfig{Endpoint: net.JoinHostPort(cfg.GRPC.Address, strconv.Itoa(cfg.GRPC.Port))},
+			})
 		} else {
-			receiverTypedCfg.Protocols.GRPC = nil
+			receiverTypedCfg.Protocols.GRPC = configoptional.None[configgrpc.ServerConfig]()
 		}
 
 		if cfg.HTTP.Enable {
-			receiverTypedCfg.Protocols.HTTP.ServerConfig.Endpoint = net.JoinHostPort(cfg.HTTP.Address, strconv.Itoa(cfg.HTTP.Port))
+			receiverTypedCfg.Protocols.HTTP = configoptional.Some(otlpreceiver.HTTPConfig{
+				ServerConfig: confighttp.ServerConfig{Endpoint: net.JoinHostPort(cfg.GRPC.Address, strconv.Itoa(cfg.GRPC.Port))},
+			})
 		} else {
-			receiverTypedCfg.Protocols.HTTP = nil
+			receiverTypedCfg.Protocols.HTTP = configoptional.None[otlpreceiver.HTTPConfig]()
 		}
 
 		pipeline.otlpRecvCounter = new(atomic.Int64)
