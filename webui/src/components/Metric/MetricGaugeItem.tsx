@@ -1,12 +1,12 @@
 import React from "react";
 
 import DonutPieChart from "../UI/DonutPieChart";
-import Loading from "../UI/Loading";
+import { Loading } from "../UI/Loading";
 import QueryError from "../UI/QueryError";
 
 import { colorForStatus } from "../utils/converter";
 import { unitFormatCallback } from "../utils/formater";
-import { Card, CardBody, CardFooter, Flex, Text } from "@chakra-ui/react";
+import { Card, Flex, Text } from "@chakra-ui/react";
 
 type MetricGaugeItemProps = {
   unit?: number;
@@ -32,19 +32,19 @@ const MetricGaugeItem = ({
 }: MetricGaugeItemProps) => {
   if (loading) {
     return (
-      <Card>
-        <CardBody>
+      <Card.Root>
+        <Card.Body>
           <Loading size="xl" />
-        </CardBody>
-      </Card>
+        </Card.Body>
+      </Card.Root>
     );
   } else if (hasError) {
     return (
-      <Card>
-        <CardBody>
+      <Card.Root>
+        <Card.Body>
           <QueryError noBorder style={{ textAlign: "center" }} />
-        </CardBody>
-      </Card>
+        </Card.Body>
+      </Card.Root>
     );
   }
   const segmentsStep: number[] = [0];
@@ -65,8 +65,8 @@ const MetricGaugeItem = ({
   segmentsColor.push("#" + colorForStatus(3));
 
   return (
-    <Card>
-      <CardBody p={1}>
+    <Card.Root>
+      <Card.Body pb={0}>
         <Flex
           direction="column"
           w="100%"
@@ -88,13 +88,13 @@ const MetricGaugeItem = ({
             }
           />
         </Flex>
-      </CardBody>
-      <CardFooter justify="center" p={0}>
+      </Card.Body>
+      <Card.Footer justifyContent="center" p={5}>
         <Text fontSize="3xl" as="b">
           {name}
         </Text>
-      </CardFooter>
-    </Card>
+      </Card.Footer>
+    </Card.Root>
   );
 };
 

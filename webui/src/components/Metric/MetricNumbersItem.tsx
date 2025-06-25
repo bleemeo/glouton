@@ -1,16 +1,17 @@
 import React, { FC } from "react";
 
-import { unitFormatCallback } from "../utils/formater";
 import {
   Flex,
-  CardFooter,
-  CardBody,
   Card,
   Text,
   Spacer,
   SimpleGrid,
+  Stat,
+  HStack,
+  FormatByte,
+  Icon,
 } from "@chakra-ui/react";
-import Loading from "../UI/Loading";
+import { Loading } from "../UI/Loading";
 import QueryError from "../UI/QueryError";
 import { iconFromName } from "../utils";
 
@@ -31,19 +32,19 @@ const MetricNumbersItem: FC<MetricNumberItemProps> = ({
 }) => {
   if (loading) {
     return (
-      <Card h="100%">
-        <CardBody>
+      <Card.Root h="100%">
+        <Card.Body>
           <Loading size="xl" />
-        </CardBody>
-      </Card>
+        </Card.Body>
+      </Card.Root>
     );
   } else if (hasError) {
     return (
-      <Card h="100%">
-        <CardBody>
+      <Card.Root h="100%">
+        <Card.Body>
           <QueryError noBorder style={{ textAlign: "center" }} />
-        </CardBody>
-      </Card>
+        </Card.Body>
+      </Card.Root>
     );
   }
   const formattedData = data!.map(
@@ -52,16 +53,13 @@ const MetricNumbersItem: FC<MetricNumberItemProps> = ({
       legend: string;
       icon?: { name: string; color: string };
     }) => {
-      const v = unitFormatCallback(unit)(d.value)
-        ? unitFormatCallback(unit)(d.value)
-        : "\u00A0\u00A0\u00A0";
-      return { value: v, legend: d.legend, icon: d.icon };
+      return { value: d.value, legend: d.legend, icon: d.icon };
     },
   );
 
   return (
-    <Card h="100%">
-      <CardBody px={5} pt={1} pb={0} h="75%">
+    <Card.Root h="100%">
+      <Card.Body px={5} pt={1} pb={0} h="75%">
         <Flex
           w="100%"
           h="100%"
@@ -71,7 +69,7 @@ const MetricNumbersItem: FC<MetricNumberItemProps> = ({
           justifyContent="space-between"
           flexWrap="wrap"
         >
-          <SimpleGrid columns={Math.ceil(formattedData.length / 2)} spacing={8}>
+          <SimpleGrid columns={Math.ceil(formattedData.length / 2)} gap={8}>
             {formattedData.map((d, idx) => (
               <Flex
                 w="fit-content"
@@ -80,32 +78,31 @@ const MetricNumbersItem: FC<MetricNumberItemProps> = ({
                 key={idx}
                 align="baseline"
               >
-                <Text fontSize="md" mb={0}>
-                  {d.legend}
-                </Text>
-                <Text
-                  mt={-1}
-                  lineHeight="80%"
-                  fontSize="min(50cqw, 10cqh)"
-                  as="b"
-                  mb={0}
-                  whiteSpace="nowrap"
-                >
-                  {d.value}{" "}
-                  {d.icon ? iconFromName(d.icon.name, 8, 8, d.icon.color) : ""}
-                </Text>
+                <Stat.Root size={"lg"}>
+                  <Stat.Label fontSize={"xl"}>{d.legend}</Stat.Label>
+                  <HStack>
+                    <Stat.ValueText fontSize={"6xl"} pt={5}>
+                      {unit === 0 ? <FormatByte value={d.value} /> : d.value}
+                    </Stat.ValueText>
+                    <Icon size={"2xl"} mt={5} ml={3}>
+                      {d.icon
+                        ? iconFromName(d.icon.name, 8, 8, d.icon.color)
+                        : ""}
+                    </Icon>
+                  </HStack>
+                </Stat.Root>
                 <Spacer />
               </Flex>
             ))}
           </SimpleGrid>
         </Flex>
-      </CardBody>
-      <CardFooter justify="center" p={0}>
-        <Text fontSize="5vh" as="b">
+      </Card.Body>
+      <Card.Footer justifyContent="center" p={5}>
+        <Text fontSize="3xl" as="b">
           {title}
         </Text>
-      </CardFooter>
-    </Card>
+      </Card.Footer>
+    </Card.Root>
   );
 };
 

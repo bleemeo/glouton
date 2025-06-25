@@ -1,6 +1,5 @@
 import React, { FC } from "react";
-
-import Loading from "./Loading";
+import { Loading } from "./Loading";
 
 const Fallback: FC = () => {
   return (

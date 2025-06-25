@@ -3,6 +3,7 @@ import { useHTTPDataFetch } from "../utils/hooks";
 import FetchSuspense from "../UI/FetchSuspense";
 import { FACTS_URL } from "../utils/dataRoutes";
 import { Fact } from "../Data/data.interface";
+import { Box, Heading } from "@chakra-ui/react";
 
 const TopNavBar: FC = () => {
   const {
@@ -12,10 +13,14 @@ const TopNavBar: FC = () => {
   } = useHTTPDataFetch<Fact[]>(FACTS_URL, null, 10000);
 
   return (
-    <nav
-      className="navbar navbar-expand-lg
-  navbar-light bg-light navbar-fixed-top fixed-top
-  navbar-toggleable-md justify-content-end"
+    <Box
+      position="fixed"
+      top="0"
+      left="0"
+      right="0"
+      zIndex="1000"
+      boxShadow="sm"
+      bg="background"
     >
       <FetchSuspense
         isLoading={isLoading}
@@ -24,18 +29,12 @@ const TopNavBar: FC = () => {
         fallbackComponent={<></>}
       >
         {({ facts }) => (
-          <h2
-            style={{
-              marginBlockEnd: "0rem",
-              marginLeft: "1rem",
-              marginRight: "1rem",
-            }}
-          >
+          <Heading textAlign={"right"} pr={5}>
             {facts ? facts.find((f: Fact) => f.name === "fqdn").value : ""}
-          </h2>
+          </Heading>
         )}
       </FetchSuspense>
-    </nav>
+    </Box>
   );
 };
 

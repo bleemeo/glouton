@@ -1,8 +1,8 @@
 import React, { FC } from "react";
-import { Card, CardBody, CardFooter, Flex, Text } from "@chakra-ui/react";
+import { Card, Flex, Text } from "@chakra-ui/react";
 
 import { unitFormatCallback } from "../utils/formater";
-import Loading from "../UI/Loading";
+import { Loading } from "../UI/Loading";
 import QueryError from "../UI/QueryError";
 import { isNil } from "lodash-es";
 
@@ -23,19 +23,19 @@ const MetricNumberItem: FC<MetricNumberItemProps> = ({
 }) => {
   if (loading) {
     return (
-      <Card h="100%">
-        <CardBody>
+      <Card.Root h="100%">
+        <Card.Body>
           <Loading size="xl" />
-        </CardBody>
-      </Card>
+        </Card.Body>
+      </Card.Root>
     );
   } else if (hasError) {
     return (
-      <Card h="100%">
-        <CardBody>
+      <Card.Root h="100%">
+        <Card.Body>
           <QueryError noBorder style={{ textAlign: "center" }} />
-        </CardBody>
-      </Card>
+        </Card.Body>
+      </Card.Root>
     );
   }
 
@@ -45,8 +45,8 @@ const MetricNumberItem: FC<MetricNumberItemProps> = ({
   }
 
   return (
-    <Card h="100%">
-      <CardBody h="75%" pb={0}>
+    <Card.Root h="100%">
+      <Card.Body pb={0}>
         <Flex
           direction="column"
           w="100%"
@@ -61,13 +61,13 @@ const MetricNumberItem: FC<MetricNumberItemProps> = ({
             </Text>
           </Flex>
         </Flex>
-      </CardBody>
-      <CardFooter justify="center" p={0}>
-        <Text fontSize="5vh" as="b">
+      </Card.Body>
+      <Card.Footer justifyContent="center" p={5}>
+        <Text fontSize="3xl" as="b">
           {title}
         </Text>
-      </CardFooter>
-    </Card>
+      </Card.Footer>
+    </Card.Root>
   );
 };
 

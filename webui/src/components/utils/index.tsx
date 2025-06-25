@@ -1,12 +1,7 @@
-import {
-  ArrowDownIcon,
-  ArrowUpIcon,
-  CheckIcon,
-  MoonIcon,
-} from "@chakra-ui/icons";
-import { ListItem, UnorderedList } from "@chakra-ui/react";
+import { List } from "@chakra-ui/react";
 import { isNil } from "lodash-es";
 import React, { FC, RefObject } from "react";
+import { FaArrowDown, FaArrowUp, FaCheckCircle, FaMoon } from "react-icons/fa";
 
 export const chartTypes = ["gauge", "number", "numbers"];
 export const UNIT_FLOAT = 0;
@@ -27,11 +22,13 @@ type ProblemsProps = {
   problems: string[];
 };
 export const Problems: FC<ProblemsProps> = ({ problems }) => (
-  <UnorderedList>
+  <List.Root>
     {problems
-      ? problems.map((problem, idx) => <ListItem key={idx}>{problem}</ListItem>)
+      ? problems.map((problem, idx) => (
+          <List.Item key={idx}>{problem}</List.Item>
+        ))
       : null}
-  </UnorderedList>
+  </List.Root>
 );
 
 type MetricDescriptionProps = {
@@ -69,13 +66,6 @@ export const copyToClipboard = (cmd: string) => {
     copyElement.removeChild(el);
   }
 };
-
-export const isDarkTheme = (theme: string) => theme === "dark";
-
-export const getThemeBackgroundColorsSelect = (theme: string) =>
-  isDarkTheme(theme)
-    ? ["#045FB4", "#0B3861", "#3a3a3a"]
-    : ["#A9D0F5", "#EFF5FB", "#FFF"];
 
 export type Period = {
   minutes: number;
@@ -235,15 +225,13 @@ export const iconFromName = (
 ) => {
   switch (name) {
     case "arrow-up":
-      return <ArrowUpIcon w={w} h={h} color={color} />;
+      return <FaArrowUp width={w} height={h} color={color} />;
     case "arrow-down":
-      return (
-        <ArrowDownIcon w={w} h={h} color={color} transform="rotate(180)" />
-      );
+      return <FaArrowDown width={w} height={h} color={color} />;
     case "process-sleeping":
-      return <MoonIcon w={w} h={h} color={color} />;
+      return <FaMoon width={w} height={h} color={color} />;
     case "process-running":
-      return <CheckIcon w={w} h={h} color={color} />;
+      return <FaCheckCircle width={w} height={h} color={color} />;
     default:
       return <></>;
   }

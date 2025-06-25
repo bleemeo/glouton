@@ -1,5 +1,6 @@
 import * as d3 from "d3";
 import React, { FC } from "react";
+import { getColors } from "../utils/colors";
 
 const tau = Math.PI * 1.6;
 const size = 100;
@@ -104,7 +105,7 @@ const DonutPieChart: FC<DonutPieChartProps> = ({
         style={{
           dominantBaseline: "middle",
           fontWeight: "bold",
-          fill: "#000",
+          fill: getColors("colors.text"),
           fontSize: `${fontSize}px`,
         }}
         transform="rotate(144)"

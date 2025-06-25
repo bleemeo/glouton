@@ -1,7 +1,6 @@
 import React, { FC, useEffect } from "react";
 
 import AgentProcesses from "./AgentProcesses";
-import Loading from "../UI/Loading";
 import Panel from "../UI/Panel";
 import QueryError from "../UI/QueryError";
 import FetchSuspense from "../UI/FetchSuspense";
@@ -18,7 +17,6 @@ const AgentProcessesContainer: FC = () => {
 
   const {
     isLoading,
-    isFetching,
     error,
     data: processes,
   } = useHTTPDataFetch<Topinfo>(PROCESSES_URL, null, 10000);
@@ -27,25 +25,15 @@ const AgentProcessesContainer: FC = () => {
     <FetchSuspense
       isLoading={isLoading}
       error={error || isNullOrUndefined(processes)}
-      loadingComponent={
-        <div className="marginOffset d-flex justify-content-center align-items-center">
-          <Loading size="xl" />
-        </div>
-      }
       fallbackComponent={<QueryError noBorder />}
       processes={processes}
     >
       {({ processes }) => (
-        <div style={{ marginTop: "1.5rem" }}>
+        <>
           <Panel>
             <AgentProcesses top={processes} sizePage={20} />
           </Panel>
-          {isFetching && (
-            <div className="d-flex justify-content-center align-items-center">
-              <Loading size="sm" />
-            </div>
-          )}
-        </div>
+        </>
       )}
     </FetchSuspense>
   );

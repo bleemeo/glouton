@@ -1,3 +1,5 @@
+import { system } from "../../../theme";
+
 const category20 = [
   "#1f77b4",
   "#aec7e8",
@@ -23,4 +25,13 @@ const category20 = [
 
 export const chartColorMap = (idx: number) => {
   return category20[idx % category20.length];
+};
+
+export const getColors = (semanticTokens: string) => {
+  const varColor = system.token(semanticTokens);
+  const extractedVar = varColor.match(/var\((--[^)]+)\)/)[1];
+
+  return getComputedStyle(document.documentElement)
+    .getPropertyValue(extractedVar)
+    .trim();
 };

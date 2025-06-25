@@ -17,7 +17,8 @@ import { Table as BTable } from "react-bootstrap";
 
 import { Process } from "../Data/data.interface";
 import { formatToBytes, percentToString2Digits } from "../utils/formater";
-import { Box, Center, Divider, Flex, Text, Tooltip } from "@chakra-ui/react";
+import { Box, Center, Flex, Separator, Text } from "@chakra-ui/react";
+import { Tooltip } from "./tooltip";
 
 const cmdLineCommand = ["#C9B202", "#2ecc71", "#3498db"];
 
@@ -259,7 +260,7 @@ const ProcessesTable: FC<ProcessesTableProps> = ({ data, widthLastColumn }) => {
         id: "cmdline",
         header: "Name",
         cell: (info) => (
-          <Tooltip label={info.getValue()}>
+          <Tooltip content={info.getValue()}>
             {formatCmdLine({
               input: info.getValue() as string,
               widthLastColumn: widthLastColumn,
@@ -403,7 +404,7 @@ const ProcessesTable: FC<ProcessesTableProps> = ({ data, widthLastColumn }) => {
               {table.getPageCount().toLocaleString()}
             </Text>
           </Center>
-          <Divider orientation="vertical" mx={3} />
+          <Separator orientation="vertical" mx={3} />
           <Center alignItems="center">
             <Text mb={0}>Go to page:</Text>
             <input

@@ -4,9 +4,7 @@ import { DebounceInput } from "react-debounce-input";
 import Toggle from "../UI/Toggle";
 import QueryError from "../UI/QueryError";
 import Docker from "./Docker";
-import Loading from "../UI/Loading";
-
-import { formatDateTime } from "../utils/formater";
+import { Loading } from "../UI/Loading";
 import { useHTTPDataFetch } from "../utils/hooks";
 import { CONTAINERS_URL } from "../utils/dataRoutes";
 import { Containers } from "../Data/data.interface";
@@ -124,32 +122,17 @@ const AgentDockerList: FC = () => {
     );
 
     const renderContainers = containersList.map((container) => {
-      let date: React.ReactNode;
+      let date: [string, string | undefined];
       if (isNil(container.startedAt)) {
-        date = (
-          <span>
-            <strong>Started&nbsp;at:</strong>
-            &nbsp;Never
-          </span>
-        );
+        date = ["Started at", "Never"];
       } else if (container.state === "running") {
-        date = (
-          <span>
-            <strong>Started&nbsp;at:</strong>
-            &nbsp;
-            {formatDateTime(container.startedAt)}
-          </span>
-        );
+        date = ["Started at", container.startedAt];
       } else {
-        date = (
-          <span>
-            <strong>Finished&nbsp;at:</strong>
-            &nbsp;
-            {formatDateTime(container.finishedAt)}
-          </span>
-        );
+        date = ["Finished at", container.finishedAt];
       }
-      return <Docker container={container} date={date} key={container.id} />;
+      return (
+        <Docker container={container} startedAt={date} key={container.id} />
+      );
     });
 
     displayContainers = (

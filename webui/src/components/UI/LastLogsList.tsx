@@ -1,13 +1,21 @@
 import React, { FC } from "react";
 import { useHTTPLogFetch } from "../utils/hooks";
-import { Badge, Box, Code, Card, CardBody, Flex, Link } from "@chakra-ui/react";
+import {
+  Badge,
+  Box,
+  Code,
+  Card,
+  Flex,
+  Link,
+  Text,
+  Icon,
+} from "@chakra-ui/react";
 import FetchSuspense from "./FetchSuspense";
-import Loading from "./Loading";
+import { Loading } from "../UI/Loading";
 import QueryError from "./QueryError";
 import { getHoursFromDateString } from "../utils/formater";
-import { Text } from "@chakra-ui/react";
 import { LOGS_URL } from "../utils/dataRoutes";
-import { ChevronRightIcon } from "@chakra-ui/icons";
+import { FaChevronRight } from "react-icons/fa";
 
 const LOGS_COUNT = 20;
 
@@ -41,37 +49,33 @@ export const LastLogsList: FC = () => {
       {({ logs }) => {
         return (
           <>
-            <Flex justify="flex-start">
+            <Flex justifyContent="space-between" alignItems="center">
               <Text fontSize="xl" as="b">
                 Latest logs
+              </Text>
+              <Text fontSize="sm">
+                <Icon>
+                  <FaChevronRight />
+                </Icon>
+                View{" "}
+                <Link color="teal.500" href="/diagnostic.txt/log.txt">
+                  full logs
+                </Link>
               </Text>
             </Flex>
             <Box h="100%" overflowY="scroll">
               {logs.map((log, index) => (
-                <Card key={index}>
-                  <CardBody p={1}>
+                <Card.Root key={index}>
+                  <Card.Body p={1}>
                     <Code fontSize="x-small">
                       <Badge>{getHoursFromDateString(log.timestamp)}</Badge>
                       &nbsp;
                       {log.message}
                     </Code>
-                  </CardBody>
-                </Card>
+                  </Card.Body>
+                </Card.Root>
               ))}
             </Box>
-            <Flex mt={1} justify="flex-end">
-              <Text fontSize="lg">
-                <ChevronRightIcon />
-                View{" "}
-                <Link
-                  fontWeight="700"
-                  color="teal.500"
-                  href="/diagnostic.txt/log.txt"
-                >
-                  full logs
-                </Link>
-              </Text>
-            </Flex>
           </>
         );
       }}

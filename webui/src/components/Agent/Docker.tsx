@@ -25,16 +25,11 @@ import {
   Center,
   Code,
   Flex,
-  Modal,
-  ModalBody,
-  ModalCloseButton,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  ModalOverlay,
+  Dialog,
   Text,
   useDisclosure,
 } from "@chakra-ui/react";
+import { DataListItem, DataListRoot } from "../UI/data-list";
 
 type DockerProcessesProps = {
   containerId: string;
@@ -95,7 +90,7 @@ const DockerProcesses: FC<DockerProcessesProps> = ({ containerId, name }) => {
 
 type DockerProps = {
   container: Container;
-  date: React.ReactNode;
+  startedAt: [string, string | undefined];
 };
 
 interface DockerInspect {
@@ -103,7 +98,7 @@ interface DockerInspect {
   inspect: string;
 }
 
-const Docker: FC<DockerProps> = ({ container, date }) => {
+const Docker: FC<DockerProps> = ({ container, startedAt }) => {
   const [dockerInspect, setDockerInspect] = useState<DockerInspect | null>(
     null,
   );
@@ -239,35 +234,37 @@ const Docker: FC<DockerProps> = ({ container, date }) => {
   };
 
   const {
-    isOpen: isOpenModal,
+    open: isOpenModal,
     onOpen: onOpenModal,
     onClose: onCloseModal,
   } = useDisclosure();
   const dockerModal = dockerInspect ? (
     <>
-      <Modal size="xl" isOpen={isOpenModal} onClose={onCloseModal}>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>{dockerInspect?.name}</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
-            <pre
-              style={{
-                maxHeight: "60vh",
-                overflowY: "auto",
-              }}
-            >
-              {JSON.stringify(JSON.parse(dockerInspect.inspect), null, 2)}
-            </pre>
-          </ModalBody>
+      <Dialog.Root size="xl" open={isOpenModal} onOpenChange={onCloseModal}>
+        <Dialog.Backdrop />
+        <Dialog.Positioner>
+          <Dialog.Content>
+            <Dialog.Header>{dockerInspect?.name}</Dialog.Header>
+            <Dialog.CloseTrigger />
+            <Dialog.Body>
+              <pre
+                style={{
+                  maxHeight: "60vh",
+                  overflowY: "auto",
+                }}
+              >
+                {JSON.stringify(JSON.parse(dockerInspect.inspect), null, 2)}
+              </pre>
+            </Dialog.Body>
 
-          <ModalFooter>
-            <Button colorScheme="blue" mr={3} onClick={onCloseModal}>
-              Close
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+            <Dialog.Footer>
+              <Button colorScheme="blue" mr={3} onClick={onCloseModal}>
+                Close
+              </Button>
+            </Dialog.Footer>
+          </Dialog.Content>
+        </Dialog.Positioner>
+      </Dialog.Root>
     </>
   ) : null;
 
@@ -305,7 +302,7 @@ const Docker: FC<DockerProps> = ({ container, date }) => {
             </small>
           </div>
           <div className="col-xl-6 pull-xl-3 col-sm-12">
-            <div className="blee-row">
+            <Flex>
               {renderDonutDocker("Memory", container.memUsedPerc)}
               {renderDonutDocker("CPU", container.cpuUsedPerc)}
               {renderNetwork(
@@ -318,25 +315,26 @@ const Docker: FC<DockerProps> = ({ container, date }) => {
                 container.ioWriteBytes,
                 container.ioReadBytes,
               )}
-            </div>
+            </Flex>
           </div>
-          <div className="col-xl-3 push-xl-5 col-md-6 blee-row">
+          <div className="col-xl-3 push-xl-5 col-md-6">
             <div style={{ minWidth: 0 }}>
-              <small>
-                <strong>Created&nbsp;at:</strong>
-                &nbsp;
-                {formatDateTime(container.createdAt)} {date}
-                <br />
-                <strong>Image&nbsp;name:</strong>
-                &nbsp;
-                {container.image}
-                <br />
-                <div className="overflow-ellipsis">
-                  <strong>Cmd:</strong>
-                  &nbsp;
-                  <span title={container.command}>{container.command}</span>
-                </div>
-              </small>
+              <DataListRoot orientation={"horizontal"} gap={0}>
+                <DataListItem
+                  label="Created at"
+                  value={formatDateTime(container.createdAt)}
+                />
+                <DataListItem
+                  label={startedAt[0]}
+                  value={formatDateTime(startedAt[1])}
+                />
+                <DataListItem label="Image name" value={container.image} />
+                <DataListItem
+                  label="Cmd"
+                  value={container.command}
+                  textOverflow={"ellipsis"}
+                />
+              </DataListRoot>
             </div>
           </div>
           <div
