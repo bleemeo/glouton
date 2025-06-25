@@ -818,6 +818,8 @@ github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza v0.126.0 h1
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza v0.126.0/go.mod h1:WltDSWZS5iNBbCz8eH3OIswEgoGgh+AuZU+GYtlxoOA=
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.126.0 h1:+7OFOEhSExnzgQv0idSSq/gCCm3RZ7H2ky/bAtrrrFM=
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.126.0/go.mod h1:1hCzWgLQTZnv62vRwea/ayxnGB87YwiDEebTWW5rtec=
+github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.126.0 h1:QCfIEMKK4Qc4mQn5Vh2hTME3+5DVzN/rlI3GiIWMjTc=
+github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.126.0/go.mod h1:6pDwFNR5u9V5fl4Yw49p3bzqSQibye56PgrObx1s7D8=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.126.0 h1:rV94rX6kw92VzeXIr2yL00M753wTyFPDaAOh43zE1eg=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.126.0/go.mod h1:R+kLdaJ9/ZlynI088ykveGhi93NWiXZfl6CnhNMrZXk=
 github.com/openconfig/gnmi v0.11.0 h1:H7pLIb/o3xObu3+x0Fv9DCK7TH3FUh7mNwbYe+34hFw=
@@ -1119,6 +1121,8 @@ go.opentelemetry.io/collector/processor/batchprocessor v0.126.0 h1:OpBsYiaQMtkg7
 go.opentelemetry.io/collector/processor/batchprocessor v0.126.0/go.mod h1:vrgWVm8XTDkY3a01WDMOkd6J0vqZ3lDnGM7bay0mnFY=
 go.opentelemetry.io/collector/processor/processorhelper v0.126.0 h1:EMyxbywaeA9iSwR5pIKMTyhwdLS62rZ2SWfN+SPB114=
 go.opentelemetry.io/collector/processor/processorhelper v0.126.0/go.mod h1:7eWyE5CMabClS24dPZzKx1RoICrHLJoZZgeL8mJL3dM=
+go.opentelemetry.io/collector/processor/processorhelper/xprocessorhelper v0.126.0 h1:JEzHJL6v/KPtVqfWdg6CmAoKdM/K2pu4kJZffP8rlMc=
+go.opentelemetry.io/collector/processor/processorhelper/xprocessorhelper v0.126.0/go.mod h1:248ActFrqGjayGJjgBOiyXZltMtp+3LRFeBslYauLx8=
 go.opentelemetry.io/collector/processor/processortest v0.126.0 h1:kKbMQ19I3K1mTNApVgqAzjpSjKGJzsAy+vGDZOMGk9M=
 go.opentelemetry.io/collector/processor/processortest v0.126.0/go.mod h1:OSP8iQDxn1vP71ChYQVSYYQ08s2r910G8eMOnMA7aiI=
 go.opentelemetry.io/collector/processor/xprocessor v0.126.0 h1:RM6vWlJbsQwMGwtoUkKPhLUWHKcdfXndXHE+fFg0YJc=

@@ -88,6 +88,7 @@ func makePipeline( //nolint:maintidx
 	cfg config.OpenTelemetry,
 	hostroot string,
 	commandRunner CommandRunner,
+	facter Facter,
 	pushLogs func(context.Context, []byte) error,
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability,
 	persister *persistHost,
@@ -229,7 +230,24 @@ func makePipeline( //nolint:maintidx
 
 	pipeline.startedComponents = append(pipeline.startedComponents, logFilter)
 
-	pipeline.inputConsumer = logFilter
+	logResourceAttribute, err := processorhelper.NewLogs(
+		ctx,
+		processor.Settings{TelemetrySettings: withoutDebugLogs(pipeline.telemetry)},
+		nil,
+		logFilter,
+		makeResourceAttributeFn(facter),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("setup log filter: %w", err)
+	}
+
+	if err = logResourceAttribute.Start(ctx, nil); err != nil {
+		return nil, fmt.Errorf("start log resource attribute: %w", err)
+	}
+
+	pipeline.startedComponents = append(pipeline.startedComponents, logResourceAttribute)
+
+	pipeline.inputConsumer = logResourceAttribute
 
 	if cfg.GRPC.Enable || cfg.HTTP.Enable {
 		factoryReceiver := otlpreceiver.NewFactory()
@@ -387,6 +405,31 @@ func makeEnforceBackPressureFn(
 			return logs, processorhelper.ErrSkipProcessingData
 		default:
 			logger.V(1).Printf("Bad logs availability status: %s", status)
+		}
+
+		return logs, nil
+	}
+}
+
+func makeResourceAttributeFn(
+	facter Facter,
+) processorhelper.ProcessLogsFunc {
+	return func(ctx context.Context, logs plog.Logs) (plog.Logs, error) {
+		facts, err := facter.Facts(ctx, 24*time.Hour)
+		if err != nil {
+			return logs, err
+		}
+
+		if facts["hostname"] == "" {
+			return logs, nil
+		}
+
+		for _, r := range logs.ResourceLogs().All() {
+			attr := r.Resource().Attributes()
+
+			if _, ok := attr.Get("host.name"); !ok {
+				r.Resource().Attributes().PutStr("host.name", facts["hostname"])
+			}
 		}
 
 		return logs, nil

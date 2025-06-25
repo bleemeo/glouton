@@ -39,6 +39,7 @@ require (
 	github.com/ncabatoff/process-exporter v0.8.7
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza v0.126.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.126.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.126.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.126.0
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.1
@@ -307,6 +308,8 @@ require (
 	go.opentelemetry.io/collector/internal/telemetry v0.126.0 // indirect
 	go.opentelemetry.io/collector/pdata/pprofile v0.126.0 // indirect
 	go.opentelemetry.io/collector/pipeline v0.126.0 // indirect
+	go.opentelemetry.io/collector/processor/processorhelper/xprocessorhelper v0.126.0 // indirect
+	go.opentelemetry.io/collector/processor/xprocessor v0.126.0 // indirect
 	go.opentelemetry.io/collector/receiver/receiverhelper v0.126.0 // indirect
 	go.opentelemetry.io/collector/receiver/xreceiver v0.126.0 // indirect
 	go.opentelemetry.io/contrib/bridges/otelzap v0.10.0 // indirect

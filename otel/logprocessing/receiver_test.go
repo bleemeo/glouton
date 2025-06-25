@@ -159,6 +159,17 @@ func noExecRunner(t *testing.T) dummyRunner {
 	}
 }
 
+type dummyFacter struct{}
+
+func (dummyFacter) Facts(ctx context.Context, maxAge time.Duration) (facts map[string]string, err error) {
+	return map[string]string{"hostname": "myhostname"}, nil
+}
+
+// fakeFacter returns a Facter than use hard coded facts (with just "hostname"="myhosname").
+func fakeFacter() Facter {
+	return dummyFacter{}
+}
+
 // mustNewPersistHost is a shorthand to instantiate both a state and a persist host.
 func mustNewPersistHost(t *testing.T) *persistHost {
 	t.Helper()
