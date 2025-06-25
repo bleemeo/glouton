@@ -1,0 +1,24 @@
+smartctl 7.1 2019-12-30 r5022 [x86_64-linux-5.4.17-2102.205.7.2.el8uek.x86_64] (local build)
+Copyright (C) 2002-19, Bruce Allen, Christian Franke, www.smartmontools.org
+
+=== START OF INFORMATION SECTION ===
+Vendor:               HPE
+Product:              LOGICAL VOLUME
+Revision:             3.53
+Compliance:           SPC-3
+User Capacity:        960,163,569,664 bytes [960 GB]
+Logical block size:   512 bytes
+Physical block size:  4096 bytes
+Rotation Rate:        Solid State Device
+Logical Unit id:      0x600508bcafec144d9a4074b9e1005b4d
+Serial number:        PWXAB0CDEFG01W
+Device type:          disk
+Local Time is:        Wed Jun 25 12:51:08 2025 UTC
+SMART support is:     Available - device has SMART capability.
+SMART support is:     Enabled
+Temperature Warning:  Disabled or Not Supported
+
+=== START OF READ SMART DATA SECTION ===
+SMART Health Status: OK
+Current Drive Temperature:     0 C
+Drive Trip Temperature:        0 C

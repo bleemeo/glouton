@@ -1,0 +1,7 @@
+device_scan:
+  /dev/sg0:
+    file: smartctl_sg0.txt
+    rc: 0
+  /dev/sg1:
+    file: smartctl_sg1.txt
+    rc: 0
