@@ -72,7 +72,7 @@ const DockerProcesses: FC<DockerProcessesProps> = ({ containerId, name }) => {
               };
             });
             return (
-              <Center flexDirection="column" overflow="auto" w="100%">
+              <Center flexDirection="column" overflow="auto" w="98%">
                 <Text fontSize="xl" as="b">
                   Processes
                 </Text>
