@@ -283,6 +283,7 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
   const serviceModal = (
     <Dialog.Root open={isOpenModal} onOpenChange={onCloseModal}>
       <Dialog.Backdrop />
+      <Dialog.Positioner>
       <Dialog.Content>
         <Dialog.Header>{showServiceDetails?.name}</Dialog.Header>
         <Dialog.CloseTrigger />
@@ -298,6 +299,7 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
           </Button>
         </Dialog.Footer>
       </Dialog.Content>
+      </Dialog.Positioner>
     </Dialog.Root>
   );
 
