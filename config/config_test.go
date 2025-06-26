@@ -586,8 +586,8 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "wrong type",
 			Files: []string{"testdata/bad_wrong_type.conf"},
 			WantWarnings: []string{
-				`cannot parse 'metric.softstatus_period_default' as int: strconv.ParseInt: parsing "string": invalid syntax`,
-				`cannot parse 'metric.softstatus_period[1][system_pending_security_updates]' as int: strconv.ParseInt: parsing "bad": invalid syntax`,
+				`'metric.softstatus_period_default' cannot parse value as 'int': strconv.ParseInt: parsing "string": invalid syntax`,
+				`'metric.softstatus_period[1][system_pending_security_updates]' cannot parse value as 'int': strconv.ParseInt: parsing "bad": invalid syntax`,
 			},
 			WantConfig: Config{
 				Metric: Metric{
@@ -703,7 +703,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				"GLOUTON_METRIC_SOFTSTATUS_PERIOD": "cpu_used=10,disk_used",
 			},
 			WantWarnings: []string{
-				`error decoding 'metric.softstatus_period': could not parse map from string: 'cpu_used=10,disk_used'`,
+				`'metric.softstatus_period' could not parse map from string: 'cpu_used=10,disk_used'`,
 			},
 		},
 		{
@@ -826,7 +826,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				"GLOUTON_ZABBIX_ENABLE": "Yes",
 			},
 			WantWarnings: []string{
-				`error decoding 'mqtt.ssl_insecure': strconv.ParseBool: parsing "invalid": invalid syntax`,
+				`'mqtt.ssl_insecure' strconv.ParseBool: parsing "invalid": invalid syntax`,
 			},
 			WantConfig: Config{
 				Agent: Agent{

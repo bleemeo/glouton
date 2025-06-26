@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"iter"
 	"net/http"
 	"net/url"
 	"path"
@@ -231,6 +232,11 @@ func (errIter errorIterator) At() json.RawMessage {
 
 func (errIter errorIterator) Err() error {
 	return errIter.err
+}
+
+func (errIter errorIterator) All(ctx context.Context) iter.Seq[json.RawMessage] {
+	return func(yield func(json.RawMessage) bool) {
+	}
 }
 
 // IsAuthenticationError returns whether the error is a bleemeo.AuthError or not.
