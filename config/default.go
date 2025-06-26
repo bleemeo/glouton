@@ -357,6 +357,12 @@ func DefaultConfig() Config { //nolint:maintidx
 			},
 			MaxConcurrency: 4,
 		},
+		SSACLI: SSACLI{
+			Enable:           true,
+			UseSudo:          true,
+			BinarySearchPath: "", // means default $PATH
+			Timeout:          10,
+		},
 		Tags: []string{},
 		Telegraf: Telegraf{
 			DockerMetricsEnable: true,

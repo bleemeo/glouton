@@ -1,0 +1,4 @@
+
+Smart Array P420 in Slot 3                (sn: PABCD0ABC0A012)
+Smart Array P420i in Slot 0 (Embedded)    (sn: 012345678AB1234)
+

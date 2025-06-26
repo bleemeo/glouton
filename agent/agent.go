@@ -72,6 +72,7 @@ import (
 	"github.com/bleemeo/glouton/prometheus/exporter/blackbox"
 	"github.com/bleemeo/glouton/prometheus/exporter/ipmi"
 	"github.com/bleemeo/glouton/prometheus/exporter/snmp"
+	"github.com/bleemeo/glouton/prometheus/exporter/ssacli"
 	"github.com/bleemeo/glouton/prometheus/process"
 	"github.com/bleemeo/glouton/prometheus/registry"
 	"github.com/bleemeo/glouton/prometheus/rules"
@@ -1457,6 +1458,22 @@ func (a *agent) registerInputs(ctx context.Context) {
 		)
 		if err != nil {
 			logger.V(1).Printf("unable to add IPMI input: %v", err)
+		}
+	}
+
+	if a.config.SSACLI.Enable {
+		gatherer := ssacli.New(a.config.SSACLI, a.commandRunner)
+
+		_, err := a.gathererRegistry.RegisterGatherer(
+			registry.RegistrationOption{
+				Description: "HP ssacli metrics",
+				JitterSeed:  0,
+				MinInterval: time.Minute,
+			},
+			gatherer,
+		)
+		if err != nil {
+			logger.V(1).Printf("unable to add ssacli input: %v", err)
 		}
 	}
 

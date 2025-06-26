@@ -1,0 +1,8 @@
+
+HPE Smart Array P408i-a SR Gen10 in Slot 0 (Embedded)
+
+   Array A
+
+      physicaldrive 1I:1:1 (port 1I:box 1:bay 1, SATA SSD, 960 GB, OK)
+      physicaldrive 1I:1:2 (port 1I:box 1:bay 2, SATA SSD, 960 GB, OK)
+

@@ -1,0 +1,8 @@
+
+Smart Array P222 in Slot 1
+
+   array A
+
+      physicaldrive 2I:0:1 (port 2I:box 0:bay 1, SATA, 500 GB, OK)
+      physicaldrive 2I:0:2 (port 2I:box 0:bay 2, SATA, 500 GB, OK)
+

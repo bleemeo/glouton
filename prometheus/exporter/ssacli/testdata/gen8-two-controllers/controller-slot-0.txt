@@ -1,0 +1,17 @@
+
+Smart Array P420i in Slot 0 (Embedded)
+
+   Array A
+
+      physicaldrive 1I:2:1 (port 1I:box 2:bay 1, SAS HDD, 1.2 TB, OK)
+      physicaldrive 1I:2:2 (port 1I:box 2:bay 2, SAS HDD, 1.2 TB, OK)
+      physicaldrive 1I:2:3 (port 1I:box 2:bay 3, SAS HDD, 1.2 TB, OK)
+      physicaldrive 1I:2:4 (port 1I:box 2:bay 4, SAS HDD, 1.2 TB, OK)
+      physicaldrive 2I:2:5 (port 2I:box 2:bay 5, SAS HDD, 1.2 TB, OK)
+      physicaldrive 2I:2:6 (port 2I:box 2:bay 6, SAS HDD, 1.2 TB, Failed)
+
+   SmartCache array B
+
+      physicaldrive 2I:2:7 (port 2I:box 2:bay 7, SATA SSD, 480 GB, OK)
+      physicaldrive 2I:2:8 (port 2I:box 2:bay 8, SATA SSD, 480 GB, OK)
+

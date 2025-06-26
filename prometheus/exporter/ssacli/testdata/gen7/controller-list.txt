@@ -1,0 +1,3 @@
+
+Smart Array P410i in Slot 0 (Embedded)    (sn: 012345678AB1234)
+
