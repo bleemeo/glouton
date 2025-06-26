@@ -13,11 +13,20 @@ import {
   SortingState,
   useReactTable,
 } from "@tanstack/react-table";
-import { Table as BTable } from "react-bootstrap";
 
 import { Process } from "../Data/data.interface";
 import { formatToBytes, percentToString2Digits } from "../utils/formater";
-import { Box, Center, Divider, Flex, Text, Tooltip } from "@chakra-ui/react";
+import {
+  Box,
+  Button,
+  Center,
+  Flex,
+  NumberInput,
+  Separator,
+  Table,
+  Text,
+} from "@chakra-ui/react";
+import { Tooltip } from "./tooltip";
 
 const cmdLineCommand = ["#C9B202", "#2ecc71", "#3498db"];
 
@@ -259,7 +268,7 @@ const ProcessesTable: FC<ProcessesTableProps> = ({ data, widthLastColumn }) => {
         id: "cmdline",
         header: "Name",
         cell: (info) => (
-          <Tooltip label={info.getValue()}>
+          <Tooltip content={info.getValue()}>
             {formatCmdLine({
               input: info.getValue() as string,
               widthLastColumn: widthLastColumn,
@@ -305,13 +314,13 @@ const ProcessesTable: FC<ProcessesTableProps> = ({ data, widthLastColumn }) => {
 
   return (
     <Box pl={2} w="100%">
-      <BTable striped bordered hover responsive size="sm">
-        <thead>
+      <Table.Root striped interactive size="sm">
+        <Table.Header>
           {table.getHeaderGroups().map((headerGroup) => (
-            <tr key={headerGroup.id}>
+            <Table.Row key={headerGroup.id}>
               {headerGroup.headers.map((header) => {
                 return (
-                  <th key={header.id} colSpan={header.colSpan}>
+                  <Table.ColumnHeader key={header.id} colSpan={header.colSpan}>
                     <div
                       {...{
                         className: header.column.getCanSort()
@@ -329,71 +338,71 @@ const ProcessesTable: FC<ProcessesTableProps> = ({ data, widthLastColumn }) => {
                         desc: " ▼",
                       }[header.column.getIsSorted() as string] ?? null}
                     </div>
-                  </th>
+                  </Table.ColumnHeader>
                 );
               })}
-            </tr>
+            </Table.Row>
           ))}
-        </thead>
-        <tbody>
+        </Table.Header>
+        <Table.Body>
           {table.getRowModel().rows.map((row) => (
-            <tr key={row.id}>
+            <Table.Row key={row.id}>
               {row.getVisibleCells().map((cell) => (
-                <td key={cell.id}>
+                <Table.Cell key={cell.id}>
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </td>
+                </Table.Cell>
               ))}
-            </tr>
+            </Table.Row>
           ))}
-        </tbody>
-        <tfoot>
+        </Table.Body>
+        <Table.Footer>
           {table.getFooterGroups().map((footerGroup) => (
-            <tr key={footerGroup.id}>
+            <Table.Row key={footerGroup.id}>
               {footerGroup.headers.map((header) => (
-                <th key={header.id} colSpan={header.colSpan}>
+                <Table.ColumnHeader key={header.id} colSpan={header.colSpan}>
                   {header.isPlaceholder
                     ? null
                     : flexRender(
                         header.column.columnDef.footer,
                         header.getContext(),
                       )}
-                </th>
+                </Table.ColumnHeader>
               ))}
-            </tr>
+            </Table.Row>
           ))}
-        </tfoot>
-      </BTable>
+        </Table.Footer>
+      </Table.Root>
       <Flex justify="space-between" align="center">
-        <Box>
-          <button
-            className="border rounded p-1"
+        <Flex gap={2} alignItems="center">
+          <Button
+            rounded={"0.25rem"}
             onClick={() => table.firstPage()}
             disabled={!table.getCanPreviousPage()}
           >
             {"<<"}
-          </button>
-          <button
-            className="border rounded p-1"
+          </Button>
+          <Button
+            rounded={"0.25rem"}
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
           >
             {"<"}
-          </button>
-          <button
-            className="border rounded p-1"
+          </Button>
+          <Button
+            rounded={"0.25rem"}
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
           >
             {">"}
-          </button>
-          <button
-            className="border rounded p-1"
+          </Button>
+          <Button
+            rounded={"0.25rem"}
             onClick={() => table.lastPage()}
             disabled={!table.getCanNextPage()}
           >
             {">>"}
-          </button>
-        </Box>
+          </Button>
+        </Flex>
 
         <Flex alignItems="center">
           <Center flexDir="column" alignItems="flex-start">
@@ -403,18 +412,23 @@ const ProcessesTable: FC<ProcessesTableProps> = ({ data, widthLastColumn }) => {
               {table.getPageCount().toLocaleString()}
             </Text>
           </Center>
-          <Divider orientation="vertical" mx={3} />
+          <Separator orientation="vertical" mx={3} />
           <Center alignItems="center">
             <Text mb={0}>Go to page:</Text>
-            <input
-              type="number"
-              defaultValue={table.getState().pagination.pageIndex + 1}
+            <NumberInput.Root
+              defaultValue={(
+                table.getState().pagination.pageIndex + 1
+              ).toString()}
               onChange={(e) => {
-                const page = e.target.value ? Number(e.target.value) - 1 : 0;
+                const target = e.target as HTMLInputElement;
+                const page = target.value ? Number(target.value) - 1 : 0;
                 table.setPageIndex(page);
               }}
-              className="border p-1 rounded w-16"
-            />
+              width="200px"
+            >
+              <NumberInput.Control />
+              <NumberInput.Input />
+            </NumberInput.Root>
           </Center>
         </Flex>
       </Flex>

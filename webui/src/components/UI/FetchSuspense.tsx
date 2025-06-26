@@ -3,7 +3,7 @@ import React, { FC, ReactNode } from "react";
 import { AxiosError } from "axios";
 
 import QueryError from "./QueryError";
-import Loading from "./Loading";
+import { Loading } from "./Loading";
 
 interface FetchSuspenseProps {
   children: (props: any) => ReactNode;

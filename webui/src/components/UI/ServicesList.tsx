@@ -1,23 +1,13 @@
 import React, { FC } from "react";
 import { Service } from "../Data/data.interface";
-import {
-  TableContainer,
-  Table,
-  Thead,
-  Th,
-  Tr,
-  Tbody,
-  Box,
-  Text,
-  Td,
-  Tooltip,
-} from "@chakra-ui/react";
-import Loading from "./Loading";
+import { Table, Box, Text } from "@chakra-ui/react";
+import { Loading } from "../UI/Loading";
 import { useHTTPDataFetch } from "../utils/hooks";
 import { SERVICES_URL } from "../utils/dataRoutes";
 import QueryError from "./QueryError";
 import FetchSuspense from "./FetchSuspense";
-import { MinusIcon } from "@chakra-ui/icons";
+import { Tooltip } from "./tooltip";
+import { FaMinus } from "react-icons/fa";
 
 export const ServicesList: FC = () => {
   const {
@@ -52,50 +42,31 @@ export const ServicesList: FC = () => {
             <Text fontSize="xl" as="b">
               Services
             </Text>
-            <TableContainer w="100%">
-              <Table variant="simple" w="100%">
-                <Thead>
-                  <Tr>
-                    <Th>Service</Th>
-                    <Th>IP Address</Th>
-                    <Th>Instance</Th>
-                    <Th>Exe path</Th>
-                  </Tr>
-                </Thead>
-                <Tbody>
-                  {services
-                    ? services.map((service) => (
-                        <Tr key={service.name}>
-                          <Td>
-                            <Text pb={0} as="b">
-                              {service.name}
-                            </Text>
-                          </Td>
-                          <Td>{service.ipAddress}</Td>
-                          <Td>
-                            {service.containerId ? (
-                              <Tooltip
-                                label={service.containerId}
-                                aria-label="ContainerID tooltip"
-                              >
-                                <Text
-                                  overflow="hidden"
-                                  textOverflow="ellipsis"
-                                  whiteSpace="nowrap"
-                                  mb={0}
-                                  fontSize="xs"
-                                >
-                                  {service.containerId}
-                                </Text>
-                              </Tooltip>
-                            ) : (
-                              <MinusIcon />
-                            )}
-                          </Td>
-                          <Td maxW={0}>
+            {/* <TableContainer w="100%"> */}
+            <Table.Root variant="line" w="100%">
+              <Table.Header>
+                <Table.Row>
+                  <Table.ColumnHeader>Service</Table.ColumnHeader>
+                  <Table.ColumnHeader>IP Address</Table.ColumnHeader>
+                  <Table.ColumnHeader>Instance</Table.ColumnHeader>
+                  <Table.ColumnHeader>Exe path</Table.ColumnHeader>
+                </Table.Row>
+              </Table.Header>
+              <Table.Body>
+                {services
+                  ? services.map((service) => (
+                      <Table.Row key={service.name}>
+                        <Table.Cell>
+                          <Text pb={0} as="b">
+                            {service.name}
+                          </Text>
+                        </Table.Cell>
+                        <Table.Cell>{service.ipAddress}</Table.Cell>
+                        <Table.Cell>
+                          {service.containerId ? (
                             <Tooltip
-                              label={service.exePath}
-                              aria-label="Exe path tooltip"
+                              content={service.containerId}
+                              aria-label="ContainerID tooltip"
                             >
                               <Text
                                 overflow="hidden"
@@ -104,16 +75,35 @@ export const ServicesList: FC = () => {
                                 mb={0}
                                 fontSize="xs"
                               >
-                                {service.exePath}
+                                {service.containerId}
                               </Text>
                             </Tooltip>
-                          </Td>
-                        </Tr>
-                      ))
-                    : null}
-                </Tbody>
-              </Table>
-            </TableContainer>
+                          ) : (
+                            <FaMinus />
+                          )}
+                        </Table.Cell>
+                        <Table.Cell maxW={0}>
+                          <Tooltip
+                            content={service.exePath}
+                            aria-label="Exe path tooltip"
+                          >
+                            <Text
+                              overflow="hidden"
+                              textOverflow="ellipsis"
+                              whiteSpace="nowrap"
+                              mb={0}
+                              fontSize="xs"
+                            >
+                              {service.exePath}
+                            </Text>
+                          </Tooltip>
+                        </Table.Cell>
+                      </Table.Row>
+                    ))
+                  : null}
+              </Table.Body>
+            </Table.Root>
+            {/* </TableContainer> */}
           </>
         );
       }}

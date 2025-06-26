@@ -1,49 +1,20 @@
 import React from "react";
-import {
-  ChakraBaseProvider,
-  extendBaseTheme,
-  theme as chakraTheme,
-} from "@chakra-ui/react";
+import { Provider } from "./UI/provider";
 
 import Routes from "./Routes";
 import TopNavBar from "./App/TopNavBar";
-
-const {
-  Button,
-  Modal,
-  Badge,
-  Card,
-  Table,
-  Tooltip,
-  Tag,
-  Select,
-  Alert,
-  Divider,
-} = chakraTheme.components;
-
-const theme = extendBaseTheme({
-  components: {
-    Button,
-    Modal,
-    Badge,
-    Card,
-    Table,
-    Tooltip,
-    Tag,
-    Select,
-    Alert,
-    Divider,
-  },
-});
+import { Container, Theme } from "@chakra-ui/react";
 
 const Root = () => {
   return (
-    <ChakraBaseProvider theme={theme}>
-      <TopNavBar />
-      <div className="main-content">
-        <Routes />
-      </div>
-    </ChakraBaseProvider>
+    <Provider>
+      <Theme height={"full"} width={"full"}>
+        <TopNavBar />
+        <Container fluid ps={"90px"} mt={"70px"} w={"100vw"} h={"100vh"}>
+          <Routes />
+        </Container>
+      </Theme>
+    </Provider>
   );
 };
 

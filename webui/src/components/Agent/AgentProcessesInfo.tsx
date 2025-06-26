@@ -2,23 +2,32 @@ import React, { FC } from "react";
 import * as d3 from "d3";
 
 import { bytesToString, formatDateTimeWithSeconds } from "../utils/formater";
-import { chartColorMap } from "../utils/colors";
 import { Topinfo } from "../Data/data.interface";
+import {
+  Badge,
+  Box,
+  ColorSwatch,
+  Flex,
+  Progress,
+  Stack,
+  Table,
+} from "@chakra-ui/react";
+import { Tooltip } from "../UI/tooltip";
+import { DataListItem, DataListRoot } from "../UI/data-list";
 
-type PercentBarProps = {
+type ColorPillProps = {
   color: string;
-  title: string;
-  percent: number;
+  label: string;
 };
 
-const PercentBar: FC<PercentBarProps> = ({ color, title, percent }) => (
-  <div
-    className="percent-bar"
-    title={title}
-    data-toggle="tooltip"
-    style={{ backgroundColor: color, width: percent + "%" }}
-  />
-);
+const ColorPill: FC<ColorPillProps> = ({ color, label }) => {
+  return (
+    <>
+      <ColorSwatch value={color} size={"2xs"} w={"2"} />
+      {label}
+    </>
+  );
+};
 
 const formatUptime = (uptimeSeconds: number) => {
   const uptimeDays = Math.trunc(uptimeSeconds / (24 * 60 * 60));
@@ -104,212 +113,290 @@ const AgentProcessesInfo: FC<AgentProcessesInfoProps> = ({ top }) => {
     `${bytesToString(top.Swap.Used * 1024)} used` +
     ` ‒ ${bytesToString(top.Swap.Free * 1024)} free`;
   const maxLoad = Math.max(...top.Loads);
-  const loadTooltipMdg =
-    top.Loads[0] + "\n" + top.Loads[1] + "\n" + top.Loads[2];
+
   return (
     <div className="row">
       <div className="col-lg-8">
-        <table
-          className="table table-sm borderless"
-          style={{ marginBottom: 0 }}
-        >
-          <tbody>
-            <tr>
-              <td className="percent-bar-label">
-                <strong>Cpu(s):</strong>
-              </td>
-              <td>
-                <div className="percent-bars">
-                  <PercentBar
-                    color="#e67e22"
-                    percent={cpuSystemPerc}
-                    title={cpuTooltipMsg}
-                  />
-                  <PercentBar
-                    color="#467FCF"
-                    percent={cpuUserPerc}
-                    title={cpuTooltipMsg}
-                  />
-                  <PercentBar
-                    color="#4DD0E1"
-                    percent={cpuNicePerc}
-                    title={cpuTooltipMsg}
-                  />
-                  <PercentBar
-                    color="#e74c3c"
-                    percent={cpuWaitPerc}
-                    title={cpuTooltipMsg}
-                  />
-                  <PercentBar
-                    color="#2ecc71"
-                    percent={cpuIdlePerc}
-                    title={cpuTooltipMsg}
-                  />
-                </div>
-              </td>
-            </tr>
-            <tr>
-              <td className="percent-bar-label">
-                <strong>Mem:</strong>
-              </td>
-              <td>
-                <div className="percent-bars">
-                  <PercentBar
-                    color="#467FCF"
-                    percent={memUsedPerc}
-                    title={memTooltipMsg}
-                  />
-                  <PercentBar
-                    color="#95a5a6"
-                    percent={memBuffersPerc}
-                    title={memTooltipMsg}
-                  />
-                  <PercentBar
-                    color="#f1c40f"
-                    percent={memCachedPerc}
-                    title={memTooltipMsg}
-                  />
-                  <PercentBar
-                    color="#2ecc71"
-                    percent={memFreePerc}
-                    title={memTooltipMsg}
-                  />
-                </div>
-              </td>
-            </tr>
-            <tr>
-              <td className="percent-bar-label">
-                <strong>Swap:</strong>
-              </td>
-              <td>
-                <div className="percent-bars">
-                  <PercentBar
-                    color="#467FCF"
-                    percent={swapUsedPerc}
-                    title={swapTooltipMsg}
-                  />
-                  <PercentBar
-                    color="#2ecc71"
-                    percent={swapFreePerc}
-                    title={swapTooltipMsg}
-                  />
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <Table.Root size={"sm"} variant="line" w="100%">
+          <Table.Body>
+            <Tooltip content={cpuTooltipMsg} aria-label="CPU tooltip">
+              <Table.Row>
+                <Table.Cell style={{ width: "10%" }}>
+                  <strong>Cpu(s):</strong>
+                </Table.Cell>
+                <Table.Cell>
+                  <Stack direction={"row"} w={"100%"} gap={0}>
+                    <Progress.Root
+                      value={100}
+                      size={"xl"}
+                      shape={"square"}
+                      colorPalette="orange"
+                      width={cpuSystemPerc + "%"}
+                    >
+                      <Progress.Track>
+                        <Progress.Range />
+                      </Progress.Track>
+                    </Progress.Root>
+                    <Progress.Root
+                      value={100}
+                      size={"xl"}
+                      shape={"square"}
+                      colorPalette="blue"
+                      width={cpuUserPerc + "%"}
+                    >
+                      <Progress.Track>
+                        <Progress.Range />
+                      </Progress.Track>
+                    </Progress.Root>
+                    <Progress.Root
+                      value={100}
+                      size={"xl"}
+                      shape={"square"}
+                      colorPalette="cyan"
+                      width={cpuNicePerc + "%"}
+                    >
+                      <Progress.Track>
+                        <Progress.Range />
+                      </Progress.Track>
+                    </Progress.Root>
+                    <Progress.Root
+                      value={100}
+                      size={"xl"}
+                      shape={"square"}
+                      colorPalette="red"
+                      width={cpuWaitPerc + "%"}
+                    >
+                      <Progress.Track>
+                        <Progress.Range />
+                      </Progress.Track>
+                    </Progress.Root>
+                    <Progress.Root
+                      value={100}
+                      size={"xl"}
+                      shape={"square"}
+                      colorPalette="green"
+                      width={cpuIdlePerc + "%"}
+                    >
+                      <Progress.Track>
+                        <Progress.Range />
+                      </Progress.Track>
+                    </Progress.Root>
+                  </Stack>
+                </Table.Cell>
+              </Table.Row>
+            </Tooltip>
+            <Tooltip content={memTooltipMsg} aria-label="Memory tooltip">
+              <Table.Row>
+                <Table.Cell style={{ width: "10%" }}>
+                  <strong>Mem:</strong>
+                </Table.Cell>
+                <Table.Cell>
+                  <Stack direction={"row"} w={"100%"} gap={0}>
+                    <Progress.Root
+                      value={100}
+                      size={"xl"}
+                      shape={"square"}
+                      colorPalette="blue"
+                      width={memUsedPerc + "%"}
+                    >
+                      <Progress.Track>
+                        <Progress.Range />
+                      </Progress.Track>
+                    </Progress.Root>
+                    <Progress.Root
+                      value={100}
+                      size={"xl"}
+                      shape={"square"}
+                      colorPalette="orange"
+                      width={memBuffersPerc + "%"}
+                    >
+                      <Progress.Track>
+                        <Progress.Range />
+                      </Progress.Track>
+                    </Progress.Root>
+                    <Progress.Root
+                      value={100}
+                      size={"xl"}
+                      shape={"square"}
+                      colorPalette="yellow"
+                      width={memCachedPerc + "%"}
+                    >
+                      <Progress.Track>
+                        <Progress.Range />
+                      </Progress.Track>
+                    </Progress.Root>
+                    <Progress.Root
+                      value={100}
+                      size={"xl"}
+                      shape={"square"}
+                      colorPalette="green"
+                      width={memFreePerc + "%"}
+                    >
+                      <Progress.Track>
+                        <Progress.Range />
+                      </Progress.Track>
+                    </Progress.Root>
+                  </Stack>
+                </Table.Cell>
+              </Table.Row>
+            </Tooltip>
+            <Tooltip content={swapTooltipMsg} aria-label="Swap tooltip">
+              <Table.Row>
+                <Table.Cell style={{ width: "10%" }}>
+                  <strong>Swap:</strong>
+                </Table.Cell>
+                <Table.Cell>
+                  <Stack direction={"row"} w={"100%"} gap={0}>
+                    <Progress.Root
+                      value={100}
+                      size={"xl"}
+                      shape={"square"}
+                      colorPalette="blue"
+                      width={swapUsedPerc + "%"}
+                    >
+                      <Progress.Track>
+                        <Progress.Range />
+                      </Progress.Track>
+                    </Progress.Root>
+                    <Progress.Root
+                      value={100}
+                      size={"xl"}
+                      shape={"square"}
+                      colorPalette="green"
+                      width={swapFreePerc + "%"}
+                    >
+                      <Progress.Track>
+                        <Progress.Range />
+                      </Progress.Track>
+                    </Progress.Root>
+                  </Stack>
+                </Table.Cell>
+              </Table.Row>
+            </Tooltip>
+          </Table.Body>
+        </Table.Root>
       </div>
-      <div className="col-lg-3">
-        <table
-          className="table table-sm borderless"
-          style={{ marginBottom: 0 }}
-        >
-          <tbody>
-            <tr>
-              <td colSpan={5}>
-                <h4 style={{ marginBottom: 0 }}>
-                  <strong style={{ fontSize: "medium" }}>Last update: </strong>
-                  <div style={{ fontSize: "medium" }}>
-                    {formatDateTimeWithSeconds(timeDate)}
-                  </div>
-                </h4>
-              </td>
-            </tr>
-            <tr>
-              <td colSpan={5}>
-                <strong>Users:</strong> {top.Users}
-              </td>
-            </tr>
-            <tr>
-              <td colSpan={5}>
-                <strong>Uptime:</strong> {formatUptime(top.Uptime)}
-              </td>
-            </tr>
-            <tr>
-              <td colSpan={5}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "left",
-                    justifyContent: "right",
-                    flexDirection: "row",
-                  }}
-                >
-                  <div style={{ width: "30%" }}>
-                    <strong>Load average:</strong>
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "left",
-                      justifyContent: "right",
-                      flexDirection: "column",
-                      width: "70%",
-                    }}
+      <div className="col-lg-4">
+        <DataListRoot orientation={"horizontal"} variant={"bold"} gap={1}>
+          <DataListItem
+            label="Last update"
+            value={formatDateTimeWithSeconds(timeDate)}
+          />
+          <DataListItem label="Users" value={top.Users} />
+          <DataListItem label="Uptime" value={formatUptime(top.Uptime)} />
+          <DataListItem
+            label="Load average"
+            value={
+              <Tooltip
+                content={
+                  <DataListRoot orientation={"horizontal"} size={"sm"} gap={1}>
+                    <DataListItem
+                      label={<ColorPill color="blue" label="Load 5" />}
+                      value={top.Loads[0]}
+                    />
+                    <DataListItem
+                      label={<ColorPill color="orange" label="Load 10" />}
+                      value={top.Loads[1]}
+                    />
+                    <DataListItem
+                      label={<ColorPill color="green" label="Load 15" />}
+                      value={top.Loads[2]}
+                    />
+                  </DataListRoot>
+                }
+              >
+                <Box flexGrow={1}>
+                  <Progress.Root
+                    value={(top.Loads[0] / maxLoad) * 100}
+                    shape={"square"}
+                    size={"sm"}
+                    colorPalette="blue"
                   >
-                    <div className="percent-bars" style={{ height: "8px" }}>
-                      <PercentBar
-                        color={chartColorMap(0)}
-                        percent={(top.Loads[0] / maxLoad) * 100}
-                        title={loadTooltipMdg}
-                      />
-                    </div>
-                    <div className="percent-bars" style={{ height: "8px" }}>
-                      <PercentBar
-                        color={chartColorMap(1)}
-                        percent={(top.Loads[1] / maxLoad) * 100}
-                        title={loadTooltipMdg}
-                      />
-                    </div>
-                    <div className="percent-bars" style={{ height: "8px" }}>
-                      <PercentBar
-                        color={chartColorMap(2)}
-                        percent={(top.Loads[2] / maxLoad) * 100}
-                        title={loadTooltipMdg}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </td>
-            </tr>
-            <tr>
-              <td colSpan={5}>
-                <strong>Tasks:</strong>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <table className="table table-sm" style={{ marginBottom: 0 }}>
-          <tbody>
-            <tr>
-              <td>{top.Processes.length} total</td>
-              <td>
-                {top.Processes.filter((p) => p.status === "running").length}{" "}
-                running
-              </td>
-              <td>
-                {
-                  top.Processes.filter(
-                    (p) =>
-                      p.status === "sleeping" ||
-                      p.status === "?" ||
-                      p.status === "idle" ||
-                      p.status === "disk-sleep",
-                  ).length
-                }{" "}
-                sleeping
-              </td>
-              <td>
-                {top.Processes.filter((p) => p.status === "stopped").length}{" "}
-                stopped
-              </td>
-              <td>
-                {top.Processes.filter((p) => p.status === "zombie").length}{" "}
-                zombie
-              </td>
-            </tr>
-          </tbody>
-        </table>
+                    <Progress.Track>
+                      <Progress.Range />
+                    </Progress.Track>
+                  </Progress.Root>
+
+                  <Progress.Root
+                    value={(top.Loads[1] / maxLoad) * 100}
+                    shape={"square"}
+                    size={"sm"}
+                    colorPalette="orange"
+                  >
+                    <Progress.Track>
+                      <Progress.Range />
+                    </Progress.Track>
+                  </Progress.Root>
+
+                  <Progress.Root
+                    value={(top.Loads[2] / maxLoad) * 100}
+                    shape={"square"}
+                    size={"sm"}
+                    colorPalette="green"
+                  >
+                    <Progress.Track>
+                      <Progress.Range />
+                    </Progress.Track>
+                  </Progress.Root>
+                </Box>
+              </Tooltip>
+            }
+          />
+          <DataListItem
+            label="Tasks"
+            value={
+              <Flex gap={1} wrap={"wrap"}>
+                <Badge
+                  rounded={"md"}
+                  textTransform={"initial"}
+                  colorPalette={"blue"}
+                >
+                  {top.Processes.length} total
+                </Badge>
+                <Badge
+                  rounded={"md"}
+                  textTransform={"initial"}
+                  colorPalette={"green"}
+                >
+                  {top.Processes.filter((p) => p.status === "running").length}{" "}
+                  running
+                </Badge>
+                <Badge
+                  rounded={"md"}
+                  textTransform={"initial"}
+                  colorPalette={"orange"}
+                >
+                  {
+                    top.Processes.filter(
+                      (p) =>
+                        p.status === "sleeping" ||
+                        p.status === "?" ||
+                        p.status === "idle" ||
+                        p.status === "disk-sleep",
+                    ).length
+                  }{" "}
+                  sleeping
+                </Badge>
+                <Badge
+                  rounded={"md"}
+                  textTransform={"initial"}
+                  colorPalette={"red"}
+                >
+                  {top.Processes.filter((p) => p.status === "stopped").length}{" "}
+                  stopped
+                </Badge>
+                <Badge
+                  rounded={"md"}
+                  textTransform={"initial"}
+                  colorPalette={"black"}
+                >
+                  {top.Processes.filter((p) => p.status === "zombie").length}{" "}
+                  zombie
+                </Badge>
+              </Flex>
+            }
+          />
+        </DataListRoot>
       </div>
     </div>
   );

@@ -114,7 +114,7 @@ Glouton uses eslint as linter. You may run it with:
 Glouton uses prettier too. You may run it with:
 
 ```sh
-(cd webui; npm run pretify)
+(cd webui; npm run prettify)
 ```
 
 ### Developing the Windows installer

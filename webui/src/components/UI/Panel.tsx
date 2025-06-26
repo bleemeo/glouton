@@ -1,5 +1,5 @@
 import React, { FC } from "react";
-import { Box, Card, CardBody } from "@chakra-ui/react";
+import { Box, Card } from "@chakra-ui/react";
 
 type PanelProps = {
   children: React.ReactNode;
@@ -7,13 +7,13 @@ type PanelProps = {
 };
 
 const Panel: FC<PanelProps> = ({ children, className = "" }) => (
-  <Card m={2}>
+  <Card.Root m={2}>
     <Box mt="-0.8rem">
-      <CardBody>
+      <Card.Body>
         <Box className={className}>{children}</Box>
-      </CardBody>
+      </Card.Body>
     </Box>
-  </Card>
+  </Card.Root>
 );
 
 export default Panel;

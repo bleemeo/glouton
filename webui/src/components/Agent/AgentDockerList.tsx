@@ -4,13 +4,13 @@ import { DebounceInput } from "react-debounce-input";
 import Toggle from "../UI/Toggle";
 import QueryError from "../UI/QueryError";
 import Docker from "./Docker";
-import Loading from "../UI/Loading";
-
-import { formatDateTime } from "../utils/formater";
+import { Loading } from "../UI/Loading";
 import { useHTTPDataFetch } from "../utils/hooks";
 import { CONTAINERS_URL } from "../utils/dataRoutes";
 import { Containers } from "../Data/data.interface";
 import { isNil } from "lodash-es";
+import { Box, Flex } from "@chakra-ui/react";
+import { DataListItem, DataListRoot } from "../UI/data-list";
 
 const PAGE_SIZE = 10;
 
@@ -124,52 +124,37 @@ const AgentDockerList: FC = () => {
     );
 
     const renderContainers = containersList.map((container) => {
-      let date: React.ReactNode;
+      let date: [string, string | undefined];
       if (isNil(container.startedAt)) {
-        date = (
-          <span>
-            <strong>Started&nbsp;at:</strong>
-            &nbsp;Never
-          </span>
-        );
+        date = ["Started at", "Never"];
       } else if (container.state === "running") {
-        date = (
-          <span>
-            <strong>Started&nbsp;at:</strong>
-            &nbsp;
-            {formatDateTime(container.startedAt)}
-          </span>
-        );
+        date = ["Started at", container.startedAt];
       } else {
-        date = (
-          <span>
-            <strong>Finished&nbsp;at:</strong>
-            &nbsp;
-            {formatDateTime(container.finishedAt)}
-          </span>
-        );
+        date = ["Finished at", container.finishedAt];
       }
-      return <Docker container={container} date={date} key={container.id} />;
+      return (
+        <Docker container={container} startedAt={date} key={container.id} />
+      );
     });
 
     displayContainers = (
       <>
         {pager}
-        <div className="list-group" style={{ marginBottom: "0.4rem" }}>
-          {renderContainers}
-        </div>
+        <Box mb={"0.4rem"}>{renderContainers}</Box>
         {pager}
       </>
     );
   }
 
   return (
-    <div>
-      <div className="row">
-        <span className="col-xl-7 align-middle col-lg-3">
-          <b>Containers :</b> {nbContainers}
-        </span>
-        <div className="blee-tool-bar col-xl-5 col-lg-9">
+    <>
+      <Flex justifyContent={"space-between"} alignItems="center" mb={4}>
+        <Box>
+          <DataListRoot orientation={"horizontal"} variant={"bold"}>
+            <DataListItem label="Containers" value={nbContainers} />
+          </DataListRoot>
+        </Box>
+        <Box>
           <span className="blee-tool-bar-item py-3">
             <Toggle
               firstOption="Running containers"
@@ -189,11 +174,11 @@ const AgentDockerList: FC = () => {
               forceNotifyOnBlur={false}
             />
           </span>
-        </div>
-      </div>
+        </Box>
+      </Flex>
 
       {displayContainers}
-    </div>
+    </>
   );
 };
 

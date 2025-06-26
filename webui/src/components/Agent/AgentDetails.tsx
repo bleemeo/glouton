@@ -23,16 +23,9 @@ import {
   Tag,
 } from "../Data/data.interface";
 import {
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalCloseButton,
   useDisclosure,
   Button,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  Container,
+  Dialog,
   Grid,
   GridItem,
   Tag as ChakraTag,
@@ -40,32 +33,24 @@ import {
   Flex,
   Link,
   Box,
-  Alert,
-  AlertDescription,
-  AlertTitle,
-  AlertIcon,
-  ListItem,
   List,
-  ListIcon,
   Spacer,
-  Tooltip,
   Badge,
   Center,
   Wrap,
   WrapItem,
+  Alert,
 } from "@chakra-ui/react";
 import ServiceDetails from "../Service/ServiceDetails";
-import {
-  CheckCircleIcon,
-  ChevronRightIcon,
-  InfoIcon,
-  WarningIcon,
-} from "@chakra-ui/icons";
 import * as echarts from "echarts/core";
 import { PieChart } from "echarts/charts";
 import { EChartsOption } from "echarts";
 import { CanvasRenderer } from "echarts/renderers";
 import { LegendComponent, TooltipComponent } from "echarts/components";
+import { Tooltip } from "../UI/tooltip";
+import { LuExternalLink } from "react-icons/lu";
+import { FaCheckCircle, FaChevronRight, FaInfoCircle } from "react-icons/fa";
+import { IoIosWarning } from "react-icons/io";
 
 echarts.use([PieChart, CanvasRenderer, TooltipComponent, LegendComponent]);
 
@@ -110,25 +95,26 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
 
     if (agentDate && agentDate < expDate) {
       expireAgentBanner = (
-        <Alert status="error" w="fit-content">
-          <AlertIcon />
-          <AlertTitle>
-            {" "}
-            This agent is more than 60 days old. You should update it!{" "}
-          </AlertTitle>
-          <AlertDescription>
-            {" "}
-            See the{" "}
-            <Link
-              color="teal.500"
-              href="https://go.bleemeo.com/l/agent-upgrade"
-              isExternal
-            >
-              documentation
-            </Link>
-            &nbsp; to learn how to do it.{" "}
-          </AlertDescription>
-        </Alert>
+        <Alert.Root status="error" w="fit-content">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>
+              {" "}
+              This agent is more than 60 days old. You should update it!{" "}
+            </Alert.Title>
+            <Alert.Description>
+              {" "}
+              See the{" "}
+              <Link
+                colorPalette="teal.500"
+                href="https://go.bleemeo.com/l/agent-upgrade"
+              >
+                documentation <LuExternalLink />
+              </Link>
+              &nbsp; to learn how to do it.{" "}
+            </Alert.Description>
+          </Alert.Content>
+        </Alert.Root>
       );
     }
   }
@@ -255,12 +241,18 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
       problemsBadges = (
         <Box>
           {warningMessages ? (
-            <Tooltip label={warningMessages} fontSize="md">
+            <Tooltip
+              content={warningMessages}
+              contentProps={{ fontSize: "md" }}
+            >
               <Badge colorScheme="orange">Warning</Badge>
             </Tooltip>
           ) : null}
           {criticalMessages ? (
-            <Tooltip label={criticalMessages} fontSize="md">
+            <Tooltip
+              content={criticalMessages}
+              contentProps={{ fontSize: "md" }}
+            >
               <Badge colorScheme="red">Critical</Badge>
             </Tooltip>
           ) : null}
@@ -283,230 +275,228 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
   }, []);
 
   const {
-    isOpen: isOpenModal,
+    open: isOpenModal,
     onOpen: onOpenModal,
     onClose: onCloseModal,
   } = useDisclosure();
 
   const serviceModal = (
-    <Modal isOpen={isOpenModal} onClose={onCloseModal}>
-      <ModalOverlay />
-      <ModalContent>
-        <ModalHeader>{showServiceDetails?.name}</ModalHeader>
-        <ModalCloseButton />
-        <ModalBody>
-          {showServiceDetails ? (
-            <ServiceDetails service={showServiceDetails} />
-          ) : null}
-        </ModalBody>
+    <Dialog.Root open={isOpenModal} onOpenChange={onCloseModal}>
+      <Dialog.Backdrop />
+      <Dialog.Positioner>
+        <Dialog.Content>
+          <Dialog.Header>{showServiceDetails?.name}</Dialog.Header>
+          <Dialog.CloseTrigger />
+          <Dialog.Body>
+            {showServiceDetails ? (
+              <ServiceDetails service={showServiceDetails} />
+            ) : null}
+          </Dialog.Body>
 
-        <ModalFooter>
-          <Button colorScheme="blue" mr={3} onClick={onCloseModal}>
-            Close
-          </Button>
-        </ModalFooter>
-      </ModalContent>
-    </Modal>
+          <Dialog.Footer>
+            <Button colorScheme="blue" mr={3} onClick={onCloseModal}>
+              Close
+            </Button>
+          </Dialog.Footer>
+        </Dialog.Content>
+      </Dialog.Positioner>
+    </Dialog.Root>
   );
 
   return (
-    <Container id="page-wrapper" mt={5}>
+    <>
       {serviceModal}
 
       {expireAgentBanner}
 
-      <Container>
-        <Grid
-          h="100%"
-          templateRows="repeat(6, 1fr)"
-          templateColumns="repeat(9, 1fr)"
-          gap={4}
-        >
-          <GridItem rowSpan={6} colSpan={3}>
-            <Panel>
-              <Box>
-                <Text fontSize="xl" as="b">
-                  Information retrieved from the agent
-                </Text>
-                {factUpdatedAtDate ? (
-                  <Text>
-                    (last update: {factUpdatedAtDate.toLocaleString()})
-                  </Text>
-                ) : null}
-                <List className="list-unstyled">
-                  {facts
-                    .filter((f) => f.name !== "fact_updated_at")
-                    .sort((a, b) => a.name.localeCompare(b.name))
-                    .map((fact) => (
-                      <ListItem key={fact.name}>
-                        <ListIcon as={ChevronRightIcon} color="grey.500" />
-                        <Text fontSize="md" as="b">
-                          {fact.name}:
-                        </Text>{" "}
-                        {fact.value}
-                      </ListItem>
-                    ))}
-                </List>
-              </Box>
-            </Panel>
-          </GridItem>
-          <GridItem colSpan={3}>
-            <FetchSuspense
-              isLoading={isLoading}
-              error={
-                error ||
-                isNullOrUndefined(services) ||
-                isNullOrUndefined(tags) ||
-                isNullOrUndefined(agentInformation) ||
-                isNullOrUndefined(agentStatus)
-              }
-              services={services}
-            >
-              {({ services }) => (
-                <Panel>
-                  <Box>
-                    <Text fontSize="xl" as="b">
-                      Services running on this agent:
-                    </Text>
-                    <Wrap mt={2}>
-                      {services
-                        .filter((service) => service.active)
-                        .sort((a, b) => a.name.localeCompare(b.name))
-                        .map((service, idx) => {
-                          return (
-                            <WrapItem key={idx}>
-                              <Button
-                                ml={2}
-                                mr={2}
-                                colorScheme={badgeColorSchemeForStatus(
-                                  service.status,
-                                )}
-                                onClick={() => {
-                                  setShowServiceDetails(service);
-                                  onOpenModal();
-                                }}
-                              >
-                                {service.name}
-                                &nbsp;
-                                <InfoIcon />
-                              </Button>
-                            </WrapItem>
-                          );
-                        })}
-                    </Wrap>
-                  </Box>
-                </Panel>
-              )}
-            </FetchSuspense>
-          </GridItem>
-          <GridItem colSpan={3}>
-            <FetchSuspense
-              isLoading={isLoading}
-              error={
-                error ||
-                isNullOrUndefined(services) ||
-                isNullOrUndefined(tags) ||
-                isNullOrUndefined(agentInformation) ||
-                isNullOrUndefined(agentStatus)
-              }
-              tags={tags}
-            >
-              {({ tags }) => (
-                <Panel>
-                  <Flex direction="column">
-                    <Text fontSize="xl" as="b">
-                      Tags for {facts.find((f) => f.name === "fqdn")?.value}:
-                    </Text>
-                    {tags.length > 0 ? (
-                      <Wrap mt={2}>
-                        {tags.map((tag, idx) => (
-                          <WrapItem key={idx}>
-                            <ChakraTag w="fit-content" colorScheme="cyan">
-                              {tag.tagName}
-                            </ChakraTag>
-                          </WrapItem>
-                        ))}
-                      </Wrap>
-                    ) : (
-                      <Text fontSize="lg">No tags to display</Text>
-                    )}
-                  </Flex>
-                </Panel>
-              )}
-            </FetchSuspense>
-          </GridItem>
-          <GridItem colSpan={3} rowSpan={4}>
-            <Panel>
-              <Center flexDir="column">
-                {problemsChart}
-                <Spacer></Spacer>
-                {problemsBadges}
-              </Center>
-            </Panel>
-          </GridItem>
-          <GridItem colSpan={3} rowSpan={4}>
-            {agentInformation && Object.keys(agentInformation).length > 0 ? (
+      <Grid
+        h="100%"
+        templateRows="repeat(6, 1fr)"
+        templateColumns="repeat(9, 1fr)"
+        gap={4}
+      >
+        <GridItem rowSpan={6} colSpan={3}>
+          <Panel>
+            <Box>
+              <Text fontSize="xl" as="b">
+                Information retrieved from the agent
+              </Text>
+              {factUpdatedAtDate ? (
+                <Text>(last update: {factUpdatedAtDate.toLocaleString()})</Text>
+              ) : null}
+              <List.Root className="list-unstyled">
+                {facts
+                  .filter((f) => f.name !== "fact_updated_at")
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((fact) => (
+                    <List.Item key={fact.name}>
+                      <List.Indicator asChild color="grey" fontSize={"2xs"}>
+                        <FaChevronRight />
+                      </List.Indicator>
+                      <Text fontSize="md" as="b">
+                        {fact.name}:
+                      </Text>{" "}
+                      {fact.value}
+                    </List.Item>
+                  ))}
+              </List.Root>
+            </Box>
+          </Panel>
+        </GridItem>
+        <GridItem colSpan={3}>
+          <FetchSuspense
+            isLoading={isLoading}
+            error={
+              error ||
+              isNullOrUndefined(services) ||
+              isNullOrUndefined(tags) ||
+              isNullOrUndefined(agentInformation) ||
+              isNullOrUndefined(agentStatus)
+            }
+            services={services}
+          >
+            {({ services }) => (
               <Panel>
-                <Flex direction="column" justify="center" align="flex-start">
-                  {agentInformation.registrationAt &&
-                  new Date(agentInformation.registrationAt).getFullYear() !==
-                    1 ? (
-                    <Box>
-                      <Text as="b">Glouton registration at:</Text>{" "}
-                      {formatDateTimeWithSeconds(
-                        agentInformation.registrationAt,
-                      )}
-                    </Box>
-                  ) : null}
-                  {agentInformation.lastReport &&
-                  new Date(agentInformation.lastReport).getFullYear() !== 1 ? (
-                    <Box>
-                      <Text as="b">Glouton last report:</Text>{" "}
-                      {formatDateTimeWithSeconds(agentInformation.lastReport)}
-                    </Box>
-                  ) : null}
-                  <Flex align="center" justify="center">
-                    <Text as="b">Connected to Bleemeo ? &nbsp; </Text>
-                    <Spacer></Spacer>
-                    {agentInformation.isConnected ? (
-                      <CheckCircleIcon color="green.500" />
-                    ) : (
-                      <WarningIcon color="red.500" />
-                    )}
-                  </Flex>
-                  <Box>
-                    <Text as="b">
-                      Need to troubleshoot ? &nbsp;
-                      <Link
-                        textColor="blue.500"
-                        fontSize="xl"
-                        href="/diagnostic"
-                      >
-                        /diagnostic
-                      </Link>
-                      &nbsp; may help you.
-                    </Text>
-                  </Box>
-                  <Box>
-                    <Text as="b">
-                      Need more logs ? &nbsp;
-                      <Link
-                        textColor="blue.500"
-                        fontSize="xl"
-                        href="/diagnostic.txt/log.txt"
-                      >
-                        /log.txt
-                      </Link>
-                      &nbsp; may help you.
-                    </Text>
-                  </Box>
+                <Box>
+                  <Text fontSize="xl" as="b">
+                    Services running on this agent:
+                  </Text>
+                  <Wrap mt={2}>
+                    {services
+                      .filter((service) => service.active)
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map((service, idx) => {
+                        return (
+                          <WrapItem key={idx}>
+                            <Button
+                              ml={2}
+                              mr={2}
+                              colorPalette={badgeColorSchemeForStatus(
+                                service.status,
+                              )}
+                              onClick={() => {
+                                setShowServiceDetails(service);
+                                onOpenModal();
+                              }}
+                            >
+                              {service.name}
+                              &nbsp;
+                              <FaInfoCircle />
+                            </Button>
+                          </WrapItem>
+                        );
+                      })}
+                  </Wrap>
+                </Box>
+              </Panel>
+            )}
+          </FetchSuspense>
+        </GridItem>
+        <GridItem colSpan={3}>
+          <FetchSuspense
+            isLoading={isLoading}
+            error={
+              error ||
+              isNullOrUndefined(services) ||
+              isNullOrUndefined(tags) ||
+              isNullOrUndefined(agentInformation) ||
+              isNullOrUndefined(agentStatus)
+            }
+            tags={tags}
+          >
+            {({ tags }) => (
+              <Panel>
+                <Flex direction="column">
+                  <Text fontSize="xl" as="b">
+                    Tags for {facts.find((f) => f.name === "fqdn")?.value}:
+                  </Text>
+                  {tags.length > 0 ? (
+                    <Wrap mt={2}>
+                      {tags.map((tag, idx) => (
+                        <WrapItem key={idx}>
+                          <ChakraTag.Root w="fit-content" colorScheme="cyan">
+                            <ChakraTag.Label>{tag.tagName}</ChakraTag.Label>
+                          </ChakraTag.Root>
+                        </WrapItem>
+                      ))}
+                    </Wrap>
+                  ) : (
+                    <Text fontSize="lg">No tags to display</Text>
+                  )}
                 </Flex>
               </Panel>
-            ) : null}
-          </GridItem>
-        </Grid>
-      </Container>
-    </Container>
+            )}
+          </FetchSuspense>
+        </GridItem>
+        <GridItem colSpan={3} rowSpan={4}>
+          <Panel>
+            <Center flexDir="column">
+              {problemsChart}
+              <Spacer></Spacer>
+              {problemsBadges}
+            </Center>
+          </Panel>
+        </GridItem>
+        <GridItem colSpan={3} rowSpan={4}>
+          {agentInformation && Object.keys(agentInformation).length > 0 ? (
+            <Panel>
+              <Flex direction="column" justify="center" align="flex-start">
+                {agentInformation.registrationAt &&
+                new Date(agentInformation.registrationAt).getFullYear() !==
+                  1 ? (
+                  <Box>
+                    <Text as="b">Glouton registration at:</Text>{" "}
+                    {formatDateTimeWithSeconds(agentInformation.registrationAt)}
+                  </Box>
+                ) : null}
+                {agentInformation.lastReport &&
+                new Date(agentInformation.lastReport).getFullYear() !== 1 ? (
+                  <Box>
+                    <Text as="b">Glouton last report:</Text>{" "}
+                    {formatDateTimeWithSeconds(agentInformation.lastReport)}
+                  </Box>
+                ) : null}
+                <Flex align="center" justify="center">
+                  <Text as="b">Connected to Bleemeo ? &nbsp; </Text>
+                  <Spacer></Spacer>
+                  {agentInformation.isConnected ? (
+                    <FaCheckCircle color="green" />
+                  ) : (
+                    <IoIosWarning color="red" />
+                  )}
+                </Flex>
+                <Box>
+                  <Text as="b">
+                    Need to troubleshoot ? &nbsp;
+                    <Link
+                      colorPalette="blue.500"
+                      fontSize="xl"
+                      href="/diagnostic"
+                    >
+                      /diagnostic
+                    </Link>
+                    &nbsp; may help you.
+                  </Text>
+                </Box>
+                <Box>
+                  <Text as="b">
+                    Need more logs ? &nbsp;
+                    <Link
+                      colorPalette="blue.500"
+                      fontSize="xl"
+                      href="/diagnostic.txt/log.txt"
+                    >
+                      /log.txt
+                    </Link>
+                    &nbsp; may help you.
+                  </Text>
+                </Box>
+              </Flex>
+            </Panel>
+          ) : null}
+        </GridItem>
+      </Grid>
+    </>
   );
 };
 
