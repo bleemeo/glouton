@@ -28,8 +28,11 @@ import {
   Dialog,
   Text,
   useDisclosure,
+  Box,
+  Heading,
 } from "@chakra-ui/react";
 import { DataListItem, DataListRoot } from "../UI/data-list";
+import { Tooltip } from "../UI/tooltip";
 
 type DockerProcessesProps = {
   containerId: string;
@@ -272,22 +275,31 @@ const Docker: FC<DockerProps> = ({ container, startedAt }) => {
     <>
       {dockerModal}
 
-      <div className="dockerItem list-group-item">
-        <div
+      <Box className="dockerItem list-group-item" border={"2px solid #ddd"}>
+        <Box
           className={`item-left-border ${
             container.state === "running" ? "success" : ""
           }`}
         >
           <span className="vertical-text">{container.state.toUpperCase()}</span>
-        </div>
-        <div className="row flex1 align-items-center justify-content-between px-3">
-          <div className="col-xl-3 col-md-6">
-            <h3 className="overflow-ellipsis" title={container.name}>
+        </Box>
+        <Flex
+          direction={"row"}
+          alignItems={"center"}
+          justifyContent={"space-between"}
+          px={3}
+        >
+          <Box className="col-xl-3 col-md-6" ml={4}>
+            <Heading
+              textOverflow={"ellipsis"}
+              size={"xs"}
+              title={container.name}
+            >
               {container.name}
-            </h3>
-            <small>{container.id.substring(0, 12)}</small>
+            </Heading>
+            <Text>{container.id.substring(0, 12)}</Text>
             <br />
-            <small>
+            <Text>
               <a onClick={() => setShowProcesses(!showProcesses)}>
                 {showProcesses ? (
                   <>
@@ -299,9 +311,9 @@ const Docker: FC<DockerProps> = ({ container, startedAt }) => {
                   </>
                 )}
               </a>
-            </small>
-          </div>
-          <div className="col-xl-6 pull-xl-3 col-sm-12">
+            </Text>
+          </Box>
+          <Flex className="col-xl-6 pull-xl-3 col-sm-12">
             <Flex>
               {renderDonutDocker("Memory", container.memUsedPerc)}
               {renderDonutDocker("CPU", container.cpuUsedPerc)}
@@ -316,27 +328,41 @@ const Docker: FC<DockerProps> = ({ container, startedAt }) => {
                 container.ioReadBytes,
               )}
             </Flex>
-          </div>
-          <div className="col-xl-3 push-xl-5 col-md-6">
-            <div style={{ minWidth: 0 }}>
-              <DataListRoot orientation={"horizontal"} gap={0}>
-                <DataListItem
-                  label="Created at"
-                  value={formatDateTime(container.createdAt)}
-                />
-                <DataListItem
-                  label={startedAt[0]}
-                  value={formatDateTime(startedAt[1])}
-                />
-                <DataListItem label="Image name" value={container.image} />
-                <DataListItem
-                  label="Cmd"
-                  value={container.command}
-                  textOverflow={"ellipsis"}
-                />
-              </DataListRoot>
-            </div>
-          </div>
+          </Flex>
+          <Box className="col-xl-3 push-xl-5 col-md-6">
+            <DataListRoot orientation={"horizontal"} gap={0}>
+              <DataListItem
+                label="Created at"
+                value={formatDateTime(container.createdAt)}
+              />
+              <DataListItem
+                label={startedAt[0]}
+                value={formatDateTime(startedAt[1])}
+              />
+              <DataListItem
+                label="Image name"
+                value={
+                  <Tooltip content={container.image}>
+                    <Text mb={0} display={"block"} truncate>
+                      {container.image}
+                    </Text>
+                  </Tooltip>
+                }
+              />
+              <DataListItem
+                label="Cmd"
+                value={
+                  container.command ? (
+                    <Code overflow={"auto"}>{container.command}</Code>
+                  ) : (
+                    <Text as={"span"} mb={0}>
+                      No command
+                    </Text>
+                  )
+                }
+              />
+            </DataListRoot>
+          </Box>
           <div
             style={{
               position: "absolute",
@@ -358,13 +384,13 @@ const Docker: FC<DockerProps> = ({ container, startedAt }) => {
               <FaIcon icon="fa fa-search-plus fa-2x" />
             </A>
           </div>
-        </div>
+        </Flex>
         <div>
           {showProcesses ? (
             <DockerProcesses containerId={container.id} name={container.name} />
           ) : null}
         </div>
-      </div>
+      </Box>
     </>
   );
 };

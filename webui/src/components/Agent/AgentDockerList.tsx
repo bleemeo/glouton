@@ -9,6 +9,8 @@ import { useHTTPDataFetch } from "../utils/hooks";
 import { CONTAINERS_URL } from "../utils/dataRoutes";
 import { Containers } from "../Data/data.interface";
 import { isNil } from "lodash-es";
+import { Box, Flex } from "@chakra-ui/react";
+import { DataListItem, DataListRoot } from "../UI/data-list";
 
 const PAGE_SIZE = 10;
 
@@ -138,21 +140,21 @@ const AgentDockerList: FC = () => {
     displayContainers = (
       <>
         {pager}
-        <div className="list-group" style={{ marginBottom: "0.4rem" }}>
-          {renderContainers}
-        </div>
+        <Box mb={"0.4rem"}>{renderContainers}</Box>
         {pager}
       </>
     );
   }
 
   return (
-    <div>
-      <div className="row">
-        <span className="col-xl-7 align-middle col-lg-3">
-          <b>Containers :</b> {nbContainers}
-        </span>
-        <div className="blee-tool-bar col-xl-5 col-lg-9">
+    <>
+      <Flex justifyContent={"space-between"} alignItems="center" mb={4}>
+        <Box>
+          <DataListRoot orientation={"horizontal"} variant={"bold"}>
+            <DataListItem label="Containers" value={nbContainers} />
+          </DataListRoot>
+        </Box>
+        <Box>
           <span className="blee-tool-bar-item py-3">
             <Toggle
               firstOption="Running containers"
@@ -172,11 +174,11 @@ const AgentDockerList: FC = () => {
               forceNotifyOnBlur={false}
             />
           </span>
-        </div>
-      </div>
+        </Box>
+      </Flex>
 
       {displayContainers}
-    </div>
+    </>
   );
 };
 
