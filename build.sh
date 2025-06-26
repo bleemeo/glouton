@@ -51,7 +51,7 @@ if [ "${ONLY_GO}" = "1" ] || [ "${ONLY_DOCKER_FAST}" = "1" ] || [ "${SKIP_JS}" =
    echo "Skip cleaning workspace because only Go binary build is enabled, or Docker fast is enabled, or JS skipping is enabled"
 else
    echo "Cleanup workspace"
-   rm -fr webui/dist webui/node_modules api/static/assets/css/ api/static/assets/js/ api/api-bindata.go api/api-packr.go api/packrd/
+   rm -fr webui/dist api/static/assets/css/ api/static/assets/js/
 fi
 
 if [ "${SKIP_JS}" != "1" ] && [ "${ONLY_GO}" != "1" ]; then
