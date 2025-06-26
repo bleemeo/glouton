@@ -7,6 +7,7 @@ import { ThemeProvider, useTheme } from "next-themes";
 import type { ThemeProviderProps } from "next-themes";
 import * as React from "react";
 import { LuMoon, LuSun } from "react-icons/lu";
+import { WiMoonAltFirstQuarter } from "react-icons/wi";
 
 export interface ColorModeProviderProps extends ThemeProviderProps {}
 
@@ -18,22 +19,29 @@ export function ColorModeProvider(props: ColorModeProviderProps) {
 
 export type ColorMode = "light" | "dark";
 
+export type ColorModeOrSystem = ColorMode | "system";
+
 export interface UseColorModeReturn {
   colorMode: ColorMode;
   setColorMode: (colorMode: ColorMode) => void;
   toggleColorMode: () => void;
+  theme: ColorModeOrSystem;
 }
 
 export function useColorMode(): UseColorModeReturn {
-  const { resolvedTheme, setTheme, forcedTheme } = useTheme();
+  const { resolvedTheme, setTheme, forcedTheme, theme } = useTheme();
   const colorMode = forcedTheme || resolvedTheme;
-  const toggleColorMode = () => {
-    setTheme(resolvedTheme === "dark" ? "light" : "dark");
-  };
+  const toggleColorMode = React.useCallback(() => {
+    const cycle: Array<ColorMode | "system"> = ["system", "light", "dark"];
+    const current = (theme ?? "system") as ColorMode | "system";
+    const next = cycle[(cycle.indexOf(current) + 1) % cycle.length];
+    setTheme(next);
+  }, [theme, setTheme]);
   return {
     colorMode: colorMode as ColorMode,
     setColorMode: setTheme,
     toggleColorMode,
+    theme: theme as ColorModeOrSystem,
   };
 }
 
@@ -43,8 +51,14 @@ export function useColorModeValue<T>(light: T, dark: T) {
 }
 
 export function ColorModeIcon() {
-  const { colorMode } = useColorMode();
-  return colorMode === "dark" ? <LuMoon /> : <LuSun />;
+  const { theme } = useColorMode();
+  return theme === "dark" ? (
+    <LuMoon />
+  ) : theme === "light" ? (
+    <LuSun />
+  ) : (
+    <WiMoonAltFirstQuarter />
+  );
 }
 
 interface ColorModeButtonProps extends Omit<IconButtonProps, "aria-label"> {}

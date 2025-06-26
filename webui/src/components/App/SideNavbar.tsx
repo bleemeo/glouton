@@ -5,6 +5,7 @@ import Fallback from "../UI/Fallback";
 import PanelErrorBoundary from "../UI/PanelErrorBoundary";
 import { Box, Icon, VStack } from "@chakra-ui/react";
 import { FaCircleInfo, FaDocker, FaGauge, FaMicrochip } from "react-icons/fa6";
+import { ColorModeButton } from "../UI/color-mode";
 
 const SideNavBar: FC = () => (
   <PanelErrorBoundary>
@@ -35,6 +36,7 @@ const SideNavBar: FC = () => (
           <Link to="/informations" title="Informations">
             <Icon as={FaCircleInfo} boxSize={8} color="white" />
           </Link>
+          <ColorModeButton variant={"plain"} color={"white"} />
         </VStack>
       </Box>
     </Suspense>

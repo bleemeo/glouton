@@ -284,21 +284,21 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
     <Dialog.Root open={isOpenModal} onOpenChange={onCloseModal}>
       <Dialog.Backdrop />
       <Dialog.Positioner>
-      <Dialog.Content>
-        <Dialog.Header>{showServiceDetails?.name}</Dialog.Header>
-        <Dialog.CloseTrigger />
-        <Dialog.Body>
-          {showServiceDetails ? (
-            <ServiceDetails service={showServiceDetails} />
-          ) : null}
-        </Dialog.Body>
+        <Dialog.Content>
+          <Dialog.Header>{showServiceDetails?.name}</Dialog.Header>
+          <Dialog.CloseTrigger />
+          <Dialog.Body>
+            {showServiceDetails ? (
+              <ServiceDetails service={showServiceDetails} />
+            ) : null}
+          </Dialog.Body>
 
-        <Dialog.Footer>
-          <Button colorScheme="blue" mr={3} onClick={onCloseModal}>
-            Close
-          </Button>
-        </Dialog.Footer>
-      </Dialog.Content>
+          <Dialog.Footer>
+            <Button colorScheme="blue" mr={3} onClick={onCloseModal}>
+              Close
+            </Button>
+          </Dialog.Footer>
+        </Dialog.Content>
       </Dialog.Positioner>
     </Dialog.Root>
   );
