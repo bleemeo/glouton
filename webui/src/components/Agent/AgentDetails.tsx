@@ -371,7 +371,7 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
                             <Button
                               ml={2}
                               mr={2}
-                              colorScheme={badgeColorSchemeForStatus(
+                              colorPalette={badgeColorSchemeForStatus(
                                 service.status,
                               )}
                               onClick={() => {
