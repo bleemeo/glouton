@@ -32,8 +32,8 @@ export function useColorMode(): UseColorModeReturn {
   const { resolvedTheme, setTheme, forcedTheme, theme } = useTheme();
   const colorMode = forcedTheme || resolvedTheme;
   const toggleColorMode = React.useCallback(() => {
-    const cycle: Array<ColorMode | "system"> = ["system", "light", "dark"];
-    const current = (theme ?? "system") as ColorMode | "system";
+    const cycle: Array<ColorModeOrSystem> = ["system", "light", "dark"];
+    const current = (theme ?? "system") as ColorModeOrSystem;
     const next = cycle[(cycle.indexOf(current) + 1) % cycle.length];
     setTheme(next);
   }, [theme, setTheme]);
