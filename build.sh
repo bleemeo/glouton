@@ -95,6 +95,7 @@ elif [ "${ONLY_GO}" = "1" ] && [ "${WITH_RACE}" != "1" ]; then
       --entrypoint '' \
       goreleaser/goreleaser:${GORELEASER_VERSION} \
       tini -g -- sh -exc "
+      mkdir -p /go/pkg
       git config --global --add safe.directory /src
       go build -ldflags='-X main.version=${GLOUTON_VERSION} -X main.commit=${COMMIT}' .
       chown $USER_UID glouton
@@ -105,6 +106,7 @@ elif [ "${ONLY_GO}" = "1" ] && [ "${WITH_RACE}" = "1" ]; then
       --entrypoint '' \
       goreleaser/goreleaser:${GORELEASER_VERSION} \
       tini -g -- sh -exc "
+      mkdir -p /go/pkg
       git config --global --add safe.directory /src
       go build -ldflags='-X main.version=${GLOUTON_VERSION} -X main.commit=${COMMIT} -linkmode external -extldflags=-static' -race .
       chown $USER_UID glouton
