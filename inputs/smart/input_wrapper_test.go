@@ -153,6 +153,27 @@ func TestParseScanOutput(t *testing.T) {
 			expectedDevices:                 []string{"/dev/sdf"},
 			expectedScanSmartctlInvocations: 0,
 		},
+		{
+			name:                            "hp_smartarray_p408i",
+			sgDevices:                       []string{"/dev/sg0", "/dev/sg1", "/dev/sg2", "/dev/sg3"},
+			expectedInitSmartctlInvocations: 2,
+			// Should we use smartctl for /dev/sda ?
+			// Pro: smart seems supported and therefor we have information about status of the disk (the logical disk I believe).
+			//      and this even if HP ssacli isn't installed
+			// Con: ssacli is better to get more detailed information (per physical drive). smart input is more built with physical drive in mind,
+			//      not logical one.
+			expectedDevices:                 []string{"/dev/sda"},
+			expectedToIgnoreStorageDevices:  true,
+			expectedScanSmartctlInvocations: 1,
+		},
+		{
+			name:                            "hp_smartarray_p410i",
+			sgDevices:                       []string{"/dev/sg0", "/dev/sg1"},
+			expectedInitSmartctlInvocations: 3,
+			expectedDevices:                 nil,
+			expectedToIgnoreStorageDevices:  true,
+			expectedScanSmartctlInvocations: 1,
+		},
 	}
 
 	for _, tc := range testCases {

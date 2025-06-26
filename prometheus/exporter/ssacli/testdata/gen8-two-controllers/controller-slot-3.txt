@@ -1,0 +1,10 @@
+
+Smart Array P420 in Slot 3
+
+   Array A
+
+      physicaldrive 1I:0:1 (port 1I:box 0:bay 1, SAS HDD, 1.2 TB, OK)
+      physicaldrive 1I:0:2 (port 1I:box 0:bay 2, SAS HDD, 1.2 TB, OK)
+      physicaldrive 1I:0:3 (port 1I:box 0:bay 3, SAS HDD, 1.2 TB, OK)
+      physicaldrive 1I:0:4 (port 1I:box 0:bay 4, SAS HDD, 1.2 TB, OK)
+

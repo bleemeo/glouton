@@ -49,6 +49,7 @@ type Config struct {
 	ServiceIgnoreMetrics           []NameInstance       `yaml:"service_ignore_metrics"`
 	ServiceIgnoreCheck             []NameInstance       `yaml:"service_ignore_check"`
 	Smart                          Smart                `yaml:"smart"`
+	SSACLI                         SSACLI               `yaml:"ssacli"`
 	Tags                           []string             `yaml:"tags"`
 	Telegraf                       Telegraf             `yaml:"telegraf"`
 	Thresholds                     map[string]Threshold `yaml:"thresholds"`
@@ -206,6 +207,13 @@ type JMX struct {
 }
 
 type IPMI struct {
+	Enable           bool   `yaml:"enable"`
+	BinarySearchPath string `yaml:"bin_search_path"`
+	UseSudo          bool   `yaml:"use_sudo"`
+	Timeout          int    `yaml:"timeout"`
+}
+
+type SSACLI struct {
 	Enable           bool   `yaml:"enable"`
 	BinarySearchPath string `yaml:"bin_search_path"`
 	UseSudo          bool   `yaml:"use_sudo"`

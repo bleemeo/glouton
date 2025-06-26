@@ -1,0 +1,4 @@
+device_scan:
+  /dev/sda:
+    file: smartctl_sda.txt
+    rc: 0
