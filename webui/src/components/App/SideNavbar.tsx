@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 import Fallback from "../UI/Fallback";
 import PanelErrorBoundary from "../UI/PanelErrorBoundary";
-import { Box, Icon, VStack } from "@chakra-ui/react";
+import { Box, Icon, Spacer, VStack } from "@chakra-ui/react";
 import { FaCircleInfo, FaDocker, FaGauge, FaMicrochip } from "react-icons/fa6";
 import { ColorModeButton } from "../UI/color-mode";
 
@@ -20,7 +20,7 @@ const SideNavBar: FC = () => (
         zIndex="1001" // Ensure it is above Top navbar
         bg="sidebarbackground"
       >
-        <VStack gap={6}>
+        <VStack gap={6} h={"100%"}>
           <Link to="/">
             <img src="/static/img/favicon.png" style={{ height: "2.2rem" }} />
           </Link>
@@ -36,6 +36,7 @@ const SideNavBar: FC = () => (
           <Link to="/informations" title="Informations">
             <Icon as={FaCircleInfo} boxSize={8} color="white" />
           </Link>
+          <Spacer />
           <ColorModeButton variant={"plain"} color={"white"} />
         </VStack>
       </Box>
