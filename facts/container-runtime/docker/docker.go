@@ -454,7 +454,12 @@ func (d *Docker) ImageTags(ctx context.Context, imageID, _ string) ([]string, er
 	d.l.Lock()
 	defer d.l.Unlock()
 
-	img, err := d.client.ImageInspect(ctx, imageID)
+	cl, err := d.getClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	img, err := cl.ImageInspect(ctx, imageID)
 	if err != nil {
 		return nil, err
 	}
