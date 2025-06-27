@@ -45,11 +45,11 @@ func svc(
 }
 
 func ctr(id, name string, labels, annotations map[string]string) facts.Container { //nolint: unparam
-	return dummyContainer{
-		id:          id,
-		name:        name,
-		labels:      labels,
-		annotations: annotations,
+	return facts.FakeContainer{
+		FakeID:            id,
+		FakeContainerName: name,
+		FakeLabels:        labels,
+		FakeAnnotations:   annotations,
 	}
 }
 
