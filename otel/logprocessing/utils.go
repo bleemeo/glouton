@@ -501,7 +501,7 @@ func (diagInfo diagnosticInformation) writeToArchive(writer types.ArchiveWriter)
 	enc = json.NewEncoder(file)
 	enc.SetIndent("", "  ")
 
-	if err := enc.Encode(diagInfo.KnownLogFilters); err != nil {
+	if err := enc.Encode(diagInfo.KnownLogFormats); err != nil {
 		return err
 	}
 
