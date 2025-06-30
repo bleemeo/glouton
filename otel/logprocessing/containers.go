@@ -87,9 +87,12 @@ func (ctrAttrs ContainerAttributes) asMap() map[string]helper.ExprStringConfig {
 	attrs := map[string]helper.ExprStringConfig{
 		attrContainerID:        helper.ExprStringConfig(ctrAttrs.ID),
 		attrContainerImageName: helper.ExprStringConfig(ctrAttrs.ImageName),
-		attrContainerImageTags: helper.ExprStringConfig(ctrAttrs.ImageTags),
 		attrContainerName:      helper.ExprStringConfig(ctrAttrs.Name),
 		attrContainerRuntime:   helper.ExprStringConfig(ctrAttrs.Runtime),
+	}
+
+	if ctrAttrs.ImageTags != "" {
+		attrs[attrContainerImageTags] = helper.ExprStringConfig(ctrAttrs.ImageTags)
 	}
 
 	if ctrAttrs.Namespace != "" {
@@ -166,10 +169,7 @@ func (cr *containerReceiver) handleContainerLogs(
 		return "", errContainerLogFileUnavailable
 	}
 
-	logCtr, err := makeLogContainer(ctx, ctr, logFilePath)
-	if err != nil {
-		return logFilePath, err
-	}
+	logCtr := makeLogContainer(ctx, ctr, logFilePath)
 
 	err = cr.setupContainerLogReceiver(ctx, logCtr, operators, logFilterConfig)
 	if err != nil {
@@ -366,23 +366,24 @@ func (cr *containerReceiver) stop() {
 	wg.Wait()
 }
 
-func makeLogContainer(ctx context.Context, container facts.Container, logFilePath string) (Container, error) {
-	imageTags, err := container.ImageTags(ctx)
-	if err != nil {
-		return Container{}, fmt.Errorf("can't get tags for image %q (%s): %w", container.ImageName(), container.ImageID(), err)
-	}
-
-	imageTagsJSON, err := json.Marshal(imageTags)
-	if err != nil {
-		return Container{}, fmt.Errorf("can't marshal tags for image %q (%s): %w", container.ImageName(), container.ImageID(), err)
-	}
-
+func makeLogContainer(ctx context.Context, container facts.Container, logFilePath string) Container {
 	attributes := ContainerAttributes{
 		Runtime:   container.RuntimeName(),
 		ID:        container.ID(),
 		Name:      container.ContainerName(),
 		ImageName: strings.SplitN(container.ImageName(), ":", 2)[0],
-		ImageTags: string(imageTagsJSON),
+	}
+
+	imageTags, err := container.ImageTags(ctx)
+	if err != nil {
+		logWarnings(fmt.Errorf("can't get tags for image %q (%s): %w", container.ImageName(), container.ImageID(), err))
+	} else {
+		imageTagsJSON, err := json.Marshal(imageTags)
+		if err != nil {
+			logWarnings(fmt.Errorf("can't marshal tags for image %q (%s): %w", container.ImageName(), container.ImageID(), err))
+		} else {
+			attributes.ImageTags = string(imageTagsJSON)
+		}
 	}
 
 	namespace := container.PodNamespace()
@@ -398,5 +399,5 @@ func makeLogContainer(ctx context.Context, container facts.Container, logFilePat
 		Attributes:      attributes,
 		logCounter:      new(atomic.Int64),
 		throughputMeter: newRingCounter(throughputMeterResolutionSecs),
-	}, nil
+	}
 }
