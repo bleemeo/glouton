@@ -57,7 +57,11 @@ const (
 
 const containerFileSizePrefix = "container://"
 
-var errContainerLogFileUnavailable = errors.New("no log file available")
+var (
+	errContainerLogFileUnavailable = errors.New("no log file available")
+	errNoLogFound                  = errors.New("no log file found")
+	errWrongNumberOfLogs           = errors.New("container should have a single log file")
+)
 
 type Container struct {
 	LogFilePath  string
@@ -199,9 +203,7 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 	}
 
 	if len(factories) != 1 {
-		logger.V(1).Printf("Container %s (%s) should have a single log file but has %d; ignoring it", ctr.Attributes.Name, ctr.Attributes.ID, len(factories))
-
-		return nil
+		return fmt.Errorf("%w: is had %d logs", errWrongNumberOfLogs, len(factories))
 	}
 
 	switch {
@@ -210,7 +212,7 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 	case len(execFiles) == 1:
 		ctr.ReceiverKind = receiverExecLog
 	default:
-		logger.V(1).Printf("No log file found for container %s (%s)", ctr.Attributes.Name, ctr.Attributes.ID)
+		return errNoLogFound
 	}
 
 	factoryFilter := filterprocessor.NewFactory()
