@@ -496,18 +496,22 @@ func (man *Manager) DiagnosticArchive(_ context.Context, writer types.ArchiveWri
 	man.pipeline.l.Unlock()
 
 	diagnosticInfo := diagnosticInformation{
-		LogProcessedCount:      man.pipeline.logProcessedCount.Load(),
-		LogThroughputPerMinute: man.pipeline.logThroughputMeter.Total(),
-		ProcessingStatus:       man.streamAvailabilityStatusFn().String(),
-		Receivers:              receiversInfo,
-		ContainerReceivers:     man.containerRecv.diagnostic(),
-		WatchedServices:        wServices,
-		KnownLogFormats:        man.knownLogFormats,
-		KnownLogFilters:        man.config.KnownLogFilters,
+		summary: diagnosticSummary{
+			LogProcessedCount:      man.pipeline.logProcessedCount.Load(),
+			LogThroughputPerMinute: man.pipeline.logThroughputMeter.Total(),
+			ProcessingStatus:       man.streamAvailabilityStatusFn().String(),
+		},
+		receivers: diagnosticReceiver{
+			Receivers:          receiversInfo,
+			ContainerReceivers: man.containerRecv.diagnostic(),
+			WatchedServices:    wServices,
+		},
+		KnownLogFormats: man.knownLogFormats,
+		KnownLogFilters: man.config.KnownLogFilters,
 	}
 
 	if man.pipeline.otlpRecvCounter != nil {
-		diagnosticInfo.OTLPReceiver = &otlpReceiverDiagnosticInformation{
+		diagnosticInfo.receivers.OTLPReceiver = &otlpReceiverDiagnosticInformation{
 			GRPCEnabled:            man.config.GRPC.Enable,
 			HTTPEnabled:            man.config.HTTP.Enable,
 			LogProcessedCount:      man.pipeline.otlpRecvCounter.Load(),

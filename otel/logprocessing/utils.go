@@ -432,20 +432,28 @@ type containerDiagnosticInformation struct {
 	Attributes             ContainerAttributes
 }
 
-type diagnosticInformation struct {
+type diagnosticSummary struct {
 	LogProcessedCount      int64
 	LogThroughputPerMinute int
 	ProcessingStatus       string
-	OTLPReceiver           *otlpReceiverDiagnosticInformation
-	Receivers              map[string]receiverDiagnosticInformation
-	ContainerReceivers     map[string]containerDiagnosticInformation
-	WatchedServices        map[string][]receiverDiagnosticInformation
-	KnownLogFormats        map[string][]config.OTELOperator
-	KnownLogFilters        map[string]config.OTELFilters
+}
+
+type diagnosticReceiver struct {
+	OTLPReceiver       *otlpReceiverDiagnosticInformation
+	Receivers          map[string]receiverDiagnosticInformation
+	ContainerReceivers map[string]containerDiagnosticInformation
+	WatchedServices    map[string][]receiverDiagnosticInformation
+}
+
+type diagnosticInformation struct {
+	summary         diagnosticSummary
+	receivers       diagnosticReceiver
+	KnownLogFormats map[string][]config.OTELOperator
+	KnownLogFilters map[string]config.OTELFilters
 }
 
 func (diagInfo diagnosticInformation) writeToArchive(writer types.ArchiveWriter) error {
-	file, err := writer.Create("log-processing.json")
+	file, err := writer.Create("log-processing/summary.json")
 	if err != nil {
 		return err
 	}
@@ -453,5 +461,49 @@ func (diagInfo diagnosticInformation) writeToArchive(writer types.ArchiveWriter)
 	enc := json.NewEncoder(file)
 	enc.SetIndent("", "  ")
 
-	return enc.Encode(diagInfo)
+	if err := enc.Encode(diagInfo.summary); err != nil {
+		return err
+	}
+
+	if err := diagInfo.receivers.writeToArchive(writer); err != nil {
+		return err
+	}
+
+	file, err = writer.Create("log-processing/known_formats.json")
+	if err != nil {
+		return err
+	}
+
+	enc = json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	if err := enc.Encode(diagInfo.KnownLogFilters); err != nil {
+		return err
+	}
+
+	file, err = writer.Create("log-processing/known_filters.json")
+	if err != nil {
+		return err
+	}
+
+	enc = json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	if err := enc.Encode(diagInfo.KnownLogFilters); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (receiverDiag diagnosticReceiver) writeToArchive(writer types.ArchiveWriter) error {
+	file, err := writer.Create("log-processing/receivers.json")
+	if err != nil {
+		return err
+	}
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(receiverDiag)
 }
