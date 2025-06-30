@@ -440,6 +440,7 @@ type containerDiagnosticInformation struct {
 	LogProcessedCount      int64
 	LogThroughputPerMinute int
 	LogFilePath            string
+	LogFileRealPath        string
 	ReceiverKind           receiverKind
 	Attributes             ContainerAttributes
 }

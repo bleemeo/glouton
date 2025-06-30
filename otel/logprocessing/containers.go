@@ -31,6 +31,7 @@ import (
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/utils/hostrootsymlink"
 
 	"github.com/google/uuid"
 	stanzaErrors "github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/errors"
@@ -326,10 +327,16 @@ func (cr *containerReceiver) diagnostic() map[string]containerDiagnosticInformat
 	infos := make(map[string]containerDiagnosticInformation, len(cr.containers))
 
 	for ctrID, ctr := range cr.containers {
+		realPath := ctr.LogFilePath
+		if cr.pipeline.hostroot != "/" {
+			realPath = hostrootsymlink.EvalSymlinks(cr.pipeline.hostroot, ctr.LogFilePath)
+		}
+
 		infos[ctrID] = containerDiagnosticInformation{
 			LogProcessedCount:      ctr.logCounter.Load(),
 			LogThroughputPerMinute: ctr.throughputMeter.Total(),
 			LogFilePath:            ctr.LogFilePath,
+			LogFileRealPath:        realPath,
 			ReceiverKind:           ctr.ReceiverKind,
 			Attributes:             ctr.Attributes,
 		}
