@@ -38,7 +38,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type LogSource struct {
+type logSource struct {
 	container   facts.Container
 	serviceID   *discovery.NameInstance
 	logFilePath string
@@ -241,7 +241,7 @@ func (man *Manager) HandleLogsFromDynamicSources(ctx context.Context, services [
 	}
 }
 
-func (man *Manager) processLogSources(services []discovery.Service, containers []facts.Container) []LogSource {
+func (man *Manager) processLogSources(services []discovery.Service, containers []facts.Container) []logSource {
 	const gloutonContainerLabelPrefix = "glouton."
 
 	containersByID := make(map[string]facts.Container, len(containers))
@@ -250,7 +250,7 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 		containersByID[ctr.ID()] = ctr
 	}
 
-	var logSources []LogSource //nolint:prealloc
+	var logSources []logSource //nolint:prealloc
 
 	for _, service := range services {
 		if service.LogProcessing == nil || !service.Active {
@@ -284,7 +284,7 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 		}
 
 		for _, serviceLogProcessing := range service.LogProcessing {
-			logSource := LogSource{
+			logSource := logSource{
 				serviceID:   &key,
 				logFilePath: serviceLogProcessing.FilePath, // ignored if in a container
 				operators:   append(operatorsForService(service), man.knownLogFormats[serviceLogProcessing.Format]...),
@@ -329,7 +329,7 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 			}
 		}
 
-		logSource := LogSource{
+		logSource := logSource{
 			container: ctr,
 		}
 		hasOpsFromFacts, hasFilterFromFacts := false, false
@@ -377,7 +377,7 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 	return logSources
 }
 
-func (man *Manager) setupProcessingForSource(ctx context.Context, logSource LogSource) error {
+func (man *Manager) setupProcessingForSource(ctx context.Context, logSource logSource) error {
 	rawOps, err := expandOperators(logSource.operators, man.knownLogFormats, false)
 	if err != nil {
 		return fmt.Errorf("expanding operators: %w", err)

@@ -53,7 +53,7 @@ func ctr(id, name string, labels, annotations map[string]string) facts.Container
 	}
 }
 
-func logSourceComparer(x, y LogSource) bool {
+func logSourceComparer(x, y logSource) bool {
 	if (x.container == nil || y.container == nil) && x.container != y.container {
 		return false
 	}
@@ -158,7 +158,7 @@ func TestProcessLogSources(t *testing.T) {
 		name                      string
 		containers                []facts.Container
 		services                  []discovery.Service
-		expectedLogSources        []LogSource
+		expectedLogSources        []logSource
 		expectedWatchedServices   map[discovery.NameInstance]struct{}
 		expectedWatchedContainers map[string]struct{} // map key: container ID
 	}{
@@ -171,7 +171,7 @@ func TestProcessLogSources(t *testing.T) {
 			services: []discovery.Service{
 				svcNginx,
 			},
-			expectedLogSources: []LogSource{
+			expectedLogSources: []logSource{
 				{
 					container: ctrNgx1,
 					serviceID: &discovery.NameInstance{Name: "nginx", Instance: "Nginx-1"},
@@ -204,7 +204,7 @@ func TestProcessLogSources(t *testing.T) {
 			services: []discovery.Service{
 				svcNginx,
 			},
-			expectedLogSources: []LogSource{
+			expectedLogSources: []logSource{
 				{
 					container: ctrApp1,
 					operators: knownLogFormats["custom_app_fmt"],
@@ -250,7 +250,7 @@ func TestProcessLogSources(t *testing.T) {
 					discovery.ServiceLogReceiver{FilePath: "/var/log/apache2/error.log", Format: "apache_error"},
 				),
 			},
-			expectedLogSources: []LogSource{
+			expectedLogSources: []logSource{
 				{
 					serviceID:   &discovery.NameInstance{Name: "apache", Instance: ""},
 					logFilePath: "/var/log/apache2/access.log",
@@ -296,7 +296,7 @@ func TestProcessLogSources(t *testing.T) {
 				ctrApp2,
 			},
 			services: []discovery.Service{},
-			expectedLogSources: []LogSource{
+			expectedLogSources: []logSource{
 				{
 					container: ctrApp2,
 					filters:   knownLogFilters["min_level_info"],
