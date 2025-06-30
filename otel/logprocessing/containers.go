@@ -196,6 +196,7 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 		cr.lastFileSizes,
 		cr.pipeline.commandRunner,
 		makeStorageFn,
+		statFileImpl,
 		ctr.Attributes.asMap(),
 	)
 	if err != nil {

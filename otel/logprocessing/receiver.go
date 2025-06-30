@@ -54,7 +54,10 @@ import (
 	"go.opentelemetry.io/collector/receiver"
 )
 
-type receiverKind string
+type (
+	receiverKind string
+	statFileType = func(logFile string, hostroot string, commandRunner CommandRunner) (ignore bool, needSudo bool, sizeFn func() (int64, error))
+)
 
 const (
 	receiverFileLog receiverKind = "filelogreceiver"
@@ -89,6 +92,7 @@ type logReceiver struct {
 	operators       []operator.Config
 	filterCfg       *filterprocessor.Config
 	setupFilterDone bool
+	statFile        statFileType
 
 	// l should always be acquired after the pipeline lock
 	l            sync.Mutex
@@ -107,6 +111,7 @@ func newLogReceiver(
 	isFromService bool,
 	logConsumer consumer.Logs,
 	knownLogFormats map[string][]config.OTELOperator,
+	statFile statFileType,
 ) (*logReceiver, error, error) {
 	if !receiverNameRegex.MatchString(name) {
 		return nil, nil, fmt.Errorf("%w: %q. It must be of the form 'my-receiver' or 'filelog/my-receiver'", errInvalidReceiverName, name) //nolint: nilnil
@@ -157,6 +162,7 @@ func newLogReceiver(
 		sizeFnByFile:    make(map[string]func() (int64, error), len(cfg.Include)),
 		logCounter:      new(atomic.Int64),
 		throughputMeter: newRingCounter(throughputMeterResolutionSecs),
+		statFile:        statFile,
 	}, warn, nil
 }
 
@@ -249,6 +255,7 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 		pipeline.lastFileSizes,
 		pipeline.commandRunner,
 		makeStorageFn,
+		r.statFile,
 		nil,
 	)
 	if err != nil {
@@ -432,6 +439,7 @@ func setupLogReceiverFactories(
 	lastFileSizes map[string]int64,
 	commandRunner CommandRunner,
 	makeStorageFn func(logFile string) *component.ID,
+	statFile statFileType,
 	extraAttributes map[string]helper.ExprStringConfig,
 ) (
 	factories map[receiver.Factory]component.Config,
@@ -552,9 +560,6 @@ func setupLogReceiverFactories(
 
 	return factories, readableFiles, execFiles, sizeFnByFile, nil
 }
-
-// Using statFile instead of the function allows us to mock it during tests.
-var statFile = statFileImpl //nolint:gochecknoglobals
 
 func statFileImpl(logFile, hostroot string, commandRunner CommandRunner) (ignore, needSudo bool, sizeFn func() (int64, error)) {
 	logFilePath := filepath.Join(hostroot, logFile)

@@ -473,7 +473,7 @@ func (man *Manager) setupProcessingForSource(ctx context.Context, logSource logS
 			Filters:   logSource.filters,
 		}
 
-		recv, warn, err := newLogReceiver(recvName, recvConfig, true, man.pipeline.getInput(), nil)
+		recv, warn, err := newLogReceiver(recvName, recvConfig, true, man.pipeline.getInput(), nil, statFileImpl)
 		if err != nil {
 			return err
 		}
