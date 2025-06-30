@@ -143,13 +143,13 @@ func (cr *containerReceiver) handleContainerLogs(
 	ctr facts.Container,
 	operators []operator.Config,
 	filters config.OTELFilters,
-) error {
+) (string, error) {
 	cr.l.Lock()
 	defer cr.l.Unlock()
 
 	logFilterConfig, warn, err := buildLogFilterConfig(filters)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	if warn != nil {
@@ -158,20 +158,20 @@ func (cr *containerReceiver) handleContainerLogs(
 
 	logFilePath := ctr.LogPath()
 	if logFilePath == "" {
-		return errContainerLogFileUnavailable
+		return "", errContainerLogFileUnavailable
 	}
 
 	logCtr, err := makeLogContainer(ctx, ctr, logFilePath)
 	if err != nil {
-		return err
+		return logFilePath, err
 	}
 
 	err = cr.setupContainerLogReceiver(ctx, logCtr, operators, logFilterConfig)
 	if err != nil {
-		return fmt.Errorf("setting up log receiver: %w", err)
+		return logFilePath, fmt.Errorf("setting up log receiver: %w", err)
 	}
 
-	return nil
+	return logFilePath, nil
 }
 
 func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr Container, operators []operator.Config, filtersCfg *filterprocessor.Config) error {

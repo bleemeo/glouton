@@ -156,7 +156,7 @@ func TestHandleContainerLogs(t *testing.T) {
 			t.Fatalf("Failed to build operators for container %s: %v", ctr.ContainerName(), err)
 		}
 
-		err = containerRecv.handleContainerLogs(ctx, ctr, ops, knownFilters[containerFilter[ctr.ContainerName()]])
+		_, err = containerRecv.handleContainerLogs(ctx, ctr, ops, knownFilters[containerFilter[ctr.ContainerName()]])
 		if err != nil {
 			t.Fatalf("Failed to handle logs for container %s: %v", ctr.ContainerName(), err)
 		}

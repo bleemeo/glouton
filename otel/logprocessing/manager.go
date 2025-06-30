@@ -58,8 +58,9 @@ type Manager struct {
 	containerRecv *containerReceiver
 
 	l                 sync.Mutex
-	watchedServices   map[discovery.NameInstance]struct{}
-	watchedContainers map[string]struct{} // map key: container ID
+	skippedSource     []sourceDiagnostic
+	watchedServices   map[discovery.NameInstance]sourceDiagnostic
+	watchedContainers map[string]sourceDiagnostic // map key: container ID
 	// serviceReceivers only contains services that don't run in a container
 	serviceReceivers map[discovery.NameInstance][]*logReceiver
 }
@@ -122,8 +123,8 @@ func New(
 		persister:                  persister,
 		pipeline:                   pipeline,
 		containerRecv:              containerRecv,
-		watchedServices:            make(map[discovery.NameInstance]struct{}),
-		watchedContainers:          make(map[string]struct{}),
+		watchedServices:            make(map[discovery.NameInstance]sourceDiagnostic),
+		watchedContainers:          make(map[string]sourceDiagnostic),
 		serviceReceivers:           make(map[discovery.NameInstance][]*logReceiver),
 	}
 
@@ -220,7 +221,17 @@ func (man *Manager) HandleLogsFromDynamicSources(ctx context.Context, services [
 		err := man.setupProcessingForSource(ctx, logSource)
 		if err != nil {
 			if logSource.serviceID != nil {
+				if diag, found := man.watchedServices[*logSource.serviceID]; found {
+					diag.SetupError = err.Error()
+					man.watchedServices[*logSource.serviceID] = diag
+				}
+
 				if logSource.container != nil {
+					if diag, found := man.watchedContainers[logSource.container.ID()]; found {
+						diag.SetupError = err.Error()
+						man.watchedContainers[logSource.container.ID()] = diag
+					}
+
 					logger.V(1).Printf(
 						"Failed to set up log processing for service %q on container %s (%s): %v",
 						logSource.serviceID.Name, logSource.container.ContainerName(), logSource.container.ID(), err,
@@ -232,6 +243,11 @@ func (man *Manager) HandleLogsFromDynamicSources(ctx context.Context, services [
 					)
 				}
 			} else {
+				if diag, found := man.watchedContainers[logSource.container.ID()]; found {
+					diag.SetupError = err.Error()
+					man.watchedContainers[logSource.container.ID()] = diag
+				}
+
 				logger.V(1).Printf(
 					"Failed to set up log processing for container %s (%s): %v",
 					logSource.container.ContainerName(), logSource.container.ID(), err,
@@ -242,6 +258,8 @@ func (man *Manager) HandleLogsFromDynamicSources(ctx context.Context, services [
 }
 
 func (man *Manager) processLogSources(services []discovery.Service, containers []facts.Container) []logSource {
+	man.skippedSource = make([]sourceDiagnostic, 0, len(man.skippedSource))
+
 	const gloutonContainerLabelPrefix = "glouton."
 
 	containersByID := make(map[string]facts.Container, len(containers))
@@ -277,9 +295,46 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 					} else if !logEnable {
 						logger.V(2).Printf("Ignoring logs of service %q, because its container has 'glouton.log_enable' set to false", service.Name)
 
+						man.skippedSource = append(man.skippedSource, sourceDiagnostic{
+							IsFromService: true,
+							ServiceKey:    key,
+							ContainerID:   service.ContainerID,
+							ContainerName: service.ContainerName,
+							SkipReason:    "Label glouton.log_enable set to false",
+						})
+
 						continue
 					}
 				}
+			}
+		}
+
+		var ctr facts.Container
+
+		if service.ContainerID != "" {
+			var found bool
+
+			ctr, found = containersByID[service.ContainerID]
+			if !found {
+				logger.V(1).Printf("Can't find container with id %q (related to service %q); ignoring it", service.ContainerID, service.Name)
+
+				man.skippedSource = append(man.skippedSource, sourceDiagnostic{
+					IsFromService: true,
+					ServiceKey:    key,
+					ContainerID:   service.ContainerID,
+					ContainerName: service.ContainerName,
+					SkipReason:    "Can't find container",
+				})
+
+				continue
+			}
+
+			man.watchedContainers[service.ContainerID] = sourceDiagnostic{
+				IsFromService: true,
+				ServiceKey:    key,
+				ContainerID:   service.ContainerID,
+				ContainerName: service.ContainerName,
+				SkipReason:    "IsFromService, look at entry in WatchedServices",
 			}
 		}
 
@@ -287,26 +342,20 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 			logSource := logSource{
 				serviceID:   &key,
 				logFilePath: serviceLogProcessing.FilePath, // ignored if in a container
+				container:   ctr,                           // possibly nil if not in a container
 				operators:   append(operatorsForService(service), man.knownLogFormats[serviceLogProcessing.Format]...),
 				filters:     man.config.KnownLogFilters[serviceLogProcessing.Filter],
 			}
 
-			if service.ContainerID != "" {
-				ctr, found := containersByID[service.ContainerID]
-				if !found {
-					logger.V(1).Printf("Can't find container with id %q (related to service %q); ignoring it", service.ContainerID, service.Name)
-
-					continue
-				}
-
-				logSource.container = ctr
-				man.watchedContainers[service.ContainerID] = struct{}{}
-			} else {
-				logSource.logFilePath = serviceLogProcessing.FilePath
-			}
-
 			logSources = append(logSources, logSource)
-			man.watchedServices[key] = struct{}{}
+		}
+
+		man.watchedServices[key] = sourceDiagnostic{
+			IsFromService:   true,
+			ServiceKey:      key,
+			ServiceLogPaths: flattenLogPaths(service.LogProcessing),
+			ContainerID:     service.ContainerID,
+			ContainerName:   service.ContainerName,
 		}
 	}
 
@@ -324,6 +373,12 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 				logger.V(1).Printf("Failed to parse value of 'glouton.log_enable' for container %s (%s): %v", ctr.ContainerName(), ctr.ID(), err)
 			} else if !logEnable {
 				logger.V(2).Printf("Ignoring logs of container %s (%s), for which 'glouton.log_enable' is set to false", ctr.ContainerName(), ctr.ID())
+
+				man.skippedSource = append(man.skippedSource, sourceDiagnostic{
+					ContainerID:   ctr.ID(),
+					ContainerName: ctr.ContainerName(),
+					SkipReason:    "Label glouton.log_enable set to false",
+				})
 
 				continue
 			}
@@ -371,7 +426,11 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 		}
 
 		logSources = append(logSources, logSource)
-		man.watchedContainers[ctrID] = struct{}{}
+		man.watchedContainers[ctrID] = sourceDiagnostic{
+			ContainerName: ctr.ContainerName(),
+			ContainerID:   ctr.ID(),
+			IsFromService: false,
+		}
 	}
 
 	return logSources
@@ -389,7 +448,20 @@ func (man *Manager) setupProcessingForSource(ctx context.Context, logSource logS
 	}
 
 	if logSource.container != nil {
-		err = man.containerRecv.handleContainerLogs(ctx, logSource.container, operators, logSource.filters)
+		logPath, err := man.containerRecv.handleContainerLogs(ctx, logSource.container, operators, logSource.filters)
+
+		if diag, found := man.watchedContainers[logSource.container.ID()]; found {
+			if diag.IsFromService {
+				if diagServ, found := man.watchedServices[diag.ServiceKey]; found {
+					diagServ.ContainerLogPath = logPath
+					man.watchedServices[diag.ServiceKey] = diagServ
+				}
+			} else {
+				diag.ContainerLogPath = logPath
+				man.watchedContainers[logSource.container.ID()] = diag
+			}
+		}
+
 		if err != nil {
 			return err
 		}
@@ -493,6 +565,15 @@ func (man *Manager) DiagnosticArchive(_ context.Context, writer types.ArchiveWri
 		}
 	}
 
+	skippedSource := slices.Clone(man.skippedSource)
+	watchedContainers := maps.Clone(man.watchedContainers)
+	watchedServices := make(map[string]sourceDiagnostic, len(man.watchedServices))
+
+	for serv, row := range man.watchedServices {
+		key := serv.Name + "/" + serv.Instance
+		watchedServices[key] = row
+	}
+
 	man.pipeline.l.Unlock()
 
 	diagnosticInfo := diagnosticInformation{
@@ -505,6 +586,11 @@ func (man *Manager) DiagnosticArchive(_ context.Context, writer types.ArchiveWri
 			Receivers:          receiversInfo,
 			ContainerReceivers: man.containerRecv.diagnostic(),
 			WatchedServices:    wServices,
+		},
+		receiversSetup: diagnosticReceiverSetup{
+			SkippedSource:     skippedSource,
+			WatchedServices:   watchedServices,
+			WatchedContainers: watchedContainers,
 		},
 		KnownLogFormats: man.knownLogFormats,
 		KnownLogFilters: man.config.KnownLogFilters,

@@ -32,6 +32,7 @@ import (
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/crashreport"
+	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
@@ -409,6 +410,17 @@ type Facter interface {
 	Facts(ctx context.Context, maxAge time.Duration) (facts map[string]string, err error)
 }
 
+type sourceDiagnostic struct {
+	ContainerName    string
+	ContainerID      string
+	ServiceKey       discovery.NameInstance
+	IsFromService    bool
+	SkipReason       string
+	ServiceLogPaths  []string
+	ContainerLogPath string
+	SetupError       string
+}
+
 type otlpReceiverDiagnosticInformation struct {
 	GRPCEnabled            bool
 	HTTPEnabled            bool
@@ -445,9 +457,16 @@ type diagnosticReceiver struct {
 	WatchedServices    map[string][]receiverDiagnosticInformation
 }
 
+type diagnosticReceiverSetup struct {
+	SkippedSource     []sourceDiagnostic
+	WatchedServices   map[string]sourceDiagnostic
+	WatchedContainers map[string]sourceDiagnostic
+}
+
 type diagnosticInformation struct {
 	summary         diagnosticSummary
 	receivers       diagnosticReceiver
+	receiversSetup  diagnosticReceiverSetup
 	KnownLogFormats map[string][]config.OTELOperator
 	KnownLogFilters map[string]config.OTELFilters
 }
@@ -466,6 +485,10 @@ func (diagInfo diagnosticInformation) writeToArchive(writer types.ArchiveWriter)
 	}
 
 	if err := diagInfo.receivers.writeToArchive(writer); err != nil {
+		return err
+	}
+
+	if err := diagInfo.receiversSetup.writeToArchive(writer); err != nil {
 		return err
 	}
 
@@ -506,4 +529,26 @@ func (receiverDiag diagnosticReceiver) writeToArchive(writer types.ArchiveWriter
 	enc.SetIndent("", "  ")
 
 	return enc.Encode(receiverDiag)
+}
+
+func (receiverDiag diagnosticReceiverSetup) writeToArchive(writer types.ArchiveWriter) error {
+	file, err := writer.Create("log-processing/receivers-setup.json")
+	if err != nil {
+		return err
+	}
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(receiverDiag)
+}
+
+func flattenLogPaths(data []discovery.ServiceLogReceiver) []string {
+	result := make([]string, 0, len(data))
+
+	for _, row := range data {
+		result = append(result, row.FilePath)
+	}
+
+	return result
 }

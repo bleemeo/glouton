@@ -17,7 +17,9 @@
 package logprocessing
 
 import (
+	"maps"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -26,6 +28,7 @@ import (
 	"github.com/bleemeo/glouton/facts"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func svc(
@@ -323,8 +326,8 @@ func TestProcessLogSources(t *testing.T) {
 		},
 		knownLogFormats:   knownLogFormats,
 		containerRecv:     newContainerReceiver(&pipelineContext{}, containerOperators, knownLogFormats, containerFilters, knownLogFilters),
-		watchedServices:   make(map[discovery.NameInstance]struct{}),
-		watchedContainers: make(map[string]struct{}),
+		watchedServices:   make(map[discovery.NameInstance]sourceDiagnostic),
+		watchedContainers: make(map[string]sourceDiagnostic),
 	}
 
 	for _, step := range executionSteps {
@@ -333,11 +336,19 @@ func TestProcessLogSources(t *testing.T) {
 			t.Fatalf("Unexpected log sources at step %q (-want +got):\n%s", step.name, diff)
 		}
 
-		if diff := cmp.Diff(step.expectedWatchedServices, logMan.watchedServices); diff != "" {
+		// We don't check the content of expectedWatchedServices's sourceDiagnostic. Only it's existence
+		expectedKeys := slices.Collect(maps.Keys(step.expectedWatchedServices))
+		gotKeys := slices.Collect(maps.Keys(logMan.watchedServices))
+
+		// The SortSlices assume we don't have two identical name with different instance.
+		if diff := cmp.Diff(expectedKeys, gotKeys, cmpopts.SortSlices(func(x, y discovery.NameInstance) bool { return x.Name < y.Name })); diff != "" {
 			t.Fatalf("Unexpected watched services at step %q (-want +got):\n%s", step.name, diff)
 		}
 
-		if diff := cmp.Diff(step.expectedWatchedContainers, logMan.watchedContainers); diff != "" {
+		expectedKeys2 := slices.Collect(maps.Keys(step.expectedWatchedContainers))
+		gotKeys2 := slices.Collect(maps.Keys(logMan.watchedContainers))
+
+		if diff := cmp.Diff(expectedKeys2, gotKeys2, cmpopts.SortSlices(func(x, y string) bool { return x < y })); diff != "" {
 			t.Fatalf("Unexpected watched containers at step %q (-want +got):\n%s", step.name, diff)
 		}
 	}
