@@ -450,38 +450,6 @@ func (d *Docker) IsContainerNameRecentlyDeleted(name string) bool {
 	return ok
 }
 
-func (d *Docker) ImageTags(ctx context.Context, imageID, _ string) ([]string, error) {
-	d.l.Lock()
-	defer d.l.Unlock()
-
-	cl, err := d.getClient(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	img, err := cl.ImageInspect(ctx, imageID)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(img.RepoTags) == 0 {
-		return nil, fmt.Errorf("%w on image %s", errNoImageTagsFound, imageID)
-	}
-
-	tags := make([]string, len(img.RepoTags))
-
-	for i, tag := range img.RepoTags {
-		tagSplit := strings.SplitN(tag, ":", 2)
-		if len(tagSplit) == 1 {
-			tags[i] = "latest"
-		} else {
-			tags[i] = tagSplit[1]
-		}
-	}
-
-	return tags, nil
-}
-
 // similar to getClient but also check that connection works.
 func (d *Docker) ensureClient(ctx context.Context) (cl dockerClient, err error) {
 	ctx, cancel := context.WithTimeout(ctx, dockerTimeout)
@@ -714,6 +682,7 @@ func (d *Docker) updateContainers(ctx context.Context) error {
 		container := dockerContainer{
 			primaryAddress: d.primaryAddress(inspect, bridgeNetworks, containerAddressOnDockerBridge),
 			inspect:        inspect,
+			d:              d,
 		}
 
 		containers[c.ID] = container
@@ -777,6 +746,7 @@ func (d *Docker) updateContainer(ctx context.Context, cl dockerClient, container
 	container := dockerContainer{
 		primaryAddress: d.primaryAddress(inspect, d.bridgeNetworks, d.containerAddressOnDockerBridge),
 		inspect:        inspect,
+		d:              d,
 	}
 
 	d.containers[containerID] = container
@@ -983,6 +953,7 @@ type dockerContainer struct {
 	primaryAddress string
 	inspect        container.InspectResponse
 	stopped        bool
+	d              *Docker
 }
 
 func (c dockerContainer) RuntimeName() string {
@@ -1121,6 +1092,40 @@ func (c dockerContainer) ImageName() string {
 	}
 
 	return c.inspect.Config.Image
+}
+
+func (c dockerContainer) ImageTags(ctx context.Context) ([]string, error) {
+	imageID := c.ImageID()
+
+	c.d.l.Lock()
+	cl, err := c.d.getClient(ctx)
+	c.d.l.Unlock()
+
+	if err != nil {
+		return nil, err
+	}
+
+	img, err := cl.ImageInspect(ctx, imageID)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(img.RepoTags) == 0 {
+		return nil, fmt.Errorf("%w on image %s", errNoImageTagsFound, imageID)
+	}
+
+	tags := make([]string, len(img.RepoTags))
+
+	for i, tag := range img.RepoTags {
+		tagSplit := strings.SplitN(tag, ":", 2)
+		if len(tagSplit) == 1 {
+			tags[i] = "latest"
+		} else {
+			tags[i] = tagSplit[1]
+		}
+	}
+
+	return tags, nil
 }
 
 func (c dockerContainer) Labels() map[string]string {

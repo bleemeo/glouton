@@ -30,7 +30,6 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/facts"
-	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
 	"github.com/bleemeo/glouton/logger"
 
 	"github.com/google/uuid"
@@ -141,7 +140,6 @@ func newContainerReceiver(
 
 func (cr *containerReceiver) handleContainerLogs(
 	ctx context.Context,
-	crRuntime crTypes.RuntimeInterface,
 	ctr facts.Container,
 	operators []operator.Config,
 	filters config.OTELFilters,
@@ -163,7 +161,7 @@ func (cr *containerReceiver) handleContainerLogs(
 		return errContainerLogFileUnavailable
 	}
 
-	logCtr, err := makeLogContainer(ctx, crRuntime, ctr, logFilePath)
+	logCtr, err := makeLogContainer(ctx, ctr, logFilePath)
 	if err != nil {
 		return err
 	}
@@ -358,8 +356,8 @@ func (cr *containerReceiver) stop() {
 	wg.Wait()
 }
 
-func makeLogContainer(ctx context.Context, crRuntime crTypes.RuntimeInterface, container facts.Container, logFilePath string) (Container, error) {
-	imageTags, err := crRuntime.ImageTags(ctx, container.ImageID(), container.ImageName())
+func makeLogContainer(ctx context.Context, container facts.Container, logFilePath string) (Container, error) {
+	imageTags, err := container.ImageTags(ctx)
 	if err != nil {
 		return Container{}, fmt.Errorf("can't get tags for image %q (%s): %w", container.ImageName(), container.ImageID(), err)
 	}

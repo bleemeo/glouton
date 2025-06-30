@@ -1126,7 +1126,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 				a.state,
 				a.commandRunner,
 				a.factProvider,
-				a.containerRuntime,
 				connector.PushLogs,
 				connector.ShouldApplyLogBackPressure,
 				a.addWarnings,
@@ -2603,9 +2602,23 @@ func (a *agent) diagnosticContainers(ctx context.Context, archive types.ArchiveW
 
 		for _, c := range containers {
 			health, healthMsg := c.Health()
+
+			imgTag, err := c.ImageTags(ctx)
+
+			var formattedImgTag string
+
+			if err != nil {
+				formattedImgTag = fmt.Sprintf("err=%v", err)
+			} else {
+				formattedImgTag = fmt.Sprintf("%v", imgTag)
+			}
+
 			fmt.Fprintf(
 				file,
-				"Name=%s, ID=%s, ignored=%v, IP=%s, listenAddr=%v,\n\tState=%v, CreatedAt=%v, StartedAt=%v, FinishedAt=%v, StoppedAndReplaced=%v\n\tHealth=%v (%s) K8S=%v/%v\n",
+				"Name=%s, ID=%s, ignored=%v, IP=%s, listenAddr=%v,\n"+
+					"\tState=%v, CreatedAt=%v, StartedAt=%v, FinishedAt=%v, StoppedAndReplaced=%v\n"+
+					"\tHealth=%v (%s) K8S=%v/%v\n"+
+					"\tLogPath=%v ImageTags=%v\n",
 				c.ContainerName(),
 				c.ID(),
 				a.containerFilter.ContainerIgnored(c),
@@ -2620,6 +2633,8 @@ func (a *agent) diagnosticContainers(ctx context.Context, archive types.ArchiveW
 				strings.ReplaceAll(healthMsg, "\n", "\\n"),
 				c.PodNamespace(),
 				c.PodName(),
+				c.LogPath(),
+				formattedImgTag,
 			)
 		}
 	}

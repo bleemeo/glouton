@@ -19,8 +19,6 @@ package logprocessing
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -39,23 +37,6 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
 )
-
-var errNotFound = errors.New("not found")
-
-type dummyRuntime struct {
-	crTypes.RuntimeInterface
-
-	imageTags map[string][]string
-}
-
-func (r dummyRuntime) ImageTags(_ context.Context, _, imageName string) ([]string, error) {
-	tags, ok := r.imageTags[imageName]
-	if !ok {
-		return nil, fmt.Errorf("image %q %w", imageName, errNotFound)
-	}
-
-	return tags, nil
-}
 
 func makeCtrLog(t *testing.T, ts time.Time, body string) []byte {
 	t.Helper()
@@ -142,13 +123,6 @@ func TestHandleContainerLogs(t *testing.T) {
 		persister:     mustNewPersistHost(t),
 	}
 
-	crRuntime := dummyRuntime{
-		imageTags: map[string][]string{
-			"img-1": {"v1.2.3", "latest"},
-			"img-2": {"latest"},
-		},
-	}
-
 	containerRecv := newContainerReceiver(&pipeline, containerOperators, knownOperators, containerFilter, knownFilters)
 
 	defer containerRecv.stop()
@@ -159,6 +133,7 @@ func TestHandleContainerLogs(t *testing.T) {
 			FakeContainerName: "ctr-1",
 			FakeImageID:       "img-id-1",
 			FakeImageName:     "img-1",
+			FakeImageTags:     []string{"v1.2.3", "latest"},
 			FakeLogPath:       f1.Name(),
 			FakeRuntimeName:   crTypes.DockerRuntime,
 		},
@@ -167,6 +142,7 @@ func TestHandleContainerLogs(t *testing.T) {
 			FakeContainerName: "ctr-2",
 			FakeImageID:       "img-id-2",
 			FakeImageName:     "img-2",
+			FakeImageTags:     []string{"latest"},
 			FakeLogPath:       f2.Name(),
 			FakePodName:       "pod",
 			FakePodNamespace:  "ns",
@@ -180,7 +156,7 @@ func TestHandleContainerLogs(t *testing.T) {
 			t.Fatalf("Failed to build operators for container %s: %v", ctr.ContainerName(), err)
 		}
 
-		err = containerRecv.handleContainerLogs(ctx, crRuntime, ctr, ops, knownFilters[containerFilter[ctr.ContainerName()]])
+		err = containerRecv.handleContainerLogs(ctx, ctr, ops, knownFilters[containerFilter[ctr.ContainerName()]])
 		if err != nil {
 			t.Fatalf("Failed to handle logs for container %s: %v", ctr.ContainerName(), err)
 		}

@@ -31,7 +31,6 @@ import (
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/facts"
-	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
 
@@ -52,7 +51,6 @@ type Manager struct {
 	config                     config.OpenTelemetry
 	knownLogFormats            map[string][]config.OTELOperator
 	state                      bleemeoTypes.State
-	crRuntime                  crTypes.RuntimeInterface
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability
 
 	persister     *persistHost
@@ -73,7 +71,6 @@ func New(
 	state bleemeoTypes.State,
 	commandRunner CommandRunner,
 	facter *facts.FactProvider,
-	crRuntime crTypes.RuntimeInterface,
 	pushLogs func(context.Context, []byte) error,
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability,
 	addWarnings func(...error),
@@ -121,7 +118,6 @@ func New(
 		config:                     cfg,
 		knownLogFormats:            knownLogFormats,
 		state:                      state,
-		crRuntime:                  crRuntime,
 		streamAvailabilityStatusFn: streamAvailabilityStatusFn,
 		persister:                  persister,
 		pipeline:                   pipeline,
@@ -393,7 +389,7 @@ func (man *Manager) setupProcessingForSource(ctx context.Context, logSource LogS
 	}
 
 	if logSource.container != nil {
-		err = man.containerRecv.handleContainerLogs(ctx, man.crRuntime, logSource.container, operators, logSource.filters)
+		err = man.containerRecv.handleContainerLogs(ctx, logSource.container, operators, logSource.filters)
 		if err != nil {
 			return err
 		}
