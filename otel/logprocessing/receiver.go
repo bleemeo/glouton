@@ -231,10 +231,21 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 		}
 
 		for _, file := range matching {
+			realFile := file
+			// If we are in a containers, resolve symlink taking hostroot in consideration.
+			// This is mandatory for file like "/var/log/containers/XXX" which are
+			// symlink to "/var/log/pods/XXX" with Kubernetes & containerd.
+			// If we don't, Glouton will try reading "/hostroot/var/log/containers/XXX". Glouton will follow
+			// the symlink (without take /hostroot in consideration) which result in Glouton trying to
+			// read "/var/log/pods/XXX" in its own mount namespace (it need to read "/hostroot/var/log/pods/XXX").
+			if pipeline.hostroot != "/" {
+				realFile = hostrootsymlink.EvalSymlinks(pipeline.hostroot, realFile)
+			}
+
 			// Ensure we're not already watching it,
 			// as well as it hasn't been matched by multiple patterns.
-			if _, found := r.watching[file]; !found && !logFiles[file] {
-				logFiles[file] = true
+			if _, found := r.watching[realFile]; !found && !logFiles[realFile] {
+				logFiles[realFile] = true
 			}
 		}
 	}
@@ -451,16 +462,6 @@ func setupLogReceiverFactories(
 	sizeFnByFile = make(map[string]func() (int64, error), len(logFiles))
 
 	for _, logFile := range logFiles {
-		// If we are in a containers, resolve symlink taking hostroot in consideration.
-		// This is mandatory for file like "/var/log/containers/XXX" which are
-		// symlink to "/var/log/pods/XXX" with Kubernetes & containerd.
-		// If we don't, Glouton will try reading "/hostroot/var/log/containers/XXX". Glouton will follow
-		// the symlink (without take /hostroot in consideration) which result in Glouton trying to
-		// read "/var/log/pods/XXX" in its own mount namespace (it need to read "/hostroot/var/log/pods/XXX").
-		if hostroot != "/" {
-			logFile = hostrootsymlink.EvalSymlinks(hostroot, logFile)
-		}
-
 		ignore, needSudo, sizeFn := statFile(logFile, hostroot, commandRunner)
 		if ignore {
 			continue

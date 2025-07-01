@@ -191,8 +191,19 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 		return &id
 	}
 
+	realLogFile := ctr.LogFilePath
+	// If we are in a containers, resolve symlink taking hostroot in consideration.
+	// This is mandatory for file like "/var/log/containers/XXX" which are
+	// symlink to "/var/log/pods/XXX" with Kubernetes & containerd.
+	// If we don't, Glouton will try reading "/hostroot/var/log/containers/XXX". Glouton will follow
+	// the symlink (without take /hostroot in consideration) which result in Glouton trying to
+	// read "/var/log/pods/XXX" in its own mount namespace (it need to read "/hostroot/var/log/pods/XXX").
+	if cr.pipeline.hostroot != "/" {
+		realLogFile = hostrootsymlink.EvalSymlinks(cr.pipeline.hostroot, realLogFile)
+	}
+
 	factories, readFiles, execFiles, sizeFnByFile, err := setupLogReceiverFactories(
-		[]string{ctr.LogFilePath},
+		[]string{realLogFile},
 		cr.pipeline.hostroot,
 		ops,
 		cr.lastFileSizes,
