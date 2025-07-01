@@ -2195,13 +2195,19 @@ func (a *agent) DiagnosticPage(ctx context.Context) string {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
+	raceDetectorMsg := ""
+	if version.RaceDetectorEnable() {
+		raceDetectorMsg = " with race-detector enabled"
+	}
+
 	fmt.Fprintf(
 		builder,
-		"Run diagnostic at %s with Glouton version %s (commit %s built using Go %s)\n",
+		"Run diagnostic at %s with Glouton version %s (commit %s built using Go %s%s)\n",
 		time.Now().Format(time.RFC3339),
 		version.Version,
 		version.BuildHash,
 		runtime.Version(),
+		raceDetectorMsg,
 	)
 
 	if a.config.Bleemeo.Enable {
