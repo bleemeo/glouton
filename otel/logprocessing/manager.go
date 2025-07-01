@@ -574,13 +574,32 @@ func (man *Manager) DiagnosticArchive(_ context.Context, writer types.ArchiveWri
 		watchedServices[key] = row
 	}
 
+	pipelineStartedComponentsCount := len(man.pipeline.startedComponents)
+	perServiceStartedComponentCount := make(map[string]int)
+
+	for srvID, logsReceivers := range man.serviceReceivers {
+		key := srvID.Name + "/" + srvID.Instance
+		total := 0
+
+		for _, lr := range logsReceivers {
+			lr.l.Lock()
+			total += len(lr.startedComponents)
+			lr.l.Unlock()
+		}
+
+		perServiceStartedComponentCount[key] = total
+	}
+
 	man.pipeline.l.Unlock()
 
 	diagnosticInfo := diagnosticInformation{
 		summary: diagnosticSummary{
-			LogProcessedCount:      man.pipeline.logProcessedCount.Load(),
-			LogThroughputPerMinute: man.pipeline.logThroughputMeter.Total(),
-			ProcessingStatus:       man.streamAvailabilityStatusFn().String(),
+			LogProcessedCount:               man.pipeline.logProcessedCount.Load(),
+			LogThroughputPerMinute:          man.pipeline.logThroughputMeter.Total(),
+			ProcessingStatus:                man.streamAvailabilityStatusFn().String(),
+			ContainerStartedComponents:      man.containerRecv.StartedComponentKeys(),
+			PipelineStartedComponentsCount:  pipelineStartedComponentsCount,
+			PerServiceStartedComponentCount: perServiceStartedComponentCount,
 		},
 		receivers: diagnosticReceiver{
 			Receivers:          receiversInfo,

@@ -446,9 +446,12 @@ type containerDiagnosticInformation struct {
 }
 
 type diagnosticSummary struct {
-	LogProcessedCount      int64
-	LogThroughputPerMinute int
-	ProcessingStatus       string
+	LogProcessedCount               int64
+	LogThroughputPerMinute          int
+	ProcessingStatus                string
+	ContainerStartedComponents      []string
+	PipelineStartedComponentsCount  int
+	PerServiceStartedComponentCount map[string]int
 }
 
 type diagnosticReceiver struct {
