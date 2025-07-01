@@ -605,7 +605,15 @@ func (man *Manager) DiagnosticArchive(_ context.Context, writer types.ArchiveWri
 		}
 	}
 
-	return diagnosticInfo.writeToArchive(writer)
+	if err := diagnosticInfo.writeToArchive(writer); err != nil {
+		return err
+	}
+
+	if err := man.persister.writeToArchive(writer); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func operatorsForService(service discovery.Service) []config.OTELOperator {
