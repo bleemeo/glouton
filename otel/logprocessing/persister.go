@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"sync"
 	"time"
 
@@ -95,7 +96,9 @@ func (h *persistHost) getAllMetadata() map[string]map[string][]byte {
 	updatedData := make(map[string]map[string][]byte, len(h.updatedKeys))
 
 	for key := range h.updatedKeys {
-		updatedData[key] = h.metadataPerReceiver[key]
+		// We assume the []byte in value of `h.metadataPerReceiver[key]` isn't mutated.
+		// If it was mutated, we also need to copy it.
+		updatedData[key] = maps.Clone(h.metadataPerReceiver[key])
 	}
 
 	return updatedData
