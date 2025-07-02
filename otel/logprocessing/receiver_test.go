@@ -276,7 +276,7 @@ func TestFileLogReceiver(t *testing.T) {
 		buf: make([]plog.Logs, 0, 2), // we plan to write 2 log lines (in fact 4, but half of them will be filtered)
 	}
 
-	recv, warn, err := newLogReceiver("filelog/recv", cfg, false, makeBufferConsumer(t, &logBuf), knownLogFormats)
+	recv, warn, err := newLogReceiver("filelog/recv", cfg, false, makeBufferConsumer(t, &logBuf), knownLogFormats, statFileImpl)
 	if err != nil {
 		t.Fatal("Failed to initialize log receiver:", err)
 	}
@@ -433,7 +433,7 @@ func TestFileLogReceiverWithHostroot(t *testing.T) {
 		buf: make([]plog.Logs, 0, 1), // we plan to write 1 log line
 	}
 
-	recv, warn, err := newLogReceiver("recv-from-container", cfg, false, makeBufferConsumer(t, &logBuf), map[string][]config.OTELOperator{})
+	recv, warn, err := newLogReceiver("recv-from-container", cfg, false, makeBufferConsumer(t, &logBuf), map[string][]config.OTELOperator{}, statFileImpl)
 	if err != nil {
 		t.Fatal("Failed to initialize log receiver:", err)
 	}
@@ -524,12 +524,7 @@ func TestExecLogReceiver(t *testing.T) {
 		t.Skip("We currently don't support accessing protected files on Windows.")
 	}
 
-	// This test must NOT run in parallel, since it replaces the statFile function.
-
-	t.Cleanup(func() {
-		// Restoring normal statFile function for other tests
-		statFile = statFileImpl
-	})
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	// Using the same file for all subtests, we won't open it anyway.
@@ -600,8 +595,10 @@ func TestExecLogReceiver(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			// Replacing the statFile function with a mock to force the use of "sudo".
-			statFile = func(string, string, CommandRunner) (ignore, needSudo bool, sizeFn func() (int64, error)) {
+			statFile := func(string, string, CommandRunner) (ignore, needSudo bool, sizeFn func() (int64, error)) {
 				return false, true, func() (int64, error) {
 					return tc.currentFileSize, nil
 				}
@@ -643,7 +640,7 @@ func TestExecLogReceiver(t *testing.T) {
 				shutdownAll(pipeline.startedComponents)
 			}()
 
-			recv, warn, err := newLogReceiver("root_files", cfg, false, makeBufferConsumer(t, &logBuffer{buf: []plog.Logs{}}), map[string][]config.OTELOperator{})
+			recv, warn, err := newLogReceiver("root_files", cfg, false, makeBufferConsumer(t, &logBuffer{buf: []plog.Logs{}}), map[string][]config.OTELOperator{}, statFile)
 			if err != nil {
 				t.Fatal("Failed to initialize log receiver:", err)
 			}

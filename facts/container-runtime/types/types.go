@@ -49,7 +49,6 @@ type RuntimeInterface interface {
 	IsContainerNameRecentlyDeleted(name string) bool
 	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error
 	ContainerExists(containerID string) bool
-	ImageTags(ctx context.Context, imageID, imageName string) ([]string, error)
 }
 
 // ExpandRuntimeAddresses adds the host root to the socket addresses if PrefixHostRoot is true.

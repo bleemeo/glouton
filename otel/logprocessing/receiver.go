@@ -37,6 +37,7 @@ import (
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/otel/execlogreceiver"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
+	"github.com/bleemeo/glouton/utils/hostrootsymlink"
 	"github.com/bleemeo/glouton/version"
 
 	"github.com/bmatcuk/doublestar/v4"
@@ -54,7 +55,10 @@ import (
 	"go.opentelemetry.io/collector/receiver"
 )
 
-type receiverKind string
+type (
+	receiverKind string
+	statFileType = func(logFile string, hostroot string, commandRunner CommandRunner) (ignore bool, needSudo bool, sizeFn func() (int64, error))
+)
 
 const (
 	receiverFileLog receiverKind = "filelogreceiver"
@@ -89,6 +93,7 @@ type logReceiver struct {
 	operators       []operator.Config
 	filterCfg       *filterprocessor.Config
 	setupFilterDone bool
+	statFile        statFileType
 
 	// l should always be acquired after the pipeline lock
 	l            sync.Mutex
@@ -107,6 +112,7 @@ func newLogReceiver(
 	isFromService bool,
 	logConsumer consumer.Logs,
 	knownLogFormats map[string][]config.OTELOperator,
+	statFile statFileType,
 ) (*logReceiver, error, error) {
 	if !receiverNameRegex.MatchString(name) {
 		return nil, nil, fmt.Errorf("%w: %q. It must be of the form 'my-receiver' or 'filelog/my-receiver'", errInvalidReceiverName, name) //nolint: nilnil
@@ -157,6 +163,7 @@ func newLogReceiver(
 		sizeFnByFile:    make(map[string]func() (int64, error), len(cfg.Include)),
 		logCounter:      new(atomic.Int64),
 		throughputMeter: newRingCounter(throughputMeterResolutionSecs),
+		statFile:        statFile,
 	}, warn, nil
 }
 
@@ -224,10 +231,21 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 		}
 
 		for _, file := range matching {
+			realFile := file
+			// If we are in a containers, resolve symlink taking hostroot in consideration.
+			// This is mandatory for file like "/var/log/containers/XXX" which are
+			// symlink to "/var/log/pods/XXX" with Kubernetes & containerd.
+			// If we don't, Glouton will try reading "/hostroot/var/log/containers/XXX". Glouton will follow
+			// the symlink (without take /hostroot in consideration) which result in Glouton trying to
+			// read "/var/log/pods/XXX" in its own mount namespace (it need to read "/hostroot/var/log/pods/XXX").
+			if pipeline.hostroot != "/" {
+				realFile = hostrootsymlink.EvalSymlinks(pipeline.hostroot, realFile)
+			}
+
 			// Ensure we're not already watching it,
 			// as well as it hasn't been matched by multiple patterns.
-			if _, found := r.watching[file]; !found && !logFiles[file] {
-				logFiles[file] = true
+			if _, found := r.watching[realFile]; !found && !logFiles[realFile] {
+				logFiles[realFile] = true
 			}
 		}
 	}
@@ -249,6 +267,7 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 		pipeline.lastFileSizes,
 		pipeline.commandRunner,
 		makeStorageFn,
+		r.statFile,
 		nil,
 	)
 	if err != nil {
@@ -432,6 +451,7 @@ func setupLogReceiverFactories(
 	lastFileSizes map[string]int64,
 	commandRunner CommandRunner,
 	makeStorageFn func(logFile string) *component.ID,
+	statFile statFileType,
 	extraAttributes map[string]helper.ExprStringConfig,
 ) (
 	factories map[receiver.Factory]component.Config,
@@ -552,9 +572,6 @@ func setupLogReceiverFactories(
 
 	return factories, readableFiles, execFiles, sizeFnByFile, nil
 }
-
-// Using statFile instead of the function allows us to mock it during tests.
-var statFile = statFileImpl //nolint:gochecknoglobals
 
 func statFileImpl(logFile, hostroot string, commandRunner CommandRunner) (ignore, needSudo bool, sizeFn func() (int64, error)) {
 	logFilePath := filepath.Join(hostroot, logFile)

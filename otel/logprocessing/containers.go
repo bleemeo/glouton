@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -30,8 +31,8 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/facts"
-	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/utils/hostrootsymlink"
 
 	"github.com/google/uuid"
 	stanzaErrors "github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/errors"
@@ -58,7 +59,11 @@ const (
 
 const containerFileSizePrefix = "container://"
 
-var errContainerLogFileUnavailable = errors.New("no log file available")
+var (
+	errContainerLogFileUnavailable = errors.New("no log file available")
+	errNoLogFound                  = errors.New("no log file found")
+	errWrongNumberOfLogs           = errors.New("container should have a single log file")
+)
 
 type Container struct {
 	LogFilePath  string
@@ -83,9 +88,12 @@ func (ctrAttrs ContainerAttributes) asMap() map[string]helper.ExprStringConfig {
 	attrs := map[string]helper.ExprStringConfig{
 		attrContainerID:        helper.ExprStringConfig(ctrAttrs.ID),
 		attrContainerImageName: helper.ExprStringConfig(ctrAttrs.ImageName),
-		attrContainerImageTags: helper.ExprStringConfig(ctrAttrs.ImageTags),
 		attrContainerName:      helper.ExprStringConfig(ctrAttrs.Name),
 		attrContainerRuntime:   helper.ExprStringConfig(ctrAttrs.Runtime),
+	}
+
+	if ctrAttrs.ImageTags != "" {
+		attrs[attrContainerImageTags] = helper.ExprStringConfig(ctrAttrs.ImageTags)
 	}
 
 	if ctrAttrs.Namespace != "" {
@@ -141,17 +149,16 @@ func newContainerReceiver(
 
 func (cr *containerReceiver) handleContainerLogs(
 	ctx context.Context,
-	crRuntime crTypes.RuntimeInterface,
 	ctr facts.Container,
 	operators []operator.Config,
 	filters config.OTELFilters,
-) error {
+) (string, error) {
 	cr.l.Lock()
 	defer cr.l.Unlock()
 
 	logFilterConfig, warn, err := buildLogFilterConfig(filters)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	if warn != nil {
@@ -160,20 +167,17 @@ func (cr *containerReceiver) handleContainerLogs(
 
 	logFilePath := ctr.LogPath()
 	if logFilePath == "" {
-		return errContainerLogFileUnavailable
+		return "", errContainerLogFileUnavailable
 	}
 
-	logCtr, err := makeLogContainer(ctx, crRuntime, ctr, logFilePath)
-	if err != nil {
-		return err
-	}
+	logCtr := makeLogContainer(ctx, ctr, logFilePath)
 
 	err = cr.setupContainerLogReceiver(ctx, logCtr, operators, logFilterConfig)
 	if err != nil {
-		return fmt.Errorf("setting up log receiver: %w", err)
+		return logFilePath, fmt.Errorf("setting up log receiver: %w", err)
 	}
 
-	return nil
+	return logFilePath, nil
 }
 
 func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr Container, operators []operator.Config, filtersCfg *filterprocessor.Config) error {
@@ -187,13 +191,25 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 		return &id
 	}
 
+	realLogFile := ctr.LogFilePath
+	// If we are in a containers, resolve symlink taking hostroot in consideration.
+	// This is mandatory for file like "/var/log/containers/XXX" which are
+	// symlink to "/var/log/pods/XXX" with Kubernetes & containerd.
+	// If we don't, Glouton will try reading "/hostroot/var/log/containers/XXX". Glouton will follow
+	// the symlink (without take /hostroot in consideration) which result in Glouton trying to
+	// read "/var/log/pods/XXX" in its own mount namespace (it need to read "/hostroot/var/log/pods/XXX").
+	if cr.pipeline.hostroot != "/" {
+		realLogFile = hostrootsymlink.EvalSymlinks(cr.pipeline.hostroot, realLogFile)
+	}
+
 	factories, readFiles, execFiles, sizeFnByFile, err := setupLogReceiverFactories(
-		[]string{ctr.LogFilePath},
+		[]string{realLogFile},
 		cr.pipeline.hostroot,
 		ops,
 		cr.lastFileSizes,
 		cr.pipeline.commandRunner,
 		makeStorageFn,
+		statFileImpl,
 		ctr.Attributes.asMap(),
 	)
 	if err != nil {
@@ -201,9 +217,7 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 	}
 
 	if len(factories) != 1 {
-		logger.V(1).Printf("Container %s (%s) should have a single log file but has %d; ignoring it", ctr.Attributes.Name, ctr.Attributes.ID, len(factories))
-
-		return nil
+		return fmt.Errorf("%w: is had %d logs", errWrongNumberOfLogs, len(factories))
 	}
 
 	switch {
@@ -212,7 +226,7 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 	case len(execFiles) == 1:
 		ctr.ReceiverKind = receiverExecLog
 	default:
-		logger.V(1).Printf("No log file found for container %s (%s)", ctr.Attributes.Name, ctr.Attributes.ID)
+		return errNoLogFound
 	}
 
 	factoryFilter := filterprocessor.NewFactory()
@@ -325,16 +339,31 @@ func (cr *containerReceiver) diagnostic() map[string]containerDiagnosticInformat
 	infos := make(map[string]containerDiagnosticInformation, len(cr.containers))
 
 	for ctrID, ctr := range cr.containers {
+		realPath := ctr.LogFilePath
+		if cr.pipeline.hostroot != "/" {
+			realPath = hostrootsymlink.EvalSymlinks(cr.pipeline.hostroot, ctr.LogFilePath)
+		}
+
 		infos[ctrID] = containerDiagnosticInformation{
 			LogProcessedCount:      ctr.logCounter.Load(),
 			LogThroughputPerMinute: ctr.throughputMeter.Total(),
 			LogFilePath:            ctr.LogFilePath,
+			LogFileRealPath:        realPath,
 			ReceiverKind:           ctr.ReceiverKind,
 			Attributes:             ctr.Attributes,
 		}
 	}
 
 	return infos
+}
+
+func (cr *containerReceiver) StartedComponentKeys() []string {
+	cr.l.Lock()
+	defer cr.l.Unlock()
+
+	startedComponentKeys := slices.Collect(maps.Keys(cr.startedComponents))
+
+	return startedComponentKeys
 }
 
 func (cr *containerReceiver) stop() {
@@ -358,23 +387,24 @@ func (cr *containerReceiver) stop() {
 	wg.Wait()
 }
 
-func makeLogContainer(ctx context.Context, crRuntime crTypes.RuntimeInterface, container facts.Container, logFilePath string) (Container, error) {
-	imageTags, err := crRuntime.ImageTags(ctx, container.ImageID(), container.ImageName())
-	if err != nil {
-		return Container{}, fmt.Errorf("can't get tags for image %q (%s): %w", container.ImageName(), container.ImageID(), err)
-	}
-
-	imageTagsJSON, err := json.Marshal(imageTags)
-	if err != nil {
-		return Container{}, fmt.Errorf("can't marshal tags for image %q (%s): %w", container.ImageName(), container.ImageID(), err)
-	}
-
+func makeLogContainer(ctx context.Context, container facts.Container, logFilePath string) Container {
 	attributes := ContainerAttributes{
 		Runtime:   container.RuntimeName(),
 		ID:        container.ID(),
 		Name:      container.ContainerName(),
 		ImageName: strings.SplitN(container.ImageName(), ":", 2)[0],
-		ImageTags: string(imageTagsJSON),
+	}
+
+	imageTags, err := container.ImageTags(ctx)
+	if err != nil {
+		logWarnings(fmt.Errorf("can't get tags for image %q (%s): %w", container.ImageName(), container.ImageID(), err))
+	} else {
+		imageTagsJSON, err := json.Marshal(imageTags)
+		if err != nil {
+			logWarnings(fmt.Errorf("can't marshal tags for image %q (%s): %w", container.ImageName(), container.ImageID(), err))
+		} else {
+			attributes.ImageTags = string(imageTagsJSON)
+		}
 	}
 
 	namespace := container.PodNamespace()
@@ -390,5 +420,5 @@ func makeLogContainer(ctx context.Context, crRuntime crTypes.RuntimeInterface, c
 		Attributes:      attributes,
 		logCounter:      new(atomic.Int64),
 		throughputMeter: newRingCounter(throughputMeterResolutionSecs),
-	}, nil
+	}
 }

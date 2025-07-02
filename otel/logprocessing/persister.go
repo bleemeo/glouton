@@ -18,12 +18,17 @@ package logprocessing
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"sync"
 	"time"
 
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/extension/xextension/storage"
@@ -67,6 +72,10 @@ func (h *persistHost) newPersistentExt(name string) component.ID {
 		receiverMetadata = make(map[string][]byte)
 	}
 
+	if _, ok := h.extensions[id]; ok {
+		logger.V(2).Printf("duplicate extensions with ID %v (name=%s)", id, name)
+	}
+
 	h.extensions[id] = persistExtension{
 		client: &storageClient{
 			name:        name,
@@ -95,7 +104,12 @@ func (h *persistHost) getAllMetadata() map[string]map[string][]byte {
 	updatedData := make(map[string]map[string][]byte, len(h.updatedKeys))
 
 	for key := range h.updatedKeys {
-		updatedData[key] = h.metadataPerReceiver[key]
+		// We assume the []byte in value of `h.metadataPerReceiver[key]` isn't mutated.
+		// If it was mutated, we also need to copy it.
+		// Also be careful to only reads key that are in updatedKeys, `persistHost` don't
+		// own `h.metadataPerReceiver[key]` for key that started an `persistExtension` and
+		// which didn't called `storeMetadata`.
+		updatedData[key] = maps.Clone(h.metadataPerReceiver[key])
 	}
 
 	return updatedData
@@ -106,6 +120,26 @@ func (h *persistHost) GetExtensions() map[component.ID]component.Component {
 	defer h.l.Unlock()
 
 	return h.extensions
+}
+
+func (h *persistHost) writeToArchive(writer types.ArchiveWriter) error {
+	h.l.Lock()
+	extensionIDs := slices.Collect(maps.Keys(h.extensions))
+	h.l.Unlock()
+
+	file, err := writer.Create("log-processing/persister.json")
+	if err != nil {
+		return err
+	}
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	if err := enc.Encode(extensionIDs); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 type persistExtension struct {

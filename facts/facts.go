@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"os"
@@ -161,7 +162,11 @@ func (f *FactProvider) SetFact(key string, value string) {
 	}
 
 	f.manualFact[key] = value
-	f.facts[key] = value
+
+	// `f.facts` is returned by `Facts` public method, and therefor we can't mutate it
+	newFacts := maps.Clone(f.facts)
+	newFacts[key] = value
+	f.facts = newFacts
 }
 
 func (f *FactProvider) updateFacts(ctx context.Context) {

@@ -368,10 +368,6 @@ func (k *Kubernetes) MetricsMinute(ctx context.Context, now time.Time) ([]types.
 	return points, multiErr.MaybeUnwrap()
 }
 
-func (k *Kubernetes) ImageTags(ctx context.Context, imageID, imageName string) ([]string, error) {
-	return k.Runtime.ImageTags(ctx, imageID, imageName)
-}
-
 func (k *Kubernetes) getCertificateExpiration(ctx context.Context, config *rest.Config, now time.Time) (types.MetricPoint, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()

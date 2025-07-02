@@ -538,7 +538,7 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 				buf: make([]plog.Logs, 0, len(tc.inputLogs)),
 			}
 
-			recv, warn, err := newLogReceiver("filelog/"+tc.name, cfg, false, makeBufferConsumer(t, &logBuf), knownLogFormats)
+			recv, warn, err := newLogReceiver("filelog/"+tc.name, cfg, false, makeBufferConsumer(t, &logBuf), knownLogFormats, statFileImpl)
 			if err != nil {
 				t.Fatal("Failed to initialize log receiver:", err)
 			}

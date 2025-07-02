@@ -309,7 +309,7 @@ func makePipeline( //nolint:maintidx
 AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers block
 
 	for name, rcvrCfg := range cfg.Receivers {
-		recv, warn, err := newLogReceiver(name, rcvrCfg, false, pipeline.inputConsumer, knownLogFormats)
+		recv, warn, err := newLogReceiver(name, rcvrCfg, false, pipeline.inputConsumer, knownLogFormats, statFileImpl)
 		if err != nil {
 			addWarnings(errorf("Failed to setup log receiver %q (ignoring it): %w", name, err))
 

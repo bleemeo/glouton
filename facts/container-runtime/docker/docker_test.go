@@ -210,14 +210,14 @@ func TestDocker_Containers(t *testing.T) {
 					continue
 				}
 
-				if diff := want.Diff(got); diff != "" {
+				if diff := want.Diff(t.Context(), got); diff != "" {
 					t.Errorf("Docker.Containers()[%v]: %s", want.ID(), diff)
 				}
 
 				got, ok := d.CachedContainer(want.ID())
 				if !ok {
 					t.Errorf("CachedContainer() don't have container %v", want.ID())
-				} else if diff := want.Diff(got); diff != "" {
+				} else if diff := want.Diff(t.Context(), got); diff != "" {
 					t.Errorf("CachedContainer(%s): %s", want.ID(), diff)
 				}
 
@@ -1050,7 +1050,7 @@ func TestDocker_Processes(t *testing.T) {
 							return
 						}
 
-						if diff := c.Diff(got); diff != "" {
+						if diff := c.Diff(t.Context(), got); diff != "" {
 							t.Errorf("ContainerFromPID(%d]): %v", pid, diff)
 						}
 
@@ -1068,7 +1068,7 @@ func TestDocker_Processes(t *testing.T) {
 							return
 						}
 
-						if diff := c.Diff(got); diff != "" {
+						if diff := c.Diff(t.Context(), got); diff != "" {
 							t.Errorf("ContainerFromPID(%d]): %v", pid, diff)
 						}
 					}

@@ -48,6 +48,7 @@ type Container interface {
 	ID() string
 	ImageID() string
 	ImageName() string
+	ImageTags(ctx context.Context) ([]string, error)
 	// Labels returns the container labels. They must not be mutated.
 	Labels() map[string]string
 	ListenAddresses() []ListenAddress
@@ -288,7 +289,7 @@ func ContainerIgnoredPorts(c Container) map[int]bool {
 
 		port, err := strconv.ParseInt(portStr, 10, 0)
 		if err != nil {
-			logger.V(1).Printf("Label %#v of %s containt invalid port: %v", k, c.ContainerName(), err)
+			logger.V(1).Printf("Label %#v of %s contain invalid port: %v", k, c.ContainerName(), err)
 
 			continue
 		}
@@ -316,6 +317,7 @@ type FakeContainer struct {
 	FakeID                 string
 	FakeImageID            string
 	FakeImageName          string
+	FakeImageTags          []string
 	FakeLabels             map[string]string
 	FakeListenAddresses    []ListenAddress
 	FakeLogPath            string
@@ -384,6 +386,10 @@ func (c FakeContainer) ImageName() string {
 	return c.FakeImageName
 }
 
+func (c FakeContainer) ImageTags(_ context.Context) ([]string, error) {
+	return c.FakeImageTags, nil
+}
+
 func (c FakeContainer) Labels() map[string]string {
 	return c.FakeLabels
 }
@@ -424,7 +430,7 @@ func (c FakeContainer) PID() int {
 	return c.FakePID
 }
 
-func (c FakeContainer) Diff(other Container) string {
+func (c FakeContainer) Diff(ctx context.Context, other Container) string {
 	diffs := []string{}
 
 	if diff := cmp.Diff(other.Annotations(), c.FakeAnnotations); c.FakeAnnotations != nil && diff != "" {
@@ -476,6 +482,11 @@ func (c FakeContainer) Diff(other Container) string {
 
 	if diff := cmp.Diff(other.ImageName(), c.FakeImageName); c.FakeImageName != "" && diff != "" {
 		diffs = append(diffs, "ImageName: "+diff)
+	}
+
+	tags, _ := other.ImageTags(ctx)
+	if diff := cmp.Diff(tags, c.FakeImageTags); len(c.FakeImageTags) != 0 && diff != "" {
+		diffs = append(diffs, "ImageTags: "+diff)
 	}
 
 	if diff := cmp.Diff(other.Labels(), c.FakeLabels); c.FakeLabels != nil && diff != "" {

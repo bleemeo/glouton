@@ -17,7 +17,9 @@
 package logprocessing
 
 import (
+	"maps"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -26,6 +28,7 @@ import (
 	"github.com/bleemeo/glouton/facts"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func svc(
@@ -45,15 +48,15 @@ func svc(
 }
 
 func ctr(id, name string, labels, annotations map[string]string) facts.Container { //nolint: unparam
-	return dummyContainer{
-		id:          id,
-		name:        name,
-		labels:      labels,
-		annotations: annotations,
+	return facts.FakeContainer{
+		FakeID:            id,
+		FakeContainerName: name,
+		FakeLabels:        labels,
+		FakeAnnotations:   annotations,
 	}
 }
 
-func logSourceComparer(x, y LogSource) bool {
+func logSourceComparer(x, y logSource) bool {
 	if (x.container == nil || y.container == nil) && x.container != y.container {
 		return false
 	}
@@ -158,7 +161,7 @@ func TestProcessLogSources(t *testing.T) {
 		name                      string
 		containers                []facts.Container
 		services                  []discovery.Service
-		expectedLogSources        []LogSource
+		expectedLogSources        []logSource
 		expectedWatchedServices   map[discovery.NameInstance]struct{}
 		expectedWatchedContainers map[string]struct{} // map key: container ID
 	}{
@@ -171,7 +174,7 @@ func TestProcessLogSources(t *testing.T) {
 			services: []discovery.Service{
 				svcNginx,
 			},
-			expectedLogSources: []LogSource{
+			expectedLogSources: []logSource{
 				{
 					container: ctrNgx1,
 					serviceID: &discovery.NameInstance{Name: "nginx", Instance: "Nginx-1"},
@@ -204,7 +207,7 @@ func TestProcessLogSources(t *testing.T) {
 			services: []discovery.Service{
 				svcNginx,
 			},
-			expectedLogSources: []LogSource{
+			expectedLogSources: []logSource{
 				{
 					container: ctrApp1,
 					operators: knownLogFormats["custom_app_fmt"],
@@ -250,7 +253,7 @@ func TestProcessLogSources(t *testing.T) {
 					discovery.ServiceLogReceiver{FilePath: "/var/log/apache2/error.log", Format: "apache_error"},
 				),
 			},
-			expectedLogSources: []LogSource{
+			expectedLogSources: []logSource{
 				{
 					serviceID:   &discovery.NameInstance{Name: "apache", Instance: ""},
 					logFilePath: "/var/log/apache2/access.log",
@@ -296,7 +299,7 @@ func TestProcessLogSources(t *testing.T) {
 				ctrApp2,
 			},
 			services: []discovery.Service{},
-			expectedLogSources: []LogSource{
+			expectedLogSources: []logSource{
 				{
 					container: ctrApp2,
 					filters:   knownLogFilters["min_level_info"],
@@ -323,8 +326,8 @@ func TestProcessLogSources(t *testing.T) {
 		},
 		knownLogFormats:   knownLogFormats,
 		containerRecv:     newContainerReceiver(&pipelineContext{}, containerOperators, knownLogFormats, containerFilters, knownLogFilters),
-		watchedServices:   make(map[discovery.NameInstance]struct{}),
-		watchedContainers: make(map[string]struct{}),
+		watchedServices:   make(map[discovery.NameInstance]sourceDiagnostic),
+		watchedContainers: make(map[string]sourceDiagnostic),
 	}
 
 	for _, step := range executionSteps {
@@ -333,11 +336,19 @@ func TestProcessLogSources(t *testing.T) {
 			t.Fatalf("Unexpected log sources at step %q (-want +got):\n%s", step.name, diff)
 		}
 
-		if diff := cmp.Diff(step.expectedWatchedServices, logMan.watchedServices); diff != "" {
+		// We don't check the content of expectedWatchedServices's sourceDiagnostic. Only it's existence
+		expectedKeys := slices.Collect(maps.Keys(step.expectedWatchedServices))
+		gotKeys := slices.Collect(maps.Keys(logMan.watchedServices))
+
+		// The SortSlices assume we don't have two identical name with different instance.
+		if diff := cmp.Diff(expectedKeys, gotKeys, cmpopts.SortSlices(func(x, y discovery.NameInstance) bool { return x.Name < y.Name })); diff != "" {
 			t.Fatalf("Unexpected watched services at step %q (-want +got):\n%s", step.name, diff)
 		}
 
-		if diff := cmp.Diff(step.expectedWatchedContainers, logMan.watchedContainers); diff != "" {
+		expectedKeys2 := slices.Collect(maps.Keys(step.expectedWatchedContainers))
+		gotKeys2 := slices.Collect(maps.Keys(logMan.watchedContainers))
+
+		if diff := cmp.Diff(expectedKeys2, gotKeys2, cmpopts.SortSlices(func(x, y string) bool { return x < y })); diff != "" {
 			t.Fatalf("Unexpected watched containers at step %q (-want +got):\n%s", step.name, diff)
 		}
 	}

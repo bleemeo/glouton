@@ -831,14 +831,14 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 					continue
 				}
 
-				if diff := want.Diff(got); diff != "" {
+				if diff := want.Diff(t.Context(), got); diff != "" {
 					t.Errorf("Kubernetes.Containers()[%v]: %s", want.ID(), diff)
 				}
 
 				got, ok := k.CachedContainer(want.ID())
 				if !ok {
 					t.Errorf("CachedContainer() don't have container %v", want.ID())
-				} else if diff := want.Diff(got); diff != "" {
+				} else if diff := want.Diff(t.Context(), got); diff != "" {
 					t.Errorf("CachedContainer(%s): %s", want.ID(), diff)
 				}
 
@@ -862,7 +862,7 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 
 				switch {
 				case !ok && want.TestHasPod:
-					t.Errorf("got isn't a wrappedContainer, but it must be assocated to a POD")
+					t.Errorf("got isn't a wrappedContainer, but it must be associated to a POD")
 				case ok && want.TestHasPod && gotWrapper.pod.Name == "":
 					t.Errorf("got is a wrappedContainer but POD is empty, want a POD")
 				case ok && !want.TestHasPod && gotWrapper.pod.Name != "":

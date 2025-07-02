@@ -19,8 +19,6 @@ package logprocessing
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -39,78 +37,6 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
 )
-
-var errNotFound = errors.New("not found")
-
-type dummyRuntime struct {
-	crTypes.RuntimeInterface
-
-	imageTags map[string][]string
-}
-
-func (r dummyRuntime) ImageTags(_ context.Context, _, imageName string) ([]string, error) {
-	tags, ok := r.imageTags[imageName]
-	if !ok {
-		return nil, fmt.Errorf("image %q %w", imageName, errNotFound)
-	}
-
-	return tags, nil
-}
-
-type dummyContainer struct {
-	facts.Container
-
-	id           string
-	name         string
-	imageID      string
-	imageName    string
-	logPath      string
-	podName      string
-	podNamespace string
-	runtimeName  string
-	labels       map[string]string
-	annotations  map[string]string
-}
-
-func (c dummyContainer) ID() string {
-	return c.id
-}
-
-func (c dummyContainer) ContainerName() string {
-	return c.name
-}
-
-func (c dummyContainer) ImageID() string {
-	return c.imageID
-}
-
-func (c dummyContainer) ImageName() string {
-	return c.imageName
-}
-
-func (c dummyContainer) LogPath() string {
-	return c.logPath
-}
-
-func (c dummyContainer) PodName() string {
-	return c.podName
-}
-
-func (c dummyContainer) PodNamespace() string {
-	return c.podNamespace
-}
-
-func (c dummyContainer) RuntimeName() string {
-	return c.runtimeName
-}
-
-func (c dummyContainer) Labels() map[string]string {
-	return c.labels
-}
-
-func (c dummyContainer) Annotations() map[string]string {
-	return c.annotations
-}
 
 func makeCtrLog(t *testing.T, ts time.Time, body string) []byte {
 	t.Helper()
@@ -197,35 +123,30 @@ func TestHandleContainerLogs(t *testing.T) {
 		persister:     mustNewPersistHost(t),
 	}
 
-	crRuntime := dummyRuntime{
-		imageTags: map[string][]string{
-			"img-1": {"v1.2.3", "latest"},
-			"img-2": {"latest"},
-		},
-	}
-
 	containerRecv := newContainerReceiver(&pipeline, containerOperators, knownOperators, containerFilter, knownFilters)
 
 	defer containerRecv.stop()
 
 	ctrs := []facts.Container{
-		dummyContainer{
-			id:          "id-1",
-			name:        "ctr-1",
-			imageID:     "img-id-1",
-			imageName:   "img-1",
-			logPath:     f1.Name(),
-			runtimeName: crTypes.DockerRuntime,
+		facts.FakeContainer{
+			FakeID:            "id-1",
+			FakeContainerName: "ctr-1",
+			FakeImageID:       "img-id-1",
+			FakeImageName:     "img-1",
+			FakeImageTags:     []string{"v1.2.3", "latest"},
+			FakeLogPath:       f1.Name(),
+			FakeRuntimeName:   crTypes.DockerRuntime,
 		},
-		dummyContainer{
-			id:           "id-2",
-			name:         "ctr-2",
-			imageID:      "img-id-2",
-			imageName:    "img-2",
-			logPath:      f2.Name(),
-			podName:      "pod",
-			podNamespace: "ns",
-			runtimeName:  crTypes.ContainerDRuntime, // the runtime shouldn't have any impact on how we set up the processing
+		facts.FakeContainer{
+			FakeID:            "id-2",
+			FakeContainerName: "ctr-2",
+			FakeImageID:       "img-id-2",
+			FakeImageName:     "img-2",
+			FakeImageTags:     []string{"latest"},
+			FakeLogPath:       f2.Name(),
+			FakePodName:       "pod",
+			FakePodNamespace:  "ns",
+			FakeRuntimeName:   crTypes.ContainerDRuntime, // the runtime shouldn't have any impact on how we set up the processing
 		},
 	}
 
@@ -235,7 +156,7 @@ func TestHandleContainerLogs(t *testing.T) {
 			t.Fatalf("Failed to build operators for container %s: %v", ctr.ContainerName(), err)
 		}
 
-		err = containerRecv.handleContainerLogs(ctx, crRuntime, ctr, ops, knownFilters[containerFilter[ctr.ContainerName()]])
+		_, err = containerRecv.handleContainerLogs(ctx, ctr, ops, knownFilters[containerFilter[ctr.ContainerName()]])
 		if err != nil {
 			t.Fatalf("Failed to handle logs for container %s: %v", ctr.ContainerName(), err)
 		}
