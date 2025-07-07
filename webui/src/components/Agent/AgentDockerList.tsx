@@ -1,4 +1,4 @@
-import React, { FC, useState, useEffect, useMemo, useCallback } from "react";
+import { FC, useState, useEffect, useMemo, useCallback } from "react";
 import { DebounceInput } from "react-debounce-input";
 
 import Toggle from "../UI/Toggle";

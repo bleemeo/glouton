@@ -1,4 +1,3 @@
-import React from "react";
 import { Provider } from "./UI/provider";
 
 import Routes from "./Routes";

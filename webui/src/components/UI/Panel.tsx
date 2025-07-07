@@ -1,4 +1,4 @@
-import React, { FC } from "react";
+import { FC } from "react";
 import { Box, Card } from "@chakra-ui/react";
 
 type PanelProps = {

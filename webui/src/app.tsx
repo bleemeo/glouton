@@ -1,4 +1,4 @@
-import React, { Suspense } from "react";
+import { Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import PanelErrorBoundary from "./components/UI/PanelErrorBoundary";
 import PanelLoading from "./components/UI/PanelLoading";

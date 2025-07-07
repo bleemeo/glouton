@@ -1,4 +1,4 @@
-import React, { FC, Suspense } from "react";
+import { FC, Suspense } from "react";
 import { Link } from "react-router-dom";
 
 import Fallback from "../UI/Fallback";

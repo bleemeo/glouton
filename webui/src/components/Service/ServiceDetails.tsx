@@ -1,4 +1,4 @@
-import React, { FC } from "react";
+import { FC } from "react";
 
 import FetchSuspense from "../UI/FetchSuspense";
 import { Badge } from "@chakra-ui/react";

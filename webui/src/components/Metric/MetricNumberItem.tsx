@@ -1,4 +1,4 @@
-import React, { FC } from "react";
+import { FC } from "react";
 import { Card, Flex, Text } from "@chakra-ui/react";
 
 import { unitFormatCallback } from "../utils/formater";

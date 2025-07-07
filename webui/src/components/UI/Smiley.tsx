@@ -1,4 +1,4 @@
-import React, { FC } from "react";
+import { FC } from "react";
 
 // SVG of Font Awesome taken from: https://github.com/encharm/Font-Awesome-SVG-PNG
 

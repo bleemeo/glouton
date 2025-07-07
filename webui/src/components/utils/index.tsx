@@ -97,7 +97,7 @@ export const computeStart = (type: string, period: Period) => {
   }
 };
 
-export const computeEnd = (type: string, period: Period) => {
+export const computeEnd = (period: Period) => {
   if (period.minutes) {
     return new Date().toISOString();
   } else {
@@ -111,7 +111,7 @@ export const computeEnd = (type: string, period: Period) => {
 export const fillEmptyPoints = (data: any, period: Period) => {
   const resampling = period.minutes ? period.minutes : 10080;
   const start = computeStart(chartTypes[1], period);
-  const end = computeEnd(chartTypes[1], period);
+  const end = computeEnd(period);
   const firstData = data[0];
   const lastData = data[data.length - 1];
   if (new Date(firstData[0]) > new Date(start)) {

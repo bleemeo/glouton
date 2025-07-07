@@ -1,5 +1,5 @@
 import * as d3 from "d3";
-import React, { FC, useState } from "react";
+import { FC, useState } from "react";
 import { isNil } from "lodash-es";
 
 import FaIcon from "../UI/FaIcon";

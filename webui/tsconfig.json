@@ -1,18 +1,7 @@
 {
-    "compilerOptions": {
-      "outDir": "./dist/",
-      "target": "ES2020",
-      "module": "ESNext",
-      "jsx": "react",
-      "allowJs": true,
-      "allowSyntheticDefaultImports": true,
-      "moduleResolution": "Bundler",
-      "lib": ["ES2022", "DOM", "DOM.Iterable"],
-      "strictNullChecks": true,
-      // "strict": true,
-      // "noImplicitAny": true,
-
-      // "skipLibCheck": true,                     /* Skip type checking of declaration files. */
-      // "forceConsistentCasingInFileNames": true  /* Disallow inconsistently-cased references to the same file. */
-    }
-  }
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.node.json" }
+  ]
+}

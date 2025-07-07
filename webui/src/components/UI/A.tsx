@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React from "react";
 
 /*
   Several articles said that <a> should only be used to link to another page

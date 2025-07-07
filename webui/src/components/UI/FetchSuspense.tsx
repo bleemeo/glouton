@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { FC, ReactNode } from "react";
+import { FC, ReactNode } from "react";
 import { AxiosError } from "axios";
 
 import QueryError from "./QueryError";

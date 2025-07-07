@@ -1,4 +1,4 @@
-import React, { FC } from "react";
+import { FC } from "react";
 import { useHTTPDataFetch } from "../utils/hooks";
 import FetchSuspense from "../UI/FetchSuspense";
 import { FACTS_URL } from "../utils/dataRoutes";
