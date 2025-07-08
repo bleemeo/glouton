@@ -21,6 +21,7 @@ export default defineConfig(({ mode }) => {
     build: {
       rollupOptions: {
         input: {
+          // main: "../api/static/index.html",
           "panel-glouton-main": 'src/index.ts',
         },
         output: {
