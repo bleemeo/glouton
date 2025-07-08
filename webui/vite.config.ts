@@ -24,14 +24,7 @@ export default defineConfig(({ mode }) => {
           "panel-glouton-main": 'src/index.ts',
         },
         output: {
-          entryFileNames: `js/[name].js?ts=${buildTimestamp}`,
-          chunkFileNames: `js/[name].${buildTimestamp}.js`,
-          assetFileNames: ({ name }) => {
-            if (name?.includes("App")) {
-              return `[name].css`
-            }
-            return 'assets/[name]-[hash].css'
-          },
+          entryFileNames: `js/[name].js`,
         },
       },
     },
