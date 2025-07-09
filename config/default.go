@@ -386,7 +386,7 @@ func DefaultConfig() Config { //nolint:maintidx
 			LocalUI: LocalUI{
 				Enable: true,
 			},
-			StaticCDNURL: "/static/",
+			StaticCDNURL: "http://localhost:3015/src/index.ts",
 		},
 		Zabbix: Zabbix{
 			Enable:  false,

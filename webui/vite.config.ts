@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react';
+import tsconfigPaths from "vite-tsconfig-paths"
 
 const buildTimestamp = new Date().getTime();
 
@@ -7,7 +8,7 @@ const buildTimestamp = new Date().getTime();
 export default defineConfig(({ mode }) => {
   const isDev = mode === 'development';
   return {
-    plugins: [react()],
+    plugins: [tsconfigPaths()],
     server: {
       port: 3015,
       strictPort: true,
@@ -15,14 +16,12 @@ export default defineConfig(({ mode }) => {
         clientPort: 3015,
       },
       headers: {
-        'Access-Control-Allow-Headers': 'X-Requested-With, content-type, Authorization, sentry-trace, baggage, Origin',
-        'Access-Control-Allow-Origin': "http://localhost:3015"
+        'Access-Control-Allow-Headers': 'X-Requested-With, content-type, Authorization, sentry-trace, baggage',
       },
     },
     build: {
       rollupOptions: {
         input: {
-          // main: "../api/static/index.html",
           "panel-glouton-main": 'src/index.ts',
         },
         output: {
