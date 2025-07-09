@@ -86,7 +86,7 @@ type assetsFileServer struct {
 }
 
 func (f *assetsFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	r.URL.Path = path.Join("static/assets", r.URL.Path)
+	r.URL.Path = path.Join("assets", r.URL.Path)
 
 	// let the client browser decode the gzipped js files
 	if strings.HasSuffix(r.URL.Path, ".js") {

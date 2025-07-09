@@ -15,7 +15,8 @@ export default defineConfig(({ mode }) => {
         clientPort: 3015,
       },
       headers: {
-        'Access-Control-Allow-Headers': 'X-Requested-With, content-type, Authorization, sentry-trace, baggage',
+        'Access-Control-Allow-Headers': 'X-Requested-With, content-type, Authorization, sentry-trace, baggage, Origin',
+        'Access-Control-Allow-Origin': "http://localhost:3015"
       },
     },
     build: {
