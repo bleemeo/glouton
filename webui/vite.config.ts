@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react';
 import tsconfigPaths from "vite-tsconfig-paths"
 
 const buildTimestamp = new Date().getTime();
@@ -7,7 +8,7 @@ const buildTimestamp = new Date().getTime();
 export default defineConfig(({ mode }) => {
   const isDev = mode === 'development';
   return {
-    plugins: [tsconfigPaths()],
+    plugins: [react(), tsconfigPaths()],
     server: {
       port: 3015,
       strictPort: true,

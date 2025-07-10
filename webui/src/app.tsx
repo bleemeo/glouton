@@ -8,6 +8,7 @@ import "core-js/es/object";
 import "core-js/es/object/values";
 import "core-js/es/object/entries";
 
+// @ts-expect-error ts(2307)
 import "./styles/bootstrap.scss";
 
 const container = document.getElementById("main");

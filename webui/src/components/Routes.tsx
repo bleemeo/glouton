@@ -5,6 +5,7 @@ import {
   Routes,
   Navigate,
 } from "react-router-dom";
+// @ts-expect-error ts(2307)
 import "rc-switch/assets/index.css";
 
 import PanelErrorBoundary from "./UI/PanelErrorBoundary";
