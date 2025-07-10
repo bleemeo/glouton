@@ -258,6 +258,8 @@ func (api *API) init() {
 	}
 
 	router.Handle("/static/*", http.StripPrefix("/static", &assetsFileServer{fs: http.FileServer(http.FS(staticFolder))}))
+	router.Handle("/assets/*", http.StripPrefix("/assets", &assetsFileServer{fs: http.FileServer(http.FS(staticFolder))}))
+
 	router.HandleFunc("/*", func(w http.ResponseWriter, _ *http.Request) {
 		var err error
 		if indexTmpl == nil {
