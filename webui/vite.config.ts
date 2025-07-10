@@ -19,6 +19,7 @@ export default defineConfig(({ mode }) => {
         'Access-Control-Allow-Headers': 'X-Requested-With, content-type, Authorization, sentry-trace, baggage',
       },
     },
+    publicDir: "static",
     build: {
       rollupOptions: {
         input: {

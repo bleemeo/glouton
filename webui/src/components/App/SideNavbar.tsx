@@ -22,7 +22,7 @@ const SideNavBar: FC = () => (
       >
         <VStack gap={6} h={"100%"}>
           <Link to="/">
-            <img src="/static/img/favicon.png" style={{ height: "2.2rem" }} />
+            <img src="/img/favicon.png" style={{ height: "2.2rem" }} />
           </Link>
           <Link to="/dashboard" title="Dashboard">
             <Icon as={FaGauge} boxSize={8} color="white" />
