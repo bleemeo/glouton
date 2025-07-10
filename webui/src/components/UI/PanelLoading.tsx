@@ -14,7 +14,7 @@ const PanelLoading: FC = () => {
       }}
     >
       <img
-        src="/img/favicon.png"
+        src="/static/img/favicon.png"
         alt="Logo"
         height="160px"
         style={{ borderRadius: "80px" }}

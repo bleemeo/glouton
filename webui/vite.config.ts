@@ -1,5 +1,4 @@
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react';
 import tsconfigPaths from "vite-tsconfig-paths"
 
 const buildTimestamp = new Date().getTime();
@@ -19,14 +18,13 @@ export default defineConfig(({ mode }) => {
         'Access-Control-Allow-Headers': 'X-Requested-With, content-type, Authorization, sentry-trace, baggage',
       },
     },
-    publicDir: "static",
     build: {
       rollupOptions: {
         input: {
           "panel-glouton-main": 'src/index.ts',
         },
         output: {
-          entryFileNames: `js/[name].js`,
+          entryFileNames: `assets/[name].js`,
         },
       },
     },
