@@ -32,7 +32,7 @@ import (
 func New() (i telegraf.Input, err error) {
 	input, ok := telegraf_inputs.Inputs["cpu"]
 	if ok {
-		cpuInput, _ := input().(*cpu.CPUStats)
+		cpuInput, _ := input().(*cpu.CPU)
 		// were we to change this, we should consider returning "interrupt' metrics on Windows
 		// (see the comment below)
 		cpuInput.PerCPU = false

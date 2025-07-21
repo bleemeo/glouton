@@ -586,8 +586,8 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "wrong type",
 			Files: []string{"testdata/bad_wrong_type.conf"},
 			WantWarnings: []string{
-				`'metric.softstatus_period_default' cannot parse value as 'int': strconv.ParseInt: parsing "string": invalid syntax`,
-				`'metric.softstatus_period[1][system_pending_security_updates]' cannot parse value as 'int': strconv.ParseInt: parsing "bad": invalid syntax`,
+				`'metric.softstatus_period_default' cannot parse value as 'int': strconv.ParseInt: invalid syntax`,
+				`'metric.softstatus_period[1][system_pending_security_updates]' cannot parse value as 'int': strconv.ParseInt: invalid syntax`,
 			},
 			WantConfig: Config{
 				Metric: Metric{

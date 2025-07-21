@@ -42,9 +42,9 @@ func (s *Store) Appender(ctx context.Context) storage.Appender {
 func (a appender) Append(_ storage.SeriesRef, l labels.Labels, t int64, v float64) (storage.SeriesRef, error) {
 	labelsMap := make(map[string]string)
 
-	for _, lblv := range l {
+	l.Range(func(lblv labels.Label) {
 		labelsMap[lblv.Name] = lblv.Value
-	}
+	})
 
 	newPoint := types.MetricPoint{
 		Point: types.Point{

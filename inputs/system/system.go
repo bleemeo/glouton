@@ -29,7 +29,7 @@ import (
 func New() (i telegraf.Input, err error) {
 	input, ok := telegraf_inputs.Inputs["system"]
 	if ok {
-		systemInput, _ := input().(*system.SystemStats)
+		systemInput, _ := input().(*system.System)
 		systemInput.Log = internal.NewLogger()
 		i = &internal.Input{
 			Input: systemInput,
