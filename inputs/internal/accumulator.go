@@ -286,6 +286,7 @@ func (a *Accumulator) processMetrics(
 
 	if a.RenameGlobal != nil {
 		var drop bool
+
 		currentContext, drop = a.RenameGlobal(currentContext)
 
 		if drop {

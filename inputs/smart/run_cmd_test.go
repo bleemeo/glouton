@@ -189,18 +189,19 @@ func TestLimitedConcurrentcy(t *testing.T) {
 
 	runCmd := runnerFunction(func(_ context.Context, _ gloutonexec.Option, _ string, _ ...string) ([]byte, error) {
 		l.Lock()
-		execution++
 
+		execution++
 		if execution > maxConcurrency {
 			exceedLimit = true
 		}
+
 		l.Unlock()
 
 		time.Sleep(time.Second)
 
 		l.Lock()
-		execution--
-		l.Unlock()
+		execution-- //nolint: wsl_v5
+		l.Unlock()  //nolint: wsl_v5
 
 		return nil, nil
 	})

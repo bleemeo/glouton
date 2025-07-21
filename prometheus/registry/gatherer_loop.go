@@ -57,6 +57,7 @@ func startScrapeLoop(
 
 	go func() {
 		defer crashreport.ProcessPanic()
+
 		sl.run(ctx, interval, timeout, jitterSeed, triggerImmediate)
 	}()
 

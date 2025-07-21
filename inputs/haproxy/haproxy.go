@@ -52,6 +52,7 @@ func New(url string) (i telegraf.Input, err error) {
 					err = fmt.Errorf("%w: %v", errCreation, r)
 				}
 			}()
+
 			reflectSet(url, haproxyInput)
 		}()
 

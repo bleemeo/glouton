@@ -162,8 +162,9 @@ type statusState struct { //nolint: recvcheck
 }
 
 type jsonState struct {
-	LabelsText string
 	statusState
+
+	LabelsText string
 }
 
 func (s statusState) Update(

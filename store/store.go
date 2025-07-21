@@ -414,6 +414,7 @@ func (s *Store) PushPoints(_ context.Context, points []types.MetricPoint) {
 	)
 
 	s.lock.Lock()
+
 	for _, point := range points {
 		metric, found, changed := s.metricGet(point.Labels, point.Annotations)
 		length := s.points.count(metric.metricID)

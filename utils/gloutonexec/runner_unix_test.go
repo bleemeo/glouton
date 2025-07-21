@@ -124,7 +124,6 @@ func TestGraceDelay(t *testing.T) {
 				"-c",
 				tt.Shell,
 			)
-
 			if !tt.WantErr != (err == nil) {
 				t.Errorf("err = %v, wantErr = %v", err, tt.WantErr)
 			}

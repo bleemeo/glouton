@@ -47,7 +47,9 @@ func (ws winService) Execute(
 
 	const cmdsAccepted = svc.AcceptStop | svc.AcceptShutdown
 	status <- svc.Status{State: svc.StartPending}
+
 	status <- svc.Status{State: svc.Running, Accepts: cmdsAccepted}
+
 loop:
 	for c := range req {
 		switch c.Cmd { //nolint:exhaustive
@@ -61,6 +63,7 @@ loop:
 			logger.V(1).Printf("unexpected control request #%d", c)
 		}
 	}
+
 	status <- svc.Status{State: svc.StopPending}
 
 	return

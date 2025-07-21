@@ -695,6 +695,7 @@ func (c *Connector) DiagnosticPage() string {
 	}
 
 	c.l.Lock()
+
 	if time.Now().Before(c.disabledUntil) {
 		fmt.Fprintf(
 			builder,

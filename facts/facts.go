@@ -281,14 +281,12 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	}
 
 	cpu, err := cpu.Info()
-
 	if err == nil && len(cpu) > 0 {
 		newFacts["cpu_model_name"] = cpu[0].ModelName
 		newFacts["cpu_cores"] = strconv.Itoa(len(cpu))
 	}
 
 	mem, err := mem.VirtualMemory()
-
 	if err == nil && mem != nil {
 		newFacts["memory"] = ByteCountDecimal(mem.Total)
 	}

@@ -280,6 +280,7 @@ func (e *Exporter) init() {
 }
 
 // Describe implement Describe of a Prometheus collector.
+//nolint: wsl_v5,gofmt,gofumpt,goimports
 func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	e.init()
 
@@ -339,44 +340,64 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 
 			ch <- prometheus.MustNewConstMetric(e.numprocsDesc,
 				prometheus.GaugeValue, float64(gcounts.Procs), gname)
+
 			ch <- prometheus.MustNewConstMetric(e.membytesDesc,
 				prometheus.GaugeValue, float64(gcounts.Memory.ResidentBytes), gname, "resident")
+
 			ch <- prometheus.MustNewConstMetric(e.membytesDesc,
 				prometheus.GaugeValue, float64(gcounts.Memory.VirtualBytes), gname, "virtual")
+
 			ch <- prometheus.MustNewConstMetric(e.membytesDesc,
 				prometheus.GaugeValue, float64(gcounts.Memory.VmSwapBytes), gname, "swapped")
+
 			ch <- prometheus.MustNewConstMetric(e.startTimeDesc,
 				prometheus.GaugeValue, float64(gcounts.OldestStartTime.Unix()), gname)
+
 			ch <- prometheus.MustNewConstMetric(e.openFDsDesc,
 				prometheus.GaugeValue, float64(gcounts.OpenFDs), gname)
+
 			ch <- prometheus.MustNewConstMetric(e.worstFDRatioDesc,
 				prometheus.GaugeValue, gcounts.WorstFDratio, gname)
+
 			ch <- prometheus.MustNewConstMetric(e.cpuSecsDesc,
 				prometheus.CounterValue, gcounts.CPUUserTime, gname, "user")
+
 			ch <- prometheus.MustNewConstMetric(e.cpuSecsDesc,
 				prometheus.CounterValue, gcounts.CPUSystemTime, gname, "system")
+
 			ch <- prometheus.MustNewConstMetric(e.readBytesDesc,
 				prometheus.CounterValue, float64(gcounts.ReadBytes), gname)
+
 			ch <- prometheus.MustNewConstMetric(e.writeBytesDesc,
 				prometheus.CounterValue, float64(gcounts.WriteBytes), gname)
+
 			ch <- prometheus.MustNewConstMetric(e.majorPageFaultsDesc,
 				prometheus.CounterValue, float64(gcounts.MajorPageFaults), gname)
+
 			ch <- prometheus.MustNewConstMetric(e.minorPageFaultsDesc,
 				prometheus.CounterValue, float64(gcounts.MinorPageFaults), gname)
+
 			ch <- prometheus.MustNewConstMetric(e.contextSwitchesDesc,
 				prometheus.CounterValue, float64(gcounts.CtxSwitchVoluntary), gname, "voluntary")
+
 			ch <- prometheus.MustNewConstMetric(e.contextSwitchesDesc,
 				prometheus.CounterValue, float64(gcounts.CtxSwitchNonvoluntary), gname, "nonvoluntary")
+
 			ch <- prometheus.MustNewConstMetric(e.numThreadsDesc,
 				prometheus.GaugeValue, float64(gcounts.NumThreads), gname)
+
 			ch <- prometheus.MustNewConstMetric(e.statesDesc,
 				prometheus.GaugeValue, float64(gcounts.States.Running), gname, "Running")
+
 			ch <- prometheus.MustNewConstMetric(e.statesDesc,
 				prometheus.GaugeValue, float64(gcounts.States.Sleeping), gname, "Sleeping")
+
 			ch <- prometheus.MustNewConstMetric(e.statesDesc,
 				prometheus.GaugeValue, float64(gcounts.States.Waiting), gname, "Waiting")
+
 			ch <- prometheus.MustNewConstMetric(e.statesDesc,
 				prometheus.GaugeValue, float64(gcounts.States.Zombie), gname, "Zombie")
+
 			ch <- prometheus.MustNewConstMetric(e.statesDesc,
 				prometheus.GaugeValue, float64(gcounts.States.Other), gname, "Other")
 
@@ -387,6 +408,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 
 			ch <- prometheus.MustNewConstMetric(e.membytesDesc,
 				prometheus.GaugeValue, float64(gcounts.Memory.ProportionalBytes), gname, "proportionalResident")
+
 			ch <- prometheus.MustNewConstMetric(e.membytesDesc,
 				prometheus.GaugeValue, float64(gcounts.Memory.ProportionalSwapBytes), gname, "proportionalSwapped")
 		}
@@ -394,8 +416,10 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 
 	ch <- prometheus.MustNewConstMetric(e.scrapeErrorsDesc,
 		prometheus.CounterValue, float64(e.scrapeErrors))
+
 	ch <- prometheus.MustNewConstMetric(e.scrapeProcReadErrorsDesc,
 		prometheus.CounterValue, float64(e.scrapeProcReadErrors))
+
 	ch <- prometheus.MustNewConstMetric(e.scrapePartialErrorsDesc,
 		prometheus.CounterValue, float64(e.scrapePartialErrors))
 }

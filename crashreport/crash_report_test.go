@@ -153,6 +153,7 @@ func TestPurgeCrashReports(t *testing.T) {
 		testDir := t.TempDir()
 
 		const keep = 2
+
 		mostRecentReports := make([]string, keep)
 
 		for i := range 10 {

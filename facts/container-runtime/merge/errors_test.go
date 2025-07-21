@@ -75,7 +75,6 @@ func Test_fixMultiError(t *testing.T) {
 			t.Parallel()
 
 			got := fixMultiError(tt.errs)
-
 			if tt.isNil && got != nil {
 				t.Errorf("fixMultiError() = %v, want nil", got)
 			}

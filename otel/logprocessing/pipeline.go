@@ -306,7 +306,7 @@ func makePipeline( //nolint:maintidx
 
 		pipeline.startedComponents = append(pipeline.startedComponents, otlpLogReceiver)
 	}
-AfterOTLPReceiversSetup: // this label must be right after the OTLP receivers block
+AfterOTLPReceiversSetup: //nolint: wsl_v5 // this label must be right after the OTLP receivers block
 
 	for name, rcvrCfg := range cfg.Receivers {
 		recv, warn, err := newLogReceiver(name, rcvrCfg, false, pipeline.inputConsumer, knownLogFormats, statFileImpl)
@@ -376,7 +376,6 @@ func makeEnforceBackPressureFn(
 ) processorhelper.ProcessLogsFunc { //nolint: wsl
 	// Since streamAvailabilityStatusFn needs to acquire both the connector and the MQTT client locks,
 	// we want to avoid calling it too frequently.
-
 	var (
 		l sync.Mutex
 		// Well ... we still need to prevent concurrent access to these variables,

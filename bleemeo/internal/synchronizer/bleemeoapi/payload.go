@@ -22,12 +22,14 @@ import (
 
 type ServicePayload struct {
 	bleemeoTypes.Monitor
+
 	Account   string `json:"account"`
 	IsMonitor bool   `json:"monitor"`
 }
 
 type ContainerPayload struct {
 	bleemeoTypes.Container
+
 	Host             string                `json:"host"`
 	Command          string                `json:"command"`
 	StartedAt        bleemeoTypes.NullTime `json:"container_started_at"`
@@ -39,12 +41,14 @@ type ContainerPayload struct {
 
 type MetricPayload struct {
 	bleemeoTypes.Metric
+
 	Name string `json:"label,omitempty"`
 	Item string `json:"item,omitempty"`
 }
 
 type AgentPayload struct {
 	bleemeoTypes.Agent
+
 	Abstracted         bool   `json:"abstracted"`
 	InitialPassword    string `json:"initial_password"`
 	InitialServerGroup string `json:"initial_server_group_name,omitempty"`

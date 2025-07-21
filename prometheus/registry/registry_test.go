@@ -55,7 +55,7 @@ func init() {
 	// It is done globally in agent/agent.go,
 	// but since the agent package isn't loaded during these tests,
 	// we must do it here too.
-	commonmodel.NameValidationScheme = commonmodel.LegacyValidation
+	commonmodel.NameValidationScheme = commonmodel.LegacyValidation //nolint: staticcheck
 }
 
 const testAgentID = "fcdc81a8-5bce-4305-8108-8e1e75439329"
@@ -1091,8 +1091,8 @@ func TestRegistry_run(t *testing.T) {
 
 	id3, err := reg.RegisterPushPointsCallback(RegistrationOption{HonorTimestamp: true}, func(_ context.Context, t time.Time) error {
 		l.Lock()
-		t0 = t
-		l.Unlock()
+		t0 = t     //nolint: wsl_v5
+		l.Unlock() //nolint: wsl_v5
 
 		reg.WithTTL(5*time.Minute).PushPoints(ctx, []types.MetricPoint{
 			{Point: types.Point{Time: t, Value: 42.0}, Labels: map[string]string{"__name__": "push", "something": "value", types.LabelItem: "/home"}},
@@ -1232,6 +1232,7 @@ func dropNilTime(in []*dto.MetricFamily) []*dto.MetricFamily {
 
 type metricPointTimeOverride struct {
 	types.Point
+
 	Labels       map[string]string
 	Annotations  types.MetricAnnotations
 	TimeOnGather time.Time

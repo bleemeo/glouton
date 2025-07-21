@@ -58,7 +58,6 @@ func (d *Data) Containers(w http.ResponseWriter, r *http.Request) {
 
 	if offsetParam := r.URL.Query().Get("offset"); offsetParam != "" {
 		offsetValue, err := strconv.Atoi(offsetParam)
-
 		if err == nil {
 			offset = offsetValue
 		}
@@ -66,7 +65,6 @@ func (d *Data) Containers(w http.ResponseWriter, r *http.Request) {
 
 	if limitParam := r.URL.Query().Get("limit"); limitParam != "" {
 		limitValue, err := strconv.Atoi(limitParam)
-
 		if err == nil {
 			limit = limitValue
 		}

@@ -149,14 +149,15 @@ func (s *mqttStats) String() string {
 	defer s.l.Unlock()
 
 	type sortableBucket struct {
-		ts time.Time
 		bucketStats
+
+		ts time.Time
 	}
 
 	bucketsStats := make([]sortableBucket, 0, len(s.buckets))
 
 	for bucket, stats := range s.buckets {
-		bucketsStats = append(bucketsStats, sortableBucket{bucket, stats})
+		bucketsStats = append(bucketsStats, sortableBucket{stats, bucket})
 	}
 
 	sort.Slice(bucketsStats, func(i, j int) bool {

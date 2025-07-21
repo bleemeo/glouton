@@ -31,6 +31,7 @@ type processProvider interface {
 
 type ProcessCheck struct {
 	*baseCheck
+
 	ps           processProvider
 	processRegex *regexp.Regexp
 }

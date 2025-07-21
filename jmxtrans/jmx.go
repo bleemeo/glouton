@@ -242,7 +242,6 @@ func (j *JMX) runServer(ctx context.Context) error {
 		var c *net.TCPConn
 
 		c, err = serverSocket.AcceptTCP()
-
 		if errNet, ok := err.(net.Error); ok && errNet.Timeout() {
 			err = nil
 

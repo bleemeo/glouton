@@ -181,8 +181,8 @@ func (uf updateFacter) pendingUpdatesWindows() (pendingUpdates int, pendingSecur
 	}
 
 	parsedPendingUpdates, err1 := strconv.Atoi(splits[0])
-	parsedPendingSecurityUpdates, err2 := strconv.Atoi(splits[1])
 
+	parsedPendingSecurityUpdates, err2 := strconv.Atoi(splits[1])
 	if err1 != nil || err2 != nil {
 		logger.V(2).Printf("Couldn't retrieve Windows Update information: cannot parse the file with content %v", splits)
 

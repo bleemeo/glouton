@@ -588,6 +588,7 @@ func (r *Registry) stopAllLoopsInner() {
 
 	for _, reg := range r.registrations {
 		reg.l.Lock()
+
 		if reg.loop == nil {
 			reg.l.Unlock()
 
@@ -978,6 +979,7 @@ func (r *Registry) diagnosticScrapeLoop(ctx context.Context, archive types.Archi
 		} else {
 			inactiveResult = append(inactiveResult, info)
 		}
+
 		reg.l.Unlock()
 	}
 

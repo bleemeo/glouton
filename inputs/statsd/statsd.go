@@ -63,6 +63,7 @@ func New(bindAddress string) (i telegraf.Input, err error) {
 						err = fmt.Errorf("%w: %v", errCreation, r)
 					}
 				}()
+
 				reflectSetPercentile(statsdInput)
 			}()
 

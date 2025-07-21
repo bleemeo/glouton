@@ -39,9 +39,9 @@ func ProcessPanic() {
 		sentry.Flush(time.Second * 5)
 
 		lock.Lock()
-		stateDir := dir
+		stateDir := dir //nolint: wsl_v5
 		diagnosticFn := diagnostic
-		lock.Unlock()
+		lock.Unlock() //nolint: wsl_v5
 		tryToGenerateDiagnostic(time.Second*10, stateDir, diagnosticFn)
 
 		logger.Printf("Glouton crashed: %v", err)

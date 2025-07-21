@@ -274,6 +274,7 @@ func (dev *device) LatestError() error {
 
 type Cluster struct {
 	device
+
 	datastores []string
 }
 
@@ -362,6 +363,7 @@ func (m *Manager) DiagnosticVSphere(ctx context.Context, archive types.ArchiveWr
 		status := "ok"
 
 		vSphere.l.Lock()
+
 		switch {
 		case vSphere.lastErrorMessage != "":
 			status = vSphere.lastErrorMessage
@@ -372,6 +374,7 @@ func (m *Manager) DiagnosticVSphere(ctx context.Context, archive types.ArchiveWr
 		case vSphere.historical30minGatherer.lastErr != nil:
 			status = vSphere.historical30minGatherer.lastErr.Error()
 		}
+
 		vSphere.l.Unlock()
 
 		endpointStatuses[host] = status

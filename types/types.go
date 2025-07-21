@@ -233,6 +233,7 @@ type Point struct {
 // MetricPoint is one point for one metrics (identified by labels) with its annotation at the time of emission.
 type MetricPoint struct {
 	Point
+
 	Labels      map[string]string
 	Annotations MetricAnnotations
 }

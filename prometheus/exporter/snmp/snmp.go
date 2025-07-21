@@ -674,7 +674,6 @@ func addressSelectPublic(addr1 string, addr2 string) string {
 // humanError convert error from the scrapper in easier to understand format.
 func humanError(err error) string {
 	var targetErr scrapper.TargetError
-
 	if errors.As(err, &targetErr) {
 		switch {
 		case targetErr.StatusCode >= 400 && bytes.Contains(targetErr.PartialBody, []byte("read: connection refused")):

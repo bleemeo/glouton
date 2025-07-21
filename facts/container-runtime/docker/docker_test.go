@@ -279,30 +279,36 @@ func TestDocker_Run(t *testing.T) {
 					Action: "connect",
 					Actor:  events.Actor{ID: "1235"},
 				}
+
 				ch <- events.Message{
 					Type:   "volume",
 					Action: "mount",
 					Actor:  events.Actor{ID: "5678"},
 				}
+
 				ch <- events.Message{
 					Type:   "container",
 					Action: "start",
 					Actor:  events.Actor{ID: cl.Containers[0].ID},
 				}
+
 				ch <- events.Message{
 					Action: "health_status:test",
 					Actor:  events.Actor{ID: cl.Containers[0].ID},
 				}
+
 				ch <- events.Message{
 					Type:   "container",
 					Action: "kill",
 					Actor:  events.Actor{ID: cl.Containers[0].ID},
 				}
+
 				ch <- events.Message{
 					Type:   "container",
 					Action: "die",
 					Actor:  events.Actor{ID: cl.Containers[0].ID},
 				}
+
 				ch <- events.Message{
 					Type:   "container",
 					Action: "destroy",
@@ -340,6 +346,7 @@ func TestDocker_Run(t *testing.T) {
 					}
 
 					eventSeen++
+
 					if ev.Type == facts.EventTypeDelete {
 						break outterloop
 					}
@@ -708,7 +715,6 @@ func TestDocker_ContainerFromCGroup(t *testing.T) { //nolint: maintidx
 					// * 7 -> new client / new querier / client error for "no runtime"
 
 					// Note: a new querier new to be make after en error (or the error will persist)
-
 					switch run {
 					case 0:
 						dockerClient = sharedClient
@@ -754,7 +760,6 @@ func TestDocker_ContainerFromCGroup(t *testing.T) { //nolint: maintidx
 
 					t.Run(fmt.Sprintf("%s-%d", c.name, run), func(t *testing.T) {
 						container, err := querier.ContainerFromCGroup(ctx, testutil.Unindent(c.cgroupData))
-
 						if c.mustErrDoesNotExist && !errors.Is(err, facts.ErrContainerDoesNotExists) {
 							// When we want ErrContainerDoesNotExists, we might allow another error if client had error, but NOT NoRuntimeError.
 							if cl.ReturnError == nil || errors.As(err, &facts.NoRuntimeError{}) {
@@ -1345,7 +1350,6 @@ func Test_maybeWrapError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := maybeWrapError(tt.errInput, tt.workedOnce)
-
 			if !errors.Is(got, tt.errInput) {
 				t.Errorf("maybeWrapError() = %v, want is %v", got, tt.errInput)
 			}

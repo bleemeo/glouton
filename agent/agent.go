@@ -108,7 +108,7 @@ import (
 //nolint:gochecknoinits
 func init() {
 	// We want to keep Prometheus's strict name validation.
-	model.NameValidationScheme = model.LegacyValidation
+	model.NameValidationScheme = model.LegacyValidation //nolint: staticcheck
 }
 
 // Jitter define the aligned timestamp used for scrapping.
@@ -808,7 +808,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.factProvider,
 		a.config.Metric.SNMP.Targets,
 	)
-
 	if warnings != nil {
 		a.addWarnings(warnings...)
 	}
@@ -1525,6 +1524,7 @@ func (a *agent) handleSighup(ctx context.Context, sighupChan chan os.Signal) {
 			}
 
 			l.Lock()
+
 			if !systemUpdateMetricPending {
 				systemUpdateMetricPending = true
 
@@ -1534,10 +1534,11 @@ func (a *agent) handleSighup(ctx context.Context, sighupChan chan os.Signal) {
 					a.waitAndRefreshPendingUpdates(ctx)
 
 					l.Lock()
-					systemUpdateMetricPending = false
-					l.Unlock()
+					systemUpdateMetricPending = false //nolint: wsl_v5
+					l.Unlock()                        //nolint: wsl_v5
 				}()
 			}
+
 			l.Unlock()
 
 			a.FireTrigger(true, true, false, true)
@@ -1645,11 +1646,13 @@ func (a *agent) miscTasks(ctx context.Context) error {
 		lastTime = now
 
 		a.triggerLock.Lock()
+
 		if !a.triggerDiscAt.IsZero() && time.Now().After(a.triggerDiscAt) {
 			a.triggerDiscAt = time.Time{}
 			a.triggerDiscImmediate = true
 			a.triggerHandler.Trigger()
 		}
+
 		a.triggerLock.Unlock()
 	}
 }
@@ -2661,8 +2664,8 @@ func (a *agent) diagnosticSNMP(ctx context.Context, archive types.ArchiveWriter)
 
 	for _, t := range a.snmpManager.Targets() {
 		fmt.Fprintf(file, "\n%s\n", t.String(ctx))
-		facts, err := t.Facts(ctx, 48*time.Hour)
 
+		facts, err := t.Facts(ctx, 48*time.Hour)
 		if err != nil {
 			fmt.Fprintf(file, " facts failed: %v\n", err)
 		} else {
@@ -2859,8 +2862,8 @@ func setupContainer(hostRootPath string) {
 
 			// ... but /var/run is usually a symlink to /run.
 			varRun := filepath.Join(hostRootPath, "var/run")
-			target, err := os.Readlink(varRun)
 
+			target, err := os.Readlink(varRun)
 			if err == nil && target == "/run" {
 				_ = os.Setenv("HOST_VAR", hostRootPath)
 			}

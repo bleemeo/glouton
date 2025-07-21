@@ -63,6 +63,7 @@ var ErrNotConnected = errors.New("currently not connected to MQTT")
 // Option are parameter for the MQTT client.
 type Option struct {
 	bleemeoTypes.GlobalOption
+
 	Cache         *cache.Cache
 	AgentID       bleemeoTypes.AgentID
 	AgentPassword string
@@ -876,6 +877,7 @@ func (c *Client) onNotification(ctx context.Context, msg paho.Message) {
 	case "diagnostic-request":
 		go func() {
 			defer crashreport.ProcessPanic()
+
 			c.opts.HandleDiagnosticRequest(ctx, payload.DiagnosticRequestToken)
 		}()
 	case "ack":

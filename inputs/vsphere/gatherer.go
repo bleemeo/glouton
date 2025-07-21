@@ -131,8 +131,8 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 		allErrs := errors.Join(filterErrors(append(acc.Errors(), err, errAddMetrics))...)
 
 		gatherer.lastPoints = gatherer.buffer.Points()
-		gatherer.lastErr = allErrs
 
+		gatherer.lastErr = allErrs
 		if gatherer.kind == gatherHist30m && allErrs == nil {
 			gatherer.lastPoints = gatherer.ptsCache.update(gatherer.lastPoints, state.T0)
 		}
