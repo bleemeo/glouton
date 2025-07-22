@@ -1,4 +1,4 @@
-import React, { FC, useState } from "react";
+import { FC, useState } from "react";
 
 import FaIcon from "./FaIcon";
 import A from "./A";
@@ -8,8 +8,7 @@ type PanelErrorBoundaryProps = {
 };
 
 const PanelErrorBoundary: FC<PanelErrorBoundaryProps> = ({ children }) => {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [hasError, setHasError] = useState(false);
+  const [hasError] = useState(false);
 
   if (hasError) {
     return (

@@ -1,10 +1,11 @@
-import React, { Suspense, useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import {
   BrowserRouter as Router,
   Route,
   Routes,
   Navigate,
 } from "react-router-dom";
+// @ts-expect-error ts(2307)
 import "rc-switch/assets/index.css";
 
 import PanelErrorBoundary from "./UI/PanelErrorBoundary";

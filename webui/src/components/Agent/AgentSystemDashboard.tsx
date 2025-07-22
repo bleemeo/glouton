@@ -1,4 +1,4 @@
-import React, { FC, useEffect, useRef } from "react";
+import { FC, useEffect, useRef } from "react";
 
 import WidgetDashboardItem from "../UI/WidgetDashboardItem";
 import MetricGaugeItem from "../Metric/MetricGaugeItem";

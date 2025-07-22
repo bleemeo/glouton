@@ -1,4 +1,4 @@
-import React, { FC } from "react";
+import { FC } from "react";
 import { Heading, Spinner, VStack } from "@chakra-ui/react";
 
 export type LoadingProps = {

@@ -101,7 +101,7 @@ docker run --rm -ti -u $UID -e HOME=/tmp/home \
 Then tell Glouton to use JavaScript file from webpack-dev-server:
 
 ```sh
-export GLOUTON_WEB_STATIC_CDN_URL=http://localhost:3015
+export GLOUTON_WEB_STATIC_CDN_URL=http://localhost:3015/src/index.ts
 ./glouton
 ```
 

@@ -46,6 +46,9 @@ import (
 //go:embed static
 var staticFolder embed.FS
 
+//go:embed assets
+var assetsFolder embed.FS
+
 type containerInterface interface {
 	Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error)
 }
@@ -86,17 +89,27 @@ type assetsFileServer struct {
 }
 
 func (f *assetsFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	r.URL.Path = path.Join("static/assets", r.URL.Path)
+	r.URL.Path = path.Join("assets", r.URL.Path)
 
 	// let the client browser decode the gzipped js files
-	if strings.HasPrefix(r.URL.Path, "static/assets/js/") {
+	if strings.HasSuffix(r.URL.Path, ".js") {
 		w.Header().Add("Content-Encoding", "gzip")
 	}
 
 	// let the client browser decode the gzipped css files
-	if strings.HasPrefix(r.URL.Path, "static/assets/css/") {
+	if strings.HasSuffix(r.URL.Path, ".css") {
 		w.Header().Add("Content-Encoding", "gzip")
 	}
+
+	f.fs.ServeHTTP(w, r)
+}
+
+type staticFileServer struct {
+	fs http.Handler
+}
+
+func (f *staticFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	r.URL.Path = path.Join("static", r.URL.Path)
 
 	f.fs.ServeHTTP(w, r)
 }
@@ -257,16 +270,15 @@ func (api *API) init() {
 		router.Handle("/debug/pprof/trace", http.HandlerFunc(pprof.Trace))
 	}
 
-	router.Handle("/static/*", http.StripPrefix("/static", &assetsFileServer{fs: http.FileServer(http.FS(staticFolder))}))
+	router.Handle("/static/*", http.StripPrefix("/static", &staticFileServer{fs: http.FileServer(http.FS(staticFolder))}))
+	router.Handle("/assets/*", http.StripPrefix("/assets", &assetsFileServer{fs: http.FileServer(http.FS(assetsFolder))}))
+
 	router.HandleFunc("/*", func(w http.ResponseWriter, _ *http.Request) {
 		var err error
 		if indexTmpl == nil {
 			_, err = w.Write(fallbackIndex)
 		} else {
 			staticURL := api.StaticCDNURL
-			if !strings.HasSuffix(staticURL, "/") {
-				staticURL += "/"
-			}
 
 			err = indexTmpl.Execute(w, gloutonUIConfig{
 				StaticCDNURL: staticURL,

@@ -51,12 +51,12 @@ if [ "${ONLY_GO}" = "1" ] || [ "${ONLY_DOCKER_FAST}" = "1" ] || [ "${SKIP_JS}" =
    echo "Skip cleaning workspace because only Go binary build is enabled, or Docker fast is enabled, or JS skipping is enabled"
 else
    echo "Cleanup workspace"
-   rm -fr webui/dist api/static/assets/css/ api/static/assets/js/
+   rm -fr webui/dist api/assets/*.css api/assets/*.js
 fi
 
 if [ "${SKIP_JS}" != "1" ] && [ "${ONLY_GO}" != "1" ]; then
    echo "Building webui"
-   mkdir -p api/static/assets/css/ api/static/assets/js/ webui/node_modules
+   mkdir -p webui/node_modules
    docker run --rm -e HOME=/go/pkg/node \
       -v $(pwd):/src --tmpfs /src/webui/node_modules:exec -w /src/webui ${NODE_MOUNT_CACHE} \
       node:22 \
@@ -65,7 +65,7 @@ if [ "${SKIP_JS}" != "1" ] && [ "${ONLY_GO}" != "1" ]; then
       chown node -R /go/pkg/node
       npm install
       npm run deploy
-      chown -R $USER_UID dist ../api/static/assets/js/ ../api/static/assets/css/
+      chown -R $USER_UID dist ../api/assets/
       "
 fi
 

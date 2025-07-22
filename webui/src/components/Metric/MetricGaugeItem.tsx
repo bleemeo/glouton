@@ -1,5 +1,3 @@
-import React from "react";
-
 import DonutPieChart from "../UI/DonutPieChart";
 import { Loading } from "../UI/Loading";
 import QueryError from "../UI/QueryError";

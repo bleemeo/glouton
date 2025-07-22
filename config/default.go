@@ -386,7 +386,7 @@ func DefaultConfig() Config { //nolint:maintidx
 			LocalUI: LocalUI{
 				Enable: true,
 			},
-			StaticCDNURL: "/static/",
+			StaticCDNURL: "/assets/panel-glouton-main.js",
 		},
 		Zabbix: Zabbix{
 			Enable:  false,

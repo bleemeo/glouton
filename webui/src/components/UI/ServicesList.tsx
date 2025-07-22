@@ -1,4 +1,4 @@
-import React, { FC } from "react";
+import { FC } from "react";
 import { Service } from "../Data/data.interface";
 import { Table, Box, Text } from "@chakra-ui/react";
 import { Loading } from "../UI/Loading";

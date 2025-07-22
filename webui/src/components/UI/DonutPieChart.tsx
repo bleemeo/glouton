@@ -1,5 +1,5 @@
 import * as d3 from "d3";
-import React, { FC } from "react";
+import { FC } from "react";
 import { getColors } from "../utils/colors";
 
 const tau = Math.PI * 1.6;

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { FC, useRef } from "react";
+import { FC, useRef } from "react";
 
 import FetchSuspense from "./FetchSuspense";
 import MetricGaugeItem from "../Metric/MetricGaugeItem";

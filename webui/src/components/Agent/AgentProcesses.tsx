@@ -1,5 +1,5 @@
 import * as d3 from "d3";
-import React, { FC } from "react";
+import { FC } from "react";
 
 import ProcessesTable from "../UI/ProcessesTable";
 import AgentProcessesInfo from "./AgentProcessesInfo";
