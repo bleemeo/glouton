@@ -10,7 +10,7 @@
   "scripts": {
     "start": "vite --host 0.0.0.0",
     "build": "npm run clean && vite build --mode production",
-    "deploy": "npm run build && for f in $(find ./dist/assets -name '*.css'); do cat $f | gzip > ../api/assets/$(basename $f); done && for f in $(find ./dist/assets -name '*.js'); do cat $f | gzip > ../api/assets/$(basename $f); done",
+    "deploy": "npm run build && mkdir -p ../api/assets/ && for f in $(find ./dist/assets -name '*.css'); do cat $f | gzip > ../api/assets/$(basename $f); done && for f in $(find ./dist/assets -name '*.js'); do cat $f | gzip > ../api/assets/$(basename $f); done",
     "clean": "rm -rf dist",
     "lint": "tsc -b && eslint src",
     "prettify": "prettier --write 'src/'"
