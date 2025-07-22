@@ -42,9 +42,9 @@ if [ "${COVERAGE}" = "1" ]; then
    docker run --rm -v "$(pwd)":/app ${GO_MOUNT_CACHE} -e HOME=/go/pkg \
       -w /app golangci/golangci-lint:${LINTER_VERSION} \
       sh -exc "
+      trap 'chown $USER_UID coverage.out coverage.html' EXIT
       go test ./... --coverprofile=coverage.out --covermode=count
       go tool cover -html=coverage.out -o coverage.html
-      chown $USER_UID coverage.out coverage.html
       "
 
    exit

@@ -63,9 +63,9 @@ if [ "${SKIP_JS}" != "1" ] && [ "${ONLY_GO}" != "1" ]; then
       sh -exc "
       mkdir -p /go/pkg/node
       chown node -R /go/pkg/node
+      trap 'chown -R $USER_UID dist ../api/assets/' EXIT
       npm install
       npm run deploy
-      chown -R $USER_UID dist ../api/assets/
       "
 fi
 
@@ -96,9 +96,9 @@ elif [ "${ONLY_GO}" = "1" ] && [ "${WITH_RACE}" != "1" ]; then
       goreleaser/goreleaser:${GORELEASER_VERSION} \
       tini -g -- sh -exc "
       mkdir -p /go/pkg
+      trap 'chown $USER_UID glouton' EXIT
       git config --global --add safe.directory /src
       go build -ldflags='-X main.version=${GLOUTON_VERSION} -X main.commit=${COMMIT}' .
-      chown $USER_UID glouton
       "
 elif [ "${ONLY_GO}" = "1" ] && [ "${WITH_RACE}" = "1" ]; then
    docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=1 \
@@ -107,9 +107,9 @@ elif [ "${ONLY_GO}" = "1" ] && [ "${WITH_RACE}" = "1" ]; then
       goreleaser/goreleaser:${GORELEASER_VERSION} \
       tini -g -- sh -exc "
       mkdir -p /go/pkg
+      trap 'chown $USER_UID glouton' EXIT
       git config --global --add safe.directory /src
       go build -ldflags='-X main.version=${GLOUTON_VERSION} -X main.commit=${COMMIT} -linkmode external -extldflags=-static' -race .
-      chown $USER_UID glouton
       "
 else
    docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=0 \
@@ -123,11 +123,11 @@ else
       tini -g -- sh -exc "
       mkdir -p /go/pkg
       git config --global --add safe.directory /src
+      trap 'chown -R $USER_UID dist' EXIT
       goreleaser check
       go generate ./...
       go test ./...
       goreleaser --clean --snapshot --parallelism 2 --timeout 45m
-      chown -R $USER_UID dist
       "
 
    echo $GLOUTON_VERSION > dist/VERSION
