@@ -32,6 +32,7 @@ const sgDevicesPattern = "/dev/sg[0-9]*"
 
 type inputWrapper struct {
 	*smart.Smart
+
 	runCmd        runCmdType
 	findSGDevices func() ([]string, error)
 

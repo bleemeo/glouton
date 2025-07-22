@@ -139,7 +139,7 @@ func (t *Target) readAll(ctx context.Context) ([]byte, error) {
 		return t.mockResponse, nil
 	}
 
-	req, err := http.NewRequest(http.MethodGet, t.URL.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, t.URL.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("prepare request to Prometheus exporter %s: %w", t.URL.String(), err)
 	}
@@ -147,7 +147,7 @@ func (t *Target) readAll(ctx context.Context) ([]byte, error) {
 	req.Header.Add("Accept", "text/plain;version=0.0.4")
 	req.Header.Set("User-Agent", version.UserAgent())
 
-	resp, err := http.DefaultClient.Do(req.WithContext(ctx))
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, TargetError{
 			ConnectErr: err,

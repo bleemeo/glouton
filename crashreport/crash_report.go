@@ -99,8 +99,8 @@ func AddStderrLogToArchive(archive types.ArchiveWriter) error {
 	}
 
 	lock.Lock()
-	stateDir := dir
-	lock.Unlock()
+	stateDir := dir //nolint: wsl_v5
+	lock.Unlock()   //nolint: wsl_v5
 
 	stderrFile, err := os.Open(filepath.Join(stateDir, stderrFileName))
 	if err != nil {
@@ -130,8 +130,8 @@ func createWorkDirIfNotExist(stateDir string) error {
 // and the new and empty file takes its place.
 func SetupStderrRedirection() {
 	lock.Lock()
-	stateDir := dir
-	lock.Unlock()
+	stateDir := dir //nolint: wsl_v5
+	lock.Unlock()   //nolint: wsl_v5
 
 	setupStderrRedirection(stateDir)
 }
@@ -217,8 +217,8 @@ func Remove(reports ...string) {
 // and only keeps the 'maxReportCount' most recent ones.
 func PurgeCrashReports(maxReportCount int) {
 	lock.Lock()
-	stateDir := dir
-	lock.Unlock()
+	stateDir := dir //nolint: wsl_v5
+	lock.Unlock()   //nolint: wsl_v5
 
 	purgeCrashReports(maxReportCount, stateDir)
 }
@@ -247,10 +247,10 @@ func purgeCrashReports(maxReportCount int, stateDir string) {
 // It returns the path to the created crash report (or an empty string if not created).
 func BundleCrashReportFiles(ctx context.Context, maxReportCount int) {
 	lock.Lock()
-	stateDir := dir
+	stateDir := dir //nolint: wsl_v5
 	enabled := !disabled
 	diagnosticFn := diagnostic
-	lock.Unlock()
+	lock.Unlock() //nolint: wsl_v5
 
 	bundleCrashReportFiles(ctx, maxReportCount, stateDir, enabled, diagnosticFn)
 }
@@ -450,6 +450,7 @@ func generateDiagnostic(ctx context.Context, writer types.ArchiveWriter, diagnos
 		defer func() {
 			if recovErr := recover(); recovErr != nil {
 				fmt.Fprintln(os.Stderr, "Diagnostic generation crashed:", recovErr)
+
 				done <- errFailedToDiagnostic
 			}
 		}()
@@ -491,6 +492,7 @@ func (d diagnosticFile) Reader() (types.ReaderWithLen, error) {
 
 type readerWithLen struct {
 	*os.File
+
 	len int
 }
 

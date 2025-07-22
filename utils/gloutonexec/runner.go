@@ -158,6 +158,7 @@ func (r *Runner) makeCmd(ctx context.Context, option Option, name string, arg ..
 			}
 
 			termSent = true
+
 			l.Unlock()
 
 			return os.ErrProcessDone

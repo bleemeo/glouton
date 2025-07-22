@@ -40,6 +40,7 @@ import (
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
 
+	cerrdefs "github.com/containerd/errdefs"
 	dockerTypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/common"
 	"github.com/docker/docker/api/types/container"
@@ -47,7 +48,6 @@ import (
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	docker "github.com/docker/docker/client"
-	"github.com/docker/docker/errdefs"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/shirou/gopsutil/v4/process"
 	"go.opentelemetry.io/otel"
@@ -356,9 +356,11 @@ func (d *Docker) Run(ctx context.Context) error {
 		case <-time.After(time.Duration(sleepDelay) * time.Second):
 		case <-ctx.Done():
 			d.l.Lock()
+
 			if d.client != nil {
 				_ = d.client.Close()
 			}
+
 			d.l.Unlock()
 
 			close(d.notifyC)
@@ -532,16 +534,6 @@ func (d *Docker) run(ctx context.Context) error {
 				action := event.Action
 				actorID := event.Actor.ID
 
-				if event.Action == "" {
-					// Docker before 1.10 didn't had Action
-					action = events.Action(event.Status)
-				}
-
-				if event.Actor.ID == "" {
-					// Docker before 1.10 didn't had Actor
-					actorID = event.ID
-				}
-
 				d.l.Lock()
 				_, ok := d.ignoredID[actorID]
 				d.l.Unlock()
@@ -663,7 +655,7 @@ func (d *Docker) updateContainers(ctx context.Context) error {
 
 	for _, c := range dockerContainers {
 		inspect, err := cl.ContainerInspect(ctx, c.ID)
-		if err != nil && docker.IsErrNotFound(err) {
+		if err != nil && cerrdefs.IsNotFound(err) {
 			continue // the container was deleted between call. Ignore it
 		}
 
@@ -1344,7 +1336,7 @@ func (d *dockerProcessQuerier) processesContainerMap(ctx context.Context, c fact
 	top, topWaux, err := d.top(ctx, c)
 
 	switch {
-	case err != nil && errdefs.IsNotFound(err):
+	case err != nil && cerrdefs.IsNotFound(err):
 		d.containerProcessErr[c.ID()] = nil
 
 		return nil

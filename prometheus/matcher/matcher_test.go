@@ -180,8 +180,8 @@ func Test_Add_Different_Type(t *testing.T) {
 func Test_Add_Error(t *testing.T) {
 	metric := "cpu"
 	m, _ := NormalizeMetric(metric)
-	err := m.Add("test", metric+"[", labels.MatchRegexp)
 
+	err := m.Add("test", metric+"[", labels.MatchRegexp)
 	if err == nil {
 		t.Errorf("An error was not caught: expected a regex compile error on metric %s", metric)
 	}

@@ -259,6 +259,7 @@ func TestContainerd_Run(t *testing.T) {
 						Parent: "sha256:ba0dae6243cc9fa2890df40a625721fdbea5c94ca6da897acdd814d710149770",
 					}),
 				}
+
 				ch <- &events.Envelope{
 					Timestamp: t0,
 					Namespace: cl.Data.Namespaces[0].MockNamespace,
@@ -272,6 +273,7 @@ func TestContainerd_Run(t *testing.T) {
 						},
 					}),
 				}
+
 				ch <- &events.Envelope{
 					Timestamp: t0,
 					Namespace: cl.Data.Namespaces[0].MockNamespace,
@@ -282,6 +284,7 @@ func TestContainerd_Run(t *testing.T) {
 						Pid:         c0.MockTask.MockPID,
 					}),
 				}
+
 				ch <- &events.Envelope{
 					Timestamp: t0,
 					Namespace: cl.Data.Namespaces[0].MockNamespace,
@@ -308,6 +311,7 @@ func TestContainerd_Run(t *testing.T) {
 						ExitedAt:    timestamppb.New(t0),
 					}),
 				}
+
 				ch <- &events.Envelope{
 					Timestamp: t0,
 					Namespace: cl.Data.Namespaces[0].MockNamespace,
@@ -348,6 +352,7 @@ func TestContainerd_Run(t *testing.T) {
 					}
 
 					eventSeen++
+
 					if ev.Type == facts.EventTypeDelete {
 						break outterloop
 					}
@@ -499,8 +504,8 @@ func TestContainerd_ContainerFromCGroup(t *testing.T) {
 			for _, ttt := range tt.wants {
 				t.Run(ttt.name, func(t *testing.T) {
 					querier := c.ProcessWithCache()
-					container, err := querier.ContainerFromCGroup(ctx, testutil.Unindent(ttt.cgroupData))
 
+					container, err := querier.ContainerFromCGroup(ctx, testutil.Unindent(ttt.cgroupData))
 					if ttt.mustErrDoesNotExist && !errors.Is(err, facts.ErrContainerDoesNotExists) {
 						t.Errorf("err = %v want ErrContainerDoesNotExists", err)
 					}

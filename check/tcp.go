@@ -32,6 +32,7 @@ import (
 // TCPCheck perform a TCP check.
 type TCPCheck struct {
 	*baseCheck
+
 	mainAddress string
 
 	send     []byte
@@ -153,7 +154,6 @@ func checkTCP(ctx context.Context, address string, send []byte, expect []byte, c
 
 	if len(expect) > 0 {
 		firstBytes, found, err := readUntilPatternFound(conn, expect)
-
 		if netErr, ok := err.(net.Error); ok && netErr.Timeout() && len(firstBytes) == 0 {
 			return types.StatusDescription{
 				CurrentStatus:     types.StatusCritical,

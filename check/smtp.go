@@ -30,6 +30,7 @@ import (
 // SMTPCheck perform a SMTP check.
 type SMTPCheck struct {
 	*baseCheck
+
 	mainAddress string
 }
 

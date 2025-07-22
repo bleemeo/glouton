@@ -29,6 +29,7 @@ import (
 // Input is a generic input that use the modifying Accumulator defined in this package.
 type Input struct {
 	telegraf.Input
+
 	Accumulator Accumulator
 	Name        string
 
@@ -105,6 +106,7 @@ func (i *Input) SecretCount() int {
 // InputWithSecrets wraps an Input that has secrets.
 type InputWithSecrets struct {
 	*Input
+
 	Count int
 }
 

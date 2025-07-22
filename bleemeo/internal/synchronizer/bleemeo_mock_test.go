@@ -361,6 +361,7 @@ func (wcm *wrapperClientMock) UpdateMetric(_ context.Context, id string, payload
 
 	metricW := struct {
 		*bleemeoapi.MetricPayload
+
 		Active *bool `json:"active"`
 	}{
 		MetricPayload: metric,

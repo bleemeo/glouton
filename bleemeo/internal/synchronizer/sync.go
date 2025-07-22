@@ -547,6 +547,7 @@ func (s *Synchronizer) DiagnosticPage() string {
 	builder.WriteString(<-httpMessage)
 
 	s.l.Lock()
+
 	if !s.lastInfo.FetchedAt.IsZero() {
 		bleemeoTime := s.lastInfo.BleemeoTime()
 		delta := s.lastInfo.TimeDrift()
@@ -558,6 +559,7 @@ func (s *Synchronizer) DiagnosticPage() string {
 			bleemeoTime.Format(time.RFC3339),
 		)
 	}
+
 	s.l.Unlock()
 
 	count := s.requestCounter.Load()
@@ -723,6 +725,7 @@ func (s *Synchronizer) UpdateDelayedContainers(localContainers []facts.Container
 
 	s.l.Lock()
 	defer s.l.Unlock()
+
 	s.delayedContainer = newDelayedContainer
 }
 
@@ -771,6 +774,7 @@ func (s *Synchronizer) SuccessiveErrors() int {
 func (s *Synchronizer) ScheduleDiagnosticUpload(filename, requestToken string, contents []byte) {
 	s.l.Lock()
 	defer s.l.Unlock()
+
 	s.state.l.Lock()
 	defer s.state.l.Unlock()
 
@@ -1021,8 +1025,8 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (*Execut
 	}
 
 	execution := s.newExecution(onlyEssential, wasCreation)
-	err := execution.run(ctx)
 
+	err := execution.run(ctx)
 	if execution.forceCacheRefreshForAll() && err == nil {
 		s.option.Cache.Save()
 

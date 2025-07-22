@@ -2437,6 +2437,7 @@ type httpTestTarget struct {
 
 type wrapListenner struct {
 	net.Listener
+
 	Timeout bool
 }
 

@@ -60,6 +60,7 @@ func (b *bleemeoExporter) CollectWithState(_ context.Context, state registry.Gat
 // points returns the points to send to the appender.
 func (b *bleemeoExporter) points(t0 time.Time) ([]types.MetricPoint, error) {
 	b.exporter.init()
+
 	b.exporter.l.Lock()
 	defer b.exporter.l.Unlock()
 

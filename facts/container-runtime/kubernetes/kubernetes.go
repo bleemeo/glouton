@@ -331,7 +331,6 @@ func (k *Kubernetes) MetricsMinute(ctx context.Context, now time.Time) ([]types.
 	var multiErr prometheus.MultiError
 
 	points, errMetrics := k.Runtime.MetricsMinute(ctx, now)
-
 	if errMetrics != nil {
 		multiErr = append(multiErr, errMetrics)
 	}
@@ -886,6 +885,7 @@ func (cl *realClient) switchToLocalAPI(ctx context.Context, localNode string) (b
 
 type wrappedContainer struct {
 	facts.Container
+
 	pod corev1.Pod
 }
 
@@ -1045,6 +1045,7 @@ func (c wrappedContainer) StoppedAndReplaced() bool {
 
 type wrapProcessQuerier struct {
 	facts.ContainerRuntimeProcessQuerier
+
 	k *Kubernetes
 }
 

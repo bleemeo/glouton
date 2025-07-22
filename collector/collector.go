@@ -219,6 +219,7 @@ type fieldCache struct {
 // inactiveMarkerAccumulator wraps a telegraf Accumulator while marking inactive metrics it receives as such.
 type inactiveMarkerAccumulator struct {
 	inputs.FixedTimeAccumulator
+
 	latestValues map[string]map[string]map[string]fieldCache
 	fieldCaches  map[string]map[string]map[string]fieldCache
 	l            sync.Mutex

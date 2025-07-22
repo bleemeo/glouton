@@ -43,7 +43,7 @@ func init() {
 	// It is done globally in agent/agent.go,
 	// but since the agent package isn't loaded during these tests,
 	// we must do it here too.
-	model.NameValidationScheme = model.LegacyValidation
+	model.NameValidationScheme = model.LegacyValidation //nolint: staticcheck
 }
 
 var (

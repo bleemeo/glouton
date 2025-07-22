@@ -122,6 +122,7 @@ func (i *Input) processWatcher(ctx context.Context) {
 			defer crashreport.ProcessPanic()
 
 			i.processStdout(ctx)
+
 			stdoutDone <- struct{}{}
 		}()
 
@@ -129,6 +130,7 @@ func (i *Input) processWatcher(ctx context.Context) {
 			defer crashreport.ProcessPanic()
 
 			i.processStderr(buffer)
+
 			stderrDone <- struct{}{}
 		}()
 

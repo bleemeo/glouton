@@ -37,6 +37,7 @@ var errUploadFailed = errors.New("upload failed")
 
 type diagnosticWithBleemeoInfo struct {
 	gloutonTypes.DiagnosticFile
+
 	diagnosticType bleemeo.GloutonDiagnostic
 	requestToken   string
 }

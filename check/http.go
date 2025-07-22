@@ -117,7 +117,10 @@ func (hc *HTTPCheck) DiagnosticArchive(ctx context.Context, archive types.Archiv
 }
 
 func (hc *HTTPCheck) httpMainCheck(ctx context.Context) types.StatusDescription {
-	req, err := http.NewRequest(http.MethodGet, hc.url, nil)
+	ctx2, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx2, http.MethodGet, hc.url, nil)
 	req.Header.Add("User-Agent", version.UserAgent())
 	req.Host = hc.httpHost
 
@@ -130,10 +133,7 @@ func (hc *HTTPCheck) httpMainCheck(ctx context.Context) types.StatusDescription 
 		}
 	}
 
-	ctx2, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	resp, err := hc.client.Do(req.WithContext(ctx2))
+	resp, err := hc.client.Do(req)
 	if urlErr, ok := err.(*url.Error); ok && urlErr.Timeout() {
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusCritical,

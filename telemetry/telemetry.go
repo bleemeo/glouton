@@ -70,14 +70,14 @@ func PostInformation(ctx context.Context, telemetryID string, url string, agenti
 
 	body, _ := json.Marshal(information) //nolint:errchkjson // False positive.
 
-	req, _ := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
-
-	req.Header.Set("Content-Type", "application/json")
-
 	ctx2, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	resp, err := http.DefaultClient.Do(req.WithContext(ctx2))
+	req, _ := http.NewRequestWithContext(ctx2, http.MethodPost, url, bytes.NewBuffer(body))
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		logger.V(1).Printf("failed when we post on telemetry: %v", err)
 

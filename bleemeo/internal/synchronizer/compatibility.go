@@ -60,6 +60,7 @@ type CompatibilityWrapper struct {
 
 type CompatibilityWrapperExecution struct {
 	*CompatibilityWrapper
+
 	execution types.SynchronizationExecution
 }
 

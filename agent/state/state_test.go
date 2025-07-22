@@ -250,8 +250,8 @@ func TestTelemetryFieldMigration(t *testing.T) {
 	}
 
 	persistentFile, errP := os.CreateTemp(t.TempDir(), "persistent")
-	cacheFile, errC := os.CreateTemp(t.TempDir(), "cache")
 
+	cacheFile, errC := os.CreateTemp(t.TempDir(), "cache")
 	if errP != nil || errC != nil {
 		t.Skip("Failed to setup test:\n", errors.Join(errP, errC))
 	}

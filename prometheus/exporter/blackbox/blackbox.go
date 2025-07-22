@@ -132,12 +132,13 @@ func (rts roundTripTLSVerifyList) AllTrusted() bool {
 }
 
 // Describe implements the prometheus.Collector interface.
+//nolint: wsl_v5,gofmt,gofumpt,goimports
 func (target configTarget) Describe(ch chan<- *prometheus.Desc) {
 	ch <- probeSuccessDesc
 	ch <- probeDurationDesc
 }
 
-// Collect implements the prometheus.Collector interface.
+// CollectWithContext implements the prometheus.Collector interface.
 // It is where we do the actual "probing".
 func (target configTarget) CollectWithContext(ctx context.Context, ch chan<- prometheus.Metric) {
 	probeFn, present := probers[target.Module.Prober]
@@ -301,7 +302,6 @@ func (target configTarget) CollectWithContext(ctx context.Context, ch chan<- pro
 
 	for _, roundTrip := range roundTrips {
 		timeoutErr, ok := roundTrip.TLSError.(timeoutIntf)
-
 		if errors.Is(roundTrip.TLSError, os.ErrDeadlineExceeded) || (ok && timeoutErr.Timeout()) {
 			timeoutInTLS = true
 		}
@@ -311,12 +311,14 @@ func (target configTarget) CollectWithContext(ctx context.Context, ch chan<- pro
 		// only emit probe_duration_seconds if it didn't timeout
 		ch <- prometheus.MustNewConstMetric(probeDurationDesc, prometheus.GaugeValue, duration.Seconds(), target.Name)
 	}
+
 	ch <- prometheus.MustNewConstMetric(probeSuccessDesc, prometheus.GaugeValue, successVal, target.Name)
 }
 
 // verifyTLS returns the last round-trip TLS expiration and whether all TLS round-trip were trusted.
 func (target configTarget) verifyTLS(extLogger *slog.Logger, roundTrips []roundTrip) roundTripTLSVerifyList {
 	start := time.Now()
+
 	defer func() {
 		extLogger.Info("verifyTLS took " + time.Since(start).String())
 	}()

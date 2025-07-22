@@ -1034,6 +1034,7 @@ type containerObject struct {
 // ContainerOCISpec contains Info() & unmarshaled oci Spec.
 type ContainerOCISpec struct {
 	containers.Container
+
 	Spec *oci.Spec `json:"Spec,omitempty"`
 }
 

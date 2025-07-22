@@ -22,6 +22,7 @@ linters:
     - mnd # Too picky.
     - musttag # json tags must be added public fields used in JSON. Disabled because it also reports errors on dependencies.
     - nestif # Too many error for now, which would require significant refactor.
+    - noinlineerr # Why couldn't we inline errors ?
     - nonamedreturns # Warn for every named return, not useful.
     - paralleltest # Requires reviewing all our tests. Should be done.
     - tagliatelle # Check struct tags. Too many errors we can't fix.
@@ -29,6 +30,7 @@ linters:
     - tparallel # Requires reviewing all our tests. Should be done.
     - varnamelen # I think there is too many false-positive.
     - wrapcheck # Too many errors, which would require to refactor most returned errors.
+    - wsl # Superseded by wsl_v5
 
   settings:
     depguard:

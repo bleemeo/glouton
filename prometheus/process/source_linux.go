@@ -281,7 +281,6 @@ func newProcValue(p proc.Proc) *procValue {
 	}
 
 	result.proc, result.procErr = getProc(p)
-
 	if result.procErr == nil {
 		result.procStat, result.procErr = getStat(result.proc)
 	}

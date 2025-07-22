@@ -270,6 +270,7 @@ type SynchronizedGlobalState interface {
 // Option are parameters for the synchronizer.
 type Option struct {
 	bleemeoTypes.GlobalOption
+
 	Cache        *cache.Cache
 	PushAppender *model.BufferAppender
 

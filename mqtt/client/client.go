@@ -216,6 +216,7 @@ func (c *Client) publish(topic string, payload []byte, retry bool) (types.Messag
 
 func (c *Client) onConnectionLost(err error) {
 	logger.Printf("%s MQTT connection lost: %v", c.opts.ID, err)
+
 	c.connectionLost <- nil
 }
 
@@ -243,11 +244,13 @@ mainLoop:
 		switch {
 		case time.Now().Before(disabledUntil):
 			c.l.Lock()
+
 			if c.mqtt != nil {
 				c.mqtt.Disconnect(0)
 
 				c.mqtt = nil
 			}
+
 			c.l.Unlock()
 		case mqtt == nil:
 			length := len(lastConnectionTimes)
@@ -274,6 +277,7 @@ mainLoop:
 
 				if currentConnectDelay < maximalDelayBetweenConnect {
 					consecutiveError++
+
 					currentConnectDelay = delay.JitterDelay(
 						delay.Exponential(minimalDelayBetweenConnect, 1.55, consecutiveError, maximalDelayBetweenConnect),
 						0.1,
@@ -355,6 +359,7 @@ mainLoop:
 		case <-ctx.Done():
 		case <-c.connectionLost:
 			c.l.Lock()
+
 			if c.mqtt != nil {
 				c.mqtt.Disconnect(0)
 			}

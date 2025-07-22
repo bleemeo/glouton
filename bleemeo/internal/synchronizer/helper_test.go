@@ -319,7 +319,6 @@ func (helper *syncTestHelper) runUntilNoError(t *testing.T, maxRun int, timeStep
 		result = mergeResult(result, tmp)
 
 		result.err = tmp.err
-
 		if result.err == nil {
 			return result
 		}

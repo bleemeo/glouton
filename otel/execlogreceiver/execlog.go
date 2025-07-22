@@ -81,8 +81,9 @@ func (f ReceiverType) BaseConfig(cfg component.Config) adapter.BaseConfig {
 
 // ExecLogConfig defines configuration for the filelog receiver.
 type ExecLogConfig struct {
-	InputConfig        execlog.Config `mapstructure:",squash"`
 	adapter.BaseConfig `mapstructure:",squash"`
+
+	InputConfig execlog.Config `mapstructure:",squash"`
 }
 
 // InputConfig unmarshals the input operator.

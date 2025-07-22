@@ -165,9 +165,10 @@ type Threshold struct {
 // Monitor groups all the information required to write metrics to a monitor.
 type Monitor struct {
 	Service
+	MonitorHTTPOptions
+
 	URL     string `json:"monitor_url"`
 	AgentID string `json:"agent"`
-	MonitorHTTPOptions
 }
 
 // MonitorHTTPOptions groups all the possible options when the probe is targeting an HTTP or HTTPS service.
@@ -181,17 +182,18 @@ type MonitorHTTPOptions struct {
 
 // Metric is a Metric object on Bleemeo API.
 type Metric struct {
-	ID          string            `json:"id"`
-	AgentID     string            `json:"agent,omitempty"`
-	LabelsText  string            `json:"labels_text,omitempty"`
-	Labels      map[string]string `json:"-"`
-	ServiceID   string            `json:"service,omitempty"`
-	ContainerID string            `json:"container,omitempty"`
-	StatusOf    string            `json:"status_of,omitempty"`
 	Threshold
 	threshold.Unit
-	DeactivatedAt time.Time `json:"deactivated_at,omitempty"`
-	FirstSeenAt   time.Time `json:"first_seen_at"`
+
+	ID            string            `json:"id"`
+	AgentID       string            `json:"agent,omitempty"`
+	LabelsText    string            `json:"labels_text,omitempty"`
+	Labels        map[string]string `json:"-"`
+	ServiceID     string            `json:"service,omitempty"`
+	ContainerID   string            `json:"container,omitempty"`
+	StatusOf      string            `json:"status_of,omitempty"`
+	DeactivatedAt time.Time         `json:"deactivated_at,omitempty"`
+	FirstSeenAt   time.Time         `json:"first_seen_at"`
 }
 
 // FailureKind is the kind of failure to register a metric. Used to know if

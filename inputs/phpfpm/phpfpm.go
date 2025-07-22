@@ -55,11 +55,12 @@ func New(url string) (i telegraf.Input, err error) {
 					err = fmt.Errorf("%w: %v", errInputCreation, r)
 				}
 			}()
+
 			reflectSet(url, phpfpmInput)
 		}()
 
 		if err != nil {
-			return
+			return i, err
 		}
 
 		i = &internal.Input{
@@ -73,5 +74,5 @@ func New(url string) (i telegraf.Input, err error) {
 		err = inputs.ErrDisabledInput
 	}
 
-	return
+	return i, err
 }

@@ -26,7 +26,6 @@ import (
 // fixMultiError ensure that NoRuntimeError isn't lost by MultiErrors.
 func fixMultiError(err error) error {
 	var errs types.MultiErrors
-
 	if !errors.As(err, &errs) {
 		return err
 	}
@@ -44,7 +43,6 @@ func fixMultiError(err error) error {
 
 	for _, err := range errs {
 		var noRuntime facts.NoRuntimeError
-
 		if !errors.As(err, &noRuntime) {
 			return errs
 		}

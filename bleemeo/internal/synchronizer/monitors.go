@@ -227,6 +227,7 @@ OuterBreak:
 					// the added complexity.
 					if !forceSync {
 						execution.RequestSynchronization(types.EntityMetric, false)
+
 						forceSync = true
 					}
 

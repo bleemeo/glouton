@@ -250,8 +250,8 @@ func parseGceFacts(projectID int64, inst gceInstance, facts map[string]string) {
 		a, err1 := strconv.Atoi(maskSplitted[0])
 		b, err2 := strconv.Atoi(maskSplitted[1])
 		c, err3 := strconv.Atoi(maskSplitted[2])
-		d, err4 := strconv.Atoi(maskSplitted[3])
 
+		d, err4 := strconv.Atoi(maskSplitted[3])
 		if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
 			logger.V(2).Printf("Couldn't parse the network mask %s", network.Mask)
 
@@ -447,6 +447,7 @@ func collectCloudProvidersFacts(ctx context.Context, facts map[string]string) {
 
 		gceFacts(ctx, gceFactMap)
 	}()
+
 	wg.Wait()
 
 	for key := range gceFactMap {

@@ -97,7 +97,6 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 			registry.MustRegister(probeFailedDueToTLSError)
 
 			var netErr net.Error
-
 			if errors.As(err, &netErr) && netErr.Timeout() ||
 				strings.Contains(err.Error(), "tls:") || err.Error() == "EOF" {
 				probeFailedDueToTLSError.Set(1)
