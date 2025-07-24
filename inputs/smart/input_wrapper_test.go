@@ -280,7 +280,7 @@ func (smartctlData *SmartctlData) makeRunCmdFor(t *testing.T) runCmdType {
 		smartctlData.invocationsCount++
 
 		switch cmd := args[0]; cmd {
-		case "--scan":
+		case "--scan": //nolint: goconst,nolintlint
 			return smartctlData.scanContent, nil
 		case "--info":
 		// Handling it below
