@@ -709,6 +709,7 @@ type realClient struct {
 	coreClient  *rest.RESTClient
 	discoClient *rest.RESTClient
 	appsClient  *rest.RESTClient
+
 	config      *rest.Config
 	useLocalAPI bool
 }
@@ -856,18 +857,16 @@ func makeClients(config *rest.Config) (coreClient, discoClient, appsClient *rest
 
 		err = setup.addToSchemeFn(scheme)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to build schema for %s: %w", setup.groupVersion, err)
+			return nil, nil, nil, fmt.Errorf("failed to build scheme for %s: %w", setup.groupVersion, err)
 		}
 
-		codecs := serializer.NewCodecFactory(scheme)
+		cfgCopy := *config
+		cfgCopy.ContentConfig.GroupVersion = setup.groupVersion
+		cfgCopy.APIPath = setup.apiPath
+		cfgCopy.NegotiatedSerializer = serializer.NewCodecFactory(scheme).WithoutConversion()
+		cfgCopy.UserAgent = rest.DefaultKubernetesUserAgent()
 
-		cfg := *config
-		cfg.ContentConfig.GroupVersion = setup.groupVersion
-		cfg.APIPath = setup.apiPath
-		cfg.NegotiatedSerializer = codecs.WithoutConversion()
-		cfg.UserAgent = rest.DefaultKubernetesUserAgent()
-
-		*setup.result, err = rest.UnversionedRESTClientFor(&cfg)
+		*setup.result, err = rest.UnversionedRESTClientFor(&cfgCopy)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("for %s: %w", setup.groupVersion, err)
 		}
