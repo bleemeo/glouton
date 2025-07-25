@@ -42,9 +42,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/version"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -703,20 +705,35 @@ type kubeClient interface {
 }
 
 type realClient struct {
-	client      *kubernetes.Clientset
+	// We need one client per "API version" (v1, discovery.k8s.io/v1, apps/v1)
+	coreClient  *rest.RESTClient
+	discoClient *rest.RESTClient
+	appsClient  *rest.RESTClient
 	config      *rest.Config
 	useLocalAPI bool
 }
 
 func (cl *realClient) GetNode(ctx context.Context, nodeName string) (*corev1.Node, error) {
-	opts := metav1.GetOptions{}
-	node, err := cl.client.CoreV1().Nodes().Get(ctx, nodeName, opts)
+	var node corev1.Node
 
-	return node, err
+	err := cl.coreClient.
+		Get().
+		Resource("nodes").
+		Name(nodeName).
+		Do(ctx).
+		Into(&node)
+
+	return &node, err
 }
 
 func (cl *realClient) GetNodes(ctx context.Context) ([]corev1.Node, error) {
-	nodes, err := cl.client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	var nodes corev1.NodeList
+
+	err := cl.coreClient.
+		Get().
+		Resource("nodes").
+		Do(ctx).
+		Into(&nodes)
 	if err != nil {
 		return nil, err
 	}
@@ -725,41 +742,51 @@ func (cl *realClient) GetNodes(ctx context.Context) ([]corev1.Node, error) {
 }
 
 func (cl *realClient) GetPODs(ctx context.Context, nodeName string) ([]corev1.Pod, error) {
-	opts := metav1.ListOptions{}
+	var pods corev1.PodList
+
+	req := cl.coreClient.Get().Resource("pods")
 
 	if nodeName != "" {
-		opts.FieldSelector = "spec.nodeName=" + nodeName
+		req.Param("fieldSelector", "spec.nodeName="+nodeName)
 	}
 
-	list, err := cl.client.CoreV1().Pods("").List(ctx, metav1.ListOptions{})
+	err := req.Do(ctx).Into(&pods)
 	if err != nil {
 		return nil, err
 	}
 
-	return list.Items, nil
+	return pods.Items, nil
 }
 
 func (cl *realClient) GetNamespaces(ctx context.Context) ([]corev1.Namespace, error) {
-	ns, err := cl.client.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	var namespaces corev1.NamespaceList
+
+	err := cl.coreClient.
+		Get().
+		Resource("namespaces").
+		Do(ctx).
+		Into(&namespaces)
 	if err != nil {
 		return nil, err
 	}
 
-	return ns.Items, nil
+	return namespaces.Items, nil
 }
 
 func (cl *realClient) GetReplicasets(ctx context.Context) ([]appsv1.ReplicaSet, error) {
-	rs, err := cl.client.AppsV1().ReplicaSets("").List(ctx, metav1.ListOptions{})
+	var replicasets appsv1.ReplicaSetList
+
+	err := cl.appsClient.Get().Resource("replicasets").Do(ctx).Into(&replicasets)
 	if err != nil {
 		return nil, err
 	}
 
-	return rs.Items, nil
+	return replicasets.Items, nil
 }
 
 func (cl *realClient) GetServerVersion(ctx context.Context) (*version.Info, error) {
 	// This is cl.client.ServerVersion() but with a context.
-	body, err := cl.client.RESTClient().Get().AbsPath("/version").Do(ctx).Raw()
+	body, err := cl.coreClient.Get().AbsPath("/version").Do(ctx).Raw()
 	if err != nil {
 		return nil, err
 	}
@@ -797,18 +824,76 @@ func getRestConfig(kubeConfig string) (*rest.Config, error) {
 	return config, err
 }
 
+func makeClients(config *rest.Config) (coreClient, discoClient, appsClient *rest.RESTClient, err error) {
+	clientSetups := []struct {
+		groupVersion  *schema.GroupVersion
+		addToSchemeFn func(*runtime.Scheme) error
+		apiPath       string
+		result        **rest.RESTClient
+	}{
+		{
+			groupVersion:  &corev1.SchemeGroupVersion,
+			addToSchemeFn: corev1.AddToScheme,
+			apiPath:       "/api",
+			result:        &coreClient,
+		},
+		{
+			groupVersion:  &discoveryv1.SchemeGroupVersion,
+			addToSchemeFn: discoveryv1.AddToScheme,
+			apiPath:       "/apis",
+			result:        &discoClient,
+		},
+		{
+			groupVersion:  &appsv1.SchemeGroupVersion,
+			addToSchemeFn: appsv1.AddToScheme,
+			apiPath:       "/apis",
+			result:        &appsClient,
+		},
+	}
+
+	for _, setup := range clientSetups {
+		scheme := runtime.NewScheme()
+
+		err = setup.addToSchemeFn(scheme)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to build schema for %s: %w", setup.groupVersion, err)
+		}
+
+		codecs := serializer.NewCodecFactory(scheme)
+
+		cfg := *config
+		cfg.ContentConfig.GroupVersion = setup.groupVersion
+		cfg.APIPath = setup.apiPath
+		cfg.NegotiatedSerializer = codecs.WithoutConversion()
+		cfg.UserAgent = rest.DefaultKubernetesUserAgent()
+
+		*setup.result, err = rest.UnversionedRESTClientFor(&cfg)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("for %s: %w", setup.groupVersion, err)
+		}
+	}
+
+	return coreClient, discoClient, appsClient, nil
+}
+
 func openConnection(ctx context.Context, kubeConfig string, localNode string) (kubeClient, error) {
 	config, err := getRestConfig(kubeConfig)
 	if err != nil {
 		return nil, err
 	}
 
-	clientset, err := kubernetes.NewForConfig(config)
+	coreClient, discoClient, appsClient, err := makeClients(config)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to build rest clients: %w", err)
 	}
 
-	client := realClient{client: clientset, config: config, useLocalAPI: false}
+	client := realClient{
+		coreClient:  coreClient,
+		discoClient: discoClient,
+		appsClient:  appsClient,
+		config:      config,
+		useLocalAPI: false,
+	}
 
 	switched, err := client.switchToLocalAPI(ctx, localNode)
 
@@ -830,12 +915,29 @@ func (cl *realClient) switchToLocalAPI(ctx context.Context, localNode string) (b
 		return false, fmt.Errorf("%w: kubernetes.nodename is missing", errMissingConfig)
 	}
 
-	ep, err := cl.client.CoreV1().Endpoints("default").Get(ctx, "kubernetes", metav1.GetOptions{})
+	var (
+		endpointSlice discoveryv1.EndpointSlice
+		pods          corev1.PodList
+	)
+
+	err := cl.discoClient.
+		Get().
+		Namespace("default").
+		Resource("endpointslices").
+		Name("kubernetes").
+		Do(ctx).
+		Into(&endpointSlice)
 	if err != nil {
-		return false, fmt.Errorf("failed to list endpoints: %w", err)
+		return false, fmt.Errorf("failed to get 'kubernetes' endpointslice: %w", err)
 	}
 
-	pods, err := cl.client.CoreV1().Pods("kube-system").List(ctx, metav1.ListOptions{FieldSelector: "spec.nodeName=" + localNode})
+	err = cl.coreClient.
+		Get().
+		Namespace("kube-system").
+		Resource("pods").
+		Param("fieldSelector", "spec.nodeName="+localNode).
+		Do(ctx).
+		Into(&pods)
 	if err != nil {
 		return false, fmt.Errorf("failed to list PODs: %w", err)
 	}
@@ -845,33 +947,40 @@ func (cl *realClient) switchToLocalAPI(ctx context.Context, localNode string) (b
 		podsIP[pod.Status.PodIP] = pod
 	}
 
-	for _, subset := range ep.Subsets {
-		httpsPort := 8443
+	httpsPort := 8443
 
-		for _, p := range subset.Ports {
-			if p.Name == "https" {
-				httpsPort = int(p.Port)
-			}
+	for _, p := range endpointSlice.Ports {
+		if p.Name != nil && *p.Name == "https" && p.Port != nil {
+			httpsPort = int(*p.Port)
 		}
+	}
 
-		for _, ip := range subset.Addresses {
-			if pod, ok := podsIP[ip.IP]; ok {
+	for _, ep := range endpointSlice.Endpoints {
+		for _, ip := range ep.Addresses {
+			if pod, ok := podsIP[ip]; ok {
 				logger.V(2).Printf("Found the POD running Kubernetes API on local node: %s", pod.Name)
 
 				shallowCopy := *cl.config
-				shallowCopy.Host = "https://" + net.JoinHostPort(ip.IP, strconv.FormatInt(int64(httpsPort), 10))
+				shallowCopy.Host = "https://" + net.JoinHostPort(ip, strconv.FormatInt(int64(httpsPort), 10))
 
-				newClient, err := kubernetes.NewForConfig(&shallowCopy)
+				coreClient, discoClient, appsClient, err := makeClients(&shallowCopy)
 				if err != nil {
-					return false, fmt.Errorf("failed create client: %w", err)
+					return false, fmt.Errorf("failed to build rest clients: %w", err)
 				}
 
-				_, err = newClient.CoreV1().Endpoints("default").Get(ctx, "kubernetes", metav1.GetOptions{})
+				err = discoClient.
+					Get().
+					Namespace("default").
+					Resource("endpointslices").
+					Do(ctx).
+					Error()
 				if err != nil {
-					return false, fmt.Errorf("failed list endpoints with new client: %w", err)
+					return false, fmt.Errorf("failed list endpointslices with new client: %w", err)
 				}
 
-				cl.client = newClient
+				cl.coreClient = coreClient
+				cl.discoClient = discoClient
+				cl.appsClient = appsClient
 				cl.config = &shallowCopy
 				cl.useLocalAPI = true
 
