@@ -64,7 +64,7 @@ func (h *persistHost) newPersistentExt(name string) component.ID {
 
 	// We don't have to care about handling any error,
 	// since the type is known to be correct (otherwise TestPersistHost would have failed),
-	// and the name doesn't have any format restriction.
+	// and the name has no format restriction.
 	id := component.MustNewIDWithName(storageType, name)
 
 	receiverMetadata, found := h.metadataPerReceiver[name]
@@ -89,6 +89,15 @@ func (h *persistHost) newPersistentExt(name string) component.ID {
 	return id
 }
 
+func (h *persistHost) removePersistentExts(ids []component.ID) {
+	h.l.Lock()
+	defer h.l.Unlock()
+
+	for _, id := range ids {
+		delete(h.extensions, id)
+	}
+}
+
 func (h *persistHost) storeMetadata(recvName string, metadata map[string][]byte) {
 	h.l.Lock()
 	defer h.l.Unlock()
@@ -106,9 +115,9 @@ func (h *persistHost) getAllMetadata() map[string]map[string][]byte {
 	for key := range h.updatedKeys {
 		// We assume the []byte in value of `h.metadataPerReceiver[key]` isn't mutated.
 		// If it was mutated, we also need to copy it.
-		// Also be careful to only reads key that are in updatedKeys, `persistHost` don't
-		// own `h.metadataPerReceiver[key]` for key that started an `persistExtension` and
-		// which didn't called `storeMetadata`.
+		// Also be careful to only read keys that are in updatedKeys, `persistHost` doesn't
+		// own `h.metadataPerReceiver[key]` for keys that started an `persistExtension` and
+		// which didn't call `storeMetadata`.
 		updatedData[key] = maps.Clone(h.metadataPerReceiver[key])
 	}
 

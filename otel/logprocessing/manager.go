@@ -174,10 +174,10 @@ ctxLoop:
 	defer man.pipeline.l.Unlock()
 
 	for _, receivers := range man.serviceReceivers {
-		stopReceivers(receivers)
+		stopReceivers(receivers, man.persister.removePersistentExts)
 	}
 
-	man.containerRecv.stop()
+	man.containerRecv.stop(man.persister.removePersistentExts)
 
 	shutdownAll(man.pipeline.startedComponents)
 
@@ -526,7 +526,7 @@ func (man *Manager) removeOldSources(ctx context.Context, services []discovery.S
 
 		receivers, found := man.serviceReceivers[service]
 		if found {
-			stopReceivers(receivers)
+			stopReceivers(receivers, man.persister.removePersistentExts)
 			delete(man.serviceReceivers, service)
 		}
 

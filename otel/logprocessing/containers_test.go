@@ -125,7 +125,7 @@ func TestHandleContainerLogs(t *testing.T) {
 
 	containerRecv := newContainerReceiver(&pipeline, containerOperators, knownOperators, containerFilter, knownFilters)
 
-	defer containerRecv.stop()
+	defer containerRecv.stop(pipeline.persister.removePersistentExts)
 
 	ctrs := []facts.Container{
 		facts.FakeContainer{

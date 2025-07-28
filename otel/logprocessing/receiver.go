@@ -100,7 +100,8 @@ type logReceiver struct {
 	watching     map[string]receiverKind
 	sizeFnByFile map[string]func() (int64, error)
 	// startedComponents is only used if the receiver is from a service
-	startedComponents []component.Component
+	startedComponents    []component.Component
+	registeredExtensions []component.ID
 
 	logCounter      *atomic.Int64
 	throughputMeter *ringCounter
@@ -256,6 +257,8 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 
 	makeStorageFn := func(logFile string) *component.ID {
 		id := pipeline.persister.newPersistentExt(r.name + metadataKeySeparator + logFile)
+
+		r.registeredExtensions = append(r.registeredExtensions, id)
 
 		return &id
 	}
