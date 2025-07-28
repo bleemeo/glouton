@@ -308,7 +308,14 @@ func TestRegistry_Register(t *testing.T) {
 		labels[types.LabelMetaBleemeoUUID] = testAgentID
 
 		return labels, false
-	}, makeDelayHook(gloutonMinimalInterval))
+	}, makeDelayHook(gloutonMinimalInterval), func() {
+		canLock := reg.l.TryLock()
+		if canLock {
+			reg.l.Unlock()
+		} else {
+			t.Errorf("could not take the registry lock within the SNMP gatherers registration function")
+		}
+	})
 
 	now := time.Now()
 
@@ -405,7 +412,7 @@ func TestRegistryDiagnostic(t *testing.T) {
 		labels[types.LabelMetaBleemeoUUID] = testAgentID
 
 		return labels, false
-	}, makeDelayHook(250*time.Millisecond))
+	}, makeDelayHook(250*time.Millisecond), nil)
 
 	// After this delay, registry should have run at least once.
 	time.Sleep(300 * time.Millisecond)
@@ -505,7 +512,7 @@ func TestRegistry_pushPoint(t *testing.T) {
 		labels[types.LabelMetaBleemeoUUID] = testAgentID
 
 		return labels, false
-	}, makeDelayHook(gloutonMinimalInterval))
+	}, makeDelayHook(gloutonMinimalInterval), nil)
 
 	got, err = reg.Gather()
 	if err != nil {
@@ -872,7 +879,7 @@ func TestRegistry_slowGather(t *testing.T) { //nolint:maintidx
 			labels[types.LabelMetaBleemeoUUID] = testAgentID
 
 			return labels, false
-		}, makeDelayHook(100*time.Millisecond))
+		}, makeDelayHook(100*time.Millisecond), nil)
 
 		return nil
 	})
@@ -941,7 +948,7 @@ func TestRegistry_slowGather(t *testing.T) { //nolint:maintidx
 		labels[types.LabelMetaBleemeoUUID] = testAgentID
 
 		return labels, false
-	}, makeDelayHook(50*time.Millisecond))
+	}, makeDelayHook(50*time.Millisecond), nil)
 
 	waitPointAndGatherCall(t, true, "name1")
 
@@ -1064,7 +1071,7 @@ func TestRegistry_run(t *testing.T) {
 		labels[types.LabelMetaBleemeoUUID] = testAgentID
 
 		return labels, false
-	}, makeDelayHook(delay))
+	}, makeDelayHook(delay), nil)
 
 	gather1 := &fakeGatherer{name: "name1"}
 	gather1.fillResponse()
