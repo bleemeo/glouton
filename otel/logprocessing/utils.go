@@ -179,7 +179,7 @@ func shutdownAll(components []component.Component) {
 
 // stopReceivers shutdowns all the components started by the given receivers,
 // while taking care of the receivers lock synchronization.
-func stopReceivers(receivers []*logReceiver, removePersistentExtsFn func(id []component.ID)) {
+func stopReceivers(receivers []*logReceiver, removePersistentExtsFn func([]component.ID)) {
 	for _, recv := range receivers {
 		recv.l.Lock()
 

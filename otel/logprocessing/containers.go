@@ -373,7 +373,7 @@ func (cr *containerReceiver) StartedComponentKeys() []string {
 	return startedComponentKeys
 }
 
-func (cr *containerReceiver) stop(removePersistentExtsFn func(id []component.ID)) {
+func (cr *containerReceiver) stop() {
 	cr.l.Lock()
 	defer cr.l.Unlock()
 
@@ -394,7 +394,7 @@ func (cr *containerReceiver) stop(removePersistentExtsFn func(id []component.ID)
 	wg.Wait()
 
 	for _, extIDs := range cr.registeredExtensions {
-		removePersistentExtsFn(extIDs)
+		cr.pipeline.persister.removePersistentExts(extIDs)
 	}
 }
 

@@ -177,7 +177,7 @@ ctxLoop:
 		stopReceivers(receivers, man.persister.removePersistentExts)
 	}
 
-	man.containerRecv.stop(man.persister.removePersistentExts)
+	man.containerRecv.stop()
 
 	shutdownAll(man.pipeline.startedComponents)
 
