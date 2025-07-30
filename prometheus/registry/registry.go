@@ -324,6 +324,7 @@ type registration struct {
 	hookMinimalInterval  time.Duration
 	interval             time.Duration
 	lastErrorLogAt       time.Time
+	delayUntil           time.Time
 }
 
 // RunNow will trigger a run of the scrapeLoop. If the registry isn't running,
@@ -1250,6 +1251,25 @@ func (r *Registry) Unregister(id int) bool {
 	return true
 }
 
+func (r *Registry) DelayRegExec(id int, until time.Time) {
+	r.l.Lock()
+	defer r.l.Unlock()
+
+	reg, ok := r.registrations[id]
+	if !ok {
+		return
+	}
+
+	reg.l.Lock()
+	defer reg.l.Unlock()
+
+	if until.After(reg.delayUntil) { // only update further
+		logger.V(2).Printf("Delaying check %q until %s", reg.option.Description, until)
+
+		reg.delayUntil = until
+	}
+}
+
 // Gather implements prometheus.Gatherer.
 func (r *Registry) Gather() ([]*dto.MetricFamily, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultGatherTimeout)
@@ -1660,6 +1680,14 @@ func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registrat
 
 	if reg.relabelHookSkip {
 		reg.l.Unlock()
+
+		return nil, 0, nil
+	}
+
+	if time.Until(reg.delayUntil) > 0 {
+		reg.l.Unlock()
+
+		logger.V(2).Printf("Skipping run of check %q (delayed until %s)", reg.option.Description, reg.delayUntil)
 
 		return nil, 0, nil
 	}

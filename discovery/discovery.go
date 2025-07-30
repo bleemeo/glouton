@@ -967,3 +967,21 @@ func (d *Discovery) GetCheckNow(nameInstance NameInstance) (CheckNow, error) {
 
 	return checkDetails.check.CheckNow, nil
 }
+
+func (d *Discovery) GetCheckIDsForContainer(containerID string) []int {
+	d.l.Lock()
+	defer d.l.Unlock()
+
+	var checkIDs []int
+
+	for key, service := range d.servicesMap {
+		if service.ContainerID == containerID {
+			check, found := d.activeCheck[key]
+			if found {
+				checkIDs = append(checkIDs, check.id)
+			}
+		}
+	}
+
+	return checkIDs
+}
