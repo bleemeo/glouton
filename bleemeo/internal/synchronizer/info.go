@@ -182,23 +182,24 @@ func (s *Synchronizer) updateMQTTStatus(ctx context.Context, apiClient types.Met
 	s.shouldUpdateMQTTStatus = false
 	s.l.Unlock()
 
+	// When the agent is not connected, check whether MQTT is accessible.
 	if !shouldUpdate || isMQTTConnected {
 		return nil
 	}
 
-	// When the agent is not connected, check whether MQTT is accessible.
-	if !isMQTTConnected {
-		mqttAddress := net.JoinHostPort(s.option.Config.Bleemeo.MQTT.Host, strconv.Itoa(s.option.Config.Bleemeo.MQTT.Port))
+	mqttAddress := net.JoinHostPort(s.option.Config.Bleemeo.MQTT.Host, strconv.Itoa(s.option.Config.Bleemeo.MQTT.Port))
 
-		conn, dialErr := net.DialTimeout("tcp", mqttAddress, 5*time.Second)
-		if conn != nil {
-			defer conn.Close()
-		}
+	timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 
-		if dialErr == nil {
-			// The agent can access MQTT, nothing to do.
-			return nil
-		}
+	conn, dialErr := s.dialer.DialContext(timeoutCtx, "tcp", mqttAddress)
+	if conn != nil {
+		defer conn.Close()
+	}
+
+	if dialErr == nil {
+		// The agent can access MQTT, nothing to do.
+		return nil
 	}
 
 	msg := fmt.Sprintf(

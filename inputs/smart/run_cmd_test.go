@@ -323,12 +323,12 @@ func TestIsExitCode1(t *testing.T) {
 			expectCode1:   false,
 		},
 		{
-			err:           exec.Command("false").Run(),
+			err:           exec.CommandContext(t.Context(), "false").Run(),
 			expectExitErr: true,
 			expectCode1:   true,
 		},
 		{
-			err:           exec.Command("sh", "-c", "exit 8").Run(),
+			err:           exec.CommandContext(t.Context(), "sh", "-c", "exit 8").Run(),
 			expectExitErr: true,
 			expectCode1:   false,
 		},
