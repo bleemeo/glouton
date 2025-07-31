@@ -27,6 +27,7 @@ import (
 	"github.com/bleemeo/glouton/prometheus/model"
 	"github.com/bleemeo/glouton/store"
 	"github.com/bleemeo/glouton/types"
+	"github.com/prometheus/prometheus/model/labels"
 
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/promql"
@@ -136,18 +137,18 @@ func (r *SimpleRuler) ApplyRulesMFS(ctx context.Context, now time.Time, mfs []*d
 				nameToIndex[name] = idx
 			}
 
-			lbls := make([]*dto.LabelPair, 0, len(sample.Metric)-1)
+			lbls := make([]*dto.LabelPair, 0, sample.Metric.Len()-1)
 
-			for _, l := range sample.Metric {
+			sample.Metric.Range(func(l labels.Label) {
 				if l.Name == types.LabelName {
-					continue
+					return
 				}
 
 				lbls = append(lbls, &dto.LabelPair{
 					Name:  proto.String(l.Name),
 					Value: proto.String(l.Value),
 				})
-			}
+			})
 
 			mfs[idx].Metric = append(mfs[idx].GetMetric(), &dto.Metric{
 				Label:       lbls,

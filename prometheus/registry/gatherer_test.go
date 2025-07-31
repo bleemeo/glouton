@@ -114,20 +114,24 @@ func Test_mergeLabels(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			opts := []cmp.Option{
-				cmpopts.IgnoreUnexported(dto.LabelPair{}),
-				cmpopts.EquateEmpty(),
-			}
-
 			inputA := labels.FromMap(model.DTO2Labels("fake_name", tt.args.a))
 			wantLabels := labels.FromMap(model.DTO2Labels("fake_name", tt.want))
 			gotLabels := mergeLabels(inputA, tt.args.b)
 
-			if diff := cmp.Diff(wantLabels, gotLabels); diff != "" {
+			opts := []cmp.Option{
+				cmpopts.IgnoreUnexported(labels.Labels{}),
+			}
+
+			if diff := cmp.Diff(wantLabels, gotLabels, opts...); diff != "" {
 				t.Errorf("mergeLabels() mismatch (-want +got)\n%s", diff)
 			}
 
 			got := mergeLabelsDTO(tt.args.a, tt.args.b)
+
+			opts = []cmp.Option{
+				cmpopts.IgnoreUnexported(dto.LabelPair{}),
+				cmpopts.EquateEmpty(),
+			}
 
 			if diff := cmp.Diff(tt.want, got, opts...); diff != "" {
 				t.Errorf("mergeLabelsDTO() mismatch (-want +got)\n%s", diff)
@@ -190,7 +194,7 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 			fields: fields{
 				source:      g,
 				annotations: types.MetricAnnotations{},
-				labels:      nil,
+				labels:      labels.EmptyLabels(),
 			},
 			want: []types.MetricPoint{
 				{

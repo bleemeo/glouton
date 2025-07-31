@@ -24,7 +24,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"sort"
 	"time"
 
 	"github.com/bleemeo/glouton/logger"
@@ -185,7 +184,7 @@ func parserReader(data []byte, filter func(lbls labels.Labels) bool) ([]*dto.Met
 		err error
 	)
 
-	p, err := textparse.New(data, "text/plain", "", false, true, nil)
+	p, err := textparse.New(data, "text/plain", "", false, true, false, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -233,9 +232,7 @@ func parserReader(data []byte, filter func(lbls labels.Labels) bool) ([]*dto.Met
 			continue
 		}
 
-		sort.Sort(lset)
-
-		if lset != nil && filter != nil && !filter(lset) {
+		if filter != nil && !filter(lset) {
 			continue
 		}
 

@@ -173,7 +173,7 @@ func TestApplyRulesMFS(t *testing.T) {
 			t.Fatalf("rule %s: %v", sr.TargetName, err)
 		}
 
-		rrules[i] = rules.NewRecordingRule(sr.TargetName, expr, nil)
+		rrules[i] = rules.NewRecordingRule(sr.TargetName, expr, labels.EmptyLabels())
 	}
 
 	ruler := New(rrules)
