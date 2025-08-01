@@ -22,7 +22,7 @@ require (
 	github.com/docker/docker v28.3.3+incompatible
 	github.com/eclipse/paho.mqtt.golang v1.5.0
 	github.com/fsnotify/fsnotify v1.9.0
-	github.com/getsentry/sentry-go v0.34.1
+	github.com/getsentry/sentry-go v0.35.0
 	github.com/go-chi/chi/v5 v5.2.2
 	github.com/go-chi/render v1.0.3
 	github.com/go-viper/mapstructure/v2 v2.4.0
@@ -45,14 +45,14 @@ require (
 	github.com/opencontainers/runtime-spec v1.2.1
 	github.com/prometheus-community/windows_exporter v0.31.1
 	github.com/prometheus/blackbox_exporter v0.27.0
-	github.com/prometheus/client_golang v1.22.0
+	github.com/prometheus/client_golang v1.23.0
 	github.com/prometheus/client_model v0.6.2
 	github.com/prometheus/common v0.65.0
 	github.com/prometheus/node_exporter v1.9.1
 	github.com/prometheus/procfs v0.17.0
 	github.com/prometheus/prometheus v0.305.0
 	github.com/rs/cors v1.11.1
-	github.com/shirou/gopsutil/v4 v4.25.6
+	github.com/shirou/gopsutil/v4 v4.25.7
 	github.com/vishvananda/netlink v1.3.1
 	github.com/vmware/govmomi v0.51.0
 	github.com/yusufpapurcu/wmi v1.2.4
@@ -93,7 +93,7 @@ require (
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.7.0 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.18.1 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.18.2 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.10.1 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.11.2 // indirect
 	github.com/Azure/go-ntlmssp v0.0.0-20221128193559-754e69321358 // indirect
