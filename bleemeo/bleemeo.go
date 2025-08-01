@@ -192,7 +192,7 @@ func (c *Connector) ApplyCachedConfiguration() {
 	currentConfig, ok := c.cache.CurrentAccountConfig()
 
 	if ok && c.option.UpdateMetricResolution != nil && currentConfig.AgentConfigByName[bleemeo.AgentType_Agent].MetricResolution != 0 {
-		c.option.UpdateMetricResolution(currentConfig.AgentConfigByName[bleemeo.AgentType_Agent].MetricResolution, currentConfig.AgentConfigByName[bleemeo.AgentType_SNMP].MetricResolution)
+		c.option.UpdateMetricResolution(currentConfig.AgentConfigByName[bleemeo.AgentType_Agent].MetricResolution)
 	}
 }
 
@@ -1105,7 +1105,7 @@ func (c *Connector) updateConfig(nameChanged bool) {
 	}
 
 	if c.option.UpdateMetricResolution != nil {
-		c.option.UpdateMetricResolution(currentConfig.AgentConfigByName[bleemeo.AgentType_Agent].MetricResolution, currentConfig.AgentConfigByName[bleemeo.AgentType_SNMP].MetricResolution)
+		c.option.UpdateMetricResolution(currentConfig.AgentConfigByName[bleemeo.AgentType_Agent].MetricResolution)
 	}
 }
 

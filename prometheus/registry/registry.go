@@ -743,11 +743,11 @@ func (r *Registry) RegisterInput(
 // When this function return, it's guaratee that all call to Option.PushPoint will use new labels.
 // The hook is assumed to be idempotent, that is for a given labels input the result is the same.
 // If the hook want break this idempotence, UpdateRegistrationHooks() should be re-called to force update of existings Gatherer.
-func (r *Registry) UpdateRegistrationHooks(relabelHook RelabelHook, updateDelayHook UpdateDelayHook, registerSNMPGatherersHook func()) {
-	r.restartLoops(func() { r.updateHooks(relabelHook, updateDelayHook, registerSNMPGatherersHook) })
+func (r *Registry) UpdateRegistrationHooks(relabelHook RelabelHook, updateDelayHook UpdateDelayHook) {
+	r.restartLoops(func() { r.updateHooks(relabelHook, updateDelayHook) })
 }
 
-func (r *Registry) updateHooks(relabelHook RelabelHook, updateDelayHook UpdateDelayHook, registerSNMPGatherersHook func()) {
+func (r *Registry) updateHooks(relabelHook RelabelHook, updateDelayHook UpdateDelayHook) {
 	r.l.Lock()
 	defer r.l.Unlock()
 
@@ -770,12 +770,6 @@ func (r *Registry) updateHooks(relabelHook RelabelHook, updateDelayHook UpdateDe
 		reg.l.Lock()
 		r.setupGatherer(reg, reg.gatherer.getSource())
 		reg.l.Unlock()
-	}
-
-	if registerSNMPGatherersHook != nil {
-		r.l.Unlock()
-		registerSNMPGatherersHook()
-		r.l.Lock()
 	}
 
 	r.blockPushPoint = false

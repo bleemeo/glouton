@@ -148,7 +148,6 @@ type agent struct {
 	threshold              *threshold.Registry
 	jmx                    *jmxtrans.JMX
 	snmpManager            *snmp.Manager
-	snmpRegistration       []int
 	store                  *store.Store
 	gathererRegistry       *registry.Registry
 	dynamicScrapper        *promexporter.DynamicScrapper
@@ -512,68 +511,69 @@ func (a *agent) UpdateThresholds(thresholds map[string]threshold.Threshold, firs
 // notifyBleemeoFirstRegistration is called when Glouton is registered with Bleemeo Cloud platform for the first time
 // This means that when this function is called, BleemeoAgentID and BleemeoAccountID are set.
 func (a *agent) notifyBleemeoFirstRegistration() {
-	a.gathererRegistry.UpdateRegistrationHooks(a.bleemeoConnector.RelabelHook, a.bleemeoConnector.UpdateDelayHook, nil)
+	a.gathererRegistry.UpdateRegistrationHooks(a.bleemeoConnector.RelabelHook, a.bleemeoConnector.UpdateDelayHook)
 	a.store.DropAllMetrics()
 }
 
 // notifyBleemeoUpdateHooks is called when Labels might change for some metrics.
 // This likely happen when SNMP target are deleted/recreated.
 func (a *agent) notifyBleemeoUpdateHooks() {
-	a.gathererRegistry.UpdateRegistrationHooks(a.bleemeoConnector.RelabelHook, a.bleemeoConnector.UpdateDelayHook, nil)
+	a.gathererRegistry.UpdateRegistrationHooks(a.bleemeoConnector.RelabelHook, a.bleemeoConnector.UpdateDelayHook)
 }
 
-func (a *agent) makeRegisterSNMPGatherersHook(resolution time.Duration) func() {
-	return func() {
-		a.l.Lock()
-		previousRegistration := a.snmpRegistration
-		a.snmpRegistration = nil
-		a.l.Unlock()
+func (a *agent) registerSNMPTargets(ctx context.Context) error {
+	ticker := time.NewTicker(5 * time.Second) // effective period is 10min
+	defer ticker.Stop()
 
-		for _, id := range previousRegistration {
-			a.gathererRegistry.Unregister(id)
+	firstRun := true
+	registeredTargets := make(map[uint64]struct{})
+
+	for {
+		select {
+		case <-ticker.C:
+		case <-ctx.Done():
+			return nil
 		}
 
-		if resolution == 0 {
-			return
+		if firstRun {
+			ticker.Reset(10 * time.Minute)
+			firstRun = false
 		}
-
-		var newRegistration []int
 
 		for _, target := range a.snmpManager.Gatherers() {
 			hash := labels.FromMap(target.ExtraLabels).Hash()
 
-			id, err := a.gathererRegistry.RegisterGatherer(
+			if _, found := registeredTargets[hash]; found {
+				continue
+			}
+
+			_, err := a.gathererRegistry.RegisterGatherer(
 				registry.RegistrationOption{
 					Description: "snmp target " + target.Address,
 					JitterSeed:  hash,
-					MinInterval: resolution,
+					MinInterval: defaultInterval,
 					Timeout:     40 * time.Second,
 					ExtraLabels: target.ExtraLabels,
-					Rules:       registry.DefaultSNMPRules(resolution),
+					Rules:       registry.DefaultSNMPRules(time.Minute),
 				},
 				target.Gatherer,
 			)
 			if err != nil {
 				logger.Printf("Unable to add SNMP scrapper for target %s: %v", target.Address, err)
 			} else {
-				newRegistration = append(newRegistration, id)
+				registeredTargets[hash] = struct{}{}
 			}
 		}
-
-		a.l.Lock()
-		defer a.l.Unlock()
-
-		a.snmpRegistration = append(a.snmpRegistration, newRegistration...)
 	}
 }
 
-func (a *agent) updateMetricResolution(defaultResolution time.Duration, snmpResolution time.Duration) {
+func (a *agent) updateMetricResolution(defaultResolution time.Duration) {
 	a.l.Lock()
 	a.metricResolution = defaultResolution
 	a.l.Unlock()
 
 	// No need to check whether the connector is nil or not, since we were called from it.
-	a.gathererRegistry.UpdateRegistrationHooks(a.bleemeoConnector.RelabelHook, a.bleemeoConnector.UpdateDelayHook, a.makeRegisterSNMPGatherersHook(snmpResolution))
+	a.gathererRegistry.UpdateRegistrationHooks(a.bleemeoConnector.RelabelHook, a.bleemeoConnector.UpdateDelayHook)
 
 	services, _ := a.discovery.GetLatestDiscovery()
 	if a.jmx != nil {
@@ -1018,6 +1018,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		{a.processUpdateMessage, "processUpdateMessage"},
 		{a.discovery.Run, "discovery"},
 		{psFact.Run, "processes lister"},
+		{a.registerSNMPTargets, "SNMP targets registerer"},
 	}
 
 	if a.config.Agent.EnableCrashReporting {
@@ -1118,7 +1119,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.gathererRegistry.UpdateRegistrationHooks(
 			a.bleemeoConnector.RelabelHook,
 			a.bleemeoConnector.UpdateDelayHook,
-			a.makeRegisterSNMPGatherersHook(time.Minute),
 		)
 
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
