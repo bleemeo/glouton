@@ -40,7 +40,7 @@ func DiagnosticTCP(host string, port int, tlsConfig *tls.Config) string {
 
 	hostPort := fmt.Sprintf("%s:%d", host, port)
 
-	conn, err := net.DialTimeout("tcp", hostPort, 5*time.Second)
+	conn, err := net.DialTimeout("tcp", hostPort, 5*time.Second) //nolint: noctx
 	if err != nil {
 		fmt.Fprintf(builder, "Unable to open TCP connection to %s: %v\n", hostPort, err)
 
@@ -94,7 +94,7 @@ func diagnosticTLS(builder io.Writer, tlsConfig *tls.Config, host string, hostPo
 	go func() {
 		defer crashreport.ProcessPanic()
 
-		errChannel <- tlsConn.Handshake()
+		errChannel <- tlsConn.Handshake() //nolint: noctx
 	}()
 
 	if err := <-errChannel; err != nil {

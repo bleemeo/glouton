@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"math"
 	"reflect"
-	"sort"
 	"sync"
 	"time"
 
@@ -366,18 +365,7 @@ func (s *Store) run(now time.Time) {
 // Annotations is always updated with value provided as argument if the metric exists, but if annotation "change" a boolean will be set.
 // Annotations are considered to change if a value change with exception of status.
 func (s *Store) metricGet(lbls map[string]string, annotations types.MetricAnnotations) (metric, bool, bool) {
-	if cap(s.workLabels) < len(lbls) {
-		s.workLabels = make(labels.Labels, len(lbls))
-	}
-
-	s.workLabels = s.workLabels[:0]
-
-	for k, v := range lbls {
-		s.workLabels = append(s.workLabels, labels.Label{Name: k, Value: v})
-	}
-
-	sort.Sort(s.workLabels)
-
+	s.workLabels = labels.FromMap(lbls)
 	hash := s.workLabels.Hash()
 
 	m, ok := s.metrics[hash]

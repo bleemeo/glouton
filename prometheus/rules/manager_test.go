@@ -56,18 +56,12 @@ func (app *mockAppendable) Appender(context.Context) storage.Appender {
 }
 
 func (a *mockAppender) Append(_ storage.SeriesRef, l labels.Labels, t int64, v float64) (storage.SeriesRef, error) {
-	labelsMap := make(map[string]string)
-
-	for _, lblv := range l {
-		labelsMap[lblv.Name] = lblv.Value
-	}
-
 	newPoint := types.MetricPoint{
 		Point: types.Point{
 			Time:  time.Unix(0, t*1e6),
 			Value: v,
 		},
-		Labels:      labelsMap,
+		Labels:      l.Map(),
 		Annotations: types.MetricAnnotations{},
 	}
 

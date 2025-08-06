@@ -105,19 +105,19 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 			}
 		}
 
-		logger.Error("Error dialing TCP", "err", err)
+		logger.ErrorContext(ctx, "Error dialing TCP", "err", err)
 
 		return false
 	}
 	defer conn.Close()
 
-	logger.Info("Successfully dialed")
+	logger.InfoContext(ctx, "Successfully dialed")
 
 	// Set a deadline to prevent the following code from blocking forever.
 	// If a deadline cannot be set, better fail the probe by returning an error
 	// now rather than blocking forever.
 	if err := conn.SetDeadline(deadline); err != nil {
-		logger.Error("Error setting deadline", "err", err)
+		logger.ErrorContext(ctx, "Error setting deadline", "err", err)
 
 		return false
 	}
@@ -138,7 +138,7 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 	scanner := bufio.NewScanner(conn)
 
 	for i, qr := range module.TCP.QueryResponse {
-		logger.Info("Processing query response entry", "entry_number", i)
+		logger.InfoContext(ctx, "Processing query response entry", "entry_number", i)
 
 		send := qr.Send
 
@@ -146,18 +146,18 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 			var match []int
 			// Read lines until one of them matches the configured regexp.
 			for scanner.Scan() {
-				logger.Debug("Read line", "line", scanner.Text())
+				logger.DebugContext(ctx, "Read line", "line", scanner.Text())
 
 				match = qr.Expect.Regexp.FindSubmatchIndex(scanner.Bytes())
 				if match != nil {
-					logger.Info("Regexp matched", "regexp", qr.Expect.Regexp, "line", scanner.Text())
+					logger.InfoContext(ctx, "Regexp matched", "regexp", qr.Expect.Regexp, "line", scanner.Text())
 
 					break
 				}
 			}
 
 			if scanner.Err() != nil {
-				logger.Error("Error reading from connection", "err", scanner.Err())
+				logger.ErrorContext(ctx, "Error reading from connection", "err", scanner.Err())
 
 				return false
 			}
@@ -165,7 +165,7 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 			if match == nil {
 				probeFailedDueToRegex.Set(1)
 
-				logger.Error("Regexp did not match", "regexp", qr.Expect.Regexp, "line", scanner.Text())
+				logger.ErrorContext(ctx, "Regexp did not match", "regexp", qr.Expect.Regexp, "line", scanner.Text())
 
 				return false
 			}
@@ -176,10 +176,10 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 		}
 
 		if send != "" {
-			logger.Debug("Sending line", "line", send)
+			logger.DebugContext(ctx, "Sending line", "line", send)
 
 			if _, err := fmt.Fprintf(conn, "%s\n", send); err != nil {
-				logger.Error("Failed to send", "err", err)
+				logger.ErrorContext(ctx, "Failed to send", "err", err)
 
 				return false
 			}
@@ -189,7 +189,7 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 			// Upgrade TCP connection to TLS.
 			tlsConfig, err := pconfig.NewTLSConfig(&module.TCP.TLSConfig)
 			if err != nil {
-				logger.Error("Failed to create TLS configuration", "err", err)
+				logger.ErrorContext(ctx, "Failed to create TLS configuration", "err", err)
 
 				return false
 			}
@@ -204,13 +204,13 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 			defer tlsConn.Close()
 
 			// Initiate TLS handshake (required here to get TLS state).
-			if err := tlsConn.Handshake(); err != nil {
-				logger.Error("TLS Handshake (client) failed", "err", err)
+			if err := tlsConn.HandshakeContext(ctx); err != nil {
+				logger.ErrorContext(ctx, "TLS Handshake (client) failed", "err", err)
 
 				return false
 			}
 
-			logger.Info("TLS Handshake (client) succeeded.")
+			logger.InfoContext(ctx, "TLS Handshake (client) succeeded.")
 
 			conn = net.Conn(tlsConn)
 			scanner = bufio.NewScanner(conn)

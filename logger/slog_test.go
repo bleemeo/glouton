@@ -42,10 +42,10 @@ func TestSlog(t *testing.T) {
 
 	slogger := NewSlog()
 
-	slogger.Debug("ignored")
-	slogger.Info("info msg")
-	slogger.Warn("warn msg", "n", 7)
-	slogger.WithGroup("grp").Error("error msg", "err", io.ErrUnexpectedEOF)
+	slogger.DebugContext(t.Context(), "ignored")
+	slogger.InfoContext(t.Context(), "info msg")
+	slogger.WarnContext(t.Context(), "warn msg", "n", 7)
+	slogger.WithGroup("grp").ErrorContext(t.Context(), "error msg", "err", io.ErrUnexpectedEOF)
 
 	result := strings.Split(strings.TrimSpace(logBuf.String()), "\n")
 	// Removing timestamps from the start of the lines so they're easier to compare

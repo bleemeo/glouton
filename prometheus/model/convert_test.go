@@ -773,7 +773,14 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 				gotPromLabels = append(gotPromLabels, promLabels)
 			}
 
-			if diff := cmp.Diff(tt.wantPromLabels, gotPromLabels, cmpopts.EquateEmpty()); diff != "" {
+			opts := []cmp.Option{
+				cmpopts.EquateEmpty(),
+				cmp.Comparer(func(x, y labels.Labels) bool {
+					return x.Hash() == y.Hash()
+				}),
+			}
+
+			if diff := cmp.Diff(tt.wantPromLabels, gotPromLabels, opts...); diff != "" {
 				t.Errorf("AnnotationToMetaLabels mismatch (-want +got)\n%s", diff)
 			}
 		})

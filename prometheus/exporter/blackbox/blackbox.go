@@ -268,7 +268,7 @@ func (target configTarget) CollectWithContext(ctx context.Context, ch chan<- pro
 		} else {
 			ch <- prometheus.MustNewConstMetric(probeTLSSuccess, prometheus.GaugeValue, 0, target.Name)
 		}
-	} else if roundTripsTLS := target.verifyTLS(extLogger, roundTrips); roundTripsTLS.HadTLS() {
+	} else if roundTripsTLS := target.verifyTLS(ctx, extLogger, roundTrips); roundTripsTLS.HadTLS() {
 		// We implement our own probe_ssl_last_chain_expiry_timestamp_seconds for
 		// https checks to support self-signed and expired certificates.
 		mfs = filterMFs(mfs, func(mf *dto.MetricFamily) bool {
@@ -316,11 +316,11 @@ func (target configTarget) CollectWithContext(ctx context.Context, ch chan<- pro
 }
 
 // verifyTLS returns the last round-trip TLS expiration and whether all TLS round-trip were trusted.
-func (target configTarget) verifyTLS(extLogger *slog.Logger, roundTrips []roundTrip) roundTripTLSVerifyList {
+func (target configTarget) verifyTLS(ctx context.Context, extLogger *slog.Logger, roundTrips []roundTrip) roundTripTLSVerifyList {
 	start := time.Now()
 
 	defer func() {
-		extLogger.Info("verifyTLS took " + time.Since(start).String())
+		extLogger.InfoContext(ctx, "verifyTLS took "+time.Since(start).String())
 	}()
 
 	if len(roundTrips) == 0 {
@@ -329,7 +329,7 @@ func (target configTarget) verifyTLS(extLogger *slog.Logger, roundTrips []roundT
 
 	firstHost, _, err := net.SplitHostPort(roundTrips[0].HostPort)
 	if err != nil {
-		extLogger.Info("net.SplitHostPort failed: " + err.Error())
+		extLogger.InfoContext(ctx, "net.SplitHostPort failed: "+err.Error())
 
 		return nil
 	}
@@ -363,7 +363,7 @@ func (target configTarget) verifyTLS(extLogger *slog.Logger, roundTrips []roundT
 
 		currentHost, _, err := net.SplitHostPort(rt.HostPort)
 		if err != nil {
-			extLogger.Info("net.SplitHostPort failed: " + err.Error())
+			extLogger.InfoContext(ctx, "net.SplitHostPort failed: "+err.Error())
 
 			result = append(result, roundTripTLSVerify{
 				hadTLS: false,
@@ -380,7 +380,7 @@ func (target configTarget) verifyTLS(extLogger *slog.Logger, roundTrips []roundT
 			// the hostname of the target.
 			tmp, err := url.Parse(target.URL)
 			if err != nil {
-				extLogger.Info("url.Parse failed: " + err.Error())
+				extLogger.InfoContext(ctx, "url.Parse failed: "+err.Error())
 
 				result = append(result, roundTripTLSVerify{
 					hadTLS: false,
@@ -392,11 +392,11 @@ func (target configTarget) verifyTLS(extLogger *slog.Logger, roundTrips []roundT
 			httpClientConfig.TLSConfig.ServerName = tmp.Hostname()
 		}
 
-		extLogger.Info(fmt.Sprintf("Using ServerName %q, firstHost %q, currentHostPort %q", httpClientConfig.TLSConfig.ServerName, firstHost, currentHost))
+		extLogger.InfoContext(ctx, fmt.Sprintf("Using ServerName %q, firstHost %q, currentHostPort %q", httpClientConfig.TLSConfig.ServerName, firstHost, currentHost))
 
 		cfg, err := config.NewTLSConfig(&httpClientConfig.TLSConfig)
 		if err != nil {
-			extLogger.Info("config.NewTLSConfig failed: " + err.Error())
+			extLogger.InfoContext(ctx, "config.NewTLSConfig failed: "+err.Error())
 
 			result = append(result, roundTripTLSVerify{
 				hadTLS: false,
@@ -426,7 +426,7 @@ func (target configTarget) verifyTLS(extLogger *slog.Logger, roundTrips []roundT
 
 		verifiedChains, err := rt.TLSState.PeerCertificates[0].Verify(opts)
 		expiry := getLastChainExpiry(verifiedChains)
-		extLogger.Info(fmt.Sprintf("numberVerifiedChains %d, expiry: %s, err: %v", len(verifiedChains), expiry, err))
+		extLogger.InfoContext(ctx, fmt.Sprintf("numberVerifiedChains %d, expiry: %s, err: %v", len(verifiedChains), expiry, err))
 
 		result = append(result, roundTripTLSVerify{
 			hadTLS:     true,

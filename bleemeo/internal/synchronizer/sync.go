@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -113,6 +114,8 @@ type Synchronizer struct {
 	shouldUpdateMQTTStatus bool
 	// Whether the agent is connected to MQTT. We use a pointer to know if the field is set.
 	isMQTTConnected *bool
+
+	dialer net.Dialer
 }
 
 type thresholdOverrideKey struct {
