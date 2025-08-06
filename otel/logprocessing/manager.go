@@ -543,6 +543,9 @@ func (man *Manager) removeOldSources(ctx context.Context, services []discovery.S
 }
 
 func (man *Manager) DiagnosticArchive(_ context.Context, writer types.ArchiveWriter) error {
+	man.l.Lock()
+	defer man.l.Unlock()
+
 	man.pipeline.l.Lock()
 
 	receiversInfo := make(map[string]receiverDiagnosticInformation, len(man.pipeline.receivers))
