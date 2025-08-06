@@ -58,7 +58,7 @@ func FamiliesToMetricPoints(
 	result := make([]types.MetricPoint, len(samples))
 
 	for i, sample := range samples {
-		builder := labels.NewBuilder(nil)
+		builder := labels.NewBuilder(labels.EmptyLabels())
 
 		for k, v := range sample.Metric {
 			builder.Set(string(k), string(v))
@@ -182,29 +182,30 @@ func MetricPointsToFamilies(points []types.MetricPoint) []*dto.MetricFamily {
 			ts = nil
 		}
 
-		if len(lbls) == 0 {
+		labelsCount := lbls.Len()
+		if labelsCount == 0 {
 			// This shouldn't happen, but it happened once on a TrueNAS with Glouton version 23.06.30.134546
 			continue
 		}
 
 		metric := &dto.Metric{
-			Label:       make([]*dto.LabelPair, 0, len(lbls)-1),
+			Label:       make([]*dto.LabelPair, 0, labelsCount-1),
 			TimestampMs: ts,
 			Untyped: &dto.Untyped{
 				Value: proto.Float64(p.Value),
 			},
 		}
 
-		for _, v := range lbls {
-			if v.Name == types.LabelName {
-				continue
+		lbls.Range(func(l labels.Label) {
+			if l.Name == types.LabelName {
+				return
 			}
 
 			metric.Label = append(metric.GetLabel(), &dto.LabelPair{
-				Name:  proto.String(v.Name),
-				Value: proto.String(v.Value),
+				Name:  proto.String(l.Name),
+				Value: proto.String(l.Value),
 			})
-		}
+		})
 
 		sort.Slice(metric.GetLabel(), func(i, j int) bool {
 			return metric.GetLabel()[i].GetName() < metric.GetLabel()[j].GetName()
@@ -219,7 +220,7 @@ func MetricPointsToFamilies(points []types.MetricPoint) []*dto.MetricFamily {
 
 	for _, fam := range families {
 		sort.Slice(fam.GetMetric(), func(i, j int) bool {
-			builder := labels.NewBuilder(nil)
+			builder := labels.NewBuilder(labels.EmptyLabels())
 
 			for _, pair := range fam.GetMetric()[i].GetLabel() {
 				builder.Set(pair.GetName(), pair.GetValue())
@@ -227,7 +228,7 @@ func MetricPointsToFamilies(points []types.MetricPoint) []*dto.MetricFamily {
 
 			lblsA := builder.Labels()
 
-			builder.Reset(nil)
+			builder.Reset(labels.EmptyLabels())
 
 			for _, pair := range fam.GetMetric()[j].GetLabel() {
 				builder.Set(pair.GetName(), pair.GetValue())
@@ -245,22 +246,21 @@ func MetricPointsToFamilies(points []types.MetricPoint) []*dto.MetricFamily {
 // DropMetaLabels delete all labels which start with __ (with exception to __name__).
 // The input is modified.
 func DropMetaLabels(lbls labels.Labels) labels.Labels {
-	i := 0
+	finalLbls := make([]labels.Label, 0, lbls.Len())
 
-	for _, l := range lbls {
+	lbls.Range(func(l labels.Label) {
 		if l.Name != types.LabelName && strings.HasPrefix(l.Name, model.ReservedLabelPrefix) {
-			continue
+			return
 		}
 
 		if l.Value == "" {
-			continue
+			return
 		}
 
-		lbls[i] = l
-		i++
-	}
+		finalLbls = append(finalLbls, l)
+	})
 
-	return lbls[:i]
+	return labels.New(finalLbls...)
 }
 
 // DropMetaLabelsFromFamilies delete all labels which start with __ (with exception to __name__).
@@ -360,7 +360,8 @@ func SamplesToMetricFamily(samples []promql.Sample, mType *dto.MetricType) (*dto
 	}
 
 	for _, pt := range samples {
-		if len(pt.Metric) == 0 {
+		labelsCount := pt.Metric.Len()
+		if labelsCount == 0 {
 			return nil, errInvalidSample
 		}
 
@@ -370,7 +371,7 @@ func SamplesToMetricFamily(samples []promql.Sample, mType *dto.MetricType) (*dto
 		}
 
 		metric := &dto.Metric{
-			Label:       make([]*dto.LabelPair, 0, len(pt.Metric)-1),
+			Label:       make([]*dto.LabelPair, 0, labelsCount-1),
 			TimestampMs: ts,
 		}
 
@@ -483,22 +484,23 @@ func DTO2Labels(name string, input []*dto.LabelPair) map[string]string {
 }
 
 func Labels2DTO(lbls labels.Labels) []*dto.LabelPair {
-	if len(lbls) == 0 {
+	labelsCount := lbls.Len()
+	if labelsCount == 0 {
 		return nil
 	}
 
-	result := make([]*dto.LabelPair, 0, len(lbls)-1)
+	result := make([]*dto.LabelPair, 0, labelsCount-1)
 
-	for _, l := range lbls {
+	lbls.Range(func(l labels.Label) {
 		if l.Name == types.LabelName {
-			continue
+			return
 		}
 
 		result = append(result, &dto.LabelPair{
 			Name:  proto.String(l.Name),
 			Value: proto.String(l.Value),
 		})
-	}
+	})
 
 	return result
 }

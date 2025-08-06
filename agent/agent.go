@@ -108,7 +108,7 @@ import (
 //nolint:gochecknoinits
 func init() {
 	// We want to keep Prometheus's strict name validation.
-	model.NameValidationScheme = model.LegacyValidation //nolint: staticcheck
+	model.NameValidationScheme = model.LegacyValidation //nolint: staticcheck,nolintlint
 }
 
 // Jitter define the aligned timestamp used for scrapping.

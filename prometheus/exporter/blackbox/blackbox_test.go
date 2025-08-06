@@ -2501,7 +2501,7 @@ func (t *httpTestTarget) Start() {
 		}
 
 		if t.UseBrokenCrypto {
-			t.srv.TLS.MaxVersion = tls.VersionSSL30 //nolint: staticcheck
+			t.srv.TLS.MaxVersion = tls.VersionSSL30 //nolint: staticcheck,nolintlint
 		}
 
 		t.srv.StartTLS()

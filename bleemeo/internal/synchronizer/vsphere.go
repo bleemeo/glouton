@@ -235,7 +235,7 @@ func (s *Synchronizer) GetVSphereAgentTypes() (map[vsphere.ResourceKind]string, 
 	vSphereAgentTypes := make(map[vsphere.ResourceKind]string, vSphereAgentTypesCount)
 
 	for i := 0; i < len(agentTypes) && len(vSphereAgentTypes) < vSphereAgentTypesCount; i++ {
-		switch a := agentTypes[i]; a.Name { //nolint: exhaustive
+		switch a := agentTypes[i]; a.Name { //nolint: exhaustive,nolintlint
 		case bleemeo.AgentType_vSphereCluster:
 			vSphereAgentTypes[vsphere.KindCluster] = a.ID
 		case bleemeo.AgentType_vSphereHost:

@@ -770,6 +770,8 @@ func (r *Registry) DiagnosticStatusStates(_ context.Context, archive types.Archi
 		return err
 	}
 
+	r.l.Lock()
+
 	jsonStates := make([]jsonState, 0, len(r.states))
 
 	for labelsText, state := range r.states {
@@ -778,6 +780,8 @@ func (r *Registry) DiagnosticStatusStates(_ context.Context, archive types.Archi
 			statusState: state,
 		})
 	}
+
+	r.l.Unlock()
 
 	sort.Slice(jsonStates, func(i, j int) bool {
 		return jsonStates[i].LabelsText < jsonStates[j].LabelsText

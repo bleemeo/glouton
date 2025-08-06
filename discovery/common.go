@@ -211,16 +211,16 @@ func (s Service) AddressPort() (string, int) {
 
 // LabelsOfStatus returns the labels for the status metrics of this service.
 func (s Service) LabelsOfStatus() map[string]string {
-	lbls := labels.Labels{
-		labels.Label{Name: types.LabelName, Value: types.MetricServiceStatus},
-		labels.Label{Name: types.LabelService, Value: s.Name},
+	lblSlice := []labels.Label{
+		{Name: types.LabelName, Value: types.MetricServiceStatus},
+		{Name: types.LabelService, Value: s.Name},
 	}
 
 	if s.Instance != "" {
-		lbls = append(lbls, labels.Label{Name: types.LabelServiceInstance, Value: s.Instance})
+		lblSlice = append(lblSlice, labels.Label{Name: types.LabelServiceInstance, Value: s.Instance})
 	}
 
-	lbls = model.AnnotationToMetaLabels(lbls, s.AnnotationsOfStatus())
+	lbls := model.AnnotationToMetaLabels(labels.New(lblSlice...), s.AnnotationsOfStatus())
 
 	return lbls.Map()
 }

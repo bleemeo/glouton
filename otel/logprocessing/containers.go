@@ -114,10 +114,11 @@ type containerReceiver struct {
 	containerOperators map[string]string // map key: container name
 	containerFilters   map[string]string // map key: container name
 
-	l                 sync.Mutex
-	startedComponents map[string][]component.Component // map key: container ID
-	containers        map[string]Container             // map key: container ID
-	sizeFnByFile      map[string]func() (int64, error) // map key: log file path
+	l                    sync.Mutex
+	startedComponents    map[string][]component.Component // map key: container ID
+	registeredExtensions map[string][]component.ID        // map key: container ID
+	containers           map[string]Container             // map key: container ID
+	sizeFnByFile         map[string]func() (int64, error) // map key: log file path
 }
 
 func newContainerReceiver(
@@ -136,14 +137,15 @@ func newContainerReceiver(
 	}
 
 	return &containerReceiver{
-		pipeline:           pipeline,
-		logConsumer:        pipeline.getInput(),
-		lastFileSizes:      lastFileSizes,
-		containerOperators: validateContainerOperators(containerOperators, knownOperators),
-		containerFilters:   validateContainerFilters(containerFilter, knownFilters),
-		startedComponents:  make(map[string][]component.Component),
-		containers:         make(map[string]Container),
-		sizeFnByFile:       make(map[string]func() (int64, error)),
+		pipeline:             pipeline,
+		logConsumer:          pipeline.getInput(),
+		lastFileSizes:        lastFileSizes,
+		containerOperators:   validateContainerOperators(containerOperators, knownOperators),
+		containerFilters:     validateContainerFilters(containerFilter, knownFilters),
+		startedComponents:    make(map[string][]component.Component),
+		registeredExtensions: make(map[string][]component.ID),
+		containers:           make(map[string]Container),
+		sizeFnByFile:         make(map[string]func() (int64, error)),
 	}
 }
 
@@ -187,6 +189,8 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 	ops := append([]operator.Config{{Builder: containerOpCfg}}, operators...)
 	makeStorageFn := func(logFile string) *component.ID {
 		id := cr.pipeline.persister.newPersistentExt("container/" + ctr.Attributes.ID + metadataKeySeparator + logFile)
+
+		cr.registeredExtensions[ctr.Attributes.ID] = append(cr.registeredExtensions[ctr.Attributes.ID], id)
 
 		return &id
 	}
@@ -324,9 +328,12 @@ func (cr *containerReceiver) stopWatchingForContainers(ctx context.Context, ids 
 			}
 		}
 
+		cr.pipeline.persister.removePersistentExts(cr.registeredExtensions[ctrID])
+
 		logFilePath := cr.containers[ctrID].LogFilePath
 
 		delete(cr.startedComponents, ctrID)
+		delete(cr.registeredExtensions, ctrID)
 		delete(cr.containers, ctrID)
 		delete(cr.sizeFnByFile, logFilePath)
 	}
@@ -385,6 +392,10 @@ func (cr *containerReceiver) stop() {
 	}
 
 	wg.Wait()
+
+	for _, extIDs := range cr.registeredExtensions {
+		cr.pipeline.persister.removePersistentExts(extIDs)
+	}
 }
 
 func makeLogContainer(ctx context.Context, container facts.Container, logFilePath string) Container {

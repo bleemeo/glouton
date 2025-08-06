@@ -202,7 +202,7 @@ func (helper *syncTestHelper) pushPoints(t *testing.T, metrics []labels.Labels) 
 	points := make([]gloutonTypes.MetricPoint, 0, len(metrics))
 
 	for _, m := range metrics {
-		mCopy := labels.New(m...)
+		mCopy := m.Copy()
 		annotations := model.MetaLabelsToAnnotation(mCopy)
 		mCopy = model.DropMetaLabels(mCopy)
 

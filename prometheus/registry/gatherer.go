@@ -171,16 +171,16 @@ type wrappedGatherer struct {
 }
 
 func newWrappedGatherer(g prometheus.Gatherer, extraLabels labels.Labels, opt RegistrationOption) *wrappedGatherer {
-	labels := make([]*dto.LabelPair, 0, len(extraLabels))
+	lbls := make([]*dto.LabelPair, 0, extraLabels.Len())
 
-	for _, l := range extraLabels {
+	extraLabels.Range(func(l labels.Label) {
 		if !strings.HasPrefix(l.Name, prometheusModel.ReservedLabelPrefix) {
-			labels = append(labels, &dto.LabelPair{
+			lbls = append(lbls, &dto.LabelPair{
 				Name:  &l.Name,
 				Value: &l.Value,
 			})
 		}
-	}
+	})
 
 	var sruler *ruler.SimpleRuler
 
@@ -190,7 +190,7 @@ func newWrappedGatherer(g prometheus.Gatherer, extraLabels labels.Labels, opt Re
 
 	wrap := &wrappedGatherer{
 		source: g,
-		labels: labels,
+		labels: lbls,
 		ruler:  sruler,
 		opt:    opt,
 	}
@@ -329,28 +329,13 @@ func (g *wrappedGatherer) getSource() prometheus.Gatherer {
 
 // mergeLabels merge two sorted list of labels. In case of name conflict, value from b wins.
 func mergeLabels(a labels.Labels, b []*dto.LabelPair) labels.Labels {
-	result := make(labels.Labels, 0, len(a)+len(b))
-	aIndex := 0
+	result := a.Map()
 
-	for _, bLabel := range b {
-		for aIndex < len(a) && a[aIndex].Name < bLabel.GetName() {
-			result = append(result, a[aIndex])
-			aIndex++
-		}
-
-		if aIndex < len(a) && a[aIndex].Name == bLabel.GetName() {
-			aIndex++
-		}
-
-		result = append(result, labels.Label{Name: bLabel.GetName(), Value: bLabel.GetValue()})
+	for _, l := range b {
+		result[l.GetName()] = l.GetValue()
 	}
 
-	for aIndex < len(a) {
-		result = append(result, a[aIndex])
-		aIndex++
-	}
-
-	return result
+	return labels.FromMap(result)
 }
 
 // mergeLabelsDTO merge two sorted list of labels. In case of name conflict, value from b wins.

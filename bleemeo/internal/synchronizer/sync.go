@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -49,9 +50,13 @@ import (
 	"github.com/bleemeo/glouton/version"
 
 	"github.com/getsentry/sentry-go"
+	"golang.org/x/oauth2"
 )
 
-const agentBrokenCacheKey = "AgentBroken"
+const (
+	agentBrokenCacheKey  = "AgentBroken"
+	refreshTokenCacheKey = "RefreshToken"
+)
 
 var (
 	errFQDNNotSet                 = errors.New("unable to register, fqdn is not set")
@@ -109,6 +114,8 @@ type Synchronizer struct {
 	shouldUpdateMQTTStatus bool
 	// Whether the agent is connected to MQTT. We use a pointer to know if the field is set.
 	isMQTTConnected *bool
+
+	dialer net.Dialer
 }
 
 type thresholdOverrideKey struct {
@@ -911,14 +918,34 @@ func (s *Synchronizer) setClient() error {
 	username := s.agentID + "@bleemeo.com"
 	_, password := s.option.State.BleemeoCredentials()
 
-	var initialRefreshTokenOpt, newOAuthTokenCallbackOpt bleemeo.ClientOption
+	var initialRefreshTokenOpt bleemeo.ClientOption
 
 	if s.option.ReloadState != nil {
 		if tk := s.option.ReloadState.Token(); tk.Valid() && tk.RefreshToken != "" {
 			initialRefreshTokenOpt = bleemeo.WithInitialOAuthRefreshToken(tk.RefreshToken)
 		}
+	}
 
-		newOAuthTokenCallbackOpt = bleemeo.WithNewOAuthTokenCallback(s.option.ReloadState.SetToken)
+	if initialRefreshTokenOpt == nil {
+		var refreshToken string
+
+		err := s.option.State.Get(refreshTokenCacheKey, &refreshToken)
+		if err != nil {
+			logger.V(1).Printf("Failed to retrieve refresh token from state cache: %v", err)
+		} else if refreshToken != "" {
+			initialRefreshTokenOpt = bleemeo.WithInitialOAuthRefreshToken(refreshToken)
+		}
+	}
+
+	newOAuthTokenCallback := func(token *oauth2.Token) {
+		err := s.option.State.Set(refreshTokenCacheKey, token.RefreshToken)
+		if err != nil {
+			logger.V(1).Printf("Failed to set refresh token in state cache: %v", err)
+		}
+
+		if s.option.ReloadState != nil {
+			s.option.ReloadState.SetToken(token)
+		}
 	}
 
 	tlsConfig := &tls.Config{
@@ -937,9 +964,9 @@ func (s *Synchronizer) setClient() error {
 		bleemeo.WithCredentials(username, password),
 		bleemeo.WithOAuthClient(gloutonOAuthClientID, ""),
 		bleemeo.WithEndpoint(s.option.Config.Bleemeo.APIBase),
-		initialRefreshTokenOpt,
+		bleemeo.WithNewOAuthTokenCallback(newOAuthTokenCallback),
 		bleemeo.WithHTTPClient(cl),
-		newOAuthTokenCallbackOpt,
+		initialRefreshTokenOpt,
 	)
 	if err != nil {
 		return err

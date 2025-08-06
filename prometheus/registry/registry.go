@@ -259,7 +259,7 @@ func (opt *RegistrationOption) buildRules() error {
 			return fmt.Errorf("rule %s (n°%d): %w", r.TargetName, i+1, err)
 		}
 
-		rr := rules.NewRecordingRule(r.TargetName, expr, nil)
+		rr := rules.NewRecordingRule(r.TargetName, expr, labels.EmptyLabels())
 		rrules = append(rrules, rr)
 	}
 
@@ -1394,15 +1394,15 @@ func gatherFromQueryable(ctx context.Context, queryable storage.Queryable, filte
 			})
 		}
 
-		dtoLabels := make([]*dto.LabelPair, 0, len(lbls)-1)
+		dtoLabels := make([]*dto.LabelPair, 0, lbls.Len()-1)
 
-		for _, l := range lbls {
+		lbls.Range(func(l labels.Label) {
 			if l.Name == types.LabelName {
-				continue
+				return
 			}
 
 			dtoLabels = append(dtoLabels, &dto.LabelPair{Name: &l.Name, Value: &l.Value})
-		}
+		})
 
 		var lastValue float64
 
@@ -1763,9 +1763,9 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 		point.Labels = r.addMetaLabels(point.Labels, RegistrationOption{})
 
 		// Add annotation to meta-label, which allow relabel to work correctly.
-		for _, lbl := range gloutonModel.AnnotationToMetaLabels(nil, point.Annotations) {
-			point.Labels[lbl.Name] = lbl.Value
-		}
+		gloutonModel.AnnotationToMetaLabels(labels.EmptyLabels(), point.Annotations).Range(func(l labels.Label) {
+			point.Labels[l.Name] = l.Value
+		})
 
 		newLabelsMap := map[string]string{
 			types.LabelName: point.Labels[types.LabelName],

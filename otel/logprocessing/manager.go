@@ -174,7 +174,7 @@ ctxLoop:
 	defer man.pipeline.l.Unlock()
 
 	for _, receivers := range man.serviceReceivers {
-		stopReceivers(receivers)
+		stopReceivers(receivers, man.persister.removePersistentExts)
 	}
 
 	man.containerRecv.stop()
@@ -526,7 +526,7 @@ func (man *Manager) removeOldSources(ctx context.Context, services []discovery.S
 
 		receivers, found := man.serviceReceivers[service]
 		if found {
-			stopReceivers(receivers)
+			stopReceivers(receivers, man.persister.removePersistentExts)
 			delete(man.serviceReceivers, service)
 		}
 
@@ -543,6 +543,9 @@ func (man *Manager) removeOldSources(ctx context.Context, services []discovery.S
 }
 
 func (man *Manager) DiagnosticArchive(_ context.Context, writer types.ArchiveWriter) error {
+	man.l.Lock()
+	defer man.l.Unlock()
+
 	man.pipeline.l.Lock()
 
 	receiversInfo := make(map[string]receiverDiagnosticInformation, len(man.pipeline.receivers))

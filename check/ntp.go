@@ -34,6 +34,8 @@ type NTPCheck struct {
 	*baseCheck
 
 	mainAddress string
+
+	listenCfg net.ListenConfig
 }
 
 // NewNTP create a new NTP check.
@@ -115,7 +117,7 @@ func decodeLeapVersionMode(value uint8) (leapIndicator int, version int, mode in
 	return
 }
 
-func (nc *NTPCheck) ntpMainCheck(context.Context) types.StatusDescription {
+func (nc *NTPCheck) ntpMainCheck(ctx context.Context) types.StatusDescription {
 	if nc.mainAddress == "" {
 		return types.StatusDescription{
 			CurrentStatus: types.StatusOk,
@@ -124,7 +126,7 @@ func (nc *NTPCheck) ntpMainCheck(context.Context) types.StatusDescription {
 
 	start := time.Now()
 
-	conn, err := net.ListenPacket("udp", ":0")
+	conn, err := nc.listenCfg.ListenPacket(ctx, "udp", ":0")
 	if err != nil {
 		logger.V(1).Printf("Unable to create UDP socket: %v", err)
 

@@ -189,7 +189,7 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 
 	slogger := slog.New(slog.NewJSONHandler(jsonLogFile, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
-	slogger.Info("This is a json log line.")
+	slogger.InfoContext(t.Context(), "This is a json log line.")
 
 	if err = customLogFile.Sync(); err != nil {
 		t.Fatal("Failed to sync log file:", err)
@@ -295,7 +295,7 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 	logBuf.reset()
 
 	for dyn := 1; dyn <= 3; dyn++ {
-		slogger.Warn("With dyn value "+strconv.Itoa(dyn), "dyn", dyn)
+		slogger.WarnContext(t.Context(), "With dyn value "+strconv.Itoa(dyn), "dyn", dyn)
 	}
 
 	t.Log("Waiting for batcher ...")
