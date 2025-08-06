@@ -119,7 +119,9 @@ func Test_mergeLabels(t *testing.T) {
 			gotLabels := mergeLabels(inputA, tt.args.b)
 
 			opts := []cmp.Option{
-				cmpopts.IgnoreUnexported(labels.Labels{}),
+				cmp.Comparer(func(x, y labels.Labels) bool {
+					return x.Hash() == y.Hash()
+				}),
 			}
 
 			if diff := cmp.Diff(wantLabels, gotLabels, opts...); diff != "" {
