@@ -79,11 +79,12 @@ rules:
       - get
       - list
   - apiGroups:
-      - ""
+      - discovery.k8s.io
     resources:
-      - endpoints
+      - endpointslices
     verbs:
       - get
+      - list
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
@@ -94,9 +95,9 @@ roleRef:
   kind: ClusterRole
   name: glouton
 subjects:
-- kind: ServiceAccount
-  name: glouton
-  namespace: default
+  - kind: ServiceAccount
+    name: glouton
+    namespace: default
 ---
 kind: DaemonSet
 apiVersion: apps/v1
@@ -117,71 +118,71 @@ spec:
         app: glouton
     spec:
       tolerations:
-      # this toleration is to have the daemonset runnable on control plane nodes
-      # remove it if your control plane nodes can't run pods
-      - key: node-role.kubernetes.io/control-plane
-        effect: NoSchedule
-      - key: node-role.kubernetes.io/etcd
-        effect: NoExecute
-      # this toleration is to have the daemonset runnable on master nodes
-      # remove it if your masters can't run pods
-      # "master nodes" was the previous name for "control plane nodes" before Kubernetes ~1.24
-      - key: node-role.kubernetes.io/master
-        effect: NoSchedule
+        # this toleration is to have the daemonset runnable on control plane nodes
+        # remove it if your control plane nodes can't run pods
+        - key: node-role.kubernetes.io/control-plane
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/etcd
+          effect: NoExecute
+        # this toleration is to have the daemonset runnable on master nodes
+        # remove it if your masters can't run pods
+        # "master nodes" was the previous name for "control plane nodes" before Kubernetes ~1.24
+        - key: node-role.kubernetes.io/master
+          effect: NoSchedule
       serviceAccountName: glouton
       terminationGracePeriodSeconds: 60
       hostNetwork: true
       hostPID: true
       containers:
-      - image: bleemeo/bleemeo-agent:latest
-        name: glouton
-        ports:
-        - name: http
-          containerPort: 8015
-        securityContext:
-          privileged: true
-        volumeMounts:
-        - name: lib-glouton
-          mountPath: /var/lib/glouton
-        - name: hostroot
-          mountPath: /hostroot
-          readOnly: true
-          # See any mount done after Glouton start
-          mountPropagation: HostToContainer
-        # We used another folder than "conf.d" because we want to merge existing
-        # file from conf.d and file coming from Kubernetes glouton-config.
-        - name: glouton-config
-          mountPath: /etc/glouton/conf-k8s.d/
-        env:
-        - name: GLOUTON_CONFIG_FILES
-          value: "/etc/glouton/glouton.conf,/etc/glouton/glouton-k8s-default.conf,/etc/glouton/conf.d,/etc/glouton/conf-k8s.d"
-        - name: GLOUTON_KUBERNETES_ENABLE
-          value: "True"
-        - name: GLOUTON_KUBERNETES_NODENAME
-          valueFrom:
-            fieldRef:
-              fieldPath: spec.nodeName
-        envFrom:
-        - secretRef:
-            name: glouton-credentials
-        - configMapRef:
-            name: glouton-environment
-        resources:
-          requests:
-            cpu: 0.05
-            memory: 100Mi
+        - image: bleemeo/bleemeo-agent:latest
+          name: glouton
+          ports:
+            - name: http
+              containerPort: 8015
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: lib-glouton
+              mountPath: /var/lib/glouton
+            - name: hostroot
+              mountPath: /hostroot
+              readOnly: true
+              # See any mount done after Glouton start
+              mountPropagation: HostToContainer
+            # We used another folder than "conf.d" because we want to merge existing
+            # file from conf.d and file coming from Kubernetes glouton-config.
+            - name: glouton-config
+              mountPath: /etc/glouton/conf-k8s.d/
+          env:
+            - name: GLOUTON_CONFIG_FILES
+              value: "/etc/glouton/glouton.conf,/etc/glouton/glouton-k8s-default.conf,/etc/glouton/conf.d,/etc/glouton/conf-k8s.d"
+            - name: GLOUTON_KUBERNETES_ENABLE
+              value: "True"
+            - name: GLOUTON_KUBERNETES_NODENAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          envFrom:
+            - secretRef:
+                name: glouton-credentials
+            - configMapRef:
+                name: glouton-environment
+          resources:
+            requests:
+              cpu: 0.05
+              memory: 100Mi
       volumes:
-      - name: lib-glouton
-        hostPath:
-          path: /var/lib/glouton
-      # Note: glouton will use this hostPath to access Docker or containerd socket
-      - name: hostroot
-        hostPath:
-          path: /
-      - name: glouton-config
-        projected:
-          sources:
-            - configMap:
-                name: glouton-default-config
-            - configMap:
-                name: glouton-config
+        - name: lib-glouton
+          hostPath:
+            path: /var/lib/glouton
+        # Note: glouton will use this hostPath to access Docker or containerd socket
+        - name: hostroot
+          hostPath:
+            path: /
+        - name: glouton-config
+          projected:
+            sources:
+              - configMap:
+                  name: glouton-default-config
+              - configMap:
+                  name: glouton-config
