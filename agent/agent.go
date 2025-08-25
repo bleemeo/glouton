@@ -1871,7 +1871,7 @@ func (a *agent) dockerWatcher(ctx context.Context) error {
 			}
 
 			switch ev.Type { //nolint: exhaustive
-			case facts.EventTypeStop:
+			case facts.EventTypeKill, facts.EventTypeStop:
 				checkIDs := a.discovery.GetCheckIDsForContainer(ev.ContainerID)
 				for _, checkID := range checkIDs {
 					// Wait a bit; other events (delete) may arrive soon.
