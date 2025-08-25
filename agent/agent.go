@@ -521,50 +521,25 @@ func (a *agent) notifyBleemeoUpdateHooks() {
 	a.gathererRegistry.UpdateRegistrationHooks(a.bleemeoConnector.RelabelHook, a.bleemeoConnector.UpdateDelayHook)
 }
 
-func (a *agent) registerSNMPTargets(ctx context.Context) error {
-	ticker := time.NewTicker(5 * time.Second) // effective period is 10min
-	defer ticker.Stop()
-
-	firstRun := true
-	registeredTargets := make(map[uint64]struct{})
-
-	for {
-		select {
-		case <-ticker.C:
-		case <-ctx.Done():
-			return nil
-		}
-
-		if firstRun {
-			ticker.Reset(10 * time.Minute)
-			firstRun = false
-		}
-
-		for _, target := range a.snmpManager.Gatherers() {
-			hash := labels.FromMap(target.ExtraLabels).Hash()
-
-			if _, found := registeredTargets[hash]; found {
-				continue
-			}
-
-			_, err := a.gathererRegistry.RegisterGatherer(
-				registry.RegistrationOption{
-					Description: "snmp target " + target.Address,
-					JitterSeed:  hash,
-					MinInterval: defaultInterval,
-					Timeout:     40 * time.Second,
-					ExtraLabels: target.ExtraLabels,
-					Rules:       registry.DefaultSNMPRules(time.Minute),
-				},
-				target.Gatherer,
-			)
-			if err != nil {
-				logger.Printf("Unable to add SNMP scrapper for target %s: %v", target.Address, err)
-			} else {
-				registeredTargets[hash] = struct{}{}
-			}
+func (a *agent) registerSNMPTargets(context.Context) error {
+	for _, target := range a.snmpManager.Gatherers() {
+		_, err := a.gathererRegistry.RegisterGatherer(
+			registry.RegistrationOption{
+				Description: "snmp target " + target.Address,
+				JitterSeed:  labels.FromMap(target.ExtraLabels).Hash(),
+				MinInterval: time.Minute,
+				Timeout:     40 * time.Second,
+				ExtraLabels: target.ExtraLabels,
+				Rules:       registry.DefaultSNMPRules(time.Minute),
+			},
+			target.Gatherer,
+		)
+		if err != nil {
+			logger.Printf("Unable to add SNMP scrapper for target %s: %v", target.Address, err)
 		}
 	}
+
+	return nil
 }
 
 func (a *agent) updateMetricResolution(defaultResolution time.Duration) {
