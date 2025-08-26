@@ -72,6 +72,8 @@ type Options struct {
 	ReloadState types.MQTTReloadState
 	// Function called when too many errors happened.
 	TooManyErrorsHandler func(ctx context.Context)
+	// Function to check whether the agent has been deleted or not.
+	IsAgentBroken func() bool
 	// A unique identifier for this client.
 	ID                  string
 	PahoLastPingCheckAt func() time.Time
@@ -256,10 +258,14 @@ mainLoop:
 			length := len(lastConnectionTimes)
 
 			if length >= 7 && time.Since(lastConnectionTimes[length-7]) < 10*time.Minute {
-				delay := delay.JitterDelay(5*time.Minute, 0.25).Round(time.Second)
+				disableDuration := delay.JitterDelay(5*time.Minute, 0.25).Round(time.Second)
 
-				c.Disable(time.Now().Add(delay))
-				logger.Printf("Too many attempts to connect to %s MQTT were made in the last 10 minutes. Disabling MQTT for %v", c.opts.ID, delay)
+				if c.opts.IsAgentBroken != nil && c.opts.IsAgentBroken() {
+					disableDuration = delay.JitterDelay(6*time.Hour, 0.25).Round(time.Minute)
+				}
+
+				c.Disable(time.Now().Add(disableDuration))
+				logger.Printf("Too many attempts to connect to %s MQTT were made in the last 10 minutes. Disabling MQTT for %v", c.opts.ID, disableDuration)
 
 				if c.opts.TooManyErrorsHandler != nil {
 					c.opts.TooManyErrorsHandler(ctx)

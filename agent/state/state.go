@@ -38,6 +38,7 @@ const stateVersion = 1
 
 const (
 	KeyKubernetesCluster = "kubernetes_cluster_name"
+	KeyAgentBroken       = "AgentBroken"
 	tmpExt               = ".tmp"
 )
 
