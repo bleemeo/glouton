@@ -31,7 +31,6 @@ import (
 	"time"
 
 	"github.com/bleemeo/bleemeo-go"
-	"github.com/bleemeo/glouton/agent/state"
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	"github.com/bleemeo/glouton/bleemeo/internal/filter"
@@ -154,16 +153,6 @@ func New(opts Option) *Client {
 		// Trigger facts synchronization to check for duplicate agent.
 		_, _ = opts.Facts.Facts(ctx, 0)
 	}
-	checkDeleted := func() bool {
-		var value json.RawMessage
-
-		err := opts.GlobalOption.State.Get(state.KeyAgentBroken, &value)
-		if err != nil {
-			return false
-		}
-
-		return value != nil
-	}
 
 	if reloadState == nil {
 		reloadState = NewReloadState(ReloadStateOptions{
@@ -179,7 +168,6 @@ func New(opts Option) *Client {
 		OptionsFunc:          c.pahoOptions,
 		ReloadState:          reloadState.ClientState(),
 		TooManyErrorsHandler: checkDuplicate,
-		IsAgentBroken:        checkDeleted,
 		ID:                   "Bleemeo",
 		PahoLastPingCheckAt:  opts.PahoLastPingCheckAt,
 	})

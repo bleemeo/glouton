@@ -36,7 +36,6 @@ import (
 	"time"
 
 	"github.com/bleemeo/bleemeo-go"
-	"github.com/bleemeo/glouton/agent/state"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncapplications"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncservices"
@@ -54,7 +53,10 @@ import (
 	"golang.org/x/oauth2"
 )
 
-const refreshTokenCacheKey = "RefreshToken"
+const (
+	agentBrokenCacheKey  = "AgentBroken"
+	refreshTokenCacheKey = "RefreshToken"
+)
 
 var (
 	errFQDNNotSet                 = errors.New("unable to register, fqdn is not set")
@@ -370,11 +372,13 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 				firstAuthErrorAt = time.Time{}
 			}
 
-			if !shouldSetAgentBrokenFlagTo.IsZero() && !stateHasValue(state.KeyAgentBroken, s.option.State) {
-				err := s.option.State.Set(state.KeyAgentBroken, shouldSetAgentBrokenFlagTo.Format(time.RFC3339))
+			if !shouldSetAgentBrokenFlagTo.IsZero() && !stateHasValue(agentBrokenCacheKey, s.option.State) {
+				err := s.option.State.Set(agentBrokenCacheKey, shouldSetAgentBrokenFlagTo.Format(time.RFC3339))
 				if err != nil {
 					logger.V(1).Printf("Failed to write agent broken flag to state cache: %v", err)
 				}
+
+				s.option.DisableCallback(bleemeoTypes.DisableDeletedAgent, s.now().Add(6*time.Hour))
 			}
 
 			if IsThrottleError(err) {
@@ -387,7 +391,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 				successiveErrors := s.successiveErrors
 				s.l.Unlock()
 
-				if stateHasValue(state.KeyAgentBroken, s.option.State) {
+				if stateHasValue(agentBrokenCacheKey, s.option.State) {
 					disableDelay = delay.Exponential(10*time.Minute, 3, successiveErrors, 5*24*time.Hour)
 				} else {
 					disableDelay = delay.JitterDelay(
@@ -447,7 +451,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 			successiveAuthErrors = 0
 			firstAuthErrorAt = time.Time{}
 
-			err = s.option.State.Delete(state.KeyAgentBroken)
+			err = s.option.State.Delete(agentBrokenCacheKey)
 			if err != nil {
 				logger.V(1).Printf("Failed to delete agent broken flag from state cache: %v", err)
 			}
