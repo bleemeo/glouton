@@ -377,8 +377,6 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 				if err != nil {
 					logger.V(1).Printf("Failed to write agent broken flag to state cache: %v", err)
 				}
-
-				s.option.DisableCallback(bleemeoTypes.DisableDeletedAgent, s.now().Add(6*time.Hour))
 			}
 
 			if IsThrottleError(err) {
@@ -391,7 +389,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 
 				if stateHasValue(agentBrokenCacheKey, s.option.State) {
 					disableDelay := delay.Exponential(10*time.Minute, 3, successiveErrors, 5*24*time.Hour)
-					s.option.DisableCallback(bleemeoTypes.DisableDeletedAgent, s.now().Add(disableDelay))
+					s.option.DisableCallback(bleemeoTypes.DisableLongStandingError, s.now().Add(disableDelay))
 				} else {
 					disableDelay := delay.JitterDelay(
 						delay.Exponential(15*time.Second, 1.55, successiveErrors, 15*time.Minute),
