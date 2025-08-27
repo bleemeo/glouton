@@ -52,7 +52,7 @@ require (
 	github.com/prometheus/procfs v0.17.0
 	github.com/prometheus/prometheus v0.305.0
 	github.com/rs/cors v1.11.1
-	github.com/shirou/gopsutil/v4 v4.25.7
+	github.com/shirou/gopsutil/v4 v4.25.6
 	github.com/vishvananda/netlink v1.3.1
 	github.com/vmware/govmomi v0.51.0
 	github.com/yusufpapurcu/wmi v1.2.4
