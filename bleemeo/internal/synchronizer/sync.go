@@ -385,22 +385,21 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 				deadline := exec.client.ThrottleDeadline().Add(delay.JitterDelay(15*time.Second, 0.3))
 				s.Disable(deadline, bleemeoTypes.DisableTooManyRequests)
 			} else {
-				var disableDelay time.Duration
-
 				s.l.Lock()
 				successiveErrors := s.successiveErrors
 				s.l.Unlock()
 
 				if stateHasValue(agentBrokenCacheKey, s.option.State) {
-					disableDelay = delay.Exponential(10*time.Minute, 3, successiveErrors, 5*24*time.Hour)
+					disableDelay := delay.Exponential(10*time.Minute, 3, successiveErrors, 5*24*time.Hour)
+					s.option.DisableCallback(bleemeoTypes.DisableDeletedAgent, s.now().Add(disableDelay))
 				} else {
-					disableDelay = delay.JitterDelay(
+					disableDelay := delay.JitterDelay(
 						delay.Exponential(15*time.Second, 1.55, successiveErrors, 15*time.Minute),
 						0.1,
 					)
-				}
 
-				s.Disable(s.now().Add(disableDelay), bleemeoTypes.DisableTooManyErrors)
+					s.Disable(s.now().Add(disableDelay), bleemeoTypes.DisableTooManyErrors)
+				}
 
 				if IsAuthenticationError(err) && successiveAuthErrors == 1 {
 					// we disable only to trigger a reconnection on MQTT
