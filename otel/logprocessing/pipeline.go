@@ -18,7 +18,6 @@ package logprocessing
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -58,8 +57,6 @@ const (
 	saveFileSizesToCachePeriod    = 1 * time.Minute
 	shutdownTimeout               = 5 * time.Second
 )
-
-var errUnexpectedType = errors.New("unexpected type")
 
 type pipelineContext struct {
 	hostroot      string
