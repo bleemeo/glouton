@@ -51,6 +51,10 @@ func MaxParallelSecrets() int {
 	return int(math.Floor(available / ((baseMemoryPages + memoryPagesPerSecret) * pageSize)))
 }
 
+func LockedMemoryLimit() uint64 {
+	return getLockedMemoryLimit()
+}
+
 // SecretfulInput represents an input that potentially contains secrets.
 type SecretfulInput interface {
 	SecretCount() int

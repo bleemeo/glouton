@@ -2476,6 +2476,16 @@ func writeMemstat(writer io.Writer) error {
 		return err
 	}
 
+	_, err = fmt.Fprintf(
+		writer,
+		"Locked memory limit: %d KiB; Max parallel input secrets: %d\n",
+		inputs.LockedMemoryLimit()/1024,
+		inputs.MaxParallelSecrets(),
+	)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
