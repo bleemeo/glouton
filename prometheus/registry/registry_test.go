@@ -3706,6 +3706,13 @@ func TestWaitForSecrets(t *testing.T) {
 			maxAllowedDuration:  2 * time.Second,
 			shouldFail:          true,
 		},
+		{
+			name:                "[1] 1*1342185292",
+			gateSize:            1, // WaitForSecrets doesn't rely on the gate size, but on inputs.MaxParallelSecrets().
+			secretsDistribution: map[int]int{1: 1342185292},
+			maxAllowedDuration:  10 * time.Millisecond,
+			shouldFail:          true,
+		},
 	}
 
 	for _, tc := range testCases {

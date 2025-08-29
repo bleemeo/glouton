@@ -82,8 +82,9 @@ type RelabelHook func(ctx context.Context, labels map[string]string) (newLabel m
 type UpdateDelayHook func(labels map[string]string) (minInterval time.Duration, retryLater bool)
 
 var (
-	errInvalidName = errors.New("invalid metric name or label name")
-	ErrBadArgument = errors.New("bad argument")
+	errInvalidName  = errors.New("invalid metric name or label name")
+	ErrBadArgument  = errors.New("bad argument")
+	errCantRunInput = errors.New("can't run an input")
 )
 
 type diagnosticer interface {
@@ -2025,6 +2026,10 @@ func fixLabels(lbls map[string]string) (map[string]string, error) {
 // WaitForSecrets returns a callback to release all the slots taken once the gathering is done,
 // or an error if the given context expired.
 func WaitForSecrets(ctx context.Context, secretsGate *gate.Gate, slotsNeeded int) (func(), error) {
+	if maxParallel := inputs.MaxParallelSecrets(); slotsNeeded > maxParallel {
+		return nil, fmt.Errorf("%w that has %d secrets (max: %d)", errCantRunInput, slotsNeeded, maxParallel)
+	}
+
 	releaseGates := func(gatesCrossed int) {
 		for range gatesCrossed {
 			secretsGate.Done()
