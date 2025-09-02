@@ -148,8 +148,6 @@ type agent struct {
 	threshold              *threshold.Registry
 	jmx                    *jmxtrans.JMX
 	snmpManager            *snmp.Manager
-	snmpUpdatePending      bool
-	snmpRegistration       []int
 	store                  *store.Store
 	gathererRegistry       *registry.Registry
 	dynamicScrapper        *promexporter.DynamicScrapper
@@ -180,7 +178,6 @@ type agent struct {
 	dockerInputID      int
 
 	l                sync.Mutex
-	cond             *sync.Cond
 	taskIDs          map[string]int
 	metricResolution time.Duration
 	configWarnings   prometheus.MultiError
@@ -207,7 +204,6 @@ type taskInfo struct {
 
 func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (ok bool) {
 	a.l.Lock()
-	a.cond = sync.NewCond(&a.l)
 	a.lastHealthCheck = time.Now()
 	a.l.Unlock()
 
@@ -525,66 +521,28 @@ func (a *agent) notifyBleemeoUpdateHooks() {
 	a.gathererRegistry.UpdateRegistrationHooks(a.bleemeoConnector.RelabelHook, a.bleemeoConnector.UpdateDelayHook)
 }
 
-func (a *agent) updateSNMPResolution(resolution time.Duration) {
-	a.l.Lock()
-
-	for a.snmpUpdatePending {
-		a.cond.Wait()
-	}
-
-	a.snmpUpdatePending = true
-	previousRegistration := a.snmpRegistration
-	a.snmpRegistration = nil
-
-	a.l.Unlock()
-
-	defer func() {
-		a.l.Lock()
-
-		a.snmpUpdatePending = false
-		a.cond.Broadcast()
-
-		a.l.Unlock()
-	}()
-
-	for _, id := range previousRegistration {
-		a.gathererRegistry.Unregister(id)
-	}
-
-	if resolution == 0 {
-		return
-	}
-
-	var newRegistration []int
-
+func (a *agent) registerSNMPTargets(context.Context) error {
 	for _, target := range a.snmpManager.Gatherers() {
-		hash := labels.FromMap(target.ExtraLabels).Hash()
-
-		id, err := a.gathererRegistry.RegisterGatherer(
+		_, err := a.gathererRegistry.RegisterGatherer(
 			registry.RegistrationOption{
 				Description: "snmp target " + target.Address,
-				JitterSeed:  hash,
-				MinInterval: resolution,
+				JitterSeed:  labels.FromMap(target.ExtraLabels).Hash(),
+				MinInterval: time.Minute,
 				Timeout:     40 * time.Second,
 				ExtraLabels: target.ExtraLabels,
-				Rules:       registry.DefaultSNMPRules(resolution),
+				Rules:       registry.DefaultSNMPRules(time.Minute),
 			},
 			target.Gatherer,
 		)
 		if err != nil {
 			logger.Printf("Unable to add SNMP scrapper for target %s: %v", target.Address, err)
-		} else {
-			newRegistration = append(newRegistration, id)
 		}
 	}
 
-	a.l.Lock()
-	defer a.l.Unlock()
-
-	a.snmpRegistration = append(a.snmpRegistration, newRegistration...)
+	return nil
 }
 
-func (a *agent) updateMetricResolution(defaultResolution time.Duration, snmpResolution time.Duration) {
+func (a *agent) updateMetricResolution(defaultResolution time.Duration) {
 	a.l.Lock()
 	a.metricResolution = defaultResolution
 	a.l.Unlock()
@@ -598,8 +556,6 @@ func (a *agent) updateMetricResolution(defaultResolution time.Duration, snmpReso
 			logger.V(1).Printf("failed to update JMX configuration: %v", err)
 		}
 	}
-
-	a.updateSNMPResolution(snmpResolution)
 }
 
 func (a *agent) getConfigThreshold() map[string]threshold.Threshold {
@@ -1037,6 +993,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		{a.processUpdateMessage, "processUpdateMessage"},
 		{a.discovery.Run, "discovery"},
 		{psFact.Run, "processes lister"},
+		{a.registerSNMPTargets, "SNMP targets registerer"},
 	}
 
 	if a.config.Agent.EnableCrashReporting {
@@ -1134,7 +1091,11 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			}
 		}
 
-		a.gathererRegistry.UpdateRegistrationHooks(a.bleemeoConnector.RelabelHook, a.bleemeoConnector.UpdateDelayHook)
+		a.gathererRegistry.UpdateRegistrationHooks(
+			a.bleemeoConnector.RelabelHook,
+			a.bleemeoConnector.UpdateDelayHook,
+		)
+
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 
 		_, err = a.gathererRegistry.RegisterAppenderCallback(
@@ -1151,10 +1112,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 
 	a.FireTrigger(true, true, false, false)
-
-	// Only start gatherers after the relabel hook is set to avoid sending metrics without
-	// instance uuid to the bleemeo connector.
-	a.updateSNMPResolution(time.Minute)
 
 	_, err = a.gathererRegistry.RegisterPushPointsCallback(
 		registry.RegistrationOption{

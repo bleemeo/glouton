@@ -753,7 +753,7 @@ func (r *Registry) updateHooks(relabelHook RelabelHook, updateDelayHook UpdateDe
 
 	r.blockPushPoint = true
 
-	// Wait for all pending gorouting that may be sending points with old labels
+	// Wait for all pending goroutines that may be sending points with old labels
 	for r.countPushPoints > 0 {
 		r.condition.Wait()
 	}

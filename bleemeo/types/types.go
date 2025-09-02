@@ -55,7 +55,7 @@ type GlobalOption struct {
 	LastVSphereChange       func(ctx context.Context) time.Time
 	VSphereEndpointsInError func() map[string]bool
 
-	UpdateMetricResolution         func(defaultResolution time.Duration, snmpResolution time.Duration)
+	UpdateMetricResolution         func(defaultResolution time.Duration)
 	UpdateThresholds               func(thresholds map[string]threshold.Threshold, firstUpdate bool)
 	UpdateUnits                    func(units map[string]threshold.Unit)
 	IsContainerEnabled             func(facts.Container) (bool, bool)
