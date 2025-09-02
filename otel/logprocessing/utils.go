@@ -53,10 +53,11 @@ const (
 )
 
 var (
-	errUnknownField  = errors.New("some unknown field(s) were found")
-	errIncludeNotStr = errors.New("include value must be a string")
-	errIsUnknown     = errors.New("is unknown")
-	errIsRecursive   = errors.New("is recursive")
+	errUnexpectedType = errors.New("unexpected type")
+	errUnknownField   = errors.New("some unknown field(s) were found")
+	errIncludeNotStr  = errors.New("include value must be a string")
+	errIsUnknown      = errors.New("is unknown")
+	errIsRecursive    = errors.New("is recursive")
 )
 
 type fileSizer interface {
@@ -207,10 +208,15 @@ func withoutDebugLogs(telSet component.TelemetrySettings) component.TelemetrySet
 }
 
 func buildLogFilterConfig(filtersCfg config.OTELFilters) (*filterprocessor.Config, error, error) {
-	var filterProcCfg filterprocessor.Config
+	defaultCfg := filterprocessor.NewFactory().CreateDefaultConfig()
+
+	filterProcCfg, ok := defaultCfg.(*filterprocessor.Config)
+	if !ok {
+		return nil, nil, fmt.Errorf("%w for filterprocessor config: %T", errUnexpectedType, defaultCfg) //nolint: nilnil
+	}
 
 	if len(filtersCfg) == 0 {
-		return &filterProcCfg, nil, nil
+		return filterProcCfg, nil, nil
 	}
 
 	var decoderMeta mapstructure.Metadata
@@ -234,7 +240,7 @@ func buildLogFilterConfig(filtersCfg config.OTELFilters) (*filterprocessor.Confi
 		warning = fmt.Errorf("%w: %s", errUnknownField, strings.Join(decoderMeta.Unused, ", "))
 	}
 
-	return &filterProcCfg, warning, filterProcCfg.Validate()
+	return filterProcCfg, warning, filterProcCfg.Validate()
 }
 
 // expandOperators replaces 'template' operators with the well-known format they reference.

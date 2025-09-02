@@ -105,6 +105,26 @@ func TestBuildLogFilterConfig(t *testing.T) {
 		},
 		{
 			input: config.OTELFilters{
+				"log_record": []string{
+					`IsMatch(body, "/nginx_status")`,
+				},
+			},
+			expectedOutput: filterprocessor.LogFilters{
+				LogConditions: []string{
+					`IsMatch(body, "/nginx_status")`,
+				},
+			},
+		},
+		{
+			input: config.OTELFilters{
+				"log_record": []string{
+					"UnknownFunc(body)",
+				},
+			},
+			expectedError: `unable to parse OTTL condition "UnknownFunc(body)": undefined function "UnknownFunc"`,
+		},
+		{
+			input: config.OTELFilters{
 				"include": map[string]any{
 					"match_type": "strict",
 					"severity_texts": []string{
