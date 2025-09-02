@@ -125,6 +125,7 @@ const (
 	DisableAgentTooOld
 	DisableAuthenticationError
 	DisableTimeDrift
+	DisableLongStandingError
 )
 
 func (r DisableReason) String() string {
@@ -141,6 +142,8 @@ func (r DisableReason) String() string {
 		return "authentication error with Bleemeo API"
 	case DisableTimeDrift:
 		return "local time is too different from actual time"
+	case DisableLongStandingError:
+		return "long standing error"
 	case NotDisabled:
 		return "not disabled"
 	default:

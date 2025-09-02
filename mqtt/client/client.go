@@ -256,10 +256,10 @@ mainLoop:
 			length := len(lastConnectionTimes)
 
 			if length >= 7 && time.Since(lastConnectionTimes[length-7]) < 10*time.Minute {
-				delay := delay.JitterDelay(5*time.Minute, 0.25).Round(time.Second)
+				disableDuration := delay.JitterDelay(5*time.Minute, 0.25).Round(time.Second)
 
-				c.Disable(time.Now().Add(delay))
-				logger.Printf("Too many attempts to connect to %s MQTT were made in the last 10 minutes. Disabling MQTT for %v", c.opts.ID, delay)
+				c.Disable(time.Now().Add(disableDuration))
+				logger.Printf("Too many attempts to connect to %s MQTT were made in the last 10 minutes. Disabling MQTT for %v", c.opts.ID, disableDuration)
 
 				if c.opts.TooManyErrorsHandler != nil {
 					c.opts.TooManyErrorsHandler(ctx)
