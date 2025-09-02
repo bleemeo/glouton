@@ -1826,6 +1826,20 @@ func (a *agent) dockerWatcher(ctx context.Context) error {
 
 				a.sendDockerContainerHealth(ctx, ev.Container)
 			}
+
+			switch ev.Type { //nolint: exhaustive
+			case facts.EventTypeKill, facts.EventTypeStop:
+				checkIDs := a.discovery.GetCheckIDsForContainer(ev.ContainerID)
+				for _, checkID := range checkIDs {
+					// Wait a bit; other events (delete) may arrive soon.
+					a.gathererRegistry.DelayRegExec(checkID, time.Now().Add(20*time.Second))
+				}
+			case facts.EventTypeDelete:
+				checkIDs := a.discovery.GetCheckIDsForContainer(ev.ContainerID)
+				for _, checkID := range checkIDs {
+					a.gathererRegistry.Unregister(checkID)
+				}
+			}
 		case <-pendingTimer.C:
 			if pendingDiscovery {
 				a.FireTrigger(pendingDiscovery, false, false, pendingSecondDiscovery)
