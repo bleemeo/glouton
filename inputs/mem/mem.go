@@ -56,6 +56,16 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 	_ = currentContext
 	_ = originalFields
 
+	if version.IsLinux() {
+		// On Linux, mem_used is used the "old" procps < 4.0 formula (based on buffered, cached and free memory)
+		// This will avoid too many that that are close to 80% of memory usage to generate notifications.
+		// Note: at this point, fields["cached"] already take sreclaimable in account (gopsutil does the sum).
+		fields["used"] = fields["total"] - fields["free"] - fields["cached"] - fields["buffered"]
+
+		// Update used_perc
+		fields["used_percent"] = (fields["used"] / fields["total"]) * 100
+	}
+
 	for metricName, value := range fields {
 		switch metricName {
 		case "available_percent":
