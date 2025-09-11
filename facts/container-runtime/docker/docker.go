@@ -753,8 +753,8 @@ func (d *Docker) updateContainer(ctx context.Context, cl dockerClient, container
 }
 
 func (d *Docker) primaryAddress(inspect container.InspectResponse, bridgeNetworks map[string]any, containerAddressOnDockerBridge map[string]string) string {
-	if inspect.NetworkSettings != nil && inspect.NetworkSettings.IPAddress != "" {
-		return inspect.NetworkSettings.IPAddress
+	if inspect.NetworkSettings != nil && inspect.NetworkSettings.IPAddress != "" { //nolint:staticcheck
+		return inspect.NetworkSettings.IPAddress //nolint:staticcheck
 	}
 
 	addressOfFirstNetwork := ""
