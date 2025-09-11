@@ -1140,6 +1140,8 @@ func (c *Connector) disableCallback(reason types.DisableReason, until time.Time)
 	c.l.Lock()
 
 	if c.disabledUntil.After(until) {
+		c.l.Unlock()
+
 		return
 	}
 
