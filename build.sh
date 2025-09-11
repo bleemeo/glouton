@@ -64,7 +64,7 @@ if [ "${SKIP_JS}" != "1" ] && [ "${ONLY_GO}" != "1" ]; then
       mkdir -p /go/pkg/node
       chown node -R /go/pkg/node
       trap 'chown -R $USER_UID dist ../api/assets/' EXIT
-      npm install
+      npm clean-install --ignore-scripts
       npm run deploy
       "
 fi

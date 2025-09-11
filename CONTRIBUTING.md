@@ -95,7 +95,7 @@ docker run --rm -ti -u $UID -e HOME=/tmp/home \
    -v $(pwd):/src -w /src/webui \
    -p 127.0.0.1:3015:3015 \
    node:22 \
-   sh -c 'npm install && npm start'
+   sh -c 'npm clean-install --ignore-scripts && npm start'
 ```
 
 Then tell Glouton to use JavaScript file from webpack-dev-server:
