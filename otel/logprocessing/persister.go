@@ -17,6 +17,7 @@
 package logprocessing
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -198,7 +199,7 @@ func (s *storageClient) Set(_ context.Context, key string, value []byte) error {
 }
 
 func (s *storageClient) set(key string, value []byte) {
-	s.dirty[key] = value
+	s.dirty[key] = bytes.Clone(value)
 	s.updatedKeys[key] = struct{}{}
 
 	if time.Since(s.lastSave) >= saveFileSizesToCachePeriod {
