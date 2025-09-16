@@ -193,7 +193,7 @@ func (s *syncServicesExecution) syncRemoteAndLocal(ctx context.Context, executio
 		return err
 	}
 
-	serviceDeactivateNonLocal(ctx, execution, localServices)
+	serviceDeleteNonLocal(ctx, execution, localServices)
 
 	return nil
 }
@@ -260,6 +260,17 @@ func (s *syncServicesExecution) serviceRegisterAndUpdate(ctx context.Context, ex
 		}
 
 		remoteSrv, remoteFound := remoteServicesByKey[key]
+
+		if remoteFound && !srv.Active {
+			logger.V(2).Printf("Deleting the service %v (uuid %s), which is inactive", key, remoteSrv.ID)
+
+			err := execution.BleemeoAPIClient().DeleteService(ctx, remoteSrv.ID)
+			if err != nil {
+				return fmt.Errorf("deleting inactive service %v on API: %w", key, err)
+			}
+
+			continue
+		}
 
 		// Skip updating the remote service if the service is already up to date.
 		listenAddresses := getListenAddress(srv.ListenAddresses)
@@ -407,8 +418,8 @@ func ServiceExcludeUnregistrable(services []discovery.Service, logThrottle func(
 	return services
 }
 
-// serviceDeactivateNonLocal marks inactive the registered services that were not found in the discovery.
-func serviceDeactivateNonLocal(ctx context.Context, execution types.SynchronizationExecution, localServices []discovery.Service) {
+// serviceDeleteNonLocal deletes the registered services that were not found in the discovery.
+func serviceDeleteNonLocal(ctx context.Context, execution types.SynchronizationExecution, localServices []discovery.Service) {
 	localServiceExists := make(map[common.ServiceNameInstance]bool, len(localServices))
 
 	for _, srv := range localServices {
@@ -426,45 +437,19 @@ func serviceDeactivateNonLocal(ctx context.Context, execution types.Synchronizat
 
 	for _, remoteSrv := range registeredServices {
 		key := common.ServiceNameInstance{Name: remoteSrv.Label, Instance: remoteSrv.Instance}
-		if !remoteSrv.Active || (remoteSrv.ID == remoteServicesByKey[key].ID && localServiceExists[key]) {
+		if remoteSrv.ID == remoteServicesByKey[key].ID && localServiceExists[key] {
 			finalServices = append(finalServices, remoteSrv)
 
 			continue
 		}
 
-		logger.V(2).Printf("Mark inactive the service %v (uuid %s)", key, remoteSrv.ID)
+		logger.V(2).Printf("Deleting the service %v (uuid %s), which isn't present locally", key, remoteSrv.ID)
 
-		// Deactivate the remote service that is not present locally.
-		result, err := serviceDeactivate(ctx, execution, remoteSrv)
+		err := execution.BleemeoAPIClient().DeleteService(ctx, remoteSrv.ID)
 		if err != nil {
-			logger.V(1).Printf("Failed to deactivate service %v on Bleemeo API: %v", key, err)
-
-			continue
+			logger.V(1).Printf("Failed to delete service %v on Bleemeo API: %v", key, err)
 		}
-
-		finalServices = append(finalServices, result)
 	}
 
 	execution.Option().Cache.SetServices(finalServices)
-}
-
-// serviceDeactivate makes a PUT request to the Bleemeo API to mark the given service as inactive.
-func serviceDeactivate(ctx context.Context, execution types.SynchronizationExecution, service bleemeoTypes.Service) (bleemeoTypes.Service, error) {
-	agentID, _ := execution.Option().State.BleemeoCredentials()
-	payload := bleemeoapi.ServicePayload{
-		Monitor: bleemeoTypes.Monitor{
-			Service: bleemeoTypes.Service{
-				Active:          false,
-				Label:           service.Label,
-				Instance:        service.Instance,
-				ListenAddresses: service.ListenAddresses,
-				ExePath:         service.ExePath,
-				Tags:            service.Tags,
-			},
-			AgentID: agentID,
-		},
-		Account: execution.Option().Cache.AccountID(),
-	}
-
-	return execution.BleemeoAPIClient().UpdateService(ctx, service.ID, payload, serviceWriteFields)
 }
