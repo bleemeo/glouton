@@ -1,0 +1,13 @@
+{
+    "ignore": [
+        "eslint.config.mjs"
+    ],
+    "ignoreDependencies": [
+        "bootstrap",
+        "@typescript-eslint/eslint-plugin",
+        "eslint-config-prettier",
+        "eslint-plugin-prettier",
+        "eslint-plugin-react"
+    ],
+    "ignoreExportsUsedInFile": true
+}

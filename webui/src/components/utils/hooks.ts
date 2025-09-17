@@ -167,22 +167,6 @@ export const useHTTPLogFetch = (
   return { isLoading, error, logs, isFetching };
 };
 
-export const useWindowWidth = () => {
-  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
-
-  const onWindowResize = () => {
-    setWindowWidth(window.innerWidth);
-  };
-  useEffect(() => {
-    window.addEventListener("resize", onWindowResize);
-    return () => {
-      window.removeEventListener("resize", onWindowResize);
-    };
-  }, []);
-
-  return windowWidth;
-};
-
 export const useDebounceValue = <T>(
   value: T,
   wait?: number,

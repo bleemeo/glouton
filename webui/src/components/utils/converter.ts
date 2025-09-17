@@ -1,23 +1,3 @@
-export const cssClassForStatus = (status: number | string | undefined) => {
-  switch (status) {
-    case 0:
-    case "OK":
-      return "success";
-    case 1:
-    case "WARNING":
-      return "warning";
-    case 2:
-    case "CRITICAL":
-      return "danger";
-    // STATUS_UNKNOWN = 3
-    case 10:
-    case "INFO":
-      return "info";
-    default:
-      return "success"; // or 'info' ??
-  }
-};
-
 export const badgeColorSchemeForStatus = (
   status: number | string | undefined,
 ) => {
