@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios, { AxiosError } from "axios";
 import { Metric, MetricFetchResult } from "../Metric/DefaultDashboardMetrics";
 import { Log } from "../Data/data.interface";
+import { debounce } from "lodash-es";
 
 interface FetchDataParameters {
   [key: string]: any;
@@ -180,4 +181,22 @@ export const useWindowWidth = () => {
   }, []);
 
   return windowWidth;
+};
+
+export const useDebounceValue = <T>(
+  value: T,
+  wait?: number,
+  options?: object,
+) => {
+  const [internalValue, setInternalValue] = useState(value);
+
+  const debouncedSetInternalValue = useMemo(() => {
+    return debounce(setInternalValue, wait, options);
+  }, [options, wait]);
+
+  useEffect(() => {
+    debouncedSetInternalValue(value);
+  }, [debouncedSetInternalValue, value]);
+
+  return internalValue;
 };
