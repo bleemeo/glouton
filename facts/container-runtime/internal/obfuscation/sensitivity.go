@@ -29,6 +29,7 @@ func isSensitive(key string) bool {
 		"secret":   {},
 		"password": {},
 		"passwd":   {},
+		"token":    {},
 	}
 
 	for potentiallySensitive, unless := range sensitiveKeywords {

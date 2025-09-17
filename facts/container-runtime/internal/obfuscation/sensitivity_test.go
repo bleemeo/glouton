@@ -65,6 +65,10 @@ func TestIsSensitive(t *testing.T) {
 			key:               "keyfile_public_key",
 			expectedSensitive: false,
 		},
+		{
+			key:               "BLEEMEO_OAUTH_INITIAL_REFRESH_TOKEN",
+			expectedSensitive: true,
+		},
 	}
 
 	for _, tc := range cases {
