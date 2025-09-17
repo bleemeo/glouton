@@ -22,10 +22,11 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	"github.com/influxdata/telegraf"
 )
 
-func New(_ config.Mdstat) (telegraf.Input, registry.RegistrationOption, error) {
+func New(config.Mdstat, *gloutonexec.Runner) (telegraf.Input, registry.RegistrationOption, error) {
 	return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
 }

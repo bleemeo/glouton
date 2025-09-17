@@ -19,58 +19,56 @@
 package mdstat
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"os/exec"
+	"io"
 	"strings"
 	"time"
+
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 )
 
 const mdadmTimeout = 5 * time.Second
 
 var errStateNotFound = errors.New("array state not found in mdadm output")
 
-type mdadmDetailsFunc func(array, mdadmPath string, useSudo bool) (mdadmInfo, error)
+type mdadmDetailsFunc func(array, mdadmPath string, runner *gloutonexec.Runner) (mdadmInfo, error)
 
 type mdadmInfo struct {
 	state string
 }
 
-func callMdadm(array, mdadmPath string, useSudo bool) (mdadmInfo, error) {
-	fullPath, err := exec.LookPath(mdadmPath)
-	if err != nil {
-		return mdadmInfo{}, err
-	}
-
-	fullCmd := []string{fullPath, "--detail", "/dev/" + array}
-
-	if useSudo {
-		fullCmd = append([]string{"sudo", "-n"}, fullCmd...)
-	}
-
+func callMdadm(array, mdadmPath string, runner *gloutonexec.Runner) (mdadmInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), mdadmTimeout)
 	defer cancel()
 
-	var stdout, stderr bytes.Buffer
+	stdout, stderr, cmdWait, err := runner.StartWithPipes(ctx, runnerOpt, mdadmPath, "--detail", "/dev/"+array)
+	if err == nil {
+		defer func() {
+			_ = stdout.Close()
+			_ = stderr.Close()
+		}()
 
-	cmd := exec.CommandContext(ctx, fullCmd[0], fullCmd[1:]...) //nolint:gosec
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+		err = cmdWait()
+	}
 
-	err = cmd.Run()
 	if err != nil {
 		var errOutput string
 
-		if stderr.Len() > 0 {
-			errOutput = " (stderr: " + stderr.String() + ")"
+		if stderrOutput, _ := io.ReadAll(stderr); len(stderrOutput) > 0 {
+			errOutput = " (stderr: " + string(stderrOutput) + ")"
 		}
 
 		return mdadmInfo{}, fmt.Errorf("failed to run mdadm on array %s: %w%s", array, err, errOutput)
 	}
 
-	return parseMdadmOutput(stdout.String())
+	stdoutOutput, err := io.ReadAll(stdout)
+	if err != nil {
+		return mdadmInfo{}, err
+	}
+
+	return parseMdadmOutput(string(stdoutOutput))
 }
 
 func parseMdadmOutput(output string) (mdadmInfo, error) {

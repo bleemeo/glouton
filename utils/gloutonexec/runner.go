@@ -112,6 +112,22 @@ func (r *Runner) LookPath(file string, option Option) (string, error) {
 	return "", &exec.Error{Name: file, Err: exec.ErrNotFound}
 }
 
+func (r *Runner) ResolvePath(file string, option Option) (string, error) {
+	if r.hostRootPath != "/" && option.SkipInContainer {
+		return "", &exec.Error{Name: file, Err: exec.ErrNotFound}
+	}
+
+	if r.hostRootPath == "" && option.RunOnHost {
+		return "", &exec.Error{Name: file, Err: exec.ErrNotFound}
+	}
+
+	if r.hostRootPath == "/" || !option.RunOnHost {
+		return file, nil
+	}
+
+	return filepath.Join(r.hostRootPath, file), nil
+}
+
 func (r *Runner) makeCmd(ctx context.Context, option Option, name string, arg ...string) (*exec.Cmd, func(error) error, error) {
 	if r.hostRootPath != "/" && option.SkipInContainer {
 		return nil, nil, ErrExecutionSkipped
