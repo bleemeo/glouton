@@ -1,15 +1,14 @@
 import { FC, useState, useEffect, useMemo, useCallback } from "react";
-import { DebounceInput } from "react-debounce-input";
 
 import Toggle from "../UI/Toggle";
 import QueryError from "../UI/QueryError";
 import Docker from "./Docker";
 import { Loading } from "../UI/Loading";
-import { useHTTPDataFetch } from "../utils/hooks";
+import { useDebounceValue, useHTTPDataFetch } from "../utils/hooks";
 import { CONTAINERS_URL } from "../utils/dataRoutes";
 import { Containers } from "../Data/data.interface";
 import { isNil } from "lodash-es";
-import { Box, Flex } from "@chakra-ui/react";
+import { Box, Flex, Input } from "@chakra-ui/react";
 import { DataListItem, DataListRoot } from "../UI/data-list";
 
 const PAGE_SIZE = 10;
@@ -20,14 +19,16 @@ const AgentDockerList: FC = () => {
   const [search, setSearch] = useState<string>("");
   const [nbContainers, setNbContainers] = useState<number>(0);
 
+  const debouncedSearch = useDebounceValue(search, 500);
+
   const parameters = useMemo(
     () => ({
       limit: PAGE_SIZE,
       offset,
-      search,
+      search: debouncedSearch,
       allContainers,
     }),
-    [offset, search, allContainers],
+    [offset, debouncedSearch, allContainers],
   );
 
   const {
@@ -165,13 +166,11 @@ const AgentDockerList: FC = () => {
           </span>
 
           <span className="blee-tool-bar-item py-3" style={{ flexShrink: "1" }}>
-            <DebounceInput
+            <Input
               type="text"
               placeholder="Search"
               className="form-control"
               onChange={handleSearchChange}
-              debounceTimeout={500}
-              forceNotifyOnBlur={false}
             />
           </span>
         </Box>
