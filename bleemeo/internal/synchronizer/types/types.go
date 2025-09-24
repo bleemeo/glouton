@@ -245,6 +245,7 @@ type ServiceClient interface {
 	ListServices(ctx context.Context, agentID string, fields string) ([]bleemeoTypes.Service, error)
 	UpdateService(ctx context.Context, id string, payload bleemeoapi.ServicePayload, fields string) (bleemeoTypes.Service, error)
 	RegisterService(ctx context.Context, payload bleemeoapi.ServicePayload) (bleemeoTypes.Service, error)
+	DeleteService(ctx context.Context, id string) error
 }
 
 type SNMPClient interface {

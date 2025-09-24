@@ -622,11 +622,16 @@ func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) (time.Ti
 
 	servicesMap := make(map[NameInstance]Service)
 
-	for key, service := range d.discoveredServicesMap {
-		service = d.setServiceActiveAndContainer(service)
+	func() {
+		d.l.Lock()
+		defer d.l.Unlock()
 
-		servicesMap[key] = service
-	}
+		for key, service := range d.discoveredServicesMap {
+			service = d.setServiceActiveAndContainer(service)
+
+			servicesMap[key] = service
+		}
+	}()
 
 	for _, service := range r {
 		if d.isServiceIgnored != nil && d.isServiceIgnored(service) {
