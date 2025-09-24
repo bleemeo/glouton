@@ -19,9 +19,11 @@ package logprocessing
 import (
 	"bytes"
 	"log"
+	"sync"
 	"testing"
 
 	"github.com/bleemeo/glouton/agent/state"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/adapter"
@@ -252,4 +254,78 @@ func TestPersistHost(t *testing.T) { //nolint:maintidx
 			log.Fatalf("Unexpected metadata (-want +got):\n%s\n", diff)
 		}
 	}
+}
+
+type stateMock struct {
+	bleemeoTypes.State
+}
+
+func (stateMock) Get(string, any) error {
+	return nil
+}
+
+// TestStorageClient tests concurrent usage of the storageClient,
+// and should be executed with the -race flag.
+func TestStorageClient(t *testing.T) {
+	t.Parallel()
+
+	h, err := newPersistHost(stateMock{})
+	if err != nil {
+		t.Fatal("Can't instantiate persist host:", err)
+	}
+
+	extID := h.newPersistentExt("test")
+	ext := h.extensions[extID]
+
+	persistExt, ok := ext.(persistExtension)
+	if !ok {
+		t.Fatalf("Unexpected extension type: %T", ext)
+	}
+
+	storageCl, err := persistExt.GetClient(t.Context(), component.KindReceiver, extID, "test")
+	if err != nil {
+		t.Fatal("Can't retrieve storage client:", err)
+	}
+
+	const storageKey = "test"
+
+	makeFunc := func(i int) func() {
+		if i%2 == 0 {
+			return func() {
+				value := []byte("Hello there")
+
+				err := storageCl.Set(t.Context(), storageKey, value)
+				if err != nil {
+					t.Error("Can't set value:", err)
+				}
+
+				value[0] = 'W' // later use of the variable
+			}
+		}
+
+		return func() {
+			value, err := storageCl.Get(t.Context(), storageKey)
+			if err != nil {
+				t.Error("Can't get value:", err)
+			}
+
+			if value != nil {
+				_ = value[0] // making use of the retrieved value
+			}
+		}
+	}
+
+	wg := new(sync.WaitGroup)
+
+	for i := range 10 {
+		fn := makeFunc(i)
+
+		wg.Go(func() {
+			for range 100 {
+				fn()
+			}
+		})
+	}
+
+	wg.Wait()
 }

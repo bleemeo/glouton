@@ -263,7 +263,6 @@ require (
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/ncabatoff/go-seq v0.0.0-20180805175032-b08ef85ed833 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib v0.135.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.135.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/filter v0.135.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl v0.135.0 // indirect
