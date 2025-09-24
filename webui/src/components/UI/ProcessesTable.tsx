@@ -56,6 +56,8 @@ export const GraphCell: FC<GraphCellProps> = ({ value }) => (
       alignItems: "center",
       justifyContent: "right",
       flexDirection: "row",
+      width: "auto",
+      minWidth: "6rem",
     }}
   >
     <div className="d-inline" style={{ width: "50%" }}>
