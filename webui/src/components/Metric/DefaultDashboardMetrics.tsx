@@ -14,19 +14,12 @@ export interface GaugeBar {
   unit: number;
   mountpoint?: string;
 }
+
 export interface NumberMetric {
   title: string;
   metrics: Metric[];
   submetrics?: NumberMetric[];
   unit: number;
-}
-
-export interface MetricPoints {
-  metric: {
-    __name__: string;
-    instance: string;
-  };
-  values: [number, string][];
 }
 
 export interface MetricFetchResult {

@@ -52,26 +52,12 @@ export interface Fact {
   value: string;
 }
 
-export interface LabelInput {
-  key: string;
-  value: string;
-}
-
 export interface MemoryUsage {
   Total: number;
   Used: number;
   Free: number;
   Buffers: number;
   Cached: number;
-}
-
-export interface MetricInput {
-  labels: LabelInput[];
-}
-
-export interface Pagination {
-  offset: number;
-  limit: number;
 }
 
 export interface Process {
