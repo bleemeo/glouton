@@ -1,4 +1,4 @@
-import { FC, useMemo, useState } from "react";
+import { FC, Fragment, useMemo, useState } from "react";
 import {
   ColumnDef,
   createColumnHelper,
@@ -56,6 +56,8 @@ export const GraphCell: FC<GraphCellProps> = ({ value }) => (
       alignItems: "center",
       justifyContent: "right",
       flexDirection: "row",
+      width: "auto",
+      minWidth: "6rem",
     }}
   >
     <div className="d-inline" style={{ width: "50%" }}>
@@ -74,92 +76,83 @@ export const GraphCell: FC<GraphCellProps> = ({ value }) => (
   </div>
 );
 
-type FormatCmdLineProps = {
+const equalRegexp = /^-[^=]+=/i;
+const twoDotsRegexp = /^-[^:]+:/i;
+const optionRegexp = /^-+/i;
+
+type ProcessCommandProps = {
   input: string;
-  widthLastColumn?: number;
-  expandable?: boolean;
 };
 
-export const formatCmdLine: FC<FormatCmdLineProps> = ({
-  input,
-  widthLastColumn,
-  expandable,
-}) => {
-  if (expandable) {
-    return (
-      <div
-        style={{
-          maxWidth: widthLastColumn ? widthLastColumn + "rem" : "10rem",
-          width: "auto",
-          color: cmdLineCommand[1],
-        }}
-      >
-        {input}
-      </div>
-    );
-  }
-  const command = input.split(" ")[0];
-  const args = input.split(" ").slice(1);
-  const regexpEqual = /^-[^=]+=/i;
-  const regexpTwoDots = /^-[^\:]+\:/i; // eslint-disable-line no-useless-escape
-  const regexpOption = /^-+/i;
+const ProcessCommand: FC<ProcessCommandProps> = ({ input }) => {
+  const [command, ...args] = useMemo(() => input.split(" "), [input]);
 
   return (
-    <div
-      className="cellEllipsis"
-      id="cmdlineDiv"
-      style={{
-        maxWidth: widthLastColumn ? widthLastColumn + "rem" : "10rem",
-        width: "auto",
-      }}
+    <Tooltip
+      contentProps={{ css: { "max-width": "2000px" } }}
+      content={
+        <Box whiteSpace={"pre-wrap"} maxW={"50vw"}>
+          {input}
+        </Box>
+      }
     >
-      <span style={{ color: cmdLineCommand[1] }}>{command}</span>
-      {args.map((arg, idx) => {
-        if (regexpEqual.test(arg)) {
-          const splittedArg = arg.split("=", 2);
+      <Box textOverflow={"ellipsis"}>
+        <Text as={"span"} color={cmdLineCommand[1]}>
+          {command}
+        </Text>
+        {args.map((arg, index) => {
+          if (equalRegexp.test(arg)) {
+            const [key, value] = arg.split("=", 2);
+
+            return (
+              <Fragment key={index}>
+                {" "}
+                <Text as={"span"} color={cmdLineCommand[0]}>
+                  {key}=
+                </Text>
+                <Text as={"span"} color={cmdLineCommand[2]}>
+                  {value}
+                </Text>
+              </Fragment>
+            );
+          }
+
+          if (twoDotsRegexp.test(arg)) {
+            const [key, value] = arg.split(":", 2);
+
+            return (
+              <Fragment key={index}>
+                {" "}
+                <Text as={"span"} color={cmdLineCommand[0]}>
+                  {key}:
+                </Text>
+                <Text as={"span"} color={cmdLineCommand[2]}>
+                  {value}
+                </Text>
+              </Fragment>
+            );
+          }
+
+          if (optionRegexp.test(arg)) {
+            return (
+              <Fragment key={index}>
+                {" "}
+                <Text as={"span"} color={cmdLineCommand[0]}>
+                  {arg}
+                </Text>
+              </Fragment>
+            );
+          }
+
           return (
-            <span
-              style={{
-                color: cmdLineCommand[0],
-              }}
-              key={idx.toString()}
-            >
+            <Fragment key={index}>
               {" "}
-              {splittedArg[0]}=
-              <span style={{ color: cmdLineCommand[2] }}>{splittedArg[1]}</span>
-            </span>
+              <Text as={"span"}>{arg}</Text>
+            </Fragment>
           );
-        } else if (regexpTwoDots.test(arg)) {
-          const splittedArg = arg.split(":", 2);
-          return (
-            <span
-              style={{
-                color: cmdLineCommand[0],
-              }}
-              key={idx.toString()}
-            >
-              {" "}
-              {splittedArg[0]}:
-              <span style={{ color: cmdLineCommand[2] }}>{splittedArg[1]}</span>
-            </span>
-          );
-        } else if (regexpOption.test(arg)) {
-          return (
-            <span
-              style={{
-                color: cmdLineCommand[0],
-              }}
-              key={idx.toString()}
-            >
-              {" "}
-              {arg}
-            </span>
-          );
-        } else {
-          return <span key={idx.toString()}> {arg}</span>;
-        }
-      })}
-    </div>
+        })}
+      </Box>
+    </Tooltip>
   );
 };
 
@@ -171,11 +164,10 @@ type ProcessesTableProps = {
   data: ProcessesTableData[];
   sizePage: number;
   classNames: string;
-  widthLastColumn?: number;
   renderLoadMoreButton?: boolean;
 };
 
-const ProcessesTable: FC<ProcessesTableProps> = ({ data, widthLastColumn }) => {
+const ProcessesTable: FC<ProcessesTableProps> = ({ data }) => {
   const [sorting, setSorting] = useState<SortingState>([
     { id: "cpu_percent", desc: true },
   ]);
@@ -267,14 +259,7 @@ const ProcessesTable: FC<ProcessesTableProps> = ({ data, widthLastColumn }) => {
       columnHelper.accessor("cmdline", {
         id: "cmdline",
         header: "Name",
-        cell: (info) => (
-          <Tooltip content={info.getValue()}>
-            {formatCmdLine({
-              input: info.getValue() as string,
-              widthLastColumn: widthLastColumn,
-            })}
-          </Tooltip>
-        ),
+        cell: (info) => <ProcessCommand input={info.getValue() as string} />,
       }),
     ],
     [],

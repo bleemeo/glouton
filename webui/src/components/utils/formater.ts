@@ -121,7 +121,7 @@ export const percentToString = function (percent: number) {
     Math.trunc(percent) > 0
       ? d3FormaterHandlingNull(".3r")
       : d3FormaterHandlingNull(".2g");
-  return formatter(percent) + " %";
+  return formatter(percent) + "\u00A0%";
 };
 
 export const percentToString2Digits = (percent: number) => {
@@ -129,7 +129,7 @@ export const percentToString2Digits = (percent: number) => {
     Math.trunc(percent) > 0
       ? d3FormaterHandlingNull(".2r")
       : d3FormaterHandlingNull(".1f");
-  return formatter(percent) + " %";
+  return formatter(percent) + "\u00A0%";
 };
 
 export const defaultToString = function (value?: number) {

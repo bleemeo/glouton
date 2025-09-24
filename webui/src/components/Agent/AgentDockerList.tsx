@@ -1,4 +1,4 @@
-import { FC, useState, useEffect, useMemo, useCallback } from "react";
+import { FC, useState, useEffect, useMemo, useCallback, JSX } from "react";
 
 import Toggle from "../UI/Toggle";
 import QueryError from "../UI/QueryError";
@@ -64,7 +64,7 @@ const AgentDockerList: FC = () => {
     [],
   );
 
-  let displayContainers: React.JSX.Element | null = null;
+  let displayContainers: JSX.Element | null = null;
 
   if (isLoading && !isFetching) {
     // Only show loading if initial load is happening
@@ -75,7 +75,7 @@ const AgentDockerList: FC = () => {
     const containersList = containers.containers;
     const currentCountContainers = containers.currentCount;
 
-    const pages: React.JSX.Element[] = [];
+    const pages: JSX.Element[] = [];
 
     if (Math.ceil(currentCountContainers / PAGE_SIZE) > 1) {
       for (let i = 0; i < Math.ceil(currentCountContainers / PAGE_SIZE); i++) {
