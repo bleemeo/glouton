@@ -269,6 +269,8 @@ func (s *syncServicesExecution) serviceRegisterAndUpdate(ctx context.Context, ex
 				return fmt.Errorf("deleting inactive service %v on API: %w", key, err)
 			}
 
+			delete(registeredServices, remoteSrv.ID)
+
 			continue
 		}
 
