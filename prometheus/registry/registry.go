@@ -2023,19 +2023,19 @@ func fixLabels(lbls map[string]string) (map[string]string, error) {
 
 	for l, v := range lbls {
 		if l == types.LabelName {
-			if !model.IsValidMetricName(model.LabelValue(v)) {
+			if !types.PrometheusValidationScheme.IsValidMetricName(v) {
 				v = replacer.Replace(v)
 
-				if !model.IsValidMetricName(model.LabelValue(v)) {
+				if !types.PrometheusValidationScheme.IsValidMetricName(v) {
 					return nil, fmt.Errorf("%w: %v", errInvalidName, v)
 				}
 
 				lbls[types.LabelName] = v
 			}
 		} else {
-			if !model.LabelName(l).IsValid() {
+			if !types.PrometheusValidationScheme.IsValidLabelName(l) {
 				newL := replacer.Replace(l)
-				if !model.LabelName(newL).IsValid() {
+				if !types.PrometheusValidationScheme.IsValidLabelName(newL) {
 					return nil, fmt.Errorf("%w: %v", errInvalidName, l)
 				}
 

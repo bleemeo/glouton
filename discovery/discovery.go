@@ -39,7 +39,6 @@ import (
 	"dario.cat/mergo"
 	"github.com/influxdata/telegraf"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/common/model"
 	"gopkg.in/yaml.v3"
 )
 
@@ -171,9 +170,9 @@ func validateServices(services []config.Service, logProcessingCfg config.OpenTel
 			continue
 		}
 
-		if !model.IsValidMetricName(model.LabelValue(srv.Type)) {
+		if !types.PrometheusValidationScheme.IsValidMetricName(srv.Type) {
 			newServiceType := replacer.Replace(srv.Type)
-			if !model.IsValidMetricName(model.LabelValue(newServiceType)) {
+			if !types.PrometheusValidationScheme.IsValidMetricName(newServiceType) {
 				warning := fmt.Errorf(
 					"%w: service type \"%s\" can only contains letters, digits and underscore",
 					config.ErrInvalidValue, srv.Type,

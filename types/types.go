@@ -33,6 +33,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql/parser"
 )
@@ -48,6 +49,8 @@ const (
 	StatusCritical
 	StatusUnknown
 )
+
+const PrometheusValidationScheme = model.LegacyValidation
 
 const MaxMQTTPayloadSize = 1024 * 1024 // 1MiB
 
