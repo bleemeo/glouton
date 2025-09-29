@@ -19,6 +19,8 @@
 package psi
 
 import (
+	"fmt"
+
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
 	"github.com/bleemeo/glouton/prometheus/registry"
@@ -69,7 +71,8 @@ func transformMetrics(gatherContext internal.GatherContext, fields map[string]fl
 
 	for field, value := range fields {
 		if field == "total" {
-			result[gatherContext.Tags["resource"]+"_"+gatherContext.Tags["type"]] = value
+			name := fmt.Sprintf("%s_%s_perc", gatherContext.Tags["resource"], gatherContext.Tags["type"])
+			result[name] = value / 1e6 * 100
 		}
 	}
 

@@ -299,11 +299,11 @@ var (
 		"nvidia_smi_clocks_current_video",
 
 		// PSI
-		"psi_cpu_some",
-		"psi_io_full",
-		"psi_io_some",
-		"psi_memory_full",
-		"psi_memory_some",
+		"psi_cpu_some_perc",
+		"psi_io_full_perc",
+		"psi_io_some_perc",
+		"psi_memory_full_perc",
+		"psi_memory_some_perc",
 
 		// Temperature
 		`{__name__="sensor_temperature", sensor=~"coretemp_package_id_.*"}`,
@@ -319,7 +319,7 @@ var (
 		"hosts_stopped_count",
 	}
 
-	defaultServiceMetrics map[discovery.ServiceName][]string = map[discovery.ServiceName][]string{
+	defaultServiceMetrics = map[discovery.ServiceName][]string{
 		discovery.ApacheService: {
 			"apache_busy_workers",
 			"apache_busy_workers_perc",
