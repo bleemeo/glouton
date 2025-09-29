@@ -24,6 +24,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -363,17 +364,27 @@ func (cl *wrapperClient) ListDiagnostics(ctx context.Context) ([]bleemeoapi.Remo
 	return diagnostics, iter.Err()
 }
 
-func (cl *wrapperClient) UploadDiagnostic(ctx context.Context, contentType string, content io.Reader) error {
-	statusCode, reqErr := cl.DoWithBody(ctx, bleemeo.ResourceGloutonDiagnostic, contentType, content)
+func (cl *wrapperClient) UploadDiagnostic(ctx context.Context, contentType string, content io.Reader) (disableDelay time.Duration, err error) {
+	resp, reqErr := cl.DoWithBody(ctx, bleemeo.ResourceGloutonDiagnostic, contentType, content)
 	if reqErr != nil {
-		return reqErr
+		return 0, reqErr
 	}
 
-	if statusCode != http.StatusCreated {
-		return fmt.Errorf("%w: status %d %s", errUploadFailed, statusCode, http.StatusText(statusCode))
+	_, _ = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
+
+	if resp.StatusCode == http.StatusCreated {
+		return 0, nil
 	}
 
-	return nil
+	if resp.StatusCode == http.StatusTooManyRequests {
+		delaySecond, err := strconv.Atoi(resp.Header.Get("Retry-After"))
+		if err == nil {
+			return time.Duration(delaySecond) * time.Second, nil
+		}
+	}
+
+	return 0, fmt.Errorf("%w: status %d %s", errUploadFailed, resp.StatusCode, resp.Status)
 }
 
 func (cl *wrapperClient) ListFacts(ctx context.Context) ([]bleemeoTypes.AgentFact, error) {

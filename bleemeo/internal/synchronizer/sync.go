@@ -100,15 +100,16 @@ type Synchronizer struct {
 	logOnce             sync.Once
 	lastDenyReasonLogAt time.Time
 
-	l                      sync.Mutex
-	disabledUntil          time.Time
-	disableReason          bleemeoTypes.DisableReason
-	forceSync              map[types.EntityName]types.SyncType
-	pendingMetricsUpdate   []string
-	pendingMonitorsUpdate  []MonitorUpdate
-	thresholdOverrides     map[thresholdOverrideKey]threshold.Threshold
-	retryableMetricFailure map[bleemeoTypes.FailureKind]bool
-	lastInfo               bleemeoTypes.GlobalInfo
+	l                             sync.Mutex
+	disabledUntil                 time.Time
+	disableReason                 bleemeoTypes.DisableReason
+	forceSync                     map[types.EntityName]types.SyncType
+	pendingMetricsUpdate          []string
+	pendingMonitorsUpdate         []MonitorUpdate
+	thresholdOverrides            map[thresholdOverrideKey]threshold.Threshold
+	retryableMetricFailure        map[bleemeoTypes.FailureKind]bool
+	disableCrashReportUploadUntil time.Time
+	lastInfo                      bleemeoTypes.GlobalInfo
 	// Whether the agent MQTT status should be synced. This is used to avoid syncing
 	// the MQTT status too soon before the agent has tried to connect to MQTT.
 	shouldUpdateMQTTStatus bool
@@ -1287,6 +1288,20 @@ func (s *Synchronizer) requestSynchronizationLocked(entityName types.EntityName,
 	} else if s.forceSync[entityName] == types.SyncTypeNone {
 		s.forceSync[entityName] = types.SyncTypeNormal
 	}
+}
+
+func (s *Synchronizer) canUploadCrashReports() bool {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	return s.disableCrashReportUploadUntil.Before(s.now())
+}
+
+func (s *Synchronizer) disableCrashReportUpload(duration time.Duration) {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	s.disableCrashReportUploadUntil = s.now().Add(duration)
 }
 
 // stateHasValue returns whether the given state has a value for the given key.
