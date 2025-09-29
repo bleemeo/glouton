@@ -298,6 +298,13 @@ var (
 		"nvidia_smi_clocks_current_memory",
 		"nvidia_smi_clocks_current_video",
 
+		// PSI
+		"psi_cpu_some",
+		"psi_io_full",
+		"psi_io_some",
+		"psi_memory_full",
+		"psi_memory_some",
+
 		// Temperature
 		`{__name__="sensor_temperature", sensor=~"coretemp_package_id_.*"}`,
 		`{__name__="sensor_temperature", sensor="k10temp_tctl"}`,
