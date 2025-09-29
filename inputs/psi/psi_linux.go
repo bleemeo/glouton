@@ -44,8 +44,9 @@ func New() (telegraf.Input, registry.RegistrationOption, error) {
 	internalInput := &internal.Input{
 		Input: kernelInput,
 		Accumulator: internal.Accumulator{
-			RenameGlobal:     renameGlobal,
-			TransformMetrics: transformMetrics,
+			RenameGlobal:          renameGlobal,
+			DifferentiatedMetrics: []string{"total"},
+			TransformMetrics:      transformMetrics,
 		},
 		Name: "PSI",
 	}
