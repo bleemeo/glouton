@@ -27,6 +27,7 @@ import (
 
 const rotatePeriod time.Duration = 24 * time.Hour
 
+// rotatingLogs implements io.WriteCloser.
 type rotatingLogs struct {
 	location   string
 	basename   string
@@ -79,7 +80,6 @@ func (r *rotatingLogs) open() error {
 	return err
 }
 
-// rotatingLogs implements io.WriteCloser.
 func (r *rotatingLogs) Write(p []byte) (n int, err error) {
 	if r.fd == nil || time.Now().Truncate(rotatePeriod) != r.lastPeriod {
 		if r.fd != nil {

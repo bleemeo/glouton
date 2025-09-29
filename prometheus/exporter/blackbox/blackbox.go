@@ -49,7 +49,9 @@ const (
 	proberNameSSL  string = "ssl"
 	proberNameICMP string = "icmp"
 	proberNameDNS  string = "dns"
+)
 
+const (
 	// Context key to get the CA Root, used only in tests.
 	contextKeyTestInjectCARoot contextKey = iota
 	// Context key to get the time function.

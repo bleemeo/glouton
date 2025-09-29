@@ -794,7 +794,9 @@ func TestRegistry_slowGather(t *testing.T) { //nolint:maintidx
 	reg, err := New(Option{
 		PushPoint: pushFunction(func(_ context.Context, pts []types.MetricPoint) {
 			l.Lock()
+
 			points = append(points, pts...)
+
 			l.Unlock()
 		}),
 		FQDN:             "example.com",
@@ -1031,7 +1033,9 @@ func TestRegistry_run(t *testing.T) {
 	reg, err := New(Option{
 		PushPoint: pushFunction(func(_ context.Context, pts []types.MetricPoint) {
 			l.Lock()
+
 			points = append(points, pts...)
+
 			l.Unlock()
 		}),
 		FQDN:        "example.com",
@@ -3624,7 +3628,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				Option{
 					PushPoint: pushFunction(func(_ context.Context, pts []types.MetricPoint) {
 						l.Lock()
+
 						gotPoints = append(gotPoints, pts...)
+
 						l.Unlock()
 					}),
 					FQDN:        "server.bleemeo.com",

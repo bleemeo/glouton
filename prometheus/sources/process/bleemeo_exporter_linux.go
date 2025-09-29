@@ -42,7 +42,7 @@ type bleemeoExporter struct {
 	lastTime  map[string]time.Time
 }
 
-// Collect sends process metrics to the Appender.
+// CollectWithState sends process metrics to the Appender.
 func (b *bleemeoExporter) CollectWithState(_ context.Context, state registry.GatherState, app storage.Appender) error {
 	points, err := b.points(state.T0)
 	if err != nil {
