@@ -59,9 +59,18 @@ func (s *Synchronizer) syncDiagnostics(ctx context.Context, syncType types.SyncT
 	}
 
 	localDiagnostics := s.listOnDemandDiagnostics()
+	crashDiagnostics := crashreport.ListUnUploadedCrashReports(stateDir)
 
 	if s.canUploadCrashReports() {
-		localDiagnostics = append(localDiagnostics, addType(crashreport.ListUnUploadedCrashReports(stateDir), bleemeo.GloutonDiagnostic_Crash)...)
+		localDiagnostics = append(localDiagnostics, addType(crashDiagnostics, bleemeo.GloutonDiagnostic_Crash)...)
+	} else {
+		// Discard all crash diagnostics generated before the throttle deadline
+		for _, crashDiag := range crashDiagnostics {
+			err = crashDiag.MarkUploaded()
+			if err != nil {
+				logger.V(2).Printf("Failed to discard crash diagnostic: %v", err)
+			}
+		}
 	}
 
 	diagnosticsToUpload := make([]diagnosticWithBleemeoInfo, 0, len(localDiagnostics))
@@ -183,11 +192,7 @@ func (s *Synchronizer) uploadDiagnostic(ctx context.Context, apiClient types.Dia
 		return 0, err
 	}
 
-	if disabledDelay > 0 {
-		return disabledDelay, nil
-	}
-
-	return 0, diagnostic.MarkUploaded()
+	return disabledDelay, diagnostic.MarkUploaded()
 }
 
 type synchronizerOnDemandDiagnostic struct {

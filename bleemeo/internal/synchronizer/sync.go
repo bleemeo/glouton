@@ -54,8 +54,9 @@ import (
 )
 
 const (
-	agentBrokenCacheKey  = "AgentBroken"
-	refreshTokenCacheKey = "RefreshToken"
+	agentBrokenCacheKey              = "AgentBroken"
+	disableCrashReportUploadCacheKey = "DisableCrashReportUploadUntil"
+	refreshTokenCacheKey             = "RefreshToken"
 )
 
 var (
@@ -180,6 +181,12 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 
 	if s.option.State != nil {
 		s.agentID, _ = s.option.State.BleemeoCredentials()
+
+		if err := s.option.State.Get(disableCrashReportUploadCacheKey, &s.disableCrashReportUploadUntil); err != nil {
+			logger.V(1).Printf("Failed to load crash report upload throttle info from cache: %v", err)
+		} else if s.disableCrashReportUploadUntil.Before(s.now()) {
+			s.disableCrashReportUploadUntil = time.Time{}
+		}
 	}
 
 	return s
@@ -212,59 +219,61 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 	defer s.state.l.Unlock()
 
 	obj := struct {
-		NextFullSync               time.Time
-		HeartBeat                  time.Time
-		HeartbeatConsecutiveError  int
-		FullSyncCount              int
-		StartedAt                  time.Time
-		LastSync                   time.Time
-		LastMetricActivation       time.Time
-		LastFactUpdatedAt          string
-		SuccessiveErrors           int
-		FirstErrorAt               time.Time
-		WarnAccountMismatchDone    bool
-		MaintenanceMode            bool
-		LastMetricCount            int
-		AgentID                    string
-		LastMaintenanceSync        time.Time
-		DisabledUntil              time.Time
-		DisableReason              bleemeoTypes.DisableReason
-		ForceSync                  map[types.EntityName]types.SyncType
-		PendingMetricsUpdateCount  int
-		PendingMonitorsUpdateCount int
-		DelayedContainer           map[string]time.Time
-		RetryableMetricFailure     map[bleemeoTypes.FailureKind]bool
-		MetricRetryAt              time.Time
-		LastInfo                   bleemeoTypes.GlobalInfo
-		ThresholdOverrides         string
-		APIFeatures                map[string]bool
+		NextFullSync                  time.Time
+		HeartBeat                     time.Time
+		HeartbeatConsecutiveError     int
+		FullSyncCount                 int
+		StartedAt                     time.Time
+		LastSync                      time.Time
+		LastMetricActivation          time.Time
+		LastFactUpdatedAt             string
+		SuccessiveErrors              int
+		FirstErrorAt                  time.Time
+		WarnAccountMismatchDone       bool
+		MaintenanceMode               bool
+		LastMetricCount               int
+		AgentID                       string
+		LastMaintenanceSync           time.Time
+		DisabledUntil                 time.Time
+		DisableReason                 bleemeoTypes.DisableReason
+		ForceSync                     map[types.EntityName]types.SyncType
+		PendingMetricsUpdateCount     int
+		PendingMonitorsUpdateCount    int
+		DelayedContainer              map[string]time.Time
+		RetryableMetricFailure        map[bleemeoTypes.FailureKind]bool
+		MetricRetryAt                 time.Time
+		DisableCrashReportUploadUntil time.Time
+		LastInfo                      bleemeoTypes.GlobalInfo
+		ThresholdOverrides            string
+		APIFeatures                   map[string]bool
 	}{
-		NextFullSync:               s.nextFullSync,
-		HeartBeat:                  s.syncHeartbeat,
-		HeartbeatConsecutiveError:  s.heartbeatConsecutiveError,
-		FullSyncCount:              s.fullSyncCount,
-		StartedAt:                  s.startedAt,
-		LastSync:                   s.lastSync,
-		LastFactUpdatedAt:          s.state.lastFactUpdatedAt,
-		LastMetricActivation:       s.state.lastMetricActivation,
-		SuccessiveErrors:           s.successiveErrors,
-		FirstErrorAt:               s.firstErrorAt,
-		WarnAccountMismatchDone:    s.warnAccountMismatchDone,
-		MaintenanceMode:            s.maintenanceMode,
-		LastMetricCount:            s.state.lastMetricCount,
-		AgentID:                    s.agentID,
-		LastMaintenanceSync:        s.state.lastMaintenanceSync,
-		DisabledUntil:              s.disabledUntil,
-		DisableReason:              s.disableReason,
-		ForceSync:                  s.forceSync,
-		PendingMetricsUpdateCount:  len(s.pendingMetricsUpdate),
-		PendingMonitorsUpdateCount: len(s.pendingMonitorsUpdate),
-		DelayedContainer:           delayedContainer,
-		RetryableMetricFailure:     s.retryableMetricFailure,
-		MetricRetryAt:              s.state.metricRetryAt,
-		LastInfo:                   s.lastInfo,
-		ThresholdOverrides:         fmt.Sprintf("%v", s.thresholdOverrides),
-		APIFeatures:                make(map[string]bool, len(s.hasFeature)),
+		NextFullSync:                  s.nextFullSync,
+		HeartBeat:                     s.syncHeartbeat,
+		HeartbeatConsecutiveError:     s.heartbeatConsecutiveError,
+		FullSyncCount:                 s.fullSyncCount,
+		StartedAt:                     s.startedAt,
+		LastSync:                      s.lastSync,
+		LastFactUpdatedAt:             s.state.lastFactUpdatedAt,
+		LastMetricActivation:          s.state.lastMetricActivation,
+		SuccessiveErrors:              s.successiveErrors,
+		FirstErrorAt:                  s.firstErrorAt,
+		WarnAccountMismatchDone:       s.warnAccountMismatchDone,
+		MaintenanceMode:               s.maintenanceMode,
+		LastMetricCount:               s.state.lastMetricCount,
+		AgentID:                       s.agentID,
+		LastMaintenanceSync:           s.state.lastMaintenanceSync,
+		DisabledUntil:                 s.disabledUntil,
+		DisableReason:                 s.disableReason,
+		ForceSync:                     s.forceSync,
+		PendingMetricsUpdateCount:     len(s.pendingMetricsUpdate),
+		PendingMonitorsUpdateCount:    len(s.pendingMonitorsUpdate),
+		DelayedContainer:              delayedContainer,
+		RetryableMetricFailure:        s.retryableMetricFailure,
+		MetricRetryAt:                 s.state.metricRetryAt,
+		DisableCrashReportUploadUntil: s.disableCrashReportUploadUntil,
+		LastInfo:                      s.lastInfo,
+		ThresholdOverrides:            fmt.Sprintf("%v", s.thresholdOverrides),
+		APIFeatures:                   make(map[string]bool, len(s.hasFeature)),
 	}
 
 	for k, v := range s.hasFeature {
@@ -1298,10 +1307,15 @@ func (s *Synchronizer) canUploadCrashReports() bool {
 }
 
 func (s *Synchronizer) disableCrashReportUpload(duration time.Duration) {
-	s.l.Lock()
-	defer s.l.Unlock()
+	until := s.now().Add(duration)
 
-	s.disableCrashReportUploadUntil = s.now().Add(duration)
+	s.l.Lock()
+	s.disableCrashReportUploadUntil = until
+	s.l.Unlock()
+
+	if err := s.option.State.Set(disableCrashReportUploadCacheKey, until); err != nil {
+		logger.V(1).Printf("Failed to save crash report upload throttle info to cache: %v", err)
+	}
 }
 
 // stateHasValue returns whether the given state has a value for the given key.
