@@ -40,9 +40,11 @@ import (
 	"github.com/bleemeo/glouton/types"
 
 	"github.com/prometheus/client_golang/prometheus"
+	admv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
+	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -85,8 +87,11 @@ const (
 )
 
 var (
-	errNoDecodedData = errors.New("no data decoded in raw certificate")
-	errMissingConfig = errors.New("missing configuration")
+	errNoCertFound         = errors.New("no certificate found")
+	errNodeHasNoInternalIP = errors.New("node has no internal IP")
+	errUnexpectedConnType  = errors.New("unexpected connection type")
+	errNoDecodedData       = errors.New("no data decoded in raw certificate")
+	errMissingConfig       = errors.New("missing configuration")
 )
 
 func (k *Kubernetes) ContainerExists(id string) bool {
@@ -345,13 +350,13 @@ func (k *Kubernetes) MetricsMinute(ctx context.Context, now time.Time) ([]types.
 	}
 
 	if cl.IsUsingLocalAPI() {
-		morePoints, errors := k.getMasterPoints(ctx, cl, now)
+		morePoints, errors := k.getLocalAPIPoints(ctx, cl, now)
 
 		points = append(points, morePoints...)
 		multiErr = append(multiErr, errors...)
 	}
 
-	morePoints, errors := k.getKubeletPoint(ctx, cl, now)
+	morePoints, errors := k.getKubeletPoints(ctx, cl, now)
 
 	points = append(points, morePoints...)
 	multiErr = append(multiErr, errors...)
@@ -364,6 +369,20 @@ func (k *Kubernetes) MetricsMinute(ctx context.Context, now time.Time) ([]types.
 		}
 
 		points = append(points, morePoints...)
+
+		crdCertPoints, err := k.getCRDCertificateExpirations(ctx, now)
+		if err != nil {
+			multiErr = append(multiErr, err)
+		}
+
+		points = append(points, crdCertPoints...)
+
+		webhookConfigCertPoints, err := k.getWebhookConfigCertificateExpirations(ctx, now)
+		if err != nil {
+			multiErr = append(multiErr, err)
+		}
+
+		points = append(points, webhookConfigCertPoints...)
 	}
 
 	return points, multiErr.MaybeUnwrap()
@@ -422,7 +441,7 @@ func (k *Kubernetes) getCertificateExpiration(ctx context.Context, config *rest.
 		// Something went wrong with the TLS handshake, we consider the certificate as expired
 		logger.V(2).Println("An error occurred on TLS handshake:", err)
 
-		return createPointFromCertTime(time.Now(), certExpLabel, now)
+		return createPointFromCertTime(time.Now(), certExpLabel, now, types.LabelItem, "api"), nil
 	}
 
 	if len(tlsConn.ConnectionState().PeerCertificates) == 0 {
@@ -433,10 +452,10 @@ func (k *Kubernetes) getCertificateExpiration(ctx context.Context, config *rest.
 
 	expiry := tlsConn.ConnectionState().PeerCertificates[0]
 
-	return createPointFromCertTime(expiry.NotAfter, certExpLabel, now)
+	return createPointFromCertTime(expiry.NotAfter, certExpLabel, now, types.LabelItem, "api"), nil
 }
 
-func (k *Kubernetes) getMasterPoints(ctx context.Context, cl kubeClient, now time.Time) ([]types.MetricPoint, []error) {
+func (k *Kubernetes) getLocalAPIPoints(ctx context.Context, cl kubeClient, now time.Time) ([]types.MetricPoint, []error) {
 	var err types.MultiErrors
 
 	points := make([]types.MetricPoint, 0, 3)
@@ -486,7 +505,7 @@ func (k *Kubernetes) getMasterPoints(ctx context.Context, cl kubeClient, now tim
 	return points, err
 }
 
-func (k *Kubernetes) getKubeletPoint(ctx context.Context, cl kubeClient, now time.Time) ([]types.MetricPoint, []error) {
+func (k *Kubernetes) getKubeletPoints(ctx context.Context, cl kubeClient, now time.Time) ([]types.MetricPoint, []error) {
 	if k.NodeName == "" {
 		return nil, []error{fmt.Errorf("%w: kubernetes.nodename is missing", errMissingConfig)}
 	}
@@ -517,7 +536,7 @@ func (k *Kubernetes) getKubeletPoint(ctx context.Context, cl kubeClient, now tim
 			if cond.Status != corev1.ConditionTrue {
 				point.Annotations.Status = types.StatusDescription{
 					CurrentStatus:     types.StatusCritical,
-					StatusDescription: "node is not ready: ",
+					StatusDescription: "node is not ready: " + cond.Message,
 				}
 			}
 		case corev1.NodeDiskPressure, corev1.NodeMemoryPressure, corev1.NodePIDPressure:
@@ -551,7 +570,30 @@ func (k *Kubernetes) getKubeletPoint(ctx context.Context, cl kubeClient, now tim
 
 	point.Point.Value = float64(point.Annotations.Status.CurrentStatus.NagiosCode())
 
-	return []types.MetricPoint{point}, nil
+	var ip string
+
+	for _, a := range node.Status.Addresses {
+		if a.Type == corev1.NodeInternalIP && a.Address != "" {
+			ip = a.Address
+
+			break
+		}
+	}
+
+	if ip == "" {
+		return []types.MetricPoint{point}, []error{fmt.Errorf("can't retrieve kubelet cert: %w", errNodeHasNoInternalIP)}
+	}
+
+	addr := net.JoinHostPort(ip, "10250")
+
+	cert, err := fetchServerCert(ctx, addr)
+	if err != nil {
+		return []types.MetricPoint{point}, []error{fmt.Errorf("fetching kubelet cert: %w", err)}
+	}
+
+	certPoint := createPointFromCertTime(cert.NotAfter, certExpLabel, now, types.LabelItem, "kubelet")
+
+	return []types.MetricPoint{point, certPoint}, nil
 }
 
 func (k *Kubernetes) getCACertificateExpiration(config *rest.Config, now time.Time) (types.MetricPoint, error) {
@@ -576,7 +618,121 @@ func (k *Kubernetes) getCACertificateExpiration(config *rest.Config, now time.Ti
 		return types.MetricPoint{}, err
 	}
 
-	return createPointFromCertTime(caCert.NotAfter, caExpLabel, now)
+	return createPointFromCertTime(caCert.NotAfter, caExpLabel, now), nil
+}
+
+func (k *Kubernetes) getCRDCertificateExpirations(ctx context.Context, now time.Time) ([]types.MetricPoint, error) {
+	crds, err := k.client.GetCRDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	certPoints := make([]types.MetricPoint, 0, len(crds))
+
+	for _, crd := range crds {
+		if crd.Spec.Conversion != nil &&
+			crd.Spec.Conversion.Webhook != nil &&
+			crd.Spec.Conversion.Webhook.ClientConfig != nil &&
+			len(crd.Spec.Conversion.Webhook.ClientConfig.CABundle) > 0 {
+			cert, err := decodeRawCert(crd.Spec.Conversion.Webhook.ClientConfig.CABundle)
+			if err != nil {
+				logger.V(2).Printf("Error decoding certificate from CRD %q: %v", crd.Name, err)
+
+				continue
+			}
+
+			labels := []string{
+				types.LabelItem, "crd-" + crd.Name,
+				types.LabelMetaKubernetesCluster, k.ClusterName,
+			}
+
+			certPoint := createPointFromCertTime(cert.NotAfter, certExpLabel, now, labels...)
+			certPoints = append(certPoints, certPoint)
+		}
+	}
+
+	return certPoints, nil
+}
+
+func (k *Kubernetes) getWebhookConfigCertificateExpirations(ctx context.Context, now time.Time) ([]types.MetricPoint, error) {
+	mutList, valList, err := k.client.GetWebhookConfigurations(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	certPoints := make([]types.MetricPoint, 0, len(mutList)+len(valList))
+
+	for _, mwc := range mutList {
+		for _, webhook := range mwc.Webhooks {
+			if len(webhook.ClientConfig.CABundle) > 0 {
+				cert, err := decodeRawCert(webhook.ClientConfig.CABundle)
+				if err != nil {
+					logger.V(2).Printf("Error decoding certificate from MutatingWebhookConfiguration %q (WebHook %q): %v", mwc.Name, webhook.Name, err)
+
+					continue
+				}
+
+				labels := []string{
+					types.LabelItem, "mutatingwebhookconfig-" + mwc.Name + "-" + webhook.Name,
+					types.LabelMetaKubernetesCluster, k.ClusterName,
+				}
+
+				certPoint := createPointFromCertTime(cert.NotAfter, certExpLabel, now, labels...)
+				certPoints = append(certPoints, certPoint)
+			}
+		}
+	}
+
+	for _, vwc := range valList {
+		for _, webhook := range vwc.Webhooks {
+			if len(webhook.ClientConfig.CABundle) > 0 {
+				cert, err := decodeRawCert(webhook.ClientConfig.CABundle)
+				if err != nil {
+					logger.V(2).Printf("Error decoding certificate from ValidatingWebhookConfiguration %q (WebHook %q): %v", vwc.Name, webhook.Name, err)
+
+					continue
+				}
+
+				labels := []string{
+					types.LabelItem, "validatingwebhookconfig-" + vwc.Name + "-" + webhook.Name,
+					types.LabelMetaKubernetesCluster, k.ClusterName,
+				}
+
+				certPoint := createPointFromCertTime(cert.NotAfter, certExpLabel, now, labels...)
+				certPoints = append(certPoints, certPoint)
+			}
+		}
+	}
+
+	return certPoints, nil
+}
+
+func fetchServerCert(ctx context.Context, addr string) (*x509.Certificate, error) {
+	d := &tls.Dialer{
+		NetDialer: &net.Dialer{Timeout: 5 * time.Second},
+		Config: &tls.Config{
+			InsecureSkipVerify: true, //nolint: gosec // We just want the cert, we don’t care about trust.
+		},
+	}
+
+	conn, err := d.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("dial error: %w", err)
+	}
+
+	defer conn.Close()
+
+	tlsConn, ok := conn.(*tls.Conn)
+	if !ok {
+		return nil, fmt.Errorf("%w: %T", errUnexpectedConnType, conn)
+	}
+
+	state := tlsConn.ConnectionState()
+	if len(state.PeerCertificates) == 0 {
+		return nil, errNoCertFound
+	}
+
+	return state.PeerCertificates[0], nil
 }
 
 func decodeRawCert(rawData []byte) (*x509.Certificate, error) {
@@ -597,10 +753,16 @@ func decodeRawCert(rawData []byte) (*x509.Certificate, error) {
 	return certData, nil
 }
 
-func createPointFromCertTime(certTime time.Time, label string, now time.Time) (types.MetricPoint, error) {
-	labels := make(map[string]string)
+func createPointFromCertTime(certTime time.Time, label string, now time.Time, extraLabelsKV ...string) types.MetricPoint {
+	labels := map[string]string{types.LabelName: label}
 
-	labels[types.LabelName] = label
+	if len(extraLabelsKV)%2 != 0 {
+		panic(fmt.Sprintf("odd number of labels provided (got %q)", extraLabelsKV))
+	}
+
+	for i := 0; i < len(extraLabelsKV); i += 2 {
+		labels[extraLabelsKV[i]] = extraLabelsKV[i+1]
+	}
 
 	remainingDays := certTime.Sub(now).Hours() / 24
 
@@ -616,7 +778,7 @@ func createPointFromCertTime(certTime time.Time, label string, now time.Time) (t
 		},
 		Labels:      labels,
 		Annotations: types.MetricAnnotations{},
-	}, nil
+	}
 }
 
 func (k *Kubernetes) getClient(ctx context.Context) (cl kubeClient, err error) {
@@ -697,18 +859,24 @@ type kubeClient interface {
 	GetPODs(ctx context.Context, nodeName string) ([]corev1.Pod, error)
 	// GetNamespaces returns all namespaces in the cluster.
 	GetNamespaces(ctx context.Context) ([]corev1.Namespace, error)
-	// GetReplicasets return all replicasets in the cluster.
+	// GetReplicasets returns all replicasets in the cluster.
 	GetReplicasets(ctx context.Context) ([]appsv1.ReplicaSet, error)
+	// GetCRDs returns all CRDs in the cluster.
+	GetCRDs(ctx context.Context) ([]apiextv1.CustomResourceDefinition, error)
+	// GetWebhookConfigurations returns all MutatingWebhookConfigurations and ValidatingWebhookConfigurations in the cluster.
+	GetWebhookConfigurations(ctx context.Context) ([]admv1.MutatingWebhookConfiguration, []admv1.ValidatingWebhookConfiguration, error)
 	GetServerVersion(ctx context.Context) (*version.Info, error)
 	IsUsingLocalAPI() bool
 	Config() *rest.Config
 }
 
 type realClient struct {
-	// We need one client per "API version" (v1, discovery.k8s.io/v1, apps/v1)
+	// We need one client per API group (v1, discovery.k8s.io/v1, apps/v1, ...)
 	coreClient  *rest.RESTClient
 	discoClient *rest.RESTClient
 	appsClient  *rest.RESTClient
+	extClient   *rest.RESTClient
+	admClient   *rest.RESTClient
 
 	config      *rest.Config
 	useLocalAPI bool
@@ -785,6 +953,42 @@ func (cl *realClient) GetReplicasets(ctx context.Context) ([]appsv1.ReplicaSet, 
 	return replicasets.Items, nil
 }
 
+func (cl *realClient) GetCRDs(ctx context.Context) ([]apiextv1.CustomResourceDefinition, error) {
+	var crds apiextv1.CustomResourceDefinitionList
+
+	err := cl.extClient.Get().Resource("customresourcedefinitions").Do(ctx).Into(&crds)
+	if err != nil {
+		return nil, err
+	}
+
+	return crds.Items, nil
+}
+
+func (cl *realClient) GetWebhookConfigurations(ctx context.Context) ([]admv1.MutatingWebhookConfiguration, []admv1.ValidatingWebhookConfiguration, error) {
+	var (
+		mutList admv1.MutatingWebhookConfigurationList
+		valList admv1.ValidatingWebhookConfigurationList
+	)
+
+	err := cl.admClient.Get().
+		AbsPath("/apis/admissionregistration.k8s.io/v1/mutatingwebhookconfigurations").
+		Do(ctx).
+		Into(&mutList)
+	if err != nil {
+		return nil, nil, fmt.Errorf("mutatingwebhookconfigurations: %w", err)
+	}
+
+	err = cl.admClient.Get().
+		AbsPath("/apis/admissionregistration.k8s.io/v1/validatingwebhookconfigurations").
+		Do(ctx).
+		Into(&valList)
+	if err != nil {
+		return nil, nil, fmt.Errorf("validatingwebhookconfigurations: %w", err)
+	}
+
+	return mutList.Items, valList.Items, nil
+}
+
 func (cl *realClient) GetServerVersion(ctx context.Context) (*version.Info, error) {
 	// This is cl.client.ServerVersion() but with a context.
 	body, err := cl.coreClient.Get().AbsPath("/version").Do(ctx).Raw()
@@ -825,7 +1029,7 @@ func getRestConfig(kubeConfig string) (*rest.Config, error) {
 	return config, err
 }
 
-func makeClients(config *rest.Config) (coreClient, discoClient, appsClient *rest.RESTClient, err error) {
+func makeClients(config *rest.Config) (coreClient, discoClient, appsClient, extClient, admClient *rest.RESTClient, err error) {
 	clientSetups := []struct {
 		groupVersion  *schema.GroupVersion
 		addToSchemeFn func(*runtime.Scheme) error
@@ -850,6 +1054,18 @@ func makeClients(config *rest.Config) (coreClient, discoClient, appsClient *rest
 			apiPath:       "/apis",
 			result:        &appsClient,
 		},
+		{
+			groupVersion:  &apiextv1.SchemeGroupVersion,
+			addToSchemeFn: apiextv1.AddToScheme,
+			apiPath:       "/apis",
+			result:        &extClient,
+		},
+		{
+			groupVersion:  &admv1.SchemeGroupVersion,
+			addToSchemeFn: admv1.AddToScheme,
+			apiPath:       "/apis",
+			result:        &admClient,
+		},
 	}
 
 	for _, setup := range clientSetups {
@@ -857,22 +1073,22 @@ func makeClients(config *rest.Config) (coreClient, discoClient, appsClient *rest
 
 		err = setup.addToSchemeFn(scheme)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to build scheme for %s: %w", setup.groupVersion, err)
+			return nil, nil, nil, nil, nil, fmt.Errorf("failed to build scheme for %s: %w", setup.groupVersion, err)
 		}
 
 		cfgCopy := *config
-		cfgCopy.ContentConfig.GroupVersion = setup.groupVersion
+		cfgCopy.GroupVersion = setup.groupVersion
 		cfgCopy.APIPath = setup.apiPath
 		cfgCopy.NegotiatedSerializer = serializer.NewCodecFactory(scheme).WithoutConversion()
 		cfgCopy.UserAgent = rest.DefaultKubernetesUserAgent()
 
 		*setup.result, err = rest.UnversionedRESTClientFor(&cfgCopy)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("for %s: %w", setup.groupVersion, err)
+			return nil, nil, nil, nil, nil, fmt.Errorf("for %s: %w", setup.groupVersion, err)
 		}
 	}
 
-	return coreClient, discoClient, appsClient, nil
+	return coreClient, discoClient, appsClient, extClient, admClient, nil
 }
 
 func openConnection(ctx context.Context, kubeConfig string, localNode string) (kubeClient, error) {
@@ -881,7 +1097,7 @@ func openConnection(ctx context.Context, kubeConfig string, localNode string) (k
 		return nil, err
 	}
 
-	coreClient, discoClient, appsClient, err := makeClients(config)
+	coreClient, discoClient, appsClient, extClient, admClient, err := makeClients(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build rest clients: %w", err)
 	}
@@ -890,6 +1106,8 @@ func openConnection(ctx context.Context, kubeConfig string, localNode string) (k
 		coreClient:  coreClient,
 		discoClient: discoClient,
 		appsClient:  appsClient,
+		extClient:   extClient,
+		admClient:   admClient,
 		config:      config,
 		useLocalAPI: false,
 	}
@@ -962,7 +1180,7 @@ func (cl *realClient) switchToLocalAPI(ctx context.Context, localNode string) (b
 				shallowCopy := *cl.config
 				shallowCopy.Host = "https://" + net.JoinHostPort(ip, strconv.FormatInt(int64(httpsPort), 10))
 
-				coreClient, discoClient, appsClient, err := makeClients(&shallowCopy)
+				coreClient, discoClient, appsClient, extClient, admClient, err := makeClients(&shallowCopy)
 				if err != nil {
 					return false, fmt.Errorf("failed to build rest clients: %w", err)
 				}
@@ -980,6 +1198,8 @@ func (cl *realClient) switchToLocalAPI(ctx context.Context, localNode string) (b
 				cl.coreClient = coreClient
 				cl.discoClient = discoClient
 				cl.appsClient = appsClient
+				cl.extClient = extClient
+				cl.admClient = admClient
 				cl.config = &shallowCopy
 				cl.useLocalAPI = true
 
