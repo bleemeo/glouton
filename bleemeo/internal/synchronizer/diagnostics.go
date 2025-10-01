@@ -24,6 +24,7 @@ import (
 	"io"
 	"mime/multipart"
 	"strconv"
+	"time"
 
 	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
@@ -57,8 +58,21 @@ func (s *Synchronizer) syncDiagnostics(ctx context.Context, syncType types.SyncT
 		return false, nil
 	}
 
-	localDiagnostics := addType(crashreport.ListUnUploadedCrashReports(stateDir), bleemeo.GloutonDiagnostic_Crash)
-	localDiagnostics = append(localDiagnostics, s.listOnDemandDiagnostics()...)
+	localDiagnostics := s.listOnDemandDiagnostics()
+	crashDiagnostics := crashreport.ListUnUploadedCrashReports(stateDir)
+
+	if s.canUploadCrashReports() {
+		localDiagnostics = append(localDiagnostics, addType(crashDiagnostics, bleemeo.GloutonDiagnostic_Crash)...)
+	} else {
+		// Discard all crash diagnostics generated before the throttle deadline
+		for _, crashDiag := range crashDiagnostics {
+			err = crashDiag.MarkUploaded()
+			if err != nil {
+				logger.V(2).Printf("Failed to discard crash diagnostic: %v", err)
+			}
+		}
+	}
+
 	diagnosticsToUpload := make([]diagnosticWithBleemeoInfo, 0, len(localDiagnostics))
 
 	for _, diagnostic := range localDiagnostics {
@@ -111,22 +125,31 @@ func (s *Synchronizer) listOnDemandDiagnostics() []diagnosticWithBleemeoInfo {
 
 func (s *Synchronizer) uploadDiagnostics(ctx context.Context, apiClient types.DiagnosticClient, diagnostics []diagnosticWithBleemeoInfo) error {
 	for _, diagnostic := range diagnostics {
-		if err := s.uploadDiagnostic(ctx, apiClient, diagnostic); err != nil {
+		disabledUntil, err := s.uploadDiagnostic(ctx, apiClient, diagnostic)
+		if err != nil {
 			return fmt.Errorf("failed to upload crash diagnostic %s: %w", diagnostic.Filename(), err)
+		}
+
+		if disabledUntil > 0 {
+			s.disableCrashReportUpload(disabledUntil)
+
+			logger.V(2).Printf("Crash reports upload is disabled for %s", disabledUntil)
+
+			break // crash reports are expected to be the last diagnostics from the list
 		}
 	}
 
 	return nil
 }
 
-func (s *Synchronizer) uploadDiagnostic(ctx context.Context, apiClient types.DiagnosticClient, diagnostic diagnosticWithBleemeoInfo) error {
+func (s *Synchronizer) uploadDiagnostic(ctx context.Context, apiClient types.DiagnosticClient, diagnostic diagnosticWithBleemeoInfo) (disableDelay time.Duration, err error) {
 	if ctxErr := ctx.Err(); ctxErr != nil {
-		return ctxErr
+		return 0, ctxErr
 	}
 
 	reader, err := diagnostic.Reader()
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	defer reader.Close()
@@ -134,7 +157,7 @@ func (s *Synchronizer) uploadDiagnostic(ctx context.Context, apiClient types.Dia
 	if reader.Len() > bleemeoapi.DiagnosticMaxSize {
 		logger.V(2).Printf("Skipping crash diagnostic %s which is too big.", diagnostic.Filename())
 
-		return diagnostic.MarkUploaded()
+		return 0, diagnostic.MarkUploaded()
 	}
 
 	buf := new(bytes.Buffer)
@@ -142,34 +165,34 @@ func (s *Synchronizer) uploadDiagnostic(ctx context.Context, apiClient types.Dia
 
 	err = multipartWriter.WriteField("type", strconv.Itoa(int(diagnostic.diagnosticType)))
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	if diagnostic.requestToken != "" {
 		err = multipartWriter.WriteField("request_token", diagnostic.requestToken)
 		if err != nil {
-			return err
+			return 0, err
 		}
 	}
 
 	formFile, err := multipartWriter.CreateFormFile("archive", diagnostic.Filename())
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	_, err = io.Copy(formFile, reader)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	_ = multipartWriter.Close()
 
-	err = apiClient.UploadDiagnostic(ctx, multipartWriter.FormDataContentType(), buf)
+	disabledDelay, err := apiClient.UploadDiagnostic(ctx, multipartWriter.FormDataContentType(), buf)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	return diagnostic.MarkUploaded()
+	return disabledDelay, diagnostic.MarkUploaded()
 }
 
 type synchronizerOnDemandDiagnostic struct {

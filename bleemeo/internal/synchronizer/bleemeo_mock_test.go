@@ -314,7 +314,7 @@ func (wcm *wrapperClientMock) ListDiagnostics(context.Context) ([]bleemeoapi.Rem
 	return wcm.resources.gloutonDiagnostics.clone(), nil
 }
 
-func (wcm *wrapperClientMock) UploadDiagnostic(ctx context.Context, contentType string, content io.Reader) error {
+func (wcm *wrapperClientMock) UploadDiagnostic(ctx context.Context, contentType string, content io.Reader) (time.Duration, error) {
 	wcm.requestCounts[mockAPIGloutonDiagnostic]++
 
 	panic("implement me")
