@@ -31,7 +31,7 @@ type encoder struct {
 	zlibWriter *zlib.Writer
 }
 
-// Encode is thread-safe.
+// EncodeObject is thread-safe.
 func (e *encoder) EncodeObject(obj any) ([]byte, error) {
 	backingBuffer := e.getBuffer()
 	buffer := bytes.NewBuffer(backingBuffer)

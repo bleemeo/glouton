@@ -1177,7 +1177,7 @@ func (m *metricFilter) isAllowed(lbls map[string]string) bool {
 	return false
 }
 
-// Returns whether this metric is in the allow list and not in the deny list.
+// IsMetricAllowed returns whether this metric is in the allow list and not in the deny list.
 func (m *metricFilter) IsMetricAllowed(lbls labels.Labels, allowNeededByRules bool) bool {
 	m.l.Lock()
 	defer m.l.Unlock()

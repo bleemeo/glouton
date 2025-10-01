@@ -389,7 +389,7 @@ func (di diskInfo) ToStatusDescription() types.StatusDescription {
 	}
 }
 
-// ToDdeviceLabel return a human friendly identifier of the disk.
+// ToDeviceLabel return a human friendly identifier of the disk.
 // Based on testdata gen8-two-controller I believe
 //   - controller is likely bind to physical *cable*
 //   - array is likely only a logical thing. It don't help to identify

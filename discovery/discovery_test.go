@@ -34,17 +34,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/influxdata/telegraf"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/common/model"
 )
-
-//nolint:gochecknoinits
-func init() {
-	// We want to keep the strict name validation.
-	// It is done globally in agent/agent.go,
-	// but since the agent package isn't loaded during these tests,
-	// we must do it here too.
-	model.NameValidationScheme = model.LegacyValidation //nolint: staticcheck,nolintlint
-}
 
 var (
 	errNotImplemented = errors.New("not implemented")

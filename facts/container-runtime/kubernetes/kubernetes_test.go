@@ -36,6 +36,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
+	prometheusModel "github.com/prometheus/common/model"
 	admv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -969,7 +970,7 @@ func TestClusterMetrics(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var parser expfmt.TextParser
+	parser := expfmt.NewTextParser(prometheusModel.LegacyValidation)
 
 	expectedMfsMap, err := parser.TextToMetricFamilies(f)
 	if err != nil {

@@ -41,22 +41,12 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/influxdata/telegraf"
 	dto "github.com/prometheus/client_model/go"
-	commonmodel "github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/gate"
 	"golang.org/x/sync/errgroup"
 )
-
-//nolint:gochecknoinits
-func init() {
-	// We want to keep the strict name validation.
-	// It is done globally in agent/agent.go,
-	// but since the agent package isn't loaded during these tests,
-	// we must do it here too.
-	commonmodel.NameValidationScheme = commonmodel.LegacyValidation //nolint: staticcheck
-}
 
 const testAgentID = "fcdc81a8-5bce-4305-8108-8e1e75439329"
 
@@ -804,7 +794,9 @@ func TestRegistry_slowGather(t *testing.T) { //nolint:maintidx
 	reg, err := New(Option{
 		PushPoint: pushFunction(func(_ context.Context, pts []types.MetricPoint) {
 			l.Lock()
+
 			points = append(points, pts...)
+
 			l.Unlock()
 		}),
 		FQDN:             "example.com",
@@ -1041,7 +1033,9 @@ func TestRegistry_run(t *testing.T) {
 	reg, err := New(Option{
 		PushPoint: pushFunction(func(_ context.Context, pts []types.MetricPoint) {
 			l.Lock()
+
 			points = append(points, pts...)
+
 			l.Unlock()
 		}),
 		FQDN:        "example.com",
@@ -3634,7 +3628,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				Option{
 					PushPoint: pushFunction(func(_ context.Context, pts []types.MetricPoint) {
 						l.Lock()
+
 						gotPoints = append(gotPoints, pts...)
+
 						l.Unlock()
 					}),
 					FQDN:        "server.bleemeo.com",

@@ -39,6 +39,9 @@ linters:
           deny:
             - pkg: io/ioutil
               desc: ioutil is deprecated starting with Go 1.16
+    godoclint:
+      disable:
+        - single-pkg-doc
     nolintlint:
       # Require nolint directives to mention the specific linter being suppressed.
       require-specific: true
@@ -69,6 +72,10 @@ linters:
       - third_party$
       - builtin$
       - examples$
+    rules:
+      - linters:
+          - gofumpt
+        source: "^\\s+return$"
 
 issues:
   max-issues-per-linter: 0

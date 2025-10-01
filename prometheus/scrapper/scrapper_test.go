@@ -31,6 +31,7 @@ import (
 
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
+	prometheusModel "github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"google.golang.org/protobuf/proto"
 )
@@ -49,7 +50,7 @@ func parserReaderReference(data []byte, filter func(lbls labels.Labels) bool) ([
 	// filter isn't used by TextToMetricFamilies
 	_ = filter
 
-	var parser expfmt.TextParser
+	parser := expfmt.NewTextParser(prometheusModel.LegacyValidation)
 
 	resultMap, err := parser.TextToMetricFamilies(bytes.NewReader(data))
 	if err != nil {

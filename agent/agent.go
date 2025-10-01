@@ -101,16 +101,9 @@ import (
 	processSource "github.com/bleemeo/glouton/prometheus/sources/process"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"gopkg.in/yaml.v3"
 )
-
-//nolint:gochecknoinits
-func init() {
-	// We want to keep Prometheus's strict name validation.
-	model.NameValidationScheme = model.LegacyValidation //nolint: staticcheck,nolintlint
-}
 
 // Jitter define the aligned timestamp used for scrapping.
 // System collector use 0 (baseJitter here and in registry.go).

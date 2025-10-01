@@ -33,6 +33,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql/parser"
 )
@@ -48,6 +49,8 @@ const (
 	StatusCritical
 	StatusUnknown
 )
+
+const PrometheusValidationScheme = model.LegacyValidation
 
 const MaxMQTTPayloadSize = 1024 * 1024 // 1MiB
 
@@ -65,7 +68,7 @@ const (
 
 	// ReservedLabelPrefix is a prefix which is not legal in user-supplied label names.
 	ReservedLabelPrefix = "__"
-	// Label starting with "__" are dropped after collections and are only accessible
+	//nolint: godoclint // Label starting with "__" are dropped after collections and are only accessible
 	// internally (e.g. not present on /metrics, on Bleemeo Cloud or in the local store),
 	// they are dropped by the metric registry.
 	// They can be used to know the origin of a metric. Unlike label which don't start by "__",
@@ -114,7 +117,7 @@ const (
 	LabelDevice                       = "device"
 	LabelModel                        = "model"
 	LabelUPSName                      = "ups_name"
-	// Kubernetes pods labels.
+	//nolint: godoclint // Kubernetes pods labels.
 	LabelState     = "state"
 	LabelOwnerKind = "owner_kind"
 	LabelOwnerName = "owner_name"

@@ -35,6 +35,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
+	prometheusModel "github.com/prometheus/common/model"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -44,7 +45,7 @@ func fileToMFS(filename string) ([]*dto.MetricFamily, error) {
 		return nil, err
 	}
 
-	var parser expfmt.TextParser
+	parser := expfmt.NewTextParser(prometheusModel.LegacyValidation)
 
 	tmpMap, err := parser.TextToMetricFamilies(fd)
 	if err != nil {
