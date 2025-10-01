@@ -356,7 +356,7 @@ func (k *Kubernetes) MetricsMinute(ctx context.Context, now time.Time) ([]types.
 		multiErr = append(multiErr, errors...)
 	}
 
-	morePoints, errors := k.getKubeletPoint(ctx, cl, now)
+	morePoints, errors := k.getKubeletPoints(ctx, cl, now)
 
 	points = append(points, morePoints...)
 	multiErr = append(multiErr, errors...)
@@ -427,7 +427,7 @@ func (k *Kubernetes) getCertificateExpiration(ctx context.Context, config *rest.
 		// Something went wrong with the TLS handshake, we consider the certificate as expired
 		logger.V(2).Println("An error occurred on TLS handshake:", err)
 
-		return createPointFromCertTime(time.Now(), certExpLabel, now)
+		return createPointFromCertTime(time.Now(), certExpLabel, now), nil
 	}
 
 	if len(tlsConn.ConnectionState().PeerCertificates) == 0 {
@@ -438,7 +438,7 @@ func (k *Kubernetes) getCertificateExpiration(ctx context.Context, config *rest.
 
 	expiry := tlsConn.ConnectionState().PeerCertificates[0]
 
-	return createPointFromCertTime(expiry.NotAfter, certExpLabel, now)
+	return createPointFromCertTime(expiry.NotAfter, certExpLabel, now), nil
 }
 
 func (k *Kubernetes) getMasterPoints(ctx context.Context, cl kubeClient, now time.Time) ([]types.MetricPoint, []error) {
@@ -502,17 +502,10 @@ func (k *Kubernetes) getMasterPoints(ctx context.Context, cl kubeClient, now tim
 		points = append(points, webhookConfigCertPoints...)
 	}
 
-	kubeletCertPoint, errTmp := k.getKubeletCertificateExpiration(ctx, now)
-	if errTmp != nil {
-		err = append(err, errTmp)
-	} else {
-		points = append(points, kubeletCertPoint)
-	}
-
 	return points, err
 }
 
-func (k *Kubernetes) getKubeletPoint(ctx context.Context, cl kubeClient, now time.Time) ([]types.MetricPoint, []error) {
+func (k *Kubernetes) getKubeletPoints(ctx context.Context, cl kubeClient, now time.Time) ([]types.MetricPoint, []error) {
 	if k.NodeName == "" {
 		return nil, []error{fmt.Errorf("%w: kubernetes.nodename is missing", errMissingConfig)}
 	}
@@ -543,7 +536,7 @@ func (k *Kubernetes) getKubeletPoint(ctx context.Context, cl kubeClient, now tim
 			if cond.Status != corev1.ConditionTrue {
 				point.Annotations.Status = types.StatusDescription{
 					CurrentStatus:     types.StatusCritical,
-					StatusDescription: "node is not ready: ",
+					StatusDescription: "node is not ready: " + cond.Message,
 				}
 			}
 		case corev1.NodeDiskPressure, corev1.NodeMemoryPressure, corev1.NodePIDPressure:
@@ -577,7 +570,30 @@ func (k *Kubernetes) getKubeletPoint(ctx context.Context, cl kubeClient, now tim
 
 	point.Point.Value = float64(point.Annotations.Status.CurrentStatus.NagiosCode())
 
-	return []types.MetricPoint{point}, nil
+	var ip string
+
+	for _, a := range node.Status.Addresses {
+		if a.Type == corev1.NodeInternalIP && a.Address != "" {
+			ip = a.Address
+
+			break
+		}
+	}
+
+	if ip == "" {
+		return []types.MetricPoint{point}, []error{fmt.Errorf("can't retrieve kubelet cert: %w", errNodeHasNoInternalIP)}
+	}
+
+	addr := net.JoinHostPort(ip, "10250")
+
+	cert, err := fetchServerCert(ctx, addr)
+	if err != nil {
+		return []types.MetricPoint{point}, []error{fmt.Errorf("fetching kubelet cert: %w", err)}
+	}
+
+	certPoint := createPointFromCertTime(cert.NotAfter, certExpLabel, now, types.LabelItem, "kubelet")
+
+	return []types.MetricPoint{point, certPoint}, nil
 }
 
 func (k *Kubernetes) getCACertificateExpiration(config *rest.Config, now time.Time) (types.MetricPoint, error) {
@@ -602,7 +618,7 @@ func (k *Kubernetes) getCACertificateExpiration(config *rest.Config, now time.Ti
 		return types.MetricPoint{}, err
 	}
 
-	return createPointFromCertTime(caCert.NotAfter, caExpLabel, now)
+	return createPointFromCertTime(caCert.NotAfter, caExpLabel, now), nil
 }
 
 func (k *Kubernetes) getCRDCertificateExpirations(ctx context.Context, now time.Time) ([]types.MetricPoint, error) {
@@ -625,11 +641,7 @@ func (k *Kubernetes) getCRDCertificateExpirations(ctx context.Context, now time.
 				continue
 			}
 
-			certPoint, err := createPointFromCertTime(cert.NotAfter, certExpLabel, now, types.LabelItem, "crd-"+crd.Name)
-			if err != nil {
-				return nil, err
-			}
-
+			certPoint := createPointFromCertTime(cert.NotAfter, certExpLabel, now, types.LabelItem, "crd-"+crd.Name)
 			certPoints = append(certPoints, certPoint)
 		}
 	}
@@ -655,11 +667,7 @@ func (k *Kubernetes) getWebhookConfigCertificateExpirations(ctx context.Context,
 					continue
 				}
 
-				certPoint, err := createPointFromCertTime(cert.NotAfter, certExpLabel, now, types.LabelItem, "mutatingwebhookconfig-"+mwc.Name+"-"+webhook.Name)
-				if err != nil {
-					return nil, err
-				}
-
+				certPoint := createPointFromCertTime(cert.NotAfter, certExpLabel, now, types.LabelItem, "mutatingwebhookconfig-"+mwc.Name+"-"+webhook.Name)
 				certPoints = append(certPoints, certPoint)
 			}
 		}
@@ -675,51 +683,13 @@ func (k *Kubernetes) getWebhookConfigCertificateExpirations(ctx context.Context,
 					continue
 				}
 
-				certPoint, err := createPointFromCertTime(cert.NotAfter, certExpLabel, now, types.LabelItem, "validatingwebhookconfig-"+vwc.Name+"-"+webhook.Name)
-				if err != nil {
-					return nil, err
-				}
-
+				certPoint := createPointFromCertTime(cert.NotAfter, certExpLabel, now, types.LabelItem, "validatingwebhookconfig-"+vwc.Name+"-"+webhook.Name)
 				certPoints = append(certPoints, certPoint)
 			}
 		}
 	}
 
 	return certPoints, nil
-}
-
-func (k *Kubernetes) getKubeletCertificateExpiration(ctx context.Context, now time.Time) (types.MetricPoint, error) {
-	if k.NodeName == "" {
-		return types.MetricPoint{}, fmt.Errorf("%w: kubernetes.nodename is missing", errMissingConfig)
-	}
-
-	node, err := k.client.GetNode(ctx, k.NodeName)
-	if err != nil {
-		return types.MetricPoint{}, err
-	}
-
-	var ip string
-
-	for _, a := range node.Status.Addresses {
-		if a.Type == corev1.NodeInternalIP && a.Address != "" {
-			ip = a.Address
-
-			break
-		}
-	}
-
-	if ip == "" {
-		return types.MetricPoint{}, fmt.Errorf("can't retrieve kubelet cert: %w", errNodeHasNoInternalIP)
-	}
-
-	addr := net.JoinHostPort(ip, "10250")
-
-	cert, err := fetchServerCert(ctx, addr)
-	if err != nil {
-		return types.MetricPoint{}, fmt.Errorf("fetching kubelet cert: %w", err)
-	}
-
-	return createPointFromCertTime(cert.NotAfter, certExpLabel, now, types.LabelItem, "kubelet")
 }
 
 func fetchServerCert(ctx context.Context, addr string) (*x509.Certificate, error) {
@@ -768,7 +738,7 @@ func decodeRawCert(rawData []byte) (*x509.Certificate, error) {
 	return certData, nil
 }
 
-func createPointFromCertTime(certTime time.Time, label string, now time.Time, extraLabelsKV ...string) (types.MetricPoint, error) {
+func createPointFromCertTime(certTime time.Time, label string, now time.Time, extraLabelsKV ...string) types.MetricPoint {
 	if len(extraLabelsKV)%2 != 0 {
 		panic("odd number of label key-value pairs")
 	}
@@ -795,7 +765,7 @@ func createPointFromCertTime(certTime time.Time, label string, now time.Time, ex
 		},
 		Labels:      labels,
 		Annotations: types.MetricAnnotations{},
-	}, nil
+	}
 }
 
 func (k *Kubernetes) getClient(ctx context.Context) (cl kubeClient, err error) {
