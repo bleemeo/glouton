@@ -254,23 +254,17 @@ func (s *syncServicesExecution) serviceRegisterAndUpdate(ctx context.Context, ex
 			continue
 		}
 
+		if !srv.Active {
+			// Inactive service will be deleted by serviceDeleteNonLocal
+			continue
+		}
+
 		key := common.ServiceNameInstance{
 			Name:     srv.Name,
 			Instance: srv.Instance,
 		}
 
 		remoteSrv, remoteFound := remoteServicesByKey[key]
-
-		if remoteFound && !srv.Active {
-			logger.V(2).Printf("Deleting the service %v (uuid %s), which is inactive", key, remoteSrv.ID)
-
-			err := execution.BleemeoAPIClient().DeleteService(ctx, remoteSrv.ID)
-			if err != nil {
-				return fmt.Errorf("deleting inactive service %v on API: %w", key, err)
-			}
-
-			continue
-		}
 
 		// Skip updating the remote service if the service is already up to date.
 		listenAddresses := getListenAddress(srv.ListenAddresses)
@@ -423,6 +417,12 @@ func serviceDeleteNonLocal(ctx context.Context, execution types.SynchronizationE
 	localServiceExists := make(map[common.ServiceNameInstance]bool, len(localServices))
 
 	for _, srv := range localServices {
+		if !srv.Active {
+			// Inactive service are considered deleted.
+			// I'm not sure why we kept them present in localServices.
+			continue
+		}
+
 		key := common.ServiceNameInstance{
 			Name:     srv.Name,
 			Instance: srv.Instance,
