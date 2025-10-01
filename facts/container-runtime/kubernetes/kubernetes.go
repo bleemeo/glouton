@@ -350,7 +350,7 @@ func (k *Kubernetes) MetricsMinute(ctx context.Context, now time.Time) ([]types.
 	}
 
 	if cl.IsUsingLocalAPI() {
-		morePoints, errors := k.getMasterPoints(ctx, cl, now)
+		morePoints, errors := k.getLocalAPIPoints(ctx, cl, now)
 
 		points = append(points, morePoints...)
 		multiErr = append(multiErr, errors...)
@@ -369,6 +369,20 @@ func (k *Kubernetes) MetricsMinute(ctx context.Context, now time.Time) ([]types.
 		}
 
 		points = append(points, morePoints...)
+
+		crdCertPoints, err := k.getCRDCertificateExpirations(ctx, now)
+		if err != nil {
+			multiErr = append(multiErr, err)
+		}
+
+		points = append(points, crdCertPoints...)
+
+		webhookConfigCertPoints, err := k.getWebhookConfigCertificateExpirations(ctx, now)
+		if err != nil {
+			multiErr = append(multiErr, err)
+		}
+
+		points = append(points, webhookConfigCertPoints...)
 	}
 
 	return points, multiErr.MaybeUnwrap()
@@ -427,7 +441,7 @@ func (k *Kubernetes) getCertificateExpiration(ctx context.Context, config *rest.
 		// Something went wrong with the TLS handshake, we consider the certificate as expired
 		logger.V(2).Println("An error occurred on TLS handshake:", err)
 
-		return createPointFromCertTime(time.Now(), certExpLabel, now), nil
+		return createPointFromCertTime(time.Now(), certExpLabel, now, "api"), nil
 	}
 
 	if len(tlsConn.ConnectionState().PeerCertificates) == 0 {
@@ -438,10 +452,10 @@ func (k *Kubernetes) getCertificateExpiration(ctx context.Context, config *rest.
 
 	expiry := tlsConn.ConnectionState().PeerCertificates[0]
 
-	return createPointFromCertTime(expiry.NotAfter, certExpLabel, now), nil
+	return createPointFromCertTime(expiry.NotAfter, certExpLabel, now, "api"), nil
 }
 
-func (k *Kubernetes) getMasterPoints(ctx context.Context, cl kubeClient, now time.Time) ([]types.MetricPoint, []error) {
+func (k *Kubernetes) getLocalAPIPoints(ctx context.Context, cl kubeClient, now time.Time) ([]types.MetricPoint, []error) {
 	var err types.MultiErrors
 
 	points := make([]types.MetricPoint, 0, 3)
@@ -486,20 +500,6 @@ func (k *Kubernetes) getMasterPoints(ctx context.Context, cl kubeClient, now tim
 		err = append(err, errTmp)
 	} else {
 		points = append(points, caCertificatePoint)
-	}
-
-	crdCertPoints, errTmp := k.getCRDCertificateExpirations(ctx, now)
-	if errTmp != nil {
-		err = append(err, errTmp)
-	} else {
-		points = append(points, crdCertPoints...)
-	}
-
-	webhookConfigCertPoints, errTmp := k.getWebhookConfigCertificateExpirations(ctx, now)
-	if errTmp != nil {
-		err = append(err, errTmp)
-	} else {
-		points = append(points, webhookConfigCertPoints...)
 	}
 
 	return points, err
@@ -591,7 +591,7 @@ func (k *Kubernetes) getKubeletPoints(ctx context.Context, cl kubeClient, now ti
 		return []types.MetricPoint{point}, []error{fmt.Errorf("fetching kubelet cert: %w", err)}
 	}
 
-	certPoint := createPointFromCertTime(cert.NotAfter, certExpLabel, now, types.LabelItem, "kubelet")
+	certPoint := createPointFromCertTime(cert.NotAfter, certExpLabel, now, "kubelet")
 
 	return []types.MetricPoint{point, certPoint}, nil
 }
@@ -641,7 +641,7 @@ func (k *Kubernetes) getCRDCertificateExpirations(ctx context.Context, now time.
 				continue
 			}
 
-			certPoint := createPointFromCertTime(cert.NotAfter, certExpLabel, now, types.LabelItem, "crd-"+crd.Name)
+			certPoint := createPointFromCertTime(cert.NotAfter, certExpLabel, now, "crd-"+crd.Name)
 			certPoints = append(certPoints, certPoint)
 		}
 	}
@@ -667,7 +667,7 @@ func (k *Kubernetes) getWebhookConfigCertificateExpirations(ctx context.Context,
 					continue
 				}
 
-				certPoint := createPointFromCertTime(cert.NotAfter, certExpLabel, now, types.LabelItem, "mutatingwebhookconfig-"+mwc.Name+"-"+webhook.Name)
+				certPoint := createPointFromCertTime(cert.NotAfter, certExpLabel, now, "mutatingwebhookconfig-"+mwc.Name+"-"+webhook.Name)
 				certPoints = append(certPoints, certPoint)
 			}
 		}
@@ -683,7 +683,7 @@ func (k *Kubernetes) getWebhookConfigCertificateExpirations(ctx context.Context,
 					continue
 				}
 
-				certPoint := createPointFromCertTime(cert.NotAfter, certExpLabel, now, types.LabelItem, "validatingwebhookconfig-"+vwc.Name+"-"+webhook.Name)
+				certPoint := createPointFromCertTime(cert.NotAfter, certExpLabel, now, "validatingwebhookconfig-"+vwc.Name+"-"+webhook.Name)
 				certPoints = append(certPoints, certPoint)
 			}
 		}
@@ -738,17 +738,13 @@ func decodeRawCert(rawData []byte) (*x509.Certificate, error) {
 	return certData, nil
 }
 
-func createPointFromCertTime(certTime time.Time, label string, now time.Time, extraLabelsKV ...string) types.MetricPoint {
-	if len(extraLabelsKV)%2 != 0 {
-		panic("odd number of label key-value pairs")
-	}
+func createPointFromCertTime(certTime time.Time, label string, now time.Time, item ...string) types.MetricPoint {
+	labels := map[string]string{types.LabelName: label}
 
-	labels := make(map[string]string, 1+len(extraLabelsKV)/2)
-
-	labels[types.LabelName] = label
-
-	for i := 0; i < len(extraLabelsKV); i += 2 {
-		labels[extraLabelsKV[i]] = extraLabelsKV[i+1]
+	if len(item) == 1 {
+		labels[types.LabelItem] = item[0]
+	} else if len(item) > 1 {
+		panic(fmt.Sprintf("a maximum of one item label should be provided (got %q)", item))
 	}
 
 	remainingDays := certTime.Sub(now).Hours() / 24
