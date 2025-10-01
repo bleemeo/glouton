@@ -177,13 +177,13 @@ func (cl *wrapperClient) Do(ctx context.Context, method, reqURI string, params u
 	return statusCode, err
 }
 
-func (cl *wrapperClient) DoWithBody(ctx context.Context, reqURI string, contentType string, body io.Reader) (statusCode int, err error) {
+func (cl *wrapperClient) DoWithBody(ctx context.Context, reqURI string, contentType string, body io.Reader) (resp *http.Response, err error) {
 	if cl == nil {
-		return 0, errClientUninitialized
+		return nil, errClientUninitialized
 	}
 
 	if err = cl.dupCheck(ctx); err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	if !path.IsAbs(reqURI) {
@@ -192,18 +192,15 @@ func (cl *wrapperClient) DoWithBody(ctx context.Context, reqURI string, contentT
 
 	req, err := cl.client.ParseRequest(http.MethodPost, reqURI, http.Header{"Content-Type": {contentType}}, nil, body)
 	if err != nil {
-		return 0, err //nolint:wrapcheck
+		return nil, err //nolint:wrapcheck
 	}
 
-	resp, err := cl.client.DoRequest(ctx, req, true)
+	resp, err = cl.client.DoRequest(ctx, req, true)
 	if err != nil {
-		return 0, err //nolint:wrapcheck
+		return nil, err //nolint:wrapcheck
 	}
 
-	_, _ = io.Copy(io.Discard, resp.Body)
-	_ = resp.Body.Close()
-
-	return resp.StatusCode, nil
+	return resp, nil
 }
 
 // notNil returns whether v or its underlying value aren't nil.

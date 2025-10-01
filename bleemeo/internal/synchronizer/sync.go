@@ -54,8 +54,9 @@ import (
 )
 
 const (
-	agentBrokenCacheKey  = "AgentBroken"
-	refreshTokenCacheKey = "RefreshToken"
+	agentBrokenCacheKey              = "AgentBroken"
+	disableCrashReportUploadCacheKey = "DisableCrashReportUploadUntil"
+	refreshTokenCacheKey             = "RefreshToken"
 )
 
 var (
@@ -100,15 +101,16 @@ type Synchronizer struct {
 	logOnce             sync.Once
 	lastDenyReasonLogAt time.Time
 
-	l                      sync.Mutex
-	disabledUntil          time.Time
-	disableReason          bleemeoTypes.DisableReason
-	forceSync              map[types.EntityName]types.SyncType
-	pendingMetricsUpdate   []string
-	pendingMonitorsUpdate  []MonitorUpdate
-	thresholdOverrides     map[thresholdOverrideKey]threshold.Threshold
-	retryableMetricFailure map[bleemeoTypes.FailureKind]bool
-	lastInfo               bleemeoTypes.GlobalInfo
+	l                             sync.Mutex
+	disabledUntil                 time.Time
+	disableReason                 bleemeoTypes.DisableReason
+	forceSync                     map[types.EntityName]types.SyncType
+	pendingMetricsUpdate          []string
+	pendingMonitorsUpdate         []MonitorUpdate
+	thresholdOverrides            map[thresholdOverrideKey]threshold.Threshold
+	retryableMetricFailure        map[bleemeoTypes.FailureKind]bool
+	disableCrashReportUploadUntil time.Time
+	lastInfo                      bleemeoTypes.GlobalInfo
 	// Whether the agent MQTT status should be synced. This is used to avoid syncing
 	// the MQTT status too soon before the agent has tried to connect to MQTT.
 	shouldUpdateMQTTStatus bool
@@ -179,6 +181,12 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 
 	if s.option.State != nil {
 		s.agentID, _ = s.option.State.BleemeoCredentials()
+
+		if err := s.option.State.Get(disableCrashReportUploadCacheKey, &s.disableCrashReportUploadUntil); err != nil {
+			logger.V(1).Printf("Failed to load crash report upload throttle info from cache: %v", err)
+		} else if s.disableCrashReportUploadUntil.Before(s.now()) {
+			s.disableCrashReportUploadUntil = time.Time{}
+		}
 	}
 
 	return s
@@ -211,59 +219,61 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 	defer s.state.l.Unlock()
 
 	obj := struct {
-		NextFullSync               time.Time
-		HeartBeat                  time.Time
-		HeartbeatConsecutiveError  int
-		FullSyncCount              int
-		StartedAt                  time.Time
-		LastSync                   time.Time
-		LastMetricActivation       time.Time
-		LastFactUpdatedAt          string
-		SuccessiveErrors           int
-		FirstErrorAt               time.Time
-		WarnAccountMismatchDone    bool
-		MaintenanceMode            bool
-		LastMetricCount            int
-		AgentID                    string
-		LastMaintenanceSync        time.Time
-		DisabledUntil              time.Time
-		DisableReason              bleemeoTypes.DisableReason
-		ForceSync                  map[types.EntityName]types.SyncType
-		PendingMetricsUpdateCount  int
-		PendingMonitorsUpdateCount int
-		DelayedContainer           map[string]time.Time
-		RetryableMetricFailure     map[bleemeoTypes.FailureKind]bool
-		MetricRetryAt              time.Time
-		LastInfo                   bleemeoTypes.GlobalInfo
-		ThresholdOverrides         string
-		APIFeatures                map[string]bool
+		NextFullSync                  time.Time
+		HeartBeat                     time.Time
+		HeartbeatConsecutiveError     int
+		FullSyncCount                 int
+		StartedAt                     time.Time
+		LastSync                      time.Time
+		LastMetricActivation          time.Time
+		LastFactUpdatedAt             string
+		SuccessiveErrors              int
+		FirstErrorAt                  time.Time
+		WarnAccountMismatchDone       bool
+		MaintenanceMode               bool
+		LastMetricCount               int
+		AgentID                       string
+		LastMaintenanceSync           time.Time
+		DisabledUntil                 time.Time
+		DisableReason                 bleemeoTypes.DisableReason
+		ForceSync                     map[types.EntityName]types.SyncType
+		PendingMetricsUpdateCount     int
+		PendingMonitorsUpdateCount    int
+		DelayedContainer              map[string]time.Time
+		RetryableMetricFailure        map[bleemeoTypes.FailureKind]bool
+		MetricRetryAt                 time.Time
+		DisableCrashReportUploadUntil time.Time
+		LastInfo                      bleemeoTypes.GlobalInfo
+		ThresholdOverrides            string
+		APIFeatures                   map[string]bool
 	}{
-		NextFullSync:               s.nextFullSync,
-		HeartBeat:                  s.syncHeartbeat,
-		HeartbeatConsecutiveError:  s.heartbeatConsecutiveError,
-		FullSyncCount:              s.fullSyncCount,
-		StartedAt:                  s.startedAt,
-		LastSync:                   s.lastSync,
-		LastFactUpdatedAt:          s.state.lastFactUpdatedAt,
-		LastMetricActivation:       s.state.lastMetricActivation,
-		SuccessiveErrors:           s.successiveErrors,
-		FirstErrorAt:               s.firstErrorAt,
-		WarnAccountMismatchDone:    s.warnAccountMismatchDone,
-		MaintenanceMode:            s.maintenanceMode,
-		LastMetricCount:            s.state.lastMetricCount,
-		AgentID:                    s.agentID,
-		LastMaintenanceSync:        s.state.lastMaintenanceSync,
-		DisabledUntil:              s.disabledUntil,
-		DisableReason:              s.disableReason,
-		ForceSync:                  s.forceSync,
-		PendingMetricsUpdateCount:  len(s.pendingMetricsUpdate),
-		PendingMonitorsUpdateCount: len(s.pendingMonitorsUpdate),
-		DelayedContainer:           delayedContainer,
-		RetryableMetricFailure:     s.retryableMetricFailure,
-		MetricRetryAt:              s.state.metricRetryAt,
-		LastInfo:                   s.lastInfo,
-		ThresholdOverrides:         fmt.Sprintf("%v", s.thresholdOverrides),
-		APIFeatures:                make(map[string]bool, len(s.hasFeature)),
+		NextFullSync:                  s.nextFullSync,
+		HeartBeat:                     s.syncHeartbeat,
+		HeartbeatConsecutiveError:     s.heartbeatConsecutiveError,
+		FullSyncCount:                 s.fullSyncCount,
+		StartedAt:                     s.startedAt,
+		LastSync:                      s.lastSync,
+		LastFactUpdatedAt:             s.state.lastFactUpdatedAt,
+		LastMetricActivation:          s.state.lastMetricActivation,
+		SuccessiveErrors:              s.successiveErrors,
+		FirstErrorAt:                  s.firstErrorAt,
+		WarnAccountMismatchDone:       s.warnAccountMismatchDone,
+		MaintenanceMode:               s.maintenanceMode,
+		LastMetricCount:               s.state.lastMetricCount,
+		AgentID:                       s.agentID,
+		LastMaintenanceSync:           s.state.lastMaintenanceSync,
+		DisabledUntil:                 s.disabledUntil,
+		DisableReason:                 s.disableReason,
+		ForceSync:                     s.forceSync,
+		PendingMetricsUpdateCount:     len(s.pendingMetricsUpdate),
+		PendingMonitorsUpdateCount:    len(s.pendingMonitorsUpdate),
+		DelayedContainer:              delayedContainer,
+		RetryableMetricFailure:        s.retryableMetricFailure,
+		MetricRetryAt:                 s.state.metricRetryAt,
+		DisableCrashReportUploadUntil: s.disableCrashReportUploadUntil,
+		LastInfo:                      s.lastInfo,
+		ThresholdOverrides:            fmt.Sprintf("%v", s.thresholdOverrides),
+		APIFeatures:                   make(map[string]bool, len(s.hasFeature)),
 	}
 
 	for k, v := range s.hasFeature {
@@ -1286,6 +1296,25 @@ func (s *Synchronizer) requestSynchronizationLocked(entityName types.EntityName,
 		s.forceSync[entityName] = types.SyncTypeForceCacheRefresh
 	} else if s.forceSync[entityName] == types.SyncTypeNone {
 		s.forceSync[entityName] = types.SyncTypeNormal
+	}
+}
+
+func (s *Synchronizer) canUploadCrashReports() bool {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	return s.disableCrashReportUploadUntil.Before(s.now())
+}
+
+func (s *Synchronizer) disableCrashReportUpload(duration time.Duration) {
+	until := s.now().Add(duration)
+
+	s.l.Lock()
+	s.disableCrashReportUploadUntil = until
+	s.l.Unlock()
+
+	if err := s.option.State.Set(disableCrashReportUploadCacheKey, until); err != nil {
+		logger.V(1).Printf("Failed to save crash report upload throttle info to cache: %v", err)
 	}
 }
 

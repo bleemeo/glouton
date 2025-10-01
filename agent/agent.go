@@ -59,6 +59,7 @@ import (
 	"github.com/bleemeo/glouton/inputs/docker"
 	"github.com/bleemeo/glouton/inputs/mdstat"
 	nvidia "github.com/bleemeo/glouton/inputs/nvidia_smi"
+	"github.com/bleemeo/glouton/inputs/psi"
 	"github.com/bleemeo/glouton/inputs/smart"
 	"github.com/bleemeo/glouton/inputs/statsd"
 	"github.com/bleemeo/glouton/inputs/temp"
@@ -1389,7 +1390,7 @@ func (a *agent) registerInputs(ctx context.Context) {
 	}
 
 	if a.config.Mdstat.Enable {
-		input, opts, err := mdstat.New(a.config.Mdstat)
+		input, opts, err := mdstat.New(a.config.Mdstat, a.commandRunner)
 		a.registerInput("mdstat", input, opts, err)
 	}
 
@@ -1427,6 +1428,9 @@ func (a *agent) registerInputs(ctx context.Context) {
 
 	input, opts, err := temp.New()
 	a.registerInput("Temp", input, opts, err)
+
+	input, opts, err = psi.New()
+	a.registerInput("PSI", input, opts, err)
 
 	a.vSphereManager.RegisterGatherers(ctx, a.config.VSphere, a.gathererRegistry.RegisterGatherer, a.state, a.factProvider)
 }

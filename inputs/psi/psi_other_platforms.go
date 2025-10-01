@@ -16,17 +16,15 @@
 
 //go:build !linux
 
-package mdstat
+package psi
 
 import (
-	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/prometheus/registry"
-	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	"github.com/influxdata/telegraf"
 )
 
-func New(config.Mdstat, *gloutonexec.Runner) (telegraf.Input, registry.RegistrationOption, error) {
+func New() (telegraf.Input, registry.RegistrationOption, error) {
 	return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
 }

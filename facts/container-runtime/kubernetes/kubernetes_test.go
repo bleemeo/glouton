@@ -37,8 +37,10 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	prometheusModel "github.com/prometheus/common/model"
+	admv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/yaml"
@@ -51,6 +53,9 @@ type mockKubernetesClient struct {
 	pods        corev1.PodList
 	namespaces  corev1.NamespaceList
 	replicaSets appsv1.ReplicaSetList
+	crds        apiextv1.CustomResourceDefinitionList
+	mwcs        admv1.MutatingWebhookConfigurationList
+	vwcs        admv1.ValidatingWebhookConfigurationList
 
 	versions struct {
 		ClientVersion *version.Info `json:"clientVersion"`
@@ -134,6 +139,14 @@ func (k *mockKubernetesClient) GetNamespaces(_ context.Context) ([]corev1.Namesp
 // GetReplicasets return all replicasets in the cluster.
 func (k *mockKubernetesClient) GetReplicasets(_ context.Context) ([]appsv1.ReplicaSet, error) {
 	return k.replicaSets.Items, nil
+}
+
+func (k *mockKubernetesClient) GetCRDs(_ context.Context) ([]apiextv1.CustomResourceDefinition, error) {
+	return k.crds.Items, nil
+}
+
+func (k *mockKubernetesClient) GetWebhookConfigurations(_ context.Context) ([]admv1.MutatingWebhookConfiguration, []admv1.ValidatingWebhookConfiguration, error) {
+	return k.mwcs.Items, k.vwcs.Items, nil
 }
 
 func (k *mockKubernetesClient) GetServerVersion(_ context.Context) (*version.Info, error) {

@@ -215,7 +215,7 @@ type ContainerClient interface {
 
 type DiagnosticClient interface {
 	ListDiagnostics(ctx context.Context) ([]bleemeoapi.RemoteDiagnostic, error)
-	UploadDiagnostic(ctx context.Context, contentType string, content io.Reader) error
+	UploadDiagnostic(ctx context.Context, contentType string, content io.Reader) (disableDelay time.Duration, err error)
 }
 
 type FactClient interface {
