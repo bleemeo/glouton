@@ -33,6 +33,7 @@ import (
 	"github.com/bleemeo/glouton/prometheus/model"
 	"github.com/bleemeo/glouton/prometheus/registry"
 	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -93,7 +94,7 @@ func setupMdstatTest(t *testing.T, name string) (input telegraf.Input, mdadmDeta
 		t.Fatal("Failed to parse mdadm details:", err)
 	}
 
-	mdstatInput, _, err := New(config.Mdstat{}) // the config won't be used
+	mdstatInput, _, err := New(config.Mdstat{}, gloutonexec.New("/")) // the config won't be used
 	if err != nil {
 		t.Fatal("Failed to initialize mdstat input:", err)
 	}
@@ -108,7 +109,7 @@ func setupMdstatTest(t *testing.T, name string) (input telegraf.Input, mdadmDeta
 		}
 	}
 
-	mdadmDetailsFn = func(array, _ string, _ bool) (mdadmInfo, error) {
+	mdadmDetailsFn = func(array, _ string, _ *gloutonexec.Runner) (mdadmInfo, error) {
 		mdadmDetailsOutput, ok := mdadmDetails[array]
 		if !ok {
 			return mdadmInfo{}, fmt.Errorf("%w for array %s", errArrayMdadmDetailsNotFound, array)
@@ -458,6 +459,7 @@ func TestGather(t *testing.T) { //nolint:maintidx
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			input, mdadmDetailsFn := setupMdstatTest(t, tc.name)
+			commandRunner := gloutonexec.New("/")
 
 			pointBuffer := new(registry.PointBuffer)
 			acc := inputs.Accumulator{
@@ -471,7 +473,7 @@ func TestGather(t *testing.T) { //nolint:maintidx
 			}
 
 			mfs := model.MetricPointsToFamilies(pointBuffer.Points())
-			mfs = gatherModifier("won't be used", false, timeNow, mdadmDetailsFn)(mfs, nil)
+			mfs = gatherModifier("won't be used", commandRunner, timeNow, mdadmDetailsFn)(mfs, nil)
 
 			if diff := cmp.Diff(tc.expectedMetrics, convert(mfs), cmpopts.SortSlices(metricSorter)); diff != "" {
 				t.Fatalf("Unexpected metrics (-want +got):\n%s", diff)

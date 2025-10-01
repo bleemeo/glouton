@@ -35,6 +35,7 @@ import (
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/registry"
 	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -45,8 +46,15 @@ import (
 
 const mdstatPath = "/proc/mdstat"
 
-func New(cfg config.Mdstat) (telegraf.Input, registry.RegistrationOption, error) {
-	if _, err := os.Stat(mdstatPath); err != nil && !testing.Testing() {
+var runnerOpt = gloutonexec.Option{RunAsRoot: true, RunOnHost: true} //nolint: gochecknoglobals
+
+func New(cfg config.Mdstat, cmdRunner *gloutonexec.Runner) (telegraf.Input, registry.RegistrationOption, error) {
+	mdstatRealPath, err := cmdRunner.ResolvePath(mdstatPath, runnerOpt)
+	if err != nil {
+		return nil, registry.RegistrationOption{}, fmt.Errorf("can't resolve mdstat path: %w", err)
+	}
+
+	if _, err := os.Stat(mdstatRealPath); err != nil && !testing.Testing() {
 		return nil, registry.RegistrationOption{}, fmt.Errorf("can't enable input: %w", err)
 	}
 
@@ -60,7 +68,7 @@ func New(cfg config.Mdstat) (telegraf.Input, registry.RegistrationOption, error)
 		return nil, registry.RegistrationOption{}, inputs.ErrUnexpectedType
 	}
 
-	mdstatConfig.FileName = mdstatPath
+	mdstatConfig.FileName = mdstatRealPath
 
 	internalInput := &internal.Input{
 		Input: mdstatConfig,
@@ -77,7 +85,7 @@ func New(cfg config.Mdstat) (telegraf.Input, registry.RegistrationOption, error)
 
 	options := registry.RegistrationOption{
 		MinInterval:    60 * time.Second,
-		GatherModifier: gatherModifier(cfg.PathMdadm, cfg.UseSudo, time.Now, callMdadm),
+		GatherModifier: gatherModifier(cfg.PathMdadm, cmdRunner, time.Now, callMdadm),
 	}
 
 	return internalInput, options, nil
@@ -117,7 +125,7 @@ type arrayInfo struct {
 	syncedBlocks                int64
 }
 
-func gatherModifier(mdadmPath string, useSudo bool, timeNow func() time.Time, mdadmDetails mdadmDetailsFunc) func(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
+func gatherModifier(mdadmPath string, runner *gloutonexec.Runner, timeNow func() time.Time, mdadmDetails mdadmDetailsFunc) func(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
 	return func(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
 		infoPerArray := make(map[string]arrayInfo)
 
@@ -170,7 +178,7 @@ func gatherModifier(mdadmPath string, useSudo bool, timeNow func() time.Time, md
 		}
 
 		for array, info := range infoPerArray {
-			healthStatusMetric := makeHealthStatusMetric(array, info, mdadmPath, useSudo, timeNow, mdadmDetails)
+			healthStatusMetric := makeHealthStatusMetric(array, info, mdadmPath, runner, timeNow, mdadmDetails)
 			disksActivityStateStatus.Metric = append(disksActivityStateStatus.Metric, healthStatusMetric)
 		}
 
@@ -193,14 +201,14 @@ func parseLabels(labels []*dto.LabelPair) (item, activityState string) {
 	return item, activityState
 }
 
-func makeHealthStatusMetric(array string, info arrayInfo, mdadmPath string, useSudo bool, timeNow func() time.Time, mdadmDetails mdadmDetailsFunc) *dto.Metric {
+func makeHealthStatusMetric(array string, info arrayInfo, mdadmPath string, runner *gloutonexec.Runner, timeNow func() time.Time, mdadmDetails mdadmDetailsFunc) *dto.Metric {
 	var (
 		status      types.Status
 		description string
 	)
 
 	if info.active != info.total || info.syncedBlocks == 0 { // Something is going on, and we may not have enough information with /proc/mdstat
-		details, err := mdadmDetails(array, mdadmPath, useSudo)
+		details, err := mdadmDetails(array, mdadmPath, runner)
 		if err != nil {
 			logger.V(1).Printf("MD: %v", err)
 
