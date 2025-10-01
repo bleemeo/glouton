@@ -21,9 +21,12 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -88,115 +91,185 @@ func TestSize(t *testing.T) {
 	}
 }
 
-func doesTimeout[T any](duration time.Duration, fn func(), queue *fifo[T]) (timedOut bool) {
-	done := make(chan struct{})
-	timer := time.NewTimer(duration)
+func doesBlock(fn func()) bool {
+	var completed atomic.Bool
 
 	go func() {
 		fn()
-		close(done)
+		completed.Store(true)
 	}()
 
-	select {
-	case <-done:
-		return false
-	case <-timer.C:
-		queue.Close()
-		<-done
+	// Waiting for the operation to either pass or block
+	synctest.Wait()
 
-		return true
+	return !completed.Load()
+}
+
+func expectQueueContent[T comparable](t *testing.T, queue *fifo[T], content []T) {
+	t.Helper()
+
+	var queueContent []T
+
+	switch {
+	case queue.writeReadDiff == 0:
+		queueContent = []T{}
+	case queue.readIdx < queue.writeIdx:
+		// Current case example:
+		// queue=[1, 2, 3]
+		// readIdx=0
+		// writeIdx=3
+		queueContent = queue.queue[queue.readIdx:queue.writeIdx]
+	default:
+		// Current case example:
+		// queue=[4, 2, 3]
+		// readIdx=1
+		// writeIdx=1
+		queueContent = append(queue.queue[queue.writeIdx:], queue.queue[:queue.readIdx]...) //nolint: gocritic
+	}
+
+	if diff := cmp.Diff(queueContent, content); diff != "" {
+		t.Fatalf("Unexpected queue content: (-want +got)\n%s", diff)
 	}
 }
 
 func TestMethods(t *testing.T) {
 	t.Run("Put", func(t *testing.T) {
-		queue := newFifo[string](2)
-		ctx, cancel := context.WithCancel(t.Context())
+		synctest.Test(t, func(t *testing.T) {
+			queue := newFifo[string](2)
+			ctx, cancel := context.WithCancel(t.Context())
 
-		if doesTimeout(time.Millisecond, func() { queue.Put(ctx, "a") }, queue) {
-			cancel()
-			t.Fatal("Should not have waited to put element in queue.")
-		}
+			t.Cleanup(func() {
+				queue.Close()
+				cancel()
+			})
 
-		if doesTimeout(time.Millisecond, func() { queue.Put(ctx, "b") }, queue) {
-			cancel()
-			t.Fatal("Should not have waited to put element in queue.")
-		}
+			if doesBlock(func() { queue.Put(ctx, "a") }) {
+				t.Fatal("Should not have waited to put element in queue.")
+			}
 
-		if !doesTimeout(5*time.Millisecond, func() { queue.Put(ctx, "c") }, queue) {
-			cancel()
-			t.Fatal("Should have waited to put element in queue.")
-		}
+			if doesBlock(func() { queue.Put(ctx, "b") }) {
+				t.Fatal("Should not have waited to put element in queue.")
+			}
 
-		cancel()
+			if !doesBlock(func() { queue.Put(ctx, "c") }) {
+				t.Fatal("Should have waited to put element in queue.")
+			}
+
+			expectQueueContent(t, queue, []string{"a", "b"})
+		})
 	})
 
 	t.Run("Get", func(t *testing.T) {
-		t.Parallel()
+		synctest.Test(t, func(t *testing.T) {
+			queue := newFifo[string](2)
+			ctx, cancel := context.WithCancel(t.Context())
 
-		queue := newFifo[string](2)
-		ctx, cancel := context.WithCancel(t.Context())
+			t.Cleanup(func() {
+				queue.Close()
+				cancel()
+			})
 
-		getFn := func(expectedValue string, expectedOk bool) func() {
-			return func() {
-				v, ok := queue.Get(ctx)
-				if ok != expectedOk {
-					t.Errorf("unexpected ok status: got %t, want %t", ok, expectedOk)
-				}
+			getFn := func(expectedValue string, expectedOk bool) func() {
+				return func() {
+					v, ok := queue.Get(ctx)
+					if ok != expectedOk {
+						t.Errorf("unexpected ok status: got %t, want %t", ok, expectedOk)
+					}
 
-				if v != expectedValue {
-					t.Errorf("unexpected value: got \"%v\", want \"%v\"", v, expectedValue)
-				}
-			}
-		}
-
-		queue.Put(ctx, "a")
-
-		if doesTimeout(5*time.Millisecond, getFn("a", true), queue) {
-			cancel()
-			t.Fatalf("Should not have waited to get element from queue.")
-		}
-
-		if !doesTimeout(5*time.Millisecond, getFn("", false), queue) {
-			cancel()
-			t.Fatalf("Should not have return without value or closing.")
-		}
-
-		cancel()
-	})
-
-	t.Run("PutNoWait", func(t *testing.T) {
-		t.Parallel()
-
-		queue := newFifo[string](2)
-
-		putFn := func(v string, expected bool) func() {
-			t.Helper()
-
-			return func() {
-				ok := queue.PutNoWait(v)
-				if ok != expected {
-					if expected {
-						t.Error("Should have inserted the value.")
-					} else {
-						t.Error("Should not have insert the value.")
+					if v != expectedValue {
+						t.Errorf("unexpected value: got \"%v\", want \"%v\"", v, expectedValue)
 					}
 				}
 			}
-		}
 
-		if doesTimeout(time.Millisecond, putFn("a", true), queue) {
-			t.Fatal("Should not have waited to put element in queue.")
-		}
+			queue.Put(ctx, "a")
 
-		if doesTimeout(time.Millisecond, putFn("b", true), queue) {
-			t.Fatal("Should not have waited to put element in queue.")
-		}
+			if doesBlock(getFn("a", true)) {
+				t.Fatalf("Should not have waited to get element from queue.")
+			}
 
-		if doesTimeout(time.Millisecond, putFn("c", false), queue) {
-			t.Fatal("Should not have waited after failed to put element in queue.")
-		}
+			if !doesBlock(getFn("", false)) {
+				t.Fatalf("Should not have return without value or closing.")
+			}
+
+			expectQueueContent(t, queue, []string{})
+		})
 	})
+
+	t.Run("PutNoWait", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			queue := newFifo[string](2)
+
+			putFn := func(v string, expected bool) func() {
+				t.Helper()
+
+				return func() {
+					ok := queue.PutNoWait(v)
+					if ok != expected {
+						if expected {
+							t.Error("Should have inserted the value.")
+						} else {
+							t.Error("Should not have insert the value.")
+						}
+					}
+				}
+			}
+
+			if doesBlock(putFn("a", true)) {
+				t.Fatal("Should not have waited to put element in queue.")
+			}
+
+			if doesBlock(putFn("b", true)) {
+				t.Fatal("Should not have waited to put element in queue.")
+			}
+
+			if doesBlock(putFn("c", false)) {
+				t.Fatal("Should not have waited after failed to put element in queue.")
+			}
+
+			expectQueueContent(t, queue, []string{"a", "b"})
+		})
+	})
+}
+
+func TestFifoLoop(t *testing.T) {
+	t.Parallel()
+
+	queue := newFifo[string](2)
+
+	t.Cleanup(queue.Close)
+
+	queue.Put(t.Context(), "a")
+	queue.Put(t.Context(), "b")
+
+	expectQueueContent(t, queue, []string{"a", "b"})
+
+	v, ok := queue.Get(t.Context())
+	if !ok || v != "a" {
+		t.Fatalf("Failed to retrieve the value from the queue: expected ok=true and v='a', got ok=%t and v=%q", ok, v)
+	}
+
+	expectQueueContent(t, queue, []string{"b"})
+
+	queue.Put(t.Context(), "c")
+
+	expectQueueContent(t, queue, []string{"b", "c"})
+
+	v, ok = queue.Get(t.Context())
+	if !ok || v != "b" {
+		t.Fatalf("Failed to retrieve the value from the queue: expected ok=true and v='b', got ok=%t and v=%q", ok, v)
+	}
+
+	v, ok = queue.Get(t.Context())
+	if !ok || v != "c" {
+		t.Fatalf("Failed to retrieve the value from the queue: expected ok=true and v='c', got ok=%t and v=%q", ok, v)
+	}
+
+	expectQueueContent(t, queue, []string{})
+
+	queue.Put(t.Context(), "a")
+
+	expectQueueContent(t, queue, []string{"a"})
 }
 
 func TestClose(t *testing.T) {

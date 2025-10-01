@@ -97,12 +97,9 @@ func (fifo *fifo[T]) Get(ctx context.Context) (v T, open bool) {
 
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() { //nolint:wsl_v5
-		defer wg.Done()
-
+	wg.Go(func() {
 		fifo.watchForDone(subCtx, fifo.notEmpty)
-	}()
+	})
 
 	defer wg.Wait()
 	// Deferring context cancel after WaitGroup.Wait to have it called before the WaitGroup.Wait
@@ -146,12 +143,9 @@ func (fifo *fifo[T]) Put(ctx context.Context, v T) {
 
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() { //nolint:wsl_v5
-		defer wg.Done()
-
+	wg.Go(func() {
 		fifo.watchForDone(subCtx, fifo.notFull)
-	}()
+	})
 
 	defer wg.Wait()
 	// Deferring context cancel after WaitGroup.Wait to have it called before the WaitGroup.Wait
