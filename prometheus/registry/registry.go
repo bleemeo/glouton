@@ -360,6 +360,7 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			SourceLabels: model.LabelNames{types.LabelMetaBleemeoUUID},
 			TargetLabel:  types.LabelInstanceUUID,
 			Replacement:  "$1",
+			NameValidationScheme: model.UTF8Validation,
 		},
 		{
 			Action:       relabel.Replace,
@@ -368,6 +369,7 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			SourceLabels: model.LabelNames{types.LabelMetaServiceUUID},
 			TargetLabel:  types.LabelServiceUUID,
 			Replacement:  "$1",
+			NameValidationScheme: model.UTF8Validation,
 		},
 		{
 			Action:       relabel.Replace,
@@ -376,6 +378,7 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			SourceLabels: model.LabelNames{types.LabelMetaGloutonFQDN, types.LabelMetaPort},
 			TargetLabel:  types.LabelInstance,
 			Replacement:  "$1:$2",
+			NameValidationScheme: model.UTF8Validation,
 		},
 		{
 			Action:       relabel.Replace,
@@ -384,6 +387,7 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			SourceLabels: model.LabelNames{types.LabelMetaGloutonFQDN, types.LabelMetaContainerName, types.LabelMetaPort, types.LabelMetaInstanceUseContainerName},
 			TargetLabel:  types.LabelInstance,
 			Replacement:  "$1-$2:$3",
+			NameValidationScheme: model.UTF8Validation,
 		},
 		// when the metric comes from a probe, the 'scraper_uuid' label is the uuid of the agent. But only if scraper_send_uuid is enabled
 		{
@@ -393,6 +397,7 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			SourceLabels: model.LabelNames{types.LabelMetaProbeServiceUUID, types.LabelMetaBleemeoUUID, types.LabelMetaSendScraperUUID},
 			TargetLabel:  types.LabelScraperUUID,
 			Replacement:  "$2",
+			NameValidationScheme: model.UTF8Validation,
 		},
 		// when the metric comes from a probe, the 'scraper' label is the value we usually put in the 'instance' label without port
 		{
@@ -402,6 +407,7 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			SourceLabels: model.LabelNames{types.LabelMetaProbeServiceUUID, types.LabelInstance},
 			TargetLabel:  types.LabelScraper,
 			Replacement:  "$2",
+			NameValidationScheme: model.UTF8Validation,
 		},
 		// when the metric comes from a probe and the user specified it in the config file, the 'scraper' label is the user-provided string
 		{
@@ -411,6 +417,7 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			SourceLabels: model.LabelNames{types.LabelMetaProbeServiceUUID, types.LabelMetaProbeScraperName},
 			TargetLabel:  types.LabelScraper,
 			Replacement:  "$2",
+			NameValidationScheme: model.UTF8Validation,
 		},
 		// when the metric comes from a probe, the 'instance_uuid' label is the uuid of the service watched
 		// and 'service_uuid' also.
@@ -420,6 +427,7 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			SourceLabels: model.LabelNames{types.LabelMetaBleemeoTargetAgentUUID},
 			TargetLabel:  types.LabelInstanceUUID,
 			Replacement:  "$1",
+			NameValidationScheme: model.UTF8Validation,
 		},
 		{
 			Action:       relabel.Replace,
@@ -427,6 +435,7 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			SourceLabels: model.LabelNames{types.LabelMetaProbeServiceUUID},
 			TargetLabel:  types.LabelServiceUUID,
 			Replacement:  "$1",
+			NameValidationScheme: model.UTF8Validation,
 		},
 		// when the metric comes from a probe, the 'instance' label is the target URI
 		{
@@ -435,6 +444,7 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			SourceLabels: model.LabelNames{types.LabelMetaBleemeoTargetAgent},
 			TargetLabel:  types.LabelInstance,
 			Replacement:  "$1",
+			NameValidationScheme: model.UTF8Validation,
 		},
 		{
 			Action:       relabel.Replace,
@@ -443,6 +453,7 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			SourceLabels: model.LabelNames{types.LabelMetaSNMPTarget},
 			TargetLabel:  types.LabelSNMPTarget,
 			Replacement:  "$1",
+			NameValidationScheme: model.UTF8Validation,
 		},
 		{
 			Action:       relabel.Replace,
@@ -451,6 +462,7 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			SourceLabels: model.LabelNames{types.LabelMetaContainerName},
 			TargetLabel:  types.LabelContainerName,
 			Replacement:  "$1",
+			NameValidationScheme: model.UTF8Validation,
 		},
 		{
 			Action:       relabel.Replace,
@@ -459,6 +471,7 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			SourceLabels: model.LabelNames{types.LabelMetaScrapeJob},
 			TargetLabel:  types.LabelScrapeJob,
 			Replacement:  "$1",
+			NameValidationScheme: model.UTF8Validation,
 		},
 		{
 			Action:       relabel.Replace,
@@ -467,6 +480,7 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			SourceLabels: model.LabelNames{types.LabelMetaScrapeInstance},
 			TargetLabel:  types.LabelScrapeInstance,
 			Replacement:  "$1",
+			NameValidationScheme: model.UTF8Validation,
 		},
 	}
 }
