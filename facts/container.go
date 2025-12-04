@@ -84,6 +84,26 @@ func (st ContainerState) IsRunning() bool {
 	return st == ContainerRunning
 }
 
+// IsCreated checks if a container is currently in a created state.
+func (st ContainerState) IsCreated() bool {
+	return st == ContainerCreated
+}
+
+// IsStopped checks if a container is currently in a stopped state.
+func (st ContainerState) IsStopped() bool {
+	return st == ContainerStopped
+}
+
+// IsRestarting checks if a container is currently in a restarting state.
+func (st ContainerState) IsRestarting() bool {
+	return st == ContainerRestarting
+}
+
+// IsUnknown checks if a container is currently in a unknown state.
+func (st ContainerState) IsUnknown() bool {
+	return st == ContainerUnknown
+}
+
 // String returns the container state as string.
 func (st ContainerState) String() string {
 	switch st {
