@@ -121,10 +121,8 @@ func (g *Gatherer) GatherWithState(ctx context.Context, state registry.GatherSta
 		// see disks.
 
 		// For first call, increase timeout
-		delay := time.Duration(g.cfg.Timeout) * time.Second
-		if delay < 30*time.Second {
-			delay = 30 * time.Second
-		}
+		delay := max(time.Duration(g.cfg.Timeout)*time.Second, 30*time.Second)
+
 		// We don't use parent context, because it's likely to be short (10 seconds) and for the
 		// very first run, we want to wait more (because the SDR cache could be populated).
 		ctx, cancel := context.WithTimeout(context.Background(), delay)
@@ -208,7 +206,7 @@ func (g *Gatherer) gatherWithMethod(ctx context.Context, now time.Time, method s
 		}
 
 		if err != nil {
-			g.listControllerOutput = append(g.listControllerOutput, []byte(fmt.Sprintf("ERR=%v\n", err))...)
+			g.listControllerOutput = append(g.listControllerOutput, fmt.Appendf(nil, "ERR=%v\n", err)...)
 
 			return nil, err
 		}

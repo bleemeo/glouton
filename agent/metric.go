@@ -1072,9 +1072,7 @@ func matchersEqual(m1, m2 matcher.Matchers) bool {
 func mergeMaps[K comparable, V any](m1, m2 map[K]V) map[K]V {
 	result := maps.Clone(m1)
 
-	for k, v := range m2 {
-		result[k] = v
-	}
+	maps.Copy(result, m2)
 
 	return result
 }

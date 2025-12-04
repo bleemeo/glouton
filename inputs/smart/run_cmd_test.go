@@ -221,11 +221,7 @@ func TestLimitedConcurrentcy(t *testing.T) {
 
 		// First test maxConcurrency call, all should be fast
 		for range runCmdCount {
-			wg.Add(1)
-
-			go func() {
-				defer wg.Done()
-
+			wg.Go(func() {
 				start := time.Now()
 				_, _ = wrapper.runCmd(config.Duration(0), false, "not used")
 
@@ -237,7 +233,7 @@ func TestLimitedConcurrentcy(t *testing.T) {
 				if duration > maxDuration {
 					maxDuration = duration
 				}
-			}()
+			})
 		}
 
 		wg.Wait()

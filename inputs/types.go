@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"reflect"
 	"slices"
 	"sync"
@@ -180,9 +181,7 @@ func (a *Accumulator) addMetrics(measurement string, fields map[string]any, tags
 	for name, valueRaw := range fields {
 		labels := make(map[string]string)
 
-		for k, v := range tags {
-			labels[k] = v
-		}
+		maps.Copy(labels, tags)
 
 		if measurement == "" {
 			labels[types.LabelName] = name

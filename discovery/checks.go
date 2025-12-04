@@ -212,7 +212,7 @@ func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryAdd
 		tcpSend = []byte("PING\n")
 
 		if service.Config.Password != "" {
-			tcpSend = []byte(fmt.Sprintf("AUTH %s\nPING\n", service.Config.Password))
+			tcpSend = fmt.Appendf(nil, "AUTH %s\nPING\n", service.Config.Password)
 		}
 
 		tcpExpect = []byte("+PONG")

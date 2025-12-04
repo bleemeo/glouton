@@ -74,7 +74,7 @@ func callMdadm(array, mdadmPath string, runner *gloutonexec.Runner) (mdadmInfo, 
 func parseMdadmOutput(output string) (mdadmInfo, error) {
 	var info mdadmInfo
 
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue

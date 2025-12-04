@@ -19,6 +19,7 @@ package facts
 import (
 	"context"
 	"errors"
+	"maps"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -263,13 +264,9 @@ func LabelsAndAnnotations(c Container) map[string]string {
 	// Copy labels to avoid mutating them
 	results := make(map[string]string, len(annotations))
 
-	for k, v := range labels {
-		results[k] = v
-	}
+	maps.Copy(results, labels)
 
-	for k, v := range annotations {
-		results[k] = v
-	}
+	maps.Copy(results, annotations)
 
 	return results
 }

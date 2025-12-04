@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"reflect"
 	"slices"
 	"strings"
@@ -84,9 +85,7 @@ func saveLastFileSizesToCache[FS fileSizer](state bleemeoTypes.State, sizers []F
 			continue
 		}
 
-		for logFile, size := range sizesByFile {
-			lastFileSizes[logFile] = size
-		}
+		maps.Copy(lastFileSizes, sizesByFile)
 	}
 
 	err := state.Set(logFileSizesCacheKey, lastFileSizes)

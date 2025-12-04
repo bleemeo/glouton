@@ -148,9 +148,9 @@ func (l ListenAddress) String() string {
 
 func decodeNetstatFile(data string) map[int][]ListenAddress {
 	result := make(map[int][]ListenAddress)
-	lines := strings.Split(data, "\n")
+	lines := strings.SplitSeq(data, "\n")
 
-	for _, line := range lines {
+	for line := range lines {
 		var (
 			protocol, address string
 			pid, port         int64

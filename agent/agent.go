@@ -732,7 +732,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	if err != nil {
 		logger.V(2).Printf("failed to get uptime: %v", err)
 	} else {
-		uptime := time.Duration(uptimeRaw) * time.Second //nolint:gosec
+		uptime := time.Duration(uptimeRaw) * time.Second
 		boottime := time.Now().Add(-uptime)
 		logger.V(2).Printf("uptime: system booted %s ago, at %s", uptime, boottime.Format(time.RFC3339))
 	}
@@ -741,7 +741,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	if err != nil {
 		logger.V(2).Printf("failed to get bootime: %v", err)
 	} else {
-		boottime := time.Unix(int64(boottimeRaw), 0) //nolint:gosec
+		boottime := time.Unix(int64(boottimeRaw), 0)
 		uptime := time.Since(boottime).Truncate(time.Second)
 		logger.V(2).Printf("bootime: system booted at %s, %s ago", boottime.Format(time.RFC3339), uptime)
 	}
@@ -1007,7 +1007,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 		a.jmx = &jmxtrans.JMX{
 			OutputConfigurationFile:       a.config.JMXTrans.ConfigFile,
-			OutputConfigurationPermission: os.FileMode(perm), //nolint:gosec
+			OutputConfigurationPermission: os.FileMode(perm),
 			ContactPort:                   a.config.JMXTrans.GraphitePort,
 			Pusher:                        a.gathererRegistry.WithTTL(5 * time.Minute),
 		}
@@ -1107,7 +1107,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	a.FireTrigger(true, true, false, false)
 
-	_, err = a.gathererRegistry.RegisterPushPointsCallback(
+	_, err = a.gathererRegistry.RegisterPushPointsCallback( //nolint:staticcheck
 		registry.RegistrationOption{
 			Description:    "statsd & docker metrics",
 			JitterSeed:     baseJitter,
@@ -1348,15 +1348,11 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	var lateTasks sync.WaitGroup
 
 	if a.config.Web.Enable {
-		lateTasks.Add(1)
-
-		go func() {
-			defer lateTasks.Done()
-
+		lateTasks.Go(func() {
 			if err := api.Run(lateCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				logger.V(1).Printf("Error while stopping api: %v", err)
 			}
-		}()
+		})
 	}
 
 	<-ctx.Done()

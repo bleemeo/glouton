@@ -19,6 +19,7 @@ package rules
 import (
 	"context"
 	"fmt"
+	"maps"
 	"runtime"
 	"sync"
 	"time"
@@ -66,9 +67,7 @@ func NewManager(ctx context.Context, queryable storage.Queryable, baseRules map[
 		rules = defaultWindowsRecordingRules
 	}
 
-	for metric, rule := range baseRules {
-		rules[metric] = rule
-	}
+	maps.Copy(rules, baseRules)
 
 	return newManager(ctx, queryable, rules, time.Now())
 }

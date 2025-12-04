@@ -18,6 +18,7 @@ package logger
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -132,20 +133,22 @@ func (t *TelegrafLogger) errorLogLevel() int {
 
 // addNameAndAttrsToArgs adds the input name and registered attributes to the log, should be used with Print.
 func (t *TelegrafLogger) addNameAndAttrsToArgs(args ...any) string {
-	log := t.name + ": "
+	var builder strings.Builder
+	builder.WriteString(t.name)
+	builder.WriteString(": ")
 
 	for _, arg := range args {
-		log += fmt.Sprint(arg)
+		fmt.Fprint(&builder, arg)
 	}
 
 	t.l.Lock()
 	defer t.l.Unlock()
 
 	for key, value := range t.attributes {
-		log += fmt.Sprintf(" %s=%v", key, value)
+		fmt.Fprintf(&builder, " %s=%v", key, value)
 	}
 
-	return log
+	return builder.String()
 }
 
 // addDescriptionToArgs adds the input name and registered attributes to the log, should be used with Printf.
@@ -155,9 +158,12 @@ func (t *TelegrafLogger) addNameAndAttrsToFormat(format string) string {
 	t.l.Lock()
 	defer t.l.Unlock()
 
+	var builder strings.Builder
+	builder.WriteString(log)
+
 	for key, value := range t.attributes {
-		log += fmt.Sprintf(" %s=%v", key, value)
+		fmt.Fprintf(&builder, " %s=%v", key, value)
 	}
 
-	return log
+	return builder.String()
 }

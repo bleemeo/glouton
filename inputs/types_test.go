@@ -224,8 +224,7 @@ func TestStoreAccumulatorWithStatus(t *testing.T) {
 			t.Errorf("labels[__name__] == %v, want %v", labels[types.LabelName], name)
 		}
 
-		if strings.HasSuffix(name, "_status") {
-			strippedName := strings.TrimSuffix(name, "_status")
+		if strippedName, found := strings.CutSuffix(name, "_status"); found {
 			if annotations.StatusOf != strippedName {
 				t.Errorf("annotations.StatusOf == %v, want %v", annotations.StatusOf, strippedName)
 			}

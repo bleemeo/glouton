@@ -170,11 +170,7 @@ func (d *Data) Containers(w http.ResponseWriter, r *http.Request) {
 func paginateInformation(input *Pagination, containersRes []*Container) []*Container {
 	if input != nil {
 		if len(containersRes) > input.Offset {
-			to := input.Offset + input.Limit
-
-			if len(containersRes) <= input.Offset+input.Limit {
-				to = len(containersRes)
-			}
+			to := min(len(containersRes), input.Offset+input.Limit)
 
 			containersRes = containersRes[input.Offset:to]
 		} else if len(containersRes) <= input.Offset {
@@ -271,7 +267,7 @@ func (d *Data) Processes(w http.ResponseWriter, r *http.Request) {
 				CreateTime:  process.CreateTime,
 				Cmdline:     process.CmdLine,
 				Name:        process.Name,
-				MemoryRss:   int64(process.MemoryRSS), //nolint:gosec
+				MemoryRss:   int64(process.MemoryRSS),
 				CPUPercent:  process.CPUPercent,
 				CPUTime:     process.CPUTime,
 				Status:      string(process.Status),

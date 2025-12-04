@@ -142,7 +142,7 @@ func describeHost(source string, rfName refName, hostProps hostLightProps) *Host
 
 	if hostProps.Hardware != nil {
 		hostFacts["cpu_cores"] = str(hostProps.Hardware.CpuInfo.NumCpuCores)
-		hostFacts["memory"] = facts.ByteCountDecimal(uint64(hostProps.Hardware.MemorySize)) //nolint: gosec
+		hostFacts["memory"] = facts.ByteCountDecimal(uint64(hostProps.Hardware.MemorySize))
 	}
 
 	if hostProps.Config != nil {
@@ -196,7 +196,7 @@ func describeVM(source string, rfName refName, vmProps vmLightProps, h *Hierarch
 
 	if vmProps.Config != nil {
 		vmFacts["cpu_cores"] = str(vmProps.Config.Hardware.NumCPU)
-		vmFacts["memory"] = facts.ByteCountDecimal(uint64(vmProps.Config.Hardware.MemoryMB) * 1 << 20) //nolint: gosec // MB to B
+		vmFacts["memory"] = facts.ByteCountDecimal(uint64(vmProps.Config.Hardware.MemoryMB) * 1 << 20) // MB to B
 		vmFacts["vsphere_vm_version"] = vmProps.Config.Version
 		vmFacts["vsphere_vm_name"] = vmProps.Config.Name
 

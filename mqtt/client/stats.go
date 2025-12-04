@@ -106,10 +106,7 @@ func (s *mqttStats) updateStats(stats bucketStats, ackWait time.Duration) bucket
 		statMin = ackWait
 	}
 
-	statMax := stats.max
-	if ackWait > statMax {
-		statMax = ackWait
-	}
+	statMax := max(ackWait, stats.max)
 
 	return bucketStats{
 		min:        statMin,

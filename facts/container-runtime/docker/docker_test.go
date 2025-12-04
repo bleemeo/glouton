@@ -327,13 +327,9 @@ func TestDocker_Run(t *testing.T) {
 				runErr error
 			)
 
-			wg.Add(1)
-
-			go func() {
-				defer wg.Done()
-
+			wg.Go(func() {
 				runErr = d.Run(ctx)
-			}()
+			})
 
 			deadline := time.After(time.Second)
 

@@ -19,6 +19,7 @@ package promexporter
 
 import (
 	"fmt"
+	"maps"
 	"net"
 	"net/url"
 	"reflect"
@@ -215,9 +216,7 @@ func copyMap(toCopy map[string]map[string]string) map[string]map[string]string {
 
 	for key, value := range toCopy {
 		newMap := make(map[string]string)
-		for key2, value2 := range value {
-			newMap[key2] = value2
-		}
+		maps.Copy(newMap, value)
 
 		copyMap[key] = newMap
 	}

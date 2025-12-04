@@ -26,6 +26,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"maps"
 	"math"
 	"math/big"
 	"net"
@@ -2186,9 +2187,7 @@ func runTest(t *testing.T, test testCase, usePlainTCPOrSSL bool, monitorID, agen
 	wantPoints := make([]types.MetricPoint, 0, len(test.wantPoints))
 	for _, point := range test.wantPoints {
 		lbls := make(map[string]string, len(point.Labels))
-		for name, value := range point.Labels {
-			lbls[name] = value
-		}
+		maps.Copy(lbls, point.Labels)
 
 		lbls[types.LabelInstance] = targetURL
 

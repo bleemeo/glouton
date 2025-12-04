@@ -19,6 +19,7 @@ package synchronizer
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -303,15 +304,7 @@ func (s *Synchronizer) containerDeleteFromLocal(ctx context.Context, execution t
 		// API will update all associated metrics and update their active status. Apply the same rule on local cache
 		metrics := s.option.Cache.Metrics()
 		for i, m := range metrics {
-			match := false
-
-			for _, id := range deletedIDs {
-				if m.ContainerID == id {
-					match = true
-
-					break
-				}
-			}
+			match := slices.Contains(deletedIDs, m.ContainerID)
 
 			if !match {
 				continue

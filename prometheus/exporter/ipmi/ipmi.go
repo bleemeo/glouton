@@ -132,10 +132,8 @@ func (g *Gatherer) GatherWithState(ctx context.Context, _ registry.GatherState) 
 			methodFreeIPMISensors,
 		}
 
-		delay := time.Duration(g.cfg.Timeout) * time.Second
-		if delay < 30*time.Second {
-			delay = 30 * time.Second
-		}
+		delay := max(time.Duration(g.cfg.Timeout)*time.Second, 30*time.Second)
+
 		// We don't use parent context, because it's likely to be short (10 seconds) and for the
 		// very first run, we want to wait more (because the SDR cache could be populated).
 		ctx, cancel := context.WithTimeout(context.Background(), delay)
@@ -228,9 +226,9 @@ func (g *Gatherer) gatherWithMethod(ctx context.Context, method ipmiMethod, isIn
 	g.lastOutput, err = g.runCmd(ctx, g.cfg.BinarySearchPath, g.cfg.UseSudo, cmd)
 
 	if isInit {
-		g.initFullOutput = append(g.initFullOutput, []byte(fmt.Sprintf("+ %s\n", strings.Join(cmd, " ")))...)
+		g.initFullOutput = append(g.initFullOutput, fmt.Appendf(nil, "+ %s\n", strings.Join(cmd, " "))...)
 		if err != nil {
-			g.initFullOutput = append(g.initFullOutput, []byte(fmt.Sprintf("ERR=%v\n", err))...)
+			g.initFullOutput = append(g.initFullOutput, fmt.Appendf(nil, "ERR=%v\n", err)...)
 		}
 
 		if len(g.lastOutput) > 10240 {

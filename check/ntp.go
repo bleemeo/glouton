@@ -106,7 +106,7 @@ func encodeLeapVersionMode(leapIndicator int, version int, mode int) uint8 {
 	// 5: Broadcast
 	// 6: NTP control message
 	// 7: Reserved for private use
-	return uint8(leapIndicator*64 + version*8 + mode) //nolint:gosec
+	return uint8(leapIndicator*64 + version*8 + mode)
 }
 
 func decodeLeapVersionMode(value uint8) (leapIndicator int, version int, mode int) {

@@ -18,6 +18,7 @@ package internal
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/bleemeo/glouton/logger"
@@ -104,20 +105,26 @@ func (l *Logger) argsWithAttrs(args []any) string {
 
 	log := fmt.Sprint(args)
 
+	var builder strings.Builder
+	builder.WriteString(log)
+
 	for key, value := range l.attributes {
-		log += fmt.Sprintf(" %s=%v", key, value)
+		fmt.Fprintf(&builder, " %s=%v", key, value)
 	}
 
-	return log
+	return builder.String()
 }
 
 func (l *Logger) formatWithAttrs(format string) string {
 	l.l.Lock()
 	defer l.l.Unlock()
 
+	var builder strings.Builder
+	builder.WriteString(format)
+
 	for key, value := range l.attributes {
-		format += fmt.Sprintf(" %s=%v", key, value)
+		fmt.Fprintf(&builder, " %s=%v", key, value)
 	}
 
-	return format
+	return builder.String()
 }

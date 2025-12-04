@@ -112,14 +112,11 @@ func (c *Client) Run(ctx context.Context) {
 		c.ackManager(ctx)
 	}()
 
-	wg.Add(1)
-
-	go func() {
+	wg.Go(func() {
 		defer crashreport.ProcessPanic()
 
 		c.receiveEvents(ctx)
-		wg.Done()
-	}()
+	})
 
 	wg.Wait()
 
@@ -592,7 +589,7 @@ func (c *Client) Disconnect(timeout time.Duration) {
 	defer c.l.Unlock()
 
 	if c.mqtt != nil {
-		c.mqtt.Disconnect(uint(timeout.Milliseconds())) //nolint: gosec
+		c.mqtt.Disconnect(uint(timeout.Milliseconds()))
 	}
 
 	c.mqtt = nil

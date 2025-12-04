@@ -502,13 +502,10 @@ func TestMarkInactiveWhileDroppingInput(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-
-	go func() {
+	wg.Go(func() {
 		// Simulate another goroutine removing the input during the gathering setup
 		c.RemoveInput(id)
-		wg.Done()
-	}()
+	})
 
 	err = c.RunGather(t.Context(), time.Now())
 	if err != nil {

@@ -19,6 +19,7 @@ package smart
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 
@@ -158,7 +159,7 @@ func (iw *inputWrapper) getDevices() ([]string, error) {
 }
 
 func (iw *inputWrapper) parseScanOutput(out []byte) (devices []string) {
-	for _, line := range strings.Split(string(out), "\n") {
+	for line := range strings.SplitSeq(string(out), "\n") {
 		devWithType := strings.SplitN(line, " ", 2)
 		if len(devWithType) <= 1 {
 			continue
@@ -190,7 +191,7 @@ func (iw *inputWrapper) getDeviceInfo(device string) (deviceInfo, error) {
 func (iw *inputWrapper) parseInfoOutput(out []byte) deviceInfo {
 	var info deviceInfo
 
-	for _, line := range strings.Split(string(out), "\n") {
+	for line := range strings.SplitSeq(string(out), "\n") {
 		line = strings.TrimSpace(line)
 
 		if value, ok := tryScan(line, "Device type: %s"); ok {
@@ -215,13 +216,7 @@ func tryScan(line string, format string) (value string, ok bool) {
 }
 
 func (iw *inputWrapper) isDeviceAllowed(device string) bool {
-	for _, excluded := range iw.Smart.Excludes {
-		if device == excluded {
-			return false
-		}
-	}
-
-	return true
+	return !slices.Contains(iw.Smart.Excludes, device)
 }
 
 func deviceTypeFor(devType string) string {

@@ -18,6 +18,7 @@ package discovery
 
 import (
 	"context"
+	"maps"
 	"os"
 	"reflect"
 	"testing"
@@ -56,9 +57,7 @@ func (mn mockNetstat) Netstat(_ context.Context, processes map[int]facts.Process
 	_ = processes
 	result := make(map[int][]facts.ListenAddress, len(mn.result))
 
-	for pid, l := range mn.result {
-		result[pid] = l
-	}
+	maps.Copy(result, mn.result)
 
 	return result, nil
 }

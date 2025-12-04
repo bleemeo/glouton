@@ -214,8 +214,8 @@ func SetPkgLevels(levels string) {
 
 	pkgLevels := make(map[string]int)
 
-	part := strings.Split(levels, ",")
-	for _, p := range part {
+	part := strings.SplitSeq(levels, ",")
+	for p := range part {
 		tmp := strings.Split(p, "=")
 		if len(tmp) != 2 {
 			continue

@@ -200,16 +200,12 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 			if err := yaml.Unmarshal(data, &fileFacts); err != nil {
 				logger.V(1).Printf("fact file is invalid: %v", err)
 			} else {
-				for k, v := range fileFacts {
-					newFacts[k] = v
-				}
+				maps.Copy(newFacts, fileFacts)
 			}
 		}
 	}
 
-	for k, v := range f.platformFacts(ctx) {
-		newFacts[k] = v
-	}
+	maps.Copy(newFacts, f.platformFacts(ctx))
 
 	primaryAddress, primaryMacAddress := f.primaryAddress(ctx)
 	newFacts["primary_address"] = primaryAddress
@@ -292,14 +288,10 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	}
 
 	for _, c := range callbacks {
-		for k, v := range c(ctx, newFacts) {
-			newFacts[k] = v
-		}
+		maps.Copy(newFacts, c(ctx, newFacts))
 	}
 
-	for k, v := range f.manualFact {
-		newFacts[k] = v
-	}
+	maps.Copy(newFacts, f.manualFact)
 
 	CleanFacts(newFacts)
 
@@ -383,8 +375,8 @@ func getFQDN(ctx context.Context) (hostname string, fqdn string) {
 func decodeOsRelease(data string) (map[string]string, error) {
 	result := make(map[string]string)
 
-	lines := strings.Split(data, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(data, "\n")
+	for line := range lines {
 		if line == "" || !strings.Contains(line, "=") {
 			continue
 		}
@@ -463,9 +455,9 @@ func decodeFreeBSDRouteGet(data string) (string, string) {
 }
 
 func bytesToString(buffer []byte) string {
-	n := bytes.IndexByte(buffer, 0)
+	before, _, _ := bytes.Cut(buffer, []byte{0})
 
-	return string(buffer[:n])
+	return string(before)
 }
 
 func guessVirtual(facts map[string]string) string {

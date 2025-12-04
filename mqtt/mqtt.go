@@ -124,14 +124,11 @@ func (m *MQTT) pahoOptions(_ context.Context) (*paho.ClientOptions, error) {
 func (m *MQTT) Run(ctx context.Context) error {
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-
-	go func() {
+	wg.Go(func() {
 		defer crashreport.ProcessPanic()
 
 		m.client.Run(ctx)
-		wg.Done()
-	}()
+	})
 
 	m.run(ctx)
 
@@ -174,10 +171,7 @@ func (m *MQTT) sendPoints() {
 
 	// Send points in batch.
 	for i := 0; i < len(payload); i += pointsBatchSize {
-		end := i + pointsBatchSize
-		if end > len(payload) {
-			end = len(payload)
-		}
+		end := min(i+pointsBatchSize, len(payload))
 
 		if err := m.client.PublishAsJSON(fmt.Sprintf("v1/agent/%s/data", m.opts.FQDN), payload[i:end], true); err != nil {
 			logger.V(1).Printf("Unable to publish points: %v", err)

@@ -210,7 +210,7 @@ func parseOutput(output string) map[int][]int {
 			continue
 		}
 
-		for _, strIndex := range strings.Fields(res[1]) {
+		for strIndex := range strings.FieldsSeq(res[1]) {
 			index, err := strconv.Atoi(strIndex)
 			if err != nil {
 				continue

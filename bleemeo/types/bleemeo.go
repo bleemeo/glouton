@@ -150,7 +150,7 @@ type Container struct {
 	Runtime          string    `json:"container_runtime"`
 
 	InspectHash          string    `json:",omitempty"`
-	GloutonLastUpdatedAt time.Time `json:",omitempty"`
+	GloutonLastUpdatedAt time.Time `json:",omitzero"`
 }
 
 // Threshold is the threshold of a metrics. We use pointer to float to support
@@ -192,7 +192,7 @@ type Metric struct {
 	ServiceID     string            `json:"service,omitempty"`
 	ContainerID   string            `json:"container,omitempty"`
 	StatusOf      string            `json:"status_of,omitempty"`
-	DeactivatedAt time.Time         `json:"deactivated_at,omitempty"`
+	DeactivatedAt time.Time         `json:"deactivated_at,omitzero"`
 	FirstSeenAt   time.Time         `json:"first_seen_at"`
 }
 
@@ -246,11 +246,7 @@ func (kind FailureKind) String() string {
 // RetryAfter return the time after which the retry of the registration may be retried.
 func (mr MetricRegistration) RetryAfter() time.Time {
 	factor := math.Pow(2, float64(mr.FailCounter))
-	delay := 15 * time.Second * time.Duration(factor)
-
-	if delay > 45*time.Minute {
-		delay = 45 * time.Minute
-	}
+	delay := min(15*time.Second*time.Duration(factor), 45*time.Minute)
 
 	return mr.LastFailAt.Add(delay)
 }

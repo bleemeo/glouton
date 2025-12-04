@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"net/url"
 	"sort"
@@ -393,7 +394,7 @@ func (t *Target) buildScraper(module string) registry.GathererWithState {
 		if _, ok := t.mockPerModule[module]; !ok {
 			return errGatherer{
 				alwaysErr: scrapper.TargetError{
-					PartialBody: []byte(fmt.Sprintf("Unknown module '%s'", module)),
+					PartialBody: fmt.Appendf(nil, "Unknown module '%s'", module),
 					StatusCode:  400,
 				},
 			}
@@ -470,10 +471,7 @@ func (t *Target) facts(ctx context.Context, maxAge time.Duration) (facts map[str
 		return nil, t.lastFactErr
 	}
 
-	scraperMaxAge := maxAge
-	if scraperMaxAge < time.Hour {
-		scraperMaxAge = time.Hour
-	}
+	scraperMaxAge := max(maxAge, time.Hour)
 
 	var scraperFact map[string]string
 
@@ -615,9 +613,7 @@ func parseProductnameComaKV(productName string) map[string]string {
 }
 
 func parseProductname(facts map[string]string) map[string]string {
-	for k, v := range parseProductnameComaKV(facts["product_name"]) {
-		facts[k] = v
-	}
+	maps.Copy(facts, parseProductnameComaKV(facts["product_name"]))
 
 	// Some product name contains multiple information separated by coma. Only kept the first one
 	// ... useless the first part isn't specific enough.
