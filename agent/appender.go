@@ -53,20 +53,39 @@ func (ma miscAppender) CollectWithState(ctx context.Context, state registry.Gath
 		return fmt.Errorf("gather on DockerProvider failed: %w", err)
 	}
 
-	countRunning := 0
+	counts := map[string]int{
+		"running":    0,
+		"created":    0,
+		"stopped":    0,
+		"restarting": 0,
+		"unknown":    0,
+	}
 
 	for _, c := range containers {
-		if c.State().IsRunning() {
-			countRunning++
+		state := c.State()
+		switch {
+		case state.IsRunning():
+			counts["running"]++
+		case state.IsCreated():
+			counts["created"]++
+		case state.IsStopped():
+			counts["stopped"]++
+		case state.IsRestarting():
+			counts["restarting"]++
+		case state.IsUnknown():
+			counts["unknown"]++
 		}
 	}
 
-	points = append(points, types.MetricPoint{
-		Point: types.Point{Time: state.T0, Value: float64(countRunning)},
-		Labels: map[string]string{
-			types.LabelName: "containers_count",
-		},
-	})
+	for status, count := range counts {
+		points = append(points, types.MetricPoint{
+			Point: types.Point{Time: state.T0, Value: float64(count)},
+			Labels: map[string]string{
+				types.LabelName: "containers_count",
+				types.LabelItem: status,
+			},
+		})
+	}
 
 	err = model.SendPointsToAppender(points, app)
 	if err != nil {
