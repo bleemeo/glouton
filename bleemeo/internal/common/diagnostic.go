@@ -24,6 +24,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -38,7 +39,7 @@ var errHandshakeTimeout = errors.New("TLS handshake timeout")
 func DiagnosticTCP(host string, port int, tlsConfig *tls.Config) string {
 	builder := &strings.Builder{}
 
-	hostPort := fmt.Sprintf("%s:%d", host, port)
+	hostPort := net.JoinHostPort(host, strconv.Itoa(port))
 
 	conn, err := net.DialTimeout("tcp", hostPort, 5*time.Second) //nolint: noctx
 	if err != nil {

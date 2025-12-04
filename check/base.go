@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"slices"
 	"sync"
 	"time"
 
@@ -66,15 +67,7 @@ type baseCheck struct {
 
 func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection bool, mainCheck func(context.Context) types.StatusDescription, labels map[string]string, annotations types.MetricAnnotations) *baseCheck {
 	if mainTCPAddress != "" {
-		found := false
-
-		for _, v := range tcpAddresses {
-			if v == mainTCPAddress {
-				found = true
-
-				break
-			}
-		}
+		found := slices.Contains(tcpAddresses, mainTCPAddress)
 
 		if !found {
 			tmp := make([]string, 0, len(tcpAddresses)+1)

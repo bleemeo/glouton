@@ -18,6 +18,7 @@ package facts
 
 import (
 	"context"
+	"maps"
 	"time"
 )
 
@@ -42,9 +43,7 @@ func (f *FactProviderMock) Facts(_ context.Context, maxAge time.Duration) (facts
 	_ = maxAge
 
 	cpy := make(map[string]string, len(f.facts))
-	for k, v := range f.facts {
-		cpy[k] = v
-	}
+	maps.Copy(cpy, f.facts)
 
 	return cpy, nil
 }

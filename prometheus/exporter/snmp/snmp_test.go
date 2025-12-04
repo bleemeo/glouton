@@ -19,6 +19,7 @@ package snmp
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -618,9 +619,7 @@ func TestNewMock(t *testing.T) {
 			t.Parallel()
 
 			wantFacts := make(map[string]string, len(tt.mockFacts))
-			for k, v := range tt.mockFacts {
-				wantFacts[k] = v
-			}
+			maps.Copy(wantFacts, tt.mockFacts)
 
 			tgt := NewMock(tt.opt, tt.mockFacts)
 

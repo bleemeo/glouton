@@ -242,23 +242,17 @@ func (c *Client) Run(ctx context.Context) error {
 
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-
-	go func() {
+	wg.Go(func() {
 		defer crashreport.ProcessPanic()
 
 		c.receiveEvents(ctx)
-		wg.Done()
-	}()
+	})
 
-	wg.Add(1)
-
-	go func() {
+	wg.Go(func() {
 		defer crashreport.ProcessPanic()
 
 		c.mqtt.Run(ctx)
-		wg.Done()
-	}()
+	})
 
 	err := c.run(ctx)
 
@@ -644,10 +638,7 @@ func (c *Client) sendPoints() {
 
 	for agentID, agentPayload := range payload {
 		for i := 0; i < len(agentPayload); i += pointsBatchSize {
-			end := i + pointsBatchSize
-			if end > len(agentPayload) {
-				end = len(agentPayload)
-			}
+			end := min(i+pointsBatchSize, len(agentPayload))
 
 			if err := c.mqtt.PublishAsJSON(fmt.Sprintf("v1/agent/%s/data", agentID), agentPayload[i:end], true); err != nil {
 				logger.V(1).Printf("Unable to publish points: %v", err)

@@ -46,6 +46,7 @@ func (ws winService) Execute(
 	_ = args
 
 	const cmdsAccepted = svc.AcceptStop | svc.AcceptShutdown
+
 	status <- svc.Status{State: svc.StartPending}
 
 	status <- svc.Status{State: svc.Running, Accepts: cmdsAccepted}

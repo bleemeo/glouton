@@ -18,6 +18,7 @@ package agent
 
 import (
 	"bytes"
+	"maps"
 	"math/rand"
 	"os"
 	"reflect"
@@ -580,13 +581,8 @@ func Test_RebuildDynamicList(t *testing.T) {
 	allowListWant := make(map[labels.Matcher][]matcher.Matchers)
 	denyListWant := make(map[labels.Matcher][]matcher.Matchers)
 
-	for key, val := range mf.allowList {
-		allowListWant[key] = val
-	}
-
-	for key, val := range mf.denyList {
-		denyListWant[key] = val
-	}
+	maps.Copy(allowListWant, mf.allowList)
+	maps.Copy(denyListWant, mf.denyList)
 
 	m, _ := matcher.NormalizeMetric("{__name__=\"something\",scrape_instance=\"containerURL\",scrape_job=\"discovered-exporters\"}")
 	m2, _ := matcher.NormalizeMetric("{__name__=\"else\",scrape_instance=\"containerURL\",scrape_job=\"discovered-exporters\"}")
@@ -1172,9 +1168,7 @@ type fakeMetric struct {
 func (m fakeMetric) Labels() map[string]string {
 	labels := make(map[string]string)
 
-	for k, v := range m.labels {
-		labels[k] = v
-	}
+	maps.Copy(labels, m.labels)
 
 	return labels
 }
@@ -1632,10 +1626,12 @@ func Benchmark_MultipleFilters(b *testing.B) {
 			continue
 		}
 
-		spaceIdx := bytes.Index(line, []byte(" "))
-		metric := string(line[:spaceIdx])
+		metric, _, found := bytes.Cut(line, []byte(" "))
+		if !found {
+			continue
+		}
 
-		lbls, err := promParser.ParseMetric(metric)
+		lbls, err := promParser.ParseMetric(string(metric))
 		if err != nil {
 			b.Fatalf("Failed to parse %q: %v", metric, err)
 		}

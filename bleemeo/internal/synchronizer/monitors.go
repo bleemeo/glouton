@@ -132,8 +132,8 @@ func applyJitterToMonitorCreationDate(monitor bleemeoTypes.Monitor, agentIDHash 
 	}
 
 	creationDateBase := creationDate.Truncate(time.Minute)
-	millisecondInMinute := (uint64(creationDate.UnixMilli()) + agentIDHash) % 45000                   //nolint: gosec
-	jitterCreationDate := creationDateBase.Add(time.Duration(millisecondInMinute) * time.Millisecond) //nolint:gosec
+	millisecondInMinute := (uint64(creationDate.UnixMilli()) + agentIDHash) % 45000
+	jitterCreationDate := creationDateBase.Add(time.Duration(millisecondInMinute) * time.Millisecond)
 
 	return jitterCreationDate, nil
 }

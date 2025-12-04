@@ -109,7 +109,7 @@ func (r Responder) responseCustomCheck(ctx context.Context, request string) (str
 
 	statusDescription := checkNow(ctx)
 
-	return statusDescription.StatusDescription, int16(statusDescription.CurrentStatus.NagiosCode()), nil //nolint:gosec
+	return statusDescription.StatusDescription, int16(statusDescription.CurrentStatus.NagiosCode()), nil
 }
 
 func (r Responder) responseNRPEConf(ctx context.Context, requestArgs []string) (string, int16, error) {
@@ -142,7 +142,7 @@ func (r Responder) responseNRPEConf(ctx context.Context, requestArgs []string) (
 	output := string(out)
 	output = strings.TrimSuffix(output, "\n")
 
-	return output, int16(nagiosCode), nil //nolint:gosec
+	return output, int16(nagiosCode), nil
 }
 
 func (r Responder) returnCommand(requestArgs []string) ([]string, error) {
@@ -206,9 +206,9 @@ func readNRPEConfFile(confBytes []byte, nrpeConfMap map[string]string) (map[stri
 
 	confCommandArguments := false
 	confString := string(confBytes)
-	confLines := strings.Split(confString, "\n")
+	confLines := strings.SplitSeq(confString, "\n")
 
-	for _, line := range confLines {
+	for line := range confLines {
 		matched := commandLineRegex.MatchString(line)
 		if matched {
 			splitLine := strings.SplitN(line, "=", 2)

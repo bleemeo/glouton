@@ -30,7 +30,7 @@ func BenchmarkPointsWriting(b *testing.B) {
 	points := newEncodedPoints()
 
 	for i := range b.N {
-		m := uint64(i) //nolint: gosec
+		m := uint64(i)
 		for p := range pointsPerMetric {
 			err := points.pushPoint(m, types.Point{
 				Time:  t0.Add(time.Duration(p*10) * time.Second),

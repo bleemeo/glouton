@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"net/url"
 	"os"
@@ -1279,9 +1280,7 @@ func (d *dockerProcessQuerier) fillContainers(ctx context.Context) error {
 		}
 
 		d.containers = make(map[string]dockerContainer, len(d.d.containers))
-		for k, v := range d.d.containers {
-			d.containers[k] = v
-		}
+		maps.Copy(d.containers, d.d.containers)
 
 		d.d.l.Unlock()
 	}
@@ -1466,7 +1465,7 @@ func decodeDocker(top container.TopResponse, c facts.Container) []facts.Process 
 		if rssIndex != -1 {
 			v, err := strconv.ParseInt(row[rssIndex], 10, 0)
 			if err == nil {
-				process.MemoryRSS = uint64(v) //nolint: gosec
+				process.MemoryRSS = uint64(v)
 			}
 		}
 

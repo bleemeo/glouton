@@ -290,7 +290,7 @@ func decodeUpdateNotifierFile(content []byte) (pendingUpdates int, pendingSecuri
 	//   and if security update exists, that number of updates is > 0
 	// * (optional) the number of ESM (paid support) security update on Ubuntu. This
 	//   number could exists with number of updates == 0.
-	for _, line := range strings.Split(string(content), "\n") {
+	for line := range strings.SplitSeq(string(content), "\n") {
 		match := re.FindStringSubmatch(line)
 		if len(match) > 0 && firstMatch {
 			tmp, _ := strconv.ParseInt(match[1], 10, 0)
@@ -344,7 +344,7 @@ func decodeAPTCheck(content []byte) (pendingUpdates int, pendingSecurityUpdates 
 func decodeAPTGet(content []byte) (pendingUpdates int, pendingSecurityUpdates int) {
 	re := regexp.MustCompile(`[^\(]*\(.* (Debian-Security|Ubuntu:[^/]*/[^-]*-security)`)
 
-	for _, line := range strings.Split(string(content), "\n") {
+	for line := range strings.SplitSeq(string(content), "\n") {
 		if !strings.HasPrefix(line, "Inst") {
 			continue
 		}
@@ -360,7 +360,7 @@ func decodeAPTGet(content []byte) (pendingUpdates int, pendingSecurityUpdates in
 }
 
 func decodeDNF(content []byte) (pendingUpdates int, pendingSecurityUpdates int) {
-	for _, line := range strings.Split(string(content), "\n") {
+	for line := range strings.SplitSeq(string(content), "\n") {
 		if line == "" {
 			continue
 		}
@@ -378,7 +378,7 @@ func decodeDNF(content []byte) (pendingUpdates int, pendingSecurityUpdates int) 
 func decodeYUMOne(content []byte) int {
 	result := 0
 
-	for _, line := range strings.Split(string(content), "\n") {
+	for line := range strings.SplitSeq(string(content), "\n") {
 		if line == "Updated Packages" {
 			continue
 		}

@@ -19,6 +19,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sort"
 	"time"
 
@@ -269,9 +270,7 @@ func statusFromLastPoint(
 			labelsCopy[name] = value
 		}
 
-		for k, v := range targetMetric {
-			labelsCopy[k] = v
-		}
+		maps.Copy(labelsCopy, targetMetric)
 
 		newPoints = append(newPoints, types.MetricPoint{
 			Point: types.Point{

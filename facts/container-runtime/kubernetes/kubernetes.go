@@ -25,6 +25,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"net/url"
 	"os"
@@ -841,8 +842,8 @@ func (k *Kubernetes) updatePods(ctx context.Context) error {
 func kuberIDtoRuntimeID(containerID string) string {
 	containerID = strings.TrimPrefix(containerID, "docker://")
 
-	if strings.HasPrefix(containerID, "containerd://") {
-		containerID = strings.TrimPrefix(containerID, "containerd://")
+	if after, ok := strings.CutPrefix(containerID, "containerd://"); ok {
+		containerID = after
 		// Glouton add the namespace in the container ID
 		containerID = "k8s.io/" + containerID
 	}
@@ -1227,13 +1228,9 @@ func (c wrappedContainer) Labels() map[string]string {
 
 	// Return a copy of the labels, don't mutate the container labels.
 	labels := make(map[string]string, len(containerLabels)+len(c.pod.Labels))
-	for name, value := range containerLabels {
-		labels[name] = value
-	}
+	maps.Copy(labels, containerLabels)
 
-	for name, value := range c.pod.Labels {
-		labels[name] = value
-	}
+	maps.Copy(labels, c.pod.Labels)
 
 	return labels
 }

@@ -31,7 +31,7 @@ const (
 func CheckLockedMemory() {
 	const arbitraryMinSecretsCount uint64 = 16
 
-	required := (baseMemoryPages + memoryPagesPerSecret*arbitraryMinSecretsCount) * uint64(os.Getpagesize()) //nolint: gosec
+	required := (baseMemoryPages + memoryPagesPerSecret*arbitraryMinSecretsCount) * uint64(os.Getpagesize())
 	available := getLockedMemoryLimit()
 
 	if required > available {

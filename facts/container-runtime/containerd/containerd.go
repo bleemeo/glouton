@@ -864,7 +864,7 @@ func convertToContainerObject(ctx context.Context, ns string, cont client.Contai
 		obj.exitTime = status.ExitTime
 	}
 
-	proc, err := process.NewProcess(int32(obj.pid)) //nolint:gosec
+	proc, err := process.NewProcess(int32(obj.pid))
 	if err != nil {
 		logger.Printf("container %s/%s, ignore error while retrieving corresponding process: %v", ns, cont.ID(), err)
 

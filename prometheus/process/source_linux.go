@@ -163,7 +163,7 @@ func (c *Processes) Processes(ctx context.Context) (processes []facts.Process, f
 
 		executable, ok := exeCache[p.ID]
 		if !ok {
-			psProc, err := process.NewProcess(int32(p.ID.Pid)) //nolint:gosec
+			psProc, err := process.NewProcess(int32(p.ID.Pid))
 			if err == nil {
 				executable, _ = psProc.ExeWithContext(ctx)
 			}
@@ -181,8 +181,8 @@ func (c *Processes) Processes(ctx context.Context) (processes []facts.Process, f
 
 		newUserCache[p.ID] = username
 
-		startTime := time.Unix(int64(c.source.BootTime), 0).UTC()                             //nolint:gosec
-		startTime = startTime.Add(time.Second / userHZ * time.Duration(p.procStat.Starttime)) //nolint:gosec
+		startTime := time.Unix(int64(c.source.BootTime), 0).UTC()
+		startTime = startTime.Add(time.Second / userHZ * time.Duration(p.procStat.Starttime))
 
 		cmdline, err := p.getCmdline()
 		if err != nil {
@@ -202,7 +202,7 @@ func (c *Processes) Processes(ctx context.Context) (processes []facts.Process, f
 			CmdLineList:     cmdline,
 			CmdLine:         strings.Join(cmdline, " "),
 			Name:            p.procStat.Comm,
-			MemoryRSS:       uint64(p.procStat.ResidentMemory()) / 1024, //nolint: gosec
+			MemoryRSS:       uint64(p.procStat.ResidentMemory()) / 1024,
 			CPUTime:         float64(p.procStat.UTime+p.procStat.STime) / userHZ,
 			Status:          status,
 			Username:        username,

@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"slices"
 	"strconv"
 	"time"
 
@@ -249,15 +250,7 @@ func (s Service) merge(update Service) Service {
 		s.LastNetstatInfo = update.LastNetstatInfo
 	case update.HasNetstatInfo:
 		for _, v := range update.ListenAddresses {
-			alreadyExist := false
-
-			for _, existing := range s.ListenAddresses {
-				if v == existing {
-					alreadyExist = true
-
-					break
-				}
-			}
+			alreadyExist := slices.Contains(s.ListenAddresses, v)
 
 			if !alreadyExist {
 				s.ListenAddresses = append(s.ListenAddresses, v)

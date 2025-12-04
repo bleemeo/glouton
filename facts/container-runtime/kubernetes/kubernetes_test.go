@@ -19,6 +19,7 @@ package kubernetes
 import (
 	"context"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"testing"
@@ -889,9 +890,7 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 			// Add facts coming from container runtime. We only test that those facts
 			// are passed as-is.
 			want := k.Runtime.RuntimeFact(t.Context(), nil)
-			for k, v := range tt.wantFacts {
-				want[k] = v
-			}
+			maps.Copy(want, tt.wantFacts)
 
 			if diff := cmp.Diff(want, facts); diff != "" {
 				t.Errorf("facts:\n%s", diff)

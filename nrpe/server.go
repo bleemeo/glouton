@@ -279,7 +279,7 @@ func encodeV2(decodedPacket reducedPacket, randBytes [2]byte) ([]byte, error) {
 
 func encodeV3(decodedPacket reducedPacket) ([]byte, error) {
 	decodedPacket.packetType = 2
-	bufferLength := int32(len(decodedPacket.buffer)) //nolint:gosec
+	bufferLength := int32(len(decodedPacket.buffer))
 	encodedPacket := make([]byte, 19+len(decodedPacket.buffer))
 
 	buf := new(bytes.Buffer)

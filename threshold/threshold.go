@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"math"
 	"sort"
 	"strings"
@@ -716,9 +717,7 @@ func (r *Registry) addPointWithThreshold(
 	// Create status point.
 	labelsCopy := make(map[string]string, len(point.Labels))
 
-	for k, v := range point.Labels {
-		labelsCopy[k] = v
-	}
+	maps.Copy(labelsCopy, point.Labels)
 
 	labelsCopy[types.LabelName] += statusMetricSuffix
 

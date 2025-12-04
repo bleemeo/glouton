@@ -20,6 +20,7 @@ package collector
 import (
 	"context"
 	"errors"
+	"maps"
 	"math"
 	"sync"
 	"time"
@@ -278,9 +279,7 @@ func (ima *inactiveMarkerAccumulator) deactivateUnseenMetrics(skipDeactivation b
 				ima.fieldCaches[measurement][field] = make(map[string]fieldCache)
 			}
 
-			for tag, v := range tags {
-				ima.fieldCaches[measurement][field][tag] = v
-			}
+			maps.Copy(ima.fieldCaches[measurement][field], tags)
 		}
 	}
 

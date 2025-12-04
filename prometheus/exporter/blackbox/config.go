@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"net/url"
 	"os"
@@ -117,9 +118,7 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*co
 			mod.HTTP.Headers = make(map[string]string, len(monitor.Headers))
 		}
 
-		for header, value := range monitor.Headers {
-			mod.HTTP.Headers[header] = value
-		}
+		maps.Copy(mod.HTTP.Headers, monitor.Headers)
 
 		uri, mod = preprocessHTTPTarget(url, mod)
 	case proberNameDNS:

@@ -103,7 +103,7 @@ func (rs *ReloadState) Close() {
 		}
 	}()
 
-	rs.client.Disconnect(uint(5 * time.Second.Milliseconds())) //nolint: gosec
+	rs.client.Disconnect(uint(5 * time.Second.Milliseconds()))
 
 	logger.V(2).Printf("Stopped MQTT with %d messages still pending", rs.pendingMessages.Len())
 

@@ -92,7 +92,7 @@ func Test_newCollector(t *testing.T) {
 		value = value.Elem()
 
 		volumeExcludePattern := value.FieldByName("volumeExcludePattern")
-		if volumeExcludePattern.Type() != reflect.TypeOf(&regexp.Regexp{}) {
+		if volumeExcludePattern.Type() != reflect.TypeFor[*regexp.Regexp]() {
 			t.Errorf("volumeExcludePattern is a %s, want a *regexp.Regexp", volumeExcludePattern.Type())
 		}
 
@@ -108,7 +108,7 @@ func Test_newCollector(t *testing.T) {
 		value = value.Elem()
 
 		nicExcludePattern := value.FieldByName("nicExcludePattern")
-		if nicExcludePattern.Type() != reflect.TypeOf(&regexp.Regexp{}) {
+		if nicExcludePattern.Type() != reflect.TypeFor[*regexp.Regexp]() {
 			t.Errorf("nicExcludePattern is a %s, want a *regexp.Regexp", nicExcludePattern.Type())
 		}
 

@@ -20,6 +20,7 @@ package merge
 import (
 	"context"
 	"errors"
+	"maps"
 	"strings"
 	"sync"
 	"time"
@@ -319,9 +320,7 @@ func (r *Runtime) RuntimeFact(ctx context.Context, currentFact map[string]string
 			runtimes = append(runtimes, name)
 		}
 
-		for k, v := range facts {
-			newFacts[k] = v
-		}
+		maps.Copy(newFacts, facts)
 	}
 
 	if len(runtimes) > 0 {

@@ -18,6 +18,7 @@ package config
 
 import (
 	"regexp"
+	"slices"
 	"testing"
 
 	"github.com/bleemeo/glouton/types"
@@ -293,15 +294,7 @@ func TestDefaultDFFSTypeIgnore(t *testing.T) {
 		t.Run(item, func(t *testing.T) {
 			t.Parallel()
 
-			match := true
-
-			for _, v := range cfg.DF.IgnoreFSType {
-				if v == item {
-					match = false
-
-					break
-				}
-			}
+			match := !slices.Contains(cfg.DF.IgnoreFSType, item)
 
 			shouldMatch := i < len(allowedType)
 

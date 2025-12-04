@@ -448,7 +448,7 @@ func Benchmark_buffer(b *testing.B) {
 
 	buff.SetCapacity(headSize, tailSize)
 
-	for n := 0; n < b.N; n++ {
+	for n := 0; b.Loop(); n++ {
 		line := fmt.Sprintf("this is line #%d. This random is to reduce compression %d%d%d\n", n, rand.Int(), rand.Int(), rand.Int()) //nolint: gosec
 
 		n, err := buff.write(time.Now(), []byte(line))

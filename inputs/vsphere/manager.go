@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"reflect"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -156,14 +157,11 @@ func (m *Manager) Devices(ctx context.Context, maxAge time.Duration) []bleemeoTy
 	wg := new(sync.WaitGroup)
 
 	for name := range m.vSpheres {
-		wg.Add(1)
-
-		go func() {
+		wg.Go(func() {
 			defer crashreport.ProcessPanic()
 
 			m.vSpheres[name].devices(ctx, deviceChan)
-			wg.Done()
-		}()
+		})
 	}
 
 	go func() { wg.Wait(); close(deviceChan) }()
@@ -215,10 +213,8 @@ func (m *Manager) FindDevice(ctx context.Context, vSphereHost, moid string) blee
 
 		// Maybe the device is a datastore belonging to a cluster ...
 		if cluster, ok := dev.(*Cluster); ok {
-			for _, datastore := range cluster.datastores {
-				if datastore == moid {
-					return cluster
-				}
+			if slices.Contains(cluster.datastores, moid) {
+				return cluster
 			}
 		}
 	}

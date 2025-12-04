@@ -449,9 +449,7 @@ func merge(dst any, src any) (any, error) {
 			return nil, fmt.Errorf("%w: map[string]interface{} with %T", errCannotMerge, src)
 		}
 
-		for key, value := range srcMap {
-			dstType[key] = value
-		}
+		maps.Copy(dstType, srcMap)
 
 		return dstType, nil
 	default:
@@ -473,8 +471,8 @@ func mergeKnownLogFormats(config map[string]any) error {
 			if err != nil {
 				return fmt.Errorf("merging known log formats: failed to decode %T into %T: %w", item, topMap, err)
 			}
-		} else if strings.HasPrefix(key, "log.opentelemetry.known_log_formats.") {
-			formatName := strings.TrimPrefix(key, "log.opentelemetry.known_log_formats.")
+		} else if after, ok := strings.CutPrefix(key, "log.opentelemetry.known_log_formats."); ok {
+			formatName := after
 			if strings.Contains(formatName, delimiter) {
 				logger.V(1).Printf("Unexpected config item %q", key)
 

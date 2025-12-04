@@ -17,6 +17,8 @@
 package postgresql
 
 import (
+	"slices"
+
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
 	"github.com/bleemeo/glouton/types"
@@ -69,12 +71,10 @@ func renameGlobal(detailedDatabases []string) func(internal.GatherContext) (inte
 			return gatherContext, false
 		}
 
-		for _, db := range detailedDatabases {
-			if db == gatherContext.Tags["db"] {
-				gatherContext.Tags[types.LabelItem] = gatherContext.Tags["db"]
+		if slices.Contains(detailedDatabases, gatherContext.Tags["db"]) {
+			gatherContext.Tags[types.LabelItem] = gatherContext.Tags["db"]
 
-				return gatherContext, false
-			}
+			return gatherContext, false
 		}
 
 		return gatherContext, true

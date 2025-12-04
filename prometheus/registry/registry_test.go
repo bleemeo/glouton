@@ -813,13 +813,9 @@ func TestRegistry_slowGather(t *testing.T) { //nolint:maintidx
 
 	var registryWG sync.WaitGroup
 
-	registryWG.Add(1)
-
-	go func() {
-		defer registryWG.Done()
-
+	registryWG.Go(func() {
 		_ = reg.Run(ctx)
-	}()
+	})
 
 	gather1 := &fakeGatherer{name: "name1"}
 	gather1.fillResponse()
@@ -997,13 +993,9 @@ func TestRegistry_slowGather(t *testing.T) { //nolint:maintidx
 	ctx, cancel = context.WithCancel(t.Context())
 	defer cancel()
 
-	registryWG.Add(1)
-
-	go func() {
-		defer registryWG.Done()
-
+	registryWG.Go(func() {
 		_ = reg.Run(ctx)
-	}()
+	})
 
 	// During shutdow, all gatherer get Unregistered, we will need to re-register them.
 	waitPointAndGatherCall(t, false, "name2")

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
 	"regexp"
 	"sort"
@@ -1177,9 +1178,7 @@ func (s *Synchronizer) prepareMetricPayload(
 	if annotations.StatusOf != "" {
 		subLabels := make(map[string]string, len(labels))
 
-		for k, v := range labels {
-			subLabels[k] = v
-		}
+		maps.Copy(subLabels, labels)
 
 		subLabels[gloutonTypes.LabelName] = annotations.StatusOf
 

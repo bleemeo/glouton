@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"slices"
 	"sort"
@@ -738,9 +739,7 @@ func (d *Discovery) setServiceActiveAndContainer(service Service) Service {
 func copyAndMergeServiceWithOverride(servicesMap map[NameInstance]Service, overrides map[NameInstance]config.Service) map[NameInstance]Service {
 	serviceMapWithOverride := make(map[NameInstance]Service)
 
-	for k, v := range servicesMap {
-		serviceMapWithOverride[k] = v
-	}
+	maps.Copy(serviceMapWithOverride, servicesMap)
 
 	for _, v := range overrides {
 		key := NameInstance{

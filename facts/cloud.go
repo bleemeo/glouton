@@ -361,7 +361,7 @@ func awsFacts(ctx context.Context, facts map[string]string) (found bool) {
 	resultVPC := make([]string, 0)
 	resultIPv4 := make([]string, 0)
 
-	for _, line := range strings.Split(macs, "\n") {
+	for line := range strings.SplitSeq(macs, "\n") {
 		t := urlContent(ctx, baseURL+line+"vpc-id", tokenHeader)
 		if t != "" {
 			resultVPC = append(resultVPC, t)

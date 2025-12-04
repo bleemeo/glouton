@@ -99,7 +99,7 @@ func Test_newCollector(t *testing.T) {
 		}
 
 		ignorePattern := mountPointFilter.FieldByName("ignorePattern")
-		if ignorePattern.Type() != reflect.TypeOf(&regexp.Regexp{}) {
+		if ignorePattern.Type() != reflect.TypeFor[*regexp.Regexp]() {
 			t.Errorf("ignorePattern is a %s, want a *regexp.Regexp", ignorePattern.Type())
 		}
 

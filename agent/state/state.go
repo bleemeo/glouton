@@ -169,13 +169,7 @@ func load(readOnly bool, persistentPath string, cachePath string) (*State, error
 }
 
 func (s *State) withBackgroundWriter() *State {
-	s.backgroundWriterWG.Add(1)
-
-	go func() {
-		defer s.backgroundWriterWG.Done()
-
-		s.backgroundWriter()
-	}()
+	s.backgroundWriterWG.Go(s.backgroundWriter)
 
 	return s
 }

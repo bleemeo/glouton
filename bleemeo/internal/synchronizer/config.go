@@ -230,10 +230,7 @@ func (s *Synchronizer) registerLocalConfigItems(
 	}
 
 	for start := 0; start < len(itemsToRegister); start += gloutonConfigItemBatchSize {
-		end := start + gloutonConfigItemBatchSize
-		if end > len(itemsToRegister) {
-			end = len(itemsToRegister)
-		}
+		end := min(start+gloutonConfigItemBatchSize, len(itemsToRegister))
 
 		err := apiClient.RegisterGloutonConfigItems(ctx, itemsToRegister[start:end])
 		if err != nil {

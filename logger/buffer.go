@@ -206,7 +206,7 @@ func (b *buffer) Content() []byte {
 
 		data, err := io.ReadAll(r)
 		if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
-			data = append(data, []byte(fmt.Sprintf("\ndecode err in head: %v\n", err))...)
+			data = append(data, fmt.Appendf(nil, "\ndecode err in head: %v\n", err)...)
 		}
 
 		return data
