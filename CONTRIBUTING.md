@@ -92,10 +92,16 @@ To run with this configuration, start webpack-dev-server:
 
 ```sh
 docker run --rm -ti -u $UID -e HOME=/tmp/home \
-   -v $(pwd):/src -w /src/webui \
-   -p 127.0.0.1:3015:3015 \
-   node:22 \
-   sh -c 'npm clean-install --ignore-scripts && npm start'
+  -v $(pwd):/src -w /src/webui \
+  -p 127.0.0.1:3015:3015 \
+  node:24 \
+  sh -c "
+  wget -qO- https://get.pnpm.io/install.sh | ENV=\"\$HOME/.shrc\" SHELL=\"\$(which sh)\" sh - && \
+  export PNPM_HOME=\"/tmp/home/.local/share/pnpm\" && \
+  export PATH=\"\$PNPM_HOME:\$PATH\" && \
+  pnpm install --frozen-lockfile --ignore-scripts && \
+  pnpm start
+  "
 ```
 
 Then tell Glouton to use JavaScript file from webpack-dev-server:
@@ -108,13 +114,13 @@ export GLOUTON_WEB_STATIC_CDN_URL=http://localhost:3015/src/index.ts
 Glouton uses eslint as linter. You may run it with:
 
 ```sh
-(cd webui; npm run lint)
+(cd webui; pnpm run lint)
 ```
 
 Glouton uses prettier too. You may run it with:
 
 ```sh
-(cd webui; npm run prettify)
+(cd webui; pnpm run prettify)
 ```
 
 ### Developing the Windows installer
@@ -141,7 +147,7 @@ Our release version will be set from the current date.
 
 The release build will
 
-* Build the local UI written in ReactJS using npm and webpack.
+* Build the local UI written in ReactJS using pnpm and webpack.
 * Compile the Go binary for supported systems
 * Build Docker image using Docker buildx
 * Build an Windows installer using NSIS
