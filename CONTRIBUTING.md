@@ -91,7 +91,7 @@ any JavaScript files, you will only need to refresh the page on your browser.
 To run with this configuration, start webpack-dev-server:
 
 ```sh
-  docker run --rm -ti -e HOME=/tmp/home \
+  docker run --rm -ti -u $UID -e HOME=/tmp/home \
     -v $(pwd):/src -w /src/webui \
     -p 127.0.0.1:3015:3015 \
     $(docker build -q --target base_builder webui) \
