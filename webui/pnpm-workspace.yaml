@@ -1,0 +1,3 @@
+minimumReleaseAge: 2880 # 1440 minutes = 1 day
+ignoreScripts: true
+ignoreDepScripts: true

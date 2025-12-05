@@ -57,16 +57,7 @@ fi
 if [ "${SKIP_JS}" != "1" ] && [ "${ONLY_GO}" != "1" ]; then
    echo "Building webui"
    mkdir -p webui/node_modules
-   docker run --rm -e HOME=/go/pkg/node \
-      -v $(pwd):/src --tmpfs /src/webui/node_modules:exec -w /src/webui ${NODE_MOUNT_CACHE} \
-      node:22 \
-      sh -exc "
-      mkdir -p /go/pkg/node
-      chown node -R /go/pkg/node
-      trap 'chown -R $USER_UID dist ../api/assets/' EXIT
-      npm clean-install --ignore-scripts
-      npm run deploy
-      "
+   docker build webui --target jsdist --output api/assets/
 fi
 
 if [ -z "${GLOUTON_VERSION}" ]; then
