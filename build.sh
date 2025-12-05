@@ -59,11 +59,8 @@ if [ "${SKIP_JS}" != "1" ] && [ "${ONLY_GO}" != "1" ]; then
    mkdir -p webui/node_modules
    docker run --rm -e HOME=/go/pkg/node \
       -v $(pwd):/src --tmpfs /src/webui/node_modules:exec -w /src/webui ${NODE_MOUNT_CACHE} \
-      node:24 \
+      $(docker build -q --target base_builder webui) \
       sh -exc "
-      wget -qO- https://get.pnpm.io/install.sh | ENV=\"\$HOME/.shrc\" SHELL=\"\$(which sh)\" sh - && \
-      export PNPM_HOME=\"/go/pkg/node/.local/share/pnpm\" && \
-      export PATH=\"\$PNPM_HOME:\$PATH\" && \
       mkdir -p /go/pkg/node && \
       chown node -R /go/pkg/node && \
       trap 'chown -R $USER_UID dist ../api/assets/' EXIT && \

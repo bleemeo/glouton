@@ -91,17 +91,14 @@ any JavaScript files, you will only need to refresh the page on your browser.
 To run with this configuration, start webpack-dev-server:
 
 ```sh
-docker run --rm -ti -u $UID -e HOME=/tmp/home \
-  -v $(pwd):/src -w /src/webui \
-  -p 127.0.0.1:3015:3015 \
-  node:24 \
-  sh -c "
-  wget -qO- https://get.pnpm.io/install.sh | ENV=\"\$HOME/.shrc\" SHELL=\"\$(which sh)\" sh - && \
-  export PNPM_HOME=\"/tmp/home/.local/share/pnpm\" && \
-  export PATH=\"\$PNPM_HOME:\$PATH\" && \
-  pnpm install --frozen-lockfile --ignore-scripts && \
-  pnpm start
-  "
+  docker run --rm -ti -e HOME=/tmp/home \
+    -v $(pwd):/src -w /src/webui \
+    -p 127.0.0.1:3015:3015 \
+    $(docker build -q --target base_builder webui) \
+    sh -c "
+    pnpm install --frozen-lockfile --ignore-scripts && \
+    pnpm start
+    "
 ```
 
 Then tell Glouton to use JavaScript file from webpack-dev-server:
