@@ -1,6 +1,7 @@
 {
     "ignore": [
-        "eslint.config.mjs"
+        "eslint.config.mjs",
+        "src/styles/bootstrap.scss"
     ],
     "ignoreDependencies": [
         "bootstrap",
