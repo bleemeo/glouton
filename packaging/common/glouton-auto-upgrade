@@ -31,7 +31,7 @@ case "$os_name" in
         export DEBIAN_FRONTEND=noninteractive
         apt-get install --assume-yes bleemeo-agent glouton
         ;;
-    centos|almalinux|rocky|fedora)
+    centos|almalinux|cloudlinux|ol|rocky|fedora|rhel)
         yum update --assumeyes bleemeo-agent glouton
         ;;
 esac
