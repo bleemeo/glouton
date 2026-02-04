@@ -56,6 +56,7 @@ var (
 		// Kubernetes
 		"kubernetes_ca_day_left",
 		"kubernetes_certificate_day_left",
+		"kubernetes_certificate_left_perc",
 		"kubernetes_kubelet_status",
 		"kubernetes_api_status",
 		"kubernetes_pods_count",
