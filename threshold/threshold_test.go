@@ -1125,6 +1125,129 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 				`__name__="kubernetes_certificate_left_perc",instance_uuid="another-id-than-main-agent-id",item="webhook"`:                            {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 10.00"},
 			},
 		},
+		{
+			Name: "kubernetes_certificate_ok",
+			SetThresholds: &setThresholdsArgs{
+				thresholdWithItem: map[string]Threshold{
+					`__name__="kubernetes_certificate_left_perc",item="api"`: {
+						HighWarning:   math.NaN(),
+						HighCritical:  math.NaN(),
+						LowCritical:   3.75,
+						LowWarning:    7.5,
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
+					},
+					`__name__="kubernetes_certificate_left_perc",item="crd"`: {
+						HighWarning:   math.NaN(),
+						HighCritical:  math.NaN(),
+						LowCritical:   3.75,
+						LowWarning:    7.5,
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
+					},
+				},
+			},
+			SetUnits: map[string]Unit{
+				`__name__="kubernetes_certificate_left_perc",item="api"`: {UnitType: 1, UnitText: "%"},
+				`__name__="kubernetes_certificate_day_left",item="api"`:  {UnitType: UnitTypeDay, UnitText: "day"},
+				`__name__="kubernetes_certificate_left_perc",item="crd"`: {UnitType: 1, UnitText: "%"},
+				`__name__="kubernetes_certificate_day_left",item="crd"`:  {UnitType: UnitTypeDay, UnitText: "day"},
+			},
+			PushedValue: map[string]float64{
+				`__name__="kubernetes_certificate_left_perc",item="api"`: 10,
+				`__name__="kubernetes_certificate_day_left",item="api"`:  36.5, // lifespan == 365 days
+				`__name__="kubernetes_certificate_left_perc",item="crd"`: 10,
+				`__name__="kubernetes_certificate_day_left",item="crd"`:  9, // lifespan == 90 days
+			},
+			WantedPoints: map[string]types.StatusDescription{
+				`__name__="kubernetes_certificate_left_perc",item="api"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 10.00 % (36 days)"},
+				`__name__="kubernetes_certificate_day_left",item="api"`:  {CurrentStatus: types.StatusUnset},
+				`__name__="kubernetes_certificate_left_perc",item="crd"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 10.00 % (9 days)"},
+				`__name__="kubernetes_certificate_day_left",item="crd"`:  {CurrentStatus: types.StatusUnset},
+			},
+		},
+		{
+			Name: "kubernetes_certificate_warning",
+			SetThresholds: &setThresholdsArgs{
+				thresholdWithItem: map[string]Threshold{
+					`__name__="kubernetes_certificate_left_perc",item="api"`: {
+						HighWarning:   math.NaN(),
+						HighCritical:  math.NaN(),
+						LowCritical:   3.75,
+						LowWarning:    7.5,
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
+					},
+					`__name__="kubernetes_certificate_left_perc",item="crd"`: {
+						HighWarning:   math.NaN(),
+						HighCritical:  math.NaN(),
+						LowCritical:   3.75,
+						LowWarning:    7.5,
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
+					},
+				},
+			},
+			SetUnits: map[string]Unit{
+				`__name__="kubernetes_certificate_left_perc",item="api"`: {UnitType: 1, UnitText: "%"},
+				`__name__="kubernetes_certificate_day_left",item="api"`:  {UnitType: UnitTypeDay, UnitText: "day"},
+				`__name__="kubernetes_certificate_left_perc",item="crd"`: {UnitType: 1, UnitText: "%"},
+				`__name__="kubernetes_certificate_day_left",item="crd"`:  {UnitType: UnitTypeDay, UnitText: "day"},
+			},
+			PushedValue: map[string]float64{
+				`__name__="kubernetes_certificate_left_perc",item="api"`: 5,
+				`__name__="kubernetes_certificate_day_left",item="api"`:  18.25, // lifespan == 365 days
+				`__name__="kubernetes_certificate_left_perc",item="crd"`: 5,
+				`__name__="kubernetes_certificate_day_left",item="crd"`:  4.5, // lifespan == 90 days
+			},
+			WantedPoints: map[string]types.StatusDescription{
+				`__name__="kubernetes_certificate_left_perc",item="api"`: {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 5.00 % (18 days) threshold (7.50 %) exceeded over last 1 minute"},
+				`__name__="kubernetes_certificate_day_left",item="api"`:  {CurrentStatus: types.StatusUnset},
+				`__name__="kubernetes_certificate_left_perc",item="crd"`: {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 5.00 % (4 days) threshold (7.50 %) exceeded over last 1 minute"},
+				`__name__="kubernetes_certificate_day_left",item="crd"`:  {CurrentStatus: types.StatusUnset},
+			},
+		},
+		{
+			Name: "kubernetes_certificate_critical",
+			SetThresholds: &setThresholdsArgs{
+				thresholdWithItem: map[string]Threshold{
+					`__name__="kubernetes_certificate_left_perc",item="api"`: {
+						HighWarning:   math.NaN(),
+						HighCritical:  math.NaN(),
+						LowCritical:   3.75,
+						LowWarning:    7.5,
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
+					},
+					`__name__="kubernetes_certificate_left_perc",item="crd"`: {
+						HighWarning:   math.NaN(),
+						HighCritical:  math.NaN(),
+						LowCritical:   3.75,
+						LowWarning:    7.5,
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
+					},
+				},
+			},
+			SetUnits: map[string]Unit{
+				`__name__="kubernetes_certificate_left_perc",item="api"`: {UnitType: 1, UnitText: "%"},
+				`__name__="kubernetes_certificate_day_left",item="api"`:  {UnitType: UnitTypeDay, UnitText: "day"},
+				`__name__="kubernetes_certificate_left_perc",item="crd"`: {UnitType: 1, UnitText: "%"},
+				`__name__="kubernetes_certificate_day_left",item="crd"`:  {UnitType: UnitTypeDay, UnitText: "day"},
+			},
+			PushedValue: map[string]float64{
+				`__name__="kubernetes_certificate_left_perc",item="api"`: 2,
+				`__name__="kubernetes_certificate_day_left",item="api"`:  7.3, // lifespan == 365 days
+				`__name__="kubernetes_certificate_left_perc",item="crd"`: 2,
+				`__name__="kubernetes_certificate_day_left",item="crd"`:  1.8, // lifespan == 90 days
+			},
+			WantedPoints: map[string]types.StatusDescription{
+				`__name__="kubernetes_certificate_left_perc",item="api"`: {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 2.00 % (7 days) threshold (3.75 %) exceeded over last 1 minute"},
+				`__name__="kubernetes_certificate_day_left",item="api"`:  {CurrentStatus: types.StatusUnset},
+				`__name__="kubernetes_certificate_left_perc",item="crd"`: {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 2.00 % (1 day) threshold (3.75 %) exceeded over last 1 minute"},
+				`__name__="kubernetes_certificate_day_left",item="crd"`:  {CurrentStatus: types.StatusUnset},
+			},
+		},
 	}
 
 	for _, step := range steps {
