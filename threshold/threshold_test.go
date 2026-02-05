@@ -350,7 +350,7 @@ func TestThresholdEqual(t *testing.T) {
 func TestAccumulatorThreshold(t *testing.T) {
 	threshold := New(mockState{})
 	threshold.SetThresholds(
-		"fake_id",
+		"",
 		nil,
 		map[string]Threshold{"cpu_used": {
 			HighWarning:   80,
@@ -711,7 +711,7 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 		currentTime := t0.Add(step.AddedToT0)
 
 		if step.SetThresholds != nil {
-			threshold.SetThresholds("fake_id", step.SetThresholds.thresholdWithItem, step.SetThresholds.thresholdAllItem)
+			threshold.SetThresholds("", step.SetThresholds.thresholdWithItem, step.SetThresholds.thresholdAllItem)
 		}
 
 		threshold.nowFunc = func() time.Time { return currentTime }
@@ -760,6 +760,442 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 		if len(newPoints) != len(moreWant) {
 			t.Errorf("At %v * stepDelay: got %d points, want %d", step.AddedToT0/stepDelay, len(newPoints), len(moreWant))
 		}
+	}
+}
+
+// TestThresholdStatic is very similar to TestThreshold, but unlike the former it
+// don't test behavior over time, just behavior for a given stable input.
+func TestThresholdStatic(t *testing.T) { //nolint: maintidx
+	t0 := time.Date(2020, 2, 24, 15, 1, 0, 0, time.UTC)
+
+	type setThresholdsArgs struct {
+		mainAgentID       string
+		thresholdWithItem map[string]Threshold
+		thresholdAllItem  map[string]Threshold
+	}
+
+	steps := []struct {
+		Name string
+		// Annotations of PushedValue will set BleemeoAgentID when a label instance_uuid is present and different
+		// than main-agent-id.
+		PushedValue map[string]float64
+		// WantedPoints will be processed to add an _status version of any points with CurrentStatus != StatusUnset
+		WantedPoints  map[string]types.StatusDescription
+		SetThresholds *setThresholdsArgs
+		SetUnits      map[string]Unit
+	}{
+		{
+			Name: "threshold_of_config_ok",
+			SetThresholds: &setThresholdsArgs{
+				thresholdAllItem: map[string]Threshold{"cpu_used": {
+					HighWarning:   80,
+					HighCritical:  90,
+					LowCritical:   math.NaN(),
+					LowWarning:    math.NaN(),
+					WarningDelay:  60 * time.Second,
+					CriticalDelay: 60 * time.Second,
+				}},
+			},
+			PushedValue: map[string]float64{
+				`__name__="cpu_used"`:                    20,
+				`__name__="disk_used_perc",item="/home"`: 60,
+			},
+			WantedPoints: map[string]types.StatusDescription{
+				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 20.00"},
+				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusUnset},
+			},
+		},
+		{
+			Name: "threshold_of_config_warning",
+			SetThresholds: &setThresholdsArgs{
+				thresholdAllItem: map[string]Threshold{"cpu_used": {
+					HighWarning:   80,
+					HighCritical:  90,
+					LowCritical:   math.NaN(),
+					LowWarning:    math.NaN(),
+					WarningDelay:  60 * time.Second,
+					CriticalDelay: 60 * time.Second,
+				}},
+			},
+			PushedValue: map[string]float64{
+				`__name__="cpu_used"`:                    85,
+				`__name__="disk_used_perc",item="/home"`: 60,
+				`__name__="disk_used_perc",item="/srv"`:  60,
+			},
+			WantedPoints: map[string]types.StatusDescription{
+				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 85.00 threshold (80.00) exceeded over last 1 minute"},
+				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusUnset},
+				`__name__="disk_used_perc",item="/srv"`:  {CurrentStatus: types.StatusUnset},
+			},
+		},
+		{
+			Name: "threshold_of_config_warning_with_unit",
+			SetThresholds: &setThresholdsArgs{
+				thresholdAllItem: map[string]Threshold{"cpu_used": {
+					HighWarning:   80,
+					HighCritical:  90,
+					LowCritical:   math.NaN(),
+					LowWarning:    math.NaN(),
+					WarningDelay:  60 * time.Second,
+					CriticalDelay: 60 * time.Second,
+				}},
+			},
+			SetUnits: map[string]Unit{
+				`__name__="cpu_used"`:                    {UnitType: 1, UnitText: "%"},
+				`__name__="disk_used_perc",item="/home"`: {UnitType: 1, UnitText: "%"},
+			},
+			PushedValue: map[string]float64{
+				`__name__="cpu_used"`:                    85,
+				`__name__="disk_used_perc",item="/home"`: 60,
+				`__name__="disk_used_perc",item="/srv"`:  60,
+			},
+			WantedPoints: map[string]types.StatusDescription{
+				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 85.00 % threshold (80.00 %) exceeded over last 1 minute"},
+				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusUnset},
+				`__name__="disk_used_perc",item="/srv"`:  {CurrentStatus: types.StatusUnset},
+			},
+		},
+		{
+			Name: "all_thresholds",
+			SetThresholds: &setThresholdsArgs{
+				thresholdWithItem: map[string]Threshold{
+					`__name__="disk_used",item="low_critical"`: {
+						HighWarning:   80,
+						HighCritical:  90,
+						LowCritical:   10,
+						LowWarning:    20,
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
+					},
+					`__name__="disk_used",item="low_warning"`: {
+						HighWarning:   80,
+						HighCritical:  90,
+						LowCritical:   10,
+						LowWarning:    20,
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
+					},
+					`__name__="disk_used",item="ok"`: {
+						HighWarning:   80,
+						HighCritical:  90,
+						LowCritical:   10,
+						LowWarning:    20,
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
+					},
+					`__name__="disk_used",item="high_warning"`: {
+						HighWarning:   80,
+						HighCritical:  90,
+						LowCritical:   10,
+						LowWarning:    20,
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
+					},
+					`__name__="disk_used",item="high_critical"`: {
+						HighWarning:   80,
+						HighCritical:  90,
+						LowCritical:   10,
+						LowWarning:    20,
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
+					},
+				},
+			},
+			PushedValue: map[string]float64{
+				`__name__="disk_used",item="low_critical"`:  5,
+				`__name__="disk_used",item="low_warning"`:   15,
+				`__name__="disk_used",item="ok"`:            50,
+				`__name__="disk_used",item="high_warning"`:  85,
+				`__name__="disk_used",item="high_critical"`: 95,
+			},
+			WantedPoints: map[string]types.StatusDescription{
+				`__name__="disk_used",item="low_critical"`:  {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 5.00 threshold (10.00) exceeded over last 1 minute"},
+				`__name__="disk_used",item="low_warning"`:   {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 15.00 threshold (20.00) exceeded over last 1 minute"},
+				`__name__="disk_used",item="ok"`:            {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 50.00"},
+				`__name__="disk_used",item="high_warning"`:  {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 85.00 threshold (80.00) exceeded over last 1 minute"},
+				`__name__="disk_used",item="high_critical"`: {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 95.00 threshold (90.00) exceeded over last 1 minute"},
+			},
+		},
+		{
+			Name: "from_bleemeo_api",
+			SetThresholds: &setThresholdsArgs{
+				mainAgentID: "main-agent-id",
+				thresholdWithItem: map[string]Threshold{
+					`__name__="cpu_used",instance_uuid="main-agent-id"`: {
+						HighWarning:   80,
+						HighCritical:  90,
+						LowCritical:   math.NaN(),
+						LowWarning:    math.NaN(),
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
+					},
+					`__name__="mem_used_perc",instance_uuid="main-agent-id"`: {
+						HighWarning:   80,
+						HighCritical:  90,
+						LowCritical:   math.NaN(),
+						LowWarning:    math.NaN(),
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
+					},
+				},
+			},
+			SetUnits: map[string]Unit{
+				`__name__="cpu_used",instance_uuid="main-agent-id"`:                    {UnitType: 1, UnitText: "%"},
+				`__name__="mem_used_perc",instance_uuid="main-agent-id"`:               {UnitType: 1, UnitText: "%"},
+				`__name__="disk_used_perc",item="/home",instance_uuid="main-agent-id"`: {UnitType: 1, UnitText: "%"},
+			},
+			PushedValue: map[string]float64{
+				`__name__="cpu_used"`: 85,
+				`__name__="mem_used_perc",instance_uuid="main-agent-id"`: 86,
+				`__name__="disk_used_perc",item="/home"`:                 60,
+				`__name__="disk_used_perc",item="/srv"`:                  60,
+			},
+			WantedPoints: map[string]types.StatusDescription{
+				`__name__="cpu_used"`: {CurrentStatus: types.StatusUnset}, // TODO: bug, instance_uuid present or absent for main-agent should be treated the same
+				`__name__="mem_used_perc",instance_uuid="main-agent-id"`: {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 86.00 % threshold (80.00 %) exceeded over last 1 minute"},
+				`__name__="disk_used_perc",item="/home"`:                 {CurrentStatus: types.StatusUnset},
+				`__name__="disk_used_perc",item="/srv"`:                  {CurrentStatus: types.StatusUnset},
+			},
+		},
+		{
+			// Test that instance labels don't break threshold.
+			// The "instance" labels isn't part of metric identifier when "MetricOnlyHasItem() == true". In this case,
+			// only the name + item matter. In addition if instance_uuid is missing it's the same as instance_uuid = main-agent-id.
+			// But SetThresholds and SetUnits must use the canonical form (MetricKey) which always include the instance_uuid and omit
+			// instance. It's only in pushed metrics that variation on instance/instance_uuid present doesn't matter.
+			Name: "instance_lazy_match",
+			SetThresholds: &setThresholdsArgs{
+				mainAgentID: "main-agent-id",
+				thresholdWithItem: map[string]Threshold{
+					`__name__="disk_used_perc",instance_uuid="main-agent-id",item="glouton"`: {
+						HighWarning:   80,
+						HighCritical:  90,
+						LowCritical:   math.NaN(),
+						LowWarning:    math.NaN(),
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
+					},
+					`__name__="disk_used_perc",instance_uuid="main-agent-id",item="/home"`: {
+						HighWarning:   80,
+						HighCritical:  90,
+						LowCritical:   math.NaN(),
+						LowWarning:    math.NaN(),
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
+					},
+					`__name__="disk_used_perc",instance_uuid="main-agent-id",item="/srv"`: {
+						HighWarning:   80,
+						HighCritical:  90,
+						LowCritical:   math.NaN(),
+						LowWarning:    math.NaN(),
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
+					},
+					// Next metrics has MetricOnlyHasItem() == FALSE, so instance *matter*
+					`__name__="node_filesystem_used",instance="plop",instance_uuid="main-agent-id",mountpoint="/var"`: {
+						HighWarning:   80,
+						HighCritical:  90,
+						LowCritical:   math.NaN(),
+						LowWarning:    math.NaN(),
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
+					},
+					`__name__="node_filesystem_used",instance="plop",instance_uuid="main-agent-id",mountpoint="/usr"`: {
+						HighWarning:   80,
+						HighCritical:  90,
+						LowCritical:   math.NaN(),
+						LowWarning:    math.NaN(),
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
+					},
+				},
+			},
+			SetUnits: map[string]Unit{
+				`__name__="disk_used_perc",instance_uuid="main-agent-id",item="glouton"`:                          {UnitType: 1, UnitText: "%"},
+				`__name__="disk_used_perc",instance_uuid="main-agent-id",item="/home"`:                            {UnitType: 1, UnitText: "%"},
+				`__name__="disk_used_perc",instance_uuid="main-agent-id",item="/srv"`:                             {UnitType: 1, UnitText: "%"},
+				`__name__="node_filesystem_used",instance="plop",instance_uuid="main-agent-id",mountpoint="/var"`: {UnitType: 1, UnitText: "%"},
+				`__name__="node_filesystem_used",instance="plop",instance_uuid="main-agent-id",mountpoint="/usr"`: {UnitType: 1, UnitText: "%"},
+			},
+			PushedValue: map[string]float64{
+				`__name__="disk_used_perc",instance="plop",instance_uuid="main-agent-id",item="glouton"`:          10,
+				`__name__="disk_used_perc",instance_uuid="main-agent-id",item="/home"`:                            20,
+				`__name__="disk_used_perc",item="/srv"`:                                                           30,
+				`__name__="node_filesystem_used",instance="plop",instance_uuid="main-agent-id",mountpoint="/var"`: 40,
+				`__name__="node_filesystem_used",instance_uuid="main-agent-id",mountpoint="/var"`:                 50,
+			},
+			WantedPoints: map[string]types.StatusDescription{
+				`__name__="disk_used_perc",instance="plop",instance_uuid="main-agent-id",item="glouton"`:          {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 10.00 %"},
+				`__name__="disk_used_perc",instance_uuid="main-agent-id",item="/home"`:                            {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 20.00 %"},
+				`__name__="disk_used_perc",item="/srv"`:                                                           {CurrentStatus: types.StatusUnset}, // TODO: bug, instance_uuid present or absent for main-agent should be treated the same
+				`__name__="node_filesystem_used",instance="plop",instance_uuid="main-agent-id",mountpoint="/var"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 40.00 %"},
+				// Expected to be unset, label "instance" don't match, and because it's an MetricOnlyHasItem() == FALSE, it must match.
+				`__name__="node_filesystem_used",instance_uuid="main-agent-id",mountpoint="/var"`: {CurrentStatus: types.StatusUnset},
+			},
+		},
+		{
+			// Test metrics from multiple agent, using labels_text (e.g. MetricOnlyHasItem() == False)
+			Name: "multiple_agent_labels_text",
+			SetThresholds: &setThresholdsArgs{
+				mainAgentID: "main-agent-id",
+				thresholdWithItem: map[string]Threshold{
+					`__name__="kubernetes_pods_count",instance="my_k8s_cluster_name",instance_uuid="another-id-than-main-agent-id",namespace="default",owner_kind="daemonset",owner_name="glouton",state="running"`: {
+						HighWarning:   math.NaN(),
+						HighCritical:  math.NaN(),
+						LowCritical:   1,
+						LowWarning:    math.NaN(),
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
+					},
+					`__name__="squirreldb_tsdb_requests_points_total",instance="localhost:8015",instance_uuid="main-agent-id",operation="read",scrape_instance="localhost:9201",scrape_job="squirreldb",type="raw"`: {
+						HighWarning:   80,
+						HighCritical:  90,
+						LowCritical:   math.NaN(),
+						LowWarning:    math.NaN(),
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
+					},
+				},
+			},
+			PushedValue: map[string]float64{
+				`__name__="kubernetes_pods_count",instance="my_k8s_cluster_name",instance_uuid="another-id-than-main-agent-id",namespace="default",owner_kind="daemonset",owner_name="glouton",state="running"`: 5,
+				`__name__="squirreldb_tsdb_requests_points_total",instance="localhost:8015",instance_uuid="main-agent-id",operation="read",scrape_instance="localhost:9201",scrape_job="squirreldb",type="raw"`: 20,
+			},
+			WantedPoints: map[string]types.StatusDescription{
+				`__name__="kubernetes_pods_count",instance="my_k8s_cluster_name",instance_uuid="another-id-than-main-agent-id",namespace="default",owner_kind="daemonset",owner_name="glouton",state="running"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 5.00"},
+				`__name__="squirreldb_tsdb_requests_points_total",instance="localhost:8015",instance_uuid="main-agent-id",operation="read",scrape_instance="localhost:9201",scrape_job="squirreldb",type="raw"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 20.00"},
+			},
+		},
+		{
+			// Test metrics from multiple agent, using only name + item (e.g. MetricOnlyHasItem() == True; but remember that MetricOnlyHasItem() could only be
+			// true for main agent)
+			Name: "multiple_agent_only_has_item",
+			SetThresholds: &setThresholdsArgs{
+				mainAgentID: "main-agent-id",
+				thresholdWithItem: map[string]Threshold{
+					// This metrics is "MetricOnlyHasItem() == true", so instance is absent here
+					`__name__="kubernetes_certificate_left_perc",instance_uuid="main-agent-id",item="kubelet"`: {
+						HighWarning:   math.NaN(),
+						HighCritical:  math.NaN(),
+						LowCritical:   1,
+						LowWarning:    math.NaN(),
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
+					},
+					// This metrics is "MetricOnlyHasItem() == true", so instance is absent here
+					`__name__="kubernetes_certificate_left_perc",instance_uuid="main-agent-id",item="api"`: {
+						HighWarning:   math.NaN(),
+						HighCritical:  math.NaN(),
+						LowCritical:   1,
+						LowWarning:    math.NaN(),
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
+					},
+					// This metrics is "MetricOnlyHasItem() == true" but on another agent (annotation BleemeoAgentID)
+					`__name__="kubernetes_certificate_left_perc",instance_uuid="another-id-than-main-agent-id",item="crd"`: {
+						HighWarning:   math.NaN(),
+						HighCritical:  math.NaN(),
+						LowCritical:   1,
+						LowWarning:    math.NaN(),
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
+					},
+					`__name__="kubernetes_certificate_left_perc",instance_uuid="another-id-than-main-agent-id",item="webhook"`: {
+						HighWarning:   math.NaN(),
+						HighCritical:  math.NaN(),
+						LowCritical:   1,
+						LowWarning:    math.NaN(),
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
+					},
+				},
+			},
+			PushedValue: map[string]float64{
+				// During push, "instance" label is always present (cf diagnostic.zip -> metrics.txt).
+				// But to ensure instance doesn't matter with MetricOnlyHasItem() == true, omit instance on one of them
+				`__name__="kubernetes_certificate_left_perc",instance="localhost:8015",instance_uuid="main-agent-id",item="kubelet"`:                  10,
+				`__name__="kubernetes_certificate_left_perc",instance_uuid="main-agent-id",item="api"`:                                                10,
+				`__name__="kubernetes_certificate_left_perc",instance="my_k8s_cluster_name",instance_uuid="another-id-than-main-agent-id",item="crd"`: 10,
+				`__name__="kubernetes_certificate_left_perc",instance_uuid="another-id-than-main-agent-id",item="webhook"`:                            10,
+			},
+			WantedPoints: map[string]types.StatusDescription{
+				`__name__="kubernetes_certificate_left_perc",instance="localhost:8015",instance_uuid="main-agent-id",item="kubelet"`:                  {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 10.00"},
+				`__name__="kubernetes_certificate_left_perc",instance_uuid="main-agent-id",item="api"`:                                                {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 10.00"},
+				`__name__="kubernetes_certificate_left_perc",instance="my_k8s_cluster_name",instance_uuid="another-id-than-main-agent-id",item="crd"`: {CurrentStatus: types.StatusUnset}, // TODO: here is should be StatusOk, but isn't due to a bug
+				`__name__="kubernetes_certificate_left_perc",instance_uuid="another-id-than-main-agent-id",item="webhook"`:                            {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 10.00"},
+			},
+		},
+	}
+
+	for _, step := range steps {
+		t.Run(step.Name, func(t *testing.T) {
+			t.Parallel()
+
+			threshold := New(mockState{})
+			threshold.nowFunc = func() time.Time { return t0 }
+
+			if step.SetThresholds != nil {
+				threshold.SetThresholds(step.SetThresholds.mainAgentID, step.SetThresholds.thresholdWithItem, step.SetThresholds.thresholdAllItem)
+			}
+
+			if step.SetUnits != nil {
+				threshold.SetUnits(step.SetUnits)
+			}
+
+			points := make([]types.MetricPoint, 0, len(step.PushedValue))
+
+			for name, value := range step.PushedValue {
+				lbls := types.TextToLabels(name)
+
+				otherAgentID := ""
+
+				if step.SetThresholds != nil && step.SetThresholds.mainAgentID != lbls[types.LabelInstanceUUID] && lbls[types.LabelInstanceUUID] != "" {
+					otherAgentID = lbls[types.LabelInstanceUUID]
+				}
+
+				points = append(points, types.MetricPoint{
+					Labels: lbls,
+					Point:  types.Point{Time: t0, Value: value},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: otherAgentID,
+					},
+				})
+			}
+
+			newPoints, statusPoints := threshold.ApplyThresholds(points)
+			newPoints = append(newPoints, statusPoints...)
+
+			moreWant := make(map[string]types.StatusDescription)
+			for name, pts := range step.WantedPoints {
+				moreWant[name] = pts
+
+				if !pts.CurrentStatus.IsSet() {
+					continue
+				}
+
+				lbls := types.TextToLabels(name)
+				lbls[types.LabelName] += statusMetricSuffix
+
+				moreWant[types.LabelsToText(lbls)] = pts
+			}
+
+			for _, pts := range newPoints {
+				want, ok := moreWant[types.LabelsToText(pts.Labels)]
+				if !ok {
+					t.Errorf("got point %v, expected not present", pts.Labels)
+
+					continue
+				}
+
+				if diff := cmp.Diff(want, pts.Annotations.Status); diff != "" {
+					t.Errorf("points %v mismatch: (-want +got)\n%s", pts.Labels, diff)
+				}
+			}
+
+			if len(newPoints) != len(moreWant) {
+				t.Errorf("got %d points, want %d", len(newPoints), len(moreWant))
+			}
+		})
 	}
 }
 
@@ -942,7 +1378,7 @@ func TestThresholdRestart(t *testing.T) {
 		currentTime := t0.Add(step.AddedToT0)
 
 		if step.SetThresholds != nil {
-			threshold.SetThresholds("fake_id", step.SetThresholds.thresholdWithItem, step.SetThresholds.thresholdAllItem)
+			threshold.SetThresholds("", step.SetThresholds.thresholdWithItem, step.SetThresholds.thresholdAllItem)
 		}
 
 		threshold.nowFunc = func() time.Time { return currentTime }

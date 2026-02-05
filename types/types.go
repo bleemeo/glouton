@@ -222,7 +222,7 @@ type MetricAnnotations struct {
 	ServiceInstance string
 	StatusOf        string
 	SNMPTarget      string
-	// store the agent for which we want to emit the metric
+	// store the agent for which we want to emit the metric, only set when we don't emit for main agent
 	BleemeoAgentID string
 	Status         StatusDescription
 }
