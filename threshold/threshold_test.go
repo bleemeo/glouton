@@ -205,6 +205,51 @@ func TestFormatValue(t *testing.T) {
 			unit:  Unit{UnitType: UnitTypeBitsPS, UnitText: "Bits/s"},
 			want:  "-1.00 EBits/s",
 		},
+		{
+			value: 365,
+			unit:  Unit{UnitType: UnitTypeDay, UnitText: "day"},
+			want:  "365 days",
+		},
+		{
+			value: 0.7,
+			unit:  Unit{UnitType: UnitTypeDay, UnitText: "day"},
+			want:  "0 day",
+		},
+		{
+			value: 0.2,
+			unit:  Unit{UnitType: UnitTypeDay, UnitText: "day"},
+			want:  "0 day",
+		},
+		{
+			value: 45,
+			unit:  Unit{UnitType: UnitTypeSecond, UnitText: "second"},
+			want:  "45 seconds",
+		},
+		{
+			value: 120,
+			unit:  Unit{UnitType: UnitTypeSecond, UnitText: "second"},
+			want:  "2 minutes",
+		},
+		{
+			value: 125,
+			unit:  Unit{UnitType: UnitTypeSecond, UnitText: "second"},
+			want:  "2 minutes",
+		},
+		{
+			value: 3600,
+			unit:  Unit{UnitType: UnitTypeSecond, UnitText: "second"},
+			want:  "1 hour",
+		},
+		{
+			value: 86400,
+			unit:  Unit{UnitType: UnitTypeSecond, UnitText: "second"},
+			want:  "1 day",
+		},
+		{
+			value: 7 * 86400,
+			unit:  Unit{UnitType: UnitTypeSecond, UnitText: "second"},
+			want:  "7 days",
+		},
 	}
 	for _, c := range cases {
 		got := FormatValue(c.value, c.unit)

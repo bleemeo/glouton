@@ -543,7 +543,7 @@ func FormatValue(value float64, unit Unit) string {
 	case UnitTypeSecond:
 		return formatDuration(time.Duration(value) * time.Second)
 	case UnitTypeDay:
-		return formatDuration(time.Duration(value) * 24 * time.Hour)
+		return formatDurationDay(time.Duration(value) * 24 * time.Hour)
 	default:
 		return fmt.Sprintf("%.2f %s", value, unit.UnitText)
 	}
@@ -556,6 +556,24 @@ func FormatValueAlt(value float64, unit Unit, valueAlt float64, unitAlt Unit) st
 		FormatValue(value, unit),
 		FormatValue(valueAlt, unitAlt),
 	)
+}
+
+func formatDurationDay(period time.Duration) string {
+	sign := ""
+	if period < 0 {
+		sign = "-"
+		period = -period
+	}
+
+	currentScale := 86400
+	value := math.Round(period.Seconds() / float64(currentScale))
+
+	result := fmt.Sprintf("%s%.0f day", sign, value)
+	if value > 1 {
+		result += "s"
+	}
+
+	return result
 }
 
 func formatDuration(period time.Duration) string {
