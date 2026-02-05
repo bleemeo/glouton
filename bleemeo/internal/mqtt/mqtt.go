@@ -743,7 +743,7 @@ func (c *Client) preparePoints(
 	payloadByAgent := make(map[bleemeoTypes.AgentID][]metricPayload, 1)
 
 	for _, p := range points {
-		key := common.MetricKey(p.Labels, p.Annotations, string(c.opts.AgentID))
+		key := metricutils.MetricKey(p.Labels, p.Annotations, string(c.opts.AgentID))
 		metric, ok := registeredMetricByKey[key]
 
 		// Don't send point if its associated metric is deactivated or not yet registered.

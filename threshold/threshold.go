@@ -427,22 +427,21 @@ func (r *Registry) GetThresholdMetricNames() []string {
 }
 
 // GetThreshold returns the current threshold for a Metric by labels text.
-func (r *Registry) GetThreshold(labelsText string) Threshold {
+func (r *Registry) GetThreshold(lbls map[string]string, annotations types.MetricAnnotations) Threshold {
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	return r.getThreshold(labelsText)
+	metricKey := metricutils.MetricKey(lbls, annotations, r.agentID)
+	metricName := lbls[types.LabelName]
+
+	return r.getThreshold(metricName, metricKey)
 }
 
-func (r *Registry) getThreshold(labelsText string) Threshold {
-	labelsMap := types.TextToLabels(labelsText)
-	labelsText = r.labelsWithoutInstance(labelsText)
-
-	if threshold, ok := r.thresholds[labelsText]; ok {
+func (r *Registry) getThreshold(metricName string, metricKey string) Threshold {
+	if threshold, ok := r.thresholds[metricKey]; ok {
 		return threshold
 	}
 
-	metricName := labelsMap[types.LabelName]
 	threshold := r.thresholdsAllItem[metricName]
 
 	if threshold.IsZero() {
@@ -604,24 +603,6 @@ func formatDuration(period time.Duration) string {
 	return result
 }
 
-// labelsWithoutInstance remove all labels but the name, the item and the instance_uuid
-// if the given labelsText match metricutils.MetricOnlyHasItem.
-// Otherwise, it returns the labels unchanged.
-func (r *Registry) labelsWithoutInstance(labelsText string) string {
-	labelsMap := types.TextToLabels(labelsText)
-	if metricutils.MetricOnlyHasItem(labelsMap, r.agentID) {
-		// Getting rid of the 'instance' label
-		labelsMap = map[string]string{
-			types.LabelName:         labelsMap[types.LabelName],
-			types.LabelItem:         labelsMap[types.LabelItem],
-			types.LabelInstanceUUID: labelsMap[types.LabelInstanceUUID],
-		}
-		labelsText = types.LabelsToText(labelsMap)
-	}
-
-	return labelsText
-}
-
 // ApplyThresholds applies the thresholds. It returns input points with their status modified by the thresholds,
 // and the new status points generated.
 func (r *Registry) ApplyThresholds(points []types.MetricPoint) ([]types.MetricPoint, []types.MetricPoint) {
@@ -633,11 +614,13 @@ func (r *Registry) ApplyThresholds(points []types.MetricPoint) ([]types.MetricPo
 
 	for _, point := range points {
 		if !point.Annotations.Status.CurrentStatus.IsSet() {
-			labelsText := types.LabelsToText(point.Labels)
-			threshold := r.getThreshold(labelsText)
+			metricKey := metricutils.MetricKey(point.Labels, point.Annotations, r.agentID)
+			metricName := point.Labels[types.LabelName]
+
+			threshold := r.getThreshold(metricName, metricKey)
 
 			if !threshold.IsZero() && !math.IsNaN(point.Value) {
-				newPoints, statusPoints = r.addPointWithThreshold(newPoints, statusPoints, point, threshold, labelsText)
+				newPoints, statusPoints = r.addPointWithThreshold(newPoints, statusPoints, point, threshold, metricKey)
 
 				continue
 			}
@@ -653,16 +636,15 @@ func (r *Registry) addPointWithThreshold(
 	points, statusPoints []types.MetricPoint,
 	point types.MetricPoint,
 	threshold Threshold,
-	labelsText string,
+	metricKey string,
 ) ([]types.MetricPoint, []types.MetricPoint) {
-	labelsText = r.labelsWithoutInstance(labelsText)
 	softStatus, highThreshold := threshold.CurrentStatus(point.Value)
-	previousState := r.states[labelsText]
+	previousState := r.states[metricKey]
 
 	newState := previousState.Update(softStatus, threshold.WarningDelay, threshold.CriticalDelay, r.nowFunc())
-	r.states[labelsText] = newState
+	r.states[metricKey] = newState
 
-	unit := r.units[labelsText]
+	unit := r.units[metricKey]
 	// Consumer expects status description from threshold to start with "Current value:"
 	statusDescription := "Current value: " + FormatValue(point.Value, unit)
 

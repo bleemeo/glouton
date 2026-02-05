@@ -330,7 +330,7 @@ func httpResponseToMetricFailureKind(content string) bleemeoTypes.FailureKind {
 }
 
 func (s *Synchronizer) metricKey(lbls map[string]string, annotations gloutonTypes.MetricAnnotations) string {
-	return common.MetricKey(lbls, annotations, s.agentID)
+	return metricutils.MetricKey(lbls, annotations, s.agentID)
 }
 
 // filterMetrics only keeps the points that can be registered.

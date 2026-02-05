@@ -951,7 +951,7 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 				`__name__="disk_used_perc",item="/srv"`:                  60,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="cpu_used"`: {CurrentStatus: types.StatusUnset}, // TODO: bug, instance_uuid present or absent for main-agent should be treated the same
+				`__name__="cpu_used"`: {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 85.00 % threshold (80.00 %) exceeded over last 1 minute"},
 				`__name__="mem_used_perc",instance_uuid="main-agent-id"`: {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 86.00 % threshold (80.00 %) exceeded over last 1 minute"},
 				`__name__="disk_used_perc",item="/home"`:                 {CurrentStatus: types.StatusUnset},
 				`__name__="disk_used_perc",item="/srv"`:                  {CurrentStatus: types.StatusUnset},
@@ -1027,7 +1027,7 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 			WantedPoints: map[string]types.StatusDescription{
 				`__name__="disk_used_perc",instance="plop",instance_uuid="main-agent-id",item="glouton"`:          {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 10.00 %"},
 				`__name__="disk_used_perc",instance_uuid="main-agent-id",item="/home"`:                            {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 20.00 %"},
-				`__name__="disk_used_perc",item="/srv"`:                                                           {CurrentStatus: types.StatusUnset}, // TODO: bug, instance_uuid present or absent for main-agent should be treated the same
+				`__name__="disk_used_perc",item="/srv"`:                                                           {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 30.00 %"},
 				`__name__="node_filesystem_used",instance="plop",instance_uuid="main-agent-id",mountpoint="/var"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 40.00 %"},
 				// Expected to be unset, label "instance" don't match, and because it's an MetricOnlyHasItem() == FALSE, it must match.
 				`__name__="node_filesystem_used",instance_uuid="main-agent-id",mountpoint="/var"`: {CurrentStatus: types.StatusUnset},
@@ -1121,7 +1121,7 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 			WantedPoints: map[string]types.StatusDescription{
 				`__name__="kubernetes_certificate_left_perc",instance="localhost:8015",instance_uuid="main-agent-id",item="kubelet"`:                  {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 10.00"},
 				`__name__="kubernetes_certificate_left_perc",instance_uuid="main-agent-id",item="api"`:                                                {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 10.00"},
-				`__name__="kubernetes_certificate_left_perc",instance="my_k8s_cluster_name",instance_uuid="another-id-than-main-agent-id",item="crd"`: {CurrentStatus: types.StatusUnset}, // TODO: here is should be StatusOk, but isn't due to a bug
+				`__name__="kubernetes_certificate_left_perc",instance="my_k8s_cluster_name",instance_uuid="another-id-than-main-agent-id",item="crd"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 10.00"},
 				`__name__="kubernetes_certificate_left_perc",instance_uuid="another-id-than-main-agent-id",item="webhook"`:                            {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 10.00"},
 			},
 		},
