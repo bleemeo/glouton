@@ -35,7 +35,7 @@ type configTarget struct {
 	BleemeoAgentID   string
 	CreationDate     time.Time
 	RefreshRate      time.Duration
-	testInjectCARoot *x509.Certificate
+	testInjectCARoot []*x509.Certificate
 	nowFunc          func() time.Time
 }
 

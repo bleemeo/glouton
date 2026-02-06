@@ -18,14 +18,13 @@
 package blackbox
 
 import (
-	"bytes"
 	"context"
+	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/pem"
 	"maps"
 	"math"
 	"math/big"
@@ -48,18 +47,28 @@ type testTarget interface {
 	Start()
 	Close()
 	URL() string
-	Certificate() *x509.Certificate
+	RootCACertificates() []*x509.Certificate
 	RequestContext(ctx context.Context) context.Context
 }
 
 type testingCerts struct {
-	CertExpireFar     tls.Certificate
-	CertExpireSoon    tls.Certificate
-	CertExpired       tls.Certificate
-	CertFarAndExpired tls.Certificate
-	NotAfterFar       time.Time
-	NotAfterSoon      time.Time
-	NotAfterExpired   time.Time
+	RootCA                         *x509.Certificate
+	RootCAAlt                      *x509.Certificate
+	SubCA                          *x509.Certificate
+	SubCAExpireSoon                *x509.Certificate
+	SubCAExpired                   *x509.Certificate
+	SelfSigned                     tls.Certificate
+	SelfSignedExpired              tls.Certificate
+	CertExpireFar                  tls.Certificate
+	CertExpireSoon                 tls.Certificate
+	CertExpired                    tls.Certificate
+	CertSubCAExpireFar             tls.Certificate
+	CertUselessExpiredIntermediary tls.Certificate
+	CertSubCAWithCAExpireSoon      tls.Certificate
+	CertMissingIntermediary        tls.Certificate
+	NotAfterFar                    time.Time
+	NotAfterSoon                   time.Time
+	NotAfterExpired                time.Time
 }
 
 type testCase struct {
@@ -72,7 +81,6 @@ type testCase struct {
 	wantPoints   []types.MetricPoint
 	absentPoints []map[string]string
 	target       testTarget
-	trustCert    bool
 	// Check that probe duration is between given value.
 	// If the min or max value is 0, no check is done.
 	probeDurationMinValue float64
@@ -88,9 +96,9 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 	agentID := "1d6a2c82-4579-4f7d-91fe-3d4946aacaf7"
 	targetNotYetKnown := "this-label-value-will-be-replaced"
 	agentFQDN := "example.com"
-	t0 := time.Date(2022, 3, 8, 10, 27, 50, 0, time.UTC)
+	t0 := time.Now().Truncate(time.Second)
 
-	certs, err := generateCerts(t0)
+	certs, err := generateCerts(t, t0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,6 +201,125 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			},
 			probeDurationMaxValue: 5,
 			target:                &httpTestTarget{},
+		},
+		{
+			// This test is mostly here to ensure test code work:
+			// The self-signed certificate is in the trusted CA root, which isn't realistic, but allows
+			// to test without involving multiple certiciates.
+			name:         "success-200-single-cert",
+			absentPoints: []map[string]string{},
+			wantPoints: []types.MetricPoint{
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 200},
+					Labels: map[string]string{
+						types.LabelName:         "probe_http_status_code",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+						"phase":                 "connect",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.NotAfterFar.Unix())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.NotAfterFar.Unix())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+			},
+			probeDurationMaxValue: 5,
+			target: &httpTestTarget{
+				TLSCert:     certs.SelfSigned,
+				RootCACerts: []*x509.Certificate{certs.SelfSigned.Leaf},
+			},
 		},
 		{
 			name:         "success-200",
@@ -305,8 +432,10 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				},
 			},
 			probeDurationMaxValue: 5,
-			trustCert:             true,
-			target:                &httpTestTarget{TLSCert: []tls.Certificate{certs.CertExpireFar}},
+			target: &httpTestTarget{
+				TLSCert:     certs.CertExpireFar,
+				RootCACerts: []*x509.Certificate{certs.RootCA},
+			},
 		},
 		{
 			name:         "fail-404",
@@ -419,10 +548,11 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				},
 			},
 			probeDurationMaxValue: 5,
-			trustCert:             true,
+
 			target: &httpTestTarget{
-				TLSCert:    []tls.Certificate{certs.CertExpireFar},
-				StatusCode: 404,
+				TLSCert:     certs.CertExpireFar,
+				RootCACerts: []*x509.Certificate{certs.RootCA},
+				StatusCode:  404,
 			},
 		},
 		{
@@ -524,10 +654,10 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			trustCert: true,
 			target: &httpTestTarget{
-				TLSCert:   []tls.Certificate{certs.CertExpireFar},
-				HTTPDelay: timeoutTime,
+				TLSCert:     certs.CertExpireFar,
+				RootCACerts: []*x509.Certificate{certs.RootCA},
+				HTTPDelay:   timeoutTime,
 			},
 		},
 		{
@@ -629,9 +759,9 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			trustCert: false,
 			target: &httpTestTarget{
-				TLSCert:               []tls.Certificate{certs.CertExpireFar},
+				TLSCert:               certs.SelfSigned,
+				RootCACerts:           []*x509.Certificate{certs.RootCA},
 				TimeoutAfterHandshake: true,
 			},
 		},
@@ -745,8 +875,125 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			trustCert: true,
-			target:    &httpTestTarget{TLSCert: []tls.Certificate{certs.CertExpireSoon}},
+			target: &httpTestTarget{
+				TLSCert:     certs.CertExpireSoon,
+				RootCACerts: []*x509.Certificate{certs.RootCA},
+			},
+		},
+		{
+			name:         "intermediary-ca",
+			absentPoints: []map[string]string{},
+			wantPoints: []types.MetricPoint{
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 200},
+					Labels: map[string]string{
+						types.LabelName:         "probe_http_status_code",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+						"phase":                 "connect",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.NotAfterFar.Unix())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.NotAfterFar.Unix())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+			},
+			target: &httpTestTarget{
+				TLSCert:     certs.CertSubCAExpireFar,
+				RootCACerts: []*x509.Certificate{certs.RootCA},
+			},
 		},
 		{
 			name:         "expired-unneeded-certs",
@@ -858,8 +1105,240 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			trustCert: true,
-			target:    &httpTestTarget{TLSCert: []tls.Certificate{certs.CertFarAndExpired}},
+			target: &httpTestTarget{
+				TLSCert:     certs.CertUselessExpiredIntermediary,
+				RootCACerts: []*x509.Certificate{certs.RootCA},
+			},
+		},
+		{
+			name:         "intermediary-ca-intermediary-expire-soon",
+			absentPoints: []map[string]string{},
+			wantPoints: []types.MetricPoint{
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 200},
+					Labels: map[string]string{
+						types.LabelName:         "probe_http_status_code",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+						"phase":                 "connect",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.NotAfterSoon.Unix())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.NotAfterSoon.Unix())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+			},
+			target: &httpTestTarget{
+				TLSCert:     certs.CertSubCAWithCAExpireSoon,
+				RootCACerts: []*x509.Certificate{certs.RootCA},
+			},
+		},
+		{
+			name:         "missing-intermediary",
+			absentPoints: []map[string]string{},
+			wantPoints: []types.MetricPoint{
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 200},
+					Labels: map[string]string{
+						types.LabelName:         "probe_http_status_code",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+						"phase":                 "connect",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.NotAfterFar.Unix())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+			},
+			target: &httpTestTarget{
+				TLSCert:     certs.CertMissingIntermediary,
+				RootCACerts: []*x509.Certificate{certs.RootCA},
+			},
 		},
 		{
 			name:         "tls-self-signed",
@@ -971,8 +1450,10 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			trustCert: false,
-			target:    &httpTestTarget{TLSCert: []tls.Certificate{certs.CertExpireFar}},
+			target: &httpTestTarget{
+				TLSCert:     certs.SelfSigned,
+				RootCACerts: []*x509.Certificate{certs.RootCA},
+			},
 		},
 		{
 			name:         "tls-self-signed-expiring",
@@ -1084,8 +1565,10 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			trustCert: false,
-			target:    &httpTestTarget{TLSCert: []tls.Certificate{certs.CertExpired}},
+			target: &httpTestTarget{
+				TLSCert:     certs.SelfSignedExpired,
+				RootCACerts: []*x509.Certificate{certs.RootCA},
+			},
 		},
 		{
 			name:         "tls-expired",
@@ -1197,8 +1680,10 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			trustCert: true,
-			target:    &httpTestTarget{TLSCert: []tls.Certificate{certs.CertExpired}},
+			target: &httpTestTarget{
+				TLSCert:     certs.CertExpired,
+				RootCACerts: []*x509.Certificate{certs.RootCA},
+			},
 		},
 		{
 			name: "timeout-tls-handshake",
@@ -1302,9 +1787,10 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			// blackbox exporter have a default timeout of 10 second for TLS handshake.
 			probeDurationMinValue: 10,
 			probeDurationMaxValue: defaultTimeout.Seconds(),
-			trustCert:             true,
+
 			target: &httpTestTarget{
-				TLSCert:               []tls.Certificate{certs.CertExpireFar},
+				TLSCert:               certs.CertExpireFar,
+				RootCACerts:           []*x509.Certificate{certs.RootCA},
 				TimeoutInTLSHandshake: true,
 			},
 		},
@@ -1416,9 +1902,10 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			// blackbox exporter have a default timeout of 10 second for TLS handshake.
 			probeDurationMinValue: 10,
 			probeDurationMaxValue: defaultTimeout.Seconds(),
-			trustCert:             true,
+
 			target: &httpTestTarget{
-				TLSCert:            []tls.Certificate{certs.CertExpireFar},
+				TLSCert:            certs.CertExpireFar,
+				RootCACerts:        []*x509.Certificate{certs.RootCA},
 				TimeoutInTCPAccept: true,
 			},
 		},
@@ -1515,9 +2002,9 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			trustCert: true,
 			target: &httpTestTarget{
-				TLSCert:       []tls.Certificate{certs.CertExpireFar},
+				TLSCert:       certs.CertExpireFar,
+				RootCACerts:   []*x509.Certificate{certs.RootCA},
 				ServerStopped: true,
 			},
 		},
@@ -1626,8 +2113,11 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			trustCert: true,
-			target:    &httpTestTarget{TLSCert: []tls.Certificate{certs.CertExpireFar}, UseBrokenCrypto: true},
+			target: &httpTestTarget{
+				TLSCert:         certs.CertExpireFar,
+				RootCACerts:     []*x509.Certificate{certs.RootCA},
+				UseBrokenCrypto: true,
+			},
 		},
 		{
 			name: "break-connection-in-http",
@@ -1734,9 +2224,9 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			trustCert: true,
 			target: &httpTestTarget{
-				TLSCert:     []tls.Certificate{certs.CertExpireFar},
+				TLSCert:     certs.CertExpireFar,
+				RootCACerts: []*x509.Certificate{certs.RootCA},
 				CloseInHTTP: true,
 			},
 		},
@@ -1845,8 +2335,11 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			trustCert: true,
-			target:    &httpTestTarget{TLSCert: []tls.Certificate{certs.CertExpireFar}, CloseInTLSHandshake: true},
+			target: &httpTestTarget{
+				TLSCert:             certs.CertExpireFar,
+				RootCACerts:         []*x509.Certificate{certs.RootCA},
+				CloseInTLSHandshake: true,
+			},
 		},
 		{
 			name: "http-bad-dns",
@@ -2136,11 +2629,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				},
 			},
 			probeDurationMinValue: 10,
-			trustCert:             true,
+
 			target: &httpTestTarget{
-				TLSCert:    []tls.Certificate{certs.CertExpireFar},
-				HTTPDelay:  10 * time.Second,
-				StatusCode: http.StatusBadGateway,
+				TLSCert:     certs.CertExpireFar,
+				RootCACerts: []*x509.Certificate{certs.RootCA},
+				HTTPDelay:   10 * time.Second,
+				StatusCode:  http.StatusBadGateway,
 			},
 		},
 	}
@@ -2230,9 +2724,7 @@ func runTest(t *testing.T, test testCase, usePlainTCPOrSSL bool, monitorID, agen
 		return t0
 	}
 
-	if test.trustCert {
-		target.Collector.testInjectCARoot = test.target.Certificate()
-	}
+	target.Collector.testInjectCARoot = test.target.RootCACertificates()
 
 	gatherer, err := newGatherer(target.Collector)
 	if err != nil {
@@ -2304,7 +2796,9 @@ func (f pushFunction) PushPoints(ctx context.Context, points []types.MetricPoint
 	f(ctx, points)
 }
 
-func generateCerts(t0 time.Time) (testingCerts, error) {
+func generateCerts(t *testing.T, t0 time.Time) (testingCerts, error) {
+	t.Helper()
+
 	var err error
 
 	notBefore := t0.Add(-25 * time.Hour)
@@ -2314,41 +2808,128 @@ func generateCerts(t0 time.Time) (testingCerts, error) {
 		NotAfterExpired: t0.Add(-24 * time.Hour),
 	}
 
-	result.CertExpireFar, err = buildCert(notBefore, result.NotAfterFar, false, "Acme Co nice")
+	rootCAPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return testingCerts{}, err
+	}
+
+	CAPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return testingCerts{}, err
+	}
+
+	CAExpireSoonPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return testingCerts{}, err
+	}
+
+	CAExpiredPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return testingCerts{}, err
+	}
+
+	serverPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return testingCerts{}, err
+	}
+
+	rootCACert, err := signCA(notBefore, result.NotAfterFar, rootCAPrivateKey.PublicKey, rootCAPrivateKey, nil, "The RootCA")
 	if err != nil {
 		return result, err
 	}
 
-	result.CertExpireSoon, err = buildCert(notBefore, result.NotAfterSoon, false, "Acme Co need renew")
+	result.RootCA, err = x509.ParseCertificate(rootCACert)
 	if err != nil {
 		return result, err
 	}
 
-	result.CertExpired, err = buildCert(notBefore, result.NotAfterExpired, false, "Acme Co expired")
+	CACert, err := signCA(notBefore, result.NotAfterFar, CAPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "SubCA")
 	if err != nil {
 		return result, err
 	}
 
-	result.CertFarAndExpired = result.CertExpireFar
-	result.CertFarAndExpired.Certificate = append(result.CertFarAndExpired.Certificate, result.CertExpired.Certificate[0])
+	CAExpireSoonCert, err := signCA(notBefore, result.NotAfterSoon, CAExpireSoonPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "SubCA expire soon")
+	if err != nil {
+		return result, err
+	}
+
+	CAExpiredCert, err := signCA(notBefore, result.NotAfterExpired, CAExpiredPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "SubCA expired")
+	if err != nil {
+		return result, err
+	}
+
+	result.SubCA, err = x509.ParseCertificate(CACert)
+	if err != nil {
+		return result, err
+	}
+
+	result.SubCAExpireSoon, err = x509.ParseCertificate(CAExpireSoonCert)
+	if err != nil {
+		return result, err
+	}
+
+	result.SubCAExpired, err = x509.ParseCertificate(CAExpiredCert)
+	if err != nil {
+		return result, err
+	}
+
+	certSelfSignFar, err := signCert(notBefore, result.NotAfterFar, serverPrivateKey.PublicKey, serverPrivateKey, nil, "SelfSigned valid")
+	if err != nil {
+		return result, err
+	}
+
+	certSelfSignExpired, err := signCert(notBefore, result.NotAfterExpired, serverPrivateKey.PublicKey, serverPrivateKey, nil, "SelfSigned expired")
+	if err != nil {
+		return result, err
+	}
+
+	certRootCAFar, err := signCert(notBefore, result.NotAfterFar, serverPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "trusted valid")
+	if err != nil {
+		return result, err
+	}
+
+	certRootCASoon, err := signCert(notBefore, result.NotAfterSoon, serverPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "trusted expire soon")
+	if err != nil {
+		return result, err
+	}
+
+	certRootCAExpired, err := signCert(notBefore, result.NotAfterExpired, serverPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "trusted expired")
+	if err != nil {
+		return result, err
+	}
+
+	certSubCAExpireFar, err := signCert(notBefore, result.NotAfterFar, serverPrivateKey.PublicKey, CAPrivateKey, result.SubCA, "trusted by sub-ca")
+	if err != nil {
+		return result, err
+	}
+
+	// This certificate expire far, but the intermediary CA expire soon
+	certSubCAWithCAExpireSoon, err := signCert(notBefore, result.NotAfterFar, serverPrivateKey.PublicKey, CAExpireSoonPrivateKey, result.SubCAExpireSoon, "trusted by a sub-ca expiring soon")
+	if err != nil {
+		return result, err
+	}
+
+	result.SelfSigned = BuildCertChain(t, [][]byte{certSelfSignFar}, serverPrivateKey)
+	result.SelfSignedExpired = BuildCertChain(t, [][]byte{certSelfSignExpired}, serverPrivateKey)
+	result.CertExpireFar = BuildCertChain(t, [][]byte{certRootCAFar}, serverPrivateKey)
+	result.CertExpireSoon = BuildCertChain(t, [][]byte{certRootCASoon}, serverPrivateKey)
+	result.CertExpired = BuildCertChain(t, [][]byte{certRootCAExpired}, serverPrivateKey)
+	result.CertSubCAExpireFar = BuildCertChain(t, [][]byte{certSubCAExpireFar, CACert}, serverPrivateKey)
+	result.CertMissingIntermediary = BuildCertChain(t, [][]byte{certSubCAExpireFar}, serverPrivateKey)
+	result.CertUselessExpiredIntermediary = BuildCertChain(t, [][]byte{certRootCAFar, CAExpiredCert}, serverPrivateKey)
+	result.CertSubCAWithCAExpireSoon = BuildCertChain(t, [][]byte{certSubCAWithCAExpireSoon, CAExpireSoonCert}, serverPrivateKey)
 
 	return result, nil
 }
 
-func buildCert(notBefore time.Time, notAfter time.Time, useInvalidName bool, org string) (tls.Certificate, error) {
-	// Inspired by generate_cert.go from crypto/tls
-	priv, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return tls.Certificate{}, err
-	}
-
+func signCert(notBefore time.Time, notAfter time.Time, publicKeyToSign rsa.PublicKey, signerPrivateKey *rsa.PrivateKey, signerCertificate *x509.Certificate, org string) ([]byte, error) {
 	keyUsage := x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment
 
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
-		return tls.Certificate{}, err
+		return nil, err
 	}
 
 	template := x509.Certificate{
@@ -2360,38 +2941,77 @@ func buildCert(notBefore time.Time, notAfter time.Time, useInvalidName bool, org
 		NotAfter:  notAfter,
 
 		KeyUsage:              keyUsage,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,
 		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")},
+		IsCA:                  signerCertificate == nil,
+	}
+
+	if signerCertificate == nil {
+		signerCertificate = &template
+	}
+
+	return x509.CreateCertificate(rand.Reader, &template, signerCertificate, &publicKeyToSign, signerPrivateKey)
+}
+
+// signCA create a certificate template and sign it using signerPrivateKey & signerCertificate.
+// signerPrivateKey is required. In case of self-signed, signerCertificate should be nil and signerPrivateKey should match the public key.
+func signCA(notBefore time.Time, notAfter time.Time, publicKeyToSign rsa.PublicKey, signerPrivateKey *rsa.PrivateKey, signerCertificate *x509.Certificate, org string) ([]byte, error) {
+	keyUsage := x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign | x509.KeyUsageCRLSign
+
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		return nil, err
+	}
+
+	template := x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			Organization: []string{org},
+		},
+		NotBefore: notBefore,
+		NotAfter:  notAfter,
+
+		KeyUsage:              keyUsage,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		BasicConstraintsValid: true,
 		IsCA:                  true,
 	}
 
-	if useInvalidName {
-		template.IPAddresses = []net.IP{net.ParseIP("1.2.3.4")}
+	if signerCertificate == nil {
+		signerCertificate = &template
 	}
 
-	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+	return x509.CreateCertificate(rand.Reader, &template, signerCertificate, &publicKeyToSign, signerPrivateKey)
+}
+
+func MustParseCertificate(t *testing.T, derByre []byte) *x509.Certificate {
+	t.Helper()
+
+	result, err := x509.ParseCertificate(derByre)
 	if err != nil {
-		return tls.Certificate{}, err
+		panic(err)
 	}
 
-	certBytes := bytes.NewBuffer(nil)
-	keyBytes := bytes.NewBuffer(nil)
+	return result
+}
 
-	if err := pem.Encode(certBytes, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}); err != nil {
-		return tls.Certificate{}, err
+func BuildCertChain(t *testing.T, derList [][]byte, privateKey *rsa.PrivateKey) tls.Certificate {
+	t.Helper()
+
+	var privateKeyInterface crypto.PrivateKey
+
+	if privateKey != nil {
+		privateKeyInterface = privateKey
 	}
 
-	privBytes, err := x509.MarshalPKCS8PrivateKey(priv)
-	if err != nil {
-		return tls.Certificate{}, err
+	return tls.Certificate{
+		Certificate: derList,
+		Leaf:        MustParseCertificate(t, derList[0]),
+		PrivateKey:  privateKeyInterface,
 	}
-
-	if err := pem.Encode(keyBytes, &pem.Block{Type: "PRIVATE KEY", Bytes: privBytes}); err != nil {
-		return tls.Certificate{}, err
-	}
-
-	return tls.X509KeyPair(certBytes.Bytes(), keyBytes.Bytes())
 }
 
 type noDNSTarget struct {
@@ -2412,7 +3032,7 @@ func (t noDNSTarget) URL() string {
 	return "http://this-does-not-exists.bleemeo.com:81"
 }
 
-func (t noDNSTarget) Certificate() *x509.Certificate {
+func (t noDNSTarget) RootCACertificates() []*x509.Certificate {
 	return nil
 }
 
@@ -2430,7 +3050,8 @@ type httpTestTarget struct {
 	CloseInHTTP           bool
 	StatusCode            int // StatusCode of 0 will be replaced by the default 200.
 	UseBrokenCrypto       bool
-	TLSCert               []tls.Certificate
+	TLSCert               tls.Certificate
+	RootCACerts           []*x509.Certificate
 	srv                   *httptest.Server
 }
 
@@ -2482,9 +3103,9 @@ func (t *httpTestTarget) Start() {
 		Timeout:  t.TimeoutInTCPAccept,
 	}
 
-	if len(t.TLSCert) > 0 {
+	if t.TLSCert.PrivateKey != nil {
 		t.srv.TLS = &tls.Config{ //nolint: gosec
-			Certificates: t.TLSCert,
+			Certificates: []tls.Certificate{t.TLSCert},
 		}
 
 		t.srv.TLS.GetCertificate = func(chi *tls.ClientHelloInfo) (*tls.Certificate, error) {
@@ -2496,7 +3117,7 @@ func (t *httpTestTarget) Start() {
 				_ = chi.Conn.Close()
 			}
 
-			return &t.TLSCert[0], nil
+			return &t.TLSCert, nil
 		}
 
 		if t.UseBrokenCrypto {
@@ -2523,8 +3144,8 @@ func (t *httpTestTarget) Close() {
 	t.srv.Close()
 }
 
-func (t *httpTestTarget) Certificate() *x509.Certificate {
-	return t.srv.Certificate()
+func (t *httpTestTarget) RootCACertificates() []*x509.Certificate {
+	return t.RootCACerts
 }
 
 func (t *httpTestTarget) RequestContext(ctx context.Context) context.Context {
@@ -2543,9 +3164,9 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 	agentID := "1d6a2c82-4579-4f7d-91fe-3d4946aacaf7"
 	targetNotYetKnown := "this-label-value-will-be-replaced"
 	agentFQDN := "example.com"
-	t0 := time.Date(2022, 3, 8, 10, 27, 50, 0, time.UTC)
+	t0 := time.Now().Truncate(time.Second)
 
-	certs, err := generateCerts(t0)
+	certs, err := generateCerts(t, t0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2645,8 +3266,11 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				},
 			},
 			probeDurationMaxValue: 5,
-			trustCert:             true,
-			target:                &httpTestTarget{TLSCert: []tls.Certificate{certs.CertExpireFar}},
+
+			target: &httpTestTarget{
+				TLSCert:     certs.CertExpireFar,
+				RootCACerts: []*x509.Certificate{certs.RootCA},
+			},
 		},
 		{
 			name: "ssl-expire-soon",
@@ -2739,8 +3363,10 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			trustCert: true,
-			target:    &httpTestTarget{TLSCert: []tls.Certificate{certs.CertExpireSoon}},
+			target: &httpTestTarget{
+				TLSCert:     certs.CertExpireSoon,
+				RootCACerts: []*x509.Certificate{certs.RootCA},
+			},
 		},
 		{
 			name: "expired-unneeded-certs",
@@ -2833,8 +3459,10 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			trustCert: true,
-			target:    &httpTestTarget{TLSCert: []tls.Certificate{certs.CertFarAndExpired}},
+			target: &httpTestTarget{
+				TLSCert:     certs.CertUselessExpiredIntermediary,
+				RootCACerts: []*x509.Certificate{certs.RootCA},
+			},
 		},
 		{
 			name: "tls-self-signed",
@@ -2927,8 +3555,10 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			trustCert: false,
-			target:    &httpTestTarget{TLSCert: []tls.Certificate{certs.CertExpireFar}},
+			target: &httpTestTarget{
+				TLSCert:     certs.SelfSigned,
+				RootCACerts: []*x509.Certificate{certs.RootCA},
+			},
 		},
 		{
 			name: "tls-self-signed-expiring",
@@ -3021,8 +3651,10 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			trustCert: false,
-			target:    &httpTestTarget{TLSCert: []tls.Certificate{certs.CertExpired}},
+			target: &httpTestTarget{
+				TLSCert:     certs.SelfSignedExpired,
+				RootCACerts: []*x509.Certificate{certs.RootCA},
+			},
 		},
 		{
 			name: "tls-expired",
@@ -3115,8 +3747,10 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			trustCert: true,
-			target:    &httpTestTarget{TLSCert: []tls.Certificate{certs.CertExpired}},
+			target: &httpTestTarget{
+				TLSCert:     certs.CertExpired,
+				RootCACerts: []*x509.Certificate{certs.RootCA},
+			},
 		},
 		{
 			name: "timeout-tls-handshake",
@@ -3197,9 +3831,9 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			trustCert: true,
 			target: &httpTestTarget{
-				TLSCert:               []tls.Certificate{certs.CertExpireFar},
+				TLSCert:               certs.CertExpireFar,
+				RootCACerts:           []*x509.Certificate{certs.RootCA},
 				TimeoutInTLSHandshake: true,
 			},
 		},
@@ -3282,9 +3916,9 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			trustCert: true,
 			target: &httpTestTarget{
-				TLSCert:            []tls.Certificate{certs.CertExpireFar},
+				TLSCert:            certs.CertExpireFar,
+				RootCACerts:        []*x509.Certificate{certs.RootCA},
 				TimeoutInTCPAccept: true,
 			},
 		},
@@ -3373,9 +4007,9 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			trustCert: true,
 			target: &httpTestTarget{
-				TLSCert:       []tls.Certificate{certs.CertExpireFar},
+				TLSCert:       certs.CertExpireFar,
+				RootCACerts:   []*x509.Certificate{certs.RootCA},
 				ServerStopped: true,
 			},
 		},
@@ -3464,8 +4098,11 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			trustCert: true,
-			target:    &httpTestTarget{TLSCert: []tls.Certificate{certs.CertExpireFar}, UseBrokenCrypto: true},
+			target: &httpTestTarget{
+				TLSCert:         certs.CertExpireFar,
+				RootCACerts:     []*x509.Certificate{certs.RootCA},
+				UseBrokenCrypto: true,
+			},
 		},
 		{
 			name: "break-connection-in-tls",
@@ -3552,8 +4189,11 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			trustCert: true,
-			target:    &httpTestTarget{TLSCert: []tls.Certificate{certs.CertExpireFar}, CloseInTLSHandshake: true},
+			target: &httpTestTarget{
+				TLSCert:             certs.CertExpireFar,
+				RootCACerts:         []*x509.Certificate{certs.RootCA},
+				CloseInTLSHandshake: true,
+			},
 		},
 		{
 			name: "ssl-bad-dns",
@@ -3640,8 +4280,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			trustCert: true,
-			target:    noDNSTarget{useSSL: true},
+			target: noDNSTarget{useSSL: true},
 		},
 		{
 			name: "tcp-success",

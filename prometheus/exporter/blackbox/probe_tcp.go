@@ -239,13 +239,15 @@ func getVerifiedChains(ctx context.Context, state tls.ConnectionState, tlsConfig
 		return nil
 	}
 
-	testInjectCARoot, _ := ctx.Value(contextKeyTestInjectCARoot).(*x509.Certificate)
-	if testInjectCARoot != nil {
+	testInjectCARoot, _ := ctx.Value(contextKeyTestInjectCARoot).([]*x509.Certificate)
+	if len(testInjectCARoot) > 0 {
 		if cfg.RootCAs == nil {
 			cfg.RootCAs = x509.NewCertPool()
 		}
 
-		cfg.RootCAs.AddCert(testInjectCARoot)
+		for _, cert := range testInjectCARoot {
+			cfg.RootCAs.AddCert(cert)
+		}
 	}
 
 	now, _ := ctx.Value(contextKeyNowFunc).(func() time.Time)

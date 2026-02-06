@@ -134,9 +134,9 @@ func (rts roundTripTLSVerifyList) AllTrusted() bool {
 }
 
 // Describe implements the prometheus.Collector interface.
-//nolint: wsl_v5,gofmt,gofumpt,goimports
 func (target configTarget) Describe(ch chan<- *prometheus.Desc) {
 	ch <- probeSuccessDesc
+
 	ch <- probeDurationDesc
 }
 
@@ -407,12 +407,14 @@ func (target configTarget) verifyTLS(ctx context.Context, extLogger *slog.Logger
 			continue
 		}
 
-		if target.testInjectCARoot != nil {
+		if len(target.testInjectCARoot) > 0 {
 			if cfg.RootCAs == nil {
 				cfg.RootCAs = x509.NewCertPool()
 			}
 
-			cfg.RootCAs.AddCert(target.testInjectCARoot)
+			for _, cert := range target.testInjectCARoot {
+				cfg.RootCAs.AddCert(cert)
+			}
 		}
 
 		opts := x509.VerifyOptions{
