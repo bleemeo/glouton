@@ -57,16 +57,17 @@ type testingCerts struct {
 	SubCAExpireSoon *x509.Certificate
 	SubCAExpired    *x509.Certificate
 
-	CertLongLivedSelfSigned        tls.Certificate
-	CertLongLivedSelfSignedExpired tls.Certificate
-	CertLongLivedOk                tls.Certificate
-	CertLongLivedCritical          tls.Certificate
-	CertLongLivedExpired           tls.Certificate
-	CertShortLivedCritical         tls.Certificate
-	CertSubCAExpireFar             tls.Certificate
-	CertUselessExpiredIntermediary tls.Certificate
-	CertSubCAWithCAExpireSoon      tls.Certificate
-	CertMissingIntermediary        tls.Certificate
+	CertLongLivedSelfSigned           tls.Certificate
+	CertLongLivedSelfSignedExpired    tls.Certificate
+	CertLongLivedOk                   tls.Certificate
+	CertLongLivedCritical             tls.Certificate
+	CertLongLivedExpired              tls.Certificate
+	CertShortLivedCritical            tls.Certificate
+	CertSubCAExpireFar                tls.Certificate
+	CertUselessExpiredIntermediary    tls.Certificate
+	CertSubCAWithCAExpireSoon         tls.Certificate
+	CertSubCAExpireFarOldIntermediary tls.Certificate
+	CertMissingIntermediary           tls.Certificate
 
 	TSLongLivedOk        time.Time
 	TSLongLivedCritical  time.Time
@@ -1110,6 +1111,121 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			},
 			target: &httpTestTarget{
 				TLSCert:     certs.CertSubCAExpireFar,
+				RootCACerts: []*x509.Certificate{certs.RootCA},
+			},
+		},
+		{
+			name:         "intermediary-ca-old-intermediary",
+			absentPoints: []map[string]string{},
+			wantPoints: []types.MetricPoint{
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 200},
+					Labels: map[string]string{
+						types.LabelName:         "probe_http_status_code",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+						"phase":                 "connect",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedCritical.Unix())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedCritical.Unix())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+			},
+			target: &httpTestTarget{
+				TLSCert:     certs.CertSubCAExpireFarOldIntermediary,
 				RootCACerts: []*x509.Certificate{certs.RootCA},
 			},
 		},
@@ -2968,6 +3084,12 @@ func generateCerts(t *testing.T, t0 time.Time) (testingCerts, error) {
 		return result, err
 	}
 
+	// This similar an older version of the same CA as CACert (same private key)
+	CACertOld, err := signCA(result.TSLongLivedCritical.Add(-longLivedDuration), result.TSLongLivedCritical, CAPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "SubCA")
+	if err != nil {
+		return result, err
+	}
+
 	CAExpireSoonCert, err := signCA(result.TSLongLivedCritical.Add(-longLivedDuration), result.TSLongLivedCritical, CAExpireSoonPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "SubCA expire soon")
 	if err != nil {
 		return result, err
@@ -3044,6 +3166,15 @@ func generateCerts(t *testing.T, t0 time.Time) (testingCerts, error) {
 	result.CertMissingIntermediary = BuildCertChain(t, [][]byte{certSubCAExpireFar}, serverPrivateKey)
 	result.CertUselessExpiredIntermediary = BuildCertChain(t, [][]byte{certRootCAFar, CAExpiredCert}, serverPrivateKey)
 	result.CertSubCAWithCAExpireSoon = BuildCertChain(t, [][]byte{certSubCAWithCAExpireSoon, CAExpireSoonCert}, serverPrivateKey)
+
+	// This situation might never exists in reality: here the *same* private key of a CA was used for two intermediary certificates:
+	//  * one that expired soon
+	//  * one that expired in longer time (updated)
+	// This case is here to test whether or not it is possible to get a valid trust chain with the wrong CA cert, but I'm
+	// quiet sure this could never occur with public PKI because:
+	//  * On some system, it could cause bugs (confusion between the two cetificates that are both identified by the identical subject)
+	//  * That means re-using a private key and not re-newing it, which feels wrong security-wise
+	result.CertSubCAExpireFarOldIntermediary = BuildCertChain(t, [][]byte{certSubCAExpireFar, CACertOld}, serverPrivateKey)
 
 	return result, nil
 }
