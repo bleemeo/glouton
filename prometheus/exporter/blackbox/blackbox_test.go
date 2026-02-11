@@ -107,8 +107,6 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 		t.Fatal(err)
 	}
 
-	httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {}))
-
 	tests := []testCase{
 		{
 			name: "http-only-success-200",
@@ -3954,6 +3952,9 @@ func (t *httpTestTarget) Start() {
 
 	if t.TLSCert.PrivateKey != nil {
 		t.srvLast.TLS = &tls.Config{ //nolint: gosec
+			// Certificates will in reality come from GetCertificate, but for
+			// StartTLS to not override our cert, we must set a value.
+			// Once StartTLS we will remove Certificates to rely only on GetCertificate
 			Certificates: []tls.Certificate{t.TLSCert},
 		}
 
