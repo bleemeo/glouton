@@ -72,6 +72,12 @@ var (
 		[]string{"instance"},
 		nil,
 	)
+	probeSSLCertificateLifespan = prometheus.NewDesc(
+		prometheus.BuildFQName("", "", "probe_ssl_leaf_certificate_lifespan"),
+		"Returns leaf certificate lifespan",
+		[]string{"instance"},
+		nil,
+	)
 	probeTLSSuccess = prometheus.NewDesc(
 		prometheus.BuildFQName("", "", "probe_ssl_validation_success"),
 		"Returns whether all SSL connections were valid",
@@ -101,10 +107,11 @@ type roundTrip struct {
 }
 
 type roundTripTLSVerify struct {
-	hadTLS     bool
-	trustedTLS bool
-	expiry     time.Time
-	err        error
+	hadTLS       bool
+	trustedTLS   bool
+	expiry       time.Time
+	leafLifespan time.Duration
+	err          error
 }
 
 type roundTripTLSVerifyList []roundTripTLSVerify
@@ -285,6 +292,10 @@ func (target configTarget) CollectWithContext(ctx context.Context, ch chan<- pro
 
 		if roundTripsTLS[len(roundTripsTLS)-1].hadTLS {
 			ch <- prometheus.MustNewConstMetric(probeTLSExpiry, prometheus.GaugeValue, float64(roundTripsTLS[len(roundTripsTLS)-1].expiry.Unix()), target.Name)
+
+			if lifespan := roundTripsTLS[len(roundTripsTLS)-1].leafLifespan; lifespan != 0 {
+				ch <- prometheus.MustNewConstMetric(probeSSLCertificateLifespan, prometheus.GaugeValue, float64(lifespan.Seconds()), target.Name)
+			}
 		}
 	}
 
@@ -433,10 +444,11 @@ func (target configTarget) verifyTLS(ctx context.Context, extLogger *slog.Logger
 		extLogger.InfoContext(ctx, fmt.Sprintf("numberVerifiedChains %d, expiry: %s, err: %v", len(verifiedChains), expiry, err))
 
 		result = append(result, roundTripTLSVerify{
-			hadTLS:     true,
-			trustedTLS: len(verifiedChains) > 0,
-			expiry:     expiry,
-			err:        err,
+			hadTLS:       true,
+			trustedTLS:   len(verifiedChains) > 0,
+			expiry:       expiry,
+			leafLifespan: getLeafLifespan(rt.TLSState),
+			err:          err,
 		})
 	}
 
@@ -461,6 +473,18 @@ func getLastChainExpiry(verifiedChains [][]*x509.Certificate) time.Time {
 	}
 
 	return lastChainExpiry
+}
+
+func getLeafLifespan(state *tls.ConnectionState) time.Duration {
+	if state == nil {
+		return 0
+	}
+
+	if len(state.PeerCertificates) == 0 {
+		return 0
+	}
+
+	return state.PeerCertificates[0].NotAfter.Sub(state.PeerCertificates[0].NotBefore)
 }
 
 // compareConfigTargets returns true if the monitors are identical, and false otherwise.

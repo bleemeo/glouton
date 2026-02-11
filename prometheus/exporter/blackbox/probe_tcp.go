@@ -86,6 +86,10 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 		Name: "probe_failed_due_to_tls_error",
 		Help: "Indicates if probe failed due to a TLS error",
 	})
+	probeSSLCertificateLifespan := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "probe_ssl_leaf_certificate_lifespan",
+		Help: "Returns leaf certificate lifespan",
+	})
 
 	registry.MustRegister(probeFailedDueToRegex)
 
@@ -126,9 +130,13 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 		tlsConn, _ := conn.(*tls.Conn)
 		state := tlsConn.ConnectionState()
 
-		registry.MustRegister(probeSSLEarliestCertExpiry, probeTLSVersion, probeSSLLastChainExpiryTimestampSeconds, probeSSLLastInformation)
+		registry.MustRegister(probeSSLEarliestCertExpiry, probeTLSVersion, probeSSLLastChainExpiryTimestampSeconds, probeSSLLastInformation, probeSSLCertificateLifespan)
 		probeSSLEarliestCertExpiry.Set(float64(getEarliestCertExpiry(&state).Unix()))
 		probeTLSVersion.WithLabelValues(getTLSVersion(&state)).Set(1)
+
+		if lifespan := getLeafLifespan(&state); lifespan != 0 {
+			probeSSLCertificateLifespan.Set(float64(lifespan.Seconds()))
+		}
 
 		verifiedChains := getVerifiedChains(ctx, state, module.TCP.TLSConfig)
 		probeSSLLastChainExpiryTimestampSeconds.Set(float64(getLastChainExpiry(verifiedChains).Unix()))
@@ -218,9 +226,13 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 			// Get certificate expiry.
 			state := tlsConn.ConnectionState()
 
-			registry.MustRegister(probeSSLEarliestCertExpiry, probeSSLLastChainExpiryTimestampSeconds)
+			registry.MustRegister(probeSSLEarliestCertExpiry, probeSSLLastChainExpiryTimestampSeconds, probeSSLCertificateLifespan)
 			probeSSLEarliestCertExpiry.Set(float64(getEarliestCertExpiry(&state).Unix()))
 			probeTLSVersion.WithLabelValues(getTLSVersion(&state)).Set(1)
+
+			if lifespan := getLeafLifespan(&state); lifespan != 0 {
+				probeSSLCertificateLifespan.Set(float64(lifespan.Seconds()))
+			}
 
 			verifiedChains := getVerifiedChains(ctx, state, module.TCP.TLSConfig)
 			probeSSLLastChainExpiryTimestampSeconds.Set(float64(getLastChainExpiry(verifiedChains).Unix()))

@@ -104,6 +104,7 @@ var (
 		"probe_success",
 		"probe_ssl_earliest_cert_expiry",
 		"probe_ssl_last_chain_expiry_timestamp_seconds",
+		"probe_ssl_leaf_certificate_lifespan",
 		"probe_ssl_validation_success",
 		"probe_http_duration_seconds",
 		"probe_failed_due_to_tls_error",

@@ -69,6 +69,8 @@ type testingCerts struct {
 	CertSubCAExpireFarOldIntermediary tls.Certificate
 	CertMissingIntermediary           tls.Certificate
 
+	LongLiveDuration     time.Duration
+	ShortLiveDuration    time.Duration
 	TSLongLivedOk        time.Time
 	TSLongLivedCritical  time.Time
 	TSShortLivedCritical time.Time
@@ -127,6 +129,13 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				},
 				{
 					types.LabelName:         "probe_ssl_validation_success",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+					types.LabelServiceUUID:  monitorID,
+				},
+				{
+					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
 					types.LabelInstance:     targetNotYetKnown,
 					types.LabelInstanceUUID: agentID,
 					types.LabelScraper:      agentFQDN,
@@ -291,6 +300,19 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
+					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_earliest_cert_expiry",
@@ -407,6 +429,19 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
+					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_earliest_cert_expiry",
@@ -513,6 +548,19 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
 						types.LabelInstance:     targetNotYetKnown,
 						types.LabelInstanceUUID: agentID,
 						types.LabelScraper:      agentFQDN,
@@ -643,6 +691,19 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
+					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_validation_success",
@@ -748,6 +809,19 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
+					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_validation_success",
@@ -841,6 +915,19 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedCritical.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
 						types.LabelInstance:     targetNotYetKnown,
 						types.LabelInstanceUUID: agentID,
 						types.LabelScraper:      agentFQDN,
@@ -966,6 +1053,19 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
+					Point: types.Point{Time: t0, Value: float64(certs.ShortLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedCritical.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_earliest_cert_expiry",
@@ -1071,6 +1171,19 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
 						types.LabelInstance:     targetNotYetKnown,
 						types.LabelInstanceUUID: agentID,
 						types.LabelScraper:      agentFQDN,
@@ -1196,6 +1309,19 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
+					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedCritical.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_earliest_cert_expiry",
@@ -1301,6 +1427,19 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
 						types.LabelInstance:     targetNotYetKnown,
 						types.LabelInstanceUUID: agentID,
 						types.LabelScraper:      agentFQDN,
@@ -1426,6 +1565,19 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
+					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedCritical.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_earliest_cert_expiry",
@@ -1531,6 +1683,19 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
 						types.LabelInstance:     targetNotYetKnown,
 						types.LabelInstanceUUID: agentID,
 						types.LabelScraper:      agentFQDN,
@@ -1656,6 +1821,19 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
+					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_earliest_cert_expiry",
@@ -1761,6 +1939,19 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
 						types.LabelInstance:     targetNotYetKnown,
 						types.LabelInstanceUUID: agentID,
 						types.LabelScraper:      agentFQDN,
@@ -1886,6 +2077,19 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
+					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedExpired.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_earliest_cert_expiry",
@@ -1922,6 +2126,13 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			absentPoints: []map[string]string{
 				{
 					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+					types.LabelServiceUUID:  monitorID,
+				},
+				{
+					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
 					types.LabelInstance:     targetNotYetKnown,
 					types.LabelInstanceUUID: agentID,
 					types.LabelScraper:      agentFQDN,
@@ -2037,6 +2248,13 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			absentPoints: []map[string]string{
 				{
 					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+					types.LabelServiceUUID:  monitorID,
+				},
+				{
+					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
 					types.LabelInstance:     targetNotYetKnown,
 					types.LabelInstanceUUID: agentID,
 					types.LabelScraper:      agentFQDN,
@@ -2165,6 +2383,13 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					types.LabelScraper:      agentFQDN,
 					types.LabelServiceUUID:  monitorID,
 				},
+				{
+					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+					types.LabelServiceUUID:  monitorID,
+				},
 			},
 			wantPoints: []types.MetricPoint{
 				{
@@ -2245,6 +2470,13 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			absentPoints: []map[string]string{
 				{
 					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+					types.LabelServiceUUID:  monitorID,
+				},
+				{
+					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
 					types.LabelInstance:     targetNotYetKnown,
 					types.LabelInstanceUUID: agentID,
 					types.LabelScraper:      agentFQDN,
@@ -2443,6 +2675,19 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
+					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_validation_success",
@@ -2467,6 +2712,13 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			absentPoints: []map[string]string{
 				{
 					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+					types.LabelServiceUUID:  monitorID,
+				},
+				{
+					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
 					types.LabelInstance:     targetNotYetKnown,
 					types.LabelInstanceUUID: agentID,
 					types.LabelScraper:      agentFQDN,
@@ -2591,6 +2843,13 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					types.LabelServiceUUID:  monitorID,
 				},
 				{
+					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+					types.LabelServiceUUID:  monitorID,
+				},
+				{
 					types.LabelName:         "probe_ssl_validation_success",
 					types.LabelInstance:     targetNotYetKnown,
 					types.LabelInstanceUUID: agentID,
@@ -2667,6 +2926,13 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			absentPoints: []map[string]string{
 				{
 					types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+					types.LabelServiceUUID:  monitorID,
+				},
+				{
+					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
 					types.LabelInstance:     targetNotYetKnown,
 					types.LabelInstanceUUID: agentID,
 					types.LabelScraper:      agentFQDN,
@@ -2834,6 +3100,19 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
+					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_earliest_cert_expiry",
@@ -2953,6 +3232,19 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
+					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_earliest_cert_expiry",
@@ -3060,6 +3352,19 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
 						types.LabelInstance:     targetNotYetKnown,
 						types.LabelInstanceUUID: agentID,
 						types.LabelScraper:      agentFQDN,
@@ -3188,6 +3493,19 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
+					Point: types.Point{Time: t0, Value: float64(certs.ShortLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSShortLivedCritical.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_earliest_cert_expiry",
@@ -3306,6 +3624,19 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
+					Point: types.Point{Time: t0, Value: float64(certs.ShortLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSShortLivedCritical.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_earliest_cert_expiry",
@@ -3414,6 +3745,19 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
 						types.LabelInstance:     targetNotYetKnown,
 						types.LabelInstanceUUID: agentID,
 						types.LabelScraper:      agentFQDN,
@@ -3622,9 +3966,9 @@ func generateCerts(t *testing.T, t0 time.Time) (testingCerts, error) {
 
 	var err error
 
-	longLivedDuration := 365 * 24 * time.Hour
-	shortLivedDuration := 90 * 24 * time.Hour
 	result := testingCerts{
+		LongLiveDuration:     365 * 24 * time.Hour,
+		ShortLiveDuration:    90 * 24 * time.Hour,
 		TSLongLivedOk:        t0.Add(200 * 24 * time.Hour),
 		TSLongLivedCritical:  t0.Add(24 * time.Hour),
 		TSShortLivedCritical: t0.Add(24 * time.Hour),
@@ -3656,7 +4000,7 @@ func generateCerts(t *testing.T, t0 time.Time) (testingCerts, error) {
 		return testingCerts{}, err
 	}
 
-	rootCACert, err := signCA(result.TSLongLivedOk.Add(-longLivedDuration), result.TSLongLivedOk, rootCAPrivateKey.PublicKey, rootCAPrivateKey, nil, "The RootCA")
+	rootCACert, err := signCA(result.TSLongLivedOk.Add(-result.LongLiveDuration), result.TSLongLivedOk, rootCAPrivateKey.PublicKey, rootCAPrivateKey, nil, "The RootCA")
 	if err != nil {
 		return result, err
 	}
@@ -3666,23 +4010,23 @@ func generateCerts(t *testing.T, t0 time.Time) (testingCerts, error) {
 		return result, err
 	}
 
-	CACert, err := signCA(result.TSLongLivedOk.Add(-longLivedDuration), result.TSLongLivedOk, CAPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "SubCA")
+	CACert, err := signCA(result.TSLongLivedOk.Add(-result.LongLiveDuration), result.TSLongLivedOk, CAPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "SubCA")
 	if err != nil {
 		return result, err
 	}
 
 	// This similar an older version of the same CA as CACert (same private key)
-	CACertOld, err := signCA(result.TSLongLivedCritical.Add(-longLivedDuration), result.TSLongLivedCritical, CAPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "SubCA")
+	CACertOld, err := signCA(result.TSLongLivedCritical.Add(-result.LongLiveDuration), result.TSLongLivedCritical, CAPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "SubCA")
 	if err != nil {
 		return result, err
 	}
 
-	CAExpireSoonCert, err := signCA(result.TSLongLivedCritical.Add(-longLivedDuration), result.TSLongLivedCritical, CAExpireSoonPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "SubCA expire soon")
+	CAExpireSoonCert, err := signCA(result.TSLongLivedCritical.Add(-result.LongLiveDuration), result.TSLongLivedCritical, CAExpireSoonPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "SubCA expire soon")
 	if err != nil {
 		return result, err
 	}
 
-	CAExpiredCert, err := signCA(result.TSLongLivedExpired.Add(-longLivedDuration), result.TSLongLivedExpired, CAExpiredPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "SubCA expired")
+	CAExpiredCert, err := signCA(result.TSLongLivedExpired.Add(-result.LongLiveDuration), result.TSLongLivedExpired, CAExpiredPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "SubCA expired")
 	if err != nil {
 		return result, err
 	}
@@ -3702,43 +4046,43 @@ func generateCerts(t *testing.T, t0 time.Time) (testingCerts, error) {
 		return result, err
 	}
 
-	certSelfSignFar, err := signCert(result.TSLongLivedOk.Add(-longLivedDuration), result.TSLongLivedOk, serverPrivateKey.PublicKey, serverPrivateKey, nil, "SelfSigned valid")
+	certSelfSignFar, err := signCert(result.TSLongLivedOk.Add(-result.LongLiveDuration), result.TSLongLivedOk, serverPrivateKey.PublicKey, serverPrivateKey, nil, "SelfSigned valid")
 	if err != nil {
 		return result, err
 	}
 
-	certSelfSignExpired, err := signCert(result.TSLongLivedExpired.Add(-longLivedDuration), result.TSLongLivedExpired, serverPrivateKey.PublicKey, serverPrivateKey, nil, "SelfSigned expired")
+	certSelfSignExpired, err := signCert(result.TSLongLivedExpired.Add(-result.LongLiveDuration), result.TSLongLivedExpired, serverPrivateKey.PublicKey, serverPrivateKey, nil, "SelfSigned expired")
 	if err != nil {
 		return result, err
 	}
 
-	certRootCAFar, err := signCert(result.TSLongLivedOk.Add(-longLivedDuration), result.TSLongLivedOk, serverPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "trusted valid")
+	certRootCAFar, err := signCert(result.TSLongLivedOk.Add(-result.LongLiveDuration), result.TSLongLivedOk, serverPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "trusted valid")
 	if err != nil {
 		return result, err
 	}
 
-	certRootCASoon, err := signCert(result.TSLongLivedCritical.Add(-longLivedDuration), result.TSLongLivedCritical, serverPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "trusted expire soon")
+	certRootCASoon, err := signCert(result.TSLongLivedCritical.Add(-result.LongLiveDuration), result.TSLongLivedCritical, serverPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "trusted expire soon")
 	if err != nil {
 		return result, err
 	}
 
-	certShortLivedRootCASoon, err := signCert(result.TSShortLivedCritical.Add(-shortLivedDuration), result.TSShortLivedCritical, serverPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "trusted expire soon")
+	certShortLivedRootCASoon, err := signCert(result.TSShortLivedCritical.Add(-result.ShortLiveDuration), result.TSShortLivedCritical, serverPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "trusted expire soon")
 	if err != nil {
 		return result, err
 	}
 
-	certRootCAExpired, err := signCert(result.TSLongLivedExpired.Add(-longLivedDuration), result.TSLongLivedExpired, serverPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "trusted expired")
+	certRootCAExpired, err := signCert(result.TSLongLivedExpired.Add(-result.LongLiveDuration), result.TSLongLivedExpired, serverPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "trusted expired")
 	if err != nil {
 		return result, err
 	}
 
-	certSubCAExpireFar, err := signCert(result.TSLongLivedOk.Add(-longLivedDuration), result.TSLongLivedOk, serverPrivateKey.PublicKey, CAPrivateKey, result.SubCA, "trusted by sub-ca")
+	certSubCAExpireFar, err := signCert(result.TSLongLivedOk.Add(-result.LongLiveDuration), result.TSLongLivedOk, serverPrivateKey.PublicKey, CAPrivateKey, result.SubCA, "trusted by sub-ca")
 	if err != nil {
 		return result, err
 	}
 
 	// This certificate expire far, but the intermediary CA expire soon
-	certSubCAWithCAExpireSoon, err := signCert(result.TSLongLivedOk.Add(-longLivedDuration), result.TSLongLivedOk, serverPrivateKey.PublicKey, CAExpireSoonPrivateKey, result.SubCAExpireSoon, "trusted by a sub-ca expiring soon")
+	certSubCAWithCAExpireSoon, err := signCert(result.TSLongLivedOk.Add(-result.LongLiveDuration), result.TSLongLivedOk, serverPrivateKey.PublicKey, CAExpireSoonPrivateKey, result.SubCAExpireSoon, "trusted by a sub-ca expiring soon")
 	if err != nil {
 		return result, err
 	}
@@ -4113,6 +4457,19 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
+					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_earliest_cert_expiry",
@@ -4201,6 +4558,19 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedCritical.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
 						types.LabelInstance:     targetNotYetKnown,
 						types.LabelInstanceUUID: agentID,
 						types.LabelScraper:      agentFQDN,
@@ -4307,6 +4677,19 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
+					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedExpired.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_earliest_cert_expiry",
@@ -4393,6 +4776,19 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
 						types.LabelInstance:     targetNotYetKnown,
 						types.LabelInstanceUUID: agentID,
 						types.LabelScraper:      agentFQDN,
@@ -4499,6 +4895,19 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
+					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedExpired.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_earliest_cert_expiry",
@@ -4595,6 +5004,19 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
+					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						types.LabelServiceUUID:  monitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedExpired.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_earliest_cert_expiry",
@@ -4638,6 +5060,13 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				},
 				{
 					types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+					types.LabelServiceUUID:  monitorID,
+				},
+				{
+					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
 					types.LabelInstance:     targetNotYetKnown,
 					types.LabelInstanceUUID: agentID,
 					types.LabelScraper:      agentFQDN,
@@ -4729,6 +5158,13 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					types.LabelServiceUUID:  monitorID,
 				},
 				{
+					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+					types.LabelServiceUUID:  monitorID,
+				},
+				{
 					types.LabelName:         "probe_duration_seconds",
 					types.LabelInstance:     targetNotYetKnown,
 					types.LabelInstanceUUID: agentID,
@@ -4808,6 +5244,13 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				},
 				{
 					types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+					types.LabelServiceUUID:  monitorID,
+				},
+				{
+					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
 					types.LabelInstance:     targetNotYetKnown,
 					types.LabelInstanceUUID: agentID,
 					types.LabelScraper:      agentFQDN,
@@ -4904,6 +5347,13 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					types.LabelScraper:      agentFQDN,
 					types.LabelServiceUUID:  monitorID,
 				},
+				{
+					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+					types.LabelServiceUUID:  monitorID,
+				},
 			},
 			wantPoints: []types.MetricPoint{
 				{
@@ -4995,6 +5445,13 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					types.LabelScraper:      agentFQDN,
 					types.LabelServiceUUID:  monitorID,
 				},
+				{
+					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+					types.LabelServiceUUID:  monitorID,
+				},
 			},
 			wantPoints: []types.MetricPoint{
 				{
@@ -5074,6 +5531,13 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			absentPoints: []map[string]string{
 				{
 					types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+					types.LabelServiceUUID:  monitorID,
+				},
+				{
+					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
 					types.LabelInstance:     targetNotYetKnown,
 					types.LabelInstanceUUID: agentID,
 					types.LabelScraper:      agentFQDN,
