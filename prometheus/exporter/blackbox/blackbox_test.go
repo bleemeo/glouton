@@ -69,12 +69,19 @@ type testingCerts struct {
 	CertSubCAExpireFarOldIntermediary tls.Certificate
 	CertMissingIntermediary           tls.Certificate
 
+	CARootDuration       time.Duration
+	CADuration           time.Duration
 	LongLiveDuration     time.Duration
 	ShortLiveDuration    time.Duration
 	TSLongLivedOk        time.Time
 	TSLongLivedCritical  time.Time
 	TSShortLivedCritical time.Time
 	TSLongLivedExpired   time.Time
+
+	TSRootCA     time.Time
+	TSCAOk       time.Time
+	TSCACritical time.Time
+	TSCAExpired  time.Time
 }
 
 type testCase struct {
@@ -970,7 +977,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:         "ssl-short-lived-expire-soon",
+			name:         "ssl-short-lived-expire-critical",
 			absentPoints: []map[string]string{},
 			wantPoints: []types.MetricPoint{
 				{
@@ -1040,7 +1047,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedCritical.Unix())},
+					Point: types.Point{Time: t0, Value: float64(certs.TSShortLivedCritical.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
 						types.LabelInstance:     targetNotYetKnown,
@@ -1066,7 +1073,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedCritical.Unix())},
+					Point: types.Point{Time: t0, Value: float64(certs.TSShortLivedCritical.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_earliest_cert_expiry",
 						types.LabelInstance:     targetNotYetKnown,
@@ -1296,7 +1303,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedCritical.Unix())},
+					Point: types.Point{Time: t0, Value: float64(certs.TSCACritical.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
 						types.LabelInstance:     targetNotYetKnown,
@@ -1322,7 +1329,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedCritical.Unix())},
+					Point: types.Point{Time: t0, Value: float64(certs.TSCACritical.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_earliest_cert_expiry",
 						types.LabelInstance:     targetNotYetKnown,
@@ -1450,7 +1457,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedExpired.Unix())},
+					Point: types.Point{Time: t0, Value: float64(certs.TSCAExpired.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_earliest_cert_expiry",
 						types.LabelInstance:     targetNotYetKnown,
@@ -1552,7 +1559,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedCritical.Unix())},
+					Point: types.Point{Time: t0, Value: float64(certs.TSCACritical.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
 						types.LabelInstance:     targetNotYetKnown,
@@ -1578,7 +1585,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedCritical.Unix())},
+					Point: types.Point{Time: t0, Value: float64(certs.TSCACritical.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_earliest_cert_expiry",
 						types.LabelInstance:     targetNotYetKnown,
@@ -3967,12 +3974,22 @@ func generateCerts(t *testing.T, t0 time.Time) (testingCerts, error) {
 	var err error
 
 	result := testingCerts{
+		CARootDuration:       10 * 365 * 24 * time.Hour,
+		CADuration:           5 * 365 * 24 * time.Hour,
 		LongLiveDuration:     365 * 24 * time.Hour,
 		ShortLiveDuration:    90 * 24 * time.Hour,
 		TSLongLivedOk:        t0.Add(200 * 24 * time.Hour),
-		TSLongLivedCritical:  t0.Add(24 * time.Hour),
+		TSLongLivedCritical:  t0.Add(9 * 24 * time.Hour),
+		TSShortLivedWarning:  t0.Add(8 * 24 * time.Hour),
 		TSShortLivedCritical: t0.Add(24 * time.Hour),
 		TSLongLivedExpired:   t0.Add(-24 * time.Hour),
+
+		// Don't use exactly same expiration time for CA than for certiciate.
+		// This allow to distinguish each value and ensure test really test what we expect
+		TSRootCA:     t0.Add(2 * 365 * 24 * time.Hour),
+		TSCAOk:       t0.Add(201 * 24 * time.Hour),
+		TSCACritical: t0.Add(10 * 24 * time.Hour),
+		TSCAExpired:  t0.Add(-25 * time.Hour),
 	}
 
 	rootCAPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -4000,7 +4017,7 @@ func generateCerts(t *testing.T, t0 time.Time) (testingCerts, error) {
 		return testingCerts{}, err
 	}
 
-	rootCACert, err := signCA(result.TSLongLivedOk.Add(-result.LongLiveDuration), result.TSLongLivedOk, rootCAPrivateKey.PublicKey, rootCAPrivateKey, nil, "The RootCA")
+	rootCACert, err := signCA(result.TSRootCA.Add(-result.CARootDuration), result.TSRootCA, rootCAPrivateKey.PublicKey, rootCAPrivateKey, nil, "The RootCA")
 	if err != nil {
 		return result, err
 	}
@@ -4010,23 +4027,23 @@ func generateCerts(t *testing.T, t0 time.Time) (testingCerts, error) {
 		return result, err
 	}
 
-	CACert, err := signCA(result.TSLongLivedOk.Add(-result.LongLiveDuration), result.TSLongLivedOk, CAPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "SubCA")
+	CACert, err := signCA(result.TSCAOk.Add(-result.CADuration), result.TSCAOk, CAPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "SubCA")
 	if err != nil {
 		return result, err
 	}
 
 	// This similar an older version of the same CA as CACert (same private key)
-	CACertOld, err := signCA(result.TSLongLivedCritical.Add(-result.LongLiveDuration), result.TSLongLivedCritical, CAPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "SubCA")
+	CACertOld, err := signCA(result.TSCACritical.Add(-result.CADuration), result.TSCACritical, CAPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "SubCA")
 	if err != nil {
 		return result, err
 	}
 
-	CAExpireSoonCert, err := signCA(result.TSLongLivedCritical.Add(-result.LongLiveDuration), result.TSLongLivedCritical, CAExpireSoonPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "SubCA expire soon")
+	CAExpireSoonCert, err := signCA(result.TSCACritical.Add(-result.CADuration), result.TSCACritical, CAExpireSoonPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "SubCA expire soon")
 	if err != nil {
 		return result, err
 	}
 
-	CAExpiredCert, err := signCA(result.TSLongLivedExpired.Add(-result.LongLiveDuration), result.TSLongLivedExpired, CAExpiredPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "SubCA expired")
+	CAExpiredCert, err := signCA(result.TSCAExpired.Add(-result.CADuration), result.TSCAExpired, CAExpiredPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "SubCA expired")
 	if err != nil {
 		return result, err
 	}
@@ -4066,7 +4083,7 @@ func generateCerts(t *testing.T, t0 time.Time) (testingCerts, error) {
 		return result, err
 	}
 
-	certShortLivedRootCASoon, err := signCert(result.TSShortLivedCritical.Add(-result.ShortLiveDuration), result.TSShortLivedCritical, serverPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "trusted expire soon")
+	certShortLivedRootCACritical, err := signCert(result.TSShortLivedCritical.Add(-result.ShortLiveDuration), result.TSShortLivedCritical, serverPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "trusted expire soon")
 	if err != nil {
 		return result, err
 	}
@@ -4081,7 +4098,8 @@ func generateCerts(t *testing.T, t0 time.Time) (testingCerts, error) {
 		return result, err
 	}
 
-	// This certificate expire far, but the intermediary CA expire soon
+	// This certificate expire far, but the intermediary CA expire soon. I believe this never exist in reality (I believe CA issue at most 1 year lifespan certiciate,
+	// and only use an CA-cert that have *more* than 1 year remaining)
 	certSubCAWithCAExpireSoon, err := signCert(result.TSLongLivedOk.Add(-result.LongLiveDuration), result.TSLongLivedOk, serverPrivateKey.PublicKey, CAExpireSoonPrivateKey, result.SubCAExpireSoon, "trusted by a sub-ca expiring soon")
 	if err != nil {
 		return result, err
@@ -4092,7 +4110,7 @@ func generateCerts(t *testing.T, t0 time.Time) (testingCerts, error) {
 	result.CertLongLivedOk = BuildCertChain(t, [][]byte{certRootCAFar}, serverPrivateKey)
 	result.CertLongLivedCritical = BuildCertChain(t, [][]byte{certRootCASoon}, serverPrivateKey)
 	result.CertLongLivedExpired = BuildCertChain(t, [][]byte{certRootCAExpired}, serverPrivateKey)
-	result.CertShortLivedCritical = BuildCertChain(t, [][]byte{certShortLivedRootCASoon}, serverPrivateKey)
+	result.CertShortLivedCritical = BuildCertChain(t, [][]byte{certShortLivedRootCACritical}, serverPrivateKey)
 	result.CertSubCAExpireFar = BuildCertChain(t, [][]byte{certSubCAExpireFar, CACert}, serverPrivateKey)
 	result.CertMissingIntermediary = BuildCertChain(t, [][]byte{certSubCAExpireFar}, serverPrivateKey)
 	result.CertUselessExpiredIntermediary = BuildCertChain(t, [][]byte{certRootCAFar, CAExpiredCert}, serverPrivateKey)
@@ -4690,7 +4708,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedExpired.Unix())},
+					Point: types.Point{Time: t0, Value: float64(certs.TSCAExpired.Unix())},
 					Labels: map[string]string{
 						types.LabelName:         "probe_ssl_earliest_cert_expiry",
 						types.LabelInstance:     targetNotYetKnown,
