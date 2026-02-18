@@ -54,6 +54,7 @@ var (
 	errUnsupportedProvider = errors.New("provider not supported by config loader")
 	errCannotMerge         = errors.New("cannot merge")
 	ErrInvalidValue        = errors.New("invalid config value")
+	ErrMissconfiguration   = errors.New("config issue")
 )
 
 // Load the configuration from files and environment variables.
@@ -105,7 +106,20 @@ func Load(withDefault bool, loadEnviron bool, paths ...string) (Config, []Item, 
 		config.Agent.CloudImageCreationFile = filepath.Join(config.Agent.StateDirectory, config.Agent.CloudImageCreationFile)
 	}
 
+	moreWarnings := checkForConfigMistake(config)
+	warnings = append(warnings, moreWarnings...)
+
 	return config, loader.items, warnings, err
+}
+
+func checkForConfigMistake(cfg Config) prometheus.MultiError {
+	var warnings prometheus.MultiError
+
+	if cfg.MQTT.Enable && len(cfg.MQTT.Hosts) == 0 {
+		warnings.Append(fmt.Errorf("%w: OpenSource MQTT is enable but with an empty hosts list", ErrMissconfiguration))
+	}
+
+	return warnings
 }
 
 // load the configuration from files and environment variables.

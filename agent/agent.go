@@ -1308,7 +1308,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	a.factProvider.SetFact("statsd_enable", strconv.FormatBool(a.config.Telegraf.StatsD.Enable))
 
-	if a.config.MQTT.Enable {
+	if a.config.MQTT.Enable && len(a.config.MQTT.Hosts) > 0 {
 		promFilteredStore := store.NewFilteredStore(
 			a.store,
 			func(m []types.MetricPoint) []types.MetricPoint {
