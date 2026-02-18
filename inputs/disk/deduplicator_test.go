@@ -127,7 +127,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name: "bind-mount",
+			name: "bind-mount", // Before gopsutil v4.25.12
 			input: []internal.Measurement{
 				{
 					Name:   "disk",
@@ -155,6 +155,53 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Tags: map[string]string{
 						"fstype": "ext4",
 						"device": "dm-1",
+						"mode":   "rw",
+						"path":   "/mnt/bind/etc/resolv.conf",
+					},
+				},
+			},
+			want: []internal.Measurement{
+				{
+					Name:   "disk",
+					Fields: nil,
+					Tags: map[string]string{
+						"fstype": "ext4",
+						"device": "dm-1",
+						"mode":   "rw",
+						"path":   "/",
+					},
+				},
+			},
+		},
+		{
+			name: "bind-mount-new", // After gopsutil v4.25.12
+			input: []internal.Measurement{
+				{
+					Name:   "disk",
+					Fields: nil,
+					Tags: map[string]string{
+						"fstype": "ext4",
+						"device": "/",
+						"mode":   "rw",
+						"path":   "/mnt/bind",
+					},
+				},
+				{
+					Name:   "disk",
+					Fields: nil,
+					Tags: map[string]string{
+						"fstype": "ext4",
+						"device": "dm-1",
+						"mode":   "rw",
+						"path":   "/",
+					},
+				},
+				{
+					Name:   "disk",
+					Fields: nil,
+					Tags: map[string]string{
+						"fstype": "ext4",
+						"device": "/mnt/bind",
 						"mode":   "rw",
 						"path":   "/mnt/bind/etc/resolv.conf",
 					},
@@ -536,6 +583,75 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 				},
 			},
 		},
+		{
+			// This test mostly ensure deduplication don't eliminate some "special" device,
+			// since we made some assumption on what is a bind mount vs a real device.
+			name: "special-device",
+			input: []internal.Measurement{
+				{
+					Name:   "disk",
+					Fields: nil,
+					Tags: map[string]string{
+						"fstype": "apfs",
+						"device": "disk3s1s1",
+						"mode":   "rw",
+						"path":   "/",
+					},
+				},
+				{
+					Name:   "disk",
+					Fields: nil,
+					Tags: map[string]string{
+						"fstype": "NTFS",
+						"device": "C:",
+						"mode":   "rw",
+						"path":   "C:",
+					},
+				},
+				{
+					Name:   "disk",
+					Fields: nil,
+					Tags: map[string]string{
+						"fstype": "zfs",
+						"device": "boot-pool/ROOT/13.0-U6.8",
+						"mode":   "rw",
+						"path":   "/home",
+					},
+				},
+			},
+			want: []internal.Measurement{
+				{
+					Name:   "disk",
+					Fields: nil,
+					Tags: map[string]string{
+						"fstype": "apfs",
+						"device": "disk3s1s1",
+						"mode":   "rw",
+						"path":   "/",
+					},
+				},
+				{
+					Name:   "disk",
+					Fields: nil,
+					Tags: map[string]string{
+						"fstype": "NTFS",
+						"device": "C:",
+						"mode":   "rw",
+						"path":   "C:",
+					},
+				},
+				{
+					Name:   "disk",
+					Fields: nil,
+					Tags: map[string]string{
+						"fstype": "zfs",
+						"device": "boot-pool/ROOT/13.0-U6.8",
+						"mode":   "rw",
+						"path":   "/home",
+					},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -543,8 +659,8 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 
 			deduplicate(acc, tt.hostroot)
 
-			if diff := cmp.Diff(acc.Measurement, tt.want); diff != "" {
-				t.Error(diff)
+			if diff := cmp.Diff(tt.want, acc.Measurement); diff != "" {
+				t.Errorf("deduplicate mismatch (-want +got)\n%s", diff)
 			}
 		})
 	}

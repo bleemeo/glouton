@@ -63,10 +63,18 @@ func deduplicate(acc *internal.StoreAccumulator, hostroot string) {
 		pathToIndx[m.Tags["path"]] = i
 	}
 
-	// when multiple devices are mounted on multiple paths:
+	// when multiple devices are mounted on multiple paths (bind mount):
 	// * the shortest path wins... unless it doesn't start by the hostroot while the others do
+	// Newer gopsutil report bind mount differently. device is the path of previous mount point, therefor we will
+	// ignore all device that are actually a mount point. A mount point will be anything that start with "/" and not "/dev/"
 	for i, m := range acc.Measurement {
 		if deleted[i] {
+			continue
+		}
+
+		if strings.HasPrefix(m.Tags["device"], "/") && !strings.HasPrefix(m.Tags["device"], "/dev/") {
+			deleted[i] = true
+
 			continue
 		}
 
