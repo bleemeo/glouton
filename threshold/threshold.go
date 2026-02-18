@@ -427,22 +427,21 @@ func (r *Registry) GetThresholdMetricNames() []string {
 }
 
 // GetThreshold returns the current threshold for a Metric by labels text.
-func (r *Registry) GetThreshold(labelsText string) Threshold {
+func (r *Registry) GetThreshold(lbls map[string]string, annotations types.MetricAnnotations) Threshold {
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	return r.getThreshold(labelsText)
+	metricKey := metricutils.MetricKey(lbls, annotations, r.agentID)
+	metricName := lbls[types.LabelName]
+
+	return r.getThreshold(metricName, metricKey)
 }
 
-func (r *Registry) getThreshold(labelsText string) Threshold {
-	labelsMap := types.TextToLabels(labelsText)
-	labelsText = r.labelsWithoutInstance(labelsText)
-
-	if threshold, ok := r.thresholds[labelsText]; ok {
+func (r *Registry) getThreshold(metricName string, metricKey string) Threshold {
+	if threshold, ok := r.thresholds[metricKey]; ok {
 		return threshold
 	}
 
-	metricName := labelsMap[types.LabelName]
 	threshold := r.thresholdsAllItem[metricName]
 
 	if threshold.IsZero() {
@@ -544,10 +543,37 @@ func FormatValue(value float64, unit Unit) string {
 	case UnitTypeSecond:
 		return formatDuration(time.Duration(value) * time.Second)
 	case UnitTypeDay:
-		return formatDuration(time.Duration(value) * 24 * time.Hour)
+		return formatDurationDay(time.Duration(value) * 24 * time.Hour)
 	default:
 		return fmt.Sprintf("%.2f %s", value, unit.UnitText)
 	}
+}
+
+// FormatValueAlt takes two couple of float value and unit and transforms it to a standard format.
+// The first couple is the value in % and the second couple the value in underlying unit.
+func FormatValueAlt(value float64, unit Unit, valueAlt float64, unitAlt Unit) string {
+	return fmt.Sprintf("%s (%s)",
+		FormatValue(value, unit),
+		FormatValue(valueAlt, unitAlt),
+	)
+}
+
+func formatDurationDay(period time.Duration) string {
+	sign := ""
+	if period < 0 {
+		sign = "-"
+		period = -period
+	}
+
+	currentScale := 86400
+	value := math.Round(period.Seconds() / float64(currentScale))
+
+	result := fmt.Sprintf("%s%.0f day", sign, value)
+	if value > 1 {
+		result += "s"
+	}
+
+	return result
 }
 
 func formatDuration(period time.Duration) string {
@@ -604,24 +630,6 @@ func formatDuration(period time.Duration) string {
 	return result
 }
 
-// labelsWithoutInstance remove all labels but the name, the item and the instance_uuid
-// if the given labelsText match metricutils.MetricOnlyHasItem.
-// Otherwise, it returns the labels unchanged.
-func (r *Registry) labelsWithoutInstance(labelsText string) string {
-	labelsMap := types.TextToLabels(labelsText)
-	if metricutils.MetricOnlyHasItem(labelsMap, r.agentID) {
-		// Getting rid of the 'instance' label
-		labelsMap = map[string]string{
-			types.LabelName:         labelsMap[types.LabelName],
-			types.LabelItem:         labelsMap[types.LabelItem],
-			types.LabelInstanceUUID: labelsMap[types.LabelInstanceUUID],
-		}
-		labelsText = types.LabelsToText(labelsMap)
-	}
-
-	return labelsText
-}
-
 // ApplyThresholds applies the thresholds. It returns input points with their status modified by the thresholds,
 // and the new status points generated.
 func (r *Registry) ApplyThresholds(points []types.MetricPoint) ([]types.MetricPoint, []types.MetricPoint) {
@@ -633,11 +641,16 @@ func (r *Registry) ApplyThresholds(points []types.MetricPoint) ([]types.MetricPo
 
 	for _, point := range points {
 		if !point.Annotations.Status.CurrentStatus.IsSet() {
-			labelsText := types.LabelsToText(point.Labels)
-			threshold := r.getThreshold(labelsText)
+			metricKey := metricutils.MetricKey(point.Labels, point.Annotations, r.agentID)
+			metricName := point.Labels[types.LabelName]
+
+			threshold := r.getThreshold(metricName, metricKey)
 
 			if !threshold.IsZero() && !math.IsNaN(point.Value) {
-				newPoints, statusPoints = r.addPointWithThreshold(newPoints, statusPoints, point, threshold, labelsText)
+				newPoint, newStatusPoint := r.addPointWithThreshold(points, point, threshold, metricKey)
+
+				newPoints = append(newPoints, newPoint)
+				statusPoints = append(statusPoints, newStatusPoint)
 
 				continue
 			}
@@ -650,21 +663,49 @@ func (r *Registry) ApplyThresholds(points []types.MetricPoint) ([]types.MetricPo
 }
 
 func (r *Registry) addPointWithThreshold(
-	points, statusPoints []types.MetricPoint,
+	inputPoints []types.MetricPoint,
 	point types.MetricPoint,
 	threshold Threshold,
-	labelsText string,
-) ([]types.MetricPoint, []types.MetricPoint) {
-	labelsText = r.labelsWithoutInstance(labelsText)
+	metricKey string,
+) (types.MetricPoint, types.MetricPoint) {
 	softStatus, highThreshold := threshold.CurrentStatus(point.Value)
-	previousState := r.states[labelsText]
+	previousState := r.states[metricKey]
+
+	// For some metrics, the threshold is applied on a _perc metric but we want to show
+	// number as another unit. For example kubernetes_certificate_left_perc is associated with
+	// kubernetes_certificate_day_left (a number of days).
+	var (
+		metricKeyAlt string
+		pointAlt     types.MetricPoint
+	)
+
+	percToAlt := map[string]string{
+		"kubernetes_certificate_left_perc": "kubernetes_certificate_day_left",
+	}
+	if altName, ok := percToAlt[point.Labels[types.LabelName]]; ok {
+		labelsMapAlt := maps.Clone(point.Labels)
+		labelsMapAlt[types.LabelName] = altName
+		metricKeyAlt = metricutils.MetricKey(labelsMapAlt, point.Annotations, r.agentID)
+
+		for _, pts := range inputPoints {
+			if maps.Equal(pts.Labels, labelsMapAlt) {
+				pointAlt = pts
+
+				break
+			}
+		}
+	}
 
 	newState := previousState.Update(softStatus, threshold.WarningDelay, threshold.CriticalDelay, r.nowFunc())
-	r.states[labelsText] = newState
+	r.states[metricKey] = newState
 
-	unit := r.units[labelsText]
+	unit := r.units[metricKey]
+	unitAlt := r.units[metricKeyAlt]
 	// Consumer expects status description from threshold to start with "Current value:"
 	statusDescription := "Current value: " + FormatValue(point.Value, unit)
+	if metricKeyAlt != "" && pointAlt.Labels != nil {
+		statusDescription = "Current value: " + FormatValueAlt(point.Value, unit, pointAlt.Value, unitAlt)
+	}
 
 	if newState.CurrentStatus != types.StatusOk {
 		thresholdLimit := math.NaN()
@@ -708,11 +749,11 @@ func (r *Registry) addPointWithThreshold(
 	annotationsCopy := point.Annotations
 	annotationsCopy.Status = status
 
-	points = append(points, types.MetricPoint{
+	newPoint := types.MetricPoint{
 		Point:       point.Point,
 		Labels:      point.Labels,
 		Annotations: annotationsCopy,
-	})
+	}
 
 	// Create status point.
 	labelsCopy := make(map[string]string, len(point.Labels))
@@ -723,13 +764,13 @@ func (r *Registry) addPointWithThreshold(
 
 	annotationsCopy.StatusOf = point.Labels[types.LabelName]
 
-	statusPoints = append(statusPoints, types.MetricPoint{
+	newStatusPoint := types.MetricPoint{
 		Point:       types.Point{Time: point.Time, Value: float64(status.CurrentStatus.NagiosCode())},
 		Labels:      labelsCopy,
 		Annotations: annotationsCopy,
-	})
+	}
 
-	return points, statusPoints
+	return newPoint, newStatusPoint
 }
 
 func (r *Registry) DiagnosticThresholds(_ context.Context, archive types.ArchiveWriter) error {

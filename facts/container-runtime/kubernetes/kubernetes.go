@@ -83,8 +83,10 @@ type Kubernetes struct {
 }
 
 const (
-	caExpLabel   = "kubernetes_ca_day_left"
-	certExpLabel = "kubernetes_certificate_day_left"
+	caExpLabelDay    = "kubernetes_ca_day_left"
+	caExpLabelPerc   = "kubernetes_ca_left_perc"
+	certExpLabelDay  = "kubernetes_certificate_day_left"
+	certExpLabelPerc = "kubernetes_certificate_left_perc"
 )
 
 var (
@@ -389,7 +391,7 @@ func (k *Kubernetes) MetricsMinute(ctx context.Context, now time.Time) ([]types.
 	return points, multiErr.MaybeUnwrap()
 }
 
-func (k *Kubernetes) getCertificateExpiration(ctx context.Context, config *rest.Config, now time.Time) (types.MetricPoint, error) {
+func (k *Kubernetes) getCertificateExpiration(ctx context.Context, config *rest.Config, now time.Time) ([]types.MetricPoint, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
@@ -422,7 +424,7 @@ func (k *Kubernetes) getCertificateExpiration(ctx context.Context, config *rest.
 
 	addr, err := url.Parse(config.Host)
 	if err != nil {
-		return types.MetricPoint{}, err
+		return nil, err
 	}
 
 	tlsConfig.ServerName = addr.Hostname()
@@ -430,7 +432,7 @@ func (k *Kubernetes) getCertificateExpiration(ctx context.Context, config *rest.
 	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr.Host)
 	if err != nil {
 		// Something went wrong with the connection, but it is not related to TLS
-		return types.MetricPoint{}, err
+		return nil, err
 	}
 
 	defer conn.Close()
@@ -442,18 +444,18 @@ func (k *Kubernetes) getCertificateExpiration(ctx context.Context, config *rest.
 		// Something went wrong with the TLS handshake, we consider the certificate as expired
 		logger.V(2).Println("An error occurred on TLS handshake:", err)
 
-		return createPointFromCertTime(time.Now(), certExpLabel, now, types.LabelItem, "api"), nil
+		return createPointsCertificateDaysAndPerc(time.Now(), time.Now(), certExpLabelDay, certExpLabelPerc, now, types.LabelItem, "api"), nil
 	}
 
 	if len(tlsConn.ConnectionState().PeerCertificates) == 0 {
 		logger.V(2).Println("No peer certificate could be found for tls dial.")
 
-		return types.MetricPoint{}, nil
+		return nil, nil
 	}
 
 	expiry := tlsConn.ConnectionState().PeerCertificates[0]
 
-	return createPointFromCertTime(expiry.NotAfter, certExpLabel, now, types.LabelItem, "api"), nil
+	return createPointsCertificateDaysAndPerc(expiry.NotBefore, expiry.NotAfter, certExpLabelDay, certExpLabelPerc, now, types.LabelItem, "api"), nil
 }
 
 func (k *Kubernetes) getLocalAPIPoints(ctx context.Context, cl kubeClient, now time.Time) ([]types.MetricPoint, []error) {
@@ -489,18 +491,18 @@ func (k *Kubernetes) getLocalAPIPoints(ctx context.Context, cl kubeClient, now t
 		return nil, []error{fmt.Errorf("%w: Kubernetes client config is unset", errMissingConfig)}
 	}
 
-	certificatePoint, errTmp := k.getCertificateExpiration(ctx, config, now)
+	certificatePoints, errTmp := k.getCertificateExpiration(ctx, config, now)
 	if errTmp != nil {
 		err = append(err, errTmp)
 	} else {
-		points = append(points, certificatePoint)
+		points = append(points, certificatePoints...)
 	}
 
-	caCertificatePoint, errTmp := k.getCACertificateExpiration(config, now)
+	caCertificatePoints, errTmp := k.getCACertificateExpiration(config, now)
 	if errTmp != nil {
 		err = append(err, errTmp)
 	} else {
-		points = append(points, caCertificatePoint)
+		points = append(points, caCertificatePoints...)
 	}
 
 	return points, err
@@ -592,12 +594,13 @@ func (k *Kubernetes) getKubeletPoints(ctx context.Context, cl kubeClient, now ti
 		return []types.MetricPoint{point}, []error{fmt.Errorf("fetching kubelet cert: %w", err)}
 	}
 
-	certPoint := createPointFromCertTime(cert.NotAfter, certExpLabel, now, types.LabelItem, "kubelet")
+	result := createPointsCertificateDaysAndPerc(cert.NotBefore, cert.NotAfter, certExpLabelDay, certExpLabelPerc, now, types.LabelItem, "kubelet")
+	result = append(result, point)
 
-	return []types.MetricPoint{point, certPoint}, nil
+	return result, nil
 }
 
-func (k *Kubernetes) getCACertificateExpiration(config *rest.Config, now time.Time) (types.MetricPoint, error) {
+func (k *Kubernetes) getCACertificateExpiration(config *rest.Config, now time.Time) ([]types.MetricPoint, error) {
 	caData := config.TLSClientConfig.CAData
 
 	var err error
@@ -606,20 +609,20 @@ func (k *Kubernetes) getCACertificateExpiration(config *rest.Config, now time.Ti
 		// CAData takes precedence over CAFile, thus we only check CAFile if there is no CAData
 		caData, err = os.ReadFile(config.TLSClientConfig.CAFile)
 		if err != nil {
-			return types.MetricPoint{}, err
+			return nil, err
 		}
 	} else if caData == nil {
 		logger.V(2).Printf("No certificate data found for Kubernetes API")
 
-		return types.MetricPoint{}, nil
+		return nil, nil
 	}
 
 	caCert, err := decodeRawCert(caData)
 	if err != nil {
-		return types.MetricPoint{}, err
+		return nil, err
 	}
 
-	return createPointFromCertTime(caCert.NotAfter, caExpLabel, now), nil
+	return createPointsCertificateDaysAndPerc(caCert.NotBefore, caCert.NotAfter, caExpLabelDay, caExpLabelPerc, now), nil
 }
 
 func (k *Kubernetes) getCRDCertificateExpirations(ctx context.Context, now time.Time) ([]types.MetricPoint, error) {
@@ -647,8 +650,8 @@ func (k *Kubernetes) getCRDCertificateExpirations(ctx context.Context, now time.
 				types.LabelMetaKubernetesCluster, k.ClusterName,
 			}
 
-			certPoint := createPointFromCertTime(cert.NotAfter, certExpLabel, now, labels...)
-			certPoints = append(certPoints, certPoint)
+			tmp := createPointsCertificateDaysAndPerc(cert.NotBefore, cert.NotAfter, certExpLabelDay, certExpLabelPerc, now, labels...)
+			certPoints = append(certPoints, tmp...)
 		}
 	}
 
@@ -678,8 +681,8 @@ func (k *Kubernetes) getWebhookConfigCertificateExpirations(ctx context.Context,
 					types.LabelMetaKubernetesCluster, k.ClusterName,
 				}
 
-				certPoint := createPointFromCertTime(cert.NotAfter, certExpLabel, now, labels...)
-				certPoints = append(certPoints, certPoint)
+				tmp := createPointsCertificateDaysAndPerc(cert.NotBefore, cert.NotAfter, certExpLabelDay, certExpLabelPerc, now, labels...)
+				certPoints = append(certPoints, tmp...)
 			}
 		}
 	}
@@ -699,8 +702,8 @@ func (k *Kubernetes) getWebhookConfigCertificateExpirations(ctx context.Context,
 					types.LabelMetaKubernetesCluster, k.ClusterName,
 				}
 
-				certPoint := createPointFromCertTime(cert.NotAfter, certExpLabel, now, labels...)
-				certPoints = append(certPoints, certPoint)
+				tmp := createPointsCertificateDaysAndPerc(cert.NotBefore, cert.NotAfter, certExpLabelDay, certExpLabelPerc, now, labels...)
+				certPoints = append(certPoints, tmp...)
 			}
 		}
 	}
@@ -754,32 +757,71 @@ func decodeRawCert(rawData []byte) (*x509.Certificate, error) {
 	return certData, nil
 }
 
-func createPointFromCertTime(certTime time.Time, label string, now time.Time, extraLabelsKV ...string) types.MetricPoint {
-	labels := map[string]string{types.LabelName: label}
+func createPointsCertificateDaysAndPerc(notBefore time.Time, notAfter time.Time, labelDays string, labelPerc string, now time.Time, extraLabelsKV ...string) []types.MetricPoint {
+	labelsDays := map[string]string{types.LabelName: labelDays}
+	labelsPerc := map[string]string{types.LabelName: labelPerc}
 
 	if len(extraLabelsKV)%2 != 0 {
 		panic(fmt.Sprintf("odd number of labels provided (got %q)", extraLabelsKV))
 	}
 
 	for i := 0; i < len(extraLabelsKV); i += 2 {
-		labels[extraLabelsKV[i]] = extraLabelsKV[i+1]
+		labelsDays[extraLabelsKV[i]] = extraLabelsKV[i+1]
+		labelsPerc[extraLabelsKV[i]] = extraLabelsKV[i+1]
 	}
 
-	remainingDays := certTime.Sub(now).Hours() / 24
+	remainingDays := notAfter.Sub(now).Hours() / 24
 
 	if remainingDays < 0 {
 		// we clamp remainingDays to 0 when the certificate already expired
 		remainingDays = 0
 	}
 
-	return types.MetricPoint{
+	lifeSpanDays := notAfter.Sub(notBefore).Hours() / 24
+
+	var remainingPerc float64
+
+	if lifeSpanDays > 365 {
+		// Clamp to 1 year:
+		//  * For other duration, when only ~8% of lifespan is remaining, it's fine to trigger
+		//    a warning (30 days for 1 year lifespan, 7 days for 90 days lifespan).
+		//    But for certificate valid for 10 year, it would result in warning at 300 days which is too soon.
+		//  * Kubelet & Kubernetes API (at least with rancher) re-use the same NotBefore date, so even if the
+		//    certificate is really valid only for 1 year, it's lifespan will increase every years.
+		lifeSpanDays = 365
+	}
+
+	if lifeSpanDays <= 0 {
+		// If lifeSpanHours is 0 (or negative, which shouldn't happen), use 0 as remaining perc to avoid division by 0
+		remainingPerc = 0.0
+	} else {
+		remainingPerc = remainingDays / lifeSpanDays * 100
+	}
+
+	// Since we clamp the lifespan to max 1 year, make sure we don't have a remaining perc > 100
+	if remainingPerc > 100 {
+		remainingPerc = 100
+	}
+
+	pointDays := types.MetricPoint{
 		Point: types.Point{
 			Time:  now,
 			Value: remainingDays,
 		},
-		Labels:      labels,
+		Labels:      labelsDays,
 		Annotations: types.MetricAnnotations{},
 	}
+
+	pointPerc := types.MetricPoint{
+		Point: types.Point{
+			Time:  now,
+			Value: remainingPerc,
+		},
+		Labels:      labelsPerc,
+		Annotations: types.MetricAnnotations{},
+	}
+
+	return []types.MetricPoint{pointDays, pointPerc}
 }
 
 func (k *Kubernetes) getClient(ctx context.Context) (cl kubeClient, err error) {

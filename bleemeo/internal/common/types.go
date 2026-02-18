@@ -23,7 +23,6 @@ import (
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
-	"github.com/bleemeo/glouton/utils/metricutils"
 )
 
 // Maximal length of fields on Bleemeo API.
@@ -46,44 +45,6 @@ func (sni ServiceNameInstance) String() string {
 	}
 
 	return sni.Name
-}
-
-// MetricKey return a unique key that could be used in for lookup in cache.MetricLookupFromList
-//
-// This is working correctly because metricFromAPI generate the correct format before adding them to the cache.
-func MetricKey(lbls map[string]string, annotations types.MetricAnnotations, agentID string) string {
-	if lbls[types.LabelInstanceUUID] == "" || lbls[types.LabelInstanceUUID] == annotations.BleemeoAgentID || (annotations.BleemeoAgentID == "" && lbls[types.LabelInstanceUUID] == agentID) {
-		// In name+item mode, we treat empty instance_uuid and instance_uuid=agentID as the same.
-		// This reflect in:
-		// * metricFromAPI which fill the instance_uuid when labels_text is empty
-		// * MetricOnlyHasItem that cause instance_uuid to not be sent on registration in name+item mode
-		//
-		// Also in this mode, we ignore instance when instance_uuid=agentID. This reflect in:
-		// * MetricOnlyHasItem that cause instance to not be sent on registration in name+item mode
-		// * instance being dropped here in metricKey
-		agentID := agentID
-
-		if annotations.BleemeoAgentID != "" {
-			agentID = annotations.BleemeoAgentID
-		}
-
-		if metricutils.MetricOnlyHasItem(lbls, agentID) {
-			tmp := make(map[string]string, len(lbls)+1)
-
-			for k, v := range lbls {
-				if k == types.LabelInstance {
-					continue
-				}
-
-				tmp[k] = v
-			}
-
-			tmp[types.LabelInstanceUUID] = agentID
-			lbls = tmp
-		}
-	}
-
-	return types.LabelsToText(lbls)
 }
 
 // MetricLookupFromList return a map[MetricLabelItem]Metric.

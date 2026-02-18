@@ -56,6 +56,7 @@ var (
 		// Kubernetes
 		"kubernetes_ca_day_left",
 		"kubernetes_certificate_day_left",
+		"kubernetes_certificate_left_perc",
 		"kubernetes_kubelet_status",
 		"kubernetes_api_status",
 		"kubernetes_pods_count",
@@ -103,6 +104,7 @@ var (
 		"probe_success",
 		"probe_ssl_earliest_cert_expiry",
 		"probe_ssl_last_chain_expiry_timestamp_seconds",
+		"probe_ssl_leaf_certificate_lifespan",
 		"probe_ssl_validation_success",
 		"probe_http_duration_seconds",
 		"probe_failed_due_to_tls_error",
