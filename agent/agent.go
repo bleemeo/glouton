@@ -27,7 +27,6 @@ import (
 	"math"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -39,6 +38,7 @@ import (
 	"sync"
 	"time"
 
+	metricfilter "github.com/bleemeo/glouton/agent/metric-filter"
 	"github.com/bleemeo/glouton/agent/state"
 	"github.com/bleemeo/glouton/api"
 	"github.com/bleemeo/glouton/bleemeo"
@@ -77,7 +77,6 @@ import (
 	"github.com/bleemeo/glouton/prometheus/process"
 	"github.com/bleemeo/glouton/prometheus/registry"
 	"github.com/bleemeo/glouton/prometheus/rules"
-	"github.com/bleemeo/glouton/prometheus/scrapper"
 	"github.com/bleemeo/glouton/store"
 	"github.com/bleemeo/glouton/task"
 	"github.com/bleemeo/glouton/telemetry"
@@ -148,9 +147,9 @@ type agent struct {
 	lastHealthCheck        time.Time
 	lastContainerEventTime time.Time
 	watchdogRunAt          []time.Time
-	metricFilter           *metricFilter
-	promFilter             *metricFilter
-	mergeMetricFilter      *metricFilter
+	metricFilter           *metricfilter.Filter
+	promFilter             *metricfilter.Filter
+	mergeMetricFilter      *metricfilter.Filter
 	monitorManager         *blackbox.RegisterManager
 	rulesManager           *rules.Manager
 	reloadState            ReloadState
@@ -645,7 +644,7 @@ func (a *agent) rebuildDynamicMetricAllowDenyList(services []discovery.Service) 
 		a.promFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), a.rulesManager.MetricNames()),
 	)
 
-	a.mergeMetricFilter.mergeInPlace(a.metricFilter, a.promFilter)
+	a.mergeMetricFilter.MergeInPlace(a.metricFilter, a.promFilter)
 
 	return errors.Join(errs...)
 }
@@ -764,7 +763,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	hasSwap := factsMap["swap_present"] == "true"
 
-	bleemeoFilter, err := newMetricFilter(a.config.Metric, len(a.snmpManager.Targets()) > 0, hasSwap, true)
+	bleemeoFilter, err := metricfilter.New(a.config.Metric, len(a.snmpManager.Targets()) > 0, hasSwap, true)
 	if err != nil {
 		logger.Printf("An error occurred while building the metric filter, allow/deny list may be partial: %v", err)
 	}
@@ -778,17 +777,17 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		func(m []types.MetricPoint) []types.MetricPoint {
 			return bleemeoFilter.FilterPoints(m, false)
 		},
-		bleemeoFilter.filterMetrics,
+		bleemeoFilter.FilterMetrics,
 	)
 	a.threshold = threshold.New(a.state)
 
-	promFilter, err := newMetricFilter(a.config.Metric, len(a.snmpManager.Targets()) > 0, hasSwap, false)
+	promFilter, err := metricfilter.New(a.config.Metric, len(a.snmpManager.Targets()) > 0, hasSwap, false)
 	if err != nil {
 		logger.Printf("An error occurred while building the Prometheus metric filter, allow/deny list may be partial: %v", err)
 	}
 
 	a.promFilter = promFilter
-	a.mergeMetricFilter = mergeMetricFilters(a.promFilter, bleemeoFilter)
+	a.mergeMetricFilter = metricfilter.MergeMetricFilters(a.promFilter, bleemeoFilter)
 
 	secretInputsGate := gate.New(inputs.MaxParallelSecrets())
 
@@ -1054,7 +1053,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			VSphereEndpointsInError:        a.vSphereManager.EndpointsInError,
 			IsContainerEnabled:             a.containerFilter.ContainerEnabled,
 			IsContainerNameRecentlyDeleted: a.containerRuntime.IsContainerNameRecentlyDeleted,
-			IsMetricAllowed:                a.metricFilter.isAllowedAndNotDeniedMap,
+			IsMetricAllowed:                a.metricFilter.IsAllowedAndNotDeniedMap,
 			PahoLastPingCheckAt:            a.pahoLogWrapper.LastPingAt,
 			LastMetricAnnotationChange:     a.store.LastAnnotationChange,
 		})
@@ -1184,7 +1183,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		processSource.RegisterExporter(ctx, a.gathererRegistry, psFact.AllProcs, dynamicDiscovery, metricsIgnored, serviceIgnored)
 	}
 
-	prometheusTargets, warnings := prometheusConfigToURLs(a.config.Metric.Prometheus.Targets)
+	prometheusTargets, warnings := config.PrometheusConfigToURLs(a.config.Metric.Prometheus.Targets)
 	if warnings != nil {
 		a.addWarnings(warnings...)
 	}
@@ -1314,7 +1313,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			func(m []types.MetricPoint) []types.MetricPoint {
 				return promFilter.FilterPoints(m, false)
 			},
-			promFilter.filterMetrics,
+			promFilter.FilterMetrics,
 		)
 
 		a.mqtt = mqtt.New(mqtt.Options{
@@ -2867,39 +2866,4 @@ func setupContainer(hostRootPath string) {
 			_ = os.Setenv("HOST_MOUNT_PREFIX", hostRootPath)
 		}
 	}
-}
-
-// prometheusConfigToURLs convert metric.prometheus.targets config to a list of targets.
-// It returns the targets and some warnings.
-//
-// See tests for the expected config.
-func prometheusConfigToURLs(configTargets []config.PrometheusTarget) ([]*scrapper.Target, prometheus.MultiError) {
-	var warnings prometheus.MultiError
-
-	targets := make([]*scrapper.Target, 0, len(configTargets))
-
-	for _, configTarget := range configTargets {
-		targetURL, err := url.Parse(configTarget.URL)
-		if err != nil {
-			warnings.Append(fmt.Errorf("%w: invalid prometheus target URL: %s", config.ErrInvalidValue, err))
-
-			continue
-		}
-
-		target := &scrapper.Target{
-			ExtraLabels: map[string]string{
-				types.LabelMetaScrapeJob: configTarget.Name,
-				// HostPort could be empty, but this ExtraLabels is used by Registry which
-				// correctly handles empty values (drop the label).
-				types.LabelMetaScrapeInstance: scrapper.HostPort(targetURL),
-			},
-			URL:       targetURL,
-			AllowList: configTarget.AllowMetrics,
-			DenyList:  configTarget.DenyMetrics,
-		}
-
-		targets = append(targets, target)
-	}
-
-	return targets, warnings
 }

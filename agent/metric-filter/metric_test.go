@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package agent
+package metricfilter
 
 import (
 	"bytes"
@@ -99,7 +99,7 @@ func Test_Basic_Build(t *testing.T) {
 	cpuMatcher, _ := promParser.ParseMetricSelector("{__name__=~\"cpu.*\"}")
 	proMatcher, _ := promParser.ParseMetricSelector("{__name__=~\"pro.*\"}")
 
-	want := metricFilter{
+	want := Filter{
 		allowList: map[labels.Matcher][]matcher.Matchers{
 			*cpuMatcher[0]: {
 				{
@@ -178,7 +178,7 @@ func Test_Basic_Build(t *testing.T) {
 		},
 	}
 
-	filter, err := newMetricFilter(basicConf.Metric, false, true, true)
+	filter, err := New(basicConf.Metric, false, true, true)
 	if err != nil {
 		t.Error(err)
 
@@ -203,7 +203,7 @@ func Test_Basic_Build(t *testing.T) {
 }
 
 func Test_basic_build_default(t *testing.T) {
-	filter, err := newMetricFilter(defaultConf.Metric, true, true, true)
+	filter, err := New(defaultConf.Metric, true, true, true)
 	if err != nil {
 		t.Error(err)
 	}
@@ -319,7 +319,7 @@ func Test_basic_build_default(t *testing.T) {
 }
 
 func Test_Basic_FilterPoints(t *testing.T) {
-	filter, err := newMetricFilter(basicConf.Metric, false, true, true)
+	filter, err := New(basicConf.Metric, false, true, true)
 	if err != nil {
 		t.Error(err)
 
@@ -381,7 +381,7 @@ func Test_Basic_FilterPoints(t *testing.T) {
 }
 
 func Test_Basic_FilterFamilies(t *testing.T) {
-	filter, err := newMetricFilter(basicConf.Metric, false, true, true)
+	filter, err := New(basicConf.Metric, false, true, true)
 	if err != nil {
 		t.Error(err)
 
@@ -549,7 +549,7 @@ func (f *fakeScrapper) GetRegisteredLabels() map[string]map[string]string {
 }
 
 func Test_RebuildDynamicList(t *testing.T) {
-	mf, _ := newMetricFilter(basicConf.Metric, false, true, true)
+	mf, _ := New(basicConf.Metric, false, true, true)
 
 	d := fakeScrapper{
 		name: "jobname",
@@ -653,14 +653,14 @@ func TestDontDuplicateKeys(t *testing.T) {
 		},
 	}
 
-	mf, _ := newMetricFilter(metricCfg, false, true, true)
+	mf, _ := New(metricCfg, false, true, true)
 
 	if len(mf.allowList) != 2 {
 		t.Errorf("Unexpected number of matchers: expected 2, got %d", len(mf.allowList))
 	}
 }
 
-func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
+func Test_New(t *testing.T) { //nolint:maintidx
 	tests := []struct {
 		name                 string
 		configAllow          []string
@@ -1087,9 +1087,9 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 				IncludeDefaultMetrics: tt.configIncludeDefault,
 			}
 
-			filter, err := newMetricFilter(metricCfg, false, true, true)
+			filter, err := New(metricCfg, false, true, true)
 			if err != nil {
-				t.Errorf("newMetricFilter() error = %v", err)
+				t.Errorf("New() error = %v", err)
 
 				return
 			}
@@ -1103,7 +1103,7 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 			wantMetrics := makeMetricsFromLabels(tt.want)
 			wantPoints := makePointsFromLabels(tt.want, t0)
 			wantFamilies := makeFamiliesFromLabels(tt.want)
-			gotMetrics := filter.filterMetrics(metrics)
+			gotMetrics := filter.FilterMetrics(metrics)
 			gotPoints := filter.FilterPoints(points, tt.allowNeededByRules)
 			gotFamilies := filter.FilterFamilies(families, tt.allowNeededByRules)
 
@@ -1237,7 +1237,7 @@ var badPoint = map[string]string{
 }
 
 func Benchmark_filters_no_match(b *testing.B) {
-	metricFilter, _ := newMetricFilter(basicConf.Metric, false, true, false)
+	metricFilter, _ := New(basicConf.Metric, false, true, false)
 
 	list100 := generatePoints(100, badPoint)
 
@@ -1289,7 +1289,7 @@ func Benchmark_filters_no_match(b *testing.B) {
 }
 
 func Benchmark_filters_one_match_first(b *testing.B) {
-	metricFilter, _ := newMetricFilter(basicConf.Metric, false, true, false)
+	metricFilter, _ := New(basicConf.Metric, false, true, false)
 
 	list100 := []types.MetricPoint{
 		{
@@ -1353,7 +1353,7 @@ func Benchmark_filters_one_match_first(b *testing.B) {
 }
 
 func Benchmark_filters_one_match_middle(b *testing.B) {
-	metricFilter, _ := newMetricFilter(basicConf.Metric, false, true, false)
+	metricFilter, _ := New(basicConf.Metric, false, true, false)
 
 	list100 := generatePoints(49, badPoint)
 
@@ -1399,7 +1399,7 @@ func Benchmark_filters_one_match_middle(b *testing.B) {
 }
 
 func Benchmark_filters_one_match_last(b *testing.B) {
-	metricFilter, _ := newMetricFilter(basicConf.Metric, false, true, false)
+	metricFilter, _ := New(basicConf.Metric, false, true, false)
 
 	list100 := generatePoints(99, badPoint)
 
@@ -1441,7 +1441,7 @@ func Benchmark_filters_one_match_last(b *testing.B) {
 }
 
 func Benchmark_filters_all(b *testing.B) {
-	metricFilter, _ := newMetricFilter(basicConf.Metric, false, true, false)
+	metricFilter, _ := New(basicConf.Metric, false, true, false)
 
 	list100 := generatePoints(100, goodPoint)
 
@@ -1479,7 +1479,7 @@ func Test_RebuildDefaultMetrics(t *testing.T) {
 		IncludeDefaultMetrics: true,
 	}
 
-	metricFilter, _ := newMetricFilter(metricCfg, false, true, false)
+	metricFilter, _ := New(metricCfg, false, true, false)
 
 	services := []discovery.Service{
 		{
@@ -1527,15 +1527,15 @@ func Test_MergeMetricFilters(t *testing.T) {
 		AllowMetrics:          []string{"m1", "m2"},
 		DenyMetrics:           []string{"no1"},
 	}
-	mf1, _ := newMetricFilter(metricCfg, false, false, false)
+	mf1, _ := New(metricCfg, false, false, false)
 
 	metricCfg.AllowMetrics = []string{"m3", "m4"}
 	metricCfg.DenyMetrics = []string{"no1", "no2"}
-	mf2, _ := newMetricFilter(metricCfg, false, false, false)
+	mf2, _ := New(metricCfg, false, false, false)
 
-	mergedFilter := mergeMetricFilters(mf1, mf2)
+	mergedFilter := MergeMetricFilters(mf1, mf2)
 
-	expectedFilter := &metricFilter{
+	expectedFilter := &Filter{
 		includeDefaultMetrics: false,
 		staticAllowList:       []matcher.Matchers{mustMatchers("m1"), mustMatchers("m2"), mustMatchers("m3"), mustMatchers("m4")},
 		staticDenyList:        []matcher.Matchers{mustMatchers("no1")},
@@ -1550,7 +1550,7 @@ func Test_MergeMetricFilters(t *testing.T) {
 		},
 	}
 
-	cmpOpts := cmp.Options{cmp.AllowUnexported(metricFilter{}), cmpopts.IgnoreTypes(sync.Mutex{}), cmpopts.IgnoreFields(labels.Matcher{}, "re")}
+	cmpOpts := cmp.Options{cmp.AllowUnexported(Filter{}), cmpopts.IgnoreTypes(sync.Mutex{}), cmpopts.IgnoreFields(labels.Matcher{}, "re")}
 	if diff := cmp.Diff(expectedFilter, mergedFilter, cmpOpts); diff != "" {
 		t.Fatalf("Unexpected filter merge result: (-want +got):\n%s", diff)
 	}
@@ -1575,13 +1575,13 @@ func Test_MergeMetricFiltersMutation(t *testing.T) {
 		AllowMetrics:          []string{"m1", "m2"},
 		DenyMetrics:           []string{"no1"},
 	}
-	mf1, _ := newMetricFilter(metricCfg, false, false, false)
+	mf1, _ := New(metricCfg, false, false, false)
 
 	metricCfg.AllowMetrics = []string{"m3", "m4"}
 	metricCfg.DenyMetrics = []string{"no1", "no2"}
-	mf2, _ := newMetricFilter(metricCfg, false, false, false)
+	mf2, _ := New(metricCfg, false, false, false)
 
-	mergedFilter := mergeMetricFilters(mf1, mf2)
+	mergedFilter := MergeMetricFilters(mf1, mf2)
 	shallowCopy := mergedFilter
 
 	metricCfg2 := config.Metric{
@@ -1589,11 +1589,11 @@ func Test_MergeMetricFiltersMutation(t *testing.T) {
 		AllowMetrics:          []string{"m1", "m2"},
 		DenyMetrics:           []string{"m4"},
 	}
-	mf1b, _ := newMetricFilter(metricCfg2, false, false, false)
+	mf1b, _ := New(metricCfg2, false, false, false)
 
-	mergedFilter.mergeInPlace(mf1b, mf2)
+	mergedFilter.MergeInPlace(mf1b, mf2)
 
-	expectedFilter := &metricFilter{
+	expectedFilter := &Filter{
 		includeDefaultMetrics: false,
 		staticAllowList:       []matcher.Matchers{mustMatchers("m1"), mustMatchers("m2"), mustMatchers("m3"), mustMatchers("m4")},
 		staticDenyList:        nil,
@@ -1606,7 +1606,7 @@ func Test_MergeMetricFiltersMutation(t *testing.T) {
 		denyList: map[labels.Matcher][]matcher.Matchers{},
 	}
 
-	cmpOpts := cmp.Options{cmp.AllowUnexported(metricFilter{}), cmpopts.IgnoreTypes(sync.Mutex{}), cmpopts.IgnoreFields(labels.Matcher{}, "re")}
+	cmpOpts := cmp.Options{cmp.AllowUnexported(Filter{}), cmpopts.IgnoreTypes(sync.Mutex{}), cmpopts.IgnoreFields(labels.Matcher{}, "re")}
 	if diff := cmp.Diff(expectedFilter, shallowCopy, cmpOpts); diff != "" {
 		t.Fatalf("Unexpected filter merge result: (-want +got):\n%s", diff)
 	}
@@ -1649,19 +1649,19 @@ func Benchmark_MultipleFilters(b *testing.B) {
 		DenyMetrics:           []string{"lotus_miner_deadline_active_partition_sector"},
 	}
 
-	mf1, warns := newMetricFilter(metricCfg, false, true, false)
+	mf1, warns := New(metricCfg, false, true, false)
 	if warns != nil {
 		b.Fatal("Unexpected warns when building filter n°1:", warns)
 	}
 
 	metricCfg.AllowMetrics = []string{"lotus_miner_deadline_active_partition_sector"}
 
-	mf2, warns := newMetricFilter(metricCfg, true, true, true)
+	mf2, warns := New(metricCfg, true, true, true)
 	if warns != nil {
 		b.Fatal("Unexpected warns when building filter n°2:", warns)
 	}
 
-	mergedMF := mergeMetricFilters(mf1, mf2)
+	mergedMF := MergeMetricFilters(mf1, mf2)
 
 	b.ResetTimer()
 

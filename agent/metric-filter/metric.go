@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package agent
+package metricfilter
 
 import (
 	"context"
@@ -768,8 +768,8 @@ const (
 	filterLogDuration = 50 * time.Millisecond
 )
 
-// metricFilter is a thread-safe holder of an allow / deny metrics list.
-type metricFilter struct {
+// Filter is a thread-safe holder of an allow / deny metrics list.
+type Filter struct {
 	includeDefaultMetrics bool
 
 	// Static matchers generated from the config file.
@@ -838,7 +838,7 @@ func matchersToMap(matchersList []matcher.Matchers) map[labels.Matcher][]matcher
 func staticScrapperLists(configTargets []config.PrometheusTarget) ([]matcher.Matchers, []matcher.Matchers) {
 	var allowList, denyList []matcher.Matchers
 
-	targets, _ := prometheusConfigToURLs(configTargets)
+	targets, _ := config.PrometheusConfigToURLs(configTargets)
 	for _, target := range targets {
 		allowMatchers := matchersForScrapperTarget(target.AllowList, target.ExtraLabels)
 		allowList = append(allowList, allowMatchers...)
@@ -910,7 +910,7 @@ func getDefaultMetrics(forBleemeo bool, hasSwap bool) []string {
 	return res
 }
 
-func (m *metricFilter) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
+func (m *Filter) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
 	file, err := archive.Create("filter-metrics.txt")
 	if err != nil {
 		return err
@@ -961,7 +961,7 @@ func printSortedMapOfList(file io.Writer, matchersMap map[labels.Matcher][]match
 	}
 }
 
-func newMetricFilter(metricCfg config.Metric, hasSNMP, hasSwap, forBleemeo bool) (*metricFilter, error) {
+func New(metricCfg config.Metric, hasSNMP, hasSwap, forBleemeo bool) (*Filter, error) {
 	rawAllowList := metricCfg.AllowMetrics
 
 	if hasSNMP {
@@ -989,7 +989,7 @@ func newMetricFilter(metricCfg config.Metric, hasSNMP, hasSwap, forBleemeo bool)
 	staticAllowList = append(staticAllowList, scrapperAllowList...)
 	staticDenyList = append(staticDenyList, scrapperDenyList...)
 
-	filter := &metricFilter{
+	filter := &Filter{
 		staticAllowList:       staticAllowList,
 		staticDenyList:        staticDenyList,
 		allowList:             matchersToMap(staticAllowList),
@@ -1000,22 +1000,22 @@ func newMetricFilter(metricCfg config.Metric, hasSNMP, hasSwap, forBleemeo bool)
 	return filter, warnings.MaybeUnwrap()
 }
 
-// mergeMetricFilters returns a new metricFilter
+// MergeMetricFilters returns a new metricFilter
 // that represents the union of both the given filters.
 // This only works if the deny-list uses equal comparison (no regexp), or is identical.
-func mergeMetricFilters(f1, f2 *metricFilter) *metricFilter {
-	result := &metricFilter{}
-	result.mergeInPlace(f1, f2)
+func MergeMetricFilters(f1, f2 *Filter) *Filter {
+	result := &Filter{}
+	result.MergeInPlace(f1, f2)
 
 	return result
 }
 
-// mergeInPlace merge the two input filter (f1 & f2) and update the filter m.
+// MergeInPlace merge the two input filter (f1 & f2) and update the filter m.
 // All previous content of m is overwrite, the result only depend on f1 & f2.
 // The merge result is the union of both result the given filters (metrics that are allowed by
 // one of the filter).
 // This only works if the deny-list uses equal comparison (no regexp), or is identical.
-func (m *metricFilter) mergeInPlace(f1, f2 *metricFilter) {
+func (m *Filter) MergeInPlace(f1, f2 *Filter) {
 	// Merging logic:
 	// - to be allowed, a metric only needs to be present in the allowlist of one of the filters
 	// - to be denied, a metric needs to be present in the deny-list of both the filters
@@ -1095,7 +1095,7 @@ func getMatchersList(list map[labels.Matcher][]matcher.Matchers, labelName strin
 	return matchers
 }
 
-func (m *metricFilter) FilterPoints(points []types.MetricPoint, allowNeededByRules bool) []types.MetricPoint {
+func (m *Filter) FilterPoints(points []types.MetricPoint, allowNeededByRules bool) []types.MetricPoint {
 	i := 0
 
 	m.l.Lock()
@@ -1126,14 +1126,14 @@ func checkMaxDuration(start time.Time, points []types.MetricPoint, i int) {
 	}
 }
 
-func (m *metricFilter) IsDenied(lbls map[string]string) bool {
+func (m *Filter) IsDenied(lbls map[string]string) bool {
 	m.l.Lock()
 	defer m.l.Unlock()
 
 	return m.isDenied(lbls)
 }
 
-func (m *metricFilter) isDenied(lbls map[string]string) bool {
+func (m *Filter) isDenied(lbls map[string]string) bool {
 	if len(m.denyList) == 0 {
 		return false
 	}
@@ -1154,14 +1154,14 @@ func (m *metricFilter) isDenied(lbls map[string]string) bool {
 	return false
 }
 
-func (m *metricFilter) IsAllowed(lbls map[string]string) bool {
+func (m *Filter) IsAllowed(lbls map[string]string) bool {
 	m.l.Lock()
 	defer m.l.Unlock()
 
 	return m.isAllowed(lbls)
 }
 
-func (m *metricFilter) isAllowed(lbls map[string]string) bool {
+func (m *Filter) isAllowed(lbls map[string]string) bool {
 	for key, allowVals := range m.allowList {
 		if !key.Matches(lbls[types.LabelName]) {
 			continue
@@ -1178,7 +1178,7 @@ func (m *metricFilter) isAllowed(lbls map[string]string) bool {
 }
 
 // IsMetricAllowed returns whether this metric is in the allow list and not in the deny list.
-func (m *metricFilter) IsMetricAllowed(lbls labels.Labels, allowNeededByRules bool) bool {
+func (m *Filter) IsMetricAllowed(lbls labels.Labels, allowNeededByRules bool) bool {
 	m.l.Lock()
 	defer m.l.Unlock()
 
@@ -1194,19 +1194,19 @@ func (m *metricFilter) IsMetricAllowed(lbls labels.Labels, allowNeededByRules bo
 	return matcher.MatchesAnyLabels(lbls, m.rulerMatchers)
 }
 
-// Returns whether this metric is in the allow list and not in the deny list.
-func (m *metricFilter) isAllowedAndNotDeniedMap(lbls map[string]string) bool {
+// IsAllowedAndNotDeniedMap returns whether this metric is in the allow list and not in the deny list.
+func (m *Filter) IsAllowedAndNotDeniedMap(lbls map[string]string) bool {
 	m.l.Lock()
 	defer m.l.Unlock()
 
 	return m.isAllowedAndNotDeniedNoLock(lbls)
 }
 
-func (m *metricFilter) isAllowedAndNotDeniedNoLock(lbls map[string]string) bool {
+func (m *Filter) isAllowedAndNotDeniedNoLock(lbls map[string]string) bool {
 	return !m.isDenied(lbls) && m.isAllowed(lbls)
 }
 
-func (m *metricFilter) filterMetrics(mt []types.Metric) []types.Metric {
+func (m *Filter) FilterMetrics(mt []types.Metric) []types.Metric {
 	i := 0
 
 	m.l.Lock()
@@ -1242,7 +1242,7 @@ func allowedMetric(lbls map[string]string, denyVals []matcher.Matchers, allowVal
 	return false
 }
 
-func (m *metricFilter) filterFamily(f *dto.MetricFamily, allowNeededByRules bool) {
+func (m *Filter) filterFamily(f *dto.MetricFamily, allowNeededByRules bool) {
 	i := 0
 	denyVals := getMatchersList(m.denyList, f.GetName())
 	allowVals := getMatchersList(m.allowList, f.GetName())
@@ -1261,7 +1261,7 @@ func (m *metricFilter) filterFamily(f *dto.MetricFamily, allowNeededByRules bool
 	f.Metric = f.GetMetric()[:i]
 }
 
-func (m *metricFilter) FilterFamilies(f []*dto.MetricFamily, allowNeededByRules bool) []*dto.MetricFamily {
+func (m *Filter) FilterFamilies(f []*dto.MetricFamily, allowNeededByRules bool) []*dto.MetricFamily {
 	i := 0
 
 	m.l.Lock()
@@ -1298,7 +1298,7 @@ type dynamicScrapper interface {
 	GetContainersLabels() map[string]map[string]string
 }
 
-func (m *metricFilter) rebuildServicesMetrics(
+func (m *Filter) rebuildServicesMetrics(
 	services []discovery.Service,
 	allowedMetrics map[string]struct{},
 ) {
@@ -1319,14 +1319,14 @@ func (m *metricFilter) rebuildServicesMetrics(
 	}
 }
 
-func (m *metricFilter) UpdateRulesMatchers(rulerMatchers []matcher.Matchers) {
+func (m *Filter) UpdateRulesMatchers(rulerMatchers []matcher.Matchers) {
 	m.l.Lock()
 	defer m.l.Unlock()
 
 	m.rulerMatchers = rulerMatchers
 }
 
-func (m *metricFilter) RebuildDynamicLists(
+func (m *Filter) RebuildDynamicLists(
 	scrapper dynamicScrapper,
 	services []discovery.Service,
 	thresholdMetricNames []string,
@@ -1388,7 +1388,7 @@ func (m *metricFilter) RebuildDynamicLists(
 	return warnings.MaybeUnwrap()
 }
 
-func (m *metricFilter) rebuildThresholdsMetrics(
+func (m *Filter) rebuildThresholdsMetrics(
 	thresholdMetricNames []string,
 	allowedMetrics map[string]struct{},
 ) {
