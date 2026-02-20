@@ -44,7 +44,7 @@ func TestConfigParsing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	bbManager, err := New(registry, config.Blackbox)
+	bbManager, err := New(registry, config.Blackbox, func(err ...error) {})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,8 +52,8 @@ func TestConfigParsing(t *testing.T) {
 	noFollowRedirect := true
 
 	// we assume parsing preserves the order, which seems to be the case
-	expectedValue := []collectorWithLabels{
-		genCollectorFromStaticTarget(configTarget{
+	expectedValue := []blackboxCollector{
+		genCollectorFromStaticTarget(staticTargetOptions{
 			URL: "https://google.com",
 			Module: bbConf.Module{
 				Prober:  "http",
@@ -78,9 +78,8 @@ func TestConfigParsing(t *testing.T) {
 			},
 			ModuleName: "http_2xx",
 			Name:       "https://google.com",
-			nowFunc:    time.Now,
-		}),
-		genCollectorFromStaticTarget(configTarget{
+		}, mockHelpers{}),
+		genCollectorFromStaticTarget(staticTargetOptions{
 			URL: "inpt.fr",
 			Module: bbConf.Module{
 				Prober:  "dns",
@@ -99,9 +98,8 @@ func TestConfigParsing(t *testing.T) {
 			},
 			ModuleName: "dns",
 			Name:       "inpt.fr",
-			nowFunc:    time.Now,
-		}),
-		genCollectorFromStaticTarget(configTarget{
+		}, mockHelpers{}),
+		genCollectorFromStaticTarget(staticTargetOptions{
 			URL: "http://neverssl.com",
 			Module: bbConf.Module{
 				Prober:  "http",
@@ -126,11 +124,10 @@ func TestConfigParsing(t *testing.T) {
 			},
 			ModuleName: "http_2xx",
 			Name:       "http://neverssl.com",
-			nowFunc:    time.Now,
-		}),
+		}, mockHelpers{}),
 	}
 
-	ignoreUnexported := cmpopts.IgnoreUnexported(configTarget{}, bbConf.Module{}.HTTP.HTTPClientConfig.ProxyConfig)
+	ignoreUnexported := cmpopts.IgnoreUnexported(blackboxCollector{}, bbConf.Module{}.HTTP.HTTPClientConfig.ProxyConfig)
 	if diff := cmp.Diff(expectedValue, bbManager.targets, ignoreUnexported); diff != "" {
 		t.Errorf("bbManager.targets mismatch (-want +got)\n%s", diff)
 	}
@@ -146,13 +143,13 @@ func TestNoTargetsConfigParsing(t *testing.T) {
 		t.Fatalf("Got warnings loading config: %v", warnings)
 	}
 
-	bbManager, err := New(nil, config.Blackbox)
+	bbManager, err := New(nil, config.Blackbox, func(err ...error) {})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if !reflect.DeepEqual(bbManager.targets, []collectorWithLabels{}) {
-		t.Fatalf("TestConfigParsing() = %+v, want %+v", bbManager.targets, []collectorWithLabels{})
+	if !reflect.DeepEqual(bbManager.targets, []blackboxCollector{}) {
+		t.Fatalf("TestConfigParsing() = %+v, want %+v", bbManager.targets, []blackboxCollector{})
 	}
 }
 

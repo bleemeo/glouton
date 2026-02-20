@@ -17,9 +17,12 @@
 package blackbox
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -27,7 +30,8 @@ import (
 	"net/http/httptrace"
 	"net/url"
 	"os"
-	"reflect"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -50,13 +54,6 @@ const (
 	proberNameSSL  string = "ssl"
 	proberNameICMP string = "icmp"
 	proberNameDNS  string = "dns"
-)
-
-const (
-	// Context key to get the CA Root, used only in tests.
-	contextKeyTestInjectCARoot contextKey = iota
-	// Context key to get the time function.
-	contextKeyNowFunc contextKey = iota
 )
 
 //nolint:gochecknoglobals
@@ -99,7 +96,11 @@ var (
 	}
 )
 
-var errNoCertificates = errors.New("no server certificate")
+var (
+	errNoCertificates     = errors.New("no server certificate")
+	errDNSResolvedUnknown = errors.New("unknown default DNS resolver")
+	errConfigWarning      = errors.New("some DNS monitor(s) need default DNS resolver to be configured. Set `blackbox.default_dns_resolver`")
+)
 
 type roundTrip struct {
 	HostPort string
@@ -142,7 +143,7 @@ func (rts roundTripTLSVerifyList) AllTrusted() bool {
 }
 
 // Describe implements the prometheus.Collector interface.
-func (target configTarget) Describe(ch chan<- *prometheus.Desc) {
+func (target blackboxCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- probeSuccessDesc
 
 	ch <- probeDurationDesc
@@ -150,7 +151,7 @@ func (target configTarget) Describe(ch chan<- *prometheus.Desc) {
 
 // CollectWithContext implements the prometheus.Collector interface.
 // It is where we do the actual "probing".
-func (target configTarget) CollectWithContext(ctx context.Context, ch chan<- prometheus.Metric) {
+func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<- prometheus.Metric) {
 	probeFn, present := probers[target.Module.Prober]
 	if !present {
 		logger.V(1).Printf("blackbox_exporter: no prober registered under the name '%s', cannot check '%s'.",
@@ -182,7 +183,15 @@ func (target configTarget) CollectWithContext(ctx context.Context, ch chan<- pro
 
 	registry := prometheus.NewRegistry()
 
-	extLogger := logger.NewSlog().With("url", target.URL)
+	var extLogger *slog.Logger
+
+	if target.Module.Prober == proberNameDNS {
+		// DNS is a bit odd in that target.URL is actually the DNS server,
+		// we prefer to show the DNS name to resolve.
+		extLogger = logger.NewSlog().With("url", target.OriginalURL)
+	} else {
+		extLogger = logger.NewSlog().With("url", target.URL)
+	}
 
 	ctx, cancel := context.WithTimeout(ctx, target.Module.Timeout)
 	// Let's ensure we don't end up with stray queries running somewhere
@@ -228,13 +237,22 @@ func (target configTarget) CollectWithContext(ctx context.Context, ch chan<- pro
 		},
 	})
 
-	// ProbeTCP needs the test CA Root and the current time, to keep using the
-	// ProbeFn type we pass these values inside the context.
-	subCtx = context.WithValue(subCtx, contextKeyTestInjectCARoot, target.testInjectCARoot)
-	subCtx = context.WithValue(subCtx, contextKeyNowFunc, target.nowFunc)
+	targetURL := target.URL
+	if targetURL == defaultResolverSentinel {
+		var err error
+
+		targetURL, err = target.CommonHelpers.DNSResolver()
+		if err != nil {
+			target.CommonHelpers.NotifyNeedForDefaultResolver(err)
+			// notify the "client" that scraping this target resulted in an error
+			ch <- prometheus.MustNewConstMetric(probeSuccessDesc, prometheus.GaugeValue, 0., target.Name)
+
+			return
+		}
+	}
 
 	// do all the actual work
-	success := probeFn(subCtx, target.URL, target.Module, registry, extLogger)
+	success := probeFn(subCtx, targetURL, target.Module, registry, extLogger)
 
 	end := time.Now()
 	duration := end.Sub(start)
@@ -278,7 +296,7 @@ func (target configTarget) CollectWithContext(ctx context.Context, ch chan<- pro
 		} else {
 			ch <- prometheus.MustNewConstMetric(probeTLSSuccess, prometheus.GaugeValue, 0, target.Name)
 		}
-	} else if roundTripsTLS := target.verifyTLS(ctx, extLogger, roundTrips); roundTripsTLS.HadTLS() {
+	} else if roundTripsTLS := verifyTLS(ctx, target, extLogger, roundTrips); roundTripsTLS.HadTLS() {
 		// We implement our own probe_ssl_last_chain_expiry_timestamp_seconds for
 		// https checks to support self-signed and expired certificates.
 		mfs = filterMFs(mfs, func(mf *dto.MetricFamily) bool {
@@ -330,7 +348,7 @@ func (target configTarget) CollectWithContext(ctx context.Context, ch chan<- pro
 }
 
 // verifyTLS returns the last round-trip TLS expiration and whether all TLS round-trip were trusted.
-func (target configTarget) verifyTLS(ctx context.Context, extLogger *slog.Logger, roundTrips []roundTrip) roundTripTLSVerifyList {
+func verifyTLS(ctx context.Context, collector blackboxCollector, extLogger *slog.Logger, roundTrips []roundTrip) roundTripTLSVerifyList {
 	start := time.Now()
 
 	defer func() {
@@ -348,7 +366,7 @@ func (target configTarget) verifyTLS(ctx context.Context, extLogger *slog.Logger
 		return nil
 	}
 
-	if target.Module.Prober != proberNameHTTP {
+	if collector.Module.Prober != proberNameHTTP {
 		return nil
 	}
 
@@ -373,7 +391,7 @@ func (target configTarget) verifyTLS(ctx context.Context, extLogger *slog.Logger
 			continue
 		}
 
-		httpClientConfig := target.Module.HTTP.HTTPClientConfig
+		httpClientConfig := collector.Module.HTTP.HTTPClientConfig
 
 		currentHost, _, err := net.SplitHostPort(rt.HostPort)
 		if err != nil {
@@ -392,7 +410,7 @@ func (target configTarget) verifyTLS(ctx context.Context, extLogger *slog.Logger
 		} else if len(httpClientConfig.TLSConfig.ServerName) == 0 {
 			// If there is no `server_name` in tls_config, use
 			// the hostname of the target.
-			tmp, err := url.Parse(target.URL)
+			tmp, err := url.Parse(collector.URL)
 			if err != nil {
 				extLogger.InfoContext(ctx, "url.Parse failed: "+err.Error())
 
@@ -419,19 +437,9 @@ func (target configTarget) verifyTLS(ctx context.Context, extLogger *slog.Logger
 			continue
 		}
 
-		if len(target.testInjectCARoot) > 0 {
-			if cfg.RootCAs == nil {
-				cfg.RootCAs = x509.NewCertPool()
-			}
-
-			for _, cert := range target.testInjectCARoot {
-				cfg.RootCAs.AddCert(cert)
-			}
-		}
-
 		opts := x509.VerifyOptions{
 			Roots:         cfg.RootCAs,
-			CurrentTime:   target.nowFunc(),
+			CurrentTime:   blackboxNow(ctx),
 			DNSName:       cfg.ServerName,
 			Intermediates: x509.NewCertPool(),
 		}
@@ -488,14 +496,9 @@ func getLeafLifespan(state *tls.ConnectionState) time.Duration {
 	return state.PeerCertificates[0].NotAfter.Sub(state.PeerCertificates[0].NotBefore)
 }
 
-// compareConfigTargets returns true if the monitors are identical, and false otherwise.
-func compareConfigTargets(a configTarget, b configTarget) bool {
-	return a.BleemeoAgentID == b.BleemeoAgentID && a.URL == b.URL && a.RefreshRate == b.RefreshRate && reflect.DeepEqual(a.Module, b.Module)
-}
-
-func collectorInMap(value collectorWithLabels, iterable map[int]gathererWithConfigTarget) bool {
+func collectorInMap(value blackboxCollector, iterable map[int]gathererRegistration) bool {
 	for _, mapValue := range iterable {
-		if compareConfigTargets(value.Collector, mapValue.target) {
+		if value.Equal(mapValue.collector) {
 			return true
 		}
 	}
@@ -503,23 +506,16 @@ func collectorInMap(value collectorWithLabels, iterable map[int]gathererWithConf
 	return false
 }
 
-func gathererInArray(value gathererWithConfigTarget, iterable []collectorWithLabels) bool {
-	for _, arrayValue := range iterable {
-		// see inMap() above
-		if compareConfigTargets(value.target, arrayValue.Collector) {
-			return true
-		}
-	}
-
-	return false
+func gathererInArray(value gathererRegistration, iterable []blackboxCollector) bool {
+	return slices.ContainsFunc(iterable, value.collector.Equal)
 }
 
 // updateRegistrations registers and deregisters collectors to sync the internal state with the configuration.
 func (m *RegisterManager) updateRegistrations() error {
 	// register new probes
-	for _, collectorFromConfig := range m.targets {
-		if !collectorInMap(collectorFromConfig, m.registrations) {
-			gatherer, err := newGatherer(collectorFromConfig.Collector)
+	for _, collector := range m.targets {
+		if !collectorInMap(collector, m.registrations) {
+			gatherer, err := newGatherer(collector)
 			if err != nil {
 				return err
 			}
@@ -527,12 +523,12 @@ func (m *RegisterManager) updateRegistrations() error {
 			var g prometheus.Gatherer = gatherer
 
 			// wrap our gatherer in ProbeGatherer, to only collect metrics when necessary
-			g = registry.NewProbeGatherer(g, collectorFromConfig.Collector.RefreshRate > time.Minute)
+			g = registry.NewProbeGatherer(g, collector.RefreshRate > time.Minute)
 
-			hash := labels.FromMap(collectorFromConfig.Labels).Hash()
+			hash := labels.FromMap(collector.Labels).Hash()
 
-			refreshRate := collectorFromConfig.Collector.RefreshRate
-			creationDate := collectorFromConfig.Collector.CreationDate
+			refreshRate := collector.RefreshRate
+			creationDate := collector.CreationDate
 
 			if !creationDate.IsZero() && refreshRate > 0 {
 				// Use creationDate for the jitter is present.
@@ -546,10 +542,10 @@ func (m *RegisterManager) updateRegistrations() error {
 			// registration.
 			id, err := m.registry.RegisterGatherer(
 				registry.RegistrationOption{
-					Description: "blackbox for " + collectorFromConfig.Collector.URL,
+					Description: "blackbox for " + collector.URL,
 					JitterSeed:  hash,
-					MinInterval: collectorFromConfig.Collector.RefreshRate,
-					ExtraLabels: collectorFromConfig.Labels,
+					MinInterval: collector.RefreshRate,
+					ExtraLabels: collector.Labels,
 				},
 				g,
 			)
@@ -562,19 +558,19 @@ func (m *RegisterManager) updateRegistrations() error {
 				m.registry.ScheduleScrape(id, time.Now())
 			}
 
-			m.registrations[id] = gathererWithConfigTarget{
-				target:   collectorFromConfig.Collector,
-				gatherer: g,
+			m.registrations[id] = gathererRegistration{
+				collector: collector,
+				gatherer:  g,
 			}
 
-			logger.V(2).Printf("New probe registered for '%s'", collectorFromConfig.Collector.Name)
+			logger.V(2).Printf("New probe registered for '%s'", collector.Name)
 		}
 	}
 
 	// unregister any obsolete probe
 	for idx, gatherer := range m.registrations {
-		if gatherer.target.BleemeoAgentID != "" && !gathererInArray(gatherer, m.targets) {
-			logger.V(2).Printf("The probe for '%s' is now deactivated", gatherer.target.Name)
+		if gatherer.collector.BleemeoAgentID != "" && !gathererInArray(gatherer, m.targets) {
+			logger.V(2).Printf("The probe for '%s' is now deactivated", gatherer.collector.Name)
 
 			m.registry.Unregister(idx)
 			delete(m.registrations, idx)
@@ -584,15 +580,142 @@ func (m *RegisterManager) updateRegistrations() error {
 	return nil
 }
 
+func getSystemResolver() (string, error) {
+	// Try guessing the system resolver. It use resolv.conf to get the first nameserver.
+	// If you need better guess, use setting `blackbox.default_dns_resolver`.``
+	f, err := os.Open("/etc/resolv.conf")
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "nameserver") {
+			fields := strings.Fields(line)
+			if len(fields) >= 2 {
+				return fields[1], nil
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return "", err
+	}
+
+	return "", errDNSResolvedUnknown
+}
+
+func (m *RegisterManager) DNSResolver() (string, error) {
+	if m.dnsResolver != "" {
+		return m.dnsResolver, nil
+	}
+
+	m.l.Lock()
+	defer m.l.Unlock()
+
+	if m.systemDNSLastUpdate.IsZero() || time.Since(m.systemDNSLastUpdate) < time.Minute {
+		m.systemDNSLastUpdate = time.Now()
+
+		tmp, err := getSystemResolver()
+		if err != nil && m.systemDNSResolver == "" {
+			return "", err
+		}
+
+		if err != nil {
+			logger.V(1).Printf("failed to get system DNS resolved, continue with old one (%s): %s", m.systemDNSResolver, err)
+		}
+
+		if err == nil {
+			m.systemDNSResolver = tmp
+		}
+	}
+
+	return m.systemDNSResolver, nil
+}
+
+func (m *RegisterManager) NotifyNeedForDefaultResolver(err error) {
+	m.l.Lock()
+	defer m.l.Unlock()
+
+	if m.notifiedNeedForDefaultResolver {
+		return
+	}
+
+	m.notifiedNeedForDefaultResolver = true
+
+	m.addWarnings(errConfigWarning)
+	logger.V(1).Printf("Unable to guess system DNS resolver due to: %s", err)
+}
+
 type pushFunction func(ctx context.Context, points []types.MetricPoint)
 
 func (f pushFunction) PushPoints(ctx context.Context, points []types.MetricPoint) {
 	f(ctx, points)
 }
 
+func convertToPEM(certs []*x509.Certificate) (string, error) {
+	var buf bytes.Buffer
+
+	for _, cert := range certs {
+		if cert == nil || cert.Raw == nil {
+			return "", errNoCertificates
+		}
+
+		if err := pem.Encode(&buf, &pem.Block{
+			Type:  "CERTIFICATE",
+			Bytes: cert.Raw,
+		}); err != nil {
+			return "", err
+		}
+	}
+
+	return buf.String(), nil
+}
+
+const (
+	// Context key to get the time function.
+	contextKeyNowValue contextKey = iota
+)
+
+func blackboxNow(ctx context.Context) time.Time {
+	now, ok := ctx.Value(contextKeyNowValue).(time.Time)
+	if !ok {
+		return time.Now()
+	}
+
+	return now
+}
+
+func blackboxOverrideNow(ctx context.Context, now time.Time) context.Context {
+	return context.WithValue(ctx, contextKeyNowValue, now)
+}
+
+type mockHelpers struct {
+	dnsResolver string
+}
+
+func (m mockHelpers) DNSResolver() (string, error) {
+	if m.dnsResolver == errorResolverSentinel {
+		// Allow to test this failure condition
+		return "", errDNSResolvedUnknown
+	}
+
+	if m.dnsResolver != "" {
+		return m.dnsResolver, nil
+	}
+
+	return getSystemResolver()
+}
+
+func (mockHelpers) NotifyNeedForDefaultResolver(err error) {
+	logger.V(1).Printf("Unable to guess system DNS resolver due to: %s", err)
+}
+
 // InternalRunProbe allow to run one Probe and return points. It's intended for tests.
 // Override options, when using zero-value means do not override.
-func InternalRunProbe(ctx context.Context, monitor types.Monitor, overrideNow time.Time, overrideCARoot []*x509.Certificate) ([]types.MetricPoint, error) {
+func InternalRunProbe(ctx context.Context, monitor types.Monitor, overrideNow time.Time, overrideCARoot []*x509.Certificate, overrideSystemDNS string) ([]types.MetricPoint, error) {
 	var (
 		l         sync.Mutex
 		resPoints []types.MetricPoint
@@ -612,32 +735,36 @@ func InternalRunProbe(ctx context.Context, monitor types.Monitor, overrideNow ti
 		return nil, err
 	}
 
-	collectorFromConfig, err := genCollectorFromDynamicTarget(monitor, "Glouton unittest")
+	collector, err := genCollectorFromDynamicTarget(monitor, "Glouton unittest", mockHelpers{dnsResolver: overrideSystemDNS})
 	if err != nil {
 		return nil, err
 	}
 
 	if !overrideNow.IsZero() {
-		collectorFromConfig.Collector.nowFunc = func() time.Time {
-			return overrideNow
-		}
+		ctx = blackboxOverrideNow(ctx, overrideNow)
 	}
 
 	if overrideCARoot != nil {
-		collectorFromConfig.Collector.testInjectCARoot = overrideCARoot
+		pem, err := convertToPEM(overrideCARoot)
+		if err != nil {
+			return nil, err
+		}
+
+		collector.Module.TCP.TLSConfig.CA = pem
+		collector.Module.HTTP.HTTPClientConfig.TLSConfig.CA = pem
 	}
 
-	gatherer, err := newGatherer(collectorFromConfig.Collector)
+	gatherer, err := newGatherer(collector)
 	if err != nil {
 		return nil, err
 	}
 
 	id, err := reg.RegisterGatherer(
 		registry.RegistrationOption{
-			Description: "blackbox for " + collectorFromConfig.Collector.URL,
+			Description: "blackbox for " + collector.URL,
 			JitterSeed:  0,
-			MinInterval: collectorFromConfig.Collector.RefreshRate,
-			ExtraLabels: collectorFromConfig.Labels,
+			MinInterval: collector.RefreshRate,
+			ExtraLabels: collector.Labels,
 		},
 		gatherer,
 	)

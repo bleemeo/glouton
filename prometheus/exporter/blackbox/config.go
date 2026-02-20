@@ -18,6 +18,7 @@ package blackbox
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -44,7 +45,10 @@ var (
 
 const defaultTimeout = 12 * time.Second
 
-const defaultResolverSentinel = "<default-resolver>" // TODO: need to handle when resolved isn't provided and a default one should be used.
+const (
+	defaultResolverSentinel = "<default-resolver>"
+	errorResolverSentinel   = "<error-resolver>"
+)
 
 func defaultModule(userAgent string) bbConf.Module {
 	return bbConf.Module{
@@ -80,26 +84,26 @@ func defaultModule(userAgent string) bbConf.Module {
 	}
 }
 
-func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*collectorWithLabels, error) {
+func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string, helpers commonHelpers) (blackboxCollector, error) {
 	mod := defaultModule(userAgent)
 
 	url, err := url.Parse(monitor.URL)
 	if err != nil {
 		logger.V(2).Printf("Invalid URL: '%s'", monitor.URL)
 
-		return nil, err
+		return blackboxCollector{}, err
 	}
 
 	uri := monitor.URL
 
 	expectedContentRegex, err := processRegexp(monitor.ExpectedContent)
 	if err != nil {
-		return nil, err
+		return blackboxCollector{}, err
 	}
 
 	forbiddenContentRegex, err := processRegexp(monitor.ForbiddenContent)
 	if err != nil {
-		return nil, err
+		return blackboxCollector{}, err
 	}
 
 	switch url.Scheme {
@@ -155,7 +159,7 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*co
 
 			part := strings.SplitN(keyValue, "=", 2)
 			if len(part) != 2 {
-				return nil, fmt.Errorf("%w: can't parse dnsquery \"%s\"", errUnsupportedURL, url.RawQuery)
+				return blackboxCollector{}, fmt.Errorf("%w: can't parse dnsquery \"%s\"", errUnsupportedURL, url.RawQuery)
 			}
 
 			// The whole DNS URL is case insensitive, so we use ToLower() everywhere.
@@ -165,7 +169,7 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*co
 			value := strings.ToUpper(part[1])
 
 			if key == "class" && value != "" && value != "IN" {
-				return nil, fmt.Errorf("%w: unknown DNS class %s", errUnsupportedURL, part[1])
+				return blackboxCollector{}, fmt.Errorf("%w: unknown DNS class %s", errUnsupportedURL, part[1])
 			}
 
 			if key == "type" {
@@ -202,26 +206,20 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*co
 		}
 	}
 
-	confTarget := configTarget{
+	return blackboxCollector{
 		Module:         mod,
 		Name:           monitor.URL,
 		BleemeoAgentID: monitor.BleemeoAgentID,
 		URL:            uri,
+		OriginalURL:    monitor.URL,
 		CreationDate:   monitor.CreationDate,
-		nowFunc:        time.Now,
-	}
-
-	if monitor.MetricMonitorResolution != 0 {
-		confTarget.RefreshRate = monitor.MetricMonitorResolution
-	}
-
-	return &collectorWithLabels{
-		Collector: confTarget,
+		RefreshRate:    monitor.MetricMonitorResolution,
 		Labels: map[string]string{
-			types.LabelMetaBleemeoTargetAgent:     confTarget.Name,
+			types.LabelMetaBleemeoTargetAgent:     monitor.URL,
 			types.LabelMetaProbeServiceUUID:       monitor.ID,
 			types.LabelMetaBleemeoTargetAgentUUID: monitor.BleemeoAgentID,
 		},
+		CommonHelpers: helpers,
 	}, nil
 }
 
@@ -258,18 +256,23 @@ func preprocessHTTPTarget(targetURL *url.URL, module bbConf.Module) (string, bbC
 	return targetURL.String(), module
 }
 
-func genCollectorFromStaticTarget(ct configTarget) collectorWithLabels {
+func genCollectorFromStaticTarget(option staticTargetOptions, helpers commonHelpers) blackboxCollector {
 	// Exposing the module name allows the client to differentiate local probes when
 	// the same URL is scrapped by different modules.
 	// Note that this doesn't matter when "remote probes" (aka. probes supplied by the API
 	// instead of the local config file) are involved, as those metrics have the 'instance_uuid'
 	// label to distinguish monitors.
-	return collectorWithLabels{
-		Collector: ct,
+	return blackboxCollector{
+		Name:        option.Name,
+		ModuleName:  option.ModuleName,
+		URL:         option.URL,
+		OriginalURL: option.URL,
+		Module:      option.Module,
 		Labels: map[string]string{
-			types.LabelMetaBleemeoTargetAgent: ct.Name,
-			"module":                          ct.ModuleName,
+			types.LabelMetaBleemeoTargetAgent: option.Name,
+			"module":                          option.ModuleName,
 		},
+		CommonHelpers: helpers,
 	}
 }
 
@@ -295,7 +298,7 @@ func setUserAgent(modules map[string]bbConf.Module, userAgent string) {
 
 // New sets the static part of blackbox configuration (aka. targets that must be scrapped no matter what).
 // This completely resets the configuration.
-func New(registry *registry.Registry, config config.Blackbox) (*RegisterManager, error) {
+func New(registry *registry.Registry, config config.Blackbox, addWarnings func(...error)) (*RegisterManager, error) {
 	setUserAgent(config.Modules, config.UserAgent)
 
 	for idx, v := range config.Modules {
@@ -305,7 +308,17 @@ func New(registry *registry.Registry, config config.Blackbox) (*RegisterManager,
 		}
 	}
 
-	targets := make([]collectorWithLabels, 0, len(config.Targets))
+	targets := make([]blackboxCollector, 0, len(config.Targets))
+
+	manager := &RegisterManager{
+		targets:       targets,
+		registrations: make(map[int]gathererRegistration, len(config.Targets)),
+		registry:      registry,
+		scraperName:   config.ScraperName,
+		userAgent:     config.UserAgent,
+		dnsResolver:   config.DefaultDNSResolver,
+		addWarnings:   addWarnings,
+	}
 
 	for idx := range config.Targets {
 		if config.Targets[idx].Name == "" {
@@ -319,21 +332,12 @@ func New(registry *registry.Registry, config config.Blackbox) (*RegisterManager,
 				"This is a probably bug, please contact us", errUnknownModule, config.Targets[idx].Name, config.Targets[idx].Module)
 		}
 
-		targets = append(targets, genCollectorFromStaticTarget(configTarget{
+		manager.targets = append(manager.targets, genCollectorFromStaticTarget(staticTargetOptions{
 			Name:       config.Targets[idx].Name,
 			URL:        config.Targets[idx].URL,
 			Module:     module,
 			ModuleName: config.Targets[idx].Module,
-			nowFunc:    time.Now,
-		}))
-	}
-
-	manager := &RegisterManager{
-		targets:       targets,
-		registrations: make(map[int]gathererWithConfigTarget, len(config.Targets)),
-		registry:      registry,
-		scraperName:   config.ScraperName,
-		userAgent:     config.UserAgent,
+		}, manager))
 	}
 
 	if err := manager.updateRegistrations(); err != nil {
@@ -349,13 +353,44 @@ func (m *RegisterManager) DiagnosticArchive(_ context.Context, archive types.Arc
 	targets := m.targets
 	m.l.Unlock()
 
-	file, err := archive.Create("blackbox.txt")
+	resolver, err := m.DNSResolver()
+
+	errMsg := ""
+	if err != nil {
+		errMsg = err.Error()
+	}
+
+	obj := struct {
+		DNSResolver string
+		ResolverErr string
+		ScraperName string
+		UserAgent   string
+	}{
+		DNSResolver: resolver,
+		ResolverErr: errMsg,
+		ScraperName: m.scraperName,
+		UserAgent:   m.userAgent,
+	}
+
+	file, err := archive.Create("blackbox.json")
+	if err != nil {
+		return err
+	}
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	if err := enc.Encode(obj); err != nil {
+		return err
+	}
+
+	file, err = archive.Create("blackbox-targets.txt")
 	if err != nil {
 		return err
 	}
 
 	for _, t := range targets {
-		fmt.Fprintf(file, "url=%s labels=%v\n", t.Collector.URL, t.Labels)
+		fmt.Fprintf(file, "url=%s labels=%v\n", t.URL, t.Labels)
 	}
 
 	return nil
@@ -366,24 +401,24 @@ func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
 	// it is easier to keep only the static monitors and rebuild the dynamic config
 	// than to compute the difference between the new and the old configuration.
 	// This is simple because calling UpdateDynamicTargets with the same argument should be idempotent.
-	newTargets := make([]collectorWithLabels, 0, len(monitors)+len(m.targets))
+	newTargets := make([]blackboxCollector, 0, len(monitors)+len(m.targets))
 
 	// get a list of static monitors
 	for _, currentTarget := range m.targets {
-		if currentTarget.Collector.BleemeoAgentID == "" {
+		if currentTarget.BleemeoAgentID == "" {
 			newTargets = append(newTargets, currentTarget)
 		}
 	}
 
 	for _, monitor := range monitors {
-		collector, err := genCollectorFromDynamicTarget(monitor, m.userAgent)
+		collector, err := genCollectorFromDynamicTarget(monitor, m.userAgent, m)
 		if err != nil {
 			logger.V(1).Printf("Monitor with URL %s is ignored: %v", monitor.URL, err)
 
 			continue
 		}
 
-		newTargets = append(newTargets, *collector)
+		newTargets = append(newTargets, collector)
 	}
 
 	if m.scraperName != "" {

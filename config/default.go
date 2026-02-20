@@ -92,11 +92,12 @@ func DefaultConfig() Config { //nolint:maintidx
 			},
 		},
 		Blackbox: Blackbox{
-			Enable:          true,
-			ScraperName:     "",
-			ScraperSendUUID: true,
-			UserAgent:       version.UserAgent(),
-			Targets:         []BlackboxTarget{},
+			Enable:             true,
+			ScraperName:        "",
+			ScraperSendUUID:    true,
+			UserAgent:          version.UserAgent(),
+			DefaultDNSResolver: "", // means try to guess the system default DNS resolver
+			Targets:            []BlackboxTarget{},
 			Modules: map[string]bbConf.Module{
 				"http": defaultBlackboxModule,
 			},

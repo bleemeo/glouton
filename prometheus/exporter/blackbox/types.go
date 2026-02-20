@@ -17,7 +17,8 @@
 package blackbox
 
 import (
-	"crypto/x509"
+	"maps"
+	"reflect"
 	"sync"
 	"time"
 
@@ -27,38 +28,63 @@ import (
 )
 
 // configTarget is the information we will supply to the probe() function.
-type configTarget struct {
-	Name             string
-	URL              string
-	Module           bbConf.Module
-	ModuleName       string
-	BleemeoAgentID   string
-	CreationDate     time.Time
-	RefreshRate      time.Duration
-	testInjectCARoot []*x509.Certificate
-	nowFunc          func() time.Time
+type staticTargetOptions struct {
+	Name       string
+	URL        string
+	Module     bbConf.Module
+	ModuleName string
 }
 
-// We define labels to apply on a specific collector at registration, as those labels cannot be exposed
+type commonHelpers interface {
+	DNSResolver() (string, error)
+	NotifyNeedForDefaultResolver(err error)
+}
+
+// We define labels to apply on a specific blackboxCollector at registration, as those labels cannot be exposed
 // while gathering (e.g. labels prefixed by '__').
-type collectorWithLabels struct {
-	Collector configTarget
-	Labels    map[string]string
+type blackboxCollector struct {
+	Name           string
+	ModuleName     string
+	URL            string
+	OriginalURL    string
+	Module         bbConf.Module
+	BleemeoAgentID string
+	CreationDate   time.Time
+	RefreshRate    time.Duration
+	Labels         map[string]string
+	CommonHelpers  commonHelpers
+}
+
+func (target blackboxCollector) Equal(other blackboxCollector) bool {
+	// return a.BleemeoAgentID == b.BleemeoAgentID && a.URL == b.URL && a.RefreshRate == b.RefreshRate && reflect.DeepEqual(a.Module, b.Module)
+	return (target.Name == other.Name &&
+		target.ModuleName == other.ModuleName &&
+		target.URL == other.URL &&
+		reflect.DeepEqual(target.Module, other.Module) &&
+		target.BleemeoAgentID == other.BleemeoAgentID &&
+		target.CreationDate.Equal(other.CreationDate) &&
+		target.RefreshRate == other.RefreshRate &&
+		maps.Equal(target.Labels, other.Labels))
 }
 
 // We need to keep a reference to the gatherer, to be able to stop the ticker, if it is a TickingGatherer.
-type gathererWithConfigTarget struct {
-	target   configTarget
-	gatherer prometheus.Gatherer
+type gathererRegistration struct {
+	collector blackboxCollector
+	gatherer  prometheus.Gatherer
 }
 
 // RegisterManager is an abstraction that allows us to reload blackbox at runtime, enabling and disabling
 // probes at will.
 type RegisterManager struct {
-	targets       []collectorWithLabels
-	scraperName   string
-	registrations map[int]gathererWithConfigTarget
-	registry      *registry.Registry
-	userAgent     string
-	l             sync.Mutex
+	targets                        []blackboxCollector
+	scraperName                    string
+	registrations                  map[int]gathererRegistration
+	registry                       *registry.Registry
+	userAgent                      string
+	dnsResolver                    string
+	systemDNSResolver              string
+	systemDNSLastUpdate            time.Time
+	notifiedNeedForDefaultResolver bool
+	addWarnings                    func(...error)
+	l                              sync.Mutex
 }

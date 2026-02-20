@@ -944,7 +944,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	if a.config.Blackbox.Enable {
 		logger.V(1).Println("Starting blackbox_exporter...")
 
-		a.monitorManager, err = blackbox.New(a.gathererRegistry, a.config.Blackbox)
+		a.monitorManager, err = blackbox.New(a.gathererRegistry, a.config.Blackbox, a.addWarnings)
 		if err != nil {
 			logger.V(0).Printf("Couldn't start blackbox_exporter: %v\nMonitors will not be able to run on this agent.", err)
 		}

@@ -35,10 +35,11 @@ import (
 
 func main() {
 	var (
-		dnsURL            = flag.String("url", "dns://8.8.8.8/bleemeo.com", "The DNS URL to query")
-		expectedContent   = flag.String("expected-content", "", "FailIfNoneMatchesRegexp")
-		unexpectedContent = flag.String("unexpected-content", "", "FailIfMatchesRegexp")
-		unfiltered        = flag.Bool("skip-filter", false, "Skip default Glouton metric filter")
+		dnsURL             = flag.String("url", "dns:bleemeo.com", "The DNS URL to query")
+		expectedContent    = flag.String("expected-content", "", "Monitor expected content")
+		unexpectedContent  = flag.String("unexpected-content", "", "Monitor unexpected content")
+		defaultDNSResolver = flag.String("default-dns-resolver", "", "Configure the default DNS resolver rather than guessing it")
+		unfiltered         = flag.Bool("skip-filter", false, "Skip default Glouton metric filter")
 	)
 
 	flag.Parse()
@@ -57,6 +58,7 @@ func main() {
 		},
 		time.Time{},
 		nil,
+		*defaultDNSResolver,
 	)
 	if err != nil {
 		slog.Error("Gather failed", slog.String("err", err.Error()))

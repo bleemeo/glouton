@@ -4206,7 +4206,7 @@ func runTestHTTPorTCP(t *testing.T, test testHTTPCase, usePlainTCPOrSSL bool, mo
 
 	ctx := t.Context()
 
-	resPoints, err := InternalRunProbe(test.target.RequestContext(ctx), monitor, t0, test.target.RootCACertificates())
+	resPoints, err := InternalRunProbe(test.target.RequestContext(ctx), monitor, t0, test.target.RootCACertificates(), errorResolverSentinel)
 	if err != nil {
 		t.Fatal(err)
 	}

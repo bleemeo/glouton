@@ -251,25 +251,9 @@ func getVerifiedChains(ctx context.Context, state tls.ConnectionState, tlsConfig
 		return nil
 	}
 
-	testInjectCARoot, _ := ctx.Value(contextKeyTestInjectCARoot).([]*x509.Certificate)
-	if len(testInjectCARoot) > 0 {
-		if cfg.RootCAs == nil {
-			cfg.RootCAs = x509.NewCertPool()
-		}
-
-		for _, cert := range testInjectCARoot {
-			cfg.RootCAs.AddCert(cert)
-		}
-	}
-
-	now, _ := ctx.Value(contextKeyNowFunc).(func() time.Time)
-	if now == nil {
-		now = time.Now
-	}
-
 	opts := x509.VerifyOptions{
 		Roots:         cfg.RootCAs,
-		CurrentTime:   now(),
+		CurrentTime:   blackboxNow(ctx),
 		DNSName:       state.ServerName,
 		Intermediates: x509.NewCertPool(),
 	}

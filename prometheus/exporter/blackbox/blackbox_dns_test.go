@@ -311,6 +311,7 @@ func TestConfigDNSTarget(t *testing.T) {
 					ForbiddenContent:        tt.ForbiddenContent,
 				},
 				"not used",
+				mockHelpers{},
 			)
 
 			if tt.WantError && err == nil {
@@ -323,12 +324,12 @@ func TestConfigDNSTarget(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if diff := cmp.Diff(tt.WantProbe, collector.Collector.Module.DNS); diff != "" {
+			if diff := cmp.Diff(tt.WantProbe, collector.Module.DNS); diff != "" {
 				t.Errorf("DNS config mismatch: (-want +got)\n%s", diff)
 			}
 
-			if collector.Collector.URL != tt.WantTarget {
-				t.Errorf("target URL = %s, want %s", collector.Collector.URL, tt.WantTarget)
+			if collector.URL != tt.WantTarget {
+				t.Errorf("target URL = %s, want %s", collector.URL, tt.WantTarget)
 			}
 		})
 	}
