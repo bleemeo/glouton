@@ -28,8 +28,6 @@ import (
 	"net"
 	"testing"
 	"time"
-
-	"github.com/bleemeo/glouton/types"
 )
 
 type testTarget interface {
@@ -79,12 +77,6 @@ type testingCerts struct {
 
 // timeoutTime is a time longer any of our timeouts.
 const timeoutTime = 15 * time.Second
-
-type pushFunction func(ctx context.Context, points []types.MetricPoint)
-
-func (f pushFunction) PushPoints(ctx context.Context, points []types.MetricPoint) {
-	f(ctx, points)
-}
 
 func generateCerts(t *testing.T, t0 time.Time) (testingCerts, error) {
 	t.Helper()

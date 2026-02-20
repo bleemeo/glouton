@@ -33,6 +33,7 @@ import (
 
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/prometheus/blackbox_exporter/prober"
 	"github.com/prometheus/client_golang/prometheus"
@@ -581,4 +582,74 @@ func (m *RegisterManager) updateRegistrations() error {
 	}
 
 	return nil
+}
+
+type pushFunction func(ctx context.Context, points []types.MetricPoint)
+
+func (f pushFunction) PushPoints(ctx context.Context, points []types.MetricPoint) {
+	f(ctx, points)
+}
+
+// InternalRunProbe allow to run one Probe and return points. It's intended for tests.
+// Override options, when using zero-value means do not override.
+func InternalRunProbe(ctx context.Context, monitor types.Monitor, overrideNow time.Time, overrideCARoot []*x509.Certificate) ([]types.MetricPoint, error) {
+	var (
+		l         sync.Mutex
+		resPoints []types.MetricPoint
+	)
+
+	reg, err := registry.New(registry.Option{
+		FQDN:        "example.com",
+		GloutonPort: "8015",
+		PushPoint: pushFunction(func(_ context.Context, points []types.MetricPoint) {
+			l.Lock()
+			defer l.Unlock()
+
+			resPoints = append(resPoints, points...)
+		}),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	collectorFromConfig, err := genCollectorFromDynamicTarget(monitor, "Glouton unittest")
+	if err != nil {
+		return nil, err
+	}
+
+	if !overrideNow.IsZero() {
+		collectorFromConfig.Collector.nowFunc = func() time.Time {
+			return overrideNow
+		}
+	}
+
+	if overrideCARoot != nil {
+		collectorFromConfig.Collector.testInjectCARoot = overrideCARoot
+	}
+
+	gatherer, err := newGatherer(collectorFromConfig.Collector)
+	if err != nil {
+		return nil, err
+	}
+
+	id, err := reg.RegisterGatherer(
+		registry.RegistrationOption{
+			Description: "blackbox for " + collectorFromConfig.Collector.URL,
+			JitterSeed:  0,
+			MinInterval: collectorFromConfig.Collector.RefreshRate,
+			ExtraLabels: collectorFromConfig.Labels,
+		},
+		gatherer,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if overrideNow.IsZero() {
+		overrideNow = time.Now()
+	}
+
+	reg.InternalRunScrape(ctx, ctx, overrideNow, id)
+
+	return resPoints, nil
 }

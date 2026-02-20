@@ -263,6 +263,10 @@ func getVerifiedChains(ctx context.Context, state tls.ConnectionState, tlsConfig
 	}
 
 	now, _ := ctx.Value(contextKeyNowFunc).(func() time.Time)
+	if now == nil {
+		now = time.Now
+	}
+
 	opts := x509.VerifyOptions{
 		Roots:         cfg.RootCAs,
 		CurrentTime:   now(),

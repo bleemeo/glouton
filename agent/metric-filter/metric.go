@@ -108,6 +108,8 @@ var (
 		"probe_ssl_validation_success",
 		"probe_http_duration_seconds",
 		"probe_failed_due_to_tls_error",
+		"probe_dns_query_succeeded",
+		"probe_dns_answer_rrs",
 	}
 
 	promLinuxDefaultSystemMetrics = []string{

@@ -28,11 +28,9 @@ import (
 	"net/http/httptest"
 	"net/http/httptrace"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
-	"github.com/bleemeo/glouton/prometheus/registry"
 	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp"
@@ -4154,13 +4152,13 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			runTestHTTPorTCP(t, tt, false, monitorID, agentID, agentFQDN, t0)
+			runTestHTTPorTCP(t, tt, false, monitorID, agentID, t0)
 		})
 	}
 }
 
 // runTestHTTPorTCP is able to run test on http:// and tcp:// (and their SSL equivalent).
-func runTestHTTPorTCP(t *testing.T, test testHTTPCase, usePlainTCPOrSSL bool, monitorID, agentID, agentFQDN string, t0 time.Time) {
+func runTestHTTPorTCP(t *testing.T, test testHTTPCase, usePlainTCPOrSSL bool, monitorID string, agentID string, t0 time.Time) {
 	t.Helper()
 	t.Parallel()
 
@@ -4208,49 +4206,10 @@ func runTestHTTPorTCP(t *testing.T, test testHTTPCase, usePlainTCPOrSSL bool, mo
 
 	ctx := t.Context()
 
-	var (
-		resPoints []types.MetricPoint
-		l         sync.Mutex
-	)
-
-	reg, err := registry.New(registry.Option{
-		FQDN:        agentFQDN,
-		GloutonPort: "8015",
-		PushPoint: pushFunction(func(_ context.Context, points []types.MetricPoint) {
-			l.Lock()
-			defer l.Unlock()
-
-			resPoints = append(resPoints, points...)
-		}),
-	})
+	resPoints, err := InternalRunProbe(test.target.RequestContext(ctx), monitor, t0, test.target.RootCACertificates())
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	target, err := genCollectorFromDynamicTarget(monitor, "Glouton unittest")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	target.Collector.nowFunc = func() time.Time {
-		return t0
-	}
-
-	target.Collector.testInjectCARoot = test.target.RootCACertificates()
-
-	gatherer, err := newGatherer(target.Collector)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	id, err := reg.RegisterGatherer(registry.RegistrationOption{
-		ExtraLabels: target.Labels,
-	}, gatherer)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	reg.InternalRunScrape(test.target.RequestContext(ctx), t.Context(), t0, id)
 
 	gotMap := make(map[string]int, len(resPoints))
 	for i, got := range resPoints {
@@ -5982,7 +5941,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			runTestHTTPorTCP(t, tt, true, monitorID, agentID, agentFQDN, t0)
+			runTestHTTPorTCP(t, tt, true, monitorID, agentID, t0)
 		})
 	}
 }

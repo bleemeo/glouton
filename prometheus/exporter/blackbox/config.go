@@ -25,6 +25,7 @@ import (
 	"net/url"
 	"os"
 	"regexp/syntax"
+	"strings"
 	"time"
 
 	"github.com/bleemeo/glouton/config"
@@ -36,9 +37,14 @@ import (
 	promConfig "github.com/prometheus/common/config"
 )
 
-var errUnknownModule = errors.New("unknown blackbox module found in your configuration")
+var (
+	errUnknownModule  = errors.New("unknown blackbox module found in your configuration")
+	errUnsupportedURL = errors.New("URL is unsupported")
+)
 
 const defaultTimeout = 12 * time.Second
+
+const defaultResolverSentinel = "<default-resolver>" // TODO: need to handle when resolved isn't provided and a default one should be used.
 
 func defaultModule(userAgent string) bbConf.Module {
 	return bbConf.Module{
@@ -59,6 +65,7 @@ func defaultModule(userAgent string) bbConf.Module {
 		DNS: bbConf.DNSProbe{
 			IPProtocol:         "ip4",
 			IPProtocolFallback: true,
+			Recursion:          true,
 		},
 		TCP: bbConf.TCPProbe{
 			IPProtocol:         "ip4",
@@ -122,12 +129,61 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*co
 
 		uri, mod = preprocessHTTPTarget(url, mod)
 	case proberNameDNS:
+		// Default
 		mod.Prober = proberNameDNS
-		// TODO: user some better defaults - or even better: use the local resolver
-		mod.DNS.QueryName = url.Host
-		// TODO: quid of ipv6 ?
 		mod.DNS.QueryType = "A"
-		uri = "1.1.1.1"
+
+		// DNS URL will be either dns://dns-server/dns-name OR dns:dns-name
+		// In the first case, url.Path, url.Host... are filled.
+		// In the second case, we need to use url.Opaque
+		if url.Path != "" {
+			mod.DNS.QueryName = strings.ToLower(strings.TrimLeft(url.Path, "/"))
+			uri = strings.ToLower(url.Host)
+
+			if uri == "" {
+				uri = defaultResolverSentinel
+			}
+		} else {
+			mod.DNS.QueryName = strings.ToLower(url.Opaque)
+			uri = defaultResolverSentinel
+		}
+
+		for keyValue := range strings.SplitSeq(url.RawQuery, ";") {
+			if keyValue == "" {
+				continue
+			}
+
+			part := strings.SplitN(keyValue, "=", 2)
+			if len(part) != 2 {
+				return nil, fmt.Errorf("%w: can't parse dnsquery \"%s\"", errUnsupportedURL, url.RawQuery)
+			}
+
+			// The whole DNS URL is case insensitive, so we use ToLower() everywhere.
+			// But value is used for DNS type (A, AAAA, TXT...) which by convention are in upper case, so
+			// use ToUpper() for the value.
+			key := strings.ToLower(part[0])
+			value := strings.ToUpper(part[1])
+
+			if key == "class" && value != "" && value != "IN" {
+				return nil, fmt.Errorf("%w: unknown DNS class %s", errUnsupportedURL, part[1])
+			}
+
+			if key == "type" {
+				mod.DNS.QueryType = value
+			}
+		}
+
+		if monitor.ExpectedContent != "" {
+			// Prefix Regex with \s because the RegEx match the full line, e.g. something
+			// like "bleemeo.com IN A 15.188.205.60" (possibly with tab rather than space).
+			// If we don't prefix, "5.188.205.60" would match.
+			// Suffix by $ for similar reason
+			mod.DNS.ValidateAnswer.FailIfNoneMatchesRegexp = []string{`\s` + expectedContentRegex.String() + "$"}
+		}
+
+		if monitor.ForbiddenContent != "" {
+			mod.DNS.ValidateAnswer.FailIfMatchesRegexp = []string{`\s` + forbiddenContentRegex.String() + "$"}
+		}
 	case proberNameTCP:
 		mod.Prober = proberNameTCP
 		uri = url.Host

@@ -32,10 +32,11 @@ func TestLabelsToText(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
-		args     args
-		want     string
-		wantBack map[string]string
+		name      string
+		args      args
+		want      string
+		wantNicer string
+		wantBack  map[string]string
 	}{
 		{
 			name: "simple",
@@ -46,7 +47,8 @@ func TestLabelsToText(t *testing.T) {
 					"mode":     "idle",
 				},
 			},
-			want: `__name__="node_cpu_seconds_total",cpu="0",mode="idle"`,
+			wantNicer: `node_cpu_seconds_total{cpu="0",mode="idle"}`,
+			want:      `__name__="node_cpu_seconds_total",cpu="0",mode="idle"`,
 		},
 		{
 			name: "sorted",
@@ -57,7 +59,8 @@ func TestLabelsToText(t *testing.T) {
 					"__name__": "node_cpu_seconds_total",
 				},
 			},
-			want: `__name__="node_cpu_seconds_total",cpu="0",mode="idle"`,
+			wantNicer: `node_cpu_seconds_total{cpu="0",mode="idle"}`,
+			want:      `__name__="node_cpu_seconds_total",cpu="0",mode="idle"`,
 		},
 		{
 			name: "only-name",
@@ -66,7 +69,8 @@ func TestLabelsToText(t *testing.T) {
 					"__name__": "go_goroutines",
 				},
 			},
-			want: `__name__="go_goroutines"`,
+			wantNicer: `go_goroutines`,
+			want:      `__name__="go_goroutines"`,
 		},
 		{
 			name: "escaped",
@@ -76,7 +80,8 @@ func TestLabelsToText(t *testing.T) {
 					"alabel":   `value1",blabel="value2`,
 				},
 			},
-			want: `__name__="go_goroutines",alabel="value1\",blabel=\"value2"`,
+			wantNicer: `go_goroutines{alabel="value1\",blabel=\"value2"}`,
+			want:      `__name__="go_goroutines",alabel="value1\",blabel=\"value2"`,
 		},
 		{
 			name: "escaped2",
@@ -86,7 +91,8 @@ func TestLabelsToText(t *testing.T) {
 					"alabel":   `value1\",blabel=\"value2\`,
 				},
 			},
-			want: `__name__="go_goroutines",alabel="value1\\\",blabel=\\\"value2\\"`,
+			wantNicer: `go_goroutines{alabel="value1\\\",blabel=\\\"value2\\"}`,
+			want:      `__name__="go_goroutines",alabel="value1\\\",blabel=\\\"value2\\"`,
 		},
 		{
 			name: "trim-empty-label",
@@ -96,7 +102,8 @@ func TestLabelsToText(t *testing.T) {
 					"empty":    "",
 				},
 			},
-			want: `__name__="go_goroutines"`,
+			want:      `__name__="go_goroutines"`,
+			wantNicer: `go_goroutines`,
 			wantBack: map[string]string{
 				"__name__": "go_goroutines",
 			},
@@ -108,6 +115,11 @@ func TestLabelsToText(t *testing.T) {
 			got := LabelsToText(tt.args.labels)
 			if got != tt.want {
 				t.Errorf("LabelsToText() = %v, want %v", got, tt.want)
+			}
+
+			gotNicer := LabelsToTextNicer(tt.args.labels)
+			if gotNicer != tt.wantNicer {
+				t.Errorf("LabelsToTextNicer() = %v, want %v", gotNicer, tt.wantNicer)
 			}
 
 			back := TextToLabels(got)
