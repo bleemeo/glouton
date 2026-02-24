@@ -26,15 +26,14 @@ import (
 )
 
 type deduplicator struct {
-	Input    *disk.Disk
-	hostroot string
+	Input *disk.Disk
 }
 
 func (d deduplicator) Gather(acc telegraf.Accumulator) error {
 	tmp := &internal.StoreAccumulator{}
 	err := d.Input.Gather(tmp)
 
-	deduplicate(tmp, d.hostroot)
+	deduplicate(tmp)
 	tmp.Send(acc)
 
 	return err
@@ -49,7 +48,7 @@ func (d deduplicator) Init() error {
 	return d.Input.Init()
 }
 
-func deduplicate(acc *internal.StoreAccumulator, hostroot string) {
+func deduplicate(acc *internal.StoreAccumulator) {
 	deleted := make([]bool, len(acc.Measurement))
 	pathToIndx := make(map[string]int, len(acc.Measurement))
 	devToIndx := make(map[string]int, len(acc.Measurement))
@@ -80,10 +79,7 @@ func deduplicate(acc *internal.StoreAccumulator, hostroot string) {
 
 		if oldI, ok := devToIndx[m.Tags["device"]]; ok {
 			oldIsShortest := len(acc.Measurement[oldI].Tags["path"]) <= len(m.Tags["path"])
-			oldNoHostRootWhileNewHad := !strings.HasPrefix(acc.Measurement[oldI].Tags["path"], hostroot) && strings.HasPrefix(m.Tags["path"], hostroot)
-			newNoHostRootWhileOldHad := !strings.HasPrefix(m.Tags["path"], hostroot) && strings.HasPrefix(acc.Measurement[oldI].Tags["path"], hostroot)
-
-			if oldIsShortest && !oldNoHostRootWhileNewHad || newNoHostRootWhileOldHad {
+			if oldIsShortest {
 				deleted[i] = true
 
 				continue
