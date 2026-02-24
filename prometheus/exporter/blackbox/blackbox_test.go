@@ -24,10 +24,23 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"maps"
+	"math"
 	"math/big"
 	"net"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/types"
+	"github.com/google/go-cmp/cmp"
+)
+
+const (
+	testTargetNotYetKnown = "this-label-value-will-be-replaced"
+	testAgentFQDN         = "example.com"
+	testMonitorID         = "7331d6c1-ede1-4483-a3b3-c99f0965f64b"
+	testAgentID           = "1d6a2c82-4579-4f7d-91fe-3d4946aacaf7"
 )
 
 type testTarget interface {
@@ -36,6 +49,126 @@ type testTarget interface {
 	URL() string
 	RootCACertificates() []*x509.Certificate
 	RequestContext(ctx context.Context) context.Context
+}
+
+type testCase struct {
+	name string
+	// wantPoints is a subset of result points, that is extra points in result don't result in error.
+	// Use absentPoints to check for absence of points.
+	// In wantPoints & absentPoints, the value of "instance" label will be replaced by target URL.
+	// In wantPoints, value NaN will be remplaced with value from result point. Use NaN when you don't
+	// care about value. However NaN will NOT be replaced with the value 0.
+	wantPoints   []types.MetricPoint
+	absentPoints []map[string]string
+	target       testTarget
+	// Check that probe duration is between given value.
+	// If the min or max value is 0, no check is done.
+	probeDurationMinValue float64
+	probeDurationMaxValue float64
+}
+
+// runTestCase is able to run test on http:// and tcp:// (and their SSL equivalent).
+func runTestCase(t *testing.T, test testCase, usePlainTCPOrSSL bool, monitorID string, agentID string, t0 time.Time) {
+	t.Helper()
+	t.Parallel()
+
+	test.target.Start()
+	defer test.target.Close()
+
+	targetURL := test.target.URL()
+	if usePlainTCPOrSSL {
+		targetURL = strings.Replace(targetURL, "https://", "ssl://", 1)
+		targetURL = strings.Replace(targetURL, "http://", "tcp://", 1)
+	}
+
+	monitor := types.Monitor{
+		ID:             monitorID,
+		BleemeoAgentID: agentID,
+		URL:            targetURL,
+	}
+
+	// To avoid conflicts between tests that use the same test case (HTTPS and SSL), we need
+	// to make a copy of the absentPoints map and the wantPoints labels map before modifying them.
+	absentPoints := make([]map[string]string, len(test.absentPoints))
+	copy(absentPoints, test.absentPoints)
+
+	for _, lbls := range absentPoints {
+		if _, ok := lbls[types.LabelInstance]; ok {
+			lbls[types.LabelInstance] = targetURL
+		}
+	}
+
+	wantPoints := make([]types.MetricPoint, 0, len(test.wantPoints))
+	for _, point := range test.wantPoints {
+		lbls := make(map[string]string, len(point.Labels))
+		maps.Copy(lbls, point.Labels)
+
+		lbls[types.LabelInstance] = targetURL
+
+		newPoint := types.MetricPoint{
+			Point:       point.Point,
+			Labels:      lbls,
+			Annotations: point.Annotations,
+		}
+
+		wantPoints = append(wantPoints, newPoint)
+	}
+
+	ctx := t.Context()
+
+	resPoints, err := InternalRunProbe(test.target.RequestContext(ctx), monitor, t0, test.target.RootCACertificates(), errorResolverSentinel)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gotMap := make(map[string]int, len(resPoints))
+	for i, got := range resPoints {
+		gotMap[types.LabelsToText(got.Labels)] = i
+	}
+
+	for _, lbls := range absentPoints {
+		if _, ok := gotMap[types.LabelsToText(lbls)]; ok {
+			t.Errorf("got labels %v, expected not present", lbls)
+		}
+	}
+
+	for _, want := range wantPoints {
+		idx, ok := gotMap[types.LabelsToText(want.Labels)]
+		if !ok {
+			t.Errorf("got no labels %v, expected present", want.Labels)
+
+			for _, got := range resPoints {
+				if got.Labels[types.LabelName] == want.Labels[types.LabelName] {
+					t.Logf("Similar labels in resPoints include: %v", got.Labels)
+				}
+			}
+
+			continue
+		}
+
+		got := resPoints[idx]
+		if math.IsNaN(want.Value) && got.Value != 0 {
+			want.Value = got.Value
+		}
+
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("points mismatch: (-want +got)\n%s", diff)
+		}
+
+		if want.Labels[types.LabelName] == "probe_duration_seconds" {
+			if test.probeDurationMaxValue != 0 {
+				if got.Value > test.probeDurationMaxValue {
+					t.Errorf("probe_duration_seconds = %v, want <= %v", got.Value, test.probeDurationMaxValue)
+				}
+			}
+
+			if test.probeDurationMinValue != 0 {
+				if got.Value < test.probeDurationMinValue {
+					t.Errorf("probe_duration_seconds = %v, want >= %v", got.Value, test.probeDurationMinValue)
+				}
+			}
+		}
+	}
 }
 
 type testingCerts struct {

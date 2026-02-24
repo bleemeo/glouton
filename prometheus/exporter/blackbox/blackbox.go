@@ -64,6 +64,12 @@ var (
 		[]string{"instance"},
 		nil,
 	)
+	probeDNSRcode = prometheus.NewDesc(
+		prometheus.BuildFQName("", "", "probe_dns_rcode"),
+		"The DNS answer rcode value",
+		[]string{"instance"},
+		nil,
+	)
 	probeTLSExpiry = prometheus.NewDesc(
 		prometheus.BuildFQName("", "", "probe_ssl_last_chain_expiry_timestamp_seconds"),
 		"Returns last SSL chain expiry in timestamp seconds",
@@ -151,7 +157,7 @@ func (target blackboxCollector) Describe(ch chan<- *prometheus.Desc) {
 
 // CollectWithContext implements the prometheus.Collector interface.
 // It is where we do the actual "probing".
-func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<- prometheus.Metric) {
+func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<- prometheus.Metric) { //nolint:maintidx
 	probeFn, present := probers[target.Module.Prober]
 	if !present {
 		logger.V(1).Printf("blackbox_exporter: no prober registered under the name '%s', cannot check '%s'.",
@@ -251,8 +257,10 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 		}
 	}
 
+	hackLogger := newDNSHackLogger(extLogger)
+
 	// do all the actual work
-	success := probeFn(subCtx, targetURL, target.Module, registry, extLogger)
+	success := probeFn(subCtx, targetURL, target.Module, registry, hackLogger.Logger())
 
 	end := time.Now()
 	duration := end.Sub(start)
@@ -315,6 +323,13 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 			if lifespan := roundTripsTLS[len(roundTripsTLS)-1].leafLifespan; lifespan != 0 {
 				ch <- prometheus.MustNewConstMetric(probeSSLCertificateLifespan, prometheus.GaugeValue, float64(lifespan.Seconds()), target.Name)
 			}
+		}
+	}
+
+	if target.Module.Prober == proberNameDNS {
+		rcode, err := hackLogger.GetRCode()
+		if err == nil {
+			ch <- prometheus.MustNewConstMetric(probeDNSRcode, prometheus.GaugeValue, float64(rcode), target.Name)
 		}
 	}
 

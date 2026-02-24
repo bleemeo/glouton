@@ -14,15 +14,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//nolint:maintidx
+//nolint:maintidx,dupl
 package blackbox
 
 import (
+	"context"
+	"crypto/x509"
+	"fmt"
+	"math"
+	"net"
 	"testing"
 	"time"
 
 	"github.com/bleemeo/glouton/types"
 	"github.com/google/go-cmp/cmp"
+	"github.com/miekg/dns"
 	bbConf "github.com/prometheus/blackbox_exporter/config"
 )
 
@@ -333,4 +339,378 @@ func TestConfigDNSTarget(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_Collect_DNS(t *testing.T) {
+	t0 := time.Now().Truncate(time.Millisecond)
+
+	// You can use go run ./prometheus/exporter/blackbox/testdata/blackbox-test-monitor.go -url dns:bleemeo.com to helps
+	// building wantPoints / absentPoints.
+	// For Rcode & flags (Authority, RecursionAvailable...) looks at logs
+	//
+	// Currently tests are mostly here to ensure Glouton is able to extract Rcode from a blackbox ProbeDNS run.
+	tests := []testCase{
+		{
+			name: "query-authoritative-dns",
+			target: &dnsTestTarget{
+				RCode: dns.RcodeSuccess,
+				Answers: []string{
+					"bleemeo.com. 3600 IN A 127.0.0.1",
+				},
+				Authority: []string{
+					"bleemeo.com. 3600 IN NS ns1.registrar.net.",
+					"bleemeo.com. 3600 IN NS ns2.registrar.net.",
+				},
+				Authoritative: true,
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_success",
+						types.LabelInstance:     testTargetNotYetKnown,
+						types.LabelInstanceUUID: testAgentID,
+						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: testAgentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_dns_rcode",
+						types.LabelInstance:     testTargetNotYetKnown,
+						types.LabelInstanceUUID: testAgentID,
+						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: testAgentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_dns_answer_rrs",
+						types.LabelInstance:     testTargetNotYetKnown,
+						types.LabelInstanceUUID: testAgentID,
+						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: testAgentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelInstance:     testTargetNotYetKnown,
+						types.LabelInstanceUUID: testAgentID,
+						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: testAgentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_dns_query_succeeded",
+						types.LabelInstance:     testTargetNotYetKnown,
+						types.LabelInstanceUUID: testAgentID,
+						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: testAgentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_duration_seconds",
+						types.LabelInstance:     testTargetNotYetKnown,
+						types.LabelInstanceUUID: testAgentID,
+						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: testAgentID,
+					},
+				},
+			},
+		},
+		{
+			name: "non-recursive-dns",
+			target: &dnsTestTarget{
+				RCode:              dns.RcodeRefused,
+				Answers:            []string{},
+				Authority:          []string{},
+				RecursionAvailable: false,
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_success",
+						types.LabelInstance:     testTargetNotYetKnown,
+						types.LabelInstanceUUID: testAgentID,
+						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: testAgentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 5},
+					Labels: map[string]string{
+						types.LabelName:         "probe_dns_rcode",
+						types.LabelInstance:     testTargetNotYetKnown,
+						types.LabelInstanceUUID: testAgentID,
+						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: testAgentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_dns_answer_rrs",
+						types.LabelInstance:     testTargetNotYetKnown,
+						types.LabelInstanceUUID: testAgentID,
+						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: testAgentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelInstance:     testTargetNotYetKnown,
+						types.LabelInstanceUUID: testAgentID,
+						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: testAgentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_dns_query_succeeded",
+						types.LabelInstance:     testTargetNotYetKnown,
+						types.LabelInstanceUUID: testAgentID,
+						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: testAgentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_duration_seconds",
+						types.LabelInstance:     testTargetNotYetKnown,
+						types.LabelInstanceUUID: testAgentID,
+						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: testAgentID,
+					},
+				},
+			},
+		},
+		{
+			name: "dnssec-fail",
+			target: &dnsTestTarget{
+				RCode:              dns.RcodeServerFailure,
+				Answers:            []string{},
+				Authority:          []string{},
+				RecursionAvailable: true,
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_success",
+						types.LabelInstance:     testTargetNotYetKnown,
+						types.LabelInstanceUUID: testAgentID,
+						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: testAgentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 2},
+					Labels: map[string]string{
+						types.LabelName:         "probe_dns_rcode",
+						types.LabelInstance:     testTargetNotYetKnown,
+						types.LabelInstanceUUID: testAgentID,
+						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: testAgentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_dns_answer_rrs",
+						types.LabelInstance:     testTargetNotYetKnown,
+						types.LabelInstanceUUID: testAgentID,
+						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: testAgentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelInstance:     testTargetNotYetKnown,
+						types.LabelInstanceUUID: testAgentID,
+						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: testAgentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_dns_query_succeeded",
+						types.LabelInstance:     testTargetNotYetKnown,
+						types.LabelInstanceUUID: testAgentID,
+						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: testAgentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_duration_seconds",
+						types.LabelInstance:     testTargetNotYetKnown,
+						types.LabelInstanceUUID: testAgentID,
+						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: testAgentID,
+					},
+				},
+			},
+		},
+	}
+
+	t.Parallel()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runTestCase(t, tt, false, testMonitorID, testAgentID, t0)
+		})
+	}
+}
+
+type dnsTestTarget struct {
+	server             *dns.Server
+	RCode              int
+	Answers            []string
+	Authority          []string
+	RecursionAvailable bool
+	Authoritative      bool
+}
+
+func (t *dnsTestTarget) Start() {
+	// This function is inspired by blackbox dns_test.go's startDNSServer function.
+	h := dns.NewServeMux()
+	h.HandleFunc(".", t.handler)
+
+	t.server = &dns.Server{Addr: ":0", Net: "udp", Handler: h}
+
+	a, err := net.ResolveUDPAddr(t.server.Net, t.server.Addr)
+	if err != nil {
+		panic(err)
+	}
+
+	l, err := net.ListenUDP(t.server.Net, a)
+	if err != nil {
+		panic(err)
+	}
+
+	t.server.PacketConn = l
+
+	go func() {
+		if err := t.server.ActivateAndServe(); err != nil {
+			panic(err)
+		}
+	}()
+}
+
+func (t *dnsTestTarget) handler(w dns.ResponseWriter, r *dns.Msg) {
+	m := new(dns.Msg)
+	m.SetReply(r)
+
+	m.Rcode = t.RCode
+	m.RecursionAvailable = t.RecursionAvailable
+	m.Authoritative = t.Authoritative
+
+	for _, rr := range t.Answers {
+		a, err := dns.NewRR(rr)
+		if err != nil {
+			panic(err)
+		}
+
+		m.Answer = append(m.Answer, a)
+	}
+
+	for _, rr := range t.Authority {
+		a, err := dns.NewRR(rr)
+		if err != nil {
+			panic(err)
+		}
+
+		m.Ns = append(m.Ns, a)
+	}
+
+	if err := w.WriteMsg(m); err != nil {
+		panic(err)
+	}
+}
+
+func (t *dnsTestTarget) Close() {
+	_ = t.server.Shutdown()
+}
+
+func (t *dnsTestTarget) URL() string {
+	return fmt.Sprintf("dns://%s/bleemeo.com", t.server.PacketConn.LocalAddr())
+}
+
+func (t *dnsTestTarget) RootCACertificates() []*x509.Certificate {
+	return nil
+}
+
+func (t *dnsTestTarget) RequestContext(ctx context.Context) context.Context {
+	return ctx
 }
