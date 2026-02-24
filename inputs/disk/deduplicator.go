@@ -49,9 +49,26 @@ func (d deduplicator) Init() error {
 }
 
 func deduplicate(acc *internal.StoreAccumulator) {
+	// For bind-mount, we will:
+	//  * Report the first mount-point used... unless the 1st mount-point is on /var/lib/kubelet/plugins/kubernetes.io/csi,
+	//    because Kubernetes with CSI will mount on CSI "internal" path the real device then kubelet mount on
+	//    /var/lib/kubelet/pods using bind-mount. The later mount-point is more interesting to user.
+	//  * Always report "real" device (device of first mount-point), in case of bind-mount
+	//  * We assume mounts are ordered
+	//
+	// When two mount occur on same mount-point, the last mount win.
 	deleted := make([]bool, len(acc.Measurement))
-	pathToIndx := make(map[string]int, len(acc.Measurement))
 	devToIndx := make(map[string]int, len(acc.Measurement))
+	pathToIndx := make(map[string]int, len(acc.Measurement))
+
+	for i, m := range acc.Measurement {
+		// look at *previous* mounts (because we assume mount are ordered) if they Tags["path"] is our device
+		for oldI := range i {
+			if m.Tags["device"] == acc.Measurement[oldI].Tags["path"] {
+				m.Tags["device"] = acc.Measurement[oldI].Tags["device"]
+			}
+		}
+	}
 
 	// when multiple mount on same path, last mount win
 	for i, m := range acc.Measurement {
@@ -62,30 +79,21 @@ func deduplicate(acc *internal.StoreAccumulator) {
 		pathToIndx[m.Tags["path"]] = i
 	}
 
-	// when multiple devices are mounted on multiple paths (bind mount):
-	// * the shortest path wins... unless it doesn't start by the hostroot while the others do
-	// Newer gopsutil report bind mount differently. device is the path of previous mount point, therefor we will
-	// ignore all device that are actually a mount point. A mount point will be anything that start with "/" and not "/dev/"
 	for i, m := range acc.Measurement {
 		if deleted[i] {
 			continue
 		}
 
-		if strings.HasPrefix(m.Tags["device"], "/") && !strings.HasPrefix(m.Tags["device"], "/dev/") {
-			deleted[i] = true
-
-			continue
-		}
-
 		if oldI, ok := devToIndx[m.Tags["device"]]; ok {
-			oldIsShortest := len(acc.Measurement[oldI].Tags["path"]) <= len(m.Tags["path"])
-			if oldIsShortest {
+			oldPath := acc.Measurement[oldI].Tags["path"]
+
+			if strings.HasPrefix(oldPath, "/var/lib/kubelet/plugins/kubernetes.io/csi") {
+				deleted[oldI] = true
+			} else {
 				deleted[i] = true
 
 				continue
 			}
-
-			deleted[oldI] = true
 		}
 
 		devToIndx[m.Tags["device"]] = i

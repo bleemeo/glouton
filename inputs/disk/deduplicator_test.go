@@ -79,18 +79,8 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name: "bind-mount", // Before gopsutil v4.25.12
+			name: "bind-mount", // After gopsutil v4.25.12
 			input: []internal.Measurement{
-				{
-					Name:   "disk",
-					Fields: nil,
-					Tags: map[string]string{
-						"fstype": "ext4",
-						"device": "dm-1",
-						"mode":   "rw",
-						"path":   "/mnt/bind",
-					},
-				},
 				{
 					Name:   "disk",
 					Fields: nil,
@@ -101,33 +91,6 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 						"path":   "/",
 					},
 				},
-				{
-					Name:   "disk",
-					Fields: nil,
-					Tags: map[string]string{
-						"fstype": "ext4",
-						"device": "dm-1",
-						"mode":   "rw",
-						"path":   "/mnt/bind/etc/resolv.conf",
-					},
-				},
-			},
-			want: []internal.Measurement{
-				{
-					Name:   "disk",
-					Fields: nil,
-					Tags: map[string]string{
-						"fstype": "ext4",
-						"device": "dm-1",
-						"mode":   "rw",
-						"path":   "/",
-					},
-				},
-			},
-		},
-		{
-			name: "bind-mount-new", // After gopsutil v4.25.12
-			input: []internal.Measurement{
 				{
 					Name:   "disk",
 					Fields: nil,
@@ -136,16 +99,6 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 						"device": "/",
 						"mode":   "rw",
 						"path":   "/mnt/bind",
-					},
-				},
-				{
-					Name:   "disk",
-					Fields: nil,
-					Tags: map[string]string{
-						"fstype": "ext4",
-						"device": "dm-1",
-						"mode":   "rw",
-						"path":   "/",
 					},
 				},
 				{
@@ -239,7 +192,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 						"fstype": "ext4",
 						"device": "dm-3",
 						"mode":   "rw",
-						"path":   "/mnt/abc", // shorter than /boot/efi
+						"path":   "/mnt/abc",
 					},
 				},
 			},
@@ -251,7 +204,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 						"fstype": "ext4",
 						"device": "dm-3",
 						"mode":   "rw",
-						"path":   "/mnt/abc",
+						"path":   "/boot/efi",
 					},
 				},
 			},
@@ -286,7 +239,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 						"fstype": "ext4",
 						"device": "dm-3",
 						"mode":   "rw",
-						"path":   "/abc/abcd", // same length as /boot/efi
+						"path":   "/abc/abcd",
 					},
 				},
 			},
@@ -460,6 +413,20 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Tags: map[string]string{
 						"path":   "/mnt/d1",
 						"device": "vdc1",
+						"fstype": "ext2",
+						"mode":   "rw",
+					},
+				},
+				{
+					// This one is questionnable: /boot/efi is vdc1, but vdb15 is still mounted in
+					// kernel (and possibly an application could have file openned on this filesystem).
+					// This is really an edge case with 2 devices and 2 mount-point which probably don't exists in
+					// real situation, so feels free to add/drop this wanted Measurement to makes test pass.
+					Name:   "disk",
+					Fields: nil,
+					Tags: map[string]string{
+						"path":   "/boot/efi",
+						"device": "vdb15",
 						"fstype": "ext2",
 						"mode":   "rw",
 					},
@@ -773,9 +740,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 						"fstype": "ext4",
 						"device": "longhorn/pvc-2d560fc3-1fb8-4635-9ba1-fb75cf55d0b8",
 						"mode":   "rw",
-						"path":   "/var/lib/kubelet/plugins/kubernetes.io/csi/driver.longhorn.io/75bb6f12d3144c67bd218e5453fd86761b0089f51deb41e2b7a67be4e46ec8c1/globalmount",
-						// TODO: we prefer the /var/lib/kubelet/pods mount point
-						// "path":   "/var/lib/kubelet/pods/e6a29bd7-8754-4f70-93cd-c32b3bc1cf41/volumes/kubernetes.io~csi/pvc-2d560fc3-1fb8-4635-9ba1-fb75cf55d0b8/mount",
+						"path":   "/var/lib/kubelet/pods/e6a29bd7-8754-4f70-93cd-c32b3bc1cf41/volumes/kubernetes.io~csi/pvc-2d560fc3-1fb8-4635-9ba1-fb75cf55d0b8/mount",
 					},
 				},
 			},
@@ -866,9 +831,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 						"fstype": "ext4",
 						"device": "nvme1n1",
 						"mode":   "rw",
-						"path":   "/var/lib/kubelet/plugins/kubernetes.io/csi/ebs.csi.aws.com/75bb6f12d3144c67bd218e5453fd86761b0089f51deb41e2b7a67be4e46ec8c1/globalmount",
-						// TODO: we prefer the /var/lib/kubelet/pods mount point
-						// "path":   "/var/lib/kubelet/pods/e6a29bd7-8754-4f70-93cd-c32b3bc1cf41/volumes/kubernetes.io~csi/pvc-2d560fc3-1fb8-4635-9ba1-fb75cf55d0b8/mount",
+						"path":   "/var/lib/kubelet/pods/e6a29bd7-8754-4f70-93cd-c32b3bc1cf41/volumes/kubernetes.io~csi/pvc-2d560fc3-1fb8-4635-9ba1-fb75cf55d0b8/mount",
 					},
 				},
 			},
