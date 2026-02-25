@@ -836,7 +836,7 @@ func matchersToMap(matchersList []matcher.Matchers) map[labels.Matcher][]matcher
 }
 
 func staticScrapperLists(configTargets []config.PrometheusTarget) ([]matcher.Matchers, []matcher.Matchers) {
-	var allowList, denyList []matcher.Matchers
+	var allowList, denyList []matcher.Matchers //nolint:prealloc
 
 	targets, _ := prometheusConfigToURLs(configTargets)
 	for _, target := range targets {

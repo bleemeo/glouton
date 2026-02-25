@@ -4717,7 +4717,7 @@ func (t *httpTestTarget) Start() {
 	}
 
 	if t.TLSCert.PrivateKey != nil {
-		t.srvLast.TLS = &tls.Config{ //nolint: gosec
+		t.srvLast.TLS = &tls.Config{
 			// Certificates will in reality come from GetCertificate, but for
 			// StartTLS to not override our cert, we must set a value.
 			// Once StartTLS we will remove Certificates to rely only on GetCertificate
@@ -4753,7 +4753,7 @@ func (t *httpTestTarget) Start() {
 		}))
 
 		if t.FirstTLSCert.PrivateKey != nil {
-			t.srvFirst.TLS = &tls.Config{ //nolint: gosec
+			t.srvFirst.TLS = &tls.Config{
 				Certificates: []tls.Certificate{t.FirstTLSCert},
 			}
 

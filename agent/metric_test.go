@@ -326,25 +326,6 @@ func Test_Basic_FilterPoints(t *testing.T) {
 		return
 	}
 
-	// these points will be filtered out by the filter
-	points := []types.MetricPoint{
-		{
-			Labels: map[string]string{
-				"__name__":        "process_cpu_seconds_total",
-				"label_not_read":  "value_not_read",
-				"scrape_instance": "localhost:2113",
-				"scrape_job":      "my_application123",
-			},
-		},
-		{
-			Labels: map[string]string{
-				"__name__":        "whatever",
-				"scrape_instance": "should_not_be_checked:8080",
-				"scrape_job":      "should_not_be_checked",
-			},
-		},
-	}
-
 	want := []types.MetricPoint{
 		{
 			Labels: map[string]string{
@@ -370,6 +351,26 @@ func Test_Basic_FilterPoints(t *testing.T) {
 			},
 		},
 	}
+
+	// these points will be filtered out by the filter
+	points := make([]types.MetricPoint, 0, 2+len(want))
+	points = append(points,
+		types.MetricPoint{
+			Labels: map[string]string{
+				"__name__":        "process_cpu_seconds_total",
+				"label_not_read":  "value_not_read",
+				"scrape_instance": "localhost:2113",
+				"scrape_job":      "my_application123",
+			},
+		},
+		types.MetricPoint{
+			Labels: map[string]string{
+				"__name__":        "whatever",
+				"scrape_instance": "should_not_be_checked:8080",
+				"scrape_job":      "should_not_be_checked",
+			},
+		},
+	)
 
 	points = append(points, want...)
 
@@ -1189,7 +1190,12 @@ func (m fakeMetric) LastPointReceivedAt() time.Time {
 }
 
 func listFromMap(m map[labels.Matcher][]matcher.Matchers) []matcher.Matchers {
-	res := []matcher.Matchers{}
+	total := 0
+	for _, val := range m {
+		total += len(val)
+	}
+
+	res := make([]matcher.Matchers, 0, total)
 
 	for _, val := range m {
 		res = append(res, val...)
@@ -1291,20 +1297,12 @@ func Benchmark_filters_no_match(b *testing.B) {
 func Benchmark_filters_one_match_first(b *testing.B) {
 	metricFilter, _ := newMetricFilter(basicConf.Metric, false, true, false)
 
-	list100 := []types.MetricPoint{
-		{
-			Labels: goodPoint,
-		},
-	}
-
+	list100 := make([]types.MetricPoint, 0, 100)
+	list100 = append(list100, types.MetricPoint{Labels: goodPoint})
 	list100 = append(list100, generatePoints(99, badPoint)...)
 
-	list10 := []types.MetricPoint{
-		{
-			Labels: goodPoint,
-		},
-	}
-
+	list10 := make([]types.MetricPoint, 0, 10)
+	list10 = append(list10, types.MetricPoint{Labels: goodPoint})
 	list10 = append(list10, generatePoints(9, badPoint)...)
 
 	list1 := []types.MetricPoint{

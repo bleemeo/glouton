@@ -633,7 +633,7 @@ func (a *agent) updateThresholds(thresholds map[string]threshold.Threshold, firs
 }
 
 func (a *agent) rebuildDynamicMetricAllowDenyList(services []discovery.Service) error {
-	var errs []error
+	errs := make([]error, 0, 2)
 
 	errs = append(
 		errs,
@@ -732,7 +732,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	if err != nil {
 		logger.V(2).Printf("failed to get uptime: %v", err)
 	} else {
-		uptime := time.Duration(uptimeRaw) * time.Second
+		uptime := time.Duration(uptimeRaw) * time.Second //nolint:gosec
 		boottime := time.Now().Add(-uptime)
 		logger.V(2).Printf("uptime: system booted %s ago, at %s", uptime, boottime.Format(time.RFC3339))
 	}
@@ -741,7 +741,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	if err != nil {
 		logger.V(2).Printf("failed to get bootime: %v", err)
 	} else {
-		boottime := time.Unix(int64(boottimeRaw), 0)
+		boottime := time.Unix(int64(boottimeRaw), 0) //nolint:gosec
 		uptime := time.Since(boottime).Truncate(time.Second)
 		logger.V(2).Printf("bootime: system booted at %s, %s ago", boottime.Format(time.RFC3339), uptime)
 	}
@@ -1484,8 +1484,8 @@ func (a *agent) handleSighup(ctx context.Context, sighupChan chan os.Signal) {
 					a.waitAndRefreshPendingUpdates(ctx)
 
 					l.Lock()
-					systemUpdateMetricPending = false //nolint: wsl_v5
-					l.Unlock()                        //nolint: wsl_v5
+					systemUpdateMetricPending = false
+					l.Unlock()
 				}()
 			}
 

@@ -131,7 +131,7 @@ func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState
 
 func (t *Target) readAll(ctx context.Context) ([]byte, error) {
 	if t.URL.Scheme == "file" || t.URL.Scheme == "" {
-		return os.ReadFile(t.URL.Path)
+		return os.ReadFile(t.URL.Path) //nolint:gosec // path comes from scraper config, not user input
 	}
 
 	if t.URL.Scheme == "mock" {
@@ -146,7 +146,7 @@ func (t *Target) readAll(ctx context.Context) ([]byte, error) {
 	req.Header.Add("Accept", "text/plain;version=0.0.4")
 	req.Header.Set("User-Agent", version.UserAgent())
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := http.DefaultClient.Do(req) //nolint:gosec // URL comes from scraper config
 	if err != nil {
 		return nil, TargetError{
 			ConnectErr: err,

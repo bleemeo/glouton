@@ -258,7 +258,7 @@ func parseGceFacts(projectID int64, inst gceInstance, facts map[string]string) {
 			continue
 		}
 
-		subnetMask := net.IPv4Mask(byte(a), byte(b), byte(c), byte(d))
+		subnetMask := net.IPv4Mask(byte(a), byte(b), byte(c), byte(d)) //nolint:gosec // values are parsed from IP octets, always in [0,255]
 		subnetIP := ip.Mask(subnetMask)
 		subnet := net.IPNet{IP: subnetIP, Mask: subnetMask}
 
@@ -396,7 +396,7 @@ func awsRetrieveToken(ctx context.Context) (string, bool) {
 
 	req.Header.Set("X-Aws-Ec2-Metadata-Token-Ttl-Seconds", "60") // mandatory
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := http.DefaultClient.Do(req) //nolint:gosec // URL is built internally for metadata endpoint
 	if err != nil {
 		return "", false
 	}

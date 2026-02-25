@@ -752,7 +752,7 @@ func fixListenAddressConflict(servicesMap map[NameInstance]Service) []Service {
 
 // filterConflictListenAddress remove address that have a conflict. It might mutate service input.
 func filterConflictListenAddress(service Service, servicesMap map[NameInstance]Service, addressesMap map[facts.ListenAddress][]NameInstance) Service {
-	var newListenAddress []facts.ListenAddress //nolint:prealloc // prealloc is used
+	var newListenAddress []facts.ListenAddress
 
 	key := NameInstance{service.Name, service.Instance}
 

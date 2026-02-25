@@ -168,7 +168,7 @@ func TestPurgeCrashReports(t *testing.T) {
 			_ = f.Close()
 
 			if i < keep {
-				mostRecentReports[i] = crashReportPath // Save it for later check
+				mostRecentReports[i] = crashReportPath //nolint:gosec // i < keep is checked above, slice has exactly keep elements // Save it for later check
 			} else if i%2 == 0 {
 				// 50% of the remaining are marked as uploaded
 				if err := markUploaded(crashReportPath); err != nil {

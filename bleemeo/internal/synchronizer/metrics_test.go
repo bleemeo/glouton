@@ -1615,8 +1615,9 @@ func TestMonitorDeactivation(t *testing.T) {
 	}
 
 	metrics := helper.MetricsFromAPI()
-	want := []bleemeoapi.MetricPayload{
-		{
+	want := make([]bleemeoapi.MetricPayload, 0, 2+len(initialMetrics))
+	want = append(want,
+		bleemeoapi.MetricPayload{
 			Metric: bleemeoTypes.Metric{
 				ID:         "1",
 				AgentID:    idAgentMain,
@@ -1624,7 +1625,7 @@ func TestMonitorDeactivation(t *testing.T) {
 			},
 			Name: agentStatusName,
 		},
-		{
+		bleemeoapi.MetricPayload{
 			Metric: bleemeoTypes.Metric{
 				ID:      "2",
 				AgentID: newMonitor.AgentID,
@@ -1636,7 +1637,7 @@ func TestMonitorDeactivation(t *testing.T) {
 			},
 			Name: "probe_duration",
 		},
-	}
+	)
 
 	want = append(want, initialMetrics...)
 

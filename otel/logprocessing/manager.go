@@ -268,7 +268,7 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 		containersByID[ctr.ID()] = ctr
 	}
 
-	var logSources []logSource //nolint:prealloc
+	var logSources []logSource
 
 	for _, service := range services {
 		if service.LogProcessing == nil || !service.Active {

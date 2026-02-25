@@ -109,7 +109,7 @@ func (s *Synchronizer) FindSNMPAgent(ctx context.Context, target *snmp.Target, s
 }
 
 func (s *Synchronizer) snmpRegisterAndUpdate(ctx context.Context, execution types.SynchronizationExecution, localTargets []*snmp.Target) error {
-	var newAgent []bleemeoTypes.Agent //nolint: prealloc
+	var newAgent []bleemeoTypes.Agent
 
 	remoteAgentList := s.option.Cache.AgentsByUUID()
 

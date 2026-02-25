@@ -109,7 +109,7 @@ func (r Responder) responseCustomCheck(ctx context.Context, request string) (str
 
 	statusDescription := checkNow(ctx)
 
-	return statusDescription.StatusDescription, int16(statusDescription.CurrentStatus.NagiosCode()), nil
+	return statusDescription.StatusDescription, int16(statusDescription.CurrentStatus.NagiosCode()), nil //nolint:gosec // NagiosCode returns 0-3, fits in int16
 }
 
 func (r Responder) responseNRPEConf(ctx context.Context, requestArgs []string) (string, int16, error) {

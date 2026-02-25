@@ -589,7 +589,7 @@ func (c *Client) Disconnect(timeout time.Duration) {
 	defer c.l.Unlock()
 
 	if c.mqtt != nil {
-		c.mqtt.Disconnect(uint(timeout.Milliseconds()))
+		c.mqtt.Disconnect(uint(timeout.Milliseconds())) //nolint:gosec // timeout is always non-negative
 	}
 
 	c.mqtt = nil

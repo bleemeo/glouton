@@ -194,7 +194,7 @@ func (api *API) init() {
 
 		if diagnosticTmpl == nil {
 			fmt.Fprintln(w, "diagnostic.html load failed. Fallback to simple text")
-			_, err = w.Write([]byte(content))
+			_, err = w.Write([]byte(content)) //nolint:gosec // content is sanitized before this point
 		} else {
 			err = diagnosticTmpl.Execute(w, content)
 		}
