@@ -263,7 +263,7 @@ func parserReader(data []byte, filter func(lbls labels.Labels) bool) ([]*dto.Met
 				return nil, fmt.Errorf("%w: second TYPE line for metric %s", errParseError, metricName)
 			}
 
-			switch metricType { //nolint:exhaustive
+			switch metricType { //nolint:exhaustive,nolintlint
 			case prometheusModel.MetricTypeCounter:
 				entry.Type = dto.MetricType_COUNTER.Enum()
 			case prometheusModel.MetricTypeGauge:

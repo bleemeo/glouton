@@ -1820,7 +1820,7 @@ func (a *agent) dockerWatcher(ctx context.Context) error {
 				a.sendDockerContainerHealth(ctx, ev.Container)
 			}
 
-			switch ev.Type { //nolint: exhaustive
+			switch ev.Type { //nolint: exhaustive,nolintlint
 			case facts.EventTypeKill, facts.EventTypeStop:
 				checkIDs := a.discovery.GetCheckIDsForContainer(ev.ContainerID)
 				for _, checkID := range checkIDs {

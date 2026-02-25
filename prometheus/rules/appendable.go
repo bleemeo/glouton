@@ -77,7 +77,7 @@ func (a errAppender) AppendHistogram(storage.SeriesRef, labels.Labels, int64, *h
 	return 0, errNotAvailable
 }
 
-func (a errAppender) AppendHistogramCTZeroSample(storage.SeriesRef, labels.Labels, int64, int64, *histogram.Histogram, *histogram.FloatHistogram) (storage.SeriesRef, error) {
+func (a errAppender) AppendHistogramSTZeroSample(storage.SeriesRef, labels.Labels, int64, int64, *histogram.Histogram, *histogram.FloatHistogram) (storage.SeriesRef, error) {
 	return 0, errNotAvailable
 }
 
@@ -85,6 +85,6 @@ func (a errAppender) UpdateMetadata(storage.SeriesRef, labels.Labels, metadata.M
 	return 0, errNotAvailable
 }
 
-func (a errAppender) AppendCTZeroSample(_ storage.SeriesRef, _ labels.Labels, _, _ int64) (storage.SeriesRef, error) {
+func (a errAppender) AppendSTZeroSample(_ storage.SeriesRef, _ labels.Labels, _, _ int64) (storage.SeriesRef, error) {
 	return 0, errNotAvailable
 }
