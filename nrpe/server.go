@@ -279,7 +279,7 @@ func encodeV2(decodedPacket reducedPacket, randBytes [2]byte) ([]byte, error) {
 
 func encodeV3(decodedPacket reducedPacket) ([]byte, error) {
 	decodedPacket.packetType = 2
-	bufferLength := int32(len(decodedPacket.buffer))
+	bufferLength := int32(len(decodedPacket.buffer)) //nolint:gosec // buffer length fits in int32
 	encodedPacket := make([]byte, 19+len(decodedPacket.buffer))
 
 	buf := new(bytes.Buffer)
@@ -414,7 +414,7 @@ func generateCert() (*tls.Config, error) {
 	}
 
 	// Configure the server to present the certficate we created
-	return &tls.Config{ //nolint:gosec
+	return &tls.Config{
 		Certificates: []tls.Certificate{rootTLSCert},
 	}, nil
 }

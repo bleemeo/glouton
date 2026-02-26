@@ -28,7 +28,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/helper"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/parser/regex"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/parser/time"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/parser/timeparser"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/transformer/add"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
 )
@@ -149,7 +149,7 @@ func TestBuildLogFilterConfig(t *testing.T) {
 				"exclude":    map[string]any{},
 				"log_record": []string{},
 			},
-			expectedError: "cannot use ottl conditions and include/exclude for logs at the same time",
+			expectedError: "cannot use \"logs.resource\", \"logs.log\" and the settings \"logs.include\", \"logs.exclude\" at the same time",
 		},
 	}
 
@@ -180,7 +180,7 @@ func TestBuildLogFilterConfig(t *testing.T) {
 				}
 			}
 
-			if diff := cmp.Diff(tc.expectedOutput, output.Logs); diff != "" {
+			if diff := cmp.Diff(tc.expectedOutput, output.Logs); diff != "" { //nolint: staticcheck
 				t.Fatalf("Unexpected result (-want +got):\n%s", diff)
 			}
 		})
@@ -451,7 +451,7 @@ func TestBuildOperators(t *testing.T) {
 			},
 		},
 		{
-			Builder: &time.Config{
+			Builder: &timeparser.Config{
 				TransformerConfig: helper.TransformerConfig{
 					WriterConfig: helper.WriterConfig{
 						BasicConfig: helper.BasicConfig{

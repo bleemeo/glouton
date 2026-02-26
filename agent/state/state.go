@@ -46,7 +46,7 @@ var errVersionIncompatible = errors.New("state.json is incompatible with this gl
 type persistedState struct {
 	Version         int    `json:"version"`
 	BleemeoAgentID  string `json:"agent_uuid"`
-	BleemeoPassword string `json:"password"`
+	BleemeoPassword string `json:"password"` //nolint:gosec // password field is intentional
 	TelemetryID     string `json:"telemetry_id"`
 	// TelemeryID is being migrated to TelemetryID.
 	TelemeryID string `json:"telemery_id,omitempty"`

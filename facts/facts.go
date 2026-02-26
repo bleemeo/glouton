@@ -517,7 +517,7 @@ func httpQuery(ctx context.Context, url string, headers []string) string {
 		req.Header.Add(splits[0], splits[1])
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := http.DefaultClient.Do(req) //nolint:gosec // URL is built internally
 	if err != nil {
 		return ""
 	}

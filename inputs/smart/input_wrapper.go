@@ -177,8 +177,10 @@ func (iw *inputWrapper) parseScanOutput(out []byte) (devices []string) {
 }
 
 func (iw *inputWrapper) getDeviceInfo(device string) (deviceInfo, error) {
-	infoArgs := []string{"--info", "--health", "--attributes", "--tolerance=verypermissive", "-n", "standby", "--format=brief"}
-	infoArgs = append(infoArgs, strings.Split(device, " ")...)
+	deviceParts := strings.Split(device, " ")
+	infoArgs := make([]string, 0, 6+len(deviceParts))
+	infoArgs = append(infoArgs, "--info", "--health", "--attributes", "--tolerance=verypermissive", "-n", "standby", "--format=brief")
+	infoArgs = append(infoArgs, deviceParts...)
 
 	infoOut, err := iw.runCmd(iw.Smart.Timeout, iw.Smart.UseSudo, iw.PathSmartctl, infoArgs...)
 	if err != nil {

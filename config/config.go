@@ -258,7 +258,7 @@ func loadPaths(loader *configLoader, paths []string) (prometheus.MultiError, pro
 	var warnings, errors prometheus.MultiError
 
 	for _, path := range paths {
-		stat, err := os.Stat(path)
+		stat, err := os.Stat(path) //nolint:gosec // path comes from config, not user input
 		if err != nil && os.IsNotExist(err) {
 			logger.V(2).Printf("config file %s ignored because it does not exists", path)
 
@@ -490,7 +490,7 @@ func migrateMetricsPrometheus(k *koanf.Koanf, config map[string]any) prometheus.
 		return nil
 	}
 
-	var ( //nolint:prealloc // False positive.
+	var (
 		warnings        prometheus.MultiError
 		migratedTargets []any
 	)

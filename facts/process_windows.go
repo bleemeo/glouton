@@ -196,14 +196,14 @@ func parseProcessData(process *SystemProcessInformationStruct) (res Process, ok 
 	}
 
 	res = Process{
-		PID: int(process.UniqueProcessID),
+		PID: int(process.UniqueProcessID), //nolint:gosec // PID fits in int on Windows
 	}
 
 	res.CreateTime = windowsTimeToTime(process.CreateTime)
 	res.CreateTimestamp = res.CreateTime.Unix()
 
 	// this is the best approximation of the parent process we can get cheaply
-	res.PPID = int(process.InheritedFromUniqueProcessID)
+	res.PPID = int(process.InheritedFromUniqueProcessID) //nolint:gosec // PPID fits in int on Windows
 
 	res.MemoryRSS = uint64(process.WorkingSetSize) / 1024
 
@@ -220,7 +220,7 @@ func parseProcessData(process *SystemProcessInformationStruct) (res Process, ok 
 		res.Name = exec[len(exec)-1]
 	}
 
-	if processHandle, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(process.UniqueProcessID)); err == nil {
+	if processHandle, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(process.UniqueProcessID)); err == nil { //nolint:gosec // PID fits in uint32 on Windows
 		if user, err := retrieveUsername(processHandle); err == nil {
 			res.Username = user
 		}

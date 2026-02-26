@@ -270,8 +270,14 @@ func makePipeline( //nolint:maintidx
 		}
 
 		if cfg.HTTP.Enable {
+			netaddr := confignet.NewDefaultAddrConfig()
+			netaddr.Endpoint = net.JoinHostPort(cfg.GRPC.Address, strconv.Itoa(cfg.GRPC.Port))
+			netaddr.Transport = "ip"
+
 			receiverTypedCfg.Protocols.HTTP = configoptional.Some(otlpreceiver.HTTPConfig{
-				ServerConfig: confighttp.ServerConfig{Endpoint: net.JoinHostPort(cfg.GRPC.Address, strconv.Itoa(cfg.GRPC.Port))},
+				ServerConfig: confighttp.ServerConfig{
+					NetAddr: netaddr,
+				},
 			})
 		} else {
 			receiverTypedCfg.Protocols.HTTP = configoptional.None[otlpreceiver.HTTPConfig]()

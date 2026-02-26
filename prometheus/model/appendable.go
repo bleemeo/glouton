@@ -95,11 +95,11 @@ func (a *childrenAppender) AppendHistogram(ref storage.SeriesRef, l labels.Label
 	return a.parent.app.AppendHistogram(ref, l, t, h, fh)
 }
 
-func (a *childrenAppender) AppendHistogramCTZeroSample(ref storage.SeriesRef, l labels.Labels, t, ct int64, h *histogram.Histogram, fh *histogram.FloatHistogram) (storage.SeriesRef, error) {
+func (a *childrenAppender) AppendHistogramSTZeroSample(ref storage.SeriesRef, l labels.Labels, t, ct int64, h *histogram.Histogram, fh *histogram.FloatHistogram) (storage.SeriesRef, error) {
 	a.parent.l.Lock()
 	defer a.parent.l.Unlock()
 
-	return a.parent.app.AppendHistogramCTZeroSample(ref, l, t, ct, h, fh)
+	return a.parent.app.AppendHistogramSTZeroSample(ref, l, t, ct, h, fh)
 }
 
 func (a *childrenAppender) UpdateMetadata(ref storage.SeriesRef, l labels.Labels, m metadata.Metadata) (storage.SeriesRef, error) {
@@ -109,9 +109,9 @@ func (a *childrenAppender) UpdateMetadata(ref storage.SeriesRef, l labels.Labels
 	return a.parent.app.UpdateMetadata(ref, l, m)
 }
 
-func (a *childrenAppender) AppendCTZeroSample(ref storage.SeriesRef, l labels.Labels, t, ct int64) (storage.SeriesRef, error) {
+func (a *childrenAppender) AppendSTZeroSample(ref storage.SeriesRef, l labels.Labels, t, ct int64) (storage.SeriesRef, error) {
 	a.parent.l.Lock()
 	defer a.parent.l.Unlock()
 
-	return a.parent.app.AppendCTZeroSample(ref, l, t, ct)
+	return a.parent.app.AppendSTZeroSample(ref, l, t, ct)
 }

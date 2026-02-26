@@ -493,7 +493,7 @@ func decodeSSACLI(output []byte, controllerSlot int) ([]diskInfo, error) {
 }
 
 func parseListController(output []byte) ([]int, error) {
-	var ( //nolint:prealloc
+	var (
 		errs   []error
 		result []int
 	)

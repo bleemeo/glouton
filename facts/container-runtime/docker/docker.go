@@ -858,7 +858,7 @@ type dockerClient interface {
 func openConnection(ctx context.Context, host string) (cl dockerClient, err error) {
 	if host != "" {
 		if u, err := url.Parse(host); err == nil && u.Scheme == "unix://" {
-			_, err := os.Stat(u.Path)
+			_, err := os.Stat(u.Path) //nolint:gosec // path comes from docker socket URL
 			if err != nil {
 				return nil, fmt.Errorf("unable to access socket %s: %w", host, err)
 			}
@@ -1465,7 +1465,7 @@ func decodeDocker(top container.TopResponse, c facts.Container) []facts.Process 
 		if rssIndex != -1 {
 			v, err := strconv.ParseInt(row[rssIndex], 10, 0)
 			if err == nil {
-				process.MemoryRSS = uint64(v)
+				process.MemoryRSS = uint64(v) //nolint:gosec // path comes from docker socket URL
 			}
 		}
 

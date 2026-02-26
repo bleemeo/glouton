@@ -72,7 +72,7 @@ func getGlobalMetrics(
 	}
 
 	// Compute cluster metrics.
-	var points []types.MetricPoint
+	var points []types.MetricPoint //nolint:prealloc
 
 	metricFunctions := []metricsFunc{podsCount, requestsAndLimits, namespacesCount, nodesCount, podsRestartCount}
 

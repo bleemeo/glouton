@@ -194,7 +194,10 @@ func (api *API) init() {
 
 		if diagnosticTmpl == nil {
 			fmt.Fprintln(w, "diagnostic.html load failed. Fallback to simple text")
-			_, err = w.Write([]byte(content))
+
+			hdr := w.Header()
+			hdr.Add("Content-Type", "plain/text")
+			_, err = w.Write([]byte(content)) //nolint:gosec // content is from internal DiagnosticPage, not user input
 		} else {
 			err = diagnosticTmpl.Execute(w, content)
 		}

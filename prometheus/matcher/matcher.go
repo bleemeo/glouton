@@ -102,7 +102,7 @@ func (m *Matchers) Add(label string, value string, labelType labels.MatchType) e
 }
 
 func (m *Matchers) String() string {
-	res := make([]string, 0)
+	res := make([]string, 0, len(*m))
 
 	for _, value := range *m {
 		res = append(res, value.String())

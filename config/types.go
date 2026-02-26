@@ -167,7 +167,7 @@ type NRPE struct {
 type OpenSourceMQTT struct {
 	Enable      bool     `yaml:"enable"`
 	Username    string   `yaml:"username"`
-	Password    string   `yaml:"password"`
+	Password    string   `yaml:"password"` //nolint:gosec // password field is intentional
 	CAFile      string   `yaml:"ca_file"`
 	Hosts       []string `yaml:"hosts"`
 	Port        int      `yaml:"port"`
@@ -392,7 +392,7 @@ type Service struct {
 	MetricsUnixSocket string `yaml:"metrics_unix_socket"`
 	// Credentials for services that require authentication.
 	Username string `yaml:"username"`
-	Password string `yaml:"password"`
+	Password string `yaml:"password"` //nolint:gosec // password field is intentional
 	// URL used to retrieve metrics (used for instance by HAProxy and PHP-FMP).
 	StatsURL string `yaml:"stats_url"`
 	// Port used to get statistics for a service.
@@ -466,7 +466,7 @@ type ContainerRuntimeAddresses struct {
 type VSphere struct {
 	URL                string `yaml:"url"`
 	Username           string `yaml:"username"`
-	Password           string `yaml:"password"`
+	Password           string `yaml:"password"` //nolint:gosec // password field is intentional
 	InsecureSkipVerify bool   `yaml:"insecure_skip_verify"`
 	SkipMonitorVMs     bool   `yaml:"skip_monitor_vms"`
 }

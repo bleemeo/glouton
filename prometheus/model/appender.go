@@ -178,7 +178,7 @@ func (a *BufferAppender) AppendHistogram(storage.SeriesRef, labels.Labels, int64
 	return 0, errNotImplemented
 }
 
-func (a *BufferAppender) AppendHistogramCTZeroSample(storage.SeriesRef, labels.Labels, int64, int64, *histogram.Histogram, *histogram.FloatHistogram) (storage.SeriesRef, error) {
+func (a *BufferAppender) AppendHistogramSTZeroSample(storage.SeriesRef, labels.Labels, int64, int64, *histogram.Histogram, *histogram.FloatHistogram) (storage.SeriesRef, error) {
 	return 0, errNotImplemented
 }
 
@@ -186,6 +186,6 @@ func (a *BufferAppender) UpdateMetadata(storage.SeriesRef, labels.Labels, metada
 	return 0, errNotImplemented
 }
 
-func (a *BufferAppender) AppendCTZeroSample(_ storage.SeriesRef, _ labels.Labels, _, _ int64) (storage.SeriesRef, error) {
+func (a *BufferAppender) AppendSTZeroSample(_ storage.SeriesRef, _ labels.Labels, _, _ int64) (storage.SeriesRef, error) {
 	return 0, errNotImplemented
 }

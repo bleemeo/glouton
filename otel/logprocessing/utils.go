@@ -222,7 +222,7 @@ func buildLogFilterConfig(filtersCfg config.OTELFilters) (*filterprocessor.Confi
 
 	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 		Metadata: &decoderMeta,
-		Result:   &filterProcCfg.Logs,
+		Result:   &filterProcCfg.Logs, //nolint: staticcheck
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("initializing decoder: %w", err) //nolint: nilnil

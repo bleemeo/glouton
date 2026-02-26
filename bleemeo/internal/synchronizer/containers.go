@@ -247,7 +247,7 @@ func (s *Synchronizer) remoteRegister(
 }
 
 func (s *Synchronizer) containerDeleteFromLocal(ctx context.Context, execution types.SynchronizationExecution, apiClient types.ContainerClient, localContainers []facts.Container) {
-	var deletedIDs []string //nolint: prealloc // we don't know the size. empty is the most likely size.
+	var deletedIDs []string
 
 	duplicatedKey := make(map[string]bool)
 	localByContainerID := make(map[string]facts.Container, len(localContainers))
