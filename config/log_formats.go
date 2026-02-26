@@ -97,12 +97,12 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 			"regex":    `^(?P<client_address>\S+) \S+ (?P<user_name>\S+) \[(?P<time>[^\]]+)] "(?P<http_request_method>\S+) \S+ \S+" (?P<http_response_status_code>\d+) (?P<http_response_size>\S+) "[^"]*" "(?P<user_agent_original>[^"]*)"`,
 			"severity": severityFromHTTPStatusCode,
 		},
-		renameAttr("client_address", "client.address"),
-		renameAttr("user_name", "user.name"),
+		removeAttr("client_address"),
+		removeAttr("user_name"),
 		renameAttr("http_request_method", "http.request.method"),
 		renameAttr("http_response_status_code", "http.response.status_code"),
-		renameAttr("http_response_size", "http.response.size"),
-		renameAttr("user_agent_original", "user_agent.original"),
+		removeAttr("http_response_size"),
+		removeAttr("user_agent_original"),
 	}
 	nginxErrorParser := []OTELOperator{
 		{
@@ -125,11 +125,10 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 				},
 			},
 		},
-		removeAttrWhenUndefined("client_address"),
+		removeAttr("client_address"),
 		removeAttrWhenUndefined("server_address"),
 		removeAttrWhenUndefined("http_request_method"),
 		removeAttrWhenUndefined("server_port"),
-		renameAttr("client_address", "client.address"),
 		renameAttr("server_address", "server.address"),
 		renameAttr("http_request_method", "http.request.method"),
 		renameAttr("server_port", "server.port"),
@@ -143,15 +142,13 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 			"regex":    `^(?P<client_address>\S+) \S+ (?P<user_name>\S+) \[(?P<time>[^\]]+)] "(((?P<http_request_method>\S+) \S+ \S+)|-)" (?P<http_response_status_code>\d+) ((?P<http_response_size>\d+)|-)( "[^"]*" "(?P<user_agent_original>[^"]*)")?`,
 			"severity": severityFromHTTPStatusCode,
 		},
-		removeAttrWhenUndefined("user_agent_original"),
+		removeAttr("user_agent_original"),
 		removeAttrWhenUndefined("http_request_method"),
-		removeAttrWhenUndefined("http_response_size"),
-		renameAttr("client_address", "client.address"),
-		renameAttr("user_name", "user.name"),
+		removeAttr("http_response_size"),
+		removeAttr("client_address"),
+		removeAttr("user_name"),
 		renameAttr("http_request_method", "http.request.method"),
 		renameAttr("http_response_status_code", "http.response.status_code"),
-		renameAttr("http_response_size", "http.response.size"),
-		renameAttr("user_agent_original", "user_agent.original"),
 	}
 	apacheErrorParser := []OTELOperator{
 		{
@@ -190,14 +187,10 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 				},
 			},
 		},
-		removeAttrWhenUndefined("process_pid"),
-		removeAttrWhenUndefined("thread_id"),
-		removeAttrWhenUndefined("client_address"),
-		removeAttrWhenUndefined("client_port"),
-		renameAttr("process_pid", "process.pid"),
-		renameAttr("thread_id", "thread.id"),
-		renameAttr("client_address", "client.address"),
-		renameAttr("client_port", "client.port"),
+		removeAttr("process_pid"),
+		removeAttr("thread_id"),
+		removeAttr("client_address"),
+		removeAttr("client_port"),
 		removeAttr("severity"),
 	}
 
@@ -254,7 +247,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 				},
 			},
 		},
-		renameAttr("process_pid", "process.pid"),
+		removeAttr("process_pid"),
 		removeAttr("severity"),
 	}
 
@@ -290,7 +283,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 				},
 			},
 		},
-		renameAttr("process_pid", "process.pid"),
+		removeAttr("process_pid"),
 		removeAttr("severity"),
 		{
 			"type":   "noop",
@@ -304,10 +297,10 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 			"regex":    `^(?P<client_address>[a-fA-F0-9.:]+):(?<client_port>\d+) \[(?P<time>[^\]]+)].+ (\d+/){4}\d+ (?P<http_response_status_code>\d+) (?P<http_response_size>\d+) .+ (\d+/){4}\d+ \d+/\d+ "(?P<http_request_method>\S+) \S+ \S+"`,
 			"severity": severityFromHTTPStatusCode,
 		},
-		renameAttr("client_address", "client.address"),
-		renameAttr("client_port", "client.port"),
+		removeAttr("client_address"),
+		removeAttr("client_port"),
 		renameAttr("http_response_status_code", "http.response.status_code"),
-		renameAttr("http_response_size", "http.response.size"),
+		removeAttr("http_response_size"),
 		renameAttr("http_request_method", "http.request.method"),
 		{
 			"type":   "noop",
@@ -350,9 +343,8 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 				},
 			},
 		},
-		removeAttrWhenUndefined("db_query_text"),
-		renameAttr("process_pid", "process.pid"),
-		renameAttr("db_query_text", "db.query.text"), // FIXME: sanitize or drop
+		removeAttr("process_pid"),
+		removeAttr("db_query_text"),
 		removeAttr("severity"),
 	}
 
@@ -378,7 +370,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 				},
 			},
 		},
-		renameAttr("thread_id", "thread.id"),
+		removeAttr("thread_id"),
 		renameAttr("db_response_status_code", "db.response.status_code"),
 		removeAttr("severity"),
 	}
