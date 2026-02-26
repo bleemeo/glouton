@@ -62,7 +62,7 @@ func Test_startScrapeLoop(t *testing.T) {
 			callback := func(_ context.Context, _ context.Context, t0 time.Time) {
 				l.Lock()
 				result = append(result, t0) //nolint: wsl_v5
-				l.Unlock()                  //nolint: wsl_v5
+				l.Unlock()
 			}
 
 			loop := startScrapeLoop(tt.interval, tt.interval, 0, callback, "", false)
@@ -74,8 +74,8 @@ func Test_startScrapeLoop(t *testing.T) {
 			notAfter = time.Now()
 
 			l.Lock()
-			lengthAtEnd = len(result) //nolint: wsl_v5
-			l.Unlock()                //nolint: wsl_v5
+			lengthAtEnd = len(result)
+			l.Unlock()
 
 			// More time to ensure loop is shutdown.
 			time.Sleep(300 * time.Millisecond)

@@ -101,7 +101,7 @@ func (a *mockAppender) AppendHistogram(storage.SeriesRef, labels.Labels, int64, 
 	return 0, errNotImplemented
 }
 
-func (a *mockAppender) AppendHistogramCTZeroSample(storage.SeriesRef, labels.Labels, int64, int64, *histogram.Histogram, *histogram.FloatHistogram) (storage.SeriesRef, error) {
+func (a *mockAppender) AppendHistogramSTZeroSample(storage.SeriesRef, labels.Labels, int64, int64, *histogram.Histogram, *histogram.FloatHistogram) (storage.SeriesRef, error) {
 	return 0, errNotImplemented
 }
 
@@ -109,7 +109,7 @@ func (a *mockAppender) UpdateMetadata(storage.SeriesRef, labels.Labels, metadata
 	return 0, errNotImplemented
 }
 
-func (a *mockAppender) AppendCTZeroSample(_ storage.SeriesRef, _ labels.Labels, _, _ int64) (storage.SeriesRef, error) {
+func (a *mockAppender) AppendSTZeroSample(_ storage.SeriesRef, _ labels.Labels, _, _ int64) (storage.SeriesRef, error) {
 	return 0, errNotImplemented
 }
 

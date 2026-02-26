@@ -163,19 +163,13 @@ func (s *mqttStats) String() string {
 
 	var builder strings.Builder
 
-	_, _ = builder.WriteString(
-		fmt.Sprintf(
-			"Global stats (min/avg/max): %v/%v/%v on %d messages\n\n",
-			s.globalStats.min, s.globalStats.avg, s.globalStats.max, s.globalStats.nbMessages,
-		),
-	)
+	_, _ = fmt.Fprintf(&builder, "Global stats (min/avg/max): %v/%v/%v on %d messages\n\n",
+		s.globalStats.min, s.globalStats.avg, s.globalStats.max, s.globalStats.nbMessages)
 
 	_, _ = builder.WriteString("start, min, avg, max, messages\n")
 
 	for _, stats := range bucketsStats {
-		_, _ = builder.WriteString(
-			fmt.Sprintf("%v, %v, %v, %v, %v\n", stats.ts, stats.min, stats.avg, stats.max, stats.nbMessages),
-		)
+		_, _ = fmt.Fprintf(&builder, "%v, %v, %v, %v, %v\n", stats.ts, stats.min, stats.avg, stats.max, stats.nbMessages)
 	}
 
 	return builder.String()

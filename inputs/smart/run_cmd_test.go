@@ -200,8 +200,8 @@ func TestLimitedConcurrentcy(t *testing.T) {
 		time.Sleep(time.Second)
 
 		l.Lock()
-		execution-- //nolint: wsl_v5
-		l.Unlock()  //nolint: wsl_v5
+		execution--
+		l.Unlock()
 
 		return nil, nil
 	})

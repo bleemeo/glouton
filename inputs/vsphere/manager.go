@@ -166,7 +166,7 @@ func (m *Manager) Devices(ctx context.Context, maxAge time.Duration) []bleemeoTy
 
 	go func() { wg.Wait(); close(deviceChan) }()
 
-	var devices []bleemeoTypes.VSphereDevice //nolint:prealloc
+	var devices []bleemeoTypes.VSphereDevice
 
 	for device := range deviceChan {
 		devices = append(devices, device)

@@ -123,7 +123,7 @@ func writeDynamicConfig(inputs []input) error {
 func inputsToFluentBitConfig(inputs []input) string {
 	var configText strings.Builder
 
-	configText.WriteString(fmt.Sprintf(serviceConfig, parsersFile))
+	fmt.Fprintf(&configText, serviceConfig, parsersFile)
 
 	for _, input := range inputs {
 		inputTag := "original_input_" + input.Path
@@ -149,13 +149,13 @@ func inputsToFluentBitConfig(inputs []input) string {
 			filterTag := filter.Metric + "_tag"
 
 			// Duplicate the original input with another tag dedicated to this filter.
-			configText.WriteString(fmt.Sprintf(filterRewriteConfig, inputTag, filterTag))
+			fmt.Fprintf(&configText, filterRewriteConfig, inputTag, filterTag)
 			// Filter the line matching the regular expression.
-			configText.WriteString(fmt.Sprintf(filterGrepConfig, filterTag, filter.Regex))
+			fmt.Fprintf(&configText, filterGrepConfig, filterTag, filter.Regex)
 			// Create a NULL output that drops lines from the previous filter.
 			// The number of lines received by this output is the number of line
 			// that matched the regular expression.
-			configText.WriteString(fmt.Sprintf(outputNullConfig, filterTag, filter.Metric))
+			fmt.Fprintf(&configText, outputNullConfig, filterTag, filter.Metric)
 		}
 	}
 

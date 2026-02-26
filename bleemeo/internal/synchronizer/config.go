@@ -203,7 +203,7 @@ func (s *Synchronizer) registerLocalConfigItems(
 	localConfigItems map[comparableConfigItem]any,
 	remoteConfigItems map[comparableConfigItem]configItemValue,
 ) error {
-	var itemsToRegister []bleemeoTypes.GloutonConfigItem //nolint:prealloc
+	var itemsToRegister []bleemeoTypes.GloutonConfigItem
 
 	// Find and register local items that are not present on the API.
 	for localItem, localValue := range localConfigItems {

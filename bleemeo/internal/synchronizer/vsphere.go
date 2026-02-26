@@ -128,7 +128,7 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(ctx context.Context, apiClient t
 
 	seenDeviceAgents := make(map[string]string, len(localDevices))
 
-	var ( //nolint: prealloc
+	var (
 		newAgents []bleemeoTypes.Agent
 		errs      []error
 	)

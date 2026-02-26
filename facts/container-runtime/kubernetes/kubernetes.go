@@ -766,8 +766,8 @@ func createPointsCertificateDaysAndPerc(notBefore time.Time, notAfter time.Time,
 	}
 
 	for i := 0; i < len(extraLabelsKV); i += 2 {
-		labelsDays[extraLabelsKV[i]] = extraLabelsKV[i+1]
-		labelsPerc[extraLabelsKV[i]] = extraLabelsKV[i+1]
+		labelsDays[extraLabelsKV[i]] = extraLabelsKV[i+1] //nolint:gosec // len is checked to be even above
+		labelsPerc[extraLabelsKV[i]] = extraLabelsKV[i+1] //nolint:gosec // len is checked to be even above
 	}
 
 	remainingDays := notAfter.Sub(now).Hours() / 24

@@ -1077,8 +1077,8 @@ func TestRegistry_run(t *testing.T) {
 
 	id3, err := reg.RegisterPushPointsCallback(RegistrationOption{HonorTimestamp: true}, func(_ context.Context, t time.Time) error {
 		l.Lock()
-		t0 = t     //nolint: wsl_v5
-		l.Unlock() //nolint: wsl_v5
+		t0 = t
+		l.Unlock()
 
 		reg.WithTTL(5*time.Minute).PushPoints(ctx, []types.MetricPoint{
 			{Point: types.Point{Time: t, Value: 42.0}, Labels: map[string]string{"__name__": "push", "something": "value", types.LabelItem: "/home"}},

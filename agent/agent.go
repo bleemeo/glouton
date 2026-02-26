@@ -82,6 +82,7 @@ import (
 	"github.com/bleemeo/glouton/telemetry"
 	"github.com/bleemeo/glouton/threshold"
 	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/utils/envsetup"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
 	"github.com/bleemeo/glouton/version"
 	"github.com/bleemeo/glouton/zabbix"
@@ -632,7 +633,7 @@ func (a *agent) updateThresholds(thresholds map[string]threshold.Threshold, firs
 }
 
 func (a *agent) rebuildDynamicMetricAllowDenyList(services []discovery.Service) error {
-	var errs []error
+	errs := make([]error, 0, 2)
 
 	errs = append(
 		errs,
@@ -669,7 +670,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			a.hostRootPath = strings.TrimSuffix(a.hostRootPath, string(os.PathSeparator))
 		}
 
-		setupContainer(a.hostRootPath)
+		envsetup.SetupContainer(a.hostRootPath)
 	}
 
 	a.commandRunner = gloutonexec.New(a.hostRootPath)
@@ -731,7 +732,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	if err != nil {
 		logger.V(2).Printf("failed to get uptime: %v", err)
 	} else {
-		uptime := time.Duration(uptimeRaw) * time.Second
+		uptime := time.Duration(uptimeRaw) * time.Second //nolint:gosec
 		boottime := time.Now().Add(-uptime)
 		logger.V(2).Printf("uptime: system booted %s ago, at %s", uptime, boottime.Format(time.RFC3339))
 	}
@@ -740,7 +741,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	if err != nil {
 		logger.V(2).Printf("failed to get bootime: %v", err)
 	} else {
-		boottime := time.Unix(int64(boottimeRaw), 0)
+		boottime := time.Unix(int64(boottimeRaw), 0) //nolint:gosec
 		uptime := time.Since(boottime).Truncate(time.Second)
 		logger.V(2).Printf("bootime: system booted at %s, %s ago", boottime.Format(time.RFC3339), uptime)
 	}
@@ -1483,8 +1484,8 @@ func (a *agent) handleSighup(ctx context.Context, sighupChan chan os.Signal) {
 					a.waitAndRefreshPendingUpdates(ctx)
 
 					l.Lock()
-					systemUpdateMetricPending = false //nolint: wsl_v5
-					l.Unlock()                        //nolint: wsl_v5
+					systemUpdateMetricPending = false
+					l.Unlock()
 				}()
 			}
 
@@ -1819,7 +1820,7 @@ func (a *agent) dockerWatcher(ctx context.Context) error {
 				a.sendDockerContainerHealth(ctx, ev.Container)
 			}
 
-			switch ev.Type { //nolint: exhaustive
+			switch ev.Type { //nolint: exhaustive,nolintlint
 			case facts.EventTypeKill, facts.EventTypeStop:
 				checkIDs := a.discovery.GetCheckIDsForContainer(ev.ContainerID)
 				for _, checkID := range checkIDs {
@@ -2809,61 +2810,4 @@ func parseIPOutput(content []byte) string {
 	}
 
 	return macAddress
-}
-
-// setupContainer will tune container to improve information gathered.
-// Mostly it make that access to file pass though hostroot.
-func setupContainer(hostRootPath string) {
-	if hostRootPath == "" {
-		logger.Printf("The agent is running in a container but GLOUTON_DF_HOST_MOUNT_POINT is unset. Some information will be missing")
-
-		return
-	}
-
-	if _, err := os.Stat(hostRootPath); os.IsNotExist(err) {
-		logger.Printf("The agent is running in a container but host / partition is not mounted on %#v. Some information will be missing", hostRootPath)
-		logger.Printf("Hint: to fix this issue when using Docker, add \"-v /:%v:ro\" when running the agent", hostRootPath)
-
-		return
-	}
-
-	if hostRootPath != "" && hostRootPath != "/" {
-		if os.Getenv("HOST_VAR") == "" {
-			// gopsutil will use HOST_VAR as prefix to host /var
-			// It's used at least for reading the number of connected user from /var/run/utmp
-			_ = os.Setenv("HOST_VAR", filepath.Join(hostRootPath, "var"))
-
-			// ... but /var/run is usually a symlink to /run.
-			varRun := filepath.Join(hostRootPath, "var/run")
-
-			target, err := os.Readlink(varRun)
-			if err == nil && target == "/run" {
-				_ = os.Setenv("HOST_VAR", hostRootPath)
-			}
-		}
-
-		if os.Getenv("HOST_ETC") == "" {
-			_ = os.Setenv("HOST_ETC", filepath.Join(hostRootPath, "etc"))
-		}
-
-		if os.Getenv("HOST_PROC") == "" {
-			_ = os.Setenv("HOST_PROC", filepath.Join(hostRootPath, "proc"))
-		}
-
-		if os.Getenv("HOST_SYS") == "" {
-			_ = os.Setenv("HOST_SYS", filepath.Join(hostRootPath, "sys"))
-		}
-
-		if os.Getenv("HOST_RUN") == "" {
-			_ = os.Setenv("HOST_RUN", filepath.Join(hostRootPath, "run"))
-		}
-
-		if os.Getenv("HOST_DEV") == "" {
-			_ = os.Setenv("HOST_DEV", filepath.Join(hostRootPath, "dev"))
-		}
-
-		if os.Getenv("HOST_MOUNT_PREFIX") == "" {
-			_ = os.Setenv("HOST_MOUNT_PREFIX", hostRootPath)
-		}
-	}
 }

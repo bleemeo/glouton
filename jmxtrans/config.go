@@ -59,7 +59,7 @@ type configServer struct {
 	OutputWriters    []configWriter `json:"outputWriters"`
 	RunPeriodSeconds int            `json:"runPeriodSeconds"`
 	Username         string         `json:"username,omitempty"`
-	Password         string         `json:"password,omitempty"`
+	Password         string         `json:"password,omitempty"` //nolint:gosec // password field is intentional
 }
 
 type configQuery struct {

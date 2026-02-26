@@ -620,7 +620,7 @@ func formatDuration(period time.Duration) string {
 			previousScale := currentScale / unit.Scale
 			valueRemainder := math.Round(remainder / float64(previousScale))
 
-			result += fmt.Sprintf(" %.0f %s", valueRemainder, units[i-1].Name)
+			result += fmt.Sprintf(" %.0f %s", valueRemainder, units[i-1].Name) //nolint:gosec // i > 0 is checked in the if condition above
 			if valueRemainder > 1 {
 				result += "s"
 			}

@@ -89,8 +89,9 @@ func (s StatusSource) CollectWithState(_ context.Context, state registry.GatherS
 	}
 
 	now := state.T0
-	points := []types.MetricPoint{
-		{
+	points := make([]types.MetricPoint, 0, 2+len(counts))
+	points = append(points,
+		types.MetricPoint{
 			Labels: map[string]string{
 				types.LabelName: "process_total",
 			},
@@ -99,7 +100,7 @@ func (s StatusSource) CollectWithState(_ context.Context, state registry.GatherS
 				Value: float64(total),
 			},
 		},
-		{
+		types.MetricPoint{
 			Labels: map[string]string{
 				types.LabelName: "process_total_threads",
 			},
@@ -108,7 +109,7 @@ func (s StatusSource) CollectWithState(_ context.Context, state registry.GatherS
 				Value: float64(totalThreads),
 			},
 		},
-	}
+	)
 
 	for name, count := range counts {
 		points = append(points, types.MetricPoint{

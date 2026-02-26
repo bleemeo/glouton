@@ -186,7 +186,7 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 		if send != "" {
 			logger.DebugContext(ctx, "Sending line", "line", send)
 
-			if _, err := fmt.Fprintf(conn, "%s\n", send); err != nil {
+			if _, err := fmt.Fprintf(conn, "%s\n", send); err != nil { //nolint:gosec // send is from probe config, not user input
 				logger.ErrorContext(ctx, "Failed to send", "err", err)
 
 				return false
