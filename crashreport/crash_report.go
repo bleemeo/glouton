@@ -131,7 +131,7 @@ func createWorkDirIfNotExist(stateDir string) error {
 func SetupStderrRedirection() {
 	lock.Lock()
 	stateDir := dir
-	lock.Unlock() //
+	lock.Unlock()
 
 	setupStderrRedirection(stateDir)
 }
@@ -218,7 +218,7 @@ func Remove(reports ...string) {
 func PurgeCrashReports(maxReportCount int) {
 	lock.Lock()
 	stateDir := dir
-	lock.Unlock() //
+	lock.Unlock()
 
 	purgeCrashReports(maxReportCount, stateDir)
 }
