@@ -46,8 +46,7 @@ func New(mountPoint string, pathMatcher types.Matcher, ignoreFSTypes []string) (
 		diskInput.IgnoreFS = ignoreFSTypes
 
 		diskDeduplicateInput := deduplicator{
-			Input:    diskInput,
-			hostroot: mountPoint,
+			Input: diskInput,
 		}
 
 		dt := diskTransformer{
