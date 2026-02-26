@@ -19,11 +19,14 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/scrapper"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/go-viper/mapstructure/v2"
 	yamlParser "github.com/knadh/koanf/parsers/yaml"
@@ -710,4 +713,39 @@ func dumpList(root []any) []any {
 	}
 
 	return root
+}
+
+// PrometheusConfigToURLs convert metric.prometheus.targets config to a list of targets.
+// It returns the targets and some warnings.
+//
+// See tests for the expected config.
+func PrometheusConfigToURLs(configTargets []PrometheusTarget) ([]*scrapper.Target, prometheus.MultiError) {
+	var warnings prometheus.MultiError
+
+	targets := make([]*scrapper.Target, 0, len(configTargets))
+
+	for _, configTarget := range configTargets {
+		targetURL, err := url.Parse(configTarget.URL)
+		if err != nil {
+			warnings.Append(fmt.Errorf("%w: invalid prometheus target URL: %s", ErrInvalidValue, err))
+
+			continue
+		}
+
+		target := &scrapper.Target{
+			ExtraLabels: map[string]string{
+				types.LabelMetaScrapeJob: configTarget.Name,
+				// HostPort could be empty, but this ExtraLabels is used by Registry which
+				// correctly handles empty values (drop the label).
+				types.LabelMetaScrapeInstance: scrapper.HostPort(targetURL),
+			},
+			URL:       targetURL,
+			AllowList: configTarget.AllowMetrics,
+			DenyList:  configTarget.DenyMetrics,
+		}
+
+		targets = append(targets, target)
+	}
+
+	return targets, warnings
 }

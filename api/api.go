@@ -197,6 +197,7 @@ func (api *API) init() {
 
 			hdr := w.Header()
 			hdr.Add("Content-Type", "plain/text")
+
 			_, err = w.Write([]byte(content)) //nolint:gosec // content is from internal DiagnosticPage, not user input
 		} else {
 			err = diagnosticTmpl.Execute(w, content)

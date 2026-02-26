@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"sort"
@@ -300,20 +301,17 @@ func (a MetricAnnotations) Changed(other MetricAnnotations) bool {
 		a.BleemeoAgentID != other.BleemeoAgentID)
 }
 
-// LabelsToText return a text version of a labels set
-// The text representation has a one-to-one relation with labels set.
-// It does because:
-// * labels are sorted by label name
-// * labels values are quoted
-//
-// Result looks like __name__="node_cpu_seconds_total",cpu="0",mode="idle".
-func LabelsToText(labels map[string]string) string {
+func labelsToText(labels map[string]string, nameBefore bool) string {
 	if len(labels) == 0 {
 		return ""
 	}
 
 	labelNames := make([]string, 0, len(labels))
 	for k := range labels {
+		if k == LabelName && nameBefore {
+			continue
+		}
+
 		labelNames = append(labelNames, k)
 	}
 
@@ -333,7 +331,36 @@ func LabelsToText(labels map[string]string) string {
 
 	str := strings.Join(strLabels, ",")
 
+	if nameBefore {
+		if str != "" {
+			return fmt.Sprintf("%s{%s}", labels[LabelName], str)
+		}
+
+		return labels[LabelName]
+	}
+
 	return str
+}
+
+// LabelsToText return a text version of a labels set
+// The text representation has a one-to-one relation with labels set.
+// It does because:
+// * labels are sorted by label name
+// * labels values are quoted
+//
+// Result looks like __name__="node_cpu_seconds_total",cpu="0",mode="idle".
+func LabelsToText(labels map[string]string) string {
+	return labelsToText(labels, false)
+}
+
+// LabelsToTextNicer convert to nicer format. It close to LabelsToText
+// but __name__ is present as classical PromQL selector, e.g.
+//
+//	`node_cpu_seconds_total{cpu="0",model="idle"}`
+//
+// When only __name__ is present, result don't include braket (e.g. `cpu_used`).
+func LabelsToTextNicer(labels map[string]string) string {
+	return labelsToText(labels, true)
 }
 
 // TextToLabels is the reverse of LabelsToText.

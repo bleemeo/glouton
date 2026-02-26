@@ -30,15 +30,15 @@ import (
 type gathererWithContext struct {
 	reg            *prometheus.Registry
 	l              sync.Mutex
-	target         configTarget
+	collector      blackboxCollector
 	currentContext context.Context //nolint:containedctx
 }
 
-func newGatherer(target configTarget) (*gathererWithContext, error) {
+func newGatherer(target blackboxCollector) (*gathererWithContext, error) {
 	reg := prometheus.NewRegistry()
 	self := &gathererWithContext{
-		reg:    reg,
-		target: target,
+		reg:       reg,
+		collector: target,
 	}
 
 	err := self.reg.Register(self)
@@ -63,9 +63,9 @@ func (g *gathererWithContext) GatherWithState(ctx context.Context, _ registry.Ga
 }
 
 func (g *gathererWithContext) Collect(ch chan<- prometheus.Metric) {
-	g.target.CollectWithContext(g.currentContext, ch)
+	g.collector.CollectWithContext(g.currentContext, ch)
 }
 
 func (g *gathererWithContext) Describe(ch chan<- *prometheus.Desc) {
-	g.target.Describe(ch)
+	g.collector.Describe(ch)
 }

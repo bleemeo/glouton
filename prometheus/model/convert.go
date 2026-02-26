@@ -146,6 +146,8 @@ func FamiliesToCollector(families []*dto.MetricFamily) ([]prometheus.Metric, err
 				result = append(result, prometheus.MustNewConstMetric(desc, prometheus.CounterValue, metric.GetCounter().GetValue(), labelsValues...))
 			case metric.GetGauge() != nil:
 				result = append(result, prometheus.MustNewConstMetric(desc, prometheus.GaugeValue, metric.GetGauge().GetValue(), labelsValues...))
+			case metric.GetUntyped() != nil:
+				result = append(result, prometheus.MustNewConstMetric(desc, prometheus.UntypedValue, metric.GetUntyped().GetValue(), labelsValues...))
 			default:
 				errs = append(errs, fmt.Errorf("%w: got %v", errUnsupportedType, metric))
 			}

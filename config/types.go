@@ -253,12 +253,13 @@ type BleemeoMQTT struct {
 }
 
 type Blackbox struct {
-	Enable          bool                     `yaml:"enable"`
-	ScraperName     string                   `yaml:"scraper_name"`
-	ScraperSendUUID bool                     `yaml:"scraper_send_uuid"`
-	UserAgent       string                   `yaml:"user_agent"`
-	Targets         []BlackboxTarget         `yaml:"targets"`
-	Modules         map[string]bbConf.Module `yaml:"modules"`
+	Enable             bool                     `yaml:"enable"`
+	ScraperName        string                   `yaml:"scraper_name"`
+	ScraperSendUUID    bool                     `yaml:"scraper_send_uuid"`
+	UserAgent          string                   `yaml:"user_agent"`
+	DefaultDNSResolver string                   `yaml:"default_dns_resolver"`
+	Targets            []BlackboxTarget         `yaml:"targets"`
+	Modules            map[string]bbConf.Module `yaml:"modules"`
 }
 
 type BlackboxTarget struct {
