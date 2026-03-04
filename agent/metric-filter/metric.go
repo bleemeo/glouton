@@ -100,8 +100,10 @@ var (
 		// Probes
 		"probe_duration_seconds",
 		"probe_dns_answer_rrs",
-		"probe_dns_lookup_time_seconds",
+		// For DNS, the lookup time is included in probe_dns_duration_seconds
+		`probe_dns_lookup_time_seconds{instance!~"dns:.*"}`,
 		"probe_dns_rcode",
+		"probe_dns_duration_seconds",
 		"probe_http_status_code",
 		"probe_success",
 		"probe_ssl_earliest_cert_expiry",
