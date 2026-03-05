@@ -140,7 +140,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(ctx context.Context, execution
 				name, common.APIContainerNameLength,
 			)
 
-			s.logThrottle(msg)
+			s.logThrottle("container-name-too-long", 1, msg)
 
 			continue
 		}

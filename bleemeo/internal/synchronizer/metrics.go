@@ -355,7 +355,7 @@ func (s *Synchronizer) filterMetrics(input []gloutonTypes.Metric) []gloutonTypes
 				m.Labels()[gloutonTypes.LabelName], m.Labels()[gloutonTypes.LabelItem], common.APIMetricItemLength,
 			)
 
-			s.logThrottle(msg)
+			s.logThrottle("metric-item-too-long", 1, msg)
 		}
 	}
 
@@ -943,30 +943,33 @@ func (mr *metricRegisterer) registerMetrics(ctx context.Context, localMetrics []
 
 func (mr *metricRegisterer) logTooManyMetrics(nbFailedStandardMetrics, nbFailedCustomMetrics int) {
 	if nbFailedCustomMetrics > 0 {
-		mr.s.logOnce.Do(func() {
-			config, ok := mr.s.option.Cache.CurrentAccountConfig()
+		config, ok := mr.s.option.Cache.CurrentAccountConfig()
 
-			maxCustomMetricsStr := ""
-			if ok {
-				maxCustomMetricsStr = fmt.Sprintf(" (%d)", config.MaxCustomMetrics)
-			}
+		maxCustomMetricsStr := ""
+		if ok {
+			maxCustomMetricsStr = fmt.Sprintf(" (%d)", config.MaxCustomMetrics)
+		}
 
-			const msg = "Failed to register %d metrics because you reached the maximum number of custom metrics%s. " +
-				"Consider removing some metrics from your allowlist, see the documentation for more details " +
-				"(https://go.bleemeo.com/l/agent-metrics-filtering)."
+		msg := fmt.Sprintf(
+			"Failed to register %d metrics because you reached the maximum number of custom metrics%s. "+
+				"Consider removing some metrics from your allowlist, see the documentation for more details "+
+				"(https://go.bleemeo.com/l/agent-metrics-filtering).",
+			nbFailedCustomMetrics,
+			maxCustomMetricsStr,
+		)
 
-			logger.V(0).Printf(msg, nbFailedCustomMetrics, maxCustomMetricsStr)
-		})
+		mr.s.logThrottle("too-many-metrics", 0, msg)
 	}
 
 	if nbFailedStandardMetrics > 0 {
-		mr.s.logOnce.Do(func() {
-			const msg = "Failed to register %d metrics because you reached the maximum number of metrics. " +
-				"Consider removing some metrics from your allowlist, see the documentation for more details " +
-				"(https://go.bleemeo.com/l/agent-metrics-filtering)."
+		msg := fmt.Sprintf(
+			"Failed to register %d metrics because you reached the maximum number of metrics. "+
+				"Consider removing some metrics from your allowlist, see the documentation for more details "+
+				"(https://go.bleemeo.com/l/agent-metrics-filtering).",
+			nbFailedStandardMetrics,
+		)
 
-			logger.V(0).Printf(msg, nbFailedStandardMetrics)
-		})
+		mr.s.logThrottle("too-many-metrics", 0, msg)
 	}
 }
 

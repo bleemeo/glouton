@@ -97,9 +97,7 @@ type Synchronizer struct {
 	agentID                   string
 	delayedContainer          map[string]time.Time
 
-	// logOnce is used to log that the limit of metrics has been reached.
-	logOnce             sync.Once
-	lastDenyReasonLogAt time.Time
+	lastLogByKey map[string]time.Time
 
 	l                             sync.Mutex
 	disabledUntil                 time.Time
@@ -1253,11 +1251,20 @@ func generatePassword(length int) (string, error) {
 }
 
 // logThrottle logs a message at most once per hour, all other logs are dropped to prevent spam.
-func (s *Synchronizer) logThrottle(msg string) {
-	if time.Since(s.lastDenyReasonLogAt) > time.Hour {
-		logger.V(1).Println(msg)
+// key is a throttling key: call with same key are limited to one message every hours.
+// Different keys could each log a message the same hour.
+func (s *Synchronizer) logThrottle(key string, level int, msg string) {
+	s.l.Lock()
+	defer s.l.Unlock()
 
-		s.lastDenyReasonLogAt = time.Now()
+	if s.lastLogByKey == nil {
+		s.lastLogByKey = make(map[string]time.Time)
+	}
+
+	if time.Since(s.lastLogByKey[key]) > time.Hour {
+		logger.V(level).Println(msg)
+
+		s.lastLogByKey[key] = time.Now()
 	}
 }
 
