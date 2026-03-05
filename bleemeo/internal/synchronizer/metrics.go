@@ -854,7 +854,8 @@ type metricRegisterer struct {
 	retryMetrics []gloutonTypes.Metric
 
 	regCountBeforeUpdate int
-	errorCount           int
+	registerFailCount    int
+	unexpectedErrorCount int
 	pendingErr           error
 	doneAtLeastOne       bool
 }
@@ -1068,16 +1069,26 @@ func (mr *metricRegisterer) doOnePass(ctx context.Context, currentList []glouton
 
 				mr.failedRegistrationByKey[key] = registration
 				mr.s.retryableMetricFailure[registration.LastFailKind] = false
+
+				mr.registerFailCount++
+				// Normally retry for them is correctly handled by mr.s.retryableMetricFailure
+				// but if we have way too much, abort with an error. This avoid issue where a Glouton
+				// would try to register thousands of metrics and fail for all of thems.
+				if mr.registerFailCount > 100 {
+					return err
+				}
+
+				time.Sleep(time.Duration(10*mr.registerFailCount) * time.Millisecond)
 			} else if mr.pendingErr == nil {
 				mr.pendingErr = err
-			}
 
-			mr.errorCount++
-			if mr.errorCount > 10 {
-				return err
-			}
+				mr.unexpectedErrorCount++
+				if mr.unexpectedErrorCount > 10 {
+					return err
+				}
 
-			time.Sleep(time.Duration(mr.errorCount/2) * time.Second)
+				time.Sleep(time.Duration(mr.unexpectedErrorCount/2) * time.Second)
+			}
 
 			continue
 		}
