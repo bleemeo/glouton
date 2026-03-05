@@ -358,8 +358,8 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 			break
 		}
 
-		_, err := s.runOnce(ctx, firstSync)
-		if err != nil {
+		_, errSync := s.runOnce(ctx, firstSync)
+		if errSync != nil {
 			var shouldSetAgentBrokenFlagTo time.Time
 
 			s.l.Lock()
@@ -373,7 +373,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 
 			s.l.Unlock()
 
-			if IsAuthenticationError(err) {
+			if IsAuthenticationError(errSync) {
 				successiveAuthErrors++
 
 				if firstAuthErrorAt.IsZero() {
@@ -392,7 +392,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 				}
 			}
 
-			if IsThrottleError(err) {
+			if IsThrottleError(errSync) {
 				deadline := exec.client.ThrottleDeadline().Add(delay.JitterDelay(15*time.Second, 0.3))
 				s.Disable(deadline, bleemeoTypes.DisableTooManyRequests)
 			} else {
@@ -412,14 +412,14 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 					s.Disable(s.now().Add(disableDelay), bleemeoTypes.DisableTooManyErrors)
 				}
 
-				if IsAuthenticationError(err) && successiveAuthErrors == 1 {
+				if IsAuthenticationError(errSync) && successiveAuthErrors == 1 {
 					// we disable only to trigger a reconnection on MQTT
 					s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, s.now().Add(10*time.Second))
 				}
 			}
 
 			switch {
-			case IsAuthenticationError(err) && s.agentID != "":
+			case IsAuthenticationError(errSync) && s.agentID != "":
 				fqdnMessage := ""
 
 				fqdn := s.option.Cache.FactsByKey()[s.agentID]["fqdn"].Value
@@ -432,7 +432,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 					s.agentID,
 					fqdnMessage,
 				)
-			case IsAuthenticationError(err):
+			case IsAuthenticationError(errSync):
 				registrationKey := []rune(s.option.Config.Bleemeo.RegistrationKey)
 				for i := range registrationKey {
 					if i >= 6 && i < len(registrationKey)-4 {
@@ -447,9 +447,9 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 				)
 			default:
 				if s.successiveErrors%5 == 1 {
-					logger.Printf("Unable to synchronize with Bleemeo: %v", err)
+					logger.Printf("Unable to synchronize with Bleemeo: %v", errSync)
 				} else {
-					logger.V(1).Printf("Unable to synchronize with Bleemeo: %v", err)
+					logger.V(1).Printf("Unable to synchronize with Bleemeo: %v", errSync)
 				}
 			}
 		} else {
