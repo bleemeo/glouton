@@ -87,6 +87,7 @@ type Synchronizer struct {
 	startedAt                 time.Time
 	syncHeartbeat             time.Time
 	heartbeatConsecutiveError int
+	lastSuccessfulSync        time.Time
 	lastSync                  time.Time
 	lastVSphereAgentsPurge    time.Time
 	successiveErrors          int
@@ -222,6 +223,7 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 		HeartbeatConsecutiveError     int
 		FullSyncCount                 int
 		StartedAt                     time.Time
+		LastSuccessfulSync            time.Time
 		LastSync                      time.Time
 		LastMetricActivation          time.Time
 		LastFactUpdatedAt             string
@@ -244,12 +246,15 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 		LastInfo                      bleemeoTypes.GlobalInfo
 		ThresholdOverrides            string
 		APIFeatures                   map[string]bool
+		StateMarkerAuthBroken         bool
+		StateMarkerDysfunctional      bool
 	}{
 		NextFullSync:                  s.nextFullSync,
 		HeartBeat:                     s.syncHeartbeat,
 		HeartbeatConsecutiveError:     s.heartbeatConsecutiveError,
 		FullSyncCount:                 s.fullSyncCount,
 		StartedAt:                     s.startedAt,
+		LastSuccessfulSync:            s.lastSuccessfulSync,
 		LastSync:                      s.lastSync,
 		LastFactUpdatedAt:             s.state.lastFactUpdatedAt,
 		LastMetricActivation:          s.state.lastMetricActivation,
@@ -1078,9 +1083,15 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (*Execut
 		logger.V(1).Printf("New full synchronization scheduled for %s", s.nextFullSync.Format(time.RFC3339))
 	}
 
+	s.l.Lock()
+
 	if err == nil {
-		s.lastSync = startAt
+		s.lastSuccessfulSync = startAt
 	}
+
+	s.lastSync = startAt
+
+	s.l.Unlock()
 
 	return execution, err
 }
