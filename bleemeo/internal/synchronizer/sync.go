@@ -54,12 +54,14 @@ import (
 )
 
 const (
-	agentBrokenCacheKey              = "AgentBroken"
+	agentAuthBrokenCacheKey          = "AgentAuthBroken"
+	agentDysfunctionalCacheKey       = "AgentDysfunctional"
 	disableCrashReportUploadCacheKey = "DisableCrashReportUploadUntil"
 	refreshTokenCacheKey             = "RefreshToken"
 )
 
 var (
+	ErrBleemeoDisabled            = errors.New("bleemeo connector is disabled")
 	errFQDNNotSet                 = errors.New("unable to register, fqdn is not set")
 	errConnectorTemporaryDisabled = errors.New("bleemeo connector temporary disabled")
 	errBleemeoUndefined           = errors.New("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see  https://go.bleemeo.com/l/agent-configuration-bleemeo-account ")
@@ -235,7 +237,7 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 		AgentID                       string
 		LastMaintenanceSync           time.Time
 		DisabledUntil                 time.Time
-		DisableReason                 bleemeoTypes.DisableReason
+		DisableReason                 string
 		ForceSync                     map[types.EntityName]types.SyncType
 		PendingMetricsUpdateCount     int
 		PendingMonitorsUpdateCount    int
@@ -266,7 +268,7 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 		AgentID:                       s.agentID,
 		LastMaintenanceSync:           s.state.lastMaintenanceSync,
 		DisabledUntil:                 s.disabledUntil,
-		DisableReason:                 s.disableReason,
+		DisableReason:                 s.disableReason.String(),
 		ForceSync:                     s.forceSync,
 		PendingMetricsUpdateCount:     len(s.pendingMetricsUpdate),
 		PendingMonitorsUpdateCount:    len(s.pendingMonitorsUpdate),
@@ -277,6 +279,8 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 		LastInfo:                      s.lastInfo,
 		ThresholdOverrides:            fmt.Sprintf("%v", s.thresholdOverrides),
 		APIFeatures:                   make(map[string]bool, len(s.hasFeature)),
+		StateMarkerAuthBroken:         stateHasValue(agentAuthBrokenCacheKey, s.option.State),
+		StateMarkerDysfunctional:      stateHasValue(agentDysfunctionalCacheKey, s.option.State),
 	}
 
 	for k, v := range s.hasFeature {
@@ -290,7 +294,7 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 }
 
 // Run runs the Synchronizer.
-func (s *Synchronizer) Run(ctx context.Context) error {
+func (s *Synchronizer) Run(ctx context.Context) error { //nolint:maintidx
 	s.startedAt = s.now()
 
 	firstSync := true
@@ -360,15 +364,18 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 
 		_, errSync := s.runOnce(ctx, firstSync)
 		if errSync != nil {
-			var shouldSetAgentBrokenFlagTo time.Time
-
 			s.l.Lock()
 			s.successiveErrors++
 
 			if s.firstErrorAt.IsZero() {
 				s.firstErrorAt = s.now()
 			} else if s.now().Sub(s.firstErrorAt) > 36*time.Hour {
-				shouldSetAgentBrokenFlagTo = s.firstErrorAt
+				if !stateHasValue(agentDysfunctionalCacheKey, s.option.State) {
+					err := s.option.State.Set(agentDysfunctionalCacheKey, s.firstErrorAt.Format(time.RFC3339))
+					if err != nil {
+						logger.V(1).Printf("Failed to write agent broken flag to state cache: %v", err)
+					}
+				}
 			}
 
 			s.l.Unlock()
@@ -379,16 +386,19 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 				if firstAuthErrorAt.IsZero() {
 					firstAuthErrorAt = s.now()
 				} else if s.now().Sub(firstAuthErrorAt) > 2*time.Hour {
-					shouldSetAgentBrokenFlagTo = firstAuthErrorAt
+					if !stateHasValue(agentAuthBrokenCacheKey, s.option.State) {
+						err := s.option.State.Set(agentAuthBrokenCacheKey, firstAuthErrorAt.Format(time.RFC3339))
+						if err != nil {
+							logger.V(1).Printf("Failed to write agent broken flag to state cache: %v", err)
+						}
+					}
 				}
 			} else {
 				firstAuthErrorAt = time.Time{}
-			}
 
-			if !shouldSetAgentBrokenFlagTo.IsZero() && !stateHasValue(agentBrokenCacheKey, s.option.State) {
-				err := s.option.State.Set(agentBrokenCacheKey, shouldSetAgentBrokenFlagTo.Format(time.RFC3339))
+				err := s.option.State.Delete(agentAuthBrokenCacheKey)
 				if err != nil {
-					logger.V(1).Printf("Failed to write agent broken flag to state cache: %v", err)
+					logger.V(1).Printf("Failed to delete agent broken flag from state cache: %v", err)
 				}
 			}
 
@@ -400,10 +410,17 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 				successiveErrors := s.successiveErrors
 				s.l.Unlock()
 
-				if stateHasValue(agentBrokenCacheKey, s.option.State) {
+				switch {
+				case stateHasValue(agentAuthBrokenCacheKey, s.option.State):
 					disableDelay := delay.Exponential(10*time.Minute, 3, successiveErrors, 5*24*time.Hour)
-					s.option.DisableCallback(bleemeoTypes.DisableLongStandingError, s.now().Add(disableDelay))
-				} else {
+					s.Disable(s.now().Add(disableDelay), bleemeoTypes.DisableAuthenticationError)
+					// Ask MQTT to disconnect, but don't block reconnection.
+					// They will be blocked anyway because it's a auth error (so we don't have oauth token required to connect to MQTT)
+					s.option.DisableCallback(bleemeoTypes.DisableRequestReconnection, s.now().Add(10*time.Second))
+				case stateHasValue(agentDysfunctionalCacheKey, s.option.State):
+					disableDelay := delay.Exponential(1*time.Minute, 1.55, successiveErrors, time.Hour)
+					s.Disable(s.now().Add(disableDelay), bleemeoTypes.DisableLongStandingError)
+				default:
 					disableDelay := delay.JitterDelay(
 						delay.Exponential(15*time.Second, 1.55, successiveErrors, 15*time.Minute),
 						0.1,
@@ -414,7 +431,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 
 				if IsAuthenticationError(errSync) && successiveAuthErrors == 1 {
 					// we disable only to trigger a reconnection on MQTT
-					s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, s.now().Add(10*time.Second))
+					s.option.DisableCallback(bleemeoTypes.DisableRequestReconnection, s.now().Add(10*time.Second))
 				}
 			}
 
@@ -461,7 +478,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 			successiveAuthErrors = 0
 			firstAuthErrorAt = time.Time{}
 
-			err = s.option.State.Delete(agentBrokenCacheKey)
+			err = s.option.State.Delete(agentDysfunctionalCacheKey)
 			if err != nil {
 				logger.V(1).Printf("Failed to delete agent broken flag from state cache: %v", err)
 			}
@@ -897,6 +914,19 @@ func (s *Synchronizer) ClearDisable(reasonToClear bleemeoTypes.DisableReason, de
 func (s *Synchronizer) VerifyAndGetToken(ctx context.Context) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+
+	disabledUntil, disableReason := s.getDisabledUntil()
+	if disableReason == bleemeoTypes.DisableAuthenticationError && s.now().Before(disabledUntil) {
+		return "", fmt.Errorf("%w: %s", ErrBleemeoDisabled, disableReason.String())
+	}
+
+	s.l.Lock()
+	hadSyncOnce := !s.lastSync.IsZero()
+	s.l.Unlock()
+
+	if !hadSyncOnce && stateHasValue(agentAuthBrokenCacheKey, s.option.State) {
+		return "", fmt.Errorf("%w: not yet started", ErrBleemeoDisabled)
+	}
 
 	// Low-cost API endpoint, used to test the validity of our token.
 	// We rely on the client to renew the token if it has expired.
