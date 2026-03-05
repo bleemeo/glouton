@@ -248,8 +248,8 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 		LastInfo                      bleemeoTypes.GlobalInfo
 		ThresholdOverrides            string
 		APIFeatures                   map[string]bool
-		StateMarkerAuthBroken         bool
-		StateMarkerDysfunctional      bool
+		StateMarkerAuthBroken         time.Time
+		StateMarkerDysfunctional      time.Time
 	}{
 		NextFullSync:                  s.nextFullSync,
 		HeartBeat:                     s.syncHeartbeat,
@@ -279,8 +279,8 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 		LastInfo:                      s.lastInfo,
 		ThresholdOverrides:            fmt.Sprintf("%v", s.thresholdOverrides),
 		APIFeatures:                   make(map[string]bool, len(s.hasFeature)),
-		StateMarkerAuthBroken:         stateHasValue(agentAuthBrokenCacheKey, s.option.State),
-		StateMarkerDysfunctional:      stateHasValue(agentDysfunctionalCacheKey, s.option.State),
+		StateMarkerAuthBroken:         stateGetTime(agentAuthBrokenCacheKey, s.option.State),
+		StateMarkerDysfunctional:      stateGetTime(agentDysfunctionalCacheKey, s.option.State),
 	}
 
 	for k, v := range s.hasFeature {
@@ -884,6 +884,11 @@ func (s *Synchronizer) getDisabledUntil() (time.Time, bleemeoTypes.DisableReason
 	s.l.Lock()
 	defer s.l.Unlock()
 
+	if s.now().After(s.disabledUntil) {
+		s.disabledUntil = time.Time{}
+		s.disableReason = bleemeoTypes.NotDisabled
+	}
+
 	return s.disabledUntil, s.disableReason
 }
 
@@ -1377,4 +1382,17 @@ func stateHasValue(key string, state bleemeoTypes.State) bool {
 	}
 
 	return value != nil
+}
+
+// stateGetTime returns whether the given state has a value for the given key.
+// If an error occurs, it returns false.
+func stateGetTime(key string, state bleemeoTypes.State) time.Time {
+	var value time.Time
+
+	err := state.Get(key, &value)
+	if err != nil {
+		return time.Time{}
+	}
+
+	return value
 }
