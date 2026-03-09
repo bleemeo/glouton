@@ -387,7 +387,7 @@ func (cr *containerReceiver) stop() {
 			defer crashreport.ProcessPanic()
 			defer wg.Done()
 
-			shutdownAll(components)
+			stopComponents(components)
 		}()
 	}
 

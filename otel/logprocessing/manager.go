@@ -179,7 +179,7 @@ ctxLoop:
 
 	man.containerRecv.stop()
 
-	shutdownAll(man.pipeline.startedComponents)
+	man.pipeline.shutdownAll()
 
 	saveLastFileSizesToCache(man.state, mergeLastFileSizes(man.pipeline.receivers, man.containerRecv))
 	saveFileMetadataToCache(man.state, man.persister.getAllMetadata())

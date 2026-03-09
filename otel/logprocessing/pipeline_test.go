@@ -175,9 +175,7 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 		t.Fatal(err)
 	}
 
-	defer func() {
-		shutdownAll(pipeline.startedComponents)
-	}()
+	defer pipeline.shutdownAll()
 
 	t.Log("Setting up fileconsumers ...")
 	time.Sleep(time.Second)

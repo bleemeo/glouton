@@ -152,9 +152,8 @@ func validateContainerFilters(containerFilter map[string]string, filtersConfigs 
 	return containerFilter
 }
 
-// shutdownAll stops all the given components (in reverse order).
-// It should be called before every unsuccessful return of the log pipeline initialization.
-func shutdownAll(components []component.Component) {
+// stopComponents stops all the given components (in reverse order).
+func stopComponents(components []component.Component) {
 	wg := new(sync.WaitGroup)
 	wg.Add(len(components))
 
@@ -183,7 +182,7 @@ func stopReceivers(receivers []*logReceiver, removePersistentExtsFn func([]compo
 	for _, recv := range receivers {
 		recv.l.Lock()
 
-		shutdownAll(recv.startedComponents)
+		stopComponents(recv.startedComponents)
 		removePersistentExtsFn(recv.registeredExtensions)
 
 		recv.l.Unlock()
