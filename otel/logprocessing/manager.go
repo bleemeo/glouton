@@ -627,6 +627,13 @@ func (man *Manager) DiagnosticArchive(_ context.Context, writer types.ArchiveWri
 		}
 	}
 
+	if man.pipeline.journalctlCounter != nil {
+		diagnosticInfo.receivers.JournalctlReceiver = &journalctlReceiverDiagnosticInformation{
+			LogProcessedCount:      man.pipeline.journalctlCounter.Load(),
+			LogThroughputPerMinute: man.pipeline.journalctlThroughputMeter.Total(),
+		}
+	}
+
 	if err := diagnosticInfo.writeToArchive(writer); err != nil {
 		return err
 	}
@@ -644,6 +651,16 @@ func operatorsForService(service discovery.Service) []config.OTELOperator {
 			"type":  "add",
 			"field": "resource['service.name']",
 			"value": service.Name,
+		},
+	}
+}
+
+func operatorsForServiceName(serviceName string) []config.OTELOperator {
+	return []config.OTELOperator{
+		{
+			"type":  "add",
+			"field": "resource['service.name']",
+			"value": serviceName,
 		},
 	}
 }

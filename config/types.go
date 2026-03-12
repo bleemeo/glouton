@@ -86,18 +86,26 @@ type OTELOperator = map[string]any
 type OTELFilters = map[string]any
 
 type OpenTelemetry struct {
-	Enable          bool                      `yaml:"enable"`
-	AutoDiscovery   bool                      `yaml:"auto_discovery"`
-	GRPC            EnableListener            `yaml:"grpc"`
-	HTTP            EnableListener            `yaml:"http"`
-	KnownLogFormats map[string][]OTELOperator `yaml:"known_log_formats"`
-	Receivers       map[string]OTLPReceiver   `yaml:"receivers"`
+	Enable              bool                      `yaml:"enable"`
+	AutoDiscovery       bool                      `yaml:"auto_discovery"`
+	AutoDiscoveryOption AutoDiscoveryOption       `yaml:"auto_discovery_option"`
+	GRPC                EnableListener            `yaml:"grpc"`
+	HTTP                EnableListener            `yaml:"http"`
+	KnownLogFormats     map[string][]OTELOperator `yaml:"known_log_formats"`
+	Receivers           map[string]OTLPReceiver   `yaml:"receivers"`
 	// map: container name -> format to apply
 	ContainerFormat map[string]string      `yaml:"container_format"`
 	GlobalFilters   OTELFilters            `yaml:"global_filters"`
 	KnownLogFilters map[string]OTELFilters `yaml:"known_log_filters"`
 	// map: container name -> filter to apply
 	ContainerFilter map[string]string `yaml:"container_filter"`
+}
+
+type AutoDiscoveryOption struct {
+	EnableJournalctl          bool `yaml:"journalctl_enable"`
+	EnableSyslog              bool `yaml:"syslog_enable"`
+	EnableAuditD              bool `yaml:"auditd_enable"`
+	EnableContainerAndService bool `yaml:"container_and_service_discovery_enable"`
 }
 
 type EnableListener struct {

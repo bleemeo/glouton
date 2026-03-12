@@ -33,6 +33,7 @@ import (
 	"github.com/bleemeo/glouton/types"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configgrpc"
 	"go.opentelemetry.io/collector/config/confighttp"
@@ -77,6 +78,9 @@ type pipelineContext struct {
 
 	otlpRecvCounter         *atomic.Int64
 	otlpRecvThroughputMeter *ringCounter
+
+	journalctlCounter         *atomic.Int64
+	journalctlThroughputMeter *ringCounter
 
 	logProcessedCount  atomic.Int64
 	logThroughputMeter *ringCounter
@@ -268,7 +272,27 @@ func (p *pipelineContext) init(
 
 	if cfg.GRPC.Enable || cfg.HTTP.Enable {
 		if err := p.setupNetworkReceiver(ctx, cfg); err != nil {
-			logger.V(1).Printf("Unable to configure GRPC/HTTP receiver: %w", err)
+			logger.V(1).Printf("Unable to configure GRPC/HTTP receiver: %v", err)
+		}
+	}
+
+	if cfg.AutoDiscovery {
+		if cfg.AutoDiscoveryOption.EnableJournalctl {
+			if err := p.setupJournalctl(ctx, knownLogFormats); err != nil {
+				logger.V(1).Printf("Unable to configure Journalctl receiver: %v", err)
+			}
+		}
+
+		if cfg.AutoDiscoveryOption.EnableSyslog {
+			if err := p.setupSyslog(ctx, knownLogFormats); err != nil {
+				logger.V(1).Printf("Unable to configure Journalctl receiver: %v", err)
+			}
+		}
+
+		if cfg.AutoDiscoveryOption.EnableAuditD {
+			if err := p.setupAuditD(ctx, knownLogFormats); err != nil {
+				logger.V(1).Printf("Unable to configure Journalctl receiver: %v", err)
+			}
 		}
 	}
 
@@ -360,6 +384,154 @@ func (p *pipelineContext) setupNetworkReceiver(
 	}
 
 	p.startedComponents = append(p.startedComponents, otlpLogReceiver)
+
+	return nil
+}
+
+func (p *pipelineContext) setupJournalctl(
+	ctx context.Context,
+	knownLogFormats map[string][]config.OTELOperator,
+) error {
+	factoryReceiver := journaldreceiver.NewFactory()
+	receiverCfg := factoryReceiver.CreateDefaultConfig()
+
+	receiverTypedCfg, ok := receiverCfg.(*journaldreceiver.JournaldConfig)
+	if !ok {
+		return fmt.Errorf("%w for receiver default config: %T", errUnexpectedConfig, receiverCfg)
+	}
+
+	if p.hostroot != "/" {
+		receiverTypedCfg.InputConfig.RootPath = p.hostroot
+	}
+
+	receiverTypedCfg.InputConfig.JournalctlPath = "/usr/bin/journalctl"
+
+	opsGroup, found := knownLogFormats["journalctl"]
+	if !found {
+		return fmt.Errorf("%w missing log format %q", errUnexpectedConfig, "journalctl")
+	}
+
+	// Operators from known log formats have already been expanded.
+	referencedOps, err := buildOperators(append(operatorsForServiceName("journalctl"), opsGroup...))
+	if err != nil {
+		return fmt.Errorf("building globally-defined operators: %w", err)
+	}
+
+	receiverTypedCfg.Operators = referencedOps
+
+	p.journalctlCounter = new(atomic.Int64)
+	p.journalctlThroughputMeter = newRingCounter(throughputMeterResolutionSecs)
+
+	journaldReceiver, err := factoryReceiver.CreateLogs(
+		ctx,
+		receiver.Settings{
+			ID:                component.NewIDWithName(factoryReceiver.Type(), "journald-receiver"),
+			TelemetrySettings: p.telemetry,
+		},
+		receiverTypedCfg,
+		wrapWithInstrumentation(p.inputConsumer, p.journalctlCounter, p.journalctlThroughputMeter),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to setup journalctl receiver: %w", err)
+	}
+
+	if err = journaldReceiver.Start(ctx, nil); err != nil {
+		return fmt.Errorf("failed to start journalctl receiver: %w", err)
+	}
+
+	p.startedComponents = append(p.startedComponents, journaldReceiver)
+
+	return nil
+}
+
+func (p *pipelineContext) setupSyslog(
+	ctx context.Context,
+	knownLogFormats map[string][]config.OTELOperator,
+) error {
+	opsGroup, found := knownLogFormats["syslog"]
+	if !found {
+		return fmt.Errorf("%w missing log format %q", errUnexpectedConfig, "syslog")
+	}
+
+	opsGroup2, found := knownLogFormats["syslogAuth"]
+	if !found {
+		return fmt.Errorf("%w missing log format %q", errUnexpectedConfig, "syslogAuth")
+	}
+
+	recvConfig := config.OTLPReceiver{
+		Include:   []string{"/var/log/syslog"},
+		Operators: append(operatorsForServiceName("syslog"), opsGroup...),
+	}
+
+	recvConfig2 := config.OTLPReceiver{
+		Include:   []string{"/var/log/auth.log"},
+		Operators: append(operatorsForServiceName("syslog"), opsGroup2...),
+	}
+
+	recv, warn, err := newLogReceiver("syslog", recvConfig, true, p.getInput(), nil, statFileImpl)
+	if err != nil {
+		return fmt.Errorf("failed to start Syslog receiver: %w", err)
+	}
+
+	if warn != nil {
+		logWarnings(errorf("A warning occurred while setting up log receiver for syslog: %w", warn))
+	}
+
+	recv2, warn, err := newLogReceiver("syslog-auth", recvConfig2, true, p.getInput(), nil, statFileImpl)
+	if err != nil {
+		return fmt.Errorf("failed to start Syslog receiver: %w", err)
+	}
+
+	if warn != nil {
+		logWarnings(errorf("A warning occurred while setting up log receiver for syslog: %w", warn))
+	}
+
+	err = recv.update(ctx, p, logWarnings)
+	if err != nil {
+		return err
+	}
+
+	p.receivers = append(p.receivers, recv)
+
+	err = recv2.update(ctx, p, logWarnings)
+	if err != nil {
+		return err
+	}
+
+	p.receivers = append(p.receivers, recv2)
+
+	return nil
+}
+
+func (p *pipelineContext) setupAuditD(
+	ctx context.Context,
+	knownLogFormats map[string][]config.OTELOperator,
+) error {
+	opsGroup, found := knownLogFormats["auditd"]
+	if !found {
+		logger.V(1).Printf("auditd receiver requires the log format %q, which is not defined", "auditd")
+	}
+
+	recvConfig := config.OTLPReceiver{
+		Include:   []string{"/var/log/audit/audit.log"},
+		Operators: append(operatorsForServiceName("auditd"), opsGroup...),
+	}
+
+	recv, warn, err := newLogReceiver("auditd", recvConfig, true, p.getInput(), nil, statFileImpl)
+	if err != nil {
+		return fmt.Errorf("failed to start AuditD receiver: %w", err)
+	}
+
+	if warn != nil {
+		logWarnings(errorf("A warning occurred while setting up log receiver for auditd: %w", warn))
+	}
+
+	err = recv.update(ctx, p, logWarnings)
+	if err != nil {
+		return err
+	}
+
+	p.receivers = append(p.receivers, recv)
 
 	return nil
 }

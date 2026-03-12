@@ -259,6 +259,12 @@ func DefaultConfig() Config { //nolint:maintidx
 			OpenTelemetry: OpenTelemetry{
 				Enable:        true,
 				AutoDiscovery: false,
+				AutoDiscoveryOption: AutoDiscoveryOption{
+					EnableJournalctl:          true,
+					EnableSyslog:              false, // journalctl already contains syslog.
+					EnableAuditD:              true,
+					EnableContainerAndService: true,
+				},
 				GRPC: EnableListener{
 					Enable:  false,
 					Address: "localhost",

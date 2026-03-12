@@ -435,6 +435,11 @@ type otlpReceiverDiagnosticInformation struct {
 	LogThroughputPerMinute int
 }
 
+type journalctlReceiverDiagnosticInformation struct {
+	LogProcessedCount      int64
+	LogThroughputPerMinute int
+}
+
 type receiverDiagnosticInformation struct {
 	LogProcessedCount      int64
 	LogThroughputPerMinute int
@@ -463,6 +468,7 @@ type diagnosticSummary struct {
 
 type diagnosticReceiver struct {
 	OTLPReceiver       *otlpReceiverDiagnosticInformation
+	JournalctlReceiver *journalctlReceiverDiagnosticInformation
 	Receivers          map[string]receiverDiagnosticInformation
 	ContainerReceivers map[string]containerDiagnosticInformation
 	WatchedServices    map[string][]receiverDiagnosticInformation
