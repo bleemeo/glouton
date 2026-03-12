@@ -257,13 +257,13 @@ func DefaultConfig() Config { //nolint:maintidx
 			HostRootPrefix: "/hostroot",
 			Inputs:         []LogInput{},
 			OpenTelemetry: OpenTelemetry{
-				Enable:        true,
-				AutoDiscovery: false,
-				AutoDiscoveryOption: AutoDiscoveryOption{
-					EnableJournalctl:          true,
-					EnableSyslog:              false, // journalctl already contains syslog.
-					EnableAuditD:              true,
-					EnableContainerAndService: true,
+				Enable: true,
+				AutoDiscovery: AutoDiscovery{
+					Enable:                      false,
+					DiscoverJournalctl:          true,
+					DiscoverSyslog:              false, // journalctl already contains syslog.
+					DiscoverAuditD:              true,
+					DiscoverContainerAndService: true,
 				},
 				GRPC: EnableListener{
 					Enable:  false,

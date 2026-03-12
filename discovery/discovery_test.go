@@ -1044,8 +1044,11 @@ func Test_usePreviousNetstat(t *testing.T) {
 
 func TestValidateServices(t *testing.T) {
 	otelCfg := config.OpenTelemetry{
-		Enable:        true,
-		AutoDiscovery: true,
+		Enable: true,
+		AutoDiscovery: config.AutoDiscovery{
+			Enable:                      true,
+			DiscoverContainerAndService: true,
+		},
 		KnownLogFormats: map[string][]config.OTELOperator{
 			"noop-fmt": {},
 		},
@@ -1258,8 +1261,8 @@ func TestValidateServices(t *testing.T) {
 		gotWarningsStr = append(gotWarningsStr, warning.Error())
 	}
 
-	if diff := cmp.Diff(gotWarningsStr, wantWarnings); diff != "" {
-		t.Fatalf("Validate returned unexpected warnings:\n%s", diff)
+	if diff := cmp.Diff(wantWarnings, gotWarningsStr); diff != "" {
+		t.Fatalf("Validate returned unexpected warnings (-want +got):\n%s", diff)
 	}
 }
 

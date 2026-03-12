@@ -420,12 +420,22 @@ func movedKeys() map[string]string {
 	return keys
 }
 
+// movedScalarKeys return all keys that were moved. The map is old key => new key.
+func movedScalarKeys() map[string]string {
+	keys := map[string]string{
+		"log.opentelemetry.auto_discovery": "log.opentelemetry.auto_discovery.enable",
+	}
+
+	return keys
+}
+
 // migrate upgrade the configuration when Glouton changes its settings.
 func migrate(k *koanf.Koanf) (*koanf.Koanf, prometheus.MultiError) {
 	config := k.All()
 
 	var warnings prometheus.MultiError
 
+	warnings = append(warnings, migrateMovedScalarKeys(k, config)...)
 	warnings = append(warnings, migrateMovedKeys(k, config)...)
 	warnings = append(warnings, migrateLogging(k, config)...)
 	warnings = append(warnings, migrateMetricsPrometheus(k, config)...)
@@ -439,6 +449,42 @@ func migrate(k *koanf.Koanf) (*koanf.Koanf, prometheus.MultiError) {
 	warnings.Append(warning)
 
 	return newConfig, warnings
+}
+
+func isScalar(val any) bool {
+	switch val.(type) {
+	case string, int, float64, bool:
+		return true
+	}
+
+	return false
+}
+
+// migrateMovedScalarKeys migrate the config settings of scalar (string, int, bool) that were simply moved.
+// Using a function in addition to migrateMovedKeys for case where we migrate the scalar into a sub-field under the same name
+// example: log.opentelemetry.auto_discovery -> log.opentelemetry.auto_discovery.enable
+func migrateMovedScalarKeys(k *koanf.Koanf, config map[string]any) prometheus.MultiError {
+	var warnings prometheus.MultiError
+
+	keys := movedScalarKeys()
+
+	for oldKey, newKey := range keys {
+		val := k.Get(oldKey)
+		if val == nil {
+			continue
+		}
+
+		if !isScalar(val) {
+			continue
+		}
+
+		config[newKey] = val
+		delete(config, oldKey)
+
+		warnings.Append(fmt.Errorf("%w: %s, use %s instead", errSettingsDeprecated, oldKey, newKey))
+	}
+
+	return warnings
 }
 
 // migrateMovedKeys migrate the config settings that were simply moved.

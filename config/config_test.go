@@ -203,8 +203,10 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				},
 			},
 			OpenTelemetry: OpenTelemetry{
-				Enable:        true,
-				AutoDiscovery: true,
+				Enable: true,
+				AutoDiscovery: AutoDiscovery{
+					Enable: true,
+				},
 				GRPC: EnableListener{
 					Enable:  true,
 					Address: "localhost",
@@ -987,6 +989,22 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
+			Name:  "deprecated_auto_discovery",
+			Files: []string{"testdata/deprecated_auto_discovery.conf"},
+			WantWarnings: []string{
+				"testdata/deprecated_auto_discovery.conf: setting is deprecated: log.opentelemetry.auto_discovery, use log.opentelemetry.auto_discovery.enable instead",
+			},
+			WantConfig: Config{
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						AutoDiscovery: AutoDiscovery{
+							Enable: true,
+						},
+					},
+				},
+			},
+		},
+		{
 			Name:  "multiple_deprecated_same_file",
 			Files: []string{"testdata/multiple_deprecated_same_file.conf", "testdata/multiple_deprecated_same_file2.conf"},
 			WantWarnings: []string{
@@ -1041,11 +1059,11 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			}
 
 			if diff := cmp.Diff(test.WantWarnings, strWarnings, cmpopts.SortSlices(lessFunc)); diff != "" {
-				t.Fatalf("Unexpected warnings:\n%s", diff)
+				t.Errorf("Unexpected warnings:\n%s", diff)
 			}
 
 			if diff := compareConfig(test.WantConfig, config, cmpopts.EquateEmpty()); diff != "" {
-				t.Fatalf("Unexpected config:\n%s", diff)
+				t.Errorf("Unexpected config:\n%s", diff)
 			}
 		})
 	}
