@@ -112,14 +112,53 @@ func Load(withDefault bool, loadEnviron bool, paths ...string) (Config, []Item, 
 	return config, loader.items, warnings, err
 }
 
-func checkForConfigMistake(cfg Config) prometheus.MultiError {
+func isUserSet(items []Item, key string) bool {
+	for _, row := range items {
+		if row.Key == key && row.Source != SourceDefault {
+			return true
+		}
+	}
+
+	return false
+}
+
+func checkForConfigMistake(cfg Config, items []Item) prometheus.MultiError {
 	var warnings prometheus.MultiError
 
 	if cfg.MQTT.Enable && len(cfg.MQTT.Hosts) == 0 {
 		warnings.Append(fmt.Errorf("%w: OpenSource MQTT is enable but with an empty hosts list", ErrMissconfiguration))
 	}
 
+	if cfg.Log.OpenTelemetry.AutoDiscovery.EnableAll {
+		if !cfg.Log.OpenTelemetry.AutoDiscovery.EnableAuditD && isUserSet(items, "log.opentelemetry.auto_discovery.enable_auditd") {
+			warnings.Append(fmt.Errorf("%w: log.opentelemetry.auto_discovery.enable_auditd can't disable when enable_all is active", ErrMissconfiguration))
+		}
+
+		if !cfg.Log.OpenTelemetry.AutoDiscovery.EnableContainerAndService && isUserSet(items, "log.opentelemetry.auto_discovery.enable_container_and_service") {
+			warnings.Append(fmt.Errorf("%w: log.opentelemetry.auto_discovery.enable_container_and_service can't disable when enable_all is active", ErrMissconfiguration))
+		}
+
+		if !cfg.Log.OpenTelemetry.AutoDiscovery.EnableJournalctl && isUserSet(items, "log.opentelemetry.auto_discovery.enable_journalctl") {
+			warnings.Append(fmt.Errorf("%w: log.opentelemetry.auto_discovery.enable_journalctl can't disable when enable_all is active", ErrMissconfiguration))
+		}
+
+		if !cfg.Log.OpenTelemetry.AutoDiscovery.EnableSyslog && isUserSet(items, "log.opentelemetry.auto_discovery.enable_syslog") {
+			warnings.Append(fmt.Errorf("%w: log.opentelemetry.auto_discovery.enable_syslog can't disable when enable_all is active", ErrMissconfiguration))
+		}
+	}
+
 	return warnings
+}
+
+func applyConfigTransformation(cfg Config) Config {
+	if cfg.Log.OpenTelemetry.AutoDiscovery.EnableAll {
+		cfg.Log.OpenTelemetry.AutoDiscovery.EnableAuditD = true
+		cfg.Log.OpenTelemetry.AutoDiscovery.EnableJournalctl = true
+		cfg.Log.OpenTelemetry.AutoDiscovery.EnableSyslog = true
+		cfg.Log.OpenTelemetry.AutoDiscovery.EnableContainerAndService = true
+	}
+
+	return cfg
 }
 
 // load the configuration from files and environment variables.
@@ -175,8 +214,10 @@ func load(loader *configLoader, withDefault bool, loadEnviron bool, paths ...str
 	warning := finalKoanf.UnmarshalWithConf("", &config, unmarshalConf)
 	warnings.Append(warning)
 
-	moreWarnings = checkForConfigMistake(config)
+	moreWarnings = checkForConfigMistake(config, loader.items)
 	warnings = append(warnings, moreWarnings...)
+
+	config = applyConfigTransformation(config)
 
 	return config, unwrapErrors(warnings), errors.MaybeUnwrap()
 }
@@ -423,7 +464,7 @@ func movedKeys() map[string]string {
 // movedScalarKeys return all keys that were moved. The map is old key => new key.
 func movedScalarKeys() map[string]string {
 	keys := map[string]string{
-		"log.opentelemetry.auto_discovery": "log.opentelemetry.auto_discovery.enable",
+		"log.opentelemetry.auto_discovery": "log.opentelemetry.auto_discovery.enable_all",
 	}
 
 	return keys

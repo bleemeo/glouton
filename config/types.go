@@ -101,11 +101,11 @@ type OpenTelemetry struct {
 }
 
 type AutoDiscovery struct {
-	Enable                      bool `yaml:"enable"`
-	DiscoverJournalctl          bool `yaml:"discover_journalctl"`
-	DiscoverSyslog              bool `yaml:"discover_syslog"`
-	DiscoverAuditD              bool `yaml:"discover_auditd"`
-	DiscoverContainerAndService bool `yaml:"discover_container_and_service"`
+	EnableAll                 bool `yaml:"enable_all"`
+	EnableJournalctl          bool `yaml:"enable_journalctl"`
+	EnableSyslog              bool `yaml:"enable_syslog"`
+	EnableAuditD              bool `yaml:"enable_auditd"`
+	EnableContainerAndService bool `yaml:"enable_container_and_service"`
 }
 
 type EnableListener struct {
