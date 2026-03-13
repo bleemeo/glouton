@@ -125,7 +125,7 @@ func (epts *encodedPoints) pushPoint(metricID uint64, point types.Point) error {
 		data.appender = app
 	}
 
-	data.appender.Append(point.Time.UnixMilli(), point.Value)
+	data.appender.Append(0, point.Time.UnixMilli(), point.Value)
 
 	if data.oldest.IsZero() || point.Time.Before(data.oldest) {
 		data.oldest = point.Time
@@ -159,7 +159,7 @@ func (epts *encodedPoints) setPoints(metricID uint64, points []types.Point) erro
 	var oldest, youngest time.Time
 
 	for _, p := range points {
-		app.Append(p.Time.UnixMilli(), p.Value)
+		app.Append(0, p.Time.UnixMilli(), p.Value)
 
 		if oldest.IsZero() || p.Time.Before(oldest) {
 			oldest = p.Time
