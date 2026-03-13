@@ -109,9 +109,6 @@ func Load(withDefault bool, loadEnviron bool, paths ...string) (Config, []Item, 
 		config.Agent.CloudImageCreationFile = filepath.Join(config.Agent.StateDirectory, config.Agent.CloudImageCreationFile)
 	}
 
-	moreWarnings := checkForConfigMistake(config)
-	warnings = append(warnings, moreWarnings...)
-
 	return config, loader.items, warnings, err
 }
 
@@ -177,6 +174,9 @@ func load(loader *configLoader, withDefault bool, loadEnviron bool, paths ...str
 
 	warning := finalKoanf.UnmarshalWithConf("", &config, unmarshalConf)
 	warnings.Append(warning)
+
+	moreWarnings = checkForConfigMistake(config)
+	warnings = append(warnings, moreWarnings...)
 
 	return config, unwrapErrors(warnings), errors.MaybeUnwrap()
 }
