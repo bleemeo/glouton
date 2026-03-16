@@ -1940,10 +1940,15 @@ func (r *Registry) applyRelabel(
 		cancel()
 	}
 
-	promLabels = labels.FromMap(input)
+	promLabelsBuilder := labels.NewBuilder(labels.Labels{})
+	for k, v := range input {
+		promLabelsBuilder.Set(k, v)
+	}
+
+	keep := relabel.ProcessBuilder(promLabelsBuilder, r.relabelConfigs...)
+	promLabels = promLabelsBuilder.Labels()
 	annotations = gloutonModel.MetaLabelsToAnnotation(promLabels)
 
-	promLabels, keep := relabel.Process(promLabels, r.relabelConfigs...)
 	if !keep {
 		return promLabels, labelsWithMeta, annotations, retryLater
 	}

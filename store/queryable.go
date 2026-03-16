@@ -120,8 +120,9 @@ func (i *seriesIter) Next() bool {
 
 		if len(points) > 0 {
 			i.current = series{
-				labels: metric.labels,
-				data:   points,
+				labels:   metric.labels,
+				createAt: metric.createAt,
+				data:     points,
 			}
 
 			return true
@@ -144,8 +145,9 @@ func (i *seriesIter) Warnings() annotations.Annotations {
 }
 
 type series struct {
-	labels map[string]string
-	data   []types.Point
+	labels   map[string]string
+	createAt time.Time
+	data     []types.Point
 }
 
 func (s series) Labels() labels.Labels {
@@ -154,14 +156,16 @@ func (s series) Labels() labels.Labels {
 
 func (s series) Iterator(_ chunkenc.Iterator) chunkenc.Iterator {
 	return &seriesSample{
-		data:   s.data,
-		offset: -1,
+		data:     s.data,
+		createAt: s.createAt,
+		offset:   -1,
 	}
 }
 
 type seriesSample struct {
-	data   []types.Point
-	offset int
+	data     []types.Point
+	createAt time.Time
+	offset   int
 }
 
 // Next advances the iterator by one.
@@ -207,6 +211,14 @@ func (s *seriesSample) AtFloatHistogram(*histogram.FloatHistogram) (int64, *hist
 
 func (s *seriesSample) AtT() int64 {
 	return s.data[s.offset].Time.UnixMilli()
+}
+
+func (s *seriesSample) AtST() int64 {
+	if s.createAt.IsZero() {
+		return 0
+	}
+
+	return s.createAt.UnixMilli()
 }
 
 // Err returns the current error. It should be used only after iterator is
