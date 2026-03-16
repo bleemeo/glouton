@@ -54,12 +54,14 @@ import (
 )
 
 const (
-	agentBrokenCacheKey              = "AgentBroken"
+	agentAuthBrokenCacheKey          = "AgentAuthBroken"
+	agentDysfunctionalCacheKey       = "AgentDysfunctional"
 	disableCrashReportUploadCacheKey = "DisableCrashReportUploadUntil"
 	refreshTokenCacheKey             = "RefreshToken"
 )
 
 var (
+	ErrBleemeoDisabled            = errors.New("bleemeo connector is disabled")
 	errFQDNNotSet                 = errors.New("unable to register, fqdn is not set")
 	errConnectorTemporaryDisabled = errors.New("bleemeo connector temporary disabled")
 	errBleemeoUndefined           = errors.New("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see  https://go.bleemeo.com/l/agent-configuration-bleemeo-account ")
@@ -87,6 +89,7 @@ type Synchronizer struct {
 	startedAt                 time.Time
 	syncHeartbeat             time.Time
 	heartbeatConsecutiveError int
+	lastSuccessfulSync        time.Time
 	lastSync                  time.Time
 	lastVSphereAgentsPurge    time.Time
 	successiveErrors          int
@@ -97,9 +100,7 @@ type Synchronizer struct {
 	agentID                   string
 	delayedContainer          map[string]time.Time
 
-	// logOnce is used to log that the limit of metrics has been reached.
-	logOnce             sync.Once
-	lastDenyReasonLogAt time.Time
+	lastLogByKey map[string]time.Time
 
 	l                             sync.Mutex
 	disabledUntil                 time.Time
@@ -224,6 +225,7 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 		HeartbeatConsecutiveError     int
 		FullSyncCount                 int
 		StartedAt                     time.Time
+		LastSuccessfulSync            time.Time
 		LastSync                      time.Time
 		LastMetricActivation          time.Time
 		LastFactUpdatedAt             string
@@ -235,7 +237,7 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 		AgentID                       string
 		LastMaintenanceSync           time.Time
 		DisabledUntil                 time.Time
-		DisableReason                 bleemeoTypes.DisableReason
+		DisableReason                 string
 		ForceSync                     map[types.EntityName]types.SyncType
 		PendingMetricsUpdateCount     int
 		PendingMonitorsUpdateCount    int
@@ -246,12 +248,15 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 		LastInfo                      bleemeoTypes.GlobalInfo
 		ThresholdOverrides            string
 		APIFeatures                   map[string]bool
+		StateMarkerAuthBroken         time.Time
+		StateMarkerDysfunctional      time.Time
 	}{
 		NextFullSync:                  s.nextFullSync,
 		HeartBeat:                     s.syncHeartbeat,
 		HeartbeatConsecutiveError:     s.heartbeatConsecutiveError,
 		FullSyncCount:                 s.fullSyncCount,
 		StartedAt:                     s.startedAt,
+		LastSuccessfulSync:            s.lastSuccessfulSync,
 		LastSync:                      s.lastSync,
 		LastFactUpdatedAt:             s.state.lastFactUpdatedAt,
 		LastMetricActivation:          s.state.lastMetricActivation,
@@ -263,7 +268,7 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 		AgentID:                       s.agentID,
 		LastMaintenanceSync:           s.state.lastMaintenanceSync,
 		DisabledUntil:                 s.disabledUntil,
-		DisableReason:                 s.disableReason,
+		DisableReason:                 s.disableReason.String(),
 		ForceSync:                     s.forceSync,
 		PendingMetricsUpdateCount:     len(s.pendingMetricsUpdate),
 		PendingMonitorsUpdateCount:    len(s.pendingMonitorsUpdate),
@@ -274,6 +279,8 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 		LastInfo:                      s.lastInfo,
 		ThresholdOverrides:            fmt.Sprintf("%v", s.thresholdOverrides),
 		APIFeatures:                   make(map[string]bool, len(s.hasFeature)),
+		StateMarkerAuthBroken:         stateGetTime(agentAuthBrokenCacheKey, s.option.State),
+		StateMarkerDysfunctional:      stateGetTime(agentDysfunctionalCacheKey, s.option.State),
 	}
 
 	for k, v := range s.hasFeature {
@@ -287,7 +294,7 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 }
 
 // Run runs the Synchronizer.
-func (s *Synchronizer) Run(ctx context.Context) error {
+func (s *Synchronizer) Run(ctx context.Context) error { //nolint:maintidx
 	s.startedAt = s.now()
 
 	firstSync := true
@@ -355,41 +362,47 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 			break
 		}
 
-		_, err := s.runOnce(ctx, firstSync)
-		if err != nil {
-			var shouldSetAgentBrokenFlagTo time.Time
-
+		_, errSync := s.runOnce(ctx, firstSync)
+		if errSync != nil {
 			s.l.Lock()
 			s.successiveErrors++
 
 			if s.firstErrorAt.IsZero() {
 				s.firstErrorAt = s.now()
 			} else if s.now().Sub(s.firstErrorAt) > 36*time.Hour {
-				shouldSetAgentBrokenFlagTo = s.firstErrorAt
+				if !stateHasValue(agentDysfunctionalCacheKey, s.option.State) {
+					err := s.option.State.Set(agentDysfunctionalCacheKey, s.firstErrorAt.Format(time.RFC3339))
+					if err != nil {
+						logger.V(1).Printf("Failed to write agent broken flag to state cache: %v", err)
+					}
+				}
 			}
 
 			s.l.Unlock()
 
-			if IsAuthenticationError(err) {
+			if IsAuthenticationError(errSync) {
 				successiveAuthErrors++
 
 				if firstAuthErrorAt.IsZero() {
 					firstAuthErrorAt = s.now()
 				} else if s.now().Sub(firstAuthErrorAt) > 2*time.Hour {
-					shouldSetAgentBrokenFlagTo = firstAuthErrorAt
+					if !stateHasValue(agentAuthBrokenCacheKey, s.option.State) {
+						err := s.option.State.Set(agentAuthBrokenCacheKey, firstAuthErrorAt.Format(time.RFC3339))
+						if err != nil {
+							logger.V(1).Printf("Failed to write agent broken flag to state cache: %v", err)
+						}
+					}
 				}
 			} else {
 				firstAuthErrorAt = time.Time{}
-			}
 
-			if !shouldSetAgentBrokenFlagTo.IsZero() && !stateHasValue(agentBrokenCacheKey, s.option.State) {
-				err := s.option.State.Set(agentBrokenCacheKey, shouldSetAgentBrokenFlagTo.Format(time.RFC3339))
+				err := s.option.State.Delete(agentAuthBrokenCacheKey)
 				if err != nil {
-					logger.V(1).Printf("Failed to write agent broken flag to state cache: %v", err)
+					logger.V(1).Printf("Failed to delete agent broken flag from state cache: %v", err)
 				}
 			}
 
-			if IsThrottleError(err) {
+			if IsThrottleError(errSync) {
 				deadline := exec.client.ThrottleDeadline().Add(delay.JitterDelay(15*time.Second, 0.3))
 				s.Disable(deadline, bleemeoTypes.DisableTooManyRequests)
 			} else {
@@ -397,10 +410,17 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 				successiveErrors := s.successiveErrors
 				s.l.Unlock()
 
-				if stateHasValue(agentBrokenCacheKey, s.option.State) {
+				switch {
+				case stateHasValue(agentAuthBrokenCacheKey, s.option.State):
 					disableDelay := delay.Exponential(10*time.Minute, 3, successiveErrors, 5*24*time.Hour)
-					s.option.DisableCallback(bleemeoTypes.DisableLongStandingError, s.now().Add(disableDelay))
-				} else {
+					s.Disable(s.now().Add(disableDelay), bleemeoTypes.DisableAuthenticationError)
+					// Ask MQTT to disconnect, but don't block reconnection.
+					// They will be blocked anyway because it's a auth error (so we don't have oauth token required to connect to MQTT)
+					s.option.DisableCallback(bleemeoTypes.DisableRequestReconnection, s.now().Add(10*time.Second))
+				case stateHasValue(agentDysfunctionalCacheKey, s.option.State):
+					disableDelay := delay.Exponential(1*time.Minute, 1.55, successiveErrors, time.Hour)
+					s.Disable(s.now().Add(disableDelay), bleemeoTypes.DisableLongStandingError)
+				default:
 					disableDelay := delay.JitterDelay(
 						delay.Exponential(15*time.Second, 1.55, successiveErrors, 15*time.Minute),
 						0.1,
@@ -409,14 +429,14 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 					s.Disable(s.now().Add(disableDelay), bleemeoTypes.DisableTooManyErrors)
 				}
 
-				if IsAuthenticationError(err) && successiveAuthErrors == 1 {
+				if IsAuthenticationError(errSync) && successiveAuthErrors == 1 {
 					// we disable only to trigger a reconnection on MQTT
-					s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, s.now().Add(10*time.Second))
+					s.option.DisableCallback(bleemeoTypes.DisableRequestReconnection, s.now().Add(10*time.Second))
 				}
 			}
 
 			switch {
-			case IsAuthenticationError(err) && s.agentID != "":
+			case IsAuthenticationError(errSync) && s.agentID != "":
 				fqdnMessage := ""
 
 				fqdn := s.option.Cache.FactsByKey()[s.agentID]["fqdn"].Value
@@ -429,7 +449,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 					s.agentID,
 					fqdnMessage,
 				)
-			case IsAuthenticationError(err):
+			case IsAuthenticationError(errSync):
 				registrationKey := []rune(s.option.Config.Bleemeo.RegistrationKey)
 				for i := range registrationKey {
 					if i >= 6 && i < len(registrationKey)-4 {
@@ -444,9 +464,9 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 				)
 			default:
 				if s.successiveErrors%5 == 1 {
-					logger.Printf("Unable to synchronize with Bleemeo: %v", err)
+					logger.Printf("Unable to synchronize with Bleemeo: %v", errSync)
 				} else {
-					logger.V(1).Printf("Unable to synchronize with Bleemeo: %v", err)
+					logger.V(1).Printf("Unable to synchronize with Bleemeo: %v", errSync)
 				}
 			}
 		} else {
@@ -458,7 +478,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 			successiveAuthErrors = 0
 			firstAuthErrorAt = time.Time{}
 
-			err = s.option.State.Delete(agentBrokenCacheKey)
+			err = s.option.State.Delete(agentDysfunctionalCacheKey)
 			if err != nil {
 				logger.V(1).Printf("Failed to delete agent broken flag from state cache: %v", err)
 			}
@@ -864,6 +884,11 @@ func (s *Synchronizer) getDisabledUntil() (time.Time, bleemeoTypes.DisableReason
 	s.l.Lock()
 	defer s.l.Unlock()
 
+	if s.now().After(s.disabledUntil) {
+		s.disabledUntil = time.Time{}
+		s.disableReason = bleemeoTypes.NotDisabled
+	}
+
 	return s.disabledUntil, s.disableReason
 }
 
@@ -894,6 +919,19 @@ func (s *Synchronizer) ClearDisable(reasonToClear bleemeoTypes.DisableReason, de
 func (s *Synchronizer) VerifyAndGetToken(ctx context.Context) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+
+	disabledUntil, disableReason := s.getDisabledUntil()
+	if disableReason == bleemeoTypes.DisableAuthenticationError && s.now().Before(disabledUntil) {
+		return "", fmt.Errorf("%w: %s", ErrBleemeoDisabled, disableReason.String())
+	}
+
+	s.l.Lock()
+	hadSyncOnce := !s.lastSync.IsZero()
+	s.l.Unlock()
+
+	if !hadSyncOnce && stateHasValue(agentAuthBrokenCacheKey, s.option.State) {
+		return "", fmt.Errorf("%w: not yet started", ErrBleemeoDisabled)
+	}
 
 	// Low-cost API endpoint, used to test the validity of our token.
 	// We rely on the client to renew the token if it has expired.
@@ -1080,9 +1118,15 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (*Execut
 		logger.V(1).Printf("New full synchronization scheduled for %s", s.nextFullSync.Format(time.RFC3339))
 	}
 
+	s.l.Lock()
+
 	if err == nil {
-		s.lastSync = startAt
+		s.lastSuccessfulSync = startAt
 	}
+
+	s.lastSync = startAt
+
+	s.l.Unlock()
 
 	return execution, err
 }
@@ -1253,11 +1297,20 @@ func generatePassword(length int) (string, error) {
 }
 
 // logThrottle logs a message at most once per hour, all other logs are dropped to prevent spam.
-func (s *Synchronizer) logThrottle(msg string) {
-	if time.Since(s.lastDenyReasonLogAt) > time.Hour {
-		logger.V(1).Println(msg)
+// key is a throttling key: call with same key are limited to one message every hours.
+// Different keys could each log a message the same hour.
+func (s *Synchronizer) logThrottle(key string, level int, msg string) {
+	s.l.Lock()
+	defer s.l.Unlock()
 
-		s.lastDenyReasonLogAt = time.Now()
+	if s.lastLogByKey == nil {
+		s.lastLogByKey = make(map[string]time.Time)
+	}
+
+	if time.Since(s.lastLogByKey[key]) > time.Hour {
+		logger.V(level).Println(msg)
+
+		s.lastLogByKey[key] = time.Now()
 	}
 }
 
@@ -1329,4 +1382,17 @@ func stateHasValue(key string, state bleemeoTypes.State) bool {
 	}
 
 	return value != nil
+}
+
+// stateGetTime returns whether the given state has a value for the given key.
+// If an error occurs, it returns false.
+func stateGetTime(key string, state bleemeoTypes.State) time.Time {
+	var value time.Time
+
+	err := state.Get(key, &value)
+	if err != nil {
+		return time.Time{}
+	}
+
+	return value
 }

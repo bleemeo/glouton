@@ -233,8 +233,11 @@ func (e *Execution) Option() types.Option {
 	return e.synchronizer.option
 }
 
-func (e *Execution) LastSync() time.Time {
-	return e.synchronizer.lastSync
+func (e *Execution) LastSuccessfulSync() time.Time {
+	e.synchronizer.l.Lock()
+	defer e.synchronizer.l.Unlock()
+
+	return e.synchronizer.lastSuccessfulSync
 }
 
 func (e *Execution) StartedAt() time.Time {

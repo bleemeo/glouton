@@ -126,6 +126,7 @@ const (
 	DisableAuthenticationError
 	DisableTimeDrift
 	DisableLongStandingError
+	DisableRequestReconnection
 )
 
 func (r DisableReason) String() string {
@@ -144,6 +145,8 @@ func (r DisableReason) String() string {
 		return "local time is too different from actual time"
 	case DisableLongStandingError:
 		return "long standing error"
+	case DisableRequestReconnection:
+		return "request MQTT reconnection"
 	case NotDisabled:
 		return "not disabled"
 	default:

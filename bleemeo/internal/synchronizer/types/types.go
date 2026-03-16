@@ -149,8 +149,8 @@ type SynchronizationExecution interface {
 	RequestUpdateThresholds()
 	RequestNotifyLabelsUpdate()
 	Option() Option
-	// LastSync returns the time the last synchronization started at and completed without error on all entities.
-	LastSync() time.Time
+	// LastSuccessfulSync returns the time the last synchronization started at and completed without error on all entities.
+	LastSuccessfulSync() time.Time
 	// StartedAt returns the time this synchronization started at.
 	StartedAt() time.Time
 	GlobalState() SynchronizedGlobalState
