@@ -34,3 +34,11 @@ glouton     ALL=(ALL) NOPASSWD: /usr/bin/stat --printf=%s /var/lib/docker/contai
 # Allow Glouton to read application logs
 glouton     ALL=(ALL) NOPASSWD: /usr/bin/tail --follow=name --bytes=* /var/log/*/*.log
 glouton     ALL=(ALL) NOPASSWD: /usr/bin/stat --printf=%s /var/log/*/*.log
+
+# Allow Glouton to read system logs
+glouton     ALL=(ALL) NOPASSWD: /usr/bin/tail --follow=name --bytes=* /var/log/syslog
+glouton     ALL=(ALL) NOPASSWD: /usr/bin/stat --printf=%s /var/log/syslog
+glouton     ALL=(ALL) NOPASSWD: /usr/bin/tail --follow=name --bytes=* /var/log/auth.log
+glouton     ALL=(ALL) NOPASSWD: /usr/bin/stat --printf=%s /var/log/auth.log
+glouton     ALL=(ALL) NOPASSWD: /usr/bin/tail --follow=name --bytes=* /var/log/message
+glouton     ALL=(ALL) NOPASSWD: /usr/bin/stat --printf=%s /var/log/message

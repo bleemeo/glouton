@@ -203,8 +203,14 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				},
 			},
 			OpenTelemetry: OpenTelemetry{
-				Enable:        true,
-				AutoDiscovery: true,
+				Enable: true,
+				AutoDiscovery: AutoDiscovery{
+					EnableAll:                 true,
+					EnableJournalctl:          true,
+					EnableSyslog:              true,
+					EnableAuditD:              true,
+					EnableContainerAndService: true,
+				},
 				GRPC: EnableListener{
 					Enable:  true,
 					Address: "localhost",
@@ -901,6 +907,43 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
+			Name:  "log-auto-discovery-one-by-one",
+			Files: []string{"testdata/log-auto-discovery-one-by-one.conf"},
+			WantConfig: Config{
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						AutoDiscovery: AutoDiscovery{
+							EnableAll:                 false,
+							EnableJournalctl:          true,
+							EnableSyslog:              false,
+							EnableAuditD:              true,
+							EnableContainerAndService: false,
+						},
+					},
+				},
+			},
+		},
+		{
+			Name:  "log-auto-discovery-all",
+			Files: []string{"testdata/log-auto-discovery-all.conf"},
+			WantWarnings: []string{
+				"config issue: log.opentelemetry.auto_discovery.enable_auditd can't disable when enable_all is active",
+			},
+			WantConfig: Config{
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						AutoDiscovery: AutoDiscovery{
+							EnableAll:                 true,
+							EnableJournalctl:          true,
+							EnableSyslog:              true,
+							EnableAuditD:              true,
+							EnableContainerAndService: true,
+						},
+					},
+				},
+			},
+		},
+		{
 			Name:  "deprecated cassandra_detailed_tables",
 			Files: []string{"testdata/deprecated_cassandra.conf"},
 			WantWarnings: []string{
@@ -987,6 +1030,26 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
+			Name:  "deprecated_auto_discovery",
+			Files: []string{"testdata/deprecated_auto_discovery.conf"},
+			WantWarnings: []string{
+				"testdata/deprecated_auto_discovery.conf: setting is deprecated: log.opentelemetry.auto_discovery, use log.opentelemetry.auto_discovery.enable_all instead",
+			},
+			WantConfig: Config{
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						AutoDiscovery: AutoDiscovery{
+							EnableAll:                 true,
+							EnableJournalctl:          true,
+							EnableSyslog:              true,
+							EnableAuditD:              true,
+							EnableContainerAndService: true,
+						},
+					},
+				},
+			},
+		},
+		{
 			Name:  "multiple_deprecated_same_file",
 			Files: []string{"testdata/multiple_deprecated_same_file.conf", "testdata/multiple_deprecated_same_file2.conf"},
 			WantWarnings: []string{
@@ -1041,11 +1104,11 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			}
 
 			if diff := cmp.Diff(test.WantWarnings, strWarnings, cmpopts.SortSlices(lessFunc)); diff != "" {
-				t.Fatalf("Unexpected warnings:\n%s", diff)
+				t.Errorf("Unexpected warnings:\n%s", diff)
 			}
 
 			if diff := compareConfig(test.WantConfig, config, cmpopts.EquateEmpty()); diff != "" {
-				t.Fatalf("Unexpected config:\n%s", diff)
+				t.Errorf("Unexpected config:\n%s", diff)
 			}
 		})
 	}

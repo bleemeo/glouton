@@ -33,11 +33,13 @@ require (
 	github.com/json-iterator/go v1.1.12
 	github.com/knadh/koanf v1.5.0
 	github.com/knadh/koanf/v2 v2.3.3
+	github.com/miekg/dns v1.1.72
 	github.com/mitchellh/copystructure v1.2.0
 	github.com/ncabatoff/process-exporter v0.8.7
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza v0.147.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.147.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.147.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver v0.147.0
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/opencontainers/runtime-spec v1.3.0
@@ -242,7 +244,6 @@ require (
 	github.com/mdlayher/netlink v1.9.0 // indirect
 	github.com/mdlayher/socket v0.5.1 // indirect
 	github.com/mdlayher/wifi v0.7.2 // indirect
-	github.com/miekg/dns v1.1.72 // indirect
 	github.com/minio/highwayhash v1.0.4-0.20251030100505-070ab1a87a76 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
@@ -264,7 +265,6 @@ require (
 	github.com/nats-io/nkeys v0.4.15 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/ncabatoff/go-seq v0.0.0-20180805175032-b08ef85ed833 // indirect
-	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/oklog/ulid/v2 v2.1.1 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.147.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/filter v0.147.0 // indirect

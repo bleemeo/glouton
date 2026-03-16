@@ -87,7 +87,7 @@ type OTELFilters = map[string]any
 
 type OpenTelemetry struct {
 	Enable          bool                      `yaml:"enable"`
-	AutoDiscovery   bool                      `yaml:"auto_discovery"`
+	AutoDiscovery   AutoDiscovery             `yaml:"auto_discovery"`
 	GRPC            EnableListener            `yaml:"grpc"`
 	HTTP            EnableListener            `yaml:"http"`
 	KnownLogFormats map[string][]OTELOperator `yaml:"known_log_formats"`
@@ -98,6 +98,14 @@ type OpenTelemetry struct {
 	KnownLogFilters map[string]OTELFilters `yaml:"known_log_filters"`
 	// map: container name -> filter to apply
 	ContainerFilter map[string]string `yaml:"container_filter"`
+}
+
+type AutoDiscovery struct {
+	EnableAll                 bool `yaml:"enable_all"`
+	EnableJournalctl          bool `yaml:"enable_journalctl"`
+	EnableSyslog              bool `yaml:"enable_syslog"`
+	EnableAuditD              bool `yaml:"enable_auditd"`
+	EnableContainerAndService bool `yaml:"enable_container_and_service"`
 }
 
 type EnableListener struct {

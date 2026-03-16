@@ -257,8 +257,14 @@ func DefaultConfig() Config { //nolint:maintidx
 			HostRootPrefix: "/hostroot",
 			Inputs:         []LogInput{},
 			OpenTelemetry: OpenTelemetry{
-				Enable:        true,
-				AutoDiscovery: false,
+				Enable: true,
+				AutoDiscovery: AutoDiscovery{
+					EnableAll:                 false,
+					EnableJournalctl:          false,
+					EnableSyslog:              false,
+					EnableAuditD:              false,
+					EnableContainerAndService: false,
+				},
 				GRPC: EnableListener{
 					Enable:  false,
 					Address: "localhost",

@@ -465,9 +465,7 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 		persister:         mustNewPersistHost(t),
 	}
 
-	defer func() {
-		shutdownAll(pipeline.startedComponents)
-	}()
+	defer pipeline.shutdownAll()
 
 	tmpDir := t.TempDir()
 	knownLogFormats := config.DefaultKnownLogFormats()

@@ -268,9 +268,7 @@ func TestFileLogReceiver(t *testing.T) {
 		persister:         mustNewPersistHost(t),
 	}
 
-	defer func() {
-		shutdownAll(pipeline.startedComponents)
-	}()
+	defer pipeline.shutdownAll()
 
 	logBuf := logBuffer{
 		buf: make([]plog.Logs, 0, 2), // we plan to write 2 log lines (in fact 4, but half of them will be filtered)
@@ -454,9 +452,7 @@ func TestFileLogReceiverWithHostroot(t *testing.T) {
 		persister:         mustNewPersistHost(t),
 	}
 
-	defer func() {
-		shutdownAll(pipeline.startedComponents)
-	}()
+	defer pipeline.shutdownAll()
 
 	err = recv.update(ctx, &pipeline, addWarningsFn(t))
 	if err != nil {
@@ -636,9 +632,7 @@ func TestExecLogReceiver(t *testing.T) {
 				pipeline.lastFileSizes[file.Name()] = tc.previousFileSize
 			}
 
-			defer func() {
-				shutdownAll(pipeline.startedComponents)
-			}()
+			defer pipeline.shutdownAll()
 
 			recv, warn, err := newLogReceiver("root_files", cfg, false, makeBufferConsumer(t, &logBuffer{buf: []plog.Logs{}}), map[string][]config.OTELOperator{}, statFile)
 			if err != nil {

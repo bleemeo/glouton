@@ -16,7 +16,9 @@
 
 package config
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // flattenOps returns a slice containing all the given operators,
 // unpacking slices if needed to end up with a flat list.
@@ -443,6 +445,141 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		removeAttr("severity"),
 	}
 
+	exprSyslogToFacility := `EXPR(
+      body["SYSLOG_FACILITY"] == "0" ? "kernel" :
+      body["SYSLOG_FACILITY"] == "1" ? "user-level" :
+      body["SYSLOG_FACILITY"] == "2" ? "mail" :
+      body["SYSLOG_FACILITY"] == "3" ? "system daemons" :
+      body["SYSLOG_FACILITY"] == "4" ? "security/authorization" :
+      body["SYSLOG_FACILITY"] == "5" ? "syslogd" :
+      body["SYSLOG_FACILITY"] == "6" ? "line printer" :
+      body["SYSLOG_FACILITY"] == "7" ? "network news" :
+      body["SYSLOG_FACILITY"] == "8" ? "uucp" :
+      body["SYSLOG_FACILITY"] == "9" ? "clock" :
+      body["SYSLOG_FACILITY"] == "10" ? "security/authorization" :
+      body["SYSLOG_FACILITY"] == "11" ? "ftp" :
+      body["SYSLOG_FACILITY"] == "12" ? "ntp" :
+      body["SYSLOG_FACILITY"] == "13" ? "log audit" :
+      body["SYSLOG_FACILITY"] == "14" ? "log alert" :
+      body["SYSLOG_FACILITY"] == "15" ? "clock" :
+      body["SYSLOG_FACILITY"] == "16" ? "local" :
+      body["SYSLOG_FACILITY"] == "17" ? "local" :
+      body["SYSLOG_FACILITY"] == "18" ? "local" :
+      body["SYSLOG_FACILITY"] == "19" ? "local" :
+      body["SYSLOG_FACILITY"] == "20" ? "local" :
+      body["SYSLOG_FACILITY"] == "21" ? "local" :
+      body["SYSLOG_FACILITY"] == "22" ? "local" :
+      body["SYSLOG_FACILITY"] == "23" ? "local" :
+      "unknown"
+    )`
+
+	// Rebuild a "syslog" message from journalctl JSON (it's also what journcalclt show on CLI)
+	exprJournalctlToSyslogBody := `EXPR(
+		timestamp.Format("Jan 02 15:04:05") + " " +
+		(body["_HOSTNAME"] ?? "") + " " +
+		(attributes["source_program"] ?? "") +
+		(body["_PID"] != nil && attributes["source_program"] != nil ? "[" + body["_PID"] + "]" : "") +
+		": " + (body["MESSAGE"] ?? "")
+	)`
+
+	journalctlParser := []OTELOperator{
+		{
+			"type":        "time_parser",
+			"parse_from":  "body._SOURCE_REALTIME_TIMESTAMP",
+			"layout":      "us",
+			"layout_type": "epoch",
+		},
+		{
+			"type":       "severity_parser",
+			"parse_from": "body.PRIORITY",
+			// Priority is syslog's level: 0 ("emerg") -> 7 ("debug")
+			// Mapping is OTEL severity -> slog level
+			"mapping": map[string]any{
+				"fatal":  "0", // Emergency
+				"error4": "1", // Alert
+				"error3": "2", // Critical
+				"error":  "3", // Error
+				"warn":   "4", // Warning
+				"info2":  "5", // Notice
+				"info":   "6", // Informational
+				"debug":  "7", // Debug
+			},
+		},
+		{
+			"type":  "add",
+			"field": "attributes.facility",
+			"value": exprSyslogToFacility,
+		},
+		{
+			"type":  "remove",
+			"field": "attributes.facility",
+			"if":    "attributes.facility == 'unknown'",
+		},
+		{
+			"type":  "add",
+			"field": "attributes.source_program",
+			"value": `EXPR(body["SYSLOG_IDENTIFIER"] ?? body["_COMM"] ?? "")`,
+		},
+		{
+			"type":  "remove",
+			"field": "attributes.source_program",
+			"if":    "attributes.source_program == ''",
+		},
+		{
+			"type":     "add",
+			"field":    "body",
+			"value":    exprJournalctlToSyslogBody,
+			"on_error": "send",
+		},
+		// fallback if above expresion failed
+		{
+			"type": "move",
+			"from": "body.MESSAGE",
+			"to":   "body",
+			"if":   `type(body) == "map" && "MESSAGE" in body`,
+		},
+	}
+
+	syslogParser := []OTELOperator{
+		{
+			// Parse syslog when time use "2026-03-10T14:23:09.079180+00:00" format (e.g. Ubuntu 24.04 and later)
+			"type":  "regex_parser",
+			"regex": `^(?P<time>[^ ]+) (?P<hostname>[^ ]+) (?P<source_program>[^ \[]+)(\[\d+\])?: .*$`,
+			"timestamp": map[string]any{
+				"parse_from":  "attributes.time",
+				"layout":      "%Y-%m-%dT%H:%M:%S.%L%z",
+				"layout_type": "strptime",
+			},
+			"if": `body matches '^\\d{4}-'`,
+		},
+		{
+			// Parse syslog when time use "Mar 10 14:39:12" format (e.g. Ubuntu 22.04)
+			"type":  "regex_parser",
+			"regex": `^(?P<time>[A-Za-z]{3} [0-9: ]+) (?P<hostname>[^ ]+) (?P<source_program>[^ \[]+)(\[\d+\])?: .*$`,
+			"timestamp": map[string]any{
+				"parse_from":  "attributes.time",
+				"layout":      "%b %d %H:%M:%S",
+				"layout_type": "strptime",
+			},
+			"if": `body matches '^[A-Za-z]{3} '`,
+		},
+		removeAttr("time"),
+		removeAttr("hostname"),
+	}
+
+	auditdParser := []OTELOperator{
+		{
+			"type":  "regex_parser",
+			"regex": `^type=(?P<type>[^ ]+) msg=audit\((?P<timestamp>[0-9.]+):[0-9]+\).*$`,
+			"timestamp": map[string]any{
+				"parse_from":  "attributes.timestamp",
+				"layout":      "s.ms",
+				"layout_type": "epoch",
+			},
+		},
+		removeAttr("timestamp"),
+	}
+
 	return map[string][]OTELOperator{
 		"json": {
 			{
@@ -764,6 +901,17 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		"rabbitmq_docker": flattenOps(
 			rabbitMQParser,
 			removeAttr("time"),
+		),
+		"journalctl": journalctlParser,
+		"auditd":     auditdParser,
+		"syslog":     syslogParser,
+		"syslogAuth": flattenOps(
+			syslogParser,
+			OTELOperator{
+				"type":  "add",
+				"field": "attributes.facility",
+				"value": "security/authorization",
+			},
 		),
 	}
 }

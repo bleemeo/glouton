@@ -27,6 +27,10 @@ fi
 
 usermod -aG docker glouton 2> /dev/null || true
 
+if getent group systemd-journal >/dev/null; then
+    usermod -aG systemd-journal glouton 2> /dev/null || true
+fi
+
 if [ -e /var/lib/bleemeo/state.json -a ! -e /var/lib/glouton/state.json ]; then
     echo "Migrating from bleemeo-agent to Glouton"
     echo "Stopping bleemeo-agent and copying state.json from bleemeo-agent to Glouton"
