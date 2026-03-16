@@ -355,7 +355,7 @@ func (s *Synchronizer) filterMetrics(input []gloutonTypes.Metric) []gloutonTypes
 				m.Labels()[gloutonTypes.LabelName], m.Labels()[gloutonTypes.LabelItem], common.APIMetricItemLength,
 			)
 
-			s.logThrottle(msg)
+			s.logThrottle("metric-item-too-long", 1, msg)
 		}
 	}
 
@@ -854,7 +854,8 @@ type metricRegisterer struct {
 	retryMetrics []gloutonTypes.Metric
 
 	regCountBeforeUpdate int
-	errorCount           int
+	registerFailCount    int
+	unexpectedErrorCount int
 	pendingErr           error
 	doneAtLeastOne       bool
 }
@@ -943,30 +944,33 @@ func (mr *metricRegisterer) registerMetrics(ctx context.Context, localMetrics []
 
 func (mr *metricRegisterer) logTooManyMetrics(nbFailedStandardMetrics, nbFailedCustomMetrics int) {
 	if nbFailedCustomMetrics > 0 {
-		mr.s.logOnce.Do(func() {
-			config, ok := mr.s.option.Cache.CurrentAccountConfig()
+		config, ok := mr.s.option.Cache.CurrentAccountConfig()
 
-			maxCustomMetricsStr := ""
-			if ok {
-				maxCustomMetricsStr = fmt.Sprintf(" (%d)", config.MaxCustomMetrics)
-			}
+		maxCustomMetricsStr := ""
+		if ok {
+			maxCustomMetricsStr = fmt.Sprintf(" (%d)", config.MaxCustomMetrics)
+		}
 
-			const msg = "Failed to register %d metrics because you reached the maximum number of custom metrics%s. " +
-				"Consider removing some metrics from your allowlist, see the documentation for more details " +
-				"(https://go.bleemeo.com/l/agent-metrics-filtering)."
+		msg := fmt.Sprintf(
+			"Failed to register %d metrics because you reached the maximum number of custom metrics%s. "+
+				"Consider removing some metrics from your allowlist, see the documentation for more details "+
+				"(https://go.bleemeo.com/l/agent-metrics-filtering).",
+			nbFailedCustomMetrics,
+			maxCustomMetricsStr,
+		)
 
-			logger.V(0).Printf(msg, nbFailedCustomMetrics, maxCustomMetricsStr)
-		})
+		mr.s.logThrottle("too-many-metrics", 0, msg)
 	}
 
 	if nbFailedStandardMetrics > 0 {
-		mr.s.logOnce.Do(func() {
-			const msg = "Failed to register %d metrics because you reached the maximum number of metrics. " +
-				"Consider removing some metrics from your allowlist, see the documentation for more details " +
-				"(https://go.bleemeo.com/l/agent-metrics-filtering)."
+		msg := fmt.Sprintf(
+			"Failed to register %d metrics because you reached the maximum number of metrics. "+
+				"Consider removing some metrics from your allowlist, see the documentation for more details "+
+				"(https://go.bleemeo.com/l/agent-metrics-filtering).",
+			nbFailedStandardMetrics,
+		)
 
-			logger.V(0).Printf(msg, nbFailedStandardMetrics)
-		})
+		mr.s.logThrottle("too-many-metrics", 0, msg)
 	}
 }
 
@@ -1065,16 +1069,26 @@ func (mr *metricRegisterer) doOnePass(ctx context.Context, currentList []glouton
 
 				mr.failedRegistrationByKey[key] = registration
 				mr.s.retryableMetricFailure[registration.LastFailKind] = false
+
+				mr.registerFailCount++
+				// Normally retry for them is correctly handled by mr.s.retryableMetricFailure
+				// but if we have way too much, abort with an error. This avoid issue where a Glouton
+				// would try to register thousands of metrics and fail for all of thems.
+				if mr.registerFailCount > 100 {
+					return err
+				}
+
+				time.Sleep(time.Duration(10*mr.registerFailCount) * time.Millisecond)
 			} else if mr.pendingErr == nil {
 				mr.pendingErr = err
-			}
 
-			mr.errorCount++
-			if mr.errorCount > 10 {
-				return err
-			}
+				mr.unexpectedErrorCount++
+				if mr.unexpectedErrorCount > 10 {
+					return err
+				}
 
-			time.Sleep(time.Duration(mr.errorCount/2) * time.Second)
+				time.Sleep(time.Duration(mr.unexpectedErrorCount/2) * time.Second)
+			}
 
 			continue
 		}

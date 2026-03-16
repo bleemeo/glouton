@@ -169,7 +169,7 @@ func compatibilitySyncToPerform(ctx context.Context, execution types.Synchroniza
 
 	_, minDelayed := execution.GlobalState().DelayedContainers()
 
-	if execution.LastSync().Before(lastDiscovery) || (!minDelayed.IsZero() && execution.StartedAt().After(minDelayed)) {
+	if execution.LastSuccessfulSync().Before(lastDiscovery) || (!minDelayed.IsZero() && execution.StartedAt().After(minDelayed)) {
 		execution.RequestSynchronization(types.EntityContainer, false)
 	}
 
@@ -183,7 +183,7 @@ func compatibilitySyncToPerform(ctx context.Context, execution types.Synchroniza
 		execution.RequestSynchronization(types.EntityMetric, false)
 	}
 
-	if execution.StartedAt().After(state.metricRetryAt) || execution.LastSync().Before(lastDiscovery) || execution.LastSync().Before(lastAnnotationChange) || state.lastMetricCount != currentMetricCount {
+	if execution.StartedAt().After(state.metricRetryAt) || execution.LastSuccessfulSync().Before(lastDiscovery) || execution.LastSuccessfulSync().Before(lastAnnotationChange) || state.lastMetricCount != currentMetricCount {
 		execution.RequestSynchronization(types.EntityMetric, false)
 	}
 

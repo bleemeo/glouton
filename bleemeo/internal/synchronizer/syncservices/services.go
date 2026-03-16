@@ -85,7 +85,7 @@ func (s *syncServicesExecution) NeedSynchronization(_ context.Context) (bool, er
 	_, lastDiscovery := s.currentExecution.Option().Discovery.GetLatestDiscovery()
 	_, minDelayed := s.currentExecution.GlobalState().DelayedContainers()
 
-	if s.currentExecution.LastSync().Before(lastDiscovery) || (!minDelayed.IsZero() && s.currentExecution.StartedAt().After(minDelayed)) {
+	if s.currentExecution.LastSuccessfulSync().Before(lastDiscovery) || (!minDelayed.IsZero() && s.currentExecution.StartedAt().After(minDelayed)) {
 		// Metrics registration may need services to be synced, trigger metrics synchronization to be sure any
 		// possible blocked metrics get registered after service are registered
 		s.currentExecution.RequestSynchronization(types.EntityMetric, false)
