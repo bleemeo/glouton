@@ -259,11 +259,11 @@ func DefaultConfig() Config { //nolint:maintidx
 			OpenTelemetry: OpenTelemetry{
 				Enable: true,
 				AutoDiscovery: AutoDiscovery{
-					EnableAll:                 false,
-					EnableJournalctl:          false,
-					EnableSyslog:              false,
-					EnableAuditD:              false,
-					EnableContainerAndService: false,
+					AllEnable:                 false,
+					JournalctlEnable:          false,
+					SyslogEnable:              false,
+					AuditdEnable:              false,
+					ContainerAndServiceEnable: false,
 				},
 				GRPC: EnableListener{
 					Enable:  false,

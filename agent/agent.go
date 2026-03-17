@@ -2014,7 +2014,7 @@ func (a *agent) updatedDiscovery(ctx context.Context, services []discovery.Servi
 			logContainers []facts.Container
 		)
 
-		if a.config.Log.OpenTelemetry.AutoDiscovery.EnableContainerAndService {
+		if a.config.Log.OpenTelemetry.AutoDiscovery.ContainerAndServiceEnable {
 			logServices = services
 			logContainers = containers
 		} else {

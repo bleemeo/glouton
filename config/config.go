@@ -129,21 +129,21 @@ func checkForConfigMistake(cfg Config, items []Item) prometheus.MultiError {
 		warnings.Append(fmt.Errorf("%w: OpenSource MQTT is enable but with an empty hosts list", ErrMissconfiguration))
 	}
 
-	if cfg.Log.OpenTelemetry.AutoDiscovery.EnableAll {
-		if !cfg.Log.OpenTelemetry.AutoDiscovery.EnableAuditD && isUserSet(items, "log.opentelemetry.auto_discovery.enable_auditd") {
-			warnings.Append(fmt.Errorf("%w: log.opentelemetry.auto_discovery.enable_auditd can't disable when enable_all is active", ErrMissconfiguration))
+	if cfg.Log.OpenTelemetry.AutoDiscovery.AllEnable {
+		if !cfg.Log.OpenTelemetry.AutoDiscovery.AuditdEnable && isUserSet(items, "log.opentelemetry.auto_discovery.auditd_enable") {
+			warnings.Append(fmt.Errorf("%w: log.opentelemetry.auto_discovery.auditd_enable can't disable when all_enable is active", ErrMissconfiguration))
 		}
 
-		if !cfg.Log.OpenTelemetry.AutoDiscovery.EnableContainerAndService && isUserSet(items, "log.opentelemetry.auto_discovery.enable_container_and_service") {
-			warnings.Append(fmt.Errorf("%w: log.opentelemetry.auto_discovery.enable_container_and_service can't disable when enable_all is active", ErrMissconfiguration))
+		if !cfg.Log.OpenTelemetry.AutoDiscovery.ContainerAndServiceEnable && isUserSet(items, "log.opentelemetry.auto_discovery.container_and_service_enable") {
+			warnings.Append(fmt.Errorf("%w: log.opentelemetry.auto_discovery.container_and_service_enable can't disable when all_enable is active", ErrMissconfiguration))
 		}
 
-		if !cfg.Log.OpenTelemetry.AutoDiscovery.EnableJournalctl && isUserSet(items, "log.opentelemetry.auto_discovery.enable_journalctl") {
-			warnings.Append(fmt.Errorf("%w: log.opentelemetry.auto_discovery.enable_journalctl can't disable when enable_all is active", ErrMissconfiguration))
+		if !cfg.Log.OpenTelemetry.AutoDiscovery.JournalctlEnable && isUserSet(items, "log.opentelemetry.auto_discovery.journalctl_enable") {
+			warnings.Append(fmt.Errorf("%w: log.opentelemetry.auto_discovery.journalctl_enable can't disable when all_enable is active", ErrMissconfiguration))
 		}
 
-		if !cfg.Log.OpenTelemetry.AutoDiscovery.EnableSyslog && isUserSet(items, "log.opentelemetry.auto_discovery.enable_syslog") {
-			warnings.Append(fmt.Errorf("%w: log.opentelemetry.auto_discovery.enable_syslog can't disable when enable_all is active", ErrMissconfiguration))
+		if !cfg.Log.OpenTelemetry.AutoDiscovery.SyslogEnable && isUserSet(items, "log.opentelemetry.auto_discovery.syslog_enable") {
+			warnings.Append(fmt.Errorf("%w: log.opentelemetry.auto_discovery.syslog_enable can't disable when all_enable is active", ErrMissconfiguration))
 		}
 	}
 
@@ -151,11 +151,11 @@ func checkForConfigMistake(cfg Config, items []Item) prometheus.MultiError {
 }
 
 func applyConfigTransformation(cfg Config) Config {
-	if cfg.Log.OpenTelemetry.AutoDiscovery.EnableAll {
-		cfg.Log.OpenTelemetry.AutoDiscovery.EnableAuditD = true
-		cfg.Log.OpenTelemetry.AutoDiscovery.EnableJournalctl = true
-		cfg.Log.OpenTelemetry.AutoDiscovery.EnableSyslog = true
-		cfg.Log.OpenTelemetry.AutoDiscovery.EnableContainerAndService = true
+	if cfg.Log.OpenTelemetry.AutoDiscovery.AllEnable {
+		cfg.Log.OpenTelemetry.AutoDiscovery.AuditdEnable = true
+		cfg.Log.OpenTelemetry.AutoDiscovery.JournalctlEnable = true
+		cfg.Log.OpenTelemetry.AutoDiscovery.SyslogEnable = true
+		cfg.Log.OpenTelemetry.AutoDiscovery.ContainerAndServiceEnable = true
 	}
 
 	return cfg
@@ -439,23 +439,28 @@ func isMultiUnwrap(err error) bool {
 // movedKeys return all keys that were moved. The map is old key => new key.
 func movedKeys() map[string]string {
 	keys := map[string]string{
-		"agent.absent_service_deactivation_delay": "service_absent_deactivation_delay",
-		"agent.http_debug.enable":                 "web.endpoints.debug_enable",
-		"agent.http_debug.enabled":                "web.endpoints.debug_enable",
-		"agent.node_exporter.enabled":             "agent.node_exporter.enable",
-		"agent.process_exporter.enabled":          "agent.process_exporter.enable",
-		"agent.telemetry.enabled":                 "agent.telemetry.enable",
-		"agent.windows_exporter.enabled":          "agent.windows_exporter.enable",
-		"blackbox.enabled":                        "blackbox.enable",
-		"bleemeo.enabled":                         "bleemeo.enable",
-		"jmx.enabled":                             "jmx.enable",
-		"kubernetes.enabled":                      "kubernetes.enable",
-		"network_interface_blacklist":             "network_interface_denylist",
-		"nrpe.enabled":                            "nrpe.enable",
-		"telegraf.docker_metrics_enabled":         "telegraf.docker_metrics_enable",
-		"telegraf.statsd.enabled":                 "telegraf.statsd.enable",
-		"web.enabled":                             "web.enable",
-		"zabbix.enabled":                          "zabbix.enable",
+		"agent.absent_service_deactivation_delay":                       "service_absent_deactivation_delay",
+		"agent.http_debug.enable":                                       "web.endpoints.debug_enable",
+		"agent.http_debug.enabled":                                      "web.endpoints.debug_enable",
+		"agent.node_exporter.enabled":                                   "agent.node_exporter.enable",
+		"agent.process_exporter.enabled":                                "agent.process_exporter.enable",
+		"agent.telemetry.enabled":                                       "agent.telemetry.enable",
+		"agent.windows_exporter.enabled":                                "agent.windows_exporter.enable",
+		"blackbox.enabled":                                              "blackbox.enable",
+		"bleemeo.enabled":                                               "bleemeo.enable",
+		"jmx.enabled":                                                   "jmx.enable",
+		"kubernetes.enabled":                                            "kubernetes.enable",
+		"log.opentelemetry.auto_discovery.enable_all":                   "log.opentelemetry.auto_discovery.all_enable",
+		"log.opentelemetry.auto_discovery.enable_auditd":                "log.opentelemetry.auto_discovery.auditd_enable",
+		"log.opentelemetry.auto_discovery.enable_container_and_service": "log.opentelemetry.auto_discovery.container_and_service_enable",
+		"log.opentelemetry.auto_discovery.enable_journalctl":            "log.opentelemetry.auto_discovery.journalctl_enable",
+		"log.opentelemetry.auto_discovery.enable_syslog":                "log.opentelemetry.auto_discovery.syslog_enable",
+		"network_interface_blacklist":                                   "network_interface_denylist",
+		"nrpe.enabled":                                                  "nrpe.enable",
+		"telegraf.docker_metrics_enabled":                               "telegraf.docker_metrics_enable",
+		"telegraf.statsd.enabled":                                       "telegraf.statsd.enable",
+		"web.enabled":                                                   "web.enable",
+		"zabbix.enabled":                                                "zabbix.enable",
 	}
 
 	return keys
@@ -464,7 +469,7 @@ func movedKeys() map[string]string {
 // movedScalarKeys return all keys that were moved. The map is old key => new key.
 func movedScalarKeys() map[string]string {
 	keys := map[string]string{
-		"log.opentelemetry.auto_discovery": "log.opentelemetry.auto_discovery.enable_all",
+		"log.opentelemetry.auto_discovery": "log.opentelemetry.auto_discovery.all_enable",
 	}
 
 	return keys

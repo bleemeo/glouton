@@ -205,11 +205,11 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			OpenTelemetry: OpenTelemetry{
 				Enable: true,
 				AutoDiscovery: AutoDiscovery{
-					EnableAll:                 true,
-					EnableJournalctl:          true,
-					EnableSyslog:              true,
-					EnableAuditD:              true,
-					EnableContainerAndService: true,
+					AllEnable:                 true,
+					JournalctlEnable:          true,
+					SyslogEnable:              true,
+					AuditdEnable:              true,
+					ContainerAndServiceEnable: true,
 				},
 				GRPC: EnableListener{
 					Enable:  true,
@@ -913,11 +913,11 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				Log: Log{
 					OpenTelemetry: OpenTelemetry{
 						AutoDiscovery: AutoDiscovery{
-							EnableAll:                 false,
-							EnableJournalctl:          true,
-							EnableSyslog:              false,
-							EnableAuditD:              true,
-							EnableContainerAndService: false,
+							AllEnable:                 false,
+							JournalctlEnable:          true,
+							SyslogEnable:              false,
+							AuditdEnable:              true,
+							ContainerAndServiceEnable: false,
 						},
 					},
 				},
@@ -927,17 +927,17 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "log-auto-discovery-all",
 			Files: []string{"testdata/log-auto-discovery-all.conf"},
 			WantWarnings: []string{
-				"config issue: log.opentelemetry.auto_discovery.enable_auditd can't disable when enable_all is active",
+				"config issue: log.opentelemetry.auto_discovery.auditd_enable can't disable when all_enable is active",
 			},
 			WantConfig: Config{
 				Log: Log{
 					OpenTelemetry: OpenTelemetry{
 						AutoDiscovery: AutoDiscovery{
-							EnableAll:                 true,
-							EnableJournalctl:          true,
-							EnableSyslog:              true,
-							EnableAuditD:              true,
-							EnableContainerAndService: true,
+							AllEnable:                 true,
+							JournalctlEnable:          true,
+							SyslogEnable:              true,
+							AuditdEnable:              true,
+							ContainerAndServiceEnable: true,
 						},
 					},
 				},
@@ -1033,17 +1033,60 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "deprecated_auto_discovery",
 			Files: []string{"testdata/deprecated_auto_discovery.conf"},
 			WantWarnings: []string{
-				"testdata/deprecated_auto_discovery.conf: setting is deprecated: log.opentelemetry.auto_discovery, use log.opentelemetry.auto_discovery.enable_all instead",
+				"testdata/deprecated_auto_discovery.conf: setting is deprecated: log.opentelemetry.auto_discovery, use log.opentelemetry.auto_discovery.all_enable instead",
 			},
 			WantConfig: Config{
 				Log: Log{
 					OpenTelemetry: OpenTelemetry{
 						AutoDiscovery: AutoDiscovery{
-							EnableAll:                 true,
-							EnableJournalctl:          true,
-							EnableSyslog:              true,
-							EnableAuditD:              true,
-							EnableContainerAndService: true,
+							AllEnable:                 true,
+							JournalctlEnable:          true,
+							SyslogEnable:              true,
+							AuditdEnable:              true,
+							ContainerAndServiceEnable: true,
+						},
+					},
+				},
+			},
+		},
+		{
+			Name:  "deprecated_auto_discovery2",
+			Files: []string{"testdata/deprecated_auto_discovery2.conf"},
+			WantWarnings: []string{
+				"testdata/deprecated_auto_discovery2.conf: setting is deprecated: log.opentelemetry.auto_discovery.enable_all, use log.opentelemetry.auto_discovery.all_enable instead",
+			},
+			WantConfig: Config{
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						AutoDiscovery: AutoDiscovery{
+							AllEnable:                 true,
+							JournalctlEnable:          true,
+							SyslogEnable:              true,
+							AuditdEnable:              true,
+							ContainerAndServiceEnable: true,
+						},
+					},
+				},
+			},
+		},
+		{
+			Name:  "deprecated_auto_discovery3",
+			Files: []string{"testdata/deprecated_auto_discovery3.conf"},
+			WantWarnings: []string{
+				"testdata/deprecated_auto_discovery3.conf: setting is deprecated: log.opentelemetry.auto_discovery.enable_journalctl, use log.opentelemetry.auto_discovery.journalctl_enable instead",
+				"testdata/deprecated_auto_discovery3.conf: setting is deprecated: log.opentelemetry.auto_discovery.enable_syslog, use log.opentelemetry.auto_discovery.syslog_enable instead",
+				"testdata/deprecated_auto_discovery3.conf: setting is deprecated: log.opentelemetry.auto_discovery.enable_auditd, use log.opentelemetry.auto_discovery.auditd_enable instead",
+				"testdata/deprecated_auto_discovery3.conf: setting is deprecated: log.opentelemetry.auto_discovery.enable_container_and_service, use log.opentelemetry.auto_discovery.container_and_service_enable instead",
+			},
+			WantConfig: Config{
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						AutoDiscovery: AutoDiscovery{
+							AllEnable:                 false,
+							JournalctlEnable:          true,
+							SyslogEnable:              true,
+							AuditdEnable:              true,
+							ContainerAndServiceEnable: true,
 						},
 					},
 				},
@@ -1108,7 +1151,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			}
 
 			if diff := compareConfig(test.WantConfig, config, cmpopts.EquateEmpty()); diff != "" {
-				t.Errorf("Unexpected config:\n%s", diff)
+				t.Errorf("Unexpected config (-want +got):\n%s", diff)
 			}
 		})
 	}

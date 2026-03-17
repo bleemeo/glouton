@@ -1046,7 +1046,7 @@ func TestValidateServices(t *testing.T) {
 	otelCfg := config.OpenTelemetry{
 		Enable: true,
 		AutoDiscovery: config.AutoDiscovery{
-			EnableContainerAndService: true,
+			ContainerAndServiceEnable: true,
 		},
 		KnownLogFormats: map[string][]config.OTELOperator{
 			"noop-fmt": {},
