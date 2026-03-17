@@ -234,7 +234,7 @@ func validateServices(services []config.Service, logProcessingCfg config.OpenTel
 			warnings.Append(fmt.Errorf("%w: %s", config.ErrInvalidValue, warning))
 		}
 
-		if logProcessingCfg.Enable && logProcessingCfg.AutoDiscovery.EnableContainerAndService {
+		if logProcessingCfg.Enable && logProcessingCfg.AutoDiscovery.ContainerAndServiceEnable {
 			warns := validateServiceLogConfig(srv, logProcessingCfg.KnownLogFormats, logProcessingCfg.KnownLogFilters)
 			for _, warn := range warns {
 				if srv.Instance != "" {
@@ -674,7 +674,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) (time.Ti
 
 	d.ignoreServicesAndPorts()
 
-	if d.logProcessingCfg.Enable && d.logProcessingCfg.AutoDiscovery.EnableContainerAndService {
+	if d.logProcessingCfg.Enable && d.logProcessingCfg.AutoDiscovery.ContainerAndServiceEnable {
 		for key, service := range d.servicesMap {
 			d.servicesMap[key] = inferLogProcessingConfig(service, d.logProcessingCfg.KnownLogFormats, d.logProcessingCfg.KnownLogFilters)
 		}

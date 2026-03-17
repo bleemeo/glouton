@@ -276,19 +276,19 @@ func (p *pipelineContext) init(
 		}
 	}
 
-	if cfg.AutoDiscovery.EnableJournalctl {
+	if cfg.AutoDiscovery.JournalctlEnable {
 		if err := p.setupJournalctl(ctx, knownLogFormats); err != nil {
 			logger.V(1).Printf("Unable to configure Journalctl receiver: %v", err)
 		}
 	}
 
-	if cfg.AutoDiscovery.EnableSyslog {
+	if cfg.AutoDiscovery.SyslogEnable {
 		if err := p.setupSyslog(ctx, knownLogFormats); err != nil {
 			logger.V(1).Printf("Unable to configure Journalctl receiver: %v", err)
 		}
 	}
 
-	if cfg.AutoDiscovery.EnableAuditD {
+	if cfg.AutoDiscovery.AuditdEnable {
 		if err := p.setupAuditD(ctx, knownLogFormats); err != nil {
 			logger.V(1).Printf("Unable to configure Journalctl receiver: %v", err)
 		}
