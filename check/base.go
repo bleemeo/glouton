@@ -218,6 +218,8 @@ func (bc *baseCheck) Check(ctx context.Context, scheduleUpdate func(opts types.S
 					SkipIfRunBefore: true,
 				})
 
+				logger.V(2).Printf("check of %s %s: status %v ignore due to container recently killed", bc.annotations.ServiceName, bc.annotations.ServiceInstance, point.Annotations.Status)
+
 				// And skip this checks. We still provide a valid point so some caller (like NRPE which can't skip
 				// a point) could still use it.
 				return point, ErrTemporarySkip
@@ -233,6 +235,8 @@ func (bc *baseCheck) Check(ctx context.Context, scheduleUpdate func(opts types.S
 					WantedTime:      c.FinishedAt().Add(terminationGracePeriod).Add(5 * time.Second),
 					SkipIfRunBefore: true,
 				})
+
+				logger.V(2).Printf("check of %s %s: status %v ignore due to container recently stopped", bc.annotations.ServiceName, bc.annotations.ServiceInstance, point.Annotations.Status)
 
 				// And skip this checks. We still provide a valid point so some caller (like NRPE which can't skip
 				// a point) could still use it.
@@ -258,6 +262,8 @@ func (bc *baseCheck) Check(ctx context.Context, scheduleUpdate func(opts types.S
 				return point, ErrTemporarySkip
 			}
 		}
+
+		logger.V(2).Printf("check of %s %s: status %v", bc.annotations.ServiceName, bc.annotations.ServiceInstance, point.Annotations.Status)
 
 		if bc.previousStatus.CurrentStatus == types.StatusOk && scheduleUpdate != nil {
 			// The check just started failing, schedule another check sooner.

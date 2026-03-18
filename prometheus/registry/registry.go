@@ -1200,6 +1200,8 @@ func (r *Registry) scheduleScrapeInner(id int, reg *registration, scheduleOption
 			return
 		}
 
+		logger.V(2).Printf("submit ScheduleRun at %v for registration_id=%d, name=%v", scheduleOption.WantedTime, id, reg.option.Description)
+
 		r.reschedules = append(r.reschedules, reschedule{
 			ID:             id,
 			Reg:            reg,
@@ -1229,6 +1231,8 @@ func (r *Registry) checkReschedule() time.Duration {
 		if reg2, ok := r.registrations[value.ID]; !ok || reg2 != value.Reg {
 			continue
 		}
+
+		logger.V(2).Printf("running ScheduleRun of registration_id=%d, name=%v", value.ID, value.Reg.option.Description)
 
 		reg := value.Reg
 		reg.runNow()
@@ -1270,6 +1274,8 @@ func (r *Registry) getRegistrationID(reg *registration) (int, bool) {
 }
 
 func (r *Registry) unregister(reg *registration) {
+	startAt := time.Now()
+
 	r.l.Lock()
 
 	id, ok := r.getRegistrationID(reg)
@@ -1288,8 +1294,9 @@ func (r *Registry) unregister(reg *registration) {
 		return
 	}
 
-	logger.V(2).Printf("Unregister with registration_id=%d called, description=%v", id, reg.option.Description)
 	r.unregisterInner(reg)
+
+	logger.V(2).Printf("Unregister with registration_id=%d called, description=%v (started at %v)", id, reg.option.Description, startAt)
 }
 
 func (r *Registry) unregisterInner(reg *registration) {

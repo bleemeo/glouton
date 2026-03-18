@@ -350,7 +350,7 @@ func (d *Discovery) addCheck(serviceCheck checker, service Service) {
 	lbls := service.LabelsOfStatus()
 
 	options := registry.RegistrationOption{
-		Description:              "check for " + service.Name,
+		Description:              fmt.Sprintf("check for %s %s", service.Name, service.Instance),
 		MinInterval:              max(service.Interval, time.Minute),
 		InstanceUseContainerName: true,
 		ExtraLabels:              lbls,
