@@ -17,10 +17,13 @@
 package discovery
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -28,6 +31,7 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/types"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	"github.com/google/go-cmp/cmp"
@@ -37,9 +41,10 @@ import (
 )
 
 var (
-	errNotImplemented = errors.New("not implemented")
-	errNotCalled      = errors.New("not called, want call")
-	errWantName       = errors.New("want name")
+	errNotImplemented  = errors.New("not implemented")
+	errUnregisterTwice = errors.New("calling unregistred twice")
+	errNotCalled       = errors.New("not called, want call")
+	errWantName        = errors.New("want name")
 )
 
 type mockState struct {
@@ -66,13 +71,20 @@ func (ms mockState) Get(key string, object any) error {
 }
 
 type mockRegistry struct {
+	l                     sync.Mutex
+	regs                  []*mockRegistration
 	ExpectedAddedContains []string
-	NewIDs                []int
-	ExpectedRemoveIDs     []int
 	err                   error
 }
 
-func (m *mockRegistry) RegisterGatherer(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error) {
+type mockRegistration struct {
+	l                   sync.Mutex
+	reg                 *mockRegistry
+	opt                 registry.RegistrationOption
+	unregisterWasCalled bool
+}
+
+func (m *mockRegistry) RegisterGatherer(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (types.Registration, error) {
 	_ = gatherer
 
 	if len(m.ExpectedAddedContains) == 0 {
@@ -82,17 +94,22 @@ func (m *mockRegistry) RegisterGatherer(opt registry.RegistrationOption, gathere
 	if !strings.Contains(opt.Description, m.ExpectedAddedContains[0]) {
 		m.err = fmt.Errorf("%w: RegisterGatherer() Description=%s, want %s", errWantName, opt.Description, m.ExpectedAddedContains[0])
 
-		return 0, m.err
+		return nil, m.err
 	}
 
-	newID := m.NewIDs[0]
 	m.ExpectedAddedContains = m.ExpectedAddedContains[1:]
-	m.NewIDs = m.NewIDs[1:]
 
-	return newID, nil
+	r := &mockRegistration{reg: m, opt: opt}
+
+	m.l.Lock()
+	defer m.l.Unlock()
+
+	m.regs = append(m.regs, r)
+
+	return r, nil
 }
 
-func (m *mockRegistry) RegisterInput(opt registry.RegistrationOption, input telegraf.Input) (int, error) {
+func (m *mockRegistry) RegisterInput(opt registry.RegistrationOption, input telegraf.Input) (types.Registration, error) {
 	_ = input
 
 	if len(m.ExpectedAddedContains) == 0 {
@@ -102,30 +119,68 @@ func (m *mockRegistry) RegisterInput(opt registry.RegistrationOption, input tele
 	if !strings.Contains(opt.Description, m.ExpectedAddedContains[0]) {
 		m.err = fmt.Errorf("%w: RegisterInput() Description=%s, want %s", errWantName, opt.Description, m.ExpectedAddedContains[0])
 
-		return 0, m.err
+		return nil, m.err
 	}
 
-	newID := m.NewIDs[0]
 	m.ExpectedAddedContains = m.ExpectedAddedContains[1:]
-	m.NewIDs = m.NewIDs[1:]
 
-	return newID, nil
+	r := &mockRegistration{reg: m, opt: opt}
+
+	m.l.Lock()
+	defer m.l.Unlock()
+
+	m.regs = append(m.regs, r)
+
+	return r, nil
 }
 
-func (m *mockRegistry) Unregister(id int) bool {
-	if len(m.ExpectedRemoveIDs) == 0 {
-		m.err = fmt.Errorf("%w: Unregister() ExpectedRemoveIDs empty when called with id %d", errWantName, id)
+func (m *mockRegistry) RegistrationByDescription(desc string) *mockRegistration {
+	m.l.Lock()
+	defer m.l.Unlock()
+
+	var found *mockRegistration
+
+	for _, row := range m.regs {
+		if row.opt.Description == desc {
+			if found != nil {
+				panic("multiple match")
+			}
+
+			found = row
+		}
 	}
 
-	if id != m.ExpectedRemoveIDs[0] {
-		m.err = fmt.Errorf("%w: Unregister(%d) want %d", errWantName, id, m.ExpectedRemoveIDs[0])
+	return found
+}
 
-		return true
+func (m *mockRegistry) GetAllRegistrations() []*mockRegistration {
+	m.l.Lock()
+	defer m.l.Unlock()
+
+	return slices.Clone(m.regs)
+}
+
+func (m *mockRegistration) Unregister() {
+	m.l.Lock()
+	defer m.l.Unlock()
+
+	if m.unregisterWasCalled {
+		m.reg.err = fmt.Errorf("%w on reg with description %v", errUnregisterTwice, m.opt.Description)
 	}
 
-	m.ExpectedRemoveIDs = m.ExpectedRemoveIDs[1:]
+	m.unregisterWasCalled = true
+}
 
-	return true
+func (m *mockRegistration) ScheduleRun(_ types.ScheduleOption) {
+	m.reg.err = fmt.Errorf("unexpected call to ScheduleRun: %w", errNotImplemented)
+}
+
+func (m *mockRegistration) InternalRunScrape(ctx context.Context, loopCtx context.Context, t0 time.Time) {
+	_ = ctx
+	_ = loopCtx
+	_ = t0
+
+	m.reg.err = fmt.Errorf("unexpected call to InternalRunScrape: %w", errNotImplemented)
 }
 
 func (m *mockRegistry) ExpectationFulfilled() error {
@@ -135,10 +190,6 @@ func (m *mockRegistry) ExpectationFulfilled() error {
 
 	if len(m.ExpectedAddedContains) > 0 {
 		return fmt.Errorf("%w: Register*() missing: %v", errNotCalled, m.ExpectedAddedContains)
-	}
-
-	if len(m.ExpectedRemoveIDs) > 0 {
-		return fmt.Errorf("%w: Unregister() missing: %v", errNotCalled, m.ExpectedRemoveIDs)
 	}
 
 	return nil
@@ -867,7 +918,6 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 func TestUpdateMetricsAndCheck(t *testing.T) {
 	reg := &mockRegistry{
 		ExpectedAddedContains: []string{"Service input nginx", "check for nginx"},
-		NewIDs:                []int{42, 43},
 	}
 	mockDynamic := &MockDiscoverer{}
 	docker := mockContainerInfo{
@@ -901,6 +951,8 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 		t.Error(err)
 	}
 
+	willBeRemoved := reg.GetAllRegistrations()
+
 	mockDynamic.result = []Service{
 		{
 			Name:            "nginx",
@@ -922,7 +974,6 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 		},
 	}
 	reg.ExpectedAddedContains = []string{"Service input memcached", "check for memcached"}
-	reg.NewIDs = []int{1337, 666}
 
 	if _, _, err := disc.discovery(t.Context()); err != nil {
 		t.Error(err)
@@ -957,8 +1008,6 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 	}
 
 	reg.ExpectedAddedContains = []string{"Service input nginx", "check for nginx"}
-	reg.NewIDs = []int{9999, 99999}
-	reg.ExpectedRemoveIDs = []int{42, 43}
 
 	if _, _, err := disc.discovery(t.Context()); err != nil {
 		t.Error(err)
@@ -966,6 +1015,12 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 
 	if err := reg.ExpectationFulfilled(); err != nil {
 		t.Error(err)
+	}
+
+	for _, row := range willBeRemoved {
+		if !row.unregisterWasCalled {
+			t.Errorf("Expected that %s was unregistered", row.opt.Description)
+		}
 	}
 }
 

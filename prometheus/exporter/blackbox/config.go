@@ -298,7 +298,7 @@ func setUserAgent(modules map[string]bbConf.Module, userAgent string) {
 
 // New sets the static part of blackbox configuration (aka. targets that must be scrapped no matter what).
 // This completely resets the configuration.
-func New(registry *registry.Registry, config config.Blackbox, addWarnings func(...error)) (*RegisterManager, error) {
+func New(reg *registry.Registry, config config.Blackbox, addWarnings func(...error)) (*RegisterManager, error) {
 	setUserAgent(config.Modules, config.UserAgent)
 
 	for idx, v := range config.Modules {
@@ -312,8 +312,8 @@ func New(registry *registry.Registry, config config.Blackbox, addWarnings func(.
 
 	manager := &RegisterManager{
 		targets:       targets,
-		registrations: make(map[int]gathererRegistration, len(config.Targets)),
-		registry:      registry,
+		registrations: make(map[types.Registration]gathererRegistration, len(config.Targets)),
+		registry:      reg,
 		scraperName:   config.ScraperName,
 		userAgent:     config.UserAgent,
 		dnsResolver:   config.DefaultDNSResolver,

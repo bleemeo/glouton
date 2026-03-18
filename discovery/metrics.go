@@ -260,9 +260,7 @@ func (d *Discovery) removeInput(key NameInstance) {
 		logger.V(2).Printf("Remove input for service %v on instance %s", key.Name, key.Instance)
 		delete(d.activeCollector, key)
 
-		if !d.metricRegistry.Unregister(collector.gathererID) {
-			logger.V(2).Printf("The gatherer wasn't present")
-		}
+		collector.gathererRegistration.Unregister()
 	}
 }
 
@@ -498,7 +496,7 @@ func (d *Discovery) registerInput(input telegraf.Input, opts registry.Registrati
 		Instance: service.Instance,
 	}
 	d.activeCollector[key] = collectorDetails{
-		gathererID: gathererID,
+		gathererRegistration: gathererID,
 	}
 
 	return err

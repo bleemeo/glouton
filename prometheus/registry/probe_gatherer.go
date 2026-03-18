@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
@@ -31,7 +32,7 @@ import (
 type ProbeGatherer struct {
 	g                   prometheus.Gatherer
 	fastUpdateOnFailure bool
-	scheduleUpdate      func(runAt time.Time)
+	scheduleUpdate      func(opts types.ScheduleOption)
 
 	l              sync.Mutex
 	successLastRun bool
@@ -45,9 +46,11 @@ func NewProbeGatherer(gatherer prometheus.Gatherer, fastUpdateOnFailure bool) *P
 	}
 }
 
-// SetScheduleUpdate is called by Registry because this gathered will be used.
-func (p *ProbeGatherer) SetScheduleUpdate(fun func(runAt time.Time)) {
-	p.scheduleUpdate = fun
+func (p *ProbeGatherer) SetScheduleUpdate(f func(opts types.ScheduleOption)) {
+	p.l.Lock()
+	defer p.l.Unlock()
+
+	p.scheduleUpdate = f
 }
 
 // Gather some metrics with an empty gatherer state.
@@ -103,7 +106,7 @@ func (p *ProbeGatherer) GatherWithState(ctx context.Context, state GatherState) 
 					t0 = time.Now()
 				}
 
-				p.scheduleUpdate(t0.Add(time.Minute))
+				p.scheduleUpdate(types.ScheduleOption{WantedTime: t0.Add(time.Minute)})
 			}
 
 			p.successLastRun = success

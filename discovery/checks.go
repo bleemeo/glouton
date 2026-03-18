@@ -42,19 +42,19 @@ const (
 
 // CheckDetails is used to save a check and his id.
 type CheckDetails struct {
-	id    int
-	check *check.Gatherer
+	registration types.Registration
+	check        *check.Gatherer
 }
 
 // collectorDetails contains information about a collector.
 // It could be a Telegraf input of a Prometheus collector.
 type collectorDetails struct {
-	gathererID int
+	gathererRegistration types.Registration
 }
 
 // checker is an interface which specifies a check.
 type checker interface {
-	Check(ctx context.Context, scheduleUpdate func(runAt time.Time)) types.MetricPoint
+	Check(ctx context.Context, scheduleUpdate func(opts types.ScheduleOption)) types.MetricPoint
 	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error
 	Close()
 }
@@ -87,7 +87,7 @@ func (d *Discovery) removeCheck(key NameInstance) {
 	if check, ok := d.activeCheck[key]; ok {
 		logger.V(2).Printf("Remove check for service %v on instance %s", key.Name, key.Instance)
 		delete(d.activeCheck, key)
-		d.metricRegistry.Unregister(check.id)
+		check.registration.Unregister()
 	}
 }
 
@@ -356,7 +356,11 @@ func (d *Discovery) addCheck(serviceCheck checker, service Service) {
 	id, err := d.metricRegistry.RegisterGatherer(options, checkGatherer)
 	if err != nil {
 		logger.V(1).Printf("Unable to add check: %v", err)
+
+		return
 	}
+
+	checkGatherer.SetScheduleUpdate(id.ScheduleRun)
 
 	key := NameInstance{
 		Name:     service.Name,
@@ -364,8 +368,8 @@ func (d *Discovery) addCheck(serviceCheck checker, service Service) {
 	}
 
 	savedCheck := CheckDetails{
-		check: checkGatherer,
-		id:    id,
+		check:        checkGatherer,
+		registration: id,
 	}
 	d.activeCheck[key] = savedCheck
 }

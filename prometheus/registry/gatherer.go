@@ -110,12 +110,6 @@ type GathererWithState interface {
 	GatherWithState(ctx context.Context, state GatherState) ([]*dto.MetricFamily, error)
 }
 
-// GathererWithScheduleUpdate is a Gatherer that had a ScheduleUpdate (like Probe gatherer).
-// The ScheduleUpdate could be used to trigger an additional gather earlier than default scrape interval.
-type GathererWithScheduleUpdate interface {
-	SetScheduleUpdate(scheduleUpdate func(runAt time.Time))
-}
-
 // GathererWithStateWrapper is a wrapper around GathererWithState that allows to specify a state to forward
 // to the wrapped gatherer when the caller does not know about GathererWithState and uses raw Gather().
 // The main use case is the /metrics HTTP endpoint, where we want to be able to gather() only some metrics

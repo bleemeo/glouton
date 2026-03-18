@@ -214,8 +214,9 @@ func TestRegistry_Register(t *testing.T) {
 	}
 
 	var (
-		id1 int
-		id2 int
+		reg1Intf types.Registration
+		reg2Intf types.Registration
+		reg1     *registration
 	)
 
 	gather1 := &fakeGatherer{
@@ -228,18 +229,13 @@ func TestRegistry_Register(t *testing.T) {
 	}
 	gather2.fillResponse()
 
-	if id1, err = reg.RegisterGatherer(RegistrationOption{}, gather1); err != nil {
+	if reg1Intf, err = reg.RegisterGatherer(RegistrationOption{}, gather1); err != nil {
 		t.Errorf("reg.RegisterGatherer(gather1) failed: %v", err)
 	}
 
-	_, _ = reg.Gather()
-
-	if gather1.callCount != 1 {
-		t.Errorf("gather1.callCount = %v, want 1", gather1.callCount)
-	}
-
-	if !reg.Unregister(id1) {
-		t.Errorf("reg.Unregister(%d) failed", id1)
+	reg1, ok := reg1Intf.(*registration)
+	if !ok {
+		t.Errorf("reg1 isn't a *Registration")
 	}
 
 	_, _ = reg.Gather()
@@ -248,11 +244,29 @@ func TestRegistry_Register(t *testing.T) {
 		t.Errorf("gather1.callCount = %v, want 1", gather1.callCount)
 	}
 
-	if id1, err = reg.RegisterGatherer(RegistrationOption{ExtraLabels: map[string]string{"name": "value"}}, gather1); err != nil {
+	_, ok = reg.getRegistrationID(reg1)
+	if !ok {
+		t.Errorf("regsitration reg1 not found")
+	}
+
+	reg1Intf.Unregister()
+
+	_, ok = reg.getRegistrationID(reg1)
+	if ok {
+		t.Errorf("reg.Unregister() failed, regsitration reg1 still present found")
+	}
+
+	_, _ = reg.Gather()
+
+	if gather1.callCount != 1 {
+		t.Errorf("gather1.callCount = %v, want 1", gather1.callCount)
+	}
+
+	if reg1Intf, err = reg.RegisterGatherer(RegistrationOption{ExtraLabels: map[string]string{"name": "value"}}, gather1); err != nil {
 		t.Errorf("re-reg.RegisterGatherer(gather1) failed: %v", err)
 	}
 
-	if id2, err = reg.RegisterGatherer(RegistrationOption{}, gather2); err != nil {
+	if reg2Intf, err = reg.RegisterGatherer(RegistrationOption{}, gather2); err != nil {
 		t.Errorf("re-reg.RegisterGatherer(gather2) failed: %v", err)
 	}
 
@@ -266,13 +280,8 @@ func TestRegistry_Register(t *testing.T) {
 		t.Errorf("gather2.callCount = %v, want 1", gather2.callCount)
 	}
 
-	if !reg.Unregister(id1) {
-		t.Errorf("reg.Unregister(%d) failed", id1)
-	}
-
-	if !reg.Unregister(id2) {
-		t.Errorf("reg.Unregister(%d) failed", id2)
-	}
+	reg1Intf.Unregister()
+	reg2Intf.Unregister()
 
 	_, _ = reg.Gather()
 
@@ -286,7 +295,7 @@ func TestRegistry_Register(t *testing.T) {
 
 	stopCallCount := 0
 
-	if id1, err = reg.RegisterGatherer(RegistrationOption{StopCallback: func() { stopCallCount++ }, ExtraLabels: map[string]string{"dummy": "value", "empty-value-to-dropped": ""}}, gather1); err != nil {
+	if reg1Intf, err = reg.RegisterGatherer(RegistrationOption{StopCallback: func() { stopCallCount++ }, ExtraLabels: map[string]string{"dummy": "value", "empty-value-to-dropped": ""}}, gather1); err != nil {
 		t.Errorf("reg.RegisterGatherer(gather1) failed: %v", err)
 	}
 
@@ -351,7 +360,7 @@ func TestRegistry_Register(t *testing.T) {
 		t.Errorf("reg.Gather() diff: (-want +got)\n%s", diff)
 	}
 
-	reg.Unregister(id1)
+	reg1Intf.Unregister()
 
 	if stopCallCount != 1 {
 		t.Errorf("stopCallCount = %v, want 1", stopCallCount)
@@ -829,14 +838,14 @@ func TestRegistry_slowGather(t *testing.T) { //nolint:maintidx
 	grp, _ := errgroup.WithContext(t.Context())
 
 	var (
-		id1 int
-		id2 int
+		reg1 types.Registration
+		reg2 types.Registration
 	)
 
 	grp.Go(func() error {
 		var err error
 
-		id1, err = reg.RegisterGatherer(RegistrationOption{}, gather1)
+		reg1, err = reg.RegisterGatherer(RegistrationOption{}, gather1)
 		if err != nil {
 			return fmt.Errorf("gather1: %w", err)
 		}
@@ -847,7 +856,7 @@ func TestRegistry_slowGather(t *testing.T) { //nolint:maintidx
 	grp.Go(func() error {
 		var err error
 
-		id2, err = reg.RegisterGatherer(RegistrationOption{}, gather2)
+		reg2, err = reg.RegisterGatherer(RegistrationOption{}, gather2)
 		if err != nil {
 			return fmt.Errorf("gather1: %w", err)
 		}
@@ -934,13 +943,13 @@ func TestRegistry_slowGather(t *testing.T) { //nolint:maintidx
 	waitPointAndGatherCall(t, true, "name1")
 
 	grp.Go(func() error {
-		reg.Unregister(id1)
+		reg1.Unregister()
 
 		return nil
 	})
 
 	grp.Go(func() error {
-		reg.Unregister(id2)
+		reg2.Unregister()
 
 		return nil
 	})
@@ -1065,17 +1074,17 @@ func TestRegistry_run(t *testing.T) {
 	// If this occur, the first will run while the other aren't yet registered.
 	time.Sleep(time.Until(time.Now().Truncate(delay).Add(delay).Add(time.Millisecond)))
 
-	id1, err := reg.RegisterGatherer(RegistrationOption{}, gather1)
+	reg1, err := reg.RegisterGatherer(RegistrationOption{}, gather1)
 	if err != nil {
 		t.Error(err)
 	}
 
-	id2, err := reg.RegisterGatherer(RegistrationOption{}, gather2)
+	reg2, err := reg.RegisterGatherer(RegistrationOption{}, gather2)
 	if err != nil {
 		t.Error(err)
 	}
 
-	id3, err := reg.RegisterPushPointsCallback(RegistrationOption{HonorTimestamp: true}, func(_ context.Context, t time.Time) error {
+	reg3, err := reg.RegisterPushPointsCallback(RegistrationOption{HonorTimestamp: true}, func(_ context.Context, t time.Time) error {
 		l.Lock()
 		t0 = t
 		l.Unlock()
@@ -1126,9 +1135,9 @@ func TestRegistry_run(t *testing.T) {
 
 	l.Unlock()
 
-	reg.Unregister(id1)
-	reg.Unregister(id2)
-	reg.Unregister(id3)
+	reg1.Unregister()
+	reg2.Unregister()
+	reg3.Unregister()
 }
 
 type sourceKind string
@@ -1160,7 +1169,7 @@ func registryRunOnce(t *testing.T, now time.Time, reg *Registry, kindToTest sour
 			return err
 		}
 
-		reg.InternalRunScrape(t.Context(), t.Context(), now, id)
+		id.InternalRunScrape(t.Context(), t.Context(), now)
 	case kindAppenderCallback:
 		id, err := reg.RegisterAppenderCallback(
 			opt,
@@ -1172,7 +1181,7 @@ func registryRunOnce(t *testing.T, now time.Time, reg *Registry, kindToTest sour
 			return err
 		}
 
-		reg.InternalRunScrape(t.Context(), t.Context(), now, id)
+		id.InternalRunScrape(t.Context(), t.Context(), now)
 	case kindGatherer:
 		id, err := reg.RegisterGatherer(
 			opt,
@@ -1184,7 +1193,7 @@ func registryRunOnce(t *testing.T, now time.Time, reg *Registry, kindToTest sour
 			return err
 		}
 
-		reg.InternalRunScrape(t.Context(), t.Context(), now, id)
+		id.InternalRunScrape(t.Context(), t.Context(), now)
 	case kindInput:
 		id, err := reg.RegisterInput(
 			opt,
@@ -1196,7 +1205,7 @@ func registryRunOnce(t *testing.T, now time.Time, reg *Registry, kindToTest sour
 			return err
 		}
 
-		reg.InternalRunScrape(t.Context(), t.Context(), now, id)
+		id.InternalRunScrape(t.Context(), t.Context(), now)
 	default:
 		t.Fatalf("unknown kind: %s", kindToTest)
 	}

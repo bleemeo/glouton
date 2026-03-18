@@ -34,7 +34,7 @@ const defaultGatherTimeout = 10 * time.Second
 // Gatherer is the gatherer used for service checks.
 type Gatherer struct {
 	check          checker
-	scheduleUpdate func(runAt time.Time)
+	scheduleUpdate func(opts types.ScheduleOption)
 
 	l sync.Mutex
 	// The last metric point produced by the check is kept to be
@@ -44,7 +44,7 @@ type Gatherer struct {
 
 // checker is an interface which specifies a check.
 type checker interface {
-	Check(ctx context.Context, scheduleUpdate func(runAt time.Time)) types.MetricPoint
+	Check(ctx context.Context, scheduleUpdate func(opts types.ScheduleOption)) types.MetricPoint
 	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error
 	Close()
 }
@@ -91,8 +91,8 @@ func (cg *Gatherer) Gather() ([]*dto.MetricFamily, error) {
 }
 
 // SetScheduleUpdate implements GathererWithScheduleUpdate.
-func (cg *Gatherer) SetScheduleUpdate(scheduleUpdate func(runAt time.Time)) {
-	cg.scheduleUpdate = scheduleUpdate
+func (cg *Gatherer) SetScheduleUpdate(f func(opts types.ScheduleOption)) {
+	cg.scheduleUpdate = f
 }
 
 // CheckNow runs the check and returns its status.

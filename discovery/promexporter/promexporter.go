@@ -117,7 +117,7 @@ func urlFromLabels(labels map[string]string, address string) string {
 // DynamicScrapper is a Prometheus scrapper that will update its target based on ListExporters.
 type DynamicScrapper struct {
 	l                sync.Mutex
-	registeredID     map[string]int
+	registeredID     map[string]types.Registration
 	registeredLabels map[string]map[string]string
 	containersLabels map[string]map[string]string
 	DynamicJobName   string
@@ -154,8 +154,8 @@ func (d *DynamicScrapper) update(containers []facts.Container) {
 			continue
 		}
 
-		if id, ok := d.registeredID[t.URL.String()]; ok {
-			d.Registry.Unregister(id)
+		if reg, ok := d.registeredID[t.URL.String()]; ok {
+			reg.Unregister()
 			delete(d.registeredID, t.URL.String())
 			delete(d.registeredLabels, t.URL.String())
 		}
@@ -180,7 +180,7 @@ func (d *DynamicScrapper) update(containers []facts.Container) {
 		}
 
 		if d.registeredID == nil {
-			d.registeredID = make(map[string]int)
+			d.registeredID = make(map[string]types.Registration)
 			d.registeredLabels = make(map[string]map[string]string)
 			d.containersLabels = make(map[string]map[string]string)
 		}
@@ -190,12 +190,12 @@ func (d *DynamicScrapper) update(containers []facts.Container) {
 		d.containersLabels[t.URL.String()] = t.ContainerLabels
 	}
 
-	for u, id := range d.registeredID {
+	for u, reg := range d.registeredID {
 		if currentURLs[u] {
 			continue
 		}
 
-		d.Registry.Unregister(id)
+		reg.Unregister()
 		delete(d.registeredID, u)
 		delete(d.registeredLabels, u)
 	}

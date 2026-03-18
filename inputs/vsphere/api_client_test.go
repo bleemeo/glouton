@@ -28,6 +28,7 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -482,7 +483,15 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 			defer cancel()
 
 			manager := new(Manager)
-			manager.RegisterGatherers(ctx, []config.VSphere{vSphereCfg}, func(_ registry.RegistrationOption, _ prometheus.Gatherer) (int, error) { return 0, nil }, nil, facts.NewMockFacter(map[string]string{"fqdn": scraperFQDN}))
+			manager.RegisterGatherers(
+				ctx,
+				[]config.VSphere{vSphereCfg},
+				func(_ registry.RegistrationOption, _ prometheus.Gatherer) (types.Registration, error) {
+					return nil, nil //nolint: nilnil
+				},
+				nil,
+				facts.NewMockFacter(map[string]string{"fqdn": scraperFQDN}),
+			)
 
 			devices := manager.Devices(ctx, 0)
 

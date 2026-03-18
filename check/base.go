@@ -148,7 +148,7 @@ func (bc *baseCheck) DiagnosticArchive(_ context.Context, archive types.ArchiveW
 // If the Check is successful, it ensures the sockets are opened.
 // If the fails, it ensures the sockets are closed.
 // If it fails for the first time (ok -> critical), a new Check will be scheduled sooner.
-func (bc *baseCheck) Check(ctx context.Context, scheduleUpdate func(runAt time.Time)) types.MetricPoint {
+func (bc *baseCheck) Check(ctx context.Context, scheduleUpdate func(opts types.ScheduleOption)) types.MetricPoint {
 	bc.l.Lock()
 	defer bc.l.Unlock()
 
@@ -171,7 +171,7 @@ func (bc *baseCheck) Check(ctx context.Context, scheduleUpdate func(runAt time.T
 
 		if bc.previousStatus.CurrentStatus == types.StatusOk && scheduleUpdate != nil {
 			// The check just started failing, schedule another check sooner.
-			scheduleUpdate(time.Now().Add(30 * time.Second))
+			scheduleUpdate(types.ScheduleOption{WantedTime: time.Now().Add(30 * time.Second)})
 		}
 	} else {
 		// The context used in openSockets must outlive the Check() since
@@ -227,7 +227,7 @@ func (bc *baseCheck) doCheck(ctx context.Context) types.StatusDescription {
 	return status
 }
 
-func (bc *baseCheck) openSockets(scheduleUpdate func(runAt time.Time)) {
+func (bc *baseCheck) openSockets(scheduleUpdate func(opts types.ScheduleOption)) {
 	if bc.cancel != nil {
 		// socket are already open
 		return
@@ -256,7 +256,7 @@ func (bc *baseCheck) openSockets(scheduleUpdate func(runAt time.Time)) {
 	}
 }
 
-func (bc *baseCheck) openSocket(ctx context.Context, addr string, scheduleUpdate func(runAt time.Time)) {
+func (bc *baseCheck) openSocket(ctx context.Context, addr string, scheduleUpdate func(opts types.ScheduleOption)) {
 	delay := 1 * time.Second / 2
 	consecutiveFailure := 0
 
@@ -297,7 +297,7 @@ func (bc *baseCheck) openSocket(ctx context.Context, addr string, scheduleUpdate
 	}
 }
 
-func (bc *baseCheck) openSocketOnce(ctx context.Context, addr string, scheduleUpdate func(runAt time.Time)) (longSleep bool) {
+func (bc *baseCheck) openSocketOnce(ctx context.Context, addr string, scheduleUpdate func(opts types.ScheduleOption)) (longSleep bool) {
 	ctx2, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
@@ -307,7 +307,7 @@ func (bc *baseCheck) openSocketOnce(ctx context.Context, addr string, scheduleUp
 
 		// Connection failed, trigger a check.
 		if scheduleUpdate != nil {
-			scheduleUpdate(time.Now())
+			scheduleUpdate(types.ScheduleOption{WantedTime: time.Now()})
 		}
 
 		return true
