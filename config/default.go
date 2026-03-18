@@ -260,7 +260,7 @@ func DefaultConfig() Config { //nolint:maintidx
 				Enable: true,
 				AutoDiscovery: AutoDiscovery{
 					AllEnable:                 false,
-					JournalctlEnable:          false,
+					JournaldEnable:            false,
 					SyslogEnable:              false,
 					AuditdEnable:              false,
 					ContainerAndServiceEnable: false,

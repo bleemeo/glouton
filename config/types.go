@@ -102,7 +102,7 @@ type OpenTelemetry struct {
 
 type AutoDiscovery struct {
 	AllEnable                 bool `yaml:"all_enable"`
-	JournalctlEnable          bool `yaml:"journalctl_enable"`
+	JournaldEnable            bool `yaml:"journald_enable"`
 	SyslogEnable              bool `yaml:"syslog_enable"`
 	AuditdEnable              bool `yaml:"auditd_enable"`
 	ContainerAndServiceEnable bool `yaml:"container_and_service_enable"`

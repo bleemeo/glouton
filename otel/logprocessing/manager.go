@@ -627,10 +627,10 @@ func (man *Manager) DiagnosticArchive(_ context.Context, writer types.ArchiveWri
 		}
 	}
 
-	if man.pipeline.journalctlCounter != nil {
-		diagnosticInfo.receivers.JournalctlReceiver = &journalctlReceiverDiagnosticInformation{
-			LogProcessedCount:      man.pipeline.journalctlCounter.Load(),
-			LogThroughputPerMinute: man.pipeline.journalctlThroughputMeter.Total(),
+	if man.pipeline.journaldCounter != nil {
+		diagnosticInfo.receivers.JournaldReceiver = &journaldReceiverDiagnosticInformation{
+			LogProcessedCount:      man.pipeline.journaldCounter.Load(),
+			LogThroughputPerMinute: man.pipeline.journaldThroughputMeter.Total(),
 		}
 	}
 

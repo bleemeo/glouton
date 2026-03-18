@@ -474,7 +474,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
     )`
 
 	// Rebuild a "syslog" message from journalctl JSON (it's also what journcalclt show on CLI)
-	exprJournalctlToSyslogBody := `EXPR(
+	exprJournaldToSyslogBody := `EXPR(
 		timestamp.Format("Jan 02 15:04:05") + " " +
 		(body["_HOSTNAME"] ?? "") + " " +
 		(attributes["source_program"] ?? "") +
@@ -482,7 +482,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		": " + (body["MESSAGE"] ?? "")
 	)`
 
-	journalctlParser := []OTELOperator{
+	journaldParser := []OTELOperator{
 		{
 			"type":        "time_parser",
 			"parse_from":  "body._SOURCE_REALTIME_TIMESTAMP",
@@ -528,7 +528,7 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		{
 			"type":     "add",
 			"field":    "body",
-			"value":    exprJournalctlToSyslogBody,
+			"value":    exprJournaldToSyslogBody,
 			"on_error": "send",
 		},
 		// fallback if above expresion failed
@@ -902,9 +902,9 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 			rabbitMQParser,
 			removeAttr("time"),
 		),
-		"journalctl": journalctlParser,
-		"auditd":     auditdParser,
-		"syslog":     syslogParser,
+		"journald": journaldParser,
+		"auditd":   auditdParser,
+		"syslog":   syslogParser,
 		"syslogAuth": flattenOps(
 			syslogParser,
 			OTELOperator{

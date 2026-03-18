@@ -138,8 +138,8 @@ func checkForConfigMistake(cfg Config, items []Item) prometheus.MultiError {
 			warnings.Append(fmt.Errorf("%w: log.opentelemetry.auto_discovery.container_and_service_enable can't disable when all_enable is active", ErrMissconfiguration))
 		}
 
-		if !cfg.Log.OpenTelemetry.AutoDiscovery.JournalctlEnable && isUserSet(items, "log.opentelemetry.auto_discovery.journalctl_enable") {
-			warnings.Append(fmt.Errorf("%w: log.opentelemetry.auto_discovery.journalctl_enable can't disable when all_enable is active", ErrMissconfiguration))
+		if !cfg.Log.OpenTelemetry.AutoDiscovery.JournaldEnable && isUserSet(items, "log.opentelemetry.auto_discovery.journald_enable") {
+			warnings.Append(fmt.Errorf("%w: log.opentelemetry.auto_discovery.journald_enable can't disable when all_enable is active", ErrMissconfiguration))
 		}
 
 		if !cfg.Log.OpenTelemetry.AutoDiscovery.SyslogEnable && isUserSet(items, "log.opentelemetry.auto_discovery.syslog_enable") {
@@ -153,7 +153,7 @@ func checkForConfigMistake(cfg Config, items []Item) prometheus.MultiError {
 func applyConfigTransformation(cfg Config) Config {
 	if cfg.Log.OpenTelemetry.AutoDiscovery.AllEnable {
 		cfg.Log.OpenTelemetry.AutoDiscovery.AuditdEnable = true
-		cfg.Log.OpenTelemetry.AutoDiscovery.JournalctlEnable = true
+		cfg.Log.OpenTelemetry.AutoDiscovery.JournaldEnable = true
 		cfg.Log.OpenTelemetry.AutoDiscovery.SyslogEnable = true
 		cfg.Log.OpenTelemetry.AutoDiscovery.ContainerAndServiceEnable = true
 	}
@@ -453,7 +453,8 @@ func movedKeys() map[string]string {
 		"log.opentelemetry.auto_discovery.enable_all":                   "log.opentelemetry.auto_discovery.all_enable",
 		"log.opentelemetry.auto_discovery.enable_auditd":                "log.opentelemetry.auto_discovery.auditd_enable",
 		"log.opentelemetry.auto_discovery.enable_container_and_service": "log.opentelemetry.auto_discovery.container_and_service_enable",
-		"log.opentelemetry.auto_discovery.enable_journalctl":            "log.opentelemetry.auto_discovery.journalctl_enable",
+		"log.opentelemetry.auto_discovery.enable_journalctl":            "log.opentelemetry.auto_discovery.journald_enable",
+		"log.opentelemetry.auto_discovery.journalctl_enable":            "log.opentelemetry.auto_discovery.journald_enable",
 		"log.opentelemetry.auto_discovery.enable_syslog":                "log.opentelemetry.auto_discovery.syslog_enable",
 		"network_interface_blacklist":                                   "network_interface_denylist",
 		"nrpe.enabled":                                                  "nrpe.enable",
