@@ -54,7 +54,7 @@ type collectorDetails struct {
 
 // checker is an interface which specifies a check.
 type checker interface {
-	Check(ctx context.Context, scheduleUpdate func(opts types.ScheduleOption)) types.MetricPoint
+	Check(ctx context.Context, scheduleUpdate func(opts types.ScheduleOption)) (types.MetricPoint, error)
 	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error
 	Close()
 }
@@ -149,6 +149,7 @@ func (d *Discovery) createCheck(service Service) {
 				!di.DisablePersistentConnection,
 				labels,
 				annotations,
+				d.containerInfo,
 			)
 			d.addCheck(check, service)
 		} else {
@@ -161,6 +162,7 @@ func (d *Discovery) createCheck(service Service) {
 			!di.DisablePersistentConnection,
 			labels,
 			annotations,
+			d.containerInfo,
 		)
 		d.addCheck(check, service)
 	// Use a process check for services that don't expose a port.
@@ -230,6 +232,7 @@ func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryAdd
 		tcpClose,
 		labels,
 		annotations,
+		d.containerInfo,
 	)
 
 	d.addCheck(tcpCheck, service)
@@ -289,6 +292,7 @@ func (d *Discovery) createHTTPCheck(
 		expectedStatusCode,
 		labels,
 		annotations,
+		d.containerInfo,
 	)
 
 	d.addCheck(httpCheck, service)
@@ -301,7 +305,7 @@ func (d *Discovery) createContainerStoppedCheck(
 	labels map[string]string,
 	annotations types.MetricAnnotations,
 ) {
-	containerCheck := check.NewContainerStopped(primaryAddress, tcpAddresses, false, labels, annotations)
+	containerCheck := check.NewContainerStopped(primaryAddress, tcpAddresses, false, labels, annotations, d.containerInfo)
 
 	d.addCheck(containerCheck, service)
 }
@@ -326,13 +330,14 @@ func (d *Discovery) createNagiosCheck(
 		labels,
 		annotations,
 		runner,
+		d.containerInfo,
 	)
 
 	d.addCheck(nagiosCheck, service)
 }
 
 func (d *Discovery) createProcessCheck(service Service, labels map[string]string, annotations types.MetricAnnotations) {
-	processCheck, err := check.NewProcess(service.Config.MatchProcess, labels, annotations, d.processFact)
+	processCheck, err := check.NewProcess(service.Config.MatchProcess, labels, annotations, d.processFact, d.containerInfo)
 	if err != nil {
 		logger.V(0).Printf("Invalid custom service %s: %v", service.Name, err)
 	}

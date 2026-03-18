@@ -55,6 +55,7 @@ func NewHTTP(
 	expectedStatusCode int,
 	labels map[string]string,
 	annotations types.MetricAnnotations,
+	containerRuntime containerInfoProvider,
 ) *HTTPCheck {
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: true, //nolint:gosec
@@ -85,7 +86,7 @@ func NewHTTP(
 		},
 	}
 
-	hc.baseCheck = newBase(mainTCPAddress, persistentAddresses, persistentConnection, hc.httpMainCheck, labels, annotations)
+	hc.baseCheck = newBase(mainTCPAddress, persistentAddresses, persistentConnection, hc.httpMainCheck, labels, annotations, containerRuntime)
 
 	return hc
 }

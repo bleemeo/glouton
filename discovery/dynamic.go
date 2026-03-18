@@ -67,6 +67,9 @@ type DynamicDiscovery struct {
 type containerInfoProvider interface {
 	Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error)
 	CachedContainer(containerID string) (c facts.Container, found bool)
+	ContainerLastKill(containerID string) time.Time
+	ContainerLastDelete(containerID string) time.Time
+	ContainerTerminationGracePeriod(containerID string) time.Duration
 }
 
 type fileReader interface {

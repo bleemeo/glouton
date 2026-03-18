@@ -19,6 +19,7 @@ package check
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"slices"
@@ -26,9 +27,19 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/crashreport"
+	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
 )
+
+var ErrTemporarySkip = errors.New("check temporary skipped")
+
+type containerInfoProvider interface {
+	CachedContainer(containerID string) (c facts.Container, found bool)
+	ContainerLastKill(containerID string) time.Time
+	ContainerLastDelete(containerID string) time.Time
+	ContainerTerminationGracePeriod(containerID string) time.Duration
+}
 
 // baseCheck perform a service check.
 //
@@ -44,12 +55,13 @@ import (
 // * 30 seconds after checks change to not Ok (to quickly recover from a service restart)
 // * (if persistentConnection is active) after a persistent TCP connection is broken.
 type baseCheck struct {
-	metricName     string
-	labels         map[string]string
-	annotations    types.MetricAnnotations
-	mainTCPAddress string
-	tcpAddresses   []string
-	mainCheck      func(ctx context.Context) types.StatusDescription
+	containerRuntime containerInfoProvider
+	metricName       string
+	labels           map[string]string
+	annotations      types.MetricAnnotations
+	mainTCPAddress   string
+	tcpAddresses     []string
+	mainCheck        func(ctx context.Context) types.StatusDescription
 
 	dialer *net.Dialer
 	wg     sync.WaitGroup
@@ -65,7 +77,15 @@ type baseCheck struct {
 	previousStatus types.StatusDescription
 }
 
-func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection bool, mainCheck func(context.Context) types.StatusDescription, labels map[string]string, annotations types.MetricAnnotations) *baseCheck {
+func newBase(
+	mainTCPAddress string,
+	tcpAddresses []string,
+	persistentConnection bool,
+	mainCheck func(context.Context) types.StatusDescription,
+	labels map[string]string,
+	annotations types.MetricAnnotations,
+	containerRuntime containerInfoProvider,
+) *baseCheck {
 	if mainTCPAddress != "" {
 		found := slices.Contains(tcpAddresses, mainTCPAddress)
 
@@ -87,6 +107,7 @@ func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection 
 		tcpAddresses:         tcpAddresses,
 		persistentConnection: persistentConnection,
 		mainCheck:            mainCheck,
+		containerRuntime:     containerRuntime,
 
 		dialer: &net.Dialer{},
 		previousStatus: types.StatusDescription{
@@ -148,7 +169,7 @@ func (bc *baseCheck) DiagnosticArchive(_ context.Context, archive types.ArchiveW
 // If the Check is successful, it ensures the sockets are opened.
 // If the fails, it ensures the sockets are closed.
 // If it fails for the first time (ok -> critical), a new Check will be scheduled sooner.
-func (bc *baseCheck) Check(ctx context.Context, scheduleUpdate func(opts types.ScheduleOption)) types.MetricPoint {
+func (bc *baseCheck) Check(ctx context.Context, scheduleUpdate func(opts types.ScheduleOption)) (types.MetricPoint, error) {
 	bc.l.Lock()
 	defer bc.l.Unlock()
 
@@ -161,12 +182,81 @@ func (bc *baseCheck) Check(ctx context.Context, scheduleUpdate func(opts types.S
 		}
 	}
 
+	annotations := bc.annotations
+	annotations.Status = status
+
+	point := types.MetricPoint{
+		Point: types.Point{
+			Time:  time.Now().Truncate(time.Second),
+			Value: float64(status.CurrentStatus.NagiosCode()),
+		},
+		Labels:      bc.labels,
+		Annotations: annotations,
+	}
+
 	if status.CurrentStatus != types.StatusOk {
 		if bc.cancel != nil {
+			// Close the TCP persistent connection
 			bc.cancel()
 			bc.wg.Wait()
 
 			bc.cancel = nil
+		}
+
+		if bc.containerRuntime != nil {
+			terminationGracePeriod := bc.containerRuntime.ContainerTerminationGracePeriod(bc.annotations.ContainerID)
+			if terminationGracePeriod == 0 {
+				// fallback on some hard-coded default
+				terminationGracePeriod = 15 * time.Second
+			}
+
+			lastKill := bc.containerRuntime.ContainerLastKill(bc.annotations.ContainerID)
+			if time.Since(lastKill) < terminationGracePeriod {
+				// Request a check in kill + grace_period + small margin
+				scheduleUpdate(types.ScheduleOption{
+					WantedTime:      lastKill.Add(terminationGracePeriod).Add(5 * time.Second),
+					SkipIfRunBefore: true,
+				})
+
+				// And skip this checks. We still provide a valid point so some caller (like NRPE which can't skip
+				// a point) could still use it.
+				return point, ErrTemporarySkip
+			}
+
+			// Same thing with "last stopped at". We would prefer to only rely on kill, but containerd don't provide
+			// kill events.
+			c, found := bc.containerRuntime.CachedContainer(bc.annotations.ContainerID)
+
+			if found && c.State() == facts.ContainerStopped && time.Since(c.FinishedAt()) < terminationGracePeriod {
+				// Request a check in kill + grace_period + small margin
+				scheduleUpdate(types.ScheduleOption{
+					WantedTime:      c.FinishedAt().Add(terminationGracePeriod).Add(5 * time.Second),
+					SkipIfRunBefore: true,
+				})
+
+				// And skip this checks. We still provide a valid point so some caller (like NRPE which can't skip
+				// a point) could still use it.
+				return point, ErrTemporarySkip
+			}
+
+			// Finally if the container is already deleted, CachedContainer might not found the container.
+			// This could easily occur if the check timeout and therefor start before the container stop/delete
+			// but likely finish after stop/delete is fully processed.
+			lastDelete := bc.containerRuntime.ContainerLastDelete(bc.annotations.ContainerID)
+			if time.Since(lastDelete) < terminationGracePeriod {
+				// Request a check in kill + grace_period + small margin
+				// but normally we won't be re-run because this check should be unregistered soon.
+				scheduleUpdate(types.ScheduleOption{
+					WantedTime:      lastDelete.Add(terminationGracePeriod).Add(5 * time.Second),
+					SkipIfRunBefore: true,
+				})
+
+				logger.V(2).Printf("check of %s %s: status %v ignore due to container recently deleted", bc.annotations.ServiceName, bc.annotations.ServiceInstance, point.Annotations.Status)
+
+				// And skip this checks. We still provide a valid point so some caller (like NRPE which can't skip
+				// a point) could still use it.
+				return point, ErrTemporarySkip
+			}
 		}
 
 		if bc.previousStatus.CurrentStatus == types.StatusOk && scheduleUpdate != nil {
@@ -181,19 +271,7 @@ func (bc *baseCheck) Check(ctx context.Context, scheduleUpdate func(opts types.S
 
 	bc.previousStatus = status
 
-	annotations := bc.annotations
-	annotations.Status = status
-
-	point := types.MetricPoint{
-		Point: types.Point{
-			Time:  time.Now().Truncate(time.Second),
-			Value: float64(status.CurrentStatus.NagiosCode()),
-		},
-		Labels:      bc.labels,
-		Annotations: annotations,
-	}
-
-	return point
+	return point, nil
 }
 
 // doCheck runs the check and returns its status.

@@ -72,6 +72,18 @@ func (mci mockContainerInfo) CachedContainer(containerID string) (container fact
 	return c, ok
 }
 
+func (mci mockContainerInfo) ContainerLastKill(containerID string) time.Time {
+	return time.Time{}
+}
+
+func (mci mockContainerInfo) ContainerLastDelete(containerID string) time.Time {
+	return time.Time{}
+}
+
+func (mci mockContainerInfo) ContainerTerminationGracePeriod(containerID string) time.Duration {
+	return 0
+}
+
 func (mci mockContainerInfo) Containers(_ context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error) {
 	_ = maxAge
 	_ = includeIgnored

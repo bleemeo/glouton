@@ -58,6 +58,7 @@ func NewTCP(
 	closeMsg []byte,
 	labels map[string]string,
 	annotations types.MetricAnnotations,
+	containerRuntime containerInfoProvider,
 ) *TCPCheck {
 	tc := &TCPCheck{
 		mainAddress: address,
@@ -71,7 +72,7 @@ func NewTCP(
 		mainCheck = nil
 	}
 
-	tc.baseCheck = newBase(address, tcpAddresses, persistentConnection, mainCheck, labels, annotations)
+	tc.baseCheck = newBase(address, tcpAddresses, persistentConnection, mainCheck, labels, annotations, containerRuntime)
 
 	return tc
 }

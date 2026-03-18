@@ -43,6 +43,11 @@ func NewProbeGatherer(gatherer prometheus.Gatherer, fastUpdateOnFailure bool) *P
 	return &ProbeGatherer{
 		g:                   gatherer,
 		fastUpdateOnFailure: fastUpdateOnFailure,
+		scheduleUpdate: func(opts types.ScheduleOption) {
+			_ = opts
+
+			logger.V(2).Printf("Missing call to SetScheduleUpdate before first GatherWithState")
+		},
 	}
 }
 

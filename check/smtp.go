@@ -46,12 +46,13 @@ func NewSMTP(
 	persistentConnection bool,
 	labels map[string]string,
 	annotations types.MetricAnnotations,
+	containerRuntime containerInfoProvider,
 ) *SMTPCheck {
 	sc := &SMTPCheck{
 		mainAddress: address,
 	}
 
-	sc.baseCheck = newBase("", persistentAddresses, persistentConnection, sc.smtpMainCheck, labels, annotations)
+	sc.baseCheck = newBase("", persistentAddresses, persistentConnection, sc.smtpMainCheck, labels, annotations, containerRuntime)
 
 	return sc
 }

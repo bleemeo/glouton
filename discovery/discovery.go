@@ -958,7 +958,7 @@ func (d *Discovery) ignoreServicesAndPorts() {
 }
 
 // CheckNow is type of check function.
-type CheckNow func(ctx context.Context) types.StatusDescription
+type CheckNow func(ctx context.Context) (types.StatusDescription, error)
 
 // GetCheckNow returns the GetCheckNow function associated to a NameInstance.
 func (d *Discovery) GetCheckNow(nameInstance NameInstance) (CheckNow, error) {

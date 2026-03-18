@@ -71,6 +71,7 @@ type Containerd struct {
 	openConnection    func(ctx context.Context, address string) (cl containerdClient, err error)
 	client            containerdClient
 	lastUpdate        time.Time
+	lastDelete        map[string]time.Time
 	lastDestroyedName map[string]time.Time
 	containers        map[string]containerObject
 	ignoredID         map[string]bool
@@ -109,6 +110,7 @@ func newWithOpenner(
 		Addresses:                 addresses,
 		DeletedContainersCallback: deletedContainersCallback,
 		IsContainerIgnored:        isContainerIgnored,
+		lastDelete:                make(map[string]time.Time),
 		lastDestroyedName:         make(map[string]time.Time),
 		containers:                make(map[string]containerObject),
 		ignoredID:                 make(map[string]bool),
@@ -146,12 +148,14 @@ func (c *Containerd) DiagnosticArchive(_ context.Context, archive types.ArchiveW
 		LastDestroyedName map[string]time.Time
 		LastUpdate        time.Time
 		PastMetricValues  []metricValue
+		AllLastDelete     map[string]time.Time
 	}{
 		WorkedOnce:        c.workedOnce,
 		Containers:        ctrs,
 		LastDestroyedName: c.lastDestroyedName,
 		LastUpdate:        c.lastUpdate,
 		PastMetricValues:  c.pastMetricValues,
+		AllLastDelete:     c.lastDelete,
 	}
 
 	enc := json.NewEncoder(file)
@@ -423,15 +427,6 @@ func (c *Containerd) IsRuntimeRunning(ctx context.Context) bool {
 	return true
 }
 
-func (c *Containerd) IsContainerNameRecentlyDeleted(name string) bool {
-	c.l.Lock()
-	defer c.l.Unlock()
-
-	_, ok := c.lastDestroyedName[name]
-
-	return ok
-}
-
 // Exec run a command in a container and return stdout+stderr.
 func (c *Containerd) Exec(ctx context.Context, containerID string, cmd []string) ([]byte, error) {
 	c.l.Lock()
@@ -604,6 +599,28 @@ func (c *Containerd) ContainerLastKill(containerID string) time.Time {
 	return time.Time{}
 }
 
+// ContainerLastDelete return the last time a container was deleted or zero-time if unknown.
+func (c *Containerd) ContainerLastDelete(containerID string) time.Time {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	return c.lastDelete[containerID]
+}
+
+func (c *Containerd) ContainerByNameLastDelete(name string) time.Time {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	return c.lastDestroyedName[name]
+}
+
+// ContainerTerminationGracePeriod return the duration between a kill and the forced stop. Use 0 if unknown.
+func (c *Containerd) ContainerTerminationGracePeriod(containerID string) time.Duration {
+	_ = containerID
+
+	return 0
+}
+
 func (c *Containerd) run(ctx context.Context) error {
 	c.l.Lock()
 
@@ -628,6 +645,12 @@ func (c *Containerd) run(ctx context.Context) error {
 	for {
 		if time.Since(lastCleanup) > 10*time.Minute {
 			c.l.Lock()
+
+			for k, v := range c.lastDelete {
+				if time.Since(v) > 10*time.Minute {
+					delete(c.lastDelete, k)
+				}
+			}
 
 			for k, v := range c.lastDestroyedName {
 				if time.Since(v) > 10*time.Minute {
@@ -692,6 +715,8 @@ func (c *Containerd) run(ctx context.Context) error {
 				if gloutonEvent.Container != nil {
 					c.lastDestroyedName[gloutonEvent.Container.ContainerName()] = time.Now()
 				}
+
+				c.lastDelete[gloutonEvent.ContainerID] = time.Now()
 
 				delete(c.containers, gloutonEvent.ContainerID)
 			case facts.EventTypeStop:
