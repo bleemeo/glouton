@@ -79,8 +79,8 @@ type pipelineContext struct {
 	otlpRecvCounter         *atomic.Int64
 	otlpRecvThroughputMeter *ringCounter
 
-	journalctlCounter         *atomic.Int64
-	journalctlThroughputMeter *ringCounter
+	journaldCounter         *atomic.Int64
+	journaldThroughputMeter *ringCounter
 
 	logProcessedCount  atomic.Int64
 	logThroughputMeter *ringCounter
@@ -276,21 +276,21 @@ func (p *pipelineContext) init(
 		}
 	}
 
-	if cfg.AutoDiscovery.JournalctlEnable {
-		if err := p.setupJournalctl(ctx, knownLogFormats); err != nil {
-			logger.V(1).Printf("Unable to configure Journalctl receiver: %v", err)
+	if cfg.AutoDiscovery.JournaldEnable {
+		if err := p.setupJournald(ctx, knownLogFormats); err != nil {
+			logger.V(1).Printf("Unable to configure journald receiver: %v", err)
 		}
 	}
 
 	if cfg.AutoDiscovery.SyslogEnable {
 		if err := p.setupSyslog(ctx, knownLogFormats); err != nil {
-			logger.V(1).Printf("Unable to configure Journalctl receiver: %v", err)
+			logger.V(1).Printf("Unable to configure journald receiver: %v", err)
 		}
 	}
 
 	if cfg.AutoDiscovery.AuditdEnable {
 		if err := p.setupAuditD(ctx, knownLogFormats); err != nil {
-			logger.V(1).Printf("Unable to configure Journalctl receiver: %v", err)
+			logger.V(1).Printf("Unable to configure journald receiver: %v", err)
 		}
 	}
 
@@ -386,7 +386,7 @@ func (p *pipelineContext) setupNetworkReceiver(
 	return nil
 }
 
-func (p *pipelineContext) setupJournalctl(
+func (p *pipelineContext) setupJournald(
 	ctx context.Context,
 	knownLogFormats map[string][]config.OTELOperator,
 ) error {
@@ -404,21 +404,21 @@ func (p *pipelineContext) setupJournalctl(
 
 	receiverTypedCfg.InputConfig.JournalctlPath = "/usr/bin/journalctl"
 
-	opsGroup, found := knownLogFormats["journalctl"]
+	opsGroup, found := knownLogFormats["journald"]
 	if !found {
-		return fmt.Errorf("%w missing log format %q", errUnexpectedConfig, "journalctl")
+		return fmt.Errorf("%w missing log format %q", errUnexpectedConfig, "journald")
 	}
 
 	// Operators from known log formats have already been expanded.
-	referencedOps, err := buildOperators(append(operatorsForServiceName("journalctl"), opsGroup...))
+	referencedOps, err := buildOperators(append(operatorsForServiceName("journald"), opsGroup...))
 	if err != nil {
 		return fmt.Errorf("building globally-defined operators: %w", err)
 	}
 
 	receiverTypedCfg.Operators = referencedOps
 
-	p.journalctlCounter = new(atomic.Int64)
-	p.journalctlThroughputMeter = newRingCounter(throughputMeterResolutionSecs)
+	p.journaldCounter = new(atomic.Int64)
+	p.journaldThroughputMeter = newRingCounter(throughputMeterResolutionSecs)
 
 	journaldReceiver, err := factoryReceiver.CreateLogs(
 		ctx,
@@ -427,14 +427,14 @@ func (p *pipelineContext) setupJournalctl(
 			TelemetrySettings: p.telemetry,
 		},
 		receiverTypedCfg,
-		wrapWithInstrumentation(p.inputConsumer, p.journalctlCounter, p.journalctlThroughputMeter),
+		wrapWithInstrumentation(p.inputConsumer, p.journaldCounter, p.journaldThroughputMeter),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to setup journalctl receiver: %w", err)
+		return fmt.Errorf("failed to setup journald receiver: %w", err)
 	}
 
 	if err = journaldReceiver.Start(ctx, nil); err != nil {
-		return fmt.Errorf("failed to start journalctl receiver: %w", err)
+		return fmt.Errorf("failed to start journald receiver: %w", err)
 	}
 
 	p.startedComponents = append(p.startedComponents, journaldReceiver)

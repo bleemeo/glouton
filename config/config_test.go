@@ -206,7 +206,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				Enable: true,
 				AutoDiscovery: AutoDiscovery{
 					AllEnable:                 true,
-					JournalctlEnable:          true,
+					JournaldEnable:            true,
 					SyslogEnable:              true,
 					AuditdEnable:              true,
 					ContainerAndServiceEnable: true,
@@ -914,7 +914,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 					OpenTelemetry: OpenTelemetry{
 						AutoDiscovery: AutoDiscovery{
 							AllEnable:                 false,
-							JournalctlEnable:          true,
+							JournaldEnable:            true,
 							SyslogEnable:              false,
 							AuditdEnable:              true,
 							ContainerAndServiceEnable: false,
@@ -934,7 +934,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 					OpenTelemetry: OpenTelemetry{
 						AutoDiscovery: AutoDiscovery{
 							AllEnable:                 true,
-							JournalctlEnable:          true,
+							JournaldEnable:            true,
 							SyslogEnable:              true,
 							AuditdEnable:              true,
 							ContainerAndServiceEnable: true,
@@ -1040,7 +1040,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 					OpenTelemetry: OpenTelemetry{
 						AutoDiscovery: AutoDiscovery{
 							AllEnable:                 true,
-							JournalctlEnable:          true,
+							JournaldEnable:            true,
 							SyslogEnable:              true,
 							AuditdEnable:              true,
 							ContainerAndServiceEnable: true,
@@ -1060,7 +1060,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 					OpenTelemetry: OpenTelemetry{
 						AutoDiscovery: AutoDiscovery{
 							AllEnable:                 true,
-							JournalctlEnable:          true,
+							JournaldEnable:            true,
 							SyslogEnable:              true,
 							AuditdEnable:              true,
 							ContainerAndServiceEnable: true,
@@ -1073,7 +1073,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "deprecated_auto_discovery3",
 			Files: []string{"testdata/deprecated_auto_discovery3.conf"},
 			WantWarnings: []string{
-				"testdata/deprecated_auto_discovery3.conf: setting is deprecated: log.opentelemetry.auto_discovery.enable_journalctl, use log.opentelemetry.auto_discovery.journalctl_enable instead",
+				"testdata/deprecated_auto_discovery3.conf: setting is deprecated: log.opentelemetry.auto_discovery.enable_journalctl, use log.opentelemetry.auto_discovery.journald_enable instead",
 				"testdata/deprecated_auto_discovery3.conf: setting is deprecated: log.opentelemetry.auto_discovery.enable_syslog, use log.opentelemetry.auto_discovery.syslog_enable instead",
 				"testdata/deprecated_auto_discovery3.conf: setting is deprecated: log.opentelemetry.auto_discovery.enable_auditd, use log.opentelemetry.auto_discovery.auditd_enable instead",
 				"testdata/deprecated_auto_discovery3.conf: setting is deprecated: log.opentelemetry.auto_discovery.enable_container_and_service, use log.opentelemetry.auto_discovery.container_and_service_enable instead",
@@ -1083,10 +1083,30 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 					OpenTelemetry: OpenTelemetry{
 						AutoDiscovery: AutoDiscovery{
 							AllEnable:                 false,
-							JournalctlEnable:          true,
+							JournaldEnable:            true,
 							SyslogEnable:              true,
 							AuditdEnable:              true,
 							ContainerAndServiceEnable: true,
+						},
+					},
+				},
+			},
+		},
+		{
+			Name:  "deprecated_auto_discovery4",
+			Files: []string{"testdata/deprecated_auto_discovery4.conf"},
+			WantWarnings: []string{
+				"testdata/deprecated_auto_discovery4.conf: setting is deprecated: log.opentelemetry.auto_discovery.journalctl_enable, use log.opentelemetry.auto_discovery.journald_enable instead",
+			},
+			WantConfig: Config{
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						AutoDiscovery: AutoDiscovery{
+							AllEnable:                 false,
+							JournaldEnable:            true,
+							SyslogEnable:              false,
+							AuditdEnable:              false,
+							ContainerAndServiceEnable: false,
 						},
 					},
 				},
