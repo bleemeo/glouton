@@ -389,9 +389,10 @@ func (bc *baseCheck) openSocketOnce(ctx context.Context, addr string, scheduleUp
 	if err != nil {
 		logger.V(2).Printf("fail to open TCP connection to %#v: %v", addr, err)
 
-		// Connection failed, trigger a check.
+		// Connection failed, trigger a check soon.
+		// We don't do it too quickly, as the connection might be closed due to container being stopped.
 		if scheduleUpdate != nil {
-			scheduleUpdate(types.ScheduleOption{WantedTime: time.Now()})
+			scheduleUpdate(types.ScheduleOption{WantedTime: time.Now().Add(5 * time.Second)})
 		}
 
 		return true
