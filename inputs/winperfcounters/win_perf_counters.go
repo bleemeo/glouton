@@ -231,6 +231,8 @@ func (c *winCollector) transformMetrics(currentContext internal.GatherContext, f
 	if currentContext.Measurement == memModuleName {
 		totalMemory := float64(c.totalMemory)
 
+		res["total"] = totalMemory
+
 		if val, present := fields["Available_Bytes"]; present {
 			res["available"] = val
 			res["available_perc"] = val * 100. / totalMemory
