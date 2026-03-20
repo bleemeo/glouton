@@ -38,6 +38,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bleemeo/glouton/agent/diagnostic"
 	metricfilter "github.com/bleemeo/glouton/agent/metric-filter"
 	"github.com/bleemeo/glouton/agent/state"
 	"github.com/bleemeo/glouton/api"
@@ -2243,8 +2244,11 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		}
 	}()
 
+	diagnosticAutoUpgrade := diagnostic.NewDiagnosticAutoUpgrade(a.commandRunner)
+
 	modules := []func(ctx context.Context, archive types.ArchiveWriter) error{
-		a.diagnosticGlobalInfo,
+		diagnostic.DiagnosticGlobalInfo,
+		a.diagnosticPage,
 		a.diagnosticGloutonState,
 		a.diagnosticJitter,
 		a.taskRegistry.DiagnosticArchive,
@@ -2264,6 +2268,7 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		a.threshold.DiagnosticStatusStates,
 		smart.DiagnosticArchive,
 		a.containerRuntime.DiagnosticArchive,
+		diagnosticAutoUpgrade.DiagnosticAutoupgrade,
 	}
 
 	if a.bleemeoConnector != nil {
@@ -2301,151 +2306,13 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 	return ctx.Err()
 }
 
-func (a *agent) diagnosticGlobalInfo(ctx context.Context, archive types.ArchiveWriter) error {
-	file, err := archive.Create("goroutines.txt")
-	if err != nil {
-		return err
-	}
-
-	// We don't know how big the buffer needs to be to collect
-	// all the goroutines. Use 2MB buffer which hopefully is enough
-	buffer := make([]byte, 1<<21)
-
-	n := runtime.Stack(buffer, true)
-	buffer = buffer[:n]
-
-	_, err = file.Write(buffer)
-	if err != nil {
-		return err
-	}
-
-	err = crashreport.AddStderrLogToArchive(archive)
-	if err != nil {
-		logger.V(1).Printf("Can't add stderr log to archive: %v", err)
-	}
-
-	file, err = archive.Create("log.txt")
-	if err != nil {
-		return err
-	}
-
-	tmp := logger.Buffer()
-
-	_, err = file.Write(tmp)
-	if err != nil {
-		return err
-	}
-
-	compressedSize := logger.CompressedSize()
-
-	fmt.Fprintf(file, "-- Log size = %d, compressed = %d (ratio: %.2f)\n", len(tmp), compressedSize, float64(compressedSize)/float64(len(tmp)))
-
-	file, err = archive.Create("memstats.txt")
-	if err != nil {
-		return err
-	}
-
-	if err := writeMemstat(file); err != nil {
-		return err
-	}
-
-	file, err = archive.Create("diagnostic.txt")
+func (a *agent) diagnosticPage(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("diagnostic.txt")
 	if err != nil {
 		return err
 	}
 
 	_, err = file.Write([]byte(a.DiagnosticPage(ctx)))
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func formatBytes(size uint64) string {
-	scales := []string{"bytes", "KiB", "MiB", "GiB", "TiB", "PiB"}
-
-	value := float64(size)
-
-	i := 0
-	for i < len(scales)-1 && math.Abs(value) >= 1024 {
-		i++
-
-		value /= 1024
-	}
-
-	return fmt.Sprintf("%.2f %s", value, scales[i])
-}
-
-func writeMemstat(writer io.Writer) error {
-	var stat runtime.MemStats
-
-	runtime.ReadMemStats(&stat)
-
-	_, err := fmt.Fprintf(writer, "Heap in-use %s, object in-use %d\n", formatBytes(stat.HeapAlloc), stat.HeapObjects)
-	if err != nil {
-		return err
-	}
-
-	_, err = fmt.Fprintf(writer, "Total allocated %s, object %d\n", formatBytes(stat.TotalAlloc), stat.Mallocs)
-	if err != nil {
-		return err
-	}
-
-	_, err = fmt.Fprintf(
-		writer,
-		"Heap details Sys (OS allocated) %s, InUse %s, Idle %s (released %s)\n",
-		formatBytes(stat.HeapSys),
-		formatBytes(stat.HeapInuse),
-		formatBytes(stat.HeapIdle),
-		formatBytes(stat.HeapReleased),
-	)
-	if err != nil {
-		return err
-	}
-
-	_, err = fmt.Fprintf(
-		writer,
-		"Other memory Sys (OS allocated) / InUse: Stack %s / %s; MSpans %s / %s; MCache %s / %s\n",
-		formatBytes(stat.StackSys),
-		formatBytes(stat.StackInuse),
-		formatBytes(stat.MSpanSys),
-		formatBytes(stat.MSpanInuse),
-		formatBytes(stat.MCacheSys),
-		formatBytes(stat.MCacheInuse),
-	)
-	if err != nil {
-		return err
-	}
-
-	_, err = fmt.Fprintf(
-		writer,
-		"Other memory BuckHashSys %s, GCSys %s, OtherSys %s\n",
-		formatBytes(stat.BuckHashSys),
-		formatBytes(stat.GCSys),
-		formatBytes(stat.OtherSys),
-	)
-	if err != nil {
-		return err
-	}
-
-	_, err = fmt.Fprintf(
-		writer,
-		"Total: Sys %s; Sum of all *Sys %s, RSS %s\n",
-		formatBytes(stat.Sys),
-		formatBytes(stat.HeapSys+stat.StackSys+stat.MSpanSys+stat.MCacheSys+stat.BuckHashSys+stat.GCSys+stat.OtherSys),
-		formatBytes(getResidentMemoryOfSelf()),
-	)
-	if err != nil {
-		return err
-	}
-
-	_, err = fmt.Fprintf(
-		writer,
-		"Locked memory limit: %d KiB; Max parallel input secrets: %d\n",
-		inputs.LockedMemoryLimit()/1024,
-		inputs.MaxParallelSecrets(),
-	)
 	if err != nil {
 		return err
 	}

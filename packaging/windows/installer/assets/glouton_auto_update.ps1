@@ -2,6 +2,7 @@ $versionUrl = "https://packages.bleemeo.com/bleemeo-agent/VERSION"
 $baseMsiUrl = "https://packages.bleemeo.com/bleemeo-agent/windows/"
 $localPackageName = "Glouton"
 $logOutFile = "C:\ProgramData\glouton\auto_update.txt"
+$msiLogPath = "C:\ProgramData\glouton\msiexec-log.txt"
 $autoUpgradeMarker = "C:\ProgramData\glouton\auto_upgrade"
 $logTmpFile = New-TemporaryFile
 Out-File -FilePath $logTmpFile -Encoding ascii
@@ -45,7 +46,7 @@ function Download-MSI {
 # Function to update the package
 function Update-Package {
     param([string]$msiPath)
-    Start-Process msiexec.exe -ArgumentList "/i `"$msiPath`" /quiet /norestart" -Wait
+    Start-Process msiexec.exe -ArgumentList "/i `"$msiPath`" /quiet /norestart /l* `"$msiLogPath`"" -Wait
 }
 
 # Main logic

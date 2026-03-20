@@ -17,4 +17,4 @@ trap "rm -f $AUTO_UPGRADE_FILE || true" EXIT
 
 touch $AUTO_UPGRADE_FILE
 
-service glouton upgrade
+service glouton upgrade 2>&1 | tee /var/lib/glouton/auto-upgrade.log
