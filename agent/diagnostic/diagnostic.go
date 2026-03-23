@@ -18,10 +18,8 @@ package diagnostic
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
-	"os"
 	"runtime"
 
 	"github.com/bleemeo/glouton/crashreport"
@@ -29,9 +27,6 @@ import (
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
-	"github.com/bleemeo/glouton/utils/gloutonexec"
-	"github.com/bleemeo/glouton/version"
-	"golang.org/x/text/encoding/unicode"
 )
 
 func DiagnosticGlobalInfo(ctx context.Context, archive types.ArchiveWriter) error {
@@ -80,167 +75,6 @@ func DiagnosticGlobalInfo(ctx context.Context, archive types.ArchiveWriter) erro
 
 	if err := writeMemstat(file); err != nil {
 		return err
-	}
-
-	return nil
-}
-
-type DiagnosticAutoUpgrade struct {
-	runner *gloutonexec.Runner
-}
-
-func NewDiagnosticAutoUpgrade(runner *gloutonexec.Runner) DiagnosticAutoUpgrade {
-	return DiagnosticAutoUpgrade{
-		runner: runner,
-	}
-}
-
-func (d DiagnosticAutoUpgrade) DiagnosticAutoupgrade(ctx context.Context, archive types.ArchiveWriter) error {
-	if version.IsWindows() {
-		return d.diagnosticAutoupgradeWindows(ctx, archive)
-	}
-
-	if version.IsFreeBSD() {
-		return d.diagnosticAutoupgradeFreeBSD(ctx, archive)
-	}
-
-	if version.IsLinux() {
-		return d.diagnosticAutoupgradeLinux(ctx, archive)
-	}
-
-	return nil
-}
-
-func (d DiagnosticAutoUpgrade) diagnosticAutoupgradeLinux(ctx context.Context, archive types.ArchiveWriter) error {
-	out, err := d.runner.Run(ctx, gloutonexec.Option{SkipInContainer: true}, "journalctl", "-u", "glouton-auto-upgrade", "--since", "24 hours ago")
-	if err != nil && errors.Is(err, gloutonexec.ErrExecutionSkipped) {
-		// The auto upgrade is not supported on containers, skip producing the diagnostic file
-		return nil
-	}
-
-	file, err := archive.Create("auto-upgrade-troubleshooting.txt")
-	if err != nil {
-		return err
-	}
-
-	if err != nil {
-		fmt.Fprintf(
-			file,
-			"Unable to get glouton-auto-upgrade logs: %s\n", err.Error(),
-		)
-
-		return nil
-	}
-
-	_, err = file.Write(out)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (d DiagnosticAutoUpgrade) diagnosticAutoupgradeWindows(ctx context.Context, archive types.ArchiveWriter) error {
-	_ = ctx
-
-	file, err := archive.Create("auto-upgrade-troubleshooting.txt")
-	if err != nil {
-		return err
-	}
-
-	st, err := os.Stat(`C:\ProgramData\glouton\auto_update.txt`)
-	if err != nil {
-		fmt.Fprintf(
-			file,
-			"Unable to Stat() auto_update.txt file: %s\n", err.Error(),
-		)
-	} else {
-		fmt.Fprintf(file, "File auto_update.txt exists and had mtime=%s and size=%d\n", st.ModTime().String(), st.Size())
-	}
-
-	st, err = os.Stat(`C:\ProgramData\glouton\msiexec-log.txt`)
-	if err != nil {
-		fmt.Fprintf(
-			file,
-			"Unable to Stat() msiexec-log.txt file: %s\n", err.Error(),
-		)
-	} else {
-		fmt.Fprintf(file, "File msiexec-log.txt exists and had mtime=%s and size=%d\n", st.ModTime().String(), st.Size())
-	}
-
-	contentBytes, err := os.ReadFile(`C:\ProgramData\glouton\auto_update.txt`)
-	if err != nil {
-		fmt.Fprintf(
-			file,
-			"Unable to Read auto_update.txt file: %s\n", err.Error(),
-		)
-	} else {
-		fmt.Fprintf(file, "\n----- auto_update.txt content -----\n")
-
-		_, err = file.Write(contentBytes)
-		if err != nil {
-			return err
-		}
-	}
-
-	contentBytes, err = os.ReadFile(`C:\ProgramData\glouton\msiexec-log.txt`)
-	if err != nil {
-		fmt.Fprintf(
-			file,
-			"Unable to Read msiexec-log.txt file: %s\n", err.Error(),
-		)
-	} else {
-		decoder := unicode.UTF16(unicode.LittleEndian, unicode.UseBOM).NewDecoder()
-
-		utf8Bytes, err := decoder.Bytes(contentBytes)
-		if err != nil {
-			fmt.Fprintf(file, "\n----- msiexec-log.txt content (failed to decode: %s) -----\n", err.Error())
-		} else {
-			fmt.Fprintf(file, "\n----- msiexec-log.txt content (decoded from UTF16) -----\n")
-
-			contentBytes = utf8Bytes
-		}
-
-		_, err = file.Write(contentBytes)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (d DiagnosticAutoUpgrade) diagnosticAutoupgradeFreeBSD(ctx context.Context, archive types.ArchiveWriter) error {
-	_ = ctx
-
-	file, err := archive.Create("auto-upgrade-troubleshooting.txt")
-	if err != nil {
-		return err
-	}
-
-	st, err := os.Stat("/var/lib/glouton/auto-upgrade.log")
-	if err != nil {
-		fmt.Fprintf(
-			file,
-			"Unable to Stat() auto-upgrade.log file: %s\n", err.Error(),
-		)
-	} else {
-		fmt.Fprintf(file, "File auto-upgrade.log exists and had mtime=%s and size=%d\n", st.ModTime().String(), st.Size())
-	}
-
-	contentBytes, err := os.ReadFile("/var/lib/glouton/auto-upgrade.log")
-	if err != nil {
-		fmt.Fprintf(
-			file,
-			"Unable to Read auto-upgrade.log file: %s\n", err.Error(),
-		)
-	} else {
-		fmt.Fprintf(file, "\n----- auto-upgrade.log content -----\n")
-
-		_, err = file.Write(contentBytes)
-		if err != nil {
-			return err
-		}
 	}
 
 	return nil
