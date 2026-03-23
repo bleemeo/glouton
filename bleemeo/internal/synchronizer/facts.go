@@ -166,6 +166,16 @@ func (s *Synchronizer) factRegister(ctx context.Context, apiClient types.FactCli
 
 			result, err := apiClient.RegisterFact(ctx, payload)
 			if err != nil {
+				// Even in case of error, stop facts that was already registered.
+				// Without this, due to fact registration error, Glouton might think it has a duplicated state.json
+				// * The previous run of glouton had glouton_pid=100
+				// * Glouton register glouton_pid=200 facts
+				// * Another facts fail. If we don't save, the following will occur
+				// * During check checkDuplicated, oldFacts will contains PID=100, but newFacts,
+				//   (since checkDuplicated update list from Bleemeo API) contains PID=200
+				//   So checkDuplicated think Glouton is duplicated, when it's wrong.
+				s.option.Cache.SetFacts(facts)
+
 				return err
 			}
 
