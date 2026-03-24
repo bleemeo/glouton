@@ -142,6 +142,34 @@ func (k *Kubernetes) ContainerLastKill(containerID string) time.Time {
 	return k.Runtime.ContainerLastKill(containerID)
 }
 
+// ContainerLastDelete return last time a containers was killed.
+func (k *Kubernetes) ContainerLastDelete(containerID string) time.Time {
+	return k.Runtime.ContainerLastDelete(containerID)
+}
+
+func (k *Kubernetes) ContainerByNameLastDelete(name string) time.Time {
+	return k.Runtime.ContainerByNameLastDelete(name)
+}
+
+// ContainerTerminationGracePeriod return the duration between a kill and the forced stop. Use 0 if unknown.
+func (k *Kubernetes) ContainerTerminationGracePeriod(containerID string) time.Duration {
+	tmp, found := k.CachedContainer(containerID)
+	if !found {
+		return 0
+	}
+
+	container, ok := tmp.(wrappedContainer)
+	if !ok {
+		return 0
+	}
+
+	if container.pod.Spec.TerminationGracePeriodSeconds == nil {
+		return 30 * time.Second
+	}
+
+	return time.Second * time.Duration(*container.pod.Spec.TerminationGracePeriodSeconds)
+}
+
 // Exec run command in the containers.
 func (k *Kubernetes) Exec(ctx context.Context, containerID string, cmd []string) ([]byte, error) {
 	return k.Runtime.Exec(ctx, containerID, cmd)
@@ -201,10 +229,6 @@ func (k *Kubernetes) Events() <-chan facts.ContainerEvent {
 // Note: if Kubernetes isn't working but the underlying container runtime works, this method return true, but POD information will be missing.
 func (k *Kubernetes) IsRuntimeRunning(ctx context.Context) bool {
 	return k.Runtime.IsRuntimeRunning(ctx)
-}
-
-func (k *Kubernetes) IsContainerNameRecentlyDeleted(name string) bool {
-	return k.Runtime.IsContainerNameRecentlyDeleted(name)
 }
 
 func (k *Kubernetes) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {

@@ -1029,34 +1029,38 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		}
 
 		connector, err := bleemeo.New(bleemeoTypes.GlobalOption{
-			Config:                         a.config,
-			ConfigItems:                    a.configItems,
-			State:                          a.state,
-			Facts:                          a.factProvider,
-			Process:                        psFact,
-			Docker:                         a.containerRuntime,
-			Store:                          bleemeoFilteredStore,
-			SNMP:                           a.snmpManager.Targets(),
-			SNMPOnlineTarget:               a.snmpManager.OnlineCount,
-			Discovery:                      a.discovery,
-			MonitorManager:                 a.monitorManager,
-			UpdateMetricResolution:         a.updateMetricResolution,
-			UpdateThresholds:               a.UpdateThresholds,
-			UpdateUnits:                    a.threshold.SetUnits,
-			NotifyFirstRegistration:        a.notifyBleemeoFirstRegistration,
-			NotifyHooksUpdate:              a.notifyBleemeoUpdateHooks,
-			BlackboxScraperName:            scaperName,
-			ReloadState:                    a.reloadState.Bleemeo(),
-			WriteDiagnosticArchive:         a.writeDiagnosticArchive,
-			VSphereDevices:                 a.vSphereManager.Devices,
-			FindVSphereDevice:              a.vSphereManager.FindDevice,
-			LastVSphereChange:              a.vSphereManager.LastChange,
-			VSphereEndpointsInError:        a.vSphereManager.EndpointsInError,
-			IsContainerEnabled:             a.containerFilter.ContainerEnabled,
-			IsContainerNameRecentlyDeleted: a.containerRuntime.IsContainerNameRecentlyDeleted,
-			IsMetricAllowed:                a.metricFilter.IsAllowedAndNotDeniedMap,
-			PahoLastPingCheckAt:            a.pahoLogWrapper.LastPingAt,
-			LastMetricAnnotationChange:     a.store.LastAnnotationChange,
+			Config:                  a.config,
+			ConfigItems:             a.configItems,
+			State:                   a.state,
+			Facts:                   a.factProvider,
+			Process:                 psFact,
+			Docker:                  a.containerRuntime,
+			Store:                   bleemeoFilteredStore,
+			SNMP:                    a.snmpManager.Targets(),
+			SNMPOnlineTarget:        a.snmpManager.OnlineCount,
+			Discovery:               a.discovery,
+			MonitorManager:          a.monitorManager,
+			UpdateMetricResolution:  a.updateMetricResolution,
+			UpdateThresholds:        a.UpdateThresholds,
+			UpdateUnits:             a.threshold.SetUnits,
+			NotifyFirstRegistration: a.notifyBleemeoFirstRegistration,
+			NotifyHooksUpdate:       a.notifyBleemeoUpdateHooks,
+			BlackboxScraperName:     scaperName,
+			ReloadState:             a.reloadState.Bleemeo(),
+			WriteDiagnosticArchive:  a.writeDiagnosticArchive,
+			VSphereDevices:          a.vSphereManager.Devices,
+			FindVSphereDevice:       a.vSphereManager.FindDevice,
+			LastVSphereChange:       a.vSphereManager.LastChange,
+			VSphereEndpointsInError: a.vSphereManager.EndpointsInError,
+			IsContainerEnabled:      a.containerFilter.ContainerEnabled,
+			IsContainerNameRecentlyDeleted: func(name string) bool {
+				deleteAt := a.containerRuntime.ContainerByNameLastDelete(name)
+
+				return !deleteAt.IsZero() && time.Since(deleteAt) < 5*time.Minute
+			},
+			IsMetricAllowed:            a.metricFilter.IsAllowedAndNotDeniedMap,
+			PahoLastPingCheckAt:        a.pahoLogWrapper.LastPingAt,
+			LastMetricAnnotationChange: a.store.LastAnnotationChange,
 		})
 		if err != nil {
 			logger.Printf("unable to start Bleemeo SAAS connector: %v", err)
@@ -1820,19 +1824,6 @@ func (a *agent) dockerWatcher(ctx context.Context) error {
 				a.sendDockerContainerHealth(ctx, ev.Container)
 			}
 
-			switch ev.Type { //nolint: exhaustive,nolintlint
-			case facts.EventTypeKill, facts.EventTypeStop:
-				checkIDs := a.discovery.GetCheckIDsForContainer(ev.ContainerID)
-				for _, checkID := range checkIDs {
-					// Wait a bit; other events (delete) may arrive soon.
-					a.gathererRegistry.DelayRegExec(checkID, time.Now().Add(20*time.Second))
-				}
-			case facts.EventTypeDelete:
-				checkIDs := a.discovery.GetCheckIDsForContainer(ev.ContainerID)
-				for _, checkID := range checkIDs {
-					a.gathererRegistry.Unregister(checkID)
-				}
-			}
 		case <-pendingTimer.C:
 			if pendingDiscovery {
 				a.FireTrigger(pendingDiscovery, false, false, pendingSecondDiscovery)

@@ -511,7 +511,7 @@ func getLeafLifespan(state *tls.ConnectionState) time.Duration {
 	return state.PeerCertificates[0].NotAfter.Sub(state.PeerCertificates[0].NotBefore)
 }
 
-func collectorInMap(value blackboxCollector, iterable map[int]gathererRegistration) bool {
+func collectorInMap(value blackboxCollector, iterable map[types.Registration]gathererRegistration) bool {
 	for _, mapValue := range iterable {
 		if value.Equal(mapValue.collector) {
 			return true
@@ -535,10 +535,8 @@ func (m *RegisterManager) updateRegistrations() error {
 				return err
 			}
 
-			var g prometheus.Gatherer = gatherer
-
 			// wrap our gatherer in ProbeGatherer, to only collect metrics when necessary
-			g = registry.NewProbeGatherer(g, collector.RefreshRate > time.Minute)
+			g := registry.NewProbeGatherer(gatherer, collector.RefreshRate > time.Minute)
 
 			hash := labels.FromMap(collector.Labels).Hash()
 
@@ -568,9 +566,11 @@ func (m *RegisterManager) updateRegistrations() error {
 				return err
 			}
 
+			g.SetScheduleUpdate(id.ScheduleRun)
+
 			if refreshRate > 0 && time.Since(creationDate) < refreshRate {
 				// For new monitor, trigger a schedule immediately
-				m.registry.ScheduleScrape(id, time.Now())
+				id.ScheduleRun(types.ScheduleOption{WantedTime: time.Now()})
 			}
 
 			m.registrations[id] = gathererRegistration{
@@ -583,12 +583,12 @@ func (m *RegisterManager) updateRegistrations() error {
 	}
 
 	// unregister any obsolete probe
-	for idx, gatherer := range m.registrations {
+	for reg, gatherer := range m.registrations {
 		if gatherer.collector.BleemeoAgentID != "" && !gathererInArray(gatherer, m.targets) {
 			logger.V(2).Printf("The probe for '%s' is now deactivated", gatherer.collector.Name)
 
-			m.registry.Unregister(idx)
-			delete(m.registrations, idx)
+			reg.Unregister()
+			delete(m.registrations, reg)
 		}
 	}
 
@@ -791,7 +791,7 @@ func InternalRunProbe(ctx context.Context, monitor types.Monitor, overrideNow ti
 		overrideNow = time.Now()
 	}
 
-	reg.InternalRunScrape(ctx, ctx, overrideNow, id)
+	id.InternalRunScrape(ctx, ctx, overrideNow)
 
 	return resPoints, nil
 }

@@ -46,6 +46,7 @@ func NewNagios(
 	labels map[string]string,
 	annotations types.MetricAnnotations,
 	runner *gloutonexec.Runner,
+	containerRuntime containerInfoProvider,
 ) *NagiosCheck {
 	nc := &NagiosCheck{
 		nagiosCommand: nagiosCommand,
@@ -58,7 +59,7 @@ func NewNagios(
 		mainTCPAddress = persistentAddresses[0]
 	}
 
-	nc.baseCheck = newBase(mainTCPAddress, persistentAddresses, persistentConnection, nc.nagiosMainCheck, labels, annotations)
+	nc.baseCheck = newBase(mainTCPAddress, persistentAddresses, persistentConnection, nc.nagiosMainCheck, labels, annotations, containerRuntime)
 
 	return nc
 }

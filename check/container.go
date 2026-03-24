@@ -28,10 +28,11 @@ func NewContainerStopped(
 	persistenConnection bool,
 	labels map[string]string,
 	annotations types.MetricAnnotations,
+	containerRuntime containerInfoProvider,
 ) *ContainerCheck {
 	newCheck := &ContainerCheck{}
 
-	newCheck.baseCheck = newBase(address, tcpAddresses, persistenConnection, newCheck.containerStoppedCheck, labels, annotations)
+	newCheck.baseCheck = newBase(address, tcpAddresses, persistenConnection, newCheck.containerStoppedCheck, labels, annotations, containerRuntime)
 
 	return newCheck
 }

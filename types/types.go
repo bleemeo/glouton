@@ -581,3 +581,17 @@ type ProcIter interface {
 	Close() error
 	// The interface also have "Proc" interface... but this interface use architecture depedend type
 }
+
+type ScheduleOption struct {
+	WantedTime time.Time
+	// SkipIfRunBefore cause the scheduled run to be ignore if another
+	// scheduled execution start between call to ScheduleRun and the wantedTime.
+	// This allow multiple call to ScheduleRun to be "merged" into one.
+	SkipIfRunBefore bool
+}
+
+type Registration interface {
+	ScheduleRun(opts ScheduleOption)
+	Unregister()
+	InternalRunScrape(ctx context.Context, loopCtx context.Context, t0 time.Time)
+}

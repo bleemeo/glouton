@@ -41,31 +41,36 @@ type Runtime struct {
 	Runtimes         []crTypes.RuntimeInterface
 	ContainerIgnored func(facts.Container) bool
 
-	l           sync.Mutex
-	idToRuntime map[string]int
-	notifyC     chan facts.ContainerEvent
+	l                sync.Mutex
+	containerID2Info map[string]containerInfo
+	notifyC          chan facts.ContainerEvent
+}
+
+type containerInfo struct {
+	runtimeIdx int
+	removedAt  time.Time
 }
 
 func (r *Runtime) getRuntime(containerID string) crTypes.RuntimeInterface {
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	idx, ok := r.idToRuntime[containerID]
+	info, ok := r.containerID2Info[containerID]
 
-	if !ok || len(r.Runtimes) <= idx {
+	if !ok || len(r.Runtimes) <= info.runtimeIdx {
 		return nil
 	}
 
-	return r.Runtimes[idx]
+	return r.Runtimes[info.runtimeIdx]
 }
 
 func (r *Runtime) ContainerExists(id string) bool {
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	_, found := r.idToRuntime[id]
+	info, found := r.containerID2Info[id]
 
-	return found
+	return found && info.removedAt.IsZero()
 }
 
 // LastUpdate return the most recent date of update.
@@ -108,6 +113,42 @@ func (r *Runtime) ContainerLastKill(containerID string) time.Time {
 	return cr.ContainerLastKill(containerID)
 }
 
+// ContainerLastDelete call function on container runtimes.
+func (r *Runtime) ContainerLastDelete(containerID string) time.Time {
+	cr := r.getRuntime(containerID)
+
+	if cr == nil {
+		logger.V(2).Printf("ContainerLastDelete: can't route container %s to a container runtime", containerID)
+
+		return time.Time{}
+	}
+
+	return cr.ContainerLastDelete(containerID)
+}
+
+func (r *Runtime) ContainerByNameLastDelete(name string) time.Time {
+	for _, runtime := range r.Runtimes {
+		if deleteAt := runtime.ContainerByNameLastDelete(name); !deleteAt.IsZero() {
+			return deleteAt
+		}
+	}
+
+	return time.Time{}
+}
+
+// ContainerTerminationGracePeriod call function on container runtimes.
+func (r *Runtime) ContainerTerminationGracePeriod(containerID string) time.Duration {
+	cr := r.getRuntime(containerID)
+
+	if cr == nil {
+		logger.V(2).Printf("ContainerTerminationGracePeriod: can't route container %s to a container runtime", containerID)
+
+		return 0
+	}
+
+	return cr.ContainerTerminationGracePeriod(containerID)
+}
+
 // Exec call function on container runtimes.
 func (r *Runtime) Exec(ctx context.Context, containerID string, cmd []string) ([]byte, error) {
 	cr := r.getRuntime(containerID)
@@ -125,7 +166,7 @@ func (r *Runtime) Exec(ctx context.Context, containerID string, cmd []string) ([
 func (r *Runtime) Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, globalErr error) {
 	var errs types.MultiErrors
 
-	idToRuntime := make(map[string]int)
+	containerID2Info := make(map[string]containerInfo)
 
 	for i, cr := range r.Runtimes {
 		list, err := cr.Containers(ctx, maxAge, true)
@@ -136,7 +177,10 @@ func (r *Runtime) Containers(ctx context.Context, maxAge time.Duration, includeI
 		}
 
 		for _, c := range list {
-			idToRuntime[c.ID()] = i
+			containerID2Info[c.ID()] = containerInfo{
+				runtimeIdx: i,
+				removedAt:  time.Time{},
+			}
 
 			if includeIgnored || !r.ContainerIgnored(c) {
 				containers = append(containers, c)
@@ -154,7 +198,24 @@ func (r *Runtime) Containers(ctx context.Context, maxAge time.Duration, includeI
 
 	r.l.Lock()
 
-	r.idToRuntime = idToRuntime
+	// Kept any recently delete container, unless a new existing one replaced it
+	for containerID, old := range r.containerID2Info {
+		if _, newExists := containerID2Info[containerID]; newExists {
+			continue
+		}
+
+		if old.removedAt.IsZero() {
+			old.removedAt = time.Now()
+		}
+
+		if time.Since(old.removedAt) > 5*time.Minute {
+			continue
+		}
+
+		containerID2Info[containerID] = old
+	}
+
+	r.containerID2Info = containerID2Info
 
 	r.l.Unlock()
 
@@ -188,16 +249,6 @@ func (r *Runtime) IsRuntimeRunning(ctx context.Context) bool {
 	}
 
 	return atLeastOne
-}
-
-func (r *Runtime) IsContainerNameRecentlyDeleted(name string) bool {
-	for _, runtime := range r.Runtimes {
-		if runtime.IsContainerNameRecentlyDeleted(name) {
-			return true
-		}
-	}
-
-	return false
 }
 
 func (r *Runtime) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
@@ -285,10 +336,13 @@ func (r *Runtime) Run(ctx context.Context) error {
 
 					r.l.Lock()
 
-					if r.idToRuntime == nil {
-						r.idToRuntime = make(map[string]int)
+					if r.containerID2Info == nil {
+						r.containerID2Info = make(map[string]containerInfo)
+					}
 
-						r.idToRuntime[ev.ContainerID] = i
+					r.containerID2Info[ev.ContainerID] = containerInfo{
+						runtimeIdx: i,
+						removedAt:  time.Time{},
 					}
 
 					r.l.Unlock()
@@ -404,11 +458,14 @@ func (m mergeProcessQuerier) ContainerFromCGroup(ctx context.Context, cgroupData
 			m.r.l.Lock()
 			defer m.r.l.Unlock()
 
-			if m.r.idToRuntime == nil {
-				m.r.idToRuntime = make(map[string]int)
+			if m.r.containerID2Info == nil {
+				m.r.containerID2Info = make(map[string]containerInfo)
 			}
 
-			m.r.idToRuntime[cont.ID()] = i
+			m.r.containerID2Info[cont.ID()] = containerInfo{
+				runtimeIdx: i,
+				removedAt:  time.Time{},
+			}
 
 			return cont, nil
 		}
@@ -436,11 +493,14 @@ func (m mergeProcessQuerier) ContainerFromPID(ctx context.Context, parentContain
 			m.r.l.Lock()
 			defer m.r.l.Unlock()
 
-			if m.r.idToRuntime == nil {
-				m.r.idToRuntime = make(map[string]int)
+			if m.r.containerID2Info == nil {
+				m.r.containerID2Info = make(map[string]containerInfo)
 			}
 
-			m.r.idToRuntime[cont.ID()] = i
+			m.r.containerID2Info[cont.ID()] = containerInfo{
+				runtimeIdx: i,
+				removedAt:  time.Time{},
+			}
 
 			return cont, nil
 		}

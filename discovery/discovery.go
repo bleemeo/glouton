@@ -98,9 +98,8 @@ type Registry interface {
 
 // GathererRegistry allow to register/unregister prometheus Gatherer.
 type GathererRegistry interface {
-	RegisterGatherer(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error)
-	RegisterInput(opt registry.RegistrationOption, input telegraf.Input) (int, error)
-	Unregister(id int) bool
+	RegisterGatherer(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (types.Registration, error)
+	RegisterInput(opt registry.RegistrationOption, input telegraf.Input) (types.Registration, error)
 }
 
 // New returns a new Discovery and some warnings.
@@ -959,7 +958,7 @@ func (d *Discovery) ignoreServicesAndPorts() {
 }
 
 // CheckNow is type of check function.
-type CheckNow func(ctx context.Context) types.StatusDescription
+type CheckNow func(ctx context.Context) (types.StatusDescription, error)
 
 // GetCheckNow returns the GetCheckNow function associated to a NameInstance.
 func (d *Discovery) GetCheckNow(nameInstance NameInstance) (CheckNow, error) {
@@ -969,22 +968,4 @@ func (d *Discovery) GetCheckNow(nameInstance NameInstance) (CheckNow, error) {
 	}
 
 	return checkDetails.check.CheckNow, nil
-}
-
-func (d *Discovery) GetCheckIDsForContainer(containerID string) []int {
-	d.l.Lock()
-	defer d.l.Unlock()
-
-	var checkIDs []int
-
-	for key, service := range d.servicesMap {
-		if service.ContainerID == containerID {
-			check, found := d.activeCheck[key]
-			if found {
-				checkIDs = append(checkIDs, check.id)
-			}
-		}
-	}
-
-	return checkIDs
 }

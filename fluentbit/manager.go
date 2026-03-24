@@ -44,7 +44,7 @@ import (
 const updateInterval = time.Minute
 
 type registerer interface {
-	RegisterGatherer(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error)
+	RegisterGatherer(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (types.Registration, error)
 }
 
 type Manager struct {

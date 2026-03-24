@@ -36,6 +36,9 @@ const (
 type RuntimeInterface interface {
 	CachedContainer(containerID string) (c facts.Container, found bool)
 	ContainerLastKill(containerID string) time.Time
+	ContainerLastDelete(containerID string) time.Time
+	ContainerByNameLastDelete(name string) time.Time
+	ContainerTerminationGracePeriod(containerID string) time.Duration
 	Exec(ctx context.Context, containerID string, cmd []string) ([]byte, error)
 	Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error)
 	Events() <-chan facts.ContainerEvent
@@ -46,7 +49,6 @@ type RuntimeInterface interface {
 	LastUpdate() time.Time
 	Metrics(ctx context.Context, now time.Time) ([]types.MetricPoint, error)
 	MetricsMinute(ctx context.Context, now time.Time) ([]types.MetricPoint, error)
-	IsContainerNameRecentlyDeleted(name string) bool
 	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error
 	ContainerExists(containerID string) bool
 }

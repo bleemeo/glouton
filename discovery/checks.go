@@ -42,19 +42,19 @@ const (
 
 // CheckDetails is used to save a check and his id.
 type CheckDetails struct {
-	id    int
-	check *check.Gatherer
+	registration types.Registration
+	check        *check.Gatherer
 }
 
 // collectorDetails contains information about a collector.
 // It could be a Telegraf input of a Prometheus collector.
 type collectorDetails struct {
-	gathererID int
+	gathererRegistration types.Registration
 }
 
 // checker is an interface which specifies a check.
 type checker interface {
-	Check(ctx context.Context, scheduleUpdate func(runAt time.Time)) types.MetricPoint
+	Check(ctx context.Context, scheduleUpdate func(opts types.ScheduleOption)) (types.MetricPoint, error)
 	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error
 	Close()
 }
@@ -87,7 +87,7 @@ func (d *Discovery) removeCheck(key NameInstance) {
 	if check, ok := d.activeCheck[key]; ok {
 		logger.V(2).Printf("Remove check for service %v on instance %s", key.Name, key.Instance)
 		delete(d.activeCheck, key)
-		d.metricRegistry.Unregister(check.id)
+		check.registration.Unregister()
 	}
 }
 
@@ -149,6 +149,7 @@ func (d *Discovery) createCheck(service Service) {
 				!di.DisablePersistentConnection,
 				labels,
 				annotations,
+				d.containerInfo,
 			)
 			d.addCheck(check, service)
 		} else {
@@ -161,6 +162,7 @@ func (d *Discovery) createCheck(service Service) {
 			!di.DisablePersistentConnection,
 			labels,
 			annotations,
+			d.containerInfo,
 		)
 		d.addCheck(check, service)
 	// Use a process check for services that don't expose a port.
@@ -230,6 +232,7 @@ func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryAdd
 		tcpClose,
 		labels,
 		annotations,
+		d.containerInfo,
 	)
 
 	d.addCheck(tcpCheck, service)
@@ -289,6 +292,7 @@ func (d *Discovery) createHTTPCheck(
 		expectedStatusCode,
 		labels,
 		annotations,
+		d.containerInfo,
 	)
 
 	d.addCheck(httpCheck, service)
@@ -301,7 +305,7 @@ func (d *Discovery) createContainerStoppedCheck(
 	labels map[string]string,
 	annotations types.MetricAnnotations,
 ) {
-	containerCheck := check.NewContainerStopped(primaryAddress, tcpAddresses, false, labels, annotations)
+	containerCheck := check.NewContainerStopped(primaryAddress, tcpAddresses, false, labels, annotations, d.containerInfo)
 
 	d.addCheck(containerCheck, service)
 }
@@ -326,13 +330,14 @@ func (d *Discovery) createNagiosCheck(
 		labels,
 		annotations,
 		runner,
+		d.containerInfo,
 	)
 
 	d.addCheck(nagiosCheck, service)
 }
 
 func (d *Discovery) createProcessCheck(service Service, labels map[string]string, annotations types.MetricAnnotations) {
-	processCheck, err := check.NewProcess(service.Config.MatchProcess, labels, annotations, d.processFact)
+	processCheck, err := check.NewProcess(service.Config.MatchProcess, labels, annotations, d.processFact, d.containerInfo)
 	if err != nil {
 		logger.V(0).Printf("Invalid custom service %s: %v", service.Name, err)
 	}
@@ -345,7 +350,7 @@ func (d *Discovery) addCheck(serviceCheck checker, service Service) {
 	lbls := service.LabelsOfStatus()
 
 	options := registry.RegistrationOption{
-		Description:              "check for " + service.Name,
+		Description:              fmt.Sprintf("check for %s %s", service.Name, service.Instance),
 		MinInterval:              max(service.Interval, time.Minute),
 		InstanceUseContainerName: true,
 		ExtraLabels:              lbls,
@@ -356,7 +361,11 @@ func (d *Discovery) addCheck(serviceCheck checker, service Service) {
 	id, err := d.metricRegistry.RegisterGatherer(options, checkGatherer)
 	if err != nil {
 		logger.V(1).Printf("Unable to add check: %v", err)
+
+		return
 	}
+
+	checkGatherer.SetScheduleUpdate(id.ScheduleRun)
 
 	key := NameInstance{
 		Name:     service.Name,
@@ -364,8 +373,8 @@ func (d *Discovery) addCheck(serviceCheck checker, service Service) {
 	}
 
 	savedCheck := CheckDetails{
-		check: checkGatherer,
-		id:    id,
+		check:        checkGatherer,
+		registration: id,
 	}
 	d.activeCheck[key] = savedCheck
 }

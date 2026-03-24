@@ -18,6 +18,7 @@ package check
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -34,7 +35,7 @@ const defaultGatherTimeout = 10 * time.Second
 // Gatherer is the gatherer used for service checks.
 type Gatherer struct {
 	check          checker
-	scheduleUpdate func(runAt time.Time)
+	scheduleUpdate func(opts types.ScheduleOption)
 
 	l sync.Mutex
 	// The last metric point produced by the check is kept to be
@@ -44,20 +45,28 @@ type Gatherer struct {
 
 // checker is an interface which specifies a check.
 type checker interface {
-	Check(ctx context.Context, scheduleUpdate func(runAt time.Time)) types.MetricPoint
+	Check(ctx context.Context, scheduleUpdate func(opts types.ScheduleOption)) (types.MetricPoint, error)
 	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error
 	Close()
 }
 
 // NewCheckGatherer returns a new check gatherer.
 func NewCheckGatherer(check checker) *Gatherer {
-	return &Gatherer{check: check}
+	return &Gatherer{
+		check: check,
+		scheduleUpdate: func(opts types.ScheduleOption) {
+			_ = opts
+
+			logger.V(2).Printf("Missing call to SetScheduleUpdate before first Check")
+		},
+	}
 }
 
 // GatherWithState implements GathererWithState.
 func (cg *Gatherer) GatherWithState(ctx context.Context, state registry.GatherState) ([]*dto.MetricFamily, error) {
 	cg.l.Lock()
 	lastMetricPoint := cg.lastMetricPoint
+	scheduleUpdate := cg.scheduleUpdate
 	cg.l.Unlock()
 
 	// Return the metrics from the last check on /metrics (unless we don't have one yet).
@@ -67,7 +76,14 @@ func (cg *Gatherer) GatherWithState(ctx context.Context, state registry.GatherSt
 		return mfs, nil
 	}
 
-	point := cg.check.Check(ctx, cg.scheduleUpdate)
+	point, err := cg.check.Check(ctx, scheduleUpdate)
+	if err != nil {
+		if !errors.Is(err, ErrTemporarySkip) {
+			return nil, err
+		}
+
+		return nil, nil
+	}
 
 	// Keep the last point. We don't keep the metric families because
 	// they might be mutated later and cause data races.
@@ -91,15 +107,22 @@ func (cg *Gatherer) Gather() ([]*dto.MetricFamily, error) {
 }
 
 // SetScheduleUpdate implements GathererWithScheduleUpdate.
-func (cg *Gatherer) SetScheduleUpdate(scheduleUpdate func(runAt time.Time)) {
-	cg.scheduleUpdate = scheduleUpdate
+func (cg *Gatherer) SetScheduleUpdate(f func(opts types.ScheduleOption)) {
+	cg.l.Lock()
+	defer cg.l.Unlock()
+
+	cg.scheduleUpdate = f
 }
 
 // CheckNow runs the check and returns its status.
-func (cg *Gatherer) CheckNow(ctx context.Context) types.StatusDescription {
-	point := cg.check.Check(ctx, cg.scheduleUpdate)
+func (cg *Gatherer) CheckNow(ctx context.Context) (types.StatusDescription, error) {
+	cg.l.Lock()
+	scheduleUpdate := cg.scheduleUpdate
+	cg.l.Unlock()
 
-	return point.Annotations.Status
+	point, err := cg.check.Check(ctx, scheduleUpdate)
+
+	return point.Annotations.Status, err
 }
 
 func (cg *Gatherer) Close() {

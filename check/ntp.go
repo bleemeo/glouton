@@ -50,12 +50,13 @@ func NewNTP(
 	persistentConnection bool,
 	labels map[string]string,
 	annotations types.MetricAnnotations,
+	containerRuntime containerInfoProvider,
 ) *NTPCheck {
 	nc := &NTPCheck{
 		mainAddress: address,
 	}
 
-	nc.baseCheck = newBase("", persistentAddresses, persistentConnection, nc.ntpMainCheck, labels, annotations)
+	nc.baseCheck = newBase("", persistentAddresses, persistentConnection, nc.ntpMainCheck, labels, annotations, containerRuntime)
 
 	return nc
 }

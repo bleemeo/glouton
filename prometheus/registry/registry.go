@@ -309,6 +309,7 @@ func (s scrapeRun) MarshalJSON() ([]byte, error) {
 
 type registration struct {
 	l                    sync.Mutex
+	registry             *Registry
 	regType              registrationType
 	option               RegistrationOption
 	addedAt              time.Time
@@ -325,14 +326,13 @@ type registration struct {
 	hookMinimalInterval  time.Duration
 	interval             time.Duration
 	lastErrorLogAt       time.Time
-	delayUntil           time.Time
 }
 
-// RunNow will trigger a run of the scrapeLoop. If the registry isn't running,
+// runNow will trigger a run of the scrapeLoop. If the registry isn't running,
 // the run will be delayed until the registry is started. In other case it will be run
 // as quickly as possible.
 // Only registration using the periodic gather are handler, other are ignored.
-func (reg *registration) RunNow() {
+func (reg *registration) runNow() {
 	reg.l.Lock()
 	defer reg.l.Unlock()
 
@@ -344,9 +344,9 @@ func (reg *registration) RunNow() {
 }
 
 type reschedule struct {
-	ID    int
-	Reg   *registration
-	RunAt time.Time
+	ID             int
+	Reg            *registration
+	ScheduleOption types.ScheduleOption
 }
 
 var errTooManyGatherers = errors.New("too many gatherers in the registry. Unable to find a new slot")
@@ -534,8 +534,8 @@ func (r *Registry) Run(ctx context.Context) error {
 	r.stopAllLoops()
 
 	// And unregister them to call Close() method on gatherer
-	for id := range r.registrations {
-		r.Unregister(id)
+	for _, reg := range r.registrations {
+		r.unregisterInner(reg)
 	}
 
 	return ctx.Err()
@@ -630,9 +630,9 @@ func (r *Registry) stopAllLoopsInner() {
 }
 
 // RegisterGatherer add a new gatherer to the list of metric sources.
-func (r *Registry) RegisterGatherer(opt RegistrationOption, gatherer prometheus.Gatherer) (int, error) {
+func (r *Registry) RegisterGatherer(opt RegistrationOption, gatherer prometheus.Gatherer) (types.Registration, error) {
 	if err := opt.buildRules(); err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	r.l.Lock()
@@ -656,17 +656,17 @@ func (r *Registry) RegisterGatherer(opt RegistrationOption, gatherer prometheus.
 //   - support for "GathererWithScheduleUpdate-like" on RegisterAppenderCallback (needed by service check, when they trigger check on TCP close)
 //   - support for conversion of all annotation to meta-label and vise-vera (model/convert.go)
 //   - support for TTL ?
-func (r *Registry) RegisterPushPointsCallback(opt RegistrationOption, f pushGatherFunction) (int, error) {
+func (r *Registry) RegisterPushPointsCallback(opt RegistrationOption, f pushGatherFunction) (types.Registration, error) {
 	return r.registerPushPointsCallback(opt, f)
 }
 
-func (r *Registry) registerPushPointsCallback(opt RegistrationOption, f pushGatherFunction) (int, error) {
+func (r *Registry) registerPushPointsCallback(opt RegistrationOption, f pushGatherFunction) (*registration, error) {
 	if !opt.HonorTimestamp {
-		return 0, fmt.Errorf("%w: PushPoint will always HonorTimestamp", errors.ErrUnsupported)
+		return nil, fmt.Errorf("%w: PushPoint will always HonorTimestamp", errors.ErrUnsupported)
 	}
 
 	if err := opt.buildRules(); err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	r.l.Lock()
@@ -685,9 +685,9 @@ func (r *Registry) registerPushPointsCallback(opt RegistrationOption, f pushGath
 func (r *Registry) RegisterAppenderCallback(
 	opt RegistrationOption,
 	cb AppenderCallback,
-) (int, error) {
+) (types.Registration, error) {
 	if err := opt.buildRules(); err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	r.l.Lock()
@@ -711,22 +711,22 @@ func (r *Registry) RegisterAppenderCallback(
 func (r *Registry) RegisterInput(
 	opt RegistrationOption,
 	input telegraf.Input,
-) (int, error) {
+) (types.Registration, error) {
 	if err := opt.buildRules(); err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	// Initialize the input.
 	if si, ok := input.(telegraf.Initializer); ok {
 		if err := si.Init(); err != nil {
-			return 0, err
+			return nil, err
 		}
 	}
 
 	// Start the input.
 	if si, ok := input.(telegraf.ServiceInput); ok {
 		if err := si.Start(nil); err != nil {
-			return 0, err
+			return nil, err
 		}
 	}
 
@@ -1075,34 +1075,34 @@ func (r *Registry) writeMetricsSelf(file io.Writer) error {
 }
 
 // addRegistration assume r.l lock is held.
-func (r *Registry) addRegistration(reg *registration) (int, error) {
+func (r *Registry) addRegistration(reg *registration) (*registration, error) {
 	id := 1
 
 	_, ok := r.registrations[id]
 	for ok {
 		id++
-		if id == 0 {
-			return 0, errTooManyGatherers
+		if id == 0 || id > (1<<16) {
+			return nil, errTooManyGatherers
 		}
 
 		_, ok = r.registrations[id]
 	}
 
+	logger.V(2).Printf("Register new gatherer with registration_id=%d called, name=%v", id, reg.option.Description)
+
 	reg.addedAt = time.Now()
 
 	r.registrations[id] = reg
 
-	if g, ok := reg.gatherer.getSource().(GathererWithScheduleUpdate); ok {
-		g.SetScheduleUpdate(func(runAt time.Time) {
-			r.scheduleUpdate(id, reg, runAt)
-		})
-	}
+	reg.l.Lock()
+	reg.registry = r
+	reg.l.Unlock()
 
 	if r.running {
 		r.restartScrapeLoop(reg)
 	}
 
-	return id, nil
+	return reg, nil
 }
 
 // restartScrapeLoop start a scrapeLoop for this registration after stop previous loop if it exists.
@@ -1150,20 +1150,24 @@ func (r *Registry) restartScrapeLoop(reg *registration) {
 	reg.restartInProgress = false
 }
 
-func (r *Registry) ScheduleScrape(id int, runAt time.Time) {
+func (reg *registration) ScheduleRun(scheduleOption types.ScheduleOption) {
+	reg.registry.scheduleScrape(reg, scheduleOption)
+}
+
+func (r *Registry) scheduleScrape(reg *registration, scheduleOption types.ScheduleOption) {
 	r.l.Lock()
-	reg := r.registrations[id]
+	id, ok := r.getRegistrationID(reg)
 	r.l.Unlock()
 
-	if reg == nil {
+	if !ok {
 		return
 	}
 
-	r.scheduleUpdate(id, reg, runAt)
+	r.scheduleScrapeInner(id, reg, scheduleOption)
 }
 
 // scheduleUpdate updates the next run of the gatherer.
-func (r *Registry) scheduleUpdate(id int, reg *registration, runAt time.Time) {
+func (r *Registry) scheduleScrapeInner(id int, reg *registration, scheduleOption types.ScheduleOption) {
 	// Run the actual update in another goroutine and return instantly to make
 	// sure taking the registry lock doesn't cause a deadlock.
 	go func() {
@@ -1172,18 +1176,40 @@ func (r *Registry) scheduleUpdate(id int, reg *registration, runAt time.Time) {
 		r.l.Lock()
 		defer r.l.Unlock()
 
-		if reg2, ok := r.registrations[id]; !ok || reg2 != reg {
+		// Filter existing reschedule with skipIfRunBefore and wantedTime after this one.
+		// During the filter, flag if a reschedule exists with wantedTime before this one.
+		i := 0
+		hadOneBefore := false
+
+		for _, row := range r.reschedules {
+			if row.Reg == reg && !row.ScheduleOption.WantedTime.After(scheduleOption.WantedTime) {
+				hadOneBefore = true
+			}
+
+			if row.Reg == reg && row.ScheduleOption.WantedTime.After(scheduleOption.WantedTime) && row.ScheduleOption.SkipIfRunBefore {
+				continue
+			}
+
+			r.reschedules[i] = row
+			i++
+		}
+
+		r.reschedules = r.reschedules[:i]
+
+		if hadOneBefore && scheduleOption.SkipIfRunBefore {
 			return
 		}
 
+		logger.V(2).Printf("submit ScheduleRun at %v for registration_id=%d, name=%v", scheduleOption.WantedTime, id, reg.option.Description)
+
 		r.reschedules = append(r.reschedules, reschedule{
-			ID:    id,
-			Reg:   reg,
-			RunAt: runAt,
+			ID:             id,
+			Reg:            reg,
+			ScheduleOption: scheduleOption,
 		})
 
 		sort.Slice(r.reschedules, func(i, j int) bool {
-			return r.reschedules[i].RunAt.Before(r.reschedules[j].RunAt)
+			return r.reschedules[i].ScheduleOption.WantedTime.Before(r.reschedules[j].ScheduleOption.WantedTime)
 		})
 	}()
 }
@@ -1196,7 +1222,7 @@ func (r *Registry) checkReschedule() time.Duration {
 	now := time.Now()
 
 	for i, value := range r.reschedules {
-		if value.RunAt.After(now) {
+		if value.ScheduleOption.WantedTime.After(now) {
 			firstInFuture = i
 
 			break
@@ -1206,8 +1232,10 @@ func (r *Registry) checkReschedule() time.Duration {
 			continue
 		}
 
+		logger.V(2).Printf("running ScheduleRun of registration_id=%d, name=%v", value.ID, value.Reg.option.Description)
+
 		reg := value.Reg
-		reg.RunNow()
+		reg.runNow()
 	}
 
 	if firstInFuture == -1 {
@@ -1223,26 +1251,55 @@ func (r *Registry) checkReschedule() time.Duration {
 		r.reschedules = r.reschedules[:initialLength-firstInFuture]
 	}
 
-	delta := max(time.Until(r.reschedules[0].RunAt), time.Second)
+	delta := max(time.Until(r.reschedules[0].ScheduleOption.WantedTime), time.Second)
 
 	return delta
 }
 
 // Unregister remove a Gatherer or PushPointCallback from the list of metric sources.
-func (r *Registry) Unregister(id int) bool {
-	r.l.Lock()
-	reg, ok := r.registrations[id]
+func (reg *registration) Unregister() {
+	reg.registry.unregister(reg)
+}
 
-	// Remove reference to original gatherer first, because some gatherer
-	// stopCallback will rely on runtime.GC() to cleanup resource.
-	delete(r.registrations, id)
+// getRegistrationID return the id of registration and whether is was found.
+// Caller must held r.l Lock.
+func (r *Registry) getRegistrationID(reg *registration) (int, bool) {
+	for id, reg2 := range r.registrations {
+		if reg2 == reg {
+			return id, true
+		}
+	}
+
+	return -1, false
+}
+
+func (r *Registry) unregister(reg *registration) {
+	startAt := time.Now()
+
+	r.l.Lock()
+
+	id, ok := r.getRegistrationID(reg)
+
+	if ok {
+		// Remove reference to original gatherer first, because some gatherer
+		// stopCallback will rely on runtime.GC() to cleanup resource.
+		delete(r.registrations, id)
+	}
 
 	r.l.Unlock()
 
 	if !ok {
-		return false
+		logger.V(2).Printf("Trying to unregister a registration not found. Description is %s", reg.option.Description)
+
+		return
 	}
 
+	r.unregisterInner(reg)
+
+	logger.V(2).Printf("Unregister with registration_id=%d called, description=%v (started at %v)", id, reg.option.Description, startAt)
+}
+
+func (r *Registry) unregisterInner(reg *registration) {
 	reg.l.Lock()
 
 	reg.removalRequested = true
@@ -1259,27 +1316,6 @@ func (r *Registry) Unregister(id int) bool {
 
 	if reg.option.StopCallback != nil {
 		reg.option.StopCallback()
-	}
-
-	return true
-}
-
-func (r *Registry) DelayRegExec(id int, until time.Time) {
-	r.l.Lock()
-	defer r.l.Unlock()
-
-	reg, ok := r.registrations[id]
-	if !ok {
-		return
-	}
-
-	reg.l.Lock()
-	defer reg.l.Unlock()
-
-	if until.After(reg.delayUntil) { // only update further
-		logger.V(2).Printf("Delaying check %q until %s", reg.option.Description, until)
-
-		reg.delayUntil = until
 	}
 }
 
@@ -1550,10 +1586,14 @@ func (r *Registry) WithTTL(ttl time.Duration) types.PointPusher {
 // InternalRunScrape run a scrape/gathering on given registration id (from RegisterGatherer & co).
 // Points gatherer are processed at if a periodic gather occurred.
 // This should only be used in test.
-func (r *Registry) InternalRunScrape(ctx context.Context, loopCtx context.Context, t0 time.Time, id int) {
+func (reg *registration) InternalRunScrape(ctx context.Context, loopCtx context.Context, t0 time.Time) {
+	reg.registry.internalRunScrape(ctx, loopCtx, t0, reg)
+}
+
+func (r *Registry) internalRunScrape(ctx context.Context, loopCtx context.Context, t0 time.Time, reg *registration) {
 	r.l.Lock()
 
-	reg, ok := r.registrations[id]
+	_, ok := r.getRegistrationID(reg)
 
 	r.l.Unlock()
 
@@ -1693,14 +1733,6 @@ func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registrat
 
 	if reg.relabelHookSkip {
 		reg.l.Unlock()
-
-		return nil, 0, nil
-	}
-
-	if time.Until(reg.delayUntil) > 0 {
-		reg.l.Unlock()
-
-		logger.V(2).Printf("Skipping run of check %q (delayed until %s)", reg.option.Description, reg.delayUntil)
 
 		return nil, 0, nil
 	}

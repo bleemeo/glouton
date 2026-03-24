@@ -27,6 +27,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bleemeo/glouton/check"
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/logger"
@@ -107,7 +108,11 @@ func (r Responder) responseCustomCheck(ctx context.Context, request string) (str
 		return "", 0, fmt.Errorf("NRPE: Command '%s' exists but does not have an associated check", request) //nolint:err113
 	}
 
-	statusDescription := checkNow(ctx)
+	statusDescription, err := checkNow(ctx)
+
+	if err != nil && !errors.Is(err, check.ErrTemporarySkip) {
+		return "", 0, fmt.Errorf("NRPE: Command '%s' had error during execution: %w", request, err)
+	}
 
 	return statusDescription.StatusDescription, int16(statusDescription.CurrentStatus.NagiosCode()), nil //nolint:gosec // NagiosCode returns 0-3, fits in int16
 }

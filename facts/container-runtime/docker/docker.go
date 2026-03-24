@@ -87,6 +87,7 @@ type Docker struct {
 
 	containers                     map[string]dockerContainer
 	lastKill                       map[string]time.Time
+	lastDelete                     map[string]time.Time
 	lastDestroyedName              map[string]time.Time
 	ignoredID                      map[string]bool
 	lastUpdate                     time.Time
@@ -123,6 +124,7 @@ func newWithOpenner(
 		DeletedContainersCallback: deletedContainersCallback,
 		IsContainerIgnored:        isContainerIgnored,
 		lastKill:                  make(map[string]time.Time),
+		lastDelete:                make(map[string]time.Time),
 		lastDestroyedName:         make(map[string]time.Time),
 		containers:                make(map[string]dockerContainer),
 		ignoredID:                 make(map[string]bool),
@@ -172,6 +174,7 @@ func (d *Docker) DiagnosticArchive(_ context.Context, archive types.ArchiveWrite
 		Containers        []containerInfo
 		LastDestroyedName map[string]time.Time
 		AllLastKill       map[string]time.Time
+		AllLastDelete     map[string]time.Time
 		LastUpdate        time.Time
 		BridgeNetworks    []string
 	}{
@@ -185,6 +188,7 @@ func (d *Docker) DiagnosticArchive(_ context.Context, archive types.ArchiveWrite
 		BridgeNetworks:    networks,
 		LastDestroyedName: d.lastDestroyedName,
 		AllLastKill:       d.lastKill,
+		AllLastDelete:     d.lastDelete,
 	}
 
 	enc := json.NewEncoder(file)
@@ -379,6 +383,43 @@ func (d *Docker) ContainerLastKill(containerID string) time.Time {
 	return d.lastKill[containerID]
 }
 
+// ContainerLastDelete return the last time a container was deleted or zero-time if unknown.
+func (d *Docker) ContainerLastDelete(containerID string) time.Time {
+	d.l.Lock()
+	defer d.l.Unlock()
+
+	return d.lastDelete[containerID]
+}
+
+func (d *Docker) ContainerByNameLastDelete(name string) time.Time {
+	d.l.Lock()
+	defer d.l.Unlock()
+
+	return d.lastDestroyedName[name]
+}
+
+// ContainerTerminationGracePeriod return the duration between a kill and the forced stop. Use 0 if unknown.
+func (d *Docker) ContainerTerminationGracePeriod(containerID string) time.Duration {
+	d.l.Lock()
+	defer d.l.Unlock()
+
+	c, found := d.containers[containerID]
+
+	if !found {
+		return 0
+	}
+
+	if c.inspect.Config == nil {
+		return 0
+	}
+
+	if c.inspect.Config.StopTimeout == nil {
+		return 0
+	}
+
+	return time.Second * time.Duration(*c.inspect.Config.StopTimeout)
+}
+
 // Exec run a command in a container and return stdout+stderr.
 func (d *Docker) Exec(ctx context.Context, containerID string, cmd []string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, dockerTimeout)
@@ -444,15 +485,6 @@ func (d *Docker) IsRuntimeRunning(ctx context.Context) bool {
 	return err == nil
 }
 
-func (d *Docker) IsContainerNameRecentlyDeleted(name string) bool {
-	d.l.Lock()
-	defer d.l.Unlock()
-
-	_, ok := d.lastDestroyedName[name]
-
-	return ok
-}
-
 // similar to getClient but also check that connection works.
 func (d *Docker) ensureClient(ctx context.Context) (cl dockerClient, err error) {
 	ctx, cancel := context.WithTimeout(ctx, dockerTimeout)
@@ -509,6 +541,12 @@ func (d *Docker) run(ctx context.Context) error {
 			for k, v := range d.lastKill {
 				if time.Since(v) > time.Hour {
 					delete(d.lastKill, k)
+				}
+			}
+
+			for k, v := range d.lastDelete {
+				if time.Since(v) > 10*time.Minute {
+					delete(d.lastDelete, k)
 				}
 			}
 
@@ -588,6 +626,7 @@ func (d *Docker) run(ctx context.Context) error {
 				case facts.EventTypeDelete:
 					if event.Container != nil {
 						d.lastDestroyedName[event.Container.ContainerName()] = time.Now()
+						d.lastDelete[event.ContainerID] = time.Now()
 					}
 
 					delete(d.containers, event.ContainerID)

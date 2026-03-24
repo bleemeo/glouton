@@ -41,6 +41,7 @@ func NewProcess(
 	labels map[string]string,
 	annotations types.MetricAnnotations,
 	ps processProvider,
+	containerRuntime containerInfoProvider,
 ) (*ProcessCheck, error) {
 	processRegex, err := regexp.Compile(matchProcess)
 	if err != nil {
@@ -52,7 +53,7 @@ func NewProcess(
 		processRegex: processRegex,
 	}
 
-	pc.baseCheck = newBase("", nil, false, pc.processMainCheck, labels, annotations)
+	pc.baseCheck = newBase("", nil, false, pc.processMainCheck, labels, annotations, containerRuntime)
 
 	return &pc, nil
 }
