@@ -113,6 +113,13 @@ func (s *Synchronizer) syncFacts(ctx context.Context, syncType types.SyncType, e
 	// s.factUpdateList() is already done by checkDuplicated
 	// s.serviceDeleteFromRemote() is unneeded, API don't delete facts
 
+	// First delete duplicated facts but kept at least one facts for each key.
+	// Normally this won't delete anything, it only does if an error occur during previous
+	// execution of factRegister or the factDeleteFromLocal after factRegister.
+	if err := s.factDeleteFromLocal(ctx, apiClient, allAgentFacts, true); err != nil {
+		return false, err
+	}
+
 	if err := s.factRegister(ctx, apiClient, allAgentFacts); err != nil {
 		return false, err
 	}
@@ -122,7 +129,7 @@ func (s *Synchronizer) syncFacts(ctx context.Context, syncType types.SyncType, e
 		return false, nil
 	}
 
-	if err := s.factDeleteFromLocal(ctx, apiClient, allAgentFacts); err != nil {
+	if err := s.factDeleteFromLocal(ctx, apiClient, allAgentFacts, false); err != nil {
 		return false, err
 	}
 
@@ -166,6 +173,16 @@ func (s *Synchronizer) factRegister(ctx context.Context, apiClient types.FactCli
 
 			result, err := apiClient.RegisterFact(ctx, payload)
 			if err != nil {
+				// Even in case of error, stop facts that was already registered.
+				// Without this, due to fact registration error, Glouton might think it has a duplicated state.json
+				// * The previous run of glouton had glouton_pid=100
+				// * Glouton register glouton_pid=200 facts
+				// * Another facts fail. If we don't save, the following will occur
+				// * During check checkDuplicated, oldFacts will contains PID=100, but newFacts,
+				//   (since checkDuplicated update list from Bleemeo API) contains PID=200
+				//   So checkDuplicated think Glouton is duplicated, when it's wrong.
+				s.option.Cache.SetFacts(facts)
+
 				return err
 			}
 
@@ -179,16 +196,49 @@ func (s *Synchronizer) factRegister(ctx context.Context, apiClient types.FactCli
 	return nil
 }
 
-func (s *Synchronizer) factDeleteFromLocal(ctx context.Context, apiClient types.FactClient, allAgentFacts map[string]map[string]string) error {
-	duplicatedKey := make(map[string]bool)
+func (s *Synchronizer) factDeleteFromLocal(ctx context.Context, apiClient types.FactClient, allAgentFacts map[string]map[string]string, keptAtLeastOne bool) error {
+	factsToKeepGoodValue := make(map[string]string)  // map agentID+key -> factID
+	factsToKeepOtherValue := make(map[string]string) // map agentID+key -> factID
 	registeredFacts := s.option.Cache.FactsByUUID()
 
-	for k, v := range registeredFacts {
+	for _, v := range registeredFacts {
 		localFacts := allAgentFacts[v.AgentID]
-		localValue, ok := localFacts[v.Key]
+		localValue, localOk := localFacts[v.Key]
 
-		if ok && localValue == v.Value && !duplicatedKey[v.AgentID+"\x00"+v.Key] {
-			duplicatedKey[v.AgentID+"\x00"+v.Key] = true
+		key := v.AgentID + "\x00" + v.Key
+
+		if localOk && localValue == v.Value {
+			if keptID, ok := factsToKeepGoodValue[key]; !ok || keptID > v.ID {
+				factsToKeepGoodValue[key] = v.ID
+			}
+
+			continue
+		}
+
+		if keptID, ok := factsToKeepOtherValue[key]; !ok || keptID > v.ID {
+			factsToKeepOtherValue[key] = v.ID
+		}
+	}
+
+	dontDeleteUUID := make(map[string]bool, len(factsToKeepGoodValue))
+	for _, id := range factsToKeepGoodValue {
+		dontDeleteUUID[id] = true
+	}
+
+	if keptAtLeastOne {
+		for k, id := range factsToKeepOtherValue {
+			// Only kept from factsToKeepOtherValue if the key (agentID + fact key) isn't already present in factsToKeepGoodValue
+			if _, ok := factsToKeepGoodValue[k]; !ok {
+				dontDeleteUUID[id] = true
+			}
+		}
+	}
+
+	facts := make([]bleemeoTypes.AgentFact, 0, len(registeredFacts))
+
+	for _, v := range registeredFacts {
+		if dontDeleteUUID[v.ID] {
+			facts = append(facts, v)
 
 			continue
 		}
@@ -200,13 +250,6 @@ func (s *Synchronizer) factDeleteFromLocal(ctx context.Context, apiClient types.
 		}
 
 		logger.V(2).Printf("Fact %s:%v (uuid=%v) deleted", v.AgentID, v.Key, v.ID)
-		delete(registeredFacts, k)
-	}
-
-	facts := make([]bleemeoTypes.AgentFact, 0, len(registeredFacts))
-
-	for _, v := range registeredFacts {
-		facts = append(facts, v)
 	}
 
 	s.option.Cache.SetFacts(facts)

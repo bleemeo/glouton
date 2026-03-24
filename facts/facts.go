@@ -298,17 +298,23 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	return newFacts
 }
 
-// CleanFacts will remove key with empty values and truncate value
-// with 100 characters or more.
+// CleanFacts will remove key with empty values, truncate value
+// with 100 characters or more and trim facts.
 func CleanFacts(facts map[string]string) {
 	for k, v := range facts {
+		v = strings.TrimSpace(v)
+
 		if v == "" {
 			delete(facts, k)
+
+			continue
 		}
 
 		if len(v) >= 100 {
-			facts[k] = v[:97] + "..."
+			v = v[:97] + "..."
 		}
+
+		facts[k] = v
 	}
 }
 
