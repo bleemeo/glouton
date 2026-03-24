@@ -118,7 +118,3 @@ func (a *agent) registerOSSpecificComponents(ctx context.Context, _ *veth.Provid
 		}
 	}
 }
-
-func getResidentMemoryOfSelf() uint64 {
-	return 0
-}
