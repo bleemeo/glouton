@@ -38,16 +38,21 @@ func ProcessPanic() {
 		sentry.CurrentHub().Recover(err)
 		sentry.Flush(time.Second * 5)
 
-		lock.Lock()
-		stateDir := dir
-		diagnosticFn := diagnostic
-		lock.Unlock()
-		tryToGenerateDiagnostic(time.Second*10, stateDir, diagnosticFn)
+		CreateCrashDiagnostic()
 
 		logger.Printf("Glouton crashed: %v", err)
 
 		panic(err)
 	}
+}
+
+// CreateCrashDiagnostic (try to) produce a cash_diagnostic archive that will be uploaded on next restart.
+func CreateCrashDiagnostic() {
+	lock.Lock()
+	stateDir := dir
+	diagnosticFn := diagnostic
+	lock.Unlock()
+	tryToGenerateDiagnostic(time.Second*10, stateDir, diagnosticFn)
 }
 
 func tryToGenerateDiagnostic(timeout time.Duration, stateDir string, diagnosticFn diagnosticFunc) {
