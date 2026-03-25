@@ -324,6 +324,14 @@ func makeBundle(ctx context.Context, stateDir string, diagnosticFn diagnosticFun
 
 	_ = f.Close()
 
+	// Wait a bit for agent to start, to allow discovery to run, component to start, ...
+	// This allow the diagnostic run after a crash to contains information and don't be empty.
+	select {
+	case <-ctx.Done():
+		return ""
+	case <-time.After(15 * time.Second):
+	}
+
 	crashReportPath := filepath.Join(stateDir, time.Now().Format(crashReportArchiveFormat))
 
 	crashReportArchive, err := os.Create(crashReportPath)
