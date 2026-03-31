@@ -107,6 +107,10 @@ func (h *persistHost) storeMetadata(recvName string, metadata map[string][]byte)
 	h.updatedKeys[recvName] = struct{}{}
 }
 
+func (h *persistHost) saveToState(state bleemeoTypes.State) {
+	saveFileMetadataToCache(state, h.getAllMetadata())
+}
+
 func (h *persistHost) getAllMetadata() map[string]map[string][]byte {
 	h.l.Lock()
 	defer h.l.Unlock()
