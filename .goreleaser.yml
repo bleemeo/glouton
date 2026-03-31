@@ -13,7 +13,6 @@ builds:
       - linux_arm_6
       - linux_arm64
       - windows_amd64
-      - windows_386
       - freebsd_amd64
     overrides:
       - goos: freebsd
