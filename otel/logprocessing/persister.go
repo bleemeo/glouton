@@ -81,7 +81,7 @@ func (h *persistHost) newPersistentExt(name string) component.ID {
 		client: &storageClient{
 			name:        name,
 			host:        h,
-			dirty:       receiverMetadata,
+			dirty:       maps.Clone(receiverMetadata),
 			updatedKeys: make(map[string]struct{}),
 			lastSave:    time.Now(),
 		},
@@ -118,11 +118,11 @@ func (h *persistHost) getAllMetadata() map[string]map[string][]byte {
 	updatedData := make(map[string]map[string][]byte, len(h.updatedKeys))
 
 	for key := range h.updatedKeys {
-		// We assume the []byte in value of `h.metadataPerReceiver[key]` isn't mutated.
-		// If it was mutated, we also need to copy it.
-		// Also be careful to only read keys that are in updatedKeys, `persistHost` doesn't
-		// own `h.metadataPerReceiver[key]` for keys that started an `persistExtension` and
-		// which didn't call `storeMetadata`.
+		// We assume the []byte values in `h.metadataPerReceiver[key]` aren't mutated.
+		// If they were mutated, we'd also need to deep-copy them.
+		// `h.metadataPerReceiver[key]` is always accessed under h.l: written by set/delete
+		// and storeMetadata, and read here. Only keys in updatedKeys are read, as those
+		// are the ones that have been explicitly stored via set or storeMetadata.
 		updatedData[key] = maps.Clone(h.metadataPerReceiver[key])
 	}
 
@@ -203,8 +203,21 @@ func (s *storageClient) Set(_ context.Context, key string, value []byte) error {
 }
 
 func (s *storageClient) set(key string, value []byte) {
-	s.dirty[key] = bytes.Clone(value)
+	cloned := bytes.Clone(value)
+	s.dirty[key] = cloned
 	s.updatedKeys[key] = struct{}{}
+
+	s.host.l.Lock()
+
+	m := s.host.metadataPerReceiver[s.name]
+	if m == nil {
+		m = make(map[string][]byte)
+		s.host.metadataPerReceiver[s.name] = m
+	}
+
+	m[key] = cloned
+	s.host.updatedKeys[s.name] = struct{}{}
+	s.host.l.Unlock()
 
 	if time.Since(s.lastSave) >= saveFileSizesToCachePeriod {
 		s.saveMetadata()
@@ -223,6 +236,10 @@ func (s *storageClient) Delete(_ context.Context, key string) error {
 func (s *storageClient) delete(key string) {
 	delete(s.dirty, key)
 	delete(s.updatedKeys, key)
+
+	s.host.l.Lock()
+	delete(s.host.metadataPerReceiver[s.name], key)
+	s.host.l.Unlock()
 }
 
 func (s *storageClient) Batch(_ context.Context, ops ...*storage.Operation) error {

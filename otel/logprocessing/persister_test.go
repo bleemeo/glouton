@@ -382,7 +382,7 @@ func TestPersistHostConcurrent(t *testing.T) {
 			wg.Go(func() {
 				for j := range numOps {
 					key := fmt.Sprintf("key%d", j%10)
-					value := []byte(fmt.Sprintf("value-%d-%d", i, j))
+					value := fmt.Appendf(nil, "value-%d-%d", i, j)
 
 					if j%2 == 0 {
 						if err := client.Set(ctx, key, value); err != nil {
