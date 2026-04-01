@@ -77,7 +77,7 @@ func PostInformation(ctx context.Context, telemetryID string, url string, agenti
 
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req) //nolint:gosec // URL is built internally
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		logger.V(1).Printf("failed when we post on telemetry: %v", err)
 

@@ -114,7 +114,7 @@ func TestPropsCaches(t *testing.T) { //nolint:maintidx
 					DnsConfig: &types.HostDnsConfig{
 						DomainName: "localdomain",
 					},
-					IpV6Enabled: ptr(false),
+					IpV6Enabled: new(false),
 				},
 				DateTimeInfo: nil,
 			},
@@ -191,7 +191,7 @@ func TestPropsCaches(t *testing.T) { //nolint:maintidx
 								DeviceInfo: &types.Description{Label: "Pointing device", Summary: "Pointing device; Device"},
 								Backing: &types.VirtualPointingDeviceDeviceBackingInfo{
 									VirtualDeviceDeviceBackingInfo: types.VirtualDeviceDeviceBackingInfo{
-										UseAutoDetect: ptr(false),
+										UseAutoDetect: new(false),
 									},
 									HostPointingDevice: "autodetect",
 								},
@@ -208,8 +208,8 @@ func TestPropsCaches(t *testing.T) { //nolint:maintidx
 							},
 							VideoRamSizeInKB:       4096,
 							NumDisplays:            1,
-							UseAutoDetect:          ptr(false),
-							Enable3DSupport:        ptr(false),
+							UseAutoDetect:          new(false),
+							Enable3DSupport:        new(false),
 							Use3dRenderer:          "automatic",
 							GraphicsMemorySizeInKB: 262144,
 						},
@@ -224,8 +224,8 @@ func TestPropsCaches(t *testing.T) { //nolint:maintidx
 								UnitNumber:    ptr[int32](17),
 							},
 							Id:                             -1,
-							AllowUnrestrictedCommunication: ptr(false),
-							FilterEnable:                   ptr(true),
+							AllowUnrestrictedCommunication: new(false),
+							FilterEnable:                   new(true),
 						},
 						&types.ParaVirtualSCSIController{
 							VirtualSCSIController: types.VirtualSCSIController{
@@ -246,7 +246,7 @@ func TestPropsCaches(t *testing.T) { //nolint:maintidx
 								DeviceInfo: &types.Description{Label: "cdrom-203", Summary: "cdrom-203"},
 								Backing: &types.VirtualCdromAtapiBackingInfo{VirtualDeviceDeviceBackingInfo: types.VirtualDeviceDeviceBackingInfo{
 									DeviceName:    "cdrom--201-824635603088",
-									UseAutoDetect: ptr(false),
+									UseAutoDetect: new(false),
 								}},
 								Connectable:   &types.VirtualDeviceConnectInfo{StartConnected: true, AllowGuestControl: true, Connected: true},
 								ControllerKey: 202,
@@ -266,12 +266,12 @@ func TestPropsCaches(t *testing.T) { //nolint:maintidx
 										},
 									},
 									DiskMode:        "persistent",
-									Split:           ptr(false),
-									WriteThrough:    ptr(false),
-									ThinProvisioned: ptr(true),
-									EagerlyScrub:    ptr(false),
+									Split:           new(false),
+									WriteThrough:    new(false),
+									ThinProvisioned: new(true),
+									EagerlyScrub:    new(false),
 									Uuid:            "be8d2471-f32e-5c7e-a89b-22cb8e533890",
-									DigestEnabled:   ptr(false),
+									DigestEnabled:   new(false),
 								},
 								ControllerKey: 202,
 								UnitNumber:    ptr[int32](0),
@@ -309,14 +309,14 @@ func TestPropsCaches(t *testing.T) { //nolint:maintidx
 								},
 								AddressType:      "generated",
 								MacAddress:       "00:0c:29:33:34:38",
-								WakeOnLanEnabled: ptr(true),
+								WakeOnLanEnabled: new(true),
 								ResourceAllocation: &types.VirtualEthernetCardResourceAllocation{
 									Reservation: ptr[int64](0),
 									Share: types.SharesInfo{
 										Shares: 50,
 										Level:  "normal",
 									},
-									Limit: ptr(int64(-1)),
+									Limit: new(int64(-1)),
 								},
 							},
 						},
@@ -366,4 +366,11 @@ func compareLightProps[propsType any](t *testing.T, expected map[string]propsTyp
 			t.Errorf("Incorrect cached properties (-want +got):\n%s", diff)
 		}
 	}
+}
+
+func ptr[T any](e T) *T {
+	v := new(T)
+	*v = e
+
+	return v
 }

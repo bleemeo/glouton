@@ -32,7 +32,6 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/rules"
-	"google.golang.org/protobuf/proto"
 )
 
 // Points older than pointsMaxAge are removed from the store.
@@ -128,9 +127,9 @@ func (r *SimpleRuler) ApplyRulesMFS(ctx context.Context, now time.Time, mfs []*d
 
 			if !ok {
 				mfs = append(mfs, &dto.MetricFamily{
-					Name: proto.String(name),
+					Name: new(name),
 					Type: dto.MetricType_UNTYPED.Enum(),
-					Help: proto.String(""),
+					Help: new(""),
 				})
 				idx = len(mfs) - 1
 
@@ -145,15 +144,15 @@ func (r *SimpleRuler) ApplyRulesMFS(ctx context.Context, now time.Time, mfs []*d
 				}
 
 				lbls = append(lbls, &dto.LabelPair{
-					Name:  proto.String(l.Name),
-					Value: proto.String(l.Value),
+					Name:  new(l.Name),
+					Value: new(l.Value),
 				})
 			})
 
 			mfs[idx].Metric = append(mfs[idx].GetMetric(), &dto.Metric{
 				Label:       lbls,
-				TimestampMs: proto.Int64(now.UnixMilli()),
-				Untyped:     &dto.Untyped{Value: proto.Float64(sample.F)},
+				TimestampMs: new(now.UnixMilli()),
+				Untyped:     &dto.Untyped{Value: new(sample.F)},
 			})
 		}
 	}

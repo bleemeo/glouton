@@ -480,7 +480,7 @@ func movedScalarKeys() map[string]string {
 func migrate(k *koanf.Koanf) (*koanf.Koanf, prometheus.MultiError) {
 	config := k.All()
 
-	var warnings prometheus.MultiError
+	warnings := make(prometheus.MultiError, 0, 6)
 
 	warnings = append(warnings, migrateMovedScalarKeys(k, config)...)
 	warnings = append(warnings, migrateMovedKeys(k, config)...)
@@ -635,7 +635,7 @@ func migrateMetricsPrometheus(k *koanf.Koanf, config map[string]any) prometheus.
 }
 
 func migrateScrapperMetrics(k *koanf.Koanf, config map[string]any) prometheus.MultiError {
-	var warnings prometheus.MultiError
+	warnings := make(prometheus.MultiError, 0, 4)
 
 	warnings = append(warnings, migrateScrapper(k, config, "metric.prometheus.allow_metrics", "metric.allow_metrics")...)
 	warnings = append(warnings, migrateScrapper(k, config, "metric.prometheus.deny_metrics", "metric.deny_metrics")...)

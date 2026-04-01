@@ -37,7 +37,6 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	prometheusModel "github.com/prometheus/common/model"
-	"google.golang.org/protobuf/proto"
 )
 
 func fileToMFS(filename string) ([]*dto.MetricFamily, error) {
@@ -325,56 +324,56 @@ func Test_mfsFilterInterface(t *testing.T) {
 				},
 				mfs: []*dto.MetricFamily{
 					{
-						Name: proto.String("ifInOctets"),
+						Name: new("ifInOctets"),
 						Metric: []*dto.Metric{
 							{
 								Label: []*dto.LabelPair{
-									{Name: proto.String(ifIndexLabelName), Value: proto.String("1")},
-									{Name: proto.String("other"), Value: proto.String("label")},
+									{Name: new(ifIndexLabelName), Value: new("1")},
+									{Name: new("other"), Value: new("label")},
 								},
 							},
 							{
 								Label: []*dto.LabelPair{
-									{Name: proto.String(ifIndexLabelName), Value: proto.String("2")},
-									{Name: proto.String("other"), Value: proto.String("label")},
+									{Name: new(ifIndexLabelName), Value: new("2")},
+									{Name: new("other"), Value: new("label")},
 								},
 							},
 							{
 								Label: []*dto.LabelPair{
-									{Name: proto.String(ifIndexLabelName), Value: proto.String("3")},
-									{Name: proto.String("other"), Value: proto.String("label")},
+									{Name: new(ifIndexLabelName), Value: new("3")},
+									{Name: new("other"), Value: new("label")},
 								},
 							},
 						},
 					},
 					{
-						Name: proto.String("all_disconnected"),
+						Name: new("all_disconnected"),
 						Metric: []*dto.Metric{
 							{
 								Label: []*dto.LabelPair{
-									{Name: proto.String(ifIndexLabelName), Value: proto.String("2")},
+									{Name: new(ifIndexLabelName), Value: new("2")},
 								},
 							},
 							{
 								Label: []*dto.LabelPair{
-									{Name: proto.String(ifIndexLabelName), Value: proto.String("4")},
+									{Name: new(ifIndexLabelName), Value: new("4")},
 								},
 							},
 						},
 					},
 					{
-						Name: proto.String("all_connected"),
+						Name: new("all_connected"),
 						Metric: []*dto.Metric{
 							{
 								Label: []*dto.LabelPair{
-									{Name: proto.String("other"), Value: proto.String("label")},
-									{Name: proto.String(ifIndexLabelName), Value: proto.String("1")},
+									{Name: new("other"), Value: new("label")},
+									{Name: new(ifIndexLabelName), Value: new("1")},
 								},
 							},
 							{
 								Label: []*dto.LabelPair{
-									{Name: proto.String(ifIndexLabelName), Value: proto.String("3")},
-									{Name: proto.String("other"), Value: proto.String("label")},
+									{Name: new(ifIndexLabelName), Value: new("3")},
+									{Name: new("other"), Value: new("label")},
 								},
 							},
 						},
@@ -383,35 +382,35 @@ func Test_mfsFilterInterface(t *testing.T) {
 			},
 			want: []*dto.MetricFamily{
 				{
-					Name: proto.String("ifInOctets"),
+					Name: new("ifInOctets"),
 					Metric: []*dto.Metric{
 						{
 							Label: []*dto.LabelPair{
-								{Name: proto.String(ifIndexLabelName), Value: proto.String("1")},
-								{Name: proto.String("other"), Value: proto.String("label")},
+								{Name: new(ifIndexLabelName), Value: new("1")},
+								{Name: new("other"), Value: new("label")},
 							},
 						},
 						{
 							Label: []*dto.LabelPair{
-								{Name: proto.String(ifIndexLabelName), Value: proto.String("3")},
-								{Name: proto.String("other"), Value: proto.String("label")},
+								{Name: new(ifIndexLabelName), Value: new("3")},
+								{Name: new("other"), Value: new("label")},
 							},
 						},
 					},
 				},
 				{
-					Name: proto.String("all_connected"),
+					Name: new("all_connected"),
 					Metric: []*dto.Metric{
 						{
 							Label: []*dto.LabelPair{
-								{Name: proto.String("other"), Value: proto.String("label")},
-								{Name: proto.String(ifIndexLabelName), Value: proto.String("1")},
+								{Name: new("other"), Value: new("label")},
+								{Name: new(ifIndexLabelName), Value: new("1")},
 							},
 						},
 						{
 							Label: []*dto.LabelPair{
-								{Name: proto.String(ifIndexLabelName), Value: proto.String("3")},
-								{Name: proto.String("other"), Value: proto.String("label")},
+								{Name: new(ifIndexLabelName), Value: new("3")},
+								{Name: new("other"), Value: new("label")},
 							},
 						},
 					},
@@ -427,55 +426,55 @@ func Test_mfsFilterInterface(t *testing.T) {
 				},
 				mfs: []*dto.MetricFamily{
 					{
-						Name: proto.String(ifOperStatusMetricName),
+						Name: new(ifOperStatusMetricName),
 						Metric: []*dto.Metric{
 							{
 								Label: []*dto.LabelPair{
-									{Name: proto.String(ifIndexLabelName), Value: proto.String("1")},
-									{Name: proto.String("other"), Value: proto.String("label")},
+									{Name: new(ifIndexLabelName), Value: new("1")},
+									{Name: new("other"), Value: new("label")},
 								},
 							},
 							{
 								Label: []*dto.LabelPair{
-									{Name: proto.String(ifIndexLabelName), Value: proto.String("2")},
-									{Name: proto.String("other"), Value: proto.String("label")},
+									{Name: new(ifIndexLabelName), Value: new("2")},
+									{Name: new("other"), Value: new("label")},
 								},
 							},
 							{
 								Label: []*dto.LabelPair{
-									{Name: proto.String(ifIndexLabelName), Value: proto.String("3")},
-									{Name: proto.String("other"), Value: proto.String("label")},
+									{Name: new(ifIndexLabelName), Value: new("3")},
+									{Name: new("other"), Value: new("label")},
 								},
 							},
 						},
 					},
 					{
-						Name: proto.String("another_metric"),
+						Name: new("another_metric"),
 						Metric: []*dto.Metric{
 							{
 								Label: []*dto.LabelPair{
-									{Name: proto.String("notIfIndex"), Value: proto.String("1")},
+									{Name: new("notIfIndex"), Value: new("1")},
 								},
 							},
 							{
 								Label: []*dto.LabelPair{
-									{Name: proto.String("notIfIndex"), Value: proto.String("2")},
+									{Name: new("notIfIndex"), Value: new("2")},
 								},
 							},
 						},
 					},
 					{
-						Name: proto.String("both_ifIndex_and_not"),
+						Name: new("both_ifIndex_and_not"),
 						Metric: []*dto.Metric{
 							{
 								Label: []*dto.LabelPair{
-									{Name: proto.String("other"), Value: proto.String("label")},
-									{Name: proto.String(ifIndexLabelName), Value: proto.String("2")},
+									{Name: new("other"), Value: new("label")},
+									{Name: new(ifIndexLabelName), Value: new("2")},
 								},
 							},
 							{
 								Label: []*dto.LabelPair{
-									{Name: proto.String("other"), Value: proto.String("label")},
+									{Name: new("other"), Value: new("label")},
 								},
 							},
 						},
@@ -484,49 +483,49 @@ func Test_mfsFilterInterface(t *testing.T) {
 			},
 			want: []*dto.MetricFamily{
 				{
-					Name: proto.String(ifOperStatusMetricName),
+					Name: new(ifOperStatusMetricName),
 					Metric: []*dto.Metric{
 						{
 							Label: []*dto.LabelPair{
-								{Name: proto.String(ifIndexLabelName), Value: proto.String("1")},
-								{Name: proto.String("other"), Value: proto.String("label")},
+								{Name: new(ifIndexLabelName), Value: new("1")},
+								{Name: new("other"), Value: new("label")},
 							},
 						},
 						{
 							Label: []*dto.LabelPair{
-								{Name: proto.String(ifIndexLabelName), Value: proto.String("2")},
-								{Name: proto.String("other"), Value: proto.String("label")},
+								{Name: new(ifIndexLabelName), Value: new("2")},
+								{Name: new("other"), Value: new("label")},
 							},
 						},
 						{
 							Label: []*dto.LabelPair{
-								{Name: proto.String(ifIndexLabelName), Value: proto.String("3")},
-								{Name: proto.String("other"), Value: proto.String("label")},
+								{Name: new(ifIndexLabelName), Value: new("3")},
+								{Name: new("other"), Value: new("label")},
 							},
 						},
 					},
 				},
 				{
-					Name: proto.String("another_metric"),
+					Name: new("another_metric"),
 					Metric: []*dto.Metric{
 						{
 							Label: []*dto.LabelPair{
-								{Name: proto.String("notIfIndex"), Value: proto.String("1")},
+								{Name: new("notIfIndex"), Value: new("1")},
 							},
 						},
 						{
 							Label: []*dto.LabelPair{
-								{Name: proto.String("notIfIndex"), Value: proto.String("2")},
+								{Name: new("notIfIndex"), Value: new("2")},
 							},
 						},
 					},
 				},
 				{
-					Name: proto.String("both_ifIndex_and_not"),
+					Name: new("both_ifIndex_and_not"),
 					Metric: []*dto.Metric{
 						{
 							Label: []*dto.LabelPair{
-								{Name: proto.String("other"), Value: proto.String("label")},
+								{Name: new("other"), Value: new("label")},
 							},
 						},
 					},

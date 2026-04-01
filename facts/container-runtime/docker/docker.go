@@ -591,7 +591,7 @@ func (d *Docker) run(ctx context.Context) error {
 					ContainerID: actorID,
 				}
 
-				switch action { //nolint: exhaustive
+				switch action { //nolint:exhaustive
 				case "start":
 					event.Type = facts.EventTypeStart
 				case "die":
@@ -897,7 +897,7 @@ type dockerClient interface {
 func openConnection(ctx context.Context, host string) (cl dockerClient, err error) {
 	if host != "" {
 		if u, err := url.Parse(host); err == nil && u.Scheme == "unix://" {
-			_, err := os.Stat(u.Path) //nolint:gosec // path comes from docker socket URL
+			_, err := os.Stat(u.Path)
 			if err != nil {
 				return nil, fmt.Errorf("unable to access socket %s: %w", host, err)
 			}

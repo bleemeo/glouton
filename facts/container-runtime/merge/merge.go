@@ -385,7 +385,7 @@ func (r *Runtime) RuntimeFact(ctx context.Context, currentFact map[string]string
 }
 
 func (r *Runtime) Metrics(ctx context.Context, now time.Time) ([]types.MetricPoint, error) {
-	points := make([]types.MetricPoint, 0) //nolint:prealloc
+	points := make([]types.MetricPoint, 0)
 
 	var errors types.MultiErrors
 
@@ -402,7 +402,7 @@ func (r *Runtime) Metrics(ctx context.Context, now time.Time) ([]types.MetricPoi
 }
 
 func (r *Runtime) MetricsMinute(ctx context.Context, now time.Time) ([]types.MetricPoint, error) {
-	points := make([]types.MetricPoint, 0) //nolint:prealloc
+	points := make([]types.MetricPoint, 0)
 
 	var errors types.MultiErrors
 

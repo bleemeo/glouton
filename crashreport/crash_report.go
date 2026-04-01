@@ -370,7 +370,7 @@ func makeBundle(ctx context.Context, stateDir string, diagnosticFn diagnosticFun
 		defer func() {
 			_ = crashDiagnosticFile.Close()
 
-			err := os.Remove(crashDiagnosticFile.Name()) //nolint:gosec // path comes from os.CreateTemp
+			err := os.Remove(crashDiagnosticFile.Name())
 			if err != nil {
 				logger.V(1).Println("Failed to delete crash diagnostic archive:", err)
 			}

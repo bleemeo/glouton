@@ -41,7 +41,6 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/vim25"
-	"google.golang.org/protobuf/proto"
 )
 
 const commonTimeout = 10 * time.Second
@@ -547,18 +546,18 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, noMetricsSince m
 		// We only want to publish a critical status when it is new, not to store points for all offline devices.
 		if deviceStatus == types.StatusOk || deviceStatus == types.StatusCritical && vSphere.lastStatuses[moid] != types.StatusCritical {
 			vSphereDeviceStatus := &dto.MetricFamily{
-				Name: proto.String("agent_status"),
+				Name: new("agent_status"),
 				Type: dto.MetricType_GAUGE.Enum(),
 				Metric: []*dto.Metric{
 					{
 						Label: []*dto.LabelPair{
-							{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String(deviceStatus.String())},
-							{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String(deviceMsg)},
-							{Name: proto.String(types.LabelMetaVSphere), Value: proto.String(vSphere.host)},
-							{Name: proto.String(types.LabelMetaVSphereMOID), Value: proto.String(moid)},
+							{Name: new(types.LabelMetaCurrentStatus), Value: new(deviceStatus.String())},
+							{Name: new(types.LabelMetaCurrentDescription), Value: new(deviceMsg)},
+							{Name: new(types.LabelMetaVSphere), Value: new(vSphere.host)},
+							{Name: new(types.LabelMetaVSphereMOID), Value: new(moid)},
 						},
 						Gauge: &dto.Gauge{
-							Value: proto.Float64(float64(deviceStatus.NagiosCode())),
+							Value: new(float64(deviceStatus.NagiosCode())),
 						},
 					},
 				},
@@ -624,7 +623,7 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 				starLabelReplacer(diskLabel, vmDisks) // TODO: remove
 
 				if diskName, ok := vmDisks[diskLabel.GetValue()]; ok {
-					labels["item"] = &dto.LabelPair{Name: proto.String("item"), Value: &diskName}
+					labels["item"] = &dto.LabelPair{Name: new("item"), Value: &diskName}
 
 					delete(labels, "disk")
 
@@ -644,7 +643,7 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 				starLabelReplacer(interfaceLabel, vmInterfaces) // TODO: remove
 
 				if interfaceName, ok := vmInterfaces[interfaceLabel.GetValue()]; ok {
-					labels["item"] = &dto.LabelPair{Name: proto.String("item"), Value: &interfaceName}
+					labels["item"] = &dto.LabelPair{Name: new("item"), Value: &interfaceName}
 					delete(labels, "interface")
 
 					break
@@ -663,7 +662,7 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 				break
 			}
 
-			labels["item"] = &dto.LabelPair{Name: proto.String("item"), Value: interfaceLabel.Value}
+			labels["item"] = &dto.LabelPair{Name: new("item"), Value: interfaceLabel.Value}
 			delete(labels, "interface")
 
 			break
@@ -673,7 +672,7 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 			starLabelReplacer(lunLabel, vSphere.labelsMetadata.datastorePerLUN) // TODO: remove
 
 			if datastore, ok := vSphere.labelsMetadata.datastorePerLUN[lunLabel.GetValue()]; ok {
-				labels["item"] = &dto.LabelPair{Name: proto.String("item"), Value: &datastore}
+				labels["item"] = &dto.LabelPair{Name: new("item"), Value: &datastore}
 				delete(labels, "lun")
 
 				break
@@ -685,8 +684,6 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 
 	return
 }
-
-func ptr[T any](e T) *T { return &e }
 
 // starLabelReplacer handles the special case where the label comes from a vcsim.
 // It sets its value to the first key found in the given map,

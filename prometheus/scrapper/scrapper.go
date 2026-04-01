@@ -36,7 +36,6 @@ import (
 	prometheusModel "github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/textparse"
-	"google.golang.org/protobuf/proto"
 )
 
 const defaultGatherTimeout = 10 * time.Second
@@ -131,7 +130,7 @@ func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState
 
 func (t *Target) readAll(ctx context.Context) ([]byte, error) {
 	if t.URL.Scheme == "file" || t.URL.Scheme == "" {
-		return os.ReadFile(t.URL.Path) //nolint:gosec // path comes from scraper config, not user input
+		return os.ReadFile(t.URL.Path)
 	}
 
 	if t.URL.Scheme == "mock" {
@@ -146,7 +145,7 @@ func (t *Target) readAll(ctx context.Context) ([]byte, error) {
 	req.Header.Add("Accept", "text/plain;version=0.0.4")
 	req.Header.Set("User-Agent", version.UserAgent())
 
-	resp, err := http.DefaultClient.Do(req) //nolint:gosec // URL comes from scraper config
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, TargetError{
 			ConnectErr: err,
@@ -288,7 +287,7 @@ func parserReader(data []byte, filter func(lbls labels.Labels) bool) ([]*dto.Met
 			}
 
 			if seriesTS != nil {
-				metric.TimestampMs = proto.Int64(*seriesTS)
+				metric.TimestampMs = new(*seriesTS)
 			}
 
 			if entry.Type == nil {
@@ -297,13 +296,13 @@ func parserReader(data []byte, filter func(lbls labels.Labels) bool) ([]*dto.Met
 
 			switch entry.GetType().String() {
 			case dto.MetricType_COUNTER.Enum().String():
-				metric.Counter = &dto.Counter{Value: proto.Float64(seriesFloat)}
+				metric.Counter = &dto.Counter{Value: new(seriesFloat)}
 			case dto.MetricType_GAUGE.Enum().String():
-				metric.Gauge = &dto.Gauge{Value: proto.Float64(seriesFloat)}
+				metric.Gauge = &dto.Gauge{Value: new(seriesFloat)}
 			case dto.MetricType_UNTYPED.Enum().String():
 				fallthrough
 			default:
-				metric.Untyped = &dto.Untyped{Value: proto.Float64(seriesFloat)}
+				metric.Untyped = &dto.Untyped{Value: new(seriesFloat)}
 			}
 
 			entry.Metric = append(entry.Metric, metric)

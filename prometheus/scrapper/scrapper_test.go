@@ -79,15 +79,15 @@ func Test_parserReader(t *testing.T) { //nolint:maintidx
 			filename: "sample.txt",
 			want: []*dto.MetricFamily{
 				{
-					Name: proto.String("http_requests_total"),
-					Help: proto.String("The total number of HTTP requests."),
+					Name: new("http_requests_total"),
+					Help: new("The total number of HTTP requests."),
 					Type: dto.MetricType_COUNTER.Enum(),
 					Metric: []*dto.Metric{
 						{
 							TimestampMs: proto.Int64(1395066363000),
 							Label: []*dto.LabelPair{
-								{Name: proto.String("code"), Value: proto.String("200")},
-								{Name: proto.String("method"), Value: proto.String("post")},
+								{Name: new("code"), Value: new("200")},
+								{Name: new("method"), Value: new("post")},
 							},
 							Counter: &dto.Counter{
 								Value: proto.Float64(1027),
@@ -96,8 +96,8 @@ func Test_parserReader(t *testing.T) { //nolint:maintidx
 						{
 							TimestampMs: proto.Int64(1395066363000),
 							Label: []*dto.LabelPair{
-								{Name: proto.String("code"), Value: proto.String("400")},
-								{Name: proto.String("method"), Value: proto.String("post")},
+								{Name: new("code"), Value: new("400")},
+								{Name: new("method"), Value: new("post")},
 							},
 							Counter: &dto.Counter{
 								Value: proto.Float64(3),
@@ -106,54 +106,54 @@ func Test_parserReader(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Name: proto.String("msdos_file_access_time_seconds"),
+					Name: new("msdos_file_access_time_seconds"),
 					Help: nil,
 					Type: dto.MetricType_UNTYPED.Enum(),
 					Metric: []*dto.Metric{
 						{
 							TimestampMs: nil,
 							Label: []*dto.LabelPair{
-								{Name: proto.String("error"), Value: proto.String("Cannot find file:\n\"FILE.TXT\"")},
-								{Name: proto.String("path"), Value: proto.String("C:\\DIR\\FILE.TXT")},
+								{Name: new("error"), Value: new("Cannot find file:\n\"FILE.TXT\"")},
+								{Name: new("path"), Value: new("C:\\DIR\\FILE.TXT")},
 							},
 							Untyped: &dto.Untyped{
-								Value: proto.Float64(1.458255915e9),
+								Value: new(1.458255915e9),
 							},
 						},
 					},
 				},
 				{
-					Name: proto.String("metric_without_timestamp_and_labels"),
+					Name: new("metric_without_timestamp_and_labels"),
 					Help: nil,
 					Type: dto.MetricType_UNTYPED.Enum(),
 					Metric: []*dto.Metric{
 						{
 							TimestampMs: nil,
 							Untyped: &dto.Untyped{
-								Value: proto.Float64(12.47),
+								Value: new(12.47),
 							},
 						},
 					},
 				},
 				{
-					Name: proto.String("something_weird"),
+					Name: new("something_weird"),
 					Help: nil,
 					Type: dto.MetricType_UNTYPED.Enum(),
 					Metric: []*dto.Metric{
 						{
 							TimestampMs: proto.Int64(3982045),
 							Label: []*dto.LabelPair{
-								{Name: proto.String("problem"), Value: proto.String("division by zero")},
+								{Name: new("problem"), Value: new("division by zero")},
 							},
 							Untyped: &dto.Untyped{
-								Value: proto.Float64(math.Inf(1)),
+								Value: new(math.Inf(1)),
 							},
 						},
 					},
 				},
 				{
-					Name: proto.String("http_request_duration_seconds"),
-					Help: proto.String("A histogram of the request duration."),
+					Name: new("http_request_duration_seconds"),
+					Help: new("A histogram of the request duration."),
 					Type: dto.MetricType_HISTOGRAM.Enum(),
 					Metric: []*dto.Metric{
 						{
@@ -164,19 +164,19 @@ func Test_parserReader(t *testing.T) { //nolint:maintidx
 								Bucket: []*dto.Bucket{
 									{
 										CumulativeCount: proto.Uint64(24054),
-										UpperBound:      proto.Float64(0.05),
+										UpperBound:      new(0.05),
 									},
 									{
 										CumulativeCount: proto.Uint64(33444),
-										UpperBound:      proto.Float64(0.1),
+										UpperBound:      new(0.1),
 									},
 									{
 										CumulativeCount: proto.Uint64(100392),
-										UpperBound:      proto.Float64(0.2),
+										UpperBound:      new(0.2),
 									},
 									{
 										CumulativeCount: proto.Uint64(129389),
-										UpperBound:      proto.Float64(0.5),
+										UpperBound:      new(0.5),
 									},
 									{
 										CumulativeCount: proto.Uint64(133988),
@@ -184,7 +184,7 @@ func Test_parserReader(t *testing.T) { //nolint:maintidx
 									},
 									{
 										CumulativeCount: proto.Uint64(144320),
-										UpperBound:      proto.Float64(math.Inf(1)),
+										UpperBound:      new(math.Inf(1)),
 									},
 								},
 							},
@@ -192,34 +192,34 @@ func Test_parserReader(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Name: proto.String("rpc_duration_seconds"),
-					Help: proto.String("A summary of the RPC duration in seconds."),
+					Name: new("rpc_duration_seconds"),
+					Help: new("A summary of the RPC duration in seconds."),
 					Type: dto.MetricType_SUMMARY.Enum(),
 					Metric: []*dto.Metric{
 						{
 							TimestampMs: nil,
 							Summary: &dto.Summary{
 								SampleCount: proto.Uint64(2693),
-								SampleSum:   proto.Float64(1.7560473e+07),
+								SampleSum:   new(1.7560473e+07),
 								Quantile: []*dto.Quantile{
 									{
-										Quantile: proto.Float64(0.01),
+										Quantile: new(0.01),
 										Value:    proto.Float64(3102),
 									},
 									{
-										Quantile: proto.Float64(0.05),
+										Quantile: new(0.05),
 										Value:    proto.Float64(3272),
 									},
 									{
-										Quantile: proto.Float64(0.5),
+										Quantile: new(0.5),
 										Value:    proto.Float64(4773),
 									},
 									{
-										Quantile: proto.Float64(0.9),
+										Quantile: new(0.9),
 										Value:    proto.Float64(9001),
 									},
 									{
-										Quantile: proto.Float64(0.99),
+										Quantile: new(0.99),
 										Value:    proto.Float64(76656),
 									},
 								},
@@ -233,14 +233,14 @@ func Test_parserReader(t *testing.T) { //nolint:maintidx
 			filename: "sample2.txt",
 			want: []*dto.MetricFamily{
 				{
-					Name: proto.String("metric1"),
-					Help: proto.String("Help text of metric1"),
+					Name: new("metric1"),
+					Help: new("Help text of metric1"),
 					Type: dto.MetricType_UNTYPED.Enum(),
 					Metric: []*dto.Metric{
 						{
 							TimestampMs: nil,
 							Label: []*dto.LabelPair{
-								{Name: proto.String("occurrence"), Value: proto.String("1")},
+								{Name: new("occurrence"), Value: new("1")},
 							},
 							Untyped: &dto.Untyped{
 								Value: proto.Float64(1),
@@ -249,23 +249,23 @@ func Test_parserReader(t *testing.T) { //nolint:maintidx
 						{
 							TimestampMs: nil,
 							Label: []*dto.LabelPair{
-								{Name: proto.String("occurrence"), Value: proto.String("2")},
+								{Name: new("occurrence"), Value: new("2")},
 							},
 							Untyped: &dto.Untyped{
-								Value: proto.Float64(1.2),
+								Value: new(1.2),
 							},
 						},
 					},
 				},
 				{
-					Name: proto.String("metric2"),
-					Help: proto.String("Help text of metric2 with TYPE"),
+					Name: new("metric2"),
+					Help: new("Help text of metric2 with TYPE"),
 					Type: dto.MetricType_GAUGE.Enum(),
 					Metric: []*dto.Metric{
 						{
 							TimestampMs: nil,
 							Label: []*dto.LabelPair{
-								{Name: proto.String("occurrence"), Value: proto.String("1")},
+								{Name: new("occurrence"), Value: new("1")},
 							},
 							Gauge: &dto.Gauge{
 								Value: proto.Float64(2),
@@ -274,23 +274,23 @@ func Test_parserReader(t *testing.T) { //nolint:maintidx
 						{
 							TimestampMs: nil,
 							Label: []*dto.LabelPair{
-								{Name: proto.String("occurrence"), Value: proto.String("2")},
+								{Name: new("occurrence"), Value: new("2")},
 							},
 							Gauge: &dto.Gauge{
-								Value: proto.Float64(2.2),
+								Value: new(2.2),
 							},
 						},
 					},
 				},
 				{
-					Name: proto.String("metric3"),
-					Help: proto.String("late help for metric3"),
+					Name: new("metric3"),
+					Help: new("late help for metric3"),
 					Type: dto.MetricType_UNTYPED.Enum(),
 					Metric: []*dto.Metric{
 						{
 							TimestampMs: nil,
 							Label: []*dto.LabelPair{
-								{Name: proto.String("occurrence"), Value: proto.String("1")},
+								{Name: new("occurrence"), Value: new("1")},
 							},
 							Untyped: &dto.Untyped{
 								Value: proto.Float64(3),
@@ -299,17 +299,17 @@ func Test_parserReader(t *testing.T) { //nolint:maintidx
 						{
 							TimestampMs: nil,
 							Label: []*dto.LabelPair{
-								{Name: proto.String("occurrence"), Value: proto.String("2")},
+								{Name: new("occurrence"), Value: new("2")},
 							},
 							Untyped: &dto.Untyped{
-								Value: proto.Float64(3.2),
+								Value: new(3.2),
 							},
 						},
 					},
 				},
 				{
-					Name: proto.String("metric4"),
-					Help: proto.String("help of metric4"),
+					Name: new("metric4"),
+					Help: new("help of metric4"),
 					Type: dto.MetricType_COUNTER.Enum(),
 					Metric: []*dto.Metric{
 						{
@@ -391,27 +391,27 @@ func flattenHistogramAndSummary(mfs []*dto.MetricFamily) []*dto.MetricFamily {
 
 		if mf.GetType().String() == dto.MetricType_HISTOGRAM.String() {
 			flatMFS = append(flatMFS, &dto.MetricFamily{
-				Name: proto.String(mf.GetName() + "_sum"),
+				Name: new(mf.GetName() + "_sum"),
 				Help: nil,
 				Type: dto.MetricType_UNTYPED.Enum(),
 				Metric: []*dto.Metric{
 					{
 						Label: metric.GetLabel(),
 						Untyped: &dto.Untyped{
-							Value: proto.Float64(metric.GetHistogram().GetSampleSum()),
+							Value: new(metric.GetHistogram().GetSampleSum()),
 						},
 					},
 				},
 			})
 			flatMFS = append(flatMFS, &dto.MetricFamily{
-				Name: proto.String(mf.GetName() + "_count"),
+				Name: new(mf.GetName() + "_count"),
 				Help: nil,
 				Type: dto.MetricType_UNTYPED.Enum(),
 				Metric: []*dto.Metric{
 					{
 						Label: metric.GetLabel(),
 						Untyped: &dto.Untyped{
-							Value: proto.Float64(float64(metric.GetHistogram().GetSampleCount())),
+							Value: new(float64(metric.GetHistogram().GetSampleCount())),
 						},
 					},
 				},
@@ -423,18 +423,18 @@ func flattenHistogramAndSummary(mfs []*dto.MetricFamily) []*dto.MetricFamily {
 					Label: append(
 						metric.GetLabel(),
 						&dto.LabelPair{
-							Name:  proto.String("le"),
-							Value: proto.String(formatFloat(b.GetUpperBound())),
+							Name:  new("le"),
+							Value: new(formatFloat(b.GetUpperBound())),
 						},
 					),
 					Untyped: &dto.Untyped{
-						Value: proto.Float64(float64(b.GetCumulativeCount())),
+						Value: new(float64(b.GetCumulativeCount())),
 					},
 				})
 			}
 
 			flatMFS = append(flatMFS, &dto.MetricFamily{
-				Name:   proto.String(mf.GetName() + "_bucket"),
+				Name:   new(mf.GetName() + "_bucket"),
 				Help:   nil,
 				Type:   dto.MetricType_UNTYPED.Enum(),
 				Metric: bucketMetrics,
@@ -443,27 +443,27 @@ func flattenHistogramAndSummary(mfs []*dto.MetricFamily) []*dto.MetricFamily {
 
 		if mf.GetType().String() == dto.MetricType_SUMMARY.String() {
 			flatMFS = append(flatMFS, &dto.MetricFamily{
-				Name: proto.String(mf.GetName() + "_sum"),
+				Name: new(mf.GetName() + "_sum"),
 				Help: nil,
 				Type: dto.MetricType_UNTYPED.Enum(),
 				Metric: []*dto.Metric{
 					{
 						Label: metric.GetLabel(),
 						Untyped: &dto.Untyped{
-							Value: proto.Float64(metric.GetSummary().GetSampleSum()),
+							Value: new(metric.GetSummary().GetSampleSum()),
 						},
 					},
 				},
 			})
 			flatMFS = append(flatMFS, &dto.MetricFamily{
-				Name: proto.String(mf.GetName() + "_count"),
+				Name: new(mf.GetName() + "_count"),
 				Help: nil,
 				Type: dto.MetricType_UNTYPED.Enum(),
 				Metric: []*dto.Metric{
 					{
 						Label: metric.GetLabel(),
 						Untyped: &dto.Untyped{
-							Value: proto.Float64(float64(metric.GetSummary().GetSampleCount())),
+							Value: new(float64(metric.GetSummary().GetSampleCount())),
 						},
 					},
 				},
@@ -475,22 +475,22 @@ func flattenHistogramAndSummary(mfs []*dto.MetricFamily) []*dto.MetricFamily {
 					Label: append(
 						metric.GetLabel(),
 						&dto.LabelPair{
-							Name:  proto.String("quantile"),
-							Value: proto.String(fmt.Sprint(q.GetQuantile())),
+							Name:  new("quantile"),
+							Value: new(fmt.Sprint(q.GetQuantile())),
 						},
 					),
 					Untyped: &dto.Untyped{
-						Value: proto.Float64(q.GetValue()),
+						Value: new(q.GetValue()),
 					},
 				})
 			}
 
 			flatMFS = append(flatMFS, &dto.MetricFamily{
-				Name: proto.String(mf.GetName()),
+				Name: new(mf.GetName()),
 				// summary quantile kept the help because the name is unchanged.
 				// This test code is made to match what parser does. But we don't really care
 				// about help or type, only name, labels & value matter.
-				Help:   proto.String(mf.GetHelp()),
+				Help:   new(mf.GetHelp()),
 				Type:   dto.MetricType_UNTYPED.Enum(),
 				Metric: quantileMetrics,
 			})

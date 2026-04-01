@@ -36,127 +36,127 @@ func TestApplyRulesMFS(t *testing.T) {
 	t0 := time.Date(2024, time.January, 3, 15, 0, 0, 0, time.Local) //nolint: gosmopolitan
 	now := t0.Add(5 * time.Minute)                                  // 5min because we have 5 samples 1min apart each
 
-	mfs := []*dto.MetricFamily{
-		{
-			Name: proto.String("ifInOctets"),
-			Type: dto.MetricType_UNTYPED.Enum(),
-			Metric: []*dto.Metric{
-				{
-					Label: []*dto.LabelPair{
-						{
-							Name:  proto.String("__name__"),
-							Value: proto.String("ifInOctets"),
-						},
-						{
-							Name:  proto.String("ifDescr"),
-							Value: proto.String("LOOPBACK"),
-						},
-						{
-							Name:  proto.String("ifType"),
-							Value: proto.String("softwareLoopback"),
-						},
-					},
-					Untyped:     &dto.Untyped{Value: proto.Float64(712799268)},
-					TimestampMs: proto.Int64(t0.Add(1 * time.Minute).UnixMilli()),
-				},
-				{
-					Label: []*dto.LabelPair{
-						{
-							Name:  proto.String("__name__"),
-							Value: proto.String("ifInOctets"),
-						},
-						{
-							Name:  proto.String("ifDescr"),
-							Value: proto.String("LOOPBACK"),
-						},
-						{
-							Name:  proto.String("ifType"),
-							Value: proto.String("softwareLoopback"),
-						},
-					},
-					Untyped:     &dto.Untyped{Value: proto.Float64(712896866)},
-					TimestampMs: proto.Int64(t0.Add(2 * time.Minute).UnixMilli()),
-				},
-				{
-					Label: []*dto.LabelPair{
-						{
-							Name:  proto.String("__name__"),
-							Value: proto.String("ifInOctets"),
-						},
-						{
-							Name:  proto.String("ifDescr"),
-							Value: proto.String("LOOPBACK"),
-						},
-						{
-							Name:  proto.String("ifType"),
-							Value: proto.String("softwareLoopback"),
-						},
-					},
-					Untyped:     &dto.Untyped{Value: proto.Float64(713012717)},
-					TimestampMs: proto.Int64(t0.Add(3 * time.Minute).UnixMilli()),
-				},
-				{
-					Label: []*dto.LabelPair{
-						{
-							Name:  proto.String("__name__"),
-							Value: proto.String("ifInOctets"),
-						},
-						{
-							Name:  proto.String("ifDescr"),
-							Value: proto.String("LOOPBACK"),
-						},
-						{
-							Name:  proto.String("ifType"),
-							Value: proto.String("softwareLoopback"),
-						},
-					},
-					Untyped:     &dto.Untyped{Value: proto.Float64(713098262)},
-					TimestampMs: proto.Int64(t0.Add(4 * time.Minute).UnixMilli()),
-				},
-				{
-					Label: []*dto.LabelPair{
-						{
-							Name:  proto.String("__name__"),
-							Value: proto.String("ifInOctets"),
-						},
-						{
-							Name:  proto.String("ifDescr"),
-							Value: proto.String("LOOPBACK"),
-						},
-						{
-							Name:  proto.String("ifType"),
-							Value: proto.String("softwareLoopback"),
-						},
-					},
-					Untyped:     &dto.Untyped{Value: proto.Float64(713201880)},
-					TimestampMs: proto.Int64(t0.Add(5 * time.Minute).UnixMilli()),
-				},
-			},
-		},
-	}
 	expectedMfs := []*dto.MetricFamily{
 		{
-			Name: proto.String("net_bits_recv"),
-			Help: proto.String(""),
+			Name: new("net_bits_recv"),
+			Help: new(""),
 			Type: dto.MetricType_UNTYPED.Enum(),
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
 						{
-							Name:  proto.String("ifDescr"),
-							Value: proto.String("LOOPBACK"),
+							Name:  new("ifDescr"),
+							Value: new("LOOPBACK"),
 						},
 						{
-							Name:  proto.String("ifType"),
-							Value: proto.String("softwareLoopback"),
+							Name:  new("ifType"),
+							Value: new("softwareLoopback"),
 						},
 					},
-					Untyped:     &dto.Untyped{Value: proto.Float64(13556.177777777777)},
-					TimestampMs: proto.Int64(now.UnixMilli()),
+					Untyped:     &dto.Untyped{Value: new(13556.177777777777)},
+					TimestampMs: new(now.UnixMilli()),
 				},
 			},
 		},
 	}
+
+	mfs := make([]*dto.MetricFamily, 0, 1+len(expectedMfs))
+	mfs = append(mfs, &dto.MetricFamily{
+		Name: new("ifInOctets"),
+		Type: dto.MetricType_UNTYPED.Enum(),
+		Metric: []*dto.Metric{
+			{
+				Label: []*dto.LabelPair{
+					{
+						Name:  new("__name__"),
+						Value: new("ifInOctets"),
+					},
+					{
+						Name:  new("ifDescr"),
+						Value: new("LOOPBACK"),
+					},
+					{
+						Name:  new("ifType"),
+						Value: new("softwareLoopback"),
+					},
+				},
+				Untyped:     &dto.Untyped{Value: proto.Float64(712799268)},
+				TimestampMs: new(t0.Add(1 * time.Minute).UnixMilli()),
+			},
+			{
+				Label: []*dto.LabelPair{
+					{
+						Name:  new("__name__"),
+						Value: new("ifInOctets"),
+					},
+					{
+						Name:  new("ifDescr"),
+						Value: new("LOOPBACK"),
+					},
+					{
+						Name:  new("ifType"),
+						Value: new("softwareLoopback"),
+					},
+				},
+				Untyped:     &dto.Untyped{Value: proto.Float64(712896866)},
+				TimestampMs: new(t0.Add(2 * time.Minute).UnixMilli()),
+			},
+			{
+				Label: []*dto.LabelPair{
+					{
+						Name:  new("__name__"),
+						Value: new("ifInOctets"),
+					},
+					{
+						Name:  new("ifDescr"),
+						Value: new("LOOPBACK"),
+					},
+					{
+						Name:  new("ifType"),
+						Value: new("softwareLoopback"),
+					},
+				},
+				Untyped:     &dto.Untyped{Value: proto.Float64(713012717)},
+				TimestampMs: new(t0.Add(3 * time.Minute).UnixMilli()),
+			},
+			{
+				Label: []*dto.LabelPair{
+					{
+						Name:  new("__name__"),
+						Value: new("ifInOctets"),
+					},
+					{
+						Name:  new("ifDescr"),
+						Value: new("LOOPBACK"),
+					},
+					{
+						Name:  new("ifType"),
+						Value: new("softwareLoopback"),
+					},
+				},
+				Untyped:     &dto.Untyped{Value: proto.Float64(713098262)},
+				TimestampMs: new(t0.Add(4 * time.Minute).UnixMilli()),
+			},
+			{
+				Label: []*dto.LabelPair{
+					{
+						Name:  new("__name__"),
+						Value: new("ifInOctets"),
+					},
+					{
+						Name:  new("ifDescr"),
+						Value: new("LOOPBACK"),
+					},
+					{
+						Name:  new("ifType"),
+						Value: new("softwareLoopback"),
+					},
+				},
+				Untyped:     &dto.Untyped{Value: proto.Float64(713201880)},
+				TimestampMs: new(t0.Add(5 * time.Minute).UnixMilli()),
+			},
+		},
+	})
 
 	simpleRules := []types.SimpleRule{
 		{
