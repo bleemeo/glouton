@@ -206,15 +206,40 @@ func (d DiagnosticAutoUpgrade) diagnosticAutoupgradeLinuxShowTimer(ctx context.C
 func (d DiagnosticAutoUpgrade) diagnosticAutoupgradeWindows(ctx context.Context, archive types.ArchiveWriter) error {
 	_ = ctx
 
-	if err := d.diagnosticFileContent(archive, "auto-upgrade-troubleshooting/auto_update-marker.txt", `C:\ProgramData\glouton\auto_update`, true); err != nil {
+	if err := d.diagnosticFileContent(archive, "auto-upgrade-troubleshooting/deprecated/auto_update-marker.txt", `C:\ProgramData\glouton\auto_update`, true); err != nil {
 		return err
 	}
 
-	if err := d.diagnosticFileContent(archive, "auto-upgrade-troubleshooting/auto_update.txt", `C:\ProgramData\glouton\auto_update.txt`, true); err != nil {
+	// This is the deprecated log files
+	if err := d.diagnosticFileContent(archive, "auto-upgrade-troubleshooting/deprecated/auto_update.txt", `C:\ProgramData\glouton\auto_update.txt`, true); err != nil {
 		return err
 	}
 
-	if err := d.diagnosticFileContent(archive, "auto-upgrade-troubleshooting/msiexec-log.txt", `C:\ProgramData\glouton\msiexec-log.txt`, true); err != nil {
+	if err := d.diagnosticFileContent(archive, "auto-upgrade-troubleshooting/deprecated/msiexec-log.txt", `C:\ProgramData\glouton\msiexec-log.txt`, true); err != nil {
+		return err
+	}
+
+	if err := d.diagnosticFileContent(archive, "auto-upgrade-troubleshooting/logs/auto_upgrade.log", `C:\ProgramData\glouton\logs\auto_upgrade.log`, true); err != nil {
+		return err
+	}
+
+	if err := d.diagnosticFileContent(archive, "auto-upgrade-troubleshooting/logs/auto_upgrade_old.log", `C:\ProgramData\glouton\logs\auto_upgrade_old.log`, true); err != nil {
+		return err
+	}
+
+	if err := d.diagnosticFileContent(archive, "auto-upgrade-troubleshooting/logs/msiexec_log.txt", `C:\ProgramData\glouton\logs\msiexec.log`, true); err != nil {
+		return err
+	}
+
+	if err := d.diagnosticFileContent(archive, "auto-upgrade-troubleshooting/logs/msiexec_log_old.txt", `C:\ProgramData\glouton\logs\msiexec_old.log`, true); err != nil {
+		return err
+	}
+
+	if err := d.diagnosticFileContent(archive, "auto-upgrade-troubleshooting/logs/last_post_install.log", `C:\ProgramData\glouton\logs\last_post_install.log`, true); err != nil {
+		return err
+	}
+
+	if err := d.diagnosticFileContent(archive, "auto-upgrade-troubleshooting/logs/last_pre_uninstall.log", `C:\ProgramData\glouton\logs\last_pre_uninstall.log`, true); err != nil {
 		return err
 	}
 
@@ -264,13 +289,22 @@ func (d DiagnosticAutoUpgrade) diagnosticFileContent(archive types.ArchiveWriter
 	}
 
 	if tryUTF16 {
-		decoder := unicode.UTF16(unicode.LittleEndian, unicode.UseBOM).NewDecoder()
+		// In Windows, we might get UTF8 or UTF-16 (if UTF-32 is possible, we ignore it).
+		// In UTF16 the BOM is always present. In UTF8, we will assume it could be present or not.
+		// UTF16 BOM is 0xFFFE or 0xFEFF. UTF8 BOM is 0xEF 0xBB 0xBF
+		// If no BOM is found, assume UTF8
+		if len(contentBytes) > 0 {
+			// poor-man UTF16 BOM detection. (those bytes are invalid in UTF8, so if present we assume it UTF16)
+			if contentBytes[0] == 0xFF || contentBytes[1] == 0xFE {
+				decoder := unicode.UTF16(unicode.LittleEndian, unicode.UseBOM).NewDecoder()
 
-		utf8Bytes, err := decoder.Bytes(contentBytes)
-		if err != nil {
-			fmt.Fprintf(file, "## Failed to decode from UTF16: %s\n", err.Error())
-		} else {
-			contentBytes = utf8Bytes
+				utf8Bytes, err := decoder.Bytes(contentBytes)
+				if err != nil {
+					fmt.Fprintf(file, "## Failed to decode from UTF16: %s\n", err.Error())
+				} else {
+					contentBytes = utf8Bytes
+				}
+			}
 		}
 	}
 

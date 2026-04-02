@@ -42,8 +42,8 @@
 				<ServiceInstall Id="InstallGloutonService" Name="glouton" DisplayName="Glouton monitoring agent" Description="Bleemeo monitoring agent for servers, containers, and applications" Vital="yes" Account="NT AUTHORITY\LocalService" Interactive="no" ErrorControl="normal" Start="auto" Type="ownProcess">
 
 					<util:ServiceConfig FirstFailureActionType="restart" SecondFailureActionType="restart" ThirdFailureActionType="restart" RestartServiceDelayInSeconds="60" />
-					
-						<!-- windows_exporter depends on Windows Management Instrumentation Service Provider -->
+
+					<!-- glouton depends on Windows Management Instrumentation Service Provider -->
 					<ServiceDependency Id="wmiApSrv" />
 				</ServiceInstall>
 				
@@ -63,7 +63,7 @@
 			</Component>
 
 			<Component Id="GloutonAutoUpdateScript" Directory="INSTALLFOLDER" Guid="DFA10ED1-033D-43F6-9AAA-C0E9C4C4F003">
-				<File Id="___var.AssetsPath_glouton_auto_update.ps1" Source="$(var.AssetsPath)glouton_auto_update.ps1" KeyPath="yes" />
+				<File Id="___var.AssetsPath_glouton_auto_upgrade.ps1" Source="$(var.AssetsPath)glouton_auto_upgrade.ps1" KeyPath="yes" />
 			</Component>
 
 			<Component Id="SystemConfig" Directory="ConfigFolder" Guid="741C2E8E-C3D3-4105-A40A-FF144FC41540">
