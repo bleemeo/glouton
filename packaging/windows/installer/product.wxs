@@ -103,19 +103,10 @@
 		<SetProperty Id="PreUninstall" Value="&quot;powershell.exe&quot; -ExecutionPolicy Bypass -NonInteractive -File &quot;[INSTALLFOLDER]pre_uninstall.ps1&quot;" Sequence="execute" Before="PreUninstall" />
 		<CustomAction Id="PreUninstall" Return="ignore" Impersonate="no" Execute="deferred" DllEntry="WixQuietExec" BinaryRef="Wix4UtilCA_X86" />
 
-		<!-- Uninstall Glouton if it was install using the old NSIS installer. -->
-		<!-- This is needed because otherwise there will be two Glouton listed in the installed applications. -->
-		<!-- The installer is executed asynchronously so we wait 10 seconds to let it finish the uninstallation. -->
-		<!-- We use "ping" to wait because the alternative to sleep on windows is "timeout" which opens a command prompt. -->
-		<SetProperty Id="UninstallOldInstaller" Value="&quot;cmd.exe&quot; /C &quot;[ProgramFilesFolder]\glouton\Uninstall.exe&quot; /S &amp;&amp; ping -n 10 127.0.0.1 &gt; nul" Sequence="execute" Before="UninstallOldInstaller" />
-		<CustomAction Id="UninstallOldInstaller" Return="ignore" Impersonate="no" Execute="deferred" DllEntry="WixQuietExec" BinaryRef="Wix4UtilCA_X86" />
-
 		<!-- _UNINSTALL is only true during uninstallation: https://stackoverflow.com/a/731700 -->
 		<SetProperty Id="_UNINSTALL" After="FindRelatedProducts" Value="1" Condition="(NOT UPGRADINGPRODUCTCODE) AND (REMOVE=&quot;ALL&quot;)" />
 		
 		<InstallExecuteSequence>
-			<Custom Action="UninstallOldInstaller" Before="InstallFiles" Condition="NOT WIX_UPGRADE_DETECTED" />
-
 			<Custom Action="PostInstallAutoUpdate" After="InstallFiles" Condition="(NOT _UNINSTALL) AND (ENABLEAUTOUPDATE)" />
 			<Custom Action="PostInstallNoAutoUpdate" After="PostInstallAutoUpdate" Condition="(NOT _UNINSTALL) AND (NOT ENABLEAUTOUPDATE)" />
 
