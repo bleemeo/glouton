@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"time"
 
 	"github.com/bleemeo/glouton/types"
@@ -219,81 +218,7 @@ func (d DiagnosticAutoUpgrade) diagnosticAutoupgradeWindows(ctx context.Context,
 		return err
 	}
 
-	if err := d.diagnosticAutoupgradeWindowsShowTimer(ctx, archive); err != nil {
-		return err
-	}
-
-	if err := d.diagnosticACLs(ctx, archive); err != nil {
-		return err
-	}
-
 	if err := d.diagnosticWindowsRegistry(ctx, archive); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (d DiagnosticAutoUpgrade) diagnosticACLs(ctx context.Context, archive types.ArchiveWriter) error {
-	gloutonPath, err := os.Executable()
-	if err != nil {
-		// Yes this error is just ignored. This error is available from commonDiagnosticGloutonBinary
-		return nil //nolint: nilerr
-	}
-
-	installDir := path.Dir(gloutonPath)
-
-	out, cmdErr := d.runner.Run(ctx, gloutonexec.Option{SkipInContainer: true}, "icacls", installDir, "/T")
-	if cmdErr != nil && errors.Is(cmdErr, gloutonexec.ErrExecutionSkipped) {
-		// The auto upgrade is not supported on containers, skip producing the diagnostic file
-		return nil
-	}
-
-	file, err := archive.Create("auto-upgrade-troubleshooting/icacls.txt")
-	if err != nil {
-		return err
-	}
-
-	if cmdErr != nil {
-		fmt.Fprintf(
-			file,
-			"Unable to run icacls: %s\n", cmdErr.Error(),
-		)
-
-		return nil
-	}
-
-	_, err = file.Write(out)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (d DiagnosticAutoUpgrade) diagnosticAutoupgradeWindowsShowTimer(ctx context.Context, archive types.ArchiveWriter) error {
-	out, cmdErr := d.runner.Run(ctx, gloutonexec.Option{SkipInContainer: true}, "schtasks", "/Query", "/TN", `Bleemeo\Glouton\Auto Update`, "/V", "/FO", "list")
-	if cmdErr != nil && errors.Is(cmdErr, gloutonexec.ErrExecutionSkipped) {
-		// The auto upgrade is not supported on containers, skip producing the diagnostic file
-		return nil
-	}
-
-	file, err := archive.Create("auto-upgrade-troubleshooting/list-timers.txt")
-	if err != nil {
-		return err
-	}
-
-	if cmdErr != nil {
-		fmt.Fprintf(
-			file,
-			"Unable to list-timers: %s\n", cmdErr.Error(),
-		)
-
-		return nil
-	}
-
-	_, err = file.Write(out)
-	if err != nil {
 		return err
 	}
 
