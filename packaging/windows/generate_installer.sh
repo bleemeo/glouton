@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
-set -ex
+set -eu
 
 if [ ! -f "dist/glouton_windows_amd64_v1/glouton.exe" ]
 then
-    echo "Source executables  not found. Please run goreleaser on the project prior to launching this script"
+    echo "!!! Source executables  not found. Please run ./build.sh to generate Windows installer"
     exit 1
 fi
 

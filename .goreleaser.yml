@@ -5,8 +5,39 @@ snapshot:
   # Our version is based on the date.
   version_template: '{{ .Env.GLOUTON_VERSION }}'
 builds:
-  - env:
+  - id: glouton
+    env:
       - CGO_ENABLED=0
+    targets:
+      - linux_amd64
+      - linux_386
+      - linux_arm_6
+      - linux_arm64
+      - windows_amd64
+      - freebsd_amd64
+    overrides:
+      - goos: freebsd
+        goarch: amd64
+        goamd64: v1
+        tags:
+          # flag to disable some node_exporter module that require CGO_ENABLED=1
+          - noexec,nomeminfo,nozfs,nonetdev,nonetisr
+  - id: glouton-race
+    env:
+      - CGO_ENABLED=1
+    flags:
+      - -race
+    ldflags:
+      # This is the default from gorelaser
+      - -s
+      - -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+      - -X main.builtBy=goreleaser
+      # This is what added to support -race with static binary.
+      - -linkmode=external
+      - -extldflags=-static
     targets:
       - linux_amd64
       - linux_386

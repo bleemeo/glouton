@@ -18,13 +18,12 @@ compile a Go binary (skip building JS, Docker image and Windows installer):
 Then run Glouton:
 
 ```sh
-./glouton
+./dist/glouton_linux_YOUR-ARCH/glouton
 ```
 
-If you are using Docker, you can quickly build a Docker image that use the Glouton you just build:
+If you are using Docker, you can quickly build a Docker image with a Glouton with:
 
 ```
-# Remember to run ./build.sh go before
 ./build.sh docker-fast
 ```
 
