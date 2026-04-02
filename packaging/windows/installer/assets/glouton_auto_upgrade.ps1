@@ -150,14 +150,24 @@ function Main {
 
         MainLogged $workTempDir
 
-        echo "-- Content of pre_uninstall.log"
+        echo "----------------------------------"
+        echo "-- Content of pre_uninstall.log --"
+        echo "----------------------------------"
         Get-Content -Path "C:\ProgramData\glouton\logs\last_pre_uninstall.log" -ErrorAction SilentlyContinue
         
-        echo "-- Content of post_install.log"
+        echo "----------------------------------"
+        echo "-- Content of post_install.log  --"
+        echo "----------------------------------"
         Get-Content -Path "C:\ProgramData\glouton\logs\last_post_install.log" -ErrorAction SilentlyContinue
 
-        echo "-- Troubleshoot help"
+        echo "----------------------------------"
+        echo "-- Troubleshoot help            --"
+        echo "----------------------------------"
         whoami /all
+
+        icacls $PSScriptRoot /T
+
+        icacls "C:\Program Files (x86)\Glouton" /T
     } catch {
         Write-Error "An error occurred: $_"
     } finally {

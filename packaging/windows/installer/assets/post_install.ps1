@@ -15,7 +15,7 @@ $TaskAutoUpdateName = "Bleemeo\Glouton\Auto Upgrade"
 $AutoUpdateLaunch = $( "powershell.exe -ExecutionPolicy Bypass -NonInteractive -File '"  + $InstallFolder + "\glouton_auto_upgrade.ps1'" )
 $logAutoUpdateFile = "C:\ProgramData\glouton\logs\auto_upgrade.log"
 
-Write-Output "Post-install start with args \"$AutoUpdate\" and \"$InstallFolder\""
+Write-Output "Post-install start with args '$AutoUpdate' and '$InstallFolder'"
 
 schtasks /Create /F /RU System /SC HOURLY /TN $TaskWindowsUpdateName /TR $WindowsUpdateCheckerLaunch
 schtasks /Run /I /TN $TaskWindowsUpdateName

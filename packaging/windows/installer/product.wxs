@@ -93,15 +93,15 @@
 
 		<!-- Post install script auto update -->
 		<SetProperty Id="PostInstallAutoUpdate" Value="&quot;powershell.exe&quot; -ExecutionPolicy Bypass -NonInteractive -File &quot;[INSTALLFOLDER]post_install.ps1&quot; -AutoUpdate &quot;[INSTALLFOLDER]&quot;" Sequence="execute" Before="PostInstallAutoUpdate" />
-		<CustomAction Id="PostInstallAutoUpdate" Return="ignore" Impersonate="no" Execute="deferred" DllEntry="WixQuietExec" BinaryRef="Wix4UtilCA_X86" />
+		<CustomAction Id="PostInstallAutoUpdate" Return="ignore" Impersonate="no" Execute="deferred" DllEntry="WixQuietExec" BinaryRef="Wix4UtilCA_X64" />
 
 		<!-- Post install script no auto update -->
 		<SetProperty Id="PostInstallNoAutoUpdate" Value="&quot;powershell.exe&quot; -ExecutionPolicy Bypass -NonInteractive -File &quot;[INSTALLFOLDER]post_install.ps1&quot; &quot;[INSTALLFOLDER]&quot;" Sequence="execute" Before="PostInstallNoAutoUpdate" />
-		<CustomAction Id="PostInstallNoAutoUpdate" Return="ignore" Impersonate="no" Execute="deferred" DllEntry="WixQuietExec" BinaryRef="Wix4UtilCA_X86" />
+		<CustomAction Id="PostInstallNoAutoUpdate" Return="ignore" Impersonate="no" Execute="deferred" DllEntry="WixQuietExec" BinaryRef="Wix4UtilCA_X64" />
 
 		<!-- Pre uninstall script -->
 		<SetProperty Id="PreUninstall" Value="&quot;powershell.exe&quot; -ExecutionPolicy Bypass -NonInteractive -File &quot;[INSTALLFOLDER]pre_uninstall.ps1&quot;" Sequence="execute" Before="PreUninstall" />
-		<CustomAction Id="PreUninstall" Return="ignore" Impersonate="no" Execute="deferred" DllEntry="WixQuietExec" BinaryRef="Wix4UtilCA_X86" />
+		<CustomAction Id="PreUninstall" Return="ignore" Impersonate="no" Execute="deferred" DllEntry="WixQuietExec" BinaryRef="Wix4UtilCA_X64" />
 
 		<!-- _UNINSTALL is only true during uninstallation: https://stackoverflow.com/a/731700 -->
 		<SetProperty Id="_UNINSTALL" After="FindRelatedProducts" Value="1" Condition="(NOT UPGRADINGPRODUCTCODE) AND (REMOVE=&quot;ALL&quot;)" />
@@ -118,7 +118,7 @@
 			<ComponentGroupRef Id="Files" />
 		</Feature>
 	
-		<StandardDirectory Id="ProgramFilesFolder">
+		<StandardDirectory Id="ProgramFiles6432Folder">
 			<Directory Id="INSTALLFOLDER" Name="Glouton" />
 		</StandardDirectory>
 
