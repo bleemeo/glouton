@@ -16,6 +16,30 @@ SKIP_TEST=0
 SKIP_MSI=0
 ENABLE_RACE=0
 
+usage() {
+   cat << EOF
+Usage: $0 [main-option] [skip-options]
+
+Main options includes:
+  <no option>: build all steps for all targets (OS & arch)
+  single-target: build all steps for one target (sepcified by GOOS & GOARM - default to current os/arch)
+  race: same as single-target, but compile with -race
+
+  go: a faster version of single-target, it skip js, test and docker steps
+      allow to quickly get the glouton binary at ./dist/glouton_linux_YOUR-ARCH/glouton
+  docker-fast: like go, but don't skip docker step
+      allow to quickly build a Docker image
+  only-js: skip all steps but build of JS. This one might be required once before go or docker-fast
+
+Skips options could be cummulated (you can specify multiple ones). Options are:
+  skip-js: skip building JS (note: JS must be built at least once after a new checkout)
+  skip-test: skip running Go test
+  skip-build: skip building Go binary
+  skip-docker: skip building Docker image
+  skip-windows-installer: skip building Windows installer
+EOF
+}
+
 while [ $# -gt 0 ]; do
    case "$1" in
       "single-target")
@@ -57,22 +81,14 @@ while [ $# -gt 0 ]; do
          SKIP_JS=1
          SKIP_MSI=1
          ;;
+      "-h"|"--help")
+         usage
+         exit 0
+         ;;
       *)
-         echo "Usage: $0 [single-target|race|skip-js|skip-test|skip-build|skip-docker|skip-windows-installer]"
-         echo "  single-target: only build one target, specified by GOOS & GOARM (default to current os/arch)"
-         echo "  race: imply single-target and compile with -race"
-         echo "  skip-js: skip building JS (note: JS must be built at least once after a new checkout)"
-         echo "  skip-test: skip running Go test"
-         echo "  skip-build: skip building Go binary"
-         echo "  skip-docker: skip building Docker image"
-         echo "  skip-windows-installer: skip building Windows installer"
-         echo ""
-         echo "Some other option exists as alias or compatibility"
-         echo "  go: only compile Go (alias of skip-js, skip-test, skip-docker, single-target)"
-         echo "  no-js: skip building JS (alias of skip-js)"
-         echo "  only-js: just JS (alias of skip-build, skip-docker, skip-windows-installer)"
-         echo "  docker-fast: build Docker image (alias of skip-js, single-target, skip-windows-installer)"
+         usage
          exit 1
+         ;;
    esac
    shift 1
 done
