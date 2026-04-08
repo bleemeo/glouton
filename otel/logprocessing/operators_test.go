@@ -356,6 +356,23 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 			},
 		},
 		{
+			name:      "mariadb",
+			logFormat: "mariadb",
+			inputLogs: []string{
+				`2026-04-07 15:43:50 0 [Note] Starting MariaDB 10.11.15-MariaDB source revision cb0d6dd835023a7162ace471cd047161f205dd58 server_uid w/xn1WGJE9viJGUAdPN7RDfmp0A= as process 4131`,
+			},
+			expectedRecords: []logRecord{
+				{
+					Timestamp: time.Date(2026, 4, 7, 15, 43, 50, 0, time.Local),
+					Body:      `2026-04-07 15:43:50 0 [Note] Starting MariaDB 10.11.15-MariaDB source revision cb0d6dd835023a7162ace471cd047161f205dd58 server_uid w/xn1WGJE9viJGUAdPN7RDfmp0A= as process 4131`,
+					Attributes: map[string]any{
+						"db.system.name": "mariadb",
+					},
+					Severity: 5,
+				},
+			},
+		},
+		{
 			name:      "mysql",
 			logFormat: "mysql",
 			inputLogs: []string{

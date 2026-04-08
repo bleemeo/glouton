@@ -100,6 +100,16 @@ var servicesLogInfo = map[ServiceName]logProcessingInfo{ //nolint: gochecknoglob
 		DefaultFormat: "postgresql",
 		DockerFormat:  "postgresql_docker",
 	},
+	MariaDBService: {
+		FileFormats: []ServiceLogReceiver{
+			{
+				FilePath: "/var/log/mariadb/mariadb.log",
+				Format:   "mariadb",
+			},
+		},
+		DefaultFormat: "mariadb",
+		DockerFormat:  "mariadb_docker",
+	},
 	MySQLService: {
 		FileFormats: []ServiceLogReceiver{
 			{
@@ -239,7 +249,7 @@ func inferLogProcessingConfig(service Service, knownLogFormats map[string][]conf
 	return service
 }
 
-//nolint: err113,gofmt,gofumpt,goimports
+//nolint:err113
 func validateServiceLogConfig(svcCfg config.Service, knownLogFormats map[string][]config.OTELOperator, knownLogFilters map[string]config.OTELFilters) (warnings []error) {
 	if len(svcCfg.LogFiles) > 0 {
 		for i, logFile := range svcCfg.LogFiles {

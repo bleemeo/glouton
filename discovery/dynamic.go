@@ -40,6 +40,7 @@ import (
 )
 
 const (
+	mariadbDefaultUser          = "root"
 	mysqlDefaultUser            = "root"
 	gloutonContainerLabelPrefix = "glouton."
 )
@@ -147,6 +148,7 @@ var (
 		"httpd":         ApacheService,
 		"influxd":       InfluxDBService,
 		"libvirtd":      LibvirtService,
+		"mariadbd":      MariaDBService,
 		"master":        PostfixService,
 		"memcached":     MemcachedService,
 		"mongod":        MongoDBService,
@@ -486,6 +488,17 @@ func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discovery
 
 // fillConfig fills the service config with information found inside the container.
 func (dd *DynamicDiscovery) fillConfig(ctx context.Context, service *Service) {
+	if service.ServiceType == MariaDBService {
+		if service.container != nil {
+			for k, v := range service.container.Environment() {
+				if k == "MARIADB_ROOT_PASSWORD" {
+					service.Config.Username = mariadbDefaultUser
+					service.Config.Password = v
+				}
+			}
+		}
+	}
+
 	if service.ServiceType == MySQLService {
 		if service.container != nil {
 			for k, v := range service.container.Environment() {
