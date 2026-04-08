@@ -8,30 +8,18 @@ USER_UID=$(id -u)
 rm -fr work
 
 USE_SINGLE_TARGET=0
-SKIP_DOCKER=0
-SKIP_JS=0
-SKIP_GO_BUILD=0
-SKIP_GO_TEST=1
-SKIP_TEST=0
-SKIP_MSI=0
 ENABLE_RACE=0
 
 usage() {
    cat << EOF
-Usage: $0 [main-option] [skip-options]
+Usage: $0 [single-target|release] [SKIP OPTIONS...]
 
-Main options includes:
-  <no option>: build all steps for all targets (OS & arch)
-  single-target: build all steps for one target (sepcified by GOOS & GOARM - default to current os/arch)
-  race: same as single-target, but compile with -race
+The target to build is (default to single-target):
+  single-target: build only for specified GOOS & GOARCH - with default to current os/arch
+  release: build for all targets (all OS & architecture supported)
+  race: Compile with Go's race detector enabled for one target (similar to single-target)
 
-  go: a faster version of single-target, it skip js, test and docker steps
-      allow to quickly get the glouton binary at ./dist/glouton_linux_YOUR-ARCH/glouton
-  docker-fast: like go, but don't skip docker step
-      allow to quickly build a Docker image
-  only-js: skip all steps but build of JS. This one might be required once before go or docker-fast
-
-Skips options could be cummulated (you can specify multiple ones). Options are:
+Skip options allow build faster by omitting some steps. They could be cummulated to skip multiple steps:
   skip-js: skip building JS (note: JS must be built at least once after a new checkout)
   skip-test: skip running Go test
   skip-build: skip building Go binary
@@ -40,16 +28,25 @@ Skips options could be cummulated (you can specify multiple ones). Options are:
 EOF
 }
 
+TARGET_TO_BUILD="single-target"
+SKIP_JS=0
+SKIP_GO_TEST=0
+SKIP_GO_BUILD=0
+SKIP_DOCKER=0
+SKIP_MSI=0
+
 while [ $# -gt 0 ]; do
    case "$1" in
       "single-target")
-         USE_SINGLE_TARGET=1
+         TARGET_TO_BUILD=single-target
          ;;
       "race")
-         USE_SINGLE_TARGET=1
-         ENABLE_RACE=1
+         TARGET_TO_BUILD=race
          ;;
-      "no-js"|"skip-js")
+      "release")
+         TARGET_TO_BUILD=release
+         ;;
+      "skip-js")
          SKIP_JS=1
          ;;
       "skip-test")
@@ -62,23 +59,6 @@ while [ $# -gt 0 ]; do
          SKIP_DOCKER=1
          ;;
       "skip-windows-installer")
-         SKIP_MSI=1
-         ;;
-      "only-js")
-         SKIP_GO_BUILD=1
-         SKIP_DOCKER=1
-         SKIP_MSI=1
-         ;;
-      "go")
-         USE_SINGLE_TARGET=1
-         SKIP_JS=1
-         SKIP_GO_TEST=1
-         SKIP_DOCKER=1
-         ;;
-      "docker-fast")
-         USE_SINGLE_TARGET=1
-         SKIP_GO_TEST=1
-         SKIP_JS=1
          SKIP_MSI=1
          ;;
       "-h"|"--help")
@@ -113,7 +93,7 @@ export GLOUTON_VERSION
 
 COMMIT=$(git rev-parse --short HEAD || echo "unknown")
 
-if [ $USE_SINGLE_TARGET = "1" ]; then
+if [ "$TARGET_TO_BUILD" != "release" ]; then
    if [ ${GOOS:-linux} != "linux" ]; then
       echo "(i) skipping Docker image build since Linux binary isn't built"
       SKIP_DOCKER=1
@@ -148,8 +128,7 @@ if [ "${SKIP_GO_BUILD}" != "1" -o "${SKIP_GO_TEST}" != "1" ]; then
       -e GORELEASER_CURRENT_TAG=0.1.1 \
       -e SKIP_GO_BUILD=$SKIP_GO_BUILD \
       -e SKIP_GO_TEST=$SKIP_GO_TEST \
-      -e USE_SINGLE_TARGET=$USE_SINGLE_TARGET \
-      -e ENABLE_RACE=$ENABLE_RACE \
+      -e TARGET_TO_BUILD=$TARGET_TO_BUILD \
       -e GOOS -e GOARCH \
       goreleaser/goreleaser:${GORELEASER_VERSION} \
       tini -g -- sh -ec "

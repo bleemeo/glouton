@@ -15,28 +15,28 @@ echo "--- Building Go binary..."
 if [ "${SKIP_GO_BUILD}" != "1" ]; then
 
    BUILD_ID=glouton
-   if [ $ENABLE_RACE = "1" ]; then
+   if [ "$TARGET_TO_BUILD" = "race" ]; then
       BUILD_ID=glouton-race
    fi
    
    EXTRA_OPTIONS=""
-   if [ $USE_SINGLE_TARGET = "1" ]; then
+   if [ "$TARGET_TO_BUILD" != "release" ]; then
       EXTRA_OPTIONS=--single-target
    fi
 
    goreleaser build --clean --snapshot --parallelism 2 --timeout 45m $EXTRA_OPTIONS --id $BUILD_ID
 
-   if [ $ENABLE_RACE = "1" ]; then
-      # Because command like ./build.sh docker-fast assume dist/glouton_linux*/glouton not dist/glouton-race_linux*/glouton,
-      # Rename folders to drop the -race
+   if [ "$TARGET_TO_BUILD" = "race" ]; then
+      # Because Docker image building assume dist/glouton_linux*/glouton not dist/glouton-race_linux*/glouton,
+      # rename folders to drop the -race
       for dirname in dist/glouton-race*; do
          mv "$dirname" "dist/glouton${dirname#dist/glouton-race}"
       done
    fi
 fi
 
-if [ $USE_SINGLE_TARGET = "1" -a ${GOOS:-linux} = "linux" ]; then
-   # Just ensure binary for other arch exists, because ./build.sh docker-fast assume glouton binary for all arch exists.
+if [ "$TARGET_TO_BUILD" != "release" -a ${GOOS:-linux} = "linux" ]; then
+   # Ensure binary for other arch exists, because Docker image building assume glouton binaries for all arch exists.
    createEmptyGloutonBinary() {
       local dirname
       local target="$1"
