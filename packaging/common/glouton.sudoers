@@ -1,4 +1,4 @@
-Defaults:glouton !requiretty, !logfile, !syslog, !pam_session
+Defaults:glouton !logfile, !syslog, !pam_session
 
 # Allow Glouton to read the MySQL user credentials needed to access the metrics.
 glouton     ALL=(root) NOPASSWD: /bin/cat /etc/mysql/debian.cnf
