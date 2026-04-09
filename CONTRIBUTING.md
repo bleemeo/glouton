@@ -8,27 +8,20 @@ docker volume create glouton-buildcache
 
 ## Test and Develop
 
-To build binary you may use the `build.sh` script. For example to just
-compile a Go binary (skip building JS, Docker image and Windows installer):
+To build binary you may use the `build.sh` script. For example to only build Glouton
+for your current architecture:
 
 ```sh
-./build.sh go
+./build.sh single-target
 ```
 
-Then run Glouton:
+This will build a (Linux) Glouton that you can run
 
 ```sh
-./glouton
+./dist/glouton_linux_YOUR-ARCH/glouton
 ```
 
-If you are using Docker, you can quickly build a Docker image that use the Glouton you just build:
-
-```
-# Remember to run ./build.sh go before
-./build.sh docker-fast
-```
-
-This result in an image tag "glouton:latest". You might need to re-tag is to use it with your existing
+This also build a Docker image (tagged glouton:latest). You might need to re-tag is to use it with your existing
 docker-compose:
 
 ```
@@ -37,27 +30,12 @@ docker tag glouton:latest bleemeo/bleemeo-agent:proposed
 
 ### Developing on MacOS
 
-If you can't run `./glouton` because it is a Linux binary, you can simply run `go run .`.
+If you can't run `./dist/glouton_linux_YOUR-ARCH/glouton` because it is a Linux binary, you can simply run `go run .`.
 
 When loading the UI, if Glouton is not able to discover your Docker containers, try changing the Docker socket with :
 
 ```sh
 export GLOUTON_CONTAINER_RUNTIME_DOCKER_ADDRESSES="unix://${HOME}/.docker/run/docker.sock"
-```
-
-### One-time rebuild UI
-
-If you need to build the UI once, follow those instruction. If you develop on the local UI,
-you probably want to follow "Developing the local UI" a bit later which will allow to iterate faster.
-
-To run a single build of UI do:
-
-```
-./build.sh only-js
-./build.sh go
-
-# If using Docker
-./build.sh docker-fast
 ```
 
 ### Linters
@@ -67,17 +45,6 @@ Glouton uses golangci-lint as linter. You may run it with:
 ```sh
 ./lint.sh
 ```
-
-### Full build
-
-If you updated JS files, rebuild them by running build.sh:
-
-```sh
-./build.sh
-```
-
-**Note:** on Windows, if you are using the Go compiler without the `build.sh` script and
-get `"gcc": executable file not found"` error, try setting the environment variable `CGO_ENABLED` to 0.
 
 #### Developing the local UI
 
