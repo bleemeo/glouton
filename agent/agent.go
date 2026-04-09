@@ -119,7 +119,8 @@ var (
 	// We want to reply with capitalized U to match output from a Zabbix agent.
 	errUnsupportedKey     = errors.New("Unsupported item key") //nolint:staticcheck
 	errFeatureUnavailable = errors.New("some features are unavailable")
-	errSudoRS             = errors.New("logs processing don't work with sudo-rs, please install sudo-ws")
+	errSudoRSLogs         = errors.New("logs processing don't work with sudo-rs, please install sudo-ws")
+	errSudoRSssacli       = errors.New("HP ssacli don't work with sudo-rs, please install sudo-ws and restart Glouton")
 )
 
 type agent struct {
@@ -178,6 +179,7 @@ type agent struct {
 	taskIDs          map[string]int
 	metricResolution time.Duration
 	configWarnings   prometheus.MultiError
+	ssacliGatherer   *ssacli.Gatherer
 }
 
 func zabbixResponse(key string, args []string) (string, error) {
@@ -1416,7 +1418,17 @@ func (a *agent) registerInputs(ctx context.Context) {
 	}
 
 	if a.config.SSACLI.Enable {
-		gatherer := ssacli.New(a.config.SSACLI, a.commandRunner)
+		a.l.Lock()
+		a.ssacliGatherer = ssacli.New(a.config.SSACLI, a.commandRunner, func() {
+			// use dedicated gorouting, because the callback shouldn't block for long
+			// and checkSudoRSForSSACLI will use method of ssacliGatherer.
+			go func() {
+				defer crashreport.ProcessPanic()
+
+				a.checkSudoRSForSSACLI(ctx)
+			}()
+		})
+		a.l.Unlock()
 
 		_, err := a.gathererRegistry.RegisterGatherer(
 			registry.RegistrationOption{
@@ -1424,7 +1436,7 @@ func (a *agent) registerInputs(ctx context.Context) {
 				JitterSeed:  0,
 				MinInterval: time.Minute,
 			},
-			gatherer,
+			a.ssacliGatherer,
 		)
 		if err != nil {
 			logger.V(1).Printf("unable to add ssacli input: %v", err)
@@ -1512,6 +1524,7 @@ func (a *agent) handleSighup(ctx context.Context, sighupChan chan os.Signal) {
 func (a *agent) processSighup(ctx context.Context) {
 	// SIGHUP could be the result of installation of sudo-ws
 	a.checkSudoRSForLogs(ctx)
+	a.checkSudoRSForSSACLI(ctx)
 }
 
 // Wait for the pending system updates to be refreshed and update the system metrics.
@@ -2628,7 +2641,7 @@ func (a *agent) checkSudoRSForLogs(ctx context.Context) {
 	logsDiscovery := a.config.Log.OpenTelemetry.AutoDiscovery
 	if a.config.Log.OpenTelemetry.Enable && (logsDiscovery.ContainerAndServiceEnable || logsDiscovery.AuditdEnable || logsDiscovery.SyslogEnable) {
 		if a.commandRunner.UseSudoRS(ctx) {
-			a.addWarnings(errSudoRS)
+			a.addWarnings(errSudoRSLogs)
 
 			return
 		}
@@ -2636,7 +2649,28 @@ func (a *agent) checkSudoRSForLogs(ctx context.Context) {
 
 	// If we reach this point, is means sudo-rs is not used because either sudo-ws is present or logs isn't enabled. Ensure
 	// the warning is removed.
-	a.removeWarning(errSudoRS)
+	a.removeWarning(errSudoRSLogs)
+}
+
+func (a *agent) checkSudoRSForSSACLI(ctx context.Context) {
+	tryListDrive := false
+
+	a.l.Lock()
+
+	if a.ssacliGatherer != nil {
+		tryListDrive = a.ssacliGatherer.WantListDrives()
+	}
+
+	a.l.Unlock()
+
+	// HP ssacli is enabled and want to list drives (which don't work with sudo-rs)
+	if tryListDrive && a.commandRunner.UseSudoRS(ctx) {
+		a.addWarnings(errSudoRSssacli)
+
+		return
+	}
+	// Unlike checkSudoRSForLogs, we don't remove the warning, because Glouton must be restarted
+	// to take change in account.
 }
 
 // Add a warning for the configuration.

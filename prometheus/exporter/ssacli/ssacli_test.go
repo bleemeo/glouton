@@ -625,7 +625,7 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				}
 			)
 
-			g := newGatherer(tt.config, cmdListController, cmdListDrive)
+			g := newGatherer(tt.config, cmdListController, cmdListDrive, func() {})
 
 			mfs, err := g.GatherWithState(t.Context(), registry.GatherState{T0: now})
 			if err != nil {

@@ -147,6 +147,7 @@ func (r *Runner) UseSudoRS(ctx context.Context) bool {
 	}
 
 	cmd := exec.CommandContext(ctx, name, "--version")
+
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		// Unsure... maybe sudo isn't installed ? Fallback on saying sudo-rs isn't used.
