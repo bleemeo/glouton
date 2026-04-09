@@ -119,6 +119,8 @@ var (
 	// We want to reply with capitalized U to match output from a Zabbix agent.
 	errUnsupportedKey     = errors.New("Unsupported item key") //nolint:staticcheck
 	errFeatureUnavailable = errors.New("some features are unavailable")
+	errSudoRSLogs         = errors.New("logs processing don't work with sudo-rs, please install sudo-ws")
+	errSudoRSssacli       = errors.New("HP ssacli don't work with sudo-rs, please install sudo-ws and restart Glouton")
 )
 
 type agent struct {
@@ -168,6 +170,7 @@ type agent struct {
 	triggerDiscImmediate      bool
 	triggerFact               bool
 	triggerSystemUpdateMetric bool
+	triggerSighup             bool
 
 	dockerInputPresent bool
 	dockerInputID      int
@@ -176,6 +179,7 @@ type agent struct {
 	taskIDs          map[string]int
 	metricResolution time.Duration
 	configWarnings   prometheus.MultiError
+	ssacliGatherer   *ssacli.Gatherer
 }
 
 func zabbixResponse(key string, args []string) (string, error) {
@@ -627,7 +631,7 @@ func (a *agent) updateThresholds(thresholds map[string]threshold.Threshold, firs
 			if name == "time_drift" && a.bleemeoConnector != nil {
 				a.bleemeoConnector.UpdateInfo()
 			} else {
-				a.FireTrigger(false, false, true, false)
+				a.FireTrigger(false, false, true, false, false)
 			}
 		}
 	}
@@ -1074,6 +1078,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.l.Unlock()
 
 		if a.config.Log.OpenTelemetry.Enable {
+			a.checkSudoRSForLogs(ctx)
+
 			a.logProcessManager, err = logprocessing.New(
 				ctx,
 				a.config.Log.OpenTelemetry,
@@ -1110,7 +1116,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		}
 	}
 
-	a.FireTrigger(true, true, false, false)
+	a.FireTrigger(true, true, false, false, false)
 
 	_, err = a.gathererRegistry.RegisterPushPointsCallback( //nolint:staticcheck
 		registry.RegistrationOption{
@@ -1412,7 +1418,17 @@ func (a *agent) registerInputs(ctx context.Context) {
 	}
 
 	if a.config.SSACLI.Enable {
-		gatherer := ssacli.New(a.config.SSACLI, a.commandRunner)
+		a.l.Lock()
+		a.ssacliGatherer = ssacli.New(a.config.SSACLI, a.commandRunner, func() {
+			// use dedicated gorouting, because the callback shouldn't block for long
+			// and checkSudoRSForSSACLI will use method of ssacliGatherer.
+			go func() {
+				defer crashreport.ProcessPanic()
+
+				a.checkSudoRSForSSACLI(ctx)
+			}()
+		})
+		a.l.Unlock()
 
 		_, err := a.gathererRegistry.RegisterGatherer(
 			registry.RegistrationOption{
@@ -1420,7 +1436,7 @@ func (a *agent) registerInputs(ctx context.Context) {
 				JitterSeed:  0,
 				MinInterval: time.Minute,
 			},
-			gatherer,
+			a.ssacliGatherer,
 		)
 		if err != nil {
 			logger.V(1).Printf("unable to add ssacli input: %v", err)
@@ -1496,11 +1512,19 @@ func (a *agent) handleSighup(ctx context.Context, sighupChan chan os.Signal) {
 
 			l.Unlock()
 
-			a.FireTrigger(true, true, false, true)
+			a.FireTrigger(true, true, false, true, true)
 		case <-ctx.Done():
 			return
 		}
 	}
+}
+
+// processSighup is called after a SIGHUP is received. It not directly called from handleSighup
+// but through triggerHandler to apply a debounce.
+func (a *agent) processSighup(ctx context.Context) {
+	// SIGHUP could be the result of installation of sudo-ws
+	a.checkSudoRSForLogs(ctx)
+	a.checkSudoRSForSSACLI(ctx)
 }
 
 // Wait for the pending system updates to be refreshed and update the system metrics.
@@ -1524,7 +1548,7 @@ func (a *agent) waitAndRefreshPendingUpdates(ctx context.Context) {
 		}
 	}
 
-	a.FireTrigger(false, false, true, false)
+	a.FireTrigger(false, false, true, false, false)
 }
 
 func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error) {
@@ -1763,7 +1787,7 @@ func (a *agent) hourlyDiscovery(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case <-time.After(delay.JitterDelay(time.Hour, 0.1)):
-			a.FireTrigger(true, false, true, false)
+			a.FireTrigger(true, false, true, false, false)
 		}
 	}
 }
@@ -1774,7 +1798,7 @@ func (a *agent) dailyFact(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case <-time.After(delay.JitterDelay(24*time.Hour, 0.1)):
-			a.FireTrigger(false, true, false, false)
+			a.FireTrigger(false, true, false, false, false)
 		}
 	}
 }
@@ -1827,7 +1851,7 @@ func (a *agent) dockerWatcher(ctx context.Context) error {
 
 		case <-pendingTimer.C:
 			if pendingDiscovery {
-				a.FireTrigger(pendingDiscovery, false, false, pendingSecondDiscovery)
+				a.FireTrigger(pendingDiscovery, false, false, pendingSecondDiscovery, false)
 				pendingDiscovery = false
 				pendingSecondDiscovery = false
 			}
@@ -1926,14 +1950,14 @@ func (a *agent) netstatWatcher(ctx context.Context) error {
 
 		newStat, _ := os.Stat(a.config.Agent.NetstatFile)
 		if newStat != nil && (stat == nil || !newStat.ModTime().Equal(stat.ModTime())) {
-			a.FireTrigger(true, false, false, false)
+			a.FireTrigger(true, false, false, false, false)
 		}
 
 		stat = newStat
 	}
 }
 
-func (a *agent) FireTrigger(discovery bool, sendFacts bool, systemUpdateMetric bool, secondDiscovery bool) {
+func (a *agent) FireTrigger(discovery bool, sendFacts bool, systemUpdateMetric bool, secondDiscovery bool, sighup bool) {
 	a.triggerLock.Lock()
 	defer a.triggerLock.Unlock()
 
@@ -1949,6 +1973,10 @@ func (a *agent) FireTrigger(discovery bool, sendFacts bool, systemUpdateMetric b
 		a.triggerSystemUpdateMetric = true
 	}
 
+	if sighup {
+		a.triggerSighup = true
+	}
+
 	// Some discovery requests ask for a second discovery in 1 minutes.
 	// The second discovery allows to discover services that are slow to start
 	if secondDiscovery {
@@ -1959,16 +1987,18 @@ func (a *agent) FireTrigger(discovery bool, sendFacts bool, systemUpdateMetric b
 	a.triggerHandler.Trigger()
 }
 
-func (a *agent) cleanTrigger() (discovery bool, sendFacts bool, systemUpdateMetric bool) {
+func (a *agent) cleanTrigger() (discovery bool, sendFacts bool, systemUpdateMetric bool, sighup bool) {
 	a.triggerLock.Lock()
 	defer a.triggerLock.Unlock()
 
 	discovery = a.triggerDiscImmediate
 	sendFacts = a.triggerFact
 	systemUpdateMetric = a.triggerSystemUpdateMetric
+	sighup = a.triggerSighup
 	a.triggerSystemUpdateMetric = false
 	a.triggerDiscImmediate = false
 	a.triggerFact = false
+	a.triggerSighup = false
 
 	return
 }
@@ -2032,7 +2062,7 @@ func (a *agent) updatedDiscovery(ctx context.Context, services []discovery.Servi
 }
 
 func (a *agent) handleTrigger(ctx context.Context) {
-	runDiscovery, runFact, runSystemUpdateMetric := a.cleanTrigger()
+	runDiscovery, runFact, runSystemUpdateMetric, runSighup := a.cleanTrigger()
 	if runDiscovery {
 		a.discovery.TriggerUpdate()
 
@@ -2062,6 +2092,10 @@ func (a *agent) handleTrigger(ctx context.Context) {
 
 	if runSystemUpdateMetric {
 		systemUpdateMetric(ctx, a)
+	}
+
+	if runSighup {
+		a.processSighup(ctx)
 	}
 }
 
@@ -2601,6 +2635,44 @@ func (a *agent) diagnosticVSphere(ctx context.Context, archive types.ArchiveWrit
 	return a.vSphereManager.DiagnosticVSphere(ctx, archive, associationFn)
 }
 
+func (a *agent) checkSudoRSForLogs(ctx context.Context) {
+	// When logs discovery is enabled, they will required sudo and don't work with sudo-rs.
+	// Only journalctl works without sudo.
+	logsDiscovery := a.config.Log.OpenTelemetry.AutoDiscovery
+	if a.config.Log.OpenTelemetry.Enable && (logsDiscovery.ContainerAndServiceEnable || logsDiscovery.AuditdEnable || logsDiscovery.SyslogEnable) {
+		if a.commandRunner.UseSudoRS(ctx) {
+			a.addWarnings(errSudoRSLogs)
+
+			return
+		}
+	}
+
+	// If we reach this point, is means sudo-rs is not used because either sudo-ws is present or logs isn't enabled. Ensure
+	// the warning is removed.
+	a.removeWarning(errSudoRSLogs)
+}
+
+func (a *agent) checkSudoRSForSSACLI(ctx context.Context) {
+	tryListDrive := false
+
+	a.l.Lock()
+
+	if a.ssacliGatherer != nil {
+		tryListDrive = a.ssacliGatherer.WantListDrives()
+	}
+
+	a.l.Unlock()
+
+	// HP ssacli is enabled and want to list drives (which don't work with sudo-rs)
+	if tryListDrive && a.commandRunner.UseSudoRS(ctx) {
+		a.addWarnings(errSudoRSssacli)
+
+		return
+	}
+	// Unlike checkSudoRSForLogs, we don't remove the warning, because Glouton must be restarted
+	// to take change in account.
+}
+
 // Add a warning for the configuration.
 func (a *agent) addWarnings(warnings ...error) {
 	var warningsStr strings.Builder
@@ -2615,6 +2687,26 @@ func (a *agent) addWarnings(warnings ...error) {
 	defer a.l.Unlock()
 
 	a.configWarnings = append(a.configWarnings, warnings...)
+}
+
+// removeWarning remove the warning that is equal, so the error should probably be
+// an "errors.New". The equality isn't errors.Is, errors.As. It's plain "==".
+func (a *agent) removeWarning(warning error) {
+	a.l.Lock()
+	defer a.l.Unlock()
+
+	i := 0
+
+	for _, row := range a.configWarnings {
+		if row == warning { //nolint:err113
+			continue
+		}
+
+		a.configWarnings[i] = row
+		i++
+	}
+
+	a.configWarnings = a.configWarnings[:i]
 }
 
 // Get configuration warnings.

@@ -75,6 +75,7 @@ type Gatherer struct {
 	usedMethod              ssaMethod
 	runListController       runFunction
 	runListDrive            runFunctionArg
+	initDoneCallback        func()
 }
 
 type diskInfo struct {
@@ -93,7 +94,8 @@ type ssacliDiskList []diskInfo
 // New returns a new Smart Storage Administrator (ssa) gatherer.
 // The Gatherer will probe for ssacli availability on first call and if unavailable will
 // do nothing on subsequent calls. Only ssacli is supported.
-func New(cfg config.SSACLI, runner *gloutonexec.Runner) *Gatherer {
+// `initDoneCallback` is invoked after first call.
+func New(cfg config.SSACLI, runner *gloutonexec.Runner, initDoneCallback func()) *Gatherer {
 	return newGatherer(
 		cfg,
 		func(ctx context.Context) ([]byte, error) {
@@ -102,6 +104,7 @@ func New(cfg config.SSACLI, runner *gloutonexec.Runner) *Gatherer {
 		func(ctx context.Context, slot string) ([]byte, error) {
 			return runCmdWithRunner(ctx, runner, cfg, []string{"ssacli", "controller", "slot=" + slot, "physicaldrive", "all", "show"})
 		},
+		initDoneCallback,
 	)
 }
 
@@ -130,6 +133,8 @@ func (g *Gatherer) GatherWithState(ctx context.Context, state registry.GatherSta
 
 		points, err := g.gatherWithMethod(ctx, state.T0, methodSSACli, true)
 
+		g.initDoneCallback()
+
 		switch {
 		case err != nil:
 			logger.V(2).Printf("ssacli call failed: %v", err)
@@ -156,11 +161,22 @@ func (g *Gatherer) GatherWithState(ctx context.Context, state registry.GatherSta
 	return model.MetricPointsToFamilies(points), err
 }
 
+// WantListDrives tells whether the gatherer tried to list drives,
+// command which require regexp in sudoers to ensure glouton could only do read-only ssacli calls.
+func (g *Gatherer) WantListDrives() bool {
+	g.l.Lock()
+	defer g.l.Unlock()
+
+	return len(g.controllerSlots) > 0
+}
+
 func (g *Gatherer) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
 	file, err := archive.Create("ssacli.json")
 	if err != nil {
 		return err
 	}
+
+	wantListDrives := g.WantListDrives()
 
 	g.l.Lock()
 	defer g.l.Unlock()
@@ -169,10 +185,12 @@ func (g *Gatherer) DiagnosticArchive(_ context.Context, archive types.ArchiveWri
 		MethodUsed              string
 		InitOutput              string
 		LastOutputPerController map[int]string
+		WantListDrives          bool
 	}{
 		MethodUsed:              methodName(g.usedMethod),
 		LastOutputPerController: make(map[int]string, len(g.lastOutputPerController)),
 		InitOutput:              string(g.listControllerOutput),
+		WantListDrives:          wantListDrives,
 	}
 
 	for k, v := range g.lastOutputPerController {
@@ -272,7 +290,7 @@ func methodName(method ssaMethod) string {
 	}
 }
 
-func newGatherer(cfg config.SSACLI, runListController runFunction, runListDrive runFunctionArg) *Gatherer {
+func newGatherer(cfg config.SSACLI, runListController runFunction, runListDrive runFunctionArg, initDoneCallback func()) *Gatherer {
 	// we never use sudo if we already are root
 	if os.Getuid() == 0 {
 		cfg.UseSudo = false
@@ -287,6 +305,7 @@ func newGatherer(cfg config.SSACLI, runListController runFunction, runListDrive 
 		runListController: runListController,
 		runListDrive:      runListDrive,
 		usedMethod:        methodNotInitialized,
+		initDoneCallback:  initDoneCallback,
 	}
 }
 

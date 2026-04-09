@@ -1,4 +1,4 @@
-Defaults:glouton !requiretty, !logfile, !syslog, !pam_session
+Defaults:glouton !logfile, !syslog, !pam_session
 
 # Allow Glouton to read the MySQL user credentials needed to access the metrics.
 glouton     ALL=(root) NOPASSWD: /bin/cat /etc/mysql/debian.cnf
@@ -22,7 +22,8 @@ glouton     ALL=(ALL) NOPASSWD: /usr/sbin/ipmi-sensors -W discretereading --sdr-
 # Note: it's important to use the regexp and not shell-glob for the variable controller slot.
 # It's important to be sure ";" isn't allowed in ssacli arguments as ssacli would interpret it as multiple commands
 # (so mostly if ";" is allowed, it could allow command injection and this sudo line would allow *write* access to ssacli)
-glouton     ALL=(ALL) NOPASSWD: /usr/local/pierref/wrappers/ssacli controller all show, /usr/local/pierref/wrappers/ssacli ^controller slot=[0-9]+ physicaldrive all show$
+glouton     ALL=(ALL) NOPASSWD: /usr/local/pierref/wrappers/ssacli controller all show
+glouton     ALL=(ALL) NOPASSWD: /usr/local/pierref/wrappers/ssacli ^controller slot=[0-9]+ physicaldrive all show$
 
 # Allow Glouton to get details about multi-disks arrays.
 glouton     ALL=(ALL) NOPASSWD: /sbin/mdadm --detail *, /usr/sbin/mdadm --detail *

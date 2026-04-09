@@ -17,6 +17,7 @@
 package gloutonexec
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -35,6 +36,7 @@ import (
 // Runner allows to run command and do LookupPath.
 // It's mostly a wrapper around Golang os/exec that known:
 // * sudo: it could add sudo for command that needs root privilege
+// * sudo.ws: if available, prefer sudo.wg rather than sudo-rs due to missing features.
 // * hostroot path: when running in a container and you want to run a command on the host.
 type Runner struct {
 	hostRootPath     string
@@ -128,6 +130,43 @@ func (r *Runner) ResolvePath(file string, option Option) (string, error) {
 	return filepath.Join(r.hostRootPath, file), nil
 }
 
+// UseSudoRS tells whether command that need root privilege will be
+// executed using sudo-rs. This runner try to prefer sudo-ws when available.
+// This function also return false when no sudo is needed at all, because
+// Glouton is already root for example.
+func (r *Runner) UseSudoRS(ctx context.Context) bool {
+	if r.gloutonRunAsRoot {
+		return false
+	}
+
+	name := r.getSudoCommand()
+
+	if name != "sudo" {
+		// A alternative sudo was found, it's not sudo-rs
+		return false
+	}
+
+	cmd := exec.CommandContext(ctx, name, "--version")
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		// Unsure... maybe sudo isn't installed ? Fallback on saying sudo-rs isn't used.
+		return false
+	}
+
+	return bytes.Contains(out, []byte("sudo-rs"))
+}
+
+// getSudoCommand returns the command to do a sudo. Default to "sudo" but
+// use "sudo.ws" if present.
+func (r *Runner) getSudoCommand() string {
+	if _, err := os.Stat("/usr/bin/sudo.ws"); err == nil {
+		return "sudo.ws"
+	}
+
+	return "sudo"
+}
+
 func (r *Runner) makeCmd(ctx context.Context, option Option, name string, arg ...string) (*exec.Cmd, func(error) error, error) {
 	if r.hostRootPath != "/" && option.SkipInContainer {
 		return nil, nil, ErrExecutionSkipped
@@ -145,7 +184,7 @@ func (r *Runner) makeCmd(ctx context.Context, option Option, name string, arg ..
 
 	if option.RunAsRoot && !r.gloutonRunAsRoot {
 		arg = append([]string{"-n", name}, arg...)
-		name = "sudo"
+		name = r.getSudoCommand()
 	}
 
 	fullCommand := name + " " + strings.Join(arg, " ")
