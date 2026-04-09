@@ -314,6 +314,8 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		if service.Config.StatsURL != "" && service.Config.Password != "" {
 			input, gathererOptions, err = jenkins.New(service.Config)
 		}
+	case MariaDBService:
+		input, err = createMariaDBInput(service)
 	case MemcachedService:
 		if ip, port := service.AddressPort(); ip != "" {
 			input, err = memcached.New(fmt.Sprintf("%s:%d", ip, port))
@@ -438,10 +440,10 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 }
 
 func createMySQLInput(service Service) (telegraf.Input, error) {
-	if unixSocket := getMySQLSocket(service); unixSocket != "" && service.Config.Password != "" {
+	if unixSocket := getMetricsSocket(service); unixSocket != "" && service.Config.Password != "" {
 		username := service.Config.Username
 		if username == "" {
-			username = "root"
+			username = mysqlDefaultUser
 		}
 
 		return mysql.New(fmt.Sprintf("%s:%s@unix(%s)/", username, service.Config.Password, unixSocket))
@@ -450,10 +452,32 @@ func createMySQLInput(service Service) (telegraf.Input, error) {
 	if ip, port := service.AddressPort(); ip != "" && service.Config.Password != "" {
 		username := service.Config.Username
 		if username == "" {
-			username = "root"
+			username = mysqlDefaultUser
 		}
 
 		return mysql.New(fmt.Sprintf("%s:%s@tcp(%s:%d)/", username, service.Config.Password, ip, port))
+	}
+
+	return nil, nil //nolint: nilnil
+}
+
+func createMariaDBInput(service Service) (telegraf.Input, error) {
+	if unixSocket := getMetricsSocket(service); unixSocket != "" && service.Config.Password != "" {
+		username := service.Config.Username
+		if username == "" {
+			username = mariadbDefaultUser
+		}
+
+		return mysql.NewMariaDB(fmt.Sprintf("%s:%s@unix(%s)/", username, service.Config.Password, unixSocket))
+	}
+
+	if ip, port := service.AddressPort(); ip != "" && service.Config.Password != "" {
+		username := service.Config.Username
+		if username == "" {
+			username = mariadbDefaultUser
+		}
+
+		return mysql.NewMariaDB(fmt.Sprintf("%s:%s@tcp(%s:%d)/", username, service.Config.Password, ip, port))
 	}
 
 	return nil, nil //nolint: nilnil
@@ -523,7 +547,7 @@ func urlForPHPFPM(service Service) string {
 	return ""
 }
 
-func getMySQLSocket(service Service) string {
+func getMetricsSocket(service Service) string {
 	socket := service.Config.MetricsUnixSocket
 
 	if socket == "" {

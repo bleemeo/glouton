@@ -350,6 +350,31 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		removeAttr("severity"),
 	}
 
+	mariaDBParser := []OTELOperator{
+		{
+			"type":  "add",
+			"field": "attributes['db.system.name']",
+			"value": "mariadb",
+		},
+		{
+			"id":    "mariadb_parser",
+			"type":  "regex_parser",
+			"regex": `^(?<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) (?<thread_id>\d+) \[(?<severity>\w+)\].+`,
+			"severity": map[string]any{
+				"parse_from": "attributes.severity",
+				// Log level reference can perhaps be found somewhere ...
+				// Mapping is OTEL severity -> MySQL priority
+				"mapping": map[string]any{
+					"error": "Error",
+					"warn":  "Warning",
+					"debug": "Note",
+				},
+			},
+		},
+		removeAttr("thread_id"),
+		removeAttr("severity"),
+	}
+
 	mysqlParser := []OTELOperator{
 		{
 			"type":  "add",
@@ -857,6 +882,20 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		),
 		"postgresql_docker": flattenOps(
 			postgresqlParser, // we'll rely on the timestamp provided by the runtime
+			removeAttr("time"),
+		),
+		"mariadb": flattenOps(
+			mariaDBParser,
+			OTELOperator{
+				"type":        "time_parser",
+				"parse_from":  "attributes.time",
+				"layout":      "%Y-%m-%d %H:%M:%S",
+				"layout_type": "strptime",
+			},
+			removeAttr("time"),
+		),
+		"mariadb_docker": flattenOps(
+			mariaDBParser, // we'll rely on the timestamp provided by the runtime
 			removeAttr("time"),
 		),
 		"mysql": flattenOps(

@@ -78,6 +78,7 @@ const (
 	JIRAService          ServiceName = "jira"
 	KafkaService         ServiceName = "kafka"
 	LibvirtService       ServiceName = "libvirt"
+	MariaDBService       ServiceName = "mariadb"
 	MemcachedService     ServiceName = "memcached"
 	MongoDBService       ServiceName = "mongodb"
 	MosquittoService     ServiceName = "mosquitto" //nolint:misspell
@@ -346,6 +347,10 @@ var (
 			ServicePort:     9092,
 			ServiceProtocol: "tcp",
 			IgnoreHighPort:  true,
+		},
+		MariaDBService: {
+			ServicePort:     3306,
+			ServiceProtocol: "tcp",
 		},
 		MemcachedService: {
 			ServicePort:     11211,

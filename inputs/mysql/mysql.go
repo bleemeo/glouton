@@ -30,6 +30,14 @@ import (
 
 // New initialise mysql.Input.
 func New(server string) (telegraf.Input, error) {
+	return newInner(server, false)
+}
+
+func NewMariaDB(server string) (telegraf.Input, error) {
+	return newInner(server, true)
+}
+
+func newInner(server string, isMariaDB bool) (telegraf.Input, error) {
 	input, ok := telegraf_inputs.Inputs["mysql"]
 	if !ok {
 		return nil, inputs.ErrDisabledInput
@@ -38,6 +46,10 @@ func New(server string) (telegraf.Input, error) {
 	mysqlInput, ok := input().(*mysql.Mysql)
 	if !ok {
 		return nil, inputs.ErrUnexpectedType
+	}
+
+	if isMariaDB {
+		mysqlInput.MariadbDialect = true
 	}
 
 	secretServer := telegraf_config.NewSecret([]byte(server))
@@ -54,6 +66,10 @@ func New(server string) (telegraf.Input, error) {
 			TransformMetrics:           transformMetrics,
 		},
 		Name: "mysql",
+	}
+
+	if isMariaDB {
+		i.Name = "mariadb"
 	}
 
 	return internal.InputWithSecrets{Input: i, Count: 1}, nil

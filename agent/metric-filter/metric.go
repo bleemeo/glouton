@@ -324,8 +324,30 @@ var (
 		"hosts_running_count",
 		"hosts_stopped_count",
 	}
+)
 
-	defaultServiceMetrics = map[discovery.ServiceName][]string{
+const (
+	filterLogDuration = 50 * time.Millisecond
+)
+
+// Filter is a thread-safe holder of an allow / deny metrics list.
+type Filter struct {
+	includeDefaultMetrics bool
+
+	// Static matchers generated from the config file.
+	// They won't change at runtime, and don't need to be rebuilt.
+	staticAllowList []matcher.Matchers
+	staticDenyList  []matcher.Matchers
+
+	l             sync.Mutex
+	rulerMatchers []matcher.Matchers
+	// Lists used while filtering.
+	allowList map[labels.Matcher][]matcher.Matchers
+	denyList  map[labels.Matcher][]matcher.Matchers
+}
+
+func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
+	defaultServiceMetrics := map[discovery.ServiceName][]string{
 		discovery.ApacheService: {
 			"apache_busy_workers",
 			"apache_busy_workers_perc",
@@ -766,26 +788,10 @@ var (
 			"zookeeper_jvm_non_heap_used",
 		},
 	}
-)
 
-const (
-	filterLogDuration = 50 * time.Millisecond
-)
+	defaultServiceMetrics[discovery.MariaDBService] = defaultServiceMetrics[discovery.MySQLService]
 
-// Filter is a thread-safe holder of an allow / deny metrics list.
-type Filter struct {
-	includeDefaultMetrics bool
-
-	// Static matchers generated from the config file.
-	// They won't change at runtime, and don't need to be rebuilt.
-	staticAllowList []matcher.Matchers
-	staticDenyList  []matcher.Matchers
-
-	l             sync.Mutex
-	rulerMatchers []matcher.Matchers
-	// Lists used while filtering.
-	allowList map[labels.Matcher][]matcher.Matchers
-	denyList  map[labels.Matcher][]matcher.Matchers
+	return defaultServiceMetrics
 }
 
 func buildMatchersList(metrics []string) ([]matcher.Matchers, prometheus.MultiError) {
@@ -1306,6 +1312,8 @@ func (m *Filter) rebuildServicesMetrics(
 	services []discovery.Service,
 	allowedMetrics map[string]struct{},
 ) {
+	defaultServiceMetrics := getServicesMetrics()
+
 	for _, service := range services {
 		if !service.Active {
 			continue
