@@ -17,6 +17,7 @@
 package gloutonexec
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -127,6 +128,32 @@ func (r *Runner) ResolvePath(file string, option Option) (string, error) {
 	}
 
 	return filepath.Join(r.hostRootPath, file), nil
+}
+
+// UseSudoRS tells whether command that need root privilege will be
+// executed using sudo-rs. This runner try to prefer sudo-ws when available.
+// This function also return false when no sudo is needed at all, because
+// Glouton is already root for example.
+func (r *Runner) UseSudoRS(ctx context.Context) bool {
+	if r.gloutonRunAsRoot {
+		return false
+	}
+
+	name := r.getSudoCommand()
+
+	if name != "sudo" {
+		// A alternative sudo was found, it's not sudo-rs
+		return false
+	}
+
+	cmd := exec.CommandContext(ctx, name, "--version")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		// Unsure... maybe sudo isn't installed ? Fallback on saying sudo-rs isn't used.
+		return false
+	}
+
+	return bytes.Contains(out, []byte("sudo-rs"))
 }
 
 // getSudoCommand returns the command to do a sudo. Default to "sudo" but
