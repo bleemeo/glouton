@@ -35,6 +35,7 @@ import (
 // Runner allows to run command and do LookupPath.
 // It's mostly a wrapper around Golang os/exec that known:
 // * sudo: it could add sudo for command that needs root privilege
+// * sudo.ws: if available, prefer sudo.wg rather than sudo-rs due to missing features.
 // * hostroot path: when running in a container and you want to run a command on the host.
 type Runner struct {
 	hostRootPath     string
@@ -128,6 +129,16 @@ func (r *Runner) ResolvePath(file string, option Option) (string, error) {
 	return filepath.Join(r.hostRootPath, file), nil
 }
 
+// getSudoCommand returns the command to do a sudo. Default to "sudo" but
+// use "sudo.ws" if present.
+func (r *Runner) getSudoCommand() string {
+	if _, err := os.Stat("/usr/bin/sudo.ws"); err == nil {
+		return "sudo.ws"
+	}
+
+	return "sudo"
+}
+
 func (r *Runner) makeCmd(ctx context.Context, option Option, name string, arg ...string) (*exec.Cmd, func(error) error, error) {
 	if r.hostRootPath != "/" && option.SkipInContainer {
 		return nil, nil, ErrExecutionSkipped
@@ -145,7 +156,7 @@ func (r *Runner) makeCmd(ctx context.Context, option Option, name string, arg ..
 
 	if option.RunAsRoot && !r.gloutonRunAsRoot {
 		arg = append([]string{"-n", name}, arg...)
-		name = "sudo"
+		name = r.getSudoCommand()
 	}
 
 	fullCommand := name + " " + strings.Join(arg, " ")
