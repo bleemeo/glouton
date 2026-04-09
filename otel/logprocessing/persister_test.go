@@ -18,6 +18,7 @@ package logprocessing
 
 import (
 	"bytes"
+	"fmt"
 	"log"
 	"sync"
 	"testing"
@@ -28,6 +29,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/adapter"
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/extension/xextension/storage"
 )
 
 func TestPersistHost(t *testing.T) { //nolint:maintidx
@@ -181,7 +183,7 @@ func TestPersistHost(t *testing.T) { //nolint:maintidx
 			t.Fatal("Can't close client:", err)
 		}
 
-		saveFileMetadataToCache(st, host.getAllMetadata())
+		host.saveToState(st)
 
 		metadata, err := getFileMetadataFromCache(st)
 		if err != nil {
@@ -264,6 +266,10 @@ func (stateMock) Get(string, any) error {
 	return nil
 }
 
+func (stateMock) Set(string, any) error {
+	return nil
+}
+
 // TestStorageClient tests concurrent usage of the storageClient,
 // and should be executed with the -race flag.
 func TestStorageClient(t *testing.T) {
@@ -328,4 +334,90 @@ func TestStorageClient(t *testing.T) {
 	}
 
 	wg.Wait()
+}
+
+// TestPersistHostConcurrent tests concurrent access to a persistHost with multiple extensions,
+// simulating concurrent Set/Get operations alongside periodic saveToState calls (as done by the saveFileSizesTicker).
+// Should be run with the -race flag.
+func TestPersistHostConcurrent(t *testing.T) {
+	t.Parallel()
+
+	const (
+		numExtensions = 5
+		numOps        = 100
+		numSaveCalls  = 50
+	)
+
+	ctx := t.Context()
+	compID := component.MustNewID("unused")
+
+	h, err := newPersistHost(stateMock{})
+	if err != nil {
+		t.Fatal("Can't instantiate persist host:", err)
+	}
+
+	clients := make([]storage.Client, numExtensions)
+
+	for range 2 {
+		for i := range numExtensions {
+			name := fmt.Sprintf("ext%d", i)
+
+			// Use one duplicated extension name
+			if i == numExtensions-1 {
+				name = fmt.Sprintf("ext%d", 0)
+			}
+
+			extID := h.newPersistentExt(name)
+
+			clients[i], err = adapter.GetStorageClient(ctx, h, &extID, compID)
+			if err != nil {
+				t.Fatal("Can't retrieve storage client:", err)
+			}
+		}
+
+		wg := new(sync.WaitGroup)
+
+		// Each extension performs concurrent Set/Get operations.
+		for i, client := range clients {
+			wg.Go(func() {
+				for j := range numOps {
+					key := fmt.Sprintf("key%d", j%10)
+					value := fmt.Appendf(nil, "value-%d-%d", i, j)
+
+					if j%2 == 0 {
+						if err := client.Set(ctx, key, value); err != nil {
+							t.Error("Can't set value:", err)
+						}
+					} else {
+						v, err := client.Get(ctx, key)
+						if err != nil {
+							t.Error("Can't get value:", err)
+						}
+
+						if v != nil {
+							_ = v[0] // use the retrieved value
+						}
+					}
+				}
+			})
+		}
+
+		// Simulate the periodic saveFileSizesTicker: call saveToState concurrently.
+		wg.Go(func() {
+			for range numSaveCalls {
+				h.saveToState(stateMock{})
+			}
+		})
+
+		wg.Wait()
+
+		// Shutdown (save state) and then re-run test
+		for _, ext := range h.GetExtensions() {
+			if p, ok := ext.(persistExtension); ok {
+				p.client.saveMetadata()
+			}
+		}
+
+		h.saveToState(stateMock{})
+	}
 }

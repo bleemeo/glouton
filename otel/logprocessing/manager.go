@@ -164,7 +164,7 @@ ctxLoop:
 			man.pipeline.l.Unlock()
 
 			saveLastFileSizesToCache(man.state, fileSizers)
-			saveFileMetadataToCache(man.state, man.persister.getAllMetadata())
+			man.persister.saveToState(man.state)
 		}
 	}
 
@@ -182,7 +182,7 @@ ctxLoop:
 	man.pipeline.shutdownAll()
 
 	saveLastFileSizesToCache(man.state, mergeLastFileSizes(man.pipeline.receivers, man.containerRecv))
-	saveFileMetadataToCache(man.state, man.persister.getAllMetadata())
+	man.persister.saveToState(man.state)
 }
 
 func (man *Manager) updateServiceReceivers(ctx context.Context) error {
