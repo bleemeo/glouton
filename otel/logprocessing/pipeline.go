@@ -137,7 +137,7 @@ func makePipeline(
 }
 
 // init setups and start the pipeline components.
-func (p *pipelineContext) init(
+func (p *pipelineContext) init( //nolint: maintidx
 	ctx context.Context,
 	cfg config.OpenTelemetry,
 	facter Facter,
@@ -178,6 +178,10 @@ func (p *pipelineContext) init(
 	}
 
 	if err = logExporter.Start(ctx, nil); err != nil {
+		if err := logExporter.Shutdown(ctx); err != nil {
+			logger.V(1).Printf("Unable to stop logExporter: %s", err.Error())
+		}
+
 		return fmt.Errorf("start exporter: %w", err)
 	}
 
@@ -203,6 +207,10 @@ func (p *pipelineContext) init(
 	}
 
 	if err = logBatcher.Start(ctx, nil); err != nil {
+		if err := logBatcher.Shutdown(ctx); err != nil {
+			logger.V(1).Printf("Unable to stop logBatcher: %s", err.Error())
+		}
+
 		return fmt.Errorf("start batcher: %w", err)
 	}
 
@@ -246,6 +254,10 @@ func (p *pipelineContext) init(
 	}
 
 	if err = logFilter.Start(ctx, nil); err != nil {
+		if err := logFilter.Shutdown(ctx); err != nil {
+			logger.V(1).Printf("Unable to stop logFilter: %s", err.Error())
+		}
+
 		return fmt.Errorf("start log filter: %w", err)
 	}
 
@@ -263,6 +275,10 @@ func (p *pipelineContext) init(
 	}
 
 	if err = logResourceAttribute.Start(ctx, nil); err != nil {
+		if err := logResourceAttribute.Shutdown(ctx); err != nil {
+			logger.V(1).Printf("Unable to stop logResourceAttribute: %s", err.Error())
+		}
+
 		return fmt.Errorf("start log resource attribute: %w", err)
 	}
 
@@ -378,6 +394,10 @@ func (p *pipelineContext) setupNetworkReceiver(
 	}
 
 	if err = otlpLogReceiver.Start(ctx, nil); err != nil {
+		if err := otlpLogReceiver.Shutdown(ctx); err != nil {
+			logger.V(1).Printf("Unable to stop otlpLogReceiver: %s", err.Error())
+		}
+
 		return fmt.Errorf("failed to start OTLP receiver: %w", err)
 	}
 
@@ -434,6 +454,10 @@ func (p *pipelineContext) setupJournald(
 	}
 
 	if err = journaldReceiver.Start(ctx, nil); err != nil {
+		if err := journaldReceiver.Shutdown(ctx); err != nil {
+			logger.V(1).Printf("Unable to stop journaldReceiver: %s", err.Error())
+		}
+
 		return fmt.Errorf("failed to start journald receiver: %w", err)
 	}
 

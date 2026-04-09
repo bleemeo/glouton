@@ -308,6 +308,10 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 		}
 
 		if err = logRcvr.Start(ctx, pipeline.persister); err != nil {
+			if err := logRcvr.Shutdown(ctx); err != nil {
+				logger.V(1).Printf("Unable to stop logRcvr: %s", err.Error())
+			}
+
 			return fmt.Errorf("start receiver: %w", err)
 		}
 
@@ -384,6 +388,10 @@ func (r *logReceiver) setupFilters(ctx context.Context, pipeline *pipelineContex
 	}
 
 	if err = logFilter.Start(ctx, nil); err != nil {
+		if err := logFilter.Shutdown(ctx); err != nil {
+			logger.V(1).Printf("Unable to stop logFilter: %s", err.Error())
+		}
+
 		return fmt.Errorf("start log filter: %w", err)
 	}
 
