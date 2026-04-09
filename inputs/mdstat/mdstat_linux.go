@@ -41,7 +41,6 @@ import (
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/mdstat"
 	dto "github.com/prometheus/client_model/go"
-	"google.golang.org/protobuf/proto"
 )
 
 const mdstatPath = "/proc/mdstat"
@@ -138,8 +137,8 @@ func gatherModifier(mdadmPath string, runner *gloutonexec.Runner, timeNow func()
 				array, activityState := parseLabels(m.GetLabel())
 				m.Label = []*dto.LabelPair{
 					{
-						Name:  proto.String(types.LabelItem),
-						Value: proto.String(array),
+						Name:  new(types.LabelItem),
+						Value: new(array),
 					},
 				}
 
@@ -172,7 +171,7 @@ func gatherModifier(mdadmPath string, runner *gloutonexec.Runner, timeNow func()
 		}
 
 		disksActivityStateStatus := &dto.MetricFamily{
-			Name:   proto.String("mdstat_health_status"),
+			Name:   new("mdstat_health_status"),
 			Type:   dto.MetricType_UNTYPED.Enum(),
 			Metric: make([]*dto.Metric, 0, len(infoPerArray)),
 		}
@@ -304,11 +303,11 @@ func plural(n int) (s, verb string) {
 func makeStatusMetric(item string, status types.Status, description string, ts int64) *dto.Metric {
 	return &dto.Metric{
 		Label: []*dto.LabelPair{
-			{Name: proto.String(types.LabelItem), Value: proto.String(item)},
-			{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String(status.String())},
-			{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String(description)},
+			{Name: new(types.LabelItem), Value: new(item)},
+			{Name: new(types.LabelMetaCurrentStatus), Value: new(status.String())},
+			{Name: new(types.LabelMetaCurrentDescription), Value: new(description)},
 		},
-		Untyped:     &dto.Untyped{Value: proto.Float64(float64(status.NagiosCode()))},
-		TimestampMs: proto.Int64(ts),
+		Untyped:     &dto.Untyped{Value: new(float64(status.NagiosCode()))},
+		TimestampMs: new(ts),
 	}
 }

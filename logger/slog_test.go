@@ -52,7 +52,7 @@ func TestSlog(t *testing.T) {
 	for i, line := range result {
 		_, err := time.Parse(timeLayout, line[:len(timeLayout)])
 		if err != nil {
-			t.Fatalf("Failed to parse timestamp in line %q: %v", i, err)
+			t.Fatalf("Failed to parse timestamp in line %d: %v", i, err)
 		}
 
 		result[i] = line[len(timeLayout):]

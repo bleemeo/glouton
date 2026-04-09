@@ -262,24 +262,24 @@ func processMFS(
 
 	if totalInterfaces > 0 {
 		result = append(result, &dto.MetricFamily{
-			Name: proto.String("total_interfaces"),
+			Name: new("total_interfaces"),
 			Type: dto.MetricType_GAUGE.Enum(),
 			Metric: []*dto.Metric{
 				{
 					Gauge: &dto.Gauge{
-						Value: proto.Float64(float64(totalInterfaces)),
+						Value: new(float64(totalInterfaces)),
 					},
 				},
 			},
 		})
 
 		result = append(result, &dto.MetricFamily{
-			Name: proto.String("connected_interfaces"),
+			Name: new("connected_interfaces"),
 			Type: dto.MetricType_GAUGE.Enum(),
 			Metric: []*dto.Metric{
 				{
 					Gauge: &dto.Gauge{
-						Value: proto.Float64(float64(connectedInterfaces)),
+						Value: new(float64(connectedInterfaces)),
 					},
 				},
 			},
@@ -298,14 +298,14 @@ func processMFS(
 		for _, m := range mf.GetMetric() {
 			for _, l := range m.GetLabel() {
 				if l.GetName() == ifIndexLabelName && indexToType[l.GetValue()] != "" {
-					l.Name = proto.String(ifTypeLabelName)
-					l.Value = proto.String(indexToType[l.GetValue()])
+					l.Name = new(ifTypeLabelName)
+					l.Value = new(indexToType[l.GetValue()])
 				}
 			}
 
 			if mf.GetName() == "sysUpTime" && m.GetGauge() != nil {
 				g := m.GetGauge()
-				g.Value = proto.Float64(g.GetValue() / 100) // convert from 1/100th of seconds to seconds.
+				g.Value = new(g.GetValue() / 100) // convert from 1/100th of seconds to seconds.
 				m.Gauge = g
 			}
 		}
@@ -315,16 +315,16 @@ func processMFS(
 	// the agent has just become unreachable or when called from /metrics.
 	if status == types.StatusOk || status == types.StatusCritical && lastStatus != types.StatusCritical || !state.FromScrapeLoop {
 		snmpDeviceStatus := &dto.MetricFamily{
-			Name: proto.String("snmp_device_status"),
+			Name: new("snmp_device_status"),
 			Type: dto.MetricType_GAUGE.Enum(),
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String(status.String())},
-						{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String(msg)},
+						{Name: new(types.LabelMetaCurrentStatus), Value: new(status.String())},
+						{Name: new(types.LabelMetaCurrentDescription), Value: new(msg)},
 					},
 					Gauge: &dto.Gauge{
-						Value: proto.Float64(float64(status.NagiosCode())),
+						Value: new(float64(status.NagiosCode())),
 					},
 				},
 			},
@@ -719,7 +719,7 @@ func mockFromFacts(facts map[string]string) map[string][]byte {
 	}
 
 	mf := &dto.MetricFamily{
-		Name: proto.String(mockFactMetricName),
+		Name: new(mockFactMetricName),
 		Type: dto.MetricType_GAUGE.Enum(),
 	}
 
@@ -729,8 +729,8 @@ func mockFromFacts(facts map[string]string) map[string][]byte {
 	for k, v := range facts {
 		mf.Metric = append(mf.GetMetric(), &dto.Metric{
 			Label: []*dto.LabelPair{
-				{Name: proto.String(mockFactLabelKey), Value: proto.String(k)},
-				{Name: proto.String(mockFactLabelValue), Value: proto.String(v)},
+				{Name: new(mockFactLabelKey), Value: new(k)},
+				{Name: new(mockFactLabelValue), Value: new(v)},
 			},
 			Gauge: &dto.Gauge{
 				Value: proto.Float64(42),

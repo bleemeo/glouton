@@ -220,5 +220,8 @@ func checkMonitors(t *testing.T, cache *Cache) {
 }
 
 func floatToPointer(f float64) *float64 {
-	return &f
+	v := new(float64)
+	*v = f
+
+	return v
 }

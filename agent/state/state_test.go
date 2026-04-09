@@ -270,7 +270,7 @@ func TestTelemetryFieldMigration(t *testing.T) {
 		t.Fatal("Failed to save state:", err)
 	}
 
-	persisted, err := os.ReadFile(persistentPath) //nolint:gosec // path is controlled in tests
+	persisted, err := os.ReadFile(persistentPath)
 	if err != nil {
 		t.Fatal("Failed to read persisted state:", err)
 	}

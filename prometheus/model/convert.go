@@ -167,8 +167,8 @@ func MetricPointsToFamilies(points []types.MetricPoint) []*dto.MetricFamily {
 
 		if !exists {
 			tmp := &dto.MetricFamily{
-				Name: proto.String(name),
-				Help: proto.String(""),
+				Name: new(name),
+				Help: new(""),
 				Type: dto.MetricType_UNTYPED.Enum(),
 			}
 			idx = len(families)
@@ -179,7 +179,7 @@ func MetricPointsToFamilies(points []types.MetricPoint) []*dto.MetricFamily {
 
 		lbls := AnnotationToMetaLabels(labels.FromMap(p.Labels), p.Annotations)
 
-		ts := proto.Int64(p.Time.UnixMilli())
+		ts := new(p.Time.UnixMilli())
 		if p.Time.IsZero() || p.Time.UnixMilli() == 0 {
 			ts = nil
 		}
@@ -194,7 +194,7 @@ func MetricPointsToFamilies(points []types.MetricPoint) []*dto.MetricFamily {
 			Label:       make([]*dto.LabelPair, 0, labelsCount-1),
 			TimestampMs: ts,
 			Untyped: &dto.Untyped{
-				Value: proto.Float64(p.Value),
+				Value: new(p.Value),
 			},
 		}
 
@@ -204,8 +204,8 @@ func MetricPointsToFamilies(points []types.MetricPoint) []*dto.MetricFamily {
 			}
 
 			metric.Label = append(metric.GetLabel(), &dto.LabelPair{
-				Name:  proto.String(l.Name),
-				Value: proto.String(l.Value),
+				Name:  new(l.Name),
+				Value: new(l.Value),
 			})
 		})
 
@@ -355,9 +355,9 @@ func SamplesToMetricFamily(samples []promql.Sample, mType *dto.MetricType) (*dto
 	}
 
 	mf := &dto.MetricFamily{
-		Name:   proto.String(samples[0].Metric.Get(types.LabelName)),
+		Name:   new(samples[0].Metric.Get(types.LabelName)),
 		Type:   mType,
-		Help:   proto.String(""),
+		Help:   new(""),
 		Metric: make([]*dto.Metric, 0, len(samples)),
 	}
 
@@ -367,7 +367,7 @@ func SamplesToMetricFamily(samples []promql.Sample, mType *dto.MetricType) (*dto
 			return nil, errInvalidSample
 		}
 
-		ts := proto.Int64(pt.T)
+		ts := new(pt.T)
 		if pt.T == 0 {
 			ts = nil
 		}
@@ -381,11 +381,11 @@ func SamplesToMetricFamily(samples []promql.Sample, mType *dto.MetricType) (*dto
 
 		switch mType.String() {
 		case dto.MetricType_COUNTER.Enum().String():
-			metric.Counter = &dto.Counter{Value: proto.Float64(pt.F)}
+			metric.Counter = &dto.Counter{Value: new(pt.F)}
 		case dto.MetricType_GAUGE.Enum().String():
-			metric.Gauge = &dto.Gauge{Value: proto.Float64(pt.F)}
+			metric.Gauge = &dto.Gauge{Value: new(pt.F)}
 		case dto.MetricType_UNTYPED.Enum().String():
-			metric.Untyped = &dto.Untyped{Value: proto.Float64(pt.F)}
+			metric.Untyped = &dto.Untyped{Value: new(pt.F)}
 		default:
 			return nil, errUnsupportedType
 		}
@@ -499,8 +499,8 @@ func Labels2DTO(lbls labels.Labels) []*dto.LabelPair {
 		}
 
 		result = append(result, &dto.LabelPair{
-			Name:  proto.String(l.Name),
-			Value: proto.String(l.Value),
+			Name:  new(l.Name),
+			Value: new(l.Value),
 		})
 	})
 
@@ -526,19 +526,19 @@ func FixType(m *dto.Metric, wantType dto.MetricType) {
 
 	switch {
 	case m.GetCounter() != nil:
-		value = proto.Float64(m.GetCounter().GetValue())
+		value = new(m.GetCounter().GetValue())
 		gotType = dto.MetricType_COUNTER
 	case m.GetGauge() != nil:
-		value = proto.Float64(m.GetGauge().GetValue())
+		value = new(m.GetGauge().GetValue())
 		gotType = dto.MetricType_GAUGE
 	case m.GetHistogram() != nil:
-		value = proto.Float64(m.GetHistogram().GetSampleSum())
+		value = new(m.GetHistogram().GetSampleSum())
 		gotType = dto.MetricType_HISTOGRAM
 	case m.GetSummary() != nil:
-		value = proto.Float64(m.GetSummary().GetSampleSum())
+		value = new(m.GetSummary().GetSampleSum())
 		gotType = dto.MetricType_SUMMARY
 	case m.GetUntyped() != nil:
-		value = proto.Float64(m.GetUntyped().GetValue())
+		value = new(m.GetUntyped().GetValue())
 		gotType = dto.MetricType_UNTYPED
 	}
 

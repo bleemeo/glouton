@@ -198,7 +198,7 @@ func (api *API) init() {
 			hdr := w.Header()
 			hdr.Add("Content-Type", "plain/text")
 
-			_, err = w.Write([]byte(content)) //nolint:gosec // content is from internal DiagnosticPage, not user input
+			_, err = w.Write([]byte(content))
 		} else {
 			err = diagnosticTmpl.Execute(w, content)
 		}
@@ -334,7 +334,7 @@ func (api *API) Run(ctx context.Context) error {
 		<-ctx.Done()
 
 		// Shutdown context. It must outlive the parent context.
-		subCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		subCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 		defer cancel()
 
 		if err := srv.Shutdown(subCtx); err != nil {

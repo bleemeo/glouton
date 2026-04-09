@@ -28,7 +28,6 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"
-	"google.golang.org/protobuf/proto"
 )
 
 func TestConversionLoop(t *testing.T) {
@@ -272,14 +271,14 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			},
 			wantMFS: []*dto.MetricFamily{
 				{
-					Name: proto.String("cpu_used"),
-					Help: proto.String(""),
+					Name: new("cpu_used"),
+					Help: new(""),
 					Type: dto.MetricType_UNTYPED.Enum(),
 					Metric: []*dto.Metric{
 						{
-							TimestampMs: proto.Int64(now.UnixMilli()),
+							TimestampMs: new(now.UnixMilli()),
 							Untyped: &dto.Untyped{
-								Value: proto.Float64(42.1),
+								Value: new(42.1),
 							},
 						},
 					},
@@ -308,13 +307,13 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			},
 			wantMFS: []*dto.MetricFamily{
 				{
-					Name: proto.String("cpu_used"),
-					Help: proto.String(""),
+					Name: new("cpu_used"),
+					Help: new(""),
 					Type: dto.MetricType_UNTYPED.Enum(),
 					Metric: []*dto.Metric{
 						{
 							Untyped: &dto.Untyped{
-								Value: proto.Float64(42.1),
+								Value: new(42.1),
 							},
 						},
 					},
@@ -343,13 +342,13 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			},
 			wantMFS: []*dto.MetricFamily{
 				{
-					Name: proto.String("cpu_used"),
-					Help: proto.String(""),
+					Name: new("cpu_used"),
+					Help: new(""),
 					Type: dto.MetricType_UNTYPED.Enum(),
 					Metric: []*dto.Metric{
 						{
 							Untyped: &dto.Untyped{
-								Value: proto.Float64(42.1),
+								Value: new(42.1),
 							},
 						},
 					},
@@ -378,13 +377,13 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			},
 			wantMFS: []*dto.MetricFamily{
 				{
-					Name: proto.String("cpu_used"),
-					Help: proto.String(""),
+					Name: new("cpu_used"),
+					Help: new(""),
 					Type: dto.MetricType_UNTYPED.Enum(),
 					Metric: []*dto.Metric{
 						{
 							Untyped: &dto.Untyped{
-								Value: proto.Float64(42.1),
+								Value: new(42.1),
 							},
 						},
 					},
@@ -413,13 +412,13 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			},
 			wantMFS: []*dto.MetricFamily{
 				{
-					Name: proto.String("cpu_used"),
-					Help: proto.String(""),
+					Name: new("cpu_used"),
+					Help: new(""),
 					Type: dto.MetricType_UNTYPED.Enum(),
 					Metric: []*dto.Metric{
 						{
 							Untyped: &dto.Untyped{
-								Value: proto.Float64(42.1),
+								Value: new(42.1),
 							},
 						},
 					},
@@ -448,13 +447,13 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			},
 			wantMFS: []*dto.MetricFamily{
 				{
-					Name: proto.String("cpu_used"),
-					Help: proto.String(""),
+					Name: new("cpu_used"),
+					Help: new(""),
 					Type: dto.MetricType_UNTYPED.Enum(),
 					Metric: []*dto.Metric{
 						{
 							Untyped: &dto.Untyped{
-								Value: proto.Float64(42.1),
+								Value: new(42.1),
 							},
 						},
 					},
@@ -483,13 +482,13 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			},
 			wantMFS: []*dto.MetricFamily{
 				{
-					Name: proto.String("cpu_used"),
-					Help: proto.String(""),
+					Name: new("cpu_used"),
+					Help: new(""),
 					Type: dto.MetricType_UNTYPED.Enum(),
 					Metric: []*dto.Metric{
 						{
 							Untyped: &dto.Untyped{
-								Value: proto.Float64(42.1),
+								Value: new(42.1),
 							},
 						},
 					},
@@ -545,35 +544,35 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			},
 			wantMFS: []*dto.MetricFamily{ //nolint: dupl
 				{
-					Name: proto.String("cpu_used"),
-					Help: proto.String(""),
+					Name: new("cpu_used"),
+					Help: new(""),
 					Type: dto.MetricType_UNTYPED.Enum(),
 					Metric: []*dto.Metric{
 						{
-							TimestampMs: proto.Int64(now.UnixMilli()),
+							TimestampMs: new(now.UnixMilli()),
 							Label: []*dto.LabelPair{
-								{Name: proto.String(types.LabelMetaContainerID), Value: proto.String("123456")},
-								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("description")},
-								{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String("critical")},
-								{Name: proto.String(types.LabelMetaServiceName), Value: proto.String("apache")},
-								{Name: proto.String("alabel"), Value: proto.String("test")},
-								{Name: proto.String("zlabel"), Value: proto.String("test2")},
+								{Name: new(types.LabelMetaContainerID), Value: new("123456")},
+								{Name: new(types.LabelMetaCurrentDescription), Value: new("description")},
+								{Name: new(types.LabelMetaCurrentStatus), Value: new("critical")},
+								{Name: new(types.LabelMetaServiceName), Value: new("apache")},
+								{Name: new("alabel"), Value: new("test")},
+								{Name: new("zlabel"), Value: new("test2")},
 							},
 							Untyped: &dto.Untyped{
-								Value: proto.Float64(42.1),
+								Value: new(42.1),
 							},
 						},
 						{
-							TimestampMs: proto.Int64(now.UnixMilli()),
+							TimestampMs: new(now.UnixMilli()),
 							Label: []*dto.LabelPair{
-								{Name: proto.String(types.LabelMetaContainerID), Value: proto.String("7890")},
-								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("description")},
-								{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String("critical")},
-								{Name: proto.String(types.LabelMetaServiceName), Value: proto.String("apache")},
-								{Name: proto.String("alabel"), Value: proto.String("test3")},
+								{Name: new(types.LabelMetaContainerID), Value: new("7890")},
+								{Name: new(types.LabelMetaCurrentDescription), Value: new("description")},
+								{Name: new(types.LabelMetaCurrentStatus), Value: new("critical")},
+								{Name: new(types.LabelMetaServiceName), Value: new("apache")},
+								{Name: new("alabel"), Value: new("test3")},
 							},
 							Untyped: &dto.Untyped{
-								Value: proto.Float64(42.1),
+								Value: new(42.1),
 							},
 						},
 					},
@@ -662,35 +661,35 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			},
 			wantMFS: []*dto.MetricFamily{ //nolint: dupl
 				{
-					Name: proto.String("cpu_used"),
-					Help: proto.String(""),
+					Name: new("cpu_used"),
+					Help: new(""),
 					Type: dto.MetricType_UNTYPED.Enum(),
 					Metric: []*dto.Metric{
 						{
-							TimestampMs: proto.Int64(now.UnixMilli()),
+							TimestampMs: new(now.UnixMilli()),
 							Label: []*dto.LabelPair{
-								{Name: proto.String(types.LabelMetaContainerID), Value: proto.String("123456")},
-								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("description")},
-								{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String("critical")},
-								{Name: proto.String(types.LabelMetaServiceName), Value: proto.String("apache")},
-								{Name: proto.String("alabel"), Value: proto.String("test")},
-								{Name: proto.String("zlabel"), Value: proto.String("test2")},
+								{Name: new(types.LabelMetaContainerID), Value: new("123456")},
+								{Name: new(types.LabelMetaCurrentDescription), Value: new("description")},
+								{Name: new(types.LabelMetaCurrentStatus), Value: new("critical")},
+								{Name: new(types.LabelMetaServiceName), Value: new("apache")},
+								{Name: new("alabel"), Value: new("test")},
+								{Name: new("zlabel"), Value: new("test2")},
 							},
 							Untyped: &dto.Untyped{
-								Value: proto.Float64(42.1),
+								Value: new(42.1),
 							},
 						},
 						{
-							TimestampMs: proto.Int64(now.UnixMilli()),
+							TimestampMs: new(now.UnixMilli()),
 							Label: []*dto.LabelPair{
-								{Name: proto.String(types.LabelMetaContainerID), Value: proto.String("7890")},
-								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("description")},
-								{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String("critical")},
-								{Name: proto.String(types.LabelMetaServiceName), Value: proto.String("apache")},
-								{Name: proto.String("alabel"), Value: proto.String("test3")},
+								{Name: new(types.LabelMetaContainerID), Value: new("7890")},
+								{Name: new(types.LabelMetaCurrentDescription), Value: new("description")},
+								{Name: new(types.LabelMetaCurrentStatus), Value: new("critical")},
+								{Name: new(types.LabelMetaServiceName), Value: new("apache")},
+								{Name: new("alabel"), Value: new("test3")},
 							},
 							Untyped: &dto.Untyped{
-								Value: proto.Float64(42.1),
+								Value: new(42.1),
 							},
 						},
 					},
@@ -875,13 +874,13 @@ func TestFamiliesToNameAndItem(t *testing.T) {
 			name: "just-name",
 			input: []*dto.MetricFamily{
 				{
-					Name: proto.String("cpu_used"),
-					Help: proto.String(""),
+					Name: new("cpu_used"),
+					Help: new(""),
 					Type: dto.MetricType_UNTYPED.Enum(),
 					Metric: []*dto.Metric{
 						{
 							Untyped: &dto.Untyped{
-								Value: proto.Float64(42.1),
+								Value: new(42.1),
 							},
 						},
 					},
@@ -889,13 +888,13 @@ func TestFamiliesToNameAndItem(t *testing.T) {
 			},
 			want: []*dto.MetricFamily{
 				{
-					Name: proto.String("cpu_used"),
-					Help: proto.String(""),
+					Name: new("cpu_used"),
+					Help: new(""),
 					Type: dto.MetricType_UNTYPED.Enum(),
 					Metric: []*dto.Metric{
 						{
 							Untyped: &dto.Untyped{
-								Value: proto.Float64(42.1),
+								Value: new(42.1),
 							},
 						},
 					},
@@ -906,16 +905,16 @@ func TestFamiliesToNameAndItem(t *testing.T) {
 			name: "just-one-item",
 			input: []*dto.MetricFamily{
 				{
-					Name: proto.String("disk_used"),
-					Help: proto.String(""),
+					Name: new("disk_used"),
+					Help: new(""),
 					Type: dto.MetricType_UNTYPED.Enum(),
 					Metric: []*dto.Metric{
 						{
 							Label: []*dto.LabelPair{
-								{Name: proto.String(types.LabelItem), Value: proto.String("/home")},
+								{Name: new(types.LabelItem), Value: new("/home")},
 							},
 							Untyped: &dto.Untyped{
-								Value: proto.Float64(42.1),
+								Value: new(42.1),
 							},
 						},
 					},
@@ -923,16 +922,16 @@ func TestFamiliesToNameAndItem(t *testing.T) {
 			},
 			want: []*dto.MetricFamily{
 				{
-					Name: proto.String("disk_used"),
-					Help: proto.String(""),
+					Name: new("disk_used"),
+					Help: new(""),
 					Type: dto.MetricType_UNTYPED.Enum(),
 					Metric: []*dto.Metric{
 						{
 							Label: []*dto.LabelPair{
-								{Name: proto.String(types.LabelItem), Value: proto.String("/home")},
+								{Name: new(types.LabelItem), Value: new("/home")},
 							},
 							Untyped: &dto.Untyped{
-								Value: proto.Float64(42.1),
+								Value: new(42.1),
 							},
 						},
 					},
@@ -943,21 +942,21 @@ func TestFamiliesToNameAndItem(t *testing.T) {
 			name: "only_meta_labels_are_kept",
 			input: []*dto.MetricFamily{
 				{
-					Name: proto.String("disk_used"),
-					Help: proto.String(""),
+					Name: new("disk_used"),
+					Help: new(""),
 					Type: dto.MetricType_UNTYPED.Enum(),
 					Metric: []*dto.Metric{
 						{
 							Label: []*dto.LabelPair{
-								{Name: proto.String(types.LabelMetaBleemeoUUID), Value: proto.String("kept")},
-								{Name: proto.String(types.LabelMetaProbeScraperName), Value: proto.String("kept2")},
-								{Name: proto.String(types.LabelDevice), Value: proto.String("remove")},
-								{Name: proto.String(types.LabelInstance), Value: proto.String("remove2")},
-								{Name: proto.String(types.LabelInstanceUUID), Value: proto.String("remove3")},
-								{Name: proto.String(types.LabelItem), Value: proto.String("/srv")},
+								{Name: new(types.LabelMetaBleemeoUUID), Value: new("kept")},
+								{Name: new(types.LabelMetaProbeScraperName), Value: new("kept2")},
+								{Name: new(types.LabelDevice), Value: new("remove")},
+								{Name: new(types.LabelInstance), Value: new("remove2")},
+								{Name: new(types.LabelInstanceUUID), Value: new("remove3")},
+								{Name: new(types.LabelItem), Value: new("/srv")},
 							},
 							Untyped: &dto.Untyped{
-								Value: proto.Float64(42.1),
+								Value: new(42.1),
 							},
 						},
 					},
@@ -965,18 +964,18 @@ func TestFamiliesToNameAndItem(t *testing.T) {
 			},
 			want: []*dto.MetricFamily{
 				{
-					Name: proto.String("disk_used"),
-					Help: proto.String(""),
+					Name: new("disk_used"),
+					Help: new(""),
 					Type: dto.MetricType_UNTYPED.Enum(),
 					Metric: []*dto.Metric{
 						{
 							Label: []*dto.LabelPair{
-								{Name: proto.String(types.LabelMetaBleemeoUUID), Value: proto.String("kept")},
-								{Name: proto.String(types.LabelMetaProbeScraperName), Value: proto.String("kept2")},
-								{Name: proto.String(types.LabelItem), Value: proto.String("/srv")},
+								{Name: new(types.LabelMetaBleemeoUUID), Value: new("kept")},
+								{Name: new(types.LabelMetaProbeScraperName), Value: new("kept2")},
+								{Name: new(types.LabelItem), Value: new("/srv")},
 							},
 							Untyped: &dto.Untyped{
-								Value: proto.Float64(42.1),
+								Value: new(42.1),
 							},
 						},
 					},

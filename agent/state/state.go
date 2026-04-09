@@ -46,7 +46,7 @@ var errVersionIncompatible = errors.New("state.json is incompatible with this gl
 type persistedState struct {
 	Version         int    `json:"version"`
 	BleemeoAgentID  string `json:"agent_uuid"`
-	BleemeoPassword string `json:"password"` //nolint:gosec // password field is intentional
+	BleemeoPassword string `json:"password"`
 	TelemetryID     string `json:"telemetry_id"`
 	// TelemeryID is being migrated to TelemetryID.
 	TelemeryID string `json:"telemery_id,omitempty"`
@@ -393,7 +393,7 @@ func (s *State) saveCacheTo(w io.Writer) error {
 func (s *State) savePersistentTo(w io.Writer) error {
 	encoder := json.NewEncoder(w)
 
-	err := encoder.Encode(s.persistent)
+	err := encoder.Encode(s.persistent) //nolint:gosec // persisting password to disk is intentional
 	if err != nil {
 		return err
 	}

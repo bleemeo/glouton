@@ -32,7 +32,6 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	prometheusModel "github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
-	"google.golang.org/protobuf/proto"
 )
 
 const defaultGatherTimeout = 10 * time.Second
@@ -300,7 +299,7 @@ func (g *wrappedGatherer) GatherWithState(ctx context.Context, state GatherState
 				if forcedTimestamp == 0 {
 					m.TimestampMs = nil
 				} else {
-					m.TimestampMs = proto.Int64(forcedTimestamp)
+					m.TimestampMs = new(forcedTimestamp)
 				}
 			}
 		}
@@ -402,8 +401,8 @@ func mergeMFS(mfs []*dto.MetricFamily) ([]*dto.MetricFamily, error) {
 			}
 		} else {
 			existingMF = &dto.MetricFamily{}
-			existingMF.Name = proto.String(mf.GetName())
-			existingMF.Help = proto.String(mf.GetHelp())
+			existingMF.Name = new(mf.GetName())
+			existingMF.Help = new(mf.GetHelp())
 			existingMF.Type = mf.Type
 			metricFamiliesByName[mf.GetName()] = existingMF
 		}

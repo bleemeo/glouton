@@ -44,39 +44,39 @@ func (g *testGatherer) GatherWithState(_ context.Context, _ GatherState) ([]*io_
 func TestFilterPastPoints(t *testing.T) {
 	firstSample := []*io_prometheus_client.MetricFamily{ //nolint: dupl
 		{
-			Name: proto.String("cpu_used"),
-			Help: proto.String(""),
-			Type: ptr(io_prometheus_client.MetricType_UNTYPED),
+			Name: new("cpu_used"),
+			Help: new(""),
+			Type: new(io_prometheus_client.MetricType),
 			Metric: []*io_prometheus_client.Metric{
 				{
 					Label: []*io_prometheus_client.LabelPair{
-						{Name: proto.String("__meta_vsphere"), Value: proto.String("127.0.0.1:xxxxx")},
-						{Name: proto.String("__meta_vsphere_moid"), Value: proto.String("10")},
-						{Name: proto.String("dcname"), Value: proto.String("ha-datacenter")},
-						{Name: proto.String("esxhostname"), Value: proto.String("esxi.test")},
-						{Name: proto.String("vmname"), Value: proto.String("alp1")},
+						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
+						{Name: new("__meta_vsphere_moid"), Value: new("10")},
+						{Name: new("dcname"), Value: new("ha-datacenter")},
+						{Name: new("esxhostname"), Value: new("esxi.test")},
+						{Name: new("vmname"), Value: new("alp1")},
 					},
-					Untyped:     &io_prometheus_client.Untyped{Value: proto.Float64(5.22334)},
+					Untyped:     &io_prometheus_client.Untyped{Value: new(5.22334)},
 					TimestampMs: proto.Int64(1700749777777),
 				},
 			},
 		},
 		{
-			Name: proto.String("disk_used_perc"),
-			Help: proto.String(""),
-			Type: ptr(io_prometheus_client.MetricType_UNTYPED),
+			Name: new("disk_used_perc"),
+			Help: new(""),
+			Type: new(io_prometheus_client.MetricType),
 			Metric: []*io_prometheus_client.Metric{
 				{
 					Label: []*io_prometheus_client.LabelPair{
-						{Name: proto.String("__meta_vsphere"), Value: proto.String("127.0.0.1:xxxxx")},
-						{Name: proto.String("__meta_vsphere_moid"), Value: proto.String("10")},
-						{Name: proto.String("clustername"), Value: proto.String("esxi.test")},
-						{Name: proto.String("dcname"), Value: proto.String("ha-datacenter")},
-						{Name: proto.String("esxhostname"), Value: proto.String("esxi.test")},
-						{Name: proto.String("item"), Value: proto.String("/")},
-						{Name: proto.String("vmname"), Value: proto.String("alp1")},
+						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
+						{Name: new("__meta_vsphere_moid"), Value: new("10")},
+						{Name: new("clustername"), Value: new("esxi.test")},
+						{Name: new("dcname"), Value: new("ha-datacenter")},
+						{Name: new("esxhostname"), Value: new("esxi.test")},
+						{Name: new("item"), Value: new("/")},
+						{Name: new("vmname"), Value: new("alp1")},
 					},
-					Untyped:     &io_prometheus_client.Untyped{Value: proto.Float64(9.26)},
+					Untyped:     &io_prometheus_client.Untyped{Value: new(9.26)},
 					TimestampMs: proto.Int64(1700749777777),
 				},
 			},
@@ -84,39 +84,39 @@ func TestFilterPastPoints(t *testing.T) {
 	}
 	secondSample := []*io_prometheus_client.MetricFamily{ //nolint: dupl
 		{
-			Name: proto.String("cpu_used"),
-			Help: proto.String(""),
-			Type: ptr(io_prometheus_client.MetricType_UNTYPED),
+			Name: new("cpu_used"),
+			Help: new(""),
+			Type: new(io_prometheus_client.MetricType),
 			Metric: []*io_prometheus_client.Metric{
 				{
 					Label: []*io_prometheus_client.LabelPair{
-						{Name: proto.String("__meta_vsphere"), Value: proto.String("127.0.0.1:xxxxx")},
-						{Name: proto.String("__meta_vsphere_moid"), Value: proto.String("10")},
-						{Name: proto.String("dcname"), Value: proto.String("ha-datacenter")},
-						{Name: proto.String("esxhostname"), Value: proto.String("esxi.test")},
-						{Name: proto.String("vmname"), Value: proto.String("alp1")},
+						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
+						{Name: new("__meta_vsphere_moid"), Value: new("10")},
+						{Name: new("dcname"), Value: new("ha-datacenter")},
+						{Name: new("esxhostname"), Value: new("esxi.test")},
+						{Name: new("vmname"), Value: new("alp1")},
 					},
-					Untyped:     &io_prometheus_client.Untyped{Value: proto.Float64(6.90137124)},
+					Untyped:     &io_prometheus_client.Untyped{Value: new(6.90137124)},
 					TimestampMs: proto.Int64(1700749977777), // after the last point
 				},
 			},
 		},
 		{
-			Name: proto.String("disk_used_perc"),
-			Help: proto.String(""),
-			Type: ptr(io_prometheus_client.MetricType_UNTYPED),
+			Name: new("disk_used_perc"),
+			Help: new(""),
+			Type: new(io_prometheus_client.MetricType),
 			Metric: []*io_prometheus_client.Metric{
 				{
 					Label: []*io_prometheus_client.LabelPair{
-						{Name: proto.String("__meta_vsphere"), Value: proto.String("127.0.0.1:xxxxx")},
-						{Name: proto.String("__meta_vsphere_moid"), Value: proto.String("10")},
-						{Name: proto.String("clustername"), Value: proto.String("esxi.test")},
-						{Name: proto.String("dcname"), Value: proto.String("ha-datacenter")},
-						{Name: proto.String("esxhostname"), Value: proto.String("esxi.test")},
-						{Name: proto.String("item"), Value: proto.String("/")},
-						{Name: proto.String("vmname"), Value: proto.String("alp1")},
+						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
+						{Name: new("__meta_vsphere_moid"), Value: new("10")},
+						{Name: new("clustername"), Value: new("esxi.test")},
+						{Name: new("dcname"), Value: new("ha-datacenter")},
+						{Name: new("esxhostname"), Value: new("esxi.test")},
+						{Name: new("item"), Value: new("/")},
+						{Name: new("vmname"), Value: new("alp1")},
 					},
-					Untyped:     &io_prometheus_client.Untyped{Value: proto.Float64(8.794201)},
+					Untyped:     &io_prometheus_client.Untyped{Value: new(8.794201)},
 					TimestampMs: proto.Int64(1700749577777), // before the last point
 				},
 			},
@@ -155,40 +155,40 @@ func TestFilterPastPoints(t *testing.T) {
 func TestFilterPurge(t *testing.T) {
 	sample := []*io_prometheus_client.MetricFamily{
 		{
-			Name: proto.String("cpu_used"),
-			Help: proto.String(""),
-			Type: ptr(io_prometheus_client.MetricType_UNTYPED),
+			Name: new("cpu_used"),
+			Help: new(""),
+			Type: new(io_prometheus_client.MetricType),
 			Metric: []*io_prometheus_client.Metric{
 				{
 					Label: []*io_prometheus_client.LabelPair{
-						{Name: proto.String("__meta_vsphere"), Value: proto.String("127.0.0.1:xxxxx")},
-						{Name: proto.String("__meta_vsphere_moid"), Value: proto.String("10")},
+						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
+						{Name: new("__meta_vsphere_moid"), Value: new("10")},
 					},
-					Untyped:     &io_prometheus_client.Untyped{Value: proto.Float64(1.2)},
-					TimestampMs: proto.Int64(time.Date(2023, 11, 23, 15, 0, 0, 0, time.UTC).UnixMilli()),
+					Untyped:     &io_prometheus_client.Untyped{Value: new(1.2)},
+					TimestampMs: new(time.Date(2023, 11, 23, 15, 0, 0, 0, time.UTC).UnixMilli()),
 				},
 			},
 		},
 		{
-			Name: proto.String("disk_used_perc"),
-			Help: proto.String(""),
-			Type: ptr(io_prometheus_client.MetricType_UNTYPED),
+			Name: new("disk_used_perc"),
+			Help: new(""),
+			Type: new(io_prometheus_client.MetricType),
 			Metric: []*io_prometheus_client.Metric{
 				{
 					Label: []*io_prometheus_client.LabelPair{
-						{Name: proto.String("__meta_vsphere"), Value: proto.String("127.0.0.1:xxxxx")},
-						{Name: proto.String("__meta_vsphere_moid"), Value: proto.String("5")},
+						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
+						{Name: new("__meta_vsphere_moid"), Value: new("5")},
 					},
-					Untyped:     &io_prometheus_client.Untyped{Value: proto.Float64(23.4)},
-					TimestampMs: proto.Int64(time.Date(2023, 11, 23, 15, 0, 0, 0, time.UTC).UnixMilli()),
+					Untyped:     &io_prometheus_client.Untyped{Value: new(23.4)},
+					TimestampMs: new(time.Date(2023, 11, 23, 15, 0, 0, 0, time.UTC).UnixMilli()),
 				},
 				{
 					Label: []*io_prometheus_client.LabelPair{
-						{Name: proto.String("__meta_vsphere"), Value: proto.String("127.0.0.1:xxxxx")},
-						{Name: proto.String("__meta_vsphere_moid"), Value: proto.String("10")},
+						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
+						{Name: new("__meta_vsphere_moid"), Value: new("10")},
 					},
-					Untyped:     &io_prometheus_client.Untyped{Value: proto.Float64(56.7)},
-					TimestampMs: proto.Int64(time.Date(2023, 11, 23, 15, 0, 0, 0, time.UTC).UnixMilli()),
+					Untyped:     &io_prometheus_client.Untyped{Value: new(56.7)},
+					TimestampMs: new(time.Date(2023, 11, 23, 15, 0, 0, 0, time.UTC).UnixMilli()),
 				},
 			},
 		},
@@ -225,7 +225,7 @@ func TestFilterPurge(t *testing.T) {
 		t.Fatalf("Nothing should have been purged (-want +got):\n%s", diff)
 	}
 
-	sample[1].Metric[0].TimestampMs = ptr[int64](t0.Add(3 * time.Minute).UnixMilli())
+	sample[1].Metric[0].TimestampMs = new(t0.Add(3 * time.Minute).UnixMilli())
 	tGatherer.mfsToReturn = sample[:1] // No new points for disk_used_perc metrics
 	gatherer.timeNow = func() time.Time {
 		return t0.Add(4 * time.Minute) // 15:04:00 UTC
@@ -251,17 +251,17 @@ func TestFilterPurge(t *testing.T) {
 
 	tGatherer.mfsToReturn = []*io_prometheus_client.MetricFamily{
 		{
-			Name: proto.String("disk_used_perc"),
-			Help: proto.String(""),
-			Type: ptr(io_prometheus_client.MetricType_UNTYPED),
+			Name: new("disk_used_perc"),
+			Help: new(""),
+			Type: new(io_prometheus_client.MetricType),
 			Metric: []*io_prometheus_client.Metric{
 				{
 					Label: []*io_prometheus_client.LabelPair{
-						{Name: proto.String("__meta_vsphere"), Value: proto.String("127.0.0.1:xxxxx")},
-						{Name: proto.String("__meta_vsphere_moid"), Value: proto.String("5")},
+						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
+						{Name: new("__meta_vsphere_moid"), Value: new("5")},
 					},
-					Untyped:     &io_prometheus_client.Untyped{Value: proto.Float64(25.7)},
-					TimestampMs: proto.Int64(t0.Add(8 * time.Minute).UnixMilli()),
+					Untyped:     &io_prometheus_client.Untyped{Value: new(25.7)},
+					TimestampMs: new(t0.Add(8 * time.Minute).UnixMilli()),
 				},
 			},
 		},
@@ -287,5 +287,3 @@ func TestFilterPurge(t *testing.T) {
 		t.Fatalf("Still nothing should have been purged (-want +got):\n%s", diff)
 	}
 }
-
-func ptr[T any](e T) *T { return &e }

@@ -396,7 +396,7 @@ func awsRetrieveToken(ctx context.Context) (string, bool) {
 
 	req.Header.Set("X-Aws-Ec2-Metadata-Token-Ttl-Seconds", "60") // mandatory
 
-	resp, err := http.DefaultClient.Do(req) //nolint:gosec // URL is built internally for metadata endpoint
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", false
 	}

@@ -134,7 +134,7 @@ func (hc *HTTPCheck) httpMainCheck(ctx context.Context) types.StatusDescription 
 		}
 	}
 
-	resp, err := hc.client.Do(req) //nolint:gosec // URL is validated before this point
+	resp, err := hc.client.Do(req)
 	if urlErr, ok := err.(*url.Error); ok && urlErr.Timeout() {
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusCritical,
