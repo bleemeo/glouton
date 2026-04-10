@@ -295,6 +295,7 @@ type Agent struct {
 	NodeExporter           NodeExporter    `yaml:"node_exporter"`
 	WindowsExporter        NodeExporter    `yaml:"windows_exporter"`
 	Telemetry              Telemetry       `yaml:"telemetry"`
+	OverrideHostname       string          `yaml:"override_hostname"`
 }
 
 type Telemetry struct {

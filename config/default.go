@@ -90,6 +90,7 @@ func DefaultConfig() Config { //nolint:maintidx
 				Enable:  true,
 				Address: "https://telemetry.bleemeo.com/v1/telemetry/",
 			},
+			OverrideHostname: "",
 		},
 		Blackbox: Blackbox{
 			Enable:             true,
