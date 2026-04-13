@@ -6,9 +6,7 @@ GORELEASER_VERSION="v2.15.1"
 USER_UID=$(id -u)
 
 rm -fr work
-
-USE_SINGLE_TARGET=0
-ENABLE_RACE=0
+mkdir -p work
 
 usage() {
    cat << EOF
@@ -41,7 +39,7 @@ while [ $# -gt 0 ]; do
          TARGET_TO_BUILD=single-target
          ;;
       "race")
-         TARGET_TO_BUILD=race
+         TARGET_TO_BUILD=single-target-race
          ;;
       "release")
          TARGET_TO_BUILD=release

@@ -1,4 +1,6 @@
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# This build is used during -race build. It's a copy of .goreleaser.yml with only few change in builds section
+#  (mostly CGO_ENABLED=1, -race and ldflags)
 version: 2
 project_name: glouton
 snapshot:
@@ -6,7 +8,20 @@ snapshot:
   version_template: '{{ .Env.GLOUTON_VERSION }}'
 builds:
   - env:
-      - CGO_ENABLED=0
+      - CGO_ENABLED=1
+    flags:
+      - -race
+    ldflags:
+      # This is the default from gorelaser
+      - -s
+      - -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+      - -X main.builtBy=goreleaser
+      # This is what added to support -race with static binary.
+      - -linkmode=external
+      - -extldflags=-static
     targets:
       - linux_amd64
       - linux_386
