@@ -528,7 +528,11 @@ func httpQuery(ctx context.Context, url string, headers []string) string {
 		return ""
 	}
 
-	defer resp.Body.Close()
+	defer func() {
+		// drain response, so HTTP connection might be re-used.
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}()
 
 	// We refuse to decode messages when the request triggered an error
 	if resp.StatusCode >= http.StatusBadRequest {
