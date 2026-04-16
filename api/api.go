@@ -118,7 +118,7 @@ func (api *API) init() {
 	router := chi.NewRouter()
 	router.Use(cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"},
-		AllowCredentials: true,
+		AllowCredentials: false,
 		Debug:            false,
 	}).Handler)
 
