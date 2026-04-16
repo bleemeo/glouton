@@ -52,6 +52,7 @@ type Responder struct {
 	customCheck    map[string]discovery.NameInstance
 	nrpeCommands   map[string]string
 	allowArguments bool
+	argsRegexp     *regexp.Regexp
 }
 
 // NewResponse returns a Response.
@@ -71,12 +72,17 @@ func NewResponse(services []config.Service, checkRegistry checkRegistry, nrpeCon
 
 	nrpeCommands, allowArguments := readNRPEConf(nrpeConfPath)
 
+	return newResponse(checkRegistry, customChecks, runner, nrpeCommands, allowArguments)
+}
+
+func newResponse(checkRegistry checkRegistry, customChecks map[string]discovery.NameInstance, runner *gloutonexec.Runner, nrpeCommands map[string]string, allowArguments bool) Responder {
 	return Responder{
 		runner:         runner,
 		discovery:      checkRegistry,
 		customCheck:    customChecks,
 		nrpeCommands:   nrpeCommands,
 		allowArguments: allowArguments,
+		argsRegexp:     regexp.MustCompile(`\$ARG([0-9]+)\$`),
 	}
 }
 
@@ -154,19 +160,15 @@ func (r Responder) responseNRPEConf(ctx context.Context, requestArgs []string) (
 func (r Responder) returnCommand(requestArgs []string) ([]string, error) {
 	nrpeCommand := r.nrpeCommands[requestArgs[0]]
 
-	argPattern := "\\$ARG([0-9])+\\$"
-	regex := regexp.MustCompile(argPattern)
+	argsToReplace := r.argsRegexp.FindAllStringSubmatch(nrpeCommand, -1)
 
-	argsToReplace := regex.FindAllString(nrpeCommand, -1)
-
-	for _, arg := range argsToReplace {
-		argNumber := strings.TrimRight(strings.TrimLeft(arg, "$ARG"), "$")
-		argInt, _ := strconv.Atoi(argNumber)
+	for _, groups := range argsToReplace {
+		argInt, _ := strconv.Atoi(groups[1])
 
 		if len(requestArgs) > argInt && r.allowArguments {
-			nrpeCommand = strings.ReplaceAll(nrpeCommand, arg, requestArgs[argInt])
+			nrpeCommand = strings.ReplaceAll(nrpeCommand, groups[0], requestArgs[argInt])
 		} else {
-			nrpeCommand = strings.Replace(nrpeCommand, arg, "", 1)
+			nrpeCommand = strings.Replace(nrpeCommand, groups[0], "", 1)
 		}
 	}
 
