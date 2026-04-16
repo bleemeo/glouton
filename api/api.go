@@ -196,7 +196,7 @@ func (api *API) init() {
 			fmt.Fprintln(w, "diagnostic.html load failed. Fallback to simple text")
 
 			hdr := w.Header()
-			hdr.Add("Content-Type", "plain/text")
+			hdr.Add("Content-Type", "text/plain")
 
 			_, err = w.Write([]byte(content))
 		} else {
