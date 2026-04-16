@@ -55,7 +55,7 @@ type Responder struct {
 }
 
 // NewResponse returns a Response.
-func NewResponse(services []config.Service, checkRegistry checkRegistry, nrpeConfPath []string) Responder {
+func NewResponse(services []config.Service, checkRegistry checkRegistry, nrpeConfPath []string, runner *gloutonexec.Runner) Responder {
 	customChecks := make(map[string]discovery.NameInstance)
 
 	for _, service := range services {
@@ -72,6 +72,7 @@ func NewResponse(services []config.Service, checkRegistry checkRegistry, nrpeCon
 	nrpeCommands, allowArguments := readNRPEConf(nrpeConfPath)
 
 	return Responder{
+		runner:         runner,
 		discovery:      checkRegistry,
 		customCheck:    customChecks,
 		nrpeCommands:   nrpeCommands,

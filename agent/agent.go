@@ -1227,7 +1227,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	if a.config.NRPE.Enable {
 		nrpeConfFile := a.config.NRPE.ConfPaths
-		nrperesponse := nrpe.NewResponse(a.config.Services, a.discovery, nrpeConfFile)
+		nrperesponse := nrpe.NewResponse(a.config.Services, a.discovery, nrpeConfFile, a.commandRunner)
 		server := nrpe.New(
 			fmt.Sprintf("%s:%d", a.config.NRPE.Address, a.config.NRPE.Port),
 			a.config.NRPE.SSL,
