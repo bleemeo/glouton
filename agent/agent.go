@@ -1818,6 +1818,8 @@ func (a *agent) dockerWatcher(ctx context.Context) error {
 	defer wg.Wait()
 
 	pendingTimer := time.NewTimer(0 * time.Second)
+	defer pendingTimer.Stop()
+
 	// drain (expire) the timer, so the invariant "pendingTimer is expired when pendingDiscovery == false" hold.
 	<-pendingTimer.C
 
