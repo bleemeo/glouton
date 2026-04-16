@@ -73,7 +73,12 @@ func PostInformation(ctx context.Context, telemetryID string, url string, agenti
 	ctx2, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	req, _ := http.NewRequestWithContext(ctx2, http.MethodPost, url, bytes.NewBuffer(body))
+	req, err := http.NewRequestWithContext(ctx2, http.MethodPost, url, bytes.NewBuffer(body))
+	if err != nil {
+		logger.V(1).Printf("failed to parse telemetry URL: %v", err)
+
+		return
+	}
 
 	req.Header.Set("Content-Type", "application/json")
 
