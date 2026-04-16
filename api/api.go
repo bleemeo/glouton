@@ -351,7 +351,7 @@ func (api *API) Run(ctx context.Context) error {
 	}
 
 	err := srv.ListenAndServe()
-	if !errors.Is(err, http.ErrServerClosed) {
+	if errors.Is(err, http.ErrServerClosed) {
 		<-idleConnsClosed
 
 		return nil
