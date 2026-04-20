@@ -530,8 +530,15 @@ func httpQuery(ctx context.Context, url string, headers []string) string {
 
 	defer func() {
 		// drain response, so HTTP connection might be re-used.
-		io.Copy(io.Discard, resp.Body)
-		resp.Body.Close()
+		_, err := io.Copy(io.Discard, resp.Body)
+		if err != nil {
+			logger.V(2).Printf("unable to drain HTTP request to %s", url)
+		}
+
+		err = resp.Body.Close()
+		if err != nil {
+			logger.V(2).Printf("unable to close HTTP request to %s", url)
+		}
 	}()
 
 	// We refuse to decode messages when the request triggered an error
