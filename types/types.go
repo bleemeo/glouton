@@ -20,11 +20,11 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -301,12 +301,17 @@ func (a MetricAnnotations) Changed(other MetricAnnotations) bool {
 		a.BleemeoAgentID != other.BleemeoAgentID)
 }
 
+var labelsBuilderPool = sync.Pool{ //nolint:gochecknoglobals
+	New: func() any { return new(strings.Builder) },
+}
+
 func labelsToText(labels map[string]string, nameBefore bool) string {
 	if len(labels) == 0 {
 		return ""
 	}
 
 	labelNames := make([]string, 0, len(labels))
+
 	for k := range labels {
 		if k == LabelName && nameBefore {
 			continue
@@ -317,7 +322,14 @@ func labelsToText(labels map[string]string, nameBefore bool) string {
 
 	sort.Strings(labelNames)
 
-	strLabels := make([]string, 0, len(labels))
+	b := labelsBuilderPool.Get().(*strings.Builder) //nolint:forcetypeassert
+	b.Reset()
+
+	if nameBefore {
+		b.WriteString(labels[LabelName])
+	}
+
+	hadLabels := false
 
 	for _, name := range labelNames {
 		value := labels[name]
@@ -325,19 +337,29 @@ func labelsToText(labels map[string]string, nameBefore bool) string {
 			continue
 		}
 
-		str := name + "=\"" + quoter.Replace(value) + "\""
-		strLabels = append(strLabels, str)
-	}
-
-	str := strings.Join(strLabels, ",")
-
-	if nameBefore {
-		if str != "" {
-			return fmt.Sprintf("%s{%s}", labels[LabelName], str)
+		if nameBefore && !hadLabels {
+			b.WriteByte('{')
 		}
 
-		return labels[LabelName]
+		if hadLabels {
+			b.WriteByte(',')
+		}
+
+		hadLabels = true
+
+		b.WriteString(name)
+		b.WriteString(`="`)
+		b.WriteString(quoter.Replace(value))
+		b.WriteByte('"')
 	}
+
+	if nameBefore && hadLabels {
+		b.WriteByte('}')
+	}
+
+	str := b.String()
+
+	labelsBuilderPool.Put(b)
 
 	return str
 }
