@@ -7,6 +7,8 @@ snapshot:
 builds:
   - env:
       - CGO_ENABLED=0
+    flags:
+      - -trimpath
     targets:
       - linux_amd64
       - linux_386

@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
 # This build is used during -debug build. It's a copy of .goreleaser.yml with only few change in builds section
-#  (mostly specify ldflag to don't strip the binary)
+#  (mostly specify ldflag to don't strip the binary and don't trimpath)
 version: 2
 project_name: glouton
 snapshot:
