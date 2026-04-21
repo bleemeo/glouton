@@ -538,7 +538,7 @@ func (c *Cache) MetricRegistrationsFail() (registrations []bleemeoTypes.MetricRe
 	return c.data.MetricRegistrationsFail
 }
 
-// MetricRegistrationsFailByKey return a map with key being the labelsText.
+// MetricRegistrationsFailByKey return a map with key being the metricutils.MetricKey.
 func (c *Cache) MetricRegistrationsFailByKey() map[string]bleemeoTypes.MetricRegistration {
 	c.l.Lock()
 	defer c.l.Unlock()

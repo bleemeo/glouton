@@ -695,7 +695,7 @@ func (c *Client) addFailedPoints(points ...types.MetricPoint) {
 	}
 
 	for _, p := range points {
-		key := types.LabelsToText(p.Labels)
+		key := metricutils.MetricKey(p.Labels, p.Annotations, string(c.opts.AgentID))
 
 		// Ignore metrics that failed to register too many times.
 		reg := c.opts.Cache.MetricRegistrationsFailByKey()[key]
