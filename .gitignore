@@ -34,3 +34,5 @@ vendor/
 /webui/npm-debug.log
 .pnpm-store/
 /core*
+/bench-new.txt
+/bench-old.txt

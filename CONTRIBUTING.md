@@ -176,6 +176,35 @@ export GLOUTON_BLEEMEO_MQTT_PORT=1883
 export GLOUTON_BLEEMEO_MQTT_SSL=False
 ```
 
+## Advanced testing
+
+### Benchmark
+
+Glouton have few benchmark. You might run and test for regression with:
+
+```
+# You might want to limit to specific package or test, depending on you use case
+go test -run='^$' -bench=. -count=10 -benchmem ./... > bench-old.txt
+
+# Apply your changes (run normal test to ensure the change is valid) and re-run benchmark:
+go test -run='^$' -bench=. -count=10 -benchmem ./... > bench-new.txt
+
+# Show diff between benchmark:
+go run golang.org/x/perf/cmd/benchstat@latest bench-old.txt bench-new.txt
+```
+
+### Fuzzing
+
+Glouton have few fuzzing tests. You might run fuzzing to find possible issue. Fuzz test are run next to normal test
+(when running `go test`), but the fuzzing part that search new input need to be run in dedicated run and once per test.
+
+The following with run fuzzing on each Fuzz test for 60 seconds for each one:
+
+```
+go test -fuzz=FuzzLabelsRoundTrip -fuzztime=60s ./types/
+go test -fuzz=FuzzTextToLabelsNoCrash -fuzztime=60s ./types/
+```
+
 ## Advanced debugging
 
 During some debugging workflow, you might need a Glouton binary with debug symbols,

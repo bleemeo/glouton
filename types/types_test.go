@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -192,5 +193,67 @@ func Test_MultiError_Is(t *testing.T) {
 				t.Errorf("MultiError.Is() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// FuzzTextToLabelsNoCrash ensure we don't have a panic on invalid input.
+func FuzzTextToLabelsNoCrash(f *testing.F) {
+	f.Add(`__name__="node_cpu_seconds_total",cpu="0",mode="idle"`)
+	f.Add(`__name__="go_goroutines"`)
+	f.Add(`__name__="go_goroutines",alabel="value1\",blabel=\"value2"`)
+	f.Add(``)
+	f.Add(`=`)
+	f.Add(`key="`)
+	f.Add(`key="value"garbage`)
+
+	f.Fuzz(func(t *testing.T, s string) {
+		TextToLabels(s)
+	})
+}
+
+// isValidKey tells whether or not input is a "valid" Prometheus label key.
+// This is very unrestrictive, as is only reject "=" and empty string.
+func isValidKey(s string) bool {
+	return len(s) > 0 && !strings.Contains(s, "=")
+}
+
+// FuzzLabelsRoundTrip ensure we have a round-trip property for label conversion.
+func FuzzLabelsRoundTrip(f *testing.F) {
+	f.Add("__name__", "go_goroutines", "", "")
+	f.Add("__name__", "node_cpu_seconds_total", "cpu", "0")
+	f.Add("__name__", `go_goroutines`, "alabel", `value1",blabel="value2`)
+
+	f.Fuzz(func(t *testing.T, k1, v1, k2, v2 string) {
+		if !isValidKey(k1) || !isValidKey(k2) || len(v1) == 0 || len(v2) == 0 {
+			t.Skip()
+		}
+
+		labels := map[string]string{k1: v1}
+
+		if k2 != k1 {
+			labels[k2] = v2
+		}
+
+		text := LabelsToText(labels)
+		back := TextToLabels(text)
+
+		if !reflect.DeepEqual(back, labels) {
+			t.Errorf("round-trip failed: labels=%v, text=%q, back=%v", labels, text, back)
+		}
+	})
+}
+
+func BenchmarkTextToLabels(b *testing.B) {
+	benchmarkInputs := []string{
+		`__name__="node_cpu_seconds_total",cpu="0",mode="idle"`,
+		`__name__="go_goroutines"`,
+		`__name__="go_goroutines",alabel="value1\",blabel=\"value2"`,
+		`__name__="http_requests_total",handler="/api/v1/query",instance="localhost:9090",job="prometheus",method="get"`,
+	}
+
+	for b.Loop() {
+		for _, input := range benchmarkInputs {
+			TextToLabels(input)
+		}
 	}
 }
