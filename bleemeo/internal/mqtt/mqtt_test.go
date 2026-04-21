@@ -43,7 +43,7 @@ func TestFailedPointsCache(t *testing.T) {
 	failedPoints := failedPointsCache{
 		maxPendingPoints:    maxPendingPoints,
 		cleanupBatchSize:    cleanupBatchSize,
-		cleanupFailedPoints: func(failedPoints []types.MetricPoint) []types.MetricPoint { return failedPoints },
+		cleanupFailedPoints: func(failedPoints []storedPoint) []storedPoint { return failedPoints },
 		metricExists:        make(map[string]struct{}),
 	}
 
@@ -409,7 +409,7 @@ func BenchmarkFailedPointsDropping(b *testing.B) {
 	failedPoints := failedPointsCache{
 		maxPendingPoints:    maxPendingPoints,
 		cleanupBatchSize:    cleanupBatchSize,
-		cleanupFailedPoints: func(failedPoints []types.MetricPoint) []types.MetricPoint { return failedPoints },
+		cleanupFailedPoints: func(failedPoints []storedPoint) []storedPoint { return failedPoints },
 		metricExists:        make(map[string]struct{}),
 	}
 
