@@ -551,7 +551,7 @@ func TestMetricSimpleSync(t *testing.T) {
 		},
 	}
 
-	if diff := cmp.Diff(want, metrics); diff != "" {
+	if diff := cmp.Diff(want, metrics, cmpopts.IgnoreUnexported(bleemeoTypes.Metric{})); diff != "" {
 		t.Errorf("metrics mismatch (-want +got):\n%s", diff)
 	}
 
@@ -590,7 +590,7 @@ func TestMetricSimpleSync(t *testing.T) {
 		},
 	}
 
-	if diff := cmp.Diff(want, metrics); diff != "" {
+	if diff := cmp.Diff(want, metrics, cmpopts.IgnoreUnexported(bleemeoTypes.Metric{})); diff != "" {
 		t.Errorf("metrics mismatch (-want +got):\n%s", diff)
 	}
 
@@ -1532,7 +1532,7 @@ func TestWithSNMP(t *testing.T) {
 		},
 	}
 
-	if diff := cmp.Diff(want, metrics); diff != "" {
+	if diff := cmp.Diff(want, metrics, cmpopts.IgnoreUnexported(bleemeoTypes.Metric{})); diff != "" {
 		t.Errorf("metrics mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -1641,7 +1641,7 @@ func TestMonitorDeactivation(t *testing.T) {
 
 	want = append(want, initialMetrics...)
 
-	if diff := cmp.Diff(want, metrics); diff != "" {
+	if diff := cmp.Diff(want, metrics, cmpopts.IgnoreUnexported(bleemeoTypes.Metric{})); diff != "" {
 		t.Fatalf("metrics mismatch (-want +got):\n%s", diff)
 	}
 
@@ -1654,7 +1654,7 @@ func TestMonitorDeactivation(t *testing.T) {
 
 	metrics = helper.MetricsFromAPI()
 
-	if diff := cmp.Diff(want, metrics); diff != "" {
+	if diff := cmp.Diff(want, metrics, cmpopts.IgnoreUnexported(bleemeoTypes.Metric{})); diff != "" {
 		t.Errorf("metrics mismatch (-want +got):\n%s", diff)
 	}
 
@@ -1705,7 +1705,7 @@ func TestMonitorDeactivation(t *testing.T) {
 		initialMetrics[2],
 	}
 
-	if diff := cmp.Diff(want, metrics); diff != "" {
+	if diff := cmp.Diff(want, metrics, cmpopts.IgnoreUnexported(bleemeoTypes.Metric{})); diff != "" {
 		t.Errorf("metrics mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -1734,14 +1734,15 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 				// API will rename and reuse the existing $SERVICE_status metric when registering service_status metrics.
 				// From Glouton point of vue, it is the same as if a new metric is created (service_status) and the old is deleted.
 				metricCopy := metricFromAPI(*metric, helper.s.now())
-				serviceType := metricCopy.Labels[gloutonTypes.LabelService]
+				metricCopyLabels := gloutonTypes.TextToLabels(metricCopy.LabelsText)
+				serviceType := metricCopyLabels[gloutonTypes.LabelService]
 
 				if metric.Name != "service_status" || serviceType == "" {
 					return nil
 				}
 
 				for idx, existing := range helper.wrapperClientMock.resources.metrics.elems {
-					if existing.Name == serviceType+"_status" && existing.Item == metricCopy.Labels[gloutonTypes.LabelServiceInstance] {
+					if existing.Name == serviceType+"_status" && existing.Item == metricCopyLabels[gloutonTypes.LabelServiceInstance] {
 						metric.ID = existing.ID
 
 						return reuseIDError{idx}
@@ -1838,7 +1839,7 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 
 				metrics := helper.MetricsFromAPI()
 
-				if diff := cmp.Diff(want1, metrics); diff != "" {
+				if diff := cmp.Diff(want1, metrics, cmpopts.IgnoreUnexported(bleemeoTypes.Metric{})); diff != "" {
 					t.Errorf("metrics mismatch (-want +got):\n%s", diff)
 				}
 
@@ -1907,7 +1908,7 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 			}
 
 			metrics := helper.MetricsFromAPI()
-			if diff := cmp.Diff(want2, metrics); diff != "" {
+			if diff := cmp.Diff(want2, metrics, cmpopts.IgnoreUnexported(bleemeoTypes.Metric{})); diff != "" {
 				t.Errorf("metrics mismatch (-want +got):\n%s", diff)
 			}
 
@@ -1954,7 +1955,7 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 
 			metrics = helper.MetricsFromAPI()
 
-			if diff := cmp.Diff(want3, metrics); diff != "" {
+			if diff := cmp.Diff(want3, metrics, cmpopts.IgnoreUnexported(bleemeoTypes.Metric{})); diff != "" {
 				t.Errorf("metrics mismatch (-want +got):\n%s", diff)
 			}
 		})
@@ -2471,7 +2472,7 @@ func Test_MergeFirstSeenAt(t *testing.T) {
 	got = sortList(got)
 	want = sortList(want)
 
-	if res := cmp.Diff(got, want); res != "" {
-		t.Errorf("FirstSeenAt Merge did not occur correctly:\n%s", res)
+	if res := cmp.Diff(want, got, cmpopts.IgnoreUnexported(bleemeoTypes.Metric{})); res != "" {
+		t.Errorf("FirstSeenAt Merge did not occur correctly: (-want +got)\n%s", res)
 	}
 }

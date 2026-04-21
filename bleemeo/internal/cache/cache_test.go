@@ -141,7 +141,6 @@ func checkMetrics(t *testing.T, cache *Cache) {
 			ID:         "8e930d86-8c51-4b3a-8601-cf6a2b1b4997",
 			AgentID:    "d5732833-fc1b-43c7-b253-565b56701651", // AgentID on metric was added in v5.
 			LabelsText: "__name__=\"agent_status\"",
-			Labels:     map[string]string{"__name__": "agent_status"},
 			Threshold: types.Threshold{
 				LowWarning:   nil,
 				LowCritical:  nil,
@@ -157,7 +156,6 @@ func checkMetrics(t *testing.T, cache *Cache) {
 			ID:         "1c412097-e83b-4afa-99a1-7503bc712b70",
 			AgentID:    "d5732833-fc1b-43c7-b253-565b56701651",
 			LabelsText: "__name__=\"agent_sent_message\",item=\"my_item\"", // _item was renamed to item in v4.
-			Labels:     map[string]string{"__name__": "agent_sent_message", "item": "my_item"},
 			Threshold: types.Threshold{
 				LowWarning:   nil,
 				LowCritical:  floatToPointer(20),

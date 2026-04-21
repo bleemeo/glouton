@@ -494,7 +494,7 @@ func (helper *syncTestHelper) assertMetricsInAPI(t *testing.T, want []bleemeoapi
 	}
 
 	optSort := cmpopts.SortSlices(func(x, y bleemeoapi.MetricPayload) bool { return x.ID < y.ID })
-	if diff := cmp.Diff(copyWant, metrics, cmpopts.EquateEmpty(), optSort); diff != "" {
+	if diff := cmp.Diff(copyWant, metrics, cmpopts.EquateEmpty(), optSort, cmpopts.IgnoreUnexported(bleemeoTypes.Metric{})); diff != "" {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 	}
 }

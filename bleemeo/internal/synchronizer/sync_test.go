@@ -90,7 +90,7 @@ func TestSync(t *testing.T) {
 	}
 
 	optMetricSort := cmpopts.SortSlices(func(x bleemeoTypes.Metric, y bleemeoTypes.Metric) bool { return x.ID < y.ID })
-	if diff := cmp.Diff(want, syncedMetrics, optMetricSort); diff != "" {
+	if diff := cmp.Diff(want, syncedMetrics, optMetricSort, cmpopts.IgnoreUnexported(bleemeoTypes.Metric{})); diff != "" {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 	}
 
@@ -218,7 +218,7 @@ func TestSyncWithSNMP(t *testing.T) {
 	}
 
 	optMetricSort := cmpopts.SortSlices(func(x, y bleemeoapi.MetricPayload) bool { return x.ID < y.ID })
-	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
+	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort, cmpopts.IgnoreUnexported(bleemeoTypes.Metric{})); diff != "" {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 	}
 
@@ -245,7 +245,7 @@ func TestSyncWithSNMP(t *testing.T) {
 
 			metrics = helper.wrapperClientMock.resources.metrics.clone()
 
-			if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
+			if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort, cmpopts.IgnoreUnexported(bleemeoTypes.Metric{})); diff != "" {
 				t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 			}
 		})
@@ -304,7 +304,7 @@ func TestSyncWithSNMP(t *testing.T) {
 		},
 	}
 
-	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
+	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort, cmpopts.IgnoreUnexported(bleemeoTypes.Metric{})); diff != "" {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 	}
 }
@@ -436,7 +436,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 	}
 
 	optMetricSort := cmpopts.SortSlices(func(x, y bleemeoapi.MetricPayload) bool { return x.ID < y.ID })
-	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
+	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort, cmpopts.IgnoreUnexported(bleemeoTypes.Metric{})); diff != "" {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 	}
 
@@ -515,7 +515,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 
 	metrics = helper.wrapperClientMock.resources.metrics.clone()
 
-	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
+	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort, cmpopts.IgnoreUnexported(bleemeoTypes.Metric{})); diff != "" {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 	}
 
@@ -602,7 +602,7 @@ func TestContainerSync(t *testing.T) {
 	}
 
 	optMetricSort := cmpopts.SortSlices(func(x, y bleemeoapi.MetricPayload) bool { return x.ID < y.ID })
-	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
+	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort, cmpopts.IgnoreUnexported(bleemeoTypes.Metric{})); diff != "" {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 	}
 
@@ -658,7 +658,7 @@ func TestContainerSync(t *testing.T) {
 		},
 	}
 
-	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
+	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort, cmpopts.IgnoreUnexported(bleemeoTypes.Metric{})); diff != "" {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 	}
 
@@ -727,7 +727,7 @@ func TestContainerSync(t *testing.T) {
 		},
 	}
 
-	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
+	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort, cmpopts.IgnoreUnexported(bleemeoTypes.Metric{})); diff != "" {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 	}
 }

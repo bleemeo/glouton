@@ -686,12 +686,6 @@ func Load(state bleemeoTypes.State) *Cache {
 
 	cache.data = newData
 
-	for i, m := range cache.data.Metrics {
-		m.Labels = types.TextToLabels(m.LabelsText)
-
-		cache.data.Metrics[i] = m
-	}
-
 	return cache
 }
 

@@ -767,7 +767,7 @@ func (c *Client) preparePoints(
 		}
 
 		// Don't send labels text if the metric only has a name and an item.
-		if metricutils.MetricOnlyHasItem(metric.Labels, metric.AgentID) {
+		if metric.OnlyHasItem() {
 			// The metric ID is not used when labels text are present
 			// because they already uniquely identify the metric.
 			payload.UUID = metric.ID
@@ -957,7 +957,7 @@ func (c *Client) ready() bool {
 	}
 
 	for _, m := range c.opts.Cache.Metrics() {
-		if m.Labels[types.LabelName] == "agent_status" {
+		if types.TextToLabels(m.LabelsText)[types.LabelName] == "agent_status" {
 			return true
 		}
 	}

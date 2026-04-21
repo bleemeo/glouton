@@ -431,7 +431,7 @@ func (wcm *wrapperClientMock) ListMetricsBy(_ context.Context, params url.Values
 			return false
 		}
 
-		if params.Has("label") && m.Labels[gloutonTypes.LabelName] != params.Get("label") {
+		if params.Has("label") && gloutonTypes.TextToLabels(m.LabelsText)[gloutonTypes.LabelName] != params.Get("label") {
 			return false
 		}
 
