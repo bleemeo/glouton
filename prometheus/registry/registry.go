@@ -254,8 +254,10 @@ type ThresholdHandler interface {
 func (opt *RegistrationOption) buildRules() error {
 	rrules := make([]*rules.RecordingRule, 0, len(opt.Rules))
 
+	promqlParser := parser.NewParser(parser.Options{})
+
 	for i, r := range opt.Rules {
-		expr, err := parser.ParseExpr(r.PromQLQuery)
+		expr, err := promqlParser.ParseExpr(r.PromQLQuery)
 		if err != nil {
 			return fmt.Errorf("rule %s (n°%d): %w", r.TargetName, i+1, err)
 		}

@@ -167,8 +167,10 @@ func TestApplyRulesMFS(t *testing.T) {
 
 	rrules := make([]*rules.RecordingRule, len(simpleRules))
 
+	promqlParser := parser.NewParser(parser.Options{})
+
 	for i, sr := range simpleRules {
-		expr, err := parser.ParseExpr(sr.PromQLQuery)
+		expr, err := promqlParser.ParseExpr(sr.PromQLQuery)
 		if err != nil {
 			t.Fatalf("rule %s: %v", sr.TargetName, err)
 		}

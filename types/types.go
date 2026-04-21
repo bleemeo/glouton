@@ -365,7 +365,9 @@ func LabelsToTextNicer(labels map[string]string) string {
 
 // TextToLabels is the reverse of LabelsToText.
 func TextToLabels(text string) map[string]string {
-	labels, err := parser.ParseMetricSelector("{" + text + "}")
+	promqlParser := parser.NewParser(parser.Options{})
+
+	labels, err := promqlParser.ParseMetricSelector("{" + text + "}")
 	if err != nil {
 		logger.Printf("unable to decode labels %#v: %v", text, err)
 

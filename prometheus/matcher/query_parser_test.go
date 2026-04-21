@@ -254,11 +254,14 @@ func TestMatchersFromQuery(t *testing.T) {
 			},
 		},
 	}
+
+	promqlParser := parser.NewParser(parser.Options{})
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			expr, err := parser.ParseExpr(tt.query)
+			expr, err := promqlParser.ParseExpr(tt.query)
 			if err != nil {
 				t.Fatal(err)
 			}
