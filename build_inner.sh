@@ -53,6 +53,8 @@ create_single_target_config() {
    TEMPLATE_CONFIG=".goreleaser.yml"
    if [ "$TARGET_TO_BUILD" = "single-target-race" ]; then
       TEMPLATE_CONFIG=".goreleaser-race.yml"
+   elif [ "$TARGET_TO_BUILD" = "single-target-debug" ]; then
+      TEMPLATE_CONFIG=".goreleaser-dbg.yml"
    fi
 
    # Removes all targets from .goreleaser.yml and re-add only $TARGET.
@@ -82,6 +84,14 @@ if [ "$TARGET_TO_BUILD" != "release" ]; then
    create_single_target_config
 else
    GORELEASER_CONFIG=".goreleaser.yml"
+fi
+
+if [ "${TARGET_TO_BUILD}" = "interactive-shell" ]; then
+   echo "--- Opening interactive shell in build container"
+   # Reset TARGET_TO_BUILD to single-target-debug, so you could easily run a build.
+   echo " * If you need to do a build (which will ensure dependencies are fetched), you can run"
+   echo "sh build_inner.sh"
+   exec bash
 fi
 
 do_test_and_build

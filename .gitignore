@@ -33,3 +33,4 @@ vendor/
 /webui/node_modules/
 /webui/npm-debug.log
 .pnpm-store/
+/core*
