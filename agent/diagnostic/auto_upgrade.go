@@ -146,7 +146,7 @@ func (d DiagnosticAutoUpgrade) diagnosticAutoupgradeLinux(ctx context.Context, a
 }
 
 func (d DiagnosticAutoUpgrade) diagnosticAutoupgradeLinuxJournalctl(ctx context.Context, archive types.ArchiveWriter) error {
-	out, cmdErr := d.runner.Run(ctx, gloutonexec.Option{SkipInContainer: true}, "journalctl", "-u", "glouton-auto-upgrade", "--since", "24 hours ago")
+	out, cmdErr := d.runner.Run(ctx, gloutonexec.Option{SkipInContainer: true}, "journalctl", "-u", "glouton-auto-upgrade", "--since", "48 hours ago")
 	if cmdErr != nil && errors.Is(cmdErr, gloutonexec.ErrExecutionSkipped) {
 		// The auto upgrade is not supported on containers, skip producing the diagnostic file
 		return nil
