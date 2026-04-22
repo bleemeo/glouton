@@ -528,7 +528,18 @@ func httpQuery(ctx context.Context, url string, headers []string) string {
 		return ""
 	}
 
-	defer resp.Body.Close()
+	defer func() {
+		// drain response, so HTTP connection might be re-used.
+		_, err := io.Copy(io.Discard, resp.Body)
+		if err != nil {
+			logger.V(2).Printf("unable to drain HTTP request to %s", url)
+		}
+
+		err = resp.Body.Close()
+		if err != nil {
+			logger.V(2).Printf("unable to close HTTP request to %s", url)
+		}
+	}()
 
 	// We refuse to decode messages when the request triggered an error
 	if resp.StatusCode >= http.StatusBadRequest {

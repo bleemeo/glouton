@@ -118,7 +118,7 @@ func (api *API) init() {
 	router := chi.NewRouter()
 	router.Use(cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"},
-		AllowCredentials: true,
+		AllowCredentials: false,
 		Debug:            false,
 	}).Handler)
 
@@ -196,7 +196,7 @@ func (api *API) init() {
 			fmt.Fprintln(w, "diagnostic.html load failed. Fallback to simple text")
 
 			hdr := w.Header()
-			hdr.Add("Content-Type", "plain/text")
+			hdr.Add("Content-Type", "text/plain")
 
 			_, err = w.Write([]byte(content))
 		} else {
@@ -351,7 +351,7 @@ func (api *API) Run(ctx context.Context) error {
 	}
 
 	err := srv.ListenAndServe()
-	if !errors.Is(err, http.ErrServerClosed) {
+	if errors.Is(err, http.ErrServerClosed) {
 		<-idleConnsClosed
 
 		return nil

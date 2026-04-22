@@ -197,7 +197,7 @@ func TestReadNRPEConfFile(t *testing.T) {
 	}
 }
 
-func TestReturnCommand(t *testing.T) { //nolint:maintidx
+func TestReturnCommand(t *testing.T) {
 	type Entries struct {
 		Responder Responder
 		Args      []string
@@ -214,14 +214,9 @@ func TestReturnCommand(t *testing.T) { //nolint:maintidx
 	}{
 		{
 			Entries: Entries{
-				Responder: Responder{
-					discovery:   nil,
-					customCheck: nil,
-					nrpeCommands: map[string]string{
-						"check_users": "command --option -h",
-					},
-					allowArguments: false,
-				},
+				Responder: newResponse(nil, nil, nil, map[string]string{
+					"check_users": "command --option -h",
+				}, false),
 				Args: []string{"check_users"},
 			},
 			Want: Want{
@@ -231,14 +226,9 @@ func TestReturnCommand(t *testing.T) { //nolint:maintidx
 		},
 		{
 			Entries: Entries{
-				Responder: Responder{
-					discovery:   nil,
-					customCheck: nil,
-					nrpeCommands: map[string]string{
-						"check_users": "command --option -s",
-					},
-					allowArguments: true,
-				},
+				Responder: newResponse(nil, nil, nil, map[string]string{
+					"check_users": "command --option -s",
+				}, true),
 				Args: []string{"check_users"},
 			},
 			Want: Want{
@@ -248,14 +238,9 @@ func TestReturnCommand(t *testing.T) { //nolint:maintidx
 		},
 		{
 			Entries: Entries{
-				Responder: Responder{
-					discovery:   nil,
-					customCheck: nil,
-					nrpeCommands: map[string]string{
-						"check_users": "command --option $ARG1$ -s",
-					},
-					allowArguments: true,
-				},
+				Responder: newResponse(nil, nil, nil, map[string]string{
+					"check_users": "command --option $ARG1$ -s",
+				}, true),
 				Args: []string{"check_users", "argument1"},
 			},
 			Want: Want{
@@ -265,14 +250,9 @@ func TestReturnCommand(t *testing.T) { //nolint:maintidx
 		},
 		{
 			Entries: Entries{
-				Responder: Responder{
-					discovery:   nil,
-					customCheck: nil,
-					nrpeCommands: map[string]string{
-						"check_users": "command --option $ARG1$ -s",
-					},
-					allowArguments: true,
-				},
+				Responder: newResponse(nil, nil, nil, map[string]string{
+					"check_users": "command --option $ARG1$ -s",
+				}, true),
 				Args: []string{"check_users", "space in args"},
 			},
 			Want: Want{
@@ -282,14 +262,9 @@ func TestReturnCommand(t *testing.T) { //nolint:maintidx
 		},
 		{
 			Entries: Entries{
-				Responder: Responder{
-					discovery:   nil,
-					customCheck: nil,
-					nrpeCommands: map[string]string{
-						"check_users": "command --option $ARG1$ -s '$ARG2$'",
-					},
-					allowArguments: true,
-				},
+				Responder: newResponse(nil, nil, nil, map[string]string{
+					"check_users": "command --option $ARG1$ -s '$ARG2$'",
+				}, true),
 				Args: []string{"check_users", "the argument one", "the argument two"},
 			},
 			Want: Want{
@@ -299,14 +274,9 @@ func TestReturnCommand(t *testing.T) { //nolint:maintidx
 		},
 		{
 			Entries: Entries{
-				Responder: Responder{
-					discovery:   nil,
-					customCheck: nil,
-					nrpeCommands: map[string]string{
-						"check_users": "command --option $ARG1$ -s \"$ARG2$\"",
-					},
-					allowArguments: true,
-				},
+				Responder: newResponse(nil, nil, nil, map[string]string{
+					"check_users": "command --option $ARG1$ -s \"$ARG2$\"",
+				}, true),
 				Args: []string{"check_users", "the argument one", "the argument two"},
 			},
 			Want: Want{
@@ -316,14 +286,9 @@ func TestReturnCommand(t *testing.T) { //nolint:maintidx
 		},
 		{
 			Entries: Entries{
-				Responder: Responder{
-					discovery:   nil,
-					customCheck: nil,
-					nrpeCommands: map[string]string{
-						"check_users": "command --option $ARG1$ -p $ARG1$",
-					},
-					allowArguments: true,
-				},
+				Responder: newResponse(nil, nil, nil, map[string]string{
+					"check_users": "command --option $ARG1$ -p $ARG1$",
+				}, true),
 				Args: []string{"check_users", "argument1", "1234"},
 			},
 			Want: Want{
@@ -333,14 +298,9 @@ func TestReturnCommand(t *testing.T) { //nolint:maintidx
 		},
 		{
 			Entries: Entries{
-				Responder: Responder{
-					discovery:   nil,
-					customCheck: nil,
-					nrpeCommands: map[string]string{
-						"check_users": "command --option $ARG1$ -h",
-					},
-					allowArguments: false,
-				},
+				Responder: newResponse(nil, nil, nil, map[string]string{
+					"check_users": "command --option $ARG1$ -h",
+				}, false),
 				Args: []string{"check_users", "argument1"},
 			},
 			Want: Want{
@@ -350,14 +310,9 @@ func TestReturnCommand(t *testing.T) { //nolint:maintidx
 		},
 		{
 			Entries: Entries{
-				Responder: Responder{
-					discovery:   nil,
-					customCheck: nil,
-					nrpeCommands: map[string]string{
-						"check_users": "command --option $ARG1$ -a",
-					},
-					allowArguments: true,
-				},
+				Responder: newResponse(nil, nil, nil, map[string]string{
+					"check_users": "command --option $ARG1$ -a",
+				}, true),
 				Args: []string{"check_users", "argument1", "argument2"},
 			},
 			Want: Want{
@@ -367,14 +322,9 @@ func TestReturnCommand(t *testing.T) { //nolint:maintidx
 		},
 		{
 			Entries: Entries{
-				Responder: Responder{
-					discovery:   nil,
-					customCheck: nil,
-					nrpeCommands: map[string]string{
-						"check_users": "command --option $ARG1$ -a $ARG2$",
-					},
-					allowArguments: true,
-				},
+				Responder: newResponse(nil, nil, nil, map[string]string{
+					"check_users": "command --option $ARG1$ -a $ARG2$",
+				}, true),
 				Args: []string{"check_users", "argument1"},
 			},
 			Want: Want{
@@ -384,14 +334,9 @@ func TestReturnCommand(t *testing.T) { //nolint:maintidx
 		},
 		{
 			Entries: Entries{
-				Responder: Responder{
-					discovery:   nil,
-					customCheck: nil,
-					nrpeCommands: map[string]string{
-						"check_users": "command --option",
-					},
-					allowArguments: true,
-				},
+				Responder: newResponse(nil, nil, nil, map[string]string{
+					"check_users": "command --option",
+				}, true),
 				Args: []string{"check_users", "argument0"},
 			},
 			Want: Want{
@@ -401,14 +346,9 @@ func TestReturnCommand(t *testing.T) { //nolint:maintidx
 		},
 		{
 			Entries: Entries{
-				Responder: Responder{
-					discovery:   nil,
-					customCheck: nil,
-					nrpeCommands: map[string]string{
-						"check_users": "command --args '$ARG1$@$ARG2$.com'",
-					},
-					allowArguments: true,
-				},
+				Responder: newResponse(nil, nil, nil, map[string]string{
+					"check_users": "command --args '$ARG1$@$ARG2$.com'",
+				}, true),
 				Args: []string{"check_users", "glouton", "bleemeo"},
 			},
 			Want: Want{
@@ -418,14 +358,9 @@ func TestReturnCommand(t *testing.T) { //nolint:maintidx
 		},
 		{
 			Entries: Entries{
-				Responder: Responder{
-					discovery:   nil,
-					customCheck: nil,
-					nrpeCommands: map[string]string{
-						"check_users": "command --args '$ARG1$ by $ARG2$'",
-					},
-					allowArguments: true,
-				},
+				Responder: newResponse(nil, nil, nil, map[string]string{
+					"check_users": "command --args '$ARG1$ by $ARG2$'",
+				}, true),
 				Args: []string{"check_users", "glouton", "bleemeo"},
 			},
 			Want: Want{
@@ -435,14 +370,9 @@ func TestReturnCommand(t *testing.T) { //nolint:maintidx
 		},
 		{
 			Entries: Entries{
-				Responder: Responder{
-					discovery:   nil,
-					customCheck: nil,
-					nrpeCommands: map[string]string{
-						"check_users": "command --args '$ARG1$ by $ARG5$'",
-					},
-					allowArguments: true,
-				},
+				Responder: newResponse(nil, nil, nil, map[string]string{
+					"check_users": "command --args '$ARG1$ by $ARG5$'",
+				}, true),
 				Args: []string{"check_users", "glouton", "bleemeo"},
 			},
 			Want: Want{
@@ -452,14 +382,9 @@ func TestReturnCommand(t *testing.T) { //nolint:maintidx
 		},
 		{
 			Entries: Entries{
-				Responder: Responder{
-					discovery:   nil,
-					customCheck: nil,
-					nrpeCommands: map[string]string{
-						"check_users": "command --args '$ARG1$ by $ARG5$'",
-					},
-					allowArguments: true,
-				},
+				Responder: newResponse(nil, nil, nil, map[string]string{
+					"check_users": "command --args '$ARG1$ by $ARG5$'",
+				}, true),
 				Args: []string{"check_users", "glouton", "bleemeo company", "three as number", "four (4)", "the number five"},
 			},
 			Want: Want{
@@ -469,14 +394,9 @@ func TestReturnCommand(t *testing.T) { //nolint:maintidx
 		},
 		{
 			Entries: Entries{
-				Responder: Responder{
-					discovery:   nil,
-					customCheck: nil,
-					nrpeCommands: map[string]string{
-						"check_users": "command --args '$ARG1$ by $ARG1$'",
-					},
-					allowArguments: false,
-				},
+				Responder: newResponse(nil, nil, nil, map[string]string{
+					"check_users": "command --args '$ARG1$ by $ARG1$'",
+				}, false),
 				Args: []string{"check_users", "glouton", "bleemeo"},
 			},
 			Want: Want{

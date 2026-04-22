@@ -500,6 +500,7 @@ func (s *Synchronizer) scheduleMetricSync(ctx context.Context, delay time.Durati
 		defer crashreport.ProcessPanic()
 
 		timer := time.NewTimer(delay)
+		defer timer.Stop()
 
 		select {
 		case <-timer.C:
