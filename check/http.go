@@ -63,7 +63,7 @@ func NewHTTP(
 
 	mainTCPAddress := ""
 
-	if u, err := url.Parse(urlValue); err != nil {
+	if u, err := url.Parse(urlValue); err == nil {
 		port := u.Port()
 		if port == "" && u.Scheme == "http" {
 			port = "80"

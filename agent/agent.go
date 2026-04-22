@@ -1228,7 +1228,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	if a.config.NRPE.Enable {
 		nrpeConfFile := a.config.NRPE.ConfPaths
-		nrperesponse := nrpe.NewResponse(a.config.Services, a.discovery, nrpeConfFile)
+		nrperesponse := nrpe.NewResponse(a.config.Services, a.discovery, nrpeConfFile, a.commandRunner)
 		server := nrpe.New(
 			fmt.Sprintf("%s:%d", a.config.NRPE.Address, a.config.NRPE.Port),
 			a.config.NRPE.SSL,
@@ -1819,6 +1819,8 @@ func (a *agent) dockerWatcher(ctx context.Context) error {
 	defer wg.Wait()
 
 	pendingTimer := time.NewTimer(0 * time.Second)
+	defer pendingTimer.Stop()
+
 	// drain (expire) the timer, so the invariant "pendingTimer is expired when pendingDiscovery == false" hold.
 	<-pendingTimer.C
 

@@ -53,7 +53,9 @@ func NormalizeMetric(metric string) (Matchers, error) {
 		metric = fmt.Sprintf("{%s%s\"%s\"}", types.LabelName, matchType, metric)
 	}
 
-	m, err := parser.ParseMetricSelector(metric)
+	promqlParser := parser.NewParser(parser.Options{})
+
+	m, err := promqlParser.ParseMetricSelector(metric)
 	if err != nil {
 		return nil, fmt.Errorf("parse metric %s: %w", metric, err)
 	}

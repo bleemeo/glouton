@@ -96,8 +96,10 @@ var (
 )
 
 func Test_Basic_Build(t *testing.T) {
-	cpuMatcher, _ := promParser.ParseMetricSelector("{__name__=~\"cpu.*\"}")
-	proMatcher, _ := promParser.ParseMetricSelector("{__name__=~\"pro.*\"}")
+	promqlParser := promParser.NewParser(promParser.Options{})
+
+	cpuMatcher, _ := promqlParser.ParseMetricSelector("{__name__=~\"cpu.*\"}")
+	proMatcher, _ := promqlParser.ParseMetricSelector("{__name__=~\"pro.*\"}")
 
 	want := Filter{
 		allowList: map[labels.Matcher][]matcher.Matchers{
@@ -1629,7 +1631,9 @@ func Benchmark_MultipleFilters(b *testing.B) {
 			continue
 		}
 
-		lbls, err := promParser.ParseMetric(string(metric))
+		promqlParser := promParser.NewParser(promParser.Options{})
+
+		lbls, err := promqlParser.ParseMetric(string(metric))
 		if err != nil {
 			b.Fatalf("Failed to parse %q: %v", metric, err)
 		}
