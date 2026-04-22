@@ -160,6 +160,100 @@ func (f *FactProvider) platformFacts(ctx context.Context) map[string]string {
 	return facts
 }
 
+func (f *FactProvider) installedPackagesFacts(ctx context.Context, facts map[string]string) {
+	osFamily := facts["os_family"]
+	osName := strings.ToLower(facts["os_name"])
+
+	trackedPackages := []struct {
+		factName    string
+		packageName string
+	}{
+		{factName: "glouton_package_version", packageName: "glouton"},
+		{factName: "bleemeo_agent_package_version", packageName: "bleemeo-agent"},
+		{factName: "bleemeo_agent_keyring_package_version", packageName: "bleemeo-agent-keyring"},
+		{factName: "bleemeo_agent_jmx_package_version", packageName: "bleemeo-agent-jmx"},
+		{factName: "bleemeo_agent_logs_package_version", packageName: "bleemeo-agent-logs"},
+	}
+
+	packageNames := make([]string, len(trackedPackages))
+	packageToFact := make(map[string]string, len(trackedPackages))
+
+	for i, pkg := range trackedPackages {
+		packageNames[i] = pkg.packageName
+		packageToFact[pkg.packageName] = pkg.factName
+	}
+
+	var versions map[string]string
+
+	switch {
+	case osFamily == "debian":
+		versions = f.queryDebianPackageVersions(ctx, packageNames)
+	case strings.Contains(osFamily, "rhel") || strings.Contains(osFamily, "fedora") || strings.Contains(osName, "fedora"):
+		versions = f.queryRPMPackageVersions(ctx, packageNames)
+	}
+
+	for pkgName, version := range versions {
+		facts[packageToFact[pkgName]] = version
+	}
+}
+
+func (f *FactProvider) queryDebianPackageVersions(ctx context.Context, packageNames []string) map[string]string {
+	args := append([]string{"-W", "-f=${Package} ${Version}\n"}, packageNames...)
+	result, err := f.options.Runner.Run(ctx, gloutonexec.Option{SkipInContainer: true}, "dpkg-query", args...)
+
+	if errors.Is(err, gloutonexec.ErrExecutionSkipped) {
+		return nil
+	}
+
+	// dpkg-query exits non-zero if any package is missing, but still outputs the installed ones
+	if err != nil && len(result) == 0 {
+		logger.V(1).Printf("unable to run dpkg-query: %v", err)
+
+		return nil
+	}
+
+	versions := make(map[string]string)
+
+	for line := range strings.SplitSeq(string(result), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 2 && fields[1] != "" {
+			versions[fields[0]] = fields[1]
+		}
+	}
+
+	return versions
+}
+
+func (f *FactProvider) queryRPMPackageVersions(ctx context.Context, packageNames []string) map[string]string {
+	args := append([]string{"-q", "--queryformat", "%{NAME} %{VERSION}-%{RELEASE}\n"}, packageNames...)
+	result, err := f.options.Runner.Run(ctx, gloutonexec.Option{SkipInContainer: true}, "rpm", args...)
+
+	if errors.Is(err, gloutonexec.ErrExecutionSkipped) {
+		return nil
+	}
+
+	// rpm writes "package X is not installed" to stdout (not stderr) for missing packages,
+	// so result is non-empty even when some packages are absent. len(result) == 0 only
+	// when rpm itself failed to run.
+	if err != nil && len(result) == 0 {
+		logger.V(1).Printf("unable to run rpm: %v", err)
+
+		return nil
+	}
+
+	versions := make(map[string]string)
+
+	for line := range strings.SplitSeq(string(result), "\n") {
+		fields := strings.Fields(line)
+		// "package X is not installed" lines have more than 2 fields — skip them
+		if len(fields) == 2 {
+			versions[fields[0]] = fields[1]
+		}
+	}
+
+	return versions
+}
+
 // primaryAddresses returns the primary IPv4
 //
 // This should be the IP address that this server use to communicate
