@@ -86,8 +86,10 @@ func newManager(ctx context.Context, queryable storage.Queryable, defaultRules m
 
 	defaultGroupRules := []rules.Rule{}
 
+	promqlParser := parser.NewParser(parser.Options{})
+
 	for metricName, val := range defaultRules {
-		exp, err := parser.ParseExpr(val)
+		exp, err := promqlParser.ParseExpr(val)
 		if err != nil {
 			logger.V(2).Printf("An error occurred while parsing expression %s: %v. This rule was not registered", val, err)
 		} else {
