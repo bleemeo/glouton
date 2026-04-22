@@ -31,51 +31,31 @@ import (
 func TestMetricLookupFromList(t *testing.T) {
 	input := []bleemeoTypes.Metric{
 		{
-			Labels: map[string]string{
-				types.LabelName: "io_reads",
-				"item":          "sda",
-			},
-			ID: "index-0",
+			LabelsText: types.LabelsToText(map[string]string{types.LabelName: "io_reads", "item": "sda"}),
+			ID:         "index-0",
 		},
 		{
-			Labels: map[string]string{
-				types.LabelName: "io_reads",
-				"item":          "sda",
-			},
+			LabelsText:    types.LabelsToText(map[string]string{types.LabelName: "io_reads", "item": "sda"}),
 			ID:            "index-1",
 			DeactivatedAt: time.Now(),
 		},
 		{
-			Labels: map[string]string{
-				types.LabelName: "io_reads",
-				"item":          "sdb",
-			},
+			LabelsText:    types.LabelsToText(map[string]string{types.LabelName: "io_reads", "item": "sdb"}),
 			ID:            "index-2",
 			DeactivatedAt: time.Now(),
 		},
 		{
-			Labels: map[string]string{
-				types.LabelName: "io_reads",
-				"item":          "sdb",
-			},
-			ID: "index-3",
+			LabelsText: types.LabelsToText(map[string]string{types.LabelName: "io_reads", "item": "sdb"}),
+			ID:         "index-3",
 		},
 		{
-			Labels: map[string]string{
-				types.LabelName: "cpu_user",
-				"item":          "",
-			},
-			ID: "index-4",
+			LabelsText: types.LabelsToText(map[string]string{types.LabelName: "cpu_user", "item": ""}),
+			ID:         "index-4",
 		},
 		{
-			Labels: map[string]string{
-				types.LabelName: "cpu_system",
-			},
-			ID: "index-5",
+			LabelsText: types.LabelsToText(map[string]string{types.LabelName: "cpu_system"}),
+			ID:         "index-5",
 		},
-	}
-	for i, v := range input {
-		input[i].LabelsText = types.LabelsToText(v.Labels)
 	}
 
 	want := map[string]bleemeoTypes.Metric{

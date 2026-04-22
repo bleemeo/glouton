@@ -131,18 +131,16 @@ func (m fakeMetric) Labels() map[string]string {
 // metricFromAPI convert a metricPayload received from API to a bleemeoTypes.Metric.
 func metricFromAPI(mp bleemeoapi.MetricPayload, lastTime time.Time) bleemeoTypes.Metric {
 	if mp.LabelsText == "" {
-		mp.Labels = map[string]string{
+		labels := map[string]string{
 			gloutonTypes.LabelName:         mp.Name,
 			gloutonTypes.LabelInstanceUUID: mp.AgentID,
 		}
 
 		if mp.Item != "" {
-			mp.Labels[gloutonTypes.LabelItem] = mp.Item
+			labels[gloutonTypes.LabelItem] = mp.Item
 		}
 
-		mp.LabelsText = gloutonTypes.LabelsToText(mp.Labels)
-	} else {
-		mp.Labels = gloutonTypes.TextToLabels(mp.LabelsText)
+		mp.LabelsText = gloutonTypes.LabelsToText(labels)
 	}
 
 	if !lastTime.IsZero() {
@@ -559,7 +557,7 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(firstUpdate bool) {
 
 		units[m.LabelsText] = m.Unit
 
-		metricName := m.Labels[gloutonTypes.LabelName]
+		metricName := gloutonTypes.TextToLabels(m.LabelsText)[gloutonTypes.LabelName]
 
 		// Apply the threshold overrides.
 		overrideKey := thresholdOverrideKey{
@@ -1352,13 +1350,15 @@ func (s *Synchronizer) metricDeleteIgnoredServices(ctx context.Context, apiClien
 }
 
 func (s *Synchronizer) undeactivableMetric(v bleemeoTypes.Metric, agents map[string]bleemeoTypes.Agent) bool {
-	if v.Labels[gloutonTypes.LabelName] == "agent_sent_message" {
+	metricName := gloutonTypes.TextToLabels(v.LabelsText)[gloutonTypes.LabelName]
+
+	if metricName == "agent_sent_message" {
 		return true
 	}
 
 	agent := agents[v.AgentID]
 
-	if v.Labels[gloutonTypes.LabelName] == agentStatusName {
+	if metricName == agentStatusName {
 		snmpTypeID, found := s.getAgentType(bleemeo.AgentType_SNMP)
 
 		// We only skip deactivation of agent_status when it not an SNMP agent.
@@ -1406,7 +1406,9 @@ func (s *Synchronizer) metricDeactivate(ctx context.Context, apiClient types.Met
 		// from the allowlist (or add one to the denylist), we want to deactivate it quickly
 		// so the number of custom metrics goes under the limit.
 		now := s.now()
-		if s.option.IsMetricAllowed(v.Labels) &&
+		vLabels := gloutonTypes.TextToLabels(v.LabelsText)
+
+		if s.option.IsMetricAllowed(vLabels) &&
 			(now.Sub(s.startedAt) < 5*time.Minute || now.Sub(v.FirstSeenAt) < gracePeriod) {
 			continue
 		}
@@ -1417,7 +1419,7 @@ func (s *Synchronizer) metricDeactivate(ctx context.Context, apiClient types.Met
 		// * but because the old metric isn't allowed, it get deactivated
 		// * then later, when new metric is created, the old metric is renamed & reactivated.
 		// With this wait, we avoid one HTTP request to deactivate the metric.
-		if v.ServiceID != "" && strings.HasSuffix(v.Labels[gloutonTypes.LabelName], "_status") && now.Sub(s.startedAt) < 5*time.Minute {
+		if v.ServiceID != "" && strings.HasSuffix(vLabels[gloutonTypes.LabelName], "_status") && now.Sub(s.startedAt) < 5*time.Minute {
 			continue
 		}
 

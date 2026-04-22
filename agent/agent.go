@@ -687,12 +687,13 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		10*time.Second,
 	)
 
-	a.factProvider = facts.NewFacter(
-		a.commandRunner,
-		a.config.Agent.FactsFile,
-		a.hostRootPath,
-		a.config.Agent.PublicIPIndicator,
-	)
+	a.factProvider = facts.NewFacter(facts.Options{
+		Runner:           a.commandRunner,
+		FactPath:         a.config.Agent.FactsFile,
+		HostRootPath:     a.hostRootPath,
+		IPIndicatorURL:   a.config.Agent.PublicIPIndicator,
+		OverrideHostname: a.config.Agent.OverrideHostname,
+	})
 
 	factsMap, err := a.factProvider.FastFacts(ctx)
 	if err != nil {

@@ -70,10 +70,7 @@ var (
 type FactProvider struct {
 	l sync.Mutex
 
-	factPath       string
-	hostRootPath   string
-	ipIndicatorURL string
-	runner         *gloutonexec.Runner
+	options Options
 
 	manualFact map[string]string
 	callbacks  []FactCallback
@@ -87,6 +84,14 @@ type FactProvider struct {
 // It returns the list of new or updated facts.
 type FactCallback func(ctx context.Context, currentFact map[string]string) map[string]string
 
+type Options struct {
+	Runner           *gloutonexec.Runner
+	FactPath         string
+	HostRootPath     string
+	IPIndicatorURL   string
+	OverrideHostname string
+}
+
 // NewFacter creates a new Fact provider
 //
 // factPath is the path to a yaml file that contains additional facts, usually
@@ -97,12 +102,9 @@ type FactCallback func(ctx context.Context, currentFact map[string]string) map[s
 // where host root is mounted.
 //
 // ipIndicatorURL is and URL which return the public IP.
-func NewFacter(runner *gloutonexec.Runner, factPath, hostRootPath, ipIndicatorURL string) *FactProvider {
+func NewFacter(options Options) *FactProvider {
 	return &FactProvider{
-		factPath:       factPath,
-		hostRootPath:   hostRootPath,
-		ipIndicatorURL: ipIndicatorURL,
-		runner:         runner,
+		options: options,
 	}
 }
 
@@ -191,8 +193,8 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	callbacks := make([]FactCallback, len(f.callbacks))
 	copy(callbacks, f.callbacks)
 
-	if f.factPath != "" {
-		if data, err := os.ReadFile(f.factPath); err != nil {
+	if f.options.FactPath != "" {
+		if data, err := os.ReadFile(f.options.FactPath); err != nil {
 			logger.V(1).Printf("unable to read fact file: %v", err)
 		} else {
 			var fileFacts map[string]string
@@ -211,16 +213,16 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	newFacts["primary_address"] = primaryAddress
 	newFacts["primary_mac_address"] = primaryMacAddress
 
-	if f.ipIndicatorURL != "" {
+	if f.options.IPIndicatorURL != "" {
 		subctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 		defer cancel()
 
-		newFacts["public_ip"] = urlContent(subctx, f.ipIndicatorURL)
+		newFacts["public_ip"] = urlContent(subctx, f.options.IPIndicatorURL)
 	}
 
 	newFacts["architecture"] = runtime.GOARCH
 
-	hostname, fqdn := getFQDN(ctx)
+	hostname, fqdn := getFQDN(ctx, f.options.OverrideHostname)
 	newFacts["fqdn"] = fqdn
 	newFacts["hostname"] = hostname
 
@@ -257,8 +259,8 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 		}
 	}
 
-	if f.hostRootPath != "" {
-		newFacts["timezone"] = getTimezone(f.hostRootPath)
+	if f.options.HostRootPath != "" {
+		newFacts["timezone"] = getTimezone(f.options.HostRootPath)
 	}
 
 	newFacts["glouton_version"] = version.Version
@@ -267,7 +269,7 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	newFacts[FactUpdatedAt] = time.Now().UTC().Format(time.RFC3339)
 	newFacts["glouton_pid"] = strconv.FormatInt(int64(os.Getpid()), 10)
 
-	autoUpgradeEnabled, err := autoUpgradeIsEnabled(ctx, f.runner)
+	autoUpgradeEnabled, err := autoUpgradeIsEnabled(ctx, f.options.Runner)
 	if !errors.Is(err, errAutoUpgradeNotSupported) {
 		if err != nil {
 			logger.V(1).Printf("Failed to check auto-upgrade status: %v", err)
@@ -345,8 +347,12 @@ func tzFromSymlink(target string) string {
 	return ""
 }
 
-func getFQDN(ctx context.Context) (hostname string, fqdn string) {
-	hostname, _ = os.Hostname()
+func getFQDN(ctx context.Context, override string) (hostname string, fqdn string) {
+	if override == "" {
+		hostname, _ = os.Hostname()
+	} else {
+		hostname = override
+	}
 
 	fqdn, err := net.DefaultResolver.LookupCNAME(ctx, hostname)
 	if err != nil {

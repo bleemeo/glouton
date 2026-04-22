@@ -16,6 +16,7 @@ The target to build is (default to single-target):
   single-target: build only for specified GOOS & GOARCH - with default to current os/arch
   release: build for all targets (all OS & architecture supported)
   race: Compile with Go's race detector enabled for one target (similar to single-target)
+  debug: Compile with debug symbols for one target (similar to single-target)
 
 Skip options allow build faster by omitting some steps. They could be cummulated to skip multiple steps:
   skip-js: skip building JS (note: JS must be built at least once after a new checkout)
@@ -23,6 +24,10 @@ Skip options allow build faster by omitting some steps. They could be cummulated
   skip-build: skip building Go binary
   skip-docker: skip building Docker image
   skip-windows-installer: skip building Windows installer
+
+Debugging options:
+  shell: open an interactive shell in the build container instead of running the build.
+         This allow to have access to some debugging tools and source path unmodified.
 EOF
 }
 
@@ -41,8 +46,19 @@ while [ $# -gt 0 ]; do
       "race")
          TARGET_TO_BUILD=single-target-race
          ;;
+      "debug")
+         TARGET_TO_BUILD=single-target-debug
+         ;;
       "release")
          TARGET_TO_BUILD=release
+         ;;
+      "shell")
+         TARGET_TO_BUILD=interactive-shell
+         SKIP_JS=1
+         SKIP_GO_TEST=1
+         SKIP_GO_BUILD=0  # Actually it won't build, it will open the shell
+         SKIP_DOCKER=1
+         SKIP_MSI=1
          ;;
       "skip-js")
          SKIP_JS=1
@@ -117,6 +133,11 @@ if [ "${SKIP_JS}" != "1" ]; then
 fi
 
 if [ "${SKIP_GO_BUILD}" != "1" -o "${SKIP_GO_TEST}" != "1" ]; then
+   DOCKER_RUN_EXTRA_OPTION=""
+   if [ "${TARGET_TO_BUILD}" = "interactive-shell" ]; then
+      DOCKER_RUN_EXTRA_OPTION="-it"
+   fi
+
    docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=0 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
       -v /var/run/docker.sock:/var/run/docker.sock \
@@ -128,6 +149,7 @@ if [ "${SKIP_GO_BUILD}" != "1" -o "${SKIP_GO_TEST}" != "1" ]; then
       -e SKIP_GO_TEST=$SKIP_GO_TEST \
       -e TARGET_TO_BUILD=$TARGET_TO_BUILD \
       -e GOOS -e GOARCH \
+      ${DOCKER_RUN_EXTRA_OPTION} \
       goreleaser/goreleaser:${GORELEASER_VERSION} \
       tini -g -- sh -ec "
       mkdir -p /go/pkg

@@ -852,7 +852,8 @@ func (s *Synchronizer) waitCPUMetric(ctx context.Context) {
 
 	metrics := s.option.Cache.Metrics()
 	for _, m := range metrics {
-		if m.Labels[gloutonTypes.LabelName] == "cpu_used" || m.Labels[gloutonTypes.LabelName] == "node_cpu_seconds_total" {
+		metricName := gloutonTypes.TextToLabels(m.LabelsText)[gloutonTypes.LabelName]
+		if metricName == "cpu_used" || metricName == "node_cpu_seconds_total" {
 			return
 		}
 	}

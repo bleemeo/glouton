@@ -10,6 +10,7 @@ builds:
   - env:
       - CGO_ENABLED=1
     flags:
+      - -trimpath
       - -race
     ldflags:
       # This is the default from gorelaser

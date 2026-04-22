@@ -39,8 +39,8 @@ import (
 const dmiDir = "/sys/devices/virtual/dmi/id/"
 
 func (f *FactProvider) osFacts(ctx context.Context, facts map[string]string) map[string]string {
-	if f.hostRootPath != "" {
-		osReleasePath := filepath.Join(f.hostRootPath, "etc/os-release")
+	if f.options.HostRootPath != "" {
+		osReleasePath := filepath.Join(f.options.HostRootPath, "etc/os-release")
 		if osReleaseData, err := os.ReadFile(osReleasePath); err != nil {
 			logger.V(1).Printf("unable to read os-release file: %v", err)
 		} else {
@@ -50,7 +50,7 @@ func (f *FactProvider) osFacts(ctx context.Context, facts map[string]string) map
 			}
 
 			if osRelease["ID"] == "debian" {
-				trueNASMarker := filepath.Join(f.hostRootPath, "lib/systemd/system/truenas.target")
+				trueNASMarker := filepath.Join(f.options.HostRootPath, "lib/systemd/system/truenas.target")
 				if _, err := os.Stat(trueNASMarker); err == nil {
 					return f.trueNasScaleOSFact(facts)
 				}
@@ -65,7 +65,7 @@ func (f *FactProvider) osFacts(ctx context.Context, facts map[string]string) map
 		}
 	}
 
-	out, err := f.runner.Run(ctx, gloutonexec.Option{SkipInContainer: true}, "lsb_release", "--codename", "--short")
+	out, err := f.options.Runner.Run(ctx, gloutonexec.Option{SkipInContainer: true}, "lsb_release", "--codename", "--short")
 	if err != nil && !errors.Is(err, gloutonexec.ErrExecutionSkipped) {
 		logger.V(1).Printf("unable to run lsb_release: %v", err)
 	} else if err == nil {
@@ -83,7 +83,7 @@ func (f *FactProvider) trueNasScaleOSFact(facts map[string]string) map[string]st
 		Version  string `json:"version"`
 	}
 
-	manifestFile := filepath.Join(f.hostRootPath, "data/manifest.json")
+	manifestFile := filepath.Join(f.options.HostRootPath, "data/manifest.json")
 	if manifestData, err := os.ReadFile(manifestFile); err != nil {
 		logger.V(1).Printf("unable to read manifest.json file: %v", err)
 	} else {
@@ -94,7 +94,7 @@ func (f *FactProvider) trueNasScaleOSFact(facts map[string]string) map[string]st
 	}
 
 	if manifest.Version == "" {
-		versionFile := filepath.Join(f.hostRootPath, "etc/version")
+		versionFile := filepath.Join(f.options.HostRootPath, "etc/version")
 		if versionData, err := os.ReadFile(versionFile); err != nil {
 			logger.V(1).Printf("unable to read version file: %v", err)
 		} else {

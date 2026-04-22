@@ -20,11 +20,11 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -36,7 +36,6 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
-	"github.com/prometheus/prometheus/promql/parser"
 )
 
 // Status is an enumeration of status (ok, warning, critical, unknown).
@@ -301,12 +300,17 @@ func (a MetricAnnotations) Changed(other MetricAnnotations) bool {
 		a.BleemeoAgentID != other.BleemeoAgentID)
 }
 
+var labelsBuilderPool = sync.Pool{ //nolint:gochecknoglobals
+	New: func() any { return new(strings.Builder) },
+}
+
 func labelsToText(labels map[string]string, nameBefore bool) string {
 	if len(labels) == 0 {
 		return ""
 	}
 
 	labelNames := make([]string, 0, len(labels))
+
 	for k := range labels {
 		if k == LabelName && nameBefore {
 			continue
@@ -317,7 +321,14 @@ func labelsToText(labels map[string]string, nameBefore bool) string {
 
 	sort.Strings(labelNames)
 
-	strLabels := make([]string, 0, len(labels))
+	b := labelsBuilderPool.Get().(*strings.Builder) //nolint:forcetypeassert
+	b.Reset()
+
+	if nameBefore {
+		b.WriteString(labels[LabelName])
+	}
+
+	hadLabels := false
 
 	for _, name := range labelNames {
 		value := labels[name]
@@ -325,19 +336,29 @@ func labelsToText(labels map[string]string, nameBefore bool) string {
 			continue
 		}
 
-		str := name + "=\"" + quoter.Replace(value) + "\""
-		strLabels = append(strLabels, str)
-	}
-
-	str := strings.Join(strLabels, ",")
-
-	if nameBefore {
-		if str != "" {
-			return fmt.Sprintf("%s{%s}", labels[LabelName], str)
+		if nameBefore && !hadLabels {
+			b.WriteByte('{')
 		}
 
-		return labels[LabelName]
+		if hadLabels {
+			b.WriteByte(',')
+		}
+
+		hadLabels = true
+
+		b.WriteString(name)
+		b.WriteString(`="`)
+		b.WriteString(quoter.Replace(value))
+		b.WriteByte('"')
 	}
+
+	if nameBefore && hadLabels {
+		b.WriteByte('}')
+	}
+
+	str := b.String()
+
+	labelsBuilderPool.Put(b)
 
 	return str
 }
@@ -363,23 +384,99 @@ func LabelsToTextNicer(labels map[string]string) string {
 	return labelsToText(labels, true)
 }
 
-// TextToLabels is the reverse of LabelsToText.
+// TextToLabels is the reverse of LabelsToText. Retrun nil in case of error.
 func TextToLabels(text string) map[string]string {
-	promqlParser := parser.NewParser(parser.Options{})
-
-	labels, err := promqlParser.ParseMetricSelector("{" + text + "}")
-	if err != nil {
-		logger.Printf("unable to decode labels %#v: %v", text, err)
-
-		return nil
+	if text == "" {
+		return map[string]string{}
 	}
 
-	results := make(map[string]string, len(labels))
-	for _, v := range labels {
-		results[v.Name] = v.Value
+	result := make(map[string]string)
+	remaining := text
+
+	for len(remaining) > 0 {
+		eq := strings.IndexByte(remaining, '=')
+		if eq <= 0 || eq+1 >= len(remaining) || remaining[eq+1] != '"' {
+			logger.V(2).Printf("unable to decode labels %#v: unexpected format near %q", text, remaining)
+
+			return nil
+		}
+
+		key := remaining[:eq]
+		remaining = remaining[eq+2:] // skip ="
+
+		value, rest, ok := consumeQuotedValue(remaining)
+		if !ok {
+			logger.V(2).Printf("unable to decode labels %#v: unterminated value for key %q", text, key)
+
+			return nil
+		}
+
+		result[key] = value
+		remaining = rest
+
+		if len(remaining) > 0 {
+			if remaining[0] != ',' {
+				logger.V(2).Printf("unable to decode labels %#v: expected ',' after value, got %q", text, remaining[0])
+
+				return nil
+			}
+
+			remaining = remaining[1:]
+		}
 	}
 
-	return results
+	return result
+}
+
+// consumeQuotedValue parses a quoted label value starting after the opening '"'.
+// Returns the unescaped value, the remaining text after the closing '"', and whether parsing succeeded.
+func consumeQuotedValue(text string) (value, remaining string, ok bool) {
+	for i := range len(text) {
+		switch text[i] {
+		case '"':
+			// Fast path: no escape sequences — return slice of original string.
+			return text[:i], text[i+1:], true
+		case '\\':
+			return consumeQuotedValueEscaped(text, i)
+		}
+	}
+
+	return "", "", false
+}
+
+// consumeQuotedValueEscaped handles the slow path when a backslash is encountered at escapeAt.
+func consumeQuotedValueEscaped(text string, escapeAt int) (value, remaining string, ok bool) {
+	var b strings.Builder
+
+	b.WriteString(text[:escapeAt])
+
+	for i := escapeAt; i < len(text); i++ {
+		switch text[i] {
+		case '"':
+			return b.String(), text[i+1:], true
+		case '\\':
+			i++
+
+			if i >= len(text) {
+				return "", "", false
+			}
+
+			switch text[i] {
+			case '"':
+				b.WriteByte('"')
+			case '\\':
+				b.WriteByte('\\')
+			case 'n':
+				b.WriteByte('\n')
+			default:
+				return "", "", false
+			}
+		default:
+			b.WriteByte(text[i])
+		}
+	}
+
+	return "", "", false
 }
 
 // Monitor represents a monitor instance.

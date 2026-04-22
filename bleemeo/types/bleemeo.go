@@ -27,6 +27,8 @@ import (
 
 	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/threshold"
+	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/utils/metricutils"
 )
 
 type NullTime time.Time //nolint: recvcheck
@@ -185,15 +187,26 @@ type Metric struct {
 	Threshold
 	threshold.Unit
 
-	ID            string            `json:"id"`
-	AgentID       string            `json:"agent,omitempty"`
-	LabelsText    string            `json:"labels_text,omitempty"`
-	Labels        map[string]string `json:"-"`
-	ServiceID     string            `json:"service,omitempty"`
-	ContainerID   string            `json:"container,omitempty"`
-	StatusOf      string            `json:"status_of,omitempty"`
-	DeactivatedAt time.Time         `json:"deactivated_at,omitzero"`
-	FirstSeenAt   time.Time         `json:"first_seen_at"`
+	ID            string    `json:"id"`
+	AgentID       string    `json:"agent,omitempty"`
+	LabelsText    string    `json:"labels_text,omitempty"`
+	ServiceID     string    `json:"service,omitempty"`
+	ContainerID   string    `json:"container,omitempty"`
+	StatusOf      string    `json:"status_of,omitempty"`
+	DeactivatedAt time.Time `json:"deactivated_at,omitzero"`
+	FirstSeenAt   time.Time `json:"first_seen_at"`
+
+	lazyInitialized bool
+	onlyHasItem     bool
+}
+
+func (m *Metric) OnlyHasItem() bool {
+	if !m.lazyInitialized {
+		m.onlyHasItem = metricutils.MetricOnlyHasItem(types.TextToLabels(m.LabelsText), m.AgentID)
+		m.lazyInitialized = true
+	}
+
+	return m.onlyHasItem
 }
 
 // FailureKind is the kind of failure to register a metric. Used to know if

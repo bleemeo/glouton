@@ -19,6 +19,7 @@ package api
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
@@ -26,6 +27,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"path"
+	"runtime"
 	"strings"
 	"time"
 
@@ -272,6 +274,21 @@ func (api *API) init() {
 		router.Handle("/debug/pprof/profile", http.HandlerFunc(pprof.Profile))
 		router.Handle("/debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))
 		router.Handle("/debug/pprof/trace", http.HandlerFunc(pprof.Trace))
+		router.HandleFunc("/debug/gc/", func(w http.ResponseWriter, r *http.Request) {
+			runtime.GC()
+
+			var stat runtime.MemStats
+
+			runtime.ReadMemStats(&stat)
+
+			encoder := json.NewEncoder(w)
+			encoder.SetIndent("", "  ")
+
+			err := encoder.Encode(stat)
+			if err != nil {
+				logger.V(2).Printf("failed to encode GC stats: %v", err)
+			}
+		})
 	}
 
 	router.Handle("/static/*", http.StripPrefix("/static", &staticFileServer{fs: http.FileServer(http.FS(staticFolder))}))

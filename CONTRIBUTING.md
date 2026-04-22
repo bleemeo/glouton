@@ -175,3 +175,99 @@ export GLOUTON_BLEEMEO_MQTT_HOST=localhost
 export GLOUTON_BLEEMEO_MQTT_PORT=1883
 export GLOUTON_BLEEMEO_MQTT_SSL=False
 ```
+
+## Advanced testing
+
+### Benchmark
+
+Glouton have few benchmark. You might run and test for regression with:
+
+```
+# You might want to limit to specific package or test, depending on you use case
+go test -run='^$' -bench=. -count=10 -benchmem ./... > bench-old.txt
+
+# Apply your changes (run normal test to ensure the change is valid) and re-run benchmark:
+go test -run='^$' -bench=. -count=10 -benchmem ./... > bench-new.txt
+
+# Show diff between benchmark:
+go run golang.org/x/perf/cmd/benchstat@latest bench-old.txt bench-new.txt
+```
+
+### Fuzzing
+
+Glouton have few fuzzing tests. You might run fuzzing to find possible issue. Fuzz test are run next to normal test
+(when running `go test`), but the fuzzing part that search new input need to be run in dedicated run and once per test.
+
+The following with run fuzzing on each Fuzz test for 60 seconds for each one:
+
+```
+go test -fuzz=FuzzLabelsRoundTrip -fuzztime=60s ./types/
+go test -fuzz=FuzzTextToLabelsNoCrash -fuzztime=60s ./types/
+```
+
+## Advanced debugging
+
+During some debugging workflow, you might need a Glouton binary with debug symbols,
+`./build.sh debug` does it.
+
+For example, to analyze the state (goroutines, values of variables, ...) from a Glouton running
+on some server (e.g. you can't start glouton in debug from your VS code):
+
+* Build Glouton with debug:
+```
+./build.sh debug
+```
+
+* Install Glouton on the server, likely using the `./dist/glouton*.deb`
+* Take a core dump of the glouton, on the server:
+```
+gcore $(pgrep -x glouton)
+```
+
+* Copy the produced core file to your VS code
+* In VS code, create a launch.json with:
+```
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Core file for Linux arm64",
+            "type": "go",
+            "request": "launch",
+            "mode": "core",
+            "program": "./dist/glouton_linux_arm64_v8.0/glouton",
+            "coreFilePath": "./core",
+            "substitutePath": [
+                {
+                    "to": "/usr/local/go",
+                    "from": "${env:GOROOT}"
+                },
+                {
+                    "to": "/go/pkg/mod",
+                    "from": "${env:GOPATH}/pkg/mod"
+                },
+                {
+                    "to": "/src",
+                    "from": "${workspaceFolder}"
+                }
+            ]
+        }
+    ]
+}
+```
+
+* Finally start this debug target in VS code, you can inspect the full state of this Glouton.
+
+
+It's also possible to use command line, and run them from the goreleaser image. This avoid the needs for
+a substitudePath configuration:
+
+```
+./build.sh shell
+
+-- Example: runing delve debugger
+go run github.com/go-delve/delve/cmd/dlv@latest core dist/glouton_linux_arm64_v8.0/glouton core
+
+-- Example: ruuning Golang viewcore, which had option like "breakdown" to view what consum memory
+go run golang.org/x/debug/cmd/viewcore@latest core --exe dist/glouton_linux_arm64_v8.0/glouton
+```

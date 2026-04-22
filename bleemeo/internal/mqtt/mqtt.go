@@ -46,8 +46,9 @@ import (
 )
 
 const (
-	maxPendingPoints = 100000
-	cleanupBatchSize = 1000
+	maxPendingPoints   = 100000
+	cleanupBatchSize   = 1000
+	failedPointsMaxAge = 1 * time.Hour
 
 	pointsBatchSize = 1000
 
@@ -146,6 +147,7 @@ func New(opts Option) *Client {
 		metricExists:        make(map[string]struct{}),
 		maxPendingPoints:    maxPendingPoints,
 		cleanupBatchSize:    cleanupBatchSize,
+		maxPointAge:         failedPointsMaxAge,
 		cleanupFailedPoints: c.cleanupFailedPoints,
 	}
 
@@ -695,7 +697,7 @@ func (c *Client) addFailedPoints(points ...types.MetricPoint) {
 	}
 
 	for _, p := range points {
-		key := types.LabelsToText(p.Labels)
+		key := metricutils.MetricKey(p.Labels, p.Annotations, string(c.opts.AgentID))
 
 		// Ignore metrics that failed to register too many times.
 		reg := c.opts.Cache.MetricRegistrationsFailByKey()[key]
@@ -707,9 +709,9 @@ func (c *Client) addFailedPoints(points ...types.MetricPoint) {
 	}
 }
 
-// cleanupFailedPoints remove points from deleted metrics or points for metric denied by configuration.
-func (c *Client) cleanupFailedPoints(failedPoints []types.MetricPoint) []types.MetricPoint {
-	// Remove points for points that are no longer present in the store.
+// cleanupFailedPoints removes points from deleted metrics or points denied by configuration.
+func (c *Client) cleanupFailedPoints(failedPoints []storedPoint) []storedPoint {
+	// Remove points for metrics that are no longer present in the store.
 	localMetrics, err := c.opts.Store.Metrics(nil)
 	if err != nil {
 		return failedPoints
@@ -718,21 +720,38 @@ func (c *Client) cleanupFailedPoints(failedPoints []types.MetricPoint) []types.M
 	localExistsByKey := make(map[string]bool, len(localMetrics))
 
 	for _, m := range localMetrics {
-		key := types.LabelsToText(m.Labels())
-		localExistsByKey[key] = true
+		localExistsByKey[types.LabelsToText(m.Labels())] = true
 	}
 
-	newPoints := make([]types.MetricPoint, 0, len(failedPoints))
+	f := filter.NewFilter(c.opts.Cache)
+
+	newPoints := make([]storedPoint, 0, len(failedPoints))
 
 	for _, p := range failedPoints {
-		key := types.LabelsToText(p.Labels)
-		if localExistsByKey[key] {
+		if !localExistsByKey[p.LabelsText] {
+			continue
+		}
+
+		// Re-implementation of c.filterPoints to avoid building newPoints list twices.
+		if math.IsNaN(p.Point.Value) {
+			continue
+		}
+
+		labels := types.TextToLabels(p.LabelsText)
+
+		isAllowed, _, err := f.IsAllowed(labels, p.Annotations)
+		if err != nil {
+			logger.V(2).Printf("mqtt: %s", err)
+
+			continue
+		}
+
+		if isAllowed {
 			newPoints = append(newPoints, p)
 		}
 	}
 
-	// Remove points that are not allowed in the current plan.
-	return c.filterPoints(newPoints)
+	return newPoints
 }
 
 // preparePoints returns the MQTT payload by processing some points and returning a map of metrics by agent ID.
@@ -767,7 +786,7 @@ func (c *Client) preparePoints(
 		}
 
 		// Don't send labels text if the metric only has a name and an item.
-		if metricutils.MetricOnlyHasItem(metric.Labels, metric.AgentID) {
+		if metric.OnlyHasItem() {
 			// The metric ID is not used when labels text are present
 			// because they already uniquely identify the metric.
 			payload.UUID = metric.ID
@@ -957,7 +976,7 @@ func (c *Client) ready() bool {
 	}
 
 	for _, m := range c.opts.Cache.Metrics() {
-		if m.Labels[types.LabelName] == "agent_status" {
+		if types.TextToLabels(m.LabelsText)[types.LabelName] == "agent_status" {
 			return true
 		}
 	}
@@ -984,32 +1003,54 @@ func (c *Client) receiveEvents(ctx context.Context) {
 	}
 }
 
+// storedPoint is a compact representation of a failed metric point.
+// It stores LabelsText instead of a Labels map to reduce per-point memory overhead.
+type storedPoint struct {
+	LabelsText  string
+	Point       types.Point
+	Annotations types.MetricAnnotations
+	AddedAt     time.Time
+}
+
 // failedPointsCache stores failed points and can check if a metric is present in the points.
 type failedPointsCache struct {
 	maxPendingPoints int
 	cleanupBatchSize int
+	maxPointAge      time.Duration
 
 	l      sync.Mutex
-	points []types.MetricPoint
-	// Map of metric names contained in the points.
+	points []storedPoint
+	// metricExists maps LabelsText to presence indicator for O(1) Contains checks.
 	metricExists        map[string]struct{}
-	cleanupFailedPoints func(failedPoints []types.MetricPoint) []types.MetricPoint
+	cleanupFailedPoints func(failedPoints []storedPoint) []storedPoint
 	tooManyPointsCount  int
 }
 
-// Add points to the cache.
+// Add converts MetricPoints to compact storedPoints and adds them to the cache.
 func (p *failedPointsCache) Add(points ...types.MetricPoint) {
 	p.l.Lock()
 	defer p.l.Unlock()
 
-	p.addNoLock(points...)
+	now := time.Now()
+	stored := make([]storedPoint, len(points))
+
+	for i, point := range points {
+		stored[i] = storedPoint{
+			LabelsText:  types.LabelsToText(point.Labels),
+			Point:       point.Point,
+			Annotations: point.Annotations,
+			AddedAt:     now,
+		}
+	}
+
+	p.addNoLock(stored...)
 }
 
-// Add points to the cache
-// The lock should be held when calling this method.
-func (p *failedPointsCache) addNoLock(points ...types.MetricPoint) {
+// addNoLock adds stored points to the cache.
+// The lock must be held when calling this method.
+func (p *failedPointsCache) addNoLock(points ...storedPoint) {
 	for _, point := range points {
-		p.metricExists[types.LabelsToText(point.Labels)] = struct{}{}
+		p.metricExists[point.LabelsText] = struct{}{}
 	}
 
 	p.points = append(p.points, points...)
@@ -1037,37 +1078,63 @@ func (p *failedPointsCache) addNoLock(points ...types.MetricPoint) {
 	}
 }
 
-// Pop the metric points.
+// Pop removes all points from the cache and returns them as MetricPoints.
+// Points older than maxPointAge are dropped.
 func (p *failedPointsCache) Pop() []types.MetricPoint {
 	p.l.Lock()
 	defer p.l.Unlock()
 
-	return p.popNoLock()
+	stored := p.popNoLock()
+
+	if p.maxPointAge > 0 {
+		cutoff := time.Now().Add(-p.maxPointAge)
+		n := 0
+
+		for _, sp := range stored {
+			if sp.AddedAt.After(cutoff) {
+				stored[n] = sp
+				n++
+			}
+		}
+
+		stored = stored[:n]
+	}
+
+	return storedToMetricPoints(stored)
 }
 
-// Pop the metric points.
-// The lock should be held when calling this method.
-func (p *failedPointsCache) popNoLock() []types.MetricPoint {
+// popNoLock removes and returns all stored points without applying TTL.
+// The lock must be held when calling this method.
+func (p *failedPointsCache) popNoLock() []storedPoint {
 	points := p.points
 	p.points = nil
 
-	for metric := range p.metricExists {
-		delete(p.metricExists, metric)
-	}
+	clear(p.metricExists)
 
 	return points
 }
 
-// Copy returns a copy of the metric points.
+// storedToMetricPoints reconstructs MetricPoints from storedPoints by parsing LabelsText.
+func storedToMetricPoints(stored []storedPoint) []types.MetricPoint {
+	result := make([]types.MetricPoint, len(stored))
+
+	for i, sp := range stored {
+		result[i] = types.MetricPoint{
+			Point:       sp.Point,
+			Labels:      types.TextToLabels(sp.LabelsText),
+			Annotations: sp.Annotations,
+		}
+	}
+
+	return result
+}
+
+// Copy returns a copy of the current points as MetricPoints (without TTL filtering).
 func (p *failedPointsCache) Copy() []types.MetricPoint {
 	p.l.Lock()
 	defer p.l.Unlock()
 
-	pointsCopy := make([]types.MetricPoint, len(p.points))
-
-	copy(pointsCopy, p.points)
-
-	return pointsCopy
+	return storedToMetricPoints(p.points)
 }
 
 // Len returns the number of points in the cache.

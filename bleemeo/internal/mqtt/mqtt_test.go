@@ -43,7 +43,7 @@ func TestFailedPointsCache(t *testing.T) {
 	failedPoints := failedPointsCache{
 		maxPendingPoints:    maxPendingPoints,
 		cleanupBatchSize:    cleanupBatchSize,
-		cleanupFailedPoints: func(failedPoints []types.MetricPoint) []types.MetricPoint { return failedPoints },
+		cleanupFailedPoints: func(failedPoints []storedPoint) []storedPoint { return failedPoints },
 		metricExists:        make(map[string]struct{}),
 	}
 
@@ -240,14 +240,12 @@ func TestMQTTPointOrder(t *testing.T) {
 	client.opts.Cache.SetMetrics([]bleemeoTypes.Metric{
 		{
 			ID:            metric1ID,
-			Labels:        metric1Labels,
 			LabelsText:    types.LabelsToText(metric1Labels),
 			AgentID:       agentID,
 			DeactivatedAt: t0,
 		},
 		{
 			ID:            metric2ID,
-			Labels:        metric2Labels,
 			LabelsText:    types.LabelsToText(metric2Labels),
 			AgentID:       agentID,
 			DeactivatedAt: time.Time{},
@@ -312,14 +310,12 @@ func TestMQTTPointOrder(t *testing.T) {
 	client.opts.Cache.SetMetrics([]bleemeoTypes.Metric{
 		{
 			ID:            metric1ID,
-			Labels:        metric1Labels,
 			LabelsText:    types.LabelsToText(metric1Labels),
 			AgentID:       agentID,
 			DeactivatedAt: time.Time{},
 		},
 		{
 			ID:            metric2ID,
-			Labels:        metric2Labels,
 			LabelsText:    types.LabelsToText(metric2Labels),
 			AgentID:       agentID,
 			DeactivatedAt: time.Time{},
@@ -413,7 +409,7 @@ func BenchmarkFailedPointsDropping(b *testing.B) {
 	failedPoints := failedPointsCache{
 		maxPendingPoints:    maxPendingPoints,
 		cleanupBatchSize:    cleanupBatchSize,
-		cleanupFailedPoints: func(failedPoints []types.MetricPoint) []types.MetricPoint { return failedPoints },
+		cleanupFailedPoints: func(failedPoints []storedPoint) []storedPoint { return failedPoints },
 		metricExists:        make(map[string]struct{}),
 	}
 

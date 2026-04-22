@@ -32,7 +32,6 @@ import (
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
-	gloutonTypes "github.com/bleemeo/glouton/types"
 )
 
 const (
@@ -456,12 +455,7 @@ func (cl *wrapperClient) listMetrics(ctx context.Context, active bool, stopSearc
 		metrics = append(metrics, metric)
 
 		if stopSearchingPredicate != nil {
-			labelsText := metric.LabelsText
-			if labelsText == "" {
-				labelsText = gloutonTypes.LabelsToText(metric.Labels)
-			}
-
-			if stopSearchingPredicate(labelsText) {
+			if stopSearchingPredicate(metric.LabelsText) {
 				break
 			}
 		}

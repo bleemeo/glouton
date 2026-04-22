@@ -1,4 +1,6 @@
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# This build is used during -debug build. It's a copy of .goreleaser.yml with only few change in builds section
+#  (mostly specify ldflag to don't strip the binary and don't trimpath)
 version: 2
 project_name: glouton
 snapshot:
@@ -7,8 +9,12 @@ snapshot:
 builds:
   - env:
       - CGO_ENABLED=0
-    flags:
-      - -trimpath
+    ldflags:
+      # This is the default from gorelaser, with -s and -w removed to keep debug symbols in the binary.
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+      - -X main.builtBy=goreleaser
     targets:
       - linux_amd64
       - linux_386
