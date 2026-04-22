@@ -182,11 +182,6 @@ type MonitorHTTPOptions struct {
 	Headers              map[string]string `json:"monitor_headers,omitempty"`
 }
 
-type Unit struct {
-	UnitType int    `json:"unit,omitempty"`
-	UnitText string `json:"unit_text,omitempty"`
-}
-
 // Metric is a Metric object on Bleemeo API.
 type Metric struct {
 	Threshold
