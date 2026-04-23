@@ -28,6 +28,8 @@ Skip options allow build faster by omitting some steps. They could be cummulated
 Debugging options:
   shell: open an interactive shell in the build container instead of running the build.
          This allow to have access to some debugging tools and source path unmodified.
+  no-optimize: This imply debug target and cause the build to skip optimizations which make
+         debbugging easier since all variables should be available during debugging session.
 EOF
 }
 
@@ -51,6 +53,9 @@ while [ $# -gt 0 ]; do
          ;;
       "release")
          TARGET_TO_BUILD=release
+         ;;
+      "no-optimize")
+         TARGET_TO_BUILD=single-target-debug-no-optimize
          ;;
       "shell")
          TARGET_TO_BUILD=interactive-shell

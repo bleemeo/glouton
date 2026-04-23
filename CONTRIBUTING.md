@@ -224,6 +224,20 @@ on some server (e.g. you can't start glouton in debug from your VS code):
 gcore $(pgrep -x glouton)
 ```
 
+* alternative: if you want to get the core dump when Glouton crash (panic), you need:
+  * Configure `GOTRACEBACK=crash`, for example for Glouton run by systemd:
+    ```
+    # systemctl edit glouton.service
+
+    [Service]
+    Environment="GOTRACEBACK=crash"
+    WorkingDirectory=/tmp
+    ```
+  * Restart Glouton (`systemctl restart glouton.service`)
+  * After each restart, increase core ulimit: `prlimit --core=unlimited:unlimited -p $(pgrep -x glouton)`
+  * You might also need to dump more page by changing core filter: `echo 0xff > /proc/$(pgrep -x glouton)/coredump_filter`
+  * Cause the panic, the core should be written on /tmp or according to `sysctl kernel.core_pattern`
+
 * Copy the produced core file to your VS code
 * In VS code, create a launch.json with:
 ```
