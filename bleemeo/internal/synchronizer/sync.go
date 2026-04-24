@@ -37,6 +37,7 @@ import (
 
 	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncaccountconfig"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncapplications"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncservices"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
@@ -167,7 +168,7 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 	s.synchronizers = []types.EntitySynchronizer{
 		&CompatibilityWrapper{state: state, name: types.EntityInfo, method: s.syncInfo, enabledInMaintenance: true, skipOnlyEssential: true},
 		&CompatibilityWrapper{state: state, name: types.EntityAgent, method: s.syncAgent, enabledInSuspendedMode: true, skipOnlyEssential: true},
-		&CompatibilityWrapper{state: state, name: types.EntityAccountConfig, method: s.syncAccountConfig, enabledInSuspendedMode: true, skipOnlyEssential: true},
+		syncaccountconfig.New(),
 		&CompatibilityWrapper{state: state, name: types.EntityFact, method: s.syncFacts},
 		&CompatibilityWrapper{state: state, name: types.EntityContainer, method: s.syncContainers},
 		&CompatibilityWrapper{state: state, name: types.EntitySNMP, method: s.syncSNMP},
@@ -311,11 +312,6 @@ func (s *Synchronizer) Run(ctx context.Context) error { //nolint:maintidx
 
 	if err != nil {
 		return fmt.Errorf("unable to create Bleemeo HTTP client. Is the API base URL correct ? (error is %w)", err)
-	}
-
-	cfg, ok := s.option.Cache.CurrentAccountConfig()
-	if ok {
-		s.state.currentConfigNotified = cfg.ID
 	}
 
 	// syncInfo early because MQTT connection will establish or not depending on it (maintenance & outdated agent).
@@ -707,6 +703,14 @@ func (s *Synchronizer) SetMaintenance(ctx context.Context, maintenance bool) {
 	defer s.l.Unlock()
 
 	s.maintenanceMode = maintenance
+}
+
+// SetSuspended sets the suspended mode on the synchronizer.
+func (s *Synchronizer) SetSuspended(suspended bool) {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	s.suspendedMode = suspended
 }
 
 // UpdateMonitor requests to update a monitor, identified by its UUID. It allows for adding, updating and removing a monitor.

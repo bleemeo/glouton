@@ -97,28 +97,26 @@ type Tag struct {
 	TagType      bleemeo.TagType `json:"tag_type"`
 }
 
-// AccountConfig is a configuration of account.
-type AccountConfig struct {
-	ID                    string `json:"id"`
-	Name                  string `json:"name"`
-	MaxCustomMetrics      int    `json:"number_of_custom_metrics"`
-	LiveProcessResolution int    `json:"live_process_resolution"`
-	LiveProcess           bool   `json:"live_process"`
-	DockerIntegration     bool   `json:"docker_integration"`
-	SNMPIntegration       bool   `json:"snmp_integration"`
-	VSphereIntegration    bool   `json:"vsphere_integration"`
-	Suspended             bool   `json:"suspended"`
+// Config is a per-account configuration entry on the Bleemeo API.
+type Config struct {
+	ID        string `json:"id"`
+	Type      int    `json:"type"`
+	AgentType string `json:"agent_type"`
+	Account   string `json:"account"`
+	Value     any    `json:"value"`
 }
 
-// AgentConfig is a configuration for one kind of agent.
-type AgentConfig struct {
-	ID               string `json:"id"`
-	MetricsAllowlist string `json:"metrics_allowlist"`
-	// MetricResolution is given in seconds.
-	MetricResolution int    `json:"metrics_resolution"`
-	AccountConfig    string `json:"account_config"`
-	AgentType        string `json:"agent_type"`
-}
+const (
+	ConfigTypeDockerIntegration      = 1010
+	ConfigTypeSNMPIntegration        = 1030
+	ConfigTypeVSphereIntegration     = 1040
+	ConfigTypeLiveProcess            = 1070
+	ConfigTypeLiveProcessResolution  = 1071
+	ConfigTypeCustomMetrics          = 1400
+	ConfigTypeAgentMetricsAllowlist  = 10000
+	ConfigTypeAgentMetricsResolution = 11000
+	ConfigTypeSuspended              = 100000
+)
 
 // Application is a group of services.
 type Application struct {
@@ -130,6 +128,7 @@ type Application struct {
 // Service is a Service object on Bleemeo API.
 type Service struct {
 	ID              string `json:"id"`
+	Account         string `json:"account"`
 	AccountConfig   string `json:"account_config"`
 	Label           string `json:"label"`
 	Instance        string `json:"instance"`

@@ -40,8 +40,7 @@ type wrapperClientMock struct {
 	requestCounts map[string]int
 	errorsCount   int
 
-	accountConfigNewAgent string
-	username, password    string
+	username, password string
 }
 
 func newClientMock(helper *syncTestHelper) *wrapperClientMock {
@@ -59,24 +58,10 @@ func newClientMock(helper *syncTestHelper) *wrapperClientMock {
 					agentTypeVSphereVM,
 				},
 			},
-			accountConfigs: resourceHolder[bleemeoTypes.AccountConfig]{
-				elems: []bleemeoTypes.AccountConfig{
-					newAccountConfig,
-				},
-			},
-			agentConfigs: resourceHolder[bleemeoTypes.AgentConfig]{
-				elems: []bleemeoTypes.AgentConfig{
-					agentConfigAgent,
-					agentConfigSNMP,
-					agentConfigMonitor,
-					agentConfigKubernetes,
-					agentConfigVSphereCluster,
-					agentConfigVSphereHost,
-					agentConfigVSphereVM,
-				},
+			configs: resourceHolder[bleemeoTypes.Config]{
+				elems: defaultAccountConfigs,
 			},
 		},
-		accountConfigNewAgent: newAccountConfig.ID,
 	}
 
 	clientMock.resources.agents.createHook = func(agent *bleemeoapi.AgentPayload) error {
@@ -102,7 +87,6 @@ func newClientMock(helper *syncTestHelper) *wrapperClientMock {
 			clientMock.password = agent.InitialPassword
 		}
 
-		agent.CurrentAccountConfigID = clientMock.accountConfigNewAgent
 		agent.InitialPassword = "password already set"
 		agent.CreatedAt = helper.Now()
 
@@ -169,16 +153,10 @@ func (wcm *wrapperClientMock) ListAgentTypes(context.Context) ([]bleemeoTypes.Ag
 	return wcm.resources.agentTypes.clone(), nil
 }
 
-func (wcm *wrapperClientMock) ListAccountConfigs(context.Context) ([]bleemeoTypes.AccountConfig, error) {
-	wcm.requestCounts[mockAPIResourceAccountConfig]++
+func (wcm *wrapperClientMock) ListConfigs(_ context.Context, _ url.Values) ([]bleemeoTypes.Config, error) {
+	wcm.requestCounts[mockAPIResourceConfig]++
 
-	return wcm.resources.accountConfigs.clone(), nil
-}
-
-func (wcm *wrapperClientMock) ListAgentConfigs(context.Context) ([]bleemeoTypes.AgentConfig, error) {
-	wcm.requestCounts[mockAPIResourceAgentConfig]++
-
-	return wcm.resources.agentConfigs.clone(), nil
+	return wcm.resources.configs.clone(), nil
 }
 
 func (wcm *wrapperClientMock) ListAgents(context.Context) ([]bleemeoTypes.Agent, error) {

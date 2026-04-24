@@ -160,7 +160,7 @@ type Client interface {
 	RawClient
 	MetaClient
 	ApplicationClient
-	AccountConfigClient
+	ConfigClient
 	AgentClient
 	GloutonConfigItemClient
 	ContainerClient
@@ -189,10 +189,9 @@ type ApplicationClient interface {
 	CreateApplication(ctx context.Context, app bleemeoTypes.Application) (bleemeoTypes.Application, error)
 }
 
-type AccountConfigClient interface {
+type ConfigClient interface {
 	ListAgentTypes(ctx context.Context) ([]bleemeoTypes.AgentType, error)
-	ListAccountConfigs(ctx context.Context) ([]bleemeoTypes.AccountConfig, error)
-	ListAgentConfigs(ctx context.Context) ([]bleemeoTypes.AgentConfig, error)
+	ListConfigs(ctx context.Context, params url.Values) ([]bleemeoTypes.Config, error)
 }
 
 type AgentClient interface {

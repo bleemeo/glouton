@@ -30,24 +30,26 @@ import (
 var ErrConfigNotFound = errors.New("configuration not found")
 
 type Filter struct {
-	defaultConfigID string
-	accountConfigs  map[string]bleemeoTypes.GloutonAccountConfig
-	agents          map[string]bleemeoTypes.Agent
-	monitors        map[bleemeoTypes.AgentID]bleemeoTypes.Monitor
+	currentAccountConfig bleemeoTypes.GloutonAccountConfig
+	probeConfigs         map[string]bleemeoTypes.GloutonProbeAccountConfig
+	agents               map[string]bleemeoTypes.Agent
+	monitors             map[bleemeoTypes.AgentID]bleemeoTypes.Monitor
 }
 
 func NewFilter(cache *cache.Cache) *Filter {
+	currentConfig, _ := cache.CurrentAccountConfig()
+
 	return &Filter{
-		defaultConfigID: cache.Agent().CurrentAccountConfigID,
-		accountConfigs:  cache.AccountConfigsByUUID(),
-		agents:          cache.AgentsByUUID(),
-		monitors:        cache.MonitorsByAgentUUID(),
+		currentAccountConfig: currentConfig,
+		probeConfigs:         cache.ProbeConfigByAccountID(),
+		agents:               cache.AgentsByUUID(),
+		monitors:             cache.MonitorsByAgentUUID(),
 	}
 }
 
 // IsAllowed returns whether a metric is allowed or not depending on the current plan.
 func (f *Filter) IsAllowed(lbls map[string]string, annotations types.MetricAnnotations) (bool, bleemeoTypes.DenyReason, error) {
-	allowlist, err := allowListForMetric(f.accountConfigs, f.defaultConfigID, annotations, f.monitors, f.agents)
+	allowlist, err := allowListForMetric(f.currentAccountConfig, f.probeConfigs, annotations, f.monitors, f.agents)
 	if err != nil {
 		return false, bleemeoTypes.DenyErrorOccurred, err
 	}
@@ -59,7 +61,7 @@ func (f *Filter) IsAllowed(lbls map[string]string, annotations types.MetricAnnot
 	}
 
 	// Deny metrics associated to a container when Docker integration is disabled unless we will ignore container.
-	if !f.accountConfigs[f.defaultConfigID].DockerIntegration && annotations.ContainerID != "" && !common.IgnoreContainer(f.accountConfigs[f.defaultConfigID], lbls) {
+	if !f.currentAccountConfig.DockerIntegration && annotations.ContainerID != "" && !common.IgnoreContainer(f.currentAccountConfig, lbls) {
 		return false, bleemeoTypes.DenyNoDockerIntegration, nil
 	}
 
@@ -80,47 +82,37 @@ func (f *Filter) IsAllowed(lbls map[string]string, annotations types.MetricAnnot
 }
 
 func allowListForMetric(
-	configs map[string]bleemeoTypes.GloutonAccountConfig,
-	defaultConfigID string,
+	currentAccountConfig bleemeoTypes.GloutonAccountConfig,
+	probeConfigs map[string]bleemeoTypes.GloutonProbeAccountConfig,
 	annotations types.MetricAnnotations,
 	monitors map[bleemeoTypes.AgentID]bleemeoTypes.Monitor,
 	agents map[string]bleemeoTypes.Agent,
 ) (map[string]bool, error) {
-	// TODO: snmp metric should use the correct AgentConfig
 	if annotations.BleemeoAgentID != "" {
-		var allowlist map[string]bool
-
 		monitor, present := monitors[bleemeoTypes.AgentID(annotations.BleemeoAgentID)]
 		if present {
-			accountConfig, present := configs[monitor.AccountConfig]
+			probeCfg, present := probeConfigs[monitor.Account]
 			if !present {
-				return nil, fmt.Errorf("%w for monitor with config ID=%s", ErrConfigNotFound, monitor.AccountConfig)
+				return nil, fmt.Errorf("%w for monitor with account ID=%s", ErrConfigNotFound, monitor.Account)
 			}
 
-			allowlist = accountConfig.AgentConfigByName[bleemeo.AgentType_Monitor].MetricsAllowlist
-		} else {
-			agent, present := agents[annotations.BleemeoAgentID]
-			if !present {
-				return nil, fmt.Errorf("%w: missing agent ID=%s", ErrConfigNotFound, annotations.BleemeoAgentID)
-			}
-
-			accountConfig, present := configs[agent.CurrentAccountConfigID]
-			if !present {
-				return nil, fmt.Errorf("%w for agent with config ID=%s", ErrConfigNotFound, agent.CurrentAccountConfigID)
-			}
-
-			ac, ok := accountConfig.AgentConfigByID[agent.AgentType]
-			if !ok {
-				return nil, fmt.Errorf("%w: missing agent config for type ID=%s", ErrConfigNotFound, agent.AgentType)
-			}
-
-			allowlist = ac.MetricsAllowlist
+			return probeCfg.MetricsAllowlist, nil
 		}
 
-		return allowlist, nil
+		agent, present := agents[annotations.BleemeoAgentID]
+		if !present {
+			return nil, fmt.Errorf("%w: missing agent ID=%s", ErrConfigNotFound, annotations.BleemeoAgentID)
+		}
+
+		ac, ok := currentAccountConfig.AgentConfigByID[agent.AgentType]
+		if !ok {
+			return nil, fmt.Errorf("%w: missing agent config for type ID=%s", ErrConfigNotFound, agent.AgentType)
+		}
+
+		return ac.MetricsAllowlist, nil
 	}
 
-	tmp, ok := configs[defaultConfigID].AgentConfigByName[bleemeo.AgentType_Agent]
+	tmp, ok := currentAccountConfig.AgentConfigByName[bleemeo.AgentType_Agent]
 	if !ok {
 		return nil, fmt.Errorf("%w: missing agent config for type Name=%s", ErrConfigNotFound, bleemeo.AgentType_Agent)
 	}

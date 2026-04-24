@@ -142,26 +142,24 @@ func TestSyncWithSNMP(t *testing.T) {
 	wantAgents := []bleemeoapi.AgentPayload{
 		{
 			Agent: bleemeoTypes.Agent{
-				ID:                     idAgentMain,
-				CreatedAt:              helper.Now(),
-				AccountID:              accountID,
-				CurrentAccountConfigID: newAccountConfig.ID,
-				AgentType:              agentTypeAgent.ID,
-				FQDN:                   testAgentFQDN,
-				DisplayName:            testAgentFQDN,
+				ID:          idAgentMain,
+				CreatedAt:   helper.Now(),
+				AccountID:   accountID,
+				AgentType:   agentTypeAgent.ID,
+				FQDN:        testAgentFQDN,
+				DisplayName: testAgentFQDN,
 			},
 			Abstracted:      false,
 			InitialPassword: "password already set",
 		},
 		{
 			Agent: bleemeoTypes.Agent{
-				ID:                     idAgentSNMP,
-				CreatedAt:              helper.Now(),
-				AccountID:              accountID,
-				CurrentAccountConfigID: newAccountConfig.ID,
-				AgentType:              agentTypeSNMP.ID,
-				FQDN:                   snmpAddress,
-				DisplayName:            "Z-The-Initial-Name",
+				ID:          idAgentSNMP,
+				CreatedAt:   helper.Now(),
+				AccountID:   accountID,
+				AgentType:   agentTypeSNMP.ID,
+				FQDN:        snmpAddress,
+				DisplayName: "Z-The-Initial-Name",
 			},
 			Abstracted:      true,
 			InitialPassword: "password already set",
@@ -360,26 +358,24 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 	wantAgents := []bleemeoapi.AgentPayload{
 		{
 			Agent: bleemeoTypes.Agent{
-				ID:                     idAgentMain,
-				CreatedAt:              helper.Now(),
-				AccountID:              accountID,
-				CurrentAccountConfigID: newAccountConfig.ID,
-				AgentType:              agentTypeAgent.ID,
-				FQDN:                   testAgentFQDN,
-				DisplayName:            testAgentFQDN,
+				ID:          idAgentMain,
+				CreatedAt:   helper.Now(),
+				AccountID:   accountID,
+				AgentType:   agentTypeAgent.ID,
+				FQDN:        testAgentFQDN,
+				DisplayName: testAgentFQDN,
 			},
 			Abstracted:      false,
 			InitialPassword: "password already set",
 		},
 		{
 			Agent: bleemeoTypes.Agent{
-				ID:                     idAgentSNMP,
-				CreatedAt:              helper.Now(),
-				AccountID:              accountID,
-				CurrentAccountConfigID: newAccountConfig.ID,
-				AgentType:              agentTypeSNMP.ID,
-				FQDN:                   snmpAddress,
-				DisplayName:            "Z-The-Initial-Name",
+				ID:          idAgentSNMP,
+				CreatedAt:   helper.Now(),
+				AccountID:   accountID,
+				AgentType:   agentTypeSNMP.ID,
+				FQDN:        snmpAddress,
+				DisplayName: "Z-The-Initial-Name",
 			},
 			Abstracted:      true,
 			InitialPassword: "password already set",
@@ -472,13 +468,12 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		wantAgents[0],
 		{
 			Agent: bleemeoTypes.Agent{
-				ID:                     idAgentSNMP,
-				CreatedAt:              helper.Now(),
-				AccountID:              accountID,
-				CurrentAccountConfigID: newAccountConfig.ID,
-				AgentType:              agentTypeSNMP.ID,
-				FQDN:                   snmpAddress,
-				DisplayName:            "Z-The-Initial-Name",
+				ID:          idAgentSNMP,
+				CreatedAt:   helper.Now(),
+				AccountID:   accountID,
+				AgentType:   agentTypeSNMP.ID,
+				FQDN:        snmpAddress,
+				DisplayName: "Z-The-Initial-Name",
 			},
 			Abstracted:      true,
 			InitialPassword: "password already set",
@@ -823,13 +818,12 @@ func TestSyncServerGroup(t *testing.T) {
 			wantAgents := []bleemeoapi.AgentPayload{
 				{
 					Agent: bleemeoTypes.Agent{
-						ID:                     idAgentMain,
-						CreatedAt:              helper.Now(),
-						AccountID:              accountID,
-						CurrentAccountConfigID: newAccountConfig.ID,
-						AgentType:              agentTypeAgent.ID,
-						FQDN:                   testAgentFQDN,
-						DisplayName:            testAgentFQDN,
+						ID:          idAgentMain,
+						CreatedAt:   helper.Now(),
+						AccountID:   accountID,
+						AgentType:   agentTypeAgent.ID,
+						FQDN:        testAgentFQDN,
+						DisplayName: testAgentFQDN,
 					},
 					Abstracted:         false,
 					InitialPassword:    "password already set",
@@ -837,13 +831,12 @@ func TestSyncServerGroup(t *testing.T) {
 				},
 				{
 					Agent: bleemeoTypes.Agent{
-						ID:                     idAgentSNMP,
-						CreatedAt:              helper.Now(),
-						AccountID:              accountID,
-						CurrentAccountConfigID: newAccountConfig.ID,
-						AgentType:              agentTypeSNMP.ID,
-						FQDN:                   snmpAddress,
-						DisplayName:            "Z-The-Initial-Name",
+						ID:          idAgentSNMP,
+						CreatedAt:   helper.Now(),
+						AccountID:   accountID,
+						AgentType:   agentTypeSNMP.ID,
+						FQDN:        snmpAddress,
+						DisplayName: "Z-The-Initial-Name",
 					},
 					Abstracted:         true,
 					InitialPassword:    "password already set",
@@ -859,100 +852,47 @@ func TestSyncServerGroup(t *testing.T) {
 	}
 }
 
+func makeTestPlanConfigs(accountID string, agentTypeAgent, agentTypeSNMP, agentTypeMonitor bleemeoTypes.AgentType, dockerEnabled bool) []bleemeoTypes.Config {
+	return []bleemeoTypes.Config{
+		{ID: "cfg-docker", Type: bleemeoTypes.ConfigTypeDockerIntegration, Account: accountID, Value: dockerEnabled},
+		{ID: "cfg-snmp-int", Type: bleemeoTypes.ConfigTypeSNMPIntegration, Account: accountID, Value: true},
+		{ID: "cfg-live-proc", Type: bleemeoTypes.ConfigTypeLiveProcess, Account: accountID, Value: true},
+		{ID: "cfg-custom", Type: bleemeoTypes.ConfigTypeCustomMetrics, Account: accountID, Value: float64(999)},
+		{ID: "cfg-agent-res", Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: agentTypeAgent.ID, Value: float64(10)},
+		{ID: "cfg-snmp-res", Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: agentTypeSNMP.ID, Value: float64(60)},
+		{ID: "cfg-mon-res", Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: agentTypeMonitor.ID, Value: float64(60)},
+	}
+}
+
 // TestBleemeoPlan ensure Glouton works as expected in various plan.
 func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
-	const (
-		configID1      = "86c0b76c-587a-48c6-a799-dd753719151c"
-		configID2      = "a0740441-88ee-4ec1-b023-b9d3e9398cf7"
-		agentConfigID1 = "62fe90d2-00cc-4b81-b49d-308de2ae22e1"
-		agentConfigID2 = "f520e10b-7718-4fb1-87d9-b1f65f90ca31"
-		agentConfigID3 = "81620241-3318-4e3b-8b33-70ff40c9e31a"
-		agentConfigID4 = "96110f90-b724-473f-8077-3244661cb68d"
-	)
-
 	cases := []struct {
 		name                string
-		accountConfig       bleemeoTypes.AccountConfig
-		agentConfigs        []bleemeoTypes.AgentConfig
+		configs             []bleemeoTypes.Config
 		wantSNMP            bool
 		wantCustomMetric    bool
 		wantContainerFK     bool
 		wantContainerMetric bool
 	}{
 		{
-			name:          "default",
-			accountConfig: newAccountConfig,
-			agentConfigs: []bleemeoTypes.AgentConfig{
-				agentConfigAgent,
-				agentConfigSNMP,
-				agentConfigMonitor,
-			},
+			name:                "default",
+			configs:             defaultAccountConfigs,
 			wantSNMP:            true,
 			wantCustomMetric:    true,
 			wantContainerFK:     true,
 			wantContainerMetric: true,
 		},
 		{
-			name: "all-enable",
-			accountConfig: bleemeoTypes.AccountConfig{
-				ID:                 configID1,
-				Name:               "all-enable",
-				MaxCustomMetrics:   999,
-				LiveProcess:        true,
-				DockerIntegration:  true,
-				SNMPIntegration:    true,
-				VSphereIntegration: true,
-			},
-			agentConfigs: []bleemeoTypes.AgentConfig{
-				{
-					ID:            agentConfigID1,
-					AccountConfig: configID1,
-					AgentType:     agentTypeAgent.ID,
-				},
-				{
-					ID:            agentConfigID2,
-					AccountConfig: configID1,
-					AgentType:     agentTypeSNMP.ID,
-				},
-				{
-					ID:            agentConfigID3,
-					AccountConfig: configID1,
-					AgentType:     agentTypeMonitor.ID,
-				},
-			},
+			name:                "all-enable",
+			configs:             makeTestPlanConfigs(accountID, agentTypeAgent, agentTypeSNMP, agentTypeMonitor, true),
 			wantSNMP:            true,
 			wantCustomMetric:    true,
 			wantContainerFK:     true,
 			wantContainerMetric: true,
 		},
 		{
-			name: "no-docker",
-			accountConfig: bleemeoTypes.AccountConfig{
-				ID:                 configID2,
-				Name:               "no-docker",
-				MaxCustomMetrics:   999,
-				LiveProcess:        true,
-				DockerIntegration:  false,
-				SNMPIntegration:    true,
-				VSphereIntegration: true,
-			},
-			agentConfigs: []bleemeoTypes.AgentConfig{
-				{
-					ID:            agentConfigID1,
-					AccountConfig: configID2,
-					AgentType:     agentTypeAgent.ID,
-				},
-				{
-					ID:            agentConfigID2,
-					AccountConfig: configID2,
-					AgentType:     agentTypeSNMP.ID,
-				},
-				{
-					ID:            agentConfigID3,
-					AccountConfig: configID2,
-					AgentType:     agentTypeMonitor.ID,
-				},
-			},
+			name:                "no-docker",
+			configs:             makeTestPlanConfigs(accountID, agentTypeAgent, agentTypeSNMP, agentTypeMonitor, false),
 			wantSNMP:            true,
 			wantCustomMetric:    true,
 			wantContainerFK:     false,
@@ -960,32 +900,15 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 		},
 		{
 			name: "no-docker-limit-list",
-			accountConfig: bleemeoTypes.AccountConfig{
-				ID:                 configID2,
-				Name:               "no-docker-limit-list",
-				MaxCustomMetrics:   999,
-				LiveProcess:        true,
-				DockerIntegration:  false,
-				SNMPIntegration:    true,
-				VSphereIntegration: true,
-			},
-			agentConfigs: []bleemeoTypes.AgentConfig{
-				{
-					ID:               agentConfigID1,
-					AccountConfig:    configID2,
-					AgentType:        agentTypeAgent.ID,
-					MetricsAllowlist: "mem_used,cpu_used,probe_success,service_status",
-				},
-				{
-					ID:            agentConfigID2,
-					AccountConfig: configID2,
-					AgentType:     agentTypeSNMP.ID,
-				},
-				{
-					ID:            agentConfigID3,
-					AccountConfig: configID2,
-					AgentType:     agentTypeMonitor.ID,
-				},
+			configs: []bleemeoTypes.Config{
+				{ID: "cfg-docker", Type: bleemeoTypes.ConfigTypeDockerIntegration, Account: accountID, Value: false},
+				{ID: "cfg-snmp-int", Type: bleemeoTypes.ConfigTypeSNMPIntegration, Account: accountID, Value: true},
+				{ID: "cfg-live-proc", Type: bleemeoTypes.ConfigTypeLiveProcess, Account: accountID, Value: true},
+				{ID: "cfg-custom", Type: bleemeoTypes.ConfigTypeCustomMetrics, Account: accountID, Value: float64(999)},
+				{ID: "cfg-agent-res", Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: agentTypeAgent.ID, Value: float64(10)},
+				{ID: "cfg-agent-allowlist", Type: bleemeoTypes.ConfigTypeAgentMetricsAllowlist, Account: accountID, AgentType: agentTypeAgent.ID, Value: "mem_used,cpu_used,probe_success,service_status"},
+				{ID: "cfg-snmp-res", Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: agentTypeSNMP.ID, Value: float64(60)},
+				{ID: "cfg-mon-res", Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: agentTypeMonitor.ID, Value: float64(60)},
 			},
 			wantSNMP:            true,
 			wantCustomMetric:    false,
@@ -994,27 +917,12 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 		},
 		{
 			name: "no-docker-no-snmp-limit-list",
-			accountConfig: bleemeoTypes.AccountConfig{
-				ID:                 configID2,
-				Name:               "no-no-no",
-				MaxCustomMetrics:   999,
-				LiveProcess:        false,
-				DockerIntegration:  false,
-				SNMPIntegration:    false,
-				VSphereIntegration: false,
-			},
-			agentConfigs: []bleemeoTypes.AgentConfig{
-				{
-					ID:               agentConfigID1,
-					AccountConfig:    configID2,
-					AgentType:        agentTypeAgent.ID,
-					MetricsAllowlist: "mem_used,cpu_used,probe_success,service_status",
-				},
-				{
-					ID:            agentConfigID3,
-					AccountConfig: configID2,
-					AgentType:     agentTypeMonitor.ID,
-				},
+			configs: []bleemeoTypes.Config{
+				{ID: "cfg-docker", Type: bleemeoTypes.ConfigTypeDockerIntegration, Account: accountID, Value: false},
+				{ID: "cfg-snmp-int", Type: bleemeoTypes.ConfigTypeSNMPIntegration, Account: accountID, Value: false},
+				{ID: "cfg-agent-res", Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: agentTypeAgent.ID, Value: float64(10)},
+				{ID: "cfg-agent-allowlist", Type: bleemeoTypes.ConfigTypeAgentMetricsAllowlist, Account: accountID, AgentType: agentTypeAgent.ID, Value: "mem_used,cpu_used,probe_success,service_status"},
+				{ID: "cfg-mon-res", Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: agentTypeMonitor.ID, Value: float64(60)},
 			},
 			wantSNMP:            false,
 			wantCustomMetric:    false,
@@ -1030,7 +938,7 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 			helper := newHelper(t)
 			defer helper.Close()
 
-			helper.SetAPIAccountConfig(tt.accountConfig, tt.agentConfigs)
+			helper.SetAPIConfigs(tt.configs)
 			helper.SNMP = []*snmp.Target{
 				snmp.NewMock(config.SNMPTarget{InitialName: "The-Initial-Name", Target: snmpAddress}, map[string]string{}),
 			}
@@ -1109,13 +1017,12 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 			wantAgents := []bleemeoapi.AgentPayload{
 				{
 					Agent: bleemeoTypes.Agent{
-						ID:                     idAgentMain,
-						CreatedAt:              helper.Now(),
-						AccountID:              accountID,
-						CurrentAccountConfigID: tt.accountConfig.ID,
-						AgentType:              agentTypeAgent.ID,
-						FQDN:                   testAgentFQDN,
-						DisplayName:            testAgentFQDN,
+						ID:          idAgentMain,
+						CreatedAt:   helper.Now(),
+						AccountID:   accountID,
+						AgentType:   agentTypeAgent.ID,
+						FQDN:        testAgentFQDN,
+						DisplayName: testAgentFQDN,
 					},
 					Abstracted:      false,
 					InitialPassword: "password already set",
@@ -1125,13 +1032,12 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 			if tt.wantSNMP {
 				wantAgents = append(wantAgents, bleemeoapi.AgentPayload{
 					Agent: bleemeoTypes.Agent{
-						ID:                     idAny,
-						CreatedAt:              helper.Now(),
-						AccountID:              accountID,
-						CurrentAccountConfigID: tt.accountConfig.ID,
-						AgentType:              agentTypeSNMP.ID,
-						FQDN:                   snmpAddress,
-						DisplayName:            "The-Initial-Name",
+						ID:          idAny,
+						CreatedAt:   helper.Now(),
+						AccountID:   accountID,
+						AgentType:   agentTypeSNMP.ID,
+						FQDN:        snmpAddress,
+						DisplayName: "The-Initial-Name",
 					},
 					Abstracted:      true,
 					InitialPassword: "password already set",

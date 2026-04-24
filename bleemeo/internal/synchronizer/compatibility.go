@@ -29,13 +29,12 @@ import (
 type synchronizerState struct {
 	l sync.Mutex
 
-	currentConfigNotified string
-	lastFactUpdatedAt     string
-	lastSNMPcount         int
-	lastVSphereUpdate     time.Time
-	metricRetryAt         time.Time
-	lastMetricCount       int
-	lastMetricActivation  time.Time
+	lastFactUpdatedAt    string
+	lastSNMPcount        int
+	lastVSphereUpdate    time.Time
+	metricRetryAt        time.Time
+	lastMetricCount      int
+	lastMetricActivation time.Time
 
 	onDemandDiagnostic synchronizerOnDemandDiagnostic
 
@@ -137,10 +136,6 @@ func compatibilitySyncToPerform(ctx context.Context, execution types.Synchroniza
 	nextConfigAt := agent.NextConfigAt
 	if !nextConfigAt.IsZero() && nextConfigAt.Before(execution.StartedAt()) {
 		execution.RequestSynchronizationForAll(true)
-	}
-
-	if state.currentConfigNotified != agent.CurrentAccountConfigID {
-		execution.RequestSynchronization(types.EntityAccountConfig, true)
 	}
 
 	if state.lastFactUpdatedAt != localFacts[facts.FactUpdatedAt] {
