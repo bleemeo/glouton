@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package syncaccountconfig
+package syncconfig
 
 import (
 	"context"
@@ -26,44 +26,44 @@ import (
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 )
 
-type SyncAccountConfig struct {
+type SyncConfig struct {
 	lastNotifiedConfig bleemeoTypes.GloutonAccountConfig
 	suspendedMode      bool
 }
 
-func New() *SyncAccountConfig {
-	return &SyncAccountConfig{}
+func New() *SyncConfig {
+	return &SyncConfig{}
 }
 
-func (s *SyncAccountConfig) Name() types.EntityName {
-	return types.EntityAccountConfig
+func (s *SyncConfig) Name() types.EntityName {
+	return types.EntityConfig
 }
 
-func (s *SyncAccountConfig) EnabledInMaintenance() bool {
+func (s *SyncConfig) EnabledInMaintenance() bool {
 	return true
 }
 
-func (s *SyncAccountConfig) EnabledInSuspendedMode() bool {
+func (s *SyncConfig) EnabledInSuspendedMode() bool {
 	return true
 }
 
-func (s *SyncAccountConfig) PrepareExecution(_ context.Context, execution types.SynchronizationExecution) (types.EntitySynchronizerExecution, error) {
-	return &syncAccountConfigExecution{
+func (s *SyncConfig) PrepareExecution(_ context.Context, execution types.SynchronizationExecution) (types.EntitySynchronizerExecution, error) {
+	return &syncConfigExecution{
 		parent:    s,
 		execution: execution,
 	}, nil
 }
 
-type syncAccountConfigExecution struct {
-	parent    *SyncAccountConfig
+type syncConfigExecution struct {
+	parent    *SyncConfig
 	execution types.SynchronizationExecution
 }
 
-func (e *syncAccountConfigExecution) NeedSynchronization(_ context.Context) (bool, error) {
-	return true, nil
+func (e *syncConfigExecution) NeedSynchronization(_ context.Context) (bool, error) {
+	return false, nil
 }
 
-func (e *syncAccountConfigExecution) RefreshCache(ctx context.Context, syncType types.SyncType) error {
+func (e *syncConfigExecution) RefreshCache(ctx context.Context, syncType types.SyncType) error {
 	if syncType != types.SyncTypeForceCacheRefresh {
 		return nil
 	}
@@ -105,7 +105,11 @@ func (e *syncAccountConfigExecution) RefreshCache(ctx context.Context, syncType 
 	return nil
 }
 
-func (e *syncAccountConfigExecution) SyncRemoteAndLocal(_ context.Context, _ types.SyncType) error {
+func (e *syncConfigExecution) SyncRemoteAndLocal(_ context.Context, _ types.SyncType) error {
+	return nil
+}
+
+func (e *syncConfigExecution) FinishExecution(_ context.Context) {
 	option := e.execution.Option()
 	cache := option.Cache
 
@@ -113,7 +117,7 @@ func (e *syncAccountConfigExecution) SyncRemoteAndLocal(_ context.Context, _ typ
 
 	if !reflect.DeepEqual(e.parent.lastNotifiedConfig, newConfig) {
 		if option.UpdateConfigCallback != nil {
-			option.UpdateConfigCallback(false)
+			option.UpdateConfigCallback()
 		}
 
 		e.parent.lastNotifiedConfig = newConfig
@@ -126,11 +130,7 @@ func (e *syncAccountConfigExecution) SyncRemoteAndLocal(_ context.Context, _ typ
 
 		e.parent.suspendedMode = newConfig.Suspended
 	}
-
-	return nil
 }
-
-func (e *syncAccountConfigExecution) FinishExecution(_ context.Context) {}
 
 func deduplicateConfigs(configs []bleemeoTypes.Config) []bleemeoTypes.Config {
 	seen := make(map[string]bool, len(configs))

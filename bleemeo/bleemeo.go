@@ -839,7 +839,7 @@ func (c *Connector) diagnosticCache(file io.Writer) {
 			}
 		}
 
-		fmt.Fprintf(file, "id=%s fqdn=%s type=%s (%s) accountID=%s, config=%s\n", a.ID, a.FQDN, agentTypeName, a.AgentType, a.AccountID, a.CurrentAccountConfigID)
+		fmt.Fprintf(file, "id=%s fqdn=%s type=%s (%s) accountID=%s\n", a.ID, a.FQDN, agentTypeName, a.AgentType, a.AccountID)
 	}
 
 	fmt.Fprintf(file, "\n# Cache known %d agent types\n", len(agentTypes))
@@ -1076,9 +1076,7 @@ func (c *Connector) IsMetricAllowed(metric gloutonTypes.LabelsAndAnnotation) (bo
 	return f.IsAllowed(metric.Labels, metric.Annotations)
 }
 
-func (c *Connector) updateConfig(nameChanged bool) {
-	_ = nameChanged
-
+func (c *Connector) updateConfig() {
 	currentConfig, ok := c.cache.CurrentAccountConfig()
 	if !ok || currentConfig.AgentConfigByName[bleemeo.AgentType_Agent].MetricResolution == 0 {
 		return

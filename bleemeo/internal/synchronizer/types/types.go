@@ -37,10 +37,10 @@ import (
 type EntityName string
 
 const (
-	EntityAccountConfig EntityName = "accountconfig"
+	EntityConfig        EntityName = "config"
 	EntityAgent         EntityName = "agent"
 	EntityApplication   EntityName = "application"
-	EntityConfig        EntityName = "config"
+	EntityGloutonConfig EntityName = "gloutonconfig"
 	EntityContainer     EntityName = "container"
 	EntityDiagnostics   EntityName = "diagnostics"
 	EntityFact          EntityName = "facts"
@@ -279,7 +279,7 @@ type Option struct {
 	DisableCallback func(reason bleemeoTypes.DisableReason, until time.Time)
 
 	// UpdateConfigCallback is a function called when Synchronizer detected a AccountConfiguration change
-	UpdateConfigCallback func(nameChanged bool)
+	UpdateConfigCallback func()
 
 	// ProvideClient may be used to provide an alternative Bleemeo API client.
 	ProvideClient func() Client

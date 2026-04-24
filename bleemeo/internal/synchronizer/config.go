@@ -73,7 +73,7 @@ func configItemsToMap(items []bleemeoTypes.GloutonConfigItem) map[comparableConf
 	return itemsMap
 }
 
-func (s *Synchronizer) syncConfig(
+func (s *Synchronizer) syncGloutonConfig(
 	ctx context.Context,
 	syncType types.SyncType,
 	execution types.SynchronizationExecution,

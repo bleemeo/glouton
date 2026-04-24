@@ -159,7 +159,7 @@ func compatibilitySyncToPerform(ctx context.Context, execution types.Synchroniza
 	// After a reload, the config has been changed, so we want to do a fullsync
 	// without waiting the nextFullSync that is kept between reload.
 	if !state.configSyncDone {
-		execution.RequestSynchronization(types.EntityConfig, true)
+		execution.RequestSynchronization(types.EntityGloutonConfig, true)
 	}
 
 	_, minDelayed := execution.GlobalState().DelayedContainers()

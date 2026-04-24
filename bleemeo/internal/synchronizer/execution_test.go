@@ -59,7 +59,7 @@ func TestExecution_LinkedSynchronization(t *testing.T) { //nolint:maintidx
 				{name: types.EntityVSphere, requestFull: true},
 			},
 			callsToRequestSynchronizationAfter: []requestSync{
-				{name: types.EntityConfig, requestFull: false},
+				{name: types.EntityGloutonConfig, requestFull: false},
 				{name: types.EntityDiagnostics, requestFull: true},
 			},
 			wantSync: map[types.EntityName]types.SyncType{
@@ -69,8 +69,8 @@ func TestExecution_LinkedSynchronization(t *testing.T) { //nolint:maintidx
 				types.EntityVSphere:   types.SyncTypeForceCacheRefresh,
 			},
 			wantPostSync: map[types.EntityName]types.SyncType{
-				types.EntityConfig:      types.SyncTypeNormal,
-				types.EntityDiagnostics: types.SyncTypeForceCacheRefresh,
+				types.EntityGloutonConfig: types.SyncTypeNormal,
+				types.EntityDiagnostics:   types.SyncTypeForceCacheRefresh,
 			},
 		},
 		{
@@ -82,7 +82,7 @@ func TestExecution_LinkedSynchronization(t *testing.T) { //nolint:maintidx
 				},
 				{
 					trigger: types.EntityContainer,
-					target:  types.EntityAccountConfig,
+					target:  types.EntityConfig,
 				},
 				{
 					trigger: types.EntityDiagnostics,
@@ -98,21 +98,21 @@ func TestExecution_LinkedSynchronization(t *testing.T) { //nolint:maintidx
 				{name: types.EntityVSphere, requestFull: true},
 			},
 			callsToRequestSynchronizationAfter: []requestSync{
-				{name: types.EntityConfig, requestFull: false},
+				{name: types.EntityGloutonConfig, requestFull: false},
 				{name: types.EntityDiagnostics, requestFull: true},
 			},
 			wantSync: map[types.EntityName]types.SyncType{
-				types.EntityMetric:        types.SyncTypeNormal,
-				types.EntityAgent:         types.SyncTypeNormal,
-				types.EntityContainer:     types.SyncTypeNormal,
-				types.EntityVSphere:       types.SyncTypeForceCacheRefresh,
-				types.EntityInfo:          types.SyncTypeNormal, // metric -> info
-				types.EntityAccountConfig: types.SyncTypeNormal, // container -> account info
+				types.EntityMetric:    types.SyncTypeNormal,
+				types.EntityAgent:     types.SyncTypeNormal,
+				types.EntityContainer: types.SyncTypeNormal,
+				types.EntityVSphere:   types.SyncTypeForceCacheRefresh,
+				types.EntityInfo:      types.SyncTypeNormal, // metric -> info
+				types.EntityConfig:    types.SyncTypeNormal, // container -> account info
 			},
 			wantPostSync: map[types.EntityName]types.SyncType{
-				types.EntityConfig:      types.SyncTypeNormal,
-				types.EntityDiagnostics: types.SyncTypeForceCacheRefresh,
-				types.EntitySNMP:        types.SyncTypeForceCacheRefresh, // diagnostic -> snmp
+				types.EntityGloutonConfig: types.SyncTypeNormal,
+				types.EntityDiagnostics:   types.SyncTypeForceCacheRefresh,
+				types.EntitySNMP:          types.SyncTypeForceCacheRefresh, // diagnostic -> snmp
 			},
 		},
 		{
@@ -124,7 +124,7 @@ func TestExecution_LinkedSynchronization(t *testing.T) { //nolint:maintidx
 				},
 				{
 					trigger: types.EntityMetric,
-					target:  types.EntityAccountConfig,
+					target:  types.EntityConfig,
 				},
 				{
 					trigger: types.EntityMetric,
@@ -141,16 +141,16 @@ func TestExecution_LinkedSynchronization(t *testing.T) { //nolint:maintidx
 				{name: types.EntityMetric, requestFull: false},
 			},
 			wantSync: map[types.EntityName]types.SyncType{
-				types.EntityMetric:        types.SyncTypeForceCacheRefresh,
-				types.EntityInfo:          types.SyncTypeForceCacheRefresh, // metric -> info
-				types.EntityAccountConfig: types.SyncTypeForceCacheRefresh, // metric -> account info
-				types.EntitySNMP:          types.SyncTypeForceCacheRefresh, // metric -> snmp
+				types.EntityMetric: types.SyncTypeForceCacheRefresh,
+				types.EntityInfo:   types.SyncTypeForceCacheRefresh, // metric -> info
+				types.EntityConfig: types.SyncTypeForceCacheRefresh, // metric -> account info
+				types.EntitySNMP:   types.SyncTypeForceCacheRefresh, // metric -> snmp
 			},
 			wantPostSync: map[types.EntityName]types.SyncType{
-				types.EntityMetric:        types.SyncTypeNormal,
-				types.EntityInfo:          types.SyncTypeNormal, // metric -> info
-				types.EntityAccountConfig: types.SyncTypeNormal, // metric -> account info
-				types.EntitySNMP:          types.SyncTypeNormal, // metric -> snmp
+				types.EntityMetric: types.SyncTypeNormal,
+				types.EntityInfo:   types.SyncTypeNormal, // metric -> info
+				types.EntityConfig: types.SyncTypeNormal, // metric -> account info
+				types.EntitySNMP:   types.SyncTypeNormal, // metric -> snmp
 			},
 		},
 		{
@@ -162,10 +162,10 @@ func TestExecution_LinkedSynchronization(t *testing.T) { //nolint:maintidx
 				},
 				{
 					trigger: types.EntityInfo,
-					target:  types.EntityAccountConfig,
+					target:  types.EntityConfig,
 				},
 				{
-					trigger: types.EntityAccountConfig,
+					trigger: types.EntityConfig,
 					target:  types.EntitySNMP,
 				},
 			},
@@ -179,16 +179,16 @@ func TestExecution_LinkedSynchronization(t *testing.T) { //nolint:maintidx
 				{name: types.EntityMetric, requestFull: false},
 			},
 			wantSync: map[types.EntityName]types.SyncType{
-				types.EntityMetric:        types.SyncTypeForceCacheRefresh,
-				types.EntityInfo:          types.SyncTypeForceCacheRefresh, // metric -> info
-				types.EntityAccountConfig: types.SyncTypeForceCacheRefresh, // metric -> info -> account info
-				types.EntitySNMP:          types.SyncTypeForceCacheRefresh, // metric -> info -> account info -> snmp
+				types.EntityMetric: types.SyncTypeForceCacheRefresh,
+				types.EntityInfo:   types.SyncTypeForceCacheRefresh, // metric -> info
+				types.EntityConfig: types.SyncTypeForceCacheRefresh, // metric -> info -> account info
+				types.EntitySNMP:   types.SyncTypeForceCacheRefresh, // metric -> info -> account info -> snmp
 			},
 			wantPostSync: map[types.EntityName]types.SyncType{
-				types.EntityMetric:        types.SyncTypeNormal,
-				types.EntityInfo:          types.SyncTypeNormal,
-				types.EntityAccountConfig: types.SyncTypeNormal,
-				types.EntitySNMP:          types.SyncTypeNormal,
+				types.EntityMetric: types.SyncTypeNormal,
+				types.EntityInfo:   types.SyncTypeNormal,
+				types.EntityConfig: types.SyncTypeNormal,
+				types.EntitySNMP:   types.SyncTypeNormal,
 			},
 		},
 		{
@@ -200,14 +200,14 @@ func TestExecution_LinkedSynchronization(t *testing.T) { //nolint:maintidx
 				},
 				{
 					trigger: types.EntityInfo,
-					target:  types.EntityAccountConfig,
+					target:  types.EntityConfig,
 				},
 				{
-					trigger: types.EntityAccountConfig,
+					trigger: types.EntityConfig,
 					target:  types.EntitySNMP,
 				},
 				{
-					trigger: types.EntityAccountConfig,
+					trigger: types.EntityConfig,
 					target:  types.EntityInfo,
 				},
 			},
@@ -221,16 +221,16 @@ func TestExecution_LinkedSynchronization(t *testing.T) { //nolint:maintidx
 				{name: types.EntityMetric, requestFull: false},
 			},
 			wantSync: map[types.EntityName]types.SyncType{
-				types.EntityMetric:        types.SyncTypeForceCacheRefresh,
-				types.EntityInfo:          types.SyncTypeForceCacheRefresh, // metric -> info
-				types.EntityAccountConfig: types.SyncTypeForceCacheRefresh, // metric -> info -> account info
-				types.EntitySNMP:          types.SyncTypeForceCacheRefresh, // metric -> info -> account info -> snmp
+				types.EntityMetric: types.SyncTypeForceCacheRefresh,
+				types.EntityInfo:   types.SyncTypeForceCacheRefresh, // metric -> info
+				types.EntityConfig: types.SyncTypeForceCacheRefresh, // metric -> info -> account info
+				types.EntitySNMP:   types.SyncTypeForceCacheRefresh, // metric -> info -> account info -> snmp
 			},
 			wantPostSync: map[types.EntityName]types.SyncType{
-				types.EntityMetric:        types.SyncTypeNormal,
-				types.EntityInfo:          types.SyncTypeNormal,
-				types.EntityAccountConfig: types.SyncTypeNormal,
-				types.EntitySNMP:          types.SyncTypeNormal,
+				types.EntityMetric: types.SyncTypeNormal,
+				types.EntityInfo:   types.SyncTypeNormal,
+				types.EntityConfig: types.SyncTypeNormal,
+				types.EntitySNMP:   types.SyncTypeNormal,
 			},
 		},
 		{
@@ -242,14 +242,14 @@ func TestExecution_LinkedSynchronization(t *testing.T) { //nolint:maintidx
 				},
 				{
 					trigger: types.EntityInfo,
-					target:  types.EntityAccountConfig,
+					target:  types.EntityConfig,
 				},
 				{
 					trigger: types.EntityInfo,
 					target:  types.EntityAgent,
 				},
 				{
-					trigger: types.EntityAccountConfig,
+					trigger: types.EntityConfig,
 					target:  types.EntitySNMP,
 				},
 				{
@@ -266,7 +266,7 @@ func TestExecution_LinkedSynchronization(t *testing.T) { //nolint:maintidx
 				},
 				{
 					trigger: types.EntityVSphere,
-					target:  types.EntityAccountConfig,
+					target:  types.EntityConfig,
 				},
 				{
 					trigger: types.EntityVSphere,
@@ -283,11 +283,11 @@ func TestExecution_LinkedSynchronization(t *testing.T) { //nolint:maintidx
 				{name: types.EntityMetric, requestFull: false},
 			},
 			wantSync: map[types.EntityName]types.SyncType{
-				types.EntityMetric:        types.SyncTypeForceCacheRefresh,
-				types.EntityInfo:          types.SyncTypeForceCacheRefresh, // metric -> info
-				types.EntityAccountConfig: types.SyncTypeForceCacheRefresh, // metric -> info -> account info
-				types.EntityAgent:         types.SyncTypeForceCacheRefresh, // metric -> info -> agent
-				types.EntitySNMP:          types.SyncTypeForceCacheRefresh, // metric -> info -> account info -> snmp
+				types.EntityMetric: types.SyncTypeForceCacheRefresh,
+				types.EntityInfo:   types.SyncTypeForceCacheRefresh, // metric -> info
+				types.EntityConfig: types.SyncTypeForceCacheRefresh, // metric -> info -> account info
+				types.EntityAgent:  types.SyncTypeForceCacheRefresh, // metric -> info -> agent
+				types.EntitySNMP:   types.SyncTypeForceCacheRefresh, // metric -> info -> account info -> snmp
 				// metric -> info -> account info -> snmp -> diagnostic
 				// OR metric -> info -> agent -> diagnostic
 				types.EntityDiagnostics: types.SyncTypeForceCacheRefresh,
@@ -295,13 +295,13 @@ func TestExecution_LinkedSynchronization(t *testing.T) { //nolint:maintidx
 				// cycle from vpshere -> metric and vpshere -> account info are broken
 			},
 			wantPostSync: map[types.EntityName]types.SyncType{
-				types.EntityMetric:        types.SyncTypeNormal,
-				types.EntityInfo:          types.SyncTypeNormal,
-				types.EntityAccountConfig: types.SyncTypeNormal,
-				types.EntityAgent:         types.SyncTypeNormal,
-				types.EntitySNMP:          types.SyncTypeNormal,
-				types.EntityDiagnostics:   types.SyncTypeNormal,
-				types.EntityVSphere:       types.SyncTypeNormal,
+				types.EntityMetric:      types.SyncTypeNormal,
+				types.EntityInfo:        types.SyncTypeNormal,
+				types.EntityConfig:      types.SyncTypeNormal,
+				types.EntityAgent:       types.SyncTypeNormal,
+				types.EntitySNMP:        types.SyncTypeNormal,
+				types.EntityDiagnostics: types.SyncTypeNormal,
+				types.EntityVSphere:     types.SyncTypeNormal,
 			},
 		},
 		{
@@ -313,14 +313,14 @@ func TestExecution_LinkedSynchronization(t *testing.T) { //nolint:maintidx
 				},
 				{
 					trigger: types.EntityInfo,
-					target:  types.EntityAccountConfig,
+					target:  types.EntityConfig,
 				},
 				{
 					trigger: types.EntityInfo,
 					target:  types.EntityAgent,
 				},
 				{
-					trigger: types.EntityAccountConfig,
+					trigger: types.EntityConfig,
 					target:  types.EntitySNMP,
 				},
 				{
@@ -337,7 +337,7 @@ func TestExecution_LinkedSynchronization(t *testing.T) { //nolint:maintidx
 				},
 				{
 					trigger: types.EntityVSphere,
-					target:  types.EntityAccountConfig,
+					target:  types.EntityConfig,
 				},
 				{
 					trigger: types.EntityVSphere,
@@ -354,11 +354,11 @@ func TestExecution_LinkedSynchronization(t *testing.T) { //nolint:maintidx
 				{name: types.EntityVSphere, requestFull: false},
 			},
 			wantSync: map[types.EntityName]types.SyncType{
-				types.EntityMetric:        types.SyncTypeForceCacheRefresh, // agent -> diagnostic -> vpshere -> metric
-				types.EntityInfo:          types.SyncTypeForceCacheRefresh, // [...] -> metric -> info
-				types.EntityAccountConfig: types.SyncTypeForceCacheRefresh, // [...] -> metric -> info -> account info
-				types.EntityAgent:         types.SyncTypeForceCacheRefresh, // [...] -> metric -> info -> agent
-				types.EntitySNMP:          types.SyncTypeForceCacheRefresh, // [...] -> metric -> info -> account info -> snmp
+				types.EntityMetric: types.SyncTypeForceCacheRefresh, // agent -> diagnostic -> vpshere -> metric
+				types.EntityInfo:   types.SyncTypeForceCacheRefresh, // [...] -> metric -> info
+				types.EntityConfig: types.SyncTypeForceCacheRefresh, // [...] -> metric -> info -> account info
+				types.EntityAgent:  types.SyncTypeForceCacheRefresh, // [...] -> metric -> info -> agent
+				types.EntitySNMP:   types.SyncTypeForceCacheRefresh, // [...] -> metric -> info -> account info -> snmp
 				// metric -> info -> account info -> snmp -> diagnostic
 				// OR metric -> info -> agent -> diagnostic
 				types.EntityDiagnostics: types.SyncTypeForceCacheRefresh,
@@ -366,13 +366,13 @@ func TestExecution_LinkedSynchronization(t *testing.T) { //nolint:maintidx
 				// cycle from vpshere -> metric and vpshere -> account info are broken
 			},
 			wantPostSync: map[types.EntityName]types.SyncType{
-				types.EntityMetric:        types.SyncTypeNormal,
-				types.EntityInfo:          types.SyncTypeNormal,
-				types.EntityAccountConfig: types.SyncTypeNormal,
-				types.EntityAgent:         types.SyncTypeNormal,
-				types.EntitySNMP:          types.SyncTypeNormal,
-				types.EntityDiagnostics:   types.SyncTypeNormal,
-				types.EntityVSphere:       types.SyncTypeNormal,
+				types.EntityMetric:      types.SyncTypeNormal,
+				types.EntityInfo:        types.SyncTypeNormal,
+				types.EntityConfig:      types.SyncTypeNormal,
+				types.EntityAgent:       types.SyncTypeNormal,
+				types.EntitySNMP:        types.SyncTypeNormal,
+				types.EntityDiagnostics: types.SyncTypeNormal,
+				types.EntityVSphere:     types.SyncTypeNormal,
 			},
 		},
 	}

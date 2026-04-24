@@ -36,7 +36,7 @@ import (
 
 const (
 	agentFactFields   = "id,agent,key,value"
-	agentFields       = "id,account,agent_type,created_at,current_config,display_name,fqdn,is_cluster_leader,next_config_at,tags"
+	agentFields       = "id,account,agent_type,created_at,display_name,fqdn,is_cluster_leader,next_config_at,tags"
 	agentTypeFields   = "id,name,display_name"
 	applicationFields = "id,name,tag"
 	configFields      = "id,type,account,agent_type,value"

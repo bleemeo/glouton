@@ -37,8 +37,8 @@ import (
 
 	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
-	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncaccountconfig"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncapplications"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncconfig"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncservices"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
@@ -168,7 +168,7 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 	s.synchronizers = []types.EntitySynchronizer{
 		&CompatibilityWrapper{state: state, name: types.EntityInfo, method: s.syncInfo, enabledInMaintenance: true, skipOnlyEssential: true},
 		&CompatibilityWrapper{state: state, name: types.EntityAgent, method: s.syncAgent, enabledInSuspendedMode: true, skipOnlyEssential: true},
-		syncaccountconfig.New(),
+		syncconfig.New(),
 		&CompatibilityWrapper{state: state, name: types.EntityFact, method: s.syncFacts},
 		&CompatibilityWrapper{state: state, name: types.EntityContainer, method: s.syncContainers},
 		&CompatibilityWrapper{state: state, name: types.EntitySNMP, method: s.syncSNMP},
@@ -177,7 +177,7 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 		syncservices.New(),
 		&CompatibilityWrapper{state: state, name: types.EntityMonitor, method: s.syncMonitors, skipOnlyEssential: true},
 		&CompatibilityWrapper{state: state, name: types.EntityMetric, method: s.syncMetrics},
-		&CompatibilityWrapper{state: state, name: types.EntityConfig, method: s.syncConfig},
+		&CompatibilityWrapper{state: state, name: types.EntityGloutonConfig, method: s.syncGloutonConfig},
 		&CompatibilityWrapper{state: state, name: types.EntityDiagnostics, method: s.syncDiagnostics},
 	}
 
@@ -617,7 +617,7 @@ func (s *Synchronizer) NotifyConfigUpdate(immediate bool) {
 	s.requestSynchronizationLocked(types.EntityInfo, true)
 	s.requestSynchronizationLocked(types.EntityAgent, true)
 	s.requestSynchronizationLocked(types.EntityFact, true)
-	s.requestSynchronizationLocked(types.EntityAccountConfig, true)
+	s.requestSynchronizationLocked(types.EntityConfig, true)
 
 	if !immediate {
 		return
@@ -675,7 +675,7 @@ func (s *Synchronizer) UpdateMonitors() {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.requestSynchronizationLocked(types.EntityAccountConfig, true)
+	s.requestSynchronizationLocked(types.EntityConfig, true)
 	s.requestSynchronizationLocked(types.EntityMonitor, true)
 }
 
@@ -1090,9 +1090,9 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (*Execut
 		execution := s.newLimitedExecution(
 			false,
 			map[types.EntityName]types.SyncType{
-				types.EntityAccountConfig: types.SyncTypeForceCacheRefresh,
-				types.EntityMetric:        types.SyncTypeNormal,
-				types.EntityAgent:         types.SyncTypeForceCacheRefresh,
+				types.EntityConfig: types.SyncTypeForceCacheRefresh,
+				types.EntityMetric: types.SyncTypeNormal,
+				types.EntityAgent:  types.SyncTypeForceCacheRefresh,
 			},
 		)
 		_ = execution.run(ctx)

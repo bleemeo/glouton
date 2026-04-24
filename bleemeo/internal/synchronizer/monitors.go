@@ -109,7 +109,7 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 	}
 
 	if needConfigUpdate {
-		execution.RequestSynchronization(types.EntityAccountConfig, true)
+		execution.RequestSynchronization(types.EntityConfig, true)
 	}
 
 	return false, s.ApplyMonitorUpdate()
