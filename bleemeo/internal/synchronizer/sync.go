@@ -168,7 +168,7 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 	s.synchronizers = []types.EntitySynchronizer{
 		&CompatibilityWrapper{state: state, name: types.EntityInfo, method: s.syncInfo, enabledInMaintenance: true, skipOnlyEssential: true},
 		&CompatibilityWrapper{state: state, name: types.EntityAgent, method: s.syncAgent, enabledInSuspendedMode: true, skipOnlyEssential: true},
-		syncconfig.New(),
+		syncconfig.New(option.Cache),
 		&CompatibilityWrapper{state: state, name: types.EntityFact, method: s.syncFacts},
 		&CompatibilityWrapper{state: state, name: types.EntityContainer, method: s.syncContainers},
 		&CompatibilityWrapper{state: state, name: types.EntitySNMP, method: s.syncSNMP},

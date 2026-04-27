@@ -19,11 +19,13 @@ package syncconfig
 import (
 	"context"
 	"net/url"
-	"reflect"
 	"strconv"
 
+	"github.com/bleemeo/glouton/bleemeo/internal/cache"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/google/go-cmp/cmp"
 )
 
 type SyncConfig struct {
@@ -31,8 +33,12 @@ type SyncConfig struct {
 	suspendedMode      bool
 }
 
-func New() *SyncConfig {
-	return &SyncConfig{}
+func New(c *cache.Cache) *SyncConfig {
+	cfg, _ := c.CurrentAccountConfig()
+
+	return &SyncConfig{
+		lastNotifiedConfig: cfg,
+	}
 }
 
 func (s *SyncConfig) Name() types.EntityName {
@@ -115,7 +121,9 @@ func (e *syncConfigExecution) FinishExecution(_ context.Context) {
 
 	newConfig, _ := cache.CurrentAccountConfig()
 
-	if !reflect.DeepEqual(e.parent.lastNotifiedConfig, newConfig) {
+	if diff := cmp.Diff(e.parent.lastNotifiedConfig, newConfig); diff != "" {
+		logger.V(1).Printf("Bleemeo config(s) changed: (-old +new):\n%s", diff)
+
 		if option.UpdateConfigCallback != nil {
 			option.UpdateConfigCallback()
 		}
