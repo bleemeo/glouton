@@ -20,6 +20,7 @@ import (
 	"context"
 	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
@@ -129,6 +130,12 @@ func (e *syncConfigExecution) FinishExecution(_ context.Context) {
 		}
 
 		e.parent.lastNotifiedConfig = newConfig
+
+		// Use slightly delayed full synchronization:
+		// * The full synchronization is needed because some features might be enabled/disabled and
+		//   (especially with enabled) we don't want to wait for hours before object get created.
+		// * But use a delay because multiple config hook might arrive in short time.
+		e.execution.RequestLaterFullSynchronization(time.Minute)
 	}
 
 	if e.parent.suspendedMode != newConfig.Suspended {

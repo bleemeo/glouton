@@ -143,6 +143,9 @@ type SynchronizationExecution interface {
 	FailOtherEntity(entityName EntityName, reason error)
 	// RequestSynchronizationForAll calls RequestSynchronization for all known entities.
 	RequestSynchronizationForAll(requestFull bool)
+	// RequestLaterFullSynchronization ask for a full synchronization to occur within delay. It might happen earlier.
+	// Prefer RequestSynchronizationForAll if you need a very soon synchronization.
+	RequestLaterFullSynchronization(delay time.Duration)
 	// IsSynchronizationRequested return whether a synchronization was requested for the
 	// specific entity during the current execution.
 	IsSynchronizationRequested(entityName EntityName) bool

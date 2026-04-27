@@ -215,6 +215,18 @@ func (e *Execution) RequestSynchronizationForAll(forceCacheRefresh bool) {
 	}
 }
 
+// RequestLaterFullSynchronization ask for a full synchronization to occur within delay. It might happen earlier.
+// Prefer RequestSynchronizationForAll if you need a very soon synchronization.
+func (e *Execution) RequestLaterFullSynchronization(delay time.Duration) {
+	e.synchronizer.l.Lock()
+	defer e.synchronizer.l.Unlock()
+
+	targetTime := e.synchronizer.now().Add(delay)
+	if e.synchronizer.nextFullSync.After(targetTime) {
+		e.synchronizer.nextFullSync = targetTime
+	}
+}
+
 // IsSynchronizationRequested return whether a synchronization was request for the
 // specific entity.
 // Note: even if this method return false, a synchronization might occur if someone call RequestSynchronize later.
