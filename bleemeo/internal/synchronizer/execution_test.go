@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bleemeo/glouton/bleemeo/internal/cache"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 
 	"github.com/google/go-cmp/cmp"
@@ -499,7 +500,9 @@ func getMockEntityExecution(s *Synchronizer, entityReplyToNeedSynchronization ma
 }
 
 func newTestExecution(entityReplyToNeedSynchronization map[types.EntityName]bool) *Execution {
-	synchronizer := newForTest(types.Option{}, time.Now)
+	synchronizer := newForTest(types.Option{
+		Cache: &cache.Cache{},
+	}, time.Now)
 
 	execution := &Execution{
 		synchronizer:        synchronizer,
