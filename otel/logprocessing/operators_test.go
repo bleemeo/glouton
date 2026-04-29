@@ -20,6 +20,8 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -50,6 +52,7 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 		logFormat       string
 		inputLogs       []string
 		expectedRecords []logRecord // dynamic attributes such as file name/path will be added automatically
+		unordered       bool        // set to true when the pipeline doesn't guarantee record ordering (e.g. router operator)
 	}{
 		{
 			name:      "raw",
@@ -285,6 +288,7 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 		{
 			name:      "haproxy",
 			logFormat: "haproxy",
+			unordered: true,
 			inputLogs: []string{
 				`[NOTICE]   (1) : Loading success.`,
 				`[WARNING]  (8) : Server http_back/api is DOWN, reason: Layer4 connection problem, info: "Connection refused", check duration: 0ms. 0 active and 0 backup servers left. 0 sessions active, 0 requeued, 0 remaining in queue.`,
@@ -550,7 +554,15 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 				tc.expectedRecords[i] = rec
 			}
 
-			if diff := cmp.Diff(tc.expectedRecords, logBuf.getAllRecords(), cmpopts.EquateEmpty()); diff != "" {
+			actual := logBuf.getAllRecords()
+
+			if tc.unordered {
+				byBody := func(a, b logRecord) int { return strings.Compare(a.Body, b.Body) }
+				slices.SortFunc(tc.expectedRecords, byBody)
+				slices.SortFunc(actual, byBody)
+			}
+
+			if diff := cmp.Diff(tc.expectedRecords, actual, cmpopts.EquateEmpty()); diff != "" {
 				t.Fatalf("Unexpected log records (-want, +got):\n%s", diff)
 			}
 		})
