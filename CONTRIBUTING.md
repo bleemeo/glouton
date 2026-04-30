@@ -216,13 +216,33 @@ on some server (e.g. you can't start glouton in debug from your VS code):
 * Build Glouton with debug:
 ```
 ./build.sh debug
+
+# You might even want to build with optimization skipped. Optimization could cause
+# local variable to be unavailable ("unreadable could not find loclist entry" from debugger).
+# This is due to variable being omitted / stored in processor register. Build without optimization to
+# help debugging
+./build.sh debug no-optimize
 ```
 
 * Install Glouton on the server, likely using the `./dist/glouton*.deb`
-* Take a core dump of the glouton, on the server:
+* Take a core dump of the glouton, on the server (gcore is included in gdb package):
 ```
 gcore $(pgrep -x glouton)
 ```
+
+* alternative: if you want to get the core dump when Glouton crash (panic), you need:
+  * Configure `GOTRACEBACK=crash`, for example for Glouton run by systemd:
+    ```
+    # systemctl edit glouton.service
+    [Service]
+    Environment="GOTRACEBACK=crash"
+    ```
+  * Restart Glouton (`systemctl restart glouton.service`)
+  * Attach gdb to the running process: `gdb attach $(pgrep -x glouton) -ex continue`
+  * In gdb, type "continue"
+  * Reproduce the crash, GDB will show that process "received signal SIGSEGV" or "SIGABRT"
+  * type "generate-core-file core", it will produce a core file in current folder
+  * You can quit gdb. Don't generate core-file for sub-sequent signal (a SIGABRT will be procuded after the SIGSEGV)
 
 * Copy the produced core file to your VS code
 * In VS code, create a launch.json with:

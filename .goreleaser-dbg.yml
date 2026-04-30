@@ -15,6 +15,11 @@ builds:
       - -X main.commit={{.Commit}}
       - -X main.date={{.Date}}
       - -X main.builtBy=goreleaser
+    # gcflags could be needed when troubleshooting a core dump after a crash (panic).
+    # This disable some optimizations that could make variable values not available in the core dump.
+    # (example: a variable could be stored in a processor register, which is not saved in the core dump, instead of being stored in the memory)
+    # When using ./build.sh no-optimize, the "gcflags:"" line will be uncommented.
+    # gcflags: ["all=-N -l"]
     targets:
       - linux_amd64
       - linux_386

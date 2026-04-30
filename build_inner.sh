@@ -53,7 +53,7 @@ create_single_target_config() {
    TEMPLATE_CONFIG=".goreleaser.yml"
    if [ "$TARGET_TO_BUILD" = "single-target-race" ]; then
       TEMPLATE_CONFIG=".goreleaser-race.yml"
-   elif [ "$TARGET_TO_BUILD" = "single-target-debug" ]; then
+   elif [ "$TARGET_TO_BUILD" = "single-target-debug" ] || [ "$TARGET_TO_BUILD" = "single-target-debug-no-optimize" ]; then
       TEMPLATE_CONFIG=".goreleaser-dbg.yml"
    fi
 
@@ -72,6 +72,10 @@ create_single_target_config() {
       in_targets && /^[[:space:]]+-/ { next }
       { in_targets = 0; print }
   ' ${TEMPLATE_CONFIG} > work/goreleaser-single-target.yml
+
+   if [ "$TARGET_TO_BUILD" = "single-target-debug-no-optimize" ]; then
+      sed -i "s/# gcflags: \[/gcflags: \[/" work/goreleaser-single-target.yml
+   fi
 }
 
 if [ "$TARGET_TO_BUILD" != "release" ]; then

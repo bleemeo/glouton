@@ -514,6 +514,9 @@ func (d *Discovery) registerInput(input telegraf.Input, opts registry.Registrati
 		opts,
 		input,
 	)
+	if err != nil {
+		return err
+	}
 
 	key := NameInstance{
 		Name:     service.Name,
@@ -523,7 +526,7 @@ func (d *Discovery) registerInput(input telegraf.Input, opts registry.Registrati
 		gathererRegistration: gathererID,
 	}
 
-	return err
+	return nil
 }
 
 func urlForPHPFPM(service Service) string {
