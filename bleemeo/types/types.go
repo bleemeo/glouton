@@ -186,8 +186,6 @@ func (d DenyReason) String() string {
 }
 
 type GloutonAccountConfig struct {
-	ID                    string
-	Name                  string
 	LiveProcessResolution time.Duration
 	LiveProcess           bool
 	DockerIntegration     bool
@@ -202,6 +200,12 @@ type GloutonAccountConfig struct {
 type GloutonAgentConfig struct {
 	MetricsAllowlist map[string]bool
 	MetricResolution time.Duration
+}
+
+type GloutonProbeAccountConfig struct {
+	MetricResolution time.Duration
+	MetricsAllowlist map[string]bool
+	Suspended        bool
 }
 
 // BleemeoReloadState is used to keep some Bleemeo components alive during reloads.

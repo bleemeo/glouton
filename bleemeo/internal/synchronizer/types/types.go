@@ -37,10 +37,10 @@ import (
 type EntityName string
 
 const (
-	EntityAccountConfig EntityName = "accountconfig"
+	EntityConfig        EntityName = "config"
 	EntityAgent         EntityName = "agent"
 	EntityApplication   EntityName = "application"
-	EntityConfig        EntityName = "config"
+	EntityGloutonConfig EntityName = "gloutonconfig"
 	EntityContainer     EntityName = "container"
 	EntityDiagnostics   EntityName = "diagnostics"
 	EntityFact          EntityName = "facts"
@@ -143,6 +143,9 @@ type SynchronizationExecution interface {
 	FailOtherEntity(entityName EntityName, reason error)
 	// RequestSynchronizationForAll calls RequestSynchronization for all known entities.
 	RequestSynchronizationForAll(requestFull bool)
+	// RequestLaterFullSynchronization ask for a full synchronization to occur within delay. It might happen earlier.
+	// Prefer RequestSynchronizationForAll if you need a very soon synchronization.
+	RequestLaterFullSynchronization(delay time.Duration)
 	// IsSynchronizationRequested return whether a synchronization was requested for the
 	// specific entity during the current execution.
 	IsSynchronizationRequested(entityName EntityName) bool
@@ -160,7 +163,7 @@ type Client interface {
 	RawClient
 	MetaClient
 	ApplicationClient
-	AccountConfigClient
+	ConfigClient
 	AgentClient
 	GloutonConfigItemClient
 	ContainerClient
@@ -189,10 +192,9 @@ type ApplicationClient interface {
 	CreateApplication(ctx context.Context, app bleemeoTypes.Application) (bleemeoTypes.Application, error)
 }
 
-type AccountConfigClient interface {
+type ConfigClient interface {
 	ListAgentTypes(ctx context.Context) ([]bleemeoTypes.AgentType, error)
-	ListAccountConfigs(ctx context.Context) ([]bleemeoTypes.AccountConfig, error)
-	ListAgentConfigs(ctx context.Context) ([]bleemeoTypes.AgentConfig, error)
+	ListConfigs(ctx context.Context, params url.Values) ([]bleemeoTypes.Config, error)
 }
 
 type AgentClient interface {
@@ -280,7 +282,7 @@ type Option struct {
 	DisableCallback func(reason bleemeoTypes.DisableReason, until time.Time)
 
 	// UpdateConfigCallback is a function called when Synchronizer detected a AccountConfiguration change
-	UpdateConfigCallback func(nameChanged bool)
+	UpdateConfigCallback func()
 
 	// ProvideClient may be used to provide an alternative Bleemeo API client.
 	ProvideClient func() Client

@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
@@ -99,14 +98,10 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 	s.option.Cache.SetMonitors(monitors)
 
 	needConfigUpdate := false
-	configs := s.option.Cache.AccountConfigsByUUID()
+	probeConfigs := s.option.Cache.ProbeConfigByAccountID()
 
 	for _, m := range monitors {
-		if cfg, ok := configs[m.AccountConfig]; !ok {
-			needConfigUpdate = true
-
-			break
-		} else if _, ok := cfg.AgentConfigByName[bleemeo.AgentType_Monitor]; !ok {
+		if _, ok := probeConfigs[m.Account]; !ok {
 			needConfigUpdate = true
 
 			break
@@ -114,7 +109,7 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 	}
 
 	if needConfigUpdate {
-		execution.RequestSynchronization(types.EntityAccountConfig, true)
+		execution.RequestSynchronization(types.EntityConfig, true)
 	}
 
 	return false, s.ApplyMonitorUpdate()
@@ -149,15 +144,15 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 
 	monitors := s.option.Cache.Monitors()
 
-	accountConfigs := s.option.Cache.AccountConfigsByUUID()
+	probeConfigs := s.option.Cache.ProbeConfigByAccountID()
 	processedMonitors := make([]gloutonTypes.Monitor, 0, len(monitors))
 	agentIDHash := hashAgentID(s.agentID)
 
 	for _, monitor := range monitors {
-		// try to retrieve the account config associated with this monitor
-		conf, present := accountConfigs[monitor.AccountConfig]
+		// try to retrieve the probe config associated with this monitor's account
+		conf, present := probeConfigs[monitor.Account]
 		if !present {
-			return fmt.Errorf("%w '%s' for probe '%s'", errMissingAccountConf, monitor.AccountConfig, monitor.URL)
+			return fmt.Errorf("%w for account '%s' of probe '%s'", errMissingAccountConf, monitor.Account, monitor.URL)
 		}
 
 		jitterCreationDate, err := applyJitterToMonitorCreationDate(monitor, agentIDHash)
@@ -169,7 +164,7 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 
 		processedMonitors = append(processedMonitors, gloutonTypes.Monitor{
 			ID:                      monitor.ID,
-			MetricMonitorResolution: conf.AgentConfigByName[bleemeo.AgentType_Monitor].MetricResolution,
+			MetricMonitorResolution: conf.MetricResolution,
 			CreationDate:            jitterCreationDate,
 			URL:                     monitor.URL,
 			BleemeoAgentID:          monitor.AgentID,

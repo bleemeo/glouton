@@ -254,6 +254,8 @@ func (c *Connector) setSuspended(suspended bool) {
 		logger.V(0).Println("Bleemeo: read only/suspended mode is now disabled, will resume sending metrics")
 	}
 
+	c.sync.SetSuspended(suspended)
+
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -563,74 +565,73 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 	return labels, false
 }
 
-func (c *Connector) getAccountConfigAndAgentType(labels map[string]string) (string, string, error) {
-	if agentID, ok := labels[gloutonTypes.LabelInstanceUUID]; ok {
-		if agent, ok := c.cache.AgentsByUUID()[agentID]; ok {
-			return agent.CurrentAccountConfigID, agent.AgentType, nil
-		}
-
-		// For private probe, we don't have access to the Agent, so try accessing the AccountConfig from the Service itself
-		if monitor, ok := c.cache.MonitorsByAgentUUID()[types.AgentID(agentID)]; ok {
-			typeID, err := c.agentTypeID(bleemeo.AgentType_Monitor)
-			if err != nil {
-				return "", "", err
-			}
-
-			return monitor.AccountConfig, typeID, nil
-		}
-
-		return "", "", fmt.Errorf("%w: %s is not in the cache", errAgentIDNotFound, agentID)
-	}
-
-	return "", "", fmt.Errorf("%w: missing LabelInstanceUUID in labels %v", errBadOption, labels)
-}
-
 func (c *Connector) UpdateDelayHook(labels map[string]string) (time.Duration, bool) {
 	if _, ok := labels[gloutonTypes.LabelMetaBleemeoRelabelHookOk]; !ok {
 		return 0, true
 	}
 
-	accountConfig, agentType, err := c.getAccountConfigAndAgentType(labels)
+	resolution, err := c.getMetricResolution(labels)
 	if err != nil {
 		logger.V(1).Printf("Can't find metric resolution for gatherer: %v", err)
 
 		return 0, true
 	}
 
-	possibleAgentTypes := make(map[string]bool)
+	if resolution == 0 {
+		return 0, true
+	}
 
+	return resolution, false
+}
+
+func (c *Connector) getMetricResolution(labels map[string]string) (time.Duration, error) {
+	agentID, ok := labels[gloutonTypes.LabelInstanceUUID]
+	if !ok {
+		return 0, fmt.Errorf("%w: missing LabelInstanceUUID in labels %v", errBadOption, labels)
+	}
+
+	// For probe/monitor agents, use ProbeConfigByAccountID
+	if monitor, ok := c.cache.MonitorsByAgentUUID()[types.AgentID(agentID)]; ok {
+		probeConfigs := c.cache.ProbeConfigByAccountID()
+		if cfg, ok := probeConfigs[monitor.Account]; ok {
+			return cfg.MetricResolution, nil
+		}
+
+		return 0, nil
+	}
+
+	currentConfig, _ := c.cache.CurrentAccountConfig()
+
+	// When a gatherer handles agents of multiple types, pick the smallest resolution.
 	if strTypes, hasAgentTypes := labels[gloutonTypes.LabelMetaAgentTypes]; hasAgentTypes {
-		// When a gatherer handles agents of multiple types,
-		// we need to retrieve the metric resolution of each.
-		// Therefore, we're able to pick the right interval (a.k.a the smallest) between them all.
-		agentTypes := strings.Split(strTypes, ",")
+		agentTypesList := strings.Split(strTypes, ",")
 
-		for _, agentType := range c.cache.AgentTypes() {
-			for _, agentTypeStr := range agentTypes {
-				if agentTypeStr == string(agentType.Name) {
-					possibleAgentTypes[agentType.ID] = true
+		var minResolution time.Duration
+
+		for _, at := range c.cache.AgentTypes() {
+			for _, atStr := range agentTypesList {
+				if atStr == string(at.Name) {
+					if cfg, ok := currentConfig.AgentConfigByID[at.ID]; ok {
+						if minResolution == 0 || cfg.MetricResolution < minResolution {
+							minResolution = cfg.MetricResolution
+						}
+					}
 				}
 			}
 		}
-	} else {
-		possibleAgentTypes[agentType] = true
+
+		return minResolution, nil
 	}
 
-	var minResolution int
-
-	for _, cfg := range c.cache.AgentConfigs() {
-		if cfg.AccountConfig == accountConfig && possibleAgentTypes[cfg.AgentType] {
-			if minResolution == 0 || cfg.MetricResolution < minResolution {
-				minResolution = cfg.MetricResolution
-			}
+	if agent, ok := c.cache.AgentsByUUID()[agentID]; ok {
+		if cfg, ok := currentConfig.AgentConfigByID[agent.AgentType]; ok {
+			return cfg.MetricResolution, nil
 		}
+
+		return 0, nil
 	}
 
-	if minResolution == 0 {
-		logger.V(1).Printf("Can't find metric resolution for account config %s & agent type %s (not found in cache)", accountConfig, agentType)
-	}
-
-	return time.Duration(minResolution) * time.Second, false
+	return 0, fmt.Errorf("%w: %s is not in the cache", errAgentIDNotFound, agentID)
 }
 
 func (c *Connector) kubernetesAgentID(clusterName string) (string, error) {
@@ -838,7 +839,7 @@ func (c *Connector) diagnosticCache(file io.Writer) {
 			}
 		}
 
-		fmt.Fprintf(file, "id=%s fqdn=%s type=%s (%s) accountID=%s, config=%s\n", a.ID, a.FQDN, agentTypeName, a.AgentType, a.AccountID, a.CurrentAccountConfigID)
+		fmt.Fprintf(file, "id=%s fqdn=%s type=%s (%s) accountID=%s\n", a.ID, a.FQDN, agentTypeName, a.AgentType, a.AccountID)
 	}
 
 	fmt.Fprintf(file, "\n# Cache known %d agent types\n", len(agentTypes))
@@ -856,38 +857,19 @@ func (c *Connector) diagnosticCache(file io.Writer) {
 		}
 	}
 
-	accountConfigs := c.cache.AccountConfigs()
-	agentConfigs := c.cache.AgentConfigs()
+	configs := c.cache.Configs()
 
-	fmt.Fprintf(file, "\n# Cache known %d account config (raw)\n", len(accountConfigs))
+	fmt.Fprintf(file, "\n# Cache known %d config entries (raw)\n", len(configs))
 
-	for _, ac := range accountConfigs {
-		fmt.Fprintf(file, "%#v\n", ac)
-	}
-
-	fmt.Fprintf(file, "\n# Cache known %d agent config (raw)\n", len(agentConfigs))
-
-	for _, ac := range agentConfigs {
-		fmt.Fprintf(file, "%#v\n", ac)
-	}
-
-	gloutonAccountConfigs := c.cache.AccountConfigsByUUID()
-
-	fmt.Fprintf(file, "\n# Structured account config\n")
-
-	for _, ac := range gloutonAccountConfigs {
-		v, err := json.MarshalIndent(ac, "", "  ")
-		if err != nil {
-			fmt.Fprintf(file, "err=%v\n", err)
-		} else {
-			fmt.Fprintf(file, "%s\n", string(v))
-		}
+	for _, cfg := range configs {
+		fmt.Fprintf(file, "%#v\n", cfg)
 	}
 
 	config, ok := c.cache.CurrentAccountConfig()
-	if ok {
-		fmt.Fprintf(file, "\n# And current account config is\n")
 
+	fmt.Fprintf(file, "\n# Current account config\n")
+
+	if ok {
 		v, err := json.MarshalIndent(config, "", "  ")
 		if err != nil {
 			fmt.Fprintf(file, "err=%v\n", err)
@@ -895,7 +877,7 @@ func (c *Connector) diagnosticCache(file io.Writer) {
 			fmt.Fprintf(file, "%s\n", string(v))
 		}
 	} else {
-		fmt.Fprintf(file, "\n# And current account config is not yet loaded\n")
+		fmt.Fprintf(file, "not yet loaded\n")
 	}
 
 	fmt.Fprintf(file, "\n# Cache known %d metrics and %d active metrics\n", len(metrics), activeMetrics)
@@ -1094,14 +1076,10 @@ func (c *Connector) IsMetricAllowed(metric gloutonTypes.LabelsAndAnnotation) (bo
 	return f.IsAllowed(metric.Labels, metric.Annotations)
 }
 
-func (c *Connector) updateConfig(nameChanged bool) {
+func (c *Connector) updateConfig() {
 	currentConfig, ok := c.cache.CurrentAccountConfig()
 	if !ok || currentConfig.AgentConfigByName[bleemeo.AgentType_Agent].MetricResolution == 0 {
 		return
-	}
-
-	if nameChanged {
-		logger.Printf("Changed to configuration %s", currentConfig.Name)
 	}
 
 	if c.option.UpdateMetricResolution != nil {

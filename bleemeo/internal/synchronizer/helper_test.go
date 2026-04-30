@@ -134,7 +134,7 @@ func (helper *syncTestHelper) addMonitorOnAPI(t *testing.T) bleemeoapi.ServicePa
 	t.Helper()
 
 	newMonitorCopy := newMonitor
-	newMonitorCopy.AccountConfig = helper.wrapperClientMock.accountConfigNewAgent
+	newMonitorCopy.Account = accountID
 
 	helper.wrapperClientMock.resources.monitors.add(newMonitorCopy.Monitor)
 
@@ -341,12 +341,9 @@ func (helper *syncTestHelper) SetAPIServices(services ...bleemeoapi.ServicePaylo
 	helper.wrapperClientMock.resources.services.elems = services
 }
 
-// SetAPIAccountConfig define the list of AccountConfig and AgentConfig present on Bleemeo API mock.
-// It also enable using the AccountConfig as default config for new Agent.
-func (helper *syncTestHelper) SetAPIAccountConfig(accountConfig bleemeoTypes.AccountConfig, agentConfigs []bleemeoTypes.AgentConfig) {
-	helper.wrapperClientMock.accountConfigNewAgent = accountConfig.ID
-	helper.wrapperClientMock.resources.accountConfigs.elems = []bleemeoTypes.AccountConfig{accountConfig}
-	helper.wrapperClientMock.resources.agentConfigs.elems = agentConfigs
+// SetAPIConfigs sets the list of Config objects present on the Bleemeo API mock.
+func (helper *syncTestHelper) SetAPIConfigs(configs []bleemeoTypes.Config) {
+	helper.wrapperClientMock.resources.configs.elems = configs
 }
 
 // SetCacheMetrics define the list of metric present in Glouton cache.

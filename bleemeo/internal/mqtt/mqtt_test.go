@@ -141,9 +141,8 @@ func mockClient(t *testing.T) *Client {
 	t.Helper()
 
 	const (
-		agentConfigID   = "test-agent-config"
-		accountConfigID = "test-account-config"
-		agentTypeID     = "test-agent-type"
+		accountID   = "test-account-id"
+		agentTypeID = "test-agent-type"
 	)
 
 	state, err := state.LoadReadOnly("", "")
@@ -152,20 +151,13 @@ func mockClient(t *testing.T) *Client {
 	}
 
 	cache := cache.Load(state)
-
-	// Set agent config with the metric allowlist.
-	cache.SetAccountConfigs([]bleemeoTypes.AccountConfig{
-		{
-			ID:   accountConfigID,
-			Name: "agent",
-		},
-	})
+	cache.SetAccountID(accountID)
 
 	cache.SetAgentList([]bleemeoTypes.Agent{
 		{
-			ID:                     agentID,
-			CurrentAccountConfigID: accountConfigID,
-			AgentType:              agentTypeID,
+			ID:        agentID,
+			AccountID: accountID,
+			AgentType: agentTypeID,
 		},
 	})
 
@@ -176,13 +168,14 @@ func mockClient(t *testing.T) *Client {
 		},
 	})
 
-	cache.SetAgentConfigs([]bleemeoTypes.AgentConfig{
+	// Set configs: AgentMetricsAllowlist with empty value to allow all metrics.
+	cache.SetConfigs([]bleemeoTypes.Config{
 		{
-			ID: agentConfigID,
-			// Empty allowlist to allow all metrics.
-			MetricsAllowlist: "",
-			AccountConfig:    accountConfigID,
-			AgentType:        agentTypeID,
+			ID:        "test-config-allowlist",
+			Type:      bleemeoTypes.ConfigTypeAgentMetricsAllowlist,
+			AgentType: agentTypeID,
+			Account:   accountID,
+			Value:     "",
 		},
 	})
 

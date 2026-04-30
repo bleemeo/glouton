@@ -36,17 +36,16 @@ import (
 )
 
 const (
-	mockAPIResourceAgent         = "agent"
-	mockAPIResourceAgentFact     = "agentfact"
-	mockAPIResourceAgentType     = "agenttype"
-	mockAPIResourceContainer     = "container"
-	mockAPIResourceMetric        = "metric"
-	mockAPIResourceAccountConfig = "accountconfig"
-	mockAPIResourceAgentConfig   = "agentconfig"
-	mockAPIResourceApplication   = "application"
-	mockAPIResourceService       = "service"
-	mockAPIGloutonConfigItem     = "gloutonconfigitem"
-	mockAPIGloutonDiagnostic     = "gloutondiagnostic"
+	mockAPIResourceAgent       = "agent"
+	mockAPIResourceAgentFact   = "agentfact"
+	mockAPIResourceAgentType   = "agenttype"
+	mockAPIResourceContainer   = "container"
+	mockAPIResourceMetric      = "metric"
+	mockAPIResourceConfig      = "config"
+	mockAPIResourceApplication = "application"
+	mockAPIResourceService     = "service"
+	mockAPIGloutonConfigItem   = "gloutonconfigitem"
+	mockAPIGloutonDiagnostic   = "gloutondiagnostic"
 )
 
 type mockMetric struct {
@@ -341,8 +340,7 @@ type resourcesSet struct {
 	agentTypes         resourceHolder[bleemeoTypes.AgentType]
 	containers         resourceHolder[bleemeoapi.ContainerPayload]
 	metrics            resourceHolder[bleemeoapi.MetricPayload]
-	accountConfigs     resourceHolder[bleemeoTypes.AccountConfig]
-	agentConfigs       resourceHolder[bleemeoTypes.AgentConfig]
+	configs            resourceHolder[bleemeoTypes.Config]
 	monitors           resourceHolder[bleemeoTypes.Monitor]
 	services           resourceHolder[bleemeoapi.ServicePayload]
 	gloutonConfigItems resourceHolder[bleemeoTypes.GloutonConfigItem]

@@ -33,7 +33,6 @@ import (
 
 const (
 	snmpCachePrefix = "bleemeo:snmp:"
-	snmpAgentFields = "id,display_name,account,agent_type,abstracted,fqdn,initial_password,created_at,next_config_at,current_config,tags,initial_server_group_name"
 )
 
 // TODO the deletion need to be done

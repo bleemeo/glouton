@@ -35,16 +35,15 @@ import (
 )
 
 const (
-	accountConfigFields = "id,name,live_process_resolution,live_process,docker_integration,snmp_integration,vsphere_integration,number_of_custom_metrics,suspended"
-	agentConfigFields   = "id,account_config,agent_type,metrics_allowlist,metrics_resolution"
-	agentFactFields     = "id,agent,key,value"
-	agentFields         = "id,account,agent_type,created_at,current_config,display_name,fqdn,is_cluster_leader,next_config_at,tags"
-	agentTypeFields     = "id,name,display_name"
-	applicationFields   = "id,name,tag"
-	configItemFields    = "id,agent,key,value,priority,source,path,type"
-	diagnosticFields    = "name"
-	monitorFields       = "id,account_config,agent,created_at,monitor_url,monitor_expected_content,monitor_expected_response_code,monitor_unexpected_content,monitor_ca_file,monitor_headers"
-	serviceFields       = "id,account_config,label,instance,listen_addresses,exe_path,tags,active,created_at"
+	agentFactFields   = "id,agent,key,value"
+	agentFields       = "id,account,agent_type,created_at,display_name,fqdn,is_cluster_leader,next_config_at,tags"
+	agentTypeFields   = "id,name,display_name"
+	applicationFields = "id,name,tag"
+	configFields      = "id,type,account,agent_type,value"
+	configItemFields  = "id,agent,key,value,priority,source,path,type"
+	diagnosticFields  = "name"
+	monitorFields     = "id,account,agent,created_at,monitor_url,monitor_expected_content,monitor_expected_response_code,monitor_unexpected_content,monitor_ca_file,monitor_headers"
+	serviceFields     = "id,account_config,label,instance,listen_addresses,exe_path,tags,active,created_at"
 )
 
 func (cl *wrapperClient) GetGlobalInfo(ctx context.Context) (bleemeoTypes.GlobalInfo, error) {
@@ -194,37 +193,18 @@ func (cl *wrapperClient) ListAgentTypes(ctx context.Context) ([]bleemeoTypes.Age
 	return agentTypes, iter.Err()
 }
 
-func (cl *wrapperClient) ListAccountConfigs(ctx context.Context) ([]bleemeoTypes.AccountConfig, error) {
-	params := url.Values{
-		"fields": {accountConfigFields},
+func (cl *wrapperClient) ListConfigs(ctx context.Context, params url.Values) ([]bleemeoTypes.Config, error) {
+	if params == nil {
+		params = url.Values{}
 	}
 
-	var configs []bleemeoTypes.AccountConfig
+	params.Set("fields", configFields)
 
-	iter := cl.Iterator(ctx, bleemeo.ResourceAccountConfig, params)
+	var configs []bleemeoTypes.Config
+
+	iter := cl.Iterator(ctx, bleemeo.ResourceConfig, params)
 	for iter.Next(ctx) {
-		var config bleemeoTypes.AccountConfig
-
-		if err := json.Unmarshal(iter.At(), &config); err != nil {
-			continue
-		}
-
-		configs = append(configs, config)
-	}
-
-	return configs, iter.Err()
-}
-
-func (cl *wrapperClient) ListAgentConfigs(ctx context.Context) ([]bleemeoTypes.AgentConfig, error) {
-	params := url.Values{
-		"fields": {agentConfigFields},
-	}
-
-	var configs []bleemeoTypes.AgentConfig
-
-	iter := cl.Iterator(ctx, bleemeo.ResourceAgentConfig, params)
-	for iter.Next(ctx) {
-		var config bleemeoTypes.AgentConfig
+		var config bleemeoTypes.Config
 
 		if err := json.Unmarshal(iter.At(), &config); err != nil {
 			continue

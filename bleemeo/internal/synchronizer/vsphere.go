@@ -36,7 +36,6 @@ const (
 	tooManyConsecutiveError       = 3
 	vSphereAgentsPurgeMinInterval = 2 * time.Minute
 	vSphereCachePrefix            = "bleemeo:vsphere:"
-	vSphereAgentFields            = "id,display_name,account,agent_type,abstracted,fqdn,initial_password,created_at,next_config_at,current_config,tags,initial_server_group_name"
 )
 
 func (s *Synchronizer) syncVSphere(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {

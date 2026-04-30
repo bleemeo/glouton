@@ -29,13 +29,12 @@ import (
 type synchronizerState struct {
 	l sync.Mutex
 
-	currentConfigNotified string
-	lastFactUpdatedAt     string
-	lastSNMPcount         int
-	lastVSphereUpdate     time.Time
-	metricRetryAt         time.Time
-	lastMetricCount       int
-	lastMetricActivation  time.Time
+	lastFactUpdatedAt    string
+	lastSNMPcount        int
+	lastVSphereUpdate    time.Time
+	metricRetryAt        time.Time
+	lastMetricCount      int
+	lastMetricActivation time.Time
 
 	onDemandDiagnostic synchronizerOnDemandDiagnostic
 
@@ -139,10 +138,6 @@ func compatibilitySyncToPerform(ctx context.Context, execution types.Synchroniza
 		execution.RequestSynchronizationForAll(true)
 	}
 
-	if state.currentConfigNotified != agent.CurrentAccountConfigID {
-		execution.RequestSynchronization(types.EntityAccountConfig, true)
-	}
-
 	if state.lastFactUpdatedAt != localFacts[facts.FactUpdatedAt] {
 		execution.RequestSynchronization(types.EntityFact, false)
 	}
@@ -164,7 +159,7 @@ func compatibilitySyncToPerform(ctx context.Context, execution types.Synchroniza
 	// After a reload, the config has been changed, so we want to do a fullsync
 	// without waiting the nextFullSync that is kept between reload.
 	if !state.configSyncDone {
-		execution.RequestSynchronization(types.EntityConfig, true)
+		execution.RequestSynchronization(types.EntityGloutonConfig, true)
 	}
 
 	_, minDelayed := execution.GlobalState().DelayedContainers()

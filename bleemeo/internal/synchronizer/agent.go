@@ -18,14 +18,11 @@ package synchronizer
 
 import (
 	"context"
-	"errors"
 
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
 )
-
-var errNoConfig = errors.New("agent don't have any configuration on Bleemeo Cloud platform. Please contact support@bleemeo.com about this issue")
 
 const apiTagsLength = 100
 
@@ -67,10 +64,6 @@ func (s *Synchronizer) syncMainAgent(ctx context.Context, apiClient types.AgentC
 	}
 
 	s.option.Cache.SetAgent(agent)
-
-	if agent.CurrentAccountConfigID == "" {
-		return errNoConfig
-	}
 
 	s.option.Cache.SetAccountID(agent.AccountID)
 

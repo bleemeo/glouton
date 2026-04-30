@@ -104,7 +104,7 @@ func TestUpgradeFromV1(t *testing.T) {
 	cache := Load(state)
 
 	checkMetrics(t, cache)
-	checkAccountConfigs(t, cache, false)
+	// AccountConfigs are no longer migrated from old cache versions; they will be re-fetched from the API.
 }
 
 func TestUpgradeFromV2(t *testing.T) {
@@ -116,7 +116,7 @@ func TestUpgradeFromV2(t *testing.T) {
 	cache := Load(state)
 
 	checkMetrics(t, cache)
-	checkAccountConfigs(t, cache, true)
+	// AccountConfigs are no longer migrated from old cache versions; they will be re-fetched from the API.
 	checkMonitors(t, cache)
 }
 
@@ -129,7 +129,7 @@ func TestUpgradeFromV6(t *testing.T) {
 	cache := Load(state)
 
 	checkMetrics(t, cache)
-	checkAccountConfigs(t, cache, true)
+	// AccountConfigs are no longer migrated from old cache versions; they will be re-fetched from the API.
 	checkMonitors(t, cache)
 }
 
@@ -179,28 +179,6 @@ func checkMetrics(t *testing.T, cache *Cache) {
 		if !reflect.DeepEqual(gotMetric, wantMetrics[i]) {
 			t.Errorf("want %#v, got %#v", wantMetrics[i], gotMetric)
 		}
-	}
-}
-
-func checkAccountConfigs(t *testing.T, cache *Cache, liveProcess bool) {
-	t.Helper()
-
-	wantAccountConfig := types.AccountConfig{
-		ID:                    "d7b022ba-e230-4776-8018-465e681e096e",
-		Name:                  "default",
-		LiveProcessResolution: 10,
-		LiveProcess:           liveProcess,
-		DockerIntegration:     true,
-	}
-
-	gotAccountConfigs := cache.AccountConfigs()
-
-	if len(gotAccountConfigs) != 1 {
-		t.Fatalf("want 1 account config, got %d", len(gotAccountConfigs))
-	}
-
-	if gotAccountConfigs[0] != wantAccountConfig {
-		t.Errorf("want %#v, got %#v", wantAccountConfig, gotAccountConfigs[0])
 	}
 }
 

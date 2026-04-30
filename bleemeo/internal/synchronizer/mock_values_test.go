@@ -42,13 +42,6 @@ const (
 //
 //nolint:gochecknoglobals
 var (
-	newAccountConfig bleemeoTypes.AccountConfig = bleemeoTypes.AccountConfig{
-		ID:                "02eb5b38-d4a0-4db4-9b43-06f63594a515",
-		Name:              "the-default",
-		SNMPIntegration:   true,
-		DockerIntegration: true,
-	}
-
 	agentTypeAgent = bleemeoTypes.AgentType{
 		DisplayName: "A server monitored with Bleemeo agent",
 		ID:          "61zb6a83-d90a-4165-bf04-944e0b2g2a10",
@@ -85,82 +78,50 @@ var (
 		Name:        bleemeo.AgentType_vSphereVM,
 	}
 
-	agentConfigAgent = bleemeoTypes.AgentConfig{
-		ID:               "cab64659-a765-4878-84d8-c7b0112aaecb",
-		AccountConfig:    newAccountConfig.ID,
-		AgentType:        agentTypeAgent.ID,
-		MetricResolution: 10,
-	}
-	agentConfigSNMP = bleemeoTypes.AgentConfig{
-		ID:               "a89d16c1-55be-4d89-9c9b-489c2d86d3fa",
-		AccountConfig:    newAccountConfig.ID,
-		AgentType:        agentTypeSNMP.ID,
-		MetricResolution: 60,
-	}
-	agentConfigMonitor = bleemeoTypes.AgentConfig{
-		ID:               "135aaa9d-5b73-4c38-b271-d3c98c039aef",
-		AccountConfig:    newAccountConfig.ID,
-		AgentType:        agentTypeMonitor.ID,
-		MetricResolution: 60,
-	}
-	agentConfigKubernetes = bleemeoTypes.AgentConfig{
-		ID:               "dcbd9b4f-8761-4363-8530-ca8d03570899",
-		AccountConfig:    newAccountConfig.ID,
-		AgentType:        agentTypeKubernetes.ID,
-		MetricResolution: 60,
-	}
-	agentConfigVSphereCluster = bleemeoTypes.AgentConfig{
-		ID:               "633400cf-e5e3-4c52-890c-f693f97c6e7f",
-		AccountConfig:    newAccountConfig.ID,
-		AgentType:        agentTypeVSphereCluster.ID,
-		MetricResolution: 60,
-	}
-	agentConfigVSphereHost = bleemeoTypes.AgentConfig{
-		ID:               "44e05701-13d8-4130-9683-9b289a2ad0fa",
-		AccountConfig:    newAccountConfig.ID,
-		AgentType:        agentTypeVSphereHost.ID,
-		MetricResolution: 60,
-	}
-	agentConfigVSphereVM = bleemeoTypes.AgentConfig{
-		ID:               "8febf9bc-1236-4c40-9665-609be5f6c545",
-		AccountConfig:    newAccountConfig.ID,
-		AgentType:        agentTypeVSphereVM.ID,
-		MetricResolution: 60,
+	// defaultAccountConfigs is the default set of Config objects used by the test mock.
+	// It corresponds to an account with SNMP and Docker integration enabled,
+	// with per-agent-type metric resolutions.
+	defaultAccountConfigs = []bleemeoTypes.Config{
+		{ID: "cfg-docker", Type: bleemeoTypes.ConfigTypeDockerIntegration, Account: accountID, Value: true},
+		{ID: "cfg-snmp-int", Type: bleemeoTypes.ConfigTypeSNMPIntegration, Account: accountID, Value: true},
+		{ID: "cfg-agent-res", Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: agentTypeAgent.ID, Value: float64(10)},
+		{ID: "cfg-snmp-res", Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: agentTypeSNMP.ID, Value: float64(60)},
+		{ID: "cfg-mon-res", Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: agentTypeMonitor.ID, Value: float64(60)},
+		{ID: "cfg-k8s-res", Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: agentTypeKubernetes.ID, Value: float64(60)},
+		{ID: "cfg-vsphere-cluster-res", Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: agentTypeVSphereCluster.ID, Value: float64(60)},
+		{ID: "cfg-vsphere-host-res", Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: agentTypeVSphereHost.ID, Value: float64(60)},
+		{ID: "cfg-vsphere-vm-res", Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: agentTypeVSphereVM.ID, Value: float64(60)},
 	}
 
 	testAgent = bleemeoapi.AgentPayload{
 		Agent: bleemeoTypes.Agent{
-			ID:        agentID,
-			AccountID: accountID,
-			// same one as in newAccountConfig
-			CurrentAccountConfigID: newAccountConfig.ID,
-			AgentType:              agentTypeAgent.ID,
-			FQDN:                   testAgentFQDN,
-			DisplayName:            testAgentFQDN,
+			ID:          agentID,
+			AccountID:   accountID,
+			AgentType:   agentTypeAgent.ID,
+			FQDN:        testAgentFQDN,
+			DisplayName: testAgentFQDN,
 		},
 		Abstracted:      false,
 		InitialPassword: "password already set",
 	}
 	newMonitorAgent = bleemeoapi.AgentPayload{
 		Agent: bleemeoTypes.Agent{
-			ID:                     "6b0ba586-0111-4a72-9cc7-f19d4f6558b9",
-			AccountID:              accountID,
-			CurrentAccountConfigID: newAccountConfig.ID,
-			AgentType:              agentTypeMonitor.ID,
-			FQDN:                   activeMonitorURL,
-			DisplayName:            activeMonitorURL,
+			ID:          "6b0ba586-0111-4a72-9cc7-f19d4f6558b9",
+			AccountID:   accountID,
+			AgentType:   agentTypeMonitor.ID,
+			FQDN:        activeMonitorURL,
+			DisplayName: activeMonitorURL,
 		},
 		Abstracted:      true,
 		InitialPassword: "password already set",
 	}
 	testK8SAgent = bleemeoapi.AgentPayload{
 		Agent: bleemeoTypes.Agent{
-			ID:                     "efb48b0a-b03d-4ba6-b643-534e81a0acaa",
-			AccountID:              accountID,
-			CurrentAccountConfigID: newAccountConfig.ID,
-			AgentType:              agentTypeKubernetes.ID,
-			FQDN:                   testK8SClusterName,
-			DisplayName:            testK8SClusterName,
+			ID:          "efb48b0a-b03d-4ba6-b643-534e81a0acaa",
+			AccountID:   accountID,
+			AgentType:   agentTypeKubernetes.ID,
+			FQDN:        testK8SClusterName,
+			DisplayName: testK8SClusterName,
 		},
 		Abstracted:      false,
 		InitialPassword: "password already set",
@@ -169,10 +130,10 @@ var (
 	newMonitor = bleemeoapi.ServicePayload{
 		Monitor: bleemeoTypes.Monitor{
 			Service: bleemeoTypes.Service{
-				ID:            "fdd9d999-e2ff-45d3-af2b-6519cf8e3e70",
-				Active:        true,
-				AccountConfig: newAccountConfig.ID,
-				CreationDate:  "2020-01-03T04:05:06Z",
+				ID:           "fdd9d999-e2ff-45d3-af2b-6519cf8e3e70",
+				Active:       true,
+				Account:      accountID,
+				CreationDate: "2020-01-03T04:05:06Z",
 			},
 			URL:     activeMonitorURL,
 			AgentID: newMonitorAgent.ID,
