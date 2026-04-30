@@ -61,6 +61,9 @@ func (f *FactProvider) platformFacts(_ context.Context) map[string]string {
 	return facts
 }
 
+func (f *FactProvider) installedPackagesFacts(ctx context.Context, facts map[string]string) {
+}
+
 // primaryAddresses returns the primary IPv4
 //
 // This should be the IP address that this server use to communicate

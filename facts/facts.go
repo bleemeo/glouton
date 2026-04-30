@@ -209,6 +209,8 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 
 	maps.Copy(newFacts, f.platformFacts(ctx))
 
+	f.installedPackagesFacts(ctx, newFacts)
+
 	primaryAddress, primaryMacAddress := f.primaryAddress(ctx)
 	newFacts["primary_address"] = primaryAddress
 	newFacts["primary_mac_address"] = primaryMacAddress
