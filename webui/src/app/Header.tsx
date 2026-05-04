@@ -1,4 +1,4 @@
-import { Box, HStack, Text } from "@chakra-ui/react";
+import { Box, chakra, HStack, Text } from "@chakra-ui/react";
 import { NavLink } from "react-router-dom";
 
 import { useFetch } from "../api/hooks";
@@ -72,12 +72,11 @@ export function Header() {
     >
       <HStack px="6" py="3" gap="6">
         <HStack gap="3">
-          <Box
-            w="6"
-            h="6"
-            borderRadius="md"
-            bgGradient="gradients.accent"
-            boxShadow="0 0 0 1px var(--chakra-colors-border-default)"
+          <chakra.img
+            src="/static/img/logo_glouton.svg"
+            alt="Glouton"
+            h="8"
+            w="auto"
           />
           <Text fontWeight="bold" fontSize="md" letterSpacing="0.04em">
             GLOUTON
