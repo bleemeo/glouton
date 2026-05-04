@@ -30,27 +30,34 @@ import (
 
 var errNotImplemented = errors.New("not implemented")
 
-type metricQueryable interface {
+type MetricQueryable interface {
 	storage.Queryable
 	Metrics(filters map[string]string) (result []types.Metric, err error)
 }
 
 type apiQueryable struct {
 	store       *store.Store
+	secondary   storage.Queryable
 	agentIDFunc func() string
 	agentID     string
 }
 
-// NewQueryable returns a metricQueryable that only do queries on the main agent.
-func NewQueryable(store *store.Store, agentIDFunc func() string) metricQueryable {
+// NewQueryable returns a MetricQueryable that only do queries on the main agent.
+func NewQueryable(store *store.Store, agentIDFunc func() string) MetricQueryable {
+	return NewQueryableWithSecondary(store, nil, agentIDFunc)
+}
+
+// NewQueryableWithSecondary is like NewQueryable but also queries an
+// additional storage.Queryable (typically the on-disk TSDB) and merges
+// the results. The secondary may be nil.
+func NewQueryableWithSecondary(store *store.Store, secondary storage.Queryable, agentIDFunc func() string) MetricQueryable {
 	// We have a function to get the agent ID and not directly the agent ID because
 	// the agent might not be registered yet.
-	q := apiQueryable{
+	return apiQueryable{
 		store:       store,
+		secondary:   secondary,
 		agentIDFunc: agentIDFunc,
 	}
-
-	return q
 }
 
 // Metrics return a list of Metric matching given labels filter.
@@ -69,7 +76,7 @@ func (q apiQueryable) Metrics(filters map[string]string) (result []types.Metric,
 
 // Querier returns a new Querier on the storage.
 func (q apiQueryable) Querier(mint, maxt int64) (storage.Querier, error) {
-	querier, err := q.store.Querier(mint, maxt)
+	primary, err := q.store.Querier(mint, maxt)
 	if err != nil {
 		return nil, err
 	}
@@ -78,12 +85,27 @@ func (q apiQueryable) Querier(mint, maxt int64) (storage.Querier, error) {
 		q.agentID = q.agentIDFunc()
 	}
 
-	querierWrapper := apiQuerier{
-		querier: querier,
-		agentID: q.agentID,
+	var inner storage.Querier = primary
+
+	if q.secondary != nil {
+		secondary, err := q.secondary.Querier(mint, maxt)
+		if err != nil {
+			_ = primary.Close()
+
+			return nil, err
+		}
+
+		inner = storage.NewMergeQuerier(
+			[]storage.Querier{primary},
+			[]storage.Querier{secondary},
+			storage.ChainedSeriesMerge,
+		)
 	}
 
-	return querierWrapper, nil
+	return apiQuerier{
+		querier: inner,
+		agentID: q.agentID,
+	}, nil
 }
 
 type apiQuerier struct {

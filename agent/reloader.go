@@ -36,6 +36,7 @@ import (
 	"github.com/bleemeo/glouton/debouncer"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/mqtt/client"
+	"github.com/bleemeo/glouton/store/tsdb"
 	"github.com/bleemeo/glouton/types"
 
 	"github.com/fsnotify/fsnotify"
@@ -52,14 +53,17 @@ var errWatcherDisabled = errors.New("reload disabled")
 type ReloadState interface {
 	Bleemeo() bleemeoTypes.BleemeoReloadState
 	MQTT() types.MQTTReloadState
+	LocalStore() *tsdb.Store
+	SetLocalStore(*tsdb.Store)
 	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error
 	WatcherError() error
 	Close()
 }
 
 type reloadState struct {
-	bleemeo bleemeoTypes.BleemeoReloadState
-	mqtt    types.MQTTReloadState
+	bleemeo    bleemeoTypes.BleemeoReloadState
+	mqtt       types.MQTTReloadState
+	localStore *tsdb.Store
 
 	l             sync.Mutex
 	watcherError  error
@@ -151,9 +155,34 @@ func (rs *reloadState) setLastReloadDate(lastReload time.Time) {
 	rs.lastReload = lastReload
 }
 
+func (rs *reloadState) LocalStore() *tsdb.Store {
+	rs.l.Lock()
+	defer rs.l.Unlock()
+
+	return rs.localStore
+}
+
+func (rs *reloadState) SetLocalStore(s *tsdb.Store) {
+	rs.l.Lock()
+	defer rs.l.Unlock()
+
+	rs.localStore = s
+}
+
 func (rs *reloadState) Close() {
 	rs.bleemeo.Close()
 	rs.mqtt.Close()
+
+	rs.l.Lock()
+	store := rs.localStore
+	rs.localStore = nil
+	rs.l.Unlock()
+
+	if store != nil {
+		if err := store.Close(); err != nil {
+			logger.V(1).Printf("local TSDB close: %v", err)
+		}
+	}
 }
 
 type agentReloader struct {

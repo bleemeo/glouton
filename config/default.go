@@ -91,6 +91,11 @@ func DefaultConfig() Config { //nolint:maintidx
 				Address: "https://telemetry.bleemeo.com/v1/telemetry/",
 			},
 			OverrideHostname: "",
+			LocalStore: LocalStore{
+				Enable:    false,
+				Path:      "",
+				Retention: 15 * 24 * time.Hour,
+			},
 		},
 		Blackbox: Blackbox{
 			Enable:             true,

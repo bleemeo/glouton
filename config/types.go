@@ -296,6 +296,13 @@ type Agent struct {
 	WindowsExporter        NodeExporter    `yaml:"windows_exporter"`
 	Telemetry              Telemetry       `yaml:"telemetry"`
 	OverrideHostname       string          `yaml:"override_hostname"`
+	LocalStore             LocalStore      `yaml:"local_store"`
+}
+
+type LocalStore struct {
+	Enable    bool          `yaml:"enable"`
+	Path      string        `yaml:"path"`
+	Retention time.Duration `yaml:"retention"`
 }
 
 type Telemetry struct {

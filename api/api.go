@@ -68,7 +68,7 @@ type API struct {
 	StaticCDNURL       string
 	LocalUIDisabled    bool
 	Endpoints          config.WebEndpoints
-	DB                 metricQueryable
+	DB                 MetricQueryable
 	ContainerRuntime   containerInterface
 	PsFact             *facts.ProcessProvider
 	FactProvider       *facts.FactProvider

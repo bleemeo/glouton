@@ -856,6 +856,8 @@ github.com/open-telemetry/opentelemetry-collector-contrib/internal/common v0.151
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/common v0.151.0/go.mod h1:isMQULLE9AcIvNbdhdmiHs9jWInuHCeVblJXkUjK7hE=
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.151.0 h1:JRjznmSHnTt0S/GegT/vfsdiiV81L36NS9fBNV7tOmM=
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.151.0/go.mod h1:9Tk5ViTj8QUqavqKOR9EeNzgoei01Mb9eZ8cnJvcIkg=
+github.com/open-telemetry/opentelemetry-collector-contrib/internal/exp/metrics v0.148.0 h1:CiTjQE/Hh5xK2t56ogrDK4nl0+tJPNmASCs4zEYZ/xU=
+github.com/open-telemetry/opentelemetry-collector-contrib/internal/exp/metrics v0.148.0/go.mod h1:WUFkzTiOpt7EYyL67gv1GOf3RD8qKWGtin3lY9LYzW4=
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/filter v0.151.0 h1:g1ewjLSYhpcgrFQN0pMNClOlwiiB5LYKDlT2fhsi5uQ=
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/filter v0.151.0/go.mod h1:qFZP/DzyuzRv52u5pKlb0xyOkiYJ9RU4sGnfTMWpfh4=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl v0.151.0 h1:oNfWcQCD3t/yPQDTwg84Ttsp8GCmqHXwvJ9wp/Wxz0w=
@@ -866,6 +868,8 @@ github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil v0.151.0
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil v0.151.0/go.mod h1:Ln3K9yJgPAwEUXqCoR8htVs6bk3cyj6zIPOyM/LhiPo=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza v0.151.0 h1:rr3GiLgPJSVsNUYPr7MJtkqInxSMCIHIjd1kCrnhcyc=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza v0.151.0/go.mod h1:vDQ2/nRNcdQF9SGNyc1Le0s8tZnm/6a8qdcA3Fvk+Ns=
+github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatocumulativeprocessor v0.148.0 h1:xgD/kNGp/wWY+bwY599Pc01OamYN17phRiTP934bM5Y=
+github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatocumulativeprocessor v0.148.0/go.mod h1:ZK7wvaefla9lB3bAW0rNKt7IzRPcTRQoOFqr4sZy/XM=
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.151.0 h1:K9brpjSqrYomTWiPfnjZu+IPFpvqIarUUvwWRxrrfqk=
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.151.0/go.mod h1:IdIFlrBhWaVcNaXdJV4eAV4fgXKUfs/DPo8QShdq/ZA=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.151.0 h1:m9I//4CxjVuoKDTOcVlNq6PWXvgXstjxigXarpNIAlQ=
@@ -963,6 +967,8 @@ github.com/prometheus/prometheus v0.311.3 h1:3IrVxQv6v5i/ZCGi6OrYeBhtCwaPTn6Z3DY
 github.com/prometheus/prometheus v0.311.3/go.mod h1:gjsCxTKtHO1Q8T9333u1s+lUR1OjPyM7ruuGH8RvVyo=
 github.com/prometheus/sigv4 v0.4.1 h1:EIc3j+8NBea9u1iV6O5ZAN8uvPq2xOIUPcqCTivHuXs=
 github.com/prometheus/sigv4 v0.4.1/go.mod h1:eu+ZbRvsc5TPiHwqh77OWuCnWK73IdkETYY46P4dXOU=
+github.com/puzpuzpuz/xsync/v4 v4.4.0 h1:vlSN6/CkEY0pY8KaB0yqo/pCLZvp9nhdbBdjipT4gWo=
+github.com/puzpuzpuz/xsync/v4 v4.4.0/go.mod h1:VJDmTCJMBt8igNxnkQd86r+8KUeN1quSfNKu5bLYFQo=
 github.com/quic-go/qpack v0.6.0 h1:g7W+BMYynC1LbYLSqRt8PBg5Tgwxn214ZZR34VIOjz8=
 github.com/quic-go/qpack v0.6.0/go.mod h1:lUpLKChi8njB4ty2bFLX2x4gzDqXwUpaO1DP9qMDZII=
 github.com/quic-go/quic-go v0.59.0 h1:OLJkp1Mlm/aS7dpKgTc6cnpynnD2Xg7C1pwL6vy/SAw=

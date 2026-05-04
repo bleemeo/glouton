@@ -1213,6 +1213,7 @@ func TestStateLoading(t *testing.T) {
 		NodeExporter:         defaultAgentCfg.NodeExporter,
 		WindowsExporter:      defaultAgentCfg.WindowsExporter,
 		Telemetry:            defaultAgentCfg.Telemetry,
+		LocalStore:           defaultAgentCfg.LocalStore,
 	}
 
 	cases := []struct {
