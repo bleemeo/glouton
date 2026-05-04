@@ -300,7 +300,9 @@ type Agent struct {
 }
 
 type LocalStore struct {
-	Enable    bool          `yaml:"enable"`
+	// Enable is a tri-state: nil means "auto" (on iff bleemeo.enable is
+	// false), true forces on, false forces off.
+	Enable    *bool         `yaml:"enable"`
 	Path      string        `yaml:"path"`
 	Retention time.Duration `yaml:"retention"`
 }

@@ -92,7 +92,7 @@ func DefaultConfig() Config { //nolint:maintidx
 			},
 			OverrideHostname: "",
 			LocalStore: LocalStore{
-				Enable:    false,
+				Enable:    nil, // auto: on iff bleemeo.enable is false
 				Path:      "",
 				Retention: 15 * 24 * time.Hour,
 			},

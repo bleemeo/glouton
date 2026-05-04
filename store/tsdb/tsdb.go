@@ -42,8 +42,9 @@ import (
 // Store wraps a prometheus/tsdb.DB so it can be used as a Glouton
 // types.PointPusher and as a storage.Queryable for the local API.
 type Store struct {
-	db   *prom_tsdb.DB
-	path string
+	db        *prom_tsdb.DB
+	path      string
+	retention time.Duration
 
 	l      sync.Mutex
 	closed bool
@@ -81,11 +82,47 @@ func Open(opts Options) (*Store, error) {
 		return nil, fmt.Errorf("tsdb: open %s: %w", opts.Path, err)
 	}
 
-	return &Store{db: db, path: opts.Path}, nil
+	retention := opts.Retention
+	if retention <= 0 {
+		retention = time.Duration(prom_tsdb.DefaultOptions().RetentionDuration) * time.Millisecond
+	}
+
+	return &Store{db: db, path: opts.Path, retention: retention}, nil
 }
 
 // Path returns the on-disk location of the TSDB.
 func (s *Store) Path() string { return s.path }
+
+// Retention returns the configured retention duration.
+func (s *Store) Retention() time.Duration { return s.retention }
+
+// OldestPointMs returns the timestamp (in ms since epoch) of the
+// oldest point that can still be queried, looking at on-disk blocks
+// first and falling back to the head block. Returns 0 if the store is
+// empty or closed.
+func (s *Store) OldestPointMs() int64 {
+	s.l.Lock()
+	closed := s.closed
+	s.l.Unlock()
+
+	if closed {
+		return 0
+	}
+
+	if blocks := s.db.Blocks(); len(blocks) > 0 {
+		return blocks[0].MinTime()
+	}
+
+	head := s.db.Head()
+	min := head.MinTime()
+
+	// An empty head returns math.MaxInt64; treat that as "no data".
+	if min == int64(^uint64(0)>>1) {
+		return 0
+	}
+
+	return min
+}
 
 // PushPoints implements types.PointPusher. It writes the given points
 // into a single appender and commits. Points with NaN values are

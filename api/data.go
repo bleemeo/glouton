@@ -452,6 +452,44 @@ func (d *Data) AgentInformation(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// StoreInfo describes the available local history depth so the UI can
+// gate time-range buttons on what is actually queryable.
+type StoreInfo struct {
+	Persistent       bool  `json:"persistent"`
+	RetentionSeconds int64 `json:"retention_seconds"`
+	OldestPointMs    int64 `json:"oldest_point_ms"`
+}
+
+// Render is a no-op required by go-chi/render.
+func (StoreInfo) Render(http.ResponseWriter, *http.Request) error { return nil }
+
+// inMemoryRetention mirrors the maxPointsAge of the in-memory store
+// in agent.go. Kept in sync manually; if it grows the UI will see
+// more recent history available even without a TSDB.
+const inMemoryRetention = 3 * time.Minute
+
+// StoreInfo returns metadata about the local metric store.
+func (d *Data) StoreInfo(w http.ResponseWriter, r *http.Request) {
+	info := StoreInfo{
+		Persistent:       false,
+		RetentionSeconds: int64(inMemoryRetention.Seconds()),
+		OldestPointMs:    time.Now().Add(-inMemoryRetention).UnixMilli(),
+	}
+
+	if ls := d.api.LocalStore; ls != nil {
+		info.Persistent = true
+		info.RetentionSeconds = int64(ls.Retention().Seconds())
+
+		if oldest := ls.OldestPointMs(); oldest > 0 {
+			info.OldestPointMs = oldest
+		}
+	}
+
+	if err := render.Render(w, r, info); err != nil {
+		logger.V(2).Printf("Can not render store info: %v", err)
+	}
+}
+
 // Tags returns a list of tags from system.
 func (d *Data) Tags(w http.ResponseWriter, r *http.Request) {
 	if d.api.AgentInfo == nil {

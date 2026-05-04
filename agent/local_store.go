@@ -25,12 +25,22 @@ import (
 	"github.com/bleemeo/glouton/types"
 )
 
-// setupLocalTSDB opens (once per process) the on-disk TSDB if
-// agent.local_store.enable is true. The handle is cached in the
+// setupLocalTSDB opens (once per process) the on-disk TSDB if the
+// resolved local_store policy says so. The handle is cached in the
 // reloadState so subsequent reloads reuse it without replaying the WAL.
+//
+// Resolution rule: an explicit agent.local_store.enable always wins;
+// when unset, the store is enabled iff bleemeo.enable is false (i.e.
+// when no SaaS backend will retain data, persist locally by default).
 func (a *agent) setupLocalTSDB() {
 	cfg := a.config.Agent.LocalStore
-	if !cfg.Enable {
+
+	enabled := !a.config.Bleemeo.Enable
+	if cfg.Enable != nil {
+		enabled = *cfg.Enable
+	}
+
+	if !enabled {
 		return
 	}
 
@@ -48,7 +58,7 @@ func (a *agent) setupLocalTSDB() {
 		Retention: cfg.Retention,
 	})
 	if err != nil {
-		logger.Printf("Local TSDB disabled: %v", err)
+		logger.Printf("Local TSDB unavailable, continuing without on-disk metric persistence: %v", err)
 
 		return
 	}

@@ -969,12 +969,16 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	promExporter := a.gathererRegistry.Exporter()
 
 	var apiDB api.MetricQueryable = api.NewQueryable(a.store, a.BleemeoAgentID)
+
+	var localStoreInfo api.LocalStoreInfo
 	if localTSDB := a.reloadState.LocalStore(); localTSDB != nil {
 		apiDB = api.NewQueryableWithSecondary(a.store, localTSDB, a.BleemeoAgentID)
+		localStoreInfo = localTSDB
 	}
 
 	api := &api.API{
 		DB:                 apiDB,
+		LocalStore:         localStoreInfo,
 		ContainerRuntime:   a.containerRuntime,
 		Endpoints:          a.config.Web.Endpoints,
 		PsFact:             psFact,
