@@ -1,5 +1,6 @@
 import { Box, HStack, Text, VStack } from "@chakra-ui/react";
-import type { ReactNode } from "react";
+import { useTheme } from "next-themes";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   Area,
   AreaChart,
@@ -14,6 +15,25 @@ import {
 } from "recharts";
 
 import { formatTickTime } from "./format";
+
+// Explicit hex colors per mode — Recharts passes the tick prop through
+// SVG attributes where CSS custom properties resolve unreliably across
+// browsers, so we feed it real values resolved at render time.
+const TICK = { light: "#6B7280", dark: "#9CA3AF" } as const;
+const AXIS = { light: "#D1D5DB", dark: "#2A3243" } as const;
+const GRID = { light: "#E5E8EE", dark: "#1F2937" } as const;
+
+function useChartPalette() {
+  const { resolvedTheme } = useTheme();
+  // resolvedTheme is undefined before hydration; fall back to dark to
+  // avoid a light-themed flash on first paint of a system-dark user.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const mode = mounted && resolvedTheme === "light" ? "light" : "dark";
+
+  return { tick: TICK[mode], axis: AXIS[mode], grid: GRID[mode] };
+}
 
 export type ChartSeries = {
   key: string;
@@ -49,6 +69,8 @@ export function MetricChart({
   variant = "area",
   formatValue,
 }: Props) {
+  const palette = useChartPalette();
+
   return (
     <Box
       bg="surface.panel"
@@ -98,7 +120,7 @@ export function MetricChart({
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             {variant === "area" ? (
-              <AreaChart data={data} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
+              <AreaChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
                 <defs>
                   {series.map((s) => (
                     <linearGradient
@@ -114,7 +136,32 @@ export function MetricChart({
                     </linearGradient>
                   ))}
                 </defs>
-                {axisAndGrid({ rangeSeconds, unit, yDomain, formatValue })}
+                <CartesianGrid
+                  strokeDasharray="2 4"
+                  stroke={palette.grid}
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="t"
+                  type="number"
+                  domain={["dataMin", "dataMax"]}
+                  tickFormatter={(t: number) => formatTickTime(t, rangeSeconds)}
+                  tick={{ fontSize: 10, fill: palette.tick, style: { fontSize: "10px" } }}
+                  stroke={palette.axis}
+                  tickLine={{ stroke: palette.axis }}
+                  height={28}
+                  minTickGap={48}
+                />
+                <YAxis
+                  domain={yDomain ?? ["auto", "auto"]}
+                  tick={{ fontSize: 10, fill: palette.tick, style: { fontSize: "10px" } }}
+                  stroke={palette.axis}
+                  tickLine={{ stroke: palette.axis }}
+                  width={56}
+                  tickFormatter={(v: number) =>
+                    formatValue ? formatValue(v) : `${v}${unit ?? ""}`
+                  }
+                />
                 <Tooltip
                   contentStyle={tooltipStyle}
                   labelFormatter={(t: number) => formatTickTime(t, rangeSeconds)}
@@ -137,8 +184,33 @@ export function MetricChart({
                 ))}
               </AreaChart>
             ) : (
-              <LineChart data={data} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
-                {axisAndGrid({ rangeSeconds, unit, yDomain, formatValue })}
+              <LineChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
+                <CartesianGrid
+                  strokeDasharray="2 4"
+                  stroke={palette.grid}
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="t"
+                  type="number"
+                  domain={["dataMin", "dataMax"]}
+                  tickFormatter={(t: number) => formatTickTime(t, rangeSeconds)}
+                  tick={{ fontSize: 10, fill: palette.tick, style: { fontSize: "10px" } }}
+                  stroke={palette.axis}
+                  tickLine={{ stroke: palette.axis }}
+                  height={28}
+                  minTickGap={48}
+                />
+                <YAxis
+                  domain={yDomain ?? ["auto", "auto"]}
+                  tick={{ fontSize: 10, fill: palette.tick, style: { fontSize: "10px" } }}
+                  stroke={palette.axis}
+                  tickLine={{ stroke: palette.axis }}
+                  width={56}
+                  tickFormatter={(v: number) =>
+                    formatValue ? formatValue(v) : `${v}${unit ?? ""}`
+                  }
+                />
                 <Tooltip
                   contentStyle={tooltipStyle}
                   labelFormatter={(t: number) => formatTickTime(t, rangeSeconds)}
@@ -186,49 +258,6 @@ const legendStyle = {
   paddingTop: "4px",
 };
 
-const axisStyle = {
-  fontSize: 11,
-  fill: "var(--chakra-colors-fg-subtle)",
-};
-
-function axisAndGrid({
-  rangeSeconds,
-  unit,
-  yDomain,
-  formatValue,
-}: {
-  rangeSeconds: number;
-  unit?: string;
-  yDomain?: [number | "auto", number | "auto"];
-  formatValue?: (v: number) => string;
-}) {
-  return (
-    <>
-      <CartesianGrid
-        strokeDasharray="2 4"
-        stroke="var(--chakra-colors-border-subtle)"
-        vertical={false}
-      />
-      <XAxis
-        dataKey="t"
-        type="number"
-        domain={["dataMin", "dataMax"]}
-        scale="time"
-        tickFormatter={(t: number) => formatTickTime(t, rangeSeconds)}
-        tick={axisStyle}
-        stroke="var(--chakra-colors-border-default)"
-        minTickGap={48}
-      />
-      <YAxis
-        domain={yDomain ?? ["auto", "auto"]}
-        tick={axisStyle}
-        stroke="var(--chakra-colors-border-default)"
-        width={48}
-        tickFormatter={(v: number) => (formatValue ? formatValue(v) : `${v}${unit ?? ""}`)}
-      />
-    </>
-  );
-}
 
 function tooltipFormatter(formatValue?: (v: number) => string, unit?: string) {
   return (value: number, name: string) => {
