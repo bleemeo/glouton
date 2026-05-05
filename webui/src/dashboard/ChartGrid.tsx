@@ -292,13 +292,17 @@ function DiskUtilizationChart({ range }: { range: Range }) {
   const res = usePromQLRange("io_utilization", range.seconds, range.step);
 
   const labelled = seriesByLabel(res.data, "item");
-  const sortedKeys = Object.keys(labelled).sort();
+  const allKeys = Object.keys(labelled).sort();
+  const [selected, setSelected] = useState("");
+
+  // Empty selection ⇒ all devices. Specific selection ⇒ only that one.
+  const visibleKeys = selected === "" ? allKeys : allKeys.filter((k) => k === selected);
 
   const data = alignSeries(
-    Object.fromEntries(sortedKeys.map((k) => [k, labelled[k]])),
+    Object.fromEntries(visibleKeys.map((k) => [k, labelled[k]])),
   );
 
-  const series: ChartSeries[] = sortedKeys.map((key, i) => ({
+  const series: ChartSeries[] = visibleKeys.map((key, i) => ({
     key,
     label: key,
     color: DYNAMIC_PALETTE[i % DYNAMIC_PALETTE.length],
@@ -315,6 +319,16 @@ function DiskUtilizationChart({ range }: { range: Range }) {
       loading={res.loading}
       error={res.error}
       variant="line"
+      controls={
+        allKeys.length > 0 ? (
+          <DeviceSelect
+            value={selected}
+            onChange={setSelected}
+            options={allKeys}
+            allLabel="All devices"
+          />
+        ) : null
+      }
     />
   );
 }
@@ -322,16 +336,24 @@ function DiskUtilizationChart({ range }: { range: Range }) {
 function FilesystemChart({ range }: { range: Range }) {
   const res = usePromQLRange("disk_used_perc", range.seconds, range.step);
 
-  // The same physical volume often appears under multiple synthetic
-  // mountpoints on macOS (System/Volumes/...). To keep the chart
-  // readable, deduplicate by the current value and keep only mounts
-  // whose usage differs from neighbours, capping the chart to ~6 lines.
+  // Full unfiltered set drives the dropdown options — even
+  // near-duplicate mounts get listed in case the user really wants
+  // to inspect one of them specifically.
   const labelled = seriesByLabel(res.data, "item");
-  const trimmed = topMounts(labelled, 6);
+  const allKeys = Object.keys(labelled).sort();
+  const [selected, setSelected] = useState("");
 
-  const data = alignSeries(trimmed);
+  // For "All" we still apply topMounts: the same physical volume
+  // often appears under several synthetic mountpoints on macOS, and
+  // that hides them so the chart stays readable.
+  const visible =
+    selected === ""
+      ? topMounts(labelled, 6)
+      : { [selected]: labelled[selected] };
 
-  const series: ChartSeries[] = Object.keys(trimmed).map((key, i) => ({
+  const data = alignSeries(visible);
+
+  const series: ChartSeries[] = Object.keys(visible).map((key, i) => ({
     key,
     label: key,
     color: DYNAMIC_PALETTE[i % DYNAMIC_PALETTE.length],
@@ -348,6 +370,16 @@ function FilesystemChart({ range }: { range: Range }) {
       loading={res.loading}
       error={res.error}
       variant="line"
+      controls={
+        allKeys.length > 0 ? (
+          <DeviceSelect
+            value={selected}
+            onChange={setSelected}
+            options={allKeys}
+            allLabel="All mounts"
+          />
+        ) : null
+      }
     />
   );
 }
