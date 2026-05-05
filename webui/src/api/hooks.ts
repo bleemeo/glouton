@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { getJSON } from "./client";
+import { notifyFetched } from "./freshness";
 import type { PromQLResponse, StoreInfo } from "./types";
 
 type FetchState<T> = {
@@ -37,6 +38,7 @@ export function useFetch<T>(url: string | null, pollMs = 0): FetchState<T> {
         const data = await getJSON<T>(url, ac.signal);
 
         if (!cancelled) {
+          notifyFetched();
           setState({ data, error: null, loading: false });
         }
       } catch (err) {

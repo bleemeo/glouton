@@ -4,6 +4,7 @@ import { NavLink } from "react-router-dom";
 import { useFetch } from "../api/hooks";
 import type { AgentInformation, Fact } from "../api/types";
 import { LiveClock } from "./LiveClock";
+import { LiveIndicator } from "./LiveIndicator";
 import { StatusBadge, type Status } from "./StatusBadge";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -121,6 +122,7 @@ export function Header() {
         <Box flex="1" />
 
         <ConnectivityStatus />
+        <LiveIndicator />
         <ThemeToggle />
         <LiveClock />
       </HStack>
