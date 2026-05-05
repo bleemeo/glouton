@@ -2,12 +2,14 @@ import {
   Box,
   Heading,
   HStack,
+  Link as ChakraLink,
   SimpleGrid,
   Spinner,
   Table,
   Text,
   VStack,
 } from "@chakra-ui/react";
+import { LuDownload, LuExternalLink } from "react-icons/lu";
 
 import { useFetch } from "../api/hooks";
 import type { AgentInformation, Fact, Service } from "../api/types";
@@ -169,7 +171,92 @@ export function Informations() {
           )}
         </Box>
       </VStack>
+
+      <DiagnosticSection />
     </VStack>
+  );
+}
+
+function DiagnosticSection() {
+  return (
+    <VStack align="stretch" gap="2">
+      <Heading size="sm" color="fg.muted" letterSpacing="0.06em" textTransform="uppercase">
+        Diagnostic
+      </Heading>
+      <Box
+        bg="surface.panel"
+        borderWidth="1px"
+        borderColor="border.subtle"
+        borderRadius="lg"
+        p="4"
+      >
+        <VStack align="stretch" gap="3">
+          <Text fontSize="sm" color="fg.muted">
+            The diagnostic endpoint bundles logs, runtime state, configuration
+            and registered metrics for support cases.
+          </Text>
+          <HStack gap="2" wrap="wrap">
+            <DiagnosticAction
+              href="/diagnostic"
+              label="Open diagnostic page"
+              icon={<LuExternalLink />}
+              external
+            />
+            <DiagnosticAction
+              href="/diagnostic.zip"
+              label="Download archive (.zip)"
+              icon={<LuDownload />}
+              download
+            />
+            <DiagnosticAction
+              href="/diagnostic.txt"
+              label="View as text"
+              icon={<LuExternalLink />}
+              external
+            />
+          </HStack>
+        </VStack>
+      </Box>
+    </VStack>
+  );
+}
+
+function DiagnosticAction({
+  href,
+  label,
+  icon,
+  external,
+  download,
+}: {
+  href: string;
+  label: string;
+  icon: React.ReactNode;
+  external?: boolean;
+  download?: boolean;
+}) {
+  return (
+    <ChakraLink
+      href={href}
+      target={external ? "_blank" : undefined}
+      rel={external ? "noopener noreferrer" : undefined}
+      download={download ? "" : undefined}
+      px="3"
+      py="2"
+      fontSize="sm"
+      fontWeight="medium"
+      borderRadius="md"
+      borderWidth="1px"
+      borderColor="border.default"
+      color="fg.default"
+      bg="surface.subtle"
+      _hover={{ bg: "surface.canvas", textDecoration: "none" }}
+      display="inline-flex"
+      alignItems="center"
+      gap="2"
+    >
+      {icon}
+      {label}
+    </ChakraLink>
   );
 }
 
