@@ -71,6 +71,39 @@ export function MetricChart({
 }: Props) {
   const palette = useChartPalette();
 
+  // Click on a legend entry hides the matching series. Hidden state is
+  // local to the chart and resets when the chart unmounts (e.g. range
+  // change rebuilds the dataset).
+  const [hidden, setHidden] = useState<Set<string>>(() => new Set());
+  const toggleSeries = (key: string) => {
+    setHidden((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+  // Recharts types dataKey as `string | number | (obj => any)`. We
+  // only ever use string dataKeys so we narrow at the boundary.
+  const handleLegendClick = (entry: unknown) => {
+    const key = (entry as { dataKey?: unknown }).dataKey;
+    if (typeof key === "string") toggleSeries(key);
+  };
+  const renderLegendLabel = (value: string, entry: unknown) => {
+    const key = (entry as { dataKey?: unknown }).dataKey;
+    const isHidden = typeof key === "string" && hidden.has(key);
+    return (
+      <span
+        style={{
+          color: isHidden ? palette.tick : "inherit",
+          textDecoration: isHidden ? "line-through" : "none",
+        }}
+      >
+        {value}
+      </span>
+    );
+  };
+
   return (
     <Box
       bg="surface.panel"
@@ -167,7 +200,13 @@ export function MetricChart({
                   labelFormatter={(t: number) => formatTickTime(t, rangeSeconds)}
                   formatter={tooltipFormatter(formatValue, unit)}
                 />
-                <Legend wrapperStyle={legendStyle} iconType="circle" iconSize={8} />
+                <Legend
+                  wrapperStyle={{ ...legendStyle, cursor: "pointer" }}
+                  iconType="circle"
+                  iconSize={8}
+                  onClick={handleLegendClick}
+                  formatter={renderLegendLabel}
+                />
                 {series.map((s) => (
                   <Area
                     key={s.key}
@@ -180,6 +219,7 @@ export function MetricChart({
                     dot={false}
                     isAnimationActive={false}
                     stackId={s.stack}
+                    hide={hidden.has(s.key)}
                   />
                 ))}
               </AreaChart>
@@ -216,7 +256,13 @@ export function MetricChart({
                   labelFormatter={(t: number) => formatTickTime(t, rangeSeconds)}
                   formatter={tooltipFormatter(formatValue, unit)}
                 />
-                <Legend wrapperStyle={legendStyle} iconType="circle" iconSize={8} />
+                <Legend
+                  wrapperStyle={{ ...legendStyle, cursor: "pointer" }}
+                  iconType="circle"
+                  iconSize={8}
+                  onClick={handleLegendClick}
+                  formatter={renderLegendLabel}
+                />
                 {series.map((s) => (
                   <Line
                     key={s.key}
@@ -227,6 +273,7 @@ export function MetricChart({
                     strokeWidth={1.75}
                     dot={false}
                     isAnimationActive={false}
+                    hide={hidden.has(s.key)}
                   />
                 ))}
               </LineChart>
