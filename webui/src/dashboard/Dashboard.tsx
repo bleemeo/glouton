@@ -7,6 +7,7 @@ import type { Fact } from "../api/types";
 import { NetworkAndIOChartGrid, SystemChartGrid } from "./ChartGrid";
 import { KPIRow } from "./KPIRow";
 import { RangeSelector } from "./RangeSelector";
+import { ServicesRow } from "./ServicesRow";
 import { DEFAULT_RANGE_ID, RANGES, type Range } from "./ranges";
 
 const RANGE_PARAM = "range";
@@ -55,6 +56,8 @@ export function Dashboard() {
   return (
     <VStack align="stretch" gap="6">
       <KPIRow cores={cores} />
+
+      <ServicesRow />
 
       <RangeSelector
         selectedId={range.id}
