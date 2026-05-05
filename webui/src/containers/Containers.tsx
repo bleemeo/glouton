@@ -15,6 +15,7 @@ import { useFetch } from "../api/hooks";
 import type { ContainersResponse } from "../api/types";
 import { StatusBadge, type Status } from "../app/StatusBadge";
 import { formatBytes } from "../dashboard/format";
+import { ContainerDrawer } from "./ContainerDrawer";
 
 function stateToStatus(state: string): Status {
   const s = state.toLowerCase();
@@ -45,11 +46,17 @@ function relativeTime(iso: string | undefined): string {
 export function Containers() {
   const [search, setSearch] = useState("");
   const [allContainers, setAllContainers] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const url = `/data/docker-containers?limit=200&allContainers=${allContainers}&search=${encodeURIComponent(search)}`;
   const res = useFetch<ContainersResponse>(url, 15_000);
 
   const items = useMemo(() => res.data?.containers ?? [], [res.data]);
+
+  const selectedContainer = useMemo(() => {
+    if (!selectedId) return null;
+    return items.find((c) => c.id === selectedId) ?? null;
+  }, [items, selectedId]);
 
   return (
     <VStack align="stretch" gap="4">
@@ -129,7 +136,14 @@ export function Containers() {
             </Table.Header>
             <Table.Body>
               {items.map((c) => (
-                <Table.Row key={c.id}>
+                <Table.Row
+                  key={c.id}
+                  cursor="pointer"
+                  onClick={() => setSelectedId(c.id)}
+                  bg={c.id === selectedId ? "surface.subtle" : undefined}
+                  _hover={{ bg: "surface.subtle" }}
+                  transition="background 100ms ease"
+                >
                   <Table.Cell>
                     <StatusBadge status={stateToStatus(c.state)} label={c.state} />
                   </Table.Cell>
@@ -169,6 +183,12 @@ export function Containers() {
           </Table.Root>
         )}
       </Box>
+
+      <ContainerDrawer
+        container={selectedContainer}
+        requestedId={selectedId}
+        onClose={() => setSelectedId(null)}
+      />
     </VStack>
   );
 }
