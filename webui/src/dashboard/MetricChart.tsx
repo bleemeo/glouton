@@ -1,4 +1,4 @@
-import { Box, HStack, Text, VStack } from "@chakra-ui/react";
+import { Box, chakra, HStack, Text, VStack } from "@chakra-ui/react";
 import { useTheme } from "next-themes";
 import { useEffect, useState, type ReactNode } from "react";
 import {
@@ -8,6 +8,7 @@ import {
   Legend,
   Line,
   LineChart,
+  ReferenceArea,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -15,6 +16,12 @@ import {
 } from "recharts";
 
 import { formatTickTime } from "./format";
+
+type ZoomState = { left: number; right: number };
+
+// Minimum span (as a fraction of the requested range) that a drag must
+// cover to actually zoom — protects against accidental clicks.
+const MIN_ZOOM_FRACTION = 0.01;
 
 // Explicit hex colors per mode — Recharts passes the tick prop through
 // SVG attributes where CSS custom properties resolve unreliably across
@@ -73,6 +80,50 @@ export function MetricChart({
 }: Props) {
   const palette = useChartPalette();
 
+  // Drag-to-zoom: refLeft/refRight track the in-progress selection,
+  // zoom holds the committed [left, right] window. Both are local to
+  // this chart and reset on range change.
+  const [refLeft, setRefLeft] = useState<number | null>(null);
+  const [refRight, setRefRight] = useState<number | null>(null);
+  const [zoom, setZoom] = useState<ZoomState | null>(null);
+
+  useEffect(() => {
+    // New range → throw away any zoom from the previous range; the
+    // numeric bounds wouldn't make sense against the new dataset.
+    setZoom(null);
+    setRefLeft(null);
+    setRefRight(null);
+  }, [rangeSeconds]);
+
+  const handleMouseDown = (state: { activeLabel?: number | string }) => {
+    const label = numberOf(state?.activeLabel);
+    if (label == null) return;
+    setRefLeft(label);
+    setRefRight(null);
+  };
+
+  const handleMouseMove = (state: { activeLabel?: number | string }) => {
+    if (refLeft == null) return;
+    const label = numberOf(state?.activeLabel);
+    if (label == null) return;
+    setRefRight(label);
+  };
+
+  const commitZoom = () => {
+    if (refLeft != null && refRight != null && refLeft !== refRight) {
+      const [a, b] = refLeft < refRight ? [refLeft, refRight] : [refRight, refLeft];
+      if (b - a >= rangeSeconds * MIN_ZOOM_FRACTION) {
+        setZoom({ left: a, right: b });
+      }
+    }
+    setRefLeft(null);
+    setRefRight(null);
+  };
+
+  const xDomain: [number, number] | ["dataMin", "dataMax"] = zoom
+    ? [zoom.left, zoom.right]
+    : ["dataMin", "dataMax"];
+
   // Click on a legend entry hides the matching series. Hidden state is
   // local to the chart and resets when the chart unmounts (e.g. range
   // change rebuilds the dataset).
@@ -128,7 +179,28 @@ export function MetricChart({
             </Text>
           ) : null}
         </VStack>
-        {controls}
+        <HStack gap="2">
+          {zoom ? (
+            <chakra.button
+              type="button"
+              onClick={() => setZoom(null)}
+              fontSize="xs"
+              fontFamily="mono"
+              color="fg.muted"
+              bg="surface.subtle"
+              borderWidth="1px"
+              borderColor="border.subtle"
+              borderRadius="md"
+              px="2"
+              py="1"
+              cursor="pointer"
+              _hover={{ bg: "surface.canvas", color: "fg.default" }}
+            >
+              Reset zoom
+            </chakra.button>
+          ) : null}
+          {controls}
+        </HStack>
       </HStack>
 
       <Box flex="1" minH="0">
@@ -156,7 +228,14 @@ export function MetricChart({
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             {variant === "area" ? (
-              <AreaChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
+              <AreaChart
+                data={data}
+                margin={{ top: 8, right: 12, bottom: 4, left: 4 }}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={commitZoom}
+                onMouseLeave={commitZoom}
+              >
                 <defs>
                   {series.map((s) => (
                     <linearGradient
@@ -180,7 +259,8 @@ export function MetricChart({
                 <XAxis
                   dataKey="t"
                   type="number"
-                  domain={["dataMin", "dataMax"]}
+                  domain={xDomain}
+                  allowDataOverflow
                   tickFormatter={(t: number) => formatTickTime(t, rangeSeconds)}
                   tick={{ fontSize: 10, fill: palette.tick, style: { fontSize: "10px" } }}
                   stroke={palette.axis}
@@ -225,9 +305,25 @@ export function MetricChart({
                     hide={hidden.has(s.key)}
                   />
                 ))}
+                {refLeft != null && refRight != null ? (
+                  <ReferenceArea
+                    x1={refLeft}
+                    x2={refRight}
+                    strokeOpacity={0.3}
+                    fill={palette.tick}
+                    fillOpacity={0.15}
+                  />
+                ) : null}
               </AreaChart>
             ) : (
-              <LineChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
+              <LineChart
+                data={data}
+                margin={{ top: 8, right: 12, bottom: 4, left: 4 }}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={commitZoom}
+                onMouseLeave={commitZoom}
+              >
                 <CartesianGrid
                   strokeDasharray="2 4"
                   stroke={palette.grid}
@@ -236,7 +332,8 @@ export function MetricChart({
                 <XAxis
                   dataKey="t"
                   type="number"
-                  domain={["dataMin", "dataMax"]}
+                  domain={xDomain}
+                  allowDataOverflow
                   tickFormatter={(t: number) => formatTickTime(t, rangeSeconds)}
                   tick={{ fontSize: 10, fill: palette.tick, style: { fontSize: "10px" } }}
                   stroke={palette.axis}
@@ -279,6 +376,15 @@ export function MetricChart({
                     hide={hidden.has(s.key)}
                   />
                 ))}
+                {refLeft != null && refRight != null ? (
+                  <ReferenceArea
+                    x1={refLeft}
+                    x2={refRight}
+                    strokeOpacity={0.3}
+                    fill={palette.tick}
+                    fillOpacity={0.15}
+                  />
+                ) : null}
               </LineChart>
             )}
           </ResponsiveContainer>
@@ -308,6 +414,12 @@ const legendStyle = {
   paddingTop: "4px",
 };
 
+
+function numberOf(v: number | string | undefined): number | null {
+  if (v == null) return null;
+  const n = typeof v === "number" ? v : parseFloat(v);
+  return isFinite(n) ? n : null;
+}
 
 function tooltipFormatter(formatValue?: (v: number) => string, unit?: string) {
   return (value: number, name: string) => {
