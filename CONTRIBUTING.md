@@ -32,10 +32,13 @@ docker tag glouton:latest bleemeo/bleemeo-agent:proposed
 
 If you can't run `./dist/glouton_linux_YOUR-ARCH/glouton` because it is a Linux binary, you can simply run `go run .`.
 
-When loading the UI, if Glouton is not able to discover your Docker containers, try changing the Docker socket with :
+Glouton auto-detects the Docker Desktop and Colima socket paths used
+on macOS, so containers running in Docker Desktop's Linux VM appear
+in the panel without extra configuration. If you run Docker through
+a non-standard socket path, point glouton at it explicitly:
 
 ```sh
-export GLOUTON_CONTAINER_RUNTIME_DOCKER_ADDRESSES="unix://${HOME}/.docker/run/docker.sock"
+export GLOUTON_CONTAINER_RUNTIME_DOCKER_ADDRESSES="unix:///path/to/docker.sock"
 ```
 
 ### Linters

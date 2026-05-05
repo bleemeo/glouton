@@ -17,6 +17,9 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/bleemeo/glouton/version"
@@ -47,6 +50,38 @@ func mapKeys() []string {
 		"log.opentelemetry.known_log_filters",
 		"log.opentelemetry.container_filter",
 	}
+}
+
+// defaultDockerAddresses returns the default Docker socket candidates
+// glouton tries when the user has not configured anything explicit.
+// On Linux this is the historical pair (host /run + /var/run). On
+// macOS we additionally probe the paths Docker Desktop uses, so that
+// `glouton` launched on a developer Mac picks up the running
+// containers without requiring GLOUTON_CONTAINER_RUNTIME_DOCKER_ADDRESSES.
+// First entry is the empty string so the Docker SDK's own DOCKER_HOST
+// resolution gets a chance to win.
+func defaultDockerAddresses() []string {
+	addrs := []string{
+		"",
+		"unix:///run/docker.sock",
+		"unix:///var/run/docker.sock",
+	}
+
+	if runtime.GOOS == "darwin" {
+		// Docker Desktop ≥ 4.13 sockets live in the user home; the
+		// exact subdir depends on the version. We list the known
+		// locations and let the runtime probe pick the first that
+		// answers.
+		if home, err := os.UserHomeDir(); err == nil && home != "" {
+			addrs = append(addrs,
+				"unix://"+filepath.Join(home, ".docker", "run", "docker.sock"),
+				"unix://"+filepath.Join(home, "Library", "Containers", "com.docker.docker", "Data", "docker.sock"),
+				"unix://"+filepath.Join(home, ".colima", "default", "docker.sock"),
+			)
+		}
+	}
+
+	return addrs
 }
 
 func DefaultConfig() Config { //nolint:maintidx
@@ -143,11 +178,7 @@ func DefaultConfig() Config { //nolint:maintidx
 			},
 			Runtime: ContainerRuntime{
 				Docker: ContainerRuntimeAddresses{
-					Addresses: []string{
-						"",
-						"unix:///run/docker.sock",
-						"unix:///var/run/docker.sock",
-					},
+					Addresses: defaultDockerAddresses(),
 					PrefixHostRoot: true,
 				},
 				ContainerD: ContainerRuntimeAddresses{
