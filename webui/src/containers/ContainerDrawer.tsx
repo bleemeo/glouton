@@ -1,4 +1,5 @@
 import {
+  Box,
   Code,
   Drawer,
   HStack,
@@ -12,9 +13,12 @@ import {
 import { LuChartLine, LuX } from "react-icons/lu";
 import { Link as RouterLink } from "react-router-dom";
 
+import { usePromQLRange } from "../api/hooks";
 import type { Container } from "../api/types";
 import { StatusBadge, type Status } from "../app/StatusBadge";
-import { formatBytes } from "../dashboard/format";
+import { formatBytes, formatPercent } from "../dashboard/format";
+import { samplesOf } from "../dashboard/promql";
+import { Sparkline } from "../dashboard/Sparkline";
 
 type Props = {
   container: Container | null;
@@ -135,8 +139,24 @@ function ContainerDetails({ container: c, onClose }: { container: Container; onC
           </ChakraLink>
 
           <SimpleGrid columns={2} gap="3">
-            <Field label="CPU" value={`${c.cpuUsedPerc.toFixed(1)} %`} mono />
-            <Field label="Memory" value={`${c.memUsedPerc.toFixed(1)} %`} mono />
+            <SparkField
+              label="CPU"
+              value={formatPercent(c.cpuUsedPerc)}
+              metric="container_cpu_used"
+              containerName={c.name}
+              color="#4F8DF5"
+            />
+            <SparkField
+              label="Memory"
+              value={formatPercent(c.memUsedPerc)}
+              metric="container_mem_used_perc"
+              containerName={c.name}
+              color="#8B5CF6"
+              yMax={100}
+            />
+          </SimpleGrid>
+
+          <SimpleGrid columns={2} gap="3">
             <Field label="↓ Network" value={`${formatBytes(c.netBitsRecv / 8)}/s`} mono />
             <Field label="↑ Network" value={`${formatBytes(c.netBitsSent / 8)}/s`} mono />
             <Field label="Read" value={`${formatBytes(c.ioReadBytes)}/s`} mono />
@@ -224,6 +244,72 @@ function Section({ label, children }: { label: string; children: React.ReactNode
         {label}
       </Text>
       {children}
+    </VStack>
+  );
+}
+
+function escapeLabelValue(v: string): string {
+  return v.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+const SPARK_RANGE_SECONDS = 15 * 60;
+const SPARK_STEP_SECONDS = 30;
+
+function SparkField({
+  label,
+  value,
+  metric,
+  containerName,
+  color,
+  yMax,
+}: {
+  label: string;
+  value: string;
+  metric: string;
+  containerName: string;
+  color: string;
+  yMax?: number;
+}) {
+  const query = `${metric}{item="${escapeLabelValue(containerName)}"}`;
+  const res = usePromQLRange(query, SPARK_RANGE_SECONDS, SPARK_STEP_SECONDS);
+  const samples = samplesOf(res.data?.data?.result?.[0]);
+
+  return (
+    <VStack
+      align="start"
+      gap="1"
+      bg="surface.subtle"
+      borderRadius="md"
+      borderWidth="1px"
+      borderColor="border.subtle"
+      p="3"
+    >
+      <Text
+        fontSize="xs"
+        color="fg.muted"
+        textTransform="uppercase"
+        letterSpacing="0.06em"
+      >
+        {label}
+      </Text>
+      <Text
+        fontSize="sm"
+        fontFamily="mono"
+        fontVariantNumeric="tabular-nums"
+        fontWeight="medium"
+      >
+        {value}
+      </Text>
+      <Box w="full" mt="1">
+        {samples.length > 0 ? (
+          <Sparkline data={samples} color={color} yMax={yMax} height={40} />
+        ) : (
+          <Box h="40px" />
+        )}
+      </Box>
+      <Text fontSize="2xs" color="fg.subtle">
+        last 15 min
+      </Text>
     </VStack>
   );
 }
