@@ -1,5 +1,6 @@
 import {
   Box,
+  Code,
   Heading,
   HStack,
   Link as ChakraLink,
@@ -172,7 +173,71 @@ export function Informations() {
         </Box>
       </VStack>
 
+      <PrometheusSection />
+
       <DiagnosticSection />
+    </VStack>
+  );
+}
+
+function PrometheusSection() {
+  // Resolved at render time so users behind reverse proxies see the
+  // actual URL they reached the panel through, not a hardcoded
+  // localhost:8015.
+  const metricsUrl =
+    typeof window !== "undefined" ? `${window.location.origin}/metrics` : "/metrics";
+
+  return (
+    <VStack align="stretch" gap="2">
+      <Heading size="sm" color="fg.muted" letterSpacing="0.06em" textTransform="uppercase">
+        Prometheus endpoint
+      </Heading>
+      <Box
+        bg="surface.panel"
+        borderWidth="1px"
+        borderColor="border.subtle"
+        borderRadius="lg"
+        p="4"
+      >
+        <VStack align="stretch" gap="3">
+          <Text fontSize="sm" color="fg.muted">
+            Glouton exposes every collected metric in Prometheus format. Point
+            an external Prometheus or compatible scraper at this URL.
+          </Text>
+          <Code
+            variant="surface"
+            fontFamily="mono"
+            fontSize="sm"
+            p="3"
+            wordBreak="break-all"
+          >
+            {metricsUrl}
+          </Code>
+          <HStack>
+            <ChakraLink
+              href="/metrics"
+              target="_blank"
+              rel="noopener noreferrer"
+              px="3"
+              py="2"
+              fontSize="sm"
+              fontWeight="medium"
+              borderRadius="md"
+              borderWidth="1px"
+              borderColor="border.default"
+              color="fg.default"
+              bg="surface.subtle"
+              _hover={{ bg: "surface.canvas", textDecoration: "none" }}
+              display="inline-flex"
+              alignItems="center"
+              gap="2"
+            >
+              <LuExternalLink />
+              Open /metrics
+            </ChakraLink>
+          </HStack>
+        </VStack>
+      </Box>
     </VStack>
   );
 }
