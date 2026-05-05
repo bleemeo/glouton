@@ -21,6 +21,27 @@ export function samplesOf(series: PromQLSeries | undefined): Sample[] {
   return out;
 }
 
+/**
+ * seriesByLabel turns a multi-series PromQL response into a map keyed
+ * by the value of the given label. Useful for charts whose number of
+ * series is known only at query time (e.g. one line per filesystem
+ * mountpoint or one line per network interface).
+ */
+export function seriesByLabel(
+  response: PromQLResponse | null | undefined,
+  labelName: string,
+): Record<string, PromQLSeries> {
+  const out: Record<string, PromQLSeries> = {};
+
+  for (const s of response?.data?.result ?? []) {
+    const value = s.metric[labelName];
+    if (!value) continue;
+    out[value] = s;
+  }
+
+  return out;
+}
+
 export function lastValue(response: PromQLResponse | null | undefined): number | null {
   const series = response?.data?.result?.[0];
   const samples = samplesOf(series);

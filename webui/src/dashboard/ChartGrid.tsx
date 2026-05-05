@@ -1,9 +1,9 @@
 import { SimpleGrid } from "@chakra-ui/react";
 
 import { usePromQLRange } from "../api/hooks";
-import { formatBytes, formatNumber, formatPercent } from "./format";
+import { formatBitsPerSec, formatBytes, formatNumber, formatPercent } from "./format";
 import { MetricChart, type ChartSeries } from "./MetricChart";
-import { alignSeries } from "./promql";
+import { alignSeries, seriesByLabel } from "./promql";
 import type { Range } from "./ranges";
 
 const COLORS = {
@@ -19,15 +19,42 @@ const COLORS = {
   load1: "#EF4444",
   load5: "#F59E0B",
   load15: "#10B981",
+  netRecv: "#4F8DF5",
+  netSent: "#F97316",
+  ioRead: "#4F8DF5",
+  ioWrite: "#F97316",
 };
 
-export function ChartGrid({ range }: { range: Range }) {
+// Cycled when the chart has dynamic series (one per device, mount, etc).
+const DYNAMIC_PALETTE = [
+  "#4F8DF5",
+  "#8B5CF6",
+  "#F97316",
+  "#10B981",
+  "#EF4444",
+  "#F59E0B",
+  "#06B6D4",
+  "#EC4899",
+];
+
+export function SystemChartGrid({ range }: { range: Range }) {
   return (
     <SimpleGrid columns={{ base: 1, lg: 2 }} gap="3">
       <CPUChart range={range} />
       <LoadChart range={range} />
       <MemoryChart range={range} />
       <SwapChart range={range} />
+    </SimpleGrid>
+  );
+}
+
+export function NetworkAndIOChartGrid({ range }: { range: Range }) {
+  return (
+    <SimpleGrid columns={{ base: 1, lg: 2 }} gap="3">
+      <DiskUtilizationChart range={range} />
+      <FilesystemChart range={range} />
+      <NetworkChart range={range} />
+      <DiskIOChart range={range} />
     </SimpleGrid>
   );
 }
@@ -152,4 +179,155 @@ function SwapChart({ range }: { range: Range }) {
       error={used.error}
     />
   );
+}
+
+function NetworkChart({ range }: { range: Range }) {
+  const recv = usePromQLRange("sum(net_bits_recv)", range.seconds, range.step);
+  const sent = usePromQLRange("sum(net_bits_sent)", range.seconds, range.step);
+
+  const data = alignSeries({
+    recv: recv.data?.data?.result?.[0],
+    sent: sent.data?.data?.result?.[0],
+  });
+
+  const series: ChartSeries[] = [
+    { key: "recv", label: "↓ Received", color: COLORS.netRecv },
+    { key: "sent", label: "↑ Sent", color: COLORS.netSent },
+  ];
+
+  return (
+    <MetricChart
+      title="Network throughput"
+      data={data}
+      series={series}
+      rangeSeconds={range.seconds}
+      formatValue={(v) => formatBitsPerSec(v)}
+      loading={recv.loading}
+      error={recv.error ?? sent.error}
+    />
+  );
+}
+
+function DiskIOChart({ range }: { range: Range }) {
+  const read = usePromQLRange("sum(io_read_bytes)", range.seconds, range.step);
+  const write = usePromQLRange("sum(io_write_bytes)", range.seconds, range.step);
+
+  const data = alignSeries({
+    read: read.data?.data?.result?.[0],
+    write: write.data?.data?.result?.[0],
+  });
+
+  const series: ChartSeries[] = [
+    { key: "read", label: "Read", color: COLORS.ioRead },
+    { key: "write", label: "Write", color: COLORS.ioWrite },
+  ];
+
+  return (
+    <MetricChart
+      title="Disk I/O throughput"
+      data={data}
+      series={series}
+      rangeSeconds={range.seconds}
+      formatValue={(v) => `${formatBytes(v)}/s`}
+      loading={read.loading}
+      error={read.error ?? write.error}
+    />
+  );
+}
+
+function DiskUtilizationChart({ range }: { range: Range }) {
+  const res = usePromQLRange("io_utilization", range.seconds, range.step);
+
+  const labelled = seriesByLabel(res.data, "item");
+  const sortedKeys = Object.keys(labelled).sort();
+
+  const data = alignSeries(
+    Object.fromEntries(sortedKeys.map((k) => [k, labelled[k]])),
+  );
+
+  const series: ChartSeries[] = sortedKeys.map((key, i) => ({
+    key,
+    label: key,
+    color: DYNAMIC_PALETTE[i % DYNAMIC_PALETTE.length],
+  }));
+
+  return (
+    <MetricChart
+      title="Disk utilization"
+      data={data}
+      series={series}
+      rangeSeconds={range.seconds}
+      yDomain={[0, 100]}
+      formatValue={(v) => formatPercent(v)}
+      loading={res.loading}
+      error={res.error}
+      variant="line"
+    />
+  );
+}
+
+function FilesystemChart({ range }: { range: Range }) {
+  const res = usePromQLRange("disk_used_perc", range.seconds, range.step);
+
+  // The same physical volume often appears under multiple synthetic
+  // mountpoints on macOS (System/Volumes/...). To keep the chart
+  // readable, deduplicate by the current value and keep only mounts
+  // whose usage differs from neighbours, capping the chart to ~6 lines.
+  const labelled = seriesByLabel(res.data, "item");
+  const trimmed = topMounts(labelled, 6);
+
+  const data = alignSeries(trimmed);
+
+  const series: ChartSeries[] = Object.keys(trimmed).map((key, i) => ({
+    key,
+    label: key,
+    color: DYNAMIC_PALETTE[i % DYNAMIC_PALETTE.length],
+  }));
+
+  return (
+    <MetricChart
+      title="Filesystem usage"
+      data={data}
+      series={series}
+      rangeSeconds={range.seconds}
+      yDomain={[0, 100]}
+      formatValue={(v) => formatPercent(v)}
+      loading={res.loading}
+      error={res.error}
+      variant="line"
+    />
+  );
+}
+
+// topMounts collapses near-duplicate mountpoints (same current usage to
+// 0.1% precision) and returns at most max entries, sorted by current
+// usage descending so the busiest filesystems show up first.
+function topMounts<T extends { values: Array<[number, string]> }>(
+  series: Record<string, T>,
+  max: number,
+): Record<string, T> {
+  type Entry = { key: string; value: T; last: number };
+
+  const entries: Entry[] = Object.entries(series).map(([key, value]) => {
+    const samples = value.values;
+    const lastRaw = samples.length > 0 ? samples[samples.length - 1][1] : "0";
+    const last = parseFloat(lastRaw);
+
+    return { key, value, last: isFinite(last) ? last : 0 };
+  });
+
+  // Deduplicate by rounded current value; "/" wins over "/System/Volumes/Data".
+  const seen = new Set<number>();
+  const dedup: Entry[] = [];
+
+  for (const entry of entries.sort((a, b) => a.key.length - b.key.length)) {
+    const bucket = Math.round(entry.last * 10);
+    if (seen.has(bucket)) continue;
+    seen.add(bucket);
+    dedup.push(entry);
+  }
+
+  dedup.sort((a, b) => b.last - a.last);
+
+  return Object.fromEntries(dedup.slice(0, max).map((e) => [e.key, e.value]));
 }

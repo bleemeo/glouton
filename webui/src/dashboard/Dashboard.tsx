@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 
 import { useFetch, useStoreInfo } from "../api/hooks";
 import type { Fact } from "../api/types";
-import { ChartGrid } from "./ChartGrid";
+import { NetworkAndIOChartGrid, SystemChartGrid } from "./ChartGrid";
 import { KPIRow } from "./KPIRow";
 import { RangeSelector } from "./RangeSelector";
 import { DEFAULT_RANGE_ID, RANGES, type Range } from "./ranges";
@@ -39,7 +39,14 @@ export function Dashboard() {
         <Heading size="sm" color="fg.muted" letterSpacing="0.06em" textTransform="uppercase">
           System metrics
         </Heading>
-        <ChartGrid range={range} />
+        <SystemChartGrid range={range} />
+      </VStack>
+
+      <VStack align="stretch" gap="3">
+        <Heading size="sm" color="fg.muted" letterSpacing="0.06em" textTransform="uppercase">
+          Network &amp; I/O
+        </Heading>
+        <NetworkAndIOChartGrid range={range} />
       </VStack>
     </VStack>
   );
