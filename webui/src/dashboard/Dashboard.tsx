@@ -1,5 +1,6 @@
 import { Heading, VStack } from "@chakra-ui/react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { useFetch, useStoreInfo } from "../api/hooks";
 import type { Fact } from "../api/types";
@@ -7,6 +8,8 @@ import { NetworkAndIOChartGrid, SystemChartGrid } from "./ChartGrid";
 import { KPIRow } from "./KPIRow";
 import { RangeSelector } from "./RangeSelector";
 import { DEFAULT_RANGE_ID, RANGES, type Range } from "./ranges";
+
+const RANGE_PARAM = "range";
 
 export function Dashboard() {
   const storeInfo = useStoreInfo();
@@ -21,8 +24,32 @@ export function Dashboard() {
     return undefined;
   }, [facts.data]);
 
-  const [range, setRange] = useState<Range>(
-    () => RANGES.find((r) => r.id === DEFAULT_RANGE_ID) ?? RANGES[0],
+  // Range lives in the URL (?range=1h) so refresh keeps it and the
+  // current view can be shared by copying the address bar. We accept
+  // any known range id; unknown values fall back to the default.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const range = useMemo<Range>(() => {
+    const id = searchParams.get(RANGE_PARAM);
+    return RANGES.find((r) => r.id === id) ?? RANGES.find((r) => r.id === DEFAULT_RANGE_ID) ?? RANGES[0];
+  }, [searchParams]);
+
+  const setRange = useCallback(
+    (next: Range) => {
+      setSearchParams(
+        (prev) => {
+          const params = new URLSearchParams(prev);
+          if (next.id === DEFAULT_RANGE_ID) {
+            // Keep the URL clean when the default is selected.
+            params.delete(RANGE_PARAM);
+          } else {
+            params.set(RANGE_PARAM, next.id);
+          }
+          return params;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
   );
 
   return (
