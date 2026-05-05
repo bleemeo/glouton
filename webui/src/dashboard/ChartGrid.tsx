@@ -1,9 +1,11 @@
 import { SimpleGrid } from "@chakra-ui/react";
+import { useState } from "react";
 
 import { usePromQLRange } from "../api/hooks";
+import { DeviceSelect } from "./DeviceSelect";
 import { formatBitsPerSec, formatBytes, formatNumber, formatPercent } from "./format";
 import { MetricChart, type ChartSeries } from "./MetricChart";
-import { alignSeries, seriesByLabel } from "./promql";
+import { alignSeries, seriesByLabel, sumSeries } from "./promql";
 import type { Range } from "./ranges";
 
 const COLORS = {
@@ -182,13 +184,30 @@ function SwapChart({ range }: { range: Range }) {
 }
 
 function NetworkChart({ range }: { range: Range }) {
-  const recv = usePromQLRange("sum(net_bits_recv)", range.seconds, range.step);
-  const sent = usePromQLRange("sum(net_bits_sent)", range.seconds, range.step);
+  // Fetch per-interface so the dropdown can offer the list of items
+  // and so client-side summation can replay the "All" view without a
+  // second round-trip.
+  const recv = usePromQLRange("net_bits_recv", range.seconds, range.step);
+  const sent = usePromQLRange("net_bits_sent", range.seconds, range.step);
 
-  const data = alignSeries({
-    recv: recv.data?.data?.result?.[0],
-    sent: sent.data?.data?.result?.[0],
-  });
+  const recvByItem = seriesByLabel(recv.data, "item");
+  const sentByItem = seriesByLabel(sent.data, "item");
+  const items = Array.from(
+    new Set([...Object.keys(recvByItem), ...Object.keys(sentByItem)]),
+  ).sort();
+
+  const [selected, setSelected] = useState("");
+
+  const recvSeries =
+    selected === ""
+      ? sumSeries(Object.values(recvByItem))
+      : recvByItem[selected];
+  const sentSeries =
+    selected === ""
+      ? sumSeries(Object.values(sentByItem))
+      : sentByItem[selected];
+
+  const data = alignSeries({ recv: recvSeries, sent: sentSeries });
 
   const series: ChartSeries[] = [
     { key: "recv", label: "↓ Received", color: COLORS.netRecv },
@@ -204,18 +223,42 @@ function NetworkChart({ range }: { range: Range }) {
       formatValue={(v) => formatBitsPerSec(v)}
       loading={recv.loading}
       error={recv.error ?? sent.error}
+      controls={
+        items.length > 0 ? (
+          <DeviceSelect
+            value={selected}
+            onChange={setSelected}
+            options={items}
+            allLabel="All interfaces"
+          />
+        ) : null
+      }
     />
   );
 }
 
 function DiskIOChart({ range }: { range: Range }) {
-  const read = usePromQLRange("sum(io_read_bytes)", range.seconds, range.step);
-  const write = usePromQLRange("sum(io_write_bytes)", range.seconds, range.step);
+  const read = usePromQLRange("io_read_bytes", range.seconds, range.step);
+  const write = usePromQLRange("io_write_bytes", range.seconds, range.step);
 
-  const data = alignSeries({
-    read: read.data?.data?.result?.[0],
-    write: write.data?.data?.result?.[0],
-  });
+  const readByItem = seriesByLabel(read.data, "item");
+  const writeByItem = seriesByLabel(write.data, "item");
+  const items = Array.from(
+    new Set([...Object.keys(readByItem), ...Object.keys(writeByItem)]),
+  ).sort();
+
+  const [selected, setSelected] = useState("");
+
+  const readSeries =
+    selected === ""
+      ? sumSeries(Object.values(readByItem))
+      : readByItem[selected];
+  const writeSeries =
+    selected === ""
+      ? sumSeries(Object.values(writeByItem))
+      : writeByItem[selected];
+
+  const data = alignSeries({ read: readSeries, write: writeSeries });
 
   const series: ChartSeries[] = [
     { key: "read", label: "Read", color: COLORS.ioRead },
@@ -231,6 +274,16 @@ function DiskIOChart({ range }: { range: Range }) {
       formatValue={(v) => `${formatBytes(v)}/s`}
       loading={read.loading}
       error={read.error ?? write.error}
+      controls={
+        items.length > 0 ? (
+          <DeviceSelect
+            value={selected}
+            onChange={setSelected}
+            options={items}
+            allLabel="All devices"
+          />
+        ) : null
+      }
     />
   );
 }

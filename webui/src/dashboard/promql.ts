@@ -42,6 +42,39 @@ export function seriesByLabel(
   return out;
 }
 
+/**
+ * sumSeries collapses several PromQL series into a single virtual one
+ * whose value at every timestamp is the sum of all input values at
+ * that timestamp. Used client-side to recompute "All interfaces" /
+ * "All devices" totals when the dropdown is set to "All" so we can
+ * keep the per-item query and avoid a second round-trip.
+ *
+ * Timestamps that don't appear in every series are kept; missing
+ * contributions are treated as 0 (a series silently absent at a step
+ * shouldn't make the total disappear).
+ */
+export function sumSeries(inputs: PromQLSeries[]): PromQLSeries | undefined {
+  if (inputs.length === 0) return undefined;
+  if (inputs.length === 1) return inputs[0];
+
+  const totals = new Map<number, number>();
+
+  for (const s of inputs) {
+    for (const [t, raw] of s.values) {
+      const v = parseFloat(raw);
+      if (!isFinite(v)) continue;
+      totals.set(t, (totals.get(t) ?? 0) + v);
+    }
+  }
+
+  const sorted = Array.from(totals.entries()).sort((a, b) => a[0] - b[0]);
+
+  return {
+    metric: {},
+    values: sorted.map(([t, v]) => [t, String(v)]),
+  };
+}
+
 export function lastValue(response: PromQLResponse | null | undefined): number | null {
   const series = response?.data?.result?.[0];
   const samples = samplesOf(series);

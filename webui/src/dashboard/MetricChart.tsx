@@ -54,6 +54,7 @@ type Props = {
   error?: Error | null;
   variant?: "area" | "line";
   formatValue?: (v: number) => string;
+  controls?: ReactNode;
 };
 
 export function MetricChart({
@@ -68,6 +69,7 @@ export function MetricChart({
   error,
   variant = "area",
   formatValue,
+  controls,
 }: Props) {
   const palette = useChartPalette();
 
@@ -115,7 +117,7 @@ export function MetricChart({
       display="flex"
       flexDirection="column"
     >
-      <HStack justify="space-between" mb="2">
+      <HStack justify="space-between" mb="2" gap="3" align="start">
         <VStack align="start" gap="0">
           <Text fontSize="sm" fontWeight="semibold">
             {title}
@@ -126,6 +128,7 @@ export function MetricChart({
             </Text>
           ) : null}
         </VStack>
+        {controls}
       </HStack>
 
       <Box flex="1" minH="0">
