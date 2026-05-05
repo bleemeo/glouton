@@ -3,12 +3,14 @@ import {
   Drawer,
   HStack,
   IconButton,
+  Link as ChakraLink,
   Portal,
   SimpleGrid,
   Text,
   VStack,
 } from "@chakra-ui/react";
-import { LuX } from "react-icons/lu";
+import { LuChartLine, LuX } from "react-icons/lu";
+import { Link as RouterLink } from "react-router-dom";
 
 import type { Container } from "../api/types";
 import { StatusBadge, type Status } from "../app/StatusBadge";
@@ -108,6 +110,30 @@ function ContainerDetails({ container: c, onClose }: { container: Container; onC
 
       <Drawer.Body>
         <VStack align="stretch" gap="5" pt="2">
+          <ChakraLink
+            as={RouterLink as never}
+            // @ts-expect-error react-router Link expects "to", chakra Link expects "href"
+            to={`/containers/${encodeURIComponent(c.name)}`}
+            onClick={onClose}
+            display="inline-flex"
+            alignItems="center"
+            gap="2"
+            px="3"
+            py="2"
+            fontSize="sm"
+            fontWeight="medium"
+            borderRadius="md"
+            borderWidth="1px"
+            borderColor="border.default"
+            color="fg.default"
+            bg="surface.subtle"
+            _hover={{ bg: "surface.canvas", textDecoration: "none" }}
+            w="fit-content"
+          >
+            <LuChartLine />
+            View charts
+          </ChakraLink>
+
           <SimpleGrid columns={2} gap="3">
             <Field label="CPU" value={`${c.cpuUsedPerc.toFixed(1)} %`} mono />
             <Field label="Memory" value={`${c.memUsedPerc.toFixed(1)} %`} mono />
