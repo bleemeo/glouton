@@ -178,7 +178,7 @@ func DefaultConfig() Config { //nolint:maintidx
 			},
 			Runtime: ContainerRuntime{
 				Docker: ContainerRuntimeAddresses{
-					Addresses: defaultDockerAddresses(),
+					Addresses:      defaultDockerAddresses(),
 					PrefixHostRoot: true,
 				},
 				ContainerD: ContainerRuntimeAddresses{

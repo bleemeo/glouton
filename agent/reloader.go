@@ -54,7 +54,7 @@ type ReloadState interface {
 	Bleemeo() bleemeoTypes.BleemeoReloadState
 	MQTT() types.MQTTReloadState
 	LocalStore() *tsdb.Store
-	SetLocalStore(*tsdb.Store)
+	SetLocalStore(s *tsdb.Store)
 	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error
 	WatcherError() error
 	Close()

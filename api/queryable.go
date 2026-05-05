@@ -85,7 +85,7 @@ func (q apiQueryable) Querier(mint, maxt int64) (storage.Querier, error) {
 		q.agentID = q.agentIDFunc()
 	}
 
-	var inner storage.Querier = primary
+	inner := primary
 
 	if q.secondary != nil {
 		secondary, err := q.secondary.Querier(mint, maxt)
