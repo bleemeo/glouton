@@ -15,6 +15,7 @@ import { LuDownload, LuExternalLink } from "react-icons/lu";
 import { useFetch } from "../api/hooks";
 import type { AgentInformation, Fact, Service } from "../api/types";
 import { StatusBadge, type Status } from "../app/StatusBadge";
+import { LogsViewer } from "./LogsViewer";
 
 const HOST_FACT_KEYS = [
   "fqdn",
@@ -172,6 +173,8 @@ export function Informations() {
           )}
         </Box>
       </VStack>
+
+      <LogsViewer />
 
       <PrometheusSection />
 

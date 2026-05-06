@@ -120,4 +120,68 @@ export function usePromQLRange(
   return useFetch<PromQLResponse>(url, 0);
 }
 
+/**
+ * useTextFetch is the plain-text counterpart of useFetch. Used for
+ * /data/logs which returns raw text rather than JSON.
+ */
+export function useTextFetch(url: string | null, pollMs = 0): FetchState<string> {
+  const [state, setState] = useState<FetchState<string>>({
+    data: null,
+    error: null,
+    loading: url !== null,
+  });
+
+  useEffect(() => {
+    if (url === null) {
+      setState({ data: null, error: null, loading: false });
+
+      return;
+    }
+
+    let cancelled = false;
+    const ac = new AbortController();
+
+    const run = async () => {
+      try {
+        const res = await fetch(url, { signal: ac.signal });
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+
+        const text = await res.text();
+
+        if (!cancelled) {
+          notifyFetched();
+          setState({ data: text, error: null, loading: false });
+        }
+      } catch (err) {
+        if (cancelled || (err as Error).name === "AbortError") {
+          return;
+        }
+
+        setState((prev) => ({ data: prev.data, error: err as Error, loading: false }));
+      }
+    };
+
+    void run();
+
+    let timer: number | null = null;
+
+    if (pollMs > 0) {
+      timer = window.setInterval(run, pollMs);
+    }
+
+    return () => {
+      cancelled = true;
+      ac.abort();
+
+      if (timer !== null) {
+        window.clearInterval(timer);
+      }
+    };
+  }, [url, pollMs]);
+
+  return state;
+}
+
 export type { FetchState };
