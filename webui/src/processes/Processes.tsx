@@ -12,7 +12,7 @@ import { useMemo, useState } from "react";
 
 import { useFetch } from "../api/hooks";
 import type { Process, Topinfo } from "../api/types";
-import { formatBytes, formatNumber } from "../dashboard/format";
+import { formatBytesFromKiB, formatNumber } from "../dashboard/format";
 import { ProcessDrawer } from "./ProcessDrawer";
 
 type SortKey = "cpu_percent" | "memory_rss" | "name" | "pid";
@@ -244,7 +244,7 @@ function ProcessRow({
   const memRatio =
     totalRSS && totalRSS > 0
       ? Math.min(1, p.memory_rss / totalRSS)
-      : Math.min(1, p.memory_rss / (4 * 1024 ** 3)); // fallback: 4 GB scale
+      : Math.min(1, p.memory_rss / (4 * 1024 ** 2)); // fallback: 4 GiB expressed in KiB
 
   const status = statusMeta(p.status);
 
@@ -307,7 +307,7 @@ function ProcessRow({
       </Table.Cell>
       <Table.Cell>
         <BarValue
-          value={formatBytes(p.memory_rss)}
+          value={formatBytesFromKiB(p.memory_rss)}
           ratio={memRatio}
           color={memColor}
         />

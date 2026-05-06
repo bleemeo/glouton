@@ -41,6 +41,17 @@ export function formatBytes(v: number | null | undefined): string {
   return `${sign}${SHORT(abs)} ${BYTE_UNITS[i]}`;
 }
 
+// formatBytesFromKiB formats a byte count expressed in KiB. The agent
+// exposes process.memory_rss and topinfo.Memory.* in KiB (gopsutil's
+// raw bytes are divided by 1024 in facts/process_unix.go and friends),
+// so callers reading those fields must multiply by 1024 before
+// formatting — this helper does that in one place.
+export function formatBytesFromKiB(v: number | null | undefined): string {
+  if (v == null || !isFinite(v)) return "—";
+
+  return formatBytes(v * 1024);
+}
+
 export function formatBitsPerSec(v: number | null | undefined): string {
   if (v == null || !isFinite(v)) return "—";
 

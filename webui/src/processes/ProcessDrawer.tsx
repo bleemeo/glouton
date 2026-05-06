@@ -12,7 +12,7 @@ import {
 import { LuX } from "react-icons/lu";
 
 import type { Process } from "../api/types";
-import { formatBytes, formatNumber } from "../dashboard/format";
+import { formatBytesFromKiB, formatNumber } from "../dashboard/format";
 
 const STATUS_META: Record<string, { label: string; color: string }> = {
   R: { label: "Running", color: "#10B981" },
@@ -98,7 +98,7 @@ function ProcessDetails({ process: p, onClose }: { process: Process; onClose: ()
         <VStack align="stretch" gap="5" pt="2">
           <SimpleGrid columns={2} gap="3">
             <Field label="CPU" value={`${p.cpu_percent.toFixed(2)} %`} mono />
-            <Field label="Memory (RSS)" value={formatBytes(p.memory_rss)} mono />
+            <Field label="Memory (RSS)" value={formatBytesFromKiB(p.memory_rss)} mono />
             <Field label="CPU time" value={`${formatNumber(p.cpu_time, 2)} s`} mono />
             <Field label="User" value={p.username || "—"} />
             <Field label="PPID" value={p.ppid > 0 ? String(p.ppid) : "—"} mono />
