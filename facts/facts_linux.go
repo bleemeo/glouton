@@ -186,7 +186,7 @@ func (f *FactProvider) installedPackagesFacts(ctx context.Context, facts map[str
 	var versions map[string]string
 
 	switch {
-	case osFamily == "debian":
+	case osFamily == "debian" || strings.Contains(osName, "debian"):
 		versions = f.queryDebianPackageVersions(ctx, packageNames)
 	case strings.Contains(osFamily, "rhel") || strings.Contains(osFamily, "fedora") || strings.Contains(osName, "fedora"):
 		versions = f.queryRPMPackageVersions(ctx, packageNames)
