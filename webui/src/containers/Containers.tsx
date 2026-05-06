@@ -27,6 +27,50 @@ function stateToStatus(state: string): Status {
   return "unknown";
 }
 
+type SortKey = "state" | "name" | "image" | "cpu" | "memory" | "netRecv" | "netSent" | "started";
+
+function startedTimestamp(iso: string | undefined): number {
+  if (!iso) return 0;
+
+  const t = new Date(iso).getTime();
+
+  return isFinite(t) ? t : 0;
+}
+
+function SortableHeader({
+  label,
+  sortKey,
+  current,
+  onSort,
+  textAlign,
+}: {
+  label: string;
+  sortKey: SortKey;
+  current: SortKey;
+  onSort: (k: SortKey) => void;
+  textAlign?: "start" | "end";
+}) {
+  const active = current === sortKey;
+
+  return (
+    <Table.ColumnHeader
+      textAlign={textAlign}
+      cursor="pointer"
+      onClick={() => onSort(sortKey)}
+      _hover={{ color: "fg.default" }}
+    >
+      <Text
+        as="span"
+        color={active ? "fg.default" : "fg.muted"}
+        fontWeight={active ? "semibold" : "medium"}
+      >
+        {label}
+        {active ? " ↓" : ""}
+      </Text>
+    </Table.ColumnHeader>
+  );
+}
+
 function relativeTime(iso: string | undefined): string {
   if (!iso) return "—";
 
@@ -47,11 +91,35 @@ export function Containers() {
   const [search, setSearch] = useState("");
   const [allContainers, setAllContainers] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("name");
 
   const url = `/data/docker-containers?limit=200&allContainers=${allContainers}&search=${encodeURIComponent(search)}`;
   const res = useFetch<ContainersResponse>(url, 15_000);
 
-  const items = useMemo(() => res.data?.containers ?? [], [res.data]);
+  const items = useMemo(() => {
+    const rows = res.data?.containers ?? [];
+
+    return [...rows].sort((a, b) => {
+      switch (sortKey) {
+        case "state":
+          return a.state.localeCompare(b.state);
+        case "name":
+          return a.name.localeCompare(b.name);
+        case "image":
+          return a.image.localeCompare(b.image);
+        case "cpu":
+          return b.cpuUsedPerc - a.cpuUsedPerc;
+        case "memory":
+          return b.memUsedPerc - a.memUsedPerc;
+        case "netRecv":
+          return b.netBitsRecv - a.netBitsRecv;
+        case "netSent":
+          return b.netBitsSent - a.netBitsSent;
+        case "started":
+          return startedTimestamp(b.startedAt) - startedTimestamp(a.startedAt);
+      }
+    });
+  }, [res.data, sortKey]);
 
   const selectedContainer = useMemo(() => {
     if (!selectedId) return null;
@@ -121,19 +189,20 @@ export function Containers() {
             No containers match.
           </Box>
         ) : (
-          <Table.Root size="sm" variant="line">
-            <Table.Header bg="surface.subtle">
-              <Table.Row>
-                <Table.ColumnHeader>State</Table.ColumnHeader>
-                <Table.ColumnHeader>Name</Table.ColumnHeader>
-                <Table.ColumnHeader>Image</Table.ColumnHeader>
-                <Table.ColumnHeader textAlign="end">CPU</Table.ColumnHeader>
-                <Table.ColumnHeader textAlign="end">Memory</Table.ColumnHeader>
-                <Table.ColumnHeader textAlign="end">↓ Net</Table.ColumnHeader>
-                <Table.ColumnHeader textAlign="end">↑ Net</Table.ColumnHeader>
-                <Table.ColumnHeader textAlign="end">Started</Table.ColumnHeader>
-              </Table.Row>
-            </Table.Header>
+          <Box maxH="calc(100vh - 240px)" overflow="auto">
+            <Table.Root size="sm" variant="line" stickyHeader>
+              <Table.Header bg="surface.subtle">
+                <Table.Row>
+                  <SortableHeader label="State" sortKey="state" current={sortKey} onSort={setSortKey} />
+                  <SortableHeader label="Name" sortKey="name" current={sortKey} onSort={setSortKey} />
+                  <SortableHeader label="Image" sortKey="image" current={sortKey} onSort={setSortKey} />
+                  <SortableHeader label="CPU" sortKey="cpu" current={sortKey} onSort={setSortKey} textAlign="end" />
+                  <SortableHeader label="Memory" sortKey="memory" current={sortKey} onSort={setSortKey} textAlign="end" />
+                  <SortableHeader label="↓ Net" sortKey="netRecv" current={sortKey} onSort={setSortKey} textAlign="end" />
+                  <SortableHeader label="↑ Net" sortKey="netSent" current={sortKey} onSort={setSortKey} textAlign="end" />
+                  <SortableHeader label="Started" sortKey="started" current={sortKey} onSort={setSortKey} textAlign="end" />
+                </Table.Row>
+              </Table.Header>
             <Table.Body>
               {items.map((c) => (
                 <Table.Row
@@ -181,6 +250,7 @@ export function Containers() {
               ))}
             </Table.Body>
           </Table.Root>
+          </Box>
         )}
       </Box>
 
