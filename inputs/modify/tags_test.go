@@ -145,6 +145,30 @@ func TestAddInstance(t *testing.T) {
 	}
 }
 
+// TestAddRenameCallbackInputWithSecrets verifies that AddRenameCallback on an InputWithSecrets
+// adds the callback directly to the embedded *Input instead of wrapping it in a new *internal.Input.
+func TestAddRenameCallbackInputWithSecrets(t *testing.T) {
+	innerInput := &internal.Input{Input: &fixedInput{}}
+	iws := internal.InputWithSecrets{Input: innerInput, Count: 1}
+
+	result := AddRenameCallback(iws, func(labels map[string]string, annotations types.MetricAnnotations) (map[string]string, types.MetricAnnotations) {
+		return labels, annotations
+	})
+
+	got, ok := result.(internal.InputWithSecrets)
+	if !ok {
+		t.Fatalf("expected InputWithSecrets, got %T", result)
+	}
+
+	if got.Input != innerInput {
+		t.Error("expected the same *Input, got a different one (unnecessary wrapper was created)")
+	}
+
+	if len(innerInput.Accumulator.RenameCallbacks) != 1 {
+		t.Errorf("expected 1 callback on the inner Input, got %d", len(innerInput.Accumulator.RenameCallbacks))
+	}
+}
+
 // TestAddInstanceSharedTags verifies that AddInstance does not corrupt the item label when
 // an input (like the Telegraf MySQL plugin) reuses the same tags map across multiple AddFields calls.
 func TestAddInstanceSharedTags(t *testing.T) {
