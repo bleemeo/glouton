@@ -1,23 +1,25 @@
-import { Suspense } from "react";
 import { createRoot } from "react-dom/client";
-import PanelErrorBoundary from "./components/UI/PanelErrorBoundary";
-import PanelLoading from "./components/UI/PanelLoading";
-import Root from "./components/Root";
+import { BrowserRouter } from "react-router-dom";
 
-import "core-js/es/object";
-import "core-js/es/object/values";
-import "core-js/es/object/entries";
-
-// @ts-expect-error ts(2307)
-import "./styles/bootstrap.scss";
+import { AppLayout } from "./app/AppLayout";
+import { AppRoutes } from "./app/AppRoutes";
+import { ErrorBoundary } from "./app/ErrorBoundary";
+import { Provider } from "./app/Provider";
 
 const container = document.getElementById("main");
-const root = createRoot(container!);
 
-root.render(
-  <PanelErrorBoundary>
-    <Suspense fallback={<PanelLoading />}>
-      <Root />
-    </Suspense>
-  </PanelErrorBoundary>,
+if (!container) {
+  throw new Error("Glouton panel mount target #main is missing from index.html");
+}
+
+createRoot(container).render(
+  <Provider>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AppLayout>
+          <AppRoutes />
+        </AppLayout>
+      </BrowserRouter>
+    </ErrorBoundary>
+  </Provider>,
 );
