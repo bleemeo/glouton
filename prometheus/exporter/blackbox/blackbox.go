@@ -54,44 +54,74 @@ const (
 	proberNameSSL  string = "ssl"
 	proberNameICMP string = "icmp"
 	proberNameDNS  string = "dns"
+
+	// Probe metric names.
+	metricProbeSuccess                     = "probe_success"
+	metricProbeDurationSeconds             = "probe_duration_seconds"
+	metricProbeDNSLookupTimeSeconds        = "probe_dns_lookup_time_seconds"
+	metricProbeHTTPStatusCode              = "probe_http_status_code"
+	metricProbeHTTPDurationSeconds         = "probe_http_duration_seconds"
+	metricProbeSSLLastChainExpiryTimestamp = "probe_ssl_last_chain_expiry_timestamp_seconds"
+	metricProbeSSLEarliestCertExpiry       = "probe_ssl_earliest_cert_expiry"
+	metricProbeSSLValidationSuccess        = "probe_ssl_validation_success"
+	metricProbeSSLLeafCertificateLifespan  = "probe_ssl_leaf_certificate_lifespan"
+	metricProbeFailedDueToTLSError         = "probe_failed_due_to_tls_error"
+	metricProbeDNSRcode                    = "probe_dns_rcode"
+	metricProbeDNSAnswerRRS                = "probe_dns_answer_rrs"
+	metricProbeDNSQuerySucceeded           = "probe_dns_query_succeeded"
+
+	// Label name for instance.
+	labelInstance = "instance"
+
+	// Label name for probe phase.
+	labelPhase = "phase"
+
+	// Phase name for probe_http_duration_seconds.
+	phaseConnect = "connect"
+
+	// IP protocol version.
+	ipProtocolV4 = "ip4"
+
+	// HTTP header name.
+	headerUserAgent = "User-Agent"
 )
 
 //nolint:gochecknoglobals
 var (
 	probeSuccessDesc = prometheus.NewDesc(
-		prometheus.BuildFQName("", "", "probe_success"),
+		prometheus.BuildFQName("", "", metricProbeSuccess),
 		"Displays whether or not the probe was a success",
-		[]string{"instance"},
+		[]string{labelInstance},
 		nil,
 	)
 	probeDNSRcode = prometheus.NewDesc(
-		prometheus.BuildFQName("", "", "probe_dns_rcode"),
+		prometheus.BuildFQName("", "", metricProbeDNSRcode),
 		"The DNS answer rcode value",
-		[]string{"instance"},
+		[]string{labelInstance},
 		nil,
 	)
 	probeTLSExpiry = prometheus.NewDesc(
-		prometheus.BuildFQName("", "", "probe_ssl_last_chain_expiry_timestamp_seconds"),
+		prometheus.BuildFQName("", "", metricProbeSSLLastChainExpiryTimestamp),
 		"Returns last SSL chain expiry in timestamp seconds",
-		[]string{"instance"},
+		[]string{labelInstance},
 		nil,
 	)
 	probeSSLCertificateLifespan = prometheus.NewDesc(
-		prometheus.BuildFQName("", "", "probe_ssl_leaf_certificate_lifespan"),
+		prometheus.BuildFQName("", "", metricProbeSSLLeafCertificateLifespan),
 		"Returns leaf certificate lifespan",
-		[]string{"instance"},
+		[]string{labelInstance},
 		nil,
 	)
 	probeTLSSuccess = prometheus.NewDesc(
-		prometheus.BuildFQName("", "", "probe_ssl_validation_success"),
+		prometheus.BuildFQName("", "", metricProbeSSLValidationSuccess),
 		"Returns whether all SSL connections were valid",
-		[]string{"instance"},
+		[]string{labelInstance},
 		nil,
 	)
 	probeDurationDesc = prometheus.NewDesc(
-		prometheus.BuildFQName("", "", "probe_duration_seconds"),
+		prometheus.BuildFQName("", "", metricProbeDurationSeconds),
 		"Returns how long the probe took to complete in seconds",
-		[]string{"instance"},
+		[]string{labelInstance},
 		nil,
 	)
 	probers = map[string]prober.ProbeFn{
@@ -288,7 +318,7 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 		tlsSuccess := false
 
 		for _, mf := range mfs {
-			if mf.GetName() == "probe_ssl_last_chain_expiry_timestamp_seconds" {
+			if mf.GetName() == metricProbeSSLLastChainExpiryTimestamp {
 				if metrics := mf.GetMetric(); len(metrics) > 0 && metrics[0].GetGauge() != nil {
 					// When the ssl connection failed, we have no verified chain, so the last chain expiry
 					// is a zero time.Time, which is then converted to a unix timestamp and to a float64.
@@ -308,7 +338,7 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 		// We implement our own probe_ssl_last_chain_expiry_timestamp_seconds for
 		// https checks to support self-signed and expired certificates.
 		mfs = filterMFs(mfs, func(mf *dto.MetricFamily) bool {
-			return mf.GetName() != "probe_ssl_last_chain_expiry_timestamp_seconds"
+			return mf.GetName() != metricProbeSSLLastChainExpiryTimestamp
 		})
 
 		if roundTripsTLS.AllTrusted() {

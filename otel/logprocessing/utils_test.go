@@ -37,8 +37,8 @@ func TestValidateContainerOperators(t *testing.T) {
 	t.Parallel()
 
 	globalOpsConfig := map[string][]config.OTELOperator{
-		"op-1": {},
-		"op-2": {},
+		testOpID1: {},
+		testOpID2: {},
 	}
 
 	testCases := []struct {
@@ -47,18 +47,18 @@ func TestValidateContainerOperators(t *testing.T) {
 	}{
 		{
 			ctrOps: map[string]string{
-				"ctr-1": "op-1",
-				"ctr-2": "op-2",
+				testContainerCtr1: "op-1",
+				testContainerCtr2: "op-2",
 			},
 			expectedCtrOps: map[string]string{
-				"ctr-1": "op-1",
-				"ctr-2": "op-2",
+				testContainerCtr1: "op-1",
+				testContainerCtr2: "op-2",
 			},
 		},
 		{
 			ctrOps: map[string]string{
-				"ctr-1": "",
-				"ctr-2": "op-3",
+				testContainerCtr1: "",
+				testContainerCtr2: "op-3",
 			},
 			expectedCtrOps: map[string]string{},
 		},
@@ -88,7 +88,7 @@ func TestBuildLogFilterConfig(t *testing.T) {
 		{
 			input: config.OTELFilters{
 				"exclude": map[string]any{
-					"match_type": "regexp",
+					"match_type": testRegexp,
 					"bodies": []string{
 						"GET",
 					},
@@ -96,7 +96,7 @@ func TestBuildLogFilterConfig(t *testing.T) {
 			},
 			expectedOutput: filterprocessor.LogFilters{
 				Exclude: &filterprocessor.LogMatchProperties{
-					LogMatchType: filterprocessor.LogMatchType("regexp"),
+					LogMatchType: filterprocessor.LogMatchType(testRegexp),
 					LogBodies: []string{
 						"GET",
 					},
@@ -105,7 +105,7 @@ func TestBuildLogFilterConfig(t *testing.T) {
 		},
 		{
 			input: config.OTELFilters{
-				"log_record": []string{
+				testFilterLogRecord: []string{
 					`IsMatch(body, "/nginx_status")`,
 				},
 			},
@@ -117,7 +117,7 @@ func TestBuildLogFilterConfig(t *testing.T) {
 		},
 		{
 			input: config.OTELFilters{
-				"log_record": []string{
+				testFilterLogRecord: []string{
 					"UnknownFunc(body)",
 				},
 			},
@@ -125,7 +125,7 @@ func TestBuildLogFilterConfig(t *testing.T) {
 		},
 		{
 			input: config.OTELFilters{
-				"include": map[string]any{
+				testFieldInclude: map[string]any{
 					"match_type": "strict",
 					"severity_texts": []string{
 						"error",
@@ -145,9 +145,9 @@ func TestBuildLogFilterConfig(t *testing.T) {
 		},
 		{
 			input: config.OTELFilters{
-				"include":    map[string]any{},
-				"exclude":    map[string]any{},
-				"log_record": []string{},
+				testFieldInclude:    map[string]any{},
+				"exclude":           map[string]any{},
+				testFilterLogRecord: []string{},
 			},
 			expectedError: "cannot use \"logs.resource\", \"logs.log\" and the settings \"logs.include\", \"logs.exclude\" at the same time",
 		},
@@ -193,25 +193,25 @@ func TestExpandOperators(t *testing.T) {
 	knownIncludes := map[string][]config.OTELOperator{
 		"regex_time": {
 			{
-				"type":  "regex_parser",
-				"regex": `^(?P<time>\[.*?\])$`,
+				testFieldType:  testRegexParser,
+				testFieldRegex: testRegexTimePattern,
 			},
 			{
-				"type":       "time_parser",
-				"parse_from": "attributes.time",
-				"layout":     "[%d/%b/%Y:%H:%M:%S %z]",
+				testFieldType:      testTimeParser,
+				testFieldParseFrom: testParseFromTime,
+				testFieldLayout:    testTimeFmtLayout,
 			},
 		},
 	}
 
 	opsConfig := []config.OTELOperator{
 		{
-			"type":  "add",
-			"field": "resource['service.name']",
-			"value": "apache_server",
+			testFieldType:  testFieldAdd,
+			testFieldName:  testRouteServiceName,
+			testFieldValue: testServiceApache,
 		},
 		{
-			"include": "regex_time",
+			testFieldInclude: "regex_time",
 		},
 	}
 
@@ -222,18 +222,18 @@ func TestExpandOperators(t *testing.T) {
 
 	expectedOperators := []config.OTELOperator{
 		{
-			"type":  "add",
-			"field": "resource['service.name']",
-			"value": "apache_server",
+			testFieldType:  testFieldAdd,
+			testFieldName:  testRouteServiceName,
+			testFieldValue: testServiceApache,
 		},
 		{
-			"type":  "regex_parser",
-			"regex": `^(?P<time>\[.*?\])$`,
+			testFieldType:  testRegexParser,
+			testFieldRegex: testRegexTimePattern,
 		},
 		{
-			"type":       "time_parser",
-			"parse_from": "attributes.time",
-			"layout":     "[%d/%b/%Y:%H:%M:%S %z]",
+			testFieldType:      testTimeParser,
+			testFieldParseFrom: testParseFromTime,
+			testFieldLayout:    testTimeFmtLayout,
 		},
 	}
 
@@ -252,105 +252,105 @@ func TestExpandLogFormats(t *testing.T) {
 	}{
 		{
 			sourceLogFormats: map[string][]config.OTELOperator{
-				"fmt-1": {
+				testFmt1: {
 					{
-						"type":  "add",
-						"field": "resource['service_name']",
-						"value": "apache_server",
+						testFieldType:  testFieldAdd,
+						testFieldName:  testResServiceName,
+						testFieldValue: testServiceApache,
 					},
 				},
-				"fmt-2": {
+				testFmt2: {
 					{
-						"include": "fmt-1",
+						testFieldInclude: testFmt1,
 					},
 					{
-						"type": "move",
-						"from": "resource['service_name']",
-						"to":   "resource['service.name']",
+						testFieldType: "move",
+						"from":        testResServiceName,
+						"to":          testRouteServiceName,
 					},
 				},
 			},
 			expectedLogFormats: map[string][]config.OTELOperator{
-				"fmt-1": {
+				testFmt1: {
 					{
-						"type":  "add",
-						"field": "resource['service_name']",
-						"value": "apache_server",
+						testFieldType:  testFieldAdd,
+						testFieldName:  testResServiceName,
+						testFieldValue: testServiceApache,
 					},
 				},
-				"fmt-2": {
+				testFmt2: {
 					{
-						"type":  "add",
-						"field": "resource['service_name']",
-						"value": "apache_server",
+						testFieldType:  testFieldAdd,
+						testFieldName:  testResServiceName,
+						testFieldValue: testServiceApache,
 					},
 					{
-						"type": "move",
-						"from": "resource['service_name']",
-						"to":   "resource['service.name']",
+						testFieldType: "move",
+						"from":        testResServiceName,
+						"to":          testRouteServiceName,
 					},
 				},
 			},
 		},
 		{
 			sourceLogFormats: map[string][]config.OTELOperator{
-				"fmt-1": {
+				testFmt1: {
 					{
-						"type":  "add",
-						"field": "resource.env",
-						"value": `EXPR(env("KEY")`,
+						testFieldType:  testFieldAdd,
+						testFieldName:  "resource.env",
+						testFieldValue: `EXPR(env("KEY")`,
 					},
 					{
-						"include": "fmt-2",
+						testFieldInclude: testFmt2,
 					},
 				},
-				"fmt-2": {
+				testFmt2: {
 					{
-						"type":  "add",
-						"field": "resource['service_name']",
-						"value": "apache_server",
+						testFieldType:  testFieldAdd,
+						testFieldName:  testResServiceName,
+						testFieldValue: testServiceApache,
 					},
 				},
 			},
 			expectedLogFormats: map[string][]config.OTELOperator{
-				"fmt-1": {
+				testFmt1: {
 					{
-						"type":  "add",
-						"field": "resource.env",
-						"value": `EXPR(env("KEY")`,
+						testFieldType:  testFieldAdd,
+						testFieldName:  "resource.env",
+						testFieldValue: `EXPR(env("KEY")`,
 					},
 					{
-						"type":  "add",
-						"field": "resource['service_name']",
-						"value": "apache_server",
+						testFieldType:  testFieldAdd,
+						testFieldName:  testResServiceName,
+						testFieldValue: testServiceApache,
 					},
 				},
-				"fmt-2": {
+				testFmt2: {
 					{
-						"type":  "add",
-						"field": "resource['service_name']",
-						"value": "apache_server",
+						testFieldType:  testFieldAdd,
+						testFieldName:  testResServiceName,
+						testFieldValue: testServiceApache,
 					},
 				},
 			},
 		},
 		{
 			sourceLogFormats: map[string][]config.OTELOperator{
-				"fmt-1": {
+				testFmt1: {
 					{
-						"include": "fmt-2",
+						testFieldInclude: testFmt2,
 					},
 				},
-				"fmt-2": {
+				testFmt2: {
 					{
-						"include": "fmt-3",
+						testFieldInclude: "fmt-3",
 					},
 				},
 				"fmt-3": {
 					{
-						"type":  "add",
-						"field": "resource['service.name']",
-						"value": "apache_server",
+						testFieldType:  testFieldAdd,
+						testFieldName:  testRouteServiceName,
+						testFieldValue: testServiceApache,
 					},
 				},
 			},
@@ -387,18 +387,18 @@ func TestBuildOperators(t *testing.T) {
 
 	rawOperators := []config.OTELOperator{
 		{
-			"type":  "add",
-			"field": "resource['service.name']",
-			"value": "apache_server",
+			testFieldType:  testFieldAdd,
+			testFieldName:  testRouteServiceName,
+			testFieldValue: testServiceApache,
 		},
 		{
-			"type":  "regex_parser",
-			"regex": `^(?P<time>\[.*?\])$`,
+			testFieldType:  testRegexParser,
+			testFieldRegex: testRegexTimePattern,
 		},
 		{
-			"type":       "time_parser",
-			"parse_from": "attributes.time",
-			"layout":     "[%d/%b/%Y:%H:%M:%S %z]",
+			testFieldType:      testTimeParser,
+			testFieldParseFrom: testParseFromTime,
+			testFieldLayout:    testTimeFmtLayout,
 		},
 	}
 
@@ -408,18 +408,18 @@ func TestBuildOperators(t *testing.T) {
 				TransformerConfig: helper.TransformerConfig{
 					WriterConfig: helper.WriterConfig{
 						BasicConfig: helper.BasicConfig{
-							OperatorID:   "add",
-							OperatorType: "add",
+							OperatorID:   testFieldAdd,
+							OperatorType: testFieldAdd,
 						},
 					},
-					OnError: "send",
+					OnError: testOnErrorSend,
 				},
 				Field: entry.Field{
 					FieldInterface: entry.ResourceField{
-						Keys: []string{"service.name"},
+						Keys: []string{testAttrServiceName},
 					},
 				},
-				Value: "apache_server",
+				Value: testServiceApache,
 			},
 		},
 		{
@@ -428,11 +428,11 @@ func TestBuildOperators(t *testing.T) {
 					TransformerConfig: helper.TransformerConfig{
 						WriterConfig: helper.WriterConfig{
 							BasicConfig: helper.BasicConfig{
-								OperatorID:   "regex_parser",
-								OperatorType: "regex_parser",
+								OperatorID:   testRegexParser,
+								OperatorType: testRegexParser,
 							},
 						},
-						OnError: "send",
+						OnError: testOnErrorSend,
 					},
 					ParseFrom: entry.Field{
 						FieldInterface: entry.BodyField{
@@ -447,7 +447,7 @@ func TestBuildOperators(t *testing.T) {
 						},
 					},
 				},
-				Regex: `^(?P<time>\[.*?\])$`,
+				Regex: testRegexTimePattern,
 			},
 		},
 		{
@@ -455,11 +455,11 @@ func TestBuildOperators(t *testing.T) {
 				TransformerConfig: helper.TransformerConfig{
 					WriterConfig: helper.WriterConfig{
 						BasicConfig: helper.BasicConfig{
-							OperatorID:   "time_parser",
-							OperatorType: "time_parser",
+							OperatorID:   testTimeParser,
+							OperatorType: testTimeParser,
 						},
 					},
-					OnError: "send",
+					OnError: testOnErrorSend,
 				},
 				TimeParser: helper.TimeParser{
 					ParseFrom: &entry.Field{
@@ -467,7 +467,7 @@ func TestBuildOperators(t *testing.T) {
 							Keys: []string{"time"},
 						},
 					},
-					Layout:     "[%d/%b/%Y:%H:%M:%S %z]",
+					Layout:     testTimeFmtLayout,
 					LayoutType: "strptime",
 				},
 			},

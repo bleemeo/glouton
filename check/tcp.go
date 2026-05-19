@@ -132,7 +132,7 @@ func checkTCP(ctx context.Context, address string, send []byte, expect []byte, c
 
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusUnknown,
-			StatusDescription: "Checker error. Unable to set Deadline",
+			StatusDescription: statusDeadlineError,
 		}
 	}
 
@@ -193,7 +193,7 @@ func checkTCP(ctx context.Context, address string, send []byte, expect []byte, c
 
 			return types.StatusDescription{
 				CurrentStatus:     types.StatusUnknown,
-				StatusDescription: "Checker error. Unable to set Deadline",
+				StatusDescription: statusDeadlineError,
 			}
 		}
 		// Give a 1 second delay for the server to close the connection

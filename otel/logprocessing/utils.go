@@ -297,7 +297,7 @@ func expandLogFormats(formats map[string][]config.OTELOperator) (map[string][]co
 func shouldUnmarshalYAMLToMapstructure(t reflect.Type) bool {
 	const otelPackagePrefix = "github.com/open-telemetry/opentelemetry-collector-contrib/"
 
-	for t.Kind() == reflect.Ptr || t.Kind() == reflect.Slice || t.Kind() == reflect.Array {
+	for t.Kind() == reflect.Pointer || t.Kind() == reflect.Slice || t.Kind() == reflect.Array {
 		t = t.Elem()
 	}
 

@@ -98,46 +98,46 @@ func TestProcessLogSources(t *testing.T) {
 	knownLogFormats := map[string][]config.OTELOperator{
 		"nginx_both": {
 			{
-				"type": "op",
-				"prop": "value",
+				testFieldType: "op",
+				testProp:      testFieldValue,
 				// and so on
 			},
 		},
-		"apache_access": {
+		testFmtApacheAccess: {
 			{
-				"type": "op",
-				"prop": "value access",
+				testFieldType: "op",
+				testProp:      "value access",
 			},
 		},
-		"apache_error": {
+		testFmtApacheError: {
 			{
-				"type": "op",
-				"prop": "value error",
+				testFieldType: "op",
+				testProp:      "value error",
 			},
 		},
 		"custom_app_fmt": {
 			{
-				"type":  "custom-op",
-				"field": 1,
+				testFieldType: "custom-op",
+				testFieldName: 1,
 			},
 		},
 	}
 	knownLogFilters := map[string]config.OTELFilters{
 		"drop_get": {
-			"exclude": map[string]any{
-				"match_type": "regexp",
-				"bodies": []string{
-					"GET",
+			testFilterExclude: map[string]any{
+				testFilterMatchType: testRegexp,
+				testFilterBodies: []string{
+					testMethodGET,
 				},
 			},
 		},
 		"no_password": {
-			"log_record": []string{
+			testFilterLogRecord: []string{
 				".*password.*",
 			},
 		},
 		"min_level_info": {
-			"include": map[string]any{
+			testFieldInclude: map[string]any{
 				"severity_number": map[string]any{
 					"min": "9",
 				},
@@ -150,11 +150,11 @@ func TestProcessLogSources(t *testing.T) {
 		"Custom-App-2": "min_level_info",
 	}
 
-	svcNginx := svc("nginx", "Nginx-1", "ngx-1", true, time.Now(), discovery.ServiceLogReceiver{Format: "nginx_both", Filter: "drop_get"})
+	svcNginx := svc(testServiceNginx, testContainerNginx1, testContainerIDNgx1, true, time.Now(), discovery.ServiceLogReceiver{Format: "nginx_both", Filter: "drop_get"})
 
-	ctrNgx1 := ctr("ngx-1", "Nginx-1", nil, nil)
+	ctrNgx1 := ctr(testContainerIDNgx1, testContainerNginx1, nil, nil)
 	ctrDisabled := ctr("disabled", "Disabled", map[string]string{"glouton.log_enable": "False"}, nil)
-	ctrApp1 := ctr("app-1", "Custom-App-1", map[string]string{"glouton.log_format": "custom_app_fmt", "glouton.log_filter": "no_password"}, nil)
+	ctrApp1 := ctr(testContainerApp1, "Custom-App-1", map[string]string{"glouton.log_format": "custom_app_fmt", "glouton.log_filter": "no_password"}, nil)
 	ctrApp2 := ctr("app-2", "Custom-App-2", nil, nil)
 
 	executionSteps := []struct {
@@ -177,13 +177,13 @@ func TestProcessLogSources(t *testing.T) {
 			expectedLogSources: []logSource{
 				{
 					container: ctrNgx1,
-					serviceID: &discovery.NameInstance{Name: "nginx", Instance: "Nginx-1"},
+					serviceID: &discovery.NameInstance{Name: testServiceNginx, Instance: testContainerNginx1},
 					operators: append(
 						[]config.OTELOperator{
 							{
-								"field": "resource['service.name']",
-								"type":  "add",
-								"value": "nginx",
+								testFieldName:  testRouteServiceName,
+								testFieldType:  testFieldAdd,
+								testFieldValue: testServiceNginx,
 							},
 						},
 						knownLogFormats["nginx_both"]...,
@@ -192,10 +192,10 @@ func TestProcessLogSources(t *testing.T) {
 				},
 			},
 			expectedWatchedServices: map[discovery.NameInstance]struct{}{
-				{Name: "nginx", Instance: "Nginx-1"}: {},
+				{Name: testServiceNginx, Instance: testContainerNginx1}: {},
 			},
 			expectedWatchedContainers: map[string]struct{}{
-				"ngx-1": {},
+				testContainerIDNgx1: {},
 			},
 		},
 		{
@@ -215,11 +215,11 @@ func TestProcessLogSources(t *testing.T) {
 				},
 			},
 			expectedWatchedServices: map[discovery.NameInstance]struct{}{
-				{Name: "nginx", Instance: "Nginx-1"}: {}, // still present
+				{Name: testServiceNginx, Instance: testContainerNginx1}: {}, // still present
 			},
 			expectedWatchedContainers: map[string]struct{}{
-				"ngx-1": {}, // still present
-				"app-1": {},
+				testContainerIDNgx1: {}, // still present
+				testContainerApp1:   {},
 			},
 		},
 		{
@@ -234,11 +234,11 @@ func TestProcessLogSources(t *testing.T) {
 			},
 			expectedLogSources: nil, // thus nothing
 			expectedWatchedServices: map[discovery.NameInstance]struct{}{
-				{Name: "nginx", Instance: "Nginx-1"}: {}, // still present
+				{Name: testServiceNginx, Instance: testContainerNginx1}: {}, // still present
 			},
 			expectedWatchedContainers: map[string]struct{}{
-				"ngx-1": {}, // still present
-				"app-1": {}, // still present
+				testContainerIDNgx1: {}, // still present
+				testContainerApp1:   {}, // still present
 			},
 		},
 		{
@@ -248,48 +248,48 @@ func TestProcessLogSources(t *testing.T) {
 			},
 			services: []discovery.Service{
 				svc(
-					"apache", "", "", true, time.Now(),
-					discovery.ServiceLogReceiver{FilePath: "/var/log/apache2/access.log", Format: "apache_access"},
-					discovery.ServiceLogReceiver{FilePath: "/var/log/apache2/error.log", Format: "apache_error"},
+					testServiceApacheHTTPD, "", "", true, time.Now(),
+					discovery.ServiceLogReceiver{FilePath: "/var/log/apache2/access.log", Format: testFmtApacheAccess},
+					discovery.ServiceLogReceiver{FilePath: "/var/log/apache2/error.log", Format: testFmtApacheError},
 				),
 			},
 			expectedLogSources: []logSource{
 				{
-					serviceID:   &discovery.NameInstance{Name: "apache", Instance: ""},
+					serviceID:   &discovery.NameInstance{Name: testServiceApacheHTTPD, Instance: ""},
 					logFilePath: "/var/log/apache2/access.log",
 					operators: append(
 						[]config.OTELOperator{
 							{
-								"field": "resource['service.name']",
-								"type":  "add",
-								"value": "apache",
+								testFieldName:  testRouteServiceName,
+								testFieldType:  testFieldAdd,
+								testFieldValue: testServiceApacheHTTPD,
 							},
 						},
-						knownLogFormats["apache_access"]...,
+						knownLogFormats[testFmtApacheAccess]...,
 					),
 				},
 				{
-					serviceID:   &discovery.NameInstance{Name: "apache", Instance: ""},
+					serviceID:   &discovery.NameInstance{Name: testServiceApacheHTTPD, Instance: ""},
 					logFilePath: "/var/log/apache2/error.log",
 					operators: append(
 						[]config.OTELOperator{
 							{
-								"field": "resource['service.name']",
-								"type":  "add",
-								"value": "apache",
+								testFieldName:  testRouteServiceName,
+								testFieldType:  testFieldAdd,
+								testFieldValue: testServiceApacheHTTPD,
 							},
 						},
-						knownLogFormats["apache_error"]...,
+						knownLogFormats[testFmtApacheError]...,
 					),
 				},
 			},
 			expectedWatchedServices: map[discovery.NameInstance]struct{}{
-				{Name: "nginx", Instance: "Nginx-1"}: {}, // would've been removed if removeOldSources() had been run
-				{Name: "apache", Instance: ""}:       {},
+				{Name: testServiceNginx, Instance: testContainerNginx1}: {}, // would've been removed if removeOldSources() had been run
+				{Name: testServiceApacheHTTPD, Instance: ""}:            {},
 			},
 			expectedWatchedContainers: map[string]struct{}{
-				"ngx-1": {}, // would've been removed if removeOldSources() had been run
-				"app-1": {}, // still present
+				testContainerIDNgx1: {}, // would've been removed if removeOldSources() had been run
+				testContainerApp1:   {}, // still present
 			},
 		},
 		{
@@ -306,13 +306,13 @@ func TestProcessLogSources(t *testing.T) {
 				},
 			},
 			expectedWatchedServices: map[discovery.NameInstance]struct{}{
-				{Name: "nginx", Instance: "Nginx-1"}: {}, // would've been removed if removeOldSources() had been run
-				{Name: "apache", Instance: ""}:       {}, // same
+				{Name: testServiceNginx, Instance: testContainerNginx1}: {}, // would've been removed if removeOldSources() had been run
+				{Name: testServiceApacheHTTPD, Instance: ""}:            {}, // same
 			},
 			expectedWatchedContainers: map[string]struct{}{
-				"ngx-1": {}, // would've been removed if removeOldSources() had been run
-				"app-1": {}, // still present
-				"app-2": {},
+				testContainerIDNgx1: {}, // would've been removed if removeOldSources() had been run
+				testContainerApp1:   {}, // still present
+				"app-2":             {},
 			},
 		},
 	}

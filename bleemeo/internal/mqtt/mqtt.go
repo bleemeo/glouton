@@ -57,6 +57,9 @@ const (
 	dataAckBackPressureDelay    = 6*time.Minute + 10*time.Second
 	topinfoAckBackPressureDelay = 6*time.Minute + 10*time.Second
 	logsAckBackPressureDelay    = 1*time.Minute + 10*time.Second
+
+	// messageTypeAck is the MQTT notification message type for acknowledgements.
+	messageTypeAck = "ack"
 )
 
 var ErrNotConnected = errors.New("currently not connected to MQTT")
@@ -890,7 +893,7 @@ func (c *Client) onNotification(ctx context.Context, msg paho.Message) {
 
 			c.opts.HandleDiagnosticRequest(ctx, payload.DiagnosticRequestToken)
 		}()
-	case "ack":
+	case messageTypeAck:
 		ts, err := time.Parse(time.RFC3339, payload.AckTimestamp)
 		if err != nil {
 			logger.V(1).Printf("Failed to parse ACK timestamp: %v", err)

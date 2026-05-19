@@ -83,7 +83,7 @@ func (sc *SMTPCheck) smtpMainCheck(ctx context.Context) types.StatusDescription 
 	if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusCritical,
-			StatusDescription: "Connection timed out after 10 seconds",
+			StatusDescription: statusConnectionTimedOut,
 		}
 	} else if err != nil {
 		return types.StatusDescription{
@@ -98,7 +98,7 @@ func (sc *SMTPCheck) smtpMainCheck(ctx context.Context) types.StatusDescription 
 
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusUnknown,
-			StatusDescription: "Checker error. Unable to set Deadline",
+			StatusDescription: statusDeadlineError,
 		}
 	}
 

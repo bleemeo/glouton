@@ -47,6 +47,32 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+const (
+	testNetworkTCP              = "tcp"
+	testAddr172170005           = "172.17.0.5"
+	testAddr172170002           = "172.17.0.2"
+	testIgnorePort5671          = "glouton.check.ignore.port.5671"
+	testIgnorePort4369          = "glouton.check.ignore.port.4369"
+	testDockerDefaultWithoutK8s = "docker_default_without_k8s"
+	testK8sVersion              = "kubernetes_version"
+	testKubeletVersion          = "kubelet_version"
+	testGloutonEnable           = "glouton.enable"
+	testAnnotationTruE          = "TruE"
+	testAnnotationOff           = "off"
+	testPodRedisMemcached       = "redis-memcached-56dfc4cbfc-2m2cq"
+	testPodDeleteMeOnce         = "delete-me-once-584c74ccf5-hmb77"
+	testAnnotationTest          = "test"
+	testImagePause              = "k8s.gcr.io/pause:3.2"
+	testVersionV1200            = "v1.20.0"
+	testAddr10880008            = "10.88.0.8"
+	testAnnotationPodIP         = "cni.projectcalico.org/podIP"
+	testAnnotationPodIPs        = "cni.projectcalico.org/podIPs"
+	testPodRabbitmqLabels       = "rabbitmq-labels-74cfb594d8-cgbzn"
+	testAddr1024412066          = "10.244.120.66"
+	testAddr1024412066Cidr      = "10.244.120.66/32"
+	testAddr1024400005          = "10.244.0.5"
+)
+
 var errNotImplemented = errors.New("not implemented")
 
 type mockKubernetesClient struct {
@@ -189,40 +215,40 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 					FakePrimaryAddress:  "172.17.0.6",
 					FakeListenAddresses: nil,
 					FakeAnnotations: map[string]string{
-						"glouton.check.ignore.port.5671": "on",
-						"glouton.check.ignore.port.4369": "TruE",
+						testIgnorePort5671: "on",
+						testIgnorePort4369: testAnnotationTruE,
 					},
 					FakePodName:      "rabbitmq-labels-74cfb594d8-zfdmb",
-					FakePodNamespace: "default",
+					FakePodNamespace: defaultNamespace,
 					FakeHealth:       facts.ContainerNoHealthCheck,
 					TestHasPod:       true,
 				},
 				{
 					FakeID:             "35de2017cb16bfd1423d9b9f567f647f687a3fdc0f855fe2535ff81de7adf04f",
 					FakeContainerName:  "k8s_rabbitmq_rabbitmq-container-port-66fdd44ccd-pk7rv_default_6d0e2a22-50ab-492f-a303-d477f3d8e3de_0",
-					FakePrimaryAddress: "172.17.0.2",
+					FakePrimaryAddress: testAddr172170002,
 					FakeListenAddresses: []facts.ListenAddress{
 						{
-							Address:       "172.17.0.2",
-							NetworkFamily: "tcp",
+							Address:       testAddr172170002,
+							NetworkFamily: testNetworkTCP,
 							Port:          5672,
 						},
 					},
 					FakePodName:      "rabbitmq-container-port-66fdd44ccd-pk7rv",
-					FakePodNamespace: "default",
+					FakePodNamespace: defaultNamespace,
 					FakeHealth:       facts.ContainerNoHealthCheck,
 					TestHasPod:       true,
 				},
 				{
 					FakeID:             "343a08aa54b463ed783a7b847902f70c0fca63f5d1f16f10cb4cee97904b4f84",
 					FakeContainerName:  "k8s_a-memcached_redis-memcached-56dfc4cbfc-2m2cq_default_c5bced17-e72c-4668-8329-76fa19cda44e_0",
-					FakePrimaryAddress: "172.17.0.5",
+					FakePrimaryAddress: testAddr172170005,
 					FakeAnnotations: map[string]string{
-						"glouton.enable": "off",
+						testGloutonEnable: testAnnotationOff,
 					},
 					FakeListenAddresses: nil,
-					FakePodName:         "redis-memcached-56dfc4cbfc-2m2cq",
-					FakePodNamespace:    "default",
+					FakePodName:         testPodRedisMemcached,
+					FakePodNamespace:    defaultNamespace,
 					FakeHealth:          facts.ContainerNoHealthCheck,
 					TestIgnored:         true,
 					TestHasPod:          true,
@@ -230,19 +256,19 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 				{
 					FakeID:             "ffb768523fa85dd12cf0e35d11b764c5df747a243532ef29855137a52a849726",
 					FakeContainerName:  "k8s_the-redis_redis-memcached-56dfc4cbfc-2m2cq_default_c5bced17-e72c-4668-8329-76fa19cda44e_0",
-					FakePrimaryAddress: "172.17.0.5",
+					FakePrimaryAddress: testAddr172170005,
 					FakeAnnotations: map[string]string{
-						"glouton.enable": "off",
+						testGloutonEnable: testAnnotationOff,
 					},
 					FakeListenAddresses: []facts.ListenAddress{
 						{
-							Address:       "172.17.0.5",
+							Address:       testAddr172170005,
 							Port:          6363,
-							NetworkFamily: "tcp",
+							NetworkFamily: testNetworkTCP,
 						},
 					},
-					FakePodName:      "redis-memcached-56dfc4cbfc-2m2cq",
-					FakePodNamespace: "default",
+					FakePodName:      testPodRedisMemcached,
+					FakePodNamespace: defaultNamespace,
 					FakeHealth:       facts.ContainerNoHealthCheck,
 					TestIgnored:      true,
 					TestHasPod:       true,
@@ -251,8 +277,8 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 					FakeID:                 "0518c93817b136b9a06b0c65649cde4901dcb0efdd5fac603cdb8a543bd54d04",
 					FakeContainerName:      "k8s_true_delete-me-once-584c74ccf5-hmb77_default_3db6f913-cc23-4e70-9c08-7bdcb73eb8c1_0",
 					FakeStoppedAndReplaced: true,
-					FakePodName:            "delete-me-once-584c74ccf5-hmb77",
-					FakePodNamespace:       "default",
+					FakePodName:            testPodDeleteMeOnce,
+					FakePodNamespace:       defaultNamespace,
 					FakeHealth:             facts.ContainerNoHealthCheck,
 					TestHasPod:             true,
 					TestIgnored:            true,
@@ -261,16 +287,16 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 					FakeID:                 "967b51dffe07684eeaa6dd8c93a572eb1562e9ac5d0ea020498fd4a6df0e59e4",
 					FakeContainerName:      "k8s_true_delete-me-once-584c74ccf5-hmb77_default_3db6f913-cc23-4e70-9c08-7bdcb73eb8c1_1",
 					FakeStoppedAndReplaced: false,
-					FakePodName:            "delete-me-once-584c74ccf5-hmb77",
-					FakePodNamespace:       "default",
+					FakePodName:            testPodDeleteMeOnce,
+					FakePodNamespace:       defaultNamespace,
 					FakeHealth:             facts.ContainerNoHealthCheck,
 					TestHasPod:             true,
 				},
 				{
 					FakeID:            "5caa874de6b37554139e2a05fced71488b823256e0691b968b69679115407cb3",
-					FakeContainerName: "docker_default_without_k8s",
+					FakeContainerName: testDockerDefaultWithoutK8s,
 					FakeLabels: map[string]string{
-						"test": "42",
+						testAnnotationTest: "42",
 					},
 					FakePrimaryAddress:  "172.17.0.8",
 					FakeListenAddresses: nil,
@@ -280,7 +306,7 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 				{
 					FakeID:            "403c412037a8ce9efb91f9ddcc91e522146df3b01aa42a6b928987ecc36e8cf0",
 					FakeContainerName: "k8s_POD_rabbitmq-labels-74cfb594d8-zfdmb_default_173e7224-1fef-485d-bb72-30d45e46a551_0",
-					FakeImageName:     "k8s.gcr.io/pause:3.2",
+					FakeImageName:     testImagePause,
 					FakeHealth:        facts.ContainerNoHealthCheck,
 					TestIgnored:       true,
 					TestHasPod:        true,
@@ -294,8 +320,8 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 				},
 			},
 			wantFacts: map[string]string{
-				"kubernetes_version": "v1.20.0",
-				"kubelet_version":    "v1.20.0",
+				testK8sVersion:     testVersionV1200,
+				testKubeletVersion: testVersionV1200,
 			},
 		},
 		{
@@ -320,40 +346,40 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 					FakePrimaryAddress:  "172.17.0.6",
 					FakeListenAddresses: nil,
 					FakeAnnotations: map[string]string{
-						"glouton.check.ignore.port.5671": "on",
-						"glouton.check.ignore.port.4369": "TruE",
+						testIgnorePort5671: "on",
+						testIgnorePort4369: testAnnotationTruE,
 					},
 					FakePodName:      "rabbitmq-labels-74cfb594d8-zfdmb",
-					FakePodNamespace: "default",
+					FakePodNamespace: defaultNamespace,
 					FakeHealth:       facts.ContainerNoHealthCheck,
 					TestHasPod:       true,
 				},
 				{
 					FakeID:             "35de2017cb16bfd1423d9b9f567f647f687a3fdc0f855fe2535ff81de7adf04f",
 					FakeContainerName:  "k8s_rabbitmq_rabbitmq-container-port-66fdd44ccd-pk7rv_default_6d0e2a22-50ab-492f-a303-d477f3d8e3de_0",
-					FakePrimaryAddress: "172.17.0.2",
+					FakePrimaryAddress: testAddr172170002,
 					FakeListenAddresses: []facts.ListenAddress{
 						{
-							Address:       "172.17.0.2",
-							NetworkFamily: "tcp",
+							Address:       testAddr172170002,
+							NetworkFamily: testNetworkTCP,
 							Port:          5672,
 						},
 					},
 					FakePodName:      "rabbitmq-container-port-66fdd44ccd-pk7rv",
-					FakePodNamespace: "default",
+					FakePodNamespace: defaultNamespace,
 					FakeHealth:       facts.ContainerNoHealthCheck,
 					TestHasPod:       true,
 				},
 				{
 					FakeID:             "343a08aa54b463ed783a7b847902f70c0fca63f5d1f16f10cb4cee97904b4f84",
 					FakeContainerName:  "k8s_a-memcached_redis-memcached-56dfc4cbfc-2m2cq_default_c5bced17-e72c-4668-8329-76fa19cda44e_0",
-					FakePrimaryAddress: "172.17.0.5",
+					FakePrimaryAddress: testAddr172170005,
 					FakeAnnotations: map[string]string{
-						"glouton.enable": "off",
+						testGloutonEnable: testAnnotationOff,
 					},
 					FakeListenAddresses: nil,
-					FakePodName:         "redis-memcached-56dfc4cbfc-2m2cq",
-					FakePodNamespace:    "default",
+					FakePodName:         testPodRedisMemcached,
+					FakePodNamespace:    defaultNamespace,
 					FakeHealth:          facts.ContainerNoHealthCheck,
 					TestIgnored:         true,
 					TestHasPod:          true,
@@ -361,19 +387,19 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 				{
 					FakeID:             "ffb768523fa85dd12cf0e35d11b764c5df747a243532ef29855137a52a849726",
 					FakeContainerName:  "k8s_the-redis_redis-memcached-56dfc4cbfc-2m2cq_default_c5bced17-e72c-4668-8329-76fa19cda44e_0",
-					FakePrimaryAddress: "172.17.0.5",
+					FakePrimaryAddress: testAddr172170005,
 					FakeAnnotations: map[string]string{
-						"glouton.enable": "off",
+						testGloutonEnable: testAnnotationOff,
 					},
 					FakeListenAddresses: []facts.ListenAddress{
 						{
-							Address:       "172.17.0.5",
+							Address:       testAddr172170005,
 							Port:          6363,
-							NetworkFamily: "tcp",
+							NetworkFamily: testNetworkTCP,
 						},
 					},
-					FakePodName:      "redis-memcached-56dfc4cbfc-2m2cq",
-					FakePodNamespace: "default",
+					FakePodName:      testPodRedisMemcached,
+					FakePodNamespace: defaultNamespace,
 					FakeHealth:       facts.ContainerNoHealthCheck,
 					TestIgnored:      true,
 					TestHasPod:       true,
@@ -382,8 +408,8 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 					FakeID:                 "0518c93817b136b9a06b0c65649cde4901dcb0efdd5fac603cdb8a543bd54d04",
 					FakeContainerName:      "k8s_true_delete-me-once-584c74ccf5-hmb77_default_3db6f913-cc23-4e70-9c08-7bdcb73eb8c1_0",
 					FakeStoppedAndReplaced: true,
-					FakePodName:            "delete-me-once-584c74ccf5-hmb77",
-					FakePodNamespace:       "default",
+					FakePodName:            testPodDeleteMeOnce,
+					FakePodNamespace:       defaultNamespace,
 					FakeHealth:             facts.ContainerNoHealthCheck,
 					TestHasPod:             true,
 					TestIgnored:            true,
@@ -392,14 +418,14 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 					FakeID:                 "967b51dffe07684eeaa6dd8c93a572eb1562e9ac5d0ea020498fd4a6df0e59e4",
 					FakeContainerName:      "k8s_true_delete-me-once-584c74ccf5-hmb77_default_3db6f913-cc23-4e70-9c08-7bdcb73eb8c1_1",
 					FakeStoppedAndReplaced: false,
-					FakePodName:            "delete-me-once-584c74ccf5-hmb77",
-					FakePodNamespace:       "default",
+					FakePodName:            testPodDeleteMeOnce,
+					FakePodNamespace:       defaultNamespace,
 					FakeHealth:             facts.ContainerNoHealthCheck,
 					TestHasPod:             true,
 				},
 				{
 					FakeID:              "5caa874de6b37554139e2a05fced71488b823256e0691b968b69679115407cb3",
-					FakeContainerName:   "docker_default_without_k8s",
+					FakeContainerName:   testDockerDefaultWithoutK8s,
 					FakePrimaryAddress:  "172.17.0.8",
 					FakeListenAddresses: nil,
 					FakeHealth:          facts.ContainerNoHealthCheck,
@@ -408,7 +434,7 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 				{
 					FakeID:            "403c412037a8ce9efb91f9ddcc91e522146df3b01aa42a6b928987ecc36e8cf0",
 					FakeContainerName: "k8s_POD_rabbitmq-labels-74cfb594d8-zfdmb_default_173e7224-1fef-485d-bb72-30d45e46a551_0",
-					FakeImageName:     "k8s.gcr.io/pause:3.2",
+					FakeImageName:     testImagePause,
 					FakeHealth:        facts.ContainerNoHealthCheck,
 					TestIgnored:       false, // Exclusion of POD container require labels on Docker
 					TestHasPod:        false, // without labels, we don't known this a POD
@@ -422,8 +448,8 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 				},
 			},
 			wantFacts: map[string]string{
-				"kubernetes_version": "v1.20.0",
-				"kubelet_version":    "v1.20.0",
+				testK8sVersion:     testVersionV1200,
+				testKubeletVersion: testVersionV1200,
 			},
 		},
 		{
@@ -444,11 +470,11 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 					FakePrimaryAddress:  "10.88.0.6",
 					FakeListenAddresses: nil,
 					FakeAnnotations: map[string]string{
-						"glouton.check.ignore.port.5671": "on",
-						"glouton.check.ignore.port.4369": "TruE",
+						testIgnorePort5671: "on",
+						testIgnorePort4369: testAnnotationTruE,
 					},
 					FakePodName:      "rabbitmq-labels-7fbb75dcd7-h6t28",
-					FakePodNamespace: "default",
+					FakePodNamespace: defaultNamespace,
 					FakeHealth:       facts.ContainerNoHealthCheck,
 					TestHasPod:       true,
 				},
@@ -459,25 +485,25 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 					FakeListenAddresses: []facts.ListenAddress{
 						{
 							Address:       "10.88.0.4",
-							NetworkFamily: "tcp",
+							NetworkFamily: testNetworkTCP,
 							Port:          5672,
 						},
 					},
 					FakePodName:      "rabbitmq-container-port-68c84fdd9-w5cdk",
-					FakePodNamespace: "default",
+					FakePodNamespace: defaultNamespace,
 					FakeHealth:       facts.ContainerNoHealthCheck,
 					TestHasPod:       true,
 				},
 				{
 					FakeID:             "d4a8b68f5f47a7388598e924981ac88d1489abbc8e4175bf4a5fd0f8ce02718a",
 					FakeContainerName:  "k8s_a-memcached_redis-memcached-78f799c9c8-2gzks_default_f62b1b74-686e-43ae-9cf6-342b5bdbbda6_0",
-					FakePrimaryAddress: "10.88.0.8",
+					FakePrimaryAddress: testAddr10880008,
 					FakeAnnotations: map[string]string{
-						"glouton.enable": "off",
+						testGloutonEnable: testAnnotationOff,
 					},
 					FakeListenAddresses: nil,
 					FakePodName:         "redis-memcached-78f799c9c8-2gzks",
-					FakePodNamespace:    "default",
+					FakePodNamespace:    defaultNamespace,
 					FakeHealth:          facts.ContainerNoHealthCheck,
 					TestIgnored:         true,
 					TestHasPod:          true,
@@ -485,19 +511,19 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 				{
 					FakeID:             "d04d3b4d7eec381acd22ec697a066b8be0525089e6ebdf2b15529aa1f796e910",
 					FakeContainerName:  "k8s_the-redis_redis-memcached-78f799c9c8-2gzks_default_f62b1b74-686e-43ae-9cf6-342b5bdbbda6_0",
-					FakePrimaryAddress: "10.88.0.8",
+					FakePrimaryAddress: testAddr10880008,
 					FakeAnnotations: map[string]string{
-						"glouton.enable": "off",
+						testGloutonEnable: testAnnotationOff,
 					},
 					FakeListenAddresses: []facts.ListenAddress{
 						{
-							Address:       "10.88.0.8",
+							Address:       testAddr10880008,
 							Port:          6363,
-							NetworkFamily: "tcp",
+							NetworkFamily: testNetworkTCP,
 						},
 					},
 					FakePodName:      "redis-memcached-78f799c9c8-2gzks",
-					FakePodNamespace: "default",
+					FakePodNamespace: defaultNamespace,
 					FakeHealth:       facts.ContainerNoHealthCheck,
 					TestIgnored:      true,
 					TestHasPod:       true,
@@ -507,7 +533,7 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 					FakeContainerName:      "k8s_true_delete-me-once-69c996b98d-rp9fl_default_f2d62dbb-708e-41b1-8ccc-7ed7ebed0326_0",
 					FakeStoppedAndReplaced: true,
 					FakePodName:            "delete-me-once-69c996b98d-rp9fl",
-					FakePodNamespace:       "default",
+					FakePodNamespace:       defaultNamespace,
 					FakeHealth:             facts.ContainerNoHealthCheck,
 					TestHasPod:             true,
 					TestIgnored:            true,
@@ -517,17 +543,17 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 					FakeContainerName:      "k8s_true_delete-me-once-69c996b98d-rp9fl_default_f2d62dbb-708e-41b1-8ccc-7ed7ebed0326_1",
 					FakeStoppedAndReplaced: false,
 					FakePodName:            "delete-me-once-69c996b98d-rp9fl",
-					FakePodNamespace:       "default",
+					FakePodNamespace:       defaultNamespace,
 					FakeHealth:             facts.ContainerNoHealthCheck,
 					TestHasPod:             true,
 				},
 				{
 					FakeID:            "57383e9932591a13a201645eecd736e8308082eec945c8c774afc8b2b22872af",
-					FakeContainerName: "docker_default_without_k8s",
+					FakeContainerName: testDockerDefaultWithoutK8s,
 					FakeLabels: map[string]string{
-						"test": "42",
+						testAnnotationTest: "42",
 					},
-					FakePrimaryAddress:  "172.17.0.2",
+					FakePrimaryAddress:  testAddr172170002,
 					FakeListenAddresses: nil,
 					FakeHealth:          facts.ContainerNoHealthCheck,
 					TestHasPod:          false,
@@ -548,8 +574,8 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 				},
 			},
 			wantFacts: map[string]string{
-				"kubernetes_version": "v1.18.0",
-				"kubelet_version":    "v1.18.0",
+				testK8sVersion:     "v1.18.0",
+				testKubeletVersion: "v1.18.0",
 			},
 		},
 		{
@@ -569,13 +595,13 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 					FakeContainerName:  "k8s_rabbitmq_rabbitmq-labels-74cfb594d8-cgbzn_default",
 					FakePrimaryAddress: "10.244.120.67",
 					FakeAnnotations: map[string]string{
-						"cni.projectcalico.org/podIP":    "10.244.120.67/32",
-						"cni.projectcalico.org/podIPs":   "10.244.120.67/32",
-						"glouton.check.ignore.port.5671": "on",
-						"glouton.check.ignore.port.4369": "TruE",
+						testAnnotationPodIP:  "10.244.120.67/32",
+						testAnnotationPodIPs: "10.244.120.67/32",
+						testIgnorePort5671:   "on",
+						testIgnorePort4369:   "TruE",
 					},
-					FakePodName:      "rabbitmq-labels-74cfb594d8-cgbzn",
-					FakePodNamespace: "default",
+					FakePodName:      testPodRabbitmqLabels,
+					FakePodNamespace: defaultNamespace,
 					FakeHealth:       facts.ContainerNoHealthCheck,
 					TestHasPod:       true,
 				},
@@ -586,26 +612,26 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 					FakeListenAddresses: []facts.ListenAddress{
 						{
 							Address:       "10.244.120.69",
-							NetworkFamily: "tcp",
+							NetworkFamily: testNetworkTCP,
 							Port:          5672,
 						},
 					},
 					FakePodName:      "rabbitmq-container-port-66fdd44ccd-7hsqr",
-					FakePodNamespace: "default",
+					FakePodNamespace: defaultNamespace,
 					FakeHealth:       facts.ContainerNoHealthCheck,
 					TestHasPod:       true,
 				},
 				{
 					FakeID:             "k8s.io/c901b6d5396a9a6eaf5699bfef5543f0279aa4e0e9548910013d9da6c04ec6b3",
 					FakeContainerName:  "k8s_a-memcached_redis-memcached-56dfc4cbfc-5qnh2_default",
-					FakePrimaryAddress: "10.244.120.66",
+					FakePrimaryAddress: testAddr1024412066,
 					FakeAnnotations: map[string]string{
-						"cni.projectcalico.org/podIP":  "10.244.120.66/32",
-						"cni.projectcalico.org/podIPs": "10.244.120.66/32",
-						"glouton.enable":               "off",
+						testAnnotationPodIP:  testAddr1024412066Cidr,
+						testAnnotationPodIPs: testAddr1024412066Cidr,
+						testGloutonEnable:    "off",
 					},
 					FakePodName:      "redis-memcached-56dfc4cbfc-5qnh2",
-					FakePodNamespace: "default",
+					FakePodNamespace: defaultNamespace,
 					FakeHealth:       facts.ContainerNoHealthCheck,
 					TestIgnored:      true,
 					TestHasPod:       true,
@@ -613,21 +639,21 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 				{
 					FakeID:             "k8s.io/d053d875c398a5c0bb1fe5bb7505c997c1b332c473f36096a2f4979a8a1dffc7",
 					FakeContainerName:  "k8s_the-redis_redis-memcached-56dfc4cbfc-5qnh2_default",
-					FakePrimaryAddress: "10.244.120.66",
+					FakePrimaryAddress: testAddr1024412066,
 					FakeAnnotations: map[string]string{
-						"cni.projectcalico.org/podIP":  "10.244.120.66/32",
-						"cni.projectcalico.org/podIPs": "10.244.120.66/32",
-						"glouton.enable":               "off",
+						testAnnotationPodIP:  testAddr1024412066Cidr,
+						testAnnotationPodIPs: testAddr1024412066Cidr,
+						testGloutonEnable:    "off",
 					},
 					FakeListenAddresses: []facts.ListenAddress{
 						{
-							Address:       "10.244.120.66",
+							Address:       testAddr1024412066,
 							Port:          6363,
-							NetworkFamily: "tcp",
+							NetworkFamily: testNetworkTCP,
 						},
 					},
 					FakePodName:      "redis-memcached-56dfc4cbfc-5qnh2",
-					FakePodNamespace: "default",
+					FakePodNamespace: defaultNamespace,
 					FakeHealth:       facts.ContainerNoHealthCheck,
 					TestIgnored:      true,
 					TestHasPod:       true,
@@ -637,15 +663,15 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 					FakeContainerName:      "k8s_true_delete-me-once-584c74ccf5-4278c_default",
 					FakeStoppedAndReplaced: false,
 					FakePodName:            "delete-me-once-584c74ccf5-4278c",
-					FakePodNamespace:       "default",
+					FakePodNamespace:       defaultNamespace,
 					FakeHealth:             facts.ContainerNoHealthCheck,
 					TestHasPod:             true,
 				},
 				{
 					FakeID:            "default/docker_default_without_k8s",
-					FakeContainerName: "docker_default_without_k8s",
+					FakeContainerName: testDockerDefaultWithoutK8s,
 					FakeLabels: map[string]string{
-						"test":                                   "42",
+						testAnnotationTest:                       "42",
 						"io.containerd.image.config.stop-signal": "SIGTERM",
 					},
 					FakePrimaryAddress: "",
@@ -657,7 +683,7 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 				{
 					FakeID:            "k8s.io/fae6537013bc47cace5de8883c72a57e4c0a02f33680e9ed0f714c62b8c27b31",
 					FakeContainerName: "k8s_POD_rabbitmq-labels-74cfb594d8-cgbzn_default",
-					FakeImageName:     "k8s.gcr.io/pause:3.2",
+					FakeImageName:     testImagePause,
 					FakeHealth:        facts.ContainerNoHealthCheck,
 					TestIgnored:       true,
 					TestHasPod:        true,
@@ -671,8 +697,8 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 				},
 			},
 			wantFacts: map[string]string{
-				"kubernetes_version": "v1.19.0",
-				"kubelet_version":    "v1.19.0",
+				testK8sVersion:     "v1.19.0",
+				testKubeletVersion: "v1.19.0",
 			},
 		},
 		{
@@ -692,11 +718,11 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 					FakeContainerName:  "k8s_rabbitmq_rabbitmq-labels-dd85c8cf9-lcfdt_default",
 					FakePrimaryAddress: "10.244.0.3",
 					FakeAnnotations: map[string]string{
-						"glouton.check.ignore.port.5671": "on",
-						"glouton.check.ignore.port.4369": "TruE",
+						testIgnorePort5671: "on",
+						testIgnorePort4369: testAnnotationTruE,
 					},
 					FakePodName:      "rabbitmq-labels-dd85c8cf9-lcfdt",
-					FakePodNamespace: "default",
+					FakePodNamespace: defaultNamespace,
 					FakeHealth:       facts.ContainerNoHealthCheck,
 					TestHasPod:       true,
 				},
@@ -707,24 +733,24 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 					FakeListenAddresses: []facts.ListenAddress{
 						{
 							Address:       "10.244.0.4",
-							NetworkFamily: "tcp",
+							NetworkFamily: testNetworkTCP,
 							Port:          5672,
 						},
 					},
 					FakePodName:      "rabbitmq-container-port-5787c86cff-w6tln",
-					FakePodNamespace: "default",
+					FakePodNamespace: defaultNamespace,
 					FakeHealth:       facts.ContainerNoHealthCheck,
 					TestHasPod:       true,
 				},
 				{
 					FakeID:             "k8s.io/41a41b52ad10fc6fb0acbc6e5cfce28fdf47bd466cb84d0118add1871dedb42c",
 					FakeContainerName:  "k8s_a-memcached_redis-memcached-78d6bb89c6-9v2hn_default",
-					FakePrimaryAddress: "10.244.0.5",
+					FakePrimaryAddress: testAddr1024400005,
 					FakeAnnotations: map[string]string{
-						"glouton.enable": "off",
+						testGloutonEnable: testAnnotationOff,
 					},
 					FakePodName:      "redis-memcached-78d6bb89c6-9v2hn",
-					FakePodNamespace: "default",
+					FakePodNamespace: defaultNamespace,
 					FakeHealth:       facts.ContainerNoHealthCheck,
 					TestIgnored:      true,
 					TestHasPod:       true,
@@ -732,19 +758,19 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 				{
 					FakeID:             "k8s.io/43c62a41b6394cc7df2f53312756670fcbb71f4de9fa07aa3935a63898e016c5",
 					FakeContainerName:  "k8s_the-redis_redis-memcached-78d6bb89c6-9v2hn_default",
-					FakePrimaryAddress: "10.244.0.5",
+					FakePrimaryAddress: testAddr1024400005,
 					FakeAnnotations: map[string]string{
-						"glouton.enable": "off",
+						testGloutonEnable: testAnnotationOff,
 					},
 					FakeListenAddresses: []facts.ListenAddress{
 						{
-							Address:       "10.244.0.5",
+							Address:       testAddr1024400005,
 							Port:          6363,
-							NetworkFamily: "tcp",
+							NetworkFamily: testNetworkTCP,
 						},
 					},
 					FakePodName:      "redis-memcached-78d6bb89c6-9v2hn",
-					FakePodNamespace: "default",
+					FakePodNamespace: defaultNamespace,
 					FakeHealth:       facts.ContainerNoHealthCheck,
 					TestIgnored:      true,
 					TestHasPod:       true,
@@ -754,15 +780,15 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 					FakeContainerName:      "k8s_true_delete-me-once-7756f7d5fb-xb2jb_default",
 					FakeStoppedAndReplaced: false,
 					FakePodName:            "delete-me-once-7756f7d5fb-xb2jb",
-					FakePodNamespace:       "default",
+					FakePodNamespace:       defaultNamespace,
 					FakeHealth:             facts.ContainerNoHealthCheck,
 					TestHasPod:             true,
 				},
 				{
 					FakeID:            "default/docker_default_without_k8s",
-					FakeContainerName: "docker_default_without_k8s",
+					FakeContainerName: testDockerDefaultWithoutK8s,
 					FakeLabels: map[string]string{
-						"test":                                   "42",
+						testAnnotationTest:                       "42",
 						"io.containerd.image.config.stop-signal": "SIGTERM",
 					},
 					FakePrimaryAddress: "",
@@ -788,8 +814,8 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 				},
 			},
 			wantFacts: map[string]string{
-				"kubernetes_version": "v1.26.1",
-				"kubelet_version":    "v1.26.1",
+				testK8sVersion:     "v1.26.1",
+				testKubeletVersion: "v1.26.1",
 			},
 		},
 	}
@@ -905,8 +931,8 @@ func TestContainerLogPath(t *testing.T) {
 		Container: facts.FakeContainer{
 			FakeID:            "k8s.io/e00f87ac94cffd0bf7e79c2605e97ed2df3ad3bc65b3abfafbc7df57a218f6d9",
 			FakeContainerName: "k8s_rabbitmq_rabbitmq-labels-74cfb594d8-cgbzn_default",
-			FakePodName:       "rabbitmq-labels-74cfb594d8-cgbzn",
-			FakePodNamespace:  "default",
+			FakePodName:       testPodRabbitmqLabels,
+			FakePodNamespace:  defaultNamespace,
 		},
 	}
 
@@ -914,8 +940,8 @@ func TestContainerLogPath(t *testing.T) {
 		Container: facts.FakeContainer{
 			FakeID:            "e00f87ac94cffd0bf7e79c2605e97ed2df3ad3bc65b3abfafbc7df57a218f6d9",
 			FakeContainerName: "k8s_rabbitmq_rabbitmq-labels-74cfb594d8-cgbzn_default_173e7224-1fef-485d-bb72-30d45e46a551_0",
-			FakePodName:       "rabbitmq-labels-74cfb594d8-cgbzn",
-			FakePodNamespace:  "default",
+			FakePodName:       testPodRabbitmqLabels,
+			FakePodNamespace:  defaultNamespace,
 		},
 	}
 

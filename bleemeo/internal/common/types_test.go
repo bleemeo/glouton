@@ -28,28 +28,36 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
+const (
+	testMetricIOReads     = "io_reads"
+	testServiceSrv        = "srv"
+	testServiceOtherSrv   = "other-srv"
+	testServiceService    = "service"
+	testServiceCreateTime = "create_time_second"
+)
+
 func TestMetricLookupFromList(t *testing.T) {
 	input := []bleemeoTypes.Metric{
 		{
-			LabelsText: types.LabelsToText(map[string]string{types.LabelName: "io_reads", "item": "sda"}),
+			LabelsText: types.LabelsToText(map[string]string{types.LabelName: testMetricIOReads, types.LabelItem: "sda"}),
 			ID:         "index-0",
 		},
 		{
-			LabelsText:    types.LabelsToText(map[string]string{types.LabelName: "io_reads", "item": "sda"}),
+			LabelsText:    types.LabelsToText(map[string]string{types.LabelName: testMetricIOReads, types.LabelItem: "sda"}),
 			ID:            "index-1",
 			DeactivatedAt: time.Now(),
 		},
 		{
-			LabelsText:    types.LabelsToText(map[string]string{types.LabelName: "io_reads", "item": "sdb"}),
+			LabelsText:    types.LabelsToText(map[string]string{types.LabelName: testMetricIOReads, types.LabelItem: "sdb"}),
 			ID:            "index-2",
 			DeactivatedAt: time.Now(),
 		},
 		{
-			LabelsText: types.LabelsToText(map[string]string{types.LabelName: "io_reads", "item": "sdb"}),
+			LabelsText: types.LabelsToText(map[string]string{types.LabelName: testMetricIOReads, types.LabelItem: "sdb"}),
 			ID:         "index-3",
 		},
 		{
-			LabelsText: types.LabelsToText(map[string]string{types.LabelName: "cpu_user", "item": ""}),
+			LabelsText: types.LabelsToText(map[string]string{types.LabelName: "cpu_user", types.LabelItem: ""}),
 			ID:         "index-4",
 		},
 		{
@@ -75,63 +83,63 @@ func TestServiceLookupFromList(t *testing.T) {
 	input := []bleemeoTypes.Service{
 		{
 			ID:           "id-1",
-			Label:        "srv",
+			Label:        testServiceSrv,
 			Instance:     "S1",
 			Active:       true,
 			CreationDate: "2023-08-28T13:21:15.539941Z",
 		},
 		{
 			ID:           "id-2",
-			Label:        "srv",
+			Label:        testServiceSrv,
 			Instance:     "S2",
 			Active:       true,
 			CreationDate: "2023-08-28T14:12:45.647132Z",
 		},
 		{
 			ID:           "id-3",
-			Label:        "srv",
+			Label:        testServiceSrv,
 			Instance:     "S2",
 			Active:       false,
 			CreationDate: "2023-08-28T13:58:02.332047Z",
 		},
 		{
 			ID:           "id-4",
-			Label:        "other-srv",
+			Label:        testServiceOtherSrv,
 			Instance:     "S",
 			Active:       false,
 			CreationDate: "2023-08-27T15:21:27.104098Z",
 		},
 		{
 			ID:           "id-5",
-			Label:        "other-srv",
+			Label:        testServiceOtherSrv,
 			Instance:     "S",
 			Active:       true,
 			CreationDate: "2023-08-28T17:25:36.745169Z",
 		},
 		{
 			ID:           "id-6",
-			Label:        "other-srv",
+			Label:        testServiceOtherSrv,
 			Instance:     "S",
 			Active:       true,
 			CreationDate: "2023-08-28T09:15:28.134825Z",
 		},
 		{
 			ID:           "id-7",
-			Label:        "service",
+			Label:        testServiceService,
 			Instance:     "S",
 			Active:       false,
 			CreationDate: "2023-08-29T13:21:15.539941Z",
 		},
 		{
 			ID:           "id-8",
-			Label:        "create_time_second",
+			Label:        testServiceCreateTime,
 			Instance:     "",
 			Active:       false,
 			CreationDate: "2023-08-28T09:15:28Z",
 		},
 		{
 			ID:           "id-9",
-			Label:        "create_time_second",
+			Label:        testServiceCreateTime,
 			Instance:     "",
 			Active:       false,
 			CreationDate: "2023-08-29T13:21:15Z",
@@ -139,11 +147,11 @@ func TestServiceLookupFromList(t *testing.T) {
 	}
 
 	want := map[ServiceNameInstance]bleemeoTypes.Service{
-		{"srv", "S1"}:              {ID: "id-1", Label: "srv", Instance: "S1", Active: true},
-		{"srv", "S2"}:              {ID: "id-2", Label: "srv", Instance: "S2", Active: true},
-		{"other-srv", "S"}:         {ID: "id-5", Label: "other-srv", Instance: "S", Active: true},
-		{"service", "S"}:           {ID: "id-7", Label: "service", Instance: "S", Active: false},
-		{"create_time_second", ""}: {ID: "id-9", Label: "create_time_second", Instance: "", Active: false},
+		{testServiceSrv, "S1"}:      {ID: "id-1", Label: testServiceSrv, Instance: "S1", Active: true},
+		{testServiceSrv, "S2"}:      {ID: "id-2", Label: testServiceSrv, Instance: "S2", Active: true},
+		{testServiceOtherSrv, "S"}:  {ID: "id-5", Label: testServiceOtherSrv, Instance: "S", Active: true},
+		{testServiceService, "S"}:   {ID: "id-7", Label: testServiceService, Instance: "S", Active: false},
+		{testServiceCreateTime, ""}: {ID: "id-9", Label: testServiceCreateTime, Instance: "", Active: false},
 	}
 	got := ServiceLookupFromList(input)
 

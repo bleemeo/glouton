@@ -74,7 +74,7 @@ func Test_jmxtransConfig_CurrentConfig(t *testing.T) {
 func Test_jmxtransConfig_cassandra_Config(t *testing.T) {
 	services := []discovery.Service{
 		{
-			Name:        "cassandra",
+			Name:        testServiceCassandra,
 			Instance:    "",
 			ServiceType: discovery.CassandraService,
 			Active:      true,
@@ -85,8 +85,8 @@ func Test_jmxtransConfig_cassandra_Config(t *testing.T) {
 			IPAddress: "127.0.0.1",
 		},
 		{
-			Name:        "cassandra",
-			Instance:    "squirreldb-cassandra",
+			Name:        testServiceCassandra,
+			Instance:    testInstanceSqCassandra,
 			ServiceType: discovery.CassandraService,
 			Active:      true,
 			Config: config.Service{
@@ -94,7 +94,7 @@ func Test_jmxtransConfig_cassandra_Config(t *testing.T) {
 			},
 			IPAddress:     "10.1.2.3",
 			ContainerID:   "abc",
-			ContainerName: "squirreldb-cassandra",
+			ContainerName: testInstanceSqCassandra,
 		},
 	}
 
@@ -106,8 +106,8 @@ func Test_jmxtransConfig_cassandra_Config(t *testing.T) {
 		t.Errorf("cfg.CurrentConfig() = %#v, want non-empty", string(content))
 	}
 
-	cassandraSHA256 := hash("cassandra")
-	cassandraContainerSHA256 := hash("cassandrasquirreldb-cassandra")
+	cassandraSHA256 := hash(testServiceCassandra)
+	cassandraContainerSHA256 := hash(testServiceCassandra + testInstanceSqCassandra)
 	memoryMBean := hash("java.lang:type=Memory")
 	detailMBean := hash("org.apache.cassandra.metrics:type=Table,keyspace=squirreldb,scope=data,name=WriteLatency")
 

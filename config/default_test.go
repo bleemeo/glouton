@@ -166,7 +166,7 @@ func TestDefaultNetworkIgnore(t *testing.T) {
 		"eno50.514",
 		"enp101s0f1np1",
 		"enp130s0f1.888",
-		"eth0",
+		testEth0,
 		"tap0",
 		"tun0",
 		"vlan10",
@@ -221,7 +221,7 @@ func TestDFFSTypeMatcher(t *testing.T) {
 			IgnoreFSType: []string{
 				// Should be considered as a string, so it shouldn't match "fuse-ext4".
 				"fuse.ext4",
-				"devtmpfs",
+				fsDevtmpfs,
 			},
 		},
 	}
@@ -232,7 +232,7 @@ func TestDFFSTypeMatcher(t *testing.T) {
 	}
 
 	allowedType := []string{"ext4", "fuse-ext4"}
-	deniedType := []string{"fuse.ext4", "devtmpfs"}
+	deniedType := []string{"fuse.ext4", fsDevtmpfs}
 
 	testMatcher(t, fsTypeMatcher, allowedType, deniedType)
 }
@@ -261,7 +261,7 @@ func TestDefaultDFFSTypeIgnore(t *testing.T) {
 		"debugfs",
 		"devfs",
 		"devpts",
-		"devtmpfs",
+		fsDevtmpfs,
 		"fdescfs",
 		"fusectl",
 		"hugetlbfs",

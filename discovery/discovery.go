@@ -204,7 +204,7 @@ func validateServices(services []config.Service, logProcessingCfg config.OpenTel
 
 		// StatsProtocol must be "http" or "tcp".
 		switch srv.StatsProtocol {
-		case "", "http", "tcp":
+		case "", customCheckHTTP, customCheckTCP:
 		default:
 			warning := fmt.Errorf(
 				"%w: service '%s' has an unsupported stats protocol: '%s'",
@@ -814,7 +814,7 @@ func applyOverrideInPlace(
 
 			if address != "" && port != 0 {
 				listenAddress := facts.ListenAddress{
-					NetworkFamily: "tcp",
+					NetworkFamily: tcpProtocol,
 					Address:       address,
 					Port:          port,
 				}

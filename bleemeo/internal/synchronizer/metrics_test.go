@@ -72,7 +72,7 @@ func TestPrioritizeAndFilterMetrics(t *testing.T) {
 		Name         string
 		HighPriority bool
 	}{
-		{"cpu_used", true},
+		{metricCPUUsed, true},
 		{"service_status", false},
 		{"io_utilization", true},
 		{"nginx_requests", false},
@@ -558,7 +558,7 @@ func TestMetricSimpleSync(t *testing.T) {
 	helper.AddTime(5 * time.Minute)
 	helper.pushPoints(t, []labels.Labels{
 		labels.New(
-			labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_system"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: metricCPUSystem},
 			labels.Label{Name: gloutonTypes.LabelInstanceUUID, Value: idAgentMain},
 		),
 	})
@@ -586,7 +586,7 @@ func TestMetricSimpleSync(t *testing.T) {
 				AgentID:    idAgentMain,
 				LabelsText: "",
 			},
-			Name: "cpu_system",
+			Name: metricCPUSystem,
 		},
 	}
 
@@ -649,7 +649,7 @@ func TestMetricSimpleSync(t *testing.T) {
 	// re-activate one metric + register one
 	helper.pushPoints(t, []labels.Labels{
 		labels.New(
-			labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_system"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: metricCPUSystem},
 			labels.Label{Name: gloutonTypes.LabelInstanceUUID, Value: idAgentMain},
 		),
 		labels.New(
@@ -673,7 +673,7 @@ func TestMetricSimpleSync(t *testing.T) {
 	}
 
 	for _, m := range metrics {
-		if m.Name == agentStatusName || m.Name == "cpu_system" || m.Name == "disk_used" {
+		if m.Name == agentStatusName || m.Name == metricCPUSystem || m.Name == "disk_used" {
 			if !m.DeactivatedAt.IsZero() {
 				t.Errorf("%v should be active", m)
 			}
@@ -1451,7 +1451,7 @@ func TestWithSNMP(t *testing.T) {
 
 	helper.pushPoints(t, []labels.Labels{
 		labels.New(
-			labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_system"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: metricCPUSystem},
 		),
 		labels.New(
 			labels.Label{Name: gloutonTypes.LabelName, Value: "ifOutOctets"},
@@ -1518,7 +1518,7 @@ func TestWithSNMP(t *testing.T) {
 				AgentID:    idAgentMain,
 				LabelsText: "",
 			},
-			Name: "cpu_system",
+			Name: metricCPUSystem,
 		},
 		{
 			Metric: bleemeoTypes.Metric{
@@ -1591,14 +1591,14 @@ func TestMonitorDeactivation(t *testing.T) {
 	pushedPoints := []labels.Labels{
 		labels.New(
 			labels.Label{Name: gloutonTypes.LabelName, Value: "probe_success"},
-			labels.Label{Name: gloutonTypes.LabelScraper, Value: "paris"},
+			labels.Label{Name: gloutonTypes.LabelScraper, Value: testBlackboxScraperName},
 			labels.Label{Name: gloutonTypes.LabelInstance, Value: "http://localhost:8000/"},
 			labels.Label{Name: gloutonTypes.LabelInstanceUUID, Value: newMonitor.AgentID},
 			labels.Label{Name: gloutonTypes.LabelMetaBleemeoTargetAgentUUID, Value: newMonitor.AgentID},
 		),
 		labels.New(
 			labels.Label{Name: gloutonTypes.LabelName, Value: "probe_duration"},
-			labels.Label{Name: gloutonTypes.LabelScraper, Value: "paris"},
+			labels.Label{Name: gloutonTypes.LabelScraper, Value: testBlackboxScraperName},
 			labels.Label{Name: gloutonTypes.LabelInstance, Value: "http://localhost:8000/"},
 			labels.Label{Name: gloutonTypes.LabelInstanceUUID, Value: newMonitor.AgentID},
 			labels.Label{Name: gloutonTypes.LabelMetaBleemeoTargetAgentUUID, Value: newMonitor.AgentID},
@@ -2192,7 +2192,7 @@ func TestKubernetesMetrics(t *testing.T) {
 			labels.Label{Name: gloutonTypes.LabelName, Value: "kubernetes_kubelet_status"},
 		),
 		labels.New(
-			labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_used"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: metricCPUUsed},
 		),
 		// Note: we have both meta-label & normal label because we need to simulare Registry.applyRelabel()
 		// (we need both annotation & getDefaultRelabelConfig())
@@ -2200,7 +2200,7 @@ func TestKubernetesMetrics(t *testing.T) {
 			labels.Label{Name: gloutonTypes.LabelName, Value: "kubernetes_cpu_limits"},
 			labels.Label{Name: gloutonTypes.LabelOwnerKind, Value: "daemonset"},
 			labels.Label{Name: gloutonTypes.LabelOwnerName, Value: "glouton"},
-			labels.Label{Name: gloutonTypes.LabelNamespace, Value: "default"},
+			labels.Label{Name: gloutonTypes.LabelNamespace, Value: testDefaultGroup},
 			labels.Label{Name: gloutonTypes.LabelMetaKubernetesCluster, Value: testK8SClusterName},
 			labels.Label{Name: gloutonTypes.LabelMetaBleemeoTargetAgent, Value: testK8SClusterName},
 			labels.Label{Name: gloutonTypes.LabelMetaBleemeoTargetAgentUUID, Value: testK8SAgent.ID},
@@ -2211,7 +2211,7 @@ func TestKubernetesMetrics(t *testing.T) {
 			labels.Label{Name: gloutonTypes.LabelName, Value: "kubernetes_cpu_requests"},
 			labels.Label{Name: gloutonTypes.LabelOwnerKind, Value: "daemonset"},
 			labels.Label{Name: gloutonTypes.LabelOwnerName, Value: "glouton"},
-			labels.Label{Name: gloutonTypes.LabelNamespace, Value: "default"},
+			labels.Label{Name: gloutonTypes.LabelNamespace, Value: testDefaultGroup},
 			labels.Label{Name: gloutonTypes.LabelMetaKubernetesCluster, Value: testK8SClusterName},
 			labels.Label{Name: gloutonTypes.LabelMetaBleemeoTargetAgent, Value: testK8SClusterName},
 			labels.Label{Name: gloutonTypes.LabelMetaBleemeoTargetAgentUUID, Value: testK8SAgent.ID},
@@ -2241,7 +2241,7 @@ func TestKubernetesMetrics(t *testing.T) {
 				AgentID:    idAgentMain,
 				LabelsText: "",
 			},
-			Name: "cpu_used",
+			Name: metricCPUUsed,
 		},
 		{
 			Metric: bleemeoTypes.Metric{
@@ -2323,7 +2323,7 @@ func TestKubernetesMetrics(t *testing.T) {
 			labels.Label{Name: gloutonTypes.LabelName, Value: "kubernetes_kubelet_status"},
 		),
 		labels.New(
-			labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_used"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: metricCPUUsed},
 		),
 	}
 

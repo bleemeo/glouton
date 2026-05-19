@@ -44,6 +44,18 @@ const (
 	diagnosticFields  = "name"
 	monitorFields     = "id,account,agent,created_at,monitor_url,monitor_expected_content,monitor_expected_response_code,monitor_unexpected_content,monitor_ca_file,monitor_headers"
 	serviceFields     = "id,account_config,label,instance,listen_addresses,exe_path,tags,active,created_at"
+
+	// queryTrue is used as a URL query parameter value for boolean true.
+	queryTrue = "true"
+
+	// paramFields is the URL query parameter name for specifying API response fields.
+	paramFields = "fields"
+
+	// paramAgent is the URL query parameter name for filtering by agent.
+	paramAgent = "agent"
+
+	// paramActive is the URL query parameter name for filtering by active status.
+	paramActive = "active"
 )
 
 func (cl *wrapperClient) GetGlobalInfo(ctx context.Context) (bleemeoTypes.GlobalInfo, error) {
@@ -67,7 +79,7 @@ func (cl *wrapperClient) RegisterSelf(ctx context.Context, accountID, password, 
 		"initial_password":          password,
 		"initial_server_group_name": initialServerGroupName,
 		"display_name":              name,
-		"fqdn":                      fqdn,
+		factFQDN:                    fqdn,
 	})
 	if err != nil {
 		return "", err
@@ -142,7 +154,7 @@ func parseRegistrationError(code int, body io.Reader) error {
 func (cl *wrapperClient) ListApplications(ctx context.Context) ([]bleemeoTypes.Application, error) {
 	applications := make([]bleemeoTypes.Application, 0)
 	params := url.Values{
-		"fields": {applicationFields},
+		paramFields: {applicationFields},
 	}
 
 	iter := cl.Iterator(ctx, bleemeo.ResourceApplication, params)
@@ -174,7 +186,7 @@ func (cl *wrapperClient) CreateApplication(ctx context.Context, app bleemeoTypes
 
 func (cl *wrapperClient) ListAgentTypes(ctx context.Context) ([]bleemeoTypes.AgentType, error) {
 	params := url.Values{
-		"fields": {agentTypeFields},
+		paramFields: {agentTypeFields},
 	}
 
 	var agentTypes []bleemeoTypes.AgentType
@@ -198,7 +210,7 @@ func (cl *wrapperClient) ListConfigs(ctx context.Context, params url.Values) ([]
 		params = url.Values{}
 	}
 
-	params.Set("fields", configFields)
+	params.Set(paramFields, configFields)
 
 	var configs []bleemeoTypes.Config
 
@@ -218,7 +230,7 @@ func (cl *wrapperClient) ListConfigs(ctx context.Context, params url.Values) ([]
 
 func (cl *wrapperClient) ListAgents(ctx context.Context) ([]bleemeoTypes.Agent, error) {
 	params := url.Values{
-		"fields": {agentFields},
+		paramFields: {agentFields},
 	}
 
 	var agents []bleemeoTypes.Agent
@@ -251,8 +263,8 @@ func (cl *wrapperClient) DeleteAgent(ctx context.Context, id string) error {
 
 func (cl *wrapperClient) ListGloutonConfigItems(ctx context.Context, agentID string) ([]bleemeoTypes.GloutonConfigItem, error) {
 	params := url.Values{
-		"fields": {configItemFields},
-		"agent":  {agentID},
+		paramFields: {configItemFields},
+		paramAgent:  {agentID},
 	}
 
 	items := make([]bleemeoTypes.GloutonConfigItem, 0)
@@ -284,8 +296,8 @@ func (cl *wrapperClient) DeleteGloutonConfigItem(ctx context.Context, id string)
 
 func (cl *wrapperClient) ListContainers(ctx context.Context, agentID string) ([]bleemeoTypes.Container, error) {
 	params := url.Values{
-		"host":   {agentID},
-		"fields": {containerCacheFields},
+		"host":      {agentID},
+		paramFields: {containerCacheFields},
 	}
 
 	var containers []bleemeoTypes.Container
@@ -322,7 +334,7 @@ func (cl *wrapperClient) RegisterContainer(ctx context.Context, payload bleemeoa
 
 func (cl *wrapperClient) ListDiagnostics(ctx context.Context) ([]bleemeoapi.RemoteDiagnostic, error) {
 	params := url.Values{
-		"fields": {diagnosticFields},
+		paramFields: {diagnosticFields},
 	}
 
 	var diagnostics []bleemeoapi.RemoteDiagnostic
@@ -368,7 +380,7 @@ func (cl *wrapperClient) UploadDiagnostic(ctx context.Context, contentType strin
 
 func (cl *wrapperClient) ListFacts(ctx context.Context) ([]bleemeoTypes.AgentFact, error) {
 	params := url.Values{
-		"fields": {agentFactFields},
+		paramFields: {agentFactFields},
 	}
 
 	var facts []bleemeoTypes.AgentFact
@@ -413,13 +425,13 @@ func (cl *wrapperClient) ListInactiveMetrics(ctx context.Context, stopSearchingP
 
 func (cl *wrapperClient) listMetrics(ctx context.Context, active bool, stopSearchingPredicate func(labelsText string) bool) ([]bleemeoapi.MetricPayload, error) {
 	params := url.Values{
-		"fields": {metricFields},
+		paramFields: {metricFields},
 	}
 
 	if active {
-		params.Set("active", stringTrue)
+		params.Set(paramActive, stringTrue)
 	} else {
-		params.Set("active", stringFalse)
+		params.Set(paramActive, stringFalse)
 	}
 
 	metrics := make([]bleemeoapi.MetricPayload, 0)
@@ -449,8 +461,8 @@ func (cl *wrapperClient) CountInactiveMetrics(ctx context.Context) (int, error) 
 		ctx,
 		bleemeo.ResourceMetric,
 		url.Values{
-			"fields": {"id"},
-			"active": {"False"},
+			paramFields: {"id"},
+			paramActive: {"False"},
 		},
 	)
 }
@@ -501,14 +513,14 @@ func (cl *wrapperClient) SetMetricActive(ctx context.Context, id string, active 
 		activeStr = stringFalse
 	}
 
-	return cl.Update(ctx, bleemeo.ResourceMetric, id, map[string]string{"active": activeStr}, "active", nil)
+	return cl.Update(ctx, bleemeo.ResourceMetric, id, map[string]string{paramActive: activeStr}, paramActive, nil)
 }
 
 func (cl *wrapperClient) ListMonitors(ctx context.Context) ([]bleemeoTypes.Monitor, error) {
 	params := url.Values{
-		"monitor": {"true"},
-		"active":  {"true"},
-		"fields":  {monitorFields},
+		"monitor":   {queryTrue},
+		paramActive: {queryTrue},
+		paramFields: {monitorFields},
 	}
 
 	var monitors []bleemeoTypes.Monitor
@@ -537,8 +549,8 @@ func (cl *wrapperClient) GetMonitorByID(ctx context.Context, id string) (bleemeo
 
 func (cl *wrapperClient) ListServices(ctx context.Context, agentID string, fields string) ([]bleemeoTypes.Service, error) {
 	params := url.Values{
-		"agent":  {agentID},
-		"fields": {fields},
+		paramAgent:  {agentID},
+		paramFields: {fields},
 	}
 
 	var services []bleemeoTypes.Service

@@ -14,12 +14,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !windows
+package check
 
-package crashreport
-
-import "golang.org/x/sys/unix"
-
-func redirectOSSpecificStderrToFile(stderrFileFd uintptr) error {
-	return unix.Dup2(int(stderrFileFd), unix.Stderr)
-}
+const (
+	statusConnectionTimedOut = "Connection timed out after 10 seconds"
+	statusDeadlineError      = "Checker error. Unable to set Deadline"
+)

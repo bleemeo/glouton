@@ -28,6 +28,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const defaultNamespace = "default"
+
 type metricsFunc func(kubeCache, time.Time) []types.MetricPoint
 
 type kubeCache struct {
@@ -203,7 +205,7 @@ func podNamespace(pod corev1.Pod) string {
 	// An empty namespace is the default namespace.
 	namespace := pod.Namespace
 	if namespace == "" {
-		namespace = "default"
+		namespace = defaultNamespace
 	}
 
 	return namespace

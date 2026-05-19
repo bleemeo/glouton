@@ -49,7 +49,7 @@ func TestLoader(t *testing.T) {
 		},
 		{
 			Key:      "blackbox.modules.mymodule.prober",
-			Value:    "http",
+			Value:    defaultHTTP,
 			Type:     TypeString,
 			Source:   SourceFile,
 			Path:     path,
@@ -78,8 +78,8 @@ func TestLoader(t *testing.T) {
 			Value: []any{
 				map[string]any{
 					"module": "mymodule",
-					"name":   "myname",
-					"url":    "https://bleemeo.com",
+					keyName:  "myname",
+					keyURL:   "https://bleemeo.com",
 				},
 			},
 			Type:     TypeBlackboxTargets,
@@ -108,7 +108,7 @@ func TestLoader(t *testing.T) {
 		{
 			Key: "metric.softstatus_period",
 			Value: map[string]any{
-				"cpu_used": 60.0,
+				testCPUUsed: 60.0,
 			},
 			Type:     TypeMapStrInt,
 			Source:   SourceFile,
@@ -121,8 +121,8 @@ func TestLoader(t *testing.T) {
 				map[string]any{
 					"allow_metrics": nil,
 					"deny_metrics":  nil,
-					"name":          "my_app",
-					"url":           "http://localhost:8080/metrics",
+					keyName:         "my_app",
+					keyURL:          "http://localhost:8080/metrics",
 				},
 			},
 			Type:     TypePrometheusTargets,
@@ -132,7 +132,7 @@ func TestLoader(t *testing.T) {
 		},
 		{
 			Key:      "metric.snmp.exporter_address",
-			Value:    "localhost",
+			Value:    DefaultLocalhost,
 			Type:     TypeString,
 			Source:   SourceFile,
 			Path:     path,
@@ -143,7 +143,7 @@ func TestLoader(t *testing.T) {
 			Value: []any{
 				map[string]any{
 					"initial_name": "AP Wifi",
-					"target":       "127.0.0.1",
+					"target":       DefaultLoopback,
 				},
 			},
 			Type:     TypeSNMPTargets,
@@ -160,7 +160,7 @@ func TestLoader(t *testing.T) {
 					"ca_file":             "",
 					"http_host":           "",
 					"nagios_nrpe_name":    "",
-					"password":            "",
+					keyPassword:           "",
 					"ssl":                 false,
 					"ssl_insecure":        false,
 					"included_items":      nil,
@@ -177,8 +177,8 @@ func TestLoader(t *testing.T) {
 					"stats_protocol":      "",
 					"check_type":          "",
 					"ignore_ports":        nil,
-					"type":                "service1",
-					"instance":            "instance1",
+					keyType:               "service1",
+					testInstance:          "instance1",
 					"port":                0.0,
 					"stats_port":          0.0,
 					"check_command":       "",
@@ -202,8 +202,8 @@ func TestLoader(t *testing.T) {
 			Key: "service_ignore_check",
 			Value: []any{
 				map[string]any{
-					"instance": "host:* container:*",
-					"name":     "postgresql",
+					testInstance: "host:* container:*",
+					keyName:      "postgresql",
 				},
 			},
 			Type:     TypeNameInstances,
@@ -215,8 +215,8 @@ func TestLoader(t *testing.T) {
 			Key: "service_ignore_metrics",
 			Value: []any{
 				map[string]any{
-					"instance": "host:*",
-					"name":     "redis",
+					testInstance: "host:*",
+					keyName:      "redis",
 				},
 			},
 			Type:     TypeNameInstances,
@@ -225,9 +225,9 @@ func TestLoader(t *testing.T) {
 			Priority: 1,
 		},
 		{
-			Key: "thresholds",
+			Key: keyThresholds,
 			Value: map[string]any{
-				"cpu_used": map[string]any{
+				testCPUUsed: map[string]any{
 					"high_critical": 90.0,
 					"high_warning":  nil,
 					"low_critical":  nil,
@@ -244,7 +244,7 @@ func TestLoader(t *testing.T) {
 			Value: []any{
 				map[string]any{
 					"container_name":      "",
-					"container_selectors": map[string]any{"com.docker.compose.service": "cassandra"},
+					"container_selectors": map[string]any{"com.docker.compose.service": testCassandra},
 					"filters": []any{
 						map[string]any{
 							"metric": "cassandra_logs_count",

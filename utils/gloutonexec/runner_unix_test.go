@@ -32,6 +32,11 @@ func TestErrTimedoutFormat(t *testing.T) {
 	}
 }
 
+const (
+	outputGood         = "good\n"
+	outputTermReceived = "term_received\n"
+)
+
 func TestGraceDelay(t *testing.T) {
 	t.Parallel()
 
@@ -50,7 +55,7 @@ func TestGraceDelay(t *testing.T) {
 			Name:         "no-timeout-no-grace",
 			ContextDelay: 500 * time.Millisecond,
 			Shell:        "t() { echo term_received; exit 0; }; trap t TERM; sleep 0.2;echo good; exit 0",
-			WantOut:      "good\n",
+			WantOut:      outputGood,
 			WantErr:      false,
 		},
 		{
@@ -58,14 +63,14 @@ func TestGraceDelay(t *testing.T) {
 			ContextDelay: 500 * time.Millisecond,
 			GraceDelay:   500 * time.Millisecond,
 			Shell:        "t() { echo term_received; exit 0; }; trap t TERM; sleep 0.2;echo good; exit 0",
-			WantOut:      "good\n",
+			WantOut:      outputGood,
 			WantErr:      false,
 		},
 		{
 			Name:         "error-no-timeout-no-grace",
 			ContextDelay: 500 * time.Millisecond,
 			Shell:        "t() { echo term_received; exit 0; }; trap t TERM; sleep 0.2;echo good; exit 1",
-			WantOut:      "good\n",
+			WantOut:      outputGood,
 			WantErr:      true,
 		},
 		{
@@ -73,7 +78,7 @@ func TestGraceDelay(t *testing.T) {
 			ContextDelay: 500 * time.Millisecond,
 			GraceDelay:   500 * time.Millisecond,
 			Shell:        "t() { echo term_received; exit 0; }; trap t TERM; sleep 0.6;echo good; exit 1",
-			WantOut:      "term_received\n",
+			WantOut:      outputTermReceived,
 			WantErr:      false,
 		},
 		{
@@ -81,7 +86,7 @@ func TestGraceDelay(t *testing.T) {
 			ContextDelay: 500 * time.Millisecond,
 			GraceDelay:   500 * time.Millisecond,
 			Shell:        "t() { echo term_received; sleep 1; exit 0; }; trap t TERM; sleep 0.6;echo good; exit 0",
-			WantOut:      "term_received\n",
+			WantOut:      outputTermReceived,
 			WantErr:      true,
 			ErrIsTimeout: true,
 		},
@@ -90,7 +95,7 @@ func TestGraceDelay(t *testing.T) {
 			ContextDelay: 500 * time.Millisecond,
 			GraceDelay:   500 * time.Millisecond,
 			Shell:        "t() { echo term_received; exit 1; }; trap t TERM; sleep 0.6;echo good; exit 1",
-			WantOut:      "term_received\n",
+			WantOut:      outputTermReceived,
 			WantErr:      true,
 			ErrIsTimeout: true,
 		},

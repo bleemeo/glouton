@@ -27,6 +27,27 @@ import (
 	bbConf "github.com/prometheus/blackbox_exporter/config"
 )
 
+// Default configuration value constants, shared between production and test code.
+const (
+	DefaultFactsFile      = "facts.yaml"
+	DefaultInstallFormat  = "manual"
+	DefaultStateCacheFile = "state.cache.json"
+	DefaultLogLevel       = "INFO"
+	DefaultLocalhost      = "localhost"
+	DefaultLoopback       = "127.0.0.1"
+
+	// Common collector and filesystem type names shared between production and test code.
+	collectorCPU = "cpu"
+	fsDevtmpfs   = "devtmpfs"
+	fsTmpfs      = "tmpfs"
+
+	// metricSystemPendingUpdates is a commonly referenced metric name in soft status periods.
+	metricSystemPendingUpdates = "system_pending_updates"
+
+	// defaultHTTP is the default protocol used in several config values.
+	defaultHTTP = "http"
+)
+
 // DefaultPaths returns the default paths used to search for config files.
 func DefaultPaths() []string {
 	return []string{
@@ -43,7 +64,7 @@ func DefaultPaths() []string {
 // This must be updated when a map value is added to the config.
 func mapKeys() []string {
 	return []string{
-		"thresholds",
+		keyThresholds,
 		"metric.softstatus_period",
 		"log.opentelemetry.receivers",
 		"log.opentelemetry.global_filters",
@@ -86,7 +107,7 @@ func defaultDockerAddresses() []string {
 
 func DefaultConfig() Config { //nolint:maintidx
 	defaultBlackboxModule := bbConf.DefaultModule
-	defaultBlackboxModule.Prober = "http"
+	defaultBlackboxModule.Prober = defaultHTTP
 	// We default to IPv4 as the ip_protocol_fallback option does not retry a request
 	// with a different IP version, but only has an effect when resolving the target.
 	defaultBlackboxModule.HTTP.IPProtocol = "ip4"
@@ -97,8 +118,8 @@ func DefaultConfig() Config { //nolint:maintidx
 	return Config{
 		Agent: Agent{
 			CloudImageCreationFile: "cloudimage_creation",
-			FactsFile:              "facts.yaml",
-			InstallationFormat:     "manual",
+			FactsFile:              DefaultFactsFile,
+			InstallationFormat:     DefaultInstallFormat,
 			ProcessExporter: ProcessExporter{
 				Enable: true,
 			},
@@ -106,7 +127,7 @@ func DefaultConfig() Config { //nolint:maintidx
 			NetstatFile:          "netstat.out",
 			StateDirectory:       "",
 			StateFile:            "state.json",
-			StateCacheFile:       "state.cache.json",
+			StateCacheFile:       DefaultStateCacheFile,
 			StateResetFile:       "state.reset",
 			DeprecatedStateFile:  "",
 			EnableCrashReporting: true,
@@ -115,11 +136,11 @@ func DefaultConfig() Config { //nolint:maintidx
 			AutoUpgradeFile:      "auto_upgrade",
 			NodeExporter: NodeExporter{
 				Enable:     true,
-				Collectors: []string{"cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev", "pressure", "stat", "time", "uname"},
+				Collectors: []string{collectorCPU, "diskstats", "filesystem", "loadavg", "meminfo", "netdev", "pressure", "stat", "time", "uname"},
 			},
 			WindowsExporter: NodeExporter{
 				Enable:     true,
-				Collectors: []string{"cpu", "cs", "logical_disk", "logon", "memory", "net", "os", "system", "tcp", "diskdrive"},
+				Collectors: []string{collectorCPU, "cs", "logical_disk", "logon", "memory", "net", "os", "system", "tcp", "diskdrive"},
 			},
 			Telemetry: Telemetry{
 				Enable:  true,
@@ -140,7 +161,7 @@ func DefaultConfig() Config { //nolint:maintidx
 			DefaultDNSResolver: "", // means try to guess the system default DNS resolver
 			Targets:            []BlackboxTarget{},
 			Modules: map[string]bbConf.Module{
-				"http": defaultBlackboxModule,
+				defaultHTTP: defaultBlackboxModule,
 			},
 		},
 		Bleemeo: Bleemeo{
@@ -178,7 +199,7 @@ func DefaultConfig() Config { //nolint:maintidx
 			},
 			Runtime: ContainerRuntime{
 				Docker: ContainerRuntimeAddresses{
-					Addresses: defaultDockerAddresses(),
+					Addresses:      defaultDockerAddresses(),
 					PrefixHostRoot: true,
 				},
 				ContainerD: ContainerRuntimeAddresses{
@@ -203,7 +224,7 @@ func DefaultConfig() Config { //nolint:maintidx
 				"debugfs",
 				"devfs",
 				"devpts",
-				"devtmpfs",
+				fsDevtmpfs,
 				"efivarfs",
 				"fdescfs",
 				"fusectl",
@@ -225,7 +246,7 @@ func DefaultConfig() Config { //nolint:maintidx
 				"selinuxfs",
 				"squashfs",
 				"sysfs",
-				"tmpfs",
+				fsTmpfs,
 				"tracefs",
 				"zfs",
 			},
@@ -304,12 +325,12 @@ func DefaultConfig() Config { //nolint:maintidx
 				},
 				GRPC: EnableListener{
 					Enable:  false,
-					Address: "localhost",
+					Address: DefaultLocalhost,
 					Port:    4317,
 				},
 				HTTP: EnableListener{
 					Enable:  false,
-					Address: "localhost",
+					Address: DefaultLocalhost,
 					Port:    4318,
 				},
 				KnownLogFormats: DefaultKnownLogFormats(),
@@ -325,7 +346,7 @@ func DefaultConfig() Config { //nolint:maintidx
 				HeadSizeBytes: 500000,
 				TailSizeBytes: 5000000,
 			},
-			Level:         "INFO",
+			Level:         DefaultLogLevel,
 			Output:        "console",
 			FileName:      "",
 			PackageLevels: "",
@@ -348,7 +369,7 @@ func DefaultConfig() Config { //nolint:maintidx
 			DenyMetrics:             []string{},
 			SoftStatusPeriodDefault: 5 * 60,
 			SoftStatusPeriod: map[string]int{
-				"system_pending_updates":          86400,
+				metricSystemPendingUpdates:        86400,
 				"system_pending_security_updates": 86400,
 				"time_elapsed_since_last_data":    0,
 				"time_drift":                      0,
@@ -356,7 +377,7 @@ func DefaultConfig() Config { //nolint:maintidx
 		},
 		MQTT: OpenSourceMQTT{
 			Enable:      false,
-			Hosts:       []string{"127.0.0.1"},
+			Hosts:       []string{DefaultLoopback},
 			Port:        1883,
 			Username:    "",
 			Password:    "",
@@ -412,7 +433,7 @@ func DefaultConfig() Config { //nolint:maintidx
 			DockerMetricsEnable: true,
 			StatsD: StatsD{
 				Enable:  true,
-				Address: "127.0.0.1",
+				Address: DefaultLoopback,
 				Port:    8125,
 			},
 		},
@@ -424,7 +445,7 @@ func DefaultConfig() Config { //nolint:maintidx
 				DebugEnable: false,
 			},
 			Listener: Listener{
-				Address: "127.0.0.1",
+				Address: DefaultLoopback,
 				Port:    8015,
 			},
 			LocalUI: LocalUI{
@@ -434,7 +455,7 @@ func DefaultConfig() Config { //nolint:maintidx
 		},
 		Zabbix: Zabbix{
 			Enable:  false,
-			Address: "127.0.0.1",
+			Address: DefaultLoopback,
 			Port:    10050,
 		},
 	}

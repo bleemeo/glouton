@@ -62,7 +62,7 @@ func sum(acc *internal.StoreAccumulator) {
 	}
 
 	sumMeasurement := internal.Measurement{
-		Name:   "postgresql",
+		Name:   inputName,
 		Fields: newFields,
 		Tags: map[string]string{
 			"sum": "true",

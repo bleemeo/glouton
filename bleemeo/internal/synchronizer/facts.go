@@ -27,19 +27,35 @@ import (
 	"github.com/bleemeo/glouton/logger"
 )
 
+// Fact name constants used for essential facts and synchronization.
+const (
+	factAgentVersion    = "agent_version"
+	factArchitecture    = "architecture"
+	factFQDN            = "fqdn"
+	factGloutonVersion  = "glouton_version"
+	factHostname        = "hostname"
+	factInstallationFmt = "installation_format"
+	factKernel          = "kernel"
+	factOSName          = "os_name"
+	factOSPrettyName    = "os_pretty_name"
+	factGloutonPID      = "glouton_pid"
+	factPublicIP        = "public_ip"
+	factVirtual         = "virtual"
+)
+
 func getEssentialFacts() map[string]bool {
 	return map[string]bool{
-		"agent_version":       true,
-		"architecture":        true,
-		"fqdn":                true,
-		"glouton_version":     true,
-		"hostname":            true,
-		"installation_format": true,
-		"kernel":              true,
-		"os_name":             true,
-		"os_pretty_name":      true,
-		"public_ip":           true,
-		"virtual":             true,
+		factAgentVersion:    true,
+		factArchitecture:    true,
+		factFQDN:            true,
+		factGloutonVersion:  true,
+		factHostname:        true,
+		factInstallationFmt: true,
+		factKernel:          true,
+		factOSName:          true,
+		factOSPrettyName:    true,
+		factPublicIP:        true,
+		factVirtual:         true,
 	}
 }
 

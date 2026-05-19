@@ -31,6 +31,16 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Test device path constants.
+const (
+	devNvme0 = "/dev/nvme0"
+	devSG0   = "/dev/sg0"
+	devSG1   = "/dev/sg1"
+	devSDA   = "/dev/sda"
+	devSG2   = "/dev/sg2"
+	devSG3   = "/dev/sg3"
+)
+
 func TestStorageDevicesPattern(t *testing.T) {
 	if _, err := filepath.Match(sgDevicesPattern, "foo"); err != nil {
 		t.Fatalf("Storage devices pattern is invalid: %v", err)
@@ -62,7 +72,7 @@ func TestIsDeviceAllowed(t *testing.T) {
 	}
 
 	expectedOutput := map[string]bool{
-		"/dev/nvme0": true,
+		devNvme0:     true,
 		"/dev/nvme1": false,
 		"/dev/nvme2": true,
 	}
@@ -91,34 +101,34 @@ func TestParseScanOutput(t *testing.T) {
 	}{
 		{
 			name:                            "firewall1",
-			sgDevices:                       []string{"/dev/sg0", "/dev/sg1", "/dev/sg2", "/dev/sg3"},
+			sgDevices:                       []string{devSG0, devSG1, devSG2, devSG3},
 			expectedInitSmartctlInvocations: 6, // 1 scan + 1 info /dev/sda + 4 info /dev/sg_
 			//                               /dev/sda is unusable, but the telegraf input will deal with it.
-			expectedDevices:                 []string{"/dev/sda", "/dev/sg2", "/dev/sg3"},
+			expectedDevices:                 []string{devSDA, devSG2, devSG3},
 			expectedToIgnoreStorageDevices:  false,
 			expectedScanSmartctlInvocations: 1,
 		},
 		{
 			name:                            "firewall2",
-			sgDevices:                       []string{"/dev/sg0", "/dev/sg1", "/dev/sg2", "/dev/sg3"},
+			sgDevices:                       []string{devSG0, devSG1, devSG2, devSG3},
 			expectedInitSmartctlInvocations: 6, // 1 scan + 1 info /dev/sda + 4 info /dev/sg_
 			//                               /dev/sda is unusable, but the telegraf input will deal with it.
-			expectedDevices:                 []string{"/dev/sda", "/dev/sg2", "/dev/sg3"},
+			expectedDevices:                 []string{devSDA, devSG2, devSG3},
 			expectedToIgnoreStorageDevices:  false,
 			expectedScanSmartctlInvocations: 1,
 		},
 		{
 			name:                            "home1",
 			expectedInitSmartctlInvocations: 2,
-			expectedDevices:                 []string{"/dev/sda", "/dev/sdb", "/dev/nvme0 -d nvme"},
+			expectedDevices:                 []string{devSDA, "/dev/sdb", "/dev/nvme0 -d nvme"},
 			expectedToIgnoreStorageDevices:  true,
 			expectedScanSmartctlInvocations: 1,
 		},
 		{
 			name:                            "home2",
-			sgDevices:                       []string{"/dev/sg0"},
+			sgDevices:                       []string{devSG0},
 			expectedInitSmartctlInvocations: 2,
-			expectedDevices:                 []string{"/dev/sda"},
+			expectedDevices:                 []string{devSDA},
 			expectedToIgnoreStorageDevices:  true,
 			expectedScanSmartctlInvocations: 1,
 		},
@@ -131,17 +141,17 @@ func TestParseScanOutput(t *testing.T) {
 		},
 		{
 			name:                            "proxmox1",
-			sgDevices:                       []string{"/dev/sg0"},
+			sgDevices:                       []string{devSG0},
 			expectedInitSmartctlInvocations: 3,
-			expectedDevices:                 []string{"/dev/sda", "/dev/bus/0 -d megaraid,0", "/dev/bus/0 -d megaraid,1", "/dev/bus/0 -d megaraid,2", "/dev/bus/0 -d megaraid,3", "/dev/bus/0 -d megaraid,4", "/dev/bus/0 -d megaraid,5", "/dev/bus/0 -d megaraid,6", "/dev/bus/0 -d megaraid,7", "/dev/bus/0 -d megaraid,8", "/dev/bus/0 -d megaraid,9", "/dev/bus/0 -d megaraid,10", "/dev/bus/0 -d megaraid,11", "/dev/bus/0 -d megaraid,12", "/dev/bus/0 -d megaraid,13"}, //nolint:lll
+			expectedDevices:                 []string{devSDA, "/dev/bus/0 -d megaraid,0", "/dev/bus/0 -d megaraid,1", "/dev/bus/0 -d megaraid,2", "/dev/bus/0 -d megaraid,3", "/dev/bus/0 -d megaraid,4", "/dev/bus/0 -d megaraid,5", "/dev/bus/0 -d megaraid,6", "/dev/bus/0 -d megaraid,7", "/dev/bus/0 -d megaraid,8", "/dev/bus/0 -d megaraid,9", "/dev/bus/0 -d megaraid,10", "/dev/bus/0 -d megaraid,11", "/dev/bus/0 -d megaraid,12", "/dev/bus/0 -d megaraid,13"}, //nolint:lll
 			expectedToIgnoreStorageDevices:  true,
 			expectedScanSmartctlInvocations: 1,
 		},
 		{
 			name:                            "proxmox2",
-			sgDevices:                       []string{"/dev/sg0", "/dev/sg1"},
+			sgDevices:                       []string{devSG0, devSG1},
 			expectedInitSmartctlInvocations: 3,
-			expectedDevices:                 []string{"/dev/sda", "/dev/bus/0 -d megaraid,0", "/dev/bus/0 -d megaraid,1"},
+			expectedDevices:                 []string{devSDA, "/dev/bus/0 -d megaraid,0", "/dev/bus/0 -d megaraid,1"},
 			expectedToIgnoreStorageDevices:  true,
 			expectedScanSmartctlInvocations: 1,
 		},
@@ -155,20 +165,20 @@ func TestParseScanOutput(t *testing.T) {
 		},
 		{
 			name:                            "hp_smartarray_p408i",
-			sgDevices:                       []string{"/dev/sg0", "/dev/sg1", "/dev/sg2", "/dev/sg3"},
+			sgDevices:                       []string{devSG0, devSG1, devSG2, devSG3},
 			expectedInitSmartctlInvocations: 2,
 			// Should we use smartctl for /dev/sda ?
 			// Pro: smart seems supported and therefor we have information about status of the disk (the logical disk I believe).
 			//      and this even if HP ssacli isn't installed
 			// Con: ssacli is better to get more detailed information (per physical drive). smart input is more built with physical drive in mind,
 			//      not logical one.
-			expectedDevices:                 []string{"/dev/sda"},
+			expectedDevices:                 []string{devSDA},
 			expectedToIgnoreStorageDevices:  true,
 			expectedScanSmartctlInvocations: 1,
 		},
 		{
 			name:                            "hp_smartarray_p410i",
-			sgDevices:                       []string{"/dev/sg0", "/dev/sg1"},
+			sgDevices:                       []string{devSG0, devSG1},
 			expectedInitSmartctlInvocations: 3,
 			expectedDevices:                 nil,
 			expectedToIgnoreStorageDevices:  true,
@@ -280,7 +290,7 @@ func (smartctlData *SmartctlData) makeRunCmdFor(t *testing.T) runCmdType {
 		smartctlData.invocationsCount++
 
 		switch cmd := args[0]; cmd {
-		case "--scan": //nolint: goconst,nolintlint
+		case argScan:
 			return smartctlData.scanContent, nil
 		case "--info":
 		// Handling it below

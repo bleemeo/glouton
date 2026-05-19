@@ -27,6 +27,11 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+const (
+	testMetricCPUUsed     = "cpu_used"
+	testMetricAgentStatus = "agent_status"
+)
+
 func Test_allowListToMap(t *testing.T) {
 	cases := []struct {
 		flat string
@@ -39,29 +44,29 @@ func Test_allowListToMap(t *testing.T) {
 		{
 			"cpu_used,agent_status",
 			map[string]bool{
-				"cpu_used":     true,
-				"agent_status": true,
+				testMetricCPUUsed:     true,
+				testMetricAgentStatus: true,
 			},
 		},
 		{
 			"   cpu_used  ,   agent_status   ",
 			map[string]bool{
-				"cpu_used":     true,
-				"agent_status": true,
+				testMetricCPUUsed:     true,
+				testMetricAgentStatus: true,
 			},
 		},
 		{
 			" cpu_used  ,agent_status\n\t",
 			map[string]bool{
-				"cpu_used":     true,
-				"agent_status": true,
+				testMetricCPUUsed:     true,
+				testMetricAgentStatus: true,
 			},
 		},
 		{
 			"agent_config_warning,\nagent_status,\ncertificate_day_left_status,\n",
 			map[string]bool{
 				"agent_config_warning":        true,
-				"agent_status":                true,
+				testMetricAgentStatus:         true,
 				"certificate_day_left_status": true,
 			},
 		},
@@ -69,8 +74,8 @@ func Test_allowListToMap(t *testing.T) {
 			"agent_config_warning,\r\nagent_status,\n\rcertificate_day_left_status,\rcpu_used",
 			map[string]bool{
 				"agent_config_warning":        true,
-				"agent_status":                true,
-				"cpu_used":                    true,
+				testMetricAgentStatus:         true,
+				testMetricCPUUsed:             true,
 				"certificate_day_left_status": true,
 			},
 		},

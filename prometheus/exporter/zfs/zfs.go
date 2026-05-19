@@ -34,6 +34,14 @@ import (
 	dto "github.com/prometheus/client_model/go"
 )
 
+const (
+	metricZFSPoolHealthStatus = "zfs_pool_health_status"
+	metricDiskUsed            = "disk_used"
+	metricDiskTotal           = "disk_total"
+	metricDiskFree            = "disk_free"
+	metricDiskUsedPerc        = "disk_used_perc"
+)
+
 var ErrZFSNotAvailable = errors.New("ZFS isn't available on this server")
 
 // Gatherer gather metrics for all ZFS pools found by "zpool" command.
@@ -188,7 +196,7 @@ func decodeZpool(output string) []types.MetricPoint {
 				Value: float64(annotation.Status.CurrentStatus.NagiosCode()),
 			},
 			Labels: map[string]string{
-				types.LabelName: "zfs_pool_health_status",
+				types.LabelName: metricZFSPoolHealthStatus,
 				types.LabelItem: poolName,
 			},
 			Annotations: annotation,
@@ -221,7 +229,7 @@ func decodeZpool(output string) []types.MetricPoint {
 				Value: float64(alloc),
 			},
 			Labels: map[string]string{
-				types.LabelName: "disk_used",
+				types.LabelName: metricDiskUsed,
 				types.LabelItem: poolName,
 			},
 		})
@@ -231,7 +239,7 @@ func decodeZpool(output string) []types.MetricPoint {
 				Value: float64(size),
 			},
 			Labels: map[string]string{
-				types.LabelName: "disk_total",
+				types.LabelName: metricDiskTotal,
 				types.LabelItem: poolName,
 			},
 		})
@@ -241,7 +249,7 @@ func decodeZpool(output string) []types.MetricPoint {
 				Value: float64(free),
 			},
 			Labels: map[string]string{
-				types.LabelName: "disk_free",
+				types.LabelName: metricDiskFree,
 				types.LabelItem: poolName,
 			},
 		})
@@ -251,7 +259,7 @@ func decodeZpool(output string) []types.MetricPoint {
 				Value: float64(alloc) / float64(size) * 100,
 			},
 			Labels: map[string]string{
-				types.LabelName: "disk_used_perc",
+				types.LabelName: metricDiskUsedPerc,
 				types.LabelItem: poolName,
 			},
 		})

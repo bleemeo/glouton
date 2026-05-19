@@ -28,21 +28,21 @@ func TestSum(t *testing.T) {
 	acc := &internal.StoreAccumulator{
 		Measurement: []internal.Measurement{
 			{
-				Name: "postgresql",
+				Name: inputName,
 				Tags: map[string]string{"db": "bleemeo"},
 				Fields: map[string]any{
-					"xact_commit":    1.2,
-					"xact_rollback":  3,
-					"blk_write_time": 8,
+					fieldXactCommit:   1.2,
+					fieldXactRollback: 3,
+					fieldBlkWriteTime: 8,
 				},
 			},
 			{
-				Name: "postgresql",
+				Name: inputName,
 				Tags: map[string]string{"db": "postgres"},
 				Fields: map[string]any{
-					"xact_commit":   1.8,
-					"xact_rollback": 7,
-					"temp_files":    7.4,
+					fieldXactCommit:   1.8,
+					fieldXactRollback: 7,
+					fieldTempFiles:    7.4,
 				},
 			},
 		},
@@ -51,31 +51,31 @@ func TestSum(t *testing.T) {
 	expected := &internal.StoreAccumulator{
 		Measurement: []internal.Measurement{
 			{
-				Name: "postgresql",
+				Name: inputName,
 				Tags: map[string]string{"db": "bleemeo"},
 				Fields: map[string]any{
-					"xact_commit":    1.2,
-					"xact_rollback":  3,
-					"blk_write_time": 8,
+					fieldXactCommit:   1.2,
+					fieldXactRollback: 3,
+					fieldBlkWriteTime: 8,
 				},
 			},
 			{
-				Name: "postgresql",
+				Name: inputName,
 				Tags: map[string]string{"db": "postgres"},
 				Fields: map[string]any{
-					"xact_commit":   1.8,
-					"xact_rollback": 7,
-					"temp_files":    7.4,
+					fieldXactCommit:   1.8,
+					fieldXactRollback: 7,
+					fieldTempFiles:    7.4,
 				},
 			},
 			{
-				Name: "postgresql",
+				Name: inputName,
 				Tags: map[string]string{"sum": "true"},
 				Fields: map[string]any{
-					"xact_commit":    3.,
-					"xact_rollback":  10.,
-					"blk_write_time": 8.,
-					"temp_files":     7.4,
+					fieldXactCommit:   3.,
+					fieldXactRollback: 10.,
+					fieldBlkWriteTime: 8.,
+					fieldTempFiles:    7.4,
 				},
 			},
 		},

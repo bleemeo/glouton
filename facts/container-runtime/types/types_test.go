@@ -25,6 +25,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+const (
+	testDockerSockRun     = "unix:///run/docker.sock"
+	testDockerSockVarRun  = "unix:///var/run/docker.sock"
+	testContainerdSock    = "/run/containerd/containerd.sock"
+	testK3sContainerdSock = "/run/k3s/containerd/containerd.sock"
+	testHostRoot          = "/hostroot"
+)
+
 func TestContainerRuntimeAddresses_ExpandAddresses(t *testing.T) {
 	tests := []struct {
 		name                    string
@@ -36,31 +44,31 @@ func TestContainerRuntimeAddresses_ExpandAddresses(t *testing.T) {
 			name: "default containerd on host",
 			containerRuntimeAddress: config.ContainerRuntimeAddresses{
 				Addresses: []string{
-					"/run/containerd/containerd.sock",
-					"/run/k3s/containerd/containerd.sock",
+					testContainerdSock,
+					testK3sContainerdSock,
 				},
 				PrefixHostRoot: true,
 			},
 			hostRoot: "/",
 			want: []string{
-				"/run/containerd/containerd.sock",
-				"/run/k3s/containerd/containerd.sock",
+				testContainerdSock,
+				testK3sContainerdSock,
 			},
 		},
 		{
 			name: "default containerd on container",
 			containerRuntimeAddress: config.ContainerRuntimeAddresses{
 				Addresses: []string{
-					"/run/containerd/containerd.sock",
-					"/run/k3s/containerd/containerd.sock",
+					testContainerdSock,
+					testK3sContainerdSock,
 				},
 				PrefixHostRoot: true,
 			},
-			hostRoot: "/hostroot",
+			hostRoot: testHostRoot,
 			want: []string{
-				"/run/containerd/containerd.sock",
+				testContainerdSock,
 				"/hostroot/run/containerd/containerd.sock",
-				"/run/k3s/containerd/containerd.sock",
+				testK3sContainerdSock,
 				"/hostroot/run/k3s/containerd/containerd.sock",
 			},
 		},
@@ -69,16 +77,16 @@ func TestContainerRuntimeAddresses_ExpandAddresses(t *testing.T) {
 			containerRuntimeAddress: config.ContainerRuntimeAddresses{
 				Addresses: []string{
 					"",
-					"unix:///run/docker.sock",
-					"unix:///var/run/docker.sock",
+					testDockerSockRun,
+					testDockerSockVarRun,
 				},
 				PrefixHostRoot: true,
 			},
 			hostRoot: "/",
 			want: []string{
 				"",
-				"unix:///run/docker.sock",
-				"unix:///var/run/docker.sock",
+				testDockerSockRun,
+				testDockerSockVarRun,
 			},
 		},
 		{
@@ -86,17 +94,17 @@ func TestContainerRuntimeAddresses_ExpandAddresses(t *testing.T) {
 			containerRuntimeAddress: config.ContainerRuntimeAddresses{
 				Addresses: []string{
 					"",
-					"unix:///run/docker.sock",
-					"unix:///var/run/docker.sock",
+					testDockerSockRun,
+					testDockerSockVarRun,
 				},
 				PrefixHostRoot: true,
 			},
-			hostRoot: "/hostroot",
+			hostRoot: testHostRoot,
 			want: []string{
 				"",
-				"unix:///run/docker.sock",
+				testDockerSockRun,
 				"unix:///hostroot/run/docker.sock",
-				"unix:///var/run/docker.sock",
+				testDockerSockVarRun,
 				"unix:///hostroot/var/run/docker.sock",
 			},
 		},
@@ -105,23 +113,23 @@ func TestContainerRuntimeAddresses_ExpandAddresses(t *testing.T) {
 			containerRuntimeAddress: config.ContainerRuntimeAddresses{
 				Addresses: []string{
 					"",
-					"unix:///run/docker.sock",
-					"unix:///var/run/docker.sock",
+					testDockerSockRun,
+					testDockerSockVarRun,
 				},
 				PrefixHostRoot: false,
 			},
-			hostRoot: "/hostroot",
+			hostRoot: testHostRoot,
 			want: []string{
 				"",
-				"unix:///run/docker.sock",
-				"unix:///var/run/docker.sock",
+				testDockerSockRun,
+				testDockerSockVarRun,
 			},
 		},
 		{
 			name: "docker custom",
 			containerRuntimeAddress: config.ContainerRuntimeAddresses{
 				Addresses: []string{
-					"unix:///run/docker.sock",
+					testDockerSockRun,
 					"",
 					"https://localhost:8080",
 					"unix://tmp/test",
@@ -129,9 +137,9 @@ func TestContainerRuntimeAddresses_ExpandAddresses(t *testing.T) {
 				},
 				PrefixHostRoot: true,
 			},
-			hostRoot: "/hostroot",
+			hostRoot: testHostRoot,
 			want: []string{
-				"unix:///run/docker.sock",
+				testDockerSockRun,
 				"unix:///hostroot/run/docker.sock",
 				"",
 				"https://localhost:8080",

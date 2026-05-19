@@ -118,7 +118,7 @@ var (
 		"glouton_gatherer_execution_seconds_count",
 		"glouton_gatherer_execution_seconds_sum",
 		"node_load1",
-		"node_cpu_seconds_global",
+		metricNodeCPUSecondsGlobal,
 		"node_memory_MemTotal_bytes",
 		"node_memory_MemAvailable_bytes",
 		"node_memory_MemFree_bytes",
@@ -179,7 +179,7 @@ var (
 		"cpu_softirq",
 		"cpu_steal",
 		"cpu_system",
-		"cpu_used",
+		metricCPUUsed,
 		"cpu_used_status",
 		"cpu_user",
 		"cpu_wait",
@@ -190,17 +190,17 @@ var (
 		"disk_inodes_total",
 		"disk_inodes_used",
 		"disk_total",
-		"disk_used",
+		metricDiskUsed,
 		"disk_used_perc",
 		"disk_used_perc_status",
 		"io_read_bytes",
-		"io_reads",
+		metricIOReads,
 		"io_read_merged",
 		"io_read_utilization",
 		"io_utilization",
 		"io_write_bytes",
 		"io_write_merged",
-		"io_writes",
+		metricIOWrites,
 		"io_write_utilization",
 		"mem_available",
 		"mem_available_perc",
@@ -208,7 +208,7 @@ var (
 		"mem_cached",
 		"mem_free",
 		"mem_total",
-		"mem_used",
+		metricMemUsed,
 		"mem_used_perc",
 		"mem_used_perc_status",
 		"mem_inactive",
@@ -328,6 +328,13 @@ var (
 
 const (
 	filterLogDuration = 50 * time.Millisecond
+
+	metricNodeCPUSecondsGlobal = "node_cpu_seconds_global"
+	metricCPUUsed              = "cpu_used"
+	metricDiskUsed             = "disk_used"
+	metricIOReads              = "io_reads"
+	metricIOWrites             = "io_writes"
+	metricMemUsed              = "mem_used"
 )
 
 // Filter is a thread-safe holder of an allow / deny metrics list.

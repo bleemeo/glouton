@@ -23,6 +23,17 @@ import (
 	"github.com/bleemeo/glouton/prometheus/exporter/common"
 )
 
+const (
+	testDiskSDA          = "sda"
+	testDiskHDA          = "hda"
+	testValueStr         = "value"
+	testMountMnt         = "/mnt"
+	testErrCompileFmt    = "failed to compile %#v: %v"
+	testErrMatchTrueFmt  = "MatchString(%s) == true, want false"
+	testErrMatchFalseFmt = "MatchString(%s) == false, want true"
+	testErrReFromREsFmt  = "ReFromREs failed: %v"
+)
+
 func TestMergeREs(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -37,13 +48,13 @@ func TestMergeREs(t *testing.T) {
 				"^nvme0n1",
 			},
 			matches: []string{
-				"sda",
+				testDiskSDA,
 				"sda5",
 				"nvme0n12",
 			},
 			noMatchers: []string{
-				"value",
-				"hda",
+				testValueStr,
+				testDiskHDA,
 				"sda15",
 				"onvmen1",
 			},
@@ -56,7 +67,7 @@ func TestMergeREs(t *testing.T) {
 				"^[A-Z]:$",
 			},
 			matches: []string{
-				"hda",
+				testDiskHDA,
 				"hdb",
 				"xvdc",
 				"mmcblk8",
@@ -75,7 +86,7 @@ func TestMergeREs(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			res, err := common.CompileREs(tt.args)
 			if err != nil {
-				t.Fatalf("failed to compile %#v: %v", tt.args, err)
+				t.Fatalf(testErrCompileFmt, tt.args, err)
 			}
 
 			got, err := common.MergeREs(res)
@@ -85,20 +96,20 @@ func TestMergeREs(t *testing.T) {
 
 			gotRE, err := regexp.Compile(got)
 			if err != nil {
-				t.Fatalf("failed to compile %#v: %v", got, err)
+				t.Fatalf(testErrCompileFmt, got, err)
 
 				return
 			}
 
 			for _, v := range tt.matches {
 				if !gotRE.MatchString(v) {
-					t.Errorf("MatchString(%s) == false, want true", v)
+					t.Errorf(testErrMatchFalseFmt, v)
 				}
 			}
 
 			for _, v := range tt.noMatchers {
 				if gotRE.MatchString(v) {
-					t.Errorf("MatchString(%s) == true, want false", v)
+					t.Errorf(testErrMatchTrueFmt, v)
 				}
 			}
 		})
@@ -119,29 +130,29 @@ func TestReFromREs(t *testing.T) {
 		{
 			name: "simple",
 			args: args{[]string{
-				"sda",
+				testDiskSDA,
 			}},
 			matches: []string{
-				"sda",
+				testDiskSDA,
 			},
 			noMatchers: []string{
-				"value",
-				"hda",
+				testValueStr,
+				testDiskHDA,
 			},
 		},
 		{
 			name: "two-choice",
 			args: args{[]string{
-				"sda",
+				testDiskSDA,
 				"nvme0n1",
 			}},
 			matches: []string{
-				"sda",
+				testDiskSDA,
 				"nvme0n1",
 			},
 			noMatchers: []string{
-				"value",
-				"hda",
+				testValueStr,
+				testDiskHDA,
 			},
 		},
 		{
@@ -152,7 +163,7 @@ func TestReFromREs(t *testing.T) {
 				"^[A-Z]:$",
 			}},
 			matches: []string{
-				"hda",
+				testDiskHDA,
 				"hdb",
 				"xvdc",
 				"mmcblk8",
@@ -171,27 +182,27 @@ func TestReFromREs(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := common.ReFromREs(tt.args.input)
 			if err != nil {
-				t.Errorf("ReFromREs failed: %v", err)
+				t.Errorf(testErrReFromREsFmt, err)
 
 				return
 			}
 
 			gotRE, err := regexp.Compile(got)
 			if err != nil {
-				t.Errorf("failed to compile %#v: %v", got, err)
+				t.Errorf(testErrCompileFmt, got, err)
 
 				return
 			}
 
 			for _, v := range tt.matches {
 				if !gotRE.MatchString(v) {
-					t.Errorf("MatchString(%s) == false, want true", v)
+					t.Errorf(testErrMatchFalseFmt, v)
 				}
 			}
 
 			for _, v := range tt.noMatchers {
 				if gotRE.MatchString(v) {
-					t.Errorf("MatchString(%s) == true, want false", v)
+					t.Errorf(testErrMatchTrueFmt, v)
 				}
 			}
 		})
@@ -252,27 +263,27 @@ func TestReFromPrefixes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := common.ReFromPrefix(tt.args.prefix)
 			if err != nil {
-				t.Errorf("ReFromREs failed: %v", err)
+				t.Errorf(testErrReFromREsFmt, err)
 
 				return
 			}
 
 			gotRE, err := regexp.Compile(got)
 			if err != nil {
-				t.Errorf("failed to compile %#v: %v", got, err)
+				t.Errorf(testErrCompileFmt, got, err)
 
 				return
 			}
 
 			for _, v := range tt.matches {
 				if !gotRE.MatchString(v) {
-					t.Errorf("MatchString(%s) == false, want true", v)
+					t.Errorf(testErrMatchFalseFmt, v)
 				}
 			}
 
 			for _, v := range tt.noMatchers {
 				if gotRE.MatchString(v) {
-					t.Errorf("MatchString(%s) == true, want false", v)
+					t.Errorf(testErrMatchTrueFmt, v)
 				}
 			}
 		})
@@ -291,10 +302,10 @@ func TestReFromPathPrefix(t *testing.T) {
 		noMatchers []string
 	}{
 		{
-			name: "/mnt",
-			args: args{"/mnt"},
+			name: testMountMnt,
+			args: args{testMountMnt},
 			matches: []string{
-				"/mnt",
+				testMountMnt,
 				"/mnt/disk",
 			},
 			noMatchers: []string{
@@ -319,27 +330,27 @@ func TestReFromPathPrefix(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := common.ReFromPathPrefix(tt.args.prefix)
 			if err != nil {
-				t.Errorf("ReFromREs failed: %v", err)
+				t.Errorf(testErrReFromREsFmt, err)
 
 				return
 			}
 
 			gotRE, err := regexp.Compile(got)
 			if err != nil {
-				t.Errorf("failed to compile %#v: %v", got, err)
+				t.Errorf(testErrCompileFmt, got, err)
 
 				return
 			}
 
 			for _, v := range tt.matches {
 				if !gotRE.MatchString(v) {
-					t.Errorf("MatchString(%s) == false, want true", v)
+					t.Errorf(testErrMatchFalseFmt, v)
 				}
 			}
 
 			for _, v := range tt.noMatchers {
 				if gotRE.MatchString(v) {
-					t.Errorf("MatchString(%s) == true, want false", v)
+					t.Errorf(testErrMatchTrueFmt, v)
 				}
 			}
 		})

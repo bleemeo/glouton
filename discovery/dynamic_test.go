@@ -31,6 +31,53 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
+const (
+	testIP17217049      = "172.17.0.49"
+	testIP17217050      = "172.17.0.50"
+	testID001           = "id001"
+	testID002           = "id002"
+	testNginxAltKey     = "nginx_port_alt"
+	testSecret          = "secret"
+	testIPZero          = "0.0.0.0"
+	testRoot            = "-root"
+	testSaslErrorLogger = "sasl_error_logger"
+	testErlangLibDir    = "/usr/lib/erlang"
+	testFalse           = "false"
+
+	testNginxMasterDaemon = "nginx: master process nginx -g daemon off;"
+	testPHPFPMMasterConf  = "php-fpm: master process (/etc/php/7.0/fpm/php-fpm.conf)"
+	testNginxMasterSbin   = "nginx: master process /usr/sbin/nginx"
+	testRedisServerListen = "redis-server *:6379"
+	testMemcachedBin      = "/usr/bin/memcached"
+	testMySQL             = string(MySQLService)
+	testHAProxy           = string(HAProxyService)
+	testUWSGI             = string(UWSGIService)
+	testMySQLD            = "mysqld"
+
+	testMemcache         = "memcache"
+	testIP192168         = "192.168.1.1"
+	testXmx1g            = "-Xmx1g"
+	testNoinput          = "-noinput"
+	testApache2Sbin      = "/usr/sbin/apache2"
+	testHome             = "-home"
+	testTrue             = "true"
+	testRabbit           = "-rabbit"
+	testCp               = "-cp"
+	testFileEncodingUTF8 = "-Dfile.encoding=UTF-8"
+	testUseG1GC          = "-XX:+UseG1GC"
+	testInit             = "init"
+	testStartServiceSh   = "/srv/start-service.sh"
+	testPath             = "/path"
+	testEllipsis         = "[...]"
+	testSname            = "-sname"
+	testStart            = "start"
+	testProgname         = "-progname"
+	testSasl             = "-sasl"
+	testNoshell          = "-noshell"
+	testOsMon            = "-os_mon"
+	testBash             = "bash"
+)
+
 type mockProcess struct {
 	result []facts.Process
 }
@@ -115,7 +162,7 @@ func TestServiceByCommand(t *testing.T) {
 		want ServiceName
 	}{
 		{
-			in:   []string{"/usr/bin/memcached", "-m", "64", "-p", "11211", "-u", "memcache", "-l", "127.0.0.1", "-P", "/var/run/memcached/memcached.pid"},
+			in:   []string{testMemcachedBin, "-m", "64", "-p", "11211", "-u", testMemcache, "-l", testIP127001, "-P", "/var/run/memcached/memcached.pid"},
 			want: MemcachedService,
 		},
 	}
@@ -140,13 +187,13 @@ func TestDynamicDiscoverySimple(t *testing.T) {
 					PID:         1547,
 					PPID:        1,
 					CreateTime:  time.Now(),
-					CmdLineList: []string{"/usr/bin/memcached", "-m", "64", "-p", "11211", "-u", "memcache", "-l", "127.0.0.1", "-P", "/var/run/memcached/memcached.pid"},
-					Name:        "memcached",
+					CmdLineList: []string{testMemcachedBin, "-m", "64", "-p", "11211", "-u", testMemcache, "-l", testIP127001, "-P", "/var/run/memcached/memcached.pid"},
+					Name:        testMemcached,
 					MemoryRSS:   0xa88,
 					CPUPercent:  0.028360216236998047,
 					CPUTime:     98.55000000000001,
 					Status:      "S",
-					Username:    "memcache",
+					Username:    testMemcache,
 					Executable:  "",
 					ContainerID: "",
 				},
@@ -154,7 +201,7 @@ func TestDynamicDiscoverySimple(t *testing.T) {
 		},
 		Netstat: mockNetstat{result: map[int][]facts.ListenAddress{
 			1547: {
-				{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211},
+				{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 11211},
 			},
 		}},
 		ContainerInfo:      mockContainerInfo{},
@@ -173,15 +220,15 @@ func TestDynamicDiscoverySimple(t *testing.T) {
 		t.Errorf("len(srv) == %v, want 1", len(srv))
 	}
 
-	if srv[0].Name != "memcached" {
-		t.Errorf("Name == %#v, want %#v", srv[0].Name, "memcached")
+	if srv[0].Name != testMemcached {
+		t.Errorf("Name == %#v, want %#v", srv[0].Name, testMemcached)
 	}
 
 	if srv[0].ServiceType != MemcachedService {
 		t.Errorf("Name == %#v, want %#v", srv[0].ServiceType, MemcachedService)
 	}
 
-	want := []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}}
+	want := []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 11211}}
 	if !reflect.DeepEqual(srv[0].ListenAddresses, want) {
 		t.Errorf("ListenAddresses == %v, want %v", srv[0].ListenAddresses, want)
 	}
@@ -209,15 +256,15 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 	}{
 		{
 			testName:         "simple-bind-all",
-			cmdLine:          []string{"/usr/bin/memcached"},
+			cmdLine:          []string{testMemcachedBin},
 			containerID:      "",
-			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "0.0.0.0", Port: 11211}},
+			netstatAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIPZero, Port: 11211}},
 			want: Service{
-				Name:            "memcached",
+				Name:            testMemcached,
 				ServiceType:     MemcachedService,
 				ContainerID:     "",
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "0.0.0.0", Port: 11211}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIPZero, Port: 11211}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0,
@@ -226,30 +273,30 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 		},
 		{
 			testName:         "simple-no-netstat",
-			cmdLine:          []string{"/usr/bin/memcached"},
+			cmdLine:          []string{testMemcachedBin},
 			containerID:      "",
 			netstatAddresses: nil,
 			want: Service{
-				Name:            "memcached",
+				Name:            testMemcached,
 				ServiceType:     MemcachedService,
 				ContainerID:     "",
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 11211}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
 		},
 		{
 			testName:         "simple-bind-specific",
-			cmdLine:          []string{"/usr/bin/memcached"},
+			cmdLine:          []string{testMemcachedBin},
 			containerID:      "",
-			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "192.168.1.1", Port: 11211}},
+			netstatAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP192168, Port: 11211}},
 			want: Service{
-				Name:            "memcached",
+				Name:            testMemcached,
 				ServiceType:     MemcachedService,
 				ContainerID:     "",
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "192.168.1.1", Port: 11211}},
-				IPAddress:       "192.168.1.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP192168, Port: 11211}},
+				IPAddress:       testIP192168,
 				Active:          true,
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0,
@@ -260,13 +307,13 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			testName:         "ignore-highport",
 			cmdLine:          []string{"/usr/sbin/haproxy", "-f", "/etc/haproxy/haproxy.cfg"},
 			containerID:      "",
-			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "0.0.0.0", Port: 80}, {NetworkFamily: "udp", Address: "0.0.0.0", Port: 42514}},
+			netstatAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIPZero, Port: 80}, {NetworkFamily: udpProtocol, Address: testIPZero, Port: 42514}},
 			want: Service{
-				Name:            "haproxy",
+				Name:            testHAProxy,
 				ServiceType:     HAProxyService,
 				ContainerID:     "",
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "0.0.0.0", Port: 80}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIPZero, Port: 80}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0,
@@ -275,17 +322,17 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 		},
 		{
 			testName:           "redis-container",
-			cmdLine:            []string{"redis-server *:6379"},
+			cmdLine:            []string{testRedisServerListen},
 			containerID:        "5b8f83412931055bcc5da35e41ada85fd70015673163d56911cac4fe6693273f",
 			netstatAddresses:   nil, // netstat won't provide information
-			containerAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 6379}},
-			containerIP:        "172.17.0.49",
+			containerAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 6379}},
+			containerIP:        testIP17217049,
 			want: Service{
-				Name:            "redis",
+				Name:            testRedis,
 				ServiceType:     RedisService,
 				ContainerID:     "5b8f83412931055bcc5da35e41ada85fd70015673163d56911cac4fe6693273f",
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 6379}},
-				IPAddress:       "172.17.0.49",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 6379}},
+				IPAddress:       testIP17217049,
 				IgnoredPorts:    map[int]bool{},
 				Active:          true,
 				HasNetstatInfo:  true,
@@ -294,13 +341,13 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			testName: "elasticsearch",
-			cmdLine:  []string{"/opt/jdk-11.0.1/bin/java", "-Xms1g", "-Xmx1g", "-XX:+UseConcMarkSweepGC", "[...]", "/usr/share/elasticsearch/lib/*", "org.elasticsearch.bootstrap.Elasticsearch"},
+			testName: string(ElasticSearchService),
+			cmdLine:  []string{"/opt/jdk-11.0.1/bin/java", "-Xms1g", testXmx1g, "-XX:+UseConcMarkSweepGC", testEllipsis, "/usr/share/elasticsearch/lib/*", elasticsearchMainClass},
 			want: Service{
-				Name:            "elasticsearch",
+				Name:            string(ElasticSearchService),
 				ServiceType:     ElasticSearchService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 9200}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 9200}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
@@ -308,18 +355,18 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 		{
 			testName:     "mariadb-container",
 			containerID:  "1234",
-			containerIP:  "172.17.0.49",
-			cmdLine:      []string{"mariadbd"},
-			containerEnv: map[string]string{"MARIADB_ROOT_PASSWORD": "secret"},
+			containerIP:  testIP17217049,
+			cmdLine:      []string{mariadbdProcess},
+			containerEnv: map[string]string{"MARIADB_ROOT_PASSWORD": testSecret},
 			want: Service{
-				Name:            "mariadb",
+				Name:            string(MariaDBService),
 				ServiceType:     MariaDBService,
 				ContainerID:     "1234",
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 3306}},
-				IPAddress:       "172.17.0.49",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 3306}},
+				IPAddress:       testIP17217049,
 				Config: config.Service{
 					Username: mariadbDefaultUser,
-					Password: "secret",
+					Password: testSecret,
 				},
 				IgnoredPorts: map[int]bool{},
 				Active:       true,
@@ -328,12 +375,12 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 		},
 		{
 			testName: "mariadb-host",
-			cmdLine:  []string{"mariadbd"},
+			cmdLine:  []string{mariadbdProcess},
 			want: Service{
-				Name:            "mariadb",
+				Name:            string(MariaDBService),
 				ServiceType:     MariaDBService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3306}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 3306}},
+				IPAddress:       testIP127001,
 				Config: config.Service{
 					Username:          "",
 					Password:          "",
@@ -346,18 +393,18 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 		{
 			testName:     "mysql-container",
 			containerID:  "1234",
-			containerIP:  "172.17.0.49",
-			cmdLine:      []string{"mysqld"},
-			containerEnv: map[string]string{"MYSQL_ROOT_PASSWORD": "secret"},
+			containerIP:  testIP17217049,
+			cmdLine:      []string{testMySQLD},
+			containerEnv: map[string]string{"MYSQL_ROOT_PASSWORD": testSecret},
 			want: Service{
-				Name:            "mysql",
+				Name:            testMySQL,
 				ServiceType:     MySQLService,
 				ContainerID:     "1234",
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 3306}},
-				IPAddress:       "172.17.0.49",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 3306}},
+				IPAddress:       testIP17217049,
 				Config: config.Service{
 					Username: mysqlDefaultUser,
-					Password: "secret",
+					Password: testSecret,
 				},
 				IgnoredPorts: map[int]bool{},
 				Active:       true,
@@ -366,18 +413,18 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 		},
 		{
 			testName: "mysql-host",
-			cmdLine:  []string{"mysqld"},
+			cmdLine:  []string{testMySQLD},
 			filesContent: map[string]string{
 				"/etc/mysql/debian.cnf": "[client]\nuser   = root\npassword    = secret\n",
 			},
 			want: Service{
-				Name:            "mysql",
+				Name:            testMySQL,
 				ServiceType:     MySQLService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3306}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 3306}},
+				IPAddress:       testIP127001,
 				Config: config.Service{
 					Username:          "root",
-					Password:          "secret",
+					Password:          testSecret,
 					MetricsUnixSocket: "",
 				},
 				Active:       true,
@@ -386,18 +433,18 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 		},
 		{
 			testName: "mysql-host2",
-			cmdLine:  []string{"mysqld"},
+			cmdLine:  []string{testMySQLD},
 			filesContent: map[string]string{
 				"/etc/mysql/debian.cnf": "[client]\nuser   = root\npassword    = secret\nsocket = /tmp/file.sock\n",
 			},
 			want: Service{
-				Name:            "mysql",
+				Name:            testMySQL,
 				ServiceType:     MySQLService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3306}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 3306}},
+				IPAddress:       testIP127001,
 				Config: config.Service{
 					Username:          "root",
-					Password:          "secret",
+					Password:          testSecret,
 					MetricsUnixSocket: "/tmp/file.sock",
 				},
 				Active:       true,
@@ -405,13 +452,13 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			testName: "rabbitmq",
-			cmdLine:  []string{"/usr/lib/erlang/erts-9.3.3.3/bin/beam.smp", "-W", "w", "[...]", "-noinput", "-s", "rabbit", "boot", "-sname", "[...]"},
+			testName: string(RabbitMQService),
+			cmdLine:  []string{"/usr/lib/erlang/erts-9.3.3.3/bin/beam.smp", "-W", "w", testEllipsis, testNoinput, "-s", "rabbit", "boot", testSname, testEllipsis},
 			want: Service{
-				Name:            "rabbitmq",
+				Name:            string(RabbitMQService),
 				ServiceType:     RabbitMQService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 5672}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 5672}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
@@ -422,8 +469,8 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			want: Service{
 				Name:            "influxdb",
 				ServiceType:     InfluxDBService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 8086}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 8086}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
@@ -433,10 +480,10 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			testName: "mysql-ubuntu-14.04",
 			cmdLine:  []string{"/usr/sbin/mysqld"},
 			want: Service{
-				Name:            "mysql",
+				Name:            testMySQL,
 				ServiceType:     MySQLService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3306}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 3306}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
@@ -447,44 +494,44 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			want: Service{
 				Name:            "ntp",
 				ServiceType:     NTPService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "udp", Address: "127.0.0.1", Port: 123}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: udpProtocol, Address: testIP127001, Port: 123}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
 		},
 		{
 			testName: "slapd-ubuntu-14.04",
-			cmdLine:  []string{"/usr/sbin/slapd", "-h", "ldap:/// ldapi:///", "-g", "openldap", "-u", "openldap", "-F", "/etc/ldap/slapd.d"},
+			cmdLine:  []string{"/usr/sbin/slapd", "-h", "ldap:/// ldapi:///", "-g", string(OpenLDAPService), "-u", string(OpenLDAPService), "-F", "/etc/ldap/slapd.d"},
 			want: Service{
-				Name:            "openldap",
+				Name:            string(OpenLDAPService),
 				ServiceType:     OpenLDAPService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 389}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 389}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
 		},
 		{
 			testName: "apache2-ubuntu-14.04",
-			cmdLine:  []string{"/usr/sbin/apache2", "-k", "start"},
+			cmdLine:  []string{testApache2Sbin, "-k", testStart},
 			want: Service{
-				Name:            "apache",
+				Name:            testApache,
 				ServiceType:     ApacheService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 80}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 80}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
 		},
 		{
 			testName: "asterisk-ubuntu-14.04",
-			cmdLine:  []string{"/usr/sbin/asterisk", "-p", "-U", "asterisk"},
+			cmdLine:  []string{"/usr/sbin/asterisk", "-p", "-U", string(AsteriskService)},
 			want: Service{
-				Name:            "asterisk",
+				Name:            string(AsteriskService),
 				ServiceType:     AsteriskService,
 				ListenAddresses: nil,
-				IPAddress:       "127.0.0.1",
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
@@ -495,8 +542,8 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			want: Service{
 				Name:            "bind",
 				ServiceType:     BindService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 53}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 53}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
@@ -507,8 +554,8 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			want: Service{
 				Name:            "dovecot",
 				ServiceType:     DovecotService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 143}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 143}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
@@ -516,16 +563,16 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 		{
 			testName: "ejabberd-ubuntu-14.04",
 			cmdLine: []string{
-				"/usr/lib/erlang/erts-5.10.4/bin/beam", "-K", "false", "-P", "250000", "--", "-root", "/usr/lib/erlang", "-progname", "erl", "--", "-home", "/var/lib/ejabberd", "--", "-sname",
-				"ejabberd", "-pa", "/usr/lib/ejabberd/ebin", "-s", "ejabberd", "-kernel", "inetrc", "\"/etc/ejabberd/inetrc\"", "-ejabberd", "config", "\"/etc/ejabberd/ejabberd.cfg\"", "log_path",
-				"\"/var/log/ejabberd/ejabberd.log\"", "erlang_log_path", "\"/var/log/ejabberd/erlang.log\"", "-sasl", "sasl_error_logger", "false", "-mnesia", "dir", "\"/var/lib/ejabberd\"",
-				"-smp", "disable", "-noshell", "-noshell", "-noinput",
+				"/usr/lib/erlang/erts-5.10.4/bin/beam", "-K", testFalse, "-P", "250000", "--", testRoot, testErlangLibDir, testProgname, processErl, "--", testHome, "/var/lib/ejabberd", "--", testSname,
+				string(EjabberService), "-pa", "/usr/lib/ejabberd/ebin", "-s", string(EjabberService), "-kernel", "inetrc", "\"/etc/ejabberd/inetrc\"", "-ejabberd", "config", "\"/etc/ejabberd/ejabberd.cfg\"", "log_path",
+				"\"/var/log/ejabberd/ejabberd.log\"", "erlang_log_path", "\"/var/log/ejabberd/erlang.log\"", testSasl, testSaslErrorLogger, testFalse, "-mnesia", "dir", "\"/var/lib/ejabberd\"",
+				"-smp", "disable", testNoshell, testNoshell, testNoinput,
 			},
 			want: Service{
-				Name:            "ejabberd",
+				Name:            string(EjabberService),
 				ServiceType:     EjabberService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 5222}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 5222}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
@@ -533,19 +580,19 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 		{
 			testName: "rabbitmq-ubuntu-14.04",
 			cmdLine: []string{
-				"/usr/lib/erlang/erts-5.10.4/bin/beam", "-W", "w", "-K", "true", "-A30", "-P", "1048576", "--", "-root", "/usr/lib/erlang", "-progname", "erl", "--", "-home", "/var/lib/rabbitmq",
-				"--", "-pa", "/usr/lib/rabbitmq/lib/rabbitmq_server-3.2.4/sbin/../ebin", "-noshell", "-noinput", "-s", "rabbit", "boot", "-sname", "rabbit@trusty", "-boot", "start_sasl", "-kernel",
-				"inet_default_connect_options", "[{nodelay,true}]", "-sasl", "errlog_type", "error", "-sasl", "sasl_error_logger", "false", "-rabbit", "error_logger",
-				"{file,\"/var/log/rabbitmq/rabbit@trusty.log\"}", "-rabbit", "sasl_error_logger", "{file,\"/var/log/rabbitmq/rabbit@trusty-sasl.log\"}", "-rabbit", "enabled_plugins_file",
-				"\"/etc/rabbitmq/enabled_plugins\"", "-rabbit", "plugins_dir", "\"/usr/lib/rabbitmq/lib/rabbitmq_server-3.2.4/sbin/../plugins\"", "-rabbit", "plugins_expand_dir",
-				"\"/var/lib/rabbitmq/mnesia/rabbit@trusty-plugins-expand\"", "-os_mon", "start_cpu_sup", "false", "-os_mon", "start_disksup", "false", "-os_mon", "start_memsup", "false", "-mnesia",
+				"/usr/lib/erlang/erts-5.10.4/bin/beam", "-W", "w", "-K", testTrue, "-A30", "-P", "1048576", "--", testRoot, testErlangLibDir, testProgname, processErl, "--", testHome, "/var/lib/rabbitmq",
+				"--", "-pa", "/usr/lib/rabbitmq/lib/rabbitmq_server-3.2.4/sbin/../ebin", testNoshell, testNoinput, "-s", "rabbit", "boot", testSname, "rabbit@trusty", "-boot", "start_sasl", "-kernel",
+				"inet_default_connect_options", "[{nodelay,true}]", testSasl, "errlog_type", "error", testSasl, testSaslErrorLogger, testFalse, testRabbit, "error_logger",
+				"{file,\"/var/log/rabbitmq/rabbit@trusty.log\"}", testRabbit, testSaslErrorLogger, "{file,\"/var/log/rabbitmq/rabbit@trusty-sasl.log\"}", testRabbit, "enabled_plugins_file",
+				"\"/etc/rabbitmq/enabled_plugins\"", testRabbit, "plugins_dir", "\"/usr/lib/rabbitmq/lib/rabbitmq_server-3.2.4/sbin/../plugins\"", testRabbit, "plugins_expand_dir",
+				"\"/var/lib/rabbitmq/mnesia/rabbit@trusty-plugins-expand\"", testOsMon, "start_cpu_sup", testFalse, testOsMon, "start_disksup", testFalse, testOsMon, "start_memsup", testFalse, "-mnesia",
 				"dir", "\"/var/lib/rabbitmq/mnesia/rabbit@trusty\"",
 			},
 			want: Service{
-				Name:            "rabbitmq",
+				Name:            string(RabbitMQService),
 				ServiceType:     RabbitMQService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 5672}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 5672}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
@@ -556,8 +603,8 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			want: Service{
 				Name:            "mongodb",
 				ServiceType:     MongoDBService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 27017}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 27017}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
@@ -566,10 +613,10 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			testName: "mosquitto-ubuntu-14.04",                                               //nolint:misspell
 			cmdLine:  []string{"/usr/sbin/mosquitto", "-c", "/etc/mosquitto/mosquitto.conf"}, //nolint:misspell
 			want: Service{
-				Name:            "mosquitto", //nolint:misspell
+				Name:            string(MosquittoService),
 				ServiceType:     MosquittoService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 1883}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 1883}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
@@ -578,22 +625,22 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			testName: "redis-ubuntu-14.04",
 			cmdLine:  []string{"/usr/bin/redis-server 127.0.0.1:6379"},
 			want: Service{
-				Name:            "redis",
+				Name:            testRedis,
 				ServiceType:     RedisService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6379}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 6379}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
 		},
 		{
 			testName: "memcached-ubuntu-14.04",
-			cmdLine:  []string{"/usr/bin/memcached", "-", "64", "-p", "11211", "-u", "memcache", "-l", "127.0.0.1"},
+			cmdLine:  []string{testMemcachedBin, "-", "64", "-p", "11211", "-u", testMemcache, "-l", testIP127001},
 			want: Service{
-				Name:            "memcached",
+				Name:            testMemcached,
 				ServiceType:     MemcachedService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 11211}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
@@ -602,10 +649,10 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			testName: "squid-ubuntu-14.04",
 			cmdLine:  []string{"/usr/sbin/squid3", "-N", "-YC", "-f", "/etc/squid3/squid.conf"},
 			want: Service{
-				Name:            "squid",
+				Name:            string(SquidService),
 				ServiceType:     SquidService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3128}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 3128}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
@@ -614,10 +661,10 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			testName: "postgresql-ubuntu-14.04",
 			cmdLine:  []string{"/usr/lib/postgresql/9.3/bin/postgres", "-D", "/var/lib/postgresql/9.3/main", "-c", "config_file=/etc/postgresql/9.3/main/postgresql.conf"},
 			want: Service{
-				Name:            "postgresql",
+				Name:            testPostgreSQL,
 				ServiceType:     PostgreSQLService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 5432}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 5432}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
@@ -625,7 +672,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 		{
 			testName: "zookeeper-ubuntu-14.04",
 			cmdLine: []string{
-				"/usr/bin/java", "-cp",
+				"/usr/bin/java", testCp,
 				"/etc/zookeeper/conf:/usr/share/java/jline.jar:/usr/share/java/log4j-1.2.jar:/usr/share/java/xercesImpl.jar:/usr/share/java/xmlParserAPIs.jar:/usr/share/java/netty.jar:/usr/share/java/slf4j-api.jar:/usr/share/java/slf4j-log4j12.jar:/usr/share/java/zookeeper.jar",
 				"-Dcom.sun.management.jmxremote", "-Dcom.sun.management.jmxremote.local.only=false", "-Dzookeeper.log.dir=/var/log/zookeeper", "-Dzookeeper.root.logger=INFO,ROLLINGFILE",
 				"org.apache.zookeeper.server.quorum.QuorumPeerMain", "/etc/zookeeper/conf/zoo.cfg",
@@ -633,8 +680,8 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			want: Service{
 				Name:            "zookeeper",
 				ServiceType:     ZookeeperService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 2181}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 2181}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
@@ -645,8 +692,8 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			want: Service{
 				Name:            "salt_master",
 				ServiceType:     SaltMasterService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 4505}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 4505}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
@@ -657,20 +704,20 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			want: Service{
 				Name:            "postfix",
 				ServiceType:     PostfixService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 25}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 25}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
 		},
 		{
 			testName: "nginx-ubuntu-14.04",
-			cmdLine:  []string{"nginx: master process /usr/sbin/nginx"},
+			cmdLine:  []string{testNginxMasterSbin},
 			want: Service{
-				Name:            "nginx",
+				Name:            testNginx,
 				ServiceType:     NginxService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 80}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 80}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
@@ -681,8 +728,8 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			want: Service{
 				Name:            "exim",
 				ServiceType:     EximService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 25}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 25}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
@@ -694,7 +741,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				Name:            "freeradius",
 				ServiceType:     FreeradiusService,
 				ListenAddresses: nil,
-				IPAddress:       "127.0.0.1",
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
@@ -705,8 +752,8 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			want: Service{
 				Name:            "varnish",
 				ServiceType:     VarnishService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6082}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 6082}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
@@ -715,18 +762,18 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 		{
 			testName: "elasticsearch-ubuntu-16.04",
 			cmdLine: []string{
-				"/usr/lib/jvm/java-8-openjdk-amd64/bin/java", "-Xms256m", "-Xmx1g", "-Djava.awt.headless=true", "-XX:+UseParNewGC", "-XX:+UseConcMarkSweepGC", "-XX:CMSInitiatingOccupancyFraction=75",
-				"-XX:+UseCMSInitiatingOccupancyOnly", "-XX:+HeapDumpOnOutOfMemoryError", "-XX:+DisableExplicitGC", "-Dfile.encoding=UTF-8", "-Delasticsearch", "-Des.pidfile=/var/run/elasticsearch.pid",
-				"-Des.path.home=/usr/share/elasticsearch", "-cp",
+				"/usr/lib/jvm/java-8-openjdk-amd64/bin/java", "-Xms256m", testXmx1g, "-Djava.awt.headless=true", "-XX:+UseParNewGC", "-XX:+UseConcMarkSweepGC", "-XX:CMSInitiatingOccupancyFraction=75",
+				"-XX:+UseCMSInitiatingOccupancyOnly", "-XX:+HeapDumpOnOutOfMemoryError", "-XX:+DisableExplicitGC", testFileEncodingUTF8, "-Delasticsearch", "-Des.pidfile=/var/run/elasticsearch.pid",
+				"-Des.path.home=/usr/share/elasticsearch", testCp,
 				":/usr/share/java/lucene-sandbox-4.10.4.jar:/usr/share/java/sigar.jar:/usr/share/java/lucene-analyzers-morfologik-4.10.4.jar:/usr/share/java/spatial4j-0.4.1.jar:/usr/share/java/lucene-expressions-4.10.4.jar:/usr/share/java/lucene-analyzers-uima-4.10.4.jar:/usr/share/java/groovy-all-2.x.jar:/usr/share/java/lucene-analyzers-kuromoji-4.10.4.jar:/usr/share/java/lucene-facet-4.10.4.jar:/usr/share/java/jna.jar:/usr/share/java/lucene-analyzers-common-4.10.4.jar:/usr/share/java/lucene-core-4.10.4.jar:/usr/share/java/apache-log4j-extras-1.2.17.jar:/usr/share/java/lucene-queries-4.10.4.jar:/usr/share/java/lucene-demo-4.10.4.jar:/usr/share/java/lucene-suggest-4.10.4.jar:/usr/share/java/lucene-analyzers-stempel-4.10.4.jar:/usr/share/java/lucene-highlighter-4.10.4.jar:/usr/share/java/lucene-memory-4.10.4.jar:/usr/share/java/lucene-classification-4.10.4.jar:/usr/share/java/lucene-replicator-4.10.4.jar:/usr/share/java/lucene-grouping-4.10.4.jar:/usr/share/java/log4j-1.2-1.2.17.jar:/usr/share/java/lucene-join-4.10.4.jar:/usr/share/java/lucene-analyzers-smartcn-4.10.4.jar:/usr/share/java/lucene-spatial-4.10.4.jar:/usr/share/java/elasticsearch-1.7.3.jar:/usr/share/java/lucene-codecs-4.10.4.jar:/usr/share/java/lucene-misc-4.10.4.jar:/usr/share/java/lucene-queryparser-4.10.4.jar:/usr/share/java/lucene-test-framework-4.10.4.jar:/usr/share/java/jts.jar:/usr/share/java/lucene-benchmark-4.10.4.jar:/usr/share/java/lucene-analyzers-icu-4.10.4.jar:/usr/share/java/lucene-analyzers-phonetic-4.10.4.jar:",
 				"-Des.default.config=/etc/elasticsearch/elasticsearch.yml", "-Des.default.path.home=/usr/share/elasticsearch", "-Des.default.path.logs=/var/log/elasticsearch",
-				"-Des.default.path.data=/var/lib/elasticsearch", "-Des.default.path.work=/tmp/elasticsearch", "-Des.default.path.conf=/etc/elasticsearch", "org.elasticsearch.bootstrap.Elasticsearch",
+				"-Des.default.path.data=/var/lib/elasticsearch", "-Des.default.path.work=/tmp/elasticsearch", "-Des.default.path.conf=/etc/elasticsearch", elasticsearchMainClass,
 			},
 			want: Service{
-				Name:            "elasticsearch",
+				Name:            string(ElasticSearchService),
 				ServiceType:     ElasticSearchService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 9200}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 9200}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
@@ -735,22 +782,22 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			testName: "squid-ubuntu-16.04",
 			cmdLine:  []string{"/usr/sbin/squid", "-YC", "-f", "/etc/squid/squid.conf"},
 			want: Service{
-				Name:            "squid",
+				Name:            string(SquidService),
 				ServiceType:     SquidService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3128}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 3128}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
 		},
 		{
-			testName: "openvpn",
+			testName: string(OpenVPNService),
 			cmdLine:  []string{"/usr/sbin/openvpn", "--writepid", "/run/openvpn/server.pid", "--daemon", "ovpn-server", "--cd", "/etc/openvpn", "--config", "/etc/openvpn/server.conf", "--script-security", "2"},
 			want: Service{
-				Name:            "openvpn",
+				Name:            string(OpenVPNService),
 				ServiceType:     OpenVPNService,
 				ListenAddresses: nil,
-				IPAddress:       "127.0.0.1",
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
@@ -762,31 +809,31 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				Name:            "libvirt",
 				ServiceType:     LibvirtService,
 				ListenAddresses: nil,
-				IPAddress:       "127.0.0.1",
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
 		},
 		{
-			testName: "haproxy",
-			cmdLine:  []string{"haproxy", "-f", "/usr/local/etc/haproxy/haproxy.cfg"},
+			testName: testHAProxy,
+			cmdLine:  []string{testHAProxy, "-f", "/usr/local/etc/haproxy/haproxy.cfg"},
 			want: Service{
-				Name:            "haproxy",
+				Name:            testHAProxy,
 				ServiceType:     HAProxyService,
 				ListenAddresses: nil,
-				IPAddress:       "127.0.0.1",
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
 		},
 		{
-			testName: "uwsgi",
-			cmdLine:  []string{"uwsgi", "--ini", "/srv/app/deploy/uwsgi.ini"},
+			testName: testUWSGI,
+			cmdLine:  []string{testUWSGI, "--ini", "/srv/app/deploy/uwsgi.ini"},
 			want: Service{
-				Name:            "uwsgi",
+				Name:            testUWSGI,
 				ServiceType:     UWSGIService,
 				ListenAddresses: nil,
-				IPAddress:       "127.0.0.1",
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
@@ -795,10 +842,10 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			testName: "uwsgi-with-auto-procname-1",
 			cmdLine:  []string{"uWSGI master"},
 			want: Service{
-				Name:            "uwsgi",
+				Name:            testUWSGI,
 				ServiceType:     UWSGIService,
 				ListenAddresses: nil,
-				IPAddress:       "127.0.0.1",
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
@@ -807,22 +854,22 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			testName: "uwsgi-with-auto-procname-2",
 			cmdLine:  []string{"uWSGI worker 1"},
 			want: Service{
-				Name:            "uwsgi",
+				Name:            testUWSGI,
 				ServiceType:     UWSGIService,
 				ListenAddresses: nil,
-				IPAddress:       "127.0.0.1",
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
 		},
 		{
 			testName: "service-install",
-			cmdLine:  []string{"apt", "install", "apache2", "redis-server", "postgresql", "mosquitto", "slapd", "squid3"}, //nolint:misspell
+			cmdLine:  []string{"apt", "install", "apache2", "redis-server", testPostgreSQL, string(MosquittoService), "slapd", "squid3"},
 			noMatch:  true,
 		},
 		{
 			testName: "docker-run",
-			cmdLine:  []string{"docker", "run", "-d", "--name", "mysqld", "mysql"},
+			cmdLine:  []string{"docker", "run", "-d", "--name", testMySQLD, testMySQL},
 			noMatch:  true,
 		},
 		{
@@ -837,29 +884,29 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 		},
 		{
 			testName: "random-erlang",
-			cmdLine:  []string{"/usr/lib/erlang/erts-6.2/bin/beam", "--", "-root", "/usr/lib/erlang", "-progname", "erl", "--", "-home", "/root", "--"},
+			cmdLine:  []string{"/usr/lib/erlang/erts-6.2/bin/beam", "--", testRoot, testErlangLibDir, testProgname, processErl, "--", testHome, "/root", "--"},
 			noMatch:  true,
 		},
 		{
 			testName: "mysql-with-space",
 			cmdLine:  []string{"/opt/program files/mysql/mysqld"},
 			want: Service{
-				Name:            "mysql",
+				Name:            testMySQL,
 				ServiceType:     MySQLService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3306}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 3306}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
 		},
 		{
 			testName: "php-fpm",
-			cmdLine:  []string{"php-fpm: master process (/etc/php/7.0/fpm/php-fpm.conf)"},
+			cmdLine:  []string{testPHPFPMMasterConf},
 			want: Service{
-				Name:            "phpfpm",
+				Name:            testPHPFPM,
 				ServiceType:     PHPFPMService,
 				ListenAddresses: nil,
-				IPAddress:       "127.0.0.1",
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
@@ -876,36 +923,36 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 		},
 		{
 			testName:    "nginx-docker-net-host",
-			containerID: "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
-			containerIP: "127.0.0.1",
-			cmdLine:     []string{"nginx: master process nginx -g daemon off;"},
+			containerID: testContainerHash,
+			containerIP: testIP127001,
+			cmdLine:     []string{testNginxMasterDaemon},
 			want: Service{
-				Name:            "nginx",
+				Name:            testNginx,
 				ServiceType:     NginxService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 80}},
-				IPAddress:       "127.0.0.1",
-				ContainerID:     "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 80}},
+				IPAddress:       testIP127001,
+				ContainerID:     testContainerHash,
 				IgnoredPorts:    map[int]bool{},
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
 		},
 		{
-			testName: "bitbucket",
+			testName: string(BitBucketService),
 			cmdLine: []string{
 				"/usr/lib/jvm/java-11-openjdk-amd64//bin/java", "-classpath /srv/bitbucket/dist/current/app", "-Datlassian.plugins.enable.wait=300", "-Datlassian.standalone=BITBUCKET",
-				"-Dbitbucket.home=/srv/bitbucket/home", "-Dbitbucket.install=/srv/bitbucket/dist/current", "-Xms512m", "-Xmx1g", "-XX:+UseG1GC", "-Dfile.encoding=UTF-8", "-Dsun.jnu.encoding=UTF-8",
+				"-Dbitbucket.home=/srv/bitbucket/home", "-Dbitbucket.install=/srv/bitbucket/dist/current", "-Xms512m", testXmx1g, testUseG1GC, testFileEncodingUTF8, "-Dsun.jnu.encoding=UTF-8",
 				"-Djava.io.tmpdir=/srv/bitbucket/home/tmp", "-Djava.library.path=/srv/bitbucket/dist/current/lib/native;/srv/bitbucket/home/lib/native",
-				"com.atlassian.bitbucket.internal.launcher.BitbucketServerLauncher", "start",
+				bitbucketServerLauncher, testStart,
 			},
 			containerID:      "",
-			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "0.0.0.0", Port: 7990}},
+			netstatAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIPZero, Port: 7990}},
 			want: Service{
-				Name:            "bitbucket",
+				Name:            string(BitBucketService),
 				ServiceType:     BitBucketService,
 				ContainerID:     "",
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "0.0.0.0", Port: 7990}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIPZero, Port: 7990}},
+				IPAddress:       testIP127001,
 				IgnoredPorts: map[int]bool{
 					5701: true,
 				},
@@ -919,22 +966,22 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			testName: "bitbucket-extra-ignore-port",
 			cmdLine: []string{
 				"/usr/lib/jvm/java-11-openjdk-amd64//bin/java", "-classpath /srv/bitbucket/dist/current/app", "-Datlassian.plugins.enable.wait=300", "-Datlassian.standalone=BITBUCKET",
-				"-Dbitbucket.home=/srv/bitbucket/home", "-Dbitbucket.install=/srv/bitbucket/dist/current", "-Xms512m", "-Xmx1g", "-XX:+UseG1GC", "-Dfile.encoding=UTF-8", "-Dsun.jnu.encoding=UTF-8",
+				"-Dbitbucket.home=/srv/bitbucket/home", "-Dbitbucket.install=/srv/bitbucket/dist/current", "-Xms512m", testXmx1g, testUseG1GC, testFileEncodingUTF8, "-Dsun.jnu.encoding=UTF-8",
 				"-Djava.io.tmpdir=/srv/bitbucket/home/tmp", "-Djava.library.path=/srv/bitbucket/dist/current/lib/native;/srv/bitbucket/home/lib/native",
-				"com.atlassian.bitbucket.internal.launcher.BitbucketServerLauncher", "start",
+				bitbucketServerLauncher, testStart,
 			},
 			containerID: "1234",
-			containerIP: "127.0.0.1",
+			containerIP: testIP127001,
 			containerLabels: map[string]string{
-				"glouton.check.ignore.port.8080": "true",
+				"glouton.check.ignore.port.8080": testTrue,
 			},
-			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 7990}},
+			netstatAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 7990}},
 			want: Service{
-				Name:            "bitbucket",
+				Name:            string(BitBucketService),
 				ServiceType:     BitBucketService,
 				ContainerID:     "1234",
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 7990}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 7990}},
+				IPAddress:       testIP127001,
 				IgnoredPorts: map[int]bool{
 					5701: true,
 					8080: true,
@@ -946,26 +993,26 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			testName: "kafka",
+			testName: string(KafkaService),
 			cmdLine: []string{
-				"/usr/local/openjdk-11/bin/java", "-Xmx1G", "-Xms1G", "-server", "-XX:+UseG1GC", "-XX:MaxGCPauseMillis=20",
+				"/usr/local/openjdk-11/bin/java", "-Xmx1G", "-Xms1G", "-server", testUseG1GC, "-XX:MaxGCPauseMillis=20",
 				"-XX:+ExplicitGCInvokesConcurrent", "-XX:MaxInlineLevel=15", "-Djava.awt.headless=true",
 				"-Xlog:gc*:file=/opt/kafka/bin/../logs/kafkaServer-gc.log:time,tags:filecount=10,filesize=100M",
 				"-Dcom.sun.management.jmxremote", "-Dcom.sun.management.jmxremote.authenticate=false", "-Dcom.sun.management.jmxremote.ssl=false",
 				"-Djava.rmi.server.hostname=localhost", "-Dcom.sun.management.jmxremote.rmi.port=1099", "-Dcom.sun.management.jmxremote.port=1099",
 				"-Dkafka.logs.dir=/opt/kafka/bin/../logs", "-Dlog4j.configuration=file:/opt/kafka/bin/../config/log4j.properties",
-				"-cp", "/opt/kafka/bin/../libs/activation-1.1.1.jar:/opt/kafka/bin/../libs/aopalliance-repackaged-2.6.1.jar",
+				testCp, "/opt/kafka/bin/../libs/activation-1.1.1.jar:/opt/kafka/bin/../libs/aopalliance-repackaged-2.6.1.jar",
 				"kafka.Kafka", "/opt/kafka/config/server.properties",
 			},
 			containerID:      "1234",
-			containerIP:      "127.0.0.1",
-			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 9092}},
+			containerIP:      testIP127001,
+			netstatAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 9092}},
 			want: Service{
-				Name:            "kafka",
+				Name:            string(KafkaService),
 				ServiceType:     KafkaService,
 				ContainerID:     "1234",
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 9092}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 9092}},
+				IPAddress:       testIP127001,
 				IgnoredPorts:    map[int]bool{},
 				Active:          true,
 				HasNetstatInfo:  true,
@@ -980,23 +1027,23 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			testName:         "not kafka",
 			cmdLine:          []string{"java", "-dconf.kafka.Kafka.address=1.2.3.4", "com.bleemeo.myapp"},
 			containerID:      "1234",
-			containerIP:      "127.0.0.1",
-			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 9092}},
+			containerIP:      testIP127001,
+			netstatAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 9092}},
 			noMatch:          true,
 		},
 		{
 			testName:         "nats",
 			cmdLine:          []string{"/nats-server", "--config nats-server.conf"},
 			containerID:      "1234",
-			containerIP:      "127.0.0.1",
-			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 4222}},
+			containerIP:      testIP127001,
+			netstatAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 4222}},
 			want: Service{
 				Name:            "nats",
 				ServiceType:     NatsService,
 				ContainerID:     "1234",
 				IgnoredPorts:    map[int]bool{},
-				IPAddress:       "127.0.0.1",
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 4222}},
+				IPAddress:       testIP127001,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 4222}},
 				Active:          true,
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0,
@@ -1005,11 +1052,11 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 		},
 		{
 			testName: "fail2ban",
-			cmdLine:  []string{"/usr/bin/python3", "/usr/bin/fail2ban-server", "-xf", "start"},
+			cmdLine:  []string{"/usr/bin/python3", "/usr/bin/fail2ban-server", "-xf", testStart},
 			want: Service{
 				Name:         "fail2ban",
 				ServiceType:  Fail2banService,
-				IPAddress:    "127.0.0.1",
+				IPAddress:    testIP127001,
 				Active:       true,
 				LastTimeSeen: t0,
 			},
@@ -1021,7 +1068,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				Name:            "nfs",
 				ServiceType:     NfsService,
 				ListenAddresses: nil,
-				IPAddress:       "127.0.0.1",
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
@@ -1035,40 +1082,40 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			want: Service{
 				Name:            "jenkins",
 				ServiceType:     JenkinsService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 8080}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 8080}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
 		},
 		{
-			testName: "upsd",
+			testName: string(UPSDService),
 			cmdLine:  []string{"/lib/nut/upsd"},
 			want: Service{
-				Name:            "upsd",
+				Name:            string(UPSDService),
 				ServiceType:     UPSDService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3493}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 3493}},
+				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
 		},
 		{
 			testName:         "nginx-alternative-port-ignore",
-			cmdLine:          []string{"nginx: master process /usr/sbin/nginx"},
-			containerID:      "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
-			containerIP:      "172.16.0.2",
-			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
+			cmdLine:          []string{testNginxMasterSbin},
+			containerID:      testContainerHash,
+			containerIP:      testIP1721602,
+			netstatAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP1721602, Port: 80}},
 			containerLabels: map[string]string{
-				"glouton.check.ignore.port.80": "true",
+				"glouton.check.ignore.port.80": testTrue,
 			},
 			want: Service{
-				Name:        "nginx",
+				Name:        testNginx,
 				ServiceType: NginxService,
-				ContainerID: "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
+				ContainerID: testContainerHash,
 				// It's not applyOverride which remove ignored ports, but we are in ignored ports
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
-				IPAddress:       "172.16.0.2",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP1721602, Port: 80}},
+				IPAddress:       testIP1721602,
 				IgnoredPorts: map[int]bool{
 					80: true,
 				},
@@ -1080,23 +1127,23 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 		},
 		{
 			testName:         "nginx-alternative-port-ignore2",
-			cmdLine:          []string{"nginx: master process /usr/sbin/nginx"},
-			containerID:      "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
-			containerName:    "nginx_port_alt",
-			containerIP:      "172.16.0.2",
-			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
+			cmdLine:          []string{testNginxMasterSbin},
+			containerID:      testContainerHash,
+			containerName:    testNginxAltKey,
+			containerIP:      testIP1721602,
+			netstatAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP1721602, Port: 80}},
 			containerLabels: map[string]string{
 				"glouton.ignore_ports": "74,75,80",
 			},
 			want: Service{
-				Name:          "nginx",
-				Instance:      "nginx_port_alt",
+				Name:          testNginx,
+				Instance:      testNginxAltKey,
 				ServiceType:   NginxService,
-				ContainerID:   "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
-				ContainerName: "nginx_port_alt",
+				ContainerID:   testContainerHash,
+				ContainerName: testNginxAltKey,
 				// It's not applyOverride which remove ignored ports, but we are in ignored ports
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
-				IPAddress:       "172.16.0.2",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP1721602, Port: 80}},
+				IPAddress:       testIP1721602,
 				// This test is done in two path. In dynamic.go we add the option to Config.
 				// in discovery (applyOverrideInPlance) we apply the config override.
 				// IgnoredPorts: map[int]bool{
@@ -1115,24 +1162,24 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 		},
 		{
 			testName:         "nginx-alternative-port-update",
-			cmdLine:          []string{"nginx: master process /usr/sbin/nginx"},
-			containerID:      "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
-			containerName:    "nginx_port_alt",
-			containerIP:      "172.16.0.2",
-			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
+			cmdLine:          []string{testNginxMasterSbin},
+			containerID:      testContainerHash,
+			containerName:    testNginxAltKey,
+			containerIP:      testIP1721602,
+			netstatAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP1721602, Port: 80}},
 			containerLabels: map[string]string{
 				"glouton.port": "8080",
 			},
 			want: Service{
-				Name:          "nginx",
-				Instance:      "nginx_port_alt",
+				Name:          testNginx,
+				Instance:      testNginxAltKey,
 				ServiceType:   NginxService,
-				ContainerID:   "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
-				ContainerName: "nginx_port_alt",
+				ContainerID:   testContainerHash,
+				ContainerName: testNginxAltKey,
 				// This test is done in two path. In dynamic.go we add the option to Config.
 				// in discovery (applyOverrideInPlance) we apply the config override.
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
-				IPAddress:       "172.16.0.2",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP1721602, Port: 80}},
+				IPAddress:       testIP1721602,
 				Active:          true,
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0,
@@ -1221,32 +1268,32 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 			processes: []facts.Process{
 				{
 					PID:         1,
-					CmdLineList: []string{"init"},
+					CmdLineList: []string{testInit},
 				},
 				{
 					PID:         2,
-					CmdLineList: []string{"bash", "/srv/start-service.sh", "redis"},
+					CmdLineList: []string{testBash, testStartServiceSh, testRedis},
 				},
 				{
 					PID:         3,
-					CmdLineList: []string{"redis-server *:6379"},
+					CmdLineList: []string{testRedisServerListen},
 				},
 			},
 			netstatAddressesPerPID: map[int][]facts.ListenAddress{
 				2: {
-					{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 1234},
+					{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 1234},
 				},
 				3: {
-					{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6379},
+					{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 6379},
 				},
 			},
 			want: []Service{
 				{
-					Name:            "redis",
+					Name:            testRedis,
 					ServiceType:     RedisService,
 					ContainerID:     "",
-					ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6379}},
-					IPAddress:       "127.0.0.1",
+					ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 6379}},
+					IPAddress:       testIP127001,
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
@@ -1260,25 +1307,25 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 			processes: []facts.Process{
 				{
 					PID:         1,
-					CmdLineList: []string{"init"},
+					CmdLineList: []string{testInit},
 				},
 				{
 					PID:         2,
-					CmdLineList: []string{"bash", "/srv/start-service.sh", "redis"},
+					CmdLineList: []string{testBash, testStartServiceSh, testRedis},
 				},
 				{
 					PID:         3,
-					CmdLineList: []string{"redis-server *:6379"},
+					CmdLineList: []string{testRedisServerListen},
 				},
 			},
 			netstatAddressesPerPID: map[int][]facts.ListenAddress{},
 			want: []Service{
 				{
-					Name:            "redis",
+					Name:            testRedis,
 					ServiceType:     RedisService,
 					ContainerID:     "",
-					ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6379}},
-					IPAddress:       "127.0.0.1",
+					ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 6379}},
+					IPAddress:       testIP127001,
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
@@ -1291,19 +1338,19 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 			processes: []facts.Process{
 				{
 					PID:         1,
-					CmdLineList: []string{"init"},
+					CmdLineList: []string{testInit},
 				},
 				{
 					PID:         2,
-					CmdLineList: []string{"bash", "/srv/start-service.sh", "redis"},
+					CmdLineList: []string{testBash, testStartServiceSh, testRedis},
 				},
 				{
 					PID:         3,
-					CmdLineList: []string{"redis-server *:6379"},
+					CmdLineList: []string{testRedisServerListen},
 				},
 				{
 					PID:         4,
-					CmdLineList: []string{"redis-server *:6379"}, // this is the process that dump to RDB file
+					CmdLineList: []string{testRedisServerListen}, // this is the process that dump to RDB file
 				},
 				{
 					PID:         5,
@@ -1312,31 +1359,31 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 			},
 			netstatAddressesPerPID: map[int][]facts.ListenAddress{
 				2: {
-					{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 1234},
+					{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 1234},
 				},
 				3: {
-					{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6379},
+					{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 6379},
 				},
 				4: {
 					// This will likely not happen, because:
 					// 1) the process that does RDB dump may not actually listen on this port.
 					// 2) Glouton netstat does NOT provided list all PID that listen on the same port. (netstat neither).
-					{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6379},
+					{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 6379},
 				},
 				5: {
-					{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6380},
+					{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 6380},
 				},
 			},
 			want: []Service{
 				{
-					Name:        "redis",
+					Name:        testRedis,
 					ServiceType: RedisService,
 					ContainerID: "",
 					ListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6379},
-						{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6380},
+						{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 6379},
+						{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 6380},
 					},
-					IPAddress:       "127.0.0.1",
+					IPAddress:       testIP127001,
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
@@ -1350,7 +1397,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 			processes: []facts.Process{
 				{
 					PID:         3,
-					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
+					CmdLineList: []string{testNginxMasterDaemon},
 				},
 				{
 					PID:         4,
@@ -1359,7 +1406,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 			},
 			netstatAddressesPerPID: map[int][]facts.ListenAddress{
 				3: {
-					{NetworkFamily: "tcp", Address: "10.2.0.1", Port: 6443},
+					{NetworkFamily: tcpProtocol, Address: "10.2.0.1", Port: 6443},
 				},
 				// We aren't guarantee to have netstat information for PID 4:
 				// netstat only show one PID per listening socket
@@ -1367,13 +1414,13 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 			},
 			want: []Service{
 				{
-					Name:        "nginx",
+					Name:        testNginx,
 					ServiceType: NginxService,
 					ContainerID: "",
 					ListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "10.2.0.1", Port: 6443},
+						{NetworkFamily: tcpProtocol, Address: "10.2.0.1", Port: 6443},
 					},
-					IPAddress:       "127.0.0.1",
+					IPAddress:       testIP127001,
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
@@ -1387,7 +1434,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 			processes: []facts.Process{
 				{
 					PID:         3,
-					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
+					CmdLineList: []string{testNginxMasterDaemon},
 				},
 				{
 					PID:         4,
@@ -1399,18 +1446,18 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 				// netstat only show one PID per listening socket
 				// internal netstat (using gopsutil) also show one PID per listening socket
 				4: {
-					{NetworkFamily: "tcp", Address: "10.0.2.1", Port: 6443},
+					{NetworkFamily: tcpProtocol, Address: "10.0.2.1", Port: 6443},
 				},
 			},
 			want: []Service{
 				{
-					Name:        "nginx",
+					Name:        testNginx,
 					ServiceType: NginxService,
 					ContainerID: "",
 					ListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "10.0.2.1", Port: 6443},
+						{NetworkFamily: tcpProtocol, Address: "10.0.2.1", Port: 6443},
 					},
-					IPAddress:       "127.0.0.1",
+					IPAddress:       testIP127001,
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
@@ -1424,35 +1471,35 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 			processes: []facts.Process{
 				{
 					PID:         3,
-					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
-					ContainerID: "id001",
+					CmdLineList: []string{testNginxMasterDaemon},
+					ContainerID: testID001,
 				},
 				{
 					PID:         4,
-					CmdLineList: []string{"php-fpm: master process (/etc/php/7.0/fpm/php-fpm.conf)"},
-					ContainerID: "id002",
+					CmdLineList: []string{testPHPFPMMasterConf},
+					ContainerID: testID002,
 				},
 			},
 			netstatAddressesPerPID: nil, // netstat won't provide information for containers
 			containers: map[string]facts.FakeContainer{
-				"id001": {
-					FakePrimaryAddress:  "172.17.0.49",
-					FakeListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80}},
+				testID001: {
+					FakePrimaryAddress:  testIP17217049,
+					FakeListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 80}},
 				},
-				"id002": {
-					FakePrimaryAddress:  "172.17.0.50",
-					FakeListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.50", Port: 9000}},
+				testID002: {
+					FakePrimaryAddress:  testIP17217050,
+					FakeListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP17217050, Port: 9000}},
 				},
 			},
 			want: []Service{
 				{
-					Name:        "nginx",
+					Name:        testNginx,
 					ServiceType: NginxService,
-					ContainerID: "id001",
+					ContainerID: testID001,
 					ListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80},
+						{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 80},
 					},
-					IPAddress:       "172.17.0.49",
+					IPAddress:       testIP17217049,
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
@@ -1460,13 +1507,13 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					LastTimeSeen:    t0,
 				},
 				{
-					Name:        "phpfpm",
+					Name:        testPHPFPM,
 					ServiceType: PHPFPMService,
-					ContainerID: "id002",
+					ContainerID: testID002,
 					ListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "172.17.0.50", Port: 9000},
+						{NetworkFamily: tcpProtocol, Address: testIP17217050, Port: 9000},
 					},
-					IPAddress:       "172.17.0.50",
+					IPAddress:       testIP17217050,
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
@@ -1480,34 +1527,34 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 			processes: []facts.Process{
 				{
 					PID:         3,
-					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
-					ContainerID: "id001",
+					CmdLineList: []string{testNginxMasterDaemon},
+					ContainerID: testID001,
 				},
 				{
 					PID:         4,
-					CmdLineList: []string{"php-fpm: master process (/etc/php/7.0/fpm/php-fpm.conf)"},
-					ContainerID: "id002",
+					CmdLineList: []string{testPHPFPMMasterConf},
+					ContainerID: testID002,
 				},
 			},
 			netstatAddressesPerPID: nil, // netstat won't provide information for containers
 			containers: map[string]facts.FakeContainer{
-				"id001": {
-					FakePrimaryAddress:  "172.17.0.49",
-					FakeListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80}},
+				testID001: {
+					FakePrimaryAddress:  testIP17217049,
+					FakeListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 80}},
 				},
-				"id002": {
-					FakePrimaryAddress: "172.17.0.50",
+				testID002: {
+					FakePrimaryAddress: testIP17217050,
 				},
 			},
 			want: []Service{
 				{
-					Name:        "nginx",
+					Name:        testNginx,
 					ServiceType: NginxService,
-					ContainerID: "id001",
+					ContainerID: testID001,
 					ListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80},
+						{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 80},
 					},
-					IPAddress:       "172.17.0.49",
+					IPAddress:       testIP17217049,
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
@@ -1515,11 +1562,11 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					LastTimeSeen:    t0,
 				},
 				{
-					Name:            "phpfpm",
+					Name:            testPHPFPM,
 					ServiceType:     PHPFPMService,
-					ContainerID:     "id002",
+					ContainerID:     testID002,
 					ListenAddresses: []facts.ListenAddress{},
-					IPAddress:       "172.17.0.50",
+					IPAddress:       testIP17217050,
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
@@ -1532,44 +1579,44 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 			processes: []facts.Process{
 				{
 					PID:         3,
-					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
-					ContainerID: "id001",
+					CmdLineList: []string{testNginxMasterDaemon},
+					ContainerID: testID001,
 				},
 				{
 					PID:         4,
-					CmdLineList: []string{"php-fpm: master process (/etc/php/7.0/fpm/php-fpm.conf)"},
-					ContainerID: "id002",
+					CmdLineList: []string{testPHPFPMMasterConf},
+					ContainerID: testID002,
 				},
 			},
 			netstatAddressesPerPID: nil, // netstat won't provide information for containers
 			containers: map[string]facts.FakeContainer{
-				"id001": {
-					FakePrimaryAddress: "172.17.0.49",
+				testID001: {
+					FakePrimaryAddress: testIP17217049,
 				},
-				"id002": {
-					FakePrimaryAddress: "172.17.0.50",
+				testID002: {
+					FakePrimaryAddress: testIP17217050,
 				},
 			},
 			want: []Service{
 				{
-					Name:        "nginx",
+					Name:        testNginx,
 					ServiceType: NginxService,
-					ContainerID: "id001",
+					ContainerID: testID001,
 					ListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80},
+						{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 80},
 					},
-					IPAddress:      "172.17.0.49",
+					IPAddress:      testIP17217049,
 					IgnoredPorts:   map[int]bool{},
 					HasNetstatInfo: false,
 					Active:         true,
 					LastTimeSeen:   t0,
 				},
 				{
-					Name:            "phpfpm",
+					Name:            testPHPFPM,
 					ServiceType:     PHPFPMService,
-					ContainerID:     "id002",
+					ContainerID:     testID002,
 					ListenAddresses: []facts.ListenAddress{},
-					IPAddress:       "172.17.0.50",
+					IPAddress:       testIP17217050,
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
@@ -1582,34 +1629,34 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 			processes: []facts.Process{
 				{
 					PID:         3,
-					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
-					ContainerID: "id001",
+					CmdLineList: []string{testNginxMasterDaemon},
+					ContainerID: testID001,
 				},
 				{
 					PID:         4,
-					CmdLineList: []string{"php-fpm: master process (/etc/php/7.0/fpm/php-fpm.conf)"},
-					ContainerID: "id001",
+					CmdLineList: []string{testPHPFPMMasterConf},
+					ContainerID: testID001,
 				},
 			},
 			netstatAddressesPerPID: nil, // netstat won't provide information for containers
 			containers: map[string]facts.FakeContainer{
-				"id001": {
-					FakePrimaryAddress: "172.17.0.49",
+				testID001: {
+					FakePrimaryAddress: testIP17217049,
 					FakeListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80},
-						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 9000},
+						{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 80},
+						{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 9000},
 					},
 				},
 			},
 			want: []Service{
 				{
-					Name:        "nginx",
+					Name:        testNginx,
 					ServiceType: NginxService,
-					ContainerID: "id001",
+					ContainerID: testID001,
 					ListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80},
+						{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 80},
 					},
-					IPAddress:       "172.17.0.49",
+					IPAddress:       testIP17217049,
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
@@ -1617,11 +1664,11 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					LastTimeSeen:    t0,
 				},
 				{
-					Name:            "phpfpm",
+					Name:            testPHPFPM,
 					ServiceType:     PHPFPMService,
-					ContainerID:     "id001",
+					ContainerID:     testID001,
 					ListenAddresses: []facts.ListenAddress{},
-					IPAddress:       "172.17.0.49",
+					IPAddress:       testIP17217049,
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
@@ -1634,31 +1681,31 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 			processes: []facts.Process{
 				{
 					PID:         3,
-					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
-					ContainerID: "id001",
+					CmdLineList: []string{testNginxMasterDaemon},
+					ContainerID: testID001,
 				},
 				{
 					PID:         4,
-					CmdLineList: []string{"php-fpm: master process (/etc/php/7.0/fpm/php-fpm.conf)"},
-					ContainerID: "id001",
+					CmdLineList: []string{testPHPFPMMasterConf},
+					ContainerID: testID001,
 				},
 			},
 			netstatAddressesPerPID: nil, // netstat won't provide information for containers
 			containers: map[string]facts.FakeContainer{
-				"id001": {
-					FakePrimaryAddress:  "172.17.0.49",
-					FakeListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80}},
+				testID001: {
+					FakePrimaryAddress:  testIP17217049,
+					FakeListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 80}},
 				},
 			},
 			want: []Service{
 				{
-					Name:        "nginx",
+					Name:        testNginx,
 					ServiceType: NginxService,
-					ContainerID: "id001",
+					ContainerID: testID001,
 					ListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80},
+						{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 80},
 					},
-					IPAddress:       "172.17.0.49",
+					IPAddress:       testIP17217049,
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
@@ -1666,11 +1713,11 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					LastTimeSeen:    t0,
 				},
 				{
-					Name:            "phpfpm",
+					Name:            testPHPFPM,
 					ServiceType:     PHPFPMService,
-					ContainerID:     "id001",
+					ContainerID:     testID001,
 					ListenAddresses: []facts.ListenAddress{},
-					IPAddress:       "172.17.0.49",
+					IPAddress:       testIP17217049,
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
@@ -1683,41 +1730,41 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 			processes: []facts.Process{
 				{
 					PID:         3,
-					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
-					ContainerID: "id001",
+					CmdLineList: []string{testNginxMasterDaemon},
+					ContainerID: testID001,
 				},
 				{
 					PID:         4,
-					CmdLineList: []string{"php-fpm: master process (/etc/php/7.0/fpm/php-fpm.conf)"},
-					ContainerID: "id001",
+					CmdLineList: []string{testPHPFPMMasterConf},
+					ContainerID: testID001,
 				},
 			},
 			netstatAddressesPerPID: nil, // netstat won't provide information for containers
 			containers: map[string]facts.FakeContainer{
-				"id001": {
-					FakePrimaryAddress: "172.17.0.49",
+				testID001: {
+					FakePrimaryAddress: testIP17217049,
 				},
 			},
 			want: []Service{
 				{
-					Name:        "nginx",
+					Name:        testNginx,
 					ServiceType: NginxService,
-					ContainerID: "id001",
+					ContainerID: testID001,
 					ListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80},
+						{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 80},
 					},
-					IPAddress:      "172.17.0.49",
+					IPAddress:      testIP17217049,
 					IgnoredPorts:   map[int]bool{},
 					HasNetstatInfo: false,
 					Active:         true,
 					LastTimeSeen:   t0,
 				},
 				{
-					Name:            "phpfpm",
+					Name:            testPHPFPM,
 					ServiceType:     PHPFPMService,
-					ContainerID:     "id001",
+					ContainerID:     testID001,
 					ListenAddresses: []facts.ListenAddress{},
-					IPAddress:       "172.17.0.49",
+					IPAddress:       testIP17217049,
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
@@ -1730,40 +1777,40 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 			processes: []facts.Process{
 				{
 					PID:         3,
-					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
-					ContainerID: "id001",
+					CmdLineList: []string{testNginxMasterDaemon},
+					ContainerID: testID001,
 				},
 				{
 					PID:         4,
-					CmdLineList: []string{"php-fpm: master process (/etc/php/7.0/fpm/php-fpm.conf)"},
-					ContainerID: "id001",
+					CmdLineList: []string{testPHPFPMMasterConf},
+					ContainerID: testID001,
 				},
 			},
 			netstatAddressesPerPID: nil, // netstat won't provide information for containers
 			containers: map[string]facts.FakeContainer{
-				"id001": {
-					FakePrimaryAddress:  "172.17.0.49",
-					FakeListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 8080}},
+				testID001: {
+					FakePrimaryAddress:  testIP17217049,
+					FakeListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8080}},
 				},
 			},
 			want: []Service{
 				{
-					Name:            "nginx",
+					Name:            testNginx,
 					ServiceType:     NginxService,
-					ContainerID:     "id001",
+					ContainerID:     testID001,
 					ListenAddresses: []facts.ListenAddress{},
-					IPAddress:       "172.17.0.49",
+					IPAddress:       testIP17217049,
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
 					LastTimeSeen:    t0,
 				},
 				{
-					Name:            "phpfpm",
+					Name:            testPHPFPM,
 					ServiceType:     PHPFPMService,
-					ContainerID:     "id001",
+					ContainerID:     testID001,
 					ListenAddresses: []facts.ListenAddress{},
-					IPAddress:       "172.17.0.49",
+					IPAddress:       testIP17217049,
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
@@ -1776,40 +1823,40 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 			processes: []facts.Process{
 				{
 					PID:         3,
-					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
-					ContainerID: "id001",
+					CmdLineList: []string{testNginxMasterDaemon},
+					ContainerID: testID001,
 				},
 				{
 					PID:         4,
-					CmdLineList: []string{"/usr/sbin/apache2", "-k", "start"},
-					ContainerID: "id001",
+					CmdLineList: []string{testApache2Sbin, "-k", testStart},
+					ContainerID: testID001,
 				},
 			},
 			netstatAddressesPerPID: nil, // netstat won't provide information for containers
 			containers: map[string]facts.FakeContainer{
-				"id001": {
-					FakePrimaryAddress:  "172.17.0.49",
-					FakeListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80}},
+				testID001: {
+					FakePrimaryAddress:  testIP17217049,
+					FakeListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 80}},
 				},
 			},
 			want: []Service{
 				{
-					Name:            "nginx",
+					Name:            testNginx,
 					ServiceType:     NginxService,
-					ContainerID:     "id001",
+					ContainerID:     testID001,
 					ListenAddresses: []facts.ListenAddress{},
-					IPAddress:       "172.17.0.49",
+					IPAddress:       testIP17217049,
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
 					LastTimeSeen:    t0,
 				},
 				{
-					Name:            "apache",
+					Name:            testApache,
 					ServiceType:     ApacheService,
-					ContainerID:     "id001",
+					ContainerID:     testID001,
 					ListenAddresses: []facts.ListenAddress{},
-					IPAddress:       "172.17.0.49",
+					IPAddress:       testIP17217049,
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
@@ -1822,43 +1869,43 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 			processes: []facts.Process{
 				{
 					PID:         3,
-					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
-					ContainerID: "id001",
+					CmdLineList: []string{testNginxMasterDaemon},
+					ContainerID: testID001,
 				},
 				{
 					PID:         4,
-					CmdLineList: []string{"/usr/sbin/apache2", "-k", "start"},
-					ContainerID: "id001",
+					CmdLineList: []string{testApache2Sbin, "-k", testStart},
+					ContainerID: testID001,
 				},
 			},
 			netstatAddressesPerPID: nil, // netstat won't provide information for containers
 			containers: map[string]facts.FakeContainer{
-				"id001": {
-					FakePrimaryAddress: "172.17.0.49",
+				testID001: {
+					FakePrimaryAddress: testIP17217049,
 					FakeListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80},
-						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 8080},
+						{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 80},
+						{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8080},
 					},
 				},
 			},
 			want: []Service{
 				{
-					Name:            "nginx",
+					Name:            testNginx,
 					ServiceType:     NginxService,
-					ContainerID:     "id001",
+					ContainerID:     testID001,
 					ListenAddresses: []facts.ListenAddress{},
-					IPAddress:       "172.17.0.49",
+					IPAddress:       testIP17217049,
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
 					LastTimeSeen:    t0,
 				},
 				{
-					Name:            "apache",
+					Name:            testApache,
 					ServiceType:     ApacheService,
-					ContainerID:     "id001",
+					ContainerID:     testID001,
 					ListenAddresses: []facts.ListenAddress{},
-					IPAddress:       "172.17.0.49",
+					IPAddress:       testIP17217049,
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
@@ -1871,34 +1918,34 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 			processes: []facts.Process{
 				{
 					PID:         3,
-					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
-					ContainerID: "id001",
+					CmdLineList: []string{testNginxMasterDaemon},
+					ContainerID: testID001,
 				},
 				{
 					PID:         4,
-					CmdLineList: []string{"php-fpm: master process (/etc/php/7.0/fpm/php-fpm.conf)"},
-					ContainerID: "id001",
+					CmdLineList: []string{testPHPFPMMasterConf},
+					ContainerID: testID001,
 				},
 			},
 			netstatAddressesPerPID: nil, // netstat won't provide information for containers
 			containers: map[string]facts.FakeContainer{
-				"id001": {
-					FakePrimaryAddress: "172.17.0.49",
+				testID001: {
+					FakePrimaryAddress: testIP17217049,
 					FakeListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80},
-						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 443},
+						{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 80},
+						{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 443},
 					},
 				},
 			},
 			want: []Service{
 				{
-					Name:        "nginx",
+					Name:        testNginx,
 					ServiceType: NginxService,
-					ContainerID: "id001",
+					ContainerID: testID001,
 					ListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80},
+						{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 80},
 					},
-					IPAddress:       "172.17.0.49",
+					IPAddress:       testIP17217049,
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
@@ -1906,11 +1953,11 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					LastTimeSeen:    t0,
 				},
 				{
-					Name:            "phpfpm",
+					Name:            testPHPFPM,
 					ServiceType:     PHPFPMService,
-					ContainerID:     "id001",
+					ContainerID:     testID001,
 					ListenAddresses: []facts.ListenAddress{},
-					IPAddress:       "172.17.0.49",
+					IPAddress:       testIP17217049,
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
@@ -1923,34 +1970,34 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 			processes: []facts.Process{
 				{
 					PID:         3,
-					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
-					ContainerID: "id001",
+					CmdLineList: []string{testNginxMasterDaemon},
+					ContainerID: testID001,
 				},
 				{
 					PID:         4,
-					CmdLineList: []string{"redis-server *:6379"},
-					ContainerID: "id001",
+					CmdLineList: []string{testRedisServerListen},
+					ContainerID: testID001,
 				},
 			},
 			netstatAddressesPerPID: nil, // netstat won't provide information for containers
 			containers: map[string]facts.FakeContainer{
-				"id001": {
-					FakePrimaryAddress: "172.17.0.49",
+				testID001: {
+					FakePrimaryAddress: testIP17217049,
 					FakeListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80},
-						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 6379},
+						{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 80},
+						{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 6379},
 					},
 				},
 			},
 			want: []Service{
 				{
-					Name:        "nginx",
+					Name:        testNginx,
 					ServiceType: NginxService,
-					ContainerID: "id001",
+					ContainerID: testID001,
 					ListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80},
+						{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 80},
 					},
-					IPAddress:       "172.17.0.49",
+					IPAddress:       testIP17217049,
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
@@ -1958,13 +2005,13 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					LastTimeSeen:    t0,
 				},
 				{
-					Name:        "redis",
+					Name:        testRedis,
 					ServiceType: RedisService,
-					ContainerID: "id001",
+					ContainerID: testID001,
 					ListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 6379},
+						{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 6379},
 					},
-					IPAddress:       "172.17.0.49",
+					IPAddress:       testIP17217049,
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
@@ -1978,45 +2025,45 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 			processes: []facts.Process{
 				{
 					PID:         3,
-					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
-					ContainerID: "id001",
+					CmdLineList: []string{testNginxMasterDaemon},
+					ContainerID: testID001,
 				},
 				{
 					PID:         4,
-					CmdLineList: []string{"redis-server *:6379"},
-					ContainerID: "id001",
+					CmdLineList: []string{testRedisServerListen},
+					ContainerID: testID001,
 				},
 			},
 			netstatAddressesPerPID: nil, // netstat won't provide information for containers
 			containers: map[string]facts.FakeContainer{
-				"id001": {
-					FakePrimaryAddress: "172.17.0.49",
+				testID001: {
+					FakePrimaryAddress: testIP17217049,
 					FakeListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 8080},
-						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 6379},
+						{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8080},
+						{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 6379},
 					},
 				},
 			},
 			want: []Service{
 				{
-					Name:            "nginx",
+					Name:            testNginx,
 					ServiceType:     NginxService,
-					ContainerID:     "id001",
+					ContainerID:     testID001,
 					ListenAddresses: []facts.ListenAddress{},
-					IPAddress:       "172.17.0.49",
+					IPAddress:       testIP17217049,
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
 					LastTimeSeen:    t0,
 				},
 				{
-					Name:        "redis",
+					Name:        testRedis,
 					ServiceType: RedisService,
-					ContainerID: "id001",
+					ContainerID: testID001,
 					ListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 6379},
+						{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 6379},
 					},
-					IPAddress:       "172.17.0.49",
+					IPAddress:       testIP17217049,
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
@@ -2077,7 +2124,7 @@ func Test_fillGenericExtraAttributes(t *testing.T) {
 					FakeLabels: map[string]string{
 						"glouton.port":         "8080",
 						"glouton.ignore_ports": "9090,9091",
-						"glouton.http_path":    "/path",
+						"glouton.http_path":    testPath,
 					},
 				},
 				Config: config.Service{
@@ -2088,7 +2135,7 @@ func Test_fillGenericExtraAttributes(t *testing.T) {
 				},
 			},
 			expectedConfigResult: config.Service{
-				HTTPPath:    "/path",
+				HTTPPath:    testPath,
 				Port:        8080,
 				IgnorePorts: []int{9090, 9091},
 				Address:     "192.168.0.1",
@@ -2117,7 +2164,7 @@ func Test_fillGenericExtraAttributes(t *testing.T) {
 				container: facts.FakeContainer{
 					FakeAnnotations: map[string]string{
 						"glouton.tags":      "tags1,tags2",
-						"glouton.http_path": "/path",
+						"glouton.http_path": testPath,
 					},
 				},
 				Config: config.Service{
@@ -2127,7 +2174,7 @@ func Test_fillGenericExtraAttributes(t *testing.T) {
 			},
 			expectedConfigResult: config.Service{
 				Tags:     []string{"tags1", "tags2"},
-				HTTPPath: "/path",
+				HTTPPath: testPath,
 			},
 		},
 	}

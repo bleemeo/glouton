@@ -98,6 +98,14 @@ func TestRun(t *testing.T) {
 	}
 }
 
+const (
+	tagI1  = `name="i1"`
+	tagI2  = `name="i2"`
+	tagI2b = `name="i2b"`
+	tagI2U = `name="I2"`
+	tagIA  = `name="ia"`
+)
+
 type msmsa map[string]map[string]any
 
 type shallowAcc struct {
@@ -314,24 +322,24 @@ func TestMarkInactive(t *testing.T) {
 	expectedCache := map[int]map[string]map[string]map[string]fieldCache{
 		1: {
 			"i1": {
-				"f1": {`name="i1"`: fieldCache{}},
-				"f2": {`name="i1"`: fieldCache{}},
-				"f3": {`name="i1"`: fieldCache{}},
+				"f1": {tagI1: fieldCache{}},
+				"f2": {tagI1: fieldCache{}},
+				"f3": {tagI1: fieldCache{}},
 			},
 		},
 		2: {
 			"i2": {
-				"f": {`name="i2"`: fieldCache{}},
+				"f": {tagI2: fieldCache{}},
 			},
 		},
 		3: {
 			"i2": {
-				"f": {`name="i2b"`: fieldCache{}},
+				"f": {tagI2b: fieldCache{}},
 			},
 		},
 		4: {
 			"ia": {
-				"fa": {`name="ia"`: fieldCache{}},
+				"fa": {tagIA: fieldCache{}},
 			},
 		},
 	}
@@ -353,23 +361,23 @@ func TestMarkInactive(t *testing.T) {
 	expectedCache = map[int]map[string]map[string]map[string]fieldCache{
 		1: {
 			"i1": {
-				"f2": {`name="i1"`: fieldCache{}},
-				"f3": {`name="i1"`: fieldCache{}},
+				"f2": {tagI1: fieldCache{}},
+				"f3": {tagI1: fieldCache{}},
 			},
 		},
 		2: {
 			"i2": {
-				"f": {`name="I2"`: fieldCache{}},
+				"f": {tagI2U: fieldCache{}},
 			},
 		},
 		3: {
 			"i2": {
-				"f": {`name="i2b"`: fieldCache{}},
+				"f": {tagI2b: fieldCache{}},
 			},
 		},
 		4: {
 			"ia": {
-				"fa": {`name="ia"`: fieldCache{}},
+				"fa": {tagIA: fieldCache{}},
 			},
 		},
 	}
@@ -396,22 +404,22 @@ func TestMarkInactive(t *testing.T) {
 	expectedCache = map[int]map[string]map[string]map[string]fieldCache{
 		1: {
 			"i1": {
-				"f3": {`name="i1"`: fieldCache{}},
+				"f3": {tagI1: fieldCache{}},
 			},
 		},
 		2: {
 			"i2": {
-				"f": {`name="I2"`: fieldCache{}},
+				"f": {tagI2U: fieldCache{}},
 			},
 		},
 		3: {
 			"i2": {
-				"f": {`name="i2b"`: fieldCache{}},
+				"f": {tagI2b: fieldCache{}},
 			},
 		},
 		4: {
 			"ia": {
-				"fa": {`name="ia"`: fieldCache{}},
+				"fa": {tagIA: fieldCache{}},
 			},
 		},
 	}
@@ -420,23 +428,23 @@ func TestMarkInactive(t *testing.T) {
 	}
 
 	expectedT0 := msmsa{
-		"i1": {`f1__name="i1"`: 1., `f2__name="i1"`: 0.2, `f3__name="i1"`: 333.},
-		"i2": {`f__name="i2"`: 2., `f__name="i2b"`: 2.2},
-		"ia": {`fa__name="ia"`: 7.},
+		"i1": {"f1__" + tagI1: 1., "f2__" + tagI1: 0.2, "f3__" + tagI1: 333.},
+		"i2": {"f__" + tagI2: 2., "f__" + tagI2b: 2.2},
+		"ia": {"fa__" + tagIA: 7.},
 	}
 	if diff := cmp.Diff(expectedT0, acc.fields[t0], cmpStaleNaN()); diff != "" {
 		t.Errorf("Unexpected fields at t0:\n%v", diff)
 	}
 
-	expectedAnnotT0 := map[string]types.MetricAnnotations{`ia__name="ia"`: {ServiceName: "A"}}
+	expectedAnnotT0 := map[string]types.MetricAnnotations{"ia__" + tagIA: {ServiceName: "A"}}
 	if diff := cmp.Diff(expectedAnnotT0, acc.annotations[t0]); diff != "" {
 		t.Errorf("Unexpected annotations at t0:\n%v", diff)
 	}
 
 	expectedT1 := msmsa{
-		"i1": {`f1__name="i1"`: floatStaleNaN, `f2__name="i1"`: 0.2, `f3__name="i1"`: 3.3},
-		"i2": {`f__name="i2"`: floatStaleNaN, `f__name="I2"`: 2., `f__name="i2b"`: 2.2},
-		"ia": {`fa__name="ia"`: 7.},
+		"i1": {"f1__" + tagI1: floatStaleNaN, "f2__" + tagI1: 0.2, "f3__" + tagI1: 3.3},
+		"i2": {"f__" + tagI2: floatStaleNaN, "f__" + tagI2U: 2., "f__" + tagI2b: 2.2},
+		"ia": {"fa__" + tagIA: 7.},
 	}
 	if diff := cmp.Diff(expectedT1, acc.fields[t1], cmpStaleNaN()); diff != "" {
 		t.Errorf("Unexpected fields at t1:\n%v", diff)
@@ -446,15 +454,15 @@ func TestMarkInactive(t *testing.T) {
 		}
 	}
 
-	expectedAnnotT1 := map[string]types.MetricAnnotations{`ia__name="ia"`: {ServiceName: "A"}}
+	expectedAnnotT1 := map[string]types.MetricAnnotations{"ia__" + tagIA: {ServiceName: "A"}}
 	if diff := cmp.Diff(expectedAnnotT1, acc.annotations[t1]); diff != "" {
 		t.Errorf("Unexpected annotations at t1:\n%v", diff)
 	}
 
 	expectedT2 := msmsa{
-		"i1": {`f2__name="i1"`: floatStaleNaN, `f3__name="i1"`: 3.},
-		"i2": {`f__name="I2"`: 22., `f__name="i2b"`: 22.22},
-		"ia": {`fa__name="ia"`: 7.},
+		"i1": {"f2__" + tagI1: floatStaleNaN, "f3__" + tagI1: 3.},
+		"i2": {"f__" + tagI2U: 22., "f__" + tagI2b: 22.22},
+		"ia": {"fa__" + tagIA: 7.},
 	}
 	if diff := cmp.Diff(expectedT2, acc.fields[t2], cmpStaleNaN()); diff != "" {
 		t.Errorf("Unexpected fields at t2:\n%v", diff)
@@ -464,7 +472,7 @@ func TestMarkInactive(t *testing.T) {
 		}
 	}
 
-	expectedAnnotT2 := map[string]types.MetricAnnotations{`ia__name="ia"`: {ServiceName: "A"}}
+	expectedAnnotT2 := map[string]types.MetricAnnotations{"ia__" + tagIA: {ServiceName: "A"}}
 	if diff := cmp.Diff(expectedAnnotT2, acc.annotations[t2]); diff != "" {
 		t.Errorf("Unexpected annotations at t2:\n%v", diff)
 	}
@@ -548,14 +556,14 @@ func TestMarkInactiveWithErrors(t *testing.T) {
 		t.Fatal("Gathering failed:", err)
 	}
 
-	acc.assertValue(t, t0, "i1", "f1", `name="i1"`, 1.)
+	acc.assertValue(t, t0, "i1", "f1", tagI1, 1.)
 
 	expectedCache := map[int]map[string]map[string]map[string]fieldCache{
 		id: {
 			"i1": {
-				"f1": {`name="i1"`: fieldCache{}},
-				"f2": {`name="i1"`: fieldCache{}},
-				"f3": {`name="i1"`: fieldCache{}},
+				"f1": {tagI1: fieldCache{}},
+				"f2": {tagI1: fieldCache{}},
+				"f3": {tagI1: fieldCache{}},
 			},
 		},
 	}
@@ -573,8 +581,8 @@ func TestMarkInactiveWithErrors(t *testing.T) {
 
 	// We expected no value for f1, because the input has returned an error (and thus no value),
 	// but no NaN neither since we're within the grace period.
-	acc.assertNoValue(t, t1, "i1", "f1", `name="i1"`)
-	acc.assertValue(t, t1, "i1", "f2", `name="i1"`, 0.22)
+	acc.assertNoValue(t, t1, "i1", "f1", tagI1)
+	acc.assertValue(t, t1, "i1", "f2", tagI1, 0.22)
 
 	// We expected the cache to still be the same, since t1 is within the grace period.
 	if diff := cmp.Diff(expectedCache, c.fieldCaches, cmpopts.IgnoreTypes(fieldCache{})); diff != "" {
@@ -590,16 +598,16 @@ func TestMarkInactiveWithErrors(t *testing.T) {
 	}
 
 	// The grace period has ended, the metric is now marked as inactive -> StaleNaN.
-	acc.assertValue(t, t2, "i1", "f1", `name="i1"`, math.Float64frombits(value.StaleNaN))
-	acc.assertValue(t, t2, "i1", "f2", `name="i1"`, math.Float64frombits(value.StaleNaN))
-	acc.assertValue(t, t2, "i1", "f3", `name="i1"`, 3.)
-	acc.assertValue(t, t2, "i1", "f4", `name="i1"`, 4.4)
+	acc.assertValue(t, t2, "i1", "f1", tagI1, math.Float64frombits(value.StaleNaN))
+	acc.assertValue(t, t2, "i1", "f2", tagI1, math.Float64frombits(value.StaleNaN))
+	acc.assertValue(t, t2, "i1", "f3", tagI1, 3.)
+	acc.assertValue(t, t2, "i1", "f4", tagI1, 4.4)
 
 	expectedCache = map[int]map[string]map[string]map[string]fieldCache{
 		id: {
 			"i1": {
-				"f3": {`name="i1"`: fieldCache{}},
-				"f4": {`name="i1"`: fieldCache{}},
+				"f3": {tagI1: fieldCache{}},
+				"f4": {tagI1: fieldCache{}},
 			},
 		},
 	}

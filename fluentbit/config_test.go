@@ -98,6 +98,17 @@ func TestInputsToFluentBitConfig(t *testing.T) {
 	}
 }
 
+const (
+	testLabelApp        = "app"
+	testLabelEnv        = "env"
+	testLabelProd       = "prod"
+	testLabelRedis      = "redis"
+	testServiceUwsgi    = "uwsgi"
+	testServicePostgres = "postgres"
+	testPathPostgres    = "/postgres"
+	testPathDirect      = "/path"
+)
+
 func TestInputLogPaths(t *testing.T) {
 	t.Parallel()
 
@@ -105,39 +116,39 @@ func TestInputLogPaths(t *testing.T) {
 		facts.FakeContainer{
 			FakeContainerName: "redis-1",
 			FakeLabels: map[string]string{
-				"app": "redis",
-				"env": "prod",
+				testLabelApp: testLabelRedis,
+				testLabelEnv: testLabelProd,
 			},
 			FakeLogPath: "/redis-1",
 		},
 		facts.FakeContainer{
 			FakeContainerName: "redis-2",
 			FakeLabels: map[string]string{
-				"app": "redis",
-				"env": "prod",
+				testLabelApp: testLabelRedis,
+				testLabelEnv: testLabelProd,
 			},
 			FakeLogPath: "/redis-2",
 		},
 		facts.FakeContainer{
 			FakeContainerName: "uwsgi-1",
 			FakeAnnotations: map[string]string{
-				"app": "uwsgi",
-				"env": "prod",
+				testLabelApp: testServiceUwsgi,
+				testLabelEnv: testLabelProd,
 			},
 			FakeLogPath: "/uwsgi-1",
 		},
 		facts.FakeContainer{
 			FakeContainerName: "uwsgi-2",
 			FakeAnnotations: map[string]string{
-				"app": "uwsgi",
-				"env": "prod",
+				testLabelApp: testServiceUwsgi,
+				testLabelEnv: testLabelProd,
 			},
 			FakeLogPath: "/uwsgi-2",
 		},
 		facts.FakeContainer{
-			FakeContainerName: "postgres",
-			FakeAnnotations:   map[string]string{"env": "prod"},
-			FakeLogPath:       "/postgres",
+			FakeContainerName: testServicePostgres,
+			FakeAnnotations:   map[string]string{testLabelEnv: testLabelProd},
+			FakeLogPath:       testPathPostgres,
 		},
 	}
 
@@ -150,39 +161,39 @@ func TestInputLogPaths(t *testing.T) {
 		{
 			Name: "direct-path",
 			Input: config.LogInput{
-				Path: "/path",
+				Path: testPathDirect,
 			},
 			HostRootPrefix: "",
-			ExpectedPaths:  []string{"/path"},
+			ExpectedPaths:  []string{testPathDirect},
 		},
 		{
 			Name: "direct-path-with-prefix",
 			Input: config.LogInput{
-				Path: "/path",
+				Path: testPathDirect,
 			},
 			HostRootPrefix: "/hostroot",
-			ExpectedPaths:  []string{"/hostroot/path"},
+			ExpectedPaths:  []string{"/hostroot" + testPathDirect},
 		},
 		{
 			Name: "container-name",
 			Input: config.LogInput{
-				ContainerName: "postgres",
+				ContainerName: testServicePostgres,
 			},
 			HostRootPrefix: "",
-			ExpectedPaths:  []string{"/postgres"},
+			ExpectedPaths:  []string{testPathPostgres},
 		},
 		{
 			Name: "container-name-with-hostroot",
 			Input: config.LogInput{
-				ContainerName: "postgres",
+				ContainerName: testServicePostgres,
 			},
 			HostRootPrefix: "/hostroot",
-			ExpectedPaths:  []string{"/hostroot/postgres"},
+			ExpectedPaths:  []string{"/hostroot" + testPathPostgres},
 		},
 		{
 			Name: "select-labels",
 			Input: config.LogInput{
-				Selectors: map[string]string{"app": "redis"},
+				Selectors: map[string]string{testLabelApp: testLabelRedis},
 			},
 			HostRootPrefix: "",
 			ExpectedPaths:  []string{"/redis-1", "/redis-2"},
@@ -191,8 +202,8 @@ func TestInputLogPaths(t *testing.T) {
 			Name: "select-annotations",
 			Input: config.LogInput{
 				Selectors: map[string]string{
-					"app": "uwsgi",
-					"env": "prod",
+					testLabelApp: testServiceUwsgi,
+					testLabelEnv: testLabelProd,
 				},
 			},
 			HostRootPrefix: "",
@@ -201,11 +212,11 @@ func TestInputLogPaths(t *testing.T) {
 		{
 			Name: "container-name-and-selector",
 			Input: config.LogInput{
-				ContainerName: "postgres",
-				Selectors:     map[string]string{"env": "prod"},
+				ContainerName: testServicePostgres,
+				Selectors:     map[string]string{testLabelEnv: testLabelProd},
 			},
 			HostRootPrefix: "",
-			ExpectedPaths:  []string{"/postgres"},
+			ExpectedPaths:  []string{testPathPostgres},
 		},
 	}
 

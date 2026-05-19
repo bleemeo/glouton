@@ -22,49 +22,63 @@ import (
 	"github.com/bleemeo/glouton/config"
 )
 
+const (
+	testIgnMySQL          = string(MySQLService)
+	testIgnPostgres       = string(PostgreSQLService)
+	testIgnInfluxDB       = string(InfluxDBService)
+	testIgnRabbitMQ       = string(RabbitMQService)
+	testIgnPrefix         = "prefix"
+	testIgnSuffix         = "suffix"
+	testIgnPrefixSuffix   = "prefix-suffix"
+	testIgnTwoPlaceholder = "two-placeholder"
+	testIgnFixedHostname  = "fixed-hostname"
+	testIgnRandomValue    = "random-value"
+	testIgnContainerName  = "container-name"
+)
+
 func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 	checksIgnored := []config.NameInstance{
 		{
-			Name: "mysql",
+			Name: testIgnMySQL,
 		},
 		{
-			Name:     "postgres",
+			Name:     testIgnPostgres,
 			Instance: "host:* container:*",
 		},
 		{
-			Name:     "apache",
+			Name:     testApache,
 			Instance: "container:*integration*",
 		},
 		{
-			Name:     "nginx",
+			Name:     testNginx,
 			Instance: "container:*",
 		},
 		{
-			Name:     "redis",
+			Name:     testRedis,
 			Instance: "host:*",
 		},
 		{
-			Name:     "influxdb",
+			Name:     testIgnInfluxDB,
 			Instance: "host:*",
 		},
 		{
-			Name:     "prefix",
+			Name:     testIgnPrefix,
 			Instance: "container:name-prefix*",
 		},
 		{
-			Name:     "suffix",
+			Name:     testIgnSuffix,
 			Instance: "container:*name-suffix",
 		},
 		{
-			Name:     "prefix-suffix",
+			Name:     testIgnPrefixSuffix,
 			Instance: "container:starts-with-*-end-withs",
 		},
 		{
-			Name:     "two-placeholder",
+			Name:     testIgnTwoPlaceholder,
 			Instance: "container:web-??",
 		},
 		{
-			Name:     "fixed-hostname",
+			Name:     testIgnFixedHostname,
 			Instance: "container:web.example.com",
 		},
 	}
@@ -77,7 +91,7 @@ func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 	}{
 		{
 			service: Service{
-				Name:          "rabbitmq",
+				Name:          testIgnRabbitMQ,
 				Instance:      "",
 				ContainerName: "",
 			},
@@ -85,15 +99,15 @@ func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 		},
 		{
 			service: Service{
-				Name:          "rabbitmq",
-				Instance:      "random-value",
-				ContainerName: "random-value",
+				Name:          testIgnRabbitMQ,
+				Instance:      testIgnRandomValue,
+				ContainerName: testIgnRandomValue,
 			},
 			expectedResult: false,
 		},
 		{
 			service: Service{
-				Name:          "mysql",
+				Name:          testIgnMySQL,
 				Instance:      "",
 				ContainerName: "",
 			},
@@ -101,15 +115,15 @@ func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 		},
 		{
 			service: Service{
-				Name:          "mysql",
-				Instance:      "container-name",
-				ContainerName: "container-name",
+				Name:          testIgnMySQL,
+				Instance:      testIgnContainerName,
+				ContainerName: testIgnContainerName,
 			},
 			expectedResult: true,
 		},
 		{
 			service: Service{
-				Name:          "mysql",
+				Name:          testIgnMySQL,
 				Instance:      "something",
 				ContainerName: "something",
 			},
@@ -117,7 +131,7 @@ func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 		},
 		{
 			service: Service{
-				Name:          "postgres",
+				Name:          testIgnPostgres,
 				Instance:      "",
 				ContainerName: "",
 			},
@@ -125,15 +139,15 @@ func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 		},
 		{
 			service: Service{
-				Name:          "postgres",
-				Instance:      "random-value",
-				ContainerName: "random-value",
+				Name:          testIgnPostgres,
+				Instance:      testIgnRandomValue,
+				ContainerName: testIgnRandomValue,
 			},
 			expectedResult: true,
 		},
 		{
 			service: Service{
-				Name:          "apache",
+				Name:          testApache,
 				Instance:      "",
 				ContainerName: "",
 			},
@@ -141,15 +155,15 @@ func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 		},
 		{
 			service: Service{
-				Name:          "apache",
-				Instance:      "container-name",
-				ContainerName: "container-name",
+				Name:          testApache,
+				Instance:      testIgnContainerName,
+				ContainerName: testIgnContainerName,
 			},
 			expectedResult: false,
 		},
 		{
 			service: Service{
-				Name:          "apache",
+				Name:          testApache,
 				Instance:      "container-integration",
 				ContainerName: "container-integration",
 			},
@@ -157,7 +171,7 @@ func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 		},
 		{
 			service: Service{
-				Name:          "apache",
+				Name:          testApache,
 				Instance:      "integration-container",
 				ContainerName: "integration-container",
 			},
@@ -165,7 +179,7 @@ func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 		},
 		{
 			service: Service{
-				Name:          "apache",
+				Name:          testApache,
 				Instance:      "test-integration-container",
 				ContainerName: "test-integration-container",
 			},
@@ -173,7 +187,7 @@ func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 		},
 		{
 			service: Service{
-				Name:          "nginx",
+				Name:          testNginx,
 				Instance:      "",
 				ContainerName: "",
 			},
@@ -181,15 +195,15 @@ func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 		},
 		{
 			service: Service{
-				Name:          "nginx",
-				Instance:      "random-value",
-				ContainerName: "random-value",
+				Name:          testNginx,
+				Instance:      testIgnRandomValue,
+				ContainerName: testIgnRandomValue,
 			},
 			expectedResult: true,
 		},
 		{
 			service: Service{
-				Name:          "redis",
+				Name:          testRedis,
 				Instance:      "",
 				ContainerName: "",
 			},
@@ -197,23 +211,23 @@ func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 		},
 		{
 			service: Service{
-				Name:          "redis",
-				Instance:      "random-value",
-				ContainerName: "random-value",
+				Name:          testRedis,
+				Instance:      testIgnRandomValue,
+				ContainerName: testIgnRandomValue,
 			},
 			expectedResult: false,
 		},
 		{
 			service: Service{
-				Name:          "influxdb",
-				Instance:      "influxdb",
-				ContainerName: "influxdb",
+				Name:          testIgnInfluxDB,
+				Instance:      testIgnInfluxDB,
+				ContainerName: testIgnInfluxDB,
 			},
 			expectedResult: false,
 		},
 		{
 			service: Service{
-				Name:          "prefix",
+				Name:          testIgnPrefix,
 				Instance:      "name-prefix",
 				ContainerName: "name-prefix",
 			},
@@ -221,7 +235,7 @@ func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 		},
 		{
 			service: Service{
-				Name:          "prefix",
+				Name:          testIgnPrefix,
 				Instance:      "name-prefixSomething",
 				ContainerName: "name-prefixSomething",
 			},
@@ -229,7 +243,7 @@ func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 		},
 		{
 			service: Service{
-				Name:          "prefix",
+				Name:          testIgnPrefix,
 				Instance:      "Something-name-prefix",
 				ContainerName: "Something-name-prefix",
 			},
@@ -237,7 +251,7 @@ func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 		},
 		{
 			service: Service{
-				Name:          "suffix",
+				Name:          testIgnSuffix,
 				Instance:      "123-name-suffix",
 				ContainerName: "123-name-suffix",
 			},
@@ -245,7 +259,7 @@ func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 		},
 		{
 			service: Service{
-				Name:          "suffix",
+				Name:          testIgnSuffix,
 				Instance:      "name-suffix",
 				ContainerName: "name-suffix",
 			},
@@ -253,7 +267,7 @@ func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 		},
 		{
 			service: Service{
-				Name:          "suffix",
+				Name:          testIgnSuffix,
 				Instance:      "name-suffix123",
 				ContainerName: "name-suffix123",
 			},
@@ -261,7 +275,7 @@ func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 		},
 		{
 			service: Service{
-				Name:          "prefix-suffix",
+				Name:          testIgnPrefixSuffix,
 				Instance:      "starts-with-###-end-withs",
 				ContainerName: "starts-with-###-end-withs",
 			},
@@ -269,7 +283,7 @@ func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 		},
 		{
 			service: Service{
-				Name:          "prefix-suffix",
+				Name:          testIgnPrefixSuffix,
 				Instance:      "starts-with--end-withs",
 				ContainerName: "starts-with--end-withs",
 			},
@@ -277,7 +291,7 @@ func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 		},
 		{
 			service: Service{
-				Name:          "prefix-suffix",
+				Name:          testIgnPrefixSuffix,
 				Instance:      "Astarts-with-###-end-withs",
 				ContainerName: "Astarts-with-###-end-withs",
 			},
@@ -285,7 +299,7 @@ func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 		},
 		{
 			service: Service{
-				Name:          "prefix-suffix",
+				Name:          testIgnPrefixSuffix,
 				Instance:      "starts-with-###-end-withsB",
 				ContainerName: "starts-with-###-end-withsB",
 			},
@@ -293,7 +307,7 @@ func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 		},
 		{
 			service: Service{
-				Name:          "two-placeholder",
+				Name:          testIgnTwoPlaceholder,
 				Instance:      "web-",
 				ContainerName: "web-",
 			},
@@ -301,7 +315,7 @@ func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 		},
 		{
 			service: Service{
-				Name:          "two-placeholder",
+				Name:          testIgnTwoPlaceholder,
 				Instance:      "web-1",
 				ContainerName: "web-1",
 			},
@@ -309,7 +323,7 @@ func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 		},
 		{
 			service: Service{
-				Name:          "two-placeholder",
+				Name:          testIgnTwoPlaceholder,
 				Instance:      "web-01",
 				ContainerName: "web-01",
 			},
@@ -317,7 +331,7 @@ func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 		},
 		{
 			service: Service{
-				Name:          "two-placeholder",
+				Name:          testIgnTwoPlaceholder,
 				Instance:      "web-001",
 				ContainerName: "web-001",
 			},
@@ -333,7 +347,7 @@ func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 		},
 		{
 			service: Service{
-				Name:          "fixed-hostname",
+				Name:          testIgnFixedHostname,
 				Instance:      "web.example.com",
 				ContainerName: "web.example.com",
 			},
@@ -341,7 +355,7 @@ func TestIsServiceIgnored(t *testing.T) { //nolint:maintidx
 		},
 		{
 			service: Service{
-				Name:          "fixed-hostname",
+				Name:          testIgnFixedHostname,
 				Instance:      "web-example-com",
 				ContainerName: "web-example-com",
 			},

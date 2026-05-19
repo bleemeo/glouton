@@ -37,6 +37,8 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 )
 
+const labelValueTrue = "true"
+
 // listExporters return list of exporters based on containers labels/annotations.
 func (d *DynamicScrapper) listExporters(containers []facts.Container) []*scrapper.Target {
 	result := make([]*scrapper.Target, 0)
@@ -88,7 +90,7 @@ func (d *DynamicScrapper) listExporters(containers []facts.Container) []*scrappe
 }
 
 func urlFromLabels(labels map[string]string, address string) string {
-	if strings.ToLower(labels["prometheus.io/scrape"]) != "true" {
+	if strings.ToLower(labels["prometheus.io/scrape"]) != labelValueTrue {
 		return ""
 	}
 

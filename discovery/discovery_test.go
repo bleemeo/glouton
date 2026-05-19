@@ -40,6 +40,46 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+const (
+	testApache           = string(ApacheService)
+	testNginx            = string(NginxService)
+	testRedis            = string(RedisService)
+	testMemcached        = string(MemcachedService)
+	testKafka            = string(KafkaService)
+	testPHPFPM           = string(PHPFPMService)
+	testPostgreSQL       = string(PostgreSQLService)
+	testMyApplication    = "myapplication"
+	testCommandToRun     = "command-to-run"
+	testCustomWebserver  = "custom_webserver"
+	testWebsite          = "website"
+	testJMXCustom        = "jmx_custom"
+	testDuplicate        = "duplicate"
+	testNginx1           = "nginx1"
+	testNoopFmt          = "noop-fmt"
+	testNoopFlt          = "noop-flt"
+	testContainerName    = "CONTAINER_NAME"
+	testAzerty           = "azerty"
+	testSSLAndStartTLS   = "ssl_and_starttls"
+	testGoodStatsProto   = "good_stats_protocol"
+	testBadStatsProto    = "bad_stats_protocol"
+	testBadLogCfg        = "bad_log_cfg"
+	testBadLogFiles      = "bad_log_files"
+	testComposePHPNginx  = "composetest-phpfpm_and_nginx-1"
+	testConflictOther    = "conflict-other-port"
+	testConflictInactive = "conflict-inactive"
+
+	testIP127001   = "127.0.0.1"
+	testIP10005    = "10.0.0.5"
+	testIP10012    = "10.0.1.2"
+	testIP1721602  = "172.16.0.2"
+	testIP1721807  = "172.18.0.7"
+	testIP1721809  = "172.18.0.9"
+	testIP12717002 = "127.17.0.2"
+	testAddr127080 = "127.0.0.1:80"
+
+	testContainerHash = "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5"
+)
+
 var (
 	errNotImplemented  = errors.New("not implemented")
 	errUnregisterTwice = errors.New("calling unregistred twice")
@@ -207,105 +247,105 @@ func TestDiscoverySingle(t *testing.T) {
 		{
 			previousService: Service{},
 			dynamicResult: Service{
-				Name:            "memcached",
+				Name:            testMemcached,
 				ServiceType:     MemcachedService,
 				ContainerID:     "",
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 11211}},
+				IPAddress:       testIP127001,
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0,
 			},
 			want: Service{
-				Name:            "memcached",
+				Name:            testMemcached,
 				ServiceType:     MemcachedService,
 				ContainerID:     "",
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 11211}},
+				IPAddress:       testIP127001,
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0,
 			},
 		},
 		{
 			previousService: Service{
-				Name:            "memcached",
+				Name:            testMemcached,
 				ServiceType:     MemcachedService,
 				ContainerID:     "",
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 11211}},
+				IPAddress:       testIP127001,
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0,
 			},
 			dynamicResult: Service{
-				Name:            "memcached",
+				Name:            testMemcached,
 				ServiceType:     MemcachedService,
 				ContainerID:     "",
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 11211}},
+				IPAddress:       testIP127001,
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0,
 			},
 			want: Service{
-				Name:            "memcached",
+				Name:            testMemcached,
 				ServiceType:     MemcachedService,
 				ContainerID:     "",
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 11211}},
+				IPAddress:       testIP127001,
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0,
 			},
 		},
 		{
 			previousService: Service{
-				Name:            "memcached",
+				Name:            testMemcached,
 				ServiceType:     MemcachedService,
 				ContainerID:     "",
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "10.0.0.5", Port: 11211}},
-				IPAddress:       "10.0.0.5",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP10005, Port: 11211}},
+				IPAddress:       testIP10005,
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0,
 			},
 			dynamicResult: Service{
-				Name:            "memcached",
+				Name:            testMemcached,
 				ServiceType:     MemcachedService,
 				ContainerID:     "",
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 11211}},
 				IPAddress:       "",
 				HasNetstatInfo:  false,
 			},
 			want: Service{
-				Name:            "memcached",
+				Name:            testMemcached,
 				ServiceType:     MemcachedService,
 				ContainerID:     "",
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "10.0.0.5", Port: 11211}},
-				IPAddress:       "10.0.0.5",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP10005, Port: 11211}},
+				IPAddress:       testIP10005,
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0,
 			},
 		},
 		{
 			previousService: Service{
-				Name:            "memcached",
+				Name:            testMemcached,
 				ServiceType:     MemcachedService,
 				ContainerID:     "",
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "10.0.0.5", Port: 11211}},
-				IPAddress:       "10.0.0.5",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP10005, Port: 11211}},
+				IPAddress:       testIP10005,
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0,
 			},
 			dynamicResult: Service{
-				Name:            "memcached",
+				Name:            testMemcached,
 				ServiceType:     MemcachedService,
 				ContainerID:     "",
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 11211}},
+				IPAddress:       testIP127001,
 				HasNetstatInfo:  true,
 			},
 			want: Service{
-				Name:            "memcached",
+				Name:            testMemcached,
 				ServiceType:     MemcachedService,
 				ContainerID:     "",
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
-				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 11211}},
+				IPAddress:       testIP127001,
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0,
 			},
@@ -400,20 +440,20 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 			name: "no override",
 			args: args{
 				discoveredServicesMap: map[NameInstance]Service{
-					{Name: "apache"}: {
-						Name:            "apache",
+					{Name: testApache}: {
+						Name:            testApache,
 						ServiceType:     ApacheService,
-						IPAddress:       "127.0.0.1",
+						IPAddress:       testIP127001,
 						ListenAddresses: []facts.ListenAddress{},
 					},
 				},
 				servicesOverride: nil,
 			},
 			want: map[NameInstance]Service{
-				{Name: "apache"}: {
-					Name:            "apache",
+				{Name: testApache}: {
+					Name:            testApache,
 					ServiceType:     ApacheService,
-					IPAddress:       "127.0.0.1",
+					IPAddress:       testIP127001,
 					ListenAddresses: []facts.ListenAddress{},
 				},
 			},
@@ -422,34 +462,34 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 			name: "address override",
 			args: args{
 				discoveredServicesMap: map[NameInstance]Service{
-					{Name: "apache"}: {
-						Name:        "apache",
+					{Name: testApache}: {
+						Name:        testApache,
 						ServiceType: ApacheService,
 					},
 				},
 				servicesOverride: []config.Service{
 					{
-						Type:    "apache",
-						Address: "10.0.1.2",
+						Type:    testApache,
+						Address: testIP10012,
 					},
 				},
 			},
 			want: map[NameInstance]Service{
-				{Name: "apache"}: {
-					Name:        "apache",
+				{Name: testApache}: {
+					Name:        testApache,
 					ServiceType: ApacheService,
 					Config: config.Service{
-						Type:    "apache",
-						Address: "10.0.1.2",
+						Type:    testApache,
+						Address: testIP10012,
 					},
 					ListenAddresses: []facts.ListenAddress{
 						{
-							NetworkFamily: "tcp",
-							Address:       "10.0.1.2",
+							NetworkFamily: tcpProtocol,
+							Address:       testIP10012,
 							Port:          80,
 						},
 					},
-					IPAddress: "10.0.1.2",
+					IPAddress: testIP10012,
 				},
 			},
 		},
@@ -457,50 +497,50 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 			name: "add custom check",
 			args: args{
 				discoveredServicesMap: map[NameInstance]Service{
-					{Name: "apache"}: {
-						Name:        "apache",
+					{Name: testApache}: {
+						Name:        testApache,
 						ServiceType: ApacheService,
 					},
 				},
 				servicesOverride: []config.Service{
 					{
-						Type:         "myapplication",
+						Type:         testMyApplication,
 						Port:         8080,
 						CheckType:    customCheckNagios,
-						CheckCommand: "command-to-run",
+						CheckCommand: testCommandToRun,
 					},
 					{
-						Type: "custom_webserver",
+						Type: testCustomWebserver,
 						Port: 8081,
 					},
 				},
 			},
 			want: map[NameInstance]Service{
-				{Name: "apache"}: {
-					Name:        "apache",
+				{Name: testApache}: {
+					Name:        testApache,
 					ServiceType: ApacheService,
 				},
-				{Name: "myapplication"}: {
+				{Name: testMyApplication}: {
 					ServiceType: CustomService,
 					Config: config.Service{
-						Type:         "myapplication",
-						Address:      "127.0.0.1", // default as soon as port is set
+						Type:         testMyApplication,
+						Address:      testIP127001, // default as soon as port is set
 						Port:         8080,
 						CheckType:    customCheckNagios,
-						CheckCommand: "command-to-run",
+						CheckCommand: testCommandToRun,
 					},
-					Name:   "myapplication",
+					Name:   testMyApplication,
 					Active: true,
 				},
-				{Name: "custom_webserver"}: {
+				{Name: testCustomWebserver}: {
 					ServiceType: CustomService,
 					Config: config.Service{
-						Type:      "custom_webserver",
-						Address:   "127.0.0.1", // default as soon as port is set
+						Type:      testCustomWebserver,
+						Address:   testIP127001, // default as soon as port is set
 						Port:      8081,
 						CheckType: customCheckTCP, // default as soon as port is set,
 					},
-					Name:   "custom_webserver",
+					Name:   testCustomWebserver,
 					Active: true,
 				},
 			},
@@ -511,12 +551,12 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 				discoveredServicesMap: nil,
 				servicesOverride: []config.Service{
 					{ // the check_command is missing
-						Type:      "myapplication",
+						Type:      testMyApplication,
 						Port:      8080,
 						CheckType: customCheckNagios,
 					},
 					{ // port is missing
-						Type:      "custom_webserver",
+						Type:      testCustomWebserver,
 						CheckType: customCheckHTTP,
 					},
 				},
@@ -527,39 +567,39 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 			name: "ignore ports",
 			args: args{
 				discoveredServicesMap: map[NameInstance]Service{
-					{Name: "apache"}: {
-						Name:        "apache",
+					{Name: testApache}: {
+						Name:        testApache,
 						ServiceType: ApacheService,
-						IPAddress:   "127.0.0.1",
+						IPAddress:   testIP127001,
 						ListenAddresses: []facts.ListenAddress{
-							{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 80},
-							{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 443},
+							{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 80},
+							{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 443},
 						},
 					},
 				},
 				servicesOverride: []config.Service{
 					{
-						Type:        "apache",
+						Type:        testApache,
 						IgnorePorts: []int{443, 22},
 					},
 				},
 			},
 			want: map[NameInstance]Service{
-				{Name: "apache"}: {
-					Name:        "apache",
+				{Name: testApache}: {
+					Name:        testApache,
 					ServiceType: ApacheService,
-					IPAddress:   "127.0.0.1",
+					IPAddress:   testIP127001,
 					ListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 80},
+						{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 80},
 						// It's not applyOverride which remove ignored ports
-						{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 443},
+						{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 443},
 					},
 					IgnoredPorts: map[int]bool{
 						22:  true,
 						443: true,
 					},
 					Config: config.Service{
-						Type:        "apache",
+						Type:        testApache,
 						IgnorePorts: []int{443, 22},
 					},
 				},
@@ -569,28 +609,28 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 			name: "ignore ports with space",
 			args: args{
 				discoveredServicesMap: map[NameInstance]Service{
-					{Name: "apache"}: {
-						Name:        "apache",
+					{Name: testApache}: {
+						Name:        testApache,
 						ServiceType: ApacheService,
 					},
 				},
 				servicesOverride: []config.Service{
 					{
-						Type:        "apache",
+						Type:        testApache,
 						IgnorePorts: []int{443, 22},
 					},
 				},
 			},
 			want: map[NameInstance]Service{
-				{Name: "apache"}: {
-					Name:        "apache",
+				{Name: testApache}: {
+					Name:        testApache,
 					ServiceType: ApacheService,
 					IgnoredPorts: map[int]bool{
 						22:  true,
 						443: true,
 					},
 					Config: config.Service{
-						Type:        "apache",
+						Type:        testApache,
 						IgnorePorts: []int{443, 22},
 					},
 				},
@@ -600,26 +640,26 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 			name: "create tags list",
 			args: args{
 				discoveredServicesMap: map[NameInstance]Service{
-					{Name: "apache"}: {
-						Name:        "apache",
+					{Name: testApache}: {
+						Name:        testApache,
 						ServiceType: ApacheService,
 					},
 				},
 				servicesOverride: []config.Service{
 					{
-						Type: "apache",
-						Tags: []string{"website"},
+						Type: testApache,
+						Tags: []string{testWebsite},
 					},
 				},
 			},
 			want: map[NameInstance]Service{
-				{Name: "apache"}: {
-					Name:        "apache",
+				{Name: testApache}: {
+					Name:        testApache,
 					ServiceType: ApacheService,
-					Tags:        []string{"website"},
+					Tags:        []string{testWebsite},
 					Config: config.Service{
-						Type: "apache",
-						Tags: []string{"website"},
+						Type: testApache,
+						Tags: []string{testWebsite},
 					},
 				},
 			},
@@ -628,27 +668,27 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 			name: "extend tags list",
 			args: args{
 				discoveredServicesMap: map[NameInstance]Service{
-					{Name: "apache"}: {
-						Name:        "apache",
+					{Name: testApache}: {
+						Name:        testApache,
 						ServiceType: ApacheService,
 						Tags:        []string{"tag-from-dynamic-discovery-like-docker-labels"},
 					},
 				},
 				servicesOverride: []config.Service{
 					{
-						Type: "apache",
-						Tags: []string{"website"},
+						Type: testApache,
+						Tags: []string{testWebsite},
 					},
 				},
 			},
 			want: map[NameInstance]Service{
-				{Name: "apache"}: {
-					Name:        "apache",
+				{Name: testApache}: {
+					Name:        testApache,
 					ServiceType: ApacheService,
-					Tags:        []string{"tag-from-dynamic-discovery-like-docker-labels", "website"},
+					Tags:        []string{"tag-from-dynamic-discovery-like-docker-labels", testWebsite},
 					Config: config.Service{
-						Type: "apache",
-						Tags: []string{"website"},
+						Type: testApache,
+						Tags: []string{testWebsite},
 					},
 				},
 			},
@@ -659,18 +699,18 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 				discoveredServicesMap: map[NameInstance]Service{},
 				servicesOverride: []config.Service{
 					{
-						Type:    "jmx_custom",
+						Type:    testJMXCustom,
 						JMXPort: 1000,
 					},
 				},
 			},
 			want: map[NameInstance]Service{
-				{Name: "jmx_custom"}: {
-					Name:        "jmx_custom",
+				{Name: testJMXCustom}: {
+					Name:        testJMXCustom,
 					ServiceType: CustomService,
 					Config: config.Service{
-						Type:      "jmx_custom",
-						Address:   "127.0.0.1",
+						Type:      testJMXCustom,
+						Address:   testIP127001,
 						Port:      1000,
 						JMXPort:   1000,
 						CheckType: customCheckTCP,
@@ -685,19 +725,19 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 				discoveredServicesMap: map[NameInstance]Service{},
 				servicesOverride: []config.Service{
 					{
-						Type:    "jmx_custom",
+						Type:    testJMXCustom,
 						Port:    8000,
 						JMXPort: 1000,
 					},
 				},
 			},
 			want: map[NameInstance]Service{
-				{Name: "jmx_custom"}: {
-					Name:        "jmx_custom",
+				{Name: testJMXCustom}: {
+					Name:        testJMXCustom,
 					ServiceType: CustomService,
 					Config: config.Service{
-						Type:      "jmx_custom",
-						Address:   "127.0.0.1",
+						Type:      testJMXCustom,
+						Address:   testIP127001,
 						Port:      8000,
 						JMXPort:   1000,
 						CheckType: customCheckTCP,
@@ -710,8 +750,8 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 			name: "override docker labels",
 			args: args{
 				discoveredServicesMap: map[NameInstance]Service{
-					{Name: "kafka"}: {
-						Name:        "kafka",
+					{Name: testKafka}: {
+						Name:        testKafka,
 						ServiceType: KafkaService,
 						// This case happens when "glouton.port" and
 						// "glouton.jmx_port" docker labels are set.
@@ -723,18 +763,18 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 				},
 				servicesOverride: []config.Service{
 					{
-						Type:    "kafka",
+						Type:    testKafka,
 						Port:    9000,
 						JMXPort: 2000,
 					},
 				},
 			},
 			want: map[NameInstance]Service{
-				{Name: "kafka"}: {
-					Name:        "kafka",
+				{Name: testKafka}: {
+					Name:        testKafka,
 					ServiceType: KafkaService,
 					Config: config.Service{
-						Type:    "kafka",
+						Type:    testKafka,
 						Port:    9000,
 						JMXPort: 2000,
 					},
@@ -747,14 +787,14 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 			// on which ports.
 			args: args{
 				discoveredServicesMap: map[NameInstance]Service{
-					{Name: "redis"}: {
-						Name:        "redis",
+					{Name: testRedis}: {
+						Name:        testRedis,
 						ServiceType: RedisService,
 						ListenAddresses: []facts.ListenAddress{
-							{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6379},
-							{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6380},
+							{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 6379},
+							{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 6380},
 						},
-						IPAddress:       "127.0.0.1",
+						IPAddress:       testIP127001,
 						HasNetstatInfo:  true,
 						LastNetstatInfo: t0,
 						Active:          true,
@@ -762,38 +802,38 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 				},
 				servicesOverride: []config.Service{
 					{
-						Type:     "redis",
-						Instance: "duplicate",
-						Address:  "127.0.0.1",
+						Type:     testRedis,
+						Instance: testDuplicate,
+						Address:  testIP127001,
 						Port:     6379,
 					},
 				},
 			},
 			want: map[NameInstance]Service{
-				{Name: "redis"}: {
-					Name:        "redis",
+				{Name: testRedis}: {
+					Name:        testRedis,
 					ServiceType: RedisService,
 					ListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6380},
+						{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 6380},
 					},
-					IPAddress:       "127.0.0.1",
+					IPAddress:       testIP127001,
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
 					Active:          true,
 				},
-				{Name: "redis", Instance: "duplicate"}: {
-					Name:        "redis",
-					Instance:    "duplicate",
+				{Name: testRedis, Instance: testDuplicate}: {
+					Name:        testRedis,
+					Instance:    testDuplicate,
 					ServiceType: RedisService,
 					ListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6379},
+						{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 6379},
 					},
-					IPAddress: "127.0.0.1",
+					IPAddress: testIP127001,
 					Active:    true,
 					Config: config.Service{
-						Type:     "redis",
-						Instance: "duplicate",
-						Address:  "127.0.0.1",
+						Type:     testRedis,
+						Instance: testDuplicate,
+						Address:  testIP127001,
 						Port:     6379,
 					},
 				},
@@ -803,15 +843,15 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 			name: "nginx-alternative-port-ignore2",
 			args: args{
 				discoveredServicesMap: map[NameInstance]Service{
-					{Name: "nginx", Instance: "nginx_port_alt"}: {
-						Name:          "nginx",
-						Instance:      "nginx_port_alt",
+					{Name: testNginx, Instance: testNginxAltKey}: {
+						Name:          testNginx,
+						Instance:      testNginxAltKey,
 						ServiceType:   NginxService,
-						ContainerID:   "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
-						ContainerName: "nginx_port_alt",
+						ContainerID:   testContainerHash,
+						ContainerName: testNginxAltKey,
 						// It's not applyOverride which remove ignored ports, but we are in ignored ports
-						ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
-						IPAddress:       "172.16.0.2",
+						ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP1721602, Port: 80}},
+						IPAddress:       testIP1721602,
 						// This test is done in two path. In dynamic.go we add the option to Config.
 						// in discovery (applyOverrideInPlance) we apply the config override.
 						// IgnoredPorts: map[int]bool{
@@ -829,15 +869,15 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 				},
 			},
 			want: map[NameInstance]Service{
-				{Name: "nginx", Instance: "nginx_port_alt"}: {
-					Name:          "nginx",
-					Instance:      "nginx_port_alt",
+				{Name: testNginx, Instance: testNginxAltKey}: {
+					Name:          testNginx,
+					Instance:      testNginxAltKey,
 					ServiceType:   NginxService,
-					ContainerID:   "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
-					ContainerName: "nginx_port_alt",
+					ContainerID:   testContainerHash,
+					ContainerName: testNginxAltKey,
 					// It's not applyOverride which remove ignored ports, but we are in ignored ports
-					ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
-					IPAddress:       "172.16.0.2",
+					ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP1721602, Port: 80}},
+					IPAddress:       testIP1721602,
 					// This test is done in two path. In dynamic.go we add the option to Config.
 					// in discovery (applyOverrideInPlance) we apply the config override.
 					IgnoredPorts: map[int]bool{
@@ -858,16 +898,16 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 			name: "nginx-alternative-port-update",
 			args: args{
 				discoveredServicesMap: map[NameInstance]Service{
-					{Name: "nginx", Instance: "nginx_port_alt"}: {
-						Name:          "nginx",
-						Instance:      "nginx_port_alt",
+					{Name: testNginx, Instance: testNginxAltKey}: {
+						Name:          testNginx,
+						Instance:      testNginxAltKey,
 						ServiceType:   NginxService,
-						ContainerID:   "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
-						ContainerName: "nginx_port_alt",
+						ContainerID:   testContainerHash,
+						ContainerName: testNginxAltKey,
 						// This test is done in two path. In dynamic.go we add the option to Config.
 						// in discovery (applyOverrideInPlance) we apply the config override.
-						ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
-						IPAddress:       "172.16.0.2",
+						ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP1721602, Port: 80}},
+						IPAddress:       testIP1721602,
 						Active:          true,
 						HasNetstatInfo:  true,
 						LastNetstatInfo: t0,
@@ -878,14 +918,14 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 				},
 			},
 			want: map[NameInstance]Service{
-				{Name: "nginx", Instance: "nginx_port_alt"}: {
-					Name:            "nginx",
-					Instance:        "nginx_port_alt",
+				{Name: testNginx, Instance: testNginxAltKey}: {
+					Name:            testNginx,
+					Instance:        testNginxAltKey,
 					ServiceType:     NginxService,
-					ContainerID:     "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
-					ContainerName:   "nginx_port_alt",
-					ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 8080}},
-					IPAddress:       "172.16.0.2",
+					ContainerID:     testContainerHash,
+					ContainerName:   testNginxAltKey,
+					ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP1721602, Port: 8080}},
+					IPAddress:       testIP1721602,
 					Active:          true,
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
@@ -932,14 +972,14 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 
 	mockDynamic.result = []Service{
 		{
-			Name:            "nginx",
-			Instance:        "nginx1",
+			Name:            testNginx,
+			Instance:        testNginx1,
 			ServiceType:     NginxService,
 			Active:          true,
 			ContainerID:     "1234",
-			ContainerName:   "nginx1",
-			IPAddress:       "172.16.0.2",
-			ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
+			ContainerName:   testNginx1,
+			IPAddress:       testIP1721602,
+			ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP1721602, Port: 80}},
 		},
 	}
 
@@ -955,22 +995,22 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 
 	mockDynamic.result = []Service{
 		{
-			Name:            "nginx",
-			Instance:        "nginx1",
+			Name:            testNginx,
+			Instance:        testNginx1,
 			ServiceType:     NginxService,
 			Active:          true,
 			ContainerID:     "1234",
-			ContainerName:   "nginx1",
-			IPAddress:       "172.16.0.2",
-			ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
+			ContainerName:   testNginx1,
+			IPAddress:       testIP1721602,
+			ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP1721602, Port: 80}},
 		},
 		{
-			Name:            "memcached",
+			Name:            testMemcached,
 			Instance:        "",
 			ServiceType:     MemcachedService,
 			Active:          true,
-			IPAddress:       "127.0.0.1",
-			ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
+			IPAddress:       testIP127001,
+			ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 11211}},
 		},
 	}
 	reg.ExpectedAddedContains = []string{"Service input memcached", "check for memcached"}
@@ -988,22 +1028,22 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 	}
 	mockDynamic.result = []Service{
 		{
-			Name:            "nginx",
-			Instance:        "nginx1",
+			Name:            testNginx,
+			Instance:        testNginx1,
 			ServiceType:     NginxService,
 			Active:          true,
 			ContainerID:     "1239",
-			ContainerName:   "nginx1",
-			IPAddress:       "172.16.0.2",
-			ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
+			ContainerName:   testNginx1,
+			IPAddress:       testIP1721602,
+			ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP1721602, Port: 80}},
 		},
 		{
-			Name:            "memcached",
+			Name:            testMemcached,
 			Instance:        "",
 			ServiceType:     MemcachedService,
 			Active:          true,
-			IPAddress:       "127.0.0.1",
-			ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
+			IPAddress:       testIP127001,
+			ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 11211}},
 		},
 	}
 
@@ -1038,13 +1078,13 @@ func Test_usePreviousNetstat(t *testing.T) {
 			name: "service restarted",
 			now:  t0,
 			previousService: Service{
-				Name:            "nginx",
+				Name:            testNginx,
 				ContainerID:     "",
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0.Add(-30 * time.Minute),
 			},
 			newService: Service{
-				Name:            "nginx",
+				Name:            testNginx,
 				ContainerID:     "",
 				HasNetstatInfo:  false,
 				LastNetstatInfo: time.Time{},
@@ -1055,13 +1095,13 @@ func Test_usePreviousNetstat(t *testing.T) {
 			name: "service restarted, netstat available",
 			now:  t0,
 			previousService: Service{
-				Name:            "nginx",
+				Name:            testNginx,
 				ContainerID:     "",
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0.Add(-30 * time.Minute),
 			},
 			newService: Service{
-				Name:            "nginx",
+				Name:            testNginx,
 				ContainerID:     "",
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0,
@@ -1072,13 +1112,13 @@ func Test_usePreviousNetstat(t *testing.T) {
 			name: "missing LastNetstatInfo on previous",
 			now:  t0,
 			previousService: Service{
-				Name:            "nginx",
+				Name:            testNginx,
 				ContainerID:     "",
 				HasNetstatInfo:  true,
 				LastNetstatInfo: time.Time{},
 			},
 			newService: Service{
-				Name:            "nginx",
+				Name:            testNginx,
 				ContainerID:     "",
 				HasNetstatInfo:  false,
 				LastNetstatInfo: time.Time{},
@@ -1104,93 +1144,93 @@ func TestValidateServices(t *testing.T) {
 			ContainerAndServiceEnable: true,
 		},
 		KnownLogFormats: map[string][]config.OTELOperator{
-			"noop-fmt": {},
+			testNoopFmt: {},
 		},
 		KnownLogFilters: map[string]config.OTELFilters{
-			"noop-flt": {},
+			testNoopFlt: {},
 		},
 	}
 
 	services := []config.Service{
 		{
-			Type:     "apache",
+			Type:     testApache,
 			Instance: "",
 			Port:     80,
-			Address:  "127.0.0.1",
+			Address:  testIP127001,
 			HTTPPath: "/",
-			HTTPHost: "127.0.0.1:80",
+			HTTPHost: testAddr127080,
 		},
 		{
-			Type:     "apache",
+			Type:     testApache,
 			Instance: "",
 			Port:     81,
-			Address:  "127.0.0.1",
+			Address:  testIP127001,
 			HTTPPath: "/",
-			HTTPHost: "127.0.0.1:80",
+			HTTPHost: testAddr127080,
 		},
 		{
-			Type:     "apache",
-			Instance: "CONTAINER_NAME",
+			Type:     testApache,
+			Instance: testContainerName,
 			Port:     80,
-			Address:  "127.17.0.2",
+			Address:  testIP12717002,
 			HTTPPath: "/",
-			HTTPHost: "127.0.0.1:80",
+			HTTPHost: testAddr127080,
 		},
 		{
-			Type:     "apache",
-			Instance: "CONTAINER_NAME",
+			Type:     testApache,
+			Instance: testContainerName,
 			Port:     81,
-			Address:  "127.17.0.2",
+			Address:  testIP12717002,
 			HTTPPath: "/",
-			HTTPHost: "127.0.0.1:80",
+			HTTPHost: testAddr127080,
 		},
 		{
-			CheckType:    "nagios",
-			CheckCommand: "azerty",
+			CheckType:    customCheckNagios,
+			CheckCommand: testAzerty,
 		},
 		{
-			Type:         "myapplication",
+			Type:         testMyApplication,
 			Port:         80,
-			CheckType:    "nagios",
-			CheckCommand: "command-to-run",
-			LogFormat:    "noop-fmt",
-			LogFilter:    "noop-flt",
+			CheckType:    customCheckNagios,
+			CheckCommand: testCommandToRun,
+			LogFormat:    testNoopFmt,
+			LogFilter:    testNoopFlt,
 		},
 		{
 			Type:         " not fixable@",
-			CheckType:    "nagios",
-			CheckCommand: "azerty",
+			CheckType:    customCheckNagios,
+			CheckCommand: testAzerty,
 		},
 		{
-			Type:      "custom_webserver",
+			Type:      testCustomWebserver,
 			Port:      8181,
-			CheckType: "http",
+			CheckType: customCheckHTTP,
 		},
 		{
 			Type:         "custom-bad.name",
-			CheckType:    "nagios",
-			CheckCommand: "azerty",
+			CheckType:    customCheckNagios,
+			CheckCommand: testAzerty,
 		},
 		{
-			Type:     "ssl_and_starttls",
+			Type:     testSSLAndStartTLS,
 			SSL:      true,
 			StartTLS: true,
 		},
 		{
-			Type:          "good_stats_protocol",
-			StatsProtocol: "http",
+			Type:          testGoodStatsProto,
+			StatsProtocol: customCheckHTTP,
 		},
 		{
-			Type:          "bad_stats_protocol",
+			Type:          testBadStatsProto,
 			StatsProtocol: "bad",
 		},
 		{
-			Type:      "bad_log_cfg",
+			Type:      testBadLogCfg,
 			LogFormat: "bad-fmt",
 			LogFilter: "bad-flt",
 		},
 		{
-			Type: "bad_log_files",
+			Type: testBadLogFiles,
 			LogFiles: []config.ServiceLogFile{
 				{
 					FilePath:  "",
@@ -1216,84 +1256,84 @@ func TestValidateServices(t *testing.T) {
 
 	wantServices := map[NameInstance]config.Service{
 		{
-			Name:     "apache",
+			Name:     testApache,
 			Instance: "",
 		}: {
-			Type:     "apache",
+			Type:     testApache,
 			Instance: "",
 			Port:     81,
-			Address:  "127.0.0.1",
+			Address:  testIP127001,
 			HTTPPath: "/",
-			HTTPHost: "127.0.0.1:80",
+			HTTPHost: testAddr127080,
 		},
 		{
-			Name:     "apache",
-			Instance: "CONTAINER_NAME",
+			Name:     testApache,
+			Instance: testContainerName,
 		}: {
-			Type:     "apache",
-			Instance: "CONTAINER_NAME",
+			Type:     testApache,
+			Instance: testContainerName,
 			Port:     81,
-			Address:  "127.17.0.2",
+			Address:  testIP12717002,
 			HTTPPath: "/",
-			HTTPHost: "127.0.0.1:80",
+			HTTPHost: testAddr127080,
 		},
 		{
-			Name:     "myapplication",
+			Name:     testMyApplication,
 			Instance: "",
 		}: {
-			Type:         "myapplication",
+			Type:         testMyApplication,
 			Port:         80,
-			CheckType:    "nagios",
-			CheckCommand: "command-to-run",
-			LogFormat:    "noop-fmt",
-			LogFilter:    "noop-flt",
+			CheckType:    customCheckNagios,
+			CheckCommand: testCommandToRun,
+			LogFormat:    testNoopFmt,
+			LogFilter:    testNoopFlt,
 		},
 		{
-			Name:     "custom_webserver",
+			Name:     testCustomWebserver,
 			Instance: "",
 		}: {
-			Type:      "custom_webserver",
+			Type:      testCustomWebserver,
 			Port:      8181,
-			CheckType: "http",
+			CheckType: customCheckHTTP,
 		},
 		{
 			Name:     "custom_bad_name",
 			Instance: "",
 		}: {
 			Type:         "custom_bad_name",
-			CheckType:    "nagios",
-			CheckCommand: "azerty",
+			CheckType:    customCheckNagios,
+			CheckCommand: testAzerty,
 		},
 		{
-			Name: "ssl_and_starttls",
+			Name: testSSLAndStartTLS,
 		}: {
-			Type:     "ssl_and_starttls",
+			Type:     testSSLAndStartTLS,
 			SSL:      false,
 			StartTLS: true,
 		},
 		{
-			Name: "good_stats_protocol",
+			Name: testGoodStatsProto,
 		}: {
-			Type:          "good_stats_protocol",
-			StatsProtocol: "http",
+			Type:          testGoodStatsProto,
+			StatsProtocol: customCheckHTTP,
 		},
 		{
-			Name: "bad_stats_protocol",
+			Name: testBadStatsProto,
 		}: {
-			Type:          "bad_stats_protocol",
+			Type:          testBadStatsProto,
 			StatsProtocol: "",
 		},
 		{
-			Name: "bad_log_cfg",
+			Name: testBadLogCfg,
 		}: {
-			Type:      "bad_log_cfg",
+			Type:      testBadLogCfg,
 			LogFormat: "bad-fmt",
 			LogFilter: "bad-flt",
 		},
 		{
-			Name: "bad_log_files",
+			Name: testBadLogFiles,
 		}: {
-			Type: "bad_log_files",
+			Type: testBadLogFiles,
 			LogFiles: []config.ServiceLogFile{
 				{
 					FilePath:  "",
@@ -1331,13 +1371,13 @@ func Test_servicesFromState(t *testing.T) {
 			stateFileBaseName: "no-version",
 			want: []Service{
 				{
-					Name:          "redis",
-					Instance:      "redis",
+					Name:          testRedis,
+					Instance:      testRedis,
 					ContainerID:   "399366e861976b77e5574c6b956f70dd2473944d822196e8bd6735da7e1d373f",
-					ContainerName: "redis",
+					ContainerName: testRedis,
 					IPAddress:     "172.17.0.2",
 					ListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "172.17.0.2", Port: 6379},
+						{NetworkFamily: tcpProtocol, Address: "172.17.0.2", Port: 6379},
 					},
 					ExePath:     "/usr/local/bin/redis-server",
 					ServiceType: RedisService,
@@ -1350,24 +1390,24 @@ func Test_servicesFromState(t *testing.T) {
 			want: []Service{
 				{
 					Active:        true,
-					Name:          "nginx",
-					Instance:      "composetest-phpfpm_and_nginx-1",
+					Name:          testNginx,
+					Instance:      testComposePHPNginx,
 					ContainerID:   "231aa25b7994847ea8b672cff7cd1d6a95a301dacece589982fd0de78470d7e3",
-					ContainerName: "composetest-phpfpm_and_nginx-1",
-					IPAddress:     "172.18.0.7",
+					ContainerName: testComposePHPNginx,
+					IPAddress:     testIP1721807,
 					ListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "172.18.0.7", Port: 80},
+						{NetworkFamily: tcpProtocol, Address: testIP1721807, Port: 80},
 					},
 					ServiceType:     NginxService,
 					HasNetstatInfo:  true,
 					LastNetstatInfo: time.Date(2023, 6, 20, 15, 18, 37, 267699930, time.UTC),
 				},
 				{
-					Name:            "phpfpm",
-					Instance:        "composetest-phpfpm_and_nginx-1",
+					Name:            testPHPFPM,
+					Instance:        testComposePHPNginx,
 					ContainerID:     "231aa25b7994847ea8b672cff7cd1d6a95a301dacece589982fd0de78470d7e3",
-					ContainerName:   "composetest-phpfpm_and_nginx-1",
-					IPAddress:       "172.18.0.7",
+					ContainerName:   testComposePHPNginx,
+					IPAddress:       testIP1721807,
 					ListenAddresses: []facts.ListenAddress{},
 					ServiceType:     PHPFPMService,
 					Active:          true,
@@ -1375,21 +1415,21 @@ func Test_servicesFromState(t *testing.T) {
 				},
 				{
 					Active:          true,
-					Name:            "nginx",
-					Instance:        "conflict-other-port",
+					Name:            testNginx,
+					Instance:        testConflictOther,
 					ContainerID:     "741852963",
-					ContainerName:   "conflict-other-port",
-					IPAddress:       "172.18.0.7",
+					ContainerName:   testConflictOther,
+					IPAddress:       testIP1721807,
 					ListenAddresses: []facts.ListenAddress{},
 					ServiceType:     NginxService,
 					HasNetstatInfo:  false,
 				},
 				{
-					Name:            "phpfpm",
-					Instance:        "conflict-other-port",
+					Name:            testPHPFPM,
+					Instance:        testConflictOther,
 					ContainerID:     "741852963",
-					ContainerName:   "conflict-other-port",
-					IPAddress:       "172.18.0.7",
+					ContainerName:   testConflictOther,
+					IPAddress:       testIP1721807,
 					ListenAddresses: []facts.ListenAddress{},
 					ServiceType:     PHPFPMService,
 					Active:          true,
@@ -1397,14 +1437,14 @@ func Test_servicesFromState(t *testing.T) {
 				},
 				{
 					Active:        true,
-					Name:          "postgresql",
+					Name:          testPostgreSQL,
 					Instance:      "",
 					ContainerID:   "",
 					ContainerName: "",
-					IPAddress:     "127.0.0.1",
+					IPAddress:     testIP127001,
 					ListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 5432},
-						{NetworkFamily: "unix", Address: "/var/run/postgresql/.s.PGSQL.5432", Port: 0},
+						{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 5432},
+						{NetworkFamily: unixProtocol, Address: "/var/run/postgresql/.s.PGSQL.5432", Port: 0},
 					},
 					ServiceType:     PostgreSQLService,
 					HasNetstatInfo:  true,
@@ -1412,13 +1452,13 @@ func Test_servicesFromState(t *testing.T) {
 				},
 				{
 					Active:        true,
-					Name:          "nginx",
-					Instance:      "conflict-inactive",
+					Name:          testNginx,
+					Instance:      testConflictInactive,
 					ContainerID:   "123456789",
-					ContainerName: "conflict-inactive",
-					IPAddress:     "172.18.0.9",
+					ContainerName: testConflictInactive,
+					IPAddress:     testIP1721809,
 					ListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "172.18.0.9", Port: 80},
+						{NetworkFamily: tcpProtocol, Address: testIP1721809, Port: 80},
 					},
 					ServiceType:     NginxService,
 					HasNetstatInfo:  true,
@@ -1426,11 +1466,11 @@ func Test_servicesFromState(t *testing.T) {
 				},
 				{
 					Active:          false,
-					Name:            "phpfpm",
-					Instance:        "conflict-inactive",
+					Name:            testPHPFPM,
+					Instance:        testConflictInactive,
 					ContainerID:     "123456789",
-					ContainerName:   "conflict-inactive",
-					IPAddress:       "172.18.0.9",
+					ContainerName:   testConflictInactive,
+					IPAddress:       testIP1721809,
 					ListenAddresses: []facts.ListenAddress{},
 					ServiceType:     PHPFPMService,
 					HasNetstatInfo:  false,
@@ -1446,13 +1486,13 @@ func Test_servicesFromState(t *testing.T) {
 			want: []Service{
 				{
 					Active:        true,
-					Name:          "nginx",
+					Name:          testNginx,
 					Instance:      "",
 					ContainerID:   "",
 					ContainerName: "",
-					IPAddress:     "127.0.0.1",
+					IPAddress:     testIP127001,
 					ListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 80},
+						{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 80},
 					},
 					ServiceType:     NginxService,
 					HasNetstatInfo:  true,
@@ -1460,13 +1500,13 @@ func Test_servicesFromState(t *testing.T) {
 				},
 				{
 					Active:        true,
-					Name:          "phpfpm",
+					Name:          testPHPFPM,
 					Instance:      "",
 					ContainerID:   "",
 					ContainerName: "",
-					IPAddress:     "127.0.0.1",
+					IPAddress:     testIP127001,
 					ListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 80},
+						{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 80},
 					},
 					ServiceType:     PHPFPMService,
 					HasNetstatInfo:  true,

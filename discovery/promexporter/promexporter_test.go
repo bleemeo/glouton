@@ -31,6 +31,19 @@ import (
 const (
 	fakeJobName      = "jobname"
 	fakePodNamespace = "default"
+
+	testContainerMyContainer = "my_container"
+	testAddressSample        = "sample"
+	testInstanceSample9102   = "sample:9102"
+	testPodMyPod1234         = "my_pod-1234"
+	testNameTestname         = "testname"
+
+	labelPromScrape         = "prometheus.io/scrape"
+	labelPromPort           = "prometheus.io/port"
+	labelPromPath           = "prometheus.io/path"
+	labelGloutonAllow       = "glouton.allow_metrics"
+	labelGloutonDeny        = "glouton.deny_metrics"
+	labelGloutonInclDefault = "glouton.include_default_metrics"
 )
 
 func TestListExporters(t *testing.T) { //nolint:maintidx
@@ -58,10 +71,10 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 			name: "docker",
 			containers: []facts.Container{
 				facts.FakeContainer{
-					FakeContainerName:  "my_container",
-					FakePrimaryAddress: "sample",
+					FakeContainerName:  testContainerMyContainer,
+					FakePrimaryAddress: testAddressSample,
 					FakeLabels: map[string]string{
-						"prometheus.io/scrape": "true",
+						labelPromScrape: labelValueTrue,
 					},
 				},
 			},
@@ -69,12 +82,12 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 				{
 					URL: mustParse("http://sample:9102/metrics"),
 					ContainerLabels: map[string]string{
-						"prometheus.io/scrape": "true",
+						labelPromScrape: labelValueTrue,
 					},
 					ExtraLabels: map[string]string{
-						types.LabelMetaContainerName:  "my_container",
+						types.LabelMetaContainerName:  testContainerMyContainer,
 						types.LabelMetaScrapeJob:      fakeJobName,
-						types.LabelMetaScrapeInstance: "sample:9102",
+						types.LabelMetaScrapeInstance: testInstanceSample9102,
 					},
 				},
 			},
@@ -84,11 +97,11 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 			containers: []facts.Container{
 				facts.FakeContainer{
 					FakeContainerName:  "k8s_containername_podname_namespace",
-					FakePodName:        "my_pod-1234",
-					FakePodNamespace:   "default",
-					FakePrimaryAddress: "sample",
+					FakePodName:        testPodMyPod1234,
+					FakePodNamespace:   fakePodNamespace,
+					FakePrimaryAddress: testAddressSample,
 					FakeAnnotations: map[string]string{
-						"prometheus.io/scrape": "true",
+						labelPromScrape: labelValueTrue,
 					},
 				},
 			},
@@ -96,14 +109,14 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 				{
 					URL: mustParse("http://sample:9102/metrics"),
 					ContainerLabels: map[string]string{
-						"prometheus.io/scrape": "true",
+						labelPromScrape: labelValueTrue,
 					},
 					ExtraLabels: map[string]string{
 						// K8S don't use meta label, because registry don't convert them to normal label unlike container_name label
 						types.LabelK8SNamespace:       fakePodNamespace,
-						types.LabelK8SPODName:         "my_pod-1234",
+						types.LabelK8SPODName:         testPodMyPod1234,
 						types.LabelMetaScrapeJob:      fakeJobName,
-						types.LabelMetaScrapeInstance: "sample:9102",
+						types.LabelMetaScrapeInstance: testInstanceSample9102,
 					},
 				},
 			},
@@ -113,9 +126,9 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 			containers: []facts.Container{
 				facts.FakeContainer{
 					FakeContainerName:  "container",
-					FakePrimaryAddress: "sample",
+					FakePrimaryAddress: testAddressSample,
 					FakeLabels: map[string]string{
-						"glouton.enable": "true",
+						"glouton.enable": labelValueTrue,
 						"my_label":       "value",
 					},
 					FakeAnnotations: map[string]string{
@@ -132,17 +145,17 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 					FakeContainerName:  "sample1_1",
 					FakePrimaryAddress: "sample1",
 					FakeLabels: map[string]string{
-						"prometheus.io/scrape": "true",
+						labelPromScrape: labelValueTrue,
 					},
 				},
 				facts.FakeContainer{
 					FakeContainerName:  "k8s_sample2_default",
 					FakePodName:        "sample2-1234",
-					FakePodNamespace:   "default",
+					FakePodNamespace:   fakePodNamespace,
 					FakePrimaryAddress: "sample2",
 					FakeLabels: map[string]string{
-						"prometheus.io/scrape": "true",
-						"prometheus.io/port":   "8080",
+						labelPromScrape: labelValueTrue,
+						labelPromPort:   "8080",
 					},
 				},
 			},
@@ -150,7 +163,7 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 				{
 					URL: mustParse("http://sample1:9102/metrics"),
 					ContainerLabels: map[string]string{
-						"prometheus.io/scrape": "true",
+						labelPromScrape: labelValueTrue,
 					},
 					ExtraLabels: map[string]string{
 						types.LabelMetaContainerName:  "sample1_1",
@@ -161,8 +174,8 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 				{
 					URL: mustParse("http://sample2:8080/metrics"),
 					ContainerLabels: map[string]string{
-						"prometheus.io/scrape": "true",
-						"prometheus.io/port":   "8080",
+						labelPromScrape: labelValueTrue,
+						labelPromPort:   "8080",
 					},
 					ExtraLabels: map[string]string{
 						types.LabelK8SNamespace:       fakePodNamespace,
@@ -177,12 +190,12 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 			name: "full-configured",
 			containers: []facts.Container{
 				facts.FakeContainer{
-					FakeContainerName:  "testname",
-					FakePrimaryAddress: "sample",
+					FakeContainerName:  testNameTestname,
+					FakePrimaryAddress: testAddressSample,
 					FakeAnnotations: map[string]string{
-						"prometheus.io/scrape": "true",
-						"prometheus.io/port":   "8080",
-						"prometheus.io/path":   "/metrics.txt",
+						labelPromScrape: labelValueTrue,
+						labelPromPort:   "8080",
+						labelPromPath:   "/metrics.txt",
 					},
 				},
 			},
@@ -190,12 +203,12 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 				{
 					URL: mustParse("http://sample:8080/metrics.txt"),
 					ContainerLabels: map[string]string{
-						"prometheus.io/scrape": "true",
-						"prometheus.io/port":   "8080",
-						"prometheus.io/path":   "/metrics.txt",
+						labelPromScrape: labelValueTrue,
+						labelPromPort:   "8080",
+						labelPromPath:   "/metrics.txt",
 					},
 					ExtraLabels: map[string]string{
-						types.LabelMetaContainerName:  "testname",
+						types.LabelMetaContainerName:  testNameTestname,
 						types.LabelMetaScrapeJob:      fakeJobName,
 						types.LabelMetaScrapeInstance: "sample:8080",
 					},
@@ -206,11 +219,11 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 			name: "path-without-slash",
 			containers: []facts.Container{
 				facts.FakeContainer{
-					FakeContainerName:  "testname",
-					FakePrimaryAddress: "sample",
+					FakeContainerName:  testNameTestname,
+					FakePrimaryAddress: testAddressSample,
 					FakeAnnotations: map[string]string{
-						"prometheus.io/scrape": "true",
-						"prometheus.io/path":   "metrics.txt",
+						labelPromScrape: labelValueTrue,
+						labelPromPath:   "metrics.txt",
 					},
 				},
 			},
@@ -218,13 +231,13 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 				{
 					URL: mustParse("http://sample:9102/metrics.txt"),
 					ContainerLabels: map[string]string{
-						"prometheus.io/scrape": "true",
-						"prometheus.io/path":   "metrics.txt",
+						labelPromScrape: labelValueTrue,
+						labelPromPath:   "metrics.txt",
 					},
 					ExtraLabels: map[string]string{
-						types.LabelMetaContainerName:  "testname",
+						types.LabelMetaContainerName:  testNameTestname,
 						types.LabelMetaScrapeJob:      fakeJobName,
-						types.LabelMetaScrapeInstance: "sample:9102",
+						types.LabelMetaScrapeInstance: testInstanceSample9102,
 					},
 				},
 			},
@@ -233,10 +246,10 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 			name: "docker-global-metrics",
 			containers: []facts.Container{
 				facts.FakeContainer{
-					FakeContainerName:  "my_container",
-					FakePrimaryAddress: "sample",
+					FakeContainerName:  testContainerMyContainer,
+					FakePrimaryAddress: testAddressSample,
 					FakeLabels: map[string]string{
-						"prometheus.io/scrape": "true",
+						labelPromScrape: labelValueTrue,
 					},
 				},
 			},
@@ -244,12 +257,12 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 				{
 					URL: mustParse("http://sample:9102/metrics"),
 					ContainerLabels: map[string]string{
-						"prometheus.io/scrape": "true",
+						labelPromScrape: labelValueTrue,
 					},
 					ExtraLabels: map[string]string{
-						types.LabelMetaContainerName:  "my_container",
+						types.LabelMetaContainerName:  testContainerMyContainer,
 						types.LabelMetaScrapeJob:      fakeJobName,
-						types.LabelMetaScrapeInstance: "sample:9102",
+						types.LabelMetaScrapeInstance: testInstanceSample9102,
 					},
 				},
 			},
@@ -258,13 +271,13 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 			name: "docker-allow-deny-metrics",
 			containers: []facts.Container{
 				facts.FakeContainer{
-					FakeContainerName:  "my_container",
-					FakePrimaryAddress: "sample",
+					FakeContainerName:  testContainerMyContainer,
+					FakePrimaryAddress: testAddressSample,
 					FakeLabels: map[string]string{
-						"prometheus.io/scrape":            "true",
-						"glouton.allow_metrics":           "cpu_used,mem_used",
-						"glouton.deny_metrics":            "up{job=\"prometheus\"}",
-						"glouton.include_default_metrics": "no",
+						labelPromScrape:         labelValueTrue,
+						labelGloutonAllow:       "cpu_used,mem_used",
+						labelGloutonDeny:        "up{job=\"prometheus\"}",
+						labelGloutonInclDefault: "no",
 					},
 				},
 			},
@@ -272,15 +285,15 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 				{
 					URL: mustParse("http://sample:9102/metrics"),
 					ContainerLabels: map[string]string{
-						"prometheus.io/scrape":            "true",
-						"glouton.allow_metrics":           "cpu_used,mem_used",
-						"glouton.deny_metrics":            "up{job=\"prometheus\"}",
-						"glouton.include_default_metrics": "no",
+						labelPromScrape:         labelValueTrue,
+						labelGloutonAllow:       "cpu_used,mem_used",
+						labelGloutonDeny:        "up{job=\"prometheus\"}",
+						labelGloutonInclDefault: "no",
 					},
 					ExtraLabels: map[string]string{
-						types.LabelMetaContainerName:  "my_container",
+						types.LabelMetaContainerName:  testContainerMyContainer,
 						types.LabelMetaScrapeJob:      fakeJobName,
-						types.LabelMetaScrapeInstance: "sample:9102",
+						types.LabelMetaScrapeInstance: testInstanceSample9102,
 					},
 				},
 			},
@@ -289,13 +302,13 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 			name: "docker-reset-global",
 			containers: []facts.Container{
 				facts.FakeContainer{
-					FakeContainerName:  "my_container",
-					FakePrimaryAddress: "sample",
+					FakeContainerName:  testContainerMyContainer,
+					FakePrimaryAddress: testAddressSample,
 					FakeLabels: map[string]string{
-						"prometheus.io/scrape":            "true",
-						"glouton.allow_metrics":           "",
-						"glouton.deny_metrics":            "",
-						"glouton.include_default_metrics": "false",
+						labelPromScrape:         labelValueTrue,
+						labelGloutonAllow:       "",
+						labelGloutonDeny:        "",
+						labelGloutonInclDefault: "false",
 					},
 				},
 			},
@@ -303,15 +316,15 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 				{
 					URL: mustParse("http://sample:9102/metrics"),
 					ContainerLabels: map[string]string{
-						"prometheus.io/scrape":            "true",
-						"glouton.allow_metrics":           "",
-						"glouton.deny_metrics":            "",
-						"glouton.include_default_metrics": "false",
+						labelPromScrape:         labelValueTrue,
+						labelGloutonAllow:       "",
+						labelGloutonDeny:        "",
+						labelGloutonInclDefault: "false",
 					},
 					ExtraLabels: map[string]string{
-						types.LabelMetaContainerName:  "my_container",
+						types.LabelMetaContainerName:  testContainerMyContainer,
 						types.LabelMetaScrapeJob:      fakeJobName,
-						types.LabelMetaScrapeInstance: "sample:9102",
+						types.LabelMetaScrapeInstance: testInstanceSample9102,
 					},
 				},
 			},
@@ -321,13 +334,13 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 			containers: []facts.Container{
 				facts.FakeContainer{
 					FakeContainerName:  "k8s_containername_podname_namespace",
-					FakePodName:        "my_pod-1234",
-					FakePodNamespace:   "default",
-					FakePrimaryAddress: "sample",
+					FakePodName:        testPodMyPod1234,
+					FakePodNamespace:   fakePodNamespace,
+					FakePrimaryAddress: testAddressSample,
 					FakeAnnotations: map[string]string{
-						"prometheus.io/scrape":            "true",
-						"glouton.allow_metrics":           "something,else",
-						"glouton.include_default_metrics": "1",
+						labelPromScrape:         labelValueTrue,
+						labelGloutonAllow:       "something,else",
+						labelGloutonInclDefault: "1",
 					},
 				},
 			},
@@ -335,15 +348,15 @@ func TestListExporters(t *testing.T) { //nolint:maintidx
 				{
 					URL: mustParse("http://sample:9102/metrics"),
 					ContainerLabels: map[string]string{
-						"prometheus.io/scrape":            "true",
-						"glouton.allow_metrics":           "something,else",
-						"glouton.include_default_metrics": "1",
+						labelPromScrape:         labelValueTrue,
+						labelGloutonAllow:       "something,else",
+						labelGloutonInclDefault: "1",
 					},
 					ExtraLabels: map[string]string{
 						types.LabelK8SNamespace:       fakePodNamespace,
-						types.LabelK8SPODName:         "my_pod-1234",
+						types.LabelK8SPODName:         testPodMyPod1234,
 						types.LabelMetaScrapeJob:      fakeJobName,
-						types.LabelMetaScrapeInstance: "sample:9102",
+						types.LabelMetaScrapeInstance: testInstanceSample9102,
 					},
 				},
 			},

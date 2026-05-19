@@ -294,7 +294,7 @@ func newProcValue(p proc.Proc) *procValue {
 func getProc(p proc.Proc) (proc.Proc, error) {
 	value := reflect.ValueOf(p)
 
-	if value.Kind() != reflect.Ptr {
+	if value.Kind() != reflect.Pointer {
 		return nil, expectedError("pointer")
 	}
 
@@ -323,7 +323,7 @@ func getProc(p proc.Proc) (proc.Proc, error) {
 func getProcCache(p proc.Proc) (unsafe.Pointer, error) {
 	value := reflect.ValueOf(p)
 
-	if value.Kind() != reflect.Ptr {
+	if value.Kind() != reflect.Pointer {
 		return nil, expectedError("pointer")
 	}
 

@@ -46,6 +46,9 @@ import (
 const (
 	idAny            = "this constant in test when the object ID doesn't matter. An helper function will replace it by actual ID"
 	idObjectNotFound = "idAny was used but object isn't found"
+
+	// testBlackboxScraperName is the scraper name used by the blackbox prober in tests.
+	testBlackboxScraperName = "paris"
 )
 
 var (
@@ -103,7 +106,7 @@ func newHelper(t *testing.T) *syncTestHelper {
 			},
 			Blackbox: config.Blackbox{
 				Enable:      true,
-				ScraperName: "paris",
+				ScraperName: testBlackboxScraperName,
 			},
 		},
 	}

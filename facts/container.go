@@ -34,6 +34,8 @@ const (
 	ignoredPortLabel           = "glouton.check.ignore.port."
 	containerEnableLabel       = "glouton.enable"
 	containerEnableLegacyLabel = "bleemeo.enable"
+	labelTrue                  = "true"
+	labelFalse                 = "false"
 )
 
 // Container is an interface that defines all the information retrievable of a container.
@@ -109,7 +111,7 @@ func (st ContainerState) IsUnknown() bool {
 func (st ContainerState) String() string {
 	switch st {
 	case ContainerRunning:
-		return "running"
+		return string(ProcessStatusRunning)
 	case ContainerCreated:
 		return "created"
 	case ContainerStopped:

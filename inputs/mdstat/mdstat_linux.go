@@ -45,6 +45,19 @@ import (
 
 const mdstatPath = "/proc/mdstat"
 
+// Metric name constants for mdstat.
+const (
+	MetricDisksActive        = "mdstat_disks_active_count"
+	MetricDisksDown          = "mdstat_disks_down_count"
+	MetricDisksFailed        = "mdstat_disks_failed_count"
+	MetricDisksTotal         = "mdstat_disks_total_count"
+	MetricBlocksSyncedFinish = "mdstat_blocks_synced_finish_time"
+	MetricBlocksSynced       = "mdstat_blocks_synced"
+	MetricBlocksSyncedPct    = "mdstat_blocks_synced_pct"
+	MetricDisksSpare         = "mdstat_disks_spare_count"
+	MetricHealthStatus       = "mdstat_health_status"
+)
+
 var runnerOpt = gloutonexec.Option{RunAsRoot: true, RunOnHost: true} //nolint: gochecknoglobals
 
 func New(cfg config.Mdstat, cmdRunner *gloutonexec.Runner) (telegraf.Input, registry.RegistrationOption, error) {
@@ -151,17 +164,17 @@ func gatherModifier(mdadmPath string, runner *gloutonexec.Runner, timeNow func()
 				}
 
 				switch mf.GetName() {
-				case "mdstat_disks_active_count":
+				case MetricDisksActive:
 					info.active = int(m.GetUntyped().GetValue())
-				case "mdstat_disks_down_count":
+				case MetricDisksDown:
 					info.down = int(m.GetUntyped().GetValue())
-				case "mdstat_disks_failed_count":
+				case MetricDisksFailed:
 					info.failed = int(m.GetUntyped().GetValue())
-				case "mdstat_disks_total_count":
+				case MetricDisksTotal:
 					info.total = int(m.GetUntyped().GetValue())
-				case "mdstat_blocks_synced_finish_time":
+				case MetricBlocksSyncedFinish:
 					info.recoveryMinutes = m.GetUntyped().GetValue()
-				case "mdstat_blocks_synced":
+				case MetricBlocksSynced:
 					info.syncedBlocks = int64(m.GetUntyped().GetValue())
 				}
 
@@ -171,7 +184,7 @@ func gatherModifier(mdadmPath string, runner *gloutonexec.Runner, timeNow func()
 		}
 
 		disksActivityStateStatus := &dto.MetricFamily{
-			Name:   new("mdstat_health_status"),
+			Name:   new(MetricHealthStatus),
 			Type:   dto.MetricType_UNTYPED.Enum(),
 			Metric: make([]*dto.Metric, 0, len(infoPerArray)),
 		}

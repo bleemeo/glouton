@@ -20,6 +20,85 @@ import (
 	"fmt"
 )
 
+// Constants for OTEL operator map keys used extensively in log format definitions.
+const (
+	opType       = "type"
+	opField      = "field"
+	opValue      = "value"
+	opAdd        = "add"
+	opRemove     = "remove"
+	opMove       = "move"
+	opParseFrom  = "parse_from"
+	opMapping    = "mapping"
+	opSeverity   = "severity"
+	opLayout     = "layout"
+	opLayoutType = "layout_type"
+	opOutput     = "output"
+	opNoop       = "noop"
+	opRouter     = "router"
+	opRoutes     = "routes"
+	opExpr       = "expr"
+	opIf         = "if"
+	opTimestamp  = "timestamp"
+
+	// Parser type constants.
+	parserRegex = "regex_parser"
+	parserJSON  = "json_parser"
+	parserTime  = "time_parser"
+
+	// Regex operator key.
+	opRegex = "regex"
+
+	// Common attribute paths.
+	attrDBSystemName = "attributes['db.system.name']"
+	attrFacility     = "attributes.facility"
+
+	// String values used in severity mappings that differ from severity-level keys.
+	mapERROR = "ERROR"
+	mapDEBUG = "DEBUG"
+
+	// Severity level constants for OTEL severity mapping.
+	sevError  = "error"
+	sevError2 = "error2"
+	sevError3 = "error3"
+	sevWarn   = "warn"
+	sevInfo   = "info"
+	sevInfo2  = "info2"
+	sevDebug  = "debug"
+	sevDebug2 = "debug2"
+	sevDebug3 = "debug3"
+	sevDebug4 = "debug4"
+	sevFatal  = "fatal"
+	sevEmerg  = "emerg"
+
+	// Common attribute paths.
+	attrSeverity  = "attributes.severity"
+	attrTime      = "attributes.time"
+	attrLogStream = "attributes['log.iostream']"
+
+	// Layout type constants.
+	layoutStrptime = "strptime"
+
+	// Stream constants.
+	streamStdout = "stdout"
+	streamStderr = "stderr"
+
+	// Service name constants used as db.system.name or map keys.
+	svcRedis      = "redis"
+	svcPostgresql = "postgresql"
+	svcMysql      = "mysql"
+	svcValkey     = "valkey"
+
+	// Router/noop target ID constants used in composite log formats.
+	idHaproxyEnd    = "haproxy_end"
+	idNginxAccess   = "nginx_access"
+	idNginxError    = "nginx_error"
+	idNginxBothEnd  = "nginx_both_end"
+	idApacheAccess  = "apache_access"
+	idApacheError   = "apache_error"
+	idApacheBothEnd = "apache_both_end"
+)
+
 // flattenOps returns a slice containing all the given operators,
 // unpacking slices if needed to end up with a flat list.
 // Given values must be either of type OTELOperator or []OTELOperator.
@@ -45,14 +124,14 @@ func flattenOps(ops ...any) []OTELOperator {
 // If the source attribute doesn't exist, the operator is a no-op.
 func renameAttr(from, to string, cond ...string) OTELOperator {
 	op := OTELOperator{
-		"type": "move",
+		opType: opMove,
 		"from": "attributes." + from,
 		"to":   "attributes['" + to + "']",
-		"if":   `"` + from + `" in attributes`,
+		opIf:   `"` + from + `" in attributes`,
 	}
 
 	if len(cond) == 1 {
-		op["if"] = cond[0]
+		op[opIf] = cond[0]
 	}
 
 	return op
@@ -60,28 +139,28 @@ func renameAttr(from, to string, cond ...string) OTELOperator {
 
 func removeAttr(name string) OTELOperator {
 	return OTELOperator{
-		"type":  "remove",
-		"field": "attributes." + name,
-		"if":    `"` + name + `" in attributes`,
+		opType:  opRemove,
+		opField: "attributes." + name,
+		opIf:    `"` + name + `" in attributes`,
 	}
 }
 
 func removeAttrWhenUndefined(name string) OTELOperator {
 	return OTELOperator{
-		"type":  "remove",
-		"field": "attributes." + name,
-		"if":    `get(attributes, "` + name + `") in [nil, ""]`,
+		opType:  opRemove,
+		opField: "attributes." + name,
+		opIf:    `get(attributes, "` + name + `") in [nil, ""]`,
 	}
 }
 
 func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 	severityFromHTTPStatusCode := map[string]any{
-		"parse_from": "attributes.http_response_status_code",
-		"mapping": map[string]any{
-			"error": "5xx",
-			"warn":  "4xx",
-			"info":  "3xx",
-			"debug": []any{
+		opParseFrom: "attributes.http_response_status_code",
+		opMapping: map[string]any{
+			sevError: "5xx",
+			sevWarn:  "4xx",
+			sevInfo:  "3xx",
+			sevDebug: []any{
 				"2xx",
 				// no range alias is defined for 1xx ...
 				/*map[string]any{
@@ -95,9 +174,9 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 	nginxAccessParser := []OTELOperator{
 		{
 			"id":       "nginx_access_parser",
-			"type":     "regex_parser",
-			"regex":    `^(?P<client_address>\S+) \S+ (?P<user_name>\S+) \[(?P<time>[^\]]+)] "(?P<http_request_method>\S+) \S+ \S+" (?P<http_response_status_code>\d+) (?P<http_response_size>\S+) "[^"]*" "(?P<user_agent_original>[^"]*)"`,
-			"severity": severityFromHTTPStatusCode,
+			opType:     parserRegex,
+			opRegex:    `^(?P<client_address>\S+) \S+ (?P<user_name>\S+) \[(?P<time>[^\]]+)] "(?P<http_request_method>\S+) \S+ \S+" (?P<http_response_status_code>\d+) (?P<http_response_size>\S+) "[^"]*" "(?P<user_agent_original>[^"]*)"`,
+			opSeverity: severityFromHTTPStatusCode,
 		},
 		removeAttr("client_address"),
 		removeAttr("user_name"),
@@ -109,21 +188,21 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 	nginxErrorParser := []OTELOperator{
 		{
 			"id":    "nginx_error_parser",
-			"type":  "regex_parser",
-			"regex": `^(?P<time>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) \[(?P<severity>\w+)] \d+#\d+:(.*?, client: (?P<client_address>[\d.]+))?(.*?, server: (?P<server_address>[^,]+))?(.*?, request: "(?P<http_request_method>[^,]+) [^,]+ [^,]+")?(.*?, host: "[\w.]+(:(?<server_port>\d+))?")?.*$`,
-			"severity": map[string]any{
-				"parse_from": "attributes.severity",
+			opType:  parserRegex,
+			opRegex: `^(?P<time>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) \[(?P<severity>\w+)] \d+#\d+:(.*?, client: (?P<client_address>[\d.]+))?(.*?, server: (?P<server_address>[^,]+))?(.*?, request: "(?P<http_request_method>[^,]+) [^,]+ [^,]+")?(.*?, host: "[\w.]+(:(?<server_port>\d+))?")?.*$`,
+			opSeverity: map[string]any{
+				opParseFrom: attrSeverity,
 				// Log level reference can be found at https://nginx.org/en/docs/ngx_core_module.html#error_log
 				// Mapping is OTEL severity -> Nginx level
-				"mapping": map[string]any{
-					"fatal":  "emerg",
-					"error3": "alert",
-					"error2": "crit",
-					"error":  "error",
-					"warn":   "warn",
-					"info2":  "notice",
-					"info":   "info",
-					"debug":  "debug",
+				opMapping: map[string]any{
+					sevFatal:  sevEmerg,
+					sevError3: "alert",
+					sevError2: "crit",
+					sevError:  sevError,
+					sevWarn:   sevWarn,
+					sevInfo2:  "notice",
+					sevInfo:   sevInfo,
+					sevDebug:  sevDebug,
 				},
 			},
 		},
@@ -140,9 +219,9 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 	apacheAccessParser := []OTELOperator{
 		{
 			"id":       "apache_access_parser",
-			"type":     "regex_parser",
-			"regex":    `^(?P<client_address>\S+) \S+ (?P<user_name>\S+) \[(?P<time>[^\]]+)] "(((?P<http_request_method>\S+) \S+ \S+)|-)" (?P<http_response_status_code>\d+) ((?P<http_response_size>\d+)|-)( "[^"]*" "(?P<user_agent_original>[^"]*)")?`,
-			"severity": severityFromHTTPStatusCode,
+			opType:     parserRegex,
+			opRegex:    `^(?P<client_address>\S+) \S+ (?P<user_name>\S+) \[(?P<time>[^\]]+)] "(((?P<http_request_method>\S+) \S+ \S+)|-)" (?P<http_response_status_code>\d+) ((?P<http_response_size>\d+)|-)( "[^"]*" "(?P<user_agent_original>[^"]*)")?`,
+			opSeverity: severityFromHTTPStatusCode,
 		},
 		removeAttr("user_agent_original"),
 		removeAttrWhenUndefined("http_request_method"),
@@ -155,21 +234,21 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 	apacheErrorParser := []OTELOperator{
 		{
 			"id":    "apache_error_parser",
-			"type":  "regex_parser",
-			"regex": `^\[(?P<time>[\w :/.]+)\] \[\w+:(?P<severity>\w+)]( \[pid (?P<process_pid>\d+):tid (?P<thread_id>\d+)\])?( \[client (?P<client_address>[\d.]+)(:(?<client_port>\d+))?\])? .*`,
-			"severity": map[string]any{
-				"parse_from": "attributes.severity",
+			opType:  parserRegex,
+			opRegex: `^\[(?P<time>[\w :/.]+)\] \[\w+:(?P<severity>\w+)]( \[pid (?P<process_pid>\d+):tid (?P<thread_id>\d+)\])?( \[client (?P<client_address>[\d.]+)(:(?<client_port>\d+))?\])? .*`,
+			opSeverity: map[string]any{
+				opParseFrom: attrSeverity,
 				// Log level reference can be found at https://httpd.apache.org/docs/current/mod/core.html#loglevel
 				// Mapping is OTEL severity -> Apache level
-				"mapping": map[string]any{
-					"fatal":  "emerg",
-					"error3": "alert",
-					"error2": "crit",
-					"error":  "error",
-					"warn":   "warn",
-					"info2":  "notice",
-					"info":   "info",
-					"debug":  "debug",
+				opMapping: map[string]any{
+					sevFatal:  sevEmerg,
+					sevError3: "alert",
+					sevError2: "crit",
+					sevError:  sevError,
+					sevWarn:   sevWarn,
+					sevInfo2:  "notice",
+					sevInfo:   sevInfo,
+					sevDebug:  sevDebug,
 					"trace4": []any{
 						"trace1",
 						"trace2",
@@ -198,25 +277,25 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 
 	kafkaParser := []OTELOperator{
 		{
-			"type":  "add",
-			"field": "attributes['messaging.system']",
-			"value": "kafka",
+			opType:  opAdd,
+			opField: "attributes['messaging.system']",
+			opValue: "kafka",
 		},
 		{
 			"id":    "kafka_parser",
-			"type":  "regex_parser",
-			"regex": `^\[(?P<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})] (?P<severity>\w+)( \[[^\]]*(partition=((?P<messaging_destination_partition_id>\d+)|(?P<messaging_destination_name>[\w-]+)))[^\]]*\])? .+ \([\w.]+\)`,
-			"severity": map[string]any{
-				"parse_from": "attributes.severity",
+			opType:  parserRegex,
+			opRegex: `^\[(?P<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})] (?P<severity>\w+)( \[[^\]]*(partition=((?P<messaging_destination_partition_id>\d+)|(?P<messaging_destination_name>[\w-]+)))[^\]]*\])? .+ \([\w.]+\)`,
+			opSeverity: map[string]any{
+				opParseFrom: attrSeverity,
 				// Log level reference can be found at https://logging.apache.org/log4j/2.x/javadoc/log4j-api/org/apache/logging/log4j/Level.html
 				// Mapping is OTEL severity -> Log4j level
-				"mapping": map[string]any{
-					"emerg": "FATAL",
-					"error": "ERROR",
-					"warn":  "WARN",
-					"info":  "INFO",
-					"debug": "DEBUG",
-					"trace": "TRACE",
+				opMapping: map[string]any{
+					sevEmerg: "FATAL",
+					sevError: mapERROR,
+					sevWarn:  "WARN",
+					sevInfo:  DefaultLogLevel,
+					sevDebug: mapDEBUG,
+					"trace":  "TRACE",
 				},
 			},
 		},
@@ -229,23 +308,23 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 
 	redisParser := []OTELOperator{
 		{
-			"type":  "add",
-			"field": "attributes['db.system.name']",
-			"value": "redis",
+			opType:  opAdd,
+			opField: attrDBSystemName,
+			opValue: svcRedis,
 		},
 		{
 			"id":    "redis_parser",
-			"type":  "regex_parser",
-			"regex": `^(?P<process_pid>\d+):[A-Z] (?<time>\d{2} \w{3} \d{4} \d{2}:\d{2}:\d{2}\.\d{3}) (?P<severity>[.\-*#]) .+`,
-			"severity": map[string]any{
-				"parse_from": "attributes.severity",
+			opType:  parserRegex,
+			opRegex: `^(?P<process_pid>\d+):[A-Z] (?<time>\d{2} \w{3} \d{4} \d{2}:\d{2}:\d{2}\.\d{3}) (?P<severity>[.\-*#]) .+`,
+			opSeverity: map[string]any{
+				opParseFrom: attrSeverity,
 				// Log level 'reference' can be 'found' at https://github.com/redis/redis/blob/aa8e2d171232218364857ee8528f1af092b9e5b7/src/server.h#L554
 				// Mapping is OTEL severity -> Redis level
-				"mapping": map[string]any{
-					"warn":   "#",
-					"info":   "*",
-					"debug":  "-",
-					"debug2": ".",
+				opMapping: map[string]any{
+					sevWarn:   "#",
+					sevInfo:   "*",
+					sevDebug:  "-",
+					sevDebug2: ".",
 				},
 			},
 		},
@@ -255,11 +334,11 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 
 	haproxyParser := []OTELOperator{
 		{
-			"type": "router",
-			"routes": []any{
+			opType: opRouter,
+			opRoutes: []any{
 				map[string]any{
-					"expr":   `body startsWith "["`,
-					"output": "haproxy_state_parser",
+					opExpr:   `body startsWith "["`,
+					opOutput: "haproxy_state_parser",
 				},
 			},
 			"default": "haproxy_access_parser",
@@ -267,37 +346,37 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		// Start: haproxy_state_parser
 		{
 			"id":    "haproxy_state_parser",
-			"type":  "regex_parser",
-			"regex": `^\[(?P<severity>[A-Z]+)\]\s+\((?<process_pid>\d+)\)\s*:\s*.+`,
-			"severity": map[string]any{
-				"parse_from": "attributes.severity",
+			opType:  parserRegex,
+			opRegex: `^\[(?P<severity>[A-Z]+)\]\s+\((?<process_pid>\d+)\)\s*:\s*.+`,
+			opSeverity: map[string]any{
+				opParseFrom: attrSeverity,
 				// Log level reference can be found at https://docs.haproxy.org/3.0/configuration.html#4.2-log
 				// Mapping is OTEL severity -> HAProxy level
-				"mapping": map[string]any{
-					"fatal":  "EMERG",
-					"error3": "ALERT",
-					"error2": "CRIT",
-					"error":  "ERR",
-					"warn":   "WARNING",
-					"info2":  "NOTICE",
-					"info":   "INFO",
-					"debug":  "DEBUG",
+				opMapping: map[string]any{
+					sevFatal:  "EMERG",
+					sevError3: "ALERT",
+					sevError2: "CRIT",
+					sevError:  "ERR",
+					sevWarn:   "WARNING",
+					sevInfo2:  "NOTICE",
+					sevInfo:   DefaultLogLevel,
+					sevDebug:  mapDEBUG,
 				},
 			},
 		},
 		removeAttr("process_pid"),
 		removeAttr("severity"),
 		{
-			"type":   "noop",
-			"output": "haproxy_end",
+			opType:   opNoop,
+			opOutput: idHaproxyEnd,
 		},
 		// End: haproxy_state_parser
 		// Start: haproxy_access_parser
 		{
 			"id":       "haproxy_access_parser",
-			"type":     "regex_parser",
-			"regex":    `^(?P<client_address>[a-fA-F0-9.:]+):(?<client_port>\d+) \[(?P<time>[^\]]+)].+ (\d+/){4}\d+ (?P<http_response_status_code>\d+) (?P<http_response_size>\d+) .+ (\d+/){4}\d+ \d+/\d+ "(?P<http_request_method>\S+) \S+ \S+"`,
-			"severity": severityFromHTTPStatusCode,
+			opType:     parserRegex,
+			opRegex:    `^(?P<client_address>[a-fA-F0-9.:]+):(?<client_port>\d+) \[(?P<time>[^\]]+)].+ (\d+/){4}\d+ (?P<http_response_status_code>\d+) (?P<http_response_size>\d+) .+ (\d+/){4}\d+ \d+/\d+ "(?P<http_request_method>\S+) \S+ \S+"`,
+			opSeverity: severityFromHTTPStatusCode,
 		},
 		removeAttr("client_address"),
 		removeAttr("client_port"),
@@ -305,40 +384,40 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		removeAttr("http_response_size"),
 		renameAttr("http_request_method", "http.request.method"),
 		{
-			"type":   "noop",
-			"output": "haproxy_end",
+			opType:   opNoop,
+			opOutput: idHaproxyEnd,
 		},
 		// End: haproxy_access_parser
 		{
-			"id":   "haproxy_end",
-			"type": "noop",
+			"id":   idHaproxyEnd,
+			opType: opNoop,
 		},
 	}
 
 	postgresqlParser := []OTELOperator{
 		{
-			"type":  "add",
-			"field": "attributes['db.system.name']",
-			"value": "postgresql",
+			opType:  opAdd,
+			opField: attrDBSystemName,
+			opValue: svcPostgresql,
 		},
 		{
 			"id":    "postgresql_parser",
-			"type":  "regex_parser",
-			"regex": `^(?<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+ \w+) \[(?<process_pid>\d+)\] (?<severity>[A-Z]+):\s+(.+statement: (?<db_query_text>.+)|.+)`,
-			"severity": map[string]any{
-				"parse_from": "attributes.severity",
+			opType:  parserRegex,
+			opRegex: `^(?<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+ \w+) \[(?<process_pid>\d+)\] (?<severity>[A-Z]+):\s+(.+statement: (?<db_query_text>.+)|.+)`,
+			opSeverity: map[string]any{
+				opParseFrom: attrSeverity,
 				// Log level reference can be found at https://www.postgresql.org/docs/current/runtime-config-logging.html#RUNTIME-CONFIG-SEVERITY-LEVELS
 				// Mapping is OTEL severity -> PostgreSQL level
-				"mapping": map[string]any{
-					"fatal":  "PANIC",
-					"error":  "FATAL",
-					"warn":   "WARNING",
-					"info2":  "NOTICE",
-					"info":   "INFO",
-					"debug4": "DEBUG",
-					"debug3": "DEBUG2",
-					"debug2": "DEBUG3",
-					"debug": []any{
+				opMapping: map[string]any{
+					sevFatal:  "PANIC",
+					sevError:  "FATAL",
+					sevWarn:   "WARNING",
+					sevInfo2:  "NOTICE",
+					sevInfo:   DefaultLogLevel,
+					sevDebug4: mapDEBUG,
+					sevDebug3: "DEBUG2",
+					sevDebug2: "DEBUG3",
+					sevDebug: []any{
 						"DEBUG4",
 						"DEBUG5",
 					},
@@ -352,22 +431,22 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 
 	mariaDBParser := []OTELOperator{
 		{
-			"type":  "add",
-			"field": "attributes['db.system.name']",
-			"value": "mariadb",
+			opType:  opAdd,
+			opField: attrDBSystemName,
+			opValue: "mariadb",
 		},
 		{
 			"id":    "mariadb_parser",
-			"type":  "regex_parser",
-			"regex": `^(?<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) (?<thread_id>\d+) \[(?<severity>\w+)\].+`,
-			"severity": map[string]any{
-				"parse_from": "attributes.severity",
+			opType:  parserRegex,
+			opRegex: `^(?<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) (?<thread_id>\d+) \[(?<severity>\w+)\].+`,
+			opSeverity: map[string]any{
+				opParseFrom: attrSeverity,
 				// Log level reference can perhaps be found somewhere ...
 				// Mapping is OTEL severity -> MySQL priority
-				"mapping": map[string]any{
-					"error": "Error",
-					"warn":  "Warning",
-					"debug": "Note",
+				opMapping: map[string]any{
+					sevError: "Error",
+					sevWarn:  "Warning",
+					sevDebug: "Note",
 				},
 			},
 		},
@@ -377,23 +456,23 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 
 	mysqlParser := []OTELOperator{
 		{
-			"type":  "add",
-			"field": "attributes['db.system.name']",
-			"value": "mysql",
+			opType:  opAdd,
+			opField: attrDBSystemName,
+			opValue: svcMysql,
 		},
 		{
 			"id":    "mysql_parser",
-			"type":  "regex_parser",
-			"regex": `^(?<time>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+\S+) (?<thread_id>\d+) \[(?<severity>\w+)\] \[(?<db_response_status_code>MY-\d+)\] \[[^\]]+\] .+`,
-			"severity": map[string]any{
-				"parse_from": "attributes.severity",
+			opType:  parserRegex,
+			opRegex: `^(?<time>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+\S+) (?<thread_id>\d+) \[(?<severity>\w+)\] \[(?<db_response_status_code>MY-\d+)\] \[[^\]]+\] .+`,
+			opSeverity: map[string]any{
+				opParseFrom: attrSeverity,
 				// Log level reference can perhaps be found somewhere ...
 				// Mapping is OTEL severity -> MySQL priority
-				"mapping": map[string]any{
-					"error": "Error",
-					"warn":  "Warning",
-					"info":  "System",
-					"debug": "Note",
+				opMapping: map[string]any{
+					sevError: "Error",
+					sevWarn:  "Warning",
+					sevInfo:  "System",
+					sevDebug: "Note",
 				},
 			},
 		},
@@ -404,26 +483,26 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 
 	mongodbParser := []OTELOperator{
 		{
-			"type":  "add",
-			"field": "attributes['db.system.name']",
-			"value": "mongodb",
+			opType:  opAdd,
+			opField: attrDBSystemName,
+			opValue: "mongodb",
 		},
 		{
 			"id":   "mongodb_parser",
-			"type": "json_parser",
-			"severity": map[string]any{
-				"parse_from": "attributes.s",
+			opType: parserJSON,
+			opSeverity: map[string]any{
+				opParseFrom: "attributes.s",
 				// Log level reference can be found at https://www.mongodb.com/docs/manual/reference/log-messages/#std-label-log-severity-levels
 				// Mapping is OTEL severity -> MongoDB severity
-				"mapping": map[string]any{
-					"fatal":  "F",
-					"error":  "E",
-					"warn":   "W",
-					"info":   "I",
-					"debug4": "D1",
-					"debug3": "D2",
-					"debug2": "D3",
-					"debug": []any{
+				opMapping: map[string]any{
+					sevFatal:  "F",
+					sevError:  "E",
+					sevWarn:   "W",
+					sevInfo:   "I",
+					sevDebug4: "D1",
+					sevDebug3: "D2",
+					sevDebug2: "D3",
+					sevDebug: []any{
 						"D4",
 						"D5",
 						"D", // previous versions
@@ -446,24 +525,24 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 
 	rabbitMQParser := []OTELOperator{
 		{
-			"type":  "add",
-			"field": "attributes['messaging.system']",
-			"value": "rabbitmq",
+			opType:  opAdd,
+			opField: "attributes['messaging.system']",
+			opValue: "rabbitmq",
 		},
 		{
 			"id":    "rabbitmq_parser",
-			"type":  "regex_parser",
-			"regex": `^(?P<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+\+\d{2}:\d{2}) \[(?P<severity>\w+)\]\s+<\d+\.\d+\.\d+> .+`,
-			"severity": map[string]any{
-				"parse_from": "attributes.severity",
+			opType:  parserRegex,
+			opRegex: `^(?P<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+\+\d{2}:\d{2}) \[(?P<severity>\w+)\]\s+<\d+\.\d+\.\d+> .+`,
+			opSeverity: map[string]any{
+				opParseFrom: attrSeverity,
 				// Log level reference can be found at https://www.rabbitmq.com/docs/logging#log-levels
 				// Mapping is OTEL severity -> RabbitMQ level
-				"mapping": map[string]any{
-					"fatal": "critical",
-					"error": "error",
-					"warn":  "warning",
-					"info":  "info",
-					"debug": "debug",
+				opMapping: map[string]any{
+					sevFatal: "critical",
+					sevError: sevError,
+					sevWarn:  "warning",
+					sevInfo:  sevInfo,
+					sevDebug: sevDebug,
 				},
 			},
 		},
@@ -509,84 +588,84 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 
 	journaldParser := []OTELOperator{
 		{
-			"type":        "time_parser",
-			"parse_from":  "body._SOURCE_REALTIME_TIMESTAMP",
-			"layout":      "us",
-			"layout_type": "epoch",
+			opType:       parserTime,
+			opParseFrom:  "body._SOURCE_REALTIME_TIMESTAMP",
+			opLayout:     "us",
+			opLayoutType: "epoch",
 		},
 		{
-			"type":       "severity_parser",
-			"parse_from": "body.PRIORITY",
+			opType:      "severity_parser",
+			opParseFrom: "body.PRIORITY",
 			// Priority is syslog's level: 0 ("emerg") -> 7 ("debug")
 			// Mapping is OTEL severity -> slog level
-			"mapping": map[string]any{
-				"fatal":  "0", // Emergency
-				"error4": "1", // Alert
-				"error3": "2", // Critical
-				"error":  "3", // Error
-				"warn":   "4", // Warning
-				"info2":  "5", // Notice
-				"info":   "6", // Informational
-				"debug":  "7", // Debug
+			opMapping: map[string]any{
+				sevFatal:  "0", // Emergency
+				"error4":  "1", // Alert
+				sevError3: "2", // Critical
+				sevError:  "3", // Error
+				sevWarn:   "4", // Warning
+				sevInfo2:  "5", // Notice
+				sevInfo:   "6", // Informational
+				sevDebug:  "7", // Debug
 			},
 		},
 		{
-			"type":  "add",
-			"field": "attributes.facility",
-			"value": exprSyslogToFacility,
+			opType:  opAdd,
+			opField: attrFacility,
+			opValue: exprSyslogToFacility,
 		},
 		{
-			"type":  "remove",
-			"field": "attributes.facility",
-			"if":    "attributes.facility == 'unknown'",
+			opType:  opRemove,
+			opField: attrFacility,
+			opIf:    "attributes.facility == 'unknown'",
 		},
 		{
-			"type":  "add",
-			"field": "attributes.source_program",
-			"value": `EXPR(body["SYSLOG_IDENTIFIER"] ?? body["_COMM"] ?? "")`,
+			opType:  opAdd,
+			opField: "attributes.source_program",
+			opValue: `EXPR(body["SYSLOG_IDENTIFIER"] ?? body["_COMM"] ?? "")`,
 		},
 		{
-			"type":  "remove",
-			"field": "attributes.source_program",
-			"if":    "attributes.source_program == ''",
+			opType:  opRemove,
+			opField: "attributes.source_program",
+			opIf:    "attributes.source_program == ''",
 		},
 		{
-			"type":     "add",
-			"field":    "body",
-			"value":    exprJournaldToSyslogBody,
+			opType:     opAdd,
+			opField:    "body",
+			opValue:    exprJournaldToSyslogBody,
 			"on_error": "send",
 		},
 		// fallback if above expresion failed
 		{
-			"type": "move",
+			opType: opMove,
 			"from": "body.MESSAGE",
 			"to":   "body",
-			"if":   `type(body) == "map" && "MESSAGE" in body`,
+			opIf:   `type(body) == "map" && "MESSAGE" in body`,
 		},
 	}
 
 	syslogParser := []OTELOperator{
 		{
 			// Parse syslog when time use "2026-03-10T14:23:09.079180+00:00" format (e.g. Ubuntu 24.04 and later)
-			"type":  "regex_parser",
-			"regex": `^(?P<time>[^ ]+) (?P<hostname>[^ ]+) (?P<source_program>[^ \[]+)(\[\d+\])?: .*$`,
-			"timestamp": map[string]any{
-				"parse_from":  "attributes.time",
-				"layout":      "%Y-%m-%dT%H:%M:%S.%L%z",
-				"layout_type": "strptime",
+			opType:  parserRegex,
+			opRegex: `^(?P<time>[^ ]+) (?P<hostname>[^ ]+) (?P<source_program>[^ \[]+)(\[\d+\])?: .*$`,
+			opTimestamp: map[string]any{
+				opParseFrom:  attrTime,
+				opLayout:     "%Y-%m-%dT%H:%M:%S.%L%z",
+				opLayoutType: layoutStrptime,
 			},
-			"if": `body matches '^\\d{4}-'`,
+			opIf: `body matches '^\\d{4}-'`,
 		},
 		{
 			// Parse syslog when time use "Mar 10 14:39:12" format (e.g. Ubuntu 22.04)
-			"type":  "regex_parser",
-			"regex": `^(?P<time>[A-Za-z]{3} [0-9: ]+) (?P<hostname>[^ ]+) (?P<source_program>[^ \[]+)(\[\d+\])?: .*$`,
-			"timestamp": map[string]any{
-				"parse_from":  "attributes.time",
-				"layout":      "%b %d %H:%M:%S",
-				"layout_type": "strptime",
+			opType:  parserRegex,
+			opRegex: `^(?P<time>[A-Za-z]{3} [0-9: ]+) (?P<hostname>[^ ]+) (?P<source_program>[^ \[]+)(\[\d+\])?: .*$`,
+			opTimestamp: map[string]any{
+				opParseFrom:  attrTime,
+				opLayout:     "%b %d %H:%M:%S",
+				opLayoutType: layoutStrptime,
 			},
-			"if": `body matches '^[A-Za-z]{3} '`,
+			opIf: `body matches '^[A-Za-z]{3} '`,
 		},
 		removeAttr("time"),
 		removeAttr("hostname"),
@@ -594,12 +673,12 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 
 	auditdParser := []OTELOperator{
 		{
-			"type":  "regex_parser",
-			"regex": `^type=(?P<type>[^ ]+) msg=audit\((?P<timestamp>[0-9.]+):[0-9]+\).*$`,
-			"timestamp": map[string]any{
-				"parse_from":  "attributes.timestamp",
-				"layout":      "s.ms",
-				"layout_type": "epoch",
+			opType:  parserRegex,
+			opRegex: `^type=(?P<type>[^ ]+) msg=audit\((?P<timestamp>[0-9.]+):[0-9]+\).*$`,
+			opTimestamp: map[string]any{
+				opParseFrom:  "attributes.timestamp",
+				opLayout:     "s.ms",
+				opLayoutType: "epoch",
 			},
 		},
 		removeAttr("timestamp"),
@@ -608,209 +687,209 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 	return map[string][]OTELOperator{
 		"json": {
 			{
-				"type": "json_parser",
+				opType: parserJSON,
 			},
 		},
 		"json_golang_slog": {
 			{
-				"type": "json_parser",
-				"timestamp": map[string]any{
-					"parse_from":  "attributes.time",
-					"layout":      "2006-01-02T15:04:05.999999999Z07:00",
-					"layout_type": "gotime", // '07:00' as no strptime equivalent
+				opType: parserJSON,
+				opTimestamp: map[string]any{
+					opParseFrom:  attrTime,
+					opLayout:     "2006-01-02T15:04:05.999999999Z07:00",
+					opLayoutType: "gotime", // '07:00' as no strptime equivalent
 				},
 			},
 			{
-				"type":       "severity_parser",
-				"parse_from": "attributes.level",
+				opType:      "severity_parser",
+				opParseFrom: "attributes.level",
 				// Log level reference can be 'found' at https://pkg.go.dev/log/slog#Level
 				// Mapping is OTEL severity -> slog level
-				"mapping": map[string]any{
-					"error4": "ERROR+3",
-					"error3": "ERROR+2",
-					"error2": "ERROR+1",
-					"error":  "ERROR",
-					"warn4":  "WARN+3",
-					"warn3":  "WARN+2",
-					"warn2":  "WARN+1",
-					"warn":   "WARN",
-					"info4":  "INFO+3",
-					"info3":  "INFO+2",
-					"info2":  "INFO+1",
-					"info":   "INFO",
-					"debug4": "DEBUG+3",
-					"debug3": "DEBUG+2",
-					"debug2": "DEBUG+1",
-					"debug":  "DEBUG",
+				opMapping: map[string]any{
+					"error4":  "ERROR+3",
+					sevError3: "ERROR+2",
+					sevError2: "ERROR+1",
+					sevError:  "ERROR",
+					"warn4":   "WARN+3",
+					"warn3":   "WARN+2",
+					"warn2":   "WARN+1",
+					sevWarn:   "WARN",
+					"info4":   "INFO+3",
+					"info3":   "INFO+2",
+					sevInfo2:  "INFO+1",
+					sevInfo:   DefaultLogLevel,
+					sevDebug4: "DEBUG+3",
+					sevDebug3: "DEBUG+2",
+					sevDebug2: "DEBUG+1",
+					sevDebug:  mapDEBUG,
 				},
 			},
 			removeAttr("time"),
 			removeAttr("level"),
 			removeAttr("msg"),
 		},
-		"nginx_access": flattenOps(
+		idNginxAccess: flattenOps(
 			OTELOperator{
-				"id":    "nginx_access",
-				"type":  "add",
-				"field": "attributes['log.iostream']",
-				"value": "stdout",
+				"id":    idNginxAccess,
+				opType:  opAdd,
+				opField: attrLogStream,
+				opValue: streamStdout,
 			},
 			nginxAccessParser,
 			OTELOperator{
-				"type":        "time_parser",
-				"parse_from":  "attributes.time",
-				"layout":      "%d/%b/%Y:%H:%M:%S %z",
-				"layout_type": "strptime",
+				opType:       parserTime,
+				opParseFrom:  attrTime,
+				opLayout:     "%d/%b/%Y:%H:%M:%S %z",
+				opLayoutType: layoutStrptime,
 			},
 			removeAttr("time"),
 		),
-		"nginx_error": flattenOps(
+		idNginxError: flattenOps(
 			OTELOperator{
-				"id":    "nginx_error",
-				"type":  "add",
-				"field": "attributes['log.iostream']",
-				"value": "stderr",
+				"id":    idNginxError,
+				opType:  opAdd,
+				opField: attrLogStream,
+				opValue: streamStderr,
 			},
 			nginxErrorParser,
 			OTELOperator{
-				"type":        "time_parser",
-				"parse_from":  "attributes.time",
-				"layout":      "%Y/%m/%d %H:%M:%S",
-				"layout_type": "strptime",
+				opType:       parserTime,
+				opParseFrom:  attrTime,
+				opLayout:     "%Y/%m/%d %H:%M:%S",
+				opLayoutType: layoutStrptime,
 			},
 			removeAttr("time"),
 		),
 		"nginx_both": flattenOps(
 			OTELOperator{
-				"type": "router",
-				"routes": []any{
+				opType: opRouter,
+				opRoutes: []any{
 					map[string]any{
-						"expr":   `body matches "^(\\d{1,3}\\.){3}\\d{1,3}\\s-\\s(-|[\\w-]+)\\s"`, // <- not regexp, but expr-lang
-						"output": "nginx_access",
+						opExpr:   `body matches "^(\\d{1,3}\\.){3}\\d{1,3}\\s-\\s(-|[\\w-]+)\\s"`, // <- not regexp, but expr-lang
+						opOutput: idNginxAccess,
 					},
 					map[string]any{
-						"expr":   `body matches "^\\d{4}\\/\\d{2}\\/\\d{2}\\s\\d{2}:\\d{2}:\\d{2}\\s\\[error]"`, // <- not regexp, but expr-lang
-						"output": "nginx_error",
+						opExpr:   `body matches "^\\d{4}\\/\\d{2}\\/\\d{2}\\s\\d{2}:\\d{2}:\\d{2}\\s\\[error]"`, // <- not regexp, but expr-lang
+						opOutput: idNginxError,
 					},
 				},
 			},
 			// Start: nginx_access
 			OTELOperator{
-				"id":    "nginx_access",
-				"type":  "add",
-				"field": "attributes['log.iostream']",
-				"value": "stdout",
+				"id":    idNginxAccess,
+				opType:  opAdd,
+				opField: attrLogStream,
+				opValue: streamStdout,
 			},
 			nginxAccessParser,
 			OTELOperator{
-				"type":   "noop",
-				"output": "nginx_both_end",
+				opType:   opNoop,
+				opOutput: idNginxBothEnd,
 			},
 			// End: nginx_access
 			// Start: nginx_error
 			OTELOperator{
-				"id":    "nginx_error",
-				"type":  "add",
-				"field": "attributes['log.iostream']",
-				"value": "stderr",
+				"id":    idNginxError,
+				opType:  opAdd,
+				opField: attrLogStream,
+				opValue: streamStderr,
 			},
 			nginxErrorParser,
 			OTELOperator{
-				"type":   "noop",
-				"output": "nginx_both_end",
+				opType:   opNoop,
+				opOutput: idNginxBothEnd,
 			},
 			// End: nginx_error
 			OTELOperator{
-				"id":   "nginx_both_end",
-				"type": "noop",
+				"id":   idNginxBothEnd,
+				opType: opNoop,
 			},
 			removeAttr("time"),
 		),
-		"apache_access": flattenOps(
+		idApacheAccess: flattenOps(
 			OTELOperator{
-				"id":    "apache_access",
-				"type":  "add",
-				"field": "attributes['log.iostream']",
-				"value": "stdout",
+				"id":    idApacheAccess,
+				opType:  opAdd,
+				opField: attrLogStream,
+				opValue: streamStdout,
 			},
 			apacheAccessParser,
 			OTELOperator{
-				"type":        "time_parser",
-				"parse_from":  "attributes.time",
-				"layout":      "%d/%b/%Y:%H:%M:%S %z",
-				"layout_type": "strptime",
+				opType:       parserTime,
+				opParseFrom:  attrTime,
+				opLayout:     "%d/%b/%Y:%H:%M:%S %z",
+				opLayoutType: layoutStrptime,
 			},
 			removeAttr("time"),
 		),
-		"apache_error": flattenOps(
+		idApacheError: flattenOps(
 			OTELOperator{
-				"id":    "apache_error",
-				"type":  "add",
-				"field": "attributes['log.iostream']",
-				"value": "stderr",
+				"id":    idApacheError,
+				opType:  opAdd,
+				opField: attrLogStream,
+				opValue: streamStderr,
 			},
 			apacheErrorParser,
 			OTELOperator{
-				"type":        "time_parser",
-				"parse_from":  "attributes.time",
-				"layout":      "%a %b %d %H:%M:%S %Y",
-				"layout_type": "strptime",
+				opType:       parserTime,
+				opParseFrom:  attrTime,
+				opLayout:     "%a %b %d %H:%M:%S %Y",
+				opLayoutType: layoutStrptime,
 			},
 			removeAttr("time"),
 		),
 		"apache_both": flattenOps(
 			OTELOperator{
-				"type": "router",
-				"routes": []any{
+				opType: opRouter,
+				opRoutes: []any{
 					map[string]any{
-						"expr":   `body matches "^(\\d{1,3}\\.){3}\\d{1,3}\\s\\S+\\s\\S+\\s\\[[^\\]]+\\]\\s"`, // <- not regexp, but expr-lang
-						"output": "apache_access",
+						opExpr:   `body matches "^(\\d{1,3}\\.){3}\\d{1,3}\\s\\S+\\s\\S+\\s\\[[^\\]]+\\]\\s"`, // <- not regexp, but expr-lang
+						opOutput: idApacheAccess,
 					},
 					map[string]any{
-						"expr":   `body matches "^\\[[\\w :.]+\\]\\s(\\[[^\\]]+\\])+\\s"`, // <- not regexp, but expr-lang
-						"output": "apache_error",
+						opExpr:   `body matches "^\\[[\\w :.]+\\]\\s(\\[[^\\]]+\\])+\\s"`, // <- not regexp, but expr-lang
+						opOutput: idApacheError,
 					},
 				},
 			},
 			// Start: apache_access
 			OTELOperator{
-				"id":    "apache_access",
-				"type":  "add",
-				"field": "attributes['log.iostream']",
-				"value": "stdout",
+				"id":    idApacheAccess,
+				opType:  opAdd,
+				opField: attrLogStream,
+				opValue: streamStdout,
 			},
 			apacheAccessParser,
 			OTELOperator{
-				"type":   "noop",
-				"output": "apache_both_end",
+				opType:   opNoop,
+				opOutput: idApacheBothEnd,
 			},
 			// End: apache_access
 			// Start: apache_error
 			OTELOperator{
-				"id":    "apache_error",
-				"type":  "add",
-				"field": "attributes['log.iostream']",
-				"value": "stderr",
+				"id":    idApacheError,
+				opType:  opAdd,
+				opField: attrLogStream,
+				opValue: streamStderr,
 			},
 			apacheErrorParser,
 			OTELOperator{
-				"type":   "noop",
-				"output": "apache_both_end",
+				opType:   opNoop,
+				opOutput: idApacheBothEnd,
 			},
 			// End: apache_error
 			OTELOperator{
-				"id":   "apache_both_end",
-				"type": "noop",
+				"id":   idApacheBothEnd,
+				opType: opNoop,
 			},
 			removeAttr("time"),
 		),
 		"kafka": flattenOps(
 			kafkaParser,
 			OTELOperator{
-				"type":        "time_parser",
-				"parse_from":  "attributes.time",
-				"layout":      "%Y-%m-%d %H:%M:%S,%f",
-				"layout_type": "strptime",
+				opType:       parserTime,
+				opParseFrom:  attrTime,
+				opLayout:     "%Y-%m-%d %H:%M:%S,%f",
+				opLayoutType: layoutStrptime,
 			},
 			removeAttr("time"),
 		),
@@ -818,13 +897,13 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 			kafkaParser, // we'll rely on the timestamp provided by the runtime
 			removeAttr("time"),
 		),
-		"redis": flattenOps(
+		svcRedis: flattenOps(
 			redisParser,
 			OTELOperator{
-				"type":        "time_parser",
-				"parse_from":  "attributes.time",
-				"layout":      "%d %b %Y %H:%M:%S.%L",
-				"layout_type": "strptime",
+				opType:       parserTime,
+				opParseFrom:  attrTime,
+				opLayout:     "%d %b %Y %H:%M:%S.%L",
+				opLayoutType: layoutStrptime,
 			},
 			removeAttr("time"),
 		),
@@ -832,37 +911,37 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 			redisParser, // we'll rely on the timestamp provided by the runtime
 			removeAttr("time"),
 		),
-		"valkey": flattenOps(
+		svcValkey: flattenOps(
 			redisParser,
 			OTELOperator{
-				"type":  "add",
-				"field": "attributes['db.system.name']",
-				"value": "valkey",
+				opType:  opAdd,
+				opField: attrDBSystemName,
+				opValue: svcValkey,
 			},
 			OTELOperator{
-				"type":        "time_parser",
-				"parse_from":  "attributes.time",
-				"layout":      "%d %b %Y %H:%M:%S.%L",
-				"layout_type": "strptime",
+				opType:       parserTime,
+				opParseFrom:  attrTime,
+				opLayout:     "%d %b %Y %H:%M:%S.%L",
+				opLayoutType: layoutStrptime,
 			},
 		),
 		"valkey_docker": flattenOps(
 			redisParser, // we'll rely on the timestamp provided by the runtime
 			OTELOperator{
-				"type":  "add",
-				"field": "attributes['db.system.name']",
-				"value": "valkey",
+				opType:  opAdd,
+				opField: attrDBSystemName,
+				opValue: svcValkey,
 			},
 			removeAttr("time"),
 		),
 		"haproxy": flattenOps(
 			haproxyParser,
 			OTELOperator{
-				"type":        "time_parser",
-				"parse_from":  "attributes.time",
-				"layout":      "%d/%b/%Y:%H:%M:%S.%L",
-				"layout_type": "strptime",
-				"if":          `"time" in attributes`, // time is not provided by the haproxy_state_parser
+				opType:       parserTime,
+				opParseFrom:  attrTime,
+				opLayout:     "%d/%b/%Y:%H:%M:%S.%L",
+				opLayoutType: layoutStrptime,
+				opIf:         `"time" in attributes`, // time is not provided by the haproxy_state_parser
 			},
 			removeAttr("time"),
 		),
@@ -870,13 +949,13 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 			haproxyParser, // we'll rely on the timestamp provided by the runtime
 			removeAttr("time"),
 		),
-		"postgresql": flattenOps(
+		svcPostgresql: flattenOps(
 			postgresqlParser,
 			OTELOperator{
-				"type":        "time_parser",
-				"parse_from":  "attributes.time",
-				"layout":      "%Y-%m-%d %H:%M:%S.%L %Z",
-				"layout_type": "strptime",
+				opType:       parserTime,
+				opParseFrom:  attrTime,
+				opLayout:     "%Y-%m-%d %H:%M:%S.%L %Z",
+				opLayoutType: layoutStrptime,
 			},
 			removeAttr("time"),
 		),
@@ -887,10 +966,10 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		"mariadb": flattenOps(
 			mariaDBParser,
 			OTELOperator{
-				"type":        "time_parser",
-				"parse_from":  "attributes.time",
-				"layout":      "%Y-%m-%d %H:%M:%S",
-				"layout_type": "strptime",
+				opType:       parserTime,
+				opParseFrom:  attrTime,
+				opLayout:     "%Y-%m-%d %H:%M:%S",
+				opLayoutType: layoutStrptime,
 			},
 			removeAttr("time"),
 		),
@@ -898,14 +977,14 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 			mariaDBParser, // we'll rely on the timestamp provided by the runtime
 			removeAttr("time"),
 		),
-		"mysql": flattenOps(
+		svcMysql: flattenOps(
 			mysqlParser,
 			// FIXME: logs from the [Entrypoint] component have a different timestamp format ...
 			OTELOperator{
-				"type":        "time_parser",
-				"parse_from":  "attributes.time",
-				"layout":      "%Y-%m-%dT%H:%M:%S.%f%z",
-				"layout_type": "strptime",
+				opType:       parserTime,
+				opParseFrom:  attrTime,
+				opLayout:     "%Y-%m-%dT%H:%M:%S.%f%z",
+				opLayoutType: layoutStrptime,
 			},
 			removeAttr("time"),
 		),
@@ -916,10 +995,10 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		"mongodb": flattenOps(
 			mongodbParser,
 			OTELOperator{
-				"type":        "time_parser",
-				"parse_from":  "attributes.t.$date",
-				"layout":      "%Y-%m-%dT%H:%M:%S.%L%j",
-				"layout_type": "strptime",
+				opType:       parserTime,
+				opParseFrom:  "attributes.t.$date",
+				opLayout:     "%Y-%m-%dT%H:%M:%S.%L%j",
+				opLayoutType: layoutStrptime,
 			},
 			removeAttr("t"),
 		),
@@ -930,10 +1009,10 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		"rabbitmq": flattenOps(
 			rabbitMQParser,
 			OTELOperator{
-				"type":        "time_parser",
-				"parse_from":  "attributes.time",
-				"layout":      "%Y-%m-%d %H:%M:%S.%f%j",
-				"layout_type": "strptime",
+				opType:       parserTime,
+				opParseFrom:  attrTime,
+				opLayout:     "%Y-%m-%d %H:%M:%S.%f%j",
+				opLayoutType: layoutStrptime,
 			},
 			removeAttr("time"),
 		),
@@ -947,9 +1026,9 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 		"syslogAuth": flattenOps(
 			syslogParser,
 			OTELOperator{
-				"type":  "add",
-				"field": "attributes.facility",
-				"value": "security/authorization",
+				opType:  opAdd,
+				opField: attrFacility,
+				opValue: "security/authorization",
 			},
 		),
 	}

@@ -92,9 +92,9 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 				Include: []string{customLogFile.Name()},
 				Operators: []config.OTELOperator{
 					{
-						"field": "resource['service.name']",
-						"type":  "add",
-						"value": "custom-svc",
+						testFieldName:  testRouteServiceName,
+						testFieldType:  testFieldAdd,
+						testFieldValue: testCustomSvc,
 					},
 				},
 				LogFormat: "custom-format",
@@ -103,12 +103,12 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 				Include:   []string{jsonLogFile.Name()},
 				LogFormat: "json_golang_slog",
 				Filters: config.OTELFilters{
-					"exclude": map[string]any{
-						"match_type": "strict",
+					testFilterExclude: map[string]any{
+						testFilterMatchType: "strict",
 						"record_attributes": []map[string]any{
 							{
-								"key":   "dyn",
-								"value": 2.,
+								testFieldKey:   testDyn,
+								testFieldValue: 2.,
 							},
 						},
 					},
@@ -118,9 +118,9 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 	}
 	cfg.KnownLogFormats["custom-format"] = []config.OTELOperator{
 		{
-			"type":  "add",
-			"field": "resource.key",
-			"value": "custom-res",
+			testFieldType:  testFieldAdd,
+			testFieldName:  testResourceKey,
+			testFieldValue: testCustomRes,
 		},
 	}
 
@@ -209,23 +209,23 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 			Timestamp: erasedTS,
 			Body:      `{"time":"<time erased>","level":"INFO","msg":"This is a json log line."}`,
 			Attributes: map[string]any{
-				"log.file.name": filepath.Base(jsonLogFile.Name()),
-				"log.file.path": jsonLogFile.Name(),
+				testAttrLogFileName: filepath.Base(jsonLogFile.Name()),
+				testAttrLogFilePath: jsonLogFile.Name(),
 			},
-			Resource: map[string]any{"host.name": "myhostname"},
+			Resource: map[string]any{testAttrHostName: testHostname},
 			Severity: 9, // info
 		},
 		{
 			Timestamp: epochTS,
 			Body:      "This is a custom log line.",
 			Attributes: map[string]any{
-				"log.file.name": filepath.Base(customLogFile.Name()),
-				"log.file.path": customLogFile.Name(),
+				testAttrLogFileName: filepath.Base(customLogFile.Name()),
+				testAttrLogFilePath: customLogFile.Name(),
 			},
 			Resource: map[string]any{
-				"host.name":    "myhostname",
-				"key":          "custom-res",
-				"service.name": "custom-svc",
+				testAttrHostName:    testHostname,
+				testFieldKey:        testCustomRes,
+				testAttrServiceName: "custom-svc",
 			},
 		},
 	}
@@ -276,13 +276,13 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 			Timestamp: epochTS,
 			Body:      "This is a another log line.",
 			Attributes: map[string]any{
-				"log.file.name": filepath.Base(customLogFile.Name()),
-				"log.file.path": customLogFile.Name(),
+				testAttrLogFileName: filepath.Base(customLogFile.Name()),
+				testAttrLogFilePath: customLogFile.Name(),
 			},
 			Resource: map[string]any{
-				"host.name":    "myhostname",
-				"key":          "custom-res",
-				"service.name": "custom-svc",
+				testAttrHostName:    testHostname,
+				testFieldKey:        testCustomRes,
+				testAttrServiceName: "custom-svc",
 			},
 		},
 	}
@@ -312,11 +312,11 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 			Timestamp: erasedTS,
 			Body:      `{"time":"<time erased>","level":"WARN","msg":"With dyn value 1","dyn":1}`,
 			Attributes: map[string]any{
-				"dyn":           1.,
-				"log.file.name": filepath.Base(jsonLogFile.Name()),
-				"log.file.path": jsonLogFile.Name(),
+				"dyn":               1.,
+				testAttrLogFileName: filepath.Base(jsonLogFile.Name()),
+				testAttrLogFilePath: jsonLogFile.Name(),
 			},
-			Resource: map[string]any{"host.name": "myhostname"},
+			Resource: map[string]any{testAttrHostName: testHostname},
 			Severity: 13, // warn
 		},
 		// Log record with dyn=2 is filtered
@@ -324,11 +324,11 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 			Timestamp: erasedTS,
 			Body:      `{"time":"<time erased>","level":"WARN","msg":"With dyn value 3","dyn":3}`,
 			Attributes: map[string]any{
-				"dyn":           3.,
-				"log.file.name": filepath.Base(jsonLogFile.Name()),
-				"log.file.path": jsonLogFile.Name(),
+				"dyn":               3.,
+				testAttrLogFileName: filepath.Base(jsonLogFile.Name()),
+				testAttrLogFilePath: jsonLogFile.Name(),
 			},
-			Resource: map[string]any{"host.name": "myhostname"},
+			Resource: map[string]any{testAttrHostName: testHostname},
 			Severity: 13, // warn
 		},
 	}

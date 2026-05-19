@@ -33,7 +33,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-const defaultJitter = 0
+const (
+	defaultJitter  = 0
+	labelGroupName = "groupname"
+)
 
 // RegisterExporter will create a new prometheus exporter using the specified parameters and adds it to the registry.
 func RegisterExporter(
@@ -146,79 +149,79 @@ func (e *Exporter) init() {
 		e.numprocsDesc = prometheus.NewDesc(
 			"namedprocess_namegroup_num_procs",
 			"number of processes in this group",
-			[]string{"groupname"},
+			[]string{labelGroupName},
 			nil,
 		)
 		e.cpuSecsDesc = prometheus.NewDesc(
 			"namedprocess_namegroup_cpu_seconds_total",
 			"Cpu user usage in seconds",
-			[]string{"groupname", "mode"},
+			[]string{labelGroupName, "mode"},
 			nil,
 		)
 		e.readBytesDesc = prometheus.NewDesc(
 			"namedprocess_namegroup_read_bytes_total",
 			"number of bytes read by this group",
-			[]string{"groupname"},
+			[]string{labelGroupName},
 			nil,
 		)
 		e.writeBytesDesc = prometheus.NewDesc(
 			"namedprocess_namegroup_write_bytes_total",
 			"number of bytes written by this group",
-			[]string{"groupname"},
+			[]string{labelGroupName},
 			nil,
 		)
 		e.majorPageFaultsDesc = prometheus.NewDesc(
 			"namedprocess_namegroup_major_page_faults_total",
 			"Major page faults",
-			[]string{"groupname"},
+			[]string{labelGroupName},
 			nil,
 		)
 		e.minorPageFaultsDesc = prometheus.NewDesc(
 			"namedprocess_namegroup_minor_page_faults_total",
 			"Minor page faults",
-			[]string{"groupname"},
+			[]string{labelGroupName},
 			nil,
 		)
 		e.contextSwitchesDesc = prometheus.NewDesc(
 			"namedprocess_namegroup_context_switches_total",
 			"Context switches",
-			[]string{"groupname", "ctxswitchtype"},
+			[]string{labelGroupName, "ctxswitchtype"},
 			nil,
 		)
 		e.membytesDesc = prometheus.NewDesc(
 			"namedprocess_namegroup_memory_bytes",
 			"number of bytes of memory in use",
-			[]string{"groupname", "memtype"},
+			[]string{labelGroupName, "memtype"},
 			nil,
 		)
 		e.openFDsDesc = prometheus.NewDesc(
 			"namedprocess_namegroup_open_filedesc",
 			"number of open file descriptors for this group",
-			[]string{"groupname"},
+			[]string{labelGroupName},
 			nil,
 		)
 		e.worstFDRatioDesc = prometheus.NewDesc(
 			"namedprocess_namegroup_worst_fd_ratio",
 			"the worst (closest to 1) ratio between open fds and max fds among all procs in this group",
-			[]string{"groupname"},
+			[]string{labelGroupName},
 			nil,
 		)
 		e.startTimeDesc = prometheus.NewDesc(
 			"namedprocess_namegroup_oldest_start_time_seconds",
 			"start time in seconds since 1970/01/01 of oldest process in group",
-			[]string{"groupname"},
+			[]string{labelGroupName},
 			nil,
 		)
 		e.numThreadsDesc = prometheus.NewDesc(
 			"namedprocess_namegroup_num_threads",
 			"Number of threads",
-			[]string{"groupname"},
+			[]string{labelGroupName},
 			nil,
 		)
 		e.statesDesc = prometheus.NewDesc(
 			"namedprocess_namegroup_states",
 			"Number of processes in states Running, Sleeping, Waiting, Zombie, or Other",
-			[]string{"groupname", "state"},
+			[]string{labelGroupName, "state"},
 			nil,
 		)
 		e.scrapeErrorsDesc = prometheus.NewDesc(
@@ -242,7 +245,7 @@ func (e *Exporter) init() {
 		e.threadWchanDesc = prometheus.NewDesc(
 			"namedprocess_namegroup_threads_wchan",
 			"Number of threads in this group waiting on each wchan",
-			[]string{"groupname", "wchan"},
+			[]string{labelGroupName, "wchan"},
 			nil,
 		)
 	}
@@ -280,7 +283,8 @@ func (e *Exporter) init() {
 }
 
 // Describe implement Describe of a Prometheus collector.
-//nolint: wsl_v5,gofmt,gofumpt,goimports
+//
+//nolint:wsl_v5
 func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	e.init()
 

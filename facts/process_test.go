@@ -35,6 +35,37 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
+const (
+	testProcessInit             = "init"
+	testProcessBash             = "bash"
+	testProcessRedis            = "redis"
+	testContainerRedisName      = "redis-name"
+	testContainerRedis2         = "redis2"
+	testContainerRedisID        = "redis-container-id"
+	testNotInDocker             = "not in docker"
+	testProcessPostgresql       = "postgresql"
+	testContainerPostgresqlName = "postgresql-name"
+	testContainerPostgresqlID   = "postgresql-container-id"
+	testSlicePostgresql         = "slice-postgresql"
+	testSliceRedis              = "slice-redis"
+	testPostgresqlSession       = "postgresql session"
+	testCgroupUserSession       = "cgroup-for-user-session"
+	testUnknownContainer        = "unknown container"
+	testChildOfInit             = "child of init"
+	testContainerID1            = "containerID/1"
+	testContainerID2            = "containerID/2"
+	testProcessKthreadd         = "[kthreadd]"
+	testProcessKworker          = "[kworker/]"
+	testNameKthreadd            = "kthreadd"
+	testCgroupReadError         = "cgroup-read-error"
+	testCgroupContainerNotFound = "cgroup-container-not-found"
+	testDockerSlice             = "a-docker-slice"
+	testCgroupDataForInit       = "cgroup data for init"
+	testProcessBusy             = "busy"
+	testProcessKthread          = "kthread"
+	testContainerC1             = "C-1"
+)
+
 var errArbitraryErrorForTest = errors.New("arbitraryErrorForTest")
 
 func TestPsStat2Status(t *testing.T) {
@@ -47,13 +78,13 @@ func TestPsStat2Status(t *testing.T) {
 		{"D", "disk-sleep"},
 		{"I", "idle"},
 		{"I<", "idle"},
-		{"R+", "running"},
-		{"Rl", "running"},
-		{"S", "sleeping"},
-		{"S<", "sleeping"},
-		{"S<l", "sleeping"},
-		{"SLl+", "sleeping"},
-		{"Ss", "sleeping"},
+		{"R+", ProcessStatusRunning},
+		{"Rl", ProcessStatusRunning},
+		{"S", ProcessStatusSleeping},
+		{"S<", ProcessStatusSleeping},
+		{"S<l", ProcessStatusSleeping},
+		{"SLl+", ProcessStatusSleeping},
+		{"Ss", ProcessStatusSleeping},
 		{"Z+", "zombie"},
 		{"T", "stopped"},
 		{"t", "tracing-stop"},
@@ -183,28 +214,28 @@ func TestUpdateProcesses(t *testing.T) {
 		processesResult: []Process{
 			{
 				PID:         1,
-				Name:        "init",
+				Name:        testProcessInit,
 				CreateTime:  t0,
 				ContainerID: "",
 				CPUTime:     999,
 			},
 			{
 				PID:         2,
-				Name:        "[kthreadd]",
+				Name:        testProcessKthreadd,
 				CreateTime:  t0,
 				ContainerID: "",
 				CPUTime:     999,
 			},
 			{
 				PID:         3,
-				Name:        "[kworker/]",
+				Name:        testProcessKworker,
 				CreateTime:  t0,
 				ContainerID: "",
 				CPUTime:     999,
 			},
 			{
 				PID:         12,
-				Name:        "redis2",
+				Name:        testContainerRedis2,
 				CreateTime:  t0,
 				ContainerID: "",
 				CPUTime:     44.2,
@@ -236,7 +267,7 @@ func TestUpdateProcesses(t *testing.T) {
 		processesResult: []Process{
 			{
 				PID:         12,
-				ContainerID: "redis-container-id",
+				ContainerID: testContainerRedisID,
 			},
 			{
 				PID:         42,
@@ -259,8 +290,8 @@ func TestUpdateProcesses(t *testing.T) {
 	cases := []Process{
 		{
 			PID:         12,
-			Name:        "redis2",
-			ContainerID: "redis-container-id",
+			Name:        testContainerRedis2,
+			ContainerID: testContainerRedisID,
 			CreateTime:  t0,
 			CPUTime:     44.2,
 			CPUPercent:  1.227, // 44.2s over 1h
@@ -274,7 +305,7 @@ func TestUpdateProcesses(t *testing.T) {
 		},
 		{
 			PID:         1,
-			Name:        "init",
+			Name:        testProcessInit,
 			ContainerID: "",
 			CreateTime:  t0,
 			CPUTime:     999,
@@ -282,7 +313,7 @@ func TestUpdateProcesses(t *testing.T) {
 		},
 		{
 			PID:         2,
-			Name:        "[kthreadd]",
+			Name:        testProcessKthreadd,
 			ContainerID: "",
 			CreateTime:  t0,
 			CPUTime:     999,
@@ -290,7 +321,7 @@ func TestUpdateProcesses(t *testing.T) {
 		},
 		{
 			PID:         3,
-			Name:        "[kworker/]",
+			Name:        testProcessKworker,
 			ContainerID: "",
 			CreateTime:  t0,
 			CPUTime:     999,
@@ -347,7 +378,7 @@ func TestUpdateProcessesWithTerminated(t *testing.T) {
 			{
 				PID:        1,
 				PPID:       0,
-				Name:       "init",
+				Name:       testProcessInit,
 				CreateTime: t0,
 			},
 			{
@@ -359,13 +390,13 @@ func TestUpdateProcessesWithTerminated(t *testing.T) {
 			{
 				PID:        101,
 				PPID:       1,
-				Name:       "cgroup-read-error",
+				Name:       testCgroupReadError,
 				CreateTime: t0,
 			},
 			{
 				PID:        102,
 				PPID:       1,
-				Name:       "cgroup-container-not-found",
+				Name:       testCgroupContainerNotFound,
 				CreateTime: t0,
 			},
 			{
@@ -379,14 +410,14 @@ func TestUpdateProcessesWithTerminated(t *testing.T) {
 			1:   "this is init",
 			100: "this-wont-be-used",
 			101: "", // empty string is handled like error
-			102: "a-docker-slice",
-			103: "a-docker-slice",
+			102: testDockerSlice,
+			103: testDockerSlice,
 		},
 	}
 	cr := &mockContainerRuntime{
 		cgroup2Container: map[string]Container{},
 		cgroup2seemsContainer: map[string]bool{
-			"a-docker-slice": true,
+			testDockerSlice: true,
 		},
 		pid2Containers: map[int]Container{
 			101: FakeContainer{
@@ -404,19 +435,19 @@ func TestUpdateProcessesWithTerminated(t *testing.T) {
 			{
 				PID:        1,
 				PPID:       0,
-				Name:       "init",
+				Name:       testProcessInit,
 				CreateTime: t0,
 			},
 			{
 				PID:        101,
 				PPID:       1,
-				Name:       "cgroup-read-error",
+				Name:       testCgroupReadError,
 				CreateTime: t0,
 			},
 			{
 				PID:        102,
 				PPID:       1,
-				Name:       "cgroup-container-not-found",
+				Name:       testCgroupContainerNotFound,
 				CreateTime: t0,
 			},
 			{
@@ -440,13 +471,13 @@ func TestUpdateProcessesWithTerminated(t *testing.T) {
 	cases := []Process{
 		{
 			PID:        1,
-			Name:       "init",
+			Name:       testProcessInit,
 			CreateTime: t0,
 		},
 		{
 			PID:           101,
 			PPID:          1,
-			Name:          "cgroup-read-error",
+			Name:          testCgroupReadError,
 			ContainerID:   "no-cgroup-id",
 			ContainerName: "no-cgroup-name",
 			CreateTime:    t0,
@@ -454,7 +485,7 @@ func TestUpdateProcessesWithTerminated(t *testing.T) {
 		{
 			PID:           102,
 			PPID:          1,
-			Name:          "cgroup-container-not-found",
+			Name:          testCgroupContainerNotFound,
 			ContainerID:   "myredis-id",
 			ContainerName: "myredis-name",
 			CreateTime:    t0,
@@ -494,67 +525,67 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:maintidx
 			{
 				PID:        1,
 				PPID:       0,
-				Name:       "init",
+				Name:       testProcessInit,
 				CreateTime: t0,
 				CPUTime:    999,
 			},
 			{
 				PID:        2,
 				PPID:       0,
-				Name:       "[kthreadd]",
+				Name:       testProcessKthreadd,
 				CreateTime: t0,
 			},
 			{
 				PID:        3,
 				PPID:       2,
-				Name:       "[kworker/]",
+				Name:       testProcessKworker,
 				CreateTime: t0,
 			},
 			{
 				PID:        12,
 				PPID:       1,
-				Name:       "redis2",
+				Name:       testContainerRedis2,
 				CreateTime: t0,
 				CPUTime:    44.2,
 			},
 			{
 				PID:        20,
 				PPID:       1,
-				Name:       "bash",
+				Name:       testProcessBash,
 				CreateTime: t0,
 			},
 			{
 				PID:        42,
 				PPID:       1,
-				Name:       "postgresql",
+				Name:       testProcessPostgresql,
 				CreateTime: t0,
 			},
 			{
 				PID:        49,
 				PPID:       42,
-				Name:       "postgresql session",
+				Name:       testPostgresqlSession,
 				CreateTime: t0,
 			},
 		},
 		processCGroup: map[int]string{
-			1:  "cgroup data for init",
+			1:  testCgroupDataForInit,
 			2:  "cgroup for kernel",
 			3:  "well, this value doesn't matter",
-			20: "cgroup-for-user-session",
+			20: testCgroupUserSession,
 			// 12 is absent, simulate "error"
-			42: "slice-postgresql",
-			49: "slice-postgresql",
+			42: testSlicePostgresql,
+			49: testSlicePostgresql,
 		},
 	}
 	cr := &mockContainerRuntime{
 		cgroup2Container: map[string]Container{
-			"slice-postgresql": FakeContainer{
-				FakeID:            "postgresql-container-id",
-				FakeContainerName: "postgresql-name",
+			testSlicePostgresql: FakeContainer{
+				FakeID:            testContainerPostgresqlID,
+				FakeContainerName: testContainerPostgresqlName,
 			},
 		},
 		pid2Containers: map[int]Container{
-			12: FakeContainer{FakeContainerName: "redis-name", FakeID: "redis-container-id"},
+			12: FakeContainer{FakeContainerName: testContainerRedisName, FakeID: testContainerRedisID},
 		},
 	}
 	pp := ProcessProvider{
@@ -571,9 +602,9 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:maintidx
 		{
 			PID:           12,
 			PPID:          1,
-			Name:          "redis2",
-			ContainerID:   "redis-container-id",
-			ContainerName: "redis-name",
+			Name:          testContainerRedis2,
+			ContainerID:   testContainerRedisID,
+			ContainerName: testContainerRedisName,
 			CreateTime:    t0,
 			CPUTime:       44.2,
 			CPUPercent:    1.227, // 44.2s over 1h
@@ -581,23 +612,23 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:maintidx
 		{
 			PID:           42,
 			PPID:          1,
-			Name:          "postgresql",
-			ContainerID:   "postgresql-container-id",
-			ContainerName: "postgresql-name",
+			Name:          testProcessPostgresql,
+			ContainerID:   testContainerPostgresqlID,
+			ContainerName: testContainerPostgresqlName,
 			CreateTime:    t0,
 		},
 		{
 			PID:           49,
 			PPID:          42,
-			Name:          "postgresql session",
-			ContainerID:   "postgresql-container-id",
-			ContainerName: "postgresql-name",
+			Name:          testPostgresqlSession,
+			ContainerID:   testContainerPostgresqlID,
+			ContainerName: testContainerPostgresqlName,
 			CreateTime:    t0,
 		},
 		{
 			PID:         1,
 			PPID:        0,
-			Name:        "init",
+			Name:        testProcessInit,
 			ContainerID: "",
 			CreateTime:  t0,
 			CPUTime:     999,
@@ -606,21 +637,21 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:maintidx
 		{
 			PID:         2,
 			PPID:        0,
-			Name:        "[kthreadd]",
+			Name:        testProcessKthreadd,
 			ContainerID: "",
 			CreateTime:  t0,
 		},
 		{
 			PID:         3,
 			PPID:        2,
-			Name:        "[kworker/]",
+			Name:        testProcessKworker,
 			ContainerID: "",
 			CreateTime:  t0,
 		},
 		{
 			PID:        20,
 			PPID:       1,
-			Name:       "bash",
+			Name:       testProcessBash,
 			CreateTime: t0,
 		},
 	}
@@ -670,19 +701,19 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:maintidx
 			{
 				PID:        1,
 				PPID:       0,
-				Name:       "init",
+				Name:       testProcessInit,
 				CreateTime: t0,
 			},
 			{
 				PID:        12,
 				PPID:       1,
-				Name:       "redis2",
+				Name:       testContainerRedis2,
 				CreateTime: t0,
 			},
 			{
 				PID:        20,
 				PPID:       1,
-				Name:       "bash",
+				Name:       testProcessBash,
 				CreateTime: t0,
 			},
 			{
@@ -694,41 +725,41 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:maintidx
 			{
 				PID:        42,
 				PPID:       1,
-				Name:       "postgresql",
+				Name:       testProcessPostgresql,
 				CreateTime: t0,
 			},
 			{
 				PID:        40,
 				PPID:       42,
-				Name:       "postgresql session",
+				Name:       testPostgresqlSession,
 				CreateTime: t1,
 			},
 			{
 				PID:        4000,
 				PPID:       42,
-				Name:       "postgresql session",
+				Name:       testPostgresqlSession,
 				CreateTime: t1,
 			},
 		},
 		processCGroup: map[int]string{
-			1:    "cgroup data for init",
-			12:   "slice-redis",
-			20:   "cgroup-for-user-session",
-			6:    "cgroup-for-user-session",
-			42:   "slice-postgresql",
-			40:   "slice-postgresql",
-			4000: "slice-postgresql",
+			1:    testCgroupDataForInit,
+			12:   testSliceRedis,
+			20:   testCgroupUserSession,
+			6:    testCgroupUserSession,
+			42:   testSlicePostgresql,
+			40:   testSlicePostgresql,
+			4000: testSlicePostgresql,
 		},
 	}
 	*cr = mockContainerRuntime{
 		cgroup2Container: map[string]Container{
-			"slice-postgresql": FakeContainer{
-				FakeID:            "postgresql-container-id",
-				FakeContainerName: "postgresql-name",
+			testSlicePostgresql: FakeContainer{
+				FakeID:            testContainerPostgresqlID,
+				FakeContainerName: testContainerPostgresqlName,
 			},
-			"slice-redis": FakeContainer{
-				FakeID:            "redis-container-id",
-				FakeContainerName: "redis-name",
+			testSliceRedis: FakeContainer{
+				FakeID:            testContainerRedisID,
+				FakeContainerName: testContainerRedisName,
 			},
 		},
 	}
@@ -736,45 +767,45 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:maintidx
 		{
 			PID:        1,
 			PPID:       0,
-			Name:       "init",
+			Name:       testProcessInit,
 			CreateTime: t0,
 		},
 		{
 			PID:           12,
 			PPID:          1,
-			Name:          "redis2",
-			ContainerID:   "redis-container-id",
-			ContainerName: "redis-name",
+			Name:          testContainerRedis2,
+			ContainerID:   testContainerRedisID,
+			ContainerName: testContainerRedisName,
 			CreateTime:    t0,
 		},
 		{
 			PID:           40,
 			PPID:          42,
-			Name:          "postgresql session",
-			ContainerID:   "postgresql-container-id",
-			ContainerName: "postgresql-name",
+			Name:          testPostgresqlSession,
+			ContainerID:   testContainerPostgresqlID,
+			ContainerName: testContainerPostgresqlName,
 			CreateTime:    t1,
 		},
 		{
 			PID:           4000,
 			PPID:          42,
-			Name:          "postgresql session",
-			ContainerID:   "postgresql-container-id",
-			ContainerName: "postgresql-name",
+			Name:          testPostgresqlSession,
+			ContainerID:   testContainerPostgresqlID,
+			ContainerName: testContainerPostgresqlName,
 			CreateTime:    t1,
 		},
 		{
 			PID:           42,
 			PPID:          1,
-			Name:          "postgresql",
-			ContainerID:   "postgresql-container-id",
-			ContainerName: "postgresql-name",
+			Name:          testProcessPostgresql,
+			ContainerID:   testContainerPostgresqlID,
+			ContainerName: testContainerPostgresqlName,
 			CreateTime:    t0,
 		},
 		{
 			PID:        20,
 			PPID:       1,
-			Name:       "bash",
+			Name:       testProcessBash,
 			CreateTime: t0,
 		},
 		{
@@ -834,13 +865,13 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:maintidx
 			{
 				PID:        1,
 				PPID:       0,
-				Name:       "init",
+				Name:       testProcessInit,
 				CreateTime: t0,
 			},
 			{
 				PID:        4010,
 				PPID:       1,
-				Name:       "redis2",
+				Name:       testContainerRedis2,
 				CreateTime: t2,
 			},
 			{
@@ -852,7 +883,7 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:maintidx
 			{
 				PID:        20,
 				PPID:       1,
-				Name:       "bash",
+				Name:       testProcessBash,
 				CreateTime: t0,
 			},
 			{
@@ -882,38 +913,38 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:maintidx
 			{
 				PID:        42,
 				PPID:       1,
-				Name:       "postgresql",
+				Name:       testProcessPostgresql,
 				CreateTime: t0,
 			},
 			{
 				PID:        12,
 				PPID:       42,
-				Name:       "postgresql session",
+				Name:       testPostgresqlSession,
 				CreateTime: t2,
 			},
 		},
 		processCGroup: map[int]string{
-			1:    "cgroup data for init",
-			4010: "slice-redis",
-			4009: "slice-redis",
-			20:   "cgroup-for-user-session",
-			21:   "cgroup-for-user-session",
-			2010: "cgroup-for-user-session",
-			2011: "cgroup-for-user-session",
-			2012: "cgroup-for-user-session",
-			42:   "slice-postgresql",
-			12:   "slice-postgresql",
+			1:    testCgroupDataForInit,
+			4010: testSliceRedis,
+			4009: testSliceRedis,
+			20:   testCgroupUserSession,
+			21:   testCgroupUserSession,
+			2010: testCgroupUserSession,
+			2011: testCgroupUserSession,
+			2012: testCgroupUserSession,
+			42:   testSlicePostgresql,
+			12:   testSlicePostgresql,
 		},
 	}
 	*cr = mockContainerRuntime{
 		cgroup2Container: map[string]Container{
-			"slice-postgresql": FakeContainer{
-				FakeID:            "postgresql-container-id",
-				FakeContainerName: "postgresql-name",
+			testSlicePostgresql: FakeContainer{
+				FakeID:            testContainerPostgresqlID,
+				FakeContainerName: testContainerPostgresqlName,
 			},
-			"slice-redis": FakeContainer{
-				FakeID:            "redis-container-id",
-				FakeContainerName: "redis-name",
+			testSliceRedis: FakeContainer{
+				FakeID:            testContainerRedisID,
+				FakeContainerName: testContainerRedisName,
 			},
 		},
 	}
@@ -921,29 +952,29 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:maintidx
 		{
 			PID:        1,
 			PPID:       0,
-			Name:       "init",
+			Name:       testProcessInit,
 			CreateTime: t0,
 		},
 		{
 			PID:           4010,
 			PPID:          1,
-			Name:          "redis2",
-			ContainerID:   "redis-container-id",
-			ContainerName: "redis-name",
+			Name:          testContainerRedis2,
+			ContainerID:   testContainerRedisID,
+			ContainerName: testContainerRedisName,
 			CreateTime:    t2,
 		},
 		{
 			PID:           4009,
 			PPID:          4010,
 			Name:          "redis-background",
-			ContainerID:   "redis-container-id",
-			ContainerName: "redis-name",
+			ContainerID:   testContainerRedisID,
+			ContainerName: testContainerRedisName,
 			CreateTime:    t2.Add(time.Millisecond),
 		},
 		{
 			PID:        20,
 			PPID:       1,
-			Name:       "bash",
+			Name:       testProcessBash,
 			CreateTime: t0,
 		},
 		{
@@ -973,17 +1004,17 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:maintidx
 		{
 			PID:           42,
 			PPID:          1,
-			Name:          "postgresql",
-			ContainerID:   "postgresql-container-id",
-			ContainerName: "postgresql-name",
+			Name:          testProcessPostgresql,
+			ContainerID:   testContainerPostgresqlID,
+			ContainerName: testContainerPostgresqlName,
 			CreateTime:    t0,
 		},
 		{
 			PID:           12,
 			PPID:          42,
-			Name:          "postgresql session",
-			ContainerID:   "postgresql-container-id",
-			ContainerName: "postgresql-name",
+			Name:          testPostgresqlSession,
+			ContainerID:   testContainerPostgresqlID,
+			ContainerName: testContainerPostgresqlName,
 			CreateTime:    t2,
 		},
 	}
@@ -1086,19 +1117,19 @@ func TestDeltaCPUPercent(t *testing.T) {
 		processes: map[int]Process{
 			1: {
 				PID:        1,
-				Name:       "init",
+				Name:       testProcessInit,
 				CreateTime: t0,
 				CPUTime:    0.012,
 			},
 			2: {
 				PID:        2,
-				Name:       "redis",
+				Name:       testProcessRedis,
 				CreateTime: t0,
 				CPUTime:    0.0,
 			},
 			3: {
 				PID:        3,
-				Name:       "busy",
+				Name:       testProcessBusy,
 				CreateTime: t0,
 				CPUTime:    13.37,
 			},
@@ -1113,19 +1144,19 @@ func TestDeltaCPUPercent(t *testing.T) {
 			processesResult: []Process{
 				{
 					PID:        1,
-					Name:       "init",
+					Name:       testProcessInit,
 					CreateTime: t0,
 					CPUTime:    0.012, // unchanged => 0%
 				},
 				{
 					PID:        2,
-					Name:       "redis",
+					Name:       testProcessRedis,
 					CreateTime: t0,
 					CPUTime:    42.0, // +42 => 70%
 				},
 				{
 					PID:        3,
-					Name:       "busy",
+					Name:       testProcessBusy,
 					CreateTime: t0,
 					CPUTime:    92.37, // +79 => 131.6%
 				},
@@ -1147,21 +1178,21 @@ func TestDeltaCPUPercent(t *testing.T) {
 	cases := []Process{
 		{
 			PID:        1,
-			Name:       "init",
+			Name:       testProcessInit,
 			CreateTime: t0,
 			CPUTime:    0.012, // unchanged => 0%
 			CPUPercent: 0.0,
 		},
 		{
 			PID:        2,
-			Name:       "redis",
+			Name:       testProcessRedis,
 			CreateTime: t0,
 			CPUTime:    42.0, // +42s over 1min => 70%
 			CPUPercent: 70.0,
 		},
 		{
 			PID:        3,
-			Name:       "busy",
+			Name:       testProcessBusy,
 			CreateTime: t0,
 			CPUTime:    92.37, // +79 over 1min => 131.666%
 			CPUPercent: 131.666,
@@ -1244,29 +1275,29 @@ func TestUpdateProcessesTime(t *testing.T) { //nolint: maintidx
 						{
 							proc: Process{
 								PID:        1,
-								Name:       "init",
+								Name:       testProcessInit,
 								CreateTime: now,
 							},
-							cgroup: "not in docker",
+							cgroup: testNotInDocker,
 						},
 						{
 							proc: Process{
 								PID:        2,
-								Name:       "kthread",
+								Name:       testProcessKthread,
 								CreateTime: t0,
 							},
-							cgroup: "not in docker",
+							cgroup: testNotInDocker,
 						},
 					},
 					wantProcesseses: []Process{
 						{
 							PID:        1,
-							Name:       "init",
+							Name:       testProcessInit,
 							CreateTime: now,
 						},
 						{
 							PID:        2,
-							Name:       "kthread",
+							Name:       testProcessKthread,
 							CreateTime: t0,
 						},
 					},
@@ -1277,7 +1308,7 @@ func TestUpdateProcessesTime(t *testing.T) { //nolint: maintidx
 						{
 							proc: Process{
 								PID:        3,
-								Name:       "bash",
+								Name:       testProcessBash,
 								CreateTime: now,
 							},
 						},
@@ -1286,21 +1317,21 @@ func TestUpdateProcessesTime(t *testing.T) { //nolint: maintidx
 						{
 							proc: Process{
 								PID:        2,
-								Name:       "kthread",
+								Name:       testProcessKthread,
 								CreateTime: t0,
 							},
-							cgroup: "not in docker",
+							cgroup: testNotInDocker,
 						},
 					},
 					wantProcesseses: []Process{
 						{
 							PID:        1,
-							Name:       "init",
+							Name:       testProcessInit,
 							CreateTime: now,
 						},
 						{
 							PID:        3,
-							Name:       "bash",
+							Name:       testProcessBash,
 							CreateTime: now,
 						},
 					},
@@ -1317,36 +1348,36 @@ func TestUpdateProcessesTime(t *testing.T) { //nolint: maintidx
 						{
 							proc: Process{
 								PID:        1,
-								Name:       "init",
+								Name:       testProcessInit,
 								CreateTime: t0,
 							},
-							cgroup: "not in docker",
+							cgroup: testNotInDocker,
 						},
 						{
 							proc: Process{
 								PID:        2,
-								Name:       "redis",
+								Name:       testProcessRedis,
 								CreateTime: t0,
 							},
 							container: FakeContainer{
 								FakeID:            "1",
-								FakeContainerName: "redis-name",
+								FakeContainerName: testContainerRedisName,
 							},
-							cgroup: "containerID/1",
+							cgroup: testContainerID1,
 						},
 					},
 					wantProcesseses: []Process{
 						{
 							PID:        1,
-							Name:       "init",
+							Name:       testProcessInit,
 							CreateTime: t0,
 						},
 						{
 							PID:           2,
-							Name:          "redis",
+							Name:          testProcessRedis,
 							CreateTime:    t0,
 							ContainerID:   "1",
-							ContainerName: "redis-name",
+							ContainerName: testContainerRedisName,
 						},
 					},
 				},
@@ -1362,22 +1393,22 @@ func TestUpdateProcessesTime(t *testing.T) { //nolint: maintidx
 						{
 							proc: Process{
 								PID:        1,
-								Name:       "init",
+								Name:       testProcessInit,
 								CreateTime: t0,
 							},
-							cgroup: "not in docker",
+							cgroup: testNotInDocker,
 						},
 						{
 							proc: Process{
 								PID:        2,
-								Name:       "redis",
+								Name:       testProcessRedis,
 								CreateTime: t0,
 							},
 							container: FakeContainer{
 								FakeID:            "1",
-								FakeContainerName: "redis-name",
+								FakeContainerName: testContainerRedisName,
 							},
-							cgroup:       "containerID/1",
+							cgroup:       testContainerID1,
 							skipCRCGroup: true,
 						},
 						{
@@ -1397,15 +1428,15 @@ func TestUpdateProcessesTime(t *testing.T) { //nolint: maintidx
 					wantProcesseses: []Process{
 						{
 							PID:        1,
-							Name:       "init",
+							Name:       testProcessInit,
 							CreateTime: t0,
 						},
 						{
 							PID:           2,
-							Name:          "redis",
+							Name:          testProcessRedis,
 							CreateTime:    t0,
 							ContainerID:   "1",
-							ContainerName: "redis-name",
+							ContainerName: testContainerRedisName,
 						},
 						{
 							PID:           3,
@@ -1428,37 +1459,37 @@ func TestUpdateProcessesTime(t *testing.T) { //nolint: maintidx
 						{
 							proc: Process{
 								PID:        1,
-								Name:       "init",
+								Name:       testProcessInit,
 								CreateTime: t0,
 							},
-							cgroup: "not in docker",
+							cgroup: testNotInDocker,
 						},
 						{
 							proc: Process{
 								PID:        2,
-								Name:       "redis",
+								Name:       testProcessRedis,
 								CreateTime: t0,
 							},
 							container: FakeContainer{
 								FakeID:            "1",
-								FakeContainerName: "redis-name",
+								FakeContainerName: testContainerRedisName,
 							},
-							cgroup:        "containerID/1",
+							cgroup:        testContainerID1,
 							skipCRProcess: true,
 						},
 					},
 					wantProcesseses: []Process{
 						{
 							PID:        1,
-							Name:       "init",
+							Name:       testProcessInit,
 							CreateTime: t0,
 						},
 						{
 							PID:           2,
-							Name:          "redis",
+							Name:          testProcessRedis,
 							CreateTime:    t0,
 							ContainerID:   "1",
-							ContainerName: "redis-name",
+							ContainerName: testContainerRedisName,
 						},
 					},
 				},
@@ -1474,22 +1505,22 @@ func TestUpdateProcessesTime(t *testing.T) { //nolint: maintidx
 						{
 							proc: Process{
 								PID:        1,
-								Name:       "init",
+								Name:       testProcessInit,
 								CreateTime: t0,
 							},
-							cgroup: "not in docker",
+							cgroup: testNotInDocker,
 						},
 						{
 							proc: Process{
 								PID:        2,
-								Name:       "redis",
+								Name:       testProcessRedis,
 								CreateTime: t0,
 							},
 							container: FakeContainer{
 								FakeID:            "1",
-								FakeContainerName: "redis-name",
+								FakeContainerName: testContainerRedisName,
 							},
-							cgroup:        "containerID/1",
+							cgroup:        testContainerID1,
 							skipCRProcess: true,
 							skipCRCGroup:  true,
 							seemsCGroup:   true,
@@ -1498,7 +1529,7 @@ func TestUpdateProcessesTime(t *testing.T) { //nolint: maintidx
 					wantProcesseses: []Process{
 						{
 							PID:        1,
-							Name:       "init",
+							Name:       testProcessInit,
 							CreateTime: t0,
 						},
 						// Redis isn't present: the FromCGroup detect that it's a container but don't find which one
@@ -1509,7 +1540,7 @@ func TestUpdateProcessesTime(t *testing.T) { //nolint: maintidx
 					wantProcesseses: []Process{
 						{
 							PID:        1,
-							Name:       "init",
+							Name:       testProcessInit,
 							CreateTime: t0,
 						},
 						// Redis is still not present after 4 minutes.
@@ -1520,13 +1551,13 @@ func TestUpdateProcessesTime(t *testing.T) { //nolint: maintidx
 					wantProcesseses: []Process{
 						{
 							PID:        1,
-							Name:       "init",
+							Name:       testProcessInit,
 							CreateTime: t0,
 						},
 						// after 5 minutes, we assume that FromCGroup is wrong and it don't belong to a container.
 						{
 							PID:           2,
-							Name:          "redis",
+							Name:          testProcessRedis,
 							CreateTime:    t0,
 							ContainerID:   "",
 							ContainerName: "",
@@ -1545,30 +1576,30 @@ func TestUpdateProcessesTime(t *testing.T) { //nolint: maintidx
 						{
 							proc: Process{
 								PID:        1,
-								Name:       "init",
+								Name:       testProcessInit,
 								CreateTime: t0,
 							},
-							cgroup: "not in docker",
+							cgroup: testNotInDocker,
 						},
 						{
 							proc: Process{
 								PID:        2,
-								Name:       "redis",
+								Name:       testProcessRedis,
 								CreateTime: t0,
 							},
 							container: FakeContainer{
 								FakeID:            "1",
-								FakeContainerName: "redis-name",
+								FakeContainerName: testContainerRedisName,
 							},
-							cgroup: "containerID/1",
+							cgroup: testContainerID1,
 						},
 						{
 							proc: Process{
 								PID:        3,
-								Name:       "unknown container",
+								Name:       testUnknownContainer,
 								CreateTime: t0,
 							},
-							cgroup:      "containerID/2",
+							cgroup:      testContainerID2,
 							seemsCGroup: true,
 						},
 					},
@@ -1588,7 +1619,7 @@ func TestUpdateProcessesTime(t *testing.T) { //nolint: maintidx
 						// After just 20 seconds, init is present because the cgroup data don't match any container
 						{
 							PID:        1,
-							Name:       "init",
+							Name:       testProcessInit,
 							CreateTime: t0,
 						},
 						// Other are still absent, because based on cgroup we think they belong to a container
@@ -1602,20 +1633,20 @@ func TestUpdateProcessesTime(t *testing.T) { //nolint: maintidx
 					wantProcesseses: []Process{
 						{
 							PID:        1,
-							Name:       "init",
+							Name:       testProcessInit,
 							CreateTime: t0,
 						},
 						// after 5 minutes, we assume that the context deadline is in fact that Docker isn't running at all
 						{
 							PID:           2,
-							Name:          "redis",
+							Name:          testProcessRedis,
 							CreateTime:    t0,
 							ContainerID:   "",
 							ContainerName: "",
 						},
 						{
 							PID:           3,
-							Name:          "unknown container",
+							Name:          testUnknownContainer,
 							CreateTime:    t0,
 							ContainerID:   "",
 							ContainerName: "",
@@ -1634,30 +1665,30 @@ func TestUpdateProcessesTime(t *testing.T) { //nolint: maintidx
 						{
 							proc: Process{
 								PID:        1,
-								Name:       "init",
+								Name:       testProcessInit,
 								CreateTime: t0,
 							},
-							cgroup: "not in docker",
+							cgroup: testNotInDocker,
 						},
 						{
 							proc: Process{
 								PID:        2,
-								Name:       "redis",
+								Name:       testProcessRedis,
 								CreateTime: t0,
 							},
 							container: FakeContainer{
 								FakeID:            "1",
-								FakeContainerName: "redis-name",
+								FakeContainerName: testContainerRedisName,
 							},
-							cgroup: "containerID/1",
+							cgroup: testContainerID1,
 						},
 						{
 							proc: Process{
 								PID:        3,
-								Name:       "unknown container",
+								Name:       testUnknownContainer,
 								CreateTime: t0,
 							},
-							cgroup:      "containerID/2",
+							cgroup:      testContainerID2,
 							seemsCGroup: true,
 						},
 					},
@@ -1677,7 +1708,7 @@ func TestUpdateProcessesTime(t *testing.T) { //nolint: maintidx
 						// After just 20 seconds, init is present because the cgroup data don't match any container
 						{
 							PID:        1,
-							Name:       "init",
+							Name:       testProcessInit,
 							CreateTime: t0,
 						},
 						// Other are still absent, because based on cgroup we think they belong to a container
@@ -1691,20 +1722,20 @@ func TestUpdateProcessesTime(t *testing.T) { //nolint: maintidx
 					wantProcesseses: []Process{
 						{
 							PID:        1,
-							Name:       "init",
+							Name:       testProcessInit,
 							CreateTime: t0,
 						},
 						// after 1 minutes, we assume that this unknown error means that Docker isn't installed.
 						{
 							PID:           2,
-							Name:          "redis",
+							Name:          testProcessRedis,
 							CreateTime:    t0,
 							ContainerID:   "",
 							ContainerName: "",
 						},
 						{
 							PID:           3,
-							Name:          "unknown container",
+							Name:          testUnknownContainer,
 							CreateTime:    t0,
 							ContainerID:   "",
 							ContainerName: "",
@@ -1723,27 +1754,27 @@ func TestUpdateProcessesTime(t *testing.T) { //nolint: maintidx
 						{
 							proc: Process{
 								PID:        1,
-								Name:       "init",
+								Name:       testProcessInit,
 								CreateTime: t0,
 							},
-							cgroup: "not in docker",
+							cgroup: testNotInDocker,
 						},
 						{
 							proc: Process{
 								PID:        2,
 								PPID:       1,
-								Name:       "bash",
+								Name:       testProcessBash,
 								CreateTime: t0.Add(time.Millisecond),
 							},
-							cgroup: "not in docker",
+							cgroup: testNotInDocker,
 						},
 						{
 							proc: Process{
 								PID:        3,
-								Name:       "unknown container",
+								Name:       testUnknownContainer,
 								CreateTime: t0,
 							},
-							cgroup:      "containerID/2",
+							cgroup:      testContainerID2,
 							seemsCGroup: true,
 						},
 					},
@@ -1771,13 +1802,13 @@ func TestUpdateProcessesTime(t *testing.T) { //nolint: maintidx
 						// and runtime is not running.
 						{
 							PID:        1,
-							Name:       "init",
+							Name:       testProcessInit,
 							CreateTime: t0,
 						},
 						{
 							PID:        2,
 							PPID:       1,
-							Name:       "bash",
+							Name:       testProcessBash,
 							CreateTime: t0.Add(time.Millisecond),
 						},
 						// Other are still absent, because based on cgroup we think they belong to a container
@@ -1794,13 +1825,13 @@ func TestUpdateProcessesTime(t *testing.T) { //nolint: maintidx
 					wantProcesseses: []Process{
 						{
 							PID:        1,
-							Name:       "init",
+							Name:       testProcessInit,
 							CreateTime: t0,
 						},
 						{
 							PID:        2,
 							PPID:       1,
-							Name:       "bash",
+							Name:       testProcessBash,
 							CreateTime: t0.Add(time.Millisecond),
 						},
 						// Other are still absent, because we believe they belong to a container.
@@ -1817,18 +1848,18 @@ func TestUpdateProcessesTime(t *testing.T) { //nolint: maintidx
 					wantProcesseses: []Process{
 						{
 							PID:        1,
-							Name:       "init",
+							Name:       testProcessInit,
 							CreateTime: t0,
 						},
 						{
 							PID:        2,
 							PPID:       1,
-							Name:       "bash",
+							Name:       testProcessBash,
 							CreateTime: t0.Add(time.Millisecond),
 						},
 						{
 							PID:           3,
-							Name:          "unknown container",
+							Name:          testUnknownContainer,
 							CreateTime:    t0,
 							ContainerID:   "",
 							ContainerName: "",
@@ -1846,19 +1877,19 @@ func TestUpdateProcessesTime(t *testing.T) { //nolint: maintidx
 					wantProcesseses: []Process{
 						{
 							PID:        1,
-							Name:       "init",
+							Name:       testProcessInit,
 							CreateTime: t0,
 						},
 						{
 							PID:        2,
 							PPID:       1,
-							Name:       "bash",
+							Name:       testProcessBash,
 							CreateTime: t0.Add(time.Millisecond),
 						},
 						// Other are still absent, because we believe they belong to a container.
 						{
 							PID:           3,
-							Name:          "unknown container",
+							Name:          testUnknownContainer,
 							CreateTime:    t0,
 							ContainerID:   "",
 							ContainerName: "",
@@ -1875,10 +1906,10 @@ func TestUpdateProcessesTime(t *testing.T) { //nolint: maintidx
 							proc: Process{
 								PID:        20,
 								PPID:       1,
-								Name:       "bash",
+								Name:       testProcessBash,
 								CreateTime: t0.Add(7 * time.Minute),
 							},
-							cgroup: "not in docker",
+							cgroup: testNotInDocker,
 						},
 					},
 					fromCGroupErr: ErrContainerDoesNotExists,
@@ -1887,25 +1918,25 @@ func TestUpdateProcessesTime(t *testing.T) { //nolint: maintidx
 					wantProcesseses: []Process{
 						{
 							PID:        1,
-							Name:       "init",
+							Name:       testProcessInit,
 							CreateTime: t0,
 						},
 						{
 							PID:        2,
 							PPID:       1,
-							Name:       "bash",
+							Name:       testProcessBash,
 							CreateTime: t0.Add(time.Millisecond),
 						},
 						{
 							PID:        20,
 							PPID:       1,
-							Name:       "bash",
+							Name:       testProcessBash,
 							CreateTime: t0.Add(7 * time.Minute),
 						},
 						// Other are still absent, because we believe they belong to a container.
 						{
 							PID:           3,
-							Name:          "unknown container",
+							Name:          testUnknownContainer,
 							CreateTime:    t0,
 							ContainerID:   "",
 							ContainerName: "",
@@ -2077,10 +2108,10 @@ func Test_sortParentFirst(t *testing.T) {
 		{
 			name: "tree",
 			processes: []Process{
-				{PID: 1, PPID: 0, CreateTime: time.UnixMilli(ts0), Name: "init"},
-				{PID: 2, PPID: 0, CreateTime: time.UnixMilli(ts0), Name: "kthreadd"},
-				{PID: 3, PPID: 1, CreateTime: time.UnixMilli(ts0 + 2), Name: "child of init"},
-				{PID: 4, PPID: 1, CreateTime: time.UnixMilli(ts0 + 3), Name: "child of init"},
+				{PID: 1, PPID: 0, CreateTime: time.UnixMilli(ts0), Name: testProcessInit},
+				{PID: 2, PPID: 0, CreateTime: time.UnixMilli(ts0), Name: testNameKthreadd},
+				{PID: 3, PPID: 1, CreateTime: time.UnixMilli(ts0 + 2), Name: testChildOfInit},
+				{PID: 4, PPID: 1, CreateTime: time.UnixMilli(ts0 + 3), Name: testChildOfInit},
 				{PID: 5, PPID: 3, CreateTime: time.UnixMilli(ts0 + 4), Name: "grand-child of init"},
 				{PID: 10, PPID: 2, CreateTime: time.UnixMilli(ts0 + 5), Name: "child of kthread"},
 			},
@@ -2089,10 +2120,10 @@ func Test_sortParentFirst(t *testing.T) {
 		{
 			name: "tree-same-time-rnd-pid",
 			processes: []Process{
-				{PID: 1661, PPID: 0, CreateTime: time.UnixMilli(ts0), Name: "init"},
-				{PID: 5785, PPID: 0, CreateTime: time.UnixMilli(ts0), Name: "kthreadd"},
-				{PID: 12837, PPID: 1661, CreateTime: time.UnixMilli(ts0), Name: "child of init"},
-				{PID: 14195, PPID: 1661, CreateTime: time.UnixMilli(ts0), Name: "child of init"},
+				{PID: 1661, PPID: 0, CreateTime: time.UnixMilli(ts0), Name: testProcessInit},
+				{PID: 5785, PPID: 0, CreateTime: time.UnixMilli(ts0), Name: testNameKthreadd},
+				{PID: 12837, PPID: 1661, CreateTime: time.UnixMilli(ts0), Name: testChildOfInit},
+				{PID: 14195, PPID: 1661, CreateTime: time.UnixMilli(ts0), Name: testChildOfInit},
 				{PID: 3370, PPID: 12837, CreateTime: time.UnixMilli(ts0), Name: "grand-child of init"},
 				{PID: 5573, PPID: 5785, CreateTime: time.UnixMilli(ts0), Name: "child of kthread"},
 			},
@@ -2102,9 +2133,9 @@ func Test_sortParentFirst(t *testing.T) {
 			name: "partial-tree",
 			processes: []Process{
 				{PID: 700, PPID: 400, CreateTime: time.UnixMilli(ts0 + 4), Name: "grand-grand-child of init"},
-				{PID: 1, PPID: 0, CreateTime: time.UnixMilli(ts0), Name: "init"},
-				{PID: 2, PPID: 0, CreateTime: time.UnixMilli(ts0), Name: "kthreadd"},
-				{PID: 500, PPID: 1, CreateTime: time.UnixMilli(ts0 + 1), Name: "child of init"},
+				{PID: 1, PPID: 0, CreateTime: time.UnixMilli(ts0), Name: testProcessInit},
+				{PID: 2, PPID: 0, CreateTime: time.UnixMilli(ts0), Name: testNameKthreadd},
+				{PID: 500, PPID: 1, CreateTime: time.UnixMilli(ts0 + 1), Name: testChildOfInit},
 				// {PID: 400, PPID: 500, CreateTime: time.UnixMilli(ts0+2), Name: "grand-child of init, missing in PS"},
 				{PID: 300, PPID: 400, CreateTime: time.UnixMilli(ts0 + 3), Name: "grand-grand-child of init"},
 				{PID: 301, PPID: 300, CreateTime: time.UnixMilli(ts0), Name: "child of PID 300 with create-time BEFORE parent"},
@@ -2222,75 +2253,76 @@ func Test_sortParentFirst(t *testing.T) {
 	}
 }
 
-//nolint: gosmopolitan,gofmt,gofumpt,goimports
 func TestSortProcessesArbitrarily(t *testing.T) {
 	const (
 		gloutonPID = 7
 		memTotal   = 1024
 	)
 
+	local, _ := time.LoadLocation("Local")
+
 	processes := []Process{
 		{
 			PID:           8,
-			CreateTime:    time.Date(2024, time.July, 19, 10, 20, 0, 0, time.Local),
+			CreateTime:    time.Date(2024, time.July, 19, 10, 20, 0, 0, local),
 			MemoryRSS:     50,
 			CPUPercent:    2,
-			ContainerName: "C-1",
+			ContainerName: testContainerC1,
 		},
 		{
 			PID:           3,
-			CreateTime:    time.Date(2024, time.July, 19, 10, 21, 0, 0, time.Local),
+			CreateTime:    time.Date(2024, time.July, 19, 10, 21, 0, 0, local),
 			MemoryRSS:     20,
 			CPUPercent:    1,
 			ContainerName: "C-2",
 		},
 		{
 			PID:        1,
-			CreateTime: time.Date(2024, time.July, 19, 10, 20, 0, 0, time.Local),
+			CreateTime: time.Date(2024, time.July, 19, 10, 20, 0, 0, local),
 			MemoryRSS:  20,
 			CPUPercent: 5,
 		},
 		{
 			PID:           6,
-			CreateTime:    time.Date(2024, time.July, 19, 10, 22, 0, 0, time.Local),
+			CreateTime:    time.Date(2024, time.July, 19, 10, 22, 0, 0, local),
 			MemoryRSS:     100,
 			CPUPercent:    15,
-			ContainerName: "C-1",
+			ContainerName: testContainerC1,
 		},
 		{
 			PID:        9,
-			CreateTime: time.Date(2024, time.July, 19, 10, 21, 0, 0, time.Local),
+			CreateTime: time.Date(2024, time.July, 19, 10, 21, 0, 0, local),
 			MemoryRSS:  20,
 			CPUPercent: 50,
 		},
 		{
 			PID:        10,
-			CreateTime: time.Date(2024, time.July, 19, 10, 23, 0, 0, time.Local),
+			CreateTime: time.Date(2024, time.July, 19, 10, 23, 0, 0, local),
 			MemoryRSS:  50,
 			CPUPercent: 40,
 		},
 		{
 			PID:           4,
-			CreateTime:    time.Date(2024, time.July, 19, 10, 22, 0, 0, time.Local),
+			CreateTime:    time.Date(2024, time.July, 19, 10, 22, 0, 0, local),
 			MemoryRSS:     7,
 			CPUPercent:    5,
-			ContainerName: "C-1",
+			ContainerName: testContainerC1,
 		},
 		{
 			PID:        5,
-			CreateTime: time.Date(2024, time.July, 19, 10, 22, 0, 0, time.Local),
+			CreateTime: time.Date(2024, time.July, 19, 10, 22, 0, 0, local),
 			MemoryRSS:  20,
 			CPUPercent: 30,
 		},
 		{
 			PID:        2,
-			CreateTime: time.Date(2024, time.July, 19, 10, 21, 0, 0, time.Local),
+			CreateTime: time.Date(2024, time.July, 19, 10, 21, 0, 0, local),
 			MemoryRSS:  30,
 			CPUPercent: 5,
 		},
 		{
 			PID:        7, // Glouton
-			CreateTime: time.Date(2024, time.July, 19, 10, 23, 0, 0, time.Local),
+			CreateTime: time.Date(2024, time.July, 19, 10, 23, 0, 0, local),
 			MemoryRSS:  16,
 			CPUPercent: 6,
 		},

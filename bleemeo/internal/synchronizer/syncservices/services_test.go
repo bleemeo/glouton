@@ -26,6 +26,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+const (
+	testTagUUID           = "dedd669b-f139-4517-a410-4c6d3f66f85f"
+	testTagOne            = "tag-one"
+	testTagUser1          = "tag-user1"
+	testComposeProject    = "my_compose_project"
+	testTagComposeProject = "docker-compose-my-compose-project"
+)
+
 func Test_serviceHadSameTags(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -48,13 +56,13 @@ func Test_serviceHadSameTags(t *testing.T) {
 			name: "one-tag",
 			remoteTags: []bleemeoTypes.Tag{
 				{
-					ID:      "dedd669b-f139-4517-a410-4c6d3f66f85f",
-					Name:    "tag-one",
+					ID:      testTagUUID,
+					Name:    testTagOne,
 					TagType: bleemeo.TagType_CreatedByGlouton,
 				},
 			},
 			localServices: discovery.Service{
-				Tags: []string{"tag-one"},
+				Tags: []string{testTagOne},
 			},
 			want: true,
 		},
@@ -62,7 +70,7 @@ func Test_serviceHadSameTags(t *testing.T) {
 			name:       "missing-tag",
 			remoteTags: []bleemeoTypes.Tag{},
 			localServices: discovery.Service{
-				Tags: []string{"tag-one"},
+				Tags: []string{testTagOne},
 			},
 			want: false,
 		},
@@ -70,8 +78,8 @@ func Test_serviceHadSameTags(t *testing.T) {
 			name: "mismatch-tag",
 			remoteTags: []bleemeoTypes.Tag{
 				{
-					ID:      "dedd669b-f139-4517-a410-4c6d3f66f85f",
-					Name:    "tag-one",
+					ID:      testTagUUID,
+					Name:    testTagOne,
 					TagType: bleemeo.TagType_CreatedByGlouton,
 				},
 			},
@@ -84,13 +92,13 @@ func Test_serviceHadSameTags(t *testing.T) {
 			name: "not-glouton-tag",
 			remoteTags: []bleemeoTypes.Tag{
 				{
-					ID:      "dedd669b-f139-4517-a410-4c6d3f66f85f",
-					Name:    "tag-one",
+					ID:      testTagUUID,
+					Name:    testTagOne,
 					TagType: bleemeo.TagType_AutomaticAPI,
 				},
 			},
 			localServices: discovery.Service{
-				Tags: []string{"tag-one"},
+				Tags: []string{testTagOne},
 			},
 			want: false,
 		},
@@ -98,14 +106,14 @@ func Test_serviceHadSameTags(t *testing.T) {
 			name: "truncated-local-tag",
 			remoteTags: []bleemeoTypes.Tag{
 				{
-					ID:      "dedd669b-f139-4517-a410-4c6d3f66f85f",
-					Name:    "tag-one",
+					ID:      testTagUUID,
+					Name:    testTagOne,
 					TagType: bleemeo.TagType_CreatedByGlouton,
 				},
 			},
 			localServices: discovery.Service{
 				Tags: []string{
-					"tag-one",
+					testTagOne,
 					"tag-longer-than-100-character-are-ignored-since-bleemeo-api-dont-support-them---filler-to-reach-100-char",
 				},
 			},
@@ -141,13 +149,13 @@ func Test_getTagsFromLocal(t *testing.T) {
 			name: "custom-tag",
 			service: discovery.Service{
 				Tags: []string{
-					"tag-user1",
+					testTagUser1,
 				},
 				Applications: nil,
 			},
 			want: []bleemeoTypes.Tag{
 				{
-					Name:    "tag-user1",
+					Name:    testTagUser1,
 					TagType: bleemeo.TagType_CreatedByGlouton,
 				},
 			},
@@ -158,14 +166,14 @@ func Test_getTagsFromLocal(t *testing.T) {
 				Tags: []string{},
 				Applications: []discovery.Application{
 					{
-						Name: "my_compose_project",
+						Name: testComposeProject,
 						Type: discovery.ApplicationDockerCompose,
 					},
 				},
 			},
 			want: []bleemeoTypes.Tag{
 				{
-					Name:    "docker-compose-my-compose-project",
+					Name:    testTagComposeProject,
 					TagType: bleemeo.TagType_AutomaticGlouton,
 				},
 			},
@@ -174,22 +182,22 @@ func Test_getTagsFromLocal(t *testing.T) {
 			name: "both-tag",
 			service: discovery.Service{
 				Tags: []string{
-					"tag-user1",
+					testTagUser1,
 				},
 				Applications: []discovery.Application{
 					{
-						Name: "my_compose_project",
+						Name: testComposeProject,
 						Type: discovery.ApplicationDockerCompose,
 					},
 				},
 			},
 			want: []bleemeoTypes.Tag{
 				{
-					Name:    "tag-user1",
+					Name:    testTagUser1,
 					TagType: bleemeo.TagType_CreatedByGlouton,
 				},
 				{
-					Name:    "docker-compose-my-compose-project",
+					Name:    testTagComposeProject,
 					TagType: bleemeo.TagType_AutomaticGlouton,
 				},
 			},
@@ -198,22 +206,22 @@ func Test_getTagsFromLocal(t *testing.T) {
 			name: "same-tag",
 			service: discovery.Service{
 				Tags: []string{
-					"docker-compose-my-compose-project",
+					testTagComposeProject,
 				},
 				Applications: []discovery.Application{
 					{
-						Name: "my_compose_project",
+						Name: testComposeProject,
 						Type: discovery.ApplicationDockerCompose,
 					},
 				},
 			},
 			want: []bleemeoTypes.Tag{
 				{
-					Name:    "docker-compose-my-compose-project",
+					Name:    testTagComposeProject,
 					TagType: bleemeo.TagType_CreatedByGlouton,
 				},
 				{
-					Name:    "docker-compose-my-compose-project",
+					Name:    testTagComposeProject,
 					TagType: bleemeo.TagType_AutomaticGlouton,
 				},
 			},

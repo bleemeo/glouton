@@ -36,6 +36,18 @@ import (
 	"github.com/prometheus/prometheus/storage"
 )
 
+const (
+	metricSmartDeviceHealthOk     = "smart_device_health_ok"
+	metricSmartDeviceHealthStatus = "smart_device_health_status"
+	metricSmartDeviceExitStatus   = "smart_device_exit_status"
+	metricUpsdStatusFlags         = "upsd_status_flags"
+	metricUpsdBatteryStatus       = "upsd_battery_status"
+	statusOnLineBatteryOk         = "On line, battery ok"
+	statusUPSOverloaded           = "UPS is overloaded"
+	statusBatteryLow              = "Battery is low"
+	statusBatteryReplace          = "Battery should be replaced"
+)
+
 // miscAppender collects container metrics.
 type miscAppender struct {
 	containerRuntime crTypes.RuntimeInterface
@@ -203,11 +215,11 @@ func (ma miscAppenderMinute) CollectWithState(ctx context.Context, state registr
 	// Add SMART status and UPSD battery status metrics.
 	points = append(
 		points,
-		statusFromLastPoint(state.T0, ma.store, "smart_device_health_ok", map[string]string{types.LabelName: "smart_device_health_status"}, smartHealthStatus)...,
+		statusFromLastPoint(state.T0, ma.store, metricSmartDeviceHealthOk, map[string]string{types.LabelName: metricSmartDeviceHealthStatus}, smartHealthStatus)...,
 	)
 	points = append(
 		points,
-		statusFromLastPoint(state.T0, ma.store, "upsd_status_flags", map[string]string{types.LabelName: "upsd_battery_status"}, upsdBatteryStatus)...,
+		statusFromLastPoint(state.T0, ma.store, metricUpsdStatusFlags, map[string]string{types.LabelName: metricUpsdBatteryStatus}, upsdBatteryStatus)...,
 	)
 
 	err = model.SendPointsToAppender(points, app)
@@ -285,8 +297,8 @@ func statusFromLastPoint(
 	return newPoints
 }
 
-// smartHealthStatus returns the "smart_device_health_status" metric description from the last value
-// of the metric "smart_device_health_ok" and its labels.
+// smartHealthStatus returns the metricSmartDeviceHealthStatus metric description from the last value
+// of the metric metricSmartDeviceHealthOk and its labels.
 func smartHealthStatus(value float64, labels map[string]string) types.StatusDescription {
 	var status types.StatusDescription
 
@@ -314,8 +326,8 @@ func smartHealthStatus(value float64, labels map[string]string) types.StatusDesc
 	return status
 }
 
-// upsdBatteryStatus returns the "upsd_battery_status" metric description from the last value
-// of the metric "upsd_status_flags" and its labels.
+// upsdBatteryStatus returns the metricUpsdBatteryStatus metric description from the last value
+// of the metric metricUpsdStatusFlags and its labels.
 // It reports a critical status when:
 // - the UPS is overloaded
 // - the UPS is on battery
@@ -344,17 +356,17 @@ func upsdBatteryStatus(value float64, _ map[string]string) types.StatusDescripti
 	case replaceBattery:
 		status = types.StatusDescription{
 			CurrentStatus:     types.StatusCritical,
-			StatusDescription: "Battery should be replaced",
+			StatusDescription: statusBatteryReplace,
 		}
 	case lowBattery:
 		status = types.StatusDescription{
 			CurrentStatus:     types.StatusCritical,
-			StatusDescription: "Battery is low",
+			StatusDescription: statusBatteryLow,
 		}
 	case overloadedOutput:
 		status = types.StatusDescription{
 			CurrentStatus:     types.StatusCritical,
-			StatusDescription: "UPS is overloaded",
+			StatusDescription: statusUPSOverloaded,
 		}
 	case !onLine:
 		status = types.StatusDescription{
@@ -364,7 +376,7 @@ func upsdBatteryStatus(value float64, _ map[string]string) types.StatusDescripti
 	default:
 		status = types.StatusDescription{
 			CurrentStatus:     types.StatusOk,
-			StatusDescription: "On line, battery ok",
+			StatusDescription: statusOnLineBatteryOk,
 		}
 	}
 

@@ -36,6 +36,13 @@ import (
 	"github.com/prometheus/prometheus/storage"
 )
 
+const (
+	testNodeCPUSecondsTotal = "node_cpu_seconds_total"
+	testCPU                 = "cpu"
+	testIRQ                 = "irq"
+	testMode                = "mode"
+)
+
 var errNotImplemented = errors.New("not implemented")
 
 type mockAppendable struct {
@@ -132,9 +139,9 @@ func TestManager(t *testing.T) {
 						Value: 123,
 					},
 					Labels: map[string]string{
-						types.LabelName: "node_cpu_seconds_total",
-						"cpu":           "0",
-						"mode":          "irq",
+						types.LabelName: testNodeCPUSecondsTotal,
+						testCPU:         "0",
+						testMode:        testIRQ,
 					},
 				},
 				{
@@ -143,9 +150,9 @@ func TestManager(t *testing.T) {
 						Value: 321,
 					},
 					Labels: map[string]string{
-						types.LabelName: "node_cpu_seconds_total",
-						"cpu":           "2",
-						"mode":          "irq",
+						types.LabelName: testNodeCPUSecondsTotal,
+						testCPU:         "2",
+						testMode:        testIRQ,
 					},
 				},
 				{
@@ -154,9 +161,9 @@ func TestManager(t *testing.T) {
 						Value: 666,
 					},
 					Labels: map[string]string{
-						types.LabelName: "node_cpu_seconds_total",
-						"cpu":           "0",
-						"mode":          "user",
+						types.LabelName: testNodeCPUSecondsTotal,
+						testCPU:         "0",
+						testMode:        "user",
 					},
 				},
 			}),
@@ -168,8 +175,8 @@ func TestManager(t *testing.T) {
 						Value: 444,
 					},
 					Labels: map[string]string{
-						types.LabelName: "node_cpu_seconds_global",
-						"mode":          "irq",
+						types.LabelName: metricNodeCPUSecondsGlobal,
+						testMode:        testIRQ,
 					},
 				},
 				{
@@ -178,8 +185,8 @@ func TestManager(t *testing.T) {
 						Value: 666,
 					},
 					Labels: map[string]string{
-						types.LabelName: "node_cpu_seconds_global",
-						"mode":          "user",
+						types.LabelName: metricNodeCPUSecondsGlobal,
+						testMode:        "user",
 					},
 				},
 			},

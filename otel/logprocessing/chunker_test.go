@@ -49,7 +49,7 @@ func makeLogs(t *testing.T, res1RecordCount, res2RecordCount int, bodySizeFactor
 		resourceLogs := logs.ResourceLogs().AppendEmpty()
 
 		resource := resourceLogs.Resource()
-		resource.Attributes().PutStr("service.name", fmt.Sprintf("srv-%d", resIdx+1))
+		resource.Attributes().PutStr(testAttrServiceName, fmt.Sprintf("srv-%d", resIdx+1))
 
 		scopeLogs := resourceLogs.ScopeLogs().AppendEmpty()
 
@@ -71,7 +71,7 @@ func makeLogs(t *testing.T, res1RecordCount, res2RecordCount int, bodySizeFactor
 			logRec.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
 
 			attrs := logRec.Attributes()
-			attrs.PutStr("key", "value")
+			attrs.PutStr(testFieldKey, testFieldValue)
 		}
 	}
 
@@ -254,7 +254,7 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    12,
-						Attributes: map[string]any{"service.name": "srv-1"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv1},
 					},
 				},
 			},
@@ -264,7 +264,7 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    13,
-						Attributes: map[string]any{"service.name": "srv-1"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv1},
 					},
 				},
 			},
@@ -274,7 +274,7 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    12,
-						Attributes: map[string]any{"service.name": "srv-1"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv1},
 					},
 				},
 			},
@@ -284,7 +284,7 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    13,
-						Attributes: map[string]any{"service.name": "srv-1"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv1},
 					},
 				},
 			},
@@ -294,7 +294,7 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    12,
-						Attributes: map[string]any{"service.name": "srv-2"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv2},
 					},
 				},
 			},
@@ -304,7 +304,7 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    13,
-						Attributes: map[string]any{"service.name": "srv-2"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv2},
 					},
 				},
 			},
@@ -314,7 +314,7 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    12,
-						Attributes: map[string]any{"service.name": "srv-2"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv2},
 					},
 				},
 			},
@@ -324,7 +324,7 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    13,
-						Attributes: map[string]any{"service.name": "srv-2"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv2},
 					},
 				},
 			},
@@ -351,7 +351,7 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    1,
-						Attributes: map[string]any{"service.name": "srv-1"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv1},
 					},
 				},
 			},
@@ -361,7 +361,7 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    1,
-						Attributes: map[string]any{"service.name": "srv-2"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv2},
 					},
 				},
 			},
@@ -387,7 +387,7 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    1,
-						Attributes: map[string]any{"service.name": "srv-1"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv1},
 					},
 				},
 			},
@@ -397,7 +397,7 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    1,
-						Attributes: map[string]any{"service.name": "srv-2"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv2},
 					},
 				},
 			},
@@ -423,7 +423,7 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    12,
-						Attributes: map[string]any{"service.name": "srv-1"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv1},
 					},
 				},
 			},
@@ -433,11 +433,11 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    8,
-						Attributes: map[string]any{"service.name": "srv-1"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv1},
 					},
 					{
 						Records:    5,
-						Attributes: map[string]any{"service.name": "srv-2"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv2},
 					},
 				},
 			},
@@ -447,7 +447,7 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    12,
-						Attributes: map[string]any{"service.name": "srv-2"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv2},
 					},
 				},
 			},
@@ -457,7 +457,7 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    13,
-						Attributes: map[string]any{"service.name": "srv-2"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv2},
 					},
 				},
 			},
@@ -467,7 +467,7 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    12,
-						Attributes: map[string]any{"service.name": "srv-2"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv2},
 					},
 				},
 			},
@@ -477,7 +477,7 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    13,
-						Attributes: map[string]any{"service.name": "srv-2"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv2},
 					},
 				},
 			},
@@ -487,7 +487,7 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    12,
-						Attributes: map[string]any{"service.name": "srv-2"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv2},
 					},
 				},
 			},
@@ -497,7 +497,7 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    13,
-						Attributes: map[string]any{"service.name": "srv-2"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv2},
 					},
 				},
 			},
@@ -523,7 +523,7 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    12,
-						Attributes: map[string]any{"service.name": "srv-1"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv1},
 					},
 				},
 			},
@@ -533,7 +533,7 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    13,
-						Attributes: map[string]any{"service.name": "srv-1"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv1},
 					},
 				},
 			},
@@ -543,7 +543,7 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    12,
-						Attributes: map[string]any{"service.name": "srv-1"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv1},
 					},
 				},
 			},
@@ -553,7 +553,7 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    13,
-						Attributes: map[string]any{"service.name": "srv-1"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv1},
 					},
 				},
 			},
@@ -563,7 +563,7 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    12,
-						Attributes: map[string]any{"service.name": "srv-1"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv1},
 					},
 				},
 			},
@@ -573,7 +573,7 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    13,
-						Attributes: map[string]any{"service.name": "srv-1"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv1},
 					},
 				},
 			},
@@ -583,11 +583,11 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    5,
-						Attributes: map[string]any{"service.name": "srv-1"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv1},
 					},
 					{
 						Records:    7,
-						Attributes: map[string]any{"service.name": "srv-2"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv2},
 					},
 				},
 			},
@@ -597,7 +597,7 @@ func TestChunkerSpecialCases(t *testing.T) { //nolint: maintidx
 				ResourceSummaries: []resourceSummary{
 					{
 						Records:    13,
-						Attributes: map[string]any{"service.name": "srv-2"},
+						Attributes: map[string]any{testAttrServiceName: testServiceSrv2},
 					},
 				},
 			},

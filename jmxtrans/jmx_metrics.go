@@ -23,6 +23,26 @@ import (
 	"github.com/bleemeo/glouton/discovery"
 )
 
+const (
+	attrUsed               = "used"
+	attrCollectionCount    = "CollectionCount"
+	attrCollectionTime     = "CollectionTime"
+	attrCount              = "Count"
+	attrValue              = "Value"
+	attrCompletedTaskCount = "CompletedTaskCount"
+	attrPulls              = "Pulls"
+	attrRequestCount       = "requestCount"
+	attrProcessingTime     = "processingTime"
+	metricJvmGC            = "jvm_gc"
+	metricRequests         = "requests"
+	metricRequestTime      = "request_time"
+	typeNameName           = "name"
+	typeNameKeyspace       = "keyspace"
+	typeNameScope          = "scope"
+	mbeanCatalinaGlobalReq = "Catalina:type=GlobalRequestProcessor,name=*"
+	mbeanGCName            = "java.lang:type=GarbageCollector,name=*"
+)
+
 //nolint:gochecknoglobals
 var (
 	defaultGenericMetrics = []config.JmxMetric{
@@ -30,29 +50,29 @@ var (
 			Name:      "jvm_heap_used",
 			MBean:     "java.lang:type=Memory",
 			Attribute: "HeapMemoryUsage",
-			Path:      "used",
+			Path:      attrUsed,
 		},
 		{
 			Name:      "jvm_non_heap_used",
 			MBean:     "java.lang:type=Memory",
 			Attribute: "NonHeapMemoryUsage",
-			Path:      "used",
+			Path:      attrUsed,
 		},
 		{
-			Name:      "jvm_gc",
-			MBean:     "java.lang:type=GarbageCollector,name=*",
-			Attribute: "CollectionCount",
+			Name:      metricJvmGC,
+			MBean:     mbeanGCName,
+			Attribute: attrCollectionCount,
 			Derive:    true,
 			Sum:       true,
-			TypeNames: []string{"name"},
+			TypeNames: []string{typeNameName},
 		},
 		{
 			Name:      "jvm_gc_utilization",
-			MBean:     "java.lang:type=GarbageCollector,name=*",
-			Attribute: "CollectionTime",
+			MBean:     mbeanGCName,
+			Attribute: attrCollectionTime,
 			Derive:    true,
 			Sum:       true,
-			TypeNames: []string{"name"},
+			TypeNames: []string{typeNameName},
 			Scale:     0.1, // time is in ms/s. Convert in %
 		},
 	}
@@ -62,64 +82,64 @@ var (
 			{
 				Name:      "read_requests_sum",
 				MBean:     "org.apache.cassandra.metrics:type=ClientRequest,scope=Read,name=Latency",
-				Attribute: "Count",
+				Attribute: attrCount,
 				Derive:    true,
 			},
 			{
 				Name:      "read_time_average",
 				MBean:     "org.apache.cassandra.metrics:type=ClientRequest,scope=Read,name=TotalLatency",
-				Attribute: "Count",
+				Attribute: attrCount,
 				Scale:     0.000001, // convert from microsecond to second
 				Derive:    true,
 			},
 			{
 				Name:      "write_requests_sum",
 				MBean:     "org.apache.cassandra.metrics:type=ClientRequest,scope=Write,name=Latency",
-				Attribute: "Count",
+				Attribute: attrCount,
 				Derive:    true,
 			},
 			{
 				Name:      "write_time_average",
 				MBean:     "org.apache.cassandra.metrics:type=ClientRequest,scope=Write,name=TotalLatency",
-				Attribute: "Count",
+				Attribute: attrCount,
 				Scale:     0.000001, // convert from microsecond to second
 				Derive:    true,
 			},
 			{
 				Name:      "bloom_filter_false_ratio_sum",
 				MBean:     "org.apache.cassandra.metrics:type=Table,name=BloomFilterFalseRatio",
-				Attribute: "Value",
+				Attribute: attrValue,
 				Scale:     100, // convert from ratio (0 to 1) to percent
 			},
 			{
 				Name:      "sstable_sum",
 				MBean:     "org.apache.cassandra.metrics:type=Table,name=LiveSSTableCount",
-				Attribute: "Value",
+				Attribute: attrValue,
 			},
 		},
 		discovery.BitBucketService: {
 			{
 				Name:      "events",
 				MBean:     "com.atlassian.bitbucket.thread-pools:name=EventThreadPool",
-				Attribute: "CompletedTaskCount",
+				Attribute: attrCompletedTaskCount,
 				Derive:    true,
 			},
 			{
 				Name:      "io_tasks",
 				MBean:     "com.atlassian.bitbucket.thread-pools:name=IoPumpThreadPool",
-				Attribute: "CompletedTaskCount",
+				Attribute: attrCompletedTaskCount,
 				Derive:    true,
 			},
 			{
 				Name:      "tasks",
 				MBean:     "com.atlassian.bitbucket.thread-pools:name=ScheduledThreadPool",
-				Attribute: "CompletedTaskCount",
+				Attribute: attrCompletedTaskCount,
 				Derive:    true,
 			},
 			{
 				Name:      "pulls",
 				MBean:     "com.atlassian.bitbucket:name=ScmStatistics",
-				Attribute: "Pulls",
+				Attribute: attrPulls,
 				Derive:    true,
 			},
 			{
@@ -150,39 +170,39 @@ var (
 				Derive:    true,
 			},
 			{
-				Name:      "requests",
-				MBean:     "Catalina:type=GlobalRequestProcessor,name=*",
-				Attribute: "requestCount",
-				TypeNames: []string{"name"},
+				Name:      metricRequests,
+				MBean:     mbeanCatalinaGlobalReq,
+				Attribute: attrRequestCount,
+				TypeNames: []string{typeNameName},
 				Derive:    true,
 				Sum:       true,
 			},
 			{
-				Name:      "request_time",
-				MBean:     "Catalina:type=GlobalRequestProcessor,name=*",
-				Attribute: "processingTime",
-				TypeNames: []string{"name"},
+				Name:      metricRequestTime,
+				MBean:     mbeanCatalinaGlobalReq,
+				Attribute: attrProcessingTime,
+				TypeNames: []string{typeNameName},
 				Derive:    true,
 				Sum:       true,
-				Ratio:     "requests",
+				Ratio:     metricRequests,
 				Scale:     0.001, // convert from millisecond to second
 			},
 			{
-				Name:      "requests",
+				Name:      metricRequests,
 				MBean:     "Tomcat:type=GlobalRequestProcessor,name=*",
-				Attribute: "requestCount",
-				TypeNames: []string{"name"},
+				Attribute: attrRequestCount,
+				TypeNames: []string{typeNameName},
 				Derive:    true,
 				Sum:       true,
 			},
 			{
-				Name:      "request_time",
+				Name:      metricRequestTime,
 				MBean:     "Tomcat:type=GlobalRequestProcessor,name=*",
-				Attribute: "processingTime",
-				TypeNames: []string{"name"},
+				Attribute: attrProcessingTime,
+				TypeNames: []string{typeNameName},
 				Derive:    true,
 				Sum:       true,
-				Ratio:     "requests",
+				Ratio:     metricRequests,
 				Scale:     0.001, // convert from millisecond to second
 			},
 		},
@@ -215,41 +235,41 @@ var (
 				Attribute: "ErrorQueueSize",
 			},
 			{
-				Name:      "requests",
+				Name:      metricRequests,
 				MBean:     "Standalone:type=GlobalRequestProcessor,name=*",
-				Attribute: "requestCount",
-				TypeNames: []string{"name"},
+				Attribute: attrRequestCount,
+				TypeNames: []string{typeNameName},
 				Derive:    true,
 				Sum:       true,
 			},
 			{
-				Name:      "request_time",
+				Name:      metricRequestTime,
 				MBean:     "Standalone:type=GlobalRequestProcessor,name=*",
-				Attribute: "processingTime",
-				TypeNames: []string{"name"},
+				Attribute: attrProcessingTime,
+				TypeNames: []string{typeNameName},
 				Derive:    true,
 				Sum:       true,
-				Ratio:     "requests",
+				Ratio:     metricRequests,
 				Scale:     0.001, // convert from millisecond to second
 			},
 		},
 		discovery.JIRAService: {
 			{
-				Name:      "requests",
-				MBean:     "Catalina:type=GlobalRequestProcessor,name=*",
-				Attribute: "requestCount",
-				TypeNames: []string{"name"},
+				Name:      metricRequests,
+				MBean:     mbeanCatalinaGlobalReq,
+				Attribute: attrRequestCount,
+				TypeNames: []string{typeNameName},
 				Derive:    true,
 				Sum:       true,
 			},
 			{
-				Name:      "request_time",
-				MBean:     "Catalina:type=GlobalRequestProcessor,name=*",
-				Attribute: "processingTime",
-				TypeNames: []string{"name"},
+				Name:      metricRequestTime,
+				MBean:     mbeanCatalinaGlobalReq,
+				Attribute: attrProcessingTime,
+				TypeNames: []string{typeNameName},
 				Derive:    true,
 				Sum:       true,
-				Ratio:     "requests",
+				Ratio:     metricRequests,
 				Scale:     0.001, // convert from millisecond to second
 			},
 		},
@@ -257,18 +277,18 @@ var (
 			{
 				Name:      "topics_count",
 				MBean:     "kafka.controller:type=KafkaController,name=GlobalTopicCount",
-				Attribute: "Value",
+				Attribute: attrValue,
 			},
 			{
 				Name:      "produce_requests_sum",
 				MBean:     "kafka.server:type=BrokerTopicMetrics,name=TotalProduceRequestsPerSec",
-				Attribute: "Count",
+				Attribute: attrCount,
 				Derive:    true,
 			},
 			{
 				Name:      "fetch_requests_sum",
 				MBean:     "kafka.server:type=BrokerTopicMetrics,name=TotalFetchRequestsPerSec",
-				Attribute: "Count",
+				Attribute: attrCount,
 				Derive:    true,
 			},
 			{
@@ -290,44 +310,44 @@ var (
 		{
 			Name:      "bloom_filter_false_ratio",
 			MBean:     "org.apache.cassandra.metrics:type=Table,keyspace={keyspace},scope={table},name=BloomFilterFalseRatio",
-			Attribute: "Value",
-			TypeNames: []string{"keyspace", "scope"},
+			Attribute: attrValue,
+			TypeNames: []string{typeNameKeyspace, typeNameScope},
 			Scale:     100,
 		},
 		{
 			Name:      "sstable",
 			MBean:     "org.apache.cassandra.metrics:type=Table,keyspace={keyspace},scope={table},name=LiveSSTableCount",
-			Attribute: "Value",
-			TypeNames: []string{"keyspace", "scope"},
+			Attribute: attrValue,
+			TypeNames: []string{typeNameKeyspace, typeNameScope},
 		},
 		{
 			Name:      "read_time",
 			MBean:     "org.apache.cassandra.metrics:type=Table,keyspace={keyspace},scope={table},name=ReadTotalLatency",
-			Attribute: "Count",
+			Attribute: attrCount,
 			Scale:     0.000001, // convert from microsecond to second
-			TypeNames: []string{"keyspace", "scope"},
+			TypeNames: []string{typeNameKeyspace, typeNameScope},
 			Derive:    true,
 		},
 		{
 			Name:      "read_requests",
 			MBean:     "org.apache.cassandra.metrics:type=Table,keyspace={keyspace},scope={table},name=ReadLatency",
-			Attribute: "Count",
-			TypeNames: []string{"keyspace", "scope"},
+			Attribute: attrCount,
+			TypeNames: []string{typeNameKeyspace, typeNameScope},
 			Derive:    true,
 		},
 		{
 			Name:      "write_time",
 			MBean:     "org.apache.cassandra.metrics:type=Table,keyspace={keyspace},scope={table},name=WriteTotalLatency",
-			Attribute: "Count",
+			Attribute: attrCount,
 			Scale:     0.000001, // convert from microsecond to second
-			TypeNames: []string{"keyspace", "scope"},
+			TypeNames: []string{typeNameKeyspace, typeNameScope},
 			Derive:    true,
 		},
 		{
 			Name:      "write_requests",
 			MBean:     "org.apache.cassandra.metrics:type=Table,keyspace={keyspace},scope={table},name=WriteLatency",
-			Attribute: "Count",
-			TypeNames: []string{"keyspace", "scope"},
+			Attribute: attrCount,
+			TypeNames: []string{typeNameKeyspace, typeNameScope},
 			Derive:    true,
 		},
 	}
@@ -336,14 +356,14 @@ var (
 		{
 			Name:      "produce_requests",
 			MBean:     "kafka.server:type=BrokerTopicMetrics,name=TotalProduceRequestsPerSec,topic={topic}",
-			Attribute: "Count",
+			Attribute: attrCount,
 			TypeNames: []string{"topic"},
 			Derive:    true,
 		},
 		{
 			Name:      "fetch_requests",
 			MBean:     "kafka.server:type=BrokerTopicMetrics,name=TotalFetchRequestsPerSec,topic={topic}",
-			Attribute: "Count",
+			Attribute: attrCount,
 			TypeNames: []string{"topic"},
 			Derive:    true,
 		},
@@ -374,7 +394,7 @@ func GetJMXMetrics(service discovery.Service) []config.JmxMetric {
 			part := strings.Split(name, ".")
 			if len(part) == 2 {
 				replacer := strings.NewReplacer(
-					"{keyspace}", part[0],
+					"{"+typeNameKeyspace+"}", part[0],
 					"{table}", part[1],
 				)
 

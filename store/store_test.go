@@ -30,6 +30,17 @@ import (
 	"github.com/prometheus/prometheus/model/value"
 )
 
+const (
+	testCPUUsed   = "cpu_used"
+	testDiskUsed  = "disk_used"
+	testItemHome  = "/home"
+	testItemSrv   = "/srv"
+	testLabelItem = "item"
+	testMetric1   = "metric1"
+	testMetric2   = "metric2"
+	testMetric3   = "metric3"
+)
+
 var timeComparer = cmp.Comparer(func(x, y time.Time) bool { //nolint:gochecknoglobals
 	return x.Truncate(time.Millisecond).Equal(y.Truncate(time.Millisecond))
 })
@@ -53,51 +64,51 @@ func TestLabelsMatchNotExact(t *testing.T) {
 	}{
 		{
 			map[string]string{
-				types.LabelName: "cpu_used",
+				types.LabelName: testCPUUsed,
 			},
 			map[string]string{
-				types.LabelName: "cpu_used",
-			},
-			true,
-		},
-		{
-			map[string]string{
-				types.LabelName: "disk_used",
-				"item":          "/home",
-			},
-			map[string]string{
-				types.LabelName: "disk_used",
+				types.LabelName: testCPUUsed,
 			},
 			true,
 		},
 		{
 			map[string]string{
-				types.LabelName: "disk_used",
-				"item":          "/home",
+				types.LabelName: testDiskUsed,
+				testLabelItem:   testItemHome,
 			},
 			map[string]string{
-				types.LabelName: "cpu_used",
+				types.LabelName: testDiskUsed,
+			},
+			true,
+		},
+		{
+			map[string]string{
+				types.LabelName: testDiskUsed,
+				testLabelItem:   testItemHome,
+			},
+			map[string]string{
+				types.LabelName: testCPUUsed,
 			},
 			false,
 		},
 		{
 			map[string]string{
-				types.LabelName: "disk_used",
-				"item":          "/home",
+				types.LabelName: testDiskUsed,
+				testLabelItem:   testItemHome,
 			},
 			map[string]string{
-				types.LabelName: "disk_used",
-				"item":          "/",
+				types.LabelName: testDiskUsed,
+				testLabelItem:   "/",
 			},
 			false,
 		},
 		{
 			map[string]string{
-				types.LabelName: "disk_used",
-				"item":          "/home",
+				types.LabelName: testDiskUsed,
+				testLabelItem:   testItemHome,
 			},
 			map[string]string{
-				types.LabelName: "disk_used",
+				types.LabelName: testDiskUsed,
 				"extra":         "label",
 			},
 			false,
@@ -119,63 +130,63 @@ func TestLabelsMatchExact(t *testing.T) {
 	}{
 		{
 			map[string]string{
-				types.LabelName: "cpu_used",
+				types.LabelName: testCPUUsed,
 			},
 			map[string]string{
-				types.LabelName: "cpu_used",
-			},
-			true,
-		},
-		{
-			map[string]string{
-				types.LabelName: "disk_used",
-				"item":          "/home",
-			},
-			map[string]string{
-				types.LabelName: "disk_used",
-			},
-			false,
-		},
-		{
-			map[string]string{
-				types.LabelName: "disk_used",
-				"item":          "/home",
-			},
-			map[string]string{
-				types.LabelName: "cpu_used",
-			},
-			false,
-		},
-		{
-			map[string]string{
-				types.LabelName: "disk_used",
-				"item":          "/home",
-			},
-			map[string]string{
-				types.LabelName: "disk_used",
-				"item":          "/",
-			},
-			false,
-		},
-		{
-			map[string]string{
-				types.LabelName: "disk_used",
-				"item":          "/home",
-			},
-			map[string]string{
-				types.LabelName: "disk_used",
-				"item":          "/home",
+				types.LabelName: testCPUUsed,
 			},
 			true,
 		},
 		{
 			map[string]string{
-				types.LabelName: "disk_used",
-				"item":          "/home",
+				types.LabelName: testDiskUsed,
+				testLabelItem:   testItemHome,
 			},
 			map[string]string{
-				types.LabelName: "disk_used",
-				"item":          "/home",
+				types.LabelName: testDiskUsed,
+			},
+			false,
+		},
+		{
+			map[string]string{
+				types.LabelName: testDiskUsed,
+				testLabelItem:   testItemHome,
+			},
+			map[string]string{
+				types.LabelName: testCPUUsed,
+			},
+			false,
+		},
+		{
+			map[string]string{
+				types.LabelName: testDiskUsed,
+				testLabelItem:   testItemHome,
+			},
+			map[string]string{
+				types.LabelName: testDiskUsed,
+				testLabelItem:   "/",
+			},
+			false,
+		},
+		{
+			map[string]string{
+				types.LabelName: testDiskUsed,
+				testLabelItem:   testItemHome,
+			},
+			map[string]string{
+				types.LabelName: testDiskUsed,
+				testLabelItem:   testItemHome,
+			},
+			true,
+		},
+		{
+			map[string]string{
+				types.LabelName: testDiskUsed,
+				testLabelItem:   testItemHome,
+			},
+			map[string]string{
+				types.LabelName: testDiskUsed,
+				testLabelItem:   testItemHome,
 				"extra":         "label",
 			},
 			false,
@@ -217,15 +228,15 @@ func TestMetricsSimple(t *testing.T) {
 
 func TestMetricsMultiple(t *testing.T) {
 	labels1 := map[string]string{
-		types.LabelName: "cpu_used",
+		types.LabelName: testCPUUsed,
 	}
 	labels2 := map[string]string{
-		types.LabelName: "disk_used",
-		"item":          "/home",
+		types.LabelName: testDiskUsed,
+		testLabelItem:   testItemHome,
 	}
 	labels3 := map[string]string{
-		types.LabelName: "disk_used",
-		"item":          "/srv",
+		types.LabelName: testDiskUsed,
+		testLabelItem:   testItemSrv,
 		"fstype":        "ext4",
 	}
 	db := New("test store", time.Hour, time.Hour)
@@ -246,7 +257,7 @@ func TestMetricsMultiple(t *testing.T) {
 		t.Errorf("metrics[0].Labels() == %v, want %v", metrics[0].Labels(), labels1)
 	}
 
-	metrics, err = db.Metrics(map[string]string{types.LabelName: "disk_used"})
+	metrics, err = db.Metrics(map[string]string{types.LabelName: testDiskUsed})
 	if err != nil {
 		t.Error(err)
 	}
@@ -256,12 +267,12 @@ func TestMetricsMultiple(t *testing.T) {
 	}
 
 	for _, m := range metrics {
-		if m.Labels()["item"] != "/home" && m.Labels()["item"] != "/srv" {
-			t.Errorf("m.Labels()[item] == %v, want %v or %v", m.Labels()["item"], "/home", "/srv")
+		if m.Labels()[testLabelItem] != testItemHome && m.Labels()[testLabelItem] != testItemSrv {
+			t.Errorf("m.Labels()[item] == %v, want %v or %v", m.Labels()[testLabelItem], testItemHome, testItemSrv)
 		}
 	}
 
-	metrics, err = db.Metrics(map[string]string{types.LabelName: "disk_used", "item": "/srv"})
+	metrics, err = db.Metrics(map[string]string{types.LabelName: testDiskUsed, testLabelItem: testItemSrv})
 	if err != nil {
 		t.Error(err)
 	}
@@ -277,7 +288,7 @@ func TestMetricsMultiple(t *testing.T) {
 
 func TestPoints(t *testing.T) {
 	labels := map[string]string{
-		types.LabelName: "cpu_used",
+		types.LabelName: testCPUUsed,
 	}
 	db := New("test store", time.Hour, time.Hour)
 	m := db.metricGetOrCreate(labels)
@@ -595,13 +606,13 @@ func TestStore_run(t *testing.T) {
 			pushPoints: []types.MetricPoint{
 				{
 					Point:  types.Point{Time: t0, Value: 5},
-					Labels: map[string]string{types.LabelName: "metric1"},
+					Labels: map[string]string{types.LabelName: testMetric1},
 				},
 			},
 			now: t0,
 			want: []metricWant{
 				{
-					labels: map[string]string{types.LabelName: "metric1"},
+					labels: map[string]string{types.LabelName: testMetric1},
 					points: []types.Point{{Time: t0, Value: 5}},
 				},
 			},
@@ -610,25 +621,25 @@ func TestStore_run(t *testing.T) {
 			pushPoints: []types.MetricPoint{
 				{
 					Point:  types.Point{Time: t0, Value: 5},
-					Labels: map[string]string{types.LabelName: "metric2"},
+					Labels: map[string]string{types.LabelName: testMetric2},
 				},
 				{
 					Point:  types.Point{Time: t0.Add(time.Hour), Value: 6},
-					Labels: map[string]string{types.LabelName: "metric2"},
+					Labels: map[string]string{types.LabelName: testMetric2},
 				},
 				{
 					Point:  types.Point{Time: t0.Add(2 * time.Hour), Value: 7},
-					Labels: map[string]string{types.LabelName: "metric2"},
+					Labels: map[string]string{types.LabelName: testMetric2},
 				},
 			},
 			now: t0.Add(3 * time.Hour),
 			want: []metricWant{
 				{
-					labels: map[string]string{types.LabelName: "metric1"},
+					labels: map[string]string{types.LabelName: testMetric1},
 					points: []types.Point{{Time: t0, Value: 5}},
 				},
 				{
-					labels: map[string]string{types.LabelName: "metric2"},
+					labels: map[string]string{types.LabelName: testMetric2},
 					points: []types.Point{
 						{Time: t0, Value: 5},
 						{Time: t0.Add(time.Hour), Value: 6},
@@ -641,32 +652,32 @@ func TestStore_run(t *testing.T) {
 			pushPoints: []types.MetricPoint{
 				{
 					Point:  types.Point{Time: t0.Add(20 * time.Hour), Value: 5},
-					Labels: map[string]string{types.LabelName: "metric3"},
+					Labels: map[string]string{types.LabelName: testMetric3},
 				},
 				{
 					Point:  types.Point{Time: t0.Add(21 * time.Hour), Value: 6},
-					Labels: map[string]string{types.LabelName: "metric3"},
+					Labels: map[string]string{types.LabelName: testMetric3},
 				},
 				{
 					Point:  types.Point{Time: t0.Add(22 * time.Hour), Value: 7},
-					Labels: map[string]string{types.LabelName: "metric3"},
+					Labels: map[string]string{types.LabelName: testMetric3},
 				},
 			},
 			now: t0.Add(24 * time.Hour),
 			want: []metricWant{
 				{
-					labels: map[string]string{types.LabelName: "metric1"},
+					labels: map[string]string{types.LabelName: testMetric1},
 					points: []types.Point{},
 				},
 				{
-					labels: map[string]string{types.LabelName: "metric2"},
+					labels: map[string]string{types.LabelName: testMetric2},
 					points: []types.Point{
 						{Time: t0.Add(time.Hour), Value: 6},
 						{Time: t0.Add(2 * time.Hour), Value: 7},
 					},
 				},
 				{
-					labels: map[string]string{types.LabelName: "metric3"},
+					labels: map[string]string{types.LabelName: testMetric3},
 					points: []types.Point{
 						{Time: t0.Add(20 * time.Hour), Value: 5},
 						{Time: t0.Add(21 * time.Hour), Value: 6},
@@ -679,34 +690,34 @@ func TestStore_run(t *testing.T) {
 			pushPoints: []types.MetricPoint{
 				{
 					Point:  types.Point{Time: t0.Add(25 * time.Hour), Value: 50},
-					Labels: map[string]string{types.LabelName: "metric1"},
+					Labels: map[string]string{types.LabelName: testMetric1},
 				},
 				{
 					Point:  types.Point{Time: t0.Add(25 * time.Hour), Value: 50},
-					Labels: map[string]string{types.LabelName: "metric2"},
+					Labels: map[string]string{types.LabelName: testMetric2},
 				},
 				{
 					Point:  types.Point{Time: t0.Add(25 * time.Hour), Value: 50},
-					Labels: map[string]string{types.LabelName: "metric3"},
+					Labels: map[string]string{types.LabelName: testMetric3},
 				},
 			},
 			now: t0.Add(25 * time.Hour),
 			want: []metricWant{
 				{
-					labels: map[string]string{types.LabelName: "metric1"},
+					labels: map[string]string{types.LabelName: testMetric1},
 					points: []types.Point{
 						{Time: t0.Add(25 * time.Hour), Value: 50},
 					},
 				},
 				{
-					labels: map[string]string{types.LabelName: "metric2"},
+					labels: map[string]string{types.LabelName: testMetric2},
 					points: []types.Point{
 						{Time: t0.Add(2 * time.Hour), Value: 7},
 						{Time: t0.Add(25 * time.Hour), Value: 50},
 					},
 				},
 				{
-					labels: map[string]string{types.LabelName: "metric3"},
+					labels: map[string]string{types.LabelName: testMetric3},
 					points: []types.Point{
 						{Time: t0.Add(20 * time.Hour), Value: 5},
 						{Time: t0.Add(21 * time.Hour), Value: 6},
@@ -725,13 +736,13 @@ func TestStore_run(t *testing.T) {
 			pushPoints: []types.MetricPoint{
 				{
 					Point:  types.Point{Time: t0.Add(51 * time.Hour), Value: 5},
-					Labels: map[string]string{types.LabelName: "metric1"},
+					Labels: map[string]string{types.LabelName: testMetric1},
 				},
 			},
 			now: t0.Add(51 * time.Hour),
 			want: []metricWant{
 				{
-					labels: map[string]string{types.LabelName: "metric1"},
+					labels: map[string]string{types.LabelName: testMetric1},
 					points: []types.Point{{Time: t0.Add(51 * time.Hour), Value: 5}},
 				},
 			},
@@ -740,7 +751,7 @@ func TestStore_run(t *testing.T) {
 			pushPoints: []types.MetricPoint{
 				{
 					Point:  types.Point{Time: t0.Add(51 * time.Hour).Add(time.Second), Value: math.Float64frombits(value.StaleNaN)},
-					Labels: map[string]string{types.LabelName: "metric1"},
+					Labels: map[string]string{types.LabelName: testMetric1},
 				},
 			},
 			now:  t0.Add(51 * time.Hour).Add(time.Second),

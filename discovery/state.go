@@ -83,9 +83,9 @@ func (o oldService) toService(instance string) (srv Service, err error) {
 	listenAddresses := make([]facts.ListenAddress, 0, len(o.NetStatPorts))
 
 	for k, v := range o.NetStatPorts {
-		if k == "unix" {
+		if k == unixProtocol {
 			listenAddresses = append(listenAddresses, facts.ListenAddress{
-				NetworkFamily: "unix",
+				NetworkFamily: unixProtocol,
 				Address:       v,
 			})
 		} else {

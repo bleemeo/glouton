@@ -32,6 +32,15 @@ import (
 	psutilNet "github.com/shirou/gopsutil/v4/net"
 )
 
+const (
+	networkTCP        = "tcp"
+	networkUDP        = "udp"
+	networkUnix       = "unix"
+	listenState       = "LISTEN"
+	addrAllInterfaces = "0.0.0.0"
+	addrLocalhost     = "127.0.0.1"
+)
+
 // NetstatProvider provide netstat information from both a file (output of netstat command) and using gopsutil
 //
 // The file is useful since gopsutil will be run with current privilege which are unlikely to be root.
@@ -74,7 +83,7 @@ func (np NetstatProvider) mergeNetstats(netstat map[int][]ListenAddress, dynamic
 			continue
 		}
 
-		if c.Status != "LISTEN" {
+		if c.Status != listenState {
 			continue
 		}
 
@@ -84,9 +93,9 @@ func (np NetstatProvider) mergeNetstats(netstat map[int][]ListenAddress, dynamic
 
 		switch c.Type {
 		case syscall.SOCK_STREAM:
-			protocol = "tcp"
+			protocol = networkTCP
 		case syscall.SOCK_DGRAM:
-			protocol = "udp"
+			protocol = networkUDP
 		default:
 			continue
 		}
@@ -139,7 +148,7 @@ func (l ListenAddress) Network() string {
 }
 
 func (l ListenAddress) String() string {
-	if l.NetworkFamily == "unix" {
+	if l.NetworkFamily == networkUnix {
 		return l.Address
 	}
 
@@ -206,14 +215,14 @@ func decodeNetstatFile(data string) map[int][]ListenAddress {
 func addAddress(addresses []ListenAddress, newAddr ListenAddress) []ListenAddress {
 	duplicate := false
 
-	if newAddr.NetworkFamily != "unix" {
-		if newAddr.NetworkFamily == "tcp6" || newAddr.NetworkFamily == "udp6" {
+	if newAddr.NetworkFamily != networkUnix {
+		if newAddr.NetworkFamily == networkTCP+"6" || newAddr.NetworkFamily == networkUDP+"6" {
 			if newAddr.Address == "::" {
-				newAddr.Address = "0.0.0.0"
+				newAddr.Address = addrAllInterfaces
 			}
 
 			if newAddr.Address == "::1" {
-				newAddr.Address = "127.0.0.1"
+				newAddr.Address = addrLocalhost
 			}
 
 			if strings.Contains(newAddr.Address, ":") {

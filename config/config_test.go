@@ -32,6 +32,47 @@ import (
 	"github.com/prometheus/common/config"
 )
 
+// Test constants shared across config_test.go, loader_test.go and default_test.go.
+const (
+	testCPU                     = "cpu"
+	testMymodule                = "mymodule"
+	testRedis                   = "redis"
+	testTmpfs                   = "tmpfs"
+	testSda                     = "sda"
+	testERROR                   = "ERROR"
+	testMinLevelInfo            = "min_level_info"
+	testService1                = "service1"
+	testNagios                  = "nagios"
+	testPostgresql              = "postgresql"
+	testCPUUsed                 = "cpu_used"
+	testEth0                    = "eth0"
+	testOldPromTargetsConf      = "testdata/old-prometheus-targets.conf"
+	testTest1                   = "test1"
+	testLocalhostMetricsURL     = "http://localhost:9090/metrics"
+	testSimplePath              = "/simple"
+	testCassandra               = "cassandra"
+	testApache                  = "apache"
+	testMySQL                   = "mysql"
+	testGloutonCloudimageCreate = "/var/lib/glouton/cloudimage_creation"
+	testGloutonFactsYaml        = "/var/lib/glouton/facts.yaml"
+	testGloutonNetstatOut       = "/var/lib/glouton/netstat.out"
+	testGloutonStateDir         = "/var/lib/glouton"
+	testGloutonStateJSON        = "/var/lib/glouton/state.json"
+	testGloutonStateCacheJSON   = "/var/lib/glouton/state.cache.json"
+	testGloutonStateReset       = "/var/lib/glouton/state.reset"
+	testGloutonUpgrade          = "/var/lib/glouton/upgrade"
+	testGloutonAutoUpgrade      = "/var/lib/glouton/auto_upgrade"
+	testInDump                  = "in-dump"
+	testNotInDump               = "not-in-dump"
+	testNew                     = "new"
+	testOld                     = "old"
+	testLocalhostPort           = "localhost:9090"
+	testOldPort                 = "old:9090"
+	testNginx                   = "nginx"
+	testInstance                = "instance"
+	testRegex                   = "regex"
+)
+
 func compareConfig(expected, got Config, opts ...cmp.Option) string {
 	ignoreUnexported := cmpopts.IgnoreUnexported(bbConf.Module{}.HTTP.HTTPClientConfig.ProxyConfig)
 	opts = append(opts, ignoreUnexported)
@@ -44,12 +85,12 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 	expectedConfig := Config{
 		Agent: Agent{
 			CloudImageCreationFile: "cloudimage_creation",
-			FactsFile:              "facts.yaml",
-			InstallationFormat:     "manual",
+			FactsFile:              DefaultFactsFile,
+			InstallationFormat:     DefaultInstallFormat,
 			NetstatFile:            "netstat.out",
 			StateDirectory:         ".",
 			StateFile:              "state.json",
-			StateCacheFile:         "state.cache.json",
+			StateCacheFile:         DefaultStateCacheFile,
 			StateResetFile:         "state.reset",
 			DeprecatedStateFile:    "state.deprecated",
 			EnableCrashReporting:   true,
@@ -66,7 +107,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			PublicIPIndicator: "https://myip.bleemeo.com",
 			WindowsExporter: NodeExporter{
 				Enable:     true,
-				Collectors: []string{"cpu"},
+				Collectors: []string{testCPU},
 			},
 			Telemetry: Telemetry{
 				Enable:  true,
@@ -75,18 +116,18 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 		},
 		Blackbox: Blackbox{
 			Enable:          true,
-			ScraperName:     "name",
+			ScraperName:     keyName,
 			ScraperSendUUID: true,
 			Targets: []BlackboxTarget{
 				{
 					Name:   "myname",
 					URL:    "https://bleemeo.com",
-					Module: "mymodule",
+					Module: testMymodule,
 				},
 			},
 			Modules: map[string]bbConf.Module{
-				"mymodule": {
-					Prober:  "http",
+				testMymodule: {
+					Prober:  defaultHTTP,
 					Timeout: 5 * time.Second,
 					HTTP: bbConf.HTTPProbe{
 						IPProtocol:       "ip4",
@@ -132,7 +173,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 		Container: Container{
 			Filter: ContainerFilter{
 				AllowByDefault: true,
-				AllowList:      []string{"redis"},
+				AllowList:      []string{testRedis},
 				DenyList:       []string{"postgres"},
 			},
 			Type:             "docker",
@@ -151,10 +192,10 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 		DF: DF{
 			HostMountPoint: "/host-root",
 			PathIgnore:     []string{"/"},
-			IgnoreFSType:   []string{"tmpfs"},
+			IgnoreFSType:   []string{testTmpfs},
 		},
 		DiskIgnore:  []string{"^(ram|loop|fd|(h|s|v|xv)d[a-z]|nvme\\d+n\\d+p)\\d+$"},
-		DiskMonitor: []string{"sda"},
+		DiskMonitor: []string{testSda},
 		JMX: JMX{
 			Enable: true,
 		},
@@ -184,11 +225,11 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					ContainerName: "redis",
+					ContainerName: testRedis,
 					Filters: []LogFilter{
 						{
 							Metric: "redis_errors_count",
-							Regex:  "ERROR",
+							Regex:  testERROR,
 						},
 					},
 				},
@@ -213,25 +254,25 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				},
 				GRPC: EnableListener{
 					Enable:  true,
-					Address: "localhost",
+					Address: DefaultLocalhost,
 					Port:    4317,
 				},
 				HTTP: EnableListener{
 					Enable:  true,
-					Address: "localhost",
+					Address: DefaultLocalhost,
 					Port:    4318,
 				},
 				KnownLogFormats: map[string][]OTELOperator{
 					"format-1": {
 						{
-							"type":  "add",
+							keyType: "add",
 							"field": "resource['service.name']",
 							"value": "apache_server",
 						},
 					},
 					"app_format": {
 						{
-							"type": "noop",
+							keyType: "noop",
 						},
 					},
 				},
@@ -240,7 +281,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 						Include: []string{"/var/log/apache/access.log", "/var/log/apache/error.log"},
 						Operators: []OTELOperator{
 							{
-								"type":  "add",
+								keyType: "add",
 								"field": "resource['service.name']",
 								"value": "apache_server",
 							},
@@ -256,7 +297,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 					},
 				},
 				KnownLogFilters: map[string]OTELFilters{
-					"min_level_info": {
+					testMinLevelInfo: {
 						"include": map[string]any{
 							"severity_number": map[string]any{
 								"min": "9",
@@ -265,7 +306,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 					},
 				},
 				ContainerFilter: map[string]string{
-					"ctr-1": "min_level_info",
+					"ctr-1": testMinLevelInfo,
 				},
 			},
 		},
@@ -274,9 +315,9 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				HeadSizeBytes: 500000,
 				TailSizeBytes: 5000000,
 			},
-			Level:         "INFO",
+			Level:         DefaultLogLevel,
 			Output:        "console",
-			FileName:      "name",
+			FileName:      keyName,
 			PackageLevels: "bleemeo=1",
 		},
 		Mdstat: Mdstat{
@@ -300,22 +341,22 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			},
 			SoftStatusPeriodDefault: 100,
 			SoftStatusPeriod: map[string]int{
-				"system_pending_updates":          100,
+				metricSystemPendingUpdates:        100,
 				"system_pending_security_updates": 200,
 			},
 			SNMP: SNMP{
-				ExporterAddress: "localhost",
+				ExporterAddress: DefaultLocalhost,
 				Targets: []SNMPTarget{
 					{
 						InitialName: "AP Wifi",
-						Target:      "127.0.0.1",
+						Target:      DefaultLoopback,
 					},
 				},
 			},
 		},
 		MQTT: OpenSourceMQTT{
 			Enable:      true,
-			Hosts:       []string{"localhost"},
+			Hosts:       []string{DefaultLocalhost},
 			Port:        1883,
 			Username:    "user",
 			Password:    "pass",
@@ -338,20 +379,20 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 		},
 		Services: []Service{
 			{
-				Type:              "service1",
+				Type:              testService1,
 				Instance:          "instance1",
 				Port:              8080,
 				IgnorePorts:       []int{8081},
-				Address:           "127.0.0.1",
+				Address:           DefaultLoopback,
 				Tags:              []string{"mytag1", "mytag2"},
 				Interval:          60,
-				CheckType:         "nagios",
+				CheckType:         testNagios,
 				HTTPPath:          "/check/",
 				HTTPStatusCode:    200,
 				HTTPHost:          "host",
 				MatchProcess:      "/usr/bin/dockerd",
 				CheckCommand:      "/path/to/bin --with-option",
-				NagiosNRPEName:    "nagios",
+				NagiosNRPEName:    testNagios,
 				MetricsUnixSocket: "/path/mysql.sock",
 				Username:          "user",
 				Password:          "password",
@@ -372,7 +413,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 						Derive:    true,
 						Sum:       true,
 						Ratio:     "a",
-						TypeNames: []string{"name"},
+						TypeNames: []string{keyName},
 					},
 				},
 				SSL:           true,
@@ -387,7 +428,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 					{
 						FilePath:  "/var/log/app.log",
 						LogFormat: "app_format",
-						LogFilter: "min_level_info",
+						LogFilter: testMinLevelInfo,
 					},
 				},
 				LogFormat: "nginx_both",
@@ -402,7 +443,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 		},
 		ServiceIgnoreMetrics: []NameInstance{
 			{
-				Name:     "redis",
+				Name:     testRedis,
 				Instance: "host:*",
 			},
 		},
@@ -424,12 +465,12 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			DockerMetricsEnable: true,
 			StatsD: StatsD{
 				Enable:  true,
-				Address: "127.0.0.1",
+				Address: DefaultLoopback,
 				Port:    8125,
 			},
 		},
 		Thresholds: map[string]Threshold{
-			"cpu_used": {
+			testCPUUsed: {
 				LowWarning:   newFloatPointer(2),
 				LowCritical:  newFloatPointer(1.5),
 				HighWarning:  newFloatPointer(80.2),
@@ -530,9 +571,9 @@ func TestMergeWithDefault(t *testing.T) {
 	expectedConfig.Bleemeo.MQTT.Host = "b"
 	expectedConfig.MQTT.Hosts = []string{}
 	expectedConfig.Metric.AllowMetrics = []string{"mymetric", "mymetric2"}
-	expectedConfig.Metric.DenyMetrics = []string{"cpu_used"}
+	expectedConfig.Metric.DenyMetrics = []string{testCPUUsed}
 	expectedConfig.Metric.SoftStatusPeriod = map[string]int{
-		"system_pending_updates": 500,
+		metricSystemPendingUpdates: 500,
 	}
 	expectedConfig.Thresholds = map[string]Threshold{
 		"mymetric": {
@@ -545,10 +586,10 @@ func TestMergeWithDefault(t *testing.T) {
 			HighWarning: newFloatPointer(80),
 		},
 	}
-	expectedConfig.NetworkInterfaceDenylist = []string{"eth0", "eth1", "eth1", "eth2"}
+	expectedConfig.NetworkInterfaceDenylist = []string{testEth0, "eth1", "eth1", "eth2"}
 
 	t.Setenv("GLOUTON_MQTT_HOSTS", "")
-	t.Setenv("GLOUTON_METRIC_DENY_METRICS", "cpu_used")
+	t.Setenv("GLOUTON_METRIC_DENY_METRICS", testCPUUsed)
 	t.Setenv("GLOUTON_METRIC_SOFTSTATUS_PERIOD", "system_pending_updates=500")
 
 	config, warnings, err := load(&configLoader{}, true, true, "testdata/merge")
@@ -600,7 +641,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			},
 			WantConfig: Config{
 				Metric: Metric{
-					SoftStatusPeriod: map[string]int{"system_pending_updates": 100},
+					SoftStatusPeriod: map[string]int{metricSystemPendingUpdates: 100},
 				},
 			},
 		},
@@ -619,7 +660,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			},
 			WantConfig: Config{
 				Agent: Agent{
-					FactsFile: "facts.yaml",
+					FactsFile: DefaultFactsFile,
 				},
 				Bleemeo: Bleemeo{
 					APIBase: "base",
@@ -659,7 +700,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 		},
 		{
 			Name:  "migration file",
-			Files: []string{"testdata/old-prometheus-targets.conf"},
+			Files: []string{testOldPromTargetsConf},
 			WantWarnings: []string{
 				"testdata/old-prometheus-targets.conf: setting is deprecated: metrics.prometheus. " +
 					"See https://go.bleemeo.com/l/doc-prometheus",
@@ -669,8 +710,8 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 					Prometheus: Prometheus{
 						Targets: []PrometheusTarget{
 							{
-								Name: "test1",
-								URL:  "http://localhost:9090/metrics",
+								Name: testTest1,
+								URL:  testLocalhostMetricsURL,
 							},
 						},
 					},
@@ -694,15 +735,15 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name: "map from env",
 			Environment: map[string]string{
 				"GLOUTON_METRIC_SOFTSTATUS_PERIOD": "cpu_used=10,disk_used=20",
-				"GLOUTON_METRIC_ALLOW_METRICS":     "cpu_used",
+				"GLOUTON_METRIC_ALLOW_METRICS":     testCPUUsed,
 			},
 			WantConfig: Config{
 				Metric: Metric{
 					SoftStatusPeriod: map[string]int{
-						"cpu_used":  10,
+						testCPUUsed: 10,
 						"disk_used": 20,
 					},
-					AllowMetrics: []string{"cpu_used"},
+					AllowMetrics: []string{testCPUUsed},
 				},
 			},
 		},
@@ -798,7 +839,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			WantConfig: Config{
 				Services: []Service{
 					{
-						Type:         "service1",
+						Type:         testService1,
 						CheckType:    "nagios",
 						CheckCommand: "/path/to/bin --with-option",
 					},
@@ -890,7 +931,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			},
 			WantConfig: Config{
 				Web: Web{
-					StaticCDNURL: "/simple",
+					StaticCDNURL: testSimplePath,
 				},
 			},
 		},
@@ -902,7 +943,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			},
 			WantConfig: Config{
 				Web: Web{
-					StaticCDNURL: "/simple",
+					StaticCDNURL: testSimplePath,
 				},
 			},
 		},
@@ -953,7 +994,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			WantConfig: Config{
 				Services: []Service{
 					{
-						Type: "cassandra",
+						Type: testCassandra,
 						DetailedItems: []string{
 							"keyspace.table1",
 							"keyspace.table2",
@@ -971,7 +1012,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			WantConfig: Config{
 				Services: []Service{
 					{
-						Type:      "service1",
+						Type:      testService1,
 						StatsPort: 9090,
 					},
 				},
@@ -985,7 +1026,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 					"use network_interface_denylist instead",
 			},
 			WantConfig: Config{
-				NetworkInterfaceDenylist: []string{"eth0"},
+				NetworkInterfaceDenylist: []string{testEth0},
 			},
 		},
 		{
@@ -997,7 +1038,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			WantConfig: Config{
 				Services: []Service{
 					{
-						Type: "apache",
+						Type: testApache,
 						Port: 1234,
 					},
 				},
@@ -1012,7 +1053,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			WantConfig: Config{
 				Services: []Service{
 					{
-						Type:     "apache",
+						Type:     testApache,
 						Instance: "my_container",
 						Port:     1234,
 					},
@@ -1124,7 +1165,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			WantConfig: Config{
 				Services: []Service{
 					{
-						Type: "apache",
+						Type: testApache,
 						Port: 1234,
 					},
 					{
@@ -1132,7 +1173,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 						Port: 1235,
 					},
 					{
-						Type:          "cassandra",
+						Type:          testCassandra,
 						Port:          1236,
 						DetailedItems: []string{"table1"},
 					},
@@ -1195,7 +1236,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 		// TODO: this should be true (or a warning should be raised).
 		// currently we silently ignore the value entered by user.
 		expectedConfig.Bleemeo.Enable = false
-		expectedConfig.Web.StaticCDNURL = "/simple"
+		expectedConfig.Web.StaticCDNURL = testSimplePath
 
 		if diff := compareConfig(expectedConfig, config); diff != "" {
 			t.Fatalf("Unexpected config:\n%s", diff)
@@ -1226,15 +1267,15 @@ func TestStateLoading(t *testing.T) {
 			Files: []string{"testdata/state-package.conf"},
 			WantConfig: Agent{
 				InstallationFormat:     "Package (deb)",
-				CloudImageCreationFile: "/var/lib/glouton/cloudimage_creation",
-				FactsFile:              "/var/lib/glouton/facts.yaml",
-				NetstatFile:            "/var/lib/glouton/netstat.out",
-				StateDirectory:         "/var/lib/glouton",
-				StateFile:              "/var/lib/glouton/state.json",
-				StateCacheFile:         "/var/lib/glouton/state.cache.json",
-				StateResetFile:         "/var/lib/glouton/state.reset",
-				UpgradeFile:            "/var/lib/glouton/upgrade",
-				AutoUpgradeFile:        "/var/lib/glouton/auto_upgrade",
+				CloudImageCreationFile: testGloutonCloudimageCreate,
+				FactsFile:              testGloutonFactsYaml,
+				NetstatFile:            testGloutonNetstatOut,
+				StateDirectory:         testGloutonStateDir,
+				StateFile:              testGloutonStateJSON,
+				StateCacheFile:         testGloutonStateCacheJSON,
+				StateResetFile:         testGloutonStateReset,
+				UpgradeFile:            testGloutonUpgrade,
+				AutoUpgradeFile:        testGloutonAutoUpgrade,
 			},
 		},
 		{
@@ -1242,15 +1283,15 @@ func TestStateLoading(t *testing.T) {
 			Files: []string{"testdata/state-docker.conf"},
 			WantConfig: Agent{
 				InstallationFormat:     "Docker image",
-				CloudImageCreationFile: "/var/lib/glouton/cloudimage_creation",
-				FactsFile:              "/var/lib/glouton/facts.yaml",
-				NetstatFile:            "/var/lib/glouton/netstat.out",
-				StateDirectory:         "/var/lib/glouton",
-				StateFile:              "/var/lib/glouton/state.json",
-				StateCacheFile:         "/var/lib/glouton/state.cache.json",
-				StateResetFile:         "/var/lib/glouton/state.reset",
-				UpgradeFile:            "/var/lib/glouton/upgrade",
-				AutoUpgradeFile:        "/var/lib/glouton/auto_upgrade",
+				CloudImageCreationFile: testGloutonCloudimageCreate,
+				FactsFile:              testGloutonFactsYaml,
+				NetstatFile:            testGloutonNetstatOut,
+				StateDirectory:         testGloutonStateDir,
+				StateFile:              testGloutonStateJSON,
+				StateCacheFile:         testGloutonStateCacheJSON,
+				StateResetFile:         testGloutonStateReset,
+				UpgradeFile:            testGloutonUpgrade,
+				AutoUpgradeFile:        testGloutonAutoUpgrade,
 				DeprecatedStateFile:    "/var/lib/bleemeo/state.json",
 			},
 		},
@@ -1275,12 +1316,12 @@ func TestStateLoading(t *testing.T) {
 		{
 			Name: "Glouton as dev",
 			WantConfig: Agent{
-				InstallationFormat:     "manual",
+				InstallationFormat:     DefaultInstallFormat,
 				CloudImageCreationFile: defaultAgentCfg.CloudImageCreationFile,
 				FactsFile:              defaultAgentCfg.FactsFile,
 				NetstatFile:            defaultAgentCfg.NetstatFile,
 				StateFile:              defaultAgentCfg.StateFile,
-				StateCacheFile:         "state.cache.json",
+				StateCacheFile:         DefaultStateCacheFile,
 				StateResetFile:         defaultAgentCfg.StateResetFile,
 				StateDirectory:         ".",
 				UpgradeFile:            defaultAgentCfg.UpgradeFile,
@@ -1291,16 +1332,16 @@ func TestStateLoading(t *testing.T) {
 			Name:  "Glouton custom",
 			Files: []string{"testdata/state-custom.conf"},
 			WantConfig: Agent{
-				InstallationFormat:     "manual",
-				CloudImageCreationFile: "/var/lib/glouton/cloudimage_creation",
-				FactsFile:              "/var/lib/glouton/facts.yaml",
-				NetstatFile:            "/var/lib/glouton/netstat.out",
-				StateDirectory:         "/var/lib/glouton",
-				StateFile:              "/var/lib/glouton/state.json",
-				StateCacheFile:         "/var/lib/glouton/state.cache.json",
-				StateResetFile:         "/var/lib/glouton/state.reset",
-				UpgradeFile:            "/var/lib/glouton/upgrade",
-				AutoUpgradeFile:        "/var/lib/glouton/auto_upgrade",
+				InstallationFormat:     DefaultInstallFormat,
+				CloudImageCreationFile: testGloutonCloudimageCreate,
+				FactsFile:              testGloutonFactsYaml,
+				NetstatFile:            testGloutonNetstatOut,
+				StateDirectory:         testGloutonStateDir,
+				StateFile:              testGloutonStateJSON,
+				StateCacheFile:         testGloutonStateCacheJSON,
+				StateResetFile:         testGloutonStateReset,
+				UpgradeFile:            testGloutonUpgrade,
+				AutoUpgradeFile:        testGloutonAutoUpgrade,
 			},
 		},
 		{
@@ -1308,38 +1349,38 @@ func TestStateLoading(t *testing.T) {
 			Files: []string{"testdata/state-package.conf", "testdata/state-custom2.conf"},
 			WantConfig: Agent{
 				InstallationFormat:     "Package (deb)",
-				CloudImageCreationFile: "/var/lib/glouton/cloudimage_creation",
-				FactsFile:              "/var/lib/glouton/facts.yaml",
-				NetstatFile:            "/var/lib/glouton/netstat.out",
-				StateDirectory:         "/var/lib/glouton",
-				StateFile:              "/var/lib/glouton/state.json",
-				StateCacheFile:         "/var/lib/glouton/state.cache.json",
-				StateResetFile:         "/var/lib/glouton/state.reset",
-				UpgradeFile:            "/var/lib/glouton/upgrade",
-				AutoUpgradeFile:        "/var/lib/glouton/auto_upgrade",
+				CloudImageCreationFile: testGloutonCloudimageCreate,
+				FactsFile:              testGloutonFactsYaml,
+				NetstatFile:            testGloutonNetstatOut,
+				StateDirectory:         testGloutonStateDir,
+				StateFile:              testGloutonStateJSON,
+				StateCacheFile:         testGloutonStateCacheJSON,
+				StateResetFile:         testGloutonStateReset,
+				UpgradeFile:            testGloutonUpgrade,
+				AutoUpgradeFile:        testGloutonAutoUpgrade,
 			},
 		},
 		{
 			Name:  "Glouton custom 2 without system",
 			Files: []string{"testdata/state-custom2.conf"},
 			WantConfig: Agent{
-				InstallationFormat:     "manual",
-				CloudImageCreationFile: "/var/lib/glouton/cloudimage_creation",
-				FactsFile:              "/var/lib/glouton/facts.yaml",
-				NetstatFile:            "/var/lib/glouton/netstat.out",
-				StateDirectory:         "/var/lib/glouton",
-				StateFile:              "/var/lib/glouton/state.json",
-				StateCacheFile:         "/var/lib/glouton/state.cache.json",
-				StateResetFile:         "/var/lib/glouton/state.reset",
-				UpgradeFile:            "/var/lib/glouton/upgrade",
-				AutoUpgradeFile:        "/var/lib/glouton/auto_upgrade",
+				InstallationFormat:     DefaultInstallFormat,
+				CloudImageCreationFile: testGloutonCloudimageCreate,
+				FactsFile:              testGloutonFactsYaml,
+				NetstatFile:            testGloutonNetstatOut,
+				StateDirectory:         testGloutonStateDir,
+				StateFile:              testGloutonStateJSON,
+				StateCacheFile:         testGloutonStateCacheJSON,
+				StateResetFile:         testGloutonStateReset,
+				UpgradeFile:            testGloutonUpgrade,
+				AutoUpgradeFile:        testGloutonAutoUpgrade,
 			},
 		},
 		{
 			Name:  "Glouton custom 3",
 			Files: []string{"testdata/state-custom3.conf"},
 			WantConfig: Agent{
-				InstallationFormat:     "manual",
+				InstallationFormat:     DefaultInstallFormat,
 				CloudImageCreationFile: "/home/glouton/data/cloudimage_creation",
 				FactsFile:              "/home/glouton/data/facts.yaml",
 				NetstatFile:            "/home/glouton/data/netstat.out",
@@ -1355,7 +1396,7 @@ func TestStateLoading(t *testing.T) {
 			Name:  "Glouton custom 4",
 			Files: []string{"testdata/state-custom4.conf"},
 			WantConfig: Agent{
-				InstallationFormat:     "manual",
+				InstallationFormat:     DefaultInstallFormat,
 				CloudImageCreationFile: "myfolder/data/cloudimage_creation",
 				FactsFile:              "myfolder/data/facts.yaml",
 				NetstatFile:            "myfolder/data/netstat.out",
@@ -1399,18 +1440,18 @@ func TestStateLoading(t *testing.T) {
 func TestDump(t *testing.T) {
 	config := Config{
 		Bleemeo: Bleemeo{
-			AccountID:       "in-dump",
-			RegistrationKey: "not-in-dump",
+			AccountID:       testInDump,
+			RegistrationKey: testNotInDump,
 		},
 		MQTT: OpenSourceMQTT{
-			Password: "not-in-dump",
+			Password: testNotInDump,
 		},
 		Services: []Service{
 			{
-				Type:        "in-dump",
-				Password:    "not-in-dump",
-				JMXPassword: "not-in-dump",
-				KeyFile:     "not-in-dump",
+				Type:        testInDump,
+				Password:    testNotInDump,
+				JMXPassword: testNotInDump,
+				KeyFile:     testNotInDump,
 			},
 			{
 				Type:        "in-dump-2",
@@ -1423,18 +1464,18 @@ func TestDump(t *testing.T) {
 
 	wantConfig := Config{
 		Bleemeo: Bleemeo{
-			AccountID:       "in-dump",
-			RegistrationKey: "*****",
+			AccountID:       testInDump,
+			RegistrationKey: CensoredValue,
 		},
 		MQTT: OpenSourceMQTT{
-			Password: "*****",
+			Password: CensoredValue,
 		},
 		Services: []Service{
 			{
-				Type:        "in-dump",
-				Password:    "*****",
-				JMXPassword: "*****",
-				KeyFile:     "*****",
+				Type:        testInDump,
+				Password:    CensoredValue,
+				JMXPassword: CensoredValue,
+				KeyFile:     CensoredValue,
 			},
 			{
 				Type: "in-dump-2",
@@ -1471,8 +1512,8 @@ func Test_migrate(t *testing.T) {
 					Prometheus: Prometheus{
 						Targets: []PrometheusTarget{
 							{
-								Name: "test1",
-								URL:  "http://localhost:9090/metrics",
+								Name: testTest1,
+								URL:  testLocalhostMetricsURL,
 							},
 						},
 					},
@@ -1481,14 +1522,14 @@ func Test_migrate(t *testing.T) {
 		},
 		{
 			Name:       "old-prometheus-targets",
-			ConfigFile: "testdata/old-prometheus-targets.conf",
+			ConfigFile: testOldPromTargetsConf,
 			WantConfig: Config{
 				Metric: Metric{
 					Prometheus: Prometheus{
 						Targets: []PrometheusTarget{
 							{
-								Name: "test1",
-								URL:  "http://localhost:9090/metrics",
+								Name: testTest1,
+								URL:  testLocalhostMetricsURL,
 							},
 						},
 					},
@@ -1503,11 +1544,11 @@ func Test_migrate(t *testing.T) {
 					Prometheus: Prometheus{
 						Targets: []PrometheusTarget{
 							{
-								Name: "new",
+								Name: testNew,
 								URL:  "http://new:9090/metrics",
 							},
 							{
-								Name: "old",
+								Name: testOld,
 								URL:  "http://old:9090/metrics",
 							},
 						},
@@ -1522,7 +1563,7 @@ func Test_migrate(t *testing.T) {
 				Metric: Metric{
 					AllowMetrics: []string{
 						"test4",
-						"test1",
+						testTest1,
 						"test2",
 					},
 					DenyMetrics: []string{
@@ -1566,14 +1607,14 @@ func Test_prometheusConfigToURLs(t *testing.T) {
 	}{
 		{
 			name:        "old",
-			cfgFilename: "testdata/old-prometheus-targets.conf",
+			cfgFilename: testOldPromTargetsConf,
 			want: []*scrapper.Target{
 				{
 					ExtraLabels: map[string]string{
-						types.LabelMetaScrapeJob:      "test1",
-						types.LabelMetaScrapeInstance: "localhost:9090",
+						types.LabelMetaScrapeJob:      testTest1,
+						types.LabelMetaScrapeInstance: testLocalhostPort,
 					},
-					URL: mustParse("http://localhost:9090/metrics"),
+					URL: mustParse(testLocalhostMetricsURL),
 				},
 			},
 		},
@@ -1583,10 +1624,10 @@ func Test_prometheusConfigToURLs(t *testing.T) {
 			want: []*scrapper.Target{
 				{
 					ExtraLabels: map[string]string{
-						types.LabelMetaScrapeJob:      "test1",
-						types.LabelMetaScrapeInstance: "localhost:9090",
+						types.LabelMetaScrapeJob:      testTest1,
+						types.LabelMetaScrapeInstance: testLocalhostPort,
 					},
-					URL: mustParse("http://localhost:9090/metrics"),
+					URL: mustParse(testLocalhostMetricsURL),
 				},
 			},
 		},
@@ -1596,15 +1637,15 @@ func Test_prometheusConfigToURLs(t *testing.T) {
 			want: []*scrapper.Target{
 				{
 					ExtraLabels: map[string]string{
-						types.LabelMetaScrapeJob:      "new",
+						types.LabelMetaScrapeJob:      testNew,
 						types.LabelMetaScrapeInstance: "new:9090",
 					},
 					URL: mustParse("http://new:9090/metrics"),
 				},
 				{
 					ExtraLabels: map[string]string{
-						types.LabelMetaScrapeJob:      "old",
-						types.LabelMetaScrapeInstance: "old:9090",
+						types.LabelMetaScrapeJob:      testOld,
+						types.LabelMetaScrapeInstance: testOldPort,
 					},
 					URL: mustParse("http://old:9090/metrics"),
 				},
@@ -1617,48 +1658,48 @@ func Test_prometheusConfigToURLs(t *testing.T) {
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "use-global",
-						types.LabelMetaScrapeInstance: "localhost:9090",
+						types.LabelMetaScrapeInstance: testLocalhostPort,
 					},
-					URL: mustParse("http://localhost:9090/metrics"),
+					URL: mustParse(testLocalhostMetricsURL),
 				},
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "reset-global",
-						types.LabelMetaScrapeInstance: "localhost:9090",
+						types.LabelMetaScrapeInstance: testLocalhostPort,
 					},
-					URL:       mustParse("http://localhost:9090/metrics"),
+					URL:       mustParse(testLocalhostMetricsURL),
 					AllowList: []string{},
 					DenyList:  []string{},
 				},
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "set-allow",
-						types.LabelMetaScrapeInstance: "localhost:9090",
+						types.LabelMetaScrapeInstance: testLocalhostPort,
 					},
 					AllowList: []string{"local2{item=~\"plop\"}"},
-					URL:       mustParse("http://localhost:9090/metrics"),
+					URL:       mustParse(testLocalhostMetricsURL),
 				},
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "set-deny",
-						types.LabelMetaScrapeInstance: "localhost:9090",
+						types.LabelMetaScrapeInstance: testLocalhostPort,
 					},
 					DenyList: []string{"local1", "local2{item!~\"plop\"}"},
-					URL:      mustParse("http://localhost:9090/metrics"),
+					URL:      mustParse(testLocalhostMetricsURL),
 				},
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "set-all",
-						types.LabelMetaScrapeInstance: "localhost:9090",
+						types.LabelMetaScrapeInstance: testLocalhostPort,
 					},
 					AllowList: []string{"hello", "world"},
 					DenyList:  []string{"test"},
-					URL:       mustParse("http://localhost:9090/metrics"),
+					URL:       mustParse(testLocalhostMetricsURL),
 				},
 				{
 					ExtraLabels: map[string]string{
-						types.LabelMetaScrapeJob:      "old",
-						types.LabelMetaScrapeInstance: "old:9090",
+						types.LabelMetaScrapeJob:      testOld,
+						types.LabelMetaScrapeInstance: testOldPort,
 					},
 					URL: mustParse("http://old:9090/metrics"),
 				},
@@ -1671,48 +1712,48 @@ func Test_prometheusConfigToURLs(t *testing.T) {
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "use-global",
-						types.LabelMetaScrapeInstance: "localhost:9090",
+						types.LabelMetaScrapeInstance: testLocalhostPort,
 					},
-					URL: mustParse("http://localhost:9090/metrics"),
+					URL: mustParse(testLocalhostMetricsURL),
 				},
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "reset-global",
-						types.LabelMetaScrapeInstance: "localhost:9090",
+						types.LabelMetaScrapeInstance: testLocalhostPort,
 					},
-					URL:       mustParse("http://localhost:9090/metrics"),
+					URL:       mustParse(testLocalhostMetricsURL),
 					AllowList: []string{},
 					DenyList:  []string{},
 				},
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "set-allow",
-						types.LabelMetaScrapeInstance: "localhost:9090",
+						types.LabelMetaScrapeInstance: testLocalhostPort,
 					},
 					AllowList: []string{"local2{item=~\"plop\"}"},
-					URL:       mustParse("http://localhost:9090/metrics"),
+					URL:       mustParse(testLocalhostMetricsURL),
 				},
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "set-deny",
-						types.LabelMetaScrapeInstance: "localhost:9090",
+						types.LabelMetaScrapeInstance: testLocalhostPort,
 					},
 					DenyList: []string{"local1", "local2{item!~\"plop\"}"},
-					URL:      mustParse("http://localhost:9090/metrics"),
+					URL:      mustParse(testLocalhostMetricsURL),
 				},
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "set-all",
-						types.LabelMetaScrapeInstance: "localhost:9090",
+						types.LabelMetaScrapeInstance: testLocalhostPort,
 					},
 					AllowList: []string{"hello", "world"},
 					DenyList:  []string{"test"},
-					URL:       mustParse("http://localhost:9090/metrics"),
+					URL:       mustParse(testLocalhostMetricsURL),
 				},
 				{
 					ExtraLabels: map[string]string{
-						types.LabelMetaScrapeJob:      "old",
-						types.LabelMetaScrapeInstance: "old:9090",
+						types.LabelMetaScrapeJob:      testOld,
+						types.LabelMetaScrapeInstance: testOldPort,
 					},
 					URL: mustParse("http://old:9090/metrics"),
 				},

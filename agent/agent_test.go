@@ -27,6 +27,16 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
+const (
+	deviceNVME0    = "nvme0"
+	deviceSDA      = "sda"
+	deviceSDB      = "sdb"
+	deviceSDD      = "sdd"
+	deviceSDE      = "sde"
+	modelNVME512GB = "PC401 NVMe SK hynix 512GB"
+	modelST1000    = "ST1000LM035"
+)
+
 func TestParseIPOutput(t *testing.T) {
 	cases := []struct {
 		description string
@@ -102,9 +112,9 @@ func TestSMARTStatus(t *testing.T) {
 						Value: 0,
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_ok",
-						types.LabelDevice: "nvme0",
-						types.LabelModel:  "PC401 NVMe SK hynix 512GB",
+						types.LabelName:   metricSmartDeviceHealthOk,
+						types.LabelDevice: deviceNVME0,
+						types.LabelModel:  modelNVME512GB,
 					},
 				},
 				{
@@ -113,9 +123,9 @@ func TestSMARTStatus(t *testing.T) {
 						Value: 0,
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_exit_status",
-						types.LabelDevice: "nvme0",
-						types.LabelModel:  "PC401 NVMe SK hynix 512GB",
+						types.LabelName:   metricSmartDeviceExitStatus,
+						types.LabelDevice: deviceNVME0,
+						types.LabelModel:  modelNVME512GB,
 					},
 				},
 				// sda: health ok, exit 0
@@ -125,9 +135,9 @@ func TestSMARTStatus(t *testing.T) {
 						Value: 1,
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_ok",
-						types.LabelDevice: "sda",
-						types.LabelModel:  "ST1000LM035",
+						types.LabelName:   metricSmartDeviceHealthOk,
+						types.LabelDevice: deviceSDA,
+						types.LabelModel:  modelST1000,
 					},
 				},
 				{
@@ -136,9 +146,9 @@ func TestSMARTStatus(t *testing.T) {
 						Value: 0,
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_exit_status",
-						types.LabelDevice: "sda",
-						types.LabelModel:  "ST1000LM035",
+						types.LabelName:   metricSmartDeviceExitStatus,
+						types.LabelDevice: deviceSDA,
+						types.LabelModel:  modelST1000,
 					},
 				},
 				// sdb: health bad, exit 0
@@ -148,9 +158,9 @@ func TestSMARTStatus(t *testing.T) {
 						Value: 0,
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_ok",
-						types.LabelDevice: "sdb",
-						types.LabelModel:  "ST1000LM035",
+						types.LabelName:   metricSmartDeviceHealthOk,
+						types.LabelDevice: deviceSDB,
+						types.LabelModel:  modelST1000,
 					},
 				},
 				{
@@ -159,9 +169,9 @@ func TestSMARTStatus(t *testing.T) {
 						Value: 0,
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_exit_status",
-						types.LabelDevice: "sdb",
-						types.LabelModel:  "ST1000LM035",
+						types.LabelName:   metricSmartDeviceExitStatus,
+						types.LabelDevice: deviceSDB,
+						types.LabelModel:  modelST1000,
 					},
 				},
 				// sdc: health not found, exit 1
@@ -171,9 +181,9 @@ func TestSMARTStatus(t *testing.T) {
 						Value: 1,
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_exit_status",
+						types.LabelName:   metricSmartDeviceExitStatus,
 						types.LabelDevice: "sdc",
-						types.LabelModel:  "ST1000LM035",
+						types.LabelModel:  modelST1000,
 					},
 				},
 				// sdd: health ok, exit 1
@@ -183,9 +193,9 @@ func TestSMARTStatus(t *testing.T) {
 						Value: 1,
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_ok",
-						types.LabelDevice: "sdd",
-						types.LabelModel:  "ST1000LM035",
+						types.LabelName:   metricSmartDeviceHealthOk,
+						types.LabelDevice: deviceSDD,
+						types.LabelModel:  modelST1000,
 					},
 				},
 				{
@@ -194,9 +204,9 @@ func TestSMARTStatus(t *testing.T) {
 						Value: 1,
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_exit_status",
-						types.LabelDevice: "sdd",
-						types.LabelModel:  "ST1000LM035",
+						types.LabelName:   metricSmartDeviceExitStatus,
+						types.LabelDevice: deviceSDD,
+						types.LabelModel:  modelST1000,
 					},
 				},
 				// sde: health bad, exit 1
@@ -206,9 +216,9 @@ func TestSMARTStatus(t *testing.T) {
 						Value: 0,
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_ok",
-						types.LabelDevice: "sde",
-						types.LabelModel:  "ST1000LM035",
+						types.LabelName:   metricSmartDeviceHealthOk,
+						types.LabelDevice: deviceSDE,
+						types.LabelModel:  modelST1000,
 					},
 				},
 				{
@@ -217,9 +227,9 @@ func TestSMARTStatus(t *testing.T) {
 						Value: 1,
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_exit_status",
-						types.LabelDevice: "sde",
-						types.LabelModel:  "ST1000LM035",
+						types.LabelName:   metricSmartDeviceExitStatus,
+						types.LabelDevice: deviceSDE,
+						types.LabelModel:  modelST1000,
 					},
 				},
 			},
@@ -230,9 +240,9 @@ func TestSMARTStatus(t *testing.T) {
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
-						types.LabelDevice: "nvme0",
-						types.LabelModel:  "PC401 NVMe SK hynix 512GB",
+						types.LabelName:   metricSmartDeviceHealthStatus,
+						types.LabelDevice: deviceNVME0,
+						types.LabelModel:  modelNVME512GB,
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
@@ -247,9 +257,9 @@ func TestSMARTStatus(t *testing.T) {
 						Value: float64(types.StatusOk.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
-						types.LabelDevice: "sda",
-						types.LabelModel:  "ST1000LM035",
+						types.LabelName:   metricSmartDeviceHealthStatus,
+						types.LabelDevice: deviceSDA,
+						types.LabelModel:  modelST1000,
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
@@ -264,9 +274,9 @@ func TestSMARTStatus(t *testing.T) {
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
-						types.LabelDevice: "sdb",
-						types.LabelModel:  "ST1000LM035",
+						types.LabelName:   metricSmartDeviceHealthStatus,
+						types.LabelDevice: deviceSDB,
+						types.LabelModel:  modelST1000,
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
@@ -281,9 +291,9 @@ func TestSMARTStatus(t *testing.T) {
 						Value: float64(types.StatusOk.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
-						types.LabelDevice: "sdd",
-						types.LabelModel:  "ST1000LM035",
+						types.LabelName:   metricSmartDeviceHealthStatus,
+						types.LabelDevice: deviceSDD,
+						types.LabelModel:  modelST1000,
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
@@ -298,9 +308,9 @@ func TestSMARTStatus(t *testing.T) {
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
-						types.LabelDevice: "sde",
-						types.LabelModel:  "ST1000LM035",
+						types.LabelName:   metricSmartDeviceHealthStatus,
+						types.LabelDevice: deviceSDE,
+						types.LabelModel:  modelST1000,
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
@@ -321,7 +331,7 @@ func TestSMARTStatus(t *testing.T) {
 
 			store.PushPoints(t.Context(), test.points)
 
-			gotMetric := statusFromLastPoint(now, store, "smart_device_health_ok", map[string]string{types.LabelName: "smart_device_health_status"}, smartHealthStatus)
+			gotMetric := statusFromLastPoint(now, store, metricSmartDeviceHealthOk, map[string]string{types.LabelName: metricSmartDeviceHealthStatus}, smartHealthStatus)
 
 			lessFunc := func(x, y types.MetricPoint) bool {
 				return x.Labels[types.LabelDevice] < y.Labels[types.LabelDevice]
@@ -339,14 +349,14 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 	t.Parallel()
 
 	const (
-		statusCalibration    = 1 << 0
-		statusSmartTrim      = 1 << 1
-		statusSmartBoost     = 1 << 2
-		statusOnLine         = 1 << 3
-		statusOnBattery      = 1 << 4
-		statusOverloaded     = 1 << 5
-		statusBatteryLow     = 1 << 6
-		statusReplaceBattery = 1 << 7
+		flagCalibration    = 1 << 0
+		flagSmartTrim      = 1 << 1
+		flagSmartBoost     = 1 << 2
+		flagOnLine         = 1 << 3
+		flagOnBattery      = 1 << 4
+		flagOverloaded     = 1 << 5
+		flagBatteryLow     = 1 << 6
+		flagReplaceBattery = 1 << 7
 	)
 
 	now := time.Now()
@@ -371,7 +381,7 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(1 << 3),
 					},
 					Labels: map[string]string{
-						types.LabelName:    "upsd_status_flags",
+						types.LabelName:    metricUpsdStatusFlags,
 						types.LabelUPSName: "on-line-with-service",
 					},
 					Annotations: types.MetricAnnotations{
@@ -381,10 +391,10 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{
 						Time:  now,
-						Value: float64(statusCalibration + statusSmartTrim + statusSmartBoost + statusOnLine),
+						Value: float64(flagCalibration + flagSmartTrim + flagSmartBoost + flagOnLine),
 					},
 					Labels: map[string]string{
-						types.LabelName:    "upsd_status_flags",
+						types.LabelName:    metricUpsdStatusFlags,
 						types.LabelUPSName: "on-line-calibration-smart-trim-boost",
 					},
 				},
@@ -394,67 +404,67 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(1 << 4),
 					},
 					Labels: map[string]string{
-						types.LabelName:    "upsd_status_flags",
+						types.LabelName:    metricUpsdStatusFlags,
 						types.LabelUPSName: "on-battery",
 					},
 				},
 				{
 					Point: types.Point{
 						Time:  now,
-						Value: float64(statusOnLine + statusOverloaded),
+						Value: float64(flagOnLine + flagOverloaded),
 					},
 					Labels: map[string]string{
-						types.LabelName:    "upsd_status_flags",
+						types.LabelName:    metricUpsdStatusFlags,
 						types.LabelUPSName: "overloaded-on-line",
 					},
 				},
 				{
 					Point: types.Point{
 						Time:  now,
-						Value: float64(statusOnBattery + statusOverloaded),
+						Value: float64(flagOnBattery + flagOverloaded),
 					},
 					Labels: map[string]string{
-						types.LabelName:    "upsd_status_flags",
+						types.LabelName:    metricUpsdStatusFlags,
 						types.LabelUPSName: "overloaded-on-battery",
 					},
 				},
 				{
 					Point: types.Point{
 						Time:  now,
-						Value: float64(statusOnBattery + statusBatteryLow),
+						Value: float64(flagOnBattery + flagBatteryLow),
 					},
 					Labels: map[string]string{
-						types.LabelName:    "upsd_status_flags",
+						types.LabelName:    metricUpsdStatusFlags,
 						types.LabelUPSName: "battery-low-on-battery",
 					},
 				},
 				{
 					Point: types.Point{
 						Time:  now,
-						Value: float64(statusOnLine + statusOverloaded + statusBatteryLow),
+						Value: float64(flagOnLine + flagOverloaded + flagBatteryLow),
 					},
 					Labels: map[string]string{
-						types.LabelName:    "upsd_status_flags",
+						types.LabelName:    metricUpsdStatusFlags,
 						types.LabelUPSName: "battery-low-overloaded-on-line",
 					},
 				},
 				{
 					Point: types.Point{
 						Time:  now,
-						Value: float64(statusOnLine + statusReplaceBattery),
+						Value: float64(flagOnLine + flagReplaceBattery),
 					},
 					Labels: map[string]string{
-						types.LabelName:    "upsd_status_flags",
+						types.LabelName:    metricUpsdStatusFlags,
 						types.LabelUPSName: "replace-battery-on-line",
 					},
 				},
 				{
 					Point: types.Point{
 						Time:  now,
-						Value: float64(statusOnBattery + statusOverloaded + statusBatteryLow + statusReplaceBattery),
+						Value: float64(flagOnBattery + flagOverloaded + flagBatteryLow + flagReplaceBattery),
 					},
 					Labels: map[string]string{
-						types.LabelName:    "upsd_status_flags",
+						types.LabelName:    metricUpsdStatusFlags,
 						types.LabelUPSName: "replace-battery-on-battery-overloaded-battery-low",
 					},
 				},
@@ -466,13 +476,13 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusOk.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:    "upsd_battery_status",
+						types.LabelName:    metricUpsdBatteryStatus,
 						types.LabelUPSName: "on-line-with-service",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
-							StatusDescription: "On line, battery ok",
+							StatusDescription: statusOnLineBatteryOk,
 						},
 						ServiceName: "upsd",
 					},
@@ -483,13 +493,13 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusOk.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:    "upsd_battery_status",
+						types.LabelName:    metricUpsdBatteryStatus,
 						types.LabelUPSName: "on-line-calibration-smart-trim-boost",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
-							StatusDescription: "On line, battery ok",
+							StatusDescription: statusOnLineBatteryOk,
 						},
 					},
 				},
@@ -499,7 +509,7 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:    "upsd_battery_status",
+						types.LabelName:    metricUpsdBatteryStatus,
 						types.LabelUPSName: "on-battery",
 					},
 					Annotations: types.MetricAnnotations{
@@ -515,13 +525,13 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:    "upsd_battery_status",
+						types.LabelName:    metricUpsdBatteryStatus,
 						types.LabelUPSName: "overloaded-on-line",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
-							StatusDescription: "UPS is overloaded",
+							StatusDescription: statusUPSOverloaded,
 						},
 					},
 				},
@@ -531,13 +541,13 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:    "upsd_battery_status",
+						types.LabelName:    metricUpsdBatteryStatus,
 						types.LabelUPSName: "overloaded-on-battery",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
-							StatusDescription: "UPS is overloaded",
+							StatusDescription: statusUPSOverloaded,
 						},
 					},
 				},
@@ -547,13 +557,13 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:    "upsd_battery_status",
+						types.LabelName:    metricUpsdBatteryStatus,
 						types.LabelUPSName: "battery-low-on-battery",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
-							StatusDescription: "Battery is low",
+							StatusDescription: statusBatteryLow,
 						},
 					},
 				},
@@ -563,13 +573,13 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:    "upsd_battery_status",
+						types.LabelName:    metricUpsdBatteryStatus,
 						types.LabelUPSName: "battery-low-overloaded-on-line",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
-							StatusDescription: "Battery is low",
+							StatusDescription: statusBatteryLow,
 						},
 					},
 				},
@@ -579,13 +589,13 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:    "upsd_battery_status",
+						types.LabelName:    metricUpsdBatteryStatus,
 						types.LabelUPSName: "replace-battery-on-line",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
-							StatusDescription: "Battery should be replaced",
+							StatusDescription: statusBatteryReplace,
 						},
 					},
 				},
@@ -595,13 +605,13 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:    "upsd_battery_status",
+						types.LabelName:    metricUpsdBatteryStatus,
 						types.LabelUPSName: "replace-battery-on-battery-overloaded-battery-low",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
-							StatusDescription: "Battery should be replaced",
+							StatusDescription: statusBatteryReplace,
 						},
 					},
 				},
@@ -617,7 +627,7 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 
 			store.PushPoints(t.Context(), test.points)
 
-			gotMetric := statusFromLastPoint(now, store, "upsd_status_flags", map[string]string{types.LabelName: "upsd_battery_status"}, upsdBatteryStatus)
+			gotMetric := statusFromLastPoint(now, store, metricUpsdStatusFlags, map[string]string{types.LabelName: metricUpsdBatteryStatus}, upsdBatteryStatus)
 
 			lessFunc := func(x, y types.MetricPoint) bool {
 				return x.Labels[types.LabelUPSName] < y.Labels[types.LabelUPSName]

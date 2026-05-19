@@ -35,6 +35,12 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+const (
+	testSomeLogs           = "Some logs"
+	testSomeDataJSON       = `{"some": "data"}`
+	testCrashReportZipGlob = "crashreport_*.zip"
+)
+
 func TestCrashReportArchivePattern(t *testing.T) {
 	t.Parallel()
 
@@ -367,7 +373,7 @@ func TestBundleCrashReportFiles(t *testing.T) { //nolint:maintidx
 			name:                  "A panic-free stderr file",
 			reportingEnabled:      true,
 			previousStderr:        true,
-			previousStderrContent: "Some logs",
+			previousStderrContent: testSomeLogs,
 			previousDiagnostic:    false,
 			wantReportPath:        false,
 		},
@@ -377,27 +383,27 @@ func TestBundleCrashReportFiles(t *testing.T) { //nolint:maintidx
 			previousStderr:        true,
 			previousStderrContent: "panic: something went wrong",
 			previousDiagnostic:    false,
-			diagnosticContent:     map[string]string{"file.json": `{"some": "data"}`},
+			diagnosticContent:     map[string]string{"file.json": testSomeDataJSON},
 			wantReportPath:        true,
 			wantArchiveFiles: map[string]string{
-				"stderr.log":           "panic: something went wrong",
-				"diagnostic/file.json": `{"some": "data"}`,
+				stderrFileName:         "panic: something went wrong",
+				"diagnostic/file.json": testSomeDataJSON,
 			},
-			wantFilesInStateDir: []fileCmp{{filenameOrPattern: "crashreport_*.zip"}},
+			wantFilesInStateDir: []fileCmp{{filenameOrPattern: testCrashReportZipGlob}},
 		},
 		{
 			name:                  "Stderr file reporting a fatal error",
 			previousStderr:        true,
 			previousStderrContent: "fatal error: sync: unlock of unlocked mutex",
 			previousDiagnostic:    false,
-			diagnosticContent:     map[string]string{"file.json": `{"some": "data"}`},
+			diagnosticContent:     map[string]string{"file.json": testSomeDataJSON},
 			reportingEnabled:      true,
 			wantReportPath:        true,
 			wantArchiveFiles: map[string]string{
-				"stderr.log":           "fatal error: sync: unlock of unlocked mutex",
-				"diagnostic/file.json": `{"some": "data"}`,
+				stderrFileName:         "fatal error: sync: unlock of unlocked mutex",
+				"diagnostic/file.json": testSomeDataJSON,
 			},
-			wantFilesInStateDir: []fileCmp{{filenameOrPattern: "crashreport_*.zip"}},
+			wantFilesInStateDir: []fileCmp{{filenameOrPattern: testCrashReportZipGlob}},
 		},
 		{
 			name:                      "With previous crash diagnostic",
@@ -405,15 +411,15 @@ func TestBundleCrashReportFiles(t *testing.T) { //nolint:maintidx
 			previousStderrContent:     "panic: here we go again",
 			previousDiagnostic:        true,
 			previousDiagnosticContent: map[string]string{"file.txt": "Some crash diagnostic content"},
-			diagnosticContent:         map[string]string{"file.log": "Some logs"},
+			diagnosticContent:         map[string]string{"file.log": testSomeLogs},
 			reportingEnabled:          true,
 			wantReportPath:            true,
 			wantArchiveFiles: map[string]string{
-				"stderr.log":                "panic: here we go again",
-				"diagnostic/file.log":       "Some logs",
+				stderrFileName:              "panic: here we go again",
+				"diagnostic/file.log":       testSomeLogs,
 				"crash_diagnostic/file.txt": "Some crash diagnostic content",
 			},
-			wantFilesInStateDir: []fileCmp{{filenameOrPattern: "crashreport_*.zip"}},
+			wantFilesInStateDir: []fileCmp{{filenameOrPattern: testCrashReportZipGlob}},
 		},
 		{
 			name:                   "Had a crash but write is in progress",

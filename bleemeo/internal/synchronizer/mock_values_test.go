@@ -36,6 +36,16 @@ const (
 	snmpAddress        string = "127.0.0.1"
 	testAgentFQDN      string = "test.bleemeo.com"
 	testK8SClusterName string = "k8s_demo"
+
+	// passwordAlreadySet is used in test agent payloads to indicate the password was set during registration.
+	passwordAlreadySet = "password already set"
+
+	// Config IDs used in default test account configs.
+	cfgIDDocker   = "cfg-docker"
+	cfgIDSNMPInt  = "cfg-snmp-int"
+	cfgIDAgentRes = "cfg-agent-res"
+	cfgIDSNMPRes  = "cfg-snmp-res"
+	cfgIDMonRes   = "cfg-mon-res"
 )
 
 // this is a go limitation, these are constants but we have to treat them as variables
@@ -82,11 +92,11 @@ var (
 	// It corresponds to an account with SNMP and Docker integration enabled,
 	// with per-agent-type metric resolutions.
 	defaultAccountConfigs = []bleemeoTypes.Config{
-		{ID: "cfg-docker", Type: bleemeoTypes.ConfigTypeDockerIntegration, Account: accountID, Value: true},
-		{ID: "cfg-snmp-int", Type: bleemeoTypes.ConfigTypeSNMPIntegration, Account: accountID, Value: true},
-		{ID: "cfg-agent-res", Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: agentTypeAgent.ID, Value: float64(10)},
-		{ID: "cfg-snmp-res", Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: agentTypeSNMP.ID, Value: float64(60)},
-		{ID: "cfg-mon-res", Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: agentTypeMonitor.ID, Value: float64(60)},
+		{ID: cfgIDDocker, Type: bleemeoTypes.ConfigTypeDockerIntegration, Account: accountID, Value: true},
+		{ID: cfgIDSNMPInt, Type: bleemeoTypes.ConfigTypeSNMPIntegration, Account: accountID, Value: true},
+		{ID: cfgIDAgentRes, Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: agentTypeAgent.ID, Value: float64(10)},
+		{ID: cfgIDSNMPRes, Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: agentTypeSNMP.ID, Value: float64(60)},
+		{ID: cfgIDMonRes, Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: agentTypeMonitor.ID, Value: float64(60)},
 		{ID: "cfg-k8s-res", Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: agentTypeKubernetes.ID, Value: float64(60)},
 		{ID: "cfg-vsphere-cluster-res", Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: agentTypeVSphereCluster.ID, Value: float64(60)},
 		{ID: "cfg-vsphere-host-res", Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: agentTypeVSphereHost.ID, Value: float64(60)},
@@ -102,7 +112,7 @@ var (
 			DisplayName: testAgentFQDN,
 		},
 		Abstracted:      false,
-		InitialPassword: "password already set",
+		InitialPassword: passwordAlreadySet,
 	}
 	newMonitorAgent = bleemeoapi.AgentPayload{
 		Agent: bleemeoTypes.Agent{
@@ -113,7 +123,7 @@ var (
 			DisplayName: activeMonitorURL,
 		},
 		Abstracted:      true,
-		InitialPassword: "password already set",
+		InitialPassword: passwordAlreadySet,
 	}
 	testK8SAgent = bleemeoapi.AgentPayload{
 		Agent: bleemeoTypes.Agent{
@@ -124,7 +134,7 @@ var (
 			DisplayName: testK8SClusterName,
 		},
 		Abstracted:      false,
-		InitialPassword: "password already set",
+		InitialPassword: passwordAlreadySet,
 	}
 
 	newMonitor = bleemeoapi.ServicePayload{

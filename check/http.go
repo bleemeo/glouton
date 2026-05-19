@@ -138,7 +138,7 @@ func (hc *HTTPCheck) httpMainCheck(ctx context.Context) types.StatusDescription 
 	if urlErr, ok := err.(*url.Error); ok && urlErr.Timeout() {
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusCritical,
-			StatusDescription: "Connection timed out after 10 seconds",
+			StatusDescription: statusConnectionTimedOut,
 		}
 	}
 

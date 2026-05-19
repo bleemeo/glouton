@@ -49,6 +49,12 @@ const virtualTypeKVM = "kvm"
 const (
 	FactKubernetesCluster = "kubernetes_cluster_name"
 	FactUpdatedAt         = "fact_updated_at"
+
+	osReleaseName       = "NAME"
+	osReleaseVersionID  = "VERSION_ID"
+	osReleasePrettyName = "PRETTY_NAME"
+
+	osNameTrueNAS = "TrueNAS"
 )
 
 var (
@@ -254,9 +260,9 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	if !version.IsWindows() {
 		if s, err := mem.SwapMemoryWithContext(ctx); err == nil {
 			if s.Total > 0 {
-				newFacts["swap_present"] = "true"
+				newFacts["swap_present"] = labelTrue
 			} else {
-				newFacts["swap_present"] = "false"
+				newFacts["swap_present"] = labelFalse
 			}
 		}
 	}
@@ -418,7 +424,7 @@ func decodeOsRelease(data string) (map[string]string, error) {
 }
 
 func decodeFreeBSDVersion(data string) (map[string]string, error) {
-	if !strings.HasPrefix(data, "TrueNAS-") {
+	if !strings.HasPrefix(data, osNameTrueNAS+"-") {
 		return nil, errUnsupportedOS
 	}
 
@@ -432,9 +438,9 @@ func decodeFreeBSDVersion(data string) (map[string]string, error) {
 	version := part[1]
 
 	return map[string]string{
-		"NAME":        "TrueNAS",
-		"VERSION_ID":  version,
-		"PRETTY_NAME": "TrueNAS " + version,
+		osReleaseName:       osNameTrueNAS,
+		osReleaseVersionID:  version,
+		osReleasePrettyName: osNameTrueNAS + " " + version,
 	}, nil
 }
 

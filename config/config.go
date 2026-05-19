@@ -48,6 +48,16 @@ const (
 	envPrefix             = "GLOUTON_"
 	deprecatedEnvPrefix   = "BLEEMEO_AGENT_"
 	delimiter             = "."
+
+	// CensoredValue is the replacement string used when redacting secrets.
+	CensoredValue = "*****"
+
+	// Common map key names used in config migration and service overrides.
+	keyURL        = "url"
+	keyName       = "name"
+	keyType       = "type"
+	keyPassword   = "password"
+	keyThresholds = "thresholds"
 )
 
 var (
@@ -602,7 +612,7 @@ func migrateMetricsPrometheus(k *koanf.Koanf, config map[string]any) prometheus.
 			continue
 		}
 
-		u, ok := tmp["url"].(string)
+		u, ok := tmp[keyURL].(string)
 		if !ok {
 			continue
 		}
@@ -610,8 +620,8 @@ func migrateMetricsPrometheus(k *koanf.Koanf, config map[string]any) prometheus.
 		warnings.Append(fmt.Errorf("%w: metrics.prometheus. See https://go.bleemeo.com/l/doc-prometheus", errSettingsDeprecated))
 
 		migratedTargets = append(migratedTargets, map[string]any{
-			"url":  u,
-			"name": key,
+			keyURL:  u,
+			keyName: key,
 		})
 
 		delete(config, "metric.prometheus."+key)
@@ -690,7 +700,7 @@ func migrateScrapper(k *koanf.Koanf, config map[string]any, deprecatedPath strin
 func migrateServices(config map[string]any) prometheus.MultiError {
 	migratedOptions := map[string]string{
 		"cassandra_detailed_tables": "detailed_items",
-		"id":                        "type",
+		"id":                        keyType,
 		"mgmt_port":                 "stats_port",
 	}
 
@@ -711,7 +721,7 @@ func migrateServices(config map[string]any) prometheus.MultiError {
 
 		var serviceType string
 
-		serviceTypeInt, ok := serviceMap["type"]
+		serviceTypeInt, ok := serviceMap[keyType]
 		if !ok {
 			serviceTypeInt, ok = serviceMap["id"]
 		}
@@ -769,7 +779,7 @@ func CensorSecretItem(key string, value any) any {
 			return ""
 		}
 
-		return "*****"
+		return CensoredValue
 	}
 
 	switch value := value.(type) {
@@ -784,7 +794,7 @@ func CensorSecretItem(key string, value any) any {
 
 // isSecret returns whether the given config key corresponds to a secret.
 func isSecret(key string) bool {
-	for _, name := range []string{"key", "secret", "password", "passwd"} {
+	for _, name := range []string{"key", "secret", keyPassword, "passwd"} {
 		if strings.Contains(key, name) {
 			return true
 		}

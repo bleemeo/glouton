@@ -50,10 +50,12 @@ type Manager struct {
 	agentStarted time.Time
 }
 
+const metricNodeCPUSecondsGlobal = "node_cpu_seconds_global"
+
 //nolint:gochecknoglobals
 var (
 	defaultLinuxRecordingRules = map[string]string{
-		"node_cpu_seconds_global": "sum(node_cpu_seconds_total) without (cpu)",
+		metricNodeCPUSecondsGlobal: "sum(node_cpu_seconds_total) without (cpu)",
 	}
 	defaultWindowsRecordingRules = map[string]string{
 		"windows_cpu_time_global":            "sum(windows_cpu_time_total) without(core)",

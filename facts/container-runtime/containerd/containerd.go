@@ -54,6 +54,8 @@ import (
 	"github.com/shirou/gopsutil/v4/process"
 )
 
+const runtimeName = "containerd"
+
 var (
 	errNotFound         = errors.New("not found")
 	errIgnoredContainer = errors.New("container ignored")
@@ -217,7 +219,7 @@ func (c *Containerd) RuntimeFact(ctx context.Context, currentFact map[string]str
 
 	return map[string]string{
 		"containerd_version": version.Version,
-		"container_runtime":  "containerd",
+		"container_runtime":  runtimeName,
 	}
 }
 
@@ -1231,7 +1233,7 @@ func isContainerdRunning() bool {
 			continue
 		}
 
-		if n, _ := p.Name(); n == "containerd" {
+		if n, _ := p.Name(); n == runtimeName {
 			return true
 		}
 	}

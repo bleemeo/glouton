@@ -63,10 +63,10 @@ func TestConfigParsing(t *testing.T) {
 					ValidStatusCodes:   []int{},
 					Method:             "GET",
 					NoFollowRedirects:  &noFollowRedirect,
-					IPProtocol:         "ip4",
+					IPProtocol:         ipProtocolV4,
 					IPProtocolFallback: false,
 					Headers: map[string]string{
-						"User-Agent": "dummy-user-agent",
+						headerUserAgent: "dummy-user-agent",
 					},
 					HTTPClientConfig: promConfig.HTTPClientConfig{
 						EnableHTTP2: true,
@@ -85,7 +85,7 @@ func TestConfigParsing(t *testing.T) {
 				Prober:  "dns",
 				Timeout: defaultTimeout,
 				DNS: bbConf.DNSProbe{
-					IPProtocol: "ip4",
+					IPProtocol: ipProtocolV4,
 					QueryName:  "nightmared.fr",
 					QueryType:  "A",
 					// by default, this is set to true
@@ -109,10 +109,10 @@ func TestConfigParsing(t *testing.T) {
 					ValidStatusCodes:   []int{},
 					Method:             "GET",
 					NoFollowRedirects:  &noFollowRedirect,
-					IPProtocol:         "ip4",
+					IPProtocol:         ipProtocolV4,
 					IPProtocolFallback: false,
 					Headers: map[string]string{
-						"User-Agent": "dummy-user-agent",
+						headerUserAgent: "dummy-user-agent",
 					},
 					HTTPClientConfig: promConfig.HTTPClientConfig{
 						EnableHTTP2: true,

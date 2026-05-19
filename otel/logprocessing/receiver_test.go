@@ -162,7 +162,7 @@ func noExecRunner(t *testing.T) dummyRunner {
 type dummyFacter struct{}
 
 func (dummyFacter) Facts(ctx context.Context, maxAge time.Duration) (facts map[string]string, err error) {
-	return map[string]string{"hostname": "myhostname"}, nil
+	return map[string]string{"hostname": testHostname}, nil
 }
 
 // fakeFacter returns a Facter than use hard coded facts (with just "hostname"="myhosname").
@@ -216,11 +216,11 @@ func TestFileLogReceiver(t *testing.T) {
 	defer f1.Close()
 
 	knownLogFormats := map[string][]config.OTELOperator{
-		"key_res_attr": {
+		testAttrKeyResAttr: {
 			{
-				"type":  "add",
-				"field": "resource.key",
-				"value": "key attribute value",
+				testFieldType:  testFieldAdd,
+				testFieldName:  testResourceKey,
+				testFieldValue: testKeyAttrValue,
 			},
 		},
 	}
@@ -231,16 +231,16 @@ func TestFileLogReceiver(t *testing.T) {
 		},
 		Operators: []config.OTELOperator{
 			{
-				"type":  "add",
-				"field": "resource['service.name']",
-				"value": "apache_server",
+				testFieldType:  testFieldAdd,
+				testFieldName:  testRouteServiceName,
+				testFieldValue: testServiceApache,
 			},
 		},
-		LogFormat: "key_res_attr",
+		LogFormat: testAttrKeyResAttr,
 		Filters: config.OTELFilters{
-			"include": map[string]any{
-				"match_type": "regexp",
-				"bodies": []string{
+			testFieldInclude: map[string]any{
+				testFilterMatchType: testRegexp,
+				testFilterBodies: []string{
 					"log [13579]",
 				},
 			},
@@ -336,8 +336,8 @@ func TestFileLogReceiver(t *testing.T) {
 				attrs.LogFilePath: f1.Name(),
 			},
 			Resource: map[string]any{
-				"service.name": "apache_server",
-				"key":          "key attribute value",
+				testAttrServiceName: testServiceApache,
+				testFieldKey:        testKeyAttrValue,
 			},
 		},
 		{
@@ -348,8 +348,8 @@ func TestFileLogReceiver(t *testing.T) {
 				attrs.LogFilePath: f2.Name(),
 			},
 			Resource: map[string]any{
-				"service.name": "apache_server",
-				"key":          "key attribute value",
+				testAttrServiceName: testServiceApache,
+				testFieldKey:        testKeyAttrValue,
 			},
 		},
 	}
@@ -408,9 +408,9 @@ func TestFileLogReceiverWithHostroot(t *testing.T) {
 		},
 		Operators: []config.OTELOperator{
 			{
-				"type":  "add",
-				"field": "resource['service.name']",
-				"value": "apache_server",
+				testFieldType:  testFieldAdd,
+				testFieldName:  testRouteServiceName,
+				testFieldValue: testServiceApache,
 			},
 		},
 	}
@@ -483,7 +483,7 @@ func TestFileLogReceiverWithHostroot(t *testing.T) {
 				attrs.LogFilePath: watchedFile, // absolute path
 			},
 			Resource: map[string]any{
-				"service.name": "apache_server",
+				testAttrServiceName: testServiceApache,
 			},
 		},
 	}
@@ -541,25 +541,25 @@ func TestExecLogReceiver(t *testing.T) {
 			name:             "new file",
 			previousFileSize: -1, // -1 for no history
 			currentFileSize:  7,
-			expectedTailArgs: []string{"--follow=name", "--bytes=0", file.Name()},
+			expectedTailArgs: []string{testFollowName, "--bytes=0", file.Name()},
 		},
 		{
 			name:             "file has not changed",
 			previousFileSize: 7,
 			currentFileSize:  7,
-			expectedTailArgs: []string{"--follow=name", "--bytes=+7", file.Name()},
+			expectedTailArgs: []string{testFollowName, "--bytes=+7", file.Name()},
 		},
 		{
 			name:             "file has grown",
 			previousFileSize: 7,
 			currentFileSize:  10,
-			expectedTailArgs: []string{"--follow=name", "--bytes=+7", file.Name()},
+			expectedTailArgs: []string{testFollowName, "--bytes=+7", file.Name()},
 		},
 		{
 			name:             "file has been truncated",
 			previousFileSize: 10,
 			currentFileSize:  3,
-			expectedTailArgs: []string{"--follow=name", "--bytes=+0", file.Name()},
+			expectedTailArgs: []string{testFollowName, "--bytes=+0", file.Name()},
 		},
 	}
 
@@ -567,9 +567,9 @@ func TestExecLogReceiver(t *testing.T) {
 		Include: []string{file.Name()},
 		Operators: []config.OTELOperator{
 			{
-				"type":  "add",
-				"field": "resource['service.name']",
-				"value": "apache_server",
+				testFieldType:  testFieldAdd,
+				testFieldName:  testRouteServiceName,
+				testFieldValue: testServiceApache,
 			},
 		},
 	}

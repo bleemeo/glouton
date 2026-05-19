@@ -37,6 +37,9 @@ const (
 	statusCacheKey     = "CacheStatusState"
 	statusMetricSuffix = "_status"
 	statesTTL          = 25 * time.Hour // some metrics are send once per day (like system_pending_security_updates)
+
+	unitNameSecond = "second"
+	unitNameDay    = "day"
 )
 
 // State store information about current firing threshold.
@@ -568,7 +571,7 @@ func formatDurationDay(period time.Duration) string {
 	currentScale := 86400
 	value := math.Round(period.Seconds() / float64(currentScale))
 
-	result := fmt.Sprintf("%s%.0f day", sign, value)
+	result := fmt.Sprintf("%s%.0f %s", sign, value, unitNameDay)
 	if value > 1 {
 		result += "s"
 	}
@@ -587,13 +590,13 @@ func formatDuration(period time.Duration) string {
 		Scale int
 		Name  string
 	}{
-		{1, "second"},
+		{1, unitNameSecond},
 		{60, "minute"},
 		{60, "hour"},
-		{24, "day"},
+		{24, unitNameDay},
 	}
 
-	result := "0 second"
+	result := "0 " + unitNameSecond
 	currentScale := 1
 
 	for i, unit := range units {

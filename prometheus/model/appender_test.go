@@ -28,6 +28,14 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+const (
+	testMetricName  = "metric_name"
+	testMetricName2 = "metric_name2"
+	testOtherLabel  = "other_label"
+	testValue2      = "value2"
+	testValue1      = "value1"
+)
+
 func TestBufferAppender(t *testing.T) { //nolint: maintidx
 	// Each step will do theses actions. All do* are executed in the order
 	// of the struct, if you want another other do two steps.
@@ -63,7 +71,7 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 						{
 							Point: types.Point{Time: t0, Value: 1.2},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
+								types.LabelName: testMetricName,
 								types.LabelItem: "item",
 							},
 						},
@@ -73,7 +81,7 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 						{
 							Point: types.Point{Time: t0, Value: 1.2},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
+								types.LabelName: testMetricName,
 								types.LabelItem: "item",
 							},
 						},
@@ -89,21 +97,21 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 						{
 							Point: types.Point{Time: t0, Value: 1.2},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value1",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue1,
 							},
 						},
 						{
 							Point: types.Point{Time: t0, Value: 5},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value2",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue2,
 							},
 						},
 						{
 							Point: types.Point{Time: t2, Value: 6},
 							Labels: map[string]string{
-								types.LabelName: "metric_name2",
+								types.LabelName: testMetricName2,
 							},
 						},
 					},
@@ -112,21 +120,21 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 						{
 							Point: types.Point{Time: t0, Value: 1.2},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value1",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue1,
 							},
 						},
 						{
 							Point: types.Point{Time: t0, Value: 5},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value2",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue2,
 							},
 						},
 						{
 							Point: types.Point{Time: t2, Value: 6},
 							Labels: map[string]string{
-								types.LabelName: "metric_name2",
+								types.LabelName: testMetricName2,
 							},
 						},
 					},
@@ -141,8 +149,8 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 						{
 							Point: types.Point{Time: t0, Value: 1.2},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value1",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue1,
 							},
 						},
 					},
@@ -151,8 +159,8 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 						{
 							Point: types.Point{Time: t0, Value: 1.2},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value1",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue1,
 							},
 						},
 					},
@@ -162,8 +170,8 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 						{
 							Point: types.Point{Time: t0, Value: 5},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value2",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue2,
 							},
 						},
 					},
@@ -172,15 +180,15 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 						{
 							Point: types.Point{Time: t0, Value: 1.2},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value1",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue1,
 							},
 						},
 						{
 							Point: types.Point{Time: t0, Value: 5},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value2",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue2,
 							},
 						},
 					},
@@ -190,7 +198,7 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 						{
 							Point: types.Point{Time: t2, Value: 6},
 							Labels: map[string]string{
-								types.LabelName: "metric_name2",
+								types.LabelName: testMetricName2,
 							},
 						},
 					},
@@ -199,15 +207,15 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 						{
 							Point: types.Point{Time: t0, Value: 1.2},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value1",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue1,
 							},
 						},
 						{
 							Point: types.Point{Time: t0, Value: 5},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value2",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue2,
 							},
 						},
 					},
@@ -222,21 +230,21 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 						{
 							Point: types.Point{Time: t0, Value: 1.2},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value1",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue1,
 							},
 						},
 						{
 							Point: types.Point{Time: t0, Value: 5},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value2",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue2,
 							},
 						},
 						{
 							Point: types.Point{Time: t2, Value: 6},
 							Labels: map[string]string{
-								types.LabelName: "metric_name2",
+								types.LabelName: testMetricName2,
 							},
 						},
 					},
@@ -248,21 +256,21 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 						{
 							Point: types.Point{Time: t0, Value: 1.2},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value1",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue1,
 							},
 						},
 						{
 							Point: types.Point{Time: t0, Value: 5},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value2",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue2,
 							},
 						},
 						{
 							Point: types.Point{Time: t2, Value: 6},
 							Labels: map[string]string{
-								types.LabelName: "metric_name2",
+								types.LabelName: testMetricName2,
 							},
 						},
 					},
@@ -277,21 +285,21 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 						{
 							Point: types.Point{Time: t0, Value: 1.2},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value1",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue1,
 							},
 						},
 						{
 							Point: types.Point{Time: t0, Value: 5},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value2",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue2,
 							},
 						},
 						{
 							Point: types.Point{Time: t2, Value: 6},
 							Labels: map[string]string{
-								types.LabelName: "metric_name2",
+								types.LabelName: testMetricName2,
 							},
 						},
 					},
@@ -306,21 +314,21 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 						{
 							Point: types.Point{Time: t0, Value: 1.2},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value1",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue1,
 							},
 						},
 						{
 							Point: types.Point{Time: t0, Value: 5},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value2",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue2,
 							},
 						},
 						{
 							Point: types.Point{Time: t2, Value: 6},
 							Labels: map[string]string{
-								types.LabelName: "metric_name2",
+								types.LabelName: testMetricName2,
 							},
 						},
 					},
@@ -328,21 +336,21 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 						{
 							Point: types.Point{Time: t0, Value: 1.2},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value1",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue1,
 							},
 						},
 						{
 							Point: types.Point{Time: t0, Value: 5},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value2",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue2,
 							},
 						},
 						{
 							Point: types.Point{Time: t2, Value: 6},
 							Labels: map[string]string{
-								types.LabelName: "metric_name2",
+								types.LabelName: testMetricName2,
 							},
 						},
 					},
@@ -357,21 +365,21 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 						{
 							Point: types.Point{Time: t0, Value: 1.2},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value1",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue1,
 							},
 						},
 						{
 							Point: types.Point{Time: t0, Value: 5},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value2",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue2,
 							},
 						},
 						{
 							Point: types.Point{Time: t2, Value: 6},
 							Labels: map[string]string{
-								types.LabelName: "metric_name2",
+								types.LabelName: testMetricName2,
 							},
 						},
 					},
@@ -383,21 +391,21 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 						{
 							Point: types.Point{Time: t1, Value: 1.2},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value1",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue1,
 							},
 						},
 						{
 							Point: types.Point{Time: t1, Value: 5},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value2",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue2,
 							},
 						},
 						{
 							Point: types.Point{Time: t1, Value: 6},
 							Labels: map[string]string{
-								types.LabelName: "metric_name2",
+								types.LabelName: testMetricName2,
 							},
 						},
 					},
@@ -405,21 +413,21 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 						{
 							Point: types.Point{Time: t0, Value: 1.2},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value1",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue1,
 							},
 						},
 						{
 							Point: types.Point{Time: t0, Value: 5},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value2",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue2,
 							},
 						},
 						{
 							Point: types.Point{Time: t2, Value: 6},
 							Labels: map[string]string{
-								types.LabelName: "metric_name2",
+								types.LabelName: testMetricName2,
 							},
 						},
 					},
@@ -434,21 +442,21 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 						{
 							Point: types.Point{Time: t0, Value: 1.2},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value1",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue1,
 							},
 						},
 						{
 							Point: types.Point{Time: t0, Value: 5},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value2",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue2,
 							},
 						},
 						{
 							Point: types.Point{Time: t2, Value: 6},
 							Labels: map[string]string{
-								types.LabelName: "metric_name2",
+								types.LabelName: testMetricName2,
 							},
 						},
 					},
@@ -459,21 +467,21 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 						{
 							Point: types.Point{Time: t0, Value: 1.2},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value1",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue1,
 							},
 						},
 						{
 							Point: types.Point{Time: t0, Value: 5},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value2",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue2,
 							},
 						},
 						{
 							Point: types.Point{Time: t2, Value: 6},
 							Labels: map[string]string{
-								types.LabelName: "metric_name2",
+								types.LabelName: testMetricName2,
 							},
 						},
 					},
@@ -488,21 +496,21 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 						{
 							Point: types.Point{Time: t0, Value: 1.2},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value1",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue1,
 							},
 						},
 						{
 							Point: types.Point{Time: t0, Value: 5},
 							Labels: map[string]string{
-								types.LabelName: "metric_name",
-								"other_label":   "value2",
+								types.LabelName: testMetricName,
+								testOtherLabel:  testValue2,
 							},
 						},
 						{
 							Point: types.Point{Time: t2, Value: 6},
 							Labels: map[string]string{
-								types.LabelName: "metric_name2",
+								types.LabelName: testMetricName2,
 							},
 						},
 					},

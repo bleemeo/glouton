@@ -42,6 +42,12 @@ import (
 // agentStatusName is the name of the special metrics used to store the agent connection status.
 const agentStatusName = "agent_status"
 
+// Metric name constants used across synchronizer code.
+const (
+	metricCPUUsed   = "cpu_used"
+	metricCPUSystem = "cpu_system"
+)
+
 // Those constant are here to make linter happy. We should likely drop them and use boolean type,
 // they are only used in API call and I'm pretty sure the API accept boolean.
 const (
@@ -161,12 +167,12 @@ type metricComparator struct {
 
 func newComparator() *metricComparator {
 	essentials := []string{
-		"cpu_idle", "cpu_wait", "cpu_nice", "cpu_user", "cpu_system", "cpu_interrupt", "cpu_softirq", "cpu_steal", "cpu_guest_nice", "cpu_guest",
+		"cpu_idle", "cpu_wait", "cpu_nice", "cpu_user", metricCPUSystem, "cpu_interrupt", "cpu_softirq", "cpu_steal", "cpu_guest_nice", "cpu_guest",
 		"mem_free", "mem_cached", "mem_buffered", "mem_used",
 		"io_utilization", "io_read_bytes", "io_write_bytes", "io_reads",
 		"io_writes", "net_bits_recv", "net_bits_sent", "net_packets_recv",
 		"net_packets_sent", "net_err_in", "net_err_out", "disk_used_perc",
-		"swap_used_perc", "cpu_used", "mem_used_perc", "agent_config_warning", agentStatusName,
+		"swap_used_perc", metricCPUUsed, "mem_used_perc", "agent_config_warning", agentStatusName,
 	}
 
 	highCard := []string{
@@ -735,8 +741,8 @@ func (s *Synchronizer) metricUpdateList(ctx context.Context, apiClient types.Met
 
 		params := url.Values{
 			"labels_text": {gloutonTypes.LabelsToText(metric.Labels())},
-			"agent":       {agentID},
-			"fields":      {metricFields},
+			paramAgent:    {agentID},
+			paramFields:   {metricFields},
 		}
 
 		if metricutils.MetricOnlyHasItem(metric.Labels(), agentID) {

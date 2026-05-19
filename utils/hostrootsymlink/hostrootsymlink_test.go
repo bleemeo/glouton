@@ -57,6 +57,12 @@ func (fi fakeFileInfo) Sys() any {
 	return 0
 }
 
+const (
+	testSyslogPath   = "/var/log/syslog"
+	testMessage1Path = "/var/log/message1"
+	testMessage2Path = "/var/log/message2"
+)
+
 func Test_evalSymlinks(t *testing.T) {
 	t.Parallel()
 
@@ -73,25 +79,25 @@ func Test_evalSymlinks(t *testing.T) {
 		{
 			name:     "no-symlink",
 			hostroot: hostroot,
-			input:    "/var/log/syslog",
-			want:     "/var/log/syslog",
+			input:    testSyslogPath,
+			want:     testSyslogPath,
 		},
 		{
 			name:     "relative-symlink",
 			hostroot: hostroot,
 			links: map[string]string{
-				"/var/log/syslog": "message",
+				testSyslogPath: "message",
 			},
-			input: "/var/log/syslog",
+			input: testSyslogPath,
 			want:  "/var/log/message",
 		},
 		{
 			name:     "no-hostroot-relative-symlink",
 			hostroot: "/",
 			links: map[string]string{
-				"/var/log/syslog": "message",
+				testSyslogPath: "message",
 			},
-			input: "/var/log/syslog",
+			input: testSyslogPath,
 			want:  "/var/log/message",
 		},
 		{
@@ -107,19 +113,19 @@ func Test_evalSymlinks(t *testing.T) {
 			name:     "relative-stay-in-hostroot",
 			hostroot: hostroot,
 			links: map[string]string{
-				"/var/log/syslog": "../../../../../../../../tmp/syslog",
+				testSyslogPath: "../../../../../../../../tmp/syslog",
 			},
-			input: "/var/log/syslog",
+			input: testSyslogPath,
 			want:  "/tmp/syslog",
 		},
 		{
 			name:     "two-links",
 			hostroot: hostroot,
 			links: map[string]string{
-				"/var/log/syslog": "../../../../../../../../tmp/link2",
-				"/tmp/link2":      "/home/log/file.log",
+				testSyslogPath: "../../../../../../../../tmp/link2",
+				"/tmp/link2":   "/home/log/file.log",
 			},
-			input: "/var/log/syslog",
+			input: testSyslogPath,
 			want:  "/home/log/file.log",
 		},
 		{
@@ -130,21 +136,21 @@ func Test_evalSymlinks(t *testing.T) {
 				"/opt/realvar/log":             "./logs-dir",
 				"/opt/realvar/logs-dir/syslog": "../sys.log",
 			},
-			input: "/var/log/syslog",
+			input: testSyslogPath,
 			want:  "/opt/realvar/sys.log",
 		},
 		{
 			name:     "infinite-loop",
 			hostroot: hostroot,
 			links: map[string]string{
-				"/var/log/syslog":   "/var/log/message1",
-				"/var/log/message1": "/var/log/message2",
-				"/var/log/message2": "/var/log/message1",
+				testSyslogPath:   testMessage1Path,
+				testMessage1Path: testMessage2Path,
+				testMessage2Path: testMessage1Path,
 			},
-			input: "/var/log/syslog",
+			input: testSyslogPath,
 			// Note: it could be message1 or message2. It depends on maxDepth. The test case don't care which one is used
 			// only that: 1) is finish and don't loop forever 2) it return whatever path it has when maxDepth is reached
-			want: "/var/log/message2",
+			want: testMessage2Path,
 		},
 	}
 	for _, tt := range tests {

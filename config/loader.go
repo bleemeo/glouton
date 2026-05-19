@@ -212,7 +212,7 @@ func itemTypeFromValue(key string, value any) ItemType {
 
 	// For more complex types (map or slices of structs), we use the key.
 	switch key {
-	case "thresholds":
+	case keyThresholds:
 		return TypeThresholds
 	case "service":
 		return TypeServices

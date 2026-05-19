@@ -47,7 +47,7 @@ func makeCtrLog(t *testing.T, ts time.Time, body string) []byte {
 		Time   string `json:"time"`
 	}{
 		Log:    body,
-		Stream: "stdout",
+		Stream: testStreamStdout,
 		Time:   ts.Format("2006-01-02T15:04:05.999999999Z"),
 	}
 
@@ -79,17 +79,17 @@ func TestHandleContainerLogs(t *testing.T) {
 	defer f2.Close()
 
 	knownOperators := map[string][]config.OTELOperator{
-		"key_res_attr": {
+		testAttrKeyResAttr: {
 			{
-				"type":  "add",
-				"field": "resource.key",
-				"value": "val from op",
+				testFieldType:  testFieldAdd,
+				testFieldName:  testResourceKey,
+				testFieldValue: "val from op",
 			},
 		},
 	}
 
 	containerOperators := map[string]string{
-		"ctr-1": "key_res_attr",
+		testContainerCtr1: testAttrKeyResAttr,
 	}
 
 	knownFilters := map[string]config.OTELFilters{}
@@ -130,7 +130,7 @@ func TestHandleContainerLogs(t *testing.T) {
 	ctrs := []facts.Container{
 		facts.FakeContainer{
 			FakeID:            "id-1",
-			FakeContainerName: "ctr-1",
+			FakeContainerName: testContainerCtr1,
 			FakeImageID:       "img-id-1",
 			FakeImageName:     "img-1",
 			FakeImageTags:     []string{"v1.2.3", "latest"},
@@ -139,7 +139,7 @@ func TestHandleContainerLogs(t *testing.T) {
 		},
 		facts.FakeContainer{
 			FakeID:            "id-2",
-			FakeContainerName: "ctr-2",
+			FakeContainerName: testContainerCtr2,
 			FakeImageID:       "img-id-2",
 			FakeImageName:     "img-2",
 			FakeImageTags:     []string{"latest"},
@@ -188,14 +188,14 @@ func TestHandleContainerLogs(t *testing.T) {
 				attrContainerID:        "id-1",
 				attrContainerImageName: "img-1",
 				attrContainerImageTags: `["v1.2.3","latest"]`,
-				attrContainerName:      "ctr-1",
+				attrContainerName:      testContainerCtr1,
 				attrContainerRuntime:   crTypes.DockerRuntime,
 				attrs.LogFileName:      "ctr-1.log",
 				attrs.LogFilePath:      f1.Name(),
-				"log.iostream":         "stdout",
+				testAttrLogIOStream:    testStreamStdout,
 			},
 			Resource: map[string]any{
-				"key": "val from op",
+				testFieldKey: "val from op",
 			},
 		},
 		{
@@ -205,13 +205,13 @@ func TestHandleContainerLogs(t *testing.T) {
 				attrContainerID:        "id-2",
 				attrContainerImageName: "img-2",
 				attrContainerImageTags: `["latest"]`,
-				attrContainerName:      "ctr-2",
+				attrContainerName:      testContainerCtr2,
 				attrContainerRuntime:   crTypes.ContainerDRuntime,
 				attrContainerNamespace: "ns",
 				attrContainerPod:       "pod",
 				attrs.LogFileName:      "ctr-2.log",
 				attrs.LogFilePath:      f2.Name(),
-				"log.iostream":         "stdout",
+				testAttrLogIOStream:    testStreamStdout,
 			},
 		},
 	}

@@ -39,6 +39,11 @@ import (
 	prom_tsdb "github.com/prometheus/prometheus/tsdb"
 )
 
+var (
+	errPathRequired = errors.New("tsdb: path is required")
+	errStoreClosed  = errors.New("tsdb: store is closed")
+)
+
 // Store wraps a prometheus/tsdb.DB so it can be used as a Glouton
 // types.PointPusher and as a storage.Queryable for the local API.
 type Store struct {
@@ -65,7 +70,7 @@ type Options struct {
 // agent reloads.
 func Open(opts Options) (*Store, error) {
 	if opts.Path == "" {
-		return nil, errors.New("tsdb: path is required")
+		return nil, errPathRequired
 	}
 
 	if err := os.MkdirAll(opts.Path, 0o750); err != nil {
@@ -114,14 +119,14 @@ func (s *Store) OldestPointMs() int64 {
 	}
 
 	head := s.db.Head()
-	min := head.MinTime()
+	minTime := head.MinTime()
 
 	// An empty head returns math.MaxInt64; treat that as "no data".
-	if min == int64(^uint64(0)>>1) {
+	if minTime == int64(^uint64(0)>>1) {
 		return 0
 	}
 
-	return min
+	return minTime
 }
 
 // PushPoints implements types.PointPusher. It writes the given points
@@ -166,7 +171,7 @@ func (s *Store) Querier(mint, maxt int64) (storage.Querier, error) {
 	s.l.Unlock()
 
 	if closed {
-		return nil, errors.New("tsdb: store is closed")
+		return nil, errStoreClosed
 	}
 
 	return s.db.Querier(mint, maxt)
@@ -190,6 +195,7 @@ func (s *Store) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter
 		head := s.db.Head()
 		minTime := time.UnixMilli(head.MinTime()).UTC()
 		maxTime := time.UnixMilli(head.MaxTime()).UTC()
+
 		fmt.Fprintf(file, "Head min time: %s\n", minTime.Format(time.RFC3339))
 		fmt.Fprintf(file, "Head max time: %s\n", maxTime.Format(time.RFC3339))
 		fmt.Fprintf(file, "Head series: %d\n", head.NumSeries())
