@@ -50,6 +50,15 @@ func newInputGatherer(input telegraf.Input) *inputGatherer {
 	return gatherer
 }
 
+// SecretCount implements inputs.SecretfulInput by delegating to the wrapped input.
+func (i *inputGatherer) SecretCount() int {
+	if si, ok := i.input.(inputs.SecretfulInput); ok {
+		return si.SecretCount()
+	}
+
+	return 0
+}
+
 // Gather implements prometheus.Gatherer .
 func (i *inputGatherer) Gather() ([]*dto.MetricFamily, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultGatherTimeout)

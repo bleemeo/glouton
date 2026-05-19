@@ -208,8 +208,8 @@ func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryAdd
 		tcpSend = []byte("version\r\n")
 		tcpExpect = []byte("VERSION")
 	case RabbitMQService:
-		tcpSend = []byte("PINGAMQP")
-		tcpExpect = []byte("AMQP")
+		tcpSend = []byte("AMQP\x00\x00\x09\x01")
+		tcpExpect = []byte{0x01, 0x00, 0x00}
 	case RedisService, ValkeyService:
 		tcpSend = []byte("PING\n")
 

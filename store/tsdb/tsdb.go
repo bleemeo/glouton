@@ -119,14 +119,14 @@ func (s *Store) OldestPointMs() int64 {
 	}
 
 	head := s.db.Head()
-	minTime := head.MinTime()
+	minT := head.MinTime()
 
 	// An empty head returns math.MaxInt64; treat that as "no data".
-	if minTime == int64(^uint64(0)>>1) {
+	if minT == int64(^uint64(0)>>1) {
 		return 0
 	}
 
-	return minTime
+	return minT
 }
 
 // PushPoints implements types.PointPusher. It writes the given points

@@ -46,6 +46,29 @@ func (*fixedInput) SampleConfig() string {
 	return ""
 }
 
+// sharedTagsInput mimics inputs like Telegraf MySQL that reuse the same tags map
+// across multiple AddFields calls within a single Gather.
+type sharedTagsInput struct {
+	measurementName string
+	tags            map[string]string
+	fieldSets       []map[string]any
+	now             time.Time
+}
+
+func (i *sharedTagsInput) Gather(acc telegraf.Accumulator) error {
+	sharedTags := maps.Clone(i.tags)
+
+	for _, fields := range i.fieldSets {
+		acc.AddFields(i.measurementName, maps.Clone(fields), sharedTags, i.now)
+	}
+
+	return nil
+}
+
+func (*sharedTagsInput) SampleConfig() string {
+	return ""
+}
+
 func TestAddInstance(t *testing.T) {
 	const (
 		containerName   = "container_name"
@@ -120,5 +143,71 @@ func TestAddInstance(t *testing.T) {
 				t.Errorf("measurement mismatch (-want +got)\n%s", diff)
 			}
 		})
+	}
+}
+
+// TestAddRenameCallbackInputWithSecrets verifies that AddRenameCallback on an InputWithSecrets
+// adds the callback directly to the embedded *Input instead of wrapping it in a new *internal.Input.
+func TestAddRenameCallbackInputWithSecrets(t *testing.T) {
+	innerInput := &internal.Input{Input: &fixedInput{}}
+	iws := internal.InputWithSecrets{Input: innerInput, Count: 1}
+
+	result := AddRenameCallback(iws, func(labels map[string]string, annotations types.MetricAnnotations) (map[string]string, types.MetricAnnotations) {
+		return labels, annotations
+	})
+
+	got, ok := result.(internal.InputWithSecrets)
+	if !ok {
+		t.Fatalf("expected InputWithSecrets, got %T", result)
+	}
+
+	if got.Input != innerInput {
+		t.Error("expected the same *Input, got a different one (unnecessary wrapper was created)")
+	}
+
+	if len(innerInput.Accumulator.RenameCallbacks) != 1 {
+		t.Errorf("expected 1 callback on the inner Input, got %d", len(innerInput.Accumulator.RenameCallbacks))
+	}
+}
+
+// TestAddInstanceSharedTags verifies that AddInstance does not corrupt the item label when
+// an input (like the Telegraf MySQL plugin) reuses the same tags map across multiple AddFields calls.
+func TestAddInstanceSharedTags(t *testing.T) {
+	const (
+		containerName   = "my-mysql"
+		measurementName = "mysql"
+	)
+
+	fieldSet1 := map[string]any{"queries": 100.0}
+	fieldSet2 := map[string]any{"slow_queries": 5.0}
+	fieldSet3 := map[string]any{"threads_connected": 10.0}
+	now := time.Now()
+
+	acc := &internal.StoreAccumulator{}
+
+	input := AddInstance(&sharedTagsInput{
+		measurementName: measurementName,
+		tags:            map[string]string{"server": "127.0.0.1:3306"},
+		fieldSets:       []map[string]any{fieldSet1, fieldSet2, fieldSet3},
+		now:             now,
+	}, containerName)
+
+	if err := input.Gather(acc); err != nil {
+		t.Error(err)
+	}
+
+	expectedTags := map[string]string{
+		"server":        "127.0.0.1:3306",
+		types.LabelItem: containerName,
+	}
+
+	for _, m := range acc.Measurement {
+		if diff := cmp.Diff(expectedTags, m.Tags); diff != "" {
+			t.Errorf("tags mismatch for measurement %q (-want +got)\n%s", m.Name, diff)
+		}
+	}
+
+	if len(acc.Measurement) != 3 {
+		t.Errorf("expected 3 measurements, got %d", len(acc.Measurement))
 	}
 }
