@@ -779,6 +779,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	a.store = store.New("agent store", 3*time.Minute, 2*time.Hour)
 
+	a.setupLocalTSDB()
+
 	bleemeoFilteredStore := store.NewFilteredStore(
 		a.store,
 		func(m []types.MetricPoint) []types.MetricPoint {
@@ -798,9 +800,14 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	secretInputsGate := gate.New(inputs.MaxParallelSecrets())
 
+	var pushPoint types.PointPusher = a.store
+	if localTSDB := a.reloadState.LocalStore(); localTSDB != nil {
+		pushPoint = teePointPusher{primary: a.store, secondary: localTSDB}
+	}
+
 	a.gathererRegistry, err = registry.New(
 		registry.Option{
-			PushPoint:             a.store,
+			PushPoint:             pushPoint,
 			ThresholdHandler:      a.threshold,
 			FQDN:                  fqdn,
 			GloutonPort:           strconv.Itoa(a.config.Web.Listener.Port),
@@ -961,8 +968,18 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	promExporter := a.gathererRegistry.Exporter()
 
+	apiDB := api.NewQueryable(a.store, a.BleemeoAgentID)
+
+	var localStoreInfo api.LocalStoreInfo
+
+	if localTSDB := a.reloadState.LocalStore(); localTSDB != nil {
+		apiDB = api.NewQueryableWithSecondary(a.store, localTSDB, a.BleemeoAgentID)
+		localStoreInfo = localTSDB
+	}
+
 	api := &api.API{
-		DB:                 api.NewQueryable(a.store, a.BleemeoAgentID),
+		DB:                 apiDB,
+		LocalStore:         localStoreInfo,
 		ContainerRuntime:   a.containerRuntime,
 		Endpoints:          a.config.Web.Endpoints,
 		PsFact:             psFact,
@@ -2301,6 +2318,10 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 
 	if a.bleemeoConnector != nil {
 		modules = append(modules, a.bleemeoConnector.DiagnosticArchive)
+	}
+
+	if localTSDB := a.reloadState.LocalStore(); localTSDB != nil {
+		modules = append(modules, localTSDB.DiagnosticArchive)
 	}
 
 	if a.monitorManager != nil {

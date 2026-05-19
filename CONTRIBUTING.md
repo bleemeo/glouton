@@ -32,10 +32,13 @@ docker tag glouton:latest bleemeo/bleemeo-agent:proposed
 
 If you can't run `./dist/glouton_linux_YOUR-ARCH/glouton` because it is a Linux binary, you can simply run `go run .`.
 
-When loading the UI, if Glouton is not able to discover your Docker containers, try changing the Docker socket with :
+Glouton auto-detects the Docker Desktop and Colima socket paths used
+on macOS, so containers running in Docker Desktop's Linux VM appear
+in the panel without extra configuration. If you run Docker through
+a non-standard socket path, point glouton at it explicitly:
 
 ```sh
-export GLOUTON_CONTAINER_RUNTIME_DOCKER_ADDRESSES="unix://${HOME}/.docker/run/docker.sock"
+export GLOUTON_CONTAINER_RUNTIME_DOCKER_ADDRESSES="unix:///path/to/docker.sock"
 ```
 
 ### Linters
@@ -175,6 +178,36 @@ export GLOUTON_BLEEMEO_MQTT_HOST=localhost
 export GLOUTON_BLEEMEO_MQTT_PORT=1883
 export GLOUTON_BLEEMEO_MQTT_SSL=False
 ```
+
+### Local metric history (TSDB)
+
+When the Bleemeo connector is disabled, Glouton enables an embedded
+Prometheus TSDB by default so the local UI can serve historical data
+across restarts. Files are stored under `${state_directory}/tsdb` (so
+`/var/lib/glouton/tsdb` on a packaged install, or the working directory
+during `go run`).
+
+To force the behavior either way, set `agent.local_store.enable` in the
+config or use the env var:
+
+```sh
+export GLOUTON_AGENT_LOCAL_STORE_ENABLE=true   # always on
+export GLOUTON_AGENT_LOCAL_STORE_ENABLE=false  # always off
+```
+
+Retention defaults to 15 days; tune it via `agent.local_store.retention`
+(any Go duration string, e.g. `7d`, `720h`).
+
+The capability is exposed at `GET /data/store-info` so the UI can decide
+which time-range buttons are meaningful given how far back data actually
+goes:
+
+```json
+{ "persistent": true, "retention_seconds": 1296000, "oldest_point_ms": 1777925810000 }
+```
+
+If the configured path is not writable, Glouton logs a warning and
+continues without persistence — the agent does not fail to start.
 
 ## Advanced testing
 

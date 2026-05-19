@@ -162,6 +162,9 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 func isNilAllowedFor(key string) bool {
 	return map[string]bool{
 		"blackbox.modules.http.http.http_client_config.http_headers": true,
+		// Tri-state pointer: nil means "auto" (resolved at runtime
+		// against bleemeo.enable).
+		"agent.local_store.enable": true,
 	}[key]
 }
 

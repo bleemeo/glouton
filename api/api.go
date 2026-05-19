@@ -62,13 +62,24 @@ type agentInterface interface {
 	Tags() []string
 }
 
+// LocalStoreInfo describes the on-disk persistent metric store, when
+// present. The API exposes this so the UI can decide which time-range
+// buttons to enable.
+type LocalStoreInfo interface {
+	// Retention returns how far back the store is configured to keep data.
+	Retention() time.Duration
+	// OldestPointMs returns the timestamp (ms since epoch) of the
+	// oldest queryable point, or 0 if the store has no data.
+	OldestPointMs() int64
+}
+
 // API contains API's port.
 type API struct {
 	BindAddress        string
 	StaticCDNURL       string
 	LocalUIDisabled    bool
 	Endpoints          config.WebEndpoints
-	DB                 metricQueryable
+	DB                 MetricQueryable
 	ContainerRuntime   containerInterface
 	PsFact             *facts.ProcessProvider
 	FactProvider       *facts.FactProvider
@@ -76,6 +87,7 @@ type API struct {
 	AgentInfo          agentInterface
 	PrometheusExporter http.Handler
 	Threshold          *threshold.Registry
+	LocalStore         LocalStoreInfo
 	DiagnosticPage     func(ctx context.Context) string
 	DiagnosticArchive  func(ctx context.Context, w types.ArchiveWriter) error
 
@@ -184,6 +196,7 @@ func (api *API) init() {
 		router.Get("/data/services", data.Services)
 		router.Get("/data/agent-informations", data.AgentInformation)
 		router.Get("/data/agent-status", data.AgentStatus)
+		router.Get("/data/store-info", data.StoreInfo)
 		router.Get("/data/tags", data.Tags)
 		router.Get("/data/processes", data.Processes)
 		router.Get("/data/logs", data.Logs)
