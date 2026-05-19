@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -34,6 +34,45 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/vmware/govmomi/simulator"
+)
+
+// Test-only constants for repeated values.
+const (
+	testStatePoweredOn = "poweredOn"
+	testStateGreen     = "green"
+)
+
+// Test fact key constants.
+const (
+	testFactKeyDomain      = "domain"
+	testFactKeyIPv6Enabled = "ipv6_enabled"
+	testFactKeyCPUModel    = "cpu_model_name"
+	testFactKeyProductName = "product_name"
+	testFactKeySysVendor   = "system_vendor"
+)
+
+// Test fact value constants shared across test files.
+const (
+	testDatastore25    = "datastore-25"
+	testCPUModelI7     = "Intel(R) Core(TM) i7-3615QM CPU @ 2.30GHz"
+	testFalse          = "false"
+	testMem4GB         = "4.00 GB"
+	testOSVmnixX86     = "vmnix-x86"
+	testIP127001       = "127.0.0.1"
+	testProductVMW     = "VMware Virtual Platform"
+	testVendorGovmomi  = "VMware, Inc. (govmomi simulator)"
+	testVersion650     = "6.5.0"
+	testDomainLocal    = "localdomain"
+	testVMVersionVmx13 = "vmx-13"
+	testDisk202_0      = "disk-202-0"
+	testEthernet0      = "ethernet-0"
+	testResources      = "Resources"
+	testDisk1000_0     = "disk-1000-0"
+	testMOIDVM74       = "vm-74"
+	testVMAppHaproxy2  = "app-haproxy2"
+	testVMVcenterVmx   = "vcenter.vmx"
+	testVMLunar        = "lunar"
+	testSCSI00         = "scsi0:0"
 )
 
 func setupVSphereAPITest(t *testing.T, dirName string) (vSphereCfg config.VSphere, deferFn func()) {
@@ -119,7 +158,7 @@ func TestVSphereSteps(t *testing.T) {
 
 	const scraperFQDN = "scraper FQDN"
 
-	providedFacts := map[string]string{"fqdn": scraperFQDN}
+	providedFacts := map[string]string{factFQDN: scraperFQDN}
 	dummyVSphere := newVSphere(vSphereURL.Host, vSphereCfg, nil, facts.NewMockFacter(providedFacts))
 
 	err = dummyVSphere.hierarchy.Refresh(ctx, clusters, resourcePools, hosts, vms, dummyVSphere.devicePropsCache.vmCache)
@@ -144,16 +183,16 @@ func TestVSphereSteps(t *testing.T) {
 	expectedCluster := Cluster{
 		device: device{
 			source: vSphereURL.Host,
-			moid:   "domain-c16",
-			name:   "DC0_C0",
+			moid:   testMOIDDomainC16,
+			name:   testClusterDC0C0,
 			facts: map[string]string{
-				"cpu_cores":    "2",
-				"fqdn":         "DC0_C0",
-				"scraper_fqdn": "scraper FQDN",
+				factCPUCores:    "2",
+				factFQDN:        testClusterDC0C0,
+				factScraperFQDN: scraperFQDN,
 			},
-			state: "green",
+			state: testStateGreen,
 		},
-		datastores: []string{"datastore-25"},
+		datastores: []string{testDatastore25},
 	}
 	if diff := cmp.Diff(expectedCluster, *cluster, cmp.AllowUnexported(Cluster{}, device{})); diff != "" {
 		t.Fatalf("Unexpected host description (-want +got):\n%s", diff)
@@ -176,25 +215,25 @@ func TestVSphereSteps(t *testing.T) {
 	expectedHost := HostSystem{
 		device{
 			source: vSphereURL.Host,
-			moid:   "host-23",
-			name:   "DC0_C0_H0",
+			moid:   testMOIDHost23,
+			name:   testHostDC0C0H0,
 			facts: map[string]string{
-				"cpu_cores":               "2",
-				"cpu_model_name":          "Intel(R) Core(TM) i7-3615QM CPU @ 2.30GHz",
-				"domain":                  "localdomain",
-				"fqdn":                    "DC0_C0_H0.localdomain",
-				"hostname":                "DC0_C0_H0",
-				"ipv6_enabled":            "false",
-				"memory":                  "4.00 GB",
-				"os_pretty_name":          "vmnix-x86",
-				"primary_address":         "127.0.0.1",
-				"product_name":            "VMware Virtual Platform",
-				"scraper_fqdn":            "scraper FQDN",
-				"system_vendor":           "VMware, Inc. (govmomi simulator)",
-				"vsphere_host_version":    "6.5.0",
-				"vsphere_vmotion_enabled": "false",
+				factCPUCores:              "2",
+				testFactKeyCPUModel:       testCPUModelI7,
+				testFactKeyDomain:         testDomainLocal,
+				factFQDN:                  "DC0_C0_H0.localdomain",
+				factHostname:              testHostDC0C0H0,
+				testFactKeyIPv6Enabled:    testFalse,
+				factMemory:                testMem4GB,
+				factOSPrettyName:          testOSVmnixX86,
+				factPrimaryAddress:        testIP127001,
+				testFactKeyProductName:    testProductVMW,
+				factScraperFQDN:           scraperFQDN,
+				testFactKeySysVendor:      testVendorGovmomi,
+				factVSphereHostVersion:    testVersion650,
+				factVSphereVMotionEnabled: testFalse,
 			},
-			state: "poweredOn",
+			state: testStatePoweredOn,
 		},
 	}
 	if diff := cmp.Diff(expectedHost, *host, cmp.AllowUnexported(HostSystem{}, device{})); diff != "" {
@@ -218,21 +257,21 @@ func TestVSphereSteps(t *testing.T) {
 	expectedVM := VirtualMachine{
 		device: device{
 			source: vSphereURL.Host,
-			moid:   "vm-28",
-			name:   "DC0_C0_RP0_VM0",
+			moid:   testMOIDVM28,
+			name:   testVMDC0C0RP0VM0,
 			facts: map[string]string{
-				"cpu_cores":             "1",
-				"fqdn":                  "DC0_C0_RP0_VM0",
-				"hostname":              "DC0_C0_RP0_VM0",
-				"memory":                "32.00 MB",
-				"os_pretty_name":        "",
-				"scraper_fqdn":          "scraper FQDN",
-				"vsphere_host":          "DC0_C0_H0",
-				"vsphere_resource_pool": "Resources",
-				"vsphere_vm_name":       "DC0_C0_RP0_VM0",
-				"vsphere_vm_version":    "vmx-13",
+				factCPUCores:            "1",
+				factFQDN:                testVMDC0C0RP0VM0,
+				factHostname:            testVMDC0C0RP0VM0,
+				factMemory:              "32.00 MB",
+				factOSPrettyName:        "",
+				factScraperFQDN:         scraperFQDN,
+				factVSphereHost:         testHostDC0C0H0,
+				factVSphereResourcePool: testResources,
+				factVSphereVMName:       testVMDC0C0RP0VM0,
+				factVSphereVMVersion:    testVMVersionVmx13,
 			},
-			state: "poweredOn",
+			state: testStatePoweredOn,
 		},
 	}
 	if diff := cmp.Diff(expectedVM, *vm, cmp.AllowUnexported(VirtualMachine{}, device{})); diff != "" {
@@ -240,8 +279,8 @@ func TestVSphereSteps(t *testing.T) {
 	}
 
 	expectedLabelsMetadata := labelsMetadata{
-		disksPerVM:         map[string]map[string]string{"vm-28": {"scsi0:0": "disk-202-0"}},
-		netInterfacesPerVM: map[string]map[string]string{"vm-28": {"4000": "ethernet-0"}},
+		disksPerVM:         map[string]map[string]string{testMOIDVM28: {testSCSI00: testDisk202_0}},
+		netInterfacesPerVM: map[string]map[string]string{testMOIDVM28: {"4000": testEthernet0}},
 	}
 	if diff := cmp.Diff(expectedLabelsMetadata, vmLabelsMetadata, cmp.AllowUnexported(labelsMetadata{})); diff != "" {
 		t.Fatalf("Unexpected labels metadata (-want +got):\n%s", diff)
@@ -268,25 +307,25 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 				{
 					device{
 						moid: "ha-host",
-						name: "esxi.test",
+						name: testHostESXI,
 						facts: map[string]string{
-							"cpu_cores":               "4",
-							"cpu_model_name":          "Intel(R) Core(TM) i7-8550U CPU @ 1.80GHz",
-							"domain":                  "test",
-							"fqdn":                    "esxi.test.test",
-							"hostname":                "esxi.test",
-							"ipv6_enabled":            "false",
-							"memory":                  "4.00 GB",
-							"os_pretty_name":          "vmnix-x86",
-							"primary_address":         "192.168.121.241",
-							"product_name":            "Standard PC (i440FX + PIIX, 1996)",
-							"scraper_fqdn":            "scraper FQDN",
-							"system_vendor":           "QEMU",
+							factCPUCores:              "4",
+							testFactKeyCPUModel:       "Intel(R) Core(TM) i7-8550U CPU @ 1.80GHz",
+							testFactKeyDomain:         "test",
+							factFQDN:                  "esxi.test.test",
+							factHostname:              testHostESXI,
+							testFactKeyIPv6Enabled:    testFalse,
+							factMemory:                testMem4GB,
+							factOSPrettyName:          testOSVmnixX86,
+							factPrimaryAddress:        "192.168.121.241",
+							testFactKeyProductName:    "Standard PC (i440FX + PIIX, 1996)",
+							factScraperFQDN:           scraperFQDN,
+							testFactKeySysVendor:      "QEMU",
 							"timezone":                "UTC",
-							"vsphere_host_version":    "8.0.1",
-							"vsphere_vmotion_enabled": "false",
+							factVSphereHostVersion:    "8.0.1",
+							factVSphereVMotionEnabled: testFalse,
 						},
-						state: "poweredOn",
+						state: testStatePoweredOn,
 					},
 				},
 			},
@@ -294,14 +333,14 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 				{
 					device: device{
 						moid: "1",
-						name: "vcenter.vmx",
+						name: testVMVcenterVmx,
 						facts: map[string]string{
-							"fqdn":                  "vcenter.vmx",
-							"hostname":              "vcenter.vmx",
-							"os_pretty_name":        "",
-							"scraper_fqdn":          "scraper FQDN",
-							"vsphere_host":          "esxi.test",
-							"vsphere_resource_pool": "Resources",
+							factFQDN:                testVMVcenterVmx,
+							factHostname:            testVMVcenterVmx,
+							factOSPrettyName:        "",
+							factScraperFQDN:         scraperFQDN,
+							factVSphereHost:         testHostESXI,
+							factVSphereResourcePool: testResources,
 						},
 						state: "poweredOff",
 					},
@@ -309,19 +348,19 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 				{
 					device: device{
 						moid: "8",
-						name: "lunar",
+						name: testVMLunar,
 						facts: map[string]string{
-							"cpu_cores":             "2",
-							"fqdn":                  "lunar",
-							"hostname":              "lunar",
-							"memory":                "1.00 GB",
-							"os_pretty_name":        "Ubuntu Linux (64-bit)",
-							"scraper_fqdn":          "scraper FQDN",
-							"vsphere_datastore":     "datastore1",
-							"vsphere_host":          "esxi.test",
-							"vsphere_resource_pool": "Resources",
-							"vsphere_vm_name":       "lunar",
-							"vsphere_vm_version":    "vmx-10",
+							factCPUCores:            "2",
+							factFQDN:                testVMLunar,
+							factHostname:            testVMLunar,
+							factMemory:              "1.00 GB",
+							factOSPrettyName:        "Ubuntu Linux (64-bit)",
+							factScraperFQDN:         scraperFQDN,
+							factVSphereDatastore:    "datastore1",
+							factVSphereHost:         testHostESXI,
+							factVSphereResourcePool: testResources,
+							factVSphereVMName:       testVMLunar,
+							factVSphereVMVersion:    "vmx-10",
 						},
 						state: "poweredOff",
 					},
@@ -329,38 +368,38 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 				{
 					device: device{
 						moid: "10",
-						name: "alp1",
+						name: testVMAlp1,
 						facts: map[string]string{
-							"cpu_cores":             "1",
-							"fqdn":                  "alp1",
-							"hostname":              "alpine",
-							"memory":                "512.00 MB",
-							"os_pretty_name":        "Linux 5.15.71-0-virt Alpine Linux v3.15 Alpine Linux 3.15.6",
-							"primary_address":       "192.168.121.117",
-							"scraper_fqdn":          "scraper FQDN",
-							"vsphere_datastore":     "datastore1",
-							"vsphere_host":          "esxi.test",
-							"vsphere_resource_pool": "Resources",
-							"vsphere_vm_name":       "alp1",
-							"vsphere_vm_version":    "vmx-14",
+							factCPUCores:            "1",
+							factFQDN:                testVMAlp1,
+							factHostname:            "alpine",
+							factMemory:              "512.00 MB",
+							factOSPrettyName:        "Linux 5.15.71-0-virt Alpine Linux v3.15 Alpine Linux 3.15.6",
+							factPrimaryAddress:      "192.168.121.117",
+							factScraperFQDN:         scraperFQDN,
+							factVSphereDatastore:    "datastore1",
+							factVSphereHost:         testHostESXI,
+							factVSphereResourcePool: testResources,
+							factVSphereVMName:       testVMAlp1,
+							factVSphereVMVersion:    "vmx-14",
 						},
-						state: "poweredOn",
+						state: testStatePoweredOn,
 					},
 				},
 			},
 			expectedLabelsMetadata: map[string]labelsMetadata{
-				"127.0.0.1": {
+				testIP127001: {
 					datastorePerLUN: map[string]string{},
 					disksPerVM: map[string]map[string]string{
 						"1": nil,
 						"10": {
-							"nvme0:0": "disk-31000-0",
-							"sata0:0": "disk-15000-0",
-							"scsi0:0": "disk-1000-0",
+							"nvme0:0":  "disk-31000-0",
+							"sata0:0":  "disk-15000-0",
+							testSCSI00: testDisk1000_0,
 						},
-						"8": {"scsi0:0": "disk-1000-0"},
+						"8": {testSCSI00: testDisk1000_0},
 					},
-					netInterfacesPerVM: map[string]map[string]string{"1": nil, "10": {"4000": "ethernet-0"}, "8": {"4000": "ethernet-0"}},
+					netInterfacesPerVM: map[string]map[string]string{"1": nil, "10": {"4000": testEthernet0}, "8": {"4000": testEthernet0}},
 				},
 			},
 		},
@@ -370,69 +409,69 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 			expectedClusters: []*Cluster{
 				{
 					device: device{
-						moid: "domain-c16",
-						name: "DC0_C0",
+						moid: testMOIDDomainC16,
+						name: testClusterDC0C0,
 						facts: map[string]string{
-							"cpu_cores":    "2",
-							"fqdn":         "DC0_C0",
-							"scraper_fqdn": "scraper FQDN",
+							factCPUCores:    "2",
+							factFQDN:        testClusterDC0C0,
+							factScraperFQDN: scraperFQDN,
 						},
-						state: "green",
+						state: testStateGreen,
 					},
-					datastores: []string{"datastore-25"},
+					datastores: []string{testDatastore25},
 				},
 			},
 			expectedHosts: []*HostSystem{
 				{
 					device: device{
-						moid: "host-23",
-						name: "DC0_C0_H0",
+						moid: testMOIDHost23,
+						name: testHostDC0C0H0,
 						facts: map[string]string{
-							"cpu_cores":               "2",
-							"cpu_model_name":          "Intel(R) Core(TM) i7-3615QM CPU @ 2.30GHz",
-							"domain":                  "localdomain",
-							"fqdn":                    "DC0_C0_H0.localdomain",
-							"hostname":                "DC0_C0_H0",
-							"ipv6_enabled":            "false",
-							"memory":                  "4.00 GB",
-							"os_pretty_name":          "vmnix-x86",
-							"primary_address":         "127.0.0.1",
-							"product_name":            "VMware Virtual Platform",
-							"scraper_fqdn":            "scraper FQDN",
-							"system_vendor":           "VMware, Inc. (govmomi simulator)",
-							"vsphere_host_version":    "6.5.0",
-							"vsphere_vmotion_enabled": "false",
+							factCPUCores:              "2",
+							testFactKeyCPUModel:       testCPUModelI7,
+							testFactKeyDomain:         testDomainLocal,
+							factFQDN:                  "DC0_C0_H0.localdomain",
+							factHostname:              testHostDC0C0H0,
+							testFactKeyIPv6Enabled:    testFalse,
+							factMemory:                testMem4GB,
+							factOSPrettyName:          testOSVmnixX86,
+							factPrimaryAddress:        testIP127001,
+							testFactKeyProductName:    testProductVMW,
+							factScraperFQDN:           scraperFQDN,
+							testFactKeySysVendor:      testVendorGovmomi,
+							factVSphereHostVersion:    testVersion650,
+							factVSphereVMotionEnabled: testFalse,
 						},
-						state: "poweredOn",
+						state: testStatePoweredOn,
 					},
 				},
 			},
 			expectedVMs: []*VirtualMachine{
 				{
 					device: device{
-						moid: "vm-28",
-						name: "DC0_C0_RP0_VM0",
+						moid: testMOIDVM28,
+						name: testVMDC0C0RP0VM0,
 						facts: map[string]string{
-							"cpu_cores":             "1",
-							"fqdn":                  "DC0_C0_RP0_VM0",
-							"hostname":              "DC0_C0_RP0_VM0",
-							"memory":                "32.00 MB",
-							"os_pretty_name":        "",
-							"scraper_fqdn":          "scraper FQDN",
-							"vsphere_host":          "DC0_C0_H0",
-							"vsphere_resource_pool": "Resources",
-							"vsphere_vm_name":       "DC0_C0_RP0_VM0",
-							"vsphere_vm_version":    "vmx-13",
+							factCPUCores:            "1",
+							factFQDN:                testVMDC0C0RP0VM0,
+							factHostname:            testVMDC0C0RP0VM0,
+							factMemory:              "32.00 MB",
+							factOSPrettyName:        "",
+							factScraperFQDN:         scraperFQDN,
+							factVSphereHost:         testHostDC0C0H0,
+							factVSphereResourcePool: testResources,
+							factVSphereVMName:       testVMDC0C0RP0VM0,
+							factVSphereVMVersion:    testVMVersionVmx13,
 						},
-						state: "poweredOn",
+						state: testStatePoweredOn,
 					},
 				},
 			},
 			expectedLabelsMetadata: map[string]labelsMetadata{
-				"127.0.0.1": {
+				testIP127001: {
 					datastorePerLUN:    map[string]string{},
-					disksPerVM:         map[string]map[string]string{"vm-28": {"scsi0:0": "disk-202-0"}},
-					netInterfacesPerVM: map[string]map[string]string{"vm-28": {"4000": "ethernet-0"}},
+					disksPerVM:         map[string]map[string]string{testMOIDVM28: {testSCSI00: testDisk202_0}},
+					netInterfacesPerVM: map[string]map[string]string{testMOIDVM28: {"4000": testEthernet0}},
 				},
 			},
 		},
@@ -443,31 +482,31 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 			expectedVMs: []*VirtualMachine{
 				{
 					device: device{
-						moid: "vm-74",
-						name: "app-haproxy2",
+						moid: testMOIDVM74,
+						name: testVMAppHaproxy2,
 						facts: map[string]string{
-							"cpu_cores":             "2",
-							"fqdn":                  "app-haproxy2",
-							"hostname":              "app-haproxy2",
-							"memory":                "2.00 GB",
-							"vsphere_host":          "host-11",    // TODO improve this
-							"vsphere_resource_pool": "resgroup-8", // TODO improve this
-							"os_pretty_name":        "Debian GNU/Linux 11 (64-bit)",
-							"primary_address":       "192.168.0.2",
-							"scraper_fqdn":          "scraper FQDN",
-							"vsphere_datastore":     "Datastore001",
-							"vsphere_vm_name":       "app-haproxy2",
-							"vsphere_vm_version":    "vmx-07",
+							factCPUCores:            "2",
+							factFQDN:                testVMAppHaproxy2,
+							factHostname:            testVMAppHaproxy2,
+							factMemory:              "2.00 GB",
+							factVSphereHost:         "host-11",    // TODO improve this
+							factVSphereResourcePool: "resgroup-8", // TODO improve this
+							factOSPrettyName:        "Debian GNU/Linux 11 (64-bit)",
+							factPrimaryAddress:      "192.168.0.2",
+							factScraperFQDN:         scraperFQDN,
+							factVSphereDatastore:    "Datastore001",
+							factVSphereVMName:       testVMAppHaproxy2,
+							factVSphereVMVersion:    "vmx-07",
 						},
-						state: "poweredOn",
+						state: testStatePoweredOn,
 					},
 				},
 			},
 			expectedLabelsMetadata: map[string]labelsMetadata{
-				"127.0.0.1": {
+				testIP127001: {
 					datastorePerLUN:    map[string]string{},
-					disksPerVM:         map[string]map[string]string{"vm-74": {"scsi0:0": "disk-1000-0"}},
-					netInterfacesPerVM: map[string]map[string]string{"vm-74": {"4000": "ethernet-0"}},
+					disksPerVM:         map[string]map[string]string{testMOIDVM74: {testSCSI00: testDisk1000_0}},
+					netInterfacesPerVM: map[string]map[string]string{testMOIDVM74: {"4000": testEthernet0}},
 				},
 			},
 		},
@@ -490,7 +529,7 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 					return nil, nil //nolint: nilnil
 				},
 				nil,
-				facts.NewMockFacter(map[string]string{"fqdn": scraperFQDN}),
+				facts.NewMockFacter(map[string]string{factFQDN: scraperFQDN}),
 			)
 
 			devices := manager.Devices(ctx, 0)

@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -26,6 +26,32 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/types"
+)
+
+// Test metric name constants.
+const (
+	metricNoDerive    = "metricNoDerive"
+	metricDeriveFloat = "metricDeriveFloat"
+	metricDeriveInt   = "metricDeriveInt"
+	metricDeriveUint  = "metricDeriveUint"
+	metricDeriveBack  = "metricDeriveBack"
+	metricDeriveBack2 = "metricDeriveBack2"
+	metricDouble      = "metricDouble"
+	metricDuplicate   = "metricDuplicate"
+
+	fieldIOReads  = "io_reads"
+	fieldLoad1    = "load1"
+	fieldRequests = "requests"
+
+	tagValueStr = "value"
+	tagItem     = "item"
+	tagDB       = "dbname"
+)
+
+// Test disk item names.
+const (
+	diskSDA     = "sda"
+	diskNvme0n1 = "nvme0n1"
 )
 
 func TestDefault(t *testing.T) {
@@ -64,12 +90,12 @@ func TestDefault(t *testing.T) {
 func TestRename(t *testing.T) {
 	called := false
 	transformMetrics := func(currentContext GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {
-		if currentContext.Tags["newTag"] != "value" {
+		if currentContext.Tags["newTag"] != tagValueStr {
 			t.Errorf("tags[newTag] == %#v, want %#v", currentContext.Tags["newTag"], "value")
 		}
 
 		for k, v := range fields {
-			if k == "metricDouble" {
+			if k == metricDouble {
 				fields[k] = v * 2
 			}
 
@@ -82,7 +108,7 @@ func TestRename(t *testing.T) {
 				delete(fields, k)
 			}
 
-			if k == "metricDuplicate" {
+			if k == metricDuplicate {
 				fields["metricDuplicated"] = v
 			}
 		}
@@ -94,7 +120,7 @@ func TestRename(t *testing.T) {
 		return GatherContext{
 			Measurement: "cpu2",
 			Tags: map[string]string{
-				"newTag": "value",
+				"newTag": tagValueStr,
 			},
 		}, false
 	}
@@ -103,7 +129,7 @@ func TestRename(t *testing.T) {
 			t.Errorf("measurement == %#v, want %#v", measurement, "cpu2")
 		}
 
-		if tags["newTag"] != "value" {
+		if tags["newTag"] != tagValueStr {
 			t.Errorf("tags[newTag] = %#v, want %#v", tags["newTag"], "value")
 		}
 
@@ -111,9 +137,9 @@ func TestRename(t *testing.T) {
 			name  string
 			value float64
 		}{
-			{"metricDouble", 40.0},
+			{metricDouble, 40.0},
 			{"metricNewName", 42.0},
-			{"metricDuplicate", 5.0},
+			{metricDuplicate, 5.0},
 			{"metricDuplicated", 5.0},
 		}
 
@@ -139,13 +165,13 @@ func TestRename(t *testing.T) {
 		finalFunc,
 		"cpu",
 		map[string]any{
-			"metricDouble":    20.0,
-			"metricRename":    42,
-			"metricDrop":      42.0,
-			"metricDuplicate": uint64(5),
+			metricDouble:    20.0,
+			"metricRename":  42,
+			"metricDrop":    42.0,
+			metricDuplicate: uint64(5),
 		},
 		map[string]string{
-			"oldTag": "value",
+			"oldTag": tagValueStr,
 		},
 	)
 
@@ -162,7 +188,7 @@ func TestDerive(t *testing.T) {
 			name  string
 			value float64
 		}{
-			{"metricNoDerive", 42.0},
+			{metricNoDerive, 42.0},
 		}
 		if len(fields) != len(cases) {
 			t.Errorf("len(fields) == %v, want %v", len(fields), len(cases))
@@ -182,10 +208,10 @@ func TestDerive(t *testing.T) {
 			name  string
 			value float64
 		}{
-			{"metricNoDerive", 12.0},
-			{"metricDeriveFloat", 1.3},
-			{"metricDeriveInt", 1.0},
-			{"metricDeriveUint", 2.0},
+			{metricNoDerive, 12.0},
+			{metricDeriveFloat, 1.3},
+			{metricDeriveInt, 1.0},
+			{metricDeriveUint, 2.0},
 		}
 
 		if len(fields) != len(cases) {
@@ -205,19 +231,19 @@ func TestDerive(t *testing.T) {
 	t0 := time.Now()
 	t1 := t0.Add(10 * time.Second)
 	acc := Accumulator{
-		DifferentiatedMetrics: []string{"metricDeriveFloat", "metricDeriveInt", "metricDeriveUint", "metricDeriveBack", "metricDeriveBack2"},
+		DifferentiatedMetrics: []string{metricDeriveFloat, metricDeriveInt, metricDeriveUint, metricDeriveBack, metricDeriveBack2},
 	}
 	acc.PrepareGather()
 	acc.processMetrics(
 		finalFunc1,
 		"cpu",
 		map[string]any{
-			"metricNoDerive":    42.0,
-			"metricDeriveFloat": 10.0,
-			"metricDeriveInt":   0,
-			"metricDeriveUint":  uint64(1000000),
-			"metricDeriveBack":  100.0,
-			"metricDeriveBack2": uint64(100),
+			metricNoDerive:    42.0,
+			metricDeriveFloat: 10.0,
+			metricDeriveInt:   0,
+			metricDeriveUint:  uint64(1000000),
+			metricDeriveBack:  100.0,
+			metricDeriveBack2: uint64(100),
 		},
 		nil,
 		t0,
@@ -227,12 +253,12 @@ func TestDerive(t *testing.T) {
 		finalFunc2,
 		"cpu",
 		map[string]any{
-			"metricNoDerive":    12.0,
-			"metricDeriveFloat": 23.0,
-			"metricDeriveInt":   10,
-			"metricDeriveUint":  uint64(1000020),
-			"metricDeriveBack":  42.0,
-			"metricDeriveBack2": uint64(42),
+			metricNoDerive:    12.0,
+			metricDeriveFloat: 23.0,
+			metricDeriveInt:   10,
+			metricDeriveUint:  uint64(1000020),
+			metricDeriveBack:  42.0,
+			metricDeriveBack2: uint64(42),
 		},
 		nil,
 		t1,
@@ -255,7 +281,7 @@ func TestDeriveFunc(t *testing.T) {
 			name  string
 			value float64
 		}{
-			{"metricNoDerive", 42.0},
+			{metricNoDerive, 42.0},
 		}
 
 		if len(fields) != len(cases) {
@@ -275,10 +301,10 @@ func TestDeriveFunc(t *testing.T) {
 			name  string
 			value float64
 		}{
-			{"metricNoDerive", 12.0},
-			{"metricDeriveFloat", 1.3},
-			{"metricDeriveInt", 1.0},
-			{"metricDeriveUint", 2.0},
+			{metricNoDerive, 12.0},
+			{metricDeriveFloat, 1.3},
+			{metricDeriveInt, 1.0},
+			{metricDeriveUint, 2.0},
 		}
 
 		if len(fields) != len(cases) {
@@ -300,7 +326,7 @@ func TestDeriveFunc(t *testing.T) {
 	t0 := time.Now()
 	t1 := t0.Add(10 * time.Second)
 	acc := Accumulator{
-		DifferentiatedMetrics:      []string{"metricDeriveFloat"},
+		DifferentiatedMetrics:      []string{metricDeriveFloat},
 		ShouldDifferentiateMetrics: shouldDifferentiateMetrics,
 	}
 	acc.PrepareGather()
@@ -308,10 +334,10 @@ func TestDeriveFunc(t *testing.T) {
 		finalFunc1,
 		"cpu",
 		map[string]any{
-			"metricNoDerive":    42.0,
-			"metricDeriveFloat": 10.0,
-			"metricDeriveInt":   0,
-			"metricDeriveUint":  uint64(1000000),
+			metricNoDerive:    42.0,
+			metricDeriveFloat: 10.0,
+			metricDeriveInt:   0,
+			metricDeriveUint:  uint64(1000000),
 		},
 		nil,
 		t0,
@@ -321,10 +347,10 @@ func TestDeriveFunc(t *testing.T) {
 		finalFunc2,
 		"cpu",
 		map[string]any{
-			"metricNoDerive":    12.0,
-			"metricDeriveFloat": 23.0,
-			"metricDeriveInt":   10,
-			"metricDeriveUint":  uint64(1000020),
+			metricNoDerive:    12.0,
+			metricDeriveFloat: 23.0,
+			metricDeriveInt:   10,
+			metricDeriveUint:  uint64(1000020),
 		},
 		nil,
 		t1,
@@ -353,10 +379,10 @@ func TestDeriveMultipleTag(t *testing.T) {
 	finalFunc2 := func(_ string, fields map[string]any, tags map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 		var want float64
 
-		switch tags["item"] {
-		case "sda":
+		switch tags[tagItem] {
+		case diskSDA:
 			want = 4.2
-		case "nvme0n1":
+		case diskNvme0n1:
 			want = 1204.0
 		}
 
@@ -364,10 +390,10 @@ func TestDeriveMultipleTag(t *testing.T) {
 			t.Errorf("len(fields) == %v, want %v", len(fields), 1)
 		}
 
-		got, _ := fields["io_reads"].(float64)
+		got, _ := fields[fieldIOReads].(float64)
 
 		if math.Abs(got-want) > 0.001 {
-			t.Errorf("fields[%#v] == %v, want %v", "io_reads", fields["io_reads"], want)
+			t.Errorf("fields[%#v] == %v, want %v", fieldIOReads, fields[fieldIOReads], want)
 		}
 
 		called2++
@@ -376,7 +402,7 @@ func TestDeriveMultipleTag(t *testing.T) {
 	t0 := time.Now()
 	t1 := t0.Add(20 * time.Second)
 	acc := Accumulator{
-		DifferentiatedMetrics: []string{"io_reads"},
+		DifferentiatedMetrics: []string{fieldIOReads},
 	}
 
 	acc.PrepareGather()
@@ -384,10 +410,10 @@ func TestDeriveMultipleTag(t *testing.T) {
 		finalFunc1,
 		"cpu",
 		map[string]any{
-			"io_reads": 100,
+			fieldIOReads: 100,
 		},
 		map[string]string{
-			"item": "sda",
+			tagItem: diskSDA,
 		},
 		t0,
 	)
@@ -395,10 +421,10 @@ func TestDeriveMultipleTag(t *testing.T) {
 		finalFunc1,
 		"cpu",
 		map[string]any{
-			"io_reads": 5748,
+			fieldIOReads: 5748,
 		},
 		map[string]string{
-			"item": "nvme0n1",
+			tagItem: diskNvme0n1,
 		},
 		t0,
 	)
@@ -407,10 +433,10 @@ func TestDeriveMultipleTag(t *testing.T) {
 		finalFunc2,
 		"cpu",
 		map[string]any{
-			"io_reads": 100 + int(4.2*20),
+			fieldIOReads: 100 + int(4.2*20),
 		},
 		map[string]string{
-			"item": "sda",
+			tagItem: diskSDA,
 		},
 		t1,
 	)
@@ -418,10 +444,10 @@ func TestDeriveMultipleTag(t *testing.T) {
 		finalFunc2,
 		"cpu",
 		map[string]any{
-			"io_reads": 5748 + int(1204*20),
+			fieldIOReads: 5748 + int(1204*20),
 		},
 		map[string]string{
-			"item": "nvme0n1",
+			tagItem: diskNvme0n1,
 		},
 		t1,
 	)
@@ -446,7 +472,7 @@ func TestMeasurementMap(t *testing.T) {
 			metricName      string
 			measurementName string
 		}{
-			{"load1", "system"},
+			{fieldLoad1, "system"},
 			{"logged", "users"},
 			{"no_match", "newDefault"},
 		}
@@ -469,7 +495,7 @@ func TestMeasurementMap(t *testing.T) {
 		newMetricName = metricName
 
 		switch metricName {
-		case "load1":
+		case fieldLoad1:
 			newMeasurement = "system"
 		case "n_logged":
 			newMeasurement = "users"
@@ -488,7 +514,7 @@ func TestMeasurementMap(t *testing.T) {
 		finalFunc,
 		"sys",
 		map[string]any{
-			"load1":    20.0,
+			fieldLoad1: 20.0,
 			"n_logged": 42,
 			"no_match": 42.0,
 		},
@@ -530,7 +556,7 @@ func TestRenameCallback(t *testing.T) {
 		finalFunc,
 		"mysql",
 		map[string]any{
-			"requests": 42.0,
+			fieldRequests: 42.0,
 		},
 		nil,
 		t0,
@@ -540,7 +566,7 @@ func TestRenameCallback(t *testing.T) {
 		finalFunc,
 		"mysql",
 		map[string]any{
-			"requests": 1337.0,
+			fieldRequests: 1337.0,
 		},
 		nil,
 		t1,
@@ -592,14 +618,14 @@ func TestRenameCallback2(t *testing.T) {
 		},
 	}
 
-	tags := map[string]string{"db": "dbname"}
+	tags := map[string]string{"db": tagDB}
 
 	acc.PrepareGather()
 	acc.processMetrics(
 		finalFunc,
 		"postgresql",
 		map[string]any{
-			"requests": 42.0,
+			fieldRequests: 42.0,
 		},
 		tags,
 		t0,
@@ -609,7 +635,7 @@ func TestRenameCallback2(t *testing.T) {
 		finalFunc,
 		"postgresql",
 		map[string]any{
-			"requests": 1337.0,
+			fieldRequests: 1337.0,
 		},
 		tags,
 		t1,
@@ -637,7 +663,7 @@ func TestLabelsMutation(t *testing.T) {
 	t0 := time.Now()
 	acc := Accumulator{
 		RenameGlobal: func(gatherContext GatherContext) (GatherContext, bool) {
-			gatherContext.Tags = map[string]string{"db": "dbname"}
+			gatherContext.Tags = map[string]string{"db": tagDB}
 
 			return gatherContext, false
 		},
@@ -650,14 +676,14 @@ func TestLabelsMutation(t *testing.T) {
 			},
 		},
 	}
-	tags := map[string]string{"db": "dbname"}
+	tags := map[string]string{"db": tagDB}
 
 	acc.PrepareGather()
 	acc.processMetrics(
 		finalFunc,
 		"postgresql",
 		map[string]any{
-			"requests": 42.0,
+			fieldRequests: 42.0,
 		},
 		tags,
 		t0,

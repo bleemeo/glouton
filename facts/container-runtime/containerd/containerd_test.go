@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -36,6 +36,14 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+const (
+	testDirMinikube    = "testdata/minikube-1.20.0"
+	testNameMinikube   = "minikube-1.20.0"
+	testContainerdJSON = "containerd.json"
+	testImageRabbitmq  = "docker.io/library/rabbitmq:latest"
+	testGloutonIgnore  = "gloutonIgnore"
+)
+
 func mustMarshalAny(v any) *anypb.Any {
 	r, err := protobuf.MarshalAnyToProto(v)
 	if err != nil {
@@ -52,17 +60,17 @@ func TestContainerd_RuntimeFact(t *testing.T) {
 		want map[string]string
 	}{
 		{
-			name: "minikube-1.20.0",
-			dir:  "testdata/minikube-1.20.0",
+			name: testNameMinikube,
+			dir:  testDirMinikube,
 			want: map[string]string{
 				"containerd_version": "1.4.3",
-				"container_runtime":  "containerd",
+				"container_runtime":  runtimeName,
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cl, err := NewMockFromFile(filepath.Join(tt.dir, "containerd.json"))
+			cl, err := NewMockFromFile(filepath.Join(tt.dir, testContainerdJSON))
 			if err != nil {
 				t.Error(err)
 
@@ -87,22 +95,22 @@ func TestContainerd_Containers(t *testing.T) {
 		filter facts.ContainerFilter
 	}{
 		{
-			name: "minikube-1.20.0",
-			dir:  "testdata/minikube-1.20.0",
+			name: testNameMinikube,
+			dir:  testDirMinikube,
 			want: []facts.FakeContainer{
 				{
 					FakeID:            "default/notRunning",
 					FakeContainerName: "notRunning",
 					FakeState:         facts.ContainerStopped,
 					FakeCommand:       []string{"true"},
-					FakeImageName:     "docker.io/library/rabbitmq:latest",
+					FakeImageName:     testImageRabbitmq,
 					FakeFinishedAt:    time.Date(2021, 1, 7, 19, 8, 54, 676875154, time.UTC),
 				},
 				{
 					FakeID:            "default/rabbitLabels",
 					FakeContainerName: "rabbitLabels",
 					FakeState:         facts.ContainerRunning,
-					FakeImageName:     "docker.io/library/rabbitmq:latest",
+					FakeImageName:     testImageRabbitmq,
 					FakeLabels: map[string]string{
 						"glouton.check.ignore.port.5672":         "false",
 						"glouton.check.ignore.port.4369":         "TrUe",
@@ -114,17 +122,17 @@ func TestContainerd_Containers(t *testing.T) {
 					FakeID:            "default/rabbitmqInternal",
 					FakeContainerName: "rabbitmqInternal",
 					FakeState:         facts.ContainerRunning,
-					FakeImageName:     "docker.io/library/rabbitmq:latest",
+					FakeImageName:     testImageRabbitmq,
 				},
 				{
 					FakeID:            "default/gloutonIgnore",
-					FakeContainerName: "gloutonIgnore",
+					FakeContainerName: testGloutonIgnore,
 					FakeState:         facts.ContainerRunning,
 					FakeLabels: map[string]string{
 						"glouton.enable":                         "off",
 						"io.containerd.image.config.stop-signal": "SIGTERM",
 					},
-					FakeImageName: "docker.io/library/rabbitmq:latest",
+					FakeImageName: testImageRabbitmq,
 					FakeImageID:   "sha256:1fc999fbdd8054b0c34c285901474f136792ad4a42d39186f3793ac40de04dba",
 					TestIgnored:   true,
 				},
@@ -146,7 +154,7 @@ func TestContainerd_Containers(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cl, err := NewMockFromFile(filepath.Join(tt.dir, "containerd.json"))
+			cl, err := NewMockFromFile(filepath.Join(tt.dir, testContainerdJSON))
 			if err != nil {
 				t.Error(err)
 
@@ -227,8 +235,8 @@ func TestContainerd_Run(t *testing.T) {
 		want []facts.FakeContainer
 	}{
 		{
-			name: "minikube-1.20.0",
-			dir:  "testdata/minikube-1.20.0",
+			name: testNameMinikube,
+			dir:  testDirMinikube,
 		},
 	}
 	for _, tt := range tests {
@@ -236,7 +244,7 @@ func TestContainerd_Run(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 
-			cl, err := NewMockFromFile(filepath.Join(tt.dir, "containerd.json"))
+			cl, err := NewMockFromFile(filepath.Join(tt.dir, testContainerdJSON))
 			if err != nil {
 				t.Error(err)
 
@@ -400,7 +408,7 @@ func TestContainerd_ContainerFromCGroup(t *testing.T) {
 	}{
 		{
 			name: "minikube-1.20.0 (containerd in Docker)",
-			dir:  "testdata/minikube-1.20.0",
+			dir:  testDirMinikube,
 			wants: []check{
 				{
 					name: "init",
@@ -485,7 +493,7 @@ func TestContainerd_ContainerFromCGroup(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cl, err := NewMockFromFile(filepath.Join(tt.dir, "containerd.json"))
+			cl, err := NewMockFromFile(filepath.Join(tt.dir, testContainerdJSON))
 			if err != nil {
 				t.Error(err)
 
@@ -546,7 +554,7 @@ func TestContainerd_ContainerFromPID(t *testing.T) {
 	}{
 		{
 			name: "minikube-1.20.0 (containerd in Docker)",
-			dir:  "testdata/minikube-1.20.0",
+			dir:  testDirMinikube,
 			wantContainerFromPID: map[int]facts.FakeContainer{
 				5094: {
 					FakeContainerName: "redis-server",
@@ -555,14 +563,14 @@ func TestContainerd_ContainerFromPID(t *testing.T) {
 					FakeImageName:     "docker.io/library/redis:alpine",
 				},
 				5044: {
-					FakeContainerName: "gloutonIgnore",
+					FakeContainerName: testGloutonIgnore,
 					FakeState:         facts.ContainerRunning,
 				},
 				4455: {
-					FakeContainerName: "gloutonIgnore",
+					FakeContainerName: testGloutonIgnore,
 				},
 				4133: {
-					FakeContainerName: "gloutonIgnore",
+					FakeContainerName: testGloutonIgnore,
 				},
 			},
 			notContainerForPID: []int{1, 42, 163},
@@ -570,7 +578,7 @@ func TestContainerd_ContainerFromPID(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cl, err := NewMockFromFile(filepath.Join(tt.dir, "containerd.json"))
+			cl, err := NewMockFromFile(filepath.Join(tt.dir, testContainerdJSON))
 			if err != nil {
 				t.Error(err)
 

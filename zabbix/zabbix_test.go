@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -52,34 +52,36 @@ func TestDecode(t *testing.T) {
 	}
 }
 
+const testKey = "key"
+
 func TestSplitData(t *testing.T) {
 	cases := []struct {
 		in       string
 		wantKey  string
 		wantArgs []string
 	}{
-		{in: "key", wantKey: "key"},
-		{"key[]", "key", []string{""}},
-		{"key[a]", "key", []string{"a"}},
-		{`key[""]`, "key", []string{""}},
-		{"key[ ]", "key", []string{""}},
-		{`key[ ""]`, "key", []string{""}},
-		{`key[ "" ]`, "key", []string{""}},
-		{"key[ a]", "key", []string{"a"}},
-		{"key[ a ]", "key", []string{"a"}},
-		{`key["a"]`, "key", []string{"a"}},
-		{`key["a",]`, "key", []string{"a", ""}},
-		{"key[a,]", "key", []string{"a", ""}},
-		{"key[a,b,c]", "key", []string{"a", "b", "c"}},
-		{`key["a","b","c"]`, "key", []string{"a", "b", "c"}},
-		{"key[a,[b,c]]", "key", []string{"a", "b,c"}},
-		{"key[a,[b,]]", "key", []string{"a", "b,"}},
-		{"key[a,b[c]", "key", []string{"a", "b[c"}},
-		{`key["a","b",["c","d\",]"]]`, "key", []string{"a", "b", `"c","d\",]"`}},
-		{`key["a","b",["c","d\",]"],[e,f]]`, "key", []string{"a", "b", `"c","d\",]"`, "e,f"}},
-		{`key[a"b"]`, "key", []string{`a"b"`}},
-		{`key["a",b"c",d]`, "key", []string{"a", `b"c"`, "d"}},
-		{`key["\"aaa\"",b,"" , " ",ccc]`, "key", []string{`"aaa"`, "b", "", "", "ccc"}},
+		{in: testKey, wantKey: testKey},
+		{"key[]", testKey, []string{""}},
+		{"key[a]", testKey, []string{"a"}},
+		{`key[""]`, testKey, []string{""}},
+		{"key[ ]", testKey, []string{""}},
+		{`key[ ""]`, testKey, []string{""}},
+		{`key[ "" ]`, testKey, []string{""}},
+		{"key[ a]", testKey, []string{"a"}},
+		{"key[ a ]", testKey, []string{"a"}},
+		{`key["a"]`, testKey, []string{"a"}},
+		{`key["a",]`, testKey, []string{"a", ""}},
+		{"key[a,]", testKey, []string{"a", ""}},
+		{"key[a,b,c]", testKey, []string{"a", "b", "c"}},
+		{`key["a","b","c"]`, testKey, []string{"a", "b", "c"}},
+		{"key[a,[b,c]]", testKey, []string{"a", "b,c"}},
+		{"key[a,[b,]]", testKey, []string{"a", "b,"}},
+		{"key[a,b[c]", testKey, []string{"a", "b[c"}},
+		{`key["a","b",["c","d\",]"]]`, testKey, []string{"a", "b", `"c","d\",]"`}},
+		{`key["a","b",["c","d\",]"],[e,f]]`, testKey, []string{"a", "b", `"c","d\",]"`, "e,f"}},
+		{`key[a"b"]`, testKey, []string{`a"b"`}},
+		{`key["a",b"c",d]`, testKey, []string{"a", `b"c"`, "d"}},
+		{`key["\"aaa\"",b,"" , " ",ccc]`, testKey, []string{`"aaa"`, "b", "", "", "ccc"}},
 	}
 	for _, c := range cases {
 		gotKey, gotArgs, err := splitData(c.in)

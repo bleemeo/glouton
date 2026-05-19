@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -46,28 +46,28 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			name: "http-only-success-200",
 			absentPoints: []map[string]string{
 				{
-					types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+					types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelName:         metricProbeSSLEarliestCertExpiry,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_validation_success",
+					types.LabelName:         metricProbeSSLValidationSuccess,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
@@ -78,7 +78,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -91,7 +91,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 200},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -104,7 +104,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -117,12 +117,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -131,7 +131,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -155,7 +155,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -168,7 +168,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 200},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -181,12 +181,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -195,7 +195,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -208,7 +208,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -221,7 +221,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -234,7 +234,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -247,7 +247,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -260,7 +260,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -284,7 +284,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -297,7 +297,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 200},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -310,12 +310,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -324,7 +324,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -337,7 +337,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -350,7 +350,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -363,7 +363,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -376,7 +376,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -389,7 +389,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -413,7 +413,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -426,7 +426,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 404},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -439,12 +439,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -453,7 +453,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -466,7 +466,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -479,7 +479,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -492,7 +492,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -505,7 +505,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -518,7 +518,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -541,14 +541,14 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			name: "probe-timeout",
 			absentPoints: []map[string]string{
 				{
-					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelName:         metricProbeSSLEarliestCertExpiry,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_duration_seconds",
+					types.LabelName:         metricProbeDurationSeconds,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
@@ -559,7 +559,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -572,7 +572,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -585,12 +585,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -599,7 +599,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -612,7 +612,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -625,7 +625,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -638,7 +638,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -659,14 +659,14 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			name: "probe-timeout2-self-signed",
 			absentPoints: []map[string]string{
 				{
-					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelName:         metricProbeSSLEarliestCertExpiry,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_duration_seconds",
+					types.LabelName:         metricProbeDurationSeconds,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
@@ -677,7 +677,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -690,7 +690,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -703,12 +703,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -717,7 +717,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -730,7 +730,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -743,7 +743,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -756,7 +756,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -780,7 +780,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -793,7 +793,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 200},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -806,12 +806,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -820,7 +820,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -833,7 +833,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -846,7 +846,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedCritical.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -859,7 +859,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -872,7 +872,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedCritical.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -885,7 +885,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -908,7 +908,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -921,7 +921,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 200},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -934,12 +934,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -948,7 +948,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -961,7 +961,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -974,7 +974,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSShortLivedWarning.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -987,7 +987,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.ShortLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1000,7 +1000,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSShortLivedWarning.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1013,7 +1013,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1036,7 +1036,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1049,7 +1049,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 200},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1062,12 +1062,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1076,7 +1076,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1089,7 +1089,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1102,7 +1102,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSShortLivedCritical.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1115,7 +1115,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.ShortLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1128,7 +1128,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSShortLivedCritical.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1141,7 +1141,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1164,7 +1164,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1177,7 +1177,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 200},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1190,12 +1190,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1204,7 +1204,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1217,7 +1217,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1230,7 +1230,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1243,7 +1243,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1256,7 +1256,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1269,7 +1269,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1292,7 +1292,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1305,7 +1305,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 200},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1318,12 +1318,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1332,7 +1332,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1345,7 +1345,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1358,7 +1358,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSCACritical.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1371,7 +1371,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1384,7 +1384,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSCACritical.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1397,7 +1397,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1420,7 +1420,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1433,7 +1433,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 200},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1446,12 +1446,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1460,7 +1460,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1473,7 +1473,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1486,7 +1486,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1499,7 +1499,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1512,7 +1512,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSCAExpired.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1525,7 +1525,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1548,7 +1548,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1561,7 +1561,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 200},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1574,12 +1574,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1588,7 +1588,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1601,7 +1601,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1614,7 +1614,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSCACritical.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1627,7 +1627,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1640,7 +1640,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSCACritical.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1653,7 +1653,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1676,7 +1676,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1689,7 +1689,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 200},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1702,12 +1702,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1716,7 +1716,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1729,7 +1729,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1742,7 +1742,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1755,7 +1755,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1768,7 +1768,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1781,7 +1781,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1804,7 +1804,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1817,7 +1817,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 200},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1830,12 +1830,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1844,7 +1844,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1857,7 +1857,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1870,7 +1870,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1883,7 +1883,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1896,7 +1896,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1909,7 +1909,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1932,7 +1932,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1945,7 +1945,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 200},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1958,12 +1958,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -1972,7 +1972,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1985,7 +1985,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -1998,7 +1998,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2011,7 +2011,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2024,7 +2024,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedWarning.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2037,7 +2037,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2060,7 +2060,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2073,7 +2073,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 200},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2086,12 +2086,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2100,7 +2100,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2113,7 +2113,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2126,7 +2126,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2139,7 +2139,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2152,7 +2152,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedExpired.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2165,7 +2165,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2188,7 +2188,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2201,7 +2201,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 200},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2214,12 +2214,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2228,7 +2228,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2241,7 +2241,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2254,7 +2254,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2267,7 +2267,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2280,7 +2280,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedExpired.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2293,7 +2293,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2316,7 +2316,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2329,7 +2329,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 200},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2342,12 +2342,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2356,7 +2356,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2369,7 +2369,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2382,7 +2382,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2395,7 +2395,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2408,7 +2408,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2421,7 +2421,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2444,21 +2444,21 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			name: "timeout-tls-handshake",
 			absentPoints: []map[string]string{
 				{
-					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelName:         metricProbeSSLEarliestCertExpiry,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_duration_seconds",
+					types.LabelName:         metricProbeDurationSeconds,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
@@ -2469,7 +2469,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2482,7 +2482,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2495,7 +2495,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2508,7 +2508,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2521,12 +2521,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2535,7 +2535,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2566,21 +2566,21 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			name: "timeout-in-tcp-accept",
 			absentPoints: []map[string]string{
 				{
-					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelName:         metricProbeSSLEarliestCertExpiry,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_duration_seconds",
+					types.LabelName:         metricProbeDurationSeconds,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
@@ -2591,7 +2591,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2604,7 +2604,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2617,7 +2617,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2630,7 +2630,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2643,12 +2643,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2657,7 +2657,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2682,28 +2682,28 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			name: "connection-refused",
 			absentPoints: []map[string]string{
 				{
-					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelName:         metricProbeSSLEarliestCertExpiry,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_validation_success",
+					types.LabelName:         metricProbeSSLValidationSuccess,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+					types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
@@ -2714,7 +2714,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2727,7 +2727,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2740,12 +2740,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2754,7 +2754,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2767,7 +2767,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2788,14 +2788,14 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			name: "broken-crypto",
 			absentPoints: []map[string]string{
 				{
-					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelName:         metricProbeSSLEarliestCertExpiry,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
@@ -2806,7 +2806,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2819,7 +2819,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2832,12 +2832,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2846,7 +2846,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2859,7 +2859,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2872,7 +2872,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2885,7 +2885,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2906,7 +2906,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			name: "break-connection-in-http",
 			absentPoints: []map[string]string{
 				{
-					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelName:         metricProbeSSLEarliestCertExpiry,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
@@ -2917,7 +2917,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2930,7 +2930,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2943,12 +2943,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -2957,7 +2957,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2970,7 +2970,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2983,7 +2983,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2996,7 +2996,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3009,7 +3009,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3030,14 +3030,14 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			name: "break-connection-in-tls",
 			absentPoints: []map[string]string{
 				{
-					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelName:         metricProbeSSLEarliestCertExpiry,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
@@ -3048,7 +3048,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3061,7 +3061,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3074,12 +3074,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3088,7 +3088,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3101,7 +3101,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3114,7 +3114,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3127,7 +3127,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3148,47 +3148,47 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			name: "http-bad-dns",
 			absentPoints: []map[string]string{
 				{
-					types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+					types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelName:         metricProbeSSLEarliestCertExpiry,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_validation_success",
+					types.LabelName:         metricProbeSSLValidationSuccess,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_http_duration_seconds",
+					types.LabelName:         metricProbeHTTPDurationSeconds,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
-					"phase":                 "connect",
+					labelPhase:              phaseConnect,
 				},
 			},
 			wantPoints: []types.MetricPoint{
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3201,7 +3201,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3214,7 +3214,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3227,7 +3227,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3244,47 +3244,47 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			name: "https-bad-dns",
 			absentPoints: []map[string]string{
 				{
-					types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+					types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelName:         metricProbeSSLEarliestCertExpiry,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_validation_success",
+					types.LabelName:         metricProbeSSLValidationSuccess,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_http_duration_seconds",
+					types.LabelName:         metricProbeHTTPDurationSeconds,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
-					"phase":                 "connect",
+					labelPhase:              phaseConnect,
 				},
 			},
 			wantPoints: []types.MetricPoint{
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3297,7 +3297,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3310,7 +3310,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3323,7 +3323,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3342,7 +3342,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3355,7 +3355,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: http.StatusBadGateway},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3368,12 +3368,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3382,7 +3382,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3395,7 +3395,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3408,7 +3408,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3421,7 +3421,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3434,7 +3434,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3447,7 +3447,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3474,7 +3474,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3487,7 +3487,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 200},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3500,12 +3500,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3514,7 +3514,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3527,7 +3527,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3540,7 +3540,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3553,7 +3553,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3566,7 +3566,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3579,7 +3579,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3604,7 +3604,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3617,7 +3617,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 200},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3630,12 +3630,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3644,7 +3644,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3657,7 +3657,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3670,7 +3670,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3683,7 +3683,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3696,7 +3696,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3709,7 +3709,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3735,7 +3735,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3748,7 +3748,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 200},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3761,12 +3761,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3775,7 +3775,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3788,7 +3788,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3801,7 +3801,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSShortLivedCritical.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3814,7 +3814,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.ShortLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3827,7 +3827,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSShortLivedCritical.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3840,7 +3840,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3866,7 +3866,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3879,7 +3879,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 200},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3892,12 +3892,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -3906,7 +3906,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3919,7 +3919,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3932,7 +3932,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSShortLivedCritical.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3945,7 +3945,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.ShortLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3958,7 +3958,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSShortLivedCritical.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3971,7 +3971,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3997,7 +3997,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4010,7 +4010,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 200},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_status_code",
+						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4023,12 +4023,12 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
 						types.LabelServiceUUID:  testMonitorID,
-						"phase":                 "connect",
+						labelPhase:              phaseConnect,
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testAgentID,
@@ -4037,7 +4037,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4050,7 +4050,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4063,7 +4063,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4076,7 +4076,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4089,7 +4089,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedExpired.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4102,7 +4102,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4323,7 +4323,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			name: "ssl-success-200",
 			absentPoints: []map[string]string{
 				{
-					types.LabelName:         "probe_failed_due_to_tls_error",
+					types.LabelName:         metricProbeFailedDueToTLSError,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
@@ -4334,7 +4334,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4347,7 +4347,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4360,7 +4360,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4373,7 +4373,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4386,7 +4386,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4399,7 +4399,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4412,7 +4412,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4434,7 +4434,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			name: "ssl-expire-soon",
 			absentPoints: []map[string]string{
 				{
-					types.LabelName:         "probe_failed_due_to_tls_error",
+					types.LabelName:         metricProbeFailedDueToTLSError,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
@@ -4445,7 +4445,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4458,7 +4458,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4471,7 +4471,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4484,7 +4484,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedCritical.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4497,7 +4497,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4510,7 +4510,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedCritical.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4523,7 +4523,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4543,7 +4543,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			name: "expired-unneeded-certs",
 			absentPoints: []map[string]string{
 				{
-					types.LabelName:         "probe_failed_due_to_tls_error",
+					types.LabelName:         metricProbeFailedDueToTLSError,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
@@ -4554,7 +4554,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4567,7 +4567,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4580,7 +4580,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4593,7 +4593,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4606,7 +4606,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4619,7 +4619,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSCAExpired.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4632,7 +4632,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4652,7 +4652,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			name: "tls-self-signed",
 			absentPoints: []map[string]string{
 				{
-					types.LabelName:         "probe_failed_due_to_tls_error",
+					types.LabelName:         metricProbeFailedDueToTLSError,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
@@ -4663,7 +4663,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4676,7 +4676,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4689,7 +4689,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4702,7 +4702,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4715,7 +4715,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4728,7 +4728,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4741,7 +4741,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4761,7 +4761,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			name: "tls-self-signed-expiring-warning",
 			absentPoints: []map[string]string{
 				{
-					types.LabelName:         "probe_failed_due_to_tls_error",
+					types.LabelName:         metricProbeFailedDueToTLSError,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
@@ -4772,7 +4772,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4785,7 +4785,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4798,7 +4798,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4811,7 +4811,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4824,7 +4824,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4837,7 +4837,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedWarning.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4850,7 +4850,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4870,7 +4870,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			name: "tls-self-signed-expiring",
 			absentPoints: []map[string]string{
 				{
-					types.LabelName:         "probe_failed_due_to_tls_error",
+					types.LabelName:         metricProbeFailedDueToTLSError,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
@@ -4881,7 +4881,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4894,7 +4894,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4907,7 +4907,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4920,7 +4920,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4933,7 +4933,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4946,7 +4946,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedExpired.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4959,7 +4959,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -4979,7 +4979,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			name: "tls-expired",
 			absentPoints: []map[string]string{
 				{
-					types.LabelName:         "probe_failed_due_to_tls_error",
+					types.LabelName:         metricProbeFailedDueToTLSError,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
@@ -4990,7 +4990,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5003,7 +5003,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5016,7 +5016,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5029,7 +5029,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5042,7 +5042,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5055,7 +5055,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedExpired.Unix())},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5068,7 +5068,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5088,28 +5088,28 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			name: "timeout-tls-handshake",
 			absentPoints: []map[string]string{
 				{
-					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelName:         metricProbeSSLEarliestCertExpiry,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+					types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_duration_seconds",
+					types.LabelName:         metricProbeDurationSeconds,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
@@ -5120,7 +5120,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5133,7 +5133,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5146,7 +5146,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_failed_due_to_tls_error",
+						types.LabelName:         metricProbeFailedDueToTLSError,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5159,7 +5159,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5180,28 +5180,28 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			name: "timeout-in-tcp-accept",
 			absentPoints: []map[string]string{
 				{
-					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelName:         metricProbeSSLEarliestCertExpiry,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+					types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_duration_seconds",
+					types.LabelName:         metricProbeDurationSeconds,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
@@ -5212,7 +5212,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5225,7 +5225,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5238,7 +5238,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_failed_due_to_tls_error",
+						types.LabelName:         metricProbeFailedDueToTLSError,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5251,7 +5251,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5272,21 +5272,21 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			name: "connection-refused",
 			absentPoints: []map[string]string{
 				{
-					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelName:         metricProbeSSLEarliestCertExpiry,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+					types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
@@ -5297,7 +5297,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5310,7 +5310,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5323,7 +5323,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5336,7 +5336,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_failed_due_to_tls_error",
+						types.LabelName:         metricProbeFailedDueToTLSError,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5349,7 +5349,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5370,21 +5370,21 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			name: "broken-crypto",
 			absentPoints: []map[string]string{
 				{
-					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelName:         metricProbeSSLEarliestCertExpiry,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+					types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
@@ -5395,7 +5395,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5408,7 +5408,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5421,7 +5421,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5434,7 +5434,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5447,7 +5447,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_failed_due_to_tls_error",
+						types.LabelName:         metricProbeFailedDueToTLSError,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5468,21 +5468,21 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			name: "break-connection-in-tls",
 			absentPoints: []map[string]string{
 				{
-					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelName:         metricProbeSSLEarliestCertExpiry,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+					types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
@@ -5493,7 +5493,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5506,7 +5506,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5519,7 +5519,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5532,7 +5532,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5545,7 +5545,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_failed_due_to_tls_error",
+						types.LabelName:         metricProbeFailedDueToTLSError,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5566,21 +5566,21 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			name: "ssl-bad-dns",
 			absentPoints: []map[string]string{
 				{
-					types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+					types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_leaf_certificate_lifespan",
+					types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
 				{
-					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelName:         metricProbeSSLEarliestCertExpiry,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
@@ -5591,7 +5591,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5604,7 +5604,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5617,7 +5617,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5630,7 +5630,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_failed_due_to_tls_error",
+						types.LabelName:         metricProbeFailedDueToTLSError,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5643,7 +5643,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5660,7 +5660,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			name: "tcp-success",
 			absentPoints: []map[string]string{
 				{
-					types.LabelName:         "probe_failed_due_to_tls_error",
+					types.LabelName:         metricProbeFailedDueToTLSError,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
@@ -5671,7 +5671,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5684,7 +5684,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5709,7 +5709,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			name: "tcp-connection-refused",
 			absentPoints: []map[string]string{
 				{
-					types.LabelName:         "probe_failed_due_to_tls_error",
+					types.LabelName:         metricProbeFailedDueToTLSError,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
@@ -5720,7 +5720,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5733,7 +5733,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5752,7 +5752,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			name: "tcp-bad-dns",
 			absentPoints: []map[string]string{
 				{
-					types.LabelName:         "probe_failed_due_to_tls_error",
+					types.LabelName:         metricProbeFailedDueToTLSError,
 					types.LabelInstance:     testTargetNotYetKnown,
 					types.LabelInstanceUUID: testAgentID,
 					types.LabelScraper:      testAgentFQDN,
@@ -5763,7 +5763,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5776,7 +5776,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -5789,7 +5789,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,

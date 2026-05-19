@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -20,6 +20,21 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+)
+
+const (
+	testCheckUsers    = "check_users"
+	testCheckLoad     = "check_load"
+	testCmdCheckUsers = "/usr/local/nagios/libexec/check_users -w 5 -c 10"
+	testCmdCheckLoad  = "/usr/local/nagios/libexec/check_load -r -w .15,.10,.05 -c .30,.25,.20"
+	testCheckZombie   = "check_zombie_procs"
+	testOptionFlag    = "--option"
+	testArgument1     = "argument1"
+	testArgTwo        = "the argument two"
+	testBleemeo       = "bleemeo"
+	testArgsFlag      = "--args"
+	testCommand       = "command"
+	testGlouton       = "glouton"
 )
 
 const nrpeConf1 = `
@@ -96,7 +111,7 @@ func TestReadNRPEConfFile(t *testing.T) {
 			},
 			Want: Want{
 				Map: map[string]string{
-					"check_users": "/usr/local/nagios/libexec/check_users -w 5 -c 10",
+					testCheckUsers: testCmdCheckUsers,
 				},
 				CommandArguments: false,
 			},
@@ -105,14 +120,14 @@ func TestReadNRPEConfFile(t *testing.T) {
 			Entries: Entries{
 				Bytes: []byte(nrpeConf2),
 				Map: map[string]string{
-					"check_users": "/usr/local/nagios/libexec/check_users -w 5 -c 10",
+					testCheckUsers: testCmdCheckUsers,
 				},
 			},
 			Want: Want{
 				Map: map[string]string{
-					"check_users":        "/usr/local/nagios/libexec/check_users -w 5 -c 10",
-					"check_load":         "/usr/local/nagios/libexec/check_load -r -w .15,.10,.05 -c .30,.25,.20",
-					"check_zombie_procs": "/usr/local/nagios/libexec/check_procs -w 5 -c 10 -s Z",
+					testCheckUsers:  testCmdCheckUsers,
+					testCheckLoad:   testCmdCheckLoad,
+					testCheckZombie: "/usr/local/nagios/libexec/check_procs -w 5 -c 10 -s Z",
 				},
 				CommandArguments: false,
 			},
@@ -121,17 +136,17 @@ func TestReadNRPEConfFile(t *testing.T) {
 			Entries: Entries{
 				Bytes: []byte(nrpeConf3),
 				Map: map[string]string{
-					"check_users":        "/usr/local/nagios/libexec/check_users -w 5 -c 10",
-					"check_load":         "/usr/local/nagios/libexec/check_load -r -w .15,.10,.05 -c .30,.25,.20",
-					"check_zombie_procs": "/usr/local/nagios/libexec/check_procs -w 5 -c 10 -s Z",
+					testCheckUsers:  testCmdCheckUsers,
+					testCheckLoad:   testCmdCheckLoad,
+					testCheckZombie: "/usr/local/nagios/libexec/check_procs -w 5 -c 10 -s Z",
 				},
 			},
 			Want: Want{
 				Map: map[string]string{
-					"check_users":        "new command",
-					"check_load":         "/usr/local/nagios/libexec/check_load -r -w .15,.10,.05 -c .30,.25,.20",
-					"check_zombie_procs": "new command again",
-					"check_hda1":         "/usr/local/nagios/libexec/check_disk -w 20% -c 10% -p /dev/hda1",
+					testCheckUsers:  "new command",
+					testCheckLoad:   testCmdCheckLoad,
+					testCheckZombie: "new command again",
+					"check_hda1":    "/usr/local/nagios/libexec/check_disk -w 20% -c 10% -p /dev/hda1",
 				},
 				CommandArguments: true,
 			},
@@ -215,192 +230,192 @@ func TestReturnCommand(t *testing.T) {
 		{
 			Entries: Entries{
 				Responder: newResponse(nil, nil, nil, map[string]string{
-					"check_users": "command --option -h",
+					testCheckUsers: "command --option -h",
 				}, false),
-				Args: []string{"check_users"},
+				Args: []string{testCheckUsers},
 			},
 			Want: Want{
-				Command: []string{"command", "--option", "-h"},
+				Command: []string{testCommand, testOptionFlag, "-h"},
 				Err:     nil,
 			},
 		},
 		{
 			Entries: Entries{
 				Responder: newResponse(nil, nil, nil, map[string]string{
-					"check_users": "command --option -s",
+					testCheckUsers: "command --option -s",
 				}, true),
-				Args: []string{"check_users"},
+				Args: []string{testCheckUsers},
 			},
 			Want: Want{
-				Command: []string{"command", "--option", "-s"},
+				Command: []string{testCommand, testOptionFlag, "-s"},
 				Err:     nil,
 			},
 		},
 		{
 			Entries: Entries{
 				Responder: newResponse(nil, nil, nil, map[string]string{
-					"check_users": "command --option $ARG1$ -s",
+					testCheckUsers: "command --option $ARG1$ -s",
 				}, true),
-				Args: []string{"check_users", "argument1"},
+				Args: []string{testCheckUsers, testArgument1},
 			},
 			Want: Want{
-				Command: []string{"command", "--option", "argument1", "-s"},
+				Command: []string{testCommand, testOptionFlag, testArgument1, "-s"},
 				Err:     nil,
 			},
 		},
 		{
 			Entries: Entries{
 				Responder: newResponse(nil, nil, nil, map[string]string{
-					"check_users": "command --option $ARG1$ -s",
+					testCheckUsers: "command --option $ARG1$ -s",
 				}, true),
-				Args: []string{"check_users", "space in args"},
+				Args: []string{testCheckUsers, "space in args"},
 			},
 			Want: Want{
-				Command: []string{"command", "--option", "space", "in", "args", "-s"},
+				Command: []string{testCommand, testOptionFlag, "space", "in", "args", "-s"},
 				Err:     nil,
 			},
 		},
 		{
 			Entries: Entries{
 				Responder: newResponse(nil, nil, nil, map[string]string{
-					"check_users": "command --option $ARG1$ -s '$ARG2$'",
+					testCheckUsers: "command --option $ARG1$ -s '$ARG2$'",
 				}, true),
-				Args: []string{"check_users", "the argument one", "the argument two"},
+				Args: []string{testCheckUsers, "the argument one", testArgTwo},
 			},
 			Want: Want{
-				Command: []string{"command", "--option", "the", "argument", "one", "-s", "the argument two"},
+				Command: []string{testCommand, testOptionFlag, "the", "argument", "one", "-s", testArgTwo},
 				Err:     nil,
 			},
 		},
 		{
 			Entries: Entries{
 				Responder: newResponse(nil, nil, nil, map[string]string{
-					"check_users": "command --option $ARG1$ -s \"$ARG2$\"",
+					testCheckUsers: "command --option $ARG1$ -s \"$ARG2$\"",
 				}, true),
-				Args: []string{"check_users", "the argument one", "the argument two"},
+				Args: []string{testCheckUsers, "the argument one", testArgTwo},
 			},
 			Want: Want{
-				Command: []string{"command", "--option", "the", "argument", "one", "-s", "the argument two"},
+				Command: []string{testCommand, testOptionFlag, "the", "argument", "one", "-s", testArgTwo},
 				Err:     nil,
 			},
 		},
 		{
 			Entries: Entries{
 				Responder: newResponse(nil, nil, nil, map[string]string{
-					"check_users": "command --option $ARG1$ -p $ARG1$",
+					testCheckUsers: "command --option $ARG1$ -p $ARG1$",
 				}, true),
-				Args: []string{"check_users", "argument1", "1234"},
+				Args: []string{testCheckUsers, testArgument1, "1234"},
 			},
 			Want: Want{
-				Command: []string{"command", "--option", "argument1", "-p", "argument1"},
+				Command: []string{testCommand, testOptionFlag, testArgument1, "-p", testArgument1},
 				Err:     nil,
 			},
 		},
 		{
 			Entries: Entries{
 				Responder: newResponse(nil, nil, nil, map[string]string{
-					"check_users": "command --option $ARG1$ -h",
+					testCheckUsers: "command --option $ARG1$ -h",
 				}, false),
-				Args: []string{"check_users", "argument1"},
+				Args: []string{testCheckUsers, testArgument1},
 			},
 			Want: Want{
-				Command: []string{"command", "--option", "-h"},
+				Command: []string{testCommand, testOptionFlag, "-h"},
 				Err:     nil,
 			},
 		},
 		{
 			Entries: Entries{
 				Responder: newResponse(nil, nil, nil, map[string]string{
-					"check_users": "command --option $ARG1$ -a",
+					testCheckUsers: "command --option $ARG1$ -a",
 				}, true),
-				Args: []string{"check_users", "argument1", "argument2"},
+				Args: []string{testCheckUsers, testArgument1, "argument2"},
 			},
 			Want: Want{
-				Command: []string{"command", "--option", "argument1", "-a"},
+				Command: []string{testCommand, testOptionFlag, testArgument1, "-a"},
 				Err:     nil,
 			},
 		},
 		{
 			Entries: Entries{
 				Responder: newResponse(nil, nil, nil, map[string]string{
-					"check_users": "command --option $ARG1$ -a $ARG2$",
+					testCheckUsers: "command --option $ARG1$ -a $ARG2$",
 				}, true),
-				Args: []string{"check_users", "argument1"},
+				Args: []string{testCheckUsers, testArgument1},
 			},
 			Want: Want{
-				Command: []string{"command", "--option", "argument1", "-a"},
+				Command: []string{testCommand, testOptionFlag, testArgument1, "-a"},
 				Err:     nil,
 			},
 		},
 		{
 			Entries: Entries{
 				Responder: newResponse(nil, nil, nil, map[string]string{
-					"check_users": "command --option",
+					testCheckUsers: "command --option",
 				}, true),
-				Args: []string{"check_users", "argument0"},
+				Args: []string{testCheckUsers, "argument0"},
 			},
 			Want: Want{
-				Command: []string{"command", "--option"},
+				Command: []string{testCommand, testOptionFlag},
 				Err:     nil,
 			},
 		},
 		{
 			Entries: Entries{
 				Responder: newResponse(nil, nil, nil, map[string]string{
-					"check_users": "command --args '$ARG1$@$ARG2$.com'",
+					testCheckUsers: "command --args '$ARG1$@$ARG2$.com'",
 				}, true),
-				Args: []string{"check_users", "glouton", "bleemeo"},
+				Args: []string{testCheckUsers, testGlouton, testBleemeo},
 			},
 			Want: Want{
-				Command: []string{"command", "--args", "glouton@bleemeo.com"},
+				Command: []string{testCommand, testArgsFlag, "glouton@bleemeo.com"},
 				Err:     nil,
 			},
 		},
 		{
 			Entries: Entries{
 				Responder: newResponse(nil, nil, nil, map[string]string{
-					"check_users": "command --args '$ARG1$ by $ARG2$'",
+					testCheckUsers: "command --args '$ARG1$ by $ARG2$'",
 				}, true),
-				Args: []string{"check_users", "glouton", "bleemeo"},
+				Args: []string{testCheckUsers, testGlouton, testBleemeo},
 			},
 			Want: Want{
-				Command: []string{"command", "--args", "glouton by bleemeo"},
+				Command: []string{testCommand, testArgsFlag, "glouton by bleemeo"},
 				Err:     nil,
 			},
 		},
 		{
 			Entries: Entries{
 				Responder: newResponse(nil, nil, nil, map[string]string{
-					"check_users": "command --args '$ARG1$ by $ARG5$'",
+					testCheckUsers: "command --args '$ARG1$ by $ARG5$'",
 				}, true),
-				Args: []string{"check_users", "glouton", "bleemeo"},
+				Args: []string{testCheckUsers, testGlouton, testBleemeo},
 			},
 			Want: Want{
-				Command: []string{"command", "--args", "glouton by "},
+				Command: []string{testCommand, testArgsFlag, "glouton by "},
 				Err:     nil,
 			},
 		},
 		{
 			Entries: Entries{
 				Responder: newResponse(nil, nil, nil, map[string]string{
-					"check_users": "command --args '$ARG1$ by $ARG5$'",
+					testCheckUsers: "command --args '$ARG1$ by $ARG5$'",
 				}, true),
-				Args: []string{"check_users", "glouton", "bleemeo company", "three as number", "four (4)", "the number five"},
+				Args: []string{testCheckUsers, testGlouton, "bleemeo company", "three as number", "four (4)", "the number five"},
 			},
 			Want: Want{
-				Command: []string{"command", "--args", "glouton by the number five"},
+				Command: []string{testCommand, testArgsFlag, "glouton by the number five"},
 				Err:     nil,
 			},
 		},
 		{
 			Entries: Entries{
 				Responder: newResponse(nil, nil, nil, map[string]string{
-					"check_users": "command --args '$ARG1$ by $ARG1$'",
+					testCheckUsers: "command --args '$ARG1$ by $ARG1$'",
 				}, false),
-				Args: []string{"check_users", "glouton", "bleemeo"},
+				Args: []string{testCheckUsers, testGlouton, testBleemeo},
 			},
 			Want: Want{
-				Command: []string{"command", "--args", " by "},
+				Command: []string{testCommand, testArgsFlag, " by "},
 				Err:     nil,
 			},
 		},

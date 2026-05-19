@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -212,7 +212,7 @@ func itemTypeFromValue(key string, value any) ItemType {
 
 	// For more complex types (map or slices of structs), we use the key.
 	switch key {
-	case "thresholds":
+	case keyThresholds:
 		return TypeThresholds
 	case "service":
 		return TypeServices

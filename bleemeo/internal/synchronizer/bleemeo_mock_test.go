@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -87,7 +87,7 @@ func newClientMock(helper *syncTestHelper) *wrapperClientMock {
 			clientMock.password = agent.InitialPassword
 		}
 
-		agent.InitialPassword = "password already set"
+		agent.InitialPassword = passwordAlreadySet
 		agent.CreatedAt = helper.Now()
 
 		return nil

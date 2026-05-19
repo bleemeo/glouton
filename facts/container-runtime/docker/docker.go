@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -65,6 +65,18 @@ var (
 
 // dockerTimeout is the time limit for requests made by the docker client.
 const dockerTimeout = 10 * time.Second
+
+const (
+	eventTypeContainer = "container"
+	actionKill         = "kill"
+	psColPID           = "PID"
+	psColCMD           = "CMD"
+	psColCOMMAND       = "COMMAND"
+	psColUID           = "UID"
+	psColUSER          = "USER"
+	psColTIME          = "TIME"
+	psColPPID          = "PPID"
+)
 
 // Docker implement a method to query Docker runtime.
 // It try to connect to the first valid DockerSockets. Empty string is a special
@@ -569,7 +581,7 @@ func (d *Docker) run(ctx context.Context) error {
 
 			d.lastEventAt = time.Unix(event.Time, event.TimeNano)
 
-			if event.Type == "" || event.Type == "container" {
+			if event.Type == "" || event.Type == eventTypeContainer {
 				action := event.Action
 				actorID := event.Actor.ID
 
@@ -581,7 +593,7 @@ func (d *Docker) run(ctx context.Context) error {
 					continue
 				}
 
-				if action == "kill" {
+				if action == actionKill {
 					d.l.Lock()
 					d.lastKill[actorID] = time.Now()
 					d.l.Unlock()
@@ -596,7 +608,7 @@ func (d *Docker) run(ctx context.Context) error {
 					event.Type = facts.EventTypeStart
 				case "die":
 					event.Type = facts.EventTypeStop
-				case "kill", "stop":
+				case actionKill, "stop":
 					event.Type = facts.EventTypeKill
 				case "destroy":
 					event.Type = facts.EventTypeDelete
@@ -1449,21 +1461,21 @@ func decodeDocker(top container.TopResponse, c facts.Container) []facts.Process 
 
 	for i, v := range top.Titles {
 		switch v {
-		case "PID":
+		case psColPID:
 			pidIndex = i
-		case "CMD", "COMMAND":
+		case psColCMD, psColCOMMAND:
 			cmdlineIndex = i
-		case "UID", "USER":
+		case psColUID, psColUSER:
 			userIndex = i
 		case "%CPU":
 			pcpuIndex = i
 		case "RSS":
 			rssIndex = i
-		case "TIME":
+		case psColTIME:
 			timeIndex = i
 		case "STAT":
 			statIndex = i
-		case "PPID":
+		case psColPPID:
 			ppidIndex = i
 		}
 	}

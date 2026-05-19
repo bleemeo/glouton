@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -63,6 +63,7 @@ type (
 const (
 	receiverFileLog receiverKind = "filelogreceiver"
 	receiverExecLog receiverKind = "execlogreceiver"
+	tailFollowName               = "--follow=name"
 )
 
 var receiverNameRegex = regexp.MustCompile(`^(filelog/)?[^/]+$`)
@@ -548,7 +549,7 @@ func setupLogReceiverFactories(
 			continue
 		}
 
-		tailArgs := []string{"tail", "--follow=name"}
+		tailArgs := []string{"tail", tailFollowName}
 
 		if lastSize, ok := lastFileSizes[logFile]; ok {
 			if lastSize > size { // the file has been truncated since the last time

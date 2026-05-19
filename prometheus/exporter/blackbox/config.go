@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -53,7 +53,7 @@ const (
 func defaultModule(userAgent string) bbConf.Module {
 	return bbConf.Module{
 		HTTP: bbConf.HTTPProbe{
-			IPProtocol: "ip4",
+			IPProtocol: ipProtocolV4,
 			HTTPClientConfig: promConfig.HTTPClientConfig{
 				FollowRedirects: true,
 				TLSConfig: promConfig.TLSConfig{
@@ -63,20 +63,20 @@ func defaultModule(userAgent string) bbConf.Module {
 				},
 			},
 			Headers: map[string]string{
-				"User-Agent": userAgent,
+				headerUserAgent: userAgent,
 			},
 		},
 		DNS: bbConf.DNSProbe{
-			IPProtocol:         "ip4",
+			IPProtocol:         ipProtocolV4,
 			IPProtocolFallback: true,
 			Recursion:          true,
 		},
 		TCP: bbConf.TCPProbe{
-			IPProtocol:         "ip4",
+			IPProtocol:         ipProtocolV4,
 			IPProtocolFallback: true,
 		},
 		ICMP: bbConf.ICMPProbe{
-			IPProtocol:         "ip4",
+			IPProtocol:         ipProtocolV4,
 			IPProtocolFallback: true,
 		},
 		// Sadly, the API does allow to specify the timeout AFAIK.
@@ -279,7 +279,7 @@ func genCollectorFromStaticTarget(option staticTargetOptions, helpers commonHelp
 // set user-agent on HTTP prober is not already set.
 func setUserAgent(modules map[string]bbConf.Module, userAgent string) {
 	for k, m := range modules {
-		if m.Prober != "http" {
+		if m.Prober != proberNameHTTP {
 			continue
 		}
 
@@ -287,11 +287,11 @@ func setUserAgent(modules map[string]bbConf.Module, userAgent string) {
 			m.HTTP.Headers = make(map[string]string)
 		}
 
-		if m.HTTP.Headers["User-Agent"] != "" {
+		if m.HTTP.Headers[headerUserAgent] != "" {
 			continue
 		}
 
-		m.HTTP.Headers["User-Agent"] = userAgent
+		m.HTTP.Headers[headerUserAgent] = userAgent
 		modules[k] = m
 	}
 }

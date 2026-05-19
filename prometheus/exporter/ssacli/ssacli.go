@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -39,7 +39,10 @@ import (
 	dto "github.com/prometheus/client_model/go"
 )
 
-const defaultTimeout = 10 * time.Second
+const (
+	defaultTimeout                = 10 * time.Second
+	metricSmartDeviceHealthStatus = "smart_device_health_status"
+)
 
 var (
 	ErrNoController         = errors.New("no controller found")
@@ -452,7 +455,7 @@ func diskIntoToPoints(now time.Time, allRows ssacliDiskList) []types.MetricPoint
 				Value: float64(status.CurrentStatus.NagiosCode()),
 			},
 			Labels: map[string]string{
-				types.LabelName:   "smart_device_health_status",
+				types.LabelName:   metricSmartDeviceHealthStatus,
 				types.LabelDevice: row.ToDeviceLabel(allRows),
 			},
 			Annotations: types.MetricAnnotations{

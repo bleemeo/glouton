@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -22,6 +22,8 @@ import (
 	"github.com/bleemeo/glouton/types"
 )
 
+const testMetricCPUUsed = "cpu_used"
+
 func TestMetricOnlyHasItem(t *testing.T) {
 	const agentID = "5f396bca-6dfd-4427-be12-c4107b076459"
 
@@ -34,7 +36,7 @@ func TestMetricOnlyHasItem(t *testing.T) {
 		{
 			name: "Bleemeo cpu",
 			labels: map[string]string{
-				types.LabelName: "cpu_used",
+				types.LabelName: testMetricCPUUsed,
 			},
 			agentID: agentID,
 			want:    true,
@@ -42,7 +44,7 @@ func TestMetricOnlyHasItem(t *testing.T) {
 		{
 			name: "Bleemeo cpu instance",
 			labels: map[string]string{
-				types.LabelName:         "cpu_used",
+				types.LabelName:         testMetricCPUUsed,
 				types.LabelInstanceUUID: agentID,
 			},
 			agentID: agentID,
@@ -51,7 +53,7 @@ func TestMetricOnlyHasItem(t *testing.T) {
 		{
 			name: "Bleemeo cpu another instance",
 			labels: map[string]string{
-				types.LabelName:         "cpu_used",
+				types.LabelName:         testMetricCPUUsed,
 				types.LabelInstanceUUID: "16b5d368-4a6b-4e07-bb14-d1ac5478226d",
 			},
 			agentID: agentID,

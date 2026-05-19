@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -34,7 +34,11 @@ import (
 	"dario.cat/mergo"
 )
 
-const tcpProtocol = "tcp"
+const (
+	tcpProtocol  = "tcp"
+	udpProtocol  = "udp"
+	unixProtocol = "unix"
+)
 
 // Discoverer allow to discover services. See DynamicDiscovery and Discovery.
 type Discoverer interface {
@@ -282,11 +286,11 @@ var (
 	servicesDiscoveryInfo = map[ServiceName]discoveryInfo{
 		ApacheService: {
 			ServicePort:     80,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 		},
 		BitBucketService: {
 			ServicePort:     7990,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 			IgnoreHighPort:  true,
 			DefaultIgnoredPorts: map[int]bool{
 				5701: true,
@@ -294,146 +298,146 @@ var (
 		},
 		BindService: {
 			ServicePort:     53,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 		},
 		CassandraService: {
 			ServicePort:     9042,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 			IgnoreHighPort:  true,
 		},
 		ConfluenceService: {
 			ServicePort:     8090,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 			IgnoreHighPort:  true,
 		},
 		DovecotService: {
 			ServicePort:     143,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 		},
 		ElasticSearchService: {
 			ServicePort:     9200,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 			IgnoreHighPort:  true,
 		},
 		EjabberService: {
 			ServicePort:     5222,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 			IgnoreHighPort:  true,
 		},
 		EximService: {
 			ServicePort:     25,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 		},
 		Fail2banService: {},
 		HAProxyService: {
 			IgnoreHighPort:  true, // HAProxy use a random high-port when Syslog over-UDP is enabled.
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 		},
 		InfluxDBService: {
 			ServicePort:     8086,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 		},
 		JenkinsService: {
 			ServicePort:     8080,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 			IgnoreHighPort:  true,
 		},
 		JIRAService: {
 			ServicePort:     8080,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 			IgnoreHighPort:  true,
 		},
 		KafkaService: {
 			ServicePort:     9092,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 			IgnoreHighPort:  true,
 		},
 		MariaDBService: {
 			ServicePort:     3306,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 		},
 		MemcachedService: {
 			ServicePort:     11211,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 		},
 		MongoDBService: {
 			ServicePort:     27017,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 		},
 		MosquittoService: {
 			ServicePort:     1883,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 		},
 		MySQLService: {
 			ServicePort:     3306,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 		},
 		NginxService: {
 			ServicePort:     80,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 		},
 		NatsService: {
 			ServicePort:     4222,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 		},
 		NfsService: {},
 		NTPService: {
 			ServicePort:     123,
-			ServiceProtocol: "udp",
+			ServiceProtocol: udpProtocol,
 		},
 		OpenLDAPService: {
 			ServicePort:     389,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 		},
 		OpenVPNService: {
 			DisablePersistentConnection: true,
 		},
 		PHPFPMService: {
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 		},
 		PostfixService: {
 			ServicePort:     25,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 		},
 		PostgreSQLService: {
 			ServicePort:     5432,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 		},
 		RabbitMQService: {
 			ServicePort:     5672,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 			IgnoreHighPort:  true,
 		},
 		RedisService: {
 			ServicePort:     6379,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 		},
 		SaltMasterService: {
 			ServicePort:     4505,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 		},
 		SquidService: {
 			ServicePort:     3128,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 		},
 		UPSDService: {
 			ServicePort:     3493,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 		},
 		UWSGIService: {
 			IgnoreHighPort: true,
 		},
 		ValkeyService: {
 			ServicePort:     6379,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 		},
 		VarnishService: {
 			ServicePort:     6082,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 		},
 		ZookeeperService: {
 			ServicePort:     2181,
-			ServiceProtocol: "tcp",
+			ServiceProtocol: tcpProtocol,
 			IgnoreHighPort:  true,
 		},
 

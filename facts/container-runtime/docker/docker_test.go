@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -36,6 +36,24 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+const (
+	testRabbitmqExposed    = "testdata_rabbitmqExposed_1"
+	testRabbitmqExposedID  = "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882"
+	testRabbitmqInternal   = "testdata_rabbitmqInternal_1"
+	testRabbitmqInternalID = "b59746cf51fa8b08eb228e5f4fc4bc28446a6f7ca19cdc3c23016f932b56003f"
+	testRabbitLabels       = "testdata_rabbitLabels_1"
+	testRabbitLabelsID     = "33600bb7b4d62f43e87839e514a4235bb72f66dcfca35a7df5c900361a2c4d6e"
+	testDockerDir          = "testdata/docker-20.10.0"
+	testDockerName         = "docker-20.10"
+	testImageRabbitmq      = "rabbitmq"
+	testDockerID           = "theDockerID"
+	testNetworkTCP         = "tcp"
+	testProcessInit        = "init"
+	testUserRoot           = "root"
+	testPython3TopCmd      = `python3 -c import docker;print(docker.Client(version="1.21").top("test"))`
+	testColTTY             = "TTY"
+)
+
 func TestDocker_RuntimeFact(t *testing.T) {
 	tests := []struct {
 		name string
@@ -43,8 +61,8 @@ func TestDocker_RuntimeFact(t *testing.T) {
 		want map[string]string
 	}{
 		{
-			name: "docker-20.10",
-			dir:  "testdata/docker-20.10.0",
+			name: testDockerName,
+			dir:  testDockerDir,
 			want: map[string]string{
 				"docker_version":     "20.10.0",
 				"docker_api_version": "1.41",
@@ -99,37 +117,37 @@ func TestDocker_Containers(t *testing.T) {
 		filter facts.ContainerFilter
 	}{
 		{
-			name: "docker-20.10",
-			dir:  "testdata/docker-20.10.0",
+			name: testDockerName,
+			dir:  testDockerDir,
 			want: []facts.FakeContainer{
 				{
 					FakeID:            "3b252c3f4b6dc25f2a727dbe1c6b24ceaff577942251e183e2300db0de4a9860",
 					FakeContainerName: "testdata_notRunning_1",
 					FakeState:         facts.ContainerStopped,
 					FakeCommand:       []string{"true"},
-					FakeImageName:     "rabbitmq",
+					FakeImageName:     testImageRabbitmq,
 					FakeHealth:        facts.ContainerNoHealthCheck,
 				},
 				{
-					FakeID:             "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
-					FakeContainerName:  "testdata_rabbitmqExposed_1",
+					FakeID:             testRabbitmqExposedID,
+					FakeContainerName:  testRabbitmqExposed,
 					FakeState:          facts.ContainerRunning,
-					FakeImageName:      "rabbitmq",
+					FakeImageName:      testImageRabbitmq,
 					FakePrimaryAddress: "172.18.0.2",
 					FakeListenAddresses: []facts.ListenAddress{
 						{
 							Address:       "172.18.0.2",
 							Port:          5671,
-							NetworkFamily: "tcp",
+							NetworkFamily: testNetworkTCP,
 						},
 					},
 					FakeHealth: facts.ContainerNoHealthCheck,
 				},
 				{
-					FakeID:            "33600bb7b4d62f43e87839e514a4235bb72f66dcfca35a7df5c900361a2c4d6e",
-					FakeContainerName: "testdata_rabbitLabels_1",
+					FakeID:            testRabbitLabelsID,
+					FakeContainerName: testRabbitLabels,
 					FakeState:         facts.ContainerRunning,
-					FakeImageName:     "rabbitmq",
+					FakeImageName:     testImageRabbitmq,
 					FakeLabels: map[string]string{
 						"com.docker.compose.config-hash":      "afc5fc62031297be2c22523c44960c2e3d0964cf58562864955781725b4e1d82",
 						"com.docker.compose.container-number": "1",
@@ -145,10 +163,10 @@ func TestDocker_Containers(t *testing.T) {
 					FakeHealth:          facts.ContainerNoHealthCheck,
 				},
 				{
-					FakeID:            "b59746cf51fa8b08eb228e5f4fc4bc28446a6f7ca19cdc3c23016f932b56003f",
-					FakeContainerName: "testdata_rabbitmqInternal_1",
+					FakeID:            testRabbitmqInternalID,
+					FakeContainerName: testRabbitmqInternal,
 					FakeState:         facts.ContainerRunning,
-					FakeImageName:     "rabbitmq",
+					FakeImageName:     testImageRabbitmq,
 					FakeHealth:        facts.ContainerNoHealthCheck,
 				},
 				{
@@ -164,7 +182,7 @@ func TestDocker_Containers(t *testing.T) {
 						"glouton.enable":                      "off",
 					},
 					FakeState:     facts.ContainerRunning,
-					FakeImageName: "rabbitmq",
+					FakeImageName: testImageRabbitmq,
 					FakeHealth:    facts.ContainerNoHealthCheck,
 					TestIgnored:   true,
 				},
@@ -256,8 +274,8 @@ func TestDocker_Run(t *testing.T) {
 		want []facts.FakeContainer
 	}{
 		{
-			name: "docker-20.10",
-			dir:  "testdata/docker-20.10.0",
+			name: testDockerName,
+			dir:  testDockerDir,
 		},
 	}
 	for _, tt := range tests {
@@ -287,7 +305,7 @@ func TestDocker_Run(t *testing.T) {
 				}
 
 				ch <- events.Message{
-					Type:   "container",
+					Type:   eventTypeContainer,
 					Action: "start",
 					Actor:  events.Actor{ID: cl.Containers[0].ID},
 				}
@@ -298,19 +316,19 @@ func TestDocker_Run(t *testing.T) {
 				}
 
 				ch <- events.Message{
-					Type:   "container",
-					Action: "kill",
+					Type:   eventTypeContainer,
+					Action: actionKill,
 					Actor:  events.Actor{ID: cl.Containers[0].ID},
 				}
 
 				ch <- events.Message{
-					Type:   "container",
+					Type:   eventTypeContainer,
 					Action: "die",
 					Actor:  events.Actor{ID: cl.Containers[0].ID},
 				}
 
 				ch <- events.Message{
-					Type:   "container",
+					Type:   eventTypeContainer,
 					Action: "destroy",
 					Actor:  events.Actor{ID: cl.Containers[0].ID},
 				}
@@ -397,10 +415,10 @@ func TestDocker_ContainerFromCGroup(t *testing.T) { //nolint: maintidx
 	}{
 		{
 			name: "docker-20.10 (Docker in Docker)",
-			dir:  "testdata/docker-20.10.0",
+			dir:  testDockerDir,
 			wants: []check{
 				{
-					name: "init",
+					name: testProcessInit,
 					cgroupData: `
 						12:cpuset:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2
 						11:memory:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/init.scope
@@ -419,7 +437,7 @@ func TestDocker_ContainerFromCGroup(t *testing.T) { //nolint: maintidx
 					mustErrDoesNotExist: true,
 				},
 				{
-					name: "rabbitmq",
+					name: testImageRabbitmq,
 					cgroupData: `
 					12:cpuset:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882
 					11:memory:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882
@@ -445,8 +463,8 @@ func TestDocker_ContainerFromCGroup(t *testing.T) { //nolint: maintidx
 						10:perf_event:/kubepods/besteffort/pod8f469a2e-bcd6-11e8-abe9-080027ae1159/2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882
 						[...]
 						1:name=systemd:/kubepods/besteffort/pod8f469a2e-bcd6-11e8-abe9-080027ae1159/2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882`,
-					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
-					containerName: "testdata_rabbitmqExposed_1",
+					containerID:   testRabbitmqExposedID,
+					containerName: testRabbitmqExposed,
 				},
 				{
 					name: "Docker on Ubuntu",
@@ -455,8 +473,8 @@ func TestDocker_ContainerFromCGroup(t *testing.T) { //nolint: maintidx
 						11:hugetlb:/docker/2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882
 						[...]
 						1:cpuset:/docker/2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882`,
-					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
-					containerName: "testdata_rabbitmqExposed_1",
+					containerID:   testRabbitmqExposedID,
+					containerName: testRabbitmqExposed,
 				},
 				{
 					name: "Docker on CentOS",
@@ -465,8 +483,8 @@ func TestDocker_ContainerFromCGroup(t *testing.T) { //nolint: maintidx
 						10:devices:/system.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope
 						[...]
 						1:name=systemd:/system.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope`,
-					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
-					containerName: "testdata_rabbitmqExposed_1",
+					containerID:   testRabbitmqExposedID,
+					containerName: testRabbitmqExposed,
 				},
 				{
 					name: "Kubernetes 1.20 on Ubuntu 20.04",
@@ -476,22 +494,22 @@ func TestDocker_ContainerFromCGroup(t *testing.T) { //nolint: maintidx
 					[...]
 					1:name=systemd:/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-podba16e26e_4736_4bdd_bb0e_7175c15b7f37.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope
 					0::/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-podba16e26e_4736_4bdd_bb0e_7175c15b7f37.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope`,
-					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
-					containerName: "testdata_rabbitmqExposed_1",
+					containerID:   testRabbitmqExposedID,
+					containerName: testRabbitmqExposed,
 				},
 				{
 					name: "Docker 20.10.18 on Ubuntu 20.04",
 					cgroupData: `
 					0::/system.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope`,
-					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
-					containerName: "testdata_rabbitmqExposed_1",
+					containerID:   testRabbitmqExposedID,
+					containerName: testRabbitmqExposed,
 				},
 				{
 					name: "PODs from inside minikube on Ubuntu 22.04",
 					cgroupData: `
 					0::/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-podba16e26e47364bddbb0e7175c15b7f37.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope`,
-					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
-					containerName: "testdata_rabbitmqExposed_1",
+					containerID:   testRabbitmqExposedID,
+					containerName: testRabbitmqExposed,
 				},
 				// the first ID, is the ID of minikube container. Since we are from outside, docker will show this container. (here we cheated at said that instead of minikube container its rabbitmq).
 				// the second ID, is the ID of the POD inside the minikube. Since we are from outside, docker don't know this ID.
@@ -499,43 +517,43 @@ func TestDocker_ContainerFromCGroup(t *testing.T) { //nolint: maintidx
 					name: "PODs from outside minikube on Ubuntu 22.04",
 					cgroupData: `
 					0::/system.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-podba16e26e47364bddbb0e7175c15b7f37.slice/docker-9f45a1e3a6ae985b6318b24123314eb8a7d6580accd9d279adb7867dc8c43a48.scope`,
-					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
-					containerName: "testdata_rabbitmqExposed_1",
+					containerID:   testRabbitmqExposedID,
+					containerName: testRabbitmqExposed,
 				},
 				{
 					name: "PODs from outside minikube on MacOS",
 					cgroupData: `
 					0::/../2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882/kubepods.slice/kubepods-besteffort.slice/kubepods-besteffort-podd240b53b_a306_422b_951d_54822714c75d.slice/docker-7bc755e4a55d5972a4cfa50ab921227b3c38321092b08df54c45537fd0bc1316.scope`,
-					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
-					containerName: "testdata_rabbitmqExposed_1",
+					containerID:   testRabbitmqExposedID,
+					containerName: testRabbitmqExposed,
 				},
 				{
 					name: "PODs from inside minikube on MacOS",
 					cgroupData: `
 					0::/kubepods.slice/kubepods-besteffort.slice/kubepods-besteffort-podd240b53b_a306_422b_951d_54822714c75d.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope`,
-					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
-					containerName: "testdata_rabbitmqExposed_1",
+					containerID:   testRabbitmqExposedID,
+					containerName: testRabbitmqExposed,
 				},
 				{
 					name: "Docker in Docker from outside on MacOS",
 					cgroupData: `
 					0::/../2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882/system.slice/docker-d4b826cbcb102335417b30518caefb9ddfcd43941a81365f73840257d600b9b2.scope`,
-					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
-					containerName: "testdata_rabbitmqExposed_1",
+					containerID:   testRabbitmqExposedID,
+					containerName: testRabbitmqExposed,
 				},
 				{
 					name: "Docker in Docker in Docker from first layer on MacOS",
 					cgroupData: `
 					0::/system.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope/system.slice/docker-da908c4920e4aed9dfbf50c3aaf16e3fc3bae44ba9cb77f463f61803d92e110c.scope`,
-					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
-					containerName: "testdata_rabbitmqExposed_1",
+					containerID:   testRabbitmqExposedID,
+					containerName: testRabbitmqExposed,
 				},
 				{
 					name: "Docker in Docker in Docker from outside on MacOS",
 					cgroupData: `
 					0::/../2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882/system.slice/docker-1b85fac471b76401a49baea1d16e268b16759883f0b8c52d48548f0c3cf69124.scope/system.slice/docker-da908c4920e4aed9dfbf50c3aaf16e3fc3bae44ba9cb77f463f61803d92e110c.scope`,
-					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
-					containerName: "testdata_rabbitmqExposed_1",
+					containerID:   testRabbitmqExposedID,
+					containerName: testRabbitmqExposed,
 				},
 			},
 		},
@@ -544,7 +562,7 @@ func TestDocker_ContainerFromCGroup(t *testing.T) { //nolint: maintidx
 			dir:  "testdata/minikube-host",
 			wants: []check{
 				{
-					name: "init",
+					name: testProcessInit,
 					cgroupData: `
 						12:cpuset:/
 						11:memory:/
@@ -662,13 +680,13 @@ func TestDocker_ContainerFromCGroup(t *testing.T) { //nolint: maintidx
 			dir:  "testdata/docker-20.10.18",
 			wants: []check{
 				{
-					name: "init",
+					name: testProcessInit,
 					cgroupData: `
 						0::/init.scope`,
 					containerID: "",
 				},
 				{
-					name: "rabbitmq",
+					name: testImageRabbitmq,
 					cgroupData: `
 					0::/system.slice/docker-7c0b134252e94d21bdb569a6fd30e812d721f7945145ddca0c829abaeacaec1f.scope`,
 					containerID:   "7c0b134252e94d21bdb569a6fd30e812d721f7945145ddca0c829abaeacaec1f",
@@ -831,24 +849,24 @@ func TestDocker_Processes(t *testing.T) {
 	}{
 		{
 			name:          "docker-20.10 (no top)",
-			dir:           "testdata/docker-20.10.0",
+			dir:           testDockerDir,
 			wantProcesses: []facts.Process{},
 		},
 		{
-			name: "docker-20.10",
-			dir:  "testdata/docker-20.10.0",
+			name: testDockerName,
+			dir:  testDockerDir,
 			top: map[string]string{
-				"33600bb7b4d62f43e87839e514a4235bb72f66dcfca35a7df5c900361a2c4d6e": `
+				testRabbitLabelsID: `
 					UID                 PID                 PPID                C                   STIME               TTY                 TIME                CMD
 					999                 4001                3906                0                   10:25               ?                   00:00:10            /bin/sh /opt/rabbitmq/sbin/rabbitmq-server
 					999                 4511                4001                0                   10:25               ?                   00:00:00            /usr/local/lib/erlang/erts-11.1.5/bin/epmd -daemon`,
-				"b59746cf51fa8b08eb228e5f4fc4bc28446a6f7ca19cdc3c23016f932b56003f": `
+				testRabbitmqInternalID: `
 					UID                 PID                 PPID                C                   STIME               TTY                 TIME                CMD
 					999                 3863                3840                0                   10:25               ?                   00:01:00            /bin/sh /opt/rabbitmq/sbin/rabbitmq-server
 					999                 4471                3863                0                   10:25               ?                   00:00:00            /usr/local/lib/erlang/erts-11.1.5/bin/epmd -daemon`,
 			},
 			topWaux: map[string]string{
-				"33600bb7b4d62f43e87839e514a4235bb72f66dcfca35a7df5c900361a2c4d6e": `
+				testRabbitLabelsID: `
 					USER                PID                 %CPU                %MEM                VSZ                 RSS                 TTY                 STAT                START               TIME                COMMAND
 					999                 4001                1.0                 0.0                 4632                836                 ?                   Ss                  10:25               0:00                /bin/sh /opt/rabbitmq/sbin/rabbitmq-server
 					999                 4511                0.0                 0.0                 8408                1444                ?                   R                   10:25               0:00                /usr/local/lib/erlang/erts-11.1.5/bin/epmd -daemon`,
@@ -865,8 +883,8 @@ func TestDocker_Processes(t *testing.T) {
 					Name:          "sh",
 					Username:      "999",
 					Status:        "sleeping",
-					ContainerID:   "33600bb7b4d62f43e87839e514a4235bb72f66dcfca35a7df5c900361a2c4d6e",
-					ContainerName: "testdata_rabbitLabels_1",
+					ContainerID:   testRabbitLabelsID,
+					ContainerName: testRabbitLabels,
 				},
 				{
 					PID:           4511,
@@ -879,8 +897,8 @@ func TestDocker_Processes(t *testing.T) {
 					Name:          "epmd",
 					Status:        facts.ProcessStatusRunning,
 					Username:      "999",
-					ContainerID:   "33600bb7b4d62f43e87839e514a4235bb72f66dcfca35a7df5c900361a2c4d6e",
-					ContainerName: "testdata_rabbitLabels_1",
+					ContainerID:   testRabbitLabelsID,
+					ContainerName: testRabbitLabels,
 				},
 				{
 					PID:           3863,
@@ -891,8 +909,8 @@ func TestDocker_Processes(t *testing.T) {
 					Name:          "sh",
 					Status:        facts.ProcessStatusUnknown,
 					Username:      "999",
-					ContainerID:   "b59746cf51fa8b08eb228e5f4fc4bc28446a6f7ca19cdc3c23016f932b56003f",
-					ContainerName: "testdata_rabbitmqInternal_1",
+					ContainerID:   testRabbitmqInternalID,
+					ContainerName: testRabbitmqInternal,
 				},
 				{
 					PID:           4471,
@@ -902,23 +920,23 @@ func TestDocker_Processes(t *testing.T) {
 					Name:          "epmd",
 					Status:        facts.ProcessStatusUnknown,
 					Username:      "999",
-					ContainerID:   "b59746cf51fa8b08eb228e5f4fc4bc28446a6f7ca19cdc3c23016f932b56003f",
-					ContainerName: "testdata_rabbitmqInternal_1",
+					ContainerID:   testRabbitmqInternalID,
+					ContainerName: testRabbitmqInternal,
 				},
 			},
 			wantContainerFromPID: map[int]facts.FakeContainer{
 				4471: {
-					FakeContainerName: "testdata_rabbitmqInternal_1",
+					FakeContainerName: testRabbitmqInternal,
 					FakeState:         facts.ContainerRunning,
-					FakeImageName:     "rabbitmq",
+					FakeImageName:     testImageRabbitmq,
 				},
 				4511: {
-					FakeContainerName: "testdata_rabbitLabels_1",
+					FakeContainerName: testRabbitLabels,
 					FakeState:         facts.ContainerRunning,
-					FakeImageName:     "rabbitmq",
+					FakeImageName:     testImageRabbitmq,
 				},
 				3863: {
-					FakeContainerName: "testdata_rabbitmqInternal_1",
+					FakeContainerName: testRabbitmqInternal,
 				},
 			},
 			notContainerForPID: []int{1, 42, 9999},
@@ -1060,7 +1078,7 @@ func TestDocker_Processes(t *testing.T) {
 						}
 
 						// yes we always pass the SAME containerID. This container ID is only a hint, wrong value should be an issue.
-						got, err = querier.ContainerFromPID(ctx, "b59746cf51fa8b08eb228e5f4fc4bc28446a6f7ca19cdc3c23016f932b56003f", pid)
+						got, err = querier.ContainerFromPID(ctx, testRabbitmqInternalID, pid)
 						if err != nil {
 							if subTT.haveError != nil && !errors.Is(err, subTT.haveError) {
 								t.Error(err)
@@ -1143,7 +1161,7 @@ func TestContainer_ListenAddresses(t *testing.T) {
 			dockerClient:  docker19_03,
 			containerName: "my_nginx",
 			want: []facts.ListenAddress{
-				{Address: "172.17.0.2", NetworkFamily: "tcp", Port: 80},
+				{Address: "172.17.0.2", NetworkFamily: testNetworkTCP, Port: 80},
 			},
 		},
 		{
@@ -1151,7 +1169,7 @@ func TestContainer_ListenAddresses(t *testing.T) {
 			dockerClient:  docker19_03,
 			containerName: "multiple-port",
 			want: []facts.ListenAddress{
-				{Address: "172.17.0.5", NetworkFamily: "tcp", Port: 5672},
+				{Address: "172.17.0.5", NetworkFamily: testNetworkTCP, Port: 5672},
 			},
 		},
 		{
@@ -1165,8 +1183,8 @@ func TestContainer_ListenAddresses(t *testing.T) {
 			dockerClient:  docker19_03,
 			containerName: "non-standard-port",
 			want: []facts.ListenAddress{
-				{Address: "172.17.0.7", NetworkFamily: "tcp", Port: 1234},
-				{Address: "172.17.0.7", NetworkFamily: "tcp", Port: 4343},
+				{Address: "172.17.0.7", NetworkFamily: testNetworkTCP, Port: 1234},
+				{Address: "172.17.0.7", NetworkFamily: testNetworkTCP, Port: 4343},
 			},
 		},
 		{
@@ -1174,7 +1192,7 @@ func TestContainer_ListenAddresses(t *testing.T) {
 			dockerClient:  docker1_13_1,
 			containerName: "multiple-port",
 			want: []facts.ListenAddress{
-				{Address: "172.17.0.3", NetworkFamily: "tcp", Port: 5672},
+				{Address: "172.17.0.3", NetworkFamily: testNetworkTCP, Port: 5672},
 			},
 		},
 	}
@@ -1225,21 +1243,21 @@ func TestDecodeDocker(t *testing.T) {
 		{
 			Processes: [][]string{
 				{
-					"3216", "root",
-					"python3 -c import docker;print(docker.Client(version=\"1.21\").top(\"test\"))",
+					"3216", testUserRoot,
+					testPython3TopCmd,
 				},
 			},
-			Titles: []string{"PID", "USER", "COMMAND"},
+			Titles: []string{psColPID, psColUSER, psColCOMMAND},
 		},
 		// Boot2Docker 1.12.3 second boot
 		{
 			Titles: []string{
-				"UID", "PID", "PPID", "C", "STIME", "TTY", "TIME", "CMD",
+				psColUID, psColPID, psColPPID, "C", "STIME", testColTTY, psColTIME, psColCMD,
 			},
 			Processes: [][]string{
 				{
-					"root", "1551", "1542", "0", "14:13", "pts/1", "00:00:00",
-					"python3 -c import docker;print(docker.Client(version=\"1.21\").top(\"test\"))",
+					testUserRoot, "1551", "1542", "0", "14:13", "pts/1", "00:00:00",
+					testPython3TopCmd,
 				},
 			},
 		},
@@ -1247,24 +1265,24 @@ func TestDecodeDocker(t *testing.T) {
 		{
 			Processes: [][]string{
 				{
-					"root", "5017", "4988", "0", "15:15", "pts/29", "00:00:00",
-					"python3 -c import docker;print(docker.Client(version=\"1.21\").top(\"test\"))",
+					testUserRoot, "5017", "4988", "0", "15:15", "pts/29", "00:00:00",
+					testPython3TopCmd,
 				},
 			},
 			Titles: []string{
-				"UID", "PID", "PPID", "C", "STIME", "TTY", "TIME", "CMD",
+				psColUID, psColPID, psColPPID, "C", "STIME", testColTTY, psColTIME, psColCMD,
 			},
 		},
 		// With ps_args="waux" added. On Ubuntu 18.04
 		{
 			Processes: [][]string{
-				{"root", "28554", "39.0", "0.1", "85640", "28496", "pts/0", "Ss+", "11:43", "0:00", "python3 -c import docker;print(docker.APIClient(version=\"1.21\").top(\"test\", ps_args=\"waux\"))"},
+				{testUserRoot, "28554", "39.0", "0.1", "85640", "28496", "pts/0", "Ss+", "11:43", "0:00", "python3 -c import docker;print(docker.APIClient(version=\"1.21\").top(\"test\", ps_args=\"waux\"))"},
 			},
-			Titles: []string{"USER", "PID", "%CPU", "%MEM", "VSZ", "RSS", "TTY", "STAT", "START", "TIME", "COMMAND"},
+			Titles: []string{psColUSER, psColPID, "%CPU", "%MEM", "VSZ", "RSS", testColTTY, "STAT", "START", psColTIME, psColCOMMAND},
 		},
 	}
 	for i, c := range cases {
-		got := decodeDocker(c, facts.FakeContainer{FakeID: "theDockerID", FakeContainerName: "theDockerName"})
+		got := decodeDocker(c, facts.FakeContainer{FakeID: testDockerID, FakeContainerName: "theDockerName"})
 		if len(got) != 1 {
 			t.Errorf("Case #%v: len(got) == %v, want 1", i, len(got))
 		}
@@ -1273,8 +1291,8 @@ func TestDecodeDocker(t *testing.T) {
 			t.Errorf("Case #%v: CmdLine[0] == %v, want %v", i, got[0].CmdLineList[0], "python3")
 		}
 
-		if got[0].ContainerID != "theDockerID" {
-			t.Errorf("Case #%v: ContainerID == %v, want %v", i, got[0].ContainerID, "theDockerID")
+		if got[0].ContainerID != testDockerID {
+			t.Errorf("Case #%v: ContainerID == %v, want %v", i, got[0].ContainerID, testDockerID)
 		}
 	}
 }

@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -113,6 +113,10 @@ const (
 	baseJitter      = 0
 	baseJitterPlus  = 500000
 	defaultInterval = 0
+
+	metricSystemPendingUpdates         = "system_pending_updates"
+	metricSystemPendingSecurityUpdates = "system_pending_security_updates"
+	metricTimeDrift                    = "time_drift"
 )
 
 var (
@@ -603,7 +607,7 @@ func (a *agent) updateThresholds(thresholds map[string]threshold.Threshold, firs
 
 	oldThresholds := map[string]threshold.Threshold{}
 
-	for _, name := range []string{"system_pending_updates", "system_pending_security_updates", "time_drift"} {
+	for _, name := range []string{metricSystemPendingUpdates, metricSystemPendingSecurityUpdates, metricTimeDrift} {
 		lbls := map[string]string{
 			types.LabelName:         name,
 			types.LabelInstanceUUID: a.BleemeoAgentID(),
@@ -620,7 +624,7 @@ func (a *agent) updateThresholds(thresholds map[string]threshold.Threshold, firs
 		logger.V(2).Printf("An error occurred while rebuilding dynamic list for updateThresholds: %v", err)
 	}
 
-	for _, name := range []string{"system_pending_updates", "system_pending_security_updates", "time_drift"} {
+	for _, name := range []string{metricSystemPendingUpdates, metricSystemPendingSecurityUpdates, metricTimeDrift} {
 		lbls := map[string]string{
 			types.LabelName:         name,
 			types.LabelInstanceUUID: a.BleemeoAgentID(),
@@ -628,7 +632,7 @@ func (a *agent) updateThresholds(thresholds map[string]threshold.Threshold, firs
 		newThreshold := a.threshold.GetThreshold(lbls, types.MetricAnnotations{})
 
 		if !firstUpdate && !oldThresholds[name].Equal(newThreshold) {
-			if name == "time_drift" && a.bleemeoConnector != nil {
+			if name == metricTimeDrift && a.bleemeoConnector != nil {
 				a.bleemeoConnector.UpdateInfo()
 			} else {
 				a.FireTrigger(false, false, true, false, false)
@@ -2132,7 +2136,7 @@ func systemUpdateMetric(ctx context.Context, a *agent) {
 	if pendingUpdate >= 0 {
 		points = append(points, types.MetricPoint{
 			Labels: map[string]string{
-				types.LabelName: "system_pending_updates",
+				types.LabelName: metricSystemPendingUpdates,
 			},
 			Point: types.Point{
 				Time:  time.Now(),
@@ -2144,7 +2148,7 @@ func systemUpdateMetric(ctx context.Context, a *agent) {
 	if pendingSecurityUpdate >= 0 {
 		points = append(points, types.MetricPoint{
 			Labels: map[string]string{
-				types.LabelName: "system_pending_security_updates",
+				types.LabelName: metricSystemPendingSecurityUpdates,
 			},
 			Point: types.Point{
 				Time:  time.Now(),

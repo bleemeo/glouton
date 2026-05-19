@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -32,6 +32,15 @@ import (
 	bbConf "github.com/prometheus/blackbox_exporter/config"
 )
 
+const (
+	testDNSQueryNameBleemeo   = "bleemeo.com"
+	testDNSResolverCloudflare = "1.1.1.1"
+	testDNSQueryTypeTXT       = "TXT"
+	testDNSAnswerIP           = "15.188.205.60"
+	testDNSAnswerIPRegex      = `\s15\.188\.205\.60$`
+	testDNSResolverAlt        = "4.2.0.42"
+)
+
 func TestConfigDNSTarget(t *testing.T) {
 	cases := []struct {
 		Name             string
@@ -47,22 +56,22 @@ func TestConfigDNSTarget(t *testing.T) {
 			DNSURL:          "dns://1.1.1.1/bleemeo.com",
 			ExpectedContent: "",
 			WantProbe: bbConf.DNSProbe{
-				IPProtocol:         "ip4", // our default from defaultModule()
-				IPProtocolFallback: true,  // our default from defaultModule()
-				Recursion:          true,  // our default from defaultModule()
-				QueryName:          "bleemeo.com",
+				IPProtocol:         ipProtocolV4, // our default from defaultModule()
+				IPProtocolFallback: true,         // our default from defaultModule()
+				Recursion:          true,         // our default from defaultModule()
+				QueryName:          testDNSQueryNameBleemeo,
 				QueryType:          "A",
 			},
-			WantTarget: "1.1.1.1",
+			WantTarget: testDNSResolverCloudflare,
 		},
 		{
 			Name:            "standard2",
 			DNSURL:          "dns://8.8.8.8/github.com",
 			ExpectedContent: "",
 			WantProbe: bbConf.DNSProbe{
-				IPProtocol:         "ip4", // our default from defaultModule()
-				IPProtocolFallback: true,  // our default from defaultModule()
-				Recursion:          true,  // our default from defaultModule()
+				IPProtocol:         ipProtocolV4, // our default from defaultModule()
+				IPProtocolFallback: true,         // our default from defaultModule()
+				Recursion:          true,         // our default from defaultModule()
 				QueryName:          "github.com",
 				QueryType:          "A",
 			},
@@ -73,10 +82,10 @@ func TestConfigDNSTarget(t *testing.T) {
 			DNSURL:          "dns:bleemeo.com",
 			ExpectedContent: "",
 			WantProbe: bbConf.DNSProbe{
-				IPProtocol:         "ip4", // our default from defaultModule()
-				IPProtocolFallback: true,  // our default from defaultModule()
-				Recursion:          true,  // our default from defaultModule()
-				QueryName:          "bleemeo.com",
+				IPProtocol:         ipProtocolV4, // our default from defaultModule()
+				IPProtocolFallback: true,         // our default from defaultModule()
+				Recursion:          true,         // our default from defaultModule()
+				QueryName:          testDNSQueryNameBleemeo,
 				QueryType:          "A",
 			},
 			WantTarget: defaultResolverSentinel,
@@ -86,23 +95,23 @@ func TestConfigDNSTarget(t *testing.T) {
 			DNSURL:          "dns://1.1.1.1/bleemeo.com?type=AAAA",
 			ExpectedContent: "",
 			WantProbe: bbConf.DNSProbe{
-				IPProtocol:         "ip4", // our default from defaultModule()
-				IPProtocolFallback: true,  // our default from defaultModule()
-				Recursion:          true,  // our default from defaultModule()
-				QueryName:          "bleemeo.com",
+				IPProtocol:         ipProtocolV4, // our default from defaultModule()
+				IPProtocolFallback: true,         // our default from defaultModule()
+				Recursion:          true,         // our default from defaultModule()
+				QueryName:          testDNSQueryNameBleemeo,
 				QueryType:          "AAAA",
 			},
-			WantTarget: "1.1.1.1",
+			WantTarget: testDNSResolverCloudflare,
 		},
 		{
 			Name:            "default-resolver-ipv6",
 			DNSURL:          "dns:bleemeo.com?type=AAAA",
 			ExpectedContent: "",
 			WantProbe: bbConf.DNSProbe{
-				IPProtocol:         "ip4", // our default from defaultModule()
-				IPProtocolFallback: true,  // our default from defaultModule()
-				Recursion:          true,  // our default from defaultModule()
-				QueryName:          "bleemeo.com",
+				IPProtocol:         ipProtocolV4, // our default from defaultModule()
+				IPProtocolFallback: true,         // our default from defaultModule()
+				Recursion:          true,         // our default from defaultModule()
+				QueryName:          testDNSQueryNameBleemeo,
 				QueryType:          "AAAA",
 			},
 			WantTarget: defaultResolverSentinel,
@@ -112,23 +121,23 @@ func TestConfigDNSTarget(t *testing.T) {
 			DNSURL:          "dns://1.1.1.1/bleemeo.com?class=IN",
 			ExpectedContent: "",
 			WantProbe: bbConf.DNSProbe{
-				IPProtocol:         "ip4", // our default from defaultModule()
-				IPProtocolFallback: true,  // our default from defaultModule()
-				Recursion:          true,  // our default from defaultModule()
-				QueryName:          "bleemeo.com",
+				IPProtocol:         ipProtocolV4, // our default from defaultModule()
+				IPProtocolFallback: true,         // our default from defaultModule()
+				Recursion:          true,         // our default from defaultModule()
+				QueryName:          testDNSQueryNameBleemeo,
 				QueryType:          "A",
 			},
-			WantTarget: "1.1.1.1",
+			WantTarget: testDNSResolverCloudflare,
 		},
 		{
 			Name:            "default-resolver-class-in",
 			DNSURL:          "dns:bleemeo.com?class=IN",
 			ExpectedContent: "",
 			WantProbe: bbConf.DNSProbe{
-				IPProtocol:         "ip4", // our default from defaultModule()
-				IPProtocolFallback: true,  // our default from defaultModule()
-				Recursion:          true,  // our default from defaultModule()
-				QueryName:          "bleemeo.com",
+				IPProtocol:         ipProtocolV4, // our default from defaultModule()
+				IPProtocolFallback: true,         // our default from defaultModule()
+				Recursion:          true,         // our default from defaultModule()
+				QueryName:          testDNSQueryNameBleemeo,
 				QueryType:          "A",
 			},
 			WantTarget: defaultResolverSentinel,
@@ -144,24 +153,24 @@ func TestConfigDNSTarget(t *testing.T) {
 			DNSURL:          "dns://1.1.1.1/bleemeo.com?type=TXT;class=IN",
 			ExpectedContent: "",
 			WantProbe: bbConf.DNSProbe{
-				IPProtocol:         "ip4", // our default from defaultModule()
-				IPProtocolFallback: true,  // our default from defaultModule()
-				Recursion:          true,  // our default from defaultModule()
-				QueryName:          "bleemeo.com",
-				QueryType:          "TXT",
+				IPProtocol:         ipProtocolV4, // our default from defaultModule()
+				IPProtocolFallback: true,         // our default from defaultModule()
+				Recursion:          true,         // our default from defaultModule()
+				QueryName:          testDNSQueryNameBleemeo,
+				QueryType:          testDNSQueryTypeTXT,
 			},
-			WantTarget: "1.1.1.1",
+			WantTarget: testDNSResolverCloudflare,
 		},
 		{
 			Name:            "default-resolver-txt-and-class-in",
 			DNSURL:          "dns:bleemeo.com?type=TXT;class=IN",
 			ExpectedContent: "",
 			WantProbe: bbConf.DNSProbe{
-				IPProtocol:         "ip4", // our default from defaultModule()
-				IPProtocolFallback: true,  // our default from defaultModule()
-				Recursion:          true,  // our default from defaultModule()
-				QueryName:          "bleemeo.com",
-				QueryType:          "TXT",
+				IPProtocol:         ipProtocolV4, // our default from defaultModule()
+				IPProtocolFallback: true,         // our default from defaultModule()
+				Recursion:          true,         // our default from defaultModule()
+				QueryName:          testDNSQueryNameBleemeo,
+				QueryType:          testDNSQueryTypeTXT,
 			},
 			WantTarget: defaultResolverSentinel,
 		},
@@ -170,24 +179,24 @@ func TestConfigDNSTarget(t *testing.T) {
 			DNSURL:          "dns://1.1.1.1/bleemeo.com?class=IN;type=TXT",
 			ExpectedContent: "",
 			WantProbe: bbConf.DNSProbe{
-				IPProtocol:         "ip4", // our default from defaultModule()
-				IPProtocolFallback: true,  // our default from defaultModule()
-				Recursion:          true,  // our default from defaultModule()
-				QueryName:          "bleemeo.com",
-				QueryType:          "TXT",
+				IPProtocol:         ipProtocolV4, // our default from defaultModule()
+				IPProtocolFallback: true,         // our default from defaultModule()
+				Recursion:          true,         // our default from defaultModule()
+				QueryName:          testDNSQueryNameBleemeo,
+				QueryType:          testDNSQueryTypeTXT,
 			},
-			WantTarget: "1.1.1.1",
+			WantTarget: testDNSResolverCloudflare,
 		},
 		{
 			Name:            "default-resolver-ipv6-2",
 			DNSURL:          "dns:bleemeo.com?class=IN;type=TXT",
 			ExpectedContent: "",
 			WantProbe: bbConf.DNSProbe{
-				IPProtocol:         "ip4", // our default from defaultModule()
-				IPProtocolFallback: true,  // our default from defaultModule()
-				Recursion:          true,  // our default from defaultModule()
-				QueryName:          "bleemeo.com",
-				QueryType:          "TXT",
+				IPProtocol:         ipProtocolV4, // our default from defaultModule()
+				IPProtocolFallback: true,         // our default from defaultModule()
+				Recursion:          true,         // our default from defaultModule()
+				QueryName:          testDNSQueryNameBleemeo,
+				QueryType:          testDNSQueryTypeTXT,
 			},
 			WantTarget: defaultResolverSentinel,
 		},
@@ -196,26 +205,26 @@ func TestConfigDNSTarget(t *testing.T) {
 			DNSURL:          "dns://1.1.1.1:53/bleemeo.com?type=TXT",
 			ExpectedContent: "",
 			WantProbe: bbConf.DNSProbe{
-				IPProtocol:         "ip4", // our default from defaultModule()
-				IPProtocolFallback: true,  // our default from defaultModule()
-				Recursion:          true,  // our default from defaultModule()
-				QueryName:          "bleemeo.com",
-				QueryType:          "TXT",
+				IPProtocol:         ipProtocolV4, // our default from defaultModule()
+				IPProtocolFallback: true,         // our default from defaultModule()
+				Recursion:          true,         // our default from defaultModule()
+				QueryName:          testDNSQueryNameBleemeo,
+				QueryType:          testDNSQueryTypeTXT,
 			},
 			WantTarget: "1.1.1.1:53",
 		},
 		{
 			Name:            "default-resolver-expect-value",
 			DNSURL:          "dns:bleemeo.com",
-			ExpectedContent: "15.188.205.60",
+			ExpectedContent: testDNSAnswerIP,
 			WantProbe: bbConf.DNSProbe{
-				IPProtocol:         "ip4", // our default from defaultModule()
-				IPProtocolFallback: true,  // our default from defaultModule()
-				Recursion:          true,  // our default from defaultModule()
-				QueryName:          "bleemeo.com",
+				IPProtocol:         ipProtocolV4, // our default from defaultModule()
+				IPProtocolFallback: true,         // our default from defaultModule()
+				Recursion:          true,         // our default from defaultModule()
+				QueryName:          testDNSQueryNameBleemeo,
 				QueryType:          "A",
 				ValidateAnswer: bbConf.DNSRRValidator{
-					FailIfNoneMatchesRegexp: []string{`\s15\.188\.205\.60$`},
+					FailIfNoneMatchesRegexp: []string{testDNSAnswerIPRegex},
 				},
 			},
 			WantTarget: defaultResolverSentinel,
@@ -223,61 +232,61 @@ func TestConfigDNSTarget(t *testing.T) {
 		{
 			Name:            "resolver-expect-value",
 			DNSURL:          "dns://4.2.0.42/bleemeo.com?type=TXT",
-			ExpectedContent: "15.188.205.60",
+			ExpectedContent: testDNSAnswerIP,
 			WantProbe: bbConf.DNSProbe{
-				IPProtocol:         "ip4", // our default from defaultModule()
-				IPProtocolFallback: true,  // our default from defaultModule()
-				Recursion:          true,  // our default from defaultModule()
-				QueryName:          "bleemeo.com",
-				QueryType:          "TXT",
+				IPProtocol:         ipProtocolV4, // our default from defaultModule()
+				IPProtocolFallback: true,         // our default from defaultModule()
+				Recursion:          true,         // our default from defaultModule()
+				QueryName:          testDNSQueryNameBleemeo,
+				QueryType:          testDNSQueryTypeTXT,
 				ValidateAnswer: bbConf.DNSRRValidator{
-					FailIfNoneMatchesRegexp: []string{`\s15\.188\.205\.60$`},
+					FailIfNoneMatchesRegexp: []string{testDNSAnswerIPRegex},
 				},
 			},
-			WantTarget: "4.2.0.42",
+			WantTarget: testDNSResolverAlt,
 		},
 		{
 			Name:             "resolver-unexpect-value",
 			DNSURL:           "dns://4.2.0.42/bleemeo.com",
 			ForbiddenContent: "1.2.3.4",
 			WantProbe: bbConf.DNSProbe{
-				IPProtocol:         "ip4", // our default from defaultModule()
-				IPProtocolFallback: true,  // our default from defaultModule()
-				Recursion:          true,  // our default from defaultModule()
-				QueryName:          "bleemeo.com",
+				IPProtocol:         ipProtocolV4, // our default from defaultModule()
+				IPProtocolFallback: true,         // our default from defaultModule()
+				Recursion:          true,         // our default from defaultModule()
+				QueryName:          testDNSQueryNameBleemeo,
 				QueryType:          "A",
 				ValidateAnswer: bbConf.DNSRRValidator{
 					FailIfMatchesRegexp: []string{`\s1\.2\.3\.4$`},
 				},
 			},
-			WantTarget: "4.2.0.42",
+			WantTarget: testDNSResolverAlt,
 		},
 		{
 			Name:             "resolver-both-check-value",
 			DNSURL:           "dns://4.2.0.42/bleemeo.com",
-			ExpectedContent:  "15.188.205.60",
+			ExpectedContent:  testDNSAnswerIP,
 			ForbiddenContent: "1.2.3.4",
 			WantProbe: bbConf.DNSProbe{
-				IPProtocol:         "ip4", // our default from defaultModule()
-				IPProtocolFallback: true,  // our default from defaultModule()
-				Recursion:          true,  // our default from defaultModule()
-				QueryName:          "bleemeo.com",
+				IPProtocol:         ipProtocolV4, // our default from defaultModule()
+				IPProtocolFallback: true,         // our default from defaultModule()
+				Recursion:          true,         // our default from defaultModule()
+				QueryName:          testDNSQueryNameBleemeo,
 				QueryType:          "A",
 				ValidateAnswer: bbConf.DNSRRValidator{
-					FailIfNoneMatchesRegexp: []string{`\s15\.188\.205\.60$`},
+					FailIfNoneMatchesRegexp: []string{testDNSAnswerIPRegex},
 					FailIfMatchesRegexp:     []string{`\s1\.2\.3\.4$`},
 				},
 			},
-			WantTarget: "4.2.0.42",
+			WantTarget: testDNSResolverAlt,
 		},
 		{
 			Name:   "resolver-dns-name",
 			DNSURL: "dns://a.gtld-servers.net/bleemeo.com",
 			WantProbe: bbConf.DNSProbe{
-				IPProtocol:         "ip4", // our default from defaultModule()
-				IPProtocolFallback: true,  // our default from defaultModule()
-				Recursion:          true,  // our default from defaultModule()
-				QueryName:          "bleemeo.com",
+				IPProtocol:         ipProtocolV4, // our default from defaultModule()
+				IPProtocolFallback: true,         // our default from defaultModule()
+				Recursion:          true,         // our default from defaultModule()
+				QueryName:          testDNSQueryNameBleemeo,
 				QueryType:          "A",
 			},
 			WantTarget: "a.gtld-servers.net",
@@ -288,10 +297,10 @@ func TestConfigDNSTarget(t *testing.T) {
 			// but Glouton support it like "dns:bleemeo.com"
 			DNSURL: "dns:///bleemeo.com",
 			WantProbe: bbConf.DNSProbe{
-				IPProtocol:         "ip4", // our default from defaultModule()
-				IPProtocolFallback: true,  // our default from defaultModule()
-				Recursion:          true,  // our default from defaultModule()
-				QueryName:          "bleemeo.com",
+				IPProtocol:         ipProtocolV4, // our default from defaultModule()
+				IPProtocolFallback: true,         // our default from defaultModule()
+				Recursion:          true,         // our default from defaultModule()
+				QueryName:          testDNSQueryNameBleemeo,
 				QueryType:          "A",
 			},
 			WantTarget: defaultResolverSentinel,
@@ -367,7 +376,7 @@ func Test_Collect_DNS(t *testing.T) {
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -380,7 +389,7 @@ func Test_Collect_DNS(t *testing.T) {
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_rcode",
+						types.LabelName:         metricProbeDNSRcode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -393,7 +402,7 @@ func Test_Collect_DNS(t *testing.T) {
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_answer_rrs",
+						types.LabelName:         metricProbeDNSAnswerRRS,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -406,7 +415,7 @@ func Test_Collect_DNS(t *testing.T) {
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -419,7 +428,7 @@ func Test_Collect_DNS(t *testing.T) {
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_query_succeeded",
+						types.LabelName:         metricProbeDNSQuerySucceeded,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -432,7 +441,7 @@ func Test_Collect_DNS(t *testing.T) {
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -456,7 +465,7 @@ func Test_Collect_DNS(t *testing.T) {
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -469,7 +478,7 @@ func Test_Collect_DNS(t *testing.T) {
 				{
 					Point: types.Point{Time: t0, Value: 5},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_rcode",
+						types.LabelName:         metricProbeDNSRcode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -482,7 +491,7 @@ func Test_Collect_DNS(t *testing.T) {
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_answer_rrs",
+						types.LabelName:         metricProbeDNSAnswerRRS,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -495,7 +504,7 @@ func Test_Collect_DNS(t *testing.T) {
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -508,7 +517,7 @@ func Test_Collect_DNS(t *testing.T) {
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_query_succeeded",
+						types.LabelName:         metricProbeDNSQuerySucceeded,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -521,7 +530,7 @@ func Test_Collect_DNS(t *testing.T) {
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -545,7 +554,7 @@ func Test_Collect_DNS(t *testing.T) {
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_success",
+						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -558,7 +567,7 @@ func Test_Collect_DNS(t *testing.T) {
 				{
 					Point: types.Point{Time: t0, Value: 2},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_rcode",
+						types.LabelName:         metricProbeDNSRcode,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -571,7 +580,7 @@ func Test_Collect_DNS(t *testing.T) {
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_answer_rrs",
+						types.LabelName:         metricProbeDNSAnswerRRS,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -584,7 +593,7 @@ func Test_Collect_DNS(t *testing.T) {
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -597,7 +606,7 @@ func Test_Collect_DNS(t *testing.T) {
 				{
 					Point: types.Point{Time: t0, Value: 1},
 					Labels: map[string]string{
-						types.LabelName:         "probe_dns_query_succeeded",
+						types.LabelName:         metricProbeDNSQuerySucceeded,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -610,7 +619,7 @@ func Test_Collect_DNS(t *testing.T) {
 				{
 					Point: types.Point{Time: t0, Value: math.NaN()},
 					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
+						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,

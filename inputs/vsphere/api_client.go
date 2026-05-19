@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -35,6 +35,24 @@ import (
 	"github.com/vmware/govmomi/vim25"
 	"github.com/vmware/govmomi/vim25/soap"
 	"github.com/vmware/govmomi/vim25/types"
+)
+
+// Common fact key names used in device descriptions.
+const (
+	factHostname              = "hostname"
+	factFQDN                  = "fqdn"
+	factScraperFQDN           = "scraper_fqdn"
+	factCPUCores              = "cpu_cores"
+	factOSPrettyName          = "os_pretty_name"
+	factVSphereVMotionEnabled = "vsphere_vmotion_enabled"
+	factVSphereResourcePool   = "vsphere_resource_pool"
+	factVSphereHost           = "vsphere_host"
+	factVSphereVMVersion      = "vsphere_vm_version"
+	factVSphereVMName         = "vsphere_vm_name"
+	factPrimaryAddress        = "primary_address"
+	factVSphereDatastore      = "vsphere_datastore"
+	factVSphereHostVersion    = "vsphere_host_version"
+	factMemory                = "memory"
 )
 
 func newDeviceFinder(ctx context.Context, vSphereCfg config.VSphere) (*find.Finder, *vim25.Client, error) {
@@ -102,7 +120,7 @@ func describeCluster(source string, rfName refName, clusterProps clusterLightPro
 	clusterFacts := make(map[string]string)
 
 	if resourceSummary := clusterProps.ComputeResource.Summary; resourceSummary != nil {
-		clusterFacts["cpu_cores"] = str(resourceSummary.ComputeResourceSummary.NumCpuCores)
+		clusterFacts[factCPUCores] = str(resourceSummary.ComputeResourceSummary.NumCpuCores)
 	}
 
 	datastores := make([]string, len(clusterProps.ComputeResource.Datastore))
@@ -119,7 +137,7 @@ func describeCluster(source string, rfName refName, clusterProps clusterLightPro
 		state:  string(clusterProps.ComputeResource.ManagedEntity.OverallStatus),
 	}
 
-	dev.facts["fqdn"] = dev.FQDN()
+	dev.facts[factFQDN] = dev.FQDN()
 
 	return &Cluster{
 		device:     dev,
@@ -129,9 +147,9 @@ func describeCluster(source string, rfName refName, clusterProps clusterLightPro
 
 func describeHost(source string, rfName refName, hostProps hostLightProps) *HostSystem {
 	hostFacts := map[string]string{
-		"hostname": hostProps.Summary.Config.Name,
+		factHostname: hostProps.Summary.Config.Name,
 		// custom
-		"vsphere_vmotion_enabled": str(hostProps.Summary.Config.VmotionEnabled),
+		factVSphereVMotionEnabled: str(hostProps.Summary.Config.VmotionEnabled),
 	}
 
 	if hostProps.Summary.Hardware != nil {
@@ -141,14 +159,14 @@ func describeHost(source string, rfName refName, hostProps hostLightProps) *Host
 	}
 
 	if hostProps.Hardware != nil {
-		hostFacts["cpu_cores"] = str(hostProps.Hardware.CpuInfo.NumCpuCores)
-		hostFacts["memory"] = facts.ByteCountDecimal(uint64(hostProps.Hardware.MemorySize)) //nolint:gosec // MemorySize is always non-negative
+		hostFacts[factCPUCores] = str(hostProps.Hardware.CpuInfo.NumCpuCores)
+		hostFacts[factMemory] = facts.ByteCountDecimal(uint64(hostProps.Hardware.MemorySize)) //nolint:gosec // MemorySize is always non-negative
 	}
 
 	if hostProps.Config != nil {
-		hostFacts["os_pretty_name"] = hostProps.Config.Product.OsType
+		hostFacts[factOSPrettyName] = hostProps.Config.Product.OsType
 		hostFacts["ipv6_enabled"] = str(*hostProps.Config.Network.IpV6Enabled)
-		hostFacts["vsphere_host_version"] = hostProps.Config.Product.Version
+		hostFacts[factVSphereHostVersion] = hostProps.Config.Product.Version
 
 		if hostProps.Config.DateTimeInfo != nil {
 			hostFacts["timezone"] = hostProps.Config.DateTimeInfo.TimeZone.Name
@@ -163,25 +181,25 @@ func describeHost(source string, rfName refName, hostProps hostLightProps) *Host
 
 			if vnic := hostProps.Config.Network.Vnic; len(vnic) > 0 {
 				if vnic[0].Spec.Ip != nil {
-					hostFacts["primary_address"] = vnic[0].Spec.Ip.IpAddress
+					hostFacts[factPrimaryAddress] = vnic[0].Spec.Ip.IpAddress
 				}
 			}
 		}
 
-		if hostFacts["hostname"] == "" {
-			hostFacts["hostname"] = hostProps.ManagedEntity.Name
+		if hostFacts[factHostname] == "" {
+			hostFacts[factHostname] = hostProps.ManagedEntity.Name
 		}
 	}
 
 	dev := device{
 		source: source,
 		moid:   rfName.Reference().Value,
-		name:   fallback(hostFacts["hostname"], rfName.Name()),
+		name:   fallback(hostFacts[factHostname], rfName.Name()),
 		facts:  hostFacts,
 		state:  string(hostProps.Runtime.PowerState),
 	}
 
-	dev.facts["fqdn"] = dev.FQDN()
+	dev.facts[factFQDN] = dev.FQDN()
 
 	return &HostSystem{dev}
 }
@@ -195,10 +213,10 @@ func describeVM(source string, rfName refName, vmProps vmLightProps, h *Hierarch
 	)
 
 	if vmProps.Config != nil {
-		vmFacts["cpu_cores"] = str(vmProps.Config.Hardware.NumCPU)
-		vmFacts["memory"] = facts.ByteCountDecimal(uint64(vmProps.Config.Hardware.MemoryMB) * 1 << 20) //nolint:gosec // MB to B -- MemoryMB is always non-negative
-		vmFacts["vsphere_vm_version"] = vmProps.Config.Version
-		vmFacts["vsphere_vm_name"] = vmProps.Config.Name
+		vmFacts[factCPUCores] = str(vmProps.Config.Hardware.NumCPU)
+		vmFacts[factMemory] = facts.ByteCountDecimal(uint64(vmProps.Config.Hardware.MemoryMB) * 1 << 20) //nolint:gosec // MB to B -- MemoryMB is always non-negative
+		vmFacts[factVSphereVMVersion] = vmProps.Config.Version
+		vmFacts[factVSphereVMName] = vmProps.Config.Name
 
 		if vmProps.Summary.Config.Product != nil {
 			vmFacts["product_name"] = vmProps.Summary.Config.Product.Name
@@ -211,7 +229,7 @@ func describeVM(source string, rfName refName, vmProps vmLightProps, h *Hierarch
 				dsNames[i] = datastore.Name
 			}
 
-			vmFacts["vsphere_datastore"] = strings.Join(dsNames, ", ")
+			vmFacts[factVSphereDatastore] = strings.Join(dsNames, ", ")
 		}
 
 		disks, netInterfaces = getVMLabelsMetadata(vmProps.Config.Hardware.Device)
@@ -223,7 +241,7 @@ func describeVM(source string, rfName refName, vmProps vmLightProps, h *Hierarch
 			host = hostName
 		}
 
-		vmFacts["vsphere_host"] = host
+		vmFacts[factVSphereHost] = host
 	}
 
 	if vmProps.ResourcePool != nil {
@@ -232,39 +250,39 @@ func describeVM(source string, rfName refName, vmProps vmLightProps, h *Hierarch
 			resourcePool = resourcePoolName
 		}
 
-		vmFacts["vsphere_resource_pool"] = resourcePool
+		vmFacts[factVSphereResourcePool] = resourcePool
 	}
 
 	if vmProps.Guest != nil {
-		vmFacts["os_pretty_name"] = vmProps.Guest.GuestFullName
+		vmFacts[factOSPrettyName] = vmProps.Guest.GuestFullName
 
 		if vmProps.Guest.IpAddress != "" {
-			vmFacts["primary_address"] = vmProps.Guest.IpAddress
+			vmFacts[factPrimaryAddress] = vmProps.Guest.IpAddress
 		}
 	}
 
-	if vmFacts["os_pretty_name"] == "" && vmProps.Config != nil && vmProps.Config.GuestFullName != "otherGuest" {
-		vmFacts["os_pretty_name"] = vmProps.Config.GuestFullName
+	if vmFacts[factOSPrettyName] == "" && vmProps.Config != nil && vmProps.Config.GuestFullName != "otherGuest" {
+		vmFacts[factOSPrettyName] = vmProps.Config.GuestFullName
 	}
 
 	switch {
 	case vmProps.Guest != nil && vmProps.Guest.HostName != "":
-		vmFacts["hostname"] = vmProps.Guest.HostName
+		vmFacts[factHostname] = vmProps.Guest.HostName
 	case vmProps.Summary.Vm != nil:
-		vmFacts["hostname"] = vmProps.Summary.Vm.Value
+		vmFacts[factHostname] = vmProps.Summary.Vm.Value
 	default:
-		vmFacts["hostname"] = rfName.Name()
+		vmFacts[factHostname] = rfName.Name()
 	}
 
 	dev := device{
 		source: source,
 		moid:   rfName.Reference().Value,
-		name:   fallback(vmFacts["vsphere_vm_name"], rfName.Name()),
+		name:   fallback(vmFacts[factVSphereVMName], rfName.Name()),
 		facts:  vmFacts,
 		state:  string(vmProps.Runtime.PowerState),
 	}
 
-	dev.facts["fqdn"] = dev.FQDN()
+	dev.facts[factFQDN] = dev.FQDN()
 
 	return &VirtualMachine{dev}, disks, netInterfaces
 }

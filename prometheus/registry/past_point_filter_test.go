@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -29,6 +29,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const testDiskUsedPerc = "disk_used_perc"
+
 type testGatherer struct {
 	mfsToReturn []*io_prometheus_client.MetricFamily
 }
@@ -44,7 +46,7 @@ func (g *testGatherer) GatherWithState(_ context.Context, _ GatherState) ([]*io_
 func TestFilterPastPoints(t *testing.T) {
 	firstSample := []*io_prometheus_client.MetricFamily{ //nolint: dupl
 		{
-			Name: new("cpu_used"),
+			Name: new(metricCPUUsed),
 			Help: new(""),
 			Type: new(io_prometheus_client.MetricType),
 			Metric: []*io_prometheus_client.Metric{
@@ -62,7 +64,7 @@ func TestFilterPastPoints(t *testing.T) {
 			},
 		},
 		{
-			Name: new("disk_used_perc"),
+			Name: new(testDiskUsedPerc),
 			Help: new(""),
 			Type: new(io_prometheus_client.MetricType),
 			Metric: []*io_prometheus_client.Metric{
@@ -84,7 +86,7 @@ func TestFilterPastPoints(t *testing.T) {
 	}
 	secondSample := []*io_prometheus_client.MetricFamily{ //nolint: dupl
 		{
-			Name: new("cpu_used"),
+			Name: new(metricCPUUsed),
 			Help: new(""),
 			Type: new(io_prometheus_client.MetricType),
 			Metric: []*io_prometheus_client.Metric{
@@ -102,7 +104,7 @@ func TestFilterPastPoints(t *testing.T) {
 			},
 		},
 		{
-			Name: new("disk_used_perc"),
+			Name: new(testDiskUsedPerc),
 			Help: new(""),
 			Type: new(io_prometheus_client.MetricType),
 			Metric: []*io_prometheus_client.Metric{
@@ -155,7 +157,7 @@ func TestFilterPastPoints(t *testing.T) {
 func TestFilterPurge(t *testing.T) {
 	sample := []*io_prometheus_client.MetricFamily{
 		{
-			Name: new("cpu_used"),
+			Name: new(metricCPUUsed),
 			Help: new(""),
 			Type: new(io_prometheus_client.MetricType),
 			Metric: []*io_prometheus_client.Metric{
@@ -170,7 +172,7 @@ func TestFilterPurge(t *testing.T) {
 			},
 		},
 		{
-			Name: new("disk_used_perc"),
+			Name: new(testDiskUsedPerc),
 			Help: new(""),
 			Type: new(io_prometheus_client.MetricType),
 			Metric: []*io_prometheus_client.Metric{
@@ -213,10 +215,10 @@ func TestFilterPurge(t *testing.T) {
 	}
 
 	expectedCache := map[string]map[uint64]point{
-		"cpu_used": {
+		metricCPUUsed: {
 			10203054987680334317: {timestampMs: 1700751600000, recordedAt: t0}, // 15:00:00 UTC,
 		},
-		"disk_used_perc": {
+		testDiskUsedPerc: {
 			3900352098746294457:  {timestampMs: 1700751600000, recordedAt: t0}, // 15:00:00 UTC,
 			10203054987680334317: {timestampMs: 1700751600000, recordedAt: t0}, // 15:00:00 UTC,
 		},
@@ -237,10 +239,10 @@ func TestFilterPurge(t *testing.T) {
 	}
 
 	expectedCache = map[string]map[uint64]point{
-		"cpu_used": {
+		metricCPUUsed: {
 			10203054987680334317: {timestampMs: t0.UnixMilli(), recordedAt: t0.Add(4 * time.Minute)},
 		},
-		"disk_used_perc": {
+		testDiskUsedPerc: {
 			3900352098746294457:  {timestampMs: t0.UnixMilli(), recordedAt: t0},
 			10203054987680334317: {timestampMs: t0.UnixMilli(), recordedAt: t0},
 		},
@@ -251,7 +253,7 @@ func TestFilterPurge(t *testing.T) {
 
 	tGatherer.mfsToReturn = []*io_prometheus_client.MetricFamily{
 		{
-			Name: new("disk_used_perc"),
+			Name: new(testDiskUsedPerc),
 			Help: new(""),
 			Type: new(io_prometheus_client.MetricType),
 			Metric: []*io_prometheus_client.Metric{
@@ -276,10 +278,10 @@ func TestFilterPurge(t *testing.T) {
 	}
 
 	expectedCache = map[string]map[uint64]point{
-		"cpu_used": {
+		metricCPUUsed: {
 			10203054987680334317: {timestampMs: t0.UnixMilli(), recordedAt: t0.Add(4 * time.Minute)},
 		},
-		"disk_used_perc": {
+		testDiskUsedPerc: {
 			3900352098746294457: {timestampMs: t0.Add(8 * time.Minute).UnixMilli(), recordedAt: t0.Add(8 * time.Minute)},
 		},
 	}

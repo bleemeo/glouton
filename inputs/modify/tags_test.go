@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -73,6 +73,7 @@ func TestAddInstance(t *testing.T) {
 	const (
 		containerName   = "container_name"
 		measurementName = "fixed_measure"
+		tagValue        = "value"
 	)
 
 	fields := map[string]any{"cpu": 4.2}
@@ -101,7 +102,7 @@ func TestAddInstance(t *testing.T) {
 			name:     "instance-with-tags",
 			instance: containerName,
 			tags: map[string]string{
-				"key": "value",
+				"key": tagValue,
 			},
 			want: []internal.Measurement{
 				{
@@ -116,7 +117,7 @@ func TestAddInstance(t *testing.T) {
 			name:     "instance-with-item",
 			instance: containerName,
 			tags: map[string]string{
-				types.LabelItem: "value",
+				types.LabelItem: tagValue,
 			},
 			want: []internal.Measurement{
 				{

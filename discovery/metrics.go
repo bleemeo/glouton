@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -334,7 +334,7 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			port = service.Config.StatsPort
 		}
 
-		if ip := service.AddressForPort(port, "tcp", true); ip != "" {
+		if ip := service.AddressForPort(port, tcpProtocol, true); ip != "" {
 			url := "http://" + net.JoinHostPort(service.IPAddress, strconv.Itoa(port))
 			input, gathererOptions, err = nats.New(url)
 		}
@@ -375,7 +375,7 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			force = true
 		}
 
-		if ip := service.AddressForPort(mgmtPort, "tcp", force); ip != "" {
+		if ip := service.AddressForPort(mgmtPort, tcpProtocol, force); ip != "" {
 			username := service.Config.Username
 			if username == "" {
 				username = "guest"
@@ -407,12 +407,12 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 
 		// The stats server can be exposed with TCP or HTTP
 		// (or a socket but we don't support it).
-		protocol := "tcp"
+		protocol := tcpProtocol
 		if service.Config.StatsProtocol != "" {
 			protocol = service.Config.StatsProtocol
 		}
 
-		if ip := service.AddressForPort(port, "tcp", true); ip != "" {
+		if ip := service.AddressForPort(port, tcpProtocol, true); ip != "" {
 			url := fmt.Sprintf("%s://%s", protocol, net.JoinHostPort(ip, strconv.Itoa(port)))
 			input, gathererOptions, err = uwsgi.New(url)
 		}

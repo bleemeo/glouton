@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -32,6 +32,11 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+const (
+	testDeviceBay1 = "bay 1"
+	testDeviceBay2 = "bay 2"
+)
+
 // Test_GatherWithState is the principal test and indirectly test other method.
 // Other test ensentially helps to diagnostic issue on sub-function / test some corner case.
 // For each new server that we can test, we should write a test case for Test_GatherWithState before other tests.
@@ -61,7 +66,7 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 			want: []types.MetricPoint{
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "controller 0 array A box 2 bay 1",
 					},
 					Point: types.Point{
@@ -77,7 +82,7 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "controller 0 array A box 2 bay 2",
 					},
 					Point: types.Point{
@@ -93,7 +98,7 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "controller 0 array A box 2 bay 3",
 					},
 					Point: types.Point{
@@ -109,7 +114,7 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "controller 0 array A box 2 bay 4",
 					},
 					Point: types.Point{
@@ -125,7 +130,7 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "controller 0 array A box 2 bay 5",
 					},
 					Point: types.Point{
@@ -141,7 +146,7 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "controller 0 array A box 2 bay 6",
 					},
 					Point: types.Point{
@@ -157,7 +162,7 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "controller 0 array B box 2 bay 7",
 					},
 					Point: types.Point{
@@ -173,7 +178,7 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "controller 0 array B box 2 bay 8",
 					},
 					Point: types.Point{
@@ -189,7 +194,7 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "controller 3 box 0 bay 1",
 					},
 					Point: types.Point{
@@ -205,7 +210,7 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "controller 3 box 0 bay 2",
 					},
 					Point: types.Point{
@@ -221,7 +226,7 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "controller 3 box 0 bay 3",
 					},
 					Point: types.Point{
@@ -237,7 +242,7 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "controller 3 box 0 bay 4",
 					},
 					Point: types.Point{
@@ -260,8 +265,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 			want: []types.MetricPoint{
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
-						types.LabelDevice: "bay 1",
+						types.LabelName:   metricSmartDeviceHealthStatus,
+						types.LabelDevice: testDeviceBay1,
 					},
 					Point: types.Point{
 						Time:  now,
@@ -276,8 +281,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
-						types.LabelDevice: "bay 2",
+						types.LabelName:   metricSmartDeviceHealthStatus,
+						types.LabelDevice: testDeviceBay2,
 					},
 					Point: types.Point{
 						Time:  now,
@@ -299,8 +304,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 			want: []types.MetricPoint{
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
-						types.LabelDevice: "bay 1",
+						types.LabelName:   metricSmartDeviceHealthStatus,
+						types.LabelDevice: testDeviceBay1,
 					},
 					Point: types.Point{
 						Time:  now,
@@ -315,8 +320,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
-						types.LabelDevice: "bay 2",
+						types.LabelName:   metricSmartDeviceHealthStatus,
+						types.LabelDevice: testDeviceBay2,
 					},
 					Point: types.Point{
 						Time:  now,
@@ -331,7 +336,7 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "bay 3",
 					},
 					Point: types.Point{
@@ -347,7 +352,7 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "bay 4",
 					},
 					Point: types.Point{
@@ -363,7 +368,7 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "bay 5",
 					},
 					Point: types.Point{
@@ -379,7 +384,7 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "bay 6",
 					},
 					Point: types.Point{
@@ -395,7 +400,7 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "bay 7",
 					},
 					Point: types.Point{
@@ -411,7 +416,7 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "bay 8",
 					},
 					Point: types.Point{
@@ -437,8 +442,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 			want: []types.MetricPoint{
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
-						types.LabelDevice: "bay 1",
+						types.LabelName:   metricSmartDeviceHealthStatus,
+						types.LabelDevice: testDeviceBay1,
 					},
 					Point: types.Point{
 						Time:  now,
@@ -453,8 +458,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
-						types.LabelDevice: "bay 2",
+						types.LabelName:   metricSmartDeviceHealthStatus,
+						types.LabelDevice: testDeviceBay2,
 					},
 					Point: types.Point{
 						Time:  now,
@@ -469,7 +474,7 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "bay 3",
 					},
 					Point: types.Point{
@@ -485,7 +490,7 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "bay 4",
 					},
 					Point: types.Point{
@@ -501,7 +506,7 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "bay 5",
 					},
 					Point: types.Point{
@@ -517,7 +522,7 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "bay 6",
 					},
 					Point: types.Point{
@@ -533,7 +538,7 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "bay 7",
 					},
 					Point: types.Point{
@@ -549,7 +554,7 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "bay 8",
 					},
 					Point: types.Point{
@@ -572,8 +577,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 			want: []types.MetricPoint{
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
-						types.LabelDevice: "bay 1",
+						types.LabelName:   metricSmartDeviceHealthStatus,
+						types.LabelDevice: testDeviceBay1,
 					},
 					Point: types.Point{
 						Time:  now,
@@ -588,8 +593,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
-						types.LabelDevice: "bay 2",
+						types.LabelName:   metricSmartDeviceHealthStatus,
+						types.LabelDevice: testDeviceBay2,
 					},
 					Point: types.Point{
 						Time:  now,

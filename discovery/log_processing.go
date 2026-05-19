@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -60,7 +60,7 @@ var servicesLogInfo = map[ServiceName]logProcessingInfo{ //nolint: gochecknoglob
 		FileFormats: []ServiceLogReceiver{
 			// TODO
 		},
-		DefaultFormat: "kafka",
+		DefaultFormat: string(KafkaService),
 		DockerFormat:  "kafka_docker",
 	},
 	RedisService: {
@@ -104,10 +104,10 @@ var servicesLogInfo = map[ServiceName]logProcessingInfo{ //nolint: gochecknoglob
 		FileFormats: []ServiceLogReceiver{
 			{
 				FilePath: "/var/log/mariadb/mariadb.log",
-				Format:   "mariadb",
+				Format:   string(MariaDBService),
 			},
 		},
-		DefaultFormat: "mariadb",
+		DefaultFormat: string(MariaDBService),
 		DockerFormat:  "mariadb_docker",
 	},
 	MySQLService: {

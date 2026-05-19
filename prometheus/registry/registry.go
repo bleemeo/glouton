@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -60,6 +60,9 @@ import (
 )
 
 const (
+	metaLabelValueYes = "yes"
+	regexCaptureAll   = "(.+)"
+
 	pushedPointsCleanupInterval = 5 * time.Minute
 	hookRetryDelay              = 2 * time.Minute
 	relabelTimeout              = 20 * time.Second
@@ -358,7 +361,7 @@ func getDefaultRelabelConfig() []*relabel.Config {
 		{
 			Action:               relabel.Replace,
 			Separator:            ";",
-			Regex:                relabel.MustNewRegexp("(.+)"),
+			Regex:                relabel.MustNewRegexp(regexCaptureAll),
 			SourceLabels:         model.LabelNames{types.LabelMetaBleemeoUUID},
 			TargetLabel:          types.LabelInstanceUUID,
 			Replacement:          "$1",
@@ -367,7 +370,7 @@ func getDefaultRelabelConfig() []*relabel.Config {
 		{
 			Action:               relabel.Replace,
 			Separator:            ";",
-			Regex:                relabel.MustNewRegexp("(.+)"),
+			Regex:                relabel.MustNewRegexp(regexCaptureAll),
 			SourceLabels:         model.LabelNames{types.LabelMetaServiceUUID},
 			TargetLabel:          types.LabelServiceUUID,
 			Replacement:          "$1",
@@ -425,7 +428,7 @@ func getDefaultRelabelConfig() []*relabel.Config {
 		// and 'service_uuid' also.
 		{
 			Action:               relabel.Replace,
-			Regex:                relabel.MustNewRegexp("(.+)"),
+			Regex:                relabel.MustNewRegexp(regexCaptureAll),
 			SourceLabels:         model.LabelNames{types.LabelMetaBleemeoTargetAgentUUID},
 			TargetLabel:          types.LabelInstanceUUID,
 			Replacement:          "$1",
@@ -433,7 +436,7 @@ func getDefaultRelabelConfig() []*relabel.Config {
 		},
 		{
 			Action:               relabel.Replace,
-			Regex:                relabel.MustNewRegexp("(.+)"),
+			Regex:                relabel.MustNewRegexp(regexCaptureAll),
 			SourceLabels:         model.LabelNames{types.LabelMetaProbeServiceUUID},
 			TargetLabel:          types.LabelServiceUUID,
 			Replacement:          "$1",
@@ -442,7 +445,7 @@ func getDefaultRelabelConfig() []*relabel.Config {
 		// when the metric comes from a probe, the 'instance' label is the target URI
 		{
 			Action:               relabel.Replace,
-			Regex:                relabel.MustNewRegexp("(.+)"),
+			Regex:                relabel.MustNewRegexp(regexCaptureAll),
 			SourceLabels:         model.LabelNames{types.LabelMetaBleemeoTargetAgent},
 			TargetLabel:          types.LabelInstance,
 			Replacement:          "$1",
@@ -451,7 +454,7 @@ func getDefaultRelabelConfig() []*relabel.Config {
 		{
 			Action:               relabel.Replace,
 			Separator:            ";",
-			Regex:                relabel.MustNewRegexp("(.+)"),
+			Regex:                relabel.MustNewRegexp(regexCaptureAll),
 			SourceLabels:         model.LabelNames{types.LabelMetaSNMPTarget},
 			TargetLabel:          types.LabelSNMPTarget,
 			Replacement:          "$1",
@@ -1933,11 +1936,11 @@ func (r *Registry) addMetaLabels(input map[string]string, opts RegistrationOptio
 	result[types.LabelMetaPort] = servicePort
 
 	if r.option.BlackboxSendScraperID {
-		result[types.LabelMetaSendScraperUUID] = "yes"
+		result[types.LabelMetaSendScraperUUID] = metaLabelValueYes
 	}
 
 	if opts.InstanceUseContainerName {
-		result[types.LabelMetaInstanceUseContainerName] = "yes"
+		result[types.LabelMetaInstanceUseContainerName] = metaLabelValueYes
 	}
 
 	return result

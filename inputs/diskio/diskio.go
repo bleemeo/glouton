@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -79,18 +79,24 @@ func (dt diskIOTransformer) transformMetrics(currentContext internal.GatherConte
 	_ = currentContext
 	_ = originalFields
 
-	for _, name := range []string{"io_time", "read_time", "write_time"} {
+	const (
+		ioTime    = "io_time"
+		readTime  = "read_time"
+		writeTime = "write_time"
+	)
+
+	for _, name := range []string{ioTime, readTime, writeTime} {
 		if value, ok := fields[name]; ok {
 			delete(fields, name)
 
 			newName := name
 
 			switch name {
-			case "io_time":
+			case ioTime:
 				newName = "utilization"
-			case "read_time":
+			case readTime:
 				newName = "read_utilization"
-			case "write_time":
+			case writeTime:
 				newName = "write_utilization"
 			}
 

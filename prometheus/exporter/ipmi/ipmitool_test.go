@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -73,7 +73,7 @@ func Test_ipmiTooldecodeDCMI(t *testing.T) {
 			},
 		},
 		{
-			name:     "R720xd",
+			name:     testNameR720xd,
 			testfile: "dell-r720xd-ipmitool-dcmi.txt",
 			want: []powerReading{
 				{
@@ -88,7 +88,7 @@ func Test_ipmiTooldecodeDCMI(t *testing.T) {
 			},
 		},
 		{
-			name:     "R720xd-2",
+			name:     testNameR720xd2,
 			testfile: "dell-r720xd-2-ipmitool-dcmi.txt",
 			want: []powerReading{
 				{
@@ -103,7 +103,7 @@ func Test_ipmiTooldecodeDCMI(t *testing.T) {
 			},
 		},
 		{
-			name:     "HP Proliant DL360 G7",
+			name:     testNameHPProliantDL360G7,
 			testfile: "hp-dl360-g7-ipmitool-dcmi.txt",
 			want:     []powerReading{},
 		},

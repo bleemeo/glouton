@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -27,6 +27,11 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	prometheusModel "github.com/prometheus/common/model"
+)
+
+const (
+	testPhysicalDrive0 = "PHYSICALDRIVE0"
+	testDiskModel      = "ST1000LM035"
 )
 
 func fileToMFS(filename string) ([]*dto.MetricFamily, error) {
@@ -72,14 +77,14 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusOk.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
-						types.LabelDevice: "PHYSICALDRIVE0",
-						types.LabelModel:  "ST1000LM035",
+						types.LabelName:   metricSmartDeviceHealthStatus,
+						types.LabelDevice: testPhysicalDrive0,
+						types.LabelModel:  testDiskModel,
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
-							StatusDescription: "SMART tests passed",
+							StatusDescription: statusDescSMARTPassed,
 						},
 					},
 				},
@@ -94,14 +99,14 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
-						types.LabelDevice: "PHYSICALDRIVE0",
-						types.LabelModel:  "ST1000LM035",
+						types.LabelName:   metricSmartDeviceHealthStatus,
+						types.LabelDevice: testPhysicalDrive0,
+						types.LabelModel:  testDiskModel,
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
-							StatusDescription: "Disk had error",
+							StatusDescription: statusDescDiskHadError,
 						},
 					},
 				},
@@ -117,14 +122,14 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
-						types.LabelDevice: "PHYSICALDRIVE0",
-						types.LabelModel:  "ST1000LM035",
+						types.LabelName:   metricSmartDeviceHealthStatus,
+						types.LabelDevice: testPhysicalDrive0,
+						types.LabelModel:  testDiskModel,
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
-							StatusDescription: "Disk is offline for unknown reason",
+							StatusDescription: statusDescDiskOfflineUnknown,
 						},
 					},
 				},
@@ -140,14 +145,14 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusWarning.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
-						types.LabelDevice: "PHYSICALDRIVE0",
-						types.LabelModel:  "ST1000LM035",
+						types.LabelName:   metricSmartDeviceHealthStatus,
+						types.LabelDevice: testPhysicalDrive0,
+						types.LabelModel:  testDiskModel,
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusWarning,
-							StatusDescription: "Disk is degraded",
+							StatusDescription: statusDescDiskDegraded,
 						},
 					},
 				},
@@ -162,14 +167,14 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusWarning.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
-						types.LabelDevice: "PHYSICALDRIVE0",
+						types.LabelName:   metricSmartDeviceHealthStatus,
+						types.LabelDevice: testPhysicalDrive0,
 						types.LabelModel:  "DD1",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusWarning,
-							StatusDescription: "Disk is degraded",
+							StatusDescription: statusDescDiskDegraded,
 						},
 					},
 				},
@@ -178,14 +183,14 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "PHYSICALDRIVE1",
 						types.LabelModel:  "DD2",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
-							StatusDescription: "Disk had error",
+							StatusDescription: statusDescDiskHadError,
 						},
 					},
 				},
@@ -194,13 +199,13 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusOk.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "PHYSICALDRIVE10",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
-							StatusDescription: "SMART tests passed",
+							StatusDescription: statusDescSMARTPassed,
 						},
 					},
 				},
@@ -209,13 +214,13 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "PHYSICALDRIVE11",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
-							StatusDescription: "Disk is offline for unknown reason",
+							StatusDescription: statusDescDiskOfflineUnknown,
 						},
 					},
 				},
@@ -224,7 +229,7 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "PHYSICALDRIVE2",
 						types.LabelModel:  "DD3",
 					},
@@ -240,7 +245,7 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "PHYSICALDRIVE3",
 						types.LabelModel:  "DD4",
 					},
@@ -256,7 +261,7 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "PHYSICALDRIVE4",
 					},
 					Annotations: types.MetricAnnotations{
@@ -271,13 +276,13 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusOk.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "PHYSICALDRIVE5",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
-							StatusDescription: "SMART tests passed",
+							StatusDescription: statusDescSMARTPassed,
 						},
 					},
 				},
@@ -286,7 +291,7 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusWarning.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "PHYSICALDRIVE6",
 					},
 					Annotations: types.MetricAnnotations{
@@ -301,7 +306,7 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "PHYSICALDRIVE7",
 					},
 					Annotations: types.MetricAnnotations{
@@ -316,7 +321,7 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "PHYSICALDRIVE8",
 					},
 					Annotations: types.MetricAnnotations{
@@ -331,7 +336,7 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
+						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "PHYSICALDRIVE9",
 					},
 					Annotations: types.MetricAnnotations{

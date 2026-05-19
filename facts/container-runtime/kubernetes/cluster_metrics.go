@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -27,6 +27,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+const defaultNamespace = "default"
 
 type metricsFunc func(kubeCache, time.Time) []types.MetricPoint
 
@@ -203,7 +205,7 @@ func podNamespace(pod corev1.Pod) string {
 	// An empty namespace is the default namespace.
 	namespace := pod.Namespace
 	if namespace == "" {
-		namespace = "default"
+		namespace = defaultNamespace
 	}
 
 	return namespace

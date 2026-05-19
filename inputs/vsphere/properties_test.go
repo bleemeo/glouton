@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -49,12 +49,12 @@ func TestPropsCaches(t *testing.T) { //nolint:maintidx
 		"domain-c16": {
 			ComputeResource: clusterLightComputeResource{
 				ManagedEntity: clusterLightComputeResourceManagedEntity{
-					OverallStatus: "green",
+					OverallStatus: testStateGreen,
 				},
 				Datastore: []types.ManagedObjectReference{
 					{
 						Type:  "Datastore",
-						Value: "datastore-25",
+						Value: testDatastore25,
 					},
 				},
 				Summary: &clusterLightComputeResourceSummary{
@@ -81,9 +81,9 @@ func TestPropsCaches(t *testing.T) { //nolint:maintidx
 			},
 			Summary: hostLightSummary{
 				Hardware: &hostLightSummaryHardware{
-					Vendor:   "VMware, Inc. (govmomi simulator)",
-					Model:    "VMware Virtual Platform",
-					CpuModel: "Intel(R) Core(TM) i7-3615QM CPU @ 2.30GHz",
+					Vendor:   testVendorGovmomi,
+					Model:    testProductVMW,
+					CpuModel: testCPUModelI7,
 				},
 				Config: hostLightSummaryConfig{
 					Name:           "DC0_C0_H0",
@@ -98,21 +98,21 @@ func TestPropsCaches(t *testing.T) { //nolint:maintidx
 			},
 			Config: &hostLightConfig{
 				Product: hostLightConfigProduct{
-					Version: "6.5.0",
-					OsType:  "vmnix-x86",
+					Version: testVersion650,
+					OsType:  testOSVmnixX86,
 				},
 				Network: &hostLightConfigNetwork{
 					Vnic: []hostLightConfigNetworkVnic{
 						{
 							Spec: hostLightConfigNetworkVnicSpec{
 								Ip: &hostLightConfigNetworkVnicSpecIp{
-									IpAddress: "127.0.0.1",
+									IpAddress: testIP127001,
 								},
 							},
 						},
 					},
 					DnsConfig: &types.HostDnsConfig{
-						DomainName: "localdomain",
+						DomainName: testDomainLocal,
 					},
 					IpV6Enabled: new(false),
 				},
@@ -125,7 +125,7 @@ func TestPropsCaches(t *testing.T) { //nolint:maintidx
 			Config: &vmLightConfig{
 				Name:          "DC0_C0_RP0_VM0",
 				GuestFullName: "otherGuest",
-				Version:       "vmx-13",
+				Version:       testVMVersionVmx13,
 				Hardware: vmLightConfigHardware{
 					NumCPU:   1,
 					MemoryMB: 32,
@@ -256,13 +256,13 @@ func TestPropsCaches(t *testing.T) { //nolint:maintidx
 						&types.VirtualDisk{
 							VirtualDevice: types.VirtualDevice{
 								Key:        204,
-								DeviceInfo: &types.Description{Label: "disk-202-0", Summary: "10,485,760 KB"},
+								DeviceInfo: &types.Description{Label: testDisk202_0, Summary: "10,485,760 KB"},
 								Backing: &types.VirtualDiskFlatVer2BackingInfo{
 									VirtualDeviceFileBackingInfo: types.VirtualDeviceFileBackingInfo{
 										FileName: "[LocalDS_0] DC0_C0_RP0_VM0/disk1.vmdk",
 										Datastore: &types.ManagedObjectReference{
 											Type:  "Datastore",
-											Value: "datastore-25",
+											Value: testDatastore25,
 										},
 									},
 									DiskMode:        "persistent",
@@ -285,7 +285,7 @@ func TestPropsCaches(t *testing.T) { //nolint:maintidx
 								VirtualDevice: types.VirtualDevice{
 									Key: 4000,
 									DeviceInfo: &types.Description{
-										Label:   "ethernet-0",
+										Label:   testEthernet0,
 										Summary: "DVSwitch: fea97929-4b2d-5972-b146-930c6d0b4014",
 									},
 									Backing: &types.VirtualEthernetCardDistributedVirtualPortBackingInfo{

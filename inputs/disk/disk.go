@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -30,6 +30,9 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/disk"
 )
 
+// inputName is the name of the disk input plugin.
+const inputName = "disk"
+
 type diskTransformer struct {
 	mountPoint string
 	matcher    types.Matcher
@@ -39,7 +42,7 @@ type diskTransformer struct {
 //
 // mountPoint is the root path to monitor. Useful when running inside a Docker.
 func New(mountPoint string, pathMatcher types.Matcher, ignoreFSTypes []string) (i telegraf.Input, err error) {
-	input, ok := telegraf_inputs.Inputs["disk"]
+	input, ok := telegraf_inputs.Inputs[inputName]
 
 	if ok {
 		diskInput, _ := input().(*disk.Disk)
@@ -59,7 +62,7 @@ func New(mountPoint string, pathMatcher types.Matcher, ignoreFSTypes []string) (
 				RenameGlobal:     dt.renameGlobal,
 				TransformMetrics: dt.transformMetrics,
 			},
-			Name: "disk",
+			Name: inputName,
 		}
 	} else {
 		err = inputs.ErrDisabledInput

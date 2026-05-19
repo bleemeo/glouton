@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -29,9 +29,20 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/postgresql"
 )
 
+// inputName is the name of the postgresql input plugin.
+const inputName = "postgresql"
+
+// Metric field name constants.
+const (
+	fieldXactCommit   = "xact_commit"
+	fieldXactRollback = "xact_rollback"
+	fieldTempFiles    = "temp_files"
+	fieldBlkWriteTime = "blk_write_time"
+)
+
 // New initialise postgresql.Input.
 func New(address string, detailedDatabases []string) (telegraf.Input, error) {
-	input, ok := telegraf_inputs.Inputs["postgresql"]
+	input, ok := telegraf_inputs.Inputs[inputName]
 	if !ok {
 		return nil, inputs.ErrDisabledInput
 	}
@@ -52,13 +63,13 @@ func New(address string, detailedDatabases []string) (telegraf.Input, error) {
 		Accumulator: internal.Accumulator{
 			RenameGlobal: renameGlobal(detailedDatabases),
 			DifferentiatedMetrics: []string{
-				"xact_commit", "xact_rollback", "blks_read", "blks_hit", "tup_returned", "tup_fetched",
-				"tup_inserted", "tup_updated", "tup_deleted", "temp_files", "temp_bytes", "blk_read_time",
-				"blk_write_time",
+				fieldXactCommit, fieldXactRollback, "blks_read", "blks_hit", "tup_returned", "tup_fetched",
+				"tup_inserted", "tup_updated", "tup_deleted", fieldTempFiles, "temp_bytes", "blk_read_time",
+				fieldBlkWriteTime,
 			},
 			TransformMetrics: transformMetrics,
 		},
-		Name: "postgresql",
+		Name: inputName,
 	}
 
 	return internal.InputWithSecrets{Input: internalInput, Count: 1}, nil
@@ -96,17 +107,17 @@ func transformMetrics(
 
 	for metricName, value := range fields {
 		switch metricName {
-		case "xact_commit":
+		case fieldXactCommit:
 			newFields["commit"+suffix] = value
-		case "xact_rollback":
+		case fieldXactRollback:
 			newFields["rollback"+suffix] = value
 		case "blks_read", "blks_hit", "tup_returned", "tup_fetched", "tup_inserted", "tup_updated":
 			newFields[metricName+suffix] = value
-		case "tup_deleted", "temp_files", "temp_bytes":
+		case "tup_deleted", fieldTempFiles, "temp_bytes":
 			newFields[metricName+suffix] = value
 		case "blk_read_time":
 			newFields["blk_read_utilization"+suffix] = value / 10 // convert ms/s to %
-		case "blk_write_time":
+		case fieldBlkWriteTime:
 			newFields["blk_write_utilization"+suffix] = value / 10 // convert ms/s to %
 		}
 	}

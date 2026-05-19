@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -35,6 +35,8 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"google.golang.org/protobuf/proto"
 )
+
+const testOccurrence = "occurrence"
 
 func Test_Host_Port(t *testing.T) {
 	url, _ := url.Parse("https://example.com:8080")
@@ -240,7 +242,7 @@ func Test_parserReader(t *testing.T) { //nolint:maintidx
 						{
 							TimestampMs: nil,
 							Label: []*dto.LabelPair{
-								{Name: new("occurrence"), Value: new("1")},
+								{Name: new(testOccurrence), Value: new("1")},
 							},
 							Untyped: &dto.Untyped{
 								Value: proto.Float64(1),
@@ -249,7 +251,7 @@ func Test_parserReader(t *testing.T) { //nolint:maintidx
 						{
 							TimestampMs: nil,
 							Label: []*dto.LabelPair{
-								{Name: new("occurrence"), Value: new("2")},
+								{Name: new(testOccurrence), Value: new("2")},
 							},
 							Untyped: &dto.Untyped{
 								Value: new(1.2),
@@ -265,7 +267,7 @@ func Test_parserReader(t *testing.T) { //nolint:maintidx
 						{
 							TimestampMs: nil,
 							Label: []*dto.LabelPair{
-								{Name: new("occurrence"), Value: new("1")},
+								{Name: new(testOccurrence), Value: new("1")},
 							},
 							Gauge: &dto.Gauge{
 								Value: proto.Float64(2),
@@ -274,7 +276,7 @@ func Test_parserReader(t *testing.T) { //nolint:maintidx
 						{
 							TimestampMs: nil,
 							Label: []*dto.LabelPair{
-								{Name: new("occurrence"), Value: new("2")},
+								{Name: new(testOccurrence), Value: new("2")},
 							},
 							Gauge: &dto.Gauge{
 								Value: new(2.2),
@@ -290,7 +292,7 @@ func Test_parserReader(t *testing.T) { //nolint:maintidx
 						{
 							TimestampMs: nil,
 							Label: []*dto.LabelPair{
-								{Name: new("occurrence"), Value: new("1")},
+								{Name: new(testOccurrence), Value: new("1")},
 							},
 							Untyped: &dto.Untyped{
 								Value: proto.Float64(3),
@@ -299,7 +301,7 @@ func Test_parserReader(t *testing.T) { //nolint:maintidx
 						{
 							TimestampMs: nil,
 							Label: []*dto.LabelPair{
-								{Name: new("occurrence"), Value: new("2")},
+								{Name: new(testOccurrence), Value: new("2")},
 							},
 							Untyped: &dto.Untyped{
 								Value: new(3.2),

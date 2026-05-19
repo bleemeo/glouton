@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -30,6 +30,8 @@ import (
 // Prevent gofmt from removing "unsafe", //go:linkname is only allowed in Go files that import "unsafe".
 var _ unsafe.Pointer
 
+const testSomething = "something"
+
 //go:linkname rootfsStripPrefix github.com/prometheus/node_exporter/collector.rootfsStripPrefix
 func rootfsStripPrefix(path string) string
 
@@ -46,12 +48,12 @@ func Test_optionsToFlags(t *testing.T) {
 		{
 			name: "full-option",
 			option: Option{
-				RootFS:                       "something",
-				FilesystemIgnoredMountPoints: "something",
-				FilesystemIgnoredType:        "something",
-				NetworkIgnoredDevices:        "something",
-				DiskStatsIgnoredDevices:      "something",
-				EnabledCollectors:            []string{"something"},
+				RootFS:                       testSomething,
+				FilesystemIgnoredMountPoints: testSomething,
+				FilesystemIgnoredType:        testSomething,
+				NetworkIgnoredDevices:        testSomething,
+				DiskStatsIgnoredDevices:      testSomething,
+				EnabledCollectors:            []string{testSomething},
 			},
 		},
 	}
@@ -74,10 +76,10 @@ func Test_newCollector(t *testing.T) {
 	// second call to Parse() won't do the same, because some code are already initialized).
 	fullOptions := Option{
 		RootFS:                       "/hostroot",
-		FilesystemIgnoredMountPoints: "something",
-		FilesystemIgnoredType:        "something",
-		NetworkIgnoredDevices:        "something",
-		DiskStatsIgnoredDevices:      "something",
+		FilesystemIgnoredMountPoints: testSomething,
+		FilesystemIgnoredType:        testSomething,
+		NetworkIgnoredDevices:        testSomething,
+		DiskStatsIgnoredDevices:      testSomething,
 		EnabledCollectors:            config.DefaultConfig().Agent.NodeExporter.Collectors,
 	}
 

@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -27,6 +27,44 @@ import (
 	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp"
+)
+
+const (
+	testUnitPercent     = "%"
+	testUnitByte        = "Byte"
+	testCPUUsed         = "cpu_used"
+	testOneDay          = "1 day"
+	testMainAgentID     = "main-agent-id"
+	testStatusVal5      = "Current value: 5.00"
+	testStatusVal10     = "Current value: 10.00"
+	testStatusVal20     = "Current value: 20.00"
+	testStatusVal95     = "Current value: 95.00"
+	testStatusWarn95    = "Current value: 95.00 threshold (80.00) exceeded over last 1 minute"
+	testStatusCrit95    = "Current value: 95.00 threshold (90.00) exceeded over last 1 minute"
+	NameCPUUsed         = `__name__="cpu_used"`
+	NameDiskUsedPerc    = `__name__="disk_used_perc",item="/home"`
+	NameDiskUsedPercSrv = `__name__="disk_used_perc",item="/srv"`
+	NameNodeCPUIdle     = `__name__="node_cpu_seconds_total",cpu="0",mode="idle"`
+	NameKubernetsCrd    = `__name__="kubernetes_certificate_day_left",item="crd"`
+	NameKubernetesAPI   = `__name__="kubernetes_certificate_day_left",item="api"`
+
+	testLabelsMemUsed          = `__name__="mem_used"`
+	testLabelsNetUsedEth0      = `__name__="net_used",item="eth0"`
+	testLabelsDiskUsedLowCrit  = `__name__="disk_used",item="low_critical"`
+	testLabelsDiskUsedLowWarn  = `__name__="disk_used",item="low_warning"`
+	testLabelsDiskUsedOk       = `__name__="disk_used",item="ok"`
+	testLabelsDiskUsedHighWarn = `__name__="disk_used",item="high_warning"`
+	testLabelsDiskUsedHighCrit = `__name__="disk_used",item="high_critical"`
+
+	testLabelsMemUsedPerc  = `__name__="mem_used_perc",instance_uuid="main-agent-id"`
+	testLabelsDiskUsedPerc = `__name__="disk_used_perc",instance_uuid="main-agent-id",item="/home"`
+	testLabelsNodeFSUsed   = `__name__="node_filesystem_used",instance="plop",instance_uuid="main-agent-id",mountpoint="/var"`
+	testLabelsK8sPods      = `__name__="kubernetes_pods_count",instance="my_k8s_cluster_name",instance_uuid="another-id-than-main-agent-id",namespace="default",owner_kind="daemonset",owner_name="glouton",state="running"`
+	testLabelsSquirrelDB   = `__name__="squirreldb_tsdb_requests_points_total",instance="localhost:8015",instance_uuid="main-agent-id",operation="read",scrape_instance="localhost:9201",scrape_job="squirreldb",type="raw"`
+	testLabelsCertAPI      = `__name__="kubernetes_certificate_left_perc",instance_uuid="main-agent-id",item="api"`
+	testLabelsCertWebhook  = `__name__="kubernetes_certificate_left_perc",instance_uuid="another-id-than-main-agent-id",item="webhook"`
+	testLabelsCertItemAPI  = `__name__="kubernetes_certificate_left_perc",item="api"`
+	testLabelsCertItemCRD  = `__name__="kubernetes_certificate_left_perc",item="crd"`
 )
 
 type mockState struct {
@@ -151,7 +189,7 @@ func TestFormatValue(t *testing.T) {
 		{
 			value: 0.,
 			// 42 is a unknown value for UnitType
-			unit: Unit{UnitType: 42, UnitText: "%"},
+			unit: Unit{UnitType: 42, UnitText: testUnitPercent},
 			want: "0.00 %",
 		},
 		{
@@ -162,37 +200,37 @@ func TestFormatValue(t *testing.T) {
 		},
 		{
 			value: 0.,
-			unit:  Unit{UnitType: UnitTypeByte, UnitText: "Byte"},
+			unit:  Unit{UnitType: UnitTypeByte, UnitText: testUnitByte},
 			want:  "0.00 Bytes",
 		},
 		{
 			value: 1024,
-			unit:  Unit{UnitType: UnitTypeByte, UnitText: "Byte"},
+			unit:  Unit{UnitType: UnitTypeByte, UnitText: testUnitByte},
 			want:  "1.00 KBytes",
 		},
 		{
 			value: 1 << 30,
-			unit:  Unit{UnitType: UnitTypeByte, UnitText: "Byte"},
+			unit:  Unit{UnitType: UnitTypeByte, UnitText: testUnitByte},
 			want:  "1.00 GBytes",
 		},
 		{
 			value: 1 << 60,
-			unit:  Unit{UnitType: UnitTypeByte, UnitText: "Byte"},
+			unit:  Unit{UnitType: UnitTypeByte, UnitText: testUnitByte},
 			want:  "1.00 EBytes",
 		},
 		{
 			value: 1 << 70,
-			unit:  Unit{UnitType: UnitTypeByte, UnitText: "Byte"},
+			unit:  Unit{UnitType: UnitTypeByte, UnitText: testUnitByte},
 			want:  "1024.00 EBytes",
 		},
 		{
 			value: -1024,
-			unit:  Unit{UnitType: UnitTypeByte, UnitText: "Byte"},
+			unit:  Unit{UnitType: UnitTypeByte, UnitText: testUnitByte},
 			want:  "-1.00 KBytes",
 		},
 		{
 			value: -1 << 30,
-			unit:  Unit{UnitType: UnitTypeByte, UnitText: "Byte"},
+			unit:  Unit{UnitType: UnitTypeByte, UnitText: testUnitByte},
 			want:  "-1.00 GBytes",
 		},
 		{
@@ -207,47 +245,47 @@ func TestFormatValue(t *testing.T) {
 		},
 		{
 			value: 365,
-			unit:  Unit{UnitType: UnitTypeDay, UnitText: "day"},
+			unit:  Unit{UnitType: UnitTypeDay, UnitText: unitNameDay},
 			want:  "365 days",
 		},
 		{
 			value: 0.7,
-			unit:  Unit{UnitType: UnitTypeDay, UnitText: "day"},
+			unit:  Unit{UnitType: UnitTypeDay, UnitText: unitNameDay},
 			want:  "0 day",
 		},
 		{
 			value: 0.2,
-			unit:  Unit{UnitType: UnitTypeDay, UnitText: "day"},
+			unit:  Unit{UnitType: UnitTypeDay, UnitText: unitNameDay},
 			want:  "0 day",
 		},
 		{
 			value: 45,
-			unit:  Unit{UnitType: UnitTypeSecond, UnitText: "second"},
+			unit:  Unit{UnitType: UnitTypeSecond, UnitText: unitNameSecond},
 			want:  "45 seconds",
 		},
 		{
 			value: 120,
-			unit:  Unit{UnitType: UnitTypeSecond, UnitText: "second"},
+			unit:  Unit{UnitType: UnitTypeSecond, UnitText: unitNameSecond},
 			want:  "2 minutes",
 		},
 		{
 			value: 125,
-			unit:  Unit{UnitType: UnitTypeSecond, UnitText: "second"},
+			unit:  Unit{UnitType: UnitTypeSecond, UnitText: unitNameSecond},
 			want:  "2 minutes",
 		},
 		{
 			value: 3600,
-			unit:  Unit{UnitType: UnitTypeSecond, UnitText: "second"},
+			unit:  Unit{UnitType: UnitTypeSecond, UnitText: unitNameSecond},
 			want:  "1 hour",
 		},
 		{
 			value: 86400,
-			unit:  Unit{UnitType: UnitTypeSecond, UnitText: "second"},
-			want:  "1 day",
+			unit:  Unit{UnitType: UnitTypeSecond, UnitText: unitNameSecond},
+			want:  testOneDay,
 		},
 		{
 			value: 7 * 86400,
-			unit:  Unit{UnitType: UnitTypeSecond, UnitText: "second"},
+			unit:  Unit{UnitType: UnitTypeSecond, UnitText: unitNameSecond},
 			want:  "7 days",
 		},
 	}
@@ -270,20 +308,20 @@ func TestFormatDuration(t *testing.T) {
 		},
 		{
 			value: 24 * time.Hour,
-			want:  "1 day",
+			want:  testOneDay,
 		},
 		{
 			value: 24*time.Hour + 100*time.Second,
-			want:  "1 day",
+			want:  testOneDay,
 		},
 		{
 			value: 24*time.Hour - 100*time.Second,
-			want:  "1 day",
+			want:  testOneDay,
 		},
 		// less than 10% from 1 day is ignored
 		{
 			value: 26 * time.Hour,
-			want:  "1 day",
+			want:  testOneDay,
 		},
 		// but more than 10% is counted and rounded
 		{
@@ -293,7 +331,7 @@ func TestFormatDuration(t *testing.T) {
 		// Same apply for 1 day minus less than 10%
 		{
 			value: 22 * time.Hour,
-			want:  "1 day",
+			want:  testOneDay,
 		},
 		// Same apply for 1 day minus more than 10%
 		{
@@ -397,7 +435,7 @@ func TestAccumulatorThreshold(t *testing.T) {
 	threshold.SetThresholds(
 		"",
 		nil,
-		map[string]Threshold{"cpu_used": {
+		map[string]Threshold{testCPUUsed: {
 			HighWarning:   80,
 			HighCritical:  90,
 			WarningDelay:  5 * time.Minute,
@@ -433,7 +471,7 @@ func TestAccumulatorThreshold(t *testing.T) {
 					CurrentStatus:     types.StatusWarning,
 					StatusDescription: "Current value: 88.00 threshold (80.00) exceeded over last 5 minutes",
 				},
-				StatusOf: "cpu_used",
+				StatusOf: testCPUUsed,
 			},
 			Labels: map[string]string{types.LabelName: "cpu_used_status"},
 			Point: types.Point{
@@ -446,7 +484,7 @@ func TestAccumulatorThreshold(t *testing.T) {
 	points := []types.MetricPoint{
 		{
 			Labels: map[string]string{
-				"__name__": "cpu_used",
+				"__name__": testCPUUsed,
 			},
 			Point: types.Point{Time: t0, Value: 88.0},
 		},
@@ -499,7 +537,7 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 			AddedToT0: 0 * stepDelay,
 			SetThresholds: &setThresholdsArgs{
 				thresholdWithItem: map[string]Threshold{
-					`__name__="disk_used_perc",item="/home"`: {
+					NameDiskUsedPerc: {
 						HighWarning:   80,
 						HighCritical:  math.NaN(),
 						LowCritical:   math.NaN(),
@@ -508,7 +546,7 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 						CriticalDelay: 60 * time.Second,
 					},
 				},
-				thresholdAllItem: map[string]Threshold{"cpu_used": {
+				thresholdAllItem: map[string]Threshold{testCPUUsed: {
 					HighWarning:   80,
 					HighCritical:  90,
 					LowCritical:   math.NaN(),
@@ -518,157 +556,157 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 				}},
 			},
 			PushedValue: map[string]float64{
-				`__name__="cpu_used"`:                    20,
-				`__name__="disk_used_perc",item="/home"`: 60,
-				`__name__="disk_used_perc",item="/srv"`:  60,
+				NameCPUUsed:         20,
+				NameDiskUsedPerc:    60,
+				NameDiskUsedPercSrv: 60,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 20.00"},
-				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 60.00"},
-				`__name__="disk_used_perc",item="/srv"`:  {CurrentStatus: types.StatusUnset},
+				NameCPUUsed:         {CurrentStatus: types.StatusOk, StatusDescription: testStatusVal20},
+				NameDiskUsedPerc:    {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 60.00"},
+				NameDiskUsedPercSrv: {CurrentStatus: types.StatusUnset},
 			},
 		},
 		{
 			AddedToT0: 1 * stepDelay,
 			PushedValue: map[string]float64{
-				`__name__="cpu_used"`:                    99,
-				`__name__="disk_used_perc",item="/home"`: 99,
-				`__name__="disk_used_perc",item="/srv"`:  99,
+				NameCPUUsed:         99,
+				NameDiskUsedPerc:    99,
+				NameDiskUsedPercSrv: 99,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 99.00"},
-				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 99.00"},
-				`__name__="disk_used_perc",item="/srv"`:  {CurrentStatus: types.StatusUnset},
+				NameCPUUsed:         {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 99.00"},
+				NameDiskUsedPerc:    {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 99.00"},
+				NameDiskUsedPercSrv: {CurrentStatus: types.StatusUnset},
 			},
 		},
 		{
 			AddedToT0: 6 * stepDelay,
 			PushedValue: map[string]float64{
-				`__name__="cpu_used"`:                    91,
-				`__name__="disk_used_perc",item="/home"`: 91,
-				`__name__="disk_used_perc",item="/srv"`:  91,
+				NameCPUUsed:         91,
+				NameDiskUsedPerc:    91,
+				NameDiskUsedPercSrv: 91,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 91.00"},
-				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 91.00"},
-				`__name__="disk_used_perc",item="/srv"`:  {CurrentStatus: types.StatusUnset},
+				NameCPUUsed:         {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 91.00"},
+				NameDiskUsedPerc:    {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 91.00"},
+				NameDiskUsedPercSrv: {CurrentStatus: types.StatusUnset},
 			},
 		},
 		{
 			AddedToT0: 7 * stepDelay,
 			PushedValue: map[string]float64{
-				`__name__="cpu_used"`:                    97,
-				`__name__="disk_used_perc",item="/home"`: 97,
-				`__name__="disk_used_perc",item="/srv"`:  97,
+				NameCPUUsed:         97,
+				NameDiskUsedPerc:    97,
+				NameDiskUsedPercSrv: 97,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 97.00 threshold (90.00) exceeded over last 1 minute"},
-				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 97.00 threshold (80.00) exceeded over last 1 minute"},
-				`__name__="disk_used_perc",item="/srv"`:  {CurrentStatus: types.StatusUnset},
+				NameCPUUsed:         {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 97.00 threshold (90.00) exceeded over last 1 minute"},
+				NameDiskUsedPerc:    {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 97.00 threshold (80.00) exceeded over last 1 minute"},
+				NameDiskUsedPercSrv: {CurrentStatus: types.StatusUnset},
 			},
 		},
 		{
 			AddedToT0: 8 * stepDelay,
 			PushedValue: map[string]float64{
-				`__name__="cpu_used"`: 5,
+				NameCPUUsed: 5,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="cpu_used"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 5.00"},
+				NameCPUUsed: {CurrentStatus: types.StatusOk, StatusDescription: testStatusVal5},
 			},
 		},
 		{
 			AddedToT0: 10 * stepDelay,
 			PushedValue: map[string]float64{
-				`__name__="cpu_used"`: 5,
+				NameCPUUsed: 5,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="cpu_used"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 5.00"},
+				NameCPUUsed: {CurrentStatus: types.StatusOk, StatusDescription: testStatusVal5},
 			},
 		},
 		{
 			AddedToT0: 11 * stepDelay,
 			PushedValue: map[string]float64{
-				`__name__="cpu_used"`: 85,
+				NameCPUUsed: 85,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="cpu_used"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 85.00"},
+				NameCPUUsed: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 85.00"},
 			},
 		},
 		{
 			AddedToT0: 12 * stepDelay,
 			PushedValue: map[string]float64{
-				`__name__="cpu_used"`: 95,
+				NameCPUUsed: 95,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="cpu_used"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 95.00"},
+				NameCPUUsed: {CurrentStatus: types.StatusOk, StatusDescription: testStatusVal95},
 			},
 		},
 		{
 			AddedToT0: 16 * stepDelay,
 			PushedValue: map[string]float64{
-				`__name__="cpu_used"`: 95,
+				NameCPUUsed: 95,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="cpu_used"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 95.00"},
+				NameCPUUsed: {CurrentStatus: types.StatusOk, StatusDescription: testStatusVal95},
 			},
 		},
 		{
 			AddedToT0: 17 * stepDelay,
 			PushedValue: map[string]float64{
-				`__name__="cpu_used"`: 95,
+				NameCPUUsed: 95,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="cpu_used"`: {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 95.00 threshold (80.00) exceeded over last 1 minute"},
+				NameCPUUsed: {CurrentStatus: types.StatusWarning, StatusDescription: testStatusWarn95},
 			},
 		},
 		{
 			AddedToT0: 18 * stepDelay,
 			PushedValue: map[string]float64{
-				`__name__="cpu_used"`: 95,
+				NameCPUUsed: 95,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="cpu_used"`: {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 95.00 threshold (90.00) exceeded over last 1 minute"},
+				NameCPUUsed: {CurrentStatus: types.StatusCritical, StatusDescription: testStatusCrit95},
 			},
 		},
 		{
 			AddedToT0: 30 * stepDelay,
 			PushedValue: map[string]float64{
-				`__name__="cpu_used"`:                    95,
-				`__name__="mem_used"`:                    95,
-				`__name__="net_used",item="eth0"`:        95,
-				`__name__="disk_used_perc",item="/home"`: 95,
-				`__name__="disk_used_perc",item="/srv"`:  95,
+				NameCPUUsed:           95,
+				testLabelsMemUsed:     95,
+				testLabelsNetUsedEth0: 95,
+				NameDiskUsedPerc:      95,
+				NameDiskUsedPercSrv:   95,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 95.00 threshold (90.00) exceeded over last 1 minute"},
-				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 95.00 threshold (80.00) exceeded over last 1 minute"},
-				`__name__="disk_used_perc",item="/srv"`:  {CurrentStatus: types.StatusUnset},
-				`__name__="mem_used"`:                    {CurrentStatus: types.StatusUnset},
-				`__name__="net_used",item="eth0"`:        {CurrentStatus: types.StatusUnset},
+				NameCPUUsed:           {CurrentStatus: types.StatusCritical, StatusDescription: testStatusCrit95},
+				NameDiskUsedPerc:      {CurrentStatus: types.StatusWarning, StatusDescription: testStatusWarn95},
+				NameDiskUsedPercSrv:   {CurrentStatus: types.StatusUnset},
+				testLabelsMemUsed:     {CurrentStatus: types.StatusUnset},
+				testLabelsNetUsedEth0: {CurrentStatus: types.StatusUnset},
 			},
 		},
 		{
 			AddedToT0: 40 * stepDelay,
 			PushedValue: map[string]float64{
-				`__name__="cpu_used"`:                    95,
-				`__name__="mem_used"`:                    95,
-				`__name__="net_used",item="eth0"`:        95,
-				`__name__="disk_used_perc",item="/home"`: 95,
-				`__name__="disk_used_perc",item="/srv"`:  95,
+				NameCPUUsed:           95,
+				testLabelsMemUsed:     95,
+				testLabelsNetUsedEth0: 95,
+				NameDiskUsedPerc:      95,
+				NameDiskUsedPercSrv:   95,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 95.00 threshold (90.00) exceeded over last 1 minute"},
-				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 95.00 threshold (80.00) exceeded over last 1 minute"},
-				`__name__="disk_used_perc",item="/srv"`:  {CurrentStatus: types.StatusUnset},
-				`__name__="mem_used"`:                    {CurrentStatus: types.StatusUnset},
-				`__name__="net_used",item="eth0"`:        {CurrentStatus: types.StatusUnset},
+				NameCPUUsed:           {CurrentStatus: types.StatusCritical, StatusDescription: testStatusCrit95},
+				NameDiskUsedPerc:      {CurrentStatus: types.StatusWarning, StatusDescription: testStatusWarn95},
+				NameDiskUsedPercSrv:   {CurrentStatus: types.StatusUnset},
+				testLabelsMemUsed:     {CurrentStatus: types.StatusUnset},
+				testLabelsNetUsedEth0: {CurrentStatus: types.StatusUnset},
 			},
 		},
 		{
 			AddedToT0: 41 * stepDelay,
 			SetThresholds: &setThresholdsArgs{
 				thresholdWithItem: map[string]Threshold{
-					`__name__="disk_used_perc",item="/home"`: {
+					NameDiskUsedPerc: {
 						HighWarning:   80,
 						HighCritical:  90,
 						LowCritical:   math.NaN(),
@@ -678,7 +716,7 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 					},
 				},
 				thresholdAllItem: map[string]Threshold{
-					"cpu_used": {
+					testCPUUsed: {
 						HighWarning:   80,
 						HighCritical:  99,
 						LowCritical:   math.NaN(),
@@ -697,25 +735,25 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 				},
 			},
 			PushedValue: map[string]float64{
-				`__name__="cpu_used"`:                    95,
-				`__name__="mem_used"`:                    95,
-				`__name__="net_used",item="eth0"`:        95,
-				`__name__="disk_used_perc",item="/home"`: 95,
-				`__name__="disk_used_perc",item="/srv"`:  95,
+				NameCPUUsed:           95,
+				testLabelsMemUsed:     95,
+				testLabelsNetUsedEth0: 95,
+				NameDiskUsedPerc:      95,
+				NameDiskUsedPercSrv:   95,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 95.00 threshold (80.00) exceeded over last 1 minute"},
-				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 95.00 threshold (90.00) exceeded over last 1 minute"},
-				`__name__="disk_used_perc",item="/srv"`:  {CurrentStatus: types.StatusUnset},
-				`__name__="mem_used"`:                    {CurrentStatus: types.StatusUnset},
-				`__name__="net_used",item="eth0"`:        {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 95.00 threshold (80.00) exceeded over last 1 minute"},
+				NameCPUUsed:           {CurrentStatus: types.StatusWarning, StatusDescription: testStatusWarn95},
+				NameDiskUsedPerc:      {CurrentStatus: types.StatusCritical, StatusDescription: testStatusCrit95},
+				NameDiskUsedPercSrv:   {CurrentStatus: types.StatusUnset},
+				testLabelsMemUsed:     {CurrentStatus: types.StatusUnset},
+				testLabelsNetUsedEth0: {CurrentStatus: types.StatusWarning, StatusDescription: testStatusWarn95},
 			},
 		},
 		{
 			AddedToT0: 42 * stepDelay,
 			SetThresholds: &setThresholdsArgs{
 				thresholdWithItem: map[string]Threshold{
-					`__name__="disk_used_perc",item="/home"`: {
+					NameDiskUsedPerc: {
 						HighWarning:   80,
 						HighCritical:  97,
 						LowCritical:   math.NaN(),
@@ -736,18 +774,18 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 				},
 			},
 			PushedValue: map[string]float64{
-				`__name__="cpu_used"`:                    95,
-				`__name__="mem_used"`:                    95,
-				`__name__="net_used",item="eth0"`:        95,
-				`__name__="disk_used_perc",item="/home"`: 95,
-				`__name__="disk_used_perc",item="/srv"`:  95,
+				NameCPUUsed:           95,
+				testLabelsMemUsed:     95,
+				testLabelsNetUsedEth0: 95,
+				NameDiskUsedPerc:      95,
+				NameDiskUsedPercSrv:   95,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusUnset},
-				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 95.00 threshold (80.00) exceeded over last 1 minute"},
-				`__name__="disk_used_perc",item="/srv"`:  {CurrentStatus: types.StatusUnset},
-				`__name__="mem_used"`:                    {CurrentStatus: types.StatusUnset},
-				`__name__="net_used",item="eth0"`:        {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 95.00"},
+				NameCPUUsed:           {CurrentStatus: types.StatusUnset},
+				NameDiskUsedPerc:      {CurrentStatus: types.StatusWarning, StatusDescription: testStatusWarn95},
+				NameDiskUsedPercSrv:   {CurrentStatus: types.StatusUnset},
+				testLabelsMemUsed:     {CurrentStatus: types.StatusUnset},
+				testLabelsNetUsedEth0: {CurrentStatus: types.StatusOk, StatusDescription: testStatusVal95},
 			},
 		},
 	}
@@ -832,7 +870,7 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 		{
 			Name: "threshold_of_config_ok",
 			SetThresholds: &setThresholdsArgs{
-				thresholdAllItem: map[string]Threshold{"cpu_used": {
+				thresholdAllItem: map[string]Threshold{testCPUUsed: {
 					HighWarning:   80,
 					HighCritical:  90,
 					LowCritical:   math.NaN(),
@@ -842,18 +880,18 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 				}},
 			},
 			PushedValue: map[string]float64{
-				`__name__="cpu_used"`:                    20,
-				`__name__="disk_used_perc",item="/home"`: 60,
+				NameCPUUsed:      20,
+				NameDiskUsedPerc: 60,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 20.00"},
-				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusUnset},
+				NameCPUUsed:      {CurrentStatus: types.StatusOk, StatusDescription: testStatusVal20},
+				NameDiskUsedPerc: {CurrentStatus: types.StatusUnset},
 			},
 		},
 		{
 			Name: "threshold_of_config_warning",
 			SetThresholds: &setThresholdsArgs{
-				thresholdAllItem: map[string]Threshold{"cpu_used": {
+				thresholdAllItem: map[string]Threshold{testCPUUsed: {
 					HighWarning:   80,
 					HighCritical:  90,
 					LowCritical:   math.NaN(),
@@ -863,20 +901,20 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 				}},
 			},
 			PushedValue: map[string]float64{
-				`__name__="cpu_used"`:                    85,
-				`__name__="disk_used_perc",item="/home"`: 60,
-				`__name__="disk_used_perc",item="/srv"`:  60,
+				NameCPUUsed:         85,
+				NameDiskUsedPerc:    60,
+				NameDiskUsedPercSrv: 60,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 85.00 threshold (80.00) exceeded over last 1 minute"},
-				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusUnset},
-				`__name__="disk_used_perc",item="/srv"`:  {CurrentStatus: types.StatusUnset},
+				NameCPUUsed:         {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 85.00 threshold (80.00) exceeded over last 1 minute"},
+				NameDiskUsedPerc:    {CurrentStatus: types.StatusUnset},
+				NameDiskUsedPercSrv: {CurrentStatus: types.StatusUnset},
 			},
 		},
 		{
 			Name: "threshold_of_config_warning_with_unit",
 			SetThresholds: &setThresholdsArgs{
-				thresholdAllItem: map[string]Threshold{"cpu_used": {
+				thresholdAllItem: map[string]Threshold{testCPUUsed: {
 					HighWarning:   80,
 					HighCritical:  90,
 					LowCritical:   math.NaN(),
@@ -886,25 +924,25 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 				}},
 			},
 			SetUnits: map[string]Unit{
-				`__name__="cpu_used"`:                    {UnitType: 1, UnitText: "%"},
-				`__name__="disk_used_perc",item="/home"`: {UnitType: 1, UnitText: "%"},
+				NameCPUUsed:      {UnitType: 1, UnitText: testUnitPercent},
+				NameDiskUsedPerc: {UnitType: 1, UnitText: testUnitPercent},
 			},
 			PushedValue: map[string]float64{
-				`__name__="cpu_used"`:                    85,
-				`__name__="disk_used_perc",item="/home"`: 60,
-				`__name__="disk_used_perc",item="/srv"`:  60,
+				NameCPUUsed:         85,
+				NameDiskUsedPerc:    60,
+				NameDiskUsedPercSrv: 60,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 85.00 % threshold (80.00 %) exceeded over last 1 minute"},
-				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusUnset},
-				`__name__="disk_used_perc",item="/srv"`:  {CurrentStatus: types.StatusUnset},
+				NameCPUUsed:         {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 85.00 % threshold (80.00 %) exceeded over last 1 minute"},
+				NameDiskUsedPerc:    {CurrentStatus: types.StatusUnset},
+				NameDiskUsedPercSrv: {CurrentStatus: types.StatusUnset},
 			},
 		},
 		{
 			Name: "all_thresholds",
 			SetThresholds: &setThresholdsArgs{
 				thresholdWithItem: map[string]Threshold{
-					`__name__="disk_used",item="low_critical"`: {
+					testLabelsDiskUsedLowCrit: {
 						HighWarning:   80,
 						HighCritical:  90,
 						LowCritical:   10,
@@ -912,7 +950,7 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 						WarningDelay:  60 * time.Second,
 						CriticalDelay: 60 * time.Second,
 					},
-					`__name__="disk_used",item="low_warning"`: {
+					testLabelsDiskUsedLowWarn: {
 						HighWarning:   80,
 						HighCritical:  90,
 						LowCritical:   10,
@@ -920,7 +958,7 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 						WarningDelay:  60 * time.Second,
 						CriticalDelay: 60 * time.Second,
 					},
-					`__name__="disk_used",item="ok"`: {
+					testLabelsDiskUsedOk: {
 						HighWarning:   80,
 						HighCritical:  90,
 						LowCritical:   10,
@@ -928,7 +966,7 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 						WarningDelay:  60 * time.Second,
 						CriticalDelay: 60 * time.Second,
 					},
-					`__name__="disk_used",item="high_warning"`: {
+					testLabelsDiskUsedHighWarn: {
 						HighWarning:   80,
 						HighCritical:  90,
 						LowCritical:   10,
@@ -936,7 +974,7 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 						WarningDelay:  60 * time.Second,
 						CriticalDelay: 60 * time.Second,
 					},
-					`__name__="disk_used",item="high_critical"`: {
+					testLabelsDiskUsedHighCrit: {
 						HighWarning:   80,
 						HighCritical:  90,
 						LowCritical:   10,
@@ -947,24 +985,24 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 				},
 			},
 			PushedValue: map[string]float64{
-				`__name__="disk_used",item="low_critical"`:  5,
-				`__name__="disk_used",item="low_warning"`:   15,
-				`__name__="disk_used",item="ok"`:            50,
-				`__name__="disk_used",item="high_warning"`:  85,
-				`__name__="disk_used",item="high_critical"`: 95,
+				testLabelsDiskUsedLowCrit:  5,
+				testLabelsDiskUsedLowWarn:  15,
+				testLabelsDiskUsedOk:       50,
+				testLabelsDiskUsedHighWarn: 85,
+				testLabelsDiskUsedHighCrit: 95,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="disk_used",item="low_critical"`:  {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 5.00 threshold (10.00) exceeded over last 1 minute"},
-				`__name__="disk_used",item="low_warning"`:   {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 15.00 threshold (20.00) exceeded over last 1 minute"},
-				`__name__="disk_used",item="ok"`:            {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 50.00"},
-				`__name__="disk_used",item="high_warning"`:  {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 85.00 threshold (80.00) exceeded over last 1 minute"},
-				`__name__="disk_used",item="high_critical"`: {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 95.00 threshold (90.00) exceeded over last 1 minute"},
+				testLabelsDiskUsedLowCrit:  {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 5.00 threshold (10.00) exceeded over last 1 minute"},
+				testLabelsDiskUsedLowWarn:  {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 15.00 threshold (20.00) exceeded over last 1 minute"},
+				testLabelsDiskUsedOk:       {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 50.00"},
+				testLabelsDiskUsedHighWarn: {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 85.00 threshold (80.00) exceeded over last 1 minute"},
+				testLabelsDiskUsedHighCrit: {CurrentStatus: types.StatusCritical, StatusDescription: testStatusCrit95},
 			},
 		},
 		{
 			Name: "from_bleemeo_api",
 			SetThresholds: &setThresholdsArgs{
-				mainAgentID: "main-agent-id",
+				mainAgentID: testMainAgentID,
 				thresholdWithItem: map[string]Threshold{
 					`__name__="cpu_used",instance_uuid="main-agent-id"`: {
 						HighWarning:   80,
@@ -974,7 +1012,7 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 						WarningDelay:  60 * time.Second,
 						CriticalDelay: 60 * time.Second,
 					},
-					`__name__="mem_used_perc",instance_uuid="main-agent-id"`: {
+					testLabelsMemUsedPerc: {
 						HighWarning:   80,
 						HighCritical:  90,
 						LowCritical:   math.NaN(),
@@ -985,21 +1023,21 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 				},
 			},
 			SetUnits: map[string]Unit{
-				`__name__="cpu_used",instance_uuid="main-agent-id"`:                    {UnitType: 1, UnitText: "%"},
-				`__name__="mem_used_perc",instance_uuid="main-agent-id"`:               {UnitType: 1, UnitText: "%"},
-				`__name__="disk_used_perc",item="/home",instance_uuid="main-agent-id"`: {UnitType: 1, UnitText: "%"},
+				`__name__="cpu_used",instance_uuid="main-agent-id"`:                    {UnitType: 1, UnitText: testUnitPercent},
+				testLabelsMemUsedPerc:                                                  {UnitType: 1, UnitText: testUnitPercent},
+				`__name__="disk_used_perc",item="/home",instance_uuid="main-agent-id"`: {UnitType: 1, UnitText: testUnitPercent},
 			},
 			PushedValue: map[string]float64{
-				`__name__="cpu_used"`: 85,
-				`__name__="mem_used_perc",instance_uuid="main-agent-id"`: 86,
-				`__name__="disk_used_perc",item="/home"`:                 60,
-				`__name__="disk_used_perc",item="/srv"`:                  60,
+				NameCPUUsed:           85,
+				testLabelsMemUsedPerc: 86,
+				NameDiskUsedPerc:      60,
+				NameDiskUsedPercSrv:   60,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="cpu_used"`: {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 85.00 % threshold (80.00 %) exceeded over last 1 minute"},
-				`__name__="mem_used_perc",instance_uuid="main-agent-id"`: {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 86.00 % threshold (80.00 %) exceeded over last 1 minute"},
-				`__name__="disk_used_perc",item="/home"`:                 {CurrentStatus: types.StatusUnset},
-				`__name__="disk_used_perc",item="/srv"`:                  {CurrentStatus: types.StatusUnset},
+				NameCPUUsed:           {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 85.00 % threshold (80.00 %) exceeded over last 1 minute"},
+				testLabelsMemUsedPerc: {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 86.00 % threshold (80.00 %) exceeded over last 1 minute"},
+				NameDiskUsedPerc:      {CurrentStatus: types.StatusUnset},
+				NameDiskUsedPercSrv:   {CurrentStatus: types.StatusUnset},
 			},
 		},
 		{
@@ -1010,7 +1048,7 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 			// instance. It's only in pushed metrics that variation on instance/instance_uuid present doesn't matter.
 			Name: "instance_lazy_match",
 			SetThresholds: &setThresholdsArgs{
-				mainAgentID: "main-agent-id",
+				mainAgentID: testMainAgentID,
 				thresholdWithItem: map[string]Threshold{
 					`__name__="disk_used_perc",instance_uuid="main-agent-id",item="glouton"`: {
 						HighWarning:   80,
@@ -1020,7 +1058,7 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 						WarningDelay:  60 * time.Second,
 						CriticalDelay: 60 * time.Second,
 					},
-					`__name__="disk_used_perc",instance_uuid="main-agent-id",item="/home"`: {
+					testLabelsDiskUsedPerc: {
 						HighWarning:   80,
 						HighCritical:  90,
 						LowCritical:   math.NaN(),
@@ -1037,7 +1075,7 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 						CriticalDelay: 60 * time.Second,
 					},
 					// Next metrics has MetricOnlyHasItem() == FALSE, so instance *matter*
-					`__name__="node_filesystem_used",instance="plop",instance_uuid="main-agent-id",mountpoint="/var"`: {
+					testLabelsNodeFSUsed: {
 						HighWarning:   80,
 						HighCritical:  90,
 						LowCritical:   math.NaN(),
@@ -1056,24 +1094,24 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 				},
 			},
 			SetUnits: map[string]Unit{
-				`__name__="disk_used_perc",instance_uuid="main-agent-id",item="glouton"`:                          {UnitType: 1, UnitText: "%"},
-				`__name__="disk_used_perc",instance_uuid="main-agent-id",item="/home"`:                            {UnitType: 1, UnitText: "%"},
-				`__name__="disk_used_perc",instance_uuid="main-agent-id",item="/srv"`:                             {UnitType: 1, UnitText: "%"},
-				`__name__="node_filesystem_used",instance="plop",instance_uuid="main-agent-id",mountpoint="/var"`: {UnitType: 1, UnitText: "%"},
-				`__name__="node_filesystem_used",instance="plop",instance_uuid="main-agent-id",mountpoint="/usr"`: {UnitType: 1, UnitText: "%"},
+				`__name__="disk_used_perc",instance_uuid="main-agent-id",item="glouton"`: {UnitType: 1, UnitText: testUnitPercent},
+				testLabelsDiskUsedPerc: {UnitType: 1, UnitText: testUnitPercent},
+				`__name__="disk_used_perc",instance_uuid="main-agent-id",item="/srv"`: {UnitType: 1, UnitText: testUnitPercent},
+				testLabelsNodeFSUsed: {UnitType: 1, UnitText: testUnitPercent},
+				`__name__="node_filesystem_used",instance="plop",instance_uuid="main-agent-id",mountpoint="/usr"`: {UnitType: 1, UnitText: testUnitPercent},
 			},
 			PushedValue: map[string]float64{
-				`__name__="disk_used_perc",instance="plop",instance_uuid="main-agent-id",item="glouton"`:          10,
-				`__name__="disk_used_perc",instance_uuid="main-agent-id",item="/home"`:                            20,
-				`__name__="disk_used_perc",item="/srv"`:                                                           30,
-				`__name__="node_filesystem_used",instance="plop",instance_uuid="main-agent-id",mountpoint="/var"`: 40,
-				`__name__="node_filesystem_used",instance_uuid="main-agent-id",mountpoint="/var"`:                 50,
+				`__name__="disk_used_perc",instance="plop",instance_uuid="main-agent-id",item="glouton"`: 10,
+				testLabelsDiskUsedPerc: 20,
+				NameDiskUsedPercSrv:    30,
+				testLabelsNodeFSUsed:   40,
+				`__name__="node_filesystem_used",instance_uuid="main-agent-id",mountpoint="/var"`: 50,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="disk_used_perc",instance="plop",instance_uuid="main-agent-id",item="glouton"`:          {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 10.00 %"},
-				`__name__="disk_used_perc",instance_uuid="main-agent-id",item="/home"`:                            {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 20.00 %"},
-				`__name__="disk_used_perc",item="/srv"`:                                                           {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 30.00 %"},
-				`__name__="node_filesystem_used",instance="plop",instance_uuid="main-agent-id",mountpoint="/var"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 40.00 %"},
+				`__name__="disk_used_perc",instance="plop",instance_uuid="main-agent-id",item="glouton"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 10.00 %"},
+				testLabelsDiskUsedPerc: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 20.00 %"},
+				NameDiskUsedPercSrv:    {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 30.00 %"},
+				testLabelsNodeFSUsed:   {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 40.00 %"},
 				// Expected to be unset, label "instance" don't match, and because it's an MetricOnlyHasItem() == FALSE, it must match.
 				`__name__="node_filesystem_used",instance_uuid="main-agent-id",mountpoint="/var"`: {CurrentStatus: types.StatusUnset},
 			},
@@ -1082,9 +1120,9 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 			// Test metrics from multiple agent, using labels_text (e.g. MetricOnlyHasItem() == False)
 			Name: "multiple_agent_labels_text",
 			SetThresholds: &setThresholdsArgs{
-				mainAgentID: "main-agent-id",
+				mainAgentID: testMainAgentID,
 				thresholdWithItem: map[string]Threshold{
-					`__name__="kubernetes_pods_count",instance="my_k8s_cluster_name",instance_uuid="another-id-than-main-agent-id",namespace="default",owner_kind="daemonset",owner_name="glouton",state="running"`: {
+					testLabelsK8sPods: {
 						HighWarning:   math.NaN(),
 						HighCritical:  math.NaN(),
 						LowCritical:   1,
@@ -1092,7 +1130,7 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 						WarningDelay:  60 * time.Second,
 						CriticalDelay: 60 * time.Second,
 					},
-					`__name__="squirreldb_tsdb_requests_points_total",instance="localhost:8015",instance_uuid="main-agent-id",operation="read",scrape_instance="localhost:9201",scrape_job="squirreldb",type="raw"`: {
+					testLabelsSquirrelDB: {
 						HighWarning:   80,
 						HighCritical:  90,
 						LowCritical:   math.NaN(),
@@ -1103,12 +1141,12 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 				},
 			},
 			PushedValue: map[string]float64{
-				`__name__="kubernetes_pods_count",instance="my_k8s_cluster_name",instance_uuid="another-id-than-main-agent-id",namespace="default",owner_kind="daemonset",owner_name="glouton",state="running"`: 5,
-				`__name__="squirreldb_tsdb_requests_points_total",instance="localhost:8015",instance_uuid="main-agent-id",operation="read",scrape_instance="localhost:9201",scrape_job="squirreldb",type="raw"`: 20,
+				testLabelsK8sPods:    5,
+				testLabelsSquirrelDB: 20,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="kubernetes_pods_count",instance="my_k8s_cluster_name",instance_uuid="another-id-than-main-agent-id",namespace="default",owner_kind="daemonset",owner_name="glouton",state="running"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 5.00"},
-				`__name__="squirreldb_tsdb_requests_points_total",instance="localhost:8015",instance_uuid="main-agent-id",operation="read",scrape_instance="localhost:9201",scrape_job="squirreldb",type="raw"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 20.00"},
+				testLabelsK8sPods:    {CurrentStatus: types.StatusOk, StatusDescription: testStatusVal5},
+				testLabelsSquirrelDB: {CurrentStatus: types.StatusOk, StatusDescription: testStatusVal20},
 			},
 		},
 		{
@@ -1116,7 +1154,7 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 			// true for main agent)
 			Name: "multiple_agent_only_has_item",
 			SetThresholds: &setThresholdsArgs{
-				mainAgentID: "main-agent-id",
+				mainAgentID: testMainAgentID,
 				thresholdWithItem: map[string]Threshold{
 					// This metrics is "MetricOnlyHasItem() == true", so instance is absent here
 					`__name__="kubernetes_certificate_left_perc",instance_uuid="main-agent-id",item="kubelet"`: {
@@ -1128,7 +1166,7 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 						CriticalDelay: 60 * time.Second,
 					},
 					// This metrics is "MetricOnlyHasItem() == true", so instance is absent here
-					`__name__="kubernetes_certificate_left_perc",instance_uuid="main-agent-id",item="api"`: {
+					testLabelsCertAPI: {
 						HighWarning:   math.NaN(),
 						HighCritical:  math.NaN(),
 						LowCritical:   1,
@@ -1145,7 +1183,7 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 						WarningDelay:  60 * time.Second,
 						CriticalDelay: 60 * time.Second,
 					},
-					`__name__="kubernetes_certificate_left_perc",instance_uuid="another-id-than-main-agent-id",item="webhook"`: {
+					testLabelsCertWebhook: {
 						HighWarning:   math.NaN(),
 						HighCritical:  math.NaN(),
 						LowCritical:   1,
@@ -1158,23 +1196,23 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 			PushedValue: map[string]float64{
 				// During push, "instance" label is always present (cf diagnostic.zip -> metrics.txt).
 				// But to ensure instance doesn't matter with MetricOnlyHasItem() == true, omit instance on one of them
-				`__name__="kubernetes_certificate_left_perc",instance="localhost:8015",instance_uuid="main-agent-id",item="kubelet"`:                  10,
-				`__name__="kubernetes_certificate_left_perc",instance_uuid="main-agent-id",item="api"`:                                                10,
+				`__name__="kubernetes_certificate_left_perc",instance="localhost:8015",instance_uuid="main-agent-id",item="kubelet"`: 10,
+				testLabelsCertAPI: 10,
 				`__name__="kubernetes_certificate_left_perc",instance="my_k8s_cluster_name",instance_uuid="another-id-than-main-agent-id",item="crd"`: 10,
-				`__name__="kubernetes_certificate_left_perc",instance_uuid="another-id-than-main-agent-id",item="webhook"`:                            10,
+				testLabelsCertWebhook: 10,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="kubernetes_certificate_left_perc",instance="localhost:8015",instance_uuid="main-agent-id",item="kubelet"`:                  {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 10.00"},
-				`__name__="kubernetes_certificate_left_perc",instance_uuid="main-agent-id",item="api"`:                                                {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 10.00"},
-				`__name__="kubernetes_certificate_left_perc",instance="my_k8s_cluster_name",instance_uuid="another-id-than-main-agent-id",item="crd"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 10.00"},
-				`__name__="kubernetes_certificate_left_perc",instance_uuid="another-id-than-main-agent-id",item="webhook"`:                            {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 10.00"},
+				`__name__="kubernetes_certificate_left_perc",instance="localhost:8015",instance_uuid="main-agent-id",item="kubelet"`: {CurrentStatus: types.StatusOk, StatusDescription: testStatusVal10},
+				testLabelsCertAPI: {CurrentStatus: types.StatusOk, StatusDescription: testStatusVal10},
+				`__name__="kubernetes_certificate_left_perc",instance="my_k8s_cluster_name",instance_uuid="another-id-than-main-agent-id",item="crd"`: {CurrentStatus: types.StatusOk, StatusDescription: testStatusVal10},
+				testLabelsCertWebhook: {CurrentStatus: types.StatusOk, StatusDescription: testStatusVal10},
 			},
 		},
 		{
 			Name: "kubernetes_certificate_ok",
 			SetThresholds: &setThresholdsArgs{
 				thresholdWithItem: map[string]Threshold{
-					`__name__="kubernetes_certificate_left_perc",item="api"`: {
+					testLabelsCertItemAPI: {
 						HighWarning:   math.NaN(),
 						HighCritical:  math.NaN(),
 						LowCritical:   3.75,
@@ -1182,7 +1220,7 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 						WarningDelay:  60 * time.Second,
 						CriticalDelay: 60 * time.Second,
 					},
-					`__name__="kubernetes_certificate_left_perc",item="crd"`: {
+					testLabelsCertItemCRD: {
 						HighWarning:   math.NaN(),
 						HighCritical:  math.NaN(),
 						LowCritical:   3.75,
@@ -1193,29 +1231,29 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 				},
 			},
 			SetUnits: map[string]Unit{
-				`__name__="kubernetes_certificate_left_perc",item="api"`: {UnitType: 1, UnitText: "%"},
-				`__name__="kubernetes_certificate_day_left",item="api"`:  {UnitType: UnitTypeDay, UnitText: "day"},
-				`__name__="kubernetes_certificate_left_perc",item="crd"`: {UnitType: 1, UnitText: "%"},
-				`__name__="kubernetes_certificate_day_left",item="crd"`:  {UnitType: UnitTypeDay, UnitText: "day"},
+				testLabelsCertItemAPI: {UnitType: 1, UnitText: testUnitPercent},
+				NameKubernetesAPI:     {UnitType: UnitTypeDay, UnitText: unitNameDay},
+				testLabelsCertItemCRD: {UnitType: 1, UnitText: testUnitPercent},
+				NameKubernetsCrd:      {UnitType: UnitTypeDay, UnitText: unitNameDay},
 			},
 			PushedValue: map[string]float64{
-				`__name__="kubernetes_certificate_left_perc",item="api"`: 10,
-				`__name__="kubernetes_certificate_day_left",item="api"`:  36.5, // lifespan == 365 days
-				`__name__="kubernetes_certificate_left_perc",item="crd"`: 10,
-				`__name__="kubernetes_certificate_day_left",item="crd"`:  9, // lifespan == 90 days
+				testLabelsCertItemAPI: 10,
+				NameKubernetesAPI:     36.5, // lifespan == 365 days
+				testLabelsCertItemCRD: 10,
+				NameKubernetsCrd:      9, // lifespan == 90 days
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="kubernetes_certificate_left_perc",item="api"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 10.00 % (36 days)"},
-				`__name__="kubernetes_certificate_day_left",item="api"`:  {CurrentStatus: types.StatusUnset},
-				`__name__="kubernetes_certificate_left_perc",item="crd"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 10.00 % (9 days)"},
-				`__name__="kubernetes_certificate_day_left",item="crd"`:  {CurrentStatus: types.StatusUnset},
+				testLabelsCertItemAPI: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 10.00 % (36 days)"},
+				NameKubernetesAPI:     {CurrentStatus: types.StatusUnset},
+				testLabelsCertItemCRD: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 10.00 % (9 days)"},
+				NameKubernetsCrd:      {CurrentStatus: types.StatusUnset},
 			},
 		},
 		{
 			Name: "kubernetes_certificate_warning",
 			SetThresholds: &setThresholdsArgs{
 				thresholdWithItem: map[string]Threshold{
-					`__name__="kubernetes_certificate_left_perc",item="api"`: {
+					testLabelsCertItemAPI: {
 						HighWarning:   math.NaN(),
 						HighCritical:  math.NaN(),
 						LowCritical:   3.75,
@@ -1223,7 +1261,7 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 						WarningDelay:  60 * time.Second,
 						CriticalDelay: 60 * time.Second,
 					},
-					`__name__="kubernetes_certificate_left_perc",item="crd"`: {
+					testLabelsCertItemCRD: {
 						HighWarning:   math.NaN(),
 						HighCritical:  math.NaN(),
 						LowCritical:   3.75,
@@ -1234,29 +1272,29 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 				},
 			},
 			SetUnits: map[string]Unit{
-				`__name__="kubernetes_certificate_left_perc",item="api"`: {UnitType: 1, UnitText: "%"},
-				`__name__="kubernetes_certificate_day_left",item="api"`:  {UnitType: UnitTypeDay, UnitText: "day"},
-				`__name__="kubernetes_certificate_left_perc",item="crd"`: {UnitType: 1, UnitText: "%"},
-				`__name__="kubernetes_certificate_day_left",item="crd"`:  {UnitType: UnitTypeDay, UnitText: "day"},
+				testLabelsCertItemAPI: {UnitType: 1, UnitText: testUnitPercent},
+				NameKubernetesAPI:     {UnitType: UnitTypeDay, UnitText: unitNameDay},
+				testLabelsCertItemCRD: {UnitType: 1, UnitText: testUnitPercent},
+				NameKubernetsCrd:      {UnitType: UnitTypeDay, UnitText: unitNameDay},
 			},
 			PushedValue: map[string]float64{
-				`__name__="kubernetes_certificate_left_perc",item="api"`: 5,
-				`__name__="kubernetes_certificate_day_left",item="api"`:  18.25, // lifespan == 365 days
-				`__name__="kubernetes_certificate_left_perc",item="crd"`: 5,
-				`__name__="kubernetes_certificate_day_left",item="crd"`:  4.5, // lifespan == 90 days
+				testLabelsCertItemAPI: 5,
+				NameKubernetesAPI:     18.25, // lifespan == 365 days
+				testLabelsCertItemCRD: 5,
+				NameKubernetsCrd:      4.5, // lifespan == 90 days
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="kubernetes_certificate_left_perc",item="api"`: {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 5.00 % (18 days) threshold (7.50 %) exceeded over last 1 minute"},
-				`__name__="kubernetes_certificate_day_left",item="api"`:  {CurrentStatus: types.StatusUnset},
-				`__name__="kubernetes_certificate_left_perc",item="crd"`: {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 5.00 % (4 days) threshold (7.50 %) exceeded over last 1 minute"},
-				`__name__="kubernetes_certificate_day_left",item="crd"`:  {CurrentStatus: types.StatusUnset},
+				testLabelsCertItemAPI: {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 5.00 % (18 days) threshold (7.50 %) exceeded over last 1 minute"},
+				NameKubernetesAPI:     {CurrentStatus: types.StatusUnset},
+				testLabelsCertItemCRD: {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 5.00 % (4 days) threshold (7.50 %) exceeded over last 1 minute"},
+				NameKubernetsCrd:      {CurrentStatus: types.StatusUnset},
 			},
 		},
 		{
 			Name: "kubernetes_certificate_critical",
 			SetThresholds: &setThresholdsArgs{
 				thresholdWithItem: map[string]Threshold{
-					`__name__="kubernetes_certificate_left_perc",item="api"`: {
+					testLabelsCertItemAPI: {
 						HighWarning:   math.NaN(),
 						HighCritical:  math.NaN(),
 						LowCritical:   3.75,
@@ -1264,7 +1302,7 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 						WarningDelay:  60 * time.Second,
 						CriticalDelay: 60 * time.Second,
 					},
-					`__name__="kubernetes_certificate_left_perc",item="crd"`: {
+					testLabelsCertItemCRD: {
 						HighWarning:   math.NaN(),
 						HighCritical:  math.NaN(),
 						LowCritical:   3.75,
@@ -1275,22 +1313,22 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 				},
 			},
 			SetUnits: map[string]Unit{
-				`__name__="kubernetes_certificate_left_perc",item="api"`: {UnitType: 1, UnitText: "%"},
-				`__name__="kubernetes_certificate_day_left",item="api"`:  {UnitType: UnitTypeDay, UnitText: "day"},
-				`__name__="kubernetes_certificate_left_perc",item="crd"`: {UnitType: 1, UnitText: "%"},
-				`__name__="kubernetes_certificate_day_left",item="crd"`:  {UnitType: UnitTypeDay, UnitText: "day"},
+				testLabelsCertItemAPI: {UnitType: 1, UnitText: testUnitPercent},
+				NameKubernetesAPI:     {UnitType: UnitTypeDay, UnitText: unitNameDay},
+				testLabelsCertItemCRD: {UnitType: 1, UnitText: testUnitPercent},
+				NameKubernetsCrd:      {UnitType: UnitTypeDay, UnitText: unitNameDay},
 			},
 			PushedValue: map[string]float64{
-				`__name__="kubernetes_certificate_left_perc",item="api"`: 2,
-				`__name__="kubernetes_certificate_day_left",item="api"`:  7.3, // lifespan == 365 days
-				`__name__="kubernetes_certificate_left_perc",item="crd"`: 2,
-				`__name__="kubernetes_certificate_day_left",item="crd"`:  1.8, // lifespan == 90 days
+				testLabelsCertItemAPI: 2,
+				NameKubernetesAPI:     7.3, // lifespan == 365 days
+				testLabelsCertItemCRD: 2,
+				NameKubernetsCrd:      1.8, // lifespan == 90 days
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="kubernetes_certificate_left_perc",item="api"`: {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 2.00 % (7 days) threshold (3.75 %) exceeded over last 1 minute"},
-				`__name__="kubernetes_certificate_day_left",item="api"`:  {CurrentStatus: types.StatusUnset},
-				`__name__="kubernetes_certificate_left_perc",item="crd"`: {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 2.00 % (1 day) threshold (3.75 %) exceeded over last 1 minute"},
-				`__name__="kubernetes_certificate_day_left",item="crd"`:  {CurrentStatus: types.StatusUnset},
+				testLabelsCertItemAPI: {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 2.00 % (7 days) threshold (3.75 %) exceeded over last 1 minute"},
+				NameKubernetesAPI:     {CurrentStatus: types.StatusUnset},
+				testLabelsCertItemCRD: {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 2.00 % (1 day) threshold (3.75 %) exceeded over last 1 minute"},
+				NameKubernetsCrd:      {CurrentStatus: types.StatusUnset},
 			},
 		},
 	}
@@ -1380,7 +1418,7 @@ func TestThresholdRestart(t *testing.T) {
 					WarningSince:  t0.Add(-40 * time.Second),
 					LastUpdate:    t0.Add(-30 * time.Second),
 				},
-				LabelsText: `__name__="cpu_used"`,
+				LabelsText: NameCPUUsed,
 			},
 			{
 				statusState: statusState{
@@ -1389,7 +1427,7 @@ func TestThresholdRestart(t *testing.T) {
 					WarningSince:  t0.Add(-90 * time.Second),
 					LastUpdate:    t0.Add(-80 * time.Second),
 				},
-				LabelsText: `__name__="disk_used_perc",item="/home"`,
+				LabelsText: NameDiskUsedPerc,
 			},
 			{
 				statusState: statusState{
@@ -1398,7 +1436,7 @@ func TestThresholdRestart(t *testing.T) {
 					WarningSince:  t0.Add(-70 * time.Second),
 					LastUpdate:    t0.Add(-30 * time.Second),
 				},
-				LabelsText: `__name__="mem_used"`,
+				LabelsText: testLabelsMemUsed,
 			},
 		},
 	})
@@ -1421,7 +1459,7 @@ func TestThresholdRestart(t *testing.T) {
 			AddedToT0: 0 * stepDelay,
 			SetThresholds: &setThresholdsArgs{
 				thresholdWithItem: map[string]Threshold{
-					`__name__="disk_used_perc",item="/home"`: {
+					NameDiskUsedPerc: {
 						HighWarning:   80,
 						HighCritical:  90,
 						LowCritical:   math.NaN(),
@@ -1430,7 +1468,7 @@ func TestThresholdRestart(t *testing.T) {
 						CriticalDelay: 60 * time.Second,
 					},
 				},
-				thresholdAllItem: map[string]Threshold{"cpu_used": {
+				thresholdAllItem: map[string]Threshold{testCPUUsed: {
 					HighWarning:   80,
 					HighCritical:  90,
 					LowCritical:   math.NaN(),
@@ -1440,23 +1478,23 @@ func TestThresholdRestart(t *testing.T) {
 				}},
 			},
 			PushedValue: map[string]float64{
-				`__name__="cpu_used"`:                    95,
-				`__name__="mem_used"`:                    95,
-				`__name__="disk_used_perc",item="/home"`: 95,
-				`__name__="disk_used_perc",item="/srv"`:  95,
+				NameCPUUsed:         95,
+				testLabelsMemUsed:   95,
+				NameDiskUsedPerc:    95,
+				NameDiskUsedPercSrv: 95,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 95.00"},
-				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 95.00 threshold (90.00) exceeded over last 1 minute"},
-				`__name__="disk_used_perc",item="/srv"`:  {CurrentStatus: types.StatusUnset},
-				`__name__="mem_used"`:                    {CurrentStatus: types.StatusUnset},
+				NameCPUUsed:         {CurrentStatus: types.StatusOk, StatusDescription: testStatusVal95},
+				NameDiskUsedPerc:    {CurrentStatus: types.StatusCritical, StatusDescription: testStatusCrit95},
+				NameDiskUsedPercSrv: {CurrentStatus: types.StatusUnset},
+				testLabelsMemUsed:   {CurrentStatus: types.StatusUnset},
 			},
 		},
 		{
 			AddedToT0: 1 * stepDelay,
 			SetThresholds: &setThresholdsArgs{
 				thresholdWithItem: map[string]Threshold{
-					`__name__="disk_used_perc",item="/home"`: {
+					NameDiskUsedPerc: {
 						HighWarning:   80,
 						HighCritical:  90,
 						LowCritical:   math.NaN(),
@@ -1464,7 +1502,7 @@ func TestThresholdRestart(t *testing.T) {
 						WarningDelay:  60 * time.Second,
 						CriticalDelay: 60 * time.Second,
 					},
-					`__name__="mem_used"`: {
+					testLabelsMemUsed: {
 						HighWarning:   80,
 						HighCritical:  90,
 						LowCritical:   math.NaN(),
@@ -1473,7 +1511,7 @@ func TestThresholdRestart(t *testing.T) {
 						CriticalDelay: 60 * time.Second,
 					},
 				},
-				thresholdAllItem: map[string]Threshold{"cpu_used": {
+				thresholdAllItem: map[string]Threshold{testCPUUsed: {
 					HighWarning:   80,
 					HighCritical:  90,
 					LowCritical:   math.NaN(),
@@ -1483,61 +1521,61 @@ func TestThresholdRestart(t *testing.T) {
 				}},
 			},
 			PushedValue: map[string]float64{
-				`__name__="cpu_used"`:                    95,
-				`__name__="mem_used"`:                    95,
-				`__name__="disk_used_perc",item="/home"`: 95,
-				`__name__="disk_used_perc",item="/srv"`:  95,
+				NameCPUUsed:         95,
+				testLabelsMemUsed:   95,
+				NameDiskUsedPerc:    95,
+				NameDiskUsedPercSrv: 95,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 95.00"},
-				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 95.00 threshold (90.00) exceeded over last 1 minute"},
-				`__name__="disk_used_perc",item="/srv"`:  {CurrentStatus: types.StatusUnset},
-				`__name__="mem_used"`:                    {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 95.00 threshold (80.00) exceeded over last 1 minute"},
+				NameCPUUsed:         {CurrentStatus: types.StatusOk, StatusDescription: testStatusVal95},
+				NameDiskUsedPerc:    {CurrentStatus: types.StatusCritical, StatusDescription: testStatusCrit95},
+				NameDiskUsedPercSrv: {CurrentStatus: types.StatusUnset},
+				testLabelsMemUsed:   {CurrentStatus: types.StatusWarning, StatusDescription: testStatusWarn95},
 			},
 		},
 		{
 			AddedToT0: 2 * stepDelay,
 			PushedValue: map[string]float64{
-				`__name__="cpu_used"`:                    95,
-				`__name__="mem_used"`:                    95,
-				`__name__="disk_used_perc",item="/home"`: 95,
-				`__name__="disk_used_perc",item="/srv"`:  95,
+				NameCPUUsed:         95,
+				testLabelsMemUsed:   95,
+				NameDiskUsedPerc:    95,
+				NameDiskUsedPercSrv: 95,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 95.00 threshold (80.00) exceeded over last 1 minute"},
-				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 95.00 threshold (90.00) exceeded over last 1 minute"},
-				`__name__="disk_used_perc",item="/srv"`:  {CurrentStatus: types.StatusUnset},
-				`__name__="mem_used"`:                    {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 95.00 threshold (80.00) exceeded over last 1 minute"},
+				NameCPUUsed:         {CurrentStatus: types.StatusWarning, StatusDescription: testStatusWarn95},
+				NameDiskUsedPerc:    {CurrentStatus: types.StatusCritical, StatusDescription: testStatusCrit95},
+				NameDiskUsedPercSrv: {CurrentStatus: types.StatusUnset},
+				testLabelsMemUsed:   {CurrentStatus: types.StatusWarning, StatusDescription: testStatusWarn95},
 			},
 		},
 		{
 			AddedToT0: 3 * stepDelay,
 			PushedValue: map[string]float64{
-				`__name__="cpu_used"`:                    95,
-				`__name__="mem_used"`:                    95,
-				`__name__="disk_used_perc",item="/home"`: 95,
-				`__name__="disk_used_perc",item="/srv"`:  95,
+				NameCPUUsed:         95,
+				testLabelsMemUsed:   95,
+				NameDiskUsedPerc:    95,
+				NameDiskUsedPercSrv: 95,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 95.00 threshold (90.00) exceeded over last 1 minute"},
-				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 95.00 threshold (90.00) exceeded over last 1 minute"},
-				`__name__="disk_used_perc",item="/srv"`:  {CurrentStatus: types.StatusUnset},
-				`__name__="mem_used"`:                    {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 95.00 threshold (90.00) exceeded over last 1 minute"},
+				NameCPUUsed:         {CurrentStatus: types.StatusCritical, StatusDescription: testStatusCrit95},
+				NameDiskUsedPerc:    {CurrentStatus: types.StatusCritical, StatusDescription: testStatusCrit95},
+				NameDiskUsedPercSrv: {CurrentStatus: types.StatusUnset},
+				testLabelsMemUsed:   {CurrentStatus: types.StatusCritical, StatusDescription: testStatusCrit95},
 			},
 		},
 		{
 			AddedToT0: 30 * stepDelay,
 			PushedValue: map[string]float64{
-				`__name__="cpu_used"`:                    95,
-				`__name__="mem_used"`:                    95,
-				`__name__="disk_used_perc",item="/home"`: 95,
-				`__name__="disk_used_perc",item="/srv"`:  95,
+				NameCPUUsed:         95,
+				testLabelsMemUsed:   95,
+				NameDiskUsedPerc:    95,
+				NameDiskUsedPercSrv: 95,
 			},
 			WantedPoints: map[string]types.StatusDescription{
-				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 95.00 threshold (90.00) exceeded over last 1 minute"},
-				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 95.00 threshold (90.00) exceeded over last 1 minute"},
-				`__name__="disk_used_perc",item="/srv"`:  {CurrentStatus: types.StatusUnset},
-				`__name__="mem_used"`:                    {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 95.00 threshold (90.00) exceeded over last 1 minute"},
+				NameCPUUsed:         {CurrentStatus: types.StatusCritical, StatusDescription: testStatusCrit95},
+				NameDiskUsedPerc:    {CurrentStatus: types.StatusCritical, StatusDescription: testStatusCrit95},
+				NameDiskUsedPercSrv: {CurrentStatus: types.StatusUnset},
+				testLabelsMemUsed:   {CurrentStatus: types.StatusCritical, StatusDescription: testStatusCrit95},
 			},
 		},
 	}
@@ -1715,7 +1753,7 @@ func TestThresholdsFromConfig(t *testing.T) {
 			},
 			MetricName: "cpu_used",
 			SoftPeriods: map[string]time.Duration{
-				"cpu_used": time.Hour,
+				testCPUUsed: time.Hour,
 			},
 			DefaultSoftPeriod: 300,
 			Expected: Threshold{
@@ -1735,7 +1773,7 @@ func TestThresholdsFromConfig(t *testing.T) {
 				HighWarning:  nil,
 				HighCritical: nil,
 			},
-			MetricName:        "cpu_used",
+			MetricName:        testCPUUsed,
 			SoftPeriods:       nil,
 			DefaultSoftPeriod: time.Second,
 			Expected: Threshold{
@@ -1755,7 +1793,7 @@ func TestThresholdsFromConfig(t *testing.T) {
 				HighWarning:  nil,
 				HighCritical: nil,
 			},
-			MetricName:        "cpu_used",
+			MetricName:        testCPUUsed,
 			SoftPeriods:       nil,
 			DefaultSoftPeriod: time.Second,
 			Expected: Threshold{

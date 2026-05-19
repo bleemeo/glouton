@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -124,6 +124,8 @@ func TestAccumulator(t *testing.T) {
 	}
 }
 
+const metricCPUUser = "cpu_user"
+
 func TestStoreAccumulatorWithStatus(t *testing.T) {
 	t0 := time.Now()
 	fields1 := map[string]any{
@@ -150,7 +152,7 @@ func TestStoreAccumulatorWithStatus(t *testing.T) {
 	}
 	annotations4 := types.MetricAnnotations{
 		Status:   statusUser,
-		StatusOf: "cpu_user",
+		StatusOf: metricCPUUser,
 	}
 
 	tags := map[string]string{
@@ -159,14 +161,14 @@ func TestStoreAccumulatorWithStatus(t *testing.T) {
 	}
 	want := map[string]float64{
 		"cpu_used":        97.0,
-		"cpu_user":        81.0,
+		metricCPUUser:     81.0,
 		"cpu_system":      16.0,
 		"cpu_idle":        3.0,
 		"cpu_user_status": 1.0,
 	}
 	wantStatus := map[string]types.StatusDescription{
 		"cpu_used":        statusUsed,
-		"cpu_user":        statusUser,
+		metricCPUUser:     statusUser,
 		"cpu_user_status": statusUser,
 	}
 

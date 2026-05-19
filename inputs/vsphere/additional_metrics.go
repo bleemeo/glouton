@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -34,9 +34,9 @@ func additionalClusterMetrics(ctx context.Context, client *vim25.Client, cluster
 		// Defining common tags for all metrics in this cluster,
 		// we will clone this map in case extra tags need to be added.
 		tags := map[string]string{
-			"clustername": cluster.Name(),
-			"dcname":      h.ParentDCName(cluster),
-			"moid":        cluster.Reference().Value,
+			tagClusterName: cluster.Name(),
+			tagDCName:      h.ParentDCName(cluster),
+			tagMOID:        cluster.Reference().Value,
 		}
 
 		hosts, err := cluster.Hosts(ctx)
@@ -69,7 +69,7 @@ func additionalClusterMetrics(ctx context.Context, client *vim25.Client, cluster
 	for _, datastore := range datastores {
 		tags := map[string]string{
 			"dsname": datastore.Name(),
-			"moid":   datastore.Reference().Value,
+			tagMOID:  datastore.Reference().Value,
 		}
 
 		hosts, err := datastore.AttachedHosts(ctx)
@@ -98,8 +98,8 @@ func additionalClusterCPU(tags map[string]string, cluster *object.ClusterCompute
 		return nil
 	}
 
-	hostUsagesMHzPerTS := retained.get("vsphere_host_cpu", "usagemhz_average", func(tags map[string]string) bool {
-		return hostMOIDs[tags["moid"]]
+	hostUsagesMHzPerTS := retained.get("vsphere_host_cpu", fieldUsageMHzAverage, func(tags map[string]string) bool {
+		return hostMOIDs[tags[tagMOID]]
 	})
 
 	for ts, hostUsagesMHz := range hostUsagesMHzPerTS {
@@ -114,7 +114,7 @@ func additionalClusterCPU(tags map[string]string, cluster *object.ClusterCompute
 
 		tags["cpu"] = instanceTotal
 
-		acc.AddFields("vsphere_cluster_cpu", map[string]any{"usage_average": result}, tags, time.Unix(ts, 0))
+		acc.AddFields("vsphere_cluster_cpu", map[string]any{fieldUsageAverage: result}, tags, time.Unix(ts, 0))
 	}
 
 	return nil
@@ -126,8 +126,8 @@ func additionalClusterMemory(tags map[string]string, cluster *object.ClusterComp
 		return nil
 	}
 
-	hostsUsageMBPerTS := retained.reduce("vsphere_host_mem", "usage_average", nil, func(acc any, value any, tags map[string]string, t time.Time) any {
-		moid := tags["moid"]
+	hostsUsageMBPerTS := retained.reduce("vsphere_host_mem", fieldUsageAverage, nil, func(acc any, value any, tags map[string]string, t time.Time) any {
+		moid := tags[tagMOID]
 		if !hostMOIDs[moid] {
 			return acc
 		}
@@ -190,7 +190,7 @@ func additionalClusterHostsCount(ctx context.Context, tags map[string]string, cl
 func additionalDatastoreIO(tags map[string]string, hostMOIDs map[string]bool, acc telegraf.Accumulator, retained retainedMetrics) error {
 	allTimestamps := make(map[int64]struct{})
 	reducer := func(acc, value any, tags map[string]string, t time.Time) any {
-		if hostMOIDs[tags["moid"]] {
+		if hostMOIDs[tags[tagMOID]] {
 			ac := acc.(map[int64]map[string]any) //nolint: forcetypeassert
 			ts := t.Unix()
 
@@ -199,7 +199,7 @@ func additionalDatastoreIO(tags map[string]string, hostMOIDs map[string]bool, ac
 				usagePerHost = make(map[string]any)
 			}
 
-			usagePerHost[tags["moid"]] = value
+			usagePerHost[tags[tagMOID]] = value
 			ac[ts] = usagePerHost
 			allTimestamps[ts] = struct{}{}
 
@@ -210,8 +210,8 @@ func additionalDatastoreIO(tags map[string]string, hostMOIDs map[string]bool, ac
 	}
 
 	// Reducing the points to a map to get the value of each metric at each timestamp
-	hostsReadKBpsPerTS := retained.reduce("vsphere_host_datastore", "read_average", make(map[int64]map[string]any), reducer)
-	hostsWriteKBpsPerTS := retained.reduce("vsphere_host_datastore", "write_average", make(map[int64]map[string]any), reducer)
+	hostsReadKBpsPerTS := retained.reduce("vsphere_host_datastore", fieldReadAverage, make(map[int64]map[string]any), reducer)
+	hostsWriteKBpsPerTS := retained.reduce("vsphere_host_datastore", fieldWriteAverage, make(map[int64]map[string]any), reducer)
 
 	for ts := range allTimestamps {
 		hostsReadKBps, readOk := hostsReadKBpsPerTS.(map[int64]map[string]any)[ts]
@@ -232,8 +232,8 @@ func additionalDatastoreIO(tags map[string]string, hostMOIDs map[string]bool, ac
 		}
 
 		fields := map[string]any{
-			"read_average":  readSum,
-			"write_average": writeSum,
+			fieldReadAverage:  readSum,
+			fieldWriteAverage: writeSum,
 		}
 
 		acc.AddFields("vsphere_datastore_datastore", fields, tags, time.Unix(ts, 0))
@@ -262,10 +262,10 @@ func additionalHostMetrics(_ context.Context, _ *vim25.Client, hosts []*object.H
 			}
 
 			tags := map[string]string{
-				"clustername": h.ParentClusterName(host),
-				"dcname":      h.ParentDCName(host),
-				"esxhostname": host.Name(),
-				"moid":        moid,
+				tagClusterName: h.ParentClusterName(host),
+				tagDCName:      h.ParentDCName(host),
+				tagESXHostName: host.Name(),
+				tagMOID:        moid,
 			}
 
 			acc.AddFields("vms", fields, tags, t0)
@@ -298,12 +298,12 @@ func additionalVMMetrics(ctx context.Context, client *vim25.Client, vms []*objec
 				usage := 100 - (float64(disk.FreeSpace)*100)/float64(disk.Capacity) // Percentage of disk used
 
 				tags := map[string]string{
-					"clustername": h.ParentClusterName(vm),
-					"dcname":      h.ParentDCName(vm),
-					"esxhostname": h.ParentHostName(vm),
-					"item":        disk.DiskPath,
-					"moid":        vm.Reference().Value,
-					"vmname":      vm.Name(),
+					tagClusterName: h.ParentClusterName(vm),
+					tagDCName:      h.ParentDCName(vm),
+					tagESXHostName: h.ParentHostName(vm),
+					"item":         disk.DiskPath,
+					tagMOID:        vm.Reference().Value,
+					tagVMName:      vm.Name(),
 				}
 
 				acc.AddFields("vsphere_vm_disk", map[string]any{"used_perc": usage}, tags, t0)

@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -39,9 +39,9 @@ var allPackets = []packetCapture{
 
 // Capture for /usr/lib/nagios/plugins/check_nrpe --no-ssl -H 127.0.0.1 -c check_load.
 var checkLoad = packetCapture{
-	Description: "check_load",
+	Description: testCheckLoad,
 	Version:     3,
-	QueryString: "check_load",
+	QueryString: testCheckLoad,
 	QueryRaw: []byte{
 		0x00, 0x03, 0x00, 0x01, 0x95, 0x5d, 0xd9, 0xff,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0xf9,
@@ -334,7 +334,7 @@ var checkLoadV2 = packetCapture{
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x57, 0x5f,
 	},
-	QueryString: "check_load",
+	QueryString: testCheckLoad,
 	ReplyRaw: []byte{
 		0x00, 0x02, 0x00, 0x02, 0x2e, 0xa0, 0xf4, 0xe0,
 		0x00, 0x01, 0x57, 0x41, 0x52, 0x4e, 0x49, 0x4e,
@@ -472,9 +472,9 @@ var checkLoadV2 = packetCapture{
 }
 
 var checkUsers = packetCapture{
-	Description: "check_users",
+	Description: testCheckUsers,
 	Version:     3,
-	QueryString: "check_users",
+	QueryString: testCheckUsers,
 	QueryRaw: []byte{
 		0x00, 0x03, 0x00, 0x01, 0xbe, 0x3a, 0xf7, 0x85,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0xf9,

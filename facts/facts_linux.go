@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -36,7 +36,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const dmiDir = "/sys/devices/virtual/dmi/id/"
+const (
+	dmiDir   = "/sys/devices/virtual/dmi/id/"
+	osDebian = "debian"
+)
 
 func (f *FactProvider) osFacts(ctx context.Context, facts map[string]string) map[string]string {
 	if f.options.HostRootPath != "" {
@@ -49,7 +52,7 @@ func (f *FactProvider) osFacts(ctx context.Context, facts map[string]string) map
 				logger.V(1).Printf("os-release file is invalid: %v", err)
 			}
 
-			if osRelease["ID"] == "debian" {
+			if osRelease["ID"] == osDebian {
 				trueNASMarker := filepath.Join(f.options.HostRootPath, "lib/systemd/system/truenas.target")
 				if _, err := os.Stat(trueNASMarker); err == nil {
 					return f.trueNasScaleOSFact(facts)
@@ -76,7 +79,7 @@ func (f *FactProvider) osFacts(ctx context.Context, facts map[string]string) map
 }
 
 func (f *FactProvider) trueNasScaleOSFact(facts map[string]string) map[string]string {
-	facts["os_name"] = "TrueNAS"
+	facts["os_name"] = osNameTrueNAS
 
 	var manifest struct {
 		Codename string `json:"codename"`
@@ -105,9 +108,9 @@ func (f *FactProvider) trueNasScaleOSFact(facts map[string]string) map[string]st
 	facts["os_codename"] = manifest.Codename
 
 	if manifest.Version != "" {
-		facts["os_pretty_name"] = "TrueNAS SCALE " + manifest.Version
+		facts["os_pretty_name"] = osNameTrueNAS + " SCALE " + manifest.Version
 	} else {
-		facts["os_pretty_name"] = "TrueNAS SCALE"
+		facts["os_pretty_name"] = osNameTrueNAS + " SCALE"
 	}
 
 	facts["os_version"] = manifest.Version
@@ -186,7 +189,7 @@ func (f *FactProvider) installedPackagesFacts(ctx context.Context, facts map[str
 	var versions map[string]string
 
 	switch {
-	case osFamily == "debian" || strings.Contains(osName, "debian"):
+	case osFamily == osDebian || strings.Contains(osName, osDebian):
 		versions = f.queryDebianPackageVersions(ctx, packageNames)
 	case strings.Contains(osFamily, "rhel") || strings.Contains(osFamily, "fedora") || strings.Contains(osName, "fedora"):
 		versions = f.queryRPMPackageVersions(ctx, packageNames)

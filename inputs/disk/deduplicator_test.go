@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -14,7 +14,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//nolint:dupl
 package disk
 
 import (
@@ -24,6 +23,51 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 )
+
+// Tag key constants used in disk measurements.
+const (
+	tagDevice = "device"
+	tagFSType = "fstype"
+	tagMode   = "mode"
+	tagPath   = "path"
+)
+
+// Filesystem type constants.
+const (
+	fsExt2 = "ext2"
+	fsExt4 = "ext4"
+	fsVFAT = "vfat"
+	fsNTFS = "NTFS"
+)
+
+// Device name constants.
+const (
+	devDM1       = "dm-1"
+	devDM3       = "dm-3"
+	devNvme0n1p1 = "nvme0n1p1"
+	devSDA2      = "sda2"
+	devVDB1      = "vdb1"
+	devVDB15     = "vdb15"
+	devVDC1      = "vdc1"
+)
+
+// Tag key for label.
+const tagLabel = "label"
+
+// Mount path constants.
+const (
+	pathBootEFI = "/boot/efi"
+	pathMntPath = "/mnt/path"
+	pathMntD1   = "/mnt/d1"
+	pathMntLong = "/mnt/this-path-is-rather-long"
+	pathVar     = "/var"
+)
+
+// Label constant.
+const labelCloudimgRootFS = "cloudimg-rootfs"
+
+// Kubelet path constant for CSI volume mount.
+const pathKubeletCSIMount = "/var/lib/kubelet/pods/e6a29bd7-8754-4f70-93cd-c32b3bc1cf41/volumes/kubernetes.io~csi/pvc-2d560fc3-1fb8-4635-9ba1-fb75cf55d0b8/mount" //nolint:lll
 
 func Test_deduplicate(t *testing.T) { //nolint:maintidx
 	tests := []struct {
@@ -35,45 +79,45 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 			name: "simple",
 			input: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"fstype": "ext4",
-						"device": "sda2",
-						"mode":   "ro",
-						"path":   "/boot",
+						tagFSType: fsExt4,
+						tagDevice: devSDA2,
+						tagMode:   "ro",
+						tagPath:   "/boot",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"fstype": "ext4",
-						"device": "dm-1",
-						"mode":   "rw",
-						"path":   "/",
+						tagFSType: fsExt4,
+						tagDevice: devDM1,
+						tagMode:   "rw",
+						tagPath:   "/",
 					},
 				},
 			},
 			want: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"fstype": "ext4",
-						"device": "sda2",
-						"mode":   "ro",
-						"path":   "/boot",
+						tagFSType: fsExt4,
+						tagDevice: devSDA2,
+						tagMode:   "ro",
+						tagPath:   "/boot",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"fstype": "ext4",
-						"device": "dm-1",
-						"mode":   "rw",
-						"path":   "/",
+						tagFSType: fsExt4,
+						tagDevice: devDM1,
+						tagMode:   "rw",
+						tagPath:   "/",
 					},
 				},
 			},
@@ -82,45 +126,45 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 			name: "bind-mount", // After gopsutil v4.25.12
 			input: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"fstype": "ext4",
-						"device": "dm-1",
-						"mode":   "rw",
-						"path":   "/",
+						tagFSType: fsExt4,
+						tagDevice: devDM1,
+						tagMode:   "rw",
+						tagPath:   "/",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"fstype": "ext4",
-						"device": "/",
-						"mode":   "rw",
-						"path":   "/mnt/bind",
+						tagFSType: fsExt4,
+						tagDevice: "/",
+						tagMode:   "rw",
+						tagPath:   "/mnt/bind",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"fstype": "ext4",
-						"device": "/mnt/bind",
-						"mode":   "rw",
-						"path":   "/mnt/bind/etc/resolv.conf",
+						tagFSType: fsExt4,
+						tagDevice: "/mnt/bind",
+						tagMode:   "rw",
+						tagPath:   "/mnt/bind/etc/resolv.conf",
 					},
 				},
 			},
 			want: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"fstype": "ext4",
-						"device": "dm-1",
-						"mode":   "rw",
-						"path":   "/",
+						tagFSType: fsExt4,
+						tagDevice: devDM1,
+						tagMode:   "rw",
+						tagPath:   "/",
 					},
 				},
 			},
@@ -129,35 +173,35 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 			name: "mount-same-path",
 			input: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"fstype": "ext4",
-						"device": "nvme0n1p1",
-						"mode":   "rw",
-						"path":   "/boot/efi",
+						tagFSType: fsExt4,
+						tagDevice: devNvme0n1p1,
+						tagMode:   "rw",
+						tagPath:   pathBootEFI,
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"fstype": "ext4",
-						"device": "dm-3",
-						"mode":   "rw",
-						"path":   "/boot/efi",
+						tagFSType: fsExt4,
+						tagDevice: devDM3,
+						tagMode:   "rw",
+						tagPath:   pathBootEFI,
 					},
 				},
 			},
 			want: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"fstype": "ext4",
-						"device": "dm-3",
-						"mode":   "rw",
-						"path":   "/boot/efi",
+						tagFSType: fsExt4,
+						tagDevice: devDM3,
+						tagMode:   "rw",
+						tagPath:   pathBootEFI,
 					},
 				},
 			},
@@ -166,45 +210,45 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 			name: "both",
 			input: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"fstype": "ext4",
-						"device": "nvme0n1p1",
-						"mode":   "rw",
-						"path":   "/boot/efi",
+						tagFSType: fsExt4,
+						tagDevice: devNvme0n1p1,
+						tagMode:   "rw",
+						tagPath:   pathBootEFI,
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"fstype": "ext4",
-						"device": "dm-3",
-						"mode":   "rw",
-						"path":   "/boot/efi",
+						tagFSType: fsExt4,
+						tagDevice: devDM3,
+						tagMode:   "rw",
+						tagPath:   pathBootEFI,
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"fstype": "ext4",
-						"device": "dm-3",
-						"mode":   "rw",
-						"path":   "/mnt/abc",
+						tagFSType: fsExt4,
+						tagDevice: devDM3,
+						tagMode:   "rw",
+						tagPath:   "/mnt/abc",
 					},
 				},
 			},
 			want: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"fstype": "ext4",
-						"device": "dm-3",
-						"mode":   "rw",
-						"path":   "/boot/efi",
+						tagFSType: fsExt4,
+						tagDevice: devDM3,
+						tagMode:   "rw",
+						tagPath:   pathBootEFI,
 					},
 				},
 			},
@@ -213,45 +257,45 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 			name: "both2",
 			input: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"fstype": "ext4",
-						"device": "nvme0n1p1",
-						"mode":   "rw",
-						"path":   "/boot/efi",
+						tagFSType: fsExt4,
+						tagDevice: devNvme0n1p1,
+						tagMode:   "rw",
+						tagPath:   pathBootEFI,
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"fstype": "ext4",
-						"device": "dm-3",
-						"mode":   "rw",
-						"path":   "/boot/efi",
+						tagFSType: fsExt4,
+						tagDevice: devDM3,
+						tagMode:   "rw",
+						tagPath:   pathBootEFI,
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"fstype": "ext4",
-						"device": "dm-3",
-						"mode":   "rw",
-						"path":   "/abc/abcd",
+						tagFSType: fsExt4,
+						tagDevice: devDM3,
+						tagMode:   "rw",
+						tagPath:   "/abc/abcd",
 					},
 				},
 			},
 			want: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"fstype": "ext4",
-						"device": "dm-3",
-						"mode":   "rw",
-						"path":   "/boot/efi",
+						tagFSType: fsExt4,
+						tagDevice: devDM3,
+						tagMode:   "rw",
+						tagPath:   pathBootEFI,
 					},
 				},
 			},
@@ -262,65 +306,65 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 			name: "special-device",
 			input: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"fstype": "apfs",
-						"device": "disk3s1s1",
-						"mode":   "rw",
-						"path":   "/",
+						tagFSType: "apfs",
+						tagDevice: "disk3s1s1",
+						tagMode:   "rw",
+						tagPath:   "/",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"fstype": "NTFS",
-						"device": "C:",
-						"mode":   "rw",
-						"path":   "C:",
+						tagFSType: fsNTFS,
+						tagDevice: "C:",
+						tagMode:   "rw",
+						tagPath:   "C:",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"fstype": "zfs",
-						"device": "boot-pool/ROOT/13.0-U6.8",
-						"mode":   "rw",
-						"path":   "/home",
+						tagFSType: "zfs",
+						tagDevice: "boot-pool/ROOT/13.0-U6.8",
+						tagMode:   "rw",
+						tagPath:   "/home",
 					},
 				},
 			},
 			want: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"fstype": "apfs",
-						"device": "disk3s1s1",
-						"mode":   "rw",
-						"path":   "/",
+						tagFSType: "apfs",
+						tagDevice: "disk3s1s1",
+						tagMode:   "rw",
+						tagPath:   "/",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"fstype": "NTFS",
-						"device": "C:",
-						"mode":   "rw",
-						"path":   "C:",
+						tagFSType: fsNTFS,
+						tagDevice: "C:",
+						tagMode:   "rw",
+						tagPath:   "C:",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"fstype": "zfs",
-						"device": "boot-pool/ROOT/13.0-U6.8",
-						"mode":   "rw",
-						"path":   "/home",
+						tagFSType: "zfs",
+						tagDevice: "boot-pool/ROOT/13.0-U6.8",
+						tagMode:   "rw",
+						tagPath:   "/home",
 					},
 				},
 			},
@@ -336,85 +380,85 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 			name: "two-mount-same-path",
 			input: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/",
-						"device": "vdb1",
-						"fstype": "ext4",
-						"mode":   "rw",
+						tagPath:   "/",
+						tagDevice: devVDB1,
+						tagFSType: fsExt4,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/boot/efi",
-						"device": "vdb15",
-						"fstype": "vfat",
-						"mode":   "rw",
+						tagPath:   pathBootEFI,
+						tagDevice: devVDB15,
+						tagFSType: fsVFAT,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/mnt/path",
-						"device": "/boot/efi",
-						"fstype": "vfat",
-						"mode":   "rw",
+						tagPath:   pathMntPath,
+						tagDevice: pathBootEFI,
+						tagFSType: fsVFAT,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"device": "vdc1",
-						"fstype": "ext2",
-						"mode":   "rw",
-						"path":   "/mnt/d1",
+						tagDevice: devVDC1,
+						tagFSType: fsExt2,
+						tagMode:   "rw",
+						tagPath:   pathMntD1,
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/mnt/path",
-						"device": "/mnt/d1",
-						"fstype": "ext2",
-						"mode":   "rw",
+						tagPath:   pathMntPath,
+						tagDevice: pathMntD1,
+						tagFSType: fsExt2,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/boot/efi",
-						"device": "/mnt/path",
-						"fstype": "ext2",
-						"mode":   "rw",
+						tagPath:   pathBootEFI,
+						tagDevice: pathMntPath,
+						tagFSType: fsExt2,
+						tagMode:   "rw",
 					},
 				},
 			},
 			want: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/",
-						"device": "vdb1",
-						"fstype": "ext4",
-						"mode":   "rw",
+						tagPath:   "/",
+						tagDevice: devVDB1,
+						tagFSType: fsExt4,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/mnt/d1",
-						"device": "vdc1",
-						"fstype": "ext2",
-						"mode":   "rw",
+						tagPath:   pathMntD1,
+						tagDevice: devVDC1,
+						tagFSType: fsExt2,
+						tagMode:   "rw",
 					},
 				},
 				{
@@ -422,13 +466,13 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					// kernel (and possibly an application could have file openned on this filesystem).
 					// This is really an edge case with 2 devices and 2 mount-point which probably don't exists in
 					// real situation, so feels free to add/drop this wanted Measurement to makes test pass.
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/boot/efi",
-						"device": "vdb15",
-						"fstype": "ext2",
-						"mode":   "rw",
+						tagPath:   pathBootEFI,
+						tagDevice: devVDB15,
+						tagFSType: fsExt2,
+						tagMode:   "rw",
 					},
 				},
 			},
@@ -438,75 +482,75 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 			name: "single-bind",
 			input: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"device": "vdb1",
-						"fstype": "ext4",
-						"mode":   "rw",
-						"path":   "/",
+						tagDevice: devVDB1,
+						tagFSType: fsExt4,
+						tagMode:   "rw",
+						tagPath:   "/",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/boot/efi",
-						"device": "vdb15",
-						"fstype": "vfat",
-						"mode":   "rw",
+						tagPath:   pathBootEFI,
+						tagDevice: devVDB15,
+						tagFSType: fsVFAT,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/mnt/d1",
-						"device": "vdc1",
-						"fstype": "ext2",
-						"mode":   "rw",
+						tagPath:   pathMntD1,
+						tagDevice: devVDC1,
+						tagFSType: fsExt2,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/mnt/path",
-						"device": "/mnt/d1",
-						"fstype": "ext2",
-						"mode":   "rw",
+						tagPath:   pathMntPath,
+						tagDevice: pathMntD1,
+						tagFSType: fsExt2,
+						tagMode:   "rw",
 					},
 				},
 			},
 			want: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/",
-						"device": "vdb1",
-						"fstype": "ext4",
-						"mode":   "rw",
+						tagPath:   "/",
+						tagDevice: devVDB1,
+						tagFSType: fsExt4,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/boot/efi",
-						"device": "vdb15",
-						"fstype": "vfat",
-						"mode":   "rw",
+						tagPath:   pathBootEFI,
+						tagDevice: devVDB15,
+						tagFSType: fsVFAT,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/mnt/d1",
-						"device": "vdc1",
-						"fstype": "ext2",
-						"mode":   "rw",
+						tagPath:   pathMntD1,
+						tagDevice: devVDC1,
+						tagFSType: fsExt2,
+						tagMode:   "rw",
 					},
 				},
 			},
@@ -517,65 +561,65 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 			name: "single-bind-then-unmount",
 			input: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/",
-						"device": "vdb1",
-						"fstype": "ext4",
-						"mode":   "rw",
+						tagPath:   "/",
+						tagDevice: devVDB1,
+						tagFSType: fsExt4,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/boot/efi",
-						"device": "vdb15",
-						"fstype": "vfat",
-						"mode":   "rw",
+						tagPath:   pathBootEFI,
+						tagDevice: devVDB15,
+						tagFSType: fsVFAT,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/mnt/path",
-						"device": "vdc1",
-						"fstype": "ext2",
-						"mode":   "rw",
+						tagPath:   pathMntPath,
+						tagDevice: devVDC1,
+						tagFSType: fsExt2,
+						tagMode:   "rw",
 					},
 				},
 			},
 			want: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/",
-						"device": "vdb1",
-						"fstype": "ext4",
-						"mode":   "rw",
+						tagPath:   "/",
+						tagDevice: devVDB1,
+						tagFSType: fsExt4,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/boot/efi",
-						"device": "vdb15",
-						"fstype": "vfat",
-						"mode":   "rw",
+						tagPath:   pathBootEFI,
+						tagDevice: devVDB15,
+						tagFSType: fsVFAT,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/mnt/path",
-						"device": "vdc1",
-						"fstype": "ext2",
-						"mode":   "rw",
+						tagPath:   pathMntPath,
+						tagDevice: devVDC1,
+						tagFSType: fsExt2,
+						tagMode:   "rw",
 					},
 				},
 			},
@@ -585,75 +629,75 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 			name: "single-bind-2",
 			input: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/",
-						"device": "vdb1",
-						"fstype": "ext4",
-						"mode":   "rw",
+						tagPath:   "/",
+						tagDevice: devVDB1,
+						tagFSType: fsExt4,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/boot/efi",
-						"device": "vdb15",
-						"fstype": "vfat",
-						"mode":   "rw",
+						tagPath:   pathBootEFI,
+						tagDevice: devVDB15,
+						tagFSType: fsVFAT,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"mode":   "rw",
-						"path":   "/mnt/this-path-is-rather-long",
-						"device": "vdc1",
-						"fstype": "ext2",
+						tagMode:   "rw",
+						tagPath:   pathMntLong,
+						tagDevice: devVDC1,
+						tagFSType: fsExt2,
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"device": "/mnt/this-path-is-rather-long",
-						"fstype": "ext2",
-						"mode":   "rw",
-						"path":   "/mnt/path",
+						tagDevice: pathMntLong,
+						tagFSType: fsExt2,
+						tagMode:   "rw",
+						tagPath:   pathMntPath,
 					},
 				},
 			},
 			want: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/",
-						"device": "vdb1",
-						"fstype": "ext4",
-						"mode":   "rw",
+						tagPath:   "/",
+						tagDevice: devVDB1,
+						tagFSType: fsExt4,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/boot/efi",
-						"device": "vdb15",
-						"fstype": "vfat",
-						"mode":   "rw",
+						tagPath:   pathBootEFI,
+						tagDevice: devVDB15,
+						tagFSType: fsVFAT,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/mnt/this-path-is-rather-long",
-						"device": "vdc1",
-						"fstype": "ext2",
-						"mode":   "rw",
+						tagPath:   pathMntLong,
+						tagDevice: devVDC1,
+						tagFSType: fsExt2,
+						tagMode:   "rw",
 					},
 				},
 			},
@@ -662,85 +706,85 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 			name: "k8s-with-longhorn",
 			input: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/",
-						"device": "sda2",
-						"fstype": "ext4",
-						"mode":   "rw",
+						tagPath:   "/",
+						tagDevice: devSDA2,
+						tagFSType: fsExt4,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/var/lib/longhorn",
-						"device": "sdb1",
-						"fstype": "ext4",
-						"mode":   "rw",
+						tagPath:   "/var/lib/longhorn",
+						tagDevice: "sdb1",
+						tagFSType: fsExt4,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"device": "/",
-						"fstype": "ext4",
-						"mode":   "rw",
-						"path":   "/var/lib/kubelet/pods/e6a29bd7-8754-4f70-93cd-c32b3bc1cf41/volume-subpaths/tigera-ca-bundle/calico-node/1",
+						tagDevice: "/",
+						tagFSType: fsExt4,
+						tagMode:   "rw",
+						tagPath:   "/var/lib/kubelet/pods/e6a29bd7-8754-4f70-93cd-c32b3bc1cf41/volume-subpaths/tigera-ca-bundle/calico-node/1",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/var/lib/kubelet/plugins/kubernetes.io/csi/driver.longhorn.io/75bb6f12d3144c67bd218e5453fd86761b0089f51deb41e2b7a67be4e46ec8c1/globalmount",
-						"device": "longhorn/pvc-2d560fc3-1fb8-4635-9ba1-fb75cf55d0b8",
-						"fstype": "ext4",
-						"mode":   "rw",
+						tagPath:   "/var/lib/kubelet/plugins/kubernetes.io/csi/driver.longhorn.io/75bb6f12d3144c67bd218e5453fd86761b0089f51deb41e2b7a67be4e46ec8c1/globalmount",
+						tagDevice: "longhorn/pvc-2d560fc3-1fb8-4635-9ba1-fb75cf55d0b8",
+						tagFSType: fsExt4,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/var/lib/kubelet/pods/e6a29bd7-8754-4f70-93cd-c32b3bc1cf41/volumes/kubernetes.io~csi/pvc-2d560fc3-1fb8-4635-9ba1-fb75cf55d0b8/mount",
-						"device": "/var/lib/kubelet/plugins/kubernetes.io/csi/driver.longhorn.io/75bb6f12d3144c67bd218e5453fd86761b0089f51deb41e2b7a67be4e46ec8c1/globalmount",
-						"fstype": "ext4",
-						"mode":   "rw",
+						tagPath:   pathKubeletCSIMount,
+						tagDevice: "/var/lib/kubelet/plugins/kubernetes.io/csi/driver.longhorn.io/75bb6f12d3144c67bd218e5453fd86761b0089f51deb41e2b7a67be4e46ec8c1/globalmount",
+						tagFSType: fsExt4,
+						tagMode:   "rw",
 					},
 				},
 			},
 			want: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/",
-						"device": "sda2",
-						"fstype": "ext4",
-						"mode":   "rw",
+						tagPath:   "/",
+						tagDevice: devSDA2,
+						tagFSType: fsExt4,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/var/lib/longhorn",
-						"device": "sdb1",
-						"fstype": "ext4",
-						"mode":   "rw",
+						tagPath:   "/var/lib/longhorn",
+						tagDevice: "sdb1",
+						tagFSType: fsExt4,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"fstype": "ext4",
-						"device": "longhorn/pvc-2d560fc3-1fb8-4635-9ba1-fb75cf55d0b8",
-						"mode":   "rw",
-						"path":   "/var/lib/kubelet/pods/e6a29bd7-8754-4f70-93cd-c32b3bc1cf41/volumes/kubernetes.io~csi/pvc-2d560fc3-1fb8-4635-9ba1-fb75cf55d0b8/mount",
+						tagFSType: fsExt4,
+						tagDevice: "longhorn/pvc-2d560fc3-1fb8-4635-9ba1-fb75cf55d0b8",
+						tagMode:   "rw",
+						tagPath:   pathKubeletCSIMount,
 					},
 				},
 			},
@@ -749,89 +793,89 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 			name: "k8s-with-aws-ebs",
 			input: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/",
-						"device": "nvme0n1p1",
-						"fstype": "ext4",
-						"mode":   "rw",
-						"label":  "cloudimg-rootfs",
+						tagPath:   "/",
+						tagDevice: devNvme0n1p1,
+						tagFSType: fsExt4,
+						tagMode:   "rw",
+						tagLabel:  labelCloudimgRootFS,
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"label":  "UEFI",
-						"path":   "/boot/efi",
-						"device": "nvme0n1p15",
-						"fstype": "vfat",
-						"mode":   "rw",
+						tagLabel:  "UEFI",
+						tagPath:   pathBootEFI,
+						tagDevice: "nvme0n1p15",
+						tagFSType: fsVFAT,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/var/lib/kubelet/pods/e6a29bd7-8754-4f70-93cd-c32b3bc1cf41/volume-subpaths/tigera-ca-bundle/calico-node/1",
-						"device": "/",
-						"fstype": "ext4",
-						"mode":   "rw",
+						tagPath:   "/var/lib/kubelet/pods/e6a29bd7-8754-4f70-93cd-c32b3bc1cf41/volume-subpaths/tigera-ca-bundle/calico-node/1",
+						tagDevice: "/",
+						tagFSType: fsExt4,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/var/lib/kubelet/plugins/kubernetes.io/csi/ebs.csi.aws.com/75bb6f12d3144c67bd218e5453fd86761b0089f51deb41e2b7a67be4e46ec8c1/globalmount",
-						"device": "nvme1n1",
-						"fstype": "ext4",
-						"mode":   "rw",
+						tagPath:   "/var/lib/kubelet/plugins/kubernetes.io/csi/ebs.csi.aws.com/75bb6f12d3144c67bd218e5453fd86761b0089f51deb41e2b7a67be4e46ec8c1/globalmount",
+						tagDevice: "nvme1n1",
+						tagFSType: fsExt4,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/var/lib/kubelet/pods/e6a29bd7-8754-4f70-93cd-c32b3bc1cf41/volumes/kubernetes.io~csi/pvc-2d560fc3-1fb8-4635-9ba1-fb75cf55d0b8/mount",
-						"device": "/var/lib/kubelet/plugins/kubernetes.io/csi/ebs.csi.aws.com/75bb6f12d3144c67bd218e5453fd86761b0089f51deb41e2b7a67be4e46ec8c1/globalmount",
-						"fstype": "ext4",
-						"mode":   "rw",
+						tagPath:   pathKubeletCSIMount,
+						tagDevice: "/var/lib/kubelet/plugins/kubernetes.io/csi/ebs.csi.aws.com/75bb6f12d3144c67bd218e5453fd86761b0089f51deb41e2b7a67be4e46ec8c1/globalmount",
+						tagFSType: fsExt4,
+						tagMode:   "rw",
 					},
 				},
 			},
 			want: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/",
-						"device": "nvme0n1p1",
-						"fstype": "ext4",
-						"mode":   "rw",
-						"label":  "cloudimg-rootfs",
+						tagPath:   "/",
+						tagDevice: devNvme0n1p1,
+						tagFSType: fsExt4,
+						tagMode:   "rw",
+						tagLabel:  labelCloudimgRootFS,
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"label":  "UEFI",
-						"path":   "/boot/efi",
-						"device": "nvme0n1p15",
-						"fstype": "vfat",
-						"mode":   "rw",
+						tagLabel:  "UEFI",
+						tagPath:   pathBootEFI,
+						tagDevice: "nvme0n1p15",
+						tagFSType: fsVFAT,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"fstype": "ext4",
-						"device": "nvme1n1",
-						"mode":   "rw",
-						"path":   "/var/lib/kubelet/pods/e6a29bd7-8754-4f70-93cd-c32b3bc1cf41/volumes/kubernetes.io~csi/pvc-2d560fc3-1fb8-4635-9ba1-fb75cf55d0b8/mount",
+						tagFSType: fsExt4,
+						tagDevice: "nvme1n1",
+						tagMode:   "rw",
+						tagPath:   pathKubeletCSIMount,
 					},
 				},
 			},
@@ -840,25 +884,25 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 			name: "windows",
 			input: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "\\C:",
-						"device": "C:",
-						"fstype": "NTFS",
-						"mode":   "rw",
+						tagPath:   "\\C:",
+						tagDevice: "C:",
+						tagFSType: fsNTFS,
+						tagMode:   "rw",
 					},
 				},
 			},
 			want: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "\\C:",
-						"device": "C:",
-						"fstype": "NTFS",
-						"mode":   "rw",
+						tagPath:   "\\C:",
+						tagDevice: "C:",
+						tagFSType: fsNTFS,
+						tagMode:   "rw",
 					},
 				},
 			},
@@ -868,27 +912,27 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 			name: "server-with-docker",
 			input: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/",
-						"device": "nvme0n1p1",
-						"fstype": "ext4",
-						"mode":   "rw",
-						"label":  "cloudimg-rootfs",
+						tagPath:   "/",
+						tagDevice: devNvme0n1p1,
+						tagFSType: fsExt4,
+						tagMode:   "rw",
+						tagLabel:  labelCloudimgRootFS,
 					},
 				},
 			},
 			want: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/",
-						"device": "nvme0n1p1",
-						"fstype": "ext4",
-						"mode":   "rw",
-						"label":  "cloudimg-rootfs",
+						tagPath:   "/",
+						tagDevice: devNvme0n1p1,
+						tagFSType: fsExt4,
+						tagMode:   "rw",
+						tagLabel:  labelCloudimgRootFS,
 					},
 				},
 			},
@@ -897,85 +941,85 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 			name: "minikube",
 			input: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/var",
-						"device": "vda1",
-						"fstype": "ext4",
-						"mode":   "rw",
+						tagPath:   pathVar,
+						tagDevice: "vda1",
+						tagFSType: fsExt4,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"mode":   "rw",
-						"path":   "/etc/resolv.conf",
-						"device": "/var",
-						"fstype": "ext4",
+						tagMode:   "rw",
+						tagPath:   "/etc/resolv.conf",
+						tagDevice: pathVar,
+						tagFSType: fsExt4,
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/etc/hostname",
-						"device": "/etc/resolv.conf",
-						"fstype": "ext4",
-						"mode":   "rw",
+						tagPath:   "/etc/hostname",
+						tagDevice: "/etc/resolv.conf",
+						tagFSType: fsExt4,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/etc/hosts",
-						"device": "/etc/hostname",
-						"fstype": "ext4",
-						"mode":   "rw",
+						tagPath:   "/etc/hosts",
+						tagDevice: "/etc/hostname",
+						tagFSType: fsExt4,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/data",
-						"device": "/etc/hosts",
-						"fstype": "ext4",
-						"mode":   "rw",
+						tagPath:   "/data",
+						tagDevice: "/etc/hosts",
+						tagFSType: fsExt4,
+						tagMode:   "rw",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"device": "/data",
-						"fstype": "ext4",
-						"mode":   "rw",
-						"path":   "/tmp/hostpath_pv",
+						tagDevice: "/data",
+						tagFSType: fsExt4,
+						tagMode:   "rw",
+						tagPath:   "/tmp/hostpath_pv",
 					},
 				},
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/tmp/hostpath-provisioner",
-						"device": "/tmp/hostpath_pv",
-						"fstype": "ext4",
-						"mode":   "rw",
+						tagPath:   "/tmp/hostpath-provisioner",
+						tagDevice: "/tmp/hostpath_pv",
+						tagFSType: fsExt4,
+						tagMode:   "rw",
 					},
 				},
 			},
 			want: []internal.Measurement{
 				{
-					Name:   "disk",
+					Name:   inputName,
 					Fields: nil,
 					Tags: map[string]string{
-						"path":   "/var",
-						"device": "vda1",
-						"fstype": "ext4",
-						"mode":   "rw",
+						tagPath:   pathVar,
+						tagDevice: "vda1",
+						tagFSType: fsExt4,
+						tagMode:   "rw",
 					},
 				},
 			},

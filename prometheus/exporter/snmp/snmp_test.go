@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -39,6 +39,23 @@ import (
 	prometheusModel "github.com/prometheus/common/model"
 )
 
+const (
+	testLabelOther       = "other"
+	testValueLabel       = "label"
+	testLabelHostname    = "hostname"
+	testFactUpdatedAt    = "fact_updated_at"
+	testDeviceType       = "device_type"
+	testTimestamp2021    = "2021-09-28T09:43:04Z"
+	testIP192168         = "192.168.1.2"
+	testDataDir          = "testdata"
+	testNotIfIndex       = "notIfIndex"
+	testDomainExample    = "example.com"
+	testLabelDomain      = "domain"
+	testPowerConnect5448 = "PowerConnect 5448"
+	testAgentVersion     = "21.11.08.123456"
+	testLinuxSNMPDInput  = "linux-snmpd.input"
+)
+
 func fileToMFS(filename string) ([]*dto.MetricFamily, error) {
 	fd, err := os.Open(filename)
 	if err != nil {
@@ -75,137 +92,137 @@ func Test_factFromPoints(t *testing.T) {
 		want         map[string]string
 	}{
 		{
-			name:       "PowerConnect 5448",
+			name:       testPowerConnect5448,
 			metricFile: "powerconnect-5448.metrics",
 			scraperFacts: map[string]string{
-				"fqdn":            "bleemeo-linux01",
-				"agent_version":   "21.11.08.123456",
-				"glouton_version": "21.11.08.123456",
+				factFQDN:          "bleemeo-linux01",
+				"agent_version":   testAgentVersion,
+				"glouton_version": testAgentVersion,
 				"something":       "else",
 			},
 			want: map[string]string{
-				"fqdn":                "bleemeo-switch01",
-				"hostname":            "bleemeo-switch01",
-				"boot_version":        "1.0.0.6",
-				"version":             "1.0.0.35",
-				"serial_number":       "CN1234567890ABCDEFGH",
-				"product_name":        "PowerConnect 5448",
-				"primary_address":     "192.168.1.2",
-				"primary_mac_address": "00:1e:45:67:89:ab",
-				"fact_updated_at":     "2021-09-28T09:43:04Z",
-				"agent_version":       "21.11.08.123456",
-				"glouton_version":     "21.11.08.123456",
-				"scraper_fqdn":        "bleemeo-linux01",
-				"device_type":         deviceTypeSwitch,
+				factFQDN:           "bleemeo-switch01",
+				testLabelHostname:  "bleemeo-switch01",
+				factBootVersion:    "1.0.0.6",
+				factVersion:        "1.0.0.35",
+				factSerialNumber:   "CN1234567890ABCDEFGH",
+				factProductName:    testPowerConnect5448,
+				factPrimaryAddress: testIP192168,
+				factPrimaryMAC:     "00:1e:45:67:89:ab",
+				testFactUpdatedAt:  testTimestamp2021,
+				"agent_version":    testAgentVersion,
+				"glouton_version":  testAgentVersion,
+				"scraper_fqdn":     "bleemeo-linux01",
+				testDeviceType:     deviceTypeSwitch,
 			},
 		},
 		{
 			name:       "Cisco N9000",
 			metricFile: "cisco-n9000.metrics",
 			want: map[string]string{
-				"fqdn":                "sw-nexus.example.com",
-				"domain":              "example.com",
-				"hostname":            "sw-nexus",
-				"boot_version":        "6.1(2)I3(2)",
-				"version":             "6.1(2)I3(2)",
-				"serial_number":       "SAL1234S567",
-				"product_name":        "Cisco NX-OS(tm) n9000",
-				"primary_mac_address": "50:87:01:a0:b0:2c",
-				"fact_updated_at":     "2021-09-28T09:43:04Z",
-				"device_type":         deviceTypeSwitch,
+				factFQDN:          "sw-nexus.example.com",
+				testLabelDomain:   testDomainExample,
+				testLabelHostname: "sw-nexus",
+				factBootVersion:   "6.1(2)I3(2)",
+				factVersion:       "6.1(2)I3(2)",
+				factSerialNumber:  "SAL1234S567",
+				factProductName:   "Cisco NX-OS(tm) n9000",
+				factPrimaryMAC:    "50:87:01:a0:b0:2c",
+				testFactUpdatedAt: testTimestamp2021,
+				testDeviceType:    deviceTypeSwitch,
 			},
 		},
 		{
 			name:       "Cisco C2960",
 			metricFile: "cisco-c2960.metrics",
 			want: map[string]string{
-				"fqdn":                "myname-switch.example.com",
-				"domain":              "example.com",
-				"hostname":            "myname-switch",
-				"boot_version":        "15.0(2)SE6",
-				"version":             "15.0(2)SE6",
-				"serial_number":       "FOC1234Z1Y2",
-				"primary_address":     "192.168.1.2",
-				"product_name":        "Cisco IOS Software, C2960 Software (C2960-LANLITEK9-M)",
-				"primary_mac_address": "34:6f:01:02:a1:00",
-				"fact_updated_at":     "2021-09-28T09:43:04Z",
-				"device_type":         deviceTypeSwitch,
+				factFQDN:           "myname-switch.example.com",
+				testLabelDomain:    testDomainExample,
+				testLabelHostname:  "myname-switch",
+				factBootVersion:    "15.0(2)SE6",
+				factVersion:        "15.0(2)SE6",
+				factSerialNumber:   "FOC1234Z1Y2",
+				factPrimaryAddress: testIP192168,
+				factProductName:    "Cisco IOS Software, C2960 Software (C2960-LANLITEK9-M)",
+				factPrimaryMAC:     "34:6f:01:02:a1:00",
+				testFactUpdatedAt:  testTimestamp2021,
+				testDeviceType:     deviceTypeSwitch,
 			},
 		},
 		{
 			name:       "Cisco ASA",
 			metricFile: "cisco-asa.metrics",
 			want: map[string]string{
-				"fqdn":            "fw.example.com",
-				"domain":          "example.com",
-				"hostname":        "fw",
-				"boot_version":    "2.1(9)8",
-				"version":         "9.4(4)32",
-				"serial_number":   "ABC1234D5EF",
-				"primary_address": "81.123.210.12",
-				"product_name":    "Cisco Adaptive Security Appliance Version 9.4(4)32",
-				"fact_updated_at": "2021-09-28T09:43:04Z",
-				"device_type":     deviceTypeFirewall,
+				factFQDN:           "fw.example.com",
+				testLabelDomain:    testDomainExample,
+				testLabelHostname:  "fw",
+				factBootVersion:    "2.1(9)8",
+				factVersion:        "9.4(4)32",
+				factSerialNumber:   "ABC1234D5EF",
+				factPrimaryAddress: "81.123.210.12",
+				factProductName:    "Cisco Adaptive Security Appliance Version 9.4(4)32",
+				testFactUpdatedAt:  testTimestamp2021,
+				testDeviceType:     deviceTypeFirewall,
 			},
 		},
 		{
 			name:       "hp-printer",
 			metricFile: "hp-printer.metrics",
 			want: map[string]string{
-				"fqdn":            "home-printer1",
-				"hostname":        "home-printer1",
-				"serial_number":   "CNB1A2B34C",
-				"primary_address": "192.168.1.2",
-				"product_name":    "HP Color LaserJet MFP M476dw",
-				"fact_updated_at": "2021-09-28T09:43:04Z",
-				"device_type":     deviceTypePrinter,
+				factFQDN:           "home-printer1",
+				testLabelHostname:  "home-printer1",
+				factSerialNumber:   "CNB1A2B34C",
+				factPrimaryAddress: testIP192168,
+				factProductName:    "HP Color LaserJet MFP M476dw",
+				testFactUpdatedAt:  testTimestamp2021,
+				testDeviceType:     deviceTypePrinter,
 			},
 		},
 		{
 			name:       "VMware ESXi",
 			metricFile: "vmware-esxi-6.5.0.metrics",
 			want: map[string]string{
-				"fqdn":            "localhost.bleemeo.work",
-				"hostname":        "localhost",
-				"domain":          "bleemeo.work",
-				"boot_version":    "2.8",
-				"version":         "6.5.0",
-				"product_name":    "VMware ESXi 6.5.0 build-14320405 VMware, Inc. x86_64",
-				"fact_updated_at": "2021-09-28T09:43:04Z",
-				"device_type":     deviceTypeHypervisor,
+				factFQDN:          "localhost.bleemeo.work",
+				testLabelHostname: "localhost",
+				testLabelDomain:   "bleemeo.work",
+				factBootVersion:   "2.8",
+				factVersion:       "6.5.0",
+				factProductName:   "VMware ESXi 6.5.0 build-14320405 VMware, Inc. x86_64",
+				testFactUpdatedAt: testTimestamp2021,
+				testDeviceType:    deviceTypeHypervisor,
 			},
 		},
 		{
 			name:       "Ubiquiti U6",
 			metricFile: "ubiquiti-u6-lite.metrics",
 			want: map[string]string{
-				"fqdn":            "U6-Lite",
-				"hostname":        "U6-Lite",
-				"version":         "5.60.19.13044",
-				"primary_address": "10.1.2.3",
-				"product_name":    "U6-Lite 5.60.19.13044",
-				"fact_updated_at": "2021-09-28T09:43:04Z",
-				"device_type":     deviceTypeAP,
+				factFQDN:           "U6-Lite",
+				testLabelHostname:  "U6-Lite",
+				factVersion:        "5.60.19.13044",
+				factPrimaryAddress: "10.1.2.3",
+				factProductName:    "U6-Lite 5.60.19.13044",
+				testFactUpdatedAt:  testTimestamp2021,
+				testDeviceType:     deviceTypeAP,
 			},
 		},
 		{
 			name:       "Ubiquiti USW",
 			metricFile: "ubiquiti-usw-24.metrics",
 			want: map[string]string{
-				"fqdn":                "USW-24-PoE",
-				"hostname":            "USW-24-PoE",
-				"primary_address":     "10.1.2.3",
-				"primary_mac_address": "78:45:50:60:70:80",
-				"product_name":        "USW-24-PoE Linux 3.18.24 #0 Thu Aug 30 12:10:54 2018 mips",
-				"fact_updated_at":     "2021-09-28T09:43:04Z",
-				"device_type":         deviceTypeSwitch,
+				factFQDN:           "USW-24-PoE",
+				testLabelHostname:  "USW-24-PoE",
+				factPrimaryAddress: "10.1.2.3",
+				factPrimaryMAC:     "78:45:50:60:70:80",
+				factProductName:    "USW-24-PoE Linux 3.18.24 #0 Thu Aug 30 12:10:54 2018 mips",
+				testFactUpdatedAt:  testTimestamp2021,
+				testDeviceType:     deviceTypeSwitch,
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			body, err := os.ReadFile(filepath.Join("testdata", tt.metricFile))
+			body, err := os.ReadFile(filepath.Join(testDataDir, tt.metricFile))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -216,7 +233,7 @@ func Test_factFromPoints(t *testing.T) {
 			}
 			tgt.now = func() time.Time { return now }
 
-			tmp, err := fileToMFS(filepath.Join("testdata", tt.metricFile))
+			tmp, err := fileToMFS(filepath.Join(testDataDir, tt.metricFile))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -261,7 +278,7 @@ func Test_humanError(t *testing.T) {
 				),
 				StatusCode: 500,
 			},
-			want: "SNMP device didn't respond",
+			want: errMsgDeviceNotRespond,
 		},
 		{
 			name: "exporter connection refused",
@@ -280,7 +297,7 @@ func Test_humanError(t *testing.T) {
 				),
 				StatusCode: 500,
 			}),
-			want: "SNMP device didn't respond",
+			want: errMsgDeviceNotRespond,
 		},
 		{
 			name: "SNMP connection timeout",
@@ -329,19 +346,19 @@ func Test_mfsFilterInterface(t *testing.T) {
 							{
 								Label: []*dto.LabelPair{
 									{Name: new(ifIndexLabelName), Value: new("1")},
-									{Name: new("other"), Value: new("label")},
+									{Name: new(testLabelOther), Value: new(testValueLabel)},
 								},
 							},
 							{
 								Label: []*dto.LabelPair{
 									{Name: new(ifIndexLabelName), Value: new("2")},
-									{Name: new("other"), Value: new("label")},
+									{Name: new(testLabelOther), Value: new(testValueLabel)},
 								},
 							},
 							{
 								Label: []*dto.LabelPair{
 									{Name: new(ifIndexLabelName), Value: new("3")},
-									{Name: new("other"), Value: new("label")},
+									{Name: new(testLabelOther), Value: new(testValueLabel)},
 								},
 							},
 						},
@@ -366,14 +383,14 @@ func Test_mfsFilterInterface(t *testing.T) {
 						Metric: []*dto.Metric{
 							{
 								Label: []*dto.LabelPair{
-									{Name: new("other"), Value: new("label")},
+									{Name: new(testLabelOther), Value: new(testValueLabel)},
 									{Name: new(ifIndexLabelName), Value: new("1")},
 								},
 							},
 							{
 								Label: []*dto.LabelPair{
 									{Name: new(ifIndexLabelName), Value: new("3")},
-									{Name: new("other"), Value: new("label")},
+									{Name: new(testLabelOther), Value: new(testValueLabel)},
 								},
 							},
 						},
@@ -387,13 +404,13 @@ func Test_mfsFilterInterface(t *testing.T) {
 						{
 							Label: []*dto.LabelPair{
 								{Name: new(ifIndexLabelName), Value: new("1")},
-								{Name: new("other"), Value: new("label")},
+								{Name: new(testLabelOther), Value: new(testValueLabel)},
 							},
 						},
 						{
 							Label: []*dto.LabelPair{
 								{Name: new(ifIndexLabelName), Value: new("3")},
-								{Name: new("other"), Value: new("label")},
+								{Name: new(testLabelOther), Value: new(testValueLabel)},
 							},
 						},
 					},
@@ -403,14 +420,14 @@ func Test_mfsFilterInterface(t *testing.T) {
 					Metric: []*dto.Metric{
 						{
 							Label: []*dto.LabelPair{
-								{Name: new("other"), Value: new("label")},
+								{Name: new(testLabelOther), Value: new(testValueLabel)},
 								{Name: new(ifIndexLabelName), Value: new("1")},
 							},
 						},
 						{
 							Label: []*dto.LabelPair{
 								{Name: new(ifIndexLabelName), Value: new("3")},
-								{Name: new("other"), Value: new("label")},
+								{Name: new(testLabelOther), Value: new(testValueLabel)},
 							},
 						},
 					},
@@ -431,19 +448,19 @@ func Test_mfsFilterInterface(t *testing.T) {
 							{
 								Label: []*dto.LabelPair{
 									{Name: new(ifIndexLabelName), Value: new("1")},
-									{Name: new("other"), Value: new("label")},
+									{Name: new(testLabelOther), Value: new(testValueLabel)},
 								},
 							},
 							{
 								Label: []*dto.LabelPair{
 									{Name: new(ifIndexLabelName), Value: new("2")},
-									{Name: new("other"), Value: new("label")},
+									{Name: new(testLabelOther), Value: new(testValueLabel)},
 								},
 							},
 							{
 								Label: []*dto.LabelPair{
 									{Name: new(ifIndexLabelName), Value: new("3")},
-									{Name: new("other"), Value: new("label")},
+									{Name: new(testLabelOther), Value: new(testValueLabel)},
 								},
 							},
 						},
@@ -453,12 +470,12 @@ func Test_mfsFilterInterface(t *testing.T) {
 						Metric: []*dto.Metric{
 							{
 								Label: []*dto.LabelPair{
-									{Name: new("notIfIndex"), Value: new("1")},
+									{Name: new(testNotIfIndex), Value: new("1")},
 								},
 							},
 							{
 								Label: []*dto.LabelPair{
-									{Name: new("notIfIndex"), Value: new("2")},
+									{Name: new(testNotIfIndex), Value: new("2")},
 								},
 							},
 						},
@@ -468,13 +485,13 @@ func Test_mfsFilterInterface(t *testing.T) {
 						Metric: []*dto.Metric{
 							{
 								Label: []*dto.LabelPair{
-									{Name: new("other"), Value: new("label")},
+									{Name: new(testLabelOther), Value: new(testValueLabel)},
 									{Name: new(ifIndexLabelName), Value: new("2")},
 								},
 							},
 							{
 								Label: []*dto.LabelPair{
-									{Name: new("other"), Value: new("label")},
+									{Name: new(testLabelOther), Value: new(testValueLabel)},
 								},
 							},
 						},
@@ -488,19 +505,19 @@ func Test_mfsFilterInterface(t *testing.T) {
 						{
 							Label: []*dto.LabelPair{
 								{Name: new(ifIndexLabelName), Value: new("1")},
-								{Name: new("other"), Value: new("label")},
+								{Name: new(testLabelOther), Value: new(testValueLabel)},
 							},
 						},
 						{
 							Label: []*dto.LabelPair{
 								{Name: new(ifIndexLabelName), Value: new("2")},
-								{Name: new("other"), Value: new("label")},
+								{Name: new(testLabelOther), Value: new(testValueLabel)},
 							},
 						},
 						{
 							Label: []*dto.LabelPair{
 								{Name: new(ifIndexLabelName), Value: new("3")},
-								{Name: new("other"), Value: new("label")},
+								{Name: new(testLabelOther), Value: new(testValueLabel)},
 							},
 						},
 					},
@@ -510,12 +527,12 @@ func Test_mfsFilterInterface(t *testing.T) {
 					Metric: []*dto.Metric{
 						{
 							Label: []*dto.LabelPair{
-								{Name: new("notIfIndex"), Value: new("1")},
+								{Name: new(testNotIfIndex), Value: new("1")},
 							},
 						},
 						{
 							Label: []*dto.LabelPair{
-								{Name: new("notIfIndex"), Value: new("2")},
+								{Name: new(testNotIfIndex), Value: new("2")},
 							},
 						},
 					},
@@ -525,7 +542,7 @@ func Test_mfsFilterInterface(t *testing.T) {
 					Metric: []*dto.Metric{
 						{
 							Label: []*dto.LabelPair{
-								{Name: new("other"), Value: new("label")},
+								{Name: new(testLabelOther), Value: new(testValueLabel)},
 							},
 						},
 					},
@@ -559,7 +576,7 @@ func Test_processMFS(t *testing.T) {
 			state:     registry.GatherState{T0: time.Now()},
 			status:    types.StatusOk,
 			msg:       "",
-			inputFile: "linux-snmpd.input",
+			inputFile: testLinuxSNMPDInput,
 			wantFile:  "linux-snmpd.want",
 		},
 		{
@@ -567,7 +584,7 @@ func Test_processMFS(t *testing.T) {
 			state:     registry.GatherState{T0: time.Now(), NoFilter: true},
 			status:    types.StatusOk,
 			msg:       "",
-			inputFile: "linux-snmpd.input",
+			inputFile: testLinuxSNMPDInput,
 			wantFile:  "linux-snmpd-nofilter.want",
 		},
 	}
@@ -575,12 +592,12 @@ func Test_processMFS(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			input, err := fileToMFS(filepath.Join("testdata", tt.inputFile))
+			input, err := fileToMFS(filepath.Join(testDataDir, tt.inputFile))
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			want, err := fileToMFS(filepath.Join("testdata", tt.wantFile))
+			want, err := fileToMFS(filepath.Join(testDataDir, tt.wantFile))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -608,7 +625,7 @@ func TestNewMock(t *testing.T) {
 			name: "some facts",
 			mockFacts: map[string]string{
 				"my_facts": "test",
-				"fqdn":     "example.com",
+				factFQDN:   testDomainExample,
 			},
 		},
 	}
@@ -643,22 +660,22 @@ func TestTarget_Module(t *testing.T) {
 		{
 			name:       "VMware ESXi 6.5.0",
 			metricFile: "vmware-esxi-6.5.0.metrics",
-			want:       "if_mib",
+			want:       moduleIfMIB,
 		},
 		{
-			name:       "PowerConnect 5448",
+			name:       testPowerConnect5448,
 			metricFile: "powerconnect-5448.metrics",
 			want:       "dell",
 		},
 		{
 			name:       "Cisco N9000",
 			metricFile: "cisco-n9000.metrics",
-			want:       "cisco",
+			want:       moduleCisco,
 		},
 		{
 			name:       "Cisco C2960",
 			metricFile: "cisco-c2960.metrics",
-			want:       "cisco",
+			want:       moduleCisco,
 		},
 		{
 			name:       "hp-printer",
@@ -667,14 +684,14 @@ func TestTarget_Module(t *testing.T) {
 		},
 		{
 			name:       "anything else",
-			metricFile: "linux-snmpd.input",
-			want:       "if_mib",
+			metricFile: testLinuxSNMPDInput,
+			want:       moduleIfMIB,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			body, err := os.ReadFile(filepath.Join("testdata", tt.metricFile))
+			body, err := os.ReadFile(filepath.Join(testDataDir, tt.metricFile))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -706,7 +723,7 @@ func Test_addressSelectPublic(t *testing.T) {
 		{
 			name:  "public-better-than-private",
 			addr1: "1.2.3.4",
-			addr2: "192.168.1.2",
+			addr2: testIP192168,
 			want:  "1.2.3.4",
 		},
 		{
@@ -730,8 +747,8 @@ func Test_addressSelectPublic(t *testing.T) {
 		{
 			name:  "private-better-than-loopback",
 			addr1: "127.0.0.1",
-			addr2: "192.168.1.2",
-			want:  "192.168.1.2",
+			addr2: testIP192168,
+			want:  testIP192168,
 		},
 	}
 	for _, tt := range tests {

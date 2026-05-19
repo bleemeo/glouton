@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -35,6 +35,16 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+const (
+	testCmdCat         = "cat"
+	testPrefixDellR320 = "dell-r320"
+	testStdout         = "test\n"
+
+	testNameHPProliantDL360G7 = "HP Proliant DL360 G7"
+	testNameR720xd            = "R720xd"
+	testNameR720xd2           = "R720xd-2"
+)
+
 var errTestCommandNotImplemented = errors.New("test don't implement this command")
 
 // Test_GatherWithState is the principal test and indirectly test other method.
@@ -52,7 +62,7 @@ var errTestCommandNotImplemented = errors.New("test don't implement this command
 func Test_GatherWithState(t *testing.T) { //nolint:maintidx
 	now := time.Date(2023, 7, 24, 8, 23, 53, 0, time.UTC)
 
-	catFullPath, err := exec.LookPath("cat")
+	catFullPath, err := exec.LookPath(testCmdCat)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +99,7 @@ func Test_GatherWithState(t *testing.T) { //nolint:maintidx
 		},
 		{
 			name:       "R320",
-			testprefix: "dell-r320",
+			testprefix: testPrefixDellR320,
 			wantMethod: methodFreeIPMIDCMI,
 			want: []types.MetricPoint{
 				{
@@ -105,7 +115,7 @@ func Test_GatherWithState(t *testing.T) { //nolint:maintidx
 		},
 		{
 			name:            "R320-use-cat",
-			testprefix:      "dell-r320",
+			testprefix:      testPrefixDellR320,
 			useCatAndRunCmd: true,
 			wantMethod:      methodFreeIPMIDCMI,
 			want: []types.MetricPoint{
@@ -122,7 +132,7 @@ func Test_GatherWithState(t *testing.T) { //nolint:maintidx
 		},
 		{
 			name:       "R320-use-cat-search-path",
-			testprefix: "dell-r320",
+			testprefix: testPrefixDellR320,
 			config: config.IPMI{
 				BinarySearchPath: folderWithCat,
 			},
@@ -142,7 +152,7 @@ func Test_GatherWithState(t *testing.T) { //nolint:maintidx
 		},
 		{
 			name:            "R320-ipmitool",
-			testprefix:      "dell-r320",
+			testprefix:      testPrefixDellR320,
 			wantMethod:      methodIPMITool,
 			disableFreeIPMI: true,
 			want: []types.MetricPoint{
@@ -159,7 +169,7 @@ func Test_GatherWithState(t *testing.T) { //nolint:maintidx
 		},
 		{
 			name:                "R320-no-dcmi",
-			testprefix:          "dell-r320",
+			testprefix:          testPrefixDellR320,
 			wantMethod:          methodFreeIPMISensors,
 			disableFreeIPMIDCMI: true,
 			disableIPMITool:     true,
@@ -192,7 +202,7 @@ func Test_GatherWithState(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:       "R720xd",
+			name:       testNameR720xd,
 			testprefix: "dell-r720xd",
 			wantMethod: methodFreeIPMIDCMI,
 			want: []types.MetricPoint{
@@ -208,7 +218,7 @@ func Test_GatherWithState(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:       "R720xd-2",
+			name:       testNameR720xd2,
 			testprefix: "dell-r720xd-2",
 			wantMethod: methodFreeIPMIDCMIEnhanced,
 			want: []types.MetricPoint{
@@ -241,7 +251,7 @@ func Test_GatherWithState(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:       "HP Proliant DL360 G7",
+			name:       testNameHPProliantDL360G7,
 			testprefix: "hp-dl360-g7",
 			wantMethod: methodFreeIPMIDCMIEnhanced,
 			want: []types.MetricPoint{
@@ -257,7 +267,7 @@ func Test_GatherWithState(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:                "HP Proliant DL360 G7",
+			name:                testNameHPProliantDL360G7,
 			testprefix:          "hp-dl360-g7",
 			disableFreeIPMIDCMI: true,
 			wantMethod:          methodFreeIPMISensors,
@@ -321,10 +331,10 @@ func Test_GatherWithState(t *testing.T) { //nolint:maintidx
 
 			var (
 				runCounts              int
-				cmdFreeIMPSensors      = []string{"cat", filepath.Join("testdata", tt.testprefix+"-ipmi-sensors.txt")}
-				cmdFreeIMPDCMI         = []string{"cat", filepath.Join("testdata", tt.testprefix+"-ipmi-dcmi.txt")}
-				cmdFreeIMPDCMIEnhanced = []string{"cat", filepath.Join("testdata", tt.testprefix+"-ipmi-dcmi-enhanced.txt")}
-				cmdIPMITool            = []string{"cat", filepath.Join("testdata", tt.testprefix+"-ipmitool-dcmi.txt")}
+				cmdFreeIMPSensors      = []string{testCmdCat, filepath.Join("testdata", tt.testprefix+"-ipmi-sensors.txt")}
+				cmdFreeIMPDCMI         = []string{testCmdCat, filepath.Join("testdata", tt.testprefix+"-ipmi-dcmi.txt")}
+				cmdFreeIMPDCMIEnhanced = []string{testCmdCat, filepath.Join("testdata", tt.testprefix+"-ipmi-dcmi-enhanced.txt")}
+				cmdIPMITool            = []string{testCmdCat, filepath.Join("testdata", tt.testprefix+"-ipmitool-dcmi.txt")}
 				cmdDoesNotExists       = []string{"this-command-does-not-exists"}
 			)
 
@@ -459,24 +469,24 @@ func Test_runCmd(t *testing.T) {
 		{
 			name:       "ok-with-output",
 			args:       []string{"sh", "-c", "echo test; true"},
-			wantOutput: "test\n",
+			wantOutput: testStdout,
 		},
 		{
 			name:       "fail-empty-output",
 			args:       []string{"sh", "-c", "echo test; false"},
-			wantOutput: "test\n",
+			wantOutput: testStdout,
 			wantErr:    true,
 		},
 		{
 			name:       "timeout-with-output",
 			args:       []string{"sh", "-c", "echo test; sleep 5; echo test2"},
 			ctxTimeout: time.Second,
-			wantOutput: "test\n",
+			wantOutput: testStdout,
 			wantErr:    true,
 		},
 		{
-			name:       "cat",
-			args:       []string{"cat", dataFile},
+			name:       testCmdCat,
+			args:       []string{testCmdCat, dataFile},
 			wantOutput: string(testdataContent),
 		},
 		{

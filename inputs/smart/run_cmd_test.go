@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -34,6 +34,11 @@ import (
 	"github.com/influxdata/telegraf/config"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/smart"
+)
+
+const (
+	argScan      = "--scan"
+	testDevNvme0 = "/dev/nvme0"
 )
 
 var testUsingGlobalRunCmd sync.Mutex //nolint:gochecknoglobals
@@ -101,11 +106,11 @@ Temperature Sensor 8:               36 Celsius
 
 		callsArgs = append(callsArgs, args)
 
-		if args[0] == "--scan" {
+		if args[0] == argScan {
 			return []byte("/dev/nvme0 -d nvme # /dev/nvme0, NVMe device"), nil
 		}
 
-		if args[len(args)-1] == "/dev/nvme0" {
+		if args[len(args)-1] == testDevNvme0 {
 			return []byte(fakeResponse), nil
 		}
 
@@ -139,9 +144,9 @@ Temperature Sensor 8:               36 Celsius
 
 	// The exact option doesn't really matter. Only that we get called.
 	expectedCalls := [][]string{
-		{"--scan"},
-		{"--scan", "--device=nvme"},
-		{"--info", "--health", "--attributes", "--tolerance=verypermissive", "-n", "standby", "--format=brief", "/dev/nvme0"},
+		{argScan},
+		{argScan, "--device=nvme"},
+		{"--info", "--health", "--attributes", "--tolerance=verypermissive", "-n", "standby", "--format=brief", testDevNvme0},
 	}
 
 	if diff := cmp.Diff(expectedCalls, callsArgs); diff != "" {
@@ -405,8 +410,8 @@ func TestRunCmdError(t *testing.T) {
 			}
 			wrc.cond = sync.NewCond(&wrc.l)
 
-			// Giving "--scan" as first arg will cause w.addStats() to return immediately.
-			_, err := wrc.runCmd(0, false, "not used", "--scan")
+			// Giving argScan as first arg will cause w.addStats() to return immediately.
+			_, err := wrc.runCmd(0, false, "not used", argScan)
 			if err == nil {
 				if tc.expectedErrStr != "" {
 					t.Fatalf("Expected error %q, got none", tc.expectedErrStr)
@@ -430,7 +435,7 @@ func TestFindDeviceInArgs(t *testing.T) {
 	)
 
 	runCmd := runnerFunction(func(_ context.Context, _ gloutonexec.Option, _ string, args ...string) ([]byte, error) {
-		if args[0] == "--scan" {
+		if args[0] == argScan {
 			return []byte("/dev/nvme0 -d nvme # /dev/nvme0, NVMe device"), nil
 		}
 

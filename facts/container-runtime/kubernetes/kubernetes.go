@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -53,6 +53,8 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
+
+const apiPathAPIs = "/apis"
 
 // Kubernetes wraps a container runtime to add information from PODs.
 // It will add annotation, IP detection, flag "StoppedAndRestarted".
@@ -1112,25 +1114,25 @@ func makeClients(config *rest.Config) (coreClient, discoClient, appsClient, extC
 		{
 			groupVersion:  &discoveryv1.SchemeGroupVersion,
 			addToSchemeFn: discoveryv1.AddToScheme,
-			apiPath:       "/apis",
+			apiPath:       apiPathAPIs,
 			result:        &discoClient,
 		},
 		{
 			groupVersion:  &appsv1.SchemeGroupVersion,
 			addToSchemeFn: appsv1.AddToScheme,
-			apiPath:       "/apis",
+			apiPath:       apiPathAPIs,
 			result:        &appsClient,
 		},
 		{
 			groupVersion:  &apiextv1.SchemeGroupVersion,
 			addToSchemeFn: apiextv1.AddToScheme,
-			apiPath:       "/apis",
+			apiPath:       apiPathAPIs,
 			result:        &extClient,
 		},
 		{
 			groupVersion:  &admv1.SchemeGroupVersion,
 			addToSchemeFn: admv1.AddToScheme,
-			apiPath:       "/apis",
+			apiPath:       apiPathAPIs,
 			result:        &admClient,
 		},
 	}
@@ -1206,7 +1208,7 @@ func (cl *realClient) switchToLocalAPI(ctx context.Context, localNode string) (b
 
 	err := cl.discoClient.
 		Get().
-		Namespace("default").
+		Namespace(defaultNamespace).
 		Resource("endpointslices").
 		Name("kubernetes").
 		Do(ctx).
@@ -1254,7 +1256,7 @@ func (cl *realClient) switchToLocalAPI(ctx context.Context, localNode string) (b
 
 				err = discoClient.
 					Get().
-					Namespace("default").
+					Namespace(defaultNamespace).
 					Resource("endpointslices").
 					Do(ctx).
 					Error()

@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -43,6 +43,16 @@ const (
 	mariadbDefaultUser          = "root"
 	mysqlDefaultUser            = "root"
 	gloutonContainerLabelPrefix = "glouton."
+
+	interpreterJava   = "java"
+	interpreterErlang = "erlang"
+	interpreterPython = "python"
+
+	mariadbdProcess         = "mariadbd"
+	elasticsearchMainClass  = "org.elasticsearch.bootstrap.Elasticsearch"
+	bitbucketServerLauncher = "com.atlassian.bitbucket.internal.launcher.BitbucketServerLauncher"
+
+	processErl = "erl"
 )
 
 type Option struct {
@@ -138,39 +148,39 @@ func (dd *DynamicDiscovery) ProcessServiceInfo(cmdLine []string, pid int, create
 //nolint:gochecknoglobals
 var (
 	knownProcesses = map[string]ServiceName{
-		"apache2":       ApacheService,
-		"asterisk":      AsteriskService,
-		"dovecot":       DovecotService,
-		"exim4":         EximService,
-		"exim":          EximService,
-		"freeradius":    FreeradiusService,
-		"haproxy":       HAProxyService,
-		"httpd":         ApacheService,
-		"influxd":       InfluxDBService,
-		"libvirtd":      LibvirtService,
-		"mariadbd":      MariaDBService,
-		"master":        PostfixService,
-		"memcached":     MemcachedService,
-		"mongod":        MongoDBService,
-		"mosquitto":     MosquittoService, //nolint:misspell
-		"mysqld":        MySQLService,
-		"named":         BindService,
-		"nats-server":   NatsService,
-		"nfsiod":        NfsService,
-		"nginx":         NginxService,
-		"ntpd":          NTPService,
-		"openvpn":       OpenVPNService,
-		"php-fpm":       PHPFPMService,
-		"postgres":      PostgreSQLService,
-		"redis-server":  RedisService,
-		"slapd":         OpenLDAPService,
-		"squid3":        SquidService,
-		"squid":         SquidService,
-		"upsd":          UPSDService,
-		"uwsgi":         UWSGIService,
-		"uWSGI":         UWSGIService,
-		"valkey-server": ValkeyService,
-		"varnishd":      VarnishService,
+		"apache2":                ApacheService,
+		string(AsteriskService):  AsteriskService,
+		"dovecot":                DovecotService,
+		"exim4":                  EximService,
+		"exim":                   EximService,
+		"freeradius":             FreeradiusService,
+		"haproxy":                HAProxyService,
+		"httpd":                  ApacheService,
+		"influxd":                InfluxDBService,
+		"libvirtd":               LibvirtService,
+		mariadbdProcess:          MariaDBService,
+		"master":                 PostfixService,
+		"memcached":              MemcachedService,
+		"mongod":                 MongoDBService,
+		string(MosquittoService): MosquittoService,
+		"mysqld":                 MySQLService,
+		"named":                  BindService,
+		"nats-server":            NatsService,
+		"nfsiod":                 NfsService,
+		"nginx":                  NginxService,
+		"ntpd":                   NTPService,
+		string(OpenVPNService):   OpenVPNService,
+		"php-fpm":                PHPFPMService,
+		"postgres":               PostgreSQLService,
+		"redis-server":           RedisService,
+		"slapd":                  OpenLDAPService,
+		"squid3":                 SquidService,
+		string(SquidService):     SquidService,
+		string(UPSDService):      UPSDService,
+		"uwsgi":                  UWSGIService,
+		"uWSGI":                  UWSGIService,
+		"valkey-server":          ValkeyService,
+		"varnishd":               VarnishService,
 	}
 	knownInterpretedProcess = []struct {
 		CmdLineMustContains []string
@@ -180,67 +190,67 @@ var (
 		{
 			CmdLineMustContains: []string{"org.apache.cassandra.service.CassandraDaemon"},
 			ServiceName:         CassandraService,
-			Interpreter:         "java",
+			Interpreter:         interpreterJava,
 		},
 		{
-			CmdLineMustContains: []string{"org.elasticsearch.bootstrap.Elasticsearch"},
+			CmdLineMustContains: []string{elasticsearchMainClass},
 			ServiceName:         ElasticSearchService,
-			Interpreter:         "java",
+			Interpreter:         interpreterJava,
 		},
 		{
 			CmdLineMustContains: []string{"org.apache.zookeeper.server.quorum.QuorumPeerMain"},
 			ServiceName:         ZookeeperService,
-			Interpreter:         "java",
+			Interpreter:         interpreterJava,
 		},
 		{
 			CmdLineMustContains: []string{"-s rabbit"},
 			ServiceName:         RabbitMQService,
-			Interpreter:         "erlang",
+			Interpreter:         interpreterErlang,
 		},
 		{
 			CmdLineMustContains: []string{"-s ejabberd"},
 			ServiceName:         EjabberService,
-			Interpreter:         "erlang",
+			Interpreter:         interpreterErlang,
 		},
 		{
 			CmdLineMustContains: []string{"com.atlassian.stash.internal.catalina.startup.Bootstrap"},
 			ServiceName:         BitBucketService,
-			Interpreter:         "java",
+			Interpreter:         interpreterJava,
 		},
 		{
-			CmdLineMustContains: []string{"com.atlassian.bitbucket.internal.launcher.BitbucketServerLauncher"},
+			CmdLineMustContains: []string{bitbucketServerLauncher},
 			ServiceName:         BitBucketService,
-			Interpreter:         "java",
+			Interpreter:         interpreterJava,
 		},
 		{
 			CmdLineMustContains: []string{"jenkins.war"},
 			ServiceName:         JenkinsService,
-			Interpreter:         "java",
+			Interpreter:         interpreterJava,
 		},
 		{
 			CmdLineMustContains: []string{"org.apache.catalina.startup.Bootstrap", "jira"},
 			ServiceName:         JIRAService,
-			Interpreter:         "java",
+			Interpreter:         interpreterJava,
 		},
 		{
 			CmdLineMustContains: []string{"org.apache.catalina.startup.Bootstrap", "confluence"},
 			ServiceName:         ConfluenceService,
-			Interpreter:         "java",
+			Interpreter:         interpreterJava,
 		},
 		{
 			CmdLineMustContains: []string{"kafka.Kafka", "server.properties"},
 			ServiceName:         KafkaService,
-			Interpreter:         "java",
+			Interpreter:         interpreterJava,
 		},
 		{
 			CmdLineMustContains: []string{"salt-master"},
 			ServiceName:         SaltMasterService,
-			Interpreter:         "python",
+			Interpreter:         interpreterPython,
 		},
 		{
 			CmdLineMustContains: []string{"fail2ban-server"},
 			ServiceName:         Fail2banService,
-			Interpreter:         "python",
+			Interpreter:         interpreterPython,
 		},
 	}
 )
@@ -445,7 +455,7 @@ func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discovery
 	newListenAddresses := service.ListenAddresses[:0]
 
 	for _, a := range service.ListenAddresses {
-		if a.Network() == "unix" {
+		if a.Network() == unixProtocol {
 			newListenAddresses = append(newListenAddresses, a)
 
 			continue
@@ -685,15 +695,15 @@ func serviceByInterpreter(name string, cmdLine []string) (serviceName ServiceNam
 	// For now, special case for java, erlang or python process.
 	// Need a more general way to manage those case. Every interpreter/VM
 	// language are affected.
-	if name == "java" || strings.HasPrefix(name, "python") || name == "erl" || strings.HasPrefix(name, "beam") {
+	if name == interpreterJava || strings.HasPrefix(name, interpreterPython) || name == processErl || strings.HasPrefix(name, "beam") {
 		for _, candidate := range knownInterpretedProcess {
 			switch candidate.Interpreter {
-			case "erlang":
-				if name != "erl" && !strings.HasPrefix(name, "beam") {
+			case interpreterErlang:
+				if name != processErl && !strings.HasPrefix(name, "beam") {
 					continue
 				}
-			case "python":
-				if !strings.HasPrefix(name, "python") {
+			case interpreterPython:
+				if !strings.HasPrefix(name, interpreterPython) {
 					continue
 				}
 			default:

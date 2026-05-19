@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -26,6 +26,14 @@ import (
 	"github.com/bleemeo/glouton/types"
 
 	dto "github.com/prometheus/client_model/go"
+)
+
+const (
+	metricSmartDeviceHealthStatus = "smart_device_health_status"
+	statusDescSMARTPassed         = "SMART tests passed"
+	statusDescDiskDegraded        = "Disk is degraded"
+	statusDescDiskOfflineUnknown  = "Disk is offline for unknown reason"
+	statusDescDiskHadError        = "Disk had error"
 )
 
 var errUnparsableStatus = errors.New("can't parse status")
@@ -106,7 +114,7 @@ func buildSmartMetric(driveModel map[string]string, driveWorstStatus map[string]
 		statusInt := driveWorstStatus[name]
 
 		lbls := map[string]string{
-			types.LabelName:   "smart_device_health_status",
+			types.LabelName:   metricSmartDeviceHealthStatus,
 			types.LabelDevice: name,
 		}
 
@@ -119,14 +127,14 @@ func buildSmartMetric(driveModel map[string]string, driveWorstStatus map[string]
 		switch statusInt {
 		case statusOk:
 			status.CurrentStatus = types.StatusOk
-			status.StatusDescription = "SMART tests passed"
+			status.StatusDescription = statusDescSMARTPassed
 		case statusStressed:
 			// We assume "stressed" means high IO, which is covered by io_utilization
 			status.CurrentStatus = types.StatusOk
-			status.StatusDescription = "SMART tests passed"
+			status.StatusDescription = statusDescSMARTPassed
 		case statusDegraded:
 			status.CurrentStatus = types.StatusWarning
-			status.StatusDescription = "Disk is degraded"
+			status.StatusDescription = statusDescDiskDegraded
 		case statusPredFail:
 			status.CurrentStatus = types.StatusWarning
 			status.StatusDescription = "SMART report predicted failure in the (near) future"
@@ -141,7 +149,7 @@ func buildSmartMetric(driveModel map[string]string, driveWorstStatus map[string]
 			status.StatusDescription = "Disk is offline for servicing"
 		case statusUnknown:
 			status.CurrentStatus = types.StatusCritical
-			status.StatusDescription = "Disk is offline for unknown reason"
+			status.StatusDescription = statusDescDiskOfflineUnknown
 		case statusLostComm:
 			status.CurrentStatus = types.StatusCritical
 			status.StatusDescription = "Disk is offline due to lost communication with it"
@@ -153,7 +161,7 @@ func buildSmartMetric(driveModel map[string]string, driveWorstStatus map[string]
 			status.StatusDescription = "Disk is offline due to unable to contact it"
 		case statusError:
 			status.CurrentStatus = types.StatusCritical
-			status.StatusDescription = "Disk had error"
+			status.StatusDescription = statusDescDiskHadError
 		}
 
 		if status.CurrentStatus != types.StatusUnset {

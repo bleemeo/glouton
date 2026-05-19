@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -25,6 +25,13 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql/parser"
+)
+
+const (
+	testDiskUsedPerc = "disk_used_perc"
+	testUptime       = "uptime"
+	testItem         = "item"
+	testMountHome    = "/home"
 )
 
 func TestMatchersFromQuery(t *testing.T) {
@@ -74,7 +81,7 @@ func TestMatchersFromQuery(t *testing.T) {
 					&labels.Matcher{
 						Type:  labels.MatchEqual,
 						Name:  types.LabelName,
-						Value: "disk_used_perc",
+						Value: testDiskUsedPerc,
 					},
 				},
 			},
@@ -113,7 +120,7 @@ func TestMatchersFromQuery(t *testing.T) {
 					&labels.Matcher{
 						Type:  labels.MatchEqual,
 						Name:  types.LabelName,
-						Value: "uptime",
+						Value: testUptime,
 					},
 				},
 			},
@@ -126,7 +133,7 @@ func TestMatchersFromQuery(t *testing.T) {
 					&labels.Matcher{
 						Type:  labels.MatchEqual,
 						Name:  types.LabelName,
-						Value: "uptime",
+						Value: testUptime,
 					},
 				},
 			},
@@ -139,7 +146,7 @@ func TestMatchersFromQuery(t *testing.T) {
 					&labels.Matcher{
 						Type:  labels.MatchEqual,
 						Name:  types.LabelName,
-						Value: "uptime",
+						Value: testUptime,
 					},
 				},
 			},
@@ -151,13 +158,13 @@ func TestMatchersFromQuery(t *testing.T) {
 				{
 					&labels.Matcher{
 						Type:  labels.MatchEqual,
-						Name:  "item",
-						Value: "/home",
+						Name:  testItem,
+						Value: testMountHome,
 					},
 					&labels.Matcher{
 						Type:  labels.MatchEqual,
 						Name:  types.LabelName,
-						Value: "disk_used_perc",
+						Value: testDiskUsedPerc,
 					},
 				},
 			},
@@ -169,13 +176,13 @@ func TestMatchersFromQuery(t *testing.T) {
 				{
 					&labels.Matcher{
 						Type:  labels.MatchNotEqual,
-						Name:  "item",
-						Value: "/home",
+						Name:  testItem,
+						Value: testMountHome,
 					},
 					&labels.Matcher{
 						Type:  labels.MatchEqual,
 						Name:  types.LabelName,
-						Value: "disk_used_perc",
+						Value: testDiskUsedPerc,
 					},
 				},
 			},
@@ -187,13 +194,13 @@ func TestMatchersFromQuery(t *testing.T) {
 				{
 					&labels.Matcher{
 						Type:  labels.MatchRegexp,
-						Name:  "item",
+						Name:  testItem,
 						Value: "(/home|/)",
 					},
 					&labels.Matcher{
 						Type:  labels.MatchEqual,
 						Name:  types.LabelName,
-						Value: "disk_used_perc",
+						Value: testDiskUsedPerc,
 					},
 				},
 			},
@@ -235,13 +242,13 @@ func TestMatchersFromQuery(t *testing.T) {
 					},
 					&labels.Matcher{
 						Type:  labels.MatchNotRegexp,
-						Name:  "item",
+						Name:  testItem,
 						Value: "ok?",
 					},
 					&labels.Matcher{
 						Type:  labels.MatchEqual,
 						Name:  types.LabelName,
-						Value: "uptime",
+						Value: testUptime,
 					},
 				},
 				{

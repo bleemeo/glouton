@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -54,7 +54,7 @@ type ReloadState interface {
 	Bleemeo() bleemeoTypes.BleemeoReloadState
 	MQTT() types.MQTTReloadState
 	LocalStore() *tsdb.Store
-	SetLocalStore(s *tsdb.Store)
+	SetLocalStore(store *tsdb.Store)
 	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error
 	WatcherError() error
 	Close()

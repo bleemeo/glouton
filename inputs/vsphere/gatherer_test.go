@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -32,6 +32,33 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
+)
+
+// Test label value constants for ESXI tests.
+const (
+	testMetaVSphereAddr = "127.0.0.1:xxxxx"
+	testDCHaDatacenter  = "ha-datacenter"
+	testHostESXI        = "esxi.test"
+	testMOIDHaHost      = "ha-host"
+	testMOIDVM10        = "10"
+	testVMAlp1          = "alp1"
+)
+
+// Test label value constants for vcsim/vCenter tests.
+const (
+	testDCDC0         = "DC0"
+	testClusterDC0C0  = "DC0_C0"
+	testHostDC0C0H0   = "DC0_C0_H0"
+	testVMDC0C0RP0VM0 = "DC0_C0_RP0_VM0"
+	testMOIDDomainC16 = "domain-c16"
+	testMOIDHost23    = "host-23"
+	testMOIDVM28      = "vm-28"
+)
+
+// Test retained metric constants.
+const (
+	testFieldUsageMHzAvg = "usagemhz_average"
+	testFieldUsageAvg    = "usage_average"
 )
 
 func setupGathering(t *testing.T, dirName string) (mfs []*dto.MetricFamily, deferFn func()) {
@@ -129,39 +156,39 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("10")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
-						{Name: new("vmname"), Value: new("alp1")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM10)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
+						{Name: new(tagVMName), Value: new(testVMAlp1)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("10")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
-						{Name: new("vmname"), Value: new("alp1")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM10)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
+						{Name: new(tagVMName), Value: new(testVMAlp1)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("ha-host")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHaHost)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.0)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("ha-host")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHaHost)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
@@ -174,19 +201,19 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("ha-host")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHaHost)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.0)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("ha-host")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHaHost)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
@@ -199,25 +226,25 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("10")},
-						{Name: new("clustername"), Value: new("esxi.test")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM10)},
+						{Name: new(tagClusterName), Value: new(testHostESXI)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
 						{Name: new("item"), Value: new("/")},
-						{Name: new("vmname"), Value: new("alp1")},
+						{Name: new(tagVMName), Value: new(testVMAlp1)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("10")},
-						{Name: new("clustername"), Value: new("esxi.test")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM10)},
+						{Name: new(tagClusterName), Value: new(testHostESXI)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
 						{Name: new("item"), Value: new("/boot")},
-						{Name: new("vmname"), Value: new("alp1")},
+						{Name: new(tagVMName), Value: new(testVMAlp1)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
@@ -230,23 +257,23 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("10")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM10)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
 						{Name: new("disk"), Value: new("*")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
-						{Name: new("vmname"), Value: new("alp1")},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
+						{Name: new(tagVMName), Value: new(testVMAlp1)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("10")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM10)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
 						{Name: new("disk"), Value: new("*")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
-						{Name: new("vmname"), Value: new("alp1")},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
+						{Name: new(tagVMName), Value: new(testVMAlp1)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
@@ -259,23 +286,23 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("10")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM10)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
 						{Name: new("disk"), Value: new("*")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
-						{Name: new("vmname"), Value: new("alp1")},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
+						{Name: new(tagVMName), Value: new(testVMAlp1)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("10")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM10)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
 						{Name: new("disk"), Value: new("*")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
-						{Name: new("vmname"), Value: new("alp1")},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
+						{Name: new(tagVMName), Value: new(testVMAlp1)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
@@ -288,19 +315,19 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("ha-host")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHaHost)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("ha-host")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHaHost)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
@@ -313,39 +340,39 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("10")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
-						{Name: new("vmname"), Value: new("alp1")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM10)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
+						{Name: new(tagVMName), Value: new(testVMAlp1)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("10")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
-						{Name: new("vmname"), Value: new("alp1")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM10)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
+						{Name: new(tagVMName), Value: new(testVMAlp1)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("ha-host")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHaHost)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("ha-host")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHaHost)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
@@ -358,42 +385,42 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("10")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM10)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
 						{Name: new("interface"), Value: new("*")},
-						{Name: new("vmname"), Value: new("alp1")},
+						{Name: new(tagVMName), Value: new(testVMAlp1)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("10")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM10)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
 						{Name: new("interface"), Value: new("*")},
-						{Name: new("vmname"), Value: new("alp1")},
+						{Name: new(tagVMName), Value: new(testVMAlp1)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("ha-host")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHaHost)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
 						{Name: new("interface"), Value: new("*")},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("ha-host")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHaHost)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
 						{Name: new("interface"), Value: new("*")},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
@@ -407,42 +434,42 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("10")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM10)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
 						{Name: new("interface"), Value: new("*")},
-						{Name: new("vmname"), Value: new("alp1")},
+						{Name: new(tagVMName), Value: new(testVMAlp1)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("10")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM10)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
 						{Name: new("interface"), Value: new("*")},
-						{Name: new("vmname"), Value: new("alp1")},
+						{Name: new(tagVMName), Value: new(testVMAlp1)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("ha-host")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHaHost)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
 						{Name: new("interface"), Value: new("*")},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("ha-host")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHaHost)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
 						{Name: new("interface"), Value: new("*")},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
@@ -456,11 +483,11 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("ha-host")},
-						{Name: new("clustername"), Value: new("esxi.test")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHaHost)},
+						{Name: new(tagClusterName), Value: new(testHostESXI)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
@@ -473,11 +500,11 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("ha-host")},
-						{Name: new("clustername"), Value: new("esxi.test")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHaHost)},
+						{Name: new(tagClusterName), Value: new(testHostESXI)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
@@ -490,21 +517,21 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("10")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
-						{Name: new("vmname"), Value: new("alp1")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM10)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
+						{Name: new(tagVMName), Value: new(testVMAlp1)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("10")},
-						{Name: new("dcname"), Value: new("ha-datacenter")},
-						{Name: new("esxhostname"), Value: new("esxi.test")},
-						{Name: new("vmname"), Value: new("alp1")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM10)},
+						{Name: new(tagDCName), Value: new(testDCHaDatacenter)},
+						{Name: new(tagESXHostName), Value: new(testHostESXI)},
+						{Name: new(tagVMName), Value: new(testVMAlp1)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
@@ -538,61 +565,61 @@ func TestGatheringVcsim(t *testing.T) { //nolint:maintidx
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("domain-c16")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDDomainC16)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("domain-c16")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDDomainC16)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("host-23")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHost23)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("host-23")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHost23)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("vm-28")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
-						{Name: new("vmname"), Value: new("DC0_C0_RP0_VM0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM28)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
+						{Name: new(tagVMName), Value: new(testVMDC0C0RP0VM0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.0)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("vm-28")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
-						{Name: new("vmname"), Value: new("DC0_C0_RP0_VM0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM28)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
+						{Name: new(tagVMName), Value: new(testVMDC0C0RP0VM0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
@@ -605,21 +632,21 @@ func TestGatheringVcsim(t *testing.T) { //nolint:maintidx
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("host-23")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHost23)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("host-23")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHost23)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
@@ -632,10 +659,10 @@ func TestGatheringVcsim(t *testing.T) { //nolint:maintidx
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("domain-c16")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDDomainC16)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
@@ -648,10 +675,10 @@ func TestGatheringVcsim(t *testing.T) { //nolint:maintidx
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("domain-c16")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDDomainC16)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
@@ -664,25 +691,25 @@ func TestGatheringVcsim(t *testing.T) { //nolint:maintidx
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("vm-28")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM28)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
 						{Name: new("disk"), Value: new("*")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
-						{Name: new("vmname"), Value: new("DC0_C0_RP0_VM0")},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
+						{Name: new(tagVMName), Value: new(testVMDC0C0RP0VM0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("vm-28")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM28)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
 						{Name: new("disk"), Value: new("*")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
-						{Name: new("vmname"), Value: new("DC0_C0_RP0_VM0")},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
+						{Name: new(tagVMName), Value: new(testVMDC0C0RP0VM0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
@@ -695,25 +722,25 @@ func TestGatheringVcsim(t *testing.T) { //nolint:maintidx
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("vm-28")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM28)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
 						{Name: new("disk"), Value: new("*")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
-						{Name: new("vmname"), Value: new("DC0_C0_RP0_VM0")},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
+						{Name: new(tagVMName), Value: new(testVMDC0C0RP0VM0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("vm-28")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM28)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
 						{Name: new("disk"), Value: new("*")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
-						{Name: new("vmname"), Value: new("DC0_C0_RP0_VM0")},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
+						{Name: new(tagVMName), Value: new(testVMDC0C0RP0VM0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
@@ -726,21 +753,21 @@ func TestGatheringVcsim(t *testing.T) { //nolint:maintidx
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("host-23")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHost23)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("host-23")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHost23)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
@@ -753,61 +780,61 @@ func TestGatheringVcsim(t *testing.T) { //nolint:maintidx
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("domain-c16")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDDomainC16)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("domain-c16")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDDomainC16)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("host-23")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHost23)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("host-23")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHost23)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("vm-28")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
-						{Name: new("vmname"), Value: new("DC0_C0_RP0_VM0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM28)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
+						{Name: new(tagVMName), Value: new(testVMDC0C0RP0VM0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("vm-28")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
-						{Name: new("vmname"), Value: new("DC0_C0_RP0_VM0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM28)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
+						{Name: new(tagVMName), Value: new(testVMDC0C0RP0VM0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
@@ -820,47 +847,47 @@ func TestGatheringVcsim(t *testing.T) { //nolint:maintidx
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("host-23")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHost23)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
 						{Name: new("interface"), Value: new("*")},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("host-23")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHost23)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
 						{Name: new("interface"), Value: new("*")},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("vm-28")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM28)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
 						{Name: new("interface"), Value: new("*")},
-						{Name: new("vmname"), Value: new("DC0_C0_RP0_VM0")},
+						{Name: new(tagVMName), Value: new(testVMDC0C0RP0VM0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("vm-28")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM28)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
 						{Name: new("interface"), Value: new("*")},
-						{Name: new("vmname"), Value: new("DC0_C0_RP0_VM0")},
+						{Name: new(tagVMName), Value: new(testVMDC0C0RP0VM0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
@@ -873,47 +900,47 @@ func TestGatheringVcsim(t *testing.T) { //nolint:maintidx
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("host-23")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHost23)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
 						{Name: new("interface"), Value: new("*")},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("host-23")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHost23)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
 						{Name: new("interface"), Value: new("*")},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("vm-28")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM28)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
 						{Name: new("interface"), Value: new("*")},
-						{Name: new("vmname"), Value: new("DC0_C0_RP0_VM0")},
+						{Name: new(tagVMName), Value: new(testVMDC0C0RP0VM0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("vm-28")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM28)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
 						{Name: new("interface"), Value: new("*")},
-						{Name: new("vmname"), Value: new("DC0_C0_RP0_VM0")},
+						{Name: new(tagVMName), Value: new(testVMDC0C0RP0VM0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
@@ -926,21 +953,21 @@ func TestGatheringVcsim(t *testing.T) { //nolint:maintidx
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("host-23")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHost23)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("host-23")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHost23)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
@@ -953,23 +980,23 @@ func TestGatheringVcsim(t *testing.T) { //nolint:maintidx
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("vm-28")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
-						{Name: new("vmname"), Value: new("DC0_C0_RP0_VM0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM28)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
+						{Name: new(tagVMName), Value: new(testVMDC0C0RP0VM0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("vm-28")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
-						{Name: new("vmname"), Value: new("DC0_C0_RP0_VM0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM28)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
+						{Name: new(tagVMName), Value: new(testVMDC0C0RP0VM0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
@@ -982,11 +1009,11 @@ func TestGatheringVcsim(t *testing.T) { //nolint:maintidx
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("host-23")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHost23)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
@@ -999,11 +1026,11 @@ func TestGatheringVcsim(t *testing.T) { //nolint:maintidx
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("host-23")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDHost23)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
@@ -1016,23 +1043,23 @@ func TestGatheringVcsim(t *testing.T) { //nolint:maintidx
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("vm-28")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
-						{Name: new("vmname"), Value: new("DC0_C0_RP0_VM0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM28)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
+						{Name: new(tagVMName), Value: new(testVMDC0C0RP0VM0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
 				{
 					Label: []*dto.LabelPair{
-						{Name: new("__meta_vsphere"), Value: new("127.0.0.1:xxxxx")},
-						{Name: new("__meta_vsphere_moid"), Value: new("vm-28")},
-						{Name: new("clustername"), Value: new("DC0_C0")},
-						{Name: new("dcname"), Value: new("DC0")},
-						{Name: new("esxhostname"), Value: new("DC0_C0_H0")},
-						{Name: new("vmname"), Value: new("DC0_C0_RP0_VM0")},
+						{Name: new(types.LabelMetaVSphere), Value: new(testMetaVSphereAddr)},
+						{Name: new(types.LabelMetaVSphereMOID), Value: new(testMOIDVM28)},
+						{Name: new(tagClusterName), Value: new(testClusterDC0C0)},
+						{Name: new(tagDCName), Value: new(testDCDC0)},
+						{Name: new(tagESXHostName), Value: new(testHostDC0C0H0)},
+						{Name: new(tagVMName), Value: new(testVMDC0C0RP0VM0)},
 					},
 					Untyped: &dto.Untyped{Value: new(1.)},
 				},
@@ -1053,7 +1080,7 @@ func TestGatheringVcsim(t *testing.T) { //nolint:maintidx
 	}
 }
 
-// vSphereLabelComparer handles the comparison between two "__meta_vsphere" labels,
+// vSphereLabelComparer handles the comparison between two types.LabelMetaVSphere labels,
 // which is unpredictable because the port used by the simulator is random.
 func vSphereLabelComparer(x, y *dto.LabelPair) bool {
 	if x.GetName() == types.LabelMetaVSphere && y.GetName() == types.LabelMetaVSphere {
@@ -1085,73 +1112,73 @@ func makeVirtualDiskMetricComparer(opts []cmp.Option) cmp.Option {
 func TestRetainedMetricsSort(t *testing.T) {
 	t0 := time.Date(2024, time.January, 8, 14, 0, 0, 0, time.Local) //nolint: gosmopolitan
 	retained := retainedMetrics{
-		"vsphere_host_cpu": []addedField{
+		measurementVSphereHostCPU: []addedField{
 			{
-				field: "usagemhz_average",
+				field: testFieldUsageMHzAvg,
 				value: 2,
-				tags:  map[string]string{"dcname": "ha-datacenter"},
+				tags:  map[string]string{tagDCName: testDCHaDatacenter},
 				t:     []time.Time{t0.Add(time.Minute)},
 			},
 			{
-				field: "usagemhz_average",
+				field: testFieldUsageMHzAvg,
 				value: 1,
-				tags:  map[string]string{"dcname": "ha-datacenter"},
+				tags:  map[string]string{tagDCName: testDCHaDatacenter},
 				t:     []time.Time{t0},
 			},
 		},
-		"vsphere_host_mem": []addedField{
+		measurementVSphereHostMem: []addedField{
 			{
-				field: "usage_average",
+				field: testFieldUsageAvg,
 				value: 1,
-				tags:  map[string]string{"dcname": "ha-datacenter"},
+				tags:  map[string]string{tagDCName: testDCHaDatacenter},
 				t:     []time.Time{},
 			},
 			{
-				field: "usage_average",
+				field: testFieldUsageAvg,
 				value: 3,
-				tags:  map[string]string{"dcname": "ha-datacenter"},
+				tags:  map[string]string{tagDCName: testDCHaDatacenter},
 				t:     []time.Time{t0},
 			},
 			{
-				field: "usage_average",
+				field: testFieldUsageAvg,
 				value: 2,
-				tags:  map[string]string{"dcname": "ha-datacenter"},
+				tags:  map[string]string{tagDCName: testDCHaDatacenter},
 				t:     []time.Time{t0.Add(-1 * time.Minute)},
 			},
 		},
 	}
 	expected := retainedMetrics{
-		"vsphere_host_cpu": []addedField{
+		measurementVSphereHostCPU: []addedField{
 			{
-				field: "usagemhz_average",
+				field: testFieldUsageMHzAvg,
 				value: 1,
-				tags:  map[string]string{"dcname": "ha-datacenter"},
+				tags:  map[string]string{tagDCName: testDCHaDatacenter},
 				t:     []time.Time{t0},
 			},
 			{
-				field: "usagemhz_average",
+				field: testFieldUsageMHzAvg,
 				value: 2,
-				tags:  map[string]string{"dcname": "ha-datacenter"},
+				tags:  map[string]string{tagDCName: testDCHaDatacenter},
 				t:     []time.Time{t0.Add(time.Minute)},
 			},
 		},
-		"vsphere_host_mem": []addedField{
+		measurementVSphereHostMem: []addedField{
 			{
-				field: "usage_average",
+				field: testFieldUsageAvg,
 				value: 1,
-				tags:  map[string]string{"dcname": "ha-datacenter"},
+				tags:  map[string]string{tagDCName: testDCHaDatacenter},
 				t:     []time.Time{},
 			},
 			{
-				field: "usage_average",
+				field: testFieldUsageAvg,
 				value: 2,
-				tags:  map[string]string{"dcname": "ha-datacenter"},
+				tags:  map[string]string{tagDCName: testDCHaDatacenter},
 				t:     []time.Time{t0.Add(-1 * time.Minute)},
 			},
 			{
-				field: "usage_average",
+				field: testFieldUsageAvg,
 				value: 3,
-				tags:  map[string]string{"dcname": "ha-datacenter"},
+				tags:  map[string]string{tagDCName: testDCHaDatacenter},
 				t:     []time.Time{t0},
 			},
 		},

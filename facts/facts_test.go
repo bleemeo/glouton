@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -36,12 +36,12 @@ VERSION_CODENAME=bionic
 UBUNTU_CODENAME=bionic
 `
 	want := map[string]string{
-		"NAME":               "Ubuntu",
+		osReleaseName:        "Ubuntu",
 		"VERSION":            "18.04.2 LTS (Bionic Beaver)",
 		"ID":                 "ubuntu",
 		"ID_LIKE":            "debian",
-		"PRETTY_NAME":        "Ubuntu 18.04.2 LTS",
-		"VERSION_ID":         "18.04",
+		osReleasePrettyName:  "Ubuntu 18.04.2 LTS",
+		osReleaseVersionID:   "18.04",
 		"HOME_URL":           "https://www.ubuntu.com/",
 		"SUPPORT_URL":        "https://help.ubuntu.com/",
 		"BUG_REPORT_URL":     "https://bugs.launchpad.net/ubuntu/",
@@ -215,18 +215,18 @@ func Test_decodeFreeBSDVersion(t *testing.T) {
 			name: "TrueNAS-13.0-U4",
 			data: "TrueNAS-13.0-U4 (e5af99be6d)",
 			want: map[string]string{
-				"NAME":        "TrueNAS",
-				"VERSION_ID":  "13.0-U4",
-				"PRETTY_NAME": "TrueNAS 13.0-U4",
+				osReleaseName:       osNameTrueNAS,
+				osReleaseVersionID:  "13.0-U4",
+				osReleasePrettyName: osNameTrueNAS + " 13.0-U4",
 			},
 		},
 		{
 			name: "TrueNAS-12.0-RELEASE",
 			data: "TrueNAS-12.0-RELEASE (f862218137)",
 			want: map[string]string{
-				"NAME":        "TrueNAS",
-				"VERSION_ID":  "12.0-RELEASE",
-				"PRETTY_NAME": "TrueNAS 12.0-RELEASE",
+				osReleaseName:       osNameTrueNAS,
+				osReleaseVersionID:  "12.0-RELEASE",
+				osReleasePrettyName: osNameTrueNAS + " 12.0-RELEASE",
 			},
 		},
 	}

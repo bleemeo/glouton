@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -41,19 +41,43 @@ import (
 	promParser "github.com/prometheus/prometheus/promql/parser"
 )
 
+const (
+	testMetricMemoryUsed                    = "memory_used"
+	testMetricIOTimes                       = "io_times"
+	testItemHome                            = "/home"
+	testItemMnt                             = "/mnt"
+	testItemDevSDA                          = "/dev/sda"
+	testItemDevSDB                          = "/dev/sdb"
+	testAllowCPUStar                        = "cpu*"
+	testMetricWhatever                      = "whatever"
+	testAppName                             = "my_application123"
+	testMetricProcessCPUSecondsTotal        = "process_cpu_seconds_total"
+	testScrapeInstanceLocalhost2113         = "localhost:2113"
+	testLabelNotRead                        = "label_not_read"
+	testMetricSensorTemperature             = "sensor_temperature"
+	testLabelSensor                         = "sensor"
+	testContainerURL                        = "containerURL"
+	testContainer2URL                       = "container2URL"
+	testLabelMode                           = "mode"
+	testMetricNo1                           = "no1"
+	testMetricLotusDeadlineActivePartSector = "lotus_miner_deadline_active_partition_sector"
+	testValueNotRead                        = "value_not_read"
+	testIOWrites                            = `io_writes`
+)
+
 //nolint:gochecknoglobals
 var (
 	basicConf = config.Config{
 		Metric: config.Metric{
 			IncludeDefaultMetrics: false,
-			AllowMetrics:          []string{"cpu*", "pro*"},
-			DenyMetrics:           []string{`process_cpu_seconds_total{scrape_job="my_application123"}`, "whatever"},
+			AllowMetrics:          []string{testAllowCPUStar, "pro*"},
+			DenyMetrics:           []string{`process_cpu_seconds_total{scrape_job="my_application123"}`, testMetricWhatever},
 			Prometheus: config.Prometheus{
 				Targets: []config.PrometheusTarget{
 					{
 						URL:          "http://localhost:2113/metrics",
-						Name:         "my_application123",
-						AllowMetrics: []string{"process_cpu_seconds_total"},
+						Name:         testAppName,
+						AllowMetrics: []string{testMetricProcessCPUSecondsTotal},
 					},
 				},
 			},
@@ -124,23 +148,23 @@ func Test_Basic_Build(t *testing.T) {
 			{
 				Name:  types.LabelName,
 				Type:  labels.MatchEqual,
-				Value: "process_cpu_seconds_total",
+				Value: testMetricProcessCPUSecondsTotal,
 			}: {
 				{
 					&labels.Matcher{
 						Name:  types.LabelName,
 						Type:  labels.MatchEqual,
-						Value: "process_cpu_seconds_total",
+						Value: testMetricProcessCPUSecondsTotal,
 					},
 					&labels.Matcher{
 						Name:  types.LabelScrapeInstance,
 						Type:  labels.MatchEqual,
-						Value: "localhost:2113",
+						Value: testScrapeInstanceLocalhost2113,
 					},
 					&labels.Matcher{
 						Name:  types.LabelScrapeJob,
 						Type:  labels.MatchEqual,
-						Value: "my_application123",
+						Value: testAppName,
 					},
 				},
 			},
@@ -149,31 +173,31 @@ func Test_Basic_Build(t *testing.T) {
 			{
 				Name:  types.LabelName,
 				Type:  labels.MatchEqual,
-				Value: "process_cpu_seconds_total",
+				Value: testMetricProcessCPUSecondsTotal,
 			}: {
 				{
 					&labels.Matcher{
 						Name:  types.LabelScrapeJob,
 						Type:  labels.MatchEqual,
-						Value: "my_application123",
+						Value: testAppName,
 					},
 					&labels.Matcher{
 						Name:  types.LabelName,
 						Type:  labels.MatchEqual,
-						Value: "process_cpu_seconds_total",
+						Value: testMetricProcessCPUSecondsTotal,
 					},
 				},
 			},
 			{
 				Name:  types.LabelName,
 				Type:  labels.MatchEqual,
-				Value: "whatever",
+				Value: testMetricWhatever,
 			}: {
 				{
 					&labels.Matcher{
 						Name:  types.LabelName,
 						Type:  labels.MatchEqual,
-						Value: "whatever",
+						Value: testMetricWhatever,
 					},
 				},
 			},
@@ -213,59 +237,59 @@ func Test_basic_build_default(t *testing.T) {
 	allowedPoints := []types.MetricPoint{
 		{
 			Labels: map[string]string{
-				"__name__":        "process_cpu_seconds_total",
-				"label_not_read":  "value_not_read",
-				"scrape_instance": "localhost:2113",
-				"scrape_job":      "my_application123",
+				types.LabelName:           testMetricProcessCPUSecondsTotal,
+				testLabelNotRead:          testValueNotRead,
+				types.LabelScrapeInstance: testScrapeInstanceLocalhost2113,
+				types.LabelScrapeJob:      testAppName,
 			},
 		},
 		{
 			Labels: map[string]string{
-				"__name__": "cpu_used",
+				types.LabelName: metricCPUUsed,
 			},
 		},
 		{
 			Labels: map[string]string{
-				"__name__": "agent_status",
+				types.LabelName: "agent_status",
 			},
 		},
 		{
 			Labels: map[string]string{
-				"__name__": "process_context_switch",
+				types.LabelName: "process_context_switch",
 			},
 		},
 		{
 			Labels: map[string]string{
-				"__name__": "swap_free",
+				types.LabelName: "swap_free",
 			},
 		},
 		{
 			Labels: map[string]string{
-				"__name__":    "sysUpTime",
-				"snmp_target": "printer.local",
+				types.LabelName: "sysUpTime",
+				"snmp_target":   "printer.local",
 			},
 		},
 		{
 			Labels: map[string]string{
-				"__name__": "smart_device_health_status",
+				types.LabelName: "smart_device_health_status",
 			},
 		},
 		{
 			Labels: map[string]string{
-				"__name__": "sensor_temperature",
-				"sensor":   "coretemp_package_id_0",
+				types.LabelName: testMetricSensorTemperature,
+				testLabelSensor: "coretemp_package_id_0",
 			},
 		},
 		{
 			Labels: map[string]string{
-				"__name__": "sensor_temperature",
-				"sensor":   "coretemp_package_id_0",
+				types.LabelName: testMetricSensorTemperature,
+				testLabelSensor: "coretemp_package_id_0",
 			},
 		},
 		{
 			Labels: map[string]string{
-				"__name__": "sensor_temperature",
-				"sensor":   "k10temp_tctl",
+				types.LabelName: testMetricSensorTemperature,
+				testLabelSensor: "k10temp_tctl",
 			},
 		},
 	}
@@ -273,32 +297,32 @@ func Test_basic_build_default(t *testing.T) {
 	deniedPoints := []types.MetricPoint{
 		{
 			Labels: map[string]string{
-				"__name__": "memcached_command_flush",
-				"item":     "redis-memcached-1",
+				types.LabelName: "memcached_command_flush",
+				types.LabelItem: "redis-memcached-1",
 			},
 		},
 		{
 			Labels: map[string]string{
-				"__name__": "node_load1",
+				types.LabelName: "node_load1",
 			},
 		},
 		{
 			Labels: map[string]string{
-				"__name__": "sensor_temperature",
-				"sensor":   "coretemp_core_0",
+				types.LabelName: testMetricSensorTemperature,
+				testLabelSensor: "coretemp_core_0",
 			},
 		},
 		{
 			Labels: map[string]string{
-				"__name__": "sensor_temperature",
-				"sensor":   "k10temp_tccd1",
+				types.LabelName: testMetricSensorTemperature,
+				testLabelSensor: "k10temp_tccd1",
 			},
 		},
 		// Service metrics are only allowed when the service is discovered. This
 		// test the default filter without any discovered services.
 		{
 			Labels: map[string]string{
-				"__name__": "apache_requests",
+				types.LabelName: "apache_requests",
 			},
 		},
 	}
@@ -331,25 +355,25 @@ func Test_Basic_FilterPoints(t *testing.T) {
 	want := []types.MetricPoint{
 		{
 			Labels: map[string]string{
-				"__name__":            "cpu_process_1",
+				types.LabelName:       "cpu_process_1",
 				"label_not_impacting": "value_not_impacting",
 			},
 		},
 		{
 			Labels: map[string]string{
-				"__name__":        "process_cpu_seconds_total",
-				"scrape_instance": "localhost:2112",
-				"scrape_job":      "my_application122",
+				types.LabelName:           testMetricProcessCPUSecondsTotal,
+				types.LabelScrapeInstance: "localhost:2112",
+				types.LabelScrapeJob:      "my_application122",
 			},
 		},
 		{
 			Labels: map[string]string{
-				"__name__": "cpu_process_2",
+				types.LabelName: "cpu_process_2",
 			},
 		},
 		{
 			Labels: map[string]string{
-				"__name__": "cpu_process_1",
+				types.LabelName: "cpu_process_1",
 			},
 		},
 	}
@@ -359,17 +383,17 @@ func Test_Basic_FilterPoints(t *testing.T) {
 	points = append(points,
 		types.MetricPoint{
 			Labels: map[string]string{
-				"__name__":        "process_cpu_seconds_total",
-				"label_not_read":  "value_not_read",
-				"scrape_instance": "localhost:2113",
-				"scrape_job":      "my_application123",
+				types.LabelName:           testMetricProcessCPUSecondsTotal,
+				testLabelNotRead:          testValueNotRead,
+				types.LabelScrapeInstance: testScrapeInstanceLocalhost2113,
+				types.LabelScrapeJob:      testAppName,
 			},
 		},
 		types.MetricPoint{
 			Labels: map[string]string{
-				"__name__":        "whatever",
-				"scrape_instance": "should_not_be_checked:8080",
-				"scrape_job":      "should_not_be_checked",
+				types.LabelName:           testMetricWhatever,
+				types.LabelScrapeInstance: "should_not_be_checked:8080",
+				types.LabelScrapeJob:      "should_not_be_checked",
 			},
 		},
 	)
@@ -391,9 +415,9 @@ func Test_Basic_FilterFamilies(t *testing.T) {
 		return
 	}
 
-	metricNames := []string{"cpu_seconds", "process_cpu_seconds_total", "whatever"}
-	lblsNames := []string{"scrape_instance", "scrape_job", "does_not_impact"}
-	lblsValues := []string{"localhost:8015", "my_application123", "my_application456", "does_not_impact"}
+	metricNames := []string{"cpu_seconds", testMetricProcessCPUSecondsTotal, testMetricWhatever}
+	lblsNames := []string{types.LabelScrapeInstance, types.LabelScrapeJob, "does_not_impact"}
+	lblsValues := []string{"localhost:8015", testAppName, "my_application456", "does_not_impact"}
 
 	fm := []*dto.MetricFamily{
 		{ // should not be filtered out
@@ -557,23 +581,23 @@ func Test_RebuildDynamicList(t *testing.T) {
 	d := fakeScrapper{
 		name: "jobname",
 		registeredLabels: map[string]map[string]string{
-			"containerURL": {
-				types.LabelMetaScrapeInstance: "containerURL",
+			testContainerURL: {
+				types.LabelMetaScrapeInstance: testContainerURL,
 				types.LabelMetaScrapeJob:      "discovered-exporters",
 				"test":                        "salut",
 			},
-			"container2URL": {
-				types.LabelMetaScrapeInstance: "container2URL",
+			testContainer2URL: {
+				types.LabelMetaScrapeInstance: testContainer2URL,
 				types.LabelMetaScrapeJob:      "discovered-exporters",
 			},
 		},
 		containersLabels: map[string]map[string]string{
-			"containerURL": {
+			testContainerURL: {
 				"prometheus.io/scrape":  "true",
 				"glouton.allow_metrics": "something,else,same_name",
 				"glouton.deny_metrics":  "other,same_name_2",
 			},
-			"container2URL": {
+			testContainer2URL: {
 				"prometheus.io/scrape":  "true",
 				"glouton.allow_metrics": "same_name",
 				"glouton.deny_metrics":  "same_name_2",
@@ -649,8 +673,8 @@ func TestDontDuplicateKeys(t *testing.T) {
 	metricCfg := config.Metric{
 		IncludeDefaultMetrics: false,
 		AllowMetrics: []string{
-			"cpu*",
-			"cpu*",
+			testAllowCPUStar,
+			testAllowCPUStar,
 			"pro",
 			"pro",
 		},
@@ -664,6 +688,47 @@ func TestDontDuplicateKeys(t *testing.T) {
 }
 
 func Test_New(t *testing.T) { //nolint:maintidx
+	testDefaultMetrics := []labels.Labels{
+		labels.FromMap(map[string]string{
+			types.LabelName: metricCPUUsed,
+		}),
+		labels.FromMap(map[string]string{
+			types.LabelName: metricMemUsed,
+		}),
+		labels.FromMap(map[string]string{
+			types.LabelName: metricDiskUsed,
+			types.LabelItem: testItemHome,
+		}),
+		labels.FromMap(map[string]string{
+			types.LabelName: metricDiskUsed,
+			types.LabelItem: "/srv",
+		}),
+		labels.FromMap(map[string]string{
+			types.LabelName: metricIOReads,
+			types.LabelItem: testItemDevSDA,
+		}),
+		labels.FromMap(map[string]string{
+			types.LabelName: metricIOReads,
+			types.LabelItem: testItemDevSDB,
+		}),
+		labels.FromMap(map[string]string{
+			types.LabelName: metricIOWrites,
+			types.LabelItem: testItemDevSDA,
+		}),
+		labels.FromMap(map[string]string{
+			types.LabelName: metricIOWrites,
+			types.LabelItem: testItemDevSDB,
+		}),
+		labels.FromMap(map[string]string{
+			types.LabelName: testMetricIOTimes,
+			types.LabelItem: testItemDevSDA,
+		}),
+		labels.FromMap(map[string]string{
+			types.LabelName: testMetricIOTimes,
+			types.LabelItem: testItemDevSDB,
+		}),
+	}
+
 	tests := []struct {
 		name                 string
 		configAllow          []string
@@ -683,12 +748,12 @@ func Test_New(t *testing.T) { //nolint:maintidx
 			configIncludeDefault: false,
 			metrics: []labels.Labels{
 				labels.FromMap(map[string]string{
-					"__name__": "cpu_used",
+					types.LabelName: metricCPUUsed,
 				}),
 			},
 			want: []labels.Labels{
 				labels.FromMap(map[string]string{
-					"__name__": "cpu_used",
+					types.LabelName: metricCPUUsed,
 				}),
 			},
 		},
@@ -700,12 +765,12 @@ func Test_New(t *testing.T) { //nolint:maintidx
 			configIncludeDefault: true,
 			metrics: []labels.Labels{
 				labels.FromMap(map[string]string{
-					"__name__": "cpu_used",
+					types.LabelName: metricCPUUsed,
 				}),
 			},
 			want: []labels.Labels{
 				labels.FromMap(map[string]string{
-					"__name__": "cpu_used",
+					types.LabelName: metricCPUUsed,
 				}),
 			},
 		},
@@ -718,25 +783,25 @@ func Test_New(t *testing.T) { //nolint:maintidx
 			configIncludeDefault: false,
 			metrics: []labels.Labels{
 				labels.FromMap(map[string]string{
-					"__name__": "cpu_used",
-					"item":     "/mnt",
+					types.LabelName: metricCPUUsed,
+					types.LabelItem: testItemMnt,
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "cpu_used",
-					"item":     "/home",
+					types.LabelName: metricCPUUsed,
+					types.LabelItem: testItemHome,
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "cpu_used",
+					types.LabelName: metricCPUUsed,
 				}),
 			},
 			want: []labels.Labels{
 				labels.FromMap(map[string]string{
-					"__name__": "cpu_used",
-					"item":     "/mnt",
+					types.LabelName: metricCPUUsed,
+					types.LabelItem: testItemMnt,
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "cpu_used",
-					"item":     "/home",
+					types.LabelName: metricCPUUsed,
+					types.LabelItem: testItemHome,
 				}),
 			},
 		},
@@ -749,29 +814,29 @@ func Test_New(t *testing.T) { //nolint:maintidx
 			configIncludeDefault: false,
 			metrics: []labels.Labels{
 				labels.FromMap(map[string]string{
-					"__name__": "cpu_used",
-					"item":     "/mnt",
+					types.LabelName: metricCPUUsed,
+					types.LabelItem: testItemMnt,
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "cpu_used",
-					"item":     "/home",
+					types.LabelName: metricCPUUsed,
+					types.LabelItem: testItemHome,
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "cpu_used",
-					"item":     "/test",
+					types.LabelName: metricCPUUsed,
+					types.LabelItem: "/test",
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "cpu_used",
+					types.LabelName: metricCPUUsed,
 				}),
 			},
 			want: []labels.Labels{
 				labels.FromMap(map[string]string{
-					"__name__": "cpu_used",
-					"item":     "/mnt",
+					types.LabelName: metricCPUUsed,
+					types.LabelItem: testItemMnt,
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "cpu_used",
-					"item":     "/home",
+					types.LabelName: metricCPUUsed,
+					types.LabelItem: testItemHome,
 				}),
 			},
 		},
@@ -784,25 +849,25 @@ func Test_New(t *testing.T) { //nolint:maintidx
 			configIncludeDefault: false,
 			metrics: []labels.Labels{
 				labels.FromMap(map[string]string{
-					"__name__": "cpu_used",
-					"item":     "/mnt",
+					types.LabelName: metricCPUUsed,
+					types.LabelItem: testItemMnt,
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "cpu_used",
-					"item":     "/home",
+					types.LabelName: metricCPUUsed,
+					types.LabelItem: testItemHome,
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "cpu_used",
+					types.LabelName: metricCPUUsed,
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "memory_used",
-					"item":     "/home",
+					types.LabelName: testMetricMemoryUsed,
+					types.LabelItem: testItemHome,
 				}),
 			},
 			want: []labels.Labels{
 				labels.FromMap(map[string]string{
-					"__name__": "memory_used",
-					"item":     "/home",
+					types.LabelName: testMetricMemoryUsed,
+					types.LabelItem: testItemHome,
 				}),
 			},
 		},
@@ -815,25 +880,25 @@ func Test_New(t *testing.T) { //nolint:maintidx
 			configIncludeDefault: false,
 			metrics: []labels.Labels{
 				labels.FromMap(map[string]string{
-					"__name__": "cpu_used",
-					"item":     "/mnt",
+					types.LabelName: metricCPUUsed,
+					types.LabelItem: testItemMnt,
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "cpu_used",
-					"item":     "/home",
+					types.LabelName: metricCPUUsed,
+					types.LabelItem: testItemHome,
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "cpu_used",
+					types.LabelName: metricCPUUsed,
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "memory_used",
-					"item":     "/home",
+					types.LabelName: testMetricMemoryUsed,
+					types.LabelItem: testItemHome,
 				}),
 			},
 			want: []labels.Labels{
 				labels.FromMap(map[string]string{
-					"__name__": "memory_used",
-					"item":     "/home",
+					types.LabelName: testMetricMemoryUsed,
+					types.LabelItem: testItemHome,
 				}),
 			},
 		},
@@ -852,45 +917,45 @@ func Test_New(t *testing.T) { //nolint:maintidx
 			configIncludeDefault: false,
 			metrics: []labels.Labels{
 				labels.FromMap(map[string]string{
-					"__name__": "cpu_used",
-					"item":     "/mnt",
+					types.LabelName: metricCPUUsed,
+					types.LabelItem: testItemMnt,
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "memory_used",
+					types.LabelName: testMetricMemoryUsed,
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "node_cpu_seconds_global",
-					"mode":     "system",
+					types.LabelName: metricNodeCPUSecondsGlobal,
+					testLabelMode:   "system",
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "node_cpu_seconds_global",
-					"mode":     "user",
+					types.LabelName: metricNodeCPUSecondsGlobal,
+					testLabelMode:   "user",
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "node_cpu_seconds_global",
-					"mode":     "wait",
+					types.LabelName: metricNodeCPUSecondsGlobal,
+					testLabelMode:   "wait",
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "memory_used",
-					"item":     "/home",
+					types.LabelName: testMetricMemoryUsed,
+					types.LabelItem: testItemHome,
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "process_count",
-					"item":     "/mnt",
+					types.LabelName: "process_count",
+					types.LabelItem: testItemMnt,
 				}),
 			},
 			want: []labels.Labels{
 				labels.FromMap(map[string]string{
-					"__name__": "cpu_used",
-					"item":     "/mnt",
+					types.LabelName: metricCPUUsed,
+					types.LabelItem: testItemMnt,
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "node_cpu_seconds_global",
-					"mode":     "user",
+					types.LabelName: metricNodeCPUSecondsGlobal,
+					testLabelMode:   "user",
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "memory_used",
-					"item":     "/home",
+					types.LabelName: testMetricMemoryUsed,
+					types.LabelItem: testItemHome,
 				}),
 			},
 		},
@@ -900,79 +965,40 @@ func Test_New(t *testing.T) { //nolint:maintidx
 				`cpu_used`,
 				`disk_used{item="/home"}`,
 				`io_reads`,
-				`io_writes`,
+				testIOWrites,
 			},
 			configDeny: []string{
-				`io_writes`,
+				testIOWrites,
 				`io_reads{item="/dev/sda"}`,
 			},
 			configIncludeDefault: false,
 			rulesMatchers: []matcher.Matchers{
 				{
-					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "io_writes"),
+					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, metricIOWrites),
 				},
 				{
-					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "io_reads"),
+					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, metricIOReads),
 				},
 				{
-					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "mem_used"),
+					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, metricMemUsed),
 				},
 				{
-					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "io_times"),
-					labels.MustNewMatcher(labels.MatchEqual, types.LabelItem, "/dev/sdb"),
+					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, testMetricIOTimes),
+					labels.MustNewMatcher(labels.MatchEqual, types.LabelItem, testItemDevSDB),
 				},
 			},
-			metrics: []labels.Labels{
-				labels.FromMap(map[string]string{
-					"__name__": "cpu_used",
-				}),
-				labels.FromMap(map[string]string{
-					"__name__": "mem_used",
-				}),
-				labels.FromMap(map[string]string{
-					"__name__": "disk_used",
-					"item":     "/home",
-				}),
-				labels.FromMap(map[string]string{
-					"__name__": "disk_used",
-					"item":     "/srv",
-				}),
-				labels.FromMap(map[string]string{
-					"__name__": "io_reads",
-					"item":     "/dev/sda",
-				}),
-				labels.FromMap(map[string]string{
-					"__name__": "io_reads",
-					"item":     "/dev/sdb",
-				}),
-				labels.FromMap(map[string]string{
-					"__name__": "io_writes",
-					"item":     "/dev/sda",
-				}),
-				labels.FromMap(map[string]string{
-					"__name__": "io_writes",
-					"item":     "/dev/sdb",
-				}),
-				labels.FromMap(map[string]string{
-					"__name__": "io_times",
-					"item":     "/dev/sda",
-				}),
-				labels.FromMap(map[string]string{
-					"__name__": "io_times",
-					"item":     "/dev/sdb",
-				}),
-			},
+			metrics: testDefaultMetrics,
 			want: []labels.Labels{
 				labels.FromMap(map[string]string{
-					"__name__": "cpu_used",
+					types.LabelName: metricCPUUsed,
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "disk_used",
-					"item":     "/home",
+					types.LabelName: metricDiskUsed,
+					types.LabelItem: testItemHome,
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "io_reads",
-					"item":     "/dev/sdb",
+					types.LabelName: metricIOReads,
+					types.LabelItem: testItemDevSDB,
 				}),
 			},
 		},
@@ -982,99 +1008,60 @@ func Test_New(t *testing.T) { //nolint:maintidx
 				`cpu_used`,
 				`disk_used{item="/home"}`,
 				`io_reads`,
-				`io_writes`,
+				testIOWrites,
 			},
 			configDeny: []string{
-				`io_writes`,
+				testIOWrites,
 				`io_reads{item="/dev/sda"}`,
 			},
 			configIncludeDefault: false,
 			allowNeededByRules:   true,
 			rulesMatchers: []matcher.Matchers{
 				{
-					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "io_writes"),
+					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, metricIOWrites),
 				},
 				{
-					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "io_reads"),
+					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, metricIOReads),
 				},
 				{
-					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "mem_used"),
+					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, metricMemUsed),
 				},
 				{
-					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "io_times"),
-					labels.MustNewMatcher(labels.MatchEqual, types.LabelItem, "/dev/sdb"),
+					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, testMetricIOTimes),
+					labels.MustNewMatcher(labels.MatchEqual, types.LabelItem, testItemDevSDB),
 				},
 			},
-			metrics: []labels.Labels{
-				labels.FromMap(map[string]string{
-					"__name__": "cpu_used",
-				}),
-				labels.FromMap(map[string]string{
-					"__name__": "mem_used",
-				}),
-				labels.FromMap(map[string]string{
-					"__name__": "disk_used",
-					"item":     "/home",
-				}),
-				labels.FromMap(map[string]string{
-					"__name__": "disk_used",
-					"item":     "/srv",
-				}),
-				labels.FromMap(map[string]string{
-					"__name__": "io_reads",
-					"item":     "/dev/sda",
-				}),
-				labels.FromMap(map[string]string{
-					"__name__": "io_reads",
-					"item":     "/dev/sdb",
-				}),
-				labels.FromMap(map[string]string{
-					"__name__": "io_writes",
-					"item":     "/dev/sda",
-				}),
-				labels.FromMap(map[string]string{
-					"__name__": "io_writes",
-					"item":     "/dev/sdb",
-				}),
-				labels.FromMap(map[string]string{
-					"__name__": "io_times",
-					"item":     "/dev/sda",
-				}),
-				labels.FromMap(map[string]string{
-					"__name__": "io_times",
-					"item":     "/dev/sdb",
-				}),
-			},
+			metrics: testDefaultMetrics,
 			want: []labels.Labels{
 				labels.FromMap(map[string]string{
-					"__name__": "cpu_used",
+					types.LabelName: metricCPUUsed,
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "mem_used",
+					types.LabelName: metricMemUsed,
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "disk_used",
-					"item":     "/home",
+					types.LabelName: metricDiskUsed,
+					types.LabelItem: testItemHome,
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "io_reads",
-					"item":     "/dev/sda",
+					types.LabelName: metricIOReads,
+					types.LabelItem: testItemDevSDA,
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "io_reads",
-					"item":     "/dev/sdb",
+					types.LabelName: metricIOReads,
+					types.LabelItem: testItemDevSDB,
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "io_writes",
-					"item":     "/dev/sda",
+					types.LabelName: metricIOWrites,
+					types.LabelItem: testItemDevSDA,
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "io_writes",
-					"item":     "/dev/sdb",
+					types.LabelName: metricIOWrites,
+					types.LabelItem: testItemDevSDB,
 				}),
 				labels.FromMap(map[string]string{
-					"__name__": "io_times",
-					"item":     "/dev/sdb",
+					types.LabelName: testMetricIOTimes,
+					types.LabelItem: testItemDevSDB,
 				}),
 			},
 		},
@@ -1230,18 +1217,18 @@ func generatePoints(nb int, lbls map[string]string) []types.MetricPoint {
 
 //nolint:gochecknoglobals
 var goodPoint = map[string]string{
-	"__name__":        "node_cpu_seconds_global",
-	"label_not_read":  "value_not_read",
-	"scrape_instance": "localhost:2113",
-	"scrape_job":      "my_application123",
+	types.LabelName:           metricNodeCPUSecondsGlobal,
+	testLabelNotRead:          testValueNotRead,
+	types.LabelScrapeInstance: testScrapeInstanceLocalhost2113,
+	types.LabelScrapeJob:      testAppName,
 }
 
 //nolint:gochecknoglobals
 var badPoint = map[string]string{
-	"__name__":        "cpu_used_status",
-	"label_not_read":  "value_not_read",
-	"scrape_instance": "localhost:2113",
-	"scrape_job":      "my_application123",
+	types.LabelName:           "cpu_used_status",
+	testLabelNotRead:          testValueNotRead,
+	types.LabelScrapeInstance: testScrapeInstanceLocalhost2113,
+	types.LabelScrapeJob:      testAppName,
 }
 
 func Benchmark_filters_no_match(b *testing.B) {
@@ -1525,12 +1512,12 @@ func Test_MergeMetricFilters(t *testing.T) {
 	metricCfg := config.Metric{
 		IncludeDefaultMetrics: false,
 		AllowMetrics:          []string{"m1", "m2"},
-		DenyMetrics:           []string{"no1"},
+		DenyMetrics:           []string{testMetricNo1},
 	}
 	mf1, _ := New(metricCfg, false, false, false)
 
 	metricCfg.AllowMetrics = []string{"m3", "m4"}
-	metricCfg.DenyMetrics = []string{"no1", "no2"}
+	metricCfg.DenyMetrics = []string{testMetricNo1, "no2"}
 	mf2, _ := New(metricCfg, false, false, false)
 
 	mergedFilter := MergeMetricFilters(mf1, mf2)
@@ -1538,7 +1525,7 @@ func Test_MergeMetricFilters(t *testing.T) {
 	expectedFilter := &Filter{
 		includeDefaultMetrics: false,
 		staticAllowList:       []matcher.Matchers{mustMatchers("m1"), mustMatchers("m2"), mustMatchers("m3"), mustMatchers("m4")},
-		staticDenyList:        []matcher.Matchers{mustMatchers("no1")},
+		staticDenyList:        []matcher.Matchers{mustMatchers(testMetricNo1)},
 		allowList: map[labels.Matcher][]matcher.Matchers{
 			*labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "m1"): {mustMatchers("m1")},
 			*labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "m2"): {mustMatchers("m2")},
@@ -1546,7 +1533,7 @@ func Test_MergeMetricFilters(t *testing.T) {
 			*labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "m4"): {mustMatchers("m4")},
 		},
 		denyList: map[labels.Matcher][]matcher.Matchers{
-			*labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "no1"): {mustMatchers("no1")},
+			*labels.MustNewMatcher(labels.MatchEqual, types.LabelName, testMetricNo1): {mustMatchers(testMetricNo1)},
 		},
 	}
 
@@ -1573,12 +1560,12 @@ func Test_MergeMetricFiltersMutation(t *testing.T) {
 	metricCfg := config.Metric{
 		IncludeDefaultMetrics: false,
 		AllowMetrics:          []string{"m1", "m2"},
-		DenyMetrics:           []string{"no1"},
+		DenyMetrics:           []string{testMetricNo1},
 	}
 	mf1, _ := New(metricCfg, false, false, false)
 
 	metricCfg.AllowMetrics = []string{"m3", "m4"}
-	metricCfg.DenyMetrics = []string{"no1", "no2"}
+	metricCfg.DenyMetrics = []string{testMetricNo1, "no2"}
 	mf2, _ := New(metricCfg, false, false, false)
 
 	mergedFilter := MergeMetricFilters(mf1, mf2)
@@ -1647,8 +1634,8 @@ func Benchmark_MultipleFilters(b *testing.B) {
 
 	metricCfg := config.Metric{
 		IncludeDefaultMetrics: true,
-		AllowMetrics:          []string{"lotus_chain_basefee", "lotus_chain_height", "lotus_miner_deadline_active_partition_sector"},
-		DenyMetrics:           []string{"lotus_miner_deadline_active_partition_sector"},
+		AllowMetrics:          []string{"lotus_chain_basefee", "lotus_chain_height", testMetricLotusDeadlineActivePartSector},
+		DenyMetrics:           []string{testMetricLotusDeadlineActivePartSector},
 	}
 
 	mf1, warns := New(metricCfg, false, true, false)
@@ -1656,7 +1643,7 @@ func Benchmark_MultipleFilters(b *testing.B) {
 		b.Fatal("Unexpected warns when building filter n°1:", warns)
 	}
 
-	metricCfg.AllowMetrics = []string{"lotus_miner_deadline_active_partition_sector"}
+	metricCfg.AllowMetrics = []string{testMetricLotusDeadlineActivePartSector}
 
 	mf2, warns := New(metricCfg, true, true, true)
 	if warns != nil {

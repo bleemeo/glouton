@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -50,8 +50,37 @@ const (
 	noMetricsStatusThreshold                = 5
 )
 
+// Common tag key names used across vSphere metrics.
+const (
+	tagClusterName = "clustername"
+	tagDCName      = "dcname"
+	tagESXHostName = "esxhostname"
+	tagVMName      = "vmname"
+	tagMOID        = "moid"
+)
+
 // A common label value.
 const instanceTotal = "instance-total"
+
+// Retained metric field names.
+const (
+	fieldUsageMHzAverage      = "usagemhz_average"
+	fieldUsageAverage         = "usage_average"
+	fieldReadAverage          = "read_average"
+	fieldWriteAverage         = "write_average"
+	fieldActiveAverage        = "active_average"
+	fieldTransmittedAverage   = "transmitted_average"
+	fieldTotalCapacityAverage = "totalCapacity_average"
+	fieldSwapoutAverage       = "swapout_average"
+)
+
+// Telegraf vSphere measurement names.
+const (
+	measurementVSphereVMCPU   = "vsphere_vm_cpu"
+	measurementVSphereVMMem   = "vsphere_vm_mem"
+	measurementVSphereHostCPU = "vsphere_host_cpu"
+	measurementVSphereHostMem = "vsphere_host_mem"
+)
 
 type labelsMetadata struct {
 	datastorePerLUN    map[string]string
@@ -231,7 +260,7 @@ func (vSphere *vSphere) describeClusters(ctx context.Context, client *vim25.Clie
 
 	for cluster, props := range clusterProps {
 		describedCluster := describeCluster(vSphere.host, cluster, props)
-		describedCluster.facts["scraper_fqdn"] = scraperFacts["fqdn"]
+		describedCluster.facts[factScraperFQDN] = scraperFacts[factFQDN]
 		clusters = append(clusters, describedCluster)
 	}
 
@@ -250,7 +279,7 @@ func (vSphere *vSphere) describeHosts(ctx context.Context, client *vim25.Client,
 
 	for host, props := range hostProps {
 		describedHost := describeHost(vSphere.host, host, props)
-		describedHost.facts["scraper_fqdn"] = scraperFacts["fqdn"]
+		describedHost.facts[factScraperFQDN] = scraperFacts[factFQDN]
 		hosts = append(hosts, describedHost)
 	}
 
@@ -273,7 +302,7 @@ func (vSphere *vSphere) describeVMs(ctx context.Context, client *vim25.Client, r
 
 	for vm, props := range vmProps {
 		describedVM, disks, netInterfaces := describeVM(vSphere.host, vm, props, vSphere.hierarchy)
-		describedVM.facts["scraper_fqdn"] = scraperFacts["fqdn"]
+		describedVM.facts[factScraperFQDN] = scraperFacts[factFQDN]
 		vms = append(vms, describedVM)
 		labelsMetadata.disksPerVM[vm.Reference().Value] = disks
 		labelsMetadata.netInterfacesPerVM[vm.Reference().Value] = netInterfaces
@@ -600,9 +629,9 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 
 	moid := labels[types.LabelMetaVSphereMOID].GetValue()
 
-	isVM := labels["vmname"].GetValue() != ""
-	isHost := !isVM && labels["esxhostname"].GetValue() != ""
-	isCluster := !isVM && !isHost && labels["dcname"].GetValue() != ""
+	isVM := labels[tagVMName].GetValue() != ""
+	isHost := !isVM && labels[tagESXHostName].GetValue() != ""
+	isCluster := !isVM && !isHost && labels[tagDCName].GetValue() != ""
 
 	switch {
 	case isVM:
@@ -704,7 +733,7 @@ func (vSphere *vSphere) renameGlobal(gatherContext internal.GatherContext) (resu
 	tags := maps.Clone(gatherContext.Tags) // Prevents labels from being unexpectedly removed
 
 	tags[types.LabelMetaVSphere] = vSphere.host
-	tags[types.LabelMetaVSphereMOID] = tags["moid"]
+	tags[types.LabelMetaVSphereMOID] = tags[tagMOID]
 
 	if tags["cpu"] == "*" { // Special case (vcsim)
 		tags["cpu"] = instanceTotal
@@ -719,7 +748,7 @@ func (vSphere *vSphere) renameGlobal(gatherContext internal.GatherContext) (resu
 	delete(tags, "guest")
 	delete(tags, "guesthostname")
 	delete(tags, "instance")
-	delete(tags, "moid")
+	delete(tags, tagMOID)
 	delete(tags, "rpname")
 	delete(tags, "source")
 	delete(tags, "uuid")
@@ -740,36 +769,36 @@ func (vSphere *vSphere) transformMetrics(currentContext internal.GatherContext, 
 	// map is: measurement -> field -> factor
 	factors := map[string]map[string]float64{
 		// VM metrics
-		"vsphere_vm_mem": {
-			"active_average":  math.NaN(), // Special case
-			"swapped_average": 1000,       // KB to B
+		measurementVSphereVMMem: {
+			fieldActiveAverage: math.NaN(), // Special case
+			"swapped_average":  1000,       // KB to B
 		},
 		"vsphere_vm_virtualDisk": {
-			"read_average":  1000, // KB/s to B/s
-			"write_average": 1000, // KB/s to B/s
+			fieldReadAverage:  1000, // KB/s to B/s
+			fieldWriteAverage: 1000, // KB/s to B/s
 		},
 		"vsphere_vm_net": {
-			"received_average":    8192, // KiB/s to b/s
-			"transmitted_average": 8192, // KiB/s to b/s
+			"received_average":      8192, // KiB/s to b/s
+			fieldTransmittedAverage: 8192, // KiB/s to b/s
 		},
 		// Host metrics
-		"vsphere_host_mem": {
-			"totalCapacity_average": 1000000, // MB to B
-			"swapin_average":        1000,    // KB to B
-			"swapout_average":       1000,    // KB to B
+		measurementVSphereHostMem: {
+			fieldTotalCapacityAverage: 1000000, // MB to B
+			"swapin_average":          1000,    // KB to B
+			fieldSwapoutAverage:       1000,    // KB to B
 		},
 		"vsphere_host_datastore": {
-			"read_average":  1000, // KB/s to B/s
-			"write_average": 1000, // KB/s to B/s
+			fieldReadAverage:  1000, // KB/s to B/s
+			fieldWriteAverage: 1000, // KB/s to B/s
 		},
 		"vsphere_host_net": {
-			"received_average":    8192, // KiB/s to b/s
-			"transmitted_average": 8192, // KiB/s to b/s
+			"received_average":      8192, // KiB/s to b/s
+			fieldTransmittedAverage: 8192, // KiB/s to b/s
 		},
 		// Datastore metrics
 		"vsphere_datastore_datastore": {
-			"write_average": 1000, // KB/s to B/s
-			"read_average":  1000, // KB/s to B/s
+			fieldWriteAverage: 1000, // KB/s to B/s
+			fieldReadAverage:  1000, // KB/s to B/s
 		},
 		"vsphere_datastore_disk": {
 			"used_latest":     1000, // KB to B
@@ -797,7 +826,7 @@ func (vSphere *vSphere) transformMetrics(currentContext internal.GatherContext, 
 }
 
 func (vSphere *vSphere) transformFieldValue(currentContext internal.GatherContext, field string, value float64) (float64, bool) {
-	if currentContext.Measurement == "vsphere_vm_mem" && field == "active_average" {
+	if currentContext.Measurement == measurementVSphereVMMem && field == fieldActiveAverage {
 		// The mem_used_perc value is currently in KB; convert it to a percentage.
 		if moid, ok := currentContext.Tags[types.LabelMetaVSphereMOID]; ok {
 			vmProps, ok := vSphere.devicePropsCache.vmCache.get(moid, true)
@@ -829,21 +858,23 @@ func renameMetrics(currentContext internal.GatherContext, metricName string) (ne
 	newMeasurement = strings.TrimPrefix(newMeasurement, "host_")
 
 	switch newMeasurement {
-	case "cpu", "vsphere_vm_cpu":
+	case "cpu", measurementVSphereVMCPU:
 		newMetricName = strings.Replace(newMetricName, "usage", "used", 1)
 		if newMetricName == "latency" {
 			newMetricName = "latency_perc"
 		}
 	case "mem":
+		const measurementSwap = "swap"
+
 		switch newMetricName {
 		case "swapped", "swapused":
-			newMeasurement = "swap" //nolint:goconst
+			newMeasurement = measurementSwap
 			newMetricName = "used"
 		case "swapin":
-			newMeasurement = "swap"
+			newMeasurement = measurementSwap
 			newMetricName = "in"
 		case "swapout":
-			newMeasurement = "swap"
+			newMeasurement = measurementSwap
 			newMetricName = "out"
 		default:
 			newMetricName = strings.Replace(newMetricName, "usage", "used_perc", 1)

@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -21,5 +21,5 @@ package crashreport
 import "golang.org/x/sys/unix"
 
 func redirectOSSpecificStderrToFile(stderrFileFd uintptr) error {
-	return unix.Dup2(int(stderrFileFd), unix.Stderr) //nolint:gosec // fd value fits in int
+	return unix.Dup2(int(stderrFileFd), unix.Stderr)
 }

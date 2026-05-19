@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -44,6 +44,14 @@ import (
 )
 
 var errArrayMdadmDetailsNotFound = errors.New("mdadm details not found")
+
+// Test array name constants.
+const (
+	arrayMD0 = "md0"
+	arrayMD1 = "md1"
+	arrayMD2 = "md2"
+	arrayMD3 = "md3"
+)
 
 // timeNow always returns the same timestamp: February 13, 2024, at 10:35am.
 func timeNow() time.Time {
@@ -126,53 +134,53 @@ func TestGather(t *testing.T) { //nolint:maintidx
 		name            string
 		expectedMetrics metricFamilies
 	}{
-		{ //nolint: dupl
+		{
 			name: "multiple_active",
 			expectedMetrics: map[string][]metric{
-				"mdstat_blocks_synced_finish_time": {
-					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0},
-					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
-					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 0},
+				MetricBlocksSyncedFinish: {
+					{Labels: map[string]string{types.LabelItem: arrayMD1}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: arrayMD2}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: arrayMD3}, Value: 0},
 				},
-				"mdstat_blocks_synced": {
-					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 136448},
-					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 1.29596288e+08},
-					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 1.318680576e+09},
+				MetricBlocksSynced: {
+					{Labels: map[string]string{types.LabelItem: arrayMD1}, Value: 136448},
+					{Labels: map[string]string{types.LabelItem: arrayMD2}, Value: 1.29596288e+08},
+					{Labels: map[string]string{types.LabelItem: arrayMD3}, Value: 1.318680576e+09},
 				},
-				"mdstat_blocks_synced_pct": {
-					{Labels: map[string]string{types.LabelItem: "md1"}},
-					{Labels: map[string]string{types.LabelItem: "md2"}},
-					{Labels: map[string]string{types.LabelItem: "md3"}},
+				MetricBlocksSyncedPct: {
+					{Labels: map[string]string{types.LabelItem: arrayMD1}},
+					{Labels: map[string]string{types.LabelItem: arrayMD2}},
+					{Labels: map[string]string{types.LabelItem: arrayMD3}},
 				},
-				"mdstat_disks_active_count": {
-					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 2},
-					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 2},
-					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 10},
+				MetricDisksActive: {
+					{Labels: map[string]string{types.LabelItem: arrayMD1}, Value: 2},
+					{Labels: map[string]string{types.LabelItem: arrayMD2}, Value: 2},
+					{Labels: map[string]string{types.LabelItem: arrayMD3}, Value: 10},
 				},
-				"mdstat_disks_down_count": {
-					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0},
-					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
-					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 0},
+				MetricDisksDown: {
+					{Labels: map[string]string{types.LabelItem: arrayMD1}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: arrayMD2}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: arrayMD3}, Value: 0},
 				},
-				"mdstat_disks_failed_count": {
-					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0},
-					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
-					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 0},
+				MetricDisksFailed: {
+					{Labels: map[string]string{types.LabelItem: arrayMD1}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: arrayMD2}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: arrayMD3}, Value: 0},
 				},
-				"mdstat_disks_spare_count": {
-					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0},
-					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
-					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 0},
+				MetricDisksSpare: {
+					{Labels: map[string]string{types.LabelItem: arrayMD1}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: arrayMD2}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: arrayMD3}, Value: 0},
 				},
-				"mdstat_disks_total_count": {
-					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 2},
-					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 2},
-					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 10},
+				MetricDisksTotal: {
+					{Labels: map[string]string{types.LabelItem: arrayMD1}, Value: 2},
+					{Labels: map[string]string{types.LabelItem: arrayMD2}, Value: 2},
+					{Labels: map[string]string{types.LabelItem: arrayMD3}, Value: 10},
 				},
-				"mdstat_health_status": {
+				MetricHealthStatus: {
 					{
 						Labels: map[string]string{
-							types.LabelItem:                   "md1",
+							types.LabelItem:                   arrayMD1,
 							types.LabelMetaCurrentStatus:      types.StatusOk.String(),
 							types.LabelMetaCurrentDescription: "",
 						},
@@ -180,7 +188,7 @@ func TestGather(t *testing.T) { //nolint:maintidx
 					},
 					{
 						Labels: map[string]string{
-							types.LabelItem:                   "md2",
+							types.LabelItem:                   arrayMD2,
 							types.LabelMetaCurrentStatus:      types.StatusOk.String(),
 							types.LabelMetaCurrentDescription: "",
 						},
@@ -200,57 +208,57 @@ func TestGather(t *testing.T) { //nolint:maintidx
 		{
 			name: "multiple_delayed",
 			expectedMetrics: map[string][]metric{
-				"mdstat_blocks_synced_finish_time": {
-					{Labels: map[string]string{types.LabelItem: "md1"}},
-					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 147.6},
-					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 0.9},
+				MetricBlocksSyncedFinish: {
+					{Labels: map[string]string{types.LabelItem: arrayMD1}},
+					{Labels: map[string]string{types.LabelItem: arrayMD2}, Value: 147.6},
+					{Labels: map[string]string{types.LabelItem: arrayMD3}, Value: 0.9},
 				},
-				"mdstat_blocks_synced": {
-					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0}, // <- important: 0 means delayed
-					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 4.238336e+07},
-					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 38528},
+				MetricBlocksSynced: {
+					{Labels: map[string]string{types.LabelItem: arrayMD1}, Value: 0}, // <- important: 0 means delayed
+					{Labels: map[string]string{types.LabelItem: arrayMD2}, Value: 4.238336e+07},
+					{Labels: map[string]string{types.LabelItem: arrayMD3}, Value: 38528},
 				},
-				"mdstat_blocks_synced_pct": {
-					{Labels: map[string]string{types.LabelItem: "md1"}},
-					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 2.2},
-					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 37.6},
+				MetricBlocksSyncedPct: {
+					{Labels: map[string]string{types.LabelItem: arrayMD1}},
+					{Labels: map[string]string{types.LabelItem: arrayMD2}, Value: 2.2},
+					{Labels: map[string]string{types.LabelItem: arrayMD3}, Value: 37.6},
 				},
-				"mdstat_disks_active_count": {
-					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 2},
-					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 2},
-					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 2},
+				MetricDisksActive: {
+					{Labels: map[string]string{types.LabelItem: arrayMD1}, Value: 2},
+					{Labels: map[string]string{types.LabelItem: arrayMD2}, Value: 2},
+					{Labels: map[string]string{types.LabelItem: arrayMD3}, Value: 2},
 				},
-				"mdstat_disks_down_count": {
-					{Labels: map[string]string{types.LabelItem: "md1"}},
-					{Labels: map[string]string{types.LabelItem: "md2"}},
-					{Labels: map[string]string{types.LabelItem: "md3"}},
+				MetricDisksDown: {
+					{Labels: map[string]string{types.LabelItem: arrayMD1}},
+					{Labels: map[string]string{types.LabelItem: arrayMD2}},
+					{Labels: map[string]string{types.LabelItem: arrayMD3}},
 				},
-				"mdstat_disks_failed_count": {
-					{Labels: map[string]string{types.LabelItem: "md1"}},
-					{Labels: map[string]string{types.LabelItem: "md2"}},
-					{Labels: map[string]string{types.LabelItem: "md3"}},
+				MetricDisksFailed: {
+					{Labels: map[string]string{types.LabelItem: arrayMD1}},
+					{Labels: map[string]string{types.LabelItem: arrayMD2}},
+					{Labels: map[string]string{types.LabelItem: arrayMD3}},
 				},
-				"mdstat_disks_spare_count": {
-					{Labels: map[string]string{types.LabelItem: "md1"}},
-					{Labels: map[string]string{types.LabelItem: "md2"}},
-					{Labels: map[string]string{types.LabelItem: "md3"}},
+				MetricDisksSpare: {
+					{Labels: map[string]string{types.LabelItem: arrayMD1}},
+					{Labels: map[string]string{types.LabelItem: arrayMD2}},
+					{Labels: map[string]string{types.LabelItem: arrayMD3}},
 				},
-				"mdstat_disks_total_count": {
-					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 2},
-					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 2},
-					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 2},
+				MetricDisksTotal: {
+					{Labels: map[string]string{types.LabelItem: arrayMD1}, Value: 2},
+					{Labels: map[string]string{types.LabelItem: arrayMD2}, Value: 2},
+					{Labels: map[string]string{types.LabelItem: arrayMD3}, Value: 2},
 				},
-				"mdstat_health_status": {
+				MetricHealthStatus: {
 					{
 						Labels: map[string]string{
-							types.LabelItem:                   "md1",
+							types.LabelItem:                   arrayMD1,
 							types.LabelMetaCurrentStatus:      types.StatusOk.String(),
 							types.LabelMetaCurrentDescription: "",
 						},
 					},
 					{
 						Labels: map[string]string{
-							types.LabelItem:                   "md2",
+							types.LabelItem:                   arrayMD2,
 							types.LabelMetaCurrentStatus:      types.StatusOk.String(),
 							types.LabelMetaCurrentDescription: "",
 						},
@@ -266,53 +274,53 @@ func TestGather(t *testing.T) { //nolint:maintidx
 				},
 			},
 		},
-		{ //nolint: dupl
+		{
 			name: "multiple_failed_spare",
 			expectedMetrics: map[string][]metric{
-				"mdstat_blocks_synced_finish_time": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
-					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0},
-					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
+				MetricBlocksSyncedFinish: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: arrayMD1}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: arrayMD2}, Value: 0},
 				},
-				"mdstat_blocks_synced": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 9.76773168e+08},
-					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 1.42191616e+08},
-					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 1.046528e+06},
+				MetricBlocksSynced: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 9.76773168e+08},
+					{Labels: map[string]string{types.LabelItem: arrayMD1}, Value: 1.42191616e+08},
+					{Labels: map[string]string{types.LabelItem: arrayMD2}, Value: 1.046528e+06},
 				},
-				"mdstat_blocks_synced_pct": {
-					{Labels: map[string]string{types.LabelItem: "md0"}},
-					{Labels: map[string]string{types.LabelItem: "md1"}},
-					{Labels: map[string]string{types.LabelItem: "md2"}},
+				MetricBlocksSyncedPct: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}},
+					{Labels: map[string]string{types.LabelItem: arrayMD1}},
+					{Labels: map[string]string{types.LabelItem: arrayMD2}},
 				},
-				"mdstat_disks_active_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 1},
-					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 2},
-					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 2},
+				MetricDisksActive: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 1},
+					{Labels: map[string]string{types.LabelItem: arrayMD1}, Value: 2},
+					{Labels: map[string]string{types.LabelItem: arrayMD2}, Value: 2},
 				},
-				"mdstat_disks_down_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 1},
-					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0},
-					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
+				MetricDisksDown: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 1},
+					{Labels: map[string]string{types.LabelItem: arrayMD1}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: arrayMD2}, Value: 0},
 				},
-				"mdstat_disks_failed_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 1},
-					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0},
-					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
+				MetricDisksFailed: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 1},
+					{Labels: map[string]string{types.LabelItem: arrayMD1}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: arrayMD2}, Value: 0},
 				},
-				"mdstat_disks_spare_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
-					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 1},
-					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
+				MetricDisksSpare: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: arrayMD1}, Value: 1},
+					{Labels: map[string]string{types.LabelItem: arrayMD2}, Value: 0},
 				},
-				"mdstat_disks_total_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 2},
-					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 2},
-					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 2},
+				MetricDisksTotal: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 2},
+					{Labels: map[string]string{types.LabelItem: arrayMD1}, Value: 2},
+					{Labels: map[string]string{types.LabelItem: arrayMD2}, Value: 2},
 				},
-				"mdstat_health_status": {
+				MetricHealthStatus: {
 					{
 						Labels: map[string]string{
-							types.LabelItem:                   "md0",
+							types.LabelItem:                   arrayMD0,
 							types.LabelMetaCurrentStatus:      types.StatusWarning.String(),
 							types.LabelMetaCurrentDescription: "The array is degraded, 1 disk is failing",
 						},
@@ -320,7 +328,7 @@ func TestGather(t *testing.T) { //nolint:maintidx
 					},
 					{
 						Labels: map[string]string{
-							types.LabelItem:                   "md1",
+							types.LabelItem:                   arrayMD1,
 							types.LabelMetaCurrentStatus:      types.StatusOk.String(),
 							types.LabelMetaCurrentDescription: "",
 						},
@@ -328,7 +336,7 @@ func TestGather(t *testing.T) { //nolint:maintidx
 					},
 					{
 						Labels: map[string]string{
-							types.LabelItem:                   "md2",
+							types.LabelItem:                   arrayMD2,
 							types.LabelMetaCurrentStatus:      types.StatusOk.String(),
 							types.LabelMetaCurrentDescription: "",
 						},
@@ -340,34 +348,34 @@ func TestGather(t *testing.T) { //nolint:maintidx
 		{ //nolint: dupl
 			name: "simple_active",
 			expectedMetrics: map[string][]metric{
-				"mdstat_blocks_synced_finish_time": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+				MetricBlocksSyncedFinish: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 0},
 				},
-				"mdstat_blocks_synced": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 1.046528e+06},
+				MetricBlocksSynced: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 1.046528e+06},
 				},
-				"mdstat_blocks_synced_pct": {
-					{Labels: map[string]string{types.LabelItem: "md0"}},
+				MetricBlocksSyncedPct: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}},
 				},
-				"mdstat_disks_active_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 2},
+				MetricDisksActive: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 2},
 				},
-				"mdstat_disks_down_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+				MetricDisksDown: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 0},
 				},
-				"mdstat_disks_failed_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+				MetricDisksFailed: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 0},
 				},
-				"mdstat_disks_spare_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+				MetricDisksSpare: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 0},
 				},
-				"mdstat_disks_total_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 2},
+				MetricDisksTotal: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 2},
 				},
-				"mdstat_health_status": {
+				MetricHealthStatus: {
 					{
 						Labels: map[string]string{
-							types.LabelItem:                   "md0",
+							types.LabelItem:                   arrayMD0,
 							types.LabelMetaCurrentStatus:      types.StatusOk.String(),
 							types.LabelMetaCurrentDescription: "",
 						},
@@ -379,34 +387,34 @@ func TestGather(t *testing.T) { //nolint:maintidx
 		{ //nolint: dupl
 			name: "simple_failed",
 			expectedMetrics: map[string][]metric{
-				"mdstat_blocks_synced_finish_time": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+				MetricBlocksSyncedFinish: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 0},
 				},
-				"mdstat_blocks_synced": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 1.95352512e+09},
+				MetricBlocksSynced: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 1.95352512e+09},
 				},
-				"mdstat_blocks_synced_pct": {
-					{Labels: map[string]string{types.LabelItem: "md0"}},
+				MetricBlocksSyncedPct: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}},
 				},
-				"mdstat_disks_active_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+				MetricDisksActive: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 0},
 				},
-				"mdstat_disks_down_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+				MetricDisksDown: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 0},
 				},
-				"mdstat_disks_failed_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 5},
+				MetricDisksFailed: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 5},
 				},
-				"mdstat_disks_spare_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+				MetricDisksSpare: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 0},
 				},
-				"mdstat_disks_total_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+				MetricDisksTotal: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 0},
 				},
-				"mdstat_health_status": {
+				MetricHealthStatus: {
 					{
 						Labels: map[string]string{
-							types.LabelItem:                   "md0",
+							types.LabelItem:                   arrayMD0,
 							types.LabelMetaCurrentStatus:      types.StatusCritical.String(),
 							types.LabelMetaCurrentDescription: "The array is currently inactive",
 						},
@@ -418,34 +426,34 @@ func TestGather(t *testing.T) { //nolint:maintidx
 		{
 			name: "simple_recovery",
 			expectedMetrics: map[string][]metric{
-				"mdstat_blocks_synced_finish_time": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 2.8},
+				MetricBlocksSyncedFinish: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 2.8},
 				},
-				"mdstat_blocks_synced": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 2.423168e+06},
+				MetricBlocksSynced: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 2.423168e+06},
 				},
-				"mdstat_blocks_synced_pct": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 9.9},
+				MetricBlocksSyncedPct: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 9.9},
 				},
-				"mdstat_disks_active_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 1},
+				MetricDisksActive: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 1},
 				},
-				"mdstat_disks_down_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 1},
+				MetricDisksDown: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 1},
 				},
-				"mdstat_disks_failed_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+				MetricDisksFailed: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 0},
 				},
-				"mdstat_disks_spare_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+				MetricDisksSpare: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 0},
 				},
-				"mdstat_disks_total_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 2},
+				MetricDisksTotal: {
+					{Labels: map[string]string{types.LabelItem: arrayMD0}, Value: 2},
 				},
-				"mdstat_health_status": {
+				MetricHealthStatus: {
 					{
 						Labels: map[string]string{
-							types.LabelItem:                   "md0",
+							types.LabelItem:                   arrayMD0,
 							types.LabelMetaCurrentStatus:      types.StatusWarning.String(),
 							types.LabelMetaCurrentDescription: "The array is degraded. The array should be fully synchronized in 3 minutes (around 10:37:00)",
 						},

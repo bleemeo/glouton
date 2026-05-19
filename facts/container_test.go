@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -21,6 +21,12 @@ import (
 	"testing"
 )
 
+const (
+	testContainerName = "does-not-matter"
+	testContainerTest = "test"
+	testGlobDoes      = "does*"
+)
+
 func TestContainerEnabled(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -32,7 +38,7 @@ func TestContainerEnabled(t *testing.T) {
 		{
 			name: "Default",
 			container: FakeContainer{
-				FakeContainerName: "does-not-matter",
+				FakeContainerName: testContainerName,
 			},
 			wantEnabled:  true,
 			wantExplicit: false,
@@ -64,7 +70,7 @@ func TestContainerEnabled(t *testing.T) {
 			name: "legacy-ignore",
 			container: FakeContainer{
 				FakeLabels: map[string]string{
-					"bleemeo.enable": "false",
+					containerEnableLegacyLabel: labelFalse,
 				},
 			},
 			wantEnabled:  false,
@@ -74,7 +80,7 @@ func TestContainerEnabled(t *testing.T) {
 			name: "ignore",
 			container: FakeContainer{
 				FakeLabels: map[string]string{
-					"glouton.enable": "false",
+					containerEnableLabel: labelFalse,
 				},
 			},
 			wantEnabled:  false,
@@ -84,7 +90,7 @@ func TestContainerEnabled(t *testing.T) {
 			name: "explicit-enable",
 			container: FakeContainer{
 				FakeLabels: map[string]string{
-					"glouton.enable": "true",
+					containerEnableLabel: labelTrue,
 				},
 			},
 			wantEnabled:  true,
@@ -94,10 +100,10 @@ func TestContainerEnabled(t *testing.T) {
 			name: "annotation-enable",
 			container: FakeContainer{
 				FakeLabels: map[string]string{
-					"glouton.enable": "false",
+					containerEnableLabel: labelFalse,
 				},
 				FakeAnnotations: map[string]string{
-					"glouton.enable": "on",
+					containerEnableLabel: "on",
 				},
 			},
 			wantEnabled:  true,
@@ -106,7 +112,7 @@ func TestContainerEnabled(t *testing.T) {
 		{
 			name: "config",
 			container: FakeContainer{
-				FakeContainerName: "does-not-matter",
+				FakeContainerName: testContainerName,
 			},
 			filter: ContainerFilter{
 				DisabledByDefault: true,
@@ -117,11 +123,11 @@ func TestContainerEnabled(t *testing.T) {
 		{
 			name: "config-allow-list",
 			container: FakeContainer{
-				FakeContainerName: "does-not-matter",
+				FakeContainerName: testContainerName,
 			},
 			filter: ContainerFilter{
 				DisabledByDefault: true,
-				AllowList:         []string{"does-not-matter"},
+				AllowList:         []string{testContainerName},
 			},
 			wantEnabled:  true,
 			wantExplicit: true,
@@ -129,11 +135,11 @@ func TestContainerEnabled(t *testing.T) {
 		{
 			name: "config-allow-list-glob",
 			container: FakeContainer{
-				FakeContainerName: "does-not-matter",
+				FakeContainerName: testContainerName,
 			},
 			filter: ContainerFilter{
 				DisabledByDefault: false,
-				AllowList:         []string{"does*"},
+				AllowList:         []string{testGlobDoes},
 			},
 			wantEnabled:  true,
 			wantExplicit: true,
@@ -145,7 +151,7 @@ func TestContainerEnabled(t *testing.T) {
 			},
 			filter: ContainerFilter{
 				DisabledByDefault: false,
-				AllowList:         []string{"does*"},
+				AllowList:         []string{testGlobDoes},
 			},
 			wantEnabled:  true,
 			wantExplicit: false,
@@ -153,12 +159,12 @@ func TestContainerEnabled(t *testing.T) {
 		{
 			name: "config-allow-deny-list",
 			container: FakeContainer{
-				FakeContainerName: "does-not-matter",
+				FakeContainerName: testContainerName,
 			},
 			filter: ContainerFilter{
 				DisabledByDefault: false,
-				AllowList:         []string{"does*"},
-				DenyList:          []string{"does-not-matter"},
+				AllowList:         []string{testGlobDoes},
+				DenyList:          []string{testContainerName},
 			},
 			wantEnabled:  false,
 			wantExplicit: true,
@@ -193,7 +199,7 @@ func TestContainerIgnoredPorts(t *testing.T) {
 			name: "No label",
 			container: FakeContainer{
 				FakeID:            "1234",
-				FakeContainerName: "test",
+				FakeContainerName: testContainerTest,
 			},
 			want: map[int]bool{},
 		},
@@ -201,9 +207,9 @@ func TestContainerIgnoredPorts(t *testing.T) {
 			name: "ignore-443",
 			container: FakeContainer{
 				FakeID:            "1234",
-				FakeContainerName: "test",
+				FakeContainerName: testContainerTest,
 				FakeLabels: map[string]string{
-					"glouton.check.ignore.port.443": "true",
+					"glouton.check.ignore.port.443": labelTrue,
 				},
 			},
 			want: map[int]bool{
@@ -214,10 +220,10 @@ func TestContainerIgnoredPorts(t *testing.T) {
 			name: "unknown-labels",
 			container: FakeContainer{
 				FakeID:            "1234",
-				FakeContainerName: "test",
+				FakeContainerName: testContainerTest,
 				FakeLabels: map[string]string{
-					"prometheus.io/scrape-port=443": "true",
-					"check.ignore.port.443":         "true",
+					"prometheus.io/scrape-port=443": labelTrue,
+					"check.ignore.port.443":         labelTrue,
 					"port":                          "443",
 				},
 			},
@@ -227,9 +233,9 @@ func TestContainerIgnoredPorts(t *testing.T) {
 			name: "multiple-ignore",
 			container: FakeContainer{
 				FakeID:            "1234",
-				FakeContainerName: "test",
+				FakeContainerName: testContainerTest,
 				FakeLabels: map[string]string{
-					"glouton.check.ignore.port.1000": "true",
+					"glouton.check.ignore.port.1000": labelTrue,
 					"glouton.check.ignore.port.1001": "tRuE",
 					"glouton.check.ignore.port.1002": "on",
 					"glouton.check.ignore.port.1003": "1",
@@ -246,9 +252,9 @@ func TestContainerIgnoredPorts(t *testing.T) {
 			name: "with-ignore-and-not-ignore",
 			container: FakeContainer{
 				FakeID:            "1234",
-				FakeContainerName: "test",
+				FakeContainerName: testContainerTest,
 				FakeLabels: map[string]string{
-					"glouton.check.ignore.port.1000": "true",
+					"glouton.check.ignore.port.1000": labelTrue,
 					"glouton.check.ignore.port.1001": "faLse",
 					"glouton.check.ignore.port.1002": "oFf",
 					"glouton.check.ignore.port.1003": "0",

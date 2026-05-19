@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -435,7 +435,7 @@ func (s *Synchronizer) Run(ctx context.Context) error { //nolint:maintidx
 			case IsAuthenticationError(errSync) && s.agentID != "":
 				fqdnMessage := ""
 
-				fqdn := s.option.Cache.FactsByKey()[s.agentID]["fqdn"].Value
+				fqdn := s.option.Cache.FactsByKey()[s.agentID][factFQDN].Value
 				if fqdn != "" {
 					fqdnMessage = " with fqdn " + fqdn
 				}
@@ -857,12 +857,12 @@ func (s *Synchronizer) waitCPUMetric(ctx context.Context) {
 	metrics := s.option.Cache.Metrics()
 	for _, m := range metrics {
 		metricName := gloutonTypes.TextToLabels(m.LabelsText)[gloutonTypes.LabelName]
-		if metricName == "cpu_used" || metricName == "node_cpu_seconds_total" {
+		if metricName == metricCPUUsed || metricName == "node_cpu_seconds_total" {
 			return
 		}
 	}
 
-	filter := map[string]string{gloutonTypes.LabelName: "cpu_used"}
+	filter := map[string]string{gloutonTypes.LabelName: metricCPUUsed}
 	filter2 := map[string]string{gloutonTypes.LabelName: "node_cpu_seconds_total"}
 	count := 0
 
@@ -1182,7 +1182,7 @@ func isDuplicatedUsingFacts(agentStartedAt time.Time, oldFacts map[string]bleeme
 	// we registered, another agent with the same ID must have modified them.
 	// Note that this won't work if the two agents are on the same host
 	// because both agents will send mostly the same facts.
-	factNames := []string{"fqdn", "primary_address", "primary_mac_address", "glouton_pid"}
+	factNames := []string{factFQDN, "primary_address", "primary_mac_address", factGloutonPID}
 	for _, name := range factNames {
 		old, ok := oldFacts[name]
 		if !ok {
@@ -1198,7 +1198,7 @@ func isDuplicatedUsingFacts(agentStartedAt time.Time, oldFacts map[string]bleeme
 			continue
 		}
 
-		if name == "glouton_pid" {
+		if name == factGloutonPID {
 			// For the fact glouton_pid we are going to be smarter. We don't want to announce a duplicate state.json
 			// when glouton crash or when its state.cache.json is restored to an older version.
 			// To solve this problem, we check that facts (old & new) where updated *after* Glouton started (this assume fact glouton_pid
@@ -1230,7 +1230,7 @@ func (s *Synchronizer) register(ctx context.Context) error {
 		return err
 	}
 
-	fqdn := facts["fqdn"]
+	fqdn := facts[factFQDN]
 	if fqdn == "" {
 		return errFQDNNotSet
 	}
@@ -1267,8 +1267,8 @@ func (s *Synchronizer) register(ctx context.Context) error {
 
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
 		scope.SetContext("agent", map[string]any{
-			"agent_id":        s.agentID,
-			"glouton_version": version.Version,
+			"agent_id":         s.agentID,
+			factGloutonVersion: version.Version,
 		})
 	})
 

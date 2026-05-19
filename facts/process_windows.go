@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -196,14 +196,14 @@ func parseProcessData(process *SystemProcessInformationStruct) (res Process, ok 
 	}
 
 	res = Process{
-		PID: int(process.UniqueProcessID), //nolint:gosec // PID fits in int on Windows
+		PID: int(process.UniqueProcessID),
 	}
 
 	res.CreateTime = windowsTimeToTime(process.CreateTime)
 	res.CreateTimestamp = res.CreateTime.Unix()
 
 	// this is the best approximation of the parent process we can get cheaply
-	res.PPID = int(process.InheritedFromUniqueProcessID) //nolint:gosec // PPID fits in int on Windows
+	res.PPID = int(process.InheritedFromUniqueProcessID)
 
 	res.MemoryRSS = uint64(process.WorkingSetSize) / 1024
 

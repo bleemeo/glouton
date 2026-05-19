@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -24,34 +24,43 @@ import (
 	"github.com/bleemeo/glouton/types"
 )
 
+const (
+	metricMemUsed                   = "mem_used"
+	metricMemFree                   = "mem_free"
+	metricMemUsedPerc               = "mem_used_perc"
+	metricCPUUsed                   = "cpu_used"
+	metricTemperature               = "temperature"
+	metricRLCPUUtilDuringLastMinute = "rlCpuUtilDuringLastMinute"
+)
+
 func DefaultSNMPRules(resolution time.Duration) []types.SimpleRule {
 	defaultRules := []types.SimpleRule{
 		{
-			TargetName:  "mem_used",
+			TargetName:  metricMemUsed,
 			PromQLQuery: `sum without (hrStorageDescr, hrStorageIndex) (hrStorageUsed{hrStorageDescr="Real Memory"} * hrStorageAllocationUnits)`,
 		},
 		{
-			TargetName:  "mem_free",
+			TargetName:  metricMemFree,
 			PromQLQuery: `sum without (hrStorageDescr, hrStorageIndex) ((hrStorageSize{hrStorageDescr="Real Memory"} - hrStorageUsed) * hrStorageAllocationUnits)`,
 		},
 		{
-			TargetName:  "mem_used_perc",
+			TargetName:  metricMemUsedPerc,
 			PromQLQuery: `sum without (hrStorageDescr, hrStorageIndex) (hrStorageUsed{hrStorageDescr="Real Memory"}/hrStorageSize) * 100`,
 		},
 		{
-			TargetName:  "mem_free",
+			TargetName:  metricMemFree,
 			PromQLQuery: `sum without (cpmCPUTotalIndex) (cpmCPUMemoryFree * 1024)`,
 		},
 		{
-			TargetName:  "mem_used",
+			TargetName:  metricMemUsed,
 			PromQLQuery: `sum without (cpmCPUTotalIndex) (cpmCPUMemoryUsed * 1024)`,
 		},
 		{
-			TargetName:  "mem_used_perc",
+			TargetName:  metricMemUsedPerc,
 			PromQLQuery: `sum without (cpmCPUTotalIndex) (cpmCPUMemoryUsed/(cpmCPUMemoryUsed+cpmCPUMemoryFree)) * 100`,
 		},
 		{
-			TargetName:  "mem_used_perc",
+			TargetName:  metricMemUsedPerc,
 			PromQLQuery: `sum without (ciscoMemoryPoolName, ciscoMemoryPoolType) (ciscoMemoryPoolUsed{ciscoMemoryPoolName=~"(Processor|System memory)"}/(ciscoMemoryPoolUsed+ciscoMemoryPoolFree)) * 100`,
 		},
 		{
@@ -73,31 +82,31 @@ func DefaultSNMPRules(resolution time.Duration) []types.SimpleRule {
 		// SNMP ex-"rename" rules
 		// `label_replace` doesn't remove the source label, so we need to explicitly drop it using the `without` clause.
 		{
-			TargetName:  "cpu_used",
+			TargetName:  metricCPUUsed,
 			PromQLQuery: `sum without (hrDeviceDescr, hrDeviceIndex) (label_replace(hrProcessorLoad, "core", "$1", "hrDeviceIndex", "(.*)"))`,
 		},
 		{
-			TargetName:  "cpu_used",
+			TargetName:  metricCPUUsed,
 			PromQLQuery: `sum without (cpmCPUTotalIndex) (label_replace(cpmCPUTotal1minRev, "core", "$1", "cpmCPUTotalIndex", "(.*)"))`,
 		},
 		{
-			TargetName:  "cpu_used",
-			PromQLQuery: "rlCpuUtilDuringLastMinute",
+			TargetName:  metricCPUUsed,
+			PromQLQuery: metricRLCPUUtilDuringLastMinute,
 		},
 		{
-			TargetName:  "mem_used",
+			TargetName:  metricMemUsed,
 			PromQLQuery: `sum without (ciscoMemoryPoolName, ciscoMemoryPoolType) (ciscoMemoryPoolUsed{ciscoMemoryPoolName=~"(Processor|System memory)"})`,
 		},
 		{
-			TargetName:  "mem_free",
+			TargetName:  metricMemFree,
 			PromQLQuery: `sum without (ciscoMemoryPoolName, ciscoMemoryPoolType) (ciscoMemoryPoolFree{ciscoMemoryPoolName=~"(Processor|System memory)"})`,
 		},
 		{
-			TargetName:  "temperature",
+			TargetName:  metricTemperature,
 			PromQLQuery: `sum without (ciscoEnvMonTemperatureStatusDescr) (label_replace(ciscoEnvMonTemperatureStatusValue, "sensor", "$1", "ciscoEnvMonTemperatureStatusDescr", "(.*)"))`,
 		},
 		{
-			TargetName:  "temperature",
+			TargetName:  metricTemperature,
 			PromQLQuery: `sum without (rlPhdUnitEnvParamStackUnit) (label_replace(rlPhdUnitEnvParamTempSensorValue{rlPhdUnitEnvParamStackUnit="1"}, "sensor", "CPU", "rlPhdUnitEnvParamStackUnit", ".*"))`,
 		},
 	}

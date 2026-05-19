@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -29,6 +29,8 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/model/labels"
 )
+
+const testServiceName = "service-name"
 
 func Test_mergeLabels(t *testing.T) {
 	var (
@@ -220,7 +222,7 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 			fields: fields{
 				source: g,
 				annotations: types.MetricAnnotations{
-					ServiceName: "service-name",
+					ServiceName: testServiceName,
 				},
 				labels: labels.FromStrings(strJob, strValue),
 			},
@@ -228,7 +230,7 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 				{
 					Point: types.Point{Time: time.Unix(0, timestampMS*1e6), Value: floatValue1},
 					Annotations: types.MetricAnnotations{
-						ServiceName: "service-name",
+						ServiceName: testServiceName,
 					},
 					Labels: map[string]string{
 						types.LabelName: "up",
@@ -239,7 +241,7 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 				{
 					Point: types.Point{Time: time.Unix(0, timestampMS*1e6), Value: floatValue2},
 					Annotations: types.MetricAnnotations{
-						ServiceName: "service-name",
+						ServiceName: testServiceName,
 					},
 					Labels: map[string]string{
 						types.LabelName: "up",
@@ -253,7 +255,7 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 			fields: fields{
 				source: g,
 				annotations: types.MetricAnnotations{
-					ServiceName: "service-name",
+					ServiceName: testServiceName,
 				},
 				labels: labels.FromStrings(strItem, strJob),
 			},
@@ -261,7 +263,7 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 				{
 					Point: types.Point{Time: time.Unix(0, timestampMS*1e6), Value: floatValue1},
 					Annotations: types.MetricAnnotations{
-						ServiceName: "service-name",
+						ServiceName: testServiceName,
 					},
 					Labels: map[string]string{
 						types.LabelName: "up",
@@ -271,7 +273,7 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 				{
 					Point: types.Point{Time: time.Unix(0, timestampMS*1e6), Value: floatValue2},
 					Annotations: types.MetricAnnotations{
-						ServiceName: "service-name",
+						ServiceName: testServiceName,
 					},
 					Labels: map[string]string{
 						types.LabelName: "up",

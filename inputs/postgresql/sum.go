@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -62,7 +62,7 @@ func sum(acc *internal.StoreAccumulator) {
 	}
 
 	sumMeasurement := internal.Measurement{
-		Name:   "postgresql",
+		Name:   inputName,
 		Fields: newFields,
 		Tags: map[string]string{
 			"sum": "true",

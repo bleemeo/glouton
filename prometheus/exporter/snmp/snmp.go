@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -51,6 +51,22 @@ const (
 	mockFactMetricName     = "_mock_snmp_metric_for_mock_fact"
 	mockFactLabelKey       = "_mock_snmp_fact_key"
 	mockFactLabelValue     = "_mock_snmp_fact_value"
+
+	// SNMP fact key names.
+	factProductName    = "product_name"
+	factFQDN           = "fqdn"
+	factPrimaryAddress = "primary_address"
+	factPrimaryMAC     = "primary_mac_address"
+	factSerialNumber   = "serial_number"
+	factVersion        = "version"
+	factBootVersion    = "boot_version"
+
+	// SNMP module names.
+	moduleIfMIB = "if_mib"
+	moduleCisco = "cisco"
+
+	// SNMP error messages.
+	errMsgDeviceNotRespond = "SNMP device didn't respond"
 )
 
 const (
@@ -113,19 +129,19 @@ func (t *Target) module(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	if strings.Contains(facts["product_name"], "Cisco") {
-		return "cisco", nil
+	if strings.Contains(facts[factProductName], "Cisco") {
+		return moduleCisco, nil
 	}
 
-	if strings.Contains(facts["product_name"], "LaserJet") {
+	if strings.Contains(facts[factProductName], "LaserJet") {
 		return "printer_mib", nil
 	}
 
-	if strings.Contains(facts["product_name"], "PowerConnect") {
+	if strings.Contains(facts[factProductName], "PowerConnect") {
 		return "dell", nil
 	}
 
-	return "if_mib", nil
+	return moduleIfMIB, nil
 }
 
 func (t *Target) Name(ctx context.Context) (string, error) {
@@ -138,8 +154,8 @@ func (t *Target) Name(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	if facts["fqdn"] != "" {
-		return facts["fqdn"], nil
+	if facts[factFQDN] != "" {
+		return facts[factFQDN], nil
 	}
 
 	return t.opt.Target, nil
@@ -506,17 +522,17 @@ func factFromPoints(points []types.MetricPoint, now time.Time, scraperFact map[s
 	result := make(map[string]string)
 
 	convertMap := map[string]string{
-		"dot1dBaseBridgeAddress": "primary_mac_address",
-		"entPhysicalFirmwareRev": "boot_version",
-		"entPhysicalSerialNum":   "serial_number",
-		"entPhysicalSoftwareRev": "version",
-		"ipAdEntAddr":            "primary_address",
-		"sysDescr":               "product_name",
-		"sysName":                "fqdn",
+		"dot1dBaseBridgeAddress": factPrimaryMAC,
+		"entPhysicalFirmwareRev": factBootVersion,
+		"entPhysicalSerialNum":   factSerialNumber,
+		"entPhysicalSoftwareRev": factVersion,
+		"ipAdEntAddr":            factPrimaryAddress,
+		"sysDescr":               factProductName,
+		"sysName":                factFQDN,
 	}
 
 	mergeMap := map[string]func(string, string) string{
-		"primary_address": addressSelectPublic,
+		factPrimaryAddress: addressSelectPublic,
 	}
 
 	for _, p := range points {
@@ -550,11 +566,11 @@ func factFromPoints(points []types.MetricPoint, now time.Time, scraperFact map[s
 	}
 
 	result[facts.FactUpdatedAt] = now.UTC().Format(time.RFC3339)
-	result["primary_mac_address"] = strings.ToLower(result["primary_mac_address"])
-	result["hostname"] = result["fqdn"]
+	result[factPrimaryMAC] = strings.ToLower(result[factPrimaryMAC])
+	result["hostname"] = result[factFQDN]
 
-	if strings.Contains(result["fqdn"], ".") {
-		l := strings.SplitN(result["fqdn"], ".", 2)
+	if strings.Contains(result[factFQDN], ".") {
+		l := strings.SplitN(result[factFQDN], ".", 2)
 		result["hostname"] = l[0]
 		result["domain"] = l[1]
 	}
@@ -567,7 +583,7 @@ func factFromPoints(points []types.MetricPoint, now time.Time, scraperFact map[s
 
 	result["agent_version"] = scraperFact["agent_version"]
 	result["glouton_version"] = scraperFact["glouton_version"]
-	result["scraper_fqdn"] = scraperFact["fqdn"]
+	result["scraper_fqdn"] = scraperFact[factFQDN]
 
 	facts.CleanFacts(result)
 
@@ -602,9 +618,9 @@ func parseProductnameComaKV(productName string) map[string]string {
 		if len(subpart) == 2 {
 			switch subpart[0] {
 			case "SN":
-				facts["serial_number"] = subpart[1]
+				facts[factSerialNumber] = subpart[1]
 			case "PID":
-				facts["product_name"] = subpart[1]
+				facts[factProductName] = subpart[1]
 			}
 		}
 	}
@@ -613,37 +629,37 @@ func parseProductnameComaKV(productName string) map[string]string {
 }
 
 func parseProductname(facts map[string]string) map[string]string {
-	maps.Copy(facts, parseProductnameComaKV(facts["product_name"]))
+	maps.Copy(facts, parseProductnameComaKV(facts[factProductName]))
 
 	// Some product name contains multiple information separated by coma. Only kept the first one
 	// ... useless the first part isn't specific enough.
-	part := strings.Split(facts["product_name"], ",")
+	part := strings.Split(facts[factProductName], ",")
 	if len(part) > 2 {
-		facts["product_name"] = part[0]
+		facts[factProductName] = part[0]
 		if part[0] == "Cisco IOS Software" {
-			facts["product_name"] = part[0] + "," + part[1]
+			facts[factProductName] = part[0] + "," + part[1]
 		}
 	}
 
-	if strings.HasPrefix(facts["product_name"], "VMware ESXi ") {
-		part := strings.Split(facts["product_name"], " ")
+	if strings.HasPrefix(facts[factProductName], "VMware ESXi ") {
+		part := strings.Split(facts[factProductName], " ")
 		if len(part) >= 3 && len(part[2]) > 0 && isDigit(part[2][0]) {
-			facts["version"] = part[2]
+			facts[factVersion] = part[2]
 		}
 	}
 
-	if strings.HasPrefix(facts["product_name"], "U6-Lite ") {
-		part := strings.Split(facts["product_name"], " ")
+	if strings.HasPrefix(facts[factProductName], "U6-Lite ") {
+		part := strings.Split(facts[factProductName], " ")
 		if len(part) >= 2 && len(part[1]) > 0 && isDigit(part[1][0]) {
-			facts["version"] = part[1]
+			facts[factVersion] = part[1]
 		}
 	}
 
-	if strings.HasPrefix(facts["product_name"], "Linux USW-") {
+	if strings.HasPrefix(facts[factProductName], "Linux USW-") {
 		// Swap Linux and the 2nd word
-		part := strings.SplitN(facts["product_name"], " ", 3)
+		part := strings.SplitN(facts[factProductName], " ", 3)
 		part[0], part[1] = part[1], part[0]
-		facts["product_name"] = strings.Join(part, " ")
+		facts[factProductName] = strings.Join(part, " ")
 	}
 
 	return facts
@@ -673,7 +689,7 @@ func humanError(err error) string {
 	if errors.As(err, &targetErr) {
 		switch {
 		case targetErr.StatusCode >= 400 && bytes.Contains(targetErr.PartialBody, []byte("read: connection refused")):
-			return "SNMP device didn't respond"
+			return errMsgDeviceNotRespond
 		case targetErr.StatusCode >= 400 && bytes.Contains(targetErr.PartialBody, []byte("request timeout")):
 			return "SNMP device request timeout"
 		case targetErr.ConnectErr != nil:
@@ -686,19 +702,19 @@ func humanError(err error) string {
 
 func deviceType(facts map[string]string) string {
 	switch {
-	case strings.HasPrefix(facts["product_name"], "PowerConnect"):
+	case strings.HasPrefix(facts[factProductName], "PowerConnect"):
 		return deviceTypeSwitch
-	case strings.Contains(facts["product_name"], "Adaptive Security Appliance"):
+	case strings.Contains(facts[factProductName], "Adaptive Security Appliance"):
 		return deviceTypeFirewall
-	case strings.HasPrefix(facts["product_name"], "Cisco"):
+	case strings.HasPrefix(facts[factProductName], "Cisco"):
 		return deviceTypeSwitch
-	case strings.HasPrefix(facts["product_name"], "U6-Lite"):
+	case strings.HasPrefix(facts[factProductName], "U6-Lite"):
 		return deviceTypeAP
-	case strings.HasPrefix(facts["product_name"], "USW-"):
+	case strings.HasPrefix(facts[factProductName], "USW-"):
 		return deviceTypeSwitch
-	case strings.Contains(facts["product_name"], "LaserJet"):
+	case strings.Contains(facts[factProductName], "LaserJet"):
 		return deviceTypePrinter
-	case strings.HasPrefix(facts["product_name"], "VMware ESX"):
+	case strings.HasPrefix(facts[factProductName], "VMware ESX"):
 		return deviceTypeHypervisor
 	}
 

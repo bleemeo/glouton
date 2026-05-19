@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -27,6 +27,13 @@ import (
 
 var errTest = errors.New("test error")
 
+const (
+	testMetricGoGoroutines = "go_goroutines"
+	testMetricNodeCPU      = "node_cpu_seconds_total"
+	testLabelsNodeCPUIdle  = `__name__="node_cpu_seconds_total",cpu="0",mode="idle"`
+	testLabelsGoGoroutines = `__name__="go_goroutines"`
+)
+
 func TestLabelsToText(t *testing.T) {
 	type args struct {
 		labels map[string]string
@@ -43,42 +50,42 @@ func TestLabelsToText(t *testing.T) {
 			name: "simple",
 			args: args{
 				labels: map[string]string{
-					"__name__": "node_cpu_seconds_total",
-					"cpu":      "0",
-					"mode":     "idle",
+					LabelName: testMetricNodeCPU,
+					"cpu":     "0",
+					"mode":    "idle",
 				},
 			},
 			wantNicer: `node_cpu_seconds_total{cpu="0",mode="idle"}`,
-			want:      `__name__="node_cpu_seconds_total",cpu="0",mode="idle"`,
+			want:      testLabelsNodeCPUIdle,
 		},
 		{
 			name: "sorted",
 			args: args{
 				labels: map[string]string{
-					"mode":     "idle",
-					"cpu":      "0",
-					"__name__": "node_cpu_seconds_total",
+					"mode":    "idle",
+					"cpu":     "0",
+					LabelName: testMetricNodeCPU,
 				},
 			},
 			wantNicer: `node_cpu_seconds_total{cpu="0",mode="idle"}`,
-			want:      `__name__="node_cpu_seconds_total",cpu="0",mode="idle"`,
+			want:      testLabelsNodeCPUIdle,
 		},
 		{
 			name: "only-name",
 			args: args{
 				labels: map[string]string{
-					"__name__": "go_goroutines",
+					LabelName: testMetricGoGoroutines,
 				},
 			},
 			wantNicer: `go_goroutines`,
-			want:      `__name__="go_goroutines"`,
+			want:      testLabelsGoGoroutines,
 		},
 		{
 			name: "escaped",
 			args: args{
 				labels: map[string]string{
-					"__name__": "go_goroutines",
-					"alabel":   `value1",blabel="value2`,
+					LabelName: testMetricGoGoroutines,
+					"alabel":  `value1",blabel="value2`,
 				},
 			},
 			wantNicer: `go_goroutines{alabel="value1\",blabel=\"value2"}`,
@@ -88,8 +95,8 @@ func TestLabelsToText(t *testing.T) {
 			name: "escaped2",
 			args: args{
 				labels: map[string]string{
-					"__name__": "go_goroutines",
-					"alabel":   `value1\",blabel=\"value2\`,
+					LabelName: testMetricGoGoroutines,
+					"alabel":  `value1\",blabel=\"value2\`,
 				},
 			},
 			wantNicer: `go_goroutines{alabel="value1\\\",blabel=\\\"value2\\"}`,
@@ -99,14 +106,14 @@ func TestLabelsToText(t *testing.T) {
 			name: "trim-empty-label",
 			args: args{
 				labels: map[string]string{
-					"__name__": "go_goroutines",
-					"empty":    "",
+					LabelName: testMetricGoGoroutines,
+					"empty":   "",
 				},
 			},
-			want:      `__name__="go_goroutines"`,
+			want:      testLabelsGoGoroutines,
 			wantNicer: `go_goroutines`,
 			wantBack: map[string]string{
-				"__name__": "go_goroutines",
+				LabelName: testMetricGoGoroutines,
 			},
 		},
 	}
@@ -198,8 +205,8 @@ func Test_MultiError_Is(t *testing.T) {
 
 // FuzzTextToLabelsNoCrash ensure we don't have a panic on invalid input.
 func FuzzTextToLabelsNoCrash(f *testing.F) {
-	f.Add(`__name__="node_cpu_seconds_total",cpu="0",mode="idle"`)
-	f.Add(`__name__="go_goroutines"`)
+	f.Add(testLabelsNodeCPUIdle)
+	f.Add(testLabelsGoGoroutines)
 	f.Add(`__name__="go_goroutines",alabel="value1\",blabel=\"value2"`)
 	f.Add(``)
 	f.Add(`=`)
@@ -219,9 +226,9 @@ func isValidKey(s string) bool {
 
 // FuzzLabelsRoundTrip ensure we have a round-trip property for label conversion.
 func FuzzLabelsRoundTrip(f *testing.F) {
-	f.Add("__name__", "go_goroutines", "", "")
-	f.Add("__name__", "node_cpu_seconds_total", "cpu", "0")
-	f.Add("__name__", `go_goroutines`, "alabel", `value1",blabel="value2`)
+	f.Add(LabelName, testMetricGoGoroutines, "", "")
+	f.Add(LabelName, testMetricNodeCPU, "cpu", "0")
+	f.Add(LabelName, testMetricGoGoroutines, "alabel", `value1",blabel="value2`)
 
 	f.Fuzz(func(t *testing.T, k1, v1, k2, v2 string) {
 		if !isValidKey(k1) || !isValidKey(k2) || len(v1) == 0 || len(v2) == 0 {
@@ -245,8 +252,8 @@ func FuzzLabelsRoundTrip(f *testing.F) {
 
 func BenchmarkTextToLabels(b *testing.B) {
 	benchmarkInputs := []string{
-		`__name__="node_cpu_seconds_total",cpu="0",mode="idle"`,
-		`__name__="go_goroutines"`,
+		testLabelsNodeCPUIdle,
+		testLabelsGoGoroutines,
 		`__name__="go_goroutines",alabel="value1\",blabel=\"value2"`,
 		`__name__="http_requests_total",handler="/api/v1/query",instance="localhost:9090",job="prometheus",method="get"`,
 	}

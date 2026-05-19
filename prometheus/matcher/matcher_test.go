@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -28,6 +28,21 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 )
 
+const (
+	testCPUPercent   = "cpu_percent"
+	testInstance1    = "instance_4"
+	testInstance3    = "instance_3"
+	testInstance2    = "instance_2"
+	testJob1         = "job_4"
+	testJob2         = "job_2"
+	testJob3         = "job_3"
+	testJobNotWanted = "job_not_wanted"
+	testShouldFail   = "should_fail"
+	testCPU2         = "cpu2"
+	testCPU          = "cpu"
+	testLabelTest    = "test"
+)
+
 func Test_NormalizeMetric(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -37,12 +52,12 @@ func Test_NormalizeMetric(t *testing.T) {
 	}{
 		{
 			name:            "basic metric",
-			allowListString: "cpu_percent",
+			allowListString: testCPUPercent,
 			want: Matchers{
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelName,
-					Value: "cpu_percent",
+					Value: testCPUPercent,
 				},
 			},
 		},
@@ -74,18 +89,18 @@ func Test_NormalizeMetric(t *testing.T) {
 			want: Matchers{
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
-					Name:  "test",
+					Name:  testLabelTest,
 					Value: "Hello",
 				},
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeInstance,
-					Value: "instance_4",
+					Value: testInstance1,
 				},
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeJob,
-					Value: "job_4",
+					Value: testJob1,
 				},
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
@@ -147,27 +162,27 @@ func Test_Fail_NormalizeMetrics(t *testing.T) {
 }
 
 func Test_Add_Same_Type(t *testing.T) {
-	m, _ := NormalizeMetric("cpu")
+	m, _ := NormalizeMetric(testCPU)
 
-	err := m.Add(types.LabelName, "cpu2", labels.MatchEqual)
+	err := m.Add(types.LabelName, testCPU2, labels.MatchEqual)
 	if err != nil {
 		t.Errorf("An error occurred: %v", err)
 	}
 
 	last := m[len(m)-1]
 
-	if last.Name != types.LabelName || last.Type != labels.MatchEqual || last.Value != "cpu2" {
+	if last.Name != types.LabelName || last.Type != labels.MatchEqual || last.Value != testCPU2 {
 		t.Errorf("Invalid value of matcher field: expected {%s %v %s}, got {%s %s %s}",
-			types.LabelName, labels.MatchEqual, "cpu2",
+			types.LabelName, labels.MatchEqual, testCPU2,
 			last.Name, last.Type, last.Value)
 	}
 }
 
 func Test_Add_Different_Type(t *testing.T) {
-	m, _ := NormalizeMetric("cpu")
+	m, _ := NormalizeMetric(testCPU)
 	before := len(m)
 
-	err := m.Add(types.LabelName, "cpu2", labels.MatchRegexp)
+	err := m.Add(types.LabelName, testCPU2, labels.MatchRegexp)
 	if err != nil {
 		t.Errorf("An error occurred: %v", err)
 	}
@@ -178,10 +193,10 @@ func Test_Add_Different_Type(t *testing.T) {
 }
 
 func Test_Add_Error(t *testing.T) {
-	metric := "cpu"
+	metric := testCPU
 	m, _ := NormalizeMetric(metric)
 
-	err := m.Add("test", metric+"[", labels.MatchRegexp)
+	err := m.Add(testLabelTest, metric+"[", labels.MatchRegexp)
 	if err == nil {
 		t.Errorf("An error was not caught: expected a regex compile error on metric %s", metric)
 	}
@@ -198,26 +213,26 @@ func Test_Matches_Basic_Point(t *testing.T) {
 			name: "basic metric",
 			point: types.MetricPoint{
 				Labels: map[string]string{
-					types.LabelName:           "cpu_percent",
-					types.LabelScrapeInstance: "instance_1",
-					types.LabelScrapeJob:      "job_1",
+					types.LabelName:           testCPUPercent,
+					types.LabelScrapeInstance: testInstance1,
+					types.LabelScrapeJob:      testJob1,
 				},
 			},
 			matchers: Matchers{
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelName,
-					Value: "cpu_percent",
+					Value: testCPUPercent,
 				},
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeInstance,
-					Value: "instance_1",
+					Value: testInstance1,
 				},
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeJob,
-					Value: "job_1",
+					Value: testJob1,
 				},
 			},
 			want: true,
@@ -226,26 +241,26 @@ func Test_Matches_Basic_Point(t *testing.T) {
 			name: "basic metric fail",
 			point: types.MetricPoint{
 				Labels: map[string]string{
-					types.LabelName:           "should_fail",
-					types.LabelScrapeInstance: "instance_3",
-					types.LabelScrapeJob:      "job_3",
+					types.LabelName:           testShouldFail,
+					types.LabelScrapeInstance: testInstance3,
+					types.LabelScrapeJob:      testJob3,
 				},
 			},
 			matchers: Matchers{
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelName,
-					Value: "cpu_percent",
+					Value: testCPUPercent,
 				},
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeInstance,
-					Value: "instance_3",
+					Value: testInstance3,
 				},
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeJob,
-					Value: "job_3",
+					Value: testJob3,
 				},
 			},
 			want: false,
@@ -254,8 +269,8 @@ func Test_Matches_Basic_Point(t *testing.T) {
 			name: "basic metric fail missing label",
 			point: types.MetricPoint{
 				Labels: map[string]string{
-					types.LabelName:           "cpu_percent",
-					types.LabelScrapeInstance: "instance_3",
+					types.LabelName:           testCPUPercent,
+					types.LabelScrapeInstance: testInstance3,
 					// missing scrape job
 				},
 			},
@@ -263,17 +278,17 @@ func Test_Matches_Basic_Point(t *testing.T) {
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelName,
-					Value: "cpu_percent",
+					Value: testCPUPercent,
 				},
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeInstance,
-					Value: "instance_3",
+					Value: testInstance3,
 				},
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeJob,
-					Value: "job_3",
+					Value: testJob3,
 				},
 			},
 			want: false,
@@ -283,8 +298,8 @@ func Test_Matches_Basic_Point(t *testing.T) {
 			point: types.MetricPoint{
 				Labels: map[string]string{
 					types.LabelName:           "cpu_percent_whatever",
-					types.LabelScrapeInstance: "instance_2",
-					types.LabelScrapeJob:      "job_2",
+					types.LabelScrapeInstance: testInstance2,
+					types.LabelScrapeJob:      testJob2,
 				},
 			},
 			matchers: Matchers{
@@ -292,12 +307,12 @@ func Test_Matches_Basic_Point(t *testing.T) {
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeInstance,
-					Value: "instance_2",
+					Value: testInstance2,
 				},
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeJob,
-					Value: "job_2",
+					Value: testJob2,
 				},
 			},
 			want: true,
@@ -307,8 +322,8 @@ func Test_Matches_Basic_Point(t *testing.T) {
 			point: types.MetricPoint{
 				Labels: map[string]string{
 					types.LabelName:           "cpu_percent_whatever_should_fail",
-					types.LabelScrapeInstance: "instance_4",
-					types.LabelScrapeJob:      "job_4",
+					types.LabelScrapeInstance: testInstance1,
+					types.LabelScrapeJob:      testJob1,
 				},
 			},
 			matchers: Matchers{
@@ -316,12 +331,12 @@ func Test_Matches_Basic_Point(t *testing.T) {
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeInstance,
-					Value: "instance_4",
+					Value: testInstance1,
 				},
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeJob,
-					Value: "job_4",
+					Value: testJob1,
 				},
 			},
 			want: false,
@@ -331,7 +346,7 @@ func Test_Matches_Basic_Point(t *testing.T) {
 			point: types.MetricPoint{
 				Labels: map[string]string{
 					types.LabelName:           "cpu_percent_whatever",
-					types.LabelScrapeInstance: "instance_2",
+					types.LabelScrapeInstance: testInstance2,
 				},
 			},
 			matchers: Matchers{
@@ -339,12 +354,12 @@ func Test_Matches_Basic_Point(t *testing.T) {
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeInstance,
-					Value: "instance_2",
+					Value: testInstance2,
 				},
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeJob,
-					Value: "job_2",
+					Value: testJob2,
 				},
 			},
 			want: false,
@@ -353,26 +368,26 @@ func Test_Matches_Basic_Point(t *testing.T) {
 			name: "basic metric label that matches not equal",
 			point: types.MetricPoint{
 				Labels: map[string]string{
-					types.LabelName:           "cpu_percent",
-					types.LabelScrapeInstance: "instance_3",
-					types.LabelScrapeJob:      "job_not_wanted",
+					types.LabelName:           testCPUPercent,
+					types.LabelScrapeInstance: testInstance3,
+					types.LabelScrapeJob:      testJobNotWanted,
 				},
 			},
 			matchers: Matchers{
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelName,
-					Value: "cpu_percent",
+					Value: testCPUPercent,
 				},
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeInstance,
-					Value: "instance_3",
+					Value: testInstance3,
 				},
 				&labels.Matcher{
 					Type:  labels.MatchNotEqual,
 					Name:  types.LabelScrapeJob,
-					Value: "job_not_wanted",
+					Value: testJobNotWanted,
 				},
 			},
 			want: false,
@@ -381,26 +396,26 @@ func Test_Matches_Basic_Point(t *testing.T) {
 			name: "basic metric missing label that works",
 			point: types.MetricPoint{
 				Labels: map[string]string{
-					types.LabelName:           "cpu_percent",
-					types.LabelScrapeInstance: "instance_4",
-					// No scrape job, but the matcher is : scrape_job != "job_not_wanted"
+					types.LabelName:           testCPUPercent,
+					types.LabelScrapeInstance: testInstance1,
+					// No scrape job, but the matcher is : scrape_job != testJobNotWanted
 				},
 			},
 			matchers: Matchers{
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelName,
-					Value: "cpu_percent",
+					Value: testCPUPercent,
 				},
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeInstance,
-					Value: "instance_4",
+					Value: testInstance1,
 				},
 				&labels.Matcher{
 					Type:  labels.MatchNotEqual,
 					Name:  types.LabelScrapeJob,
-					Value: "job_not_wanted",
+					Value: testJobNotWanted,
 				},
 			},
 			want: true,
@@ -409,25 +424,25 @@ func Test_Matches_Basic_Point(t *testing.T) {
 			name: "should fail",
 			point: types.MetricPoint{
 				Labels: map[string]string{
-					types.LabelScrapeInstance: "should_fail",
-					types.LabelScrapeJob:      "should_fail",
+					types.LabelScrapeInstance: testShouldFail,
+					types.LabelScrapeJob:      testShouldFail,
 				},
 			},
 			matchers: Matchers{
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelName,
-					Value: "cpu_percent",
+					Value: testCPUPercent,
 				},
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeInstance,
-					Value: "instance_1",
+					Value: testInstance1,
 				},
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeJob,
-					Value: "job_1",
+					Value: testJob1,
 				},
 			},
 			want: false,
@@ -446,9 +461,9 @@ func Test_Matches_Basic_Point(t *testing.T) {
 }
 
 func Test_Matches_Basic_Family(t *testing.T) {
-	fn := []string{"cpu_percent", "should_fail", "cpu_whatever_should_fail"}
+	fn := []string{testCPUPercent, testShouldFail, "cpu_whatever_should_fail"}
 	lbln := []string{types.LabelScrapeInstance, types.LabelScrapeJob}
-	lblv := []string{"instance_1", "job_1", "instance_2", "job_2"}
+	lblv := []string{testInstance1, testJob1, testInstance2, testJob2}
 	tests := []struct {
 		name       string
 		metricName string
@@ -475,17 +490,17 @@ func Test_Matches_Basic_Family(t *testing.T) {
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelName,
-					Value: "cpu_percent",
+					Value: testCPUPercent,
 				},
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeInstance,
-					Value: "instance_1",
+					Value: testInstance1,
 				},
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeJob,
-					Value: "job_1",
+					Value: testJob1,
 				},
 			},
 			want: true,
@@ -510,12 +525,12 @@ func Test_Matches_Basic_Family(t *testing.T) {
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeInstance,
-					Value: "instance_1",
+					Value: testInstance1,
 				},
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeJob,
-					Value: "job_1",
+					Value: testJob1,
 				},
 			},
 			want: true,
@@ -539,17 +554,17 @@ func Test_Matches_Basic_Family(t *testing.T) {
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelName,
-					Value: "cpu_percent",
+					Value: testCPUPercent,
 				},
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeInstance,
-					Value: "instance_1",
+					Value: testInstance1,
 				},
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeJob,
-					Value: "job_1",
+					Value: testJob1,
 				},
 			},
 			want: false,
@@ -569,17 +584,17 @@ func Test_Matches_Basic_Family(t *testing.T) {
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelName,
-					Value: "cpu_percent",
+					Value: testCPUPercent,
 				},
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeInstance,
-					Value: "instance_1",
+					Value: testInstance1,
 				},
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeJob,
-					Value: "job_1",
+					Value: testJob1,
 				},
 			},
 			want: false,
@@ -604,12 +619,12 @@ func Test_Matches_Basic_Family(t *testing.T) {
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeInstance,
-					Value: "instance_1",
+					Value: testInstance1,
 				},
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeJob,
-					Value: "job_1",
+					Value: testJob1,
 				},
 			},
 			want: false,
@@ -654,12 +669,12 @@ func Test_Matches_Basic_Family(t *testing.T) {
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeInstance,
-					Value: "instance_1",
+					Value: testInstance1,
 				},
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelScrapeJob,
-					Value: "job_1",
+					Value: testJob1,
 				},
 			},
 			want: false,
@@ -678,9 +693,9 @@ func Test_Matches_Basic_Family(t *testing.T) {
 }
 
 func Test_String(t *testing.T) {
-	m, _ := NormalizeMetric("cpu")
+	m, _ := NormalizeMetric(testCPU)
 
-	_ = m.Add("test", "test", labels.MatchEqual)
+	_ = m.Add(testLabelTest, testLabelTest, labels.MatchEqual)
 
 	want := "{__name__=\"cpu\",test=\"test\"}"
 

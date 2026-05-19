@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -96,9 +96,9 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Timestamp: time.Date(2025, 4, 4, 11, 14, 50, 0, utcPlus2),
 					Body:      `127.0.0.1 - - [04/Apr/2025:11:14:50 +0200] "GET / HTTP/1.1" 200 396 "-" "Glouton 0.1"`,
 					Attributes: map[string]any{
-						"http.request.method":       "GET",
-						"http.response.status_code": "200",
-						"log.iostream":              "stdout",
+						testAttrHTTPMethod:  testMethodGET,
+						testAttrHTTPStatus:  "200",
+						testAttrLogIOStream: testStreamStdout,
 					},
 					Severity: 5,
 				},
@@ -106,9 +106,9 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Timestamp: time.Date(2025, 4, 4, 11, 15, 18, 0, utcPlus2),
 					Body:      `127.0.0.1 - user [04/Apr/2025:11:15:18 +0200] "GET /favicon.ico HTTP/1.1" 404 134 "http://localhost" "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:137.0) Gecko/20100101 Firefox/137.0"`,
 					Attributes: map[string]any{
-						"http.request.method":       "GET",
-						"http.response.status_code": "404",
-						"log.iostream":              "stdout",
+						testAttrHTTPMethod:  testMethodGET,
+						testAttrHTTPStatus:  "404",
+						testAttrLogIOStream: testStreamStdout,
 					},
 					Severity: 13,
 				},
@@ -126,10 +126,10 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Timestamp: time.Date(2025, 4, 4, 11, 48, 45, 0, time.Local),
 					Body:      `2025/04/04 11:48:45 [error] 29#29: *1 open() "/usr/share/nginx/html/favicon.ico" failed (2: No such file or directory), client: 172.17.0.1, server: localhost, request: "GET /favicon.ico HTTP/1.1", host: "localhost:8080", referrer: "http://localhost:8080/50x.html"`,
 					Attributes: map[string]any{
-						"http.request.method": "GET",
-						"log.iostream":        "stderr",
-						"server.address":      "localhost",
-						"server.port":         "8080",
+						testAttrHTTPMethod:  testMethodGET,
+						testAttrLogIOStream: testStreamStderr,
+						"server.address":    "localhost",
+						"server.port":       "8080",
 					},
 					Severity: 17,
 				},
@@ -137,9 +137,9 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Timestamp: time.Date(2025, 6, 5, 21, 2, 21, 0, time.Local),
 					Body:      `2025/06/05 21:02:21 [error] 3862819#3862819: *5145928 writev() failed (32: Broken pipe) while sending request to upstream, client: 1.2.34.254, server: backup.example.com, request: "PUT /backup/wal_005/000000090000279400000009.lz4 HTTP/2.0", upstream: "http://127.0.0.1:9000/backup/wal_005/000000090000279400000009.lz4", host: "backup.example.com"`,
 					Attributes: map[string]any{
-						"http.request.method": "PUT",
-						"log.iostream":        "stderr",
-						"server.address":      "backup.example.com",
+						testAttrHTTPMethod:  "PUT",
+						testAttrLogIOStream: testStreamStderr,
+						"server.address":    "backup.example.com",
 					},
 					Severity: 17,
 				},
@@ -147,7 +147,7 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 		},
 		{
 			name:      "apache-access",
-			logFormat: "apache_access",
+			logFormat: testFmtApacheAccess,
 			inputLogs: []string{
 				`172.17.0.1 - - [04/Apr/2025:09:53:14 +0000] "GET / HTTP/1.1" 200 45`,
 				`172.17.0.1 - - [04/Apr/2025:09:53:21 +0000] "GET /nginx_status HTTP/1.1" 404 196`,
@@ -159,9 +159,9 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Timestamp: time.Date(2025, 4, 4, 9, 53, 14, 0, time.UTC),
 					Body:      `172.17.0.1 - - [04/Apr/2025:09:53:14 +0000] "GET / HTTP/1.1" 200 45`,
 					Attributes: map[string]any{
-						"http.request.method":       "GET",
-						"http.response.status_code": "200",
-						"log.iostream":              "stdout",
+						testAttrHTTPMethod:  testMethodGET,
+						testAttrHTTPStatus:  "200",
+						testAttrLogIOStream: testStreamStdout,
 					},
 					Severity: 5,
 				},
@@ -169,9 +169,9 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Timestamp: time.Date(2025, 4, 4, 9, 53, 21, 0, time.UTC),
 					Body:      `172.17.0.1 - - [04/Apr/2025:09:53:21 +0000] "GET /nginx_status HTTP/1.1" 404 196`,
 					Attributes: map[string]any{
-						"http.request.method":       "GET",
-						"http.response.status_code": "404",
-						"log.iostream":              "stdout",
+						testAttrHTTPMethod:  testMethodGET,
+						testAttrHTTPStatus:  "404",
+						testAttrLogIOStream: testStreamStdout,
 					},
 					Severity: 13,
 				},
@@ -179,8 +179,8 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Timestamp: time.Date(2025, 4, 4, 9, 53, 22, 0, time.UTC),
 					Body:      "172.17.0.1 - - [04/Apr/2025:09:53:22 +0000] \"-\" 408 -",
 					Attributes: map[string]any{
-						"http.response.status_code": "408",
-						"log.iostream":              "stdout",
+						testAttrHTTPStatus:  "408",
+						testAttrLogIOStream: testStreamStdout,
 					},
 					Severity: 13,
 				},
@@ -188,9 +188,9 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Timestamp: time.Date(2025, 6, 23, 14, 40, 45, 0, time.UTC),
 					Body:      `127.0.0.1 - - [23/Jun/2025:14:40:45 +0000] "GET /apache_404 HTTP/1.1" 404 490 "-" "python-requests/2.31.0"`,
 					Attributes: map[string]any{
-						"http.request.method":       "GET",
-						"http.response.status_code": "404",
-						"log.iostream":              "stdout",
+						testAttrHTTPMethod:  testMethodGET,
+						testAttrHTTPStatus:  "404",
+						testAttrLogIOStream: testStreamStdout,
 					},
 					Severity: 13,
 				},
@@ -198,7 +198,7 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 		},
 		{
 			name:      "apache-error",
-			logFormat: "apache_error",
+			logFormat: testFmtApacheError,
 			inputLogs: []string{
 				`[Fri Apr 04 11:53:04.199554 2025] [mpm_event:notice] [pid 1:tid 1] AH00489: Apache/2.4.63 (Unix) configured -- resuming normal operations`,
 				`[Fri Apr 04 11:54:29.902022 2025] [core:error] [pid 35708:tid 4328636416] [client 72.15.99.187] File does not exist: /usr/local/apache2/htdocs/favicon.ico`,
@@ -208,7 +208,7 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Timestamp: time.Date(2025, 4, 4, 11, 53, 4, 199554000, time.Local),
 					Body:      "[Fri Apr 04 11:53:04.199554 2025] [mpm_event:notice] [pid 1:tid 1] AH00489: Apache/2.4.63 (Unix) configured -- resuming normal operations",
 					Attributes: map[string]any{
-						"log.iostream": "stderr",
+						testAttrLogIOStream: testStreamStderr,
 					},
 					Severity: 10,
 				},
@@ -216,15 +216,15 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Timestamp: time.Date(2025, 4, 4, 11, 54, 29, 902022000, time.Local),
 					Body:      "[Fri Apr 04 11:54:29.902022 2025] [core:error] [pid 35708:tid 4328636416] [client 72.15.99.187] File does not exist: /usr/local/apache2/htdocs/favicon.ico",
 					Attributes: map[string]any{
-						"log.iostream": "stderr",
+						testAttrLogIOStream: testStreamStderr,
 					},
 					Severity: 17,
 				},
 			},
 		},
 		{
-			name:      "kafka",
-			logFormat: "kafka",
+			name:      testDBKafka,
+			logFormat: testDBKafka,
 			inputLogs: []string{
 				`[2025-04-04 12:09:35,863] INFO [ReplicaFetcherManager on broker 1] Removed fetcher for partitions Set(test-topic-0) (kafka.server.ReplicaFetcherManager)`,
 				`[2025-04-04 12:09:35,883] INFO [LogLoader partition=test-topic-0, dir=/tmp/kraft-combined-logs] Loading producer state till offset 0 (org.apache.kafka.storage.internals.log.UnifiedLog)`,
@@ -235,7 +235,7 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Timestamp: time.Date(2025, 4, 4, 12, 9, 35, 863000000, time.Local),
 					Body:      `[2025-04-04 12:09:35,863] INFO [ReplicaFetcherManager on broker 1] Removed fetcher for partitions Set(test-topic-0) (kafka.server.ReplicaFetcherManager)`,
 					Attributes: map[string]any{
-						"messaging.system": "kafka",
+						testAttrMsgSystem: testDBKafka,
 					},
 					Severity: 9,
 				},
@@ -244,7 +244,7 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Body:      `[2025-04-04 12:09:35,883] INFO [LogLoader partition=test-topic-0, dir=/tmp/kraft-combined-logs] Loading producer state till offset 0 (org.apache.kafka.storage.internals.log.UnifiedLog)`,
 					Attributes: map[string]any{
 						"messaging.destination.name": "test-topic-0",
-						"messaging.system":           "kafka",
+						testAttrMsgSystem:            testDBKafka,
 					},
 					Severity: 9,
 				},
@@ -253,15 +253,15 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Body:      `[2025-04-04 13:33:13,847] WARN [GroupCoordinator id=1 topic=__consumer_offsets partition=22] Group console-consumer-54101 with generation 2 is now empty. (org.apache.kafka.coordinator.group.GroupMetadataManager)`,
 					Attributes: map[string]any{
 						"messaging.destination.partition.id": "22",
-						"messaging.system":                   "kafka",
+						testAttrMsgSystem:                    testDBKafka,
 					},
 					Severity: 13,
 				},
 			},
 		},
 		{
-			name:      "redis",
-			logFormat: "redis",
+			name:      testDBRedis,
+			logFormat: testDBRedis,
 			inputLogs: []string{
 				`1:M 04 Apr 2025 13:52:29.632 * Background saving started by pid 104`,
 				`104:C 04 Apr 2025 13:52:29.650 * DB saved on disk`,
@@ -271,7 +271,7 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Timestamp: time.Date(2025, 4, 4, 13, 52, 29, 632000000, time.Local),
 					Body:      `1:M 04 Apr 2025 13:52:29.632 * Background saving started by pid 104`,
 					Attributes: map[string]any{
-						"db.system.name": "redis",
+						testAttrDBSystem: testDBRedis,
 					},
 					Severity: 9,
 				},
@@ -279,7 +279,7 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Timestamp: time.Date(2025, 4, 4, 13, 52, 29, 650000000, time.Local),
 					Body:      `104:C 04 Apr 2025 13:52:29.650 * DB saved on disk`,
 					Attributes: map[string]any{
-						"db.system.name": "redis",
+						testAttrDBSystem: testDBRedis,
 					},
 					Severity: 9,
 				},
@@ -319,8 +319,8 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Timestamp: time.Date(2025, 5, 5, 15, 24, 34, 6000000, time.Local),
 					Body:      `::ffff:241.1.2.3:1685 [05/May/2025:15:24:34.006] http-in~ be_ingest/10.75.1.2 0/0/1/88/89 200 188 - - ---- 8/4/0/0/0 0/0 "POST /cloud/api/v2/iot/someid/telemetry HTTP/1.1"`,
 					Attributes: map[string]any{
-						"http.response.status_code": "200",
-						"http.request.method":       "POST",
+						testAttrHTTPStatus: "200",
+						testAttrHTTPMethod: "POST",
 					},
 					Severity: 5,
 				},
@@ -328,8 +328,8 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Timestamp: time.Date(2025, 5, 12, 9, 52, 7, 313000000, time.Local),
 					Body:      `127.0.0.1:38074 [12/May/2025:09:52:07.313] web_front web_back/web1 0/0/0/2/2 404 466 - - ---- 1/1/0/1/0 0/0 "GET /some-route HTTP/1.1"`,
 					Attributes: map[string]any{
-						"http.response.status_code": "404",
-						"http.request.method":       "GET",
+						testAttrHTTPStatus: "404",
+						testAttrHTTPMethod: testMethodGET,
 					},
 					Severity: 13,
 				},
@@ -337,7 +337,7 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 		},
 		{
 			name:      "postgres",
-			logFormat: "postgresql",
+			logFormat: testFmtPostgresql,
 			inputLogs: []string{
 				`2025-04-04 14:39:09.167 UTC [27] LOG:  checkpoint starting: time`,
 				`2025-04-04 14:41:59.076 UTC [2768] LOG:  duration: 42.292 ms  statement: DELETE FROM "silk_response" WHERE "silk_response"."request_id" IN ('63b0e9b6-5ba2-432d-a299-e983d089aa0b', '6edc9f33-191f-4057-9630-e5e4355abc2c')`,
@@ -347,21 +347,21 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Timestamp: time.Date(2025, 4, 4, 14, 39, 9, 167000000, time.UTC),
 					Body:      `2025-04-04 14:39:09.167 UTC [27] LOG:  checkpoint starting: time`,
 					Attributes: map[string]any{
-						"db.system.name": "postgresql",
+						testAttrDBSystem: testFmtPostgresql,
 					},
 				},
 				{
 					Timestamp: time.Date(2025, 4, 4, 14, 41, 59, 76000000, time.UTC),
 					Body:      `2025-04-04 14:41:59.076 UTC [2768] LOG:  duration: 42.292 ms  statement: DELETE FROM "silk_response" WHERE "silk_response"."request_id" IN ('63b0e9b6-5ba2-432d-a299-e983d089aa0b', '6edc9f33-191f-4057-9630-e5e4355abc2c')`,
 					Attributes: map[string]any{
-						"db.system.name": "postgresql",
+						testAttrDBSystem: testFmtPostgresql,
 					},
 				},
 			},
 		},
 		{
 			name:      "mariadb",
-			logFormat: "mariadb",
+			logFormat: testFmtMariaDB,
 			inputLogs: []string{
 				`2026-04-07 15:43:50 0 [Note] Starting MariaDB 10.11.15-MariaDB source revision cb0d6dd835023a7162ace471cd047161f205dd58 server_uid w/xn1WGJE9viJGUAdPN7RDfmp0A= as process 4131`,
 			},
@@ -370,15 +370,15 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Timestamp: time.Date(2026, 4, 7, 15, 43, 50, 0, time.Local),
 					Body:      `2026-04-07 15:43:50 0 [Note] Starting MariaDB 10.11.15-MariaDB source revision cb0d6dd835023a7162ace471cd047161f205dd58 server_uid w/xn1WGJE9viJGUAdPN7RDfmp0A= as process 4131`,
 					Attributes: map[string]any{
-						"db.system.name": "mariadb",
+						testAttrDBSystem: testFmtMariaDB,
 					},
 					Severity: 5,
 				},
 			},
 		},
 		{
-			name:      "mysql",
-			logFormat: "mysql",
+			name:      testDBMySQL,
+			logFormat: testDBMySQL,
 			inputLogs: []string{
 				// `2025-04-04 14:50:02+00:00 [Note] [Entrypoint]: Entrypoint script for MySQL Server 9.2.0-1.el9 started.`,
 				`2025-04-04T14:50:03.474893Z 0 [System] [MY-015017] [Server] MySQL Server Initialization - start.`,
@@ -389,7 +389,7 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Timestamp: time.Date(2025, 4, 4, 14, 50, 2, 0, time.UTC),
 					Body:      `2025-04-04 14:50:02+00:00 [Note] [Entrypoint]: Entrypoint script for MySQL Server 9.2.0-1.el9 started.`,
 					Attributes: map[string]any{
-						"db.system.name": "mysql",
+						testAttrDBSystem: testDBMySQL,
 					},
 					Severity: 0,
 				},*/
@@ -398,7 +398,7 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Body:      `2025-04-04T14:50:03.474893Z 0 [System] [MY-015017] [Server] MySQL Server Initialization - start.`,
 					Attributes: map[string]any{
 						"db.response.status_code": "MY-015017",
-						"db.system.name":          "mysql",
+						testAttrDBSystem:          testDBMySQL,
 					},
 					Severity: 9,
 				},
@@ -407,15 +407,15 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Body:      `2025-04-04T14:50:05.193871Z 6 [Warning] [MY-010453] [Server] root@localhost is created with an empty password ! Please consider switching off the --initialize-insecure option.`,
 					Attributes: map[string]any{
 						"db.response.status_code": "MY-010453",
-						"db.system.name":          "mysql",
+						testAttrDBSystem:          testDBMySQL,
 					},
 					Severity: 13,
 				},
 			},
 		},
 		{
-			name:      "mongodb",
-			logFormat: "mongodb",
+			name:      testDBMongoDB,
+			logFormat: testDBMongoDB,
 			inputLogs: []string{
 				`{"t":{"$date":"2025-04-04T14:59:59.934+00:00"},"s":"I",  "c":"INDEX",    "id":20345,   "ctx":"conn7","msg":"Index build: done building","attr":{"buildUUID":null,"collectionUUID":{"uuid":{"$uuid":"e8be8d1e-3c09-4de4-8f4e-2fd1b2ddad91"}},"namespace":"my-db.my-collection","index":"_id_","ident":"index-8-8921814859363955208","collectionIdent":"collection-7-8921814859363955208","commitTimestamp":null}}`,
 				`{"t":{"$date":"2025-04-04T15:00:00.016+00:00"},"s":"W",  "c":"CONTROL",  "id":636300,  "ctx":"ftdc","msg":"Use of deprecated server parameter name","attr":{"deprecatedName":"internalQueryCacheSize","canonicalName":"internalQueryCacheMaxEntriesPerCollection"}}`,
@@ -426,7 +426,7 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Body:      `{"t":{"$date":"2025-04-04T14:59:59.934+00:00"},"s":"I",  "c":"INDEX",    "id":20345,   "ctx":"conn7","msg":"Index build: done building","attr":{"buildUUID":null,"collectionUUID":{"uuid":{"$uuid":"e8be8d1e-3c09-4de4-8f4e-2fd1b2ddad91"}},"namespace":"my-db.my-collection","index":"_id_","ident":"index-8-8921814859363955208","collectionIdent":"collection-7-8921814859363955208","commitTimestamp":null}}`,
 					Attributes: map[string]any{
 						"db.collection.name": "my-db.my-collection",
-						"db.system.name":     "mongodb",
+						testAttrDBSystem:     testDBMongoDB,
 					},
 					Severity: 9,
 				},
@@ -434,15 +434,15 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Timestamp: time.Date(2025, 4, 4, 15, 0, 0, 16000000, time.UTC),
 					Body:      `{"t":{"$date":"2025-04-04T15:00:00.016+00:00"},"s":"W",  "c":"CONTROL",  "id":636300,  "ctx":"ftdc","msg":"Use of deprecated server parameter name","attr":{"deprecatedName":"internalQueryCacheSize","canonicalName":"internalQueryCacheMaxEntriesPerCollection"}}`,
 					Attributes: map[string]any{
-						"db.system.name": "mongodb",
+						testAttrDBSystem: testDBMongoDB,
 					},
 					Severity: 13,
 				},
 			},
 		},
 		{
-			name:      "rabbitmq",
-			logFormat: "rabbitmq",
+			name:      testMsgRabbitMQ,
+			logFormat: testMsgRabbitMQ,
 			inputLogs: []string{
 				`2025-04-04 15:17:07.803117+00:00 [info] <0.5147.0> accepting AMQP connection <0.5147.0> (127.0.0.1:37542 -> 127.0.0.1:5672)`,
 				`2025-04-04 15:17:57.802102+00:00 [error] <0.5171.0> {bad_header,<<"PINGAMQP">>}`,
@@ -452,7 +452,7 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Timestamp: time.Date(2025, 4, 4, 15, 17, 7, 803117000, time.UTC),
 					Body:      `2025-04-04 15:17:07.803117+00:00 [info] <0.5147.0> accepting AMQP connection <0.5147.0> (127.0.0.1:37542 -> 127.0.0.1:5672)`,
 					Attributes: map[string]any{
-						"messaging.system": "rabbitmq",
+						testAttrMsgSystem: testMsgRabbitMQ,
 					},
 					Severity: 9,
 				},
@@ -460,7 +460,7 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 					Timestamp: time.Date(2025, 4, 4, 15, 17, 57, 802102000, time.UTC),
 					Body:      `2025-04-04 15:17:57.802102+00:00 [error] <0.5171.0> {bad_header,<<"PINGAMQP">>}`,
 					Attributes: map[string]any{
-						"messaging.system": "rabbitmq",
+						testAttrMsgSystem: testMsgRabbitMQ,
 					},
 					Severity: 17,
 				},

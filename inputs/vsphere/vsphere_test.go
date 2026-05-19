@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -39,38 +39,38 @@ func TestRenameMetrics(t *testing.T) {
 		expectedName        string
 	}{
 		{
-			"vsphere_vm_cpu",
+			measurementVSphereVMCPU,
 			"latency_average",
-			"vsphere_vm_cpu",
+			measurementVSphereVMCPU,
 			"latency_perc",
 		},
 		{
-			"vsphere_host_mem",
-			"swapout_average",
+			measurementVSphereHostMem,
+			fieldSwapoutAverage,
 			"swap",
 			"out",
 		},
 		{
-			"vsphere_host_mem",
-			"totalCapacity_average",
+			measurementVSphereHostMem,
+			fieldTotalCapacityAverage,
 			"mem",
 			"total",
 		},
 		{
 			"vsphere_vm_disk",
-			"read_average",
+			fieldReadAverage,
 			"io",
 			"read_bytes",
 		},
 		{
 			"vsphere_datastore_datastore",
-			"write_average",
+			fieldWriteAverage,
 			"io",
 			"write_bytes",
 		},
 		{
 			"vsphere_vm_net",
-			"transmitted_average",
+			fieldTransmittedAverage,
 			"net",
 			"bits_sent",
 		},
@@ -97,9 +97,9 @@ func TestTransformMetrics(t *testing.T) {
 		expectedValue float64
 		tags          map[string]string
 	}{
-		"vsphere_vm_mem": {
+		measurementVSphereVMMem: {
 			{
-				field:         "active_average",
+				field:         fieldActiveAverage,
 				value:         430080,
 				expectedValue: 21,
 				tags:          map[string]string{types.LabelMetaVSphereMOID: "vm-77"},
@@ -113,31 +113,31 @@ func TestTransformMetrics(t *testing.T) {
 		},
 		"vsphere_vm_virtualDisk": {
 			{
-				field:         "read_average",
+				field:         fieldReadAverage,
 				value:         35.432,
 				expectedValue: 35432,
 			},
 			{
-				field:         "write_average",
+				field:         fieldWriteAverage,
 				value:         36.68,
 				expectedValue: 36680,
 			},
 		},
-		"vsphere_host_mem": {
+		measurementVSphereHostMem: {
 			{
-				field:         "totalCapacity_average",
+				field:         fieldTotalCapacityAverage,
 				value:         4294.967296,
 				expectedValue: 4294967296,
 			},
 			{
-				field:         "swapout_average",
+				field:         fieldSwapoutAverage,
 				value:         78,
 				expectedValue: 78000,
 			},
 		},
 		"vsphere_host_net": {
 			{
-				field:         "transmitted_average",
+				field:         fieldTransmittedAverage,
 				value:         0.91,
 				expectedValue: 7454.72,
 			},

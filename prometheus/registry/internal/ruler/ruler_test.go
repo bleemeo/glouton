@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -32,6 +32,17 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const (
+	testDiskUsed      = "disk_used"
+	testSoftwareLoop  = "softwareLoopback"
+	testIfType        = "ifType"
+	testIfInOctets    = "ifInOctets"
+	testIfDescr       = "ifDescr"
+	testLoopback      = "LOOPBACK"
+	testMetricCPUUsed = "cpu_used"
+	testMountHome     = "/home"
+)
+
 func TestApplyRulesMFS(t *testing.T) {
 	t0 := time.Date(2024, time.January, 3, 15, 0, 0, 0, time.Local) //nolint: gosmopolitan
 	now := t0.Add(5 * time.Minute)                                  // 5min because we have 5 samples 1min apart each
@@ -45,12 +56,12 @@ func TestApplyRulesMFS(t *testing.T) {
 				{
 					Label: []*dto.LabelPair{
 						{
-							Name:  new("ifDescr"),
-							Value: new("LOOPBACK"),
+							Name:  new(testIfDescr),
+							Value: new(testLoopback),
 						},
 						{
-							Name:  new("ifType"),
-							Value: new("softwareLoopback"),
+							Name:  new(testIfType),
+							Value: new(testSoftwareLoop),
 						},
 					},
 					Untyped:     &dto.Untyped{Value: new(13556.177777777777)},
@@ -62,22 +73,22 @@ func TestApplyRulesMFS(t *testing.T) {
 
 	mfs := make([]*dto.MetricFamily, 0, 1+len(expectedMfs))
 	mfs = append(mfs, &dto.MetricFamily{
-		Name: new("ifInOctets"),
+		Name: new(testIfInOctets),
 		Type: dto.MetricType_UNTYPED.Enum(),
 		Metric: []*dto.Metric{
 			{
 				Label: []*dto.LabelPair{
 					{
 						Name:  new("__name__"),
-						Value: new("ifInOctets"),
+						Value: new(testIfInOctets),
 					},
 					{
-						Name:  new("ifDescr"),
-						Value: new("LOOPBACK"),
+						Name:  new(testIfDescr),
+						Value: new(testLoopback),
 					},
 					{
-						Name:  new("ifType"),
-						Value: new("softwareLoopback"),
+						Name:  new(testIfType),
+						Value: new(testSoftwareLoop),
 					},
 				},
 				Untyped:     &dto.Untyped{Value: proto.Float64(712799268)},
@@ -87,15 +98,15 @@ func TestApplyRulesMFS(t *testing.T) {
 				Label: []*dto.LabelPair{
 					{
 						Name:  new("__name__"),
-						Value: new("ifInOctets"),
+						Value: new(testIfInOctets),
 					},
 					{
-						Name:  new("ifDescr"),
-						Value: new("LOOPBACK"),
+						Name:  new(testIfDescr),
+						Value: new(testLoopback),
 					},
 					{
-						Name:  new("ifType"),
-						Value: new("softwareLoopback"),
+						Name:  new(testIfType),
+						Value: new(testSoftwareLoop),
 					},
 				},
 				Untyped:     &dto.Untyped{Value: proto.Float64(712896866)},
@@ -105,15 +116,15 @@ func TestApplyRulesMFS(t *testing.T) {
 				Label: []*dto.LabelPair{
 					{
 						Name:  new("__name__"),
-						Value: new("ifInOctets"),
+						Value: new(testIfInOctets),
 					},
 					{
-						Name:  new("ifDescr"),
-						Value: new("LOOPBACK"),
+						Name:  new(testIfDescr),
+						Value: new(testLoopback),
 					},
 					{
-						Name:  new("ifType"),
-						Value: new("softwareLoopback"),
+						Name:  new(testIfType),
+						Value: new(testSoftwareLoop),
 					},
 				},
 				Untyped:     &dto.Untyped{Value: proto.Float64(713012717)},
@@ -123,15 +134,15 @@ func TestApplyRulesMFS(t *testing.T) {
 				Label: []*dto.LabelPair{
 					{
 						Name:  new("__name__"),
-						Value: new("ifInOctets"),
+						Value: new(testIfInOctets),
 					},
 					{
-						Name:  new("ifDescr"),
-						Value: new("LOOPBACK"),
+						Name:  new(testIfDescr),
+						Value: new(testLoopback),
 					},
 					{
-						Name:  new("ifType"),
-						Value: new("softwareLoopback"),
+						Name:  new(testIfType),
+						Value: new(testSoftwareLoop),
 					},
 				},
 				Untyped:     &dto.Untyped{Value: proto.Float64(713098262)},
@@ -141,15 +152,15 @@ func TestApplyRulesMFS(t *testing.T) {
 				Label: []*dto.LabelPair{
 					{
 						Name:  new("__name__"),
-						Value: new("ifInOctets"),
+						Value: new(testIfInOctets),
 					},
 					{
-						Name:  new("ifDescr"),
-						Value: new("LOOPBACK"),
+						Name:  new(testIfDescr),
+						Value: new(testLoopback),
 					},
 					{
-						Name:  new("ifType"),
-						Value: new("softwareLoopback"),
+						Name:  new(testIfType),
+						Value: new(testSoftwareLoop),
 					},
 				},
 				Untyped:     &dto.Untyped{Value: proto.Float64(713201880)},
@@ -193,18 +204,18 @@ func Test_filterPointsForRules(t *testing.T) {
 	points := []types.MetricPoint{
 		{
 			Labels: map[string]string{
-				types.LabelName: "cpu_used",
+				types.LabelName: testMetricCPUUsed,
 			},
 		},
 		{
 			Labels: map[string]string{
-				types.LabelName: "disk_used",
-				types.LabelItem: "/home",
+				types.LabelName: testDiskUsed,
+				types.LabelItem: testMountHome,
 			},
 		},
 		{
 			Labels: map[string]string{
-				types.LabelName: "disk_used",
+				types.LabelName: testDiskUsed,
 				types.LabelItem: "/srv",
 			},
 		},
@@ -232,14 +243,14 @@ func Test_filterPointsForRules(t *testing.T) {
 			name: "simple",
 			matchers: []matcher.Matchers{
 				{
-					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "cpu_used"),
+					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, testMetricCPUUsed),
 				},
 			},
 			points: points,
 			want: []types.MetricPoint{
 				{
 					Labels: map[string]string{
-						types.LabelName: "cpu_used",
+						types.LabelName: testMetricCPUUsed,
 					},
 				},
 			},
@@ -248,16 +259,16 @@ func Test_filterPointsForRules(t *testing.T) {
 			name: "with-labels",
 			matchers: []matcher.Matchers{
 				{
-					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "disk_used"),
-					labels.MustNewMatcher(labels.MatchEqual, types.LabelItem, "/home"),
+					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, testDiskUsed),
+					labels.MustNewMatcher(labels.MatchEqual, types.LabelItem, testMountHome),
 				},
 			},
 			points: points,
 			want: []types.MetricPoint{
 				{
 					Labels: map[string]string{
-						types.LabelName: "disk_used",
-						types.LabelItem: "/home",
+						types.LabelName: testDiskUsed,
+						types.LabelItem: testMountHome,
 					},
 				},
 			},

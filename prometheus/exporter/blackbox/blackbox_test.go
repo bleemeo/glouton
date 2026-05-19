@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -37,10 +37,11 @@ import (
 )
 
 const (
-	testTargetNotYetKnown = "this-label-value-will-be-replaced"
-	testAgentFQDN         = "example.com"
-	testMonitorID         = "7331d6c1-ede1-4483-a3b3-c99f0965f64b"
-	testAgentID           = "1d6a2c82-4579-4f7d-91fe-3d4946aacaf7"
+	testTargetNotYetKnown     = "this-label-value-will-be-replaced"
+	testAgentFQDN             = "example.com"
+	testMonitorID             = "7331d6c1-ede1-4483-a3b3-c99f0965f64b"
+	testAgentID               = "1d6a2c82-4579-4f7d-91fe-3d4946aacaf7"
+	testCertTrustedExpireSoon = "trusted expire soon"
 )
 
 type testTarget interface {
@@ -327,17 +328,17 @@ func generateCerts(t *testing.T, t0 time.Time) (testingCerts, error) {
 		return result, err
 	}
 
-	certRootCASoon, err := signCert(result.TSLongLivedCritical.Add(-result.LongLiveDuration), result.TSLongLivedCritical, serverPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "trusted expire soon")
+	certRootCASoon, err := signCert(result.TSLongLivedCritical.Add(-result.LongLiveDuration), result.TSLongLivedCritical, serverPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, testCertTrustedExpireSoon)
 	if err != nil {
 		return result, err
 	}
 
-	certShortLivedRootCACritical, err := signCert(result.TSShortLivedCritical.Add(-result.ShortLiveDuration), result.TSShortLivedCritical, serverPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "trusted expire soon")
+	certShortLivedRootCACritical, err := signCert(result.TSShortLivedCritical.Add(-result.ShortLiveDuration), result.TSShortLivedCritical, serverPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, testCertTrustedExpireSoon)
 	if err != nil {
 		return result, err
 	}
 
-	certShortLivedRootCAWarning, err := signCert(result.TSShortLivedWarning.Add(-result.ShortLiveDuration), result.TSShortLivedWarning, serverPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, "trusted expire soon")
+	certShortLivedRootCAWarning, err := signCert(result.TSShortLivedWarning.Add(-result.ShortLiveDuration), result.TSShortLivedWarning, serverPrivateKey.PublicKey, rootCAPrivateKey, result.RootCA, testCertTrustedExpireSoon)
 	if err != nil {
 		return result, err
 	}

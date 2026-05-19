@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -27,6 +27,13 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 )
 
+const (
+	labelName    = "__name__"
+	testCPUUsed  = "cpu_used"
+	testHost1    = "host1"
+	testInstance = "instance"
+)
+
 func TestRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 
@@ -40,15 +47,15 @@ func TestRoundTrip(t *testing.T) {
 	points := []types.MetricPoint{
 		{
 			Point:  types.Point{Time: now.Add(-2 * time.Minute), Value: 1.5},
-			Labels: map[string]string{"__name__": "cpu_used", "instance": "host1"},
+			Labels: map[string]string{labelName: testCPUUsed, testInstance: testHost1},
 		},
 		{
 			Point:  types.Point{Time: now.Add(-1 * time.Minute), Value: 2.5},
-			Labels: map[string]string{"__name__": "cpu_used", "instance": "host1"},
+			Labels: map[string]string{labelName: testCPUUsed, testInstance: testHost1},
 		},
 		{
 			Point:  types.Point{Time: now, Value: 3.5},
-			Labels: map[string]string{"__name__": "cpu_used", "instance": "host1"},
+			Labels: map[string]string{labelName: testCPUUsed, testInstance: testHost1},
 		},
 	}
 
@@ -61,7 +68,7 @@ func TestRoundTrip(t *testing.T) {
 
 	defer q.Close()
 
-	matcher := labels.MustNewMatcher(labels.MatchEqual, "__name__", "cpu_used")
+	matcher := labels.MustNewMatcher(labels.MatchEqual, labelName, testCPUUsed)
 	ss := q.Select(context.Background(), false, nil, matcher)
 
 	var got []float64
@@ -107,7 +114,7 @@ func TestPersistsAcrossReopen(t *testing.T) {
 	store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point:  types.Point{Time: now, Value: 42},
-			Labels: map[string]string{"__name__": "x"},
+			Labels: map[string]string{labelName: "x"},
 		},
 	})
 
@@ -129,7 +136,7 @@ func TestPersistsAcrossReopen(t *testing.T) {
 
 	defer q.Close()
 
-	matcher := labels.MustNewMatcher(labels.MatchEqual, "__name__", "x")
+	matcher := labels.MustNewMatcher(labels.MatchEqual, labelName, "x")
 	ss := q.Select(context.Background(), false, nil, matcher)
 
 	var found bool
@@ -182,7 +189,7 @@ func TestPushPointsSkipsNaN(t *testing.T) {
 	store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point:  types.Point{Time: now, Value: nanFloat()},
-			Labels: map[string]string{"__name__": "y"},
+			Labels: map[string]string{labelName: "y"},
 		},
 	})
 
@@ -193,7 +200,7 @@ func TestPushPointsSkipsNaN(t *testing.T) {
 
 	defer q.Close()
 
-	matcher := labels.MustNewMatcher(labels.MatchEqual, "__name__", "y")
+	matcher := labels.MustNewMatcher(labels.MatchEqual, labelName, "y")
 	ss := q.Select(context.Background(), false, nil, matcher)
 
 	for ss.Next() {

@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -40,14 +40,14 @@ func TestNotificationCompatibility(t *testing.T) {
 
 	typeVersions := []any{ // any -> notificationPayloadV1, notificationPayload, ...
 		notificationPayloadV1{
-			MessageType:            "ack",
+			MessageType:            messageTypeAck,
 			AckTimestamp:           "2025-01-09T08:57:40+00:00",
 			DataStreamAvailable:    true,
 			TopInfoStreamAvailable: true,
 			LogsStreamAvailable:    false, // Logs weren't actually used at this moment, so this field should always resolve to false.
 		},
 		notificationPayload{
-			MessageType:                  "ack",
+			MessageType:                  messageTypeAck,
 			AckTimestamp:                 "2025-01-09T08:57:40+00:00",
 			DataStreamAvailable:          true,
 			TopInfoStreamAvailable:       true,

@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -30,6 +30,14 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
+const (
+	testServiceRedis     = "redis"
+	testTagUser          = "user-tag"
+	testComposeName      = "my-compose"
+	testAppDockerCompose = "Docker compose my-compose"
+	testTagDockerCompose = "docker-compose-my-compose"
+)
+
 func Test_syncRemoteAndLocal(t *testing.T) {
 	t.Parallel()
 
@@ -51,7 +59,7 @@ func Test_syncRemoteAndLocal(t *testing.T) {
 			name: "no-applications",
 			localServices: []discovery.Service{
 				{
-					Name: "redis",
+					Name: testServiceRedis,
 					Tags: []string{"tag-arent-application"},
 				},
 				{
@@ -63,7 +71,7 @@ func Test_syncRemoteAndLocal(t *testing.T) {
 				{
 					ID:     "1",
 					Active: true,
-					Label:  "redis",
+					Label:  testServiceRedis,
 					Tags: []bleemeoTypes.Tag{
 						{ID: "1", Name: "tag-arent-application", TagType: bleemeo.TagType_CreatedByGlouton},
 					},
@@ -78,10 +86,10 @@ func Test_syncRemoteAndLocal(t *testing.T) {
 				{
 					Name:   "redis",
 					Active: true,
-					Tags:   []string{"user-tag"},
+					Tags:   []string{testTagUser},
 					Applications: []discovery.Application{
 						{
-							Name: "my-compose",
+							Name: testComposeName,
 							Type: discovery.ApplicationDockerCompose,
 						},
 					},
@@ -91,8 +99,8 @@ func Test_syncRemoteAndLocal(t *testing.T) {
 			remoteApplication: []bleemeoTypes.Application{},
 			wantCreateApplication: []bleemeoTypes.Application{
 				{
-					Name: "Docker compose my-compose",
-					Tag:  "docker-compose-my-compose",
+					Name: testAppDockerCompose,
+					Tag:  testTagDockerCompose,
 				},
 			},
 		},
@@ -100,11 +108,11 @@ func Test_syncRemoteAndLocal(t *testing.T) {
 			name: "application-already-exists",
 			localServices: []discovery.Service{
 				{
-					Name: "redis",
-					Tags: []string{"user-tag"},
+					Name: testServiceRedis,
+					Tags: []string{testTagUser},
 					Applications: []discovery.Application{
 						{
-							Name: "my-compose",
+							Name: testComposeName,
 							Type: discovery.ApplicationDockerCompose,
 						},
 					},
@@ -114,8 +122,8 @@ func Test_syncRemoteAndLocal(t *testing.T) {
 			remoteApplication: []bleemeoTypes.Application{
 				{
 					ID:   "1",
-					Name: "Docker compose my-compose",
-					Tag:  "docker-compose-my-compose",
+					Name: testAppDockerCompose,
+					Tag:  testTagDockerCompose,
 				},
 			},
 			wantCreateApplication: []bleemeoTypes.Application{},
@@ -124,11 +132,11 @@ func Test_syncRemoteAndLocal(t *testing.T) {
 			name: "manually-created-application",
 			localServices: []discovery.Service{
 				{
-					Name: "redis",
-					Tags: []string{"user-tag"},
+					Name: testServiceRedis,
+					Tags: []string{testTagUser},
 					Applications: []discovery.Application{
 						{
-							Name: "my-compose",
+							Name: testComposeName,
 							Type: discovery.ApplicationDockerCompose,
 						},
 					},
@@ -138,7 +146,7 @@ func Test_syncRemoteAndLocal(t *testing.T) {
 			remoteApplication: []bleemeoTypes.Application{
 				{
 					ID:   "1",
-					Name: "Docker compose my-compose",
+					Name: testAppDockerCompose,
 					Tag:  "custom-tag",
 				},
 			},
@@ -152,11 +160,11 @@ func Test_syncRemoteAndLocal(t *testing.T) {
 			name: "application-is-deleted-service-is-tagged",
 			localServices: []discovery.Service{
 				{
-					Name: "redis",
-					Tags: []string{"user-tag"},
+					Name: testServiceRedis,
+					Tags: []string{testTagUser},
 					Applications: []discovery.Application{
 						{
-							Name: "my-compose",
+							Name: testComposeName,
 							Type: discovery.ApplicationDockerCompose,
 						},
 					},
@@ -170,7 +178,7 @@ func Test_syncRemoteAndLocal(t *testing.T) {
 					Tags: []bleemeoTypes.Tag{
 						{
 							ID:      "1",
-							Name:    "docker-compose-my-compose",
+							Name:    testTagDockerCompose,
 							TagType: bleemeo.TagType_AutomaticGlouton,
 						},
 					},
@@ -187,7 +195,7 @@ func Test_syncRemoteAndLocal(t *testing.T) {
 					Active: false,
 					Applications: []discovery.Application{
 						{
-							Name: "my-compose",
+							Name: testComposeName,
 							Type: discovery.ApplicationDockerCompose,
 						},
 					},

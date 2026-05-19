@@ -1,4 +1,4 @@
-// Copyright 2015-2025 Bleemeo
+// Copyright 2015-2026 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -30,14 +30,27 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
+const (
+	testCacheKeyString        = "this-should-be-stored-in-cache-file"
+	testCacheKeyString2       = "another-marker-value"
+	testStateJSON             = "state.json"
+	testStateCacheJSON        = "state.cache.json"
+	testBleemeoAgentID        = "98a28d20-eb60-4304-aa05-1e1ffe633bee"
+	testBleemeoPassword       = "theSecretPassword"
+	testCacheBleemeoConnector = "CacheBleemeoConnector"
+	testFactID                = "e3f3ef05-b112-440e-b7c0-44768901c99c"
+	testCacheKeyABC2          = "a:b:c2"
+	testCacheKeyABCD          = "a:bc:d"
+)
+
 func TestDefaultCachePath(t *testing.T) {
 	tests := []struct {
 		persistentPath string
 		want           string
 	}{
 		{
-			persistentPath: "state.json",
-			want:           "state.cache.json",
+			persistentPath: testStateJSON,
+			want:           testStateCacheJSON,
 		},
 		{
 			persistentPath: "state.dat",
@@ -149,14 +162,14 @@ func TestLoad(t *testing.T) {
 			wantPersistent: persistedState{
 				dirty:           true,
 				Version:         stateVersion,
-				BleemeoAgentID:  "98a28d20-eb60-4304-aa05-1e1ffe633bee",
-				BleemeoPassword: "theSecretPassword",
+				BleemeoAgentID:  testBleemeoAgentID,
+				BleemeoPassword: testBleemeoPassword,
 				TelemetryID:     "78946",
 			},
 			wantKeys: map[string]any{
-				"CacheBleemeoConnector": fakeBleemeoCache{
+				testCacheBleemeoConnector: fakeBleemeoCache{
 					Version: 6,
-					Facts:   []fakeFactType{{ID: "e3f3ef05-b112-440e-b7c0-44768901c99c", Key: "cpu_model_name"}},
+					Facts:   []fakeFactType{{ID: testFactID, Key: "cpu_model_name"}},
 				},
 			},
 		},
@@ -169,14 +182,14 @@ func TestLoad(t *testing.T) {
 			wantPersistent: persistedState{
 				dirty:           true,
 				Version:         stateVersion,
-				BleemeoAgentID:  "98a28d20-eb60-4304-aa05-1e1ffe633bee",
-				BleemeoPassword: "theSecretPassword",
+				BleemeoAgentID:  testBleemeoAgentID,
+				BleemeoPassword: testBleemeoPassword,
 				TelemetryID:     "78946",
 			},
 			wantKeys: map[string]any{
-				"CacheBleemeoConnector": fakeBleemeoCache{
+				testCacheBleemeoConnector: fakeBleemeoCache{
 					Version: 7,
-					Facts:   []fakeFactType{{ID: "e3f3ef05-b112-440e-b7c0-44768901c99c", Key: "cpu_model_name_v2"}},
+					Facts:   []fakeFactType{{ID: testFactID, Key: "cpu_model_name_v2"}},
 				},
 			},
 		},
@@ -189,14 +202,14 @@ func TestLoad(t *testing.T) {
 			wantPersistent: persistedState{
 				dirty:           true,
 				Version:         stateVersion,
-				BleemeoAgentID:  "98a28d20-eb60-4304-aa05-1e1ffe633bee",
-				BleemeoPassword: "theSecretPassword",
+				BleemeoAgentID:  testBleemeoAgentID,
+				BleemeoPassword: testBleemeoPassword,
 				TelemetryID:     "78946",
 			},
 			wantKeys: map[string]any{
-				"CacheBleemeoConnector": fakeBleemeoCache{
+				testCacheBleemeoConnector: fakeBleemeoCache{
 					Version: 6,
-					Facts:   []fakeFactType{{ID: "e3f3ef05-b112-440e-b7c0-44768901c99c", Key: "cpu_model_name"}},
+					Facts:   []fakeFactType{{ID: testFactID, Key: "cpu_model_name"}},
 				},
 			},
 		},
@@ -292,10 +305,10 @@ func TestGetByPrefix(t *testing.T) {
 
 	state := State{
 		cache: map[string]json.RawMessage{
-			"a:b:c1": []byte(`[1, 2, 3]`),
-			"a:b:c2": []byte(`[7]`),
-			"a:bc:d": []byte(`{"a": 2.5}`),
-			"a:":     []byte(`{"b:": "c"}`),
+			"a:b:c1":         []byte(`[1, 2, 3]`),
+			testCacheKeyABC2: []byte(`[7]`),
+			testCacheKeyABCD: []byte(`{"a": 2.5}`),
+			"a:":             []byte(`{"b:": "c"}`),
 		},
 	}
 
@@ -308,22 +321,22 @@ func TestGetByPrefix(t *testing.T) {
 			prefix:     "a:b:",
 			resultType: []int{},
 			expected: map[string]any{
-				"a:b:c1": []int{1, 2, 3},
-				"a:b:c2": []int{7},
+				"a:b:c1":         []int{1, 2, 3},
+				testCacheKeyABC2: []int{7},
 			},
 		},
 		{
-			prefix:     "a:b:c2",
+			prefix:     testCacheKeyABC2,
 			resultType: []int{},
 			expected: map[string]any{
-				"a:b:c2": []int{7},
+				testCacheKeyABC2: []int{7},
 			},
 		},
 		{
 			prefix:     "a:bc",
 			resultType: a{},
 			expected: map[string]any{
-				"a:bc:d": a{2.5},
+				testCacheKeyABCD: a{2.5},
 			},
 		},
 		{
@@ -331,7 +344,7 @@ func TestGetByPrefix(t *testing.T) {
 			resultType: map[string]any{},
 			expected: map[string]any{
 				// a{} can also be represented as a map:
-				"a:bc:d": map[string]any{
+				testCacheKeyABCD: map[string]any{
 					"a": 2.5,
 				},
 				"a:": map[string]any{
@@ -359,15 +372,10 @@ func TestGetByPrefix(t *testing.T) {
 
 // TestBackgroundWriter test that state.cache.json is wrote (by the background thread).
 func TestBackgroundWriter(t *testing.T) {
-	const (
-		cacheKeyString  = "this-should-be-stored-in-cache-file"
-		cacheKeyString2 = "another-marker-value"
-	)
-
 	tmpdir := t.TempDir()
 
-	persistentPath := filepath.Join(tmpdir, "state.json")
-	cachePath := filepath.Join(tmpdir, "state.cache.json")
+	persistentPath := filepath.Join(tmpdir, testStateJSON)
+	cachePath := filepath.Join(tmpdir, testStateCacheJSON)
 
 	state, err := Load(persistentPath, cachePath)
 	if err != nil {
@@ -408,7 +416,7 @@ func TestBackgroundWriter(t *testing.T) {
 	}
 
 	// This cause a *background* write to state.cache.json
-	_ = state.Set("key1", cacheKeyString)
+	_ = state.Set("key1", testCacheKeyString)
 
 	deadline = time.Now().Add(10 * time.Second)
 	valueFound := false
@@ -419,7 +427,7 @@ func TestBackgroundWriter(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if bytes.Contains(data, []byte(cacheKeyString)) {
+		if bytes.Contains(data, []byte(testCacheKeyString)) {
 			valueFound = true
 
 			break
@@ -429,10 +437,10 @@ func TestBackgroundWriter(t *testing.T) {
 	}
 
 	if !valueFound {
-		t.Errorf("cacheKeyString isn't stored in cache state")
+		t.Errorf("testCacheKeyString isn't stored in cache state")
 	}
 
-	_ = state.Set("key2", cacheKeyString2)
+	_ = state.Set("key2", testCacheKeyString2)
 	// Close ensure the background write finish
 	state.Close()
 
@@ -441,27 +449,22 @@ func TestBackgroundWriter(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !bytes.Contains(data, []byte(cacheKeyString)) {
-		t.Errorf("cacheKeyString isn't stored in cache state")
+	if !bytes.Contains(data, []byte(testCacheKeyString)) {
+		t.Errorf("testCacheKeyString isn't stored in cache state")
 	}
 
-	if !bytes.Contains(data, []byte(cacheKeyString2)) {
-		t.Errorf("cacheKeyString2 isn't stored in cache state")
+	if !bytes.Contains(data, []byte(testCacheKeyString2)) {
+		t.Errorf("testCacheKeyString2 isn't stored in cache state")
 	}
 }
 
 // TestBackgroundWriterNoCreateWait is similar to TestBackgroundWriter but ensure that even if
 // we don't wait for state.cache.json creation, it will eventually be created.
 func TestBackgroundWriterNoCreateWait(t *testing.T) {
-	const (
-		cacheKeyString  = "this-should-be-stored-in-cache-file"
-		cacheKeyString2 = "another-marker-value"
-	)
-
 	tmpdir := t.TempDir()
 
-	persistentPath := filepath.Join(tmpdir, "state.json")
-	cachePath := filepath.Join(tmpdir, "state.cache.json")
+	persistentPath := filepath.Join(tmpdir, testStateJSON)
+	cachePath := filepath.Join(tmpdir, testStateCacheJSON)
 
 	state, err := Load(persistentPath, cachePath)
 	if err != nil {
@@ -474,7 +477,7 @@ func TestBackgroundWriterNoCreateWait(t *testing.T) {
 	}
 
 	id := state.TelemetryID()
-	_ = state.Set("key1", cacheKeyString)
+	_ = state.Set("key1", testCacheKeyString)
 
 	// persistent is always created.
 	data, err := os.ReadFile(persistentPath)
@@ -513,7 +516,7 @@ func TestBackgroundWriterNoCreateWait(t *testing.T) {
 	// Cache is allowed to not contains the first key, because the background thread might just write
 	// the empty state requested in SaveTo() and could submitting write asked by Set().
 	// But any additional change to cache will fix the issue
-	_ = state.Set("key2", cacheKeyString2)
+	_ = state.Set("key2", testCacheKeyString2)
 	state.Close()
 
 	data, err = os.ReadFile(cachePath)
@@ -521,12 +524,12 @@ func TestBackgroundWriterNoCreateWait(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !bytes.Contains(data, []byte(cacheKeyString)) {
-		t.Errorf("cacheKeyString isn't stored in cache state")
+	if !bytes.Contains(data, []byte(testCacheKeyString)) {
+		t.Errorf("testCacheKeyString isn't stored in cache state")
 	}
 
-	if !bytes.Contains(data, []byte(cacheKeyString2)) {
-		t.Errorf("cacheKeyString2 isn't stored in cache state")
+	if !bytes.Contains(data, []byte(testCacheKeyString2)) {
+		t.Errorf("testCacheKeyString2 isn't stored in cache state")
 	}
 }
 
@@ -534,17 +537,15 @@ func TestBackgroundWriterNoCreateWait(t *testing.T) {
 // if it was deleted.
 func TestSkipCacheWriteIfRemoved(t *testing.T) {
 	const (
-		cacheKeyString  = "this-should-be-stored-in-cache-file"
-		cacheKeyString2 = "another-marker-value"
-		agentID         = "agent-id"
-		password1       = "password1"
-		password2       = "password2"
+		agentID   = "agent-id"
+		password1 = "password1"
+		password2 = "password2"
 	)
 
 	tmpdir := t.TempDir()
 
-	persistentPath := filepath.Join(tmpdir, "state.json")
-	cachePath := filepath.Join(tmpdir, "state.cache.json")
+	persistentPath := filepath.Join(tmpdir, testStateJSON)
+	cachePath := filepath.Join(tmpdir, testStateCacheJSON)
 
 	state, err := Load(persistentPath, cachePath)
 	if err != nil {
@@ -573,7 +574,7 @@ func TestSkipCacheWriteIfRemoved(t *testing.T) {
 	}
 
 	_ = state.SetBleemeoCredentials(agentID, password1)
-	_ = state.Set("key1", cacheKeyString)
+	_ = state.Set("key1", testCacheKeyString)
 
 	data, err := os.ReadFile(persistentPath)
 	if err != nil {
@@ -593,7 +594,7 @@ func TestSkipCacheWriteIfRemoved(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if bytes.Contains(data, []byte(cacheKeyString)) {
+		if bytes.Contains(data, []byte(testCacheKeyString)) {
 			valueFound = true
 
 			break
@@ -603,14 +604,14 @@ func TestSkipCacheWriteIfRemoved(t *testing.T) {
 	}
 
 	if !valueFound {
-		t.Errorf("cacheKeyString isn't stored in cache state")
+		t.Errorf("testCacheKeyString isn't stored in cache state")
 	}
 
 	// user now remove the state.cache.json
 	_ = os.Remove(cachePath)
 
 	_ = state.SetBleemeoCredentials(agentID, password2)
-	_ = state.Set("key2", cacheKeyString2)
+	_ = state.Set("key2", testCacheKeyString2)
 
 	// persistent get updated, but state.cache.json will not be created at all
 	data, err = os.ReadFile(persistentPath)
