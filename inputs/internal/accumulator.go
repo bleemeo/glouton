@@ -19,6 +19,7 @@ package internal
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 	"sync"
@@ -334,8 +335,12 @@ func (a *Accumulator) processMetrics(
 
 	a.l.Unlock()
 
-	for _, f := range a.RenameCallbacks {
-		currentContext.Tags, currentContext.Annotations = f(currentContext.Tags, currentContext.Annotations)
+	if len(a.RenameCallbacks) > 0 {
+		currentContext.Tags = maps.Clone(currentContext.Tags)
+
+		for _, f := range a.RenameCallbacks {
+			currentContext.Tags, currentContext.Annotations = f(currentContext.Tags, currentContext.Annotations)
+		}
 	}
 
 	for measurementName, fields := range fieldsPerMeasurements {

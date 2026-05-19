@@ -37,6 +37,12 @@ func AddRenameCallback(input telegraf.Input, f RenameCallback) telegraf.Input {
 		return internalInput
 	}
 
+	if iws, ok := input.(internal.InputWithSecrets); ok {
+		iws.Input.Accumulator.RenameCallbacks = append(iws.Input.Accumulator.RenameCallbacks, internal.RenameCallback(f))
+
+		return iws
+	}
+
 	// The first line of the sample config contains a comment with the input description.
 	configLines := strings.Split(input.SampleConfig(), "\n")
 	description := strings.TrimPrefix(configLines[0], "# ")
