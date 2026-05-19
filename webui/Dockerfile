@@ -4,17 +4,18 @@
 #
 
 FROM node:24 AS base_builder
-ENV PNPM_HOME="/usr/local/share/pnpm"
+ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN wget -qO- https://get.pnpm.io/install.sh | ENV="$HOME/.shrc" SHELL="$(which sh)" sh -
+# Do the pnpm --version to trigger corepack's download of pnpm, so it's stay cached in Docker layers.
+RUN corepack enable && pnpm --version
 
 FROM base_builder AS builder
 
 WORKDIR /app
 
-COPY package.json pnpm-lock.yaml ./
-RUN --mount=type=cache,target=/usr/local/share/pnpm/store \
-    pnpm install --frozen-lockfile --ignore-scripts
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm install --frozen-lockfile
 
 COPY . .
 
