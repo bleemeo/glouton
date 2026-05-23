@@ -24,11 +24,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
 
 	"github.com/go-chi/render"
+	"gopkg.in/yaml.v3"
 )
 
 type Data struct {
@@ -467,6 +469,33 @@ func (StoreInfo) Render(http.ResponseWriter, *http.Request) error { return nil }
 // in agent.go. Kept in sync manually; if it grows the UI will see
 // more recent history available even without a TSDB.
 const inMemoryRetention = 3 * time.Minute
+
+// Config writes the merged in-memory configuration as YAML, with
+// secrets redacted (keys matching key/secret/password/passwd are
+// replaced with "*****"). Same payload that ships in the diagnostic
+// archive's config.yaml, exposed as its own endpoint so the panel
+// can link to it.
+func (d *Data) Config(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+
+	if _, err := w.Write([]byte("# Glouton merged configuration (defaults + files + environment).\n# Secrets are redacted server-side.\n\n")); err != nil {
+		logger.V(2).Printf("Can not write config preamble: %v", err)
+
+		return
+	}
+
+	enc := yaml.NewEncoder(w)
+	enc.SetIndent(4)
+
+	if err := enc.Encode(config.Dump(d.api.Config)); err != nil {
+		logger.V(2).Printf("Can not encode config: %v", err)
+	}
+
+	if err := enc.Close(); err != nil {
+		logger.V(2).Printf("Can not close config encoder: %v", err)
+	}
+}
 
 // StoreInfo returns metadata about the local metric store.
 func (d *Data) StoreInfo(w http.ResponseWriter, r *http.Request) {
