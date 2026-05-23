@@ -567,7 +567,19 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 
 func (c *Connector) UpdateDelayHook(labels map[string]string) (time.Duration, bool) {
 	if _, ok := labels[gloutonTypes.LabelMetaBleemeoRelabelHookOk]; !ok {
-		return 0, true
+		// RelabelHook short-circuits without stamping the OK label when
+		// the agent isn't registered yet (agentID == ""), or when the
+		// gatherer has labels RelabelHook doesn't recognize (e.g. a
+		// static blackbox target with no Bleemeo agent ID). In both
+		// cases we have no Bleemeo-imposed resolution to enforce;
+		// returning retryLater=true here silently halts ALL scraping —
+		// local store, /metrics endpoint and dashboard included — and
+		// the periodic retry never recovers because the OK label is
+		// never produced. Return retryLater=false so the gatherer runs
+		// at its default cadence; once a later setup pass sees the OK
+		// label (e.g. after first registration), the configured Bleemeo
+		// resolution applies.
+		return 0, false
 	}
 
 	resolution, err := c.getMetricResolution(labels)
