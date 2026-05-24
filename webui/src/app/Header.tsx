@@ -2,17 +2,20 @@ import { Box, chakra, HStack, Text } from "@chakra-ui/react";
 import { NavLink } from "react-router-dom";
 
 import { useFetch } from "../api/hooks";
-import type { AgentInformation, Fact } from "../api/types";
+import type { AgentInformation, Fact, MonitorsResponse } from "../api/types";
 import { LiveIndicator } from "./LiveIndicator";
 import { StatusBadge, type Status } from "./StatusBadge";
 import { ThemeToggle } from "./ThemeToggle";
 
-const NAV = [
+type NavItem = { to: string; label: string };
+
+const BASE_NAV: NavItem[] = [
   { to: "/dashboard", label: "Dashboard" },
   { to: "/containers", label: "Containers" },
   { to: "/processes", label: "Processes" },
-  { to: "/informations", label: "Informations" },
-] as const;
+];
+
+const TAIL_NAV: NavItem[] = [{ to: "/informations", label: "Informations" }];
 
 function HostName() {
   const facts = useFetch<Fact[]>("/data/facts", 60_000);
@@ -46,7 +49,10 @@ function ConnectivityStatus() {
     if (info.data.isConnected) {
       status = "ok";
       label = "Connected to Bleemeo";
-    } else if (info.data.registrationAt && info.data.registrationAt !== "0001-01-01T00:00:00Z") {
+    } else if (
+      info.data.registrationAt &&
+      info.data.registrationAt !== "0001-01-01T00:00:00Z"
+    ) {
       status = "warn";
       label = "Bleemeo disconnected";
     } else {
@@ -59,6 +65,17 @@ function ConnectivityStatus() {
 }
 
 export function Header() {
+  const monitors = useFetch<MonitorsResponse>("/data/monitors", 60_000);
+  const hasMonitors = (monitors.data?.monitors?.length ?? 0) > 0;
+
+  const nav: NavItem[] = [
+    ...BASE_NAV,
+    ...(hasMonitors
+      ? [{ to: "/monitors", label: "Uptime Monitoring" } as NavItem]
+      : []),
+    ...TAIL_NAV,
+  ];
+
   return (
     <Box
       as="header"
@@ -86,8 +103,12 @@ export function Header() {
         <HostName />
 
         <HStack as="nav" gap="1" ms="4">
-          {NAV.map((item) => (
-            <NavLink key={item.to} to={item.to} style={{ textDecoration: "none" }}>
+          {nav.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              style={{ textDecoration: "none" }}
+            >
               {({ isActive }) => (
                 <Box
                   px="3"

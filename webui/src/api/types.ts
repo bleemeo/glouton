@@ -78,6 +78,18 @@ export type Topinfo = {
   Swap?: { Total: number; Used: number; Free: number };
 };
 
+export type Monitor = {
+  name: string;
+  url: string;
+  module: string;
+  scheme: string;
+  source: "config" | "bleemeo";
+};
+
+export type MonitorsResponse = {
+  monitors: Monitor[];
+};
+
 // PromQL matrix response (subset used by the dashboard).
 export type PromQLValue = [number, string]; // [unix-ts seconds, stringified float]
 
