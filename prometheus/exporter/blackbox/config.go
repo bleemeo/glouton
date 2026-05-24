@@ -26,6 +26,7 @@ import (
 	"net/url"
 	"os"
 	"regexp/syntax"
+	"slices"
 	"strings"
 	"time"
 
@@ -345,6 +346,55 @@ func New(reg *registry.Registry, config config.Blackbox, addWarnings func(...err
 	}
 
 	return manager, nil
+}
+
+// Target is a UI-facing snapshot of one registered probe target.
+// It is intentionally a flat value type so callers don't need to
+// import the heavier blackboxCollector/Module types.
+type Target struct {
+	Name string
+	// URL is the original target URL as configured (with scheme, e.g.
+	// https://example.com); the post-resolution probe URL used
+	// internally is intentionally not exposed.
+	URL string
+	// Module is the module name (string from the config) — "http",
+	// "dns", etc.
+	Module string
+	// Scheme is the lowercase URL scheme (http, https, dns, tcp,
+	// icmp, ssl). Derived from URL for convenience.
+	Scheme string
+	// BleemeoAgentID is empty for targets coming from the local
+	// `blackbox.targets` config, non-empty for monitors provisioned by
+	// the Bleemeo Cloud platform.
+	BleemeoAgentID string
+}
+
+// Targets returns a snapshot of every currently-registered probe
+// target (both local-config and Bleemeo-provisioned). Safe to call
+// concurrently; the returned slice is owned by the caller.
+func (m *RegisterManager) Targets() []Target {
+	m.l.Lock()
+	collectors := slices.Clone(m.targets)
+	m.l.Unlock()
+
+	out := make([]Target, 0, len(collectors))
+
+	for _, c := range collectors {
+		scheme := ""
+		if i := strings.Index(c.OriginalURL, "://"); i > 0 {
+			scheme = strings.ToLower(c.OriginalURL[:i])
+		}
+
+		out = append(out, Target{
+			Name:           c.Name,
+			URL:            c.OriginalURL,
+			Module:         c.ModuleName,
+			Scheme:         scheme,
+			BleemeoAgentID: c.BleemeoAgentID,
+		})
+	}
+
+	return out
 }
 
 // DiagnosticArchive add diagnostic information.
