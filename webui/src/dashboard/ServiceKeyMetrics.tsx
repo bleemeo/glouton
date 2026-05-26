@@ -53,22 +53,18 @@ export function ServiceKeyMetrics({ serviceName }: Props) {
       </Text>
       <SimpleGrid columns={{ base: 1, sm: metrics.length > 2 ? 3 : 2 }} gap="2">
         {metrics.map((m) => (
-          <MetricCard key={m.metric} metric={m} serviceName={serviceName} />
+          <MetricCard key={m.metric} metric={m} />
         ))}
       </SimpleGrid>
     </VStack>
   );
 }
 
-function MetricCard({
-  metric,
-  serviceName,
-}: {
-  metric: ServiceKeyMetric;
-  serviceName: string;
-}) {
-  const escaped = serviceName.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  const baseQuery = `${metric.metric}{service="${escaped}"}`;
+function MetricCard({ metric }: { metric: ServiceKeyMetric }) {
+  // Glouton's per-service metrics are already scoped to a single
+  // service (one input per service instance), so a bare metric name
+  // is all that's needed — no {service="..."} selector required.
+  const baseQuery = metric.metric;
   // For counters we want a per-second rate. The [1m] window matches
   // glouton's typical scrape interval and stays cheap.
   const query = metric.format === "rate" ? `rate(${baseQuery}[1m])` : baseQuery;
