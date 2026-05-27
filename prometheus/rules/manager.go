@@ -19,8 +19,6 @@ package rules
 import (
 	"context"
 	"fmt"
-	"maps"
-	"runtime"
 	"sync"
 	"time"
 
@@ -50,28 +48,8 @@ type Manager struct {
 	agentStarted time.Time
 }
 
-const metricNodeCPUSecondsGlobal = "node_cpu_seconds_global"
-
-//nolint:gochecknoglobals
-var (
-	defaultLinuxRecordingRules = map[string]string{
-		metricNodeCPUSecondsGlobal: "sum(node_cpu_seconds_total) without (cpu)",
-	}
-	defaultWindowsRecordingRules = map[string]string{
-		"windows_cpu_time_global":            "sum(windows_cpu_time_total) without(core)",
-		"windows_memory_standby_cache_bytes": "windows_memory_standby_cache_core_bytes+windows_memory_standby_cache_normal_priority_bytes+windows_memory_standby_cache_reserve_bytes",
-	}
-)
-
 func NewManager(ctx context.Context, queryable storage.Queryable, baseRules map[string]string) *Manager {
-	rules := defaultLinuxRecordingRules
-	if runtime.GOOS == "windows" {
-		rules = defaultWindowsRecordingRules
-	}
-
-	maps.Copy(rules, baseRules)
-
-	return newManager(ctx, queryable, rules, time.Now())
+	return newManager(ctx, queryable, baseRules, time.Now())
 }
 
 func newManager(ctx context.Context, queryable storage.Queryable, defaultRules map[string]string, created time.Time) *Manager {
