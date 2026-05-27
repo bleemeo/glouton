@@ -233,8 +233,6 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 	// Let's ensure we don't end up with stray queries running somewhere
 	defer cancel()
 
-	start := time.Now()
-
 	var (
 		l                sync.Mutex
 		roundTrips       []roundTrip
@@ -296,6 +294,8 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 			return
 		}
 	}
+	start := time.Now()
+
 	// do all the actual work
 	success := probeFn(subCtx, targetURL, target.Module, registry, hackLogger.Logger())
 
@@ -563,12 +563,15 @@ func gathererInArray(value gathererRegistration, iterable []blackboxCollector) b
 }
 
 func checkNotPrivateTarget(rawURL string) error {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return err
+	host := rawURL
+
+	if u, err := url.Parse(rawURL); err == nil && u.Hostname() != "" {
+		host = u.Hostname()
+	} else if h, _, err := net.SplitHostPort(rawURL); err == nil {
+		host = h
 	}
 
-	ips, err := net.LookupHost(u.Hostname())
+	ips, err := net.LookupHost(host)
 	if err != nil {
 		return err
 	}
