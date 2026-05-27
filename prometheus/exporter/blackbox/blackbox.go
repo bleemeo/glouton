@@ -289,6 +289,13 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 
 	hackLogger := newDNSHackLogger(extLogger)
 
+	if target.IsPublicProbe {
+		if err := checkNotPrivateTarget(targetURL); err != nil {
+			extLogger.WarnContext(ctx, "blocked: target resolves to private IP", "error", err)
+			ch <- prometheus.MustNewConstMetric(probeSuccessDesc, prometheus.GaugeValue, 0., target.Name)
+			return
+		}
+	}
 	// do all the actual work
 	success := probeFn(subCtx, targetURL, target.Module, registry, hackLogger.Logger())
 
@@ -553,6 +560,27 @@ func collectorInMap(value blackboxCollector, iterable map[types.Registration]gat
 
 func gathererInArray(value gathererRegistration, iterable []blackboxCollector) bool {
 	return slices.ContainsFunc(iterable, value.collector.Equal)
+}
+
+func checkNotPrivateTarget(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return err
+	}
+
+	ips, err := net.LookupHost(u.Hostname())
+	if err != nil {
+		return err
+	}
+
+	for _, ipStr := range ips {
+		ip := net.ParseIP(ipStr)
+		if ip != nil && (ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLoopback()) {
+			return fmt.Errorf("target resolves to private IP %s", ipStr)
+		}
+	}
+
+	return nil
 }
 
 // updateRegistrations registers and deregisters collectors to sync the internal state with the configuration.
