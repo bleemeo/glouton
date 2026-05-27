@@ -290,10 +290,13 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 	if target.IsPublicProbe {
 		if err := checkNotPrivateTarget(targetURL); err != nil {
 			extLogger.WarnContext(ctx, "blocked: target resolves to private IP", "error", err)
+
 			ch <- prometheus.MustNewConstMetric(probeSuccessDesc, prometheus.GaugeValue, 0., target.Name)
+
 			return
 		}
 	}
+
 	start := time.Now()
 
 	// do all the actual work
