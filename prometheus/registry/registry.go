@@ -1666,7 +1666,7 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, loopCtx context.Context, 
 	reg.lastScrapes = append(reg.lastScrapes, scrapeRun{ScrapeAt: t0, ScrapeDuration: duration, ScrapedPointsCount: len(mfs), Error: err})
 
 	if errors.Is(err, errSkippingScrapeDueToRelabelHook) {
-		// We don't log skipping to to relabel hook, but we still store the error in reg.lastScrapes
+		// We don't log skipping due to relabel hook, but we still store the error in reg.lastScrapes
 		err = nil
 	}
 
