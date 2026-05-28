@@ -241,6 +241,22 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 
 	// This is done to capture the last response TLS handshake state.
 	subCtx := httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
+		ConnectStart: func(network, addr string) {
+			if !target.IsPublicProbe {
+				return
+			}
+
+			host, _, err := net.SplitHostPort(addr)
+			if err != nil {
+				return
+			}
+
+			ip := net.ParseIP(host)
+			if ip != nil && (ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLoopback()) {
+				extLogger.WarnContext(ctx, "blocked: redirect to private IP", "addr", addr)
+				cancel()
+			}
+		},
 		GetConn: func(hostPort string) {
 			l.Lock()
 			defer l.Unlock()
@@ -288,7 +304,7 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 	hackLogger := newDNSHackLogger(extLogger)
 
 	if target.IsPublicProbe {
-		if err := checkNotPrivateTarget(targetURL); err != nil {
+		if err := checkNotPrivateTarget(ctx, targetURL); err != nil {
 			extLogger.WarnContext(ctx, "blocked: target resolves to private IP", "error", err)
 
 			ch <- prometheus.MustNewConstMetric(probeSuccessDesc, prometheus.GaugeValue, 0., target.Name)
@@ -565,7 +581,7 @@ func gathererInArray(value gathererRegistration, iterable []blackboxCollector) b
 	return slices.ContainsFunc(iterable, value.collector.Equal)
 }
 
-func checkNotPrivateTarget(rawURL string) error {
+func checkNotPrivateTarget(ctx context.Context, rawURL string) error {
 	host := rawURL
 
 	if u, err := url.Parse(rawURL); err == nil && u.Hostname() != "" {
@@ -574,7 +590,7 @@ func checkNotPrivateTarget(rawURL string) error {
 		host = h
 	}
 
-	ips, err := net.LookupHost(host)
+	ips, err := net.DefaultResolver.LookupHost(ctx, host)
 	if err != nil {
 		return err
 	}
@@ -582,7 +598,9 @@ func checkNotPrivateTarget(rawURL string) error {
 	for _, ipStr := range ips {
 		ip := net.ParseIP(ipStr)
 		if ip != nil && (ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLoopback()) {
-			return fmt.Errorf("target resolves to private IP %s", ipStr)
+			var errPrivateTarget = errors.New("target resolves to private IP")
+
+			return fmt.Errorf("%w: %s", errPrivateTarget, ipStr)
 		}
 	}
 

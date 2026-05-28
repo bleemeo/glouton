@@ -418,13 +418,14 @@ func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
 			continue
 		}
 
+		collector.IsPublicProbe = monitor.IsPublicProbe
+
 		newTargets = append(newTargets, collector)
 	}
 
 	if m.scraperName != "" {
 		for idx := range newTargets {
 			newTargets[idx].Labels[types.LabelMetaProbeScraperName] = m.scraperName
-			newTargets[idx].IsPublicProbe = true
 		}
 	}
 
