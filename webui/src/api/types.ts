@@ -38,6 +38,8 @@ export type Container = {
   createdAt?: string;
   startedAt?: string;
   finishedAt?: string;
+  primaryAddress: string;
+  listenAddresses: string[];
   ioWriteBytes: number;
   ioReadBytes: number;
   netBitsRecv: number;
