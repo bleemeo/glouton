@@ -1388,7 +1388,7 @@ func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*d
 			mutex.Lock()
 			defer mutex.Unlock()
 
-			if err != nil {
+			if err != nil && !errors.Is(err, errSkippingScrapeDueToRelabelHook) {
 				errs = append(errs, err)
 			}
 
