@@ -64,7 +64,13 @@ export function ServiceDrawer({ service, onClose }: Props) {
   );
 }
 
-function Details({ service: s, onClose }: { service: Service; onClose: () => void }) {
+function Details({
+  service: s,
+  onClose,
+}: {
+  service: Service;
+  onClose: () => void;
+}) {
   const status = statusFromCode(s.status);
 
   return (
@@ -73,11 +79,20 @@ function Details({ service: s, onClose }: { service: Service; onClose: () => voi
         <HStack justify="space-between" align="start">
           <VStack align="start" gap="2">
             <StatusBadge status={status} label={statusLabel(s.status)} />
-            <Drawer.Title fontSize="lg" fontWeight="semibold" wordBreak="break-all">
+            <Drawer.Title
+              fontSize="lg"
+              fontWeight="semibold"
+              wordBreak="break-all"
+            >
               {s.name}
             </Drawer.Title>
           </VStack>
-          <IconButton aria-label="Close" size="sm" variant="ghost" onClick={onClose}>
+          <IconButton
+            aria-label="Close"
+            size="sm"
+            variant="ghost"
+            onClick={onClose}
+          >
             <LuX />
           </IconButton>
         </HStack>
@@ -156,7 +171,13 @@ function Details({ service: s, onClose }: { service: Service; onClose: () => voi
   );
 }
 
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
+function Section({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <VStack align="stretch" gap="1.5">
       <Text

@@ -3,10 +3,16 @@ import { useState } from "react";
 
 import { usePromQLRange } from "../api/hooks";
 import { DeviceSelect } from "./DeviceSelect";
-import { formatBitsPerSec, formatBytes, formatNumber, formatPercent } from "./format";
+import {
+  formatBitsPerSec,
+  formatBytes,
+  formatNumber,
+  formatPercent,
+} from "./format";
 import { MetricChart, type ChartSeries } from "./MetricChart";
 import { alignSeries, seriesByLabel, sumSeries } from "./promql";
 import type { Range } from "./ranges";
+import { toUiStatus, useThresholds } from "./thresholds";
 
 const COLORS = {
   cpuUser: "#4F8DF5",
@@ -66,6 +72,7 @@ function CPUChart({ range }: { range: Range }) {
   const system = usePromQLRange("cpu_system", range.seconds, range.step);
   const wait = usePromQLRange("cpu_wait", range.seconds, range.step);
   const other = usePromQLRange("cpu_other", range.seconds, range.step);
+  const { byMetric, stateByMetric } = useThresholds();
 
   const data = alignSeries({
     user: user.data?.data?.result?.[0],
@@ -91,6 +98,8 @@ function CPUChart({ range }: { range: Range }) {
       formatValue={(v) => formatPercent(v)}
       loading={user.loading || system.loading}
       error={user.error ?? system.error}
+      thresholds={byMetric.cpu_used}
+      currentStatus={toUiStatus(stateByMetric.cpu_used?.status)}
     />
   );
 }
@@ -99,6 +108,7 @@ function LoadChart({ range }: { range: Range }) {
   const l1 = usePromQLRange("system_load1", range.seconds, range.step);
   const l5 = usePromQLRange("system_load5", range.seconds, range.step);
   const l15 = usePromQLRange("system_load15", range.seconds, range.step);
+  const { byMetric, stateByMetric } = useThresholds();
 
   const data = alignSeries({
     load1: l1.data?.data?.result?.[0],
@@ -122,6 +132,8 @@ function LoadChart({ range }: { range: Range }) {
       loading={l1.loading}
       error={l1.error ?? l5.error ?? l15.error}
       variant="line"
+      thresholds={byMetric.system_load1}
+      currentStatus={toUiStatus(stateByMetric.system_load1?.status)}
     />
   );
 }
@@ -296,7 +308,8 @@ function DiskUtilizationChart({ range }: { range: Range }) {
   const [selected, setSelected] = useState("");
 
   // Empty selection ⇒ all devices. Specific selection ⇒ only that one.
-  const visibleKeys = selected === "" ? allKeys : allKeys.filter((k) => k === selected);
+  const visibleKeys =
+    selected === "" ? allKeys : allKeys.filter((k) => k === selected);
 
   const data = alignSeries(
     Object.fromEntries(visibleKeys.map((k) => [k, labelled[k]])),

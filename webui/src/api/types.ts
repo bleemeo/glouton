@@ -78,6 +78,40 @@ export type Topinfo = {
   Swap?: { Total: number; Used: number; Free: number };
 };
 
+export type ThresholdRule = {
+  metricName: string;
+  labelsText?: string;
+  // item is the value of the `item` label when set (mountpoint for
+  // disk metrics, interface name for network metrics, …). Empty for
+  // metric-wide rules.
+  item?: string;
+  source: "config" | "bleemeo";
+  lowCritical: number | null;
+  lowWarning: number | null;
+  highWarning: number | null;
+  highCritical: number | null;
+  warningDelaySec: number;
+  criticalDelaySec: number;
+};
+
+export type ThresholdStatus = "ok" | "warning" | "critical" | "unknown";
+
+export type ThresholdState = {
+  metricName: string;
+  labelsText?: string;
+  item?: string;
+  status: ThresholdStatus;
+  warningSince?: string;
+  criticalSince?: string;
+  lastUpdate?: string;
+  lastValue?: number;
+};
+
+export type ThresholdsResponse = {
+  thresholds: ThresholdRule[];
+  states: ThresholdState[];
+};
+
 // PromQL matrix response (subset used by the dashboard).
 export type PromQLValue = [number, string]; // [unix-ts seconds, stringified float]
 

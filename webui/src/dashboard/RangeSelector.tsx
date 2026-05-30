@@ -31,11 +31,7 @@ export function RangeSelector({ selectedId, onSelect, storeInfo }: Props) {
               fontFamily="mono"
               fontWeight={active ? "semibold" : "medium"}
               color={
-                active
-                  ? "fg.default"
-                  : available
-                    ? "fg.muted"
-                    : "fg.subtle"
+                active ? "fg.default" : available ? "fg.muted" : "fg.subtle"
               }
               bg={active ? "surface.subtle" : "transparent"}
               borderRadius="md"
@@ -45,7 +41,9 @@ export function RangeSelector({ selectedId, onSelect, storeInfo }: Props) {
               opacity={available ? 1 : 0.45}
               position="relative"
               transition="all 120ms ease"
-              _hover={available ? { bg: "surface.subtle", color: "fg.default" } : {}}
+              _hover={
+                available ? { bg: "surface.subtle", color: "fg.default" } : {}
+              }
               title={
                 available
                   ? `Last ${r.label}`

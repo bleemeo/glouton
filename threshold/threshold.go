@@ -163,6 +163,11 @@ type statusState struct { //nolint: recvcheck
 	CriticalSince time.Time
 	WarningSince  time.Time
 	LastUpdate    time.Time
+	// LastValue is the last value the threshold engine evaluated for
+	// this series. Surfaced by the UI as "current value: X" alongside
+	// the threshold rule. Persisted in state.json (zero-value when
+	// loaded from older data).
+	LastValue float64
 }
 
 type jsonState struct {
@@ -427,6 +432,124 @@ func (r *Registry) GetThresholdMetricNames() []string {
 	}
 
 	return res
+}
+
+// SourceConfig and SourceBleemeo identify where a threshold rule was
+// loaded from. Config-sourced thresholds match every series of a
+// metric name; Bleemeo-sourced thresholds carry an explicit
+// per-instance labels selector and override config on a match.
+const (
+	SourceConfig  = "config"
+	SourceBleemeo = "bleemeo"
+)
+
+// Entry is a UI-facing snapshot of a single active threshold rule.
+// Bounds use NaN to mark unset bounds (same convention as Threshold).
+type Entry struct {
+	MetricName    string
+	LabelsText    string
+	Source        string
+	LowCritical   float64
+	LowWarning    float64
+	HighWarning   float64
+	HighCritical  float64
+	WarningDelay  time.Duration
+	CriticalDelay time.Duration
+}
+
+// AllThresholds returns a flat snapshot of every threshold currently
+// active in the registry, both Bleemeo-pushed (per-instance) and
+// config-defined (per-metric-name). Zero / fully-unset thresholds are
+// skipped — they don't move the alerting needle and just add noise.
+func (r *Registry) AllThresholds() []Entry {
+	r.l.Lock()
+	defer r.l.Unlock()
+
+	out := make([]Entry, 0, len(r.thresholds)+len(r.thresholdsAllItem))
+
+	for metricName, t := range r.thresholdsAllItem {
+		if t.IsZero() {
+			continue
+		}
+
+		out = append(out, Entry{
+			MetricName:    metricName,
+			Source:        SourceConfig,
+			LowCritical:   t.LowCritical,
+			LowWarning:    t.LowWarning,
+			HighWarning:   t.HighWarning,
+			HighCritical:  t.HighCritical,
+			WarningDelay:  t.WarningDelay,
+			CriticalDelay: t.CriticalDelay,
+		})
+	}
+
+	for labelsText, t := range r.thresholds {
+		if t.IsZero() {
+			continue
+		}
+
+		lbls := types.TextToLabels(labelsText)
+		out = append(out, Entry{
+			MetricName:    lbls[types.LabelName],
+			LabelsText:    labelsText,
+			Source:        SourceBleemeo,
+			LowCritical:   t.LowCritical,
+			LowWarning:    t.LowWarning,
+			HighWarning:   t.HighWarning,
+			HighCritical:  t.HighCritical,
+			WarningDelay:  t.WarningDelay,
+			CriticalDelay: t.CriticalDelay,
+		})
+	}
+
+	return out
+}
+
+// StateEntry is a UI-facing snapshot of the current status of a single
+// threshold-tracked series. Times use the zero value when the state
+// has not been entered (e.g. a metric that has only ever been ok will
+// have both WarningSince and CriticalSince at the zero time).
+type StateEntry struct {
+	// LabelsText is the canonical labels representation of the
+	// series this state tracks (e.g. `__name__="cpu_used",instance_uuid="..."`).
+	LabelsText string
+	// MetricName is the value of the `__name__` label, extracted
+	// for convenience.
+	MetricName    string
+	CurrentStatus types.Status
+	WarningSince  time.Time
+	CriticalSince time.Time
+	LastUpdate    time.Time
+	// LastValue is the metric value evaluated at LastUpdate. Useful
+	// for the UI to show "current 95.2%" alongside the threshold.
+	LastValue float64
+}
+
+// AllStates returns a snapshot of every threshold-tracked status the
+// registry knows about. Useful for the UI to display "X for N minutes"
+// on a metric without having to recompute the soft-period logic
+// client-side.
+func (r *Registry) AllStates() []StateEntry {
+	r.l.Lock()
+	defer r.l.Unlock()
+
+	out := make([]StateEntry, 0, len(r.states))
+
+	for labelsText, state := range r.states {
+		lbls := types.TextToLabels(labelsText)
+		out = append(out, StateEntry{
+			LabelsText:    labelsText,
+			MetricName:    lbls[types.LabelName],
+			CurrentStatus: state.CurrentStatus,
+			WarningSince:  state.WarningSince,
+			CriticalSince: state.CriticalSince,
+			LastUpdate:    state.LastUpdate,
+			LastValue:     state.LastValue,
+		})
+	}
+
+	return out
 }
 
 // GetThreshold returns the current threshold for a Metric by labels text.
@@ -700,6 +823,7 @@ func (r *Registry) addPointWithThreshold(
 	}
 
 	newState := previousState.Update(softStatus, threshold.WarningDelay, threshold.CriticalDelay, r.nowFunc())
+	newState.LastValue = point.Value
 	r.states[metricKey] = newState
 
 	unit := r.units[metricKey]

@@ -41,7 +41,7 @@ export function ServicesRow() {
   });
 
   const selected = selectedKey
-    ? sorted.find((s) => serviceKey(s) === selectedKey) ?? null
+    ? (sorted.find((s) => serviceKey(s) === selectedKey) ?? null)
     : null;
 
   return (

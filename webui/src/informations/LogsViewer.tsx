@@ -1,4 +1,12 @@
-import { Box, chakra, Heading, HStack, Input, Text, VStack } from "@chakra-ui/react";
+import {
+  Box,
+  chakra,
+  Heading,
+  HStack,
+  Input,
+  Text,
+  VStack,
+} from "@chakra-ui/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LuCopy, LuExternalLink } from "react-icons/lu";
 
@@ -42,7 +50,8 @@ type LogLine = {
   severity: Severity;
 };
 
-const LOG_LINE_RE = /^(\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?)\s+(.*)$/;
+const LOG_LINE_RE =
+  /^(\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?)\s+(.*)$/;
 
 function parseLines(text: string): LogLine[] {
   const out: LogLine[] = [];
@@ -118,7 +127,12 @@ export function LogsViewer() {
   return (
     <VStack align="stretch" gap="2">
       <HStack justify="space-between" gap="3" wrap="wrap">
-        <Heading size="sm" color="fg.muted" letterSpacing="0.06em" textTransform="uppercase">
+        <Heading
+          size="sm"
+          color="fg.muted"
+          letterSpacing="0.06em"
+          textTransform="uppercase"
+        >
           Glouton logs
         </Heading>
         <HStack gap="2">
@@ -166,7 +180,11 @@ export function LogsViewer() {
             borderColor="border.subtle"
             bg="surface.subtle"
             color="fg.muted"
-            _hover={{ bg: "surface.canvas", color: "fg.default", textDecoration: "none" }}
+            _hover={{
+              bg: "surface.canvas",
+              color: "fg.default",
+              textDecoration: "none",
+            }}
           >
             <LuExternalLink />
           </chakra.a>
@@ -194,7 +212,9 @@ export function LogsViewer() {
         ) : res.loading && filtered.length === 0 ? (
           <Text color="fg.muted">Loading…</Text>
         ) : filtered.length === 0 ? (
-          <Text color="fg.muted">{search ? "No match" : "No log line yet."}</Text>
+          <Text color="fg.muted">
+            {search ? "No match" : "No log line yet."}
+          </Text>
         ) : (
           <VStack align="stretch" gap="0.5" minW="0">
             {filtered.map((line, i) => (
@@ -250,7 +270,13 @@ function LogRow({ line, search }: { line: LogLine; search: string }) {
       <Text color="fg.subtle" whiteSpace="nowrap" flexShrink={0}>
         {line.timestamp.slice(11)}
       </Text>
-      <Box color={color} whiteSpace="pre-wrap" wordBreak="break-word" minW="0" flex="1">
+      <Box
+        color={color}
+        whiteSpace="pre-wrap"
+        wordBreak="break-word"
+        minW="0"
+        flex="1"
+      >
         {highlight(line.message, search)}
       </Box>
     </HStack>

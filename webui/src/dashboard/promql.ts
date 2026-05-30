@@ -75,7 +75,9 @@ export function sumSeries(inputs: PromQLSeries[]): PromQLSeries | undefined {
   };
 }
 
-export function lastValue(response: PromQLResponse | null | undefined): number | null {
+export function lastValue(
+  response: PromQLResponse | null | undefined,
+): number | null {
   const series = response?.data?.result?.[0];
   const samples = samplesOf(series);
 
