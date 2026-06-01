@@ -465,6 +465,86 @@ type StoreInfo struct {
 // Render is a no-op required by go-chi/render.
 func (StoreInfo) Render(http.ResponseWriter, *http.Request) error { return nil }
 
+// Monitor describes a blackbox target as seen by the UI. The `instance`
+// label on the resulting probe_* metrics matches the name.
+type Monitor struct {
+	Name   string `json:"name"`
+	URL    string `json:"url"`
+	Module string `json:"module"`
+	Scheme string `json:"scheme"`
+	// Source identifies where the target was provisioned from. "config"
+	// = local `blackbox.targets` config. "bleemeo" = monitor pushed by
+	// the Bleemeo Cloud platform (the agent received it via sync).
+	Source string `json:"source"`
+}
+
+// MonitorsResponse is the payload returned by /data/monitors.
+type MonitorsResponse struct {
+	Monitors []Monitor `json:"monitors"`
+}
+
+// Render is a no-op required by go-chi/render.
+func (MonitorsResponse) Render(http.ResponseWriter, *http.Request) error { return nil }
+
+// Monitors returns the active probe targets so the UI can build the
+// Uptime Monitoring tab. When the blackbox manager is available (the
+// usual case when blackbox.enable is on) we read directly from it,
+// which transparently covers both the local `blackbox.targets` config
+// AND any dynamic monitors provisioned by Bleemeo Cloud. As a fallback
+// — typically when blackbox is disabled at the agent level — we still
+// return the static config so the tab has something to show.
+func (d *Data) Monitors(w http.ResponseWriter, r *http.Request) {
+	out := MonitorsResponse{Monitors: []Monitor{}}
+
+	if d.api.Monitors != nil {
+		for _, t := range d.api.Monitors.Targets() {
+			name := t.Name
+			if name == "" {
+				name = t.URL
+			}
+
+			source := "config"
+			if t.BleemeoAgentID != "" {
+				source = "bleemeo"
+			}
+
+			out.Monitors = append(out.Monitors, Monitor{
+				Name:   name,
+				URL:    t.URL,
+				Module: t.Module,
+				Scheme: t.Scheme,
+				Source: source,
+			})
+		}
+	} else {
+		for _, t := range d.api.Config.Blackbox.Targets {
+			name := t.Name
+			if name == "" {
+				name = t.URL
+			}
+
+			scheme := ""
+			if i := strings.Index(t.URL, "://"); i > 0 {
+				scheme = strings.ToLower(t.URL[:i])
+			}
+
+			out.Monitors = append(out.Monitors, Monitor{
+				Name:   name,
+				URL:    t.URL,
+				Module: t.Module,
+				Scheme: scheme,
+				Source: "config",
+			})
+		}
+	}
+
+	sort.Slice(out.Monitors, func(i, j int) bool { return out.Monitors[i].Name < out.Monitors[j].Name })
+
+	if err := render.Render(w, r, out); err != nil {
+		logger.V(2).Printf("Can not render monitors: %v", err)
+	}
+}
+
 // inMemoryRetention mirrors the maxPointsAge of the in-memory store
 // in agent.go. Kept in sync manually; if it grows the UI will see
 // more recent history available even without a TSDB.

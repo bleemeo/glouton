@@ -6,6 +6,7 @@ import { useFetch, useStoreInfo } from "../api/hooks";
 import type { Fact } from "../api/types";
 import { NetworkAndIOChartGrid, SystemChartGrid } from "./ChartGrid";
 import { KPIRow } from "./KPIRow";
+import { MonitorsRow } from "./MonitorsRow";
 import { RangeSelector } from "./RangeSelector";
 import { ServicesRow } from "./ServicesRow";
 import { DEFAULT_RANGE_ID, RANGES, type Range } from "./ranges";
@@ -31,7 +32,11 @@ export function Dashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const range = useMemo<Range>(() => {
     const id = searchParams.get(RANGE_PARAM);
-    return RANGES.find((r) => r.id === id) ?? RANGES.find((r) => r.id === DEFAULT_RANGE_ID) ?? RANGES[0];
+    return (
+      RANGES.find((r) => r.id === id) ??
+      RANGES.find((r) => r.id === DEFAULT_RANGE_ID) ??
+      RANGES[0]
+    );
   }, [searchParams]);
 
   const setRange = useCallback(
@@ -59,6 +64,8 @@ export function Dashboard() {
 
       <ServicesRow />
 
+      <MonitorsRow />
+
       <RangeSelector
         selectedId={range.id}
         onSelect={setRange}
@@ -66,14 +73,24 @@ export function Dashboard() {
       />
 
       <VStack align="stretch" gap="3">
-        <Heading size="sm" color="fg.muted" letterSpacing="0.06em" textTransform="uppercase">
+        <Heading
+          size="sm"
+          color="fg.muted"
+          letterSpacing="0.06em"
+          textTransform="uppercase"
+        >
           System metrics
         </Heading>
         <SystemChartGrid range={range} />
       </VStack>
 
       <VStack align="stretch" gap="3">
-        <Heading size="sm" color="fg.muted" letterSpacing="0.06em" textTransform="uppercase">
+        <Heading
+          size="sm"
+          color="fg.muted"
+          letterSpacing="0.06em"
+          textTransform="uppercase"
+        >
           Network &amp; I/O
         </Heading>
         <NetworkAndIOChartGrid range={range} />
