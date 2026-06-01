@@ -214,6 +214,7 @@ func (api *API) init() {
 		router.Get("/data/config", data.Config)
 		router.Get("/data/monitors", data.Monitors)
 		router.Get("/data/store-info", data.StoreInfo)
+		router.Get("/data/thresholds", data.Thresholds)
 		router.Get("/data/tags", data.Tags)
 		router.Get("/data/processes", data.Processes)
 		router.Get("/data/logs", data.Logs)

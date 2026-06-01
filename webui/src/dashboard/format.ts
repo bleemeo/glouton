@@ -74,7 +74,10 @@ export function formatNumber(v: number | null | undefined, digits = 2): string {
   return v.toFixed(digits);
 }
 
-export function formatTickTime(unixSeconds: number, rangeSeconds: number): string {
+export function formatTickTime(
+  unixSeconds: number,
+  rangeSeconds: number,
+): string {
   const d = new Date(unixSeconds * 1_000);
 
   if (rangeSeconds <= 60 * 60) {

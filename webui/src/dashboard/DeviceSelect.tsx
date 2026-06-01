@@ -11,7 +11,12 @@ type Props = {
  * A compact native select rendered to look at home in a chart title
  * row. The empty value means "no filter" (show the aggregated total).
  */
-export function DeviceSelect({ value, onChange, options, allLabel = "All" }: Props) {
+export function DeviceSelect({
+  value,
+  onChange,
+  options,
+  allLabel = "All",
+}: Props) {
   return (
     <chakra.select
       value={value}

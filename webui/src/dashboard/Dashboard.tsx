@@ -9,6 +9,7 @@ import { KPIRow } from "./KPIRow";
 import { MonitorsRow } from "./MonitorsRow";
 import { RangeSelector } from "./RangeSelector";
 import { ServicesRow } from "./ServicesRow";
+import { ThresholdAlertBanner } from "./ThresholdAlertBanner";
 import { DEFAULT_RANGE_ID, RANGES, type Range } from "./ranges";
 
 const RANGE_PARAM = "range";
@@ -60,6 +61,8 @@ export function Dashboard() {
 
   return (
     <VStack align="stretch" gap="6">
+      <ThresholdAlertBanner />
+
       <KPIRow cores={cores} />
 
       <ServicesRow />

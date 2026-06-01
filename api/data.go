@@ -18,6 +18,7 @@ package api
 
 import (
 	"errors"
+	"math"
 	"net/http"
 	"sort"
 	"strconv"
@@ -473,6 +474,53 @@ type StoreInfo struct {
 // Render is a no-op required by go-chi/render.
 func (StoreInfo) Render(http.ResponseWriter, *http.Request) error { return nil }
 
+// ThresholdRule describes a single active threshold on the agent.
+// All four bound fields use a nullable float so the wire format can
+// represent "unset bound" as JSON null (NaN is invalid JSON).
+type ThresholdRule struct {
+	MetricName string `json:"metricName"`
+	LabelsText string `json:"labelsText,omitempty"`
+	// Item is the value of the `item` label when present (e.g. the
+	// mountpoint for disk metrics, the interface name for network
+	// metrics). Empty for rules that apply to a metric as a whole.
+	Item         string   `json:"item,omitempty"`
+	Source       string   `json:"source"`
+	LowCritical  *float64 `json:"lowCritical"`
+	LowWarning   *float64 `json:"lowWarning"`
+	HighWarning  *float64 `json:"highWarning"`
+	HighCritical *float64 `json:"highCritical"`
+	// Soft periods, in seconds: a value must stay outside the band
+	// for at least this long before the status flips. 0 = immediate.
+	WarningDelaySec  int64 `json:"warningDelaySec"`
+	CriticalDelaySec int64 `json:"criticalDelaySec"`
+}
+
+// ThresholdState is the current status of a single threshold-tracked
+// series. The *Since fields use ISO timestamps and are null when the
+// state has not been entered.
+type ThresholdState struct {
+	MetricName    string     `json:"metricName"`
+	LabelsText    string     `json:"labelsText,omitempty"`
+	Item          string     `json:"item,omitempty"`
+	Status        string     `json:"status"` // "ok" | "warning" | "critical" | "unknown"
+	WarningSince  *time.Time `json:"warningSince,omitempty"`
+	CriticalSince *time.Time `json:"criticalSince,omitempty"`
+	LastUpdate    *time.Time `json:"lastUpdate,omitempty"`
+	// LastValue is the metric value at the last threshold evaluation
+	// (~scrape cadence, default 10s). Null when no evaluation has
+	// happened yet.
+	LastValue *float64 `json:"lastValue,omitempty"`
+}
+
+// ThresholdsResponse is the payload returned by /data/thresholds.
+type ThresholdsResponse struct {
+	Thresholds []ThresholdRule  `json:"thresholds"`
+	States     []ThresholdState `json:"states"`
+}
+
+// Render is a no-op required by go-chi/render.
+func (ThresholdsResponse) Render(http.ResponseWriter, *http.Request) error { return nil }
+
 // Monitor describes a blackbox target as seen by the UI. The `instance`
 // label on the resulting probe_* metrics matches the name.
 type Monitor struct {
@@ -605,6 +653,135 @@ func (d *Data) StoreInfo(w http.ResponseWriter, r *http.Request) {
 	if err := render.Render(w, r, info); err != nil {
 		logger.V(2).Printf("Can not render store info: %v", err)
 	}
+}
+
+// Thresholds returns every threshold rule currently active on the
+// agent, both Bleemeo-pushed (per-instance) and locally configured
+// (per-metric-name). The UI uses this to color KPI cards from the
+// real bounds and to draw warn/crit reference zones on charts.
+func (d *Data) Thresholds(w http.ResponseWriter, r *http.Request) {
+	out := ThresholdsResponse{
+		Thresholds: []ThresholdRule{},
+		States:     []ThresholdState{},
+	}
+
+	if d.api.Threshold != nil {
+		for _, e := range d.api.Threshold.AllThresholds() {
+			out.Thresholds = append(out.Thresholds, ThresholdRule{
+				MetricName:       e.MetricName,
+				LabelsText:       e.LabelsText,
+				Item:             itemFromLabelsText(e.LabelsText),
+				Source:           e.Source,
+				LowCritical:      nullableFloat(e.LowCritical),
+				LowWarning:       nullableFloat(e.LowWarning),
+				HighWarning:      nullableFloat(e.HighWarning),
+				HighCritical:     nullableFloat(e.HighCritical),
+				WarningDelaySec:  int64(e.WarningDelay.Seconds()),
+				CriticalDelaySec: int64(e.CriticalDelay.Seconds()),
+			})
+		}
+
+		for _, s := range d.api.Threshold.AllStates() {
+			out.States = append(out.States, ThresholdState{
+				MetricName:    s.MetricName,
+				LabelsText:    s.LabelsText,
+				Item:          itemFromLabelsText(s.LabelsText),
+				Status:        statusToString(s.CurrentStatus),
+				WarningSince:  nullableTime(s.WarningSince),
+				CriticalSince: nullableTime(s.CriticalSince),
+				LastUpdate:    nullableTime(s.LastUpdate),
+				LastValue:     nullableValueWhenUpdated(s.LastValue, s.LastUpdate),
+			})
+		}
+	}
+
+	sort.Slice(out.Thresholds, func(i, j int) bool {
+		return lessByMetricLabels(
+			out.Thresholds[i].MetricName, out.Thresholds[i].LabelsText,
+			out.Thresholds[j].MetricName, out.Thresholds[j].LabelsText,
+		)
+	})
+
+	sort.Slice(out.States, func(i, j int) bool {
+		return lessByMetricLabels(
+			out.States[i].MetricName, out.States[i].LabelsText,
+			out.States[j].MetricName, out.States[j].LabelsText,
+		)
+	})
+
+	if err := render.Render(w, r, out); err != nil {
+		logger.V(2).Printf("Can not render thresholds: %v", err)
+	}
+}
+
+// lessByMetricLabels gives both the rules and the states tables a
+// deterministic order: metric name first, then labels. Same order as
+// the threshold engine itself, so a user comparing the JSON to its
+// internal state lines up.
+func lessByMetricLabels(metricA, labelsA, metricB, labelsB string) bool {
+	if metricA != metricB {
+		return metricA < metricB
+	}
+
+	return labelsA < labelsB
+}
+
+// itemFromLabelsText pulls the `item` label out of a canonical labels
+// text representation. Returns empty when the label is absent — which
+// is the normal case for config-source thresholds that target a
+// metric name as a whole.
+func itemFromLabelsText(labelsText string) string {
+	if labelsText == "" {
+		return ""
+	}
+
+	return types.TextToLabels(labelsText)[types.LabelItem]
+}
+
+// statusToString mirrors types.Status.String() but folds the internal
+// "unset" sentinel into "unknown" so the wire vocabulary stays at the
+// four values the front-end's ThresholdStatus union expects.
+func statusToString(s types.Status) string {
+	if s == types.StatusUnset {
+		return "unknown"
+	}
+
+	return s.String()
+}
+
+func nullableTime(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+
+	return &t
+}
+
+// nullableValueWhenUpdated returns the value only when the engine has
+// actually evaluated this metric at least once (i.e. LastUpdate is
+// set). A bare zero value when no evaluation has happened would be
+// misleading — the agent could not have observed a real "0".
+func nullableValueWhenUpdated(value float64, lastUpdate time.Time) *float64 {
+	if lastUpdate.IsZero() {
+		return nil
+	}
+
+	if math.IsNaN(value) {
+		return nil
+	}
+
+	return &value
+}
+
+// nullableFloat serialises NaN as JSON null. NaN is the Threshold
+// package's convention for "this bound is unset" — encoding/json
+// would otherwise emit NaN which is invalid JSON.
+func nullableFloat(v float64) *float64 {
+	if math.IsNaN(v) {
+		return nil
+	}
+
+	return &v
 }
 
 // Tags returns a list of tags from system.
