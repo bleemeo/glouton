@@ -126,16 +126,24 @@ func (d *Data) Containers(w http.ResponseWriter, r *http.Request) {
 			createdAt := container.CreatedAt()
 			startedAt := container.StartedAt()
 			finishedAt := container.FinishedAt()
+
+			listenAddrs := make([]string, 0, len(container.ListenAddresses()))
+			for _, addr := range container.ListenAddresses() {
+				listenAddrs = append(listenAddrs, addr.String())
+			}
+
 			c := &Container{
-				Command:     cmdString,
-				CreatedAt:   &createdAt,
-				ID:          container.ID(),
-				Image:       container.ImageName(),
-				InspectJSON: container.ContainerJSON(),
-				Name:        container.ContainerName(),
-				StartedAt:   &startedAt,
-				State:       container.State().String(),
-				FinishedAt:  &finishedAt,
+				Command:         cmdString,
+				CreatedAt:       &createdAt,
+				ID:              container.ID(),
+				Image:           container.ImageName(),
+				InspectJSON:     container.ContainerJSON(),
+				Name:            container.ContainerName(),
+				StartedAt:       &startedAt,
+				State:           container.State().String(),
+				FinishedAt:      &finishedAt,
+				PrimaryAddress:  container.PrimaryAddress(),
+				ListenAddresses: listenAddrs,
 			}
 
 			c, err = d.containerInformation(container, c)

@@ -31,7 +31,8 @@ function stateToStatus(state: string): Status {
 
   if (s.includes("running") || s === "up") return "ok";
   if (s.includes("paused") || s.includes("restarting")) return "warn";
-  if (s.includes("exited") || s.includes("dead") || s.includes("stopped")) return "crit";
+  if (s.includes("exited") || s.includes("dead") || s.includes("stopped"))
+    return "crit";
 
   return "unknown";
 }
@@ -79,7 +80,11 @@ export function ContainerDrawer({ container, requestedId, onClose }: Props) {
       <Portal>
         <Drawer.Backdrop bg="blackAlpha.500" />
         <Drawer.Positioner>
-          <Drawer.Content bg="surface.panel" borderLeftWidth="1px" borderColor="border.subtle">
+          <Drawer.Content
+            bg="surface.panel"
+            borderLeftWidth="1px"
+            borderColor="border.subtle"
+          >
             {container ? (
               <ContainerDetails container={container} onClose={onClose} />
             ) : (
@@ -92,21 +97,36 @@ export function ContainerDrawer({ container, requestedId, onClose }: Props) {
   );
 }
 
-function ContainerDetails({ container: c, onClose }: { container: Container; onClose: () => void }) {
+function ContainerDetails({
+  container: c,
+  onClose,
+}: {
+  container: Container;
+  onClose: () => void;
+}) {
   return (
     <>
       <Drawer.Header borderBottomWidth="1px" borderColor="border.subtle" pb="3">
         <HStack justify="space-between" align="start">
           <VStack align="start" gap="2">
             <StatusBadge status={stateToStatus(c.state)} label={c.state} />
-            <Drawer.Title fontSize="lg" fontWeight="semibold" wordBreak="break-all">
+            <Drawer.Title
+              fontSize="lg"
+              fontWeight="semibold"
+              wordBreak="break-all"
+            >
               {c.name}
             </Drawer.Title>
             <Text fontSize="xs" color="fg.subtle" fontFamily="mono">
               {c.id.slice(0, 24)}
             </Text>
           </VStack>
-          <IconButton aria-label="Close" size="sm" variant="ghost" onClick={onClose}>
+          <IconButton
+            aria-label="Close"
+            size="sm"
+            variant="ghost"
+            onClick={onClose}
+          >
             <LuX />
           </IconButton>
         </HStack>
@@ -157,14 +177,73 @@ function ContainerDetails({ container: c, onClose }: { container: Container; onC
           </SimpleGrid>
 
           <SimpleGrid columns={2} gap="3">
-            <Field label="↓ Network" value={`${formatBytes(c.netBitsRecv / 8)}/s`} mono />
-            <Field label="↑ Network" value={`${formatBytes(c.netBitsSent / 8)}/s`} mono />
-            <Field label="Read" value={`${formatBytes(c.ioReadBytes)}/s`} mono />
-            <Field label="Write" value={`${formatBytes(c.ioWriteBytes)}/s`} mono />
+            <Field
+              label="↓ Network"
+              value={`${formatBytes(c.netBitsRecv / 8)}/s`}
+              mono
+            />
+            <Field
+              label="↑ Network"
+              value={`${formatBytes(c.netBitsSent / 8)}/s`}
+              mono
+            />
+            <Field
+              label="Read"
+              value={`${formatBytes(c.ioReadBytes)}/s`}
+              mono
+            />
+            <Field
+              label="Write"
+              value={`${formatBytes(c.ioWriteBytes)}/s`}
+              mono
+            />
           </SimpleGrid>
 
+          {c.primaryAddress || c.listenAddresses.length > 0 ? (
+            <Section label="Addresses">
+              <VStack align="stretch" gap="1.5">
+                {c.primaryAddress ? (
+                  <HStack gap="2" fontSize="xs" fontFamily="mono">
+                    <Text color="fg.subtle" minW="6ch">
+                      IP
+                    </Text>
+                    <Code variant="surface" fontSize="xs" px="2" py="0.5">
+                      {c.primaryAddress}
+                    </Code>
+                  </HStack>
+                ) : null}
+                {c.listenAddresses.length > 0 ? (
+                  <HStack gap="2" align="start" fontSize="xs" fontFamily="mono">
+                    <Text color="fg.subtle" minW="6ch" pt="1">
+                      Listen
+                    </Text>
+                    <HStack gap="1.5" wrap="wrap" flex="1">
+                      {c.listenAddresses.map((addr) => (
+                        <Code
+                          key={addr}
+                          variant="surface"
+                          fontSize="xs"
+                          px="2"
+                          py="0.5"
+                        >
+                          {addr}
+                        </Code>
+                      ))}
+                    </HStack>
+                  </HStack>
+                ) : null}
+              </VStack>
+            </Section>
+          ) : null}
+
           <Section label="Image">
-            <Code variant="surface" fontFamily="mono" fontSize="xs" wordBreak="break-all" p="2">
+            <Code
+              variant="surface"
+              fontFamily="mono"
+              fontSize="xs"
+              wordBreak="break-all"
+              p="2"
+            >
               {c.image}
             </Code>
           </Section>
@@ -210,13 +289,24 @@ function ContainerDetails({ container: c, onClose }: { container: Container; onC
   );
 }
 
-function RemovedNotice({ id, onClose }: { id: string | null; onClose: () => void }) {
+function RemovedNotice({
+  id,
+  onClose,
+}: {
+  id: string | null;
+  onClose: () => void;
+}) {
   return (
     <>
       <Drawer.Header borderBottomWidth="1px" borderColor="border.subtle">
         <HStack justify="space-between">
           <Drawer.Title>Container removed</Drawer.Title>
-          <IconButton aria-label="Close" size="sm" variant="ghost" onClick={onClose}>
+          <IconButton
+            aria-label="Close"
+            size="sm"
+            variant="ghost"
+            onClick={onClose}
+          >
             <LuX />
           </IconButton>
         </HStack>
@@ -232,7 +322,13 @@ function RemovedNotice({ id, onClose }: { id: string | null; onClose: () => void
   );
 }
 
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
+function Section({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <VStack align="stretch" gap="1.5">
       <Text
