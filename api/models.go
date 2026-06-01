@@ -55,15 +55,15 @@ type CPUUsage struct {
 }
 
 type Container struct {
-	Command         string     `json:"command"`
-	CreatedAt       *time.Time `json:"createdAt,omitempty"`
-	ID              string     `json:"id"`
-	Image           string     `json:"image"`
-	InspectJSON     string     `json:"inspectJSON"`
-	Name            string     `json:"name"`
-	StartedAt       *time.Time `json:"startedAt,omitempty"`
-	State           string     `json:"state"`
-	FinishedAt      *time.Time `json:"finishedAt,omitempty"`
+	Command     string     `json:"command"`
+	CreatedAt   *time.Time `json:"createdAt,omitempty"`
+	ID          string     `json:"id"`
+	Image       string     `json:"image"`
+	InspectJSON string     `json:"inspectJSON"`
+	Name        string     `json:"name"`
+	StartedAt   *time.Time `json:"startedAt,omitempty"`
+	State       string     `json:"state"`
+	FinishedAt  *time.Time `json:"finishedAt,omitempty"`
 	// PrimaryAddress is the container's main IP as reported by the
 	// runtime (the first non-bridge address it picks). Empty when the
 	// container runs with host networking or no network attached.
