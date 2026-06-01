@@ -85,9 +85,10 @@ type RelabelHook func(ctx context.Context, labels map[string]string) (newLabel m
 type UpdateDelayHook func(labels map[string]string) (minInterval time.Duration, retryLater bool)
 
 var (
-	errInvalidName  = errors.New("invalid metric name or label name")
-	ErrBadArgument  = errors.New("bad argument")
-	errCantRunInput = errors.New("can't run an input")
+	errInvalidName                    = errors.New("invalid metric name or label name")
+	ErrBadArgument                    = errors.New("bad argument")
+	errCantRunInput                   = errors.New("can't run an input")
+	errSkippingScrapeDueToRelabelHook = errors.New("skipping scrape due to relabel hook")
 )
 
 type diagnosticer interface {
@@ -1387,7 +1388,7 @@ func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*d
 			mutex.Lock()
 			defer mutex.Unlock()
 
-			if err != nil {
+			if err != nil && !errors.Is(err, errSkippingScrapeDueToRelabelHook) {
 				errs = append(errs, err)
 			}
 
@@ -1662,6 +1663,13 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, loopCtx context.Context, 
 
 	reg.l.Lock()
 
+	reg.lastScrapes = append(reg.lastScrapes, scrapeRun{ScrapeAt: t0, ScrapeDuration: duration, ScrapedPointsCount: len(mfs), Error: err})
+
+	if errors.Is(err, errSkippingScrapeDueToRelabelHook) {
+		// We don't log skipping due to relabel hook, but we still store the error in reg.lastScrapes
+		err = nil
+	}
+
 	if err != nil {
 		logLvl := 2
 
@@ -1678,8 +1686,6 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, loopCtx context.Context, 
 			logger.V(logLvl).Printf("Gather of metrics failed on %s, some metrics may be missing: %v", reg.option.Description, err)
 		}
 	}
-
-	reg.lastScrapes = append(reg.lastScrapes, scrapeRun{ScrapeAt: t0, ScrapeDuration: duration, ScrapedPointsCount: len(mfs), Error: err})
 
 	if len(reg.lastScrapes) > maxLastScrape {
 		reg.lastScrapes = reg.lastScrapes[len(reg.lastScrapes)-maxLastScrape:]
@@ -1739,7 +1745,7 @@ func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registrat
 	if reg.relabelHookSkip {
 		reg.l.Unlock()
 
-		return nil, 0, nil
+		return nil, 0, errSkippingScrapeDueToRelabelHook
 	}
 
 	secretInput, hasSecrets := reg.gatherer.source.(inputs.SecretfulInput)
