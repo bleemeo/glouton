@@ -121,6 +121,12 @@ func (a *mockAppender) AppendSTZeroSample(_ storage.SeriesRef, _ labels.Labels, 
 }
 
 func TestManager(t *testing.T) {
+	const metricNodeCPUSecondsGlobal = "node_cpu_seconds_global"
+
+	defaultLinuxRecordingRules := map[string]string{
+		metricNodeCPUSecondsGlobal: "sum(node_cpu_seconds_total) without (cpu)",
+	}
+
 	t0 := time.Now().Add(-time.Minute).Round(time.Millisecond)
 	t1 := t0.Add(time.Second)
 
@@ -198,7 +204,7 @@ func TestManager(t *testing.T) {
 
 			app := &mockAppendable{forceTS: t1}
 
-			mgr := NewManager(t.Context(), tt.queryable, nil)
+			mgr := NewManager(t.Context(), tt.queryable, tt.rules)
 
 			err := mgr.CollectWithState(t.Context(), registry.GatherState{T0: time.Now()}, app.Appender(t.Context()))
 			if err != nil {

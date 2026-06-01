@@ -36,6 +36,7 @@ import (
 	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/exporter/blackbox"
 	"github.com/bleemeo/glouton/prometheus/promql"
 	"github.com/bleemeo/glouton/threshold"
 	"github.com/bleemeo/glouton/types"
@@ -73,6 +74,15 @@ type LocalStoreInfo interface {
 	OldestPointMs() int64
 }
 
+// MonitorSource produces the list of currently-active probe targets
+// (both local-config and Bleemeo-provisioned). Implemented by
+// *blackbox.RegisterManager; declared as an interface here so the
+// /data/monitors handler can fall back to a config-only view when
+// blackbox is disabled and so tests can mock it.
+type MonitorSource interface {
+	Targets() []blackbox.Target
+}
+
 // API contains API's port.
 type API struct {
 	BindAddress        string
@@ -88,8 +98,13 @@ type API struct {
 	PrometheusExporter http.Handler
 	Threshold          *threshold.Registry
 	LocalStore         LocalStoreInfo
-	DiagnosticPage     func(ctx context.Context) string
-	DiagnosticArchive  func(ctx context.Context, w types.ArchiveWriter) error
+	Monitors           MonitorSource
+	// Config is the merged in-memory configuration. The /data/config
+	// handler dumps a redacted copy (secrets stripped by
+	// config.CensorSecretItem) for inspection from the UI.
+	Config            config.Config
+	DiagnosticPage    func(ctx context.Context) string
+	DiagnosticArchive func(ctx context.Context, w types.ArchiveWriter) error
 
 	router http.Handler
 }
@@ -196,6 +211,8 @@ func (api *API) init() {
 		router.Get("/data/services", data.Services)
 		router.Get("/data/agent-informations", data.AgentInformation)
 		router.Get("/data/agent-status", data.AgentStatus)
+		router.Get("/data/config", data.Config)
+		router.Get("/data/monitors", data.Monitors)
 		router.Get("/data/store-info", data.StoreInfo)
 		router.Get("/data/thresholds", data.Thresholds)
 		router.Get("/data/tags", data.Tags)

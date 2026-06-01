@@ -203,7 +203,97 @@ export function Informations() {
 
       <PrometheusSection />
 
+      <ConfigurationSection />
+
       <DiagnosticSection />
+    </VStack>
+  );
+}
+
+function ConfigurationSection() {
+  return (
+    <VStack align="stretch" gap="2">
+      <Heading size="sm" color="fg.muted" letterSpacing="0.06em" textTransform="uppercase">
+        Configuration
+      </Heading>
+      <Box
+        bg="surface.panel"
+        borderWidth="1px"
+        borderColor="border.subtle"
+        borderRadius="lg"
+        p="4"
+      >
+        <VStack align="stretch" gap="3">
+          <Text fontSize="sm" color="fg.muted">
+            The merged in-memory configuration (defaults + files +
+            environment overrides) as a plain YAML document. Secrets are
+            redacted server-side — values for keys matching{" "}
+            <Code variant="surface" fontSize="xs">
+              key
+            </Code>
+            ,{" "}
+            <Code variant="surface" fontSize="xs">
+              secret
+            </Code>
+            ,{" "}
+            <Code variant="surface" fontSize="xs">
+              password
+            </Code>{" "}
+            or{" "}
+            <Code variant="surface" fontSize="xs">
+              passwd
+            </Code>{" "}
+            are replaced with{" "}
+            <Code variant="surface" fontSize="xs">
+              *****
+            </Code>
+            .
+          </Text>
+          <HStack gap="2" wrap="wrap">
+            <ChakraLink
+              href="/data/config"
+              target="_blank"
+              rel="noopener noreferrer"
+              px="3"
+              py="2"
+              fontSize="sm"
+              fontWeight="medium"
+              borderRadius="md"
+              borderWidth="1px"
+              borderColor="border.default"
+              color="fg.default"
+              bg="surface.subtle"
+              _hover={{ bg: "surface.canvas", textDecoration: "none" }}
+              display="inline-flex"
+              alignItems="center"
+              gap="2"
+            >
+              <LuExternalLink />
+              View running configuration
+            </ChakraLink>
+            <ChakraLink
+              href="/data/config"
+              download="glouton-config.yaml"
+              px="3"
+              py="2"
+              fontSize="sm"
+              fontWeight="medium"
+              borderRadius="md"
+              borderWidth="1px"
+              borderColor="border.default"
+              color="fg.default"
+              bg="surface.subtle"
+              _hover={{ bg: "surface.canvas", textDecoration: "none" }}
+              display="inline-flex"
+              alignItems="center"
+              gap="2"
+            >
+              <LuDownload />
+              Download (.yaml)
+            </ChakraLink>
+          </HStack>
+        </VStack>
+      </Box>
     </VStack>
   );
 }

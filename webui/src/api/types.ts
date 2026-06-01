@@ -38,6 +38,8 @@ export type Container = {
   createdAt?: string;
   startedAt?: string;
   finishedAt?: string;
+  primaryAddress: string;
+  listenAddresses: string[];
   ioWriteBytes: number;
   ioReadBytes: number;
   netBitsRecv: number;
@@ -110,6 +112,18 @@ export type ThresholdState = {
 export type ThresholdsResponse = {
   thresholds: ThresholdRule[];
   states: ThresholdState[];
+};
+
+export type Monitor = {
+  name: string;
+  url: string;
+  module: string;
+  scheme: string;
+  source: "config" | "bleemeo";
+};
+
+export type MonitorsResponse = {
+  monitors: Monitor[];
 };
 
 // PromQL matrix response (subset used by the dashboard).

@@ -6,6 +6,7 @@ import { useFetch, useStoreInfo } from "../api/hooks";
 import type { Fact } from "../api/types";
 import { NetworkAndIOChartGrid, SystemChartGrid } from "./ChartGrid";
 import { KPIRow } from "./KPIRow";
+import { MonitorsRow } from "./MonitorsRow";
 import { RangeSelector } from "./RangeSelector";
 import { ServicesRow } from "./ServicesRow";
 import { ThresholdAlertBanner } from "./ThresholdAlertBanner";
@@ -65,6 +66,8 @@ export function Dashboard() {
       <KPIRow cores={cores} />
 
       <ServicesRow />
+
+      <MonitorsRow />
 
       <RangeSelector
         selectedId={range.id}

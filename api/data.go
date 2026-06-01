@@ -25,11 +25,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
 
 	"github.com/go-chi/render"
+	"gopkg.in/yaml.v3"
 )
 
 type Data struct {
@@ -125,16 +127,24 @@ func (d *Data) Containers(w http.ResponseWriter, r *http.Request) {
 			createdAt := container.CreatedAt()
 			startedAt := container.StartedAt()
 			finishedAt := container.FinishedAt()
+
+			listenAddrs := make([]string, 0, len(container.ListenAddresses()))
+			for _, addr := range container.ListenAddresses() {
+				listenAddrs = append(listenAddrs, addr.String())
+			}
+
 			c := &Container{
-				Command:     cmdString,
-				CreatedAt:   &createdAt,
-				ID:          container.ID(),
-				Image:       container.ImageName(),
-				InspectJSON: container.ContainerJSON(),
-				Name:        container.ContainerName(),
-				StartedAt:   &startedAt,
-				State:       container.State().String(),
-				FinishedAt:  &finishedAt,
+				Command:         cmdString,
+				CreatedAt:       &createdAt,
+				ID:              container.ID(),
+				Image:           container.ImageName(),
+				InspectJSON:     container.ContainerJSON(),
+				Name:            container.ContainerName(),
+				StartedAt:       &startedAt,
+				State:           container.State().String(),
+				FinishedAt:      &finishedAt,
+				PrimaryAddress:  container.PrimaryAddress(),
+				ListenAddresses: listenAddrs,
 			}
 
 			c, err = d.containerInformation(container, c)
@@ -511,10 +521,117 @@ type ThresholdsResponse struct {
 // Render is a no-op required by go-chi/render.
 func (ThresholdsResponse) Render(http.ResponseWriter, *http.Request) error { return nil }
 
+// Monitor describes a blackbox target as seen by the UI. The `instance`
+// label on the resulting probe_* metrics matches the name.
+type Monitor struct {
+	Name   string `json:"name"`
+	URL    string `json:"url"`
+	Module string `json:"module"`
+	Scheme string `json:"scheme"`
+	// Source identifies where the target was provisioned from. "config"
+	// = local `blackbox.targets` config. "bleemeo" = monitor pushed by
+	// the Bleemeo Cloud platform (the agent received it via sync).
+	Source string `json:"source"`
+}
+
+// MonitorsResponse is the payload returned by /data/monitors.
+type MonitorsResponse struct {
+	Monitors []Monitor `json:"monitors"`
+}
+
+// Render is a no-op required by go-chi/render.
+func (MonitorsResponse) Render(http.ResponseWriter, *http.Request) error { return nil }
+
+// Monitors returns the active probe targets so the UI can build the
+// Uptime Monitoring tab. When the blackbox manager is available (the
+// usual case when blackbox.enable is on) we read directly from it,
+// which transparently covers both the local `blackbox.targets` config
+// AND any dynamic monitors provisioned by Bleemeo Cloud. As a fallback
+// — typically when blackbox is disabled at the agent level — we still
+// return the static config so the tab has something to show.
+func (d *Data) Monitors(w http.ResponseWriter, r *http.Request) {
+	out := MonitorsResponse{Monitors: []Monitor{}}
+
+	if d.api.Monitors != nil {
+		for _, t := range d.api.Monitors.Targets() {
+			name := t.Name
+			if name == "" {
+				name = t.URL
+			}
+
+			source := "config"
+			if t.BleemeoAgentID != "" {
+				source = "bleemeo"
+			}
+
+			out.Monitors = append(out.Monitors, Monitor{
+				Name:   name,
+				URL:    t.URL,
+				Module: t.Module,
+				Scheme: t.Scheme,
+				Source: source,
+			})
+		}
+	} else {
+		for _, t := range d.api.Config.Blackbox.Targets {
+			name := t.Name
+			if name == "" {
+				name = t.URL
+			}
+
+			scheme := ""
+			if i := strings.Index(t.URL, "://"); i > 0 {
+				scheme = strings.ToLower(t.URL[:i])
+			}
+
+			out.Monitors = append(out.Monitors, Monitor{
+				Name:   name,
+				URL:    t.URL,
+				Module: t.Module,
+				Scheme: scheme,
+				Source: "config",
+			})
+		}
+	}
+
+	sort.Slice(out.Monitors, func(i, j int) bool { return out.Monitors[i].Name < out.Monitors[j].Name })
+
+	if err := render.Render(w, r, out); err != nil {
+		logger.V(2).Printf("Can not render monitors: %v", err)
+	}
+}
+
 // inMemoryRetention mirrors the maxPointsAge of the in-memory store
 // in agent.go. Kept in sync manually; if it grows the UI will see
 // more recent history available even without a TSDB.
 const inMemoryRetention = 3 * time.Minute
+
+// Config writes the merged in-memory configuration as YAML, with
+// secrets redacted (keys matching key/secret/password/passwd are
+// replaced with "*****"). Same payload that ships in the diagnostic
+// archive's config.yaml, exposed as its own endpoint so the panel
+// can link to it.
+func (d *Data) Config(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+
+	if _, err := w.Write([]byte("# Glouton merged configuration (defaults + files + environment).\n# Secrets are redacted server-side.\n\n")); err != nil {
+		logger.V(2).Printf("Can not write config preamble: %v", err)
+
+		return
+	}
+
+	enc := yaml.NewEncoder(w)
+	enc.SetIndent(4)
+
+	if err := enc.Encode(config.Dump(d.api.Config)); err != nil {
+		logger.V(2).Printf("Can not encode config: %v", err)
+	}
+
+	if err := enc.Close(); err != nil {
+		logger.V(2).Printf("Can not close config encoder: %v", err)
+	}
+}
 
 // StoreInfo returns metadata about the local metric store.
 func (d *Data) StoreInfo(w http.ResponseWriter, r *http.Request) {

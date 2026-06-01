@@ -55,21 +55,28 @@ type CPUUsage struct {
 }
 
 type Container struct {
-	Command      string     `json:"command"`
-	CreatedAt    *time.Time `json:"createdAt,omitempty"`
-	ID           string     `json:"id"`
-	Image        string     `json:"image"`
-	InspectJSON  string     `json:"inspectJSON"`
-	Name         string     `json:"name"`
-	StartedAt    *time.Time `json:"startedAt,omitempty"`
-	State        string     `json:"state"`
-	FinishedAt   *time.Time `json:"finishedAt,omitempty"`
-	IoWriteBytes float64    `json:"ioWriteBytes"`
-	IoReadBytes  float64    `json:"ioReadBytes"`
-	NetBitsRecv  float64    `json:"netBitsRecv"`
-	NetBitsSent  float64    `json:"netBitsSent"`
-	MemUsedPerc  float64    `json:"memUsedPerc"`
-	CPUUsedPerc  float64    `json:"cpuUsedPerc"`
+	Command         string     `json:"command"`
+	CreatedAt       *time.Time `json:"createdAt,omitempty"`
+	ID              string     `json:"id"`
+	Image           string     `json:"image"`
+	InspectJSON     string     `json:"inspectJSON"`
+	Name            string     `json:"name"`
+	StartedAt       *time.Time `json:"startedAt,omitempty"`
+	State           string     `json:"state"`
+	FinishedAt      *time.Time `json:"finishedAt,omitempty"`
+	// PrimaryAddress is the container's main IP as reported by the
+	// runtime (the first non-bridge address it picks). Empty when the
+	// container runs with host networking or no network attached.
+	PrimaryAddress string `json:"primaryAddress"`
+	// ListenAddresses lists the sockets the container is bound to,
+	// rendered as "tcp/0.0.0.0:80" / "udp/0.0.0.0:53" / "unix:/var/run/docker.sock".
+	ListenAddresses []string `json:"listenAddresses"`
+	IoWriteBytes    float64  `json:"ioWriteBytes"`
+	IoReadBytes     float64  `json:"ioReadBytes"`
+	NetBitsRecv     float64  `json:"netBitsRecv"`
+	NetBitsSent     float64  `json:"netBitsSent"`
+	MemUsedPerc     float64  `json:"memUsedPerc"`
+	CPUUsedPerc     float64  `json:"cpuUsedPerc"`
 }
 
 type Containers struct {
