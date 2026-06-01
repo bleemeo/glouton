@@ -88,8 +88,12 @@ type API struct {
 	PrometheusExporter http.Handler
 	Threshold          *threshold.Registry
 	LocalStore         LocalStoreInfo
-	DiagnosticPage     func(ctx context.Context) string
-	DiagnosticArchive  func(ctx context.Context, w types.ArchiveWriter) error
+	// Config is the merged in-memory configuration. The /data/config
+	// handler dumps a redacted copy (secrets stripped by
+	// config.CensorSecretItem) for inspection from the UI.
+	Config            config.Config
+	DiagnosticPage    func(ctx context.Context) string
+	DiagnosticArchive func(ctx context.Context, w types.ArchiveWriter) error
 
 	router http.Handler
 }
@@ -196,6 +200,7 @@ func (api *API) init() {
 		router.Get("/data/services", data.Services)
 		router.Get("/data/agent-informations", data.AgentInformation)
 		router.Get("/data/agent-status", data.AgentStatus)
+		router.Get("/data/config", data.Config)
 		router.Get("/data/store-info", data.StoreInfo)
 		router.Get("/data/tags", data.Tags)
 		router.Get("/data/processes", data.Processes)

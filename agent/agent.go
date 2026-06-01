@@ -993,6 +993,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		AgentInfo:          a,
 		PrometheusExporter: promExporter,
 		Threshold:          a.threshold,
+		Config:             a.config,
 		StaticCDNURL:       a.config.Web.StaticCDNURL,
 		DiagnosticPage:     a.DiagnosticPage,
 		DiagnosticArchive:  a.writeDiagnosticArchive,
