@@ -58,5 +58,7 @@ echo "Capturing $GLOUTON_URL → $OUT/"
 shoot /dashboard     dashboard     1600,1900
 shoot /containers    containers    1600,1000
 shoot /processes     processes     1600,1000
+# Uptime Monitoring tab: KPI cards + one row of monitor cards per ~3 targets.
+shoot /monitors      monitors      1600,820
 shoot /informations  informations  1600,1400
 echo "Done."

@@ -51,13 +51,15 @@ history.
 
 <table>
   <tr>
-    <td width="33%"><strong>Containers</strong> — sortable, status-coded, click a row for the full record.</td>
-    <td width="33%"><strong>Processes</strong> — top consumers, live, click for the full record.</td>
-    <td width="33%"><strong>Informations</strong> — facts, services, embedded logs, Prometheus URL and diagnostic exports.</td>
+    <td width="25%"><strong>Containers</strong> — sortable, status-coded, click a row for the full record.</td>
+    <td width="25%"><strong>Processes</strong> — top consumers, live, click for the full record.</td>
+    <td width="25%"><strong>Uptime Monitoring</strong> — probe targets, availability and recent failures at a glance.</td>
+    <td width="25%"><strong>Informations</strong> — facts, services, embedded logs, Prometheus URL and diagnostic exports.</td>
   </tr>
   <tr>
     <td><a href="assets/screenshots/containers.png"><img src="assets/screenshots/containers.png" alt="Glouton containers tab"/></a></td>
     <td><a href="assets/screenshots/processes.png"><img src="assets/screenshots/processes.png" alt="Glouton processes tab"/></a></td>
+    <td><a href="assets/screenshots/monitors.png"><img src="assets/screenshots/monitors.png" alt="Glouton uptime monitoring tab"/></a></td>
     <td><a href="assets/screenshots/informations.png"><img src="assets/screenshots/informations.png" alt="Glouton informations tab"/></a></td>
   </tr>
 </table>
