@@ -42,7 +42,13 @@ var (
 	ErrMultiArrayNotAllowed        = errors.New("multi-level arrays are not allowed")
 	ErrQuotedParamContainsUnquoted = errors.New("quoted parameter cannot contain unquoted part")
 	errWrongHeader                 = errors.New("wrong packet header")
+	errInvalidDataLength           = errors.New("invalid data length")
 )
+
+// maxDataLength is the maximum accepted data length announced in a Zabbix
+// packet. The length is controlled by the client, so it must be bounded to
+// avoid huge (or negative) allocations that would allow a denial of service.
+const maxDataLength = 64 * 1024
 
 // Server is a Zabbix server than use Callback for reply to queries.
 type Server struct {
@@ -131,6 +137,10 @@ func decode(r io.Reader) (packetStruct, error) {
 		err = fmt.Errorf("binary.Read failed for packet_version: %w", err)
 
 		return decodedPacket, err
+	}
+
+	if dataLength < 0 || dataLength > maxDataLength {
+		return decodedPacket, errInvalidDataLength
 	}
 
 	packetData := make([]byte, dataLength)
