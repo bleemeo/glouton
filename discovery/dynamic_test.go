@@ -14,6 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//nolint:goconst
 package discovery
 
 import (
@@ -1223,6 +1224,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			FileReader: mockFileReader{
 				contents: c.filesContent,
 			},
+			AllowedLabelOverrides: config.DefaultConfig().Container.AllowedLabelOverrides,
 		})
 		dd.now = func() time.Time { return t0 }
 
@@ -2112,13 +2114,17 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 }
 
 func Test_fillGenericExtraAttributes(t *testing.T) {
+	defaultOverrides := config.DefaultConfig().Container.AllowedLabelOverrides
+
 	cases := []struct {
 		name                        string
 		serviceFromDynamicDiscovery Service
+		allowedLabelOverrides       []string
 		expectedConfigResult        config.Service
 	}{
 		{
-			name: "ports-and-http_path",
+			name:                  "ports-and-http_path",
+			allowedLabelOverrides: defaultOverrides,
 			serviceFromDynamicDiscovery: Service{
 				container: facts.FakeContainer{
 					FakeLabels: map[string]string{
@@ -2142,7 +2148,8 @@ func Test_fillGenericExtraAttributes(t *testing.T) {
 			},
 		},
 		{
-			name: "tags",
+			name:                  "tags",
+			allowedLabelOverrides: defaultOverrides,
 			serviceFromDynamicDiscovery: Service{
 				container: facts.FakeContainer{
 					FakeLabels: map[string]string{
@@ -2159,7 +2166,8 @@ func Test_fillGenericExtraAttributes(t *testing.T) {
 			},
 		},
 		{
-			name: "from-annotations",
+			name:                  "from-annotations",
+			allowedLabelOverrides: defaultOverrides,
 			serviceFromDynamicDiscovery: Service{
 				container: facts.FakeContainer{
 					FakeAnnotations: map[string]string{
@@ -2177,6 +2185,42 @@ func Test_fillGenericExtraAttributes(t *testing.T) {
 				HTTPPath: testPath,
 			},
 		},
+		{
+			// check_command allows arbitrary command execution and must NOT be
+			// honored when it isn't in the allow-list, even though other (safe)
+			// labels on the same container are still applied.
+			name:                  "dangerous-label-blocked-by-default",
+			allowedLabelOverrides: defaultOverrides,
+			serviceFromDynamicDiscovery: Service{
+				container: facts.FakeContainer{
+					FakeLabels: map[string]string{
+						"glouton.port":          "8080",
+						"glouton.check_command": "/bin/evil --pwn",
+					},
+				},
+			},
+			expectedConfigResult: config.Service{
+				Port: 8080,
+			},
+		},
+		{
+			// When explicitly allowed (trusted environment), check_command is
+			// honored. The allow-list is additive with the safe defaults.
+			name:                  "dangerous-label-allowed-when-listed",
+			allowedLabelOverrides: append(append([]string{}, defaultOverrides...), "check_command"),
+			serviceFromDynamicDiscovery: Service{
+				container: facts.FakeContainer{
+					FakeLabels: map[string]string{
+						"glouton.port":          "8080",
+						"glouton.check_command": "/bin/check_something",
+					},
+				},
+			},
+			expectedConfigResult: config.Service{
+				Port:         8080,
+				CheckCommand: "/bin/check_something",
+			},
+		},
 	}
 
 	for _, tt := range cases {
@@ -2184,10 +2228,11 @@ func Test_fillGenericExtraAttributes(t *testing.T) {
 			service := tt.serviceFromDynamicDiscovery
 
 			dd := NewDynamic(Option{
-				PS:                 mockProcess{},
-				Netstat:            mockNetstat{},
-				ContainerInfo:      mockContainerInfo{},
-				IsContainerIgnored: facts.ContainerFilter{}.ContainerIgnored,
+				PS:                    mockProcess{},
+				Netstat:               mockNetstat{},
+				ContainerInfo:         mockContainerInfo{},
+				IsContainerIgnored:    facts.ContainerFilter{}.ContainerIgnored,
+				AllowedLabelOverrides: tt.allowedLabelOverrides,
 			})
 
 			dd.fillConfigFromLabels(&service)

@@ -926,12 +926,13 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	metricsIgnored := discovery.NewIgnoredService(a.config.ServiceIgnoreMetrics)
 	isCheckIgnored := discovery.NewIgnoredService(a.config.ServiceIgnoreCheck).IsServiceIgnored
 	dynamicDiscovery := discovery.NewDynamic(discovery.Option{
-		PS:                 psFact,
-		Netstat:            netstat,
-		ContainerInfo:      a.containerRuntime,
-		IsContainerIgnored: a.containerFilter.ContainerIgnored,
-		IsServiceIgnored:   serviceIgnored.IsServiceIgnored,
-		FileReader:         discovery.SudoFileReader{HostRootPath: a.hostRootPath, Runner: a.commandRunner},
+		PS:                    psFact,
+		Netstat:               netstat,
+		ContainerInfo:         a.containerRuntime,
+		IsContainerIgnored:    a.containerFilter.ContainerIgnored,
+		IsServiceIgnored:      serviceIgnored.IsServiceIgnored,
+		FileReader:            discovery.SudoFileReader{HostRootPath: a.hostRootPath, Runner: a.commandRunner},
+		AllowedLabelOverrides: a.config.Container.AllowedLabelOverrides,
 	})
 
 	a.discovery, warnings = discovery.New(
