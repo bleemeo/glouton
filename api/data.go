@@ -200,6 +200,7 @@ func (d *Data) containerInformation(container facts.Container, c *Container) (*C
 		"container_net_bits_sent",
 		"container_mem_used_perc",
 		"container_cpu_used",
+		"container_cpu_throttled_perc",
 	}
 
 	for _, m := range containerMetrics {

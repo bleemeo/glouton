@@ -56,6 +56,12 @@ import (
 
 const runtimeName = "containerd"
 
+const (
+	metricCPUPeriods          = "container_cpu_periods"
+	metricCPUThrottledPeriods = "container_cpu_throttled_periods"
+	metricCPUThrottledPerc    = "container_cpu_throttled_perc"
+)
+
 var (
 	errNotFound         = errors.New("not found")
 	errIgnoredContainer = errors.New("container ignored")
@@ -321,6 +327,11 @@ func convertMetric(data any) (map[string]uint64, error) {
 			valueMap["container_cpu_used"] = value.GetCPU().GetUsage().GetTotal() / 1e3
 		}
 
+		if value.GetCPU() != nil && value.GetCPU().GetThrottling() != nil {
+			valueMap[metricCPUThrottledPeriods] = value.GetCPU().GetThrottling().GetThrottledPeriods()
+			valueMap[metricCPUPeriods] = value.GetCPU().GetThrottling().GetPeriods()
+		}
+
 		if value.GetBlkio() != nil {
 			for _, row := range value.GetBlkio().GetIoServiceBytesRecursive() {
 				if row != nil && row.GetOp() == "Read" {
@@ -338,6 +349,8 @@ func convertMetric(data any) (map[string]uint64, error) {
 	case *v2.Metrics:
 		if value.GetCPU() != nil {
 			valueMap["container_cpu_used"] = value.GetCPU().GetUsageUsec()
+			valueMap[metricCPUThrottledPeriods] = value.GetCPU().GetNrThrottled()
+			valueMap[metricCPUPeriods] = value.GetCPU().GetNrPeriods()
 		}
 
 		if value.GetIo() != nil {
@@ -1518,8 +1531,8 @@ func rateFromMetricValue(gloutonIDToName map[string]string, pastValues []metricV
 			var floatValue float64
 
 			switch {
-			case k == "container_mem_limit":
-				// This metric isn't emitted
+			case k == "container_mem_limit", k == metricCPUThrottledPeriods, k == metricCPUPeriods:
+				// These raw counters aren't emitted, they are only used to derive other metrics.
 				continue
 			case k == "container_mem_used":
 				// It's the only non-derivated value
@@ -1575,6 +1588,30 @@ func rateFromMetricValue(gloutonIDToName map[string]string, pastValues []metricV
 					})
 				}
 			}
+		}
+
+		// container_cpu_throttled_perc is the ratio of CFS periods during which the
+		// container was throttled, in percent. Both counters are monotonic, so we
+		// derive the ratio from their deltas over the interval.
+		newThrottled := newV.Values[metricCPUThrottledPeriods]
+		pastThrottled := pastV.Values[metricCPUThrottledPeriods]
+		newPeriods := newV.Values[metricCPUPeriods]
+		pastPeriods := pastV.Values[metricCPUPeriods]
+
+		if newThrottled >= pastThrottled && newPeriods > pastPeriods {
+			ratio := float64(newThrottled-pastThrottled) / float64(newPeriods-pastPeriods) * 100
+
+			points = append(points, types.MetricPoint{
+				Point: types.Point{Time: newV.Time, Value: ratio},
+				Labels: map[string]string{
+					types.LabelName:            metricCPUThrottledPerc,
+					types.LabelItem:            name,
+					types.LabelMetaContainerID: id,
+				},
+				Annotations: types.MetricAnnotations{
+					ContainerID: id,
+				},
+			})
 		}
 	}
 

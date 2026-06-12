@@ -84,6 +84,7 @@ var (
 		// Docker
 		"containers_count",
 		"container_cpu_used",
+		"container_cpu_throttled_perc",
 		"container_health_status",
 		"container_io_read_bytes",
 		"container_io_write_bytes",
