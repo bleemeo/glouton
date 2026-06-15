@@ -136,6 +136,7 @@ var (
 	errNoCertificates     = errors.New("no server certificate")
 	errDNSResolvedUnknown = errors.New("unknown default DNS resolver")
 	errConfigWarning      = errors.New("some DNS monitor(s) need default DNS resolver to be configured. Set `blackbox.default_dns_resolver`")
+	errPrivateTarget      = errors.New("target resolves to private IP")
 )
 
 type roundTrip struct {
@@ -598,8 +599,6 @@ func checkNotPrivateTarget(ctx context.Context, rawURL string) error {
 	for _, ipStr := range ips {
 		ip := net.ParseIP(ipStr)
 		if ip != nil && (ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLoopback()) {
-			var errPrivateTarget = errors.New("target resolves to private IP")
-
 			return fmt.Errorf("%w: %s", errPrivateTarget, ipStr)
 		}
 	}
