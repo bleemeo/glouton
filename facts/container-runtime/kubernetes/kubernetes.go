@@ -631,6 +631,8 @@ func (k *Kubernetes) getKubeletPoints(ctx context.Context, cl kubeClient, now ti
 		}
 	}
 
+	resultPoints = append(resultPoints, nodeAllocatablePoints(node, now)...)
+
 	var ip string
 
 	for _, a := range node.Status.Addresses {
@@ -655,6 +657,34 @@ func (k *Kubernetes) getKubeletPoints(ctx context.Context, cl kubeClient, now ti
 	resultPoints = append(resultPoints, createPointsCertificateDaysAndPerc(cert.NotBefore, cert.NotAfter, certExpLabelDay, certExpLabelPerc, now, types.LabelItem, "kubelet")...)
 
 	return resultPoints, nil
+}
+
+// nodeAllocatablePoints returns the allocatable resources of the node as metrics:
+// kubernetes_cpu_allocatable (cores), kubernetes_memory_allocatable (bytes),
+// kubernetes_pods_allocatable (count) and kubernetes_ephemeral_storage_allocatable (bytes).
+// We only expose allocatable (not capacity), as it reflects the resources usable by pods.
+func nodeAllocatablePoints(node *corev1.Node, now time.Time) []types.MetricPoint {
+	allocatable := node.Status.Allocatable
+
+	values := map[string]float64{
+		"kubernetes_cpu_allocatable":               allocatable.Cpu().AsApproximateFloat64(),
+		"kubernetes_memory_allocatable":            allocatable.Memory().AsApproximateFloat64(),
+		"kubernetes_pods_allocatable":              allocatable.Pods().AsApproximateFloat64(),
+		"kubernetes_ephemeral_storage_allocatable": allocatable.StorageEphemeral().AsApproximateFloat64(),
+	}
+
+	points := make([]types.MetricPoint, 0, len(values))
+
+	for name, value := range values {
+		points = append(points, types.MetricPoint{
+			Point: types.Point{Time: now, Value: value},
+			Labels: map[string]string{
+				types.LabelName: name,
+			},
+		})
+	}
+
+	return points
 }
 
 func (k *Kubernetes) getCACertificateExpiration(config *rest.Config, now time.Time) ([]types.MetricPoint, error) {

@@ -42,6 +42,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/yaml"
@@ -1021,5 +1022,56 @@ func TestClusterMetrics(t *testing.T) {
 
 	if diff := cmp.Diff(expectedPoints, gotPoints, cmpopts.SortSlices(lessFunc)); diff != "" {
 		t.Fatalf("Didn't get expected points:\n%s", diff)
+	}
+}
+
+func TestNodeAllocatablePoints(t *testing.T) {
+	now := time.Date(2022, time.April, 1, 0, 0, 0, 0, time.UTC)
+
+	node := &corev1.Node{
+		Status: corev1.NodeStatus{
+			Allocatable: corev1.ResourceList{
+				corev1.ResourceCPU:              resource.MustParse("4"),
+				corev1.ResourceMemory:           resource.MustParse("8Gi"),
+				corev1.ResourcePods:             resource.MustParse("110"),
+				corev1.ResourceEphemeralStorage: resource.MustParse("50Gi"),
+			},
+		},
+	}
+
+	want := map[string]float64{
+		"kubernetes_cpu_allocatable":               4,
+		"kubernetes_memory_allocatable":            8 * 1024 * 1024 * 1024,
+		"kubernetes_pods_allocatable":              110,
+		"kubernetes_ephemeral_storage_allocatable": 50 * 1024 * 1024 * 1024,
+	}
+
+	got := nodeAllocatablePoints(node, now)
+
+	if len(got) != len(want) {
+		t.Fatalf("got %d points, want %d", len(got), len(want))
+	}
+
+	for _, point := range got {
+		name := point.Labels[types.LabelName]
+
+		wantValue, ok := want[name]
+		if !ok {
+			t.Errorf("unexpected metric %q", name)
+
+			continue
+		}
+
+		if point.Value != wantValue {
+			t.Errorf("metric %q = %v, want %v", name, point.Value, wantValue)
+		}
+
+		if !point.Time.Equal(now) {
+			t.Errorf("metric %q time = %v, want %v", name, point.Time, now)
+		}
+
+		if len(point.Labels) != 1 {
+			t.Errorf("metric %q has labels %v, want only __name__", name, point.Labels)
+		}
 	}
 }

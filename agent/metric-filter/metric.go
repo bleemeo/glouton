@@ -66,6 +66,9 @@ var (
 		"kubernetes_cpu_limits",
 		"kubernetes_memory_requests",
 		"kubernetes_memory_limits",
+		"kubernetes_cpu_allocatable",
+		"kubernetes_memory_allocatable",
+		"kubernetes_pods_allocatable",
 		"kubernetes_pods_restart_count",
 
 		// Key Processes
