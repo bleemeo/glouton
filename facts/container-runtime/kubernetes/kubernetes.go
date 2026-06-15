@@ -544,60 +544,92 @@ func (k *Kubernetes) getKubeletPoints(ctx context.Context, cl kubeClient, now ti
 		return nil, []error{err}
 	}
 
-	point := types.MetricPoint{
-		Point: types.Point{Time: now, Value: 3.0},
-		Labels: map[string]string{
-			types.LabelName: "kubernetes_kubelet_status",
-		},
-		Annotations: types.MetricAnnotations{
-			Status: types.StatusDescription{
-				CurrentStatus:     types.StatusOk,
-				StatusDescription: "no known issue",
-			},
-		},
-	}
+	const kubeletConditionStatus = "kubernetes_kubelet_status"
 
-	var resourceWarning []string
+	resultPoints := make([]types.MetricPoint, 0, 5) // expect 5 condition so 5 points
 
 	for _, cond := range node.Status.Conditions {
 		switch cond.Type {
 		case corev1.NodeReady:
+			status := types.StatusDescription{
+				CurrentStatus:     types.StatusOk,
+				StatusDescription: "node ready",
+			}
 			if cond.Status != corev1.ConditionTrue {
-				point.Annotations.Status = types.StatusDescription{
+				status = types.StatusDescription{
 					CurrentStatus:     types.StatusCritical,
 					StatusDescription: "node is not ready: " + cond.Message,
 				}
 			}
+
+			resultPoints = append(resultPoints, types.MetricPoint{
+				Point: types.Point{Time: now, Value: float64(status.CurrentStatus.NagiosCode())},
+				Labels: map[string]string{
+					types.LabelName:      kubeletConditionStatus,
+					types.LabelCondition: "ready",
+				},
+				Annotations: types.MetricAnnotations{
+					Status: status,
+				},
+			})
 		case corev1.NodeDiskPressure, corev1.NodeMemoryPressure, corev1.NodePIDPressure:
-			if cond.Status == corev1.ConditionTrue {
-				typeText := map[corev1.NodeConditionType]string{
-					corev1.NodeDiskPressure:   "disk",
-					corev1.NodeMemoryPressure: "memory",
-					corev1.NodePIDPressure:    "PID",
-				}[cond.Type]
-				resourceWarning = append(
-					resourceWarning,
-					fmt.Sprintf("node has %s pressure: %s", typeText, cond.Message),
-				)
+			typeText := map[corev1.NodeConditionType]string{
+				corev1.NodeDiskPressure:   "disk pressure",
+				corev1.NodeMemoryPressure: "memory pressure",
+				corev1.NodePIDPressure:    "PID pressure",
+			}[cond.Type]
+
+			conditionLabel := map[corev1.NodeConditionType]string{
+				corev1.NodeDiskPressure:   "disk_pressure",
+				corev1.NodeMemoryPressure: "memory_pressure",
+				corev1.NodePIDPressure:    "pid_pressure",
+			}[cond.Type]
+
+			status := types.StatusDescription{
+				CurrentStatus:     types.StatusOk,
+				StatusDescription: fmt.Sprintf("node %s cleared", typeText),
 			}
+			if cond.Status == corev1.ConditionTrue {
+				status = types.StatusDescription{
+					CurrentStatus:     types.StatusCritical,
+					StatusDescription: fmt.Sprintf("node has %s: %s", typeText, cond.Message),
+				}
+			}
+
+			resultPoints = append(resultPoints, types.MetricPoint{
+				Point: types.Point{Time: now, Value: float64(status.CurrentStatus.NagiosCode())},
+				Labels: map[string]string{
+					types.LabelName:      kubeletConditionStatus,
+					types.LabelCondition: conditionLabel,
+				},
+				Annotations: types.MetricAnnotations{
+					Status: status,
+				},
+			})
 		case corev1.NodeNetworkUnavailable:
-			if cond.Status == corev1.ConditionTrue {
-				resourceWarning = append(
-					resourceWarning,
-					"node has networking issue: "+cond.Message,
-				)
+			status := types.StatusDescription{
+				CurrentStatus:     types.StatusOk,
+				StatusDescription: "node network available",
 			}
+			if cond.Status == corev1.ConditionTrue {
+				status = types.StatusDescription{
+					CurrentStatus:     types.StatusCritical,
+					StatusDescription: "node has networking issue: " + cond.Message,
+				}
+			}
+
+			resultPoints = append(resultPoints, types.MetricPoint{
+				Point: types.Point{Time: now, Value: float64(status.CurrentStatus.NagiosCode())},
+				Labels: map[string]string{
+					types.LabelName:      kubeletConditionStatus,
+					types.LabelCondition: "network_unavailable",
+				},
+				Annotations: types.MetricAnnotations{
+					Status: status,
+				},
+			})
 		}
 	}
-
-	if len(resourceWarning) > 0 && point.Annotations.Status.CurrentStatus == types.StatusOk {
-		point.Annotations.Status = types.StatusDescription{
-			CurrentStatus:     types.StatusWarning,
-			StatusDescription: strings.Join(resourceWarning, ", "),
-		}
-	}
-
-	point.Point.Value = float64(point.Annotations.Status.CurrentStatus.NagiosCode())
 
 	var ip string
 
@@ -610,20 +642,19 @@ func (k *Kubernetes) getKubeletPoints(ctx context.Context, cl kubeClient, now ti
 	}
 
 	if ip == "" {
-		return []types.MetricPoint{point}, []error{fmt.Errorf("can't retrieve kubelet cert: %w", errNodeHasNoInternalIP)}
+		return resultPoints, []error{fmt.Errorf("can't retrieve kubelet cert: %w", errNodeHasNoInternalIP)}
 	}
 
 	addr := net.JoinHostPort(ip, "10250")
 
 	cert, err := fetchServerCert(ctx, addr)
 	if err != nil {
-		return []types.MetricPoint{point}, []error{fmt.Errorf("fetching kubelet cert: %w", err)}
+		return resultPoints, []error{fmt.Errorf("fetching kubelet cert: %w", err)}
 	}
 
-	result := createPointsCertificateDaysAndPerc(cert.NotBefore, cert.NotAfter, certExpLabelDay, certExpLabelPerc, now, types.LabelItem, "kubelet")
-	result = append(result, point)
+	resultPoints = append(resultPoints, createPointsCertificateDaysAndPerc(cert.NotBefore, cert.NotAfter, certExpLabelDay, certExpLabelPerc, now, types.LabelItem, "kubelet")...)
 
-	return result, nil
+	return resultPoints, nil
 }
 
 func (k *Kubernetes) getCACertificateExpiration(config *rest.Config, now time.Time) ([]types.MetricPoint, error) {
