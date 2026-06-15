@@ -18,7 +18,6 @@ kubernetes_cpu_limits{namespace="namespace-2",owner_kind="job",owner_name="job-r
 kubernetes_cpu_limits{namespace="namespace-2",owner_kind="job",owner_name="job-succeeded"} 0 1648771200000
 kubernetes_cpu_limits{namespace="namespace-3",owner_kind="deployment",owner_name="running-ready"} 0 1648771200000
 kubernetes_cpu_limits{namespace="namespace-3",owner_kind="deployment",owner_name="unschedulable"} 0 1648771200000
-# 200m + 200m (2 containers per pod) * 3 (3 replicas) = 1.2
 kubernetes_cpu_limits{namespace="namespace-3",owner_kind="replicaset",owner_name="running-replicaset"} 1.2 1648771200000
 # HELP kubernetes_cpu_requests 
 # TYPE kubernetes_cpu_requests untyped
@@ -40,7 +39,6 @@ kubernetes_cpu_requests{namespace="namespace-2",owner_kind="job",owner_name="job
 kubernetes_cpu_requests{namespace="namespace-2",owner_kind="job",owner_name="job-succeeded"} 0 1648771200000
 kubernetes_cpu_requests{namespace="namespace-3",owner_kind="deployment",owner_name="running-ready"} 0 1648771200000
 kubernetes_cpu_requests{namespace="namespace-3",owner_kind="deployment",owner_name="unschedulable"} 0 1648771200000
-# 100m + 100m (2 containers per pod) * 3 (3 replicas) = 0.6
 kubernetes_cpu_requests{namespace="namespace-3",owner_kind="replicaset",owner_name="running-replicaset"} 0.6 1648771200000
 # HELP kubernetes_memory_limits 
 # TYPE kubernetes_memory_limits untyped
@@ -62,7 +60,6 @@ kubernetes_memory_limits{namespace="namespace-2",owner_kind="job",owner_name="jo
 kubernetes_memory_limits{namespace="namespace-2",owner_kind="job",owner_name="job-succeeded"} 0 1648771200000
 kubernetes_memory_limits{namespace="namespace-3",owner_kind="deployment",owner_name="running-ready"} 0 1648771200000
 kubernetes_memory_limits{namespace="namespace-3",owner_kind="deployment",owner_name="unschedulable"} 0 1648771200000
-# 50Mi + 50Mi (2 containers per pod) * 3 (3 replicas) = 300Mi = 314572800 bytes
 kubernetes_memory_limits{namespace="namespace-3",owner_kind="replicaset",owner_name="running-replicaset"} 3.145728e+08 1648771200000
 # HELP kubernetes_memory_requests 
 # TYPE kubernetes_memory_requests untyped
@@ -84,7 +81,6 @@ kubernetes_memory_requests{namespace="namespace-2",owner_kind="job",owner_name="
 kubernetes_memory_requests{namespace="namespace-2",owner_kind="job",owner_name="job-succeeded"} 0 1648771200000
 kubernetes_memory_requests{namespace="namespace-3",owner_kind="deployment",owner_name="running-ready"} 0 1648771200000
 kubernetes_memory_requests{namespace="namespace-3",owner_kind="deployment",owner_name="unschedulable"} 0 1648771200000
-# 10Mi + 10Mi (2 containers per pod) * 3 (3 replicas) = 60Mi = 629145606 bytes
 kubernetes_memory_requests{namespace="namespace-3",owner_kind="replicaset",owner_name="running-replicaset"} 6.291456e+07 1648771200000
 # HELP kubernetes_namespaces_count 
 # TYPE kubernetes_namespaces_count untyped
@@ -145,3 +141,27 @@ kubernetes_pods_restart_count{namespace="namespace-3",owner_kind="deployment",ow
 kubernetes_pods_restart_count{namespace="namespace-3",owner_kind="replicaset",owner_name="running-replicaset",pod_name="running-replicaset-b5bnx"} 0 1648771200000
 kubernetes_pods_restart_count{namespace="namespace-3",owner_kind="replicaset",owner_name="running-replicaset",pod_name="running-replicaset-jbshn"} 0 1648771200000
 kubernetes_pods_restart_count{namespace="namespace-3",owner_kind="replicaset",owner_name="running-replicaset",pod_name="running-replicaset-rv7pk"} 0 1648771200000
+# HELP kubernetes_replicas_available 
+# TYPE kubernetes_replicas_available untyped
+kubernetes_replicas_available{namespace="default",owner_kind="deployment",owner_name="single"} 1 1648771200000
+kubernetes_replicas_available{namespace="default",owner_kind="deployment",owner_name="web"} 2 1648771200000
+kubernetes_replicas_available{namespace="kube-system",owner_kind="daemonset",owner_name="kindnet"} 3 1648771200000
+kubernetes_replicas_available{namespace="kube-system",owner_kind="daemonset",owner_name="kube-proxy"} 4 1648771200000
+kubernetes_replicas_available{namespace="kube-system",owner_kind="deployment",owner_name="coredns"} 1 1648771200000
+kubernetes_replicas_available{namespace="namespace-1",owner_kind="statefulset",owner_name="database"} 3 1648771200000
+# HELP kubernetes_replicas_desired 
+# TYPE kubernetes_replicas_desired untyped
+kubernetes_replicas_desired{namespace="default",owner_kind="deployment",owner_name="single"} 1 1648771200000
+kubernetes_replicas_desired{namespace="default",owner_kind="deployment",owner_name="web"} 3 1648771200000
+kubernetes_replicas_desired{namespace="kube-system",owner_kind="daemonset",owner_name="kindnet"} 4 1648771200000
+kubernetes_replicas_desired{namespace="kube-system",owner_kind="daemonset",owner_name="kube-proxy"} 4 1648771200000
+kubernetes_replicas_desired{namespace="kube-system",owner_kind="deployment",owner_name="coredns"} 1 1648771200000
+kubernetes_replicas_desired{namespace="namespace-1",owner_kind="statefulset",owner_name="database"} 3 1648771200000
+# HELP kubernetes_replicas_ready 
+# TYPE kubernetes_replicas_ready untyped
+kubernetes_replicas_ready{namespace="default",owner_kind="deployment",owner_name="single"} 1 1648771200000
+kubernetes_replicas_ready{namespace="default",owner_kind="deployment",owner_name="web"} 2 1648771200000
+kubernetes_replicas_ready{namespace="kube-system",owner_kind="daemonset",owner_name="kindnet"} 3 1648771200000
+kubernetes_replicas_ready{namespace="kube-system",owner_kind="daemonset",owner_name="kube-proxy"} 4 1648771200000
+kubernetes_replicas_ready{namespace="kube-system",owner_kind="deployment",owner_name="coredns"} 1 1648771200000
+kubernetes_replicas_ready{namespace="namespace-1",owner_kind="statefulset",owner_name="database"} 3 1648771200000

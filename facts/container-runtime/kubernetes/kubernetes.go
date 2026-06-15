@@ -991,6 +991,12 @@ type kubeClient interface {
 	GetNamespaces(ctx context.Context) ([]corev1.Namespace, error)
 	// GetReplicasets returns all replicasets in the cluster.
 	GetReplicasets(ctx context.Context) ([]appsv1.ReplicaSet, error)
+	// GetDeployments returns all deployments in the cluster.
+	GetDeployments(ctx context.Context) ([]appsv1.Deployment, error)
+	// GetStatefulSets returns all statefulsets in the cluster.
+	GetStatefulSets(ctx context.Context) ([]appsv1.StatefulSet, error)
+	// GetDaemonSets returns all daemonsets in the cluster.
+	GetDaemonSets(ctx context.Context) ([]appsv1.DaemonSet, error)
 	// GetCRDs returns all CRDs in the cluster.
 	GetCRDs(ctx context.Context) ([]apiextv1.CustomResourceDefinition, error)
 	// GetWebhookConfigurations returns all MutatingWebhookConfigurations and ValidatingWebhookConfigurations in the cluster.
@@ -1081,6 +1087,39 @@ func (cl *realClient) GetReplicasets(ctx context.Context) ([]appsv1.ReplicaSet, 
 	}
 
 	return replicasets.Items, nil
+}
+
+func (cl *realClient) GetDeployments(ctx context.Context) ([]appsv1.Deployment, error) {
+	var deployments appsv1.DeploymentList
+
+	err := cl.appsClient.Get().Resource("deployments").Do(ctx).Into(&deployments)
+	if err != nil {
+		return nil, err
+	}
+
+	return deployments.Items, nil
+}
+
+func (cl *realClient) GetStatefulSets(ctx context.Context) ([]appsv1.StatefulSet, error) {
+	var statefulSets appsv1.StatefulSetList
+
+	err := cl.appsClient.Get().Resource("statefulsets").Do(ctx).Into(&statefulSets)
+	if err != nil {
+		return nil, err
+	}
+
+	return statefulSets.Items, nil
+}
+
+func (cl *realClient) GetDaemonSets(ctx context.Context) ([]appsv1.DaemonSet, error) {
+	var daemonSets appsv1.DaemonSetList
+
+	err := cl.appsClient.Get().Resource("daemonsets").Do(ctx).Into(&daemonSets)
+	if err != nil {
+		return nil, err
+	}
+
+	return daemonSets.Items, nil
 }
 
 func (cl *realClient) GetCRDs(ctx context.Context) ([]apiextv1.CustomResourceDefinition, error) {

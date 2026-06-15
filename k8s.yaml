@@ -75,6 +75,9 @@ rules:
       - nodes
       - namespaces
       - replicasets
+      - deployments
+      - statefulsets
+      - daemonsets
     verbs:
       - get
       - list

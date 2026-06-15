@@ -24,6 +24,7 @@ import (
 	"github.com/bleemeo/glouton/types"
 
 	"github.com/prometheus/client_golang/prometheus"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -37,6 +38,9 @@ type kubeCache struct {
 	replicasetOwnerByUID map[string]metav1.OwnerReference
 	namespaces           []corev1.Namespace
 	nodes                []corev1.Node
+	deployments          []appsv1.Deployment
+	statefulSets         []appsv1.StatefulSet
+	daemonSets           []appsv1.DaemonSet
 }
 
 // getGlobalMetrics returns global cluster metrics.
@@ -65,6 +69,15 @@ func getGlobalMetrics(
 	replicasets, err := cl.GetReplicasets(ctx)
 	multiErr.Append(err)
 
+	cache.deployments, err = cl.GetDeployments(ctx)
+	multiErr.Append(err)
+
+	cache.statefulSets, err = cl.GetStatefulSets(ctx)
+	multiErr.Append(err)
+
+	cache.daemonSets, err = cl.GetDaemonSets(ctx)
+	multiErr.Append(err)
+
 	cache.replicasetOwnerByUID = make(map[string]metav1.OwnerReference, len(replicasets))
 
 	for _, replicaset := range replicasets {
@@ -76,7 +89,7 @@ func getGlobalMetrics(
 	// Compute cluster metrics.
 	var points []types.MetricPoint //nolint:prealloc
 
-	metricFunctions := []metricsFunc{podsCount, requestsAndLimits, namespacesCount, nodesCount, podsRestartCount}
+	metricFunctions := []metricsFunc{podsCount, requestsAndLimits, namespacesCount, nodesCount, podsRestartCount, workloadReplicas}
 
 	for _, f := range metricFunctions {
 		points = append(points, f(cache, now)...)
@@ -202,10 +215,13 @@ func podOwner(pod corev1.Pod, replicasetOwnerByUID map[string]metav1.OwnerRefere
 
 // podNamespace returns the namespace of a pod.
 func podNamespace(pod corev1.Pod) string {
-	// An empty namespace is the default namespace.
-	namespace := pod.Namespace
+	return namespaceOrDefault(pod.Namespace)
+}
+
+// namespaceOrDefault returns the given namespace, or the default namespace if it is empty.
+func namespaceOrDefault(namespace string) string {
 	if namespace == "" {
-		namespace = defaultNamespace
+		return defaultNamespace
 	}
 
 	return namespace
@@ -379,6 +395,83 @@ func podsRestartCount(cache kubeCache, now time.Time) []types.MetricPoint {
 		points = append(points, types.MetricPoint{
 			Point:  types.Point{Time: now, Value: float64(restartCount)},
 			Labels: labels,
+		})
+	}
+
+	return points
+}
+
+// workloadReplicas returns the metrics kubernetes_replicas_(desired|ready|available) for each
+// Deployment, StatefulSet and DaemonSet in the cluster, with the following labels:
+// - owner_kind: the kind of the workload (deployment, statefulset or daemonset).
+// - owner_name: the name of the workload.
+// - namespace: the workload's namespace.
+func workloadReplicas(cache kubeCache, now time.Time) []types.MetricPoint {
+	type replicas struct {
+		desired   float64
+		ready     float64
+		available float64
+	}
+
+	// 3 points (desired, ready, available) per workload.
+	workloadCount := len(cache.deployments) + len(cache.statefulSets) + len(cache.daemonSets)
+	points := make([]types.MetricPoint, 0, workloadCount*3)
+
+	addWorkload := func(kind, name, namespace string, r replicas) {
+		values := map[string]float64{
+			"kubernetes_replicas_desired":   r.desired,
+			"kubernetes_replicas_ready":     r.ready,
+			"kubernetes_replicas_available": r.available,
+		}
+
+		for metricName, value := range values {
+			points = append(points, types.MetricPoint{
+				Point: types.Point{Time: now, Value: value},
+				Labels: map[string]string{
+					types.LabelName:      metricName,
+					types.LabelOwnerKind: kind,
+					types.LabelOwnerName: strings.ToLower(name),
+					types.LabelNamespace: namespace,
+				},
+			})
+		}
+	}
+
+	for _, deployment := range cache.deployments {
+		// spec.replicas defaults to 1 when unset.
+		desired := float64(1)
+		if deployment.Spec.Replicas != nil {
+			desired = float64(*deployment.Spec.Replicas)
+		}
+
+		addWorkload("deployment", deployment.Name, namespaceOrDefault(deployment.Namespace), replicas{
+			desired:   desired,
+			ready:     float64(deployment.Status.ReadyReplicas),
+			available: float64(deployment.Status.AvailableReplicas),
+		})
+	}
+
+	for _, statefulSet := range cache.statefulSets {
+		// spec.replicas defaults to 1 when unset.
+		desired := float64(1)
+		if statefulSet.Spec.Replicas != nil {
+			desired = float64(*statefulSet.Spec.Replicas)
+		}
+
+		addWorkload("statefulset", statefulSet.Name, namespaceOrDefault(statefulSet.Namespace), replicas{
+			desired:   desired,
+			ready:     float64(statefulSet.Status.ReadyReplicas),
+			available: float64(statefulSet.Status.AvailableReplicas),
+		})
+	}
+
+	for _, daemonSet := range cache.daemonSets {
+		// DaemonSets have no spec.replicas: the desired count is the number of nodes
+		// that should run the daemon.
+		addWorkload("daemonset", daemonSet.Name, namespaceOrDefault(daemonSet.Namespace), replicas{
+			desired:   float64(daemonSet.Status.DesiredNumberScheduled),
+			ready:     float64(daemonSet.Status.NumberReady),
+			available: float64(daemonSet.Status.NumberAvailable),
 		})
 	}
 

@@ -77,13 +77,16 @@ const (
 var errNotImplemented = errors.New("not implemented")
 
 type mockKubernetesClient struct {
-	nodes       corev1.NodeList
-	pods        corev1.PodList
-	namespaces  corev1.NamespaceList
-	replicaSets appsv1.ReplicaSetList
-	crds        apiextv1.CustomResourceDefinitionList
-	mwcs        admv1.MutatingWebhookConfigurationList
-	vwcs        admv1.ValidatingWebhookConfigurationList
+	nodes        corev1.NodeList
+	pods         corev1.PodList
+	namespaces   corev1.NamespaceList
+	replicaSets  appsv1.ReplicaSetList
+	deployments  appsv1.DeploymentList
+	statefulSets appsv1.StatefulSetList
+	daemonSets   appsv1.DaemonSetList
+	crds         apiextv1.CustomResourceDefinitionList
+	mwcs         admv1.MutatingWebhookConfigurationList
+	vwcs         admv1.ValidatingWebhookConfigurationList
 
 	versions struct {
 		ClientVersion *version.Info `json:"clientVersion"`
@@ -135,6 +138,30 @@ func newKubernetesMock(dirname string) (*mockKubernetesClient, error) {
 		}
 	}
 
+	data, localErr = os.ReadFile(filepath.Join(dirname, "deployments.yaml"))
+	if localErr == nil {
+		err = yaml.Unmarshal(data, &result.deployments)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	data, localErr = os.ReadFile(filepath.Join(dirname, "statefulsets.yaml"))
+	if localErr == nil {
+		err = yaml.Unmarshal(data, &result.statefulSets)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	data, localErr = os.ReadFile(filepath.Join(dirname, "daemonsets.yaml"))
+	if localErr == nil {
+		err = yaml.Unmarshal(data, &result.daemonSets)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return result, err
 }
 
@@ -167,6 +194,21 @@ func (k *mockKubernetesClient) GetNamespaces(_ context.Context) ([]corev1.Namesp
 // GetReplicasets return all replicasets in the cluster.
 func (k *mockKubernetesClient) GetReplicasets(_ context.Context) ([]appsv1.ReplicaSet, error) {
 	return k.replicaSets.Items, nil
+}
+
+// GetDeployments return all deployments in the cluster.
+func (k *mockKubernetesClient) GetDeployments(_ context.Context) ([]appsv1.Deployment, error) {
+	return k.deployments.Items, nil
+}
+
+// GetStatefulSets return all statefulsets in the cluster.
+func (k *mockKubernetesClient) GetStatefulSets(_ context.Context) ([]appsv1.StatefulSet, error) {
+	return k.statefulSets.Items, nil
+}
+
+// GetDaemonSets return all daemonsets in the cluster.
+func (k *mockKubernetesClient) GetDaemonSets(_ context.Context) ([]appsv1.DaemonSet, error) {
+	return k.daemonSets.Items, nil
 }
 
 func (k *mockKubernetesClient) GetCRDs(_ context.Context) ([]apiextv1.CustomResourceDefinition, error) {
@@ -984,11 +1026,12 @@ func TestClusterMetrics(t *testing.T) {
 	// 	delete(point.Labels, types.LabelMetaKubernetesCluster)
 	// }
 	// mfs := model.MetricPointsToFamilies(gotPoints)
-	// fd, _ := os.OpenFile("/tmp/metrics.txt", os.O_CREATE|os.O_WRONLY, 0o750)
-	// enc := expfmt.NewEncoder(fd, expfmt.FmtText)
+	// fd, _ := os.OpenFile(metricFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o750)
+	// enc := expfmt.NewEncoder(fd, expfmt.NewFormat(expfmt.TypeTextPlain))
 	// for _, mf := range mfs {
 	// 	enc.Encode(mf)
 	// }
+	// fd.Close()
 
 	// Read expected metrics from a file.
 	f, err := os.Open(metricFile)
