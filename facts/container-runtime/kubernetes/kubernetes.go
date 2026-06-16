@@ -46,11 +46,18 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/version"
+	"k8s.io/client-go/discovery"
+	memory "k8s.io/client-go/discovery/cached/memory"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -97,6 +104,7 @@ var (
 	errUnexpectedConnType  = errors.New("unexpected connection type")
 	errNoDecodedData       = errors.New("no data decoded in raw certificate")
 	errMissingConfig       = errors.New("missing configuration")
+	errNoScaleReplicas     = errors.New("scale subresource has no spec.replicas")
 )
 
 func (k *Kubernetes) ContainerExists(id string) bool {
@@ -997,6 +1005,10 @@ type kubeClient interface {
 	GetStatefulSets(ctx context.Context) ([]appsv1.StatefulSet, error)
 	// GetDaemonSets returns all daemonsets in the cluster.
 	GetDaemonSets(ctx context.Context) ([]appsv1.DaemonSet, error)
+	// GetScale returns the desired replicas (spec.replicas of the scale subresource) of the
+	// object identified by apiVersion/kind/namespace/name. It returns an error when the object's
+	// resource has no scale subresource or when the agent lacks the permission to read it.
+	GetScale(ctx context.Context, apiVersion, kind, namespace, name string) (int32, error)
 	// GetCRDs returns all CRDs in the cluster.
 	GetCRDs(ctx context.Context) ([]apiextv1.CustomResourceDefinition, error)
 	// GetWebhookConfigurations returns all MutatingWebhookConfigurations and ValidatingWebhookConfigurations in the cluster.
@@ -1013,6 +1025,11 @@ type realClient struct {
 	appsClient  *rest.RESTClient
 	extClient   *rest.RESTClient
 	admClient   *rest.RESTClient
+
+	// The dynamic client and REST mapper are used to read the scale subresource of arbitrary
+	// resources (including CRDs managed by operators), which the typed clients above cannot do.
+	dynamicClient dynamic.Interface
+	restMapper    meta.RESTMapper
 
 	config      *rest.Config
 	useLocalAPI bool
@@ -1120,6 +1137,41 @@ func (cl *realClient) GetDaemonSets(ctx context.Context) ([]appsv1.DaemonSet, er
 	}
 
 	return daemonSets.Items, nil
+}
+
+func (cl *realClient) GetScale(ctx context.Context, apiVersion, kind, namespace, name string) (int32, error) {
+	gv, err := schema.ParseGroupVersion(apiVersion)
+	if err != nil {
+		return 0, err
+	}
+
+	mapping, err := cl.restMapper.RESTMapping(schema.GroupKind{Group: gv.Group, Kind: kind}, gv.Version)
+	if err != nil {
+		return 0, err
+	}
+
+	var resource dynamic.ResourceInterface
+	if mapping.Scope.Name() == meta.RESTScopeNameNamespace {
+		resource = cl.dynamicClient.Resource(mapping.Resource).Namespace(namespace)
+	} else {
+		resource = cl.dynamicClient.Resource(mapping.Resource)
+	}
+
+	scale, err := resource.Get(ctx, name, metav1.GetOptions{}, "scale")
+	if err != nil {
+		return 0, err
+	}
+
+	replicas, found, err := unstructured.NestedInt64(scale.Object, "spec", "replicas")
+	if err != nil {
+		return 0, err
+	}
+
+	if !found {
+		return 0, errNoScaleReplicas
+	}
+
+	return int32(replicas), nil //nolint:gosec
 }
 
 func (cl *realClient) GetCRDs(ctx context.Context) ([]apiextv1.CustomResourceDefinition, error) {
@@ -1260,6 +1312,24 @@ func makeClients(config *rest.Config) (coreClient, discoClient, appsClient, extC
 	return coreClient, discoClient, appsClient, extClient, admClient, nil
 }
 
+// makeScaleClients builds the dynamic client and REST mapper used to read the scale subresource
+// of arbitrary resources (the typed REST clients built by makeClients can't address unknown groups).
+func makeScaleClients(config *rest.Config) (dynamic.Interface, meta.RESTMapper, error) {
+	dynamicClient, err := dynamic.NewForConfig(config)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(config)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	restMapper := restmapper.NewDeferredDiscoveryRESTMapper(memory.NewMemCacheClient(discoveryClient))
+
+	return dynamicClient, restMapper, nil
+}
+
 func openConnection(ctx context.Context, kubeConfig string, localNode string) (kubeClient, error) {
 	config, err := getRestConfig(kubeConfig)
 	if err != nil {
@@ -1271,14 +1341,21 @@ func openConnection(ctx context.Context, kubeConfig string, localNode string) (k
 		return nil, fmt.Errorf("failed to build rest clients: %w", err)
 	}
 
+	dynamicClient, restMapper, err := makeScaleClients(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build scale clients: %w", err)
+	}
+
 	client := realClient{
-		coreClient:  coreClient,
-		discoClient: discoClient,
-		appsClient:  appsClient,
-		extClient:   extClient,
-		admClient:   admClient,
-		config:      config,
-		useLocalAPI: false,
+		coreClient:    coreClient,
+		discoClient:   discoClient,
+		appsClient:    appsClient,
+		extClient:     extClient,
+		admClient:     admClient,
+		dynamicClient: dynamicClient,
+		restMapper:    restMapper,
+		config:        config,
+		useLocalAPI:   false,
 	}
 
 	switched, err := client.switchToLocalAPI(ctx, localNode)
@@ -1354,6 +1431,11 @@ func (cl *realClient) switchToLocalAPI(ctx context.Context, localNode string) (b
 					return false, fmt.Errorf("failed to build rest clients: %w", err)
 				}
 
+				dynamicClient, restMapper, err := makeScaleClients(&shallowCopy)
+				if err != nil {
+					return false, fmt.Errorf("failed to build scale clients: %w", err)
+				}
+
 				err = discoClient.
 					Get().
 					Namespace(defaultNamespace).
@@ -1369,6 +1451,8 @@ func (cl *realClient) switchToLocalAPI(ctx context.Context, localNode string) (b
 				cl.appsClient = appsClient
 				cl.extClient = extClient
 				cl.admClient = admClient
+				cl.dynamicClient = dynamicClient
+				cl.restMapper = restMapper
 				cl.config = &shallowCopy
 				cl.useLocalAPI = true
 

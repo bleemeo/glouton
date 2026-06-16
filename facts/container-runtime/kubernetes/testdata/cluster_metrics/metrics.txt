@@ -157,6 +157,7 @@ kubernetes_replicas_desired{namespace="kube-system",owner_kind="daemonset",owner
 kubernetes_replicas_desired{namespace="kube-system",owner_kind="daemonset",owner_name="kube-proxy"} 4 1648771200000
 kubernetes_replicas_desired{namespace="kube-system",owner_kind="deployment",owner_name="coredns"} 1 1648771200000
 kubernetes_replicas_desired{namespace="namespace-1",owner_kind="statefulset",owner_name="database"} 3 1648771200000
+kubernetes_replicas_desired{namespace="namespace-3",owner_kind="replicaset",owner_name="running-replicaset"} 3 1648771200000
 # HELP kubernetes_replicas_ready 
 # TYPE kubernetes_replicas_ready untyped
 kubernetes_replicas_ready{namespace="default",owner_kind="deployment",owner_name="single"} 1 1648771200000
@@ -165,3 +166,4 @@ kubernetes_replicas_ready{namespace="kube-system",owner_kind="daemonset",owner_n
 kubernetes_replicas_ready{namespace="kube-system",owner_kind="daemonset",owner_name="kube-proxy"} 4 1648771200000
 kubernetes_replicas_ready{namespace="kube-system",owner_kind="deployment",owner_name="coredns"} 1 1648771200000
 kubernetes_replicas_ready{namespace="namespace-1",owner_kind="statefulset",owner_name="database"} 3 1648771200000
+kubernetes_replicas_ready{namespace="namespace-3",owner_kind="replicaset",owner_name="running-replicaset"} 3 1648771200000

@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -29,7 +30,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const defaultNamespace = "default"
+const (
+	defaultNamespace            = "default"
+	metricNameReplicasDesired   = "kubernetes_replicas_desired"
+	metricNameReplicasReady     = "kubernetes_replicas_ready"
+	metricNameReplicasAvailable = "kubernetes_replicas_available"
+)
 
 type metricsFunc func(kubeCache, time.Time) []types.MetricPoint
 
@@ -94,6 +100,10 @@ func getGlobalMetrics(
 	for _, f := range metricFunctions {
 		points = append(points, f(cache, now)...)
 	}
+
+	// Generic replicas metrics for owners not handled by workloadReplicas (operators/CRDs,
+	// bare ReplicaSets). This needs the client (scale subresource) so it can't be a metricsFunc.
+	points = append(points, genericReplicas(ctx, cl, cache, now)...)
 
 	// Add the Kubernetes cluster meta label to global metrics, this is used to
 	// replace the agent ID by the Kubernetes agent ID in the relabel hook.
@@ -191,26 +201,33 @@ func podsCount(cache kubeCache, now time.Time) []types.MetricPoint {
 
 // podOwner return the kind and the name of the owner of a pod.
 func podOwner(pod corev1.Pod, replicasetOwnerByUID map[string]metav1.OwnerReference) (kind string, name string) {
+	_, kind, name = podOwnerRef(pod, replicasetOwnerByUID)
+
+	return kind, name
+}
+
+// podOwnerRef returns the apiVersion, kind and name of the owner of a pod.
+func podOwnerRef(pod corev1.Pod, replicasetOwnerByUID map[string]metav1.OwnerReference) (apiVersion, kind, name string) {
 	// If the pod has no owner, use the pod name.
 	if len(pod.OwnerReferences) == 0 {
-		return pod.Kind, pod.Name
+		return pod.APIVersion, pod.Kind, pod.Name
 	}
 
 	ownerRef := pod.OwnerReferences[0]
-	kind, name = ownerRef.Kind, ownerRef.Name
+	apiVersion, kind, name = ownerRef.APIVersion, ownerRef.Kind, ownerRef.Name
 
 	// For Kubernetes deployments with multiple replicas, a replicaset is created. This means the pod's
 	// owner is the replicaset (which has a generated name, e.g. "coredns-565d847f94"). In this case we
 	// prefer to associate this pod with the owner of the replicaset (e.g. the deployment "coredns").
 	if kind == "ReplicaSet" {
-		ownerRef := replicasetOwnerByUID[string(ownerRef.UID)]
+		parentRef := replicasetOwnerByUID[string(ownerRef.UID)]
 
-		if ownerRef.Kind != "" {
-			kind, name = ownerRef.Kind, ownerRef.Name
+		if parentRef.Kind != "" {
+			apiVersion, kind, name = parentRef.APIVersion, parentRef.Kind, parentRef.Name
 		}
 	}
 
-	return kind, name
+	return apiVersion, kind, name
 }
 
 // podNamespace returns the namespace of a pod.
@@ -419,9 +436,9 @@ func workloadReplicas(cache kubeCache, now time.Time) []types.MetricPoint {
 
 	addWorkload := func(kind, name, namespace string, r replicas) {
 		values := map[string]float64{
-			"kubernetes_replicas_desired":   r.desired,
-			"kubernetes_replicas_ready":     r.ready,
-			"kubernetes_replicas_available": r.available,
+			metricNameReplicasDesired:   r.desired,
+			metricNameReplicasReady:     r.ready,
+			metricNameReplicasAvailable: r.available,
 		}
 
 		for metricName, value := range values {
@@ -476,4 +493,109 @@ func workloadReplicas(cache kubeCache, now time.Time) []types.MetricPoint {
 	}
 
 	return points
+}
+
+// genericReplicasSkippedKinds are owner kinds handled elsewhere (workloadReplicas) or that have
+// no controller / no meaningful desired count, so genericReplicas ignores them.
+//
+//nolint:gochecknoglobals
+var genericReplicasSkippedKinds = map[string]bool{
+	"Deployment":  true, // handled by workloadReplicas
+	"StatefulSet": true, // handled by workloadReplicas
+	"DaemonSet":   true, // handled by workloadReplicas
+	"Node":        true, // static/mirror pods, no replicas concept
+	"Pod":         true, // standalone pod
+	"Job":         true, // completion semantics, not replicas (a finished Job has 0 ready pods)
+	"CronJob":     true, // same as Job, and spawns a new Job name on every run
+	"":            true, // unknown owner
+}
+
+// genericReplicas returns kubernetes_replicas_ready (and kubernetes_replicas_desired when a scale
+// subresource is available) for pods whose owner is NOT handled by workloadReplicas. This covers
+// operator-managed pods (owned by a CRD) and bare ReplicaSets.
+//
+//   - ready is computed by counting pods in the Ready condition, grouped by owner.
+//   - desired comes from the owner's scale subresource (best-effort): owners without a scale
+//     subresource, or for which the agent lacks permission, simply don't get a desired metric.
+//     available isn't emitted here: it can't be derived generically (it depends on the controller's
+//     minReadySeconds).
+func genericReplicas(ctx context.Context, cl kubeClient, cache kubeCache, now time.Time) []types.MetricPoint {
+	type owner struct {
+		apiVersion string
+		kind       string
+		name       string
+		namespace  string
+	}
+
+	readyByOwner := make(map[owner]int)
+
+	for _, pod := range cache.pods {
+		apiVersion, kind, name := podOwnerRef(pod, cache.replicasetOwnerByUID)
+
+		if genericReplicasSkippedKinds[kind] {
+			continue
+		}
+
+		key := owner{
+			apiVersion: apiVersion,
+			kind:       kind,
+			name:       name,
+			namespace:  namespaceOrDefault(pod.Namespace),
+		}
+
+		// "+= 0" still creates the map entry, so owners with no ready pod are reported with 0.
+		readyByOwner[key] += boolToInt(isPodReady(pod))
+	}
+
+	points := make([]types.MetricPoint, 0, len(readyByOwner)*2)
+
+	for owner, ready := range readyByOwner {
+		labels := func(metricName string) map[string]string {
+			return map[string]string{
+				types.LabelName:      metricName,
+				types.LabelOwnerKind: strings.ToLower(owner.kind),
+				types.LabelOwnerName: strings.ToLower(owner.name),
+				types.LabelNamespace: owner.namespace,
+			}
+		}
+
+		points = append(points, types.MetricPoint{
+			Point:  types.Point{Time: now, Value: float64(ready)},
+			Labels: labels(metricNameReplicasReady),
+		})
+
+		desired, err := cl.GetScale(ctx, owner.apiVersion, owner.kind, owner.namespace, owner.name)
+		if err != nil {
+			// No scale subresource (or no permission): desired isn't available for this owner.
+			logger.V(2).Printf("kubernetes: no scale for %s %s/%s: %v", owner.kind, owner.namespace, owner.name, err)
+
+			continue
+		}
+
+		points = append(points, types.MetricPoint{
+			Point:  types.Point{Time: now, Value: float64(desired)},
+			Labels: labels(metricNameReplicasDesired),
+		})
+	}
+
+	return points
+}
+
+// isPodReady returns whether the pod is in the Ready condition.
+func isPodReady(pod corev1.Pod) bool {
+	for _, cond := range pod.Status.Conditions {
+		if cond.Type == corev1.PodReady {
+			return cond.Status == corev1.ConditionTrue
+		}
+	}
+
+	return false
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+
+	return 0
 }

@@ -43,6 +43,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/yaml"
@@ -87,6 +88,9 @@ type mockKubernetesClient struct {
 	crds         apiextv1.CustomResourceDefinitionList
 	mwcs         admv1.MutatingWebhookConfigurationList
 	vwcs         admv1.ValidatingWebhookConfigurationList
+
+	// scales lets tests inject scale subresource desired replicas, keyed by "kind/namespace/name".
+	scales map[string]int32
 
 	versions struct {
 		ClientVersion *version.Info `json:"clientVersion"`
@@ -209,6 +213,50 @@ func (k *mockKubernetesClient) GetStatefulSets(_ context.Context) ([]appsv1.Stat
 // GetDaemonSets return all daemonsets in the cluster.
 func (k *mockKubernetesClient) GetDaemonSets(_ context.Context) ([]appsv1.DaemonSet, error) {
 	return k.daemonSets.Items, nil
+}
+
+// GetScale returns the desired replicas of the scale subresource. Tests can inject values through
+// the scales map; otherwise it falls back to spec.replicas of the matching known typed object
+// (mirroring how the scale subresource reflects spec.replicas of ReplicaSets/Deployments/StatefulSets).
+func (k *mockKubernetesClient) GetScale(_ context.Context, _, kind, namespace, name string) (int32, error) {
+	if v, ok := k.scales[kind+"/"+namespace+"/"+name]; ok {
+		return v, nil
+	}
+
+	switch kind {
+	case "ReplicaSet":
+		for _, rs := range k.replicaSets.Items {
+			if rs.Name == name && rs.Namespace == namespace {
+				if rs.Spec.Replicas != nil {
+					return *rs.Spec.Replicas, nil
+				}
+
+				return 1, nil
+			}
+		}
+	case "Deployment":
+		for _, d := range k.deployments.Items {
+			if d.Name == name && d.Namespace == namespace {
+				if d.Spec.Replicas != nil {
+					return *d.Spec.Replicas, nil
+				}
+
+				return 1, nil
+			}
+		}
+	case "StatefulSet":
+		for _, s := range k.statefulSets.Items {
+			if s.Name == name && s.Namespace == namespace {
+				if s.Spec.Replicas != nil {
+					return *s.Spec.Replicas, nil
+				}
+
+				return 1, nil
+			}
+		}
+	}
+
+	return 0, errNotImplemented
 }
 
 func (k *mockKubernetesClient) GetCRDs(_ context.Context) ([]apiextv1.CustomResourceDefinition, error) {
@@ -1116,5 +1164,73 @@ func TestNodeAllocatablePoints(t *testing.T) {
 		if len(point.Labels) != 1 {
 			t.Errorf("metric %q has labels %v, want only __name__", name, point.Labels)
 		}
+	}
+}
+
+func TestGenericReplicas(t *testing.T) {
+	now := time.Date(2022, time.April, 1, 0, 0, 0, 0, time.UTC)
+
+	makePod := func(apiVersion, kind, ownerName, namespace string, ready bool) corev1.Pod {
+		status := corev1.ConditionFalse
+		if ready {
+			status = corev1.ConditionTrue
+		}
+
+		return corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				OwnerReferences: []metav1.OwnerReference{
+					{APIVersion: apiVersion, Kind: kind, Name: ownerName},
+				},
+			},
+			Status: corev1.PodStatus{
+				Conditions: []corev1.PodCondition{
+					{Type: corev1.PodReady, Status: status},
+				},
+			},
+		}
+	}
+
+	cache := kubeCache{
+		pods: []corev1.Pod{
+			// Operator CRD with a scale subresource: ready aggregated, desired from scale.
+			makePod("kafka.strimzi.io/v1beta2", "Kafka", "my-cluster", "data", true),
+			makePod("kafka.strimzi.io/v1beta2", "Kafka", "my-cluster", "data", false),
+			// Operator CRD without a scale subresource: only ready is emitted.
+			makePod("example.com/v1", "Foo", "foo1", "default", true),
+			// Handled by workloadReplicas / not a replica controller: skipped.
+			makePod("apps/v1", "Deployment", "web", "default", true),
+			makePod("batch/v1", "Job", "import", "default", true),
+		},
+	}
+
+	mockClient := &mockKubernetesClient{
+		scales: map[string]int32{"Kafka/data/my-cluster": 3},
+	}
+
+	got := genericReplicas(t.Context(), mockClient, cache, now)
+
+	// Index points by "metric|owner_kind|owner_name|namespace" -> value.
+	type key struct{ name, kind, owner, ns string }
+
+	gotMap := make(map[key]float64, len(got))
+
+	for _, point := range got {
+		gotMap[key{
+			name:  point.Labels[types.LabelName],
+			kind:  point.Labels[types.LabelOwnerKind],
+			owner: point.Labels[types.LabelOwnerName],
+			ns:    point.Labels[types.LabelNamespace],
+		}] = point.Value
+	}
+
+	want := map[key]float64{
+		{metricNameReplicasReady, "kafka", "my-cluster", "data"}:   1,
+		{metricNameReplicasDesired, "kafka", "my-cluster", "data"}: 3,
+		{metricNameReplicasReady, "foo", "foo1", "default"}:        1,
+	}
+
+	if diff := cmp.Diff(want, gotMap); diff != "" {
+		t.Fatalf("unexpected generic replicas points (-want +got):\n%s", diff)
 	}
 }

@@ -159,6 +159,7 @@ require (
 	github.com/elastic/go-grok v0.3.1 // indirect
 	github.com/elastic/lunes v0.2.0 // indirect
 	github.com/ema/qdisc v1.0.0 // indirect
+	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
 	github.com/expr-lang/expr v1.17.8 // indirect
 	github.com/facette/natsort v0.0.0-20181210072756-2cd4dd1e2dcb // indirect
 	github.com/fatih/color v1.19.0 // indirect
@@ -202,6 +203,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/golang/snappy v1.0.0 // indirect
 	github.com/google/cel-go v0.28.1 // indirect
+	github.com/google/gnostic-models v0.7.0 // indirect
 	github.com/google/go-tpm v0.9.9-0.20260124013517-8f8f42cba0de // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.15 // indirect

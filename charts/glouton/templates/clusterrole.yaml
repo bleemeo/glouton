@@ -17,6 +17,14 @@ rules:
     verbs:
       - get
       - list
+  # Read the scale subresource of any resource to expose the desired replicas of
+  # operator-managed workloads (kubernetes_replicas_desired).
+  - apiGroups:
+      - "*"
+    resources:
+      - "*/scale"
+    verbs:
+      - get
   - apiGroups:
       - discovery.k8s.io
     resources:
