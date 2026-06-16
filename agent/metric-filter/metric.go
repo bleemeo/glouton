@@ -72,7 +72,6 @@ var (
 		"kubernetes_pods_restart_count",
 		"kubernetes_replicas_desired",
 		"kubernetes_replicas_ready",
-		"kubernetes_replicas_available",
 
 		// Key Processes
 		"process_context_switch",
