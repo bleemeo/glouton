@@ -44,6 +44,7 @@ import (
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/yaml"
@@ -216,39 +217,18 @@ func (k *mockKubernetesClient) GetDaemonSets(_ context.Context) ([]appsv1.Daemon
 }
 
 // GetScale returns the desired replicas of the scale subresource. Tests can inject values through
-// the scales map; otherwise it falls back to spec.replicas of the matching known typed object
-// (mirroring how the scale subresource reflects spec.replicas of ReplicaSets/Deployments/StatefulSets).
-func (k *mockKubernetesClient) GetScale(_ context.Context, _, kind, namespace, name string) (int32, error) {
-	if v, ok := k.scales[kind+"/"+namespace+"/"+name]; ok {
+// the scales map (keyed by "resource/namespace/name"); otherwise it falls back to spec.replicas of
+// the matching ReplicaSet (mirroring how the scale subresource reflects spec.replicas).
+func (k *mockKubernetesClient) GetScale(_ context.Context, gvr schema.GroupVersionResource, namespace, name string) (int32, error) {
+	if v, ok := k.scales[gvr.Resource+"/"+namespace+"/"+name]; ok {
 		return v, nil
 	}
 
-	switch kind {
-	case "ReplicaSet":
+	if gvr.Resource == "replicasets" {
 		for _, rs := range k.replicaSets.Items {
 			if rs.Name == name && rs.Namespace == namespace {
 				if rs.Spec.Replicas != nil {
 					return *rs.Spec.Replicas, nil
-				}
-
-				return 1, nil
-			}
-		}
-	case "Deployment":
-		for _, d := range k.deployments.Items {
-			if d.Name == name && d.Namespace == namespace {
-				if d.Spec.Replicas != nil {
-					return *d.Spec.Replicas, nil
-				}
-
-				return 1, nil
-			}
-		}
-	case "StatefulSet":
-		for _, s := range k.statefulSets.Items {
-			if s.Name == name && s.Namespace == namespace {
-				if s.Spec.Replicas != nil {
-					return *s.Spec.Replicas, nil
 				}
 
 				return 1, nil
@@ -1205,7 +1185,19 @@ func TestGenericReplicas(t *testing.T) {
 	}
 
 	mockClient := &mockKubernetesClient{
-		scales: map[string]int32{"Kafka/data/my-cluster": 3},
+		// The Kafka CRD lets genericReplicas resolve the "kafkas" resource for the scale lookup.
+		// Foo has no CRD, so its desired can't be resolved (only ready is emitted).
+		crds: apiextv1.CustomResourceDefinitionList{
+			Items: []apiextv1.CustomResourceDefinition{
+				{
+					Spec: apiextv1.CustomResourceDefinitionSpec{
+						Group: "kafka.strimzi.io",
+						Names: apiextv1.CustomResourceDefinitionNames{Kind: "Kafka", Plural: "kafkas"},
+					},
+				},
+			},
+		},
+		scales: map[string]int32{"kafkas/data/my-cluster": 3},
 	}
 
 	got := genericReplicas(t.Context(), mockClient, cache, now)

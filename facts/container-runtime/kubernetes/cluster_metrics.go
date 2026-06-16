@@ -28,6 +28,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 const (
@@ -510,6 +511,17 @@ var genericReplicasSkippedKinds = map[string]bool{
 	"":            true, // unknown owner
 }
 
+// builtinScaleResources maps built-in "group/Kind" to their resource name (plural) for the scale
+// subresource, avoiding a discovery round-trip. Only ReplicaSet is reachable here (the apps
+// workloads are skipped above and DaemonSet has no scale), but the others are listed for clarity.
+//
+//nolint:gochecknoglobals
+var builtinScaleResources = map[string]string{
+	"apps/ReplicaSet":  "replicasets",
+	"apps/Deployment":  "deployments",
+	"apps/StatefulSet": "statefulsets",
+}
+
 // genericReplicas returns kubernetes_replicas_ready (and kubernetes_replicas_desired when a scale
 // subresource is available) for pods whose owner is NOT handled by workloadReplicas. This covers
 // operator-managed pods (owned by a CRD) and bare ReplicaSets.
@@ -549,6 +561,8 @@ func genericReplicas(ctx context.Context, cl kubeClient, cache kubeCache, now ti
 
 	points := make([]types.MetricPoint, 0, len(readyByOwner)*2)
 
+	resolvePlural := newPluralResolver(ctx, cl)
+
 	for owner, ready := range readyByOwner {
 		labels := func(metricName string) map[string]string {
 			return map[string]string{
@@ -564,7 +578,25 @@ func genericReplicas(ctx context.Context, cl kubeClient, cache kubeCache, now ti
 			Labels: labels(metricNameReplicasReady),
 		})
 
-		desired, err := cl.GetScale(ctx, owner.apiVersion, owner.kind, owner.namespace, owner.name)
+		gv, err := schema.ParseGroupVersion(owner.apiVersion)
+		if err != nil {
+			logger.V(2).Printf("kubernetes: invalid apiVersion %q for %s %s/%s: %v", owner.apiVersion, owner.kind, owner.namespace, owner.name, err)
+
+			continue
+		}
+
+		plural, ok := resolvePlural(gv.Group, owner.kind)
+		if !ok {
+			// We can't map this owner to a resource (not a built-in we handle, and no matching CRD):
+			// desired isn't available, only ready is emitted.
+			logger.V(2).Printf("kubernetes: can't resolve resource for %s/%s, skipping desired", gv.Group, owner.kind)
+
+			continue
+		}
+
+		gvr := schema.GroupVersionResource{Group: gv.Group, Version: gv.Version, Resource: plural}
+
+		desired, err := cl.GetScale(ctx, gvr, owner.namespace, owner.name)
 		if err != nil {
 			// No scale subresource (or no permission): desired isn't available for this owner.
 			logger.V(2).Printf("kubernetes: no scale for %s %s/%s: %v", owner.kind, owner.namespace, owner.name, err)
@@ -579,6 +611,44 @@ func genericReplicas(ctx context.Context, cl kubeClient, cache kubeCache, now ti
 	}
 
 	return points
+}
+
+// newPluralResolver returns a function mapping a (group, kind) to its resource name (plural),
+// needed to build the scale subresource URL. It first checks the built-in table, then the cluster
+// CRDs.
+//
+// The returned resolver is meant to be used for a single metrics cycle: the CRD list it fetches is
+// memoized only for the lifetime of the resolver (at most one GetCRDs call, and none at all when
+// every owner has a built-in group, e.g. bare ReplicaSets). A fresh resolver is created on each
+// genericReplicas call, so the CRD list is naturally refreshed every cycle (no long-lived cache to
+// invalidate).
+func newPluralResolver(ctx context.Context, cl kubeClient) func(group, kind string) (string, bool) {
+	var crdPlurals map[string]string // "group/Kind" -> plural, nil until the first CRD lookup.
+
+	return func(group, kind string) (string, bool) {
+		key := group + "/" + kind
+
+		if plural, ok := builtinScaleResources[key]; ok {
+			return plural, true
+		}
+
+		if crdPlurals == nil {
+			crdPlurals = map[string]string{}
+
+			crds, err := cl.GetCRDs(ctx)
+			if err != nil {
+				logger.V(2).Printf("kubernetes: can't list CRDs to resolve scale resources: %v", err)
+			}
+
+			for _, crd := range crds {
+				crdPlurals[crd.Spec.Group+"/"+crd.Spec.Names.Kind] = crd.Spec.Names.Plural
+			}
+		}
+
+		plural, ok := crdPlurals[key]
+
+		return plural, ok
+	}
 }
 
 // isPodReady returns whether the pod is in the Ready condition.
