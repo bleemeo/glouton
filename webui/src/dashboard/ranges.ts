@@ -30,7 +30,10 @@ export const DEFAULT_RANGE_ID = "1h";
  * least 25% of the requested range — past that point the chart would
  * be mostly empty.
  */
-export function isRangeAvailable(range: Range, oldestPointMs: number | undefined): boolean {
+export function isRangeAvailable(
+  range: Range,
+  oldestPointMs: number | undefined,
+): boolean {
   if (!oldestPointMs) {
     return false;
   }

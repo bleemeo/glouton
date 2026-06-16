@@ -63,6 +63,7 @@ const (
 	testMetricLotusDeadlineActivePartSector = "lotus_miner_deadline_active_partition_sector"
 	testValueNotRead                        = "value_not_read"
 	testIOWrites                            = `io_writes`
+	metricNodeCPUSecondsGlobal              = "node_cpu_seconds_global"
 )
 
 //nolint:gochecknoglobals

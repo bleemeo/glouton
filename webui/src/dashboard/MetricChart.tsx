@@ -9,6 +9,7 @@ import {
   Line,
   LineChart,
   ReferenceArea,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -16,6 +17,11 @@ import {
 } from "recharts";
 
 import { formatTickTime } from "./format";
+import { STATUS_COLORS, type ThresholdBounds } from "./thresholds";
+
+// Solid colors used by the warning / critical reference lines.
+const WARN_COLOR = STATUS_COLORS.warn.solid;
+const CRIT_COLOR = STATUS_COLORS.crit.solid;
 
 type ZoomState = { left: number; right: number };
 
@@ -62,6 +68,14 @@ type Props = {
   variant?: "area" | "line";
   formatValue?: (v: number) => string;
   controls?: ReactNode;
+  // thresholds, when set, are drawn as faint horizontal warn/crit
+  // reference zones. Useful on KPI-style charts (CPU%, RAM%) where
+  // the bounds tell the reader at a glance how much headroom remains.
+  thresholds?: ThresholdBounds;
+  // currentStatus, when "warn" or "crit", surfaces a small pill next
+  // to the chart title. Lets the reader spot a firing chart in a
+  // grid of cards without inspecting the data lines.
+  currentStatus?: "ok" | "warn" | "crit" | "unknown";
 };
 
 export function MetricChart({
@@ -77,6 +91,8 @@ export function MetricChart({
   variant = "area",
   formatValue,
   controls,
+  thresholds,
+  currentStatus,
 }: Props) {
   const palette = useChartPalette();
 
@@ -111,7 +127,8 @@ export function MetricChart({
 
   const commitZoom = () => {
     if (refLeft != null && refRight != null && refLeft !== refRight) {
-      const [a, b] = refLeft < refRight ? [refLeft, refRight] : [refRight, refLeft];
+      const [a, b] =
+        refLeft < refRight ? [refLeft, refRight] : [refRight, refLeft];
       if (b - a >= rangeSeconds * MIN_ZOOM_FRACTION) {
         setZoom({ left: a, right: b });
       }
@@ -170,9 +187,14 @@ export function MetricChart({
     >
       <HStack justify="space-between" mb="2" gap="3" align="start">
         <VStack align="start" gap="0">
-          <Text fontSize="sm" fontWeight="semibold">
-            {title}
-          </Text>
+          <HStack gap="2" align="center">
+            <Text fontSize="sm" fontWeight="semibold">
+              {title}
+            </Text>
+            {currentStatus === "warn" || currentStatus === "crit" ? (
+              <StatusPill status={currentStatus} />
+            ) : null}
+          </HStack>
           {summary ? (
             <Text fontSize="xs" color="fg.muted" fontFamily="mono">
               {summary}
@@ -209,7 +231,12 @@ export function MetricChart({
             <Text fontSize="sm" color="status.crit">
               Failed to load
             </Text>
-            <Text fontSize="xs" color="fg.subtle" maxW="40ch" textAlign="center">
+            <Text
+              fontSize="xs"
+              color="fg.subtle"
+              maxW="40ch"
+              textAlign="center"
+            >
               {error.message}
             </Text>
           </CenteredMessage>
@@ -247,7 +274,11 @@ export function MetricChart({
                       y2="1"
                     >
                       <stop offset="0%" stopColor={s.color} stopOpacity={0.6} />
-                      <stop offset="100%" stopColor={s.color} stopOpacity={0.05} />
+                      <stop
+                        offset="100%"
+                        stopColor={s.color}
+                        stopOpacity={0.05}
+                      />
                     </linearGradient>
                   ))}
                 </defs>
@@ -262,7 +293,11 @@ export function MetricChart({
                   domain={xDomain}
                   allowDataOverflow
                   tickFormatter={(t: number) => formatTickTime(t, rangeSeconds)}
-                  tick={{ fontSize: 10, fill: palette.tick, style: { fontSize: "10px" } }}
+                  tick={{
+                    fontSize: 10,
+                    fill: palette.tick,
+                    style: { fontSize: "10px" },
+                  }}
                   stroke={palette.axis}
                   tickLine={{ stroke: palette.axis }}
                   height={28}
@@ -270,7 +305,11 @@ export function MetricChart({
                 />
                 <YAxis
                   domain={yDomain ?? ["auto", "auto"]}
-                  tick={{ fontSize: 10, fill: palette.tick, style: { fontSize: "10px" } }}
+                  tick={{
+                    fontSize: 10,
+                    fill: palette.tick,
+                    style: { fontSize: "10px" },
+                  }}
                   stroke={palette.axis}
                   tickLine={{ stroke: palette.axis }}
                   width={56}
@@ -280,8 +319,23 @@ export function MetricChart({
                 />
                 <Tooltip
                   contentStyle={tooltipStyle}
-                  labelFormatter={(t: number) => formatTickTime(t, rangeSeconds)}
+                  labelFormatter={(t: number) =>
+                    formatTickTime(t, rangeSeconds)
+                  }
                   formatter={tooltipFormatter(formatValue, unit)}
+                  content={
+                    thresholds
+                      ? (props) => (
+                          <ThresholdAwareTooltip
+                            {...props}
+                            rangeSeconds={rangeSeconds}
+                            formatValue={formatValue}
+                            unit={unit}
+                            thresholds={thresholds}
+                          />
+                        )
+                      : undefined
+                  }
                 />
                 <Legend
                   wrapperStyle={{ ...legendStyle, cursor: "pointer" }}
@@ -290,6 +344,7 @@ export function MetricChart({
                   onClick={handleLegendClick}
                   formatter={renderLegendLabel}
                 />
+                {renderThresholdBands(thresholds, formatValue)}
                 {series.map((s) => (
                   <Area
                     key={s.key}
@@ -335,7 +390,11 @@ export function MetricChart({
                   domain={xDomain}
                   allowDataOverflow
                   tickFormatter={(t: number) => formatTickTime(t, rangeSeconds)}
-                  tick={{ fontSize: 10, fill: palette.tick, style: { fontSize: "10px" } }}
+                  tick={{
+                    fontSize: 10,
+                    fill: palette.tick,
+                    style: { fontSize: "10px" },
+                  }}
                   stroke={palette.axis}
                   tickLine={{ stroke: palette.axis }}
                   height={28}
@@ -343,7 +402,11 @@ export function MetricChart({
                 />
                 <YAxis
                   domain={yDomain ?? ["auto", "auto"]}
-                  tick={{ fontSize: 10, fill: palette.tick, style: { fontSize: "10px" } }}
+                  tick={{
+                    fontSize: 10,
+                    fill: palette.tick,
+                    style: { fontSize: "10px" },
+                  }}
                   stroke={palette.axis}
                   tickLine={{ stroke: palette.axis }}
                   width={56}
@@ -353,8 +416,23 @@ export function MetricChart({
                 />
                 <Tooltip
                   contentStyle={tooltipStyle}
-                  labelFormatter={(t: number) => formatTickTime(t, rangeSeconds)}
+                  labelFormatter={(t: number) =>
+                    formatTickTime(t, rangeSeconds)
+                  }
                   formatter={tooltipFormatter(formatValue, unit)}
+                  content={
+                    thresholds
+                      ? (props) => (
+                          <ThresholdAwareTooltip
+                            {...props}
+                            rangeSeconds={rangeSeconds}
+                            formatValue={formatValue}
+                            unit={unit}
+                            thresholds={thresholds}
+                          />
+                        )
+                      : undefined
+                  }
                 />
                 <Legend
                   wrapperStyle={{ ...legendStyle, cursor: "pointer" }}
@@ -363,6 +441,7 @@ export function MetricChart({
                   onClick={handleLegendClick}
                   formatter={renderLegendLabel}
                 />
+                {renderThresholdBands(thresholds, formatValue)}
                 {series.map((s) => (
                   <Line
                     key={s.key}
@@ -402,6 +481,44 @@ function CenteredMessage({ children }: { children: ReactNode }) {
   );
 }
 
+// StatusPill is the compact "WARN" / "CRIT" tag rendered next to a
+// chart title when the metric the chart represents is currently
+// firing. Mirrors the visual language of the dashboard banner so the
+// two reinforce each other.
+function StatusPill({ status }: { status: "warn" | "crit" }) {
+  const color = status === "crit" ? CRIT_COLOR : WARN_COLOR;
+  const label = status === "crit" ? "CRIT" : "WARN";
+
+  return (
+    <Box
+      as="span"
+      display="inline-flex"
+      alignItems="center"
+      gap="1.5"
+      px="1.5"
+      py="0.5"
+      borderRadius="sm"
+      bg={`${color}1F`}
+      title={
+        status === "crit"
+          ? "Metric in critical state"
+          : "Metric in warning state"
+      }
+    >
+      <Box w="1.5" h="1.5" borderRadius="full" bg={color} />
+      <Text
+        as="span"
+        fontSize="2xs"
+        fontWeight="semibold"
+        color={color}
+        letterSpacing="0.04em"
+      >
+        {label}
+      </Text>
+    </Box>
+  );
+}
+
 const tooltipStyle = {
   background: "var(--chakra-colors-surface-panel)",
   border: "1px solid var(--chakra-colors-border-default)",
@@ -413,7 +530,6 @@ const legendStyle = {
   fontSize: "11px",
   paddingTop: "4px",
 };
-
 
 function numberOf(v: number | string | undefined): number | null {
   if (v == null) return null;
@@ -429,4 +545,255 @@ function tooltipFormatter(formatValue?: (v: number) => string, unit?: string) {
 
     return [formatted, name];
   };
+}
+
+// thresholdStatusFor folds the hovered data point against the chart's
+// bounds. For stacked charts (where the displayed Y is a sum) we sum
+// all series at the hovered timestamp; for line charts we use the
+// single series value. Returns null when no bound is crossed.
+function thresholdStatusFor(
+  total: number,
+  bounds: ThresholdBounds,
+): { level: "warn" | "crit"; label: string } | null {
+  if (bounds.highCritical != null && total >= bounds.highCritical) {
+    return { level: "crit", label: "above critical" };
+  }
+  if (bounds.lowCritical != null && total <= bounds.lowCritical) {
+    return { level: "crit", label: "below critical" };
+  }
+  if (bounds.highWarning != null && total >= bounds.highWarning) {
+    return { level: "warn", label: "above warning" };
+  }
+  if (bounds.lowWarning != null && total <= bounds.lowWarning) {
+    return { level: "warn", label: "below warning" };
+  }
+  return null;
+}
+
+// ThresholdAwareTooltip is a custom recharts Tooltip content that
+// mimics the default look-and-feel and appends a status line when
+// the cursor is hovering over a data point that crosses one of the
+// configured thresholds. We render the existing series rows ourselves
+// so the threshold footer can sit at the bottom in a consistent style.
+// Recharts' TooltipPayloadEntry has a wide `value` type
+// (string | number | (string | number)[]) and uses ValueType
+// internally. We accept `readonly unknown[]` and narrow each entry
+// inside rather than importing recharts internals.
+function ThresholdAwareTooltip(props: {
+  active?: boolean;
+  payload?: readonly unknown[];
+  label?: number | string;
+  rangeSeconds: number;
+  formatValue?: (v: number) => string;
+  unit?: string;
+  thresholds: ThresholdBounds;
+}) {
+  const {
+    active,
+    payload,
+    label,
+    rangeSeconds,
+    formatValue,
+    unit,
+    thresholds,
+  } = props;
+
+  if (!active || !payload || payload.length === 0) return null;
+
+  // Narrow each entry at the boundary. Anything that isn't a numeric
+  // value contributes 0 to the total so stacked rendering doesn't
+  // break when recharts hands us a placeholder series.
+  const entries = payload.map((raw) => {
+    const p = raw as {
+      color?: string;
+      name?: string | number;
+      value?: number | string | unknown;
+      dataKey?: string | number;
+    };
+    const numeric = typeof p.value === "number" ? p.value : null;
+    return {
+      color: p.color,
+      name: p.name,
+      value: numeric,
+      dataKey: p.dataKey,
+    };
+  });
+
+  const total = entries.reduce((acc, p) => acc + (p.value ?? 0), 0);
+  const status = thresholdStatusFor(total, thresholds);
+
+  const labelText =
+    typeof label === "number" ? formatTickTime(label, rangeSeconds) : label;
+
+  return (
+    <div
+      style={{
+        background: "var(--chakra-colors-surface-panel)",
+        border: "1px solid var(--chakra-colors-border-default)",
+        borderRadius: "8px",
+        fontSize: "12px",
+        padding: "8px 10px",
+        minWidth: "120px",
+      }}
+    >
+      <div
+        style={{
+          fontSize: "11px",
+          color: "var(--chakra-colors-fg-muted)",
+          marginBottom: "4px",
+        }}
+      >
+        {labelText}
+      </div>
+      {entries.map((p, i) => {
+        const value =
+          p.value == null
+            ? "—"
+            : formatValue
+              ? formatValue(p.value)
+              : `${p.value.toFixed(2)}${unit ?? ""}`;
+        return (
+          <div
+            key={`${p.dataKey ?? "k"}-${i}`}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "1px 0",
+            }}
+          >
+            <span
+              style={{
+                display: "inline-block",
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: p.color,
+              }}
+            />
+            <span style={{ color: "var(--chakra-colors-fg-default)" }}>
+              {p.name}
+            </span>
+            <span
+              style={{
+                marginLeft: "auto",
+                fontFamily:
+                  "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                color: "var(--chakra-colors-fg-default)",
+              }}
+            >
+              {value}
+            </span>
+          </div>
+        );
+      })}
+      {status ? (
+        <div
+          style={{
+            marginTop: "6px",
+            paddingTop: "6px",
+            borderTop: "1px solid var(--chakra-colors-border-subtle)",
+            fontSize: "11px",
+            fontWeight: 600,
+            color: status.level === "crit" ? CRIT_COLOR : WARN_COLOR,
+            textTransform: "uppercase",
+            letterSpacing: "0.04em",
+          }}
+        >
+          {status.label}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// renderThresholdBands draws dashed reference lines at each
+// configured warn/crit boundary, with a discrete value-only label on
+// the right edge of the chart. Earlier iterations had:
+//   - translucent fill bands → blended into data, hard to read.
+//   - "warn 75%" / "crit 90%" inline labels → too large, redundant
+//     with the colour, and the Y axis already shows where the line
+//     sits.
+// The current style keeps the line minimal and lets the dashed colour
+// carry the semantics (orange = warn, red = crit); the small label
+// repeats only the *value* so the reader doesn't have to interpolate
+// it from the Y axis when the threshold falls between two ticks.
+function renderThresholdBands(
+  bounds: ThresholdBounds | undefined,
+  formatValue?: (v: number) => string,
+) {
+  if (!bounds) return null;
+
+  const lines: ReactNode[] = [];
+
+  const addLine = (key: string, value: number, color: string) => {
+    const text = formatValue ? formatValue(value) : String(value);
+    lines.push(
+      <ReferenceLine
+        key={key}
+        y={value}
+        stroke={color}
+        strokeDasharray="3 3"
+        strokeWidth={1}
+        strokeOpacity={0.7}
+        ifOverflow="extendDomain"
+        label={renderThresholdLabel(text, color)}
+      />,
+    );
+  };
+
+  if (bounds.highCritical != null) {
+    addLine("high-crit", bounds.highCritical, CRIT_COLOR);
+  }
+
+  if (bounds.highWarning != null) {
+    addLine("high-warn", bounds.highWarning, WARN_COLOR);
+  }
+
+  if (bounds.lowWarning != null) {
+    addLine("low-warn", bounds.lowWarning, WARN_COLOR);
+  }
+
+  if (bounds.lowCritical != null) {
+    addLine("low-crit", bounds.lowCritical, CRIT_COLOR);
+  }
+
+  return lines;
+}
+
+// renderThresholdLabel renders a minimal SVG label aligned to the
+// right of the chart, just above the reference line. We deliberately
+// keep it text-only (no pill, no background) so the threshold reads
+// like an axis annotation rather than a competing UI chip. Font
+// styling goes through the `style` prop because Recharts injects CSS
+// that overrides bare SVG `font-size` / `font-family` attributes.
+function renderThresholdLabel(text: string, color: string) {
+  const ThresholdLabel = (props: {
+    viewBox?: { x?: number; width?: number; y?: number };
+  }) => {
+    const vb = props.viewBox ?? {};
+    const x = (vb.x ?? 0) + (vb.width ?? 0) - 4;
+    const y = (vb.y ?? 0) - 3;
+
+    return (
+      <text
+        x={x}
+        y={y}
+        textAnchor="end"
+        style={{
+          fontSize: "9px",
+          fontFamily:
+            "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+          fontWeight: 600,
+          fill: color,
+          letterSpacing: "0.02em",
+        }}
+      >
+        {text}
+      </text>
+    );
+  };
+  ThresholdLabel.displayName = "ThresholdLabel";
+
+  return ThresholdLabel;
 }

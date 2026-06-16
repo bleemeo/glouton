@@ -16,6 +16,7 @@ import { useFetch } from "../api/hooks";
 import type { AgentInformation, Fact, Service } from "../api/types";
 import { StatusBadge, type Status } from "../app/StatusBadge";
 import { LogsViewer } from "./LogsViewer";
+import { ThresholdsSection } from "./ThresholdsSection";
 
 const HOST_FACT_KEYS = [
   "fqdn",
@@ -92,7 +93,10 @@ export function Informations() {
           rows={
             agent.data
               ? [
-                  ["Status", agent.data.isConnected ? "Connected" : "Disconnected"],
+                  [
+                    "Status",
+                    agent.data.isConnected ? "Connected" : "Disconnected",
+                  ],
                   ["Registered at", formatTimestamp(agent.data.registrationAt)],
                   ["Last report", formatTimestamp(agent.data.lastReport)],
                 ]
@@ -104,19 +108,30 @@ export function Informations() {
           title="Host"
           loading={facts.loading}
           error={facts.error}
-          rows={pickFacts(facts.data, HOST_FACT_KEYS).map((f) => [f.name, f.value])}
+          rows={pickFacts(facts.data, HOST_FACT_KEYS).map((f) => [
+            f.name,
+            f.value,
+          ])}
         />
 
         <FactsCard
           title="Runtime"
           loading={facts.loading}
           error={facts.error}
-          rows={pickFacts(facts.data, RUNTIME_FACT_KEYS).map((f) => [f.name, f.value])}
+          rows={pickFacts(facts.data, RUNTIME_FACT_KEYS).map((f) => [
+            f.name,
+            f.value,
+          ])}
         />
       </SimpleGrid>
 
       <VStack align="stretch" gap="2">
-        <Heading size="sm" color="fg.muted" letterSpacing="0.06em" textTransform="uppercase">
+        <Heading
+          size="sm"
+          color="fg.muted"
+          letterSpacing="0.06em"
+          textTransform="uppercase"
+        >
           Discovered services
         </Heading>
         <Box
@@ -157,10 +172,18 @@ export function Informations() {
                       <StatusBadge status={statusFromCode(s.status)} />
                     </Table.Cell>
                     <Table.Cell fontWeight="medium">{s.name}</Table.Cell>
-                    <Table.Cell fontFamily="mono" fontSize="sm" color="fg.muted">
+                    <Table.Cell
+                      fontFamily="mono"
+                      fontSize="sm"
+                      color="fg.muted"
+                    >
                       {s.ipAddress || "—"}
                     </Table.Cell>
-                    <Table.Cell fontFamily="mono" fontSize="sm" color="fg.muted">
+                    <Table.Cell
+                      fontFamily="mono"
+                      fontSize="sm"
+                      color="fg.muted"
+                    >
                       {(s.listenAddresses ?? []).join(", ") || "—"}
                     </Table.Cell>
                     <Table.Cell color="fg.subtle" fontSize="xs">
@@ -174,11 +197,103 @@ export function Informations() {
         </Box>
       </VStack>
 
+      <ThresholdsSection />
+
       <LogsViewer />
 
       <PrometheusSection />
 
+      <ConfigurationSection />
+
       <DiagnosticSection />
+    </VStack>
+  );
+}
+
+function ConfigurationSection() {
+  return (
+    <VStack align="stretch" gap="2">
+      <Heading size="sm" color="fg.muted" letterSpacing="0.06em" textTransform="uppercase">
+        Configuration
+      </Heading>
+      <Box
+        bg="surface.panel"
+        borderWidth="1px"
+        borderColor="border.subtle"
+        borderRadius="lg"
+        p="4"
+      >
+        <VStack align="stretch" gap="3">
+          <Text fontSize="sm" color="fg.muted">
+            The merged in-memory configuration (defaults + files +
+            environment overrides) as a plain YAML document. Secrets are
+            redacted server-side — values for keys matching{" "}
+            <Code variant="surface" fontSize="xs">
+              key
+            </Code>
+            ,{" "}
+            <Code variant="surface" fontSize="xs">
+              secret
+            </Code>
+            ,{" "}
+            <Code variant="surface" fontSize="xs">
+              password
+            </Code>{" "}
+            or{" "}
+            <Code variant="surface" fontSize="xs">
+              passwd
+            </Code>{" "}
+            are replaced with{" "}
+            <Code variant="surface" fontSize="xs">
+              *****
+            </Code>
+            .
+          </Text>
+          <HStack gap="2" wrap="wrap">
+            <ChakraLink
+              href="/data/config"
+              target="_blank"
+              rel="noopener noreferrer"
+              px="3"
+              py="2"
+              fontSize="sm"
+              fontWeight="medium"
+              borderRadius="md"
+              borderWidth="1px"
+              borderColor="border.default"
+              color="fg.default"
+              bg="surface.subtle"
+              _hover={{ bg: "surface.canvas", textDecoration: "none" }}
+              display="inline-flex"
+              alignItems="center"
+              gap="2"
+            >
+              <LuExternalLink />
+              View running configuration
+            </ChakraLink>
+            <ChakraLink
+              href="/data/config"
+              download="glouton-config.yaml"
+              px="3"
+              py="2"
+              fontSize="sm"
+              fontWeight="medium"
+              borderRadius="md"
+              borderWidth="1px"
+              borderColor="border.default"
+              color="fg.default"
+              bg="surface.subtle"
+              _hover={{ bg: "surface.canvas", textDecoration: "none" }}
+              display="inline-flex"
+              alignItems="center"
+              gap="2"
+            >
+              <LuDownload />
+              Download (.yaml)
+            </ChakraLink>
+          </HStack>
+        </VStack>
+      </Box>
     </VStack>
   );
 }
@@ -188,11 +303,18 @@ function PrometheusSection() {
   // actual URL they reached the panel through, not a hardcoded
   // localhost:8015.
   const metricsUrl =
-    typeof window !== "undefined" ? `${window.location.origin}/metrics` : "/metrics";
+    typeof window !== "undefined"
+      ? `${window.location.origin}/metrics`
+      : "/metrics";
 
   return (
     <VStack align="stretch" gap="2">
-      <Heading size="sm" color="fg.muted" letterSpacing="0.06em" textTransform="uppercase">
+      <Heading
+        size="sm"
+        color="fg.muted"
+        letterSpacing="0.06em"
+        textTransform="uppercase"
+      >
         Prometheus endpoint
       </Heading>
       <Box
@@ -248,7 +370,12 @@ function PrometheusSection() {
 function DiagnosticSection() {
   return (
     <VStack align="stretch" gap="2">
-      <Heading size="sm" color="fg.muted" letterSpacing="0.06em" textTransform="uppercase">
+      <Heading
+        size="sm"
+        color="fg.muted"
+        letterSpacing="0.06em"
+        textTransform="uppercase"
+      >
         Diagnostic
       </Heading>
       <Box
@@ -364,10 +491,21 @@ function FactsCard({
         <VStack align="stretch" gap="2">
           {rows.map(([k, v]) => (
             <HStack key={k} justify="space-between" align="start" gap="3">
-              <Text fontSize="xs" color="fg.muted" textTransform="uppercase" letterSpacing="0.04em">
+              <Text
+                fontSize="xs"
+                color="fg.muted"
+                textTransform="uppercase"
+                letterSpacing="0.04em"
+              >
                 {k.replace(/_/g, " ")}
               </Text>
-              <Text fontSize="sm" fontFamily="mono" textAlign="end" maxW="60%" wordBreak="break-word">
+              <Text
+                fontSize="sm"
+                fontFamily="mono"
+                textAlign="end"
+                maxW="60%"
+                wordBreak="break-word"
+              >
                 {v}
               </Text>
             </HStack>

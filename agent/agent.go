@@ -981,9 +981,19 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		localStoreInfo = localTSDB
 	}
 
+	// Pass the blackbox manager as the monitors source when present.
+	// When blackbox is disabled, leave it nil — the /data/monitors
+	// handler falls back to reading the static config so the tab
+	// still has something useful to show.
+	var monitorSource api.MonitorSource
+	if a.monitorManager != nil {
+		monitorSource = a.monitorManager
+	}
+
 	api := &api.API{
 		DB:                 apiDB,
 		LocalStore:         localStoreInfo,
+		Monitors:           monitorSource,
 		ContainerRuntime:   a.containerRuntime,
 		Endpoints:          a.config.Web.Endpoints,
 		PsFact:             psFact,
@@ -993,6 +1003,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		AgentInfo:          a,
 		PrometheusExporter: promExporter,
 		Threshold:          a.threshold,
+		Config:             a.config,
 		StaticCDNURL:       a.config.Web.StaticCDNURL,
 		DiagnosticPage:     a.DiagnosticPage,
 		DiagnosticArchive:  a.writeDiagnosticArchive,
