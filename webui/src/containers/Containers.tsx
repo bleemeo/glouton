@@ -22,12 +22,21 @@ function stateToStatus(state: string): Status {
 
   if (s.includes("running") || s === "up") return "ok";
   if (s.includes("paused") || s.includes("restarting")) return "warn";
-  if (s.includes("exited") || s.includes("dead") || s.includes("stopped")) return "crit";
+  if (s.includes("exited") || s.includes("dead") || s.includes("stopped"))
+    return "crit";
 
   return "unknown";
 }
 
-type SortKey = "state" | "name" | "image" | "cpu" | "memory" | "netRecv" | "netSent" | "started";
+type SortKey =
+  | "state"
+  | "name"
+  | "image"
+  | "cpu"
+  | "memory"
+  | "netRecv"
+  | "netSent"
+  | "started";
 
 function startedTimestamp(iso: string | undefined): number {
   if (!iso) return 0;
@@ -76,7 +85,8 @@ function relativeTime(iso: string | undefined): string {
 
   const t = new Date(iso).getTime();
 
-  if (!isFinite(t) || t === new Date("0001-01-01T00:00:00Z").getTime()) return "—";
+  if (!isFinite(t) || t === new Date("0001-01-01T00:00:00Z").getTime())
+    return "—";
 
   const diffSec = Math.floor((Date.now() - t) / 1000);
 
@@ -193,63 +203,127 @@ export function Containers() {
             <Table.Root size="sm" variant="line" stickyHeader>
               <Table.Header bg="surface.subtle">
                 <Table.Row>
-                  <SortableHeader label="State" sortKey="state" current={sortKey} onSort={setSortKey} />
-                  <SortableHeader label="Name" sortKey="name" current={sortKey} onSort={setSortKey} />
-                  <SortableHeader label="Image" sortKey="image" current={sortKey} onSort={setSortKey} />
-                  <SortableHeader label="CPU" sortKey="cpu" current={sortKey} onSort={setSortKey} textAlign="end" />
-                  <SortableHeader label="Memory" sortKey="memory" current={sortKey} onSort={setSortKey} textAlign="end" />
-                  <SortableHeader label="↓ Net" sortKey="netRecv" current={sortKey} onSort={setSortKey} textAlign="end" />
-                  <SortableHeader label="↑ Net" sortKey="netSent" current={sortKey} onSort={setSortKey} textAlign="end" />
-                  <SortableHeader label="Started" sortKey="started" current={sortKey} onSort={setSortKey} textAlign="end" />
+                  <SortableHeader
+                    label="State"
+                    sortKey="state"
+                    current={sortKey}
+                    onSort={setSortKey}
+                  />
+                  <SortableHeader
+                    label="Name"
+                    sortKey="name"
+                    current={sortKey}
+                    onSort={setSortKey}
+                  />
+                  <SortableHeader
+                    label="Image"
+                    sortKey="image"
+                    current={sortKey}
+                    onSort={setSortKey}
+                  />
+                  <SortableHeader
+                    label="CPU"
+                    sortKey="cpu"
+                    current={sortKey}
+                    onSort={setSortKey}
+                    textAlign="end"
+                  />
+                  <SortableHeader
+                    label="Memory"
+                    sortKey="memory"
+                    current={sortKey}
+                    onSort={setSortKey}
+                    textAlign="end"
+                  />
+                  <SortableHeader
+                    label="↓ Net"
+                    sortKey="netRecv"
+                    current={sortKey}
+                    onSort={setSortKey}
+                    textAlign="end"
+                  />
+                  <SortableHeader
+                    label="↑ Net"
+                    sortKey="netSent"
+                    current={sortKey}
+                    onSort={setSortKey}
+                    textAlign="end"
+                  />
+                  <SortableHeader
+                    label="Started"
+                    sortKey="started"
+                    current={sortKey}
+                    onSort={setSortKey}
+                    textAlign="end"
+                  />
                 </Table.Row>
               </Table.Header>
-            <Table.Body>
-              {items.map((c) => (
-                <Table.Row
-                  key={c.id}
-                  cursor="pointer"
-                  onClick={() => setSelectedId(c.id)}
-                  bg={c.id === selectedId ? "surface.subtle" : undefined}
-                  _hover={{ bg: "surface.subtle" }}
-                  transition="background 100ms ease"
-                >
-                  <Table.Cell>
-                    <StatusBadge status={stateToStatus(c.state)} label={c.state} />
-                  </Table.Cell>
-                  <Table.Cell>
-                    <VStack align="start" gap="0">
-                      <Text fontSize="sm" fontWeight="medium">
-                        {c.name}
+              <Table.Body>
+                {items.map((c) => (
+                  <Table.Row
+                    key={c.id}
+                    cursor="pointer"
+                    onClick={() => setSelectedId(c.id)}
+                    bg={c.id === selectedId ? "surface.subtle" : undefined}
+                    _hover={{ bg: "surface.subtle" }}
+                    transition="background 100ms ease"
+                  >
+                    <Table.Cell>
+                      <StatusBadge
+                        status={stateToStatus(c.state)}
+                        label={c.state}
+                      />
+                    </Table.Cell>
+                    <Table.Cell>
+                      <VStack align="start" gap="0">
+                        <Text fontSize="sm" fontWeight="medium">
+                          {c.name}
+                        </Text>
+                        <Text fontSize="xs" color="fg.subtle" fontFamily="mono">
+                          {c.id.slice(0, 12)}
+                        </Text>
+                      </VStack>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Text fontSize="sm" fontFamily="mono" color="fg.muted">
+                        {c.image}
                       </Text>
-                      <Text fontSize="xs" color="fg.subtle" fontFamily="mono">
-                        {c.id.slice(0, 12)}
-                      </Text>
-                    </VStack>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Text fontSize="sm" fontFamily="mono" color="fg.muted">
-                      {c.image}
-                    </Text>
-                  </Table.Cell>
-                  <Table.Cell textAlign="end" fontFamily="mono" fontVariantNumeric="tabular-nums">
-                    {c.cpuUsedPerc.toFixed(1)}%
-                  </Table.Cell>
-                  <Table.Cell textAlign="end" fontFamily="mono" fontVariantNumeric="tabular-nums">
-                    {c.memUsedPerc.toFixed(1)}%
-                  </Table.Cell>
-                  <Table.Cell textAlign="end" fontFamily="mono" fontVariantNumeric="tabular-nums">
-                    {formatBytes(c.netBitsRecv / 8)}/s
-                  </Table.Cell>
-                  <Table.Cell textAlign="end" fontFamily="mono" fontVariantNumeric="tabular-nums">
-                    {formatBytes(c.netBitsSent / 8)}/s
-                  </Table.Cell>
-                  <Table.Cell textAlign="end" fontSize="xs" color="fg.muted">
-                    {relativeTime(c.startedAt)}
-                  </Table.Cell>
-                </Table.Row>
-              ))}
-            </Table.Body>
-          </Table.Root>
+                    </Table.Cell>
+                    <Table.Cell
+                      textAlign="end"
+                      fontFamily="mono"
+                      fontVariantNumeric="tabular-nums"
+                    >
+                      {c.cpuUsedPerc.toFixed(1)}%
+                    </Table.Cell>
+                    <Table.Cell
+                      textAlign="end"
+                      fontFamily="mono"
+                      fontVariantNumeric="tabular-nums"
+                    >
+                      {c.memUsedPerc.toFixed(1)}%
+                    </Table.Cell>
+                    <Table.Cell
+                      textAlign="end"
+                      fontFamily="mono"
+                      fontVariantNumeric="tabular-nums"
+                    >
+                      {formatBytes(c.netBitsRecv / 8)}/s
+                    </Table.Cell>
+                    <Table.Cell
+                      textAlign="end"
+                      fontFamily="mono"
+                      fontVariantNumeric="tabular-nums"
+                    >
+                      {formatBytes(c.netBitsSent / 8)}/s
+                    </Table.Cell>
+                    <Table.Cell textAlign="end" fontSize="xs" color="fg.muted">
+                      {relativeTime(c.startedAt)}
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table.Root>
           </Box>
         )}
       </Box>

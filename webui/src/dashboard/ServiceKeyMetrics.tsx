@@ -136,7 +136,12 @@ function MetricCard({ metric }: { metric: ServiceKeyMetric }) {
       </Text>
       <Box w="full" h="36px">
         {samples.length > 0 ? (
-          <Sparkline data={samples} color={metric.color} yMax={metric.yMax} height={36} />
+          <Sparkline
+            data={samples}
+            color={metric.color}
+            yMax={metric.yMax}
+            height={36}
+          />
         ) : null}
       </Box>
     </VStack>

@@ -1,10 +1,5 @@
 {
-    "ignore": [
-        "eslint.config.mjs",
-        "src/styles/bootstrap.scss"
-    ],
     "ignoreDependencies": [
-        "bootstrap",
         "@typescript-eslint/eslint-plugin",
         "eslint-config-prettier",
         "eslint-plugin-prettier",

@@ -24,7 +24,8 @@ export class ErrorBoundary extends Component<Props, State> {
               Something went wrong rendering the panel.
             </Heading>
             <Text color="fg.muted">
-              The error is logged to the browser console. Reloading usually helps.
+              The error is logged to the browser console. Reloading usually
+              helps.
             </Text>
             <Code variant="surface" p="3" w="full" whiteSpace="pre-wrap">
               {this.state.error.message}

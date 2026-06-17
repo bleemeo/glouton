@@ -3,7 +3,12 @@ import { useMemo, useState } from "react";
 
 import { usePromQLRange, useStoreInfo } from "../api/hooks";
 import { samplesOf, type Sample } from "./promql";
-import { DEFAULT_RANGE_ID, isRangeAvailable, RANGES, type Range } from "./ranges";
+import {
+  DEFAULT_RANGE_ID,
+  isRangeAvailable,
+  RANGES,
+  type Range,
+} from "./ranges";
 
 const STATUS_COLOR: Record<number, string> = {
   0: "#10B981", // ok
@@ -62,7 +67,12 @@ function compressToSegments(samples: Sample[], endSec: number): Segment[] {
     }
   }
 
-  segments.push({ from, to: endSec, status, durationSec: Math.max(0, endSec - from) });
+  segments.push({
+    from,
+    to: endSec,
+    status,
+    durationSec: Math.max(0, endSec - from),
+  });
 
   return segments;
 }
@@ -112,7 +122,10 @@ export function ServiceAvailability({ serviceName }: Props) {
 
   const endSec = Math.floor(Date.now() / 1000);
   const startSec = endSec - range.seconds;
-  const segments = useMemo(() => compressToSegments(samples, endSec), [samples, endSec]);
+  const segments = useMemo(
+    () => compressToSegments(samples, endSec),
+    [samples, endSec],
+  );
 
   // Stats: uptime %, per-status distribution, change count, current
   // state duration, and the longest non-OK streak.
@@ -124,7 +137,11 @@ export function ServiceAvailability({ serviceName }: Props) {
         changes: 0,
         currentStatus: null as number | null,
         currentDurationSec: 0,
-        longestOutage: null as { status: number; durationSec: number; from: number } | null,
+        longestOutage: null as {
+          status: number;
+          durationSec: number;
+          from: number;
+        } | null,
       };
     }
 
@@ -132,14 +149,32 @@ export function ServiceAvailability({ serviceName }: Props) {
     const last = segments[segments.length - 1];
 
     const buckets: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0 };
-    let longestOutage: { status: number; durationSec: number; from: number } | null = null;
+    let longestOutage: {
+      status: number;
+      durationSec: number;
+      from: number;
+    } | null = null;
 
     for (const seg of segments) {
-      const bucketKey = seg.status === 0 ? 0 : seg.status === 1 ? 1 : seg.status >= 2 && seg.status < 3 ? 2 : 3;
+      const bucketKey =
+        seg.status === 0
+          ? 0
+          : seg.status === 1
+            ? 1
+            : seg.status >= 2 && seg.status < 3
+              ? 2
+              : 3;
       buckets[bucketKey] = (buckets[bucketKey] ?? 0) + seg.durationSec;
 
-      if (seg.status !== 0 && (!longestOutage || seg.durationSec > longestOutage.durationSec)) {
-        longestOutage = { status: bucketKey, durationSec: seg.durationSec, from: seg.from };
+      if (
+        seg.status !== 0 &&
+        (!longestOutage || seg.durationSec > longestOutage.durationSec)
+      ) {
+        longestOutage = {
+          status: bucketKey,
+          durationSec: seg.durationSec,
+          from: seg.from,
+        };
       }
     }
 
@@ -161,14 +196,19 @@ export function ServiceAvailability({ serviceName }: Props) {
 
   // Last check timestamp from the freshest sample (not the segment
   // end, which we extend to "now" for the stripe).
-  const lastCheckSec = samples.length > 0 ? samples[samples.length - 1].t : null;
+  const lastCheckSec =
+    samples.length > 0 ? samples[samples.length - 1].t : null;
 
   // Recent transitions: take the boundary points (from segment i to
   // segment i+1) and list the most recent first.
   const transitions = useMemo(() => {
     const out: { at: number; from: number; to: number }[] = [];
     for (let i = 1; i < segments.length; i++) {
-      out.push({ at: segments[i].from, from: segments[i - 1].status, to: segments[i].status });
+      out.push({
+        at: segments[i].from,
+        from: segments[i - 1].status,
+        to: segments[i].status,
+      });
     }
     return out.reverse().slice(0, RECENT_CHANGES);
   }, [segments]);
@@ -201,7 +241,9 @@ export function ServiceAvailability({ serviceName }: Props) {
         loading={res.loading}
       />
 
-      {transitions.length > 0 ? <TransitionsList transitions={transitions} /> : null}
+      {transitions.length > 0 ? (
+        <TransitionsList transitions={transitions} />
+      ) : null}
     </VStack>
   );
 }
@@ -233,46 +275,92 @@ function Stats({
     <VStack align="stretch" gap="1.5">
       <HStack gap="4" wrap="wrap" fontSize="sm">
         <HStack gap="1.5">
-          <Text color="fg.muted" fontSize="xs" textTransform="uppercase" letterSpacing="0.04em">
+          <Text
+            color="fg.muted"
+            fontSize="xs"
+            textTransform="uppercase"
+            letterSpacing="0.04em"
+          >
             Uptime
           </Text>
           <Text
             fontFamily="mono"
             fontVariantNumeric="tabular-nums"
             fontWeight="semibold"
-            color={ok && uptimePct >= 99 ? "#10B981" : ok && uptimePct >= 95 ? "#F59E0B" : "fg.default"}
+            color={
+              ok && uptimePct >= 99
+                ? "#10B981"
+                : ok && uptimePct >= 95
+                  ? "#F59E0B"
+                  : "fg.default"
+            }
           >
             {ok ? `${uptimePct.toFixed(1)}%` : "—"}
           </Text>
         </HStack>
         <HStack gap="1.5">
-          <Text color="fg.muted" fontSize="xs" textTransform="uppercase" letterSpacing="0.04em">
+          <Text
+            color="fg.muted"
+            fontSize="xs"
+            textTransform="uppercase"
+            letterSpacing="0.04em"
+          >
             Changes
           </Text>
-          <Text fontFamily="mono" fontVariantNumeric="tabular-nums" fontWeight="semibold">
+          <Text
+            fontFamily="mono"
+            fontVariantNumeric="tabular-nums"
+            fontWeight="semibold"
+          >
             {changes}
           </Text>
         </HStack>
         {currentStatus != null ? (
           <HStack gap="1.5">
-            <Text color="fg.muted" fontSize="xs" textTransform="uppercase" letterSpacing="0.04em">
+            <Text
+              color="fg.muted"
+              fontSize="xs"
+              textTransform="uppercase"
+              letterSpacing="0.04em"
+            >
               Current
             </Text>
-            <Box w="2" h="2" borderRadius="full" bg={statusColor(currentStatus)} />
-            <Text fontFamily="mono" fontVariantNumeric="tabular-nums" fontWeight="semibold">
-              {statusLabel(currentStatus)} for {formatDuration(currentDurationSec)}
+            <Box
+              w="2"
+              h="2"
+              borderRadius="full"
+              bg={statusColor(currentStatus)}
+            />
+            <Text
+              fontFamily="mono"
+              fontVariantNumeric="tabular-nums"
+              fontWeight="semibold"
+            >
+              {statusLabel(currentStatus)} for{" "}
+              {formatDuration(currentDurationSec)}
             </Text>
           </HStack>
         ) : null}
       </HStack>
 
       {distributionEntries.length > 1 || longestOutage ? (
-        <HStack gap="4" wrap="wrap" fontSize="xs" color="fg.subtle" fontFamily="mono">
+        <HStack
+          gap="4"
+          wrap="wrap"
+          fontSize="xs"
+          color="fg.subtle"
+          fontFamily="mono"
+        >
           {distributionEntries.length > 1 ? (
             <HStack gap="2">
               {distributionEntries.map(([k, pct]) => (
                 <HStack key={k} gap="1">
-                  <Box w="1.5" h="1.5" borderRadius="full" bg={statusColor(k)} />
+                  <Box
+                    w="1.5"
+                    h="1.5"
+                    borderRadius="full"
+                    bg={statusColor(k)}
+                  />
                   <Text>
                     {statusLabel(k)} {pct.toFixed(1)}%
                   </Text>
@@ -348,7 +436,13 @@ function StatusStripe({
           />
         ))}
       </HStack>
-      <HStack justify="space-between" px="0.5" fontSize="2xs" color="fg.subtle" fontFamily="mono">
+      <HStack
+        justify="space-between"
+        px="0.5"
+        fontSize="2xs"
+        color="fg.subtle"
+        fontFamily="mono"
+      >
         <Text>{formatTime(startSec)}</Text>
         {lastCheckSec ? (
           <Text title={`Last sample at ${formatTime(lastCheckSec)}`}>
@@ -450,4 +544,3 @@ function RangePicker({
     </HStack>
   );
 }
-

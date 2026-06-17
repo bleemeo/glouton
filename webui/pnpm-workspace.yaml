@@ -1,3 +1,9 @@
 minimumReleaseAge: 2880 # 1440 minutes = 1 day
 ignoreScripts: true
 ignoreDepScripts: true
+
+overrides:
+  # Vite 8.0.16 (latest) still ships esbuild 0.27.7, which has
+  # GHSA-gv7w-rqvm-qjhr (high) and GHSA-g7r4-m6w7-qqqr (low). Force
+  # the patched line until vite bumps its own dependency.
+  esbuild: ">=0.28.1"

@@ -46,7 +46,11 @@ export function useFetch<T>(url: string | null, pollMs = 0): FetchState<T> {
           return;
         }
 
-        setState((prev) => ({ data: prev.data, error: err as Error, loading: false }));
+        setState((prev) => ({
+          data: prev.data,
+          error: err as Error,
+          loading: false,
+        }));
       }
     };
 
@@ -124,7 +128,10 @@ export function usePromQLRange(
  * useTextFetch is the plain-text counterpart of useFetch. Used for
  * /data/logs which returns raw text rather than JSON.
  */
-export function useTextFetch(url: string | null, pollMs = 0): FetchState<string> {
+export function useTextFetch(
+  url: string | null,
+  pollMs = 0,
+): FetchState<string> {
   const [state, setState] = useState<FetchState<string>>({
     data: null,
     error: null,
@@ -159,7 +166,11 @@ export function useTextFetch(url: string | null, pollMs = 0): FetchState<string>
           return;
         }
 
-        setState((prev) => ({ data: prev.data, error: err as Error, loading: false }));
+        setState((prev) => ({
+          data: prev.data,
+          error: err as Error,
+          loading: false,
+        }));
       }
     };
 

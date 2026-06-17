@@ -75,8 +75,20 @@ export type Topinfo = {
   Loads: number[];
   Users: number;
   Processes: Process[];
-  CPU?: { User: number; System: number; Idle: number; IOWait: number; Steal: number };
-  Memory?: { Total: number; Used: number; Free: number; Buffers: number; Cached: number };
+  CPU?: {
+    User: number;
+    System: number;
+    Idle: number;
+    IOWait: number;
+    Steal: number;
+  };
+  Memory?: {
+    Total: number;
+    Used: number;
+    Free: number;
+    Buffers: number;
+    Cached: number;
+  };
   Swap?: { Total: number; Used: number; Free: number };
 };
 
