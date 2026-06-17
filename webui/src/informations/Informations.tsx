@@ -213,7 +213,12 @@ export function Informations() {
 function ConfigurationSection() {
   return (
     <VStack align="stretch" gap="2">
-      <Heading size="sm" color="fg.muted" letterSpacing="0.06em" textTransform="uppercase">
+      <Heading
+        size="sm"
+        color="fg.muted"
+        letterSpacing="0.06em"
+        textTransform="uppercase"
+      >
         Configuration
       </Heading>
       <Box
@@ -225,9 +230,9 @@ function ConfigurationSection() {
       >
         <VStack align="stretch" gap="3">
           <Text fontSize="sm" color="fg.muted">
-            The merged in-memory configuration (defaults + files +
-            environment overrides) as a plain YAML document. Secrets are
-            redacted server-side — values for keys matching{" "}
+            The merged in-memory configuration (defaults + files + environment
+            overrides) as a plain YAML document. Secrets are redacted
+            server-side — values for keys matching{" "}
             <Code variant="surface" fontSize="xs">
               key
             </Code>

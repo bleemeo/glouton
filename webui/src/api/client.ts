@@ -12,8 +12,14 @@ export class HttpError extends Error {
   }
 }
 
-export async function getJSON<T>(url: string, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(url, { signal, headers: { Accept: "application/json" } });
+export async function getJSON<T>(
+  url: string,
+  signal?: AbortSignal,
+): Promise<T> {
+  const res = await fetch(url, {
+    signal,
+    headers: { Accept: "application/json" },
+  });
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");

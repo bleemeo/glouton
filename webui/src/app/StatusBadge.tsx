@@ -9,7 +9,13 @@ const colors: Record<Status, { bg: string; ring: string; label: string }> = {
   unknown: { bg: "kpi.neutral.bg", ring: "fg.subtle", label: "Unknown" },
 };
 
-export function StatusBadge({ status, label }: { status: Status; label?: string }) {
+export function StatusBadge({
+  status,
+  label,
+}: {
+  status: Status;
+  label?: string;
+}) {
   const c = colors[status];
 
   return (

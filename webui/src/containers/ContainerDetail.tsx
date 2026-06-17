@@ -1,5 +1,4 @@
 import {
-  Box,
   Heading,
   HStack,
   SimpleGrid,
@@ -9,12 +8,21 @@ import {
 } from "@chakra-ui/react";
 import { useCallback, useMemo } from "react";
 import { LuArrowLeft } from "react-icons/lu";
-import { Link as RouterLink, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import {
+  Link as RouterLink,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 
 import { useFetch, usePromQLRange, useStoreInfo } from "../api/hooks";
 import type { Container, ContainersResponse } from "../api/types";
 import { StatusBadge, type Status } from "../app/StatusBadge";
-import { formatBitsPerSec, formatBytes, formatPercent } from "../dashboard/format";
+import {
+  formatBitsPerSec,
+  formatBytes,
+  formatPercent,
+} from "../dashboard/format";
 import { MetricChart, type ChartSeries } from "../dashboard/MetricChart";
 import { alignSeries } from "../dashboard/promql";
 import { DEFAULT_RANGE_ID, RANGES, type Range } from "../dashboard/ranges";
@@ -35,7 +43,8 @@ function stateToStatus(state: string): Status {
   const s = state.toLowerCase();
   if (s.includes("running") || s === "up") return "ok";
   if (s.includes("paused") || s.includes("restarting")) return "warn";
-  if (s.includes("exited") || s.includes("dead") || s.includes("stopped")) return "crit";
+  if (s.includes("exited") || s.includes("dead") || s.includes("stopped"))
+    return "crit";
   return "unknown";
 }
 
@@ -63,7 +72,11 @@ export function ContainerDetail() {
   const [searchParams, setSearchParams] = useSearchParams();
   const range = useMemo<Range>(() => {
     const id = searchParams.get(RANGE_PARAM);
-    return RANGES.find((r) => r.id === id) ?? RANGES.find((r) => r.id === DEFAULT_RANGE_ID) ?? RANGES[0];
+    return (
+      RANGES.find((r) => r.id === id) ??
+      RANGES.find((r) => r.id === DEFAULT_RANGE_ID) ??
+      RANGES[0]
+    );
   }, [searchParams]);
 
   const setRange = useCallback(
@@ -98,8 +111,8 @@ export function ContainerDetail() {
       <VStack align="start" gap="3">
         <Heading size="md">Container not found</Heading>
         <Text color="fg.muted">
-          No container named "{decodedName}" is currently running. It may have
-          been stopped or renamed.
+          No container named &quot;{decodedName}&quot; is currently running. It
+          may have been stopped or renamed.
         </Text>
         <BackLink onClick={() => navigate("/containers")} />
       </VStack>
@@ -153,10 +166,20 @@ function Header({ container: c }: { container: Container }) {
         <StatusBadge status={stateToStatus(c.state)} label={c.state} />
         <Heading size="md">{c.name}</Heading>
       </HStack>
-      <HStack gap="6" wrap="wrap" fontSize="xs" color="fg.muted" fontFamily="mono">
+      <HStack
+        gap="6"
+        wrap="wrap"
+        fontSize="xs"
+        color="fg.muted"
+        fontFamily="mono"
+      >
         <Text>{c.image}</Text>
         <Text title={c.id}>id: {c.id.slice(0, 12)}</Text>
-        {c.command ? <Text truncate maxW="60ch" title={c.command}>cmd: {c.command}</Text> : null}
+        {c.command ? (
+          <Text truncate maxW="60ch" title={c.command}>
+            cmd: {c.command}
+          </Text>
+        ) : null}
       </HStack>
     </VStack>
   );
@@ -168,10 +191,16 @@ function escapeLabelValue(v: string): string {
 
 function ContainerCPUChart({ name, range }: { name: string; range: Range }) {
   const filter = `{item="${escapeLabelValue(name)}"}`;
-  const cpu = usePromQLRange(`container_cpu_used${filter}`, range.seconds, range.step);
+  const cpu = usePromQLRange(
+    `container_cpu_used${filter}`,
+    range.seconds,
+    range.step,
+  );
 
   const data = alignSeries({ cpu: cpu.data?.data?.result?.[0] });
-  const series: ChartSeries[] = [{ key: "cpu", label: "CPU", color: COLORS.cpu }];
+  const series: ChartSeries[] = [
+    { key: "cpu", label: "CPU", color: COLORS.cpu },
+  ];
 
   return (
     <MetricChart
@@ -282,7 +311,3 @@ function ContainerIOChart({ name, range }: { name: string; range: Range }) {
     />
   );
 }
-
-// Unused prop on Box silences a lint warning if we ever decide we don't
-// want the back link to look like a chakra-styled box.
-export type ContainerDetailBoxProps = React.ComponentProps<typeof Box>;

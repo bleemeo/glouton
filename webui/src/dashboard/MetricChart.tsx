@@ -319,8 +319,8 @@ export function MetricChart({
                 />
                 <Tooltip
                   contentStyle={tooltipStyle}
-                  labelFormatter={(t: number) =>
-                    formatTickTime(t, rangeSeconds)
+                  labelFormatter={(t) =>
+                    typeof t === "number" ? formatTickTime(t, rangeSeconds) : ""
                   }
                   formatter={tooltipFormatter(formatValue, unit)}
                   content={
@@ -416,8 +416,8 @@ export function MetricChart({
                 />
                 <Tooltip
                   contentStyle={tooltipStyle}
-                  labelFormatter={(t: number) =>
-                    formatTickTime(t, rangeSeconds)
+                  labelFormatter={(t) =>
+                    typeof t === "number" ? formatTickTime(t, rangeSeconds) : ""
                   }
                   formatter={tooltipFormatter(formatValue, unit)}
                   content={
@@ -537,13 +537,22 @@ function numberOf(v: number | string | undefined): number | null {
   return isFinite(n) ? n : null;
 }
 
-function tooltipFormatter(formatValue?: (v: number) => string, unit?: string) {
-  return (value: number, name: string) => {
-    const formatted = formatValue
-      ? formatValue(value)
-      : `${value.toFixed(2)}${unit ?? ""}`;
+function tooltipFormatter(
+  formatValue?: (v: number) => string,
+  unit?: string,
+): (value: unknown, name: unknown) => [string, string] {
+  return (value, name) => {
+    const v = typeof value === "number" ? value : null;
+    const formatted =
+      v == null
+        ? "—"
+        : formatValue
+          ? formatValue(v)
+          : `${v.toFixed(2)}${unit ?? ""}`;
+    const displayName =
+      typeof name === "string" || typeof name === "number" ? String(name) : "";
 
-    return [formatted, name];
+    return [formatted, displayName];
   };
 }
 

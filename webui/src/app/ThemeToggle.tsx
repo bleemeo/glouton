@@ -20,7 +20,8 @@ export function ThemeToggle() {
   const current = (theme ?? "system") as Mode;
   const next = order[(order.indexOf(current) + 1) % order.length];
 
-  const Icon = current === "dark" ? LuMoon : current === "light" ? LuSun : LuMonitor;
+  const Icon =
+    current === "dark" ? LuMoon : current === "light" ? LuSun : LuMonitor;
 
   return (
     <IconButton

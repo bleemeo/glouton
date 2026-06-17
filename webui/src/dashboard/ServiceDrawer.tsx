@@ -91,7 +91,10 @@ function Details({
 
   const containerName = useMemo(() => {
     if (!s.containerId || !containers.data) return null;
-    return containers.data.containers.find((c) => c.id === s.containerId)?.name ?? null;
+    return (
+      containers.data.containers.find((c) => c.id === s.containerId)?.name ??
+      null
+    );
   }, [s.containerId, containers.data]);
 
   return (

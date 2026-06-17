@@ -19,10 +19,7 @@ type SortKey = "cpu_percent" | "memory_rss" | "name" | "pid";
 
 const POLL_MS = 5_000;
 
-const STATUS_META: Record<
-  string,
-  { label: string; color: string }
-> = {
+const STATUS_META: Record<string, { label: string; color: string }> = {
   R: { label: "Running", color: "#10B981" },
   S: { label: "Sleeping", color: "#9CA3AF" },
   D: { label: "Disk wait", color: "#F59E0B" },
@@ -55,18 +52,20 @@ export function Processes() {
         )
       : list;
 
-    return [...filtered].sort((a, b) => {
-      switch (sortKey) {
-        case "cpu_percent":
-          return b.cpu_percent - a.cpu_percent;
-        case "memory_rss":
-          return b.memory_rss - a.memory_rss;
-        case "name":
-          return a.name.localeCompare(b.name);
-        case "pid":
-          return a.pid - b.pid;
-      }
-    }).slice(0, 200);
+    return [...filtered]
+      .sort((a, b) => {
+        switch (sortKey) {
+          case "cpu_percent":
+            return b.cpu_percent - a.cpu_percent;
+          case "memory_rss":
+            return b.memory_rss - a.memory_rss;
+          case "name":
+            return a.name.localeCompare(b.name);
+          case "pid":
+            return a.pid - b.pid;
+        }
+      })
+      .slice(0, 200);
   }, [res.data, search, sortKey]);
 
   const totalRSS = res.data?.Memory?.Total;
@@ -340,7 +339,13 @@ function BarValue({
       >
         {value}
       </Text>
-      <Box w="60px" h="3px" bg="surface.subtle" borderRadius="full" overflow="hidden">
+      <Box
+        w="60px"
+        h="3px"
+        bg="surface.subtle"
+        borderRadius="full"
+        overflow="hidden"
+      >
         <Box
           h="full"
           w={`${Math.max(2, ratio * 100)}%`}

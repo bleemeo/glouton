@@ -51,7 +51,11 @@ export function ProcessDrawer({ process, requestedPid, onClose }: Props) {
       <Portal>
         <Drawer.Backdrop bg="blackAlpha.500" />
         <Drawer.Positioner>
-          <Drawer.Content bg="surface.panel" borderLeftWidth="1px" borderColor="border.subtle">
+          <Drawer.Content
+            bg="surface.panel"
+            borderLeftWidth="1px"
+            borderColor="border.subtle"
+          >
             {process ? (
               <ProcessDetails process={process} onClose={onClose} />
             ) : (
@@ -64,7 +68,13 @@ export function ProcessDrawer({ process, requestedPid, onClose }: Props) {
   );
 }
 
-function ProcessDetails({ process: p, onClose }: { process: Process; onClose: () => void }) {
+function ProcessDetails({
+  process: p,
+  onClose,
+}: {
+  process: Process;
+  onClose: () => void;
+}) {
   const status = statusMeta(p.status);
   const created = p.create_time ? new Date(p.create_time) : null;
 
@@ -98,10 +108,22 @@ function ProcessDetails({ process: p, onClose }: { process: Process; onClose: ()
         <VStack align="stretch" gap="5" pt="2">
           <SimpleGrid columns={2} gap="3">
             <Field label="CPU" value={`${p.cpu_percent.toFixed(2)} %`} mono />
-            <Field label="Memory (RSS)" value={formatBytesFromKiB(p.memory_rss)} mono />
-            <Field label="CPU time" value={`${formatNumber(p.cpu_time, 2)} s`} mono />
+            <Field
+              label="Memory (RSS)"
+              value={formatBytesFromKiB(p.memory_rss)}
+              mono
+            />
+            <Field
+              label="CPU time"
+              value={`${formatNumber(p.cpu_time, 2)} s`}
+              mono
+            />
             <Field label="User" value={p.username || "—"} />
-            <Field label="PPID" value={p.ppid > 0 ? String(p.ppid) : "—"} mono />
+            <Field
+              label="PPID"
+              value={p.ppid > 0 ? String(p.ppid) : "—"}
+              mono
+            />
             <Field
               label="Started"
               value={created ? created.toLocaleString() : "—"}
@@ -151,13 +173,24 @@ function ProcessDetails({ process: p, onClose }: { process: Process; onClose: ()
   );
 }
 
-function ExitedNotice({ pid, onClose }: { pid: number | null; onClose: () => void }) {
+function ExitedNotice({
+  pid,
+  onClose,
+}: {
+  pid: number | null;
+  onClose: () => void;
+}) {
   return (
     <>
       <Drawer.Header borderBottomWidth="1px" borderColor="border.subtle">
         <HStack justify="space-between">
           <Drawer.Title>Process exited</Drawer.Title>
-          <IconButton aria-label="Close" size="sm" variant="ghost" onClick={onClose}>
+          <IconButton
+            aria-label="Close"
+            size="sm"
+            variant="ghost"
+            onClick={onClose}
+          >
             <LuX />
           </IconButton>
         </HStack>
@@ -173,7 +206,13 @@ function ExitedNotice({ pid, onClose }: { pid: number | null; onClose: () => voi
   );
 }
 
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
+function Section({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <VStack align="stretch" gap="1.5">
       <Text
