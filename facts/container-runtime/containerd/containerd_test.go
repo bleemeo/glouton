@@ -27,7 +27,10 @@ import (
 
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/facts/container-runtime/internal/testutil"
+	"github.com/bleemeo/glouton/types"
 
+	v1 "github.com/containerd/cgroups/v3/cgroup1/stats"
+	v2 "github.com/containerd/cgroups/v3/cgroup2/stats"
 	pbEvents "github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/protobuf"
 	"github.com/containerd/containerd/v2/client"
@@ -42,6 +45,8 @@ const (
 	testContainerdJSON = "containerd.json"
 	testImageRabbitmq  = "docker.io/library/rabbitmq:latest"
 	testGloutonIgnore  = "gloutonIgnore"
+
+	testThrottleContainerID = "container-id"
 )
 
 func mustMarshalAny(v any) *anypb.Any {
@@ -645,5 +650,133 @@ func TestContainerd_ContainerFromPID(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestConvertMetric_Throttling(t *testing.T) {
+	tests := []struct {
+		name string
+		data any
+	}{
+		{
+			name: "cgroup-v1",
+			data: &v1.Metrics{
+				CPU: &v1.CPUStat{
+					Usage:      &v1.CPUUsage{Total: 1000},
+					Throttling: &v1.Throttle{Periods: 100, ThrottledPeriods: 25},
+				},
+			},
+		},
+		{
+			name: "cgroup-v2",
+			data: &v2.Metrics{
+				CPU: &v2.CPUStat{
+					UsageUsec:   1000,
+					NrPeriods:   100,
+					NrThrottled: 25,
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := convertMetric(tt.data)
+			if err != nil {
+				t.Fatalf("convertMetric() error = %v", err)
+			}
+
+			if got["container_cpu_periods"] != 100 {
+				t.Errorf("container_cpu_periods = %d, want 100", got["container_cpu_periods"])
+			}
+
+			if got["container_cpu_throttled_periods"] != 25 {
+				t.Errorf("container_cpu_throttled_periods = %d, want 25", got["container_cpu_throttled_periods"])
+			}
+		})
+	}
+}
+
+func TestRateFromMetricValue_ThrottledPerc(t *testing.T) {
+	const id = "ns/" + testThrottleContainerID
+
+	gloutonIDToName := map[string]string{id: "my-container"}
+
+	pastValues := []metricValue{
+		{
+			ContainerNamespace: "ns",
+			ContainerID:        testThrottleContainerID,
+			Time:               time.Unix(0, 0),
+			Values: map[string]uint64{
+				metricCPUPeriods:          100,
+				metricCPUThrottledPeriods: 10,
+			},
+		},
+	}
+	newValues := []metricValue{
+		{
+			ContainerNamespace: "ns",
+			ContainerID:        testThrottleContainerID,
+			Time:               time.Unix(10, 0),
+			Values: map[string]uint64{
+				// 40 new periods, 30 of them throttled => 75%.
+				metricCPUPeriods:          140,
+				metricCPUThrottledPeriods: 40,
+			},
+		},
+	}
+
+	points := rateFromMetricValue(gloutonIDToName, pastValues, newValues)
+
+	var found bool
+
+	for _, p := range points {
+		if p.Labels[types.LabelName] == metricCPUPeriods || p.Labels[types.LabelName] == metricCPUThrottledPeriods {
+			t.Errorf("raw counter %q should not be emitted", p.Labels[types.LabelName])
+		}
+
+		if p.Labels[types.LabelName] == metricCPUThrottledPerc {
+			found = true
+
+			if p.Value != 75 {
+				t.Errorf("container_cpu_throttled_perc = %v, want 75", p.Value)
+			}
+		}
+	}
+
+	if !found {
+		t.Error("container_cpu_throttled_perc was not emitted")
+	}
+}
+
+func TestRateFromMetricValue_ThrottledPercNoPeriods(t *testing.T) {
+	const id = "ns/" + testThrottleContainerID
+
+	gloutonIDToName := map[string]string{id: "my-container"}
+
+	// No new period elapsed (e.g. container without a CPU limit): no metric.
+	values := []metricValue{
+		{
+			ContainerNamespace: "ns",
+			ContainerID:        testThrottleContainerID,
+			Time:               time.Unix(0, 0),
+			Values:             map[string]uint64{metricCPUPeriods: 0, metricCPUThrottledPeriods: 0},
+		},
+	}
+	newValues := []metricValue{
+		{
+			ContainerNamespace: "ns",
+			ContainerID:        testThrottleContainerID,
+			Time:               time.Unix(10, 0),
+			Values:             map[string]uint64{metricCPUPeriods: 0, metricCPUThrottledPeriods: 0},
+		},
+	}
+
+	points := rateFromMetricValue(gloutonIDToName, values, newValues)
+
+	for _, p := range points {
+		if p.Labels[types.LabelName] == metricCPUThrottledPerc {
+			t.Errorf("container_cpu_throttled_perc should not be emitted when no period elapsed, got %v", p.Value)
+		}
 	}
 }

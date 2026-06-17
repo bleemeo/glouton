@@ -687,6 +687,14 @@ func (s *Synchronizer) UpdateMaintenance() {
 	s.requestSynchronizationLocked(types.EntityInfo, false)
 }
 
+// UpdateAgent requests to check for the agent synchronization.
+func (s *Synchronizer) UpdateAgent() {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	s.requestSynchronizationLocked(types.EntityAgent, false)
+}
+
 // SetMaintenance allows to trigger the maintenance mode for the synchronize.
 // When running in maintenance mode, only the general infos, the agent and its configuration are synced.
 func (s *Synchronizer) SetMaintenance(ctx context.Context, maintenance bool) {

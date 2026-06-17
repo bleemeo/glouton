@@ -42,6 +42,9 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/yaml"
@@ -76,13 +79,19 @@ const (
 var errNotImplemented = errors.New("not implemented")
 
 type mockKubernetesClient struct {
-	nodes       corev1.NodeList
-	pods        corev1.PodList
-	namespaces  corev1.NamespaceList
-	replicaSets appsv1.ReplicaSetList
-	crds        apiextv1.CustomResourceDefinitionList
-	mwcs        admv1.MutatingWebhookConfigurationList
-	vwcs        admv1.ValidatingWebhookConfigurationList
+	nodes        corev1.NodeList
+	pods         corev1.PodList
+	namespaces   corev1.NamespaceList
+	replicaSets  appsv1.ReplicaSetList
+	deployments  appsv1.DeploymentList
+	statefulSets appsv1.StatefulSetList
+	daemonSets   appsv1.DaemonSetList
+	crds         apiextv1.CustomResourceDefinitionList
+	mwcs         admv1.MutatingWebhookConfigurationList
+	vwcs         admv1.ValidatingWebhookConfigurationList
+
+	// scales lets tests inject scale subresource desired replicas, keyed by "kind/namespace/name".
+	scales map[string]int32
 
 	versions struct {
 		ClientVersion *version.Info `json:"clientVersion"`
@@ -134,6 +143,30 @@ func newKubernetesMock(dirname string) (*mockKubernetesClient, error) {
 		}
 	}
 
+	data, localErr = os.ReadFile(filepath.Join(dirname, "deployments.yaml"))
+	if localErr == nil {
+		err = yaml.Unmarshal(data, &result.deployments)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	data, localErr = os.ReadFile(filepath.Join(dirname, "statefulsets.yaml"))
+	if localErr == nil {
+		err = yaml.Unmarshal(data, &result.statefulSets)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	data, localErr = os.ReadFile(filepath.Join(dirname, "daemonsets.yaml"))
+	if localErr == nil {
+		err = yaml.Unmarshal(data, &result.daemonSets)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return result, err
 }
 
@@ -166,6 +199,44 @@ func (k *mockKubernetesClient) GetNamespaces(_ context.Context) ([]corev1.Namesp
 // GetReplicasets return all replicasets in the cluster.
 func (k *mockKubernetesClient) GetReplicasets(_ context.Context) ([]appsv1.ReplicaSet, error) {
 	return k.replicaSets.Items, nil
+}
+
+// GetDeployments return all deployments in the cluster.
+func (k *mockKubernetesClient) GetDeployments(_ context.Context) ([]appsv1.Deployment, error) {
+	return k.deployments.Items, nil
+}
+
+// GetStatefulSets return all statefulsets in the cluster.
+func (k *mockKubernetesClient) GetStatefulSets(_ context.Context) ([]appsv1.StatefulSet, error) {
+	return k.statefulSets.Items, nil
+}
+
+// GetDaemonSets return all daemonsets in the cluster.
+func (k *mockKubernetesClient) GetDaemonSets(_ context.Context) ([]appsv1.DaemonSet, error) {
+	return k.daemonSets.Items, nil
+}
+
+// GetScale returns the desired replicas of the scale subresource. Tests can inject values through
+// the scales map (keyed by "resource/namespace/name"); otherwise it falls back to spec.replicas of
+// the matching ReplicaSet (mirroring how the scale subresource reflects spec.replicas).
+func (k *mockKubernetesClient) GetScale(_ context.Context, gvr schema.GroupVersionResource, namespace, name string) (int32, error) {
+	if v, ok := k.scales[gvr.Resource+"/"+namespace+"/"+name]; ok {
+		return v, nil
+	}
+
+	if gvr.Resource == "replicasets" {
+		for _, rs := range k.replicaSets.Items {
+			if rs.Name == name && rs.Namespace == namespace {
+				if rs.Spec.Replicas != nil {
+					return *rs.Spec.Replicas, nil
+				}
+
+				return 1, nil
+			}
+		}
+	}
+
+	return 0, errNotImplemented
 }
 
 func (k *mockKubernetesClient) GetCRDs(_ context.Context) ([]apiextv1.CustomResourceDefinition, error) {
@@ -983,11 +1054,12 @@ func TestClusterMetrics(t *testing.T) {
 	// 	delete(point.Labels, types.LabelMetaKubernetesCluster)
 	// }
 	// mfs := model.MetricPointsToFamilies(gotPoints)
-	// fd, _ := os.OpenFile("/tmp/metrics.txt", os.O_CREATE|os.O_WRONLY, 0o750)
-	// enc := expfmt.NewEncoder(fd, expfmt.FmtText)
+	// fd, _ := os.OpenFile(metricFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o750)
+	// enc := expfmt.NewEncoder(fd, expfmt.NewFormat(expfmt.TypeTextPlain))
 	// for _, mf := range mfs {
 	// 	enc.Encode(mf)
 	// }
+	// fd.Close()
 
 	// Read expected metrics from a file.
 	f, err := os.Open(metricFile)
@@ -1021,5 +1093,136 @@ func TestClusterMetrics(t *testing.T) {
 
 	if diff := cmp.Diff(expectedPoints, gotPoints, cmpopts.SortSlices(lessFunc)); diff != "" {
 		t.Fatalf("Didn't get expected points:\n%s", diff)
+	}
+}
+
+func TestNodeAllocatablePoints(t *testing.T) {
+	now := time.Date(2022, time.April, 1, 0, 0, 0, 0, time.UTC)
+
+	node := &corev1.Node{
+		Status: corev1.NodeStatus{
+			Allocatable: corev1.ResourceList{
+				corev1.ResourceCPU:              resource.MustParse("4"),
+				corev1.ResourceMemory:           resource.MustParse("8Gi"),
+				corev1.ResourcePods:             resource.MustParse("110"),
+				corev1.ResourceEphemeralStorage: resource.MustParse("50Gi"),
+			},
+		},
+	}
+
+	want := map[string]float64{
+		"kubernetes_cpu_allocatable":               4,
+		"kubernetes_memory_allocatable":            8 * 1024 * 1024 * 1024,
+		"kubernetes_pods_allocatable":              110,
+		"kubernetes_ephemeral_storage_allocatable": 50 * 1024 * 1024 * 1024,
+	}
+
+	got := nodeAllocatablePoints(node, now)
+
+	if len(got) != len(want) {
+		t.Fatalf("got %d points, want %d", len(got), len(want))
+	}
+
+	for _, point := range got {
+		name := point.Labels[types.LabelName]
+
+		wantValue, ok := want[name]
+		if !ok {
+			t.Errorf("unexpected metric %q", name)
+
+			continue
+		}
+
+		if point.Value != wantValue {
+			t.Errorf("metric %q = %v, want %v", name, point.Value, wantValue)
+		}
+
+		if !point.Time.Equal(now) {
+			t.Errorf("metric %q time = %v, want %v", name, point.Time, now)
+		}
+
+		if len(point.Labels) != 1 {
+			t.Errorf("metric %q has labels %v, want only __name__", name, point.Labels)
+		}
+	}
+}
+
+func TestGenericReplicas(t *testing.T) {
+	now := time.Date(2022, time.April, 1, 0, 0, 0, 0, time.UTC)
+
+	makePod := func(apiVersion, kind, ownerName, namespace string, ready bool) corev1.Pod {
+		status := corev1.ConditionFalse
+		if ready {
+			status = corev1.ConditionTrue
+		}
+
+		return corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				OwnerReferences: []metav1.OwnerReference{
+					{APIVersion: apiVersion, Kind: kind, Name: ownerName},
+				},
+			},
+			Status: corev1.PodStatus{
+				Conditions: []corev1.PodCondition{
+					{Type: corev1.PodReady, Status: status},
+				},
+			},
+		}
+	}
+
+	cache := kubeCache{
+		pods: []corev1.Pod{
+			// Operator CRD with a scale subresource: ready aggregated, desired from scale.
+			makePod("kafka.strimzi.io/v1beta2", "Kafka", "my-cluster", "data", true),
+			makePod("kafka.strimzi.io/v1beta2", "Kafka", "my-cluster", "data", false),
+			// Operator CRD without a scale subresource: only ready is emitted.
+			makePod("example.com/v1", "Foo", "foo1", "default", true),
+			// Handled by workloadReplicas / not a replica controller: skipped.
+			makePod("apps/v1", "Deployment", "web", "default", true),
+			makePod("batch/v1", "Job", "import", "default", true),
+		},
+	}
+
+	mockClient := &mockKubernetesClient{
+		// The Kafka CRD lets genericReplicas resolve the "kafkas" resource for the scale lookup.
+		// Foo has no CRD, so its desired can't be resolved (only ready is emitted).
+		crds: apiextv1.CustomResourceDefinitionList{
+			Items: []apiextv1.CustomResourceDefinition{
+				{
+					Spec: apiextv1.CustomResourceDefinitionSpec{
+						Group: "kafka.strimzi.io",
+						Names: apiextv1.CustomResourceDefinitionNames{Kind: "Kafka", Plural: "kafkas"},
+					},
+				},
+			},
+		},
+		scales: map[string]int32{"kafkas/data/my-cluster": 3},
+	}
+
+	got := genericReplicas(t.Context(), mockClient, cache, now)
+
+	// Index points by "metric|owner_kind|owner_name|namespace" -> value.
+	type key struct{ name, kind, owner, ns string }
+
+	gotMap := make(map[key]float64, len(got))
+
+	for _, point := range got {
+		gotMap[key{
+			name:  point.Labels[types.LabelName],
+			kind:  point.Labels[types.LabelOwnerKind],
+			owner: point.Labels[types.LabelOwnerName],
+			ns:    point.Labels[types.LabelNamespace],
+		}] = point.Value
+	}
+
+	want := map[key]float64{
+		{metricNameReplicasReady, "kafka", "my-cluster", "data"}:   1,
+		{metricNameReplicasDesired, "kafka", "my-cluster", "data"}: 3,
+		{metricNameReplicasReady, "foo", "foo1", "default"}:        1,
+	}
+
+	if diff := cmp.Diff(want, gotMap); diff != "" {
+		t.Fatalf("unexpected generic replicas points (-want +got):\n%s", diff)
 	}
 }

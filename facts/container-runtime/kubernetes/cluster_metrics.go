@@ -21,14 +21,22 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
 
 	"github.com/prometheus/client_golang/prometheus"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-const defaultNamespace = "default"
+const (
+	defaultNamespace            = "default"
+	metricNameReplicasDesired   = "kubernetes_replicas_desired"
+	metricNameReplicasReady     = "kubernetes_replicas_ready"
+	metricNameReplicasAvailable = "kubernetes_replicas_available"
+)
 
 type metricsFunc func(kubeCache, time.Time) []types.MetricPoint
 
@@ -37,6 +45,9 @@ type kubeCache struct {
 	replicasetOwnerByUID map[string]metav1.OwnerReference
 	namespaces           []corev1.Namespace
 	nodes                []corev1.Node
+	deployments          []appsv1.Deployment
+	statefulSets         []appsv1.StatefulSet
+	daemonSets           []appsv1.DaemonSet
 }
 
 // getGlobalMetrics returns global cluster metrics.
@@ -65,6 +76,15 @@ func getGlobalMetrics(
 	replicasets, err := cl.GetReplicasets(ctx)
 	multiErr.Append(err)
 
+	cache.deployments, err = cl.GetDeployments(ctx)
+	multiErr.Append(err)
+
+	cache.statefulSets, err = cl.GetStatefulSets(ctx)
+	multiErr.Append(err)
+
+	cache.daemonSets, err = cl.GetDaemonSets(ctx)
+	multiErr.Append(err)
+
 	cache.replicasetOwnerByUID = make(map[string]metav1.OwnerReference, len(replicasets))
 
 	for _, replicaset := range replicasets {
@@ -76,11 +96,15 @@ func getGlobalMetrics(
 	// Compute cluster metrics.
 	var points []types.MetricPoint //nolint:prealloc
 
-	metricFunctions := []metricsFunc{podsCount, requestsAndLimits, namespacesCount, nodesCount, podsRestartCount}
+	metricFunctions := []metricsFunc{podsCount, requestsAndLimits, namespacesCount, nodesCount, podsRestartCount, workloadReplicas}
 
 	for _, f := range metricFunctions {
 		points = append(points, f(cache, now)...)
 	}
+
+	// Generic replicas metrics for owners not handled by workloadReplicas (operators/CRDs,
+	// bare ReplicaSets). This needs the client (scale subresource) so it can't be a metricsFunc.
+	points = append(points, genericReplicas(ctx, cl, cache, now)...)
 
 	// Add the Kubernetes cluster meta label to global metrics, this is used to
 	// replace the agent ID by the Kubernetes agent ID in the relabel hook.
@@ -178,34 +202,44 @@ func podsCount(cache kubeCache, now time.Time) []types.MetricPoint {
 
 // podOwner return the kind and the name of the owner of a pod.
 func podOwner(pod corev1.Pod, replicasetOwnerByUID map[string]metav1.OwnerReference) (kind string, name string) {
+	_, kind, name = podOwnerRef(pod, replicasetOwnerByUID)
+
+	return kind, name
+}
+
+// podOwnerRef returns the apiVersion, kind and name of the owner of a pod.
+func podOwnerRef(pod corev1.Pod, replicasetOwnerByUID map[string]metav1.OwnerReference) (apiVersion, kind, name string) {
 	// If the pod has no owner, use the pod name.
 	if len(pod.OwnerReferences) == 0 {
-		return pod.Kind, pod.Name
+		return pod.APIVersion, pod.Kind, pod.Name
 	}
 
 	ownerRef := pod.OwnerReferences[0]
-	kind, name = ownerRef.Kind, ownerRef.Name
+	apiVersion, kind, name = ownerRef.APIVersion, ownerRef.Kind, ownerRef.Name
 
 	// For Kubernetes deployments with multiple replicas, a replicaset is created. This means the pod's
 	// owner is the replicaset (which has a generated name, e.g. "coredns-565d847f94"). In this case we
 	// prefer to associate this pod with the owner of the replicaset (e.g. the deployment "coredns").
 	if kind == "ReplicaSet" {
-		ownerRef := replicasetOwnerByUID[string(ownerRef.UID)]
+		parentRef := replicasetOwnerByUID[string(ownerRef.UID)]
 
-		if ownerRef.Kind != "" {
-			kind, name = ownerRef.Kind, ownerRef.Name
+		if parentRef.Kind != "" {
+			apiVersion, kind, name = parentRef.APIVersion, parentRef.Kind, parentRef.Name
 		}
 	}
 
-	return kind, name
+	return apiVersion, kind, name
 }
 
 // podNamespace returns the namespace of a pod.
 func podNamespace(pod corev1.Pod) string {
-	// An empty namespace is the default namespace.
-	namespace := pod.Namespace
+	return namespaceOrDefault(pod.Namespace)
+}
+
+// namespaceOrDefault returns the given namespace, or the default namespace if it is empty.
+func namespaceOrDefault(namespace string) string {
 	if namespace == "" {
-		namespace = defaultNamespace
+		return defaultNamespace
 	}
 
 	return namespace
@@ -383,4 +417,255 @@ func podsRestartCount(cache kubeCache, now time.Time) []types.MetricPoint {
 	}
 
 	return points
+}
+
+// workloadReplicas returns the metrics kubernetes_replicas_(desired|ready|available) for each
+// Deployment, StatefulSet and DaemonSet in the cluster, with the following labels:
+// - owner_kind: the kind of the workload (deployment, statefulset or daemonset).
+// - owner_name: the name of the workload.
+// - namespace: the workload's namespace.
+func workloadReplicas(cache kubeCache, now time.Time) []types.MetricPoint {
+	type replicas struct {
+		desired   float64
+		ready     float64
+		available float64
+	}
+
+	// 3 points (desired, ready, available) per workload.
+	workloadCount := len(cache.deployments) + len(cache.statefulSets) + len(cache.daemonSets)
+	points := make([]types.MetricPoint, 0, workloadCount*3)
+
+	addWorkload := func(kind, name, namespace string, r replicas) {
+		values := map[string]float64{
+			metricNameReplicasDesired:   r.desired,
+			metricNameReplicasReady:     r.ready,
+			metricNameReplicasAvailable: r.available,
+		}
+
+		for metricName, value := range values {
+			points = append(points, types.MetricPoint{
+				Point: types.Point{Time: now, Value: value},
+				Labels: map[string]string{
+					types.LabelName:      metricName,
+					types.LabelOwnerKind: kind,
+					types.LabelOwnerName: strings.ToLower(name),
+					types.LabelNamespace: namespace,
+				},
+			})
+		}
+	}
+
+	for _, deployment := range cache.deployments {
+		// spec.replicas defaults to 1 when unset.
+		desired := float64(1)
+		if deployment.Spec.Replicas != nil {
+			desired = float64(*deployment.Spec.Replicas)
+		}
+
+		addWorkload("deployment", deployment.Name, namespaceOrDefault(deployment.Namespace), replicas{
+			desired:   desired,
+			ready:     float64(deployment.Status.ReadyReplicas),
+			available: float64(deployment.Status.AvailableReplicas),
+		})
+	}
+
+	for _, statefulSet := range cache.statefulSets {
+		// spec.replicas defaults to 1 when unset.
+		desired := float64(1)
+		if statefulSet.Spec.Replicas != nil {
+			desired = float64(*statefulSet.Spec.Replicas)
+		}
+
+		addWorkload("statefulset", statefulSet.Name, namespaceOrDefault(statefulSet.Namespace), replicas{
+			desired:   desired,
+			ready:     float64(statefulSet.Status.ReadyReplicas),
+			available: float64(statefulSet.Status.AvailableReplicas),
+		})
+	}
+
+	for _, daemonSet := range cache.daemonSets {
+		// DaemonSets have no spec.replicas: the desired count is the number of nodes
+		// that should run the daemon.
+		addWorkload("daemonset", daemonSet.Name, namespaceOrDefault(daemonSet.Namespace), replicas{
+			desired:   float64(daemonSet.Status.DesiredNumberScheduled),
+			ready:     float64(daemonSet.Status.NumberReady),
+			available: float64(daemonSet.Status.NumberAvailable),
+		})
+	}
+
+	return points
+}
+
+// genericReplicasSkippedKinds are owner kinds handled elsewhere (workloadReplicas) or that have
+// no controller / no meaningful desired count, so genericReplicas ignores them.
+//
+//nolint:gochecknoglobals
+var genericReplicasSkippedKinds = map[string]bool{
+	"Deployment":  true, // handled by workloadReplicas
+	"StatefulSet": true, // handled by workloadReplicas
+	"DaemonSet":   true, // handled by workloadReplicas
+	"Node":        true, // static/mirror pods, no replicas concept
+	"Pod":         true, // standalone pod
+	"Job":         true, // completion semantics, not replicas (a finished Job has 0 ready pods)
+	"CronJob":     true, // same as Job, and spawns a new Job name on every run
+	"":            true, // unknown owner
+}
+
+// builtinScaleResources maps built-in "group/Kind" to their resource name (plural) for the scale
+// subresource, avoiding a discovery round-trip. Only ReplicaSet is reachable here (the apps
+// workloads are skipped above and DaemonSet has no scale), but the others are listed for clarity.
+//
+//nolint:gochecknoglobals
+var builtinScaleResources = map[string]string{
+	"apps/ReplicaSet":  "replicasets",
+	"apps/Deployment":  "deployments",
+	"apps/StatefulSet": "statefulsets",
+}
+
+// genericReplicas returns kubernetes_replicas_ready (and kubernetes_replicas_desired when a scale
+// subresource is available) for pods whose owner is NOT handled by workloadReplicas. This covers
+// operator-managed pods (owned by a CRD) and bare ReplicaSets.
+//
+//   - ready is computed by counting pods in the Ready condition, grouped by owner.
+//   - desired comes from the owner's scale subresource (best-effort): owners without a scale
+//     subresource, or for which the agent lacks permission, simply don't get a desired metric.
+//     available isn't emitted here: it can't be derived generically (it depends on the controller's
+//     minReadySeconds).
+func genericReplicas(ctx context.Context, cl kubeClient, cache kubeCache, now time.Time) []types.MetricPoint {
+	type owner struct {
+		apiVersion string
+		kind       string
+		name       string
+		namespace  string
+	}
+
+	readyByOwner := make(map[owner]int)
+
+	for _, pod := range cache.pods {
+		apiVersion, kind, name := podOwnerRef(pod, cache.replicasetOwnerByUID)
+
+		if genericReplicasSkippedKinds[kind] {
+			continue
+		}
+
+		key := owner{
+			apiVersion: apiVersion,
+			kind:       kind,
+			name:       name,
+			namespace:  namespaceOrDefault(pod.Namespace),
+		}
+
+		// "+= 0" still creates the map entry, so owners with no ready pod are reported with 0.
+		readyByOwner[key] += boolToInt(isPodReady(pod))
+	}
+
+	points := make([]types.MetricPoint, 0, len(readyByOwner)*2)
+
+	resolvePlural := newPluralResolver(ctx, cl)
+
+	for owner, ready := range readyByOwner {
+		labels := func(metricName string) map[string]string {
+			return map[string]string{
+				types.LabelName:      metricName,
+				types.LabelOwnerKind: strings.ToLower(owner.kind),
+				types.LabelOwnerName: strings.ToLower(owner.name),
+				types.LabelNamespace: owner.namespace,
+			}
+		}
+
+		points = append(points, types.MetricPoint{
+			Point:  types.Point{Time: now, Value: float64(ready)},
+			Labels: labels(metricNameReplicasReady),
+		})
+
+		gv, err := schema.ParseGroupVersion(owner.apiVersion)
+		if err != nil {
+			logger.V(2).Printf("kubernetes: invalid apiVersion %q for %s %s/%s: %v", owner.apiVersion, owner.kind, owner.namespace, owner.name, err)
+
+			continue
+		}
+
+		plural, ok := resolvePlural(gv.Group, owner.kind)
+		if !ok {
+			// We can't map this owner to a resource (not a built-in we handle, and no matching CRD):
+			// desired isn't available, only ready is emitted.
+			logger.V(2).Printf("kubernetes: can't resolve resource for %s/%s, skipping desired", gv.Group, owner.kind)
+
+			continue
+		}
+
+		gvr := schema.GroupVersionResource{Group: gv.Group, Version: gv.Version, Resource: plural}
+
+		desired, err := cl.GetScale(ctx, gvr, owner.namespace, owner.name)
+		if err != nil {
+			// No scale subresource (or no permission): desired isn't available for this owner.
+			logger.V(2).Printf("kubernetes: no scale for %s %s/%s: %v", owner.kind, owner.namespace, owner.name, err)
+
+			continue
+		}
+
+		points = append(points, types.MetricPoint{
+			Point:  types.Point{Time: now, Value: float64(desired)},
+			Labels: labels(metricNameReplicasDesired),
+		})
+	}
+
+	return points
+}
+
+// newPluralResolver returns a function mapping a (group, kind) to its resource name (plural),
+// needed to build the scale subresource URL. It first checks the built-in table, then the cluster
+// CRDs.
+//
+// The returned resolver is meant to be used for a single metrics cycle: the CRD list it fetches is
+// memoized only for the lifetime of the resolver (at most one GetCRDs call, and none at all when
+// every owner has a built-in group, e.g. bare ReplicaSets). A fresh resolver is created on each
+// genericReplicas call, so the CRD list is naturally refreshed every cycle (no long-lived cache to
+// invalidate).
+func newPluralResolver(ctx context.Context, cl kubeClient) func(group, kind string) (string, bool) {
+	var crdPlurals map[string]string // "group/Kind" -> plural, nil until the first CRD lookup.
+
+	return func(group, kind string) (string, bool) {
+		key := group + "/" + kind
+
+		if plural, ok := builtinScaleResources[key]; ok {
+			return plural, true
+		}
+
+		if crdPlurals == nil {
+			crdPlurals = map[string]string{}
+
+			crds, err := cl.GetCRDs(ctx)
+			if err != nil {
+				logger.V(2).Printf("kubernetes: can't list CRDs to resolve scale resources: %v", err)
+			}
+
+			for _, crd := range crds {
+				crdPlurals[crd.Spec.Group+"/"+crd.Spec.Names.Kind] = crd.Spec.Names.Plural
+			}
+		}
+
+		plural, ok := crdPlurals[key]
+
+		return plural, ok
+	}
+}
+
+// isPodReady returns whether the pod is in the Ready condition.
+func isPodReady(pod corev1.Pod) bool {
+	for _, cond := range pod.Status.Conditions {
+		if cond.Type == corev1.PodReady {
+			return cond.Status == corev1.ConditionTrue
+		}
+	}
+
+	return false
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+
+	return 0
 }

@@ -80,6 +80,8 @@ type Option struct {
 	UpdateMonitor func(op string, uuid string)
 	// UpdateMaintenance requests to check for the maintenance mode again
 	UpdateMaintenance func()
+	// UpdateAgent requests to check for that agent is still synchronized by bleemeo-api
+	UpdateAgent func()
 	// HandleDiagnosticRequest requests the sending of a diagnostic to the API
 	HandleDiagnosticRequest func(ctx context.Context, requestToken string)
 	// GetToken returns the token used to talk with the Bleemeo API.
@@ -825,6 +827,11 @@ func (c *Client) preparePoints(
 func (c *Client) onConnect(mqttClient paho.Client) {
 	// refresh 'info' to check the maintenance mode (for which we normally are notified by MQTT message)
 	c.opts.UpdateMaintenance()
+
+	// Also refresh agent, it contains Kubernetes IsClusterLeader for which we are also notified by MQTT.
+	// So if Glouton is not yet connected when it get elected leader (which is possible during very first
+	// creation), it will miss the notification.
+	c.opts.UpdateAgent()
 
 	if !c.IsSendingSuspended() {
 		// when in maintenance mode, we do not send messages to /connect

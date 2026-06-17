@@ -46,10 +46,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/version"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -97,6 +100,7 @@ var (
 	errUnexpectedConnType  = errors.New("unexpected connection type")
 	errNoDecodedData       = errors.New("no data decoded in raw certificate")
 	errMissingConfig       = errors.New("missing configuration")
+	errNoScaleReplicas     = errors.New("scale subresource has no spec.replicas")
 )
 
 func (k *Kubernetes) ContainerExists(id string) bool {
@@ -544,60 +548,94 @@ func (k *Kubernetes) getKubeletPoints(ctx context.Context, cl kubeClient, now ti
 		return nil, []error{err}
 	}
 
-	point := types.MetricPoint{
-		Point: types.Point{Time: now, Value: 3.0},
-		Labels: map[string]string{
-			types.LabelName: "kubernetes_kubelet_status",
-		},
-		Annotations: types.MetricAnnotations{
-			Status: types.StatusDescription{
-				CurrentStatus:     types.StatusOk,
-				StatusDescription: "no known issue",
-			},
-		},
-	}
+	const kubeletConditionStatus = "kubernetes_kubelet_status"
 
-	var resourceWarning []string
+	resultPoints := make([]types.MetricPoint, 0, 5) // expect 5 condition so 5 points
 
 	for _, cond := range node.Status.Conditions {
 		switch cond.Type {
 		case corev1.NodeReady:
+			status := types.StatusDescription{
+				CurrentStatus:     types.StatusOk,
+				StatusDescription: "node ready",
+			}
 			if cond.Status != corev1.ConditionTrue {
-				point.Annotations.Status = types.StatusDescription{
+				status = types.StatusDescription{
 					CurrentStatus:     types.StatusCritical,
 					StatusDescription: "node is not ready: " + cond.Message,
 				}
 			}
+
+			resultPoints = append(resultPoints, types.MetricPoint{
+				Point: types.Point{Time: now, Value: float64(status.CurrentStatus.NagiosCode())},
+				Labels: map[string]string{
+					types.LabelName:      kubeletConditionStatus,
+					types.LabelCondition: "ready",
+				},
+				Annotations: types.MetricAnnotations{
+					Status: status,
+				},
+			})
 		case corev1.NodeDiskPressure, corev1.NodeMemoryPressure, corev1.NodePIDPressure:
-			if cond.Status == corev1.ConditionTrue {
-				typeText := map[corev1.NodeConditionType]string{
-					corev1.NodeDiskPressure:   "disk",
-					corev1.NodeMemoryPressure: "memory",
-					corev1.NodePIDPressure:    "PID",
-				}[cond.Type]
-				resourceWarning = append(
-					resourceWarning,
-					fmt.Sprintf("node has %s pressure: %s", typeText, cond.Message),
-				)
+			typeText := map[corev1.NodeConditionType]string{
+				corev1.NodeDiskPressure:   "disk pressure",
+				corev1.NodeMemoryPressure: "memory pressure",
+				corev1.NodePIDPressure:    "PID pressure",
+			}[cond.Type]
+
+			conditionLabel := map[corev1.NodeConditionType]string{
+				corev1.NodeDiskPressure:   "disk_pressure",
+				corev1.NodeMemoryPressure: "memory_pressure",
+				corev1.NodePIDPressure:    "pid_pressure",
+			}[cond.Type]
+
+			status := types.StatusDescription{
+				CurrentStatus:     types.StatusOk,
+				StatusDescription: fmt.Sprintf("node %s cleared", typeText),
 			}
+			if cond.Status == corev1.ConditionTrue {
+				status = types.StatusDescription{
+					CurrentStatus:     types.StatusCritical,
+					StatusDescription: fmt.Sprintf("node has %s: %s", typeText, cond.Message),
+				}
+			}
+
+			resultPoints = append(resultPoints, types.MetricPoint{
+				Point: types.Point{Time: now, Value: float64(status.CurrentStatus.NagiosCode())},
+				Labels: map[string]string{
+					types.LabelName:      kubeletConditionStatus,
+					types.LabelCondition: conditionLabel,
+				},
+				Annotations: types.MetricAnnotations{
+					Status: status,
+				},
+			})
 		case corev1.NodeNetworkUnavailable:
-			if cond.Status == corev1.ConditionTrue {
-				resourceWarning = append(
-					resourceWarning,
-					"node has networking issue: "+cond.Message,
-				)
+			status := types.StatusDescription{
+				CurrentStatus:     types.StatusOk,
+				StatusDescription: "node network available",
 			}
+			if cond.Status == corev1.ConditionTrue {
+				status = types.StatusDescription{
+					CurrentStatus:     types.StatusCritical,
+					StatusDescription: "node has networking issue: " + cond.Message,
+				}
+			}
+
+			resultPoints = append(resultPoints, types.MetricPoint{
+				Point: types.Point{Time: now, Value: float64(status.CurrentStatus.NagiosCode())},
+				Labels: map[string]string{
+					types.LabelName:      kubeletConditionStatus,
+					types.LabelCondition: "network_unavailable",
+				},
+				Annotations: types.MetricAnnotations{
+					Status: status,
+				},
+			})
 		}
 	}
 
-	if len(resourceWarning) > 0 && point.Annotations.Status.CurrentStatus == types.StatusOk {
-		point.Annotations.Status = types.StatusDescription{
-			CurrentStatus:     types.StatusWarning,
-			StatusDescription: strings.Join(resourceWarning, ", "),
-		}
-	}
-
-	point.Point.Value = float64(point.Annotations.Status.CurrentStatus.NagiosCode())
+	resultPoints = append(resultPoints, nodeAllocatablePoints(node, now)...)
 
 	var ip string
 
@@ -610,20 +648,47 @@ func (k *Kubernetes) getKubeletPoints(ctx context.Context, cl kubeClient, now ti
 	}
 
 	if ip == "" {
-		return []types.MetricPoint{point}, []error{fmt.Errorf("can't retrieve kubelet cert: %w", errNodeHasNoInternalIP)}
+		return resultPoints, []error{fmt.Errorf("can't retrieve kubelet cert: %w", errNodeHasNoInternalIP)}
 	}
 
 	addr := net.JoinHostPort(ip, "10250")
 
 	cert, err := fetchServerCert(ctx, addr)
 	if err != nil {
-		return []types.MetricPoint{point}, []error{fmt.Errorf("fetching kubelet cert: %w", err)}
+		return resultPoints, []error{fmt.Errorf("fetching kubelet cert: %w", err)}
 	}
 
-	result := createPointsCertificateDaysAndPerc(cert.NotBefore, cert.NotAfter, certExpLabelDay, certExpLabelPerc, now, types.LabelItem, "kubelet")
-	result = append(result, point)
+	resultPoints = append(resultPoints, createPointsCertificateDaysAndPerc(cert.NotBefore, cert.NotAfter, certExpLabelDay, certExpLabelPerc, now, types.LabelItem, "kubelet")...)
 
-	return result, nil
+	return resultPoints, nil
+}
+
+// nodeAllocatablePoints returns the allocatable resources of the node as metrics:
+// kubernetes_cpu_allocatable (cores), kubernetes_memory_allocatable (bytes),
+// kubernetes_pods_allocatable (count) and kubernetes_ephemeral_storage_allocatable (bytes).
+// We only expose allocatable (not capacity), as it reflects the resources usable by pods.
+func nodeAllocatablePoints(node *corev1.Node, now time.Time) []types.MetricPoint {
+	allocatable := node.Status.Allocatable
+
+	values := map[string]float64{
+		"kubernetes_cpu_allocatable":               allocatable.Cpu().AsApproximateFloat64(),
+		"kubernetes_memory_allocatable":            allocatable.Memory().AsApproximateFloat64(),
+		"kubernetes_pods_allocatable":              allocatable.Pods().AsApproximateFloat64(),
+		"kubernetes_ephemeral_storage_allocatable": allocatable.StorageEphemeral().AsApproximateFloat64(),
+	}
+
+	points := make([]types.MetricPoint, 0, len(values))
+
+	for name, value := range values {
+		points = append(points, types.MetricPoint{
+			Point: types.Point{Time: now, Value: value},
+			Labels: map[string]string{
+				types.LabelName: name,
+			},
+		})
+	}
+
+	return points
 }
 
 func (k *Kubernetes) getCACertificateExpiration(config *rest.Config, now time.Time) ([]types.MetricPoint, error) {
@@ -930,6 +995,16 @@ type kubeClient interface {
 	GetNamespaces(ctx context.Context) ([]corev1.Namespace, error)
 	// GetReplicasets returns all replicasets in the cluster.
 	GetReplicasets(ctx context.Context) ([]appsv1.ReplicaSet, error)
+	// GetDeployments returns all deployments in the cluster.
+	GetDeployments(ctx context.Context) ([]appsv1.Deployment, error)
+	// GetStatefulSets returns all statefulsets in the cluster.
+	GetStatefulSets(ctx context.Context) ([]appsv1.StatefulSet, error)
+	// GetDaemonSets returns all daemonsets in the cluster.
+	GetDaemonSets(ctx context.Context) ([]appsv1.DaemonSet, error)
+	// GetScale returns the desired replicas (spec.replicas of the scale subresource) of the
+	// object identified by gvr/namespace/name. It returns an error when the object's resource has
+	// no scale subresource or when the agent lacks the permission to read it.
+	GetScale(ctx context.Context, gvr schema.GroupVersionResource, namespace, name string) (int32, error)
 	// GetCRDs returns all CRDs in the cluster.
 	GetCRDs(ctx context.Context) ([]apiextv1.CustomResourceDefinition, error)
 	// GetWebhookConfigurations returns all MutatingWebhookConfigurations and ValidatingWebhookConfigurations in the cluster.
@@ -946,6 +1021,10 @@ type realClient struct {
 	appsClient  *rest.RESTClient
 	extClient   *rest.RESTClient
 	admClient   *rest.RESTClient
+
+	// The dynamic client is used to read the scale subresource of arbitrary resources (including
+	// CRDs managed by operators), which the typed clients above cannot do.
+	dynamicClient dynamic.Interface
 
 	config      *rest.Config
 	useLocalAPI bool
@@ -1020,6 +1099,58 @@ func (cl *realClient) GetReplicasets(ctx context.Context) ([]appsv1.ReplicaSet, 
 	}
 
 	return replicasets.Items, nil
+}
+
+func (cl *realClient) GetDeployments(ctx context.Context) ([]appsv1.Deployment, error) {
+	var deployments appsv1.DeploymentList
+
+	err := cl.appsClient.Get().Resource("deployments").Do(ctx).Into(&deployments)
+	if err != nil {
+		return nil, err
+	}
+
+	return deployments.Items, nil
+}
+
+func (cl *realClient) GetStatefulSets(ctx context.Context) ([]appsv1.StatefulSet, error) {
+	var statefulSets appsv1.StatefulSetList
+
+	err := cl.appsClient.Get().Resource("statefulsets").Do(ctx).Into(&statefulSets)
+	if err != nil {
+		return nil, err
+	}
+
+	return statefulSets.Items, nil
+}
+
+func (cl *realClient) GetDaemonSets(ctx context.Context) ([]appsv1.DaemonSet, error) {
+	var daemonSets appsv1.DaemonSetList
+
+	err := cl.appsClient.Get().Resource("daemonsets").Do(ctx).Into(&daemonSets)
+	if err != nil {
+		return nil, err
+	}
+
+	return daemonSets.Items, nil
+}
+
+func (cl *realClient) GetScale(ctx context.Context, gvr schema.GroupVersionResource, namespace, name string) (int32, error) {
+	// Pod owners are always namespaced (a pod can't be owned by a cluster-scoped object).
+	scale, err := cl.dynamicClient.Resource(gvr).Namespace(namespace).Get(ctx, name, metav1.GetOptions{}, "scale")
+	if err != nil {
+		return 0, err
+	}
+
+	replicas, found, err := unstructured.NestedInt64(scale.Object, "spec", "replicas")
+	if err != nil {
+		return 0, err
+	}
+
+	if !found {
+		return 0, errNoScaleReplicas
+	}
+
+	return int32(replicas), nil //nolint:gosec
 }
 
 func (cl *realClient) GetCRDs(ctx context.Context) ([]apiextv1.CustomResourceDefinition, error) {
@@ -1171,14 +1302,20 @@ func openConnection(ctx context.Context, kubeConfig string, localNode string) (k
 		return nil, fmt.Errorf("failed to build rest clients: %w", err)
 	}
 
+	dynamicClient, err := dynamic.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build dynamic client: %w", err)
+	}
+
 	client := realClient{
-		coreClient:  coreClient,
-		discoClient: discoClient,
-		appsClient:  appsClient,
-		extClient:   extClient,
-		admClient:   admClient,
-		config:      config,
-		useLocalAPI: false,
+		coreClient:    coreClient,
+		discoClient:   discoClient,
+		appsClient:    appsClient,
+		extClient:     extClient,
+		admClient:     admClient,
+		dynamicClient: dynamicClient,
+		config:        config,
+		useLocalAPI:   false,
 	}
 
 	switched, err := client.switchToLocalAPI(ctx, localNode)
@@ -1254,6 +1391,11 @@ func (cl *realClient) switchToLocalAPI(ctx context.Context, localNode string) (b
 					return false, fmt.Errorf("failed to build rest clients: %w", err)
 				}
 
+				dynamicClient, err := dynamic.NewForConfig(&shallowCopy)
+				if err != nil {
+					return false, fmt.Errorf("failed to build dynamic client: %w", err)
+				}
+
 				err = discoClient.
 					Get().
 					Namespace(defaultNamespace).
@@ -1269,6 +1411,7 @@ func (cl *realClient) switchToLocalAPI(ctx context.Context, localNode string) (b
 				cl.appsClient = appsClient
 				cl.extClient = extClient
 				cl.admClient = admClient
+				cl.dynamicClient = dynamicClient
 				cl.config = &shallowCopy
 				cl.useLocalAPI = true
 

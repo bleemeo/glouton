@@ -30,6 +30,12 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/docker"
 )
 
+const (
+	measurementContainerCPU         = "container_cpu"
+	fieldThrottlingPeriods          = "throttling_periods"
+	fieldThrottlingThrottledPeriods = "throttling_throttled_periods"
+)
+
 // New initialise docker.Input.
 func New(dockerAddress string, dockerRuntime crTypes.RuntimeInterface, isContainerIgnored func(facts.Container) bool) (i telegraf.Input, err error) {
 	input, ok := telegraf_inputs.Inputs["docker"]
@@ -49,7 +55,7 @@ func New(dockerAddress string, dockerRuntime crTypes.RuntimeInterface, isContain
 				Input: dockerInput,
 				Accumulator: internal.Accumulator{
 					RenameGlobal:          r.renameGlobal,
-					DifferentiatedMetrics: []string{"usage_total", "rx_bytes", "tx_bytes", "io_service_bytes_recursive_read", "io_service_bytes_recursive_write"},
+					DifferentiatedMetrics: []string{"usage_total", fieldThrottlingPeriods, fieldThrottlingThrottledPeriods, "rx_bytes", "tx_bytes", "io_service_bytes_recursive_read", "io_service_bytes_recursive_write"},
 					TransformMetrics:      transformMetrics,
 				},
 				Name: "docker",
@@ -91,7 +97,7 @@ func (r renamer) renameGlobal(gatherContext internal.GatherContext) (internal.Ga
 	}
 
 	switch gatherContext.Measurement {
-	case "container_cpu":
+	case measurementContainerCPU:
 		if gatherContext.OriginalTags["cpu"] != "cpu-total" {
 			return gatherContext, true
 		}
@@ -115,11 +121,20 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 	newFields := make(map[string]float64)
 
 	switch currentContext.Measurement {
-	case "container_cpu":
+	case measurementContainerCPU:
 		if value, ok := fields["usage_total"]; ok {
 			// Docker sends the total usage in nanosecond.
 			// Convert it to Second, then percent
 			newFields["used"] = value / 10000000
+		}
+
+		// container_cpu_throttled_perc is the ratio of CFS periods during which the
+		// container was throttled, in percent. Both fields are differentiated, so we
+		// have the per-interval deltas here; their ratio equals the ratio of deltas.
+		if periods, ok := fields[fieldThrottlingPeriods]; ok && periods > 0 {
+			if throttled, ok := fields[fieldThrottlingThrottledPeriods]; ok {
+				newFields["throttled_perc"] = throttled / periods * 100
+			}
 		}
 	case "container_mem":
 		if value, ok := fields["usage_percent"]; ok {

@@ -66,7 +66,12 @@ var (
 		"kubernetes_cpu_limits",
 		"kubernetes_memory_requests",
 		"kubernetes_memory_limits",
+		"kubernetes_cpu_allocatable",
+		"kubernetes_memory_allocatable",
+		"kubernetes_pods_allocatable",
 		"kubernetes_pods_restart_count",
+		"kubernetes_replicas_desired",
+		"kubernetes_replicas_ready",
 
 		// Key Processes
 		"process_context_switch",
@@ -84,6 +89,7 @@ var (
 		// Docker
 		"containers_count",
 		"container_cpu_used",
+		"container_cpu_throttled_perc",
 		"container_health_status",
 		"container_io_read_bytes",
 		"container_io_write_bytes",
