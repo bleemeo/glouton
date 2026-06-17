@@ -127,8 +127,14 @@ func (q apiQuerier) Select(ctx context.Context, sortSeries bool, hints *storage.
 }
 
 // Close releases the resources of the Querier.
+//
+// It MUST delegate to the wrapped querier: when a secondary (the on-disk
+// TSDB) is present, q.querier is a MergeQuerier holding a real TSDB reader.
+// Returning nil here would leak that reader on every API query, which keeps
+// the head isolation state open forever — blocking head truncation
+// (unbounded head/WAL growth) and db.Close() at shutdown.
 func (q apiQuerier) Close() error {
-	return nil
+	return q.querier.Close()
 }
 
 // LabelValues is not implemented.

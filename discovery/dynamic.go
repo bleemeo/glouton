@@ -63,6 +63,10 @@ type Option struct {
 	IsServiceIgnored   func(Service) bool
 	FileReader         fileReader
 	DefaultStack       string
+	// AllowedLabelOverrides is the list of service-configuration fields (by
+	// their YAML name) that may be overridden through "glouton.*" container
+	// labels and Kubernetes annotations. See config.Container.AllowedLabelOverrides.
+	AllowedLabelOverrides []string
 }
 
 // DynamicDiscovery implement the dynamic discovery. It will only return
@@ -73,6 +77,9 @@ type DynamicDiscovery struct {
 
 	option Option
 	now    func() time.Time
+	// allowedLabels is the set of service-configuration fields (by their YAML
+	// name) that may be overridden through container labels/annotations.
+	allowedLabels map[string]bool
 }
 
 type containerInfoProvider interface {
@@ -90,9 +97,16 @@ type fileReader interface {
 // NewDynamic create a new dynamic service discovery which use information from
 // processes and netstat to discovery services.
 func NewDynamic(opts Option) *DynamicDiscovery {
+	allowedLabels := make(map[string]bool, len(opts.AllowedLabelOverrides))
+
+	for _, k := range opts.AllowedLabelOverrides {
+		allowedLabels[k] = true
+	}
+
 	dd := &DynamicDiscovery{
-		now:    time.Now,
-		option: opts,
+		now:           time.Now,
+		option:        opts,
+		allowedLabels: allowedLabels,
 	}
 
 	return dd
@@ -561,6 +575,21 @@ func (dd *DynamicDiscovery) fillConfigFromLabels(service *Service) {
 		}
 
 		k = strings.TrimPrefix(k, gloutonContainerLabelPrefix)
+
+		// Only honor fields that are explicitly allowed to be overridden.
+		// Fields like check_command can run arbitrary commands as Glouton
+		// (usually root): since any user able to start a container or a
+		// Kubernetes pod can set these labels/annotations, blindly honoring
+		// them would be a privilege escalation. The allow-list is configurable
+		// (container.allowed_label_overrides) for trusted environments.
+		if !dd.allowedLabels[k] {
+			logger.V(1).Printf(
+				"Ignoring label %q on container %s: %q is not in container.allowed_label_overrides",
+				gloutonContainerLabelPrefix+k, service.ContainerName, k,
+			)
+
+			continue
+		}
 
 		labels[k] = v
 	}

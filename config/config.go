@@ -53,11 +53,14 @@ const (
 	CensoredValue = "*****"
 
 	// Common map key names used in config migration and service overrides.
-	keyURL        = "url"
-	keyName       = "name"
-	keyType       = "type"
-	keyPassword   = "password"
-	keyThresholds = "thresholds"
+	keyURL           = "url"
+	keyName          = "name"
+	keyType          = "type"
+	keyPassword      = "password"
+	keyThresholds    = "thresholds"
+	keyDetailedItems = "detailed_items"
+	keyStatsPort     = "stats_port"
+	keyCheckCommand  = "check_command"
 )
 
 var (
@@ -699,9 +702,9 @@ func migrateScrapper(k *koanf.Koanf, config map[string]any, deprecatedPath strin
 // migrateServices migrates deprecated service options.
 func migrateServices(config map[string]any) prometheus.MultiError {
 	migratedOptions := map[string]string{
-		"cassandra_detailed_tables": "detailed_items",
+		"cassandra_detailed_tables": keyDetailedItems,
 		"id":                        keyType,
-		"mgmt_port":                 "stats_port",
+		"mgmt_port":                 keyStatsPort,
 	}
 
 	var warnings prometheus.MultiError

@@ -40,7 +40,16 @@ import (
 	"github.com/bleemeo/glouton/version"
 )
 
-var errWrongValue = errors.New("wrong value for crc32")
+// maxBufferLength is the maximum accepted buffer length announced in an NRPE
+// packet. The length is controlled by the client, so it must be bounded to
+// avoid huge (or negative) allocations that would allow a denial of service.
+const maxBufferLength = 64 * 1024
+
+var (
+	errWrongValue          = errors.New("wrong value for crc32")
+	errInvalidBufferLength = errors.New("invalid buffer length")
+	errMissingNullByte     = errors.New("buffer is not null-terminated")
+)
 
 type reducedPacket struct {
 	packetVersion int16
@@ -189,6 +198,10 @@ func decode(r io.Reader) (reducedPacket, error) {
 		bufferlength = 1017
 	}
 
+	if bufferlength < 0 || bufferlength > maxBufferLength {
+		return decodedPacket, errInvalidBufferLength
+	}
+
 	packetBuffer := make([]byte, bufferlength+3)
 
 	_, err = r.Read(packetBuffer)
@@ -211,6 +224,9 @@ func decode(r io.Reader) (reducedPacket, error) {
 	}
 
 	i := bytes.IndexByte(packetBuffer, 0x0)
+	if i == -1 {
+		return decodedPacket, errMissingNullByte
+	}
 
 	if decodedPacket.packetVersion == 3 {
 		packetBuffer = packetBuffer[:i]

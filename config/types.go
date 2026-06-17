@@ -464,6 +464,38 @@ type Container struct {
 	Type             string           `yaml:"type"`
 	PIDNamespaceHost bool             `yaml:"pid_namespace_host"`
 	Runtime          ContainerRuntime `yaml:"runtime"`
+	// AllowedLabelOverrides is the list of service-configuration fields (by
+	// their YAML name) that may be overridden through "glouton.*" container
+	// labels and Kubernetes annotations. Fields that allow running arbitrary
+	// commands (like check_command) are excluded from the built-in defaults and
+	// must be added here explicitly: since any user able to start a container or
+	// a Kubernetes pod can set these labels/annotations, honoring them would
+	// otherwise let that user run commands as Glouton (usually root). Only enable
+	// the dangerous fields when container/pod creation is restricted to trusted
+	// users.
+	//
+	// This list is empty by default and a user-provided value replaces it. The
+	// built-in safe defaults (DefaultAllowedLabelOverrides) are added on top only
+	// when IncludeDefaultLabelOverrides is true.
+	AllowedLabelOverrides []string `yaml:"allowed_label_overrides"`
+	// IncludeDefaultLabelOverrides controls whether the built-in safe defaults
+	// (DefaultAllowedLabelOverrides) are added to AllowedLabelOverrides. It is
+	// true by default.
+	IncludeDefaultLabelOverrides bool `yaml:"include_default_label_overrides"`
+}
+
+// EffectiveAllowedLabelOverrides returns the list of service-configuration
+// fields that may be overridden through container labels/annotations: the
+// explicit AllowedLabelOverrides plus, when IncludeDefaultLabelOverrides is
+// true, the built-in safe defaults.
+func (c Container) EffectiveAllowedLabelOverrides() []string {
+	allowed := append([]string{}, c.AllowedLabelOverrides...)
+
+	if c.IncludeDefaultLabelOverrides {
+		allowed = append(allowed, DefaultAllowedLabelOverrides()...)
+	}
+
+	return allowed
 }
 
 type ContainerFilter struct {
