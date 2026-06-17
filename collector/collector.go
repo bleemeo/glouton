@@ -46,11 +46,21 @@ type Collector struct {
 	inputs       map[int]telegraf.Input
 	currentDelay time.Duration
 	updateDelayC chan any
-	l            sync.Mutex
+	// stopGatherDrainTimeout is how long RemoveInput/Close wait for an input's
+	// in-flight Gather to drain before giving up. When it expires, we stop waiting
+	// but the input's Stop() is still called later, once the Gather completes (see
+	// stopInputAsync). This bounds shutdown/removal latency without ever calling
+	// Stop() while a Gather is still running. It is a var so tests can lower it.
+
+	stopGatherDrainTimeout time.Duration
+	l                      sync.Mutex
 	// map inputID -> measurement -> field name -> tags key/value -> fieldCache
 	fieldCaches          map[int]map[string]map[string]map[string]fieldCache
 	secretInputsGate     *gate.Gate
 	lastSuccessfulGather map[int]time.Time
+	// gatherWG tracks in-flight Gather() calls per input, so Stop() can wait for
+	// them to drain. Kept in sync with inputs (same keys, same lifetime).
+	gatherWG map[int]*sync.WaitGroup
 }
 
 // New returns a Collector with default option
@@ -59,13 +69,15 @@ type Collector struct {
 // 10 seconds.
 func New(acc telegraf.Accumulator, secretInputsGate *gate.Gate) *Collector {
 	c := &Collector{
-		acc:                  acc,
-		inputs:               make(map[int]telegraf.Input),
-		currentDelay:         10 * time.Second,
-		updateDelayC:         make(chan any),
-		fieldCaches:          make(map[int]map[string]map[string]map[string]fieldCache),
-		secretInputsGate:     secretInputsGate,
-		lastSuccessfulGather: make(map[int]time.Time),
+		acc:                    acc,
+		inputs:                 make(map[int]telegraf.Input),
+		currentDelay:           10 * time.Second,
+		updateDelayC:           make(chan any),
+		stopGatherDrainTimeout: 10 * time.Second,
+		fieldCaches:            make(map[int]map[string]map[string]map[string]fieldCache),
+		secretInputsGate:       secretInputsGate,
+		lastSuccessfulGather:   make(map[int]time.Time),
+		gatherWG:               make(map[int]*sync.WaitGroup),
 	}
 
 	return c
@@ -98,6 +110,7 @@ func (c *Collector) AddInput(input telegraf.Input, shortName string) (int, error
 	}
 
 	c.inputs[id] = input
+	c.gatherWG[id] = &sync.WaitGroup{}
 	c.fieldCaches[id] = make(map[string]map[string]map[string]fieldCache)
 
 	if si, ok := input.(telegraf.ServiceInput); ok {
@@ -112,31 +125,96 @@ func (c *Collector) AddInput(input telegraf.Input, shortName string) (int, error
 // RemoveInput removes an input by its ID.
 func (c *Collector) RemoveInput(id int) {
 	c.l.Lock()
-	defer c.l.Unlock()
 
-	if input, ok := c.inputs[id]; ok {
-		if si, ok := input.(telegraf.ServiceInput); ok {
-			si.Stop()
-		}
-	} else {
-		logger.V(2).Printf("called RemoveInput with unexisting ID %d", id)
-	}
+	input, ok := c.inputs[id]
+	wg := c.gatherWG[id]
 
 	delete(c.inputs, id)
+	delete(c.gatherWG, id)
 	delete(c.fieldCaches, id)
 	delete(c.lastSuccessfulGather, id)
+
+	c.l.Unlock()
+
+	if !ok {
+		logger.V(2).Printf("called RemoveInput with unexisting ID %d", id)
+
+		return
+	}
+
+	// Wait (with a deadline) for the input's Gather to drain and Stop() to run.
+	// If the deadline expires, Stop() is still called later by the background
+	// goroutine, but we don't block the caller any longer.
+	select {
+	case <-stopInputAsync(input, wg):
+	case <-time.After(c.stopGatherDrainTimeout):
+		logger.V(2).Printf("input %d still gathering, deferring its Stop() until the gather completes", id)
+	}
 }
 
 // Close stops all inputs.
 func (c *Collector) Close() {
 	c.l.Lock()
-	defer c.l.Unlock()
 
-	for _, input := range c.inputs {
-		if si, ok := input.(telegraf.ServiceInput); ok {
-			si.Stop()
+	oldInputs := c.inputs
+	oldGatherWG := c.gatherWG
+	c.inputs = make(map[int]telegraf.Input)
+	c.gatherWG = make(map[int]*sync.WaitGroup)
+
+	c.l.Unlock()
+
+	// Start draining+stopping every input concurrently, then wait for them all
+	// with a single shared deadline so shutdown stays bounded. Inputs that are
+	// still gathering past the deadline are stopped later by their background
+	// goroutine.
+	dones := make([]<-chan struct{}, 0, len(oldInputs))
+	for id, input := range oldInputs {
+		dones = append(dones, stopInputAsync(input, oldGatherWG[id]))
+	}
+
+	deadline := time.After(c.stopGatherDrainTimeout)
+
+	for _, done := range dones {
+		select {
+		case <-done:
+		case <-deadline:
+			logger.V(2).Printf("some inputs still gathering at shutdown, deferring their Stop() until the gather completes")
+
+			return
 		}
 	}
+}
+
+// stopInputAsync stops a ServiceInput once its in-flight Gather() calls have
+// drained. The drain-then-Stop runs in its own goroutine with no deadline, so
+// Stop() is guaranteed to run only when no Gather() is in flight. This avoids a
+// nil-pointer crash in some telegraf inputs (e.g. docker) whose Stop() releases
+// a client still used by an in-flight Gather goroutine.
+//
+// It returns a channel closed once Stop() has been called (or immediately for a
+// non-ServiceInput), letting the caller wait with its own deadline.
+func stopInputAsync(input telegraf.Input, wg *sync.WaitGroup) <-chan struct{} {
+	done := make(chan struct{})
+
+	si, ok := input.(telegraf.ServiceInput)
+	if !ok {
+		close(done)
+
+		return done
+	}
+
+	go func() {
+		defer crashreport.ProcessPanic()
+		defer close(done)
+
+		if wg != nil {
+			wg.Wait()
+		}
+
+		si.Stop()
+	}()
+
+	return done
 }
 
 // RunGather run one gather and send metric through the accumulator.
@@ -163,12 +241,19 @@ func (c *Collector) runOnce(ctx context.Context, t0 time.Time) {
 	for id, input := range c.inputs {
 		fieldCaches := c.fieldCaches[id]
 		lastSuccess, hasSucceeded := c.lastSuccessfulGather[id]
+		inputWG := c.gatherWG[id]
 
 		wg.Add(1)
+		// Track this Gather on the per-input WaitGroup so RemoveInput/Close can
+		// wait for it to drain before calling the input's Stop(). The Add is done
+		// under c.l, so it is ordered before any RemoveInput/Close that observes
+		// this input (which also takes c.l), guaranteeing a correct drain wait.
+		inputWG.Add(1)
 
 		go func() {
 			defer crashreport.ProcessPanic()
 			defer wg.Done()
+			defer inputWG.Done()
 
 			secretInput, hasSecrets := input.(inputs.SecretfulInput)
 			if hasSecrets && secretInput.SecretCount() > 0 {
