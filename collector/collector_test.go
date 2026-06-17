@@ -73,6 +73,191 @@ func TestAddRemove(t *testing.T) {
 	}
 }
 
+// serviceMockInput is a telegraf.ServiceInput whose Gather blocks until
+// releaseGather is closed, used to exercise the Stop()/Gather() race.
+type serviceMockInput struct {
+	gatherStarted chan struct{}
+	releaseGather chan struct{}
+
+	mu                 sync.Mutex
+	gathering          bool
+	startedSignaled    bool
+	stopCalled         bool
+	stopWhileGathering bool
+}
+
+func (s *serviceMockInput) Start(telegraf.Accumulator) error { return nil }
+
+func (s *serviceMockInput) Stop() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.gathering {
+		s.stopWhileGathering = true
+	}
+
+	s.stopCalled = true
+}
+
+func (s *serviceMockInput) Gather(telegraf.Accumulator) error {
+	s.mu.Lock()
+	s.gathering = true
+
+	if !s.startedSignaled {
+		s.startedSignaled = true
+		close(s.gatherStarted)
+	}
+	s.mu.Unlock()
+
+	<-s.releaseGather
+
+	s.mu.Lock()
+	s.gathering = false
+	s.mu.Unlock()
+
+	return nil
+}
+
+func (s *serviceMockInput) SampleConfig() string { return "" }
+
+// TestRemoveInputWaitsForGather ensures RemoveInput never calls Stop() while a
+// Gather() is still in flight (which would crash inputs whose Stop() frees a
+// resource still used by the gather, e.g. the docker input's client).
+func TestRemoveInputWaitsForGather(t *testing.T) {
+	t.Parallel()
+
+	c := New(nil, gate.New(0))
+	input := &serviceMockInput{
+		gatherStarted: make(chan struct{}),
+		releaseGather: make(chan struct{}),
+	}
+
+	id, err := c.AddInput(input, "svc")
+	if err != nil {
+		t.Fatal("Failed to add input:", err)
+	}
+
+	var gatherWG sync.WaitGroup
+
+	gatherWG.Go(func() {
+		_ = c.RunGather(t.Context(), time.Now())
+	})
+
+	<-input.gatherStarted // Gather is now blocked in flight.
+
+	removeReturned := make(chan struct{})
+
+	go func() {
+		c.RemoveInput(id)
+		close(removeReturned)
+	}()
+
+	// RemoveInput must block on the in-flight Gather: it should not have
+	// returned (nor called Stop) before we release the gather.
+	select {
+	case <-removeReturned:
+		t.Fatal("RemoveInput returned before the in-flight Gather completed")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	input.mu.Lock()
+	if input.stopCalled {
+		t.Fatal("Stop() was called while a Gather was still in flight")
+	}
+	input.mu.Unlock()
+
+	close(input.releaseGather) // Let the gather finish.
+
+	gatherWG.Wait()
+	<-removeReturned
+
+	input.mu.Lock()
+	defer input.mu.Unlock()
+
+	if !input.stopCalled {
+		t.Fatal("Stop() was never called")
+	}
+
+	if input.stopWhileGathering {
+		t.Fatal("Stop() raced with an in-flight Gather()")
+	}
+}
+
+// TestRemoveInputDeferredStop ensures that when the drain deadline expires,
+// RemoveInput returns without blocking, yet Stop() is still called once the
+// slow Gather eventually completes.
+func TestRemoveInputDeferredStop(t *testing.T) {
+	t.Parallel()
+
+	c := New(nil, gate.New(0))
+	c.stopGatherDrainTimeout = 50 * time.Millisecond
+	input := &serviceMockInput{
+		gatherStarted: make(chan struct{}),
+		releaseGather: make(chan struct{}),
+	}
+
+	id, err := c.AddInput(input, "svc")
+	if err != nil {
+		t.Fatal("Failed to add input:", err)
+	}
+
+	var gatherWG sync.WaitGroup
+
+	gatherWG.Go(func() {
+		_ = c.RunGather(t.Context(), time.Now())
+	})
+
+	<-input.gatherStarted
+
+	// RemoveInput should give up waiting after the (short) deadline.
+	done := make(chan struct{})
+
+	go func() {
+		c.RemoveInput(id)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("RemoveInput did not return after the drain deadline expired")
+	}
+
+	// Stop() must not have been called yet (gather still in flight).
+	input.mu.Lock()
+	if input.stopCalled {
+		t.Fatal("Stop() was called while a Gather was still in flight")
+	}
+	input.mu.Unlock()
+
+	// Once the gather finishes, the background goroutine must still call Stop().
+	close(input.releaseGather)
+	gatherWG.Wait()
+
+	deadline := time.After(time.Second)
+
+	for {
+		input.mu.Lock()
+		stopped := input.stopCalled
+		raced := input.stopWhileGathering
+		input.mu.Unlock()
+
+		if raced {
+			t.Fatal("Stop() raced with an in-flight Gather()")
+		}
+
+		if stopped {
+			break
+		}
+
+		select {
+		case <-deadline:
+			t.Fatal("Stop() was never called after the deferred gather completed")
+		case <-time.After(time.Millisecond):
+		}
+	}
+}
+
 func TestRun(t *testing.T) {
 	ctx := t.Context()
 	c := New(nil, gate.New(0))
