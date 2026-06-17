@@ -197,49 +197,12 @@ func DefaultConfig() Config { //nolint:maintidx
 				AllowList:      []string{},
 				DenyList:       []string{},
 			},
-			// Safe service-configuration fields that may be overridden through
-			// "glouton.*" container labels/annotations. Excluded by design (add
-			// them only when container/pod creation is restricted to trusted
-			// users):
-			//   - arbitrary command execution: check_type, check_command, nagios_nrpe_name
-			//   - arbitrary file read: log_files
-			//   - target redirection / SSRF: address, stats_url, metrics_unix_socket
-			//     (these let the check be pointed at an attacker-chosen
-			//     endpoint, e.g. address=127.0.0.1 to probe host-local services;
-			//     by default checks target the container's own IP). Fields like
-			//     port or stats_port stay allowed since they keep the container
-			//     IP as target.
-			AllowedLabelOverrides: []string{
-				"type",
-				"instance",
-				"port",
-				"ignore_ports",
-				"tags",
-				"interval",
-				"http_path",
-				"http_status_code",
-				"http_host",
-				"match_process",
-				"username",
-				"password",
-				keyStatsPort,
-				"stats_protocol",
-				keyDetailedItems,
-				"jmx_port",
-				"jmx_username",
-				"jmx_password",
-				"jmx_metrics",
-				"ssl",
-				"ssl_insecure",
-				"starttls",
-				"ca_file",
-				"cert_file",
-				"key_file",
-				"included_items",
-				"excluded_items",
-				"log_format",
-				"log_filter",
-			},
+			// AllowedLabelOverrides is empty by default and behaves as an exact
+			// allow-list: a user-provided value replaces it. The built-in safe
+			// defaults are added on top only when IncludeDefaultLabelOverrides is
+			// true (see DefaultAllowedLabelOverrides).
+			AllowedLabelOverrides:        []string{},
+			IncludeDefaultLabelOverrides: true,
 			Runtime: ContainerRuntime{
 				Docker: ContainerRuntimeAddresses{
 					Addresses:      defaultDockerAddresses(),
@@ -501,5 +464,53 @@ func DefaultConfig() Config { //nolint:maintidx
 			Address: DefaultLoopback,
 			Port:    10050,
 		},
+	}
+}
+
+// DefaultAllowedLabelOverrides returns the built-in safe service-configuration
+// fields that may be overridden through "glouton.*" container
+// labels/annotations. They are added to Container.AllowedLabelOverrides when
+// Container.IncludeDefaultLabelOverrides is true.
+//
+// Excluded by design (add them explicitly through AllowedLabelOverrides only
+// when container/pod creation is restricted to trusted users):
+//   - arbitrary command execution: check_type, check_command, nagios_nrpe_name
+//   - arbitrary file read: log_files
+//   - target redirection / SSRF: address, stats_url, metrics_unix_socket
+//     (these let the check be pointed at an attacker-chosen endpoint, e.g.
+//     address=127.0.0.1 to probe host-local services; by default checks target
+//     the container's own IP). Fields like port or stats_port stay allowed
+//     since they keep the container IP as target.
+func DefaultAllowedLabelOverrides() []string {
+	return []string{
+		"type",
+		"instance",
+		"port",
+		"ignore_ports",
+		"tags",
+		"interval",
+		"http_path",
+		"http_status_code",
+		"http_host",
+		"match_process",
+		"username",
+		"password",
+		keyStatsPort,
+		"stats_protocol",
+		keyDetailedItems,
+		"jmx_port",
+		"jmx_username",
+		"jmx_password",
+		"jmx_metrics",
+		"ssl",
+		"ssl_insecure",
+		"starttls",
+		"ca_file",
+		"cert_file",
+		"key_file",
+		"included_items",
+		"excluded_items",
+		"log_format",
+		"log_filter",
 	}
 }

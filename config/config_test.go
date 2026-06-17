@@ -622,6 +622,48 @@ func TestDefaultNoFile(t *testing.T) {
 	}
 }
 
+func TestEffectiveAllowedLabelOverrides(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		container Container
+		want      []string
+	}{
+		{
+			name:      "empty allow-list with defaults",
+			container: Container{AllowedLabelOverrides: nil, IncludeDefaultLabelOverrides: true},
+			want:      DefaultAllowedLabelOverrides(),
+		},
+		{
+			name:      "override replaces when defaults disabled",
+			container: Container{AllowedLabelOverrides: []string{keyCheckCommand}, IncludeDefaultLabelOverrides: false},
+			want:      []string{keyCheckCommand},
+		},
+		{
+			name:      "override merged on top of defaults",
+			container: Container{AllowedLabelOverrides: []string{keyCheckCommand}, IncludeDefaultLabelOverrides: true},
+			want:      append([]string{keyCheckCommand}, DefaultAllowedLabelOverrides()...),
+		},
+		{
+			name:      "empty allow-list without defaults",
+			container: Container{AllowedLabelOverrides: nil, IncludeDefaultLabelOverrides: false},
+			want:      []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := tt.container.EffectiveAllowedLabelOverrides()
+			if diff := cmp.Diff(tt.want, got, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("EffectiveAllowedLabelOverrides() mismatch (-want +got)\n%s", diff)
+			}
+		})
+	}
+}
+
 // Testload tests loading the config and the warnings and errors returned.
 func TestLoad(t *testing.T) { //nolint:maintidx
 	tests := []struct {

@@ -60,6 +60,7 @@ const (
 	keyThresholds    = "thresholds"
 	keyDetailedItems = "detailed_items"
 	keyStatsPort     = "stats_port"
+	keyCheckCommand  = "check_command"
 )
 
 var (

@@ -1224,7 +1224,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			FileReader: mockFileReader{
 				contents: c.filesContent,
 			},
-			AllowedLabelOverrides: config.DefaultConfig().Container.AllowedLabelOverrides,
+			AllowedLabelOverrides: config.DefaultConfig().Container.EffectiveAllowedLabelOverrides(),
 		})
 		dd.now = func() time.Time { return t0 }
 
@@ -2114,7 +2114,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 }
 
 func Test_fillGenericExtraAttributes(t *testing.T) {
-	defaultOverrides := config.DefaultConfig().Container.AllowedLabelOverrides
+	defaultOverrides := config.DefaultConfig().Container.EffectiveAllowedLabelOverrides()
 
 	cases := []struct {
 		name                        string

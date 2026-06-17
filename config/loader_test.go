@@ -181,7 +181,7 @@ func TestLoader(t *testing.T) {
 					testInstance:          "instance1",
 					"port":                0.0,
 					keyStatsPort:          0.0,
-					"check_command":       "",
+					keyCheckCommand:       "",
 					"jmx_password":        "",
 					"excluded_items":      nil,
 					"http_path":           "",
