@@ -85,13 +85,7 @@ func getGlobalMetrics(
 	cache.daemonSets, err = cl.GetDaemonSets(ctx)
 	multiErr.Append(err)
 
-	cache.replicasetOwnerByUID = make(map[string]metav1.OwnerReference, len(replicasets))
-
-	for _, replicaset := range replicasets {
-		if len(replicaset.OwnerReferences) > 0 {
-			cache.replicasetOwnerByUID[string(replicaset.UID)] = replicaset.OwnerReferences[0]
-		}
-	}
+	cache.replicasetOwnerByUID = buildReplicasetOwnerByUID(replicasets)
 
 	// Compute cluster metrics.
 	var points []types.MetricPoint //nolint:prealloc

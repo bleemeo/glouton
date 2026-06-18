@@ -1,0 +1,204 @@
+apiVersion: v1
+items:
+- apiVersion: v1
+  kind: Pod
+  metadata:
+    annotations:
+      cni.projectcalico.org/containerID: 6325f4687b882a91bff76c71d76f5ce20892b6ae7e24186b21807f6a2f4b47e0
+      cni.projectcalico.org/podIP: 10.42.1.191/32
+      cni.projectcalico.org/podIPs: 10.42.1.191/32
+    creationTimestamp: "2026-06-18T12:44:02Z"
+    generateName: volumes-demo-
+    generation: 1
+    labels:
+      app: volumes-demo
+      apps.kubernetes.io/pod-index: "0"
+      controller-revision-hash: volumes-demo-5c9b84677
+      statefulset.kubernetes.io/pod-name: volumes-demo-0
+    name: volumes-demo-0
+    namespace: ns-testcase1
+    ownerReferences:
+    - apiVersion: apps/v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: StatefulSet
+      name: volumes-demo
+      uid: 7c975375-526b-4d34-96f4-a93d40a847d9
+    resourceVersion: "96705"
+    uid: e001081c-a249-4dce-a24a-b8b332cabe9d
+  spec:
+    containers:
+    - image: nginx:1.27
+      imagePullPolicy: IfNotPresent
+      name: app
+      resources: {}
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      volumeMounts:
+      - mountPath: /data
+        name: data
+      - mountPath: /scratch
+        name: scratch
+      - mountPath: /scratch-memory
+        name: scratch-memory
+      - mountPath: /etc/app
+        name: config
+        readOnly: true
+      - mountPath: /assets
+        name: assets
+        readOnly: true
+      - mountPath: /generic-ephemeral
+        name: generic-eph
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: kube-api-access-9wfld
+        readOnly: true
+    dnsPolicy: ClusterFirst
+    enableServiceLinks: true
+    hostname: volumes-demo-0
+    nodeName: node2
+    preemptionPolicy: PreemptLowerPriority
+    priority: 0
+    restartPolicy: Always
+    schedulerName: default-scheduler
+    securityContext: {}
+    serviceAccount: default
+    serviceAccountName: default
+    subdomain: volumes-demo
+    terminationGracePeriodSeconds: 30
+    tolerations:
+    - effect: NoExecute
+      key: node.kubernetes.io/not-ready
+      operator: Exists
+      tolerationSeconds: 300
+    - effect: NoExecute
+      key: node.kubernetes.io/unreachable
+      operator: Exists
+      tolerationSeconds: 300
+    volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: data-volumes-demo-0
+    - emptyDir:
+        sizeLimit: 256Mi
+      name: scratch
+    - emptyDir:
+        medium: Memory
+        sizeLimit: 256Mi
+      name: scratch-memory
+    - configMap:
+        defaultMode: 420
+        name: demo-config
+      name: config
+    - image:
+        pullPolicy: IfNotPresent
+        reference: registry.k8s.io/pause:3.10
+      name: assets
+    - ephemeral:
+        volumeClaimTemplate:
+          metadata: {}
+          spec:
+            accessModes:
+            - ReadWriteOnce
+            resources:
+              requests:
+                storage: 512Mi
+            volumeMode: Filesystem
+      name: generic-eph
+    - name: kube-api-access-9wfld
+      projected:
+        defaultMode: 420
+        sources:
+        - serviceAccountToken:
+            expirationSeconds: 3607
+            path: token
+        - configMap:
+            items:
+            - key: ca.crt
+              path: ca.crt
+            name: kube-root-ca.crt
+        - downwardAPI:
+            items:
+            - fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.namespace
+              path: namespace
+  status:
+    conditions:
+    - lastProbeTime: null
+      lastTransitionTime: "2026-06-18T12:44:17Z"
+      observedGeneration: 1
+      status: "True"
+      type: PodReadyToStartContainers
+    - lastProbeTime: null
+      lastTransitionTime: "2026-06-18T12:44:04Z"
+      observedGeneration: 1
+      status: "True"
+      type: Initialized
+    - lastProbeTime: null
+      lastTransitionTime: "2026-06-18T12:44:17Z"
+      observedGeneration: 1
+      status: "True"
+      type: Ready
+    - lastProbeTime: null
+      lastTransitionTime: "2026-06-18T12:44:17Z"
+      observedGeneration: 1
+      status: "True"
+      type: ContainersReady
+    - lastProbeTime: null
+      lastTransitionTime: "2026-06-18T12:44:04Z"
+      observedGeneration: 1
+      status: "True"
+      type: PodScheduled
+    containerStatuses:
+    - containerID: containerd://f047a57cbbd2043d2133fe955d10a779ce708e4180653142a31699dcca88fed1
+      image: docker.io/library/nginx:1.27
+      imageID: docker.io/library/nginx@sha256:6784fb0834aa7dbbe12e3d7471e69c290df3e6ba810dc38b34ae33d3c1c05f7d
+      lastState: {}
+      name: app
+      ready: true
+      resources: {}
+      restartCount: 0
+      started: true
+      state:
+        running:
+          startedAt: "2026-06-18T12:44:17Z"
+      user:
+        linux:
+          gid: 0
+          supplementalGroups:
+          - 0
+          uid: 0
+      volumeMounts:
+      - mountPath: /data
+        name: data
+      - mountPath: /scratch
+        name: scratch
+      - mountPath: /scratch-memory
+        name: scratch-memory
+      - mountPath: /etc/app
+        name: config
+        readOnly: true
+        recursiveReadOnly: Disabled
+      - mountPath: /assets
+        name: assets
+        readOnly: true
+        recursiveReadOnly: Disabled
+      - mountPath: /generic-ephemeral
+        name: generic-eph
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: kube-api-access-9wfld
+        readOnly: true
+        recursiveReadOnly: Disabled
+    hostIP: 192.168.64.8
+    hostIPs:
+    - ip: 192.168.64.8
+    observedGeneration: 1
+    phase: Running
+    podIP: 10.42.1.191
+    podIPs:
+    - ip: 10.42.1.191
+    qosClass: BestEffort
+    startTime: "2026-06-18T12:44:04Z"
+kind: List
+metadata:
+  resourceVersion: ""

@@ -14,6 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//nolint:goconst
 package kubernetes
 
 import (
@@ -82,6 +83,7 @@ type mockKubernetesClient struct {
 	nodes        corev1.NodeList
 	pods         corev1.PodList
 	namespaces   corev1.NamespaceList
+	pvcs         corev1.PersistentVolumeClaimList
 	replicaSets  appsv1.ReplicaSetList
 	deployments  appsv1.DeploymentList
 	statefulSets appsv1.StatefulSetList
@@ -143,6 +145,14 @@ func newKubernetesMock(dirname string) (*mockKubernetesClient, error) {
 		}
 	}
 
+	data, localErr = os.ReadFile(filepath.Join(dirname, "pvcs.yaml"))
+	if localErr == nil {
+		err = yaml.Unmarshal(data, &result.pvcs)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	data, localErr = os.ReadFile(filepath.Join(dirname, "deployments.yaml"))
 	if localErr == nil {
 		err = yaml.Unmarshal(data, &result.deployments)
@@ -194,6 +204,11 @@ func (k *mockKubernetesClient) GetNodes(_ context.Context) ([]corev1.Node, error
 // GetNamespaces returns all namespaces in the cluster.
 func (k *mockKubernetesClient) GetNamespaces(_ context.Context) ([]corev1.Namespace, error) {
 	return k.namespaces.Items, nil
+}
+
+// GetPVCs returns all PersistentVolumeClaims in the cluster.
+func (k *mockKubernetesClient) GetPVCs(_ context.Context) ([]corev1.PersistentVolumeClaim, error) {
+	return k.pvcs.Items, nil
 }
 
 // GetReplicasets return all replicasets in the cluster.

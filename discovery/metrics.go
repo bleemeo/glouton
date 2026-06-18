@@ -68,7 +68,7 @@ import (
 )
 
 // AddDefaultInputs adds system inputs to a collector.
-func AddDefaultInputs(commandRunner *gloutonexec.Runner, metricRegistry GathererRegistry, inputsConfig inputs.CollectorConfig, vethProvider *veth.Provider) error {
+func AddDefaultInputs(commandRunner *gloutonexec.Runner, metricRegistry GathererRegistry, inputsConfig inputs.CollectorConfig, vethProvider *veth.Provider, k8sResolver disk.KubernetesPodResolver) error {
 	input, err := system.New()
 	if err != nil {
 		return err
@@ -97,7 +97,7 @@ func AddDefaultInputs(commandRunner *gloutonexec.Runner, metricRegistry Gatherer
 	}
 
 	if inputsConfig.DFRootPath != "" {
-		input, err = disk.New(inputsConfig.DFRootPath, inputsConfig.DFPathMatcher, inputsConfig.DFIgnoreFSTypes)
+		input, err = disk.New(inputsConfig.DFRootPath, inputsConfig.DFPathMatcher, inputsConfig.DFIgnoreFSTypes, k8sResolver)
 		if err != nil {
 			return err
 		}

@@ -57,6 +57,7 @@ import (
 	"github.com/bleemeo/glouton/facts/container-runtime/veth"
 	"github.com/bleemeo/glouton/fluentbit"
 	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/inputs/disk"
 	"github.com/bleemeo/glouton/inputs/docker"
 	"github.com/bleemeo/glouton/inputs/mdstat"
 	nvidia "github.com/bleemeo/glouton/inputs/nvidia_smi"
@@ -1315,7 +1316,14 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		return
 	}
 
-	if err = discovery.AddDefaultInputs(a.commandRunner, a.gathererRegistry, conf, a.vethProvider); err != nil {
+	// When running on Kubernetes, the runtime can resolve pod labels for filesystem
+	// metrics of pod volumes. Left nil otherwise.
+	var k8sResolver disk.KubernetesPodResolver
+	if kube, ok := a.containerRuntime.(*kubernetes.Kubernetes); ok {
+		k8sResolver = kube
+	}
+
+	if err = discovery.AddDefaultInputs(a.commandRunner, a.gathererRegistry, conf, a.vethProvider, k8sResolver); err != nil {
 		logger.Printf("Unable to initialize system collector: %v", err)
 
 		return

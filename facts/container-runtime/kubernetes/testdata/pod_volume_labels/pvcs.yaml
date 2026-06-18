@@ -1,0 +1,74 @@
+apiVersion: v1
+items:
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    annotations:
+      pv.kubernetes.io/bind-completed: "yes"
+      pv.kubernetes.io/bound-by-controller: "yes"
+      volume.beta.kubernetes.io/storage-provisioner: driver.longhorn.io
+      volume.kubernetes.io/storage-provisioner: driver.longhorn.io
+    creationTimestamp: "2026-06-18T12:44:02Z"
+    finalizers:
+    - kubernetes.io/pvc-protection
+    labels:
+      app: volumes-demo
+    name: data-volumes-demo-0
+    namespace: ns-testcase1
+    resourceVersion: "96540"
+    uid: 7de278db-ec0b-4393-bc18-938e64f4e687
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: 1Gi
+    storageClassName: longhorn
+    volumeMode: Filesystem
+    volumeName: pvc-7de278db-ec0b-4393-bc18-938e64f4e687
+  status:
+    accessModes:
+    - ReadWriteOnce
+    capacity:
+      storage: 1Gi
+    phase: Bound
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    annotations:
+      pv.kubernetes.io/bind-completed: "yes"
+      pv.kubernetes.io/bound-by-controller: "yes"
+      volume.beta.kubernetes.io/storage-provisioner: driver.longhorn.io
+      volume.kubernetes.io/storage-provisioner: driver.longhorn.io
+    creationTimestamp: "2026-06-18T12:44:02Z"
+    finalizers:
+    - kubernetes.io/pvc-protection
+    name: volumes-demo-0-generic-eph
+    namespace: ns-testcase1
+    ownerReferences:
+    - apiVersion: v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: Pod
+      name: volumes-demo-0
+      uid: e001081c-a249-4dce-a24a-b8b332cabe9d
+    resourceVersion: "96529"
+    uid: ad29bb45-7d82-42cd-bb9c-b73e0b21e5c5
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: 512Mi
+    storageClassName: longhorn
+    volumeMode: Filesystem
+    volumeName: pvc-ad29bb45-7d82-42cd-bb9c-b73e0b21e5c5
+  status:
+    accessModes:
+    - ReadWriteOnce
+    capacity:
+      storage: 512Mi
+    phase: Bound
+kind: List
+metadata:
+  resourceVersion: ""

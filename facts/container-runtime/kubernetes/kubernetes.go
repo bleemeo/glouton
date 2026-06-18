@@ -85,6 +85,21 @@ type Kubernetes struct {
 	version        *version.Info
 	id2Pod         map[string]corev1.Pod
 	podID2Pod      map[string]corev1.Pod
+	// replicasetOwnerByUID maps a ReplicaSet UID to its owner (usually a Deployment).
+	// Used to resolve a pod's workload owner from its ReplicaSet. Best-effort: it stays
+	// empty when listing ReplicaSets is not permitted, in which case the immediate owner
+	// (the ReplicaSet itself) is reported.
+	replicasetOwnerByUID map[string]metav1.OwnerReference
+	// pvcByPVName maps a PersistentVolume name to the PersistentVolumeClaim bound to it.
+	// Used to resolve the in-pod volume name of a CSI mount. Best-effort: it stays empty
+	// when listing PersistentVolumeClaims is not permitted.
+	pvcByPVName map[string]pvcReference
+}
+
+// pvcReference identifies a PersistentVolumeClaim.
+type pvcReference struct {
+	namespace string
+	name      string
 }
 
 const (
@@ -969,7 +984,137 @@ func (k *Kubernetes) updatePods(ctx context.Context) error {
 		}
 	}
 
+	k.updateReplicasetOwners(ctx, cl)
+	k.updatePVCs(ctx, cl)
+
 	return nil
+}
+
+// updatePVCs refreshes the PersistentVolume -> PersistentVolumeClaim mapping used to
+// resolve the in-pod volume name of a CSI mount. It is best-effort: on error (e.g.
+// missing RBAC permission) the previous mapping is kept and the volume label is
+// simply omitted on CSI volumes.
+func (k *Kubernetes) updatePVCs(ctx context.Context, cl kubeClient) {
+	pvcs, err := cl.GetPVCs(ctx)
+	if err != nil {
+		logger.V(2).Printf("kubernetes: unable to list PersistentVolumeClaims, the volume label will be missing on CSI volumes: %v", err)
+
+		return
+	}
+
+	byPV := make(map[string]pvcReference, len(pvcs))
+
+	for _, pvc := range pvcs {
+		if pvc.Spec.VolumeName != "" {
+			byPV[pvc.Spec.VolumeName] = pvcReference{namespace: pvc.Namespace, name: pvc.Name}
+		}
+	}
+
+	k.pvcByPVName = byPV
+}
+
+// updateReplicasetOwners refreshes the ReplicaSet -> owner mapping used to resolve
+// a pod's workload owner. It is best-effort: on error (e.g. missing RBAC permission)
+// the previous mapping is kept and the immediate owner is reported instead.
+func (k *Kubernetes) updateReplicasetOwners(ctx context.Context, cl kubeClient) {
+	replicasets, err := cl.GetReplicasets(ctx)
+	if err != nil {
+		logger.V(2).Printf("kubernetes: unable to list ReplicaSets, owner will fall back to the immediate owner: %v", err)
+
+		return
+	}
+
+	k.replicasetOwnerByUID = buildReplicasetOwnerByUID(replicasets)
+}
+
+// buildReplicasetOwnerByUID indexes ReplicaSets by their UID to their first owner
+// (usually a Deployment), so a pod's workload owner can be resolved through its
+// ReplicaSet.
+func buildReplicasetOwnerByUID(replicasets []appsv1.ReplicaSet) map[string]metav1.OwnerReference {
+	owners := make(map[string]metav1.OwnerReference, len(replicasets))
+
+	for _, replicaset := range replicasets {
+		if len(replicaset.OwnerReferences) > 0 {
+			owners[string(replicaset.UID)] = replicaset.OwnerReferences[0]
+		}
+	}
+
+	return owners
+}
+
+// PodVolumeLabels returns the Kubernetes labels (namespace, pod_name, owner_kind,
+// owner_name) for the pod with the given UID. found is false when the pod is not
+// (yet) known by the local cache.
+func (k *Kubernetes) PodVolumeLabels(podUID string) (map[string]string, bool) {
+	k.l.Lock()
+	defer k.l.Unlock()
+
+	pod, ok := k.podID2Pod[podUID]
+	if !ok {
+		return nil, false
+	}
+
+	_, ownerKind, ownerName := podOwnerRef(pod, k.replicasetOwnerByUID)
+
+	return map[string]string{
+		types.LabelNamespace: podNamespace(pod),
+		types.LabelPodName:   pod.Name,
+		types.LabelOwnerKind: strings.ToLower(ownerKind),
+		types.LabelOwnerName: ownerName,
+	}, true
+}
+
+// CSIVolumeLabels returns the labels identifying a CSI volume mount whose kubelet
+// directory is dir. For a PVC-backed volume the directory is the PersistentVolume
+// name, so it returns {pv: dir} plus {volume: <in-pod volume name>} when the PVC can
+// be resolved (requires PVC list access). For an inline (ephemeral) CSI volume there
+// is no PersistentVolume and the directory already is the in-pod volume name, so it
+// returns {volume: dir}.
+func (k *Kubernetes) CSIVolumeLabels(podUID, dir string) map[string]string {
+	k.l.Lock()
+	defer k.l.Unlock()
+
+	pod, ok := k.podID2Pod[podUID]
+	if !ok {
+		return map[string]string{types.LabelPV: dir}
+	}
+
+	// Inline (ephemeral) CSI volume: the directory is the in-pod volume name, not a PV.
+	for _, volume := range pod.Spec.Volumes {
+		if volume.Name == dir && volume.CSI != nil {
+			return map[string]string{types.LabelVolume: dir}
+		}
+	}
+
+	// Otherwise the directory is the PersistentVolume name.
+	labels := map[string]string{types.LabelPV: dir}
+
+	if pvc, ok := k.pvcByPVName[dir]; ok && pvc.namespace == pod.Namespace {
+		for _, volume := range pod.Spec.Volumes {
+			if volumeClaimName(pod, volume) == pvc.name {
+				labels[types.LabelVolume] = volume.Name
+
+				break
+			}
+		}
+	}
+
+	return labels
+}
+
+// volumeClaimName returns the name of the PersistentVolumeClaim a pod volume is backed
+// by, either referenced directly (persistentVolumeClaim) or auto-created for a generic
+// ephemeral volume (the claim is named "<pod>-<volume>"). It returns "" for volumes
+// that are not backed by a PVC.
+func volumeClaimName(pod corev1.Pod, volume corev1.Volume) string {
+	switch {
+	case volume.PersistentVolumeClaim != nil:
+		return volume.PersistentVolumeClaim.ClaimName
+	case volume.Ephemeral != nil:
+		return pod.Name + "-" + volume.Name
+	default:
+		return ""
+	}
 }
 
 func kuberIDtoRuntimeID(containerID string) string {
@@ -993,6 +1138,8 @@ type kubeClient interface {
 	GetPODs(ctx context.Context, nodeName string) ([]corev1.Pod, error)
 	// GetNamespaces returns all namespaces in the cluster.
 	GetNamespaces(ctx context.Context) ([]corev1.Namespace, error)
+	// GetPVCs returns all PersistentVolumeClaims in the cluster.
+	GetPVCs(ctx context.Context) ([]corev1.PersistentVolumeClaim, error)
 	// GetReplicasets returns all replicasets in the cluster.
 	GetReplicasets(ctx context.Context) ([]appsv1.ReplicaSet, error)
 	// GetDeployments returns all deployments in the cluster.
@@ -1088,6 +1235,17 @@ func (cl *realClient) GetNamespaces(ctx context.Context) ([]corev1.Namespace, er
 	}
 
 	return namespaces.Items, nil
+}
+
+func (cl *realClient) GetPVCs(ctx context.Context) ([]corev1.PersistentVolumeClaim, error) {
+	var pvcs corev1.PersistentVolumeClaimList
+
+	err := cl.coreClient.Get().Resource("persistentvolumeclaims").Do(ctx).Into(&pvcs)
+	if err != nil {
+		return nil, err
+	}
+
+	return pvcs.Items, nil
 }
 
 func (cl *realClient) GetReplicasets(ctx context.Context) ([]appsv1.ReplicaSet, error) {
