@@ -28,11 +28,16 @@ import (
 )
 
 type diskIOTransformer struct {
-	matcher types.Matcher
+	matcher  types.Matcher
+	enricher *k8sEnricher
 }
 
 // New initialise diskio.Input.
-func New(diskMatcher types.Matcher) (i telegraf.Input, err error) {
+//
+// k8sResolver may be nil; when set, IO metrics of block devices dedicated to a single
+// Kubernetes CSI PersistentVolume (cloud block volumes) are enriched with pod labels
+// (namespace, pod_name, owner_*, pv/volume).
+func New(diskMatcher types.Matcher, k8sResolver KubernetesPodResolver) (i telegraf.Input, err error) {
 	input, ok := telegraf_inputs.Inputs["diskio"]
 
 	if ok {
@@ -41,6 +46,11 @@ func New(diskMatcher types.Matcher) (i telegraf.Input, err error) {
 		dt := diskIOTransformer{
 			matcher: diskMatcher,
 		}
+
+		if k8sResolver != nil {
+			dt.enricher = newK8sEnricher(k8sResolver)
+		}
+
 		i = &internal.Input{
 			Input: diskioInput,
 			Accumulator: internal.Accumulator{
@@ -71,6 +81,12 @@ func (dt diskIOTransformer) renameGlobal(gatherContext internal.GatherContext) (
 	}
 
 	gatherContext.Tags[types.LabelItem] = item
+
+	// On Kubernetes, a block device dedicated to a single CSI PersistentVolume gets the
+	// pod labels added; item stays the (node-stable) device name.
+	if dt.enricher != nil {
+		dt.enricher.enrich(item, gatherContext.Tags)
+	}
 
 	return gatherContext, false
 }

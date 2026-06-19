@@ -127,7 +127,7 @@ func AddDefaultInputs(commandRunner *gloutonexec.Runner, metricRegistry Gatherer
 		}
 	}
 
-	input, err = diskio.New(inputsConfig.IODiskMatcher)
+	input, err = diskio.New(inputsConfig.IODiskMatcher, k8sResolver)
 	if err != nil {
 		return err
 	}

@@ -36,14 +36,6 @@ import (
 // inputName is the name of the disk input plugin.
 const inputName = "disk"
 
-// kubeletPodsPrefix is the prefix of kubelet mount paths for pod volumes.
-const kubeletPodsPrefix = "/var/lib/kubelet/pods/"
-
-// csiPlugin is the volume plugin directory used by CSI volumes. For these, the
-// path holds the PersistentVolume name; for every other plugin it holds the
-// in-pod volume name (.spec.volumes[].name).
-const csiPlugin = "kubernetes.io~csi"
-
 // holdTimeout is how long a pod-volume metric is held back (dropped) while waiting
 // for its pod to be discovered. Past this delay the metric is emitted in degraded
 // mode (raw mount path as item, without Kubernetes labels) so a full disk stays
@@ -176,7 +168,7 @@ type k8sEnricher struct {
 func (e *k8sEnricher) enrich(path string, tags map[string]string) (drop, handled bool) {
 	e.runPurge()
 
-	podUID, plugin, dir, ok := parsePodVolumePath(path)
+	podUID, plugin, dir, ok := internal.ParsePodVolumePath(path)
 	if !ok {
 		return false, false
 	}
@@ -196,7 +188,7 @@ func (e *k8sEnricher) enrich(path string, tags map[string]string) (drop, handled
 		}
 	}
 
-	if plugin == csiPlugin {
+	if plugin == internal.CSIPlugin {
 		// A CSI directory is the PersistentVolume name (PVC-backed) or the in-pod volume
 		// name (inline ephemeral); the resolver classifies it. For other plugins the path
 		// directory already is the volume name.
@@ -262,23 +254,6 @@ func (e *k8sEnricher) holdOrDegrade(podUID, dir, path string, tags map[string]st
 	tags[types.LabelItem] = path
 
 	return false
-}
-
-// parsePodVolumePath parses a kubelet pod volume mount path of the form
-// /var/lib/kubelet/pods/<uid>/volumes/<plugin>/<dir>[/...]. It returns the pod
-// UID, the volume plugin and the volume directory, with ok=true on a match.
-func parsePodVolumePath(path string) (podUID, plugin, dir string, ok bool) {
-	rest, found := strings.CutPrefix(path, kubeletPodsPrefix)
-	if !found {
-		return "", "", "", false
-	}
-
-	parts := strings.Split(rest, "/")
-	if len(parts) < 4 || parts[1] != "volumes" {
-		return "", "", "", false
-	}
-
-	return parts[0], parts[2], parts[3], true
 }
 
 func (dt diskTransformer) transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]any) map[string]float64 {
