@@ -31,14 +31,18 @@ import (
 type ReloadState struct {
 	l                     sync.Mutex
 	client                paho.Client
-	isClosed              bool
 	connectionLostChannel chan error
-	pendingMessages       *fifo[types.Message]
+	// stopped is closed by Close() to unblock any in-flight callback.
+	// The data channels are never closed (a callback fired during a reload
+	// must keep its lock-free send pending until the next run consumes it).
+	stopped         chan struct{}
+	pendingMessages *fifo[types.Message]
 }
 
 func NewReloadState() *ReloadState {
 	return &ReloadState{
 		connectionLostChannel: make(chan error),
+		stopped:               make(chan struct{}),
 		pendingMessages:       newFifo[types.Message](maxPendingMessages),
 	}
 }
@@ -60,14 +64,13 @@ func (rs *ReloadState) SetClient(cli paho.Client) {
 }
 
 func (rs *ReloadState) OnConnectionLost(_ paho.Client, err error) {
-	rs.l.Lock()
-	defer rs.l.Unlock()
-
-	if rs.isClosed {
-		return
+	// Don't hold rs.l while sending: paho may call this during the reload
+	// window when no consumer is running. Blocking here without the lock lets
+	// the next run construct its client (which takes rs.l) and drain the event.
+	select {
+	case rs.connectionLostChannel <- err:
+	case <-rs.stopped:
 	}
-
-	rs.connectionLostChannel <- err
 }
 
 func (rs *ReloadState) ConnectionLostChannel() <-chan error {
@@ -97,23 +100,13 @@ func (rs *ReloadState) Close() {
 		return
 	}
 
-	// Consume all events on channel to make sure the paho client is not blocked.
-	go func() {
-		for range rs.connectionLostChannel {
-		}
-	}()
+	// Unblock any in-flight callback (the data channel is never closed, so
+	// callbacks can't panic on a send) before disconnecting.
+	close(rs.stopped)
 
 	rs.client.Disconnect(uint(5 * time.Second.Milliseconds())) //nolint:gosec // constant value, always positive
 
 	logger.V(2).Printf("Stopped MQTT with %d messages still pending", rs.pendingMessages.Len())
 
-	// The callbacks need to know when the channel are closed
-	// so they don't send on a closed channel.
-	rs.l.Lock()
-	defer rs.l.Unlock()
-
-	rs.isClosed = true
-
-	close(rs.connectionLostChannel)
 	rs.pendingMessages.Close()
 }
