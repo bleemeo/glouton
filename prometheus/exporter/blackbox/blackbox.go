@@ -289,7 +289,8 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 	})
 
 	targetURL := target.URL
-	if targetURL == defaultResolverSentinel {
+	usedDefaultResolver := targetURL == defaultResolverSentinel
+	if usedDefaultResolver {
 		var err error
 
 		targetURL, err = target.CommonHelpers.DNSResolver()
@@ -304,8 +305,10 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 
 	hackLogger := newDNSHackLogger(extLogger)
 
-	if target.IsPublicProbe {
-		if err := checkNotPrivateTarget(ctx, targetURL); err != nil {
+	if target.IsPublicProbe && !usedDefaultResolver {
+		checkCtx, checkCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer checkCancel()
+		if err := checkNotPrivateTarget(checkCtx, targetURL); err != nil {
 			extLogger.WarnContext(ctx, "blocked: target resolves to private IP", "error", err)
 
 			ch <- prometheus.MustNewConstMetric(probeSuccessDesc, prometheus.GaugeValue, 0., target.Name)
