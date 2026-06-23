@@ -124,6 +124,10 @@ const (
 	LabelOwnerName = "owner_name"
 	LabelPodName   = "pod_name"
 	LabelNamespace = "namespace"
+	// LabelVolume is the name of the volume inside the pod (.spec.volumes[].name).
+	LabelVolume = "volume"
+	// LabelPV is the name of the PersistentVolume backing a CSI volume.
+	LabelPV = "pv"
 )
 
 const (

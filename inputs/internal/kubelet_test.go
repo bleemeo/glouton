@@ -1,0 +1,84 @@
+// Copyright 2015-2026 Bleemeo
+//
+// bleemeo.com an infrastructure monitoring solution in the Cloud
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package internal
+
+import "testing"
+
+func TestParsePodVolumePath(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name       string
+		path       string
+		wantOK     bool
+		wantUID    string
+		wantPlugin string
+		wantDir    string
+	}{
+		{
+			name:       "csi",
+			path:       "/var/lib/kubelet/pods/e6a29bd7-8754-4f70-93cd-c32b3bc1cf41/volumes/kubernetes.io~csi/pvc-2d560fc3/mount",
+			wantOK:     true,
+			wantUID:    "e6a29bd7-8754-4f70-93cd-c32b3bc1cf41",
+			wantPlugin: "kubernetes.io~csi",
+			wantDir:    "pvc-2d560fc3",
+		},
+		{
+			name:       "empty-dir",
+			path:       "/var/lib/kubelet/pods/e6a29bd7/volumes/kubernetes.io~empty-dir/cache",
+			wantOK:     true,
+			wantUID:    "e6a29bd7",
+			wantPlugin: "kubernetes.io~empty-dir",
+			wantDir:    "cache",
+		},
+		{
+			name:   "not a pod volume",
+			path:   "/",
+			wantOK: false,
+		},
+		{
+			name:   "host path under var lib",
+			path:   "/var/lib/docker/overlay2",
+			wantOK: false,
+		},
+		{
+			name:   "subpath is not a volumes mount",
+			path:   "/var/lib/kubelet/pods/e6a29bd7/volume-subpaths/tigera-ca-bundle/calico-node/1",
+			wantOK: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			podUID, plugin, dir, ok := ParsePodVolumePath(tc.path)
+			if ok != tc.wantOK {
+				t.Fatalf("ParsePodVolumePath(%q) ok = %v, want %v", tc.path, ok, tc.wantOK)
+			}
+
+			if !tc.wantOK {
+				return
+			}
+
+			if podUID != tc.wantUID || plugin != tc.wantPlugin || dir != tc.wantDir {
+				t.Errorf("ParsePodVolumePath(%q) = (%q, %q, %q), want (%q, %q, %q)",
+					tc.path, podUID, plugin, dir, tc.wantUID, tc.wantPlugin, tc.wantDir)
+			}
+		})
+	}
+}

@@ -17,8 +17,11 @@
 package disk
 
 import (
+	"maps"
 	"os"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
@@ -33,15 +36,38 @@ import (
 // inputName is the name of the disk input plugin.
 const inputName = "disk"
 
+// holdTimeout is how long a pod-volume metric is held back (dropped) while waiting
+// for its pod to be discovered. Past this delay the metric is emitted in degraded
+// mode (raw mount path as item, without Kubernetes labels) so a full disk stays
+// visible even if the pod association is broken.
+const holdTimeout = 5 * time.Minute
+
+// KubernetesPodResolver resolves Kubernetes labels for a pod volume mount.
+type KubernetesPodResolver interface {
+	// PodVolumeLabels returns the Kubernetes labels (namespace, pod_name, owner_kind,
+	// owner_name) for the pod with the given UID. found is false when the pod is not
+	// (yet) known.
+	PodVolumeLabels(podUID string) (labels map[string]string, found bool)
+	// CSIVolumeLabels returns the labels identifying a CSI volume mount whose kubelet
+	// directory is dir: {pv} (+ {volume} when resolvable) for a PVC-backed volume, or
+	// {volume} for an inline (ephemeral) CSI volume.
+	CSIVolumeLabels(podUID, dir string) map[string]string
+}
+
 type diskTransformer struct {
 	mountPoint string
 	matcher    types.Matcher
+	enricher   *k8sEnricher
 }
 
 // New initializes disk.Input
 //
 // mountPoint is the root path to monitor. Useful when running inside a Docker.
-func New(mountPoint string, pathMatcher types.Matcher, ignoreFSTypes []string) (i telegraf.Input, err error) {
+// k8sResolver may be nil; when set, filesystem metrics of Kubernetes pod volumes
+// are enriched with pod labels (namespace, pod_name, owner_*, volume/pv) and their
+// item is rewritten to a short stable per-node identifier instead of the volatile
+// kubelet mount path.
+func New(mountPoint string, pathMatcher types.Matcher, ignoreFSTypes []string, k8sResolver KubernetesPodResolver) (i telegraf.Input, err error) {
 	input, ok := telegraf_inputs.Inputs[inputName]
 
 	if ok {
@@ -53,9 +79,19 @@ func New(mountPoint string, pathMatcher types.Matcher, ignoreFSTypes []string) (
 		}
 
 		dt := diskTransformer{
-			strings.TrimRight(mountPoint, "/"),
-			pathMatcher,
+			mountPoint: strings.TrimRight(mountPoint, "/"),
+			matcher:    pathMatcher,
 		}
+
+		if k8sResolver != nil {
+			dt.enricher = &k8sEnricher{
+				resolver:     k8sResolver,
+				holdTimeout:  holdTimeout,
+				pendingSince: make(map[string]pendingEntry),
+				now:          time.Now,
+			}
+		}
+
 		i = &internal.Input{
 			Input: diskDeduplicateInput,
 			Accumulator: internal.Accumulator{
@@ -94,9 +130,130 @@ func (dt diskTransformer) renameGlobal(gatherContext internal.GatherContext) (in
 		return gatherContext, true
 	}
 
+	// Kubernetes pod volumes get pod labels and a short stable item instead of the
+	// volatile kubelet mount path. handled is true when item is such a pod volume mount.
+	if dt.enricher != nil {
+		if drop, handled := dt.enricher.enrich(item, gatherContext.Tags); handled {
+			return gatherContext, drop
+		}
+	}
+
 	gatherContext.Tags[types.LabelItem] = item
 
 	return gatherContext, false
+}
+
+type pendingEntry struct {
+	firstSeen time.Time
+	lastSeen  time.Time
+}
+
+// k8sEnricher adds Kubernetes pod labels to filesystem metrics of pod volumes.
+type k8sEnricher struct {
+	resolver    KubernetesPodResolver
+	holdTimeout time.Duration
+	lastPurge   time.Time
+
+	l sync.Mutex
+	// pendingSince records, per unresolved pod volume, when it was first seen, to
+	// implement the hold timeout.
+	pendingSince map[string]pendingEntry
+	now          func() time.Time
+}
+
+// enrich sets the Kubernetes labels of a pod volume mount into tags, dropping the
+// item label. handled is false when path is not a pod volume mount (the caller
+// then keeps the normal item label). drop is true while the metric is held back
+// waiting for its pod to be discovered.
+func (e *k8sEnricher) enrich(path string, tags map[string]string) (drop, handled bool) {
+	e.runPurge()
+
+	podUID, plugin, dir, ok := internal.ParsePodVolumePath(path)
+	if !ok {
+		return false, false
+	}
+
+	podLabels, found := e.resolver.PodVolumeLabels(podUID)
+	if !found {
+		return e.holdOrDegrade(podUID, dir, path, tags), true
+	}
+
+	e.l.Lock()
+	delete(e.pendingSince, podUID+"/"+dir)
+	e.l.Unlock()
+
+	for name, value := range podLabels {
+		if value != "" {
+			tags[name] = value
+		}
+	}
+
+	if plugin == internal.CSIPlugin {
+		// A CSI directory is the PersistentVolume name (PVC-backed) or the in-pod volume
+		// name (inline ephemeral); the resolver classifies it. For other plugins the path
+		// directory already is the volume name.
+		maps.Copy(tags, e.resolver.CSIVolumeLabels(podUID, dir))
+	} else {
+		tags[types.LabelVolume] = dir
+	}
+
+	// item is the shortest stable identifier unique per node, kept for dashboards that
+	// group disks by item. The PV name is unique per node; otherwise (inline ephemeral
+	// volumes) the volume name is only unique within the pod, so prefix it with pod_name.
+	switch {
+	case tags[types.LabelPV] != "":
+		tags[types.LabelItem] = tags[types.LabelPV]
+		// no need to kept the same value in "item" and "pv"
+		delete(tags, types.LabelPV)
+	case tags[types.LabelVolume] != "":
+		tags[types.LabelItem] = tags[types.LabelPodName] + "/" + tags[types.LabelVolume]
+	}
+
+	return false, true
+}
+
+func (e *k8sEnricher) runPurge() {
+	e.l.Lock()
+	defer e.l.Unlock()
+
+	if e.lastPurge.Add(time.Hour).After(e.now()) {
+		return
+	}
+
+	e.lastPurge = e.now()
+
+	for k, entry := range e.pendingSince {
+		if entry.lastSeen.Add(10 * time.Minute).Before(e.now()) {
+			delete(e.pendingSince, k)
+		}
+	}
+}
+
+// holdOrDegrade decides whether to keep holding back an unresolved pod volume
+// (drop=true) or, once the hold timeout elapsed, emit it in degraded mode (item =
+// raw mount path, no Kubernetes labels).
+func (e *k8sEnricher) holdOrDegrade(podUID, dir, path string, tags map[string]string) (drop bool) {
+	key := podUID + "/" + dir
+
+	e.l.Lock()
+
+	entry, exists := e.pendingSince[key]
+	if !exists {
+		entry.firstSeen = e.now()
+	}
+
+	entry.lastSeen = e.now()
+	e.pendingSince[key] = entry
+
+	e.l.Unlock()
+
+	if e.now().Sub(entry.firstSeen) < e.holdTimeout {
+		return true
+	}
+
+	tags[types.LabelItem] = path
+
+	return false
 }
 
 func (dt diskTransformer) transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]any) map[string]float64 {

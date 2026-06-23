@@ -74,6 +74,7 @@ rules:
       - pods
       - nodes
       - namespaces
+      - persistentvolumeclaims
       - replicasets
       - deployments
       - statefulsets
