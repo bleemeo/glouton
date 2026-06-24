@@ -242,26 +242,6 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 
 	// This is done to capture the last response TLS handshake state.
 	subCtx := httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
-		ConnectStart: func(network, addr string) {
-			if !target.IsPublicProbe {
-				return
-			}
-
-			host, port, err := net.SplitHostPort(addr)
-			if err != nil {
-				return
-			}
-
-			if port == "53" {
-				return
-			}
-
-			ip := net.ParseIP(host)
-			if ip != nil && (ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLoopback()) {
-				extLogger.WarnContext(ctx, "blocked: redirect to private IP", "addr", addr)
-				cancel()
-			}
-		},
 		GetConn: func(hostPort string) {
 			l.Lock()
 			defer l.Unlock()
@@ -277,6 +257,15 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 			currentRoundTrip = roundTrip{
 				HostPort: hostPort,
 				TLSState: nil,
+			}
+			if target.IsPublicProbe {
+				checkCtx, checkCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer checkCancel()
+
+				if err := checkNotPrivateTarget(checkCtx, hostPort); err != nil {
+					extLogger.WarnContext(ctx, "blocked: redirect to private IP", "hostPort", hostPort)
+					cancel()
+				}
 			}
 		},
 		TLSHandshakeDone: func(cs tls.ConnectionState, e error) {
