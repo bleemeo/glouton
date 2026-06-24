@@ -247,8 +247,12 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 				return
 			}
 
-			host, _, err := net.SplitHostPort(addr)
+			host, port, err := net.SplitHostPort(addr)
 			if err != nil {
+				return
+			}
+
+			if port == "53" {
 				return
 			}
 
