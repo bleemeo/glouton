@@ -42,14 +42,9 @@ import (
 	"github.com/bleemeo/glouton/types"
 
 	cerrdefs "github.com/containerd/errdefs"
-	dockerTypes "github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/common"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/events"
-	"github.com/docker/docker/api/types/image"
-	"github.com/docker/docker/api/types/network"
-	docker "github.com/docker/docker/client"
-	"github.com/docker/docker/pkg/stdcopy"
+	"github.com/moby/moby/api/pkg/stdcopy"
+	"github.com/moby/moby/api/types/container"
+	docker "github.com/moby/moby/client"
 	"github.com/shirou/gopsutil/v4/process"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/metric/noop"
@@ -445,7 +440,7 @@ func (d *Docker) Exec(ctx context.Context, containerID string, cmd []string) ([]
 		return nil, err
 	}
 
-	id, err := cl.ContainerExecCreate(ctx, containerID, container.ExecOptions{
+	id, err := cl.ExecCreate(ctx, containerID, docker.ExecCreateOptions{
 		Cmd:          cmd,
 		AttachStdout: true,
 		AttachStderr: true,
@@ -454,7 +449,7 @@ func (d *Docker) Exec(ctx context.Context, containerID string, cmd []string) ([]
 		return nil, err
 	}
 
-	resp, err := cl.ContainerExecAttach(ctx, id.ID, container.ExecAttachOptions{})
+	resp, err := cl.ExecAttach(ctx, id.ID, docker.ExecAttachOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -511,7 +506,7 @@ func (d *Docker) ensureClient(ctx context.Context) (cl dockerClient, err error) 
 		}
 	}
 
-	if _, err := cl.Ping(ctx); err != nil {
+	if _, err := cl.Ping(ctx, docker.PingOptions{}); err != nil {
 		d.apiVersion = ""
 		d.serverVersion = ""
 		d.client = nil
@@ -542,7 +537,8 @@ func (d *Docker) run(ctx context.Context) error {
 	ctx2, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	eventC, errC := cl.Events(ctx2, events.ListOptions{Since: d.lastEventAt.Format(time.RFC3339Nano)})
+	eventsResult := cl.Events(ctx2, docker.EventsListOptions{Since: d.lastEventAt.Format(time.RFC3339Nano)})
+	eventC, errC := eventsResult.Messages, eventsResult.Err
 
 	var lastCleanup time.Time
 
@@ -677,8 +673,8 @@ func (d *Docker) updateContainers(ctx context.Context) error {
 	bridgeNetworks := make(map[string]any)
 	containerAddressOnDockerBridge := make(map[string]string)
 
-	if networks, err := cl.NetworkList(ctx, network.ListOptions{}); err == nil {
-		for _, n := range networks {
+	if networks, err := cl.NetworkList(ctx, docker.NetworkListOptions{}); err == nil {
+		for _, n := range networks.Items {
 			if n.Name == "" {
 				continue
 			}
@@ -689,15 +685,16 @@ func (d *Docker) updateContainers(ctx context.Context) error {
 		}
 	}
 
-	if network, err := cl.NetworkInspect(ctx, "docker_gwbridge", network.InspectOptions{}); err == nil {
-		for containerID, endpoint := range network.Containers {
-			// IPv4Address is an CIDR (like "172.17.0.4/24")
-			address := strings.Split(endpoint.IPv4Address, "/")[0]
-			containerAddressOnDockerBridge[containerID] = address
+	if gwBridge, err := cl.NetworkInspect(ctx, "docker_gwbridge", docker.NetworkInspectOptions{}); err == nil {
+		for containerID, endpoint := range gwBridge.Network.Containers {
+			// IPv4Address is a CIDR (like "172.17.0.4/24"); keep only the address part.
+			if endpoint.IPv4Address.IsValid() {
+				containerAddressOnDockerBridge[containerID] = endpoint.IPv4Address.Addr().String()
+			}
 		}
 	}
 
-	dockerContainers, err := cl.ContainerList(ctx, container.ListOptions{All: true})
+	dockerContainers, err := cl.ContainerList(ctx, docker.ContainerListOptions{All: true})
 	if err != nil {
 		return err
 	}
@@ -705,8 +702,8 @@ func (d *Docker) updateContainers(ctx context.Context) error {
 	containers := make(map[string]dockerContainer)
 	ignoredID := make(map[string]bool)
 
-	for _, c := range dockerContainers {
-		inspect, err := cl.ContainerInspect(ctx, c.ID)
+	for _, c := range dockerContainers.Items {
+		inspectResult, err := cl.ContainerInspect(ctx, c.ID, docker.ContainerInspectOptions{})
 		if err != nil && cerrdefs.IsNotFound(err) {
 			continue // the container was deleted between call. Ignore it
 		}
@@ -715,8 +712,10 @@ func (d *Docker) updateContainers(ctx context.Context) error {
 			return err
 		}
 
-		if inspect.ContainerJSONBase == nil {
-			logger.V(2).Printf("containerJSON base is empty for %s", c.ID)
+		inspect := inspectResult.Container
+
+		if inspect.ID == "" {
+			logger.V(2).Printf("container inspect is empty for %s", c.ID)
 
 			continue
 		}
@@ -773,12 +772,14 @@ func (d *Docker) updateContainer(ctx context.Context, cl dockerClient, container
 
 	var result dockerContainer
 
-	inspect, err := cl.ContainerInspect(ctx, containerID)
+	inspectResult, err := cl.ContainerInspect(ctx, containerID, docker.ContainerInspectOptions{})
 	if err != nil {
 		return result, err
 	}
 
-	if inspect.ContainerJSONBase == nil {
+	inspect := inspectResult.Container
+
+	if inspect.ID == "" {
 		return result, errNilJSON
 	}
 
@@ -805,10 +806,6 @@ func (d *Docker) updateContainer(ctx context.Context, cl dockerClient, container
 }
 
 func (d *Docker) primaryAddress(inspect container.InspectResponse, bridgeNetworks map[string]any, containerAddressOnDockerBridge map[string]string) string {
-	if inspect.NetworkSettings != nil && inspect.NetworkSettings.IPAddress != "" { //nolint:staticcheck
-		return inspect.NetworkSettings.IPAddress //nolint:staticcheck
-	}
-
 	addressOfFirstNetwork := ""
 
 	if inspect.NetworkSettings != nil {
@@ -817,12 +814,12 @@ func (d *Docker) primaryAddress(inspect container.InspectResponse, bridgeNetwork
 				return "127.0.0.1"
 			}
 
-			if _, ok := bridgeNetworks[key]; ep.IPAddress != "" && ok {
-				return ep.IPAddress
+			if _, ok := bridgeNetworks[key]; ep.IPAddress.IsValid() && ok {
+				return ep.IPAddress.String()
 			}
 
-			if addressOfFirstNetwork == "" && ep.IPAddress != "" {
-				addressOfFirstNetwork = ep.IPAddress
+			if addressOfFirstNetwork == "" && ep.IPAddress.IsValid() {
+				addressOfFirstNetwork = ep.IPAddress.String()
 			}
 		}
 	}
@@ -862,7 +859,7 @@ func (d *Docker) getClient(ctx context.Context) (cl dockerClient, err error) {
 				continue
 			}
 
-			v, err := cl.ServerVersion(ctx)
+			v, err := cl.ServerVersion(ctx, docker.ServerVersionOptions{})
 			if err != nil {
 				logger.V(2).Printf("Docker openConnection on %s failed: %v", addr, err)
 
@@ -892,17 +889,17 @@ func (d *Docker) getClient(ctx context.Context) (cl dockerClient, err error) {
 }
 
 type dockerClient interface {
-	ContainerExecAttach(ctx context.Context, execID string, config container.ExecAttachOptions) (dockerTypes.HijackedResponse, error)
-	ContainerExecCreate(ctx context.Context, container string, config container.ExecOptions) (common.IDResponse, error)
-	ContainerInspect(ctx context.Context, container string) (container.InspectResponse, error)
-	ContainerList(ctx context.Context, options container.ListOptions) ([]container.Summary, error)
-	ContainerTop(ctx context.Context, container string, arguments []string) (container.TopResponse, error)
-	Events(ctx context.Context, options events.ListOptions) (<-chan events.Message, <-chan error)
-	ImageInspect(ctx context.Context, imageID string, inspectOpts ...docker.ImageInspectOption) (image.InspectResponse, error)
-	NetworkInspect(ctx context.Context, network string, options network.InspectOptions) (network.Inspect, error)
-	NetworkList(ctx context.Context, options network.ListOptions) ([]network.Summary, error)
-	Ping(ctx context.Context) (dockerTypes.Ping, error)
-	ServerVersion(ctx context.Context) (dockerTypes.Version, error)
+	ContainerInspect(ctx context.Context, containerID string, options docker.ContainerInspectOptions) (docker.ContainerInspectResult, error)
+	ContainerList(ctx context.Context, options docker.ContainerListOptions) (docker.ContainerListResult, error)
+	ContainerTop(ctx context.Context, containerID string, options docker.ContainerTopOptions) (docker.ContainerTopResult, error)
+	Events(ctx context.Context, options docker.EventsListOptions) docker.EventsResult
+	ExecAttach(ctx context.Context, execID string, options docker.ExecAttachOptions) (docker.ExecAttachResult, error)
+	ExecCreate(ctx context.Context, containerID string, options docker.ExecCreateOptions) (docker.ExecCreateResult, error)
+	ImageInspect(ctx context.Context, imageID string, inspectOpts ...docker.ImageInspectOption) (docker.ImageInspectResult, error)
+	NetworkInspect(ctx context.Context, networkID string, options docker.NetworkInspectOptions) (docker.NetworkInspectResult, error)
+	NetworkList(ctx context.Context, options docker.NetworkListOptions) (docker.NetworkListResult, error)
+	Ping(ctx context.Context, options docker.PingOptions) (docker.PingResult, error)
+	ServerVersion(ctx context.Context, options docker.ServerVersionOptions) (docker.ServerVersionResult, error)
 	Close() error
 }
 
@@ -917,16 +914,17 @@ func openConnection(ctx context.Context, host string) (cl dockerClient, err erro
 	}
 
 	if host == "" {
-		cl, err = docker.NewClientWithOpts(docker.FromEnv, docker.WithAPIVersionNegotiation())
+		cl, err = docker.New(docker.FromEnv)
 	} else {
-		cl, err = docker.NewClientWithOpts(docker.FromEnv, docker.WithHost(host), docker.WithAPIVersionNegotiation())
+		cl, err = docker.New(docker.FromEnv, docker.WithHost(host))
 	}
 
 	if err != nil {
 		return nil, err
 	}
 
-	if _, err = cl.Ping(ctx); err != nil {
+	// API-version negotiation now happens through Ping; the client option is a no-op.
+	if _, err = cl.Ping(ctx, docker.PingOptions{NegotiateAPIVersion: true}); err != nil {
 		return nil, err
 	}
 
@@ -1111,12 +1109,14 @@ func (c dockerContainer) Health() (facts.ContainerHealth, string) {
 	}
 
 	switch c.inspect.State.Health.Status {
-	case "healthy":
+	case container.Healthy:
 		return facts.ContainerHealthy, msg
-	case "starting":
+	case container.Starting:
 		return facts.ContainerStarting, msg
-	case "unhealthy":
+	case container.Unhealthy:
 		return facts.ContainerUnhealthy, msg
+	case container.NoHealthcheck:
+		return facts.ContainerHealthUnknown, msg
 	default:
 		return facts.ContainerHealthUnknown, msg
 	}
@@ -1195,9 +1195,9 @@ func (c dockerContainer) ListenAddresses() []facts.ListenAddress {
 		}
 
 		addresses = append(addresses, facts.ListenAddress{
-			NetworkFamily: port.Proto(),
+			NetworkFamily: string(port.Proto()),
 			Address:       c.PrimaryAddress(),
-			Port:          port.Int(),
+			Port:          int(port.Num()),
 		})
 	}
 
@@ -1254,7 +1254,7 @@ func (c dockerContainer) State() facts.ContainerState {
 		return facts.ContainerStopped
 	}
 
-	return dockerStatus2State(c.inspect.State.Status)
+	return dockerStatus2State(string(c.inspect.State.Status))
 }
 
 func (c dockerContainer) StoppedAndReplaced() bool {
@@ -1421,7 +1421,7 @@ func (d *dockerProcessQuerier) processesContainerMap(ctx context.Context, c fact
 	return nil
 }
 
-func (d *dockerProcessQuerier) top(ctx context.Context, c facts.Container) (container.TopResponse, container.TopResponse, error) {
+func (d *dockerProcessQuerier) top(ctx context.Context, c facts.Container) (docker.ContainerTopResult, docker.ContainerTopResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, dockerTimeout)
 	defer cancel()
 
@@ -1436,20 +1436,20 @@ func (d *dockerProcessQuerier) top(ctx context.Context, c facts.Container) (cont
 	d.d.l.Unlock()
 
 	if err != nil || cl == nil {
-		return container.TopResponse{}, container.TopResponse{}, err
+		return docker.ContainerTopResult{}, docker.ContainerTopResult{}, err
 	}
 
-	top, err := cl.ContainerTop(ctx, c.ID(), nil)
+	top, err := cl.ContainerTop(ctx, c.ID(), docker.ContainerTopOptions{})
 	if err != nil {
-		return top, container.TopResponse{}, err
+		return top, docker.ContainerTopResult{}, err
 	}
 
-	topWaux, err := cl.ContainerTop(ctx, c.ID(), []string{"waux"})
+	topWaux, err := cl.ContainerTop(ctx, c.ID(), docker.ContainerTopOptions{Arguments: []string{"waux"}})
 
 	return top, topWaux, err
 }
 
-func decodeDocker(top container.TopResponse, c facts.Container) []facts.Process {
+func decodeDocker(top docker.ContainerTopResult, c facts.Container) []facts.Process {
 	userIndex := -1
 	pidIndex := -1
 	pcpuIndex := -1

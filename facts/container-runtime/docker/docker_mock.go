@@ -26,21 +26,17 @@ import (
 	"reflect"
 
 	"github.com/bleemeo/glouton/facts"
-	docker "github.com/docker/docker/client"
 
-	dockerTypes "github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/common"
-	containerTypes "github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/events"
-	"github.com/docker/docker/api/types/image"
-	"github.com/docker/docker/api/types/network"
+	containerTypes "github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/events"
+	docker "github.com/moby/moby/client"
 )
 
 // MockDockerClient is a fake Docker client that could be used during test.
 type MockDockerClient struct {
 	EventChanMaker func() <-chan events.Message
 	Containers     []containerTypes.InspectResponse
-	Version        dockerTypes.Version
+	Version        docker.ServerVersionResult
 	Top            map[string]containerTypes.TopResponse
 	TopWaux        map[string]containerTypes.TopResponse
 	ReturnError    error
@@ -54,43 +50,43 @@ var (
 	errContainerTopMissingArg = errors.New("ContainerTop called without empty arg or waux")
 )
 
-// ContainerExecAttach is not implemented.
-func (cl *MockDockerClient) ContainerExecAttach(context.Context, string, containerTypes.ExecAttachOptions) (dockerTypes.HijackedResponse, error) {
-	return dockerTypes.HijackedResponse{}, errNotImplemented
+// ExecAttach is not implemented.
+func (cl *MockDockerClient) ExecAttach(context.Context, string, docker.ExecAttachOptions) (docker.ExecAttachResult, error) {
+	return docker.ExecAttachResult{}, errNotImplemented
 }
 
-// ContainerExecCreate is not implemented.
-func (cl *MockDockerClient) ContainerExecCreate(context.Context, string, containerTypes.ExecOptions) (common.IDResponse, error) {
-	return common.IDResponse{}, errNotImplemented
+// ExecCreate is not implemented.
+func (cl *MockDockerClient) ExecCreate(context.Context, string, docker.ExecCreateOptions) (docker.ExecCreateResult, error) {
+	return docker.ExecCreateResult{}, errNotImplemented
 }
 
 // ContainerInspect return inspect for in-memory list of containers.
-func (cl *MockDockerClient) ContainerInspect(_ context.Context, container string) (containerTypes.InspectResponse, error) {
+func (cl *MockDockerClient) ContainerInspect(_ context.Context, container string, _ docker.ContainerInspectOptions) (docker.ContainerInspectResult, error) {
 	if cl.ReturnError != nil {
-		return containerTypes.InspectResponse{}, cl.ReturnError
+		return docker.ContainerInspectResult{}, cl.ReturnError
 	}
 
 	for _, c := range cl.Containers {
 		if c.ID == container || c.Name == "/"+container {
-			return c, nil
+			return docker.ContainerInspectResult{Container: c}, nil
 		}
 	}
 
-	return containerTypes.InspectResponse{}, errNotFound
+	return docker.ContainerInspectResult{}, errNotFound
 }
 
 // ContainerList list containers from in-memory list.
-func (cl *MockDockerClient) ContainerList(_ context.Context, options containerTypes.ListOptions) ([]containerTypes.Summary, error) {
+func (cl *MockDockerClient) ContainerList(_ context.Context, options docker.ContainerListOptions) (docker.ContainerListResult, error) {
 	if cl.ReturnError != nil {
-		return nil, cl.ReturnError
+		return docker.ContainerListResult{}, cl.ReturnError
 	}
 
-	if !reflect.DeepEqual(options, containerTypes.ListOptions{All: true}) {
-		return nil, fmt.Errorf("ContainerList %w with options other than all=True", errNotImplemented)
+	if !reflect.DeepEqual(options, docker.ContainerListOptions{All: true}) {
+		return docker.ContainerListResult{}, fmt.Errorf("ContainerList %w with options other than all=True", errNotImplemented)
 	}
 
 	if cl.Containers == nil {
-		return nil, fmt.Errorf("ContainerList %w", errNotImplemented)
+		return docker.ContainerListResult{}, fmt.Errorf("ContainerList %w", errNotImplemented)
 	}
 
 	result := make([]containerTypes.Summary, len(cl.Containers))
@@ -100,78 +96,82 @@ func (cl *MockDockerClient) ContainerList(_ context.Context, options containerTy
 		}
 	}
 
-	return result, nil
+	return docker.ContainerListResult{Items: result}, nil
 }
 
 // ContainerTop return hard-coded value for top.
-func (cl *MockDockerClient) ContainerTop(_ context.Context, container string, arguments []string) (containerTypes.TopResponse, error) {
+func (cl *MockDockerClient) ContainerTop(_ context.Context, container string, options docker.ContainerTopOptions) (docker.ContainerTopResult, error) {
 	cl.TopCallCount++
 
 	if cl.ReturnError != nil {
-		return containerTypes.TopResponse{}, cl.ReturnError
+		return docker.ContainerTopResult{}, cl.ReturnError
 	}
 
-	if len(arguments) == 0 {
-		return cl.Top[container], nil
+	if len(options.Arguments) == 0 {
+		top := cl.Top[container]
+
+		return docker.ContainerTopResult{Processes: top.Processes, Titles: top.Titles}, nil
 	}
 
-	if len(arguments) == 1 && arguments[0] == "waux" {
-		return cl.TopWaux[container], nil
+	if len(options.Arguments) == 1 && options.Arguments[0] == "waux" {
+		top := cl.TopWaux[container]
+
+		return docker.ContainerTopResult{Processes: top.Processes, Titles: top.Titles}, nil
 	}
 
-	return containerTypes.TopResponse{}, errContainerTopMissingArg
+	return docker.ContainerTopResult{}, errContainerTopMissingArg
 }
 
 // Events do events.
-func (cl *MockDockerClient) Events(context.Context, events.ListOptions) (<-chan events.Message, <-chan error) {
+func (cl *MockDockerClient) Events(context.Context, docker.EventsListOptions) docker.EventsResult {
 	if cl.ReturnError != nil {
 		ch := make(chan error, 1)
 		ch <- cl.ReturnError
 
-		return nil, ch
+		return docker.EventsResult{Err: ch}
 	}
 
 	if cl.EventChanMaker != nil {
-		return cl.EventChanMaker(), nil
+		return docker.EventsResult{Messages: cl.EventChanMaker()}
 	}
 
 	ch := make(chan error, 1)
 	ch <- fmt.Errorf("Events %w", errNotImplemented)
 
-	return nil, ch
+	return docker.EventsResult{Err: ch}
 }
 
-func (cl *MockDockerClient) ImageInspect(context.Context, string, ...docker.ImageInspectOption) (image.InspectResponse, error) {
-	return image.InspectResponse{}, errNotImplemented
+func (cl *MockDockerClient) ImageInspect(context.Context, string, ...docker.ImageInspectOption) (docker.ImageInspectResult, error) {
+	return docker.ImageInspectResult{}, errNotImplemented
 }
 
 // NetworkInspect is not implemented.
-func (cl *MockDockerClient) NetworkInspect(context.Context, string, network.InspectOptions) (network.Inspect, error) {
-	return network.Inspect{}, fmt.Errorf("NetworkInspect %w", errNotImplemented)
+func (cl *MockDockerClient) NetworkInspect(context.Context, string, docker.NetworkInspectOptions) (docker.NetworkInspectResult, error) {
+	return docker.NetworkInspectResult{}, fmt.Errorf("NetworkInspect %w", errNotImplemented)
 }
 
 // NetworkList is not implemented.
-func (cl *MockDockerClient) NetworkList(context.Context, network.ListOptions) ([]network.Inspect, error) {
-	return nil, fmt.Errorf("NetworkList %w", errNotImplemented)
+func (cl *MockDockerClient) NetworkList(context.Context, docker.NetworkListOptions) (docker.NetworkListResult, error) {
+	return docker.NetworkListResult{}, fmt.Errorf("NetworkList %w", errNotImplemented)
 }
 
 // Ping do nothing.
-func (cl *MockDockerClient) Ping(context.Context) (dockerTypes.Ping, error) {
+func (cl *MockDockerClient) Ping(context.Context, docker.PingOptions) (docker.PingResult, error) {
 	if cl.ReturnError != nil {
-		return dockerTypes.Ping{}, cl.ReturnError
+		return docker.PingResult{}, cl.ReturnError
 	}
 
-	return dockerTypes.Ping{}, nil
+	return docker.PingResult{}, nil
 }
 
 // ServerVersion do server version.
-func (cl *MockDockerClient) ServerVersion(context.Context) (dockerTypes.Version, error) {
+func (cl *MockDockerClient) ServerVersion(context.Context, docker.ServerVersionOptions) (docker.ServerVersionResult, error) {
 	if cl.ReturnError != nil {
-		return dockerTypes.Version{}, cl.ReturnError
+		return docker.ServerVersionResult{}, cl.ReturnError
 	}
 
 	if len(cl.Version.Components) == 0 {
-		return dockerTypes.Version{
+		return docker.ServerVersionResult{
 			Version: "42",
 		}, nil
 	}
