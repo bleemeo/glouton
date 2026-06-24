@@ -216,7 +216,9 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string, help
 		CreationDate:   monitor.CreationDate,
 		RefreshRate:    monitor.MetricMonitorResolution,
 		Labels: map[string]string{
-			types.LabelMetaBleemeoTargetAgent:     monitor.URL,
+			// Censor credentials embedded in the URL: this label is relabeled into the
+			// 'instance' label sent to the Bleemeo API and dumped in diagnostics.
+			types.LabelMetaBleemeoTargetAgent:     config.CensorURLCredentials(monitor.URL),
 			types.LabelMetaProbeServiceUUID:       monitor.ID,
 			types.LabelMetaBleemeoTargetAgentUUID: monitor.BleemeoAgentID,
 		},
@@ -270,7 +272,7 @@ func genCollectorFromStaticTarget(option staticTargetOptions, helpers commonHelp
 		OriginalURL: option.URL,
 		Module:      option.Module,
 		Labels: map[string]string{
-			types.LabelMetaBleemeoTargetAgent: option.Name,
+			types.LabelMetaBleemeoTargetAgent: config.CensorURLCredentials(option.Name),
 			"module":                          option.ModuleName,
 		},
 		CommonHelpers: helpers,
@@ -440,7 +442,7 @@ func (m *RegisterManager) DiagnosticArchive(_ context.Context, archive types.Arc
 	}
 
 	for _, t := range targets {
-		fmt.Fprintf(file, "url=%s labels=%v\n", t.URL, t.Labels)
+		fmt.Fprintf(file, "url=%s labels=%v\n", config.CensorURLCredentials(t.URL), t.Labels)
 	}
 
 	return nil

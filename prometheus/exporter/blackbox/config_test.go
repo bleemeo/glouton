@@ -18,11 +18,13 @@ package blackbox
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/types"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	bbConf "github.com/prometheus/blackbox_exporter/config"
@@ -150,6 +152,37 @@ func TestNoTargetsConfigParsing(t *testing.T) {
 
 	if !reflect.DeepEqual(bbManager.targets, []blackboxCollector{}) {
 		t.Fatalf("TestConfigParsing() = %+v, want %+v", bbManager.targets, []blackboxCollector{})
+	}
+}
+
+// TestDynamicTargetCensorsURLCredentials ensures credentials embedded in a
+// monitor URL are redacted in the __meta_bleemeo_target_agent label (which is
+// relabeled into 'instance' sent to the Bleemeo API and dumped in diagnostics),
+// while the actual probe target (collector.URL) keeps the real credentials.
+func TestDynamicTargetCensorsURLCredentials(t *testing.T) {
+	t.Parallel()
+
+	monitor := types.Monitor{ //nolint:gosec
+		ID:             "1cb119d1-df61-41c7-ae6a-5b4e54442e00",
+		BleemeoAgentID: "60ed127d-b3d3-4c82-89e2-df74a80a9e9e",
+		URL:            "http://user:pass@localhost:1234/path",
+	}
+
+	collector, err := genCollectorFromDynamicTarget(monitor, "dummy-user-agent", mockHelpers{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gotLabel := collector.Labels[types.LabelMetaBleemeoTargetAgent]
+	wantLabel := "http://user:" + config.CensoredValue + "@localhost:1234/path"
+
+	if gotLabel != wantLabel {
+		t.Errorf("target agent label = %q, want %q", gotLabel, wantLabel)
+	}
+
+	// The probe target must keep the real credentials to be able to probe.
+	if !strings.Contains(collector.URL, "user:pass@") {
+		t.Errorf("probe URL = %q, expected it to keep the real credentials", collector.URL)
 	}
 }
 

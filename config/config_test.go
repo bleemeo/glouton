@@ -1540,6 +1540,81 @@ func TestDump(t *testing.T) {
 	}
 }
 
+// TestCensorSecretItem checks the per-item censoring used on the config items
+// synchronized to the Bleemeo API, especially for blackbox module secrets whose
+// flattened keys (bearer_token, credentials) or URL-embedded credentials
+// (proxy_url) aren't named like a typical secret.
+func TestCensorSecretItem(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		key   string
+		value any
+		want  any
+	}{
+		{
+			name:  "blackbox bearer_token",
+			key:   "blackbox.modules.mymod.http.bearer_token",
+			value: "s3cr3t-token",
+			want:  CensoredValue,
+		},
+		{
+			name:  "blackbox bearer_token_file",
+			key:   "blackbox.modules.mymod.http.bearer_token_file",
+			value: "/etc/glouton/token",
+			want:  CensoredValue,
+		},
+		{
+			name:  "blackbox authorization credentials",
+			key:   "blackbox.modules.mymod.http.authorization.credentials",
+			value: "s3cr3t-creds",
+			want:  CensoredValue,
+		},
+		{
+			name:  "blackbox oauth2 client_secret",
+			key:   "blackbox.modules.mymod.http.oauth2.client_secret",
+			value: "s3cr3t",
+			want:  CensoredValue,
+		},
+		{ //nolint:gosec
+			name:  "proxy_url with credentials",
+			key:   "blackbox.modules.mymod.http.proxy_url",
+			value: "http://user:pass@proxy.example.com:3128",
+			want:  "http://user:" + CensoredValue + "@proxy.example.com:3128",
+		},
+		{
+			name:  "proxy_url without credentials is preserved",
+			key:   "blackbox.modules.mymod.http.proxy_url",
+			value: "http://proxy.example.com:3128",
+			want:  "http://proxy.example.com:3128",
+		},
+		{
+			name:  "empty secret is not censored",
+			key:   "blackbox.modules.mymod.http.bearer_token",
+			value: "",
+			want:  "",
+		},
+		{
+			name:  "non-secret string is preserved",
+			key:   "blackbox.modules.mymod.http.method",
+			value: "GET",
+			want:  "GET",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := CensorSecretItem(tc.key, tc.value)
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("CensorSecretItem(%q, %v): (-want +got)\n%s", tc.key, tc.value, diff)
+			}
+		})
+	}
+}
+
 func Test_migrate(t *testing.T) {
 	tests := []struct {
 		Name       string
