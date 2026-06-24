@@ -86,6 +86,7 @@ const (
 	testResServiceName   = "resource['service_name']"
 	testFmt2             = "fmt-2"
 	testOnErrorSend      = "send"
+	testOnErrorSendQuiet = "send_quiet"
 	testFollowName       = "--follow=name"
 	testRegexp           = "regexp"
 )
