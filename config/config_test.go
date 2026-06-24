@@ -1615,6 +1615,55 @@ func TestCensorSecretItem(t *testing.T) {
 	}
 }
 
+// TestCensorURLSecrets checks the diagnostic-only URL censoring: userinfo
+// credentials and secret-looking query parameters are redacted, while the rest
+// of the URL is preserved.
+func TestCensorURLSecrets(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		value string
+		want  string
+	}{
+		{
+			name:  "query secret key",
+			value: "http://localhost:1234/path?key=s3cr3t&foo=bar",
+			want:  "http://localhost:1234/path?key=" + CensoredValue + "&foo=bar",
+		},
+		{
+			name:  "query secret token mixed case",
+			value: "https://host/probe?Token=abc&q=1",
+			want:  "https://host/probe?Token=" + CensoredValue + "&q=1",
+		},
+		{ //nolint:gosec
+			name:  "userinfo and query secret combined",
+			value: "http://user:pass@host:1234/p?api_key=xyz",
+			want:  "http://user:" + CensoredValue + "@host:1234/p?api_key=" + CensoredValue,
+		},
+		{
+			name:  "no secret query parameter is preserved",
+			value: "http://localhost:1234/path?foo=bar&page=2",
+			want:  "http://localhost:1234/path?foo=bar&page=2",
+		},
+		{
+			name:  "non-url string is preserved",
+			value: "not a url",
+			want:  "not a url",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := CensorURLSecrets(tc.value); got != tc.want {
+				t.Errorf("CensorURLSecrets(%q) = %q, want %q", tc.value, got, tc.want)
+			}
+		})
+	}
+}
+
 func Test_migrate(t *testing.T) {
 	tests := []struct {
 		Name       string

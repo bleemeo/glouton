@@ -225,9 +225,9 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 	if target.Module.Prober == proberNameDNS {
 		// DNS is a bit odd in that target.URL is actually the DNS server,
 		// we prefer to show the DNS name to resolve.
-		extLogger = logger.NewSlog().With("url", gloutonConfig.CensorURLCredentials(target.OriginalURL))
+		extLogger = logger.NewSlog().With("url", gloutonConfig.CensorURLSecrets(target.OriginalURL))
 	} else {
-		extLogger = logger.NewSlog().With("url", gloutonConfig.CensorURLCredentials(target.URL))
+		extLogger = logger.NewSlog().With("url", gloutonConfig.CensorURLSecrets(target.URL))
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, target.Module.Timeout)
@@ -586,7 +586,7 @@ func (m *RegisterManager) updateRegistrations() error {
 			// registration.
 			id, err := m.registry.RegisterGatherer(
 				registry.RegistrationOption{
-					Description: "blackbox for " + gloutonConfig.CensorURLCredentials(collector.URL),
+					Description: "blackbox for " + gloutonConfig.CensorURLSecrets(collector.URL),
 					JitterSeed:  hash,
 					MinInterval: collector.RefreshRate,
 					ExtraLabels: collector.Labels,
@@ -609,7 +609,7 @@ func (m *RegisterManager) updateRegistrations() error {
 				gatherer:  g,
 			}
 
-			logger.V(2).Printf("New probe registered for '%s'", gloutonConfig.CensorURLCredentials(collector.Name))
+			logger.V(2).Printf("New probe registered for '%s'", gloutonConfig.CensorURLSecrets(collector.Name))
 		}
 	}
 
@@ -807,7 +807,7 @@ func InternalRunProbe(ctx context.Context, monitor types.Monitor, overrideNow ti
 
 	id, err := reg.RegisterGatherer(
 		registry.RegistrationOption{
-			Description: "blackbox for " + gloutonConfig.CensorURLCredentials(collector.URL),
+			Description: "blackbox for " + gloutonConfig.CensorURLSecrets(collector.URL),
 			JitterSeed:  0,
 			MinInterval: collector.RefreshRate,
 			ExtraLabels: collector.Labels,

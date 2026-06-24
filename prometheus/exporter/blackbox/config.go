@@ -442,7 +442,15 @@ func (m *RegisterManager) DiagnosticArchive(_ context.Context, archive types.Arc
 	}
 
 	for _, t := range targets {
-		fmt.Fprintf(file, "url=%s labels=%v\n", config.CensorURLCredentials(t.URL), t.Labels)
+		// Censor URL secrets (userinfo credentials and secret-looking query
+		// parameters) for the diagnostic only. The real metric labels are left
+		// untouched so the metric identity is preserved.
+		labels := make(map[string]string, len(t.Labels))
+		for k, v := range t.Labels {
+			labels[k] = config.CensorURLSecrets(v)
+		}
+
+		fmt.Fprintf(file, "url=%s labels=%v\n", config.CensorURLSecrets(t.URL), labels)
 	}
 
 	return nil
