@@ -95,9 +95,11 @@ done
 if docker volume ls | grep -q glouton-buildcache; then
    GO_MOUNT_CACHE="-v glouton-buildcache:/go/pkg"
    NODE_MOUNT_CACHE="-v glouton-buildcache:/go/pkg"
+   GO_CACHE_PERSISTED=1
 else
    GO_MOUNT_CACHE=""
    NODE_MOUNT_CACHE=""
+   GO_CACHE_PERSISTED=0
 fi
 
 if [ -z "${GLOUTON_VERSION:-}" ]; then
@@ -152,6 +154,7 @@ if [ "${SKIP_GO_BUILD}" != "1" -o "${SKIP_GO_TEST}" != "1" ]; then
       -e GORELEASER_CURRENT_TAG=0.1.1 \
       -e SKIP_GO_BUILD=$SKIP_GO_BUILD \
       -e SKIP_GO_TEST=$SKIP_GO_TEST \
+      -e GO_CACHE_PERSISTED=$GO_CACHE_PERSISTED \
       -e TARGET_TO_BUILD=$TARGET_TO_BUILD \
       -e GOOS -e GOARCH \
       ${DOCKER_RUN_EXTRA_OPTION} \
