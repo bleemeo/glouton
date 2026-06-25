@@ -244,9 +244,9 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 	subCtx := httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
 		GetConn: func(hostPort string) {
 			l.Lock()
-			defer l.Unlock()
 
 			if ctx.Err() != nil {
+				l.Unlock()
 				return
 			}
 
@@ -258,8 +258,9 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 				HostPort: hostPort,
 				TLSState: nil,
 			}
+			l.Unlock()
 			if target.IsPublicProbe {
-				checkCtx, checkCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				checkCtx, checkCancel := context.WithTimeout(ctx, 10*time.Second)
 				defer checkCancel()
 
 				if err := checkNotPrivateTarget(checkCtx, hostPort); err != nil {
@@ -299,7 +300,7 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 	hackLogger := newDNSHackLogger(extLogger)
 
 	if target.IsPublicProbe && !usedDefaultResolver {
-		checkCtx, checkCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		checkCtx, checkCancel := context.WithTimeout(ctx, 10*time.Second)
 		defer checkCancel()
 		if err := checkNotPrivateTarget(checkCtx, targetURL); err != nil {
 			extLogger.WarnContext(ctx, "blocked: target resolves to private IP", "error", err)
