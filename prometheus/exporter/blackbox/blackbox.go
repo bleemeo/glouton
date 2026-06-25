@@ -247,6 +247,7 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 
 			if ctx.Err() != nil {
 				l.Unlock()
+
 				return
 			}
 
@@ -259,6 +260,7 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 				TLSState: nil,
 			}
 			l.Unlock()
+
 			if target.IsPublicProbe {
 				checkCtx, checkCancel := context.WithTimeout(ctx, 10*time.Second)
 				defer checkCancel()
@@ -284,6 +286,7 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 
 	targetURL := target.URL
 	usedDefaultResolver := targetURL == defaultResolverSentinel
+
 	if usedDefaultResolver {
 		var err error
 
@@ -302,6 +305,7 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 	if target.IsPublicProbe && !usedDefaultResolver {
 		checkCtx, checkCancel := context.WithTimeout(ctx, 10*time.Second)
 		defer checkCancel()
+
 		if err := checkNotPrivateTarget(checkCtx, targetURL); err != nil {
 			extLogger.WarnContext(ctx, "blocked: target resolves to private IP", "error", err)
 
@@ -579,13 +583,9 @@ func gathererInArray(value gathererRegistration, iterable []blackboxCollector) b
 	return slices.ContainsFunc(iterable, value.collector.Equal)
 }
 
-var cgnatRange = func() *net.IPNet {
-	_, network, _ := net.ParseCIDR("100.64.0.0/10")
-
-	return network
-}()
-
 func ipIsCGNate(ip net.IP) bool {
+	_, cgnatRange, _ := net.ParseCIDR("100.64.0.0/10")
+
 	return cgnatRange.Contains(ip)
 }
 
