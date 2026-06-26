@@ -126,6 +126,12 @@ func (rs *reloadState) SetPendingPoints(points []gloutonTypes.MetricPoint) {
 }
 
 func (rs *reloadState) Close() {
+	select {
+	case <-rs.stopped:
+		return // Close is never called twice, but do an extra check to be extra sure
+	default:
+	}
+
 	// Unblock any in-flight callback (the data channels are never closed, so
 	// callbacks can't panic on a send) before disconnecting.
 	close(rs.stopped)

@@ -96,6 +96,12 @@ func (rs *ReloadState) PendingMessagesCount() int {
 }
 
 func (rs *ReloadState) Close() {
+	select {
+	case <-rs.stopped:
+		return // Close is never called twice, but do an extra check to be extra sure
+	default:
+	}
+
 	if rs.client == nil {
 		return
 	}
