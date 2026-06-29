@@ -432,7 +432,7 @@ func TestBuildOperators(t *testing.T) {
 								OperatorType: testRegexParser,
 							},
 						},
-						OnError: testOnErrorSend,
+						OnError: testOnErrorSendQuiet,
 					},
 					ParseFrom: entry.Field{
 						FieldInterface: entry.BodyField{
@@ -459,7 +459,7 @@ func TestBuildOperators(t *testing.T) {
 							OperatorType: testTimeParser,
 						},
 					},
-					OnError: testOnErrorSend,
+					OnError: testOnErrorSendQuiet,
 				},
 				TimeParser: helper.TimeParser{
 					ParseFrom: &entry.Field{

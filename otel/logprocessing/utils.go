@@ -356,7 +356,53 @@ func unmarshalMapstructureHook(from reflect.Value, to reflect.Value) (any, error
 	return from.Interface(), nil // return the data as-is
 }
 
+// quietParserErrors defaults parser operators to on_error="send_quiet" when they
+// don't set on_error explicitly. Stanza's default is "send", which logs one ERROR
+// per line that fails to parse. For a high-volume source whose lines don't all
+// match (e.g. multi-line Postgres logs), that floods the logs and the logger's
+// de-duplication cache (see logger/zap.go) — the root cause of the memory blow-up
+// in diagnostic on_demand_20260623-122247. "send_quiet" still forwards the entry;
+// it only moves the parse-failure log down to debug level.
+func quietParserErrors(ops []config.OTELOperator) []config.OTELOperator {
+	const (
+		typeKey      = "type"
+		onErrorKey   = "on_error"
+		sendQuiet    = "send_quiet"
+		parserSuffix = "_parser"
+	)
+
+	out := make([]config.OTELOperator, len(ops))
+
+	for i, op := range ops {
+		out[i] = op
+
+		// Every stanza parser (regex_parser, json_parser, time_parser,
+		// severity_parser, key_value_parser, ...) logs one error per line that
+		// fails to parse when on_error is left at the default "send".
+		if typ, _ := op[typeKey].(string); !strings.HasSuffix(typ, parserSuffix) {
+			continue
+		}
+
+		if _, set := op[onErrorKey]; set {
+			continue
+		}
+
+		// Clone so we never mutate the shared known-format definitions.
+		cloned := make(config.OTELOperator, len(op)+1)
+		for k, v := range op {
+			cloned[k] = v
+		}
+
+		cloned[onErrorKey] = sendQuiet
+		out[i] = cloned
+	}
+
+	return out
+}
+
 func buildOperators(rawOperators []config.OTELOperator) ([]operator.Config, error) {
+	rawOperators = quietParserErrors(rawOperators)
+
 	operators := make([]operator.Config, 0, len(rawOperators))
 
 	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{

@@ -28,6 +28,12 @@ import (
 const (
 	logDebouncePeriod      = 30 * time.Second
 	logDebouncePurgePeriod = 10 * time.Minute
+	// logDebounceMaxEntries bounds the de-duplication cache. The periodic purge
+	// only drops entries older than logDebouncePeriod, so a flood of *unique*
+	// messages (which never dedupe — e.g. a high-volume log source failing to
+	// parse, each line carrying a unique field) would otherwise add one entry per
+	// message and retain gigabytes between purges.
+	logDebounceMaxEntries = 10000
 )
 
 func ZapLogger() *zap.Logger {
@@ -70,6 +76,15 @@ func (z *zapWrapper) Write(buffer []byte) (int, error) {
 		z.l.Unlock()
 
 		return len(buffer), nil
+	}
+
+	// Keep the cache bounded: if a flood of unique messages has filled it (the
+	// periodic purge can't help when every entry is recent), reset it. Worst
+	// case a few duplicate lines slip through until it fills again.
+	if len(z.m) >= logDebounceMaxEntries {
+		clear(z.m)
+
+		z.lastPurge = time.Now()
 	}
 
 	z.m[msg] = time.Now()
