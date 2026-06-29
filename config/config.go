@@ -790,6 +790,10 @@ func CensorSecretItem(key string, value any) any {
 		return dumpMap(value)
 	case []any:
 		return dumpList(value)
+	case string:
+		// Redact credentials embedded in URL values (e.g. proxy_url=http://user:pass@host),
+		// which aren't caught by isSecret because the key itself isn't a secret.
+		return CensorURLCredentials(value)
 	default:
 		return value
 	}
@@ -797,13 +801,89 @@ func CensorSecretItem(key string, value any) any {
 
 // isSecret returns whether the given config key corresponds to a secret.
 func isSecret(key string) bool {
-	for _, name := range []string{"key", "secret", keyPassword, "passwd"} {
+	for _, name := range []string{"key", "secret", keyPassword, "passwd", "token", "credentials"} {
 		if strings.Contains(key, name) {
 			return true
 		}
 	}
 
 	return false
+}
+
+// CensorURLCredentials redacts the password embedded in the userinfo of an URL
+// value (e.g. "http://user:pass@host" becomes "http://user:*****@host"). Non-URL
+// strings and URLs without credentials are returned unchanged. It is used to make
+// URLs safe for logs, diagnostic archives and data sent to the Bleemeo API.
+func CensorURLCredentials(value string) string {
+	if !strings.Contains(value, "@") {
+		return value
+	}
+
+	u, err := url.Parse(value)
+	if err != nil || u.User == nil {
+		return value
+	}
+
+	if _, hasPassword := u.User.Password(); !hasPassword {
+		return value
+	}
+
+	// Keep only the username (properly escaped) then splice the censored
+	// password back in. Going through url.UserPassword would percent-encode
+	// the placeholder (e.g. "%2A%2A..."), making the result unreadable.
+	u.User = url.User(u.User.Username())
+	censored := u.String()
+	at := strings.Index(censored, "@")
+
+	return censored[:at] + ":" + CensoredValue + censored[at:]
+}
+
+// CensorURLSecrets redacts, in an URL value, both the credentials embedded in the
+// userinfo (see CensorURLCredentials) and the values of query-string parameters
+// whose name looks like a secret (same keyword list as config secrets, see isSecret).
+// It is meant for diagnostic output (e.g. blackbox-targets.txt); metric labels keep
+// the original URL so the metric identity sent to the Bleemeo API is preserved.
+func CensorURLSecrets(value string) string {
+	return CensorURLCredentials(censorURLQuerySecrets(value))
+}
+
+// censorURLQuerySecrets redacts the values of query-string parameters whose name
+// looks like a secret (e.g. "?token=abc" becomes "?token=*****"). The order and
+// encoding of the other parameters are preserved. Non-URL strings and URLs without
+// a matching parameter are returned unchanged.
+func censorURLQuerySecrets(value string) string {
+	u, err := url.Parse(value)
+	if err != nil || u.RawQuery == "" {
+		return value
+	}
+
+	params := strings.Split(u.RawQuery, "&")
+	changed := false
+
+	for i, param := range params {
+		name, paramValue, found := strings.Cut(param, "=")
+		if !found || paramValue == "" {
+			continue
+		}
+
+		decodedName, err := url.QueryUnescape(name)
+		if err != nil {
+			decodedName = name
+		}
+
+		if isSecret(strings.ToLower(decodedName)) {
+			params[i] = name + "=" + CensoredValue
+			changed = true
+		}
+	}
+
+	if !changed {
+		return value
+	}
+
+	u.RawQuery = strings.Join(params, "&")
+
+	return u.String()
 }
 
 func dumpList(root []any) []any {

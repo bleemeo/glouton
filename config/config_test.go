@@ -1540,6 +1540,130 @@ func TestDump(t *testing.T) {
 	}
 }
 
+// TestCensorSecretItem checks the per-item censoring used on the config items
+// synchronized to the Bleemeo API, especially for blackbox module secrets whose
+// flattened keys (bearer_token, credentials) or URL-embedded credentials
+// (proxy_url) aren't named like a typical secret.
+func TestCensorSecretItem(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		key   string
+		value any
+		want  any
+	}{
+		{
+			name:  "blackbox bearer_token",
+			key:   "blackbox.modules.mymod.http.bearer_token",
+			value: "s3cr3t-token",
+			want:  CensoredValue,
+		},
+		{
+			name:  "blackbox bearer_token_file",
+			key:   "blackbox.modules.mymod.http.bearer_token_file",
+			value: "/etc/glouton/token",
+			want:  CensoredValue,
+		},
+		{
+			name:  "blackbox authorization credentials",
+			key:   "blackbox.modules.mymod.http.authorization.credentials",
+			value: "s3cr3t-creds",
+			want:  CensoredValue,
+		},
+		{
+			name:  "blackbox oauth2 client_secret",
+			key:   "blackbox.modules.mymod.http.oauth2.client_secret",
+			value: "s3cr3t",
+			want:  CensoredValue,
+		},
+		{ //nolint:gosec
+			name:  "proxy_url with credentials",
+			key:   "blackbox.modules.mymod.http.proxy_url",
+			value: "http://user:pass@proxy.example.com:3128",
+			want:  "http://user:" + CensoredValue + "@proxy.example.com:3128",
+		},
+		{
+			name:  "proxy_url without credentials is preserved",
+			key:   "blackbox.modules.mymod.http.proxy_url",
+			value: "http://proxy.example.com:3128",
+			want:  "http://proxy.example.com:3128",
+		},
+		{
+			name:  "empty secret is not censored",
+			key:   "blackbox.modules.mymod.http.bearer_token",
+			value: "",
+			want:  "",
+		},
+		{
+			name:  "non-secret string is preserved",
+			key:   "blackbox.modules.mymod.http.method",
+			value: "GET",
+			want:  "GET",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := CensorSecretItem(tc.key, tc.value)
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("CensorSecretItem(%q, %v): (-want +got)\n%s", tc.key, tc.value, diff)
+			}
+		})
+	}
+}
+
+// TestCensorURLSecrets checks the diagnostic-only URL censoring: userinfo
+// credentials and secret-looking query parameters are redacted, while the rest
+// of the URL is preserved.
+func TestCensorURLSecrets(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		value string
+		want  string
+	}{
+		{
+			name:  "query secret key",
+			value: "http://localhost:1234/path?key=s3cr3t&foo=bar",
+			want:  "http://localhost:1234/path?key=" + CensoredValue + "&foo=bar",
+		},
+		{
+			name:  "query secret token mixed case",
+			value: "https://host/probe?Token=abc&q=1",
+			want:  "https://host/probe?Token=" + CensoredValue + "&q=1",
+		},
+		{ //nolint:gosec
+			name:  "userinfo and query secret combined",
+			value: "http://user:pass@host:1234/p?api_key=xyz",
+			want:  "http://user:" + CensoredValue + "@host:1234/p?api_key=" + CensoredValue,
+		},
+		{
+			name:  "no secret query parameter is preserved",
+			value: "http://localhost:1234/path?foo=bar&page=2",
+			want:  "http://localhost:1234/path?foo=bar&page=2",
+		},
+		{
+			name:  "non-url string is preserved",
+			value: "not a url",
+			want:  "not a url",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := CensorURLSecrets(tc.value); got != tc.want {
+				t.Errorf("CensorURLSecrets(%q) = %q, want %q", tc.value, got, tc.want)
+			}
+		})
+	}
+}
+
 func Test_migrate(t *testing.T) {
 	tests := []struct {
 		Name       string
