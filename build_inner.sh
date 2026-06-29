@@ -10,6 +10,15 @@ do_test_and_build() {
    if [ "${SKIP_GO_TEST}" != "1" ]; then
       echo "--- Runnning Go test..."
       go test ./...
+
+      # When the Go cache isn't persisted between runs, the build cache produced
+      # by the tests is never reused by the build below (test and build caches
+      # don't overlap). Drop it before building to lower peak disk usage
+      # (~1.7 GiB) on CI.
+      if [ "${SKIP_GO_BUILD}" != "1" ] && [ "${GO_CACHE_PERSISTED:-1}" != "1" ]; then
+         echo "--- Dropping Go test cache (not persisted between runs)"
+         go clean -cache
+      fi
    fi
 
    if [ "${SKIP_GO_BUILD}" != "1" ]; then
