@@ -30,10 +30,10 @@ import (
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/facts/container-runtime/internal/testutil"
 
-	containerTypes "github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/events"
-	docker "github.com/docker/docker/client"
 	"github.com/google/go-cmp/cmp"
+	containerTypes "github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/events"
+	docker "github.com/moby/moby/client"
 )
 
 const (
@@ -1238,7 +1238,7 @@ func TestDecodeDocker(t *testing.T) {
 	//     bleemeo/bleemeo-agent \
 	//     python3 -c 'import docker;
 	//     print(docker.APIClient(version="1.21").top("test"))'
-	cases := []containerTypes.TopResponse{
+	cases := []docker.ContainerTopResult{
 		// Boot2Docker 1.12.3 first boot
 		{
 			Processes: [][]string{
@@ -1378,12 +1378,12 @@ func Test_maybeWrapError(t *testing.T) {
 func makeErrConnectionFailed(t *testing.T) error {
 	t.Helper()
 
-	cl, err := docker.NewClientWithOpts(docker.WithHost("unix://bad/host/so_we_get_an_errConnectionFailed"))
+	cl, err := docker.New(docker.WithHost("unix://bad/host/so_we_get_an_errConnectionFailed"))
 	if err != nil {
 		t.Fatal("Creating client:", err)
 	}
 
-	_, errNoConnection := cl.Ping(t.Context())
+	_, errNoConnection := cl.Ping(t.Context(), docker.PingOptions{NegotiateAPIVersion: true})
 	if errNoConnection == nil {
 		t.Fatal("Expected ping to failed, but didn't ...")
 	}
