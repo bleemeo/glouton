@@ -137,6 +137,7 @@ var (
 	errNoCertificates     = errors.New("no server certificate")
 	errDNSResolvedUnknown = errors.New("unknown default DNS resolver")
 	errConfigWarning      = errors.New("some DNS monitor(s) need default DNS resolver to be configured. Set `blackbox.default_dns_resolver`")
+	errPrivateTarget      = errors.New("target resolves to private IP")
 )
 
 type roundTrip struct {
@@ -234,8 +235,6 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 	// Let's ensure we don't end up with stray queries running somewhere
 	defer cancel()
 
-	start := time.Now()
-
 	var (
 		l                sync.Mutex
 		roundTrips       []roundTrip
@@ -246,9 +245,10 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 	subCtx := httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
 		GetConn: func(hostPort string) {
 			l.Lock()
-			defer l.Unlock()
 
 			if ctx.Err() != nil {
+				l.Unlock()
+
 				return
 			}
 
@@ -259,6 +259,17 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 			currentRoundTrip = roundTrip{
 				HostPort: hostPort,
 				TLSState: nil,
+			}
+			l.Unlock()
+
+			if target.IsPublicProbe {
+				checkCtx, checkCancel := context.WithTimeout(ctx, 10*time.Second)
+				defer checkCancel()
+
+				if err := checkNotPrivateTarget(checkCtx, hostPort); err != nil {
+					extLogger.WarnContext(ctx, "blocked: redirect to private IP", "hostPort", hostPort)
+					cancel()
+				}
 			}
 		},
 		TLSHandshakeDone: func(cs tls.ConnectionState, e error) {
@@ -275,7 +286,9 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 	})
 
 	targetURL := target.URL
-	if targetURL == defaultResolverSentinel {
+	usedDefaultResolver := targetURL == defaultResolverSentinel
+
+	if usedDefaultResolver {
 		var err error
 
 		targetURL, err = target.CommonHelpers.DNSResolver()
@@ -289,6 +302,21 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 	}
 
 	hackLogger := newDNSHackLogger(extLogger)
+
+	if target.IsPublicProbe && !usedDefaultResolver {
+		checkCtx, checkCancel := context.WithTimeout(ctx, 10*time.Second)
+		defer checkCancel()
+
+		if err := checkNotPrivateTarget(checkCtx, targetURL); err != nil {
+			extLogger.WarnContext(ctx, "blocked: target resolves to private IP", "error", err)
+
+			ch <- prometheus.MustNewConstMetric(probeSuccessDesc, prometheus.GaugeValue, 0., target.Name)
+
+			return
+		}
+	}
+
+	start := time.Now()
 
 	// do all the actual work
 	success := probeFn(subCtx, targetURL, target.Module, registry, hackLogger.Logger())
@@ -554,6 +582,36 @@ func collectorInMap(value blackboxCollector, iterable map[types.Registration]gat
 
 func gathererInArray(value gathererRegistration, iterable []blackboxCollector) bool {
 	return slices.ContainsFunc(iterable, value.collector.Equal)
+}
+
+func ipIsCGNate(ip net.IP) bool {
+	_, cgnatRange, _ := net.ParseCIDR("100.64.0.0/10")
+
+	return cgnatRange.Contains(ip)
+}
+
+func checkNotPrivateTarget(ctx context.Context, rawURL string) error {
+	host := rawURL
+
+	if u, err := url.Parse(rawURL); err == nil && u.Hostname() != "" {
+		host = u.Hostname()
+	} else if h, _, err := net.SplitHostPort(rawURL); err == nil {
+		host = h
+	}
+
+	ips, err := net.DefaultResolver.LookupHost(ctx, host)
+	if err != nil {
+		return err
+	}
+
+	for _, ipStr := range ips {
+		ip := net.ParseIP(ipStr)
+		if ip != nil && (ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLoopback() || ip.IsMulticast() || ip.IsUnspecified() || ipIsCGNate(ip) || ip.Equal(net.IPv4bcast)) {
+			return fmt.Errorf("%w: %s", errPrivateTarget, ipStr)
+		}
+	}
+
+	return nil
 }
 
 // updateRegistrations registers and deregisters collectors to sync the internal state with the configuration.

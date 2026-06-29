@@ -64,6 +64,7 @@ echo "Start lint Linux"
 docker run --rm -v "$(pwd)":/app ${GO_MOUNT_CACHE} -e HOME=/go/pkg \
    -e GOOS=linux -e GOARCH=amd64 --tmpfs /app/webui/node_modules:exec -w /app golangci/golangci-lint:${LINTER_VERSION} \
    bash -ec "
+   mkdir -p /go/pkg
    git config --global --add safe.directory /app
    golangci-lint run
    "
@@ -73,6 +74,7 @@ echo "Start lint FreeBSD"
 docker run --rm -v "$(pwd)":/app ${GO_MOUNT_CACHE} -e HOME=/go/pkg \
    -e GOOS=freebsd -e GOARCH=amd64 --tmpfs /app/webui/node_modules:exec -w /app golangci/golangci-lint:${LINTER_VERSION} \
    bash -ec "
+   mkdir -p /go/pkg
    git config --global --add safe.directory /app
    golangci-lint run --build-tags noexec,nomeminfo,nozfs,nonetdev,nonetisr
    "
@@ -82,6 +84,7 @@ echo "Start lint Windows"
 docker run --rm -v "$(pwd)":/app ${GO_MOUNT_CACHE} -e HOME=/go/pkg \
    -e GOOS=windows -e GOARCH=amd64 --tmpfs /app/webui/node_modules:exec -w /app golangci/golangci-lint:${LINTER_VERSION} \
    bash -ec "
+   mkdir -p /go/pkg
    git config --global --add safe.directory /app
    golangci-lint run
    "

@@ -496,6 +496,7 @@ type Monitor struct {
 	ForbiddenContent        string
 	CAFile                  string
 	Headers                 map[string]string
+	IsPublicProbe           bool
 }
 
 // MultiErrors is a type containing multiple errors. It implements the error interface.

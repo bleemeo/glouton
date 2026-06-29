@@ -478,6 +478,8 @@ func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
 			continue
 		}
 
+		collector.IsPublicProbe = monitor.IsPublicProbe
+
 		newTargets = append(newTargets, collector)
 	}
 

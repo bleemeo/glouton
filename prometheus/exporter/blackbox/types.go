@@ -54,6 +54,7 @@ type blackboxCollector struct {
 	RefreshRate    time.Duration
 	Labels         map[string]string
 	CommonHelpers  commonHelpers
+	IsPublicProbe  bool
 }
 
 func (target blackboxCollector) Equal(other blackboxCollector) bool {
@@ -65,7 +66,8 @@ func (target blackboxCollector) Equal(other blackboxCollector) bool {
 		target.BleemeoAgentID == other.BleemeoAgentID &&
 		target.CreationDate.Equal(other.CreationDate) &&
 		target.RefreshRate == other.RefreshRate &&
-		maps.Equal(target.Labels, other.Labels))
+		maps.Equal(target.Labels, other.Labels) &&
+		target.IsPublicProbe == other.IsPublicProbe)
 }
 
 // We need to keep a reference to the gatherer, to be able to stop the ticker, if it is a TickingGatherer.
