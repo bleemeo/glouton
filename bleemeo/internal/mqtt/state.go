@@ -38,9 +38,12 @@ const notificationChannelSize = 1000
 // reloadState implements the types.MQTTReloadState interface.
 type reloadState struct {
 	l                   sync.Mutex
-	isClosed            bool
 	connectChannel      chan paho.Client
 	notificationChannel chan paho.Message
+	// stopped is closed by Close() to unblock any in-flight callback.
+	// The data channels are never closed (a callback fired during a reload
+	// must keep its lock-free send pending until the next run consumes it).
+	stopped chan struct{}
 
 	mqtt            types.MQTTClient
 	upgradeFile     string
@@ -64,6 +67,7 @@ func NewReloadState(opts ReloadStateOptions) types.MQTTReloadState {
 	rs := &reloadState{
 		connectChannel:      make(chan paho.Client),
 		notificationChannel: make(chan paho.Message, notificationChannelSize),
+		stopped:             make(chan struct{}),
 		upgradeFile:         opts.UpgradeFile,
 		autoUpgradeFile:     opts.AutoUpgradeFile,
 		agentID:             opts.AgentID,
@@ -78,14 +82,13 @@ func (rs *reloadState) SetMQTT(mqtt types.MQTTClient) {
 }
 
 func (rs *reloadState) OnConnect(cli paho.Client) {
-	rs.l.Lock()
-	defer rs.l.Unlock()
-
-	if rs.isClosed {
-		return
+	// Don't hold rs.l while sending: paho may call this during the reload
+	// window when no consumer is running. Blocking here without the lock lets
+	// the next run construct its client (which takes rs.l) and drain the event.
+	select {
+	case rs.connectChannel <- cli:
+	case <-rs.stopped:
 	}
-
-	rs.connectChannel <- cli
 }
 
 func (rs *reloadState) ConnectChannel() <-chan paho.Client {
@@ -93,13 +96,8 @@ func (rs *reloadState) ConnectChannel() <-chan paho.Client {
 }
 
 func (rs *reloadState) OnNotification(_ paho.Client, msg paho.Message) {
-	rs.l.Lock()
-	defer rs.l.Unlock()
-
-	if rs.isClosed {
-		return
-	}
-
+	// Lock-free, non-blocking: the channel is never closed, so the send can't
+	// panic, and notifications are intentionally dropped when the buffer is full.
 	select {
 	case rs.notificationChannel <- msg:
 	default:
@@ -128,15 +126,15 @@ func (rs *reloadState) SetPendingPoints(points []gloutonTypes.MetricPoint) {
 }
 
 func (rs *reloadState) Close() {
-	// Consume all events on channels to make sure the paho client is not blocked.
-	go func() {
-		for range rs.notificationChannel {
-		}
-	}()
-	go func() {
-		for range rs.connectChannel {
-		}
-	}()
+	select {
+	case <-rs.stopped:
+		return // Close is never called twice, but do an extra check to be extra sure
+	default:
+	}
+
+	// Unblock any in-flight callback (the data channels are never closed, so
+	// callbacks can't panic on a send) before disconnecting.
+	close(rs.stopped)
 
 	if rs.mqtt != nil && rs.mqtt.IsConnectionOpen() {
 		cause := "Clean shutdown"
@@ -155,16 +153,6 @@ func (rs *reloadState) Close() {
 
 		rs.mqtt.Disconnect(5 * time.Second)
 	}
-
-	// The callbacks need to know when the channel are closed
-	// so they don't send on a closed channel.
-	rs.l.Lock()
-	defer rs.l.Unlock()
-
-	rs.isClosed = true
-
-	close(rs.notificationChannel)
-	close(rs.connectChannel)
 }
 
 // ClientState returns the reload state of the mqtt client.
