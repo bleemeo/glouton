@@ -389,9 +389,7 @@ func quietParserErrors(ops []config.OTELOperator) []config.OTELOperator {
 
 		// Clone so we never mutate the shared known-format definitions.
 		cloned := make(config.OTELOperator, len(op)+1)
-		for k, v := range op {
-			cloned[k] = v
-		}
+		maps.Copy(cloned, op)
 
 		cloned[onErrorKey] = sendQuiet
 		out[i] = cloned

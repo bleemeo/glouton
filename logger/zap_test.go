@@ -48,7 +48,7 @@ func TestZapWrapperDebounceCacheBounded(t *testing.T) {
 
 	for i := range flood {
 		// Unique per line, like the stanza parse-errors in the incident.
-		_, _ = z.Write([]byte(fmt.Sprintf("error\tFailed to process entry\t{\"entry.timestamp\": %d}\n", i)))
+		_, _ = z.Write(fmt.Appendf(nil, "error\tFailed to process entry\t{\"entry.timestamp\": %d}\n", i))
 	}
 
 	z.l.Lock()

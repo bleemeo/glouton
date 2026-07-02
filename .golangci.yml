@@ -13,6 +13,7 @@ linters:
     - funcorder # Would force us to reorganize hundreds of functions.
     - funlen
     - gocognit # We use maintidx to lint function complexity.
+    - goconst # Too picky, with tests it require too many creation of constants.
     - gocyclo # We use maintidx to lint function complexity.
     - godox # Too many TODO in code, but should be removed and TODO fixed :)
     - gomoddirectives # We sometimes need to use mod replacements to fix upgrades.
