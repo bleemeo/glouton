@@ -584,7 +584,7 @@ func gathererInArray(value gathererRegistration, iterable []blackboxCollector) b
 	return slices.ContainsFunc(iterable, value.collector.Equal)
 }
 
-func ipIsCGNate(ip net.IP) bool {
+func ipIsCGNAT(ip net.IP) bool {
 	_, cgnatRange, _ := net.ParseCIDR("100.64.0.0/10")
 
 	return cgnatRange.Contains(ip)
@@ -606,7 +606,7 @@ func checkNotPrivateTarget(ctx context.Context, rawURL string) error {
 
 	for _, ipStr := range ips {
 		ip := net.ParseIP(ipStr)
-		if ip != nil && (ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLoopback() || ip.IsMulticast() || ip.IsUnspecified() || ipIsCGNate(ip) || ip.Equal(net.IPv4bcast)) {
+		if ip != nil && (ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLoopback() || ip.IsMulticast() || ip.IsUnspecified() || ipIsCGNAT(ip) || ip.Equal(net.IPv4bcast)) {
 			return fmt.Errorf("%w: %s", errPrivateTarget, ipStr)
 		}
 	}
