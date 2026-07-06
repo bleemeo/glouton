@@ -52,6 +52,7 @@ require (
 	github.com/prometheus/node_exporter v1.11.1
 	github.com/prometheus/procfs v0.20.1
 	github.com/prometheus/prometheus v0.312.0
+	github.com/robfig/cron/v3 v3.0.1
 	github.com/rs/cors v1.11.1
 	github.com/shirou/gopsutil/v4 v4.26.5
 	github.com/vishvananda/netlink v1.3.1

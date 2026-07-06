@@ -41,6 +41,7 @@ import (
 	prometheusModel "github.com/prometheus/common/model"
 	admv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -88,6 +89,8 @@ type mockKubernetesClient struct {
 	deployments  appsv1.DeploymentList
 	statefulSets appsv1.StatefulSetList
 	daemonSets   appsv1.DaemonSetList
+	jobs         batchv1.JobList
+	cronJobs     batchv1.CronJobList
 	crds         apiextv1.CustomResourceDefinitionList
 	mwcs         admv1.MutatingWebhookConfigurationList
 	vwcs         admv1.ValidatingWebhookConfigurationList
@@ -177,6 +180,22 @@ func newKubernetesMock(dirname string) (*mockKubernetesClient, error) {
 		}
 	}
 
+	data, localErr = os.ReadFile(filepath.Join(dirname, "jobs.yaml"))
+	if localErr == nil {
+		err = yaml.Unmarshal(data, &result.jobs)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	data, localErr = os.ReadFile(filepath.Join(dirname, "cronjobs.yaml"))
+	if localErr == nil {
+		err = yaml.Unmarshal(data, &result.cronJobs)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return result, err
 }
 
@@ -227,6 +246,14 @@ func (k *mockKubernetesClient) GetStatefulSets(_ context.Context) ([]appsv1.Stat
 }
 
 // GetDaemonSets return all daemonsets in the cluster.
+func (k *mockKubernetesClient) GetJobs(_ context.Context) ([]batchv1.Job, error) {
+	return k.jobs.Items, nil
+}
+
+func (k *mockKubernetesClient) GetCronJobs(_ context.Context) ([]batchv1.CronJob, error) {
+	return k.cronJobs.Items, nil
+}
+
 func (k *mockKubernetesClient) GetDaemonSets(_ context.Context) ([]appsv1.DaemonSet, error) {
 	return k.daemonSets.Items, nil
 }
