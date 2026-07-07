@@ -472,29 +472,36 @@ func DefaultConfig() Config { //nolint:maintidx
 // labels/annotations. They are added to Container.AllowedLabelOverrides when
 // Container.IncludeDefaultLabelOverrides is true.
 //
-// Excluded by design (add them explicitly through AllowedLabelOverrides only
-// when container/pod creation is restricted to trusted users):
-//   - arbitrary command execution: check_type, check_command, nagios_nrpe_name
-//   - arbitrary file read: log_files
-//   - target redirection / SSRF: address, stats_url, metrics_unix_socket
-//     (these let the check be pointed at an attacker-chosen endpoint, e.g.
-//     address=127.0.0.1 to probe host-local services; by default checks target
-//     the container's own IP). Fields like port or stats_port stay allowed
-//     since they keep the container IP as target.
+// Only the fields that would grant a capability *beyond* the container sandbox
+// are excluded by design (add them explicitly through AllowedLabelOverrides
+// only when container/pod creation is restricted to trusted users):
+//   - command execution on the host as Glouton (root): check_type,
+//     check_command, nagios_nrpe_name
+//   - arbitrary host file read (content exfiltrated as logs): log_files
+//
+// Fields that merely redirect a check to an attacker-chosen endpoint (address,
+// stats_url, metrics_unix_socket) are intentionally allowed: making network
+// requests is already possible from inside the attacker's container, and the
+// response is not reflected back (blind SSRF), so the marginal risk is low and
+// does not justify breaking mandatory options (e.g. stats_url is required to
+// monitor services like Jenkins through "docker run" labels).
 func DefaultAllowedLabelOverrides() []string {
 	return []string{
 		"type",
 		"instance",
 		"port",
 		"ignore_ports",
+		"address",
 		"tags",
 		"interval",
 		"http_path",
 		"http_status_code",
 		"http_host",
 		"match_process",
+		"metrics_unix_socket",
 		"username",
 		"password",
+		"stats_url",
 		keyStatsPort,
 		"stats_protocol",
 		keyDetailedItems,
