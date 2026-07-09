@@ -72,6 +72,10 @@ var (
 		"kubernetes_pods_restart_count",
 		"kubernetes_replicas_desired",
 		"kubernetes_replicas_ready",
+		"kubernetes_hpa_min_replicas",
+		"kubernetes_hpa_max_replicas",
+		"kubernetes_hpa_scaling_limited",
+		"kubernetes_hpa_status",
 
 		// Key Processes
 		"process_context_switch",
