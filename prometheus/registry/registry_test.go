@@ -3877,3 +3877,45 @@ func sortMetricPoints(points []types.MetricPoint) []types.MetricPoint {
 
 	return points
 }
+
+// TestRegistry_ScheduleRunDoesNotBlockOnLock guards against a registry-wide
+// deadlock: ScheduleRun is reachable synchronously from within a gather (a
+// service check or a blackbox probe calls scheduleUpdate while being gathered),
+// and that gather runs as a child goroutine of GatherWithState which blocks on
+// its WaitGroup until the child returns. If ScheduleRun acquires r.l on the
+// caller's goroutine, the child can stall on the contended lock and never
+// signal the WaitGroup, wedging every r.l user including the health check (the
+// watchdog then kills the process). So ScheduleRun must never take r.l
+// synchronously. Holding r.l here reproduces the contended case deterministically.
+func TestRegistry_ScheduleRunDoesNotBlockOnLock(t *testing.T) {
+	reg, err := New(Option{})
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+
+	handle, err := reg.RegisterGatherer(RegistrationOption{}, &fakeGatherer{name: testName1})
+	if err != nil {
+		t.Fatalf("RegisterGatherer() failed: %v", err)
+	}
+
+	// Hold the registry lock, as a gather running concurrently with any other
+	// r.l user would experience.
+	reg.l.Lock()
+	defer reg.l.Unlock()
+
+	done := make(chan struct{})
+
+	go func() {
+		handle.ScheduleRun(types.ScheduleOption{WantedTime: time.Now()})
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// ScheduleRun returned without needing r.l: the actual rescheduling work
+		// is deferred to a background goroutine that will acquire r.l once we
+		// release it.
+	case <-time.After(5 * time.Second):
+		t.Fatal("ScheduleRun blocked while r.l was held: re-entrant lock deadlock hazard")
+	}
+}
