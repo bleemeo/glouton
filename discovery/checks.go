@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/bleemeo/glouton/check"
@@ -120,6 +121,18 @@ func (d *Discovery) createCheck(service Service) {
 			continue
 		}
 
+		// NSQ service exposes two ports for one process
+		// but to health check NSQ only the Primary port must be checked or else it will trigger a false alarm
+		if service.ServiceType == NSQService {
+			_, portStr, err := net.SplitHostPort(a.String())
+			if err == nil {
+				p, err := strconv.Atoi(portStr)
+				if err != nil || p != primaryPort {
+					continue
+				}
+			}
+		}
+
 		if a.Address == net.IPv4zero.String() {
 			a.Address = service.IPAddress
 		}
@@ -139,7 +152,7 @@ func (d *Discovery) createCheck(service Service) {
 	switch service.ServiceType { //nolint:exhaustive
 	case DovecotService, MemcachedService, RabbitMQService, RedisService, ValkeyService, ZookeeperService, NatsService:
 		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
-	case ApacheService, InfluxDBService, NginxService, SquidService:
+	case ApacheService, InfluxDBService, NginxService, NSQService, SquidService:
 		d.createHTTPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
 	case NTPService:
 		if primaryAddress != "" {
@@ -269,6 +282,11 @@ func (d *Discovery) createHTTPCheck(
 
 	if service.ServiceType == InfluxDBService {
 		u.Path = "/ping"
+	}
+
+	if service.ServiceType == NSQService {
+		u.Path = "/ping"
+		expectedStatusCode = 200
 	}
 
 	if service.Config.HTTPPath != "" {

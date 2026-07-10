@@ -418,6 +418,32 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"cassandra_write_time_average",
 		},
 
+		discovery.ClickHouseService: {
+			"clickhouse_events_query",
+			"clickhouse_events_select_query",
+			"clickhouse_events_query_time_microseconds",
+			"clickhouse_events_dns_error",
+			"clickhouse_events_failed_query",
+			"clickhouse_events_mutations_total_milliseconds",
+			"clickhouse_events_network_receive_bytes",
+			"clickhouse_events_network_send_bytes",
+			"clickhouse_events_slow_read",
+			"clickhouse_metrics_attached_databases",
+			"clickhouse_metrics_broken_disks",
+			"clickhouse_metrics_broken_distributed_bytes_to_insert",
+			"clickhouse_metrics_broken_distributed_files_to_insert",
+			"clickhouse_metrics_delayed_inserts",
+			"clickhouse_metrics_is_server_shutting_down",
+			"clickhouse_metrics_memory_tracking",
+			"clickhouse_metrics_query",
+			"clickhouse_disks_free_space_percent",
+			"clickhouse_mutations_running",
+			"clickhouse_mutations_failed",
+			"clickhouse_asynchronous_metrics_replicas_max_queue_size",
+			"clickhouse_asynchronous_metrics_memory_resident",
+			"clickhouse_processes_longest_running",
+		},
+
 		discovery.ConfluenceService: {
 			"confluence_db_query_time",
 			"confluence_jvm_gc",
@@ -651,6 +677,19 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"nginx_connections_writing",
 		},
 
+		discovery.NSQService: {
+			"nsq_channel_depth",
+			"nsq_topic_depth",
+			"nsq_channel_client_count",
+			"nsq_channel_inflight_count",
+			"nsq_channel_message_count",
+			"nsq_topic_message_count",
+			"nsq_channel_requeue_count",
+			"nsq_channel_timeout_count",
+			"nsq_server_server_count",
+			"nsq_server_topic_count",
+		},
+
 		discovery.OpenLDAPService: {
 			"openldap_connections_current",
 			"openldap_waiters_read",
@@ -710,6 +749,21 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"postgresql_tup_returned_sum",
 			"postgresql_tup_updated",
 			"postgresql_tup_updated_sum",
+		},
+
+		discovery.PgBouncerService: {
+			"pgbouncer_avg_query_count",
+			"pgbouncer_avg_query_time",
+			"pgbouncer_avg_wait_time",
+			"pgbouncer_pools_cl_active",
+			"pgbouncer_pools_cl_waiting",
+			"pgbouncer_pools_sv_active",
+			"pgbouncer_pools_sv_idle",
+			"pgbouncer_pools_maxwait",
+			"pgbouncer_stats_total_requests",
+			"pgbouncer_stats_total_query_time",
+			"pgbouncer_stats_total_received",
+			"pgbouncer_stats_total_sent",
 		},
 
 		discovery.RabbitMQService: {
@@ -784,6 +838,20 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"redis_total_operations",
 			"redis_uptime",
 			"redis_volatile_changes",
+		},
+
+		discovery.VaultService: {
+			"vault_core_active",
+			"vault_core_check_token",
+			"vault_core_leadership_lost",
+			"vault_core_unsealed_value",
+			"vault_core_handle_login_request",
+			"vault_core_handle_request",
+			"vault_core_post_unseal",
+			"vault_core_active_value",
+			"vault_core_in_flight_requests_value",
+			"vault_expire_num_leases",
+			"vault_core_response_status_code",
 		},
 
 		discovery.ZookeeperService: {

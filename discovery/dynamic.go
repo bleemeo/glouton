@@ -164,6 +164,8 @@ var (
 	knownProcesses = map[string]ServiceName{
 		"apache2":                ApacheService,
 		string(AsteriskService):  AsteriskService,
+		"clickhouse":             ClickHouseService,
+		"clickhouse-server":      ClickHouseService,
 		"dovecot":                DovecotService,
 		"exim4":                  EximService,
 		"exim":                   EximService,
@@ -182,10 +184,12 @@ var (
 		"nats-server":            NatsService,
 		"nfsiod":                 NfsService,
 		"nginx":                  NginxService,
+		"nsqd":                   NSQService,
 		"ntpd":                   NTPService,
 		string(OpenVPNService):   OpenVPNService,
 		"php-fpm":                PHPFPMService,
 		"postgres":               PostgreSQLService,
+		"pgbouncer":              PgBouncerService,
 		"redis-server":           RedisService,
 		"slapd":                  OpenLDAPService,
 		"squid3":                 SquidService,
@@ -195,6 +199,7 @@ var (
 		"uWSGI":                  UWSGIService,
 		"valkey-server":          ValkeyService,
 		"varnishd":               VarnishService,
+		"vault":                  VaultService,
 	}
 	knownInterpretedProcess = []struct {
 		CmdLineMustContains []string
@@ -512,6 +517,20 @@ func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discovery
 
 // fillConfig fills the service config with information found inside the container.
 func (dd *DynamicDiscovery) fillConfig(ctx context.Context, service *Service) {
+	if service.ServiceType == ClickHouseService {
+		if service.container != nil {
+			for k, v := range service.container.Environment() {
+				if k == "CLICKHOUSE_PASSWORD" || k == "CLICKHOUSE_ADMIN_PASSWORD" {
+					service.Config.Password = v
+				}
+
+				if k == "CLICKHOUSE_USER" || k == "CLICKHOUSE_ADMIN_USER" {
+					service.Config.Username = v
+				}
+			}
+		}
+	}
+
 	if service.ServiceType == MariaDBService {
 		if service.container != nil {
 			for k, v := range service.container.Environment() {
@@ -554,6 +573,34 @@ func (dd *DynamicDiscovery) fillConfig(ctx context.Context, service *Service) {
 
 				if k == "POSTGRES_USER" {
 					service.Config.Username = v
+				}
+			}
+		}
+	}
+
+	if service.ServiceType == PgBouncerService {
+		if service.container != nil {
+			for k, v := range service.container.Environment() {
+				if k == "POSTGRES_PASSWORD" || k == "PGBOUNCER_PASSWORD" || k == "DB_PASSWORD" {
+					service.Config.Password = v
+				}
+
+				if k == "POSTGRES_USER" || k == "PGBOUNCER_USER" || k == "DB_USER" {
+					service.Config.Username = v
+				}
+			}
+		}
+	}
+
+	if service.ServiceType == NSQService {
+		service.CheckIgnored = true
+	}
+
+	if service.ServiceType == VaultService {
+		if service.container != nil {
+			for k, v := range service.container.Environment() {
+				if k == "VAULT_TOKEN" {
+					service.Config.Password = v
 				}
 			}
 		}
