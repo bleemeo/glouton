@@ -427,10 +427,7 @@ func (dd *DynamicDiscovery) serviceFromProcess(ctx context.Context, process fact
 
 func getDiscoveryInfo(now time.Time, service *Service, netstat map[int][]facts.ListenAddress, pid int) discoveryInfo {
 	if service.ContainerID == "" {
-		// We don't handle netstat for MacOS
-		if !version.IsMacOS() {
-			service.ListenAddresses = netstat[pid]
-		}
+		service.ListenAddresses = netstat[pid]
 	} else {
 		service.ListenAddresses = service.container.ListenAddresses()
 		service.IgnoredPorts = facts.ContainerIgnoredPorts(service.container)
