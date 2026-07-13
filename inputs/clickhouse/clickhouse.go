@@ -35,7 +35,6 @@ func New(url string, username string, password string) (i telegraf.Input, err er
 			clickhouseInput.Username = username
 			clickhouseInput.Password = password
 			clickhouseInput.AutoDiscovery = false
-			clickhouseInput.ClientConfig.InsecureSkipVerify = true
 
 			i = &internal.Input{
 				Input:       clickhouseInput,

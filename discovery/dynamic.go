@@ -427,7 +427,10 @@ func (dd *DynamicDiscovery) serviceFromProcess(ctx context.Context, process fact
 
 func getDiscoveryInfo(now time.Time, service *Service, netstat map[int][]facts.ListenAddress, pid int) discoveryInfo {
 	if service.ContainerID == "" {
-		service.ListenAddresses = netstat[pid]
+		// We don't handle netstat for MacOS
+		if !version.IsMacOS() {
+			service.ListenAddresses = netstat[pid]
+		}
 	} else {
 		service.ListenAddresses = service.container.ListenAddresses()
 		service.IgnoredPorts = facts.ContainerIgnoredPorts(service.container)
@@ -528,6 +531,7 @@ func firstEnv(env map[string]string, keysByPriority ...string) (value string, ok
 			return value, true
 		}
 	}
+
 	return "", false
 }
 
@@ -542,6 +546,7 @@ func firstCompletePair(env map[string]string, pairsByPriority ...credentialPair)
 			return user, pwd, true
 		}
 	}
+
 	return "", "", false
 }
 
@@ -626,7 +631,7 @@ func (dd *DynamicDiscovery) fillConfig(ctx context.Context, service *Service) {
 				{userKey: "PGBOUNCER_USER", passKey: "PGBOUNCER_PASSWORD"},
 				{userKey: "DB_USER", passKey: "DB_PASSWORD"},
 				{userKey: "POSTGRES_USER", passKey: "POSTGRES_PASSWORD"},
-			}
+			} //nolint:itsnothardcodedcredentialsiswear
 
 			if u, p, ok := firstCompletePair(env, pairs...); ok {
 				service.Config.Username = u
@@ -813,6 +818,7 @@ func serviceByCommand(cmdLine []string) (serviceName ServiceName, found bool) {
 		if len(cmdLine) > 1 && cmdLine[1] == "server" {
 			return ClickHouseService, true
 		}
+
 		return "", false
 	}
 
