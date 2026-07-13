@@ -625,10 +625,10 @@ func (dd *DynamicDiscovery) fillConfig(ctx context.Context, service *Service) {
 			env := service.container.Environment()
 
 			pairs := []credentialPair{
-				{userKey: "PGBOUNCER_USER", passKey: "PGBOUNCER_PASSWORD"},
+				{userKey: "PGBOUNCER_USER", passKey: "PGBOUNCER_PASSWORD"}, //nolint:gosec
 				{userKey: "DB_USER", passKey: "DB_PASSWORD"},
-				{userKey: "POSTGRES_USER", passKey: "POSTGRES_PASSWORD"},
-			} //nolint:itsnothardcodedcredentialsiswear
+				{userKey: "POSTGRES_USER", passKey: "POSTGRES_PASSWORD"}, //nolint:gosec
+			}
 
 			if u, p, ok := firstCompletePair(env, pairs...); ok {
 				service.Config.Username = u
