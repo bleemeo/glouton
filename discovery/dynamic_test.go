@@ -166,6 +166,38 @@ func TestServiceByCommand(t *testing.T) {
 			in:   []string{testMemcachedBin, "-m", "64", "-p", "11211", "-u", testMemcache, "-l", testIP127001, "-P", "/var/run/memcached/memcached.pid"},
 			want: MemcachedService,
 		},
+		{
+			in:   []string{"clickhouse-server", "--config-file=/etc/clickhouse-server/config.xml"},
+			want: ClickHouseService,
+		},
+		{
+			in:   []string{"/usr/bin/clickhouse-server", "--config=/etc/clickhouse-server/config.xml", "--pid-file=/run/clickhouse-server/clickhouse-server.pid"},
+			want: ClickHouseService,
+		},
+		{
+			in:   []string{"clickhouse", "server", "--config=/etc/clickhouse-server/config.xml"},
+			want: ClickHouseService,
+		},
+		{
+			in:   []string{"/usr/bin/clickhouse", "server"},
+			want: ClickHouseService,
+		},
+		{
+			in:   []string{"clickhouse", "client", "--host", "127.0.0.1"},
+			want: "",
+		},
+		{
+			in:   []string{"clickhouse", "local", "--query", "SELECT 1"},
+			want: "",
+		},
+		{
+			in:   []string{"clickhouse", "benchmark"},
+			want: "",
+		},
+		{
+			in:   []string{"clickhouse"},
+			want: "",
+		},
 	}
 
 	for i, c := range cases {
@@ -2108,6 +2140,183 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 
 			if diff := cmp.Diff(c.want, srv, cmpopts.IgnoreUnexported(Service{}), cmpopts.EquateEmpty(), sorter); diff != "" {
 				t.Errorf("services mismatch (-want +got)\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestFillConfigClickHouseCredentials(t *testing.T) {
+	cases := []struct {
+		name         string
+		env          map[string]string
+		wantUsername string
+		wantPassword string
+	}{
+		{
+			name:         "normal-credentials-only",
+			env:          map[string]string{"CLICKHOUSE_USER": "default", "CLICKHOUSE_PASSWORD": "pass"},
+			wantUsername: "default",
+			wantPassword: "pass",
+		},
+		{
+			name:         "admin-credentials-only",
+			env:          map[string]string{"CLICKHOUSE_ADMIN_USER": "admin", "CLICKHOUSE_ADMIN_PASSWORD": "adminpass"},
+			wantUsername: "admin",
+			wantPassword: "adminpass",
+		},
+		{
+			name: "both-complete-pairs-present-admin-wins",
+			env: map[string]string{
+				"CLICKHOUSE_USER": "default", "CLICKHOUSE_PASSWORD": "pass",
+				"CLICKHOUSE_ADMIN_USER": "admin", "CLICKHOUSE_ADMIN_PASSWORD": "adminpass",
+			},
+			wantUsername: "admin",
+			wantPassword: "adminpass",
+		},
+		{
+			name: "stray-admin-password-falls-back-to-complete-normal-pair",
+			env: map[string]string{
+				"CLICKHOUSE_USER": "default", "CLICKHOUSE_PASSWORD": "pass",
+				"CLICKHOUSE_ADMIN_PASSWORD": "adminpass",
+			},
+			wantUsername: "default",
+			wantPassword: "pass",
+		},
+		{
+			name: "stray-admin-user-falls-back-to-complete-normal-pair",
+			env: map[string]string{
+				"CLICKHOUSE_USER": "default", "CLICKHOUSE_PASSWORD": "pass",
+				"CLICKHOUSE_ADMIN_USER": "admin",
+			},
+			wantUsername: "default",
+			wantPassword: "pass",
+		},
+		{
+			// No pair is complete at all: fall back to filling each field independently rather than setting nothing.
+			name:         "lone-password-no-complete-pair-falls-back-per-field",
+			env:          map[string]string{"CLICKHOUSE_PASSWORD": "pass"},
+			wantUsername: "",
+			wantPassword: "pass",
+		},
+		{
+			// An intentionally empty password is a valid, meaningful value and must be kept not treated as if it was never set.
+			name:         "explicitly-empty-password-is-kept",
+			env:          map[string]string{"CLICKHOUSE_USER": "default", "CLICKHOUSE_PASSWORD": ""},
+			wantUsername: "default",
+			wantPassword: "",
+		},
+	}
+
+	dd := NewDynamic(Option{
+		PS:                 mockProcess{},
+		Netstat:            mockNetstat{},
+		ContainerInfo:      mockContainerInfo{},
+		IsContainerIgnored: facts.ContainerFilter{}.ContainerIgnored,
+	})
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			service := Service{
+				ServiceType: ClickHouseService,
+				container:   facts.FakeContainer{FakeEnvironment: tt.env},
+			}
+
+			dd.fillConfig(t.Context(), &service)
+
+			if service.Config.Username != tt.wantUsername {
+				t.Errorf("Username == %#v, want %#v", service.Config.Username, tt.wantUsername)
+			}
+
+			if service.Config.Password != tt.wantPassword {
+				t.Errorf("Password == %#v, want %#v", service.Config.Password, tt.wantPassword)
+			}
+		})
+	}
+}
+
+func TestFillConfigPgBouncerCredentials(t *testing.T) {
+	cases := []struct {
+		name         string
+		env          map[string]string
+		wantUsername string
+		wantPassword string
+	}{
+		{
+			name:         "postgres-tier-only",
+			env:          map[string]string{"POSTGRES_USER": "bleemeo_user", "POSTGRES_PASSWORD": "password"},
+			wantUsername: "bleemeo_user",
+			wantPassword: "password",
+		},
+		{
+			name:         "db-tier-only",
+			env:          map[string]string{"DB_USER": "appuser", "DB_PASSWORD": "apppassword"},
+			wantUsername: "appuser",
+			wantPassword: "apppassword",
+		},
+		{
+			name:         "pgbouncer-tier-only",
+			env:          map[string]string{"PGBOUNCER_USER": "pgbouncer", "PGBOUNCER_PASSWORD": "pgbouncerpass"},
+			wantUsername: "pgbouncer",
+			wantPassword: "pgbouncerpass",
+		},
+		{
+			name: "all-three-tiers-present-pgbouncer-wins",
+			env: map[string]string{
+				"POSTGRES_USER": "bleemeo_user", "POSTGRES_PASSWORD": "password",
+				"DB_USER": "appuser", "DB_PASSWORD": "apppassword",
+				"PGBOUNCER_USER": "pgbouncer", "PGBOUNCER_PASSWORD": "pgbouncerpass",
+			},
+			wantUsername: "pgbouncer",
+			wantPassword: "pgbouncerpass",
+		},
+		{
+			name: "stray-pgbouncer-password-falls-back-to-complete-db-pair",
+			env: map[string]string{
+				"DB_USER": "appuser", "DB_PASSWORD": "apppassword",
+				"PGBOUNCER_PASSWORD": "pgbouncerpass",
+			},
+			wantUsername: "appuser",
+			wantPassword: "apppassword",
+		},
+		{
+			name: "stray-db-password-falls-back-to-complete-postgres-pair",
+			env: map[string]string{
+				"POSTGRES_USER": "bleemeo_user", "POSTGRES_PASSWORD": "password",
+				"DB_PASSWORD": "apppassword",
+			},
+			wantUsername: "bleemeo_user",
+			wantPassword: "password",
+		},
+		{
+			name:         "lone-password-no-complete-pair-falls-back-per-field",
+			env:          map[string]string{"DB_PASSWORD": "apppassword"},
+			wantUsername: "",
+			wantPassword: "apppassword",
+		},
+	}
+
+	dd := NewDynamic(Option{
+		PS:                 mockProcess{},
+		Netstat:            mockNetstat{},
+		ContainerInfo:      mockContainerInfo{},
+		IsContainerIgnored: facts.ContainerFilter{}.ContainerIgnored,
+	})
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			service := Service{
+				ServiceType: PgBouncerService,
+				container:   facts.FakeContainer{FakeEnvironment: tt.env},
+			}
+
+			dd.fillConfig(t.Context(), &service)
+
+			if service.Config.Username != tt.wantUsername {
+				t.Errorf("Username == %#v, want %#v", service.Config.Username, tt.wantUsername)
+			}
+
+			if service.Config.Password != tt.wantPassword {
+				t.Errorf("Password == %#v, want %#v", service.Config.Password, tt.wantPassword)
 			}
 		})
 	}

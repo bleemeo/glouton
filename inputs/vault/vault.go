@@ -30,8 +30,7 @@ func New(url string, token string) (i telegraf.Input, err error) {
 			i = &internal.Input{
 				Input: vaultInput,
 				Accumulator: internal.Accumulator{
-					RenameGlobal:     renameGlobal,
-					TransformMetrics: transformMetrics,
+					RenameGlobal: renameGlobal,
 				},
 				Name: "vault",
 			}
@@ -46,15 +45,7 @@ func New(url string, token string) (i telegraf.Input, err error) {
 }
 
 func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
-	cleanName := strings.ReplaceAll(gatherContext.Measurement, ".", "_")
-	gatherContext.Measurement = strings.ReplaceAll(cleanName, "-", "_")
+	gatherContext.Measurement = strings.ReplaceAll(gatherContext.Measurement, ".", "_")
 
 	return gatherContext, false
-}
-
-func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]any) map[string]float64 {
-	_ = currentContext
-	_ = originalFields
-
-	return fields
 }

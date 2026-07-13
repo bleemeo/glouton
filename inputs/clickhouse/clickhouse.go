@@ -38,11 +38,9 @@ func New(url string, username string, password string) (i telegraf.Input, err er
 			clickhouseInput.ClientConfig.InsecureSkipVerify = true
 
 			i = &internal.Input{
-				Input: clickhouseInput,
-				Accumulator: internal.Accumulator{
-					TransformMetrics: transformMetrics,
-				},
-				Name: "clickhouse",
+				Input:       clickhouseInput,
+				Accumulator: internal.Accumulator{},
+				Name:        "clickhouse",
 			}
 		} else {
 			err = inputs.ErrUnexpectedType
@@ -52,11 +50,4 @@ func New(url string, username string, password string) (i telegraf.Input, err er
 	}
 
 	return
-}
-
-func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]any) map[string]float64 {
-	_ = currentContext
-	_ = originalFields
-
-	return fields
 }

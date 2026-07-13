@@ -34,11 +34,9 @@ func New(url string) (i telegraf.Input, err error) {
 			nsqInput.Endpoints = []string{url}
 
 			i = &internal.Input{
-				Input: nsqInput,
-				Accumulator: internal.Accumulator{
-					TransformMetrics: transformMetrics,
-				},
-				Name: "nsq",
+				Input:       nsqInput,
+				Accumulator: internal.Accumulator{},
+				Name:        "nsq",
 			}
 		} else {
 			err = inputs.ErrUnexpectedType
@@ -48,11 +46,4 @@ func New(url string) (i telegraf.Input, err error) {
 	}
 
 	return
-}
-
-func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]any) map[string]float64 {
-	_ = currentContext
-	_ = originalFields
-
-	return fields
 }

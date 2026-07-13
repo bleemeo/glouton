@@ -35,11 +35,9 @@ func New(address string) (i telegraf.Input, err error) {
 			pgbouncerInput.Address = config.NewSecret([]byte(address))
 
 			i = &internal.Input{
-				Input: pgbouncerInput,
-				Accumulator: internal.Accumulator{
-					TransformMetrics: transformMetrics,
-				},
-				Name: "pgbouncer",
+				Input:       pgbouncerInput,
+				Accumulator: internal.Accumulator{},
+				Name:        "pgbouncer",
 			}
 		} else {
 			err = inputs.ErrUnexpectedType
@@ -49,11 +47,4 @@ func New(address string) (i telegraf.Input, err error) {
 	}
 
 	return
-}
-
-func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]any) map[string]float64 {
-	_ = currentContext
-	_ = originalFields
-
-	return fields
 }

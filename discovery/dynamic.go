@@ -164,7 +164,6 @@ var (
 	knownProcesses = map[string]ServiceName{
 		"apache2":                ApacheService,
 		string(AsteriskService):  AsteriskService,
-		"clickhouse":             ClickHouseService,
 		"clickhouse-server":      ClickHouseService,
 		"dovecot":                DovecotService,
 		"exim4":                  EximService,
@@ -515,16 +514,57 @@ func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discovery
 	}
 }
 
+// credentialPair groups the env var name used for a username with the one used for its matching password.
+type credentialPair struct {
+	userKey string
+	passKey string
+}
+
+// firstEnv returns the value of the first key found in env, trying keys in order.
+// This is only meant as a last-resort per-field fallback when no full credentialPair is available.
+func firstEnv(env map[string]string, keysByPriority ...string) (value string, ok bool) {
+	for _, key := range keysByPriority {
+		if value, ok := env[key]; ok {
+			return value, true
+		}
+	}
+	return "", false
+}
+
+// firstCompletePair returns the username/password of the first pair, in
+// priority order, for which BOTH env vars are present in env.
+func firstCompletePair(env map[string]string, pairsByPriority ...credentialPair) (username, password string, ok bool) {
+	for _, pair := range pairsByPriority {
+		user, uOk := env[pair.userKey]
+		pwd, pOk := env[pair.passKey]
+
+		if uOk && pOk {
+			return user, pwd, true
+		}
+	}
+	return "", "", false
+}
+
 // fillConfig fills the service config with information found inside the container.
 func (dd *DynamicDiscovery) fillConfig(ctx context.Context, service *Service) {
 	if service.ServiceType == ClickHouseService {
 		if service.container != nil {
-			for k, v := range service.container.Environment() {
-				if k == "CLICKHOUSE_PASSWORD" || k == "CLICKHOUSE_ADMIN_PASSWORD" {
+			env := service.container.Environment()
+
+			pairs := []credentialPair{
+				{userKey: "CLICKHOUSE_ADMIN_USER", passKey: "CLICKHOUSE_ADMIN_PASSWORD"},
+				{userKey: "CLICKHOUSE_USER", passKey: "CLICKHOUSE_PASSWORD"},
+			}
+
+			if u, p, ok := firstCompletePair(env, pairs...); ok {
+				service.Config.Username = u
+				service.Config.Password = p
+			} else {
+				if v, ok := firstEnv(env, "CLICKHOUSE_ADMIN_PASSWORD", "CLICKHOUSE_PASSWORD"); ok {
 					service.Config.Password = v
 				}
 
-				if k == "CLICKHOUSE_USER" || k == "CLICKHOUSE_ADMIN_USER" {
+				if v, ok := firstEnv(env, "CLICKHOUSE_ADMIN_USER", "CLICKHOUSE_USER"); ok {
 					service.Config.Username = v
 				}
 			}
@@ -580,20 +620,27 @@ func (dd *DynamicDiscovery) fillConfig(ctx context.Context, service *Service) {
 
 	if service.ServiceType == PgBouncerService {
 		if service.container != nil {
-			for k, v := range service.container.Environment() {
-				if k == "POSTGRES_PASSWORD" || k == "PGBOUNCER_PASSWORD" || k == "DB_PASSWORD" {
+			env := service.container.Environment()
+
+			pairs := []credentialPair{
+				{userKey: "PGBOUNCER_USER", passKey: "PGBOUNCER_PASSWORD"},
+				{userKey: "DB_USER", passKey: "DB_PASSWORD"},
+				{userKey: "POSTGRES_USER", passKey: "POSTGRES_PASSWORD"},
+			}
+
+			if u, p, ok := firstCompletePair(env, pairs...); ok {
+				service.Config.Username = u
+				service.Config.Password = p
+			} else {
+				if v, ok := firstEnv(env, "PGBOUNCER_PASSWORD", "DB_PASSWORD", "POSTGRES_PASSWORD"); ok {
 					service.Config.Password = v
 				}
 
-				if k == "POSTGRES_USER" || k == "PGBOUNCER_USER" || k == "DB_USER" {
+				if v, ok := firstEnv(env, "PGBOUNCER_USER", "DB_USER", "POSTGRES_USER"); ok {
 					service.Config.Username = v
 				}
 			}
 		}
-	}
-
-	if service.ServiceType == NSQService {
-		service.CheckIgnored = true
 	}
 
 	if service.ServiceType == VaultService {
@@ -760,6 +807,13 @@ func serviceByCommand(cmdLine []string) (serviceName ServiceName, found bool) {
 
 	if ok {
 		return serviceName, ok
+	}
+
+	if name == "clickhouse" {
+		if len(cmdLine) > 1 && cmdLine[1] == "server" {
+			return ClickHouseService, true
+		}
+		return "", false
 	}
 
 	serviceName, ok = knownProcesses[name]
