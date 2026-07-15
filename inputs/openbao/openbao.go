@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package vault
+package openbao
 
 import (
 	"strings"
@@ -27,21 +27,21 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/vault"
 )
 
-// New initialise vault.Input.
+// New initialise openbao Input.
 func New(url string, token string) (i telegraf.Input, err error) {
 	input, ok := telegraf_inputs.Inputs["vault"]
 	if ok {
-		vaultInput, ok := input().(*vault.Vault)
+		openbaoInput, ok := input().(*vault.Vault)
 		if ok {
-			vaultInput.URL = url
-			vaultInput.Token = token
+			openbaoInput.URL = url
+			openbaoInput.Token = token
 
 			i = &internal.Input{
-				Input: vaultInput,
+				Input: openbaoInput,
 				Accumulator: internal.Accumulator{
 					RenameGlobal: renameGlobal,
 				},
-				Name: "vault",
+				Name: "openbao",
 			}
 		} else {
 			err = inputs.ErrUnexpectedType
@@ -54,7 +54,13 @@ func New(url string, token string) (i telegraf.Input, err error) {
 }
 
 func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
-	gatherContext.Measurement = strings.ReplaceAll(gatherContext.Measurement, ".", "_")
+	newName := strings.ReplaceAll(gatherContext.Measurement, ".", "_")
+	newName, found := strings.CutPrefix(newName, "vault")
+	if found {
+		gatherContext.Measurement = "bao" + newName
+	} else {
+		gatherContext.Measurement = newName
+	}
 
 	return gatherContext, false
 }

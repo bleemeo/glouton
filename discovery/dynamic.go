@@ -185,6 +185,7 @@ var (
 		"nginx":                  NginxService,
 		"nsqd":                   NSQService,
 		"ntpd":                   NTPService,
+		"bao":                    OpenBaoService,
 		string(OpenVPNService):   OpenVPNService,
 		"php-fpm":                PHPFPMService,
 		"postgres":               PostgreSQLService,
@@ -606,6 +607,16 @@ func (dd *DynamicDiscovery) fillConfig(ctx context.Context, service *Service) {
 		}
 	}
 
+	if service.ServiceType == OpenBaoService {
+		if service.container != nil {
+			for k, v := range service.container.Environment() {
+				if k == "BAO_TOKEN" {
+					service.Config.Password = v
+				}
+			}
+		}
+	}
+
 	if service.ServiceType == PostgreSQLService {
 		if service.container != nil {
 			for k, v := range service.container.Environment() {
@@ -811,9 +822,16 @@ func serviceByCommand(cmdLine []string) (serviceName ServiceName, found bool) {
 		return serviceName, ok
 	}
 
-	if name == "clickhouse" {
+	if name == "clickhouse" || name == "bao" || name == "vault" {
 		if len(cmdLine) > 1 && cmdLine[1] == "server" {
-			return ClickHouseService, true
+			switch name {
+			case "clickhouse":
+				return ClickHouseService, true
+			case "bao":
+				return OpenBaoService, true
+			case "vault":
+				return VaultService, true
+			}
 		}
 
 		return "", false

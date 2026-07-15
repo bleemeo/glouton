@@ -93,6 +93,7 @@ const (
 	NginxService         ServiceName = "nginx"
 	NSQService           ServiceName = "nsq"
 	NTPService           ServiceName = "ntp"
+	OpenBaoService       ServiceName = "openbao"
 	OpenLDAPService      ServiceName = "openldap"
 	OpenVPNService       ServiceName = "openvpn"
 	PHPFPMService        ServiceName = "phpfpm"
@@ -396,6 +397,10 @@ var (
 		NTPService: {
 			ServicePort:     123,
 			ServiceProtocol: udpProtocol,
+		},
+		OpenBaoService: {
+			ServicePort:     8200,
+			ServiceProtocol: tcpProtocol,
 		},
 		OpenLDAPService: {
 			ServicePort:     389,

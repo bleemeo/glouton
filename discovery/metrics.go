@@ -47,6 +47,7 @@ import (
 	"github.com/bleemeo/glouton/inputs/nfs"
 	"github.com/bleemeo/glouton/inputs/nginx"
 	"github.com/bleemeo/glouton/inputs/nsq"
+	"github.com/bleemeo/glouton/inputs/openbao"
 	"github.com/bleemeo/glouton/inputs/openldap"
 	"github.com/bleemeo/glouton/inputs/pgbouncer"
 	"github.com/bleemeo/glouton/inputs/phpfpm"
@@ -361,6 +362,11 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		if ip, port := service.AddressPort(); ip != "" {
 			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
 			input, err = nsq.New(url)
+		}
+	case OpenBaoService:
+		if ip, port := service.AddressPort(); ip != "" {
+			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
+			input, err = openbao.New(url, service.Config.Password)
 		}
 	case OpenLDAPService:
 		if ip, port := service.AddressPort(); ip != "" {

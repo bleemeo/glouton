@@ -690,6 +690,20 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"nsq_server_topic_count",
 		},
 
+		discovery.OpenBaoService: {
+			"bao_core_active",
+			"bao_core_check_token",
+			"bao_core_leadership_lost",
+			"bao_core_unsealed_value",
+			"bao_core_handle_login_request",
+			"bao_core_handle_request",
+			"bao_core_post_unseal",
+			"bao_core_active_value",
+			"bao_core_in_flight_requests_value",
+			"bao_expire_num_leases",
+			"bao_core_response_status_code",
+		},
+
 		discovery.OpenLDAPService: {
 			"openldap_connections_current",
 			"openldap_waiters_read",
