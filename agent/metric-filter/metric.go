@@ -690,7 +690,7 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"nsq_server_topic_count",
 		},
 
-		discovery.OpenBaoService: {
+		discovery.OpenBaoService: { // OpenBao is a fork of Hashicorp Vault
 			"bao_core_active",
 			"bao_core_check_token",
 			"bao_core_leadership_lost",

@@ -55,8 +55,8 @@ func New(url string, token string) (i telegraf.Input, err error) {
 
 func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
 	newName := strings.ReplaceAll(gatherContext.Measurement, ".", "_")
-	newName, found := strings.CutPrefix(newName, "vault")
-	if found {
+
+	if newName, found := strings.CutPrefix(newName, "vault"); found {
 		gatherContext.Measurement = "bao" + newName
 	} else {
 		gatherContext.Measurement = newName
