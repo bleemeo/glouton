@@ -306,7 +306,7 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			input, err = apache.New(statusURL)
 		}
 	case ClickHouseService:
-		if ip, port := service.AddressPort(); ip != "" {
+		if ip, port := clickHouseAddress(service); ip != "" {
 			if service.Config.Username == "" {
 				service.Config.Username = "default"
 			}
@@ -590,6 +590,26 @@ func urlForPHPFPM(service Service) string {
 	}
 
 	return ""
+}
+
+func clickHouseAddress(service Service) (ip string, port int) {
+	if service.Config.StatsPort != 0 {
+		return service.AddressForPort(service.Config.StatsPort, tcpProtocol, true), service.Config.StatsPort
+	}
+
+	if service.Config.Port != 0 {
+		return service.AddressForPort(service.Config.Port, tcpProtocol, true), service.Config.Port
+	}
+
+	ip, port = service.AddressPort()
+
+	// 8123 is the Clickhouse monitoring port by default, using another one is a special config by the user
+	if ip == "" && service.Config.Port == 0 && service.IPAddress != "" {
+		ip = service.IPAddress
+		port = servicesDiscoveryInfo[ClickHouseService].ServicePort
+	}
+
+	return ip, port
 }
 
 func getMetricsSocket(service Service) string {
