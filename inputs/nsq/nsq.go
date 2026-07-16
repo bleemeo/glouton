@@ -34,9 +34,15 @@ func New(url string) (i telegraf.Input, err error) {
 			nsqInput.Endpoints = []string{url}
 
 			i = &internal.Input{
-				Input:       nsqInput,
-				Accumulator: internal.Accumulator{},
-				Name:        "nsq",
+				Input: nsqInput,
+				Accumulator: internal.Accumulator{
+					DifferentiatedMetrics: []string{
+						"message_count",
+						"requeue_count",
+						"timeout_count",
+					},
+				},
+				Name: "nsq",
 			}
 		} else {
 			err = inputs.ErrUnexpectedType
@@ -45,5 +51,5 @@ func New(url string) (i telegraf.Input, err error) {
 		err = inputs.ErrDisabledInput
 	}
 
-	return
+	return i, err
 }

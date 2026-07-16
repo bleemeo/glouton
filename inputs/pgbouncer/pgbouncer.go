@@ -35,9 +35,18 @@ func New(address string) (i telegraf.Input, err error) {
 			pgbouncerInput.Address = config.NewSecret([]byte(address))
 
 			i = &internal.Input{
-				Input:       pgbouncerInput,
-				Accumulator: internal.Accumulator{},
-				Name:        "pgbouncer",
+				Input: pgbouncerInput,
+				Accumulator: internal.Accumulator{
+					TransformMetrics: transformMetrics,
+					DifferentiatedMetrics: []string{
+						"total_requests",
+						"total_query_count",
+						"total_query_time",
+						"total_received",
+						"total_sent",
+					},
+				},
+				Name: "pgbouncer",
 			}
 		} else {
 			err = inputs.ErrUnexpectedType
@@ -47,4 +56,21 @@ func New(address string) (i telegraf.Input, err error) {
 	}
 
 	return
+}
+
+func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]any) map[string]float64 {
+	_ = currentContext
+	_ = originalFields
+
+	newFields := make(map[string]float64)
+
+	for metricName, value := range fields {
+		if metricName == "total_query_time" || metricName == "avg_query_time" || metricName == "avg_wait_time" {
+			value /= 1000000 // convert from microseconds to seconds
+		}
+
+		newFields[metricName] = value
+	}
+
+	return newFields
 }

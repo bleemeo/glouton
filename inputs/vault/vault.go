@@ -40,6 +40,14 @@ func New(url string, token string) (i telegraf.Input, err error) {
 				Input: vaultInput,
 				Accumulator: internal.Accumulator{
 					RenameGlobal: renameGlobal,
+					DifferentiatedMetrics: []string{
+						"handle_request",
+						"handle_login_request",
+						"check_token",
+						"response_status_code",
+						"leadership_lost",
+						"post_unseal",
+					},
 				},
 				Name: "vault",
 			}
@@ -50,7 +58,7 @@ func New(url string, token string) (i telegraf.Input, err error) {
 		err = inputs.ErrDisabledInput
 	}
 
-	return
+	return i, err
 }
 
 func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {

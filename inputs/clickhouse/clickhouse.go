@@ -37,9 +37,21 @@ func New(url string, username string, password string) (i telegraf.Input, err er
 			clickhouseInput.AutoDiscovery = false
 
 			i = &internal.Input{
-				Input:       clickhouseInput,
-				Accumulator: internal.Accumulator{},
-				Name:        "clickhouse",
+				Input: clickhouseInput,
+				Accumulator: internal.Accumulator{
+					TransformMetrics: transformMetrics,
+					DifferentiatedMetrics: []string{
+						"query",
+						"select_query",
+						"query_time_microseconds",
+						"failed_query",
+						"mutation_total_milliseconds",
+						"network_receive_bytes",
+						"network_send_bytes",
+						"slow_read",
+					},
+				},
+				Name: "clickhouse",
 			}
 		} else {
 			err = inputs.ErrUnexpectedType
@@ -48,5 +60,28 @@ func New(url string, username string, password string) (i telegraf.Input, err er
 		err = inputs.ErrDisabledInput
 	}
 
-	return
+	return i, err
+}
+
+func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]any) map[string]float64 {
+	_ = currentContext
+	_ = originalFields
+
+	newFields := make(map[string]float64)
+
+	for metricName, value := range fields {
+		if metricName == "query_time_microseconds" {
+			metricName = "query_time_seconds"
+			value /= 1000000 // convert from microseconds to seconds
+		}
+
+		if metricName == "mutation_total_milliseconds" {
+			metricName = "mutation_total_seconds"
+			value /= 1000 // convert from milliseconds to seconds
+		}
+
+		newFields[metricName] = value
+	}
+
+	return newFields
 }
