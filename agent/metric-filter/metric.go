@@ -769,11 +769,10 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"pgbouncer_pools_sv_active",
 			"pgbouncer_pools_sv_idle",
 			"pgbouncer_pools_maxwait",
-			"pgbouncer_stats_total_requests",
-			"pgbouncer_stats_total_query_count",
-			"pgbouncer_stats_total_query_time",
-			"pgbouncer_stats_total_received",
-			"pgbouncer_stats_total_sent",
+			"pgbouncer_total_query_count",
+			"pgbouncer_total_query_time",
+			"pgbouncer_total_received",
+			"pgbouncer_total_sent",
 		},
 
 		discovery.RabbitMQService: {
