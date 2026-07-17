@@ -198,6 +198,42 @@ func TestServiceByCommand(t *testing.T) {
 			in:   []string{"clickhouse"},
 			want: "",
 		},
+		{
+			in:   []string{"vault"},
+			want: "",
+		},
+		{
+			in:   []string{"vault", "client"},
+			want: "",
+		},
+		{
+			in:   []string{"vault", "server"},
+			want: VaultService,
+		},
+		{
+			in:   []string{"bao"},
+			want: "",
+		},
+		{
+			in:   []string{"bao", "client"},
+			want: "",
+		},
+		{
+			in:   []string{"bao", "server"},
+			want: OpenBaoService,
+		},
+		{
+			in:   []string{"openbao"},
+			want: "",
+		},
+		{
+			in:   []string{"openbao", "client"},
+			want: "",
+		},
+		{
+			in:   []string{"openbao", "server"},
+			want: "",
+		},
 	}
 
 	for i, c := range cases {
@@ -482,6 +518,554 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				},
 				Active:       true,
 				LastTimeSeen: t0,
+			},
+		},
+		{
+			testName: "base local clickhouse",
+			cmdLine:  []string{"clickhouse-server"},
+			want: Service{
+				Name:            string(ClickHouseService),
+				ServiceType:     ClickHouseService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 8123}},
+				IPAddress:       testIP127001,
+				Config: config.Service{
+					Username: "",
+					Password: "",
+				},
+				Active:       true,
+				LastTimeSeen: t0,
+			},
+		},
+		{
+			testName:    string(ClickHouseService),
+			containerID: "clickhouse1",
+			containerIP: testIP17217049,
+			cmdLine:     []string{"clickhouse-server", "--config-file=/etc/clickhouse-server/config.xml"},
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8123},
+			},
+			containerEnv: map[string]string{
+				"CLICKHOUSE_USER":     "default",
+				"CLICKHOUSE_PASSWORD": testSecret,
+			},
+			want: Service{
+				Name:        string(ClickHouseService),
+				ServiceType: ClickHouseService,
+				ContainerID: "clickhouse1",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8123},
+				},
+				IPAddress: testIP17217049,
+				Config: config.Service{
+					Username: "default",
+					Password: testSecret,
+				},
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// Admin credentials take priority over the "normal" default-user
+			// credentials when both are present, but only as a complete pair.
+			testName:    "clickhouse-admin-credentials-priority",
+			containerID: "clickhouse2",
+			containerIP: testIP17217049,
+			cmdLine:     []string{"clickhouse-server", "--config-file=/etc/clickhouse-server/config.xml"},
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8123},
+			},
+			containerEnv: map[string]string{
+				"CLICKHOUSE_USER":           "default",
+				"CLICKHOUSE_PASSWORD":       testSecret,
+				"CLICKHOUSE_ADMIN_USER":     "admin",
+				"CLICKHOUSE_ADMIN_PASSWORD": "adminpass",
+			},
+			want: Service{
+				Name:        string(ClickHouseService),
+				ServiceType: ClickHouseService,
+				ContainerID: "clickhouse2",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8123},
+				},
+				IPAddress: testIP17217049,
+				Config: config.Service{
+					Username: "admin",
+					Password: "adminpass",
+				},
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// Not full admin credentials fall back to normal pair.
+			testName:    "clickhouse-stray-admin-password-falls-back",
+			containerID: "clickhouse3",
+			containerIP: testIP17217049,
+			cmdLine:     []string{"clickhouse-server", "--config-file=/etc/clickhouse-server/config.xml"},
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8123},
+			},
+			containerEnv: map[string]string{
+				"CLICKHOUSE_USER":           "default",
+				"CLICKHOUSE_PASSWORD":       testSecret,
+				"CLICKHOUSE_ADMIN_PASSWORD": "adminpass",
+			},
+			want: Service{
+				Name:        string(ClickHouseService),
+				ServiceType: ClickHouseService,
+				ContainerID: "clickhouse3",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8123},
+				},
+				IPAddress: testIP17217049,
+				Config: config.Service{
+					Username: "default",
+					Password: testSecret,
+				},
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			testName:    "clickhouse-stray-admin-user-falls-back",
+			containerID: "clickhouse4",
+			containerIP: testIP17217049,
+			cmdLine:     []string{"clickhouse-server", "--config-file=/etc/clickhouse-server/config.xml"},
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8123},
+			},
+			containerEnv: map[string]string{
+				"CLICKHOUSE_USER":       "default",
+				"CLICKHOUSE_PASSWORD":   testSecret,
+				"CLICKHOUSE_ADMIN_USER": "admin",
+			},
+			want: Service{
+				Name:        string(ClickHouseService),
+				ServiceType: ClickHouseService,
+				ContainerID: "clickhouse4",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8123},
+				},
+				IPAddress: testIP17217049,
+				Config: config.Service{
+					Username: "default",
+					Password: testSecret,
+				},
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// No pair is complete at all : fall back to filling each field
+			// independently rather than setting nothing.
+			testName:    "clickhouse-lone-password-no-complete-pair",
+			containerID: "clickhouse5",
+			containerIP: testIP17217049,
+			cmdLine:     []string{"clickhouse-server", "--config-file=/etc/clickhouse-server/config.xml"},
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8123},
+			},
+			containerEnv: map[string]string{
+				"CLICKHOUSE_PASSWORD": testSecret,
+			},
+			want: Service{
+				Name:        string(ClickHouseService),
+				ServiceType: ClickHouseService,
+				ContainerID: "clickhouse5",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8123},
+				},
+				IPAddress: testIP17217049,
+				Config: config.Service{
+					Password: testSecret,
+				},
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			testName: "base local pgbouncer",
+			cmdLine:  []string{"pgbouncer", "pgbouncer.ini"},
+			want: Service{
+				Name:            string(PgBouncerService),
+				ServiceType:     PgBouncerService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 6432}},
+				IPAddress:       testIP127001,
+				Config: config.Service{
+					Username: "",
+					Password: "",
+				},
+				Active:       true,
+				LastTimeSeen: t0,
+			},
+		},
+		{
+			testName:    string(PgBouncerService),
+			containerID: "pgbouncer1",
+			containerIP: testIP17217049,
+			cmdLine:     []string{"/usr/bin/pgbouncer", "/etc/pgbouncer/pgbouncer.ini"},
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 6432},
+			},
+			containerEnv: map[string]string{
+				"PGBOUNCER_USER":     "pgbouncer",
+				"PGBOUNCER_PASSWORD": testSecret,
+			},
+			want: Service{
+				Name:        string(PgBouncerService),
+				ServiceType: PgBouncerService,
+				ContainerID: "pgbouncer1",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 6432},
+				},
+				IPAddress: testIP17217049,
+				Config: config.Service{
+					Username: "pgbouncer",
+					Password: testSecret,
+				},
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// POSTGRES_* env vars are used only as a last resort.
+			testName:    "pgbouncer-postgres-tier-only",
+			containerID: "pgbouncer2",
+			containerIP: testIP17217049,
+			cmdLine:     []string{"/usr/bin/pgbouncer", "/etc/pgbouncer/pgbouncer.ini"},
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 6432},
+			},
+			containerEnv: map[string]string{
+				"POSTGRES_USER":     "bleemeo_user",
+				"POSTGRES_PASSWORD": testSecret,
+			},
+			want: Service{
+				Name:        string(PgBouncerService),
+				ServiceType: PgBouncerService,
+				ContainerID: "pgbouncer2",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 6432},
+				},
+				IPAddress: testIP17217049,
+				Config: config.Service{
+					Username: "bleemeo_user",
+					Password: testSecret,
+				},
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// DB_* is the edoburu/pgbouncer image's generic convention,
+			// sitting between PGBOUNCER_* and POSTGRES_* in priority.
+			testName:    "pgbouncer-db-tier-only",
+			containerID: "pgbouncer3",
+			containerIP: testIP17217049,
+			cmdLine:     []string{"/usr/bin/pgbouncer", "/etc/pgbouncer/pgbouncer.ini"},
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 6432},
+			},
+			containerEnv: map[string]string{
+				"DB_USER":     "appuser",
+				"DB_PASSWORD": "apppassword",
+			},
+			want: Service{
+				Name:        string(PgBouncerService),
+				ServiceType: PgBouncerService,
+				ContainerID: "pgbouncer3",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 6432},
+				},
+				IPAddress: testIP17217049,
+				Config: config.Service{
+					Username: "appuser",
+					Password: "apppassword",
+				},
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			testName:    "pgbouncer-all-tiers-present-pgbouncer-wins",
+			containerID: "pgbouncer4",
+			containerIP: testIP17217049,
+			cmdLine:     []string{"/usr/bin/pgbouncer", "/etc/pgbouncer/pgbouncer.ini"},
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 6432},
+			},
+			containerEnv: map[string]string{
+				"POSTGRES_USER": "bleemeo_user", "POSTGRES_PASSWORD": "password",
+				"DB_USER": "appuser", "DB_PASSWORD": "apppassword",
+				"PGBOUNCER_USER": "pgbouncer", "PGBOUNCER_PASSWORD": "pgbouncerpass",
+			},
+			want: Service{
+				Name:        string(PgBouncerService),
+				ServiceType: PgBouncerService,
+				ContainerID: "pgbouncer4",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 6432},
+				},
+				IPAddress: testIP17217049,
+				Config: config.Service{
+					Username: "pgbouncer",
+					Password: "pgbouncerpass",
+				},
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// incomplete PGBOUNCER_* must not steal the username from the
+			// complete DB_* pair one tier below.
+			testName:    "pgbouncer-stray-pgbouncer-password-falls-back-to-db",
+			containerID: "pgbouncer5",
+			containerIP: testIP17217049,
+			cmdLine:     []string{"/usr/bin/pgbouncer", "/etc/pgbouncer/pgbouncer.ini"},
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 6432},
+			},
+			containerEnv: map[string]string{
+				"DB_USER": "appuser", "DB_PASSWORD": "apppassword",
+				"PGBOUNCER_PASSWORD": "pgbouncerpass",
+			},
+			want: Service{
+				Name:        string(PgBouncerService),
+				ServiceType: PgBouncerService,
+				ContainerID: "pgbouncer5",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 6432},
+				},
+				IPAddress: testIP17217049,
+				Config: config.Service{
+					Username: "appuser",
+					Password: "apppassword",
+				},
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// Same logic one tier down.
+			testName:    "pgbouncer-stray-db-password-falls-back-to-postgres",
+			containerID: "pgbouncer6",
+			containerIP: testIP17217049,
+			cmdLine:     []string{"/usr/bin/pgbouncer", "/etc/pgbouncer/pgbouncer.ini"},
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 6432},
+			},
+			containerEnv: map[string]string{
+				"POSTGRES_USER": "bleemeo_user", "POSTGRES_PASSWORD": "password",
+				"DB_PASSWORD": "apppassword",
+			},
+			want: Service{
+				Name:        string(PgBouncerService),
+				ServiceType: PgBouncerService,
+				ContainerID: "pgbouncer6",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 6432},
+				},
+				IPAddress: testIP17217049,
+				Config: config.Service{
+					Username: "bleemeo_user",
+					Password: "password",
+				},
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// No tier is complete at all: fall back to filling each field
+			// independently rather than setting nothing.
+			testName:    "pgbouncer-lone-password-no-complete-pair",
+			containerID: "pgbouncer7",
+			containerIP: testIP17217049,
+			cmdLine:     []string{"/usr/bin/pgbouncer", "/etc/pgbouncer/pgbouncer.ini"},
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 6432},
+			},
+			containerEnv: map[string]string{
+				"DB_PASSWORD": "apppassword",
+			},
+			want: Service{
+				Name:        string(PgBouncerService),
+				ServiceType: PgBouncerService,
+				ContainerID: "pgbouncer7",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 6432},
+				},
+				IPAddress: testIP17217049,
+				Config: config.Service{
+					Password: "apppassword",
+				},
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			testName: "base local nsq",
+			cmdLine:  []string{"nsqd", "--lookupd-tcp-address=127.0.0.1:4160"},
+			want: Service{
+				Name:            string(NSQService),
+				ServiceType:     NSQService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 4151}},
+				IPAddress:       testIP127001,
+				Config: config.Service{
+					Username: "",
+					Password: "",
+				},
+				Active:       true,
+				LastTimeSeen: t0,
+			},
+		},
+		{
+			testName:    string(NSQService),
+			containerID: "nsqd1",
+			containerIP: testIP17217049,
+			cmdLine:     []string{"/nsqd", "--lookupd-tcp-address=nsqlookupd:4160", "--broadcast-address=127.0.0.1"},
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 4151},
+			},
+			want: Service{
+				Name:        string(NSQService),
+				ServiceType: NSQService,
+				ContainerID: "nsqd1",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 4151},
+				},
+				IPAddress:       testIP17217049,
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			testName: "base local vault",
+			cmdLine:  []string{"vault", "server"},
+			want: Service{
+				Name:            string(VaultService),
+				ServiceType:     VaultService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 8200}},
+				IPAddress:       testIP127001,
+				Config: config.Service{
+					Password: "",
+				},
+				Active:       true,
+				LastTimeSeen: t0,
+			},
+		},
+		{
+			// fillConfig only sets Password from VAULT_TOKEN.
+			testName:    string(VaultService),
+			containerID: "vault1",
+			containerIP: testIP17217049,
+			cmdLine:     []string{"vault", "server", "-dev"},
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8200},
+			},
+			containerEnv: map[string]string{
+				"VAULT_TOKEN": testSecret,
+			},
+			want: Service{
+				Name:        string(VaultService),
+				ServiceType: VaultService,
+				ContainerID: "vault1",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8200},
+				},
+				IPAddress: testIP17217049,
+				Config: config.Service{
+					Password: testSecret,
+				},
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			testName: "base local openbao",
+			cmdLine:  []string{"bao", "server"},
+			want: Service{
+				Name:            string(OpenBaoService),
+				ServiceType:     OpenBaoService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 8200}},
+				IPAddress:       testIP127001,
+				Config: config.Service{
+					Password: "",
+				},
+				Active:       true,
+				LastTimeSeen: t0,
+			},
+		},
+		{
+			// OpenBao is a Vault fork: same knownProcesses/fillConfig shape,
+			// but its own binary name ("bao") and token env var (BAO_TOKEN).
+			testName:    string(OpenBaoService),
+			containerID: "openbao1",
+			containerIP: testIP17217049,
+			cmdLine:     []string{"bao", "server", "-dev"},
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8200},
+			},
+			containerEnv: map[string]string{
+				"BAO_TOKEN": testSecret,
+			},
+			want: Service{
+				Name:        string(OpenBaoService),
+				ServiceType: OpenBaoService,
+				ContainerID: "openbao1",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8200},
+				},
+				IPAddress: testIP17217049,
+				Config: config.Service{
+					Password: testSecret,
+				},
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -2140,183 +2724,6 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 
 			if diff := cmp.Diff(c.want, srv, cmpopts.IgnoreUnexported(Service{}), cmpopts.EquateEmpty(), sorter); diff != "" {
 				t.Errorf("services mismatch (-want +got)\n%s", diff)
-			}
-		})
-	}
-}
-
-func TestFillConfigClickHouseCredentials(t *testing.T) {
-	cases := []struct {
-		name         string
-		env          map[string]string
-		wantUsername string
-		wantPassword string
-	}{
-		{
-			name:         "normal-credentials-only",
-			env:          map[string]string{"CLICKHOUSE_USER": "default", "CLICKHOUSE_PASSWORD": "pass"},
-			wantUsername: "default",
-			wantPassword: "pass",
-		},
-		{
-			name:         "admin-credentials-only",
-			env:          map[string]string{"CLICKHOUSE_ADMIN_USER": "admin", "CLICKHOUSE_ADMIN_PASSWORD": "adminpass"},
-			wantUsername: "admin",
-			wantPassword: "adminpass",
-		},
-		{
-			name: "both-complete-pairs-present-admin-wins",
-			env: map[string]string{
-				"CLICKHOUSE_USER": "default", "CLICKHOUSE_PASSWORD": "pass",
-				"CLICKHOUSE_ADMIN_USER": "admin", "CLICKHOUSE_ADMIN_PASSWORD": "adminpass",
-			},
-			wantUsername: "admin",
-			wantPassword: "adminpass",
-		},
-		{
-			name: "stray-admin-password-falls-back-to-complete-normal-pair",
-			env: map[string]string{
-				"CLICKHOUSE_USER": "default", "CLICKHOUSE_PASSWORD": "pass",
-				"CLICKHOUSE_ADMIN_PASSWORD": "adminpass",
-			},
-			wantUsername: "default",
-			wantPassword: "pass",
-		},
-		{
-			name: "stray-admin-user-falls-back-to-complete-normal-pair",
-			env: map[string]string{
-				"CLICKHOUSE_USER": "default", "CLICKHOUSE_PASSWORD": "pass",
-				"CLICKHOUSE_ADMIN_USER": "admin",
-			},
-			wantUsername: "default",
-			wantPassword: "pass",
-		},
-		{
-			// No pair is complete at all: fall back to filling each field independently rather than setting nothing.
-			name:         "lone-password-no-complete-pair-falls-back-per-field",
-			env:          map[string]string{"CLICKHOUSE_PASSWORD": "pass"},
-			wantUsername: "",
-			wantPassword: "pass",
-		},
-		{
-			// An intentionally empty password is a valid, meaningful value and must be kept not treated as if it was never set.
-			name:         "explicitly-empty-password-is-kept",
-			env:          map[string]string{"CLICKHOUSE_USER": "default", "CLICKHOUSE_PASSWORD": ""},
-			wantUsername: "default",
-			wantPassword: "",
-		},
-	}
-
-	dd := NewDynamic(Option{
-		PS:                 mockProcess{},
-		Netstat:            mockNetstat{},
-		ContainerInfo:      mockContainerInfo{},
-		IsContainerIgnored: facts.ContainerFilter{}.ContainerIgnored,
-	})
-
-	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
-			service := Service{
-				ServiceType: ClickHouseService,
-				container:   facts.FakeContainer{FakeEnvironment: tt.env},
-			}
-
-			dd.fillConfig(t.Context(), &service)
-
-			if service.Config.Username != tt.wantUsername {
-				t.Errorf("Username == %#v, want %#v", service.Config.Username, tt.wantUsername)
-			}
-
-			if service.Config.Password != tt.wantPassword {
-				t.Errorf("Password == %#v, want %#v", service.Config.Password, tt.wantPassword)
-			}
-		})
-	}
-}
-
-func TestFillConfigPgBouncerCredentials(t *testing.T) {
-	cases := []struct {
-		name         string
-		env          map[string]string
-		wantUsername string
-		wantPassword string
-	}{
-		{
-			name:         "postgres-tier-only",
-			env:          map[string]string{"POSTGRES_USER": "bleemeo_user", "POSTGRES_PASSWORD": "password"},
-			wantUsername: "bleemeo_user",
-			wantPassword: "password",
-		},
-		{
-			name:         "db-tier-only",
-			env:          map[string]string{"DB_USER": "appuser", "DB_PASSWORD": "apppassword"},
-			wantUsername: "appuser",
-			wantPassword: "apppassword",
-		},
-		{
-			name:         "pgbouncer-tier-only",
-			env:          map[string]string{"PGBOUNCER_USER": "pgbouncer", "PGBOUNCER_PASSWORD": "pgbouncerpass"},
-			wantUsername: "pgbouncer",
-			wantPassword: "pgbouncerpass",
-		},
-		{
-			name: "all-three-tiers-present-pgbouncer-wins",
-			env: map[string]string{
-				"POSTGRES_USER": "bleemeo_user", "POSTGRES_PASSWORD": "password",
-				"DB_USER": "appuser", "DB_PASSWORD": "apppassword",
-				"PGBOUNCER_USER": "pgbouncer", "PGBOUNCER_PASSWORD": "pgbouncerpass",
-			},
-			wantUsername: "pgbouncer",
-			wantPassword: "pgbouncerpass",
-		},
-		{
-			name: "stray-pgbouncer-password-falls-back-to-complete-db-pair",
-			env: map[string]string{
-				"DB_USER": "appuser", "DB_PASSWORD": "apppassword",
-				"PGBOUNCER_PASSWORD": "pgbouncerpass",
-			},
-			wantUsername: "appuser",
-			wantPassword: "apppassword",
-		},
-		{
-			name: "stray-db-password-falls-back-to-complete-postgres-pair",
-			env: map[string]string{
-				"POSTGRES_USER": "bleemeo_user", "POSTGRES_PASSWORD": "password",
-				"DB_PASSWORD": "apppassword",
-			},
-			wantUsername: "bleemeo_user",
-			wantPassword: "password",
-		},
-		{
-			name:         "lone-password-no-complete-pair-falls-back-per-field",
-			env:          map[string]string{"DB_PASSWORD": "apppassword"},
-			wantUsername: "",
-			wantPassword: "apppassword",
-		},
-	}
-
-	dd := NewDynamic(Option{
-		PS:                 mockProcess{},
-		Netstat:            mockNetstat{},
-		ContainerInfo:      mockContainerInfo{},
-		IsContainerIgnored: facts.ContainerFilter{}.ContainerIgnored,
-	})
-
-	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
-			service := Service{
-				ServiceType: PgBouncerService,
-				container:   facts.FakeContainer{FakeEnvironment: tt.env},
-			}
-
-			dd.fillConfig(t.Context(), &service)
-
-			if service.Config.Username != tt.wantUsername {
-				t.Errorf("Username == %#v, want %#v", service.Config.Username, tt.wantUsername)
-			}
-
-			if service.Config.Password != tt.wantPassword {
-				t.Errorf("Password == %#v, want %#v", service.Config.Password, tt.wantPassword)
 			}
 		})
 	}
