@@ -64,8 +64,21 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 	newFields := make(map[string]float64)
 
 	for metricName, value := range fields {
-		if metricName == "total_query_time" || metricName == "avg_query_time" || metricName == "avg_wait_time" {
+		if metricName == "total_query_time" {
+			metricName = "query_time_seconds"
 			value /= 1000000 // convert from microseconds to seconds
+		}
+
+		if metricName == "total_query_count" {
+			metricName = "query_count"
+		}
+
+		if metricName == "total_received" {
+			metricName = "received_bytes"
+		}
+
+		if metricName == "total_sent" {
+			metricName = "sent_bytes"
 		}
 
 		newFields[metricName] = value

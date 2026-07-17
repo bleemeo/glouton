@@ -44,7 +44,6 @@ func New(url string, token string) (i telegraf.Input, err error) {
 						"handle_request_count",
 						"handle_login_request_count",
 						"check_token_count",
-						"response_status_code_count",
 						"leadership_lost_count",
 					},
 				},

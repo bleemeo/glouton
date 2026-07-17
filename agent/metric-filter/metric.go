@@ -694,7 +694,6 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"bao_core_active_value",
 			"bao_core_in_flight_requests_value",
 			"bao_expire_num_leases_value",
-			"bao_core_response_status_code_count", // special structure not correctly handled for now
 		},
 
 		discovery.OpenLDAPService: {
@@ -767,10 +766,10 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"pgbouncer_pools_sv_active",
 			"pgbouncer_pools_sv_idle",
 			"pgbouncer_pools_maxwait",
-			"pgbouncer_total_query_count",
-			"pgbouncer_total_query_time",
-			"pgbouncer_total_received",
-			"pgbouncer_total_sent",
+			"pgbouncer_query_count",
+			"pgbouncer_query_time_seconds",
+			"pgbouncer_received_bytes",
+			"pgbouncer_sent_bytes",
 		},
 
 		discovery.RabbitMQService: {
@@ -856,7 +855,6 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"vault_core_active_value",
 			"vault_core_in_flight_requests_value",
 			"vault_expire_num_leases_value",
-			"vault_core_response_status_code_count", // special structure not correctly handled for now
 		},
 
 		discovery.ZookeeperService: {
