@@ -432,7 +432,7 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"clickhouse_metrics_broken_distributed_files_to_insert",
 			"clickhouse_metrics_delayed_inserts",
 			"clickhouse_metrics_memory_tracking",
-			"clickhouse_metrics_query",
+			"clickhouse_metrics_active_query",
 			"clickhouse_mutations_running",
 			"clickhouse_mutations_failed",
 			"clickhouse_asynchronous_metrics_replicas_max_queue_size",
@@ -686,17 +686,15 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 		},
 
 		discovery.OpenBaoService: { // OpenBao is a fork of Hashicorp Vault
-			"bao_core_active",
-			"bao_core_check_token",
-			"bao_core_leadership_lost",
+			"bao_core_check_token_count",
+			"bao_core_leadership_lost_count",
 			"bao_core_unsealed_value",
-			"bao_core_handle_login_request",
-			"bao_core_handle_request",
-			"bao_core_post_unseal",
+			"bao_core_handle_login_request_count",
+			"bao_core_handle_request_count",
 			"bao_core_active_value",
 			"bao_core_in_flight_requests_value",
-			"bao_expire_num_leases",
-			"bao_core_response_status_code",
+			"bao_expire_num_leases_value",
+			"bao_core_response_status_code_count", // special structure not correctly handled for now
 		},
 
 		discovery.OpenLDAPService: {
@@ -850,17 +848,15 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 		},
 
 		discovery.VaultService: {
-			"vault_core_active",
-			"vault_core_check_token",
-			"vault_core_leadership_lost",
+			"vault_core_check_token_count",
+			"vault_core_leadership_lost_count",
 			"vault_core_unsealed_value",
-			"vault_core_handle_login_request",
-			"vault_core_handle_request",
-			"vault_core_post_unseal",
+			"vault_core_handle_login_request_count",
+			"vault_core_handle_request_count",
 			"vault_core_active_value",
 			"vault_core_in_flight_requests_value",
-			"vault_expire_num_leases",
-			"vault_core_response_status_code",
+			"vault_expire_num_leases_value",
+			"vault_core_response_status_code_count", // special structure not correctly handled for now
 		},
 
 		discovery.ZookeeperService: {

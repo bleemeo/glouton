@@ -306,7 +306,13 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			input, err = apache.New(statusURL)
 		}
 	case ClickHouseService:
-		if ip, port := clickHouseAddress(service); ip != "" {
+		if service.Config.StatsURL != "" {
+			if service.Config.Username == "" {
+				service.Config.Username = "default"
+			}
+
+			input, err = clickhouse.New(service.Config.StatsURL, service.Config.Username, service.Config.Password)
+		} else if ip, port := clickHouseAddress(service); ip != "" {
 			if service.Config.Username == "" {
 				service.Config.Username = "default"
 			}
@@ -359,12 +365,16 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			input, err = nginx.New(fmt.Sprintf("http://%s/nginx_status", net.JoinHostPort(ip, strconv.Itoa(port))))
 		}
 	case NSQService:
-		if ip, port := service.AddressPort(); ip != "" {
+		if service.Config.StatsURL != "" {
+			input, err = nsq.New(service.Config.StatsURL)
+		} else if ip, port := service.AddressPort(); ip != "" {
 			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
 			input, err = nsq.New(url)
 		}
 	case OpenBaoService:
-		if ip, port := service.AddressPort(); ip != "" {
+		if service.Config.StatsURL != "" {
+			input, err = openbao.New(service.Config.StatsURL, service.Config.Password)
+		} else if ip, port := service.AddressPort(); ip != "" {
 			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
 			input, err = openbao.New(url, service.Config.Password)
 		}
@@ -454,7 +464,9 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			input, gathererOptions, err = uwsgi.New(url)
 		}
 	case VaultService:
-		if ip, port := service.AddressPort(); ip != "" {
+		if service.Config.StatsURL != "" {
+			input, err = vault.New(service.Config.StatsURL, service.Config.Password)
+		} else if ip, port := service.AddressPort(); ip != "" {
 			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
 			input, err = vault.New(url, service.Config.Password)
 		}

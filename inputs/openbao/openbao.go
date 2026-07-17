@@ -41,12 +41,11 @@ func New(url string, token string) (i telegraf.Input, err error) {
 				Accumulator: internal.Accumulator{
 					RenameGlobal: renameGlobal,
 					DifferentiatedMetrics: []string{
-						"handle_request",
-						"handle_login_request",
-						"check_token",
-						"response_status_code",
-						"leadership_lost",
-						"post_unseal",
+						"handle_request_count",
+						"handle_login_request_count",
+						"check_token_count",
+						"response_status_code_count",
+						"leadership_lost_count",
 					},
 				},
 				Name: "openbao",

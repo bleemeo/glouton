@@ -39,6 +39,7 @@ func New(url string, username string, password string) (i telegraf.Input, err er
 			i = &internal.Input{
 				Input: clickhouseInput,
 				Accumulator: internal.Accumulator{
+					RenameGlobal:     renameGlobal,
 					TransformMetrics: transformMetrics,
 					DifferentiatedMetrics: []string{
 						"query",
@@ -61,6 +62,18 @@ func New(url string, username string, password string) (i telegraf.Input, err er
 	}
 
 	return i, err
+}
+
+func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
+	if gatherContext.Measurement == "clickhouse_metrics" {
+		// Rename query field to active_query for clarity and conflict with query from events measurement.
+		if value, ok := gatherContext.OriginalFields["query"]; ok {
+			gatherContext.OriginalFields["active_query"] = value
+			delete(gatherContext.OriginalFields, "query")
+		}
+	}
+
+	return gatherContext, false
 }
 
 func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]any) map[string]float64 {

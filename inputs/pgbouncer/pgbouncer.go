@@ -39,7 +39,6 @@ func New(address string) (i telegraf.Input, err error) {
 				Accumulator: internal.Accumulator{
 					TransformMetrics: transformMetrics,
 					DifferentiatedMetrics: []string{
-						"total_requests",
 						"total_query_count",
 						"total_query_time",
 						"total_received",
