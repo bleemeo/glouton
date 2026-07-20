@@ -17,6 +17,8 @@
 package nsq
 
 import (
+	"strings"
+
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
 
@@ -41,6 +43,7 @@ func New(url string) (i telegraf.Input, err error) {
 						"requeue_count",
 						"timeout_count",
 					},
+					RenameMetrics: renameMetrics,
 				},
 				Name: "nsq",
 			}
@@ -52,4 +55,15 @@ func New(url string) (i telegraf.Input, err error) {
 	}
 
 	return i, err
+}
+
+func renameMetrics(currentContext internal.GatherContext, metricName string) (newMeasurement string, newMetricName string) {
+	newMeasurement = currentContext.Measurement
+	newMetricName = strings.TrimSuffix(metricName, "_count")
+
+	if newMetricName != metricName {
+		newMetricName += "s"
+	}
+
+	return newMeasurement, newMetricName
 }

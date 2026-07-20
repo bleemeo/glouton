@@ -73,7 +73,7 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 		}
 
 		if metricName == "total_query_count" {
-			metricName = "query_count"
+			metricName = "query"
 		}
 
 		if metricName == "total_received" {

@@ -41,6 +41,7 @@ func New(url string, token string) (i telegraf.Input, err error) {
 				Accumulator: internal.Accumulator{
 					RenameGlobal:     renameGlobal,
 					TransformMetrics: transformMetrics,
+					RenameMetrics:    renameMetrics,
 				},
 				Name: "vault",
 			}
@@ -90,4 +91,16 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 	newFields["count"] = rate
 
 	return newFields
+}
+
+func renameMetrics(currentContext internal.GatherContext, metricName string) (newMeasurement string, newMetricName string) {
+	if metricName == "value" {
+		return "", currentContext.Measurement
+	}
+
+	if metricName == "count" {
+		return "", currentContext.Measurement + "s"
+	}
+
+	return currentContext.Measurement, metricName
 }
