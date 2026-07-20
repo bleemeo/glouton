@@ -50,6 +50,7 @@ func New(url string, username string, password string) (i telegraf.Input, err er
 						"network_receive_bytes",
 						"network_send_bytes",
 						"slow_read",
+						"mutation_total_parts",
 					},
 				},
 				Name: "clickhouse",
@@ -82,18 +83,28 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 
 	newFields := make(map[string]float64)
 
-	for metricName, value := range fields {
-		if metricName == "query_time_microseconds" {
-			metricName = "query_time_seconds"
-			value /= 1000000 // convert from microseconds to seconds
-		}
+	queryTimeRate, hasQueryTime := fields["query_time_microseconds"]
+	queryCountRate, hasQueryCount := fields["query"]
+	mutationTimeRate, hasMutationTime := fields["mutation_total_milliseconds"]
+	mutationCountRate, hasMutationCount := fields["mutation_total_parts"]
 
-		if metricName == "mutation_total_milliseconds" {
-			metricName = "mutation_total_seconds"
-			value /= 1000 // convert from milliseconds to seconds
+	for metricName, value := range fields {
+		if metricName == "query_time_microseconds" || metricName == "mutation_total_milliseconds" {
+			// Not used by themselves but replaced below by actual average durations for queries and mutations.
+			continue
 		}
 
 		newFields[metricName] = value
+	}
+
+	// Protect from division by 0.
+	if hasQueryTime && hasQueryCount && queryCountRate > 0 {
+		newFields["query_time_seconds"] = queryTimeRate / queryCountRate / 1000000 // microseconds -> seconds.
+	}
+
+	// Protect from division by 0.
+	if hasMutationTime && hasMutationCount && mutationCountRate > 0 {
+		newFields["mutation_time_seconds"] = mutationTimeRate / mutationCountRate / 1000 // milliseconds -> seconds.
 	}
 
 	return newFields

@@ -68,7 +68,7 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 
 	for metricName, value := range fields {
 		if metricName == "total_query_time" {
-			// Not used by itslef but replaced below by an actual average duration
+			// Not used by itslef but replaced below by an actual average duration.
 			continue
 		}
 
@@ -87,9 +87,9 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 		newFields[metricName] = value
 	}
 
-	// Protect from division by 0
+	// Protect from division by 0.
 	if hasQueryTime && hasQueryCount && queryCountRate > 0 {
-		newFields["query_time_seconds"] = queryTimeRate / queryCountRate / 1000000 // microseconds -> seconds
+		newFields["query_time_seconds"] = queryTimeRate / queryCountRate / 1000000 // microseconds -> seconds.
 	}
 
 	return newFields
