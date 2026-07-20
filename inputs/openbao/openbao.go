@@ -39,13 +39,8 @@ func New(url string, token string) (i telegraf.Input, err error) {
 			i = &internal.Input{
 				Input: openbaoInput,
 				Accumulator: internal.Accumulator{
-					RenameGlobal: renameGlobal,
-					DifferentiatedMetrics: []string{
-						"handle_request_count",
-						"handle_login_request_count",
-						"check_token_count",
-						"leadership_lost_count",
-					},
+					RenameGlobal:     renameGlobal,
+					TransformMetrics: transformMetrics,
 				},
 				Name: "openbao",
 			}
@@ -69,4 +64,36 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 	}
 
 	return gatherContext, false
+}
+
+var rateMeasurements = map[string]bool{ //nolint:gochecknoglobals
+	"bao_core_handle_request":       true,
+	"bao_core_handle_login_request": true,
+	"bao_core_check_token":          true,
+	"bao_core_leadership_lost":      true,
+}
+
+func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {
+	if !rateMeasurements[currentContext.Measurement] {
+		return fields
+	}
+
+	rate, ok := fields["rate"]
+	if !ok {
+		return fields
+	}
+
+	newFields := make(map[string]float64, len(fields))
+
+	for name, value := range fields {
+		if name == "rate" {
+			continue
+		}
+
+		newFields[name] = value
+	}
+
+	newFields["count"] = rate
+
+	return newFields
 }
