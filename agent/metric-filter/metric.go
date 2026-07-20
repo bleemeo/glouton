@@ -758,9 +758,6 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 		},
 
 		discovery.PgBouncerService: {
-			"pgbouncer_avg_query_count",
-			"pgbouncer_avg_query_time",
-			"pgbouncer_avg_wait_time",
 			"pgbouncer_pools_cl_active",
 			"pgbouncer_pools_cl_waiting",
 			"pgbouncer_pools_sv_active",
