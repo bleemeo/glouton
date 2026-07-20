@@ -433,7 +433,6 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"clickhouse_metrics_delayed_inserts",
 			"clickhouse_metrics_memory_tracking",
 			"clickhouse_metrics_active_query",
-			"clickhouse_metrics_part_mutation",
 			"clickhouse_mutations_running",
 			"clickhouse_mutations_failed",
 			"clickhouse_asynchronous_metrics_replicas_max_queue_size",
