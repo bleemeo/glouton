@@ -58,6 +58,10 @@ func New(url string, token string) (i telegraf.Input, err error) {
 func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
 	gatherContext.Measurement = strings.ReplaceAll(gatherContext.Measurement, ".", "_")
 
+	if gatherContext.Measurement == "vault_core_leadership_lost" {
+		gatherContext.Measurement = "vault_core_leadership_losses"
+	}
+
 	return gatherContext, false
 }
 
@@ -65,7 +69,7 @@ var rateMeasurements = map[string]bool{ //nolint:gochecknoglobals
 	"vault_core_handle_request":       true,
 	"vault_core_handle_login_request": true,
 	"vault_core_check_token":          true,
-	"vault_core_leadership_lost":      true,
+	"vault_core_leadership_losses":    true,
 }
 
 func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {

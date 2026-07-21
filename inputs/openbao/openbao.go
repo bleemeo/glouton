@@ -64,6 +64,10 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 		gatherContext.Measurement = newName
 	}
 
+	if gatherContext.Measurement == "bao_core_leadership_lost" {
+		gatherContext.Measurement = "bao_core_leadership_losses"
+	}
+
 	return gatherContext, false
 }
 
@@ -71,7 +75,7 @@ var rateMeasurements = map[string]bool{ //nolint:gochecknoglobals
 	"bao_core_handle_request":       true,
 	"bao_core_handle_login_request": true,
 	"bao_core_check_token":          true,
-	"bao_core_leadership_lost":      true,
+	"bao_core_leadership_losses":    true,
 }
 
 func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {
