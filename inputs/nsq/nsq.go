@@ -59,9 +59,9 @@ func New(url string) (i telegraf.Input, err error) {
 
 func renameMetrics(currentContext internal.GatherContext, metricName string) (newMeasurement string, newMetricName string) {
 	newMeasurement = currentContext.Measurement
-	newMetricName = strings.TrimSuffix(metricName, "_count")
+	newMetricName, foundCountSuffix := strings.CutSuffix(metricName, "_count")
 
-	if newMetricName != metricName {
+	if foundCountSuffix {
 		newMetricName += "s"
 	}
 

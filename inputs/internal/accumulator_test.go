@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/types"
+	"github.com/google/go-cmp/cmp"
 )
 
 // Test metric name constants.
@@ -501,8 +502,8 @@ func TestDeriveSameFieldDifferentMeasurement(t *testing.T) {
 		"vault_core_check_token":    7,
 	}
 
-	if !reflect.DeepEqual(results, want) {
-		t.Errorf("results == %v, want %v", results, want)
+	if diff := cmp.Diff(want, results); diff != "" {
+		t.Errorf("results mismatch (-want +got)\n%s", diff)
 	}
 }
 
