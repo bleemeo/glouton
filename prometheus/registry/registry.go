@@ -1160,27 +1160,28 @@ func (reg *registration) ScheduleRun(scheduleOption types.ScheduleOption) {
 	reg.registry.scheduleScrape(reg, scheduleOption)
 }
 
+// scheduleScrape updates the next run of the gatherer.
 func (r *Registry) scheduleScrape(reg *registration, scheduleOption types.ScheduleOption) {
-	r.l.Lock()
-	id, ok := r.getRegistrationID(reg)
-	r.l.Unlock()
-
-	if !ok {
-		return
-	}
-
-	r.scheduleScrapeInner(id, reg, scheduleOption)
-}
-
-// scheduleUpdate updates the next run of the gatherer.
-func (r *Registry) scheduleScrapeInner(id int, reg *registration, scheduleOption types.ScheduleOption) {
 	// Run the actual update in another goroutine and return instantly to make
-	// sure taking the registry lock doesn't cause a deadlock.
+	// sure taking the registry lock doesn't cause a deadlock. scheduleScrape is
+	// reachable synchronously from within a gather: a service check or a blackbox
+	// probe calls scheduleUpdate/ScheduleRun while it is being gathered. That
+	// gather runs as a child goroutine spawned by GatherWithState, which blocks on
+	// wg.Wait() until its children finish. Taking r.l synchronously here would let
+	// that child stall on a contended r.l and never signal the WaitGroup, wedging
+	// the whole registry (including the health check, whose starvation makes the
+	// watchdog kill the process). So everything that needs r.l, including looking
+	// up the registration id, must happen off the caller's goroutine.
 	go func() {
 		defer crashreport.ProcessPanic()
 
 		r.l.Lock()
 		defer r.l.Unlock()
+
+		id, ok := r.getRegistrationID(reg)
+		if !ok {
+			return
+		}
 
 		// Filter existing reschedule with skipIfRunBefore and wantedTime after this one.
 		// During the filter, flag if a reschedule exists with wantedTime before this one.

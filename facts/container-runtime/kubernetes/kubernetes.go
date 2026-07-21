@@ -44,6 +44,7 @@ import (
 	admv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -1151,6 +1152,10 @@ type kubeClient interface {
 	GetDaemonSets(ctx context.Context) ([]appsv1.DaemonSet, error)
 	// GetHPAs returns all HorizontalPodAutoscalers in the cluster.
 	GetHPAs(ctx context.Context) ([]autoscalingv2.HorizontalPodAutoscaler, error)
+	// GetJobs returns all jobs in the cluster.
+	GetJobs(ctx context.Context) ([]batchv1.Job, error)
+	// GetCronJobs returns all cronjobs in the cluster.
+	GetCronJobs(ctx context.Context) ([]batchv1.CronJob, error)
 	// GetScale returns the desired replicas (spec.replicas of the scale subresource) of the
 	// object identified by gvr/namespace/name. It returns an error when the object's resource has
 	// no scale subresource or when the agent lacks the permission to read it.
@@ -1169,6 +1174,7 @@ type realClient struct {
 	coreClient        *rest.RESTClient
 	discoClient       *rest.RESTClient
 	appsClient        *rest.RESTClient
+	batchClient       *rest.RESTClient
 	extClient         *rest.RESTClient
 	admClient         *rest.RESTClient
 	autoscalingClient *rest.RESTClient
@@ -1307,6 +1313,28 @@ func (cl *realClient) GetHPAs(ctx context.Context) ([]autoscalingv2.HorizontalPo
 	return hpas.Items, nil
 }
 
+func (cl *realClient) GetJobs(ctx context.Context) ([]batchv1.Job, error) {
+	var jobs batchv1.JobList
+
+	err := cl.batchClient.Get().Resource("jobs").Do(ctx).Into(&jobs)
+	if err != nil {
+		return nil, err
+	}
+
+	return jobs.Items, nil
+}
+
+func (cl *realClient) GetCronJobs(ctx context.Context) ([]batchv1.CronJob, error) {
+	var cronJobs batchv1.CronJobList
+
+	err := cl.batchClient.Get().Resource("cronjobs").Do(ctx).Into(&cronJobs)
+	if err != nil {
+		return nil, err
+	}
+
+	return cronJobs.Items, nil
+}
+
 func (cl *realClient) GetScale(ctx context.Context, gvr schema.GroupVersionResource, namespace, name string) (int32, error) {
 	// Pod owners are always namespaced (a pod can't be owned by a cluster-scoped object).
 	scale, err := cl.dynamicClient.Resource(gvr).Namespace(namespace).Get(ctx, name, metav1.GetOptions{}, "scale")
@@ -1402,7 +1430,7 @@ func getRestConfig(kubeConfig string) (*rest.Config, error) {
 	return config, err
 }
 
-func makeClients(config *rest.Config) (coreClient, discoClient, appsClient, extClient, admClient, autoscalingClient *rest.RESTClient, err error) {
+func makeClients(config *rest.Config) (coreClient, discoClient, appsClient, batchClient, extClient, admClient, autoscalingClient *rest.RESTClient, err error) {
 	clientSetups := []struct {
 		groupVersion  *schema.GroupVersion
 		addToSchemeFn func(*runtime.Scheme) error
@@ -1426,6 +1454,12 @@ func makeClients(config *rest.Config) (coreClient, discoClient, appsClient, extC
 			addToSchemeFn: appsv1.AddToScheme,
 			apiPath:       apiPathAPIs,
 			result:        &appsClient,
+		},
+		{
+			groupVersion:  &batchv1.SchemeGroupVersion,
+			addToSchemeFn: batchv1.AddToScheme,
+			apiPath:       apiPathAPIs,
+			result:        &batchClient,
 		},
 		{
 			groupVersion:  &apiextv1.SchemeGroupVersion,
@@ -1452,7 +1486,7 @@ func makeClients(config *rest.Config) (coreClient, discoClient, appsClient, extC
 
 		err = setup.addToSchemeFn(scheme)
 		if err != nil {
-			return nil, nil, nil, nil, nil, nil, fmt.Errorf("failed to build scheme for %s: %w", setup.groupVersion, err)
+			return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("failed to build scheme for %s: %w", setup.groupVersion, err)
 		}
 
 		cfgCopy := *config
@@ -1463,11 +1497,11 @@ func makeClients(config *rest.Config) (coreClient, discoClient, appsClient, extC
 
 		*setup.result, err = rest.UnversionedRESTClientFor(&cfgCopy)
 		if err != nil {
-			return nil, nil, nil, nil, nil, nil, fmt.Errorf("for %s: %w", setup.groupVersion, err)
+			return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("for %s: %w", setup.groupVersion, err)
 		}
 	}
 
-	return coreClient, discoClient, appsClient, extClient, admClient, autoscalingClient, nil
+	return coreClient, discoClient, appsClient, batchClient, extClient, admClient, autoscalingClient, nil
 }
 
 func openConnection(ctx context.Context, kubeConfig string, localNode string) (kubeClient, error) {
@@ -1476,7 +1510,7 @@ func openConnection(ctx context.Context, kubeConfig string, localNode string) (k
 		return nil, err
 	}
 
-	coreClient, discoClient, appsClient, extClient, admClient, autoscalingClient, err := makeClients(config)
+	coreClient, discoClient, appsClient, batchClient, extClient, admClient, autoscalingClient, err := makeClients(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build rest clients: %w", err)
 	}
@@ -1490,6 +1524,7 @@ func openConnection(ctx context.Context, kubeConfig string, localNode string) (k
 		coreClient:        coreClient,
 		discoClient:       discoClient,
 		appsClient:        appsClient,
+		batchClient:       batchClient,
 		extClient:         extClient,
 		admClient:         admClient,
 		autoscalingClient: autoscalingClient,
@@ -1566,7 +1601,7 @@ func (cl *realClient) switchToLocalAPI(ctx context.Context, localNode string) (b
 				shallowCopy := *cl.config
 				shallowCopy.Host = "https://" + net.JoinHostPort(ip, strconv.FormatInt(int64(httpsPort), 10))
 
-				coreClient, discoClient, appsClient, extClient, admClient, autoscalingClient, err := makeClients(&shallowCopy)
+				coreClient, discoClient, appsClient, batchClient, extClient, admClient, autoscalingClient, err := makeClients(&shallowCopy)
 				if err != nil {
 					return false, fmt.Errorf("failed to build rest clients: %w", err)
 				}
@@ -1589,6 +1624,7 @@ func (cl *realClient) switchToLocalAPI(ctx context.Context, localNode string) (b
 				cl.coreClient = coreClient
 				cl.discoClient = discoClient
 				cl.appsClient = appsClient
+				cl.batchClient = batchClient
 				cl.extClient = extClient
 				cl.admClient = admClient
 				cl.autoscalingClient = autoscalingClient
