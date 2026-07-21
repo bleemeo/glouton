@@ -185,7 +185,6 @@ var (
 		"nginx":                  NginxService,
 		"nsqd":                   NSQService,
 		"ntpd":                   NTPService,
-		"bao":                    OpenBaoService,
 		string(OpenVPNService):   OpenVPNService,
 		"php-fpm":                PHPFPMService,
 		"postgres":               PostgreSQLService,
@@ -199,7 +198,6 @@ var (
 		"uWSGI":                  UWSGIService,
 		"valkey-server":          ValkeyService,
 		"varnishd":               VarnishService,
-		"vault":                  VaultService,
 	}
 	knownInterpretedProcess = []struct {
 		CmdLineMustContains []string
