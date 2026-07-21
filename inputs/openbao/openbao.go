@@ -64,10 +64,6 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 		gatherContext.Measurement = newName
 	}
 
-	if gatherContext.Measurement == "bao_core_leadership_lost" {
-		gatherContext.Measurement = "bao_core_leadership_losses"
-	}
-
 	return gatherContext, false
 }
 
@@ -109,6 +105,9 @@ func renameMetrics(currentContext internal.GatherContext, metricName string) (ne
 	}
 
 	if metricName == "count" {
+		if currentContext.Measurement == "bao_core_leadership_lost" {
+			return "", "bao_core_leadership_losses"
+		}
 		return "", currentContext.Measurement + "s"
 	}
 

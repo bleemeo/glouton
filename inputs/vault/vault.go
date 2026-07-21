@@ -58,10 +58,6 @@ func New(url string, token string) (i telegraf.Input, err error) {
 func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
 	gatherContext.Measurement = strings.ReplaceAll(gatherContext.Measurement, ".", "_")
 
-	if gatherContext.Measurement == "vault_core_leadership_lost" {
-		gatherContext.Measurement = "vault_core_leadership_losses"
-	}
-
 	return gatherContext, false
 }
 
@@ -103,6 +99,9 @@ func renameMetrics(currentContext internal.GatherContext, metricName string) (ne
 	}
 
 	if metricName == "count" {
+		if currentContext.Measurement == "vault_core_leadership_lost" {
+			return "", "vault_core_leadership_losses"
+		}
 		return "", currentContext.Measurement + "s"
 	}
 
