@@ -982,6 +982,8 @@ github.com/rfjakob/eme v1.1.2/go.mod h1:cVvpasglm/G3ngEfcfT/Wt0GwhkuO32pf/poW6Ny
 github.com/rhnvrm/simples3 v0.6.1/go.mod h1:Y+3vYm2V7Y4VijFoJHHTrja6OgPrJ2cBti8dPGkC3sA=
 github.com/robbiet480/go.nut v0.0.0-20240622015809-60e196249c53 h1:TaG8Gmz2WOhR5KKymFGy9nnECpEZ+z01J9F22aqjuF0=
 github.com/robbiet480/go.nut v0.0.0-20240622015809-60e196249c53/go.mod h1:pL1huxuIlWub46MsMVJg4p7OXkzbPp/APxh9IH0eJjQ=
+github.com/robfig/cron/v3 v3.0.1 h1:WdRxkvbJztn8LMz/QEvLN5sBU+xKpSqwwUO1Pjr4qDs=
+github.com/robfig/cron/v3 v3.0.1/go.mod h1:eQICP3HwyT7UooqI/z+Ov+PtYAWygg1TEWWzGIFLtro=
 github.com/rogpeppe/fastuuid v1.2.0/go.mod h1:jVj6XXZzXRy/MSR5jhDC/2q6DgLz+nrA6LYCDYWNEvQ=
 github.com/rogpeppe/go-internal v1.14.1 h1:UQB4HGPB6osV0SQTLymcB4TgvyWu6ZyliaW0tI/otEQ=
 github.com/rogpeppe/go-internal v1.14.1/go.mod h1:MaRKkUm5W0goXpeCfT7UZI6fk/L7L7so1lCWt35ZSgc=

@@ -72,6 +72,10 @@ var (
 		"kubernetes_pods_restart_count",
 		"kubernetes_replicas_desired",
 		"kubernetes_replicas_ready",
+		"kubernetes_cronjob_missed_runs",
+		"kubernetes_cronjob_last_success_age_seconds",
+		"kubernetes_job_failed_pods",
+		"kubernetes_last_job_duration_seconds",
 
 		// Key Processes
 		"process_context_switch",
