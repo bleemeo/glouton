@@ -43,6 +43,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	admv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -1149,6 +1150,8 @@ type kubeClient interface {
 	GetStatefulSets(ctx context.Context) ([]appsv1.StatefulSet, error)
 	// GetDaemonSets returns all daemonsets in the cluster.
 	GetDaemonSets(ctx context.Context) ([]appsv1.DaemonSet, error)
+	// GetHPAs returns all HorizontalPodAutoscalers in the cluster.
+	GetHPAs(ctx context.Context) ([]autoscalingv2.HorizontalPodAutoscaler, error)
 	// GetJobs returns all jobs in the cluster.
 	GetJobs(ctx context.Context) ([]batchv1.Job, error)
 	// GetCronJobs returns all cronjobs in the cluster.
@@ -1168,12 +1171,13 @@ type kubeClient interface {
 
 type realClient struct {
 	// We need one client per API group (v1, discovery.k8s.io/v1, apps/v1, ...)
-	coreClient  *rest.RESTClient
-	discoClient *rest.RESTClient
-	appsClient  *rest.RESTClient
-	batchClient *rest.RESTClient
-	extClient   *rest.RESTClient
-	admClient   *rest.RESTClient
+	coreClient        *rest.RESTClient
+	discoClient       *rest.RESTClient
+	appsClient        *rest.RESTClient
+	batchClient       *rest.RESTClient
+	extClient         *rest.RESTClient
+	admClient         *rest.RESTClient
+	autoscalingClient *rest.RESTClient
 
 	// The dynamic client is used to read the scale subresource of arbitrary resources (including
 	// CRDs managed by operators), which the typed clients above cannot do.
@@ -1298,6 +1302,17 @@ func (cl *realClient) GetDaemonSets(ctx context.Context) ([]appsv1.DaemonSet, er
 	return daemonSets.Items, nil
 }
 
+func (cl *realClient) GetHPAs(ctx context.Context) ([]autoscalingv2.HorizontalPodAutoscaler, error) {
+	var hpas autoscalingv2.HorizontalPodAutoscalerList
+
+	err := cl.autoscalingClient.Get().Resource("horizontalpodautoscalers").Do(ctx).Into(&hpas)
+	if err != nil {
+		return nil, err
+	}
+
+	return hpas.Items, nil
+}
+
 func (cl *realClient) GetJobs(ctx context.Context) ([]batchv1.Job, error) {
 	var jobs batchv1.JobList
 
@@ -1415,7 +1430,7 @@ func getRestConfig(kubeConfig string) (*rest.Config, error) {
 	return config, err
 }
 
-func makeClients(config *rest.Config) (coreClient, discoClient, appsClient, batchClient, extClient, admClient *rest.RESTClient, err error) {
+func makeClients(config *rest.Config) (coreClient, discoClient, appsClient, batchClient, extClient, admClient, autoscalingClient *rest.RESTClient, err error) {
 	clientSetups := []struct {
 		groupVersion  *schema.GroupVersion
 		addToSchemeFn func(*runtime.Scheme) error
@@ -1458,6 +1473,12 @@ func makeClients(config *rest.Config) (coreClient, discoClient, appsClient, batc
 			apiPath:       apiPathAPIs,
 			result:        &admClient,
 		},
+		{
+			groupVersion:  &autoscalingv2.SchemeGroupVersion,
+			addToSchemeFn: autoscalingv2.AddToScheme,
+			apiPath:       apiPathAPIs,
+			result:        &autoscalingClient,
+		},
 	}
 
 	for _, setup := range clientSetups {
@@ -1465,7 +1486,7 @@ func makeClients(config *rest.Config) (coreClient, discoClient, appsClient, batc
 
 		err = setup.addToSchemeFn(scheme)
 		if err != nil {
-			return nil, nil, nil, nil, nil, nil, fmt.Errorf("failed to build scheme for %s: %w", setup.groupVersion, err)
+			return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("failed to build scheme for %s: %w", setup.groupVersion, err)
 		}
 
 		cfgCopy := *config
@@ -1476,11 +1497,11 @@ func makeClients(config *rest.Config) (coreClient, discoClient, appsClient, batc
 
 		*setup.result, err = rest.UnversionedRESTClientFor(&cfgCopy)
 		if err != nil {
-			return nil, nil, nil, nil, nil, nil, fmt.Errorf("for %s: %w", setup.groupVersion, err)
+			return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("for %s: %w", setup.groupVersion, err)
 		}
 	}
 
-	return coreClient, discoClient, appsClient, batchClient, extClient, admClient, nil
+	return coreClient, discoClient, appsClient, batchClient, extClient, admClient, autoscalingClient, nil
 }
 
 func openConnection(ctx context.Context, kubeConfig string, localNode string) (kubeClient, error) {
@@ -1489,7 +1510,7 @@ func openConnection(ctx context.Context, kubeConfig string, localNode string) (k
 		return nil, err
 	}
 
-	coreClient, discoClient, appsClient, batchClient, extClient, admClient, err := makeClients(config)
+	coreClient, discoClient, appsClient, batchClient, extClient, admClient, autoscalingClient, err := makeClients(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build rest clients: %w", err)
 	}
@@ -1500,15 +1521,16 @@ func openConnection(ctx context.Context, kubeConfig string, localNode string) (k
 	}
 
 	client := realClient{
-		coreClient:    coreClient,
-		discoClient:   discoClient,
-		appsClient:    appsClient,
-		batchClient:   batchClient,
-		extClient:     extClient,
-		admClient:     admClient,
-		dynamicClient: dynamicClient,
-		config:        config,
-		useLocalAPI:   false,
+		coreClient:        coreClient,
+		discoClient:       discoClient,
+		appsClient:        appsClient,
+		batchClient:       batchClient,
+		extClient:         extClient,
+		admClient:         admClient,
+		autoscalingClient: autoscalingClient,
+		dynamicClient:     dynamicClient,
+		config:            config,
+		useLocalAPI:       false,
 	}
 
 	switched, err := client.switchToLocalAPI(ctx, localNode)
@@ -1579,7 +1601,7 @@ func (cl *realClient) switchToLocalAPI(ctx context.Context, localNode string) (b
 				shallowCopy := *cl.config
 				shallowCopy.Host = "https://" + net.JoinHostPort(ip, strconv.FormatInt(int64(httpsPort), 10))
 
-				coreClient, discoClient, appsClient, batchClient, extClient, admClient, err := makeClients(&shallowCopy)
+				coreClient, discoClient, appsClient, batchClient, extClient, admClient, autoscalingClient, err := makeClients(&shallowCopy)
 				if err != nil {
 					return false, fmt.Errorf("failed to build rest clients: %w", err)
 				}
@@ -1605,6 +1627,7 @@ func (cl *realClient) switchToLocalAPI(ctx context.Context, localNode string) (b
 				cl.batchClient = batchClient
 				cl.extClient = extClient
 				cl.admClient = admClient
+				cl.autoscalingClient = autoscalingClient
 				cl.dynamicClient = dynamicClient
 				cl.config = &shallowCopy
 				cl.useLocalAPI = true

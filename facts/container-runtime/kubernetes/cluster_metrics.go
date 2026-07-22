@@ -27,6 +27,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	cron "github.com/robfig/cron/v3"
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,6 +39,21 @@ const (
 	metricNameReplicasDesired   = "kubernetes_replicas_desired"
 	metricNameReplicasReady     = "kubernetes_replicas_ready"
 	metricNameReplicasAvailable = "kubernetes_replicas_available"
+
+	metricNameHPAMinReplicas    = "kubernetes_hpa_min_replicas"
+	metricNameHPAMaxReplicas    = "kubernetes_hpa_max_replicas"
+	metricNameHPAScalingLimited = "kubernetes_hpa_scaling_limited"
+	metricNameHPAStatus         = "kubernetes_hpa_status"
+
+	// hpaReasonScalingDisabled is the HPA controller's reason on the ScalingActive condition when
+	// scaling is intentionally disabled (target scaled to 0 replicas). This is not a failure.
+	hpaReasonScalingDisabled = "ScalingDisabled"
+
+	// hpaDegradedGracePeriod is how long an HPA condition must stay in a failing state before
+	// kubernetes_hpa_status escalates to Warning/Critical. A rollout briefly makes the HPA lose its
+	// metrics (new pods not yet Ready / not yet scraped by metrics-server), which recovers on its
+	// own; only a failure that outlasts this window is a real problem worth alerting on.
+	hpaDegradedGracePeriod = 3 * time.Minute
 
 	// maxMissedRunsCount caps the number of schedule ticks counted for
 	// kubernetes_cronjob_missed_runs. A high-frequency CronJob that has been failing
@@ -64,6 +80,7 @@ type kubeCache struct {
 	deployments          []appsv1.Deployment
 	statefulSets         []appsv1.StatefulSet
 	daemonSets           []appsv1.DaemonSet
+	hpas                 []autoscalingv2.HorizontalPodAutoscaler
 	jobs                 []batchv1.Job
 	cronJobs             []batchv1.CronJob
 }
@@ -103,6 +120,9 @@ func getGlobalMetrics(
 	cache.daemonSets, err = cl.GetDaemonSets(ctx)
 	multiErr.Append(err)
 
+	cache.hpas, err = cl.GetHPAs(ctx)
+	multiErr.Append(err)
+
 	cache.jobs, err = cl.GetJobs(ctx)
 	multiErr.Append(err)
 
@@ -114,7 +134,7 @@ func getGlobalMetrics(
 	// Compute cluster metrics.
 	var points []types.MetricPoint //nolint:prealloc
 
-	metricFunctions := []metricsFunc{podsCount, requestsAndLimits, namespacesCount, nodesCount, podsRestartCount, workloadReplicas, cronJobMetrics, jobMetrics}
+	metricFunctions := []metricsFunc{podsCount, requestsAndLimits, namespacesCount, nodesCount, podsRestartCount, workloadReplicas, hpaMetrics, cronJobMetrics, jobMetrics}
 
 	for _, f := range metricFunctions {
 		points = append(points, f(cache, now)...)
@@ -512,6 +532,131 @@ func workloadReplicas(cache kubeCache, now time.Time) []types.MetricPoint {
 	}
 
 	return points
+}
+
+// hpaMetrics returns metrics for each HorizontalPodAutoscaler in the cluster. To join naturally
+// with the kubernetes_replicas_* metrics, HPA metrics are labelled by the HPA's scale target
+// (owner_kind/owner_name) rather than by the HPA object itself:
+//   - kubernetes_hpa_min_replicas / kubernetes_hpa_max_replicas: the configured bounds, which are
+//     not derivable from the workload objects. Comparing kubernetes_replicas_desired to max lets
+//     alerting detect an autoscaler pinned at its ceiling.
+//   - kubernetes_hpa_scaling_limited: 1 when the HPA wants to scale beyond min/max but is clamped.
+//   - kubernetes_hpa_status: a self-declared health status (bypasses user thresholds). Critical
+//     when the HPA can't do its job (can't read metrics or can't act on the target), Warning when
+//     scaling is intentionally disabled (target at 0 replicas), OK otherwise.
+func hpaMetrics(cache kubeCache, now time.Time) []types.MetricPoint {
+	// 4 points per HPA.
+	points := make([]types.MetricPoint, 0, len(cache.hpas)*4)
+
+	for _, hpa := range cache.hpas {
+		// spec.minReplicas defaults to 1 when unset.
+		minReplicas := float64(1)
+		if hpa.Spec.MinReplicas != nil {
+			minReplicas = float64(*hpa.Spec.MinReplicas)
+		}
+
+		labels := func(name string) map[string]string {
+			return map[string]string{
+				types.LabelName:      name,
+				types.LabelOwnerKind: strings.ToLower(hpa.Spec.ScaleTargetRef.Kind),
+				types.LabelOwnerName: strings.ToLower(hpa.Spec.ScaleTargetRef.Name),
+				types.LabelNamespace: namespaceOrDefault(hpa.Namespace),
+			}
+		}
+
+		points = append(
+			points,
+			types.MetricPoint{
+				Point:  types.Point{Time: now, Value: minReplicas},
+				Labels: labels(metricNameHPAMinReplicas),
+			},
+			types.MetricPoint{
+				Point:  types.Point{Time: now, Value: float64(hpa.Spec.MaxReplicas)},
+				Labels: labels(metricNameHPAMaxReplicas),
+			},
+			types.MetricPoint{
+				Point:  types.Point{Time: now, Value: hpaScalingLimited(hpa)},
+				Labels: labels(metricNameHPAScalingLimited),
+			},
+		)
+
+		status := hpaHealth(hpa, now)
+		points = append(points, types.MetricPoint{
+			Point:       types.Point{Time: now, Value: float64(status.CurrentStatus.NagiosCode())},
+			Labels:      labels(metricNameHPAStatus),
+			Annotations: types.MetricAnnotations{Status: status},
+		})
+	}
+
+	return points
+}
+
+// hpaScalingLimited returns 1 when the HPA's ScalingLimited condition is True (the desired replica
+// count was clamped to min or max), 0 otherwise.
+func hpaScalingLimited(hpa autoscalingv2.HorizontalPodAutoscaler) float64 {
+	for _, cond := range hpa.Status.Conditions {
+		if cond.Type == autoscalingv2.ScalingLimited && cond.Status == corev1.ConditionTrue {
+			return 1
+		}
+	}
+
+	return 0
+}
+
+// hpaHealth derives a health status from the HPA conditions. AbleToScale reports whether the
+// controller can read and update the target's scale (plumbing); ScalingActive reports whether it
+// can compute a desired replica count from its metrics. Either being false means the autoscaler
+// isn't doing its job (Critical), except the benign ScalingDisabled case (Warning). The worst
+// status across conditions wins.
+//
+// A condition that has only recently started failing is ignored (kept OK) until it has been failing
+// for hpaDegradedGracePeriod, so a rollout's transient loss of metrics doesn't produce alert noise.
+func hpaHealth(hpa autoscalingv2.HorizontalPodAutoscaler, now time.Time) types.StatusDescription {
+	result := types.StatusDescription{
+		CurrentStatus:     types.StatusOk,
+		StatusDescription: "HPA is able to scale its target",
+	}
+
+	worsen := func(candidate types.StatusDescription) {
+		if candidate.CurrentStatus > result.CurrentStatus {
+			result = candidate
+		}
+	}
+
+	for _, cond := range hpa.Status.Conditions {
+		if cond.Status == corev1.ConditionTrue {
+			continue
+		}
+
+		// Grace period: a condition that transitioned to its failing state less than
+		// hpaDegradedGracePeriod ago is still considered healthy (LastTransitionTime only moves on a
+		// real True<->False transition, so this measures how long it has been continuously failing).
+		if now.Sub(cond.LastTransitionTime.Time) < hpaDegradedGracePeriod {
+			continue
+		}
+
+		// The condition Reason (a short code) and Message (a human-readable explanation) are already
+		// self-describing, so use them as-is rather than prefixing our own sentence.
+		desc := cond.Reason
+		if cond.Message != "" {
+			desc += ": " + cond.Message
+		}
+
+		switch cond.Type { //nolint:exhaustive
+		case autoscalingv2.AbleToScale:
+			worsen(types.StatusDescription{CurrentStatus: types.StatusCritical, StatusDescription: desc})
+		case autoscalingv2.ScalingActive:
+			// ScalingDisabled (target scaled to 0) is intentional, not a failure.
+			status := types.StatusCritical
+			if cond.Reason == hpaReasonScalingDisabled {
+				status = types.StatusWarning
+			}
+
+			worsen(types.StatusDescription{CurrentStatus: status, StatusDescription: desc})
+		}
+	}
+
+	return result
 }
 
 // cronJobMetrics returns per-CronJob metrics:

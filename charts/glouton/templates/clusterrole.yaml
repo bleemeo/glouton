@@ -19,6 +19,13 @@ rules:
       - get
       - list
   - apiGroups:
+      - autoscaling
+    resources:
+      - horizontalpodautoscalers
+    verbs:
+      - get
+      - list
+  - apiGroups:
       - batch
     resources:
       - jobs
