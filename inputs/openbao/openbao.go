@@ -71,7 +71,7 @@ var rateMeasurements = map[string]bool{ //nolint:gochecknoglobals
 	"bao_core_handle_request":       true,
 	"bao_core_handle_login_request": true,
 	"bao_core_check_token":          true,
-	"bao_core_leadership_losses":    true,
+	"bao_core_leadership_lost":      true,
 }
 
 func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {
@@ -108,6 +108,7 @@ func renameMetrics(currentContext internal.GatherContext, metricName string) (ne
 		if currentContext.Measurement == "bao_core_leadership_lost" {
 			return "", "bao_core_leadership_losses"
 		}
+
 		return "", currentContext.Measurement + "s"
 	}
 
