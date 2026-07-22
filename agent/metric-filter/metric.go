@@ -422,6 +422,27 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"cassandra_write_time_average",
 		},
 
+		discovery.ClickHouseService: {
+			"clickhouse_asynchronous_metrics_replicas_max_queue_size",
+			"clickhouse_events_failed_query",
+			"clickhouse_events_mutation_time_seconds",
+			"clickhouse_events_network_receive_bytes",
+			"clickhouse_events_network_send_bytes",
+			"clickhouse_events_query_time_seconds",
+			"clickhouse_events_query",
+			"clickhouse_events_select_query",
+			"clickhouse_events_slow_read",
+			"clickhouse_metrics_active_query",
+			"clickhouse_metrics_broken_disks",
+			"clickhouse_metrics_broken_distributed_bytes_to_insert",
+			"clickhouse_metrics_broken_distributed_files_to_insert",
+			"clickhouse_metrics_delayed_inserts",
+			"clickhouse_metrics_memory_tracking",
+			"clickhouse_mutations_failed",
+			"clickhouse_mutations_running",
+			"clickhouse_processes_longest_running",
+		},
+
 		discovery.ConfluenceService: {
 			"confluence_db_query_time",
 			"confluence_jvm_gc",
@@ -655,6 +676,30 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"nginx_connections_writing",
 		},
 
+		discovery.NSQService: {
+			"nsq_channel_clients",
+			"nsq_channel_depth",
+			"nsq_channel_inflights",
+			"nsq_channel_messages",
+			"nsq_channel_requeues",
+			"nsq_channel_timeouts",
+			"nsq_server_servers",
+			"nsq_server_topics",
+			"nsq_topic_depth",
+			"nsq_topic_messages",
+		},
+
+		discovery.OpenBaoService: { // OpenBao is a fork of Hashicorp Vault
+			"bao_core_active",
+			"bao_core_check_tokens",
+			"bao_core_handle_login_requests",
+			"bao_core_handle_requests",
+			"bao_core_in_flight_requests",
+			"bao_core_leadership_losses",
+			"bao_core_unsealed",
+			"bao_expire_num_leases",
+		},
+
 		discovery.OpenLDAPService: {
 			"openldap_connections_current",
 			"openldap_waiters_read",
@@ -714,6 +759,18 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"postgresql_tup_returned_sum",
 			"postgresql_tup_updated",
 			"postgresql_tup_updated_sum",
+		},
+
+		discovery.PgBouncerService: {
+			"pgbouncer_pools_cl_active",
+			"pgbouncer_pools_cl_waiting",
+			"pgbouncer_pools_maxwait",
+			"pgbouncer_pools_sv_active",
+			"pgbouncer_pools_sv_idle",
+			"pgbouncer_query_time_seconds",
+			"pgbouncer_query",
+			"pgbouncer_received_bytes",
+			"pgbouncer_sent_bytes",
 		},
 
 		discovery.RabbitMQService: {
@@ -788,6 +845,17 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"redis_total_operations",
 			"redis_uptime",
 			"redis_volatile_changes",
+		},
+
+		discovery.VaultService: {
+			"vault_core_active",
+			"vault_core_check_tokens",
+			"vault_core_handle_login_requests",
+			"vault_core_handle_requests",
+			"vault_core_in_flight_requests",
+			"vault_core_leadership_losses",
+			"vault_core_unsealed",
+			"vault_expire_num_leases",
 		},
 
 		discovery.ZookeeperService: {

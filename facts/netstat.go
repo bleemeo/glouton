@@ -89,6 +89,11 @@ func (np NetstatProvider) mergeNetstats(netstat map[int][]ListenAddress, dynamic
 
 		address := c.Laddr.IP
 
+		// * address in MacOS corresponds to 0.0.0.0
+		if address == "*" {
+			address = addrAllInterfaces
+		}
+
 		var protocol string
 
 		switch c.Type {
@@ -135,7 +140,7 @@ var (
 	)
 )
 
-// ListenAddress is net.Addr implmentation.
+// ListenAddress is net.Addr implementation.
 type ListenAddress struct {
 	NetworkFamily string
 	Address       string

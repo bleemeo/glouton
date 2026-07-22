@@ -184,6 +184,7 @@ func (a *Accumulator) convertToFloatFields(currentContext GatherContext, fields 
 	var (
 		searchMetrics map[string]bool
 		flatTag       string
+		flatTagDone   bool
 	)
 
 	if a.workResult == nil {
@@ -234,8 +235,11 @@ func (a *Accumulator) convertToFloatFields(currentContext GatherContext, fields 
 			continue
 		}
 
-		if flatTag == "" && len(currentContext.Tags) > 0 {
-			flatTag = a.flattenTag(currentContext.Tags)
+		if !flatTagDone {
+			// Measurement is part of the key so that distinct counters sharing the same
+			// tag set don't clobber each other's derivative state.
+			flatTag = currentContext.Measurement + "\x00" + a.flattenTag(currentContext.Tags)
+			flatTagDone = true
 		}
 
 		a.doDifferentiate(a.workResult, flatTag, len(fields), metricName, value, metricTime)

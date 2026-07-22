@@ -29,6 +29,7 @@ import (
 	"github.com/bleemeo/glouton/facts/container-runtime/veth"
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/apache"
+	"github.com/bleemeo/glouton/inputs/clickhouse"
 	"github.com/bleemeo/glouton/inputs/cpu"
 	"github.com/bleemeo/glouton/inputs/disk"
 	"github.com/bleemeo/glouton/inputs/diskio"
@@ -45,7 +46,10 @@ import (
 	netInput "github.com/bleemeo/glouton/inputs/net"
 	"github.com/bleemeo/glouton/inputs/nfs"
 	"github.com/bleemeo/glouton/inputs/nginx"
+	"github.com/bleemeo/glouton/inputs/nsq"
+	"github.com/bleemeo/glouton/inputs/openbao"
 	"github.com/bleemeo/glouton/inputs/openldap"
+	"github.com/bleemeo/glouton/inputs/pgbouncer"
 	"github.com/bleemeo/glouton/inputs/phpfpm"
 	"github.com/bleemeo/glouton/inputs/postgresql"
 	"github.com/bleemeo/glouton/inputs/rabbitmq"
@@ -54,6 +58,7 @@ import (
 	"github.com/bleemeo/glouton/inputs/system"
 	"github.com/bleemeo/glouton/inputs/upsd"
 	"github.com/bleemeo/glouton/inputs/uwsgi"
+	"github.com/bleemeo/glouton/inputs/vault"
 	"github.com/bleemeo/glouton/inputs/winperfcounters"
 	"github.com/bleemeo/glouton/inputs/zookeeper"
 	"github.com/bleemeo/glouton/logger"
@@ -300,6 +305,21 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 
 			input, err = apache.New(statusURL)
 		}
+	case ClickHouseService:
+		if service.Config.StatsURL != "" {
+			if service.Config.Username == "" {
+				service.Config.Username = "default"
+			}
+
+			input, err = clickhouse.New(service.Config.StatsURL, service.Config.Username, service.Config.Password)
+		} else if ip, port := clickHouseAddress(service); ip != "" {
+			if service.Config.Username == "" {
+				service.Config.Username = "default"
+			}
+
+			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
+			input, err = clickhouse.New(url, service.Config.Username, service.Config.Password)
+		}
 	case ElasticSearchService:
 		if ip, port := service.AddressPort(); ip != "" {
 			input, err = elasticsearch.New("http://" + net.JoinHostPort(ip, strconv.Itoa(port)))
@@ -344,6 +364,20 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		if ip, port := service.AddressPort(); ip != "" {
 			input, err = nginx.New(fmt.Sprintf("http://%s/nginx_status", net.JoinHostPort(ip, strconv.Itoa(port))))
 		}
+	case NSQService:
+		if service.Config.StatsURL != "" {
+			input, err = nsq.New(service.Config.StatsURL)
+		} else if ip, port := service.AddressPort(); ip != "" {
+			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
+			input, err = nsq.New(url)
+		}
+	case OpenBaoService:
+		if service.Config.StatsURL != "" {
+			input, err = openbao.New(service.Config.StatsURL, service.Config.Password)
+		} else if ip, port := service.AddressPort(); ip != "" {
+			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
+			input, err = openbao.New(url, service.Config.Password)
+		}
 	case OpenLDAPService:
 		if ip, port := service.AddressPort(); ip != "" {
 			input, gathererOptions, err = openldap.New(ip, port, service.Config)
@@ -365,6 +399,19 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 				ip, port, username, service.Config.Password,
 			)
 			input, err = postgresql.New(address, service.Config.DetailedItems)
+		}
+	case PgBouncerService:
+		if ip, port := service.AddressPort(); ip != "" {
+			username := service.Config.Username
+			if username == "" {
+				username = "pgbouncer"
+			}
+
+			address := fmt.Sprintf(
+				"host=%s port=%d user=%s password=%s dbname=pgbouncer sslmode=disable",
+				ip, port, username, service.Config.Password,
+			)
+			input, err = pgbouncer.New(address)
 		}
 	case RabbitMQService:
 		mgmtPort := 15672
@@ -415,6 +462,13 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		if ip := service.AddressForPort(port, tcpProtocol, true); ip != "" {
 			url := fmt.Sprintf("%s://%s", protocol, net.JoinHostPort(ip, strconv.Itoa(port)))
 			input, gathererOptions, err = uwsgi.New(url)
+		}
+	case VaultService:
+		if service.Config.StatsURL != "" {
+			input, err = vault.New(service.Config.StatsURL, service.Config.Password)
+		} else if ip, port := service.AddressPort(); ip != "" {
+			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
+			input, err = vault.New(url, service.Config.Password)
 		}
 	case ZookeeperService:
 		if ip, port := service.AddressPort(); ip != "" {
@@ -548,6 +602,26 @@ func urlForPHPFPM(service Service) string {
 	}
 
 	return ""
+}
+
+func clickHouseAddress(service Service) (ip string, port int) {
+	if service.Config.StatsPort != 0 {
+		return service.AddressForPort(service.Config.StatsPort, tcpProtocol, true), service.Config.StatsPort
+	}
+
+	if service.Config.Port != 0 {
+		return service.AddressForPort(service.Config.Port, tcpProtocol, true), service.Config.Port
+	}
+
+	ip, port = service.AddressPort()
+
+	// 8123 is the Clickhouse monitoring port by default, using another one is a special config by the user
+	if ip == "" && service.Config.Port == 0 && service.IPAddress != "" {
+		ip = service.IPAddress
+		port = servicesDiscoveryInfo[ClickHouseService].ServicePort
+	}
+
+	return ip, port
 }
 
 func getMetricsSocket(service Service) string {
