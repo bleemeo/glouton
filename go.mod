@@ -37,11 +37,11 @@ require (
 	github.com/moby/moby/api v1.55.0
 	github.com/moby/moby/client v0.5.0
 	github.com/ncabatoff/process-exporter v0.8.7
-	github.com/open-telemetry/opentelemetry-collector-contrib/connector/countconnector v0.155.0
-	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza v0.155.0
-	github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.155.0
-	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.155.0
-	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver v0.155.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/connector/countconnector v0.154.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza v0.154.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.154.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.154.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver v0.154.0
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/opencontainers/runtime-spec v1.3.0
@@ -269,11 +269,11 @@ require (
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/ncabatoff/go-seq v0.0.0-20180805175032-b08ef85ed833 // indirect
 	github.com/oklog/ulid/v2 v2.1.1 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.155.0 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/internal/filter v0.155.0 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/internal/pdatautil v0.155.0 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl v0.155.0 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil v0.155.0 // indirect
+	github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.154.0 // indirect
+	github.com/open-telemetry/opentelemetry-collector-contrib/internal/filter v0.154.0 // indirect
+	github.com/open-telemetry/opentelemetry-collector-contrib/internal/pdatautil v0.154.0 // indirect
+	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl v0.154.0 // indirect
+	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil v0.154.0 // indirect
 	github.com/opencontainers/selinux v1.15.1 // indirect
 	github.com/peterbourgon/unixtransport v0.0.7 // indirect
 	github.com/pierrec/lz4/v4 v4.1.27 // indirect
