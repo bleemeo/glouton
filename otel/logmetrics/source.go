@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/logger"
 
 	"github.com/google/uuid"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/connector/countconnector"
@@ -31,20 +32,26 @@ import (
 	"go.opentelemetry.io/collector/component"
 	otelconnector "go.opentelemetry.io/collector/connector"
 	"go.opentelemetry.io/collector/consumer"
+	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/receiver"
 )
 
-var errUnexpectedConfigType = errors.New("unexpected receiver config type")
+var (
+	errUnexpectedConfigType = errors.New("unexpected receiver config type")
+	errNoValidFilter        = errors.New("no valid filter for source")
+)
 
 // source is one OTel mini-pipeline for a single log-to-metric source (a static
 // path or a resolved container log file):
 //
-//	filelogreceiver --(plog.Logs)--> countconnector --(pmetric.Metrics)--> shared registry sink
+//	filelogreceiver --(plog.Logs)--> countconnector(s) --(pmetric.Metrics)--> shared registry sink
 //
-// countconnector evaluates one OTTL "IsMatch(body, ...)" condition per metric.
+// Normally one connector handles all of a source's filters. If that combined
+// config fails validation, it falls back to one connector per filter (fanned
+// out) so a bad regex only disables its own metric.
 type source struct {
-	recv receiver.Logs
-	conn otelconnector.Logs
+	recv  receiver.Logs
+	conns []otelconnector.Logs
 }
 
 // newSource builds and starts a source. include is a list of glob patterns
@@ -58,36 +65,11 @@ func newSource(
 	filters []config.LogFilter,
 	sink consumer.Metrics,
 ) (*source, error) {
-	connCfg := &countconnector.Config{Logs: make(map[string]countconnector.MetricInfo, len(filters))}
-
-	for _, filter := range filters {
-		connCfg.Logs[filter.Metric] = countconnector.MetricInfo{
-			Description: "log-to-metric: " + filter.Metric,
-			Conditions:  []string{fmt.Sprintf("IsMatch(body, %q)", filter.Regex)},
-		}
-	}
-
-	if err := connCfg.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid filter: %w", err)
-	}
-
 	connFactory := countconnector.NewFactory()
 
-	conn, err := connFactory.CreateLogsToMetrics(
-		ctx,
-		otelconnector.Settings{
-			ID:                component.NewIDWithName(connFactory.Type(), uuid.NewString()),
-			TelemetrySettings: telemetry,
-		},
-		connCfg,
-		sink,
-	)
+	conns, err := buildConnectors(ctx, connFactory, telemetry, filters, sink)
 	if err != nil {
-		return nil, fmt.Errorf("build connector: %w", err)
-	}
-
-	if err := conn.Start(ctx, nil); err != nil {
-		return nil, fmt.Errorf("start connector: %w", err)
+		return nil, err
 	}
 
 	var operators []operator.Config
@@ -104,7 +86,7 @@ func newSource(
 
 	recvCfg, ok := defaultCfg.(*filelogreceiver.FileLogConfig)
 	if !ok {
-		_ = conn.Shutdown(ctx)
+		shutdownConns(ctx, conns)
 
 		return nil, fmt.Errorf("%w: %T", errUnexpectedConfigType, defaultCfg)
 	}
@@ -119,30 +101,157 @@ func newSource(
 			TelemetrySettings: telemetry,
 		},
 		recvCfg,
-		conn,
+		nextConsumer(conns),
 	)
 	if err != nil {
-		_ = conn.Shutdown(ctx)
+		shutdownConns(ctx, conns)
 
 		return nil, fmt.Errorf("build receiver: %w", err)
 	}
 
 	if err := recv.Start(ctx, nil); err != nil {
-		_ = conn.Shutdown(ctx)
+		shutdownConns(ctx, conns)
 
 		return nil, fmt.Errorf("start receiver: %w", err)
 	}
 
-	return &source{recv: recv, conn: conn}, nil
+	return &source{recv: recv, conns: conns}, nil
+}
+
+// buildConnectors tries one connector for all filters together (fast path: one
+// tree walk and one registry lock per batch). If that combined config fails
+// validation, it falls back to one connector per filter so a bad regex only
+// disables its own metric instead of every filter on this source.
+func buildConnectors(
+	ctx context.Context,
+	connFactory otelconnector.Factory,
+	telemetry component.TelemetrySettings,
+	filters []config.LogFilter,
+	sink consumer.Metrics,
+) ([]otelconnector.Logs, error) {
+	combinedCfg := &countconnector.Config{Logs: make(map[string]countconnector.MetricInfo, len(filters))}
+
+	for _, filter := range filters {
+		combinedCfg.Logs[filter.Metric] = metricInfo(filter)
+	}
+
+	if combinedCfg.Validate() == nil {
+		if conn, err := createConnector(ctx, connFactory, telemetry, combinedCfg, sink); err == nil {
+			return []otelconnector.Logs{conn}, nil
+		}
+	}
+
+	conns := make([]otelconnector.Logs, 0, len(filters))
+
+	for _, filter := range filters {
+		filterCfg := &countconnector.Config{Logs: map[string]countconnector.MetricInfo{filter.Metric: metricInfo(filter)}}
+
+		if err := filterCfg.Validate(); err != nil {
+			logger.Printf("logmetrics: metric %q disabled, invalid filter: %v", filter.Metric, err)
+
+			continue
+		}
+
+		conn, err := createConnector(ctx, connFactory, telemetry, filterCfg, sink)
+		if err != nil {
+			logger.Printf("logmetrics: metric %q disabled: %v", filter.Metric, err)
+
+			continue
+		}
+
+		conns = append(conns, conn)
+	}
+
+	if len(conns) == 0 {
+		return nil, errNoValidFilter
+	}
+
+	return conns, nil
+}
+
+func metricInfo(filter config.LogFilter) countconnector.MetricInfo {
+	return countconnector.MetricInfo{
+		Description: "log-to-metric: " + filter.Metric,
+		Conditions:  []string{fmt.Sprintf("IsMatch(body, %q)", filter.Regex)},
+	}
+}
+
+func createConnector(
+	ctx context.Context,
+	factory otelconnector.Factory,
+	telemetry component.TelemetrySettings,
+	cfg *countconnector.Config,
+	sink consumer.Metrics,
+) (otelconnector.Logs, error) {
+	conn, err := factory.CreateLogsToMetrics(
+		ctx,
+		otelconnector.Settings{
+			ID:                component.NewIDWithName(factory.Type(), uuid.NewString()),
+			TelemetrySettings: telemetry,
+		},
+		cfg,
+		sink,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("build connector: %w", err)
+	}
+
+	if err := conn.Start(ctx, nil); err != nil {
+		_ = conn.Shutdown(ctx)
+
+		return nil, fmt.Errorf("start connector: %w", err)
+	}
+
+	return conn, nil
+}
+
+// nextConsumer avoids the fan-out wrapper entirely in the common case (a
+// single connector, e.g. one filter or the combined fast path).
+func nextConsumer(conns []otelconnector.Logs) consumer.Logs {
+	if len(conns) == 1 {
+		return conns[0]
+	}
+
+	return fanoutLogs(conns)
+}
+
+// fanoutLogs forwards each batch to every conn. Sharing one plog.Logs across
+// all of them is safe: countconnector never mutates its input.
+func fanoutLogs(conns []otelconnector.Logs) consumer.Logs {
+	fanout, err := consumer.NewLogs(func(ctx context.Context, ld plog.Logs) error {
+		var errs error
+
+		for _, conn := range conns {
+			errs = errors.Join(errs, conn.ConsumeLogs(ctx, ld))
+		}
+
+		return errs
+	})
+	if err != nil {
+		panic(err) // only fails if the func were nil
+	}
+
+	return fanout
+}
+
+func shutdownConns(ctx context.Context, conns []otelconnector.Logs) {
+	for _, conn := range conns {
+		_ = conn.Shutdown(ctx)
+	}
 }
 
 func (s *source) stop(ctx context.Context) error {
-	recvError := s.recv.Shutdown(ctx)
-	connError := s.conn.Shutdown(ctx)
+	recvErr := s.recv.Shutdown(ctx)
 
-	if recvError != nil {
-		return recvError
+	var connErr error
+
+	for _, conn := range s.conns {
+		connErr = errors.Join(connErr, conn.Shutdown(ctx))
 	}
 
-	return connError
+	if recvErr != nil {
+		return recvErr
+	}
+
+	return connErr
 }

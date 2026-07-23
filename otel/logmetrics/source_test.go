@@ -203,3 +203,91 @@ func TestSourceInvalidRegex(t *testing.T) {
 		t.Fatal("Expected an error for an invalid regex")
 	}
 }
+
+// TestSourceFastPathSingleConnector locks in the optimization: when every filter
+// is valid, buildConnectors uses one combined connector instead of one per filter.
+func TestSourceFastPathSingleConnector(t *testing.T) {
+	t.Parallel()
+
+	sink, _ := collectingSink()
+
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{"/nonexistent"}, false, []config.LogFilter{
+		{Metric: "a_count", Regex: "a"},
+		{Metric: "b_count", Regex: "b"},
+		{Metric: "c_count", Regex: "c"},
+	}, sink)
+	if err != nil {
+		t.Fatal("Failed to build source:", err)
+	}
+
+	defer src.stop(t.Context()) //nolint:errcheck
+
+	if len(src.conns) != 1 {
+		t.Errorf("Expected exactly 1 connector on the fast path, got %d", len(src.conns))
+	}
+}
+
+// TestSourceIsolatesInvalidFilter is the regression test for the fallback path in
+// buildConnectors: when a source has both valid and invalid filters, the combined
+// fast path fails validation, so it falls back to one connector per valid filter --
+// the invalid one is disabled but its siblings keep counting normally.
+func TestSourceIsolatesInvalidFilter(t *testing.T) {
+	t.Parallel()
+
+	logFile, err := os.CreateTemp(t.TempDir(), "app-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFile.Close()
+
+	sink, totals := collectingSink()
+
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, []config.LogFilter{
+		{Metric: "app_errors_count", Regex: `\[error\]`},
+		{Metric: "app_requests_count", Regex: "GET /"},
+		{Metric: "app_broken_count", Regex: "("},
+	}, sink)
+	if err != nil {
+		t.Fatal("Failed to build source despite one invalid filter:", err)
+	}
+
+	defer src.stop(t.Context()) //nolint:errcheck
+
+	if len(src.conns) != 2 {
+		t.Errorf("Expected exactly 2 connectors (valid filters only, isolated per-filter), got %d", len(src.conns))
+	}
+
+	time.Sleep(500 * time.Millisecond)
+
+	lines := []string{
+		"[error] something broke\n",
+		"127.0.0.1 GET / 200\n",
+	}
+
+	for _, line := range lines {
+		if _, err := logFile.WriteString(line); err != nil {
+			t.Fatal("Failed to write log line:", err)
+		}
+	}
+
+	if err := logFile.Sync(); err != nil {
+		t.Fatal("Failed to sync log file:", err)
+	}
+
+	time.Sleep(time.Second)
+
+	got := totals()
+
+	if got["app_errors_count"] != 1 {
+		t.Errorf("Expected 1 match for app_errors_count, got %d", got["app_errors_count"])
+	}
+
+	if got["app_requests_count"] != 1 {
+		t.Errorf("Expected 1 match for app_requests_count, got %d", got["app_requests_count"])
+	}
+
+	if _, found := got["app_broken_count"]; found {
+		t.Errorf("app_broken_count should never receive any data, got %d", got["app_broken_count"])
+	}
+}
