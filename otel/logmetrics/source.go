@@ -52,11 +52,18 @@ var (
 type source struct {
 	recv  receiver.Logs
 	conns []otelconnector.Logs
+
+	persister *persistHost // nil if this source runs without persisted offsets
+
+	extID component.ID // valid only if persister != nil
 }
 
 // newSource builds and starts a source. include is a list of glob patterns
 // (hostroot already applied). If isContainer, the Docker/CRI envelope is
-// unwrapped first (same "container" operator otel/logprocessing uses).
+// unwrapped first (same "container" operator otel/logprocessing uses). If
+// persister is non-nil, name is used as this source's stable persisted-offset
+// identity (a joined path list for static sources, a container ID for container
+// sources), so a restart resumes tailing instead of skipping to the file's end.
 func newSource(
 	ctx context.Context,
 	telemetry component.TelemetrySettings,
@@ -64,6 +71,8 @@ func newSource(
 	isContainer bool,
 	filters []config.LogFilter,
 	sink consumer.Metrics,
+	persister *persistHost,
+	name string,
 ) (*source, error) {
 	connFactory := countconnector.NewFactory()
 
@@ -94,6 +103,17 @@ func newSource(
 	recvCfg.InputConfig.Include = include
 	recvCfg.Operators = operators
 
+	var (
+		host  component.Host
+		extID component.ID
+	)
+
+	if persister != nil {
+		extID = persister.newPersistentExt(name)
+		recvCfg.StorageID = &extID
+		host = persister
+	}
+
 	recv, err := recvFactory.CreateLogs(
 		ctx,
 		receiver.Settings{
@@ -106,16 +126,24 @@ func newSource(
 	if err != nil {
 		shutdownConns(ctx, conns)
 
+		if persister != nil {
+			persister.removePersistentExt(extID)
+		}
+
 		return nil, fmt.Errorf("build receiver: %w", err)
 	}
 
-	if err := recv.Start(ctx, nil); err != nil {
+	if err := recv.Start(ctx, host); err != nil {
 		shutdownConns(ctx, conns)
+
+		if persister != nil {
+			persister.removePersistentExt(extID)
+		}
 
 		return nil, fmt.Errorf("start receiver: %w", err)
 	}
 
-	return &source{recv: recv, conns: conns}, nil
+	return &source{recv: recv, conns: conns, persister: persister, extID: extID}, nil
 }
 
 // buildConnectors tries one connector for all filters together (fast path: one
@@ -132,6 +160,12 @@ func buildConnectors(
 	combinedCfg := &countconnector.Config{Logs: make(map[string]countconnector.MetricInfo, len(filters))}
 
 	for _, filter := range filters {
+		if _, exists := combinedCfg.Logs[filter.Metric]; exists {
+			logger.Printf("logmetrics: metric %q declared more than once for the same source, ignoring the duplicate", filter.Metric)
+
+			continue
+		}
+
 		combinedCfg.Logs[filter.Metric] = metricInfo(filter)
 	}
 
@@ -172,7 +206,7 @@ func buildConnectors(
 func metricInfo(filter config.LogFilter) countconnector.MetricInfo {
 	return countconnector.MetricInfo{
 		Description: "log-to-metric: " + filter.Metric,
-		Conditions:  []string{fmt.Sprintf("IsMatch(body, %q)", filter.Regex)},
+		Conditions:  []string{fmt.Sprintf("IsMatch(log.body, %q)", filter.Regex)},
 	}
 }
 
@@ -242,6 +276,10 @@ func shutdownConns(ctx context.Context, conns []otelconnector.Logs) {
 
 func (s *source) stop(ctx context.Context) error {
 	recvErr := s.recv.Shutdown(ctx)
+
+	if s.persister != nil {
+		s.persister.removePersistentExt(s.extID)
+	}
 
 	var connErr error
 

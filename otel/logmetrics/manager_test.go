@@ -18,7 +18,9 @@ package logmetrics
 
 import (
 	"context"
+	"encoding/json"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -42,6 +44,48 @@ func (f *fakeRuntime) Containers(context.Context, time.Duration, bool) ([]facts.
 	return f.containers, nil
 }
 
+// memoryState is a minimal, real (not no-op) bleemeoTypes.State backed by an
+// in-memory JSON round-trip, so tests can verify data actually survives a
+// save/reload cycle across two separate Manager instances.
+type memoryState struct {
+	l    sync.Mutex
+	data map[string][]byte
+}
+
+func newMemoryState() *memoryState {
+	return &memoryState{data: make(map[string][]byte)}
+}
+
+func (m *memoryState) Set(key string, object any) error {
+	b, err := json.Marshal(object)
+	if err != nil {
+		return err
+	}
+
+	m.l.Lock()
+	m.data[key] = b
+	m.l.Unlock()
+
+	return nil
+}
+
+func (m *memoryState) Get(key string, result any) error {
+	m.l.Lock()
+	b, found := m.data[key]
+	m.l.Unlock()
+
+	if !found {
+		return nil
+	}
+
+	return json.Unmarshal(b, result)
+}
+
+func (m *memoryState) GetByPrefix(string, any) (map[string]any, error) { return map[string]any{}, nil }
+func (m *memoryState) Delete(string) error                             { return nil }
+func (m *memoryState) BleemeoCredentials() (string, string)            { return "", "" }
+func (m *memoryState) SetBleemeoCredentials(string, string) error      { return nil }
+
 // TestManagerStaticSource is an end-to-end test of a legacy path-based log.inputs
 // entry: a real file, a real OTel filelogreceiver+countconnector pipeline, through
 // the Manager.
@@ -63,7 +107,7 @@ func TestManagerStaticSource(t *testing.T) {
 		},
 	}
 
-	man := New(cfg, "/", &fakeRuntime{})
+	man := New(cfg, "/", &fakeRuntime{}, newMemoryState())
 
 	// Metric names must be known immediately, before any matching line was seen.
 	if names := man.MetricNames(); len(names) != 1 || names[0] != "app_errors_count" {
@@ -159,7 +203,7 @@ func TestManagerContainerSource(t *testing.T) {
 		},
 	}
 
-	man := New(cfg, "/", &fakeRuntime{containers: []facts.Container{ctr}})
+	man := New(cfg, "/", &fakeRuntime{containers: []facts.Container{ctr}}, newMemoryState())
 
 	man.startStaticSources(t.Context())
 	man.updateContainerSources(t.Context())
@@ -212,7 +256,7 @@ func TestManagerContainerRemoved(t *testing.T) {
 	}
 
 	runtime := &fakeRuntime{containers: []facts.Container{ctr}}
-	man := New(cfg, "/", runtime)
+	man := New(cfg, "/", runtime, newMemoryState())
 
 	man.updateContainerSources(t.Context())
 
@@ -234,5 +278,106 @@ func TestManagerContainerRemoved(t *testing.T) {
 
 	if stillWatching {
 		t.Fatal("Expected the container's source to be stopped once the container disappeared")
+	}
+}
+
+// TestManagerPersistsOffsetAcrossRestart is the regression test for persisted read
+// offsets: a line written entirely during the "restart gap" (while no Manager is
+// running) must still be picked up by the next run, because it resumes tailing
+// from the offset saved by the previous run instead of defaulting to the file's end.
+func TestManagerPersistsOffsetAcrossRestart(t *testing.T) {
+	t.Parallel()
+
+	logFile, err := os.CreateTemp(t.TempDir(), "app-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFile.Close()
+
+	cfg := config.Log{
+		Inputs: []config.LogInput{
+			{Path: logFile.Name(), Filters: []config.LogFilter{
+				{Metric: "app_errors_count", Regex: `\[error\]`},
+			}},
+		},
+	}
+
+	state := newMemoryState()
+
+	// First run: starts tailing an empty file, then "first" is written and read
+	// while it's actively running, so the offset saved on stop is past "first".
+	man1 := New(cfg, "/", &fakeRuntime{}, state)
+
+	ctx1, cancel1 := context.WithCancel(t.Context())
+	done1 := make(chan error, 1)
+
+	go func() { done1 <- man1.Run(ctx1) }()
+
+	time.Sleep(500 * time.Millisecond)
+
+	if _, err := logFile.WriteString("[error] first\n"); err != nil {
+		t.Fatal("Failed to write log line:", err)
+	}
+
+	if err := logFile.Sync(); err != nil {
+		t.Fatal("Failed to sync log file:", err)
+	}
+
+	time.Sleep(time.Second)
+
+	cancel1()
+
+	select {
+	case <-done1:
+	case <-time.After(5 * time.Second):
+		t.Fatal("First Manager.Run did not return after context cancellation")
+	}
+
+	// Written entirely during the "restart gap": no Manager is running yet.
+	if _, err := logFile.WriteString("[error] second\n"); err != nil {
+		t.Fatal("Failed to write log line:", err)
+	}
+
+	if err := logFile.Sync(); err != nil {
+		t.Fatal("Failed to sync log file:", err)
+	}
+
+	// Second run, same persisted state: must pick up "second" via the offset saved
+	// by the previous run, even though it was written before this run even started.
+	man := New(cfg, "/", &fakeRuntime{}, state)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+
+	go func() { done <- man.Run(ctx) }()
+
+	time.Sleep(time.Second)
+
+	cancel()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Manager.Run did not return after context cancellation")
+	}
+
+	appender := glmodel.NewBufferAppender()
+
+	if err := man.EmitMetrics(t.Context(), registry.GatherState{}, appender); err != nil {
+		t.Fatal("EmitMetrics returned an error:", err)
+	}
+
+	mfs, err := appender.AsMF()
+	if err != nil {
+		t.Fatal("AsMF returned an error:", err)
+	}
+
+	if len(mfs) != 1 || mfs[0].GetName() != "app_errors_count" {
+		t.Fatalf("Expected exactly 1 metric family named app_errors_count, got %v", mfs)
+	}
+
+	if got := mfs[0].GetMetric()[0].GetUntyped().GetValue(); got != 1.0/windowSecs {
+		t.Errorf("Expected the restarted run to pick up exactly 1 new match via the persisted offset (rate %v), got %v", 1.0/windowSecs, got)
 	}
 }

@@ -41,6 +41,7 @@ const windowSecs = 60
 type counter struct {
 	metric  string
 	counter *ringCounter
+	lbls    labels.Labels // precomputed once: never changes after creation, no need to rebuild it on every emit
 }
 
 // metricsRegistry holds one counter per metric name, shared across every source
@@ -65,7 +66,11 @@ func (reg *metricsRegistry) resolve(filters []config.LogFilter) []*counter {
 	for _, filter := range filters {
 		c, found := reg.counters[filter.Metric]
 		if !found {
-			c = &counter{metric: filter.Metric, counter: newRingCounter(windowSecs)}
+			c = &counter{
+				metric:  filter.Metric,
+				counter: newRingCounter(windowSecs),
+				lbls:    labels.FromMap(map[string]string{types.LabelName: filter.Metric}),
+			}
 			reg.counters[filter.Metric] = c
 		}
 
@@ -95,7 +100,7 @@ func (reg *metricsRegistry) emit(app storage.Appender) error {
 
 		_, err := app.Append(
 			0,
-			labels.FromMap(map[string]string{types.LabelName: c.metric}),
+			c.lbls,
 			0,
 			rate,
 		)

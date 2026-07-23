@@ -21,9 +21,11 @@ import (
 	"encoding/json"
 	"maps"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/crashreport"
 	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
@@ -52,10 +54,12 @@ type Manager struct {
 	cfg       config.Log
 	hostroot  string
 	runtime   crTypes.RuntimeInterface
+	state     bleemeoTypes.State
 	telemetry component.TelemetrySettings
 
-	reg  *metricsRegistry
-	sink consumer.Metrics
+	reg       *metricsRegistry
+	sink      consumer.Metrics
+	persister *persistHost // nil if persistence setup failed; sources then run without a StorageID
 
 	l                 sync.Mutex
 	staticSources     []*source
@@ -63,13 +67,19 @@ type Manager struct {
 	watchedContainers map[string]string  // map key: container ID -> container name, for diagnostics
 }
 
-func New(cfg config.Log, hostroot string, runtime crTypes.RuntimeInterface) *Manager {
+func New(cfg config.Log, hostroot string, runtime crTypes.RuntimeInterface, state bleemeoTypes.State) *Manager {
 	reg := newMetricsRegistry()
+
+	persister, err := newPersistHost(state)
+	if err != nil {
+		logger.V(1).Printf("logmetrics: persistence disabled, read offsets won't survive a restart: %v", err)
+	}
 
 	man := &Manager{
 		cfg:      cfg,
 		hostroot: hostroot,
 		runtime:  runtime,
+		state:    state,
 		telemetry: component.TelemetrySettings{
 			Logger:         logger.ZapLogger(),
 			TracerProvider: noop.NewTracerProvider(),
@@ -78,6 +88,7 @@ func New(cfg config.Log, hostroot string, runtime crTypes.RuntimeInterface) *Man
 		},
 		reg:               reg,
 		sink:              reg.metricsSink(),
+		persister:         persister,
 		containerSources:  make(map[string]*source),
 		watchedContainers: make(map[string]string),
 	}
@@ -108,29 +119,41 @@ func collectAllFilters(cfg config.Log) []config.LogFilter {
 	return filters
 }
 
-// Run starts static sources once, then polls to start/stop container sources as
-// containers appear/disappear. Skips polling if cfg has no container-based rule.
+// Run starts static sources once, then every updateInterval starts/stops container
+// sources as containers appear/disappear (skipped if cfg has no container-based
+// rule) and saves persisted read offsets to the state cache.
 func (man *Manager) Run(ctx context.Context) error {
 	defer crashreport.ProcessPanic()
 
 	man.startStaticSources(ctx)
 
-	if hasContainerFilters(man.cfg) {
-		for ctx.Err() == nil {
-			man.updateContainerSources(ctx)
+	watchContainers := hasContainerFilters(man.cfg)
 
-			select {
-			case <-time.After(updateInterval):
-			case <-ctx.Done():
-			}
+	for ctx.Err() == nil {
+		if watchContainers {
+			man.updateContainerSources(ctx)
 		}
-	} else {
-		<-ctx.Done()
+
+		man.saveState()
+
+		select {
+		case <-time.After(updateInterval):
+		case <-ctx.Done():
+		}
 	}
 
 	man.stopAll(context.Background())
+	man.saveState()
 
 	return ctx.Err()
+}
+
+// saveState persists every source's read offset to the state cache, so a Glouton
+// restart resumes tailing where it left off instead of skipping to the file's end.
+func (man *Manager) saveState() {
+	if man.persister != nil {
+		man.persister.saveToState(man.state)
+	}
 }
 
 func (man *Manager) startStaticSources(ctx context.Context) {
@@ -161,7 +184,10 @@ func (man *Manager) startStaticSource(ctx context.Context, include []string, fil
 		return
 	}
 
-	src, err := newSource(ctx, man.telemetry, include, false, filters, man.sink)
+	// The joined include patterns are a stable identity across restarts.
+	name := "path:" + strings.Join(include, ",")
+
+	src, err := newSource(ctx, man.telemetry, include, false, filters, man.sink, man.persister, name)
 	if err != nil {
 		logger.V(1).Printf("logmetrics: failed to start source for %v: %v", include, err)
 
@@ -205,7 +231,12 @@ func (man *Manager) updateContainerSources(ctx context.Context) {
 			continue
 		}
 
-		src, err := newSource(ctx, man.telemetry, []string{logPath}, true, filters, man.sink)
+		// The container ID is a stable identity across a Glouton restart as long as
+		// the same container instance is still running (it changes if the container
+		// itself is recreated, which is fine: that's effectively a new log source).
+		name := "container:" + ctr.ID()
+
+		src, err := newSource(ctx, man.telemetry, []string{logPath}, true, filters, man.sink, man.persister, name)
 		if err != nil {
 			logger.V(1).Printf("logmetrics: failed to start source for container %s (%s): %v", ctr.ContainerName(), ctr.ID(), err)
 
@@ -280,5 +311,13 @@ func (man *Manager) DiagnosticArchive(_ context.Context, archive types.ArchiveWr
 	enc := json.NewEncoder(file)
 	enc.SetIndent("", "  ")
 
-	return enc.Encode(info)
+	if err := enc.Encode(info); err != nil {
+		return err
+	}
+
+	if man.persister != nil {
+		return man.persister.writeToArchive(archive)
+	}
+
+	return nil
 }

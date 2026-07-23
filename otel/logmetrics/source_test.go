@@ -106,7 +106,7 @@ func TestSourceCountsRealFile(t *testing.T) {
 	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, []config.LogFilter{
 		{Metric: "app_errors_count", Regex: `\[error\]`},
 		{Metric: "app_requests_count", Regex: "GET /"},
-	}, sink)
+	}, sink, nil, "")
 	if err != nil {
 		t.Fatal("Failed to build source:", err)
 	}
@@ -165,7 +165,7 @@ func TestSourceUnwrapsContainerEnvelope(t *testing.T) {
 	// "log" field value, so the body is "[error] something broke\n", not "...broke".
 	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, true, []config.LogFilter{
 		{Metric: "container_errors_count", Regex: `^\[error\] something broke\n?$`},
-	}, sink)
+	}, sink, nil, "")
 	if err != nil {
 		t.Fatal("Failed to build source:", err)
 	}
@@ -198,7 +198,7 @@ func TestSourceInvalidRegex(t *testing.T) {
 
 	_, err := newSource(t.Context(), testTelemetrySettings(), []string{"/nonexistent"}, false, []config.LogFilter{
 		{Metric: "bad", Regex: "("},
-	}, sink)
+	}, sink, nil, "")
 	if err == nil {
 		t.Fatal("Expected an error for an invalid regex")
 	}
@@ -215,7 +215,7 @@ func TestSourceFastPathSingleConnector(t *testing.T) {
 		{Metric: "a_count", Regex: "a"},
 		{Metric: "b_count", Regex: "b"},
 		{Metric: "c_count", Regex: "c"},
-	}, sink)
+	}, sink, nil, "")
 	if err != nil {
 		t.Fatal("Failed to build source:", err)
 	}
@@ -224,6 +224,60 @@ func TestSourceFastPathSingleConnector(t *testing.T) {
 
 	if len(src.conns) != 1 {
 		t.Errorf("Expected exactly 1 connector on the fast path, got %d", len(src.conns))
+	}
+}
+
+// TestSourceDuplicateMetricNameFirstWins is the regression test for
+// buildConnectors' fast path silently letting a later filter with the same
+// Metric name overwrite an earlier one in the combined connector config:
+// only the first-defined filter for a given metric name must be honored.
+func TestSourceDuplicateMetricNameFirstWins(t *testing.T) {
+	t.Parallel()
+
+	logFile, err := os.CreateTemp(t.TempDir(), "app-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFile.Close()
+
+	sink, totals := collectingSink()
+
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, []config.LogFilter{
+		{Metric: "dup_count", Regex: "first"},
+		{Metric: "dup_count", Regex: "second"},
+	}, sink, nil, "")
+	if err != nil {
+		t.Fatal("Failed to build source:", err)
+	}
+
+	defer src.stop(t.Context()) //nolint:errcheck
+
+	if len(src.conns) != 1 {
+		t.Errorf("Expected exactly 1 connector on the fast path, got %d", len(src.conns))
+	}
+
+	time.Sleep(500 * time.Millisecond)
+
+	lines := []string{
+		"line matching first\n",
+		"line matching second\n",
+	}
+
+	for _, line := range lines {
+		if _, err := logFile.WriteString(line); err != nil {
+			t.Fatal("Failed to write log line:", err)
+		}
+	}
+
+	if err := logFile.Sync(); err != nil {
+		t.Fatal("Failed to sync log file:", err)
+	}
+
+	time.Sleep(time.Second)
+
+	if got := totals()["dup_count"]; got != 1 {
+		t.Errorf("Expected only the first-defined filter's regex to count (1 match), got %d", got)
 	}
 }
 
@@ -247,7 +301,7 @@ func TestSourceIsolatesInvalidFilter(t *testing.T) {
 		{Metric: "app_errors_count", Regex: `\[error\]`},
 		{Metric: "app_requests_count", Regex: "GET /"},
 		{Metric: "app_broken_count", Regex: "("},
-	}, sink)
+	}, sink, nil, "")
 	if err != nil {
 		t.Fatal("Failed to build source despite one invalid filter:", err)
 	}

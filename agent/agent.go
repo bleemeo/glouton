@@ -643,7 +643,10 @@ func (a *agent) updateThresholds(thresholds map[string]threshold.Threshold, firs
 func (a *agent) rebuildDynamicMetricAllowDenyList(services []discovery.Service) error {
 	errs := make([]error, 0, 2)
 
-	logMetricNames := a.logMetricsManager.MetricNames()
+	var logMetricNames []string
+	if a.logMetricsManager != nil {
+		logMetricNames = a.logMetricsManager.MetricNames()
+	}
 
 	errs = append(
 		errs,
@@ -1057,7 +1060,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	a.vSphereManager = vsphere.NewManager()
 
-	a.logMetricsManager = logmetrics.New(a.config.Log, a.hostRootPath, a.containerRuntime)
+	a.logMetricsManager = logmetrics.New(a.config.Log, a.hostRootPath, a.containerRuntime, a.state)
 	tasks = append(tasks, taskInfo{a.logMetricsManager.Run, "Log-to-metric manager"})
 
 	_, err = a.gathererRegistry.RegisterAppenderCallback(

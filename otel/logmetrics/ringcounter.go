@@ -94,7 +94,7 @@ func (rc *ringCounter) discardOutdatedValues(now int64) {
 	if int(now-rc.lastUpdateAt) >= rc.size {
 		rc.resetRange(0, rc.size-1)
 	} else if idx != lastIdx {
-		rc.resetRange(min(lastIdx+1, rc.size-1), idx)
+		rc.resetRange((lastIdx+1)%rc.size, idx)
 	}
 }
 
