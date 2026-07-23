@@ -75,6 +75,25 @@ const (
 	testSCSI00         = "scsi0:0"
 )
 
+// Test constants specific to the vcenter_2 fixture. It is a partial dump whose
+// parent hierarchy (datacenter/folders) is absent; since govmomi v0.55 the
+// simulator adopts such orphaned objects into a folder, so the cluster and host
+// are now discoverable (they were invisible with older govmomi versions).
+const (
+	testMOIDDomainC7    = "domain-c7"
+	testMOIDHost11      = "host-11"
+	testClusterTestCL0  = "TEST-CL0"
+	testHost192         = "192.168.0.203"
+	testHostFQDN192     = "192.168.0.203.test.io"
+	testDatastore2150   = "datastore-2150"
+	testTrue            = "true"
+	testDomainTestIO    = "test.io"
+	testMem767          = "767.66 GB"
+	testProductProLiant = "ProLiant DL360 Gen10"
+	testVendorHPE       = "HPE"
+	testVersion701      = "7.0.1"
+)
+
 func setupVSphereAPITest(t *testing.T, dirName string) (vSphereCfg config.VSphere, deferFn func()) {
 	t.Helper()
 
@@ -476,9 +495,48 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:          "vCenter",
-			dirName:       "vcenter_2",
-			expectedHosts: []*HostSystem{},
+			name:    "vCenter",
+			dirName: "vcenter_2",
+			expectedClusters: []*Cluster{
+				{
+					device: device{
+						moid: testMOIDDomainC7,
+						name: testClusterTestCL0,
+						facts: map[string]string{
+							factCPUCores:    "120",
+							factFQDN:        testClusterTestCL0,
+							factScraperFQDN: scraperFQDN,
+						},
+						state: testStateGreen,
+					},
+					datastores: []string{testDatastore25, testDatastore2150},
+				},
+			},
+			expectedHosts: []*HostSystem{
+				{
+					device: device{
+						moid: testMOIDHost11,
+						name: testHost192,
+						facts: map[string]string{
+							factCPUCores:              "40",
+							testFactKeyCPUModel:       testCPUModelI7,
+							testFactKeyDomain:         testDomainTestIO,
+							factFQDN:                  testHostFQDN192,
+							factHostname:              testHost192,
+							testFactKeyIPv6Enabled:    testTrue,
+							factMemory:                testMem767,
+							factOSPrettyName:          testOSVmnixX86,
+							factPrimaryAddress:        testIP127001,
+							testFactKeyProductName:    testProductProLiant,
+							factScraperFQDN:           scraperFQDN,
+							testFactKeySysVendor:      testVendorHPE,
+							factVSphereHostVersion:    testVersion701,
+							factVSphereVMotionEnabled: testFalse,
+						},
+						state: testStatePoweredOn,
+					},
+				},
+			},
 			expectedVMs: []*VirtualMachine{
 				{
 					device: device{
@@ -489,8 +547,8 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 							factFQDN:                testVMAppHaproxy2,
 							factHostname:            testVMAppHaproxy2,
 							factMemory:              "2.00 GB",
-							factVSphereHost:         "host-11",    // TODO improve this
-							factVSphereResourcePool: "resgroup-8", // TODO improve this
+							factVSphereHost:         testClusterTestCL0,
+							factVSphereResourcePool: testResources,
 							factOSPrettyName:        "Debian GNU/Linux 11 (64-bit)",
 							factPrimaryAddress:      "192.168.0.2",
 							factScraperFQDN:         scraperFQDN,

@@ -41,6 +41,8 @@ import (
 	prometheusModel "github.com/prometheus/common/model"
 	admv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv2 "k8s.io/api/autoscaling/v2"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -88,6 +90,9 @@ type mockKubernetesClient struct {
 	deployments  appsv1.DeploymentList
 	statefulSets appsv1.StatefulSetList
 	daemonSets   appsv1.DaemonSetList
+	hpas         autoscalingv2.HorizontalPodAutoscalerList
+	jobs         batchv1.JobList
+	cronJobs     batchv1.CronJobList
 	crds         apiextv1.CustomResourceDefinitionList
 	mwcs         admv1.MutatingWebhookConfigurationList
 	vwcs         admv1.ValidatingWebhookConfigurationList
@@ -177,6 +182,30 @@ func newKubernetesMock(dirname string) (*mockKubernetesClient, error) {
 		}
 	}
 
+	data, localErr = os.ReadFile(filepath.Join(dirname, "hpas.yaml"))
+	if localErr == nil {
+		err = yaml.Unmarshal(data, &result.hpas)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	data, localErr = os.ReadFile(filepath.Join(dirname, "jobs.yaml"))
+	if localErr == nil {
+		err = yaml.Unmarshal(data, &result.jobs)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	data, localErr = os.ReadFile(filepath.Join(dirname, "cronjobs.yaml"))
+	if localErr == nil {
+		err = yaml.Unmarshal(data, &result.cronJobs)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return result, err
 }
 
@@ -227,8 +256,21 @@ func (k *mockKubernetesClient) GetStatefulSets(_ context.Context) ([]appsv1.Stat
 }
 
 // GetDaemonSets return all daemonsets in the cluster.
+func (k *mockKubernetesClient) GetJobs(_ context.Context) ([]batchv1.Job, error) {
+	return k.jobs.Items, nil
+}
+
+func (k *mockKubernetesClient) GetCronJobs(_ context.Context) ([]batchv1.CronJob, error) {
+	return k.cronJobs.Items, nil
+}
+
 func (k *mockKubernetesClient) GetDaemonSets(_ context.Context) ([]appsv1.DaemonSet, error) {
 	return k.daemonSets.Items, nil
+}
+
+// GetHPAs return all HorizontalPodAutoscalers in the cluster.
+func (k *mockKubernetesClient) GetHPAs(_ context.Context) ([]autoscalingv2.HorizontalPodAutoscaler, error) {
+	return k.hpas.Items, nil
 }
 
 // GetScale returns the desired replicas of the scale subresource. Tests can inject values through
@@ -1239,5 +1281,126 @@ func TestGenericReplicas(t *testing.T) {
 
 	if diff := cmp.Diff(want, gotMap); diff != "" {
 		t.Fatalf("unexpected generic replicas points (-want +got):\n%s", diff)
+	}
+}
+
+func TestHPAMetrics(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2022, time.April, 1, 0, 0, 0, 0, time.UTC)
+
+	// condAge builds a condition whose state transitioned `age` ago (drives the grace period).
+	condAge := func(t autoscalingv2.HorizontalPodAutoscalerConditionType, status corev1.ConditionStatus, reason string, age time.Duration) autoscalingv2.HorizontalPodAutoscalerCondition {
+		return autoscalingv2.HorizontalPodAutoscalerCondition{
+			Type:               t,
+			Status:             status,
+			Reason:             reason,
+			Message:            reason,
+			LastTransitionTime: metav1.Time{Time: now.Add(-age)},
+		}
+	}
+
+	// cond is a long-standing condition (well past the grace period).
+	cond := func(t autoscalingv2.HorizontalPodAutoscalerConditionType, status corev1.ConditionStatus, reason string) autoscalingv2.HorizontalPodAutoscalerCondition {
+		return condAge(t, status, reason, time.Hour)
+	}
+
+	makeHPA := func(name, targetKind, targetName string, minReplicas *int32, maxReplicas int32, conds ...autoscalingv2.HorizontalPodAutoscalerCondition) autoscalingv2.HorizontalPodAutoscaler {
+		return autoscalingv2.HorizontalPodAutoscaler{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "prod"},
+			Spec: autoscalingv2.HorizontalPodAutoscalerSpec{
+				ScaleTargetRef: autoscalingv2.CrossVersionObjectReference{Kind: targetKind, Name: targetName},
+				MinReplicas:    minReplicas,
+				MaxReplicas:    maxReplicas,
+			},
+			Status: autoscalingv2.HorizontalPodAutoscalerStatus{Conditions: conds},
+		}
+	}
+
+	two := int32(2)
+
+	cache := kubeCache{
+		hpas: []autoscalingv2.HorizontalPodAutoscaler{
+			// Healthy HPA, not limited.
+			makeHPA(
+				"web", "Deployment", "Web", &two, 10,
+				cond(autoscalingv2.AbleToScale, corev1.ConditionTrue, "ReadyForNewScale"),
+				cond(autoscalingv2.ScalingActive, corev1.ConditionTrue, "ValidMetricFound"),
+				cond(autoscalingv2.ScalingLimited, corev1.ConditionFalse, "DesiredWithinRange"),
+			),
+			// Pinned at max, and metrics unavailable => Critical. minReplicas unset => defaults to 1.
+			makeHPA(
+				"api", "Deployment", "api", nil, 5,
+				cond(autoscalingv2.AbleToScale, corev1.ConditionTrue, "ReadyForNewScale"),
+				cond(autoscalingv2.ScalingActive, corev1.ConditionFalse, "FailedGetResourceMetric"),
+				cond(autoscalingv2.ScalingLimited, corev1.ConditionTrue, "TooManyReplicas"),
+			),
+			// Scaling intentionally disabled (target at 0 replicas) => Warning.
+			makeHPA(
+				"worker", "StatefulSet", "worker", &two, 8,
+				cond(autoscalingv2.ScalingActive, corev1.ConditionFalse, hpaReasonScalingDisabled),
+			),
+			// Metrics unavailable but only just now (rollout in progress) => still OK, within grace.
+			makeHPA(
+				"deploying", "Deployment", "deploying", &two, 6,
+				cond(autoscalingv2.AbleToScale, corev1.ConditionTrue, "ReadyForNewScale"),
+				condAge(autoscalingv2.ScalingActive, corev1.ConditionFalse, "FailedGetResourceMetric", 30*time.Second),
+			),
+		},
+	}
+
+	got := hpaMetrics(cache, now)
+
+	type key struct{ name, kind, owner, ns string }
+
+	values := make(map[key]float64, len(got))
+	statuses := make(map[key]types.Status, len(got))
+
+	for _, point := range got {
+		k := key{
+			name:  point.Labels[types.LabelName],
+			kind:  point.Labels[types.LabelOwnerKind],
+			owner: point.Labels[types.LabelOwnerName],
+			ns:    point.Labels[types.LabelNamespace],
+		}
+		values[k] = point.Value
+
+		if point.Annotations.Status.CurrentStatus.IsSet() {
+			statuses[k] = point.Annotations.Status.CurrentStatus
+		}
+	}
+
+	wantValues := map[key]float64{
+		{metricNameHPAMinReplicas, "deployment", "web", "prod"}:          2,
+		{metricNameHPAMaxReplicas, "deployment", "web", "prod"}:          10,
+		{metricNameHPAScalingLimited, "deployment", "web", "prod"}:       0,
+		{metricNameHPAStatus, "deployment", "web", "prod"}:               float64(types.StatusOk.NagiosCode()),
+		{metricNameHPAMinReplicas, "deployment", "api", "prod"}:          1,
+		{metricNameHPAMaxReplicas, "deployment", "api", "prod"}:          5,
+		{metricNameHPAScalingLimited, "deployment", "api", "prod"}:       1,
+		{metricNameHPAStatus, "deployment", "api", "prod"}:               float64(types.StatusCritical.NagiosCode()),
+		{metricNameHPAMinReplicas, "statefulset", "worker", "prod"}:      2,
+		{metricNameHPAMaxReplicas, "statefulset", "worker", "prod"}:      8,
+		{metricNameHPAScalingLimited, "statefulset", "worker", "prod"}:   0,
+		{metricNameHPAStatus, "statefulset", "worker", "prod"}:           float64(types.StatusWarning.NagiosCode()),
+		{metricNameHPAMinReplicas, "deployment", "deploying", "prod"}:    2,
+		{metricNameHPAMaxReplicas, "deployment", "deploying", "prod"}:    6,
+		{metricNameHPAScalingLimited, "deployment", "deploying", "prod"}: 0,
+		{metricNameHPAStatus, "deployment", "deploying", "prod"}:         float64(types.StatusOk.NagiosCode()),
+	}
+
+	if diff := cmp.Diff(wantValues, values); diff != "" {
+		t.Fatalf("unexpected HPA metric values (-want +got):\n%s", diff)
+	}
+
+	wantStatuses := map[key]types.Status{
+		{metricNameHPAStatus, "deployment", "web", "prod"}:       types.StatusOk,
+		{metricNameHPAStatus, "deployment", "api", "prod"}:       types.StatusCritical,
+		{metricNameHPAStatus, "statefulset", "worker", "prod"}:   types.StatusWarning,
+		{metricNameHPAStatus, "deployment", "deploying", "prod"}: types.StatusOk,
+	}
+
+	if diff := cmp.Diff(wantStatuses, statuses); diff != "" {
+		t.Fatalf("unexpected HPA status annotations (-want +got):\n%s", diff)
 	}
 }

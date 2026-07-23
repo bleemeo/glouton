@@ -69,6 +69,7 @@ const (
 	BindService          ServiceName = "bind"
 	BitBucketService     ServiceName = "bitbucket"
 	CassandraService     ServiceName = "cassandra"
+	ClickHouseService    ServiceName = "clickhouse"
 	ConfluenceService    ServiceName = "confluence"
 	DovecotService       ServiceName = "dovecot"
 	EjabberService       ServiceName = "ejabberd"
@@ -90,12 +91,15 @@ const (
 	NatsService          ServiceName = "nats"
 	NfsService           ServiceName = "nfs"
 	NginxService         ServiceName = "nginx"
+	NSQService           ServiceName = "nsq"
 	NTPService           ServiceName = "ntp"
+	OpenBaoService       ServiceName = "openbao"
 	OpenLDAPService      ServiceName = "openldap"
 	OpenVPNService       ServiceName = "openvpn"
 	PHPFPMService        ServiceName = "phpfpm"
 	PostfixService       ServiceName = "postfix"
 	PostgreSQLService    ServiceName = "postgresql"
+	PgBouncerService     ServiceName = "pgbouncer"
 	RabbitMQService      ServiceName = "rabbitmq"
 	RedisService         ServiceName = "redis"
 	SaltMasterService    ServiceName = "salt_master"
@@ -104,6 +108,7 @@ const (
 	ValkeyService        ServiceName = "valkey"
 	VarnishService       ServiceName = "varnish"
 	UPSDService          ServiceName = "upsd"
+	VaultService         ServiceName = "vault"
 	ZookeeperService     ServiceName = "zookeeper"
 
 	CustomService ServiceName = "__custom__"
@@ -305,6 +310,10 @@ var (
 			ServiceProtocol: tcpProtocol,
 			IgnoreHighPort:  true,
 		},
+		ClickHouseService: {
+			ServicePort:     8123,
+			ServiceProtocol: tcpProtocol,
+		},
 		ConfluenceService: {
 			ServicePort:     8090,
 			ServiceProtocol: tcpProtocol,
@@ -381,9 +390,17 @@ var (
 			ServiceProtocol: tcpProtocol,
 		},
 		NfsService: {},
+		NSQService: {
+			ServicePort:     4151,
+			ServiceProtocol: tcpProtocol,
+		},
 		NTPService: {
 			ServicePort:     123,
 			ServiceProtocol: udpProtocol,
+		},
+		OpenBaoService: {
+			ServicePort:     8200,
+			ServiceProtocol: tcpProtocol,
 		},
 		OpenLDAPService: {
 			ServicePort:     389,
@@ -401,6 +418,10 @@ var (
 		},
 		PostgreSQLService: {
 			ServicePort:     5432,
+			ServiceProtocol: tcpProtocol,
+		},
+		PgBouncerService: {
+			ServicePort:     6432,
 			ServiceProtocol: tcpProtocol,
 		},
 		RabbitMQService: {
@@ -433,6 +454,10 @@ var (
 		},
 		VarnishService: {
 			ServicePort:     6082,
+			ServiceProtocol: tcpProtocol,
+		},
+		VaultService: {
+			ServicePort:     8200,
 			ServiceProtocol: tcpProtocol,
 		},
 		ZookeeperService: {

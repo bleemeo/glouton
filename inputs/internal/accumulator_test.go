@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/types"
+	"github.com/google/go-cmp/cmp"
 )
 
 // Test metric name constants.
@@ -458,6 +459,51 @@ func TestDeriveMultipleTag(t *testing.T) {
 
 	if called2 != 2 {
 		t.Errorf("finalFunc2 was not called twice")
+	}
+}
+
+// TestDeriveSameFieldDifferentMeasurement reproduces the Vault/OpenBao situation: several
+// distinct measurements share the exact same field name and no tags at all.
+func TestDeriveSameFieldDifferentMeasurement(t *testing.T) {
+	const fieldCount = "count"
+
+	results := map[string]float64{}
+	finalFunc := func(measurement string, fields map[string]any, _ map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
+		if got, ok := fields[fieldCount].(float64); ok {
+			results[measurement] = got
+		}
+	}
+
+	shouldDerive := func(_ GatherContext, metricName string) bool {
+		return metricName == fieldCount
+	}
+
+	t0 := time.Now()
+	t1 := t0.Add(10 * time.Second)
+
+	acc := Accumulator{
+		ShouldDifferentiateMetrics: shouldDerive,
+	}
+
+	acc.PrepareGather()
+	acc.processMetrics(finalFunc, "vault_core_handle_request", map[string]any{fieldCount: uint64(1000)}, nil, t0)
+	acc.processMetrics(finalFunc, "vault_core_check_token", map[string]any{fieldCount: uint64(5000)}, nil, t0)
+
+	if len(results) != 0 {
+		t.Fatalf("first gather should produce no rate (no history yet), got %v", results)
+	}
+
+	acc.PrepareGather()
+	acc.processMetrics(finalFunc, "vault_core_handle_request", map[string]any{fieldCount: uint64(1000 + 10*3)}, nil, t1)
+	acc.processMetrics(finalFunc, "vault_core_check_token", map[string]any{fieldCount: uint64(5000 + 10*7)}, nil, t1)
+
+	want := map[string]float64{
+		"vault_core_handle_request": 3,
+		"vault_core_check_token":    7,
+	}
+
+	if diff := cmp.Diff(want, results); diff != "" {
+		t.Errorf("results mismatch (-want +got)\n%s", diff)
 	}
 }
 
