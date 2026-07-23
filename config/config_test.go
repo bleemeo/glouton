@@ -212,7 +212,6 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			KubeConfig:          "/config",
 		},
 		Log: Log{
-			FluentBitURL:   "http://localhost:2020",
 			HostRootPrefix: "/hostroot",
 			Inputs: []LogInput{
 				{

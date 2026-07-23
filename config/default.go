@@ -70,6 +70,9 @@ func mapKeys() []string {
 		"log.opentelemetry.global_filters",
 		"log.opentelemetry.known_log_filters",
 		"log.opentelemetry.container_filter",
+		"log.metrics.receivers",
+		"log.metrics.known_filters",
+		"log.metrics.container_filters",
 	}
 }
 
@@ -314,10 +317,6 @@ func DefaultConfig() Config { //nolint:maintidx
 			KubeConfig:          "",
 		},
 		Log: Log{
-			// bleemeo-agent-logs overrides the URL and set an empty host root prefix.
-			// We don't set an empty host root by default and change it in the Glouton docker image to
-			// support the case where Glouton is installed as a package and Fluent Bit is in a container.
-			FluentBitURL:   "",
 			HostRootPrefix: "/hostroot",
 			Inputs:         []LogInput{},
 			OpenTelemetry: OpenTelemetry{
@@ -345,6 +344,11 @@ func DefaultConfig() Config { //nolint:maintidx
 				GlobalFilters:   OTELFilters{},
 				KnownLogFilters: map[string]OTELFilters{},
 				ContainerFilter: map[string]string{},
+			},
+			Metrics: LogMetricsConfig{
+				Receivers:        map[string]LogMetricsReceiver{},
+				KnownFilters:     map[string][]LogFilter{},
+				ContainerFilters: map[string]string{},
 			},
 		},
 		Logging: Logging{

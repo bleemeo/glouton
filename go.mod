@@ -37,10 +37,11 @@ require (
 	github.com/moby/moby/api v1.55.0
 	github.com/moby/moby/client v0.5.0
 	github.com/ncabatoff/process-exporter v0.8.7
-	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza v0.154.0
-	github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.154.0
-	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.154.0
-	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver v0.154.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/connector/countconnector v0.155.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza v0.155.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.155.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.155.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver v0.155.0
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/opencontainers/runtime-spec v1.3.0
@@ -62,6 +63,7 @@ require (
 	go.opentelemetry.io/collector/config/confighttp v0.155.0
 	go.opentelemetry.io/collector/config/confignet v1.61.0
 	go.opentelemetry.io/collector/config/configoptional v1.61.0
+	go.opentelemetry.io/collector/connector v0.155.0
 	go.opentelemetry.io/collector/consumer v1.61.0
 	go.opentelemetry.io/collector/exporter v1.61.0
 	go.opentelemetry.io/collector/exporter/exporterhelper v0.155.0
@@ -233,6 +235,7 @@ require (
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/leodido/go-syslog/v4 v4.5.0 // indirect
 	github.com/leodido/ragel-machinery v0.0.0-20190525184631-5f46317e436b // indirect
+	github.com/lightstep/go-expohisto v1.0.0 // indirect
 	github.com/lufia/iostat v1.2.1 // indirect
 	github.com/lufia/plan9stats v0.0.0-20260330125221-c963978e514e // indirect
 	github.com/magefile/mage v1.17.2 // indirect
@@ -266,10 +269,11 @@ require (
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/ncabatoff/go-seq v0.0.0-20180805175032-b08ef85ed833 // indirect
 	github.com/oklog/ulid/v2 v2.1.1 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.154.0 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/internal/filter v0.154.0 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl v0.154.0 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil v0.154.0 // indirect
+	github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.155.0 // indirect
+	github.com/open-telemetry/opentelemetry-collector-contrib/internal/filter v0.155.0 // indirect
+	github.com/open-telemetry/opentelemetry-collector-contrib/internal/pdatautil v0.155.0 // indirect
+	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl v0.155.0 // indirect
+	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil v0.155.0 // indirect
 	github.com/opencontainers/selinux v1.15.1 // indirect
 	github.com/peterbourgon/unixtransport v0.0.7 // indirect
 	github.com/pierrec/lz4/v4 v4.1.27 // indirect
@@ -322,6 +326,7 @@ require (
 	go.opentelemetry.io/collector/config/configtls v1.61.0 // indirect
 	go.opentelemetry.io/collector/confmap v1.61.0 // indirect
 	go.opentelemetry.io/collector/confmap/xconfmap v0.155.0 // indirect
+	go.opentelemetry.io/collector/connector/xconnector v0.155.0 // indirect
 	go.opentelemetry.io/collector/consumer/consumererror v0.155.0 // indirect
 	go.opentelemetry.io/collector/consumer/consumertest v0.155.0 // indirect
 	go.opentelemetry.io/collector/consumer/xconsumer v0.155.0 // indirect
@@ -330,6 +335,7 @@ require (
 	go.opentelemetry.io/collector/extension/extensionmiddleware v0.155.0 // indirect
 	go.opentelemetry.io/collector/featuregate v1.61.0 // indirect
 	go.opentelemetry.io/collector/internal/componentalias v0.155.0 // indirect
+	go.opentelemetry.io/collector/internal/fanoutconsumer v0.155.0 // indirect
 	go.opentelemetry.io/collector/internal/sharedcomponent v0.155.0 // indirect
 	go.opentelemetry.io/collector/internal/telemetry v0.155.0 // indirect
 	go.opentelemetry.io/collector/pdata/pprofile v0.155.0 // indirect

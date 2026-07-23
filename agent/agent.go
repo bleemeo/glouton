@@ -55,7 +55,6 @@ import (
 	"github.com/bleemeo/glouton/facts/container-runtime/kubernetes"
 	"github.com/bleemeo/glouton/facts/container-runtime/merge"
 	"github.com/bleemeo/glouton/facts/container-runtime/veth"
-	"github.com/bleemeo/glouton/fluentbit"
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/disk"
 	"github.com/bleemeo/glouton/inputs/docker"
@@ -71,6 +70,7 @@ import (
 	"github.com/bleemeo/glouton/mqtt"
 	"github.com/bleemeo/glouton/mqtt/client"
 	"github.com/bleemeo/glouton/nrpe"
+	"github.com/bleemeo/glouton/otel/logmetrics"
 	"github.com/bleemeo/glouton/otel/logprocessing"
 	"github.com/bleemeo/glouton/prometheus/exporter/blackbox"
 	"github.com/bleemeo/glouton/prometheus/exporter/ipmi"
@@ -78,7 +78,6 @@ import (
 	"github.com/bleemeo/glouton/prometheus/exporter/ssacli"
 	"github.com/bleemeo/glouton/prometheus/process"
 	"github.com/bleemeo/glouton/prometheus/registry"
-	"github.com/bleemeo/glouton/prometheus/rules"
 	"github.com/bleemeo/glouton/store"
 	"github.com/bleemeo/glouton/task"
 	"github.com/bleemeo/glouton/telemetry"
@@ -160,14 +159,13 @@ type agent struct {
 	promFilter             *metricfilter.Filter
 	mergeMetricFilter      *metricfilter.Filter
 	monitorManager         *blackbox.RegisterManager
-	rulesManager           *rules.Manager
 	reloadState            ReloadState
 	vethProvider           *veth.Provider
 	mqtt                   *mqtt.MQTT
 	pahoLogWrapper         *client.LogWrapper
-	fluentbitManager       *fluentbit.Manager
 	vSphereManager         *vsphere.Manager
 	logProcessManager      *logprocessing.Manager
+	logMetricsManager      *logmetrics.Manager
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -645,14 +643,16 @@ func (a *agent) updateThresholds(thresholds map[string]threshold.Threshold, firs
 func (a *agent) rebuildDynamicMetricAllowDenyList(services []discovery.Service) error {
 	errs := make([]error, 0, 2)
 
+	logMetricNames := a.logMetricsManager.MetricNames()
+
 	errs = append(
 		errs,
-		a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), a.rulesManager.MetricNames()),
+		a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), logMetricNames),
 	)
 
 	errs = append(
 		errs,
-		a.promFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), a.rulesManager.MetricNames()),
+		a.promFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), logMetricNames),
 	)
 
 	a.mergeMetricFilter.MergeInPlace(a.metricFilter, a.promFilter)
@@ -1055,12 +1055,22 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		tasks = append(tasks, taskInfo{a.jmx.Run, "jmxtrans"})
 	}
 
-	baseRules := fluentbit.PromQLRulesFromInputs(a.config.Log.Inputs)
-	a.rulesManager = rules.NewManager(ctx, a.store, baseRules)
-
 	a.vSphereManager = vsphere.NewManager()
 
-	a.metricFilter.UpdateRulesMatchers(a.rulesManager.InputMetricMatchers())
+	a.logMetricsManager = logmetrics.New(a.config.Log, a.hostRootPath, a.containerRuntime)
+	tasks = append(tasks, taskInfo{a.logMetricsManager.Run, "Log-to-metric manager"})
+
+	_, err = a.gathererRegistry.RegisterAppenderCallback(
+		registry.RegistrationOption{
+			Description:        "log-to-metric",
+			JitterSeed:         baseJitterPlus,
+			NoLabelsAlteration: true,
+		},
+		registry.AppenderFunc(a.logMetricsManager.EmitMetrics),
+	)
+	if err != nil {
+		logger.Printf("unable to add log-to-metric metrics: %v", err)
+	}
 
 	if a.config.Bleemeo.Enable {
 		scaperName := a.config.Blackbox.ScraperName
@@ -1214,18 +1224,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		logger.Printf("unable to add miscAppenderMinute metrics: %v", err)
 	}
 
-	_, err = a.gathererRegistry.RegisterAppenderCallback(
-		registry.RegistrationOption{
-			Description:        "rulesManager",
-			JitterSeed:         baseJitterPlus,
-			NoLabelsAlteration: true,
-		},
-		a.rulesManager,
-	)
-	if err != nil {
-		logger.Printf("unable to add recording rules metrics: %v", err)
-	}
-
 	if a.config.Agent.ProcessExporter.Enable {
 		processSource.RegisterExporter(ctx, a.gathererRegistry, psFact.AllProcs, dynamicDiscovery, metricsIgnored, serviceIgnored)
 	}
@@ -1287,20 +1285,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	if !reflect.DeepEqual(a.config.DiskMonitor, config.DefaultConfig().DiskMonitor) && len(a.config.DiskIgnore) > 0 {
 		logger.Printf("Warning: both \"disk_monitor\" and \"disk_ignore\" are set. Only \"disk_ignore\" will be used")
-	}
-
-	if len(a.config.Log.Inputs) > 0 {
-		a.fluentbitManager, warnings = fluentbit.New(a.config.Log, a.gathererRegistry, a.containerRuntime, a.commandRunner)
-		if warnings != nil {
-			a.addWarnings(warnings...)
-		}
-
-		if a.fluentbitManager != nil {
-			tasks = append(tasks, taskInfo{
-				a.fluentbitManager.Run,
-				"Fluent Bit manager",
-			})
-		}
 	}
 
 	a.vethProvider = &veth.Provider{
@@ -2330,7 +2314,6 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		a.diagnosticVSphere,
 		a.metricFilter.DiagnosticArchive,
 		a.gathererRegistry.DiagnosticArchive,
-		a.rulesManager.DiagnosticArchive,
 		a.reloadState.DiagnosticArchive,
 		a.vethProvider.DiagnosticArchive,
 		a.threshold.DiagnosticThresholds,
@@ -2356,12 +2339,12 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		modules = append(modules, a.mqtt.DiagnosticArchive)
 	}
 
-	if a.fluentbitManager != nil {
-		modules = append(modules, a.fluentbitManager.DiagnosticArchive)
-	}
-
 	if a.logProcessManager != nil {
 		modules = append(modules, a.logProcessManager.DiagnosticArchive)
+	}
+
+	if a.logMetricsManager != nil {
+		modules = append(modules, a.logMetricsManager.DiagnosticArchive)
 	}
 
 	for _, f := range modules {

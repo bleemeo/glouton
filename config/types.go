@@ -59,10 +59,10 @@ type Config struct {
 }
 
 type Log struct {
-	FluentBitURL   string        `yaml:"fluentbit_url"`
-	HostRootPrefix string        `yaml:"hostroot_prefix"`
-	Inputs         []LogInput    `yaml:"inputs"`
-	OpenTelemetry  OpenTelemetry `yaml:"opentelemetry"`
+	HostRootPrefix string           `yaml:"hostroot_prefix"`
+	Inputs         []LogInput       `yaml:"inputs"`
+	OpenTelemetry  OpenTelemetry    `yaml:"opentelemetry"`
+	Metrics        LogMetricsConfig `yaml:"metrics"`
 }
 
 type LogInput struct {
@@ -75,6 +75,23 @@ type LogInput struct {
 type LogFilter struct {
 	Metric string `yaml:"metric"`
 	Regex  string `yaml:"regex"`
+}
+
+// LogMetricsConfig is the new-style, independent configuration for counting log
+// lines matching a pattern and reporting the match rate as a metric. It is
+// deliberately separate from OpenTelemetry (log shipping): the two features are
+// unrelated other than both reading log sources, and log-to-metric must never imply
+// shipping logs anywhere.
+type LogMetricsConfig struct {
+	Receivers    map[string]LogMetricsReceiver `yaml:"receivers"`
+	KnownFilters map[string][]LogFilter        `yaml:"known_filters"`
+	// map: container name -> known_filters key to apply
+	ContainerFilters map[string]string `yaml:"container_filters"`
+}
+
+type LogMetricsReceiver struct {
+	Include []string    `yaml:"include"`
+	Filters []LogFilter `yaml:"filters"`
 }
 
 // OTELOperator represents an OpenTelemetry operator as plain YAML,
