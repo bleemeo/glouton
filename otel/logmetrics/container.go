@@ -24,19 +24,29 @@ import (
 	"github.com/bleemeo/glouton/utils/hostrootsymlink"
 )
 
+func hasContainerFilters(cfg config.Log) bool {
+	for _, input := range cfg.Inputs {
+		if input.Path == "" && (input.ContainerName != "" || len(input.Selectors) > 0) {
+			return true
+		}
+	}
+
+	return len(cfg.Metrics.ContainerFilters) > 0
+}
+
 // resolveContainerFilters returns the concatenation of every filter source that matches ctr.
 func resolveContainerFilters(cfg config.Log, ctr facts.Container) []config.LogFilter {
 	var filters []config.LogFilter
 
 	for _, input := range cfg.Inputs {
 		if input.Path != "" {
-			continue // path-based -> not container, handled statically, see resolvePathSources
+			continue // path-based, not container
 		}
 
 		matchName := input.ContainerName != "" && ctr.ContainerName() == input.ContainerName
 		matchSelectors := len(input.Selectors) > 0 && containerMatchesSelectors(ctr, input.Selectors)
 
-		matches := (matchName && matchSelectors) || (len(input.Selectors) > 0 && matchName) || (input.ContainerName == "" && matchSelectors)
+		matches := (matchName && matchSelectors) || (len(input.Selectors) == 0 && matchName) || (input.ContainerName == "" && matchSelectors)
 
 		if matches {
 			filters = append(filters, input.Filters...)

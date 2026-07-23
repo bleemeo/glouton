@@ -23,10 +23,8 @@ import (
 	"github.com/bleemeo/glouton/logger"
 )
 
-// ringCounter serves for storing a count for each second of a sliding time window.
-// Its precision is hard-coded (1s), but its size is configurable.
-// When the Add method is called, the given delta is added
-// to the bucket that corresponds to the current second.
+// ringCounter stores a count per second over a sliding window (1s precision,
+// configurable size). Add adds delta to the bucket for the current second.
 type ringCounter struct {
 	size         int
 	t0           int64
@@ -35,13 +33,12 @@ type ringCounter struct {
 	lastUpdateAt int64
 }
 
-// newRingCounter initialises a new "throughput meter".
-// Since its granularity is 1 second, the size must be given as seconds as well.
-// The size must be strictly positive, defaults to 60 seconds (mirroring the old Fluent Bit rate(...[1m])).
-// The Total method will then return the sum of the data recorded in a sliding time window of this width.
+// newRingCounter creates a counter over a window of size seconds (must be > 0,
+// defaults to 60 mirroring the old Fluent Bit rate(...[1m])).
 func newRingCounter(size int) *ringCounter {
 	if size < 1 {
 		size = 60
+
 		logger.V(1).Printf("ring counter size must be strictly positive, defaults to 60 seconds")
 	}
 
@@ -53,9 +50,7 @@ func newRingCounter(size int) *ringCounter {
 
 // Add records the given delta for the current second.
 func (rc *ringCounter) Add(delta int) {
-	// We want to insert the delta for the time when the method was called,
-	// so storing the time now rather than after acquiring the lock
-	// avoids distorting the measurement.
+	// Capture the time before locking, so contention doesn't skew the measurement.
 	now := time.Now().Unix()
 
 	rc.l.Lock()
@@ -95,8 +90,7 @@ func (rc *ringCounter) discardOutdatedValues(now int64) {
 	idx := int(now-rc.t0) % rc.size
 	lastIdx := int(rc.lastUpdateAt-rc.t0) % rc.size
 
-	// If the latest update is older than the total size,
-	// it means that all the data is stale.
+	// All data is stale if the latest update is older than the window size.
 	if int(now-rc.lastUpdateAt) >= rc.size {
 		rc.resetRange(0, rc.size-1)
 	} else if idx != lastIdx {

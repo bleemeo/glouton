@@ -32,22 +32,19 @@ import (
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
-// windowSecs is the sliding window (in seconds) used to turn a raw match count
-// into a "matches per second" rate, mirroring the old Fluent Bit rate(...[1m]).
+// windowSecs is the sliding window used for the "matches per second" rate,
+// mirroring the old Fluent Bit rate(...[1m]).
 const windowSecs = 60
 
-// counter accumulates, over a sliding window, the number of log lines matching a
-// given metric's condition (matching itself happens inside the countconnector via
-// an OTTL condition — this just aggregates the delta counts it reports).
+// counter aggregates the delta counts reported by the countconnector for one
+// metric over a sliding window (matching itself happens via OTTL).
 type counter struct {
 	metric  string
 	counter *ringCounter
 }
 
-// metricsRegistry holds one counter per configured metric name, shared across every
-// log source that references that metric name, so matches occurring on different
-// sources but reported under the same metric name are aggregated together rather
-// than producing conflicting series.
+// metricsRegistry holds one counter per metric name, shared across every source
+// that references it, so same-named matches from different sources aggregate.
 type metricsRegistry struct {
 	l        sync.Mutex
 	counters map[string]*counter
@@ -57,9 +54,8 @@ func newMetricsRegistry() *metricsRegistry {
 	return &metricsRegistry{counters: make(map[string]*counter)}
 }
 
-// resolve returns one counter per filter, creating and registering it the first
-// time its metric name is seen. If a metric name is resolved more than once,
-// all resolutions share the same counter, so matches aggregate correctly.
+// resolve returns one counter per filter, creating it the first time its metric
+// name is seen; repeated names share the same counter.
 func (reg *metricsRegistry) resolve(filters []config.LogFilter) []*counter {
 	reg.l.Lock()
 	defer reg.l.Unlock()
@@ -79,8 +75,8 @@ func (reg *metricsRegistry) resolve(filters []config.LogFilter) []*counter {
 	return counters
 }
 
-// metricNames returns the name of every metric currently registered, so it can be
-// fed into the metric allow-list (see agent.rebuildDynamicMetricAllowDenyList).
+// metricNames returns every registered metric name (fed into the metric
+// allow-list, see agent.rebuildDynamicMetricAllowDenyList).
 func (reg *metricsRegistry) metricNames() []string {
 	reg.l.Lock()
 	defer reg.l.Unlock()
@@ -111,9 +107,8 @@ func (reg *metricsRegistry) emit(app storage.Appender) error {
 	return app.Commit()
 }
 
-// metricsSink returns a consumer.Metrics that adds each Sum data point's (delta)
-// value into the corresponding counter -- the shared "next" consumer for every
-// source's countconnector, so matches from any source aggregate by metric name.
+// metricsSink is the shared "next" consumer for every source's countconnector,
+// adding each Sum data point's delta into the matching counter.
 func (reg *metricsRegistry) metricsSink() consumer.Metrics {
 	sink, err := consumer.NewMetrics(func(_ context.Context, md pmetric.Metrics) error {
 		reg.l.Lock()
@@ -139,8 +134,8 @@ func (reg *metricsRegistry) metricsSink() consumer.Metrics {
 	return sink
 }
 
-// addSumDataPoints adds every data point of m (if it's a Sum, which is all
-// countconnector ever emits) to the matching counter. The caller must hold reg.l.
+// addSumDataPoints adds m's data points (Sum only, all countconnector emits) to
+// the matching counter. Caller must hold reg.l.
 func (reg *metricsRegistry) addSumDataPoints(m pmetric.Metric) {
 	if m.Type() != pmetric.MetricTypeSum {
 		return

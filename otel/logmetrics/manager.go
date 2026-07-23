@@ -39,13 +39,10 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 )
 
-// Package logmetrics counts log lines matching a regex and reports the match rate
-// as a metric ("log-to-metric"), using real OpenTelemetry Collector components
-// (filelogreceiver + the countconnector, matching via OTTL) rather than hand-rolled
-// tailing/regex code. It is deliberately independent from otel/logprocessing (log
-// shipping): the two features are unrelated other than both reading log sources,
-// and this package never ships log content anywhere, and works regardless of
-// whether log shipping or Bleemeo are enabled.
+// Package logmetrics counts log lines matching a regex and reports the rate as a
+// metric, via filelogreceiver + countconnector (OTTL matching). Independent from
+// otel/logprocessing: never ships log content, works without log shipping or
+// Bleemeo enabled.
 
 const updateInterval = time.Minute
 
@@ -100,31 +97,35 @@ func collectAllFilters(cfg config.Log) []config.LogFilter {
 		filters = append(filters, input.Filters...)
 	}
 
-	for _, metrics_recv := range cfg.Metrics.Receivers {
-		filters = append(filters, metrics_recv.Filters...)
+	for _, metricsRecv := range cfg.Metrics.Receivers {
+		filters = append(filters, metricsRecv.Filters...)
 	}
 
-	for _, metrics_knownfilter := range cfg.Metrics.KnownFilters {
-		filters = append(filters, metrics_knownfilter...)
+	for _, metricsKnownFilter := range cfg.Metrics.KnownFilters {
+		filters = append(filters, metricsKnownFilter...)
 	}
 
 	return filters
 }
 
-// Run starts the static (path-based) sources once, then periodically resolves and
-// starts/stops container-based sources as containers appear and disappear,
+// Run starts static sources once, then polls to start/stop container sources as
+// containers appear/disappear. Skips polling if cfg has no container-based rule.
 func (man *Manager) Run(ctx context.Context) error {
 	defer crashreport.ProcessPanic()
 
 	man.startStaticSources(ctx)
 
-	for ctx.Err() == nil {
-		man.updateContainerSources(ctx)
+	if hasContainerFilters(man.cfg) {
+		for ctx.Err() == nil {
+			man.updateContainerSources(ctx)
 
-		select {
-		case <-time.After(updateInterval):
-		case <-ctx.Done():
+			select {
+			case <-time.After(updateInterval):
+			case <-ctx.Done():
+			}
 		}
+	} else {
+		<-ctx.Done()
 	}
 
 	man.stopAll(context.Background())

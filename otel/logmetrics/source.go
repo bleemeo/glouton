@@ -36,24 +36,20 @@ import (
 
 var errUnexpectedConfigType = errors.New("unexpected receiver config type")
 
-// source is one real OpenTelemetry Collector mini-pipeline dedicated to a single
-// log-to-metric source (a static path or a resolved container log file):
+// source is one OTel mini-pipeline for a single log-to-metric source (a static
+// path or a resolved container log file):
 //
 //	filelogreceiver --(plog.Logs)--> countconnector --(pmetric.Metrics)--> shared registry sink
 //
-// The countconnector evaluates one OTTL "IsMatch(body, ...)" condition per
-// configured metric and reports a delta count each time it processes a batch --
-// matching happens natively in OpenTelemetry (OTTL)
+// countconnector evaluates one OTTL "IsMatch(body, ...)" condition per metric.
 type source struct {
 	recv receiver.Logs
 	conn otelconnector.Logs
 }
 
 // newSource builds and starts a source. include is a list of glob patterns
-// (hostroot already applied by the caller). If isContainer is true, the Docker/CRI
-// log envelope is unwrapped (via the same "container" operator otel/logprocessing
-// uses) before matching, so OTTL sees the actual log message rather than the raw
-// JSON/CRI-wrapped line.
+// (hostroot already applied). If isContainer, the Docker/CRI envelope is
+// unwrapped first (same "container" operator otel/logprocessing uses).
 func newSource(
 	ctx context.Context,
 	telemetry component.TelemetrySettings,
@@ -115,8 +111,6 @@ func newSource(
 
 	recvCfg.InputConfig.Include = include
 	recvCfg.Operators = operators
-	// No StorageID: matches aren't persisted across restarts.
-	// A restart may miss a handful of lines around the moment it happens.
 
 	recv, err := recvFactory.CreateLogs(
 		ctx,
