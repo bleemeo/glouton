@@ -197,6 +197,58 @@ func TestResolveContainerCounters(t *testing.T) {
 	}
 }
 
+// TestHasContainerCounters is the regression test for a purely label-driven
+// setup (glouton.log_counter labels + known_counters, no static
+// container_counters entry, no container-based log.inputs entry): container
+// watching must still be enabled, otherwise resolveContainerCounters' label
+// lookup is never reached at all.
+func TestHasContainerCounters(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		Name     string
+		Cfg      config.Log
+		Expected bool
+	}{
+		{
+			Name:     "nothing-configured",
+			Cfg:      config.Log{},
+			Expected: false,
+		},
+		{
+			Name: "legacy-container-name-input",
+			Cfg: config.Log{Inputs: []config.LogInput{
+				{ContainerName: "redis", Counters: testCounterErrors},
+			}},
+			Expected: true,
+		},
+		{
+			Name: "static-container-counters-map",
+			Cfg: config.Log{Metrics: config.LogMetricsConfig{
+				ContainerCounters: map[string]string{"ctr": "grp"},
+			}},
+			Expected: true,
+		},
+		{
+			Name: "known-counters-only-label-driven",
+			Cfg: config.Log{Metrics: config.LogMetricsConfig{
+				KnownCounters: map[string][]config.LogCounter{"grp-label": testCounterErrors},
+			}},
+			Expected: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := hasContainerCounters(test.Cfg); got != test.Expected {
+				t.Errorf("Expected %v, got %v", test.Expected, got)
+			}
+		})
+	}
+}
+
 func TestResolveContainerLogPath(t *testing.T) {
 	t.Parallel()
 

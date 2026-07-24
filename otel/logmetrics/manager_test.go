@@ -416,3 +416,31 @@ func TestManagerPersistsOffsetAcrossRestart(t *testing.T) {
 		t.Errorf("Expected the restarted run to pick up exactly 1 new match via the persisted offset (rate %v), got %v", 1.0/windowSecs, got)
 	}
 }
+
+// TestManagerRegistersNetworkOnlyCounters is the regression test for
+// collectAllCounters forgetting cfg.Metrics.Network.Counters: a counter used
+// only by the network receiver (not by any input/receiver/known_counters
+// entry) must still be registered at startup, or its data points get silently
+// dropped by addSumDataPoints (registry lookup miss) and it never appears in
+// EmitMetrics/MetricNames, no matter what actually gets pushed to it.
+func TestManagerRegistersNetworkOnlyCounters(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.Log{
+		Metrics: config.LogMetricsConfig{
+			Network: config.LogMetricsNetworkReceiver{
+				Counters: []config.LogCounter{
+					{Metric: "network_only_count", Regex: `\[error\]`},
+				},
+			},
+		},
+	}
+
+	man := New(cfg, "/", &fakeRuntime{}, newMemoryState(), noExecRunner(t))
+
+	names := man.MetricNames()
+
+	if len(names) != 1 || names[0] != "network_only_count" {
+		t.Fatalf("Expected MetricNames to contain exactly [network_only_count], got %v", names)
+	}
+}

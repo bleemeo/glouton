@@ -143,13 +143,17 @@ func collectAllCounters(cfg config.Log) []config.LogCounter {
 		counters = append(counters, metricsKnownCounter...)
 	}
 
+	counters = append(counters, cfg.Metrics.Network.Counters...)
+
 	return counters
 }
 
 // Run starts static sources once, then every updateInterval starts/stops container
 // sources as containers appear/disappear (skipped if cfg has no container-based
 // rule), retries static sources that found no log file yet (e.g. not created at
-// startup), and saves persisted read offsets to the state cache.
+// startup), starts watching any new file matching an already-running static
+// source's include pattern (e.g. daily-rotated logs), and saves persisted read
+// offsets to the state cache.
 func (man *Manager) Run(ctx context.Context) error {
 	defer crashreport.ProcessPanic()
 
@@ -164,6 +168,7 @@ func (man *Manager) Run(ctx context.Context) error {
 		}
 
 		man.retryPendingStaticSources(ctx)
+		man.updateStaticSources(ctx)
 
 		man.saveState()
 
@@ -236,10 +241,7 @@ func (man *Manager) startStaticSource(ctx context.Context, include []string, cou
 }
 
 // retryPendingStaticSources retries static sources that previously found no
-// log file (e.g. not created yet at startup). Note: unlike a glob passed
-// directly to a long-lived filelogreceiver, a source that already started
-// with some matching files won't pick up additional new files matching the
-// same pattern later -- only entirely-pending sources are retried here.
+// log file at all yet (e.g. not created yet at startup).
 func (man *Manager) retryPendingStaticSources(ctx context.Context) {
 	man.l.Lock()
 	defer man.l.Unlock()
@@ -262,6 +264,20 @@ func (man *Manager) retryPendingStaticSources(ctx context.Context) {
 	}
 
 	man.pendingStatic = stillPending
+}
+
+// updateStaticSources starts a receiver for any file newly matching an
+// already-running static source's include pattern (e.g. a daily-rotated log),
+// without disturbing already-running receivers for that same source.
+func (man *Manager) updateStaticSources(ctx context.Context) {
+	man.l.Lock()
+	defer man.l.Unlock()
+
+	for _, src := range man.staticSources {
+		if err := src.update(ctx); err != nil {
+			logger.V(1).Printf("logmetrics: failed to update source: %v", err)
+		}
+	}
 }
 
 // staticSourceName is a stable persisted-offset identity for a static source, across restarts.

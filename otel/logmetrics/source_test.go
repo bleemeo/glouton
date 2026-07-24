@@ -20,6 +20,7 @@ import (
 	"context"
 	"maps"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -351,5 +352,79 @@ func TestSourceIsolatesInvalidCounter(t *testing.T) {
 
 	if _, found := got["app_broken_count"]; found {
 		t.Errorf("app_broken_count should never receive any data, got %d", got["app_broken_count"])
+	}
+}
+
+// TestSourceUpdatePicksUpNewFile is the regression test for a source that
+// resolves a glob against at least one file at creation time: unlike a
+// pattern handed directly to a single long-lived filelogreceiver (which polls
+// for new matches internally), this source needs update() to be called
+// (Manager.updateStaticSources does so every updateInterval) to notice a new
+// file -- e.g. a daily-rotated log -- created after the source started.
+func TestSourceUpdatePicksUpNewFile(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+
+	file1, err := os.Create(filepath.Join(tmpDir, "app-2026-07-24.log"))
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer file1.Close()
+
+	sink, totals := collectingSink()
+
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{filepath.Join(tmpDir, "*.log")}, false, false, []config.LogCounter{
+		{Metric: "rotated_errors_count", Regex: `\[error\]`},
+	}, sink, nil, noExecRunner(t), logsource.StatFile, "")
+	if err != nil {
+		t.Fatal("Failed to build source:", err)
+	}
+
+	defer src.stop(t.Context()) //nolint:errcheck
+
+	time.Sleep(500 * time.Millisecond)
+
+	if _, err := file1.WriteString("[error] from day one\n"); err != nil {
+		t.Fatal("Failed to write log line:", err)
+	}
+
+	if err := file1.Sync(); err != nil {
+		t.Fatal("Failed to sync log file:", err)
+	}
+
+	time.Sleep(time.Second)
+
+	if got := totals()["rotated_errors_count"]; got != 1 {
+		t.Fatalf("Expected 1 match from the original file, got %d", got)
+	}
+
+	// A new file appears matching the same glob (e.g. the next day's rotated log).
+	file2, err := os.Create(filepath.Join(tmpDir, "app-2026-07-25.log"))
+	if err != nil {
+		t.Fatal("Can't create second log file:", err)
+	}
+
+	defer file2.Close()
+
+	if err := src.update(t.Context()); err != nil {
+		t.Fatal("Failed to update source:", err)
+	}
+
+	time.Sleep(500 * time.Millisecond)
+
+	if _, err := file2.WriteString("[error] from day two\n"); err != nil {
+		t.Fatal("Failed to write log line:", err)
+	}
+
+	if err := file2.Sync(); err != nil {
+		t.Fatal("Failed to sync log file:", err)
+	}
+
+	time.Sleep(time.Second)
+
+	if got := totals()["rotated_errors_count"]; got != 2 {
+		t.Errorf("Expected 2 matches total after update() picked up the new file, got %d", got)
 	}
 }

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io/fs"
 	"strings"
+	"sync"
 
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/logger"
@@ -54,14 +55,29 @@ var (
 //
 // A source may resolve to several log files (e.g. include is a glob pattern),
 // each gets its own receiver (filelogreceiver, or execlogreceiver as a
-// sudo-tail fallback for a file this process can't read directly).
+// sudo-tail fallback for a file this process can't read directly). update()
+// can be called periodically to start receivers for newly-appeared files
+// matching the same include patterns, without disturbing already-running ones
+// -- unlike a glob handed directly to a single long-lived filelogreceiver,
+// this needs to be driven explicitly (see Manager.updateStaticSources).
 type source struct {
-	recvs []receiver.Logs
-	conns []otelconnector.Logs
+	telemetry     component.TelemetrySettings
+	include       []string
+	hasHostRoot   bool
+	operators     []operator.Config
+	commandRunner logsource.CommandRunner
+	statFile      logsource.StatFileFunc
+	name          string
+	recvConsumer  consumer.Logs
 
 	persister *logsource.PersistHost // nil if this source runs without persisted offsets
 
-	extIDs []component.ID // valid only if persister != nil, one per underlying log file
+	l        sync.Mutex
+	watching map[string]bool // log files already covered by a running receiver
+	recvs    []receiver.Logs
+	extIDs   []component.ID // valid only if persister != nil, one per underlying log file
+
+	conns []otelconnector.Logs
 }
 
 // newSource builds and starts a source. include is a list of glob patterns,
@@ -100,103 +116,155 @@ func newSource(
 		operators = append(operators, logsource.BuildContainerEnvelopeOperator())
 	}
 
-	logFiles := expandIncludePatterns(include, hasHostRoot)
-	if len(logFiles) == 0 {
+	src := &source{
+		telemetry:     telemetry,
+		include:       include,
+		hasHostRoot:   hasHostRoot,
+		operators:     operators,
+		commandRunner: commandRunner,
+		statFile:      statFile,
+		name:          name,
+		recvConsumer:  nextConsumer(conns),
+		persister:     persister,
+		watching:      make(map[string]bool),
+		conns:         conns,
+	}
+
+	if err := src.addNewFiles(ctx); err != nil {
+		shutdownConns(ctx, conns)
+
+		return nil, err
+	}
+
+	if len(src.watching) == 0 {
 		shutdownConns(ctx, conns)
 
 		return nil, errNoLogFileFound
 	}
 
+	return src, nil
+}
+
+// update starts a receiver for any file newly matching this source's include
+// patterns that isn't already being watched. Already-running receivers are
+// left untouched.
+func (s *source) update(ctx context.Context) error {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	return s.addNewFiles(ctx)
+}
+
+// addNewFiles must be called with s.l held.
+func (s *source) addNewFiles(ctx context.Context) error {
+	logFiles := expandIncludePatterns(s.include, s.hasHostRoot)
+
+	var newFiles []string
+
+	for _, f := range logFiles {
+		if !s.watching[f] {
+			newFiles = append(newFiles, f)
+		}
+	}
+
+	if len(newFiles) == 0 {
+		return nil
+	}
+
 	var (
-		host   component.Host
-		extIDs []component.ID
+		host      component.Host
+		newExtIDs []component.ID
 	)
 
 	makeStorageFn := func(string) *component.ID { return nil }
 
-	if persister != nil {
-		host = persister
+	if s.persister != nil {
+		host = s.persister
 		makeStorageFn = func(logFile string) *component.ID {
-			id := persister.NewPersistentExt(name + "/" + logFile)
-			extIDs = append(extIDs, id)
+			id := s.persister.NewPersistentExt(s.name + "/" + logFile)
+			newExtIDs = append(newExtIDs, id)
 
 			return &id
 		}
 	}
 
 	factories, readFiles, execFiles, _, err := logsource.SetupLogReceiverFactories(
-		logFiles,
+		newFiles,
 		"", // logFiles are already fully resolved (hostroot applied by the caller)
-		operators,
+		s.operators,
 		nil, // no cross-restart file-size tracking (yet) for log-to-metric sudo-tail sources
-		commandRunner,
+		s.commandRunner,
 		makeStorageFn,
-		statFile,
+		s.statFile,
 		nil,
 	)
 	if err != nil {
-		shutdownConns(ctx, conns)
-
-		if persister != nil {
-			persister.RemovePersistentExts(extIDs)
+		if s.persister != nil {
+			s.persister.RemovePersistentExts(newExtIDs)
 		}
 
-		return nil, fmt.Errorf("setting up receiver factories: %w", err)
+		return fmt.Errorf("setting up receiver factories: %w", err)
 	}
 
 	if len(execFiles) > 0 {
-		logger.V(2).Printf("logmetrics: source %q tailing %d file(s) directly, %d via sudo: %v", name, len(readFiles), len(execFiles), execFiles)
+		logger.V(2).Printf("logmetrics: source %q tailing %d file(s) directly, %d via sudo: %v", s.name, len(readFiles), len(execFiles), execFiles)
 	}
 
 	if len(factories) == 0 {
-		shutdownConns(ctx, conns)
-
-		if persister != nil {
-			persister.RemovePersistentExts(extIDs)
+		if s.persister != nil {
+			s.persister.RemovePersistentExts(newExtIDs)
 		}
 
-		return nil, errNoLogFileFound
+		return nil // nothing new actually resolved (e.g. every new file vanished/unreadable)
 	}
 
-	recvConsumer := nextConsumer(conns)
-	recvs := make([]receiver.Logs, 0, len(factories))
+	newRecvs := make([]receiver.Logs, 0, len(factories))
 
 	for factory, recvCfg := range factories {
 		recv, err := factory.CreateLogs(
 			ctx,
 			receiver.Settings{
 				ID:                component.NewIDWithName(factory.Type(), uuid.NewString()),
-				TelemetrySettings: telemetry,
+				TelemetrySettings: s.telemetry,
 			},
 			recvCfg,
-			recvConsumer,
+			s.recvConsumer,
 		)
 		if err != nil {
-			shutdownReceivers(ctx, recvs)
-			shutdownConns(ctx, conns)
+			shutdownReceivers(ctx, newRecvs)
 
-			if persister != nil {
-				persister.RemovePersistentExts(extIDs)
+			if s.persister != nil {
+				s.persister.RemovePersistentExts(newExtIDs)
 			}
 
-			return nil, fmt.Errorf("build receiver: %w", err)
+			return fmt.Errorf("build receiver: %w", err)
 		}
 
 		if err := recv.Start(ctx, host); err != nil {
-			shutdownReceivers(ctx, recvs)
-			shutdownConns(ctx, conns)
+			shutdownReceivers(ctx, newRecvs)
 
-			if persister != nil {
-				persister.RemovePersistentExts(extIDs)
+			if s.persister != nil {
+				s.persister.RemovePersistentExts(newExtIDs)
 			}
 
-			return nil, fmt.Errorf("start receiver: %w", err)
+			return fmt.Errorf("start receiver: %w", err)
 		}
 
-		recvs = append(recvs, recv)
+		newRecvs = append(newRecvs, recv)
 	}
 
-	return &source{recvs: recvs, conns: conns, persister: persister, extIDs: extIDs}, nil
+	s.recvs = append(s.recvs, newRecvs...)
+	s.extIDs = append(s.extIDs, newExtIDs...)
+
+	for _, f := range readFiles {
+		s.watching[f] = true
+	}
+
+	for _, f := range execFiles {
+		s.watching[f] = true
+	}
+
+	return nil
 }
 
 // expandIncludePatterns resolves glob patterns into actual file paths (already
@@ -375,14 +443,19 @@ func shutdownConns(ctx context.Context, conns []otelconnector.Logs) {
 }
 
 func (s *source) stop(ctx context.Context) error {
+	s.l.Lock()
+	recvs := s.recvs
+	extIDs := s.extIDs
+	s.l.Unlock()
+
 	var recvErr error
 
-	for _, recv := range s.recvs {
+	for _, recv := range recvs {
 		recvErr = errors.Join(recvErr, recv.Shutdown(ctx))
 	}
 
 	if s.persister != nil {
-		s.persister.RemovePersistentExts(s.extIDs)
+		s.persister.RemovePersistentExts(extIDs)
 	}
 
 	var connErr error

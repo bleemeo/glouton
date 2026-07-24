@@ -27,7 +27,6 @@ import (
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configgrpc"
-	"go.opentelemetry.io/collector/config/confighttp"
 	"go.opentelemetry.io/collector/config/confignet"
 	"go.opentelemetry.io/collector/config/configoptional"
 	"go.opentelemetry.io/collector/consumer"
@@ -61,23 +60,27 @@ func SetupOTLPNetworkReceiver(
 	}
 
 	if grpcCfg.Enable {
-		receiverTypedCfg.Protocols.GRPC = configoptional.Some(configgrpc.ServerConfig{
-			NetAddr: confignet.AddrConfig{Endpoint: net.JoinHostPort(grpcCfg.Address, strconv.Itoa(grpcCfg.Port))},
-		})
+		// Mutate the factory's default GRPC config in place (rather than building a
+		// ServerConfig from scratch) so defaults like ReadBufferSize survive.
+		grpc := receiverTypedCfg.Protocols.GRPC.GetOrInsertDefault()
+		grpc.NetAddr = confignet.AddrConfig{
+			Endpoint:  net.JoinHostPort(grpcCfg.Address, strconv.Itoa(grpcCfg.Port)),
+			Transport: confignet.TransportTypeTCP,
+		}
 	} else {
 		receiverTypedCfg.Protocols.GRPC = configoptional.None[configgrpc.ServerConfig]()
 	}
 
 	if httpCfg.Enable {
-		netaddr := confignet.NewDefaultAddrConfig()
-		netaddr.Endpoint = net.JoinHostPort(httpCfg.Address, strconv.Itoa(httpCfg.Port))
-		netaddr.Transport = "ip"
-
-		receiverTypedCfg.Protocols.HTTP = configoptional.Some(otlpreceiver.HTTPConfig{
-			ServerConfig: confighttp.ServerConfig{
-				NetAddr: netaddr,
-			},
-		})
+		// Same as above: mutate in place, so the factory's default TracesURLPath/
+		// MetricsURLPath/LogsURLPath survive (otlpreceiver panics on Start if the
+		// logs URL path is empty, and "ip" is not a valid net.Listen transport --
+		// both defaults must come from the factory, not be rebuilt from scratch).
+		http := receiverTypedCfg.Protocols.HTTP.GetOrInsertDefault()
+		http.ServerConfig.NetAddr = confignet.AddrConfig{
+			Endpoint:  net.JoinHostPort(httpCfg.Address, strconv.Itoa(httpCfg.Port)),
+			Transport: confignet.TransportTypeTCP,
+		}
 	} else {
 		receiverTypedCfg.Protocols.HTTP = configoptional.None[otlpreceiver.HTTPConfig]()
 	}
@@ -95,7 +98,9 @@ func SetupOTLPNetworkReceiver(
 		return nil, fmt.Errorf("failed to setup OTLP receiver: %w", err)
 	}
 
-	if err = otlpLogReceiver.Start(ctx, nil); err != nil {
+	// otlpreceiver's gRPC startup path calls host.GetExtensions() unconditionally,
+	// so a nil component.Host (a nil interface, not just a nil map) panics.
+	if err = otlpLogReceiver.Start(ctx, nopHost{}); err != nil {
 		if shutdownErr := otlpLogReceiver.Shutdown(ctx); shutdownErr != nil {
 			return nil, fmt.Errorf("failed to start OTLP receiver: %w (and failed to stop it too: %w)", err, shutdownErr)
 		}
@@ -104,4 +109,13 @@ func SetupOTLPNetworkReceiver(
 	}
 
 	return otlpLogReceiver, nil
+}
+
+// nopHost is a component.Host with no extensions, sufficient for a receiver
+// that doesn't need to look any up (this OTLP receiver doesn't use auth
+// extensions).
+type nopHost struct{}
+
+func (nopHost) GetExtensions() map[component.ID]component.Component {
+	return nil
 }

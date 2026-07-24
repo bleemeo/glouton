@@ -31,6 +31,11 @@ import (
 // It takes precedence over the static container_counters config map.
 const containerLogCounterLabel = "glouton.log_counter"
 
+// hasContainerCounters reports whether any container could possibly need
+// watching: via a legacy container-based log.inputs entry, the static
+// container_counters config map, or -- since any container can opt in purely
+// via the glouton.log_counter label -- the mere existence of a known_counters
+// group for a label to reference.
 func hasContainerCounters(cfg config.Log) bool {
 	for _, input := range cfg.Inputs {
 		if input.Path == "" && (input.ContainerName != "" || len(input.Selectors) > 0) {
@@ -38,7 +43,7 @@ func hasContainerCounters(cfg config.Log) bool {
 		}
 	}
 
-	return len(cfg.Metrics.ContainerCounters) > 0
+	return len(cfg.Metrics.ContainerCounters) > 0 || len(cfg.Metrics.KnownCounters) > 0
 }
 
 // resolveContainerCounters returns the concatenation of every counter source that matches ctr.

@@ -22,6 +22,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -58,7 +59,10 @@ func TestSourceExecLogFallback(t *testing.T) {
 		return false, true, func() (int64, error) { return 0, nil }
 	}
 
-	var tailArgs []string
+	var (
+		l        sync.Mutex
+		tailArgs []string
+	)
 
 	runner := dummyRunner{
 		run: func(_ context.Context, _ gloutonexec.Option, cmd string, args ...string) ([]byte, error) {
@@ -67,7 +71,9 @@ func TestSourceExecLogFallback(t *testing.T) {
 			return nil, nil
 		},
 		startWithPipes: func(_ context.Context, _ gloutonexec.Option, _ string, args ...string) (io.ReadCloser, io.ReadCloser, func() error, error) {
+			l.Lock()
 			tailArgs = args
+			l.Unlock()
 
 			return io.NopCloser(bytes.NewReader(nil)), io.NopCloser(bytes.NewReader(nil)), func() error { return nil }, nil
 		},
@@ -86,11 +92,16 @@ func TestSourceExecLogFallback(t *testing.T) {
 
 	time.Sleep(500 * time.Millisecond)
 
-	if len(tailArgs) == 0 {
+	l.Lock()
+
+	got := append([]string(nil), tailArgs...)
+	l.Unlock()
+
+	if len(got) == 0 {
 		t.Fatal("Expected a sudo tail command to have been started, but StartWithPipes was never called")
 	}
 
-	if got := tailArgs[len(tailArgs)-1]; got != file.Name() {
-		t.Errorf("Expected the tail command to target %q, got args %v", file.Name(), tailArgs)
+	if last := got[len(got)-1]; last != file.Name() {
+		t.Errorf("Expected the tail command to target %q, got args %v", file.Name(), got)
 	}
 }
