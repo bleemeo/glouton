@@ -35,12 +35,12 @@ const (
 )
 
 //nolint:gochecknoglobals
-var testFilterErrors = []config.LogFilter{{Metric: "errors_count", Regex: `\[error\]`}}
+var testCounterErrors = []config.LogCounter{{Metric: "errors_count", Regex: `\[error\]`}}
 
-// TestResolveContainerFilters ports the container-matching scenarios that used to be
+// TestResolveContainerCounters ports the container-matching scenarios that used to be
 // covered by fluentbit.Manager.inputLogPaths (fluentbit/config_test.go), since the
 // same container_name/container_selectors matching now lives here.
-func TestResolveContainerFilters(t *testing.T) {
+func TestResolveContainerCounters(t *testing.T) {
 	t.Parallel()
 
 	containers := map[string]facts.Container{
@@ -68,29 +68,37 @@ func TestResolveContainerFilters(t *testing.T) {
 		"new-style": facts.FakeContainer{
 			FakeContainerName: "new-style",
 		},
+		"label-selected": facts.FakeContainer{
+			FakeContainerName: "label-selected",
+			FakeLabels:        map[string]string{containerLogCounterLabel: "grp-label"},
+		},
+		"label-unknown-falls-back": facts.FakeContainer{
+			FakeContainerName: "label-unknown-falls-back",
+			FakeLabels:        map[string]string{containerLogCounterLabel: "nonexistent-group"},
+		},
 	}
 
 	tests := []struct {
-		Name            string
-		Cfg             config.Log
-		ContainerName   string
-		ExpectedFilters []config.LogFilter
+		Name             string
+		Cfg              config.Log
+		ContainerName    string
+		ExpectedCounters []config.LogCounter
 	}{
 		{
 			Name: "matches-by-container-name",
 			Cfg: config.Log{Inputs: []config.LogInput{
-				{ContainerName: testServicePostgres, Filters: testFilterErrors},
+				{ContainerName: testServicePostgres, Counters: testCounterErrors},
 			}},
-			ContainerName:   testServicePostgres,
-			ExpectedFilters: testFilterErrors,
+			ContainerName:    testServicePostgres,
+			ExpectedCounters: testCounterErrors,
 		},
 		{
 			Name: "matches-by-label-selector",
 			Cfg: config.Log{Inputs: []config.LogInput{
-				{Selectors: map[string]string{testLabelApp: testLabelRedis}, Filters: testFilterErrors},
+				{Selectors: map[string]string{testLabelApp: testLabelRedis}, Counters: testCounterErrors},
 			}},
-			ContainerName:   "redis-1",
-			ExpectedFilters: testFilterErrors,
+			ContainerName:    "redis-1",
+			ExpectedCounters: testCounterErrors,
 		},
 		{
 			Name: "matches-by-annotation-selector",
@@ -100,11 +108,11 @@ func TestResolveContainerFilters(t *testing.T) {
 						testLabelApp: testServiceUwsgi,
 						testLabelEnv: testLabelProd,
 					},
-					Filters: testFilterErrors,
+					Counters: testCounterErrors,
 				},
 			}},
-			ContainerName:   "uwsgi-1",
-			ExpectedFilters: testFilterErrors,
+			ContainerName:    "uwsgi-1",
+			ExpectedCounters: testCounterErrors,
 		},
 		{
 			Name: "container-name-and-selector-both-required",
@@ -112,36 +120,67 @@ func TestResolveContainerFilters(t *testing.T) {
 				{
 					ContainerName: testServicePostgres,
 					Selectors:     map[string]string{testLabelEnv: testLabelProd},
-					Filters:       testFilterErrors,
+					Counters:      testCounterErrors,
 				},
 			}},
-			ContainerName:   testServicePostgres,
-			ExpectedFilters: testFilterErrors,
+			ContainerName:    testServicePostgres,
+			ExpectedCounters: testCounterErrors,
 		},
 		{
 			Name: "no-match",
 			Cfg: config.Log{Inputs: []config.LogInput{
-				{ContainerName: testServicePostgres, Filters: testFilterErrors},
+				{ContainerName: testServicePostgres, Counters: testCounterErrors},
 			}},
-			ContainerName:   "unrelated",
-			ExpectedFilters: nil,
+			ContainerName:    "unrelated",
+			ExpectedCounters: nil,
 		},
 		{
 			Name: "path-based-inputs-are-ignored",
 			Cfg: config.Log{Inputs: []config.LogInput{
-				{Path: "/var/log/foo.log", Filters: testFilterErrors},
+				{Path: "/var/log/foo.log", Counters: testCounterErrors},
 			}},
-			ContainerName:   testServicePostgres,
-			ExpectedFilters: nil,
+			ContainerName:    testServicePostgres,
+			ExpectedCounters: nil,
 		},
 		{
-			Name: "new-style-container-filters-config",
+			Name: "new-style-container-counters-config",
 			Cfg: config.Log{Metrics: config.LogMetricsConfig{
-				KnownFilters:     map[string][]config.LogFilter{"grp": testFilterErrors},
-				ContainerFilters: map[string]string{"new-style": "grp"},
+				KnownCounters:     map[string][]config.LogCounter{"grp": testCounterErrors},
+				ContainerCounters: map[string]string{"new-style": "grp"},
 			}},
-			ContainerName:   "new-style",
-			ExpectedFilters: testFilterErrors,
+			ContainerName:    "new-style",
+			ExpectedCounters: testCounterErrors,
+		},
+		{
+			// Mirrors otel/logprocessing's glouton.log_filter/glouton.log_format
+			// container-label handling.
+			Name: "glouton-log-counter-label-selects-known-counters",
+			Cfg: config.Log{Metrics: config.LogMetricsConfig{
+				KnownCounters: map[string][]config.LogCounter{"grp-label": testCounterErrors},
+			}},
+			ContainerName:    "label-selected",
+			ExpectedCounters: testCounterErrors,
+		},
+		{
+			Name: "glouton-log-counter-label-takes-precedence-over-static-config-map",
+			Cfg: config.Log{Metrics: config.LogMetricsConfig{
+				KnownCounters: map[string][]config.LogCounter{
+					"grp-label":  testCounterErrors,
+					"grp-static": {{Metric: "other_count", Regex: "other"}},
+				},
+				ContainerCounters: map[string]string{"label-selected": "grp-static"},
+			}},
+			ContainerName:    "label-selected",
+			ExpectedCounters: testCounterErrors,
+		},
+		{
+			Name: "unknown-glouton-log-counter-label-falls-back-to-static-config-map",
+			Cfg: config.Log{Metrics: config.LogMetricsConfig{
+				KnownCounters:     map[string][]config.LogCounter{"grp-static": testCounterErrors},
+				ContainerCounters: map[string]string{"label-unknown-falls-back": "grp-static"},
+			}},
+			ContainerName:    "label-unknown-falls-back",
+			ExpectedCounters: testCounterErrors,
 		},
 	}
 
@@ -149,10 +188,10 @@ func TestResolveContainerFilters(t *testing.T) {
 		t.Run(test.Name, func(t *testing.T) {
 			t.Parallel()
 
-			got := resolveContainerFilters(test.Cfg, containers[test.ContainerName])
+			got := resolveContainerCounters(test.Cfg, containers[test.ContainerName])
 
-			if diff := cmp.Diff(test.ExpectedFilters, got); diff != "" {
-				t.Fatalf("Unexpected filters:\n%s", diff)
+			if diff := cmp.Diff(test.ExpectedCounters, got); diff != "" {
+				t.Fatalf("Unexpected counters:\n%s", diff)
 			}
 		})
 	}

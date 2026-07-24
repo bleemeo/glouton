@@ -32,12 +32,12 @@ import (
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/otel/logsource"
 	"github.com/bleemeo/glouton/utils/hostrootsymlink"
 
 	"github.com/google/uuid"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/helper"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/parser/container"
 	stanzaErrors "github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/stanzaerrors"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
 	"go.opentelemetry.io/collector/component"
@@ -67,11 +67,11 @@ var (
 
 type Container struct {
 	LogFilePath  string
-	ReceiverKind receiverKind
+	ReceiverKind logsource.ReceiverKind
 	Attributes   ContainerAttributes
 
 	logCounter      *atomic.Int64
-	throughputMeter *ringCounter
+	throughputMeter *logsource.RingCounter
 }
 
 type ContainerAttributes struct {
@@ -183,12 +183,9 @@ func (cr *containerReceiver) handleContainerLogs(
 }
 
 func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr Container, operators []operator.Config, filtersCfg *filterprocessor.Config) error {
-	containerOpCfg := container.NewConfig()
-	containerOpCfg.AddMetadataFromFilePath = false
-
-	ops := append([]operator.Config{{Builder: containerOpCfg}}, operators...)
+	ops := append([]operator.Config{logsource.BuildContainerEnvelopeOperator()}, operators...)
 	makeStorageFn := func(logFile string) *component.ID {
-		id := cr.pipeline.persister.newPersistentExt("container/" + ctr.Attributes.ID + metadataKeySeparator + logFile)
+		id := cr.pipeline.persister.NewPersistentExt("container/" + ctr.Attributes.ID + metadataKeySeparator + logFile)
 
 		cr.registeredExtensions[ctr.Attributes.ID] = append(cr.registeredExtensions[ctr.Attributes.ID], id)
 
@@ -206,14 +203,14 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 		realLogFile = hostrootsymlink.EvalSymlinks(cr.pipeline.hostroot, realLogFile)
 	}
 
-	factories, readFiles, execFiles, sizeFnByFile, err := setupLogReceiverFactories(
+	factories, readFiles, execFiles, sizeFnByFile, err := logsource.SetupLogReceiverFactories(
 		[]string{realLogFile},
 		cr.pipeline.hostroot,
 		ops,
 		cr.lastFileSizes,
 		cr.pipeline.commandRunner,
 		makeStorageFn,
-		statFileImpl,
+		logsource.StatFile,
 		ctr.Attributes.asMap(),
 	)
 	if err != nil {
@@ -226,9 +223,9 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 
 	switch {
 	case len(readFiles) == 1:
-		ctr.ReceiverKind = receiverFileLog
+		ctr.ReceiverKind = logsource.ReceiverFileLog
 	case len(execFiles) == 1:
-		ctr.ReceiverKind = receiverExecLog
+		ctr.ReceiverKind = logsource.ReceiverExecLog
 	default:
 		return errNoLogFound
 	}
@@ -242,7 +239,7 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 			TelemetrySettings: withoutDebugLogs(cr.pipeline.telemetry),
 		},
 		filtersCfg,
-		wrapWithInstrumentation(cr.logConsumer, ctr.logCounter, ctr.throughputMeter),
+		logsource.WrapWithInstrumentation(cr.logConsumer, ctr.logCounter, ctr.throughputMeter),
 	)
 	if err != nil {
 		return fmt.Errorf("setup log filter: %w", err)
@@ -328,7 +325,7 @@ func (cr *containerReceiver) stopWatchingForContainers(ctx context.Context, ids 
 			}
 		}
 
-		cr.pipeline.persister.removePersistentExts(cr.registeredExtensions[ctrID])
+		cr.pipeline.persister.RemovePersistentExts(cr.registeredExtensions[ctrID])
 
 		logFilePath := cr.containers[ctrID].LogFilePath
 
@@ -394,7 +391,7 @@ func (cr *containerReceiver) stop() {
 	wg.Wait()
 
 	for _, extIDs := range cr.registeredExtensions {
-		cr.pipeline.persister.removePersistentExts(extIDs)
+		cr.pipeline.persister.RemovePersistentExts(extIDs)
 	}
 }
 
@@ -430,6 +427,6 @@ func makeLogContainer(ctx context.Context, container facts.Container, logFilePat
 		LogFilePath:     logFilePath,
 		Attributes:      attributes,
 		logCounter:      new(atomic.Int64),
-		throughputMeter: newRingCounter(throughputMeterResolutionSecs),
+		throughputMeter: logsource.NewRingCounter(throughputMeterResolutionSecs),
 	}
 }

@@ -26,6 +26,7 @@ import (
 
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/otel/logsource"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
@@ -103,10 +104,10 @@ func TestSourceCountsRealFile(t *testing.T) {
 
 	sink, totals := collectingSink()
 
-	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, []config.LogFilter{
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, false, []config.LogCounter{
 		{Metric: "app_errors_count", Regex: `\[error\]`},
 		{Metric: "app_requests_count", Regex: "GET /"},
-	}, sink, nil, "")
+	}, sink, nil, noExecRunner(t), logsource.StatFile, "")
 	if err != nil {
 		t.Fatal("Failed to build source:", err)
 	}
@@ -163,9 +164,9 @@ func TestSourceUnwrapsContainerEnvelope(t *testing.T) {
 
 	// The container parser preserves the trailing newline embedded in Docker's JSON
 	// "log" field value, so the body is "[error] something broke\n", not "...broke".
-	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, true, []config.LogFilter{
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, true, false, []config.LogCounter{
 		{Metric: "container_errors_count", Regex: `^\[error\] something broke\n?$`},
-	}, sink, nil, "")
+	}, sink, nil, noExecRunner(t), logsource.StatFile, "")
 	if err != nil {
 		t.Fatal("Failed to build source:", err)
 	}
@@ -196,26 +197,33 @@ func TestSourceInvalidRegex(t *testing.T) {
 
 	sink, _ := collectingSink()
 
-	_, err := newSource(t.Context(), testTelemetrySettings(), []string{"/nonexistent"}, false, []config.LogFilter{
+	_, err := newSource(t.Context(), testTelemetrySettings(), []string{"/nonexistent"}, false, false, []config.LogCounter{
 		{Metric: "bad", Regex: "("},
-	}, sink, nil, "")
+	}, sink, nil, noExecRunner(t), logsource.StatFile, "")
 	if err == nil {
 		t.Fatal("Expected an error for an invalid regex")
 	}
 }
 
-// TestSourceFastPathSingleConnector locks in the optimization: when every filter
-// is valid, buildConnectors uses one combined connector instead of one per filter.
+// TestSourceFastPathSingleConnector locks in the optimization: when every counter
+// is valid, buildConnectors uses one combined connector instead of one per counter.
 func TestSourceFastPathSingleConnector(t *testing.T) {
 	t.Parallel()
 
+	logFile, err := os.CreateTemp(t.TempDir(), "fastpath-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFile.Close()
+
 	sink, _ := collectingSink()
 
-	src, err := newSource(t.Context(), testTelemetrySettings(), []string{"/nonexistent"}, false, []config.LogFilter{
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, false, []config.LogCounter{
 		{Metric: "a_count", Regex: "a"},
 		{Metric: "b_count", Regex: "b"},
 		{Metric: "c_count", Regex: "c"},
-	}, sink, nil, "")
+	}, sink, nil, noExecRunner(t), logsource.StatFile, "")
 	if err != nil {
 		t.Fatal("Failed to build source:", err)
 	}
@@ -228,9 +236,9 @@ func TestSourceFastPathSingleConnector(t *testing.T) {
 }
 
 // TestSourceDuplicateMetricNameFirstWins is the regression test for
-// buildConnectors' fast path silently letting a later filter with the same
+// buildConnectors' fast path silently letting a later counter with the same
 // Metric name overwrite an earlier one in the combined connector config:
-// only the first-defined filter for a given metric name must be honored.
+// only the first-defined counter for a given metric name must be honored.
 func TestSourceDuplicateMetricNameFirstWins(t *testing.T) {
 	t.Parallel()
 
@@ -243,10 +251,10 @@ func TestSourceDuplicateMetricNameFirstWins(t *testing.T) {
 
 	sink, totals := collectingSink()
 
-	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, []config.LogFilter{
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, false, []config.LogCounter{
 		{Metric: "dup_count", Regex: "first"},
 		{Metric: "dup_count", Regex: "second"},
-	}, sink, nil, "")
+	}, sink, nil, noExecRunner(t), logsource.StatFile, "")
 	if err != nil {
 		t.Fatal("Failed to build source:", err)
 	}
@@ -277,15 +285,15 @@ func TestSourceDuplicateMetricNameFirstWins(t *testing.T) {
 	time.Sleep(time.Second)
 
 	if got := totals()["dup_count"]; got != 1 {
-		t.Errorf("Expected only the first-defined filter's regex to count (1 match), got %d", got)
+		t.Errorf("Expected only the first-defined counter's regex to count (1 match), got %d", got)
 	}
 }
 
-// TestSourceIsolatesInvalidFilter is the regression test for the fallback path in
-// buildConnectors: when a source has both valid and invalid filters, the combined
-// fast path fails validation, so it falls back to one connector per valid filter --
+// TestSourceIsolatesInvalidCounter is the regression test for the fallback path in
+// buildConnectors: when a source has both valid and invalid counters, the combined
+// fast path fails validation, so it falls back to one connector per valid counter --
 // the invalid one is disabled but its siblings keep counting normally.
-func TestSourceIsolatesInvalidFilter(t *testing.T) {
+func TestSourceIsolatesInvalidCounter(t *testing.T) {
 	t.Parallel()
 
 	logFile, err := os.CreateTemp(t.TempDir(), "app-*.log")
@@ -297,19 +305,19 @@ func TestSourceIsolatesInvalidFilter(t *testing.T) {
 
 	sink, totals := collectingSink()
 
-	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, []config.LogFilter{
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, false, []config.LogCounter{
 		{Metric: "app_errors_count", Regex: `\[error\]`},
 		{Metric: "app_requests_count", Regex: "GET /"},
 		{Metric: "app_broken_count", Regex: "("},
-	}, sink, nil, "")
+	}, sink, nil, noExecRunner(t), logsource.StatFile, "")
 	if err != nil {
-		t.Fatal("Failed to build source despite one invalid filter:", err)
+		t.Fatal("Failed to build source despite one invalid counter:", err)
 	}
 
 	defer src.stop(t.Context()) //nolint:errcheck
 
 	if len(src.conns) != 2 {
-		t.Errorf("Expected exactly 2 connectors (valid filters only, isolated per-filter), got %d", len(src.conns))
+		t.Errorf("Expected exactly 2 connectors (valid counters only, isolated per-counter), got %d", len(src.conns))
 	}
 
 	time.Sleep(500 * time.Millisecond)

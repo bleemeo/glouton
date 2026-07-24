@@ -71,8 +71,8 @@ func mapKeys() []string {
 		"log.opentelemetry.known_log_filters",
 		"log.opentelemetry.container_filter",
 		"log.metrics.receivers",
-		"log.metrics.known_filters",
-		"log.metrics.container_filters",
+		"log.metrics.known_counters",
+		"log.metrics.container_counters",
 	}
 }
 
@@ -346,9 +346,22 @@ func DefaultConfig() Config { //nolint:maintidx
 				ContainerFilter: map[string]string{},
 			},
 			Metrics: LogMetricsConfig{
-				Receivers:        map[string]LogMetricsReceiver{},
-				KnownFilters:     map[string][]LogFilter{},
-				ContainerFilters: map[string]string{},
+				Receivers:         map[string]LogMetricsReceiver{},
+				KnownCounters:     map[string][]LogCounter{},
+				ContainerCounters: map[string]string{},
+				Network: LogMetricsNetworkReceiver{
+					GRPC: EnableListener{
+						Enable:  false,
+						Address: DefaultLocalhost,
+						Port:    4417,
+					},
+					HTTP: EnableListener{
+						Enable:  false,
+						Address: DefaultLocalhost,
+						Port:    4418,
+					},
+					Counters: []LogCounter{},
+				},
 			},
 		},
 		Logging: Logging{

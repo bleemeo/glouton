@@ -21,13 +21,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"maps"
 	"reflect"
 	"slices"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
@@ -35,15 +33,13 @@ import (
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/otel/logsource"
 	"github.com/bleemeo/glouton/types"
-	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/consumer"
-	"go.opentelemetry.io/collector/pdata/plog"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -51,6 +47,7 @@ import (
 const (
 	logFileSizesCacheKey    = "LogFileSizes"
 	logFileMetadataCacheKey = "LogFileMetadata"
+	persistStorageType      = "glouton_log_metadata_storage"
 )
 
 var (
@@ -91,28 +88,6 @@ func saveLastFileSizesToCache[FS fileSizer](state bleemeoTypes.State, sizers []F
 	err := state.Set(logFileSizesCacheKey, lastFileSizes)
 	if err != nil {
 		logger.V(1).Printf("Failed to save last log file sizes to cache: %v", err)
-	}
-}
-
-func getFileMetadataFromCache(state bleemeoTypes.State) (map[string]map[string][]byte, error) {
-	var metadataMap map[string]map[string][]byte
-
-	err := state.Get(logFileMetadataCacheKey, &metadataMap)
-	if err != nil {
-		return nil, err
-	}
-
-	if metadataMap == nil { // it may not exist in the state cache yet
-		metadataMap = make(map[string]map[string][]byte)
-	}
-
-	return metadataMap, nil
-}
-
-func saveFileMetadataToCache(state bleemeoTypes.State, metadata map[string]map[string][]byte) {
-	err := state.Set(logFileMetadataCacheKey, metadata)
-	if err != nil {
-		logger.V(1).Printf("Failed to save log file metadata to cache: %v", err)
 	}
 }
 
@@ -419,23 +394,6 @@ func buildOperators(rawOperators []config.OTELOperator) ([]operator.Config, erro
 	return operators, nil
 }
 
-func wrapWithInstrumentation(next consumer.Logs, counter *atomic.Int64, throughputMeter *ringCounter) consumer.Logs {
-	logCounter, err := consumer.NewLogs(func(ctx context.Context, ld plog.Logs) error {
-		count := ld.LogRecordCount()
-		counter.Add(int64(count))
-		throughputMeter.Add(count)
-
-		return next.ConsumeLogs(ctx, ld)
-	})
-	if err != nil {
-		logger.V(1).Printf("Failed to wrap component with log counters: %v", err)
-
-		return next // give up wrapping it and just use it as is
-	}
-
-	return logCounter
-}
-
 // diffBetween returns the elements from s1 that are absent from m2.
 func diffBetween[K comparable, V any](s1 []K, m2 map[K]V) []K {
 	var diff []K
@@ -452,10 +410,9 @@ loop1:
 	return diff
 }
 
-type CommandRunner interface {
-	Run(ctx context.Context, option gloutonexec.Option, name string, arg ...string) ([]byte, error)
-	StartWithPipes(ctx context.Context, option gloutonexec.Option, name string, arg ...string) (stdoutPipe io.ReadCloser, stderrPipe io.ReadCloser, wait func() error, err error)
-}
+// CommandRunner is otel/logsource.CommandRunner, aliased here so existing call
+// sites in this package don't need to spell out the otel/logsource import.
+type CommandRunner = logsource.CommandRunner
 
 type Facter interface {
 	Facts(ctx context.Context, maxAge time.Duration) (facts map[string]string, err error)
@@ -497,7 +454,7 @@ type containerDiagnosticInformation struct {
 	LogThroughputPerMinute int
 	LogFilePath            string
 	LogFileRealPath        string
-	ReceiverKind           receiverKind
+	ReceiverKind           logsource.ReceiverKind
 	Attributes             ContainerAttributes
 }
 

@@ -216,7 +216,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			Inputs: []LogInput{
 				{
 					Path: "/var/log/apache/access.log",
-					Filters: []LogFilter{
+					Counters: []LogCounter{
 						{
 							Metric: "apache_errors_count",
 							Regex:  "\\[error\\]",
@@ -225,7 +225,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				},
 				{
 					ContainerName: testRedis,
-					Filters: []LogFilter{
+					Counters: []LogCounter{
 						{
 							Metric: "redis_errors_count",
 							Regex:  testERROR,
@@ -234,7 +234,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Selectors: map[string]string{"app": "postgres"},
-					Filters: []LogFilter{
+					Counters: []LogCounter{
 						{
 							Metric: "postgres_errors_count",
 							Regex:  "error",

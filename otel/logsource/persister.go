@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package logprocessing
+package logsource
 
 import (
 	"bytes"
@@ -35,38 +35,91 @@ import (
 	"go.opentelemetry.io/collector/extension/xextension/storage"
 )
 
-const storageType = "glouton_log_metadata_storage"
-
 var errStorageClientNotFound = errors.New("storage client not found")
 
-type persistHost struct {
+// PersistConfig gives a PersistHost its own identity, so two independent
+// features (log shipping, log-to-metric) never collide in Glouton's shared
+// state cache or OTel component registry, while sharing this implementation.
+type PersistConfig struct {
+	// StorageType is this host's component.Type, must be unique across features.
+	StorageType string
+	// CacheKey is the bleemeoTypes.State key this host's data is stored under.
+	CacheKey string
+	// ArchivePath is the file created by WriteToArchive in a diagnostic bundle.
+	ArchivePath string
+	// FullSnapshot, if true, persists every receiver's metadata on every
+	// SaveToState call, even ones untouched since this PersistHost was built
+	// (so an idle-but-still-running source doesn't lose its offset just for
+	// not having produced anything yet this run). If false, only receivers
+	// touched via Set/Delete/Batch since this PersistHost was built are
+	// persisted, so a removed source's stale offset falls out of the cache
+	// instead of being kept forever.
+	FullSnapshot bool
+	// SaveThrottle, if non-zero, limits how often a single Set() call pushes
+	// its receiver's dirty data up into the host's in-memory map (a cheap
+	// operation, but proportional to that receiver's key count). Zero means
+	// push on every call.
+	SaveThrottle time.Duration
+}
+
+// PersistHost is a minimal component.Host (just GetExtensions()) backing every
+// source's filelogreceiver StorageID with a storageClient persisted into
+// Glouton's state cache, so read offsets survive a Glouton restart.
+type PersistHost struct {
+	cfg PersistConfig
+
 	l                   sync.Mutex
 	extensions          map[component.ID]component.Component
 	metadataPerReceiver map[string]map[string][]byte
 	updatedKeys         map[string]struct{}
 }
 
-func newPersistHost(state bleemeoTypes.State) (*persistHost, error) {
-	metadata, err := getFileMetadataFromCache(state)
+func NewPersistHost(state bleemeoTypes.State, cfg PersistConfig) (*PersistHost, error) {
+	metadata, err := getFileMetadataFromCache(state, cfg.CacheKey)
 	if err != nil {
 		return nil, err
 	}
 
-	return &persistHost{
+	return &PersistHost{
+		cfg:                 cfg,
 		extensions:          make(map[component.ID]component.Component),
 		metadataPerReceiver: metadata,
 		updatedKeys:         make(map[string]struct{}),
 	}, nil
 }
 
-func (h *persistHost) newPersistentExt(name string) component.ID {
+func getFileMetadataFromCache(state bleemeoTypes.State, cacheKey string) (map[string]map[string][]byte, error) {
+	var metadataMap map[string]map[string][]byte
+
+	err := state.Get(cacheKey, &metadataMap)
+	if err != nil {
+		return nil, err
+	}
+
+	if metadataMap == nil { // it may not exist in the state cache yet
+		metadataMap = make(map[string]map[string][]byte)
+	}
+
+	return metadataMap, nil
+}
+
+func saveFileMetadataToCache(state bleemeoTypes.State, cacheKey string, metadata map[string]map[string][]byte) {
+	if err := state.Set(cacheKey, metadata); err != nil {
+		logger.V(1).Printf("Failed to save log file metadata to cache (%s): %v", cacheKey, err)
+	}
+}
+
+// NewPersistentExt registers (or re-attaches to) the persisted storage for name
+// (a stable per-source identity: e.g. a joined path list for static sources, a
+// container ID for container sources) and returns its component.ID.
+func (h *PersistHost) NewPersistentExt(name string) component.ID {
 	h.l.Lock()
 	defer h.l.Unlock()
 
 	// We don't have to care about handling any error,
 	// since the type is known to be correct (otherwise TestPersistHost would have failed),
 	// and the name has no format restriction.
-	id := component.MustNewIDWithName(storageType, name)
+	id := component.MustNewIDWithName(h.cfg.StorageType, name)
 
 	receiverMetadata, found := h.metadataPerReceiver[name]
 	if !found {
@@ -90,7 +143,16 @@ func (h *persistHost) newPersistentExt(name string) component.ID {
 	return id
 }
 
-func (h *persistHost) removePersistentExts(ids []component.ID) {
+// RemovePersistentExt un-registers a single extension, previously returned by NewPersistentExt.
+func (h *PersistHost) RemovePersistentExt(id component.ID) {
+	h.l.Lock()
+	defer h.l.Unlock()
+
+	delete(h.extensions, id)
+}
+
+// RemovePersistentExts un-registers several extensions at once.
+func (h *PersistHost) RemovePersistentExts(ids []component.ID) {
 	h.l.Lock()
 	defer h.l.Unlock()
 
@@ -99,7 +161,7 @@ func (h *persistHost) removePersistentExts(ids []component.ID) {
 	}
 }
 
-func (h *persistHost) storeMetadata(recvName string, metadata map[string][]byte) {
+func (h *PersistHost) storeMetadata(recvName string, metadata map[string][]byte) {
 	h.l.Lock()
 	defer h.l.Unlock()
 
@@ -107,13 +169,24 @@ func (h *persistHost) storeMetadata(recvName string, metadata map[string][]byte)
 	h.updatedKeys[recvName] = struct{}{}
 }
 
-func (h *persistHost) saveToState(state bleemeoTypes.State) {
-	saveFileMetadataToCache(state, h.getAllMetadata())
+// SaveToState persists this host's current metadata into state, under CacheKey.
+func (h *PersistHost) SaveToState(state bleemeoTypes.State) {
+	saveFileMetadataToCache(state, h.cfg.CacheKey, h.getAllMetadata())
 }
 
-func (h *persistHost) getAllMetadata() map[string]map[string][]byte {
+func (h *PersistHost) getAllMetadata() map[string]map[string][]byte {
 	h.l.Lock()
 	defer h.l.Unlock()
+
+	if h.cfg.FullSnapshot {
+		out := make(map[string]map[string][]byte, len(h.metadataPerReceiver))
+
+		for key, val := range h.metadataPerReceiver {
+			out[key] = maps.Clone(val)
+		}
+
+		return out
+	}
 
 	updatedData := make(map[string]map[string][]byte, len(h.updatedKeys))
 
@@ -129,19 +202,21 @@ func (h *persistHost) getAllMetadata() map[string]map[string][]byte {
 	return updatedData
 }
 
-func (h *persistHost) GetExtensions() map[component.ID]component.Component {
+// GetExtensions implements component.Host.
+func (h *PersistHost) GetExtensions() map[component.ID]component.Component {
 	h.l.Lock()
 	defer h.l.Unlock()
 
 	return h.extensions
 }
 
-func (h *persistHost) writeToArchive(writer types.ArchiveWriter) error {
+// WriteToArchive writes the list of currently-registered extension IDs to ArchivePath in a diagnostic bundle.
+func (h *PersistHost) WriteToArchive(writer types.ArchiveWriter) error {
 	h.l.Lock()
 	extensionIDs := slices.Collect(maps.Keys(h.extensions))
 	h.l.Unlock()
 
-	file, err := writer.Create("log-processing/persister.json")
+	file, err := writer.Create(h.cfg.ArchivePath)
 	if err != nil {
 		return err
 	}
@@ -149,11 +224,7 @@ func (h *persistHost) writeToArchive(writer types.ArchiveWriter) error {
 	enc := json.NewEncoder(file)
 	enc.SetIndent("", "  ")
 
-	if err := enc.Encode(extensionIDs); err != nil {
-		return err
-	}
-
-	return nil
+	return enc.Encode(extensionIDs)
 }
 
 type persistExtension struct {
@@ -178,7 +249,7 @@ func (e persistExtension) GetClient(_ context.Context, kind component.Kind, _ co
 
 type storageClient struct {
 	name string
-	host *persistHost
+	host *PersistHost
 
 	l           sync.Mutex
 	dirty       map[string][]byte
@@ -219,7 +290,7 @@ func (s *storageClient) set(key string, value []byte) {
 	s.host.updatedKeys[s.name] = struct{}{}
 	s.host.l.Unlock()
 
-	if time.Since(s.lastSave) >= saveFileSizesToCachePeriod {
+	if s.host.cfg.SaveThrottle == 0 || time.Since(s.lastSave) >= s.host.cfg.SaveThrottle {
 		s.saveMetadata()
 	}
 }
@@ -272,6 +343,12 @@ func (s *storageClient) Close(_ context.Context) error {
 
 func (s *storageClient) saveMetadata() {
 	s.lastSave = time.Now()
+
+	if s.host.cfg.FullSnapshot {
+		s.host.storeMetadata(s.name, maps.Clone(s.dirty))
+
+		return
+	}
 
 	updatedData := make(map[string][]byte, len(s.updatedKeys))
 	// Only saving the values that have been updated during this run,

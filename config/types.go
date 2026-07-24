@@ -69,10 +69,13 @@ type LogInput struct {
 	Path          string            `yaml:"path"`
 	ContainerName string            `yaml:"container_name"`
 	Selectors     map[string]string `yaml:"container_selectors"`
-	Filters       []LogFilter       `yaml:"filters"`
+	Counters      []LogCounter      `yaml:"counters"`
 }
 
-type LogFilter struct {
+// LogCounter is a regex whose match rate is reported as the named metric --
+// unrelated to OpenTelemetry's OTELFilters/KnownLogFilters (which drop/keep
+// shipped log records): a LogCounter never discards anything, it only counts.
+type LogCounter struct {
 	Metric string `yaml:"metric"`
 	Regex  string `yaml:"regex"`
 }
@@ -83,15 +86,26 @@ type LogFilter struct {
 // unrelated other than both reading log sources, and log-to-metric must never imply
 // shipping logs anywhere.
 type LogMetricsConfig struct {
-	Receivers    map[string]LogMetricsReceiver `yaml:"receivers"`
-	KnownFilters map[string][]LogFilter        `yaml:"known_filters"`
-	// map: container name -> known_filters key to apply
-	ContainerFilters map[string]string `yaml:"container_filters"`
+	Receivers     map[string]LogMetricsReceiver `yaml:"receivers"`
+	KnownCounters map[string][]LogCounter       `yaml:"known_counters"`
+	// map: container name -> known_counters key to apply
+	ContainerCounters map[string]string         `yaml:"container_counters"`
+	Network           LogMetricsNetworkReceiver `yaml:"network"`
 }
 
 type LogMetricsReceiver struct {
-	Include []string    `yaml:"include"`
-	Filters []LogFilter `yaml:"filters"`
+	Include  []string     `yaml:"include"`
+	Counters []LogCounter `yaml:"counters"`
+}
+
+// LogMetricsNetworkReceiver lets log-to-metric count matches in logs pushed via
+// an external OTLP gRPC/HTTP client, mirroring OpenTelemetry's GRPC/HTTP
+// log-shipping input but on distinct default ports (see default.go) so enabling
+// both features' network receivers on the same host doesn't collide.
+type LogMetricsNetworkReceiver struct {
+	GRPC     EnableListener `yaml:"grpc"`
+	HTTP     EnableListener `yaml:"http"`
+	Counters []LogCounter   `yaml:"counters"`
 }
 
 // OTELOperator represents an OpenTelemetry operator as plain YAML,

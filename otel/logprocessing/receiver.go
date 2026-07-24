@@ -17,7 +17,6 @@
 package logprocessing
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -27,62 +26,29 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/logger"
-	"github.com/bleemeo/glouton/otel/execlogreceiver"
-	"github.com/bleemeo/glouton/utils/gloutonexec"
+	"github.com/bleemeo/glouton/otel/logsource"
 	"github.com/bleemeo/glouton/utils/hostrootsymlink"
-	"github.com/bleemeo/glouton/version"
 
 	"github.com/bmatcuk/doublestar/v4"
-	"github.com/go-viper/mapstructure/v2"
 	"github.com/google/uuid"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/attrs"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/helper"
 	stanzaErrors "github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/stanzaerrors"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/processor"
 	"go.opentelemetry.io/collector/receiver"
 )
 
-type (
-	receiverKind string
-	statFileType = func(logFile string, hostroot string, commandRunner CommandRunner) (ignore bool, needSudo bool, sizeFn func() (int64, error))
-)
-
-const (
-	receiverFileLog receiverKind = "filelogreceiver"
-	receiverExecLog receiverKind = "execlogreceiver"
-	tailFollowName               = "--follow=name"
-)
-
 var receiverNameRegex = regexp.MustCompile(`^(filelog/)?[^/]+$`)
 
 var errInvalidReceiverName = errors.New("invalid receiver name")
-
-// Since github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal/consumerretry is internal,
-// we recreate its config type and mapstructure.Decode() it into the receivers' options.
-var retryCfg = struct { //nolint:gochecknoglobals
-	Enabled         bool          `mapstructure:"enabled"`
-	InitialInterval time.Duration `mapstructure:"initial_interval"`
-	MaxInterval     time.Duration `mapstructure:"max_interval"`
-	MaxElapsedTime  time.Duration `mapstructure:"max_elapsed_time"`
-}{
-	Enabled:         true,
-	InitialInterval: 1 * time.Second,  // default value
-	MaxInterval:     30 * time.Second, // default value
-	MaxElapsedTime:  1 * time.Hour,
-}
 
 const metadataKeySeparator = "/"
 
@@ -94,18 +60,18 @@ type logReceiver struct {
 	operators       []operator.Config
 	filterCfg       *filterprocessor.Config
 	setupFilterDone bool
-	statFile        statFileType
+	statFile        logsource.StatFileFunc
 
 	// l should always be acquired after the pipeline lock
 	l            sync.Mutex
-	watching     map[string]receiverKind
+	watching     map[string]logsource.ReceiverKind
 	sizeFnByFile map[string]func() (int64, error)
 	// startedComponents is only used if the receiver is from a service
 	startedComponents    []component.Component
 	registeredExtensions []component.ID
 
 	logCounter      *atomic.Int64
-	throughputMeter *ringCounter
+	throughputMeter *logsource.RingCounter
 }
 
 func newLogReceiver(
@@ -114,7 +80,7 @@ func newLogReceiver(
 	isFromService bool,
 	logConsumer consumer.Logs,
 	knownLogFormats map[string][]config.OTELOperator,
-	statFile statFileType,
+	statFile logsource.StatFileFunc,
 ) (*logReceiver, error, error) {
 	if !receiverNameRegex.MatchString(name) {
 		return nil, nil, fmt.Errorf("%w: %q. It must be of the form 'my-receiver' or 'filelog/my-receiver'", errInvalidReceiverName, name) //nolint: nilnil
@@ -161,10 +127,10 @@ func newLogReceiver(
 		logConsumer:     logConsumer,
 		operators:       operators,
 		filterCfg:       filterCfg,
-		watching:        make(map[string]receiverKind, len(cfg.Include)),
+		watching:        make(map[string]logsource.ReceiverKind, len(cfg.Include)),
 		sizeFnByFile:    make(map[string]func() (int64, error), len(cfg.Include)),
 		logCounter:      new(atomic.Int64),
-		throughputMeter: newRingCounter(throughputMeterResolutionSecs),
+		throughputMeter: logsource.NewRingCounter(throughputMeterResolutionSecs),
 		statFile:        statFile,
 	}, warn, nil
 }
@@ -257,14 +223,14 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 	}
 
 	makeStorageFn := func(logFile string) *component.ID {
-		id := pipeline.persister.newPersistentExt(r.name + metadataKeySeparator + logFile)
+		id := pipeline.persister.NewPersistentExt(r.name + metadataKeySeparator + logFile)
 
 		r.registeredExtensions = append(r.registeredExtensions, id)
 
 		return &id
 	}
 
-	fileLogReceiverFactories, readFiles, execFiles, sizeFnByFile, err := setupLogReceiverFactories(
+	fileLogReceiverFactories, readFiles, execFiles, sizeFnByFile, err := logsource.SetupLogReceiverFactories(
 		slices.Collect(maps.Keys(logFiles)),
 		pipeline.hostroot,
 		r.operators,
@@ -327,11 +293,11 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 	}
 
 	for _, logFile := range readFiles {
-		r.watching[logFile] = receiverFileLog
+		r.watching[logFile] = logsource.ReceiverFileLog
 	}
 
 	for _, logFile := range execFiles {
-		r.watching[logFile] = receiverExecLog
+		r.watching[logFile] = logsource.ReceiverExecLog
 	}
 
 	maps.Insert(r.sizeFnByFile, maps.All(sizeFnByFile))
@@ -382,7 +348,7 @@ func (r *logReceiver) setupFilters(ctx context.Context, pipeline *pipelineContex
 			TelemetrySettings: withoutDebugLogs(pipeline.telemetry),
 		},
 		r.filterCfg,
-		wrapWithInstrumentation(r.logConsumer, r.logCounter, r.throughputMeter),
+		logsource.WrapWithInstrumentation(r.logConsumer, r.logCounter, r.throughputMeter),
 	)
 	if err != nil {
 		return fmt.Errorf("setup log filter: %w", err)
@@ -421,9 +387,9 @@ func (r *logReceiver) diagnosticInfo() receiverDiagnosticInformation {
 
 	for logFile, kind := range r.watching {
 		switch kind {
-		case receiverFileLog:
+		case logsource.ReceiverFileLog:
 			info.FileLogReceiverPaths = append(info.FileLogReceiverPaths, logFile)
-		case receiverExecLog:
+		case logsource.ReceiverExecLog:
 			info.ExecLogReceiverPaths = append(info.ExecLogReceiverPaths, logFile)
 		default:
 			logger.V(1).Printf("Unknown log receiver kind %q for file %q", kind, logFile)
@@ -451,222 +417,4 @@ FilesFromConfig:
 	}
 
 	return info
-}
-
-// setupLogReceiverFactories builds receiver factories for the given log files,
-// accordingly to whether the file is directly readable or not.
-// Files that don't exist at the time of the call to this function will be ignored.
-func setupLogReceiverFactories(
-	logFiles []string,
-	hostroot string,
-	operators []operator.Config,
-	lastFileSizes map[string]int64,
-	commandRunner CommandRunner,
-	makeStorageFn func(logFile string) *component.ID,
-	statFile statFileType,
-	extraAttributes map[string]helper.ExprStringConfig,
-) (
-	factories map[receiver.Factory]component.Config,
-	readableFiles, execFiles []string,
-	sizeFnByFile map[string]func() (int64, error),
-	err error,
-) {
-	sizeFnByFile = make(map[string]func() (int64, error), len(logFiles))
-
-	for _, logFile := range logFiles {
-		ignore, needSudo, sizeFn := statFile(logFile, hostroot, commandRunner)
-		if ignore {
-			continue
-		}
-
-		sizeFnByFile[logFile] = sizeFn
-
-		if needSudo {
-			execFiles = append(execFiles, logFile)
-		} else {
-			readableFiles = append(readableFiles, logFile)
-		}
-	}
-
-	factories = make(map[receiver.Factory]component.Config, len(readableFiles)+len(execFiles))
-
-	for _, logFile := range readableFiles {
-		factory := filelogreceiver.NewFactory()
-		fileCfg := factory.CreateDefaultConfig()
-
-		fileTypedCfg, ok := fileCfg.(*filelogreceiver.FileLogConfig)
-		if !ok {
-			return nil, nil, nil, nil, fmt.Errorf("%w for file log receiver: %T", errUnexpectedType, fileCfg)
-		}
-
-		fileTypedCfg.InputConfig.Include = []string{filepath.Join(hostroot, logFile)}
-		fileTypedCfg.InputConfig.IncludeFileName = true
-		fileTypedCfg.InputConfig.IncludeFilePath = false // set manually
-		fileTypedCfg.InputConfig.Attributes = map[string]helper.ExprStringConfig{
-			attrs.LogFilePath: helper.ExprStringConfig(logFile), // so as to avoid the hostroot prefix
-		}
-		fileTypedCfg.Operators = operators
-		fileTypedCfg.BaseConfig.StorageID = makeStorageFn(logFile)
-
-		if extraAttributes != nil {
-			maps.Insert(fileTypedCfg.InputConfig.Attributes, maps.All(extraAttributes))
-		}
-
-		_, err := sizeFnByFile[logFile]()
-		if err != nil {
-			logger.V(1).Printf("Error getting size of file %q (ignoring it): %v", logFile, err)
-
-			continue
-		}
-
-		// For filelogreceivers the offset is stored separately, so we don't really care about the size here.
-		// However, if this is the first time we've seen this file, we want to read starting at the end.
-		if _, ok := lastFileSizes[logFile]; !ok {
-			fileTypedCfg.InputConfig.StartAt = "end"
-		}
-
-		err = mapstructure.Decode(retryCfg, &fileTypedCfg.RetryOnFailure)
-		if err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("failed to define consumerretry config on file log receiver: %w", err)
-		}
-
-		factories[factory] = fileTypedCfg
-	}
-
-	for _, logFile := range execFiles {
-		factory := execlogreceiver.NewFactory()
-		execCfg := factory.CreateDefaultConfig()
-
-		execTypedCfg, ok := execCfg.(*execlogreceiver.ExecLogConfig)
-		if !ok {
-			return nil, nil, nil, nil, fmt.Errorf("%w for exec log receiver: %T", errUnexpectedType, execCfg)
-		}
-
-		size, err := sizeFnByFile[logFile]()
-		if err != nil {
-			logger.V(1).Printf("Error getting size of file %q (ignoring it): %v", logFile, err)
-
-			continue
-		}
-
-		tailArgs := []string{"tail", tailFollowName}
-
-		if lastSize, ok := lastFileSizes[logFile]; ok {
-			if lastSize > size { // the file has been truncated since the last time
-				tailArgs = append(tailArgs, "--bytes=+0") // start at the beginning of the file
-			} else { // the file has at least the same size as the last time
-				tailArgs = append(tailArgs, fmt.Sprintf("--bytes=+%d", lastSize)) // start where we were the last time
-			}
-		} else { // the file has never been seen before
-			tailArgs = append(tailArgs, "--bytes=0") // start at the end of the file
-		}
-
-		execTypedCfg.InputConfig.Argv = append(tailArgs, filepath.Join(hostroot, logFile)) //nolint: gocritic
-		execTypedCfg.InputConfig.CommandRunner = commandRunner
-		execTypedCfg.InputConfig.RunAsRoot = true
-		execTypedCfg.InputConfig.Attributes = map[string]helper.ExprStringConfig{
-			attrs.LogFileName: helper.ExprStringConfig(filepath.Base(logFile)),
-			attrs.LogFilePath: helper.ExprStringConfig(logFile),
-		}
-		execTypedCfg.Operators = operators
-
-		if extraAttributes != nil {
-			maps.Insert(execTypedCfg.InputConfig.Attributes, maps.All(extraAttributes))
-		}
-
-		err = mapstructure.Decode(retryCfg, &execTypedCfg.RetryOnFailure)
-		if err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("failed to define consumerretry config on exec log receiver: %w", err)
-		}
-
-		factories[factory] = execTypedCfg
-	}
-
-	return factories, readableFiles, execFiles, sizeFnByFile, nil
-}
-
-func statFileImpl(logFile, hostroot string, commandRunner CommandRunner) (ignore, needSudo bool, sizeFn func() (int64, error)) {
-	logFilePath := filepath.Join(hostroot, logFile)
-
-	f, err := os.OpenFile(logFilePath, os.O_RDONLY, 0) // the mode perm isn't needed for read
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return true, false, nil
-		}
-
-		if !errors.Is(err, fs.ErrPermission) {
-			logger.V(1).Printf("Failed to open log file %q (ignoring it): %v", logFile, err)
-
-			return true, false, nil
-		}
-
-		if version.IsWindows() {
-			logger.V(1).Printf("Can't open protected log file on Windows, ignoring %q.", logFile)
-
-			return true, false, nil
-		}
-
-		if _, err = sudoStatFile(logFilePath, commandRunner); err != nil {
-			logger.V(1).Printf("Can't `sudo stat` log file %q (ignoring it): %v", logFile, err)
-
-			return true, false, nil
-		}
-
-		needSudo = true
-		sizeFn = func() (int64, error) {
-			statOutput, err := sudoStatFile(logFilePath, commandRunner)
-			if err != nil {
-				return 0, err
-			}
-
-			size, err := strconv.ParseInt(string(statOutput), 10, 64)
-			if err != nil {
-				return 0, fmt.Errorf("unexpected stat output %q: %w", statOutput, err)
-			}
-
-			return size, nil
-		}
-	} else {
-		err = f.Close()
-		if err != nil {
-			logger.V(1).Printf("Failed to close log file %q: %v", logFile, err)
-		}
-
-		needSudo = false
-		sizeFn = func() (int64, error) {
-			stat, err := os.Stat(logFilePath)
-			if err != nil {
-				return 0, err
-			}
-
-			return stat.Size(), nil
-		}
-	}
-
-	return false, needSudo, sizeFn
-}
-
-// sudoStatFile executes a `sudo stat --printf=%s` on the given file and returns its (trimmed) output.
-func sudoStatFile(logFile string, commandRunner CommandRunner) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	runOpt := gloutonexec.Option{
-		RunAsRoot:      true,
-		CombinedOutput: true,
-	}
-
-	out, err := commandRunner.Run(ctx, runOpt, "stat", "--printf=%s", logFile)
-	trimmedOutput := bytes.TrimSpace(out)
-
-	if err != nil {
-		strOut := string(trimmedOutput)
-		if strOut != "" {
-			strOut = ": " + strOut
-		}
-
-		return nil, fmt.Errorf("%w%s", err, strOut)
-	}
-
-	return trimmedOutput, nil
 }

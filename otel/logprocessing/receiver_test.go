@@ -29,13 +29,12 @@ import (
 
 	"github.com/bleemeo/glouton/agent/state"
 	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/otel/logsource"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
 	"github.com/bleemeo/glouton/version"
 
-	"github.com/go-viper/mapstructure/v2"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/adapter"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/attrs"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
@@ -171,7 +170,7 @@ func fakeFacter() Facter {
 }
 
 // mustNewPersistHost is a shorthand to instantiate both a state and a persist host.
-func mustNewPersistHost(t *testing.T) *persistHost {
+func mustNewPersistHost(t *testing.T) *logsource.PersistHost {
 	t.Helper()
 
 	st, err := state.LoadReadOnly("not", "used")
@@ -179,7 +178,12 @@ func mustNewPersistHost(t *testing.T) *persistHost {
 		t.Fatal("Can't instantiate state:", err)
 	}
 
-	host, err := newPersistHost(st)
+	host, err := logsource.NewPersistHost(st, logsource.PersistConfig{
+		StorageType:  persistStorageType,
+		CacheKey:     logFileMetadataCacheKey,
+		ArchivePath:  "log-processing/persister.json",
+		SaveThrottle: saveFileSizesToCachePeriod,
+	})
 	if err != nil {
 		t.Fatal("Can't instantiate persist host:", err)
 	}
@@ -274,7 +278,7 @@ func TestFileLogReceiver(t *testing.T) {
 		buf: make([]plog.Logs, 0, 2), // we plan to write 2 log lines (in fact 4, but half of them will be filtered)
 	}
 
-	recv, warn, err := newLogReceiver("filelog/recv", cfg, false, makeBufferConsumer(t, &logBuf), knownLogFormats, statFileImpl)
+	recv, warn, err := newLogReceiver("filelog/recv", cfg, false, makeBufferConsumer(t, &logBuf), knownLogFormats, logsource.StatFile)
 	if err != nil {
 		t.Fatal("Failed to initialize log receiver:", err)
 	}
@@ -431,7 +435,7 @@ func TestFileLogReceiverWithHostroot(t *testing.T) {
 		buf: make([]plog.Logs, 0, 1), // we plan to write 1 log line
 	}
 
-	recv, warn, err := newLogReceiver("recv-from-container", cfg, false, makeBufferConsumer(t, &logBuf), map[string][]config.OTELOperator{}, statFileImpl)
+	recv, warn, err := newLogReceiver("recv-from-container", cfg, false, makeBufferConsumer(t, &logBuf), map[string][]config.OTELOperator{}, logsource.StatFile)
 	if err != nil {
 		t.Fatal("Failed to initialize log receiver:", err)
 	}
@@ -656,33 +660,5 @@ func TestExecLogReceiver(t *testing.T) {
 				t.Fatalf("Starting command should have been called once, but has been %d times.", startCmdCallsCount)
 			}
 		})
-	}
-}
-
-func TestRetryConfigIsUpToDate(t *testing.T) {
-	consumerretryConfig := adapter.BaseConfig{}.RetryOnFailure
-
-	err := mapstructure.Decode(retryCfg, &consumerretryConfig)
-	if err != nil {
-		t.Fatal("Failed to define consumerretry config:", err)
-	}
-
-	// Converting both consumerretryConfig and retryCfg to maps,
-	// so we can compare them easily.
-
-	var consumerretryCfgMap, retryCfgMap map[string]any
-
-	err = mapstructure.Decode(consumerretryConfig, &consumerretryCfgMap)
-	if err != nil {
-		t.Fatal("Failed to convert consumerretry config to a map:", err)
-	}
-
-	err = mapstructure.Decode(retryCfg, &retryCfgMap)
-	if err != nil {
-		t.Fatal("Failed to convert retry config to a map:", err)
-	}
-
-	if diff := cmp.Diff(retryCfgMap, consumerretryCfgMap); diff != "" {
-		t.Fatalf("Unexpected consumerretry config (-want, +got):\n%s", diff)
 	}
 }

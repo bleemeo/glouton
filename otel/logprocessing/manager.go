@@ -32,6 +32,7 @@ import (
 	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/otel/logsource"
 	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/uuid"
@@ -53,7 +54,7 @@ type Manager struct {
 	state                      bleemeoTypes.State
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability
 
-	persister     *persistHost
+	persister     *logsource.PersistHost
 	pipeline      *pipelineContext
 	containerRecv *containerReceiver
 
@@ -85,7 +86,12 @@ func New(
 		return nil, fmt.Errorf("can't expand known log formats: %w", err)
 	}
 
-	persister, err := newPersistHost(state)
+	persister, err := logsource.NewPersistHost(state, logsource.PersistConfig{
+		StorageType:  persistStorageType,
+		CacheKey:     logFileMetadataCacheKey,
+		ArchivePath:  "log-processing/persister.json",
+		SaveThrottle: saveFileSizesToCachePeriod,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("can't create persist host: %w", err)
 	}
@@ -164,7 +170,7 @@ ctxLoop:
 			man.pipeline.l.Unlock()
 
 			saveLastFileSizesToCache(man.state, fileSizers)
-			man.persister.saveToState(man.state)
+			man.persister.SaveToState(man.state)
 		}
 	}
 
@@ -174,7 +180,7 @@ ctxLoop:
 	defer man.pipeline.l.Unlock()
 
 	for _, receivers := range man.serviceReceivers {
-		stopReceivers(receivers, man.persister.removePersistentExts)
+		stopReceivers(receivers, man.persister.RemovePersistentExts)
 	}
 
 	man.containerRecv.stop()
@@ -182,7 +188,7 @@ ctxLoop:
 	man.pipeline.shutdownAll()
 
 	saveLastFileSizesToCache(man.state, mergeLastFileSizes(man.pipeline.receivers, man.containerRecv))
-	man.persister.saveToState(man.state)
+	man.persister.SaveToState(man.state)
 }
 
 func (man *Manager) updateServiceReceivers(ctx context.Context) error {
@@ -473,7 +479,7 @@ func (man *Manager) setupProcessingForSource(ctx context.Context, logSource logS
 			Filters:   logSource.filters,
 		}
 
-		recv, warn, err := newLogReceiver(recvName, recvConfig, true, man.pipeline.getInput(), nil, statFileImpl)
+		recv, warn, err := newLogReceiver(recvName, recvConfig, true, man.pipeline.getInput(), nil, logsource.StatFile)
 		if err != nil {
 			return err
 		}
@@ -526,7 +532,7 @@ func (man *Manager) removeOldSources(ctx context.Context, services []discovery.S
 
 		receivers, found := man.serviceReceivers[service]
 		if found {
-			stopReceivers(receivers, man.persister.removePersistentExts)
+			stopReceivers(receivers, man.persister.RemovePersistentExts)
 			delete(man.serviceReceivers, service)
 		}
 
@@ -638,7 +644,7 @@ func (man *Manager) DiagnosticArchive(_ context.Context, writer types.ArchiveWri
 		return err
 	}
 
-	if err := man.persister.writeToArchive(writer); err != nil {
+	if err := man.persister.WriteToArchive(writer); err != nil {
 		return err
 	}
 

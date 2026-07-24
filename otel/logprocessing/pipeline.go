@@ -20,8 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -30,15 +28,12 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/otel/logsource"
 	"github.com/bleemeo/glouton/types"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver"
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/config/configgrpc"
-	"go.opentelemetry.io/collector/config/confighttp"
-	"go.opentelemetry.io/collector/config/confignet"
-	"go.opentelemetry.io/collector/config/configoptional"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
@@ -48,7 +43,6 @@ import (
 	"go.opentelemetry.io/collector/processor/batchprocessor"
 	"go.opentelemetry.io/collector/processor/processorhelper"
 	"go.opentelemetry.io/collector/receiver"
-	"go.opentelemetry.io/collector/receiver/otlpreceiver"
 	noopM "go.opentelemetry.io/otel/metric/noop"
 	"go.opentelemetry.io/otel/trace/noop"
 )
@@ -67,7 +61,7 @@ type pipelineContext struct {
 	lastFileSizes map[string]int64
 	telemetry     component.TelemetrySettings
 	commandRunner CommandRunner
-	persister     *persistHost
+	persister     *logsource.PersistHost
 
 	l sync.Mutex
 	// startedComponents represents all the components that must be shut down at the end of the context's lifetime.
@@ -77,13 +71,13 @@ type pipelineContext struct {
 	inputConsumer consumer.Logs
 
 	otlpRecvCounter         *atomic.Int64
-	otlpRecvThroughputMeter *ringCounter
+	otlpRecvThroughputMeter *logsource.RingCounter
 
 	journaldCounter         *atomic.Int64
-	journaldThroughputMeter *ringCounter
+	journaldThroughputMeter *logsource.RingCounter
 
 	logProcessedCount  atomic.Int64
-	logThroughputMeter *ringCounter
+	logThroughputMeter *logsource.RingCounter
 }
 
 type pipelineOptions struct {
@@ -99,7 +93,7 @@ func makePipeline(
 	facter Facter,
 	pushLogs func(context.Context, []byte) error,
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability,
-	persister *persistHost,
+	persister *logsource.PersistHost,
 	addWarnings func(...error),
 	knownLogFormats map[string][]config.OTELOperator,
 	lastFileSizes map[string]int64,
@@ -123,7 +117,7 @@ func makePipeline(
 		persister:          persister,
 		startedComponents:  make([]component.Component, 0, 3), // 3 should be the minimum number of components
 		receivers:          make([]*logReceiver, 0, len(cfg.Receivers)),
-		logThroughputMeter: newRingCounter(throughputMeterResolutionSecs),
+		logThroughputMeter: logsource.NewRingCounter(throughputMeterResolutionSecs),
 	}
 
 	err := pipeline.init(ctx, cfg, facter, pushLogs, opts, streamAvailabilityStatusFn, addWarnings, knownLogFormats)
@@ -347,58 +341,19 @@ func (p *pipelineContext) setupNetworkReceiver(
 	ctx context.Context,
 	cfg config.OpenTelemetry,
 ) error {
-	factoryReceiver := otlpreceiver.NewFactory()
-	receiverCfg := factoryReceiver.CreateDefaultConfig()
-
-	receiverTypedCfg, ok := receiverCfg.(*otlpreceiver.Config)
-	if !ok {
-		return fmt.Errorf("%w for receiver default config: %T", errUnexpectedConfig, receiverCfg)
-	}
-
-	if cfg.GRPC.Enable {
-		receiverTypedCfg.Protocols.GRPC = configoptional.Some(configgrpc.ServerConfig{
-			NetAddr: confignet.AddrConfig{Endpoint: net.JoinHostPort(cfg.GRPC.Address, strconv.Itoa(cfg.GRPC.Port))},
-		})
-	} else {
-		receiverTypedCfg.Protocols.GRPC = configoptional.None[configgrpc.ServerConfig]()
-	}
-
-	if cfg.HTTP.Enable {
-		netaddr := confignet.NewDefaultAddrConfig()
-		netaddr.Endpoint = net.JoinHostPort(cfg.GRPC.Address, strconv.Itoa(cfg.GRPC.Port))
-		netaddr.Transport = "ip"
-
-		receiverTypedCfg.Protocols.HTTP = configoptional.Some(otlpreceiver.HTTPConfig{
-			ServerConfig: confighttp.ServerConfig{
-				NetAddr: netaddr,
-			},
-		})
-	} else {
-		receiverTypedCfg.Protocols.HTTP = configoptional.None[otlpreceiver.HTTPConfig]()
-	}
-
 	p.otlpRecvCounter = new(atomic.Int64)
-	p.otlpRecvThroughputMeter = newRingCounter(throughputMeterResolutionSecs)
+	p.otlpRecvThroughputMeter = logsource.NewRingCounter(throughputMeterResolutionSecs)
 
-	otlpLogReceiver, err := factoryReceiver.CreateLogs(
+	otlpLogReceiver, err := logsource.SetupOTLPNetworkReceiver(
 		ctx,
-		receiver.Settings{
-			ID:                component.NewIDWithName(factoryReceiver.Type(), "otlp-receiver"),
-			TelemetrySettings: p.telemetry,
-		},
-		receiverTypedCfg,
-		wrapWithInstrumentation(p.inputConsumer, p.otlpRecvCounter, p.otlpRecvThroughputMeter),
+		p.telemetry,
+		cfg.GRPC,
+		cfg.HTTP,
+		logsource.WrapWithInstrumentation(p.inputConsumer, p.otlpRecvCounter, p.otlpRecvThroughputMeter),
+		"otlp-receiver",
 	)
 	if err != nil {
-		return fmt.Errorf("failed to setup OTLP receiver: %w", err)
-	}
-
-	if err = otlpLogReceiver.Start(ctx, nil); err != nil {
-		if err := otlpLogReceiver.Shutdown(ctx); err != nil {
-			logger.V(1).Printf("Unable to stop otlpLogReceiver: %s", err.Error())
-		}
-
-		return fmt.Errorf("failed to start OTLP receiver: %w", err)
+		return err
 	}
 
 	p.startedComponents = append(p.startedComponents, otlpLogReceiver)
@@ -438,7 +393,7 @@ func (p *pipelineContext) setupJournald(
 	receiverTypedCfg.Operators = referencedOps
 
 	p.journaldCounter = new(atomic.Int64)
-	p.journaldThroughputMeter = newRingCounter(throughputMeterResolutionSecs)
+	p.journaldThroughputMeter = logsource.NewRingCounter(throughputMeterResolutionSecs)
 
 	journaldReceiver, err := factoryReceiver.CreateLogs(
 		ctx,
@@ -447,7 +402,7 @@ func (p *pipelineContext) setupJournald(
 			TelemetrySettings: p.telemetry,
 		},
 		receiverTypedCfg,
-		wrapWithInstrumentation(p.inputConsumer, p.journaldCounter, p.journaldThroughputMeter),
+		logsource.WrapWithInstrumentation(p.inputConsumer, p.journaldCounter, p.journaldThroughputMeter),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to setup journald receiver: %w", err)
@@ -490,7 +445,7 @@ func (p *pipelineContext) setupSyslog(
 		Operators: append(operatorsForServiceName("syslog"), opsGroup2...),
 	}
 
-	recv, warn, err := newLogReceiver("syslog", recvConfig, true, p.getInput(), nil, statFileImpl)
+	recv, warn, err := newLogReceiver("syslog", recvConfig, true, p.getInput(), nil, logsource.StatFile)
 	if err != nil {
 		return fmt.Errorf("failed to start Syslog receiver: %w", err)
 	}
@@ -499,7 +454,7 @@ func (p *pipelineContext) setupSyslog(
 		logWarnings(errorf("A warning occurred while setting up log receiver for syslog: %w", warn))
 	}
 
-	recv2, warn, err := newLogReceiver("syslog-auth", recvConfig2, true, p.getInput(), nil, statFileImpl)
+	recv2, warn, err := newLogReceiver("syslog-auth", recvConfig2, true, p.getInput(), nil, logsource.StatFile)
 	if err != nil {
 		return fmt.Errorf("failed to start Syslog receiver: %w", err)
 	}
@@ -539,7 +494,7 @@ func (p *pipelineContext) setupAuditD(
 		Operators: append(operatorsForServiceName("auditd"), opsGroup...),
 	}
 
-	recv, warn, err := newLogReceiver("auditd", recvConfig, true, p.getInput(), nil, statFileImpl)
+	recv, warn, err := newLogReceiver("auditd", recvConfig, true, p.getInput(), nil, logsource.StatFile)
 	if err != nil {
 		return fmt.Errorf("failed to start AuditD receiver: %w", err)
 	}
@@ -565,7 +520,7 @@ func (p *pipelineContext) setupConfigReceivers(
 	knownLogFormats map[string][]config.OTELOperator,
 ) {
 	for name, rcvrCfg := range cfg.Receivers {
-		recv, warn, err := newLogReceiver(name, rcvrCfg, false, p.inputConsumer, knownLogFormats, statFileImpl)
+		recv, warn, err := newLogReceiver(name, rcvrCfg, false, p.inputConsumer, knownLogFormats, logsource.StatFile)
 		if err != nil {
 			addWarnings(errorf("Failed to setup log receiver %q (ignoring it): %w", name, err))
 

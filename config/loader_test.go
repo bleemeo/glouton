@@ -245,7 +245,7 @@ func TestLoader(t *testing.T) {
 				map[string]any{
 					"container_name":      "",
 					"container_selectors": map[string]any{"com.docker.compose.service": testCassandra},
-					"filters": []any{
+					"counters": []any{
 						map[string]any{
 							"metric": "cassandra_logs_count",
 							"regex":  ".*",

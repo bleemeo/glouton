@@ -1060,7 +1060,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	a.vSphereManager = vsphere.NewManager()
 
-	a.logMetricsManager = logmetrics.New(a.config.Log, a.hostRootPath, a.containerRuntime, a.state)
+	a.logMetricsManager = logmetrics.New(a.config.Log, a.hostRootPath, a.containerRuntime, a.state, a.commandRunner)
 	tasks = append(tasks, taskInfo{a.logMetricsManager.Run, "Log-to-metric manager"})
 
 	_, err = a.gathererRegistry.RegisterAppenderCallback(

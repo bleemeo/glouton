@@ -32,12 +32,12 @@ func TestRegistryResolve(t *testing.T) {
 
 	reg := newMetricsRegistry()
 
-	filters := []config.LogFilter{
+	logCounters := []config.LogCounter{
 		{Metric: "apache_errors_count", Regex: `\[error\]`},
 		{Metric: "apache_requests_count", Regex: "GET /"},
 	}
 
-	counters := reg.resolve(filters)
+	counters := reg.resolve(logCounters)
 
 	if len(counters) != 2 {
 		t.Fatalf("Expected 2 counters, got %d", len(counters))
@@ -46,7 +46,7 @@ func TestRegistryResolve(t *testing.T) {
 	// Resolving an already-registered metric name again must return the exact same
 	// counter, so that matches from multiple sources reporting under the same
 	// metric name are aggregated.
-	again := reg.resolve([]config.LogFilter{{Metric: "apache_errors_count", Regex: "unused"}})
+	again := reg.resolve([]config.LogCounter{{Metric: "apache_errors_count", Regex: "unused"}})
 
 	if again[0] != counters[0] {
 		t.Fatal("Expected resolve() to return the same *counter for an already-registered metric name")
@@ -66,7 +66,7 @@ func TestRegistryEmit(t *testing.T) {
 
 	reg := newMetricsRegistry()
 
-	counters := reg.resolve([]config.LogFilter{
+	counters := reg.resolve([]config.LogCounter{
 		{Metric: "apache_errors_count", Regex: `\[error\]`},
 	})
 
@@ -129,7 +129,7 @@ func TestMetricsSink(t *testing.T) {
 
 	reg := newMetricsRegistry()
 
-	counters := reg.resolve([]config.LogFilter{
+	counters := reg.resolve([]config.LogCounter{
 		{Metric: "apache_errors_count", Regex: `\[error\]`},
 		{Metric: "apache_requests_count", Regex: "GET /"},
 	})

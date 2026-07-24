@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/otel/logsource"
 	"github.com/bleemeo/glouton/types"
 
 	"github.com/prometheus/prometheus/model/labels"
@@ -40,7 +41,7 @@ const windowSecs = 60
 // metric over a sliding window (matching itself happens via OTTL).
 type counter struct {
 	metric  string
-	counter *ringCounter
+	counter *logsource.RingCounter
 	lbls    labels.Labels // precomputed once: never changes after creation, no need to rebuild it on every emit
 }
 
@@ -55,29 +56,29 @@ func newMetricsRegistry() *metricsRegistry {
 	return &metricsRegistry{counters: make(map[string]*counter)}
 }
 
-// resolve returns one counter per filter, creating it the first time its metric
-// name is seen; repeated names share the same counter.
-func (reg *metricsRegistry) resolve(filters []config.LogFilter) []*counter {
+// resolve returns one counter per logCounter, creating it the first time its
+// metric name is seen; repeated names share the same counter.
+func (reg *metricsRegistry) resolve(logCounters []config.LogCounter) []*counter {
 	reg.l.Lock()
 	defer reg.l.Unlock()
 
-	counters := make([]*counter, 0, len(filters))
+	resolved := make([]*counter, 0, len(logCounters))
 
-	for _, filter := range filters {
-		c, found := reg.counters[filter.Metric]
+	for _, lc := range logCounters {
+		c, found := reg.counters[lc.Metric]
 		if !found {
 			c = &counter{
-				metric:  filter.Metric,
-				counter: newRingCounter(windowSecs),
-				lbls:    labels.FromMap(map[string]string{types.LabelName: filter.Metric}),
+				metric:  lc.Metric,
+				counter: logsource.NewRingCounter(windowSecs),
+				lbls:    labels.FromMap(map[string]string{types.LabelName: lc.Metric}),
 			}
-			reg.counters[filter.Metric] = c
+			reg.counters[lc.Metric] = c
 		}
 
-		counters = append(counters, c)
+		resolved = append(resolved, c)
 	}
 
-	return counters
+	return resolved
 }
 
 // metricNames returns every registered metric name (fed into the metric

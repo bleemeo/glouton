@@ -14,14 +14,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package logprocessing
+package logsource
 
 import (
 	"sync"
 	"time"
 )
 
-// ringCounter is kind of a ring-buffer, but serves for storing
+// RingCounter is kind of a ring-buffer, but serves for storing
 // a count for each second of a sliding time window.
 // Its precision is hard-coded (1s), but its size is configurable.
 // When the Add method is called, the given delta is added
@@ -29,7 +29,7 @@ import (
 // The buckets can be represented as a ring, so when we want to increment
 // the counter for, say, the 61st second after the first call, we start
 // a new loop over the buckets and replace the content of the 1st one.
-type ringCounter struct {
+type RingCounter struct {
 	size         int
 	t0           int64
 	l            sync.Mutex
@@ -37,23 +37,23 @@ type ringCounter struct {
 	lastUpdateAt int64
 }
 
-// newRingCounter initialises a new "throughput meter".
+// NewRingCounter initialises a new "throughput meter".
 // Since its granularity is 1 second, the size must be given as seconds as well.
 // The size must be strictly positive, otherwise it panics.
 // The Total method will then return the sum of the data recorded in a sliding time window of this width.
-func newRingCounter(size int) *ringCounter { //nolint:unparam
+func NewRingCounter(size int) *RingCounter {
 	if size < 1 {
 		panic("ring counter size must be strictly positive")
 	}
 
-	return &ringCounter{
+	return &RingCounter{
 		size:    size,
 		buckets: make([]int, size),
 	}
 }
 
 // Add records the given delta for the current second.
-func (rc *ringCounter) Add(delta int) {
+func (rc *RingCounter) Add(delta int) {
 	// We want to insert the delta for the time when the method was called,
 	// so storing the time now rather than after acquiring the lock
 	// avoids distorting the measurement.
@@ -75,7 +75,7 @@ func (rc *ringCounter) Add(delta int) {
 }
 
 // Total returns the sum of all the data recorded during the last `size` seconds.
-func (rc *ringCounter) Total() int {
+func (rc *RingCounter) Total() int {
 	rc.l.Lock()
 	defer rc.l.Unlock()
 
@@ -96,7 +96,7 @@ func (rc *ringCounter) Total() int {
 	return total
 }
 
-func (rc *ringCounter) discardOutdatedValues(now int64) {
+func (rc *RingCounter) discardOutdatedValues(now int64) {
 	idx := int(now-rc.t0) % rc.size
 	lastIdx := int(rc.lastUpdateAt-rc.t0) % rc.size
 
@@ -105,11 +105,14 @@ func (rc *ringCounter) discardOutdatedValues(now int64) {
 	if int(now-rc.lastUpdateAt) >= rc.size {
 		rc.resetRange(0, rc.size-1)
 	} else if idx != lastIdx {
-		rc.resetRange(min(lastIdx+1, rc.size-1), idx)
+		// lastIdx+1 must wrap around to 0 rather than clamp to rc.size-1,
+		// otherwise the bucket that was just written (lastIdx) gets spuriously
+		// re-zeroed instead of only the newly-entered one.
+		rc.resetRange((lastIdx+1)%rc.size, idx)
 	}
 }
 
-func (rc *ringCounter) resetRange(from, to int) {
+func (rc *RingCounter) resetRange(from, to int) {
 	if from > to {
 		rc.resetRange(from, rc.size-1)
 		rc.resetRange(0, to)

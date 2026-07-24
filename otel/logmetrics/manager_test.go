@@ -19,6 +19,7 @@ package logmetrics
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"sync"
 	"testing"
@@ -29,7 +30,41 @@ import (
 	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
 	glmodel "github.com/bleemeo/glouton/prometheus/model"
 	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 )
+
+// dummyRunner is a logsource.CommandRunner test double whose behavior is
+// entirely defined by the given funcs.
+type dummyRunner struct {
+	run            func(ctx context.Context, option gloutonexec.Option, cmd string, args ...string) ([]byte, error)
+	startWithPipes func(ctx context.Context, option gloutonexec.Option, cmd string, args ...string) (stdoutPipe io.ReadCloser, stderrPipe io.ReadCloser, wait func() error, err error)
+}
+
+func (dr dummyRunner) Run(ctx context.Context, option gloutonexec.Option, cmd string, args ...string) ([]byte, error) {
+	return dr.run(ctx, option, cmd, args...)
+}
+
+func (dr dummyRunner) StartWithPipes(ctx context.Context, option gloutonexec.Option, cmd string, args ...string) (stdoutPipe io.ReadCloser, stderrPipe io.ReadCloser, wait func() error, err error) {
+	return dr.startWithPipes(ctx, option, cmd, args...)
+}
+
+// noExecRunner returns a CommandRunner that fails the given test if any command is executed.
+func noExecRunner(t *testing.T) dummyRunner {
+	t.Helper()
+
+	return dummyRunner{
+		run: func(_ context.Context, _ gloutonexec.Option, cmd string, args ...string) ([]byte, error) {
+			t.Errorf("No command should have been executed during this test, but: %s %s", cmd, args)
+
+			return nil, nil
+		},
+		startWithPipes: func(_ context.Context, _ gloutonexec.Option, cmd string, args ...string) (io.ReadCloser, io.ReadCloser, func() error, error) {
+			t.Errorf("No command should have been executed during this test, but: %s %s", cmd, args)
+
+			return nil, nil, nil, nil
+		},
+	}
+}
 
 // fakeRuntime implements crTypes.RuntimeInterface by embedding a nil interface and
 // overriding only Containers, the sole method the Manager under test calls. Calling
@@ -101,13 +136,13 @@ func TestManagerStaticSource(t *testing.T) {
 
 	cfg := config.Log{
 		Inputs: []config.LogInput{
-			{Path: logFile.Name(), Filters: []config.LogFilter{
+			{Path: logFile.Name(), Counters: []config.LogCounter{
 				{Metric: "app_errors_count", Regex: `\[error\]`},
 			}},
 		},
 	}
 
-	man := New(cfg, "/", &fakeRuntime{}, newMemoryState())
+	man := New(cfg, "/", &fakeRuntime{}, newMemoryState(), noExecRunner(t))
 
 	// Metric names must be known immediately, before any matching line was seen.
 	if names := man.MetricNames(); len(names) != 1 || names[0] != "app_errors_count" {
@@ -175,7 +210,7 @@ func TestManagerStaticSource(t *testing.T) {
 // log.inputs entry: a fake container whose log file is a real, Docker-JSON-wrapped
 // temp file, resolved and processed dynamically by the Manager's container polling
 // loop. This is the regression test for the original RabbitMQ bug: the log line is
-// wrapped exactly like a real Docker container log, and the filter only matches the
+// wrapped exactly like a real Docker container log, and the counter only matches the
 // unwrapped message, so it also verifies the "container" envelope operator runs
 // before OTTL matching.
 func TestManagerContainerSource(t *testing.T) {
@@ -197,13 +232,13 @@ func TestManagerContainerSource(t *testing.T) {
 	// "log" field value, so the body is "[error] something broke\n", not "...broke".
 	cfg := config.Log{
 		Inputs: []config.LogInput{
-			{ContainerName: ctr.ContainerName(), Filters: []config.LogFilter{
+			{ContainerName: ctr.ContainerName(), Counters: []config.LogCounter{
 				{Metric: "rabbitmq_errors", Regex: `^\[error\] something broke\n?$`},
 			}},
 		},
 	}
 
-	man := New(cfg, "/", &fakeRuntime{containers: []facts.Container{ctr}}, newMemoryState())
+	man := New(cfg, "/", &fakeRuntime{containers: []facts.Container{ctr}}, newMemoryState(), noExecRunner(t))
 
 	man.startStaticSources(t.Context())
 	man.updateContainerSources(t.Context())
@@ -251,12 +286,12 @@ func TestManagerContainerRemoved(t *testing.T) {
 
 	cfg := config.Log{
 		Inputs: []config.LogInput{
-			{ContainerName: ctr.ContainerName(), Filters: []config.LogFilter{{Metric: "app_errors", Regex: "ERROR"}}},
+			{ContainerName: ctr.ContainerName(), Counters: []config.LogCounter{{Metric: "app_errors", Regex: "ERROR"}}},
 		},
 	}
 
 	runtime := &fakeRuntime{containers: []facts.Container{ctr}}
-	man := New(cfg, "/", runtime, newMemoryState())
+	man := New(cfg, "/", runtime, newMemoryState(), noExecRunner(t))
 
 	man.updateContainerSources(t.Context())
 
@@ -297,7 +332,7 @@ func TestManagerPersistsOffsetAcrossRestart(t *testing.T) {
 
 	cfg := config.Log{
 		Inputs: []config.LogInput{
-			{Path: logFile.Name(), Filters: []config.LogFilter{
+			{Path: logFile.Name(), Counters: []config.LogCounter{
 				{Metric: "app_errors_count", Regex: `\[error\]`},
 			}},
 		},
@@ -307,7 +342,7 @@ func TestManagerPersistsOffsetAcrossRestart(t *testing.T) {
 
 	// First run: starts tailing an empty file, then "first" is written and read
 	// while it's actively running, so the offset saved on stop is past "first".
-	man1 := New(cfg, "/", &fakeRuntime{}, state)
+	man1 := New(cfg, "/", &fakeRuntime{}, state, noExecRunner(t))
 
 	ctx1, cancel1 := context.WithCancel(t.Context())
 	done1 := make(chan error, 1)
@@ -345,7 +380,7 @@ func TestManagerPersistsOffsetAcrossRestart(t *testing.T) {
 
 	// Second run, same persisted state: must pick up "second" via the offset saved
 	// by the previous run, even though it was written before this run even started.
-	man := New(cfg, "/", &fakeRuntime{}, state)
+	man := New(cfg, "/", &fakeRuntime{}, state, noExecRunner(t))
 
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)

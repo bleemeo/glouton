@@ -14,15 +14,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package logmetrics
+package logsource
 
 import "testing"
 
-// newTestRingCounter builds a ringCounter with its bucket-tracking fields set
+// newTestRingCounter builds a RingCounter with its bucket-tracking fields set
 // directly, so discardOutdatedValues can be driven with an explicit "now"
 // instead of depending on the wall clock.
-func newTestRingCounter(size int, t0, lastUpdateAt int64, buckets []int) *ringCounter { //nolint:unparam
-	return &ringCounter{size: size, t0: t0, lastUpdateAt: lastUpdateAt, buckets: buckets}
+func newTestRingCounter(size int, t0, lastUpdateAt int64, buckets []int) *RingCounter { //nolint:unparam
+	return &RingCounter{size: size, t0: t0, lastUpdateAt: lastUpdateAt, buckets: buckets}
 }
 
 func TestRingCounterDiscardSameSecond(t *testing.T) {
@@ -64,9 +64,10 @@ func TestRingCounterDiscardAdvanceNoWrap(t *testing.T) {
 }
 
 // TestRingCounterDiscardWraparound is the regression test for the ring
-// wraparound bug: when the current second's bucket index wraps from size-1
-// back to 0, the bucket at size-1 holds data written just one second earlier
-// and must survive -- only the newly-entered bucket 0 should be cleared.
+// wraparound bug (present in the pre-otel/logsource otel/logprocessing copy):
+// when the current second's bucket index wraps from size-1 back to 0, the
+// bucket at size-1 holds data written just one second earlier and must
+// survive -- only the newly-entered bucket 0 should be cleared.
 func TestRingCounterDiscardWraparound(t *testing.T) {
 	t.Parallel()
 
@@ -100,7 +101,7 @@ func TestRingCounterDiscardFullyStale(t *testing.T) {
 func TestRingCounterAddAndTotal(t *testing.T) {
 	t.Parallel()
 
-	rc := newRingCounter(60)
+	rc := NewRingCounter(60)
 
 	rc.Add(2)
 	rc.Add(3)

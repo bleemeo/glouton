@@ -30,6 +30,7 @@ import (
 	"github.com/bleemeo/glouton/agent/state"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/otel/logsource"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -129,7 +130,12 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 		t.Fatal("Can't instantiate state:", err)
 	}
 
-	persister, err := newPersistHost(st)
+	persister, err := logsource.NewPersistHost(st, logsource.PersistConfig{
+		StorageType:  persistStorageType,
+		CacheKey:     logFileMetadataCacheKey,
+		ArchivePath:  "log-processing/persister.json",
+		SaveThrottle: saveFileSizesToCachePeriod,
+	})
 	if err != nil {
 		t.Fatal("Can't instantiate persist host:", err)
 	}

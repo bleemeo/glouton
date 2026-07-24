@@ -21,22 +21,29 @@ import (
 
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/utils/hostrootsymlink"
 )
 
-func hasContainerFilters(cfg config.Log) bool {
+// containerLogCounterLabel lets a single container opt into a named
+// known_counters group via a Docker label/Kubernetes annotation, mirroring
+// otel/logprocessing's glouton.log_filter/glouton.log_format container labels.
+// It takes precedence over the static container_counters config map.
+const containerLogCounterLabel = "glouton.log_counter"
+
+func hasContainerCounters(cfg config.Log) bool {
 	for _, input := range cfg.Inputs {
 		if input.Path == "" && (input.ContainerName != "" || len(input.Selectors) > 0) {
 			return true
 		}
 	}
 
-	return len(cfg.Metrics.ContainerFilters) > 0
+	return len(cfg.Metrics.ContainerCounters) > 0
 }
 
-// resolveContainerFilters returns the concatenation of every filter source that matches ctr.
-func resolveContainerFilters(cfg config.Log, ctr facts.Container) []config.LogFilter {
-	var filters []config.LogFilter
+// resolveContainerCounters returns the concatenation of every counter source that matches ctr.
+func resolveContainerCounters(cfg config.Log, ctr facts.Container) []config.LogCounter {
+	var counters []config.LogCounter
 
 	for _, input := range cfg.Inputs {
 		if input.Path != "" {
@@ -49,15 +56,28 @@ func resolveContainerFilters(cfg config.Log, ctr facts.Container) []config.LogFi
 		matches := (matchName && matchSelectors) || (len(input.Selectors) == 0 && matchName) || (input.ContainerName == "" && matchSelectors)
 
 		if matches {
-			filters = append(filters, input.Filters...)
+			counters = append(counters, input.Counters...)
 		}
 	}
 
-	if knownName, found := cfg.Metrics.ContainerFilters[ctr.ContainerName()]; found {
-		filters = append(filters, cfg.Metrics.KnownFilters[knownName]...)
+	hasFromLabel := false
+
+	if knownName, found := facts.LabelsAndAnnotations(ctr)[containerLogCounterLabel]; found {
+		if known, ok := cfg.Metrics.KnownCounters[knownName]; ok {
+			counters = append(counters, known...)
+			hasFromLabel = true
+		} else {
+			logger.V(1).Printf("Container %s (%s) requires an unknown log counter: %q", ctr.ContainerName(), ctr.ID(), knownName)
+		}
 	}
 
-	return filters
+	if !hasFromLabel {
+		if knownName, found := cfg.Metrics.ContainerCounters[ctr.ContainerName()]; found {
+			counters = append(counters, cfg.Metrics.KnownCounters[knownName]...)
+		}
+	}
+
+	return counters
 }
 
 // containerMatchesSelectors returns true if the container's labels or annotations match the selectors.

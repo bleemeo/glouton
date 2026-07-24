@@ -14,12 +14,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package logprocessing
+package logsource
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
-	"log"
 	"sync"
 	"testing"
 
@@ -32,7 +32,63 @@ import (
 	"go.opentelemetry.io/collector/extension/xextension/storage"
 )
 
-func TestPersistHost(t *testing.T) { //nolint:maintidx
+const (
+	testStorageType = "test_storage"
+	testCacheKey    = "TestFileMetadata"
+)
+
+func touchedOnlyConfig() PersistConfig {
+	return PersistConfig{StorageType: testStorageType, CacheKey: testCacheKey}
+}
+
+func fullSnapshotConfig() PersistConfig {
+	return PersistConfig{StorageType: testStorageType, CacheKey: testCacheKey, FullSnapshot: true}
+}
+
+// memoryState is a real (JSON round-trip, not a no-op) bleemeoTypes.State fake.
+type memoryState struct {
+	l    sync.Mutex
+	data map[string][]byte
+}
+
+func newMemoryState() *memoryState {
+	return &memoryState{data: make(map[string][]byte)}
+}
+
+func (m *memoryState) Set(key string, object any) error {
+	b, err := json.Marshal(object)
+	if err != nil {
+		return err
+	}
+
+	m.l.Lock()
+	m.data[key] = b
+	m.l.Unlock()
+
+	return nil
+}
+
+func (m *memoryState) Get(key string, result any) error {
+	m.l.Lock()
+	b, found := m.data[key]
+	m.l.Unlock()
+
+	if !found {
+		return nil
+	}
+
+	return json.Unmarshal(b, result)
+}
+
+func (m *memoryState) GetByPrefix(string, any) (map[string]any, error) { return map[string]any{}, nil }
+func (m *memoryState) Delete(string) error                             { return nil }
+func (m *memoryState) BleemeoCredentials() (string, string)            { return "", "" }
+func (m *memoryState) SetBleemeoCredentials(string, string) error      { return nil }
+
+// TestPersistHostTouchedOnlyEvictsUntouchedReceivers pins otel/logprocessing's
+// current behavior: only receivers touched since the PersistHost was built are
+// persisted, so a removed source's stale offset falls out of the cache.
+func TestPersistHostTouchedOnlyEvictsUntouchedReceivers(t *testing.T) { //nolint:maintidx
 	t.Parallel()
 
 	const (
@@ -56,20 +112,19 @@ func TestPersistHost(t *testing.T) { //nolint:maintidx
 
 	// - - - First run: starting with no existing metadata - - -
 	{
-		host, err := newPersistHost(st)
+		host, err := NewPersistHost(st, touchedOnlyConfig())
 		if err != nil {
 			t.Fatal("Can't instantiate persist host:", err)
 		}
 
-		extID := host.newPersistentExt(ext1)
+		extID := host.NewPersistentExt(ext1)
 
 		client, err := adapter.GetStorageClient(ctx, host, &extID, compID)
 		if err != nil {
 			t.Fatal("Can't retrieve storage client:", err)
 		}
 
-		err = client.Set(ctx, key1, []byte(val1))
-		if err != nil {
+		if err := client.Set(ctx, key1, []byte(val1)); err != nil {
 			t.Fatal("Can't set value:", err)
 		}
 
@@ -82,13 +137,11 @@ func TestPersistHost(t *testing.T) { //nolint:maintidx
 			t.Fatalf("Unexpected value: want %q, got %q", val1, v)
 		}
 
-		err = client.Set(ctx, key2, []byte(val2))
-		if err != nil {
+		if err := client.Set(ctx, key2, []byte(val2)); err != nil {
 			t.Fatal("Can't set value:", err)
 		}
 
-		err = client.Delete(ctx, key1)
-		if err != nil {
+		if err := client.Delete(ctx, key1); err != nil {
 			t.Fatal("Can't delete value:", err)
 		}
 
@@ -101,35 +154,31 @@ func TestPersistHost(t *testing.T) { //nolint:maintidx
 			t.Fatal("Deleted key should have a nil value, but:", v)
 		}
 
-		err = client.Close(ctx)
-		if err != nil {
+		if err := client.Close(ctx); err != nil {
 			t.Fatal("Can't close client:", err)
 		}
 
 		metadata := host.getAllMetadata()
 		expectedMetadata := map[string]map[string][]byte{
-			ext1: {
-				key2: []byte(val2),
-			},
+			ext1: {key2: []byte(val2)},
 		}
 
 		if diff := cmp.Diff(expectedMetadata, metadata); diff != "" {
-			log.Fatalf("Unexpected metadata (-want +got):\n%s\n", diff)
+			t.Fatalf("Unexpected metadata (-want +got):\n%s\n", diff)
 		}
 
-		// Writing it to the state for the second phase
-		saveFileMetadataToCache(st, metadata)
+		saveFileMetadataToCache(st, testCacheKey, metadata)
 	}
 
 	// - - - Second run: starting with pre-existing metadata - - -
 	{
-		host, err := newPersistHost(st)
+		host, err := NewPersistHost(st, touchedOnlyConfig())
 		if err != nil {
 			t.Fatal("Can't instantiate persist host:", err)
 		}
 
-		ext1ID := host.newPersistentExt(ext1)
-		ext2ID := host.newPersistentExt(ext2)
+		ext1ID := host.NewPersistentExt(ext1)
+		ext2ID := host.NewPersistentExt(ext2)
 
 		client1, err := adapter.GetStorageClient(ctx, host, &ext1ID, compID)
 		if err != nil {
@@ -150,8 +199,6 @@ func TestPersistHost(t *testing.T) { //nolint:maintidx
 			t.Fatal("Non-existing key should have a nil value, but:", v)
 		}
 
-		// Retrieving a value from the last run (through the state)
-
 		v, err = client1.Get(ctx, key2)
 		if err != nil {
 			t.Fatal("Can't retrieve value:", err)
@@ -161,57 +208,47 @@ func TestPersistHost(t *testing.T) { //nolint:maintidx
 			t.Fatalf("Unexpected value: want %q, got %q", val2, v)
 		}
 
-		// Checking for conflicts between clients
-
-		err = client1.Set(ctx, key1, []byte(val1))
-		if err != nil {
+		if err := client1.Set(ctx, key1, []byte(val1)); err != nil {
 			t.Fatal("Can't set value:", err)
 		}
 
-		err = client2.Set(ctx, key1, []byte(val1))
-		if err != nil {
+		if err := client2.Set(ctx, key1, []byte(val1)); err != nil {
 			t.Fatal("Can't set value:", err)
 		}
 
-		err = client1.Close(ctx)
-		if err != nil {
+		if err := client1.Close(ctx); err != nil {
 			t.Fatal("Can't close client:", err)
 		}
 
-		err = client2.Close(ctx)
-		if err != nil {
+		if err := client2.Close(ctx); err != nil {
 			t.Fatal("Can't close client:", err)
 		}
 
-		host.saveToState(st)
+		host.SaveToState(st)
 
-		metadata, err := getFileMetadataFromCache(st)
+		metadata, err := getFileMetadataFromCache(st, testCacheKey)
 		if err != nil {
 			t.Fatal("Can't get metadata from state:", err)
 		}
 
 		expectedMetadata := map[string]map[string][]byte{
-			ext1: {
-				key1: []byte(val1),
-			},
-			ext2: {
-				key1: []byte(val1),
-			},
+			ext1: {key1: []byte(val1)},
+			ext2: {key1: []byte(val1)},
 		}
 
 		if diff := cmp.Diff(expectedMetadata, metadata); diff != "" {
-			log.Fatalf("Unexpected metadata (-want +got):\n%s\n", diff)
+			t.Fatalf("Unexpected metadata (-want +got):\n%s\n", diff)
 		}
 	}
 
 	// - - - Third run: starting with pre-existing metadata, again - - -
 	{
-		host, err := newPersistHost(st)
+		host, err := NewPersistHost(st, touchedOnlyConfig())
 		if err != nil {
 			t.Fatal("Can't instantiate persist host:", err)
 		}
 
-		extID := host.newPersistentExt(ext1)
+		extID := host.NewPersistentExt(ext1)
 
 		client, err := adapter.GetStorageClient(ctx, host, &extID, compID)
 		if err != nil {
@@ -229,8 +266,6 @@ func TestPersistHost(t *testing.T) { //nolint:maintidx
 			t.Fatal("Value should have been discarded, since it wasn't set in the last run")
 		}
 
-		// But the value written the very last run should still be present
-
 		v, err = client.Get(ctx, key1)
 		if err != nil {
 			t.Fatal("Can't retrieve value:", err)
@@ -240,8 +275,7 @@ func TestPersistHost(t *testing.T) { //nolint:maintidx
 			t.Fatalf("Unexpected value: want %q, got %q", val1, v)
 		}
 
-		err = client.Close(ctx)
-		if err != nil {
+		if err := client.Close(ctx); err != nil {
 			t.Fatal("Can't close client:", err)
 		}
 
@@ -253,8 +287,110 @@ func TestPersistHost(t *testing.T) { //nolint:maintidx
 		}
 
 		if diff := cmp.Diff(expectedMetadata, metadata); diff != "" {
-			log.Fatalf("Unexpected metadata (-want +got):\n%s\n", diff)
+			t.Fatalf("Unexpected metadata (-want +got):\n%s\n", diff)
 		}
+	}
+}
+
+// TestPersistHostFullSnapshotKeepsUntouchedReceivers is the regression test for
+// otel/logmetrics's chosen behavior: a periodic SaveToState must not drop a
+// receiver's previously-persisted offset just because that receiver hasn't
+// been written to yet during this process's lifetime (e.g. an idle source).
+func TestPersistHostFullSnapshotKeepsUntouchedReceivers(t *testing.T) {
+	t.Parallel()
+
+	st := newMemoryState()
+
+	initial := map[string]map[string][]byte{
+		"A": {"offset": []byte("A1")},
+		"B": {"offset": []byte("B1")},
+	}
+
+	if err := st.Set(testCacheKey, initial); err != nil {
+		t.Fatal("Failed to seed initial state:", err)
+	}
+
+	h, err := NewPersistHost(st, fullSnapshotConfig())
+	if err != nil {
+		t.Fatal("NewPersistHost failed:", err)
+	}
+
+	idA := h.NewPersistentExt("A")
+	h.NewPersistentExt("B") // never touched afterwards
+
+	extA, ok := h.extensions[idA].(persistExtension)
+	if !ok {
+		t.Fatal("Expected a persistExtension for A")
+	}
+
+	if err := extA.client.Set(t.Context(), "offset", []byte("A2")); err != nil {
+		t.Fatal("Failed to update A's offset:", err)
+	}
+
+	h.SaveToState(st)
+
+	var saved map[string]map[string][]byte
+
+	if err := st.Get(testCacheKey, &saved); err != nil {
+		t.Fatal("Failed to read back saved state:", err)
+	}
+
+	if got := string(saved["A"]["offset"]); got != "A2" {
+		t.Errorf("Expected A's offset to be updated to %q, got %q", "A2", got)
+	}
+
+	if got, found := saved["B"]; !found || string(got["offset"]) != "B1" {
+		t.Errorf("Expected B's untouched offset %q to survive the save, got %v (found=%v)", "B1", got, found)
+	}
+}
+
+// TestStorageClientFullSnapshotCloseKeepsSnapshot is the same regression test
+// one level down: closing a storage client that was only ever Get() from
+// (never Set()) must not erase its previously-known offsets from the host.
+func TestStorageClientFullSnapshotCloseKeepsSnapshot(t *testing.T) {
+	t.Parallel()
+
+	st := newMemoryState()
+
+	initial := map[string]map[string][]byte{
+		"A": {"offset": []byte("A1")},
+	}
+
+	if err := st.Set(testCacheKey, initial); err != nil {
+		t.Fatal("Failed to seed initial state:", err)
+	}
+
+	h, err := NewPersistHost(st, fullSnapshotConfig())
+	if err != nil {
+		t.Fatal("NewPersistHost failed:", err)
+	}
+
+	idA := h.NewPersistentExt("A")
+
+	extA, ok := h.extensions[idA].(persistExtension)
+	if !ok {
+		t.Fatal("Expected a persistExtension for A")
+	}
+
+	// Read-only access this run: never call Set before Close.
+	if _, err := extA.client.Get(t.Context(), "offset"); err != nil {
+		t.Fatal("Get failed:", err)
+	}
+
+	if err := extA.client.Close(t.Context()); err != nil {
+		t.Fatal("Close failed:", err)
+	}
+
+	h.SaveToState(st)
+
+	var saved map[string]map[string][]byte
+
+	if err := st.Get(testCacheKey, &saved); err != nil {
+		t.Fatal("Failed to read back saved state:", err)
+	}
+
+	if got, found := saved["A"]; !found || string(got["offset"]) != "A1" {
+		t.Errorf("Expected A's offset %q to survive an idle Close(), got %v (found=%v)", "A1", got, found)
 	}
 }
 
@@ -275,12 +411,12 @@ func (stateMock) Set(string, any) error {
 func TestStorageClient(t *testing.T) {
 	t.Parallel()
 
-	h, err := newPersistHost(stateMock{})
+	h, err := NewPersistHost(stateMock{}, touchedOnlyConfig())
 	if err != nil {
 		t.Fatal("Can't instantiate persist host:", err)
 	}
 
-	extID := h.newPersistentExt("test")
+	extID := h.NewPersistentExt("test")
 	ext := h.extensions[extID]
 
 	persistExt, ok := ext.(persistExtension)
@@ -336,8 +472,8 @@ func TestStorageClient(t *testing.T) {
 	wg.Wait()
 }
 
-// TestPersistHostConcurrent tests concurrent access to a persistHost with multiple extensions,
-// simulating concurrent Set/Get operations alongside periodic saveToState calls (as done by the saveFileSizesTicker).
+// TestPersistHostConcurrent tests concurrent access to a PersistHost with multiple extensions,
+// simulating concurrent Set/Get operations alongside periodic SaveToState calls.
 // Should be run with the -race flag.
 func TestPersistHostConcurrent(t *testing.T) {
 	t.Parallel()
@@ -351,7 +487,7 @@ func TestPersistHostConcurrent(t *testing.T) {
 	ctx := t.Context()
 	compID := component.MustNewID("unused")
 
-	h, err := newPersistHost(stateMock{})
+	h, err := NewPersistHost(stateMock{}, touchedOnlyConfig())
 	if err != nil {
 		t.Fatal("Can't instantiate persist host:", err)
 	}
@@ -367,7 +503,7 @@ func TestPersistHostConcurrent(t *testing.T) {
 				name = fmt.Sprintf("ext%d", 0)
 			}
 
-			extID := h.newPersistentExt(name)
+			extID := h.NewPersistentExt(name)
 
 			clients[i], err = adapter.GetStorageClient(ctx, h, &extID, compID)
 			if err != nil {
@@ -402,10 +538,10 @@ func TestPersistHostConcurrent(t *testing.T) {
 			})
 		}
 
-		// Simulate the periodic saveFileSizesTicker: call saveToState concurrently.
+		// Simulate the periodic ticker: call SaveToState concurrently.
 		wg.Go(func() {
 			for range numSaveCalls {
-				h.saveToState(stateMock{})
+				h.SaveToState(stateMock{})
 			}
 		})
 
@@ -418,6 +554,6 @@ func TestPersistHostConcurrent(t *testing.T) {
 			}
 		}
 
-		h.saveToState(stateMock{})
+		h.SaveToState(stateMock{})
 	}
 }
