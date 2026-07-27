@@ -360,8 +360,8 @@ func unmarshalMapstructureHook(from reflect.Value, to reflect.Value) (any, error
 // don't set on_error explicitly. Stanza's default is "send", which logs one ERROR
 // per line that fails to parse. For a high-volume source whose lines don't all
 // match (e.g. multi-line Postgres logs), that floods the logs and the logger's
-// de-duplication cache (see logger/zap.go) — the root cause of the memory blow-up
-// in diagnostic on_demand_20260623-122247. "send_quiet" still forwards the entry;
+// sampler (see logger/zap.go) — the root cause of the memory blow-up in
+// diagnostic on_demand_20260623-122247. "send_quiet" still forwards the entry;
 // it only moves the parse-failure log down to debug level.
 func quietParserErrors(ops []config.OTELOperator) []config.OTELOperator {
 	const (
