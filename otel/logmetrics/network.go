@@ -24,8 +24,8 @@ import (
 	"github.com/bleemeo/glouton/otel/logsource"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/connector/countconnector"
-	otelconnector "go.opentelemetry.io/collector/connector"
 	"go.opentelemetry.io/collector/component"
+	otelconnector "go.opentelemetry.io/collector/connector"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/receiver"
 )

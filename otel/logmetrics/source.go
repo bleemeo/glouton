@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"slices"
 	"strings"
 	"sync"
 
@@ -73,7 +74,7 @@ type source struct {
 	persister *logsource.PersistHost // nil if this source runs without persisted offsets
 
 	l        sync.Mutex
-	watching map[string]bool // log files already covered by a running receiver
+	watching map[string]logsource.ReceiverKind
 	recvs    []receiver.Logs
 	extIDs   []component.ID // valid only if persister != nil, one per underlying log file
 
@@ -126,7 +127,7 @@ func newSource(
 		name:          name,
 		recvConsumer:  nextConsumer(conns),
 		persister:     persister,
-		watching:      make(map[string]bool),
+		watching:      make(map[string]logsource.ReceiverKind),
 		conns:         conns,
 	}
 
@@ -143,6 +144,28 @@ func newSource(
 	}
 
 	return src, nil
+}
+
+// watchedFiles returns the log files currently covered by a running receiver.
+func (s *source) watchedFiles() (fileLogPaths, execLogPaths []string) {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	for f, kind := range s.watching {
+		switch kind {
+		case logsource.ReceiverFileLog:
+			fileLogPaths = append(fileLogPaths, f)
+		case logsource.ReceiverExecLog:
+			execLogPaths = append(execLogPaths, f)
+		default:
+			logger.V(1).Printf("logmetrics: unknown log receiver kind %q for file %q", kind, f)
+		}
+	}
+
+	slices.Sort(fileLogPaths)
+	slices.Sort(execLogPaths)
+
+	return fileLogPaths, execLogPaths
 }
 
 // update starts a receiver for any file newly matching this source's include
@@ -162,7 +185,7 @@ func (s *source) addNewFiles(ctx context.Context) error {
 	var newFiles []string
 
 	for _, f := range logFiles {
-		if !s.watching[f] {
+		if _, ok := s.watching[f]; !ok {
 			newFiles = append(newFiles, f)
 		}
 	}
@@ -206,8 +229,12 @@ func (s *source) addNewFiles(ctx context.Context) error {
 		return fmt.Errorf("setting up receiver factories: %w", err)
 	}
 
+	if len(readFiles) > 0 {
+		logger.V(2).Printf("logmetrics: source %q opened log file(s) directly: %v", s.name, readFiles)
+	}
+
 	if len(execFiles) > 0 {
-		logger.V(2).Printf("logmetrics: source %q tailing %d file(s) directly, %d via sudo: %v", s.name, len(readFiles), len(execFiles), execFiles)
+		logger.V(2).Printf("logmetrics: source %q opened log file(s) via sudo: %v", s.name, execFiles)
 	}
 
 	if len(factories) == 0 {
@@ -257,11 +284,11 @@ func (s *source) addNewFiles(ctx context.Context) error {
 	s.extIDs = append(s.extIDs, newExtIDs...)
 
 	for _, f := range readFiles {
-		s.watching[f] = true
+		s.watching[f] = logsource.ReceiverFileLog
 	}
 
 	for _, f := range execFiles {
-		s.watching[f] = true
+		s.watching[f] = logsource.ReceiverExecLog
 	}
 
 	return nil

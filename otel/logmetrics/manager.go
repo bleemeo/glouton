@@ -19,7 +19,7 @@ package logmetrics
 import (
 	"context"
 	"encoding/json"
-	"maps"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -397,6 +397,30 @@ func (man *Manager) MetricNames() []string {
 	return man.reg.metricNames()
 }
 
+// staticSourceDiagnostic and containerSourceDiagnostic describe a source's
+// resolved log files for the diagnostic archive.
+type staticSourceDiagnostic struct {
+	Include              []string
+	FileLogReceiverPaths []string
+	ExecLogReceiverPaths []string
+}
+
+type containerSourceDiagnostic struct {
+	Name                 string
+	FileLogReceiverPaths []string
+	ExecLogReceiverPaths []string
+}
+
+// networkSourceDiagnostic describes the network source for the diagnostic archive.
+type networkSourceDiagnostic struct {
+	Active      bool
+	GRPCEnabled bool
+	GRPCAddress string
+	HTTPEnabled bool
+	HTTPAddress string
+	MetricNames []string
+}
+
 func (man *Manager) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
 	file, err := archive.Create("log-to-metrics.json")
 	if err != nil {
@@ -404,18 +428,63 @@ func (man *Manager) DiagnosticArchive(_ context.Context, archive types.ArchiveWr
 	}
 
 	man.l.Lock()
+
+	staticSources := make([]staticSourceDiagnostic, 0, len(man.staticSources))
+
+	for _, src := range man.staticSources {
+		fileLogPaths, execLogPaths := src.watchedFiles()
+		staticSources = append(staticSources, staticSourceDiagnostic{
+			Include:              src.include,
+			FileLogReceiverPaths: fileLogPaths,
+			ExecLogReceiverPaths: execLogPaths,
+		})
+	}
+
+	containerSources := make(map[string]containerSourceDiagnostic, len(man.containerSources))
+
+	for id, src := range man.containerSources {
+		fileLogPaths, execLogPaths := src.watchedFiles()
+		containerSources[id] = containerSourceDiagnostic{
+			Name:                 man.watchedContainers[id],
+			FileLogReceiverPaths: fileLogPaths,
+			ExecLogReceiverPaths: execLogPaths,
+		}
+	}
+
+	netCfg := man.cfg.Metrics.Network
+
+	metricNames := make([]string, 0, len(netCfg.Counters))
+	for _, counter := range netCfg.Counters {
+		metricNames = append(metricNames, counter.Metric)
+	}
+
+	networkSource := networkSourceDiagnostic{
+		Active:      man.networkSource != nil,
+		GRPCEnabled: netCfg.GRPC.Enable,
+		HTTPEnabled: netCfg.HTTP.Enable,
+		MetricNames: metricNames,
+	}
+
+	if netCfg.GRPC.Enable {
+		networkSource.GRPCAddress = fmt.Sprintf("%s:%d", netCfg.GRPC.Address, netCfg.GRPC.Port)
+	}
+
+	if netCfg.HTTP.Enable {
+		networkSource.HTTPAddress = fmt.Sprintf("%s:%d", netCfg.HTTP.Address, netCfg.HTTP.Port)
+	}
+
 	info := struct {
-		MetricNames         []string
-		WatchedContainers   map[string]string
-		StaticSourceCount   int
-		PendingStaticCount  int
-		NetworkSourceActive bool
+		MetricNames        []string
+		StaticSources      []staticSourceDiagnostic
+		ContainerSources   map[string]containerSourceDiagnostic
+		PendingStaticCount int
+		NetworkSource      networkSourceDiagnostic
 	}{
-		MetricNames:         man.reg.metricNames(),
-		WatchedContainers:   maps.Clone(man.watchedContainers),
-		StaticSourceCount:   len(man.staticSources),
-		PendingStaticCount:  len(man.pendingStatic),
-		NetworkSourceActive: man.networkSource != nil,
+		MetricNames:        man.reg.metricNames(),
+		StaticSources:      staticSources,
+		ContainerSources:   containerSources,
+		PendingStaticCount: len(man.pendingStatic),
+		NetworkSource:      networkSource,
 	}
 	man.l.Unlock()
 
