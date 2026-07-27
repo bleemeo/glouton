@@ -213,32 +213,39 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 		},
 		Log: Log{
 			HostRootPrefix: "/hostroot",
-			Inputs: []LogInput{
-				{
-					Path: "/var/log/apache/access.log",
-					Counters: []LogCounter{
-						{
-							Metric: "apache_errors_count",
-							Regex:  "\\[error\\]",
+			Metrics: LogMetricsConfig{
+				Receivers: map[string]LogMetricsReceiver{
+					"apache_access": {
+						Include: []string{"/var/log/apache/access.log"},
+						Counters: []LogCounter{
+							{
+								Metric: "apache_errors_count",
+								Regex:  "\\[error\\]",
+							},
 						},
 					},
 				},
-				{
-					ContainerName: testRedis,
-					Counters: []LogCounter{
+				KnownCounters: map[string][]LogCounter{
+					"redis_errors": {
 						{
 							Metric: "redis_errors_count",
 							Regex:  testERROR,
 						},
 					},
-				},
-				{
-					Selectors: map[string]string{"app": "postgres"},
-					Counters: []LogCounter{
+					"postgres_errors": {
 						{
 							Metric: "postgres_errors_count",
 							Regex:  "error",
 						},
+					},
+				},
+				ContainerCounters: map[string]string{
+					testRedis: "redis_errors",
+				},
+				ContainerSelectorCounters: []ContainerSelectorCounter{
+					{
+						Selectors:     map[string]string{"app": "postgres"},
+						KnownCounters: "postgres_errors",
 					},
 				},
 			},
@@ -1665,9 +1672,10 @@ func TestCensorURLSecrets(t *testing.T) {
 
 func Test_migrate(t *testing.T) {
 	tests := []struct {
-		Name       string
-		ConfigFile string
-		WantConfig Config
+		Name        string
+		ConfigFile  string
+		WantConfig  Config
+		WantWarning bool
 	}{
 		{
 			Name:       "new-prometheus-targets",
@@ -1738,16 +1746,92 @@ func Test_migrate(t *testing.T) {
 				},
 			},
 		},
+		{
+			Name:       "legacy-log-inputs-path",
+			ConfigFile: "testdata/legacy-log-inputs-path.conf",
+			WantConfig: Config{
+				Log: Log{
+					Metrics: LogMetricsConfig{
+						Receivers: map[string]LogMetricsReceiver{
+							"legacy_input_0": {
+								Include: []string{"/var/log/apache/access.log"},
+								Counters: []LogCounter{
+									{Metric: "apache_errors_count", Regex: `\[error\]`},
+								},
+							},
+						},
+					},
+				},
+			},
+			WantWarning: true,
+		},
+		{
+			Name:       "legacy-log-inputs-container-name",
+			ConfigFile: "testdata/legacy-log-inputs-container-name.conf",
+			WantConfig: Config{
+				Log: Log{
+					Metrics: LogMetricsConfig{
+						KnownCounters: map[string][]LogCounter{
+							"legacy_input_0": {{Metric: "redis_errors_count", Regex: "ERROR"}},
+						},
+						ContainerCounters: map[string]string{"redis": "legacy_input_0"},
+					},
+				},
+			},
+			WantWarning: true,
+		},
+		{
+			Name:       "legacy-log-inputs-selectors",
+			ConfigFile: "testdata/legacy-log-inputs-selectors.conf",
+			WantConfig: Config{
+				Log: Log{
+					Metrics: LogMetricsConfig{
+						KnownCounters: map[string][]LogCounter{
+							"legacy_input_0": {{Metric: "postgres_errors_count", Regex: "error"}},
+						},
+						ContainerSelectorCounters: []ContainerSelectorCounter{
+							{Selectors: map[string]string{"app": "postgres"}, KnownCounters: "legacy_input_0"},
+						},
+					},
+				},
+			},
+			WantWarning: true,
+		},
+		{
+			Name:       "legacy-log-inputs-name-and-selectors",
+			ConfigFile: "testdata/legacy-log-inputs-name-and-selectors.conf",
+			WantConfig: Config{
+				Log: Log{
+					Metrics: LogMetricsConfig{
+						KnownCounters: map[string][]LogCounter{
+							"legacy_input_0": {{Metric: "postgres_errors_count", Regex: "error"}},
+						},
+						ContainerSelectorCounters: []ContainerSelectorCounter{
+							{
+								ContainerName: "postgres",
+								Selectors:     map[string]string{"env": "prod"},
+								KnownCounters: "legacy_input_0",
+							},
+						},
+					},
+				},
+			},
+			WantWarning: true,
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
-			config, _, err := load(&configLoader{}, false, false, test.ConfigFile)
+			config, warnings, err := load(&configLoader{}, false, false, test.ConfigFile)
 			if err != nil {
 				t.Fatalf("Failed to load config: %s", err)
 			}
 
-			if diff := compareConfig(test.WantConfig, config); diff != "" {
+			if test.WantWarning && warnings == nil {
+				t.Fatal("Expected a deprecation warning, got none")
+			}
+
+			if diff := compareConfig(test.WantConfig, config, cmpopts.EquateEmpty()); diff != "" {
 				t.Fatalf("Unexpected config:\n%s", diff)
 			}
 		})

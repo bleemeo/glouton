@@ -493,7 +493,7 @@ func movedScalarKeys() map[string]string {
 func migrate(k *koanf.Koanf) (*koanf.Koanf, prometheus.MultiError) {
 	config := k.All()
 
-	warnings := make(prometheus.MultiError, 0, 6)
+	warnings := make(prometheus.MultiError, 0, 7)
 
 	warnings = append(warnings, migrateMovedScalarKeys(k, config)...)
 	warnings = append(warnings, migrateMovedKeys(k, config)...)
@@ -501,6 +501,7 @@ func migrate(k *koanf.Koanf) (*koanf.Koanf, prometheus.MultiError) {
 	warnings = append(warnings, migrateMetricsPrometheus(k, config)...)
 	warnings = append(warnings, migrateScrapperMetrics(k, config)...)
 	warnings = append(warnings, migrateServices(config)...)
+	warnings = append(warnings, migrateLogInputs(k, config)...)
 
 	// We can't reuse the previous Koanf because it doesn't allow removing keys.
 	newConfig := koanf.New(delimiter)
@@ -695,6 +696,105 @@ func migrateScrapper(k *koanf.Koanf, config map[string]any, deprecatedPath strin
 		config[correctPath] = targets
 		delete(config, deprecatedPath)
 	}
+
+	return warnings
+}
+
+// migrateLogInputs folds the legacy log.inputs[].filters entries -- the
+// original, Fluent Bit-era way of declaring a log-to-metric source, which
+// predates log.metrics and is otherwise handled identically by otel/logmetrics
+// for path/container_name/container_selectors -- into the equivalent
+// log.metrics.* shape, so otel/logmetrics only ever has to handle one config
+// shape.
+func migrateLogInputs(k *koanf.Koanf, config map[string]any) prometheus.MultiError {
+	var warnings prometheus.MultiError
+
+	inputs, ok := k.Get("log.inputs").([]any)
+	if !ok || len(inputs) == 0 {
+		return nil
+	}
+
+	receivers, _ := k.Get("log.metrics.receivers").(map[string]any)
+	if receivers == nil {
+		receivers = map[string]any{}
+	}
+
+	knownCounters, _ := k.Get("log.metrics.known_counters").(map[string]any)
+	if knownCounters == nil {
+		knownCounters = map[string]any{}
+	}
+
+	containerCounters, _ := k.Get("log.metrics.container_counters").(map[string]any)
+	if containerCounters == nil {
+		containerCounters = map[string]any{}
+	}
+
+	containerSelectorCounters, _ := k.Get("log.metrics.container_selector_counters").([]any)
+
+	remainingInputs := make([]any, 0, len(inputs))
+	translated := false
+
+	for i, inputAny := range inputs {
+		inputMap, ok := inputAny.(map[string]any)
+		if !ok {
+			remainingInputs = append(remainingInputs, inputAny)
+
+			continue
+		}
+
+		filtersList, ok := inputMap["filters"].([]any)
+		if !ok || len(filtersList) == 0 {
+			remainingInputs = append(remainingInputs, inputAny) // no filters: this entry never did anything for log-to-metric
+
+			continue
+		}
+
+		// Drop the consumed key so it doesn't reach the strict struct decode
+		// (which errors on unknown keys) as a leftover on an otherwise-fully-
+		// translated entry.
+		delete(inputMap, "filters")
+
+		name := fmt.Sprintf("legacy_input_%d", i)
+		path, _ := inputMap["path"].(string)
+		containerName, _ := inputMap["container_name"].(string)
+		selectors, _ := inputMap["container_selectors"].(map[string]any)
+
+		switch {
+		case path != "":
+			receivers[name] = map[string]any{"include": []any{path}, "counters": filtersList}
+			warnings.Append(fmt.Errorf("%w: log.inputs[].filters (path %q), use log.metrics.receivers instead", errSettingsDeprecated, path))
+
+			translated = true
+		case containerName != "" && len(selectors) == 0:
+			knownCounters[name] = filtersList
+			containerCounters[containerName] = name
+			warnings.Append(fmt.Errorf("%w: log.inputs[].filters (container_name %q), use log.metrics.known_counters/container_counters instead", errSettingsDeprecated, containerName))
+
+			translated = true
+		case len(selectors) > 0:
+			knownCounters[name] = filtersList
+			containerSelectorCounters = append(containerSelectorCounters, map[string]any{
+				"container_name": containerName,
+				"selectors":      selectors,
+				"known_counters": name,
+			})
+			warnings.Append(fmt.Errorf("%w: log.inputs[].filters (container_selectors %v), use log.metrics.known_counters/container_selector_counters instead", errSettingsDeprecated, selectors))
+
+			translated = true
+		default:
+			remainingInputs = append(remainingInputs, inputAny)
+		}
+	}
+
+	if !translated {
+		return nil
+	}
+
+	config["log.metrics.receivers"] = receivers
+	config["log.metrics.known_counters"] = knownCounters
+	config["log.metrics.container_counters"] = containerCounters
+	config["log.metrics.container_selector_counters"] = containerSelectorCounters
+	config["log.inputs"] = remainingInputs
 
 	return warnings
 }

@@ -86,29 +86,36 @@ func TestResolveContainerCounters(t *testing.T) {
 	}{
 		{
 			Name: "matches-by-container-name",
-			Cfg: config.Log{Inputs: []config.LogInput{
-				{ContainerName: testServicePostgres, Counters: testCounterErrors},
+			Cfg: config.Log{Metrics: config.LogMetricsConfig{
+				KnownCounters:     map[string][]config.LogCounter{"postgres-grp": testCounterErrors},
+				ContainerCounters: map[string]string{testServicePostgres: "postgres-grp"},
 			}},
 			ContainerName:    testServicePostgres,
 			ExpectedCounters: testCounterErrors,
 		},
 		{
 			Name: "matches-by-label-selector",
-			Cfg: config.Log{Inputs: []config.LogInput{
-				{Selectors: map[string]string{testLabelApp: testLabelRedis}, Counters: testCounterErrors},
+			Cfg: config.Log{Metrics: config.LogMetricsConfig{
+				KnownCounters: map[string][]config.LogCounter{"redis-grp": testCounterErrors},
+				ContainerSelectorCounters: []config.ContainerSelectorCounter{
+					{Selectors: map[string]string{testLabelApp: testLabelRedis}, KnownCounters: "redis-grp"},
+				},
 			}},
 			ContainerName:    "redis-1",
 			ExpectedCounters: testCounterErrors,
 		},
 		{
 			Name: "matches-by-annotation-selector",
-			Cfg: config.Log{Inputs: []config.LogInput{
-				{
-					Selectors: map[string]string{
-						testLabelApp: testServiceUwsgi,
-						testLabelEnv: testLabelProd,
+			Cfg: config.Log{Metrics: config.LogMetricsConfig{
+				KnownCounters: map[string][]config.LogCounter{"uwsgi-grp": testCounterErrors},
+				ContainerSelectorCounters: []config.ContainerSelectorCounter{
+					{
+						Selectors: map[string]string{
+							testLabelApp: testServiceUwsgi,
+							testLabelEnv: testLabelProd,
+						},
+						KnownCounters: "uwsgi-grp",
 					},
-					Counters: testCounterErrors,
 				},
 			}},
 			ContainerName:    "uwsgi-1",
@@ -116,30 +123,41 @@ func TestResolveContainerCounters(t *testing.T) {
 		},
 		{
 			Name: "container-name-and-selector-both-required",
-			Cfg: config.Log{Inputs: []config.LogInput{
-				{
-					ContainerName: testServicePostgres,
-					Selectors:     map[string]string{testLabelEnv: testLabelProd},
-					Counters:      testCounterErrors,
+			Cfg: config.Log{Metrics: config.LogMetricsConfig{
+				KnownCounters: map[string][]config.LogCounter{"postgres-both-grp": testCounterErrors},
+				ContainerSelectorCounters: []config.ContainerSelectorCounter{
+					{
+						ContainerName: testServicePostgres,
+						Selectors:     map[string]string{testLabelEnv: testLabelProd},
+						KnownCounters: "postgres-both-grp",
+					},
 				},
 			}},
 			ContainerName:    testServicePostgres,
 			ExpectedCounters: testCounterErrors,
 		},
 		{
-			Name: "no-match",
-			Cfg: config.Log{Inputs: []config.LogInput{
-				{ContainerName: testServicePostgres, Counters: testCounterErrors},
+			Name: "container-name-and-selector-both-required-name-mismatch",
+			Cfg: config.Log{Metrics: config.LogMetricsConfig{
+				KnownCounters: map[string][]config.LogCounter{"postgres-both-grp": testCounterErrors},
+				ContainerSelectorCounters: []config.ContainerSelectorCounter{
+					{
+						ContainerName: "some-other-name",
+						Selectors:     map[string]string{testLabelEnv: testLabelProd},
+						KnownCounters: "postgres-both-grp",
+					},
+				},
 			}},
-			ContainerName:    "unrelated",
+			ContainerName:    testServicePostgres,
 			ExpectedCounters: nil,
 		},
 		{
-			Name: "path-based-inputs-are-ignored",
-			Cfg: config.Log{Inputs: []config.LogInput{
-				{Path: "/var/log/foo.log", Counters: testCounterErrors},
+			Name: "no-match",
+			Cfg: config.Log{Metrics: config.LogMetricsConfig{
+				KnownCounters:     map[string][]config.LogCounter{"postgres-grp": testCounterErrors},
+				ContainerCounters: map[string]string{testServicePostgres: "postgres-grp"},
 			}},
-			ContainerName:    testServicePostgres,
+			ContainerName:    "unrelated",
 			ExpectedCounters: nil,
 		},
 		{
@@ -182,6 +200,39 @@ func TestResolveContainerCounters(t *testing.T) {
 			ContainerName:    "label-unknown-falls-back",
 			ExpectedCounters: testCounterErrors,
 		},
+		{
+			Name: "container-exclude-by-name-overrides-container-counters",
+			Cfg: config.Log{Metrics: config.LogMetricsConfig{
+				KnownCounters:     map[string][]config.LogCounter{"postgres-grp": testCounterErrors},
+				ContainerCounters: map[string]string{testServicePostgres: "postgres-grp"},
+				ContainerExclude:  []config.ContainerExcludeRule{{ContainerName: testServicePostgres}},
+			}},
+			ContainerName:    testServicePostgres,
+			ExpectedCounters: nil,
+		},
+		{
+			Name: "container-exclude-by-selector-overrides-container-selector-counters",
+			Cfg: config.Log{Metrics: config.LogMetricsConfig{
+				KnownCounters: map[string][]config.LogCounter{"redis-grp": testCounterErrors},
+				ContainerSelectorCounters: []config.ContainerSelectorCounter{
+					{Selectors: map[string]string{testLabelApp: testLabelRedis}, KnownCounters: "redis-grp"},
+				},
+				ContainerExclude: []config.ContainerExcludeRule{
+					{Selectors: map[string]string{testLabelApp: testLabelRedis}},
+				},
+			}},
+			ContainerName:    "redis-1",
+			ExpectedCounters: nil,
+		},
+		{
+			Name: "container-exclude-overrides-glouton-log-counter-label",
+			Cfg: config.Log{Metrics: config.LogMetricsConfig{
+				KnownCounters:    map[string][]config.LogCounter{"grp-label": testCounterErrors},
+				ContainerExclude: []config.ContainerExcludeRule{{ContainerName: "label-selected"}},
+			}},
+			ContainerName:    "label-selected",
+			ExpectedCounters: nil,
+		},
 	}
 
 	for _, test := range tests {
@@ -199,9 +250,9 @@ func TestResolveContainerCounters(t *testing.T) {
 
 // TestHasContainerCounters is the regression test for a purely label-driven
 // setup (glouton.log_counter labels + known_counters, no static
-// container_counters entry, no container-based log.inputs entry): container
-// watching must still be enabled, otherwise resolveContainerCounters' label
-// lookup is never reached at all.
+// container_counters/container_selector_counters entry): container watching
+// must still be enabled, otherwise resolveContainerCounters' label lookup is
+// never reached at all.
 func TestHasContainerCounters(t *testing.T) {
 	t.Parallel()
 
@@ -216,9 +267,11 @@ func TestHasContainerCounters(t *testing.T) {
 			Expected: false,
 		},
 		{
-			Name: "legacy-container-name-input",
-			Cfg: config.Log{Inputs: []config.LogInput{
-				{ContainerName: "redis", Counters: testCounterErrors},
+			Name: "static-container-selector-counters",
+			Cfg: config.Log{Metrics: config.LogMetricsConfig{
+				ContainerSelectorCounters: []config.ContainerSelectorCounter{
+					{Selectors: map[string]string{"app": "redis"}, KnownCounters: "grp"},
+				},
 			}},
 			Expected: true,
 		},

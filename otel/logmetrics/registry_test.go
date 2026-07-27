@@ -22,6 +22,7 @@ import (
 
 	"github.com/bleemeo/glouton/config"
 	glmodel "github.com/bleemeo/glouton/prometheus/model"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp"
 	"go.opentelemetry.io/collector/pdata/pmetric"
@@ -37,7 +38,7 @@ func TestRegistryResolve(t *testing.T) {
 		{Metric: "apache_requests_count", Regex: "GET /"},
 	}
 
-	counters := reg.resolve(logCounters)
+	counters := reg.resolve(logCounters, "")
 
 	if len(counters) != 2 {
 		t.Fatalf("Expected 2 counters, got %d", len(counters))
@@ -46,7 +47,7 @@ func TestRegistryResolve(t *testing.T) {
 	// Resolving an already-registered metric name again must return the exact same
 	// counter, so that matches from multiple sources reporting under the same
 	// metric name are aggregated.
-	again := reg.resolve([]config.LogCounter{{Metric: "apache_errors_count", Regex: "unused"}})
+	again := reg.resolve([]config.LogCounter{{Metric: "apache_errors_count", Regex: "unused"}}, "")
 
 	if again[0] != counters[0] {
 		t.Fatal("Expected resolve() to return the same *counter for an already-registered metric name")
@@ -68,7 +69,7 @@ func TestRegistryEmit(t *testing.T) {
 
 	counters := reg.resolve([]config.LogCounter{
 		{Metric: "apache_errors_count", Regex: `\[error\]`},
-	})
+	}, "")
 
 	// 120 matches over the windowSecs (60s) window => 2/s.
 	for range 120 {
@@ -132,9 +133,9 @@ func TestMetricsSink(t *testing.T) {
 	counters := reg.resolve([]config.LogCounter{
 		{Metric: "apache_errors_count", Regex: `\[error\]`},
 		{Metric: "apache_requests_count", Regex: "GET /"},
-	})
+	}, "")
 
-	sink := reg.metricsSink()
+	sink := reg.metricsSinkForItem("")
 
 	if err := sink.ConsumeMetrics(t.Context(), makeSumMetrics(map[string]int64{
 		"apache_errors_count": 2,
@@ -157,5 +158,108 @@ func TestMetricsSink(t *testing.T) {
 
 	if got := requestsCounter.counter.Total(); got != 0 {
 		t.Errorf("Expected 0 matches for apache_requests_count, got %d", got)
+	}
+}
+
+// TestRegistryItemDisambiguation is the regression test for same-named metrics from
+// different containers merging into one series: resolving the same metric name under
+// two different items must return distinct counters, each independently addressable
+// via its own metricsSinkForItem, and each emitting its own labeled sample.
+func TestRegistryItemDisambiguation(t *testing.T) {
+	t.Parallel()
+
+	reg := newMetricsRegistry()
+
+	logCounters := []config.LogCounter{{Metric: "web_errors_count", Regex: `\[error\]`}}
+
+	countersA := reg.resolve(logCounters, "container-a")
+	countersB := reg.resolve(logCounters, "container-b")
+
+	if countersA[0] == countersB[0] {
+		t.Fatal("Expected distinct counters for the same metric name under different items")
+	}
+
+	if err := reg.metricsSinkForItem("container-a").ConsumeMetrics(t.Context(), makeSumMetrics(map[string]int64{
+		"web_errors_count": 2,
+	})); err != nil {
+		t.Fatalf("ConsumeMetrics returned an error: %v", err)
+	}
+
+	if err := reg.metricsSinkForItem("container-b").ConsumeMetrics(t.Context(), makeSumMetrics(map[string]int64{
+		"web_errors_count": 5,
+	})); err != nil {
+		t.Fatalf("ConsumeMetrics returned an error: %v", err)
+	}
+
+	if got := countersA[0].counter.Total(); got != 2 {
+		t.Errorf("Expected 2 matches for container-a, got %d", got)
+	}
+
+	if got := countersB[0].counter.Total(); got != 5 {
+		t.Errorf("Expected 5 matches for container-b, got %d", got)
+	}
+
+	app := glmodel.NewBufferAppender()
+
+	if err := reg.emit(app); err != nil {
+		t.Fatalf("emit returned an error: %v", err)
+	}
+
+	mfs, err := app.AsMF()
+	if err != nil {
+		t.Fatalf("AsMF returned an error: %v", err)
+	}
+
+	if len(mfs) != 1 || mfs[0].GetName() != "web_errors_count" {
+		t.Fatalf("Expected exactly 1 metric family named web_errors_count, got %v", mfs)
+	}
+
+	if len(mfs[0].GetMetric()) != 2 {
+		t.Fatalf("Expected 2 distinctly-labeled samples (one per item), got %d", len(mfs[0].GetMetric()))
+	}
+
+	gotItems := make([]string, 0, 2)
+
+	for _, m := range mfs[0].GetMetric() {
+		for _, lbl := range m.GetLabel() {
+			if lbl.GetName() == types.LabelItem {
+				gotItems = append(gotItems, lbl.GetValue())
+			}
+		}
+	}
+
+	sort.Strings(gotItems)
+
+	if diff := cmp.Diff([]string{"container-a", "container-b"}, gotItems); diff != "" {
+		t.Fatalf("Unexpected item labels:\n%s", diff)
+	}
+}
+
+// TestRegistryLabels covers custom static labels and their interaction with the
+// reserved __name__/item labels: user labels merge in, but can never override the
+// real metric name or the real auto-derived item.
+func TestRegistryLabels(t *testing.T) {
+	t.Parallel()
+
+	reg := newMetricsRegistry()
+
+	staticCounters := reg.resolve([]config.LogCounter{
+		{Metric: "app_errors_count", Regex: `\[error\]`, Labels: map[string]string{"env": "prod"}},
+	}, "")
+
+	if got := staticCounters[0].lbls.Get("env"); got != "prod" {
+		t.Errorf("Expected custom label env=prod, got %q", got)
+	}
+
+	if got := staticCounters[0].lbls.Get(types.LabelName); got != "app_errors_count" {
+		t.Errorf("Expected __name__=app_errors_count, got %q", got)
+	}
+
+	spoofedCounters := reg.resolve([]config.LogCounter{
+		{Metric: "container_errors_count", Regex: `\[error\]`, Labels: map[string]string{"item": "spoofed"}},
+	}, "real-container")
+
+	if got := spoofedCounters[0].lbls.Get(types.LabelItem); got != "real-container" {
+		t.Errorf("Expected the real auto-derived item to win over a user labels:{item:...} entry, got %q", got)
 	}
 }

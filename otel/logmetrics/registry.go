@@ -38,41 +38,93 @@ import (
 const windowSecs = 60
 
 // counter aggregates the delta counts reported by the countconnector for one
-// metric over a sliding window (matching itself happens via OTTL).
+// metric over a sliding window (matching itself happens via OTTL). item is ""
+// for non-container sources (static paths, network receiver), or the
+// container name for container sources -- see counterKey.
 type counter struct {
 	metric  string
+	item    string
 	counter *logsource.RingCounter
 	lbls    labels.Labels // precomputed once: never changes after creation, no need to rebuild it on every emit
 }
 
-// metricsRegistry holds one counter per metric name, shared across every source
-// that references it, so same-named matches from different sources aggregate.
+// counterKey identifies one aggregated series: same metric name from
+// different items (e.g. different containers) must stay distinguishable, so
+// item is part of the identity, not just a label on a shared counter.
+type counterKey struct {
+	metric string
+	item   string
+}
+
+// metricsRegistry holds one counter per (metric, item), shared across every
+// source that references the same pair, so same-named-same-item matches
+// aggregate (e.g. multiple static inputs feeding the same metric name).
 type metricsRegistry struct {
-	l        sync.Mutex
-	counters map[string]*counter
+	l sync.Mutex
+	// declaredNames holds every metric name ever passed to declare() or
+	// resolve(), independent of whether a live counter exists yet for it --
+	// this is what feeds MetricNames()/allow-listing immediately at startup,
+	// before any container source has actually appeared and called resolve().
+	declaredNames map[string]bool
+	counters      map[counterKey]*counter
 }
 
 func newMetricsRegistry() *metricsRegistry {
-	return &metricsRegistry{counters: make(map[string]*counter)}
+	return &metricsRegistry{
+		declaredNames: make(map[string]bool),
+		counters:      make(map[counterKey]*counter),
+	}
 }
 
-// resolve returns one counter per logCounter, creating it the first time its
-// metric name is seen; repeated names share the same counter.
-func (reg *metricsRegistry) resolve(logCounters []config.LogCounter) []*counter {
+// declare registers every logCounter's metric name for MetricNames()/allow-listing
+// purposes only, without creating a live, aggregatable counter -- resolve() is what
+// creates those, per source, once a source actually starts.
+func (reg *metricsRegistry) declare(logCounters []config.LogCounter) {
+	reg.l.Lock()
+	defer reg.l.Unlock()
+
+	for _, lc := range logCounters {
+		reg.declaredNames[lc.Metric] = true
+	}
+}
+
+// resolve returns one counter per logCounter for the given item ("" for non-container
+// sources), creating it the first time this (metric, item) pair is seen; repeated
+// (metric, item) pairs share the same counter, and the first registration's Labels
+// win if a later declaration of the same metric name sets different ones.
+func (reg *metricsRegistry) resolve(logCounters []config.LogCounter, item string) []*counter {
 	reg.l.Lock()
 	defer reg.l.Unlock()
 
 	resolved := make([]*counter, 0, len(logCounters))
 
 	for _, lc := range logCounters {
-		c, found := reg.counters[lc.Metric]
+		reg.declaredNames[lc.Metric] = true
+
+		key := counterKey{metric: lc.Metric, item: item}
+
+		c, found := reg.counters[key]
 		if !found {
+			lblMap := maps.Clone(lc.Labels)
+			if lblMap == nil {
+				lblMap = make(map[string]string, 2) //nolint:mnd
+			}
+
+			// Reserved keys are set last so they always win over an accidental
+			// same-name entry in a user's labels: map.
+			lblMap[types.LabelName] = lc.Metric
+
+			if item != "" {
+				lblMap[types.LabelItem] = item
+			}
+
 			c = &counter{
 				metric:  lc.Metric,
+				item:    item,
 				counter: logsource.NewRingCounter(windowSecs),
-				lbls:    labels.FromMap(map[string]string{types.LabelName: lc.Metric}),
+				lbls:    labels.FromMap(lblMap),
 			}
-			reg.counters[lc.Metric] = c
+			reg.counters[key] = c
 		}
 
 		resolved = append(resolved, c)
@@ -81,13 +133,13 @@ func (reg *metricsRegistry) resolve(logCounters []config.LogCounter) []*counter 
 	return resolved
 }
 
-// metricNames returns every registered metric name (fed into the metric
+// metricNames returns every declared metric name (fed into the metric
 // allow-list, see agent.rebuildDynamicMetricAllowDenyList).
 func (reg *metricsRegistry) metricNames() []string {
 	reg.l.Lock()
 	defer reg.l.Unlock()
 
-	return slices.Collect(maps.Keys(reg.counters))
+	return slices.Collect(maps.Keys(reg.declaredNames))
 }
 
 // emit appends one "matches per second" sample per registered metric into app.
@@ -113,9 +165,10 @@ func (reg *metricsRegistry) emit(app storage.Appender) error {
 	return app.Commit()
 }
 
-// metricsSink is the shared "next" consumer for every source's countconnector,
-// adding each Sum data point's delta into the matching counter.
-func (reg *metricsRegistry) metricsSink() consumer.Metrics {
+// metricsSinkForItem returns the "next" consumer for one source's countconnector,
+// adding each Sum data point's delta into the matching (metric, item) counter.
+// item should be "" for non-container sources.
+func (reg *metricsRegistry) metricsSinkForItem(item string) consumer.Metrics {
 	sink, err := consumer.NewMetrics(func(_ context.Context, md pmetric.Metrics) error {
 		reg.l.Lock()
 		defer reg.l.Unlock()
@@ -126,7 +179,7 @@ func (reg *metricsRegistry) metricsSink() consumer.Metrics {
 			for j := range scopeMetrics.Len() {
 				metrics := scopeMetrics.At(j).Metrics()
 				for k := range metrics.Len() {
-					reg.addSumDataPoints(metrics.At(k))
+					reg.addSumDataPoints(metrics.At(k), item)
 				}
 			}
 		}
@@ -141,13 +194,13 @@ func (reg *metricsRegistry) metricsSink() consumer.Metrics {
 }
 
 // addSumDataPoints adds m's data points (Sum only, all countconnector emits) to
-// the matching counter. Caller must hold reg.l.
-func (reg *metricsRegistry) addSumDataPoints(m pmetric.Metric) {
+// the matching (metric, item) counter. Caller must hold reg.l.
+func (reg *metricsRegistry) addSumDataPoints(m pmetric.Metric, item string) {
 	if m.Type() != pmetric.MetricTypeSum {
 		return
 	}
 
-	c, found := reg.counters[m.Name()]
+	c, found := reg.counters[counterKey{metric: m.Name(), item: item}]
 	if !found {
 		return
 	}

@@ -65,11 +65,17 @@ type Log struct {
 	Metrics        LogMetricsConfig `yaml:"metrics"`
 }
 
+// LogInput is the original, Fluent Bit-era way of declaring a log-to-metric
+// source, predating LogMetricsConfig. It still parses so configs from before
+// this feature was ported to OpenTelemetry keep working, but migrateLogInputs
+// (config.go) translates any entry with Filters into the equivalent
+// LogMetricsConfig shape before it ever reaches this struct --
+// LogMetricsConfig is the only shape otel/logmetrics itself needs to handle.
 type LogInput struct {
 	Path          string            `yaml:"path"`
 	ContainerName string            `yaml:"container_name"`
 	Selectors     map[string]string `yaml:"container_selectors"`
-	Counters      []LogCounter      `yaml:"counters"`
+	Filters       []LogCounter      `yaml:"filters"`
 }
 
 // LogCounter is a regex whose match rate is reported as the named metric --
@@ -78,6 +84,13 @@ type LogInput struct {
 type LogCounter struct {
 	Metric string `yaml:"metric"`
 	Regex  string `yaml:"regex"`
+	// Exclude, if set, excludes lines that also match this regex from the
+	// count -- e.g. count every "[error]" line except a known-noisy one.
+	Exclude string `yaml:"exclude"`
+	// Labels are static, user-declared labels attached to every sample of
+	// this metric, in addition to the metric name and (for container-sourced
+	// counters) the automatic item label.
+	Labels map[string]string `yaml:"labels"`
 }
 
 // LogMetricsConfig is the new-style, independent configuration for counting log
@@ -89,13 +102,40 @@ type LogMetricsConfig struct {
 	Receivers     map[string]LogMetricsReceiver `yaml:"receivers"`
 	KnownCounters map[string][]LogCounter       `yaml:"known_counters"`
 	// map: container name -> known_counters key to apply
-	ContainerCounters map[string]string         `yaml:"container_counters"`
-	Network           LogMetricsNetworkReceiver `yaml:"network"`
+	ContainerCounters map[string]string `yaml:"container_counters"`
+	// containers matched by label/annotation selector (rather than by exact
+	// name, see ContainerCounters) -- additive: every entry whose Selectors
+	// match a given container contributes its known_counters group, on top of
+	// whatever the label/ContainerCounters resolution already picked.
+	ContainerSelectorCounters []ContainerSelectorCounter `yaml:"container_selector_counters"`
+	// ContainerExclude vetoes counting for any matching container, overriding
+	// every other resolution mechanism (label, ContainerCounters,
+	// ContainerSelectorCounters) for that container.
+	ContainerExclude []ContainerExcludeRule    `yaml:"container_exclude"`
+	Network          LogMetricsNetworkReceiver `yaml:"network"`
 }
 
 type LogMetricsReceiver struct {
 	Include  []string     `yaml:"include"`
 	Counters []LogCounter `yaml:"counters"`
+}
+
+type ContainerSelectorCounter struct {
+	// ContainerName, if set, additionally requires an exact name match on top
+	// of Selectors (both conditions apply together).
+	ContainerName string            `yaml:"container_name"`
+	Selectors     map[string]string `yaml:"selectors"`
+	// KnownCounters references a LogMetricsConfig.KnownCounters group, same
+	// pattern as ContainerCounters.
+	KnownCounters string `yaml:"known_counters"`
+}
+
+// ContainerExcludeRule matches a container the same way ContainerSelectorCounter
+// does (ContainerName and/or Selectors, both required if both set), but its
+// match vetoes counting entirely instead of contributing a known_counters group.
+type ContainerExcludeRule struct {
+	ContainerName string            `yaml:"container_name"`
+	Selectors     map[string]string `yaml:"selectors"`
 }
 
 // LogMetricsNetworkReceiver lets log-to-metric count matches in logs pushed via

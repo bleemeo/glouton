@@ -32,38 +32,27 @@ import (
 const containerLogCounterLabel = "glouton.log_counter"
 
 // hasContainerCounters reports whether any container could possibly need
-// watching: via a legacy container-based log.inputs entry, the static
-// container_counters config map, or -- since any container can opt in purely
-// via the glouton.log_counter label -- the mere existence of a known_counters
-// group for a label to reference.
+// watching: via the static container_counters/container_selector_counters
+// config, or -- since any container can opt in purely via the
+// glouton.log_counter label -- the mere existence of a known_counters group
+// for a label to reference.
 func hasContainerCounters(cfg config.Log) bool {
-	for _, input := range cfg.Inputs {
-		if input.Path == "" && (input.ContainerName != "" || len(input.Selectors) > 0) {
-			return true
-		}
-	}
-
-	return len(cfg.Metrics.ContainerCounters) > 0 || len(cfg.Metrics.KnownCounters) > 0
+	return len(cfg.Metrics.ContainerCounters) > 0 ||
+		len(cfg.Metrics.ContainerSelectorCounters) > 0 ||
+		len(cfg.Metrics.KnownCounters) > 0
 }
 
-// resolveContainerCounters returns the concatenation of every counter source that matches ctr.
+// resolveContainerCounters returns the concatenation of every counter source that matches ctr,
+// or nil if ctr matches a ContainerExclude rule -- exclusion vetoes every other resolution
+// mechanism (label, ContainerCounters, ContainerSelectorCounters) unconditionally.
 func resolveContainerCounters(cfg config.Log, ctr facts.Container) []config.LogCounter {
-	var counters []config.LogCounter
-
-	for _, input := range cfg.Inputs {
-		if input.Path != "" {
-			continue // path-based, not container
-		}
-
-		matchName := input.ContainerName != "" && ctr.ContainerName() == input.ContainerName
-		matchSelectors := len(input.Selectors) > 0 && containerMatchesSelectors(ctr, input.Selectors)
-
-		matches := (matchName && matchSelectors) || (len(input.Selectors) == 0 && matchName) || (input.ContainerName == "" && matchSelectors)
-
-		if matches {
-			counters = append(counters, input.Counters...)
+	for _, ex := range cfg.Metrics.ContainerExclude {
+		if matchesContainerRule(ctr, ex.ContainerName, ex.Selectors) {
+			return nil
 		}
 	}
+
+	var counters []config.LogCounter
 
 	hasFromLabel := false
 
@@ -82,7 +71,29 @@ func resolveContainerCounters(cfg config.Log, ctr facts.Container) []config.LogC
 		}
 	}
 
+	// Selector-based rules are additive: every matching entry contributes its
+	// known_counters group on top of whatever the label/ContainerCounters
+	// resolution above already picked. ContainerName, if set, is an extra
+	// requirement on top of Selectors (both must match).
+	for _, sel := range cfg.Metrics.ContainerSelectorCounters {
+		if matchesContainerRule(ctr, sel.ContainerName, sel.Selectors) {
+			counters = append(counters, cfg.Metrics.KnownCounters[sel.KnownCounters]...)
+		}
+	}
+
 	return counters
+}
+
+// matchesContainerRule reports whether ctr matches a {containerName, selectors} rule:
+// containerName (if set) requires an exact match, selectors (if set) require every
+// key/value to match a label or annotation -- both conditions apply together when set,
+// and an empty/unset one acts as a wildcard on that dimension.
+func matchesContainerRule(ctr facts.Container, containerName string, selectors map[string]string) bool {
+	if containerName != "" && containerName != ctr.ContainerName() {
+		return false
+	}
+
+	return containerMatchesSelectors(ctr, selectors)
 }
 
 // containerMatchesSelectors returns true if the container's labels or annotations match the selectors.

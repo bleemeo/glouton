@@ -135,10 +135,12 @@ func TestManagerStaticSource(t *testing.T) {
 	defer logFile.Close()
 
 	cfg := config.Log{
-		Inputs: []config.LogInput{
-			{Path: logFile.Name(), Counters: []config.LogCounter{
-				{Metric: "app_errors_count", Regex: `\[error\]`},
-			}},
+		Metrics: config.LogMetricsConfig{
+			Receivers: map[string]config.LogMetricsReceiver{
+				"app": {Include: []string{logFile.Name()}, Counters: []config.LogCounter{
+					{Metric: "app_errors_count", Regex: `\[error\]`},
+				}},
+			},
 		},
 	}
 
@@ -206,8 +208,8 @@ func TestManagerStaticSource(t *testing.T) {
 	}
 }
 
-// TestManagerContainerSource is an end-to-end test of a legacy container_name-based
-// log.inputs entry: a fake container whose log file is a real, Docker-JSON-wrapped
+// TestManagerContainerSource is an end-to-end test of a container_name-based
+// container_counters entry: a fake container whose log file is a real, Docker-JSON-wrapped
 // temp file, resolved and processed dynamically by the Manager's container polling
 // loop. This is the regression test for the original RabbitMQ bug: the log line is
 // wrapped exactly like a real Docker container log, and the counter only matches the
@@ -231,10 +233,11 @@ func TestManagerContainerSource(t *testing.T) {
 	// The container parser preserves the trailing newline embedded in Docker's JSON
 	// "log" field value, so the body is "[error] something broke\n", not "...broke".
 	cfg := config.Log{
-		Inputs: []config.LogInput{
-			{ContainerName: ctr.ContainerName(), Counters: []config.LogCounter{
-				{Metric: "rabbitmq_errors", Regex: `^\[error\] something broke\n?$`},
-			}},
+		Metrics: config.LogMetricsConfig{
+			KnownCounters: map[string][]config.LogCounter{
+				"rabbitmq-grp": {{Metric: "rabbitmq_errors", Regex: `^\[error\] something broke\n?$`}},
+			},
+			ContainerCounters: map[string]string{ctr.ContainerName(): "rabbitmq-grp"},
 		},
 	}
 
@@ -260,7 +263,7 @@ func TestManagerContainerSource(t *testing.T) {
 	time.Sleep(time.Second)
 
 	man.l.Lock()
-	counter, found := man.reg.counters["rabbitmq_errors"]
+	counter, found := man.reg.counters[counterKey{metric: "rabbitmq_errors", item: ctr.ContainerName()}]
 	man.l.Unlock()
 
 	if !found {
@@ -269,6 +272,110 @@ func TestManagerContainerSource(t *testing.T) {
 
 	if got := counter.counter.Total(); got != 1 {
 		t.Errorf("Expected 1 match for rabbitmq_errors, got %d", got)
+	}
+}
+
+// TestManagerTwoContainersSameMetricGetDistinctItems is the end-to-end regression test
+// for the item-label feature: two different containers both producing the same
+// known_counters-declared metric name must come out as two distinctly-labeled series
+// with independent counts, not merge into one.
+func TestManagerTwoContainersSameMetricGetDistinctItems(t *testing.T) {
+	t.Parallel()
+
+	logFileA, err := os.CreateTemp(t.TempDir(), "app-a-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFileA.Close()
+
+	logFileB, err := os.CreateTemp(t.TempDir(), "app-b-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFileB.Close()
+
+	ctrA := facts.FakeContainer{FakeID: "id-a", FakeContainerName: "app-a", FakeLogPath: logFileA.Name()}
+	ctrB := facts.FakeContainer{FakeID: "id-b", FakeContainerName: "app-b", FakeLogPath: logFileB.Name()}
+
+	cfg := config.Log{
+		Metrics: config.LogMetricsConfig{
+			KnownCounters: map[string][]config.LogCounter{
+				"shared-grp": {{Metric: "shared_errors_count", Regex: `\[error\]`}},
+			},
+			ContainerCounters: map[string]string{
+				ctrA.ContainerName(): "shared-grp",
+				ctrB.ContainerName(): "shared-grp",
+			},
+		},
+	}
+
+	man := New(cfg, "/", &fakeRuntime{containers: []facts.Container{ctrA, ctrB}}, newMemoryState(), noExecRunner(t))
+
+	man.updateContainerSources(t.Context())
+
+	defer man.stopAll(t.Context())
+
+	time.Sleep(500 * time.Millisecond)
+
+	dockerLine := func(msg string) string {
+		return `{"log":"` + msg + `\n","stream":"stdout","time":"2024-01-15T10:23:45.123Z"}` + "\n"
+	}
+
+	if _, err := logFileA.WriteString(dockerLine("[error] a1") + dockerLine("[error] a2")); err != nil {
+		t.Fatal("Failed to write log line:", err)
+	}
+
+	if _, err := logFileB.WriteString(dockerLine("[error] b1")); err != nil {
+		t.Fatal("Failed to write log line:", err)
+	}
+
+	if err := logFileA.Sync(); err != nil {
+		t.Fatal("Failed to sync log file:", err)
+	}
+
+	if err := logFileB.Sync(); err != nil {
+		t.Fatal("Failed to sync log file:", err)
+	}
+
+	time.Sleep(time.Second)
+
+	appender := glmodel.NewBufferAppender()
+
+	if err := man.EmitMetrics(t.Context(), registry.GatherState{}, appender); err != nil {
+		t.Fatal("EmitMetrics returned an error:", err)
+	}
+
+	mfs, err := appender.AsMF()
+	if err != nil {
+		t.Fatal("AsMF returned an error:", err)
+	}
+
+	if len(mfs) != 1 || mfs[0].GetName() != "shared_errors_count" {
+		t.Fatalf("Expected exactly 1 metric family named shared_errors_count, got %v", mfs)
+	}
+
+	if len(mfs[0].GetMetric()) != 2 {
+		t.Fatalf("Expected 2 distinctly-labeled samples (one per container), got %d", len(mfs[0].GetMetric()))
+	}
+
+	gotRates := make(map[string]float64, 2)
+
+	for _, m := range mfs[0].GetMetric() {
+		for _, lbl := range m.GetLabel() {
+			if lbl.GetName() == "item" {
+				gotRates[lbl.GetValue()] = m.GetUntyped().GetValue()
+			}
+		}
+	}
+
+	if got := gotRates[ctrA.ContainerName()]; got != 2.0/windowSecs {
+		t.Errorf("Expected rate %v for %s, got %v", 2.0/windowSecs, ctrA.ContainerName(), got)
+	}
+
+	if got := gotRates[ctrB.ContainerName()]; got != 1.0/windowSecs {
+		t.Errorf("Expected rate %v for %s, got %v", 1.0/windowSecs, ctrB.ContainerName(), got)
 	}
 }
 
@@ -285,8 +392,9 @@ func TestManagerContainerRemoved(t *testing.T) {
 	ctr := facts.FakeContainer{FakeContainerName: "app-1", FakeLogPath: logFile.Name()}
 
 	cfg := config.Log{
-		Inputs: []config.LogInput{
-			{ContainerName: ctr.ContainerName(), Counters: []config.LogCounter{{Metric: "app_errors", Regex: "ERROR"}}},
+		Metrics: config.LogMetricsConfig{
+			KnownCounters:     map[string][]config.LogCounter{"app-grp": {{Metric: "app_errors", Regex: "ERROR"}}},
+			ContainerCounters: map[string]string{ctr.ContainerName(): "app-grp"},
 		},
 	}
 
@@ -331,10 +439,12 @@ func TestManagerPersistsOffsetAcrossRestart(t *testing.T) {
 	defer logFile.Close()
 
 	cfg := config.Log{
-		Inputs: []config.LogInput{
-			{Path: logFile.Name(), Counters: []config.LogCounter{
-				{Metric: "app_errors_count", Regex: `\[error\]`},
-			}},
+		Metrics: config.LogMetricsConfig{
+			Receivers: map[string]config.LogMetricsReceiver{
+				"app": {Include: []string{logFile.Name()}, Counters: []config.LogCounter{
+					{Metric: "app_errors_count", Regex: `\[error\]`},
+				}},
+			},
 		},
 	}
 

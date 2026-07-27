@@ -147,6 +147,57 @@ func TestSourceCountsRealFile(t *testing.T) {
 	}
 }
 
+// TestSourceExcludeRegex confirms a LogCounter.Exclude regex suppresses lines that
+// would otherwise match Regex, via the extra "not IsMatch(...)" OTTL condition in
+// metricInfo -- a known-noisy line stays uncounted, an ordinary matching line doesn't.
+func TestSourceExcludeRegex(t *testing.T) {
+	t.Parallel()
+
+	logFile, err := os.CreateTemp(t.TempDir(), "app-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFile.Close()
+
+	sink, totals := collectingSink()
+
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, false, []config.LogCounter{
+		{Metric: "app_errors_count", Regex: `\[error\]`, Exclude: "connection reset"},
+	}, sink, nil, noExecRunner(t), logsource.StatFile, "")
+	if err != nil {
+		t.Fatal("Failed to build source:", err)
+	}
+
+	defer src.stop(t.Context()) //nolint:errcheck
+
+	time.Sleep(500 * time.Millisecond)
+
+	lines := []string{
+		"[error] something broke\n",
+		"[error] connection reset by peer\n",
+		"[error] another real problem\n",
+	}
+
+	for _, line := range lines {
+		if _, err := logFile.WriteString(line); err != nil {
+			t.Fatal("Failed to write log line:", err)
+		}
+	}
+
+	if err := logFile.Sync(); err != nil {
+		t.Fatal("Failed to sync log file:", err)
+	}
+
+	time.Sleep(time.Second)
+
+	got := totals()
+
+	if got["app_errors_count"] != 2 {
+		t.Errorf("Expected 2 matches for app_errors_count (excluding the connection reset line), got %d", got["app_errors_count"])
+	}
+}
+
 // TestSourceUnwrapsContainerEnvelope is the regression test for the original
 // RabbitMQ bug: a regex that only matches the unwrapped message, fed through a
 // Docker-JSON-wrapped raw line, via a real filelogreceiver+countconnector pipeline

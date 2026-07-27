@@ -65,7 +65,8 @@ type Manager struct {
 	state     bleemeoTypes.State
 	telemetry component.TelemetrySettings
 
-	reg           *metricsRegistry
+	reg *metricsRegistry
+	// sink is the item="" sink, shared by every non-container source (static, network).
 	sink          consumer.Metrics
 	persister     *logsource.PersistHost // nil if persistence setup failed; sources then run without a StorageID
 	commandRunner logsource.CommandRunner
@@ -114,26 +115,23 @@ func New(cfg config.Log, hostroot string, runtime crTypes.RuntimeInterface, stat
 			Resource:       pcommon.NewResource(),
 		},
 		reg:               reg,
-		sink:              reg.metricsSink(),
+		sink:              reg.metricsSinkForItem(""),
 		persister:         persister,
 		containerSources:  make(map[string]*source),
 		watchedContainers: make(map[string]string),
 	}
 
-	// Pre-register every declared metric name (legacy and new-style) so MetricNames() is complete immediately
-	// without waiting for a dynamically-resolved source (container) to appear.
-	man.reg.resolve(collectAllCounters(cfg))
+	// Declare every configured metric name (legacy and new-style) so MetricNames() is complete
+	// immediately, without waiting for a dynamically-resolved source (container) to appear.
+	man.reg.declare(collectAllCounters(cfg))
 
 	return man
 }
 
 // collectAllCounters gathers every LogCounter declared anywhere in the config.
+// cfg.Metrics is expected to already be the output of translateLegacyInputs.
 func collectAllCounters(cfg config.Log) []config.LogCounter {
 	var counters []config.LogCounter
-
-	for _, input := range cfg.Inputs {
-		counters = append(counters, input.Counters...)
-	}
 
 	for _, metricsRecv := range cfg.Metrics.Receivers {
 		counters = append(counters, metricsRecv.Counters...)
@@ -204,14 +202,6 @@ func (man *Manager) startStaticSources(ctx context.Context) {
 	man.l.Lock()
 	defer man.l.Unlock()
 
-	for _, input := range man.cfg.Inputs {
-		if input.Path == "" {
-			continue // container-based, handled dynamically, see updateContainerSources
-		}
-
-		man.startStaticSource(ctx, []string{filepath.Join(man.hostroot, input.Path)}, input.Counters)
-	}
-
 	for _, recv := range man.cfg.Metrics.Receivers {
 		include := make([]string, len(recv.Include))
 
@@ -227,6 +217,8 @@ func (man *Manager) startStaticSource(ctx context.Context, include []string, cou
 	if len(counters) == 0 {
 		return
 	}
+
+	man.reg.resolve(counters, "")
 
 	src, err := newSource(ctx, man.telemetry, include, false, man.hasHostRoot(), counters, man.sink, man.persister, man.commandRunner, logsource.StatFile, staticSourceName(include))
 	if err != nil {
@@ -253,6 +245,8 @@ func (man *Manager) retryPendingStaticSources(ctx context.Context) {
 	stillPending := man.pendingStatic[:0]
 
 	for _, pending := range man.pendingStatic {
+		man.reg.resolve(pending.counters, "")
+
 		src, err := newSource(ctx, man.telemetry, pending.include, false, man.hasHostRoot(), pending.counters, man.sink, man.persister, man.commandRunner, logsource.StatFile, staticSourceName(pending.include))
 		if err != nil {
 			stillPending = append(stillPending, pending)
@@ -289,6 +283,8 @@ func staticSourceName(include []string) string {
 func (man *Manager) startNetworkSource(ctx context.Context) {
 	man.l.Lock()
 	defer man.l.Unlock()
+
+	man.reg.resolve(man.cfg.Metrics.Network.Counters, "")
 
 	src, err := newNetworkSource(ctx, man.telemetry, man.cfg.Metrics.Network, man.sink)
 	if err != nil {
@@ -339,7 +335,9 @@ func (man *Manager) updateContainerSources(ctx context.Context) {
 		// itself is recreated, which is fine: that's effectively a new log source).
 		name := "container:" + ctr.ID()
 
-		src, err := newSource(ctx, man.telemetry, []string{logPath}, true, man.hasHostRoot(), counters, man.sink, man.persister, man.commandRunner, logsource.StatFile, name)
+		man.reg.resolve(counters, ctr.ContainerName())
+
+		src, err := newSource(ctx, man.telemetry, []string{logPath}, true, man.hasHostRoot(), counters, man.reg.metricsSinkForItem(ctr.ContainerName()), man.persister, man.commandRunner, logsource.StatFile, name)
 		if err != nil {
 			logger.V(1).Printf("logmetrics: failed to start source for container %s (%s): %v", ctr.ContainerName(), ctr.ID(), err)
 

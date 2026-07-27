@@ -372,9 +372,19 @@ func buildConnectors(
 }
 
 func metricInfo(counter config.LogCounter) countconnector.MetricInfo {
+	// countconnector.MetricInfo.Conditions defaults to ORing multiple entries
+	// together (ottl.ConditionSequence's default LogicOperation is Or, not
+	// And), so Regex/Exclude must be combined into a single "and"/"not"
+	// condition string rather than passed as two separate list entries.
+	condition := fmt.Sprintf("IsMatch(log.body, %q)", counter.Regex)
+
+	if counter.Exclude != "" {
+		condition = fmt.Sprintf("%s and not IsMatch(log.body, %q)", condition, counter.Exclude)
+	}
+
 	return countconnector.MetricInfo{
 		Description: "log-to-metric: " + counter.Metric,
-		Conditions:  []string{fmt.Sprintf("IsMatch(log.body, %q)", counter.Regex)},
+		Conditions:  []string{condition},
 	}
 }
 

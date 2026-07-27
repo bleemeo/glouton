@@ -346,9 +346,11 @@ func DefaultConfig() Config { //nolint:maintidx
 				ContainerFilter: map[string]string{},
 			},
 			Metrics: LogMetricsConfig{
-				Receivers:         map[string]LogMetricsReceiver{},
-				KnownCounters:     map[string][]LogCounter{},
-				ContainerCounters: map[string]string{},
+				Receivers:                 map[string]LogMetricsReceiver{},
+				KnownCounters:             map[string][]LogCounter{},
+				ContainerCounters:         map[string]string{},
+				ContainerSelectorCounters: []ContainerSelectorCounter{},
+				ContainerExclude:          []ContainerExcludeRule{},
 				Network: LogMetricsNetworkReceiver{
 					GRPC: EnableListener{
 						Enable:  false,
