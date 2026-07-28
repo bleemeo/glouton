@@ -698,7 +698,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "invalid yaml multiple files",
 			Files: []string{"testdata/invalid"},
 			WantWarnings: []string{
-				`testdata/invalid/10-invalid.conf: yaml: line 2: found character that cannot start any token (line 2 uses a tab for indentation, which YAML doesn't allow; use spaces instead: "\tregistration_key: \"a\"")`,
+				`testdata/invalid/10-invalid.conf: yaml: line 2: found character that cannot start any token (uses a tab for indentation, which YAML doesn't allow; use spaces instead: "\tregistration_key: \"a\"")`,
 			},
 			WantConfig: Config{
 				Agent: Agent{
@@ -713,7 +713,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "invalid yaml bad indentation",
 			Files: []string{"testdata/bad_indentation.conf"},
 			WantWarnings: []string{
-				`testdata/bad_indentation.conf: yaml: line 1: did not find expected key (line 3 has 4 space(s) of indentation, should be 2: "    mqtt:")`,
+				`testdata/bad_indentation.conf: yaml: line 3: did not find expected key (has 4 space(s) of indentation, should be 2: "    mqtt:")`,
 			},
 		},
 		{

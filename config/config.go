@@ -22,6 +22,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/bleemeo/glouton/logger"
@@ -380,7 +381,7 @@ func loadFile(loader *configLoader, path string) prometheus.MultiError {
 	if len(warnings) > 0 {
 		// Errors are read-only diagnostics here: reading the file again to pinpoint the faulty
 		// line is only done when parsing already failed, so it doesn't affect the normal load path.
-		if data, readErr := os.ReadFile(path); readErr == nil {
+		if data, readErr := os.ReadFile(path); readErr == nil { //nolint:gosec
 			for i, warning := range warnings {
 				warnings[i] = addYAMLIndentationHint(warning, data)
 			}
@@ -449,17 +450,36 @@ func addYAMLIndentationHint(err error, data []byte) error {
 		return err
 	}
 
-	if issue, ok := findYAMLIndentationIssue(data); ok {
-		if issue.IsTab {
-			return fmt.Errorf("%w (line %d uses a tab for indentation, which YAML doesn't allow; use spaces instead: %q)",
-				err, issue.Line, issue.Content)
-		}
-
-		return fmt.Errorf("%w (line %d has %d space(s) of indentation, should be %d: %q)",
-			err, issue.Line, issue.FoundIndent, issue.ExpectedIndent, issue.Content)
+	issue, ok := findYAMLIndentationIssue(data)
+	if !ok {
+		return fmt.Errorf("%w (this is usually caused by inconsistent indentation, or mixing tabs and spaces, in the YAML file)", err)
 	}
 
-	return fmt.Errorf("%w (this is usually caused by inconsistent indentation, or mixing tabs and spaces, in the YAML file)", err)
+	// yaml.v3's own line number often points to where the parser gave up rather than to the
+	// actual mistake, so it's replaced by the pinpointed line instead of shown alongside it.
+	problem := fmt.Sprintf("yaml: line %d: %s", issue.Line, yamlProblemText(msg))
+
+	if issue.IsTab {
+		return fmt.Errorf("%s (uses a tab for indentation, which YAML doesn't allow; use spaces instead: %q)", problem, issue.Content) //nolint:err113
+	}
+
+	return fmt.Errorf("%s (has %d space(s) of indentation, should be %d: %q)", problem, issue.FoundIndent, issue.ExpectedIndent, issue.Content) //nolint:err113
+}
+
+// yamlProblemText strips the "yaml: " prefix and any "line N: " location that yaml.v3 prepends to
+// its error messages, leaving just the underlying problem description.
+func yamlProblemText(msg string) string {
+	problem := strings.TrimPrefix(msg, "yaml: ")
+
+	if rest, ok := strings.CutPrefix(problem, "line "); ok {
+		if lineNo, after, ok := strings.Cut(rest, ": "); ok {
+			if _, err := strconv.Atoi(lineNo); err == nil {
+				return after
+			}
+		}
+	}
+
+	return problem
 }
 
 // yamlIndentIssue describes a single line whose indentation breaks the surrounding block
@@ -558,7 +578,8 @@ func findYAMLIndentationIssue(data []byte) (issue yamlIndentIssue, ok bool) {
 
 		value := strings.TrimSpace(trimmed[colonIdx+1:])
 
-		allowsChild := true
+		var allowsChild bool
+
 		expectedChildIndent := -1
 
 		switch {
