@@ -518,16 +518,7 @@ func findYAMLIndentationIssue(data []byte) (issue yamlIndentIssue, ok bool) {
 
 		leading := raw[:len(raw)-len(strings.TrimLeft(raw, " \t"))]
 		trimmed := strings.TrimLeft(raw, " \t")
-
-		if strings.Contains(leading, "\t") {
-			return yamlIndentIssue{Line: lineNo, Content: strings.TrimRight(raw, "\r"), IsTab: true}, true
-		}
-
 		indent := len(leading)
-
-		if strings.HasPrefix(trimmed, "#") {
-			continue
-		}
 
 		if inBlockScalar {
 			if indent > blockScalarIndent {
@@ -535,6 +526,14 @@ func findYAMLIndentationIssue(data []byte) (issue yamlIndentIssue, ok bool) {
 			}
 
 			inBlockScalar = false
+		}
+
+		if strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+
+		if strings.Contains(leading, "\t") {
+			return yamlIndentIssue{Line: lineNo, Content: strings.TrimRight(raw, "\r"), IsTab: true}, true
 		}
 
 		if strings.HasPrefix(trimmed, "- ") || trimmed == "-" ||
@@ -576,7 +575,7 @@ func findYAMLIndentationIssue(data []byte) (issue yamlIndentIssue, ok bool) {
 			return yamlIndentIssue{}, false
 		}
 
-		value := strings.TrimSpace(trimmed[colonIdx+1:])
+		value := strings.TrimSpace(stripYAMLLineComment(strings.TrimSpace(trimmed[colonIdx+1:])))
 
 		var allowsChild bool
 
@@ -659,6 +658,31 @@ func yamlMappingColonIndex(s string) int {
 	}
 
 	return -1
+}
+
+// stripYAMLLineComment removes a trailing "# ..." comment from s, honoring quoted strings and
+// requiring the '#' to be at the start of s or preceded by whitespace, per YAML's comment rules.
+func stripYAMLLineComment(s string) string {
+	inSingle, inDouble := false, false
+
+	for i := range len(s) {
+		switch s[i] {
+		case '\'':
+			if !inDouble {
+				inSingle = !inSingle
+			}
+		case '"':
+			if !inSingle {
+				inDouble = !inDouble
+			}
+		case '#':
+			if !inSingle && !inDouble && (i == 0 || s[i-1] == ' ' || s[i-1] == '\t') {
+				return strings.TrimRight(s[:i], " \t")
+			}
+		}
+	}
+
+	return s
 }
 
 func unwrapRecurse(err error) []error {
