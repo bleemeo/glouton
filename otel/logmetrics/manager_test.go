@@ -121,9 +121,11 @@ func (m *memoryState) Delete(string) error                             { return 
 func (m *memoryState) BleemeoCredentials() (string, string)            { return "", "" }
 func (m *memoryState) SetBleemeoCredentials(string, string) error      { return nil }
 
-// TestManagerStaticSource is an end-to-end test of a legacy path-based log.inputs
-// entry: a real file, a real OTel filelogreceiver+countconnector pipeline, through
-// the Manager.
+// TestManagerStaticSource is an end-to-end test of a plain path-based
+// receiver: a real file, a real OTel filelogreceiver+countconnector pipeline,
+// through the Manager. The receiver never references the metric by name --
+// log.metrics.count is global (see LogMetricsConfig's doc comment), so it
+// applies automatically to every watched source.
 func TestManagerStaticSource(t *testing.T) {
 	t.Parallel()
 
@@ -137,14 +139,15 @@ func TestManagerStaticSource(t *testing.T) {
 	cfg := config.Log{
 		Metrics: config.LogMetricsConfig{
 			Receivers: map[string]config.LogMetricsReceiver{
-				"app": {Include: []string{logFile.Name()}, Counters: []config.LogCounter{
-					{Metric: "app_errors_count", Regex: `\[error\]`},
-				}},
+				"app": {"include": []string{logFile.Name()}},
+			},
+			Count: map[string]config.LogMetricsCount{
+				"app_errors_count": {"conditions": []any{`IsMatch(body, "\\[error\\]")`}},
 			},
 		},
 	}
 
-	man := New(cfg, "/", &fakeRuntime{}, newMemoryState(), noExecRunner(t))
+	man := New(t.Context(), cfg, "/", &fakeRuntime{}, newMemoryState(), noExecRunner(t))
 
 	// Metric names must be known immediately, before any matching line was seen.
 	if names := man.MetricNames(); len(names) != 1 || names[0] != "app_errors_count" {
@@ -208,8 +211,191 @@ func TestManagerStaticSource(t *testing.T) {
 	}
 }
 
-// TestManagerContainerSource is an end-to-end test of a container_name-based
-// container_counters entry: a fake container whose log file is a real, Docker-JSON-wrapped
+// TestManagerStaticSourceInlineOperatorsAttributeCounter is an end-to-end test
+// of a static receiver using raw inline operators (config.OTELOperator, the
+// same shape/mechanism as OTLPReceiver.Operators) instead of the log_format
+// shortcut, matching real OpenTelemetry receiver config more directly: no
+// named-format indirection, just the operators themselves. The metric then
+// matches against a parsed attribute instead of the raw body.
+func TestManagerStaticSourceInlineOperatorsAttributeCounter(t *testing.T) {
+	t.Parallel()
+
+	logFile, err := os.CreateTemp(t.TempDir(), "app-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFile.Close()
+
+	cfg := config.Log{
+		Metrics: config.LogMetricsConfig{
+			Receivers: map[string]config.LogMetricsReceiver{
+				"app": {
+					"include": []string{logFile.Name()},
+					"operators": []config.OTELOperator{
+						{
+							"type":  "regex_parser",
+							"regex": `^level=(?P<level>\w+) `,
+						},
+					},
+				},
+			},
+			Count: map[string]config.LogMetricsCount{
+				"app_warn_count": {"conditions": []any{`IsMatch(attributes["level"], "warn")`}},
+			},
+		},
+	}
+
+	man := New(t.Context(), cfg, "/", &fakeRuntime{}, newMemoryState(), noExecRunner(t))
+
+	ctx, cancel := context.WithCancel(t.Context())
+
+	done := make(chan error, 1)
+
+	go func() {
+		done <- man.Run(ctx)
+	}()
+
+	time.Sleep(500 * time.Millisecond)
+
+	lines := []string{
+		"level=info normal startup\n",
+		"level=warn disk almost full\n",
+		"level=warn cpu almost full\n",
+	}
+
+	for _, line := range lines {
+		if _, err := logFile.WriteString(line); err != nil {
+			t.Fatal("Failed to write log line:", err)
+		}
+	}
+
+	if err := logFile.Sync(); err != nil {
+		t.Fatal("Failed to sync log file:", err)
+	}
+
+	time.Sleep(time.Second)
+
+	cancel()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Manager.Run did not return after context cancellation")
+	}
+
+	appender := glmodel.NewBufferAppender()
+
+	if err := man.EmitMetrics(t.Context(), registry.GatherState{}, appender); err != nil {
+		t.Fatal("EmitMetrics returned an error:", err)
+	}
+
+	mfs, err := appender.AsMF()
+	if err != nil {
+		t.Fatal("AsMF returned an error:", err)
+	}
+
+	if len(mfs) != 1 || mfs[0].GetName() != "app_warn_count" {
+		t.Fatalf("Expected exactly 1 metric family named app_warn_count, got %v", mfs)
+	}
+
+	if got := mfs[0].GetMetric()[0].GetUntyped().GetValue(); got != 2.0/windowSecs {
+		t.Errorf("Expected rate %v (2 matching warn lines out of 3), got %v", 2.0/windowSecs, got)
+	}
+}
+
+// TestManagerStaticSourceLogFormatAttributeCounter is an end-to-end test of a
+// static receiver applying a known_log_format (reused from
+// log.opentelemetry.known_log_formats) before counting, so a counter can
+// match on a parsed attribute (http.response.status_code) instead of the raw
+// body -- the regression test for "count Apache 5xx responses".
+func TestManagerStaticSourceLogFormatAttributeCounter(t *testing.T) {
+	t.Parallel()
+
+	logFile, err := os.CreateTemp(t.TempDir(), "apache-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFile.Close()
+
+	cfg := config.Log{
+		OpenTelemetry: config.OpenTelemetry{
+			KnownLogFormats: config.DefaultKnownLogFormats(),
+		},
+		Metrics: config.LogMetricsConfig{
+			Receivers: map[string]config.LogMetricsReceiver{
+				"apache": {
+					"include":    []string{logFile.Name()},
+					"log_format": "apache_access",
+				},
+			},
+			Count: map[string]config.LogMetricsCount{
+				"apache_server_error": {"conditions": []any{`IsMatch(attributes["http.response.status_code"], "5..")`}},
+			},
+		},
+	}
+
+	man := New(t.Context(), cfg, "/", &fakeRuntime{}, newMemoryState(), noExecRunner(t))
+
+	ctx, cancel := context.WithCancel(t.Context())
+
+	done := make(chan error, 1)
+
+	go func() {
+		done <- man.Run(ctx)
+	}()
+
+	time.Sleep(500 * time.Millisecond)
+
+	lines := []string{
+		`127.0.0.1 - - [10/Oct/2023:13:55:36 +0000] "GET /index.html HTTP/1.1" 200 1234 "-" "curl/7.68.0"` + "\n",
+		`127.0.0.1 - - [10/Oct/2023:13:55:37 +0000] "GET /broken HTTP/1.1" 500 1234 "-" "curl/7.68.0"` + "\n",
+		`127.0.0.1 - - [10/Oct/2023:13:55:38 +0000] "GET /also-broken HTTP/1.1" 503 1234 "-" "curl/7.68.0"` + "\n",
+	}
+
+	for _, line := range lines {
+		if _, err := logFile.WriteString(line); err != nil {
+			t.Fatal("Failed to write log line:", err)
+		}
+	}
+
+	if err := logFile.Sync(); err != nil {
+		t.Fatal("Failed to sync log file:", err)
+	}
+
+	time.Sleep(time.Second)
+
+	cancel()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Manager.Run did not return after context cancellation")
+	}
+
+	appender := glmodel.NewBufferAppender()
+
+	if err := man.EmitMetrics(t.Context(), registry.GatherState{}, appender); err != nil {
+		t.Fatal("EmitMetrics returned an error:", err)
+	}
+
+	mfs, err := appender.AsMF()
+	if err != nil {
+		t.Fatal("AsMF returned an error:", err)
+	}
+
+	if len(mfs) != 1 || mfs[0].GetName() != "apache_server_error" {
+		t.Fatalf("Expected exactly 1 metric family named apache_server_error, got %v", mfs)
+	}
+
+	if got := mfs[0].GetMetric()[0].GetUntyped().GetValue(); got != 2.0/windowSecs {
+		t.Errorf("Expected rate %v (2 matching 5xx lines out of 3), got %v", 2.0/windowSecs, got)
+	}
+}
+
+// TestManagerContainerSource is an end-to-end test of a container_counters
+// entry: a fake container whose log file is a real, Docker-JSON-wrapped
 // temp file, resolved and processed dynamically by the Manager's container polling
 // loop. This is the regression test for the original RabbitMQ bug: the log line is
 // wrapped exactly like a real Docker container log, and the counter only matches the
@@ -234,14 +420,14 @@ func TestManagerContainerSource(t *testing.T) {
 	// "log" field value, so the body is "[error] something broke\n", not "...broke".
 	cfg := config.Log{
 		Metrics: config.LogMetricsConfig{
-			KnownCounters: map[string][]config.LogCounter{
-				"rabbitmq-grp": {{Metric: "rabbitmq_errors", Regex: `^\[error\] something broke\n?$`}},
+			Count: map[string]config.LogMetricsCount{
+				"rabbitmq_errors": {"conditions": []any{`IsMatch(body, "^\\[error\\] something broke\\n?$")`}},
 			},
-			ContainerCounters: map[string]string{ctr.ContainerName(): "rabbitmq-grp"},
+			ContainerCounters: []string{ctr.ContainerName()},
 		},
 	}
 
-	man := New(cfg, "/", &fakeRuntime{containers: []facts.Container{ctr}}, newMemoryState(), noExecRunner(t))
+	man := New(t.Context(), cfg, "/", &fakeRuntime{containers: []facts.Container{ctr}}, newMemoryState(), noExecRunner(t))
 
 	man.startStaticSources(t.Context())
 	man.updateContainerSources(t.Context())
@@ -276,9 +462,9 @@ func TestManagerContainerSource(t *testing.T) {
 }
 
 // TestManagerTwoContainersSameMetricGetDistinctItems is the end-to-end regression test
-// for the item-label feature: two different containers both producing the same
-// known_counters-declared metric name must come out as two distinctly-labeled series
-// with independent counts, not merge into one.
+// for the item-label feature: two different containers both watched for the same
+// (global) metric must come out as two distinctly-labeled series with independent
+// counts, not merge into one.
 func TestManagerTwoContainersSameMetricGetDistinctItems(t *testing.T) {
 	t.Parallel()
 
@@ -301,17 +487,14 @@ func TestManagerTwoContainersSameMetricGetDistinctItems(t *testing.T) {
 
 	cfg := config.Log{
 		Metrics: config.LogMetricsConfig{
-			KnownCounters: map[string][]config.LogCounter{
-				"shared-grp": {{Metric: "shared_errors_count", Regex: `\[error\]`}},
+			Count: map[string]config.LogMetricsCount{
+				"shared_errors_count": {"conditions": []any{`IsMatch(body, "\\[error\\]")`}},
 			},
-			ContainerCounters: map[string]string{
-				ctrA.ContainerName(): "shared-grp",
-				ctrB.ContainerName(): "shared-grp",
-			},
+			ContainerCounters: []string{ctrA.ContainerName(), ctrB.ContainerName()},
 		},
 	}
 
-	man := New(cfg, "/", &fakeRuntime{containers: []facts.Container{ctrA, ctrB}}, newMemoryState(), noExecRunner(t))
+	man := New(t.Context(), cfg, "/", &fakeRuntime{containers: []facts.Container{ctrA, ctrB}}, newMemoryState(), noExecRunner(t))
 
 	man.updateContainerSources(t.Context())
 
@@ -393,13 +576,13 @@ func TestManagerContainerRemoved(t *testing.T) {
 
 	cfg := config.Log{
 		Metrics: config.LogMetricsConfig{
-			KnownCounters:     map[string][]config.LogCounter{"app-grp": {{Metric: "app_errors", Regex: "ERROR"}}},
-			ContainerCounters: map[string]string{ctr.ContainerName(): "app-grp"},
+			Count:             map[string]config.LogMetricsCount{"app_errors": {"conditions": []any{`IsMatch(body, "ERROR")`}}},
+			ContainerCounters: []string{ctr.ContainerName()},
 		},
 	}
 
 	runtime := &fakeRuntime{containers: []facts.Container{ctr}}
-	man := New(cfg, "/", runtime, newMemoryState(), noExecRunner(t))
+	man := New(t.Context(), cfg, "/", runtime, newMemoryState(), noExecRunner(t))
 
 	man.updateContainerSources(t.Context())
 
@@ -441,9 +624,10 @@ func TestManagerPersistsOffsetAcrossRestart(t *testing.T) {
 	cfg := config.Log{
 		Metrics: config.LogMetricsConfig{
 			Receivers: map[string]config.LogMetricsReceiver{
-				"app": {Include: []string{logFile.Name()}, Counters: []config.LogCounter{
-					{Metric: "app_errors_count", Regex: `\[error\]`},
-				}},
+				"app": {"include": []string{logFile.Name()}},
+			},
+			Count: map[string]config.LogMetricsCount{
+				"app_errors_count": {"conditions": []any{`IsMatch(body, "\\[error\\]")`}},
 			},
 		},
 	}
@@ -452,7 +636,7 @@ func TestManagerPersistsOffsetAcrossRestart(t *testing.T) {
 
 	// First run: starts tailing an empty file, then "first" is written and read
 	// while it's actively running, so the offset saved on stop is past "first".
-	man1 := New(cfg, "/", &fakeRuntime{}, state, noExecRunner(t))
+	man1 := New(t.Context(), cfg, "/", &fakeRuntime{}, state, noExecRunner(t))
 
 	ctx1, cancel1 := context.WithCancel(t.Context())
 	done1 := make(chan error, 1)
@@ -490,7 +674,7 @@ func TestManagerPersistsOffsetAcrossRestart(t *testing.T) {
 
 	// Second run, same persisted state: must pick up "second" via the offset saved
 	// by the previous run, even though it was written before this run even started.
-	man := New(cfg, "/", &fakeRuntime{}, state, noExecRunner(t))
+	man := New(t.Context(), cfg, "/", &fakeRuntime{}, state, noExecRunner(t))
 
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
@@ -527,26 +711,24 @@ func TestManagerPersistsOffsetAcrossRestart(t *testing.T) {
 	}
 }
 
-// TestManagerRegistersNetworkOnlyCounters is the regression test for
-// collectAllCounters forgetting cfg.Metrics.Network.Counters: a counter used
-// only by the network receiver (not by any input/receiver/known_counters
-// entry) must still be registered at startup, or its data points get silently
-// dropped by addSumDataPoints (registry lookup miss) and it never appears in
-// EmitMetrics/MetricNames, no matter what actually gets pushed to it.
-func TestManagerRegistersNetworkOnlyCounters(t *testing.T) {
+// TestManagerRegistersEveryCountEntry is the regression test for
+// collectAllCounters: every log.metrics.count entry must be registered at
+// startup regardless of whether any receiver/container is even configured to
+// feed it yet, or its data points get silently dropped by addSumDataPoints
+// (registry lookup miss) and it never appears in EmitMetrics/MetricNames, no
+// matter what actually gets pushed to it later (e.g. by the network source).
+func TestManagerRegistersEveryCountEntry(t *testing.T) {
 	t.Parallel()
 
 	cfg := config.Log{
 		Metrics: config.LogMetricsConfig{
-			Network: config.LogMetricsNetworkReceiver{
-				Counters: []config.LogCounter{
-					{Metric: "network_only_count", Regex: `\[error\]`},
-				},
+			Count: map[string]config.LogMetricsCount{
+				"network_only_count": {"conditions": []any{`IsMatch(body, "\\[error\\]")`}},
 			},
 		},
 	}
 
-	man := New(cfg, "/", &fakeRuntime{}, newMemoryState(), noExecRunner(t))
+	man := New(t.Context(), cfg, "/", &fakeRuntime{}, newMemoryState(), noExecRunner(t))
 
 	names := man.MetricNames()
 

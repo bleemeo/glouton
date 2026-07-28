@@ -21,69 +21,63 @@ import (
 	"errors"
 
 	"github.com/bleemeo/glouton/config"
-	"github.com/bleemeo/glouton/otel/logsource"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/connector/countconnector"
 	"go.opentelemetry.io/collector/component"
 	otelconnector "go.opentelemetry.io/collector/connector"
 	"go.opentelemetry.io/collector/consumer"
-	"go.opentelemetry.io/collector/receiver"
 )
-
-const networkReceiverIDName = "logmetrics-otlp-receiver"
 
 // networkSource counts matches in logs pushed by an external OTLP gRPC/HTTP
 // client, rather than tailing a file. There is no StorageID/persisted offset
 // here: unlike a file, there's no byte position to resume from.
+//
+// Unlike other sources, this doesn't own an OTLP receiver: the physical
+// listener is shared with otel/logprocessing (see
+// logsource.SetupOTLPNetworkReceiver/FanoutLogs), so a client only ever needs
+// one endpoint regardless of which features consume what it sends.
+// entryConsumer is what the shared receiver's owner feeds into, exposed via
+// Manager.NetworkLogsConsumer.
 type networkSource struct {
-	recv  receiver.Logs
-	conns []otelconnector.Logs
+	conns         []otelconnector.Logs
+	entryConsumer consumer.Logs
 }
 
 // newNetworkSource returns (nil, nil) if the network receiver is disabled or
-// has no counters configured -- neither is an error, just "nothing to start".
+// there's nothing configured to count at all -- neither is an error, just
+// "nothing to start". Like any other source, it counts against the global
+// count map (see LogMetricsConfig.Count's doc comment): there's no separate
+// counter list for network-pushed logs.
 func newNetworkSource(
 	ctx context.Context,
 	telemetry component.TelemetrySettings,
 	netCfg config.LogMetricsNetworkReceiver,
+	count map[string]config.LogMetricsCount,
 	sink consumer.Metrics,
 ) (*networkSource, error) {
-	if !netCfg.GRPC.Enable && !netCfg.HTTP.Enable {
+	if len(netCfg.Receivers) == 0 && !netCfg.Enable {
 		return nil, nil //nolint:nilnil
 	}
 
-	if len(netCfg.Counters) == 0 {
+	if len(count) == 0 {
 		return nil, nil //nolint:nilnil
 	}
 
 	connFactory := countconnector.NewFactory()
 
-	conns, err := buildConnectors(ctx, connFactory, telemetry, netCfg.Counters, sink)
+	conns, err := buildConnectors(ctx, connFactory, telemetry, count, sink)
 	if err != nil {
 		return nil, err
 	}
 
-	recv, err := logsource.SetupOTLPNetworkReceiver(ctx, telemetry, netCfg.GRPC, netCfg.HTTP, nextConsumer(conns), networkReceiverIDName)
-	if err != nil {
-		shutdownConns(ctx, conns)
-
-		return nil, err
-	}
-
-	return &networkSource{recv: recv, conns: conns}, nil
+	return &networkSource{conns: conns, entryConsumer: nextConsumer(conns)}, nil
 }
 
 func (s *networkSource) stop(ctx context.Context) error {
-	recvErr := s.recv.Shutdown(ctx)
-
 	var connErr error
 
 	for _, conn := range s.conns {
 		connErr = errors.Join(connErr, conn.Shutdown(ctx))
-	}
-
-	if recvErr != nil {
-		return recvErr
 	}
 
 	return connErr

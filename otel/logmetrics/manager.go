@@ -19,7 +19,7 @@ package logmetrics
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,6 +35,8 @@ import (
 	"github.com/bleemeo/glouton/prometheus/registry"
 	"github.com/bleemeo/glouton/types"
 
+	"github.com/go-viper/mapstructure/v2"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
 	"github.com/prometheus/prometheus/storage"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
@@ -65,11 +67,24 @@ type Manager struct {
 	state     bleemeoTypes.State
 	telemetry component.TelemetrySettings
 
+	// knownLogFormats is cfg.OpenTelemetry.KnownLogFormats, expanded once (see
+	// logsource.ExpandLogFormats) -- shared with otel/logprocessing only in
+	// the sense that both read the same config.OpenTelemetry.KnownLogFormats
+	// section; log-to-metric never ships anything anywhere, this only makes
+	// parsed attributes available to a receiver's own counters.
+	knownLogFormats map[string][]config.OTELOperator
+
 	reg *metricsRegistry
 	// sink is the item="" sink, shared by every non-container source (static, network).
 	sink          consumer.Metrics
 	persister     *logsource.PersistHost // nil if persistence setup failed; sources then run without a StorageID
 	commandRunner logsource.CommandRunner
+
+	// metricSpecs is cfg.Metrics.Count, reduced once to what the registry
+	// needs (name + labels) -- since Count is global (see
+	// LogMetricsConfig.Count's doc comment), the same []metricSpec is
+	// resolved against every source, regardless of what actually produced it.
+	metricSpecs []metricSpec
 
 	l                 sync.Mutex
 	staticSources     []*source
@@ -82,12 +97,18 @@ type Manager struct {
 // pendingStaticSource is a static source spec that failed to resolve to any
 // log file at the time it was attempted (e.g. the file doesn't exist yet).
 type pendingStaticSource struct {
-	include  []string
-	counters []config.LogCounter
+	include         []string
+	formatOperators []operator.Config
+	extraRaw        map[string]any
 }
 
-func New(cfg config.Log, hostroot string, runtime crTypes.RuntimeInterface, state bleemeoTypes.State, commandRunner logsource.CommandRunner) *Manager {
+func New(ctx context.Context, cfg config.Log, hostroot string, runtime crTypes.RuntimeInterface, state bleemeoTypes.State, commandRunner logsource.CommandRunner) *Manager {
 	reg := newMetricsRegistry()
+
+	knownLogFormats, err := logsource.ExpandLogFormats(cfg.OpenTelemetry.KnownLogFormats)
+	if err != nil {
+		logger.V(1).Printf("logmetrics: failed to expand known log formats, log_format won't be usable: %v", err)
+	}
 
 	persister, err := logsource.NewPersistHost(state, logsource.PersistConfig{
 		StorageType: persistStorageType,
@@ -103,11 +124,13 @@ func New(cfg config.Log, hostroot string, runtime crTypes.RuntimeInterface, stat
 	}
 
 	man := &Manager{
-		cfg:           cfg,
-		hostroot:      hostroot,
-		runtime:       runtime,
-		state:         state,
-		commandRunner: commandRunner,
+		cfg:             cfg,
+		hostroot:        hostroot,
+		runtime:         runtime,
+		state:           state,
+		commandRunner:   commandRunner,
+		knownLogFormats: knownLogFormats,
+		metricSpecs:     collectAllCounters(cfg),
 		telemetry: component.TelemetrySettings{
 			Logger:         logger.ZapLogger(),
 			TracerProvider: noop.NewTracerProvider(),
@@ -121,29 +144,98 @@ func New(cfg config.Log, hostroot string, runtime crTypes.RuntimeInterface, stat
 		watchedContainers: make(map[string]string),
 	}
 
-	// Declare every configured metric name (legacy and new-style) so MetricNames() is complete
+	// Declare every configured metric name so MetricNames() is complete
 	// immediately, without waiting for a dynamically-resolved source (container) to appear.
-	man.reg.declare(collectAllCounters(cfg))
+	man.reg.declare(man.metricSpecs)
+
+	// Built eagerly (rather than in Run, like static/container sources) so
+	// NetworkLogsConsumer is available immediately for the shared network
+	// receiver's owner to wire in, before Run ever starts.
+	man.startNetworkSource(ctx)
 
 	return man
 }
 
-// collectAllCounters gathers every LogCounter declared anywhere in the config.
-// cfg.Metrics is expected to already be the output of translateLegacyInputs.
-func collectAllCounters(cfg config.Log) []config.LogCounter {
-	var counters []config.LogCounter
+// NetworkLogsConsumer returns the entry point log-to-metric wants to receive
+// externally-pushed logs on, or nil if this feature didn't opt into the
+// shared network receiver (no counters configured, or GRPC/HTTP both
+// disabled). The caller (the shared OTLP receiver owner, see
+// logsource.FanoutLogs) is responsible for actually starting the physical
+// listener.
+func (man *Manager) NetworkLogsConsumer() consumer.Logs {
+	man.l.Lock()
+	defer man.l.Unlock()
 
-	for _, metricsRecv := range cfg.Metrics.Receivers {
-		counters = append(counters, metricsRecv.Counters...)
+	if man.networkSource == nil {
+		return nil
 	}
 
-	for _, metricsKnownCounter := range cfg.Metrics.KnownCounters {
-		counters = append(counters, metricsKnownCounter...)
+	return man.networkSource.entryConsumer
+}
+
+// resolveReceiverFormatOperators builds the stanza operators for a receiver's
+// LogFormat (an OpenTelemetry.KnownLogFormats reference), if set -- the
+// receiver's own operators/log_format are Glouton's own additions layered on
+// top of the otherwise-raw config.LogMetricsReceiver (see its doc comment).
+// Returns nil (no operators, not an error) if LogFormat is unset, references
+// an unknown format, or fails to build -- each case just logs a warning and
+// leaves the receiver parsing nothing beyond its raw body text, same fallback
+// behavior as an unknown known_log_formats reference elsewhere in this
+// package.
+func (man *Manager) resolveReceiverFormatOperators(name string, rawOperators []config.OTELOperator, logFormat string) []operator.Config {
+	// Operators run first -- expanded the same way otel/logprocessing does, so
+	// a single-key {"include": name} entry can reference a KnownLogFormats
+	// group in place, mixed in with other raw operators.
+	expandedOps, err := logsource.ExpandOperators(rawOperators, man.knownLogFormats, false)
+	if err != nil {
+		logger.V(1).Printf("logmetrics: receiver %q: failed to expand operators: %v", name, err)
+
+		expandedOps = nil
 	}
 
-	counters = append(counters, cfg.Metrics.Network.Counters...)
+	ops, err := logsource.BuildOperators(expandedOps)
+	if err != nil {
+		logger.V(1).Printf("logmetrics: receiver %q: failed to build operators: %v", name, err)
 
-	return counters
+		ops = nil
+	}
+
+	if logFormat == "" {
+		return ops
+	}
+
+	// LogFormat's whole group is appended after, same order otel/logprocessing
+	// combines OTLPReceiver.Operators and OTLPReceiver.LogFormat.
+	formatRawOps, ok := man.knownLogFormats[logFormat]
+	if !ok {
+		logger.V(1).Printf("logmetrics: receiver %q requires an unknown log format %q", name, logFormat)
+
+		return ops
+	}
+
+	formatOps, err := logsource.BuildOperators(formatRawOps)
+	if err != nil {
+		logger.V(1).Printf("logmetrics: receiver %q: failed to build log format %q: %v", name, logFormat, err)
+
+		return ops
+	}
+
+	return append(ops, formatOps...)
+}
+
+// collectAllCounters reduces every log.metrics.count entry down to what the
+// registry needs (name + labels) for MetricNames()/allow-listing and label
+// assignment -- the OTTL matching logic itself lives entirely in
+// countconnector.MetricInfo (see metricInfo, source.go), decoded straight
+// from the same raw entries.
+func collectAllCounters(cfg config.Log) []metricSpec {
+	specs := make([]metricSpec, 0, len(cfg.Metrics.Count))
+
+	for name, raw := range cfg.Metrics.Count {
+		specs = append(specs, metricSpec{Metric: name, Labels: extractLabels(raw)})
+	}
+
+	return specs
 }
 
 // Run starts static sources once, then every updateInterval starts/stops container
@@ -156,7 +248,6 @@ func (man *Manager) Run(ctx context.Context) error {
 	defer crashreport.ProcessPanic()
 
 	man.startStaticSources(ctx)
-	man.startNetworkSource(ctx)
 
 	watchContainers := hasContainerCounters(man.cfg)
 
@@ -202,29 +293,53 @@ func (man *Manager) startStaticSources(ctx context.Context) {
 	man.l.Lock()
 	defer man.l.Unlock()
 
-	for _, recv := range man.cfg.Metrics.Receivers {
-		include := make([]string, len(recv.Include))
+	for name, recv := range man.cfg.Metrics.Receivers {
+		var fields struct {
+			Include   []string              `mapstructure:"include"`
+			Operators []config.OTELOperator `mapstructure:"operators"`
+			LogFormat string                `mapstructure:"log_format"`
+		}
 
-		for i, pattern := range recv.Include {
+		if err := mapstructure.Decode(recv, &fields); err != nil {
+			logger.V(1).Printf("logmetrics: receiver %q: failed to decode config: %v", name, err)
+
+			continue
+		}
+
+		include := make([]string, len(fields.Include))
+
+		for i, pattern := range fields.Include {
 			include[i] = filepath.Join(man.hostroot, pattern)
 		}
 
-		man.startStaticSource(ctx, include, recv.Counters)
+		man.startStaticSource(ctx, include, man.resolveReceiverFormatOperators(name, fields.Operators, fields.LogFormat), recv)
 	}
 }
 
-func (man *Manager) startStaticSource(ctx context.Context, include []string, counters []config.LogCounter) {
-	if len(counters) == 0 {
+func (man *Manager) startStaticSource(ctx context.Context, include []string, formatOperators []operator.Config, extraRaw map[string]any) {
+	if len(man.cfg.Metrics.Count) == 0 {
 		return
 	}
 
-	man.reg.resolve(counters, "")
+	man.reg.resolve(man.metricSpecs, "")
 
-	src, err := newSource(ctx, man.telemetry, include, false, man.hasHostRoot(), counters, man.sink, man.persister, man.commandRunner, logsource.StatFile, staticSourceName(include))
+	src, err := newSource(ctx, man.telemetry, include, false, man.hasHostRoot(), man.cfg.Metrics.Count, formatOperators, extraRaw, man.sink, man.persister, man.commandRunner, logsource.StatFile, staticSourceName(include))
 	if err != nil {
-		logger.V(1).Printf("logmetrics: no log file yet for %v, will retry: %v", include, err)
+		if errors.Is(err, errNoLogFileFound) {
+			logger.V(1).Printf("logmetrics: no log file yet for %v, will retry: %v", include, err)
 
-		man.pendingStatic = append(man.pendingStatic, pendingStaticSource{include: include, counters: counters})
+			man.pendingStatic = append(man.pendingStatic, pendingStaticSource{include: include, formatOperators: formatOperators, extraRaw: extraRaw})
+
+			return
+		}
+
+		// Not a "the file doesn't exist yet" situation (e.g. every metric's
+		// condition is invalid, or a raw receiver field failed to decode) --
+		// retrying wouldn't help, since nothing about this changes without a
+		// config change and a restart, so this doesn't go through
+		// pendingStatic at all: it would otherwise retry forever against the
+		// same unfixable error.
+		logger.Printf("logmetrics: failed to start source for %v: %v", include, err)
 
 		return
 	}
@@ -245,11 +360,18 @@ func (man *Manager) retryPendingStaticSources(ctx context.Context) {
 	stillPending := man.pendingStatic[:0]
 
 	for _, pending := range man.pendingStatic {
-		man.reg.resolve(pending.counters, "")
+		man.reg.resolve(man.metricSpecs, "")
 
-		src, err := newSource(ctx, man.telemetry, pending.include, false, man.hasHostRoot(), pending.counters, man.sink, man.persister, man.commandRunner, logsource.StatFile, staticSourceName(pending.include))
+		src, err := newSource(ctx, man.telemetry, pending.include, false, man.hasHostRoot(), man.cfg.Metrics.Count, pending.formatOperators, pending.extraRaw, man.sink, man.persister, man.commandRunner, logsource.StatFile, staticSourceName(pending.include))
 		if err != nil {
-			stillPending = append(stillPending, pending)
+			if errors.Is(err, errNoLogFileFound) {
+				stillPending = append(stillPending, pending)
+			} else {
+				// The file showed up, but something else now fails (e.g. its
+				// counters are invalid) -- same reasoning as startStaticSource:
+				// stop retrying, it won't self-resolve.
+				logger.Printf("logmetrics: giving up on source for %v: %v", pending.include, err)
+			}
 
 			continue
 		}
@@ -284,9 +406,14 @@ func (man *Manager) startNetworkSource(ctx context.Context) {
 	man.l.Lock()
 	defer man.l.Unlock()
 
-	man.reg.resolve(man.cfg.Metrics.Network.Counters, "")
+	netCfg := man.cfg.Metrics.Network
+	if len(netCfg.Receivers) == 0 && !netCfg.Enable {
+		return // nothing to resolve either: no "" item source will ever exist to feed it
+	}
 
-	src, err := newNetworkSource(ctx, man.telemetry, man.cfg.Metrics.Network, man.sink)
+	man.reg.resolve(man.metricSpecs, "")
+
+	src, err := newNetworkSource(ctx, man.telemetry, netCfg, man.cfg.Metrics.Count, man.sink)
 	if err != nil {
 		logger.V(1).Printf("logmetrics: failed to start network source: %v", err)
 
@@ -318,8 +445,7 @@ func (man *Manager) updateContainerSources(ctx context.Context) {
 			continue
 		}
 
-		counters := resolveContainerCounters(man.cfg, ctr)
-		if len(counters) == 0 {
+		if !isContainerWatched(man.cfg, ctr) {
 			continue
 		}
 
@@ -335,9 +461,9 @@ func (man *Manager) updateContainerSources(ctx context.Context) {
 		// itself is recreated, which is fine: that's effectively a new log source).
 		name := "container:" + ctr.ID()
 
-		man.reg.resolve(counters, ctr.ContainerName())
+		man.reg.resolve(man.metricSpecs, ctr.ContainerName())
 
-		src, err := newSource(ctx, man.telemetry, []string{logPath}, true, man.hasHostRoot(), counters, man.reg.metricsSinkForItem(ctr.ContainerName()), man.persister, man.commandRunner, logsource.StatFile, name)
+		src, err := newSource(ctx, man.telemetry, []string{logPath}, true, man.hasHostRoot(), man.cfg.Metrics.Count, nil, nil, man.reg.metricsSinkForItem(ctr.ContainerName()), man.persister, man.commandRunner, logsource.StatFile, name)
 		if err != nil {
 			logger.V(1).Printf("logmetrics: failed to start source for container %s (%s): %v", ctr.ContainerName(), ctr.ID(), err)
 
@@ -411,13 +537,18 @@ type containerSourceDiagnostic struct {
 	ExecLogReceiverPaths []string
 }
 
+// networkReceiverDiagnostic describes one log.network.receivers entry this
+// feature pulls from, for the diagnostic archive.
+type networkReceiverDiagnostic struct {
+	Name         string
+	GRPCEndpoint string // "" if this receiver has no GRPC protocol configured
+	HTTPEndpoint string // "" if this receiver has no HTTP protocol configured
+}
+
 // networkSourceDiagnostic describes the network source for the diagnostic archive.
 type networkSourceDiagnostic struct {
 	Active      bool
-	GRPCEnabled bool
-	GRPCAddress string
-	HTTPEnabled bool
-	HTTPAddress string
+	Receivers   []networkReceiverDiagnostic
 	MetricNames []string
 }
 
@@ -453,24 +584,39 @@ func (man *Manager) DiagnosticArchive(_ context.Context, archive types.ArchiveWr
 
 	netCfg := man.cfg.Metrics.Network
 
-	metricNames := make([]string, 0, len(netCfg.Counters))
-	for _, counter := range netCfg.Counters {
-		metricNames = append(metricNames, counter.Metric)
+	// Like any other source, the network source (if active) counts against
+	// every log.metrics.count entry -- there's no separate counter list to
+	// read here (see LogMetricsNetworkReceiver's doc comment).
+	metricNames := make([]string, 0, len(man.cfg.Metrics.Count))
+	for name := range man.cfg.Metrics.Count {
+		metricNames = append(metricNames, name)
+	}
+
+	// netCfg.Receivers only names which log.network.receivers entries this
+	// feature pulls from; their actual protocols/endpoints live there
+	// (man.cfg.Network), possibly shared with otel/logprocessing if it
+	// references the same entry.
+	receiversInfo := make([]networkReceiverDiagnostic, 0, len(netCfg.Receivers))
+
+	for _, name := range netCfg.Receivers {
+		recv := man.cfg.Network.Receivers[name]
+		info := networkReceiverDiagnostic{Name: name}
+
+		if recv.Protocols.GRPC != nil {
+			info.GRPCEndpoint = recv.Protocols.GRPC.Endpoint
+		}
+
+		if recv.Protocols.HTTP != nil {
+			info.HTTPEndpoint = recv.Protocols.HTTP.Endpoint
+		}
+
+		receiversInfo = append(receiversInfo, info)
 	}
 
 	networkSource := networkSourceDiagnostic{
 		Active:      man.networkSource != nil,
-		GRPCEnabled: netCfg.GRPC.Enable,
-		HTTPEnabled: netCfg.HTTP.Enable,
+		Receivers:   receiversInfo,
 		MetricNames: metricNames,
-	}
-
-	if netCfg.GRPC.Enable {
-		networkSource.GRPCAddress = fmt.Sprintf("%s:%d", netCfg.GRPC.Address, netCfg.GRPC.Port)
-	}
-
-	if netCfg.HTTP.Enable {
-		networkSource.HTTPAddress = fmt.Sprintf("%s:%d", netCfg.HTTP.Address, netCfg.HTTP.Port)
 	}
 
 	info := struct {

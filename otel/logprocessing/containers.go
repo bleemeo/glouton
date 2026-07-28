@@ -212,6 +212,7 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 		makeStorageFn,
 		logsource.StatFile,
 		ctr.Attributes.asMap(),
+		nil, // no per-container raw receiver config: containers have no named receiver entry to paste one into
 	)
 	if err != nil {
 		return fmt.Errorf("setting up receiver factories: %w", err)

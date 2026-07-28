@@ -30,6 +30,7 @@ import (
 	"github.com/bleemeo/glouton/otel/logsource"
 
 	"github.com/bmatcuk/doublestar/v4"
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/google/uuid"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/connector/countconnector"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
@@ -66,6 +67,7 @@ type source struct {
 	include       []string
 	hasHostRoot   bool
 	operators     []operator.Config
+	extraRaw      map[string]any // raw pass-through into the real filelogreceiver config, see LogMetricsReceiver.Raw
 	commandRunner logsource.CommandRunner
 	statFile      logsource.StatFileFunc
 	name          string
@@ -87,17 +89,21 @@ type source struct {
 // otel/logprocessing applies, since a sudo command run from Glouton's own
 // mount namespace can't reach a path that only makes sense under hostroot).
 // If isContainer, the Docker/CRI envelope is unwrapped first (same operator
-// otel/logprocessing uses). If persister is non-nil, name is used as this
-// source's stable persisted-offset identity (a joined path list for static
-// sources, a container ID for container sources), so a restart resumes
-// tailing instead of skipping to the file's end.
+// otel/logprocessing uses), before formatOperators (from
+// LogMetricsReceiver.LogFormat, if set) run, so a format parses the actual
+// log line rather than its envelope. If persister is non-nil, name is used as
+// this source's stable persisted-offset identity (a joined path list for
+// static sources, a container ID for container sources), so a restart
+// resumes tailing instead of skipping to the file's end.
 func newSource(
 	ctx context.Context,
 	telemetry component.TelemetrySettings,
 	include []string,
 	isContainer bool,
 	hasHostRoot bool,
-	counters []config.LogCounter,
+	count map[string]config.LogMetricsCount,
+	formatOperators []operator.Config,
+	extraRaw map[string]any,
 	sink consumer.Metrics,
 	persister *logsource.PersistHost,
 	commandRunner logsource.CommandRunner,
@@ -106,7 +112,7 @@ func newSource(
 ) (*source, error) {
 	connFactory := countconnector.NewFactory()
 
-	conns, err := buildConnectors(ctx, connFactory, telemetry, counters, sink)
+	conns, err := buildConnectors(ctx, connFactory, telemetry, count, sink)
 	if err != nil {
 		return nil, err
 	}
@@ -117,11 +123,14 @@ func newSource(
 		operators = append(operators, logsource.BuildContainerEnvelopeOperator())
 	}
 
+	operators = append(operators, formatOperators...)
+
 	src := &source{
 		telemetry:     telemetry,
 		include:       include,
 		hasHostRoot:   hasHostRoot,
 		operators:     operators,
+		extraRaw:      extraRaw,
 		commandRunner: commandRunner,
 		statFile:      statFile,
 		name:          name,
@@ -220,6 +229,7 @@ func (s *source) addNewFiles(ctx context.Context) error {
 		makeStorageFn,
 		s.statFile,
 		nil,
+		s.extraRaw,
 	)
 	if err != nil {
 		if s.persister != nil {
@@ -341,28 +351,38 @@ func shutdownReceivers(ctx context.Context, recvs []receiver.Logs) {
 	}
 }
 
-// buildConnectors tries one connector for all counters together (fast path: one
+// buildConnectors tries one connector for all of count together (fast path: one
 // tree walk and one registry lock per batch). If that combined config fails
-// validation, it falls back to one connector per counter so a bad regex only
-// disables its own metric instead of every counter on this source.
+// validation, it falls back to one connector per metric so a bad condition only
+// disables its own metric instead of every metric on this source. A metric
+// whose raw config can't even be decoded (see metricInfo) is excluded from both
+// paths entirely, with a visible warning -- it never silently falls back to
+// matching every log record.
 func buildConnectors(
 	ctx context.Context,
 	connFactory otelconnector.Factory,
 	telemetry component.TelemetrySettings,
-	counters []config.LogCounter,
+	count map[string]config.LogMetricsCount,
 	sink consumer.Metrics,
 ) ([]otelconnector.Logs, error) {
-	combinedCfg := &countconnector.Config{Logs: make(map[string]countconnector.MetricInfo, len(counters))}
+	infos := make(map[string]countconnector.MetricInfo, len(count))
 
-	for _, counter := range counters {
-		if _, exists := combinedCfg.Logs[counter.Metric]; exists {
-			logger.Printf("logmetrics: metric %q declared more than once for the same source, ignoring the duplicate", counter.Metric)
+	for name, raw := range count {
+		info, err := metricInfo(name, raw)
+		if err != nil {
+			logger.Printf("logmetrics: metric %q disabled, invalid config: %v", name, err)
 
 			continue
 		}
 
-		combinedCfg.Logs[counter.Metric] = metricInfo(counter)
+		infos[name] = info
 	}
+
+	if len(infos) == 0 {
+		return nil, errNoValidCounter
+	}
+
+	combinedCfg := &countconnector.Config{Logs: infos}
 
 	if combinedCfg.Validate() == nil {
 		if conn, err := createConnector(ctx, connFactory, telemetry, combinedCfg, sink); err == nil {
@@ -370,20 +390,20 @@ func buildConnectors(
 		}
 	}
 
-	conns := make([]otelconnector.Logs, 0, len(counters))
+	conns := make([]otelconnector.Logs, 0, len(infos))
 
-	for _, counter := range counters {
-		counterCfg := &countconnector.Config{Logs: map[string]countconnector.MetricInfo{counter.Metric: metricInfo(counter)}}
+	for name, info := range infos {
+		counterCfg := &countconnector.Config{Logs: map[string]countconnector.MetricInfo{name: info}}
 
 		if err := counterCfg.Validate(); err != nil {
-			logger.Printf("logmetrics: metric %q disabled, invalid counter: %v", counter.Metric, err)
+			logger.Printf("logmetrics: metric %q disabled, invalid counter: %v", name, err)
 
 			continue
 		}
 
 		conn, err := createConnector(ctx, connFactory, telemetry, counterCfg, sink)
 		if err != nil {
-			logger.Printf("logmetrics: metric %q disabled: %v", counter.Metric, err)
+			logger.Printf("logmetrics: metric %q disabled: %v", name, err)
 
 			continue
 		}
@@ -398,21 +418,58 @@ func buildConnectors(
 	return conns, nil
 }
 
-func metricInfo(counter config.LogCounter) countconnector.MetricInfo {
-	// countconnector.MetricInfo.Conditions defaults to ORing multiple entries
-	// together (ottl.ConditionSequence's default LogicOperation is Or, not
-	// And), so Regex/Exclude must be combined into a single "and"/"not"
-	// condition string rather than passed as two separate list entries.
-	condition := fmt.Sprintf("IsMatch(log.body, %q)", counter.Regex)
-
-	if counter.Exclude != "" {
-		condition = fmt.Sprintf("%s and not IsMatch(log.body, %q)", condition, counter.Exclude)
+// metricInfo builds the countconnector.MetricInfo for metric name from its raw
+// config.LogMetricsCount, decoding straight into the real vendored struct
+// (description, conditions, attributes -- same trick as OTLPReceiver), so an
+// existing connectors.count.logs.<metric> definition pastes in almost
+// verbatim. "labels" isn't a real countconnector field (see LogMetricsCount's
+// doc comment) and is silently ignored by the decode; extractLabels is what
+// reads it. A metric with no conditions at all counts every log record on
+// every source unconditionally, matching real countconnector semantics -- but
+// only when that's genuinely what the config says: a raw value that fails to
+// decode at all (e.g. "conditions" given as a bare string instead of a list)
+// returns an error instead of silently falling back to that same "count
+// everything" shape, which would otherwise turn a config mistake into
+// wildly-wrong metrics with no visible sign anything is broken.
+func metricInfo(name string, raw config.LogMetricsCount) (countconnector.MetricInfo, error) {
+	info := countconnector.MetricInfo{
+		Description: "log-to-metric: " + name,
 	}
 
-	return countconnector.MetricInfo{
-		Description: "log-to-metric: " + counter.Metric,
-		Conditions:  []string{condition},
+	if len(raw) == 0 {
+		return info, nil
 	}
+
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{Result: &info})
+	if err != nil {
+		return countconnector.MetricInfo{}, fmt.Errorf("creating decoder: %w", err)
+	}
+
+	if err := decoder.Decode(raw); err != nil {
+		return countconnector.MetricInfo{}, fmt.Errorf("decoding config: %w", err)
+	}
+
+	return info, nil
+}
+
+// extractLabels reads the "labels" field out of a raw config.LogMetricsCount
+// entry -- the one field metricInfo's decode above never sets, since it has
+// no real countconnector counterpart (see LogMetricsCount's doc comment).
+func extractLabels(raw config.LogMetricsCount) map[string]string {
+	rawLabels, _ := raw["labels"].(map[string]any)
+	if len(rawLabels) == 0 {
+		return nil
+	}
+
+	labels := make(map[string]string, len(rawLabels))
+
+	for k, v := range rawLabels {
+		if s, ok := v.(string); ok {
+			labels[k] = s
+		}
+	}
+
+	return labels
 }
 
 func createConnector(

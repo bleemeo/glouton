@@ -501,6 +501,7 @@ func migrate(k *koanf.Koanf) (*koanf.Koanf, prometheus.MultiError) {
 	warnings = append(warnings, migrateMetricsPrometheus(k, config)...)
 	warnings = append(warnings, migrateScrapperMetrics(k, config)...)
 	warnings = append(warnings, migrateServices(config)...)
+	warnings = append(warnings, migrateLegacyNetworkListeners(k, config)...)
 	warnings = append(warnings, migrateLogInputs(k, config)...)
 
 	// We can't reuse the previous Koanf because it doesn't allow removing keys.
@@ -700,12 +701,58 @@ func migrateScrapper(k *koanf.Koanf, config map[string]any, deprecatedPath strin
 	return warnings
 }
 
+// mergeLegacyFilters translates each legacy {metric, regex, exclude, labels}
+// filter (log.inputs[].filters' own shape) into a real countconnector
+// condition string, upserting it into the global log.metrics.count map by
+// metric name -- on a name collision (e.g. two legacy log.inputs entries
+// sharing the same metric name), the condition is appended to the existing
+// entry's conditions list rather than overwriting it: countconnector already
+// ORs multiple Conditions entries together, so this only broadens what counts
+// as a match instead of losing one side. A filter missing metric/regex is
+// dropped (it never did anything under the old format either).
+func mergeLegacyFilters(count map[string]any, filtersList []any) {
+	for _, filterAny := range filtersList {
+		filterMap, ok := filterAny.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		metric, _ := filterMap["metric"].(string)
+		regex, _ := filterMap["regex"].(string)
+
+		if metric == "" || regex == "" {
+			continue
+		}
+
+		exclude, _ := filterMap["exclude"].(string)
+
+		condition := fmt.Sprintf("IsMatch(body, %q)", regex)
+		if exclude != "" {
+			condition = fmt.Sprintf("%s and not IsMatch(body, %q)", condition, exclude)
+		}
+
+		entry, ok := count[metric].(map[string]any)
+		if !ok {
+			entry = map[string]any{}
+
+			if labels, ok := filterMap["labels"].(map[string]any); ok && len(labels) > 0 {
+				entry["labels"] = labels
+			}
+
+			count[metric] = entry
+		}
+
+		conditions, _ := entry["conditions"].([]any)
+		entry["conditions"] = append(conditions, condition)
+	}
+}
+
 // migrateLogInputs folds the legacy log.inputs[].filters entries -- the
 // original, Fluent Bit-era way of declaring a log-to-metric source, which
 // predates log.metrics and is otherwise handled identically by otel/logmetrics
 // for path/container_name/container_selectors -- into the equivalent
-// log.metrics.* shape, so otel/logmetrics only ever has to handle one config
-// shape.
+// log.metrics.* shape, so otel/logmetrics only ever has to handle the current
+// (raw, OTel-shaped) config.
 func migrateLogInputs(k *koanf.Koanf, config map[string]any) prometheus.MultiError {
 	var warnings prometheus.MultiError
 
@@ -719,16 +766,12 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any) prometheus.MultiErr
 		receivers = map[string]any{}
 	}
 
-	knownCounters, _ := k.Get("log.metrics.known_counters").(map[string]any)
-	if knownCounters == nil {
-		knownCounters = map[string]any{}
+	count, _ := k.Get("log.metrics.count").(map[string]any)
+	if count == nil {
+		count = map[string]any{}
 	}
 
-	containerCounters, _ := k.Get("log.metrics.container_counters").(map[string]any)
-	if containerCounters == nil {
-		containerCounters = map[string]any{}
-	}
-
+	containerCounters, _ := k.Get("log.metrics.container_counters").([]any)
 	containerSelectorCounters, _ := k.Get("log.metrics.container_selector_counters").([]any)
 
 	remainingInputs := make([]any, 0, len(inputs))
@@ -761,24 +804,27 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any) prometheus.MultiErr
 
 		switch {
 		case path != "":
-			receivers[name] = map[string]any{"include": []any{path}, "counters": filtersList}
-			warnings.Append(fmt.Errorf("%w: log.inputs[].filters (path %q), use log.metrics.receivers instead", errSettingsDeprecated, path))
+			mergeLegacyFilters(count, filtersList)
+
+			receivers[name] = map[string]any{"include": []any{path}}
+			warnings.Append(fmt.Errorf("%w: log.inputs[].filters (path %q), use log.metrics.receivers/count instead", errSettingsDeprecated, path))
 
 			translated = true
 		case containerName != "" && len(selectors) == 0:
-			knownCounters[name] = filtersList
-			containerCounters[containerName] = name
-			warnings.Append(fmt.Errorf("%w: log.inputs[].filters (container_name %q), use log.metrics.known_counters/container_counters instead", errSettingsDeprecated, containerName))
+			mergeLegacyFilters(count, filtersList)
+
+			containerCounters = append(containerCounters, containerName)
+			warnings.Append(fmt.Errorf("%w: log.inputs[].filters (container_name %q), use log.metrics.container_counters/count instead", errSettingsDeprecated, containerName))
 
 			translated = true
 		case len(selectors) > 0:
-			knownCounters[name] = filtersList
+			mergeLegacyFilters(count, filtersList)
+
 			containerSelectorCounters = append(containerSelectorCounters, map[string]any{
 				"container_name": containerName,
 				"selectors":      selectors,
-				"known_counters": name,
 			})
-			warnings.Append(fmt.Errorf("%w: log.inputs[].filters (container_selectors %v), use log.metrics.known_counters/container_selector_counters instead", errSettingsDeprecated, selectors))
+			warnings.Append(fmt.Errorf("%w: log.inputs[].filters (container_selectors %v), use log.metrics.container_selector_counters/count instead", errSettingsDeprecated, selectors))
 
 			translated = true
 		default:
@@ -791,10 +837,133 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any) prometheus.MultiErr
 	}
 
 	config["log.metrics.receivers"] = receivers
-	config["log.metrics.known_counters"] = knownCounters
+	config["log.metrics.count"] = count
 	config["log.metrics.container_counters"] = containerCounters
 	config["log.metrics.container_selector_counters"] = containerSelectorCounters
 	config["log.inputs"] = remainingInputs
+
+	return warnings
+}
+
+// migrateLegacyNetworkListeners folds log.opentelemetry.grpc/http and
+// log.metrics.network.grpc/http's old, pre-log.network {enable, address, port}
+// shape -- each its own standalone listener, predating the shared
+// log.network.receivers introduced alongside log.metrics -- into the new
+// shape (see NetworkConfig/NetworkReceiver/OTLPNetworkParticipation),
+// preserving each one's exact address/port. Two legacy sources with
+// byte-identical {grpc, http} settings collapse onto one synthesized shared
+// receiver (what manually reconfiguring them would have produced anyway);
+// anything else synthesizes its own receiver, exactly reproducing the old
+// two-listener behavior.
+func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any) prometheus.MultiError {
+	var warnings prometheus.MultiError
+
+	type legacyFeature struct {
+		path            string
+		receiversPath   string
+		defaultGRPCPort int
+		defaultHTTPPort int
+	}
+
+	// Matches the old, distinct-by-default ports each feature used to pick,
+	// specifically so enabling both without any customization didn't collide.
+	features := []legacyFeature{
+		{path: "log.opentelemetry", receiversPath: "log.opentelemetry.network.receivers", defaultGRPCPort: 4317, defaultHTTPPort: 4318},
+		{path: "log.metrics.network", receiversPath: "log.metrics.network.receivers", defaultGRPCPort: 4417, defaultHTTPPort: 4418},
+	}
+
+	type endpointSpec struct {
+		grpc string // "" if disabled
+		http string // "" if disabled
+	}
+
+	endpointOf := func(legacy map[string]any, defaultPort int) string {
+		enable, _ := legacy["enable"].(bool)
+		if !enable {
+			return ""
+		}
+
+		address, _ := legacy["address"].(string)
+		if address == "" {
+			address = DefaultLocalhost
+		}
+
+		port := defaultPort
+
+		switch p := legacy["port"].(type) {
+		case int:
+			port = p
+		case int64:
+			port = int(p)
+		case float64:
+			port = int(p)
+		}
+
+		return fmt.Sprintf("%s:%d", address, port)
+	}
+
+	receivers, _ := k.Get("log.network.receivers").(map[string]any)
+	if receivers == nil {
+		receivers = map[string]any{}
+	}
+
+	nameBySpec := make(map[endpointSpec]string, len(features))
+
+	for _, feature := range features {
+		legacyGRPC, hasGRPC := k.Get(feature.path + ".grpc").(map[string]any)
+		legacyHTTP, hasHTTP := k.Get(feature.path + ".http").(map[string]any)
+
+		if !hasGRPC && !hasHTTP {
+			continue
+		}
+
+		// Drop the consumed keys so they don't reach the strict struct decode
+		// (which errors on unknown keys) even for an entry that ends up fully
+		// disabled below.
+		delete(config, feature.path+".grpc")
+		delete(config, feature.path+".http")
+
+		warnings.Append(fmt.Errorf(
+			"%w: %s.grpc/http {enable, address, port}, use log.network.receivers + %s.network.receivers instead",
+			errSettingsDeprecated, feature.path, feature.path,
+		))
+
+		var spec endpointSpec
+		if hasGRPC {
+			spec.grpc = endpointOf(legacyGRPC, feature.defaultGRPCPort)
+		}
+
+		if hasHTTP {
+			spec.http = endpointOf(legacyHTTP, feature.defaultHTTPPort)
+		}
+
+		if spec.grpc == "" && spec.http == "" {
+			continue // both were disabled: no network participation to migrate
+		}
+
+		name, found := nameBySpec[spec]
+		if !found {
+			name = strings.ReplaceAll(feature.path, ".", "-") + "-legacy"
+			nameBySpec[spec] = name
+
+			protocols := map[string]any{}
+			if spec.grpc != "" {
+				protocols["grpc"] = map[string]any{"endpoint": spec.grpc}
+			}
+
+			if spec.http != "" {
+				protocols["http"] = map[string]any{"endpoint": spec.http}
+			}
+
+			receivers[name] = map[string]any{"protocols": protocols}
+		}
+
+		config[feature.receiversPath] = []any{name}
+	}
+
+	if len(receivers) > 0 {
+		config["log.network.receivers"] = receivers
+	}
 
 	return warnings
 }

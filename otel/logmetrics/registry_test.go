@@ -20,7 +20,6 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/bleemeo/glouton/config"
 	glmodel "github.com/bleemeo/glouton/prometheus/model"
 	"github.com/bleemeo/glouton/types"
 
@@ -33,9 +32,9 @@ func TestRegistryResolve(t *testing.T) {
 
 	reg := newMetricsRegistry()
 
-	logCounters := []config.LogCounter{
-		{Metric: "apache_errors_count", Regex: `\[error\]`},
-		{Metric: "apache_requests_count", Regex: "GET /"},
+	logCounters := []metricSpec{
+		{Metric: "apache_errors_count"},
+		{Metric: "apache_requests_count"},
 	}
 
 	counters := reg.resolve(logCounters, "")
@@ -47,7 +46,7 @@ func TestRegistryResolve(t *testing.T) {
 	// Resolving an already-registered metric name again must return the exact same
 	// counter, so that matches from multiple sources reporting under the same
 	// metric name are aggregated.
-	again := reg.resolve([]config.LogCounter{{Metric: "apache_errors_count", Regex: "unused"}}, "")
+	again := reg.resolve([]metricSpec{{Metric: "apache_errors_count"}}, "")
 
 	if again[0] != counters[0] {
 		t.Fatal("Expected resolve() to return the same *counter for an already-registered metric name")
@@ -67,8 +66,8 @@ func TestRegistryEmit(t *testing.T) {
 
 	reg := newMetricsRegistry()
 
-	counters := reg.resolve([]config.LogCounter{
-		{Metric: "apache_errors_count", Regex: `\[error\]`},
+	counters := reg.resolve([]metricSpec{
+		{Metric: "apache_errors_count"},
 	}, "")
 
 	// 120 matches over the windowSecs (60s) window => 2/s.
@@ -130,9 +129,9 @@ func TestMetricsSink(t *testing.T) {
 
 	reg := newMetricsRegistry()
 
-	counters := reg.resolve([]config.LogCounter{
-		{Metric: "apache_errors_count", Regex: `\[error\]`},
-		{Metric: "apache_requests_count", Regex: "GET /"},
+	counters := reg.resolve([]metricSpec{
+		{Metric: "apache_errors_count"},
+		{Metric: "apache_requests_count"},
 	}, "")
 
 	sink := reg.metricsSinkForItem("")
@@ -170,7 +169,7 @@ func TestRegistryItemDisambiguation(t *testing.T) {
 
 	reg := newMetricsRegistry()
 
-	logCounters := []config.LogCounter{{Metric: "web_errors_count", Regex: `\[error\]`}}
+	logCounters := []metricSpec{{Metric: "web_errors_count"}}
 
 	countersA := reg.resolve(logCounters, "container-a")
 	countersB := reg.resolve(logCounters, "container-b")
@@ -243,8 +242,8 @@ func TestRegistryLabels(t *testing.T) {
 
 	reg := newMetricsRegistry()
 
-	staticCounters := reg.resolve([]config.LogCounter{
-		{Metric: "app_errors_count", Regex: `\[error\]`, Labels: map[string]string{"env": "prod"}},
+	staticCounters := reg.resolve([]metricSpec{
+		{Metric: "app_errors_count", Labels: map[string]string{"env": "prod"}},
 	}, "")
 
 	if got := staticCounters[0].lbls.Get("env"); got != "prod" {
@@ -255,8 +254,8 @@ func TestRegistryLabels(t *testing.T) {
 		t.Errorf("Expected __name__=app_errors_count, got %q", got)
 	}
 
-	spoofedCounters := reg.resolve([]config.LogCounter{
-		{Metric: "container_errors_count", Regex: `\[error\]`, Labels: map[string]string{"item": "spoofed"}},
+	spoofedCounters := reg.resolve([]metricSpec{
+		{Metric: "container_errors_count", Labels: map[string]string{"item": "spoofed"}},
 	}, "real-container")
 
 	if got := spoofedCounters[0].lbls.Get(types.LabelItem); got != "real-container" {

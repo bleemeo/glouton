@@ -90,20 +90,20 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 		KnownLogFormats: config.DefaultKnownLogFormats(),
 		Receivers: map[string]config.OTLPReceiver{
 			"custom-receiver": {
-				Include: []string{customLogFile.Name()},
-				Operators: []config.OTELOperator{
+				"include": []string{customLogFile.Name()},
+				"operators": []config.OTELOperator{
 					{
 						testFieldName:  testRouteServiceName,
 						testFieldType:  testFieldAdd,
 						testFieldValue: testCustomSvc,
 					},
 				},
-				LogFormat: "custom-format",
+				"log_format": "custom-format",
 			},
 			"filelog/later": {
-				Include:   []string{jsonLogFile.Name()},
-				LogFormat: "json_golang_slog",
-				Filters: config.OTELFilters{
+				"include":    []string{jsonLogFile.Name()},
+				"log_format": "json_golang_slog",
+				"filters": config.OTELFilters{
 					testFilterExclude: map[string]any{
 						testFilterMatchType: "strict",
 						"record_attributes": []map[string]any{

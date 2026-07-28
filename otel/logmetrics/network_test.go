@@ -27,17 +27,16 @@ func TestNewNetworkSourceDisabled(t *testing.T) {
 
 	sink, _ := collectingSink()
 
-	netCfg := config.LogMetricsNetworkReceiver{
-		Counters: []config.LogCounter{{Metric: "pushed_errors_count", Regex: `\[error\]`}},
-	}
+	netCfg := config.LogMetricsNetworkReceiver{}
+	count := map[string]config.LogMetricsCount{"pushed_errors_count": {"conditions": []any{`IsMatch(body, "\\[error\\]")`}}}
 
-	src, err := newNetworkSource(t.Context(), testTelemetrySettings(), netCfg, sink)
+	src, err := newNetworkSource(t.Context(), testTelemetrySettings(), netCfg, count, sink)
 	if err != nil {
-		t.Fatal("Expected no error when GRPC/HTTP are both disabled, got:", err)
+		t.Fatal("Expected no error when no receivers are referenced, got:", err)
 	}
 
 	if src != nil {
-		t.Fatal("Expected a nil source when GRPC/HTTP are both disabled")
+		t.Fatal("Expected a nil source when no receivers are referenced")
 	}
 }
 
@@ -47,10 +46,10 @@ func TestNewNetworkSourceNoCounters(t *testing.T) {
 	sink, _ := collectingSink()
 
 	netCfg := config.LogMetricsNetworkReceiver{
-		GRPC: config.EnableListener{Enable: true, Address: "127.0.0.1", Port: 0},
+		Receivers: []string{"otlp"},
 	}
 
-	src, err := newNetworkSource(t.Context(), testTelemetrySettings(), netCfg, sink)
+	src, err := newNetworkSource(t.Context(), testTelemetrySettings(), netCfg, nil, sink)
 	if err != nil {
 		t.Fatal("Expected no error when no counters are configured, got:", err)
 	}
@@ -60,27 +59,29 @@ func TestNewNetworkSourceNoCounters(t *testing.T) {
 	}
 }
 
-// TestNewNetworkSourceGRPCStartsAndStops verifies the gRPC OTLP receiver
-// actually binds and can be cleanly shut down. Verifying a real OTLP push end
-// to end would need an OTLP log exporter client, not otherwise a dependency
-// of this module -- left as a manual verification step (see the review reply).
-func TestNewNetworkSourceGRPCStartsAndStops(t *testing.T) {
+// TestNewNetworkSourceBuildsConsumer verifies that, once a receiver is
+// referenced with at least one log.metrics.count entry configured (global,
+// see LogMetricsConfig's doc comment), newNetworkSource builds a usable
+// entry consumer and its connectors stop cleanly -- it no longer starts an
+// OTLP receiver itself (that's shared with otel/logprocessing, see
+// logsource.SetupOTLPNetworkReceiver/FanoutLogs, and tested there).
+func TestNewNetworkSourceBuildsConsumer(t *testing.T) {
 	t.Parallel()
 
 	sink, _ := collectingSink()
 
 	netCfg := config.LogMetricsNetworkReceiver{
-		GRPC:     config.EnableListener{Enable: true, Address: "127.0.0.1", Port: 0},
-		Counters: []config.LogCounter{{Metric: "pushed_errors_count", Regex: `\[error\]`}},
+		Receivers: []string{"otlp"},
 	}
+	count := map[string]config.LogMetricsCount{"pushed_errors_count": {"conditions": []any{`IsMatch(body, "\\[error\\]")`}}}
 
-	src, err := newNetworkSource(t.Context(), testTelemetrySettings(), netCfg, sink)
+	src, err := newNetworkSource(t.Context(), testTelemetrySettings(), netCfg, count, sink)
 	if err != nil {
-		t.Fatal("Failed to start network source:", err)
+		t.Fatal("Failed to build network source:", err)
 	}
 
-	if src == nil {
-		t.Fatal("Expected a non-nil source when GRPC is enabled with counters configured")
+	if src == nil || src.entryConsumer == nil {
+		t.Fatal("Expected a non-nil source with a non-nil entry consumer when a receiver is referenced with counters configured")
 	}
 
 	if err := src.stop(t.Context()); err != nil {
@@ -88,29 +89,29 @@ func TestNewNetworkSourceGRPCStartsAndStops(t *testing.T) {
 	}
 }
 
-// TestNewNetworkSourceHTTPStartsAndStops is the regression test for two real
-// bugs found in logsource.SetupOTLPNetworkReceiver's HTTP branch: an invalid
-// "ip" transport (net.Listen only accepts tcp/tcp4/tcp6/unix/unixpacket) and
-// building otlpreceiver.HTTPConfig from scratch, which dropped the factory's
-// default LogsURLPath and made otlpreceiver panic on Start (net/http rejects
-// an empty ServeMux pattern).
-func TestNewNetworkSourceHTTPStartsAndStops(t *testing.T) {
+// TestNewNetworkSourceSimpleEnableBuildsConsumer is the regression test for
+// the simple "enable: true" shortcut (config.OTLPNetworkParticipation/
+// LogMetricsNetworkReceiver.Enable): newNetworkSource must build a consumer
+// even with no Receivers named, as long as Enable is set -- resolving which
+// actual log.network.receivers entry that means is agent.go's job (see
+// config.ResolveNetworkReceivers), not this function's.
+func TestNewNetworkSourceSimpleEnableBuildsConsumer(t *testing.T) {
 	t.Parallel()
 
 	sink, _ := collectingSink()
 
 	netCfg := config.LogMetricsNetworkReceiver{
-		HTTP:     config.EnableListener{Enable: true, Address: "127.0.0.1", Port: 0},
-		Counters: []config.LogCounter{{Metric: "pushed_errors_count", Regex: `\[error\]`}},
+		Enable: true,
 	}
+	count := map[string]config.LogMetricsCount{"pushed_errors_count": {"conditions": []any{`IsMatch(body, "\\[error\\]")`}}}
 
-	src, err := newNetworkSource(t.Context(), testTelemetrySettings(), netCfg, sink)
+	src, err := newNetworkSource(t.Context(), testTelemetrySettings(), netCfg, count, sink)
 	if err != nil {
-		t.Fatal("Failed to start network source:", err)
+		t.Fatal("Failed to build network source:", err)
 	}
 
-	if src == nil {
-		t.Fatal("Expected a non-nil source when HTTP is enabled with counters configured")
+	if src == nil || src.entryConsumer == nil {
+		t.Fatal("Expected a non-nil source with a non-nil entry consumer when Enable is set with counters configured")
 	}
 
 	if err := src.stop(t.Context()); err != nil {

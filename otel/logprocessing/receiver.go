@@ -36,6 +36,7 @@ import (
 	"github.com/bleemeo/glouton/utils/hostrootsymlink"
 
 	"github.com/bmatcuk/doublestar/v4"
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/google/uuid"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
 	stanzaErrors "github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/stanzaerrors"
@@ -53,8 +54,17 @@ var errInvalidReceiverName = errors.New("invalid receiver name")
 const metadataKeySeparator = "/"
 
 type logReceiver struct {
-	name            string
+	name string
+	// cfg is the raw config as given (see config.OTLPReceiver) -- passed
+	// through as-is to logsource.SetupLogReceiverFactories, so any real
+	// filelogreceiver/fileconsumer field it sets (start_at, on_truncate,
+	// encoding, multiline, ...) takes effect verbatim. include is pulled out
+	// of it once, here, for Glouton's own glob-resolution logic below (a real
+	// field too, so it's redundantly present in cfg, but that's harmless:
+	// SetupLogReceiverFactories always overwrites Include with the actual
+	// resolved file itself, after applying cfg).
 	cfg             config.OTLPReceiver
+	include         []string
 	isFromService   bool
 	logConsumer     consumer.Logs
 	operators       []operator.Config
@@ -86,7 +96,23 @@ func newLogReceiver(
 		return nil, nil, fmt.Errorf("%w: %q. It must be of the form 'my-receiver' or 'filelog/my-receiver'", errInvalidReceiverName, name) //nolint: nilnil
 	}
 
-	rawOps, err := expandOperators(cfg.Operators, knownLogFormats, false)
+	// cfg is raw (see config.OTLPReceiver's doc comment): pull out the fields
+	// Glouton's own logic needs. include/operators are real filelogreceiver
+	// fields too (so they stay in cfg, redundantly, for the verbatim pass-
+	// through to logsource.SetupLogReceiverFactories); log_format/filters are
+	// Glouton's own additions with no equivalent in the real schema.
+	var fields struct {
+		Include   []string              `mapstructure:"include"`
+		Operators []config.OTELOperator `mapstructure:"operators"`
+		LogFormat string                `mapstructure:"log_format"`
+		Filters   config.OTELFilters    `mapstructure:"filters"`
+	}
+
+	if err := mapstructure.Decode(cfg, &fields); err != nil {
+		return nil, nil, fmt.Errorf("decoding receiver %q config: %w", name, err) //nolint: nilnil
+	}
+
+	rawOps, err := expandOperators(fields.Operators, knownLogFormats, false)
 	if err != nil {
 		return nil, nil, fmt.Errorf("expanding operators: %w", err) //nolint: nilnil
 	}
@@ -96,10 +122,10 @@ func newLogReceiver(
 		return nil, nil, fmt.Errorf("building operators: %w", err) //nolint: nilnil
 	}
 
-	if cfg.LogFormat != "" {
-		opsGroup, found := knownLogFormats[cfg.LogFormat]
+	if fields.LogFormat != "" {
+		opsGroup, found := knownLogFormats[fields.LogFormat]
 		if !found {
-			logger.V(1).Printf("Log receiver %q requires the log format %q, which is not defined", name, cfg.LogFormat)
+			logger.V(1).Printf("Log receiver %q requires the log format %q, which is not defined", name, fields.LogFormat)
 		} else {
 			// Operators from known log formats have already been expanded.
 			referencedOps, err := buildOperators(opsGroup)
@@ -111,7 +137,7 @@ func newLogReceiver(
 		}
 	}
 
-	filterCfg, warn, err := buildLogFilterConfig(cfg.Filters)
+	filterCfg, warn, err := buildLogFilterConfig(fields.Filters)
 	if err != nil {
 		return nil, nil, fmt.Errorf("building filters: %w", err) //nolint: nilnil
 	}
@@ -123,12 +149,13 @@ func newLogReceiver(
 	return &logReceiver{
 		name:            name,
 		cfg:             cfg,
+		include:         fields.Include,
 		isFromService:   isFromService,
 		logConsumer:     logConsumer,
 		operators:       operators,
 		filterCfg:       filterCfg,
-		watching:        make(map[string]logsource.ReceiverKind, len(cfg.Include)),
-		sizeFnByFile:    make(map[string]func() (int64, error), len(cfg.Include)),
+		watching:        make(map[string]logsource.ReceiverKind, len(fields.Include)),
+		sizeFnByFile:    make(map[string]func() (int64, error), len(fields.Include)),
 		logCounter:      new(atomic.Int64),
 		throughputMeter: logsource.NewRingCounter(throughputMeterResolutionSecs),
 		statFile:        statFile,
@@ -145,9 +172,9 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 	defer r.l.Unlock()
 
 	hasHostRoot := len(pipeline.hostroot) > len(string(os.PathSeparator))
-	logFiles := make(map[string]bool, len(r.cfg.Include))
+	logFiles := make(map[string]bool, len(r.include))
 
-	for _, filePattern := range r.cfg.Include {
+	for _, filePattern := range r.include {
 		matching, err := doublestar.FilepathGlob(
 			filepath.Join(pipeline.hostroot, filePattern),
 			doublestar.WithFilesOnly(),
@@ -239,6 +266,7 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 		makeStorageFn,
 		r.statFile,
 		nil,
+		r.cfg,
 	)
 	if err != nil {
 		return fmt.Errorf("setting up receiver factories: %w", err)
@@ -397,7 +425,7 @@ func (r *logReceiver) diagnosticInfo() receiverDiagnosticInformation {
 	}
 
 FilesFromConfig:
-	for _, logFilePattern := range r.cfg.Include {
+	for _, logFilePattern := range r.include {
 		if strings.ContainsRune(logFilePattern, '*') {
 			for watching := range r.watching {
 				// Since the pattern is known to be valid, we can safely ignore this error.

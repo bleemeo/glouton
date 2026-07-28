@@ -81,9 +81,9 @@ func TestSourceExecLogFallback(t *testing.T) {
 
 	sink, _ := collectingSink()
 
-	src, err := newSource(t.Context(), testTelemetrySettings(), []string{file.Name()}, false, false, []config.LogCounter{
-		{Metric: "protected_errors_count", Regex: `\[error\]`},
-	}, sink, nil, runner, mockStatFile, "")
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{file.Name()}, false, false, map[string]config.LogMetricsCount{
+		"protected_errors_count": {"conditions": []any{`IsMatch(body, "\\[error\\]")`}},
+	}, nil, nil, sink, nil, runner, mockStatFile, "")
 	if err != nil {
 		t.Fatal("Failed to build source:", err)
 	}

@@ -213,39 +213,37 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 		},
 		Log: Log{
 			HostRootPrefix: "/hostroot",
+			Network: NetworkConfig{
+				Receivers: map[string]NetworkReceiver{
+					"otlp": {
+						Protocols: NetworkProtocols{
+							GRPC: &NetworkEndpoint{Endpoint: "localhost:4317"},
+							HTTP: &NetworkEndpoint{Endpoint: "localhost:4318"},
+						},
+					},
+				},
+			},
 			Metrics: LogMetricsConfig{
 				Receivers: map[string]LogMetricsReceiver{
 					"apache_access": {
-						Include: []string{"/var/log/apache/access.log"},
-						Counters: []LogCounter{
-							{
-								Metric: "apache_errors_count",
-								Regex:  "\\[error\\]",
-							},
-						},
+						"include": []any{"/var/log/apache/access.log"},
 					},
 				},
-				KnownCounters: map[string][]LogCounter{
-					"redis_errors": {
-						{
-							Metric: "redis_errors_count",
-							Regex:  testERROR,
-						},
+				Count: map[string]LogMetricsCount{
+					"apache_errors_count": {
+						"conditions": []any{`IsMatch(body, "\\[error\\]")`},
 					},
-					"postgres_errors": {
-						{
-							Metric: "postgres_errors_count",
-							Regex:  "error",
-						},
+					"redis_errors_count": {
+						"conditions": []any{`IsMatch(body, "` + testERROR + `")`},
+					},
+					"postgres_errors_count": {
+						"conditions": []any{`IsMatch(body, "error")`},
 					},
 				},
-				ContainerCounters: map[string]string{
-					testRedis: "redis_errors",
-				},
-				ContainerSelectorCounters: []ContainerSelectorCounter{
+				ContainerCounters: []string{testRedis},
+				ContainerSelectorCounters: []ContainerSelectorRule{
 					{
-						Selectors:     map[string]string{"app": "postgres"},
-						KnownCounters: "postgres_errors",
+						Selectors: map[string]string{"app": "postgres"},
 					},
 				},
 			},
@@ -258,15 +256,8 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 					AuditdEnable:              true,
 					ContainerAndServiceEnable: true,
 				},
-				GRPC: EnableListener{
-					Enable:  true,
-					Address: DefaultLocalhost,
-					Port:    4317,
-				},
-				HTTP: EnableListener{
-					Enable:  true,
-					Address: DefaultLocalhost,
-					Port:    4318,
+				Network: OTLPNetworkParticipation{
+					Receivers: []string{"otlp"},
 				},
 				KnownLogFormats: map[string][]OTELOperator{
 					"format-1": {
@@ -284,9 +275,9 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				},
 				Receivers: map[string]OTLPReceiver{
 					"filelog/recv": {
-						Include: []string{"/var/log/apache/access.log", "/var/log/apache/error.log"},
-						Operators: []OTELOperator{
-							{
+						"include": []any{"/var/log/apache/access.log", "/var/log/apache/error.log"},
+						"operators": []any{
+							map[string]any{
 								keyType: "add",
 								"field": "resource['service.name']",
 								"value": "apache_server",
@@ -1754,10 +1745,12 @@ func Test_migrate(t *testing.T) {
 					Metrics: LogMetricsConfig{
 						Receivers: map[string]LogMetricsReceiver{
 							"legacy_input_0": {
-								Include: []string{"/var/log/apache/access.log"},
-								Counters: []LogCounter{
-									{Metric: "apache_errors_count", Regex: `\[error\]`},
-								},
+								"include": []any{"/var/log/apache/access.log"},
+							},
+						},
+						Count: map[string]LogMetricsCount{
+							"apache_errors_count": {
+								"conditions": []any{`IsMatch(body, "\\[error\\]")`},
 							},
 						},
 					},
@@ -1771,10 +1764,12 @@ func Test_migrate(t *testing.T) {
 			WantConfig: Config{
 				Log: Log{
 					Metrics: LogMetricsConfig{
-						KnownCounters: map[string][]LogCounter{
-							"legacy_input_0": {{Metric: "redis_errors_count", Regex: "ERROR"}},
+						Count: map[string]LogMetricsCount{
+							"redis_errors_count": {
+								"conditions": []any{`IsMatch(body, "ERROR")`},
+							},
 						},
-						ContainerCounters: map[string]string{"redis": "legacy_input_0"},
+						ContainerCounters: []string{"redis"},
 					},
 				},
 			},
@@ -1786,15 +1781,91 @@ func Test_migrate(t *testing.T) {
 			WantConfig: Config{
 				Log: Log{
 					Metrics: LogMetricsConfig{
-						KnownCounters: map[string][]LogCounter{
-							"legacy_input_0": {{Metric: "postgres_errors_count", Regex: "error"}},
+						Count: map[string]LogMetricsCount{
+							"postgres_errors_count": {
+								"conditions": []any{`IsMatch(body, "error")`},
+							},
 						},
-						ContainerSelectorCounters: []ContainerSelectorCounter{
-							{Selectors: map[string]string{"app": "postgres"}, KnownCounters: "legacy_input_0"},
+						ContainerSelectorCounters: []ContainerSelectorRule{
+							{Selectors: map[string]string{"app": "postgres"}},
 						},
 					},
 				},
 			},
+			WantWarning: true,
+		},
+		{
+			Name:       "legacy-opentelemetry-network",
+			ConfigFile: "testdata/legacy-opentelemetry-network.conf",
+			WantConfig: Config{
+				Log: Log{
+					Network: NetworkConfig{
+						Receivers: map[string]NetworkReceiver{
+							"log-opentelemetry-legacy": {
+								Protocols: NetworkProtocols{
+									GRPC: &NetworkEndpoint{Endpoint: "192.168.1.10:5000"},
+								},
+							},
+						},
+					},
+					OpenTelemetry: OpenTelemetry{
+						Network: OTLPNetworkParticipation{Receivers: []string{"log-opentelemetry-legacy"}},
+					},
+				},
+			},
+			WantWarning: true,
+		},
+		{
+			Name:       "legacy-metrics-network",
+			ConfigFile: "testdata/legacy-metrics-network.conf",
+			WantConfig: Config{
+				Log: Log{
+					Network: NetworkConfig{
+						Receivers: map[string]NetworkReceiver{
+							"log-metrics-network-legacy": {
+								Protocols: NetworkProtocols{
+									GRPC: &NetworkEndpoint{Endpoint: "localhost:4417"},
+									HTTP: &NetworkEndpoint{Endpoint: "localhost:4418"},
+								},
+							},
+						},
+					},
+					Metrics: LogMetricsConfig{
+						Network: LogMetricsNetworkReceiver{Receivers: []string{"log-metrics-network-legacy"}},
+					},
+				},
+			},
+			WantWarning: true,
+		},
+		{
+			Name:       "legacy-network-shared",
+			ConfigFile: "testdata/legacy-network-shared.conf",
+			WantConfig: Config{
+				Log: Log{
+					Network: NetworkConfig{
+						Receivers: map[string]NetworkReceiver{
+							"log-opentelemetry-legacy": {
+								Protocols: NetworkProtocols{
+									GRPC: &NetworkEndpoint{Endpoint: "10.0.0.5:9000"},
+									HTTP: &NetworkEndpoint{Endpoint: "10.0.0.5:9001"},
+								},
+							},
+						},
+					},
+					OpenTelemetry: OpenTelemetry{
+						Network: OTLPNetworkParticipation{Receivers: []string{"log-opentelemetry-legacy"}},
+					},
+					Metrics: LogMetricsConfig{
+						Network: LogMetricsNetworkReceiver{Receivers: []string{"log-opentelemetry-legacy"}},
+					},
+				},
+			},
+			WantWarning: true,
+		},
+		{
+			Name:        "legacy-network-disabled",
+			ConfigFile:  "testdata/legacy-network-disabled.conf",
+			WantConfig:  Config{},
 			WantWarning: true,
 		},
 		{
@@ -1803,14 +1874,15 @@ func Test_migrate(t *testing.T) {
 			WantConfig: Config{
 				Log: Log{
 					Metrics: LogMetricsConfig{
-						KnownCounters: map[string][]LogCounter{
-							"legacy_input_0": {{Metric: "postgres_errors_count", Regex: "error"}},
+						Count: map[string]LogMetricsCount{
+							"postgres_errors_count": {
+								"conditions": []any{`IsMatch(body, "error")`},
+							},
 						},
-						ContainerSelectorCounters: []ContainerSelectorCounter{
+						ContainerSelectorCounters: []ContainerSelectorRule{
 							{
 								ContainerName: "postgres",
 								Selectors:     map[string]string{"env": "prod"},
-								KnownCounters: "legacy_input_0",
 							},
 						},
 					},

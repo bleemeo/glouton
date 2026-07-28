@@ -23,7 +23,6 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/otel/logsource"
 	"github.com/bleemeo/glouton/types"
 
@@ -32,6 +31,18 @@ import (
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
+
+// metricSpec is a (name, labels) pair used for registry declare/resolve --
+// decoded once from a config.LogMetricsCount entry's own "labels" field (see
+// extractLabels, source.go), independent of the OTTL matching logic itself
+// (which countconnector handles directly from the raw config.LogMetricsCount,
+// see metricInfo). Since log.metrics.count is global (see
+// config.LogMetricsConfig's doc comment), the same []metricSpec is resolved
+// against every source, regardless of what actually produced it.
+type metricSpec struct {
+	Metric string
+	Labels map[string]string
+}
 
 // windowSecs is the sliding window used for the "matches per second" rate,
 // mirroring the old Fluent Bit rate(...[1m]).
@@ -76,50 +87,50 @@ func newMetricsRegistry() *metricsRegistry {
 	}
 }
 
-// declare registers every logCounter's metric name for MetricNames()/allow-listing
+// declare registers every spec's metric name for MetricNames()/allow-listing
 // purposes only, without creating a live, aggregatable counter -- resolve() is what
 // creates those, per source, once a source actually starts.
-func (reg *metricsRegistry) declare(logCounters []config.LogCounter) {
+func (reg *metricsRegistry) declare(specs []metricSpec) {
 	reg.l.Lock()
 	defer reg.l.Unlock()
 
-	for _, lc := range logCounters {
-		reg.declaredNames[lc.Metric] = true
+	for _, spec := range specs {
+		reg.declaredNames[spec.Metric] = true
 	}
 }
 
-// resolve returns one counter per logCounter for the given item ("" for non-container
+// resolve returns one counter per spec for the given item ("" for non-container
 // sources), creating it the first time this (metric, item) pair is seen; repeated
 // (metric, item) pairs share the same counter, and the first registration's Labels
 // win if a later declaration of the same metric name sets different ones.
-func (reg *metricsRegistry) resolve(logCounters []config.LogCounter, item string) []*counter {
+func (reg *metricsRegistry) resolve(specs []metricSpec, item string) []*counter {
 	reg.l.Lock()
 	defer reg.l.Unlock()
 
-	resolved := make([]*counter, 0, len(logCounters))
+	resolved := make([]*counter, 0, len(specs))
 
-	for _, lc := range logCounters {
-		reg.declaredNames[lc.Metric] = true
+	for _, spec := range specs {
+		reg.declaredNames[spec.Metric] = true
 
-		key := counterKey{metric: lc.Metric, item: item}
+		key := counterKey{metric: spec.Metric, item: item}
 
 		c, found := reg.counters[key]
 		if !found {
-			lblMap := maps.Clone(lc.Labels)
+			lblMap := maps.Clone(spec.Labels)
 			if lblMap == nil {
 				lblMap = make(map[string]string, 2) //nolint:mnd
 			}
 
 			// Reserved keys are set last so they always win over an accidental
 			// same-name entry in a user's labels: map.
-			lblMap[types.LabelName] = lc.Metric
+			lblMap[types.LabelName] = spec.Metric
 
 			if item != "" {
 				lblMap[types.LabelItem] = item
 			}
 
 			c = &counter{
-				metric:  lc.Metric,
+				metric:  spec.Metric,
 				item:    item,
 				counter: logsource.NewRingCounter(windowSecs),
 				lbls:    labels.FromMap(lblMap),

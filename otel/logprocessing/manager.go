@@ -36,6 +36,7 @@ import (
 	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/collector/consumer"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -137,6 +138,15 @@ func New(
 	go processingManager.handleProcessingLifecycle(ctx)
 
 	return processingManager, nil
+}
+
+// NetworkLogsConsumer returns the entry point log-shipping wants to receive
+// externally-pushed logs on, or nil if this feature didn't opt into the
+// shared network receiver (log.opentelemetry.grpc/http.enable both false).
+// The caller (the shared OTLP receiver owner, see logsource.FanoutLogs) is
+// responsible for actually starting the physical listener.
+func (man *Manager) NetworkLogsConsumer() consumer.Logs {
+	return man.pipeline.networkConsumer
 }
 
 // handleProcessingLifecycle periodically saves file sizes to the state cache,
@@ -474,9 +484,9 @@ func (man *Manager) setupProcessingForSource(ctx context.Context, logSource logS
 	} else {
 		recvName := fmt.Sprintf("service_%s-%q_%s", logSource.serviceID.Name, logSource.serviceID.Instance, uuid.NewString())
 		recvConfig := config.OTLPReceiver{
-			Include:   []string{logSource.logFilePath},
-			Operators: logSource.operators,
-			Filters:   logSource.filters,
+			"include":   []string{logSource.logFilePath},
+			"operators": logSource.operators,
+			"filters":   logSource.filters,
 		}
 
 		recv, warn, err := newLogReceiver(recvName, recvConfig, true, man.pipeline.getInput(), nil, logsource.StatFile)
@@ -626,8 +636,7 @@ func (man *Manager) DiagnosticArchive(_ context.Context, writer types.ArchiveWri
 
 	if man.pipeline.otlpRecvCounter != nil {
 		diagnosticInfo.receivers.OTLPReceiver = &otlpReceiverDiagnosticInformation{
-			GRPCEnabled:            man.config.GRPC.Enable,
-			HTTPEnabled:            man.config.HTTP.Enable,
+			Receivers:              man.config.Network.Receivers,
 			LogProcessedCount:      man.pipeline.otlpRecvCounter.Load(),
 			LogThroughputPerMinute: man.pipeline.otlpRecvThroughputMeter.Total(),
 		}

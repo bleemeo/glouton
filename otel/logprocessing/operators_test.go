@@ -504,8 +504,8 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 			defer logFile.Close()
 
 			cfg := config.OTLPReceiver{
-				Include:   []string{logFile.Name()},
-				LogFormat: tc.logFormat,
+				"include":    []string{logFile.Name()},
+				"log_format": tc.logFormat,
 			}
 
 			logBuf := logBuffer{

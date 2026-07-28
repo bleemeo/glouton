@@ -21,8 +21,6 @@ import (
 
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts"
-
-	"github.com/google/go-cmp/cmp"
 )
 
 const (
@@ -35,12 +33,14 @@ const (
 )
 
 //nolint:gochecknoglobals
-var testCounterErrors = []config.LogCounter{{Metric: "errors_count", Regex: `\[error\]`}}
+var testCount = map[string]config.LogMetricsCount{"errors_count": {"conditions": []any{`IsMatch(body, "\\[error\\]")`}}}
 
-// TestResolveContainerCounters ports the container-matching scenarios that used to be
+// TestIsContainerWatched ports the container-matching scenarios that used to be
 // covered by fluentbit.Manager.inputLogPaths (fluentbit/config_test.go), since the
-// same container_name/container_selectors matching now lives here.
-func TestResolveContainerCounters(t *testing.T) {
+// same container_name/container_selectors matching now lives here. Since
+// log.metrics.count is global (see LogMetricsConfig's doc comment), watching is
+// now a pure yes/no decision instead of resolving a per-container counter group.
+func TestIsContainerWatched(t *testing.T) {
 	t.Parallel()
 
 	containers := map[string]facts.Container{
@@ -70,168 +70,128 @@ func TestResolveContainerCounters(t *testing.T) {
 		},
 		"label-selected": facts.FakeContainer{
 			FakeContainerName: "label-selected",
-			FakeLabels:        map[string]string{containerLogCounterLabel: "grp-label"},
-		},
-		"label-unknown-falls-back": facts.FakeContainer{
-			FakeContainerName: "label-unknown-falls-back",
-			FakeLabels:        map[string]string{containerLogCounterLabel: "nonexistent-group"},
+			FakeLabels:        map[string]string{containerLogCounterLabel: "any-value"},
 		},
 	}
 
 	tests := []struct {
-		Name             string
-		Cfg              config.Log
-		ContainerName    string
-		ExpectedCounters []config.LogCounter
+		Name          string
+		Cfg           config.Log
+		ContainerName string
+		Expected      bool
 	}{
 		{
 			Name: "matches-by-container-name",
 			Cfg: config.Log{Metrics: config.LogMetricsConfig{
-				KnownCounters:     map[string][]config.LogCounter{"postgres-grp": testCounterErrors},
-				ContainerCounters: map[string]string{testServicePostgres: "postgres-grp"},
+				ContainerCounters: []string{testServicePostgres},
 			}},
-			ContainerName:    testServicePostgres,
-			ExpectedCounters: testCounterErrors,
+			ContainerName: testServicePostgres,
+			Expected:      true,
 		},
 		{
 			Name: "matches-by-label-selector",
 			Cfg: config.Log{Metrics: config.LogMetricsConfig{
-				KnownCounters: map[string][]config.LogCounter{"redis-grp": testCounterErrors},
-				ContainerSelectorCounters: []config.ContainerSelectorCounter{
-					{Selectors: map[string]string{testLabelApp: testLabelRedis}, KnownCounters: "redis-grp"},
+				ContainerSelectorCounters: []config.ContainerSelectorRule{
+					{Selectors: map[string]string{testLabelApp: testLabelRedis}},
 				},
 			}},
-			ContainerName:    "redis-1",
-			ExpectedCounters: testCounterErrors,
+			ContainerName: "redis-1",
+			Expected:      true,
 		},
 		{
 			Name: "matches-by-annotation-selector",
 			Cfg: config.Log{Metrics: config.LogMetricsConfig{
-				KnownCounters: map[string][]config.LogCounter{"uwsgi-grp": testCounterErrors},
-				ContainerSelectorCounters: []config.ContainerSelectorCounter{
+				ContainerSelectorCounters: []config.ContainerSelectorRule{
 					{
 						Selectors: map[string]string{
 							testLabelApp: testServiceUwsgi,
 							testLabelEnv: testLabelProd,
 						},
-						KnownCounters: "uwsgi-grp",
 					},
 				},
 			}},
-			ContainerName:    "uwsgi-1",
-			ExpectedCounters: testCounterErrors,
+			ContainerName: "uwsgi-1",
+			Expected:      true,
 		},
 		{
 			Name: "container-name-and-selector-both-required",
 			Cfg: config.Log{Metrics: config.LogMetricsConfig{
-				KnownCounters: map[string][]config.LogCounter{"postgres-both-grp": testCounterErrors},
-				ContainerSelectorCounters: []config.ContainerSelectorCounter{
+				ContainerSelectorCounters: []config.ContainerSelectorRule{
 					{
 						ContainerName: testServicePostgres,
 						Selectors:     map[string]string{testLabelEnv: testLabelProd},
-						KnownCounters: "postgres-both-grp",
 					},
 				},
 			}},
-			ContainerName:    testServicePostgres,
-			ExpectedCounters: testCounterErrors,
+			ContainerName: testServicePostgres,
+			Expected:      true,
 		},
 		{
 			Name: "container-name-and-selector-both-required-name-mismatch",
 			Cfg: config.Log{Metrics: config.LogMetricsConfig{
-				KnownCounters: map[string][]config.LogCounter{"postgres-both-grp": testCounterErrors},
-				ContainerSelectorCounters: []config.ContainerSelectorCounter{
+				ContainerSelectorCounters: []config.ContainerSelectorRule{
 					{
 						ContainerName: "some-other-name",
 						Selectors:     map[string]string{testLabelEnv: testLabelProd},
-						KnownCounters: "postgres-both-grp",
 					},
 				},
 			}},
-			ContainerName:    testServicePostgres,
-			ExpectedCounters: nil,
+			ContainerName: testServicePostgres,
+			Expected:      false,
 		},
 		{
 			Name: "no-match",
 			Cfg: config.Log{Metrics: config.LogMetricsConfig{
-				KnownCounters:     map[string][]config.LogCounter{"postgres-grp": testCounterErrors},
-				ContainerCounters: map[string]string{testServicePostgres: "postgres-grp"},
+				ContainerCounters: []string{testServicePostgres},
 			}},
-			ContainerName:    "unrelated",
-			ExpectedCounters: nil,
+			ContainerName: "unrelated",
+			Expected:      false,
 		},
 		{
 			Name: "new-style-container-counters-config",
 			Cfg: config.Log{Metrics: config.LogMetricsConfig{
-				KnownCounters:     map[string][]config.LogCounter{"grp": testCounterErrors},
-				ContainerCounters: map[string]string{"new-style": "grp"},
+				ContainerCounters: []string{"new-style"},
 			}},
-			ContainerName:    "new-style",
-			ExpectedCounters: testCounterErrors,
+			ContainerName: "new-style",
+			Expected:      true,
 		},
 		{
 			// Mirrors otel/logprocessing's glouton.log_filter/glouton.log_format
 			// container-label handling.
-			Name: "glouton-log-counter-label-selects-known-counters",
-			Cfg: config.Log{Metrics: config.LogMetricsConfig{
-				KnownCounters: map[string][]config.LogCounter{"grp-label": testCounterErrors},
-			}},
-			ContainerName:    "label-selected",
-			ExpectedCounters: testCounterErrors,
-		},
-		{
-			Name: "glouton-log-counter-label-takes-precedence-over-static-config-map",
-			Cfg: config.Log{Metrics: config.LogMetricsConfig{
-				KnownCounters: map[string][]config.LogCounter{
-					"grp-label":  testCounterErrors,
-					"grp-static": {{Metric: "other_count", Regex: "other"}},
-				},
-				ContainerCounters: map[string]string{"label-selected": "grp-static"},
-			}},
-			ContainerName:    "label-selected",
-			ExpectedCounters: testCounterErrors,
-		},
-		{
-			Name: "unknown-glouton-log-counter-label-falls-back-to-static-config-map",
-			Cfg: config.Log{Metrics: config.LogMetricsConfig{
-				KnownCounters:     map[string][]config.LogCounter{"grp-static": testCounterErrors},
-				ContainerCounters: map[string]string{"label-unknown-falls-back": "grp-static"},
-			}},
-			ContainerName:    "label-unknown-falls-back",
-			ExpectedCounters: testCounterErrors,
+			Name:          "glouton-log-counter-label-opts-in",
+			Cfg:           config.Log{},
+			ContainerName: "label-selected",
+			Expected:      true,
 		},
 		{
 			Name: "container-exclude-by-name-overrides-container-counters",
 			Cfg: config.Log{Metrics: config.LogMetricsConfig{
-				KnownCounters:     map[string][]config.LogCounter{"postgres-grp": testCounterErrors},
-				ContainerCounters: map[string]string{testServicePostgres: "postgres-grp"},
+				ContainerCounters: []string{testServicePostgres},
 				ContainerExclude:  []config.ContainerExcludeRule{{ContainerName: testServicePostgres}},
 			}},
-			ContainerName:    testServicePostgres,
-			ExpectedCounters: nil,
+			ContainerName: testServicePostgres,
+			Expected:      false,
 		},
 		{
 			Name: "container-exclude-by-selector-overrides-container-selector-counters",
 			Cfg: config.Log{Metrics: config.LogMetricsConfig{
-				KnownCounters: map[string][]config.LogCounter{"redis-grp": testCounterErrors},
-				ContainerSelectorCounters: []config.ContainerSelectorCounter{
-					{Selectors: map[string]string{testLabelApp: testLabelRedis}, KnownCounters: "redis-grp"},
+				ContainerSelectorCounters: []config.ContainerSelectorRule{
+					{Selectors: map[string]string{testLabelApp: testLabelRedis}},
 				},
 				ContainerExclude: []config.ContainerExcludeRule{
 					{Selectors: map[string]string{testLabelApp: testLabelRedis}},
 				},
 			}},
-			ContainerName:    "redis-1",
-			ExpectedCounters: nil,
+			ContainerName: "redis-1",
+			Expected:      false,
 		},
 		{
 			Name: "container-exclude-overrides-glouton-log-counter-label",
 			Cfg: config.Log{Metrics: config.LogMetricsConfig{
-				KnownCounters:    map[string][]config.LogCounter{"grp-label": testCounterErrors},
 				ContainerExclude: []config.ContainerExcludeRule{{ContainerName: "label-selected"}},
 			}},
-			ContainerName:    "label-selected",
-			ExpectedCounters: nil,
+			ContainerName: "label-selected",
+			Expected:      false,
 		},
 	}
 
@@ -239,20 +199,17 @@ func TestResolveContainerCounters(t *testing.T) {
 		t.Run(test.Name, func(t *testing.T) {
 			t.Parallel()
 
-			got := resolveContainerCounters(test.Cfg, containers[test.ContainerName])
-
-			if diff := cmp.Diff(test.ExpectedCounters, got); diff != "" {
-				t.Fatalf("Unexpected counters:\n%s", diff)
+			if got := isContainerWatched(test.Cfg, containers[test.ContainerName]); got != test.Expected {
+				t.Errorf("Expected %v, got %v", test.Expected, got)
 			}
 		})
 	}
 }
 
-// TestHasContainerCounters is the regression test for a purely label-driven
-// setup (glouton.log_counter labels + known_counters, no static
-// container_counters/container_selector_counters entry): container watching
-// must still be enabled, otherwise resolveContainerCounters' label lookup is
-// never reached at all.
+// TestHasContainerCounters is the regression test for container watching being
+// gated purely on whether any metric is defined at all (see
+// LogMetricsConfig.Count's doc comment): with none, no container selection
+// mechanism (static or label-driven) would ever produce anything.
 func TestHasContainerCounters(t *testing.T) {
 	t.Parallel()
 
@@ -267,25 +224,18 @@ func TestHasContainerCounters(t *testing.T) {
 			Expected: false,
 		},
 		{
-			Name: "static-container-selector-counters",
+			Name: "static-container-selector-counters-but-no-count",
 			Cfg: config.Log{Metrics: config.LogMetricsConfig{
-				ContainerSelectorCounters: []config.ContainerSelectorCounter{
-					{Selectors: map[string]string{"app": "redis"}, KnownCounters: "grp"},
+				ContainerSelectorCounters: []config.ContainerSelectorRule{
+					{Selectors: map[string]string{"app": "redis"}},
 				},
 			}},
-			Expected: true,
+			Expected: false,
 		},
 		{
-			Name: "static-container-counters-map",
+			Name: "count-defined-enables-watching",
 			Cfg: config.Log{Metrics: config.LogMetricsConfig{
-				ContainerCounters: map[string]string{"ctr": "grp"},
-			}},
-			Expected: true,
-		},
-		{
-			Name: "known-counters-only-label-driven",
-			Cfg: config.Log{Metrics: config.LogMetricsConfig{
-				KnownCounters: map[string][]config.LogCounter{"grp-label": testCounterErrors},
+				Count: testCount,
 			}},
 			Expected: true,
 		},

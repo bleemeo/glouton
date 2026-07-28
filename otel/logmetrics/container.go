@@ -18,70 +18,60 @@ package logmetrics
 
 import (
 	"path/filepath"
+	"slices"
 
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts"
-	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/utils/hostrootsymlink"
 )
 
-// containerLogCounterLabel lets a single container opt into a named
-// known_counters group via a Docker label/Kubernetes annotation, mirroring
-// otel/logprocessing's glouton.log_filter/glouton.log_format container labels.
-// It takes precedence over the static container_counters config map.
+// containerLogCounterLabel lets a single container opt into log-to-metric via
+// a Docker label/Kubernetes annotation (any value, presence is all that
+// matters), mirroring otel/logprocessing's glouton.log_filter/
+// glouton.log_format container labels. Since log.metrics.count is global (see
+// LogMetricsConfig's doc comment), there is no group name to reference here
+// anymore: the label is a plain opt-in on top of ContainerCounters/
+// ContainerSelectorCounters.
 const containerLogCounterLabel = "glouton.log_counter"
 
-// hasContainerCounters reports whether any container could possibly need
-// watching: via the static container_counters/container_selector_counters
-// config, or -- since any container can opt in purely via the
-// glouton.log_counter label -- the mere existence of a known_counters group
-// for a label to reference.
+// hasContainerCounters reports whether container watching could possibly
+// matter: only if at least one metric is defined at all (see
+// LogMetricsConfig.Count) -- with none, no container (however selected) would
+// ever produce anything. If Count is non-empty, watching is always
+// potentially relevant, since any container can opt in purely via the
+// glouton.log_counter label regardless of ContainerCounters/
+// ContainerSelectorCounters.
 func hasContainerCounters(cfg config.Log) bool {
-	return len(cfg.Metrics.ContainerCounters) > 0 ||
-		len(cfg.Metrics.ContainerSelectorCounters) > 0 ||
-		len(cfg.Metrics.KnownCounters) > 0
+	return len(cfg.Metrics.Count) > 0
 }
 
-// resolveContainerCounters returns the concatenation of every counter source that matches ctr,
-// or nil if ctr matches a ContainerExclude rule -- exclusion vetoes every other resolution
-// mechanism (label, ContainerCounters, ContainerSelectorCounters) unconditionally.
-func resolveContainerCounters(cfg config.Log, ctr facts.Container) []config.LogCounter {
+// isContainerWatched reports whether ctr should be watched for log-to-metric:
+// via the glouton.log_counter label, the static ContainerCounters list, or a
+// matching ContainerSelectorCounters rule -- unless it first matches a
+// ContainerExclude rule, which vetoes every other selection mechanism
+// unconditionally.
+func isContainerWatched(cfg config.Log, ctr facts.Container) bool {
 	for _, ex := range cfg.Metrics.ContainerExclude {
 		if matchesContainerRule(ctr, ex.ContainerName, ex.Selectors) {
-			return nil
+			return false
 		}
 	}
 
-	var counters []config.LogCounter
-
-	hasFromLabel := false
-
-	if knownName, found := facts.LabelsAndAnnotations(ctr)[containerLogCounterLabel]; found {
-		if known, ok := cfg.Metrics.KnownCounters[knownName]; ok {
-			counters = append(counters, known...)
-			hasFromLabel = true
-		} else {
-			logger.V(1).Printf("Container %s (%s) requires an unknown log counter: %q", ctr.ContainerName(), ctr.ID(), knownName)
-		}
+	if _, found := facts.LabelsAndAnnotations(ctr)[containerLogCounterLabel]; found {
+		return true
 	}
 
-	if !hasFromLabel {
-		if knownName, found := cfg.Metrics.ContainerCounters[ctr.ContainerName()]; found {
-			counters = append(counters, cfg.Metrics.KnownCounters[knownName]...)
-		}
+	if slices.Contains(cfg.Metrics.ContainerCounters, ctr.ContainerName()) {
+		return true
 	}
 
-	// Selector-based rules are additive: every matching entry contributes its
-	// known_counters group on top of whatever the label/ContainerCounters
-	// resolution above already picked. ContainerName, if set, is an extra
-	// requirement on top of Selectors (both must match).
 	for _, sel := range cfg.Metrics.ContainerSelectorCounters {
 		if matchesContainerRule(ctr, sel.ContainerName, sel.Selectors) {
-			counters = append(counters, cfg.Metrics.KnownCounters[sel.KnownCounters]...)
+			return true
 		}
 	}
 
-	return counters
+	return false
 }
 
 // matchesContainerRule reports whether ctr matches a {containerName, selectors} rule:

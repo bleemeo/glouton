@@ -66,13 +66,14 @@ func mapKeys() []string {
 	return []string{
 		keyThresholds,
 		"metric.softstatus_period",
+		"log.network.receivers",
 		"log.opentelemetry.receivers",
 		"log.opentelemetry.global_filters",
 		"log.opentelemetry.known_log_filters",
 		"log.opentelemetry.container_filter",
+		"log.opentelemetry.container_format",
 		"log.metrics.receivers",
-		"log.metrics.known_counters",
-		"log.metrics.container_counters",
+		"log.metrics.count",
 	}
 }
 
@@ -319,6 +320,12 @@ func DefaultConfig() Config { //nolint:maintidx
 		Log: Log{
 			HostRootPrefix: "/hostroot",
 			Inputs:         []LogInput{},
+			// No network receiver is pre-declared: like the real OpenTelemetry
+			// Collector, nothing is configured (and so nothing binds) until the
+			// user explicitly adds one under log.network.receivers.
+			Network: NetworkConfig{
+				Receivers: map[string]NetworkReceiver{},
+			},
 			OpenTelemetry: OpenTelemetry{
 				Enable: true,
 				AutoDiscovery: AutoDiscovery{
@@ -328,16 +335,7 @@ func DefaultConfig() Config { //nolint:maintidx
 					AuditdEnable:              false,
 					ContainerAndServiceEnable: false,
 				},
-				GRPC: EnableListener{
-					Enable:  false,
-					Address: DefaultLocalhost,
-					Port:    4317,
-				},
-				HTTP: EnableListener{
-					Enable:  false,
-					Address: DefaultLocalhost,
-					Port:    4318,
-				},
+				Network:         OTLPNetworkParticipation{Receivers: []string{}},
 				KnownLogFormats: DefaultKnownLogFormats(),
 				Receivers:       map[string]OTLPReceiver{},
 				ContainerFormat: map[string]string{},
@@ -347,22 +345,12 @@ func DefaultConfig() Config { //nolint:maintidx
 			},
 			Metrics: LogMetricsConfig{
 				Receivers:                 map[string]LogMetricsReceiver{},
-				KnownCounters:             map[string][]LogCounter{},
-				ContainerCounters:         map[string]string{},
-				ContainerSelectorCounters: []ContainerSelectorCounter{},
+				Count:                     map[string]LogMetricsCount{},
+				ContainerCounters:         []string{},
+				ContainerSelectorCounters: []ContainerSelectorRule{},
 				ContainerExclude:          []ContainerExcludeRule{},
 				Network: LogMetricsNetworkReceiver{
-					GRPC: EnableListener{
-						Enable:  false,
-						Address: DefaultLocalhost,
-						Port:    4417,
-					},
-					HTTP: EnableListener{
-						Enable:  false,
-						Address: DefaultLocalhost,
-						Port:    4418,
-					},
-					Counters: []LogCounter{},
+					Receivers: []string{},
 				},
 			},
 		},

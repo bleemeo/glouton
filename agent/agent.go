@@ -72,6 +72,7 @@ import (
 	"github.com/bleemeo/glouton/nrpe"
 	"github.com/bleemeo/glouton/otel/logmetrics"
 	"github.com/bleemeo/glouton/otel/logprocessing"
+	"github.com/bleemeo/glouton/otel/logsource"
 	"github.com/bleemeo/glouton/prometheus/exporter/blackbox"
 	"github.com/bleemeo/glouton/prometheus/exporter/ipmi"
 	"github.com/bleemeo/glouton/prometheus/exporter/snmp"
@@ -1060,7 +1061,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	a.vSphereManager = vsphere.NewManager()
 
-	a.logMetricsManager = logmetrics.New(a.config.Log, a.hostRootPath, a.containerRuntime, a.state, a.commandRunner)
+	a.logMetricsManager = logmetrics.New(ctx, a.config.Log, a.hostRootPath, a.containerRuntime, a.state, a.commandRunner)
 	tasks = append(tasks, taskInfo{a.logMetricsManager.Run, "Log-to-metric manager"})
 
 	_, err = a.gathererRegistry.RegisterAppenderCallback(
@@ -1162,6 +1163,71 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		if err != nil {
 			logger.Printf("unable to add bleemeo connector metrics: %v", err)
 		}
+	}
+
+	// Both log-shipping and log-to-metric may want to receive externally-pushed
+	// logs; when they name the same log.network.receivers entry, they share a
+	// single OTLP gRPC/HTTP listener (see logsource.PlanSharedNetworkReceivers)
+	// so their client only ever needs one endpoint. Each receiver's protocols
+	// are entirely its own config (log.network.receivers.<name>.protocols),
+	// same as a real OTel receiver -- a feature just lists which receivers it
+	// pulls from, like an OTel pipeline's own `receivers: [...]`. A feature
+	// can skip naming one entirely and just set network.enable instead (the
+	// simple, single-listener shortcut -- see config.ResolveNetworkReceivers/
+	// EffectiveNetworkReceivers): it resolves to config.DefaultNetworkReceiverName,
+	// auto-provisioned with default GRPC/HTTP endpoints as long as nobody has
+	// defined any log.network.receivers entry explicitly.
+	otelNetwork := a.config.Log.OpenTelemetry.Network
+	metricsNetwork := a.config.Log.Metrics.Network
+
+	effectiveNetworkReceivers := config.EffectiveNetworkReceivers(
+		a.config.Log.Network.Receivers,
+		otelNetwork.Enable && len(otelNetwork.Receivers) == 0,
+		metricsNetwork.Enable && len(metricsNetwork.Receivers) == 0,
+	)
+
+	var networkWants []logsource.NetworkWant
+
+	if a.logProcessManager != nil {
+		if c := a.logProcessManager.NetworkLogsConsumer(); c != nil {
+			networkWants = append(networkWants, logsource.NetworkWant{
+				Consumer:  c,
+				Receivers: config.ResolveNetworkReceivers(otelNetwork.Enable, otelNetwork.Receivers),
+			})
+		}
+	}
+
+	if c := a.logMetricsManager.NetworkLogsConsumer(); c != nil {
+		networkWants = append(networkWants, logsource.NetworkWant{
+			Consumer:  c,
+			Receivers: config.ResolveNetworkReceivers(metricsNetwork.Enable, metricsNetwork.Receivers),
+		})
+	}
+
+	for _, planned := range logsource.PlanSharedNetworkReceivers(effectiveNetworkReceivers, networkWants) {
+		plannedCopy := planned
+
+		recv, err := logsource.SetupOTLPNetworkReceiver(
+			ctx,
+			logsource.NewTelemetrySettings(),
+			plannedCopy.Protocols,
+			plannedCopy.Sink,
+			"shared-otlp-receiver-"+plannedCopy.Name,
+		)
+		if err != nil {
+			logger.Printf("unable to start shared log network receiver %q: %v", plannedCopy.Name, err)
+
+			continue
+		}
+
+		tasks = append(tasks, taskInfo{
+			func(ctx context.Context) error {
+				<-ctx.Done()
+
+				return recv.Shutdown(context.Background())
+			},
+			fmt.Sprintf("Shared log network receiver (%s)", plannedCopy.Name),
+		})
 	}
 
 	a.FireTrigger(true, true, false, false, false)

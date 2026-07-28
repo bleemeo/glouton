@@ -70,6 +70,14 @@ type pipelineContext struct {
 
 	inputConsumer consumer.Logs
 
+	// networkConsumer is inputConsumer wrapped with processed-count/throughput
+	// instrumentation, exposed via Manager.NetworkLogsConsumer for the shared
+	// OTLP network receiver (owned outside this package, see
+	// logsource.SetupOTLPNetworkReceiver/FanoutLogs) to feed into -- nil if
+	// this feature didn't opt into the network receiver (GRPC/HTTP both
+	// disabled).
+	networkConsumer consumer.Logs
+
 	otlpRecvCounter         *atomic.Int64
 	otlpRecvThroughputMeter *logsource.RingCounter
 
@@ -280,10 +288,8 @@ func (p *pipelineContext) init( //nolint: maintidx
 
 	p.inputConsumer = logResourceAttribute
 
-	if cfg.GRPC.Enable || cfg.HTTP.Enable {
-		if err := p.setupNetworkReceiver(ctx, cfg); err != nil {
-			logger.V(1).Printf("Unable to configure GRPC/HTTP receiver: %v", err)
-		}
+	if cfg.Network.Enable || len(cfg.Network.Receivers) > 0 {
+		p.setupNetworkConsumer()
 	}
 
 	if cfg.AutoDiscovery.JournaldEnable {
@@ -337,28 +343,17 @@ func (p *pipelineContext) init( //nolint: maintidx
 	return nil
 }
 
-func (p *pipelineContext) setupNetworkReceiver(
-	ctx context.Context,
-	cfg config.OpenTelemetry,
-) error {
+// setupNetworkConsumer wraps inputConsumer with processed-count/throughput
+// instrumentation and exposes it as networkConsumer, for the shared OTLP
+// network receiver to feed into. Unlike other sources, this package no longer
+// starts its own OTLP receiver: the physical listener is shared with
+// otel/logmetrics (see logsource.SetupOTLPNetworkReceiver/FanoutLogs), so a
+// client only ever needs one endpoint regardless of which features consume
+// what it sends.
+func (p *pipelineContext) setupNetworkConsumer() {
 	p.otlpRecvCounter = new(atomic.Int64)
 	p.otlpRecvThroughputMeter = logsource.NewRingCounter(throughputMeterResolutionSecs)
-
-	otlpLogReceiver, err := logsource.SetupOTLPNetworkReceiver(
-		ctx,
-		p.telemetry,
-		cfg.GRPC,
-		cfg.HTTP,
-		logsource.WrapWithInstrumentation(p.inputConsumer, p.otlpRecvCounter, p.otlpRecvThroughputMeter),
-		"otlp-receiver",
-	)
-	if err != nil {
-		return err
-	}
-
-	p.startedComponents = append(p.startedComponents, otlpLogReceiver)
-
-	return nil
+	p.networkConsumer = logsource.WrapWithInstrumentation(p.inputConsumer, p.otlpRecvCounter, p.otlpRecvThroughputMeter)
 }
 
 func (p *pipelineContext) setupJournald(
@@ -436,13 +431,13 @@ func (p *pipelineContext) setupSyslog(
 	}
 
 	recvConfig := config.OTLPReceiver{
-		Include:   []string{"/var/log/syslog"},
-		Operators: append(operatorsForServiceName("syslog"), opsGroup...),
+		"include":   []string{"/var/log/syslog"},
+		"operators": append(operatorsForServiceName("syslog"), opsGroup...),
 	}
 
 	recvConfig2 := config.OTLPReceiver{
-		Include:   []string{"/var/log/auth.log"},
-		Operators: append(operatorsForServiceName("syslog"), opsGroup2...),
+		"include":   []string{"/var/log/auth.log"},
+		"operators": append(operatorsForServiceName("syslog"), opsGroup2...),
 	}
 
 	recv, warn, err := newLogReceiver("syslog", recvConfig, true, p.getInput(), nil, logsource.StatFile)
@@ -490,8 +485,8 @@ func (p *pipelineContext) setupAuditD(
 	}
 
 	recvConfig := config.OTLPReceiver{
-		Include:   []string{"/var/log/audit/audit.log"},
-		Operators: append(operatorsForServiceName("auditd"), opsGroup...),
+		"include":   []string{"/var/log/audit/audit.log"},
+		"operators": append(operatorsForServiceName("auditd"), opsGroup...),
 	}
 
 	recv, warn, err := newLogReceiver("auditd", recvConfig, true, p.getInput(), nil, logsource.StatFile)

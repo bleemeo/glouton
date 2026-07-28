@@ -29,6 +29,7 @@ import (
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/otel/logsource"
 
+	"github.com/google/go-cmp/cmp"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -105,10 +106,10 @@ func TestSourceCountsRealFile(t *testing.T) {
 
 	sink, totals := collectingSink()
 
-	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, false, []config.LogCounter{
-		{Metric: "app_errors_count", Regex: `\[error\]`},
-		{Metric: "app_requests_count", Regex: "GET /"},
-	}, sink, nil, noExecRunner(t), logsource.StatFile, "")
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, false, map[string]config.LogMetricsCount{
+		"app_errors_count":   {"conditions": []any{`IsMatch(body, "\\[error\\]")`}},
+		"app_requests_count": {"conditions": []any{`IsMatch(body, "GET /")`}},
+	}, nil, nil, sink, nil, noExecRunner(t), logsource.StatFile, "")
 	if err != nil {
 		t.Fatal("Failed to build source:", err)
 	}
@@ -162,9 +163,9 @@ func TestSourceExcludeRegex(t *testing.T) {
 
 	sink, totals := collectingSink()
 
-	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, false, []config.LogCounter{
-		{Metric: "app_errors_count", Regex: `\[error\]`, Exclude: "connection reset"},
-	}, sink, nil, noExecRunner(t), logsource.StatFile, "")
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, false, map[string]config.LogMetricsCount{
+		"app_errors_count": {"conditions": []any{`IsMatch(body, "\\[error\\]") and not IsMatch(body, "connection reset")`}},
+	}, nil, nil, sink, nil, noExecRunner(t), logsource.StatFile, "")
 	if err != nil {
 		t.Fatal("Failed to build source:", err)
 	}
@@ -216,9 +217,9 @@ func TestSourceUnwrapsContainerEnvelope(t *testing.T) {
 
 	// The container parser preserves the trailing newline embedded in Docker's JSON
 	// "log" field value, so the body is "[error] something broke\n", not "...broke".
-	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, true, false, []config.LogCounter{
-		{Metric: "container_errors_count", Regex: `^\[error\] something broke\n?$`},
-	}, sink, nil, noExecRunner(t), logsource.StatFile, "")
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, true, false, map[string]config.LogMetricsCount{
+		"container_errors_count": {"conditions": []any{`IsMatch(body, "^\\[error\\] something broke\\n?$")`}},
+	}, nil, nil, sink, nil, noExecRunner(t), logsource.StatFile, "")
 	if err != nil {
 		t.Fatal("Failed to build source:", err)
 	}
@@ -249,9 +250,9 @@ func TestSourceInvalidRegex(t *testing.T) {
 
 	sink, _ := collectingSink()
 
-	_, err := newSource(t.Context(), testTelemetrySettings(), []string{"/nonexistent"}, false, false, []config.LogCounter{
-		{Metric: "bad", Regex: "("},
-	}, sink, nil, noExecRunner(t), logsource.StatFile, "")
+	_, err := newSource(t.Context(), testTelemetrySettings(), []string{"/nonexistent"}, false, false, map[string]config.LogMetricsCount{
+		"bad": {"conditions": []any{`IsMatch(body, "(")`}},
+	}, nil, nil, sink, nil, noExecRunner(t), logsource.StatFile, "")
 	if err == nil {
 		t.Fatal("Expected an error for an invalid regex")
 	}
@@ -271,11 +272,11 @@ func TestSourceFastPathSingleConnector(t *testing.T) {
 
 	sink, _ := collectingSink()
 
-	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, false, []config.LogCounter{
-		{Metric: "a_count", Regex: "a"},
-		{Metric: "b_count", Regex: "b"},
-		{Metric: "c_count", Regex: "c"},
-	}, sink, nil, noExecRunner(t), logsource.StatFile, "")
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, false, map[string]config.LogMetricsCount{
+		"a_count": {"conditions": []any{`IsMatch(body, "a")`}},
+		"b_count": {"conditions": []any{`IsMatch(body, "b")`}},
+		"c_count": {"conditions": []any{`IsMatch(body, "c")`}},
+	}, nil, nil, sink, nil, noExecRunner(t), logsource.StatFile, "")
 	if err != nil {
 		t.Fatal("Failed to build source:", err)
 	}
@@ -284,60 +285,6 @@ func TestSourceFastPathSingleConnector(t *testing.T) {
 
 	if len(src.conns) != 1 {
 		t.Errorf("Expected exactly 1 connector on the fast path, got %d", len(src.conns))
-	}
-}
-
-// TestSourceDuplicateMetricNameFirstWins is the regression test for
-// buildConnectors' fast path silently letting a later counter with the same
-// Metric name overwrite an earlier one in the combined connector config:
-// only the first-defined counter for a given metric name must be honored.
-func TestSourceDuplicateMetricNameFirstWins(t *testing.T) {
-	t.Parallel()
-
-	logFile, err := os.CreateTemp(t.TempDir(), "app-*.log")
-	if err != nil {
-		t.Fatal("Can't create log file:", err)
-	}
-
-	defer logFile.Close()
-
-	sink, totals := collectingSink()
-
-	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, false, []config.LogCounter{
-		{Metric: "dup_count", Regex: "first"},
-		{Metric: "dup_count", Regex: "second"},
-	}, sink, nil, noExecRunner(t), logsource.StatFile, "")
-	if err != nil {
-		t.Fatal("Failed to build source:", err)
-	}
-
-	defer src.stop(t.Context()) //nolint:errcheck
-
-	if len(src.conns) != 1 {
-		t.Errorf("Expected exactly 1 connector on the fast path, got %d", len(src.conns))
-	}
-
-	time.Sleep(500 * time.Millisecond)
-
-	lines := []string{
-		"line matching first\n",
-		"line matching second\n",
-	}
-
-	for _, line := range lines {
-		if _, err := logFile.WriteString(line); err != nil {
-			t.Fatal("Failed to write log line:", err)
-		}
-	}
-
-	if err := logFile.Sync(); err != nil {
-		t.Fatal("Failed to sync log file:", err)
-	}
-
-	time.Sleep(time.Second)
-
-	if got := totals()["dup_count"]; got != 1 {
-		t.Errorf("Expected only the first-defined counter's regex to count (1 match), got %d", got)
 	}
 }
 
@@ -357,11 +304,11 @@ func TestSourceIsolatesInvalidCounter(t *testing.T) {
 
 	sink, totals := collectingSink()
 
-	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, false, []config.LogCounter{
-		{Metric: "app_errors_count", Regex: `\[error\]`},
-		{Metric: "app_requests_count", Regex: "GET /"},
-		{Metric: "app_broken_count", Regex: "("},
-	}, sink, nil, noExecRunner(t), logsource.StatFile, "")
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, false, map[string]config.LogMetricsCount{
+		"app_errors_count":   {"conditions": []any{`IsMatch(body, "\\[error\\]")`}},
+		"app_requests_count": {"conditions": []any{`IsMatch(body, "GET /")`}},
+		"app_broken_count":   {"conditions": []any{`IsMatch(body, "(")`}},
+	}, nil, nil, sink, nil, noExecRunner(t), logsource.StatFile, "")
 	if err != nil {
 		t.Fatal("Failed to build source despite one invalid counter:", err)
 	}
@@ -426,9 +373,9 @@ func TestSourceUpdatePicksUpNewFile(t *testing.T) {
 
 	sink, totals := collectingSink()
 
-	src, err := newSource(t.Context(), testTelemetrySettings(), []string{filepath.Join(tmpDir, "*.log")}, false, false, []config.LogCounter{
-		{Metric: "rotated_errors_count", Regex: `\[error\]`},
-	}, sink, nil, noExecRunner(t), logsource.StatFile, "")
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{filepath.Join(tmpDir, "*.log")}, false, false, map[string]config.LogMetricsCount{
+		"rotated_errors_count": {"conditions": []any{`IsMatch(body, "\\[error\\]")`}},
+	}, nil, nil, sink, nil, noExecRunner(t), logsource.StatFile, "")
 	if err != nil {
 		t.Fatal("Failed to build source:", err)
 	}
@@ -477,5 +424,101 @@ func TestSourceUpdatePicksUpNewFile(t *testing.T) {
 
 	if got := totals()["rotated_errors_count"]; got != 2 {
 		t.Errorf("Expected 2 matches total after update() picked up the new file, got %d", got)
+	}
+}
+
+// TestMetricInfo is the regression test for pasting an existing
+// connectors.count.logs.<metric> definition almost verbatim: description,
+// conditions and attributes must decode straight into the real
+// countconnector.MetricInfo, with the raw description overriding the
+// "log-to-metric: <name>" default.
+func TestMetricInfo(t *testing.T) {
+	t.Parallel()
+
+	raw := config.LogMetricsCount{
+		"description": "pasted from an existing OTel config",
+		"conditions":  []any{`IsMatch(body, "error")`, `IsMatch(body, "warn")`},
+		"attributes":  []any{map[string]any{"key": "level"}},
+	}
+
+	info, err := metricInfo("ignored_description_source", raw)
+	if err != nil {
+		t.Fatal("metricInfo returned an error:", err)
+	}
+
+	if info.Description != "pasted from an existing OTel config" {
+		t.Errorf("Expected the raw description to apply, got %q", info.Description)
+	}
+
+	wantConditions := []string{`IsMatch(body, "error")`, `IsMatch(body, "warn")`}
+	if diff := cmp.Diff(wantConditions, info.Conditions); diff != "" {
+		t.Fatalf("Unexpected conditions (-want +got):\n%s", diff)
+	}
+
+	if len(info.Attributes) != 1 || info.Attributes[0].Key != "level" {
+		t.Errorf("Expected the raw attributes to apply, got %v", info.Attributes)
+	}
+}
+
+// TestMetricInfoDefaultDescription is the regression test for a metric with
+// no raw config at all (e.g. declared purely to be fed by another source's
+// conditions, see LogMetricsConfig.Count's doc comment): it must still get a
+// usable default description and no conditions (which countconnector treats
+// as "count every log record unconditionally").
+func TestMetricInfoDefaultDescription(t *testing.T) {
+	t.Parallel()
+
+	info, err := metricInfo("my_metric", nil)
+	if err != nil {
+		t.Fatal("metricInfo returned an error:", err)
+	}
+
+	if info.Description != "log-to-metric: my_metric" {
+		t.Errorf("Expected a default description, got %q", info.Description)
+	}
+
+	if len(info.Conditions) != 0 {
+		t.Errorf("Expected no conditions with an empty raw config, got %v", info.Conditions)
+	}
+}
+
+// TestMetricInfoDecodeError is the regression test for the fix that stops a
+// malformed metric from silently turning into "count everything": a raw
+// config.LogMetricsCount that fails to decode (here, "conditions" given as a
+// bare string instead of a list) must return an error instead of an empty-
+// Conditions MetricInfo, which would otherwise pass countconnector's own
+// Validate() and silently match every log record.
+func TestMetricInfoDecodeError(t *testing.T) {
+	t.Parallel()
+
+	raw := config.LogMetricsCount{
+		"conditions": `IsMatch(body, "error")`, // should be a []any, not a bare string
+	}
+
+	if _, err := metricInfo("broken_metric", raw); err == nil {
+		t.Fatal("Expected metricInfo to return an error for a malformed raw config")
+	}
+}
+
+// TestExtractLabels covers the one field metricInfo's decode never sets
+// (labels isn't a real countconnector field, see LogMetricsCount's doc
+// comment).
+func TestExtractLabels(t *testing.T) {
+	t.Parallel()
+
+	raw := config.LogMetricsCount{
+		"conditions": []any{`IsMatch(body, "error")`},
+		"labels":     map[string]any{"env": "prod", "not_a_string": 5},
+	}
+
+	got := extractLabels(raw)
+
+	want := map[string]string{"env": "prod"}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("Unexpected labels (-want +got):\n%s", diff)
+	}
+
+	if got := extractLabels(nil); got != nil {
+		t.Errorf("Expected nil labels for an empty raw config, got %v", got)
 	}
 }

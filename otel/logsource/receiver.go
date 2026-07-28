@@ -63,6 +63,25 @@ const (
 
 var errUnexpectedType = errors.New("unexpected type")
 
+// decodeRawReceiverConfig decodes raw (extraRaw's) YAML directly into dest (an
+// already-populated real receiver config, e.g. *filelogreceiver.FileLogConfig),
+// overwriting only the fields present in raw -- same partial-override
+// semantics a real Collector config load has ("any setting you specify
+// overrides the default, if present"). Reuses unmarshalMapstructureHook so a
+// field like header.metadata_operators (itself []operator.Config) decodes
+// correctly too.
+func decodeRawReceiverConfig(dest any, raw map[string]any) error {
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		Result:     dest,
+		DecodeHook: unmarshalMapstructureHook,
+	})
+	if err != nil {
+		return fmt.Errorf("creating decoder: %w", err)
+	}
+
+	return decoder.Decode(raw)
+}
+
 // CommandRunner runs external commands, used to `sudo tail`/`sudo stat` files
 // this process can't read directly.
 type CommandRunner interface {
@@ -93,6 +112,17 @@ var retryCfg = struct { //nolint:gochecknoglobals
 // accordingly to whether the file is directly readable or not (falling back to
 // a sudo-tail execlogreceiver when it isn't). Files that don't exist at the
 // time of the call to this function will be ignored.
+//
+// extraRaw is raw YAML for any real filelogreceiver/fileconsumer field beyond
+// what this function already sets itself (e.g. start_at, on_truncate,
+// encoding, multiline, exclude, poll_interval, header) -- decoded straight
+// into the real vendored config, same trick used for OTELFilters/OTELOperator
+// elsewhere, so an existing OTel Collector receiver config pastes in almost
+// verbatim. It's applied before this function's own fields, which always win
+// on conflict (e.g. Include/StorageID/StartAt-for-new-files are never
+// overridable this way), and only to the filelogreceiver path: it has no
+// filelogreceiver-shaped equivalent on the execlogreceiver sudo-tail
+// fallback, so it's silently inapplicable there.
 func SetupLogReceiverFactories(
 	logFiles []string,
 	hostroot string,
@@ -102,6 +132,7 @@ func SetupLogReceiverFactories(
 	makeStorageFn func(logFile string) *component.ID,
 	statFile StatFileFunc,
 	extraAttributes map[string]helper.ExprStringConfig,
+	extraRaw map[string]any,
 ) (
 	factories map[receiver.Factory]component.Config,
 	readableFiles, execFiles []string,
@@ -134,6 +165,12 @@ func SetupLogReceiverFactories(
 		fileTypedCfg, ok := fileCfg.(*filelogreceiver.FileLogConfig)
 		if !ok {
 			return nil, nil, nil, nil, fmt.Errorf("%w for file log receiver: %T", errUnexpectedType, fileCfg)
+		}
+
+		if len(extraRaw) > 0 {
+			if err := decodeRawReceiverConfig(fileTypedCfg, extraRaw); err != nil {
+				return nil, nil, nil, nil, fmt.Errorf("decoding extra receiver config: %w", err)
+			}
 		}
 
 		fileTypedCfg.InputConfig.Include = []string{filepath.Join(hostroot, logFile)}

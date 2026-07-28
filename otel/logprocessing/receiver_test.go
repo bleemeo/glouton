@@ -230,18 +230,18 @@ func TestFileLogReceiver(t *testing.T) {
 	}
 
 	cfg := config.OTLPReceiver{
-		Include: []string{
+		"include": []string{
 			filepath.Join(tmpDir, "*.log"),
 		},
-		Operators: []config.OTELOperator{
+		"operators": []config.OTELOperator{
 			{
 				testFieldType:  testFieldAdd,
 				testFieldName:  testRouteServiceName,
 				testFieldValue: testServiceApache,
 			},
 		},
-		LogFormat: testAttrKeyResAttr,
-		Filters: config.OTELFilters{
+		"log_format": testAttrKeyResAttr,
+		"filters": config.OTELFilters{
 			testFieldInclude: map[string]any{
 				testFilterMatchType: testRegexp,
 				testFilterBodies: []string{
@@ -407,10 +407,10 @@ func TestFileLogReceiverWithHostroot(t *testing.T) {
 	defer file.Close()
 
 	cfg := config.OTLPReceiver{
-		Include: []string{
+		"include": []string{
 			watchedFile,
 		},
-		Operators: []config.OTELOperator{
+		"operators": []config.OTELOperator{
 			{
 				testFieldType:  testFieldAdd,
 				testFieldName:  testRouteServiceName,
@@ -568,8 +568,8 @@ func TestExecLogReceiver(t *testing.T) {
 	}
 
 	cfg := config.OTLPReceiver{
-		Include: []string{file.Name()},
-		Operators: []config.OTELOperator{
+		"include": []string{file.Name()},
+		"operators": []config.OTELOperator{
 			{
 				testFieldType:  testFieldAdd,
 				testFieldName:  testRouteServiceName,
