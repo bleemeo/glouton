@@ -1348,6 +1348,21 @@ func TestFindYAMLIndentationIssue(t *testing.T) {
 			Data:   "metric:\n  softstatus_period: {a: 1}\n",
 			WantOK: false,
 		},
+		{
+			Name:   "trailing comment on a mapping key still allows children",
+			Data:   "bleemeo:\n  mqtt:  # some note\n    host: 127.0.0.1\n",
+			WantOK: false,
+		},
+		{
+			Name:   "tab inside a comment is not reported",
+			Data:   "logging:\n\t# tab-indented comment\n  level: INFO\n",
+			WantOK: false,
+		},
+		{
+			Name:   "tab inside block scalar content is not reported",
+			Data:   "agent:\n  installation_format: |\n\t  tab-indented content\n  cloudimage_creation_file: \"x\"\n",
+			WantOK: false,
+		},
 	}
 
 	for _, tt := range tests {
