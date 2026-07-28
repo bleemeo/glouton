@@ -377,6 +377,16 @@ func loadFile(loader *configLoader, path string) prometheus.MultiError {
 	// Overwrite values, merge maps and append slices.
 	warnings := loader.Load(path, file.Provider(path), yamlParser.Parser())
 
+	if len(warnings) > 0 {
+		// Errors are read-only diagnostics here: reading the file again to pinpoint the faulty
+		// line is only done when parsing already failed, so it doesn't affect the normal load path.
+		if data, readErr := os.ReadFile(path); readErr == nil {
+			for i, warning := range warnings {
+				warnings[i] = addYAMLIndentationHint(warning, data)
+			}
+		}
+	}
+
 	// Add path to errors.
 	for i, warning := range warnings {
 		warnings[i] = fmt.Errorf("%s: %w", path, warning)
@@ -407,6 +417,227 @@ func unwrapErrors(errs prometheus.MultiError) prometheus.MultiError {
 	}
 
 	return unwrapped
+}
+
+// yamlIndentationErrorSubstrings lists substrings of the errors returned by gopkg.in/yaml.v3's
+// scanner/parser that are, in practice, almost always caused by inconsistent indentation or the
+// use of tabs instead of spaces in the YAML file, rather than by another kind of syntax mistake.
+var yamlIndentationErrorSubstrings = []string{ //nolint:gochecknoglobals
+	"did not find expected key",
+	"did not find expected '-' indicator",
+	"did not find expected node content",
+	"mapping values are not allowed in this context",
+	"found character that cannot start any token",
+	"found unexpected end of stream",
+}
+
+// addYAMLIndentationHint improves YAML syntax errors that are caused by indentation mistakes.
+func addYAMLIndentationHint(err error, data []byte) error {
+	msg := err.Error()
+
+	matches := false
+
+	for _, substr := range yamlIndentationErrorSubstrings {
+		if strings.Contains(msg, substr) {
+			matches = true
+
+			break
+		}
+	}
+
+	if !matches {
+		return err
+	}
+
+	if issue, ok := findYAMLIndentationIssue(data); ok {
+		if issue.IsTab {
+			return fmt.Errorf("%w (line %d uses a tab for indentation, which YAML doesn't allow; use spaces instead: %q)",
+				err, issue.Line, issue.Content)
+		}
+
+		return fmt.Errorf("%w (line %d has %d space(s) of indentation, should be %d: %q)",
+			err, issue.Line, issue.FoundIndent, issue.ExpectedIndent, issue.Content)
+	}
+
+	return fmt.Errorf("%w (this is usually caused by inconsistent indentation, or mixing tabs and spaces, in the YAML file)", err)
+}
+
+// yamlIndentIssue describes a single line whose indentation breaks the surrounding block
+// structure, along with enough detail to tell the user exactly what to change.
+type yamlIndentIssue struct {
+	Line           int
+	Content        string
+	FoundIndent    int
+	ExpectedIndent int
+	IsTab          bool
+}
+
+// findYAMLIndentationIssue walks a YAML document's block-mapping structure line by line, tracking
+// the indentation level each mapping key opens for its children. It reports the first line whose
+// indentation doesn't fit that structure.
+func findYAMLIndentationIssue(data []byte) (issue yamlIndentIssue, ok bool) {
+	type frame struct {
+		indent              int
+		allowsChild         bool
+		expectedChildIndent int
+	}
+
+	lines := strings.Split(string(data), "\n")
+
+	var stack []frame
+
+	inBlockScalar := false
+	blockScalarIndent := 0
+
+	for i, raw := range lines {
+		lineNo := i + 1
+
+		if strings.TrimRight(raw, " \t\r") == "" {
+			continue
+		}
+
+		leading := raw[:len(raw)-len(strings.TrimLeft(raw, " \t"))]
+		trimmed := strings.TrimLeft(raw, " \t")
+
+		if strings.Contains(leading, "\t") {
+			return yamlIndentIssue{Line: lineNo, Content: strings.TrimRight(raw, "\r"), IsTab: true}, true
+		}
+
+		indent := len(leading)
+
+		if strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+
+		if inBlockScalar {
+			if indent > blockScalarIndent {
+				continue
+			}
+
+			inBlockScalar = false
+		}
+
+		if strings.HasPrefix(trimmed, "- ") || trimmed == "-" ||
+			strings.HasPrefix(trimmed, "---") || strings.HasPrefix(trimmed, "...") ||
+			strings.ContainsAny(trimmed, "[]{}") ||
+			strings.HasPrefix(trimmed, "&") || strings.HasPrefix(trimmed, "*") {
+			return yamlIndentIssue{}, false
+		}
+
+		for len(stack) > 0 && indent < stack[len(stack)-1].indent {
+			stack = stack[:len(stack)-1]
+		}
+
+		if len(stack) > 0 {
+			top := stack[len(stack)-1]
+
+			switch {
+			case indent > top.indent:
+				if !top.allowsChild {
+					return yamlIndentIssue{
+						Line: lineNo, Content: strings.TrimRight(raw, "\r"),
+						FoundIndent: indent, ExpectedIndent: top.indent,
+					}, true
+				}
+
+				if top.expectedChildIndent >= 0 && indent != top.expectedChildIndent {
+					return yamlIndentIssue{
+						Line: lineNo, Content: strings.TrimRight(raw, "\r"),
+						FoundIndent: indent, ExpectedIndent: top.expectedChildIndent,
+					}, true
+				}
+			case indent == top.indent:
+				stack = stack[:len(stack)-1]
+			}
+		}
+
+		colonIdx := yamlMappingColonIndex(trimmed)
+		if colonIdx < 0 {
+			return yamlIndentIssue{}, false
+		}
+
+		value := strings.TrimSpace(trimmed[colonIdx+1:])
+
+		allowsChild := true
+		expectedChildIndent := -1
+
+		switch {
+		case value == "":
+			allowsChild = true
+			expectedChildIndent = leadingCommentIndent(lines, i+1, indent)
+		case strings.HasPrefix(value, "|") || strings.HasPrefix(value, ">"):
+			allowsChild = true
+			inBlockScalar = true
+			blockScalarIndent = indent
+		default:
+			allowsChild = false
+		}
+
+		stack = append(stack, frame{indent: indent, allowsChild: allowsChild, expectedChildIndent: expectedChildIndent})
+	}
+
+	return yamlIndentIssue{}, false
+}
+
+// leadingCommentIndent looks, starting at lines[from], for a run of comment lines more indented
+// than parentIndent and immediately preceding the block's first real content line.
+func leadingCommentIndent(lines []string, from, parentIndent int) int {
+	indent := -1
+
+	for _, raw := range lines[from:] {
+		if strings.TrimRight(raw, " \t\r") == "" {
+			continue
+		}
+
+		leading := raw[:len(raw)-len(strings.TrimLeft(raw, " \t"))]
+		if strings.Contains(leading, "\t") {
+			return -1
+		}
+
+		li := len(leading)
+		if li <= parentIndent {
+			break
+		}
+
+		trimmed := strings.TrimLeft(raw, " \t")
+		if !strings.HasPrefix(trimmed, "#") {
+			break
+		}
+
+		switch {
+		case indent == -1:
+			indent = li
+		case indent != li:
+			return -1
+		}
+	}
+
+	return indent
+}
+
+// yamlMappingColonIndex returns the index of the colon that separates a mapping key from its
+// value in s.
+func yamlMappingColonIndex(s string) int {
+	inSingle, inDouble := false, false
+
+	for i := range len(s) {
+		switch s[i] {
+		case '\'':
+			if !inDouble {
+				inSingle = !inSingle
+			}
+		case '"':
+			if !inSingle {
+				inDouble = !inDouble
+			}
+		case ':':
+			if !inSingle && !inDouble && (i+1 == len(s) || s[i+1] == ' ' || s[i+1] == '\t') {
+				return i
+			}
+		}
+	}
+
+	return -1
 }
 
 func unwrapRecurse(err error) []error {

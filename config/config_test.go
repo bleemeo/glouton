@@ -698,7 +698,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "invalid yaml multiple files",
 			Files: []string{"testdata/invalid"},
 			WantWarnings: []string{
-				"testdata/invalid/10-invalid.conf: yaml: line 2: found character that cannot start any token",
+				`testdata/invalid/10-invalid.conf: yaml: line 2: found character that cannot start any token (line 2 uses a tab for indentation, which YAML doesn't allow; use spaces instead: "\tregistration_key: \"a\"")`,
 			},
 			WantConfig: Config{
 				Agent: Agent{
@@ -707,6 +707,13 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				Bleemeo: Bleemeo{
 					APIBase: "base",
 				},
+			},
+		},
+		{
+			Name:  "invalid yaml bad indentation",
+			Files: []string{"testdata/bad_indentation.conf"},
+			WantWarnings: []string{
+				`testdata/bad_indentation.conf: yaml: line 1: did not find expected key (line 3 has 4 space(s) of indentation, should be 2: "    mqtt:")`,
 			},
 		},
 		{
@@ -1284,6 +1291,82 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			t.Fatalf("Unexpected config:\n%s", diff)
 		}
 	})
+}
+
+func TestFindYAMLIndentationIssue(t *testing.T) {
+	tests := []struct {
+		Name      string
+		Data      string
+		WantIssue yamlIndentIssue
+		WantOK    bool
+	}{
+		{
+			Name: "key over-indented under scalar value",
+			Data: "bleemeo:\n" +
+				"  api_base: \"http://127.0.0.1:8000\"\n" +
+				"    mqtt:\n" +
+				"      host: 127.0.0.1\n",
+			WantIssue: yamlIndentIssue{Line: 3, Content: "    mqtt:", FoundIndent: 4, ExpectedIndent: 2},
+			WantOK:    true,
+		},
+		{
+			Name: "tab used for indentation",
+			Data: "bleemeo:\n\tregistration_key: \"a\"\n        account_id: \"b\"\n",
+			WantIssue: yamlIndentIssue{
+				Line: 2, Content: "\tregistration_key: \"a\"", IsTab: true,
+			},
+			WantOK: true,
+		},
+		{
+			Name: "key under-indented relative to surrounding comments",
+			Data: "logging:\n" +
+				"    # level is the verbosity level.\n" +
+				"    # * \"INFO\" which is the same as level 0\n" +
+				"   level: INFO\n" +
+				"    # output can be set to \"console\", \"syslog\" or \"file\".\n" +
+				"    output: console\n",
+			WantIssue: yamlIndentIssue{Line: 4, Content: "   level: INFO", FoundIndent: 3, ExpectedIndent: 4},
+			WantOK:    true,
+		},
+		{
+			Name:   "valid nested mapping",
+			Data:   "bleemeo:\n  api_base: \"x\"\n  mqtt:\n    host: 127.0.0.1\n",
+			WantOK: false,
+		},
+		{
+			Name:   "block scalar allows deeper indentation",
+			Data:   "agent:\n  installation_format: |\n    some\n      deeply indented text\n  cloudimage_creation_file: \"x\"\n",
+			WantOK: false,
+		},
+		{
+			Name:   "sequences are not analyzed",
+			Data:   "service_ignore:\n  - id: apache\n    instance: foo\n",
+			WantOK: false,
+		},
+		{
+			Name:   "flow style is not analyzed",
+			Data:   "metric:\n  softstatus_period: {a: 1}\n",
+			WantOK: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.Name, func(t *testing.T) {
+			issue, ok := findYAMLIndentationIssue([]byte(tt.Data))
+
+			if ok != tt.WantOK {
+				t.Fatalf("findYAMLIndentationIssue() ok = %v, want %v", ok, tt.WantOK)
+			}
+
+			if !tt.WantOK {
+				return
+			}
+
+			if issue != tt.WantIssue {
+				t.Fatalf("findYAMLIndentationIssue() = %+v, want %+v", issue, tt.WantIssue)
+			}
+		})
+	}
 }
 
 func TestStateLoading(t *testing.T) {
