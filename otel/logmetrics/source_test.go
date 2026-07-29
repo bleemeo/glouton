@@ -17,6 +17,7 @@
 package logmetrics
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -94,7 +95,7 @@ func TestSourceCountsRealFile(t *testing.T) {
 	}
 	reg, totals := testRegistry()
 
-	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, false, count, nil, nil, specsForCount(count), "src", kindReceiver, reg, nil, nil, noExecRunner(t), logsource.StatFile, "")
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, count, nil, nil, specsForCount(count), "src", kindReceiver, reg, nil, nil, noExecRunner(t), logsource.StatFile, "")
 	if err != nil {
 		t.Fatal("Failed to build source:", err)
 	}
@@ -151,7 +152,7 @@ func TestSourceExcludeRegex(t *testing.T) {
 	}
 	reg, totals := testRegistry()
 
-	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, false, count, nil, nil, specsForCount(count), "src", kindReceiver, reg, nil, nil, noExecRunner(t), logsource.StatFile, "")
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, count, nil, nil, specsForCount(count), "src", kindReceiver, reg, nil, nil, noExecRunner(t), logsource.StatFile, "")
 	if err != nil {
 		t.Fatal("Failed to build source:", err)
 	}
@@ -205,7 +206,7 @@ func TestSourceUnwrapsContainerEnvelope(t *testing.T) {
 
 	// The container parser preserves the trailing newline embedded in Docker's JSON
 	// "log" field value, so the body is "[error] something broke\n", not "...broke".
-	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, true, false, count, nil, nil, specsForCount(count), "test-container", kindContainer, reg, nil, nil, noExecRunner(t), logsource.StatFile, "")
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, count, nil, nil, specsForCount(count), "test-container", kindContainer, reg, nil, nil, noExecRunner(t), logsource.StatFile, "")
 	if err != nil {
 		t.Fatal("Failed to build source:", err)
 	}
@@ -239,9 +240,27 @@ func TestSourceInvalidRegex(t *testing.T) {
 	}
 	reg, _ := testRegistry()
 
-	_, err := newSource(t.Context(), testTelemetrySettings(), []string{"/nonexistent"}, false, false, count, nil, nil, specsForCount(count), "src", kindReceiver, reg, nil, nil, noExecRunner(t), logsource.StatFile, "")
-	if err == nil {
-		t.Fatal("Expected an error for an invalid regex")
+	_, err := newSource(t.Context(), testTelemetrySettings(), []string{"/nonexistent"}, false, count, nil, nil, specsForCount(count), "src", kindReceiver, reg, nil, nil, noExecRunner(t), logsource.StatFile, "")
+	if !errors.Is(err, errNoValidCounter) {
+		t.Fatalf("Expected errNoValidCounter (a metric applied but failed to build), got %v", err)
+	}
+}
+
+// TestSourceNoApplicableMetric distinguishes "nothing named this source at
+// all" (errNoApplicableMetric) from "metrics applied but all failed to build"
+// (errNoValidCounter, see TestSourceInvalidRegex) -- the two log differently
+// in Manager (see manager.go), so the underlying error must stay distinct.
+func TestSourceNoApplicableMetric(t *testing.T) {
+	t.Parallel()
+
+	count := map[string]config.LogMetricsCount{
+		"scoped_elsewhere": {"conditions": []any{`IsMatch(body, "error")`}, "sources": []any{"other_source"}},
+	}
+	reg, _ := testRegistry()
+
+	_, err := newSource(t.Context(), testTelemetrySettings(), []string{"/nonexistent"}, false, count, nil, nil, specsForCount(count), "src", kindReceiver, reg, nil, nil, noExecRunner(t), logsource.StatFile, "")
+	if !errors.Is(err, errNoApplicableMetric) {
+		t.Fatalf("Expected errNoApplicableMetric (nothing scoped to this source), got %v", err)
 	}
 }
 
@@ -264,7 +283,7 @@ func TestSourceFastPathSingleConnector(t *testing.T) {
 	}
 	reg, _ := testRegistry()
 
-	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, false, count, nil, nil, specsForCount(count), "src", kindReceiver, reg, nil, nil, noExecRunner(t), logsource.StatFile, "")
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, count, nil, nil, specsForCount(count), "src", kindReceiver, reg, nil, nil, noExecRunner(t), logsource.StatFile, "")
 	if err != nil {
 		t.Fatal("Failed to build source:", err)
 	}
@@ -296,7 +315,7 @@ func TestSourceIsolatesInvalidCounter(t *testing.T) {
 	}
 	reg, totals := testRegistry()
 
-	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, false, count, nil, nil, specsForCount(count), "src", kindReceiver, reg, nil, nil, noExecRunner(t), logsource.StatFile, "")
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, count, nil, nil, specsForCount(count), "src", kindReceiver, reg, nil, nil, noExecRunner(t), logsource.StatFile, "")
 	if err != nil {
 		t.Fatal("Failed to build source despite one invalid counter:", err)
 	}
@@ -364,7 +383,7 @@ func TestSourceUpdatePicksUpNewFile(t *testing.T) {
 	}
 	reg, totals := testRegistry()
 
-	src, err := newSource(t.Context(), testTelemetrySettings(), []string{filepath.Join(tmpDir, "*.log")}, false, false, count, nil, nil, specsForCount(count), "src", kindReceiver, reg, nil, nil, noExecRunner(t), logsource.StatFile, "")
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{filepath.Join(tmpDir, "*.log")}, false, count, nil, nil, specsForCount(count), "src", kindReceiver, reg, nil, nil, noExecRunner(t), logsource.StatFile, "")
 	if err != nil {
 		t.Fatal("Failed to build source:", err)
 	}
@@ -660,5 +679,12 @@ func TestExtractPerItemFlag(t *testing.T) {
 
 	if !extractPerItemFlag(config.LogMetricsCount{"per_receiver_item": true}, kindReceiver) {
 		t.Error("Expected an explicit per_receiver_item:true to override the default")
+	}
+
+	// A present but wrongly-typed value falls back to the default rather
+	// than panicking or silently misbehaving (it also logs a warning, not
+	// asserted here).
+	if extractPerItemFlag(config.LogMetricsCount{"per_container_item": "true"}, kindContainer) != perItemDefault(kindContainer) {
+		t.Error("Expected a non-bool per_container_item value to fall back to the default")
 	}
 }

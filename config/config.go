@@ -70,7 +70,7 @@ var (
 	errWrongMapFormat        = errors.New("could not parse map from string")
 	errUnsupportedProvider   = errors.New("provider not supported by config loader")
 	errCannotMerge           = errors.New("cannot merge")
-	errLegacyFilterNameClash = errors.New("legacy log.inputs filter collides with another input's filter of the same metric name")
+	errLegacyFilterNameClash = errors.New("legacy log.inputs filter shares a metric name with another log.metrics.count entry")
 	ErrInvalidValue          = errors.New("invalid config value")
 	ErrMissconfiguration     = errors.New("config issue")
 )
@@ -706,13 +706,36 @@ func migrateScrapper(k *koanf.Koanf, config map[string]any, deprecatedPath strin
 // mergeLegacyFilters translates each legacy filter into a countconnector
 // condition, upserting it into count by metric name, and records
 // sourceIdentifier (the migrated receiver/container's own name, or "" for a
-// selector-only entry with no name) onto that entry's "sources" list --
-// restoring the old Fluent Bit per-input isolation that a global
-// log.metrics.count entry would otherwise lose. On a name collision the
-// condition is appended rather than overwritten (countconnector ORs them),
-// and a warning is returned so the migration isn't silently lossy.
-func mergeLegacyFilters(count map[string]any, filtersList []any, sourceIdentifier string) []error {
+// selector-only entry with no name) onto that entry's "sources" list, so
+// that entry keeps counting exactly the sources it used to under the legacy
+// per-input model. createdByMigration and pinnedGlobal track state across
+// every mergeLegacyFilters call for the whole migration (one metric name can
+// be touched by several log.inputs entries, or already exist outside
+// migration entirely):
+//
+//   - A metric log.inputs shares with a pre-existing log.metrics.count entry
+//     (hand-written by the user, or otherwise not created by this migration)
+//     is never touched: its condition is still OR'd in so the legacy filter
+//     keeps working, but "sources" is left exactly as the user defined it --
+//     migration must never silently narrow an entry it doesn't own.
+//   - A metric shared by two or more legacy inputs merges their identifiers
+//     into one "sources" list (a real, if unusual, improvement over the old
+//     model: one merged series instead of two independent ones, but still
+//     scoped to just those sources rather than becoming accidentally global).
+//   - A metric touched by any selector-only entry (sourceIdentifier == "",
+//     no stable name to put in "sources") is pinned fully global instead:
+//     such a container can never be named, so scoping would silently drop
+//     it. This applies regardless of processing order -- a later selector
+//     entry un-scopes an already-scoped metric just as an earlier one
+//     prevents scoping from ever being added.
+//
+// A warning is returned for every genuine collision (once per input, not
+// once per repeated filter within the same input) so the migration isn't
+// silently lossy or silently narrowing.
+func mergeLegacyFilters(count map[string]any, filtersList []any, sourceIdentifier string, createdByMigration, pinnedGlobal map[string]bool) []error {
 	var warnings []error
+
+	touchedThisCall := make(map[string]bool)
 
 	for _, filterAny := range filtersList {
 		filterMap, ok := filterAny.(map[string]any)
@@ -734,8 +757,8 @@ func mergeLegacyFilters(count map[string]any, filtersList []any, sourceIdentifie
 			condition = fmt.Sprintf("%s and not IsMatch(body, %q)", condition, exclude)
 		}
 
-		entry, ok := count[metric].(map[string]any)
-		if !ok {
+		entry, existed := count[metric].(map[string]any)
+		if !existed {
 			entry = map[string]any{}
 
 			if labels, ok := filterMap["labels"].(map[string]any); ok && len(labels) > 0 {
@@ -743,21 +766,47 @@ func mergeLegacyFilters(count map[string]any, filtersList []any, sourceIdentifie
 			}
 
 			count[metric] = entry
-		} else {
-			warnings = append(warnings, fmt.Errorf(
-				"%w: metric %q, sources are merged into one shared log.metrics.count.%s entry",
-				errLegacyFilterNameClash, metric, metric,
-			))
+			createdByMigration[metric] = true
 		}
+
+		firstTouchThisCall := !touchedThisCall[metric]
+		touchedThisCall[metric] = true
 
 		conditions, _ := entry["conditions"].([]any)
 		entry["conditions"] = append(conditions, condition)
 
-		if sourceIdentifier != "" {
-			sources, _ := entry["sources"].([]any)
+		if createdByMigration[metric] {
+			switch {
+			case sourceIdentifier == "":
+				delete(entry, "sources")
 
-			if !slices.Contains(sources, any(sourceIdentifier)) {
-				entry["sources"] = append(sources, sourceIdentifier)
+				pinnedGlobal[metric] = true
+			case !pinnedGlobal[metric]:
+				sources, _ := entry["sources"].([]any)
+
+				if !slices.Contains(sources, any(sourceIdentifier)) {
+					entry["sources"] = append(sources, sourceIdentifier)
+				}
+			}
+		}
+
+		if existed && firstTouchThisCall {
+			switch {
+			case !createdByMigration[metric]:
+				warnings = append(warnings, fmt.Errorf(
+					"%w: metric %q, its condition was appended but its \"sources\" scope was left unchanged",
+					errLegacyFilterNameClash, metric,
+				))
+			case pinnedGlobal[metric]:
+				warnings = append(warnings, fmt.Errorf(
+					"%w: metric %q, also matched by a selector-only log.inputs entry with no stable name, so it stays global instead of being scoped",
+					errLegacyFilterNameClash, metric,
+				))
+			default:
+				warnings = append(warnings, fmt.Errorf(
+					"%w: metric %q, sources are merged into one shared log.metrics.count.%s entry",
+					errLegacyFilterNameClash, metric, metric,
+				))
 			}
 		}
 	}
@@ -795,6 +844,13 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any) prometheus.MultiErr
 	remainingInputs := make([]any, 0, len(inputs))
 	translated := false
 
+	// Shared across every mergeLegacyFilters call below, so a metric name
+	// touched by several log.inputs entries (or already present outside this
+	// migration) is recognized no matter which entry is processed first --
+	// see mergeLegacyFilters's doc comment.
+	createdByMigration := map[string]bool{}
+	pinnedGlobal := map[string]bool{}
+
 	for i, inputAny := range inputs {
 		inputMap, ok := inputAny.(map[string]any)
 		if !ok {
@@ -822,7 +878,7 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any) prometheus.MultiErr
 
 		switch {
 		case path != "":
-			for _, w := range mergeLegacyFilters(count, filtersList, name) {
+			for _, w := range mergeLegacyFilters(count, filtersList, name, createdByMigration, pinnedGlobal) {
 				warnings.Append(w)
 			}
 
@@ -831,7 +887,7 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any) prometheus.MultiErr
 
 			translated = true
 		case containerName != "" && len(selectors) == 0:
-			for _, w := range mergeLegacyFilters(count, filtersList, containerName) {
+			for _, w := range mergeLegacyFilters(count, filtersList, containerName, createdByMigration, pinnedGlobal) {
 				warnings.Append(w)
 			}
 
@@ -843,7 +899,7 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any) prometheus.MultiErr
 			// containerName may be "" here (a pure selector rule): such a
 			// container has no stable name to scope onto at config time, so
 			// its metric stays global (mergeLegacyFilters skips empty identifiers).
-			for _, w := range mergeLegacyFilters(count, filtersList, containerName) {
+			for _, w := range mergeLegacyFilters(count, filtersList, containerName, createdByMigration, pinnedGlobal) {
 				warnings.Append(w)
 			}
 

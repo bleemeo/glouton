@@ -83,7 +83,7 @@ func TestSourceExecLogFallback(t *testing.T) {
 	}
 	reg, _ := testRegistry()
 
-	src, err := newSource(t.Context(), testTelemetrySettings(), []string{file.Name()}, false, false, count, nil, nil, specsForCount(count), "src", kindReceiver, reg, nil, nil, runner, mockStatFile, "")
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{file.Name()}, false, count, nil, nil, specsForCount(count), "src", kindReceiver, reg, nil, nil, runner, mockStatFile, "")
 	if err != nil {
 		t.Fatal("Failed to build source:", err)
 	}

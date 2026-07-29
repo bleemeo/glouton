@@ -309,7 +309,7 @@ func (man *Manager) startStaticSource(
 	formatOperators []operator.Config,
 	extraRaw map[string]any,
 ) {
-	src, err := newSource(ctx, man.telemetry, include, false, man.hasHostRoot(), man.cfg.Metrics.Count, formatOperators, extraRaw, man.metricSpecs, name, kindReceiver, man.reg, man.persister, man.lastFileSizes, man.commandRunner, logsource.StatFile, staticSourceName(include))
+	src, err := newSource(ctx, man.telemetry, include, man.hasHostRoot(), man.cfg.Metrics.Count, formatOperators, extraRaw, man.metricSpecs, name, kindReceiver, man.reg, man.persister, man.lastFileSizes, man.commandRunner, logsource.StatFile, staticSourceName(include))
 	if err != nil {
 		if errors.Is(err, errNoLogFileFound) {
 			logger.V(1).Printf("logmetrics: no log file yet for %v, will retry: %v", include, err)
@@ -322,7 +322,11 @@ func (man *Manager) startStaticSource(
 		}
 
 		// Not a missing-file situation, so retrying won't help: skip pendingStatic.
-		logger.Printf("logmetrics: failed to start source for %v: %v", include, err)
+		// V(1): errNoApplicableMetric/errNoValidCounter are the expected outcome
+		// for a receiver that legitimately has no log.metrics.count entry scoped
+		// to it (see "sources"), not necessarily a misconfiguration -- same
+		// severity as the container/network source equivalents below.
+		logger.V(1).Printf("logmetrics: failed to start source for %v: %v", include, err)
 
 		return
 	}
@@ -330,7 +334,10 @@ func (man *Manager) startStaticSource(
 	man.staticSources = append(man.staticSources, src)
 }
 
-// retryPendingStaticSources retries static sources that previously found no log file yet.
+// retryPendingStaticSources retries static sources that previously found no
+// log file yet, by re-running them through startStaticSource -- which
+// re-adds a source to man.pendingStatic itself if it's still not found,
+// exactly like a first attempt would.
 func (man *Manager) retryPendingStaticSources(ctx context.Context) {
 	man.l.Lock()
 	defer man.l.Unlock()
@@ -339,25 +346,12 @@ func (man *Manager) retryPendingStaticSources(ctx context.Context) {
 		return
 	}
 
-	stillPending := man.pendingStatic[:0]
+	pending := man.pendingStatic
+	man.pendingStatic = nil
 
-	for _, pending := range man.pendingStatic {
-		src, err := newSource(ctx, man.telemetry, pending.include, false, man.hasHostRoot(), man.cfg.Metrics.Count, pending.formatOperators, pending.extraRaw, man.metricSpecs, pending.name, kindReceiver, man.reg, man.persister, man.lastFileSizes, man.commandRunner, logsource.StatFile, staticSourceName(pending.include))
-		if err != nil {
-			if errors.Is(err, errNoLogFileFound) {
-				stillPending = append(stillPending, pending)
-			} else {
-				// The file showed up but something else now fails; won't self-resolve.
-				logger.Printf("logmetrics: giving up on source for %v: %v", pending.include, err)
-			}
-
-			continue
-		}
-
-		man.staticSources = append(man.staticSources, src)
+	for _, p := range pending {
+		man.startStaticSource(ctx, p.name, p.include, p.formatOperators, p.extraRaw)
 	}
-
-	man.pendingStatic = stillPending
 }
 
 // updateStaticSources starts a receiver for any file newly matching an
@@ -445,7 +439,7 @@ func (man *Manager) updateContainerSources(ctx context.Context) {
 		// Container ID is a stable identity as long as the same instance keeps running.
 		name := "container:" + ctr.ID()
 
-		src, err := newSource(ctx, man.telemetry, []string{logPath}, true, man.hasHostRoot(), man.cfg.Metrics.Count, nil, nil, man.metricSpecs, ctr.ContainerName(), kindContainer, man.reg, man.persister, man.lastFileSizes, man.commandRunner, logsource.StatFile, name)
+		src, err := newSource(ctx, man.telemetry, []string{logPath}, man.hasHostRoot(), man.cfg.Metrics.Count, nil, nil, man.metricSpecs, ctr.ContainerName(), kindContainer, man.reg, man.persister, man.lastFileSizes, man.commandRunner, logsource.StatFile, name)
 		if err != nil {
 			logger.V(1).Printf("logmetrics: failed to start source for container %s (%s): %v", ctr.ContainerName(), ctr.ID(), err)
 

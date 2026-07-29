@@ -1662,6 +1662,166 @@ func TestCensorURLSecrets(t *testing.T) {
 	}
 }
 
+// TestMergeLegacyFiltersNativeEntryUntouched checks that migration never
+// narrows a log.metrics.count entry it didn't create itself: a legacy
+// log.inputs filter sharing a metric name with a pre-existing (hand-written)
+// entry still gets its condition OR'd in, but the entry's "sources" (here:
+// entirely absent, i.e. global) is left exactly as the user defined it.
+func TestMergeLegacyFiltersNativeEntryUntouched(t *testing.T) {
+	t.Parallel()
+
+	count := map[string]any{
+		"app_errors": map[string]any{
+			"conditions": []any{`IsMatch(body, "native")`},
+		},
+	}
+	createdByMigration := map[string]bool{}
+	pinnedGlobal := map[string]bool{}
+
+	filters := []any{map[string]any{"metric": "app_errors", "regex": "legacy"}}
+
+	warnings := mergeLegacyFilters(count, filters, "db", createdByMigration, pinnedGlobal)
+	if len(warnings) != 1 || !strings.Contains(warnings[0].Error(), "left unchanged") {
+		t.Fatalf("Expected exactly one 'left unchanged' warning, got %v", warnings)
+	}
+
+	entry := count["app_errors"].(map[string]any) //nolint:forcetypeassert
+
+	if _, hasSources := entry["sources"]; hasSources {
+		t.Errorf("Expected the native entry's \"sources\" to stay untouched (absent), got %v", entry["sources"])
+	}
+
+	wantConditions := []any{`IsMatch(body, "native")`, `IsMatch(body, "legacy")`}
+	if diff := cmp.Diff(wantConditions, entry["conditions"]); diff != "" {
+		t.Errorf("Unexpected conditions (-want +got):\n%s", diff)
+	}
+
+	// A second, different legacy input colliding with the same native entry
+	// must be left untouched too, not just the first one.
+	warnings = mergeLegacyFilters(count, []any{map[string]any{"metric": "app_errors", "regex": "legacy2"}}, "worker", createdByMigration, pinnedGlobal)
+	if len(warnings) != 1 || !strings.Contains(warnings[0].Error(), "left unchanged") {
+		t.Fatalf("Expected the second collision to also be left unchanged, got %v", warnings)
+	}
+
+	if _, hasSources := entry["sources"]; hasSources {
+		t.Errorf("Expected \"sources\" to still be absent after a second native collision, got %v", entry["sources"])
+	}
+}
+
+// TestMergeLegacyFiltersSameInputRepeatedMetric checks that two filters for
+// the same metric within a single log.inputs entry (a legitimate OR-together
+// pattern) don't trigger a "collides with another input" warning.
+func TestMergeLegacyFiltersSameInputRepeatedMetric(t *testing.T) {
+	t.Parallel()
+
+	count := map[string]any{}
+	createdByMigration := map[string]bool{}
+	pinnedGlobal := map[string]bool{}
+
+	filters := []any{
+		map[string]any{"metric": "app_errors", "regex": "one"},
+		map[string]any{"metric": "app_errors", "regex": "two"},
+	}
+
+	warnings := mergeLegacyFilters(count, filters, "app", createdByMigration, pinnedGlobal)
+	if len(warnings) != 0 {
+		t.Fatalf("Expected no warning for two filters of the same metric within one input, got %v", warnings)
+	}
+
+	entry := count["app_errors"].(map[string]any) //nolint:forcetypeassert
+
+	wantConditions := []any{`IsMatch(body, "one")`, `IsMatch(body, "two")`}
+	if diff := cmp.Diff(wantConditions, entry["conditions"]); diff != "" {
+		t.Errorf("Unexpected conditions (-want +got):\n%s", diff)
+	}
+
+	wantSources := []any{"app"}
+	if diff := cmp.Diff(wantSources, entry["sources"]); diff != "" {
+		t.Errorf("Unexpected sources (-want +got):\n%s", diff)
+	}
+}
+
+// TestMergeLegacyFiltersCrossInputCollisionMerges checks the intended
+// behavior for two different legacy inputs sharing a metric name: both
+// identifiers land in "sources" (a single merged series), with one warning.
+func TestMergeLegacyFiltersCrossInputCollisionMerges(t *testing.T) {
+	t.Parallel()
+
+	count := map[string]any{}
+	createdByMigration := map[string]bool{}
+	pinnedGlobal := map[string]bool{}
+
+	warningsA := mergeLegacyFilters(count, []any{map[string]any{"metric": "shared", "regex": "a"}}, "input_a", createdByMigration, pinnedGlobal)
+	if len(warningsA) != 0 {
+		t.Fatalf("Expected no warning for the first input to create the entry, got %v", warningsA)
+	}
+
+	warningsB := mergeLegacyFilters(count, []any{map[string]any{"metric": "shared", "regex": "b"}}, "input_b", createdByMigration, pinnedGlobal)
+	if len(warningsB) != 1 || !strings.Contains(warningsB[0].Error(), "merged into one shared") {
+		t.Fatalf("Expected exactly one 'merged into one shared' warning, got %v", warningsB)
+	}
+
+	entry := count["shared"].(map[string]any) //nolint:forcetypeassert
+
+	wantSources := []any{"input_a", "input_b"}
+	if diff := cmp.Diff(wantSources, entry["sources"]); diff != "" {
+		t.Errorf("Unexpected sources (-want +got):\n%s", diff)
+	}
+}
+
+// TestMergeLegacyFiltersSelectorPinsGlobal checks that a selector-only entry
+// (no stable name, sourceIdentifier=="") forces the metric fully global --
+// regardless of whether it's processed before or after a named entry that
+// would otherwise have scoped it.
+func TestMergeLegacyFiltersSelectorPinsGlobal(t *testing.T) {
+	t.Parallel()
+
+	t.Run("selector-first", func(t *testing.T) {
+		t.Parallel()
+
+		count := map[string]any{}
+		createdByMigration := map[string]bool{}
+		pinnedGlobal := map[string]bool{}
+
+		mergeLegacyFilters(count, []any{map[string]any{"metric": "m", "regex": "a"}}, "", createdByMigration, pinnedGlobal)
+		warnings := mergeLegacyFilters(count, []any{map[string]any{"metric": "m", "regex": "b"}}, "worker", createdByMigration, pinnedGlobal)
+
+		if len(warnings) != 1 || !strings.Contains(warnings[0].Error(), "stays global") {
+			t.Fatalf("Expected a 'stays global' warning, got %v", warnings)
+		}
+
+		entry := count["m"].(map[string]any) //nolint:forcetypeassert
+		if _, hasSources := entry["sources"]; hasSources {
+			t.Errorf("Expected \"sources\" to stay absent (global), got %v", entry["sources"])
+		}
+	})
+
+	t.Run("named-first", func(t *testing.T) {
+		t.Parallel()
+
+		count := map[string]any{}
+		createdByMigration := map[string]bool{}
+		pinnedGlobal := map[string]bool{}
+
+		mergeLegacyFilters(count, []any{map[string]any{"metric": "m", "regex": "a"}}, "worker", createdByMigration, pinnedGlobal)
+
+		entry := count["m"].(map[string]any) //nolint:forcetypeassert
+		if diff := cmp.Diff([]any{"worker"}, entry["sources"]); diff != "" {
+			t.Fatalf("Expected the named entry to be scoped before the selector arrives (-want +got):\n%s", diff)
+		}
+
+		warnings := mergeLegacyFilters(count, []any{map[string]any{"metric": "m", "regex": "b"}}, "", createdByMigration, pinnedGlobal)
+
+		if len(warnings) != 1 || !strings.Contains(warnings[0].Error(), "stays global") {
+			t.Fatalf("Expected a 'stays global' warning, got %v", warnings)
+		}
+
+		if _, hasSources := entry["sources"]; hasSources {
+			t.Errorf("Expected the selector to retroactively clear \"sources\" back to global, got %v", entry["sources"])
+		}
+	})
+}
+
 func Test_migrate(t *testing.T) { //nolint:maintidx
 	tests := []struct {
 		Name                string
@@ -1921,7 +2081,7 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 				},
 			},
 			WantWarning:         true,
-			WantWarningContains: "collides with another input's filter of the same metric name",
+			WantWarningContains: "shares a metric name with another log.metrics.count entry",
 		},
 		{
 			Name:       "legacy-log-inputs-name-and-selectors",

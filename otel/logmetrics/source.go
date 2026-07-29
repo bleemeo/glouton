@@ -43,8 +43,9 @@ import (
 )
 
 var (
-	errNoValidCounter = errors.New("no valid counter for source")
-	errNoLogFileFound = errors.New("no log file found for source")
+	errNoValidCounter     = errors.New("no valid counter for source")
+	errNoLogFileFound     = errors.New("no log file found for source")
+	errNoApplicableMetric = errors.New("no log.metrics.count entry applies to this source")
 )
 
 // source is one OTel mini-pipeline for a single log-to-metric source (a static
@@ -84,8 +85,8 @@ type source struct {
 
 // newSource builds and starts a source. include is a list of glob patterns
 // with hostroot already applied; hasHostRoot disables the sudo-tail fallback
-// when true. If isContainer, the Docker/CRI envelope is unwrapped before
-// formatOperators run. If persister is non-nil, name is the stable
+// when true. If kind is kindContainer, the Docker/CRI envelope is unwrapped
+// before formatOperators run. If persister is non-nil, name is the stable
 // persisted-offset identity used to resume tailing across restarts.
 // lastFileSizes is the fallback "have we ever seen this file" cache used when
 // persister is nil.
@@ -99,7 +100,6 @@ func newSource(
 	ctx context.Context,
 	telemetry component.TelemetrySettings,
 	include []string,
-	isContainer bool,
 	hasHostRoot bool,
 	count map[string]config.LogMetricsCount,
 	formatOperators []operator.Config,
@@ -121,7 +121,7 @@ func newSource(
 
 	var operators []operator.Config
 
-	if isContainer {
+	if kind == kindContainer {
 		operators = append(operators, logsource.BuildContainerEnvelopeOperator())
 	}
 
@@ -472,9 +472,21 @@ func perItemDefault(kind string) bool {
 // "per_<kind>_item" override, falling back to perItemDefault(kind). It only
 // affects a metric with no "sources" (global): whether each matching source
 // of that kind still gets its own item, or merges into the shared item="".
+// A present but wrongly-typed value (e.g. a string instead of a bool) is
+// warned about rather than silently ignored, so a typo doesn't just quietly
+// keep the default.
 func extractPerItemFlag(raw config.LogMetricsCount, kind string) bool {
-	v, ok := raw["per_"+kind+"_item"].(bool)
+	key := "per_" + kind + "_item"
+
+	rawValue, present := raw[key]
+	if !present {
+		return perItemDefault(kind)
+	}
+
+	v, ok := rawValue.(bool)
 	if !ok {
+		logger.Printf("logmetrics: %q must be a boolean, got %v (%T), using default", key, rawValue, rawValue)
+
 		return perItemDefault(kind)
 	}
 
@@ -519,8 +531,11 @@ func groupMetricsByItem(count map[string]config.LogMetricsCount, sourceName, kin
 // builds one connector set per resulting group, so a single source can feed
 // several different item buckets at once (e.g. its own scoped metric plus a
 // shared global one). A group that fails to produce any valid counter is
-// logged and skipped, not fatal; errNoValidCounter is only returned if
-// nothing survived across every group.
+// logged and skipped, not fatal. Two distinct errors distinguish why nothing
+// started at all: errNoApplicableMetric means no log.metrics.count entry
+// names this source (nothing to even attempt -- check "sources", or this may
+// be intentional); errNoValidCounter means metrics did apply but every one
+// failed to build a connector (check their conditions).
 func buildGroupedConnectors(
 	ctx context.Context,
 	telemetry component.TelemetrySettings,
@@ -531,11 +546,16 @@ func buildGroupedConnectors(
 	reg *metricsRegistry,
 	name string,
 ) ([]otelconnector.Logs, error) {
+	groups := groupMetricsByItem(count, sourceName, kind)
+	if len(groups) == 0 {
+		return nil, errNoApplicableMetric
+	}
+
 	connFactory := countconnector.NewFactory()
 
 	var conns []otelconnector.Logs
 
-	for item, names := range groupMetricsByItem(count, sourceName, kind) {
+	for item, names := range groups {
 		groupCount := filterCount(count, names, name)
 		if len(groupCount) == 0 {
 			continue
@@ -554,7 +574,7 @@ func buildGroupedConnectors(
 	}
 
 	if len(conns) == 0 {
-		return nil, errNoValidCounter
+		return nil, fmt.Errorf("%w: %d applicable metric group(s), all failed to build a connector", errNoValidCounter, len(groups))
 	}
 
 	return conns, nil
