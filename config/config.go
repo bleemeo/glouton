@@ -22,6 +22,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/bleemeo/glouton/logger"
@@ -64,13 +65,14 @@ const (
 )
 
 var (
-	errDeprecatedEnv       = errors.New("environment variable is deprecated")
-	errSettingsDeprecated  = errors.New("setting is deprecated")
-	errWrongMapFormat      = errors.New("could not parse map from string")
-	errUnsupportedProvider = errors.New("provider not supported by config loader")
-	errCannotMerge         = errors.New("cannot merge")
-	ErrInvalidValue        = errors.New("invalid config value")
-	ErrMissconfiguration   = errors.New("config issue")
+	errDeprecatedEnv         = errors.New("environment variable is deprecated")
+	errSettingsDeprecated    = errors.New("setting is deprecated")
+	errWrongMapFormat        = errors.New("could not parse map from string")
+	errUnsupportedProvider   = errors.New("provider not supported by config loader")
+	errCannotMerge           = errors.New("cannot merge")
+	errLegacyFilterNameClash = errors.New("legacy log.inputs filter collides with another input's filter of the same metric name")
+	ErrInvalidValue          = errors.New("invalid config value")
+	ErrMissconfiguration     = errors.New("config issue")
 )
 
 // Load the configuration from files and environment variables.
@@ -701,16 +703,17 @@ func migrateScrapper(k *koanf.Koanf, config map[string]any, deprecatedPath strin
 	return warnings
 }
 
-// mergeLegacyFilters translates each legacy {metric, regex, exclude, labels}
-// filter (log.inputs[].filters' own shape) into a real countconnector
-// condition string, upserting it into the global log.metrics.count map by
-// metric name -- on a name collision (e.g. two legacy log.inputs entries
-// sharing the same metric name), the condition is appended to the existing
-// entry's conditions list rather than overwriting it: countconnector already
-// ORs multiple Conditions entries together, so this only broadens what counts
-// as a match instead of losing one side. A filter missing metric/regex is
-// dropped (it never did anything under the old format either).
-func mergeLegacyFilters(count map[string]any, filtersList []any) {
+// mergeLegacyFilters translates each legacy filter into a countconnector
+// condition, upserting it into count by metric name, and records
+// sourceIdentifier (the migrated receiver/container's own name, or "" for a
+// selector-only entry with no name) onto that entry's "sources" list --
+// restoring the old Fluent Bit per-input isolation that a global
+// log.metrics.count entry would otherwise lose. On a name collision the
+// condition is appended rather than overwritten (countconnector ORs them),
+// and a warning is returned so the migration isn't silently lossy.
+func mergeLegacyFilters(count map[string]any, filtersList []any, sourceIdentifier string) []error {
+	var warnings []error
+
 	for _, filterAny := range filtersList {
 		filterMap, ok := filterAny.(map[string]any)
 		if !ok {
@@ -740,11 +743,26 @@ func mergeLegacyFilters(count map[string]any, filtersList []any) {
 			}
 
 			count[metric] = entry
+		} else {
+			warnings = append(warnings, fmt.Errorf(
+				"%w: metric %q, sources are merged into one shared log.metrics.count.%s entry",
+				errLegacyFilterNameClash, metric, metric,
+			))
 		}
 
 		conditions, _ := entry["conditions"].([]any)
 		entry["conditions"] = append(conditions, condition)
+
+		if sourceIdentifier != "" {
+			sources, _ := entry["sources"].([]any)
+
+			if !slices.Contains(sources, any(sourceIdentifier)) {
+				entry["sources"] = append(sources, sourceIdentifier)
+			}
+		}
 	}
+
+	return warnings
 }
 
 // migrateLogInputs folds the legacy log.inputs[].filters entries -- the
@@ -804,21 +822,30 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any) prometheus.MultiErr
 
 		switch {
 		case path != "":
-			mergeLegacyFilters(count, filtersList)
+			for _, w := range mergeLegacyFilters(count, filtersList, name) {
+				warnings.Append(w)
+			}
 
 			receivers[name] = map[string]any{"include": []any{path}}
 			warnings.Append(fmt.Errorf("%w: log.inputs[].filters (path %q), use log.metrics.receivers/count instead", errSettingsDeprecated, path))
 
 			translated = true
 		case containerName != "" && len(selectors) == 0:
-			mergeLegacyFilters(count, filtersList)
+			for _, w := range mergeLegacyFilters(count, filtersList, containerName) {
+				warnings.Append(w)
+			}
 
 			containerCounters = append(containerCounters, containerName)
 			warnings.Append(fmt.Errorf("%w: log.inputs[].filters (container_name %q), use log.metrics.container_counters/count instead", errSettingsDeprecated, containerName))
 
 			translated = true
 		case len(selectors) > 0:
-			mergeLegacyFilters(count, filtersList)
+			// containerName may be "" here (a pure selector rule): such a
+			// container has no stable name to scope onto at config time, so
+			// its metric stays global (mergeLegacyFilters skips empty identifiers).
+			for _, w := range mergeLegacyFilters(count, filtersList, containerName) {
+				warnings.Append(w)
+			}
 
 			containerSelectorCounters = append(containerSelectorCounters, map[string]any{
 				"container_name": containerName,
@@ -828,6 +855,8 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any) prometheus.MultiErr
 
 			translated = true
 		default:
+			warnings.Append(fmt.Errorf("%w: log.inputs[%d] has filters but no path/container_name/container_selectors set, filters were dropped", errSettingsDeprecated, i))
+
 			remainingInputs = append(remainingInputs, inputAny)
 		}
 	}

@@ -21,13 +21,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
 	"slices"
 	"strings"
 	"sync"
 	"time"
 
-	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/discovery"
@@ -54,41 +52,10 @@ var (
 	errUnknownField   = errors.New("some unknown field(s) were found")
 )
 
-type fileSizer interface {
-	sizesByFile() (map[string]int64, error)
-}
-
-func getLastFileSizesFromCache(state bleemeoTypes.State) (lastFileSizes map[string]int64) {
-	err := state.Get(logFileSizesCacheKey, &lastFileSizes)
-	if err != nil {
-		logger.V(1).Printf("Can't find log file sizes in cache: %v", err)
-	}
-
-	return lastFileSizes
-}
-
-func saveLastFileSizesToCache[FS fileSizer](state bleemeoTypes.State, sizers []FS) {
-	lastFileSizes := make(map[string]int64)
-
-	for _, recv := range sizers {
-		sizesByFile, err := recv.sizesByFile()
-		if err != nil {
-			logger.V(1).Printf("Can't get log file sizes: %v", err)
-
-			continue
-		}
-
-		maps.Copy(lastFileSizes, sizesByFile)
-	}
-
-	err := state.Set(logFileSizesCacheKey, lastFileSizes)
-	if err != nil {
-		logger.V(1).Printf("Failed to save last log file sizes to cache: %v", err)
-	}
-}
-
-func mergeLastFileSizes(receivers []*logReceiver, containerRecv *containerReceiver) []fileSizer {
-	sizers := make([]fileSizer, len(receivers)+1)
+// mergeLastFileSizes gathers every receiver's FileSizer for
+// logsource.SaveLastFileSizesToCache.
+func mergeLastFileSizes(receivers []*logReceiver, containerRecv *containerReceiver) []logsource.FileSizer {
+	sizers := make([]logsource.FileSizer, len(receivers)+1)
 
 	for i, recv := range receivers {
 		sizers[i] = recv

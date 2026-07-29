@@ -14,15 +14,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package logsource holds the OTel log-receiver building blocks shared by
-// otel/logprocessing (log shipping) and otel/logmetrics (log-to-metric): both
-// features tail the same kind of log sources (static files, container logs,
-// externally-pushed OTLP), so this package is where that logic lives once.
-//
-// Sharing stops at code: each caller keeps its own persisted state, its own
-// component IDs and its own pipeline/manager lifecycle, so a bug in one
-// feature's state can't leak into the other's.
 package logsource
+
+// Package logsource holds the OTel log-receiver building blocks shared by
+// otel/logprocessing and otel/logmetrics: both tail the same kind of log
+// sources (static files, container logs, OTLP), so the logic lives here once.
+// Each caller keeps its own persisted state and component lifecycle.
 
 import (
 	"bytes"
@@ -63,13 +60,9 @@ const (
 
 var errUnexpectedType = errors.New("unexpected type")
 
-// decodeRawReceiverConfig decodes raw (extraRaw's) YAML directly into dest (an
-// already-populated real receiver config, e.g. *filelogreceiver.FileLogConfig),
-// overwriting only the fields present in raw -- same partial-override
-// semantics a real Collector config load has ("any setting you specify
-// overrides the default, if present"). Reuses unmarshalMapstructureHook so a
-// field like header.metadata_operators (itself []operator.Config) decodes
-// correctly too.
+// decodeRawReceiverConfig decodes raw YAML into dest (an already-populated
+// receiver config), overwriting only the fields present in raw. Reuses
+// unmarshalMapstructureHook so nested operator.Config fields decode correctly.
 func decodeRawReceiverConfig(dest any, raw map[string]any) error {
 	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 		Result:     dest,
@@ -94,8 +87,8 @@ type CommandRunner interface {
 // ignored) a function returning its current size.
 type StatFileFunc = func(logFile string, hostroot string, commandRunner CommandRunner) (ignore bool, needSudo bool, sizeFn func() (int64, error))
 
-// Since github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal/consumerretry is internal,
-// we recreate its config type and mapstructure.Decode() it into the receivers' options.
+// consumerretry's config type is internal, so we recreate it here and
+// mapstructure.Decode() it into the receivers' options.
 var retryCfg = struct { //nolint:gochecknoglobals
 	Enabled         bool          `mapstructure:"enabled"`
 	InitialInterval time.Duration `mapstructure:"initial_interval"`
@@ -108,21 +101,15 @@ var retryCfg = struct { //nolint:gochecknoglobals
 	MaxElapsedTime:  1 * time.Hour,
 }
 
-// SetupLogReceiverFactories builds receiver factories for the given log files,
-// accordingly to whether the file is directly readable or not (falling back to
-// a sudo-tail execlogreceiver when it isn't). Files that don't exist at the
-// time of the call to this function will be ignored.
+// SetupLogReceiverFactories builds receiver factories for the given log
+// files, falling back to a sudo-tail execlogreceiver for files this process
+// can't read directly. Files that don't exist at call time are ignored.
 //
-// extraRaw is raw YAML for any real filelogreceiver/fileconsumer field beyond
-// what this function already sets itself (e.g. start_at, on_truncate,
-// encoding, multiline, exclude, poll_interval, header) -- decoded straight
-// into the real vendored config, same trick used for OTELFilters/OTELOperator
-// elsewhere, so an existing OTel Collector receiver config pastes in almost
-// verbatim. It's applied before this function's own fields, which always win
-// on conflict (e.g. Include/StorageID/StartAt-for-new-files are never
-// overridable this way), and only to the filelogreceiver path: it has no
-// filelogreceiver-shaped equivalent on the execlogreceiver sudo-tail
-// fallback, so it's silently inapplicable there.
+// extraRaw is raw YAML for any filelogreceiver/fileconsumer field beyond what
+// this function sets itself; it's decoded into the real vendored config and
+// applied before this function's own fields, which always win on conflict.
+// "operators" is always stripped from it first, since it has its own
+// dedicated parameter above.
 func SetupLogReceiverFactories(
 	logFiles []string,
 	hostroot string,
@@ -139,6 +126,12 @@ func SetupLogReceiverFactories(
 	sizeFnByFile map[string]func() (int64, error),
 	err error,
 ) {
+	if _, hasOperators := extraRaw["operators"]; hasOperators {
+		trimmedRaw := maps.Clone(extraRaw)
+		delete(trimmedRaw, "operators")
+		extraRaw = trimmedRaw
+	}
+
 	sizeFnByFile = make(map[string]func() (int64, error), len(logFiles))
 
 	for _, logFile := range logFiles {
@@ -193,8 +186,7 @@ func SetupLogReceiverFactories(
 			continue
 		}
 
-		// For filelogreceivers the offset is stored separately, so we don't really care about the size here.
-		// However, if this is the first time we've seen this file, we want to read starting at the end.
+		// Offset is stored separately; only new files need to start at the end.
 		if _, ok := lastFileSizes[logFile]; !ok {
 			fileTypedCfg.InputConfig.StartAt = "end"
 		}
@@ -216,6 +208,12 @@ func SetupLogReceiverFactories(
 			return nil, nil, nil, nil, fmt.Errorf("%w for exec log receiver: %T", errUnexpectedType, execCfg)
 		}
 
+		if len(extraRaw) > 0 {
+			if err := decodeRawReceiverConfig(execTypedCfg, extraRaw); err != nil {
+				return nil, nil, nil, nil, fmt.Errorf("decoding extra receiver config: %w", err)
+			}
+		}
+
 		size, err := sizeFnByFile[logFile]()
 		if err != nil {
 			logger.V(1).Printf("Error getting size of file %q (ignoring it): %v", logFile, err)
@@ -226,13 +224,13 @@ func SetupLogReceiverFactories(
 		tailArgs := []string{"tail", tailFollowName}
 
 		if lastSize, ok := lastFileSizes[logFile]; ok {
-			if lastSize > size { // the file has been truncated since the last time
-				tailArgs = append(tailArgs, "--bytes=+0") // start at the beginning of the file
-			} else { // the file has at least the same size as the last time
-				tailArgs = append(tailArgs, fmt.Sprintf("--bytes=+%d", lastSize)) // start where we were the last time
+			if lastSize > size { // file was truncated
+				tailArgs = append(tailArgs, "--bytes=+0")
+			} else {
+				tailArgs = append(tailArgs, fmt.Sprintf("--bytes=+%d", lastSize)) // resume from last offset
 			}
-		} else { // the file has never been seen before
-			tailArgs = append(tailArgs, "--bytes=0") // start at the end of the file
+		} else {
+			tailArgs = append(tailArgs, "--bytes=0") // new file: start at the end
 		}
 
 		execTypedCfg.InputConfig.Argv = append(tailArgs, filepath.Join(hostroot, logFile)) //nolint: gocritic
@@ -259,9 +257,9 @@ func SetupLogReceiverFactories(
 	return factories, readableFiles, execFiles, sizeFnByFile, nil
 }
 
-// StatFile is the default StatFileFunc: it opens logFile directly, and if that
-// fails with a permission error, falls back to `sudo stat` to check whether a
-// sudo-tail (execlogreceiver) can read it instead.
+// StatFile is the default StatFileFunc: it opens logFile directly, falling
+// back to `sudo stat` on a permission error to check if a sudo-tail can read
+// it instead.
 func StatFile(logFile, hostroot string, commandRunner CommandRunner) (ignore, needSudo bool, sizeFn func() (int64, error)) {
 	logFilePath := filepath.Join(hostroot, logFile)
 

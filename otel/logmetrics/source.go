@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -51,50 +52,49 @@ var (
 //
 //	filelogreceiver/execlogreceiver --(plog.Logs)--> countconnector(s) --(pmetric.Metrics)--> shared registry sink
 //
-// Normally one connector handles all of a source's counters. If that combined
-// config fails validation, it falls back to one connector per counter (fanned
-// out) so a bad regex only disables its own metric.
+// Normally one connector handles all of a source's counters, falling back to
+// one connector per counter if the combined config fails validation.
 //
-// A source may resolve to several log files (e.g. include is a glob pattern),
-// each gets its own receiver (filelogreceiver, or execlogreceiver as a
-// sudo-tail fallback for a file this process can't read directly). update()
-// can be called periodically to start receivers for newly-appeared files
-// matching the same include patterns, without disturbing already-running ones
-// -- unlike a glob handed directly to a single long-lived filelogreceiver,
-// this needs to be driven explicitly (see Manager.updateStaticSources).
+// A source may resolve to several log files (glob include pattern), each with
+// its own receiver (filelogreceiver, or execlogreceiver as a sudo-tail
+// fallback). update() starts receivers for newly-appeared files without
+// disturbing already-running ones.
 type source struct {
 	telemetry     component.TelemetrySettings
 	include       []string
 	hasHostRoot   bool
 	operators     []operator.Config
-	extraRaw      map[string]any // raw pass-through into the real filelogreceiver config, see LogMetricsReceiver.Raw
+	extraRaw      map[string]any // raw pass-through into the real filelogreceiver config
 	commandRunner logsource.CommandRunner
 	statFile      logsource.StatFileFunc
 	name          string
 	recvConsumer  consumer.Logs
 
-	persister *logsource.PersistHost // nil if this source runs without persisted offsets
+	persister     *logsource.PersistHost // nil if this source runs without persisted offsets
+	lastFileSizes map[string]int64       // cross-restart "have we ever seen this file" cache
 
-	l        sync.Mutex
-	watching map[string]logsource.ReceiverKind
-	recvs    []receiver.Logs
-	extIDs   []component.ID // valid only if persister != nil, one per underlying log file
+	l            sync.Mutex
+	watching     map[string]logsource.ReceiverKind
+	recvs        []receiver.Logs
+	extIDs       []component.ID                   // valid only if persister != nil, one per log file
+	sizeFnByFile map[string]func() (int64, error) // for SizesByFile
 
 	conns []otelconnector.Logs
 }
 
-// newSource builds and starts a source. include is a list of glob patterns,
-// with hostroot already applied (hasHostRoot reports whether that hostroot is
-// non-trivial, in which case sudo-tail isn't attempted: same restriction
-// otel/logprocessing applies, since a sudo command run from Glouton's own
-// mount namespace can't reach a path that only makes sense under hostroot).
-// If isContainer, the Docker/CRI envelope is unwrapped first (same operator
-// otel/logprocessing uses), before formatOperators (from
-// LogMetricsReceiver.LogFormat, if set) run, so a format parses the actual
-// log line rather than its envelope. If persister is non-nil, name is used as
-// this source's stable persisted-offset identity (a joined path list for
-// static sources, a container ID for container sources), so a restart
-// resumes tailing instead of skipping to the file's end.
+// newSource builds and starts a source. include is a list of glob patterns
+// with hostroot already applied; hasHostRoot disables the sudo-tail fallback
+// when true. If isContainer, the Docker/CRI envelope is unwrapped before
+// formatOperators run. If persister is non-nil, name is the stable
+// persisted-offset identity used to resume tailing across restarts.
+// lastFileSizes is the fallback "have we ever seen this file" cache used when
+// persister is nil.
+//
+// count and specs are the full, global log.metrics.count registry; sourceName
+// identifies this source for count's own "sources" field, and kind
+// (kindReceiver, kindContainer or kindNetwork) is this source's kind, used to
+// resolve each global metric's own per_<kind>_item flag (see
+// groupMetricsByItem).
 func newSource(
 	ctx context.Context,
 	telemetry component.TelemetrySettings,
@@ -104,15 +104,17 @@ func newSource(
 	count map[string]config.LogMetricsCount,
 	formatOperators []operator.Config,
 	extraRaw map[string]any,
-	sink consumer.Metrics,
+	specs []metricSpec,
+	sourceName string,
+	kind string,
+	reg *metricsRegistry,
 	persister *logsource.PersistHost,
+	lastFileSizes map[string]int64,
 	commandRunner logsource.CommandRunner,
 	statFile logsource.StatFileFunc,
 	name string,
 ) (*source, error) {
-	connFactory := countconnector.NewFactory()
-
-	conns, err := buildConnectors(ctx, connFactory, telemetry, count, sink)
+	conns, err := buildGroupedConnectors(ctx, telemetry, count, specs, sourceName, kind, reg, name)
 	if err != nil {
 		return nil, err
 	}
@@ -136,6 +138,7 @@ func newSource(
 		name:          name,
 		recvConsumer:  nextConsumer(conns),
 		persister:     persister,
+		lastFileSizes: lastFileSizes,
 		watching:      make(map[string]logsource.ReceiverKind),
 		conns:         conns,
 	}
@@ -175,6 +178,30 @@ func (s *source) watchedFiles() (fileLogPaths, execLogPaths []string) {
 	slices.Sort(execLogPaths)
 
 	return fileLogPaths, execLogPaths
+}
+
+// SizesByFile returns the size of each log file watched by this source, for
+// the cross-restart lastFileSizes cache.
+func (s *source) SizesByFile() (map[string]int64, error) {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	sizes := make(map[string]int64, len(s.sizeFnByFile))
+
+	for logFile, sizeFn := range s.sizeFnByFile {
+		size, err := sizeFn()
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
+
+			return nil, err
+		}
+
+		sizes[logFile] = size
+	}
+
+	return sizes, nil
 }
 
 // update starts a receiver for any file newly matching this source's include
@@ -220,11 +247,11 @@ func (s *source) addNewFiles(ctx context.Context) error {
 		}
 	}
 
-	factories, readFiles, execFiles, _, err := logsource.SetupLogReceiverFactories(
+	factories, readFiles, execFiles, newSizeFns, err := logsource.SetupLogReceiverFactories(
 		newFiles,
 		"", // logFiles are already fully resolved (hostroot applied by the caller)
 		s.operators,
-		nil, // no cross-restart file-size tracking (yet) for log-to-metric sudo-tail sources
+		s.lastFileSizes,
 		s.commandRunner,
 		makeStorageFn,
 		s.statFile,
@@ -293,6 +320,12 @@ func (s *source) addNewFiles(ctx context.Context) error {
 	s.recvs = append(s.recvs, newRecvs...)
 	s.extIDs = append(s.extIDs, newExtIDs...)
 
+	if s.sizeFnByFile == nil {
+		s.sizeFnByFile = make(map[string]func() (int64, error), len(newSizeFns))
+	}
+
+	maps.Copy(s.sizeFnByFile, newSizeFns)
+
 	for _, f := range readFiles {
 		s.watching[f] = logsource.ReceiverFileLog
 	}
@@ -304,11 +337,10 @@ func (s *source) addNewFiles(ctx context.Context) error {
 	return nil
 }
 
-// expandIncludePatterns resolves glob patterns into actual file paths (already
-// fully hostroot-resolved). A pattern that can't be listed due to a permission
-// error is passed through as a literal path when it has no wildcard and
-// hasHostRoot is false, giving SetupLogReceiverFactories/StatFile a chance to
-// fall back to a sudo-tail (execlogreceiver) -- otherwise it's dropped.
+// expandIncludePatterns resolves glob patterns into actual file paths. A
+// pattern that hits a permission error is passed through as a literal path
+// (when it has no wildcard and hasHostRoot is false) to allow a sudo-tail
+// fallback; otherwise it's dropped.
 func expandIncludePatterns(patterns []string, hasHostRoot bool) []string {
 	seen := make(map[string]bool, len(patterns))
 
@@ -324,8 +356,7 @@ func expandIncludePatterns(patterns []string, hasHostRoot bool) []string {
 			}
 
 			if errors.Is(err, fs.ErrPermission) && !hasHostRoot && !strings.Contains(pattern, "*") {
-				// We still have a chance to handle it with a sudo tail.
-				matches = []string{pattern}
+				matches = []string{pattern} // still a chance via sudo tail
 			} else {
 				logger.V(1).Printf("logmetrics: file %q: %v", pattern, err)
 
@@ -351,13 +382,188 @@ func shutdownReceivers(ctx context.Context, recvs []receiver.Logs) {
 	}
 }
 
-// buildConnectors tries one connector for all of count together (fast path: one
-// tree walk and one registry lock per batch). If that combined config fails
-// validation, it falls back to one connector per metric so a bad condition only
-// disables its own metric instead of every metric on this source. A metric
-// whose raw config can't even be decoded (see metricInfo) is excluded from both
-// paths entirely, with a visible warning -- it never silently falls back to
-// matching every log record.
+// filterCount restricts count to names, dropping (with a warning identifying
+// srcCtx) any name that isn't a real count entry. Returns count unchanged if
+// names is empty -- the default, global-registry behavior.
+func filterCount(count map[string]config.LogMetricsCount, names []string, srcCtx string) map[string]config.LogMetricsCount {
+	if len(names) == 0 {
+		return count
+	}
+
+	filtered := make(map[string]config.LogMetricsCount, len(names))
+
+	for _, name := range names {
+		raw, ok := count[name]
+		if !ok {
+			logger.Printf("logmetrics: %s: metric %q listed but not defined in log.metrics.count", srcCtx, name)
+
+			continue
+		}
+
+		filtered[name] = raw
+	}
+
+	return filtered
+}
+
+// filterSpecs is filterCount's counterpart for metricSpecs, so a scoped
+// source only registers the metrics it can actually produce.
+func filterSpecs(specs []metricSpec, names []string) []metricSpec {
+	if len(names) == 0 {
+		return specs
+	}
+
+	wanted := make(map[string]bool, len(names))
+	for _, name := range names {
+		wanted[name] = true
+	}
+
+	filtered := make([]metricSpec, 0, len(names))
+
+	for _, spec := range specs {
+		if wanted[spec.Metric] {
+			filtered = append(filtered, spec)
+		}
+	}
+
+	return filtered
+}
+
+// extractSources reads the "sources" field out of a raw config.LogMetricsCount
+// entry -- the metric-side counterpart naming which receivers/containers/the
+// network source feed it. Unset or empty means global (every source).
+func extractSources(raw config.LogMetricsCount) []string {
+	rawSources, _ := raw["sources"].([]any)
+	if len(rawSources) == 0 {
+		return nil
+	}
+
+	sources := make([]string, 0, len(rawSources))
+
+	for _, v := range rawSources {
+		if s, ok := v.(string); ok {
+			sources = append(sources, s)
+		}
+	}
+
+	return sources
+}
+
+// Source kinds, used both as groupMetricsByItem's kind parameter and as the
+// "per_<kind>_item" raw config key suffix (see extractPerItemFlag).
+const (
+	kindReceiver  = "receiver"
+	kindContainer = "container"
+	kindNetwork   = "network"
+)
+
+// perItemDefault is the fallback when a metric doesn't set its own
+// "per_<kind>_item" flag. Containers default to true: a container's identity
+// isn't known ahead of time (dynamic discovery, restarts, replica suffixes),
+// so there's no practical way to opt one in via "sources" just to get a
+// per-instance item -- it needs one automatically. Receivers and the network
+// source default to false: they're named statically in config, so "sources"
+// is already a cheap way to opt one in when a separate item is wanted.
+func perItemDefault(kind string) bool {
+	return kind == kindContainer
+}
+
+// extractPerItemFlag reads a raw config.LogMetricsCount entry's
+// "per_<kind>_item" override, falling back to perItemDefault(kind). It only
+// affects a metric with no "sources" (global): whether each matching source
+// of that kind still gets its own item, or merges into the shared item="".
+func extractPerItemFlag(raw config.LogMetricsCount, kind string) bool {
+	v, ok := raw["per_"+kind+"_item"].(bool)
+	if !ok {
+		return perItemDefault(kind)
+	}
+
+	return v
+}
+
+// groupMetricsByItem partitions count's metric names by the item label
+// sourceName (of the given kind: kindReceiver, kindContainer or kindNetwork)
+// should report them under. A metric naming only sourceName in "sources" gets
+// its own item (sourceName); one naming 2+ sources including sourceName
+// merges into a single series with no item at all; one naming sources that
+// don't include sourceName isn't fed by this source and produces nothing
+// here. A metric with no "sources" (global) gets sourceName as its item if
+// its own per_<kind>_item flag is true (see extractPerItemFlag), else "".
+func groupMetricsByItem(count map[string]config.LogMetricsCount, sourceName, kind string) map[string][]string {
+	groups := make(map[string][]string)
+
+	for name, raw := range count {
+		switch sources := extractSources(raw); {
+		case len(sources) == 0:
+			item := ""
+			if extractPerItemFlag(raw, kind) {
+				item = sourceName
+			}
+
+			groups[item] = append(groups[item], name)
+		case len(sources) == 1:
+			if sources[0] == sourceName {
+				groups[sourceName] = append(groups[sourceName], name)
+			}
+		default:
+			if slices.Contains(sources, sourceName) {
+				groups[""] = append(groups[""], name)
+			}
+		}
+	}
+
+	return groups
+}
+
+// buildGroupedConnectors partitions count by item via groupMetricsByItem and
+// builds one connector set per resulting group, so a single source can feed
+// several different item buckets at once (e.g. its own scoped metric plus a
+// shared global one). A group that fails to produce any valid counter is
+// logged and skipped, not fatal; errNoValidCounter is only returned if
+// nothing survived across every group.
+func buildGroupedConnectors(
+	ctx context.Context,
+	telemetry component.TelemetrySettings,
+	count map[string]config.LogMetricsCount,
+	specs []metricSpec,
+	sourceName string,
+	kind string,
+	reg *metricsRegistry,
+	name string,
+) ([]otelconnector.Logs, error) {
+	connFactory := countconnector.NewFactory()
+
+	var conns []otelconnector.Logs
+
+	for item, names := range groupMetricsByItem(count, sourceName, kind) {
+		groupCount := filterCount(count, names, name)
+		if len(groupCount) == 0 {
+			continue
+		}
+
+		reg.resolve(filterSpecs(specs, names), item)
+
+		groupConns, err := buildConnectors(ctx, connFactory, telemetry, groupCount, reg.metricsSinkForItem(item))
+		if err != nil {
+			logger.Printf("logmetrics: source %q: item %q: %v", name, item, err)
+
+			continue
+		}
+
+		conns = append(conns, groupConns...)
+	}
+
+	if len(conns) == 0 {
+		return nil, errNoValidCounter
+	}
+
+	return conns, nil
+}
+
+// buildConnectors tries one connector for all of count together. If that
+// combined config fails validation, it falls back to one connector per metric
+// so a bad condition only disables its own metric. A metric whose raw config
+// can't be decoded is excluded from both paths, with a warning.
 func buildConnectors(
 	ctx context.Context,
 	connFactory otelconnector.Factory,
@@ -419,18 +625,11 @@ func buildConnectors(
 }
 
 // metricInfo builds the countconnector.MetricInfo for metric name from its raw
-// config.LogMetricsCount, decoding straight into the real vendored struct
-// (description, conditions, attributes -- same trick as OTLPReceiver), so an
+// config.LogMetricsCount, decoding straight into the vendored struct so an
 // existing connectors.count.logs.<metric> definition pastes in almost
-// verbatim. "labels" isn't a real countconnector field (see LogMetricsCount's
-// doc comment) and is silently ignored by the decode; extractLabels is what
-// reads it. A metric with no conditions at all counts every log record on
-// every source unconditionally, matching real countconnector semantics -- but
-// only when that's genuinely what the config says: a raw value that fails to
-// decode at all (e.g. "conditions" given as a bare string instead of a list)
-// returns an error instead of silently falling back to that same "count
-// everything" shape, which would otherwise turn a config mistake into
-// wildly-wrong metrics with no visible sign anything is broken.
+// verbatim. "labels" isn't a real countconnector field and is ignored here;
+// extractLabels reads it separately. A decode failure returns an error rather
+// than silently falling back to "count everything".
 func metricInfo(name string, raw config.LogMetricsCount) (countconnector.MetricInfo, error) {
 	info := countconnector.MetricInfo{
 		Description: "log-to-metric: " + name,
@@ -453,8 +652,7 @@ func metricInfo(name string, raw config.LogMetricsCount) (countconnector.MetricI
 }
 
 // extractLabels reads the "labels" field out of a raw config.LogMetricsCount
-// entry -- the one field metricInfo's decode above never sets, since it has
-// no real countconnector counterpart (see LogMetricsCount's doc comment).
+// entry, the one field metricInfo's decode never sets.
 func extractLabels(raw config.LogMetricsCount) map[string]string {
 	rawLabels, _ := raw["labels"].(map[string]any)
 	if len(rawLabels) == 0 {

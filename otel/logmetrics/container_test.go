@@ -35,11 +35,9 @@ const (
 //nolint:gochecknoglobals
 var testCount = map[string]config.LogMetricsCount{"errors_count": {"conditions": []any{`IsMatch(body, "\\[error\\]")`}}}
 
-// TestIsContainerWatched ports the container-matching scenarios that used to be
-// covered by fluentbit.Manager.inputLogPaths (fluentbit/config_test.go), since the
-// same container_name/container_selectors matching now lives here. Since
-// log.metrics.count is global (see LogMetricsConfig's doc comment), watching is
-// now a pure yes/no decision instead of resolving a per-container counter group.
+// TestIsContainerWatched ports the container-matching scenarios previously
+// covered by fluentbit.Manager.inputLogPaths: since log.metrics.count is
+// global, watching is now a pure yes/no decision.
 func TestIsContainerWatched(t *testing.T) {
 	t.Parallel()
 
@@ -67,10 +65,6 @@ func TestIsContainerWatched(t *testing.T) {
 		},
 		"new-style": facts.FakeContainer{
 			FakeContainerName: "new-style",
-		},
-		"label-selected": facts.FakeContainer{
-			FakeContainerName: "label-selected",
-			FakeLabels:        map[string]string{containerLogCounterLabel: "any-value"},
 		},
 	}
 
@@ -156,12 +150,10 @@ func TestIsContainerWatched(t *testing.T) {
 			Expected:      true,
 		},
 		{
-			// Mirrors otel/logprocessing's glouton.log_filter/glouton.log_format
-			// container-label handling.
-			Name:          "glouton-log-counter-label-opts-in",
+			Name:          "no-config-at-all-never-matches",
 			Cfg:           config.Log{},
-			ContainerName: "label-selected",
-			Expected:      true,
+			ContainerName: "unrelated",
+			Expected:      false,
 		},
 		{
 			Name: "container-exclude-by-name-overrides-container-counters",
@@ -185,14 +177,6 @@ func TestIsContainerWatched(t *testing.T) {
 			ContainerName: "redis-1",
 			Expected:      false,
 		},
-		{
-			Name: "container-exclude-overrides-glouton-log-counter-label",
-			Cfg: config.Log{Metrics: config.LogMetricsConfig{
-				ContainerExclude: []config.ContainerExcludeRule{{ContainerName: "label-selected"}},
-			}},
-			ContainerName: "label-selected",
-			Expected:      false,
-		},
 	}
 
 	for _, test := range tests {
@@ -206,10 +190,8 @@ func TestIsContainerWatched(t *testing.T) {
 	}
 }
 
-// TestHasContainerCounters is the regression test for container watching being
-// gated purely on whether any metric is defined at all (see
-// LogMetricsConfig.Count's doc comment): with none, no container selection
-// mechanism (static or label-driven) would ever produce anything.
+// TestHasContainerCounters checks that container watching requires both a
+// metric and a selection mechanism to be configured.
 func TestHasContainerCounters(t *testing.T) {
 	t.Parallel()
 
@@ -224,7 +206,7 @@ func TestHasContainerCounters(t *testing.T) {
 			Expected: false,
 		},
 		{
-			Name: "static-container-selector-counters-but-no-count",
+			Name: "container-selector-counters-but-no-count",
 			Cfg: config.Log{Metrics: config.LogMetricsConfig{
 				ContainerSelectorCounters: []config.ContainerSelectorRule{
 					{Selectors: map[string]string{"app": "redis"}},
@@ -233,9 +215,27 @@ func TestHasContainerCounters(t *testing.T) {
 			Expected: false,
 		},
 		{
-			Name: "count-defined-enables-watching",
+			Name: "count-but-no-container-selection",
 			Cfg: config.Log{Metrics: config.LogMetricsConfig{
 				Count: testCount,
+			}},
+			Expected: false,
+		},
+		{
+			Name: "count-and-container-counters",
+			Cfg: config.Log{Metrics: config.LogMetricsConfig{
+				Count:             testCount,
+				ContainerCounters: []string{"redis"},
+			}},
+			Expected: true,
+		},
+		{
+			Name: "count-and-container-selector-counters",
+			Cfg: config.Log{Metrics: config.LogMetricsConfig{
+				Count: testCount,
+				ContainerSelectorCounters: []config.ContainerSelectorRule{
+					{Selectors: map[string]string{"app": "redis"}},
+				},
 			}},
 			Expected: true,
 		},

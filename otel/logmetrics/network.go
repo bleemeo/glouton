@@ -22,7 +22,6 @@ import (
 
 	"github.com/bleemeo/glouton/config"
 
-	"github.com/open-telemetry/opentelemetry-collector-contrib/connector/countconnector"
 	"go.opentelemetry.io/collector/component"
 	otelconnector "go.opentelemetry.io/collector/connector"
 	"go.opentelemetry.io/collector/consumer"
@@ -45,15 +44,17 @@ type networkSource struct {
 
 // newNetworkSource returns (nil, nil) if the network receiver is disabled or
 // there's nothing configured to count at all -- neither is an error, just
-// "nothing to start". Like any other source, it counts against the global
-// count map (see LogMetricsConfig.Count's doc comment): there's no separate
-// counter list for network-pushed logs.
+// "nothing to start". Like any other source, count/specs are the full,
+// global log.metrics.count registry; it's identified as "network" for
+// count's own "sources" field (see groupMetricsByItem), with "" as its
+// default item for an unscoped (global) metric.
 func newNetworkSource(
 	ctx context.Context,
 	telemetry component.TelemetrySettings,
 	netCfg config.LogMetricsNetworkReceiver,
 	count map[string]config.LogMetricsCount,
-	sink consumer.Metrics,
+	specs []metricSpec,
+	reg *metricsRegistry,
 ) (*networkSource, error) {
 	if len(netCfg.Receivers) == 0 && !netCfg.Enable {
 		return nil, nil //nolint:nilnil
@@ -63,9 +64,7 @@ func newNetworkSource(
 		return nil, nil //nolint:nilnil
 	}
 
-	connFactory := countconnector.NewFactory()
-
-	conns, err := buildConnectors(ctx, connFactory, telemetry, count, sink)
+	conns, err := buildGroupedConnectors(ctx, telemetry, count, specs, kindNetwork, kindNetwork, reg, kindNetwork)
 	if err != nil {
 		return nil, err
 	}

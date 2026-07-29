@@ -32,10 +32,9 @@ import (
 	"github.com/bleemeo/glouton/version"
 )
 
-// TestSourceExecLogFallback is the regression test for the gap this pass
-// closes: a log-to-metric source for a file this process can't read directly
-// must fall back to a sudo-tail (execlogreceiver), the same way
-// otel/logprocessing already does, instead of silently producing no metric.
+// TestSourceExecLogFallback checks that a log-to-metric source for a file
+// this process can't read falls back to a sudo-tail (execlogreceiver),
+// like otel/logprocessing does, instead of silently producing no metric.
 func TestSourceExecLogFallback(t *testing.T) {
 	if version.IsWindows() {
 		t.Skip("We currently don't support accessing protected files on Windows.")
@@ -79,11 +78,12 @@ func TestSourceExecLogFallback(t *testing.T) {
 		},
 	}
 
-	sink, _ := collectingSink()
-
-	src, err := newSource(t.Context(), testTelemetrySettings(), []string{file.Name()}, false, false, map[string]config.LogMetricsCount{
+	count := map[string]config.LogMetricsCount{
 		"protected_errors_count": {"conditions": []any{`IsMatch(body, "\\[error\\]")`}},
-	}, nil, nil, sink, nil, runner, mockStatFile, "")
+	}
+	reg, _ := testRegistry()
+
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{file.Name()}, false, false, count, nil, nil, specsForCount(count), "src", kindReceiver, reg, nil, nil, runner, mockStatFile, "")
 	if err != nil {
 		t.Fatal("Failed to build source:", err)
 	}

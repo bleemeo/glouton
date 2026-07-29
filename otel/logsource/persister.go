@@ -48,17 +48,13 @@ type PersistConfig struct {
 	// ArchivePath is the file created by WriteToArchive in a diagnostic bundle.
 	ArchivePath string
 	// FullSnapshot, if true, persists every receiver's metadata on every
-	// SaveToState call, even ones untouched since this PersistHost was built
-	// (so an idle-but-still-running source doesn't lose its offset just for
-	// not having produced anything yet this run). If false, only receivers
-	// touched via Set/Delete/Batch since this PersistHost was built are
-	// persisted, so a removed source's stale offset falls out of the cache
-	// instead of being kept forever.
+	// SaveToState call, even untouched ones. If false, only receivers touched
+	// since this PersistHost was built are persisted, so removed sources fall
+	// out of the cache.
 	FullSnapshot bool
-	// SaveThrottle, if non-zero, limits how often a single Set() call pushes
-	// its receiver's dirty data up into the host's in-memory map (a cheap
-	// operation, but proportional to that receiver's key count). Zero means
-	// push on every call.
+	// SaveThrottle, if non-zero, limits how often a Set() call pushes its
+	// receiver's dirty data into the host's in-memory map. Zero pushes on
+	// every call.
 	SaveThrottle time.Duration
 }
 
@@ -116,9 +112,7 @@ func (h *PersistHost) NewPersistentExt(name string) component.ID {
 	h.l.Lock()
 	defer h.l.Unlock()
 
-	// We don't have to care about handling any error,
-	// since the type is known to be correct (otherwise TestPersistHost would have failed),
-	// and the name has no format restriction.
+	// Error is impossible here: the type is known-correct and name is unrestricted.
 	id := component.MustNewIDWithName(h.cfg.StorageType, name)
 
 	receiverMetadata, found := h.metadataPerReceiver[name]
@@ -191,11 +185,7 @@ func (h *PersistHost) getAllMetadata() map[string]map[string][]byte {
 	updatedData := make(map[string]map[string][]byte, len(h.updatedKeys))
 
 	for key := range h.updatedKeys {
-		// We assume the []byte values in `h.metadataPerReceiver[key]` aren't mutated.
-		// If they were mutated, we'd also need to deep-copy them.
-		// `h.metadataPerReceiver[key]` is always accessed under h.l: written by set/delete
-		// and storeMetadata, and read here. Only keys in updatedKeys are read, as those
-		// are the ones that have been explicitly stored via set or storeMetadata.
+		// Assumes metadataPerReceiver[key] values aren't mutated elsewhere.
 		updatedData[key] = maps.Clone(h.metadataPerReceiver[key])
 	}
 
@@ -351,8 +341,7 @@ func (s *storageClient) saveMetadata() {
 	}
 
 	updatedData := make(map[string][]byte, len(s.updatedKeys))
-	// Only saving the values that have been updated during this run,
-	// so as to discard the ones that correspond to files that no longer exist.
+	// Discards values for files that no longer exist.
 	for key := range s.updatedKeys {
 		updatedData[key] = s.dirty[key]
 	}

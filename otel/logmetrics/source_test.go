@@ -17,11 +17,9 @@
 package logmetrics
 
 import (
-	"context"
-	"maps"
 	"os"
 	"path/filepath"
-	"sync"
+	"slices"
 	"testing"
 	"time"
 
@@ -31,9 +29,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/pcommon"
-	"go.opentelemetry.io/collector/pdata/pmetric"
 	noopM "go.opentelemetry.io/otel/metric/noop"
 	"go.opentelemetry.io/otel/trace/noop"
 )
@@ -47,48 +43,36 @@ func testTelemetrySettings() component.TelemetrySettings {
 	}
 }
 
-// collectingSink returns a consumer.Metrics recording every Sum data point it sees,
-// keyed by metric name, and a function to read the accumulated totals. The consumer
-// callback runs on the OTel pipeline's own goroutine, concurrently with the test
-// reading the totals, hence the mutex.
-func collectingSink() (consumer.Metrics, func() map[string]int64) {
-	var l sync.Mutex
-
-	totals := make(map[string]int64)
-
-	sink, err := consumer.NewMetrics(func(_ context.Context, md pmetric.Metrics) error {
-		l.Lock()
-		defer l.Unlock()
-
-		for i := range md.ResourceMetrics().Len() {
-			sms := md.ResourceMetrics().At(i).ScopeMetrics()
-			for j := range sms.Len() {
-				ms := sms.At(j).Metrics()
-				for k := range ms.Len() {
-					m := ms.At(k)
-					if m.Type() != pmetric.MetricTypeSum {
-						continue
-					}
-
-					dps := m.Sum().DataPoints()
-					for d := range dps.Len() {
-						totals[m.Name()] += dps.At(d).IntValue()
-					}
-				}
-			}
-		}
-
-		return nil
-	})
-	if err != nil {
-		panic(err)
+// specsForCount builds the metricSpec list newSource needs to actually
+// register a counter for every name in count (see metricsRegistry.resolve) --
+// in production this is Manager.metricSpecs, reduced from the same count map.
+func specsForCount(count map[string]config.LogMetricsCount) []metricSpec {
+	specs := make([]metricSpec, 0, len(count))
+	for name := range count {
+		specs = append(specs, metricSpec{Metric: name})
 	}
 
-	return sink, func() map[string]int64 {
-		l.Lock()
-		defer l.Unlock()
+	return specs
+}
 
-		return maps.Clone(totals)
+// testRegistry returns a fresh metricsRegistry and a function reading back
+// each metric's raw match count across every item. It reads
+// RingCounter.Total() directly rather than going through emit()'s windowed
+// rate, since these tests run in well under windowSecs: every match added is
+// still in the ring when read back, so Total() equals the raw count.
+func testRegistry() (*metricsRegistry, func() map[string]int64) {
+	reg := newMetricsRegistry()
+
+	return reg, func() map[string]int64 {
+		reg.l.Lock()
+		defer reg.l.Unlock()
+
+		totals := make(map[string]int64, len(reg.counters))
+		for key, c := range reg.counters {
+			totals[key.metric] += int64(c.counter.Total())
+		}
+
+		return totals
 	}
 }
 
@@ -104,12 +88,13 @@ func TestSourceCountsRealFile(t *testing.T) {
 
 	defer logFile.Close()
 
-	sink, totals := collectingSink()
-
-	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, false, map[string]config.LogMetricsCount{
+	count := map[string]config.LogMetricsCount{
 		"app_errors_count":   {"conditions": []any{`IsMatch(body, "\\[error\\]")`}},
 		"app_requests_count": {"conditions": []any{`IsMatch(body, "GET /")`}},
-	}, nil, nil, sink, nil, noExecRunner(t), logsource.StatFile, "")
+	}
+	reg, totals := testRegistry()
+
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, false, count, nil, nil, specsForCount(count), "src", kindReceiver, reg, nil, nil, noExecRunner(t), logsource.StatFile, "")
 	if err != nil {
 		t.Fatal("Failed to build source:", err)
 	}
@@ -161,11 +146,12 @@ func TestSourceExcludeRegex(t *testing.T) {
 
 	defer logFile.Close()
 
-	sink, totals := collectingSink()
-
-	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, false, map[string]config.LogMetricsCount{
+	count := map[string]config.LogMetricsCount{
 		"app_errors_count": {"conditions": []any{`IsMatch(body, "\\[error\\]") and not IsMatch(body, "connection reset")`}},
-	}, nil, nil, sink, nil, noExecRunner(t), logsource.StatFile, "")
+	}
+	reg, totals := testRegistry()
+
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, false, count, nil, nil, specsForCount(count), "src", kindReceiver, reg, nil, nil, noExecRunner(t), logsource.StatFile, "")
 	if err != nil {
 		t.Fatal("Failed to build source:", err)
 	}
@@ -200,9 +186,8 @@ func TestSourceExcludeRegex(t *testing.T) {
 }
 
 // TestSourceUnwrapsContainerEnvelope is the regression test for the original
-// RabbitMQ bug: a regex that only matches the unwrapped message, fed through a
-// Docker-JSON-wrapped raw line, via a real filelogreceiver+countconnector pipeline
-// with the container envelope operator enabled.
+// RabbitMQ bug: a regex matching only the unwrapped message must still match
+// a Docker-JSON-wrapped raw line once the container envelope operator runs.
 func TestSourceUnwrapsContainerEnvelope(t *testing.T) {
 	t.Parallel()
 
@@ -213,13 +198,14 @@ func TestSourceUnwrapsContainerEnvelope(t *testing.T) {
 
 	defer logFile.Close()
 
-	sink, totals := collectingSink()
+	count := map[string]config.LogMetricsCount{
+		"container_errors_count": {"conditions": []any{`IsMatch(body, "^\\[error\\] something broke\\n?$")`}},
+	}
+	reg, totals := testRegistry()
 
 	// The container parser preserves the trailing newline embedded in Docker's JSON
 	// "log" field value, so the body is "[error] something broke\n", not "...broke".
-	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, true, false, map[string]config.LogMetricsCount{
-		"container_errors_count": {"conditions": []any{`IsMatch(body, "^\\[error\\] something broke\\n?$")`}},
-	}, nil, nil, sink, nil, noExecRunner(t), logsource.StatFile, "")
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, true, false, count, nil, nil, specsForCount(count), "test-container", kindContainer, reg, nil, nil, noExecRunner(t), logsource.StatFile, "")
 	if err != nil {
 		t.Fatal("Failed to build source:", err)
 	}
@@ -248,11 +234,12 @@ func TestSourceUnwrapsContainerEnvelope(t *testing.T) {
 func TestSourceInvalidRegex(t *testing.T) {
 	t.Parallel()
 
-	sink, _ := collectingSink()
-
-	_, err := newSource(t.Context(), testTelemetrySettings(), []string{"/nonexistent"}, false, false, map[string]config.LogMetricsCount{
+	count := map[string]config.LogMetricsCount{
 		"bad": {"conditions": []any{`IsMatch(body, "(")`}},
-	}, nil, nil, sink, nil, noExecRunner(t), logsource.StatFile, "")
+	}
+	reg, _ := testRegistry()
+
+	_, err := newSource(t.Context(), testTelemetrySettings(), []string{"/nonexistent"}, false, false, count, nil, nil, specsForCount(count), "src", kindReceiver, reg, nil, nil, noExecRunner(t), logsource.StatFile, "")
 	if err == nil {
 		t.Fatal("Expected an error for an invalid regex")
 	}
@@ -270,13 +257,14 @@ func TestSourceFastPathSingleConnector(t *testing.T) {
 
 	defer logFile.Close()
 
-	sink, _ := collectingSink()
-
-	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, false, map[string]config.LogMetricsCount{
+	count := map[string]config.LogMetricsCount{
 		"a_count": {"conditions": []any{`IsMatch(body, "a")`}},
 		"b_count": {"conditions": []any{`IsMatch(body, "b")`}},
 		"c_count": {"conditions": []any{`IsMatch(body, "c")`}},
-	}, nil, nil, sink, nil, noExecRunner(t), logsource.StatFile, "")
+	}
+	reg, _ := testRegistry()
+
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, false, count, nil, nil, specsForCount(count), "src", kindReceiver, reg, nil, nil, noExecRunner(t), logsource.StatFile, "")
 	if err != nil {
 		t.Fatal("Failed to build source:", err)
 	}
@@ -288,10 +276,9 @@ func TestSourceFastPathSingleConnector(t *testing.T) {
 	}
 }
 
-// TestSourceIsolatesInvalidCounter is the regression test for the fallback path in
-// buildConnectors: when a source has both valid and invalid counters, the combined
-// fast path fails validation, so it falls back to one connector per valid counter --
-// the invalid one is disabled but its siblings keep counting normally.
+// TestSourceIsolatesInvalidCounter checks buildConnectors' fallback path:
+// with both valid and invalid counters, it falls back to one connector per
+// valid counter, so the invalid one is disabled but its siblings keep working.
 func TestSourceIsolatesInvalidCounter(t *testing.T) {
 	t.Parallel()
 
@@ -302,13 +289,14 @@ func TestSourceIsolatesInvalidCounter(t *testing.T) {
 
 	defer logFile.Close()
 
-	sink, totals := collectingSink()
-
-	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, false, map[string]config.LogMetricsCount{
+	count := map[string]config.LogMetricsCount{
 		"app_errors_count":   {"conditions": []any{`IsMatch(body, "\\[error\\]")`}},
 		"app_requests_count": {"conditions": []any{`IsMatch(body, "GET /")`}},
 		"app_broken_count":   {"conditions": []any{`IsMatch(body, "(")`}},
-	}, nil, nil, sink, nil, noExecRunner(t), logsource.StatFile, "")
+	}
+	reg, totals := testRegistry()
+
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{logFile.Name()}, false, false, count, nil, nil, specsForCount(count), "src", kindReceiver, reg, nil, nil, noExecRunner(t), logsource.StatFile, "")
 	if err != nil {
 		t.Fatal("Failed to build source despite one invalid counter:", err)
 	}
@@ -348,17 +336,17 @@ func TestSourceIsolatesInvalidCounter(t *testing.T) {
 		t.Errorf("Expected 1 match for app_requests_count, got %d", got["app_requests_count"])
 	}
 
-	if _, found := got["app_broken_count"]; found {
+	// The registry may still pre-declare a counter for app_broken_count (same
+	// group as the two valid metrics), but it must never be incremented: no
+	// connector was ever built for it.
+	if got["app_broken_count"] != 0 {
 		t.Errorf("app_broken_count should never receive any data, got %d", got["app_broken_count"])
 	}
 }
 
-// TestSourceUpdatePicksUpNewFile is the regression test for a source that
-// resolves a glob against at least one file at creation time: unlike a
-// pattern handed directly to a single long-lived filelogreceiver (which polls
-// for new matches internally), this source needs update() to be called
-// (Manager.updateStaticSources does so every updateInterval) to notice a new
-// file -- e.g. a daily-rotated log -- created after the source started.
+// TestSourceUpdatePicksUpNewFile checks that a source resolving a glob at
+// creation time needs update() called (Manager.updateStaticSources does so
+// every updateInterval) to notice a new file, e.g. a daily-rotated log.
 func TestSourceUpdatePicksUpNewFile(t *testing.T) {
 	t.Parallel()
 
@@ -371,11 +359,12 @@ func TestSourceUpdatePicksUpNewFile(t *testing.T) {
 
 	defer file1.Close()
 
-	sink, totals := collectingSink()
-
-	src, err := newSource(t.Context(), testTelemetrySettings(), []string{filepath.Join(tmpDir, "*.log")}, false, false, map[string]config.LogMetricsCount{
+	count := map[string]config.LogMetricsCount{
 		"rotated_errors_count": {"conditions": []any{`IsMatch(body, "\\[error\\]")`}},
-	}, nil, nil, sink, nil, noExecRunner(t), logsource.StatFile, "")
+	}
+	reg, totals := testRegistry()
+
+	src, err := newSource(t.Context(), testTelemetrySettings(), []string{filepath.Join(tmpDir, "*.log")}, false, false, count, nil, nil, specsForCount(count), "src", kindReceiver, reg, nil, nil, noExecRunner(t), logsource.StatFile, "")
 	if err != nil {
 		t.Fatal("Failed to build source:", err)
 	}
@@ -427,11 +416,9 @@ func TestSourceUpdatePicksUpNewFile(t *testing.T) {
 	}
 }
 
-// TestMetricInfo is the regression test for pasting an existing
-// connectors.count.logs.<metric> definition almost verbatim: description,
-// conditions and attributes must decode straight into the real
-// countconnector.MetricInfo, with the raw description overriding the
-// "log-to-metric: <name>" default.
+// TestMetricInfo checks that a pasted connectors.count.logs.<metric>
+// definition decodes straight into countconnector.MetricInfo, with the raw
+// description overriding the "log-to-metric: <name>" default.
 func TestMetricInfo(t *testing.T) {
 	t.Parallel()
 
@@ -460,11 +447,9 @@ func TestMetricInfo(t *testing.T) {
 	}
 }
 
-// TestMetricInfoDefaultDescription is the regression test for a metric with
-// no raw config at all (e.g. declared purely to be fed by another source's
-// conditions, see LogMetricsConfig.Count's doc comment): it must still get a
-// usable default description and no conditions (which countconnector treats
-// as "count every log record unconditionally").
+// TestMetricInfoDefaultDescription checks that a metric with no raw config
+// still gets a usable default description and no conditions (which
+// countconnector treats as "count every log record unconditionally").
 func TestMetricInfoDefaultDescription(t *testing.T) {
 	t.Parallel()
 
@@ -482,12 +467,9 @@ func TestMetricInfoDefaultDescription(t *testing.T) {
 	}
 }
 
-// TestMetricInfoDecodeError is the regression test for the fix that stops a
-// malformed metric from silently turning into "count everything": a raw
-// config.LogMetricsCount that fails to decode (here, "conditions" given as a
-// bare string instead of a list) must return an error instead of an empty-
-// Conditions MetricInfo, which would otherwise pass countconnector's own
-// Validate() and silently match every log record.
+// TestMetricInfoDecodeError checks that a raw config.LogMetricsCount that
+// fails to decode returns an error, instead of an empty-Conditions MetricInfo
+// that would silently match every log record.
 func TestMetricInfoDecodeError(t *testing.T) {
 	t.Parallel()
 
@@ -520,5 +502,163 @@ func TestExtractLabels(t *testing.T) {
 
 	if got := extractLabels(nil); got != nil {
 		t.Errorf("Expected nil labels for an empty raw config, got %v", got)
+	}
+}
+
+func TestFilterCount(t *testing.T) {
+	t.Parallel()
+
+	count := map[string]config.LogMetricsCount{
+		"a": {"conditions": []any{`IsMatch(body, "a")`}},
+		"b": {"conditions": []any{`IsMatch(body, "b")`}},
+	}
+
+	if got := filterCount(count, nil, "ctx"); len(got) != 2 {
+		t.Errorf("Expected no scoping (nil names) to return count unchanged, got %v", got)
+	}
+
+	got := filterCount(count, []string{"a"}, "ctx")
+	if len(got) != 1 || got["a"] == nil {
+		t.Fatalf("Expected exactly metric %q, got %v", "a", got)
+	}
+
+	got = filterCount(count, []string{"a", "does_not_exist"}, "ctx")
+	if len(got) != 1 || got["a"] == nil {
+		t.Errorf("Expected the unknown name to be dropped, keeping only %q, got %v", "a", got)
+	}
+}
+
+func TestFilterSpecs(t *testing.T) {
+	t.Parallel()
+
+	specs := []metricSpec{{Metric: "a"}, {Metric: "b"}}
+
+	if got := filterSpecs(specs, nil); len(got) != 2 {
+		t.Errorf("Expected no scoping (nil names) to return specs unchanged, got %v", got)
+	}
+
+	got := filterSpecs(specs, []string{"b"})
+	if len(got) != 1 || got[0].Metric != "b" {
+		t.Fatalf("Expected exactly metric %q, got %v", "b", got)
+	}
+}
+
+func TestExtractSources(t *testing.T) {
+	t.Parallel()
+
+	if got := extractSources(nil); got != nil {
+		t.Errorf("Expected nil sources for an empty raw config, got %v", got)
+	}
+
+	if got := extractSources(config.LogMetricsCount{"sources": []any{}}); got != nil {
+		t.Errorf("Expected nil sources for an empty list, got %v", got)
+	}
+
+	got := extractSources(config.LogMetricsCount{"sources": []any{"app_full", "vault"}})
+
+	want := []string{"app_full", "vault"}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("Unexpected sources (-want +got):\n%s", diff)
+	}
+}
+
+// TestGroupMetricsByItem covers the 0/1/2+-sources item-assignment rules: a
+// global metric's item depends on its per_<kind>_item flag (see
+// TestExtractPerItemFlag), a metric naming only sourceName gets its own item,
+// a metric naming 2+ sources including sourceName merges into "", and a
+// metric naming sources that don't include sourceName isn't fed by it.
+func TestGroupMetricsByItem(t *testing.T) {
+	t.Parallel()
+
+	count := map[string]config.LogMetricsCount{
+		"global_metric":       {},
+		"scoped_to_self":      {"sources": []any{"recv-a"}},
+		"scoped_to_other":     {"sources": []any{"recv-b"}},
+		"merged_metric":       {"sources": []any{"recv-a", "recv-b"}},
+		"merged_metric_other": {"sources": []any{"recv-b", "recv-c"}},
+	}
+
+	got := groupMetricsByItem(count, "recv-a", kindReceiver)
+
+	want := map[string][]string{
+		"":       {"global_metric", "merged_metric"},
+		"recv-a": {"scoped_to_self"},
+	}
+
+	for item, names := range want {
+		slices.Sort(names)
+
+		gotNames := slices.Clone(got[item])
+		slices.Sort(gotNames)
+
+		if diff := cmp.Diff(names, gotNames); diff != "" {
+			t.Errorf("Unexpected metric names for item %q (-want +got):\n%s", item, diff)
+		}
+	}
+
+	if names, ok := got["recv-b"]; ok {
+		t.Errorf("recv-a should never produce a group for another source's item, got %v", names)
+	}
+
+	if slices.Contains(got[""], "merged_metric_other") || slices.Contains(got[""], "scoped_to_other") {
+		t.Errorf("recv-a should not be fed metrics scoped to other sources, got %v", got[""])
+	}
+}
+
+// TestGroupMetricsByItemPerKindFlags covers the per_<kind>_item override for
+// global (sourceless) metrics: a container gets its own item by default, a
+// receiver/network source doesn't -- and either can be flipped explicitly.
+func TestGroupMetricsByItemPerKindFlags(t *testing.T) {
+	t.Parallel()
+
+	count := map[string]config.LogMetricsCount{
+		"default_container": {},
+		"default_receiver":  {},
+		"opt_in_receiver":   {"per_receiver_item": true},
+		"opt_out_container": {"per_container_item": false},
+	}
+
+	gotContainer := groupMetricsByItem(count, "ctr-1", kindContainer)
+
+	if !slices.Contains(gotContainer["ctr-1"], "default_container") {
+		t.Errorf("Expected a container to get its own item by default, got groups %v", gotContainer)
+	}
+
+	if !slices.Contains(gotContainer[""], "opt_out_container") {
+		t.Errorf("Expected per_container_item:false to merge into item=\"\", got groups %v", gotContainer)
+	}
+
+	gotReceiver := groupMetricsByItem(count, "recv-1", kindReceiver)
+
+	if !slices.Contains(gotReceiver[""], "default_receiver") {
+		t.Errorf("Expected a receiver to share item=\"\" by default, got groups %v", gotReceiver)
+	}
+
+	if !slices.Contains(gotReceiver["recv-1"], "opt_in_receiver") {
+		t.Errorf("Expected per_receiver_item:true to give the receiver its own item, got groups %v", gotReceiver)
+	}
+}
+
+func TestExtractPerItemFlag(t *testing.T) {
+	t.Parallel()
+
+	if !extractPerItemFlag(config.LogMetricsCount{}, kindContainer) {
+		t.Error("Expected per_container_item to default to true")
+	}
+
+	if extractPerItemFlag(config.LogMetricsCount{}, kindReceiver) {
+		t.Error("Expected per_receiver_item to default to false")
+	}
+
+	if extractPerItemFlag(config.LogMetricsCount{}, kindNetwork) {
+		t.Error("Expected per_network_item to default to false")
+	}
+
+	if extractPerItemFlag(config.LogMetricsCount{"per_container_item": false}, kindContainer) {
+		t.Error("Expected an explicit per_container_item:false to override the default")
+	}
+
+	if !extractPerItemFlag(config.LogMetricsCount{"per_receiver_item": true}, kindReceiver) {
+		t.Error("Expected an explicit per_receiver_item:true to override the default")
 	}
 }

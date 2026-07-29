@@ -341,8 +341,8 @@ func (r *logReceiver) currentlyWatching() []string {
 	return slices.Collect(maps.Keys(r.watching))
 }
 
-// sizesByFile returns the size of each log file watched by this receiver.
-func (r *logReceiver) sizesByFile() (map[string]int64, error) {
+// SizesByFile returns the size of each log file watched by this receiver.
+func (r *logReceiver) SizesByFile() (map[string]int64, error) {
 	r.l.Lock()
 	defer r.l.Unlock()
 

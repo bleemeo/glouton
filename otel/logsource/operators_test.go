@@ -22,11 +22,10 @@ import (
 	"github.com/bleemeo/glouton/config"
 )
 
-// TestBuildOperatorsFromKnownFormat is a direct-package smoke test covering
-// exactly the path otel/logmetrics needs: resolving a known_log_formats-style
-// entry by name into stanza operator.Config values -- the fuller behavior
-// (recursive include expansion, error messages) is already covered by
-// otel/logprocessing's tests, which alias these same exported functions.
+// TestBuildOperatorsFromKnownFormat smoke-tests resolving a
+// known_log_formats-style entry by name into stanza operator.Config values;
+// fuller behavior is covered by otel/logprocessing's tests of the same
+// exported functions.
 func TestBuildOperatorsFromKnownFormat(t *testing.T) {
 	t.Parallel()
 

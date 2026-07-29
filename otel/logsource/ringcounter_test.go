@@ -63,11 +63,9 @@ func TestRingCounterDiscardAdvanceNoWrap(t *testing.T) {
 	}
 }
 
-// TestRingCounterDiscardWraparound is the regression test for the ring
-// wraparound bug (present in the pre-otel/logsource otel/logprocessing copy):
-// when the current second's bucket index wraps from size-1 back to 0, the
-// bucket at size-1 holds data written just one second earlier and must
-// survive -- only the newly-entered bucket 0 should be cleared.
+// TestRingCounterDiscardWraparound checks that when the bucket index wraps
+// from size-1 back to 0, only the newly-entered bucket 0 is cleared; size-1
+// still holds data from one second earlier and must survive.
 func TestRingCounterDiscardWraparound(t *testing.T) {
 	t.Parallel()
 

@@ -25,12 +25,12 @@ import (
 func TestNewNetworkSourceDisabled(t *testing.T) {
 	t.Parallel()
 
-	sink, _ := collectingSink()
+	reg, _ := testRegistry()
 
 	netCfg := config.LogMetricsNetworkReceiver{}
 	count := map[string]config.LogMetricsCount{"pushed_errors_count": {"conditions": []any{`IsMatch(body, "\\[error\\]")`}}}
 
-	src, err := newNetworkSource(t.Context(), testTelemetrySettings(), netCfg, count, sink)
+	src, err := newNetworkSource(t.Context(), testTelemetrySettings(), netCfg, count, specsForCount(count), reg)
 	if err != nil {
 		t.Fatal("Expected no error when no receivers are referenced, got:", err)
 	}
@@ -43,13 +43,13 @@ func TestNewNetworkSourceDisabled(t *testing.T) {
 func TestNewNetworkSourceNoCounters(t *testing.T) {
 	t.Parallel()
 
-	sink, _ := collectingSink()
+	reg, _ := testRegistry()
 
 	netCfg := config.LogMetricsNetworkReceiver{
 		Receivers: []string{"otlp"},
 	}
 
-	src, err := newNetworkSource(t.Context(), testTelemetrySettings(), netCfg, nil, sink)
+	src, err := newNetworkSource(t.Context(), testTelemetrySettings(), netCfg, nil, nil, reg)
 	if err != nil {
 		t.Fatal("Expected no error when no counters are configured, got:", err)
 	}
@@ -59,23 +59,21 @@ func TestNewNetworkSourceNoCounters(t *testing.T) {
 	}
 }
 
-// TestNewNetworkSourceBuildsConsumer verifies that, once a receiver is
-// referenced with at least one log.metrics.count entry configured (global,
-// see LogMetricsConfig's doc comment), newNetworkSource builds a usable
-// entry consumer and its connectors stop cleanly -- it no longer starts an
-// OTLP receiver itself (that's shared with otel/logprocessing, see
-// logsource.SetupOTLPNetworkReceiver/FanoutLogs, and tested there).
+// TestNewNetworkSourceBuildsConsumer checks that newNetworkSource builds a
+// usable entry consumer once a receiver is referenced with counters
+// configured, and that it no longer starts an OTLP receiver itself (that's
+// shared with otel/logprocessing and tested there).
 func TestNewNetworkSourceBuildsConsumer(t *testing.T) {
 	t.Parallel()
 
-	sink, _ := collectingSink()
+	reg, _ := testRegistry()
 
 	netCfg := config.LogMetricsNetworkReceiver{
 		Receivers: []string{"otlp"},
 	}
 	count := map[string]config.LogMetricsCount{"pushed_errors_count": {"conditions": []any{`IsMatch(body, "\\[error\\]")`}}}
 
-	src, err := newNetworkSource(t.Context(), testTelemetrySettings(), netCfg, count, sink)
+	src, err := newNetworkSource(t.Context(), testTelemetrySettings(), netCfg, count, specsForCount(count), reg)
 	if err != nil {
 		t.Fatal("Failed to build network source:", err)
 	}
@@ -89,23 +87,20 @@ func TestNewNetworkSourceBuildsConsumer(t *testing.T) {
 	}
 }
 
-// TestNewNetworkSourceSimpleEnableBuildsConsumer is the regression test for
-// the simple "enable: true" shortcut (config.OTLPNetworkParticipation/
-// LogMetricsNetworkReceiver.Enable): newNetworkSource must build a consumer
-// even with no Receivers named, as long as Enable is set -- resolving which
-// actual log.network.receivers entry that means is agent.go's job (see
-// config.ResolveNetworkReceivers), not this function's.
+// TestNewNetworkSourceSimpleEnableBuildsConsumer checks that
+// newNetworkSource builds a consumer with no Receivers named, as long as
+// Enable is set -- resolving the actual receiver is agent.go's job.
 func TestNewNetworkSourceSimpleEnableBuildsConsumer(t *testing.T) {
 	t.Parallel()
 
-	sink, _ := collectingSink()
+	reg, _ := testRegistry()
 
 	netCfg := config.LogMetricsNetworkReceiver{
 		Enable: true,
 	}
 	count := map[string]config.LogMetricsCount{"pushed_errors_count": {"conditions": []any{`IsMatch(body, "\\[error\\]")`}}}
 
-	src, err := newNetworkSource(t.Context(), testTelemetrySettings(), netCfg, count, sink)
+	src, err := newNetworkSource(t.Context(), testTelemetrySettings(), netCfg, count, specsForCount(count), reg)
 	if err != nil {
 		t.Fatal("Failed to build network source:", err)
 	}

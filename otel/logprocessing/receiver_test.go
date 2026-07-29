@@ -361,7 +361,7 @@ func TestFileLogReceiver(t *testing.T) {
 		t.Fatalf("Unexpected log lines (-want, +got):\n%s", diff)
 	}
 
-	fileSizes, err := recv.sizesByFile()
+	fileSizes, err := recv.SizesByFile()
 	if err != nil {
 		t.Fatal("Failed to get file sizes:", err)
 	}
@@ -495,7 +495,7 @@ func TestFileLogReceiverWithHostroot(t *testing.T) {
 		t.Fatalf("Unexpected log lines (-want, +got):\n%s", diff)
 	}
 
-	fileSizes, err := recv.sizesByFile()
+	fileSizes, err := recv.SizesByFile()
 	if err != nil {
 		t.Fatal("Failed to get file sizes:", err)
 	}

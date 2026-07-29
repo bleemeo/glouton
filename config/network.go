@@ -16,17 +16,13 @@
 
 package config
 
-// DefaultNetworkReceiverName is the log.network.receivers entry a feature's
-// simple "enable: true" participation (see OTLPNetworkParticipation,
-// LogMetricsNetworkReceiver) resolves to when it names no explicit receivers
-// of its own, and the entry EffectiveNetworkReceivers auto-provisions when
-// log.network.receivers is left completely empty.
+// DefaultNetworkReceiverName is the log.network.receivers entry auto-provisioned
+// by EffectiveNetworkReceivers for the simple "enable: true" shortcut.
 const DefaultNetworkReceiverName = "otlp"
 
-// ResolveNetworkReceivers returns the log.network.receivers entries a
-// participant pulls from: its own explicit receivers if any are named
-// (advanced mode -- enable is then irrelevant), or DefaultNetworkReceiverName
-// if it opted into the simple enable-only shortcut instead, or none.
+// ResolveNetworkReceivers returns the receivers a participant pulls from: its
+// own explicit list if set, else DefaultNetworkReceiverName if it just set
+// enable, else none.
 func ResolveNetworkReceivers(enable bool, receivers []string) []string {
 	if len(receivers) > 0 {
 		return receivers
@@ -40,14 +36,9 @@ func ResolveNetworkReceivers(enable bool, receivers []string) []string {
 }
 
 // EffectiveNetworkReceivers returns networkReceivers unchanged if it already
-// has any entry -- naming even one receiver yourself takes full manual
-// control, real OTel has no auto-provisioning either. Otherwise, if any
-// simpleWant is true (a participant opted into the simple enable-only
-// shortcut with no receivers of its own), it returns a single
-// DefaultNetworkReceiverName entry with both GRPC and HTTP on the standard
-// OTLP ports -- so the common single-listener case needs no receiver defined
-// anywhere. Returns networkReceivers unchanged (possibly empty) if no
-// participant wants the shortcut.
+// has an entry (naming one yourself disables auto-provisioning). Otherwise, if
+// any simpleWant is true, it auto-provisions a single DefaultNetworkReceiverName
+// entry on the standard OTLP ports.
 func EffectiveNetworkReceivers(networkReceivers map[string]NetworkReceiver, simpleWants ...bool) map[string]NetworkReceiver {
 	if len(networkReceivers) > 0 {
 		return networkReceivers

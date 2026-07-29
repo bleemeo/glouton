@@ -121,9 +121,9 @@ func makeSumMetrics(counts map[string]int64) pmetric.Metrics {
 	return md
 }
 
-// TestMetricsSink is the regression test for the OTel-native design: it feeds a
-// pmetric.Metrics (as the countconnector would produce) through the shared sink and
-// checks the matching counters — and only those — got incremented by the delta.
+// TestMetricsSink feeds a pmetric.Metrics (as countconnector would produce)
+// through the shared sink and checks only the matching counters get
+// incremented.
 func TestMetricsSink(t *testing.T) {
 	t.Parallel()
 
@@ -160,10 +160,9 @@ func TestMetricsSink(t *testing.T) {
 	}
 }
 
-// TestRegistryItemDisambiguation is the regression test for same-named metrics from
-// different containers merging into one series: resolving the same metric name under
-// two different items must return distinct counters, each independently addressable
-// via its own metricsSinkForItem, and each emitting its own labeled sample.
+// TestRegistryItemDisambiguation checks that resolving the same metric name
+// under two different items returns distinct counters, each independently
+// addressable and emitting its own labeled sample.
 func TestRegistryItemDisambiguation(t *testing.T) {
 	t.Parallel()
 

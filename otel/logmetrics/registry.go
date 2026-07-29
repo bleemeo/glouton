@@ -32,51 +32,36 @@ import (
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
-// metricSpec is a (name, labels) pair used for registry declare/resolve --
-// decoded once from a config.LogMetricsCount entry's own "labels" field (see
-// extractLabels, source.go), independent of the OTTL matching logic itself
-// (which countconnector handles directly from the raw config.LogMetricsCount,
-// see metricInfo). Since log.metrics.count is global (see
-// config.LogMetricsConfig's doc comment), the same []metricSpec is resolved
-// against every source, regardless of what actually produced it.
+// metricSpec is a (name, labels) pair used for registry declare/resolve,
+// decoded from a config.LogMetricsCount entry's "labels" field (see extractLabels, source.go).
 type metricSpec struct {
 	Metric string
 	Labels map[string]string
 }
 
-// windowSecs is the sliding window used for the "matches per second" rate,
-// mirroring the old Fluent Bit rate(...[1m]).
+// windowSecs is the sliding window for the "matches per second" rate, mirroring the old Fluent Bit rate(...[1m]).
 const windowSecs = 60
 
-// counter aggregates the delta counts reported by the countconnector for one
-// metric over a sliding window (matching itself happens via OTTL). item is ""
-// for non-container sources (static paths, network receiver), or the
-// container name for container sources -- see counterKey.
+// counter aggregates the delta counts for one metric over a sliding window.
+// item is "" for non-container sources, or the container name otherwise.
 type counter struct {
 	metric  string
 	item    string
 	counter *logsource.RingCounter
-	lbls    labels.Labels // precomputed once: never changes after creation, no need to rebuild it on every emit
+	lbls    labels.Labels // precomputed once, never rebuilt
 }
 
-// counterKey identifies one aggregated series: same metric name from
-// different items (e.g. different containers) must stay distinguishable, so
-// item is part of the identity, not just a label on a shared counter.
+// counterKey identifies one aggregated series; item is part of the identity so
+// the same metric name from different containers stays distinguishable.
 type counterKey struct {
 	metric string
 	item   string
 }
 
-// metricsRegistry holds one counter per (metric, item), shared across every
-// source that references the same pair, so same-named-same-item matches
-// aggregate (e.g. multiple static inputs feeding the same metric name).
+// metricsRegistry holds one counter per (metric, item), shared across sources so matches aggregate.
 type metricsRegistry struct {
-	l sync.Mutex
-	// declaredNames holds every metric name ever passed to declare() or
-	// resolve(), independent of whether a live counter exists yet for it --
-	// this is what feeds MetricNames()/allow-listing immediately at startup,
-	// before any container source has actually appeared and called resolve().
-	declaredNames map[string]bool
+	l             sync.Mutex
+	declaredNames map[string]bool // every name ever declared or resolved, feeds MetricNames()
 	counters      map[counterKey]*counter
 }
 
@@ -87,9 +72,7 @@ func newMetricsRegistry() *metricsRegistry {
 	}
 }
 
-// declare registers every spec's metric name for MetricNames()/allow-listing
-// purposes only, without creating a live, aggregatable counter -- resolve() is what
-// creates those, per source, once a source actually starts.
+// declare registers every spec's metric name for MetricNames(), without creating a live counter.
 func (reg *metricsRegistry) declare(specs []metricSpec) {
 	reg.l.Lock()
 	defer reg.l.Unlock()
@@ -99,10 +82,7 @@ func (reg *metricsRegistry) declare(specs []metricSpec) {
 	}
 }
 
-// resolve returns one counter per spec for the given item ("" for non-container
-// sources), creating it the first time this (metric, item) pair is seen; repeated
-// (metric, item) pairs share the same counter, and the first registration's Labels
-// win if a later declaration of the same metric name sets different ones.
+// resolve returns one counter per spec for item, creating it the first time this pair is seen.
 func (reg *metricsRegistry) resolve(specs []metricSpec, item string) []*counter {
 	reg.l.Lock()
 	defer reg.l.Unlock()
@@ -121,8 +101,7 @@ func (reg *metricsRegistry) resolve(specs []metricSpec, item string) []*counter 
 				lblMap = make(map[string]string, 2) //nolint:mnd
 			}
 
-			// Reserved keys are set last so they always win over an accidental
-			// same-name entry in a user's labels: map.
+			// Reserved keys set last so they win over a same-name user label.
 			lblMap[types.LabelName] = spec.Metric
 
 			if item != "" {
@@ -144,8 +123,7 @@ func (reg *metricsRegistry) resolve(specs []metricSpec, item string) []*counter 
 	return resolved
 }
 
-// metricNames returns every declared metric name (fed into the metric
-// allow-list, see agent.rebuildDynamicMetricAllowDenyList).
+// metricNames returns every declared metric name.
 func (reg *metricsRegistry) metricNames() []string {
 	reg.l.Lock()
 	defer reg.l.Unlock()
@@ -178,7 +156,6 @@ func (reg *metricsRegistry) emit(app storage.Appender) error {
 
 // metricsSinkForItem returns the "next" consumer for one source's countconnector,
 // adding each Sum data point's delta into the matching (metric, item) counter.
-// item should be "" for non-container sources.
 func (reg *metricsRegistry) metricsSinkForItem(item string) consumer.Metrics {
 	sink, err := consumer.NewMetrics(func(_ context.Context, md pmetric.Metrics) error {
 		reg.l.Lock()
@@ -204,8 +181,7 @@ func (reg *metricsRegistry) metricsSinkForItem(item string) consumer.Metrics {
 	return sink
 }
 
-// addSumDataPoints adds m's data points (Sum only, all countconnector emits) to
-// the matching (metric, item) counter. Caller must hold reg.l.
+// addSumDataPoints adds m's data points to the matching (metric, item) counter. Caller must hold reg.l.
 func (reg *metricsRegistry) addSumDataPoints(m pmetric.Metric, item string) {
 	if m.Type() != pmetric.MetricTypeSum {
 		return

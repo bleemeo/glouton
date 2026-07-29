@@ -41,21 +41,12 @@ import (
 var errUnexpectedConfig = errors.New("unexpected config type")
 
 // SetupOTLPNetworkReceiver builds, starts and returns an OTLP log receiver for
-// protocols (mirrors otlpreceiver.Config.Protocols: a nil field means that
-// protocol is disabled, its presence enables it -- same "configoptional"
-// convention real OTel itself uses, so config.NetworkProtocols can be passed
-// straight from config.NetworkReceiver.Protocols), forwarding everything it
-// receives to sink. idName should be unique per caller.
-//
-// Unlike a normal Collector config load, building receiverTypedCfg here never
-// goes through confmap's automatic validation, so this explicitly calls
-// Validate() itself: without it, a receiver with every protocol disabled
-// wouldn't error at all -- otlpReceiver.Start silently no-ops per protocol
-// when absent, so pushed logs would just vanish with nothing logged anywhere.
-//
-// The caller is responsible for wrapping sink with WrapWithInstrumentation
-// beforehand if it wants processed-count/throughput bookkeeping, and for
-// calling Shutdown on the returned receiver.
+// protocols (a nil field disables that protocol), forwarding everything it
+// receives to sink. idName should be unique per caller. Validate() is called
+// explicitly, since this bypasses confmap's automatic validation, or a
+// receiver with every protocol disabled would silently drop all logs instead
+// of erroring. The caller must wrap sink with WrapWithInstrumentation itself
+// if wanted, and call Shutdown on the returned receiver.
 func SetupOTLPNetworkReceiver(
 	ctx context.Context,
 	telemetry component.TelemetrySettings,
@@ -72,8 +63,7 @@ func SetupOTLPNetworkReceiver(
 	}
 
 	if protocols.GRPC != nil {
-		// Mutate the factory's default GRPC config in place (rather than building a
-		// ServerConfig from scratch) so defaults like ReadBufferSize survive.
+		// Mutate in place so defaults like ReadBufferSize survive.
 		grpc := receiverTypedCfg.Protocols.GRPC.GetOrInsertDefault()
 		if protocols.GRPC.Endpoint != "" {
 			grpc.NetAddr = confignet.AddrConfig{
@@ -86,9 +76,8 @@ func SetupOTLPNetworkReceiver(
 	}
 
 	if protocols.HTTP != nil {
-		// Same as above: mutate in place, so the factory's default TracesURLPath/
-		// MetricsURLPath/LogsURLPath survive (otlpreceiver panics on Start if the
-		// logs URL path is empty).
+		// Same as above: mutate in place so URL path defaults survive (Start
+		// panics if the logs URL path is empty).
 		http := receiverTypedCfg.Protocols.HTTP.GetOrInsertDefault()
 		if protocols.HTTP.Endpoint != "" {
 			http.ServerConfig.NetAddr = confignet.AddrConfig{
@@ -117,8 +106,7 @@ func SetupOTLPNetworkReceiver(
 		return nil, fmt.Errorf("failed to setup OTLP receiver: %w", err)
 	}
 
-	// otlpreceiver's gRPC startup path calls host.GetExtensions() unconditionally,
-	// so a nil component.Host (a nil interface, not just a nil map) panics.
+	// otlpreceiver calls host.GetExtensions() unconditionally, so a nil Host panics.
 	if err = otlpLogReceiver.Start(ctx, nopHost{}); err != nil {
 		if shutdownErr := otlpLogReceiver.Shutdown(ctx); shutdownErr != nil {
 			return nil, fmt.Errorf("failed to start OTLP receiver: %w (and failed to stop it too: %w)", err, shutdownErr)
@@ -131,9 +119,8 @@ func SetupOTLPNetworkReceiver(
 }
 
 // NewTelemetrySettings builds the component.TelemetrySettings every OTel
-// component constructed by otel/logprocessing and otel/logmetrics needs,
-// wired to Glouton's own logger and to no-op tracing/metrics providers (this
-// embedded usage never exports OTel's own telemetry about itself).
+// component needs, wired to Glouton's logger and no-op tracing/metrics
+// providers.
 func NewTelemetrySettings() component.TelemetrySettings {
 	return component.TelemetrySettings{
 		Logger:         logger.ZapLogger(),
@@ -144,12 +131,9 @@ func NewTelemetrySettings() component.TelemetrySettings {
 }
 
 // FanoutLogs returns a consumer.Logs that forwards every batch to every
-// non-nil sink, in argument order. Some consumers mutate a plog.Logs in place
-// (e.g. otel/logprocessing's resource-attribute processor adds "host.name" to
-// its resource attributes), so every sink after the first receives its own
-// deep copy -- mutations made while feeding one sink must never be visible to
-// another. Returns nil if every sink is nil, or the sink itself, unmodified
-// (no copy, not even wrapped), if there is exactly one.
+// non-nil sink, in argument order. Sinks may mutate a plog.Logs in place, so
+// every sink after the first gets its own deep copy. Returns nil if every
+// sink is nil, or the sink itself unmodified if there is exactly one.
 func FanoutLogs(sinks ...consumer.Logs) consumer.Logs {
 	active := make([]consumer.Logs, 0, len(sinks))
 
@@ -167,9 +151,8 @@ func FanoutLogs(sinks ...consumer.Logs) consumer.Logs {
 	}
 
 	fanout, err := consumer.NewLogs(func(ctx context.Context, ld plog.Logs) error {
-		// Every clone must be taken from the pristine ld before any sink runs:
-		// if a sink mutates its batch in place and only then we cloned from
-		// ld, a later sink would see that earlier mutation too.
+		// Clone from the pristine ld before any sink runs, or a later sink
+		// could see an earlier sink's mutation.
 		batches := make([]plog.Logs, len(active))
 		batches[0] = ld
 
@@ -194,12 +177,8 @@ func FanoutLogs(sinks ...consumer.Logs) consumer.Logs {
 }
 
 // NetworkWant describes one feature's opt-in to named shared network
-// receivers (config.Log.Network.Receivers): Consumer is its entry point, and
-// Receivers is the list of entries it pulls from -- mirrors an OTel
-// pipeline's own `receivers: [...]` list. A feature gets whatever protocols
-// each named receiver has configured; there's no separate per-protocol opt-in
-// at this level, same as real OTel (a pipeline either includes a receiver, in
-// full, or doesn't).
+// receivers: Consumer is its entry point, Receivers the names it pulls from.
+// A feature gets whatever protocols each named receiver has configured.
 type NetworkWant struct {
 	Consumer  consumer.Logs
 	Receivers []string
@@ -214,15 +193,9 @@ type PlannedReceiver struct {
 }
 
 // PlanSharedNetworkReceivers groups wants by receiver name, so features
-// naming the same config.Log.Network.Receivers entry share one physical
-// listener and one FanoutLogs sink, while features naming different entries
-// get independent listeners. An entry nobody references, or referenced but
-// producing no consumer, is omitted from the result -- there's nothing to
-// start. Each planned receiver's protocols come straight from that entry's
-// own config: unlike an earlier design, there's no "did a participant want
-// this protocol" derivation here, matching real OTel where a receiver's
-// protocols are intrinsic to the receiver, not to whichever pipelines include
-// it.
+// naming the same entry share one physical listener and one FanoutLogs sink.
+// An entry nobody references, or with no consumer, is omitted. Each planned
+// receiver's protocols come straight from that entry's own config.
 func PlanSharedNetworkReceivers(receivers map[string]config.NetworkReceiver, wants []NetworkWant) []PlannedReceiver {
 	consumersByName := make(map[string][]consumer.Logs)
 
@@ -247,6 +220,13 @@ func PlanSharedNetworkReceivers(receivers map[string]config.NetworkReceiver, wan
 	planned := make([]PlannedReceiver, 0, len(names))
 
 	for _, name := range names {
+		recv, ok := receivers[name]
+		if !ok {
+			logger.Printf("logsource: network receiver %q referenced but not defined in log.network.receivers", name)
+
+			continue
+		}
+
 		sink := FanoutLogs(consumersByName[name]...)
 		if sink == nil {
 			continue
@@ -254,7 +234,7 @@ func PlanSharedNetworkReceivers(receivers map[string]config.NetworkReceiver, wan
 
 		planned = append(planned, PlannedReceiver{
 			Name:      name,
-			Protocols: receivers[name].Protocols,
+			Protocols: recv.Protocols,
 			Sink:      sink,
 		})
 	}
@@ -262,9 +242,8 @@ func PlanSharedNetworkReceivers(receivers map[string]config.NetworkReceiver, wan
 	return planned
 }
 
-// nopHost is a component.Host with no extensions, sufficient for a receiver
-// that doesn't need to look any up (this OTLP receiver doesn't use auth
-// extensions).
+// nopHost is a component.Host with no extensions; this OTLP receiver doesn't
+// use auth extensions.
 type nopHost struct{}
 
 func (nopHost) GetExtensions() map[component.ID]component.Component {

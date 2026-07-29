@@ -100,11 +100,9 @@ func shouldUnmarshalYAMLToMapstructure(t reflect.Type) bool {
 
 	switch pkgPath := t.PkgPath(); {
 	case strings.HasPrefix(pkgPath, otelPackagePrefix):
-		// We only want to apply this particular way of unmarshalling to types that come from OpenTelemetry...
-		return true
+		return true // OpenTelemetry types
 	case pkgPath == "":
-		// ...but we also need to apply it to builtin types that may contain OpenTelemetry types.
-		return true
+		return true // builtin types, may contain OpenTelemetry types
 	default:
 		return false
 	}
@@ -118,9 +116,8 @@ type obsoleteUnmarshaler interface {
 }
 
 func unmarshalMapstructureHook(from reflect.Value, to reflect.Value) (any, error) {
-	// The purpose of this mapstructure hook is to call the UnmarshalYAML() method
-	// on types that define it in order to construct themselves correctly,
-	// while being not unmarshalling YAML, but decoding a slice of maps to a slice of [operator.Config].
+	// Calls UnmarshalYAML() on types that define it, even though we're decoding
+	// a slice of maps rather than unmarshalling YAML directly.
 	if !shouldUnmarshalYAMLToMapstructure(to.Type()) {
 		return from.Interface(), nil // returning the data as-is
 	}
@@ -153,12 +150,9 @@ func unmarshalMapstructureHook(from reflect.Value, to reflect.Value) (any, error
 	return from.Interface(), nil // return the data as-is
 }
 
-// QuietParserErrors defaults parser operators to on_error="send_quiet" when they
-// don't set on_error explicitly. Stanza's default is "send", which logs one ERROR
-// per line that fails to parse. For a high-volume source whose lines don't all
-// match (e.g. multi-line Postgres logs), that floods the logs and the logger's
-// de-duplication cache (see logger/zap.go) -- it only moves the parse-failure log
-// down to debug level, it still forwards the entry.
+// QuietParserErrors defaults parser operators to on_error="send_quiet" when
+// not set explicitly, since Stanza's "send" default logs one ERROR per line
+// that fails to parse, flooding high-volume sources.
 func QuietParserErrors(ops []config.OTELOperator) []config.OTELOperator {
 	const (
 		typeKey      = "type"
@@ -172,9 +166,7 @@ func QuietParserErrors(ops []config.OTELOperator) []config.OTELOperator {
 	for i, op := range ops {
 		out[i] = op
 
-		// Every stanza parser (regex_parser, json_parser, time_parser,
-		// severity_parser, key_value_parser, ...) logs one error per line that
-		// fails to parse when on_error is left at the default "send".
+		// Only parser-type operators log per-line errors.
 		if typ, _ := op[typeKey].(string); !strings.HasSuffix(typ, parserSuffix) {
 			continue
 		}

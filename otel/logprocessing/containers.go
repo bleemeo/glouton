@@ -280,7 +280,7 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 	return nil
 }
 
-func (cr *containerReceiver) sizesByFile() (map[string]int64, error) {
+func (cr *containerReceiver) SizesByFile() (map[string]int64, error) {
 	cr.l.Lock()
 	defer cr.l.Unlock()
 

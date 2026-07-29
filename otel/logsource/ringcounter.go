@@ -21,14 +21,9 @@ import (
 	"time"
 )
 
-// RingCounter is kind of a ring-buffer, but serves for storing
-// a count for each second of a sliding time window.
-// Its precision is hard-coded (1s), but its size is configurable.
-// When the Add method is called, the given delta is added
-// to the bucket that corresponds to the current second.
-// The buckets can be represented as a ring, so when we want to increment
-// the counter for, say, the 61st second after the first call, we start
-// a new loop over the buckets and replace the content of the 1st one.
+// RingCounter is a ring-buffer of per-second counts over a sliding window of
+// configurable size (precision is hard-coded to 1s). Add adds to the bucket
+// for the current second, wrapping around once the window is full.
 type RingCounter struct {
 	size         int
 	t0           int64
@@ -37,10 +32,8 @@ type RingCounter struct {
 	lastUpdateAt int64
 }
 
-// NewRingCounter initialises a new "throughput meter".
-// Since its granularity is 1 second, the size must be given as seconds as well.
-// The size must be strictly positive, otherwise it panics.
-// The Total method will then return the sum of the data recorded in a sliding time window of this width.
+// NewRingCounter creates a RingCounter with the given size in seconds; size
+// must be strictly positive, otherwise it panics.
 func NewRingCounter(size int) *RingCounter {
 	if size < 1 {
 		panic("ring counter size must be strictly positive")
@@ -54,9 +47,7 @@ func NewRingCounter(size int) *RingCounter {
 
 // Add records the given delta for the current second.
 func (rc *RingCounter) Add(delta int) {
-	// We want to insert the delta for the time when the method was called,
-	// so storing the time now rather than after acquiring the lock
-	// avoids distorting the measurement.
+	// Capture the time before acquiring the lock, to avoid distorting the measurement.
 	now := time.Now().Unix()
 
 	rc.l.Lock()
@@ -80,9 +71,7 @@ func (rc *RingCounter) Total() int {
 	defer rc.l.Unlock()
 
 	now := time.Now().Unix()
-	// If no data has been recorded for a moment until now,
-	// we need to flush the buckets corresponding to this period
-	// before evaluating the buckets' sum.
+	// Flush buckets for any gap since the last update before summing.
 	rc.discardOutdatedValues(now)
 
 	rc.lastUpdateAt = now
@@ -100,14 +89,11 @@ func (rc *RingCounter) discardOutdatedValues(now int64) {
 	idx := int(now-rc.t0) % rc.size
 	lastIdx := int(rc.lastUpdateAt-rc.t0) % rc.size
 
-	// If the latest update is older than the total size,
-	// it means that all the data is stale.
+	// All data is stale if the last update is older than the window size.
 	if int(now-rc.lastUpdateAt) >= rc.size {
 		rc.resetRange(0, rc.size-1)
 	} else if idx != lastIdx {
-		// lastIdx+1 must wrap around to 0 rather than clamp to rc.size-1,
-		// otherwise the bucket that was just written (lastIdx) gets spuriously
-		// re-zeroed instead of only the newly-entered one.
+		// Wrap lastIdx+1 to 0 so the just-written bucket isn't re-zeroed.
 		rc.resetRange((lastIdx+1)%rc.size, idx)
 	}
 }

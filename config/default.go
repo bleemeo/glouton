@@ -320,9 +320,8 @@ func DefaultConfig() Config { //nolint:maintidx
 		Log: Log{
 			HostRootPrefix: "/hostroot",
 			Inputs:         []LogInput{},
-			// No network receiver is pre-declared: like the real OpenTelemetry
-			// Collector, nothing is configured (and so nothing binds) until the
-			// user explicitly adds one under log.network.receivers.
+			// No network receiver is pre-declared; nothing binds until the user
+			// adds one under log.network.receivers.
 			Network: NetworkConfig{
 				Receivers: map[string]NetworkReceiver{},
 			},

@@ -113,7 +113,7 @@ func New(
 		persister,
 		addWarnings,
 		knownLogFormats,
-		getLastFileSizesFromCache(state),
+		logsource.GetLastFileSizesFromCache(state, logFileSizesCacheKey),
 		pipelineOpts,
 	)
 	if err != nil {
@@ -179,7 +179,7 @@ ctxLoop:
 			fileSizers := mergeLastFileSizes(man.pipeline.receivers, man.containerRecv)
 			man.pipeline.l.Unlock()
 
-			saveLastFileSizesToCache(man.state, fileSizers)
+			logsource.SaveLastFileSizesToCache(man.state, logFileSizesCacheKey, fileSizers)
 			man.persister.SaveToState(man.state)
 		}
 	}
@@ -197,7 +197,7 @@ ctxLoop:
 
 	man.pipeline.shutdownAll()
 
-	saveLastFileSizesToCache(man.state, mergeLastFileSizes(man.pipeline.receivers, man.containerRecv))
+	logsource.SaveLastFileSizesToCache(man.state, logFileSizesCacheKey, mergeLastFileSizes(man.pipeline.receivers, man.containerRecv))
 	man.persister.SaveToState(man.state)
 }
 

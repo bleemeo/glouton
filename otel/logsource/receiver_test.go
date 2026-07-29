@@ -20,9 +20,12 @@ import (
 	"os"
 	"testing"
 
+	"github.com/bleemeo/glouton/otel/execlogreceiver"
+
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/google/go-cmp/cmp"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/adapter"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver"
 	"go.opentelemetry.io/collector/component"
 )
@@ -37,9 +40,7 @@ func TestRetryConfigIsUpToDate(t *testing.T) {
 		t.Fatal("Failed to define consumerretry config:", err)
 	}
 
-	// Converting both consumerretryConfig and retryCfg to maps,
-	// so we can compare them easily.
-
+	// Compare as maps for an easier diff.
 	var consumerretryCfgMap, retryCfgMap map[string]any
 
 	err = mapstructure.Decode(consumerretryConfig, &consumerretryCfgMap)
@@ -57,11 +58,9 @@ func TestRetryConfigIsUpToDate(t *testing.T) {
 	}
 }
 
-// TestSetupLogReceiverFactoriesExtraRaw is the regression test for pasting an
-// existing OTel Collector filelogreceiver config almost verbatim: extraRaw
-// fields (here, Encoding) must land on the built FileLogConfig, while
-// Glouton's own authoritative fields (Include, StartAt for a never-seen
-// file) must still win over anything conflicting extraRaw might set.
+// TestSetupLogReceiverFactoriesExtraRaw checks that extraRaw fields (e.g.
+// Encoding) land on the built FileLogConfig, while Glouton's own
+// authoritative fields (Include, StartAt) still win over conflicting ones.
 func TestSetupLogReceiverFactoriesExtraRaw(t *testing.T) {
 	t.Parallel()
 
@@ -129,5 +128,167 @@ func TestSetupLogReceiverFactoriesExtraRaw(t *testing.T) {
 
 	if len(fileCfg.InputConfig.Include) != 1 || fileCfg.InputConfig.Include[0] != tmpFile.Name() {
 		t.Errorf("Expected Glouton's own Include to be set to the resolved file, got %v", fileCfg.InputConfig.Include)
+	}
+}
+
+// TestSetupLogReceiverFactoriesKnownFileDoesNotForceStartAtEnd checks that a
+// lastFileSizes entry alone is enough to avoid forcing StartAt="end" again,
+// even with no persister -- otherwise backlog would be skipped on every
+// restart, not just the first time a file is seen.
+func TestSetupLogReceiverFactoriesKnownFileDoesNotForceStartAtEnd(t *testing.T) {
+	t.Parallel()
+
+	tmpFile, err := os.CreateTemp(t.TempDir(), "app-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer tmpFile.Close()
+
+	extraRaw := map[string]any{"start_at": "beginning"}
+
+	lastFileSizes := map[string]int64{tmpFile.Name(): 0} // already seen before, at size 0
+
+	factories, readable, exec, _, err := SetupLogReceiverFactories(
+		[]string{tmpFile.Name()},
+		"",
+		nil,
+		lastFileSizes,
+		nil,
+		func(string) *component.ID { return nil },
+		StatFile,
+		nil,
+		extraRaw,
+	)
+	if err != nil {
+		t.Fatal("SetupLogReceiverFactories returned an error:", err)
+	}
+
+	if len(readable) != 1 || len(exec) != 0 {
+		t.Fatalf("Expected exactly 1 directly-readable file and no exec fallback, got readable=%v exec=%v", readable, exec)
+	}
+
+	var fileCfg *filelogreceiver.FileLogConfig
+
+	for _, cfg := range factories {
+		fileCfg, _ = cfg.(*filelogreceiver.FileLogConfig)
+	}
+
+	if fileCfg == nil {
+		t.Fatal("Expected a *filelogreceiver.FileLogConfig")
+	}
+
+	if fileCfg.InputConfig.StartAt != "beginning" {
+		t.Errorf(`Expected StartAt to be left at extraRaw's "beginning" for an already-known file, got %q`, fileCfg.InputConfig.StartAt)
+	}
+}
+
+// TestSetupLogReceiverFactoriesExtraRawOperatorsStripped checks that an
+// unexpanded "operators" shorthand left in extraRaw is stripped instead of
+// reaching decodeRawReceiverConfig, which would reject it.
+func TestSetupLogReceiverFactoriesExtraRawOperatorsStripped(t *testing.T) {
+	t.Parallel()
+
+	tmpFile, err := os.CreateTemp(t.TempDir(), "app-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer tmpFile.Close()
+
+	extraRaw := map[string]any{
+		"operators": []any{map[string]any{"include": "some_format"}}, // shorthand, no "type" key
+	}
+
+	expandedOperators := []operator.Config{}
+
+	factories, readable, exec, _, err := SetupLogReceiverFactories(
+		[]string{tmpFile.Name()},
+		"",
+		expandedOperators,
+		nil,
+		nil,
+		func(string) *component.ID { return nil },
+		StatFile,
+		nil,
+		extraRaw,
+	)
+	if err != nil {
+		t.Fatal("SetupLogReceiverFactories returned an error (extraRaw's raw operators shorthand should have been stripped):", err)
+	}
+
+	if len(factories) != 1 {
+		t.Fatalf("Expected exactly 1 factory, got %d", len(factories))
+	}
+
+	if len(readable) != 1 || len(exec) != 0 {
+		t.Fatalf("Expected exactly 1 directly-readable file and no exec fallback, got readable=%v exec=%v", readable, exec)
+	}
+
+	// The original extraRaw map must not have been mutated (it's often reused
+	// across calls, e.g. on every retry of a pending static source).
+	if _, stillPresent := extraRaw["operators"]; !stillPresent {
+		t.Error("Expected the caller's extraRaw map to be left untouched")
+	}
+}
+
+// TestSetupLogReceiverFactoriesExtraRawSudoFallback checks that extraRaw
+// settings (encoding, multiline) also apply on the execlogreceiver (sudo-tail)
+// fallback path, not just the direct-read one.
+func TestSetupLogReceiverFactoriesExtraRawSudoFallback(t *testing.T) {
+	t.Parallel()
+
+	extraRaw := map[string]any{
+		"encoding":  "utf-16le",
+		"multiline": map[string]any{"line_start_pattern": `^\d{4}-\d{2}-\d{2}`},
+	}
+
+	forceSudoStatFile := func(_, _ string, _ CommandRunner) (ignore, needSudo bool, sizeFn func() (int64, error)) {
+		return false, true, func() (int64, error) { return 0, nil }
+	}
+
+	factories, readable, exec, _, err := SetupLogReceiverFactories(
+		[]string{"/some/protected.log"},
+		"",
+		nil,
+		nil,
+		nil,
+		func(string) *component.ID { return nil },
+		forceSudoStatFile,
+		nil,
+		extraRaw,
+	)
+	if err != nil {
+		t.Fatal("SetupLogReceiverFactories returned an error:", err)
+	}
+
+	if len(readable) != 0 {
+		t.Fatalf("Expected no directly-readable file, got %v", readable)
+	}
+
+	if len(exec) != 1 {
+		t.Fatalf("Expected exactly 1 exec fallback file, got %v", exec)
+	}
+
+	if len(factories) != 1 {
+		t.Fatalf("Expected exactly 1 factory, got %d", len(factories))
+	}
+
+	var execCfg *execlogreceiver.ExecLogConfig
+
+	for _, cfg := range factories {
+		execCfg, _ = cfg.(*execlogreceiver.ExecLogConfig)
+	}
+
+	if execCfg == nil {
+		t.Fatal("Expected a *execlogreceiver.ExecLogConfig")
+	}
+
+	if execCfg.InputConfig.Encoding != "utf-16le" {
+		t.Errorf("Expected extraRaw's encoding to apply to the sudo-tail fallback too, got %q", execCfg.InputConfig.Encoding)
+	}
+
+	if execCfg.InputConfig.SplitConfig.LineStartPattern != `^\d{4}-\d{2}-\d{2}` {
+		t.Errorf("Expected extraRaw's multiline config to apply to the sudo-tail fallback too, got %q", execCfg.InputConfig.SplitConfig.LineStartPattern)
 	}
 }

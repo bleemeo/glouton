@@ -46,16 +46,16 @@ import (
 )
 
 // Package logmetrics counts log lines matching a regex and reports the rate as a
-// metric, via filelogreceiver + countconnector (OTTL matching). Independent from
-// otel/logprocessing: never ships log content, works without log shipping or
-// Bleemeo enabled.
+// metric, via filelogreceiver + countconnector. Independent from
+// otel/logprocessing: never ships log content.
 
 const updateInterval = time.Minute
 
 const (
-	persistStorageType = "glouton_log_metrics_storage"
-	persistCacheKey    = "LogMetricsFileMetadata"
-	persistArchivePath = "log-to-metrics/persister.json"
+	persistStorageType    = "glouton_log_metrics_storage"
+	persistCacheKey       = "LogMetricsFileMetadata"
+	persistArchivePath    = "log-to-metrics/persister.json"
+	lastFileSizesCacheKey = "LogMetricsFileSizes"
 )
 
 // Manager tails log sources (static paths, and dynamically-resolved container log
@@ -67,36 +67,30 @@ type Manager struct {
 	state     bleemeoTypes.State
 	telemetry component.TelemetrySettings
 
-	// knownLogFormats is cfg.OpenTelemetry.KnownLogFormats, expanded once (see
-	// logsource.ExpandLogFormats) -- shared with otel/logprocessing only in
-	// the sense that both read the same config.OpenTelemetry.KnownLogFormats
-	// section; log-to-metric never ships anything anywhere, this only makes
-	// parsed attributes available to a receiver's own counters.
+	// knownLogFormats is cfg.OpenTelemetry.KnownLogFormats, expanded once.
 	knownLogFormats map[string][]config.OTELOperator
 
-	reg *metricsRegistry
-	// sink is the item="" sink, shared by every non-container source (static, network).
-	sink          consumer.Metrics
-	persister     *logsource.PersistHost // nil if persistence setup failed; sources then run without a StorageID
+	reg           *metricsRegistry
+	persister     *logsource.PersistHost // nil if persistence setup failed
+	lastFileSizes map[string]int64       // cross-restart "have we ever seen this file" cache
 	commandRunner logsource.CommandRunner
 
 	// metricSpecs is cfg.Metrics.Count, reduced once to what the registry
-	// needs (name + labels) -- since Count is global (see
-	// LogMetricsConfig.Count's doc comment), the same []metricSpec is
-	// resolved against every source, regardless of what actually produced it.
+	// needs (name + labels); resolved against every source since Count is global.
 	metricSpecs []metricSpec
 
 	l                 sync.Mutex
 	staticSources     []*source
-	pendingStatic     []pendingStaticSource // static sources that found no log file yet, retried every updateInterval
-	containerSources  map[string]*source    // map key: container ID
-	watchedContainers map[string]string     // map key: container ID -> container name, for diagnostics
+	pendingStatic     []pendingStaticSource // no log file yet, retried every updateInterval
+	containerSources  map[string]*source    // key: container ID
+	watchedContainers map[string]string     // key: container ID -> name, for diagnostics
 	networkSource     *networkSource        // nil if disabled or unconfigured
 }
 
 // pendingStaticSource is a static source spec that failed to resolve to any
-// log file at the time it was attempted (e.g. the file doesn't exist yet).
+// log file yet, retried every updateInterval.
 type pendingStaticSource struct {
+	name            string
 	include         []string
 	formatOperators []operator.Config
 	extraRaw        map[string]any
@@ -114,13 +108,12 @@ func New(ctx context.Context, cfg config.Log, hostroot string, runtime crTypes.R
 		StorageType: persistStorageType,
 		CacheKey:    persistCacheKey,
 		ArchivePath: persistArchivePath,
-		// Unlike otel/logprocessing, keep every receiver's metadata on every save
-		// (not just the ones touched this run): a log-to-metric source that's
-		// simply idle (no matching line since restart) must not lose its offset.
+		// Keep every receiver's metadata on every save, unlike otel/logprocessing:
+		// an idle source must not lose its offset.
 		FullSnapshot: true,
 	})
 	if err != nil {
-		logger.V(1).Printf("logmetrics: persistence disabled, read offsets won't survive a restart: %v", err)
+		logger.Printf("logmetrics: persistence disabled, read offsets won't survive a restart: %v", err)
 	}
 
 	man := &Manager{
@@ -138,30 +131,26 @@ func New(ctx context.Context, cfg config.Log, hostroot string, runtime crTypes.R
 			Resource:       pcommon.NewResource(),
 		},
 		reg:               reg,
-		sink:              reg.metricsSinkForItem(""),
 		persister:         persister,
+		lastFileSizes:     logsource.GetLastFileSizesFromCache(state, lastFileSizesCacheKey),
 		containerSources:  make(map[string]*source),
 		watchedContainers: make(map[string]string),
 	}
 
 	// Declare every configured metric name so MetricNames() is complete
-	// immediately, without waiting for a dynamically-resolved source (container) to appear.
+	// immediately, without waiting for a container source to appear.
 	man.reg.declare(man.metricSpecs)
 
-	// Built eagerly (rather than in Run, like static/container sources) so
-	// NetworkLogsConsumer is available immediately for the shared network
-	// receiver's owner to wire in, before Run ever starts.
+	// Built eagerly, before Run, so NetworkLogsConsumer is ready for the
+	// shared network receiver's owner to wire in.
 	man.startNetworkSource(ctx)
 
 	return man
 }
 
-// NetworkLogsConsumer returns the entry point log-to-metric wants to receive
-// externally-pushed logs on, or nil if this feature didn't opt into the
-// shared network receiver (no counters configured, or GRPC/HTTP both
-// disabled). The caller (the shared OTLP receiver owner, see
-// logsource.FanoutLogs) is responsible for actually starting the physical
-// listener.
+// NetworkLogsConsumer returns the entry point for externally-pushed logs, or
+// nil if this feature didn't opt into the shared network receiver. The caller
+// (see logsource.FanoutLogs) starts the actual listener.
 func (man *Manager) NetworkLogsConsumer() consumer.Logs {
 	man.l.Lock()
 	defer man.l.Unlock()
@@ -174,18 +163,9 @@ func (man *Manager) NetworkLogsConsumer() consumer.Logs {
 }
 
 // resolveReceiverFormatOperators builds the stanza operators for a receiver's
-// LogFormat (an OpenTelemetry.KnownLogFormats reference), if set -- the
-// receiver's own operators/log_format are Glouton's own additions layered on
-// top of the otherwise-raw config.LogMetricsReceiver (see its doc comment).
-// Returns nil (no operators, not an error) if LogFormat is unset, references
-// an unknown format, or fails to build -- each case just logs a warning and
-// leaves the receiver parsing nothing beyond its raw body text, same fallback
-// behavior as an unknown known_log_formats reference elsewhere in this
-// package.
+// LogFormat (a KnownLogFormats reference), if set. Returns nil (not an error)
+// if LogFormat is unset, unknown, or fails to build, logging a warning instead.
 func (man *Manager) resolveReceiverFormatOperators(name string, rawOperators []config.OTELOperator, logFormat string) []operator.Config {
-	// Operators run first -- expanded the same way otel/logprocessing does, so
-	// a single-key {"include": name} entry can reference a KnownLogFormats
-	// group in place, mixed in with other raw operators.
 	expandedOps, err := logsource.ExpandOperators(rawOperators, man.knownLogFormats, false)
 	if err != nil {
 		logger.V(1).Printf("logmetrics: receiver %q: failed to expand operators: %v", name, err)
@@ -204,8 +184,7 @@ func (man *Manager) resolveReceiverFormatOperators(name string, rawOperators []c
 		return ops
 	}
 
-	// LogFormat's whole group is appended after, same order otel/logprocessing
-	// combines OTLPReceiver.Operators and OTLPReceiver.LogFormat.
+	// LogFormat's group is appended after, same order as OTLPReceiver.
 	formatRawOps, ok := man.knownLogFormats[logFormat]
 	if !ok {
 		logger.V(1).Printf("logmetrics: receiver %q requires an unknown log format %q", name, logFormat)
@@ -224,10 +203,8 @@ func (man *Manager) resolveReceiverFormatOperators(name string, rawOperators []c
 }
 
 // collectAllCounters reduces every log.metrics.count entry down to what the
-// registry needs (name + labels) for MetricNames()/allow-listing and label
-// assignment -- the OTTL matching logic itself lives entirely in
-// countconnector.MetricInfo (see metricInfo, source.go), decoded straight
-// from the same raw entries.
+// registry needs (name + labels). The OTTL matching logic itself lives in
+// countconnector.MetricInfo (see metricInfo, source.go).
 func collectAllCounters(cfg config.Log) []metricSpec {
 	specs := make([]metricSpec, 0, len(cfg.Metrics.Count))
 
@@ -238,12 +215,9 @@ func collectAllCounters(cfg config.Log) []metricSpec {
 	return specs
 }
 
-// Run starts static sources once, then every updateInterval starts/stops container
-// sources as containers appear/disappear (skipped if cfg has no container-based
-// rule), retries static sources that found no log file yet (e.g. not created at
-// startup), starts watching any new file matching an already-running static
-// source's include pattern (e.g. daily-rotated logs), and saves persisted read
-// offsets to the state cache.
+// Run starts static sources once, then every updateInterval starts/stops
+// container sources as containers appear/disappear, retries pending static
+// sources, picks up newly-matching files, and saves persisted read offsets.
 func (man *Manager) Run(ctx context.Context) error {
 	defer crashreport.ProcessPanic()
 
@@ -273,18 +247,30 @@ func (man *Manager) Run(ctx context.Context) error {
 	return ctx.Err()
 }
 
-// saveState persists every source's read offset to the state cache, so a Glouton
-// restart resumes tailing where it left off instead of skipping to the file's end.
+// saveState persists every source's read offset so a restart resumes tailing
+// where it left off, and updates the coarser lastFileSizes fallback cache.
 func (man *Manager) saveState() {
 	if man.persister != nil {
 		man.persister.SaveToState(man.state)
 	}
+
+	man.l.Lock()
+	sizers := make([]logsource.FileSizer, 0, len(man.staticSources)+len(man.containerSources))
+
+	for _, src := range man.staticSources {
+		sizers = append(sizers, src)
+	}
+
+	for _, src := range man.containerSources {
+		sizers = append(sizers, src)
+	}
+	man.l.Unlock()
+
+	logsource.SaveLastFileSizesToCache(man.state, lastFileSizesCacheKey, sizers)
 }
 
-// hasHostRoot reports whether Glouton runs with a non-trivial hostroot (i.e.
-// containerized, with the host filesystem bind-mounted): a sudo-tail fallback
-// can't reach a path that only makes sense under that mount, since the sudo
-// command runs in Glouton's own mount namespace, not the host's.
+// hasHostRoot reports whether Glouton runs containerized with the host
+// filesystem bind-mounted, in which case a sudo-tail fallback can't reach it.
 func (man *Manager) hasHostRoot() bool {
 	return len(man.hostroot) > len(string(os.PathSeparator))
 }
@@ -312,33 +298,30 @@ func (man *Manager) startStaticSources(ctx context.Context) {
 			include[i] = filepath.Join(man.hostroot, pattern)
 		}
 
-		man.startStaticSource(ctx, include, man.resolveReceiverFormatOperators(name, fields.Operators, fields.LogFormat), recv)
+		man.startStaticSource(ctx, name, include, man.resolveReceiverFormatOperators(name, fields.Operators, fields.LogFormat), recv)
 	}
 }
 
-func (man *Manager) startStaticSource(ctx context.Context, include []string, formatOperators []operator.Config, extraRaw map[string]any) {
-	if len(man.cfg.Metrics.Count) == 0 {
-		return
-	}
-
-	man.reg.resolve(man.metricSpecs, "")
-
-	src, err := newSource(ctx, man.telemetry, include, false, man.hasHostRoot(), man.cfg.Metrics.Count, formatOperators, extraRaw, man.sink, man.persister, man.commandRunner, logsource.StatFile, staticSourceName(include))
+func (man *Manager) startStaticSource(
+	ctx context.Context,
+	name string,
+	include []string,
+	formatOperators []operator.Config,
+	extraRaw map[string]any,
+) {
+	src, err := newSource(ctx, man.telemetry, include, false, man.hasHostRoot(), man.cfg.Metrics.Count, formatOperators, extraRaw, man.metricSpecs, name, kindReceiver, man.reg, man.persister, man.lastFileSizes, man.commandRunner, logsource.StatFile, staticSourceName(include))
 	if err != nil {
 		if errors.Is(err, errNoLogFileFound) {
 			logger.V(1).Printf("logmetrics: no log file yet for %v, will retry: %v", include, err)
 
-			man.pendingStatic = append(man.pendingStatic, pendingStaticSource{include: include, formatOperators: formatOperators, extraRaw: extraRaw})
+			man.pendingStatic = append(man.pendingStatic, pendingStaticSource{
+				name: name, include: include, formatOperators: formatOperators, extraRaw: extraRaw,
+			})
 
 			return
 		}
 
-		// Not a "the file doesn't exist yet" situation (e.g. every metric's
-		// condition is invalid, or a raw receiver field failed to decode) --
-		// retrying wouldn't help, since nothing about this changes without a
-		// config change and a restart, so this doesn't go through
-		// pendingStatic at all: it would otherwise retry forever against the
-		// same unfixable error.
+		// Not a missing-file situation, so retrying won't help: skip pendingStatic.
 		logger.Printf("logmetrics: failed to start source for %v: %v", include, err)
 
 		return
@@ -347,8 +330,7 @@ func (man *Manager) startStaticSource(ctx context.Context, include []string, for
 	man.staticSources = append(man.staticSources, src)
 }
 
-// retryPendingStaticSources retries static sources that previously found no
-// log file at all yet (e.g. not created yet at startup).
+// retryPendingStaticSources retries static sources that previously found no log file yet.
 func (man *Manager) retryPendingStaticSources(ctx context.Context) {
 	man.l.Lock()
 	defer man.l.Unlock()
@@ -360,16 +342,12 @@ func (man *Manager) retryPendingStaticSources(ctx context.Context) {
 	stillPending := man.pendingStatic[:0]
 
 	for _, pending := range man.pendingStatic {
-		man.reg.resolve(man.metricSpecs, "")
-
-		src, err := newSource(ctx, man.telemetry, pending.include, false, man.hasHostRoot(), man.cfg.Metrics.Count, pending.formatOperators, pending.extraRaw, man.sink, man.persister, man.commandRunner, logsource.StatFile, staticSourceName(pending.include))
+		src, err := newSource(ctx, man.telemetry, pending.include, false, man.hasHostRoot(), man.cfg.Metrics.Count, pending.formatOperators, pending.extraRaw, man.metricSpecs, pending.name, kindReceiver, man.reg, man.persister, man.lastFileSizes, man.commandRunner, logsource.StatFile, staticSourceName(pending.include))
 		if err != nil {
 			if errors.Is(err, errNoLogFileFound) {
 				stillPending = append(stillPending, pending)
 			} else {
-				// The file showed up, but something else now fails (e.g. its
-				// counters are invalid) -- same reasoning as startStaticSource:
-				// stop retrying, it won't self-resolve.
+				// The file showed up but something else now fails; won't self-resolve.
 				logger.Printf("logmetrics: giving up on source for %v: %v", pending.include, err)
 			}
 
@@ -383,8 +361,7 @@ func (man *Manager) retryPendingStaticSources(ctx context.Context) {
 }
 
 // updateStaticSources starts a receiver for any file newly matching an
-// already-running static source's include pattern (e.g. a daily-rotated log),
-// without disturbing already-running receivers for that same source.
+// already-running static source's include pattern.
 func (man *Manager) updateStaticSources(ctx context.Context) {
 	man.l.Lock()
 	defer man.l.Unlock()
@@ -396,7 +373,7 @@ func (man *Manager) updateStaticSources(ctx context.Context) {
 	}
 }
 
-// staticSourceName is a stable persisted-offset identity for a static source, across restarts.
+// staticSourceName is a stable persisted-offset identity for a static source.
 func staticSourceName(include []string) string {
 	return "path:" + strings.Join(include, ",")
 }
@@ -408,23 +385,21 @@ func (man *Manager) startNetworkSource(ctx context.Context) {
 
 	netCfg := man.cfg.Metrics.Network
 	if len(netCfg.Receivers) == 0 && !netCfg.Enable {
-		return // nothing to resolve either: no "" item source will ever exist to feed it
+		return
 	}
 
-	man.reg.resolve(man.metricSpecs, "")
-
-	src, err := newNetworkSource(ctx, man.telemetry, netCfg, man.cfg.Metrics.Count, man.sink)
+	src, err := newNetworkSource(ctx, man.telemetry, netCfg, man.cfg.Metrics.Count, man.metricSpecs, man.reg)
 	if err != nil {
 		logger.V(1).Printf("logmetrics: failed to start network source: %v", err)
 
 		return
 	}
 
-	man.networkSource = src // nil if disabled or unconfigured, which is fine
+	man.networkSource = src
 }
 
-// updateContainerSources resolves the live container list and starts a source for
-// every newly-matching container, stopping sources for containers that disappeared.
+// updateContainerSources resolves the live container list, starts a source for
+// every newly-matching container, and stops sources for containers that disappeared.
 func (man *Manager) updateContainerSources(ctx context.Context) {
 	containers, err := man.runtime.Containers(ctx, updateInterval, false)
 	if err != nil {
@@ -441,11 +416,22 @@ func (man *Manager) updateContainerSources(ctx context.Context) {
 	for _, ctr := range containers {
 		currentIDs[ctr.ID()] = true
 
-		if _, alreadyWatched := man.containerSources[ctr.ID()]; alreadyWatched {
+		src, alreadyWatched := man.containerSources[ctr.ID()]
+		watched := isContainerWatched(man.cfg, ctr)
+
+		if alreadyWatched && !watched {
+			// Still running, but no longer matches (e.g. label removed); re-checked every tick.
+			if err := src.stop(ctx); err != nil {
+				logger.V(1).Printf("logmetrics: failed to stop source for container %s: %v", ctr.ID(), err)
+			}
+
+			delete(man.containerSources, ctr.ID())
+			delete(man.watchedContainers, ctr.ID())
+
 			continue
 		}
 
-		if !isContainerWatched(man.cfg, ctr) {
+		if alreadyWatched || !watched {
 			continue
 		}
 
@@ -456,14 +442,10 @@ func (man *Manager) updateContainerSources(ctx context.Context) {
 			continue
 		}
 
-		// The container ID is a stable identity across a Glouton restart as long as
-		// the same container instance is still running (it changes if the container
-		// itself is recreated, which is fine: that's effectively a new log source).
+		// Container ID is a stable identity as long as the same instance keeps running.
 		name := "container:" + ctr.ID()
 
-		man.reg.resolve(man.metricSpecs, ctr.ContainerName())
-
-		src, err := newSource(ctx, man.telemetry, []string{logPath}, true, man.hasHostRoot(), man.cfg.Metrics.Count, nil, nil, man.reg.metricsSinkForItem(ctr.ContainerName()), man.persister, man.commandRunner, logsource.StatFile, name)
+		src, err := newSource(ctx, man.telemetry, []string{logPath}, true, man.hasHostRoot(), man.cfg.Metrics.Count, nil, nil, man.metricSpecs, ctr.ContainerName(), kindContainer, man.reg, man.persister, man.lastFileSizes, man.commandRunner, logsource.StatFile, name)
 		if err != nil {
 			logger.V(1).Printf("logmetrics: failed to start source for container %s (%s): %v", ctr.ContainerName(), ctr.ID(), err)
 
@@ -511,14 +493,13 @@ func (man *Manager) stopAll(ctx context.Context) {
 	}
 }
 
-// EmitMetrics implements registry.AppenderFunc, reporting the current "matches per
-// second" rate of every configured log-to-metric counter.
+// EmitMetrics implements registry.AppenderFunc, reporting the current rate of
+// every configured log-to-metric counter.
 func (man *Manager) EmitMetrics(_ context.Context, _ registry.GatherState, app storage.Appender) error {
 	return man.reg.emit(app)
 }
 
-// MetricNames returns the name of every configured log-to-metric counter, so it can
-// be fed into the metric allow-list (see agent.rebuildDynamicMetricAllowDenyList).
+// MetricNames returns the name of every configured log-to-metric counter.
 func (man *Manager) MetricNames() []string {
 	return man.reg.metricNames()
 }
@@ -541,8 +522,8 @@ type containerSourceDiagnostic struct {
 // feature pulls from, for the diagnostic archive.
 type networkReceiverDiagnostic struct {
 	Name         string
-	GRPCEndpoint string // "" if this receiver has no GRPC protocol configured
-	HTTPEndpoint string // "" if this receiver has no HTTP protocol configured
+	GRPCEndpoint string // "" if not configured
+	HTTPEndpoint string // "" if not configured
 }
 
 // networkSourceDiagnostic describes the network source for the diagnostic archive.
@@ -584,18 +565,13 @@ func (man *Manager) DiagnosticArchive(_ context.Context, archive types.ArchiveWr
 
 	netCfg := man.cfg.Metrics.Network
 
-	// Like any other source, the network source (if active) counts against
-	// every log.metrics.count entry -- there's no separate counter list to
-	// read here (see LogMetricsNetworkReceiver's doc comment).
+	// The network source (if active) counts against every log.metrics.count entry.
 	metricNames := make([]string, 0, len(man.cfg.Metrics.Count))
 	for name := range man.cfg.Metrics.Count {
 		metricNames = append(metricNames, name)
 	}
 
-	// netCfg.Receivers only names which log.network.receivers entries this
-	// feature pulls from; their actual protocols/endpoints live there
-	// (man.cfg.Network), possibly shared with otel/logprocessing if it
-	// references the same entry.
+	// netCfg.Receivers only names entries; protocols/endpoints live in man.cfg.Network.
 	receiversInfo := make([]networkReceiverDiagnostic, 0, len(netCfg.Receivers))
 
 	for _, name := range netCfg.Receivers {

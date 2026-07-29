@@ -122,10 +122,9 @@ func (m *memoryState) BleemeoCredentials() (string, string)            { return 
 func (m *memoryState) SetBleemeoCredentials(string, string) error      { return nil }
 
 // TestManagerStaticSource is an end-to-end test of a plain path-based
-// receiver: a real file, a real OTel filelogreceiver+countconnector pipeline,
-// through the Manager. The receiver never references the metric by name --
-// log.metrics.count is global (see LogMetricsConfig's doc comment), so it
-// applies automatically to every watched source.
+// receiver through a real filelogreceiver+countconnector pipeline: the
+// receiver never names the metric, since log.metrics.count is global and
+// applies to every watched source automatically.
 func TestManagerStaticSource(t *testing.T) {
 	t.Parallel()
 
@@ -211,12 +210,296 @@ func TestManagerStaticSource(t *testing.T) {
 	}
 }
 
+// TestManagerScopedReceiversGetDistinctItems is the end-to-end test for
+// per-receiver metrics: scoping: two receivers, each scoped to its own
+// metric via an identical condition, must produce genuinely distinct
+// item-labeled series -- neither receiver's item ever reports the other's
+// metric, even though both conditions could match either file's content.
+func TestManagerScopedReceiversGetDistinctItems(t *testing.T) {
+	t.Parallel()
+
+	logFileA, err := os.CreateTemp(t.TempDir(), "app-a-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFileA.Close()
+
+	logFileB, err := os.CreateTemp(t.TempDir(), "app-b-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFileB.Close()
+
+	cfg := config.Log{
+		Metrics: config.LogMetricsConfig{
+			Receivers: map[string]config.LogMetricsReceiver{
+				"app_a": {"include": []string{logFileA.Name()}},
+				"app_b": {"include": []string{logFileB.Name()}},
+			},
+			Count: map[string]config.LogMetricsCount{
+				"metric_a": {"conditions": []any{`IsMatch(body, "error")`}, "sources": []any{"app_a"}},
+				"metric_b": {"conditions": []any{`IsMatch(body, "error")`}, "sources": []any{"app_b"}},
+			},
+		},
+	}
+
+	man := New(t.Context(), cfg, "/", &fakeRuntime{}, newMemoryState(), noExecRunner(t))
+
+	man.startStaticSources(t.Context())
+
+	defer man.stopAll(t.Context())
+
+	time.Sleep(500 * time.Millisecond)
+
+	if _, err := logFileA.WriteString("error in A\n"); err != nil {
+		t.Fatal("Failed to write log line:", err)
+	}
+
+	if _, err := logFileB.WriteString("error in B\n"); err != nil {
+		t.Fatal("Failed to write log line:", err)
+	}
+
+	if err := logFileA.Sync(); err != nil {
+		t.Fatal("Failed to sync log file:", err)
+	}
+
+	if err := logFileB.Sync(); err != nil {
+		t.Fatal("Failed to sync log file:", err)
+	}
+
+	time.Sleep(time.Second)
+
+	appender := glmodel.NewBufferAppender()
+
+	if err := man.EmitMetrics(t.Context(), registry.GatherState{}, appender); err != nil {
+		t.Fatal("EmitMetrics returned an error:", err)
+	}
+
+	mfs, err := appender.AsMF()
+	if err != nil {
+		t.Fatal("AsMF returned an error:", err)
+	}
+
+	gotItemByMetric := make(map[string]string, len(mfs))
+
+	for _, mf := range mfs {
+		for _, m := range mf.GetMetric() {
+			for _, lbl := range m.GetLabel() {
+				if lbl.GetName() == "item" {
+					gotItemByMetric[mf.GetName()] = lbl.GetValue()
+				}
+			}
+		}
+	}
+
+	if got := gotItemByMetric["metric_a"]; got != "app_a" {
+		t.Errorf(`Expected metric_a's item to be "app_a", got %q`, got)
+	}
+
+	if got := gotItemByMetric["metric_b"]; got != "app_b" {
+		t.Errorf(`Expected metric_b's item to be "app_b", got %q`, got)
+	}
+}
+
+// TestManagerUnscopedReceiversShareAggregateItem is the regression test
+// guarding against making item-per-receiver unconditional: two receivers
+// with no metrics: field must keep sharing item="" and summing into one
+// series, exactly like before this field existed -- e.g. for a metric
+// meant to aggregate matches across every source.
+func TestManagerUnscopedReceiversShareAggregateItem(t *testing.T) {
+	t.Parallel()
+
+	logFileA, err := os.CreateTemp(t.TempDir(), "app-a-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFileA.Close()
+
+	logFileB, err := os.CreateTemp(t.TempDir(), "app-b-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFileB.Close()
+
+	cfg := config.Log{
+		Metrics: config.LogMetricsConfig{
+			Receivers: map[string]config.LogMetricsReceiver{
+				"app_a": {"include": []string{logFileA.Name()}},
+				"app_b": {"include": []string{logFileB.Name()}},
+			},
+			Count: map[string]config.LogMetricsCount{
+				"global_error_count": {"conditions": []any{`IsMatch(body, "error")`}},
+			},
+		},
+	}
+
+	man := New(t.Context(), cfg, "/", &fakeRuntime{}, newMemoryState(), noExecRunner(t))
+
+	man.startStaticSources(t.Context())
+
+	defer man.stopAll(t.Context())
+
+	time.Sleep(500 * time.Millisecond)
+
+	if _, err := logFileA.WriteString("error in A\n"); err != nil {
+		t.Fatal("Failed to write log line:", err)
+	}
+
+	if _, err := logFileB.WriteString("error in B\n"); err != nil {
+		t.Fatal("Failed to write log line:", err)
+	}
+
+	if err := logFileA.Sync(); err != nil {
+		t.Fatal("Failed to sync log file:", err)
+	}
+
+	if err := logFileB.Sync(); err != nil {
+		t.Fatal("Failed to sync log file:", err)
+	}
+
+	time.Sleep(time.Second)
+
+	appender := glmodel.NewBufferAppender()
+
+	if err := man.EmitMetrics(t.Context(), registry.GatherState{}, appender); err != nil {
+		t.Fatal("EmitMetrics returned an error:", err)
+	}
+
+	mfs, err := appender.AsMF()
+	if err != nil {
+		t.Fatal("AsMF returned an error:", err)
+	}
+
+	if len(mfs) != 1 || mfs[0].GetName() != "global_error_count" {
+		t.Fatalf("Expected exactly 1 metric family named global_error_count, got %v", mfs)
+	}
+
+	if len(mfs[0].GetMetric()) != 1 {
+		t.Fatalf("Expected both unscoped receivers to sum into 1 series (item=\"\"), got %d", len(mfs[0].GetMetric()))
+	}
+
+	for _, lbl := range mfs[0].GetMetric()[0].GetLabel() {
+		if lbl.GetName() == "item" {
+			t.Errorf(`Expected no "item" label on the shared bucket, got %q`, lbl.GetValue())
+		}
+	}
+
+	if got := mfs[0].GetMetric()[0].GetUntyped().GetValue(); got != 2.0/windowSecs {
+		t.Errorf("Expected both receivers' matches to sum into one rate %v, got %v", 2.0/windowSecs, got)
+	}
+}
+
+// TestManagerMultiSourceMetricMerges checks the 2+-sources case: a metric
+// naming two receivers under its own "sources" merges both into a single,
+// item-less series, while each receiver still independently feeds an
+// unrelated global metric (no sources) exactly as before.
+func TestManagerMultiSourceMetricMerges(t *testing.T) {
+	t.Parallel()
+
+	logFileA, err := os.CreateTemp(t.TempDir(), "app-a-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFileA.Close()
+
+	logFileB, err := os.CreateTemp(t.TempDir(), "app-b-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFileB.Close()
+
+	cfg := config.Log{
+		Metrics: config.LogMetricsConfig{
+			Receivers: map[string]config.LogMetricsReceiver{
+				"app_a": {"include": []string{logFileA.Name()}},
+				"app_b": {"include": []string{logFileB.Name()}},
+			},
+			Count: map[string]config.LogMetricsCount{
+				"merged_errors":     {"conditions": []any{`IsMatch(body, "error")`}, "sources": []any{"app_a", "app_b"}},
+				"global_everywhere": {"conditions": []any{`IsMatch(body, "error")`}},
+			},
+		},
+	}
+
+	man := New(t.Context(), cfg, "/", &fakeRuntime{}, newMemoryState(), noExecRunner(t))
+
+	man.startStaticSources(t.Context())
+
+	defer man.stopAll(t.Context())
+
+	time.Sleep(500 * time.Millisecond)
+
+	if _, err := logFileA.WriteString("error in A\n"); err != nil {
+		t.Fatal("Failed to write log line:", err)
+	}
+
+	if _, err := logFileB.WriteString("error in B\n"); err != nil {
+		t.Fatal("Failed to write log line:", err)
+	}
+
+	if err := logFileA.Sync(); err != nil {
+		t.Fatal("Failed to sync log file:", err)
+	}
+
+	if err := logFileB.Sync(); err != nil {
+		t.Fatal("Failed to sync log file:", err)
+	}
+
+	time.Sleep(time.Second)
+
+	appender := glmodel.NewBufferAppender()
+
+	if err := man.EmitMetrics(t.Context(), registry.GatherState{}, appender); err != nil {
+		t.Fatal("EmitMetrics returned an error:", err)
+	}
+
+	mfs, err := appender.AsMF()
+	if err != nil {
+		t.Fatal("AsMF returned an error:", err)
+	}
+
+	if len(mfs) != 2 {
+		t.Fatalf("Expected exactly 2 metric families, got %v", mfs)
+	}
+
+	for _, mf := range mfs {
+		switch mf.GetName() {
+		case "merged_errors":
+			if len(mf.GetMetric()) != 1 {
+				t.Fatalf("Expected merged_errors to be a single merged series, got %d samples", len(mf.GetMetric()))
+			}
+
+			for _, lbl := range mf.GetMetric()[0].GetLabel() {
+				if lbl.GetName() == "item" {
+					t.Errorf(`Expected no "item" label on the merged series, got %q`, lbl.GetValue())
+				}
+			}
+
+			if got := mf.GetMetric()[0].GetUntyped().GetValue(); got != 2.0/windowSecs {
+				t.Errorf("Expected both sources' matches to sum into one rate %v, got %v", 2.0/windowSecs, got)
+			}
+		case "global_everywhere":
+			if len(mf.GetMetric()) != 1 {
+				t.Fatalf("Expected global_everywhere to also be a single shared series, got %d samples", len(mf.GetMetric()))
+			}
+
+			if got := mf.GetMetric()[0].GetUntyped().GetValue(); got != 2.0/windowSecs {
+				t.Errorf("Expected global_everywhere to independently sum both receivers' matches too (rate %v), got %v", 2.0/windowSecs, got)
+			}
+		}
+	}
+}
+
 // TestManagerStaticSourceInlineOperatorsAttributeCounter is an end-to-end test
-// of a static receiver using raw inline operators (config.OTELOperator, the
-// same shape/mechanism as OTLPReceiver.Operators) instead of the log_format
-// shortcut, matching real OpenTelemetry receiver config more directly: no
-// named-format indirection, just the operators themselves. The metric then
-// matches against a parsed attribute instead of the raw body.
+// of a static receiver using raw inline operators (config.OTELOperator)
+// instead of the log_format shortcut, with the metric matching a parsed
+// attribute instead of the raw body.
 func TestManagerStaticSourceInlineOperatorsAttributeCounter(t *testing.T) {
 	t.Parallel()
 
@@ -304,11 +587,10 @@ func TestManagerStaticSourceInlineOperatorsAttributeCounter(t *testing.T) {
 	}
 }
 
-// TestManagerStaticSourceLogFormatAttributeCounter is an end-to-end test of a
-// static receiver applying a known_log_format (reused from
-// log.opentelemetry.known_log_formats) before counting, so a counter can
-// match on a parsed attribute (http.response.status_code) instead of the raw
-// body -- the regression test for "count Apache 5xx responses".
+// TestManagerStaticSourceLogFormatAttributeCounter is the regression test for
+// "count Apache 5xx responses": a static receiver applies a known_log_format
+// before counting, so the counter can match a parsed attribute
+// (http.response.status_code) instead of the raw body.
 func TestManagerStaticSourceLogFormatAttributeCounter(t *testing.T) {
 	t.Parallel()
 
@@ -394,13 +676,11 @@ func TestManagerStaticSourceLogFormatAttributeCounter(t *testing.T) {
 	}
 }
 
-// TestManagerContainerSource is an end-to-end test of a container_counters
-// entry: a fake container whose log file is a real, Docker-JSON-wrapped
-// temp file, resolved and processed dynamically by the Manager's container polling
-// loop. This is the regression test for the original RabbitMQ bug: the log line is
-// wrapped exactly like a real Docker container log, and the counter only matches the
-// unwrapped message, so it also verifies the "container" envelope operator runs
-// before OTTL matching.
+// TestManagerContainerSource is the regression test for the original
+// RabbitMQ bug: a container_counters entry's log line is wrapped exactly
+// like a real Docker container log, and the counter only matches the
+// unwrapped message, so the "container" envelope operator must run before
+// OTTL matching.
 func TestManagerContainerSource(t *testing.T) {
 	t.Parallel()
 
@@ -461,10 +741,9 @@ func TestManagerContainerSource(t *testing.T) {
 	}
 }
 
-// TestManagerTwoContainersSameMetricGetDistinctItems is the end-to-end regression test
-// for the item-label feature: two different containers both watched for the same
-// (global) metric must come out as two distinctly-labeled series with independent
-// counts, not merge into one.
+// TestManagerTwoContainersSameMetricGetDistinctItems checks that two
+// containers watched for the same global metric produce two distinctly
+// item-labeled series with independent counts, not one merged series.
 func TestManagerTwoContainersSameMetricGetDistinctItems(t *testing.T) {
 	t.Parallel()
 
@@ -562,6 +841,85 @@ func TestManagerTwoContainersSameMetricGetDistinctItems(t *testing.T) {
 	}
 }
 
+// TestManagerContainerScopedToOwnMetric is the end-to-end test for a
+// container-scoped metric: a metric naming a *different* source in "sources"
+// must not register for this container's item at all -- not merely report it
+// as zero, but have it genuinely absent from EmitMetrics's output for that
+// item -- while a metric naming this container specifically still works.
+func TestManagerContainerScopedToOwnMetric(t *testing.T) {
+	t.Parallel()
+
+	logFile, err := os.CreateTemp(t.TempDir(), "app-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFile.Close()
+
+	ctr := facts.FakeContainer{FakeID: "id-1", FakeContainerName: "app-1", FakeLogPath: logFile.Name()}
+
+	cfg := config.Log{
+		Metrics: config.LogMetricsConfig{
+			Count: map[string]config.LogMetricsCount{
+				"app_errors":          {"conditions": []any{`IsMatch(body, "ERROR")`}, "sources": []any{ctr.ContainerName()}},
+				"unrelated_elsewhere": {"conditions": []any{`IsMatch(body, "ERROR")`}, "sources": []any{"some-other-container"}},
+			},
+			ContainerCounters: []string{ctr.ContainerName()},
+		},
+	}
+
+	man := New(t.Context(), cfg, "/", &fakeRuntime{containers: []facts.Container{ctr}}, newMemoryState(), noExecRunner(t))
+
+	man.updateContainerSources(t.Context())
+
+	defer man.stopAll(t.Context())
+
+	time.Sleep(500 * time.Millisecond)
+
+	dockerLine := `{"log":"ERROR something broke\n","stream":"stdout","time":"2024-01-15T10:23:45.123Z"}` + "\n"
+
+	if _, err := logFile.WriteString(dockerLine); err != nil {
+		t.Fatal("Failed to write log line:", err)
+	}
+
+	if err := logFile.Sync(); err != nil {
+		t.Fatal("Failed to sync log file:", err)
+	}
+
+	time.Sleep(time.Second)
+
+	appender := glmodel.NewBufferAppender()
+
+	if err := man.EmitMetrics(t.Context(), registry.GatherState{}, appender); err != nil {
+		t.Fatal("EmitMetrics returned an error:", err)
+	}
+
+	mfs, err := appender.AsMF()
+	if err != nil {
+		t.Fatal("AsMF returned an error:", err)
+	}
+
+	gotNames := make(map[string]bool, len(mfs))
+
+	for _, mf := range mfs {
+		for _, m := range mf.GetMetric() {
+			for _, lbl := range m.GetLabel() {
+				if lbl.GetName() == "item" && lbl.GetValue() == ctr.ContainerName() {
+					gotNames[mf.GetName()] = true
+				}
+			}
+		}
+	}
+
+	if !gotNames["app_errors"] {
+		t.Errorf("Expected app_errors to be registered for %s, got %v", ctr.ContainerName(), gotNames)
+	}
+
+	if gotNames["unrelated_elsewhere"] {
+		t.Errorf("Expected unrelated_elsewhere to be genuinely absent for %s (scoped out), got %v", ctr.ContainerName(), gotNames)
+	}
+}
+
 func TestManagerContainerRemoved(t *testing.T) {
 	t.Parallel()
 
@@ -607,10 +965,67 @@ func TestManagerContainerRemoved(t *testing.T) {
 	}
 }
 
-// TestManagerPersistsOffsetAcrossRestart is the regression test for persisted read
-// offsets: a line written entirely during the "restart gap" (while no Manager is
-// running) must still be picked up by the next run, because it resumes tailing
-// from the offset saved by the previous run instead of defaulting to the file's end.
+// TestManagerContainerWatchStopsWhenLabelRemoved checks that a container
+// matched via a ContainerSelectorCounters label rule stops being watched as
+// soon as that label is removed live, without the container itself
+// disappearing or the config changing.
+func TestManagerContainerWatchStopsWhenLabelRemoved(t *testing.T) {
+	t.Parallel()
+
+	logFile, err := os.CreateTemp(t.TempDir(), "app-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFile.Close()
+
+	ctrWatched := facts.FakeContainer{
+		FakeID:            "id-1",
+		FakeContainerName: "app-1",
+		FakeLogPath:       logFile.Name(),
+		FakeLabels:        map[string]string{"app": "web"},
+	}
+
+	cfg := config.Log{
+		Metrics: config.LogMetricsConfig{
+			Count: map[string]config.LogMetricsCount{"app_errors": {"conditions": []any{`IsMatch(body, "ERROR")`}}},
+			ContainerSelectorCounters: []config.ContainerSelectorRule{
+				{Selectors: map[string]string{"app": "web"}},
+			},
+		},
+	}
+
+	runtime := &fakeRuntime{containers: []facts.Container{ctrWatched}}
+	man := New(t.Context(), cfg, "/", runtime, newMemoryState(), noExecRunner(t))
+
+	man.updateContainerSources(t.Context())
+
+	man.l.Lock()
+	_, watching := man.containerSources[ctrWatched.ID()]
+	man.l.Unlock()
+
+	if !watching {
+		t.Fatal("Expected the container to be watched once it carries the matching label")
+	}
+
+	ctrUnwatched := ctrWatched
+	ctrUnwatched.FakeLabels = nil
+	runtime.containers = []facts.Container{ctrUnwatched}
+
+	man.updateContainerSources(t.Context())
+
+	man.l.Lock()
+	_, stillWatching := man.containerSources[ctrWatched.ID()]
+	man.l.Unlock()
+
+	if stillWatching {
+		t.Fatal("Expected the container's source to be stopped once its matching label was removed")
+	}
+}
+
+// TestManagerPersistsOffsetAcrossRestart checks that a line written while no
+// Manager is running is still picked up on restart, since it resumes tailing
+// from the previously persisted offset instead of the file's end.
 func TestManagerPersistsOffsetAcrossRestart(t *testing.T) {
 	t.Parallel()
 
@@ -711,12 +1126,62 @@ func TestManagerPersistsOffsetAcrossRestart(t *testing.T) {
 	}
 }
 
-// TestManagerRegistersEveryCountEntry is the regression test for
-// collectAllCounters: every log.metrics.count entry must be registered at
-// startup regardless of whether any receiver/container is even configured to
-// feed it yet, or its data points get silently dropped by addSumDataPoints
-// (registry lookup miss) and it never appears in EmitMetrics/MetricNames, no
-// matter what actually gets pushed to it later (e.g. by the network source).
+// TestManagerPersistsFileSizesAcrossRestart checks that Manager.lastFileSizes
+// round-trips through the state cache independently of the offset persister,
+// since it's the fallback signal used when the persister is unavailable.
+func TestManagerPersistsFileSizesAcrossRestart(t *testing.T) {
+	t.Parallel()
+
+	logFile, err := os.CreateTemp(t.TempDir(), "app-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFile.Close()
+
+	if _, err := logFile.WriteString("[error] first\n"); err != nil {
+		t.Fatal("Failed to write log line:", err)
+	}
+
+	cfg := config.Log{
+		Metrics: config.LogMetricsConfig{
+			Receivers: map[string]config.LogMetricsReceiver{
+				"app": {"include": []string{logFile.Name()}},
+			},
+			Count: map[string]config.LogMetricsCount{
+				"app_errors_count": {"conditions": []any{`IsMatch(body, "\\[error\\]")`}},
+			},
+		},
+	}
+
+	state := newMemoryState()
+
+	man1 := New(t.Context(), cfg, "/", &fakeRuntime{}, state, noExecRunner(t))
+	man1.startStaticSources(t.Context())
+	man1.saveState()
+	man1.stopAll(t.Context())
+
+	var sizes map[string]int64
+
+	if err := state.Get(lastFileSizesCacheKey, &sizes); err != nil {
+		t.Fatal("Failed to read the lastFileSizes cache:", err)
+	}
+
+	if _, ok := sizes[logFile.Name()]; !ok {
+		t.Fatalf("Expected %q's size to be persisted to the lastFileSizes cache, got %v", logFile.Name(), sizes)
+	}
+
+	man2 := New(t.Context(), cfg, "/", &fakeRuntime{}, state, noExecRunner(t))
+
+	if _, ok := man2.lastFileSizes[logFile.Name()]; !ok {
+		t.Fatalf("Expected the second Manager to load the previous run's lastFileSizes cache, got %v", man2.lastFileSizes)
+	}
+}
+
+// TestManagerRegistersEveryCountEntry checks that collectAllCounters
+// registers every log.metrics.count entry at startup, even with no
+// receiver/container feeding it yet -- otherwise its data points would be
+// silently dropped and it would never appear in EmitMetrics/MetricNames.
 func TestManagerRegistersEveryCountEntry(t *testing.T) {
 	t.Parallel()
 

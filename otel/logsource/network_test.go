@@ -99,11 +99,9 @@ func TestFanoutLogsSingleSinkPassthrough(t *testing.T) {
 	}
 }
 
-// TestFanoutLogsIsolatesMutations is the regression test for sharing one
-// physical OTLP receiver between otel/logprocessing and otel/logmetrics:
-// otel/logprocessing's resource-attribute processor mutates a plog.Logs in
-// place, so every sink after the first must see its own independent copy --
-// never a batch mutated by an earlier sink.
+// TestFanoutLogsIsolatesMutations checks that each sink after the first gets
+// its own independent copy, since logprocessing's resource-attribute
+// processor mutates a plog.Logs in place.
 func TestFanoutLogsIsolatesMutations(t *testing.T) {
 	t.Parallel()
 
@@ -180,6 +178,28 @@ func TestPlanSharedNetworkReceiversOmitsUnreferencedReceivers(t *testing.T) {
 	}
 }
 
+// TestPlanSharedNetworkReceiversOmitsUnknownReceiverName is the regression
+// test for a receiver name that resolves but isn't defined in
+// log.network.receivers: it must be skipped, not turned into a
+// protocol-less PlannedReceiver.
+func TestPlanSharedNetworkReceiversOmitsUnknownReceiverName(t *testing.T) {
+	t.Parallel()
+
+	receivers := map[string]config.NetworkReceiver{
+		"custom1": {Protocols: config.NetworkProtocols{GRPC: &config.NetworkEndpoint{Endpoint: "127.0.0.1:4317"}}},
+	}
+
+	consumerA, _ := recordingLogsConsumer()
+
+	planned := PlanSharedNetworkReceivers(receivers, []NetworkWant{
+		{Consumer: consumerA, Receivers: []string{"otlp"}}, // not in receivers
+	})
+
+	if len(planned) != 0 {
+		t.Fatalf("Expected no planned receiver for an unknown name, got %+v", planned)
+	}
+}
+
 func TestPlanSharedNetworkReceiversSplitsByName(t *testing.T) {
 	t.Parallel()
 
@@ -218,13 +238,10 @@ func TestPlanSharedNetworkReceiversSplitsByName(t *testing.T) {
 	}
 }
 
-// TestPlanSharedNetworkReceiversIsolatesSharedNetworkMutations is the
-// regression test for sharing one physical listener between
-// otel/logprocessing and otel/logmetrics: when both name the same
-// log.network.receivers entry, they get one FanoutLogs sink, and
-// otel/logprocessing's resource-attribute processor mutating a plog.Logs in
-// place must never be visible to otel/logmetrics's consumer, regardless of
-// which one is registered first.
+// TestPlanSharedNetworkReceiversIsolatesSharedNetworkMutations checks that
+// when logprocessing and logmetrics share one log.network.receivers entry
+// (one FanoutLogs sink), an in-place mutation by one never leaks to the
+// other, regardless of registration order.
 func TestPlanSharedNetworkReceiversIsolatesSharedNetworkMutations(t *testing.T) {
 	t.Parallel()
 
@@ -296,12 +313,9 @@ func TestSetupOTLPNetworkReceiverGRPCStartsAndStops(t *testing.T) {
 	}
 }
 
-// TestSetupOTLPNetworkReceiverHTTPStartsAndStops is the regression test for two
-// real bugs found in SetupOTLPNetworkReceiver's HTTP branch: an invalid "ip"
-// transport (net.Listen only accepts tcp/tcp4/tcp6/unix/unixpacket) and
-// building otlpreceiver.HTTPConfig from scratch, which dropped the factory's
-// default LogsURLPath and made otlpreceiver panic on Start (net/http rejects
-// an empty ServeMux pattern).
+// TestSetupOTLPNetworkReceiverHTTPStartsAndStops is the regression test for
+// an invalid "ip" transport and a missing default LogsURLPath that made
+// otlpreceiver panic on Start.
 func TestSetupOTLPNetworkReceiverHTTPStartsAndStops(t *testing.T) {
 	t.Parallel()
 
@@ -324,11 +338,8 @@ func TestSetupOTLPNetworkReceiverNoProtocolErrors(t *testing.T) {
 
 	sink, _ := recordingLogsConsumer()
 
-	// Regression test: without an explicit Validate() call, otlpReceiver.Start
-	// silently no-ops per protocol when absent instead of erroring, so a
-	// receiver with no protocols configured would otherwise start
-	// "successfully" while binding nothing and losing every pushed log
-	// silently.
+	// Without an explicit Validate() call, otlpReceiver.Start silently no-ops
+	// per protocol when absent, instead of erroring.
 	_, err := SetupOTLPNetworkReceiver(t.Context(), NewTelemetrySettings(), config.NetworkProtocols{}, sink, "test-no-protocol")
 	if err == nil {
 		t.Fatal("Expected an error when no protocol is configured, got none")

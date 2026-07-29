@@ -21,11 +21,9 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/parser/container"
 )
 
-// BuildContainerEnvelopeOperator returns the operator that unwraps a
-// Docker-JSON/CRI container log envelope so `body` becomes the actual log
-// message. It must run first, before any other operator (in particular before
-// any destructive parser a known log format may apply), so downstream stages
-// never see the raw envelope.
+// BuildContainerEnvelopeOperator unwraps a Docker-JSON/CRI container log
+// envelope so `body` becomes the actual log message. Must run first, before
+// any other operator.
 func BuildContainerEnvelopeOperator() operator.Config {
 	containerCfg := container.NewConfig()
 	containerCfg.AddMetadataFromFilePath = false

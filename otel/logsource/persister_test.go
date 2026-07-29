@@ -292,10 +292,9 @@ func TestPersistHostTouchedOnlyEvictsUntouchedReceivers(t *testing.T) { //nolint
 	}
 }
 
-// TestPersistHostFullSnapshotKeepsUntouchedReceivers is the regression test for
-// otel/logmetrics's chosen behavior: a periodic SaveToState must not drop a
-// receiver's previously-persisted offset just because that receiver hasn't
-// been written to yet during this process's lifetime (e.g. an idle source).
+// TestPersistHostFullSnapshotKeepsUntouchedReceivers checks that a periodic
+// SaveToState doesn't drop a receiver's previously-persisted offset just
+// because it hasn't been written to yet (e.g. an idle source).
 func TestPersistHostFullSnapshotKeepsUntouchedReceivers(t *testing.T) {
 	t.Parallel()
 
@@ -344,9 +343,9 @@ func TestPersistHostFullSnapshotKeepsUntouchedReceivers(t *testing.T) {
 	}
 }
 
-// TestStorageClientFullSnapshotCloseKeepsSnapshot is the same regression test
-// one level down: closing a storage client that was only ever Get() from
-// (never Set()) must not erase its previously-known offsets from the host.
+// TestStorageClientFullSnapshotCloseKeepsSnapshot checks that closing a
+// storage client that was only ever Get() from, never Set(), doesn't erase
+// its previously-known offsets from the host.
 func TestStorageClientFullSnapshotCloseKeepsSnapshot(t *testing.T) {
 	t.Parallel()
 

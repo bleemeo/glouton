@@ -18,6 +18,7 @@ package config
 
 import (
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -1661,12 +1662,13 @@ func TestCensorURLSecrets(t *testing.T) {
 	}
 }
 
-func Test_migrate(t *testing.T) {
+func Test_migrate(t *testing.T) { //nolint:maintidx
 	tests := []struct {
-		Name        string
-		ConfigFile  string
-		WantConfig  Config
-		WantWarning bool
+		Name                string
+		ConfigFile          string
+		WantConfig          Config
+		WantWarning         bool
+		WantWarningContains string
 	}{
 		{
 			Name:       "new-prometheus-targets",
@@ -1751,6 +1753,7 @@ func Test_migrate(t *testing.T) {
 						Count: map[string]LogMetricsCount{
 							"apache_errors_count": {
 								"conditions": []any{`IsMatch(body, "\\[error\\]")`},
+								"sources":    []any{"legacy_input_0"},
 							},
 						},
 					},
@@ -1767,6 +1770,7 @@ func Test_migrate(t *testing.T) {
 						Count: map[string]LogMetricsCount{
 							"redis_errors_count": {
 								"conditions": []any{`IsMatch(body, "ERROR")`},
+								"sources":    []any{"redis"},
 							},
 						},
 						ContainerCounters: []string{"redis"},
@@ -1869,6 +1873,57 @@ func Test_migrate(t *testing.T) {
 			WantWarning: true,
 		},
 		{
+			Name:       "legacy-log-inputs-unmatched",
+			ConfigFile: "testdata/legacy-log-inputs-unmatched.conf",
+			WantConfig: Config{
+				Log: Log{
+					Inputs: []LogInput{{}}, // the orphan entry is kept, but its filters are dropped
+					Metrics: LogMetricsConfig{
+						Receivers: map[string]LogMetricsReceiver{
+							"legacy_input_0": {
+								"include": []any{"/var/log/apache/access.log"},
+							},
+						},
+						Count: map[string]LogMetricsCount{
+							"apache_errors_count": {
+								"conditions": []any{`IsMatch(body, "\\[error\\]")`},
+								"sources":    []any{"legacy_input_0"},
+							},
+						},
+					},
+				},
+			},
+			WantWarning:         true,
+			WantWarningContains: "has filters but no path/container_name/container_selectors",
+		},
+		{
+			Name:       "legacy-log-inputs-name-collision",
+			ConfigFile: "testdata/legacy-log-inputs-name-collision.conf",
+			WantConfig: Config{
+				Log: Log{
+					Metrics: LogMetricsConfig{
+						Receivers: map[string]LogMetricsReceiver{
+							"legacy_input_0": {
+								"include": []any{"/var/log/apache/access.log"},
+							},
+						},
+						Count: map[string]LogMetricsCount{
+							"shared_errors_count": {
+								"conditions": []any{
+									`IsMatch(body, "\\[error\\]")`,
+									`IsMatch(body, "ERROR")`,
+								},
+								"sources": []any{"legacy_input_0", "redis"},
+							},
+						},
+						ContainerCounters: []string{"redis"},
+					},
+				},
+			},
+			WantWarning:         true,
+			WantWarningContains: "collides with another input's filter of the same metric name",
+		},
+		{
 			Name:       "legacy-log-inputs-name-and-selectors",
 			ConfigFile: "testdata/legacy-log-inputs-name-and-selectors.conf",
 			WantConfig: Config{
@@ -1877,6 +1932,7 @@ func Test_migrate(t *testing.T) {
 						Count: map[string]LogMetricsCount{
 							"postgres_errors_count": {
 								"conditions": []any{`IsMatch(body, "error")`},
+								"sources":    []any{"postgres"},
 							},
 						},
 						ContainerSelectorCounters: []ContainerSelectorRule{
@@ -1901,6 +1957,10 @@ func Test_migrate(t *testing.T) {
 
 			if test.WantWarning && warnings == nil {
 				t.Fatal("Expected a deprecation warning, got none")
+			}
+
+			if test.WantWarningContains != "" && !strings.Contains(warnings.Error(), test.WantWarningContains) {
+				t.Fatalf("Expected a warning containing %q, got: %s", test.WantWarningContains, warnings.Error())
 			}
 
 			if diff := compareConfig(test.WantConfig, config, cmpopts.EquateEmpty()); diff != "" {
