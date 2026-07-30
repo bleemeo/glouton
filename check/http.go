@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"time"
@@ -71,7 +72,7 @@ func NewHTTP(
 			port = "443"
 		}
 
-		mainTCPAddress = fmt.Sprintf("%s:%s", u.Hostname(), port)
+		mainTCPAddress = net.JoinHostPort(u.Hostname(), port)
 	}
 
 	hc := &HTTPCheck{

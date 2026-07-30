@@ -780,3 +780,84 @@ func TestRateFromMetricValue_ThrottledPercNoPeriods(t *testing.T) {
 		}
 	}
 }
+
+func TestParseFIBTrieLocalAddress(t *testing.T) {
+	const fibTrie = `Main:
+  +-- 0.0.0.0/0 3 0 5
+     |-- 0.0.0.0
+        /0 universe UNICAST
+     +-- 127.0.0.0/8 2 0 2
+        +-- 127.0.0.0/31 1 0 0
+           |-- 127.0.0.0
+              /32 link BROADCAST
+           |-- 127.0.0.1
+              /32 host LOCAL
+        |-- 127.255.255.255
+           /32 link BROADCAST
+     +-- 172.17.0.0/16 2 0 2
+        |-- 172.17.0.0
+           /16 link UNICAST
+        |-- 172.17.0.5
+           /32 host LOCAL
+        |-- 172.17.255.255
+           /32 link BROADCAST
+`
+
+	want := "172.17.0.5"
+	if got := parseFIBTrieLocalAddress(fibTrie); got != want {
+		t.Errorf("parseFIBTrieLocalAddress() = %q, want %q", got, want)
+	}
+
+	if got := parseFIBTrieLocalAddress("Main:\n  +-- 0.0.0.0/0 3 0 5\n"); got != "" {
+		t.Errorf("parseFIBTrieLocalAddress() with no LOCAL entry = %q, want empty", got)
+	}
+}
+
+func TestParseFIBTrieLocalAddress_SkipsLinkLocal(t *testing.T) {
+	// A link-local (APIPA, 169.254.0.0/16) address that sorts before a real address in the
+	// trie must not be returned as the primary address.
+	const fibTrie = `Main:
+  +-- 0.0.0.0/0 3 0 5
+     |-- 0.0.0.0
+        /0 universe UNICAST
+     +-- 169.254.0.0/16 2 0 2
+        |-- 169.254.0.0
+           /16 link UNICAST
+        |-- 169.254.1.2
+           /32 host LOCAL
+        |-- 169.254.255.255
+           /32 link BROADCAST
+     +-- 172.17.0.0/16 2 0 2
+        |-- 172.17.0.0
+           /16 link UNICAST
+        |-- 172.17.0.5
+           /32 host LOCAL
+        |-- 172.17.255.255
+           /32 link BROADCAST
+`
+
+	want := "172.17.0.5"
+	if got := parseFIBTrieLocalAddress(fibTrie); got != want {
+		t.Errorf("parseFIBTrieLocalAddress() = %q, want %q (link-local address should be skipped)", got, want)
+	}
+}
+
+func TestParseIfInet6GlobalAddress(t *testing.T) {
+	const ifInet6 = "" +
+		"00000000000000000000000000000001 01 80 10 80       lo\n" +
+		"fe80000000000000021fd3fffe0824cc 02 40 20 80      eth0\n" +
+		"20010db8000000000000000000000005 02 40 00 00      eth0\n"
+
+	want := "2001:db8::5"
+	if got := parseIfInet6GlobalAddress(ifInet6); got != want {
+		t.Errorf("parseIfInet6GlobalAddress() = %q, want %q", got, want)
+	}
+
+	const noGlobal = "" +
+		"00000000000000000000000000000001 01 80 10 80       lo\n" +
+		"fe80000000000000021fd3fffe0824cc 02 40 20 80      eth0\n"
+
+	if got := parseIfInet6GlobalAddress(noGlobal); got != "" {
+		t.Errorf("parseIfInet6GlobalAddress() with no global entry = %q, want empty", got)
+	}
+}

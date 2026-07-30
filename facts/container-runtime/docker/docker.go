@@ -807,6 +807,8 @@ func (d *Docker) updateContainer(ctx context.Context, cl dockerClient, container
 
 func (d *Docker) primaryAddress(inspect container.InspectResponse, bridgeNetworks map[string]any, containerAddressOnDockerBridge map[string]string) string {
 	addressOfFirstNetwork := ""
+	ipv6AddressOfBridgeNetwork := ""
+	ipv6AddressOfFirstNetwork := ""
 
 	if inspect.NetworkSettings != nil {
 		for key, ep := range inspect.NetworkSettings.Networks {
@@ -814,12 +816,31 @@ func (d *Docker) primaryAddress(inspect container.InspectResponse, bridgeNetwork
 				return "127.0.0.1"
 			}
 
-			if _, ok := bridgeNetworks[key]; ep.IPAddress.IsValid() && ok {
-				return ep.IPAddress.String()
-			}
+			_, isBridge := bridgeNetworks[key]
 
-			if addressOfFirstNetwork == "" && ep.IPAddress.IsValid() {
-				addressOfFirstNetwork = ep.IPAddress.String()
+			switch {
+			case ep.IPAddress.IsValid():
+				if isBridge {
+					return ep.IPAddress.String()
+				}
+
+				if addressOfFirstNetwork == "" {
+					addressOfFirstNetwork = ep.IPAddress.String()
+				}
+			case ep.GlobalIPv6Address.IsValid():
+				// Only used as a fallback when the container has no IPv4 address at all
+				// (e.g. an IPv6-only network), since IPv4 always wins above. Networks are
+				// iterated in an unspecified (map) order, so this can never return early the
+				// way the IPv4 bridge-preferred case above does -- another network visited
+				// later in the same loop might still yield a real IPv4 address, which must
+				// keep winning regardless of iteration order.
+				if isBridge {
+					if ipv6AddressOfBridgeNetwork == "" {
+						ipv6AddressOfBridgeNetwork = ep.GlobalIPv6Address.String()
+					}
+				} else if ipv6AddressOfFirstNetwork == "" {
+					ipv6AddressOfFirstNetwork = ep.GlobalIPv6Address.String()
+				}
 			}
 		}
 	}
@@ -830,6 +851,14 @@ func (d *Docker) primaryAddress(inspect container.InspectResponse, bridgeNetwork
 
 	if addressOfFirstNetwork != "" {
 		return addressOfFirstNetwork
+	}
+
+	if ipv6AddressOfBridgeNetwork != "" {
+		return ipv6AddressOfBridgeNetwork
+	}
+
+	if ipv6AddressOfFirstNetwork != "" {
+		return ipv6AddressOfFirstNetwork
 	}
 
 	if ipMask := inspect.Config.Labels["io.rancher.container.ip"]; ipMask != "" {

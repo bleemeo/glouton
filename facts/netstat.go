@@ -18,7 +18,6 @@ package facts
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"os"
 	"regexp"
@@ -157,7 +156,7 @@ func (l ListenAddress) String() string {
 		return l.Address
 	}
 
-	return fmt.Sprintf("%s:%d", l.Address, l.Port)
+	return net.JoinHostPort(l.Address, strconv.Itoa(l.Port))
 }
 
 func decodeNetstatFile(data string) map[int][]ListenAddress {
@@ -217,6 +216,12 @@ func decodeNetstatFile(data string) map[int][]ListenAddress {
 	return result
 }
 
+// isGenericAddress reports whether addr is a wildcard or loopback address --
+// i.e. one that can refer to the same socket regardless of address family.
+func isGenericAddress(addr string) bool {
+	return addr == addrAllInterfaces || addr == addrLocalhost
+}
+
 func addAddress(addresses []ListenAddress, newAddr ListenAddress) []ListenAddress {
 	duplicate := false
 
@@ -230,16 +235,20 @@ func addAddress(addresses []ListenAddress, newAddr ListenAddress) []ListenAddres
 				newAddr.Address = addrLocalhost
 			}
 
-			if strings.Contains(newAddr.Address, ":") {
-				// It's still an IPv6 address, we don't know how to convert it to IPv4
-				return addresses
-			}
-
 			newAddr.NetworkFamily = newAddr.NetworkFamily[:3]
 		}
 
 		for i, v := range addresses {
 			if v.Network() != newAddr.Network() {
+				continue
+			}
+
+			// A wildcard/loopback address reported under both families (e.g. "tcp 0.0.0.0:111"
+			// and "tcp6 :::111") is the same socket and should merge. Two distinct specific
+			// addresses sharing a port (e.g. a dual-stack service on 172.17.0.1 and fd00::5)
+			// are not duplicates and must both be kept -- even when one of the two happens to
+			// be a wildcard/loopback address and the other isn't.
+			if v.Address != newAddr.Address && (!isGenericAddress(v.Address) || !isGenericAddress(newAddr.Address)) {
 				continue
 			}
 

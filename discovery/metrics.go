@@ -338,7 +338,7 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		input, err = createMariaDBInput(service)
 	case MemcachedService:
 		if ip, port := service.AddressPort(); ip != "" {
-			input, err = memcached.New(fmt.Sprintf("%s:%d", ip, port))
+			input, err = memcached.New(net.JoinHostPort(ip, strconv.Itoa(port)))
 		}
 	case MongoDBService:
 		if ip, port := service.AddressPort(); ip != "" {
@@ -472,7 +472,7 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		}
 	case ZookeeperService:
 		if ip, port := service.AddressPort(); ip != "" {
-			input, err = zookeeper.New(fmt.Sprintf("%s:%d", ip, port))
+			input, err = zookeeper.New(net.JoinHostPort(ip, strconv.Itoa(port)))
 		}
 	case CustomService:
 		return nil
@@ -509,7 +509,7 @@ func createMySQLInput(service Service) (telegraf.Input, error) {
 			username = mysqlDefaultUser
 		}
 
-		return mysql.New(fmt.Sprintf("%s:%s@tcp(%s:%d)/", username, service.Config.Password, ip, port))
+		return mysql.New(fmt.Sprintf("%s:%s@tcp(%s)/", username, service.Config.Password, net.JoinHostPort(ip, strconv.Itoa(port))))
 	}
 
 	return nil, nil //nolint: nilnil
@@ -531,7 +531,7 @@ func createMariaDBInput(service Service) (telegraf.Input, error) {
 			username = mariadbDefaultUser
 		}
 
-		return mysql.NewMariaDB(fmt.Sprintf("%s:%s@tcp(%s:%d)/", username, service.Config.Password, ip, port))
+		return mysql.NewMariaDB(fmt.Sprintf("%s:%s@tcp(%s)/", username, service.Config.Password, net.JoinHostPort(ip, strconv.Itoa(port))))
 	}
 
 	return nil, nil //nolint: nilnil
