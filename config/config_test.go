@@ -691,14 +691,20 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "invalid yaml",
 			Files: []string{"testdata/bad_yaml.conf"},
 			WantWarnings: []string{
-				"line 1: cannot unmarshal !!str `bad:bad` into map[string]interface {}",
+				"testdata/bad_yaml.conf: invalid YAML: [1:1] string was used where mapping is expected\n" +
+					">  1 | bad:bad\n" +
+					"       ^\n",
 			},
 		},
 		{
 			Name:  "invalid yaml multiple files",
 			Files: []string{"testdata/invalid"},
 			WantWarnings: []string{
-				`testdata/invalid/10-invalid.conf: yaml: line 2: found character that cannot start any token (uses a tab for indentation, which YAML doesn't allow; use spaces instead: "\tregistration_key: \"a\"")`,
+				"testdata/invalid/10-invalid.conf: invalid YAML: [2:1] found character '\t' that cannot start any token\n" +
+					"   1 | bleemeo:\n" +
+					">  2 | \tregistration_key: \"a\"\n" +
+					"       ^\n" +
+					"   3 |         account_id: \"b\"",
 			},
 			WantConfig: Config{
 				Agent: Agent{
@@ -713,7 +719,12 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "invalid yaml bad indentation",
 			Files: []string{"testdata/bad_indentation.conf"},
 			WantWarnings: []string{
-				`testdata/bad_indentation.conf: yaml: line 3: did not find expected key (has 4 space(s) of indentation, should be 2: "    mqtt:")`,
+				"testdata/bad_indentation.conf: invalid YAML: [3:5] value is not allowed in this context. map key-value is pre-defined\n" +
+					"   1 | bleemeo:\n" +
+					"   2 |   api_base: \"http://127.0.0.1:8000\"\n" +
+					">  3 |     mqtt:\n" +
+					"           ^\n" +
+					"   4 |       host: 127.0.0.1",
 			},
 		},
 		{
@@ -1291,97 +1302,6 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			t.Fatalf("Unexpected config:\n%s", diff)
 		}
 	})
-}
-
-func TestFindYAMLIndentationIssue(t *testing.T) {
-	tests := []struct {
-		Name      string
-		Data      string
-		WantIssue yamlIndentIssue
-		WantOK    bool
-	}{
-		{
-			Name: "key over-indented under scalar value",
-			Data: "bleemeo:\n" +
-				"  api_base: \"http://127.0.0.1:8000\"\n" +
-				"    mqtt:\n" +
-				"      host: 127.0.0.1\n",
-			WantIssue: yamlIndentIssue{Line: 3, Content: "    mqtt:", FoundIndent: 4, ExpectedIndent: 2},
-			WantOK:    true,
-		},
-		{
-			Name: "tab used for indentation",
-			Data: "bleemeo:\n\tregistration_key: \"a\"\n        account_id: \"b\"\n",
-			WantIssue: yamlIndentIssue{
-				Line: 2, Content: "\tregistration_key: \"a\"", IsTab: true,
-			},
-			WantOK: true,
-		},
-		{
-			Name: "key under-indented relative to surrounding comments",
-			Data: "logging:\n" +
-				"    # level is the verbosity level.\n" +
-				"    # * \"INFO\" which is the same as level 0\n" +
-				"   level: INFO\n" +
-				"    # output can be set to \"console\", \"syslog\" or \"file\".\n" +
-				"    output: console\n",
-			WantIssue: yamlIndentIssue{Line: 4, Content: "   level: INFO", FoundIndent: 3, ExpectedIndent: 4},
-			WantOK:    true,
-		},
-		{
-			Name:   "valid nested mapping",
-			Data:   "bleemeo:\n  api_base: \"x\"\n  mqtt:\n    host: 127.0.0.1\n",
-			WantOK: false,
-		},
-		{
-			Name:   "block scalar allows deeper indentation",
-			Data:   "agent:\n  installation_format: |\n    some\n      deeply indented text\n  cloudimage_creation_file: \"x\"\n",
-			WantOK: false,
-		},
-		{
-			Name:   "sequences are not analyzed",
-			Data:   "service_ignore:\n  - id: apache\n    instance: foo\n",
-			WantOK: false,
-		},
-		{
-			Name:   "flow style is not analyzed",
-			Data:   "metric:\n  softstatus_period: {a: 1}\n",
-			WantOK: false,
-		},
-		{
-			Name:   "trailing comment on a mapping key still allows children",
-			Data:   "bleemeo:\n  mqtt:  # some note\n    host: 127.0.0.1\n",
-			WantOK: false,
-		},
-		{
-			Name:   "tab inside a comment is not reported",
-			Data:   "logging:\n\t# tab-indented comment\n  level: INFO\n",
-			WantOK: false,
-		},
-		{
-			Name:   "tab inside block scalar content is not reported",
-			Data:   "agent:\n  installation_format: |\n\t  tab-indented content\n  cloudimage_creation_file: \"x\"\n",
-			WantOK: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.Name, func(t *testing.T) {
-			issue, ok := findYAMLIndentationIssue([]byte(tt.Data))
-
-			if ok != tt.WantOK {
-				t.Fatalf("findYAMLIndentationIssue() ok = %v, want %v", ok, tt.WantOK)
-			}
-
-			if !tt.WantOK {
-				return
-			}
-
-			if issue != tt.WantIssue {
-				t.Fatalf("findYAMLIndentationIssue() = %+v, want %+v", issue, tt.WantIssue)
-			}
-		})
-	}
 }
 
 func TestStateLoading(t *testing.T) {
