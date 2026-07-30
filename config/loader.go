@@ -172,11 +172,22 @@ func addYAMLSyntaxHint(err error, path string) error {
 
 	var out map[string]any
 
-	if goccyErr := goccyyaml.Unmarshal(data, &out); goccyErr != nil {
-		return fmt.Errorf("invalid YAML: %w", goccyErr)
+	goccyErr := goccyyaml.Unmarshal(data, &out)
+	if goccyErr == nil {
+		return err
 	}
 
-	return err
+	var yamlErr goccyyaml.Error
+	if errors.As(goccyErr, &yamlErr) {
+		if tk := yamlErr.GetToken(); tk != nil && tk.Position != nil {
+			return fmt.Errorf(
+				"invalid YAML: line %d, column %d: %s",
+				tk.Position.Line, tk.Position.Column, yamlErr.GetMessage(),
+			)
+		}
+	}
+
+	return fmt.Errorf("invalid YAML: %s", goccyyaml.FormatError(goccyErr, false, false))
 }
 
 // isNilAllowedFor returns whether the given key must escape the not-null-validation or not.

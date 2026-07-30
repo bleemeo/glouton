@@ -691,20 +691,14 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "invalid yaml",
 			Files: []string{"testdata/bad_yaml.conf"},
 			WantWarnings: []string{
-				"testdata/bad_yaml.conf: invalid YAML: [1:1] string was used where mapping is expected\n" +
-					">  1 | bad:bad\n" +
-					"       ^\n",
+				"testdata/bad_yaml.conf: invalid YAML: line 1, column 1: string was used where mapping is expected",
 			},
 		},
 		{
 			Name:  "invalid yaml multiple files",
 			Files: []string{"testdata/invalid"},
 			WantWarnings: []string{
-				"testdata/invalid/10-invalid.conf: invalid YAML: [2:1] found character '\t' that cannot start any token\n" +
-					"   1 | bleemeo:\n" +
-					">  2 | \tregistration_key: \"a\"\n" +
-					"       ^\n" +
-					"   3 |         account_id: \"b\"",
+				"testdata/invalid/10-invalid.conf: invalid YAML: line 2, column 1: found character '\t' that cannot start any token",
 			},
 			WantConfig: Config{
 				Agent: Agent{
@@ -719,12 +713,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "invalid yaml bad indentation",
 			Files: []string{"testdata/bad_indentation.conf"},
 			WantWarnings: []string{
-				"testdata/bad_indentation.conf: invalid YAML: [3:5] value is not allowed in this context. map key-value is pre-defined\n" +
-					"   1 | bleemeo:\n" +
-					"   2 |   api_base: \"http://127.0.0.1:8000\"\n" +
-					">  3 |     mqtt:\n" +
-					"           ^\n" +
-					"   4 |       host: 127.0.0.1",
+				"testdata/bad_indentation.conf: invalid YAML: line 3, column 5: value is not allowed in this context. map key-value is pre-defined",
 			},
 		},
 		{
