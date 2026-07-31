@@ -1139,7 +1139,7 @@ func Test_usePreviousNetstat(t *testing.T) {
 
 func TestValidateServices(t *testing.T) {
 	otelCfg := config.OpenTelemetry{
-		Enable: true,
+		ShippingEnable: true,
 		AutoDiscovery: config.AutoDiscovery{
 			ContainerAndServiceEnable: true,
 		},

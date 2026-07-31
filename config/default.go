@@ -72,8 +72,7 @@ func mapKeys() []string {
 		"log.opentelemetry.known_log_filters",
 		"log.opentelemetry.container_filter",
 		"log.opentelemetry.container_format",
-		"log.metrics.receivers",
-		"log.metrics.count",
+		"log.metrics_rules",
 	}
 }
 
@@ -326,7 +325,8 @@ func DefaultConfig() Config { //nolint:maintidx
 				Receivers: map[string]NetworkReceiver{},
 			},
 			OpenTelemetry: OpenTelemetry{
-				Enable: true,
+				ShippingEnable: true,
+				SendLogs:       true,
 				AutoDiscovery: AutoDiscovery{
 					AllEnable:                 false,
 					JournaldEnable:            false,
@@ -334,24 +334,15 @@ func DefaultConfig() Config { //nolint:maintidx
 					AuditdEnable:              false,
 					ContainerAndServiceEnable: false,
 				},
-				Network:         OTLPNetworkParticipation{Receivers: []string{}},
-				KnownLogFormats: DefaultKnownLogFormats(),
-				Receivers:       map[string]OTLPReceiver{},
-				ContainerFormat: map[string]string{},
-				GlobalFilters:   OTELFilters{},
-				KnownLogFilters: map[string]OTELFilters{},
-				ContainerFilter: map[string]string{},
+				KnownLogFormats:  DefaultKnownLogFormats(),
+				Receivers:        map[string]LogReceiver{},
+				ContainerFormat:  map[string]string{},
+				GlobalFilters:    OTELFilters{},
+				KnownLogFilters:  map[string]OTELFilters{},
+				ContainerFilter:  map[string]string{},
+				ContainerExclude: []ContainerExcludeRule{},
 			},
-			Metrics: LogMetricsConfig{
-				Receivers:                 map[string]LogMetricsReceiver{},
-				Count:                     map[string]LogMetricsCount{},
-				ContainerCounters:         []string{},
-				ContainerSelectorCounters: []ContainerSelectorRule{},
-				ContainerExclude:          []ContainerExcludeRule{},
-				Network: LogMetricsNetworkReceiver{
-					Receivers: []string{},
-				},
-			},
+			MetricsRules: map[string][]LogMetricEntry{},
 		},
 		Logging: Logging{
 			Buffer: LoggingBuffer{

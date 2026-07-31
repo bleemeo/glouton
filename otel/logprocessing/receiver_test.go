@@ -229,7 +229,7 @@ func TestFileLogReceiver(t *testing.T) {
 		},
 	}
 
-	cfg := config.OTLPReceiver{
+	cfg := config.LogReceiver{
 		"include": []string{
 			filepath.Join(tmpDir, "*.log"),
 		},
@@ -406,7 +406,7 @@ func TestFileLogReceiverWithHostroot(t *testing.T) {
 
 	defer file.Close()
 
-	cfg := config.OTLPReceiver{
+	cfg := config.LogReceiver{
 		"include": []string{
 			watchedFile,
 		},
@@ -567,7 +567,7 @@ func TestExecLogReceiver(t *testing.T) {
 		},
 	}
 
-	cfg := config.OTLPReceiver{
+	cfg := config.LogReceiver{
 		"include": []string{file.Name()},
 		"operators": []config.OTELOperator{
 			{

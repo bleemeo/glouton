@@ -66,18 +66,6 @@ func mergeLastFileSizes(receivers []*logReceiver, containerRecv *containerReceiv
 	return sizers
 }
 
-func validateContainerOperators(containerOps map[string]string, opsConfigs map[string][]config.OTELOperator) map[string]string {
-	for ctrName, opName := range containerOps {
-		if opsConfigs[opName] == nil {
-			logger.V(1).Printf("Container %q requires the log processing operator %q, which is not defined", ctrName, opName)
-
-			delete(containerOps, ctrName)
-		}
-	}
-
-	return containerOps
-}
-
 func validateContainerFilters(containerFilter map[string]string, filtersConfigs map[string]config.OTELFilters) map[string]string {
 	for ctrName, filterName := range containerFilter {
 		if filtersConfigs[filterName] == nil {
@@ -234,10 +222,13 @@ type sourceDiagnostic struct {
 	SetupError       string
 }
 
-type otlpReceiverDiagnosticInformation struct {
-	// Receivers is the list of log.network.receivers entries this feature
-	// pulls externally-pushed logs from (log.opentelemetry.network.receivers).
-	Receivers              []string
+// fanoutSourceDiagnostic reports a logsource.ReceiverManager-owned source
+// (SourceReceiver or SourceContainerLabel) this package opted into via
+// WantSource: the actual file/container tail is owned and reported by
+// logsource itself, this only tracks what flows through this package's own
+// per-source filter stage.
+type fanoutSourceDiagnostic struct {
+	Kind                   string
 	LogProcessedCount      int64
 	LogThroughputPerMinute int
 }
@@ -261,7 +252,7 @@ type containerDiagnosticInformation struct {
 	LogFilePath            string
 	LogFileRealPath        string
 	ReceiverKind           logsource.ReceiverKind
-	Attributes             ContainerAttributes
+	Attributes             logsource.ContainerAttributes
 }
 
 type diagnosticSummary struct {
@@ -274,11 +265,15 @@ type diagnosticSummary struct {
 }
 
 type diagnosticReceiver struct {
-	OTLPReceiver       *otlpReceiverDiagnosticInformation
 	JournaldReceiver   *journaldReceiverDiagnosticInformation
 	Receivers          map[string]receiverDiagnosticInformation
 	ContainerReceivers map[string]containerDiagnosticInformation
 	WatchedServices    map[string][]receiverDiagnosticInformation
+	// FanoutSources reports logsource.ReceiverManager-owned sources this
+	// package consumes via WantSource (config receivers and container-label
+	// sources); the physical tail itself is owned and diagnosed by
+	// logsource, not here.
+	FanoutSources map[string]fanoutSourceDiagnostic
 }
 
 type diagnosticReceiverSetup struct {

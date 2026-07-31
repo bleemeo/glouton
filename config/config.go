@@ -22,7 +22,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/bleemeo/glouton/logger"
@@ -233,6 +232,10 @@ func load(loader *configLoader, withDefault bool, loadEnviron bool, paths ...str
 	warnings = append(warnings, moreWarnings...)
 
 	config = applyConfigTransformation(config)
+
+	if err := validateLogReceivers(config); err != nil {
+		errors.Append(err)
+	}
 
 	return config, unwrapErrors(warnings), errors.MaybeUnwrap()
 }
@@ -471,6 +474,7 @@ func movedKeys() map[string]string {
 		"log.opentelemetry.auto_discovery.enable_journalctl":            "log.opentelemetry.auto_discovery.journald_enable",
 		"log.opentelemetry.auto_discovery.journalctl_enable":            "log.opentelemetry.auto_discovery.journald_enable",
 		"log.opentelemetry.auto_discovery.enable_syslog":                "log.opentelemetry.auto_discovery.syslog_enable",
+		"log.opentelemetry.enable":                                      "log.opentelemetry.shipping_enable",
 		"network_interface_blacklist":                                   "network_interface_denylist",
 		"nrpe.enabled":                                                  "nrpe.enable",
 		"telegraf.docker_metrics_enabled":                               "telegraf.docker_metrics_enable",
@@ -703,37 +707,35 @@ func migrateScrapper(k *koanf.Koanf, config map[string]any, deprecatedPath strin
 	return warnings
 }
 
-// mergeLegacyFilters translates each legacy filter into a countconnector
-// condition, upserting it into count by metric name, and records
-// sourceIdentifier (the migrated receiver/container's own name, or "" for a
-// selector-only entry with no name) onto that entry's "sources" list, so
-// that entry keeps counting exactly the sources it used to under the legacy
-// per-input model. createdByMigration and pinnedGlobal track state across
-// every mergeLegacyFilters call for the whole migration (one metric name can
-// be touched by several log.inputs entries, or already exist outside
-// migration entirely):
+// legacyMetricsRuleName namespaces a migrated log.inputs metric name into
+// its own log.metrics_rules entry, so it can't collide with a hand-written
+// entry sharing the same short name.
+func legacyMetricsRuleName(metric string) string {
+	return "legacy_log_inputs_metric_" + metric
+}
+
+// mergeLegacyFilters OR's each legacy filter's regex/exclude into a
+// countconnector condition, upserting it by metric name into metricsByName
+// (shared across every log.inputs entry being migrated, so a metric name
+// touched by several entries is recognized no matter which is processed
+// first). Every migrated metric always gets item: "" -- see
+// migrateLogInputs's doc comment for why -- so two log.inputs entries
+// sharing a metric name naturally coalesce into the same single series
+// once migrated, exactly reproducing today's pre-migration behavior (which
+// never had a per-source item either).
 //
-//   - A metric log.inputs shares with a pre-existing log.metrics.count entry
-//     (hand-written by the user, or otherwise not created by this migration)
-//     is never touched: its condition is still OR'd in so the legacy filter
-//     keeps working, but "sources" is left exactly as the user defined it --
-//     migration must never silently narrow an entry it doesn't own.
-//   - A metric shared by two or more legacy inputs merges their identifiers
-//     into one "sources" list (a real, if unusual, improvement over the old
-//     model: one merged series instead of two independent ones, but still
-//     scoped to just those sources rather than becoming accidentally global).
-//   - A metric touched by any selector-only entry (sourceIdentifier == "",
-//     no stable name to put in "sources") is pinned fully global instead:
-//     such a container can never be named, so scoping would silently drop
-//     it. This applies regardless of processing order -- a later selector
-//     entry un-scopes an already-scoped metric just as an earlier one
-//     prevents scoping from ever being added.
-//
-// A warning is returned for every genuine collision (once per input, not
-// once per repeated filter within the same input) so the migration isn't
-// silently lossy or silently narrowing.
-func mergeLegacyFilters(count map[string]any, filtersList []any, sourceIdentifier string, createdByMigration, pinnedGlobal map[string]bool) []error {
-	var warnings []error
+// Returns the distinct metric names this call's filters touched, so the
+// caller's synthesized receiver only references the metrics_rules entries
+// its own filters actually declared -- preserving each input's original
+// scoping instead of turning every migrated receiver into a grab-bag of
+// every migrated metric. A warning is returned the first time a call adds
+// to an already-existing entry, so a metric name shared across log.inputs
+// entries is surfaced, not silently merged.
+func mergeLegacyFilters(metricsByName map[string]any, filtersList []any) ([]string, []error) {
+	var (
+		touched  []string
+		warnings []error
+	)
 
 	touchedThisCall := make(map[string]bool)
 
@@ -757,69 +759,49 @@ func mergeLegacyFilters(count map[string]any, filtersList []any, sourceIdentifie
 			condition = fmt.Sprintf("%s and not IsMatch(body, %q)", condition, exclude)
 		}
 
-		entry, existed := count[metric].(map[string]any)
+		entry, existed := metricsByName[metric].(map[string]any)
 		if !existed {
-			entry = map[string]any{}
+			entry = map[string]any{"metric": metric, "item": ""}
 
 			if labels, ok := filterMap["labels"].(map[string]any); ok && len(labels) > 0 {
 				entry["labels"] = labels
 			}
 
-			count[metric] = entry
-			createdByMigration[metric] = true
+			metricsByName[metric] = entry
 		}
 
-		firstTouchThisCall := !touchedThisCall[metric]
-		touchedThisCall[metric] = true
+		if !touchedThisCall[metric] {
+			touchedThisCall[metric] = true
+
+			touched = append(touched, metric)
+
+			if existed {
+				warnings = append(warnings, fmt.Errorf(
+					"%w: metric %q, conditions from multiple log.inputs entries are merged into one shared log.metrics_rules.%s entry",
+					errLegacyFilterNameClash, metric, legacyMetricsRuleName(metric),
+				))
+			}
+		}
 
 		conditions, _ := entry["conditions"].([]any)
 		entry["conditions"] = append(conditions, condition)
-
-		if createdByMigration[metric] {
-			switch {
-			case sourceIdentifier == "":
-				delete(entry, "sources")
-
-				pinnedGlobal[metric] = true
-			case !pinnedGlobal[metric]:
-				sources, _ := entry["sources"].([]any)
-
-				if !slices.Contains(sources, any(sourceIdentifier)) {
-					entry["sources"] = append(sources, sourceIdentifier)
-				}
-			}
-		}
-
-		if existed && firstTouchThisCall {
-			switch {
-			case !createdByMigration[metric]:
-				warnings = append(warnings, fmt.Errorf(
-					"%w: metric %q, its condition was appended but its \"sources\" scope was left unchanged",
-					errLegacyFilterNameClash, metric,
-				))
-			case pinnedGlobal[metric]:
-				warnings = append(warnings, fmt.Errorf(
-					"%w: metric %q, also matched by a selector-only log.inputs entry with no stable name, so it stays global instead of being scoped",
-					errLegacyFilterNameClash, metric,
-				))
-			default:
-				warnings = append(warnings, fmt.Errorf(
-					"%w: metric %q, sources are merged into one shared log.metrics.count.%s entry",
-					errLegacyFilterNameClash, metric, metric,
-				))
-			}
-		}
 	}
 
-	return warnings
+	return touched, warnings
 }
 
 // migrateLogInputs folds the legacy log.inputs[].filters entries -- the
-// original, Fluent Bit-era way of declaring a log-to-metric source, which
-// predates log.metrics and is otherwise handled identically by otel/logmetrics
-// for path/container_name/container_selectors -- into the equivalent
-// log.metrics.* shape, so otel/logmetrics only ever has to handle the current
-// (raw, OTel-shaped) config.
+// original, Fluent Bit-era way of declaring a log-to-metric source -- into
+// the equivalent log.opentelemetry.receivers/log.metrics_rules shape, so
+// otel/logmetrics only ever has to handle the current, unified config.
+//
+// Every migrated metric gets item: "" unconditionally, matching what these
+// metrics actually carry today in production: Fluent Bit's own Prometheus
+// self-metrics, scraped and turned into a PromQL recording rule that strips
+// every label ("without (name, scrape_instance, scrape_job)"), including
+// any per-source identity. Migrating to anything other than an empty item
+// would change the identity of an already-existing metric series for real,
+// currently-deployed users.
 func migrateLogInputs(k *koanf.Koanf, config map[string]any) prometheus.MultiError {
 	var warnings prometheus.MultiError
 
@@ -828,28 +810,33 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any) prometheus.MultiErr
 		return nil
 	}
 
-	receivers, _ := k.Get("log.metrics.receivers").(map[string]any)
+	// Read from config (the mutable snapshot), not k (the original,
+	// unmutated tree): migrateLegacyNetworkListeners runs first in migrate()
+	// and may already have written a "legacy_network" receiver here -- reading
+	// via k.Get would silently drop it.
+	receivers, _ := config["log.opentelemetry.receivers"].(map[string]any)
+	if receivers == nil {
+		receivers, _ = k.Get("log.opentelemetry.receivers").(map[string]any)
+	}
+
 	if receivers == nil {
 		receivers = map[string]any{}
 	}
 
-	count, _ := k.Get("log.metrics.count").(map[string]any)
-	if count == nil {
-		count = map[string]any{}
+	metricsRules, _ := config["log.metrics_rules"].(map[string]any)
+	if metricsRules == nil {
+		metricsRules, _ = k.Get("log.metrics_rules").(map[string]any)
 	}
 
-	containerCounters, _ := k.Get("log.metrics.container_counters").([]any)
-	containerSelectorCounters, _ := k.Get("log.metrics.container_selector_counters").([]any)
+	if metricsRules == nil {
+		metricsRules = map[string]any{}
+	}
+
+	// Shared across every mergeLegacyFilters call below -- see its doc comment.
+	metricsByName := map[string]any{}
 
 	remainingInputs := make([]any, 0, len(inputs))
 	translated := false
-
-	// Shared across every mergeLegacyFilters call below, so a metric name
-	// touched by several log.inputs entries (or already present outside this
-	// migration) is recognized no matter which entry is processed first --
-	// see mergeLegacyFilters's doc comment.
-	createdByMigration := map[string]bool{}
-	pinnedGlobal := map[string]bool{}
 
 	for i, inputAny := range inputs {
 		inputMap, ok := inputAny.(map[string]any)
@@ -871,96 +858,113 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any) prometheus.MultiErr
 		// translated entry.
 		delete(inputMap, "filters")
 
-		name := fmt.Sprintf("legacy_input_%d", i)
 		path, _ := inputMap["path"].(string)
 		containerName, _ := inputMap["container_name"].(string)
 		selectors, _ := inputMap["container_selectors"].(map[string]any)
 
-		switch {
-		case path != "":
-			for _, w := range mergeLegacyFilters(count, filtersList, name, createdByMigration, pinnedGlobal) {
-				warnings.Append(w)
-			}
-
-			receivers[name] = map[string]any{"include": []any{path}}
-			warnings.Append(fmt.Errorf("%w: log.inputs[].filters (path %q), use log.metrics.receivers/count instead", errSettingsDeprecated, path))
-
-			translated = true
-		case containerName != "" && len(selectors) == 0:
-			for _, w := range mergeLegacyFilters(count, filtersList, containerName, createdByMigration, pinnedGlobal) {
-				warnings.Append(w)
-			}
-
-			containerCounters = append(containerCounters, containerName)
-			warnings.Append(fmt.Errorf("%w: log.inputs[].filters (container_name %q), use log.metrics.container_counters/count instead", errSettingsDeprecated, containerName))
-
-			translated = true
-		case len(selectors) > 0:
-			// containerName may be "" here (a pure selector rule): such a
-			// container has no stable name to scope onto at config time, so
-			// its metric stays global (mergeLegacyFilters skips empty identifiers).
-			for _, w := range mergeLegacyFilters(count, filtersList, containerName, createdByMigration, pinnedGlobal) {
-				warnings.Append(w)
-			}
-
-			containerSelectorCounters = append(containerSelectorCounters, map[string]any{
-				"container_name": containerName,
-				"selectors":      selectors,
-			})
-			warnings.Append(fmt.Errorf("%w: log.inputs[].filters (container_selectors %v), use log.metrics.container_selector_counters/count instead", errSettingsDeprecated, selectors))
-
-			translated = true
-		default:
+		if path == "" && containerName == "" && len(selectors) == 0 {
 			warnings.Append(fmt.Errorf("%w: log.inputs[%d] has filters but no path/container_name/container_selectors set, filters were dropped", errSettingsDeprecated, i))
 
 			remainingInputs = append(remainingInputs, inputAny)
+
+			continue
 		}
+
+		touchedMetrics, mergeWarnings := mergeLegacyFilters(metricsByName, filtersList)
+		for _, w := range mergeWarnings {
+			warnings.Append(w)
+		}
+
+		metrics := make([]any, 0, len(touchedMetrics))
+		for _, metric := range touchedMetrics {
+			metrics = append(metrics, map[string]any{"include": legacyMetricsRuleName(metric)})
+		}
+
+		// Legacy log.inputs was metrics-only (Fluent Bit never shipped these
+		// logs through Glouton), so the migrated receiver never ships either.
+		receiver := map[string]any{
+			"send_logs": false,
+			"metrics":   metrics,
+		}
+
+		if path != "" {
+			receiver["include"] = []any{path}
+		}
+
+		if containerName != "" {
+			receiver["container_name"] = containerName
+		}
+
+		if len(selectors) > 0 {
+			receiver["container_selectors"] = selectors
+		}
+
+		receivers[fmt.Sprintf("legacy_input_%d", i)] = receiver
+
+		warnings.Append(fmt.Errorf("%w: log.inputs[%d].filters, use log.opentelemetry.receivers/log.metrics_rules instead", errSettingsDeprecated, i))
+
+		translated = true
 	}
 
 	if !translated {
 		return nil
 	}
 
-	config["log.metrics.receivers"] = receivers
-	config["log.metrics.count"] = count
-	config["log.metrics.container_counters"] = containerCounters
-	config["log.metrics.container_selector_counters"] = containerSelectorCounters
+	for metric, entry := range metricsByName {
+		ruleName := legacyMetricsRuleName(metric)
+
+		if _, exists := metricsRules[ruleName]; exists {
+			warnings.Append(fmt.Errorf(
+				"%w: log.metrics_rules.%s already exists, keeping it as-is instead of overwriting it with the migrated log.inputs metric %q",
+				errSettingsDeprecated, ruleName, metric,
+			))
+
+			continue
+		}
+
+		metricsRules[ruleName] = []any{entry}
+	}
+
+	config["log.opentelemetry.receivers"] = receivers
+	config["log.metrics_rules"] = metricsRules
 	config["log.inputs"] = remainingInputs
 
 	return warnings
 }
 
-// migrateLegacyNetworkListeners folds log.opentelemetry.grpc/http and
-// log.metrics.network.grpc/http's old, pre-log.network {enable, address, port}
-// shape -- each its own standalone listener, predating the shared
-// log.network.receivers introduced alongside log.metrics -- into the new
-// shape (see NetworkConfig/NetworkReceiver/OTLPNetworkParticipation),
-// preserving each one's exact address/port. Two legacy sources with
-// byte-identical {grpc, http} settings collapse onto one synthesized shared
-// receiver (what manually reconfiguring them would have produced anyway);
-// anything else synthesizes its own receiver, exactly reproducing the old
-// two-listener behavior.
+// migrateLegacyNetworkListeners folds log.opentelemetry.grpc/http's old,
+// pre-log.network {enable, address, port} shape -- a standalone listener,
+// predating log.network.receivers -- into a synthesized "legacy_network"
+// receiver participating in a named log.network.receivers listener,
+// preserving the exact address/port and reproducing the old unconditional
+// shipping behavior (send_logs: true).
 func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any) prometheus.MultiError {
 	var warnings prometheus.MultiError
 
-	type legacyFeature struct {
-		path            string
-		receiversPath   string
-		defaultGRPCPort int
-		defaultHTTPPort int
+	const (
+		path            = "log.opentelemetry"
+		defaultGRPCPort = 4317
+		defaultHTTPPort = 4318
+		receiverName    = "legacy-network"
+	)
+
+	legacyGRPC, hasGRPC := k.Get(path + ".grpc").(map[string]any)
+	legacyHTTP, hasHTTP := k.Get(path + ".http").(map[string]any)
+
+	if !hasGRPC && !hasHTTP {
+		return nil
 	}
 
-	// Matches the old, distinct-by-default ports each feature used to pick,
-	// specifically so enabling both without any customization didn't collide.
-	features := []legacyFeature{
-		{path: "log.opentelemetry", receiversPath: "log.opentelemetry.network.receivers", defaultGRPCPort: 4317, defaultHTTPPort: 4318},
-		{path: "log.metrics.network", receiversPath: "log.metrics.network.receivers", defaultGRPCPort: 4417, defaultHTTPPort: 4418},
-	}
+	// Drop the consumed keys so they don't reach the strict struct decode
+	// (which errors on unknown keys) even for an entry that ends up fully
+	// disabled below.
+	delete(config, path+".grpc")
+	delete(config, path+".http")
 
-	type endpointSpec struct {
-		grpc string // "" if disabled
-		http string // "" if disabled
-	}
+	warnings.Append(fmt.Errorf(
+		"%w: %s.grpc/http {enable, address, port}, use log.network.receivers + a log.opentelemetry.receivers entry's network field instead",
+		errSettingsDeprecated, path,
+	))
 
 	endpointOf := func(legacy map[string]any, defaultPort int) string {
 		enable, _ := legacy["enable"].(bool)
@@ -987,68 +991,46 @@ func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any) promet
 		return fmt.Sprintf("%s:%d", address, port)
 	}
 
-	receivers, _ := k.Get("log.network.receivers").(map[string]any)
+	var grpcEndpoint, httpEndpoint string
+	if hasGRPC {
+		grpcEndpoint = endpointOf(legacyGRPC, defaultGRPCPort)
+	}
+
+	if hasHTTP {
+		httpEndpoint = endpointOf(legacyHTTP, defaultHTTPPort)
+	}
+
+	if grpcEndpoint == "" && httpEndpoint == "" {
+		return warnings // both were disabled: no network participation to migrate
+	}
+
+	protocols := map[string]any{}
+	if grpcEndpoint != "" {
+		protocols["grpc"] = map[string]any{"endpoint": grpcEndpoint}
+	}
+
+	if httpEndpoint != "" {
+		protocols["http"] = map[string]any{"endpoint": httpEndpoint}
+	}
+
+	networkReceivers, _ := k.Get("log.network.receivers").(map[string]any)
+	if networkReceivers == nil {
+		networkReceivers = map[string]any{}
+	}
+
+	networkReceivers[receiverName] = map[string]any{"protocols": protocols}
+	config["log.network.receivers"] = networkReceivers
+
+	receivers, _ := k.Get("log.opentelemetry.receivers").(map[string]any)
 	if receivers == nil {
 		receivers = map[string]any{}
 	}
 
-	nameBySpec := make(map[endpointSpec]string, len(features))
-
-	for _, feature := range features {
-		legacyGRPC, hasGRPC := k.Get(feature.path + ".grpc").(map[string]any)
-		legacyHTTP, hasHTTP := k.Get(feature.path + ".http").(map[string]any)
-
-		if !hasGRPC && !hasHTTP {
-			continue
-		}
-
-		// Drop the consumed keys so they don't reach the strict struct decode
-		// (which errors on unknown keys) even for an entry that ends up fully
-		// disabled below.
-		delete(config, feature.path+".grpc")
-		delete(config, feature.path+".http")
-
-		warnings.Append(fmt.Errorf(
-			"%w: %s.grpc/http {enable, address, port}, use log.network.receivers + %s.network.receivers instead",
-			errSettingsDeprecated, feature.path, feature.path,
-		))
-
-		var spec endpointSpec
-		if hasGRPC {
-			spec.grpc = endpointOf(legacyGRPC, feature.defaultGRPCPort)
-		}
-
-		if hasHTTP {
-			spec.http = endpointOf(legacyHTTP, feature.defaultHTTPPort)
-		}
-
-		if spec.grpc == "" && spec.http == "" {
-			continue // both were disabled: no network participation to migrate
-		}
-
-		name, found := nameBySpec[spec]
-		if !found {
-			name = strings.ReplaceAll(feature.path, ".", "-") + "-legacy"
-			nameBySpec[spec] = name
-
-			protocols := map[string]any{}
-			if spec.grpc != "" {
-				protocols["grpc"] = map[string]any{"endpoint": spec.grpc}
-			}
-
-			if spec.http != "" {
-				protocols["http"] = map[string]any{"endpoint": spec.http}
-			}
-
-			receivers[name] = map[string]any{"protocols": protocols}
-		}
-
-		config[feature.receiversPath] = []any{name}
+	receivers["legacy_network"] = map[string]any{
+		"network":   map[string]any{"receivers": []any{receiverName}},
+		"send_logs": true,
 	}
-
-	if len(receivers) > 0 {
-		config["log.network.receivers"] = receivers
-	}
+	config["log.opentelemetry.receivers"] = receivers
 
 	return warnings
 }

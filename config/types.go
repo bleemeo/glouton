@@ -59,11 +59,15 @@ type Config struct {
 }
 
 type Log struct {
-	HostRootPrefix string           `yaml:"hostroot_prefix"`
-	Inputs         []LogInput       `yaml:"inputs"`
-	Network        NetworkConfig    `yaml:"network"`
-	OpenTelemetry  OpenTelemetry    `yaml:"opentelemetry"`
-	Metrics        LogMetricsConfig `yaml:"metrics"`
+	HostRootPrefix string        `yaml:"hostroot_prefix"`
+	Inputs         []LogInput    `yaml:"inputs"`
+	Network        NetworkConfig `yaml:"network"`
+	OpenTelemetry  OpenTelemetry `yaml:"opentelemetry"`
+	// MetricsRules are named, reusable libraries of metric definitions
+	// (same shape as a receiver's own inline metrics: entries). An entry
+	// does nothing on its own until a receiver includes it by name from its
+	// own metrics: list (see OpenTelemetry.Receivers/LogReceiver).
+	MetricsRules map[string][]LogMetricEntry `yaml:"metrics_rules"`
 }
 
 // NetworkConfig holds named, shared OTLP gRPC/HTTP receivers that log
@@ -90,7 +94,7 @@ type NetworkEndpoint struct {
 }
 
 // OTLPNetworkParticipation lists which Log.Network.Receivers entries a
-// feature pulls logs from. Enable is a shortcut resolving to
+// receiver/feature pulls logs from. Enable is a shortcut resolving to
 // DefaultNetworkReceiverName (see EffectiveNetworkReceivers).
 type OTLPNetworkParticipation struct {
 	Enable    bool     `yaml:"enable"`
@@ -98,7 +102,7 @@ type OTLPNetworkParticipation struct {
 }
 
 // LogInput is the legacy Fluent Bit-era log-to-metric source; migrateLogInputs
-// (config.go) translates it into LogMetricsConfig.
+// (config.go) translates it into OpenTelemetry.Receivers/Log.MetricsRules.
 type LogInput struct {
 	Path          string            `yaml:"path"`
 	ContainerName string            `yaml:"container_name"`
@@ -115,64 +119,13 @@ type LegacyLogFilter struct {
 	Labels  map[string]string `yaml:"labels"`
 }
 
-// LogMetricsConfig configures counting log lines matching a pattern and
-// reporting the match rate as a metric, independent from OpenTelemetry log
-// shipping. Each log.metrics.count entry owns its sources: with none listed
-// it's global (fed by every watched source); with sources listed, only those
-// feed it (see LogMetricsCount's doc comment).
-type LogMetricsConfig struct {
-	Receivers map[string]LogMetricsReceiver `yaml:"receivers"`
-	Count     map[string]LogMetricsCount    `yaml:"count"`
-	// ContainerCounters names containers to watch by exact name.
-	ContainerCounters []string `yaml:"container_counters"`
-	// ContainerSelectorCounters additionally watches containers matched by
-	// label/annotation selector.
-	ContainerSelectorCounters []ContainerSelectorRule `yaml:"container_selector_counters"`
-	// ContainerExclude vetoes watching a matching container.
-	ContainerExclude []ContainerExcludeRule    `yaml:"container_exclude"`
-	Network          LogMetricsNetworkReceiver `yaml:"network"`
-}
-
-// LogMetricsReceiver is raw YAML decoding into the vendored
-// filelogreceiver/fileconsumer config (like OTLPReceiver); log_format names
-// an OpenTelemetry.KnownLogFormats entry.
-type LogMetricsReceiver = map[string]any
-
-// LogMetricsCount is raw YAML for one metric definition, decoding into
-// countconnector.MetricInfo. labels and sources are Glouton's own additions:
-// labels are static labels attached to every sample; sources names which
-// receivers/containers/the network source ("network") feed this metric --
-// none means global (every watched source); one gets that source's own item;
-// two or more merge into a single series with no item at all.
-//
-// For a global (sourceless) metric, per_container_item/per_receiver_item/
-// per_network_item (bool) further decide whether a matching source of that
-// kind still gets its own item, instead of merging into the shared item="".
-// Containers default to true (a container's name usually isn't known ahead
-// of time, so there's no practical way to list one in "sources" just to get
-// a per-instance item); receivers and the network source default to false.
-type LogMetricsCount = map[string]any
-
-// ContainerSelectorRule matches a container by label/annotation selector to
-// opt it into being watched for log-to-metric.
-type ContainerSelectorRule struct {
-	// ContainerName, if set, additionally requires an exact name match.
-	ContainerName string            `yaml:"container_name"`
-	Selectors     map[string]string `yaml:"selectors"`
-}
-
-// ContainerExcludeRule matches like ContainerSelectorRule, but vetoes
-// watching instead of opting in.
+// ContainerExcludeRule matches a container by exact name and/or
+// label/annotation selector, to veto it from BOTH log shipping
+// auto_discovery and metrics container-label detection (see
+// OpenTelemetry.ContainerExclude) -- one shared list for both concerns.
 type ContainerExcludeRule struct {
 	ContainerName string            `yaml:"container_name"`
 	Selectors     map[string]string `yaml:"selectors"`
-}
-
-// LogMetricsNetworkReceiver lets log-to-metric count matches in logs pushed
-// via an external OTLP client, same shape as OTLPNetworkParticipation.
-type LogMetricsNetworkReceiver struct {
-	Enable    bool     `yaml:"enable"`
-	Receivers []string `yaml:"receivers"`
 }
 
 // OTELOperator is raw YAML built into an operator.Config before use.
@@ -182,18 +135,29 @@ type OTELOperator = map[string]any
 type OTELFilters = map[string]any
 
 type OpenTelemetry struct {
-	Enable        bool          `yaml:"enable"`
-	AutoDiscovery AutoDiscovery `yaml:"auto_discovery"`
-	// Network names which Log.Network.Receivers entries to pull logs from.
-	Network         OTLPNetworkParticipation  `yaml:"network"`
+	// ShippingEnable is the master switch for log SHIPPING only (renamed
+	// from Enable): it no longer gates metrics, which run whenever a
+	// receiver/metrics_rules/container label opts a source in, independent
+	// of shipping.
+	ShippingEnable bool `yaml:"shipping_enable"`
+	// SendLogs is the global default for whether a receiver ships its logs,
+	// applied unless the receiver overrides it with its own send_logs
+	// field. Irrelevant with zero configured receivers.
+	SendLogs        bool                      `yaml:"send_logs"`
+	AutoDiscovery   AutoDiscovery             `yaml:"auto_discovery"`
 	KnownLogFormats map[string][]OTELOperator `yaml:"known_log_formats"`
-	Receivers       map[string]OTLPReceiver   `yaml:"receivers"`
+	// Receivers are named log sources, for shipping and/or metrics (see
+	// LogReceiver's doc comment for its Glouton-specific keys).
+	Receivers map[string]LogReceiver `yaml:"receivers"`
 	// map: container name -> format to apply
 	ContainerFormat map[string]string      `yaml:"container_format"`
 	GlobalFilters   OTELFilters            `yaml:"global_filters"`
 	KnownLogFilters map[string]OTELFilters `yaml:"known_log_filters"`
 	// map: container name -> filter to apply
 	ContainerFilter map[string]string `yaml:"container_filter"`
+	// ContainerExclude vetoes a matching container from both shipping
+	// auto_discovery and metrics container-label detection at once.
+	ContainerExclude []ContainerExcludeRule `yaml:"container_exclude"`
 }
 
 type AutoDiscovery struct {
@@ -210,10 +174,45 @@ type EnableListener struct {
 	Port    int    `yaml:"port"`
 }
 
-// OTLPReceiver is raw YAML decoding into the vendored
-// filelogreceiver/fileconsumer config (see logsource.SetupLogReceiverFactories);
-// log_format and filters are Glouton's own additions.
-type OTLPReceiver = map[string]any
+// LogReceiver is raw YAML: real filelogreceiver/fileconsumer fields
+// (include, exclude, start_at, encoding, ...) paste in verbatim (see
+// logsource.SetupLogReceiverFactories), alongside Glouton's own additions:
+//
+//   - container_name / container_selectors: watch matching containers'
+//     logs, in addition to (or instead of) include. Both can be combined,
+//     and combined with include, on the same receiver -- every match feeds
+//     this one receiver's shipping/metrics as a single unit.
+//   - network: OTLPNetworkParticipation, participate in a log.network
+//     listener (Form A: {receivers: [name,...]}, Form B: {enable: true}).
+//   - send_logs: override the global OpenTelemetry.SendLogs default for
+//     this receiver.
+//   - log_format / operators: parse each line into attributes before
+//     shipping and before any metrics condition runs, applying to both.
+//   - filters: OTELFilters for SHIPPING only (drop/keep, not counting).
+//   - metrics: []LogMetricEntry, this receiver's log-to-metric definitions.
+//
+// A receiver needs at least one of include/container_name/
+// container_selectors/network -- enforced by validateLogReceivers.
+type LogReceiver = map[string]any
+
+// LogMetricEntry is one item of a receiver's metrics: list, or of a
+// Log.MetricsRules[name] list. Either:
+//
+//   - {include: <metrics_rules-name>}, pulling in every metric defined
+//     under that Log.MetricsRules entry, or
+//   - an inline definition decoding into countconnector.MetricInfo
+//     (conditions, attributes), plus Glouton's own additions: regex
+//     (sugar for a single 'IsMatch(body, "...")' condition), labels (a
+//     static map[string]string stamped on every sample, zero cardinality
+//     risk -- distinct from attributes' dynamic per-value grouping), and
+//     item (explicit override of the auto-derived item -- see the item
+//     derivation rules in otel/logmetrics).
+//
+// Kept raw (not a struct) for the same verbatim-passthrough reason as
+// LogReceiver, and so "item" stays distinguishable as absent (derive it)
+// vs. explicitly set to "" (used by legacy log.inputs migration to
+// preserve today's empty item on already-live metrics).
+type LogMetricEntry = map[string]any
 
 type Smart struct {
 	Enable         bool     `yaml:"enable"`

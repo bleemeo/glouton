@@ -224,41 +224,15 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			Metrics: LogMetricsConfig{
-				Receivers: map[string]LogMetricsReceiver{
-					"apache_access": {
-						"include": []any{"/var/log/apache/access.log"},
-					},
-				},
-				Count: map[string]LogMetricsCount{
-					"apache_errors_count": {
-						"conditions": []any{`IsMatch(body, "\\[error\\]")`},
-					},
-					"redis_errors_count": {
-						"conditions": []any{`IsMatch(body, "` + testERROR + `")`},
-					},
-					"postgres_errors_count": {
-						"conditions": []any{`IsMatch(body, "error")`},
-					},
-				},
-				ContainerCounters: []string{testRedis},
-				ContainerSelectorCounters: []ContainerSelectorRule{
-					{
-						Selectors: map[string]string{"app": "postgres"},
-					},
-				},
-			},
 			OpenTelemetry: OpenTelemetry{
-				Enable: true,
+				ShippingEnable: true,
+				SendLogs:       true,
 				AutoDiscovery: AutoDiscovery{
 					AllEnable:                 true,
 					JournaldEnable:            true,
 					SyslogEnable:              true,
 					AuditdEnable:              true,
 					ContainerAndServiceEnable: true,
-				},
-				Network: OTLPNetworkParticipation{
-					Receivers: []string{"otlp"},
 				},
 				KnownLogFormats: map[string][]OTELOperator{
 					"format-1": {
@@ -274,7 +248,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 						},
 					},
 				},
-				Receivers: map[string]OTLPReceiver{
+				Receivers: map[string]LogReceiver{
 					"filelog/recv": {
 						"include": []any{"/var/log/apache/access.log", "/var/log/apache/error.log"},
 						"operators": []any{
@@ -282,6 +256,36 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 								keyType: "add",
 								"field": "resource['service.name']",
 								"value": "apache_server",
+							},
+						},
+						"network": map[string]any{
+							"receivers": []any{"otlp"},
+						},
+					},
+					"apache_access": {
+						"include": []any{"/var/log/apache/access.log"},
+						"metrics": []any{
+							map[string]any{
+								"metric":     "apache_errors_count",
+								"conditions": []any{`IsMatch(body, "\\[error\\]")`},
+							},
+						},
+					},
+					"redis": {
+						"container_name": testRedis,
+						"metrics": []any{
+							map[string]any{
+								"metric":     "redis_errors_count",
+								"conditions": []any{`IsMatch(body, "` + testERROR + `")`},
+							},
+						},
+					},
+					"postgres": {
+						"container_selectors": map[string]any{"app": "postgres"},
+						"metrics": []any{
+							map[string]any{
+								"metric":     "postgres_errors_count",
+								"conditions": []any{`IsMatch(body, "error")`},
 							},
 						},
 					},
@@ -585,6 +589,13 @@ func TestMergeWithDefault(t *testing.T) {
 		},
 	}
 	expectedConfig.NetworkInterfaceDenylist = []string{testEth0, "eth1", "eth1", "eth2"}
+	// Regression test: log.metrics_rules must be added to mapKeys() (default.go)
+	// like every other config map, or a non-empty value from a file gets wiped
+	// by the (structurally present but empty) default map when withDefault=true.
+	expectedConfig.Log.MetricsRules = map[string][]LogMetricEntry{
+		"rule_a": {{"metric": "metric_a", "regex": "a"}},
+		"rule_b": {{"metric": "metric_b", "regex": "b"}},
+	}
 
 	t.Setenv("GLOUTON_MQTT_HOSTS", "")
 	t.Setenv("GLOUTON_METRIC_DENY_METRICS", testCPUUsed)
@@ -1662,164 +1673,87 @@ func TestCensorURLSecrets(t *testing.T) {
 	}
 }
 
-// TestMergeLegacyFiltersNativeEntryUntouched checks that migration never
-// narrows a log.metrics.count entry it didn't create itself: a legacy
-// log.inputs filter sharing a metric name with a pre-existing (hand-written)
-// entry still gets its condition OR'd in, but the entry's "sources" (here:
-// entirely absent, i.e. global) is left exactly as the user defined it.
-func TestMergeLegacyFiltersNativeEntryUntouched(t *testing.T) {
-	t.Parallel()
-
-	count := map[string]any{
-		"app_errors": map[string]any{
-			"conditions": []any{`IsMatch(body, "native")`},
-		},
-	}
-	createdByMigration := map[string]bool{}
-	pinnedGlobal := map[string]bool{}
-
-	filters := []any{map[string]any{"metric": "app_errors", "regex": "legacy"}}
-
-	warnings := mergeLegacyFilters(count, filters, "db", createdByMigration, pinnedGlobal)
-	if len(warnings) != 1 || !strings.Contains(warnings[0].Error(), "left unchanged") {
-		t.Fatalf("Expected exactly one 'left unchanged' warning, got %v", warnings)
-	}
-
-	entry := count["app_errors"].(map[string]any) //nolint:forcetypeassert
-
-	if _, hasSources := entry["sources"]; hasSources {
-		t.Errorf("Expected the native entry's \"sources\" to stay untouched (absent), got %v", entry["sources"])
-	}
-
-	wantConditions := []any{`IsMatch(body, "native")`, `IsMatch(body, "legacy")`}
-	if diff := cmp.Diff(wantConditions, entry["conditions"]); diff != "" {
-		t.Errorf("Unexpected conditions (-want +got):\n%s", diff)
-	}
-
-	// A second, different legacy input colliding with the same native entry
-	// must be left untouched too, not just the first one.
-	warnings = mergeLegacyFilters(count, []any{map[string]any{"metric": "app_errors", "regex": "legacy2"}}, "worker", createdByMigration, pinnedGlobal)
-	if len(warnings) != 1 || !strings.Contains(warnings[0].Error(), "left unchanged") {
-		t.Fatalf("Expected the second collision to also be left unchanged, got %v", warnings)
-	}
-
-	if _, hasSources := entry["sources"]; hasSources {
-		t.Errorf("Expected \"sources\" to still be absent after a second native collision, got %v", entry["sources"])
-	}
-}
-
 // TestMergeLegacyFiltersSameInputRepeatedMetric checks that two filters for
-// the same metric within a single log.inputs entry (a legitimate OR-together
-// pattern) don't trigger a "collides with another input" warning.
+// the same metric within a single mergeLegacyFilters call (a legitimate
+// OR-together pattern, e.g. two filters in one log.inputs entry) don't
+// trigger a collision warning, and that the resulting entry always carries
+// item: "" and no "sources" field at all (that bookkeeping is gone).
 func TestMergeLegacyFiltersSameInputRepeatedMetric(t *testing.T) {
 	t.Parallel()
 
-	count := map[string]any{}
-	createdByMigration := map[string]bool{}
-	pinnedGlobal := map[string]bool{}
+	metricsByName := map[string]any{}
 
 	filters := []any{
 		map[string]any{"metric": "app_errors", "regex": "one"},
 		map[string]any{"metric": "app_errors", "regex": "two"},
 	}
 
-	warnings := mergeLegacyFilters(count, filters, "app", createdByMigration, pinnedGlobal)
+	touched, warnings := mergeLegacyFilters(metricsByName, filters)
 	if len(warnings) != 0 {
-		t.Fatalf("Expected no warning for two filters of the same metric within one input, got %v", warnings)
+		t.Fatalf("Expected no warning for two filters of the same metric within one call, got %v", warnings)
 	}
 
-	entry := count["app_errors"].(map[string]any) //nolint:forcetypeassert
+	if diff := cmp.Diff([]string{"app_errors"}, touched); diff != "" {
+		t.Errorf("Unexpected touched metrics (-want +got):\n%s", diff)
+	}
+
+	entry := metricsByName["app_errors"].(map[string]any) //nolint:forcetypeassert
 
 	wantConditions := []any{`IsMatch(body, "one")`, `IsMatch(body, "two")`}
 	if diff := cmp.Diff(wantConditions, entry["conditions"]); diff != "" {
 		t.Errorf("Unexpected conditions (-want +got):\n%s", diff)
 	}
 
-	wantSources := []any{"app"}
-	if diff := cmp.Diff(wantSources, entry["sources"]); diff != "" {
-		t.Errorf("Unexpected sources (-want +got):\n%s", diff)
+	if item, ok := entry["item"]; !ok || item != "" {
+		t.Errorf("Expected item to always be explicitly set to \"\", got %v (present=%v)", item, ok)
+	}
+
+	if _, hasSources := entry["sources"]; hasSources {
+		t.Errorf("Expected no \"sources\" key at all, got %v", entry["sources"])
 	}
 }
 
-// TestMergeLegacyFiltersCrossInputCollisionMerges checks the intended
-// behavior for two different legacy inputs sharing a metric name: both
-// identifiers land in "sources" (a single merged series), with one warning.
+// TestMergeLegacyFiltersCrossInputCollisionMerges checks that two separate
+// mergeLegacyFilters calls (one per log.inputs entry) sharing a metric name
+// OR their conditions together into a single entry, warning once, and that
+// the merged entry still always carries item: "" and no "sources" field.
 func TestMergeLegacyFiltersCrossInputCollisionMerges(t *testing.T) {
 	t.Parallel()
 
-	count := map[string]any{}
-	createdByMigration := map[string]bool{}
-	pinnedGlobal := map[string]bool{}
+	metricsByName := map[string]any{}
 
-	warningsA := mergeLegacyFilters(count, []any{map[string]any{"metric": "shared", "regex": "a"}}, "input_a", createdByMigration, pinnedGlobal)
+	touchedA, warningsA := mergeLegacyFilters(metricsByName, []any{map[string]any{"metric": "shared", "regex": "a"}})
 	if len(warningsA) != 0 {
-		t.Fatalf("Expected no warning for the first input to create the entry, got %v", warningsA)
+		t.Fatalf("Expected no warning for the first call to create the entry, got %v", warningsA)
 	}
 
-	warningsB := mergeLegacyFilters(count, []any{map[string]any{"metric": "shared", "regex": "b"}}, "input_b", createdByMigration, pinnedGlobal)
+	if diff := cmp.Diff([]string{"shared"}, touchedA); diff != "" {
+		t.Errorf("Unexpected touched metrics (-want +got):\n%s", diff)
+	}
+
+	touchedB, warningsB := mergeLegacyFilters(metricsByName, []any{map[string]any{"metric": "shared", "regex": "b"}})
 	if len(warningsB) != 1 || !strings.Contains(warningsB[0].Error(), "merged into one shared") {
 		t.Fatalf("Expected exactly one 'merged into one shared' warning, got %v", warningsB)
 	}
 
-	entry := count["shared"].(map[string]any) //nolint:forcetypeassert
-
-	wantSources := []any{"input_a", "input_b"}
-	if diff := cmp.Diff(wantSources, entry["sources"]); diff != "" {
-		t.Errorf("Unexpected sources (-want +got):\n%s", diff)
+	if diff := cmp.Diff([]string{"shared"}, touchedB); diff != "" {
+		t.Errorf("Unexpected touched metrics (-want +got):\n%s", diff)
 	}
-}
 
-// TestMergeLegacyFiltersSelectorPinsGlobal checks that a selector-only entry
-// (no stable name, sourceIdentifier=="") forces the metric fully global --
-// regardless of whether it's processed before or after a named entry that
-// would otherwise have scoped it.
-func TestMergeLegacyFiltersSelectorPinsGlobal(t *testing.T) {
-	t.Parallel()
+	entry := metricsByName["shared"].(map[string]any) //nolint:forcetypeassert
 
-	t.Run("selector-first", func(t *testing.T) {
-		t.Parallel()
+	wantConditions := []any{`IsMatch(body, "a")`, `IsMatch(body, "b")`}
+	if diff := cmp.Diff(wantConditions, entry["conditions"]); diff != "" {
+		t.Errorf("Unexpected conditions (-want +got):\n%s", diff)
+	}
 
-		count := map[string]any{}
-		createdByMigration := map[string]bool{}
-		pinnedGlobal := map[string]bool{}
+	if item, ok := entry["item"]; !ok || item != "" {
+		t.Errorf("Expected item to always be explicitly set to \"\", got %v (present=%v)", item, ok)
+	}
 
-		mergeLegacyFilters(count, []any{map[string]any{"metric": "m", "regex": "a"}}, "", createdByMigration, pinnedGlobal)
-		warnings := mergeLegacyFilters(count, []any{map[string]any{"metric": "m", "regex": "b"}}, "worker", createdByMigration, pinnedGlobal)
-
-		if len(warnings) != 1 || !strings.Contains(warnings[0].Error(), "stays global") {
-			t.Fatalf("Expected a 'stays global' warning, got %v", warnings)
-		}
-
-		entry := count["m"].(map[string]any) //nolint:forcetypeassert
-		if _, hasSources := entry["sources"]; hasSources {
-			t.Errorf("Expected \"sources\" to stay absent (global), got %v", entry["sources"])
-		}
-	})
-
-	t.Run("named-first", func(t *testing.T) {
-		t.Parallel()
-
-		count := map[string]any{}
-		createdByMigration := map[string]bool{}
-		pinnedGlobal := map[string]bool{}
-
-		mergeLegacyFilters(count, []any{map[string]any{"metric": "m", "regex": "a"}}, "worker", createdByMigration, pinnedGlobal)
-
-		entry := count["m"].(map[string]any) //nolint:forcetypeassert
-		if diff := cmp.Diff([]any{"worker"}, entry["sources"]); diff != "" {
-			t.Fatalf("Expected the named entry to be scoped before the selector arrives (-want +got):\n%s", diff)
-		}
-
-		warnings := mergeLegacyFilters(count, []any{map[string]any{"metric": "m", "regex": "b"}}, "", createdByMigration, pinnedGlobal)
-
-		if len(warnings) != 1 || !strings.Contains(warnings[0].Error(), "stays global") {
-			t.Fatalf("Expected a 'stays global' warning, got %v", warnings)
-		}
-
-		if _, hasSources := entry["sources"]; hasSources {
-			t.Errorf("Expected the selector to retroactively clear \"sources\" back to global, got %v", entry["sources"])
-		}
-	})
+	if _, hasSources := entry["sources"]; hasSources {
+		t.Errorf("Expected no \"sources\" key at all, got %v", entry["sources"])
+	}
 }
 
 func Test_migrate(t *testing.T) { //nolint:maintidx
@@ -1904,16 +1838,23 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 			ConfigFile: "testdata/legacy-log-inputs-path.conf",
 			WantConfig: Config{
 				Log: Log{
-					Metrics: LogMetricsConfig{
-						Receivers: map[string]LogMetricsReceiver{
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
 							"legacy_input_0": {
-								"include": []any{"/var/log/apache/access.log"},
+								"include":   []any{"/var/log/apache/access.log"},
+								"send_logs": false,
+								"metrics": []any{
+									map[string]any{"include": "legacy_log_inputs_metric_apache_errors_count"},
+								},
 							},
 						},
-						Count: map[string]LogMetricsCount{
-							"apache_errors_count": {
+					},
+					MetricsRules: map[string][]LogMetricEntry{
+						"legacy_log_inputs_metric_apache_errors_count": {
+							{
+								"metric":     "apache_errors_count",
+								"item":       "",
 								"conditions": []any{`IsMatch(body, "\\[error\\]")`},
-								"sources":    []any{"legacy_input_0"},
 							},
 						},
 					},
@@ -1926,14 +1867,25 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 			ConfigFile: "testdata/legacy-log-inputs-container-name.conf",
 			WantConfig: Config{
 				Log: Log{
-					Metrics: LogMetricsConfig{
-						Count: map[string]LogMetricsCount{
-							"redis_errors_count": {
-								"conditions": []any{`IsMatch(body, "ERROR")`},
-								"sources":    []any{"redis"},
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
+							"legacy_input_0": {
+								"container_name": testRedis,
+								"send_logs":      false,
+								"metrics": []any{
+									map[string]any{"include": "legacy_log_inputs_metric_redis_errors_count"},
+								},
 							},
 						},
-						ContainerCounters: []string{"redis"},
+					},
+					MetricsRules: map[string][]LogMetricEntry{
+						"legacy_log_inputs_metric_redis_errors_count": {
+							{
+								"metric":     "redis_errors_count",
+								"item":       "",
+								"conditions": []any{`IsMatch(body, "ERROR")`},
+							},
+						},
 					},
 				},
 			},
@@ -1944,14 +1896,24 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 			ConfigFile: "testdata/legacy-log-inputs-selectors.conf",
 			WantConfig: Config{
 				Log: Log{
-					Metrics: LogMetricsConfig{
-						Count: map[string]LogMetricsCount{
-							"postgres_errors_count": {
-								"conditions": []any{`IsMatch(body, "error")`},
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
+							"legacy_input_0": {
+								"container_selectors": map[string]any{"app": "postgres"},
+								"send_logs":           false,
+								"metrics": []any{
+									map[string]any{"include": "legacy_log_inputs_metric_postgres_errors_count"},
+								},
 							},
 						},
-						ContainerSelectorCounters: []ContainerSelectorRule{
-							{Selectors: map[string]string{"app": "postgres"}},
+					},
+					MetricsRules: map[string][]LogMetricEntry{
+						"legacy_log_inputs_metric_postgres_errors_count": {
+							{
+								"metric":     "postgres_errors_count",
+								"item":       "",
+								"conditions": []any{`IsMatch(body, "error")`},
+							},
 						},
 					},
 				},
@@ -1965,7 +1927,7 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 				Log: Log{
 					Network: NetworkConfig{
 						Receivers: map[string]NetworkReceiver{
-							"log-opentelemetry-legacy": {
+							"legacy-network": {
 								Protocols: NetworkProtocols{
 									GRPC: &NetworkEndpoint{Endpoint: "192.168.1.10:5000"},
 								},
@@ -1973,42 +1935,28 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 						},
 					},
 					OpenTelemetry: OpenTelemetry{
-						Network: OTLPNetworkParticipation{Receivers: []string{"log-opentelemetry-legacy"}},
-					},
-				},
-			},
-			WantWarning: true,
-		},
-		{
-			Name:       "legacy-metrics-network",
-			ConfigFile: "testdata/legacy-metrics-network.conf",
-			WantConfig: Config{
-				Log: Log{
-					Network: NetworkConfig{
-						Receivers: map[string]NetworkReceiver{
-							"log-metrics-network-legacy": {
-								Protocols: NetworkProtocols{
-									GRPC: &NetworkEndpoint{Endpoint: "localhost:4417"},
-									HTTP: &NetworkEndpoint{Endpoint: "localhost:4418"},
-								},
+						Receivers: map[string]LogReceiver{
+							"legacy_network": {
+								"network":   map[string]any{"receivers": []any{"legacy-network"}},
+								"send_logs": true,
 							},
 						},
 					},
-					Metrics: LogMetricsConfig{
-						Network: LogMetricsNetworkReceiver{Receivers: []string{"log-metrics-network-legacy"}},
-					},
 				},
 			},
 			WantWarning: true,
 		},
 		{
-			Name:       "legacy-network-shared",
-			ConfigFile: "testdata/legacy-network-shared.conf",
+			// Exercises both protocols enabled at once (legacy-opentelemetry-network
+			// above only enables grpc), migrated into a single synthesized receiver
+			// participating in one log.network listener with both endpoints.
+			Name:       "legacy-network-both-protocols",
+			ConfigFile: "testdata/legacy-network-both-protocols.conf",
 			WantConfig: Config{
 				Log: Log{
 					Network: NetworkConfig{
 						Receivers: map[string]NetworkReceiver{
-							"log-opentelemetry-legacy": {
+							"legacy-network": {
 								Protocols: NetworkProtocols{
 									GRPC: &NetworkEndpoint{Endpoint: "10.0.0.5:9000"},
 									HTTP: &NetworkEndpoint{Endpoint: "10.0.0.5:9001"},
@@ -2017,10 +1965,12 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 						},
 					},
 					OpenTelemetry: OpenTelemetry{
-						Network: OTLPNetworkParticipation{Receivers: []string{"log-opentelemetry-legacy"}},
-					},
-					Metrics: LogMetricsConfig{
-						Network: LogMetricsNetworkReceiver{Receivers: []string{"log-opentelemetry-legacy"}},
+						Receivers: map[string]LogReceiver{
+							"legacy_network": {
+								"network":   map[string]any{"receivers": []any{"legacy-network"}},
+								"send_logs": true,
+							},
+						},
 					},
 				},
 			},
@@ -2038,16 +1988,23 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 			WantConfig: Config{
 				Log: Log{
 					Inputs: []LogInput{{}}, // the orphan entry is kept, but its filters are dropped
-					Metrics: LogMetricsConfig{
-						Receivers: map[string]LogMetricsReceiver{
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
 							"legacy_input_0": {
-								"include": []any{"/var/log/apache/access.log"},
+								"include":   []any{"/var/log/apache/access.log"},
+								"send_logs": false,
+								"metrics": []any{
+									map[string]any{"include": "legacy_log_inputs_metric_apache_errors_count"},
+								},
 							},
 						},
-						Count: map[string]LogMetricsCount{
-							"apache_errors_count": {
+					},
+					MetricsRules: map[string][]LogMetricEntry{
+						"legacy_log_inputs_metric_apache_errors_count": {
+							{
+								"metric":     "apache_errors_count",
+								"item":       "",
 								"conditions": []any{`IsMatch(body, "\\[error\\]")`},
-								"sources":    []any{"legacy_input_0"},
 							},
 						},
 					},
@@ -2061,44 +2018,64 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 			ConfigFile: "testdata/legacy-log-inputs-name-collision.conf",
 			WantConfig: Config{
 				Log: Log{
-					Metrics: LogMetricsConfig{
-						Receivers: map[string]LogMetricsReceiver{
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
 							"legacy_input_0": {
-								"include": []any{"/var/log/apache/access.log"},
+								"include":   []any{"/var/log/apache/access.log"},
+								"send_logs": false,
+								"metrics": []any{
+									map[string]any{"include": "legacy_log_inputs_metric_shared_errors_count"},
+								},
+							},
+							"legacy_input_1": {
+								"container_name": testRedis,
+								"send_logs":      false,
+								"metrics": []any{
+									map[string]any{"include": "legacy_log_inputs_metric_shared_errors_count"},
+								},
 							},
 						},
-						Count: map[string]LogMetricsCount{
-							"shared_errors_count": {
+					},
+					MetricsRules: map[string][]LogMetricEntry{
+						"legacy_log_inputs_metric_shared_errors_count": {
+							{
+								"metric": "shared_errors_count",
+								"item":   "",
 								"conditions": []any{
 									`IsMatch(body, "\\[error\\]")`,
 									`IsMatch(body, "ERROR")`,
 								},
-								"sources": []any{"legacy_input_0", "redis"},
 							},
 						},
-						ContainerCounters: []string{"redis"},
 					},
 				},
 			},
 			WantWarning:         true,
-			WantWarningContains: "shares a metric name with another log.metrics.count entry",
+			WantWarningContains: "merged into one shared",
 		},
 		{
 			Name:       "legacy-log-inputs-name-and-selectors",
 			ConfigFile: "testdata/legacy-log-inputs-name-and-selectors.conf",
 			WantConfig: Config{
 				Log: Log{
-					Metrics: LogMetricsConfig{
-						Count: map[string]LogMetricsCount{
-							"postgres_errors_count": {
-								"conditions": []any{`IsMatch(body, "error")`},
-								"sources":    []any{"postgres"},
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
+							"legacy_input_0": {
+								"container_name":      "postgres",
+								"container_selectors": map[string]any{"env": "prod"},
+								"send_logs":           false,
+								"metrics": []any{
+									map[string]any{"include": "legacy_log_inputs_metric_postgres_errors_count"},
+								},
 							},
 						},
-						ContainerSelectorCounters: []ContainerSelectorRule{
+					},
+					MetricsRules: map[string][]LogMetricEntry{
+						"legacy_log_inputs_metric_postgres_errors_count": {
 							{
-								ContainerName: "postgres",
-								Selectors:     map[string]string{"env": "prod"},
+								"metric":     "postgres_errors_count",
+								"item":       "",
+								"conditions": []any{`IsMatch(body, "error")`},
 							},
 						},
 					},

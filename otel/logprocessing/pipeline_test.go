@@ -87,8 +87,9 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 	defer jsonLogFile.Close()
 
 	cfg := config.OpenTelemetry{
+		SendLogs:        true, // ship every configured receiver in this test, none overrides it
 		KnownLogFormats: config.DefaultKnownLogFormats(),
-		Receivers: map[string]config.OTLPReceiver{
+		Receivers: map[string]config.LogReceiver{
 			"custom-receiver": {
 				"include": []string{customLogFile.Name()},
 				"operators": []config.OTELOperator{
@@ -182,6 +183,29 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 	}
 
 	defer pipeline.shutdownAll()
+
+	// makePipeline no longer starts cfg.Receivers itself (that's now
+	// logsource.ReceiverManager's job, see WantSource in sink_provider.go):
+	// build a Manager directly around this pipeline (bypassing New(), which
+	// would hardcode a much slower pipelineOptions) and register it as a
+	// SinkProvider, then resolve the configured receivers exactly like
+	// agent.go's future wiring would.
+	man := &Manager{
+		config:      cfg,
+		pipeline:    pipeline,
+		fanoutSinks: make(map[string]*fanoutSink),
+	}
+
+	receiverManager, err := logsource.NewReceiverManager(cfg, "/", st, noExecRunner(t))
+	if err != nil {
+		t.Fatal("Can't instantiate receiver manager:", err)
+	}
+
+	receiverManager.RegisterSinkProvider(man)
+
+	if err := receiverManager.RescanReceivers(t.Context()); err != nil {
+		t.Fatal("Failed to resolve configured receivers:", err)
+	}
 
 	t.Log("Setting up fileconsumers ...")
 	time.Sleep(time.Second)

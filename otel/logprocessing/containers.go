@@ -18,7 +18,6 @@ package logprocessing
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -37,24 +36,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/helper"
 	stanzaErrors "github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/stanzaerrors"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/processor"
 	"go.opentelemetry.io/collector/receiver"
-)
-
-const (
-	attrContainerID        = "container.id"
-	attrContainerImageName = "container.image.name"
-	attrContainerImageTags = "container.image.tags"
-	attrContainerName      = "container.name"
-	attrContainerRuntime   = "container.runtime"
-
-	attrContainerNamespace = "k8s.namespace.name"
-	attrContainerPod       = "k8s.pod.name"
 )
 
 const containerFileSizePrefix = "container://"
@@ -65,54 +52,25 @@ var (
 	errWrongNumberOfLogs           = errors.New("container should have a single log file")
 )
 
+// Container is only used for the container-hosted "known service" path (see
+// processLogSources): a container matched by no receiver/label, whose log
+// format instead comes from Glouton's built-in per-service-type detection
+// (discovery.inferLogProcessingConfig). That has no config-driven or
+// label-driven equivalent, so logsource.ReceiverManager can't supersede it --
+// it stays tailed directly by this package.
 type Container struct {
 	LogFilePath  string
 	ReceiverKind logsource.ReceiverKind
-	Attributes   ContainerAttributes
+	Attributes   logsource.ContainerAttributes
 
 	logCounter      *atomic.Int64
 	throughputMeter *logsource.RingCounter
 }
 
-type ContainerAttributes struct {
-	Runtime   string
-	ID        string
-	Name      string
-	ImageName string
-	ImageTags string
-	Namespace string `json:",omitempty"`
-	Pod       string `json:",omitempty"`
-}
-
-func (ctrAttrs ContainerAttributes) asMap() map[string]helper.ExprStringConfig {
-	attrs := map[string]helper.ExprStringConfig{
-		attrContainerID:        helper.ExprStringConfig(ctrAttrs.ID),
-		attrContainerImageName: helper.ExprStringConfig(ctrAttrs.ImageName),
-		attrContainerName:      helper.ExprStringConfig(ctrAttrs.Name),
-		attrContainerRuntime:   helper.ExprStringConfig(ctrAttrs.Runtime),
-	}
-
-	if ctrAttrs.ImageTags != "" {
-		attrs[attrContainerImageTags] = helper.ExprStringConfig(ctrAttrs.ImageTags)
-	}
-
-	if ctrAttrs.Namespace != "" {
-		attrs[attrContainerNamespace] = helper.ExprStringConfig(ctrAttrs.Namespace)
-	}
-
-	if ctrAttrs.Pod != "" {
-		attrs[attrContainerPod] = helper.ExprStringConfig(ctrAttrs.Pod)
-	}
-
-	return attrs
-}
-
 type containerReceiver struct {
-	pipeline           *pipelineContext
-	logConsumer        consumer.Logs
-	lastFileSizes      map[string]int64  // map key: log file path
-	containerOperators map[string]string // map key: container name
-	containerFilters   map[string]string // map key: container name
+	pipeline      *pipelineContext
+	logConsumer   consumer.Logs
+	lastFileSizes map[string]int64 // map key: log file path
 
 	l                    sync.Mutex
 	startedComponents    map[string][]component.Component // map key: container ID
@@ -121,13 +79,7 @@ type containerReceiver struct {
 	sizeFnByFile         map[string]func() (int64, error) // map key: log file path
 }
 
-func newContainerReceiver(
-	pipeline *pipelineContext,
-	containerOperators map[string]string,
-	knownOperators map[string][]config.OTELOperator,
-	containerFilter map[string]string,
-	knownFilters map[string]config.OTELFilters,
-) *containerReceiver {
+func newContainerReceiver(pipeline *pipelineContext) *containerReceiver {
 	lastFileSizes := make(map[string]int64)
 
 	for filePath, size := range pipeline.lastFileSizes {
@@ -140,8 +92,6 @@ func newContainerReceiver(
 		pipeline:             pipeline,
 		logConsumer:          pipeline.getInput(),
 		lastFileSizes:        lastFileSizes,
-		containerOperators:   validateContainerOperators(containerOperators, knownOperators),
-		containerFilters:     validateContainerFilters(containerFilter, knownFilters),
 		startedComponents:    make(map[string][]component.Component),
 		registeredExtensions: make(map[string][]component.ID),
 		containers:           make(map[string]Container),
@@ -211,7 +161,7 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 		cr.pipeline.commandRunner,
 		makeStorageFn,
 		logsource.StatFile,
-		ctr.Attributes.asMap(),
+		ctr.Attributes.AsMap(),
 		nil, // no per-container raw receiver config: containers have no named receiver entry to paste one into
 	)
 	if err != nil {
@@ -396,37 +346,15 @@ func (cr *containerReceiver) stop() {
 	}
 }
 
+// makeLogContainer builds a Container, delegating attribute resolution
+// (image tags, pod/namespace, ...) to logsource.BuildContainerAttributes --
+// the same richer, shared implementation logsource.ReceiverManager uses for
+// every other container-derived source, so both paths stamp identical
+// attributes.
 func makeLogContainer(ctx context.Context, container facts.Container, logFilePath string) Container {
-	attributes := ContainerAttributes{
-		Runtime:   container.RuntimeName(),
-		ID:        container.ID(),
-		Name:      container.ContainerName(),
-		ImageName: strings.SplitN(container.ImageName(), ":", 2)[0],
-	}
-
-	imageTags, err := container.ImageTags(ctx)
-	if err != nil {
-		logWarnings(fmt.Errorf("can't get tags for image %q (%s): %w", container.ImageName(), container.ImageID(), err))
-	} else {
-		imageTagsJSON, err := json.Marshal(imageTags)
-		if err != nil {
-			logWarnings(fmt.Errorf("can't marshal tags for image %q (%s): %w", container.ImageName(), container.ImageID(), err))
-		} else {
-			attributes.ImageTags = string(imageTagsJSON)
-		}
-	}
-
-	namespace := container.PodNamespace()
-	pod := container.PodName()
-
-	if namespace != "" && pod != "" {
-		attributes.Namespace = namespace
-		attributes.Pod = pod
-	}
-
 	return Container{
 		LogFilePath:     logFilePath,
-		Attributes:      attributes,
+		Attributes:      logsource.BuildContainerAttributes(ctx, container),
 		logCounter:      new(atomic.Int64),
 		throughputMeter: logsource.NewRingCounter(throughputMeterResolutionSecs),
 	}

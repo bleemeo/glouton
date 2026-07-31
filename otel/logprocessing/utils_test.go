@@ -33,49 +33,6 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
 )
 
-func TestValidateContainerOperators(t *testing.T) {
-	t.Parallel()
-
-	globalOpsConfig := map[string][]config.OTELOperator{
-		testOpID1: {},
-		testOpID2: {},
-	}
-
-	testCases := []struct {
-		ctrOps         map[string]string
-		expectedCtrOps map[string]string
-	}{
-		{
-			ctrOps: map[string]string{
-				testContainerCtr1: "op-1",
-				testContainerCtr2: "op-2",
-			},
-			expectedCtrOps: map[string]string{
-				testContainerCtr1: "op-1",
-				testContainerCtr2: "op-2",
-			},
-		},
-		{
-			ctrOps: map[string]string{
-				testContainerCtr1: "",
-				testContainerCtr2: "op-3",
-			},
-			expectedCtrOps: map[string]string{},
-		},
-	}
-
-	for i, tc := range testCases {
-		t.Run(strconv.Itoa(i+1), func(t *testing.T) {
-			t.Parallel()
-
-			res := validateContainerOperators(tc.ctrOps, globalOpsConfig)
-			if diff := cmp.Diff(tc.expectedCtrOps, res); diff != "" {
-				t.Fatalf("Unexpected result (-want +got):\n%s", diff)
-			}
-		})
-	}
-}
-
 func TestBuildLogFilterConfig(t *testing.T) {
 	t.Parallel()
 

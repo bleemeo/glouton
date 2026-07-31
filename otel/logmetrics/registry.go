@@ -61,7 +61,7 @@ type counterKey struct {
 // metricsRegistry holds one counter per (metric, item), shared across sources so matches aggregate.
 type metricsRegistry struct {
 	l             sync.Mutex
-	declaredNames map[string]bool // every name ever declared or resolved, feeds MetricNames()
+	declaredNames map[string]bool // every name ever resolved, feeds MetricNames()
 	counters      map[counterKey]*counter
 }
 
@@ -69,16 +69,6 @@ func newMetricsRegistry() *metricsRegistry {
 	return &metricsRegistry{
 		declaredNames: make(map[string]bool),
 		counters:      make(map[counterKey]*counter),
-	}
-}
-
-// declare registers every spec's metric name for MetricNames(), without creating a live counter.
-func (reg *metricsRegistry) declare(specs []metricSpec) {
-	reg.l.Lock()
-	defer reg.l.Unlock()
-
-	for _, spec := range specs {
-		reg.declaredNames[spec.Metric] = true
 	}
 }
 

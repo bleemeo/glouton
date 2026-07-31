@@ -36,7 +36,6 @@ import (
 	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/uuid"
-	"go.opentelemetry.io/collector/consumer"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -54,6 +53,11 @@ type Manager struct {
 	knownLogFormats            map[string][]config.OTELOperator
 	state                      bleemeoTypes.State
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability
+	// containerFilter is cfg.ContainerFilter, pre-validated once at New()
+	// (invalid entries stripped with a warning) -- used by WantSource's
+	// SourceContainerLabel path to resolve glouton.log_filter's fallback (see
+	// sink_provider.go).
+	containerFilter map[string]string
 
 	persister     *logsource.PersistHost
 	pipeline      *pipelineContext
@@ -65,8 +69,23 @@ type Manager struct {
 	watchedContainers map[string]sourceDiagnostic // map key: container ID
 	// serviceReceivers only contains services that don't run in a container
 	serviceReceivers map[discovery.NameInstance][]*logReceiver
+	// fanoutSinks tracks, for diagnostics only, every logsource.ReceiverManager
+	// -owned source this package opted into via WantSource: the physical
+	// tail itself is owned and diagnosed by logsource, not here.
+	fanoutSinks map[string]*fanoutSink
 }
 
+// New builds the log-shipping pipeline and registers it as a
+// logsource.SinkProvider on receiverManager: every source receiverManager
+// resolves (a log.opentelemetry.receivers entry, or a container opted in
+// solely via glouton.* labels) is then offered to this Manager's WantSource,
+// which decides whether to ship it (see sink_provider.go). Call
+// RegisterSinkProvider on receiverManager's other providers (otel/logmetrics)
+// separately -- New only registers itself.
+//
+// receiverManager must already exist (see logsource.NewReceiverManager) but
+// doesn't need to have resolved anything yet: RescanReceivers/UpdateContainers
+// can run any time after this call.
 func New(
 	ctx context.Context,
 	cfg config.OpenTelemetry,
@@ -77,6 +96,7 @@ func New(
 	pushLogs func(context.Context, []byte) error,
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability,
 	addWarnings func(...error),
+	receiverManager *logsource.ReceiverManager,
 ) (*Manager, error) {
 	// Expanding known log formats, allowing one level of cross-referencing.
 	// Referenced formats must be defined above references to them.
@@ -120,33 +140,28 @@ func New(
 		return nil, fmt.Errorf("building pipeline: %w", err)
 	}
 
-	containerRecv := newContainerReceiver(pipeline, cfg.ContainerFormat, knownLogFormats, cfg.ContainerFilter, cfg.KnownLogFilters)
+	containerRecv := newContainerReceiver(pipeline)
 
 	processingManager := &Manager{
 		config:                     cfg,
 		knownLogFormats:            knownLogFormats,
 		state:                      state,
 		streamAvailabilityStatusFn: streamAvailabilityStatusFn,
+		containerFilter:            validateContainerFilters(cfg.ContainerFilter, cfg.KnownLogFilters),
 		persister:                  persister,
 		pipeline:                   pipeline,
 		containerRecv:              containerRecv,
 		watchedServices:            make(map[discovery.NameInstance]sourceDiagnostic),
 		watchedContainers:          make(map[string]sourceDiagnostic),
 		serviceReceivers:           make(map[discovery.NameInstance][]*logReceiver),
+		fanoutSinks:                make(map[string]*fanoutSink),
 	}
+
+	receiverManager.RegisterSinkProvider(processingManager)
 
 	go processingManager.handleProcessingLifecycle(ctx)
 
 	return processingManager, nil
-}
-
-// NetworkLogsConsumer returns the entry point log-shipping wants to receive
-// externally-pushed logs on, or nil if this feature didn't opt into the
-// shared network receiver (log.opentelemetry.grpc/http.enable both false).
-// The caller (the shared OTLP receiver owner, see logsource.FanoutLogs) is
-// responsible for actually starting the physical listener.
-func (man *Manager) NetworkLogsConsumer() consumer.Logs {
-	return man.pipeline.networkConsumer
 }
 
 // handleProcessingLifecycle periodically saves file sizes to the state cache,
@@ -233,50 +248,53 @@ func (man *Manager) HandleLogsFromDynamicSources(ctx context.Context, services [
 
 	logSources := man.processLogSources(services, containers)
 
+	// Every logSource now comes from a discovered service (see
+	// processLogSources): a plain container opted in solely via glouton.*
+	// labels no longer goes through this package at all, it's
+	// logsource.ReceiverManager's SourceContainerLabel/WantSource's job (see
+	// sink_provider.go). So serviceID is always set below.
 	for _, logSource := range logSources {
 		err := man.setupProcessingForSource(ctx, logSource)
-		if err != nil {
-			if logSource.serviceID != nil {
-				if diag, found := man.watchedServices[*logSource.serviceID]; found {
-					diag.SetupError = err.Error()
-					man.watchedServices[*logSource.serviceID] = diag
-				}
+		if err == nil {
+			continue
+		}
 
-				if logSource.container != nil {
-					if diag, found := man.watchedContainers[logSource.container.ID()]; found {
-						diag.SetupError = err.Error()
-						man.watchedContainers[logSource.container.ID()] = diag
-					}
+		if diag, found := man.watchedServices[*logSource.serviceID]; found {
+			diag.SetupError = err.Error()
+			man.watchedServices[*logSource.serviceID] = diag
+		}
 
-					logger.V(1).Printf(
-						"Failed to set up log processing for service %q on container %s (%s): %v",
-						logSource.serviceID.Name, logSource.container.ContainerName(), logSource.container.ID(), err,
-					)
-				} else {
-					logger.V(1).Printf(
-						"Failed to set up log processing for service %q file %q: %v",
-						logSource.serviceID.Name, logSource.logFilePath, err,
-					)
-				}
-			} else {
-				if diag, found := man.watchedContainers[logSource.container.ID()]; found {
-					diag.SetupError = err.Error()
-					man.watchedContainers[logSource.container.ID()] = diag
-				}
-
-				logger.V(1).Printf(
-					"Failed to set up log processing for container %s (%s): %v",
-					logSource.container.ContainerName(), logSource.container.ID(), err,
-				)
+		if logSource.container != nil {
+			if diag, found := man.watchedContainers[logSource.container.ID()]; found {
+				diag.SetupError = err.Error()
+				man.watchedContainers[logSource.container.ID()] = diag
 			}
+
+			logger.V(1).Printf(
+				"Failed to set up log processing for service %q on container %s (%s): %v",
+				logSource.serviceID.Name, logSource.container.ContainerName(), logSource.container.ID(), err,
+			)
+		} else {
+			logger.V(1).Printf(
+				"Failed to set up log processing for service %q file %q: %v",
+				logSource.serviceID.Name, logSource.logFilePath, err,
+			)
 		}
 	}
 }
 
+// processLogSources resolves log sources for discovered services -- both
+// bare processes (own log files) and services running in a container
+// (Glouton's own built-in log-format detection per service type, see
+// discovery.inferLogProcessingConfig). This is the ONLY log source this
+// package still resolves on its own: a container with no matching service
+// (whether opted in via glouton.* labels or a log.opentelemetry.receivers
+// entry) is resolved by logsource.ReceiverManager, which offers it to this
+// package's WantSource (see sink_provider.go) -- there's no equivalent of
+// Glouton's per-service-type log format detection in the new format, so it
+// can't be superseded by the shared receiver runtime.
 func (man *Manager) processLogSources(services []discovery.Service, containers []facts.Container) []logSource {
 	man.skippedSource = make([]sourceDiagnostic, 0, len(man.skippedSource))
-
-	const gloutonContainerLabelPrefix = "glouton."
 
 	containersByID := make(map[string]facts.Container, len(containers))
 
@@ -303,7 +321,7 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 		if service.ContainerID != "" {
 			ctr, found := containersByID[service.ContainerID]
 			if found {
-				logEnableStr, found := facts.LabelsAndAnnotations(ctr)[gloutonContainerLabelPrefix+"log_enable"]
+				logEnableStr, found := facts.LabelsAndAnnotations(ctr)[logsource.ContainerLabelPrefix+"log_enable"]
 				if found {
 					logEnable, err := strconv.ParseBool(strings.ToLower(logEnableStr))
 					if err != nil {
@@ -375,80 +393,6 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 		}
 	}
 
-	for ctrID, ctr := range containersByID {
-		if _, alreadyWatching := man.watchedContainers[ctrID]; alreadyWatching {
-			continue
-		}
-
-		ctrFacts := facts.LabelsAndAnnotations(ctr)
-
-		logEnableStr, found := ctrFacts[gloutonContainerLabelPrefix+"log_enable"]
-		if found {
-			logEnable, err := strconv.ParseBool(strings.ToLower(logEnableStr))
-			if err != nil {
-				logger.V(1).Printf("Failed to parse value of 'glouton.log_enable' for container %s (%s): %v", ctr.ContainerName(), ctr.ID(), err)
-			} else if !logEnable {
-				logger.V(2).Printf("Ignoring logs of container %s (%s), for which 'glouton.log_enable' is set to false", ctr.ContainerName(), ctr.ID())
-
-				man.skippedSource = append(man.skippedSource, sourceDiagnostic{
-					ContainerID:   ctr.ID(),
-					ContainerName: ctr.ContainerName(),
-					SkipReason:    "Label glouton.log_enable set to false",
-				})
-
-				continue
-			}
-		}
-
-		logSource := logSource{
-			container: ctr,
-		}
-		hasOpsFromFacts, hasFilterFromFacts := false, false
-
-		logFormat, found := ctrFacts[gloutonContainerLabelPrefix+"log_format"]
-		if found {
-			ops, found := man.knownLogFormats[logFormat]
-			if found {
-				logSource.operators = ops
-				hasOpsFromFacts = true
-			} else {
-				logger.V(1).Printf("Container %s (%s) requires an unknown log format: %q", ctr.ContainerName(), ctrID, logFormat)
-			}
-		}
-
-		if !hasOpsFromFacts {
-			ops, found := man.knownLogFormats[man.containerRecv.containerOperators[ctr.ContainerName()]]
-			if found {
-				logSource.operators = ops
-			}
-		}
-
-		logFilter, found := ctrFacts[gloutonContainerLabelPrefix+"log_filter"]
-		if found {
-			filters, found := man.config.KnownLogFilters[logFilter]
-			if found {
-				logSource.filters = filters
-				hasFilterFromFacts = true
-			} else {
-				logger.V(1).Printf("Container %s (%s) requires an unknown log filter: %q", ctr.ContainerName(), ctrID, logFilter)
-			}
-		}
-
-		if !hasFilterFromFacts {
-			filters, found := man.config.KnownLogFilters[man.containerRecv.containerFilters[ctr.ContainerName()]]
-			if found {
-				logSource.filters = filters
-			}
-		}
-
-		logSources = append(logSources, logSource)
-		man.watchedContainers[ctrID] = sourceDiagnostic{
-			ContainerName: ctr.ContainerName(),
-			ContainerID:   ctr.ID(),
-			IsFromService: false,
-		}
-	}
-
 	return logSources
 }
 
@@ -483,7 +427,7 @@ func (man *Manager) setupProcessingForSource(ctx context.Context, logSource logS
 		}
 	} else {
 		recvName := fmt.Sprintf("service_%s-%q_%s", logSource.serviceID.Name, logSource.serviceID.Instance, uuid.NewString())
-		recvConfig := config.OTLPReceiver{
+		recvConfig := config.LogReceiver{
 			"include":   []string{logSource.logFilePath},
 			"operators": logSource.operators,
 			"filters":   logSource.filters,
@@ -624,6 +568,7 @@ func (man *Manager) DiagnosticArchive(_ context.Context, writer types.ArchiveWri
 			Receivers:          receiversInfo,
 			ContainerReceivers: man.containerRecv.diagnostic(),
 			WatchedServices:    wServices,
+			FanoutSources:      man.fanoutSourceDiagnosticsLocked(),
 		},
 		receiversSetup: diagnosticReceiverSetup{
 			SkippedSource:     skippedSource,
@@ -632,14 +577,6 @@ func (man *Manager) DiagnosticArchive(_ context.Context, writer types.ArchiveWri
 		},
 		KnownLogFormats: man.knownLogFormats,
 		KnownLogFilters: man.config.KnownLogFilters,
-	}
-
-	if man.pipeline.otlpRecvCounter != nil {
-		diagnosticInfo.receivers.OTLPReceiver = &otlpReceiverDiagnosticInformation{
-			Receivers:              man.config.Network.Receivers,
-			LogProcessedCount:      man.pipeline.otlpRecvCounter.Load(),
-			LogThroughputPerMinute: man.pipeline.otlpRecvThroughputMeter.Total(),
-		}
 	}
 
 	if man.pipeline.journaldCounter != nil {

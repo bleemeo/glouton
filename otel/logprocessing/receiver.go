@@ -55,7 +55,7 @@ const metadataKeySeparator = "/"
 
 type logReceiver struct {
 	name string
-	// cfg is the raw config as given (see config.OTLPReceiver) -- passed
+	// cfg is the raw config as given (see config.LogReceiver) -- passed
 	// through as-is to logsource.SetupLogReceiverFactories, so any real
 	// filelogreceiver/fileconsumer field it sets (start_at, on_truncate,
 	// encoding, multiline, ...) takes effect verbatim. include is pulled out
@@ -63,7 +63,7 @@ type logReceiver struct {
 	// field too, so it's redundantly present in cfg, but that's harmless:
 	// SetupLogReceiverFactories always overwrites Include with the actual
 	// resolved file itself, after applying cfg).
-	cfg             config.OTLPReceiver
+	cfg             config.LogReceiver
 	include         []string
 	isFromService   bool
 	logConsumer     consumer.Logs
@@ -86,7 +86,7 @@ type logReceiver struct {
 
 func newLogReceiver(
 	name string,
-	cfg config.OTLPReceiver,
+	cfg config.LogReceiver,
 	isFromService bool,
 	logConsumer consumer.Logs,
 	knownLogFormats map[string][]config.OTELOperator,
@@ -96,7 +96,7 @@ func newLogReceiver(
 		return nil, nil, fmt.Errorf("%w: %q. It must be of the form 'my-receiver' or 'filelog/my-receiver'", errInvalidReceiverName, name) //nolint: nilnil
 	}
 
-	// cfg is raw (see config.OTLPReceiver's doc comment): pull out the fields
+	// cfg is raw (see config.LogReceiver's doc comment): pull out the fields
 	// Glouton's own logic needs. include/operators are real filelogreceiver
 	// fields too (so they stay in cfg, redundantly, for the verbatim pass-
 	// through to logsource.SetupLogReceiverFactories); log_format/filters are

@@ -92,9 +92,6 @@ func TestHandleContainerLogs(t *testing.T) {
 		testContainerCtr1: testAttrKeyResAttr,
 	}
 
-	knownFilters := map[string]config.OTELFilters{}
-	containerFilter := map[string]string{}
-
 	logger, err := zap.NewDevelopment(zap.IncreaseLevel(zap.InfoLevel))
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
@@ -123,7 +120,7 @@ func TestHandleContainerLogs(t *testing.T) {
 		persister:     mustNewPersistHost(t),
 	}
 
-	containerRecv := newContainerReceiver(&pipeline, containerOperators, knownOperators, containerFilter, knownFilters)
+	containerRecv := newContainerReceiver(&pipeline)
 
 	defer containerRecv.stop()
 
@@ -156,7 +153,7 @@ func TestHandleContainerLogs(t *testing.T) {
 			t.Fatalf("Failed to build operators for container %s: %v", ctr.ContainerName(), err)
 		}
 
-		_, err = containerRecv.handleContainerLogs(ctx, ctr, ops, knownFilters[containerFilter[ctr.ContainerName()]])
+		_, err = containerRecv.handleContainerLogs(ctx, ctr, ops, nil)
 		if err != nil {
 			t.Fatalf("Failed to handle logs for container %s: %v", ctr.ContainerName(), err)
 		}

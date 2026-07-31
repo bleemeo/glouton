@@ -68,18 +68,15 @@ type pipelineContext struct {
 	startedComponents []component.Component
 	receivers         []*logReceiver
 
+	// inputConsumer is the shared entry point every source feeds into,
+	// whatever brought it here: journald/syslog/auditd/bare-service receivers
+	// owned directly by this package, the service-hosted container path
+	// (containers.go), or a WantSource-built sink for a
+	// logsource.ReceiverManager-owned source (config receiver or
+	// container-label source). Network participation is no longer a
+	// pipeline-level concern: it's per-receiver now (see LogReceiver's
+	// "network" field), resolved entirely by logsource.ReceiverManager.
 	inputConsumer consumer.Logs
-
-	// networkConsumer is inputConsumer wrapped with processed-count/throughput
-	// instrumentation, exposed via Manager.NetworkLogsConsumer for the shared
-	// OTLP network receiver (owned outside this package, see
-	// logsource.SetupOTLPNetworkReceiver/FanoutLogs) to feed into -- nil if
-	// this feature didn't opt into the network receiver (GRPC/HTTP both
-	// disabled).
-	networkConsumer consumer.Logs
-
-	otlpRecvCounter         *atomic.Int64
-	otlpRecvThroughputMeter *logsource.RingCounter
 
 	journaldCounter         *atomic.Int64
 	journaldThroughputMeter *logsource.RingCounter
@@ -124,7 +121,7 @@ func makePipeline(
 		commandRunner:      commandRunner,
 		persister:          persister,
 		startedComponents:  make([]component.Component, 0, 3), // 3 should be the minimum number of components
-		receivers:          make([]*logReceiver, 0, len(cfg.Receivers)),
+		receivers:          make([]*logReceiver, 0, 3),        // syslog, syslog-auth, auditd
 		logThroughputMeter: logsource.NewRingCounter(throughputMeterResolutionSecs),
 	}
 
@@ -139,7 +136,7 @@ func makePipeline(
 }
 
 // init setups and start the pipeline components.
-func (p *pipelineContext) init( //nolint: maintidx
+func (p *pipelineContext) init(
 	ctx context.Context,
 	cfg config.OpenTelemetry,
 	facter Facter,
@@ -288,10 +285,6 @@ func (p *pipelineContext) init( //nolint: maintidx
 
 	p.inputConsumer = logResourceAttribute
 
-	if cfg.Network.Enable || len(cfg.Network.Receivers) > 0 {
-		p.setupNetworkConsumer()
-	}
-
 	if cfg.AutoDiscovery.JournaldEnable {
 		if err := p.setupJournald(ctx, knownLogFormats); err != nil {
 			logger.V(1).Printf("Unable to configure journald receiver: %v", err)
@@ -309,8 +302,6 @@ func (p *pipelineContext) init( //nolint: maintidx
 			logger.V(1).Printf("Unable to configure journald receiver: %v", err)
 		}
 	}
-
-	p.setupConfigReceivers(ctx, cfg, addWarnings, knownLogFormats)
 
 	go func() {
 		defer crashreport.ProcessPanic()
@@ -341,19 +332,6 @@ func (p *pipelineContext) init( //nolint: maintidx
 	}()
 
 	return nil
-}
-
-// setupNetworkConsumer wraps inputConsumer with processed-count/throughput
-// instrumentation and exposes it as networkConsumer, for the shared OTLP
-// network receiver to feed into. Unlike other sources, this package no longer
-// starts its own OTLP receiver: the physical listener is shared with
-// otel/logmetrics (see logsource.SetupOTLPNetworkReceiver/FanoutLogs), so a
-// client only ever needs one endpoint regardless of which features consume
-// what it sends.
-func (p *pipelineContext) setupNetworkConsumer() {
-	p.otlpRecvCounter = new(atomic.Int64)
-	p.otlpRecvThroughputMeter = logsource.NewRingCounter(throughputMeterResolutionSecs)
-	p.networkConsumer = logsource.WrapWithInstrumentation(p.inputConsumer, p.otlpRecvCounter, p.otlpRecvThroughputMeter)
 }
 
 func (p *pipelineContext) setupJournald(
@@ -430,12 +408,12 @@ func (p *pipelineContext) setupSyslog(
 		return fmt.Errorf("%w missing log format %q", errUnexpectedConfig, "syslogAuth")
 	}
 
-	recvConfig := config.OTLPReceiver{
+	recvConfig := config.LogReceiver{
 		"include":   []string{"/var/log/syslog"},
 		"operators": append(operatorsForServiceName("syslog"), opsGroup...),
 	}
 
-	recvConfig2 := config.OTLPReceiver{
+	recvConfig2 := config.LogReceiver{
 		"include":   []string{"/var/log/auth.log"},
 		"operators": append(operatorsForServiceName("syslog"), opsGroup2...),
 	}
@@ -484,7 +462,7 @@ func (p *pipelineContext) setupAuditD(
 		logger.V(1).Printf("auditd receiver requires the log format %q, which is not defined", "auditd")
 	}
 
-	recvConfig := config.OTLPReceiver{
+	recvConfig := config.LogReceiver{
 		"include":   []string{"/var/log/audit/audit.log"},
 		"operators": append(operatorsForServiceName("auditd"), opsGroup...),
 	}
@@ -506,39 +484,6 @@ func (p *pipelineContext) setupAuditD(
 	p.receivers = append(p.receivers, recv)
 
 	return nil
-}
-
-func (p *pipelineContext) setupConfigReceivers(
-	ctx context.Context,
-	cfg config.OpenTelemetry,
-	addWarnings func(...error),
-	knownLogFormats map[string][]config.OTELOperator,
-) {
-	for name, rcvrCfg := range cfg.Receivers {
-		recv, warn, err := newLogReceiver(name, rcvrCfg, false, p.inputConsumer, knownLogFormats, logsource.StatFile)
-		if err != nil {
-			addWarnings(errorf("Failed to setup log receiver %q (ignoring it): %w", name, err))
-
-			continue
-		}
-
-		if warn != nil {
-			addWarnings(errorf("Warning while setting up log receiver %q: %w", name, warn))
-		}
-
-		err = recv.update(ctx, p, addWarnings)
-		if err != nil {
-			addWarnings(errorf("Failed to start log receiver %q (ignoring it): %w", name, err))
-
-			continue
-		}
-
-		p.receivers = append(p.receivers, recv)
-	}
-
-	if len(p.receivers) == 0 && len(cfg.Receivers) > 0 {
-		logger.V(1).Printf("None of the %d configured log receiver(s) are valid.", len(cfg.Receivers))
-	}
 }
 
 // shutdownAll shutdown all started components.

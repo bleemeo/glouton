@@ -167,6 +167,7 @@ type agent struct {
 	vSphereManager         *vsphere.Manager
 	logProcessManager      *logprocessing.Manager
 	logMetricsManager      *logmetrics.Manager
+	receiverManager        *logsource.ReceiverManager
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -1061,8 +1062,23 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	a.vSphereManager = vsphere.NewManager()
 
-	a.logMetricsManager = logmetrics.New(ctx, a.config.Log, a.hostRootPath, a.containerRuntime, a.state, a.commandRunner)
+	// receiverManager owns every physical file/container/network log tail
+	// (one per log.opentelemetry.receivers entry, plus one per container
+	// opted in solely via glouton.* labels) and fans each one's records out
+	// to whichever of logMetricsManager/logProcessManager wants them -- both
+	// must register (RegisterSinkProvider) before the first
+	// RescanReceivers/UpdateContainers/NetworkWants call below.
+	a.receiverManager, err = logsource.NewReceiverManager(a.config.Log.OpenTelemetry, a.hostRootPath, a.state, a.commandRunner)
+	if err != nil {
+		logger.Printf("unable to setup log receivers: %v", err)
+	}
+
+	a.logMetricsManager = logmetrics.New(a.config.Log.OpenTelemetry, a.config.Log.MetricsRules)
 	tasks = append(tasks, taskInfo{a.logMetricsManager.Run, "Log-to-metric manager"})
+
+	if a.receiverManager != nil {
+		a.receiverManager.RegisterSinkProvider(a.logMetricsManager)
+	}
 
 	_, err = a.gathererRegistry.RegisterAppenderCallback(
 		registry.RegistrationOption{
@@ -1126,7 +1142,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.bleemeoConnector = connector
 		a.l.Unlock()
 
-		if a.config.Log.OpenTelemetry.Enable {
+		if a.config.Log.OpenTelemetry.ShippingEnable && a.receiverManager != nil {
 			a.checkSudoRSForLogs(ctx)
 
 			a.logProcessManager, err = logprocessing.New(
@@ -1139,6 +1155,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 				connector.PushLogs,
 				connector.ShouldApplyLogBackPressure,
 				a.addWarnings,
+				a.receiverManager,
 			)
 			if err != nil {
 				logger.Printf("unable to setup log processing: %v", err)
@@ -1165,69 +1182,70 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		}
 	}
 
-	// Both log-shipping and log-to-metric may want to receive externally-pushed
-	// logs; when they name the same log.network.receivers entry, they share a
-	// single OTLP gRPC/HTTP listener (see logsource.PlanSharedNetworkReceivers)
-	// so their client only ever needs one endpoint. Each receiver's protocols
-	// are entirely its own config (log.network.receivers.<name>.protocols),
-	// same as a real OTel receiver -- a feature just lists which receivers it
-	// pulls from, like an OTel pipeline's own `receivers: [...]`. A feature
-	// can skip naming one entirely and just set network.enable instead (the
-	// simple, single-listener shortcut -- see config.ResolveNetworkReceivers/
-	// EffectiveNetworkReceivers): it resolves to config.DefaultNetworkReceiverName,
-	// auto-provisioned with default GRPC/HTTP endpoints as long as nobody has
-	// defined any log.network.receivers entry explicitly.
-	otelNetwork := a.config.Log.OpenTelemetry.Network
-	metricsNetwork := a.config.Log.Metrics.Network
+	if a.receiverManager != nil {
+		// Resolve every include-pattern (file) receiver now; container-based
+		// and container-label receivers get their first resolution from the
+		// initial UpdateContainers call below, then again on every discovery
+		// event (see updatedDiscovery) and every runReceiverManager tick.
+		if err := a.receiverManager.RescanReceivers(ctx); err != nil {
+			logger.V(1).Printf("failed to resolve some log receivers: %v", err)
+		}
 
-	effectiveNetworkReceivers := config.EffectiveNetworkReceivers(
-		a.config.Log.Network.Receivers,
-		otelNetwork.Enable && len(otelNetwork.Receivers) == 0,
-		metricsNetwork.Enable && len(metricsNetwork.Receivers) == 0,
-	)
+		if initialContainers, err := a.containerRuntime.Containers(ctx, time.Hour, false); err != nil {
+			logger.V(1).Printf("Failed to retrieve containers: %v", err)
+		} else {
+			a.receiverManager.UpdateContainers(ctx, initialContainers)
+		}
 
-	var networkWants []logsource.NetworkWant
+		// Both log-shipping and log-to-metric may want to receive
+		// externally-pushed logs; when they name the same
+		// log.network.receivers entry, they share a single OTLP gRPC/HTTP
+		// listener (see logsource.PlanSharedNetworkReceivers) so their client
+		// only ever needs one endpoint. Each receiver's protocols are
+		// entirely its own config (log.network.receivers.<name>.protocols),
+		// same as a real OTel receiver -- a log.opentelemetry.receivers entry
+		// just lists which log.network.receivers it pulls from, like an OTel
+		// pipeline's own `receivers: [...]`. A receiver can skip naming one
+		// entirely and just set network.enable instead (the simple,
+		// single-listener shortcut -- see config.ResolveNetworkReceivers/
+		// EffectiveNetworkReceivers): it resolves to
+		// config.DefaultNetworkReceiverName, auto-provisioned with default
+		// GRPC/HTTP endpoints as long as nobody has defined any
+		// log.network.receivers entry explicitly. receiverManager.NetworkWants
+		// already returns one want per receiver, fanned out internally to
+		// whichever of logProcessManager/logMetricsManager wants it.
+		effectiveNetworkReceivers := config.EffectiveNetworkReceivers(
+			a.config.Log.Network.Receivers,
+			anyReceiverWantsDefaultNetwork(a.config.Log.OpenTelemetry.Receivers),
+		)
 
-	if a.logProcessManager != nil {
-		if c := a.logProcessManager.NetworkLogsConsumer(); c != nil {
-			networkWants = append(networkWants, logsource.NetworkWant{
-				Consumer:  c,
-				Receivers: config.ResolveNetworkReceivers(otelNetwork.Enable, otelNetwork.Receivers),
+		for _, planned := range logsource.PlanSharedNetworkReceivers(effectiveNetworkReceivers, a.receiverManager.NetworkWants(ctx)) {
+			plannedCopy := planned
+
+			recv, err := logsource.SetupOTLPNetworkReceiver(
+				ctx,
+				logsource.NewTelemetrySettings(),
+				plannedCopy.Protocols,
+				plannedCopy.Sink,
+				"shared-otlp-receiver-"+plannedCopy.Name,
+			)
+			if err != nil {
+				logger.Printf("unable to start shared log network receiver %q: %v", plannedCopy.Name, err)
+
+				continue
+			}
+
+			tasks = append(tasks, taskInfo{
+				func(ctx context.Context) error {
+					<-ctx.Done()
+
+					return recv.Shutdown(context.Background())
+				},
+				fmt.Sprintf("Shared log network receiver (%s)", plannedCopy.Name),
 			})
 		}
-	}
 
-	if c := a.logMetricsManager.NetworkLogsConsumer(); c != nil {
-		networkWants = append(networkWants, logsource.NetworkWant{
-			Consumer:  c,
-			Receivers: config.ResolveNetworkReceivers(metricsNetwork.Enable, metricsNetwork.Receivers),
-		})
-	}
-
-	for _, planned := range logsource.PlanSharedNetworkReceivers(effectiveNetworkReceivers, networkWants) {
-		plannedCopy := planned
-
-		recv, err := logsource.SetupOTLPNetworkReceiver(
-			ctx,
-			logsource.NewTelemetrySettings(),
-			plannedCopy.Protocols,
-			plannedCopy.Sink,
-			"shared-otlp-receiver-"+plannedCopy.Name,
-		)
-		if err != nil {
-			logger.Printf("unable to start shared log network receiver %q: %v", plannedCopy.Name, err)
-
-			continue
-		}
-
-		tasks = append(tasks, taskInfo{
-			func(ctx context.Context) error {
-				<-ctx.Done()
-
-				return recv.Shutdown(context.Background())
-			},
-			fmt.Sprintf("Shared log network receiver (%s)", plannedCopy.Name),
-		})
+		tasks = append(tasks, taskInfo{a.runReceiverManager, "Log receiver manager"})
 	}
 
 	a.FireTrigger(true, true, false, false, false)
@@ -2122,39 +2140,87 @@ func (a *agent) updatedDiscovery(ctx context.Context, services []discovery.Servi
 		logger.V(2).Printf("Error during dynamic Filter rebuild: %v", err)
 	}
 
-	if a.logProcessManager != nil {
+	if a.logProcessManager != nil || a.receiverManager != nil {
 		containers, err := a.containerRuntime.Containers(ctx, time.Hour, false)
 		if err != nil {
 			logger.V(1).Printf("Failed to retrieve containers: %v", err)
 		}
 
-		var (
-			logServices   []discovery.Service
-			logContainers []facts.Container
-		)
-
-		if a.config.Log.OpenTelemetry.AutoDiscovery.ContainerAndServiceEnable {
-			logServices = services
-			logContainers = containers
-		} else {
-			for _, ctr := range containers {
-				logEnableStr, found := facts.LabelsAndAnnotations(ctr)["glouton.log_enable"]
-				if found {
-					logEnable, err := strconv.ParseBool(strings.ToLower(logEnableStr))
-					if err != nil {
-						logger.V(1).Printf("Failed to parse value of 'glouton.log_enable' for container %s (%s): %v", ctr.ContainerName(), ctr.ID(), err)
-
-						continue
-					}
-
-					if logEnable {
-						logContainers = append(logContainers, ctr)
-					}
-				}
-			}
+		// receiverManager resolves every log.opentelemetry.receivers
+		// container_name/container_selectors match and every glouton.*
+		// container-label opt-in itself (container_exclude and
+		// glouton.log_enable=false vetoes included) -- unlike the old
+		// per-container glouton.log_enable pre-filter this replaces, it needs
+		// the full, unfiltered container list to do that resolution
+		// correctly, independent of shipping being enabled at all (metrics
+		// works standalone).
+		if a.receiverManager != nil {
+			a.receiverManager.UpdateContainers(ctx, containers)
 		}
 
-		a.logProcessManager.HandleLogsFromDynamicSources(ctx, logServices, logContainers)
+		if a.logProcessManager != nil {
+			// Glouton's own per-service-type log format detection (services
+			// running bare or in a container) is the only log source
+			// log.opentelemetry.receivers/glouton.* labels can't supersede
+			// (see logprocessing.Manager.processLogSources) -- it still
+			// depends on auto_discovery.container_and_service_enable exactly
+			// as before.
+			var logServices []discovery.Service
+			if a.config.Log.OpenTelemetry.AutoDiscovery.ContainerAndServiceEnable {
+				logServices = services
+			}
+
+			a.logProcessManager.HandleLogsFromDynamicSources(ctx, logServices, containers)
+		}
+	}
+}
+
+// anyReceiverWantsDefaultNetwork reports whether any log.opentelemetry.receivers
+// entry sets network.enable with no named log.network.receivers of its own --
+// the simple shortcut that auto-provisions config.DefaultNetworkReceiverName
+// (see config.EffectiveNetworkReceivers).
+func anyReceiverWantsDefaultNetwork(receivers map[string]config.LogReceiver) bool {
+	for name, raw := range receivers {
+		_, _, _, network, err := config.LogReceiverSelectors(raw)
+		if err != nil {
+			logger.V(1).Printf("log.opentelemetry.receivers.%s: %v", name, err)
+
+			continue
+		}
+
+		if network.Enable && len(network.Receivers) == 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
+// runReceiverManager periodically re-resolves include-pattern (file)
+// receivers -- new files matching a glob can appear at any time, unlike
+// container/network sources which react to discovery events -- and persists
+// every source's read offset, mirroring otel/logprocessing's former internal
+// cadence (both were 1 minute). It shuts receiverManager down when ctx ends.
+func (a *agent) runReceiverManager(ctx context.Context) error {
+	const receiverManagerUpdatePeriod = time.Minute
+
+	ticker := time.NewTicker(receiverManagerUpdatePeriod)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			a.receiverManager.SaveState()
+			a.receiverManager.Shutdown(context.Background())
+
+			return ctx.Err()
+		case <-ticker.C:
+			if err := a.receiverManager.RescanReceivers(ctx); err != nil {
+				logger.V(1).Printf("failed to resolve some log receivers: %v", err)
+			}
+
+			a.receiverManager.SaveState()
+		}
 	}
 }
 
@@ -2739,7 +2805,7 @@ func (a *agent) checkSudoRSForLogs(ctx context.Context) {
 	// When logs discovery is enabled, they will required sudo and don't work with sudo-rs.
 	// Only journalctl works without sudo.
 	logsDiscovery := a.config.Log.OpenTelemetry.AutoDiscovery
-	if a.config.Log.OpenTelemetry.Enable && (logsDiscovery.ContainerAndServiceEnable || logsDiscovery.AuditdEnable || logsDiscovery.SyslogEnable) {
+	if a.config.Log.OpenTelemetry.ShippingEnable && (logsDiscovery.ContainerAndServiceEnable || logsDiscovery.AuditdEnable || logsDiscovery.SyslogEnable) {
 		if a.commandRunner.UseSudoRS(ctx) {
 			a.addWarnings(errSudoRSLogs)
 
