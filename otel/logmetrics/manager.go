@@ -19,11 +19,11 @@ package logmetrics
 import (
 	"context"
 	"encoding/json"
-	"slices"
 	"sync"
 
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/crashreport"
+	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/otel/logsource"
 	"github.com/bleemeo/glouton/prometheus/registry"
@@ -36,20 +36,10 @@ import (
 	"go.opentelemetry.io/collector/consumer"
 )
 
-// Package logmetrics counts log lines matching a condition/regex and reports
-// the rate as a metric, via the real vendored countconnector. It's a thin
-// logsource.SinkProvider: otel/logsource.ReceiverManager owns every physical
-// file/container tail and offers each resolved source to Manager.WantSource,
-// which decides whether it has anything to count from it and, if so, wires a
-// countconnector chain feeding the shared metricsRegistry. Independent from
-// otel/logprocessing: never ships log content.
+// Package logmetrics counts log lines matching a condition/regex and reports the rate as a metric, via the vendored countconnector.
 
-// Manager builds a countconnector pipeline for every ReceiverManager-resolved
-// source that has metrics configured, and aggregates their output into one
-// registry of (metric, item) rate counters. The zero value isn't usable;
-// construct with New, then register it with a *logsource.ReceiverManager via
-// RegisterSinkProvider before that manager's first RescanReceivers/
-// UpdateContainers call.
+// Manager builds a countconnector pipeline for every resolved source that has metrics configured, and aggregates their output into one registry of (metric, item) rate counters.
+// The zero value isn't usable; construct with New.
 type Manager struct {
 	cfg          config.OpenTelemetry
 	metricsRules map[string][]config.LogMetricEntry
@@ -57,14 +47,17 @@ type Manager struct {
 
 	reg *metricsRegistry
 
-	l       sync.Mutex
-	conns   []otelconnector.Logs
-	sources []sourceDiagnostic
+	l     sync.Mutex
+	built []builtSource
+}
+
+// builtSource is one WantSource-accepted source's countconnector chain, kept so ReleaseSource can shut it down individually.
+type builtSource struct {
+	diag  sourceDiagnostic
+	conns []otelconnector.Logs
 }
 
 // New builds a Manager for cfg's receivers and metricsRules (log.metrics_rules).
-// It doesn't resolve anything yet: call RegisterSinkProvider on the shared
-// *logsource.ReceiverManager to start feeding it sources.
 func New(cfg config.OpenTelemetry, metricsRules map[string][]config.LogMetricEntry) *Manager {
 	return &Manager{
 		cfg:          cfg,
@@ -74,9 +67,7 @@ func New(cfg config.OpenTelemetry, metricsRules map[string][]config.LogMetricEnt
 	}
 }
 
-// receiverMetricsField narrow-decodes just a raw LogReceiver's "metrics" key,
-// following the same narrow-decode pattern as config.LogReceiverSelectors and
-// otel/logsource's decodeReceiverFields.
+// receiverMetricsField narrow-decodes just a raw LogReceiver's "metrics" key.
 type receiverMetricsField struct {
 	Metrics []any
 }
@@ -96,9 +87,7 @@ func decodeReceiverMetrics(raw config.LogReceiver) ([]any, error) {
 	return fields.Metrics, nil
 }
 
-// WantSource implements logsource.SinkProvider: it decides whether src has
-// any metrics to count, and if so builds (and remembers, for Shutdown/
-// DiagnosticArchive) the countconnector chain feeding it.
+// WantSource implements logsource.SinkProvider: it decides whether src has any metrics to count, and builds the countconnector chain feeding it.
 func (man *Manager) WantSource(ctx context.Context, src logsource.ResolvedSource) (consumer.Logs, bool) {
 	switch src.Kind {
 	case logsource.SourceReceiver:
@@ -110,10 +99,7 @@ func (man *Manager) WantSource(ctx context.Context, src logsource.ResolvedSource
 	}
 }
 
-// wantReceiverSource resolves a SourceReceiver's own "metrics:" field. Its
-// item always defaults to the receiver's own config name (src.Name), even if
-// its selectors matched several containers at once -- merging them under one
-// item is then an explicit config choice, not something decided here.
+// wantReceiverSource resolves a SourceReceiver's own "metrics:" field, defaulting its item to the receiver's config name (src.Name).
 func (man *Manager) wantReceiverSource(ctx context.Context, src logsource.ResolvedSource) (consumer.Logs, bool) {
 	raw, found := man.cfg.Receivers[src.ReceiverName]
 	if !found {
@@ -141,12 +127,7 @@ func (man *Manager) wantReceiverSource(ctx context.Context, src logsource.Resolv
 	return man.buildSink(ctx, resolved, src.Name, diag)
 }
 
-// wantContainerLabelSource resolves a SourceContainerLabel's
-// glouton.log_metrics label, if set, directly against log.metrics_rules (no
-// further {include: ...} expansion: the named rule set IS the resolved
-// list). Its item always defaults to the container's own runtime name
-// (src.Name), keeping two containers sharing the same label value from
-// merging into one series.
+// wantContainerLabelSource resolves a SourceContainerLabel's glouton.log_metrics label against log.metrics_rules, defaulting its item to the container's runtime name (src.Name).
 func (man *Manager) wantContainerLabelSource(ctx context.Context, src logsource.ResolvedSource) (consumer.Logs, bool) {
 	if src.LogMetricsRule == "" {
 		return nil, false
@@ -180,11 +161,7 @@ func (man *Manager) wantContainerLabelSource(ctx context.Context, src logsource.
 	return man.buildSink(ctx, resolved, src.Name, diag)
 }
 
-// buildSink builds the countconnector chain for resolved, grouped by item
-// (defaultItem unless a metric overrides its own), and remembers it for
-// Shutdown/DiagnosticArchive. Every metric name is declared (MetricNames()
-// reflects it immediately, before any matching log line arrives) as a side
-// effect of buildGroupedConnectors' own reg.resolve call, not separately here.
+// buildSink builds the countconnector chain for resolved, grouped by item, and remembers it for Shutdown/DiagnosticArchive.
 func (man *Manager) buildSink(ctx context.Context, resolved []resolvedMetric, defaultItem string, diag sourceDiagnostic) (consumer.Logs, bool) {
 	conns, err := buildGroupedConnectors(ctx, man.telemetry, resolved, defaultItem, man.reg, diag.Name)
 	if err != nil {
@@ -196,11 +173,50 @@ func (man *Manager) buildSink(ctx context.Context, resolved []resolvedMetric, de
 	diag.MetricNames = metricNamesOf(resolved)
 
 	man.l.Lock()
-	man.conns = append(man.conns, conns...)
-	man.sources = append(man.sources, diag)
+	man.built = append(man.built, builtSource{diag: diag, conns: conns})
 	man.l.Unlock()
 
 	return logsConsumerFor(conns), true
+}
+
+// ReleaseSource implements logsource.SinkProvider: it shuts down and forgets the countconnector chain built for container, if any.
+// Called when a container disappears, since container recreation assigns a new ID and would otherwise leak the old chain.
+func (man *Manager) ReleaseSource(ctx context.Context, container facts.Container) {
+	if container == nil {
+		return
+	}
+
+	containerID := container.ID()
+
+	man.l.Lock()
+
+	kept := make([]builtSource, 0, len(man.built))
+
+	var toStop []otelconnector.Logs
+
+	for _, b := range man.built {
+		if b.diag.Kind == "container_label" && b.diag.ContainerID == containerID {
+			toStop = append(toStop, b.conns...)
+
+			continue
+		}
+
+		kept = append(kept, b)
+	}
+
+	man.built = kept
+
+	man.l.Unlock()
+
+	if len(toStop) == 0 {
+		return
+	}
+
+	logger.V(2).Printf("logmetrics: releasing container %s (%d connector(s) stopped)", containerID, len(toStop))
+
+	if err := shutdownConns(ctx, toStop); err != nil {
+		logger.V(1).Printf("logmetrics: releasing container %s: %v", containerID, err)
+	}
 }
 
 func metricNamesOf(entries []resolvedMetric) []string {
@@ -218,11 +234,7 @@ func metricNamesOf(entries []resolvedMetric) []string {
 	return names
 }
 
-// Run keeps Manager alive for ctx's lifetime. There is no periodic
-// source-rescanning or container-polling left to do here -- ReceiverManager
-// owns that -- and RingCounter (registry.go) discards outdated buckets lazily
-// on its own Add/Total calls, so no active ticking is needed either; metrics
-// emission itself happens on demand, via EmitMetrics.
+// Run keeps Manager alive for ctx's lifetime; there is no periodic work to do here.
 func (man *Manager) Run(ctx context.Context) error {
 	defer crashreport.ProcessPanic()
 
@@ -234,9 +246,15 @@ func (man *Manager) Run(ctx context.Context) error {
 // Shutdown stops every countconnector this Manager ever built.
 func (man *Manager) Shutdown(ctx context.Context) error {
 	man.l.Lock()
-	conns := man.conns
-	man.conns = nil
+	built := man.built
+	man.built = nil
 	man.l.Unlock()
+
+	var conns []otelconnector.Logs
+
+	for _, b := range built {
+		conns = append(conns, b.conns...)
+	}
 
 	return shutdownConns(ctx, conns)
 }
@@ -252,8 +270,7 @@ func (man *Manager) MetricNames() []string {
 	return man.reg.metricNames()
 }
 
-// sourceDiagnostic describes one resolved, wanted source for the diagnostic
-// archive.
+// sourceDiagnostic describes one resolved, wanted source for the diagnostic archive.
 type sourceDiagnostic struct {
 	Name           string
 	Kind           string // "receiver" or "container_label"
@@ -270,7 +287,11 @@ func (man *Manager) DiagnosticArchive(_ context.Context, archive types.ArchiveWr
 	}
 
 	man.l.Lock()
-	sources := slices.Clone(man.sources)
+	sources := make([]sourceDiagnostic, 0, len(man.built))
+
+	for _, b := range man.built {
+		sources = append(sources, b.diag)
+	}
 	man.l.Unlock()
 
 	info := struct {

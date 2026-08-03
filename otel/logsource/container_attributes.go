@@ -37,9 +37,7 @@ const (
 	attrContainerPod       = "k8s.pod.name"
 )
 
-// ContainerAttributes carries a container's identity, stamped as stanza
-// attributes on every log record its tail produces (see AsMap), so shipping
-// and metrics both see which container/pod/image a record came from.
+// ContainerAttributes carries a container's identity, stamped as attributes on every log record it produces.
 type ContainerAttributes struct {
 	Runtime   string
 	ID        string
@@ -50,10 +48,7 @@ type ContainerAttributes struct {
 	Pod       string `json:",omitempty"`
 }
 
-// BuildContainerAttributes resolves ctr's attributes, including its image
-// tags (which may require a runtime/API call, hence ctx). A failure to
-// resolve image tags is logged, not fatal: the rest of the attributes are
-// still returned.
+// BuildContainerAttributes resolves ctr's attributes, including its image tags. A failure to resolve image tags is logged, not fatal.
 func BuildContainerAttributes(ctx context.Context, ctr facts.Container) ContainerAttributes {
 	attributes := ContainerAttributes{
 		Runtime:   ctr.RuntimeName(),
@@ -82,8 +77,7 @@ func BuildContainerAttributes(ctx context.Context, ctr facts.Container) Containe
 	return attributes
 }
 
-// AsMap turns attrs into the stanza attribute config SetupLogReceiverFactories
-// stamps on every log record produced by this container's tail.
+// AsMap turns attrs into the stanza attribute config stamped on every log record.
 func (attrs ContainerAttributes) AsMap() map[string]helper.ExprStringConfig {
 	out := map[string]helper.ExprStringConfig{
 		attrContainerID:        helper.ExprStringConfig(attrs.ID),

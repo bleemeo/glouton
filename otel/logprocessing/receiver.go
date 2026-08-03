@@ -55,14 +55,8 @@ const metadataKeySeparator = "/"
 
 type logReceiver struct {
 	name string
-	// cfg is the raw config as given (see config.LogReceiver) -- passed
-	// through as-is to logsource.SetupLogReceiverFactories, so any real
-	// filelogreceiver/fileconsumer field it sets (start_at, on_truncate,
-	// encoding, multiline, ...) takes effect verbatim. include is pulled out
-	// of it once, here, for Glouton's own glob-resolution logic below (a real
-	// field too, so it's redundantly present in cfg, but that's harmless:
-	// SetupLogReceiverFactories always overwrites Include with the actual
-	// resolved file itself, after applying cfg).
+	// cfg is the raw config (see config.LogReceiver), passed through as-is to SetupLogReceiverFactories;
+	// include is also pulled out here for Glouton's own glob-resolution logic below.
 	cfg             config.LogReceiver
 	include         []string
 	isFromService   bool
@@ -96,11 +90,8 @@ func newLogReceiver(
 		return nil, nil, fmt.Errorf("%w: %q. It must be of the form 'my-receiver' or 'filelog/my-receiver'", errInvalidReceiverName, name) //nolint: nilnil
 	}
 
-	// cfg is raw (see config.LogReceiver's doc comment): pull out the fields
-	// Glouton's own logic needs. include/operators are real filelogreceiver
-	// fields too (so they stay in cfg, redundantly, for the verbatim pass-
-	// through to logsource.SetupLogReceiverFactories); log_format/filters are
-	// Glouton's own additions with no equivalent in the real schema.
+	// cfg is raw; pull out the fields Glouton's own logic needs (log_format/filters have no equivalent
+	// in the real schema).
 	var fields struct {
 		Include   []string              `mapstructure:"include"`
 		Operators []config.OTELOperator `mapstructure:"operators"`
@@ -162,11 +153,8 @@ func newLogReceiver(
 	}, warn, nil
 }
 
-// update tries to create a log receiver for each file from the config
-// that hasn't been handled yet.
-//
-// Passing the pipelineContext at each call rather than storing it in logReceiver
-// makes explicit the fact that its lock must be acquired during the call to update().
+// update creates a log receiver for each unhandled file in the config. pipeline is passed in (not stored)
+// to make clear its lock must be held during the call.
 func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, addWarnings func(...error)) error {
 	r.l.Lock()
 	defer r.l.Unlock()
@@ -227,18 +215,12 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 
 		for _, file := range matching {
 			realFile := file
-			// If we are in a containers, resolve symlink taking hostroot in consideration.
-			// This is mandatory for file like "/var/log/containers/XXX" which are
-			// symlink to "/var/log/pods/XXX" with Kubernetes & containerd.
-			// If we don't, Glouton will try reading "/hostroot/var/log/containers/XXX". Glouton will follow
-			// the symlink (without take /hostroot in consideration) which result in Glouton trying to
-			// read "/var/log/pods/XXX" in its own mount namespace (it need to read "/hostroot/var/log/pods/XXX").
+			// Resolve symlinks relative to hostroot (Kubernetes/containerd's /var/log/containers/XXX -> /var/log/pods/XXX).
 			if pipeline.hostroot != "/" {
 				realFile = hostrootsymlink.EvalSymlinks(pipeline.hostroot, realFile)
 			}
 
-			// Ensure we're not already watching it,
-			// as well as it hasn't been matched by multiple patterns.
+			// Skip if already watching or already matched by another pattern.
 			if _, found := r.watching[realFile]; !found && !logFiles[realFile] {
 				logFiles[realFile] = true
 			}
@@ -311,9 +293,7 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 		}
 
 		if r.isFromService {
-			// If this receiver is related to a service, it may disappear at any moment due to the deletion of the said service.
-			// We don't store it in the logReceiver rather than in pipeline.startedComponents
-			// to be able to find it easily to stop and delete it when the service won't exist anymore.
+			// Store in r.startedComponents (not pipeline) to find and stop it when the service disappears.
 			r.startedComponents = append(r.startedComponents, logRcvr)
 		} else {
 			pipeline.startedComponents = append(pipeline.startedComponents, logRcvr)

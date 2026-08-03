@@ -41,11 +41,7 @@ func testTelemetrySettings() component.TelemetrySettings {
 	}
 }
 
-// testRegistry returns a fresh metricsRegistry and a function reading back
-// each metric's raw match count across every item. It reads
-// RingCounter.Total() directly rather than going through emit()'s windowed
-// rate, since these tests run in well under windowSecs: every match added is
-// still in the ring when read back, so Total() equals the raw count.
+// testRegistry returns a fresh metricsRegistry and a function reading back each metric's raw match count.
 func testRegistry() (*metricsRegistry, func() map[counterKey]int64) {
 	reg := newMetricsRegistry()
 
@@ -62,8 +58,7 @@ func testRegistry() (*metricsRegistry, func() map[counterKey]int64) {
 	}
 }
 
-// logsWithBody builds a single-record plog.Logs with the given body, as a
-// countconnector would receive straight from a receiver.
+// logsWithBody builds a single-record plog.Logs with the given body.
 func logsWithBody(body string) plog.Logs {
 	ld := plog.NewLogs()
 	rl := ld.ResourceLogs().AppendEmpty()
@@ -84,8 +79,7 @@ func TestExtractItem(t *testing.T) {
 		t.Fatalf("Expected a pointer to %q, got %v", "custom", got)
 	}
 
-	// The whole point of extractItem: item explicitly set to "" must stay
-	// distinguishable from "unset" (legacy log.inputs migration relies on this).
+	// item explicitly set to "" must stay distinguishable from "unset".
 	got = extractItem(config.LogMetricEntry{"item": ""})
 	if got == nil || *got != "" {
 		t.Fatalf(`Expected a non-nil pointer to "", got %v`, got)
@@ -113,8 +107,7 @@ func TestResolveInlineMetric(t *testing.T) {
 	}
 }
 
-// TestResolveReceiverMetrics covers the include+inline mixing, multiple
-// libraries and unknown-include warning.
+// Test include+inline mixing across multiple libraries, plus an unknown include.
 func TestResolveReceiverMetrics(t *testing.T) {
 	t.Parallel()
 
@@ -159,9 +152,7 @@ func TestResolveReceiverMetricsMalformedEntry(t *testing.T) {
 	}
 }
 
-// TestGroupResolvedMetricsByItem covers default-item grouping and explicit
-// per-metric item overrides, including an override to "" (distinct from
-// "never set").
+// Test default-item grouping and explicit per-metric item overrides, including an override to "".
 func TestGroupResolvedMetricsByItem(t *testing.T) {
 	t.Parallel()
 
@@ -203,9 +194,7 @@ func namesOf(entries []resolvedMetric) []string {
 	return names
 }
 
-// TestMetricInfo checks that a pasted connectors.count.logs.<metric>
-// definition decodes straight into countconnector.MetricInfo, with the raw
-// description overriding the "log-to-metric: <name>" default.
+// Test that a pasted connectors.count.logs.<metric> definition decodes into countconnector.MetricInfo.
 func TestMetricInfo(t *testing.T) {
 	t.Parallel()
 
@@ -234,8 +223,7 @@ func TestMetricInfo(t *testing.T) {
 	}
 }
 
-// TestMetricInfoRegexSugar checks that "regex" expands into a single
-// IsMatch(body, ...) condition, on top of any explicit "conditions".
+// Test that "regex" expands into a single IsMatch(body, ...) condition, on top of any explicit "conditions".
 func TestMetricInfoRegexSugar(t *testing.T) {
 	t.Parallel()
 
@@ -244,10 +232,7 @@ func TestMetricInfoRegexSugar(t *testing.T) {
 		t.Fatal("metricInfo returned an error:", err)
 	}
 
-	// %q escapes the literal backslashes in the regex, exactly like the
-	// existing legacy log.inputs migration's own regex->condition expansion
-	// (config.mergeLegacyFilters) -- the OTTL string literal must carry them
-	// escaped to represent the same regex bytes.
+	// %q escapes the literal backslashes so the OTTL string literal represents the same regex bytes.
 	want := []string{`IsMatch(body, "\\[error\\]")`}
 	if diff := cmp.Diff(want, info.Conditions); diff != "" {
 		t.Fatalf("Unexpected conditions from regex sugar (-want +got):\n%s", diff)
@@ -267,9 +252,7 @@ func TestMetricInfoRegexSugar(t *testing.T) {
 	}
 }
 
-// TestMetricInfoDefaultDescription checks that a metric with no raw config
-// still gets a usable default description and no conditions (which
-// countconnector treats as "count every log record unconditionally").
+// Test that a metric with no raw config gets a default description and no conditions.
 func TestMetricInfoDefaultDescription(t *testing.T) {
 	t.Parallel()
 
@@ -287,14 +270,12 @@ func TestMetricInfoDefaultDescription(t *testing.T) {
 	}
 }
 
-// TestMetricInfoDecodeError checks that a raw config.LogMetricEntry that
-// fails to decode returns an error, instead of an empty-Conditions MetricInfo
-// that would silently match every log record.
+// Test that a raw config.LogMetricEntry which fails to decode returns an error rather than matching every record.
 func TestMetricInfoDecodeError(t *testing.T) {
 	t.Parallel()
 
 	raw := config.LogMetricEntry{
-		"conditions": `IsMatch(body, "error")`, // should be a []any, not a bare string
+		"conditions": `IsMatch(body, "error")`, // should be []any, not a bare string
 	}
 
 	if _, err := metricInfo("broken_metric", raw); err == nil {
@@ -302,8 +283,7 @@ func TestMetricInfoDecodeError(t *testing.T) {
 	}
 }
 
-// TestExtractLabels covers the one field metricInfo's decode never sets
-// (labels isn't a real countconnector field, see LogMetricEntry's doc comment).
+// Test extractLabels, the one field metricInfo's decode never sets.
 func TestExtractLabels(t *testing.T) {
 	t.Parallel()
 
@@ -324,10 +304,7 @@ func TestExtractLabels(t *testing.T) {
 	}
 }
 
-// TestBuildGroupedConnectorsEndToEnd is an end-to-end test of the real
-// vendored countconnector wiring: feeding synthetic plog.Logs through the
-// built connector(s) must increment the shared registry's counters, item by
-// item.
+// Test the real countconnector wiring end to end: logs fed through the built connectors increment the shared registry.
 func TestBuildGroupedConnectorsEndToEnd(t *testing.T) {
 	t.Parallel()
 
@@ -371,9 +348,7 @@ func TestBuildGroupedConnectorsEndToEnd(t *testing.T) {
 	}
 }
 
-// TestBuildGroupedConnectorsExplicitItemSplitsGroup checks that a metric
-// overriding its own item gets built (and counted) as a distinct group from
-// the receiver's default-item metrics.
+// Test that a metric overriding its own item is built as a distinct group from the receiver's default-item metrics.
 func TestBuildGroupedConnectorsExplicitItemSplitsGroup(t *testing.T) {
 	t.Parallel()
 
@@ -410,10 +385,7 @@ func TestBuildGroupedConnectorsExplicitItemSplitsGroup(t *testing.T) {
 	}
 }
 
-// TestBuildGroupedConnectorsIsolatesInvalidCounter checks buildConnectors'
-// fallback path: with both valid and invalid counters, it falls back to one
-// connector per valid counter, so the invalid one is disabled but its
-// siblings keep working.
+// Test that with both valid and invalid counters, buildConnectors falls back to one connector per valid counter.
 func TestBuildGroupedConnectorsIsolatesInvalidCounter(t *testing.T) {
 	t.Parallel()
 
@@ -447,9 +419,7 @@ func TestBuildGroupedConnectorsIsolatesInvalidCounter(t *testing.T) {
 		t.Errorf("Expected 1 match for app_errors_count, got %v", got)
 	}
 
-	// The registry may still pre-declare a counter for app_broken_count (same
-	// group as the valid metric), but it must never be incremented: no
-	// connector was ever built for it.
+	// app_broken_count's counter may be pre-declared but must never be incremented.
 	if got[counterKey{metric: "app_broken_count", item: "recv"}] != 0 {
 		t.Errorf("app_broken_count should never receive any data, got %v", got)
 	}
@@ -485,8 +455,7 @@ func TestBuildGroupedConnectorsAllInvalid(t *testing.T) {
 	}
 }
 
-// TestLogsConsumerFor checks the 0/1/N-connector special cases delegated to
-// logsource.FanoutLogs.
+// Test the 0/1/N-connector special cases delegated to logsource.FanoutLogs.
 func TestLogsConsumerFor(t *testing.T) {
 	t.Parallel()
 

@@ -32,11 +32,7 @@ func newTestManager(t *testing.T, cfg config.OpenTelemetry, metricsRules map[str
 	return New(cfg, metricsRules)
 }
 
-// countsFor reads back every declared counter's raw total for a given metric
-// name, keyed by item -- present with 0 for an item whose counter was
-// declared (via reg.resolve, see buildGroupedConnectors) but never
-// incremented, absent for an item that was never even grouped for this
-// metric at all.
+// countsFor reads back every declared counter's raw total for a metric, keyed by item.
 func countsFor(man *Manager, metric string) map[string]int64 {
 	man.reg.l.Lock()
 	defer man.reg.l.Unlock()
@@ -52,8 +48,7 @@ func countsFor(man *Manager, metric string) map[string]int64 {
 	return counts
 }
 
-// TestWantSourceReceiverNoMetrics checks that a receiver with no "metrics:"
-// field at all -- or an unknown receiver name -- is never wanted.
+// Test that a receiver with no "metrics:" field, or an unknown receiver name, is never wanted.
 func TestWantSourceReceiverNoMetrics(t *testing.T) {
 	t.Parallel()
 
@@ -72,9 +67,7 @@ func TestWantSourceReceiverNoMetrics(t *testing.T) {
 	}
 }
 
-// TestWantSourceReceiverInline is the end-to-end test for a hand-written
-// inline metric: WantSource must return a usable sink, feeding the shared
-// registry under the receiver's own name as item.
+// Test a hand-written inline metric end to end, from WantSource through to the registry.
 func TestWantSourceReceiverInline(t *testing.T) {
 	t.Parallel()
 
@@ -108,8 +101,7 @@ func TestWantSourceReceiverInline(t *testing.T) {
 	}
 }
 
-// TestWantSourceReceiverMetricsRulesInclude checks the {include: name}
-// expansion against log.metrics_rules end to end.
+// Test the {include: name} expansion against log.metrics_rules end to end.
 func TestWantSourceReceiverMetricsRulesInclude(t *testing.T) {
 	t.Parallel()
 
@@ -143,10 +135,7 @@ func TestWantSourceReceiverMetricsRulesInclude(t *testing.T) {
 	}
 }
 
-// TestWantSourceReceiverItemOverride checks that a metric's own "item" field
-// always wins over the receiver's default item -- both for a normal explicit
-// override, and for item explicitly set to "" (what legacy log.inputs
-// migration writes, which must be honored verbatim, not treated as unset).
+// Test that a metric's own "item" field always wins over the receiver's default item, including item explicitly set to "".
 func TestWantSourceReceiverItemOverride(t *testing.T) {
 	t.Parallel()
 
@@ -209,9 +198,7 @@ func TestWantSourceReceiverItemOverride(t *testing.T) {
 	}
 }
 
-// TestWantSourceTwoReceiversGetDistinctItems checks that two receivers each
-// defining the same metric name inline (no shared metrics_rules) produce
-// genuinely distinct, independently-counted series.
+// Test that two receivers defining the same metric name inline get distinct, independently-counted series.
 func TestWantSourceTwoReceiversGetDistinctItems(t *testing.T) {
 	t.Parallel()
 
@@ -256,8 +243,7 @@ func TestWantSourceTwoReceiversGetDistinctItems(t *testing.T) {
 	}
 }
 
-// TestWantSourceContainerLabelNoRule checks that a container with no
-// glouton.log_metrics label at all is never wanted.
+// Test that a container with no glouton.log_metrics label is never wanted.
 func TestWantSourceContainerLabelNoRule(t *testing.T) {
 	t.Parallel()
 
@@ -272,9 +258,7 @@ func TestWantSourceContainerLabelNoRule(t *testing.T) {
 	}
 }
 
-// TestWantSourceContainerLabelUnknownRule checks that a
-// glouton.log_metrics label naming a rule set that doesn't exist is
-// rejected, not silently ignored as "no rule at all".
+// Test that a glouton.log_metrics label naming an unknown rule set is rejected, not silently ignored.
 func TestWantSourceContainerLabelUnknownRule(t *testing.T) {
 	t.Parallel()
 
@@ -291,9 +275,7 @@ func TestWantSourceContainerLabelUnknownRule(t *testing.T) {
 	}
 }
 
-// TestWantSourceContainerLabelValid is the end-to-end test for a container
-// opted in purely via glouton.log_metrics: its item must be the container's
-// own runtime name (src.Name), not the rule set's name.
+// Test a container opted in via glouton.log_metrics: its item must be the container's own name, not the rule set's name.
 func TestWantSourceContainerLabelValid(t *testing.T) {
 	t.Parallel()
 
@@ -320,9 +302,7 @@ func TestWantSourceContainerLabelValid(t *testing.T) {
 	}
 }
 
-// TestWantSourceContainerLabelTwoContainersSameRuleGetDistinctItems checks
-// that two containers sharing the same glouton.log_metrics value don't
-// merge into one series.
+// Test that two containers sharing the same glouton.log_metrics value don't merge into one series.
 func TestWantSourceContainerLabelTwoContainersSameRuleGetDistinctItems(t *testing.T) {
 	t.Parallel()
 
@@ -349,17 +329,13 @@ func TestWantSourceContainerLabelTwoContainersSameRuleGetDistinctItems(t *testin
 		t.Errorf(`Expected 1 match under "app-a", got %v`, got)
 	}
 
-	// app-b's counter exists (declared as soon as its source was resolved,
-	// see buildGroupedConnectors' reg.resolve call) but must never have been
-	// incremented: no log line was ever sent through its own sink.
+	// app-b's counter exists but was never incremented.
 	if got["app-b"] != 0 {
 		t.Errorf("Expected app-b to have no match, got %v", got)
 	}
 }
 
-// TestManagerMetricNamesDeclaredBeforeAnyData checks that a metric's name is
-// declared (MetricNames() reports it) as soon as its source is resolved,
-// even before any log line was ever seen.
+// Test that a metric's name is declared as soon as its source is resolved, before any log line is seen.
 func TestManagerMetricNamesDeclaredBeforeAnyData(t *testing.T) {
 	t.Parallel()
 
@@ -388,8 +364,58 @@ func TestManagerMetricNamesDeclaredBeforeAnyData(t *testing.T) {
 	}
 }
 
-// TestManagerShutdownStopsConnectors checks that Shutdown tears down every
-// countconnector this Manager ever built, without error.
+// Test that ReleaseSource removes only the released container's connectors, leaving an unrelated receiver's untouched.
+func TestReleaseSourceStopsAndForgetsContainerConnectors(t *testing.T) {
+	t.Parallel()
+
+	man := newTestManager(t, config.OpenTelemetry{
+		Receivers: map[string]config.LogReceiver{
+			"app": {
+				"include": []string{"/var/log/app.log"},
+				"metrics": []any{
+					map[string]any{"metric": "app_count", "conditions": []any{`IsMatch(body, "x")`}},
+				},
+			},
+		},
+	}, map[string][]config.LogMetricEntry{
+		"web_errors": {{"metric": "web_errors_count", "conditions": []any{`IsMatch(body, "error")`}}},
+	})
+
+	ctr := facts.FakeContainer{FakeID: "id-1", FakeContainerName: "web-1"}
+
+	if _, ok := man.WantSource(t.Context(), logsource.ResolvedSource{Kind: logsource.SourceReceiver, Name: "app", ReceiverName: "app"}); !ok {
+		t.Fatal("Expected the receiver to be wanted")
+	}
+
+	if _, ok := man.WantSource(t.Context(), logsource.ResolvedSource{
+		Kind: logsource.SourceContainerLabel, Name: "web-1", Container: ctr, LogMetricsRule: "web_errors",
+	}); !ok {
+		t.Fatal("Expected the container to be wanted")
+	}
+
+	man.l.Lock()
+	builtBefore := len(man.built)
+	man.l.Unlock()
+
+	if builtBefore != 2 {
+		t.Fatalf("expected 2 built sources before release, got %d", builtBefore)
+	}
+
+	man.ReleaseSource(t.Context(), ctr)
+
+	man.l.Lock()
+	defer man.l.Unlock()
+
+	if len(man.built) != 1 {
+		t.Fatalf("expected exactly 1 built source to remain after releasing the container, got %d: %+v", len(man.built), man.built)
+	}
+
+	if man.built[0].diag.Kind != "receiver" {
+		t.Fatalf("expected the surviving built source to be the receiver's, got %+v", man.built[0].diag)
+	}
+}
+
+// Test that Shutdown tears down every countconnector the Manager built, without error.
 func TestManagerShutdownStopsConnectors(t *testing.T) {
 	t.Parallel()
 
@@ -413,9 +439,7 @@ func TestManagerShutdownStopsConnectors(t *testing.T) {
 	}
 }
 
-// TestManagerDiagnosticArchiveListsResolvedSources is a smoke test for
-// DiagnosticArchive: it must at least report the resolved source and its
-// metric names, without erroring.
+// Smoke test that DiagnosticArchive reports the resolved source and its metric names.
 func TestManagerDiagnosticArchiveListsResolvedSources(t *testing.T) {
 	t.Parallel()
 
@@ -435,7 +459,11 @@ func TestManagerDiagnosticArchiveListsResolvedSources(t *testing.T) {
 	}
 
 	man.l.Lock()
-	sources := man.sources
+	sources := make([]sourceDiagnostic, 0, len(man.built))
+
+	for _, b := range man.built {
+		sources = append(sources, b.diag)
+	}
 	man.l.Unlock()
 
 	if len(sources) != 1 || sources[0].Name != "app" || sources[0].Kind != "receiver" {

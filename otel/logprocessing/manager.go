@@ -21,8 +21,6 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -53,15 +51,13 @@ type Manager struct {
 	knownLogFormats            map[string][]config.OTELOperator
 	state                      bleemeoTypes.State
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability
-	// containerFilter is cfg.ContainerFilter, pre-validated once at New()
-	// (invalid entries stripped with a warning) -- used by WantSource's
-	// SourceContainerLabel path to resolve glouton.log_filter's fallback (see
-	// sink_provider.go).
+	// containerFilter is cfg.ContainerFilter, pre-validated at New() (invalid entries stripped with a warning).
 	containerFilter map[string]string
 
-	persister     *logsource.PersistHost
-	pipeline      *pipelineContext
-	containerRecv *containerReceiver
+	receiverManager *logsource.ReceiverManager
+	persister       *logsource.PersistHost
+	pipeline        *pipelineContext
+	containerRecv   *containerReceiver
 
 	l                 sync.Mutex
 	skippedSource     []sourceDiagnostic
@@ -69,23 +65,12 @@ type Manager struct {
 	watchedContainers map[string]sourceDiagnostic // map key: container ID
 	// serviceReceivers only contains services that don't run in a container
 	serviceReceivers map[discovery.NameInstance][]*logReceiver
-	// fanoutSinks tracks, for diagnostics only, every logsource.ReceiverManager
-	// -owned source this package opted into via WantSource: the physical
-	// tail itself is owned and diagnosed by logsource, not here.
+	// fanoutSinks tracks, for diagnostics only, sources opted into via WantSource; the tail itself is owned by logsource.
 	fanoutSinks map[string]*fanoutSink
 }
 
-// New builds the log-shipping pipeline and registers it as a
-// logsource.SinkProvider on receiverManager: every source receiverManager
-// resolves (a log.opentelemetry.receivers entry, or a container opted in
-// solely via glouton.* labels) is then offered to this Manager's WantSource,
-// which decides whether to ship it (see sink_provider.go). Call
-// RegisterSinkProvider on receiverManager's other providers (otel/logmetrics)
-// separately -- New only registers itself.
-//
-// receiverManager must already exist (see logsource.NewReceiverManager) but
-// doesn't need to have resolved anything yet: RescanReceivers/UpdateContainers
-// can run any time after this call.
+// New builds the log-shipping pipeline and registers it as a logsource.SinkProvider on receiverManager,
+// which decides per-source whether to ship it via WantSource (see sink_provider.go).
 func New(
 	ctx context.Context,
 	cfg config.OpenTelemetry,
@@ -98,8 +83,7 @@ func New(
 	addWarnings func(...error),
 	receiverManager *logsource.ReceiverManager,
 ) (*Manager, error) {
-	// Expanding known log formats, allowing one level of cross-referencing.
-	// Referenced formats must be defined above references to them.
+	// Expand known log formats, allowing one level of cross-referencing.
 	knownLogFormats, err := expandLogFormats(cfg.KnownLogFormats)
 	if err != nil {
 		addWarnings(err)
@@ -107,15 +91,8 @@ func New(
 		return nil, fmt.Errorf("can't expand known log formats: %w", err)
 	}
 
-	persister, err := logsource.NewPersistHost(state, logsource.PersistConfig{
-		StorageType:  persistStorageType,
-		CacheKey:     logFileMetadataCacheKey,
-		ArchivePath:  "log-processing/persister.json",
-		SaveThrottle: saveFileSizesToCachePeriod,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("can't create persist host: %w", err)
-	}
+	// Reuse receiverManager's own PersistHost; two separate instances would overwrite each other's saved offsets.
+	persister := receiverManager.Persister()
 
 	pipelineOpts := pipelineOptions{
 		batcherTimeout:           10 * time.Second,
@@ -148,6 +125,7 @@ func New(
 		state:                      state,
 		streamAvailabilityStatusFn: streamAvailabilityStatusFn,
 		containerFilter:            validateContainerFilters(cfg.ContainerFilter, cfg.KnownLogFilters),
+		receiverManager:            receiverManager,
 		persister:                  persister,
 		pipeline:                   pipeline,
 		containerRecv:              containerRecv,
@@ -158,6 +136,14 @@ func New(
 	}
 
 	receiverManager.RegisterSinkProvider(processingManager)
+
+	// Fold this package's file sizes into receiverManager's shared save instead of running an independent saver of the same state key.
+	receiverManager.RegisterExternalSizer(func() []logsource.FileSizer {
+		processingManager.pipeline.l.Lock()
+		defer processingManager.pipeline.l.Unlock()
+
+		return mergeLastFileSizes(processingManager.pipeline.receivers, processingManager.containerRecv)
+	})
 
 	go processingManager.handleProcessingLifecycle(ctx)
 
@@ -172,9 +158,7 @@ func (man *Manager) handleProcessingLifecycle(ctx context.Context) {
 	recvUpdateTicker := time.NewTicker(receiversUpdatePeriod)
 	defer recvUpdateTicker.Stop()
 
-	saveFileSizesTicker := time.NewTicker(saveFileSizesToCachePeriod)
-	defer saveFileSizesTicker.Stop()
-
+	// File sizes are saved via receiverManager's own periodic SaveState (see New's RegisterExternalSizer), not a ticker here.
 ctxLoop:
 	for ctx.Err() == nil {
 		select {
@@ -189,20 +173,12 @@ ctxLoop:
 			}
 
 			man.l.Unlock()
-		case <-saveFileSizesTicker.C:
-			man.pipeline.l.Lock()
-			fileSizers := mergeLastFileSizes(man.pipeline.receivers, man.containerRecv)
-			man.pipeline.l.Unlock()
-
-			logsource.SaveLastFileSizesToCache(man.state, logFileSizesCacheKey, fileSizers)
-			man.persister.SaveToState(man.state)
 		}
 	}
 
 	// ctx has expired, shutting everything down
 
 	man.pipeline.l.Lock()
-	defer man.pipeline.l.Unlock()
 
 	for _, receivers := range man.serviceReceivers {
 		stopReceivers(receivers, man.persister.RemovePersistentExts)
@@ -212,8 +188,10 @@ ctxLoop:
 
 	man.pipeline.shutdownAll()
 
-	logsource.SaveLastFileSizesToCache(man.state, logFileSizesCacheKey, mergeLastFileSizes(man.pipeline.receivers, man.containerRecv))
-	man.persister.SaveToState(man.state)
+	man.pipeline.l.Unlock()
+
+	// Must run outside man.pipeline.l: SaveState locks it via the external sizer, and sync.Mutex isn't reentrant.
+	man.receiverManager.SaveState()
 }
 
 func (man *Manager) updateServiceReceivers(ctx context.Context) error {
@@ -224,8 +202,7 @@ func (man *Manager) updateServiceReceivers(ctx context.Context) error {
 
 	for _, receivers := range man.serviceReceivers {
 		for _, recv := range receivers {
-			// We can run several logReceiver.update() in parallel without taking the pipeline lock in each,
-			// since they only do read-access to the lock-protected fields.
+			// update() can run in parallel here since it only reads the lock-protected fields.
 			errGrp.Go(func() error {
 				err := recv.update(ctx, man.pipeline, logWarnings)
 				if err != nil {
@@ -248,11 +225,8 @@ func (man *Manager) HandleLogsFromDynamicSources(ctx context.Context, services [
 
 	logSources := man.processLogSources(services, containers)
 
-	// Every logSource now comes from a discovered service (see
-	// processLogSources): a plain container opted in solely via glouton.*
-	// labels no longer goes through this package at all, it's
-	// logsource.ReceiverManager's SourceContainerLabel/WantSource's job (see
-	// sink_provider.go). So serviceID is always set below.
+	// Every logSource comes from a discovered service now, so serviceID is always set below
+	// (label-only containers go through logsource.ReceiverManager/WantSource instead, see sink_provider.go).
 	for _, logSource := range logSources {
 		err := man.setupProcessingForSource(ctx, logSource)
 		if err == nil {
@@ -283,16 +257,7 @@ func (man *Manager) HandleLogsFromDynamicSources(ctx context.Context, services [
 	}
 }
 
-// processLogSources resolves log sources for discovered services -- both
-// bare processes (own log files) and services running in a container
-// (Glouton's own built-in log-format detection per service type, see
-// discovery.inferLogProcessingConfig). This is the ONLY log source this
-// package still resolves on its own: a container with no matching service
-// (whether opted in via glouton.* labels or a log.opentelemetry.receivers
-// entry) is resolved by logsource.ReceiverManager, which offers it to this
-// package's WantSource (see sink_provider.go) -- there's no equivalent of
-// Glouton's per-service-type log format detection in the new format, so it
-// can't be superseded by the shared receiver runtime.
+// processLogSources resolves log sources for discovered services; everything else goes through logsource.ReceiverManager/WantSource.
 func (man *Manager) processLogSources(services []discovery.Service, containers []facts.Container) []logSource {
 	man.skippedSource = make([]sourceDiagnostic, 0, len(man.skippedSource))
 
@@ -319,27 +284,18 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 		}
 
 		if service.ContainerID != "" {
-			ctr, found := containersByID[service.ContainerID]
-			if found {
-				logEnableStr, found := facts.LabelsAndAnnotations(ctr)[logsource.ContainerLabelPrefix+"log_enable"]
-				if found {
-					logEnable, err := strconv.ParseBool(strings.ToLower(logEnableStr))
-					if err != nil {
-						logger.V(1).Printf("Failed to parse value of 'glouton.log_enable' for container %s (%s): %v", ctr.ContainerName(), ctr.ID(), err)
-					} else if !logEnable {
-						logger.V(2).Printf("Ignoring logs of service %q, because its container has 'glouton.log_enable' set to false", service.Name)
+			if ctr, found := containersByID[service.ContainerID]; found && logsource.IsContainerExcluded(man.config, ctr) {
+				logger.V(2).Printf("Ignoring logs of service %q, because its container is excluded", service.Name)
 
-						man.skippedSource = append(man.skippedSource, sourceDiagnostic{
-							IsFromService: true,
-							ServiceKey:    key,
-							ContainerID:   service.ContainerID,
-							ContainerName: service.ContainerName,
-							SkipReason:    "Label glouton.log_enable set to false",
-						})
+				man.skippedSource = append(man.skippedSource, sourceDiagnostic{
+					IsFromService: true,
+					ServiceKey:    key,
+					ContainerID:   service.ContainerID,
+					ContainerName: service.ContainerName,
+					SkipReason:    "Container excluded (glouton.log_enable=false or container_exclude)",
+				})
 
-						continue
-					}
-				}
+				continue
 			}
 		}
 

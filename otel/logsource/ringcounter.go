@@ -21,9 +21,7 @@ import (
 	"time"
 )
 
-// RingCounter is a ring-buffer of per-second counts over a sliding window of
-// configurable size (precision is hard-coded to 1s). Add adds to the bucket
-// for the current second, wrapping around once the window is full.
+// RingCounter is a ring-buffer of per-second counts over a sliding window (precision hard-coded to 1s).
 type RingCounter struct {
 	size         int
 	t0           int64
@@ -32,8 +30,7 @@ type RingCounter struct {
 	lastUpdateAt int64
 }
 
-// NewRingCounter creates a RingCounter with the given size in seconds; size
-// must be strictly positive, otherwise it panics.
+// NewRingCounter creates a RingCounter with the given size in seconds; panics if size < 1.
 func NewRingCounter(size int) *RingCounter {
 	if size < 1 {
 		panic("ring counter size must be strictly positive")

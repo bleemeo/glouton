@@ -33,30 +33,16 @@ import (
 	"go.opentelemetry.io/collector/processor"
 )
 
-// fanoutSink is what backs a WantSource sink for a logsource.ReceiverManager
-// -owned source (a config receiver or a container-label source): its own
-// filter stage, instrumented for diagnostics, feeding into the shared
-// pipeline (pipeline.go).
+// fanoutSink backs a WantSource sink for a ReceiverManager-owned source: its own filter stage feeding the
+// shared pipeline. comp is kept so ReleaseSource can shut it down individually.
 type fanoutSink struct {
 	kind            logsource.SourceKind
+	comp            component.Component
 	logCounter      *atomic.Int64
 	throughputMeter *logsource.RingCounter
 }
 
-// WantSource implements logsource.SinkProvider: this package wants a
-// logsource.ReceiverManager-owned source iff its fully-resolved SendLogs
-// decision is true (ReceiverManager already combined the receiver/container's
-// own send_logs with OpenTelemetry.SendLogs/glouton.log_enable -- WantSource
-// doesn't re-derive it), in which case it returns a sink that applies this
-// source's own filters before feeding into the shared export pipeline.
-//
-// Filters are built unconditionally, as part of constructing this sink --
-// this is what fixes the legacy logReceiver.update()'s latent bug, where
-// setupFilters only ran after resolving at least one file from "include"
-// (so a network-only receiver's filters: were silently never applied): here,
-// there's no file-discovery step to gate on in the first place, filtering
-// always happens before WantSource returns, regardless of whether the source
-// is a file, a container tail, or a network push.
+// WantSource implements logsource.SinkProvider: returns a sink with filters applied if SendLogs is true.
 func (man *Manager) WantSource(ctx context.Context, src logsource.ResolvedSource) (consumer.Logs, bool) {
 	if !src.SendLogs {
 		return nil, false
@@ -79,10 +65,8 @@ func (man *Manager) WantSource(ctx context.Context, src logsource.ResolvedSource
 	}
 }
 
-// receiverFilterFields narrow-decodes a config receiver's own "filters" key,
-// the only field WantSource itself needs from it: include/container_name/
-// container_selectors/network/log_format/operators are all already resolved
-// by logsource.ReceiverManager, upstream of the fan-out.
+// receiverFilterFields decodes a config receiver's "filters" key, the only field WantSource needs
+// (everything else is already resolved upstream by logsource.ReceiverManager).
 type receiverFilterFields struct {
 	Filters config.OTELFilters `mapstructure:"filters"`
 }
@@ -97,14 +81,8 @@ func decodeReceiverFilters(raw config.LogReceiver) (config.OTELFilters, error) {
 	return fields.Filters, nil
 }
 
-// resolveContainerFilter resolves ctr's shipping-only log filter: its own
-// glouton.log_filter label if it names a known filter, else the
-// OpenTelemetry.ContainerFilter[containerName] fallback. This mirrors
-// logsource.resolveContainerLogFormat's log_format resolution, except
-// log_filter is shipping-only, so logsource.ReceiverManager exposes the raw
-// label (ResolvedSource doesn't carry it) but leaves resolving it to this
-// package (see logsource/container_labels.go's containerLabels.LogFilter doc
-// comment).
+// resolveContainerFilter resolves ctr's log filter: its own glouton.log_filter label if it names a known
+// filter, else the OpenTelemetry.ContainerFilter[containerName] fallback.
 func (man *Manager) resolveContainerFilter(ctr facts.Container) config.OTELFilters {
 	containerName := ctr.ContainerName()
 
@@ -123,12 +101,8 @@ func (man *Manager) resolveContainerFilter(ctr facts.Container) config.OTELFilte
 	return nil
 }
 
-// wrapWithFilter builds name's filter processor and feeds it into the shared
-// pipeline (pipeline.go's exporter/batcher/backpressure/global-filter/
-// resource-attribute chain) -- the same filter-then-pipeline wiring for both
-// a config receiver and a container-label source, built once, synchronously,
-// at WantSource call time. A build/start failure is logged and reported as
-// "not interested" (WantSource has no error return of its own).
+// wrapWithFilter builds name's filter processor and feeds it into the shared pipeline. A build/start
+// failure is logged and reported as "not interested" (WantSource has no error return of its own).
 func (man *Manager) wrapWithFilter(ctx context.Context, kind logsource.SourceKind, name string, filters config.OTELFilters) (consumer.Logs, bool) {
 	filterCfg, warn, err := buildLogFilterConfig(filters)
 	if err != nil {
@@ -174,15 +148,42 @@ func (man *Manager) wrapWithFilter(ctx context.Context, kind logsource.SourceKin
 	man.pipeline.startedComponents = append(man.pipeline.startedComponents, logFilter)
 	man.pipeline.l.Unlock()
 
-	// man.l is acquired separately (never nested with man.pipeline.l, in
-	// either order) to avoid a lock-ordering inversion with
-	// HandleLogsFromDynamicSources, which acquires man.l before
-	// man.pipeline.l.
+	// man.l is acquired separately, never nested with man.pipeline.l, in either order.
 	man.l.Lock()
-	man.fanoutSinks[name] = &fanoutSink{kind: kind, logCounter: logCounter, throughputMeter: throughputMeter}
+	man.fanoutSinks[name] = &fanoutSink{kind: kind, comp: logFilter, logCounter: logCounter, throughputMeter: throughputMeter}
 	man.l.Unlock()
 
 	return logFilter, true
+}
+
+// ReleaseSource implements logsource.SinkProvider: it shuts down and forgets container's filter processor,
+// if any. Called when a SourceContainerLabel container disappears, so its processor doesn't leak on recreation.
+func (man *Manager) ReleaseSource(ctx context.Context, container facts.Container) {
+	if container == nil {
+		return
+	}
+
+	name := "ctr-" + container.ID()
+
+	man.l.Lock()
+
+	sink, found := man.fanoutSinks[name]
+	if found {
+		delete(man.fanoutSinks, name)
+	}
+	man.l.Unlock()
+
+	if !found {
+		return
+	}
+
+	logger.V(2).Printf("logprocessing: releasing container %s (filter processor stopped)", container.ID())
+
+	man.pipeline.l.Lock()
+	man.pipeline.startedComponents = removeComponent(man.pipeline.startedComponents, sink.comp)
+	man.pipeline.l.Unlock()
+
+	stopComponents([]component.Component{sink.comp})
 }
 
 // fanoutSourceDiagnosticsLocked snapshots every WantSource-built sink's

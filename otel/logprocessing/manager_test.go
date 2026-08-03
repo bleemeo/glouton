@@ -81,7 +81,6 @@ func logSourceComparer(x, y logSource) bool {
 	}
 
 	if !reflect.DeepEqual(x.operators, y.operators) {
-		// operators are just basic types, so we can delegate this work to reflect
 		return false
 	}
 
@@ -92,13 +91,7 @@ func logSourceComparer(x, y logSource) bool {
 	return true
 }
 
-// TestProcessLogSources covers what still belongs to this package after the
-// otel/logsource.ReceiverManager rework: log sources derived from a
-// discovered service, whether it runs in a container (Glouton's own built-in
-// per-service-type log format detection) or as a bare process. A plain
-// container opted in solely via glouton.* labels, with no matching service,
-// is no longer resolved here at all -- see sink_provider_test.go for that
-// (now logsource.ReceiverManager's SourceContainerLabel + WantSource).
+// TestProcessLogSources tests deriving log sources from discovered services, in containers or as bare processes.
 func TestProcessLogSources(t *testing.T) {
 	t.Parallel()
 
@@ -193,12 +186,12 @@ func TestProcessLogSources(t *testing.T) {
 				svcNginx,
 				svc("old", "outdated", "", false, time.Now().Add(-365*24*time.Hour)),
 			},
-			expectedLogSources: nil, // thus nothing
+			expectedLogSources: nil,
 			expectedWatchedServices: map[discovery.NameInstance]struct{}{
-				{Name: testServiceNginx, Instance: testContainerNginx1}: {}, // still present
+				{Name: testServiceNginx, Instance: testContainerNginx1}: {},
 			},
 			expectedWatchedContainers: map[string]struct{}{
-				testContainerIDNgx1: {}, // still present
+				testContainerIDNgx1: {},
 			},
 		},
 		{
@@ -242,11 +235,11 @@ func TestProcessLogSources(t *testing.T) {
 				},
 			},
 			expectedWatchedServices: map[discovery.NameInstance]struct{}{
-				{Name: testServiceNginx, Instance: testContainerNginx1}: {}, // would've been removed if removeOldSources() had been run
+				{Name: testServiceNginx, Instance: testContainerNginx1}: {}, // removeOldSources() isn't run here, so stale entries remain.
 				{Name: testServiceApacheHTTPD, Instance: ""}:            {},
 			},
 			expectedWatchedContainers: map[string]struct{}{
-				testContainerIDNgx1: {}, // would've been removed if removeOldSources() had been run
+				testContainerIDNgx1: {},
 			},
 		},
 	}
@@ -268,11 +261,11 @@ func TestProcessLogSources(t *testing.T) {
 			t.Fatalf("Unexpected log sources at step %q (-want +got):\n%s", step.name, diff)
 		}
 
-		// We don't check the content of expectedWatchedServices's sourceDiagnostic. Only it's existence
+		// Only key existence is checked, not sourceDiagnostic content.
 		expectedKeys := slices.Collect(maps.Keys(step.expectedWatchedServices))
 		gotKeys := slices.Collect(maps.Keys(logMan.watchedServices))
 
-		// The SortSlices assume we don't have two identical name with different instance.
+		// Assumes no two services share a name with different instances.
 		if diff := cmp.Diff(expectedKeys, gotKeys, cmpopts.SortSlices(func(x, y discovery.NameInstance) bool { return x.Name < y.Name })); diff != "" {
 			t.Fatalf("Unexpected watched services at step %q (-want +got):\n%s", step.name, diff)
 		}

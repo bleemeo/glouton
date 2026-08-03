@@ -16,10 +16,8 @@
 
 package logsource
 
-// Package logsource holds the OTel log-receiver building blocks shared by
-// otel/logprocessing and otel/logmetrics: both tail the same kind of log
-// sources (static files, container logs, OTLP), so the logic lives here once.
-// Each caller keeps its own persisted state and component lifecycle.
+// Package logsource holds the OTel log-receiver building blocks shared by otel/logprocessing and
+// otel/logmetrics, since both tail the same kind of log sources.
 
 import (
 	"bytes"
@@ -60,9 +58,8 @@ const (
 
 var errUnexpectedType = errors.New("unexpected type")
 
-// decodeRawReceiverConfig decodes raw YAML into dest (an already-populated
-// receiver config), overwriting only the fields present in raw. Reuses
-// unmarshalMapstructureHook so nested operator.Config fields decode correctly.
+// decodeRawReceiverConfig decodes raw YAML into dest, overwriting only the fields present in raw.
+// Reuses unmarshalMapstructureHook so nested operator.Config fields decode correctly.
 func decodeRawReceiverConfig(dest any, raw map[string]any) error {
 	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 		Result:     dest,
@@ -87,8 +84,7 @@ type CommandRunner interface {
 // ignored) a function returning its current size.
 type StatFileFunc = func(logFile string, hostroot string, commandRunner CommandRunner) (ignore bool, needSudo bool, sizeFn func() (int64, error))
 
-// consumerretry's config type is internal, so we recreate it here and
-// mapstructure.Decode() it into the receivers' options.
+// retryCfg: mapstructure-decoded consumer retry config for receivers.
 var retryCfg = struct { //nolint:gochecknoglobals
 	Enabled         bool          `mapstructure:"enabled"`
 	InitialInterval time.Duration `mapstructure:"initial_interval"`
@@ -101,15 +97,7 @@ var retryCfg = struct { //nolint:gochecknoglobals
 	MaxElapsedTime:  1 * time.Hour,
 }
 
-// SetupLogReceiverFactories builds receiver factories for the given log
-// files, falling back to a sudo-tail execlogreceiver for files this process
-// can't read directly. Files that don't exist at call time are ignored.
-//
-// extraRaw is raw YAML for any filelogreceiver/fileconsumer field beyond what
-// this function sets itself; it's decoded into the real vendored config and
-// applied before this function's own fields, which always win on conflict.
-// "operators" is always stripped from it first, since it has its own
-// dedicated parameter above.
+// SetupLogReceiverFactories builds receiver factories, falling back to sudo-tail for unreadable files. Missing files are ignored; extraRaw is merged with this function's fields taking priority.
 func SetupLogReceiverFactories(
 	logFiles []string,
 	hostroot string,
@@ -257,9 +245,7 @@ func SetupLogReceiverFactories(
 	return factories, readableFiles, execFiles, sizeFnByFile, nil
 }
 
-// StatFile is the default StatFileFunc: it opens logFile directly, falling
-// back to `sudo stat` on a permission error to check if a sudo-tail can read
-// it instead.
+// StatFile opens logFile directly, falling back to `sudo stat` on permission errors.
 func StatFile(logFile, hostroot string, commandRunner CommandRunner) (ignore, needSudo bool, sizeFn func() (int64, error)) {
 	logFilePath := filepath.Join(hostroot, logFile)
 

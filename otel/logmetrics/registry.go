@@ -32,14 +32,13 @@ import (
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
-// metricSpec is a (name, labels) pair used for registry declare/resolve,
-// decoded from a config.LogMetricsCount entry's "labels" field (see extractLabels, source.go).
+// metricSpec is a (name, labels) pair used for registry declare/resolve.
 type metricSpec struct {
 	Metric string
 	Labels map[string]string
 }
 
-// windowSecs is the sliding window for the "matches per second" rate, mirroring the old Fluent Bit rate(...[1m]).
+// windowSecs is the sliding window, in seconds, for the "matches per second" rate.
 const windowSecs = 60
 
 // counter aggregates the delta counts for one metric over a sliding window.

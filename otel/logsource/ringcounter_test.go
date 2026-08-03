@@ -18,9 +18,7 @@ package logsource
 
 import "testing"
 
-// newTestRingCounter builds a RingCounter with its bucket-tracking fields set
-// directly, so discardOutdatedValues can be driven with an explicit "now"
-// instead of depending on the wall clock.
+// newTestRingCounter builds a RingCounter with an explicit clock state for testing.
 func newTestRingCounter(size int, t0, lastUpdateAt int64, buckets []int) *RingCounter { //nolint:unparam
 	return &RingCounter{size: size, t0: t0, lastUpdateAt: lastUpdateAt, buckets: buckets}
 }
@@ -40,8 +38,7 @@ func TestRingCounterDiscardSameSecond(t *testing.T) {
 func TestRingCounterDiscardAdvanceNoWrap(t *testing.T) {
 	t.Parallel()
 
-	// lastIdx=1, idx=3: buckets 2 and 3 should be cleared, bucket 4 (unrelated,
-	// still within the window) and bucket 1 (just-written) must survive.
+	// Advance from idx 1 to 3: buckets 2-3 clear, 1 and 4 survive.
 	rc := newTestRingCounter(5, 100, 101, []int{0, 9, 5, 5, 3})
 
 	rc.discardOutdatedValues(103)
@@ -63,9 +60,7 @@ func TestRingCounterDiscardAdvanceNoWrap(t *testing.T) {
 	}
 }
 
-// TestRingCounterDiscardWraparound checks that when the bucket index wraps
-// from size-1 back to 0, only the newly-entered bucket 0 is cleared; size-1
-// still holds data from one second earlier and must survive.
+// TestRingCounterDiscardWraparound checks that wraparound clears only the newly-entered bucket, not the previous one.
 func TestRingCounterDiscardWraparound(t *testing.T) {
 	t.Parallel()
 

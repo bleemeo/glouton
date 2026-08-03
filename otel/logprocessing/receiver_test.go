@@ -69,15 +69,14 @@ func (logBuf *logBuffer) getAllRecords() []logRecord {
 	logBuf.l.Lock()
 	defer logBuf.l.Unlock()
 
-	result := make([]logRecord, 0, len(logBuf.buf)) // - there may be more than 1 log message per plog.Logs object
+	result := make([]logRecord, 0, len(logBuf.buf)) // a plog.Logs may hold more than one log message
 
 	for _, ld := range logBuf.buf {
 		for i := range ld.ResourceLogs().Len() {
 			resourceLog := ld.ResourceLogs().At(i)
 			scopeLogs := resourceLog.ScopeLogs()
 
-			// resourceAttrs defaults to nil when they are no attributes,
-			// to avoid declaring `Resource: map[string]any{}` in the diff expectation.
+			// nil (not an empty map) avoids noise in diff expectations when there are no attributes.
 			var resourceAttrs map[string]any
 
 			if resourceLog.Resource().Attributes().Len() > 0 {
@@ -275,7 +274,7 @@ func TestFileLogReceiver(t *testing.T) {
 	defer pipeline.shutdownAll()
 
 	logBuf := logBuffer{
-		buf: make([]plog.Logs, 0, 2), // we plan to write 2 log lines (in fact 4, but half of them will be filtered)
+		buf: make([]plog.Logs, 0, 2), // half the written lines are expected to be filtered out
 	}
 
 	recv, warn, err := newLogReceiver("filelog/recv", cfg, false, makeBufferConsumer(t, &logBuf), knownLogFormats, logsource.StatFile)
@@ -392,11 +391,9 @@ func TestFileLogReceiver(t *testing.T) {
 func TestFileLogReceiverWithHostroot(t *testing.T) {
 	t.Parallel()
 
-	// In this test, we ensure hostroot is handled correctly.
-	// It shouldn't appear anywhere, as it is internal logic.
+	// Test that hostroot stays internal and never leaks into watched/reported paths.
 	const watchedFile = "/file.log"
-	// We'll act as if this temp dir was the mountpoint of the host filesystem,
-	// and the file we watch is at its root.
+	// hostRootPath acts as the mountpoint of the host filesystem.
 	hostRootPath := t.TempDir()
 
 	file, err := os.Create(filepath.Join(hostRootPath, watchedFile))
@@ -432,7 +429,7 @@ func TestFileLogReceiverWithHostroot(t *testing.T) {
 	}
 
 	logBuf := logBuffer{
-		buf: make([]plog.Logs, 0, 1), // we plan to write 1 log line
+		buf: make([]plog.Logs, 0, 1),
 	}
 
 	recv, warn, err := newLogReceiver("recv-from-container", cfg, false, makeBufferConsumer(t, &logBuf), map[string][]config.OTELOperator{}, logsource.StatFile)

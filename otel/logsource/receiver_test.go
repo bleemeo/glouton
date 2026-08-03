@@ -58,9 +58,7 @@ func TestRetryConfigIsUpToDate(t *testing.T) {
 	}
 }
 
-// TestSetupLogReceiverFactoriesExtraRaw checks that extraRaw fields (e.g.
-// Encoding) land on the built FileLogConfig, while Glouton's own
-// authoritative fields (Include, StartAt) still win over conflicting ones.
+// TestSetupLogReceiverFactoriesExtraRaw checks that extraRaw fields apply, but Glouton's own fields (Include, StartAt) still win.
 func TestSetupLogReceiverFactoriesExtraRaw(t *testing.T) {
 	t.Parallel()
 
@@ -73,7 +71,7 @@ func TestSetupLogReceiverFactoriesExtraRaw(t *testing.T) {
 
 	extraRaw := map[string]any{
 		"encoding":  "utf-16le",
-		"start_at":  "beginning", // Glouton's own StartAt-for-new-files logic must override this
+		"start_at":  "beginning", // must be overridden by Glouton's own StartAt logic
 		"multiline": map[string]any{"line_start_pattern": `^\d{4}-\d{2}-\d{2}`},
 	}
 
@@ -131,10 +129,7 @@ func TestSetupLogReceiverFactoriesExtraRaw(t *testing.T) {
 	}
 }
 
-// TestSetupLogReceiverFactoriesKnownFileDoesNotForceStartAtEnd checks that a
-// lastFileSizes entry alone is enough to avoid forcing StartAt="end" again,
-// even with no persister -- otherwise backlog would be skipped on every
-// restart, not just the first time a file is seen.
+// TestSetupLogReceiverFactoriesKnownFileDoesNotForceStartAtEnd checks that a known lastFileSizes entry alone avoids forcing StartAt=end again.
 func TestSetupLogReceiverFactoriesKnownFileDoesNotForceStartAtEnd(t *testing.T) {
 	t.Parallel()
 
@@ -183,9 +178,7 @@ func TestSetupLogReceiverFactoriesKnownFileDoesNotForceStartAtEnd(t *testing.T) 
 	}
 }
 
-// TestSetupLogReceiverFactoriesExtraRawOperatorsStripped checks that an
-// unexpanded "operators" shorthand left in extraRaw is stripped instead of
-// reaching decodeRawReceiverConfig, which would reject it.
+// TestSetupLogReceiverFactoriesExtraRawOperatorsStripped checks that a raw "operators" shorthand in extraRaw is stripped before it would be rejected.
 func TestSetupLogReceiverFactoriesExtraRawOperatorsStripped(t *testing.T) {
 	t.Parallel()
 
@@ -225,16 +218,13 @@ func TestSetupLogReceiverFactoriesExtraRawOperatorsStripped(t *testing.T) {
 		t.Fatalf("Expected exactly 1 directly-readable file and no exec fallback, got readable=%v exec=%v", readable, exec)
 	}
 
-	// The original extraRaw map must not have been mutated (it's often reused
-	// across calls, e.g. on every retry of a pending static source).
+	// extraRaw must not be mutated: it's reused across retries.
 	if _, stillPresent := extraRaw["operators"]; !stillPresent {
 		t.Error("Expected the caller's extraRaw map to be left untouched")
 	}
 }
 
-// TestSetupLogReceiverFactoriesExtraRawSudoFallback checks that extraRaw
-// settings (encoding, multiline) also apply on the execlogreceiver (sudo-tail)
-// fallback path, not just the direct-read one.
+// TestSetupLogReceiverFactoriesExtraRawSudoFallback checks that extraRaw settings also apply on the sudo-tail fallback path.
 func TestSetupLogReceiverFactoriesExtraRawSudoFallback(t *testing.T) {
 	t.Parallel()
 

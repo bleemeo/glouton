@@ -38,25 +38,16 @@ var (
 	errNoApplicableMetric = errors.New("no metrics entry applies to this source")
 )
 
-// resolvedMetric is one metrics: entry after expanding any {include: name}
-// against log.metrics_rules -- either an inline entry, or one member of an
-// included rule set, decoded down to what building a countconnector and
-// deriving its item need. Raw is kept (not further decoded) so metricInfo
-// can build the real countconnector.MetricInfo lazily, once grouped by item.
+// resolvedMetric is one metrics: entry after expanding any {include: name} against log.metrics_rules.
+// Raw is kept as-is so metricInfo can decode it lazily, once grouped by item.
 type resolvedMetric struct {
 	Metric string
 	Raw    config.LogMetricEntry
-	// Item is nil when the entry never set its own "item" (derive one from
-	// the source), non-nil (possibly pointing at "") when it did -- see
-	// extractItem.
+	// Item is nil when the entry never set its own "item" (derive one from the source), non-nil when it did.
 	Item *string
 }
 
-// resolveReceiverMetrics expands rawMetrics (a receiver's "metrics:" list,
-// each element either {include: <metricsRules name>} or an inline entry)
-// against metricsRules, warning and skipping an unknown include name or a
-// malformed entry rather than failing the whole receiver -- so it never
-// actually fails outright, hence no error return.
+// resolveReceiverMetrics expands rawMetrics (a receiver's "metrics:" list of inline entries or {include: name}) against metricsRules, warning and skipping invalid entries instead of failing.
 func resolveReceiverMetrics(rawMetrics []any, metricsRules map[string][]config.LogMetricEntry) []resolvedMetric {
 	var resolved []resolvedMetric
 
@@ -94,20 +85,14 @@ func resolveReceiverMetrics(rawMetrics []any, metricsRules map[string][]config.L
 	return resolved
 }
 
-// asMetricEntry narrows a raw "metrics:" list element down to a
-// config.LogMetricEntry (a map[string]any alias): every real config entry
-// decodes to this shape, but a malformed one (e.g. a bare string) must be
-// rejected rather than panicking.
+// asMetricEntry narrows a raw "metrics:" list element down to a config.LogMetricEntry, rejecting a malformed one instead of panicking.
 func asMetricEntry(v any) (config.LogMetricEntry, bool) {
 	m, ok := v.(map[string]any)
 
 	return m, ok
 }
 
-// resolveInlineMetric reads a self-contained metrics: entry's "metric" name
-// and item override, keeping raw as-is for metricInfo/extractLabels to
-// decode later. Warns and returns ok=false for an entry with no (or a
-// non-string) "metric" name -- nothing useful to build from it.
+// resolveInlineMetric reads a self-contained metrics: entry's "metric" name and item override, warning and returning ok=false if the name is missing.
 func resolveInlineMetric(raw config.LogMetricEntry) (resolvedMetric, bool) {
 	metric, _ := raw["metric"].(string)
 	if metric == "" {
@@ -119,12 +104,8 @@ func resolveInlineMetric(raw config.LogMetricEntry) (resolvedMetric, bool) {
 	return resolvedMetric{Metric: metric, Raw: raw, Item: extractItem(raw)}, true
 }
 
-// extractItem reads raw's "item" field, presence-sensitively: nil means "not
-// set, derive one from the source" (see groupResolvedMetricsByItem), while a
-// non-nil pointer -- including one pointing at "" -- means the config
-// explicitly set it and it must be honored verbatim. This is what lets
-// legacy log.inputs migration pin item="" without that being confused with
-// "unset" (config.LogMetricEntry's doc comment, config/types.go).
+// extractItem reads raw's "item" field, presence-sensitively: nil means "unset, derive one", a non-nil pointer (even to "") means the config explicitly set it.
+// This lets legacy migration pin item="" without it being confused with "unset".
 func extractItem(raw config.LogMetricEntry) *string {
 	rawItem, present := raw["item"]
 	if !present {
@@ -141,11 +122,7 @@ func extractItem(raw config.LogMetricEntry) *string {
 	return &s
 }
 
-// groupResolvedMetricsByItem partitions entries by the item they should
-// report under: an entry with its own Item set (even to "") always uses it;
-// otherwise it falls into defaultItem, the source's own derived item (a
-// receiver's config name, or a glouton.log_metrics container's runtime name
-// -- see ResolvedSource.Name).
+// groupResolvedMetricsByItem partitions entries by the item they should report under, falling back to defaultItem when an entry has no Item override.
 func groupResolvedMetricsByItem(entries []resolvedMetric, defaultItem string) map[string][]resolvedMetric {
 	groups := make(map[string][]resolvedMetric)
 
@@ -161,13 +138,8 @@ func groupResolvedMetricsByItem(entries []resolvedMetric, defaultItem string) ma
 	return groups
 }
 
-// buildGroupedConnectors partitions entries by item via
-// groupResolvedMetricsByItem and builds one connector set per resulting
-// group, so a single source can feed several different item buckets at once
-// (e.g. its own metrics plus one explicitly overridden to a different item).
-// A group that fails to produce any valid counter is logged and skipped, not
-// fatal; errNoApplicableMetric only fires when entries itself is empty (the
-// caller should generally avoid calling this at all in that case).
+// buildGroupedConnectors partitions entries by item and builds one connector set per group, so a single source can feed several item buckets at once.
+// A group that fails to produce a valid counter is logged and skipped, not fatal.
 func buildGroupedConnectors(
 	ctx context.Context,
 	telemetry component.TelemetrySettings,
@@ -205,9 +177,7 @@ func buildGroupedConnectors(
 	return conns, nil
 }
 
-// specsForEntries reduces entries down to what the registry's declare/resolve
-// need (name + static labels), for reg.resolve to pre-declare every metric
-// name up front, even one whose connector later fails to build.
+// specsForEntries reduces entries down to what the registry's declare/resolve need (name + static labels).
 func specsForEntries(entries []resolvedMetric) []metricSpec {
 	specs := make([]metricSpec, 0, len(entries))
 
@@ -218,10 +188,7 @@ func specsForEntries(entries []resolvedMetric) []metricSpec {
 	return specs
 }
 
-// buildConnectors tries one connector for all of entries together. If that
-// combined config fails validation, it falls back to one connector per
-// metric so a bad condition only disables its own metric. An entry whose raw
-// config can't be decoded is excluded from both paths, with a warning.
+// buildConnectors tries one connector for all entries together, falling back to one connector per metric if the combined config fails validation, so a bad condition only disables its own metric.
 func buildConnectors(
 	ctx context.Context,
 	connFactory otelconnector.Factory,
@@ -282,15 +249,8 @@ func buildConnectors(
 	return conns, nil
 }
 
-// metricInfo builds the countconnector.MetricInfo for metric name from its
-// raw config.LogMetricEntry, decoding straight into the vendored struct so
-// an existing connectors.count.logs.<metric> definition pastes in almost
-// verbatim. "item"/"labels" aren't real countconnector fields and are
-// ignored here (extractItem/extractLabels read them separately); "regex" is
-// Glouton's own sugar for a single body-matching condition, expanded into
-// Conditions on top of whatever "conditions" already decoded. A decode
-// failure returns an error rather than silently falling back to "count
-// everything".
+// metricInfo builds the countconnector.MetricInfo for metric name from its raw config.LogMetricEntry.
+// "item"/"labels" are ignored here (read separately); "regex" is Glouton's own sugar, expanded into Conditions.
 func metricInfo(name string, raw config.LogMetricEntry) (countconnector.MetricInfo, error) {
 	info := countconnector.MetricInfo{
 		Description: "log-to-metric: " + name,
@@ -316,8 +276,7 @@ func metricInfo(name string, raw config.LogMetricEntry) (countconnector.MetricIn
 	return info, nil
 }
 
-// extractLabels reads the "labels" field out of a raw config.LogMetricEntry,
-// the one field metricInfo's decode never sets.
+// extractLabels reads the "labels" field out of a raw config.LogMetricEntry.
 func extractLabels(raw config.LogMetricEntry) map[string]string {
 	rawLabels, _ := raw["labels"].(map[string]any)
 	if len(rawLabels) == 0 {
@@ -364,8 +323,7 @@ func createConnector(
 	return conn, nil
 }
 
-// logsConsumerFor fans a source's connectors into a single consumer.Logs,
-// via logsource.FanoutLogs (which already special-cases 0/1 sinks).
+// logsConsumerFor fans a source's connectors into a single consumer.Logs.
 func logsConsumerFor(conns []otelconnector.Logs) consumer.Logs {
 	sinks := make([]consumer.Logs, len(conns))
 

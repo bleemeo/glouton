@@ -29,9 +29,8 @@ type FileSizer interface {
 	SizesByFile() (map[string]int64, error)
 }
 
-// GetLastFileSizesFromCache loads the cross-restart "have we ever seen this
-// file" cache saved by SaveLastFileSizesToCache under cacheKey. It only tells
-// whether a file is new or already known, never the read offset itself.
+// GetLastFileSizesFromCache loads the cross-restart file-size cache saved by SaveLastFileSizesToCache under cacheKey. It only tells
+// whether a file is new, never the read offset.
 func GetLastFileSizesFromCache(state bleemeoTypes.State, cacheKey string) (lastFileSizes map[string]int64) {
 	err := state.Get(cacheKey, &lastFileSizes)
 	if err != nil {
@@ -41,9 +40,7 @@ func GetLastFileSizesFromCache(state bleemeoTypes.State, cacheKey string) (lastF
 	return lastFileSizes
 }
 
-// SaveLastFileSizesToCache persists the current size of every file watched by
-// every sizer under cacheKey, for GetLastFileSizesFromCache to reload on the
-// next restart.
+// SaveLastFileSizesToCache persists the current size of every file watched by every sizer under cacheKey.
 func SaveLastFileSizesToCache(state bleemeoTypes.State, cacheKey string, sizers []FileSizer) {
 	lastFileSizes := make(map[string]int64)
 

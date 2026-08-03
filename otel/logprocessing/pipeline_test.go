@@ -43,10 +43,7 @@ var (
 	erasedTS = time.Date(2025, 4, 24, 17, 28, 37, 0, time.UTC)
 )
 
-// makeTimeEraserOpt provides a cmp.Option that makes logs comparison easier,
-// by erasing the timestamps from the logRecord objects. It works the following way:
-// - if the Timestamp field is defined (not zero or epoch), it is replaced by erasedTS (an arbitrarily chosen value)
-// - it replaces all the occurrences of patterns matching the given timeRe with the string "<time erased>".
+// makeTimeEraserOpt returns a cmp.Option that erases timestamps from logRecord objects for easier comparison.
 func makeTimeEraserOpt(timeRe string) cmp.Option {
 	eraseTimeRe := regexp.MustCompile(timeRe)
 
@@ -87,7 +84,7 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 	defer jsonLogFile.Close()
 
 	cfg := config.OpenTelemetry{
-		SendLogs:        true, // ship every configured receiver in this test, none overrides it
+		SendLogs:        true, // none of the receivers below override this
 		KnownLogFormats: config.DefaultKnownLogFormats(),
 		Receivers: map[string]config.LogReceiver{
 			"custom-receiver": {
@@ -142,7 +139,7 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 	}
 
 	logBuf := logBuffer{
-		buf: make([]plog.Logs, 0, 2), // we plan to write 2 log lines (at a time)
+		buf: make([]plog.Logs, 0, 2),
 	}
 
 	currentAvailability := new(atomic.Value)
@@ -184,12 +181,8 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 
 	defer pipeline.shutdownAll()
 
-	// makePipeline no longer starts cfg.Receivers itself (that's now
-	// logsource.ReceiverManager's job, see WantSource in sink_provider.go):
-	// build a Manager directly around this pipeline (bypassing New(), which
-	// would hardcode a much slower pipelineOptions) and register it as a
-	// SinkProvider, then resolve the configured receivers exactly like
-	// agent.go's future wiring would.
+	// Build a Manager around this pipeline directly (bypassing New(), which hardcodes slower pipelineOptions)
+	// and register it as a SinkProvider, mirroring agent.go's wiring.
 	man := &Manager{
 		config:      cfg,
 		pipeline:    pipeline,

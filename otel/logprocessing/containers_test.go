@@ -108,7 +108,7 @@ func TestHandleContainerLogs(t *testing.T) {
 	defer cancel()
 
 	logBuf := logBuffer{
-		buf: make([]plog.Logs, 0, 2), // we plan to write 2 log lines
+		buf: make([]plog.Logs, 0, 2),
 	}
 
 	pipeline := pipelineContext{
@@ -143,7 +143,7 @@ func TestHandleContainerLogs(t *testing.T) {
 			FakeLogPath:       f2.Name(),
 			FakePodName:       "pod",
 			FakePodNamespace:  "ns",
-			FakeRuntimeName:   crTypes.ContainerDRuntime, // the runtime shouldn't have any impact on how we set up the processing
+			FakeRuntimeName:   crTypes.ContainerDRuntime, // runtime shouldn't affect processing setup
 		},
 	}
 

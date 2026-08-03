@@ -26,9 +26,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/plog"
 )
 
-// WrapWithInstrumentation wraps next so every batch passing through updates
-// counter (total log records seen) and throughputMeter (rate over a sliding
-// window), before being forwarded unchanged to next.
+// WrapWithInstrumentation wraps next so every batch updates counter (total log records seen) and throughputMeter (sliding-window rate) before being forwarded unchanged.
 func WrapWithInstrumentation(next consumer.Logs, counter *atomic.Int64, throughputMeter *RingCounter) consumer.Logs {
 	logCounter, err := consumer.NewLogs(func(ctx context.Context, ld plog.Logs) error {
 		count := ld.LogRecordCount()
@@ -40,7 +38,7 @@ func WrapWithInstrumentation(next consumer.Logs, counter *atomic.Int64, throughp
 	if err != nil {
 		logger.V(1).Printf("Failed to wrap component with log counters: %v", err)
 
-		return next // give up wrapping it and just use it as is
+		return next // fall back to unwrapped
 	}
 
 	return logCounter

@@ -68,14 +68,8 @@ type pipelineContext struct {
 	startedComponents []component.Component
 	receivers         []*logReceiver
 
-	// inputConsumer is the shared entry point every source feeds into,
-	// whatever brought it here: journald/syslog/auditd/bare-service receivers
-	// owned directly by this package, the service-hosted container path
-	// (containers.go), or a WantSource-built sink for a
-	// logsource.ReceiverManager-owned source (config receiver or
-	// container-label source). Network participation is no longer a
-	// pipeline-level concern: it's per-receiver now (see LogReceiver's
-	// "network" field), resolved entirely by logsource.ReceiverManager.
+	// inputConsumer is the shared entry point every source feeds into: journald/syslog/auditd/bare-service
+	// receivers, the container path (containers.go), or a WantSource-built sink.
 	inputConsumer consumer.Logs
 
 	journaldCounter         *atomic.Int64
@@ -315,9 +309,7 @@ func (p *pipelineContext) init(
 				p.l.Lock()
 
 				for i, rcvr := range p.receivers {
-					// Here we use logWarnings instead of addWarnings,
-					// because that would make the description of
-					// agent_config_warning grow indefinitely.
+					// logWarnings, not addWarnings, so agent_config_warning's description doesn't grow indefinitely.
 					err := rcvr.update(ctx, p, logWarnings)
 					if err != nil {
 						logger.V(1).Printf("Failed to update log receiver n°%d: %v", i+1, err)
@@ -500,13 +492,10 @@ func makeEnforceBackPressureFn(
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability,
 	logsAvailabilityCacheTTL time.Duration,
 ) processorhelper.ProcessLogsFunc { //nolint: wsl
-	// Since streamAvailabilityStatusFn needs to acquire both the connector and the MQTT client locks,
-	// we want to avoid calling it too frequently.
+	// Debounced since streamAvailabilityStatusFn acquires both the connector and MQTT client locks.
 	var (
 		l sync.Mutex
-		// Well ... we still need to prevent concurrent access to these variables,
-		// since the back-pressure function we return can be called
-		// simultaneously by multiple log emitters.
+		// Guards concurrent access: the returned function can be called simultaneously by multiple log emitters.
 		lastCacheValue  bleemeoTypes.LogsAvailability
 		lastCacheUpdate time.Time
 	)

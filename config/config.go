@@ -40,9 +40,7 @@ import (
 )
 
 const (
-	// Tag used to unmarshal the config.
-	// We need to use the "yaml" tag instead of the default "koanf" tag because
-	// the config embeds the blackbox module config which uses YAML.
+	// Tag used to unmarshal the config; "yaml" instead of "koanf" because the config embeds the blackbox module config which uses YAML.
 	Tag                   = "yaml"
 	EnvGloutonConfigFiles = "GLOUTON_CONFIG_FILES"
 	envPrefix             = "GLOUTON_"
@@ -74,8 +72,7 @@ var (
 	ErrMissconfiguration     = errors.New("config issue")
 )
 
-// Load the configuration from files and environment variables.
-// It returns the config, the loaded items, warnings and an error.
+// Load loads the configuration from files and environment variables, returning the config, loaded items, warnings and an error.
 func Load(withDefault bool, loadEnviron bool, paths ...string) (Config, []Item, prometheus.MultiError, error) {
 	// If no config was given with flags or env variables, fallback on the default files.
 	if len(paths) == 0 || len(paths) == 1 && paths[0] == "" {
@@ -185,8 +182,7 @@ func load(loader *configLoader, withDefault bool, loadEnviron bool, paths ...str
 	warnings, errors := loadPaths(loader, paths)
 
 	if loadEnviron {
-		// Load config from environment variables.
-		// The warnings are filled only after Load is called.
+		// Load config from environment variables; warnings filled after Load.
 		envToKey, envWarnings := envToKeyFunc()
 
 		moreWarnings := loader.Load("", env.Provider(deprecatedEnvPrefix, delimiter, envToKey), nil)
@@ -213,12 +209,10 @@ func load(loader *configLoader, withDefault bool, loadEnviron bool, paths ...str
 	// Unmarshal the config.
 	var config Config
 
-	// Here we ignore unused keys warnings and most decoder hooks
-	// because this processing was already done in the config loader.
+	// Most decoder hooks ignored here; already handled in config loader.
 	unmarshalConf := koanf.UnmarshalConf{
 		DecoderConfig: &mapstructure.DecoderConfig{
-			// Keep the blackbox hook to use its custom yaml
-			// marshaller that sets default values.
+			// Blackbox hook uses custom yaml marshaller for defaults.
 			DecodeHook: blackboxModuleHookFunc(),
 			Result:     &config,
 		},
@@ -240,8 +234,7 @@ func load(loader *configLoader, withDefault bool, loadEnviron bool, paths ...str
 	return config, unwrapErrors(warnings), errors.MaybeUnwrap()
 }
 
-// envToKeyFunc returns a function that converts an environment variable to a configuration key
-// and a pointer to Warnings, the warnings are filled only after koanf.Load has been called.
+// envToKeyFunc returns a function converting an env variable to a config key, plus warnings filled only after koanf.Load has been called.
 // Panics if two config keys correspond to the same environment variable.
 func envToKeyFunc() (func(string) string, *prometheus.MultiError) {
 	// Get all config keys from an empty config.
@@ -306,8 +299,7 @@ func toEnvKey(key string) string {
 	return envKey
 }
 
-// toDeprecatedEnvKey returns the environment variable corresponding to a configuration key
-// with the deprecated prefix. For instance: toEnvKey("web.enable") -> BLEEMEO_AGENT_WEB_ENABLE.
+// toDeprecatedEnvKey returns the environment variable with the deprecated prefix (e.g. "web.enable" -> BLEEMEO_AGENT_WEB_ENABLE).
 func toDeprecatedEnvKey(key string) string {
 	envKey := strings.ToUpper(key)
 	envKey = deprecatedEnvPrefix + strings.ReplaceAll(envKey, ".", "_")
@@ -378,8 +370,7 @@ func loadDirectory(loader *configLoader, dirPath string) (prometheus.MultiError,
 }
 
 func loadFile(loader *configLoader, path string) prometheus.MultiError {
-	// Merge this file with the previous config.
-	// Overwrite values, merge maps and append slices.
+	// Merge this file with previous config, overwriting values, merging maps, appending slices.
 	warnings := loader.Load(path, file.Provider(path), yamlParser.Parser())
 
 	// Add path to errors.
@@ -528,9 +519,8 @@ func isScalar(val any) bool {
 	return false
 }
 
-// migrateMovedScalarKeys migrate the config settings of scalar (string, int, bool) that were simply moved.
-// Using a function in addition to migrateMovedKeys for case where we migrate the scalar into a sub-field under the same name
-// example: log.opentelemetry.auto_discovery -> log.opentelemetry.auto_discovery.enable
+// migrateMovedScalarKeys migrates scalar (string, int, bool) config settings that were simply moved into a sub-field under the same name,
+// e.g. log.opentelemetry.auto_discovery -> log.opentelemetry.auto_discovery.enable.
 func migrateMovedScalarKeys(k *koanf.Koanf, config map[string]any) prometheus.MultiError {
 	var warnings prometheus.MultiError
 
@@ -600,8 +590,7 @@ func migrateLogging(k *koanf.Koanf, config map[string]any) prometheus.MultiError
 
 // migrateMetricsPrometheus migrates Prometheus settings.
 func migrateMetricsPrometheus(k *koanf.Koanf, config map[string]any) prometheus.MultiError {
-	// metrics.prometheus was renamed metrics.prometheus.targets
-	// We guess that old path was used when metrics.prometheus.*.url exist and is a string
+	// metrics.prometheus was renamed metrics.prometheus.targets; the old path is detected when metrics.prometheus.*.url exists and is a string.
 	v := k.Get("metric.prometheus")
 	if v == nil {
 		return nil
@@ -707,30 +696,12 @@ func migrateScrapper(k *koanf.Koanf, config map[string]any, deprecatedPath strin
 	return warnings
 }
 
-// legacyMetricsRuleName namespaces a migrated log.inputs metric name into
-// its own log.metrics_rules entry, so it can't collide with a hand-written
-// entry sharing the same short name.
+// legacyMetricsRuleName namespaces a migrated log.inputs metric name so it can't collide with a hand-written log.metrics_rules entry of the same name.
 func legacyMetricsRuleName(metric string) string {
 	return "legacy_log_inputs_metric_" + metric
 }
 
-// mergeLegacyFilters OR's each legacy filter's regex/exclude into a
-// countconnector condition, upserting it by metric name into metricsByName
-// (shared across every log.inputs entry being migrated, so a metric name
-// touched by several entries is recognized no matter which is processed
-// first). Every migrated metric always gets item: "" -- see
-// migrateLogInputs's doc comment for why -- so two log.inputs entries
-// sharing a metric name naturally coalesce into the same single series
-// once migrated, exactly reproducing today's pre-migration behavior (which
-// never had a per-source item either).
-//
-// Returns the distinct metric names this call's filters touched, so the
-// caller's synthesized receiver only references the metrics_rules entries
-// its own filters actually declared -- preserving each input's original
-// scoping instead of turning every migrated receiver into a grab-bag of
-// every migrated metric. A warning is returned the first time a call adds
-// to an already-existing entry, so a metric name shared across log.inputs
-// entries is surfaced, not silently merged.
+// mergeLegacyFilters ORs legacy filter regex/exclude into countconnector conditions, coalescing metrics by name; returns touched metrics and warnings.
 func mergeLegacyFilters(metricsByName map[string]any, filtersList []any) ([]string, []error) {
 	var (
 		touched  []string
@@ -790,18 +761,9 @@ func mergeLegacyFilters(metricsByName map[string]any, filtersList []any) ([]stri
 	return touched, warnings
 }
 
-// migrateLogInputs folds the legacy log.inputs[].filters entries -- the
-// original, Fluent Bit-era way of declaring a log-to-metric source -- into
-// the equivalent log.opentelemetry.receivers/log.metrics_rules shape, so
-// otel/logmetrics only ever has to handle the current, unified config.
-//
-// Every migrated metric gets item: "" unconditionally, matching what these
-// metrics actually carry today in production: Fluent Bit's own Prometheus
-// self-metrics, scraped and turned into a PromQL recording rule that strips
-// every label ("without (name, scrape_instance, scrape_job)"), including
-// any per-source identity. Migrating to anything other than an empty item
-// would change the identity of an already-existing metric series for real,
-// currently-deployed users.
+// migrateLogInputs folds the legacy log.inputs[].filters entries (the original, Fluent Bit-era log-to-metric source) into the
+// equivalent log.opentelemetry.receivers/log.metrics_rules shape. Every migrated metric gets item: "" unconditionally, to avoid
+// changing the identity of an already-existing metric series for currently-deployed users.
 func migrateLogInputs(k *koanf.Koanf, config map[string]any) prometheus.MultiError {
 	var warnings prometheus.MultiError
 
@@ -810,10 +772,7 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any) prometheus.MultiErr
 		return nil
 	}
 
-	// Read from config (the mutable snapshot), not k (the original,
-	// unmutated tree): migrateLegacyNetworkListeners runs first in migrate()
-	// and may already have written a "legacy_network" receiver here -- reading
-	// via k.Get would silently drop it.
+	// Read from config, not k: migrateLegacyNetworkListeners may already have written a "legacy_network" receiver here.
 	receivers, _ := config["log.opentelemetry.receivers"].(map[string]any)
 	if receivers == nil {
 		receivers, _ = k.Get("log.opentelemetry.receivers").(map[string]any)
@@ -853,9 +812,7 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any) prometheus.MultiErr
 			continue
 		}
 
-		// Drop the consumed key so it doesn't reach the strict struct decode
-		// (which errors on unknown keys) as a leftover on an otherwise-fully-
-		// translated entry.
+		// Drop the consumed key so it doesn't trip the strict struct decode (errors on unknown keys).
 		delete(inputMap, "filters")
 
 		path, _ := inputMap["path"].(string)
@@ -880,8 +837,7 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any) prometheus.MultiErr
 			metrics = append(metrics, map[string]any{"include": legacyMetricsRuleName(metric)})
 		}
 
-		// Legacy log.inputs was metrics-only (Fluent Bit never shipped these
-		// logs through Glouton), so the migrated receiver never ships either.
+		// Legacy log.inputs was metrics-only, so the migrated receiver never ships logs either.
 		receiver := map[string]any{
 			"send_logs": false,
 			"metrics":   metrics,
@@ -932,12 +888,9 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any) prometheus.MultiErr
 	return warnings
 }
 
-// migrateLegacyNetworkListeners folds log.opentelemetry.grpc/http's old,
-// pre-log.network {enable, address, port} shape -- a standalone listener,
-// predating log.network.receivers -- into a synthesized "legacy_network"
-// receiver participating in a named log.network.receivers listener,
-// preserving the exact address/port and reproducing the old unconditional
-// shipping behavior (send_logs: true).
+// migrateLegacyNetworkListeners folds log.opentelemetry.grpc/http's old, pre-log.network {enable, address, port} shape into a
+// synthesized "legacy_network" receiver under log.network.receivers, preserving the address/port and the unconditional shipping
+// behavior (send_logs: true).
 func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any) prometheus.MultiError {
 	var warnings prometheus.MultiError
 
@@ -955,9 +908,7 @@ func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any) promet
 		return nil
 	}
 
-	// Drop the consumed keys so they don't reach the strict struct decode
-	// (which errors on unknown keys) even for an entry that ends up fully
-	// disabled below.
+	// Drop the consumed keys so they don't trip the strict struct decode (errors on unknown keys).
 	delete(config, path+".grpc")
 	delete(config, path+".http")
 
@@ -1090,8 +1041,7 @@ func migrateServices(config map[string]any) prometheus.MultiError {
 	return warnings
 }
 
-// Dump return a copy of the whole configuration, with secrets retracted.
-// secret is any key containing "key", "secret", "password" or "passwd".
+// Dump returns a copy of the whole configuration with secrets retracted (any key containing "key", "secret", "password" or "passwd").
 func Dump(config Config) map[string]any {
 	k := koanf.New(delimiter)
 	_ = k.Load(structs.Provider(config, Tag), nil)
@@ -1109,8 +1059,7 @@ func dumpMap(root map[string]any) map[string]any {
 	return censored
 }
 
-// CensorSecretItem returns the censored item value with secrets
-// and password removed for safe external use.
+// CensorSecretItem returns the item value with secrets and passwords redacted for safe external use.
 func CensorSecretItem(key string, value any) any {
 	if isSecret(key) {
 		// Don't censor unset secrets.
@@ -1127,8 +1076,7 @@ func CensorSecretItem(key string, value any) any {
 	case []any:
 		return dumpList(value)
 	case string:
-		// Redact credentials embedded in URL values (e.g. proxy_url=http://user:pass@host),
-		// which aren't caught by isSecret because the key itself isn't a secret.
+		// Redact credentials embedded in URL values (e.g. proxy_url=http://user:pass@host) not caught by isSecret.
 		return CensorURLCredentials(value)
 	default:
 		return value
@@ -1146,10 +1094,8 @@ func isSecret(key string) bool {
 	return false
 }
 
-// CensorURLCredentials redacts the password embedded in the userinfo of an URL
-// value (e.g. "http://user:pass@host" becomes "http://user:*****@host"). Non-URL
-// strings and URLs without credentials are returned unchanged. It is used to make
-// URLs safe for logs, diagnostic archives and data sent to the Bleemeo API.
+// CensorURLCredentials redacts the password embedded in an URL's userinfo (e.g. "http://user:pass@host" becomes
+// "http://user:*****@host"). Non-URL strings and URLs without credentials are returned unchanged.
 func CensorURLCredentials(value string) string {
 	if !strings.Contains(value, "@") {
 		return value
@@ -1164,9 +1110,7 @@ func CensorURLCredentials(value string) string {
 		return value
 	}
 
-	// Keep only the username (properly escaped) then splice the censored
-	// password back in. Going through url.UserPassword would percent-encode
-	// the placeholder (e.g. "%2A%2A..."), making the result unreadable.
+	// Keep only the username then splice the censored password back in; url.UserPassword would percent-encode the placeholder, making it unreadable.
 	u.User = url.User(u.User.Username())
 	censored := u.String()
 	at := strings.Index(censored, "@")
@@ -1174,19 +1118,14 @@ func CensorURLCredentials(value string) string {
 	return censored[:at] + ":" + CensoredValue + censored[at:]
 }
 
-// CensorURLSecrets redacts, in an URL value, both the credentials embedded in the
-// userinfo (see CensorURLCredentials) and the values of query-string parameters
-// whose name looks like a secret (same keyword list as config secrets, see isSecret).
-// It is meant for diagnostic output (e.g. blackbox-targets.txt); metric labels keep
-// the original URL so the metric identity sent to the Bleemeo API is preserved.
+// CensorURLSecrets redacts an URL's userinfo credentials and secret-looking query parameters (see CensorURLCredentials, isSecret).
+// Meant for diagnostic output; metric labels keep the original URL to preserve metric identity.
 func CensorURLSecrets(value string) string {
 	return CensorURLCredentials(censorURLQuerySecrets(value))
 }
 
-// censorURLQuerySecrets redacts the values of query-string parameters whose name
-// looks like a secret (e.g. "?token=abc" becomes "?token=*****"). The order and
-// encoding of the other parameters are preserved. Non-URL strings and URLs without
-// a matching parameter are returned unchanged.
+// censorURLQuerySecrets redacts query-string parameter values whose name looks like a secret (e.g. "?token=abc" becomes
+// "?token=*****"), preserving the order and encoding of the rest.
 func censorURLQuerySecrets(value string) string {
 	u, err := url.Parse(value)
 	if err != nil || u.RawQuery == "" {
@@ -1237,10 +1176,7 @@ func dumpList(root []any) []any {
 	return root
 }
 
-// PrometheusConfigToURLs convert metric.prometheus.targets config to a list of targets.
-// It returns the targets and some warnings.
-//
-// See tests for the expected config.
+// PrometheusConfigToURLs converts metric.prometheus.targets config to a list of targets, and returns some warnings.
 func PrometheusConfigToURLs(configTargets []PrometheusTarget) ([]*scrapper.Target, prometheus.MultiError) {
 	var warnings prometheus.MultiError
 
@@ -1257,8 +1193,7 @@ func PrometheusConfigToURLs(configTargets []PrometheusTarget) ([]*scrapper.Targe
 		target := &scrapper.Target{
 			ExtraLabels: map[string]string{
 				types.LabelMetaScrapeJob: configTarget.Name,
-				// HostPort could be empty, but this ExtraLabels is used by Registry which
-				// correctly handles empty values (drop the label).
+				// HostPort could be empty; Registry correctly drops empty label values.
 				types.LabelMetaScrapeInstance: scrapper.HostPort(targetURL),
 			},
 			URL:       targetURL,

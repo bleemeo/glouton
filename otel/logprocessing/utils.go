@@ -78,6 +78,17 @@ func validateContainerFilters(containerFilter map[string]string, filtersConfigs 
 	return containerFilter
 }
 
+// removeComponent returns components with target removed to avoid double-shutdown during pipeline teardown.
+func removeComponent(components []component.Component, target component.Component) []component.Component {
+	for i, c := range components {
+		if c == target {
+			return append(components[:i], components[i+1:]...)
+		}
+	}
+
+	return components
+}
+
 // stopComponents stops all the given components (in reverse order).
 func stopComponents(components []component.Component) {
 	wg := new(sync.WaitGroup)
@@ -167,10 +178,7 @@ func buildLogFilterConfig(filtersCfg config.OTELFilters) (*filterprocessor.Confi
 	return filterProcCfg, warning, filterProcCfg.Validate()
 }
 
-// expandOperators, expandLogFormats, buildOperators and quietParserErrors now
-// live in otel/logsource (shared with otel/logmetrics, see that package's own
-// doc comment), thin wrappers here so every existing call site in this
-// package (and its tests) keeps working unchanged.
+// expandOperators is a thin wrapper around logsource.ExpandOperators for backward compatibility.
 func expandOperators(ops []config.OTELOperator, knownIncludes map[string][]config.OTELOperator, denyRecursiveInclude bool) ([]config.OTELOperator, error) {
 	return logsource.ExpandOperators(ops, knownIncludes, denyRecursiveInclude)
 }
@@ -222,11 +230,7 @@ type sourceDiagnostic struct {
 	SetupError       string
 }
 
-// fanoutSourceDiagnostic reports a logsource.ReceiverManager-owned source
-// (SourceReceiver or SourceContainerLabel) this package opted into via
-// WantSource: the actual file/container tail is owned and reported by
-// logsource itself, this only tracks what flows through this package's own
-// per-source filter stage.
+// fanoutSourceDiagnostic tracks a logsource.ReceiverManager-owned source that this package opted into via WantSource.
 type fanoutSourceDiagnostic struct {
 	Kind                   string
 	LogProcessedCount      int64
@@ -269,10 +273,7 @@ type diagnosticReceiver struct {
 	Receivers          map[string]receiverDiagnosticInformation
 	ContainerReceivers map[string]containerDiagnosticInformation
 	WatchedServices    map[string][]receiverDiagnosticInformation
-	// FanoutSources reports logsource.ReceiverManager-owned sources this
-	// package consumes via WantSource (config receivers and container-label
-	// sources); the physical tail itself is owned and diagnosed by
-	// logsource, not here.
+	// FanoutSources tracks logsource.ReceiverManager-owned sources this package consumes via WantSource.
 	FanoutSources map[string]fanoutSourceDiagnostic
 }
 

@@ -35,8 +35,7 @@ var (
 	errIsRecursive   = errors.New("is recursive")
 )
 
-// ExpandOperators replaces 'template' operators with the well-known format they reference.
-// These 'template' operators must define a single "include" key, like so:
+// ExpandOperators replaces 'template' operators (which must define a single "include" key) with the well-known format they reference; example:
 //
 //	{
 //		   "include": "some-format"
@@ -73,9 +72,7 @@ func ExpandOperators(ops []config.OTELOperator, knownIncludes map[string][]confi
 	return result, nil
 }
 
-// ExpandLogFormats expands every named format in formats, allowing one level
-// of cross-referencing between them. Referenced formats must be defined
-// above references to them.
+// ExpandLogFormats expands every named format in formats, allowing one level of cross-referencing between them.
 func ExpandLogFormats(formats map[string][]config.OTELOperator) (map[string][]config.OTELOperator, error) {
 	result := make(map[string][]config.OTELOperator, len(formats))
 
@@ -108,16 +105,13 @@ func shouldUnmarshalYAMLToMapstructure(t reflect.Type) bool {
 	}
 }
 
-// obsoleteUnmarshaler is a copy of gopkg.in/yaml.v3.obsoleteUnmarshaler
-// and is implemented by types that bring their own unmarshalling logic,
-// like github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator.Config.
+// obsoleteUnmarshaler is a copy of gopkg.in/yaml.v3.obsoleteUnmarshaler, implemented by types with custom unmarshalling logic.
 type obsoleteUnmarshaler interface {
 	UnmarshalYAML(unmarshal func(any) error) error
 }
 
 func unmarshalMapstructureHook(from reflect.Value, to reflect.Value) (any, error) {
-	// Calls UnmarshalYAML() on types that define it, even though we're decoding
-	// a slice of maps rather than unmarshalling YAML directly.
+	// Calls UnmarshalYAML() on types that define it, even though we aren't unmarshalling YAML directly.
 	if !shouldUnmarshalYAMLToMapstructure(to.Type()) {
 		return from.Interface(), nil // returning the data as-is
 	}
@@ -126,8 +120,7 @@ func unmarshalMapstructureHook(from reflect.Value, to reflect.Value) (any, error
 		err := yamlUnmarshaler.UnmarshalYAML(func(v any) error {
 			decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 				Result: v,
-				// We aim to align the decoding behavior with opentelemetry-collector:
-				// https://github.com/open-telemetry/opentelemetry-collector/blob/ac7c0f2f4cd8fa05ccc7def96e997eabc2c44f33/confmap/confmap.go#L226
+				// Aligns decoding behavior with opentelemetry-collector's confmap.
 				DecodeHook: mapstructure.ComposeDecodeHookFunc(
 					mapstructure.StringToSliceHookFunc(","),
 					mapstructure.StringToTimeDurationHookFunc(),
@@ -150,9 +143,7 @@ func unmarshalMapstructureHook(from reflect.Value, to reflect.Value) (any, error
 	return from.Interface(), nil // return the data as-is
 }
 
-// QuietParserErrors defaults parser operators to on_error="send_quiet" when
-// not set explicitly, since Stanza's "send" default logs one ERROR per line
-// that fails to parse, flooding high-volume sources.
+// QuietParserErrors defaults parser operators to on_error="send_quiet" unless set explicitly, since Stanza's default logs one ERROR per failed line.
 func QuietParserErrors(ops []config.OTELOperator) []config.OTELOperator {
 	const (
 		typeKey      = "type"
@@ -186,9 +177,7 @@ func QuietParserErrors(ops []config.OTELOperator) []config.OTELOperator {
 	return out
 }
 
-// BuildOperators decodes rawOperators (plain YAML, as config.OTELOperator)
-// into stanza operator.Config values, the shape both otel/logprocessing and
-// otel/logmetrics feed into filelogreceiver/execlogreceiver.
+// BuildOperators decodes rawOperators into stanza operator.Config values, as fed into filelogreceiver/execlogreceiver.
 func BuildOperators(rawOperators []config.OTELOperator) ([]operator.Config, error) {
 	rawOperators = QuietParserErrors(rawOperators)
 

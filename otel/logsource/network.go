@@ -40,13 +40,11 @@ import (
 
 var errUnexpectedConfig = errors.New("unexpected config type")
 
-// SetupOTLPNetworkReceiver builds, starts and returns an OTLP log receiver for
-// protocols (a nil field disables that protocol), forwarding everything it
-// receives to sink. idName should be unique per caller. Validate() is called
-// explicitly, since this bypasses confmap's automatic validation, or a
-// receiver with every protocol disabled would silently drop all logs instead
-// of erroring. The caller must wrap sink with WrapWithInstrumentation itself
-// if wanted, and call Shutdown on the returned receiver.
+// SetupOTLPNetworkReceiver builds, starts and returns an OTLP log receiver for protocols (a nil field
+// disables it), forwarding everything to sink. idName must be unique per caller. Validate() is called
+// explicitly since this bypasses confmap's automatic validation, or an all-disabled receiver would
+// silently drop logs instead of erroring. Caller must wrap sink with WrapWithInstrumentation itself if
+// wanted, and call Shutdown on the returned receiver.
 func SetupOTLPNetworkReceiver(
 	ctx context.Context,
 	telemetry component.TelemetrySettings,
@@ -130,10 +128,9 @@ func NewTelemetrySettings() component.TelemetrySettings {
 	}
 }
 
-// FanoutLogs returns a consumer.Logs that forwards every batch to every
-// non-nil sink, in argument order. Sinks may mutate a plog.Logs in place, so
-// every sink after the first gets its own deep copy. Returns nil if every
-// sink is nil, or the sink itself unmodified if there is exactly one.
+// FanoutLogs returns a consumer.Logs forwarding every batch to every non-nil sink, in order. Each sink
+// after the first gets its own deep copy, since sinks may mutate a plog.Logs in place. Returns nil if
+// every sink is nil, or the sink itself if there's exactly one.
 func FanoutLogs(sinks ...consumer.Logs) consumer.Logs {
 	active := make([]consumer.Logs, 0, len(sinks))
 

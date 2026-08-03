@@ -43,9 +43,7 @@ func TestRegistryResolve(t *testing.T) {
 		t.Fatalf("Expected 2 counters, got %d", len(counters))
 	}
 
-	// Resolving an already-registered metric name again must return the exact same
-	// counter, so that matches from multiple sources reporting under the same
-	// metric name are aggregated.
+	// Resolving an already-registered metric name again must return the same counter.
 	again := reg.resolve([]metricSpec{{Metric: "apache_errors_count"}}, "")
 
 	if again[0] != counters[0] {
@@ -70,7 +68,7 @@ func TestRegistryEmit(t *testing.T) {
 		{Metric: "apache_errors_count"},
 	}, "")
 
-	// 120 matches over the windowSecs (60s) window => 2/s.
+	// 120 matches over the 60s window => 2/s.
 	for range 120 {
 		counters[0].counter.Add(1)
 	}
@@ -103,8 +101,7 @@ func TestRegistryEmit(t *testing.T) {
 	}
 }
 
-// makeSumMetrics builds a pmetric.Metrics with a single Sum data point per
-// counts entry, mirroring what countconnector.appendMetricsTo produces.
+// makeSumMetrics builds a pmetric.Metrics with a single Sum data point per counts entry.
 func makeSumMetrics(counts map[string]int64) pmetric.Metrics {
 	md := pmetric.NewMetrics()
 	sm := md.ResourceMetrics().AppendEmpty().ScopeMetrics().AppendEmpty()
@@ -121,9 +118,7 @@ func makeSumMetrics(counts map[string]int64) pmetric.Metrics {
 	return md
 }
 
-// TestMetricsSink feeds a pmetric.Metrics (as countconnector would produce)
-// through the shared sink and checks only the matching counters get
-// incremented.
+// Test that feeding a pmetric.Metrics through the shared sink only increments matching counters.
 func TestMetricsSink(t *testing.T) {
 	t.Parallel()
 
@@ -138,7 +133,7 @@ func TestMetricsSink(t *testing.T) {
 
 	if err := sink.ConsumeMetrics(t.Context(), makeSumMetrics(map[string]int64{
 		"apache_errors_count": 2,
-		"unregistered_metric": 5, // must be silently ignored: no matching counter
+		"unregistered_metric": 5, // no matching counter, silently ignored
 	})); err != nil {
 		t.Fatalf("ConsumeMetrics returned an error: %v", err)
 	}
@@ -160,9 +155,7 @@ func TestMetricsSink(t *testing.T) {
 	}
 }
 
-// TestRegistryItemDisambiguation checks that resolving the same metric name
-// under two different items returns distinct counters, each independently
-// addressable and emitting its own labeled sample.
+// Test that resolving the same metric name under two different items returns distinct counters.
 func TestRegistryItemDisambiguation(t *testing.T) {
 	t.Parallel()
 
@@ -233,9 +226,7 @@ func TestRegistryItemDisambiguation(t *testing.T) {
 	}
 }
 
-// TestRegistryLabels covers custom static labels and their interaction with the
-// reserved __name__/item labels: user labels merge in, but can never override the
-// real metric name or the real auto-derived item.
+// Test that custom static labels merge in but can never override the reserved __name__/item labels.
 func TestRegistryLabels(t *testing.T) {
 	t.Parallel()
 

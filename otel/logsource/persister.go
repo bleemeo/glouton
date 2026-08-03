@@ -37,9 +37,8 @@ import (
 
 var errStorageClientNotFound = errors.New("storage client not found")
 
-// PersistConfig gives a PersistHost its own identity, so two independent
-// features (log shipping, log-to-metric) never collide in Glouton's shared
-// state cache or OTel component registry, while sharing this implementation.
+// PersistConfig gives a PersistHost its own identity, so independent features never collide in the shared state cache or OTel
+// component registry.
 type PersistConfig struct {
 	// StorageType is this host's component.Type, must be unique across features.
 	StorageType string
@@ -47,20 +46,15 @@ type PersistConfig struct {
 	CacheKey string
 	// ArchivePath is the file created by WriteToArchive in a diagnostic bundle.
 	ArchivePath string
-	// FullSnapshot, if true, persists every receiver's metadata on every
-	// SaveToState call, even untouched ones. If false, only receivers touched
-	// since this PersistHost was built are persisted, so removed sources fall
-	// out of the cache.
+	// FullSnapshot, if true, persists every receiver's metadata on every SaveToState call, even untouched ones; if false, only
+	// touched receivers are persisted.
 	FullSnapshot bool
-	// SaveThrottle, if non-zero, limits how often a Set() call pushes its
-	// receiver's dirty data into the host's in-memory map. Zero pushes on
-	// every call.
+	// SaveThrottle, if non-zero, limits how often a Set() call pushes its receiver's dirty data into the host's in-memory map.
 	SaveThrottle time.Duration
 }
 
-// PersistHost is a minimal component.Host (just GetExtensions()) backing every
-// source's filelogreceiver StorageID with a storageClient persisted into
-// Glouton's state cache, so read offsets survive a Glouton restart.
+// PersistHost is a minimal component.Host backing every source's filelogreceiver storage with a client persisted into Glouton's
+// state cache, so read offsets survive a restart.
 type PersistHost struct {
 	cfg PersistConfig
 
@@ -105,9 +99,8 @@ func saveFileMetadataToCache(state bleemeoTypes.State, cacheKey string, metadata
 	}
 }
 
-// NewPersistentExt registers (or re-attaches to) the persisted storage for name
-// (a stable per-source identity: e.g. a joined path list for static sources, a
-// container ID for container sources) and returns its component.ID.
+// NewPersistentExt registers (or re-attaches to) the persisted storage for name, a stable per-source identity, and returns its
+// component.ID.
 func (h *PersistHost) NewPersistentExt(name string) component.ID {
 	h.l.Lock()
 	defer h.l.Unlock()

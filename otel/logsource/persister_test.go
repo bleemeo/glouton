@@ -85,9 +85,7 @@ func (m *memoryState) Delete(string) error                             { return 
 func (m *memoryState) BleemeoCredentials() (string, string)            { return "", "" }
 func (m *memoryState) SetBleemeoCredentials(string, string) error      { return nil }
 
-// TestPersistHostTouchedOnlyEvictsUntouchedReceivers pins otel/logprocessing's
-// current behavior: only receivers touched since the PersistHost was built are
-// persisted, so a removed source's stale offset falls out of the cache.
+// TestPersistHostTouchedOnlyEvictsUntouchedReceivers verifies that only touched receivers are persisted.
 func TestPersistHostTouchedOnlyEvictsUntouchedReceivers(t *testing.T) { //nolint:maintidx
 	t.Parallel()
 
@@ -292,9 +290,7 @@ func TestPersistHostTouchedOnlyEvictsUntouchedReceivers(t *testing.T) { //nolint
 	}
 }
 
-// TestPersistHostFullSnapshotKeepsUntouchedReceivers checks that a periodic
-// SaveToState doesn't drop a receiver's previously-persisted offset just
-// because it hasn't been written to yet (e.g. an idle source).
+// TestPersistHostFullSnapshotKeepsUntouchedReceivers verifies idle receivers' offsets aren't dropped on save.
 func TestPersistHostFullSnapshotKeepsUntouchedReceivers(t *testing.T) {
 	t.Parallel()
 
@@ -343,9 +339,7 @@ func TestPersistHostFullSnapshotKeepsUntouchedReceivers(t *testing.T) {
 	}
 }
 
-// TestStorageClientFullSnapshotCloseKeepsSnapshot checks that closing a
-// storage client that was only ever Get() from, never Set(), doesn't erase
-// its previously-known offsets from the host.
+// TestStorageClientFullSnapshotCloseKeepsSnapshot verifies that closing a read-only client preserves its offsets.
 func TestStorageClientFullSnapshotCloseKeepsSnapshot(t *testing.T) {
 	t.Parallel()
 
@@ -405,8 +399,7 @@ func (stateMock) Set(string, any) error {
 	return nil
 }
 
-// TestStorageClient tests concurrent usage of the storageClient,
-// and should be executed with the -race flag.
+// TestStorageClient exercises concurrent storageClient usage; run with -race.
 func TestStorageClient(t *testing.T) {
 	t.Parallel()
 
@@ -471,9 +464,7 @@ func TestStorageClient(t *testing.T) {
 	wg.Wait()
 }
 
-// TestPersistHostConcurrent tests concurrent access to a PersistHost with multiple extensions,
-// simulating concurrent Set/Get operations alongside periodic SaveToState calls.
-// Should be run with the -race flag.
+// TestPersistHostConcurrent exercises concurrent multi-extension access with Set/Get and SaveToState; run with -race.
 func TestPersistHostConcurrent(t *testing.T) {
 	t.Parallel()
 

@@ -25,10 +25,7 @@ import (
 	"github.com/bleemeo/glouton/logger"
 )
 
-// ContainerLabelPrefix is the prefix for every glouton.* container
-// label/annotation ReceiverManager's container-label fallback path consults
-// (see parseContainerLabels), for a container matched by no configured
-// receiver's container_name/container_selectors.
+// ContainerLabelPrefix is the prefix for every glouton.* container label/annotation.
 const ContainerLabelPrefix = "glouton."
 
 const (
@@ -42,21 +39,14 @@ const (
 // containerLabels is what ReceiverManager derives from a container's own
 // glouton.* labels/annotations.
 type containerLabels struct {
-	// LogEnable is nil if unset. false vetoes the container entirely (see
-	// IsContainerExcluded); true also implies SendLogs unless send_logs is
-	// set explicitly (see resolveSendLogs) -- back-compat with today's live
-	// opt-in behavior.
+	// LogEnable is nil if unset; false vetoes the container, true implies SendLogs unless set explicitly.
 	LogEnable *bool
 	SendLogs  *bool
-	// LogMetrics is the glouton.log_metrics value: a Log.MetricsRules name,
-	// resolved by otel/logmetrics, not here. "" means unset.
+	// LogMetrics is the glouton.log_metrics value, a Log.MetricsRules name; "" means unset.
 	LogMetrics string
-	// LogFormat is the glouton.log_format value, a KnownLogFormats name. ""
-	// means unset (see resolveContainerLogFormat).
+	// LogFormat is the glouton.log_format value, a KnownLogFormats name; "" means unset.
 	LogFormat string
-	// LogFilter is the glouton.log_filter value, shipping-only (a
-	// KnownLogFilters name). ReceiverManager doesn't resolve it -- it's
-	// exposed so otel/logprocessing can, unchanged from today.
+	// LogFilter is the glouton.log_filter value, a KnownLogFilters name (shipping-only).
 	LogFilter string
 }
 
@@ -72,9 +62,7 @@ func parseContainerLabels(ctr facts.Container) containerLabels {
 	}
 }
 
-// parseBoolLabel reads a boolean container label, warning (not erroring) and
-// returning nil if malformed -- a typo shouldn't silently enable or disable
-// something.
+// parseBoolLabel reads a boolean container label, warning and returning nil if malformed.
 func parseBoolLabel(ctr facts.Container, raw map[string]string, key string) *bool {
 	str, found := raw[key]
 	if !found {
@@ -91,11 +79,7 @@ func parseBoolLabel(ctr facts.Container, raw map[string]string, key string) *boo
 	return &v
 }
 
-// resolveSendLogs computes this container's effective shipping decision: its
-// own explicit send_logs if set, else log_enable=true implying send_logs=true,
-// else fallbackDefault -- the caller decides what that means (see
-// ReceiverManager.updateLabelContainers: it's auto_discovery.
-// container_and_service_enable, not the receiver-oriented OpenTelemetry.SendLogs).
+// resolveSendLogs computes this container's effective shipping decision: explicit send_logs, else log_enable=true, else fallbackDefault.
 func (labels containerLabels) resolveSendLogs(fallbackDefault bool) bool {
 	if labels.SendLogs != nil {
 		return *labels.SendLogs
@@ -113,17 +97,8 @@ func (labels containerLabels) isExcluded() bool {
 	return labels.LogEnable != nil && !*labels.LogEnable
 }
 
-// IsContainerExcluded reports whether ctr is vetoed from every log source
-// (shipping and metrics alike): either its own glouton.log_enable=false
-// label, or a matching OpenTelemetry.ContainerExclude rule. This check always
-// runs first, before any receiver/label resolution -- even for a container
-// otherwise matched by an explicit receiver's container_name/
-// container_selectors.
-func IsContainerExcluded(cfg config.OpenTelemetry, ctr facts.Container) bool {
-	if parseContainerLabels(ctr).isExcluded() {
-		return true
-	}
-
+// isConfigExcluded reports whether ctr matches an OpenTelemetry.ContainerExclude rule.
+func isConfigExcluded(cfg config.OpenTelemetry, ctr facts.Container) bool {
 	for _, rule := range cfg.ContainerExclude {
 		if MatchesContainerRule(ctr, rule.ContainerName, rule.Selectors) {
 			return true
@@ -133,13 +108,24 @@ func IsContainerExcluded(cfg config.OpenTelemetry, ctr facts.Container) bool {
 	return false
 }
 
-// resolveContainerLogFormat resolves the raw operators for a container's log
-// format: its own glouton.log_format label if it names a known format, else
-// the OpenTelemetry.ContainerFormat[containerName] fallback, else nil. Both
-// paths warn (not error) on an unknown format name. The result applies to
-// BOTH this container's shipped logs and its metrics conditions/attributes --
-// unlike today's otel/logprocessing-only container_format, which never
-// reached otel/logmetrics.
+// IsContainerConfigExcluded reports whether ctr matches an OpenTelemetry.ContainerExclude rule, ignoring the glouton.log_enable label.
+// Use it when a receiver's container_name/container_selectors already opted the container in explicitly.
+func IsContainerConfigExcluded(cfg config.OpenTelemetry, ctr facts.Container) bool {
+	return isConfigExcluded(cfg, ctr)
+}
+
+// IsContainerExcluded reports whether ctr is vetoed from auto-discovery: its own glouton.log_enable=false label, or a matching
+// OpenTelemetry.ContainerExclude rule. Containers explicitly matched by a receiver use IsContainerConfigExcluded instead.
+func IsContainerExcluded(cfg config.OpenTelemetry, ctr facts.Container) bool {
+	if parseContainerLabels(ctr).isExcluded() {
+		return true
+	}
+
+	return isConfigExcluded(cfg, ctr)
+}
+
+// resolveContainerLogFormat resolves a container's log format operators: its glouton.log_format label if known, else the
+// ContainerFormat fallback, else nil. Warns on an unknown format name.
 func resolveContainerLogFormat(
 	containerName string,
 	labelFormat string,

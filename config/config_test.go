@@ -561,11 +561,7 @@ func TestOverrideDefault(t *testing.T) {
 	}
 }
 
-// TestMergeWithDefault tests that the config files and the environment variables
-// are correctly merge.
-// For files, basic types (string, int, ...) are overwritten, maps are merged and arrays are concatenated.
-// Files overwrite default values but merges maps with the defaults.
-// Environment variables always overwrite the existing config.
+// TestMergeWithDefault tests that config files and environment variables are correctly merged with defaults.
 func TestMergeWithDefault(t *testing.T) {
 	expectedConfig := DefaultConfig()
 	expectedConfig.Bleemeo.Enable = false
@@ -589,9 +585,7 @@ func TestMergeWithDefault(t *testing.T) {
 		},
 	}
 	expectedConfig.NetworkInterfaceDenylist = []string{testEth0, "eth1", "eth1", "eth2"}
-	// Regression test: log.metrics_rules must be added to mapKeys() (default.go)
-	// like every other config map, or a non-empty value from a file gets wiped
-	// by the (structurally present but empty) default map when withDefault=true.
+	// Regression test: log.metrics_rules must be registered in mapKeys(), or file values get wiped by the empty default map.
 	expectedConfig.Log.MetricsRules = map[string][]LogMetricEntry{
 		"rule_a": {{"metric": "metric_a", "regex": "a"}},
 		"rule_b": {{"metric": "metric_b", "regex": "b"}},
@@ -673,7 +667,7 @@ func TestEffectiveAllowedLabelOverrides(t *testing.T) {
 	}
 }
 
-// Testload tests loading the config and the warnings and errors returned.
+// TestLoad tests loading the config and the warnings and errors returned.
 func TestLoad(t *testing.T) { //nolint:maintidx
 	tests := []struct {
 		Name         string
@@ -1268,7 +1262,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 		})
 	}
 
-	// This subtest is apart because needs a slightly different setup than the other cases.
+	// This subtest needs a slightly different setup than the other cases.
 	t.Run("config contains null parts", func(t *testing.T) {
 		config, warnings, err := load(&configLoader{}, true, false, "testdata/null-parts.conf")
 		if err != nil {
@@ -1284,8 +1278,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 		expectedConfig := DefaultConfig()
 		expectedConfig.Bleemeo.APIBase = "not/null"
 		expectedConfig.Bleemeo.ContainerRegistrationDelaySeconds = 0
-		// TODO: this should be true (or a warning should be raised).
-		// currently we silently ignore the value entered by user.
+		// TODO: this should be true, or a warning should be raised.
 		expectedConfig.Bleemeo.Enable = false
 		expectedConfig.Web.StaticCDNURL = testSimplePath
 
@@ -1346,8 +1339,7 @@ func TestStateLoading(t *testing.T) {
 				DeprecatedStateFile:    "/var/lib/bleemeo/state.json",
 			},
 		},
-		// Testing for Windows is impossible to do from a unix Go runtime,
-		// because path/filepath functions exclusively use / as the path separator.
+		// Windows can't be tested from a unix Go runtime since path/filepath always uses /.
 		/*{
 			Name:  "Glouton on Windows",
 			Files: []string{"testdata/state-windows.conf"},
@@ -1549,10 +1541,7 @@ func TestDump(t *testing.T) {
 	}
 }
 
-// TestCensorSecretItem checks the per-item censoring used on the config items
-// synchronized to the Bleemeo API, especially for blackbox module secrets whose
-// flattened keys (bearer_token, credentials) or URL-embedded credentials
-// (proxy_url) aren't named like a typical secret.
+// TestCensorSecretItem tests per-item secret censoring, including blackbox secrets not named like a typical secret.
 func TestCensorSecretItem(t *testing.T) {
 	t.Parallel()
 
@@ -1624,9 +1613,7 @@ func TestCensorSecretItem(t *testing.T) {
 	}
 }
 
-// TestCensorURLSecrets checks the diagnostic-only URL censoring: userinfo
-// credentials and secret-looking query parameters are redacted, while the rest
-// of the URL is preserved.
+// TestCensorURLSecrets tests that URL userinfo credentials and secret-looking query parameters are redacted.
 func TestCensorURLSecrets(t *testing.T) {
 	t.Parallel()
 
@@ -1673,11 +1660,7 @@ func TestCensorURLSecrets(t *testing.T) {
 	}
 }
 
-// TestMergeLegacyFiltersSameInputRepeatedMetric checks that two filters for
-// the same metric within a single mergeLegacyFilters call (a legitimate
-// OR-together pattern, e.g. two filters in one log.inputs entry) don't
-// trigger a collision warning, and that the resulting entry always carries
-// item: "" and no "sources" field at all (that bookkeeping is gone).
+// Test that two filters for the same metric within a single input don't trigger a false collision warning.
 func TestMergeLegacyFiltersSameInputRepeatedMetric(t *testing.T) {
 	t.Parallel()
 
@@ -1713,10 +1696,7 @@ func TestMergeLegacyFiltersSameInputRepeatedMetric(t *testing.T) {
 	}
 }
 
-// TestMergeLegacyFiltersCrossInputCollisionMerges checks that two separate
-// mergeLegacyFilters calls (one per log.inputs entry) sharing a metric name
-// OR their conditions together into a single entry, warning once, and that
-// the merged entry still always carries item: "" and no "sources" field.
+// Test that two separate inputs sharing a metric name get merged into one entry, warning once.
 func TestMergeLegacyFiltersCrossInputCollisionMerges(t *testing.T) {
 	t.Parallel()
 
@@ -1947,9 +1927,7 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 			WantWarning: true,
 		},
 		{
-			// Exercises both protocols enabled at once (legacy-opentelemetry-network
-			// above only enables grpc), migrated into a single synthesized receiver
-			// participating in one log.network listener with both endpoints.
+			// Both protocols enabled at once, migrated into a single receiver.
 			Name:       "legacy-network-both-protocols",
 			ConfigFile: "testdata/legacy-network-both-protocols.conf",
 			WantConfig: Config{

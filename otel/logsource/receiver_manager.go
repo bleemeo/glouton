@@ -24,6 +24,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -43,37 +44,21 @@ import (
 	"go.opentelemetry.io/collector/receiver"
 )
 
-// Persistence identity, deliberately identical to otel/logprocessing's
-// current (live, production) values: once otel/logprocessing is rewired onto
-// ReceiverManager, an already-deployed agent's read offsets must survive the
-// switch unchanged.
+// Persistence identity, kept identical to otel/logprocessing's so read offsets survive the migration.
 const (
 	persistStorageType      = "glouton_log_metadata_storage"
 	logFileMetadataCacheKey = "LogFileMetadata"
 	logFileSizesCacheKey    = "LogFileSizes"
-	persistArchivePath      = "log-receivers/persister.json"
+	// persistArchivePath keeps otel/logprocessing's pre-rewrite name (see Persister()).
+	persistArchivePath = "log-processing/persister.json"
 
-	// saveThrottle limits how often a single file's read offset is pushed
-	// into the persister's in-memory map, matching otel/logprocessing's
-	// current (live) save policy.
+	// saveThrottle limits how often a file's read offset is saved, matching otel/logprocessing's policy.
 	saveThrottle = time.Minute
 )
 
 var errNoContainerLogFile = errors.New("no log file found for container")
 
-// ReceiverManager owns exactly one physical file/container tail per
-// configured log.opentelemetry.receivers entry (plus one per container
-// opted in solely via glouton.* labels), and fans each one's parsed records
-// out to whichever registered SinkProvider wants them (see RegisterSinkProvider
-// and FanoutLogs). It replaces the previously-independent receiver/tailing/
-// container-watching runtimes of otel/logprocessing and otel/logmetrics.
-//
-// A receiver's log_format/operators are resolved once, upstream of the
-// fan-out point, so every SinkProvider sees identically-parsed records --
-// this is deliberate (see the package's design notes), not an oversight.
-//
-// The zero value isn't usable; construct with NewReceiverManager. All
-// exported methods are safe for concurrent use.
+// ReceiverManager owns log tails and fans records to registered SinkProviders. Use NewReceiverManager; all exported methods are thread-safe.
 type ReceiverManager struct {
 	cfg           config.OpenTelemetry
 	hostroot      string
@@ -87,16 +72,15 @@ type ReceiverManager struct {
 	persister     *PersistHost
 	lastFileSizes map[string]int64
 
-	l           sync.Mutex
-	providers   []SinkProvider
-	receivers   map[string]*managedSource // by OpenTelemetry.Receivers key
-	byContainer map[string]*managedSource // by container ID, SourceContainerLabel only
+	l                  sync.Mutex
+	providers          []SinkProvider
+	receivers          map[string]*managedSource // by OpenTelemetry.Receivers key
+	byContainer        map[string]*managedSource // by container ID, SourceContainerLabel only
+	externalSizerFuncs []func() []FileSizer
 }
 
-// NewReceiverManager builds a ReceiverManager for cfg. It doesn't start
-// anything yet -- register every SinkProvider first (RegisterSinkProvider),
-// then call RescanReceivers/UpdateContainers to actually resolve sources and
-// start tailing.
+// NewReceiverManager builds a ReceiverManager for cfg. Register every SinkProvider first, then call
+// RescanReceivers/UpdateContainers to resolve sources and start tailing.
 func NewReceiverManager(cfg config.OpenTelemetry, hostroot string, state bleemeoTypes.State, commandRunner CommandRunner) (*ReceiverManager, error) {
 	knownLogFormats, err := ExpandLogFormats(cfg.KnownLogFormats)
 	if err != nil {
@@ -128,11 +112,9 @@ func NewReceiverManager(cfg config.OpenTelemetry, hostroot string, state bleemeo
 	}, nil
 }
 
-// RegisterSinkProvider registers p as a candidate consumer of every source
-// ReceiverManager resolves from now on. Must be called before the first
-// RescanReceivers/UpdateContainers/NetworkWants call: a source resolved
-// before p registers never asks it (WantSource is only called once, the
-// first time a source is seen).
+// RegisterSinkProvider registers p as a candidate consumer of every source resolved from now on. Must
+// be called before the first RescanReceivers/UpdateContainers/NetworkWants call, since WantSource is
+// only asked once per source.
 func (rm *ReceiverManager) RegisterSinkProvider(p SinkProvider) {
 	rm.l.Lock()
 	defer rm.l.Unlock()
@@ -140,39 +122,50 @@ func (rm *ReceiverManager) RegisterSinkProvider(p SinkProvider) {
 	rm.providers = append(rm.providers, p)
 }
 
-// managedSource is one resolved fan-out point (one configured receiver, or
-// one container opted in via labels): the physical tail(s) feeding it, and
-// the (possibly nil, if no SinkProvider wants it) consumer they feed into.
+// Persister returns the shared *PersistHost every resolved source's read offset is persisted through,
+// so callers like otel/logprocessing persist through this same instance instead of building their own
+// and silently overwriting these offsets.
+func (rm *ReceiverManager) Persister() *PersistHost {
+	return rm.persister
+}
+
+// RegisterExternalSizer folds FileSizers that ReceiverManager doesn't own into SaveState's
+// "LogFileSizes" snapshot. fn is called fresh on every SaveState, so it can reflect receivers
+// added/removed since registration.
+func (rm *ReceiverManager) RegisterExternalSizer(fn func() []FileSizer) {
+	rm.l.Lock()
+	defer rm.l.Unlock()
+
+	rm.externalSizerFuncs = append(rm.externalSizerFuncs, fn)
+}
+
+// managedSource is one resolved fan-out point (a configured receiver, or a label-opted-in container):
+// its physical tail(s) and the consumer they feed into (nil if no SinkProvider wants it).
 type managedSource struct {
 	name string
 	kind SourceKind
 
-	// fanout is nil if no registered SinkProvider wants this source; no
-	// physical tail is ever started in that case.
+	// fanout is nil if no SinkProvider wants this source.
 	fanout consumer.Logs
+	// container is set only for a SourceContainerLabel managedSource, so a later removal can notify
+	// every provider via releaseProviders.
+	container facts.Container
 
-	// operators applies to every physical tail under this source, before the
-	// fan-out point. It never includes the container envelope operator
-	// itself -- callers prepend BuildContainerEnvelopeOperator() per
-	// container tail, since a mixed receiver (include + container_selectors)
-	// only wants it on the container-derived tails.
+	// operators applies to every tail under this source, before fan-out. Callers prepend
+	// BuildContainerEnvelopeOperator() per container tail, since a mixed receiver only wants it there.
 	operators []operator.Config
-	// extraRaw is the raw passthrough into the real fileconsumer config, nil
-	// for a SourceContainerLabel source (no receiver entry to paste one into).
+	// extraRaw is the raw passthrough into the fileconsumer config, nil for SourceContainerLabel.
 	extraRaw map[string]any
 
 	l sync.Mutex
-	// watching/sizeFnByFile/recvs/extIDs: include-pattern file tails, flat
-	// (never removed individually -- only whole-source shutdown does).
+	// watching/sizeFnByFile/recvs/extIDs: include-pattern file tails, removed only on full source shutdown.
 	watching     map[string]ReceiverKind
 	sizeFnByFile map[string]func() (int64, error)
 	recvs        []receiver.Logs
 	extIDs       []component.ID
 
-	// containerRecvs/containerExtIDs/containerLogFile: container-derived
-	// tails, keyed by container ID so one can be stopped without touching
-	// the others (container disappears, or a receiver's selector no longer
-	// matches it).
+	// containerRecvs/containerExtIDs/containerLogFile: container-derived tails, keyed by container ID
+	// so one can be stopped without touching the others.
 	containerRecvs   map[string][]receiver.Logs
 	containerExtIDs  map[string][]component.ID
 	containerLogFile map[string]string
@@ -192,8 +185,7 @@ func newManagedSource(name string, kind SourceKind, operators []operator.Config,
 	}
 }
 
-// SizesByFile implements FileSizer, for the cross-restart "have we ever seen
-// this file" cache (see GetLastFileSizesFromCache/SaveLastFileSizesToCache).
+// SizesByFile implements FileSizer, for the cross-restart file-size cache.
 func (ms *managedSource) SizesByFile() (map[string]int64, error) {
 	ms.l.Lock()
 	defer ms.l.Unlock()
@@ -216,11 +208,8 @@ func (ms *managedSource) SizesByFile() (map[string]int64, error) {
 	return sizes, nil
 }
 
-// receiverFields is the subset of a raw LogReceiver's keys ReceiverManager
-// itself needs beyond config.LogReceiverSelectors (which only covers
-// include/container_name/container_selectors/network): send_logs, log_format
-// and operators, following the same narrow-decode pattern as
-// decodeRawReceiverConfig.
+// receiverFields is the subset of a raw LogReceiver's keys ReceiverManager needs beyond
+// config.LogReceiverSelectors: send_logs, log_format and operators.
 type receiverFields struct {
 	Include   []string
 	SendLogs  *bool                 `mapstructure:"send_logs"`
@@ -243,12 +232,7 @@ func decodeReceiverFields(raw config.LogReceiver) (receiverFields, error) {
 	return fields, nil
 }
 
-// askProviders asks every registered SinkProvider whether it wants src,
-// returning the fan-out of every non-nil answer (nil if none do -- see
-// FanoutLogs). Callers must hold rm.l. ctx is forwarded from whichever
-// caller resolved this source (RescanReceivers/UpdateContainers/
-// NetworkWants) -- it's the long-lived context any component a provider
-// builds must be tied to, not a short-request-scoped one.
+// askProviders asks every SinkProvider if it wants src, fanning out answers. Callers must hold rm.l.
 func (rm *ReceiverManager) askProviders(ctx context.Context, src ResolvedSource) consumer.Logs {
 	sinks := make([]consumer.Logs, 0, len(rm.providers))
 
@@ -261,10 +245,14 @@ func (rm *ReceiverManager) askProviders(ctx context.Context, src ResolvedSource)
 	return FanoutLogs(sinks...)
 }
 
-// ensureReceiverSource returns the managedSource for a configured receiver,
-// resolving it (deciding once whether any SinkProvider wants it, and
-// building its shared operators) the first time it's seen. Callers must hold
-// rm.l.
+// releaseProviders tells every SinkProvider to clean up for this container. Callers must hold rm.l.
+func (rm *ReceiverManager) releaseProviders(ctx context.Context, container facts.Container) {
+	for _, p := range rm.providers {
+		p.ReleaseSource(ctx, container)
+	}
+}
+
+// ensureReceiverSource returns or resolves the managedSource for a receiver. Callers must hold rm.l.
 func (rm *ReceiverManager) ensureReceiverSource(ctx context.Context, name string, raw config.LogReceiver) (*managedSource, receiverFields, error) {
 	fields, err := decodeReceiverFields(raw)
 	if err != nil {
@@ -295,9 +283,8 @@ func (rm *ReceiverManager) ensureReceiverSource(ctx context.Context, name string
 	return ms, fields, nil
 }
 
-// buildReceiverOperators resolves a receiver's operators/log_format fields
-// into stanza operator.Config, warning (not failing) on an expansion/build
-// error -- the receiver still starts, just without that parsing step.
+// buildReceiverOperators resolves a receiver's operators/log_format into stanza operator.Config,
+// warning (not failing) on error.
 func (rm *ReceiverManager) buildReceiverOperators(name string, fields receiverFields) []operator.Config {
 	rawOps, err := ExpandOperators(fields.Operators, rm.knownLogFormats, false)
 	if err != nil {
@@ -334,12 +321,7 @@ func (rm *ReceiverManager) buildReceiverOperators(name string, fields receiverFi
 	return append(operators, formatOps...)
 }
 
-// RescanReceivers (re)resolves every configured receiver -- including
-// deciding, the first time each is seen, whether any SinkProvider wants it --
-// and starts a file tail for any newly-matching include pattern. Safe (and
-// expected) to call repeatedly: an already-running tail is left untouched, so
-// the caller can wire this to the same periodic tick otel/logprocessing used
-// to run its own receivers on.
+// RescanReceivers resolves receivers and starts tails for new include patterns; idempotent.
 func (rm *ReceiverManager) RescanReceivers(ctx context.Context) error {
 	rm.l.Lock()
 	defer rm.l.Unlock()
@@ -368,11 +350,8 @@ func (rm *ReceiverManager) RescanReceivers(ctx context.Context) error {
 	return errs
 }
 
-// resolveIncludeGlobs expands patterns into actual, hostroot-stripped,
-// symlink-resolved file paths -- based on otel/logprocessing's richer
-// version (logReceiver.update), which (unlike otel/logmetrics's) resolves
-// hostroot symlinks, needed for e.g. Kubernetes' /var/log/containers/*
-// -> /var/log/pods/* symlinks.
+// resolveIncludeGlobs expands patterns into hostroot-stripped, symlink-resolved file paths (needed
+// for e.g. Kubernetes' /var/log/containers/* -> /var/log/pods/* symlinks).
 func (rm *ReceiverManager) resolveIncludeGlobs(name string, patterns []string) []string {
 	hasHostRoot := len(rm.hostroot) > len(string(os.PathSeparator))
 
@@ -438,8 +417,7 @@ func (rm *ReceiverManager) resolveIncludeGlobs(name string, patterns []string) [
 	return files
 }
 
-// startIncludeFiles starts a receiver for each of files not already being
-// watched by ms. Already-running tails are left untouched.
+// startIncludeFiles starts receivers for new files in ms; idempotent.
 func (rm *ReceiverManager) startIncludeFiles(ctx context.Context, ms *managedSource, name string, files []string) error {
 	ms.l.Lock()
 	defer ms.l.Unlock()
@@ -552,15 +530,7 @@ type containerMatcher struct {
 	containerSelectors map[string]string
 }
 
-// UpdateContainers is the single entry point for reacting to container
-// add/remove/change: it resolves, for every live (non-excluded) container,
-// which configured receivers' container_name/container_selectors match it
-// (starting/stopping per-container tails accordingly), and falls back to
-// glouton.* container-label detection for any container matched by no
-// receiver at all. It replaces otel/logmetrics's former independent
-// 1-minute container poll: call it from the same discovery-triggered path
-// otel/logprocessing already reacts to, so metrics reacts to container
-// changes exactly as fast as shipping does.
+// UpdateContainers matches containers to receivers by name/selectors, falling back to glouton.* labels.
 func (rm *ReceiverManager) UpdateContainers(ctx context.Context, containers []facts.Container) {
 	rm.l.Lock()
 	defer rm.l.Unlock()
@@ -571,7 +541,7 @@ func (rm *ReceiverManager) UpdateContainers(ctx context.Context, containers []fa
 	claimed := make(map[string]bool, len(containers))
 
 	for _, ctr := range containers {
-		if ctr.LogPath() == "" || IsContainerExcluded(rm.cfg, ctr) {
+		if ctr.LogPath() == "" || IsContainerConfigExcluded(rm.cfg, ctr) {
 			continue
 		}
 
@@ -610,8 +580,7 @@ func (rm *ReceiverManager) UpdateContainers(ctx context.Context, containers []fa
 	rm.updateLabelContainers(ctx, containers, claimed)
 }
 
-// containerMatchers returns the container-selection fields of every
-// configured receiver that watches containers at all. Callers must hold rm.l.
+// containerMatchers returns container-selection fields from all receivers. Callers must hold rm.l.
 func (rm *ReceiverManager) containerMatchers() []containerMatcher {
 	var matchers []containerMatcher
 
@@ -635,10 +604,7 @@ func (rm *ReceiverManager) containerMatchers() []containerMatcher {
 	return matchers
 }
 
-// updateLabelContainers resolves the glouton.* label fallback for every
-// live, non-excluded container claimed by no receiver, starting/stopping
-// per-container sources as they appear, change ownership, or disappear.
-// Callers must hold rm.l.
+// updateLabelContainers resolves glouton.* label fallbacks for unclaimed containers. Callers must hold rm.l.
 func (rm *ReceiverManager) updateLabelContainers(ctx context.Context, containers []facts.Container, claimed map[string]bool) {
 	current := make(map[string]bool, len(containers))
 
@@ -664,14 +630,9 @@ func (rm *ReceiverManager) updateLabelContainers(ctx context.Context, containers
 				ctr.ContainerName(), SourceContainerLabel,
 				append([]operator.Config{BuildContainerEnvelopeOperator()}, operators...), nil,
 			)
-			// The fallback default here is auto_discovery.container_and_service_enable,
-			// not OpenTelemetry.SendLogs: SendLogs is the default for receivers
-			// (sources the user already explicitly configured), whereas a
-			// container reached ONLY through this label-fallback path was never
-			// explicitly configured at all -- auto_discovery is the toggle that
-			// decides whether such untouched containers ship by default, exactly
-			// as it does today. Metrics (LogMetricsRule) are unaffected either
-			// way: this only decides SendLogs.
+			// Default here is auto_discovery.container_and_service_enable, not OpenTelemetry.SendLogs,
+			// since this container was never explicitly configured. Only affects SendLogs, not LogMetricsRule.
+			ms.container = ctr
 			ms.fanout = rm.askProviders(ctx, ResolvedSource{
 				Kind:           SourceContainerLabel,
 				Name:           ctr.ContainerName(),
@@ -696,18 +657,12 @@ func (rm *ReceiverManager) updateLabelContainers(ctx context.Context, containers
 		}
 
 		rm.shutdownSource(ctx, ms)
+		rm.releaseProviders(ctx, ms.container)
 		delete(rm.byContainer, id)
 	}
 }
 
-// containerPersistName builds a stable persisted-offset identity for a
-// container's tail. namespace is "" for a label-detected container (matching
-// otel/logprocessing's current key exactly, for offset continuity across the
-// migration -- today, a container is always reached through exactly one
-// path), or a receiver name when reached through an explicit
-// container_name/container_selectors match (namespaced so the same
-// container matched by two different receivers, per design, gets two
-// independent read offsets).
+// containerPersistName builds a persisted-offset identity; namespace is "" for label-detected, or a receiver name for independent offsets.
 func containerPersistName(namespace, containerID, logFile string) string {
 	if namespace == "" {
 		return "container/" + containerID + "/" + logFile
@@ -716,9 +671,7 @@ func containerPersistName(namespace, containerID, logFile string) string {
 	return "container/" + namespace + "/" + containerID + "/" + logFile
 }
 
-// startContainerTail starts ctr's log tail under ms, unless it's already
-// running or ms.fanout is nil (nobody wants this source: don't waste a file
-// handle on it).
+// startContainerTail starts a tail for ctr under ms if wanted and not already running.
 func (rm *ReceiverManager) startContainerTail(
 	ctx context.Context,
 	ms *managedSource,
@@ -742,10 +695,8 @@ func (rm *ReceiverManager) startContainerTail(
 		return errNoContainerLogFile
 	}
 
-	// Resolve hostroot symlinks (e.g. Kubernetes' /var/log/containers/* ->
-	// /var/log/pods/*): without this, Glouton would try to read
-	// "<hostroot>/var/log/pods/..." by following the symlink from inside its
-	// own mount namespace, ignoring hostroot.
+	// Resolve hostroot symlinks (e.g. Kubernetes' /var/log/containers/* -> /var/log/pods/*), or the
+	// symlink target would be read ignoring hostroot.
 	realFile := logFilePath
 	if rm.hostroot != "/" {
 		realFile = hostrootsymlink.EvalSymlinks(rm.hostroot, realFile)
@@ -851,9 +802,8 @@ func (rm *ReceiverManager) Shutdown(ctx context.Context) {
 	}
 }
 
-// SaveState persists every source's read offset (so a restart resumes
-// tailing where it left off) and refreshes the coarser cross-restart
-// lastFileSizes cache. Call it periodically and at shutdown.
+// SaveState persists every source's read offset and refreshes the lastFileSizes cache. Call it
+// periodically and at shutdown.
 func (rm *ReceiverManager) SaveState() {
 	rm.persister.SaveToState(rm.state)
 
@@ -867,16 +817,21 @@ func (rm *ReceiverManager) SaveState() {
 	for _, ms := range rm.byContainer {
 		sizers = append(sizers, ms)
 	}
+
+	externalFuncs := slices.Clone(rm.externalSizerFuncs)
 	rm.l.Unlock()
+
+	// Called outside rm.l: an external sizer locks its own state and may be slow (it stats every
+	// watched file).
+	for _, fn := range externalFuncs {
+		sizers = append(sizers, fn()...)
+	}
 
 	SaveLastFileSizesToCache(rm.state, logFileSizesCacheKey, sizers)
 }
 
-// NetworkWants returns one NetworkWant per configured receiver with a
-// network: participation, its Consumer already the fan-out of every
-// SinkProvider that wants it -- so the caller (see PlanSharedNetworkReceivers)
-// only ever has one want per receiver to plan, regardless of how many
-// features consume it.
+// NetworkWants returns one NetworkWant per configured receiver with network participation, its
+// Consumer already the fan-out of every SinkProvider that wants it.
 func (rm *ReceiverManager) NetworkWants(ctx context.Context) []NetworkWant {
 	rm.l.Lock()
 	defer rm.l.Unlock()

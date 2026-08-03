@@ -52,12 +52,8 @@ var (
 	errWrongNumberOfLogs           = errors.New("container should have a single log file")
 )
 
-// Container is only used for the container-hosted "known service" path (see
-// processLogSources): a container matched by no receiver/label, whose log
-// format instead comes from Glouton's built-in per-service-type detection
-// (discovery.inferLogProcessingConfig). That has no config-driven or
-// label-driven equivalent, so logsource.ReceiverManager can't supersede it --
-// it stays tailed directly by this package.
+// Container represents a container whose logs are tailed directly by this
+// package, via Glouton's built-in per-service-type log format detection.
 type Container struct {
 	LogFilePath  string
 	ReceiverKind logsource.ReceiverKind
@@ -143,12 +139,7 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 	}
 
 	realLogFile := ctr.LogFilePath
-	// If we are in a containers, resolve symlink taking hostroot in consideration.
-	// This is mandatory for file like "/var/log/containers/XXX" which are
-	// symlink to "/var/log/pods/XXX" with Kubernetes & containerd.
-	// If we don't, Glouton will try reading "/hostroot/var/log/containers/XXX". Glouton will follow
-	// the symlink (without take /hostroot in consideration) which result in Glouton trying to
-	// read "/var/log/pods/XXX" in its own mount namespace (it need to read "/hostroot/var/log/pods/XXX").
+	// Resolve symlinks relative to hostroot (Kubernetes/containerd's /var/log/containers/XXX -> /var/log/pods/XXX).
 	if cr.pipeline.hostroot != "/" {
 		realLogFile = hostrootsymlink.EvalSymlinks(cr.pipeline.hostroot, realLogFile)
 	}
@@ -162,7 +153,7 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 		makeStorageFn,
 		logsource.StatFile,
 		ctr.Attributes.AsMap(),
-		nil, // no per-container raw receiver config: containers have no named receiver entry to paste one into
+		nil, // containers have no named receiver entry to paste a raw config into
 	)
 	if err != nil {
 		return fmt.Errorf("setting up receiver factories: %w", err)
@@ -240,8 +231,7 @@ func (cr *containerReceiver) SizesByFile() (map[string]int64, error) {
 		size, err := sizeFn()
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
-				// We may not catch errors produced by the "sudo stat" cmd,
-				// but this would not really be convenient ...
+				// May not catch errors from the "sudo stat" command.
 				continue
 			}
 
@@ -328,8 +318,7 @@ func (cr *containerReceiver) stop() {
 	wg := new(sync.WaitGroup)
 	wg.Add(len(cr.startedComponents))
 
-	// Stopping all the container receivers in parallel,
-	// since they don't depend on each other.
+	// Stop all container receivers in parallel; they don't depend on each other.
 	for _, components := range cr.startedComponents {
 		go func() {
 			defer crashreport.ProcessPanic()
@@ -346,11 +335,8 @@ func (cr *containerReceiver) stop() {
 	}
 }
 
-// makeLogContainer builds a Container, delegating attribute resolution
-// (image tags, pod/namespace, ...) to logsource.BuildContainerAttributes --
-// the same richer, shared implementation logsource.ReceiverManager uses for
-// every other container-derived source, so both paths stamp identical
-// attributes.
+// makeLogContainer builds a Container, delegating attribute resolution to
+// logsource.BuildContainerAttributes so it matches other container-derived sources.
 func makeLogContainer(ctx context.Context, container facts.Container, logFilePath string) Container {
 	return Container{
 		LogFilePath:     logFilePath,

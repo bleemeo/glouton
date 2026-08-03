@@ -28,13 +28,11 @@ import (
 type SourceKind int
 
 const (
-	// SourceReceiver is a configured OpenTelemetry.Receivers entry: a file
-	// include, a container_name/container_selectors match, and/or network
-	// participation, all sharing this one receiver's name/operators.
+	// SourceReceiver is a configured OpenTelemetry.Receivers entry: a file include, a
+	// container_name/container_selectors match, and/or network participation, sharing one name/operators.
 	SourceReceiver SourceKind = iota
-	// SourceContainerLabel is a container matched by no receiver's
-	// container_name/container_selectors, opted into shipping/metrics solely
-	// through its own glouton.* labels/annotations.
+	// SourceContainerLabel is a container matched by no receiver's container_name/container_selectors,
+	// opted into shipping/metrics solely through its own glouton.* labels/annotations.
 	SourceContainerLabel
 )
 
@@ -46,44 +44,39 @@ const (
 type ResolvedSource struct {
 	Kind SourceKind
 
-	// Name is this source's default metrics item: the receiver's own config
-	// name for SourceReceiver (even if its selectors match several
-	// containers at once -- merging them under one item is then an explicit
-	// choice), or the container's own runtime name for SourceContainerLabel.
+	// Name is this source's default metrics item: the receiver's own config name for SourceReceiver, or
+	// the container's own runtime name for SourceContainerLabel.
 	Name string
 
-	// ReceiverName is the OpenTelemetry.Receivers key, set only for
-	// SourceReceiver.
+	// ReceiverName is the OpenTelemetry.Receivers key, set only for SourceReceiver.
 	ReceiverName string
 
-	// Container is the single container behind a SourceContainerLabel
-	// source. It's nil for SourceReceiver, even when that receiver's
-	// container_name/container_selectors matched one or more containers --
-	// those are tailed individually but share this one resolved source.
+	// Container is the single container behind a SourceContainerLabel source; nil for SourceReceiver,
+	// even when its selectors matched several containers, since those are tailed individually but share
+	// this one resolved source.
 	Container facts.Container
 
-	// SendLogs is the fully-resolved shipping decision for this source: for
-	// SourceReceiver, its own send_logs if set, else
-	// OpenTelemetry.SendLogs; for SourceContainerLabel, glouton.send_logs,
-	// else glouton.log_enable=true (back-compat), else OpenTelemetry.SendLogs.
+	// SendLogs is the fully-resolved shipping decision: SourceReceiver's own send_logs if set, else
+	// OpenTelemetry.SendLogs; SourceContainerLabel's glouton.send_logs, else glouton.log_enable=true
+	// (back-compat), else OpenTelemetry.SendLogs.
 	SendLogs bool
 
-	// LogMetricsRule is the glouton.log_metrics label's value, set only for
-	// SourceContainerLabel when that label is present ("" otherwise). A
-	// SourceReceiver's metrics instead come from its own "metrics:" field,
-	// which otel/logmetrics resolves directly from config.
+	// LogMetricsRule is the glouton.log_metrics label's value, set only for SourceContainerLabel (""
+	// otherwise). A SourceReceiver's metrics instead come from its own "metrics:" field.
 	LogMetricsRule string
 }
 
-// SinkProvider is implemented by each feature that can consume a
-// ReceiverManager-owned source (otel/logprocessing for shipping,
-// otel/logmetrics for counting). WantSource is called once per
-// ResolvedSource, when ReceiverManager first sees it; a false ok (or a nil
-// sink) means "not interested," and no physical tail is even started if no
-// provider wants a given source. Implementations must return quickly: called
-// with ReceiverManager's lock held. ctx is the same long-lived context the
-// caller (RescanReceivers/UpdateContainers/NetworkWants) was given -- valid
-// for the lifetime of any component WantSource builds, not just this call.
+// SinkProvider is implemented by each feature that can consume a ReceiverManager-owned source
+// (otel/logprocessing for shipping, otel/logmetrics for counting). WantSource is called once per
+// ResolvedSource; a false ok or nil sink means "not interested," and no tail is started if nobody wants
+// it. Called with ReceiverManager's lock held: implementations must return quickly. ctx stays valid for
+// the lifetime of any component WantSource builds, not just this call.
 type SinkProvider interface {
 	WantSource(ctx context.Context, src ResolvedSource) (sink consumer.Logs, ok bool)
+
+	// ReleaseSource tells the provider container is gone (e.g. a Docker/Kubernetes restart assigns a
+	// new ID even for "the same" service), so it can forget whatever it built for it. No-op if nothing
+	// was built. Only called for a SourceContainerLabel container -- a SourceReceiver never goes away
+	// individually. Called with ReceiverManager's lock held; must return quickly.
+	ReleaseSource(ctx context.Context, container facts.Container)
 }

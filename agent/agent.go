@@ -1062,12 +1062,9 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	a.vSphereManager = vsphere.NewManager()
 
-	// receiverManager owns every physical file/container/network log tail
-	// (one per log.opentelemetry.receivers entry, plus one per container
-	// opted in solely via glouton.* labels) and fans each one's records out
-	// to whichever of logMetricsManager/logProcessManager wants them -- both
-	// must register (RegisterSinkProvider) before the first
-	// RescanReceivers/UpdateContainers/NetworkWants call below.
+	// receiverManager owns every log receiver (file, container, network) and fans
+	// records out to registered sinks. Sinks must call RegisterSinkProvider before
+	// the first RescanReceivers/UpdateContainers/NetworkWants call below.
 	a.receiverManager, err = logsource.NewReceiverManager(a.config.Log.OpenTelemetry, a.hostRootPath, a.state, a.commandRunner)
 	if err != nil {
 		logger.Printf("unable to setup log receivers: %v", err)
@@ -1183,10 +1180,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 
 	if a.receiverManager != nil {
-		// Resolve every include-pattern (file) receiver now; container-based
-		// and container-label receivers get their first resolution from the
-		// initial UpdateContainers call below, then again on every discovery
-		// event (see updatedDiscovery) and every runReceiverManager tick.
+		// Resolve include-pattern (file) receivers now; container and network
+		// receivers get resolved by UpdateContainers below and on later discovery events.
 		if err := a.receiverManager.RescanReceivers(ctx); err != nil {
 			logger.V(1).Printf("failed to resolve some log receivers: %v", err)
 		}
@@ -1197,23 +1192,9 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			a.receiverManager.UpdateContainers(ctx, initialContainers)
 		}
 
-		// Both log-shipping and log-to-metric may want to receive
-		// externally-pushed logs; when they name the same
-		// log.network.receivers entry, they share a single OTLP gRPC/HTTP
-		// listener (see logsource.PlanSharedNetworkReceivers) so their client
-		// only ever needs one endpoint. Each receiver's protocols are
-		// entirely its own config (log.network.receivers.<name>.protocols),
-		// same as a real OTel receiver -- a log.opentelemetry.receivers entry
-		// just lists which log.network.receivers it pulls from, like an OTel
-		// pipeline's own `receivers: [...]`. A receiver can skip naming one
-		// entirely and just set network.enable instead (the simple,
-		// single-listener shortcut -- see config.ResolveNetworkReceivers/
-		// EffectiveNetworkReceivers): it resolves to
-		// config.DefaultNetworkReceiverName, auto-provisioned with default
-		// GRPC/HTTP endpoints as long as nobody has defined any
-		// log.network.receivers entry explicitly. receiverManager.NetworkWants
-		// already returns one want per receiver, fanned out internally to
-		// whichever of logProcessManager/logMetricsManager wants it.
+		// Log-shipping and log-to-metric share a single OTLP listener when they name
+		// the same log.network.receivers entry (see logsource.PlanSharedNetworkReceivers).
+		// A receiver with none named falls back to the auto-provisioned default listener.
 		effectiveNetworkReceivers := config.EffectiveNetworkReceivers(
 			a.config.Log.Network.Receivers,
 			anyReceiverWantsDefaultNetwork(a.config.Log.OpenTelemetry.Receivers),
@@ -2146,25 +2127,15 @@ func (a *agent) updatedDiscovery(ctx context.Context, services []discovery.Servi
 			logger.V(1).Printf("Failed to retrieve containers: %v", err)
 		}
 
-		// receiverManager resolves every log.opentelemetry.receivers
-		// container_name/container_selectors match and every glouton.*
-		// container-label opt-in itself (container_exclude and
-		// glouton.log_enable=false vetoes included) -- unlike the old
-		// per-container glouton.log_enable pre-filter this replaces, it needs
-		// the full, unfiltered container list to do that resolution
-		// correctly, independent of shipping being enabled at all (metrics
-		// works standalone).
+		// receiverManager resolves container_name/container_selectors matches and
+		// glouton.* label opt-ins itself, so it needs the full container list.
 		if a.receiverManager != nil {
 			a.receiverManager.UpdateContainers(ctx, containers)
 		}
 
 		if a.logProcessManager != nil {
-			// Glouton's own per-service-type log format detection (services
-			// running bare or in a container) is the only log source
-			// log.opentelemetry.receivers/glouton.* labels can't supersede
-			// (see logprocessing.Manager.processLogSources) -- it still
-			// depends on auto_discovery.container_and_service_enable exactly
-			// as before.
+			// Per-service-type log format auto-detection still depends on
+			// auto_discovery.container_and_service_enable, as before.
 			var logServices []discovery.Service
 			if a.config.Log.OpenTelemetry.AutoDiscovery.ContainerAndServiceEnable {
 				logServices = services
@@ -2175,10 +2146,7 @@ func (a *agent) updatedDiscovery(ctx context.Context, services []discovery.Servi
 	}
 }
 
-// anyReceiverWantsDefaultNetwork reports whether any log.opentelemetry.receivers
-// entry sets network.enable with no named log.network.receivers of its own --
-// the simple shortcut that auto-provisions config.DefaultNetworkReceiverName
-// (see config.EffectiveNetworkReceivers).
+// anyReceiverWantsDefaultNetwork reports whether any receiver wants the auto-provisioned default network receiver.
 func anyReceiverWantsDefaultNetwork(receivers map[string]config.LogReceiver) bool {
 	for name, raw := range receivers {
 		_, _, _, network, err := config.LogReceiverSelectors(raw)
@@ -2196,11 +2164,7 @@ func anyReceiverWantsDefaultNetwork(receivers map[string]config.LogReceiver) boo
 	return false
 }
 
-// runReceiverManager periodically re-resolves include-pattern (file)
-// receivers -- new files matching a glob can appear at any time, unlike
-// container/network sources which react to discovery events -- and persists
-// every source's read offset, mirroring otel/logprocessing's former internal
-// cadence (both were 1 minute). It shuts receiverManager down when ctx ends.
+// runReceiverManager periodically re-resolves file receivers and persists read offsets until ctx is done.
 func (a *agent) runReceiverManager(ctx context.Context) error {
 	const receiverManagerUpdatePeriod = time.Minute
 

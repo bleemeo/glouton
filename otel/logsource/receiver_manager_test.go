@@ -31,13 +31,13 @@ import (
 	"go.opentelemetry.io/collector/pdata/plog"
 )
 
-// fakeSinkProvider is a SinkProvider test double recording every
-// ResolvedSource it was asked about, answering according to want.
+// fakeSinkProvider is a SinkProvider test double recording asked sources and released containers.
 type fakeSinkProvider struct {
 	want func(src ResolvedSource) (consumer.Logs, bool)
 
-	l     sync.Mutex
-	asked []ResolvedSource
+	l        sync.Mutex
+	asked    []ResolvedSource
+	released []facts.Container
 }
 
 func (f *fakeSinkProvider) WantSource(_ context.Context, src ResolvedSource) (consumer.Logs, bool) {
@@ -48,11 +48,25 @@ func (f *fakeSinkProvider) WantSource(_ context.Context, src ResolvedSource) (co
 	return f.want(src)
 }
 
+func (f *fakeSinkProvider) ReleaseSource(_ context.Context, container facts.Container) {
+	f.l.Lock()
+	defer f.l.Unlock()
+
+	f.released = append(f.released, container)
+}
+
 func (f *fakeSinkProvider) askedSources() []ResolvedSource {
 	f.l.Lock()
 	defer f.l.Unlock()
 
 	return append([]ResolvedSource(nil), f.asked...)
+}
+
+func (f *fakeSinkProvider) releasedSources() []facts.Container {
+	f.l.Lock()
+	defer f.l.Unlock()
+
+	return append([]facts.Container(nil), f.released...)
 }
 
 // newRecordingProvider returns a SinkProvider that always wants every source,
@@ -94,9 +108,7 @@ func newTestReceiverManager(t *testing.T, cfg config.OpenTelemetry) *ReceiverMan
 	return rm
 }
 
-// TestReceiverManagerFanout checks that a single physical file tail is fanned
-// out to every registered SinkProvider that wants it, and that nothing is
-// tailed at all when none do.
+// TestReceiverManagerFanout tests that a single file tail fans out to every SinkProvider that wants it, and none is tailed when none do.
 func TestReceiverManagerFanout(t *testing.T) {
 	t.Parallel()
 
@@ -167,10 +179,7 @@ func TestReceiverManagerFanout(t *testing.T) {
 	}
 }
 
-// TestReceiverManagerPersistsOffsetAcrossRestart checks that a line written
-// while no ReceiverManager is running is still picked up on "restart" (a
-// second instance sharing the same state), since it resumes from the offset
-// persisted by the first instance instead of the file's end.
+// TestReceiverManagerPersistsOffsetAcrossRestart tests that a line written while no manager is running is still picked up on restart, via the persisted offset.
 func TestReceiverManagerPersistsOffsetAcrossRestart(t *testing.T) {
 	t.Parallel()
 
@@ -250,9 +259,39 @@ func TestReceiverManagerPersistsOffsetAcrossRestart(t *testing.T) {
 	}
 }
 
-// TestReceiverManagerContainerSelectorMatch checks that a container matching
-// a receiver's container_selectors is tailed under that receiver (Docker
-// envelope unwrapped) and that the resolved source correctly names it.
+// fakeFileSizer is a FileSizer test double returning a fixed set of sizes.
+type fakeFileSizer map[string]int64
+
+func (f fakeFileSizer) SizesByFile() (map[string]int64, error) {
+	return f, nil
+}
+
+// TestReceiverManagerSaveStateFoldsExternalSizers tests that RegisterExternalSizer's callback is folded into SaveState's snapshot, so it doesn't overwrite the other side's sizes.
+func TestReceiverManagerSaveStateFoldsExternalSizers(t *testing.T) {
+	t.Parallel()
+
+	state := newMemoryState()
+
+	rm, err := NewReceiverManager(config.OpenTelemetry{}, "/", state, nil)
+	if err != nil {
+		t.Fatal("NewReceiverManager failed:", err)
+	}
+
+	t.Cleanup(func() { rm.Shutdown(t.Context()) })
+
+	rm.RegisterExternalSizer(func() []FileSizer {
+		return []FileSizer{fakeFileSizer{"external/file.log": 42}}
+	})
+
+	rm.SaveState()
+
+	sizes := GetLastFileSizesFromCache(state, logFileSizesCacheKey)
+	if sizes["external/file.log"] != 42 {
+		t.Fatalf("expected the external sizer's file to be persisted under %q, got %+v", logFileSizesCacheKey, sizes)
+	}
+}
+
+// TestReceiverManagerContainerSelectorMatch tests that a container matching container_selectors is tailed under that receiver with the Docker envelope unwrapped.
 func TestReceiverManagerContainerSelectorMatch(t *testing.T) {
 	t.Parallel()
 
@@ -307,9 +346,7 @@ func TestReceiverManagerContainerSelectorMatch(t *testing.T) {
 	}
 }
 
-// TestReceiverManagerContainerMatchedByTwoReceiversBothTail is the regression
-// test for the "two receivers match the same container" design decision: no
-// special-casing, both independently tail it under their own item.
+// TestReceiverManagerContainerMatchedByTwoReceiversBothTail tests that a container matched by two receivers is tailed independently by both, with no special-casing.
 func TestReceiverManagerContainerMatchedByTwoReceiversBothTail(t *testing.T) {
 	t.Parallel()
 
@@ -347,10 +384,7 @@ func TestReceiverManagerContainerMatchedByTwoReceiversBothTail(t *testing.T) {
 	}
 }
 
-// TestReceiverManagerContainerExcludeVetoesEverything checks that a
-// container matching an OpenTelemetry.ContainerExclude rule is never
-// resolved at all, even though it would otherwise match a receiver's
-// container_selectors.
+// TestReceiverManagerContainerExcludeVetoesEverything tests that ContainerExclude vetoes a container even when it also matches a receiver's container_selectors.
 func TestReceiverManagerContainerExcludeVetoesEverything(t *testing.T) {
 	t.Parallel()
 
@@ -378,10 +412,8 @@ func TestReceiverManagerContainerExcludeVetoesEverything(t *testing.T) {
 	}
 }
 
-// TestReceiverManagerLogEnableFalseVetoesReceiverMatch checks that
-// glouton.log_enable=false vetoes a container even when it's matched by an
-// explicit receiver's container_selectors -- the veto always runs first.
-func TestReceiverManagerLogEnableFalseVetoesReceiverMatch(t *testing.T) {
+// TestReceiverManagerLogEnableFalseDoesNotVetoReceiverMatch tests that glouton.log_enable=false does not veto a container explicitly matched by a receiver's container_selectors.
+func TestReceiverManagerLogEnableFalseDoesNotVetoReceiverMatch(t *testing.T) {
 	t.Parallel()
 
 	ctr := facts.FakeContainer{
@@ -402,15 +434,42 @@ func TestReceiverManagerLogEnableFalseVetoesReceiverMatch(t *testing.T) {
 
 	rm.UpdateContainers(t.Context(), []facts.Container{ctr})
 
-	if asked := provider.askedSources(); len(asked) != 0 {
-		t.Fatalf("expected glouton.log_enable=false to veto even an explicit receiver match, got %+v", asked)
+	if asked := provider.askedSources(); len(asked) != 1 {
+		t.Fatalf("expected the explicit receiver match to still be resolved despite glouton.log_enable=false, got %+v", asked)
 	}
 }
 
-// TestReceiverManagerReceiverMatchSkipsLabelFallback checks that a container
-// matched by an explicit receiver is resolved exactly once (via the
-// receiver), never additionally through the glouton.* label fallback path --
-// avoiding double-counting.
+// TestReceiverManagerContainerExcludeStillVetoesReceiverMatch tests that ContainerExclude still vetoes a container even when explicitly matched by a receiver, unlike log_enable=false.
+func TestReceiverManagerContainerExcludeStillVetoesReceiverMatch(t *testing.T) {
+	t.Parallel()
+
+	ctr := facts.FakeContainer{
+		FakeID: "id-1", FakeContainerName: "app-1", FakeLogPath: "/fake/app.log",
+		FakeLabels: map[string]string{"app": "web"},
+	}
+
+	cfg := config.OpenTelemetry{
+		Receivers: map[string]config.LogReceiver{
+			"web": {"container_selectors": map[string]string{"app": "web"}},
+		},
+		ContainerExclude: []config.ContainerExcludeRule{
+			{ContainerName: "app-1"},
+		},
+	}
+
+	rm := newTestReceiverManager(t, cfg)
+
+	provider := declineProvider()
+	rm.RegisterSinkProvider(provider)
+
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr})
+
+	if asked := provider.askedSources(); len(asked) != 0 {
+		t.Fatalf("expected container_exclude to still veto an explicit receiver match, got %+v", asked)
+	}
+}
+
+// TestReceiverManagerReceiverMatchSkipsLabelFallback tests that a container matched by a receiver is resolved once, not also via the label fallback.
 func TestReceiverManagerReceiverMatchSkipsLabelFallback(t *testing.T) {
 	t.Parallel()
 
@@ -438,10 +497,7 @@ func TestReceiverManagerReceiverMatchSkipsLabelFallback(t *testing.T) {
 	}
 }
 
-// TestReceiverManagerContainerLabelFallbackSurfacesLogMetricsRule checks that
-// a container matched by no receiver, carrying glouton.log_metrics, is
-// resolved as a SourceContainerLabel source surfacing that label's raw
-// value (otel/logmetrics resolves it against Log.MetricsRules itself).
+// TestReceiverManagerContainerLabelFallbackSurfacesLogMetricsRule tests that an unmatched container with glouton.log_metrics resolves as a SourceContainerLabel carrying that label's raw value.
 func TestReceiverManagerContainerLabelFallbackSurfacesLogMetricsRule(t *testing.T) {
 	t.Parallel()
 
@@ -468,9 +524,7 @@ func TestReceiverManagerContainerLabelFallbackSurfacesLogMetricsRule(t *testing.
 	}
 }
 
-// TestReceiverManagerLogEnableTrueImpliesSendLogs checks the back-compat
-// fallback: glouton.log_enable=true implies send_logs=true unless send_logs
-// is set explicitly, even when the global default is false.
+// TestReceiverManagerLogEnableTrueImpliesSendLogs tests that glouton.log_enable=true implies send_logs=true unless overridden, even if the global default is false.
 func TestReceiverManagerLogEnableTrueImpliesSendLogs(t *testing.T) {
 	t.Parallel()
 
@@ -496,9 +550,7 @@ func TestReceiverManagerLogEnableTrueImpliesSendLogs(t *testing.T) {
 	}
 }
 
-// TestReceiverManagerExplicitSendLogsOverridesLogEnable checks that an
-// explicit glouton.send_logs always wins over the log_enable=true
-// implication.
+// TestReceiverManagerExplicitSendLogsOverridesLogEnable tests that an explicit glouton.send_logs always wins over log_enable=true.
 func TestReceiverManagerExplicitSendLogsOverridesLogEnable(t *testing.T) {
 	t.Parallel()
 
@@ -527,12 +579,7 @@ func TestReceiverManagerExplicitSendLogsOverridesLogEnable(t *testing.T) {
 	}
 }
 
-// TestReceiverManagerUnlabeledContainerFollowsAutoDiscovery checks that a
-// container with NO glouton.* labels at all falls back to
-// auto_discovery.container_and_service_enable for SendLogs, NOT the
-// receiver-oriented OpenTelemetry.SendLogs default -- otherwise every
-// container would start shipping by default (SendLogs defaults to true)
-// regardless of auto_discovery being off by default.
+// TestReceiverManagerUnlabeledContainerFollowsAutoDiscovery tests that an unlabeled container's SendLogs follows auto_discovery.container_and_service_enable, not OpenTelemetry.SendLogs.
 func TestReceiverManagerUnlabeledContainerFollowsAutoDiscovery(t *testing.T) {
 	t.Parallel()
 
@@ -558,9 +605,7 @@ func TestReceiverManagerUnlabeledContainerFollowsAutoDiscovery(t *testing.T) {
 	}
 }
 
-// TestReceiverManagerUpdateContainersAddRemove checks that UpdateContainers
-// reacts to a container's arrival (starting its tail) and disappearance
-// (stopping and removing it) across two successive calls.
+// TestReceiverManagerUpdateContainersAddRemove tests that UpdateContainers starts tailing on arrival and stops/removes on disappearance.
 func TestReceiverManagerUpdateContainersAddRemove(t *testing.T) {
 	t.Parallel()
 
@@ -607,9 +652,43 @@ func TestReceiverManagerUpdateContainersAddRemove(t *testing.T) {
 	}
 }
 
-// TestReceiverManagerNetworkWants checks that a receiver with a network:
-// participation yields exactly one NetworkWant, its Consumer already fanned
-// out to every SinkProvider that wants it.
+// TestReceiverManagerReleasesProvidersWhenContainerDisappears tests that a container's disappearance calls ReleaseSource on every SinkProvider, not just tearing down the tail, to avoid leaking per-container resources.
+func TestReceiverManagerReleasesProvidersWhenContainerDisappears(t *testing.T) {
+	t.Parallel()
+
+	logFile, err := os.CreateTemp(t.TempDir(), "app-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFile.Close()
+
+	ctr := facts.FakeContainer{FakeID: "id-1", FakeContainerName: "app-1", FakeLogPath: logFile.Name()}
+
+	rm := newTestReceiverManager(t, config.OpenTelemetry{})
+
+	provider, _ := newRecordingProvider()
+	rm.RegisterSinkProvider(provider)
+
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr})
+
+	if released := provider.releasedSources(); len(released) != 0 {
+		t.Fatalf("expected nothing released while the container is still present, got %+v", released)
+	}
+
+	rm.UpdateContainers(t.Context(), nil)
+
+	released := provider.releasedSources()
+	if len(released) != 1 {
+		t.Fatalf("expected exactly one ReleaseSource call once the container disappeared, got %+v", released)
+	}
+
+	if released[0] == nil || released[0].ID() != ctr.ID() {
+		t.Fatalf("expected the released source to identify the disappeared container, got %+v", released[0])
+	}
+}
+
+// TestReceiverManagerNetworkWants tests that a receiver with network participation yields one NetworkWant whose Consumer fans out to every SinkProvider that wants it.
 func TestReceiverManagerNetworkWants(t *testing.T) {
 	t.Parallel()
 

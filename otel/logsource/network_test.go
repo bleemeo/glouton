@@ -27,10 +27,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/plog"
 )
 
-// recordingLogsConsumer returns a consumer.Logs recording every batch it was
-// handed, and a function reading back the accumulated batches. The consumer
-// callback may run on a different goroutine than the caller reading them,
-// hence the mutex.
+// recordingLogsConsumer returns a consumer.Logs that records every batch, safe for concurrent access.
 func recordingLogsConsumer() (consumer.Logs, func() []plog.Logs) {
 	var l sync.Mutex
 
@@ -99,9 +96,7 @@ func TestFanoutLogsSingleSinkPassthrough(t *testing.T) {
 	}
 }
 
-// TestFanoutLogsIsolatesMutations checks that each sink after the first gets
-// its own independent copy, since logprocessing's resource-attribute
-// processor mutates a plog.Logs in place.
+// TestFanoutLogsIsolatesMutations checks that each sink after the first gets its own copy, since a sink may mutate its batch in place.
 func TestFanoutLogsIsolatesMutations(t *testing.T) {
 	t.Parallel()
 
@@ -178,10 +173,7 @@ func TestPlanSharedNetworkReceiversOmitsUnreferencedReceivers(t *testing.T) {
 	}
 }
 
-// TestPlanSharedNetworkReceiversOmitsUnknownReceiverName is the regression
-// test for a receiver name that resolves but isn't defined in
-// log.network.receivers: it must be skipped, not turned into a
-// protocol-less PlannedReceiver.
+// TestPlanSharedNetworkReceiversOmitsUnknownReceiverName checks that a receiver name undefined in log.network.receivers is skipped, not turned into a protocol-less PlannedReceiver.
 func TestPlanSharedNetworkReceiversOmitsUnknownReceiverName(t *testing.T) {
 	t.Parallel()
 
@@ -238,10 +230,7 @@ func TestPlanSharedNetworkReceiversSplitsByName(t *testing.T) {
 	}
 }
 
-// TestPlanSharedNetworkReceiversIsolatesSharedNetworkMutations checks that
-// when logprocessing and logmetrics share one log.network.receivers entry
-// (one FanoutLogs sink), an in-place mutation by one never leaks to the
-// other, regardless of registration order.
+// TestPlanSharedNetworkReceiversIsolatesSharedNetworkMutations checks that sharing one receiver's sink between two consumers doesn't leak in-place mutations, regardless of order.
 func TestPlanSharedNetworkReceiversIsolatesSharedNetworkMutations(t *testing.T) {
 	t.Parallel()
 
@@ -313,9 +302,7 @@ func TestSetupOTLPNetworkReceiverGRPCStartsAndStops(t *testing.T) {
 	}
 }
 
-// TestSetupOTLPNetworkReceiverHTTPStartsAndStops is the regression test for
-// an invalid "ip" transport and a missing default LogsURLPath that made
-// otlpreceiver panic on Start.
+// TestSetupOTLPNetworkReceiverHTTPStartsAndStops is a regression test for otlpreceiver panicking on Start due to an invalid transport and missing LogsURLPath.
 func TestSetupOTLPNetworkReceiverHTTPStartsAndStops(t *testing.T) {
 	t.Parallel()
 
@@ -338,8 +325,7 @@ func TestSetupOTLPNetworkReceiverNoProtocolErrors(t *testing.T) {
 
 	sink, _ := recordingLogsConsumer()
 
-	// Without an explicit Validate() call, otlpReceiver.Start silently no-ops
-	// per protocol when absent, instead of erroring.
+	// Without Validate(), Start silently no-ops instead of erroring when no protocol is set.
 	_, err := SetupOTLPNetworkReceiver(t.Context(), NewTelemetrySettings(), config.NetworkProtocols{}, sink, "test-no-protocol")
 	if err == nil {
 		t.Fatal("Expected an error when no protocol is configured, got none")

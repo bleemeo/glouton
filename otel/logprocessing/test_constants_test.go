@@ -87,9 +87,7 @@ const (
 	testFollowName       = "--follow=name"
 	testRegexp           = "regexp"
 
-	// Container attribute keys, matching logsource.ContainerAttributes.AsMap's
-	// output (production code no longer needs these directly: attribute
-	// stamping is delegated to logsource, see containers.go's makeLogContainer).
+	// Container attribute keys, matching logsource.ContainerAttributes.AsMap's output.
 	attrContainerID        = "container.id"
 	attrContainerImageName = "container.image.name"
 	attrContainerImageTags = "container.image.tags"

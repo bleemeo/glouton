@@ -18,6 +18,7 @@ package logprocessing
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -32,10 +33,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/plog"
 )
 
-// makeSimpleLogs builds a minimal plog.Logs with one record per body, for
-// feeding directly into a WantSource-built sink (bypassing any real file/
-// container tail -- that machinery belongs to otel/logsource, not tested
-// here).
+// makeSimpleLogs builds a minimal plog.Logs with one record per body.
 func makeSimpleLogs(bodies ...string) plog.Logs {
 	logs := plog.NewLogs()
 	scopeLogs := logs.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
@@ -56,9 +54,7 @@ func bodiesOf(records []logRecord) []string {
 	return bodies
 }
 
-// newSinkTestManager builds a Manager around a real pipeline (fast batcher/
-// backpressure timings), without going through New() -- this test drives
-// WantSource directly, it doesn't need a logsource.ReceiverManager at all.
+// newSinkTestManager builds a Manager around a real pipeline, without going through New().
 func newSinkTestManager(t *testing.T, cfg config.OpenTelemetry, logBuf *logBuffer) *Manager {
 	t.Helper()
 
@@ -132,13 +128,7 @@ func TestWantSourceDeclinesWhenSendLogsFalse(t *testing.T) {
 	}
 }
 
-// TestWantSourceReceiverFilterAppliesUnconditionally proves both the
-// per-receiver filter resolution (the receiver's own "filters" key) AND the
-// fix for the legacy logReceiver.update() ordering bug: this receiver has no
-// "include"/"container_name"/"container_selectors"/"network" field at all
-// (a pure network-style source, nothing to glob-discover), yet its filters
-// still apply -- filter-wiring is built unconditionally at WantSource time,
-// not gated behind resolving a file first.
+// Test that a receiver's own filters apply even with no file/container fields to resolve first.
 func TestWantSourceReceiverFilterAppliesUnconditionally(t *testing.T) {
 	t.Parallel()
 
@@ -253,5 +243,56 @@ func TestWantSourceContainerLabelFilter(t *testing.T) {
 				t.Fatalf("Unexpected records (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+// Test that ReleaseSource removes the released container's filter processor from both fanoutSinks and startedComponents.
+func TestReleaseSourceStopsAndForgetsContainerFilter(t *testing.T) {
+	t.Parallel()
+
+	var logBuf logBuffer
+
+	man := newSinkTestManager(t, config.OpenTelemetry{}, &logBuf)
+
+	container := facts.FakeContainer{FakeID: "ctr-id", FakeContainerName: "my-ctr"}
+
+	sink, ok := man.WantSource(t.Context(), logsource.ResolvedSource{
+		Kind: logsource.SourceContainerLabel, Container: container, SendLogs: true,
+	})
+	if !ok || sink == nil {
+		t.Fatal("expected WantSource to want this source")
+	}
+
+	man.l.Lock()
+	sinkEntry, found := man.fanoutSinks["ctr-"+container.ID()]
+	man.l.Unlock()
+
+	if !found {
+		t.Fatal("expected a fanoutSinks entry for the container before release")
+	}
+
+	man.pipeline.l.Lock()
+	hasComponent := slices.Contains(man.pipeline.startedComponents, sinkEntry.comp)
+	man.pipeline.l.Unlock()
+
+	if !hasComponent {
+		t.Fatal("expected the container's filter processor in pipeline.startedComponents before release")
+	}
+
+	man.ReleaseSource(t.Context(), container)
+
+	man.l.Lock()
+	_, stillFound := man.fanoutSinks["ctr-"+container.ID()]
+	man.l.Unlock()
+
+	if stillFound {
+		t.Fatal("expected the fanoutSinks entry to be removed after release")
+	}
+
+	man.pipeline.l.Lock()
+	defer man.pipeline.l.Unlock()
+
+	if slices.Contains(man.pipeline.startedComponents, sinkEntry.comp) {
+		t.Fatal("expected the filter processor to be removed from pipeline.startedComponents after release")
 	}
 }
