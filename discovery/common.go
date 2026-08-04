@@ -64,6 +64,7 @@ type ServiceName string
 
 // List of known service names.
 const (
+	ActiveMQService      ServiceName = "activemq"
 	ApacheService        ServiceName = "apache"
 	AsteriskService      ServiceName = "asterisk"
 	BindService          ServiceName = "bind"
@@ -71,6 +72,7 @@ const (
 	CassandraService     ServiceName = "cassandra"
 	ClickHouseService    ServiceName = "clickhouse"
 	ConfluenceService    ServiceName = "confluence"
+	ConsulService        ServiceName = "consul"
 	DovecotService       ServiceName = "dovecot"
 	EjabberService       ServiceName = "ejabberd"
 	ElasticSearchService ServiceName = "elasticsearch"
@@ -104,6 +106,7 @@ const (
 	RedisService         ServiceName = "redis"
 	SaltMasterService    ServiceName = "salt_master"
 	SquidService         ServiceName = "squid"
+	TomcatService        ServiceName = "tomcat"
 	UWSGIService         ServiceName = "uwsgi"
 	ValkeyService        ServiceName = "valkey"
 	VarnishService       ServiceName = "varnish"
@@ -289,6 +292,10 @@ func (s Service) merge(update Service) Service {
 //nolint:gochecknoglobals
 var (
 	servicesDiscoveryInfo = map[ServiceName]discoveryInfo{
+		ActiveMQService: {
+			ServicePort:     8161,
+			ServiceProtocol: tcpProtocol,
+		},
 		ApacheService: {
 			ServicePort:     80,
 			ServiceProtocol: tcpProtocol,
@@ -318,6 +325,10 @@ var (
 			ServicePort:     8090,
 			ServiceProtocol: tcpProtocol,
 			IgnoreHighPort:  true,
+		},
+		ConsulService: {
+			ServicePort:     8500,
+			ServiceProtocol: tcpProtocol,
 		},
 		DovecotService: {
 			ServicePort:     143,
@@ -440,6 +451,11 @@ var (
 		SquidService: {
 			ServicePort:     3128,
 			ServiceProtocol: tcpProtocol,
+		},
+		TomcatService: {
+			ServicePort:     8080,
+			ServiceProtocol: tcpProtocol,
+			IgnoreHighPort:  true,
 		},
 		UPSDService: {
 			ServicePort:     3493,

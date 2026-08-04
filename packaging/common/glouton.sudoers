@@ -9,6 +9,9 @@ glouton     ALL=(root) NOPASSWD: /usr/lib/glouton/glouton-veths
 # Allow Glouton to get the number of banned IPs from fail2ban.
 glouton     ALL=(root) NOEXEC: NOPASSWD: /usr/bin/fail2ban-client status, /usr/bin/fail2ban-client status *
 
+# Allow Glouton to read Varnish metrics via varnishstat.
+glouton     ALL=(root) NOEXEC: NOPASSWD: /usr/bin/varnishstat -j, /usr/bin/varnishstat -j *
+
 # Allow Glouton to get SMART metrics.
 glouton     ALL=(ALL) NOPASSWD: /usr/bin/smartctl, /usr/sbin/smartctl
 

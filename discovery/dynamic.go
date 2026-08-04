@@ -164,7 +164,9 @@ var (
 	knownProcesses = map[string]ServiceName{
 		"apache2":                ApacheService,
 		string(AsteriskService):  AsteriskService,
+		"chronyd":                NTPService,
 		"clickhouse-server":      ClickHouseService,
+		string(ConsulService):    ConsulService,
 		"dovecot":                DovecotService,
 		"exim4":                  EximService,
 		"exim":                   EximService,
@@ -252,6 +254,24 @@ var (
 		{
 			CmdLineMustContains: []string{"org.apache.catalina.startup.Bootstrap", "confluence"},
 			ServiceName:         ConfluenceService,
+			Interpreter:         interpreterJava,
+		},
+		{
+			// This must come after the more specific JIRA/Confluence/BitBucket entries above,
+			// since those also run a plain Tomcat under the hood and would otherwise be
+			// shadowed by this less specific match.
+			CmdLineMustContains: []string{"org.apache.catalina.startup.Bootstrap"},
+			ServiceName:         TomcatService,
+			Interpreter:         interpreterJava,
+		},
+		{
+			// The main class (org.apache.activemq.console.Main) is read from the
+			// activemq.jar manifest and never appears as a literal cmdline
+			// argument when started the way the official Docker image does it
+			// (java -jar activemq.jar start), so match a system property that
+			// the launch script always sets instead.
+			CmdLineMustContains: []string{"-Dactivemq.home="},
+			ServiceName:         ActiveMQService,
 			Interpreter:         interpreterJava,
 		},
 		{

@@ -163,6 +163,7 @@ require (
 	github.com/elastic/lunes v0.2.2 // indirect
 	github.com/ema/qdisc v1.0.0 // indirect
 	github.com/expr-lang/expr v1.17.8 // indirect
+	github.com/facebook/time v0.0.0-20250903103710-a5911c32cdb9 // indirect
 	github.com/facette/natsort v0.0.0-20181210072756-2cd4dd1e2dcb // indirect
 	github.com/fatih/color v1.19.0 // indirect
 	github.com/fatih/structs v1.1.0 // indirect

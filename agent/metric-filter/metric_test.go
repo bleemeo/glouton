@@ -1489,7 +1489,19 @@ func Test_RebuildDefaultMetrics(t *testing.T) {
 		metricsNames = append(metricsNames, k)
 	}
 
-	want := []string{"postfix_queue_size"}
+	want := []string{
+		"postfix_queue_size",
+		"bind_counter_query",
+		"bind_counter_nxdomain",
+		"bind_counter_servfail",
+		"bind_counter_qry_success",
+		"bind_counter_qry_nxdomain",
+		"bind_memory_total_use",
+		"bind_memory_in_use",
+	}
+
+	sort.Strings(metricsNames)
+	sort.Strings(want)
 
 	res := cmp.Diff(metricsNames, want, cmpopts.IgnoreUnexported(labels.Matcher{}))
 

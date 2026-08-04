@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"time"
@@ -28,14 +29,20 @@ import (
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/facts/container-runtime/veth"
 	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/inputs/activemq"
 	"github.com/bleemeo/glouton/inputs/apache"
+	"github.com/bleemeo/glouton/inputs/bind"
+	"github.com/bleemeo/glouton/inputs/chrony"
 	"github.com/bleemeo/glouton/inputs/clickhouse"
+	"github.com/bleemeo/glouton/inputs/consul"
 	"github.com/bleemeo/glouton/inputs/cpu"
 	"github.com/bleemeo/glouton/inputs/disk"
 	"github.com/bleemeo/glouton/inputs/diskio"
+	"github.com/bleemeo/glouton/inputs/dovecot"
 	"github.com/bleemeo/glouton/inputs/elasticsearch"
 	"github.com/bleemeo/glouton/inputs/fail2ban"
 	"github.com/bleemeo/glouton/inputs/haproxy"
+	"github.com/bleemeo/glouton/inputs/influxdb"
 	"github.com/bleemeo/glouton/inputs/jenkins"
 	"github.com/bleemeo/glouton/inputs/mem"
 	"github.com/bleemeo/glouton/inputs/memcached"
@@ -47,6 +54,7 @@ import (
 	"github.com/bleemeo/glouton/inputs/nfs"
 	"github.com/bleemeo/glouton/inputs/nginx"
 	"github.com/bleemeo/glouton/inputs/nsq"
+	"github.com/bleemeo/glouton/inputs/ntp"
 	"github.com/bleemeo/glouton/inputs/openbao"
 	"github.com/bleemeo/glouton/inputs/openldap"
 	"github.com/bleemeo/glouton/inputs/pgbouncer"
@@ -56,8 +64,10 @@ import (
 	"github.com/bleemeo/glouton/inputs/redis"
 	"github.com/bleemeo/glouton/inputs/swap"
 	"github.com/bleemeo/glouton/inputs/system"
+	"github.com/bleemeo/glouton/inputs/tomcat"
 	"github.com/bleemeo/glouton/inputs/upsd"
 	"github.com/bleemeo/glouton/inputs/uwsgi"
+	"github.com/bleemeo/glouton/inputs/varnish"
 	"github.com/bleemeo/glouton/inputs/vault"
 	"github.com/bleemeo/glouton/inputs/winperfcounters"
 	"github.com/bleemeo/glouton/inputs/zookeeper"
@@ -70,6 +80,14 @@ import (
 
 	"github.com/influxdata/telegraf"
 	"github.com/prometheus/client_golang/prometheus"
+)
+
+const (
+	// bindDefaultStatsPort is the default port of BIND's statistics-channel, which is
+	// disabled by default and unrelated to the DNS port used for discovery.
+	bindDefaultStatsPort = 8053
+	// dovecotDefaultStatsPort is the default port of Dovecot's old_stats plugin listener.
+	dovecotDefaultStatsPort = 24242
 )
 
 // AddDefaultInputs adds system inputs to a collector.
@@ -295,6 +313,11 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 	}
 
 	switch service.ServiceType { //nolint:exhaustive
+	case ActiveMQService:
+		if ip, port := service.AddressPort(); ip != "" {
+			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
+			input, err = activemq.New(url, service.Config.Username, service.Config.Password)
+		}
 	case ApacheService:
 		if ip, port := service.AddressPort(); ip != "" {
 			statusURL := fmt.Sprintf("http://%s/server-status?auto", net.JoinHostPort(ip, strconv.Itoa(port)))
@@ -304,6 +327,31 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			}
 
 			input, err = apache.New(statusURL)
+		}
+	case BindService:
+		// Auto-discovery always assumes XML v3 (the only format on BIND
+		// 9.10+, and available on 9.9+ with --enable-newstats), since the
+		// telegraf plugin picks its parser solely from the URL path and
+		// can't auto-detect what the server actually speaks. Older BIND
+		// (9.6-9.8, or 9.9 without newstats) only has XML v2, reachable at
+		// the same port with no path suffix at all (9.6-9.8) or "/xml/v2"
+		// (9.9); some 9.10+ distros also expose JSON v1 at "/json/v1". For
+		// any of those, set the service's stats_url config explicitly to
+		// the right path -- see the URL table in telegraf's bind plugin
+		// doc. We could maybe probe the endpoint to pick the right format
+		// automatically.
+		if service.Config.StatsURL != "" {
+			input, err = bind.New(service.Config.StatsURL)
+		} else {
+			port := bindDefaultStatsPort
+			if service.Config.StatsPort != 0 {
+				port = service.Config.StatsPort
+			}
+
+			if ip := service.AddressForPort(port, tcpProtocol, true); ip != "" {
+				url := fmt.Sprintf("http://%s/xml/v3", net.JoinHostPort(ip, strconv.Itoa(port)))
+				input, err = bind.New(url)
+			}
 		}
 	case ClickHouseService:
 		if service.Config.StatsURL != "" {
@@ -320,6 +368,26 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
 			input, err = clickhouse.New(url, service.Config.Username, service.Config.Password)
 		}
+	case ConsulService:
+		if service.Config.StatsURL != "" {
+			input, err = consul.New(service.Config.StatsURL, service.Config.Password)
+		} else if ip, port := service.AddressPort(); ip != "" {
+			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
+			input, err = consul.New(url, service.Config.Password)
+		}
+	case DovecotService:
+		if socket := getMetricsSocket(service); socket != "" {
+			input, err = dovecot.New(socket)
+		} else {
+			port := dovecotDefaultStatsPort
+			if service.Config.StatsPort != 0 {
+				port = service.Config.StatsPort
+			}
+
+			if ip := service.AddressForPort(port, tcpProtocol, true); ip != "" {
+				input, err = dovecot.New(net.JoinHostPort(ip, strconv.Itoa(port)))
+			}
+		}
 	case ElasticSearchService:
 		if ip, port := service.AddressPort(); ip != "" {
 			input, err = elasticsearch.New("http://" + net.JoinHostPort(ip, strconv.Itoa(port)))
@@ -329,6 +397,13 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 	case HAProxyService:
 		if service.Config.StatsURL != "" {
 			input, err = haproxy.New(service.Config.StatsURL)
+		}
+	case InfluxDBService:
+		if service.Config.StatsURL != "" {
+			input, err = influxdb.New(service.Config.StatsURL, service.Config.Username, service.Config.Password)
+		} else if ip, port := service.AddressPort(); ip != "" {
+			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port)) + "/debug/vars"
+			input, err = influxdb.New(url, service.Config.Username, service.Config.Password)
 		}
 	case JenkinsService:
 		if service.Config.StatsURL != "" && service.Config.Password != "" {
@@ -370,6 +445,15 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		} else if ip, port := service.AddressPort(); ip != "" {
 			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
 			input, err = nsq.New(url)
+		}
+	case NTPService:
+		// Pick the telegraf plugin matching whichever NTP daemon was actually
+		// detected: chrony has its own control-socket/UDP protocol, distinct
+		// from the ntpd one queried through the ntpq CLI tool.
+		if filepath.Base(service.ExePath) == "chronyd" {
+			input, err = chrony.New()
+		} else {
+			input, err = ntp.New()
 		}
 	case OpenBaoService:
 		if service.Config.StatsURL != "" {
@@ -440,6 +524,13 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		if ip, port := service.AddressPort(); ip != "" {
 			input, err = redis.New("tcp://"+net.JoinHostPort(ip, strconv.Itoa(port)), service.Config.Password)
 		}
+	case TomcatService:
+		if service.Config.StatsURL != "" {
+			input, err = tomcat.New(service.Config.StatsURL, service.Config.Username, service.Config.Password)
+		} else if ip, port := service.AddressPort(); ip != "" {
+			url := fmt.Sprintf("http://%s/manager/status/all?XML=true", net.JoinHostPort(ip, strconv.Itoa(port)))
+			input, err = tomcat.New(url, service.Config.Username, service.Config.Password)
+		}
 	case UPSDService:
 		if ip, port := service.AddressPort(); ip != "" {
 			input, gathererOptions, err = upsd.New(ip, port, service.Config.Username, service.Config.Password)
@@ -463,6 +554,8 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			url := fmt.Sprintf("%s://%s", protocol, net.JoinHostPort(ip, strconv.Itoa(port)))
 			input, gathererOptions, err = uwsgi.New(url)
 		}
+	case VarnishService:
+		input, gathererOptions, err = varnish.New()
 	case VaultService:
 		if service.Config.StatsURL != "" {
 			input, err = vault.New(service.Config.StatsURL, service.Config.Password)

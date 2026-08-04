@@ -367,6 +367,18 @@ type Filter struct {
 
 func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 	defaultServiceMetrics := map[discovery.ServiceName][]string{
+		discovery.ActiveMQService: {
+			"activemq_queues_size",
+			"activemq_queues_consumer_count",
+			"activemq_queues_enqueue_count",
+			"activemq_queues_dequeue_count",
+			"activemq_topics_size",
+			"activemq_topics_consumer_count",
+			"activemq_topics_enqueue_count",
+			"activemq_topics_dequeue_count",
+			"activemq_subscribers_pending_queue_size",
+		},
+
 		discovery.ApacheService: {
 			"apache_busy_workers",
 			"apache_busy_workers_perc",
@@ -387,6 +399,16 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"apache_scoreboard_finishing",
 			"apache_scoreboard_idle_cleanup",
 			"apache_scoreboard_open",
+		},
+
+		discovery.BindService: {
+			"bind_counter_query",
+			"bind_counter_nxdomain",
+			"bind_counter_servfail",
+			"bind_counter_qry_success",
+			"bind_counter_qry_nxdomain",
+			"bind_memory_total_use",
+			"bind_memory_in_use",
 		},
 
 		discovery.BitBucketService: {
@@ -461,6 +483,24 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"confluence_requests",
 		},
 
+		discovery.ConsulService: {
+			"consul_autopilot_healthy",
+			"consul_raft_apply_rate",
+			"consul_raft_committime_mean",
+			"consul_runtime_num_goroutines",
+			"consul_rpc_request_rate",
+			"consul_kvs_apply_mean",
+		},
+
+		discovery.DovecotService: {
+			"dovecot_num_logins",
+			"dovecot_num_cmds",
+			"dovecot_num_connected_sessions",
+			"dovecot_mail_cache_hits",
+			"dovecot_disk_input",
+			"dovecot_disk_output",
+		},
+
 		discovery.ElasticSearchService: {
 			"elasticsearch_docs_count",
 			"elasticsearch_jvm_gc",
@@ -501,6 +541,29 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"haproxy_stot",
 			"haproxy_ttime",
 		},
+		discovery.InfluxDBService: {
+			"influxdb_httpd_req",
+			"influxdb_httpd_req_duration_seconds",
+			"influxdb_httpd_client_error",
+			"influxdb_httpd_server_error",
+			"influxdb_httpd_auth_fail",
+			"influxdb_httpd_query_req",
+			"influxdb_httpd_query_req_duration_seconds",
+			"influxdb_httpd_write_req",
+			"influxdb_httpd_write_req_duration_seconds",
+			"influxdb_httpd_write_req_bytes",
+			"influxdb_httpd_points_written_ok",
+			"influxdb_httpd_points_written_fail",
+			"influxdb_httpd_points_written_dropped",
+			"influxdb_write_write_error",
+			"influxdb_write_write_drop",
+			"influxdb_write_write_timeout",
+			"influxdb_write_point_req",
+			"influxdb_query_executor_queries_active",
+			"influxdb_database_num_series",
+			"influxdb_database_num_measurements",
+		},
+
 		discovery.JenkinsService: {
 			"jenkins_busy_executors",
 			"jenkins_total_executors",
@@ -693,6 +756,23 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"nsq_topic_messages",
 		},
 
+		discovery.NTPService: {
+			// ntpq (queried through the ntpq CLI tool, used against ntpd).
+			"ntpq_delay",
+			"ntpq_jitter",
+			"ntpq_offset",
+			"ntpq_reach",
+
+			// chrony (queried through chronyd's control socket).
+			"chrony_frequency",
+			"chrony_system_time",
+			"chrony_last_offset",
+			"chrony_rms_offset",
+			"chrony_root_delay",
+			"chrony_root_dispersion",
+			"chrony_skew",
+		},
+
 		discovery.OpenBaoService: { // OpenBao is a fork of Hashicorp Vault
 			"bao_core_active",
 			"bao_core_check_tokens",
@@ -808,6 +888,18 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"redis_volatile_changes",
 		},
 
+		discovery.TomcatService: {
+			"tomcat_jvm_memory_free",
+			"tomcat_jvm_memory_max",
+			"tomcat_jvm_memory_total",
+			"tomcat_jvm_memorypool_used",
+			"tomcat_connector_request_count",
+			"tomcat_connector_error_count",
+			"tomcat_connector_processing_time_seconds",
+			"tomcat_connector_bytes_received",
+			"tomcat_connector_bytes_sent",
+		},
+
 		discovery.UPSDService: {
 			"upsd_battery_status",
 			"upsd_status_flags",
@@ -849,6 +941,13 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"redis_total_operations",
 			"redis_uptime",
 			"redis_volatile_changes",
+		},
+
+		discovery.VarnishService: {
+			"varnish_cache_hit",
+			"varnish_cache_miss",
+			"varnish_cache_hit_ratio",
+			"varnish_uptime",
 		},
 
 		discovery.VaultService: {
