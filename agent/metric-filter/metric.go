@@ -358,8 +358,7 @@ type Filter struct {
 	staticAllowList []matcher.Matchers
 	staticDenyList  []matcher.Matchers
 
-	l             sync.Mutex
-	rulerMatchers []matcher.Matchers
+	l sync.Mutex
 	// Lists used while filtering.
 	allowList map[labels.Matcher][]matcher.Matchers
 	denyList  map[labels.Matcher][]matcher.Matchers
@@ -1022,24 +1021,7 @@ func (m *Filter) DiagnosticArchive(_ context.Context, archive types.ArchiveWrite
 	fmt.Fprintf(file, "\n# Deny list (%d entries)\n", len(m.denyList))
 	printSortedMapOfList(file, m.denyList)
 
-	fmt.Fprintf(file, "\n# rulerMatchers (%d entries)\n", len(m.rulerMatchers))
-	printSortedList(file, m.rulerMatchers)
-
 	return nil
-}
-
-func printSortedList(file io.Writer, matchersList []matcher.Matchers) {
-	sortedMatchers := make([]string, 0, len(matchersList))
-
-	for _, matchers := range matchersList {
-		sortedMatchers = append(sortedMatchers, matchers.String())
-	}
-
-	sort.Strings(sortedMatchers)
-
-	for _, matchers := range sortedMatchers {
-		fmt.Fprintf(file, "%s\n", matchers)
-	}
 }
 
 func printSortedMapOfList(file io.Writer, matchersMap map[labels.Matcher][]matcher.Matchers) {
@@ -1148,7 +1130,6 @@ func (m *Filter) MergeInPlace(f1, f2 *Filter) {
 	m.includeDefaultMetrics = f1.includeDefaultMetrics || f2.includeDefaultMetrics
 	m.staticAllowList = slices.Concat(f1.staticAllowList, f2.staticAllowList)
 	m.staticDenyList = staticDenyList
-	m.rulerMatchers = slices.Concat(f1.rulerMatchers, f2.rulerMatchers)
 	m.allowList = mergeMaps(f1.allowList, f2.allowList)
 	m.denyList = denyList
 }
@@ -1192,7 +1173,7 @@ func getMatchersList(list map[labels.Matcher][]matcher.Matchers, labelName strin
 	return matchers
 }
 
-func (m *Filter) FilterPoints(points []types.MetricPoint, allowNeededByRules bool) []types.MetricPoint {
+func (m *Filter) FilterPoints(points []types.MetricPoint) []types.MetricPoint {
 	i := 0
 
 	m.l.Lock()
@@ -1202,9 +1183,6 @@ func (m *Filter) FilterPoints(points []types.MetricPoint, allowNeededByRules boo
 
 	for _, point := range points {
 		if m.isAllowedAndNotDeniedNoLock(point.Labels) {
-			points[i] = point
-			i++
-		} else if allowNeededByRules && matcher.MatchesAny(point.Labels, m.rulerMatchers) {
 			points[i] = point
 			i++
 		}
@@ -1275,20 +1253,11 @@ func (m *Filter) isAllowed(lbls map[string]string) bool {
 }
 
 // IsMetricAllowed returns whether this metric is in the allow list and not in the deny list.
-func (m *Filter) IsMetricAllowed(lbls labels.Labels, allowNeededByRules bool) bool {
+func (m *Filter) IsMetricAllowed(lbls labels.Labels) bool {
 	m.l.Lock()
 	defer m.l.Unlock()
 
-	allowed := m.isAllowedAndNotDeniedNoLock(lbls.Map())
-	if allowed {
-		return true
-	}
-
-	if !allowNeededByRules {
-		return false
-	}
-
-	return matcher.MatchesAnyLabels(lbls, m.rulerMatchers)
+	return m.isAllowedAndNotDeniedNoLock(lbls.Map())
 }
 
 // IsAllowedAndNotDeniedMap returns whether this metric is in the allow list and not in the deny list.
@@ -1339,7 +1308,7 @@ func allowedMetric(lbls map[string]string, denyVals []matcher.Matchers, allowVal
 	return false
 }
 
-func (m *Filter) filterFamily(f *dto.MetricFamily, allowNeededByRules bool) {
+func (m *Filter) filterFamily(f *dto.MetricFamily) {
 	i := 0
 	denyVals := getMatchersList(m.denyList, f.GetName())
 	allowVals := getMatchersList(m.allowList, f.GetName())
@@ -1349,16 +1318,13 @@ func (m *Filter) filterFamily(f *dto.MetricFamily, allowNeededByRules bool) {
 		if allowedMetric(lbls, denyVals, allowVals) {
 			f.Metric[i] = metric
 			i++
-		} else if allowNeededByRules && matcher.MatchesAny(lbls, m.rulerMatchers) {
-			f.Metric[i] = metric
-			i++
 		}
 	}
 
 	f.Metric = f.GetMetric()[:i]
 }
 
-func (m *Filter) FilterFamilies(f []*dto.MetricFamily, allowNeededByRules bool) []*dto.MetricFamily {
+func (m *Filter) FilterFamilies(f []*dto.MetricFamily) []*dto.MetricFamily {
 	i := 0
 
 	m.l.Lock()
@@ -1371,7 +1337,7 @@ func (m *Filter) FilterFamilies(f []*dto.MetricFamily, allowNeededByRules bool) 
 	for _, family := range f {
 		pointsIn += len(family.GetMetric())
 
-		m.filterFamily(family, allowNeededByRules)
+		m.filterFamily(family)
 
 		pointsOut += len(family.GetMetric())
 
@@ -1416,13 +1382,6 @@ func (m *Filter) rebuildServicesMetrics(
 			}
 		}
 	}
-}
-
-func (m *Filter) UpdateRulesMatchers(rulerMatchers []matcher.Matchers) {
-	m.l.Lock()
-	defer m.l.Unlock()
-
-	m.rulerMatchers = rulerMatchers
 }
 
 func (m *Filter) RebuildDynamicLists(

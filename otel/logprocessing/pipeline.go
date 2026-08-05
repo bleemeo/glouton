@@ -37,14 +37,11 @@ import (
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
-	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/processor"
 	"go.opentelemetry.io/collector/processor/batchprocessor"
 	"go.opentelemetry.io/collector/processor/processorhelper"
 	"go.opentelemetry.io/collector/receiver"
-	noopM "go.opentelemetry.io/otel/metric/noop"
-	"go.opentelemetry.io/otel/trace/noop"
 )
 
 const (
@@ -104,14 +101,9 @@ func makePipeline(
 	// Avoid using the return parameter 'pipelineCtx' because it will be set to <nil> when returning an error,
 	// and we won't be able to access its fields anymore, e.g., startedComponents in deferred function.
 	pipeline := &pipelineContext{
-		lastFileSizes: lastFileSizes,
-		hostroot:      hostroot,
-		telemetry: component.TelemetrySettings{
-			Logger:         logger.ZapLogger(),
-			TracerProvider: noop.NewTracerProvider(),
-			MeterProvider:  noopM.NewMeterProvider(),
-			Resource:       pcommon.NewResource(),
-		},
+		lastFileSizes:      lastFileSizes,
+		hostroot:           hostroot,
+		telemetry:          logsource.NewTelemetrySettings(),
 		commandRunner:      commandRunner,
 		persister:          persister,
 		startedComponents:  make([]component.Component, 0, 3), // 3 should be the minimum number of components
@@ -350,7 +342,7 @@ func (p *pipelineContext) setupJournald(
 	}
 
 	// Operators from known log formats have already been expanded.
-	referencedOps, err := buildOperators(append(operatorsForServiceName("journald"), opsGroup...))
+	referencedOps, err := logsource.BuildOperators(append(operatorsForServiceName("journald"), opsGroup...))
 	if err != nil {
 		return fmt.Errorf("building globally-defined operators: %w", err)
 	}

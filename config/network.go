@@ -16,7 +16,7 @@
 
 package config
 
-// DefaultNetworkReceiverName is the log.network.receivers entry auto-provisioned
+// DefaultNetworkReceiverName is the opentelemetry.network.receivers entry auto-provisioned
 // by EffectiveNetworkReceivers for the simple "enable: true" shortcut.
 const DefaultNetworkReceiverName = "otlp"
 

@@ -19,6 +19,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -487,7 +488,9 @@ func movedScalarKeys() map[string]string {
 }
 
 // migrate upgrade the configuration when Glouton changes its settings.
-func migrate(k *koanf.Koanf) (*koanf.Koanf, prometheus.MultiError) {
+// path identifies the provider being migrated (e.g. a config file path); it's used to keep
+// generated keys unique when the same migration runs once per provider (see migrateLogInputs).
+func migrate(k *koanf.Koanf, path string) (*koanf.Koanf, prometheus.MultiError) {
 	config := k.All()
 
 	warnings := make(prometheus.MultiError, 0, 7)
@@ -499,7 +502,8 @@ func migrate(k *koanf.Koanf) (*koanf.Koanf, prometheus.MultiError) {
 	warnings = append(warnings, migrateScrapperMetrics(k, config)...)
 	warnings = append(warnings, migrateServices(config)...)
 	warnings = append(warnings, migrateLegacyNetworkListeners(k, config)...)
-	warnings = append(warnings, migrateLogInputs(k, config)...)
+	warnings = append(warnings, migrateLogInputs(k, config, path)...)
+	warnings = append(warnings, migrateLogFluentBitURL(config)...)
 
 	// We can't reuse the previous Koanf because it doesn't allow removing keys.
 	newConfig := koanf.New(delimiter)
@@ -701,6 +705,20 @@ func legacyMetricsRuleName(metric string) string {
 	return "legacy_log_inputs_metric_" + metric
 }
 
+// legacyInputReceiverName builds a receiver name for a migrated log.inputs[i] entry that's unique across every
+// provider (config file), not just within one: migrate() runs once per provider with i restarting from 0 each
+// time, so two files each declaring one log.inputs entry would otherwise both produce "legacy_input_0".
+func legacyInputReceiverName(path string, i int) string {
+	if path == "" {
+		return fmt.Sprintf("legacy_input_%d", i)
+	}
+
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(path))
+
+	return fmt.Sprintf("legacy_input_%08x_%d", h.Sum32(), i)
+}
+
 // mergeLegacyFilters ORs legacy filter regex/exclude into countconnector conditions, coalescing metrics by name; returns touched metrics and warnings.
 func mergeLegacyFilters(metricsByName map[string]any, filtersList []any) ([]string, []error) {
 	var (
@@ -764,7 +782,10 @@ func mergeLegacyFilters(metricsByName map[string]any, filtersList []any) ([]stri
 // migrateLogInputs folds the legacy log.inputs[].filters entries (the original, Fluent Bit-era log-to-metric source) into the
 // equivalent log.opentelemetry.receivers/log.metrics_rules shape. Every migrated metric gets item: "" unconditionally, to avoid
 // changing the identity of an already-existing metric series for currently-deployed users.
-func migrateLogInputs(k *koanf.Koanf, config map[string]any) prometheus.MultiError {
+// providerPath identifies the provider this call is migrating (e.g. a config file path); migrate() runs once per provider
+// with the loop index i restarting from 0 each time, so providerPath must be folded into the generated receiver name to
+// avoid two files each declaring one log.inputs entry from both producing "legacy_input_0" and overwriting one another.
+func migrateLogInputs(k *koanf.Koanf, config map[string]any, providerPath string) prometheus.MultiError {
 	var warnings prometheus.MultiError
 
 	inputs, ok := k.Get("log.inputs").([]any)
@@ -855,7 +876,7 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any) prometheus.MultiErr
 			receiver["container_selectors"] = selectors
 		}
 
-		receivers[fmt.Sprintf("legacy_input_%d", i)] = receiver
+		receivers[legacyInputReceiverName(providerPath, i)] = receiver
 
 		warnings.Append(fmt.Errorf("%w: log.inputs[%d].filters, use log.opentelemetry.receivers/log.metrics_rules instead", errSettingsDeprecated, i))
 
@@ -888,9 +909,9 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any) prometheus.MultiErr
 	return warnings
 }
 
-// migrateLegacyNetworkListeners folds log.opentelemetry.grpc/http's old, pre-log.network {enable, address, port} shape into a
-// synthesized "legacy_network" receiver under log.network.receivers, preserving the address/port and the unconditional shipping
-// behavior (send_logs: true).
+// migrateLegacyNetworkListeners folds log.opentelemetry.grpc/http's old, pre-network-receivers {enable, address, port} shape into a
+// synthesized "legacy_network" receiver under opentelemetry.network.receivers, preserving the address/port and the unconditional
+// shipping behavior (send_logs: true).
 func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any) prometheus.MultiError {
 	var warnings prometheus.MultiError
 
@@ -913,7 +934,7 @@ func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any) promet
 	delete(config, path+".http")
 
 	warnings.Append(fmt.Errorf(
-		"%w: %s.grpc/http {enable, address, port}, use log.network.receivers + a log.opentelemetry.receivers entry's network field instead",
+		"%w: %s.grpc/http {enable, address, port}, use opentelemetry.network.receivers + a log.opentelemetry.receivers entry's network field instead",
 		errSettingsDeprecated, path,
 	))
 
@@ -964,13 +985,13 @@ func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any) promet
 		protocols["http"] = map[string]any{"endpoint": httpEndpoint}
 	}
 
-	networkReceivers, _ := k.Get("log.network.receivers").(map[string]any)
+	networkReceivers, _ := k.Get("opentelemetry.network.receivers").(map[string]any)
 	if networkReceivers == nil {
 		networkReceivers = map[string]any{}
 	}
 
 	networkReceivers[receiverName] = map[string]any{"protocols": protocols}
-	config["log.network.receivers"] = networkReceivers
+	config["opentelemetry.network.receivers"] = networkReceivers
 
 	receivers, _ := k.Get("log.opentelemetry.receivers").(map[string]any)
 	if receivers == nil {
@@ -982,6 +1003,23 @@ func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any) promet
 		"send_logs": true,
 	}
 	config["log.opentelemetry.receivers"] = receivers
+
+	return warnings
+}
+
+// migrateLogFluentBitURL drops the pre-OpenTelemetry log.fluentbit_url setting (once overridden by the
+// bleemeo-agent-logs package) with a deprecation warning, instead of letting it fail the strict struct
+// decode as an unknown key -- which otherwise looks like a config error on every upgrade instead of a no-op.
+func migrateLogFluentBitURL(config map[string]any) prometheus.MultiError {
+	if _, ok := config["log.fluentbit_url"]; !ok {
+		return nil
+	}
+
+	delete(config, "log.fluentbit_url")
+
+	var warnings prometheus.MultiError
+
+	warnings.Append(fmt.Errorf("%w: log.fluentbit_url. This option does not exists anymore and has no effect", errSettingsDeprecated))
 
 	return warnings
 }

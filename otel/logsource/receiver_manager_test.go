@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -259,6 +260,73 @@ func TestReceiverManagerPersistsOffsetAcrossRestart(t *testing.T) {
 	}
 }
 
+// TestReceiverManagerStopsIncludeFileWhenItDisappears guards against a regression where a file matched by
+// an include glob (e.g. a daily-rotated log) kept its receiver/extension running forever once the file
+// stopped existing/matching, since only container-derived tails had a cleanup path (stopUnwantedContainerTails).
+func TestReceiverManagerStopsIncludeFileWhenItDisappears(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	logFile, err := os.CreateTemp(dir, "app-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFile.Close()
+
+	cfg := config.OpenTelemetry{
+		Receivers: map[string]config.LogReceiver{
+			"app": {"include": []string{filepath.Join(dir, "*.log")}},
+		},
+	}
+
+	rm := newTestReceiverManager(t, cfg)
+
+	provider, _ := newRecordingProvider()
+	rm.RegisterSinkProvider(provider)
+
+	if err := rm.RescanReceivers(t.Context()); err != nil {
+		t.Fatal("RescanReceivers failed:", err)
+	}
+
+	rm.l.Lock()
+	ms := rm.receivers["app"]
+	rm.l.Unlock()
+
+	ms.l.Lock()
+	watchingBefore := len(ms.watching)
+	recvsBefore := len(ms.recvs)
+	ms.l.Unlock()
+
+	if watchingBefore != 1 || recvsBefore != 1 {
+		t.Fatalf("expected exactly 1 watched/started file before removal, got watching=%d recvs=%d", watchingBefore, recvsBefore)
+	}
+
+	if err := os.Remove(logFile.Name()); err != nil {
+		t.Fatal("Failed to remove log file:", err)
+	}
+
+	if err := rm.RescanReceivers(t.Context()); err != nil {
+		t.Fatal("RescanReceivers failed:", err)
+	}
+
+	ms.l.Lock()
+	defer ms.l.Unlock()
+
+	if got := len(ms.watching); got != 0 {
+		t.Errorf("expected the disappeared file to be forgotten from watching, got %d entries: %v", got, ms.watching)
+	}
+
+	if got := len(ms.recvs); got != 0 {
+		t.Errorf("expected the disappeared file's receiver to be stopped and forgotten, got %d entries", got)
+	}
+
+	if got := len(ms.extIDs); got != 0 {
+		t.Errorf("expected the disappeared file's extension to be forgotten, got %d entries", got)
+	}
+}
+
 // fakeFileSizer is a FileSizer test double returning a fixed set of sizes.
 type fakeFileSizer map[string]int64
 
@@ -285,9 +353,9 @@ func TestReceiverManagerSaveStateFoldsExternalSizers(t *testing.T) {
 
 	rm.SaveState()
 
-	sizes := GetLastFileSizesFromCache(state, logFileSizesCacheKey)
+	sizes := GetLastFileSizesFromCache(state, LogFileSizesCacheKey)
 	if sizes["external/file.log"] != 42 {
-		t.Fatalf("expected the external sizer's file to be persisted under %q, got %+v", logFileSizesCacheKey, sizes)
+		t.Fatalf("expected the external sizer's file to be persisted under %q, got %+v", LogFileSizesCacheKey, sizes)
 	}
 }
 
@@ -521,6 +589,82 @@ func TestReceiverManagerContainerLabelFallbackSurfacesLogMetricsRule(t *testing.
 	src := asked[0]
 	if src.Kind != SourceContainerLabel || src.LogMetricsRule != "known_web_errors" || src.Name != "app-1" || src.Container == nil {
 		t.Fatalf("unexpected resolved source: %+v", src)
+	}
+}
+
+// TestReceiverManagerContainerLabelChangeRebuildsFanout guards against a regression where an already-tracked
+// container's glouton.* labels were only ever parsed and applied once (at first discovery); a later label
+// change (e.g. a live "kubectl annotate" without recreating the container) was silently ignored forever.
+func TestReceiverManagerContainerLabelChangeRebuildsFanout(t *testing.T) {
+	t.Parallel()
+
+	rm := newTestReceiverManager(t, config.OpenTelemetry{})
+
+	provider := declineProvider()
+	rm.RegisterSinkProvider(provider)
+
+	ctrBefore := facts.FakeContainer{
+		FakeID: "id-1", FakeContainerName: "app-1", FakeLogPath: "/fake/app.log",
+		FakeLabels: map[string]string{ContainerLabelPrefix + "log_metrics": "rule_a"},
+	}
+
+	rm.UpdateContainers(t.Context(), []facts.Container{ctrBefore})
+
+	// Same container ID, but the glouton.log_metrics label changed (e.g. a live annotation edit).
+	ctrAfter := facts.FakeContainer{
+		FakeID: "id-1", FakeContainerName: "app-1", FakeLogPath: "/fake/app.log",
+		FakeLabels: map[string]string{ContainerLabelPrefix + "log_metrics": "rule_b"},
+	}
+
+	rm.UpdateContainers(t.Context(), []facts.Container{ctrAfter})
+
+	asked := provider.askedSources()
+	if len(asked) != 2 {
+		t.Fatalf("expected 2 resolved sources (one per scan), got %d: %+v", len(asked), asked)
+	}
+
+	if asked[0].LogMetricsRule != "rule_a" {
+		t.Errorf("expected the first scan to resolve LogMetricsRule %q, got %q", "rule_a", asked[0].LogMetricsRule)
+	}
+
+	if asked[1].LogMetricsRule != "rule_b" {
+		t.Errorf("expected the label change to be picked up on the second scan (LogMetricsRule %q), got %q -- labels are only applied once at first discovery", "rule_b", asked[1].LogMetricsRule)
+	}
+
+	released := provider.releasedSources()
+	if len(released) != 1 || released[0].ID() != "id-1" {
+		t.Errorf("expected the stale fanout to be released once for container id-1 before rebuilding, got %+v", released)
+	}
+}
+
+// TestReceiverManagerContainerLabelUnchangedDoesNotRebuild tests that an unchanged label set across scans
+// doesn't spuriously rebuild the fanout (e.g. via a fresh *bool pointer that looks different on ==).
+func TestReceiverManagerContainerLabelUnchangedDoesNotRebuild(t *testing.T) {
+	t.Parallel()
+
+	rm := newTestReceiverManager(t, config.OpenTelemetry{})
+
+	provider := declineProvider()
+	rm.RegisterSinkProvider(provider)
+
+	ctr := facts.FakeContainer{
+		FakeID: "id-1", FakeContainerName: "app-1", FakeLogPath: "/fake/app.log",
+		FakeLabels: map[string]string{
+			ContainerLabelPrefix + "log_enable":  "true",
+			ContainerLabelPrefix + "log_metrics": "rule_a",
+		},
+	}
+
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr})
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr})
+
+	if released := provider.releasedSources(); len(released) != 0 {
+		t.Errorf("expected no release across scans with identical labels, got %+v", released)
+	}
+
+	asked := provider.askedSources()
+	if len(asked) != 1 {
+		t.Errorf("expected exactly 1 resolved source (second scan is a no-op since nothing changed), got %d: %+v", len(asked), asked)
 	}
 }
 

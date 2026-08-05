@@ -111,7 +111,7 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 	warnings.Append(err)
 
 	// Migrate old configuration keys.
-	k, moreWarnings := migrate(k)
+	k, moreWarnings := migrate(k, path)
 	warnings = append(warnings, moreWarnings...)
 
 	config, moreWarnings := convertTypes(k)

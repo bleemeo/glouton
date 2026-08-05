@@ -27,6 +27,7 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts"
 	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
+	"github.com/bleemeo/glouton/otel/logsource"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/attrs"
@@ -148,7 +149,7 @@ func TestHandleContainerLogs(t *testing.T) {
 	}
 
 	for _, ctr := range ctrs {
-		ops, err := buildOperators(knownOperators[containerOperators[ctr.ContainerName()]])
+		ops, err := logsource.BuildOperators(knownOperators[containerOperators[ctr.ContainerName()]])
 		if err != nil {
 			t.Fatalf("Failed to build operators for container %s: %v", ctr.ContainerName(), err)
 		}

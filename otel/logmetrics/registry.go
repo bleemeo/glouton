@@ -22,6 +22,7 @@ import (
 	"maps"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/bleemeo/glouton/otel/logsource"
 	"github.com/bleemeo/glouton/types"
@@ -31,6 +32,12 @@ import (
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
+
+// releaseGracePeriod bridges a container recreation (new ID, same item, e.g. a Kubernetes pod restart):
+// release() delays actually dropping an item's counters by this long, so a same-item replacement resolved
+// shortly after (in a later scan than the one that noticed the old container gone) reuses the existing
+// counter -- a continuous series -- instead of resetting to 0.
+const releaseGracePeriod = 90 * time.Second
 
 // metricSpec is a (name, labels) pair used for registry declare/resolve.
 type metricSpec struct {
@@ -62,12 +69,20 @@ type metricsRegistry struct {
 	l             sync.Mutex
 	declaredNames map[string]bool // every name ever resolved, feeds MetricNames()
 	counters      map[counterKey]*counter
+	// gracePeriod is how long release() waits before actually dropping an item's counters. Zero means
+	// immediate/synchronous (used by tests).
+	gracePeriod time.Duration
+	// pendingRelease holds a scheduled-but-not-yet-fired release() timer per item, so a resolve() for
+	// that item before it fires can cancel it (the item is back in use).
+	pendingRelease map[string]*time.Timer
 }
 
-func newMetricsRegistry() *metricsRegistry {
+func newMetricsRegistry(gracePeriod time.Duration) *metricsRegistry {
 	return &metricsRegistry{
-		declaredNames: make(map[string]bool),
-		counters:      make(map[counterKey]*counter),
+		declaredNames:  make(map[string]bool),
+		counters:       make(map[counterKey]*counter),
+		gracePeriod:    gracePeriod,
+		pendingRelease: make(map[string]*time.Timer),
 	}
 }
 
@@ -75,6 +90,8 @@ func newMetricsRegistry() *metricsRegistry {
 func (reg *metricsRegistry) resolve(specs []metricSpec, item string) []*counter {
 	reg.l.Lock()
 	defer reg.l.Unlock()
+
+	reg.cancelPendingReleaseLocked(item)
 
 	resolved := make([]*counter, 0, len(specs))
 
@@ -110,6 +127,58 @@ func (reg *metricsRegistry) resolve(specs []metricSpec, item string) []*counter 
 	}
 
 	return resolved
+}
+
+// release drops every counter registered for item, after gracePeriod, so a removed container's series stop
+// being emitted (as a permanent 0) instead of accumulating in the registry for the process lifetime. The
+// delay bridges a container recreation racing this release: see releaseGracePeriod. declaredNames is left
+// untouched: the metric name itself may still be in use by other items.
+func (reg *metricsRegistry) release(item string) {
+	if item == "" {
+		return
+	}
+
+	reg.l.Lock()
+	defer reg.l.Unlock()
+
+	reg.cancelPendingReleaseLocked(item)
+
+	if reg.gracePeriod <= 0 {
+		reg.forgetLocked(item)
+
+		return
+	}
+
+	reg.pendingRelease[item] = time.AfterFunc(reg.gracePeriod, func() {
+		reg.forget(item)
+	})
+}
+
+// cancelPendingReleaseLocked stops and forgets any release() scheduled for item, since it's back in use.
+// Caller must hold reg.l.
+func (reg *metricsRegistry) cancelPendingReleaseLocked(item string) {
+	if timer, pending := reg.pendingRelease[item]; pending {
+		timer.Stop()
+		delete(reg.pendingRelease, item)
+	}
+}
+
+// forgetLocked drops every counter registered for item. Caller must hold reg.l.
+func (reg *metricsRegistry) forgetLocked(item string) {
+	for key := range reg.counters {
+		if key.item == item {
+			delete(reg.counters, key)
+		}
+	}
+}
+
+// forget is forgetLocked's entry point for a fired release() timer, which runs without reg.l held.
+func (reg *metricsRegistry) forget(item string) {
+	reg.l.Lock()
+	defer reg.l.Unlock()
+
+	delete(reg.pendingRelease, item)
+	reg.forgetLocked(item)
 }
 
 // metricNames returns every declared metric name.

@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/otel/logsource"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -172,7 +173,7 @@ func TestExpandOperators(t *testing.T) {
 		},
 	}
 
-	ops, err := expandOperators(opsConfig, knownIncludes, false)
+	ops, err := logsource.ExpandOperators(opsConfig, knownIncludes, false)
 	if err != nil {
 		t.Fatal("Failed to expand operators:", err)
 	}
@@ -319,7 +320,7 @@ func TestExpandLogFormats(t *testing.T) {
 		t.Run(strconv.Itoa(i+1), func(t *testing.T) {
 			t.Parallel()
 
-			result, err := expandLogFormats(tc.sourceLogFormats)
+			result, err := logsource.ExpandLogFormats(tc.sourceLogFormats)
 			if err != nil {
 				if tc.expectedErrMsg == "" {
 					t.Fatalf("Unexpected error: %v", err)
@@ -431,7 +432,7 @@ func TestBuildOperators(t *testing.T) {
 		},
 	}
 
-	operators, err := buildOperators(rawOperators)
+	operators, err := logsource.BuildOperators(rawOperators)
 	if err != nil {
 		t.Fatal("Failed to build operators:", err)
 	}

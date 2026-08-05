@@ -19,6 +19,7 @@ package logmetrics
 import (
 	"sort"
 	"testing"
+	"time"
 
 	glmodel "github.com/bleemeo/glouton/prometheus/model"
 	"github.com/bleemeo/glouton/types"
@@ -30,7 +31,7 @@ import (
 func TestRegistryResolve(t *testing.T) {
 	t.Parallel()
 
-	reg := newMetricsRegistry()
+	reg := newMetricsRegistry(0)
 
 	logCounters := []metricSpec{
 		{Metric: "apache_errors_count"},
@@ -62,7 +63,7 @@ func TestRegistryResolve(t *testing.T) {
 func TestRegistryEmit(t *testing.T) {
 	t.Parallel()
 
-	reg := newMetricsRegistry()
+	reg := newMetricsRegistry(0)
 
 	counters := reg.resolve([]metricSpec{
 		{Metric: "apache_errors_count"},
@@ -122,7 +123,7 @@ func makeSumMetrics(counts map[string]int64) pmetric.Metrics {
 func TestMetricsSink(t *testing.T) {
 	t.Parallel()
 
-	reg := newMetricsRegistry()
+	reg := newMetricsRegistry(0)
 
 	counters := reg.resolve([]metricSpec{
 		{Metric: "apache_errors_count"},
@@ -159,7 +160,7 @@ func TestMetricsSink(t *testing.T) {
 func TestRegistryItemDisambiguation(t *testing.T) {
 	t.Parallel()
 
-	reg := newMetricsRegistry()
+	reg := newMetricsRegistry(0)
 
 	logCounters := []metricSpec{{Metric: "web_errors_count"}}
 
@@ -226,11 +227,85 @@ func TestRegistryItemDisambiguation(t *testing.T) {
 	}
 }
 
+// Test that release() with a zero grace period drops the item's counters synchronously (the behavior
+// every other registry test relies on).
+func TestRegistryReleaseZeroGracePeriodIsSynchronous(t *testing.T) {
+	t.Parallel()
+
+	reg := newMetricsRegistry(0)
+
+	reg.resolve([]metricSpec{{Metric: "app_errors_count"}}, "web-1")
+	reg.release("web-1")
+
+	if _, found := reg.counters[counterKey{metric: "app_errors_count", item: "web-1"}]; found {
+		t.Error("Expected the counter to be gone immediately after release() with a zero grace period")
+	}
+}
+
+// Test that resolve() for an item cancels its pending release, so a container recreated shortly after the
+// old one disappears (new ID, same item) reuses the existing counter instead of resetting to 0.
+func TestRegistryResolveCancelsPendingRelease(t *testing.T) {
+	t.Parallel()
+
+	reg := newMetricsRegistry(time.Hour) // long enough that the timer never fires during this test
+
+	before := reg.resolve([]metricSpec{{Metric: "app_errors_count"}}, "web-1")
+	before[0].counter.Add(3)
+
+	reg.release("web-1")
+
+	if _, pending := reg.pendingRelease["web-1"]; !pending {
+		t.Fatal("Expected release() to schedule a pending release")
+	}
+
+	after := reg.resolve([]metricSpec{{Metric: "app_errors_count"}}, "web-1")
+
+	if _, pending := reg.pendingRelease["web-1"]; pending {
+		t.Error("Expected resolve() to cancel the pending release")
+	}
+
+	if after[0] != before[0] {
+		t.Error("Expected resolve() to return the same counter (reused, not reset) after cancelling the pending release")
+	}
+
+	if got := after[0].counter.Total(); got != 3 {
+		t.Errorf("Expected the counter's prior total to survive (3), got %d", got)
+	}
+}
+
+// Test that release() eventually drops the item's counters once its grace period elapses with no reuse.
+func TestRegistryReleaseForgetsAfterGracePeriodElapses(t *testing.T) {
+	t.Parallel()
+
+	const gracePeriod = 20 * time.Millisecond
+
+	reg := newMetricsRegistry(gracePeriod)
+
+	reg.resolve([]metricSpec{{Metric: "app_errors_count"}}, "web-1")
+	reg.release("web-1")
+
+	deadline := time.Now().Add(10 * gracePeriod)
+
+	for time.Now().Before(deadline) {
+		reg.l.Lock()
+		_, found := reg.counters[counterKey{metric: "app_errors_count", item: "web-1"}]
+		reg.l.Unlock()
+
+		if !found {
+			return // forgotten, as expected
+		}
+
+		time.Sleep(gracePeriod / 4)
+	}
+
+	t.Errorf("Expected the counter to be forgotten within %s of its grace period elapsing, it never was", 10*gracePeriod)
+}
+
 // Test that custom static labels merge in but can never override the reserved __name__/item labels.
 func TestRegistryLabels(t *testing.T) {
 	t.Parallel()
 
-	reg := newMetricsRegistry()
+	reg := newMetricsRegistry(0)
 
 	staticCounters := reg.resolve([]metricSpec{
 		{Metric: "app_errors_count", Labels: map[string]string{"env": "prod"}},

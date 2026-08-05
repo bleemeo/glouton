@@ -290,6 +290,109 @@ func TestPersistHostTouchedOnlyEvictsUntouchedReceivers(t *testing.T) { //nolint
 	}
 }
 
+// TestRemovePersistentExtKeepsMetadata guards against a regression where RemovePersistentExt(s) would drop
+// metadataPerReceiver/updatedKeys unconditionally. It's also called on a graceful, resumable shutdown (e.g.
+// a full ReceiverManager.Shutdown ahead of a process restart), where the offset must survive so the next
+// run resumes from it instead of re-reading (or skipping) already-processed log lines.
+func TestRemovePersistentExtKeepsMetadata(t *testing.T) {
+	t.Parallel()
+
+	st := newMemoryState()
+
+	h, err := NewPersistHost(st, touchedOnlyConfig())
+	if err != nil {
+		t.Fatal("NewPersistHost failed:", err)
+	}
+
+	idA := h.NewPersistentExt("app")
+
+	extA, ok := h.extensions[idA].(persistExtension)
+	if !ok {
+		t.Fatal("Expected a persistExtension for app")
+	}
+
+	if err := extA.client.Set(t.Context(), "offset", []byte("A1")); err != nil {
+		t.Fatal("Failed to set offset:", err)
+	}
+
+	// Simulates a graceful shutdown: Close() saves the final offset, then the caller
+	// un-registers the extension without meaning to forget the receiver forever.
+	if err := extA.client.Close(t.Context()); err != nil {
+		t.Fatal("Failed to close client:", err)
+	}
+
+	h.RemovePersistentExt(idA)
+
+	if _, found := h.extensions[idA]; found {
+		t.Error("Expected the extension to be removed")
+	}
+
+	h.SaveToState(st)
+
+	var saved map[string]map[string][]byte
+
+	if err := st.Get(testCacheKey, &saved); err != nil {
+		t.Fatal("Failed to read back saved state:", err)
+	}
+
+	if got, found := saved["app"]; !found || string(got["offset"]) != "A1" {
+		t.Errorf(`Expected "app"'s offset %q to survive a graceful RemovePersistentExt, got %v (found=%v)`, "A1", got, found)
+	}
+}
+
+// TestRemovePersistentExtsAndForgetDropsMetadata guards against a regression where a permanently-removed
+// source (e.g. a gone container) kept its stale offset in metadataPerReceiver/updatedKeys, which would
+// otherwise be rewritten into the state cache by every later SaveToState call, for as long as the process runs.
+func TestRemovePersistentExtsAndForgetDropsMetadata(t *testing.T) {
+	t.Parallel()
+
+	st := newMemoryState()
+
+	h, err := NewPersistHost(st, touchedOnlyConfig())
+	if err != nil {
+		t.Fatal("NewPersistHost failed:", err)
+	}
+
+	idA := h.NewPersistentExt("gone-container")
+
+	extA, ok := h.extensions[idA].(persistExtension)
+	if !ok {
+		t.Fatal("Expected a persistExtension for gone-container")
+	}
+
+	if err := extA.client.Set(t.Context(), "offset", []byte("A1")); err != nil {
+		t.Fatal("Failed to set offset:", err)
+	}
+
+	// Simulates the receiver's own shutdown sequence: Close() (re-)populates metadataPerReceiver/updatedKeys,
+	// then the caller permanently removes the now-dead container's extension.
+	if err := extA.client.Close(t.Context()); err != nil {
+		t.Fatal("Failed to close client:", err)
+	}
+
+	h.RemovePersistentExtsAndForget([]component.ID{idA})
+
+	if _, found := h.extensions[idA]; found {
+		t.Error("Expected the extension to be removed")
+	}
+
+	if metadata := h.getAllMetadata(); len(metadata) != 0 {
+		t.Errorf("Expected no metadata to survive RemovePersistentExtsAndForget, got %v", metadata)
+	}
+
+	h.SaveToState(st)
+
+	var saved map[string]map[string][]byte
+
+	if err := st.Get(testCacheKey, &saved); err != nil {
+		t.Fatal("Failed to read back saved state:", err)
+	}
+
+	if _, found := saved["gone-container"]; found {
+		t.Errorf("Expected gone-container's offset to be gone from the saved state, got %v", saved)
+	}
+}
+
 // TestPersistHostFullSnapshotKeepsUntouchedReceivers verifies idle receivers' offsets aren't dropped on save.
 func TestPersistHostFullSnapshotKeepsUntouchedReceivers(t *testing.T) {
 	t.Parallel()

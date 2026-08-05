@@ -173,7 +173,7 @@ func TestPlanSharedNetworkReceiversOmitsUnreferencedReceivers(t *testing.T) {
 	}
 }
 
-// TestPlanSharedNetworkReceiversOmitsUnknownReceiverName checks that a receiver name undefined in log.network.receivers is skipped, not turned into a protocol-less PlannedReceiver.
+// TestPlanSharedNetworkReceiversOmitsUnknownReceiverName checks that a receiver name undefined in opentelemetry.network.receivers is skipped, not turned into a protocol-less PlannedReceiver.
 func TestPlanSharedNetworkReceiversOmitsUnknownReceiverName(t *testing.T) {
 	t.Parallel()
 

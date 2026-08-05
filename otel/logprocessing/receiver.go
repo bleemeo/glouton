@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
-	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -33,7 +31,6 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/otel/logsource"
-	"github.com/bleemeo/glouton/utils/hostrootsymlink"
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/go-viper/mapstructure/v2"
@@ -53,6 +50,10 @@ var errInvalidReceiverName = errors.New("invalid receiver name")
 
 const metadataKeySeparator = "/"
 
+// logReceiver's tail lifecycle bookkeeping (watching/sizeFnByFile/startedComponents/registeredExtensions)
+// independently parallels otel/logsource's managedSource (receiver_manager.go) and this package's own
+// containerReceiver (containers.go) -- each tracks a differently-shaped fan-out chain, so they haven't been
+// unified, but a fix to one's tail-start/stop or offset-forget logic likely applies to the others too.
 type logReceiver struct {
 	name string
 	// cfg is the raw config (see config.LogReceiver), passed through as-is to SetupLogReceiverFactories;
@@ -103,12 +104,12 @@ func newLogReceiver(
 		return nil, nil, fmt.Errorf("decoding receiver %q config: %w", name, err) //nolint: nilnil
 	}
 
-	rawOps, err := expandOperators(fields.Operators, knownLogFormats, false)
+	rawOps, err := logsource.ExpandOperators(fields.Operators, knownLogFormats, false)
 	if err != nil {
 		return nil, nil, fmt.Errorf("expanding operators: %w", err) //nolint: nilnil
 	}
 
-	operators, err := buildOperators(rawOps)
+	operators, err := logsource.BuildOperators(rawOps)
 	if err != nil {
 		return nil, nil, fmt.Errorf("building operators: %w", err) //nolint: nilnil
 	}
@@ -119,7 +120,7 @@ func newLogReceiver(
 			logger.V(1).Printf("Log receiver %q requires the log format %q, which is not defined", name, fields.LogFormat)
 		} else {
 			// Operators from known log formats have already been expanded.
-			referencedOps, err := buildOperators(opsGroup)
+			referencedOps, err := logsource.BuildOperators(opsGroup)
 			if err != nil {
 				return nil, nil, fmt.Errorf("building globally-defined operators: %w", err) //nolint: nilnil
 			}
@@ -159,71 +160,16 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	hasHostRoot := len(pipeline.hostroot) > len(string(os.PathSeparator))
-	logFiles := make(map[string]bool, len(r.include))
+	resolvedFiles := logsource.ResolveIncludeGlobs(pipeline.hostroot, r.include, func(msg string) {
+		addWarnings(errorf("Log receiver %q: %s", r.name, msg))
+	})
 
-	for _, filePattern := range r.include {
-		matching, err := doublestar.FilepathGlob(
-			filepath.Join(pipeline.hostroot, filePattern),
-			doublestar.WithFilesOnly(),
-			doublestar.WithFailOnIOErrors(),
-		)
-		if err != nil {
-			if errors.Is(err, doublestar.ErrBadPattern) {
-				addWarnings(errorf("Log receiver %q: file %q: %w", r.name, filePattern, err))
+	logFiles := make(map[string]bool, len(resolvedFiles))
 
-				continue // ignoring this file
-			}
-
-			if errors.Is(err, fs.ErrPermission) {
-				if hasHostRoot {
-					// We don't support execlogreceiver from a container
-					addWarnings(errorf("Log receiver %q: resolving file %q: %w (ignoring it)", r.name, filePattern, err))
-
-					continue // ignoring this file
-				}
-
-				if strings.Contains(filePattern, "*") {
-					if unwrapped := errors.Unwrap(err); unwrapped != nil {
-						// Getting rid of the operation that failed (stat, open, ...)
-						// to only show the actual error (e.g. "permission denied").
-						err = unwrapped
-					}
-
-					addWarnings(errorf(
-						"Log receiver %q: resolving file pattern %q: %w (ignoring it)\n%s",
-						r.name, filePattern, err,
-						"(Note that Glouton may be able to read protected log file using sudo tail, but you need to use explicit path (no glob pattern).)",
-					))
-
-					continue // ignoring this pattern
-				}
-				// We still have a chance to handle it with sudo commands.
-				matching = []string{filePattern}
-			} else {
-				logger.V(1).Printf("Log receiver %q: file %q: %v", r.name, filePattern, err)
-
-				continue // ignoring this file
-			}
-		} else if hasHostRoot {
-			// Dropping the hostroot from each log file path, if necessary.
-			// We'll re-add it only where it is needed (stat, tail, ...)
-			for i, logFile := range matching {
-				matching[i] = strings.TrimPrefix(logFile, pipeline.hostroot)
-			}
-		}
-
-		for _, file := range matching {
-			realFile := file
-			// Resolve symlinks relative to hostroot (Kubernetes/containerd's /var/log/containers/XXX -> /var/log/pods/XXX).
-			if pipeline.hostroot != "/" {
-				realFile = hostrootsymlink.EvalSymlinks(pipeline.hostroot, realFile)
-			}
-
-			// Skip if already watching or already matched by another pattern.
-			if _, found := r.watching[realFile]; !found && !logFiles[realFile] {
-				logFiles[realFile] = true
-			}
+	for _, realFile := range resolvedFiles {
+		// Skip if already watching.
+		if _, found := r.watching[realFile]; !found {
+			logFiles[realFile] = true
 		}
 	}
 

@@ -55,6 +55,7 @@ func (rc *RingCounter) Add(delta int) {
 		rc.lastUpdateAt = now
 	}
 
+	rc.rebaseIfClockWentBackwards(now)
 	rc.discardOutdatedValues(now)
 
 	idx := int(now-rc.t0) % rc.size
@@ -68,6 +69,7 @@ func (rc *RingCounter) Total() int {
 	defer rc.l.Unlock()
 
 	now := time.Now().Unix()
+	rc.rebaseIfClockWentBackwards(now)
 	// Flush buckets for any gap since the last update before summing.
 	rc.discardOutdatedValues(now)
 
@@ -80,6 +82,17 @@ func (rc *RingCounter) Total() int {
 	}
 
 	return total
+}
+
+// rebaseIfClockWentBackwards resets the ring and rebases t0 when the wall clock moved before it
+// (NTP correction, VM snapshot restore, ...), which would otherwise make now-rc.t0 negative and
+// panic on the buckets[idx] access in Add.
+func (rc *RingCounter) rebaseIfClockWentBackwards(now int64) {
+	if rc.t0 != 0 && now < rc.t0 {
+		rc.resetRange(0, rc.size-1)
+		rc.t0 = now
+		rc.lastUpdateAt = now
+	}
 }
 
 func (rc *RingCounter) discardOutdatedValues(now int64) {

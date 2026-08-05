@@ -66,7 +66,7 @@ func mapKeys() []string {
 	return []string{
 		keyThresholds,
 		"metric.softstatus_period",
-		"log.network.receivers",
+		"opentelemetry.network.receivers",
 		"log.opentelemetry.receivers",
 		"log.opentelemetry.global_filters",
 		"log.opentelemetry.known_log_filters",
@@ -319,11 +319,6 @@ func DefaultConfig() Config { //nolint:maintidx
 		Log: Log{
 			HostRootPrefix: "/hostroot",
 			Inputs:         []LogInput{},
-			// No network receiver is pre-declared; nothing binds until the user
-			// adds one under log.network.receivers.
-			Network: NetworkConfig{
-				Receivers: map[string]NetworkReceiver{},
-			},
 			OpenTelemetry: OpenTelemetry{
 				ShippingEnable: true,
 				SendLogs:       true,
@@ -410,6 +405,13 @@ func DefaultConfig() Config { //nolint:maintidx
 			Enable:  false,
 			BinPath: "/usr/bin/nvidia-smi",
 			Timeout: 5,
+		},
+		// No network receiver is pre-declared; nothing binds until the user
+		// adds one under opentelemetry.network.receivers.
+		OpenTelemetry: OpenTelemetryConfig{
+			Network: NetworkConfig{
+				Receivers: map[string]NetworkReceiver{},
+			},
 		},
 		ServiceAbsentDeactivationDelay: 7 * 24 * time.Hour,
 		ServiceIgnore:                  []NameInstance{},

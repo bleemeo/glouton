@@ -63,6 +63,10 @@ type Container struct {
 	throughputMeter *logsource.RingCounter
 }
 
+// containerReceiver's tail lifecycle bookkeeping (startedComponents/registeredExtensions/sizeFnByFile)
+// independently parallels otel/logsource's managedSource (receiver_manager.go) and this package's own
+// logReceiver (receiver.go) -- each tracks a differently-shaped fan-out chain, so they haven't been
+// unified, but a fix to one's tail-start/stop or offset-forget logic likely applies to the others too.
 type containerReceiver struct {
 	pipeline      *pipelineContext
 	logConsumer   consumer.Logs
@@ -266,7 +270,8 @@ func (cr *containerReceiver) stopWatchingForContainers(ctx context.Context, ids 
 			}
 		}
 
-		cr.pipeline.persister.RemovePersistentExts(cr.registeredExtensions[ctrID])
+		// The container is gone for good (not just a restart): forget its offset too.
+		cr.pipeline.persister.RemovePersistentExtsAndForget(cr.registeredExtensions[ctrID])
 
 		logFilePath := cr.containers[ctrID].LogFilePath
 

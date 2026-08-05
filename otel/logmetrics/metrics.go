@@ -147,15 +147,18 @@ func buildGroupedConnectors(
 	defaultItem string,
 	reg *metricsRegistry,
 	sourceName string,
-) ([]otelconnector.Logs, error) {
+) ([]otelconnector.Logs, []string, error) {
 	groups := groupResolvedMetricsByItem(entries, defaultItem)
 	if len(groups) == 0 {
-		return nil, errNoApplicableMetric
+		return nil, nil, errNoApplicableMetric
 	}
 
 	connFactory := countconnector.NewFactory()
 
-	var conns []otelconnector.Logs
+	var (
+		conns []otelconnector.Logs
+		items []string
+	)
 
 	for item, groupEntries := range groups {
 		reg.resolve(specsForEntries(groupEntries), item)
@@ -168,13 +171,14 @@ func buildGroupedConnectors(
 		}
 
 		conns = append(conns, groupConns...)
+		items = append(items, item)
 	}
 
 	if len(conns) == 0 {
-		return nil, fmt.Errorf("%w: %d applicable metric group(s), all failed to build a connector", errNoValidCounter, len(groups))
+		return nil, nil, fmt.Errorf("%w: %d applicable metric group(s), all failed to build a connector", errNoValidCounter, len(groups))
 	}
 
-	return conns, nil
+	return conns, items, nil
 }
 
 // specsForEntries reduces entries down to what the registry's declare/resolve need (name + static labels).
@@ -188,7 +192,9 @@ func specsForEntries(entries []resolvedMetric) []metricSpec {
 	return specs
 }
 
-// buildConnectors tries one connector for all entries together, falling back to one connector per metric if the combined config fails validation, so a bad condition only disables its own metric.
+// buildConnectors validates each entry's counter independently -- countconnector.Config.Validate() already checks
+// every Logs entry on its own, with no cross-entry state -- so a bad condition only disables its own metric, then
+// builds a single connector from the survivors instead of one connector per metric.
 func buildConnectors(
 	ctx context.Context,
 	connFactory otelconnector.Factory,
@@ -206,6 +212,14 @@ func buildConnectors(
 			continue
 		}
 
+		counterCfg := &countconnector.Config{Logs: map[string]countconnector.MetricInfo{entry.Metric: info}}
+
+		if err := counterCfg.Validate(); err != nil {
+			logger.Printf("logmetrics: metric %q disabled, invalid counter: %v", entry.Metric, err)
+
+			continue
+		}
+
 		infos[entry.Metric] = info
 	}
 
@@ -213,40 +227,12 @@ func buildConnectors(
 		return nil, errNoValidCounter
 	}
 
-	combinedCfg := &countconnector.Config{Logs: infos}
-
-	if combinedCfg.Validate() == nil {
-		if conn, err := createConnector(ctx, connFactory, telemetry, combinedCfg, sink); err == nil {
-			return []otelconnector.Logs{conn}, nil
-		}
+	conn, err := createConnector(ctx, connFactory, telemetry, &countconnector.Config{Logs: infos}, sink)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", errNoValidCounter, err)
 	}
 
-	conns := make([]otelconnector.Logs, 0, len(infos))
-
-	for name, info := range infos {
-		counterCfg := &countconnector.Config{Logs: map[string]countconnector.MetricInfo{name: info}}
-
-		if err := counterCfg.Validate(); err != nil {
-			logger.Printf("logmetrics: metric %q disabled, invalid counter: %v", name, err)
-
-			continue
-		}
-
-		conn, err := createConnector(ctx, connFactory, telemetry, counterCfg, sink)
-		if err != nil {
-			logger.Printf("logmetrics: metric %q disabled: %v", name, err)
-
-			continue
-		}
-
-		conns = append(conns, conn)
-	}
-
-	if len(conns) == 0 {
-		return nil, errNoValidCounter
-	}
-
-	return conns, nil
+	return []otelconnector.Logs{conn}, nil
 }
 
 // metricInfo builds the countconnector.MetricInfo for metric name from its raw config.LogMetricEntry.

@@ -130,7 +130,9 @@ func (h *PersistHost) NewPersistentExt(name string) component.ID {
 	return id
 }
 
-// RemovePersistentExt un-registers a single extension, previously returned by NewPersistentExt.
+// RemovePersistentExt un-registers a single extension, previously returned by NewPersistentExt. Its
+// metadata (last-known offset) is kept, since this is also called on a graceful, resumable shutdown
+// (e.g. process restart): see RemovePersistentExtsAndForget for permanent removal.
 func (h *PersistHost) RemovePersistentExt(id component.ID) {
 	h.l.Lock()
 	defer h.l.Unlock()
@@ -138,13 +140,29 @@ func (h *PersistHost) RemovePersistentExt(id component.ID) {
 	delete(h.extensions, id)
 }
 
-// RemovePersistentExts un-registers several extensions at once.
+// RemovePersistentExts un-registers several extensions at once, keeping their metadata (see RemovePersistentExt).
 func (h *PersistHost) RemovePersistentExts(ids []component.ID) {
 	h.l.Lock()
 	defer h.l.Unlock()
 
 	for _, id := range ids {
 		delete(h.extensions, id)
+	}
+}
+
+// RemovePersistentExtsAndForget un-registers several extensions and forgets their metadata, for a source
+// that's permanently gone (e.g. a removed container), as opposed to a graceful/resumable shutdown.
+// Without this, a removed source's last-known metadata (re-saved by its storageClient.Close call just
+// before removal) would stay in metadataPerReceiver/updatedKeys and keep being rewritten into the state
+// cache by every later SaveToState/getAllMetadata call, for as long as the process runs.
+func (h *PersistHost) RemovePersistentExtsAndForget(ids []component.ID) {
+	h.l.Lock()
+	defer h.l.Unlock()
+
+	for _, id := range ids {
+		delete(h.extensions, id)
+		delete(h.metadataPerReceiver, id.Name())
+		delete(h.updatedKeys, id.Name())
 	}
 }
 

@@ -34,17 +34,10 @@ import (
 	"github.com/bleemeo/glouton/types"
 
 	"github.com/go-viper/mapstructure/v2"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
 	"go.opentelemetry.io/collector/component"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-)
-
-const (
-	logFileSizesCacheKey    = "LogFileSizes"
-	logFileMetadataCacheKey = "LogFileMetadata"
-	persistStorageType      = "glouton_log_metadata_storage"
 )
 
 var (
@@ -176,23 +169,6 @@ func buildLogFilterConfig(filtersCfg config.OTELFilters) (*filterprocessor.Confi
 	}
 
 	return filterProcCfg, warning, filterProcCfg.Validate()
-}
-
-// expandOperators is a thin wrapper around logsource.ExpandOperators for backward compatibility.
-func expandOperators(ops []config.OTELOperator, knownIncludes map[string][]config.OTELOperator, denyRecursiveInclude bool) ([]config.OTELOperator, error) {
-	return logsource.ExpandOperators(ops, knownIncludes, denyRecursiveInclude)
-}
-
-func expandLogFormats(formats map[string][]config.OTELOperator) (map[string][]config.OTELOperator, error) {
-	return logsource.ExpandLogFormats(formats)
-}
-
-func buildOperators(rawOperators []config.OTELOperator) ([]operator.Config, error) {
-	return logsource.BuildOperators(rawOperators)
-}
-
-func quietParserErrors(ops []config.OTELOperator) []config.OTELOperator {
-	return logsource.QuietParserErrors(ops)
 }
 
 // diffBetween returns the elements from s1 that are absent from m2.

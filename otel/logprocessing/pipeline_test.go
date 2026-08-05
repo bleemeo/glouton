@@ -129,8 +129,8 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 	}
 
 	persister, err := logsource.NewPersistHost(st, logsource.PersistConfig{
-		StorageType:  persistStorageType,
-		CacheKey:     logFileMetadataCacheKey,
+		StorageType:  logsource.PersistStorageType,
+		CacheKey:     logsource.LogFileMetadataCacheKey,
 		ArchivePath:  "log-processing/persister.json",
 		SaveThrottle: saveFileSizesToCachePeriod,
 	})
@@ -169,7 +169,7 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 			t.Errorf("Warnings were reported: %v", errs)
 		},
 		cfg.KnownLogFormats, // nothing to expand
-		logsource.GetLastFileSizesFromCache(st, logFileSizesCacheKey),
+		logsource.GetLastFileSizesFromCache(st, logsource.LogFileSizesCacheKey),
 		pipelineOptions{
 			batcherTimeout:           100 * time.Millisecond,
 			logsAvailabilityCacheTTL: 100 * time.Millisecond,

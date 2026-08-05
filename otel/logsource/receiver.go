@@ -30,13 +30,16 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/otel/execlogreceiver"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
+	"github.com/bleemeo/glouton/utils/hostrootsymlink"
 	"github.com/bleemeo/glouton/version"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/attrs"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
@@ -95,6 +98,85 @@ var retryCfg = struct { //nolint:gochecknoglobals
 	InitialInterval: 1 * time.Second,  // default value
 	MaxInterval:     30 * time.Second, // default value
 	MaxElapsedTime:  1 * time.Hour,
+}
+
+// ResolveIncludeGlobs expands patterns into hostroot-stripped, symlink-resolved, deduplicated file paths
+// (symlink resolution is needed for e.g. Kubernetes' /var/log/containers/* -> /var/log/pods/* symlinks).
+// warn is called, once per skipped pattern, with a ready-to-format message (no receiver name, no trailing
+// punctuation); callers decide where it's surfaced (a plain log line, or a warning visible in the UI).
+func ResolveIncludeGlobs(hostroot string, patterns []string, warn func(msg string)) []string {
+	hasHostRoot := len(hostroot) > len(string(os.PathSeparator))
+
+	seen := make(map[string]bool)
+
+	var files []string
+
+	for _, pattern := range patterns {
+		matching, err := doublestar.FilepathGlob(
+			filepath.Join(hostroot, pattern),
+			doublestar.WithFilesOnly(),
+			doublestar.WithFailOnIOErrors(),
+		)
+		if err != nil {
+			if errors.Is(err, doublestar.ErrBadPattern) {
+				warn(fmt.Sprintf("file %q: %v", pattern, err))
+
+				continue
+			}
+
+			if errors.Is(err, fs.ErrPermission) {
+				if hasHostRoot {
+					// We don't support execlogreceiver from a container.
+					warn(fmt.Sprintf("resolving file %q: %v (ignoring it)", pattern, err))
+
+					continue
+				}
+
+				if strings.Contains(pattern, "*") {
+					if unwrapped := errors.Unwrap(err); unwrapped != nil {
+						// Getting rid of the operation that failed (stat, open, ...)
+						// to only show the actual error (e.g. "permission denied").
+						err = unwrapped
+					}
+
+					warn(fmt.Sprintf(
+						"resolving file pattern %q: %v (ignoring it; Glouton can read a protected log file via "+
+							"sudo tail, but only for an explicit path, not a glob pattern)", pattern, err,
+					))
+
+					continue
+				}
+
+				matching = []string{pattern} // still a chance via sudo tail
+			} else {
+				warn(fmt.Sprintf("file %q: %v", pattern, err))
+
+				continue
+			}
+		} else if hasHostRoot {
+			// Dropping the hostroot from each log file path, if necessary.
+			// We'll re-add it only where it is needed (stat, tail, ...).
+			for i, logFile := range matching {
+				matching[i] = strings.TrimPrefix(logFile, hostroot)
+			}
+		}
+
+		for _, file := range matching {
+			realFile := file
+			// Resolve symlinks relative to hostroot (Kubernetes/containerd's /var/log/containers/XXX -> /var/log/pods/XXX).
+			if hostroot != "/" {
+				realFile = hostrootsymlink.EvalSymlinks(hostroot, realFile)
+			}
+
+			if !seen[realFile] {
+				seen[realFile] = true
+
+				files = append(files, realFile)
+			}
+		}
+	}
+
+	return files
 }
 
 // SetupLogReceiverFactories builds receiver factories, falling back to sudo-tail for unreadable files. Missing files are ignored; extraRaw is merged with this function's fields taking priority.

@@ -103,9 +103,9 @@ func (f pushFunction) PushPoints(ctx context.Context, points []types.MetricPoint
 }
 
 type metricFilter interface {
-	FilterPoints(points []types.MetricPoint, allowNeededByRules bool) []types.MetricPoint
-	FilterFamilies(f []*dto.MetricFamily, allowNeededByRules bool) []*dto.MetricFamily
-	IsMetricAllowed(lbls labels.Labels, allowNeededByRules bool) bool
+	FilterPoints(points []types.MetricPoint) []types.MetricPoint
+	FilterFamilies(f []*dto.MetricFamily) []*dto.MetricFamily
+	IsMetricAllowed(lbls labels.Labels) bool
 }
 
 // Registry is a dynamic collection of metrics sources.
@@ -197,8 +197,7 @@ type RegistrationOption struct {
 	// When all 'essentials' gatherers are stuck, Glouton kills himself (see Registry.HealthCheck).
 	IsEssential bool
 	// AcceptAllowedMetricsOnly will only keep metrics allowed at ends of Gather(), so the
-	// metric not allowed by allow_list (or metric denied) will be dropped. Metrics that are
-	// needed by SimpleRule will still be allowed.
+	// metric not allowed by allow_list (or metric denied) will be dropped.
 	// Currently (until Registry.renamer is dropped), this shouldn't be activated on SNMP gatherer.
 	AcceptAllowedMetricsOnly bool
 	// HonorTimestamp indicate whether timestamp associated with each metric point is used or if a timestamp
@@ -1422,7 +1421,7 @@ func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*d
 	mfs = removeMetaLabels(mfs)
 
 	if !state.NoFilter && r.option.Filter != nil {
-		mfs = r.option.Filter.FilterFamilies(mfs, false)
+		mfs = r.option.Filter.FilterFamilies(mfs)
 	}
 
 	// Use prometheus.Gatherers because it will:
@@ -1499,7 +1498,7 @@ func gatherFromQueryable(ctx context.Context, queryable storage.Queryable, filte
 	}
 
 	if filter != nil {
-		result = filter.FilterFamilies(result, false)
+		result = filter.FilterFamilies(result)
 	}
 
 	return result, series.Err()
@@ -1626,7 +1625,7 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, loopCtx context.Context, 
 		reg.l.Unlock()
 
 		state.HintMetricFilter = func(lbls labels.Labels) bool {
-			return r.option.Filter.IsMetricAllowed(mergeLabels(lbls, extraLabels), true)
+			return r.option.Filter.IsMetricAllowed(mergeLabels(lbls, extraLabels))
 		}
 	}
 
@@ -1716,7 +1715,7 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, loopCtx context.Context, 
 	}
 
 	if reg.option.AcceptAllowedMetricsOnly {
-		points = r.option.Filter.FilterPoints(points, true)
+		points = r.option.Filter.FilterPoints(points)
 	}
 
 	if len(points) > 0 && r.option.PushPoint != nil {

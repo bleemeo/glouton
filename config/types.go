@@ -43,6 +43,7 @@ type Config struct {
 	NetworkInterfaceDenylist       []string             `yaml:"network_interface_denylist"`
 	NRPE                           NRPE                 `yaml:"nrpe"`
 	NvidiaSMI                      NvidiaSMI            `yaml:"nvidia_smi"`
+	OpenTelemetry                  OpenTelemetryConfig  `yaml:"opentelemetry"`
 	Services                       []Service            `yaml:"service"`
 	ServiceAbsentDeactivationDelay time.Duration        `yaml:"service_absent_deactivation_delay"`
 	ServiceIgnore                  []NameInstance       `yaml:"service_ignore"`
@@ -61,13 +62,18 @@ type Config struct {
 type Log struct {
 	HostRootPrefix string        `yaml:"hostroot_prefix"`
 	Inputs         []LogInput    `yaml:"inputs"`
-	Network        NetworkConfig `yaml:"network"`
 	OpenTelemetry  OpenTelemetry `yaml:"opentelemetry"`
 	// MetricsRules are named, reusable libraries of metric definitions
 	// (same shape as a receiver's own inline metrics: entries). An entry
 	// does nothing on its own until a receiver includes it by name from its
 	// own metrics: list (see OpenTelemetry.Receivers/LogReceiver).
 	MetricsRules map[string][]LogMetricEntry `yaml:"metrics_rules"`
+}
+
+// OpenTelemetryConfig holds OpenTelemetry-related settings that aren't specific to any one signal
+// (logs/metrics/traces), as opposed to Log.OpenTelemetry which is log-specific.
+type OpenTelemetryConfig struct {
+	Network NetworkConfig `yaml:"network"`
 }
 
 // NetworkConfig holds named, shared OTLP gRPC/HTTP receivers that log
@@ -93,7 +99,7 @@ type NetworkEndpoint struct {
 	Endpoint string `yaml:"endpoint"`
 }
 
-// OTLPNetworkParticipation lists which Log.Network.Receivers entries a
+// OTLPNetworkParticipation lists which OpenTelemetry.Network.Receivers entries a
 // receiver/feature pulls logs from. Enable is a shortcut resolving to
 // DefaultNetworkReceiverName (see EffectiveNetworkReceivers).
 type OTLPNetworkParticipation struct {
@@ -182,7 +188,7 @@ type EnableListener struct {
 //     logs, in addition to (or instead of) include. Both can be combined,
 //     and combined with include, on the same receiver -- every match feeds
 //     this one receiver's shipping/metrics as a single unit.
-//   - network: OTLPNetworkParticipation, participate in a log.network
+//   - network: OTLPNetworkParticipation, participate in an opentelemetry.network
 //     listener (Form A: {receivers: [name,...]}, Form B: {enable: true}).
 //   - send_logs: override the global OpenTelemetry.SendLogs default for
 //     this receiver.

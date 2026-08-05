@@ -22,10 +22,7 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
-	"os"
-	"path/filepath"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 
@@ -35,7 +32,6 @@ import (
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/utils/hostrootsymlink"
 
-	"github.com/bmatcuk/doublestar/v4"
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/google/uuid"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
@@ -44,11 +40,15 @@ import (
 	"go.opentelemetry.io/collector/receiver"
 )
 
-// Persistence identity, kept identical to otel/logprocessing's so read offsets survive the migration.
+// Persistence identity, exported so otel/logprocessing shares the exact same values instead of hand-copying
+// them (which could otherwise silently drift and split log-file read offsets across a restart).
 const (
-	persistStorageType      = "glouton_log_metadata_storage"
-	logFileMetadataCacheKey = "LogFileMetadata"
-	logFileSizesCacheKey    = "LogFileSizes"
+	PersistStorageType      = "glouton_log_metadata_storage"
+	LogFileMetadataCacheKey = "LogFileMetadata"
+	LogFileSizesCacheKey    = "LogFileSizes"
+)
+
+const (
 	// persistArchivePath keeps otel/logprocessing's pre-rewrite name (see Persister()).
 	persistArchivePath = "log-processing/persister.json"
 
@@ -88,8 +88,8 @@ func NewReceiverManager(cfg config.OpenTelemetry, hostroot string, state bleemeo
 	}
 
 	persister, err := NewPersistHost(state, PersistConfig{
-		StorageType:  persistStorageType,
-		CacheKey:     logFileMetadataCacheKey,
+		StorageType:  PersistStorageType,
+		CacheKey:     LogFileMetadataCacheKey,
 		ArchivePath:  persistArchivePath,
 		SaveThrottle: saveThrottle,
 	})
@@ -106,7 +106,7 @@ func NewReceiverManager(cfg config.OpenTelemetry, hostroot string, state bleemeo
 		telemetry:       NewTelemetrySettings(),
 		knownLogFormats: knownLogFormats,
 		persister:       persister,
-		lastFileSizes:   GetLastFileSizesFromCache(state, logFileSizesCacheKey),
+		lastFileSizes:   GetLastFileSizesFromCache(state, LogFileSizesCacheKey),
 		receivers:       make(map[string]*managedSource),
 		byContainer:     make(map[string]*managedSource),
 	}, nil
@@ -141,6 +141,12 @@ func (rm *ReceiverManager) RegisterExternalSizer(fn func() []FileSizer) {
 
 // managedSource is one resolved fan-out point (a configured receiver, or a label-opted-in container):
 // its physical tail(s) and the consumer they feed into (nil if no SinkProvider wants it).
+//
+// Its start-new/stop-unwanted tail lifecycle bookkeeping (watching/sizeFnByFile/recvs/extIDs,
+// containerRecvs/containerExtIDs/containerLogFile) independently parallels otel/logprocessing's own
+// logReceiver (receiver.go) and containerReceiver (containers.go) -- they track a different shape
+// (component.Component for a filter/batch/export chain, vs. plain receiver.Logs here) so they haven't been
+// unified, but a fix to one's tail-start/stop or offset-forget logic likely applies to the others too.
 type managedSource struct {
 	name string
 	kind SourceKind
@@ -150,6 +156,10 @@ type managedSource struct {
 	// container is set only for a SourceContainerLabel managedSource, so a later removal can notify
 	// every provider via releaseProviders.
 	container facts.Container
+	// labels is the glouton.* labels resolved when fanout was last (re)built, set only for a
+	// SourceContainerLabel managedSource. Compared against each scan's freshly-parsed labels so a live
+	// label/annotation edit (e.g. glouton.log_metrics) triggers a rebuild instead of being silently ignored.
+	labels containerLabels
 
 	// operators applies to every tail under this source, before fan-out. Callers prepend
 	// BuildContainerEnvelopeOperator() per container tail, since a mixed receiver only wants it there.
@@ -158,11 +168,13 @@ type managedSource struct {
 	extraRaw map[string]any
 
 	l sync.Mutex
-	// watching/sizeFnByFile/recvs/extIDs: include-pattern file tails, removed only on full source shutdown.
+	// watching/sizeFnByFile: cover both include-pattern and container-derived file tails.
 	watching     map[string]ReceiverKind
 	sizeFnByFile map[string]func() (int64, error)
-	recvs        []receiver.Logs
-	extIDs       []component.ID
+	// recvs/extIDs: include-pattern file tails, keyed by file so one can be stopped (e.g. it stopped
+	// matching any include pattern, or was rotated away) without touching the others.
+	recvs  map[string][]receiver.Logs
+	extIDs map[string][]component.ID
 
 	// containerRecvs/containerExtIDs/containerLogFile: container-derived tails, keyed by container ID
 	// so one can be stopped without touching the others.
@@ -179,6 +191,8 @@ func newManagedSource(name string, kind SourceKind, operators []operator.Config,
 		extraRaw:         extraRaw,
 		watching:         make(map[string]ReceiverKind),
 		sizeFnByFile:     make(map[string]func() (int64, error)),
+		recvs:            make(map[string][]receiver.Logs),
+		extIDs:           make(map[string][]component.ID),
 		containerRecvs:   make(map[string][]receiver.Logs),
 		containerExtIDs:  make(map[string][]component.ID),
 		containerLogFile: make(map[string]string),
@@ -345,6 +359,13 @@ func (rm *ReceiverManager) RescanReceivers(ctx context.Context) error {
 		if err := rm.startIncludeFiles(ctx, ms, name, files); err != nil {
 			errs = errors.Join(errs, fmt.Errorf("receiver %q: %w", name, err))
 		}
+
+		wanted := make(map[string]bool, len(files))
+		for _, f := range files {
+			wanted[f] = true
+		}
+
+		rm.stopUnwantedIncludeFiles(ctx, ms, wanted)
 	}
 
 	return errs
@@ -353,87 +374,35 @@ func (rm *ReceiverManager) RescanReceivers(ctx context.Context) error {
 // resolveIncludeGlobs expands patterns into hostroot-stripped, symlink-resolved file paths (needed
 // for e.g. Kubernetes' /var/log/containers/* -> /var/log/pods/* symlinks).
 func (rm *ReceiverManager) resolveIncludeGlobs(name string, patterns []string) []string {
-	hasHostRoot := len(rm.hostroot) > len(string(os.PathSeparator))
-
-	seen := make(map[string]bool)
-
-	var files []string
-
-	for _, pattern := range patterns {
-		matching, err := doublestar.FilepathGlob(
-			filepath.Join(rm.hostroot, pattern),
-			doublestar.WithFilesOnly(),
-			doublestar.WithFailOnIOErrors(),
-		)
-		if err != nil {
-			if errors.Is(err, doublestar.ErrBadPattern) {
-				logger.V(1).Printf("logsource: receiver %q: file %q: %v", name, pattern, err)
-
-				continue
-			}
-
-			if errors.Is(err, fs.ErrPermission) {
-				if hasHostRoot {
-					logger.V(1).Printf("logsource: receiver %q: resolving file %q: %v (ignoring it)", name, pattern, err)
-
-					continue
-				}
-
-				if strings.Contains(pattern, "*") {
-					logger.V(1).Printf(
-						"logsource: receiver %q: resolving file pattern %q: %v (ignoring it; Glouton can read a protected log "+
-							"file via sudo tail, but only for an explicit path, not a glob pattern)", name, pattern, err,
-					)
-
-					continue
-				}
-
-				matching = []string{pattern} // still a chance via sudo tail
-			} else {
-				logger.V(1).Printf("logsource: receiver %q: file %q: %v", name, pattern, err)
-
-				continue
-			}
-		} else if hasHostRoot {
-			for i, logFile := range matching {
-				matching[i] = strings.TrimPrefix(logFile, rm.hostroot)
-			}
-		}
-
-		for _, file := range matching {
-			realFile := file
-			if rm.hostroot != "/" {
-				realFile = hostrootsymlink.EvalSymlinks(rm.hostroot, realFile)
-			}
-
-			if !seen[realFile] {
-				seen[realFile] = true
-
-				files = append(files, realFile)
-			}
-		}
-	}
-
-	return files
+	return ResolveIncludeGlobs(rm.hostroot, patterns, func(msg string) {
+		logger.V(1).Printf("logsource: receiver %q: %s", name, msg)
+	})
 }
 
-// startIncludeFiles starts receivers for new files in ms; idempotent.
+// startIncludeFiles starts receivers for new files in ms; idempotent. Files are set up one at a time (not
+// batched into a single SetupLogReceiverFactories call) so each file's receiver/extension can be tracked
+// and later stopped independently in stopUnwantedIncludeFiles, without touching the others.
 func (rm *ReceiverManager) startIncludeFiles(ctx context.Context, ms *managedSource, name string, files []string) error {
 	ms.l.Lock()
 	defer ms.l.Unlock()
 
-	var newFiles []string
+	var errs error
 
 	for _, f := range files {
-		if _, ok := ms.watching[f]; !ok {
-			newFiles = append(newFiles, f)
+		if _, ok := ms.watching[f]; ok {
+			continue
+		}
+
+		if err := rm.startIncludeFile(ctx, ms, name, f); err != nil {
+			errs = errors.Join(errs, fmt.Errorf("file %q: %w", f, err))
 		}
 	}
 
-	if len(newFiles) == 0 {
-		return nil
-	}
+	return errs
+}
 
+// startIncludeFile starts a single include-pattern file's receiver under ms. Callers must hold ms.l.
+func (rm *ReceiverManager) startIncludeFile(ctx context.Context, ms *managedSource, name, file string) error {
 	var newExtIDs []component.ID
 
 	makeStorageFn := func(logFile string) *component.ID {
@@ -444,7 +413,7 @@ func (rm *ReceiverManager) startIncludeFiles(ctx context.Context, ms *managedSou
 	}
 
 	factories, readFiles, execFiles, sizeFns, err := SetupLogReceiverFactories(
-		newFiles, rm.hostroot, ms.operators, rm.lastFileSizes, rm.commandRunner, makeStorageFn, rm.statFile, nil, ms.extraRaw,
+		[]string{file}, rm.hostroot, ms.operators, rm.lastFileSizes, rm.commandRunner, makeStorageFn, rm.statFile, nil, ms.extraRaw,
 	)
 	if err != nil {
 		rm.persister.RemovePersistentExts(newExtIDs)
@@ -465,19 +434,40 @@ func (rm *ReceiverManager) startIncludeFiles(ctx context.Context, ms *managedSou
 		return err
 	}
 
-	ms.recvs = append(ms.recvs, newRecvs...)
-	ms.extIDs = append(ms.extIDs, newExtIDs...)
+	ms.recvs[file] = append(ms.recvs[file], newRecvs...)
+	ms.extIDs[file] = append(ms.extIDs[file], newExtIDs...)
 	maps.Copy(ms.sizeFnByFile, sizeFns)
 
-	for _, f := range readFiles {
-		ms.watching[f] = ReceiverFileLog
-	}
-
-	for _, f := range execFiles {
-		ms.watching[f] = ReceiverExecLog
+	switch {
+	case len(readFiles) == 1:
+		ms.watching[file] = ReceiverFileLog
+	case len(execFiles) == 1:
+		ms.watching[file] = ReceiverExecLog
 	}
 
 	return nil
+}
+
+// stopUnwantedIncludeFiles stops every include-pattern tail under ms whose file isn't in wanted (e.g. it
+// stopped matching any include pattern, or was rotated/deleted away), forgetting its persisted offset too:
+// symmetric to stopUnwantedContainerTails.
+func (rm *ReceiverManager) stopUnwantedIncludeFiles(ctx context.Context, ms *managedSource, wanted map[string]bool) {
+	ms.l.Lock()
+	defer ms.l.Unlock()
+
+	for file, recvs := range ms.recvs {
+		if wanted[file] {
+			continue
+		}
+
+		shutdownReceivers(ctx, recvs)
+		rm.persister.RemovePersistentExtsAndForget(ms.extIDs[file])
+
+		delete(ms.recvs, file)
+		delete(ms.extIDs, file)
+		delete(ms.watching, file)
+		delete(ms.sizeFnByFile, file)
+	}
 }
 
 func (rm *ReceiverManager) createAndStartReceivers(
@@ -616,6 +606,17 @@ func (rm *ReceiverManager) updateLabelContainers(ctx context.Context, containers
 		labels := parseContainerLabels(ctr)
 
 		ms, found := rm.byContainer[ctr.ID()]
+		if found && !ms.labels.equal(labels) {
+			// The container's glouton.* labels/annotations changed since last scan (e.g. a live edit,
+			// not a recreation): tear down and rebuild so the new send_logs/log_metrics/log_format take
+			// effect, instead of silently keeping the stale fanout/operators forever.
+			rm.shutdownSource(ctx, ms, false)
+			rm.releaseProviders(ctx, ms.container)
+			delete(rm.byContainer, ctr.ID())
+
+			found = false
+		}
+
 		if !found {
 			rawOps := resolveContainerLogFormat(ctr.ContainerName(), labels.LogFormat, rm.cfg.ContainerFormat, rm.knownLogFormats)
 
@@ -633,6 +634,7 @@ func (rm *ReceiverManager) updateLabelContainers(ctx context.Context, containers
 			// Default here is auto_discovery.container_and_service_enable, not OpenTelemetry.SendLogs,
 			// since this container was never explicitly configured. Only affects SendLogs, not LogMetricsRule.
 			ms.container = ctr
+			ms.labels = labels
 			ms.fanout = rm.askProviders(ctx, ResolvedSource{
 				Kind:           SourceContainerLabel,
 				Name:           ctr.ContainerName(),
@@ -656,7 +658,8 @@ func (rm *ReceiverManager) updateLabelContainers(ctx context.Context, containers
 			continue
 		}
 
-		rm.shutdownSource(ctx, ms)
+		// The container is gone for good (not just a restart): forget its offset too.
+		rm.shutdownSource(ctx, ms, true)
 		rm.releaseProviders(ctx, ms.container)
 		delete(rm.byContainer, id)
 	}
@@ -762,7 +765,8 @@ func (rm *ReceiverManager) stopUnwantedContainerTails(ctx context.Context, ms *m
 		}
 
 		shutdownReceivers(ctx, recvs)
-		rm.persister.RemovePersistentExts(ms.containerExtIDs[id])
+		// The container is gone for good (not just a restart): forget its offset too.
+		rm.persister.RemovePersistentExtsAndForget(ms.containerExtIDs[id])
 
 		logFile := ms.containerLogFile[id]
 		delete(ms.watching, logFile)
@@ -773,32 +777,43 @@ func (rm *ReceiverManager) stopUnwantedContainerTails(ctx context.Context, ms *m
 	}
 }
 
-// shutdownSource stops every physical tail (include-file and container-derived)
-// under ms.
-func (rm *ReceiverManager) shutdownSource(ctx context.Context, ms *managedSource) {
+// shutdownSource stops every physical tail (include-file and container-derived) under ms. forget must be
+// false for a graceful/resumable shutdown (e.g. process restart), where the offset must survive so the next
+// run resumes from it, and true only when ms is gone for good (e.g. its container was removed).
+func (rm *ReceiverManager) shutdownSource(ctx context.Context, ms *managedSource, forget bool) {
 	ms.l.Lock()
 	defer ms.l.Unlock()
 
-	shutdownReceivers(ctx, ms.recvs)
-	rm.persister.RemovePersistentExts(ms.extIDs)
+	removeExts := rm.persister.RemovePersistentExts
+	if forget {
+		removeExts = rm.persister.RemovePersistentExtsAndForget
+	}
+
+	for _, recvs := range ms.recvs {
+		shutdownReceivers(ctx, recvs)
+	}
+
+	for _, extIDs := range ms.extIDs {
+		removeExts(extIDs)
+	}
 
 	for id, recvs := range ms.containerRecvs {
 		shutdownReceivers(ctx, recvs)
-		rm.persister.RemovePersistentExts(ms.containerExtIDs[id])
+		removeExts(ms.containerExtIDs[id])
 	}
 }
 
-// Shutdown stops every physical tail this ReceiverManager owns.
+// Shutdown stops every physical tail this ReceiverManager owns, preserving every offset for the next restart.
 func (rm *ReceiverManager) Shutdown(ctx context.Context) {
 	rm.l.Lock()
 	defer rm.l.Unlock()
 
 	for _, ms := range rm.receivers {
-		rm.shutdownSource(ctx, ms)
+		rm.shutdownSource(ctx, ms, false)
 	}
 
 	for _, ms := range rm.byContainer {
-		rm.shutdownSource(ctx, ms)
+		rm.shutdownSource(ctx, ms, false)
 	}
 }
 
@@ -827,7 +842,7 @@ func (rm *ReceiverManager) SaveState() {
 		sizers = append(sizers, fn()...)
 	}
 
-	SaveLastFileSizesToCache(rm.state, logFileSizesCacheKey, sizers)
+	SaveLastFileSizesToCache(rm.state, LogFileSizesCacheKey, sizers)
 }
 
 // NetworkWants returns one NetworkWant per configured receiver with network participation, its

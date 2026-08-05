@@ -91,6 +91,35 @@ func TestRingCounterDiscardFullyStale(t *testing.T) {
 	}
 }
 
+func TestRingCounterClockWentBackwards(t *testing.T) {
+	t.Parallel()
+
+	rc := newTestRingCounter(5, 100, 104, []int{1, 2, 3, 4, 7})
+
+	// Wall clock jumped back before t0 (NTP correction, VM snapshot restore, ...): must not
+	// leave now-t0 negative (which would panic on buckets[idx] in Add).
+	rc.rebaseIfClockWentBackwards(95)
+
+	if got := rc.t0; got != 95 {
+		t.Errorf("Expected t0 to be rebased to 95, got %d", got)
+	}
+
+	if got := rc.lastUpdateAt; got != 95 {
+		t.Errorf("Expected lastUpdateAt to be rebased to 95, got %d", got)
+	}
+
+	for i, got := range rc.buckets {
+		if got != 0 {
+			t.Errorf("Expected bucket %d to be cleared on rebase, got %d", i, got)
+		}
+	}
+
+	idx := int(95-rc.t0) % rc.size
+	if idx < 0 || idx >= rc.size {
+		t.Fatalf("idx %d out of range after rebase", idx)
+	}
+}
+
 func TestRingCounterAddAndTotal(t *testing.T) {
 	t.Parallel()
 

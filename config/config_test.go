@@ -214,16 +214,6 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 		},
 		Log: Log{
 			HostRootPrefix: "/hostroot",
-			Network: NetworkConfig{
-				Receivers: map[string]NetworkReceiver{
-					"otlp": {
-						Protocols: NetworkProtocols{
-							GRPC: &NetworkEndpoint{Endpoint: "localhost:4317"},
-							HTTP: &NetworkEndpoint{Endpoint: "localhost:4318"},
-						},
-					},
-				},
-			},
 			OpenTelemetry: OpenTelemetry{
 				ShippingEnable: true,
 				SendLogs:       true,
@@ -309,6 +299,18 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				},
 				ContainerFilter: map[string]string{
 					"ctr-1": testMinLevelInfo,
+				},
+			},
+		},
+		OpenTelemetry: OpenTelemetryConfig{
+			Network: NetworkConfig{
+				Receivers: map[string]NetworkReceiver{
+					"otlp": {
+						Protocols: NetworkProtocols{
+							GRPC: &NetworkEndpoint{Endpoint: "localhost:4317"},
+							HTTP: &NetworkEndpoint{Endpoint: "localhost:4318"},
+						},
+					},
 				},
 			},
 		},
@@ -1820,7 +1822,7 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 				Log: Log{
 					OpenTelemetry: OpenTelemetry{
 						Receivers: map[string]LogReceiver{
-							"legacy_input_0": {
+							legacyInputReceiverName("testdata/legacy-log-inputs-path.conf", 0): {
 								"include":   []any{"/var/log/apache/access.log"},
 								"send_logs": false,
 								"metrics": []any{
@@ -1849,7 +1851,7 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 				Log: Log{
 					OpenTelemetry: OpenTelemetry{
 						Receivers: map[string]LogReceiver{
-							"legacy_input_0": {
+							legacyInputReceiverName("testdata/legacy-log-inputs-container-name.conf", 0): {
 								"container_name": testRedis,
 								"send_logs":      false,
 								"metrics": []any{
@@ -1878,7 +1880,7 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 				Log: Log{
 					OpenTelemetry: OpenTelemetry{
 						Receivers: map[string]LogReceiver{
-							"legacy_input_0": {
+							legacyInputReceiverName("testdata/legacy-log-inputs-selectors.conf", 0): {
 								"container_selectors": map[string]any{"app": "postgres"},
 								"send_logs":           false,
 								"metrics": []any{
@@ -1904,7 +1906,7 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 			Name:       "legacy-opentelemetry-network",
 			ConfigFile: "testdata/legacy-opentelemetry-network.conf",
 			WantConfig: Config{
-				Log: Log{
+				OpenTelemetry: OpenTelemetryConfig{
 					Network: NetworkConfig{
 						Receivers: map[string]NetworkReceiver{
 							"legacy-network": {
@@ -1914,6 +1916,8 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 							},
 						},
 					},
+				},
+				Log: Log{
 					OpenTelemetry: OpenTelemetry{
 						Receivers: map[string]LogReceiver{
 							"legacy_network": {
@@ -1931,7 +1935,7 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 			Name:       "legacy-network-both-protocols",
 			ConfigFile: "testdata/legacy-network-both-protocols.conf",
 			WantConfig: Config{
-				Log: Log{
+				OpenTelemetry: OpenTelemetryConfig{
 					Network: NetworkConfig{
 						Receivers: map[string]NetworkReceiver{
 							"legacy-network": {
@@ -1942,6 +1946,8 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 							},
 						},
 					},
+				},
+				Log: Log{
 					OpenTelemetry: OpenTelemetry{
 						Receivers: map[string]LogReceiver{
 							"legacy_network": {
@@ -1968,7 +1974,7 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 					Inputs: []LogInput{{}}, // the orphan entry is kept, but its filters are dropped
 					OpenTelemetry: OpenTelemetry{
 						Receivers: map[string]LogReceiver{
-							"legacy_input_0": {
+							legacyInputReceiverName("testdata/legacy-log-inputs-unmatched.conf", 0): {
 								"include":   []any{"/var/log/apache/access.log"},
 								"send_logs": false,
 								"metrics": []any{
@@ -1998,14 +2004,14 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 				Log: Log{
 					OpenTelemetry: OpenTelemetry{
 						Receivers: map[string]LogReceiver{
-							"legacy_input_0": {
+							legacyInputReceiverName("testdata/legacy-log-inputs-name-collision.conf", 0): {
 								"include":   []any{"/var/log/apache/access.log"},
 								"send_logs": false,
 								"metrics": []any{
 									map[string]any{"include": "legacy_log_inputs_metric_shared_errors_count"},
 								},
 							},
-							"legacy_input_1": {
+							legacyInputReceiverName("testdata/legacy-log-inputs-name-collision.conf", 1): {
 								"container_name": testRedis,
 								"send_logs":      false,
 								"metrics": []any{
@@ -2038,7 +2044,7 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 				Log: Log{
 					OpenTelemetry: OpenTelemetry{
 						Receivers: map[string]LogReceiver{
-							"legacy_input_0": {
+							legacyInputReceiverName("testdata/legacy-log-inputs-name-and-selectors.conf", 0): {
 								"container_name":      "postgres",
 								"container_selectors": map[string]any{"env": "prod"},
 								"send_logs":           false,
@@ -2082,6 +2088,66 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 				t.Fatalf("Unexpected config:\n%s", diff)
 			}
 		})
+	}
+}
+
+// Test_migrateLogFluentBitURL guards against log.fluentbit_url (dropped by the OpenTelemetry log rewrite, but
+// still set by upgrading installs via the bleemeo-agent-logs package override) failing config load as an
+// unknown key instead of being silently deprecated like other removed settings.
+func Test_migrateLogFluentBitURL(t *testing.T) {
+	t.Parallel()
+
+	config, warnings, err := load(&configLoader{}, false, false, "testdata/legacy-log-fluentbit-url.conf")
+	if err != nil {
+		t.Fatalf("Failed to load config: %s", err)
+	}
+
+	if warnings == nil || !strings.Contains(warnings.Error(), "log.fluentbit_url") {
+		t.Fatalf("Expected a deprecation warning mentioning log.fluentbit_url, got: %v", warnings)
+	}
+
+	if diff := compareConfig(Config{}, config, cmpopts.EquateEmpty()); diff != "" {
+		t.Fatalf("Expected fluentbit_url to be dropped with no other effect on config:\n%s", diff)
+	}
+}
+
+// Test_migrateLogInputs_multiFileNoCollision guards against a regression where each config file's log.inputs
+// migration restarted its "legacy_input_%d" naming from 0, so two conf.d files each declaring one log.inputs
+// entry produced the same receiver key and the last-loaded one silently discarded the other's receiver.
+func Test_migrateLogInputs_multiFileNoCollision(t *testing.T) {
+	t.Parallel()
+
+	fileA := "testdata/legacy-log-inputs-multifile-a.conf"
+	fileB := "testdata/legacy-log-inputs-multifile-b.conf"
+
+	config, _, err := load(&configLoader{}, false, false, fileA, fileB)
+	if err != nil {
+		t.Fatalf("Failed to load config: %s", err)
+	}
+
+	if got := len(config.Log.OpenTelemetry.Receivers); got != 2 {
+		t.Fatalf("Expected 2 distinct receivers (one per file), got %d: %v", got, config.Log.OpenTelemetry.Receivers)
+	}
+
+	nameA := legacyInputReceiverName(fileA, 0)
+	nameB := legacyInputReceiverName(fileB, 0)
+
+	if nameA == nameB {
+		t.Fatalf("Expected distinct receiver names for distinct files, both computed %q", nameA)
+	}
+
+	if _, ok := config.Log.OpenTelemetry.Receivers[nameA]; !ok {
+		t.Errorf("Missing receiver %q from %s", nameA, fileA)
+	}
+
+	if _, ok := config.Log.OpenTelemetry.Receivers[nameB]; !ok {
+		t.Errorf("Missing receiver %q from %s", nameB, fileB)
+	}
+
+	for _, metric := range []string{"redis_errors_count", "nginx_errors_count"} {
+		if _, ok := config.Log.MetricsRules[legacyMetricsRuleName(metric)]; !ok {
+			t.Errorf("Missing metrics rule for %q", metric)
+		}
 	}
 }
 

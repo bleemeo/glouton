@@ -55,6 +55,9 @@ type Manager struct {
 type builtSource struct {
 	diag  sourceDiagnostic
 	conns []otelconnector.Logs
+	// items are every registry item this source resolved counters for (usually just diag.Name, but a
+	// metrics: entry's own "item" override can add more); ReleaseSource uses it to purge the registry.
+	items []string
 }
 
 // New builds a Manager for cfg's receivers and metricsRules (log.metrics_rules).
@@ -63,7 +66,7 @@ func New(cfg config.OpenTelemetry, metricsRules map[string][]config.LogMetricEnt
 		cfg:          cfg,
 		metricsRules: metricsRules,
 		telemetry:    logsource.NewTelemetrySettings(),
-		reg:          newMetricsRegistry(),
+		reg:          newMetricsRegistry(releaseGracePeriod),
 	}
 }
 
@@ -163,7 +166,7 @@ func (man *Manager) wantContainerLabelSource(ctx context.Context, src logsource.
 
 // buildSink builds the countconnector chain for resolved, grouped by item, and remembers it for Shutdown/DiagnosticArchive.
 func (man *Manager) buildSink(ctx context.Context, resolved []resolvedMetric, defaultItem string, diag sourceDiagnostic) (consumer.Logs, bool) {
-	conns, err := buildGroupedConnectors(ctx, man.telemetry, resolved, defaultItem, man.reg, diag.Name)
+	conns, items, err := buildGroupedConnectors(ctx, man.telemetry, resolved, defaultItem, man.reg, diag.Name)
 	if err != nil {
 		logger.V(1).Printf("logmetrics: source %q: %v", diag.Name, err)
 
@@ -173,13 +176,14 @@ func (man *Manager) buildSink(ctx context.Context, resolved []resolvedMetric, de
 	diag.MetricNames = metricNamesOf(resolved)
 
 	man.l.Lock()
-	man.built = append(man.built, builtSource{diag: diag, conns: conns})
+	man.built = append(man.built, builtSource{diag: diag, conns: conns, items: items})
 	man.l.Unlock()
 
 	return logsConsumerFor(conns), true
 }
 
-// ReleaseSource implements logsource.SinkProvider: it shuts down and forgets the countconnector chain built for container, if any.
+// ReleaseSource implements logsource.SinkProvider: it shuts down and forgets the countconnector chain built for container, if any,
+// and purges the registry counters it fed so a recreated container's old name/hash doesn't keep emitting a permanent 0.
 // Called when a container disappears, since container recreation assigns a new ID and would otherwise leak the old chain.
 func (man *Manager) ReleaseSource(ctx context.Context, container facts.Container) {
 	if container == nil {
@@ -192,11 +196,15 @@ func (man *Manager) ReleaseSource(ctx context.Context, container facts.Container
 
 	kept := make([]builtSource, 0, len(man.built))
 
-	var toStop []otelconnector.Logs
+	var (
+		toStop        []otelconnector.Logs
+		releasedItems []string
+	)
 
 	for _, b := range man.built {
 		if b.diag.Kind == "container_label" && b.diag.ContainerID == containerID {
 			toStop = append(toStop, b.conns...)
+			releasedItems = append(releasedItems, b.items...)
 
 			continue
 		}
@@ -206,10 +214,26 @@ func (man *Manager) ReleaseSource(ctx context.Context, container facts.Container
 
 	man.built = kept
 
+	// Some other still-kept source may resolve the same item (e.g. a shared "item" override):
+	// don't purge those out from under it.
+	stillUsed := make(map[string]bool)
+
+	for _, b := range kept {
+		for _, item := range b.items {
+			stillUsed[item] = true
+		}
+	}
+
 	man.l.Unlock()
 
 	if len(toStop) == 0 {
 		return
+	}
+
+	for _, item := range releasedItems {
+		if !stillUsed[item] {
+			man.reg.release(item)
+		}
 	}
 
 	logger.V(2).Printf("logmetrics: releasing container %s (%d connector(s) stopped)", containerID, len(toStop))
@@ -234,11 +258,15 @@ func metricNamesOf(entries []resolvedMetric) []string {
 	return names
 }
 
-// Run keeps Manager alive for ctx's lifetime; there is no periodic work to do here.
+// Run keeps Manager alive for ctx's lifetime, then shuts down every countconnector it built.
 func (man *Manager) Run(ctx context.Context) error {
 	defer crashreport.ProcessPanic()
 
 	<-ctx.Done()
+
+	if err := man.Shutdown(context.Background()); err != nil {
+		logger.V(1).Printf("logmetrics: shutdown: %v", err)
+	}
 
 	return ctx.Err()
 }

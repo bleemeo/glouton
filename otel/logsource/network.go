@@ -219,7 +219,7 @@ func PlanSharedNetworkReceivers(receivers map[string]config.NetworkReceiver, wan
 	for _, name := range names {
 		recv, ok := receivers[name]
 		if !ok {
-			logger.Printf("logsource: network receiver %q referenced but not defined in log.network.receivers", name)
+			logger.Printf("logsource: network receiver %q referenced but not defined in opentelemetry.network.receivers", name)
 
 			continue
 		}

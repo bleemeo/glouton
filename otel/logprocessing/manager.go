@@ -84,7 +84,7 @@ func New(
 	receiverManager *logsource.ReceiverManager,
 ) (*Manager, error) {
 	// Expand known log formats, allowing one level of cross-referencing.
-	knownLogFormats, err := expandLogFormats(cfg.KnownLogFormats)
+	knownLogFormats, err := logsource.ExpandLogFormats(cfg.KnownLogFormats)
 	if err != nil {
 		addWarnings(err)
 
@@ -110,7 +110,7 @@ func New(
 		persister,
 		addWarnings,
 		knownLogFormats,
-		logsource.GetLastFileSizesFromCache(state, logFileSizesCacheKey),
+		logsource.GetLastFileSizesFromCache(state, logsource.LogFileSizesCacheKey),
 		pipelineOpts,
 	)
 	if err != nil {
@@ -353,12 +353,12 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 }
 
 func (man *Manager) setupProcessingForSource(ctx context.Context, logSource logSource) error {
-	rawOps, err := expandOperators(logSource.operators, man.knownLogFormats, false)
+	rawOps, err := logsource.ExpandOperators(logSource.operators, man.knownLogFormats, false)
 	if err != nil {
 		return fmt.Errorf("expanding operators: %w", err)
 	}
 
-	operators, err := buildOperators(rawOps)
+	operators, err := logsource.BuildOperators(rawOps)
 	if err != nil {
 		return fmt.Errorf("building operators: %w", err)
 	}
@@ -442,7 +442,8 @@ func (man *Manager) removeOldSources(ctx context.Context, services []discovery.S
 
 		receivers, found := man.serviceReceivers[service]
 		if found {
-			stopReceivers(receivers, man.persister.RemovePersistentExts)
+			// The service is gone for good (not just a restart): forget its offset too.
+			stopReceivers(receivers, man.persister.RemovePersistentExtsAndForget)
 			delete(man.serviceReceivers, service)
 		}
 

@@ -130,21 +130,16 @@ type fakeInput struct {
 	input []types.MetricPoint
 }
 
-func (f *fakeFilter) FilterPoints(points []types.MetricPoint, allowNeededByRules bool) []types.MetricPoint {
-	_ = allowNeededByRules
-
+func (f *fakeFilter) FilterPoints(points []types.MetricPoint) []types.MetricPoint {
 	return points
 }
 
-func (f *fakeFilter) FilterFamilies(families []*dto.MetricFamily, allowNeededByRules bool) []*dto.MetricFamily {
-	_ = allowNeededByRules
-
+func (f *fakeFilter) FilterFamilies(families []*dto.MetricFamily) []*dto.MetricFamily {
 	return families
 }
 
-func (f *fakeFilter) IsMetricAllowed(lbls labels.Labels, allowNeededByRules bool) bool {
+func (f *fakeFilter) IsMetricAllowed(lbls labels.Labels) bool {
 	_ = lbls
-	_ = allowNeededByRules
 
 	return true
 }

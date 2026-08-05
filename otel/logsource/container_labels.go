@@ -97,6 +97,25 @@ func (labels containerLabels) isExcluded() bool {
 	return labels.LogEnable != nil && !*labels.LogEnable
 }
 
+// equal reports whether labels and other resolve to the same values. Every field but the two *bool ones is
+// directly comparable; LogEnable/SendLogs need a dedicated comparison since parseContainerLabels allocates a
+// fresh *bool each call, so two calls parsing the identical underlying value would otherwise never be ==.
+func (labels containerLabels) equal(other containerLabels) bool {
+	return boolPtrEqual(labels.LogEnable, other.LogEnable) &&
+		boolPtrEqual(labels.SendLogs, other.SendLogs) &&
+		labels.LogMetrics == other.LogMetrics &&
+		labels.LogFormat == other.LogFormat &&
+		labels.LogFilter == other.LogFilter
+}
+
+func boolPtrEqual(a, b *bool) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+
+	return *a == *b
+}
+
 // isConfigExcluded reports whether ctr matches an OpenTelemetry.ContainerExclude rule.
 func isConfigExcluded(cfg config.OpenTelemetry, ctr facts.Container) bool {
 	for _, rule := range cfg.ContainerExclude {

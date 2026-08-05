@@ -43,7 +43,7 @@ func testTelemetrySettings() component.TelemetrySettings {
 
 // testRegistry returns a fresh metricsRegistry and a function reading back each metric's raw match count.
 func testRegistry() (*metricsRegistry, func() map[counterKey]int64) {
-	reg := newMetricsRegistry()
+	reg := newMetricsRegistry(0)
 
 	return reg, func() map[counterKey]int64 {
 		reg.l.Lock()
@@ -315,7 +315,7 @@ func TestBuildGroupedConnectorsEndToEnd(t *testing.T) {
 
 	reg, totals := testRegistry()
 
-	conns, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), entries, "my-receiver", reg, "my-receiver")
+	conns, _, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), entries, "my-receiver", reg, "my-receiver")
 	if err != nil {
 		t.Fatal("buildGroupedConnectors returned an error:", err)
 	}
@@ -361,7 +361,7 @@ func TestBuildGroupedConnectorsExplicitItemSplitsGroup(t *testing.T) {
 
 	reg, totals := testRegistry()
 
-	conns, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), entries, "recv", reg, "recv")
+	conns, _, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), entries, "recv", reg, "recv")
 	if err != nil {
 		t.Fatal("buildGroupedConnectors returned an error:", err)
 	}
@@ -396,7 +396,7 @@ func TestBuildGroupedConnectorsIsolatesInvalidCounter(t *testing.T) {
 
 	reg, totals := testRegistry()
 
-	conns, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), entries, "recv", reg, "recv")
+	conns, _, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), entries, "recv", reg, "recv")
 	if err != nil {
 		t.Fatal("buildGroupedConnectors returned an error despite one valid counter:", err)
 	}
@@ -434,7 +434,7 @@ func TestBuildGroupedConnectorsNoEntries(t *testing.T) {
 
 	reg, _ := testRegistry()
 
-	_, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), nil, "recv", reg, "recv")
+	_, _, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), nil, "recv", reg, "recv")
 	if !errors.Is(err, errNoApplicableMetric) {
 		t.Fatalf("Expected errNoApplicableMetric for an empty entry list, got %v", err)
 	}
@@ -449,7 +449,7 @@ func TestBuildGroupedConnectorsAllInvalid(t *testing.T) {
 
 	reg, _ := testRegistry()
 
-	_, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), entries, "recv", reg, "recv")
+	_, _, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), entries, "recv", reg, "recv")
 	if !errors.Is(err, errNoValidCounter) {
 		t.Fatalf("Expected errNoValidCounter (a metric applied but failed to build), got %v", err)
 	}

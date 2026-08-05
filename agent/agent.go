@@ -794,7 +794,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	bleemeoFilteredStore := store.NewFilteredStore(
 		a.store,
 		func(m []types.MetricPoint) []types.MetricPoint {
-			return bleemeoFilter.FilterPoints(m, false)
+			return bleemeoFilter.FilterPoints(m)
 		},
 		bleemeoFilter.FilterMetrics,
 	)
@@ -961,9 +961,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 
 	a.dynamicScrapper = &promexporter.DynamicScrapper{
-		Registry:        a.gathererRegistry,
-		DynamicJobName:  "discovered-exporters",
-		FluentBitInputs: a.config.Log.Inputs,
+		Registry:       a.gathererRegistry,
+		DynamicJobName: "discovered-exporters",
 	}
 
 	if a.config.Blackbox.Enable {
@@ -1193,10 +1192,10 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		}
 
 		// Log-shipping and log-to-metric share a single OTLP listener when they name
-		// the same log.network.receivers entry (see logsource.PlanSharedNetworkReceivers).
+		// the same opentelemetry.network.receivers entry (see logsource.PlanSharedNetworkReceivers).
 		// A receiver with none named falls back to the auto-provisioned default listener.
 		effectiveNetworkReceivers := config.EffectiveNetworkReceivers(
-			a.config.Log.Network.Receivers,
+			a.config.OpenTelemetry.Network.Receivers,
 			anyReceiverWantsDefaultNetwork(a.config.Log.OpenTelemetry.Receivers),
 		)
 
@@ -1417,7 +1416,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		promFilteredStore := store.NewFilteredStore(
 			a.store,
 			func(m []types.MetricPoint) []types.MetricPoint {
-				return promFilter.FilterPoints(m, false)
+				return promFilter.FilterPoints(m)
 			},
 			promFilter.FilterMetrics,
 		)

@@ -17,9 +17,12 @@
 package logmetrics
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts"
@@ -29,7 +32,11 @@ import (
 func newTestManager(t *testing.T, cfg config.OpenTelemetry, metricsRules map[string][]config.LogMetricEntry) *Manager {
 	t.Helper()
 
-	return New(cfg, metricsRules)
+	man := New(cfg, metricsRules)
+	// Most tests want release() to be synchronous; the grace-period-specific tests set their own.
+	man.reg.gracePeriod = 0
+
+	return man
 }
 
 // countsFor reads back every declared counter's raw total for a metric, keyed by item.
@@ -415,6 +422,130 @@ func TestReleaseSourceStopsAndForgetsContainerConnectors(t *testing.T) {
 	}
 }
 
+// Test that ReleaseSource purges the released container's counters from the registry, so a container churning
+// through names/hashes (Kubernetes pod recreation, ...) doesn't keep emitting a permanent 0 for its old item forever.
+func TestReleaseSourcePurgesRegistryCounters(t *testing.T) {
+	t.Parallel()
+
+	man := newTestManager(t, config.OpenTelemetry{}, map[string][]config.LogMetricEntry{
+		"web_errors": {{"metric": "web_errors_count", "conditions": []any{`IsMatch(body, "error")`}}},
+	})
+
+	ctr := facts.FakeContainer{FakeID: "id-1", FakeContainerName: "web-1"}
+
+	sink, ok := man.WantSource(t.Context(), logsource.ResolvedSource{
+		Kind: logsource.SourceContainerLabel, Name: "web-1", Container: ctr, LogMetricsRule: "web_errors",
+	})
+	if !ok {
+		t.Fatal("Expected the container to be wanted")
+	}
+
+	if err := sink.ConsumeLogs(t.Context(), logsWithBody("an error happened")); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := countsFor(man, "web_errors_count"); got["web-1"] != 1 {
+		t.Fatalf(`Expected 1 match under "web-1" before release, got %v`, got)
+	}
+
+	man.ReleaseSource(t.Context(), ctr)
+
+	if got := countsFor(man, "web_errors_count"); len(got) != 0 {
+		t.Errorf("Expected the registry to have purged item %q after release, got %v", "web-1", got)
+	}
+
+	// The metric name itself must stay declared: another container may still report it.
+	if names := man.MetricNames(); !slices.Contains(names, "web_errors_count") {
+		t.Errorf("Expected web_errors_count to remain a declared metric name, got %v", names)
+	}
+}
+
+// Test that a container recreated (new ID, same item) shortly after the old one is released reuses the
+// existing counter instead of resetting to 0: guards the ReceiverManager-level race where a scan can
+// release an old container's item and want a same-named replacement's item in close succession.
+func TestReleaseSourceThenWantSourceReusesCounterWithinGracePeriod(t *testing.T) {
+	t.Parallel()
+
+	man := newTestManager(t, config.OpenTelemetry{}, map[string][]config.LogMetricEntry{
+		"web_errors": {{"metric": "web_errors_count", "conditions": []any{`IsMatch(body, "error")`}}},
+	})
+	man.reg.gracePeriod = time.Hour // long enough that the timer never fires during this test
+
+	oldCtr := facts.FakeContainer{FakeID: "id-old", FakeContainerName: "web-1"}
+
+	oldSink, ok := man.WantSource(t.Context(), logsource.ResolvedSource{
+		Kind: logsource.SourceContainerLabel, Name: "web-1", Container: oldCtr, LogMetricsRule: "web_errors",
+	})
+	if !ok {
+		t.Fatal("Expected the old container to be wanted")
+	}
+
+	if err := oldSink.ConsumeLogs(t.Context(), logsWithBody("an error happened")); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := countsFor(man, "web_errors_count"); got["web-1"] != 1 {
+		t.Fatalf(`Expected 1 match under "web-1" before recreation, got %v`, got)
+	}
+
+	// The container is recreated: a new ID, but the same runtime name (so the same registry item).
+	man.ReleaseSource(t.Context(), oldCtr)
+
+	newCtr := facts.FakeContainer{FakeID: "id-new", FakeContainerName: "web-1"}
+
+	newSink, ok := man.WantSource(t.Context(), logsource.ResolvedSource{
+		Kind: logsource.SourceContainerLabel, Name: "web-1", Container: newCtr, LogMetricsRule: "web_errors",
+	})
+	if !ok {
+		t.Fatal("Expected the new container to be wanted")
+	}
+
+	if got := countsFor(man, "web_errors_count"); got["web-1"] != 1 {
+		t.Fatalf(`Expected the prior match under "web-1" to survive the recreation (grace period), got %v`, got)
+	}
+
+	if err := newSink.ConsumeLogs(t.Context(), logsWithBody("another error")); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := countsFor(man, "web_errors_count"); got["web-1"] != 2 {
+		t.Errorf(`Expected a continuous count (1 before + 1 after recreation = 2) under "web-1", got %v`, got)
+	}
+}
+
+// Test that ReleaseSource doesn't purge an item still used by another, still-active built source
+// (e.g. two containers sharing an explicit "item" override).
+func TestReleaseSourceKeepsSharedItemInUse(t *testing.T) {
+	t.Parallel()
+
+	man := newTestManager(t, config.OpenTelemetry{}, map[string][]config.LogMetricEntry{
+		"shared_rule": {{"metric": "shared_metric", "item": "shared-item", "conditions": []any{`IsMatch(body, "x")`}}},
+	})
+
+	ctrA := facts.FakeContainer{FakeID: "id-a", FakeContainerName: "app-a"}
+	ctrB := facts.FakeContainer{FakeID: "id-b", FakeContainerName: "app-b"}
+
+	if _, ok := man.WantSource(t.Context(), logsource.ResolvedSource{Kind: logsource.SourceContainerLabel, Name: "app-a", Container: ctrA, LogMetricsRule: "shared_rule"}); !ok {
+		t.Fatal("Expected container app-a to be wanted")
+	}
+
+	sinkB, ok := man.WantSource(t.Context(), logsource.ResolvedSource{Kind: logsource.SourceContainerLabel, Name: "app-b", Container: ctrB, LogMetricsRule: "shared_rule"})
+	if !ok {
+		t.Fatal("Expected container app-b to be wanted")
+	}
+
+	man.ReleaseSource(t.Context(), ctrA)
+
+	if err := sinkB.ConsumeLogs(t.Context(), logsWithBody("x")); err != nil {
+		t.Fatal(err)
+	}
+
+	got := countsFor(man, "shared_metric")
+	if got["shared-item"] != 1 {
+		t.Errorf(`Expected "shared-item" counter to survive app-a's release since app-b still uses it, got %v`, got)
+	}
+}
+
 // Test that Shutdown tears down every countconnector the Manager built, without error.
 func TestManagerShutdownStopsConnectors(t *testing.T) {
 	t.Parallel()
@@ -436,6 +567,51 @@ func TestManagerShutdownStopsConnectors(t *testing.T) {
 
 	if err := man.Shutdown(t.Context()); err != nil {
 		t.Fatalf("Shutdown returned an error: %v", err)
+	}
+}
+
+// TestManagerRunShutsDownConnectorsOnCtxDone guards against a regression where Run only blocked on
+// ctx.Done() and returned, never calling Shutdown -- leaving every countconnector chain built by
+// WantSource running (and its underlying resources unshut-down) after the agent stops using this Manager.
+func TestManagerRunShutsDownConnectorsOnCtxDone(t *testing.T) {
+	t.Parallel()
+
+	man := newTestManager(t, config.OpenTelemetry{
+		Receivers: map[string]config.LogReceiver{
+			"app": {
+				"include": []string{"/var/log/app.log"},
+				"metrics": []any{
+					map[string]any{"metric": "app_errors_count", "conditions": []any{`IsMatch(body, "error")`}},
+				},
+			},
+		},
+	}, nil)
+
+	if _, ok := man.WantSource(t.Context(), logsource.ResolvedSource{Kind: logsource.SourceReceiver, Name: "app", ReceiverName: "app"}); !ok {
+		t.Fatal("Expected the receiver to be wanted")
+	}
+
+	man.l.Lock()
+	builtBefore := len(man.built)
+	man.l.Unlock()
+
+	if builtBefore == 0 {
+		t.Fatal("Expected at least 1 built source before Run returns")
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	if err := man.Run(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Expected Run to return context.Canceled, got %v", err)
+	}
+
+	man.l.Lock()
+	builtAfter := len(man.built)
+	man.l.Unlock()
+
+	if builtAfter != 0 {
+		t.Errorf("Expected Run to have called Shutdown (built sources forgotten), got %d still built", builtAfter)
 	}
 }
 
