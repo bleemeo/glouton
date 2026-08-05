@@ -216,23 +216,19 @@ func decodeNetstatFile(data string) map[int][]ListenAddress {
 	return result
 }
 
-// isGenericAddress reports whether addr is a wildcard or loopback address --
-// i.e. one that can refer to the same socket regardless of address family.
-func isGenericAddress(addr string) bool {
-	return addr == addrAllInterfaces || addr == addrLocalhost
-}
-
 func addAddress(addresses []ListenAddress, newAddr ListenAddress) []ListenAddress {
 	duplicate := false
 
 	if newAddr.NetworkFamily != networkUnix {
 		if newAddr.NetworkFamily == networkTCP+"6" || newAddr.NetworkFamily == networkUDP+"6" {
+			// The IPv6 wildcard address is reported under both families (e.g. "tcp 0.0.0.0:111"
+			// and "tcp6 :::111") for the same dual-stack socket, so normalize it to merge below.
+			// ::1 is NOT normalized to 127.0.0.1: unlike the wildcard, a socket bound to the
+			// specific address ::1 does not also accept connections on 127.0.0.1 (no IPv4-mapped
+			// dual-stack behavior for non-wildcard binds), so they must be kept as distinct
+			// addresses or an IPv6-only service listening on ::1 would be probed on 127.0.0.1.
 			if newAddr.Address == "::" {
 				newAddr.Address = addrAllInterfaces
-			}
-
-			if newAddr.Address == "::1" {
-				newAddr.Address = addrLocalhost
 			}
 
 			newAddr.NetworkFamily = newAddr.NetworkFamily[:3]
@@ -243,12 +239,10 @@ func addAddress(addresses []ListenAddress, newAddr ListenAddress) []ListenAddres
 				continue
 			}
 
-			// A wildcard/loopback address reported under both families (e.g. "tcp 0.0.0.0:111"
-			// and "tcp6 :::111") is the same socket and should merge. Two distinct specific
-			// addresses sharing a port (e.g. a dual-stack service on 172.17.0.1 and fd00::5)
-			// are not duplicates and must both be kept -- even when one of the two happens to
-			// be a wildcard/loopback address and the other isn't.
-			if v.Address != newAddr.Address && (!isGenericAddress(v.Address) || !isGenericAddress(newAddr.Address)) {
+			// Two distinct addresses sharing a port (e.g. a dual-stack service on 172.17.0.1
+			// and fd00::5, or unrelated services on 127.0.0.1 and ::1) are not duplicates and
+			// must both be kept.
+			if v.Address != newAddr.Address {
 				continue
 			}
 

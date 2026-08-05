@@ -143,6 +143,20 @@ func TestAddAddress(t *testing.T) {
 				{NetworkFamily: networkTCP, Address: "2001:db8::5", Port: 8080},
 			},
 		},
+		{
+			// ::1 must NOT be merged into (or rewritten as) 127.0.0.1: unlike the wildcard
+			// address, binding to the specific address ::1 does not also accept connections on
+			// 127.0.0.1. An IPv6-only service listening on ::1 and an unrelated IPv4 service
+			// listening on 127.0.0.1 on the same port are two distinct sockets.
+			adds: []ListenAddress{
+				{NetworkFamily: networkTCP, Address: addrLocalhost, Port: 8080},
+				{NetworkFamily: networkTCP + "6", Address: "::1", Port: 8080},
+			},
+			want: []ListenAddress{
+				{NetworkFamily: networkTCP, Address: addrLocalhost, Port: 8080},
+				{NetworkFamily: networkTCP, Address: "::1", Port: 8080},
+			},
+		},
 	}
 
 	for i, c := range cases {
@@ -169,7 +183,7 @@ func TestDecodeNetstatFile(t *testing.T) {
 			{NetworkFamily: networkTCP, Address: "172.17.0.1", Port: 9100},
 		},
 		14250: {
-			{NetworkFamily: networkTCP, Address: addrLocalhost, Port: 631}, // tcp6 as assumed to be tcp6+4. We only work with tcp4 for now
+			{NetworkFamily: networkTCP, Address: "::1", Port: 631}, // tcp6 normalized to tcp, but ::1 is kept distinct from 127.0.0.1
 		},
 		1375: {
 			{NetworkFamily: networkUDP, Address: addrAllInterfaces, Port: 5353},
