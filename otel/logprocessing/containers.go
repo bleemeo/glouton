@@ -134,10 +134,16 @@ func (cr *containerReceiver) handleContainerLogs(
 
 func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr Container, operators []operator.Config, filtersCfg *filterprocessor.Config) error {
 	ops := append([]operator.Config{logsource.BuildContainerEnvelopeOperator()}, operators...)
+
+	// Accumulated locally (not written straight into cr.registeredExtensions) so any error below can roll
+	// these back with RemovePersistentExts instead of leaking them under a container whose setup never
+	// actually completed.
+	var newExtIDs []component.ID
+
 	makeStorageFn := func(logFile string) *component.ID {
 		id := cr.pipeline.persister.NewPersistentExt("container/" + ctr.Attributes.ID + metadataKeySeparator + logFile)
 
-		cr.registeredExtensions[ctr.Attributes.ID] = append(cr.registeredExtensions[ctr.Attributes.ID], id)
+		newExtIDs = append(newExtIDs, id)
 
 		return &id
 	}
@@ -160,10 +166,14 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 		nil, // containers have no named receiver entry to paste a raw config into
 	)
 	if err != nil {
+		cr.pipeline.persister.RemovePersistentExts(newExtIDs)
+
 		return fmt.Errorf("setting up receiver factories: %w", err)
 	}
 
 	if len(factories) != 1 {
+		cr.pipeline.persister.RemovePersistentExts(newExtIDs)
+
 		return fmt.Errorf("%w: is had %d logs", errWrongNumberOfLogs, len(factories))
 	}
 
@@ -173,6 +183,8 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 	case len(execFiles) == 1:
 		ctr.ReceiverKind = logsource.ReceiverExecLog
 	default:
+		cr.pipeline.persister.RemovePersistentExts(newExtIDs)
+
 		return errNoLogFound
 	}
 
@@ -188,16 +200,18 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 		logsource.WrapWithInstrumentation(cr.logConsumer, ctr.logCounter, ctr.throughputMeter),
 	)
 	if err != nil {
+		cr.pipeline.persister.RemovePersistentExts(newExtIDs)
+
 		return fmt.Errorf("setup log filter: %w", err)
 	}
 
 	if err = logFilter.Start(ctx, nil); err != nil {
+		cr.pipeline.persister.RemovePersistentExts(newExtIDs)
+
 		return fmt.Errorf("start log filter: %w", err)
 	}
 
-	cr.startedComponents[ctr.Attributes.ID] = append(cr.startedComponents[ctr.Attributes.ID], logFilter)
-	cr.containers[ctr.Attributes.ID] = ctr
-	maps.Insert(cr.sizeFnByFile, maps.All(sizeFnByFile))
+	startedComponents := []component.Component{logFilter}
 
 	for logReceiverFactory, logReceiverCfg := range factories {
 		settings := receiver.Settings{
@@ -207,6 +221,9 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 
 		logRcvr, err := logReceiverFactory.CreateLogs(ctx, settings, logReceiverCfg, logFilter)
 		if err != nil {
+			stopComponents(startedComponents)
+			cr.pipeline.persister.RemovePersistentExts(newExtIDs)
+
 			var agentErr stanzaErrors.AgentError
 			if errors.As(err, &agentErr) && agentErr.Suggestion != "" {
 				return fmt.Errorf("setup receiver: %w (%s)", err, agentErr.Suggestion)
@@ -216,15 +233,26 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 		}
 
 		if err = logRcvr.Start(ctx, cr.pipeline.persister); err != nil {
+			stopComponents(startedComponents)
+			cr.pipeline.persister.RemovePersistentExts(newExtIDs)
+
 			return fmt.Errorf("start receiver: %w", err)
 		}
 
-		cr.startedComponents[ctr.Attributes.ID] = append(cr.startedComponents[ctr.Attributes.ID], logRcvr)
+		startedComponents = append(startedComponents, logRcvr)
 	}
+
+	cr.startedComponents[ctr.Attributes.ID] = append(cr.startedComponents[ctr.Attributes.ID], startedComponents...)
+	cr.registeredExtensions[ctr.Attributes.ID] = append(cr.registeredExtensions[ctr.Attributes.ID], newExtIDs...)
+	cr.containers[ctr.Attributes.ID] = ctr
+	maps.Insert(cr.sizeFnByFile, maps.All(sizeFnByFile))
 
 	return nil
 }
 
+// SizesByFile implements FileSizer. A single file's stat error only skips that file -- it must not
+// discard every other file's already-successfully-read size (see the equivalent fix and rationale on
+// otel/logsource's managedSource.SizesByFile).
 func (cr *containerReceiver) SizesByFile() (map[string]int64, error) {
 	cr.l.Lock()
 	defer cr.l.Unlock()
@@ -234,12 +262,12 @@ func (cr *containerReceiver) SizesByFile() (map[string]int64, error) {
 	for logFile, sizeFn := range cr.sizeFnByFile {
 		size, err := sizeFn()
 		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
+			if !errors.Is(err, fs.ErrNotExist) {
 				// May not catch errors from the "sudo stat" command.
-				continue
+				logger.V(1).Printf("Can't get size of file %q (ignoring it): %v", logFile, err)
 			}
 
-			return nil, err
+			continue
 		}
 
 		sizes[containerFileSizePrefix+logFile] = size
@@ -256,20 +284,20 @@ func (cr *containerReceiver) stopWatchingForContainers(ctx context.Context, ids 
 	defer cancel()
 
 	for _, ctrID := range ids {
-		recvComponents, ok := cr.startedComponents[ctrID]
-		if !ok {
-			logger.V(1).Printf("Can't stop log receiver for container %s: it doesn't have one ...", ctrID)
-
-			continue
-		}
-
-		for _, comp := range recvComponents {
-			err := comp.Shutdown(shutdownCtx)
-			if err != nil {
-				logger.V(1).Printf("Failed to stop log receiver component for container %s: %v", ctrID, err)
+		if recvComponents, ok := cr.startedComponents[ctrID]; ok {
+			for _, comp := range recvComponents {
+				err := comp.Shutdown(shutdownCtx)
+				if err != nil {
+					logger.V(1).Printf("Failed to stop log receiver component for container %s: %v", ctrID, err)
+				}
 			}
+		} else {
+			logger.V(1).Printf("Can't stop log receiver for container %s: it doesn't have one ...", ctrID)
 		}
 
+		// Clean up unconditionally, even with no startedComponents entry above: a container whose setup
+		// failed part-way can still have registeredExtensions/containers/sizeFnByFile entries, and
+		// skipping this would leak them permanently since the container is gone for good.
 		// The container is gone for good (not just a restart): forget its offset too.
 		cr.pipeline.persister.RemovePersistentExtsAndForget(cr.registeredExtensions[ctrID])
 

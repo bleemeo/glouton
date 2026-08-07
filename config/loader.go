@@ -271,6 +271,7 @@ func convertTypes(
 				stringToMapHookFunc(),
 				stringToBoolHookFunc(),
 				StringToIntSliceHookFunc(","),
+				networkProtocolsNullMeansDefaultHookFunc(),
 			),
 			Metadata:         nil,
 			ErrorUnused:      true,
@@ -436,7 +437,10 @@ func (c *configLoader) Build() (*koanf.Koanf, prometheus.MultiError) {
 	return k, warnings
 }
 
-// Merge maps and append slices.
+// Merge maps and append slices. A map merge recurses into any sub-key present as a map[string]any on both
+// sides (e.g. a receiver's or a threshold's own fields), instead of letting src's value replace dst's
+// wholesale -- otherwise splitting one named entry's fields across two config files/conf.d snippets (file
+// A sets a receiver's include, file B sets its send_logs) silently drops the earlier file's fields.
 func merge(dst any, src any) (any, error) {
 	switch dstType := dst.(type) {
 	case []any:
@@ -452,7 +456,32 @@ func merge(dst any, src any) (any, error) {
 			return nil, fmt.Errorf("%w: map[string]interface{} with %T", errCannotMerge, src)
 		}
 
-		maps.Copy(dstType, srcMap)
+		for key, srcVal := range srcMap {
+			dstVal, exists := dstType[key]
+			if !exists {
+				dstType[key] = srcVal
+
+				continue
+			}
+
+			dstValMap, dstIsMap := dstVal.(map[string]any)
+			srcValMap, srcIsMap := srcVal.(map[string]any)
+
+			if dstIsMap && srcIsMap {
+				merged, err := merge(dstValMap, srcValMap)
+				if err != nil {
+					return nil, err
+				}
+
+				dstType[key] = merged
+
+				continue
+			}
+
+			// Not both maps (a scalar, a slice, or a type mismatch): the later-loaded source wins,
+			// matching the non-map/slice behavior in priority() (last file loaded takes precedence).
+			dstType[key] = srcVal
+		}
 
 		return dstType, nil
 	default:

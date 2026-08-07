@@ -66,7 +66,7 @@ func mapKeys() []string {
 	return []string{
 		keyThresholds,
 		"metric.softstatus_period",
-		"opentelemetry.network.receivers",
+		"opentelemetry.network_listeners",
 		"log.opentelemetry.receivers",
 		"log.opentelemetry.global_filters",
 		"log.opentelemetry.known_log_filters",
@@ -407,11 +407,9 @@ func DefaultConfig() Config { //nolint:maintidx
 			Timeout: 5,
 		},
 		// No network receiver is pre-declared; nothing binds until the user
-		// adds one under opentelemetry.network.receivers.
+		// adds one under opentelemetry.NetworkListeners.
 		OpenTelemetry: OpenTelemetryConfig{
-			Network: NetworkConfig{
-				Receivers: map[string]NetworkReceiver{},
-			},
+			NetworkListeners: map[string]NetworkListener{},
 		},
 		ServiceAbsentDeactivationDelay: 7 * 24 * time.Hour,
 		ServiceIgnore:                  []NameInstance{},

@@ -67,6 +67,21 @@ func logsWithBody(body string) plog.Logs {
 	return ld
 }
 
+// logsWithBodyAndAttrs builds a single-record plog.Logs with the given body and log record attributes,
+// the level a metrics: entry's "attributes:" list extracts from (see countconnector's counter.update).
+func logsWithBodyAndAttrs(body string, attrs map[string]string) plog.Logs {
+	ld := plog.NewLogs()
+	rl := ld.ResourceLogs().AppendEmpty()
+	record := rl.ScopeLogs().AppendEmpty().LogRecords().AppendEmpty()
+	record.Body().SetStr(body)
+
+	for k, v := range attrs {
+		record.Attributes().PutStr(k, v)
+	}
+
+	return ld
+}
+
 func TestExtractItem(t *testing.T) {
 	t.Parallel()
 
@@ -449,9 +464,25 @@ func TestBuildGroupedConnectorsAllInvalid(t *testing.T) {
 
 	reg, _ := testRegistry()
 
-	_, _, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), entries, "recv", reg, "recv")
+	_, gotItems, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), entries, "recv", reg, "recv")
 	if !errors.Is(err, errNoValidCounter) {
 		t.Fatalf("Expected errNoValidCounter (a metric applied but failed to build), got %v", err)
+	}
+
+	if len(gotItems) != 0 {
+		t.Errorf("Expected no items reported for a group that failed entirely, got %v", gotItems)
+	}
+
+	// Regression: resolve() must not have declared a permanent counter for "recv" here -- since the
+	// item never makes it into buildGroupedConnectors' returned items, Manager.ReleaseSource would
+	// never release it, and reg.emit would keep reporting a stale, always-zero "bad" series forever.
+	reg.l.Lock()
+	defer reg.l.Unlock()
+
+	for key := range reg.counters {
+		if key.item == "recv" {
+			t.Errorf("Expected no counter left registered for item %q after the whole group failed to build, got %+v", "recv", key)
+		}
 	}
 }
 

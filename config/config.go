@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"maps"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -68,7 +69,7 @@ var (
 	errWrongMapFormat        = errors.New("could not parse map from string")
 	errUnsupportedProvider   = errors.New("provider not supported by config loader")
 	errCannotMerge           = errors.New("cannot merge")
-	errLegacyFilterNameClash = errors.New("legacy log.inputs filter shares a metric name with another log.metrics.count entry")
+	errLegacyFilterNameClash = errors.New("legacy log.inputs filter shares a metric name with another log.inputs entry")
 	ErrInvalidValue          = errors.New("invalid config value")
 	ErrMissconfiguration     = errors.New("config issue")
 )
@@ -229,6 +230,14 @@ func load(loader *configLoader, withDefault bool, loadEnviron bool, paths ...str
 	config = applyConfigTransformation(config)
 
 	if err := validateLogReceivers(config); err != nil {
+		errors.Append(err)
+	}
+
+	if err := validateNetworkListeners(config); err != nil {
+		errors.Append(err)
+	}
+
+	if err := validateContainerExcludeRules(config); err != nil {
 		errors.Append(err)
 	}
 
@@ -501,7 +510,7 @@ func migrate(k *koanf.Koanf, path string) (*koanf.Koanf, prometheus.MultiError) 
 	warnings = append(warnings, migrateMetricsPrometheus(k, config)...)
 	warnings = append(warnings, migrateScrapperMetrics(k, config)...)
 	warnings = append(warnings, migrateServices(config)...)
-	warnings = append(warnings, migrateLegacyNetworkListeners(k, config)...)
+	warnings = append(warnings, migrateLegacyNetworkListeners(k, config, path)...)
 	warnings = append(warnings, migrateLogInputs(k, config, path)...)
 	warnings = append(warnings, migrateLogFluentBitURL(config)...)
 
@@ -578,10 +587,15 @@ func migrateLogging(k *koanf.Koanf, config map[string]any) prometheus.MultiError
 		oldKey := "logging.buffer." + name
 		newKey := "logging.buffer." + name + "_bytes"
 
-		value := k.Int(oldKey)
-		if value == 0 {
+		// k.Exists, not "value == 0": k.Int returns 0 both when the key is absent and when the user
+		// explicitly wrote 0, and treating those the same left an explicit 0 unmigrated (the old key
+		// survived to trip the final decode's ErrorUnused check instead of getting a clean deprecation
+		// notice).
+		if !k.Exists(oldKey) {
 			continue
 		}
+
+		value := k.Int(oldKey)
 
 		config[newKey] = value * 100
 		delete(config, oldKey)
@@ -700,11 +714,6 @@ func migrateScrapper(k *koanf.Koanf, config map[string]any, deprecatedPath strin
 	return warnings
 }
 
-// legacyMetricsRuleName namespaces a migrated log.inputs metric name so it can't collide with a hand-written log.metrics_rules entry of the same name.
-func legacyMetricsRuleName(metric string) string {
-	return "legacy_log_inputs_metric_" + metric
-}
-
 // legacyInputReceiverName builds a receiver name for a migrated log.inputs[i] entry that's unique across every
 // provider (config file), not just within one: migrate() runs once per provider with i restarting from 0 each
 // time, so two files each declaring one log.inputs entry would otherwise both produce "legacy_input_0".
@@ -766,8 +775,8 @@ func mergeLegacyFilters(metricsByName map[string]any, filtersList []any) ([]stri
 
 			if existed {
 				warnings = append(warnings, fmt.Errorf(
-					"%w: metric %q, conditions from multiple log.inputs entries are merged into one shared log.metrics_rules.%s entry",
-					errLegacyFilterNameClash, metric, legacyMetricsRuleName(metric),
+					"%w: metric %q, conditions from multiple log.inputs entries are merged into one shared definition, applied to every receiver that touches it",
+					errLegacyFilterNameClash, metric,
 				))
 			}
 		}
@@ -780,8 +789,10 @@ func mergeLegacyFilters(metricsByName map[string]any, filtersList []any) ([]stri
 }
 
 // migrateLogInputs folds the legacy log.inputs[].filters entries (the original, Fluent Bit-era log-to-metric source) into the
-// equivalent log.opentelemetry.receivers/log.metrics_rules shape. Every migrated metric gets item: "" unconditionally, to avoid
-// changing the identity of an already-existing metric series for currently-deployed users.
+// equivalent log.opentelemetry.receivers shape, each migrated metric embedded inline in its receiver's own metrics: list
+// (not routed through a shared/named log.metrics_rules entry, which could otherwise silently collide with -- and be
+// shadowed by -- a hand-written rule of the same auto-derived name). Every migrated metric gets item: "" unconditionally,
+// to avoid changing the identity of an already-existing metric series for currently-deployed users.
 // providerPath identifies the provider this call is migrating (e.g. a config file path); migrate() runs once per provider
 // with the loop index i restarting from 0 each time, so providerPath must be folded into the generated receiver name to
 // avoid two files each declaring one log.inputs entry from both producing "legacy_input_0" and overwriting one another.
@@ -803,17 +814,14 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any, providerPath string
 		receivers = map[string]any{}
 	}
 
-	metricsRules, _ := config["log.metrics_rules"].(map[string]any)
-	if metricsRules == nil {
-		metricsRules, _ = k.Get("log.metrics_rules").(map[string]any)
-	}
-
-	if metricsRules == nil {
-		metricsRules = map[string]any{}
-	}
-
 	// Shared across every mergeLegacyFilters call below -- see its doc comment.
 	metricsByName := map[string]any{}
+
+	// receiverMetrics tracks, per generated receiver name, which metric names it touches. The actual
+	// entries are embedded once every log.inputs entry has been processed, so a metric name shared by
+	// several log.inputs entries (and therefore several receivers) is fully merged in metricsByName
+	// before any receiver gets its copy.
+	receiverMetrics := map[string][]string{}
 
 	remainingInputs := make([]any, 0, len(inputs))
 	translated := false
@@ -853,15 +861,9 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any, providerPath string
 			warnings.Append(w)
 		}
 
-		metrics := make([]any, 0, len(touchedMetrics))
-		for _, metric := range touchedMetrics {
-			metrics = append(metrics, map[string]any{"include": legacyMetricsRuleName(metric)})
-		}
-
 		// Legacy log.inputs was metrics-only, so the migrated receiver never ships logs either.
 		receiver := map[string]any{
 			"send_logs": false,
-			"metrics":   metrics,
 		}
 
 		if path != "" {
@@ -876,7 +878,9 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any, providerPath string
 			receiver["container_selectors"] = selectors
 		}
 
-		receivers[legacyInputReceiverName(providerPath, i)] = receiver
+		name := legacyInputReceiverName(providerPath, i)
+		receivers[name] = receiver
+		receiverMetrics[name] = touchedMetrics
 
 		warnings.Append(fmt.Errorf("%w: log.inputs[%d].filters, use log.opentelemetry.receivers/log.metrics_rules instead", errSettingsDeprecated, i))
 
@@ -887,40 +891,77 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any, providerPath string
 		return nil
 	}
 
-	for metric, entry := range metricsByName {
-		ruleName := legacyMetricsRuleName(metric)
+	// Every log.inputs entry has now been folded into metricsByName, so each metric's entry holds its
+	// final, fully-merged condition list: embed a copy directly into every receiver that touches it.
+	for name, metricNames := range receiverMetrics {
+		receiver, _ := receivers[name].(map[string]any)
 
-		if _, exists := metricsRules[ruleName]; exists {
-			warnings.Append(fmt.Errorf(
-				"%w: log.metrics_rules.%s already exists, keeping it as-is instead of overwriting it with the migrated log.inputs metric %q",
-				errSettingsDeprecated, ruleName, metric,
-			))
-
-			continue
+		metrics := make([]any, 0, len(metricNames))
+		for _, metric := range metricNames {
+			metrics = append(metrics, cloneMetricEntry(metricsByName[metric]))
 		}
 
-		metricsRules[ruleName] = []any{entry}
+		receiver["metrics"] = metrics
 	}
 
 	config["log.opentelemetry.receivers"] = receivers
-	config["log.metrics_rules"] = metricsRules
 	config["log.inputs"] = remainingInputs
 
 	return warnings
 }
 
+// cloneMetricEntry copies a mergeLegacyFilters entry so embedding it into several receivers' own metrics:
+// list leaves each with its own map/slice instead of every receiver aliasing (and being able to mutate)
+// the exact same one.
+func cloneMetricEntry(entryAny any) map[string]any {
+	entry, _ := entryAny.(map[string]any)
+	clone := make(map[string]any, len(entry))
+
+	for k, v := range entry {
+		switch val := v.(type) {
+		case []any:
+			clone[k] = append([]any(nil), val...)
+		case map[string]any:
+			clone[k] = maps.Clone(val)
+		default:
+			clone[k] = v
+		}
+	}
+
+	return clone
+}
+
+// legacyNetworkReceiverNames builds a unique-per-provider pair of names for migrateLegacyNetworkListeners'
+// synthesized receiver (log.opentelemetry.receivers key) and network listener (opentelemetry.network_listeners
+// key), the same way legacyInputReceiverName namespaces migrateLogInputs' output: migrate() runs once per
+// provider (config file), so two files each still using the legacy grpc/http shape would otherwise both
+// produce the same fixed names and one would silently clobber the other's config at merge time.
+func legacyNetworkReceiverNames(providerPath string) (receiverKey, listenerKey string) {
+	if providerPath == "" {
+		return "legacy_network", "legacy-network"
+	}
+
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(providerPath))
+	suffix := fmt.Sprintf("%08x", h.Sum32())
+
+	return "legacy_network_" + suffix, "legacy-network-" + suffix
+}
+
 // migrateLegacyNetworkListeners folds log.opentelemetry.grpc/http's old, pre-network-receivers {enable, address, port} shape into a
-// synthesized "legacy_network" receiver under opentelemetry.network.receivers, preserving the address/port and the unconditional
-// shipping behavior (send_logs: true).
-func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any) prometheus.MultiError {
+// synthesized "legacy_network" receiver under opentelemetry.network_listeners, preserving the address/port and the unconditional
+// shipping behavior (send_logs: true). providerPath identifies the provider being migrated (e.g. a config file path); see
+// legacyNetworkReceiverNames for why it must be folded into the generated names.
+func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any, providerPath string) prometheus.MultiError {
 	var warnings prometheus.MultiError
 
 	const (
 		path            = "log.opentelemetry"
 		defaultGRPCPort = 4317
 		defaultHTTPPort = 4318
-		receiverName    = "legacy-network"
 	)
+
+	receiverKey, listenerKey := legacyNetworkReceiverNames(providerPath)
 
 	legacyGRPC, hasGRPC := k.Get(path + ".grpc").(map[string]any)
 	legacyHTTP, hasHTTP := k.Get(path + ".http").(map[string]any)
@@ -929,12 +970,18 @@ func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any) promet
 		return nil
 	}
 
-	// Drop the consumed keys so they don't trip the strict struct decode (errors on unknown keys).
-	delete(config, path+".grpc")
-	delete(config, path+".http")
+	// Drop the consumed keys so they don't trip the strict struct decode (errors on unknown keys). config
+	// is k.All()'s flat, dot-joined map, so path+".grpc" is never itself a key -- only its leaves
+	// (.enable, .address, .port) are; deleting that exact string is a no-op and leaks a confusing
+	// "invalid keys" warning on every use of this legacy shape.
+	for key := range config {
+		if strings.HasPrefix(key, path+".grpc.") || strings.HasPrefix(key, path+".http.") {
+			delete(config, key)
+		}
+	}
 
 	warnings.Append(fmt.Errorf(
-		"%w: %s.grpc/http {enable, address, port}, use opentelemetry.network.receivers + a log.opentelemetry.receivers entry's network field instead",
+		"%w: %s.grpc/http {enable, address, port}, use opentelemetry.network_listeners + a log.opentelemetry.receivers entry's from_listener field instead",
 		errSettingsDeprecated, path,
 	))
 
@@ -985,21 +1032,21 @@ func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any) promet
 		protocols["http"] = map[string]any{"endpoint": httpEndpoint}
 	}
 
-	networkReceivers, _ := k.Get("opentelemetry.network.receivers").(map[string]any)
-	if networkReceivers == nil {
-		networkReceivers = map[string]any{}
+	NetworkListeners, _ := k.Get("opentelemetry.network_listeners").(map[string]any)
+	if NetworkListeners == nil {
+		NetworkListeners = map[string]any{}
 	}
 
-	networkReceivers[receiverName] = map[string]any{"protocols": protocols}
-	config["opentelemetry.network.receivers"] = networkReceivers
+	NetworkListeners[listenerKey] = map[string]any{"protocols": protocols}
+	config["opentelemetry.network_listeners"] = NetworkListeners
 
 	receivers, _ := k.Get("log.opentelemetry.receivers").(map[string]any)
 	if receivers == nil {
 		receivers = map[string]any{}
 	}
 
-	receivers["legacy_network"] = map[string]any{
-		"network":   map[string]any{"receivers": []any{receiverName}},
+	receivers[receiverKey] = map[string]any{
+		"network":   map[string]any{"receivers": []any{listenerKey}},
 		"send_logs": true,
 	}
 	config["log.opentelemetry.receivers"] = receivers

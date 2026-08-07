@@ -60,7 +60,6 @@ func (rc *RingCounter) Add(delta int) {
 
 	idx := int(now-rc.t0) % rc.size
 	rc.buckets[idx] += delta
-	rc.lastUpdateAt = now
 }
 
 // Total returns the sum of all the data recorded during the last `size` seconds.
@@ -72,8 +71,6 @@ func (rc *RingCounter) Total() int {
 	rc.rebaseIfClockWentBackwards(now)
 	// Flush buckets for any gap since the last update before summing.
 	rc.discardOutdatedValues(now)
-
-	rc.lastUpdateAt = now
 
 	var total int
 
@@ -96,6 +93,18 @@ func (rc *RingCounter) rebaseIfClockWentBackwards(now int64) {
 }
 
 func (rc *RingCounter) discardOutdatedValues(now int64) {
+	if now <= rc.lastUpdateAt {
+		// The clock moved backward (or didn't advance) within the counter's lifetime -- rebase already
+		// handles a jump before t0, so at this point now >= t0 still holds and idx stays valid. There's
+		// nothing to discard for a step this small, and lastUpdateAt must NOT be regressed to now, or a
+		// later genuine tick would compute its gap from this stale backward value instead of the last
+		// real forward progress -- which is exactly what let a small backward jump wipe out most of the
+		// window before this guard existed (now-lastUpdateAt went negative, missing the ">= size" check
+		// below, then idx from the backward now landed far from lastIdx, wrapping resetRange around
+		// almost the whole ring).
+		return
+	}
+
 	idx := int(now-rc.t0) % rc.size
 	lastIdx := int(rc.lastUpdateAt-rc.t0) % rc.size
 
@@ -106,6 +115,8 @@ func (rc *RingCounter) discardOutdatedValues(now int64) {
 		// Wrap lastIdx+1 to 0 so the just-written bucket isn't re-zeroed.
 		rc.resetRange((lastIdx+1)%rc.size, idx)
 	}
+
+	rc.lastUpdateAt = now
 }
 
 func (rc *RingCounter) resetRange(from, to int) {

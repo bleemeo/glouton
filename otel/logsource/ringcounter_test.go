@@ -19,7 +19,7 @@ package logsource
 import "testing"
 
 // newTestRingCounter builds a RingCounter with an explicit clock state for testing.
-func newTestRingCounter(size int, t0, lastUpdateAt int64, buckets []int) *RingCounter { //nolint:unparam
+func newTestRingCounter(size int, t0, lastUpdateAt int64, buckets []int) *RingCounter {
 	return &RingCounter{size: size, t0: t0, lastUpdateAt: lastUpdateAt, buckets: buckets}
 }
 
@@ -117,6 +117,36 @@ func TestRingCounterClockWentBackwards(t *testing.T) {
 	idx := int(95-rc.t0) % rc.size
 	if idx < 0 || idx >= rc.size {
 		t.Fatalf("idx %d out of range after rebase", idx)
+	}
+}
+
+// TestRingCounterSmallBackwardJumpDoesNotWipeWindow guards against a regression where a backward clock
+// jump smaller than the window size (an NTP/chrony step correction, a VM pause/resume, ...) zeroed out
+// almost the entire window instead of being a no-op. Reproduces the exact scenario from the review:
+// t0=50, lastUpdateAt=100, now=98 -- a mere 2-second regression that used to compute now-lastUpdateAt=-2
+// (missing the ">= size" staleness check), then wrap resetRange(51, 48) around the whole 60-bucket ring.
+func TestRingCounterSmallBackwardJumpDoesNotWipeWindow(t *testing.T) {
+	t.Parallel()
+
+	const size = 60
+
+	buckets := make([]int, size)
+	for i := range buckets {
+		buckets[i] = 1
+	}
+
+	rc := newTestRingCounter(size, 50, 100, buckets)
+
+	rc.discardOutdatedValues(98)
+
+	for i, got := range rc.buckets {
+		if got != 1 {
+			t.Errorf("Expected bucket %d to survive the small backward jump untouched, got %d", i, got)
+		}
+	}
+
+	if got := rc.lastUpdateAt; got != 100 {
+		t.Errorf("Expected lastUpdateAt to stay at 100 (not regress to the backward now=98), got %d", got)
 	}
 }
 

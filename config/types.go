@@ -73,18 +73,12 @@ type Log struct {
 // OpenTelemetryConfig holds OpenTelemetry-related settings that aren't specific to any one signal
 // (logs/metrics/traces), as opposed to Log.OpenTelemetry which is log-specific.
 type OpenTelemetryConfig struct {
-	Network NetworkConfig `yaml:"network"`
+	NetworkListeners map[string]NetworkListener `yaml:"network_listeners"`
 }
 
-// NetworkConfig holds named, shared OTLP gRPC/HTTP receivers that log
-// features pull externally-pushed logs from.
-type NetworkConfig struct {
-	Receivers map[string]NetworkReceiver `yaml:"receivers"`
-}
-
-// NetworkReceiver mirrors otlpreceiver.Config: a protocol's presence enables
+// NetworkListener mirrors otlpreceiver.Config: a protocol's presence enables
 // it, nil disables it, no separate enable flag.
-type NetworkReceiver struct {
+type NetworkListener struct {
 	Protocols NetworkProtocols `yaml:"protocols"`
 }
 
@@ -94,16 +88,18 @@ type NetworkProtocols struct {
 }
 
 // NetworkEndpoint mirrors OTel's single "host:port" endpoint string. Left
-// blank, otlpreceiver's factory default applies.
+// blank, otlpreceiver's factory default applies (localhost: gRPC port 4317, HTTP port 4318).
 type NetworkEndpoint struct {
 	Endpoint string `yaml:"endpoint"`
 }
 
-// OTLPNetworkParticipation lists which OpenTelemetry.Network.Receivers entries a
-// receiver/feature pulls logs from. Enable is a shortcut resolving to
-// DefaultNetworkReceiverName (see EffectiveNetworkReceivers).
+// OTLPNetworkParticipation lists which OpenTelemetry.NetworkListeners entries a
+// receiver/feature pulls logs from. Every named entry must already exist under
+// opentelemetry.network_listeners -- there's no implicit/default listener, so
+// unrelated config elsewhere can never change what this receiver participates
+// in (see PlanSharedNetworkListeners's errUndefinedNetworkListener for the
+// typo/missing-entry case).
 type OTLPNetworkParticipation struct {
-	Enable    bool     `yaml:"enable"`
 	Receivers []string `yaml:"receivers"`
 }
 
@@ -119,10 +115,8 @@ type LogInput struct {
 // LegacyLogFilter is a regex whose match rate is reported as the named
 // metric, in the legacy log.inputs[].filters shape.
 type LegacyLogFilter struct {
-	Metric  string            `yaml:"metric"`
-	Regex   string            `yaml:"regex"`
-	Exclude string            `yaml:"exclude"`
-	Labels  map[string]string `yaml:"labels"`
+	Metric string `yaml:"metric"`
+	Regex  string `yaml:"regex"`
 }
 
 // ContainerExcludeRule matches a container by exact name and/or
@@ -188,8 +182,8 @@ type EnableListener struct {
 //     logs, in addition to (or instead of) include. Both can be combined,
 //     and combined with include, on the same receiver -- every match feeds
 //     this one receiver's shipping/metrics as a single unit.
-//   - network: OTLPNetworkParticipation, participate in an opentelemetry.network
-//     listener (Form A: {receivers: [name,...]}, Form B: {enable: true}).
+//   - network: OTLPNetworkParticipation, participate in one or more
+//     opentelemetry.network_listeners entries ({network: {receivers: [name,...]}}).
 //   - send_logs: override the global OpenTelemetry.SendLogs default for
 //     this receiver.
 //   - log_format / operators: parse each line into attributes before
@@ -213,6 +207,15 @@ type LogReceiver = map[string]any
 //     risk -- distinct from attributes' dynamic per-value grouping), and
 //     item (explicit override of the auto-derived item -- see the item
 //     derivation rules in otel/logmetrics).
+//
+// item, labels and attributes can all three produce a value for the same label key (most notably
+// "item" itself, since nothing stops an attributes entry from using that key, or a labels entry from
+// setting "item"). Where they collide, precedence is item > labels > attributes: the auto-derived/
+// explicit item and every labels: entry are reserved-key-safe, static, and operator-declared, so they
+// always win; an attribute (extracted from the log line's own content at match time, so effectively
+// untrusted/dynamic) only fills in a label key nothing else has already claimed -- it is dropped, never
+// promoted, on collision. See otel/logmetrics/registry.go's resolve()/resolveAttrCounterLocked for the
+// implementation.
 //
 // Kept raw (not a struct) for the same verbatim-passthrough reason as
 // LogReceiver, and so "item" stays distinguishable as absent (derive it)

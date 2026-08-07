@@ -34,6 +34,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/plog"
 )
 
@@ -357,5 +358,46 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 	}
 	if diff := cmp.Diff(expectedLogLines, logBuf.getAllRecords(), timeEraserOpt); diff != "" {
 		t.Fatalf("Unexpected logs (-want +got):\n%s", diff)
+	}
+}
+
+// fakeShutdownComponent is a minimal component.Component recording whether Shutdown was called, used to
+// verify shutdownAll actually reaches components started under a *logReceiver, not just p.startedComponents.
+type fakeShutdownComponent struct {
+	shutdownCalled atomic.Bool
+}
+
+func (c *fakeShutdownComponent) Start(context.Context, component.Host) error { return nil }
+
+func (c *fakeShutdownComponent) Shutdown(context.Context) error {
+	c.shutdownCalled.Store(true)
+
+	return nil
+}
+
+// TestShutdownAllStopsPipelineReceivers guards against a regression where shutdownAll only stopped
+// p.startedComponents, leaving journald/syslog/syslog-auth/auditd receivers (tracked in p.receivers,
+// populated by setupJournald/setupSyslog/setupAuditD) running forever after a config reload or agent
+// shutdown.
+func TestShutdownAllStopsPipelineReceivers(t *testing.T) {
+	t.Parallel()
+
+	pipeline := pipelineContext{
+		persister: mustNewPersistHost(t),
+	}
+
+	fake := &fakeShutdownComponent{}
+	recv := &logReceiver{
+		name:              "fake",
+		watching:          map[string]logsource.ReceiverKind{},
+		startedComponents: []component.Component{fake},
+	}
+
+	pipeline.receivers = append(pipeline.receivers, recv)
+
+	pipeline.shutdownAll()
+
+	if !fake.shutdownCalled.Load() {
+		t.Error("Expected shutdownAll to shut down the receiver's started components via p.receivers")
 	}
 }

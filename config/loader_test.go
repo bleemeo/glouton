@@ -303,3 +303,59 @@ func TestIsNil(t *testing.T) {
 		})
 	}
 }
+
+// TestMergeRecursesIntoNestedMaps guards against a regression where merge()'s map case only shallow-merged
+// (maps.Copy): when the same sub-key (e.g. a receiver name) existed on both sides, src's whole value
+// replaced dst's instead of recursing, silently dropping whichever fields dst had that src didn't repeat.
+func TestMergeRecursesIntoNestedMaps(t *testing.T) {
+	t.Parallel()
+
+	dst := map[string]any{
+		"myrecv": map[string]any{"include": []any{"/var/log/app.log"}},
+	}
+	src := map[string]any{
+		"myrecv": map[string]any{"send_logs": false},
+	}
+
+	got, err := merge(dst, src)
+	if err != nil {
+		t.Fatalf("merge returned an error: %v", err)
+	}
+
+	want := map[string]any{
+		"myrecv": map[string]any{
+			"include":   []any{"/var/log/app.log"},
+			"send_logs": false,
+		},
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("Unexpected merge result (-want +got):\n%s", diff)
+	}
+}
+
+// Test_loadMergesSplitReceiverFieldsAcrossFiles is the end-to-end version of
+// TestMergeRecursesIntoNestedMaps: two conf.d-style files each set a different field on the same named
+// log receiver; both must survive instead of validateLogReceivers rejecting the receiver as having "no
+// source selector" -- a confusing secondary symptom of the real merge bug.
+func Test_loadMergesSplitReceiverFieldsAcrossFiles(t *testing.T) {
+	t.Parallel()
+
+	config, _, err := load(&configLoader{}, false, false, "testdata/split-receiver-fields-a.conf", "testdata/split-receiver-fields-b.conf")
+	if err != nil {
+		t.Fatalf("Failed to load config: %s", err)
+	}
+
+	recv, ok := config.Log.OpenTelemetry.Receivers["myrecv"]
+	if !ok {
+		t.Fatalf("Expected receiver %q to exist, got %v", "myrecv", config.Log.OpenTelemetry.Receivers)
+	}
+
+	if diff := cmp.Diff([]any{"/var/log/app.log"}, recv["include"]); diff != "" {
+		t.Errorf("Expected fileA's include to survive (-want +got):\n%s", diff)
+	}
+
+	if got, ok := recv["send_logs"].(bool); !ok || got {
+		t.Errorf("Expected fileB's send_logs=false to survive, got %v", recv["send_logs"])
+	}
+}

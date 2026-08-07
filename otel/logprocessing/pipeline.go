@@ -472,6 +472,9 @@ func (p *pipelineContext) setupAuditD(
 
 // shutdownAll shutdown all started components.
 func (p *pipelineContext) shutdownAll() {
+	// Receivers are upstream of startedComponents (the shared exporter/batcher/filter/resourceAttr
+	// chain): stop them first, matching stopComponents' own "stop the beginning of the chain first" order.
+	stopReceivers(p.receivers, p.persister.RemovePersistentExts)
 	stopComponents(p.startedComponents)
 }
 

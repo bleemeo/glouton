@@ -155,7 +155,8 @@ func newLogReceiver(
 }
 
 // update creates a log receiver for each unhandled file in the config. pipeline is passed in (not stored)
-// to make clear its lock must be held during the call.
+// to make clear its lock must be held during the call. Files are started one at a time (see startFile) so
+// a failure on one file can't affect the others in the same call.
 func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, addWarnings func(...error)) error {
 	r.l.Lock()
 	defer r.l.Unlock()
@@ -164,29 +165,57 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 		addWarnings(errorf("Log receiver %q: %s", r.name, msg))
 	})
 
-	logFiles := make(map[string]bool, len(resolvedFiles))
+	var newFiles []string
 
 	for _, realFile := range resolvedFiles {
 		// Skip if already watching.
 		if _, found := r.watching[realFile]; !found {
-			logFiles[realFile] = true
+			newFiles = append(newFiles, realFile)
 		}
 	}
 
-	if len(logFiles) == 0 {
+	if len(newFiles) == 0 {
 		return nil
 	}
+
+	if !r.setupFilterDone {
+		r.setupFilterDone = true
+
+		if err := r.setupFilters(ctx, pipeline); err != nil {
+			return err
+		}
+	}
+
+	var errs error
+
+	for _, file := range newFiles {
+		if err := r.startFile(ctx, pipeline, file); err != nil {
+			errs = errors.Join(errs, fmt.Errorf("file %q: %w", file, err))
+		}
+	}
+
+	return errs
+}
+
+// startFile starts a single new file's receiver(s) under r. Processing one file at a time (instead of the
+// whole newFiles batch through a single SetupLogReceiverFactories call) means a later file's failure can't
+// leave an earlier, already-started file untracked in r.watching -- which would otherwise make the next
+// update() call start a second, duplicate receiver tailing (and shipping) that same file. Any receiver or
+// persistent storage extension started for this file is rolled back if a later step for the SAME file
+// fails. Callers must hold r.l.
+func (r *logReceiver) startFile(ctx context.Context, pipeline *pipelineContext, file string) error {
+	var newExtIDs []component.ID
 
 	makeStorageFn := func(logFile string) *component.ID {
 		id := pipeline.persister.NewPersistentExt(r.name + metadataKeySeparator + logFile)
 
-		r.registeredExtensions = append(r.registeredExtensions, id)
+		newExtIDs = append(newExtIDs, id)
 
 		return &id
 	}
 
-	fileLogReceiverFactories, readFiles, execFiles, sizeFnByFile, err := logsource.SetupLogReceiverFactories(
-		slices.Collect(maps.Keys(logFiles)),
+	factories, readFiles, execFiles, sizeFnByFile, err := logsource.SetupLogReceiverFactories(
+		[]string{file},
 		pipeline.hostroot,
 		r.operators,
 		pipeline.lastFileSizes,
@@ -197,19 +226,14 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 		r.cfg,
 	)
 	if err != nil {
+		pipeline.persister.RemovePersistentExts(newExtIDs)
+
 		return fmt.Errorf("setting up receiver factories: %w", err)
 	}
 
-	if !r.setupFilterDone {
-		r.setupFilterDone = true
+	newRecvs := make([]component.Component, 0, len(factories))
 
-		err = r.setupFilters(ctx, pipeline)
-		if err != nil {
-			return err
-		}
-	}
-
-	for logReceiverFactory, logReceiverCfg := range fileLogReceiverFactories {
+	for logReceiverFactory, logReceiverCfg := range factories {
 		settings := receiver.Settings{
 			ID:                component.NewIDWithName(logReceiverFactory.Type(), uuid.NewString()),
 			TelemetrySettings: pipeline.telemetry,
@@ -222,6 +246,9 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 			r.logConsumer,
 		)
 		if err != nil {
+			stopComponents(newRecvs)
+			pipeline.persister.RemovePersistentExts(newExtIDs)
+
 			var agentErr stanzaErrors.AgentError
 			if errors.As(err, &agentErr) && agentErr.Suggestion != "" {
 				return fmt.Errorf("setup receiver: %w (%s)", err, agentErr.Suggestion)
@@ -235,23 +262,29 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 				logger.V(1).Printf("Unable to stop logRcvr: %s", err.Error())
 			}
 
+			stopComponents(newRecvs)
+			pipeline.persister.RemovePersistentExts(newExtIDs)
+
 			return fmt.Errorf("start receiver: %w", err)
 		}
 
-		if r.isFromService {
-			// Store in r.startedComponents (not pipeline) to find and stop it when the service disappears.
-			r.startedComponents = append(r.startedComponents, logRcvr)
-		} else {
-			pipeline.startedComponents = append(pipeline.startedComponents, logRcvr)
-		}
+		newRecvs = append(newRecvs, logRcvr)
 	}
 
-	for _, logFile := range readFiles {
-		r.watching[logFile] = logsource.ReceiverFileLog
+	if r.isFromService {
+		// Store in r.startedComponents (not pipeline) to find and stop it when the service disappears.
+		r.startedComponents = append(r.startedComponents, newRecvs...)
+	} else {
+		pipeline.startedComponents = append(pipeline.startedComponents, newRecvs...)
 	}
 
-	for _, logFile := range execFiles {
-		r.watching[logFile] = logsource.ReceiverExecLog
+	r.registeredExtensions = append(r.registeredExtensions, newExtIDs...)
+
+	switch {
+	case len(readFiles) == 1:
+		r.watching[file] = logsource.ReceiverFileLog
+	case len(execFiles) == 1:
+		r.watching[file] = logsource.ReceiverExecLog
 	}
 
 	maps.Insert(r.sizeFnByFile, maps.All(sizeFnByFile))

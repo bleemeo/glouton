@@ -27,6 +27,7 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/otel/logsource"
+	"github.com/bleemeo/glouton/types"
 )
 
 func newTestManager(t *testing.T, cfg config.OpenTelemetry, metricsRules map[string][]config.LogMetricEntry) *Manager {
@@ -648,5 +649,114 @@ func TestManagerDiagnosticArchiveListsResolvedSources(t *testing.T) {
 
 	if !slices.Contains(sources[0].MetricNames, "app_errors_count") {
 		t.Errorf("Expected the resolved source to list its metric name, got %+v", sources[0])
+	}
+}
+
+// countersFor reads back every counter (base and attribute-derived) declared for metric, end to end
+// through the real countconnector.
+func countersFor(man *Manager, metric string) map[counterKey]*counter {
+	man.reg.l.Lock()
+	defer man.reg.l.Unlock()
+
+	found := make(map[counterKey]*counter)
+
+	for key, c := range man.reg.counters {
+		if key.metric == metric {
+			found[key] = c
+		}
+	}
+
+	return found
+}
+
+// Test that a metrics: entry's "attributes:" list produces one distinct, correctly labeled series per
+// attribute-value combination actually observed, end to end through the real countconnector -- and that a
+// same-named static "labels:" entry always wins over the dynamic attribute (item > labels > attributes).
+func TestWantSourceReceiverAttributesProduceDistinctLabeledSeries(t *testing.T) {
+	t.Parallel()
+
+	man := newTestManager(t, config.OpenTelemetry{
+		Receivers: map[string]config.LogReceiver{
+			"app": {
+				"include": []string{"/var/log/app.log"},
+				"metrics": []any{
+					map[string]any{
+						"metric":     "http_requests_count",
+						"conditions": []any{`IsMatch(body, "request")`},
+						"labels":     map[string]any{"status": "shadowed-by-labels"},
+						"attributes": []any{
+							map[string]any{"key": "status"}, // shadowed: "labels" already claims "status"
+							map[string]any{"key": "method"}, // unclaimed: becomes a real dynamic label
+						},
+					},
+				},
+			},
+		},
+	}, nil)
+
+	sink, ok := man.WantSource(t.Context(), logsource.ResolvedSource{Kind: logsource.SourceReceiver, Name: "app", ReceiverName: "app"})
+	if !ok || sink == nil {
+		t.Fatal("Expected the receiver to be wanted with a non-nil sink")
+	}
+
+	lines := []map[string]string{
+		{"status": "200", "method": "GET"},
+		{"status": "500", "method": "POST"},
+		{"status": "200", "method": "GET"}, // repeats the first combo: must accumulate, not duplicate
+	}
+
+	for _, attrs := range lines {
+		if err := sink.ConsumeLogs(t.Context(), logsWithBodyAndAttrs("a request", attrs)); err != nil {
+			t.Fatal("ConsumeLogs returned an error:", err)
+		}
+	}
+
+	found := countersFor(man, "http_requests_count")
+	if len(found) != 3 {
+		t.Fatalf("Expected 3 counters (base + method=GET + method=POST), got %d: %+v", len(found), found)
+	}
+
+	var base *counter
+
+	byMethod := make(map[string]*counter)
+
+	for key, c := range found {
+		if key.attrs == "" {
+			base = c
+
+			continue
+		}
+
+		byMethod[c.lbls.Get("method")] = c
+	}
+
+	if base == nil {
+		t.Fatal("Expected a base (attrs-less) counter declared for the metric")
+	}
+
+	if got := int64(base.counter.Total()); got != 0 {
+		t.Errorf("Expected the base counter to stay at 0 (every match carries attributes), got %d", got)
+	}
+
+	for _, c := range []*counter{base, byMethod["GET"], byMethod["POST"]} {
+		if c == nil {
+			t.Fatalf("Missing expected counter, got byMethod=%+v", byMethod)
+		}
+
+		if got := c.lbls.Get("status"); got != "shadowed-by-labels" {
+			t.Errorf("Expected labels: to always win over the dynamic \"status\" attribute, got status=%q", got)
+		}
+	}
+
+	if got := int64(byMethod["GET"].counter.Total()); got != 2 {
+		t.Errorf("Expected method=GET to total 2 (two matching lines), got %d", got)
+	}
+
+	if got := int64(byMethod["POST"].counter.Total()); got != 1 {
+		t.Errorf("Expected method=POST to total 1, got %d", got)
+	}
+
+	if got := byMethod["GET"].lbls.Get(types.LabelName); got != "http_requests_count" {
+		t.Errorf("Expected __name__=http_requests_count on the attribute-derived series, got %q", got)
 	}
 }

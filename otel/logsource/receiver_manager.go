@@ -30,6 +30,7 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
 	"github.com/bleemeo/glouton/utils/hostrootsymlink"
 
 	"github.com/go-viper/mapstructure/v2"
@@ -129,6 +130,16 @@ func (rm *ReceiverManager) Persister() *PersistHost {
 	return rm.persister
 }
 
+// DiagnosticArchive writes the persisted read-offset/registered-extension state to a diagnostic bundle.
+// otel/logprocessing's Manager shares this exact *PersistHost (see Persister()) and already writes it
+// through its own DiagnosticArchive when it exists -- agent.go only wires this one in when that manager
+// doesn't exist (log shipping/Bleemeo disabled), so the same file is never written twice into one archive.
+// Without either, a bundle taken while log-to-metric receivers are active would have no read-offset/
+// extension state at all, even though that state is exactly what's needed to debug a stuck tail.
+func (rm *ReceiverManager) DiagnosticArchive(_ context.Context, writer types.ArchiveWriter) error {
+	return rm.persister.WriteToArchive(writer)
+}
+
 // RegisterExternalSizer folds FileSizers that ReceiverManager doesn't own into SaveState's
 // "LogFileSizes" snapshot. fn is called fresh on every SaveState, so it can reflect receivers
 // added/removed since registration.
@@ -199,7 +210,11 @@ func newManagedSource(name string, kind SourceKind, operators []operator.Config,
 	}
 }
 
-// SizesByFile implements FileSizer, for the cross-restart file-size cache.
+// SizesByFile implements FileSizer, for the cross-restart file-size cache. A single file's stat error
+// (e.g. a permission flip after logrotate, or sudoStatFile's timeout under load) only skips that file --
+// it must not discard every other file's already-successfully-read size for this managedSource, which a
+// caller merging sizes from several FileSizer instances (see SaveLastFileSizesToCache) would otherwise
+// drop entirely on any single error.
 func (ms *managedSource) SizesByFile() (map[string]int64, error) {
 	ms.l.Lock()
 	defer ms.l.Unlock()
@@ -209,11 +224,11 @@ func (ms *managedSource) SizesByFile() (map[string]int64, error) {
 	for logFile, sizeFn := range ms.sizeFnByFile {
 		size, err := sizeFn()
 		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
-				continue
+			if !errors.Is(err, fs.ErrNotExist) {
+				logger.V(1).Printf("Can't get size of file %q (ignoring it): %v", logFile, err)
 			}
 
-			return nil, err
+			continue
 		}
 
 		sizes[logFile] = size
@@ -859,8 +874,7 @@ func (rm *ReceiverManager) NetworkWants(ctx context.Context) []NetworkWant {
 			continue
 		}
 
-		receiverNames := config.ResolveNetworkReceivers(network.Enable, network.Receivers)
-		if len(receiverNames) == 0 {
+		if len(network.Receivers) == 0 {
 			continue
 		}
 
@@ -871,7 +885,7 @@ func (rm *ReceiverManager) NetworkWants(ctx context.Context) []NetworkWant {
 			continue
 		}
 
-		wants = append(wants, NetworkWant{Consumer: ms.fanout, Receivers: receiverNames})
+		wants = append(wants, NetworkWant{Consumer: ms.fanout, Receivers: network.Receivers})
 	}
 
 	return wants

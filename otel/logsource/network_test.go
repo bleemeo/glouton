@@ -18,6 +18,7 @@ package logsource
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 
@@ -146,19 +147,23 @@ func TestFanoutLogsIsolatesMutations(t *testing.T) {
 	}
 }
 
-func TestPlanSharedNetworkReceiversOmitsUnreferencedReceivers(t *testing.T) {
+func TestPlanSharedNetworkListenersOmitsUnreferencedReceivers(t *testing.T) {
 	t.Parallel()
 
-	receivers := map[string]config.NetworkReceiver{
+	receivers := map[string]config.NetworkListener{
 		"otlp":   {Protocols: config.NetworkProtocols{GRPC: &config.NetworkEndpoint{Endpoint: "127.0.0.1:4317"}}},
 		"unused": {Protocols: config.NetworkProtocols{GRPC: &config.NetworkEndpoint{Endpoint: "127.0.0.1:5317"}}},
 	}
 
 	consumerA, _ := recordingLogsConsumer()
 
-	planned := PlanSharedNetworkReceivers(receivers, []NetworkWant{
+	planned, warnings := PlanSharedNetworkListeners(receivers, []NetworkWant{
 		{Consumer: consumerA, Receivers: []string{"otlp"}},
 	})
+
+	if len(warnings) != 0 {
+		t.Fatalf("Expected no warnings, got %v", warnings)
+	}
 
 	if len(planned) != 1 {
 		t.Fatalf("Expected exactly 1 planned receiver, got %d", len(planned))
@@ -173,29 +178,119 @@ func TestPlanSharedNetworkReceiversOmitsUnreferencedReceivers(t *testing.T) {
 	}
 }
 
-// TestPlanSharedNetworkReceiversOmitsUnknownReceiverName checks that a receiver name undefined in opentelemetry.network.receivers is skipped, not turned into a protocol-less PlannedReceiver.
-func TestPlanSharedNetworkReceiversOmitsUnknownReceiverName(t *testing.T) {
+// TestPlanSharedNetworkListenersDedupesRepeatedNameInOneWant guards against a regression where a config
+// typo naming the same listener twice in one receiver's network.receivers list (e.g. [otlp, otlp])
+// registered want.Consumer twice, so FanoutLogs delivered every batch to it twice -- silently doubling
+// log-to-metric counts or duplicating shipped logs.
+func TestPlanSharedNetworkListenersDedupesRepeatedNameInOneWant(t *testing.T) {
 	t.Parallel()
 
-	receivers := map[string]config.NetworkReceiver{
+	receivers := map[string]config.NetworkListener{
+		"otlp": {Protocols: config.NetworkProtocols{GRPC: &config.NetworkEndpoint{Endpoint: "127.0.0.1:4317"}}},
+	}
+
+	consumerA, received := recordingLogsConsumer()
+
+	planned, warnings := PlanSharedNetworkListeners(receivers, []NetworkWant{
+		{Consumer: consumerA, Receivers: []string{"otlp", "otlp"}},
+	})
+
+	if len(warnings) != 0 {
+		t.Fatalf("Expected no warnings, got %v", warnings)
+	}
+
+	if len(planned) != 1 {
+		t.Fatalf("Expected exactly 1 planned receiver, got %d", len(planned))
+	}
+
+	if err := planned[0].Sink.ConsumeLogs(t.Context(), makeLogs("once")); err != nil {
+		t.Fatal("ConsumeLogs returned an error:", err)
+	}
+
+	if got := len(received()); got != 1 {
+		t.Fatalf("Expected the batch to reach consumerA exactly once, got %d deliveries", got)
+	}
+}
+
+// TestPlanSharedNetworkListenersOmitsUnknownReceiverName checks that a receiver name undefined in
+// opentelemetry.network_listeners is skipped (not turned into a protocol-less PlannedReceiver) and
+// reported back as a warning instead of only a log line, so it can reach agent_config_warning.
+func TestPlanSharedNetworkListenersOmitsUnknownReceiverName(t *testing.T) {
+	t.Parallel()
+
+	receivers := map[string]config.NetworkListener{
 		"custom1": {Protocols: config.NetworkProtocols{GRPC: &config.NetworkEndpoint{Endpoint: "127.0.0.1:4317"}}},
 	}
 
 	consumerA, _ := recordingLogsConsumer()
 
-	planned := PlanSharedNetworkReceivers(receivers, []NetworkWant{
+	planned, warnings := PlanSharedNetworkListeners(receivers, []NetworkWant{
 		{Consumer: consumerA, Receivers: []string{"otlp"}}, // not in receivers
 	})
 
 	if len(planned) != 0 {
 		t.Fatalf("Expected no planned receiver for an unknown name, got %+v", planned)
 	}
+
+	if len(warnings) != 1 || !errors.Is(warnings[0], errUndefinedNetworkListener) {
+		t.Fatalf("Expected exactly one errUndefinedNetworkListener warning, got %v", warnings)
+	}
 }
 
-func TestPlanSharedNetworkReceiversSplitsByName(t *testing.T) {
+// TestPlanSharedNetworkListenersWarnsOnUndefinedNameEvenWithoutConsumer guards against a regression
+// where a receiver with only a network.receivers reference and nothing else asking for its logs (no
+// metrics, no shipping -- so its want carries a nil Consumer) skipped the undefined-listener check
+// entirely: the whole want was dropped before its Receivers names were ever checked against the
+// configured network_listeners, so a typo'd listener name on an otherwise-inert receiver produced no
+// warning anywhere, not even in agent_config_warning.
+func TestPlanSharedNetworkListenersWarnsOnUndefinedNameEvenWithoutConsumer(t *testing.T) {
 	t.Parallel()
 
-	receivers := map[string]config.NetworkReceiver{
+	receivers := map[string]config.NetworkListener{
+		"custom1": {Protocols: config.NetworkProtocols{GRPC: &config.NetworkEndpoint{Endpoint: "127.0.0.1:4317"}}},
+	}
+
+	planned, warnings := PlanSharedNetworkListeners(receivers, []NetworkWant{
+		{Consumer: nil, Receivers: []string{"does_not_exist"}},
+	})
+
+	if len(planned) != 0 {
+		t.Fatalf("Expected no planned receiver, got %+v", planned)
+	}
+
+	if len(warnings) != 1 || !errors.Is(warnings[0], errUndefinedNetworkListener) {
+		t.Fatalf("Expected exactly one errUndefinedNetworkListener warning even with a nil Consumer, got %v", warnings)
+	}
+}
+
+// TestPlanSharedNetworkListenersNilConsumerValidNameStaysSilent checks the adjacent case: a want with a
+// nil Consumer referencing a *valid* listener name must not warn and must not be planned (nothing wants
+// its logs, so there's nothing to start) -- the undefined-name check must not start warning about every
+// inert reference, only genuinely undefined ones.
+func TestPlanSharedNetworkListenersNilConsumerValidNameStaysSilent(t *testing.T) {
+	t.Parallel()
+
+	receivers := map[string]config.NetworkListener{
+		"otlp": {Protocols: config.NetworkProtocols{GRPC: &config.NetworkEndpoint{Endpoint: "127.0.0.1:4317"}}},
+	}
+
+	planned, warnings := PlanSharedNetworkListeners(receivers, []NetworkWant{
+		{Consumer: nil, Receivers: []string{"otlp"}},
+	})
+
+	if len(warnings) != 0 {
+		t.Fatalf("Expected no warnings for a valid name, got %v", warnings)
+	}
+
+	if len(planned) != 0 {
+		t.Fatalf("Expected no planned receiver for a want with no consumer, got %+v", planned)
+	}
+}
+
+func TestPlanSharedNetworkListenersSplitsByName(t *testing.T) {
+	t.Parallel()
+
+	receivers := map[string]config.NetworkListener{
 		"shipping": {Protocols: config.NetworkProtocols{GRPC: &config.NetworkEndpoint{Endpoint: "127.0.0.1:4317"}}},
 		"metrics":  {Protocols: config.NetworkProtocols{HTTP: &config.NetworkEndpoint{Endpoint: "127.0.0.1:4418"}}},
 	}
@@ -203,7 +298,7 @@ func TestPlanSharedNetworkReceiversSplitsByName(t *testing.T) {
 	shippingConsumer, shippingReceived := recordingLogsConsumer()
 	metricsConsumer, metricsReceived := recordingLogsConsumer()
 
-	planned := PlanSharedNetworkReceivers(receivers, []NetworkWant{
+	planned, _ := PlanSharedNetworkListeners(receivers, []NetworkWant{
 		{Consumer: shippingConsumer, Receivers: []string{"shipping"}},
 		{Consumer: metricsConsumer, Receivers: []string{"metrics"}},
 	})
@@ -212,7 +307,7 @@ func TestPlanSharedNetworkReceiversSplitsByName(t *testing.T) {
 		t.Fatalf("Expected 2 independent planned receivers, got %d", len(planned))
 	}
 
-	// Deterministic order: PlanSharedNetworkReceivers sorts by name.
+	// Deterministic order: PlanSharedNetworkListeners sorts by name.
 	if planned[0].Name != "metrics" || planned[1].Name != "shipping" {
 		t.Fatalf("Unexpected planned receiver names/order: %v", []string{planned[0].Name, planned[1].Name})
 	}
@@ -230,11 +325,11 @@ func TestPlanSharedNetworkReceiversSplitsByName(t *testing.T) {
 	}
 }
 
-// TestPlanSharedNetworkReceiversIsolatesSharedNetworkMutations checks that sharing one receiver's sink between two consumers doesn't leak in-place mutations, regardless of order.
-func TestPlanSharedNetworkReceiversIsolatesSharedNetworkMutations(t *testing.T) {
+// TestPlanSharedNetworkListenersIsolatesSharedNetworkMutations checks that sharing one receiver's sink between two consumers doesn't leak in-place mutations, regardless of order.
+func TestPlanSharedNetworkListenersIsolatesSharedNetworkMutations(t *testing.T) {
 	t.Parallel()
 
-	receivers := map[string]config.NetworkReceiver{
+	receivers := map[string]config.NetworkListener{
 		"otlp": {Protocols: config.NetworkProtocols{GRPC: &config.NetworkEndpoint{Endpoint: "127.0.0.1:4317"}}},
 	}
 
@@ -261,7 +356,7 @@ func TestPlanSharedNetworkReceiversIsolatesSharedNetworkMutations(t *testing.T) 
 			"metrics":  {Consumer: recording, Receivers: []string{"otlp"}},
 		}
 
-		planned := PlanSharedNetworkReceivers(receivers, []NetworkWant{wants[order[0]], wants[order[1]]})
+		planned, _ := PlanSharedNetworkListeners(receivers, []NetworkWant{wants[order[0]], wants[order[1]]})
 		if len(planned) != 1 {
 			t.Fatalf("order %v: expected exactly 1 planned (shared) receiver, got %d", order, len(planned))
 		}
@@ -285,14 +380,14 @@ func TestPlanSharedNetworkReceiversIsolatesSharedNetworkMutations(t *testing.T) 
 	}
 }
 
-func TestSetupOTLPNetworkReceiverGRPCStartsAndStops(t *testing.T) {
+func TestSetupOTLPNetworkListenerGRPCStartsAndStops(t *testing.T) {
 	t.Parallel()
 
 	sink, _ := recordingLogsConsumer()
 
 	protocols := config.NetworkProtocols{GRPC: &config.NetworkEndpoint{Endpoint: "127.0.0.1:0"}}
 
-	recv, err := SetupOTLPNetworkReceiver(t.Context(), NewTelemetrySettings(), protocols, sink, "test-grpc-receiver")
+	recv, err := SetupOTLPNetworkListener(t.Context(), NewTelemetrySettings(), protocols, sink, "test-grpc-receiver")
 	if err != nil {
 		t.Fatal("Failed to start OTLP receiver:", err)
 	}
@@ -302,15 +397,15 @@ func TestSetupOTLPNetworkReceiverGRPCStartsAndStops(t *testing.T) {
 	}
 }
 
-// TestSetupOTLPNetworkReceiverHTTPStartsAndStops is a regression test for otlpreceiver panicking on Start due to an invalid transport and missing LogsURLPath.
-func TestSetupOTLPNetworkReceiverHTTPStartsAndStops(t *testing.T) {
+// TestSetupOTLPNetworkListenerHTTPStartsAndStops is a regression test for otlpreceiver panicking on Start due to an invalid transport and missing LogsURLPath.
+func TestSetupOTLPNetworkListenerHTTPStartsAndStops(t *testing.T) {
 	t.Parallel()
 
 	sink, _ := recordingLogsConsumer()
 
 	protocols := config.NetworkProtocols{HTTP: &config.NetworkEndpoint{Endpoint: "127.0.0.1:0"}}
 
-	recv, err := SetupOTLPNetworkReceiver(t.Context(), NewTelemetrySettings(), protocols, sink, "test-http-receiver")
+	recv, err := SetupOTLPNetworkListener(t.Context(), NewTelemetrySettings(), protocols, sink, "test-http-receiver")
 	if err != nil {
 		t.Fatal("Failed to start OTLP receiver:", err)
 	}
@@ -320,13 +415,13 @@ func TestSetupOTLPNetworkReceiverHTTPStartsAndStops(t *testing.T) {
 	}
 }
 
-func TestSetupOTLPNetworkReceiverNoProtocolErrors(t *testing.T) {
+func TestSetupOTLPNetworkListenerNoProtocolErrors(t *testing.T) {
 	t.Parallel()
 
 	sink, _ := recordingLogsConsumer()
 
 	// Without Validate(), Start silently no-ops instead of erroring when no protocol is set.
-	_, err := SetupOTLPNetworkReceiver(t.Context(), NewTelemetrySettings(), config.NetworkProtocols{}, sink, "test-no-protocol")
+	_, err := SetupOTLPNetworkListener(t.Context(), NewTelemetrySettings(), config.NetworkProtocols{}, sink, "test-no-protocol")
 	if err == nil {
 		t.Fatal("Expected an error when no protocol is configured, got none")
 	}

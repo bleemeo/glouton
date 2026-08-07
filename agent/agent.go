@@ -1069,23 +1069,26 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		logger.Printf("unable to setup log receivers: %v", err)
 	}
 
-	a.logMetricsManager = logmetrics.New(a.config.Log.OpenTelemetry, a.config.Log.MetricsRules)
-	tasks = append(tasks, taskInfo{a.logMetricsManager.Run, "Log-to-metric manager"})
-
+	// Only set up when receiverManager exists: it's the sole source of the sources
+	// logMetricsManager would ever count, so without it the manager could run forever
+	// with nothing to do.
 	if a.receiverManager != nil {
-		a.receiverManager.RegisterSinkProvider(a.logMetricsManager)
-	}
+		a.logMetricsManager = logmetrics.New(a.config.Log.OpenTelemetry, a.config.Log.MetricsRules)
+		tasks = append(tasks, taskInfo{a.logMetricsManager.Run, "Log-to-metric manager"})
 
-	_, err = a.gathererRegistry.RegisterAppenderCallback(
-		registry.RegistrationOption{
-			Description:        "log-to-metric",
-			JitterSeed:         baseJitterPlus,
-			NoLabelsAlteration: true,
-		},
-		registry.AppenderFunc(a.logMetricsManager.EmitMetrics),
-	)
-	if err != nil {
-		logger.Printf("unable to add log-to-metric metrics: %v", err)
+		a.receiverManager.RegisterSinkProvider(a.logMetricsManager)
+
+		_, err = a.gathererRegistry.RegisterAppenderCallback(
+			registry.RegistrationOption{
+				Description:        "log-to-metric",
+				JitterSeed:         baseJitterPlus,
+				NoLabelsAlteration: true,
+			},
+			registry.AppenderFunc(a.logMetricsManager.EmitMetrics),
+		)
+		if err != nil {
+			logger.Printf("unable to add log-to-metric metrics: %v", err)
+		}
 	}
 
 	if a.config.Bleemeo.Enable {
@@ -1185,24 +1188,17 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			logger.V(1).Printf("failed to resolve some log receivers: %v", err)
 		}
 
-		if initialContainers, err := a.containerRuntime.Containers(ctx, time.Hour, false); err != nil {
-			logger.V(1).Printf("Failed to retrieve containers: %v", err)
-		} else {
-			a.receiverManager.UpdateContainers(ctx, initialContainers)
-		}
-
 		// Log-shipping and log-to-metric share a single OTLP listener when they name
-		// the same opentelemetry.network.receivers entry (see logsource.PlanSharedNetworkReceivers).
-		// A receiver with none named falls back to the auto-provisioned default listener.
-		effectiveNetworkReceivers := config.EffectiveNetworkReceivers(
-			a.config.OpenTelemetry.Network.Receivers,
-			anyReceiverWantsDefaultNetwork(a.config.Log.OpenTelemetry.Receivers),
-		)
+		// the same opentelemetry.network_listeners entry (see logsource.PlanSharedNetworkListeners).
+		// Every name a receiver references must be defined there explicitly -- there's no
+		// implicit/default listener to fall back to.
+		plannedListeners, listenerWarnings := logsource.PlanSharedNetworkListeners(a.config.OpenTelemetry.NetworkListeners, a.receiverManager.NetworkWants(ctx))
+		a.addWarnings(listenerWarnings...)
 
-		for _, planned := range logsource.PlanSharedNetworkReceivers(effectiveNetworkReceivers, a.receiverManager.NetworkWants(ctx)) {
+		for _, planned := range plannedListeners {
 			plannedCopy := planned
 
-			recv, err := logsource.SetupOTLPNetworkReceiver(
+			recv, err := logsource.SetupOTLPNetworkListener(
 				ctx,
 				logsource.NewTelemetrySettings(),
 				plannedCopy.Protocols,
@@ -1210,7 +1206,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 				"shared-otlp-receiver-"+plannedCopy.Name,
 			)
 			if err != nil {
-				logger.Printf("unable to start shared log network receiver %q: %v", plannedCopy.Name, err)
+				a.addWarnings(fmt.Errorf("unable to start OpenTelemetry network receiver %q: %w", plannedCopy.Name, err))
 
 				continue
 			}
@@ -1221,7 +1217,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 					return recv.Shutdown(context.Background())
 				},
-				fmt.Sprintf("Shared log network receiver (%s)", plannedCopy.Name),
+				fmt.Sprintf("OpenTelemetry network receiver (%s)", plannedCopy.Name),
 			})
 		}
 
@@ -2145,24 +2141,6 @@ func (a *agent) updatedDiscovery(ctx context.Context, services []discovery.Servi
 	}
 }
 
-// anyReceiverWantsDefaultNetwork reports whether any receiver wants the auto-provisioned default network receiver.
-func anyReceiverWantsDefaultNetwork(receivers map[string]config.LogReceiver) bool {
-	for name, raw := range receivers {
-		_, _, _, network, err := config.LogReceiverSelectors(raw)
-		if err != nil {
-			logger.V(1).Printf("log.opentelemetry.receivers.%s: %v", name, err)
-
-			continue
-		}
-
-		if network.Enable && len(network.Receivers) == 0 {
-			return true
-		}
-	}
-
-	return false
-}
-
 // runReceiverManager periodically re-resolves file receivers and persists read offsets until ctx is done.
 func (a *agent) runReceiverManager(ctx context.Context) error {
 	const receiverManagerUpdatePeriod = time.Minute
@@ -2439,6 +2417,12 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 
 	if a.logProcessManager != nil {
 		modules = append(modules, a.logProcessManager.DiagnosticArchive)
+	} else if a.receiverManager != nil {
+		// logProcessManager.DiagnosticArchive (above) already writes this same persister when it
+		// exists -- it shares receiverManager's *PersistHost, see logsource.ReceiverManager.Persister.
+		// Without either, log-to-metric's read-offset/extension state would be missing from the bundle
+		// entirely whenever log shipping/Bleemeo is disabled.
+		modules = append(modules, a.receiverManager.DiagnosticArchive)
 	}
 
 	if a.logMetricsManager != nil {

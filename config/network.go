@@ -16,46 +16,26 @@
 
 package config
 
-// DefaultNetworkReceiverName is the opentelemetry.network.receivers entry auto-provisioned
-// by EffectiveNetworkReceivers for the simple "enable: true" shortcut.
-const DefaultNetworkReceiverName = "otlp"
+import (
+	"errors"
+	"fmt"
+)
 
-// ResolveNetworkReceivers returns the receivers a participant pulls from: its
-// own explicit list if set, else DefaultNetworkReceiverName if it just set
-// enable, else none.
-func ResolveNetworkReceivers(enable bool, receivers []string) []string {
-	if len(receivers) > 0 {
-		return receivers
-	}
+var errNetworkListenerNoProtocol = errors.New("opentelemetry.network_listeners entry has no protocol enabled (grpc or http)")
 
-	if enable {
-		return []string{DefaultNetworkReceiverName}
-	}
+// validateNetworkListeners rejects any opentelemetry.network_listeners entry with neither grpc nor http
+// configured -- almost certainly a typo/mistake (e.g. an empty "protocols:" block). Without this, such
+// an entry silently listens on nothing: otlpreceiver.Config.Validate() does reject it, but only once a
+// receiver references it and the agent tries to start it at runtime, and even then the failure only hit
+// the log file instead of the same load-time errors every other misconfigured receiver produces.
+func validateNetworkListeners(cfg Config) error {
+	var errs []error
 
-	return nil
-}
-
-// EffectiveNetworkReceivers returns networkReceivers unchanged if it already
-// has an entry (naming one yourself disables auto-provisioning). Otherwise, if
-// any simpleWant is true, it auto-provisions a single DefaultNetworkReceiverName
-// entry on the standard OTLP ports.
-func EffectiveNetworkReceivers(networkReceivers map[string]NetworkReceiver, simpleWants ...bool) map[string]NetworkReceiver {
-	if len(networkReceivers) > 0 {
-		return networkReceivers
-	}
-
-	for _, want := range simpleWants {
-		if want {
-			return map[string]NetworkReceiver{
-				DefaultNetworkReceiverName: {
-					Protocols: NetworkProtocols{
-						GRPC: &NetworkEndpoint{Endpoint: "localhost:4317"},
-						HTTP: &NetworkEndpoint{Endpoint: "localhost:4318"},
-					},
-				},
-			}
+	for name, listener := range cfg.OpenTelemetry.NetworkListeners {
+		if listener.Protocols.GRPC == nil && listener.Protocols.HTTP == nil {
+			errs = append(errs, fmt.Errorf("%w: %q", errNetworkListenerNoProtocol, name))
 		}
 	}
 
-	return networkReceivers
+	return errors.Join(errs...)
 }

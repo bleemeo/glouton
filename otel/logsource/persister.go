@@ -117,6 +117,12 @@ func (h *PersistHost) NewPersistentExt(name string) component.ID {
 		logger.V(2).Printf("duplicate extensions with ID %v (name=%s)", id, name)
 	}
 
+	// Replacing the old client here (if any) doesn't lose its unflushed Set() calls: storageClient.set()
+	// already writes through to h.metadataPerReceiver/h.updatedKeys synchronously on every call,
+	// independent of this client's own SaveThrottle-gated saveMetadata(). SaveToState/getAllMetadata (the
+	// actual restart-recovery path) reads those host-level maps directly, not any individual client's
+	// private dirty/updatedKeys -- so they already reflect every Set() this duplicate name ever received,
+	// regardless of which storageClient instance is current by the time a save happens.
 	h.extensions[id] = persistExtension{
 		client: &storageClient{
 			name:        name,

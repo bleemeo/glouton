@@ -19,6 +19,7 @@ package logprocessing
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -44,6 +45,8 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
 )
+
+var errSimulatedStartFailure = errors.New("simulated start failure")
 
 type logRecord struct {
 	Timestamp  time.Time
@@ -388,6 +391,88 @@ func TestFileLogReceiver(t *testing.T) {
 	}
 }
 
+// TestNginxBothDefaultRouteDoesNotDropUnmatchedLines guards against a regression where the "nginx_both"
+// composite log format's router had no "default" route (unlike "haproxy", which does): a line matching
+// neither the access nor the error sub-pattern was silently dropped by the stanza router transformer
+// instead of degrading through the access parser like haproxy's equivalent case.
+func TestNginxBothDefaultRouteDoesNotDropUnmatchedLines(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+
+	f, err := os.Create(filepath.Join(tmpDir, "nginx.log"))
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer f.Close()
+
+	knownLogFormats, err := logsource.ExpandLogFormats(config.DefaultKnownLogFormats())
+	if err != nil {
+		t.Fatalf("Failed to expand default known log formats: %v", err)
+	}
+
+	cfg := config.LogReceiver{
+		"include":    []string{f.Name()},
+		"log_format": "nginx_both",
+	}
+
+	logger, err := zap.NewDevelopment(zap.IncreaseLevel(zap.InfoLevel))
+	if err != nil {
+		t.Fatalf("Failed to create logger: %v", err)
+	}
+
+	telSet := component.TelemetrySettings{
+		Logger:         logger,
+		TracerProvider: noop.NewTracerProvider(),
+		MeterProvider:  noopM.NewMeterProvider(),
+		Resource:       pcommon.NewResource(),
+	}
+
+	pipeline := pipelineContext{
+		hostroot:          string(os.PathSeparator),
+		lastFileSizes:     make(map[string]int64),
+		telemetry:         telSet,
+		startedComponents: []component.Component{},
+		commandRunner:     noExecRunner(t),
+		persister:         mustNewPersistHost(t),
+	}
+
+	defer pipeline.shutdownAll()
+
+	logBuf := logBuffer{buf: make([]plog.Logs, 0, 1)}
+
+	recv, warn, err := newLogReceiver("filelog/nginx", cfg, false, makeBufferConsumer(t, &logBuf), knownLogFormats, logsource.StatFile)
+	if err != nil {
+		t.Fatal("Failed to initialize log receiver:", err)
+	}
+
+	if warn != nil {
+		t.Fatal("Got a warning during log receiver initialization:", warn)
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	if err := recv.update(ctx, &pipeline, addWarningsFn(t)); err != nil {
+		t.Fatal("Failed to update pipeline:", err)
+	}
+
+	time.Sleep(time.Second)
+
+	// Matches neither nginx_both's access pattern (starts with an IP) nor its error pattern (starts with
+	// a "YYYY/MM/DD ... [error]" timestamp).
+	if _, err := f.WriteString("this line matches neither the nginx access nor error pattern\n"); err != nil {
+		t.Fatal("Failed to write to log file:", err)
+	}
+
+	time.Sleep(2 * time.Second)
+
+	if got := len(logBuf.getAllRecords()); got != 1 {
+		t.Fatalf("Expected the unmatched line to still be shipped (not dropped) via the router's default route, got %d records: %v", got, logBuf.getAllRecords())
+	}
+}
+
 func TestFileLogReceiverWithHostroot(t *testing.T) {
 	t.Parallel()
 
@@ -657,5 +742,124 @@ func TestExecLogReceiver(t *testing.T) {
 				t.Fatalf("Starting command should have been called once, but has been %d times.", startCmdCallsCount)
 			}
 		})
+	}
+}
+
+// TestFileLogReceiverPartialBatchFailureDoesNotDuplicate guards against a regression where update()
+// resolved a whole batch of new files through one SetupLogReceiverFactories call and only recorded
+// r.watching after every file in the batch started successfully: if a later file in the batch failed to
+// start, an earlier file's already-started receiver was left out of r.watching, so the next update() call
+// started a second, duplicate receiver tailing (and shipping) that same file. Since update() now starts
+// files one at a time (startFile), a failing file must not affect any other file in the same or a later call.
+func TestFileLogReceiverPartialBatchFailureDoesNotDuplicate(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+
+	fileOK, err := os.Create(filepath.Join(tmpDir, "ok.log"))
+	if err != nil {
+		t.Fatal("Can't create fileOK:", err)
+	}
+
+	defer fileOK.Close()
+
+	fileFail, err := os.Create(filepath.Join(tmpDir, "fail.log"))
+	if err != nil {
+		t.Fatal("Can't create fileFail:", err)
+	}
+
+	defer fileFail.Close()
+
+	// Force sudo/exec mode for both files, so Start() goes through commandRunner.StartWithPipes, which
+	// we can make fail deterministically for one specific file.
+	statFile := func(string, string, CommandRunner) (ignore, needSudo bool, sizeFn func() (int64, error)) {
+		return false, true, func() (int64, error) { return 0, nil }
+	}
+
+	startCallsByFile := map[string]int{}
+
+	testLogger, err := zap.NewDevelopment(zap.IncreaseLevel(zap.InfoLevel))
+	if err != nil {
+		t.Fatalf("Failed to create logger: %v", err)
+	}
+
+	telSet := component.TelemetrySettings{
+		Logger:         testLogger,
+		TracerProvider: noop.NewTracerProvider(),
+		MeterProvider:  noopM.NewMeterProvider(),
+		Resource:       pcommon.NewResource(),
+	}
+
+	pipeline := pipelineContext{
+		hostroot:          string(os.PathSeparator),
+		lastFileSizes:     make(map[string]int64),
+		telemetry:         telSet,
+		startedComponents: []component.Component{},
+		commandRunner: dummyRunner{
+			run: func(_ context.Context, _ gloutonexec.Option, cmd string, args ...string) ([]byte, error) {
+				t.Errorf("No command should have been executed using this method, but: %s %s", cmd, args)
+
+				return nil, nil
+			},
+			startWithPipes: func(_ context.Context, _ gloutonexec.Option, _ string, args ...string) (io.ReadCloser, io.ReadCloser, func() error, error) {
+				file := args[len(args)-1]
+				startCallsByFile[file]++
+
+				if file == fileFail.Name() {
+					return nil, nil, nil, fmt.Errorf("%w: %s", errSimulatedStartFailure, file)
+				}
+
+				nopReadCloser := io.NopCloser(bytes.NewReader(nil))
+
+				return nopReadCloser, nopReadCloser, func() error { return nil }, nil
+			},
+		},
+		persister: mustNewPersistHost(t),
+	}
+
+	defer pipeline.shutdownAll()
+
+	cfg := config.LogReceiver{
+		"include": []string{fileOK.Name(), fileFail.Name()},
+	}
+
+	recv, warn, err := newLogReceiver("root_files", cfg, false, makeBufferConsumer(t, &logBuffer{buf: []plog.Logs{}}), map[string][]config.OTELOperator{}, statFile)
+	if err != nil {
+		t.Fatal("Failed to initialize log receiver:", err)
+	}
+
+	if warn != nil {
+		t.Fatal("Got a warning during log receiver initialization:", warn)
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	err = recv.update(ctx, &pipeline, addWarningsFn(t))
+	if err == nil {
+		t.Fatal("Expected update() to return an error for the failing file")
+	}
+
+	if diff := cmp.Diff([]string{fileOK.Name()}, recv.currentlyWatching(), sortFilesOpt); diff != "" {
+		t.Errorf("Unexpected watched log files after the first update() (-want, +got):\n%s", diff)
+	}
+
+	// Second call: fileOK must not be restarted (it's already watched), fileFail is retried since it
+	// never got marked as watched.
+	err = recv.update(ctx, &pipeline, addWarningsFn(t))
+	if err == nil {
+		t.Fatal("Expected update() to return an error for the still-failing file")
+	}
+
+	if diff := cmp.Diff([]string{fileOK.Name()}, recv.currentlyWatching(), sortFilesOpt); diff != "" {
+		t.Errorf("Unexpected watched log files after the second update() (-want, +got):\n%s", diff)
+	}
+
+	if got := startCallsByFile[fileOK.Name()]; got != 1 {
+		t.Errorf("Expected fileOK to be started exactly once across both update() calls, got %d", got)
+	}
+
+	if got := startCallsByFile[fileFail.Name()]; got != 2 {
+		t.Errorf("Expected fileFail to be retried on both update() calls, got %d", got)
 	}
 }

@@ -301,6 +301,42 @@ func TestRegistryReleaseForgetsAfterGracePeriodElapses(t *testing.T) {
 	t.Errorf("Expected the counter to be forgotten within %s of its grace period elapsing, it never was", 10*gracePeriod)
 }
 
+// Test that a forget() call carrying a now-stale epoch (simulating a release() timer that already fired,
+// but whose goroutine only acquires reg.l after a concurrent resolve() reused the item -- Timer.Stop()
+// returning false in cancelPendingReleaseLocked doesn't stop an already-fired goroutine from still
+// running) does not purge the counters the resolve() just reused.
+func TestRegistryForgetSkipsStaleEpochAfterReuse(t *testing.T) {
+	t.Parallel()
+
+	reg := newMetricsRegistry(time.Hour) // grace period irrelevant: forget() is invoked directly below
+
+	before := reg.resolve([]metricSpec{{Metric: "app_errors_count"}}, "web-1")
+	before[0].counter.Add(7)
+
+	reg.release("web-1")
+
+	staleEpoch := reg.releaseEpoch["web-1"] // captured as release()'s scheduled forget() would have
+
+	// A same-named replacement is resolved before the grace period elapses.
+	after := reg.resolve([]metricSpec{{Metric: "app_errors_count"}}, "web-1")
+
+	if after[0] != before[0] {
+		t.Fatal("Expected resolve() to reuse the existing counter")
+	}
+
+	// Simulate the delayed forget() goroutine finally running with the epoch it captured before the
+	// resolve() above invalidated it.
+	reg.forget("web-1", staleEpoch)
+
+	if _, found := reg.counters[counterKey{metric: "app_errors_count", item: "web-1"}]; !found {
+		t.Fatal("Expected the reused counter to survive a stale forget() call racing a concurrent resolve()")
+	}
+
+	if got := after[0].counter.Total(); got != 7 {
+		t.Errorf("Expected the counter's prior total to survive (7), got %d", got)
+	}
+}
+
 // Test that custom static labels merge in but can never override the reserved __name__/item labels.
 func TestRegistryLabels(t *testing.T) {
 	t.Parallel()
@@ -325,5 +361,237 @@ func TestRegistryLabels(t *testing.T) {
 
 	if got := spoofedCounters[0].lbls.Get(types.LabelItem); got != "real-container" {
 		t.Errorf("Expected the real auto-derived item to win over a user labels:{item:...} entry, got %q", got)
+	}
+}
+
+// sumDataPoint is one data point to feed makeSumMetricWithPoints, optionally carrying attributes (as a
+// metrics: entry's "attributes:" list would produce via the countconnector).
+type sumDataPoint struct {
+	Attrs map[string]string
+	Count int64
+}
+
+// makeSumMetricWithPoints builds a pmetric.Metrics with a single Sum metric named name, one data point per
+// entry in points.
+func makeSumMetricWithPoints(name string, points ...sumDataPoint) pmetric.Metrics {
+	md := pmetric.NewMetrics()
+	sm := md.ResourceMetrics().AppendEmpty().ScopeMetrics().AppendEmpty()
+
+	m := sm.Metrics().AppendEmpty()
+	m.SetName(name)
+	sum := m.SetEmptySum()
+	sum.SetIsMonotonic(true)
+	sum.SetAggregationTemporality(pmetric.AggregationTemporalityDelta)
+
+	for _, p := range points {
+		dp := sum.DataPoints().AppendEmpty()
+		dp.SetIntValue(p.Count)
+
+		for k, v := range p.Attrs {
+			dp.Attributes().PutStr(k, v)
+		}
+	}
+
+	return md
+}
+
+// Test that data points carrying attribute values (a metrics: entry's "attributes:" list) create distinct
+// series per combination actually observed, instead of collapsing into the item's base counter, and that
+// the same combination seen again across batches accumulates into that same series.
+func TestRegistryAttributesCreateDistinctSeries(t *testing.T) {
+	t.Parallel()
+
+	reg := newMetricsRegistry(0)
+
+	reg.resolve([]metricSpec{{Metric: "http_requests_count"}}, "")
+
+	sink := reg.metricsSinkForItem("")
+
+	if err := sink.ConsumeMetrics(t.Context(), makeSumMetricWithPoints("http_requests_count",
+		sumDataPoint{Attrs: map[string]string{"status": "200"}, Count: 3},
+		sumDataPoint{Attrs: map[string]string{"status": "500"}, Count: 1},
+	)); err != nil {
+		t.Fatalf("ConsumeMetrics returned an error: %v", err)
+	}
+
+	// A later batch with the same combo must accumulate into the same series, not create a third one.
+	if err := sink.ConsumeMetrics(t.Context(), makeSumMetricWithPoints("http_requests_count",
+		sumDataPoint{Attrs: map[string]string{"status": "200"}, Count: 2},
+	)); err != nil {
+		t.Fatalf("ConsumeMetrics returned an error: %v", err)
+	}
+
+	base, found := reg.counters[counterKey{metric: "http_requests_count", item: ""}]
+	if !found {
+		t.Fatal("Expected the base counter to exist")
+	}
+
+	if got := base.counter.Total(); got != 0 {
+		t.Errorf("Expected the base (no-attrs) counter to stay untouched, got %d", got)
+	}
+
+	var status200, status500 *counter
+
+	for key, c := range reg.counters {
+		if key.metric != "http_requests_count" || key.attrs == "" {
+			continue
+		}
+
+		switch c.lbls.Get("status") {
+		case "200":
+			status200 = c
+		case "500":
+			status500 = c
+		}
+	}
+
+	if status200 == nil || status500 == nil {
+		t.Fatalf("Expected distinct counters for status=200 and status=500, got counters=%+v", reg.counters)
+	}
+
+	if got := status200.counter.Total(); got != 5 {
+		t.Errorf("Expected status=200 total 5 (3+2 across two batches), got %d", got)
+	}
+
+	if got := status500.counter.Total(); got != 1 {
+		t.Errorf("Expected status=500 total 1, got %d", got)
+	}
+}
+
+// Test that once a metric using "attributes:" has at least one real attrs-variant sibling, its base
+// (attrs="") counter -- which can never receive an Add() itself, see resolveAttrCounterLocked -- is no
+// longer emitted as a spurious always-zero series alongside the real ones.
+func TestRegistryEmitSkipsPhantomBaseSeriesOnceAttributedSiblingExists(t *testing.T) {
+	t.Parallel()
+
+	reg := newMetricsRegistry(0)
+
+	reg.resolve([]metricSpec{{Metric: "http_requests_count"}}, "")
+
+	sink := reg.metricsSinkForItem("")
+
+	if err := sink.ConsumeMetrics(t.Context(), makeSumMetricWithPoints("http_requests_count",
+		sumDataPoint{Attrs: map[string]string{"status": "200"}, Count: 3},
+	)); err != nil {
+		t.Fatalf("ConsumeMetrics returned an error: %v", err)
+	}
+
+	app := glmodel.NewBufferAppender()
+
+	if err := reg.emit(app); err != nil {
+		t.Fatalf("emit returned an error: %v", err)
+	}
+
+	mfs, err := app.AsMF()
+	if err != nil {
+		t.Fatalf("AsMF returned an error: %v", err)
+	}
+
+	if len(mfs) != 1 {
+		t.Fatalf("Expected exactly 1 metric family, got %d", len(mfs))
+	}
+
+	if got := len(mfs[0].GetMetric()); got != 1 {
+		t.Fatalf("Expected exactly 1 sample (the real status=200 series, base series skipped), got %d", got)
+	}
+
+	for _, lbl := range mfs[0].GetMetric()[0].GetLabel() {
+		if lbl.GetName() == "status" && lbl.GetValue() != "200" {
+			t.Errorf("Expected the surviving sample to be the status=200 series, got status=%q", lbl.GetValue())
+		}
+	}
+}
+
+// Test that an attribute whose key collides with the reserved item key or a static "labels:" entry is
+// dropped instead of overriding it: precedence is item > labels > attributes.
+func TestRegistryAttributesShadowedByItemAndLabels(t *testing.T) {
+	t.Parallel()
+
+	reg := newMetricsRegistry(0)
+
+	reg.resolve([]metricSpec{
+		{Metric: "web_requests_count", Labels: map[string]string{"env": "prod"}},
+	}, "web-1")
+
+	sink := reg.metricsSinkForItem("web-1")
+
+	if err := sink.ConsumeMetrics(t.Context(), makeSumMetricWithPoints("web_requests_count",
+		sumDataPoint{Attrs: map[string]string{
+			"item":   "spoofed-item", // shadowed: reserved key
+			"env":    "spoofed-env",  // shadowed: static "labels:" already claims it
+			"region": "eu",           // unclaimed: becomes a real label
+		}, Count: 1},
+	)); err != nil {
+		t.Fatalf("ConsumeMetrics returned an error: %v", err)
+	}
+
+	var realCounter *counter
+
+	for key, c := range reg.counters {
+		if key.metric == "web_requests_count" && key.attrs != "" {
+			realCounter = c
+		}
+	}
+
+	if realCounter == nil {
+		t.Fatalf("Expected a real attribute-derived counter, got counters=%+v", reg.counters)
+	}
+
+	if got := realCounter.lbls.Get(types.LabelItem); got != "web-1" {
+		t.Errorf("Expected the real item to win over the spoofed \"item\" attribute, got %q", got)
+	}
+
+	if got := realCounter.lbls.Get("env"); got != "prod" {
+		t.Errorf("Expected the static labels: value to win over the spoofed \"env\" attribute, got %q", got)
+	}
+
+	if got := realCounter.lbls.Get("region"); got != "eu" {
+		t.Errorf("Expected the unclaimed \"region\" attribute to surface as a label, got %q", got)
+	}
+
+	if got := realCounter.counter.Total(); got != 1 {
+		t.Errorf("Expected 1 match, got %d", got)
+	}
+}
+
+// Test that two genuinely distinct attribute-value combinations never collide onto the same counter, even
+// when a value contains the raw separator characters ('=', ',') the canonical key is built from -- guards
+// against a regression where an unescaped "key=value," encoding let combination A ({"a": "1,b=2", "b":
+// "3"}) and combination B ({"a": "1", "b": "2,b=3"}) both produce the literal string "a=1,b=2,b=3," and
+// merge into one series with whichever combination's labels happened to be created first.
+func TestRegistryAttributesWithSeparatorCharsDontCollide(t *testing.T) {
+	t.Parallel()
+
+	reg := newMetricsRegistry(0)
+
+	reg.resolve([]metricSpec{{Metric: "tricky_count"}}, "")
+
+	sink := reg.metricsSinkForItem("")
+
+	if err := sink.ConsumeMetrics(t.Context(), makeSumMetricWithPoints("tricky_count",
+		sumDataPoint{Attrs: map[string]string{"a": "1,b=2", "b": "3"}, Count: 1},
+		sumDataPoint{Attrs: map[string]string{"a": "1", "b": "2,b=3"}, Count: 1},
+	)); err != nil {
+		t.Fatalf("ConsumeMetrics returned an error: %v", err)
+	}
+
+	var combos []counterKey
+
+	for key := range reg.counters {
+		if key.metric == "tricky_count" && key.attrs != "" {
+			combos = append(combos, key)
+		}
+	}
+
+	if len(combos) != 2 {
+		t.Fatalf("Expected 2 distinct attribute-combo counters, got %d: %+v", len(combos), combos)
+	}
+
+	for _, key := range combos {
+		c := reg.counters[key]
+
+		if got := c.counter.Total(); got != 1 {
+			t.Errorf("Expected each distinct combo to total 1 (no cross-contamination), got %d for %+v", got, key)
+		}
 	}
 }

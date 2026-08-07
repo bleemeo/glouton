@@ -40,12 +40,12 @@ import (
 
 var errUnexpectedConfig = errors.New("unexpected config type")
 
-// SetupOTLPNetworkReceiver builds, starts and returns an OTLP log receiver for protocols (a nil field
+// SetupOTLPNetworkListener builds, starts and returns an OTLP log receiver for protocols (a nil field
 // disables it), forwarding everything to sink. idName must be unique per caller. Validate() is called
 // explicitly since this bypasses confmap's automatic validation, or an all-disabled receiver would
 // silently drop logs instead of erroring. Caller must wrap sink with WrapWithInstrumentation itself if
 // wanted, and call Shutdown on the returned receiver.
-func SetupOTLPNetworkReceiver(
+func SetupOTLPNetworkListener(
 	ctx context.Context,
 	telemetry component.TelemetrySettings,
 	protocols config.NetworkProtocols,
@@ -181,34 +181,61 @@ type NetworkWant struct {
 	Receivers []string
 }
 
-// PlannedReceiver is what SetupOTLPNetworkReceiver needs to start one named
-// shared receiver, as computed by PlanSharedNetworkReceivers.
+// PlannedReceiver is what SetupOTLPNetworkListener needs to start one named
+// shared receiver, as computed by PlanSharedNetworkListeners.
 type PlannedReceiver struct {
 	Name      string
 	Protocols config.NetworkProtocols
 	Sink      consumer.Logs
 }
 
-// PlanSharedNetworkReceivers groups wants by receiver name, so features
+// errUndefinedNetworkListener flags a log receiver's network.receivers entry that names an
+// opentelemetry.network_listeners key that doesn't exist (a typo, or the listener's definition was dropped
+// -- e.g. a null "protocols:"/"grpc:"/"http:" value is dropped by loader.go's generic null-value handling
+// before the entry is even decoded, leaving nothing behind to reconstruct it from. A non-null but empty
+// "protocols: {}" is a different case: the entry still exists, so it's instead caught earlier, as a
+// load-time error, by config.validateNetworkListeners -- it never reaches this check).
+var errUndefinedNetworkListener = errors.New("network receiver referenced but not defined in opentelemetry.network_listeners")
+
+// PlanSharedNetworkListeners groups wants by receiver name, so features
 // naming the same entry share one physical listener and one FanoutLogs sink.
-// An entry nobody references, or with no consumer, is omitted. Each planned
-// receiver's protocols come straight from that entry's own config.
-func PlanSharedNetworkReceivers(receivers map[string]config.NetworkReceiver, wants []NetworkWant) []PlannedReceiver {
+// An entry nobody references, or with no consumer, is omitted from the
+// planned receivers. Each planned receiver's protocols come straight from
+// that entry's own config. The second return value carries one
+// errUndefinedNetworkListener per referenced but undefined name -- checked
+// against every want's Receivers regardless of whether that want has an
+// active Consumer, so a receiver with a typo'd listener name still gets
+// warned about even when it has nothing else (no metrics, no shipping)
+// asking for its logs -- for the caller to surface as a config warning
+// instead of a log-only message a user has no way to see in
+// agent_config_warning.
+func PlanSharedNetworkListeners(receivers map[string]config.NetworkListener, wants []NetworkWant) ([]PlannedReceiver, []error) {
 	consumersByName := make(map[string][]consumer.Logs)
+	referencedNames := make(map[string]bool)
 
 	for _, want := range wants {
-		if want.Consumer == nil {
-			continue
-		}
+		// Dedupe within this one want: a config typo naming the same listener twice (e.g.
+		// network: {receivers: [otlp, otlp]}) must not register want.Consumer twice, or FanoutLogs
+		// would deliver every batch to it twice, silently doubling counts/duplicating shipped logs.
+		seen := make(map[string]bool, len(want.Receivers))
 
 		for _, name := range want.Receivers {
+			// Recorded even with a nil Consumer, so an inert receiver referencing an undefined
+			// listener still gets warned about instead of being silently dropped below.
+			referencedNames[name] = true
+
+			if want.Consumer == nil || seen[name] {
+				continue
+			}
+
+			seen[name] = true
 			consumersByName[name] = append(consumersByName[name], want.Consumer)
 		}
 	}
 
-	names := make([]string, 0, len(consumersByName))
+	names := make([]string, 0, len(referencedNames))
 
-	for name := range consumersByName {
+	for name := range referencedNames {
 		names = append(names, name)
 	}
 
@@ -216,10 +243,12 @@ func PlanSharedNetworkReceivers(receivers map[string]config.NetworkReceiver, wan
 
 	planned := make([]PlannedReceiver, 0, len(names))
 
+	var warnings []error
+
 	for _, name := range names {
 		recv, ok := receivers[name]
 		if !ok {
-			logger.Printf("logsource: network receiver %q referenced but not defined in opentelemetry.network.receivers", name)
+			warnings = append(warnings, fmt.Errorf("%w: %q", errUndefinedNetworkListener, name))
 
 			continue
 		}
@@ -236,7 +265,7 @@ func PlanSharedNetworkReceivers(receivers map[string]config.NetworkReceiver, wan
 		})
 	}
 
-	return planned
+	return planned, warnings
 }
 
 // nopHost is a component.Host with no extensions; this OTLP receiver doesn't

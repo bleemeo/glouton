@@ -17,10 +17,15 @@
 package logsource
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -28,6 +33,7 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts"
 
+	"github.com/google/go-cmp/cmp"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/plog"
 )
@@ -866,5 +872,76 @@ func TestReceiverManagerNetworkWants(t *testing.T) {
 
 	if got := totalRecords(received()); got != 1 {
 		t.Fatalf("expected 1 record to reach the provider, got %d", got)
+	}
+}
+
+// TestManagedSourceSizesByFileSkipsOnlyTheFailingFile guards against a regression where one file's
+// non-ErrNotExist stat error (e.g. a permission flip after logrotate, or sudoStatFile's timeout under
+// load) aborted SizesByFile entirely, discarding every other file's already-successfully-read size for
+// this managedSource -- which SaveLastFileSizesToCache then drops wholesale on any error, risking a
+// stale/lost resume offset for the healthy files too.
+// fakeArchiveWriter is a minimal types.ArchiveWriter test double recording bytes written per filename.
+type fakeArchiveWriter struct {
+	files map[string]*bytes.Buffer
+}
+
+func (w *fakeArchiveWriter) Create(filename string) (io.Writer, error) {
+	if w.files == nil {
+		w.files = make(map[string]*bytes.Buffer)
+	}
+
+	buf := &bytes.Buffer{}
+	w.files[filename] = buf
+
+	return buf, nil
+}
+
+func (w *fakeArchiveWriter) CurrentFileName() string {
+	return ""
+}
+
+// Test that ReceiverManager.DiagnosticArchive writes the shared persister's registered-extension state,
+// closing the gap where a diagnostic bundle taken with log shipping/Bleemeo disabled (so
+// otel/logprocessing's Manager, which shares this exact persister, never runs) had no read-offset/
+// extension state at all, even though log-to-metric receivers using that persister were still active.
+func TestReceiverManagerDiagnosticArchiveWritesPersisterState(t *testing.T) {
+	t.Parallel()
+
+	rm := newTestReceiverManager(t, config.OpenTelemetry{})
+
+	id := rm.persister.NewPersistentExt("test-receiver")
+
+	writer := &fakeArchiveWriter{}
+
+	if err := rm.DiagnosticArchive(t.Context(), writer); err != nil {
+		t.Fatal("DiagnosticArchive returned an error:", err)
+	}
+
+	buf, found := writer.files[persistArchivePath]
+	if !found {
+		t.Fatalf("Expected a %q entry written to the archive, got %v", persistArchivePath, writer.files)
+	}
+
+	if !strings.Contains(buf.String(), id.String()) {
+		t.Errorf("Expected the archived state to mention the registered extension %q, got %s", id.String(), buf.String())
+	}
+}
+
+func TestManagedSourceSizesByFileSkipsOnlyTheFailingFile(t *testing.T) {
+	t.Parallel()
+
+	ms := newManagedSource("recv", SourceReceiver, nil, nil)
+
+	ms.sizeFnByFile["good.log"] = func() (int64, error) { return 42, nil }
+	ms.sizeFnByFile["bad.log"] = func() (int64, error) { return 0, errors.New("permission denied") } //nolint:err113
+	ms.sizeFnByFile["gone.log"] = func() (int64, error) { return 0, fs.ErrNotExist }
+
+	sizes, err := ms.SizesByFile()
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if diff := cmp.Diff(map[string]int64{"good.log": 42}, sizes); diff != "" {
+		t.Fatalf("Unexpected sizes (-want +got):\n%s", diff)
 	}
 }

@@ -161,14 +161,20 @@ func buildGroupedConnectors(
 	)
 
 	for item, groupEntries := range groups {
-		reg.resolve(specsForEntries(groupEntries), item)
-
+		// reg.resolve() only runs once buildConnectors has confirmed at least one entry in this group
+		// is valid: resolving first would declare (permanent, zero-value) counters for an item that
+		// then never makes it into items below, so Manager.ReleaseSource would never release them --
+		// a leak for the process lifetime once the item's source (e.g. its container) is gone.
+		// metricsSinkForItem is safe to call before resolve(): it looks up reg.counters fresh on every
+		// incoming data point and no-ops if the key isn't there yet.
 		groupConns, err := buildConnectors(ctx, connFactory, telemetry, groupEntries, reg.metricsSinkForItem(item))
 		if err != nil {
 			logger.Printf("logmetrics: source %q: item %q: %v", sourceName, item, err)
 
 			continue
 		}
+
+		reg.resolve(specsForEntries(groupEntries), item)
 
 		conns = append(conns, groupConns...)
 		items = append(items, item)
@@ -272,9 +278,14 @@ func extractLabels(raw config.LogMetricEntry) map[string]string {
 	labels := make(map[string]string, len(rawLabels))
 
 	for k, v := range rawLabels {
-		if s, ok := v.(string); ok {
-			labels[k] = s
+		s, ok := v.(string)
+		if !ok {
+			logger.Printf("logmetrics: label %q must be a string, got %v (%T), dropping it", k, v, v)
+
+			continue
 		}
+
+		labels[k] = s
 	}
 
 	return labels
