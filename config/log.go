@@ -26,7 +26,7 @@ import (
 var (
 	errReceiverNoSelector               = errors.New("log.opentelemetry receiver has no source selector (include, container_name, container_selectors, or from_listeners)")
 	errContainerExcludeEmpty            = errors.New("log.opentelemetry.container_exclude entry has neither container_name nor selectors set")
-	errReceiverNetworkListenerUndefined = errors.New("network listener not defined in opentelemetry.network_listeners")
+	errReceiverNetworkListenerUndefined = errors.New("network listener not defined in opentelemetry.listeners")
 	errReceiverMetricsRuleUndefined     = errors.New("metrics_rules entry not defined in log.metrics_rules")
 )
 

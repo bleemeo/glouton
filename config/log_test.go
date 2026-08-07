@@ -21,9 +21,9 @@ import (
 	"testing"
 )
 
-// Test that a receiver's from_listeners entry naming a listener opentelemetry.network_listeners
+// Test that a receiver's from_listeners entry naming a listener opentelemetry.listeners
 // doesn't define is rejected at load time -- since there's no implicit/default listener to fall back to
-// anymore, an undefined name is unambiguously a typo or a forgotten network_listeners entry, and should be
+// anymore, an undefined name is unambiguously a typo or a forgotten listeners entry, and should be
 // caught immediately instead of only surfacing later as a runtime agent_config_warning.
 func TestValidateLogReceiversRejectsUndefinedNetworkListener(t *testing.T) {
 	t.Parallel()
@@ -47,7 +47,7 @@ func TestValidateLogReceiversRejectsUndefinedNetworkListener(t *testing.T) {
 }
 
 // Test that a receiver's from_listeners entry naming a listener that IS defined under
-// opentelemetry.network_listeners is accepted.
+// opentelemetry.listeners is accepted.
 func TestValidateLogReceiversAcceptsDefinedNetworkListener(t *testing.T) {
 	t.Parallel()
 

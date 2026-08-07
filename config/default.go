@@ -66,7 +66,7 @@ func mapKeys() []string {
 	return []string{
 		keyThresholds,
 		"metric.softstatus_period",
-		"opentelemetry.network_listeners",
+		"opentelemetry.listeners",
 		"log.opentelemetry.receivers",
 		"log.opentelemetry.global_filters",
 		"log.opentelemetry.known_log_filters",

@@ -146,7 +146,7 @@ func ParseBool(value string) (bool, error) {
 }
 
 // networkProtocolsNullMeansDefaultHookFunc makes a bare "grpc:"/"http:" key (a YAML null value) under
-// opentelemetry.network_listeners.*.protocols behave exactly like an explicit "grpc: {}"/"http: {}": the
+// opentelemetry.listeners.*.protocols behave exactly like an explicit "grpc: {}"/"http: {}": the
 // protocol is enabled with the factory-default endpoint. This matches how every upstream OTel collector
 // receiver's own "protocols:" block already works (see receivers.otlp in the OTel collector docs) --
 // listing a protocol at all, empty or not, enables it; only a protocol not listed is disabled. Without

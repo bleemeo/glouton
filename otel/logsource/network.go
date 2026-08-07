@@ -190,12 +190,12 @@ type PlannedReceiver struct {
 }
 
 // errUndefinedNetworkListener flags a log receiver's from_listeners entry that names an
-// opentelemetry.network_listeners key that doesn't exist (a typo, or the listener's definition was dropped
+// opentelemetry.listeners key that doesn't exist (a typo, or the listener's definition was dropped
 // -- e.g. a null "protocols:"/"grpc:"/"http:" value is dropped by loader.go's generic null-value handling
 // before the entry is even decoded, leaving nothing behind to reconstruct it from. A non-null but empty
 // "protocols: {}" is a different case: the entry still exists, so it's instead caught earlier, as a
 // load-time error, by config.validateNetworkListeners -- it never reaches this check).
-var errUndefinedNetworkListener = errors.New("network receiver referenced but not defined in opentelemetry.network_listeners")
+var errUndefinedNetworkListener = errors.New("network receiver referenced but not defined in opentelemetry.listeners")
 
 // PlanSharedNetworkListeners groups wants by receiver name, so features
 // naming the same entry share one physical listener and one FanoutLogs sink.

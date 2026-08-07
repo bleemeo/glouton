@@ -294,10 +294,53 @@ func envToKeyFunc() (func(string) string, *prometheus.MultiError) {
 			s = newKey
 		}
 
-		return envToKey[s]
+		if key, ok := envToKey[s]; ok {
+			return key
+		}
+
+		if key, ok := resolveListenerEnvKey(s); ok {
+			return key
+		}
+
+		return ""
 	}
 
 	return envFunc, &warnings
+}
+
+// listenerEnvPrefix is the fixed prefix of the dynamic per-listener environment
+// variables handled by resolveListenerEnvKey.
+const listenerEnvPrefix = "GLOUTON_OPENTELEMETRY_LISTENERS_"
+
+// listenerEnvSuffixes maps the fixed suffix of a dynamic per-listener environment
+// variable to the config key it sets below opentelemetry.listeners.<name>.
+var listenerEnvSuffixes = map[string]string{ //nolint:gochecknoglobals
+	"_PROTOCOLS_GRPC_ENDPOINT": "protocols.grpc.endpoint",
+	"_PROTOCOLS_HTTP_ENDPOINT": "protocols.http.endpoint",
+}
+
+// resolveListenerEnvKey resolves an environment variable of the form
+// GLOUTON_OPENTELEMETRY_LISTENERS_<name>_PROTOCOLS_GRPC_ENDPOINT (or _HTTP_ENDPOINT)
+// to its config key, e.g. "opentelemetry.listeners.<name>.protocols.grpc.endpoint".
+// <name> is recovered by trimming the fixed prefix and suffix rather than by
+// splitting on delimiters, so it may contain underscores. This only handles
+// opentelemetry.listeners and isn't meant as a generic mechanism for other maps.
+func resolveListenerEnvKey(s string) (string, bool) {
+	rest, ok := strings.CutPrefix(s, listenerEnvPrefix)
+	if !ok {
+		return "", false
+	}
+
+	for suffix, subKey := range listenerEnvSuffixes {
+		name, ok := strings.CutSuffix(rest, suffix)
+		if !ok || name == "" {
+			continue
+		}
+
+		return "opentelemetry.listeners." + strings.ToLower(name) + "." + subKey, true
+	}
+
+	return "", false
 }
 
 // toEnvKey returns the environment variable corresponding to a configuration key.
@@ -932,7 +975,7 @@ func cloneMetricEntry(entryAny any) map[string]any {
 }
 
 // legacyNetworkReceiverNames builds a unique-per-provider pair of names for migrateLegacyNetworkListeners'
-// synthesized receiver (log.opentelemetry.receivers key) and network listener (opentelemetry.network_listeners
+// synthesized receiver (log.opentelemetry.receivers key) and network listener (opentelemetry.listeners
 // key), the same way legacyInputReceiverName namespaces migrateLogInputs' output: migrate() runs once per
 // provider (config file), so two files each still using the legacy grpc/http shape would otherwise both
 // produce the same fixed names and one would silently clobber the other's config at merge time.
@@ -949,7 +992,7 @@ func legacyNetworkReceiverNames(providerPath string) (receiverKey, listenerKey s
 }
 
 // migrateLegacyNetworkListeners folds log.opentelemetry.grpc/http's old, pre-network-receivers {enable, address, port} shape into a
-// synthesized "legacy_network" receiver under opentelemetry.network_listeners, preserving the address/port and the unconditional
+// synthesized "legacy_network" receiver under opentelemetry.listeners, preserving the address/port and the unconditional
 // shipping behavior (send_logs: true). providerPath identifies the provider being migrated (e.g. a config file path); see
 // legacyNetworkReceiverNames for why it must be folded into the generated names.
 func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any, providerPath string) prometheus.MultiError {
@@ -981,7 +1024,7 @@ func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any, provid
 	}
 
 	warnings.Append(fmt.Errorf(
-		"%w: %s.grpc/http {enable, address, port}, use opentelemetry.network_listeners + a log.opentelemetry.receivers entry's from_listener field instead",
+		"%w: %s.grpc/http {enable, address, port}, use opentelemetry.listeners + a log.opentelemetry.receivers entry's from_listener field instead",
 		errSettingsDeprecated, path,
 	))
 
@@ -1032,13 +1075,13 @@ func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any, provid
 		protocols["http"] = map[string]any{"endpoint": httpEndpoint}
 	}
 
-	NetworkListeners, _ := k.Get("opentelemetry.network_listeners").(map[string]any)
+	NetworkListeners, _ := k.Get("opentelemetry.listeners").(map[string]any)
 	if NetworkListeners == nil {
 		NetworkListeners = map[string]any{}
 	}
 
 	NetworkListeners[listenerKey] = map[string]any{"protocols": protocols}
-	config["opentelemetry.network_listeners"] = NetworkListeners
+	config["opentelemetry.listeners"] = NetworkListeners
 
 	receivers, _ := k.Get("log.opentelemetry.receivers").(map[string]any)
 	if receivers == nil {

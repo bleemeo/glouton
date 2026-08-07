@@ -1189,7 +1189,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		}
 
 		// Log-shipping and log-to-metric share a single OTLP listener when they name
-		// the same opentelemetry.network_listeners entry (see logsource.PlanSharedNetworkListeners).
+		// the same opentelemetry.listeners entry (see logsource.PlanSharedNetworkListeners).
 		// Every name a receiver references must be defined there explicitly -- there's no
 		// implicit/default listener to fall back to.
 		plannedListeners, listenerWarnings := logsource.PlanSharedNetworkListeners(a.config.OpenTelemetry.NetworkListeners, a.receiverManager.NetworkWants(ctx))

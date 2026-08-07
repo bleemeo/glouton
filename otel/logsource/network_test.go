@@ -213,7 +213,7 @@ func TestPlanSharedNetworkListenersDedupesRepeatedNameInOneWant(t *testing.T) {
 }
 
 // TestPlanSharedNetworkListenersOmitsUnknownReceiverName checks that a receiver name undefined in
-// opentelemetry.network_listeners is skipped (not turned into a protocol-less PlannedReceiver) and
+// opentelemetry.listeners is skipped (not turned into a protocol-less PlannedReceiver) and
 // reported back as a warning instead of only a log line, so it can reach agent_config_warning.
 func TestPlanSharedNetworkListenersOmitsUnknownReceiverName(t *testing.T) {
 	t.Parallel()
@@ -241,7 +241,7 @@ func TestPlanSharedNetworkListenersOmitsUnknownReceiverName(t *testing.T) {
 // where a receiver with only a network.receivers reference and nothing else asking for its logs (no
 // metrics, no shipping -- so its want carries a nil Consumer) skipped the undefined-listener check
 // entirely: the whole want was dropped before its Receivers names were ever checked against the
-// configured network_listeners, so a typo'd listener name on an otherwise-inert receiver produced no
+// configured listeners, so a typo'd listener name on an otherwise-inert receiver produced no
 // warning anywhere, not even in agent_config_warning.
 func TestPlanSharedNetworkListenersWarnsOnUndefinedNameEvenWithoutConsumer(t *testing.T) {
 	t.Parallel()

@@ -128,6 +128,10 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 			continue
 		}
 
+		if providerType == SourceEnv && key == "opentelemetry.listeners" {
+			value = pruneNilMapValues(value)
+		}
+
 		priority := priority(providerType, key, value, c.loadCount)
 
 		// Keep the real type of the value before it's converted to JSON.
@@ -351,6 +355,13 @@ func priority(provider ItemSource, key string, value any, loadCount int) int {
 
 	switch provider {
 	case SourceEnv:
+		// Entries under opentelemetry.listeners set by the dynamic per-listener
+		// environment variables (see resolveListenerEnvKey) must merge into
+		// file-defined listeners instead of replacing the whole map.
+		if key == "opentelemetry.listeners" {
+			return priorityMapAndArrayFile
+		}
+
 		return priorityEnv
 	case SourceFile:
 		// Slices in files all have the same priority because they are appended.
@@ -487,6 +498,33 @@ func merge(dst any, src any) (any, error) {
 	default:
 		return nil, fmt.Errorf("%w: unsupported type %T", errCannotMerge, dst)
 	}
+}
+
+// pruneNilMapValues recursively removes nil-valued entries from a nested
+// map[string]any. Used only for the opentelemetry.listeners item sourced from
+// the environment (see resolveListenerEnvKey): a dynamic per-listener
+// environment variable only sets a single leaf, but the Config-struct round
+// trip in convertTypes fills in every other NetworkListener/NetworkProtocols
+// field as an explicit nil. Without pruning, merge() would treat those
+// explicit nils as the environment intentionally overwriting sibling fields
+// (e.g. an untouched HTTP endpoint) defined in a config file.
+func pruneNilMapValues(value any) any {
+	m, ok := value.(map[string]any)
+	if !ok {
+		return value
+	}
+
+	for key, val := range m {
+		if val == nil {
+			delete(m, key)
+
+			continue
+		}
+
+		m[key] = pruneNilMapValues(val)
+	}
+
+	return m
 }
 
 // mergeKnownLogFormats seeks for all items like log.opentelemetry.known_log_formats.*,

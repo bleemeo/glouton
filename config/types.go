@@ -73,7 +73,7 @@ type Log struct {
 // OpenTelemetryConfig holds OpenTelemetry-related settings that aren't specific to any one signal
 // (logs/metrics/traces), as opposed to Log.OpenTelemetry which is log-specific.
 type OpenTelemetryConfig struct {
-	NetworkListeners map[string]NetworkListener `yaml:"network_listeners"`
+	NetworkListeners map[string]NetworkListener `yaml:"listeners"`
 }
 
 // NetworkListener mirrors otlpreceiver.Config: a protocol's presence enables
@@ -173,8 +173,8 @@ type EnableListener struct {
 //     and combined with include, on the same receiver -- every match feeds
 //     this one receiver's shipping/metrics as a single unit.
 //   - from_listeners: []string, pull logs from one or more
-//     opentelemetry.network_listeners entries by name ({from_listeners: [name,...]}).
-//     Every named entry must already exist under opentelemetry.network_listeners --
+//     opentelemetry.listeners entries by name ({from_listeners: [name,...]}).
+//     Every named entry must already exist under opentelemetry.listeners --
 //     there's no implicit/default listener, so unrelated config elsewhere can never
 //     change what this receiver participates in (see PlanSharedNetworkListeners's
 //     errUndefinedNetworkListener for the typo/missing-entry case).

@@ -73,7 +73,7 @@ func TestValidateNetworkListeners(t *testing.T) {
 		}
 	})
 
-	t.Run("no network_listeners at all is accepted", func(t *testing.T) {
+	t.Run("no listeners at all is accepted", func(t *testing.T) {
 		t.Parallel()
 
 		if err := validateNetworkListeners(Config{}); err != nil {

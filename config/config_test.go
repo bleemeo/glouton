@@ -2113,7 +2113,7 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 	}
 }
 
-// Test_loadRejectsNetworkListenerWithNoProtocol guards against an opentelemetry.network_listeners entry
+// Test_loadRejectsNetworkListenerWithNoProtocol guards against an opentelemetry.listeners entry
 // with an explicit empty "protocols: {}" (neither grpc nor http present at all) silently doing nothing
 // once a receiver references it: Load() must reject it up front, the same way it already rejects a log
 // receiver with no selector. Note this is distinct from a "protocols:" block that DOES list grpc/http but
@@ -2224,10 +2224,10 @@ func Test_migrateLegacyNetworkListenersNoInvalidKeysLeak(t *testing.T) {
 }
 
 // Test_loadNetworkListenerSurvivesDefaultMerge guards against a regression where
-// "opentelemetry.network_listeners" was missing from default.go's mapKeys(), so DefaultConfig()'s empty
+// "opentelemetry.listeners" was missing from default.go's mapKeys(), so DefaultConfig()'s empty
 // map for that field and a real config file's nested entries landed as separate flat keys under the same
 // prefix -- and koanf's tree-building let the shorter (default, empty) key silently clobber the deeper
-// (file, populated) one once merged, wiping out any configured network_listeners entirely. Must use the
+// (file, populated) one once merged, wiping out any configured listeners entirely. Must use the
 // real, public Load() (withDefault=true) to reproduce: the internal load() with withDefault=false doesn't
 // merge in the default map at all, so it can't catch this class of bug.
 func Test_loadNetworkListenerSurvivesDefaultMerge(t *testing.T) {
@@ -2249,6 +2249,87 @@ func Test_loadNetworkListenerSurvivesDefaultMerge(t *testing.T) {
 
 	if listener.Protocols.GRPC == nil || listener.Protocols.GRPC.Endpoint != "127.0.0.1:9999" {
 		t.Errorf("Expected the configured GRPC endpoint to survive, got %+v", listener.Protocols)
+	}
+}
+
+// Test_loadDynamicListenerEnv guards resolveListenerEnvKey and its interaction with the loader's
+// merge-priority logic: a GLOUTON_OPENTELEMETRY_LISTENERS_<name>_PROTOCOLS_GRPC/HTTP_ENDPOINT variable must
+// only overwrite that single leaf, not wholesale-replace the whole opentelemetry.listeners map (which
+// would silently drop every other listener, and every other field of the targeted listener, loaded from a
+// config file), and must be able to create a listener that doesn't exist in any file.
+func Test_loadDynamicListenerEnv(t *testing.T) {
+	t.Setenv("GLOUTON_OPENTELEMETRY_LISTENERS_otlp_PROTOCOLS_GRPC_ENDPOINT", "0.0.0.0:1")
+	t.Setenv("GLOUTON_OPENTELEMETRY_LISTENERS_foo_bar_PROTOCOLS_HTTP_ENDPOINT", "0.0.0.0:2")
+
+	cfg, _, warnings, err := Load(true, true, "testdata/network-listener-dynamic-env.conf")
+	if err != nil {
+		t.Fatalf("Load returned an error: %v", err)
+	}
+
+	if warnings != nil {
+		t.Fatalf("Expected no warnings, got: %v", warnings)
+	}
+
+	otlp, ok := cfg.OpenTelemetry.NetworkListeners["otlp"]
+	if !ok {
+		t.Fatalf("Expected the %q listener to still exist, got %v", "otlp", cfg.OpenTelemetry.NetworkListeners)
+	}
+
+	if otlp.Protocols.GRPC == nil || otlp.Protocols.GRPC.Endpoint != "0.0.0.0:1" {
+		t.Errorf("Expected the environment variable to override otlp's GRPC endpoint, got %+v", otlp.Protocols)
+	}
+
+	if otlp.Protocols.HTTP == nil || otlp.Protocols.HTTP.Endpoint != "127.0.0.1:4318" {
+		t.Errorf("Expected otlp's file-configured HTTP endpoint to survive untouched, got %+v", otlp.Protocols)
+	}
+
+	other, ok := cfg.OpenTelemetry.NetworkListeners["other"]
+	if !ok {
+		t.Fatalf("Expected the %q listener (untouched by any environment variable) to survive, got %v", "other", cfg.OpenTelemetry.NetworkListeners)
+	}
+
+	if other.Protocols.GRPC == nil || other.Protocols.GRPC.Endpoint != "127.0.0.1:9999" {
+		t.Errorf("Expected other's file-configured GRPC endpoint to survive untouched, got %+v", other.Protocols)
+	}
+
+	fooBar, ok := cfg.OpenTelemetry.NetworkListeners["foo_bar"]
+	if !ok {
+		t.Fatalf("Expected a new %q listener to be created from the environment alone, got %v", "foo_bar", cfg.OpenTelemetry.NetworkListeners)
+	}
+
+	if fooBar.Protocols.GRPC != nil {
+		t.Errorf("Expected foo_bar's GRPC endpoint to remain unset, got %+v", fooBar.Protocols)
+	}
+
+	if fooBar.Protocols.HTTP == nil || fooBar.Protocols.HTTP.Endpoint != "0.0.0.0:2" {
+		t.Errorf("Expected the environment variable to set foo_bar's HTTP endpoint, got %+v", fooBar.Protocols)
+	}
+}
+
+// Test_loadDynamicListenerEnvIgnoresMalformed guards resolveListenerEnvKey against two inputs that look
+// intentional (same GLOUTON_OPENTELEMETRY_LISTENERS_ prefix) but aren't valid: no listener name between the
+// prefix and the suffix, and a suffix that isn't one of the two known protocol endpoints. Both must be
+// silently ignored, consistent with how any other unrecognized GLOUTON_ variable is already treated.
+func Test_loadDynamicListenerEnvIgnoresMalformed(t *testing.T) {
+	t.Setenv("GLOUTON_OPENTELEMETRY_LISTENERS__PROTOCOLS_GRPC_ENDPOINT", "0.0.0.0:1")
+	t.Setenv("GLOUTON_OPENTELEMETRY_LISTENERS_otlp_PROTOCOLS_UDP_ENDPOINT", "0.0.0.0:2")
+
+	cfg, _, warnings, err := Load(true, true, "testdata/network-listener-survives-defaults.conf")
+	if err != nil {
+		t.Fatalf("Load returned an error: %v", err)
+	}
+
+	if warnings != nil {
+		t.Fatalf("Expected no warnings, got: %v", warnings)
+	}
+
+	if got := len(cfg.OpenTelemetry.NetworkListeners); got != 1 {
+		t.Fatalf("Expected only the file-configured listener to exist, got %d: %v", got, cfg.OpenTelemetry.NetworkListeners)
+	}
+
+	otlp := cfg.OpenTelemetry.NetworkListeners["otlp"]
+	if otlp.Protocols.GRPC == nil || otlp.Protocols.GRPC.Endpoint != "127.0.0.1:9999" {
+		t.Errorf("Expected the malformed environment variables to be ignored, got %+v", otlp.Protocols)
 	}
 }
 

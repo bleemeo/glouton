@@ -21,9 +21,9 @@ import (
 	"fmt"
 )
 
-var errNetworkListenerNoProtocol = errors.New("opentelemetry.network_listeners entry has no protocol enabled (grpc or http)")
+var errNetworkListenerNoProtocol = errors.New("opentelemetry.listeners entry has no protocol enabled (grpc or http)")
 
-// validateNetworkListeners rejects any opentelemetry.network_listeners entry with neither grpc nor http
+// validateNetworkListeners rejects any opentelemetry.listeners entry with neither grpc nor http
 // configured -- almost certainly a typo/mistake (e.g. an empty "protocols:" block). Without this, such
 // an entry silently listens on nothing: otlpreceiver.Config.Validate() does reject it, but only once a
 // receiver references it and the agent tries to start it at runtime, and even then the failure only hit
