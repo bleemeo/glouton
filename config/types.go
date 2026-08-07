@@ -93,16 +93,6 @@ type NetworkEndpoint struct {
 	Endpoint string `yaml:"endpoint"`
 }
 
-// OTLPNetworkParticipation lists which OpenTelemetry.NetworkListeners entries a
-// receiver/feature pulls logs from. Every named entry must already exist under
-// opentelemetry.network_listeners -- there's no implicit/default listener, so
-// unrelated config elsewhere can never change what this receiver participates
-// in (see PlanSharedNetworkListeners's errUndefinedNetworkListener for the
-// typo/missing-entry case).
-type OTLPNetworkParticipation struct {
-	Receivers []string `yaml:"receivers"`
-}
-
 // LogInput is the legacy Fluent Bit-era log-to-metric source; migrateLogInputs
 // (config.go) translates it into OpenTelemetry.Receivers/Log.MetricsRules.
 type LogInput struct {
@@ -182,8 +172,12 @@ type EnableListener struct {
 //     logs, in addition to (or instead of) include. Both can be combined,
 //     and combined with include, on the same receiver -- every match feeds
 //     this one receiver's shipping/metrics as a single unit.
-//   - network: OTLPNetworkParticipation, participate in one or more
-//     opentelemetry.network_listeners entries ({network: {receivers: [name,...]}}).
+//   - from_listeners: []string, pull logs from one or more
+//     opentelemetry.network_listeners entries by name ({from_listeners: [name,...]}).
+//     Every named entry must already exist under opentelemetry.network_listeners --
+//     there's no implicit/default listener, so unrelated config elsewhere can never
+//     change what this receiver participates in (see PlanSharedNetworkListeners's
+//     errUndefinedNetworkListener for the typo/missing-entry case).
 //   - send_logs: override the global OpenTelemetry.SendLogs default for
 //     this receiver.
 //   - log_format / operators: parse each line into attributes before
@@ -192,7 +186,7 @@ type EnableListener struct {
 //   - metrics: []LogMetricEntry, this receiver's log-to-metric definitions.
 //
 // A receiver needs at least one of include/container_name/
-// container_selectors/network -- enforced by validateLogReceivers.
+// container_selectors/from_listeners -- enforced by validateLogReceivers.
 type LogReceiver = map[string]any
 
 // LogMetricEntry is one item of a receiver's metrics: list, or of a

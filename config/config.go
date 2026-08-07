@@ -1046,8 +1046,8 @@ func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any, provid
 	}
 
 	receivers[receiverKey] = map[string]any{
-		"network":   map[string]any{"receivers": []any{listenerKey}},
-		"send_logs": true,
+		"from_listeners": []any{listenerKey},
+		"send_logs":      true,
 	}
 	config["log.opentelemetry.receivers"] = receivers
 

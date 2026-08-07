@@ -869,12 +869,12 @@ func (rm *ReceiverManager) NetworkWants(ctx context.Context) []NetworkWant {
 	wants := make([]NetworkWant, 0, len(rm.cfg.Receivers))
 
 	for name, raw := range rm.cfg.Receivers {
-		_, _, _, network, err := config.LogReceiverSelectors(raw)
+		_, _, _, fromListeners, err := config.LogReceiverSelectors(raw)
 		if err != nil {
 			continue
 		}
 
-		if len(network.Receivers) == 0 {
+		if len(fromListeners) == 0 {
 			continue
 		}
 
@@ -885,7 +885,7 @@ func (rm *ReceiverManager) NetworkWants(ctx context.Context) []NetworkWant {
 			continue
 		}
 
-		wants = append(wants, NetworkWant{Consumer: ms.fanout, Receivers: network.Receivers})
+		wants = append(wants, NetworkWant{Consumer: ms.fanout, Receivers: fromListeners})
 	}
 
 	return wants

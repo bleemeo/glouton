@@ -249,9 +249,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 								"value": "apache_server",
 							},
 						},
-						"network": map[string]any{
-							"receivers": []any{"otlp"},
-						},
+						"from_listeners": []any{"otlp"},
 					},
 					"apache_access": {
 						"include": []any{"/var/log/apache/access.log"},
@@ -1917,8 +1915,8 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 					OpenTelemetry: OpenTelemetry{
 						Receivers: map[string]LogReceiver{
 							legacyNetworkReceiverKey("testdata/legacy-opentelemetry-network.conf"): {
-								"network":   map[string]any{"receivers": []any{legacyNetworkListenerKey("testdata/legacy-opentelemetry-network.conf")}},
-								"send_logs": true,
+								"from_listeners": []any{legacyNetworkListenerKey("testdata/legacy-opentelemetry-network.conf")},
+								"send_logs":      true,
 							},
 						},
 					},
@@ -1945,8 +1943,8 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 					OpenTelemetry: OpenTelemetry{
 						Receivers: map[string]LogReceiver{
 							legacyNetworkReceiverKey("testdata/legacy-network-both-protocols.conf"): {
-								"network":   map[string]any{"receivers": []any{legacyNetworkListenerKey("testdata/legacy-network-both-protocols.conf")}},
-								"send_logs": true,
+								"from_listeners": []any{legacyNetworkListenerKey("testdata/legacy-network-both-protocols.conf")},
+								"send_logs":      true,
 							},
 						},
 					},

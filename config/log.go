@@ -24,7 +24,7 @@ import (
 )
 
 var (
-	errReceiverNoSelector               = errors.New("log.opentelemetry receiver has no source selector (include, container_name, container_selectors, or network)")
+	errReceiverNoSelector               = errors.New("log.opentelemetry receiver has no source selector (include, container_name, container_selectors, or from_listeners)")
 	errContainerExcludeEmpty            = errors.New("log.opentelemetry.container_exclude entry has neither container_name nor selectors set")
 	errReceiverNetworkListenerUndefined = errors.New("network listener not defined in opentelemetry.network_listeners")
 	errReceiverMetricsRuleUndefined     = errors.New("metrics_rules entry not defined in log.metrics_rules")
@@ -34,10 +34,10 @@ var (
 // what it watches, narrow-decoded out of the rest of the receiver's
 // (otherwise real vendored fileconsumer/filelogreceiver) fields.
 type receiverSelectors struct {
-	Include            []string                 `mapstructure:"include"`
-	ContainerName      string                   `mapstructure:"container_name"`
-	ContainerSelectors map[string]string        `mapstructure:"container_selectors"`
-	Network            OTLPNetworkParticipation `mapstructure:"network"`
+	Include            []string          `mapstructure:"include"`
+	ContainerName      string            `mapstructure:"container_name"`
+	ContainerSelectors map[string]string `mapstructure:"container_selectors"`
+	FromListeners      []string          `mapstructure:"from_listeners"`
 }
 
 // LogReceiverSelectors narrow-decodes just the selector-related keys out of
@@ -45,19 +45,19 @@ type receiverSelectors struct {
 // filelogreceiver) field it may carry. Used both by validateLogReceivers and
 // by the runtime layer (e.g. to check whether a container already matches a
 // configured receiver before falling back to container-label detection).
-func LogReceiverSelectors(raw LogReceiver) (include []string, containerName string, containerSelectors map[string]string, network OTLPNetworkParticipation, err error) {
+func LogReceiverSelectors(raw LogReceiver) (include []string, containerName string, containerSelectors map[string]string, fromListeners []string, err error) {
 	var probe receiverSelectors
 
 	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{Result: &probe})
 	if err != nil {
-		return nil, "", nil, OTLPNetworkParticipation{}, fmt.Errorf("creating decoder: %w", err)
+		return nil, "", nil, nil, fmt.Errorf("creating decoder: %w", err)
 	}
 
 	if err := decoder.Decode(raw); err != nil {
-		return nil, "", nil, OTLPNetworkParticipation{}, err
+		return nil, "", nil, nil, err
 	}
 
-	return probe.Include, probe.ContainerName, probe.ContainerSelectors, probe.Network, nil
+	return probe.Include, probe.ContainerName, probe.ContainerSelectors, probe.FromListeners, nil
 }
 
 // receiverMetricsIncludeNames returns every distinct {include: name} value found in raw's "metrics" list.
@@ -89,28 +89,28 @@ func receiverMetricsIncludeNames(raw LogReceiver) []string {
 
 // validateLogReceivers rejects any log.opentelemetry.receivers entry with no
 // source selector at all (include, container_name, container_selectors, or
-// network) -- almost certainly a typo/mistake, caught at load time instead
-// of silently doing nothing. It also rejects network receivers and metric includes
+// from_listeners) -- almost certainly a typo/mistake, caught at load time instead
+// of silently doing nothing. It also rejects undefined from_listeners entries and metric includes
 // that don't exist.
 func validateLogReceivers(cfg Config) error {
 	var errs []error
 
 	for name, raw := range cfg.Log.OpenTelemetry.Receivers {
-		include, containerName, containerSelectors, network, err := LogReceiverSelectors(raw)
+		include, containerName, containerSelectors, fromListeners, err := LogReceiverSelectors(raw)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("log.opentelemetry.receivers.%s: %w", name, err))
 
 			continue
 		}
 
-		if len(include) == 0 && containerName == "" && len(containerSelectors) == 0 && len(network.Receivers) == 0 {
+		if len(include) == 0 && containerName == "" && len(containerSelectors) == 0 && len(fromListeners) == 0 {
 			errs = append(errs, fmt.Errorf("%w: %q", errReceiverNoSelector, name))
 		}
 
-		for _, listenerName := range network.Receivers {
+		for _, listenerName := range fromListeners {
 			if _, ok := cfg.OpenTelemetry.NetworkListeners[listenerName]; !ok {
 				errs = append(errs, fmt.Errorf(
-					"%w: log.opentelemetry.receivers.%s.network.receivers references %q",
+					"%w: log.opentelemetry.receivers.%s.from_listeners references %q",
 					errReceiverNetworkListenerUndefined, name, listenerName,
 				))
 			}

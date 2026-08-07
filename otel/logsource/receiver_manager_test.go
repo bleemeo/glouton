@@ -844,7 +844,7 @@ func TestReceiverManagerNetworkWants(t *testing.T) {
 
 	cfg := config.OpenTelemetry{
 		Receivers: map[string]config.LogReceiver{
-			"billing": {"network": map[string]any{"receivers": []string{"otlp"}}},
+			"billing": {"from_listeners": []string{"otlp"}},
 		},
 	}
 

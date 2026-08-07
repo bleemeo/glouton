@@ -21,7 +21,7 @@ import (
 	"testing"
 )
 
-// Test that a receiver's network.receivers entry naming a listener opentelemetry.network_listeners
+// Test that a receiver's from_listeners entry naming a listener opentelemetry.network_listeners
 // doesn't define is rejected at load time -- since there's no implicit/default listener to fall back to
 // anymore, an undefined name is unambiguously a typo or a forgotten network_listeners entry, and should be
 // caught immediately instead of only surfacing later as a runtime agent_config_warning.
@@ -33,7 +33,7 @@ func TestValidateLogReceiversRejectsUndefinedNetworkListener(t *testing.T) {
 			OpenTelemetry: OpenTelemetry{
 				Receivers: map[string]LogReceiver{
 					"filelog/recv": {
-						"network": map[string]any{"receivers": []any{"does_not_exist"}},
+						"from_listeners": []any{"does_not_exist"},
 					},
 				},
 			},
@@ -46,7 +46,7 @@ func TestValidateLogReceiversRejectsUndefinedNetworkListener(t *testing.T) {
 	}
 }
 
-// Test that a receiver's network.receivers entry naming a listener that IS defined under
+// Test that a receiver's from_listeners entry naming a listener that IS defined under
 // opentelemetry.network_listeners is accepted.
 func TestValidateLogReceiversAcceptsDefinedNetworkListener(t *testing.T) {
 	t.Parallel()
@@ -61,7 +61,7 @@ func TestValidateLogReceiversAcceptsDefinedNetworkListener(t *testing.T) {
 			OpenTelemetry: OpenTelemetry{
 				Receivers: map[string]LogReceiver{
 					"filelog/recv": {
-						"network": map[string]any{"receivers": []any{"otlp"}},
+						"from_listeners": []any{"otlp"},
 					},
 				},
 			},

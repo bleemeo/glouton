@@ -189,7 +189,7 @@ type PlannedReceiver struct {
 	Sink      consumer.Logs
 }
 
-// errUndefinedNetworkListener flags a log receiver's network.receivers entry that names an
+// errUndefinedNetworkListener flags a log receiver's from_listeners entry that names an
 // opentelemetry.network_listeners key that doesn't exist (a typo, or the listener's definition was dropped
 // -- e.g. a null "protocols:"/"grpc:"/"http:" value is dropped by loader.go's generic null-value handling
 // before the entry is even decoded, leaving nothing behind to reconstruct it from. A non-null but empty
@@ -215,7 +215,7 @@ func PlanSharedNetworkListeners(receivers map[string]config.NetworkListener, wan
 
 	for _, want := range wants {
 		// Dedupe within this one want: a config typo naming the same listener twice (e.g.
-		// network: {receivers: [otlp, otlp]}) must not register want.Consumer twice, or FanoutLogs
+		// from_listeners: [otlp, otlp]) must not register want.Consumer twice, or FanoutLogs
 		// would deliver every batch to it twice, silently doubling counts/duplicating shipped logs.
 		seen := make(map[string]bool, len(want.Receivers))
 
