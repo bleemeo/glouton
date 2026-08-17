@@ -18,6 +18,7 @@ package config
 
 import (
 	"errors"
+	"math"
 	"net/url"
 	"strings"
 	"testing"
@@ -2252,7 +2253,7 @@ func Test_loadNetworkListenerSurvivesDefaultMerge(t *testing.T) {
 	}
 }
 
-// Test_loadDynamicListenerEnv guards resolveListenerEnvKey and its interaction with the loader's
+// Test_loadDynamicListenerEnv guards resolveDynamicEnvKey and its interaction with the loader's
 // merge-priority logic: a GLOUTON_OPENTELEMETRY_LISTENERS_<name>_PROTOCOLS_GRPC/HTTP_ENDPOINT variable must
 // only overwrite that single leaf, not wholesale-replace the whole opentelemetry.listeners map (which
 // would silently drop every other listener, and every other field of the targeted listener, loaded from a
@@ -2306,7 +2307,7 @@ func Test_loadDynamicListenerEnv(t *testing.T) {
 	}
 }
 
-// Test_loadDynamicListenerEnvIgnoresMalformed guards resolveListenerEnvKey against two inputs that look
+// Test_loadDynamicListenerEnvIgnoresMalformed guards resolveDynamicEnvKey against two inputs that look
 // intentional (same GLOUTON_OPENTELEMETRY_LISTENERS_ prefix) but aren't valid: no listener name between the
 // prefix and the suffix, and a suffix that isn't one of the two known protocol endpoints. Both must be
 // silently ignored, consistent with how any other unrecognized GLOUTON_ variable is already treated.
@@ -2330,6 +2331,201 @@ func Test_loadDynamicListenerEnvIgnoresMalformed(t *testing.T) {
 	otlp := cfg.OpenTelemetry.NetworkListeners["otlp"]
 	if otlp.Protocols.GRPC == nil || otlp.Protocols.GRPC.Endpoint != "127.0.0.1:9999" {
 		t.Errorf("Expected the malformed environment variables to be ignored, got %+v", otlp.Protocols)
+	}
+}
+
+// Test_loadDynamicThresholdEnv is the thresholds counterpart of Test_loadDynamicListenerEnv: a
+// GLOUTON_THRESHOLDS_<metric>_LOW_WARNING/LOW_CRITICAL/HIGH_WARNING/HIGH_CRITICAL variable must only
+// overwrite that single leaf, not wholesale-replace the whole thresholds map or the other fields of the
+// targeted metric's entry, and must be able to create a threshold entry for a metric that doesn't exist in
+// any file.
+func Test_loadDynamicThresholdEnv(t *testing.T) {
+	t.Setenv("GLOUTON_THRESHOLDS_cpu_used_HIGH_CRITICAL", "95")
+	t.Setenv("GLOUTON_THRESHOLDS_mem_used_LOW_WARNING", "10")
+
+	cfg, _, warnings, err := Load(true, true, "testdata/threshold-dynamic-env.conf")
+	if err != nil {
+		t.Fatalf("Load returned an error: %v", err)
+	}
+
+	if warnings != nil {
+		t.Fatalf("Expected no warnings, got: %v", warnings)
+	}
+
+	cpuUsed, ok := cfg.Thresholds["cpu_used"]
+	if !ok {
+		t.Fatalf("Expected the %q threshold to still exist, got %v", "cpu_used", cfg.Thresholds)
+	}
+
+	if cpuUsed.HighCritical == nil || *cpuUsed.HighCritical != 95 {
+		t.Errorf("Expected the environment variable to override cpu_used's high_critical, got %+v", cpuUsed)
+	}
+
+	if cpuUsed.LowWarning == nil || *cpuUsed.LowWarning != 2 ||
+		cpuUsed.LowCritical == nil || *cpuUsed.LowCritical != 1.5 ||
+		cpuUsed.HighWarning == nil || *cpuUsed.HighWarning != 80.2 {
+		t.Errorf("Expected cpu_used's other file-configured fields to survive untouched, got %+v", cpuUsed)
+	}
+
+	diskUsed, ok := cfg.Thresholds["disk_used"]
+	if !ok {
+		t.Fatalf("Expected the %q threshold (untouched by any environment variable) to survive, got %v", "disk_used", cfg.Thresholds)
+	}
+
+	if diskUsed.LowCritical == nil || *diskUsed.LowCritical != 2 || diskUsed.HighWarning == nil || *diskUsed.HighWarning != 90.5 {
+		t.Errorf("Expected disk_used's file-configured fields to survive untouched, got %+v", diskUsed)
+	}
+
+	memUsed, ok := cfg.Thresholds["mem_used"]
+	if !ok {
+		t.Fatalf("Expected a new %q threshold to be created from the environment alone, got %v", "mem_used", cfg.Thresholds)
+	}
+
+	if memUsed.LowWarning == nil || *memUsed.LowWarning != 10 {
+		t.Errorf("Expected the environment variable to set mem_used's low_warning, got %+v", memUsed)
+	}
+
+	if memUsed.LowCritical != nil || memUsed.HighWarning != nil || memUsed.HighCritical != nil {
+		t.Errorf("Expected mem_used's other fields to remain unset, got %+v", memUsed)
+	}
+}
+
+// Test_loadDynamicThresholdEnvIgnoresMalformed is the thresholds counterpart of
+// Test_loadDynamicListenerEnvIgnoresMalformed: an empty metric name and an unrecognized suffix must both
+// be silently ignored.
+func Test_loadDynamicThresholdEnvIgnoresMalformed(t *testing.T) {
+	t.Setenv("GLOUTON_THRESHOLDS__HIGH_WARNING", "1")
+	t.Setenv("GLOUTON_THRESHOLDS_cpu_used_MEDIUM_WARNING", "2")
+
+	cfg, _, warnings, err := Load(true, true, "testdata/threshold-survives-defaults.conf")
+	if err != nil {
+		t.Fatalf("Load returned an error: %v", err)
+	}
+
+	if warnings != nil {
+		t.Fatalf("Expected no warnings, got: %v", warnings)
+	}
+
+	if got := len(cfg.Thresholds); got != 1 {
+		t.Fatalf("Expected only the file-configured threshold to exist, got %d: %v", got, cfg.Thresholds)
+	}
+
+	cpuUsed := cfg.Thresholds["cpu_used"]
+	if cpuUsed.HighCritical == nil || *cpuUsed.HighCritical != 90 {
+		t.Errorf("Expected the malformed environment variables to be ignored, got %+v", cpuUsed)
+	}
+
+	if cpuUsed.LowWarning != nil || cpuUsed.LowCritical != nil || cpuUsed.HighWarning != nil {
+		t.Errorf("Expected the malformed environment variables not to add any field, got %+v", cpuUsed)
+	}
+}
+
+// Test_resolveDynamicEnvKey unit-tests resolveDynamicEnvKey directly, without going through the whole
+// Load() pipeline: correct key construction for both known suffixes, a name containing underscores, and
+// rejection of an unrelated variable, an unknown suffix, and an empty listener name.
+func Test_resolveDynamicEnvKey(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		env     string
+		wantKey string
+		wantOK  bool
+	}{
+		{"grpc endpoint", "GLOUTON_OPENTELEMETRY_LISTENERS_otlp_PROTOCOLS_GRPC_ENDPOINT", "opentelemetry.listeners.otlp.protocols.grpc.endpoint", true},
+		{"http endpoint", "GLOUTON_OPENTELEMETRY_LISTENERS_otlp_PROTOCOLS_HTTP_ENDPOINT", "opentelemetry.listeners.otlp.protocols.http.endpoint", true},
+		{"name with underscores", "GLOUTON_OPENTELEMETRY_LISTENERS_foo_bar_PROTOCOLS_GRPC_ENDPOINT", "opentelemetry.listeners.foo_bar.protocols.grpc.endpoint", true},
+		{"unrelated variable", "GLOUTON_WEB_ENABLE", "", false},
+		{"unknown suffix", "GLOUTON_OPENTELEMETRY_LISTENERS_otlp_PROTOCOLS_UDP_ENDPOINT", "", false},
+		{"empty name", "GLOUTON_OPENTELEMETRY_LISTENERS__PROTOCOLS_GRPC_ENDPOINT", "", false},
+		{"threshold low_warning", "GLOUTON_THRESHOLDS_cpu_used_LOW_WARNING", "thresholds.cpu_used.low_warning", true},
+		{"threshold high_critical", "GLOUTON_THRESHOLDS_cpu_used_HIGH_CRITICAL", "thresholds.cpu_used.high_critical", true},
+		{"threshold unknown suffix", "GLOUTON_THRESHOLDS_cpu_used_MEDIUM_WARNING", "", false},
+		{"threshold empty name", "GLOUTON_THRESHOLDS__LOW_WARNING", "", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			key, ok := resolveDynamicEnvKey(tc.env)
+			if ok != tc.wantOK {
+				t.Fatalf("resolveDynamicEnvKey(%q) ok = %v, want %v", tc.env, ok, tc.wantOK)
+			}
+
+			if key != tc.wantKey {
+				t.Errorf("resolveDynamicEnvKey(%q) = %q, want %q", tc.env, key, tc.wantKey)
+			}
+		})
+	}
+}
+
+// Test_resolveDynamicEnvKeyTriesEveryEntry is a regression test for a bug introduced while generalizing
+// resolveDynamicEnvKey from a single hardcoded listener case into a loop over dynamicEnvVarList: the loop
+// used to `return "", false` as soon as ONE entry's prefix didn't match the input, instead of trying the
+// next entry, which made every dynamicEnvVar registered after the first one silently unreachable.
+// Temporarily appends a second, unrelated synthetic entry to dynamicEnvVarList and checks that a variable
+// matching only that second entry (and not the first) still resolves -- this must keep passing however
+// many entries dynamicEnvVarList grows to.
+func Test_resolveDynamicEnvKeyTriesEveryEntry(t *testing.T) {
+	original := dynamicEnvVarList
+	dynamicEnvVarList = append(append([]dynamicEnvVar{}, original...), dynamicEnvVar{
+		envPrefix:    "GLOUTON_SOME_OTHER_MAP_",
+		configPrefix: "some.other.map.",
+		suffixes: map[string]string{
+			"_VALUE": "value",
+		},
+	})
+
+	t.Cleanup(func() { dynamicEnvVarList = original })
+
+	key, ok := resolveDynamicEnvKey("GLOUTON_SOME_OTHER_MAP_myentry_VALUE")
+	if !ok {
+		t.Fatal("Expected a variable matching the second dynamicEnvVar entry to resolve, got ok=false -- " +
+			"the loop is probably bailing out on the first entry's prefix mismatch instead of trying the next one")
+	}
+
+	if want := "some.other.map.myentry.value"; key != want {
+		t.Errorf("resolveDynamicEnvKey = %q, want %q", key, want)
+	}
+}
+
+// Test_dynamicEnvVarConfigKeysCoversNewEntries guards the point of dynamicEnvVarConfigKeys existing at
+// all: loader.go's merge-priority and nil-pruning special cases must apply to ANY dynamicEnvVarList entry,
+// not just opentelemetry.listeners, without loader.go needing to be touched again when a new entry is
+// added. Appends a synthetic second entry and checks that priority() grants its config key the
+// map-merging priority (instead of the env-always-wins priority a plain scalar env var would get) purely
+// because it's present in dynamicEnvVarList.
+func Test_dynamicEnvVarConfigKeysCoversNewEntries(t *testing.T) {
+	original := dynamicEnvVarList
+	dynamicEnvVarList = append(append([]dynamicEnvVar{}, original...), dynamicEnvVar{
+		envPrefix:    "GLOUTON_SOME_OTHER_MAP_",
+		configPrefix: "some.other.map.",
+		suffixes: map[string]string{
+			"_VALUE": "value",
+		},
+	})
+
+	t.Cleanup(func() { dynamicEnvVarList = original })
+
+	dynamicKeys := dynamicEnvVarConfigKeys()
+	if !dynamicKeys["some.other.map"] {
+		t.Fatalf("Expected %q to be derived from the synthetic entry's configPrefix, got %v", "some.other.map", dynamicKeys)
+	}
+
+	// priorityMapAndArrayFile and priorityEnv are unexported consts local to priority() in loader.go
+	// (1 and math.MaxInt32 respectively); mirrored here since they aren't reachable from the test.
+	const priorityMapAndArrayFile = 1
+
+	got := priority(SourceEnv, "some.other.map", map[string]any{"myentry": map[string]any{"value": "x"}}, 0, dynamicKeys)
+	if got != priorityMapAndArrayFile {
+		t.Errorf("priority(SourceEnv, %q, ...) = %d, want %d (priorityMapAndArrayFile) -- a new dynamicEnvVarList "+
+			"entry's config key isn't getting the merge treatment automatically", "some.other.map", got, priorityMapAndArrayFile)
+	}
+
+	// A plain, unrelated env-sourced key must still get the ordinary env-always-wins priority.
+	if got := priority(SourceEnv, "web.enable", true, 0, dynamicKeys); got != math.MaxInt32 {
+		t.Errorf("priority(SourceEnv, %q, ...) = %d, want %d (priorityEnv)", "web.enable", got, math.MaxInt32)
 	}
 }
 

@@ -298,7 +298,7 @@ func envToKeyFunc() (func(string) string, *prometheus.MultiError) {
 			return key
 		}
 
-		if key, ok := resolveListenerEnvKey(s); ok {
+		if key, ok := resolveDynamicEnvKey(s); ok {
 			return key
 		}
 
@@ -308,39 +308,73 @@ func envToKeyFunc() (func(string) string, *prometheus.MultiError) {
 	return envFunc, &warnings
 }
 
-// listenerEnvPrefix is the fixed prefix of the dynamic per-listener environment
-// variables handled by resolveListenerEnvKey.
-const listenerEnvPrefix = "GLOUTON_OPENTELEMETRY_LISTENERS_"
-
-// listenerEnvSuffixes maps the fixed suffix of a dynamic per-listener environment
-// variable to the config key it sets below opentelemetry.listeners.<name>.
-var listenerEnvSuffixes = map[string]string{ //nolint:gochecknoglobals
-	"_PROTOCOLS_GRPC_ENDPOINT": "protocols.grpc.endpoint",
-	"_PROTOCOLS_HTTP_ENDPOINT": "protocols.http.endpoint",
+type dynamicEnvVar struct {
+	envPrefix    string
+	configPrefix string
+	suffixes     map[string]string
 }
 
-// resolveListenerEnvKey resolves an environment variable of the form
-// GLOUTON_OPENTELEMETRY_LISTENERS_<name>_PROTOCOLS_GRPC_ENDPOINT (or _HTTP_ENDPOINT)
-// to its config key, e.g. "opentelemetry.listeners.<name>.protocols.grpc.endpoint".
-// <name> is recovered by trimming the fixed prefix and suffix rather than by
-// splitting on delimiters, so it may contain underscores. This only handles
-// opentelemetry.listeners and isn't meant as a generic mechanism for other maps.
-func resolveListenerEnvKey(s string) (string, bool) {
-	rest, ok := strings.CutPrefix(s, listenerEnvPrefix)
-	if !ok {
-		return "", false
-	}
+var dynamicEnvVarList = []dynamicEnvVar{ //nolint:gochecknoglobals
+	{
+		// OpenTelemetry Listener
+		envPrefix:    "GLOUTON_OPENTELEMETRY_LISTENERS_",
+		configPrefix: "opentelemetry.listeners.",
+		suffixes: map[string]string{
+			"_PROTOCOLS_GRPC_ENDPOINT": "protocols.grpc.endpoint",
+			"_PROTOCOLS_HTTP_ENDPOINT": "protocols.http.endpoint",
+		},
+	},
+	{
+		// Thresholds
+		envPrefix:    "GLOUTON_THRESHOLDS_",
+		configPrefix: "thresholds.",
+		suffixes: map[string]string{
+			"_LOW_WARNING":   "low_warning",
+			"_LOW_CRITICAL":  "low_critical",
+			"_HIGH_WARNING":  "high_warning",
+			"_HIGH_CRITICAL": "high_critical",
+		},
+	},
+}
 
-	for suffix, subKey := range listenerEnvSuffixes {
-		name, ok := strings.CutSuffix(rest, suffix)
-		if !ok || name == "" {
+// resolveDynamicEnvKey resolves an environment variable of the form
+// VARIABLE_PREFIX_<name>_VARIABLE_SUFFIX to its config key,
+// e.g. "opentelemetry.listeners.<name>.protocols.grpc.endpoint".
+// <name> is recovered by trimming the fixed prefix and suffix, it may contain underscores.
+// This only handles opentelemetry.listeners and thresholds for now (add entries to dynamicEnvVarList for more).
+func resolveDynamicEnvKey(s string) (string, bool) {
+	for _, dynamicVar := range dynamicEnvVarList {
+		rest, ok := strings.CutPrefix(s, dynamicVar.envPrefix)
+		if !ok {
 			continue
 		}
 
-		return "opentelemetry.listeners." + strings.ToLower(name) + "." + subKey, true
+		for suffix, subKey := range dynamicVar.suffixes {
+			name, ok := strings.CutSuffix(rest, suffix)
+			if !ok || name == "" {
+				continue
+			}
+
+			return dynamicVar.configPrefix + strings.ToLower(name) + "." + subKey, true
+		}
 	}
 
 	return "", false
+}
+
+// dynamicEnvVarConfigKeys returns the set of top-level config keys that dynamicEnvVarList's entries set a
+// leaf under (e.g. "opentelemetry.listeners", derived from the listener entry's "opentelemetry.listeners."
+// configPrefix). loader.go uses this to know which map-shaped config keys need nil-pruning and
+// merge-priority treatment when set from the environment, without hardcoding each key by name -- so a
+// future dynamicEnvVarList entry targeting a different config key gets that treatment for free.
+func dynamicEnvVarConfigKeys() map[string]bool {
+	keys := make(map[string]bool, len(dynamicEnvVarList))
+
+	for _, dynamicVar := range dynamicEnvVarList {
+		keys[strings.TrimSuffix(dynamicVar.configPrefix, delimiter)] = true
+	}
+
+	return keys
 }
 
 // toEnvKey returns the environment variable corresponding to a configuration key.

@@ -117,6 +117,14 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 	config, moreWarnings := convertTypes(k)
 	warnings = append(warnings, moreWarnings...)
 
+	// Computed once per Load() call (not once per key) since it's only needed for
+	// SourceEnv and is otherwise unused; both the pruning check below and priority()
+	// share this single map instead of each recomputing it per key.
+	var dynamicKeys map[string]bool
+	if providerType == SourceEnv {
+		dynamicKeys = dynamicEnvVarConfigKeys()
+	}
+
 	for key, value := range config {
 		if value == nil && !isNilAllowedFor(key) {
 			warnings = append(warnings, fmt.Errorf("%q %w", key, errNullConfigValue))
@@ -128,11 +136,11 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 			continue
 		}
 
-		if providerType == SourceEnv && key == "opentelemetry.listeners" {
+		if dynamicKeys[key] {
 			value = pruneNilMapValues(value)
 		}
 
-		priority := priority(providerType, key, value, c.loadCount)
+		priority := priority(providerType, key, value, c.loadCount, dynamicKeys)
 
 		// Keep the real type of the value before it's converted to JSON.
 		valueType := itemTypeFromValue(key, value)
@@ -345,8 +353,10 @@ func allKeys(k *koanf.Koanf) map[string]any {
 // When two items have the same key, the one with the highest priority is kept.
 // When the value is a map or an array, the items may have the same priority, in
 // this case the arrays are appended to each other, and the maps are merged.
+// dynamicEnvKeys is dynamicEnvVarConfigKeys(), computed once by the caller (only
+// meaningful for provider == SourceEnv; may be nil otherwise).
 // It panics on unknown providers.
-func priority(provider ItemSource, key string, value any, loadCount int) int {
+func priority(provider ItemSource, key string, value any, loadCount int, dynamicEnvKeys map[string]bool) int {
 	const (
 		priorityDefault         = -1
 		priorityMapAndArrayFile = 1
@@ -355,10 +365,10 @@ func priority(provider ItemSource, key string, value any, loadCount int) int {
 
 	switch provider {
 	case SourceEnv:
-		// Entries under opentelemetry.listeners set by the dynamic per-listener
-		// environment variables (see resolveListenerEnvKey) must merge into
-		// file-defined listeners instead of replacing the whole map.
-		if key == "opentelemetry.listeners" {
+		// Entries under a dynamicEnvVarList config key (e.g. opentelemetry.listeners, set by the dynamic
+		// per-listener environment variables -- see resolveDynamicEnvKey) must merge into file-defined
+		// entries instead of replacing the whole map.
+		if dynamicEnvKeys[key] {
 			return priorityMapAndArrayFile
 		}
 
@@ -501,13 +511,13 @@ func merge(dst any, src any) (any, error) {
 }
 
 // pruneNilMapValues recursively removes nil-valued entries from a nested
-// map[string]any. Used only for the opentelemetry.listeners item sourced from
-// the environment (see resolveListenerEnvKey): a dynamic per-listener
-// environment variable only sets a single leaf, but the Config-struct round
-// trip in convertTypes fills in every other NetworkListener/NetworkProtocols
-// field as an explicit nil. Without pruning, merge() would treat those
-// explicit nils as the environment intentionally overwriting sibling fields
-// (e.g. an untouched HTTP endpoint) defined in a config file.
+// map[string]any. Used only for dynamicEnvVarConfigKeys items sourced from the
+// environment (see resolveDynamicEnvKey): a dynamic env var only sets a single
+// leaf, but the Config-struct round trip in convertTypes fills in every other
+// sibling field (e.g. NetworkListener/NetworkProtocols, for the listener case)
+// as an explicit nil. Without pruning, merge() would treat those explicit nils
+// as the environment intentionally overwriting sibling fields (e.g. an
+// untouched HTTP endpoint) defined in a config file.
 func pruneNilMapValues(value any) any {
 	m, ok := value.(map[string]any)
 	if !ok {
