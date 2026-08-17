@@ -23,6 +23,7 @@ import (
 	"os"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/bleemeo/glouton/facts"
@@ -297,13 +298,7 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 	switch service.ServiceType { //nolint:exhaustive
 	case ApacheService:
 		if ip, port := service.AddressPort(); ip != "" {
-			statusURL := fmt.Sprintf("http://%s/server-status?auto", net.JoinHostPort(ip, strconv.Itoa(port)))
-
-			if port == 80 {
-				statusURL = fmt.Sprintf("http://%s/server-status?auto", ip)
-			}
-
-			input, err = apache.New(statusURL)
+			input, err = apache.New(apacheStatusURL(ip, port))
 		}
 	case ClickHouseService:
 		if service.Config.StatsURL != "" {
@@ -602,6 +597,22 @@ func urlForPHPFPM(service Service) string {
 	}
 
 	return ""
+}
+
+// apacheStatusURL builds the server-status URL for an Apache instance, omitting the port
+// from the URL when it's the HTTP default (80) -- an IPv6 address then still needs brackets
+// even without a port suffix.
+func apacheStatusURL(ip string, port int) string {
+	if port == 80 {
+		host := ip
+		if strings.Contains(host, ":") {
+			host = "[" + host + "]"
+		}
+
+		return fmt.Sprintf("http://%s/server-status?auto", host)
+	}
+
+	return fmt.Sprintf("http://%s/server-status?auto", net.JoinHostPort(ip, strconv.Itoa(port)))
 }
 
 func clickHouseAddress(service Service) (ip string, port int) {

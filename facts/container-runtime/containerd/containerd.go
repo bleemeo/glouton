@@ -850,11 +850,31 @@ func (c *Containerd) updateContainers(ctx context.Context) error {
 	return nil
 }
 
+// hasHostNetwork reports whether the container shares the host's network namespace,
+// i.e. was run with the OCI equivalent of Docker's "--net host": the OCI runtime spec
+// represents this as the absence of a "network" entry in the container's namespaces,
+// as opposed to Docker which exposes it as a network named "host" in NetworkSettings.
+func hasHostNetwork(spec *oci.Spec) bool {
+	if spec.Linux == nil {
+		return false
+	}
+
+	for _, ns := range spec.Linux.Namespaces {
+		if ns.Type == specs.NetworkNamespace {
+			return false
+		}
+	}
+
+	return true
+}
+
 // primaryAddressFromProc returns the first address assigned in the given PID's network
 // namespace (IPv4 preferred over IPv6, excluding loopback and link-local), read directly
 // from procfs. Since /proc/<pid> reflects whatever PID namespace this process shares with
-// pid (typically the host's, when Glouton runs with --pid=host), this requires no more
-// privilege than reading that PID's other /proc/<pid>/* entries -- no subprocess needed.
+// pid (typically the host's, when Glouton runs with --pid=host), this only requires that
+// pid to be visible: /proc/<pid>/net/{fib_trie,if_inet6} are plain world-readable files,
+// unlike ptrace-gated entries such as /proc/<pid>/environ or /proc/<pid>/stack which need
+// CAP_SYS_PTRACE -- no subprocess needed.
 func primaryAddressFromProc(pid int) string {
 	if address := ipv4LocalAddressFromProc(pid); address != "" {
 		return address
@@ -993,7 +1013,15 @@ func convertToContainerObject(ctx context.Context, ns string, cont client.Contai
 	}
 
 	obj.pid = int(task.Pid())
-	obj.primaryAddress = primaryAddressFromProc(obj.pid)
+
+	if hasHostNetwork(&spec) {
+		// Consistent with the Docker runtime: on host networking, the container shares the
+		// host's network namespace and a service is generally only expected to be reachable
+		// through the loopback interface.
+		obj.primaryAddress = "127.0.0.1"
+	} else {
+		obj.primaryAddress = primaryAddressFromProc(obj.pid)
+	}
 
 	status, err := task.Status(ctx)
 	if err == nil {

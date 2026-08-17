@@ -118,43 +118,66 @@ func TestAddAddress(t *testing.T) {
 			want: []ListenAddress{{NetworkFamily: networkTCP, Address: "2001:db8::1", Port: 8080}},
 		},
 		{
-			// Two distinct specific addresses (one IPv4, one IPv6) sharing the same port must
-			// both be kept -- they are not the same wildcard-bound socket reported twice.
+			// Two distinct, non-local addresses sharing a port are collapsed to one
+			// representative address (only one address is usable for checks/metrics anyway):
+			// whichever was seen first is kept, since neither is preferred over the other.
 			adds: []ListenAddress{
 				{NetworkFamily: networkTCP, Address: "172.17.0.1", Port: 8080},
 				{NetworkFamily: networkTCP + "6", Address: "2001:db8::5", Port: 8080},
 			},
 			want: []ListenAddress{
 				{NetworkFamily: networkTCP, Address: "172.17.0.1", Port: 8080},
-				{NetworkFamily: networkTCP, Address: "2001:db8::5", Port: 8080},
 			},
 		},
 		{
-			// A wildcard IPv4 bind (0.0.0.0) and a real, distinct IPv6 address sharing the same
-			// port are not the same socket either -- only both-generic or exactly-equal addresses
-			// should merge. A real IPv6 address must not be dropped just because the other side
-			// happens to be generic.
+			// Same as above with a wildcard IPv4 bind (0.0.0.0) instead of a specific address:
+			// still collapsed to the first-seen entry since neither side is local.
 			adds: []ListenAddress{
 				{NetworkFamily: networkTCP, Address: addrAllInterfaces, Port: 8080},
 				{NetworkFamily: networkTCP + "6", Address: "2001:db8::5", Port: 8080},
 			},
 			want: []ListenAddress{
 				{NetworkFamily: networkTCP, Address: addrAllInterfaces, Port: 8080},
-				{NetworkFamily: networkTCP, Address: "2001:db8::5", Port: 8080},
 			},
 		},
 		{
-			// ::1 must NOT be merged into (or rewritten as) 127.0.0.1: unlike the wildcard
-			// address, binding to the specific address ::1 does not also accept connections on
-			// 127.0.0.1. An IPv6-only service listening on ::1 and an unrelated IPv4 service
-			// listening on 127.0.0.1 on the same port are two distinct sockets.
+			// ::1 must NOT be rewritten as 127.0.0.1 (unlike the wildcard address, binding to
+			// ::1 does not also accept connections on 127.0.0.1), but when both loopback
+			// addresses are present for the same port, IPv4 is preferred so the pick is
+			// consistent regardless of discovery order.
 			adds: []ListenAddress{
 				{NetworkFamily: networkTCP, Address: addrLocalhost, Port: 8080},
 				{NetworkFamily: networkTCP + "6", Address: "::1", Port: 8080},
 			},
 			want: []ListenAddress{
 				{NetworkFamily: networkTCP, Address: addrLocalhost, Port: 8080},
-				{NetworkFamily: networkTCP, Address: "::1", Port: 8080},
+			},
+		},
+		{
+			// The same loopback preference applies regardless of discovery order.
+			adds: []ListenAddress{
+				{NetworkFamily: networkTCP + "6", Address: "::1", Port: 8080},
+				{NetworkFamily: networkTCP, Address: addrLocalhost, Port: 8080},
+			},
+			want: []ListenAddress{
+				{NetworkFamily: networkTCP, Address: addrLocalhost, Port: 8080},
+			},
+		},
+		{
+			// A link-local IPv6 address can't be connected to without specifying a zone
+			// (interface), which we have no way to determine here, so it must be dropped
+			// entirely rather than kept as a useless listen address.
+			adds: []ListenAddress{{NetworkFamily: networkTCP + "6", Address: "fe80::1", Port: 8080}},
+			want: nil,
+		},
+		{
+			// A local address is preferred over a non-local one sharing the same port.
+			adds: []ListenAddress{
+				{NetworkFamily: networkTCP, Address: "172.17.0.1", Port: 8080},
+				{NetworkFamily: networkTCP, Address: addrLocalhost, Port: 8080},
+			},
+			want: []ListenAddress{
+				{NetworkFamily: networkTCP, Address: addrLocalhost, Port: 8080},
 			},
 		},
 	}

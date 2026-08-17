@@ -35,6 +35,8 @@ import (
 	"github.com/containerd/containerd/protobuf"
 	"github.com/containerd/containerd/v2/client"
 	"github.com/containerd/containerd/v2/core/events"
+	"github.com/containerd/containerd/v2/pkg/oci"
+	"github.com/opencontainers/runtime-spec/specs-go"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -859,5 +861,50 @@ func TestParseIfInet6GlobalAddress(t *testing.T) {
 
 	if got := parseIfInet6GlobalAddress(noGlobal); got != "" {
 		t.Errorf("parseIfInet6GlobalAddress() with no global entry = %q, want empty", got)
+	}
+}
+
+func TestHasHostNetwork(t *testing.T) {
+	cases := []struct {
+		name string
+		spec oci.Spec
+		want bool
+	}{
+		{
+			name: "no linux section",
+			spec: oci.Spec{},
+			want: false,
+		},
+		{
+			name: "network namespace present",
+			spec: oci.Spec{
+				Linux: &specs.Linux{
+					Namespaces: []specs.LinuxNamespace{
+						{Type: specs.PIDNamespace},
+						{Type: specs.NetworkNamespace},
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "network namespace absent (--net host equivalent)",
+			spec: oci.Spec{
+				Linux: &specs.Linux{
+					Namespaces: []specs.LinuxNamespace{
+						{Type: specs.PIDNamespace},
+					},
+				},
+			},
+			want: true,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := hasHostNetwork(&c.spec); got != c.want {
+				t.Errorf("hasHostNetwork() = %v, want %v", got, c.want)
+			}
+		})
 	}
 }
