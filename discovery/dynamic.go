@@ -166,7 +166,6 @@ var (
 		string(AsteriskService):  AsteriskService,
 		"chronyd":                NTPService,
 		"clickhouse-server":      ClickHouseService,
-		string(ConsulService):    ConsulService,
 		"dovecot":                DovecotService,
 		"exim4":                  EximService,
 		"exim":                   EximService,
@@ -200,6 +199,19 @@ var (
 		"uWSGI":                  UWSGIService,
 		"valkey-server":          ValkeyService,
 		"varnishd":               VarnishService,
+	}
+	// serverSubCommands lists the services whose binary is also their client CLI. They
+	// are only detected on the sub-command that starts the server ("vault server",
+	// "consul agent", ...), so that a client command ("vault status", "consul members",
+	// ...) isn't reported as the service itself.
+	serverSubCommands = map[string]struct {
+		SubCommand  string
+		ServiceName ServiceName
+	}{
+		"bao":                 {SubCommand: "server", ServiceName: OpenBaoService},
+		"clickhouse":          {SubCommand: "server", ServiceName: ClickHouseService},
+		string(ConsulService): {SubCommand: "agent", ServiceName: ConsulService},
+		"vault":               {SubCommand: "server", ServiceName: VaultService},
 	}
 	knownInterpretedProcess = []struct {
 		CmdLineMustContains []string
@@ -840,16 +852,9 @@ func serviceByCommand(cmdLine []string) (serviceName ServiceName, found bool) {
 		return serviceName, ok
 	}
 
-	if name == "clickhouse" || name == "bao" || name == "vault" {
-		if len(cmdLine) > 1 && cmdLine[1] == "server" {
-			switch name {
-			case "clickhouse":
-				return ClickHouseService, true
-			case "bao":
-				return OpenBaoService, true
-			case "vault":
-				return VaultService, true
-			}
+	if candidate, ok := serverSubCommands[name]; ok {
+		if len(cmdLine) > 1 && cmdLine[1] == candidate.SubCommand {
+			return candidate.ServiceName, true
 		}
 
 		return "", false

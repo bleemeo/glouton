@@ -1023,6 +1023,25 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
+			testName: "base local consul",
+			cmdLine:  []string{"consul", "agent", "-server", "-data-dir=/tmp/consul"},
+			want: Service{
+				Name:            string(ConsulService),
+				ServiceType:     ConsulService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 8500}},
+				IPAddress:       testIP127001,
+				Active:          true,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// The consul binary is also its client CLI, only "consul agent" runs a Consul
+			// node. Client commands must not be reported as a Consul service.
+			testName: "consul-client-command",
+			cmdLine:  []string{"consul", "monitor", "-log-level=debug"},
+			noMatch:  true,
+		},
+		{
 			testName: "base local openbao",
 			cmdLine:  []string{"bao", "server"},
 			want: Service{
@@ -1108,6 +1127,20 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 		{
 			testName: "ntp-ubuntu-14.04",
 			cmdLine:  []string{"/usr/sbin/ntpd", "-p", "/var/run/ntpd.pid", "-g", "-u", "107:114"},
+			want: Service{
+				Name:            "ntp",
+				ServiceType:     NTPService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: udpProtocol, Address: testIP127001, Port: 123}},
+				IPAddress:       testIP127001,
+				Active:          true,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// chronyd is the other NTP daemon we support. It's the same service, only the
+			// input differs (see createInput).
+			testName: "chrony-ubuntu-24.04",
+			cmdLine:  []string{"/usr/sbin/chronyd", "-F", "1"},
 			want: Service{
 				Name:            "ntp",
 				ServiceType:     NTPService,
@@ -1700,6 +1733,57 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				Name:            "jenkins",
 				ServiceType:     JenkinsService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 8080}},
+				IPAddress:       testIP127001,
+				Active:          true,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			testName: "tomcat",
+			cmdLine: []string{
+				"java", "-Djava.util.logging.config.file=/usr/local/tomcat/conf/logging.properties",
+				"-Dcatalina.base=/usr/local/tomcat", "-Dcatalina.home=/usr/local/tomcat",
+				"-classpath", "/usr/local/tomcat/bin/bootstrap.jar", "org.apache.catalina.startup.Bootstrap", testStart,
+			},
+			want: Service{
+				Name:            string(TomcatService),
+				ServiceType:     TomcatService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 8080}},
+				IPAddress:       testIP127001,
+				Active:          true,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// JIRA (like Confluence and BitBucket) runs on Tomcat: the more specific
+			// entries must win over the plain Tomcat one.
+			testName: "jira-not-detected-as-tomcat",
+			cmdLine: []string{
+				"java", "-Dcatalina.base=/opt/atlassian/jira", "-Dcatalina.home=/opt/atlassian/jira",
+				"-classpath", "/opt/atlassian/jira/bin/bootstrap.jar", "org.apache.catalina.startup.Bootstrap", testStart,
+			},
+			want: Service{
+				Name:            string(JIRAService),
+				ServiceType:     JIRAService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 8080}},
+				IPAddress:       testIP127001,
+				Active:          true,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// The official ActiveMQ image starts the broker with "java -jar activemq.jar",
+			// so the main class never appears in the cmdline: we match on the
+			// activemq.home system property the launch script always sets.
+			testName: "activemq",
+			cmdLine: []string{
+				"java", "-Xms64M", "-Dactivemq.home=/opt/activemq", "-Dactivemq.base=/opt/activemq",
+				"-jar", "/opt/activemq/bin/activemq.jar", testStart,
+			},
+			want: Service{
+				Name:            string(ActiveMQService),
+				ServiceType:     ActiveMQService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 8161}},
 				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,

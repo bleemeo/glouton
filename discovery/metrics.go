@@ -59,6 +59,7 @@ import (
 	"github.com/bleemeo/glouton/inputs/openldap"
 	"github.com/bleemeo/glouton/inputs/pgbouncer"
 	"github.com/bleemeo/glouton/inputs/phpfpm"
+	"github.com/bleemeo/glouton/inputs/postfix"
 	"github.com/bleemeo/glouton/inputs/postgresql"
 	"github.com/bleemeo/glouton/inputs/rabbitmq"
 	"github.com/bleemeo/glouton/inputs/redis"
@@ -88,7 +89,15 @@ const (
 	bindDefaultStatsPort = 8053
 	// dovecotDefaultStatsPort is the default port of Dovecot's old_stats plugin listener.
 	dovecotDefaultStatsPort = 24242
+	// postfixSpoolDirectory is where Postfix keeps its queues.
+	postfixSpoolDirectory = "/var/spool/postfix"
 )
+
+// postfixQueues are the queues telegraf's postfix input reports on, all of which it
+// needs to read.
+//
+//nolint:gochecknoglobals
+var postfixQueues = []string{"active", "hold", "incoming", "maildrop", "deferred"}
 
 // AddDefaultInputs adds system inputs to a collector.
 func AddDefaultInputs(commandRunner *gloutonexec.Runner, metricRegistry GathererRegistry, inputsConfig inputs.CollectorConfig, vethProvider *veth.Provider, k8sResolver disk.KubernetesPodResolver) error {
@@ -314,7 +323,10 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 
 	switch service.ServiceType { //nolint:exhaustive
 	case ActiveMQService:
-		if ip, port := service.AddressPort(); ip != "" {
+		// The web console the metrics are read from always requires authentication
+		// (admin/admin on a default install), so without credentials every gather would
+		// only get a 401.
+		if ip, port := service.AddressPort(); ip != "" && service.Config.Password != "" {
 			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
 			input, err = activemq.New(url, service.Config.Username, service.Config.Password)
 		}
@@ -329,29 +341,8 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			input, err = apache.New(statusURL)
 		}
 	case BindService:
-		// Auto-discovery always assumes XML v3 (the only format on BIND
-		// 9.10+, and available on 9.9+ with --enable-newstats), since the
-		// telegraf plugin picks its parser solely from the URL path and
-		// can't auto-detect what the server actually speaks. Older BIND
-		// (9.6-9.8, or 9.9 without newstats) only has XML v2, reachable at
-		// the same port with no path suffix at all (9.6-9.8) or "/xml/v2"
-		// (9.9); some 9.10+ distros also expose JSON v1 at "/json/v1". For
-		// any of those, set the service's stats_url config explicitly to
-		// the right path -- see the URL table in telegraf's bind plugin
-		// doc. We could maybe probe the endpoint to pick the right format
-		// automatically.
-		if service.Config.StatsURL != "" {
-			input, err = bind.New(service.Config.StatsURL)
-		} else {
-			port := bindDefaultStatsPort
-			if service.Config.StatsPort != 0 {
-				port = service.Config.StatsPort
-			}
-
-			if ip := service.AddressForPort(port, tcpProtocol, true); ip != "" {
-				url := fmt.Sprintf("http://%s/xml/v3", net.JoinHostPort(ip, strconv.Itoa(port)))
-				input, err = bind.New(url)
-			}
+		if url := bindStatsURL(service); url != "" {
+			input, err = bind.New(url)
 		}
 	case ClickHouseService:
 		if service.Config.StatsURL != "" {
@@ -376,17 +367,8 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			input, err = consul.New(url, service.Config.Password)
 		}
 	case DovecotService:
-		if socket := getMetricsSocket(service); socket != "" {
-			input, err = dovecot.New(socket)
-		} else {
-			port := dovecotDefaultStatsPort
-			if service.Config.StatsPort != 0 {
-				port = service.Config.StatsPort
-			}
-
-			if ip := service.AddressForPort(port, tcpProtocol, true); ip != "" {
-				input, err = dovecot.New(net.JoinHostPort(ip, strconv.Itoa(port)))
-			}
+		if server := dovecotStatsServer(service); server != "" {
+			input, err = dovecot.New(server)
 		}
 	case ElasticSearchService:
 		if ip, port := service.AddressPort(); ip != "" {
@@ -399,6 +381,8 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			input, err = haproxy.New(service.Config.StatsURL)
 		}
 	case InfluxDBService:
+		// "/debug/vars" only exists on InfluxDB 1.x. InfluxDB 2.x exposes its metrics in
+		// the Prometheus format on "/metrics", which this input can't read.
 		if service.Config.StatsURL != "" {
 			input, err = influxdb.New(service.Config.StatsURL, service.Config.Username, service.Config.Password)
 		} else if ip, port := service.AddressPort(); ip != "" {
@@ -450,7 +434,7 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		// Pick the telegraf plugin matching whichever NTP daemon was actually
 		// detected: chrony has its own control-socket/UDP protocol, distinct
 		// from the ntpd one queried through the ntpq CLI tool.
-		if filepath.Base(service.ExePath) == "chronyd" {
+		if isChronyDaemon(service) {
 			input, err = chrony.New()
 		} else {
 			input, err = ntp.New()
@@ -470,6 +454,16 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		statsURL := urlForPHPFPM(service)
 		if statsURL != "" {
 			input, err = phpfpm.New(statsURL)
+		}
+	case PostfixService:
+		// This only adds the per-queue metrics: the total number of mails waiting
+		// (postfix_queue_size) is gathered on its own from "postqueue -p", which works
+		// without any extra permission (see agent.postfixQueueSize).
+		//
+		// The spool directory of a containerized Postfix isn't the host one, and reading
+		// the host one would report the metrics of another Postfix entirely.
+		if service.ContainerID == "" && postfixQueuesReadable(postfixSpoolDirectory) {
+			input, err = postfix.New(postfixSpoolDirectory)
 		}
 	case PostgreSQLService:
 		if ip, port := service.AddressPort(); ip != "" && service.Config.Password != "" {
@@ -525,9 +519,12 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			input, err = redis.New("tcp://"+net.JoinHostPort(ip, strconv.Itoa(port)), service.Config.Password)
 		}
 	case TomcatService:
-		if service.Config.StatsURL != "" {
+		// The manager webapp the metrics are read from requires a user with the
+		// "manager-status" role, so without credentials every gather would only get a
+		// 401 (or a 404 when the webapp isn't even deployed).
+		if service.Config.StatsURL != "" && service.Config.Password != "" {
 			input, err = tomcat.New(service.Config.StatsURL, service.Config.Username, service.Config.Password)
-		} else if ip, port := service.AddressPort(); ip != "" {
+		} else if ip, port := service.AddressPort(); ip != "" && service.Config.Password != "" {
 			url := fmt.Sprintf("http://%s/manager/status/all?XML=true", net.JoinHostPort(ip, strconv.Itoa(port)))
 			input, err = tomcat.New(url, service.Config.Username, service.Config.Password)
 		}
@@ -729,4 +726,85 @@ func getMetricsSocket(service Service) string {
 	}
 
 	return socket
+}
+
+// bindStatsURL returns the URL of BIND's statistics-channel, or "" when no address is
+// known for it. The statistics-channel is disabled by default and is unrelated to the
+// DNS port used for discovery, so it's looked up on its own default port unless the
+// user configured one.
+//
+// Auto-discovery always assumes XML v3 (the only format on BIND 9.10+, and available
+// on 9.9+ with --enable-newstats), since the telegraf plugin picks its parser solely
+// from the URL path and can't auto-detect what the server actually speaks. Older BIND
+// (9.6-9.8, or 9.9 without newstats) only has XML v2, reachable at the same port with
+// no path suffix at all (9.6-9.8) or "/xml/v2" (9.9); some 9.10+ distros also expose
+// JSON v1 at "/json/v1". For any of those, set the service's stats_url config
+// explicitly to the right path -- see the URL table in telegraf's bind plugin doc.
+// We could maybe probe the endpoint to pick the right format automatically.
+func bindStatsURL(service Service) string {
+	if service.Config.StatsURL != "" {
+		return service.Config.StatsURL
+	}
+
+	port := bindDefaultStatsPort
+	if service.Config.StatsPort != 0 {
+		port = service.Config.StatsPort
+	}
+
+	ip := service.AddressForPort(port, tcpProtocol, true)
+	if ip == "" {
+		return ""
+	}
+
+	return fmt.Sprintf("http://%s/xml/v3", net.JoinHostPort(ip, strconv.Itoa(port)))
+}
+
+// dovecotStatsServer returns the address of Dovecot's old_stats plugin listener, either
+// as a unix socket path or as a "host:port" TCP address, or "" when neither is known.
+func dovecotStatsServer(service Service) string {
+	if socket := getMetricsSocket(service); socket != "" {
+		return socket
+	}
+
+	port := dovecotDefaultStatsPort
+	if service.Config.StatsPort != 0 {
+		port = service.Config.StatsPort
+	}
+
+	ip := service.AddressForPort(port, tcpProtocol, true)
+	if ip == "" {
+		return ""
+	}
+
+	return net.JoinHostPort(ip, strconv.Itoa(port))
+}
+
+// postfixQueuesReadable tells whether every Postfix queue can be read in the given
+// spool directory.
+//
+// The queues are only readable by the postfix user on a default install, while Glouton
+// runs as its own user: read access has to be granted first (see the permissions
+// section of telegraf's postfix plugin doc), otherwise every gather would only report
+// errors. Like the unix socket of getMetricsSocket, this is checked once when the
+// input is created, so granting the access later is only picked up when the service
+// changes or when Glouton restarts.
+func postfixQueuesReadable(spoolDirectory string) bool {
+	for _, queue := range postfixQueues {
+		f, err := os.Open(filepath.Join(spoolDirectory, queue))
+		if err != nil {
+			return false
+		}
+
+		f.Close()
+	}
+
+	return true
+}
+
+// isChronyDaemon tells whether the NTP service found is chronyd rather than ntpd, the
+// two being queried with a different telegraf plugin. When the daemon can't be told
+// apart -- the executable path is unknown, as for a service declared by the user --
+// ntpd is assumed, since that's the historical behavior.
+func isChronyDaemon(service Service) bool {
+	return filepath.Base(service.ExePath) == "chronyd"
 }
