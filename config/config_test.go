@@ -2529,6 +2529,26 @@ func Test_dynamicEnvVarConfigKeysCoversNewEntries(t *testing.T) {
 	}
 }
 
+// Test_dynamicEnvVarListKeysAreInMapKeys guards the link between dynamicEnvVarList (config.go) and
+// default.go's mapKeys(): a prefix key missing from mapKeys() stays a set of flat "key.sub.field" entries
+// that dynamicEnvVarConfigKeys never matches, so its dynamic env vars stop merging correctly (the
+// whole-map-replacement bug the mechanism exists to prevent) without failing anything else.
+func Test_dynamicEnvVarListKeysAreInMapKeys(t *testing.T) {
+	t.Parallel()
+
+	known := make(map[string]bool, len(mapKeys()))
+	for _, k := range mapKeys() {
+		known[k] = true
+	}
+
+	for key := range dynamicEnvVarConfigKeys() {
+		if !known[key] {
+			t.Errorf("dynamicEnvVarList has an entry for %q, but %q is missing from default.go's mapKeys() -- "+
+				"its dynamic env vars will silently fail to merge correctly", key, key)
+		}
+	}
+}
+
 // Test_migrateLogFluentBitURL guards against log.fluentbit_url (dropped by the OpenTelemetry log rewrite, but
 // still set by upgrading installs via the bleemeo-agent-logs package override) failing config load as an
 // unknown key instead of being silently deprecated like other removed settings.

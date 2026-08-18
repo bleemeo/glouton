@@ -179,11 +179,11 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 	}
 
 	if !r.setupFilterDone {
-		r.setupFilterDone = true
-
 		if err := r.setupFilters(ctx, pipeline); err != nil {
 			return err
 		}
+
+		r.setupFilterDone = true
 	}
 
 	var errs error

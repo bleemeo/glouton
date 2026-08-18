@@ -391,6 +391,113 @@ func TestFileLogReceiver(t *testing.T) {
 	}
 }
 
+// TestLogReceiverRetriesFilterSetupAfterFailure checks that update() only marks filter setup done once
+// setupFilters has actually succeeded, so a receiver whose filters: config fails to build on the first
+// attempt retries it later instead of shipping every matched file unfiltered forever. The invalid regex
+// used here is only rejected at filterprocessor.CreateLogs time, not at decode time (same trick as
+// TestSetupContainerLogReceiverRollsBackExtensionOnFilterFailure).
+func TestLogReceiverRetriesFilterSetupAfterFailure(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+
+	f1, err := os.Create(filepath.Join(tmpDir, "f1.log"))
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer f1.Close()
+
+	cfg := config.LogReceiver{
+		"include": []string{
+			filepath.Join(tmpDir, "*.log"),
+		},
+		"filters": config.OTELFilters{
+			testFieldInclude: map[string]any{
+				testFilterMatchType: testRegexp,
+				testFilterBodies: []string{
+					"[unclosed",
+				},
+			},
+		},
+	}
+
+	logger, err := zap.NewDevelopment(zap.IncreaseLevel(zap.InfoLevel))
+	if err != nil {
+		t.Fatalf("Failed to create logger: %v", err)
+	}
+
+	pipeline := pipelineContext{
+		hostroot:      string(os.PathSeparator),
+		lastFileSizes: make(map[string]int64),
+		telemetry: component.TelemetrySettings{
+			Logger:         logger,
+			TracerProvider: noop.NewTracerProvider(),
+			MeterProvider:  noopM.NewMeterProvider(),
+			Resource:       pcommon.NewResource(),
+		},
+		startedComponents: []component.Component{},
+		commandRunner:     noExecRunner(t),
+		persister:         mustNewPersistHost(t),
+	}
+
+	defer pipeline.shutdownAll()
+
+	logBuf := logBuffer{buf: make([]plog.Logs, 0, 1)}
+
+	recv, warn, err := newLogReceiver("filelog/recv", cfg, false, makeBufferConsumer(t, &logBuf), nil, logsource.StatFile)
+	if err != nil {
+		t.Fatal("Failed to initialize log receiver:", err)
+	}
+
+	if warn != nil {
+		t.Fatal("Got a warning during log receiver initialization:", warn)
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	if err := recv.update(ctx, &pipeline, addWarningsFn(t)); err == nil {
+		t.Fatal("Expected update() to fail on the malformed filter")
+	}
+
+	if recv.setupFilterDone {
+		t.Fatal("Expected setupFilterDone to stay false after a failed setupFilters, so the next update() retries it")
+	}
+
+	if got := len(recv.currentlyWatching()); got != 0 {
+		t.Fatalf("Expected no file to be watched after a failed update(), got %d: %v", got, recv.currentlyWatching())
+	}
+
+	// Swap in a valid filter config, as a corrected regex would, then retry: this must re-run setupFilters
+	// rather than no-op on a setupFilterDone left over from the failed attempt.
+	validFilterCfg, warn, err := buildLogFilterConfig(config.OTELFilters{
+		testFieldInclude: map[string]any{
+			testFilterMatchType: testRegexp,
+			testFilterBodies: []string{
+				"valid",
+			},
+		},
+	})
+	if err != nil || warn != nil {
+		t.Fatalf("Failed to build the valid filter config: err=%v warn=%v", err, warn)
+	}
+
+	recv.filterCfg = validFilterCfg
+
+	if err := recv.update(ctx, &pipeline, addWarningsFn(t)); err != nil {
+		t.Fatal("Expected the retried update() to succeed once the filter config is valid:", err)
+	}
+
+	if !recv.setupFilterDone {
+		t.Error("Expected setupFilterDone to be true after a successful setupFilters")
+	}
+
+	if diff := cmp.Diff([]string{f1.Name()}, recv.currentlyWatching(), sortFilesOpt); diff != "" {
+		t.Errorf("Unexpected watched log files after the retry (-want, +got):\n%s", diff)
+	}
+}
+
 // TestNginxBothDefaultRouteDoesNotDropUnmatchedLines guards against a regression where the "nginx_both"
 // composite log format's router had no "default" route (unlike "haproxy", which does): a line matching
 // neither the access nor the error sub-pattern was silently dropped by the stanza router transformer

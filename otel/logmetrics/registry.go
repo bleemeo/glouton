@@ -277,6 +277,9 @@ func (reg *metricsRegistry) emit(app storage.Appender) error {
 // adding each Sum data point's delta into the matching (metric, item) counter.
 func (reg *metricsRegistry) metricsSinkForItem(item string) consumer.Metrics {
 	sink, err := consumer.NewMetrics(func(_ context.Context, md pmetric.Metrics) error {
+		// reg.l must be held across the whole resolve+Add sequence, not just the resolve: release() and
+		// forgetLocked() take reg.l too, and an item they evict between the two steps would leave the
+		// delta landing on a counter the registry no longer references, silently dropping it.
 		reg.l.Lock()
 		defer reg.l.Unlock()
 

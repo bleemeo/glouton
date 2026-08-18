@@ -314,6 +314,10 @@ type dynamicEnvVar struct {
 	suffixes     map[string]string
 }
 
+// dynamicEnvVarList entries only get the nil-pruning/merge-priority treatment (via
+// dynamicEnvVarConfigKeys, used by loader.go) once their configPrefix key is also listed in default.go's
+// mapKeys(), which is what collapses the key's dotted leaves into a single map. Keep both in sync when
+// adding an entry; Test_dynamicEnvVarListKeysAreInMapKeys enforces it.
 var dynamicEnvVarList = []dynamicEnvVar{ //nolint:gochecknoglobals
 	{
 		// OpenTelemetry Listener

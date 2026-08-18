@@ -60,8 +60,10 @@ func DefaultPaths() []string {
 	}
 }
 
-// mapKeys returns the config keys that hold map values.
-// This must be updated when a map value is added to the config.
+// mapKeys returns the config keys that hold map values, i.e. the keys allKeys/isMapKey (loader.go) must
+// treat as one nested map rather than as flat "key.sub.field" entries when merging file and default config.
+// This must be updated when a map value is added to the config, including for every prefix key used by
+// dynamicEnvVarList (config.go) -- see Test_dynamicEnvVarListKeysAreInMapKeys.
 func mapKeys() []string {
 	return []string{
 		keyThresholds,

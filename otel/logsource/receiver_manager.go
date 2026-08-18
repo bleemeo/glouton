@@ -36,6 +36,7 @@ import (
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/google/uuid"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/helper"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/receiver"
@@ -418,45 +419,30 @@ func (rm *ReceiverManager) startIncludeFiles(ctx context.Context, ms *managedSou
 
 // startIncludeFile starts a single include-pattern file's receiver under ms. Callers must hold ms.l.
 func (rm *ReceiverManager) startIncludeFile(ctx context.Context, ms *managedSource, name, file string) error {
-	var newExtIDs []component.ID
-
-	makeStorageFn := func(logFile string) *component.ID {
-		id := rm.persister.NewPersistentExt(name + "/" + logFile)
-		newExtIDs = append(newExtIDs, id)
-
-		return &id
-	}
-
-	factories, readFiles, execFiles, sizeFns, err := SetupLogReceiverFactories(
-		[]string{file}, rm.hostroot, ms.operators, rm.lastFileSizes, rm.commandRunner, makeStorageFn, rm.statFile, nil, ms.extraRaw,
-	)
+	started, err := rm.setupAndStartReceiver(ctx, receiverSetup{
+		file:        file,
+		operators:   ms.operators,
+		extraRaw:    ms.extraRaw,
+		fanout:      ms.fanout,
+		persistName: func(logFile string) string { return name + "/" + logFile },
+	})
 	if err != nil {
-		rm.persister.RemovePersistentExts(newExtIDs)
-
-		return fmt.Errorf("setting up receiver factories: %w", err)
-	}
-
-	if len(factories) == 0 {
-		rm.persister.RemovePersistentExts(newExtIDs)
-
-		return nil
-	}
-
-	newRecvs, err := rm.createAndStartReceivers(ctx, factories, ms.fanout)
-	if err != nil {
-		rm.persister.RemovePersistentExts(newExtIDs)
-
 		return err
 	}
 
-	ms.recvs[file] = append(ms.recvs[file], newRecvs...)
-	ms.extIDs[file] = append(ms.extIDs[file], newExtIDs...)
-	maps.Copy(ms.sizeFnByFile, sizeFns)
+	// Nothing readable or executable matched this file yet: not an error, it may show up on a later update.
+	if started == nil {
+		return nil
+	}
+
+	ms.recvs[file] = append(ms.recvs[file], started.recvs...)
+	ms.extIDs[file] = append(ms.extIDs[file], started.extIDs...)
+	maps.Copy(ms.sizeFnByFile, started.sizeFns)
 
 	switch {
-	case len(readFiles) == 1:
+	case len(started.readFiles) == 1:
 		ms.watching[file] = ReceiverFileLog
-	case len(execFiles) == 1:
+	case len(started.execFiles) == 1:
 		ms.watching[file] = ReceiverExecLog
 	}
 
@@ -722,50 +708,116 @@ func (rm *ReceiverManager) startContainerTail(
 
 	attributes := BuildContainerAttributes(ctx, ctr)
 
+	started, err := rm.setupAndStartReceiver(ctx, receiverSetup{
+		file:      realFile,
+		operators: operators,
+		attrs:     attributes.AsMap(),
+		fanout:    ms.fanout,
+		persistName: func(logFile string) string {
+			return containerPersistName(persistNamespace, ctr.ID(), logFile)
+		},
+		// A container tail that doesn't resolve to exactly one log source is an error, not a no-op, so
+		// started is never nil below.
+		requireExactlyOneFactory: true,
+	})
+	if err != nil {
+		return err
+	}
+
+	ms.containerRecvs[ctr.ID()] = started.recvs
+	ms.containerExtIDs[ctr.ID()] = started.extIDs
+	ms.containerLogFile[ctr.ID()] = realFile
+	maps.Copy(ms.sizeFnByFile, started.sizeFns)
+
+	switch {
+	case len(started.readFiles) == 1:
+		ms.watching[realFile] = ReceiverFileLog
+	case len(started.execFiles) == 1:
+		ms.watching[realFile] = ReceiverExecLog
+	}
+
+	return nil
+}
+
+// receiverSetup describes the log receiver(s) setupAndStartReceiver should build for a single file.
+type receiverSetup struct {
+	file      string
+	operators []operator.Config
+	attrs     map[string]helper.ExprStringConfig
+	extraRaw  map[string]any
+	fanout    consumer.Logs
+	// persistName maps a log file to the identity its persisted offset is stored under.
+	persistName func(logFile string) string
+	// requireExactlyOneFactory makes any factory count other than one an error instead of a no-op: a
+	// container tail must resolve to a single readable/executable log source, while an include pattern
+	// tolerates a file that yields nothing yet.
+	requireExactlyOneFactory bool
+}
+
+// startedReceiver holds what setupAndStartReceiver started for one file,
+// along with the bookkeeping its caller records on the managedSource.
+type startedReceiver struct {
+	recvs     []receiver.Logs
+	readFiles []string
+	execFiles []string
+	sizeFns   map[string]func() (int64, error)
+	extIDs    []component.ID
+}
+
+// setupAndStartReceiver builds and starts the log receiver(s) for setup.file, registering a new persistent
+// extension via setup.persistName and rolling it back if any step fails. It returns a nil startedReceiver
+// and a nil error when the file yields no receiver to start, which only happens for a setup that doesn't
+// set requireExactlyOneFactory. Callers must hold ms.l.
+func (rm *ReceiverManager) setupAndStartReceiver(ctx context.Context, setup receiverSetup) (*startedReceiver, error) {
 	var newExtIDs []component.ID
 
+	started := false
+
+	// Every failure path below, and the no-receiver-to-start one, must give back the extensions
+	// makeStorageFn registered along the way.
+	defer func() {
+		if !started {
+			rm.persister.RemovePersistentExts(newExtIDs)
+		}
+	}()
+
 	makeStorageFn := func(logFile string) *component.ID {
-		id := rm.persister.NewPersistentExt(containerPersistName(persistNamespace, ctr.ID(), logFile))
+		id := rm.persister.NewPersistentExt(setup.persistName(logFile))
 		newExtIDs = append(newExtIDs, id)
 
 		return &id
 	}
 
 	factories, readFiles, execFiles, sizeFns, err := SetupLogReceiverFactories(
-		[]string{realFile}, rm.hostroot, operators, rm.lastFileSizes, rm.commandRunner, makeStorageFn, rm.statFile, attributes.AsMap(), nil,
+		[]string{setup.file}, rm.hostroot, setup.operators, rm.lastFileSizes, rm.commandRunner, makeStorageFn,
+		rm.statFile, setup.attrs, setup.extraRaw,
 	)
 	if err != nil {
-		rm.persister.RemovePersistentExts(newExtIDs)
-
-		return fmt.Errorf("setting up receiver factories: %w", err)
+		return nil, fmt.Errorf("setting up receiver factories: %w", err)
 	}
 
-	if len(factories) != 1 {
-		rm.persister.RemovePersistentExts(newExtIDs)
-
-		return errNoContainerLogFile
+	if setup.requireExactlyOneFactory && len(factories) != 1 {
+		return nil, errNoContainerLogFile
 	}
 
-	recvs, err := rm.createAndStartReceivers(ctx, factories, ms.fanout)
+	if len(factories) == 0 {
+		return nil, nil //nolint:nilnil // no receiver to start for this file: not an error, see doc comment.
+	}
+
+	recvs, err := rm.createAndStartReceivers(ctx, factories, setup.fanout)
 	if err != nil {
-		rm.persister.RemovePersistentExts(newExtIDs)
-
-		return err
+		return nil, err
 	}
 
-	ms.containerRecvs[ctr.ID()] = recvs
-	ms.containerExtIDs[ctr.ID()] = newExtIDs
-	ms.containerLogFile[ctr.ID()] = realFile
-	maps.Copy(ms.sizeFnByFile, sizeFns)
+	started = true
 
-	switch {
-	case len(readFiles) == 1:
-		ms.watching[realFile] = ReceiverFileLog
-	case len(execFiles) == 1:
-		ms.watching[realFile] = ReceiverExecLog
-	}
-
-	return nil
+	return &startedReceiver{
+		recvs:     recvs,
+		readFiles: readFiles,
+		execFiles: execFiles,
+		sizeFns:   sizeFns,
+		extIDs:    newExtIDs,
+	}, nil
 }
 
 // stopUnwantedContainerTails stops every container tail under ms whose
