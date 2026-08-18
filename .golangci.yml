@@ -17,6 +17,7 @@ linters:
     - gocyclo # We use maintidx to lint function complexity.
     - godox # Too many TODO in code, but should be removed and TODO fixed :)
     - gomoddirectives # We sometimes need to use mod replacements to fix upgrades.
+    - gomodguard # Superseded by gomodguard_v2.
     - interfacebloat # Warn when an interface has too many methods, not useful.
     - ireturn # Complain that interface A implementation method return an interface B... it's a requirement of interface A that is unavoidable.
     - lll
