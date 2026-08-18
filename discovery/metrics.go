@@ -795,7 +795,8 @@ func postfixQueuesReadable(spoolDirectory string) bool {
 			return false
 		}
 
-		f.Close()
+		// Only opening the queue matters here, so closing it can't fail in a way we care about.
+		_ = f.Close()
 	}
 
 	return true

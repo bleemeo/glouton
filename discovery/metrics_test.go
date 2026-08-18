@@ -264,7 +264,7 @@ func TestPostfixQueuesReadable(t *testing.T) {
 		spool := t.TempDir()
 
 		for _, queue := range queues {
-			if err := os.Mkdir(filepath.Join(spool, queue), 0o755); err != nil {
+			if err := os.Mkdir(filepath.Join(spool, queue), 0o750); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -296,7 +296,10 @@ func TestPostfixQueuesReadable(t *testing.T) {
 		}
 
 		spool := newSpool(t, postfixQueues)
-		if err := os.Chmod(filepath.Join(spool, postfixQueues[0]), 0o300); err != nil {
+
+		// Drop every permission bit but write, which is what a queue the Glouton user
+		// isn't granted access to looks like: opening it fails.
+		if err := os.Chmod(filepath.Join(spool, postfixQueues[0]), 0o200); err != nil {
 			t.Fatal(err)
 		}
 
