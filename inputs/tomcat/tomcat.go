@@ -19,6 +19,7 @@ package tomcat
 import (
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -38,6 +39,7 @@ func New(url string, username string, password string) (i telegraf.Input, err er
 			i = &internal.Input{
 				Input: tomcatInput,
 				Accumulator: internal.Accumulator{
+					RenameGlobal:     renameGlobal,
 					TransformMetrics: transformMetrics,
 					DifferentiatedMetrics: []string{
 						"bytes_received",
@@ -57,6 +59,21 @@ func New(url string, username string, password string) (i telegraf.Input, err er
 	}
 
 	return i, err
+}
+
+// renameGlobal drops the "source" tag, which holds the whole status URL we queried
+// and is redundant with the labels already set on service metrics. The "name" tag
+// (connector or memory pool name) is kept since it identifies the item.
+func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
+	delete(gatherContext.Tags, "source")
+
+	// The item is what tells the connectors and the memory pools apart: without it all
+	// of them would end up on the same metric.
+	if name := gatherContext.Tags["name"]; name != "" {
+		gatherContext.Tags[types.LabelItem] = name
+	}
+
+	return gatherContext, false
 }
 
 func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {

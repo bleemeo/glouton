@@ -35,9 +35,11 @@ func New() (i telegraf.Input, err error) {
 		chronyInput, ok := input().(*chrony.Chrony)
 		if ok {
 			i = &internal.Input{
-				Input:       chronyInput,
-				Accumulator: internal.Accumulator{},
-				Name:        "chrony",
+				Input: chronyInput,
+				Accumulator: internal.Accumulator{
+					RenameGlobal: renameGlobal,
+				},
+				Name: "chrony",
 			}
 		} else {
 			err = inputs.ErrUnexpectedType
@@ -47,4 +49,17 @@ func New() (i telegraf.Input, err error) {
 	}
 
 	return i, err
+}
+
+// renameGlobal drops the tags describing the current synchronization state
+// (leap_status, reference_id and stratum) and the socket we queried. Their value
+// changes while chronyd runs -- each change would start a new metric series -- and
+// they don't tell which metric this is.
+func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
+	delete(gatherContext.Tags, "leap_status")
+	delete(gatherContext.Tags, "reference_id")
+	delete(gatherContext.Tags, "stratum")
+	delete(gatherContext.Tags, "source")
+
+	return gatherContext, false
 }

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/google/go-cmp/cmp"
 )
 
 // collectFinalMetrics replicates the measurement/field -> final metric name
@@ -52,9 +53,21 @@ func collectFinalMetrics(store *internal.StoreAccumulator) map[string]float64 {
 
 func newAccumulator(store *internal.StoreAccumulator) internal.Accumulator {
 	return internal.Accumulator{
+		RenameGlobal:               renameGlobal,
 		RenameMetrics:              renameMetrics,
 		ShouldDifferentiateMetrics: shouldDifferentiateMetrics,
 		Accumulator:                store,
+	}
+}
+
+// assertTags checks the tags kept on every emitted measurement.
+func assertTags(t *testing.T, store *internal.StoreAccumulator, want map[string]string) {
+	t.Helper()
+
+	for _, m := range store.Measurement {
+		if diff := cmp.Diff(want, m.Tags); diff != "" {
+			t.Errorf("tags of measurement %q (-want +got):\n%s", m.Name, diff)
+		}
 	}
 }
 
@@ -93,7 +106,7 @@ func TestCounterDifferentiation(t *testing.T) {
 		"SERVFAIL":    uint64(10),
 		"QrySuccess":  uint64(900),
 		"QryNXDOMAIN": uint64(50),
-	}, map[string]string{"type": "nsstat"}, t0)
+	}, map[string]string{"type": "nsstat", "url": "http://127.0.0.1:8053/xml/v3"}, t0)
 
 	// Discard the first gather: every field is a differentiated counter, so
 	// it has no rate yet (no history).
@@ -106,7 +119,7 @@ func TestCounterDifferentiation(t *testing.T) {
 		"SERVFAIL":    uint64(10 + 5),     // rate = 0.5/s
 		"QrySuccess":  uint64(900 + 80),   // rate = 8/s
 		"QryNXDOMAIN": uint64(50 + 10),    // rate = 1/s
-	}, map[string]string{"type": "nsstat"}, t1)
+	}, map[string]string{"type": "nsstat", "url": "http://127.0.0.1:8053/xml/v3"}, t1)
 
 	got := collectFinalMetrics(store)
 
@@ -117,6 +130,10 @@ func TestCounterDifferentiation(t *testing.T) {
 		"bind_counter_qry_success":  8,
 		"bind_counter_qry_nxdomain": 1,
 	})
+
+	// The statistics-channel URL is redundant with the labels already set on
+	// service metrics, while "type" tells which counter set this is.
+	assertTags(t, store, map[string]string{"type": "nsstat"})
 }
 
 // TestMemoryNotDifferentiated exercises "bind_memory": total_use/in_use are
@@ -130,7 +147,11 @@ func TestMemoryNotDifferentiated(t *testing.T) {
 	acc.AddFields("bind_memory", map[string]any{
 		"total_use": uint64(16663252),
 		"in_use":    uint64(4113717),
-	}, nil, time.Now())
+	}, map[string]string{
+		"url":    "http://127.0.0.1:8053/xml/v3",
+		"source": "127.0.0.1",
+		"port":   "8053",
+	}, time.Now())
 
 	got := collectFinalMetrics(store)
 
@@ -138,4 +159,6 @@ func TestMemoryNotDifferentiated(t *testing.T) {
 		"bind_memory_total_use": 16663252,
 		"bind_memory_in_use":    4113717,
 	})
+
+	assertTags(t, store, map[string]string{})
 }

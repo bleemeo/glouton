@@ -21,6 +21,7 @@ import (
 
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -78,6 +79,15 @@ func New(url string, username string, password string) (i telegraf.Input, err er
 func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
 	if gatherContext.Measurement == "influxdb_queryExecutor" {
 		gatherContext.Measurement = "influxdb_query_executor"
+	}
+
+	// The URL we queried is redundant with the labels already set on service metrics.
+	delete(gatherContext.Tags, "url")
+
+	// The item is what tells the databases apart: without it they would all end up on
+	// the same metric.
+	if database := gatherContext.Tags["database"]; database != "" {
+		gatherContext.Tags[types.LabelItem] = database
 	}
 
 	return gatherContext, false

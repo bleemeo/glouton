@@ -368,15 +368,15 @@ type Filter struct {
 func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 	defaultServiceMetrics := map[discovery.ServiceName][]string{
 		discovery.ActiveMQService: {
-			"activemq_queues_size",
 			"activemq_queues_consumer_count",
-			"activemq_queues_enqueue_count",
 			"activemq_queues_dequeue_count",
-			"activemq_topics_size",
-			"activemq_topics_consumer_count",
-			"activemq_topics_enqueue_count",
-			"activemq_topics_dequeue_count",
+			"activemq_queues_enqueue_count",
+			"activemq_queues_size",
 			"activemq_subscribers_pending_queue_size",
+			"activemq_topics_consumer_count",
+			"activemq_topics_dequeue_count",
+			"activemq_topics_enqueue_count",
+			"activemq_topics_size",
 		},
 
 		discovery.ApacheService: {
@@ -402,12 +402,14 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 		},
 
 		discovery.BindService: {
-			"bind_counter_query",
 			"bind_counter_nxdomain",
-			"bind_counter_servfail",
-			"bind_counter_qry_success",
 			"bind_counter_qry_nxdomain",
-			"bind_memory_total_use",
+			"bind_counter_qry_success",
+			"bind_counter_query",
+			"bind_counter_servfail",
+			// bind_memory_total_use isn't collected: BIND 9.18+ replaced TotalUse by
+			// Malloced in its statistics, which the telegraf input doesn't read, so the
+			// metric would always be 0.
 			"bind_memory_in_use",
 		},
 
@@ -485,20 +487,20 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 
 		discovery.ConsulService: {
 			"consul_autopilot_healthy",
+			"consul_kvs_apply_mean",
 			"consul_raft_apply_rate",
 			"consul_raft_committime_mean",
-			"consul_runtime_num_goroutines",
 			"consul_rpc_request_rate",
-			"consul_kvs_apply_mean",
+			"consul_runtime_num_goroutines",
 		},
 
 		discovery.DovecotService: {
-			"dovecot_num_logins",
-			"dovecot_num_cmds",
-			"dovecot_num_connected_sessions",
-			"dovecot_mail_cache_hits",
 			"dovecot_disk_input",
 			"dovecot_disk_output",
+			"dovecot_mail_cache_hits",
+			"dovecot_num_cmds",
+			"dovecot_num_connected_sessions",
+			"dovecot_num_logins",
 		},
 
 		discovery.ElasticSearchService: {
@@ -541,27 +543,28 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"haproxy_stot",
 			"haproxy_ttime",
 		},
+
 		discovery.InfluxDBService: {
-			"influxdb_httpd_req",
-			"influxdb_httpd_req_duration_seconds",
-			"influxdb_httpd_client_error",
-			"influxdb_httpd_server_error",
+			"influxdb_database_num_measurements",
+			"influxdb_database_num_series",
 			"influxdb_httpd_auth_fail",
+			"influxdb_httpd_client_error",
+			"influxdb_httpd_points_written_dropped",
+			"influxdb_httpd_points_written_fail",
+			"influxdb_httpd_points_written_ok",
 			"influxdb_httpd_query_req",
 			"influxdb_httpd_query_req_duration_seconds",
+			"influxdb_httpd_req",
+			"influxdb_httpd_req_duration_seconds",
+			"influxdb_httpd_server_error",
 			"influxdb_httpd_write_req",
-			"influxdb_httpd_write_req_duration_seconds",
 			"influxdb_httpd_write_req_bytes",
-			"influxdb_httpd_points_written_ok",
-			"influxdb_httpd_points_written_fail",
-			"influxdb_httpd_points_written_dropped",
-			"influxdb_write_write_error",
-			"influxdb_write_write_drop",
-			"influxdb_write_write_timeout",
-			"influxdb_write_point_req",
+			"influxdb_httpd_write_req_duration_seconds",
 			"influxdb_query_executor_queries_active",
-			"influxdb_database_num_series",
-			"influxdb_database_num_measurements",
+			"influxdb_write_point_req",
+			"influxdb_write_write_drop",
+			"influxdb_write_write_error",
+			"influxdb_write_write_timeout",
 		},
 
 		discovery.JenkinsService: {
@@ -757,20 +760,20 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 		},
 
 		discovery.NTPService: {
-			// ntpq (queried through the ntpq CLI tool, used against ntpd).
-			"ntpq_delay",
-			"ntpq_jitter",
-			"ntpq_offset",
-			"ntpq_reach",
-
 			// chrony (queried through chronyd's control socket).
 			"chrony_frequency",
-			"chrony_system_time",
 			"chrony_last_offset",
 			"chrony_rms_offset",
 			"chrony_root_delay",
 			"chrony_root_dispersion",
 			"chrony_skew",
+			"chrony_system_time",
+
+			// ntpq (queried through the ntpq CLI tool, used against ntpd).
+			"ntpq_delay",
+			"ntpq_jitter",
+			"ntpq_offset",
+			"ntpq_reach",
 		},
 
 		discovery.OpenBaoService: { // OpenBao is a fork of Hashicorp Vault
@@ -813,6 +816,12 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 		},
 
 		discovery.PostfixService: {
+			// postfix_queue_size is the number of mails waiting in the whole queue,
+			// gathered from "postqueue -p". The others are per-queue and come from the
+			// telegraf input, which walks the spool directory.
+			"postfix_queue_age_seconds",
+			"postfix_queue_bytes",
+			"postfix_queue_length",
 			"postfix_queue_size",
 		},
 
@@ -889,15 +898,15 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 		},
 
 		discovery.TomcatService: {
+			"tomcat_connector_bytes_received",
+			"tomcat_connector_bytes_sent",
+			"tomcat_connector_error_count",
+			"tomcat_connector_processing_time_seconds",
+			"tomcat_connector_request_count",
 			"tomcat_jvm_memory_free",
 			"tomcat_jvm_memory_max",
 			"tomcat_jvm_memory_total",
 			"tomcat_jvm_memorypool_used",
-			"tomcat_connector_request_count",
-			"tomcat_connector_error_count",
-			"tomcat_connector_processing_time_seconds",
-			"tomcat_connector_bytes_received",
-			"tomcat_connector_bytes_sent",
 		},
 
 		discovery.UPSDService: {
@@ -945,8 +954,8 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 
 		discovery.VarnishService: {
 			"varnish_cache_hit",
-			"varnish_cache_miss",
 			"varnish_cache_hit_ratio",
+			"varnish_cache_miss",
 			"varnish_uptime",
 		},
 

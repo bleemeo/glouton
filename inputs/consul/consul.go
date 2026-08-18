@@ -59,10 +59,59 @@ func New(url string, token string) (i telegraf.Input, err error) {
 }
 
 func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
-	measurement := strings.ReplaceAll(gatherContext.Measurement, ".", "_")
+	measurement := stripNodeName(gatherContext)
+	measurement = strings.ReplaceAll(measurement, ".", "_")
 	gatherContext.Measurement = strings.ToLower(measurement)
 
 	return gatherContext, false
+}
+
+// gaugeSubsystems are the Consul subsystems reporting gauges. They are the only place
+// a node name has to be stripped, see stripNodeName. A subsystem missing from this list
+// only means its gauges keep the node name, never that another metric gets renamed by
+// mistake.
+//
+//nolint:gochecknoglobals
+var gaugeSubsystems = map[string]bool{
+	"autopilot":   true,
+	"members":     true,
+	"memberlist":  true,
+	"raft":        true,
+	"rpc":         true,
+	"runtime":     true,
+	"serf":        true,
+	"server":      true,
+	"session_ttl": true,
+	"state":       true,
+	"version":     true,
+}
+
+// stripNodeName removes the node name Consul inserts in the name of its gauges:
+// "consul.<node>.runtime.num_goroutines" is reported as consul_runtime_num_goroutines,
+// like it already is when the agent runs with telemetry.disable_hostname. Keeping the
+// node name would make the metric name differ on every node, so it could neither be
+// listed in the default metrics nor be compared between nodes.
+//
+// Only gauges carry it -- counters and samples (consul.raft.apply, consul.kvs.apply,
+// ...) never do -- and the accumulator tells them apart by their single "value" field,
+// the shape the consul_agent plugin gives gauges.
+func stripNodeName(gatherContext internal.GatherContext) string {
+	if len(gatherContext.OriginalFields) != 1 {
+		return gatherContext.Measurement
+	}
+
+	if _, isGauge := gatherContext.OriginalFields["value"]; !isGauge {
+		return gatherContext.Measurement
+	}
+
+	parts := strings.Split(gatherContext.Measurement, ".")
+	// A node name is only there when a subsystem follows it, "consul.<node>.runtime.x"
+	// against "consul.runtime.x" without one.
+	if len(parts) < 4 || !gaugeSubsystems[parts[2]] {
+		return gatherContext.Measurement
+	}
+
+	return strings.Join(append(parts[:1:1], parts[2:]...), ".")
 }
 
 func renameMetrics(currentContext internal.GatherContext, metricName string) (newMeasurement string, newMetricName string) {

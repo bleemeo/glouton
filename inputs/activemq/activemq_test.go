@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/google/go-cmp/cmp"
 )
 
 // collectFinalMetrics replicates the measurement/field -> final metric name
@@ -52,6 +53,7 @@ func collectFinalMetrics(store *internal.StoreAccumulator) map[string]float64 {
 
 func newAccumulator(store *internal.StoreAccumulator) internal.Accumulator {
 	return internal.Accumulator{
+		RenameGlobal: renameGlobal,
 		DifferentiatedMetrics: []string{
 			"enqueue_count",
 			"dequeue_count",
@@ -77,6 +79,17 @@ func assertMetrics(t *testing.T, got map[string]float64, want map[string]float64
 	}
 }
 
+// assertTags checks the tags kept on every emitted measurement.
+func assertTags(t *testing.T, store *internal.StoreAccumulator, want map[string]string) {
+	t.Helper()
+
+	for _, m := range store.Measurement {
+		if diff := cmp.Diff(want, m.Tags); diff != "" {
+			t.Errorf("tags of measurement %q (-want +got):\n%s", m.Name, diff)
+		}
+	}
+}
+
 // TestDifferentiation exercises both the "activemq_queues" and
 // "activemq_topics" measurements: enqueue_count/dequeue_count are broker
 // lifetime totals and get differentiated into per-second rates, while
@@ -96,7 +109,7 @@ func TestDifferentiation(t *testing.T) {
 		"consumer_count": uint64(2),
 		"enqueue_count":  uint64(1000),
 		"dequeue_count":  uint64(950),
-	}, map[string]string{"name": "orders"}, t0)
+	}, map[string]string{"name": "orders", "source": "127.0.0.1", "port": "8161"}, t0)
 	acc.AddFields("activemq_topics", map[string]any{
 		"size":           uint64(1),
 		"consumer_count": uint64(4),
@@ -114,7 +127,7 @@ func TestDifferentiation(t *testing.T) {
 		"consumer_count": uint64(3),
 		"enqueue_count":  uint64(1000 + 50), // rate = 5/s
 		"dequeue_count":  uint64(950 + 40),  // rate = 4/s
-	}, map[string]string{"name": "orders"}, t1)
+	}, map[string]string{"name": "orders", "source": "127.0.0.1", "port": "8161"}, t1)
 	acc.AddFields("activemq_topics", map[string]any{
 		"size":           uint64(2),
 		"consumer_count": uint64(4),
@@ -134,4 +147,41 @@ func TestDifferentiation(t *testing.T) {
 		"activemq_topics_enqueue_count":  10,
 		"activemq_topics_dequeue_count":  9,
 	})
+}
+
+// TestTagsDropped checks that the tags describing the ActiveMQ console we queried are
+// dropped, since they are redundant with the labels already set on service metrics,
+// while the queue/topic name is kept.
+func TestTagsDropped(t *testing.T) {
+	store := &internal.StoreAccumulator{}
+	acc := newAccumulator(store)
+
+	acc.PrepareGather()
+	acc.AddFields("activemq_queues", map[string]any{
+		"size": uint64(5),
+	}, map[string]string{"name": "orders", "source": "127.0.0.1", "port": "8161"}, time.Now())
+
+	assertTags(t, store, map[string]string{"name": "orders", "item": "orders"})
+}
+
+// TestAdvisoryTopicsDropped checks the topics ActiveMQ creates for its own bookkeeping
+// are dropped -- a broker adds a few of them per destination and per connection -- and
+// that the trailing space the plugin leaves on topic names is trimmed.
+func TestAdvisoryTopicsDropped(t *testing.T) {
+	store := &internal.StoreAccumulator{}
+	acc := newAccumulator(store)
+
+	acc.PrepareGather()
+	acc.AddFields("activemq_topics", map[string]any{
+		"size": uint64(0),
+	}, map[string]string{"name": "ActiveMQ.Advisory.MasterBroker "}, time.Now())
+	acc.AddFields("activemq_topics", map[string]any{
+		"size": uint64(3),
+	}, map[string]string{"name": "orders.events "}, time.Now())
+
+	if len(store.Measurement) != 1 {
+		t.Fatalf("got %d measurements, want only the non-advisory one: %#v", len(store.Measurement), store.Measurement)
+	}
+
+	assertTags(t, store, map[string]string{"name": "orders.events", "item": "orders.events"})
 }

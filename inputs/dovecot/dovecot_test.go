@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/google/go-cmp/cmp"
 )
 
 // collectFinalMetrics replicates the measurement/field -> final metric name
@@ -52,6 +53,7 @@ func collectFinalMetrics(store *internal.StoreAccumulator) map[string]float64 {
 
 func newAccumulator(store *internal.StoreAccumulator) internal.Accumulator {
 	return internal.Accumulator{
+		RenameGlobal: renameGlobal,
 		DifferentiatedMetrics: []string{
 			"num_logins",
 			"num_cmds",
@@ -80,6 +82,17 @@ func assertMetrics(t *testing.T, got map[string]float64, want map[string]float64
 	}
 }
 
+// assertTags checks the tags kept on every emitted measurement.
+func assertTags(t *testing.T, store *internal.StoreAccumulator, want map[string]string) {
+	t.Helper()
+
+	for _, m := range store.Measurement {
+		if diff := cmp.Diff(want, m.Tags); diff != "" {
+			t.Errorf("tags of measurement %q (-want +got):\n%s", m.Name, diff)
+		}
+	}
+}
+
 // TestDifferentiation checks that num_logins/num_cmds/mail_cache_hits/
 // disk_input/disk_output (cumulative since reset_timestamp) are
 // differentiated into per-second rates, while num_connected_sessions (the
@@ -100,7 +113,7 @@ func TestDifferentiation(t *testing.T) {
 		"mail_cache_hits":        uint64(68192209),
 		"disk_input":             uint64(6493168218112),
 		"disk_output":            uint64(17978638815232),
-	}, nil, t0)
+	}, map[string]string{"server": "127.0.0.1", "type": "global"}, t0)
 
 	// Discard the first gather: every differentiated field has no rate yet
 	// (no history).
@@ -114,7 +127,7 @@ func TestDifferentiation(t *testing.T) {
 		"mail_cache_hits":        uint64(68192209 + 2000),         // rate = 200/s
 		"disk_input":             uint64(6493168218112 + 100000),  // rate = 10000/s
 		"disk_output":            uint64(17978638815232 + 200000), // rate = 20000/s
-	}, nil, t1)
+	}, map[string]string{"server": "127.0.0.1", "type": "global"}, t1)
 
 	got := collectFinalMetrics(store)
 
@@ -126,4 +139,37 @@ func TestDifferentiation(t *testing.T) {
 		"dovecot_disk_output":            20000,
 		"dovecot_num_connected_sessions": 1300,
 	})
+
+	// The listener we queried is redundant with the labels already set on service
+	// metrics, and "type" is always "global" since that's the only query type we ask for.
+	assertTags(t, store, map[string]string{})
+}
+
+// TestTimestampsDropped checks the two timestamps Dovecot reports are dropped: they are
+// time.Time values, so they aren't metrics and would only add a conversion error to
+// every gather.
+func TestTimestampsDropped(t *testing.T) {
+	store := &internal.StoreAccumulator{}
+	acc := newAccumulator(store)
+
+	acc.PrepareGather()
+	acc.AddFields("dovecot", map[string]any{
+		"num_connected_sessions": uint64(12),
+		"last_update":            time.Now(),
+		"reset_timestamp":        time.Now(),
+	}, map[string]string{"server": "127.0.0.1", "type": "global"}, time.Now())
+
+	if len(store.Errors) != 0 {
+		t.Errorf("got %d errors, want none: %v", len(store.Errors), store.Errors)
+	}
+
+	got := collectFinalMetrics(store)
+
+	assertMetrics(t, got, map[string]float64{"dovecot_num_connected_sessions": 12})
+
+	for _, name := range []string{"dovecot_last_update", "dovecot_reset_timestamp"} {
+		if _, ok := got[name]; ok {
+			t.Errorf("%q should have been dropped, got value %v", name, got[name])
+		}
+	}
 }

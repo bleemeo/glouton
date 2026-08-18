@@ -30,7 +30,9 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/varnish"
 )
 
-// New returns a Varnish input.
+// New returns a Varnish input. It reads the metrics with "sudo varnishstat", run by
+// Telegraf itself and not through Glouton's command runner, so a Varnish running in a
+// container isn't reachable when Glouton runs on the host (and the other way around).
 func New() (telegraf.Input, registry.RegistrationOption, error) {
 	input, ok := telegraf_inputs.Inputs["varnish"]
 	if !ok {
@@ -48,6 +50,7 @@ func New() (telegraf.Input, registry.RegistrationOption, error) {
 	internalInput := &internal.Input{
 		Input: varnishInput,
 		Accumulator: internal.Accumulator{
+			RenameGlobal:     renameGlobal,
 			TransformMetrics: transformMetrics,
 			DifferentiatedMetrics: []string{
 				"cache_hit",
@@ -63,6 +66,14 @@ func New() (telegraf.Input, registry.RegistrationOption, error) {
 	}
 
 	return internalInput, options, nil
+}
+
+// renameGlobal drops the "section" tag: the metrics we gather all come from the MAIN
+// section of varnishstat, so it's the same value on every point.
+func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
+	delete(gatherContext.Tags, "section")
+
+	return gatherContext, false
 }
 
 // transformMetrics adds a cache_hit_ratio field computed from the

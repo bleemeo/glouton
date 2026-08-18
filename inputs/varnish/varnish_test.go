@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/google/go-cmp/cmp"
 )
 
 // collectFinalMetrics replicates the measurement/field -> final metric name
@@ -54,6 +55,7 @@ func collectFinalMetrics(store *internal.StoreAccumulator) map[string]float64 {
 
 func newAccumulator(store *internal.StoreAccumulator) internal.Accumulator {
 	return internal.Accumulator{
+		RenameGlobal:     renameGlobal,
 		TransformMetrics: transformMetrics,
 		DifferentiatedMetrics: []string{
 			"cache_hit",
@@ -80,6 +82,17 @@ func assertMetrics(t *testing.T, got map[string]float64, want map[string]float64
 	}
 }
 
+// assertTags checks the tags kept on every emitted measurement.
+func assertTags(t *testing.T, store *internal.StoreAccumulator, want map[string]string) {
+	t.Helper()
+
+	for _, m := range store.Measurement {
+		if diff := cmp.Diff(want, m.Tags); diff != "" {
+			t.Errorf("tags of measurement %q (-want +got):\n%s", m.Name, diff)
+		}
+	}
+}
+
 // TestDifferentiationAndHitRatio checks that cache_hit/cache_miss (lifetime
 // totals since Varnish started) are differentiated into per-second rates,
 // that hit_ratio is computed from those rates, and that uptime (itself a
@@ -97,7 +110,7 @@ func TestDifferentiationAndHitRatio(t *testing.T) {
 		"cache_hit":  uint64(1000),
 		"cache_miss": uint64(100),
 		"uptime":     uint64(3600),
-	}, nil, t0)
+	}, map[string]string{"section": "MAIN"}, t0)
 
 	// Discard the first gather: cache_hit/cache_miss have no rate yet (no
 	// history).
@@ -108,7 +121,7 @@ func TestDifferentiationAndHitRatio(t *testing.T) {
 		"cache_hit":  uint64(1000 + 900), // rate = 90/s
 		"cache_miss": uint64(100 + 100),  // rate = 10/s
 		"uptime":     uint64(3610),
-	}, nil, t1)
+	}, map[string]string{"section": "MAIN"}, t1)
 
 	got := collectFinalMetrics(store)
 
@@ -119,4 +132,7 @@ func TestDifferentiationAndHitRatio(t *testing.T) {
 		"varnish_cache_hit_ratio": 0.9,
 		"varnish_uptime":          3610,
 	})
+
+	// All the metrics we gather come from the MAIN section, so the tag is dropped.
+	assertTags(t, store, map[string]string{})
 }

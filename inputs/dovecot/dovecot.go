@@ -40,6 +40,7 @@ func New(server string) (i telegraf.Input, err error) {
 			i = &internal.Input{
 				Input: dovecotInput,
 				Accumulator: internal.Accumulator{
+					RenameGlobal: renameGlobal,
 					DifferentiatedMetrics: []string{
 						"num_logins",
 						"num_cmds",
@@ -58,4 +59,20 @@ func New(server string) (i telegraf.Input, err error) {
 	}
 
 	return i, err
+}
+
+// renameGlobal drops the tag naming the old_stats listener we queried, redundant with
+// the labels already set on service metrics, and the "type" tag which is always
+// "global" since that's the only query type we ask for.
+//
+// It also drops the two timestamps Dovecot reports, which aren't metrics: they are
+// time.Time values, so keeping them would only add a conversion error to every gather.
+func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
+	delete(gatherContext.Tags, "server")
+	delete(gatherContext.Tags, "type")
+
+	delete(gatherContext.OriginalFields, "last_update")
+	delete(gatherContext.OriginalFields, "reset_timestamp")
+
+	return gatherContext, false
 }

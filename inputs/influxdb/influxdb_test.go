@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/google/go-cmp/cmp"
 )
 
 // collectFinalMetrics replicates the measurement/field -> final metric name
@@ -91,6 +92,17 @@ func assertMetrics(t *testing.T, got map[string]float64, want map[string]float64
 
 		if math.Abs(gotValue-value) > 0.0001 {
 			t.Errorf("metric %q == %v, want %v", name, gotValue, value)
+		}
+	}
+}
+
+// assertTags checks the tags kept on every emitted measurement.
+func assertTags(t *testing.T, store *internal.StoreAccumulator, want map[string]string) {
+	t.Helper()
+
+	for _, m := range store.Measurement {
+		if diff := cmp.Diff(want, m.Tags); diff != "" {
+			t.Errorf("tags of measurement %q (-want +got):\n%s", m.Name, diff)
 		}
 	}
 }
@@ -247,7 +259,10 @@ func TestRenamePipelineDatabase(t *testing.T) {
 	acc.AddFields("influxdb_database", map[string]any{
 		"numSeries":       1234.0,
 		"numMeasurements": 12.0,
-	}, nil, time.Now())
+	}, map[string]string{
+		"database": "telegraf",
+		"url":      "http://127.0.0.1:8086/debug/vars",
+	}, time.Now())
 
 	got := collectFinalMetrics(store)
 
@@ -255,4 +270,8 @@ func TestRenamePipelineDatabase(t *testing.T) {
 		"influxdb_database_num_series":       1234,
 		"influxdb_database_num_measurements": 12,
 	})
+
+	// The URL we queried is redundant with the labels already set on service
+	// metrics, while "database" tells which database this is about.
+	assertTags(t, store, map[string]string{"database": "telegraf", "item": "telegraf"})
 }

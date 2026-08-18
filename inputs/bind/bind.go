@@ -38,6 +38,7 @@ func New(url string) (i telegraf.Input, err error) {
 			i = &internal.Input{
 				Input: bindInput,
 				Accumulator: internal.Accumulator{
+					RenameGlobal:               renameGlobal,
 					RenameMetrics:              renameMetrics,
 					ShouldDifferentiateMetrics: shouldDifferentiateMetrics,
 				},
@@ -51,6 +52,17 @@ func New(url string) (i telegraf.Input, err error) {
 	}
 
 	return i, err
+}
+
+// renameGlobal drops the tags describing the statistics-channel we queried: they are
+// redundant with the labels already set on service metrics. The "type" tag (opcode,
+// rcode, qtype, ...) and the per-zone tags are kept since they identify the counter.
+func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
+	delete(gatherContext.Tags, "url")
+	delete(gatherContext.Tags, "source")
+	delete(gatherContext.Tags, "port")
+
+	return gatherContext, false
 }
 
 var counterFieldRenames = map[string]string{ //nolint:gochecknoglobals

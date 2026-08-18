@@ -17,8 +17,11 @@
 package activemq
 
 import (
+	"strings"
+
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -38,6 +41,7 @@ func New(url string, username string, password string) (i telegraf.Input, err er
 			i = &internal.Input{
 				Input: activeMQInput,
 				Accumulator: internal.Accumulator{
+					RenameGlobal: renameGlobal,
 					DifferentiatedMetrics: []string{
 						"enqueue_count",
 						"dequeue_count",
@@ -53,4 +57,40 @@ func New(url string, username string, password string) (i telegraf.Input, err er
 	}
 
 	return i, err
+}
+
+// advisoryTopicPrefix is the prefix of the topics ActiveMQ creates on its own to
+// publish broker events (one per destination, per connection, ...).
+const advisoryTopicPrefix = "ActiveMQ.Advisory."
+
+// renameGlobal drops the tags describing the ActiveMQ console we queried: they are
+// redundant with the labels already set on service metrics. The queue/topic/subscriber
+// tags are kept since they identify the item the metric is about.
+//
+// It also drops the advisory topics, whose metrics only describe the broker's own
+// bookkeeping, and would add a few series per destination and per connection.
+func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
+	delete(gatherContext.Tags, "source")
+	delete(gatherContext.Tags, "port")
+
+	// The plugin trims the name of queues but not the one of topics.
+	name := strings.TrimSpace(gatherContext.Tags["name"])
+	if name != "" {
+		gatherContext.Tags["name"] = name
+	}
+
+	if strings.HasPrefix(name, advisoryTopicPrefix) {
+		return gatherContext, true
+	}
+
+	// The item is what tells the destinations apart: without it every queue and topic
+	// would end up on the same metric.
+	if name == "" {
+		// Subscribers are named by the client that holds them.
+		name = gatherContext.Tags["client_id"]
+	}
+
+	gatherContext.Tags[types.LabelItem] = name
+
+	return gatherContext, false
 }

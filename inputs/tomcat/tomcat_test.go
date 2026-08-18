@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/google/go-cmp/cmp"
 )
 
 // collectFinalMetrics replicates the measurement/field -> final metric name
@@ -52,6 +53,7 @@ func collectFinalMetrics(store *internal.StoreAccumulator) map[string]float64 {
 
 func newAccumulator(store *internal.StoreAccumulator) internal.Accumulator {
 	return internal.Accumulator{
+		RenameGlobal:     renameGlobal,
 		TransformMetrics: transformMetrics,
 		DifferentiatedMetrics: []string{
 			"bytes_received",
@@ -81,6 +83,17 @@ func assertMetrics(t *testing.T, got map[string]float64, want map[string]float64
 	}
 }
 
+// assertTags checks the tags kept on every emitted measurement.
+func assertTags(t *testing.T, store *internal.StoreAccumulator, want map[string]string) {
+	t.Helper()
+
+	for _, m := range store.Measurement {
+		if diff := cmp.Diff(want, m.Tags); diff != "" {
+			t.Errorf("tags of measurement %q (-want +got):\n%s", m.Name, diff)
+		}
+	}
+}
+
 // TestRenamePipelineConnector exercises the "tomcat_connector" measurement's
 // cumulative counters, converted to per-second rates (via
 // DifferentiatedMetrics), with processing_time further combined with
@@ -104,7 +117,10 @@ func TestRenamePipelineConnector(t *testing.T) {
 		"current_thread_count": 20.0,
 		"max_threads":          200.0,
 		"max_time":             300.0,
-	}, nil, t0)
+	}, map[string]string{
+		"name":   "http-nio-8080",
+		"source": "http://127.0.0.1:8080/manager/status/all?XML=true",
+	}, t0)
 
 	// Discard the first gather: every differentiated field has no rate yet
 	// (no history).
@@ -121,7 +137,10 @@ func TestRenamePipelineConnector(t *testing.T) {
 		"current_thread_count": 20.0,
 		"max_threads":          200.0,
 		"max_time":             450.0,
-	}, nil, t1)
+	}, map[string]string{
+		"name":   "http-nio-8080",
+		"source": "http://127.0.0.1:8080/manager/status/all?XML=true",
+	}, t1)
 
 	got := collectFinalMetrics(store)
 
@@ -140,4 +159,8 @@ func TestRenamePipelineConnector(t *testing.T) {
 	if _, ok := got["tomcat_connector_processing_time"]; ok {
 		t.Errorf("raw processing_time rate should have been dropped, got value %v", got["tomcat_connector_processing_time"])
 	}
+
+	// The status URL is redundant with the labels already set on service metrics,
+	// while "name" tells which connector this is.
+	assertTags(t, store, map[string]string{"name": "http-nio-8080", "item": "http-nio-8080"})
 }
