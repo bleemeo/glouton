@@ -17,6 +17,7 @@
 package logsource
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"maps"
@@ -24,15 +25,24 @@ import (
 	"strings"
 
 	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/logger"
 
 	"github.com/go-viper/mapstructure/v2"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/adapter"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/entry"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/helper"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/pipeline"
+	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/consumer"
+	"go.opentelemetry.io/collector/pdata/plog"
 )
 
 var (
-	errIncludeNotStr = errors.New("include value must be a string")
-	errIsUnknown     = errors.New("is unknown")
-	errIsRecursive   = errors.New("is recursive")
+	errIncludeNotStr         = errors.New("include value must be a string")
+	errIsUnknown             = errors.New("is unknown")
+	errIsRecursive           = errors.New("is recursive")
+	errNoOperatorsInPipeline = errors.New("network operator pipeline has no operators")
 )
 
 // ExpandOperators replaces 'template' operators (which must define a single "include" key) with the well-known format they reference; example:
@@ -197,4 +207,113 @@ func BuildOperators(rawOperators []config.OTELOperator) ([]operator.Config, erro
 	}
 
 	return operators, nil
+}
+
+// wrapWithOperators returns a consumer.Logs that runs operators (a receiver's plain transform chain --
+// see managedSource.operators -- with no input/emitter operator of its own) against every incoming
+// batch before delegating to next. It exists because operators is otherwise only ever applied by being
+// embedded into a filelogreceiver/execlogreceiver's own adapter.BaseConfig (see SetupLogReceiverFactories):
+// that works for include/container-tail sources, but a from_listeners (network) source's plog.Logs
+// arrives pre-materialized, with no stanza receiver of its own to carry operators through.
+//
+// Returns next unchanged, with a no-op cleanup, when operators is empty or next is nil: this must stay a
+// true zero-cost passthrough, since most from_listeners receivers set no operators at all. On any build
+// error it likewise falls back to next, warning instead of failing -- matching buildReceiverOperators'
+// existing convention -- since a malformed operator config should degrade a receiver back to today's
+// behavior (operators skipped), not break its listener.
+//
+// The returned consumer.Logs is not safe for concurrent ConsumeLogs calls on its own: stanza operators
+// aren't documented safe for concurrent Process/ProcessBatch on one instance, and neither is this
+// function's own Batch()/OutChannel() drain protocol below. Callers sharing one from_listeners port
+// across receivers must serialize calls into each receiver's own wrapped consumer themselves.
+func wrapWithOperators(operators []operator.Config, set component.TelemetrySettings, next consumer.Logs) (consumer.Logs, func()) {
+	noop := func() {}
+
+	if len(operators) == 0 || next == nil {
+		return next, noop
+	}
+
+	emitter := helper.NewSynchronousLogEmitter(set, func(ctx context.Context, entries []*entry.Entry) {
+		if err := next.ConsumeLogs(ctx, adapter.ConvertEntries(entries)); err != nil {
+			logger.V(1).Printf("logsource: network operator pipeline: forwarding converted batch: %v", err)
+		}
+	})
+
+	pipe, err := pipeline.Config{Operators: operators, DefaultOutput: emitter}.Build(set)
+	if err != nil {
+		logger.V(1).Printf("logsource: failed to build network operator pipeline, operators won't apply: %v", err)
+
+		return next, noop
+	}
+
+	if err := pipe.Start(nil); err != nil {
+		logger.V(1).Printf("logsource: failed to start network operator pipeline, operators won't apply: %v", err)
+
+		return next, noop
+	}
+
+	entryPoint := pipe.Operators()
+	if len(entryPoint) == 0 {
+		logger.V(1).Printf("logsource: network operator pipeline built with no operators, operators won't apply: %v", errNoOperatorsInPipeline)
+
+		_ = pipe.Stop()
+
+		return next, noop
+	}
+
+	fromPdata := adapter.NewFromPdataConverter(set, 1) // workerCount=1: callers already serialize ConsumeLogs, so extra workers only add goroutines.
+	fromPdata.Start()
+
+	bridged, err := consumer.NewLogs(func(ctx context.Context, ld plog.Logs) error {
+		return runThroughOperators(ctx, fromPdata, entryPoint[0], ld)
+	})
+	if err != nil {
+		logger.V(1).Printf("logsource: failed to build network operator pipeline consumer, operators won't apply: %v", err)
+
+		fromPdata.Stop()
+		_ = pipe.Stop()
+
+		return next, noop
+	}
+
+	cleanup := func() {
+		fromPdata.Stop()
+		_ = pipe.Stop()
+	}
+
+	return bridged, cleanup
+}
+
+// runThroughOperators converts ld to stanza entries via fromPdata, feeds them through entryPoint (whose
+// downstream DefaultOutput synchronously forwards the transformed result -- see wrapWithOperators), and
+// waits for every (ResourceLogs x ScopeLogs) pair's converted entries before returning, so a caller
+// relying on this call's completion (e.g. an OTLP gRPC/HTTP request handler) isn't racing the conversion.
+func runThroughOperators(ctx context.Context, fromPdata *adapter.FromPdataConverter, entryPoint operator.Operator, ld plog.Logs) error {
+	expected := 0
+	for _, rls := range ld.ResourceLogs().All() {
+		expected += rls.ScopeLogs().Len()
+	}
+
+	if expected == 0 {
+		return nil
+	}
+
+	if err := fromPdata.Batch(ld); err != nil {
+		return fmt.Errorf("converting batch for network operator pipeline: %w", err)
+	}
+
+	var errs error
+
+	for range expected {
+		entries, ok := <-fromPdata.OutChannel()
+		if !ok {
+			break
+		}
+
+		if err := entryPoint.ProcessBatch(ctx, entries); err != nil {
+			errs = errors.Join(errs, err)
+		}
+	}
+
+	return errs
 }

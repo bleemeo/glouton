@@ -230,15 +230,15 @@ func load(loader *configLoader, withDefault bool, loadEnviron bool, paths ...str
 	config = applyConfigTransformation(config)
 
 	if err := validateLogReceivers(config); err != nil {
-		errors.Append(err)
+		warnings.Append(err)
 	}
 
 	if err := validateNetworkListeners(config); err != nil {
-		errors.Append(err)
+		warnings.Append(err)
 	}
 
 	if err := validateContainerExcludeRules(config); err != nil {
-		errors.Append(err)
+		warnings.Append(err)
 	}
 
 	return config, unwrapErrors(warnings), errors.MaybeUnwrap()

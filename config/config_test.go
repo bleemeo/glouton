@@ -17,7 +17,6 @@
 package config
 
 import (
-	"errors"
 	"math"
 	"net/url"
 	"strings"
@@ -2114,18 +2113,24 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 	}
 }
 
-// Test_loadRejectsNetworkListenerWithNoProtocol guards against an opentelemetry.listeners entry
+// Test_loadWarnsNetworkListenerWithNoProtocol guards against an opentelemetry.listeners entry
 // with an explicit empty "protocols: {}" (neither grpc nor http present at all) silently doing nothing
-// once a receiver references it: Load() must reject it up front, the same way it already rejects a log
-// receiver with no selector. Note this is distinct from a "protocols:" block that DOES list grpc/http but
-// with nothing under them (a bare key) -- see Test_loadBareProtocolKeyMeansEnabledWithDefaults: since
-// networkProtocolsNullMeansDefaultHookFunc, that shape is enabled with default endpoints, not rejected.
-func Test_loadRejectsNetworkListenerWithNoProtocol(t *testing.T) {
+// once a receiver references it: Load() must warn about it up front, the same way it already warns about a
+// log receiver with no selector. This must be a warning rather than a load error: Glouton should keep
+// starting whenever possible, since misconfiguration is otherwise only visible from the Bleemeo panel. Note
+// this is distinct from a "protocols:" block that DOES list grpc/http but with nothing under them (a bare
+// key) -- see Test_loadBareProtocolKeyMeansEnabledWithDefaults: since networkProtocolsNullMeansDefaultHookFunc,
+// that shape is enabled with default endpoints, not rejected.
+func Test_loadWarnsNetworkListenerWithNoProtocol(t *testing.T) {
 	t.Parallel()
 
-	_, _, err := load(&configLoader{}, false, false, "testdata/network-listener-no-protocol.conf")
-	if !errors.Is(err, errNetworkListenerNoProtocol) {
-		t.Fatalf("Expected errNetworkListenerNoProtocol, got: %v", err)
+	_, warnings, err := load(&configLoader{}, false, false, "testdata/network-listener-no-protocol.conf")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if warnings == nil || !strings.Contains(warnings.Error(), errNetworkListenerNoProtocol.Error()) {
+		t.Fatalf("Expected a warning containing %q, got: %v", errNetworkListenerNoProtocol, warnings)
 	}
 }
 
@@ -2161,16 +2166,22 @@ func Test_loadBareProtocolKeyMeansEnabledWithDefaults(t *testing.T) {
 	}
 }
 
-// Test_loadRejectsEmptyContainerExcludeRule guards against a log.opentelemetry.container_exclude entry
+// Test_loadWarnsEmptyContainerExcludeRule guards against a log.opentelemetry.container_exclude entry
 // with neither container_name nor selectors set: MatchesContainerRule treats an unset field as a
 // wildcard, so such an entry would otherwise silently veto every container from both log shipping and
-// metrics container-label detection instead of the one container it was meant to match.
-func Test_loadRejectsEmptyContainerExcludeRule(t *testing.T) {
+// metrics container-label detection instead of the one container it was meant to match. This must be a
+// warning rather than a load error: Glouton should keep starting whenever possible, since misconfiguration
+// is otherwise only visible from the Bleemeo panel.
+func Test_loadWarnsEmptyContainerExcludeRule(t *testing.T) {
 	t.Parallel()
 
-	_, _, err := load(&configLoader{}, false, false, "testdata/container-exclude-empty.conf")
-	if !errors.Is(err, errContainerExcludeEmpty) {
-		t.Fatalf("Expected errContainerExcludeEmpty, got: %v", err)
+	_, warnings, err := load(&configLoader{}, false, false, "testdata/container-exclude-empty.conf")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if warnings == nil || !strings.Contains(warnings.Error(), errContainerExcludeEmpty.Error()) {
+		t.Fatalf("Expected a warning containing %q, got: %v", errContainerExcludeEmpty, warnings)
 	}
 }
 

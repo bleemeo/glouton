@@ -39,6 +39,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/helper"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
+	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/receiver"
 )
 
@@ -165,6 +166,20 @@ type managedSource struct {
 
 	// fanout is nil if no SinkProvider wants this source.
 	fanout consumer.Logs
+	// networkFanout is fanout wrapped with operators for from_listeners delivery (see NetworkWants):
+	// nil whenever fanout itself is nil. Built once, lazily, by ensureReceiverSource -- the
+	// include/container-tail paths never read this field, only NetworkWants, since they already apply
+	// operators themselves via SetupLogReceiverFactories.
+	networkFanout consumer.Logs
+	// networkCleanup releases whatever background resource networkFanout's operator bridge started
+	// (see wrapWithOperators); always non-nil once networkFanout is set, a no-op if wrapping fell back
+	// to raw fanout. Called from ReceiverManager.Shutdown.
+	networkCleanup func()
+	// networkMu serializes ConsumeLogs calls into networkFanout: stanza's pipeline/operator instances
+	// aren't documented safe for concurrent Process/ProcessBatch on one instance, and the OTLP receiver
+	// may call this receiver's shared network consumer concurrently from several simultaneous
+	// gRPC/HTTP requests hitting the same listener.
+	networkMu sync.Mutex
 	// container is set only for a SourceContainerLabel managedSource, so a later removal can notify
 	// every provider via releaseProviders.
 	container facts.Container
@@ -307,6 +322,8 @@ func (rm *ReceiverManager) ensureReceiverSource(ctx context.Context, name string
 		ReceiverName: name,
 		SendLogs:     sendLogs,
 	})
+
+	ms.networkFanout, ms.networkCleanup = wrapWithOperators(operators, rm.telemetry, ms.fanout)
 
 	rm.receivers[name] = ms
 
@@ -877,6 +894,10 @@ func (rm *ReceiverManager) Shutdown(ctx context.Context) {
 
 	for _, ms := range rm.receivers {
 		rm.shutdownSource(ctx, ms, false)
+
+		if ms.networkCleanup != nil {
+			ms.networkCleanup()
+		}
 	}
 
 	for _, ms := range rm.byContainer {
@@ -937,8 +958,31 @@ func (rm *ReceiverManager) NetworkWants(ctx context.Context) []NetworkWant {
 			continue
 		}
 
-		wants = append(wants, NetworkWant{Consumer: ms.fanout, Receivers: fromListeners})
+		wants = append(wants, NetworkWant{Consumer: rm.serializedNetworkConsumer(ms), Receivers: fromListeners})
 	}
 
 	return wants
+}
+
+// serializedNetworkConsumer returns a consumer.Logs delegating to ms.networkFanout under ms.networkMu,
+// so concurrent OTLP requests hitting a listener shared with other receivers never call this receiver's
+// own operator pipeline concurrently (see managedSource.networkMu). Returns nil unchanged when
+// ms.networkFanout is nil (no SinkProvider wants this source), matching NetworkWants' existing
+// nil-Consumer contract.
+func (rm *ReceiverManager) serializedNetworkConsumer(ms *managedSource) consumer.Logs {
+	if ms.networkFanout == nil {
+		return nil
+	}
+
+	wrapped, err := consumer.NewLogs(func(ctx context.Context, ld plog.Logs) error {
+		ms.networkMu.Lock()
+		defer ms.networkMu.Unlock()
+
+		return ms.networkFanout.ConsumeLogs(ctx, ld)
+	})
+	if err != nil {
+		return ms.networkFanout // unreachable in practice: consumer.NewLogs only fails on a nil func.
+	}
+
+	return wrapped
 }

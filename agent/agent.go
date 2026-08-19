@@ -2788,13 +2788,15 @@ func (a *agent) checkSudoRSForSSACLI(ctx context.Context) {
 
 // Add a warning for the configuration.
 func (a *agent) addWarnings(warnings ...error) {
-	var warningsStr strings.Builder
-	for _, w := range warnings {
-		warningsStr.WriteByte('\n')
-		warningsStr.WriteString(w.Error())
-	}
+	if len(warnings) > 0 {
+		var warningsStr strings.Builder
+		for _, w := range warnings {
+			warningsStr.WriteByte('\n')
+			warningsStr.WriteString(w.Error())
+		}
 
-	logger.Printf("Warning while loading configuration:%s", warningsStr.String())
+		logger.Printf("Warning while loading configuration:%s", warningsStr.String())
+	}
 
 	a.l.Lock()
 	defer a.l.Unlock()

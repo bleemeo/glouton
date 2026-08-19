@@ -102,6 +102,53 @@ func totalRecords(batches []plog.Logs) int {
 	return total
 }
 
+// allLogRecordAttrValues returns every log record's string value for attribute key, across every
+// batch, skipping records missing it.
+func allLogRecordAttrValues(batches []plog.Logs, key string) []string {
+	var values []string
+
+	for _, b := range batches {
+		for _, rl := range b.ResourceLogs().All() {
+			for _, sl := range rl.ScopeLogs().All() {
+				for _, lr := range sl.LogRecords().All() {
+					if v, ok := lr.Attributes().Get(key); ok {
+						values = append(values, v.Str())
+					}
+				}
+			}
+		}
+	}
+
+	return values
+}
+
+// firstLogRecordTagValue returns the first log record's string value for the "tag" attribute (the
+// value every test operator config in this file adds), across every batch.
+func firstLogRecordTagValue(batches []plog.Logs) (string, bool) {
+	values := allLogRecordAttrValues(batches, "tag")
+	if len(values) == 0 {
+		return "", false
+	}
+
+	return values[0], true
+}
+
+// newRecordingProviderFor returns a SinkProvider that only wants the named receiver's source, and a
+// function reading back every batch its sink received.
+func newRecordingProviderFor(receiverName string) (*fakeSinkProvider, func() []plog.Logs) {
+	sink, received := recordingLogsConsumer()
+
+	return &fakeSinkProvider{
+		want: func(src ResolvedSource) (consumer.Logs, bool) {
+			if src.ReceiverName != receiverName {
+				return nil, false
+			}
+
+			return sink, true
+		},
+	}, received
+}
+
 func newTestReceiverManager(t *testing.T, cfg config.OpenTelemetry) *ReceiverManager {
 	t.Helper()
 
@@ -872,6 +919,182 @@ func TestReceiverManagerNetworkWants(t *testing.T) {
 
 	if got := totalRecords(received()); got != 1 {
 		t.Fatalf("expected 1 record to reach the provider, got %d", got)
+	}
+}
+
+// TestReceiverManagerNetworkWantsAppliesOperators guards the from_listeners path against silently
+// skipping a receiver's own operators: before this fix, only include/container-tail sources ran
+// operators (embedded into a filelogreceiver/execlogreceiver's own config by SetupLogReceiverFactories),
+// while network-sourced logs went straight into ms.fanout untouched.
+func TestReceiverManagerNetworkWantsAppliesOperators(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.OpenTelemetry{
+		Receivers: map[string]config.LogReceiver{
+			"billing": {
+				"from_listeners": []string{"otlp"},
+				"operators": []any{
+					map[string]any{"type": "add", "field": "attributes.tag", "value": "net"},
+				},
+			},
+		},
+	}
+
+	rm := newTestReceiverManager(t, cfg)
+
+	provider, received := newRecordingProvider()
+	rm.RegisterSinkProvider(provider)
+
+	wants := rm.NetworkWants(t.Context())
+	if len(wants) != 1 {
+		t.Fatalf("expected exactly 1 NetworkWant, got %d", len(wants))
+	}
+
+	if err := wants[0].Consumer.ConsumeLogs(t.Context(), makeLogs("network")); err != nil {
+		t.Fatal("ConsumeLogs returned an error:", err)
+	}
+
+	got, ok := firstLogRecordTagValue(received())
+	if !ok {
+		t.Fatal("expected the operator's attribute to be present on the received record")
+	}
+
+	if got != "net" {
+		t.Fatalf("expected attribute value %q, got %q", "net", got)
+	}
+}
+
+// TestReceiverManagerAppliesOperatorsToBothIncludeAndNetwork guards the exact scenario reported: a
+// receiver mixing include (file tail) and from_listeners (network) sources must apply the same
+// operators to both -- previously only the file-tailed logs got the transform, giving the impression
+// that operators were ignored outright.
+func TestReceiverManagerAppliesOperatorsToBothIncludeAndNetwork(t *testing.T) {
+	t.Parallel()
+
+	logFile, err := os.CreateTemp(t.TempDir(), "app-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFile.Close()
+
+	cfg := config.OpenTelemetry{
+		Receivers: map[string]config.LogReceiver{
+			"app": {
+				"include":        []string{logFile.Name()},
+				"from_listeners": []string{"otlp"},
+				"operators": []any{
+					map[string]any{"type": "add", "field": "attributes.tag", "value": "net_default"},
+				},
+			},
+		},
+	}
+
+	rm := newTestReceiverManager(t, cfg)
+
+	provider, received := newRecordingProvider()
+	rm.RegisterSinkProvider(provider)
+
+	if err := rm.RescanReceivers(t.Context()); err != nil {
+		t.Fatal("RescanReceivers failed:", err)
+	}
+
+	time.Sleep(500 * time.Millisecond)
+
+	if _, err := logFile.WriteString("line one\n"); err != nil {
+		t.Fatal("Failed to write log line:", err)
+	}
+
+	if err := logFile.Sync(); err != nil {
+		t.Fatal("Failed to sync log file:", err)
+	}
+
+	time.Sleep(time.Second)
+
+	wants := rm.NetworkWants(t.Context())
+	if len(wants) != 1 {
+		t.Fatalf("expected exactly 1 NetworkWant, got %d", len(wants))
+	}
+
+	if err := wants[0].Consumer.ConsumeLogs(t.Context(), makeLogs("network")); err != nil {
+		t.Fatal("ConsumeLogs returned an error:", err)
+	}
+
+	values := allLogRecordAttrValues(received(), "tag")
+	if len(values) != 2 {
+		t.Fatalf("expected 2 records carrying the operator's attribute (one file-tailed, one network-sourced), got %d: %v", len(values), values)
+	}
+
+	for _, v := range values {
+		if v != "net_default" {
+			t.Errorf("expected every record's tag attribute to be %q, got %q", "net_default", v)
+		}
+	}
+}
+
+// TestReceiverManagerNetworkWantsSharedListenerAppliesEachReceiversOwnOperators checks that two
+// receivers sharing one from_listeners listener name each get their own operators applied to their own
+// copy: PlanSharedNetworkListeners/FanoutLogs already deep-copy each incoming batch per referencing
+// receiver before this fix's per-receiver operator wrapping runs, so per-receiver operators stay
+// correctly attributed even when the physical listener is shared.
+func TestReceiverManagerNetworkWantsSharedListenerAppliesEachReceiversOwnOperators(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.OpenTelemetry{
+		Receivers: map[string]config.LogReceiver{
+			"app1": {
+				"from_listeners": []string{"otlp"},
+				"operators": []any{
+					map[string]any{"type": "add", "field": "attributes.tag", "value": "one"},
+				},
+			},
+			"app2": {
+				"from_listeners": []string{"otlp"},
+				"operators": []any{
+					map[string]any{"type": "add", "field": "attributes.tag", "value": "two"},
+				},
+			},
+		},
+	}
+
+	rm := newTestReceiverManager(t, cfg)
+
+	provider1, received1 := newRecordingProviderFor("app1")
+	provider2, received2 := newRecordingProviderFor("app2")
+
+	rm.RegisterSinkProvider(provider1)
+	rm.RegisterSinkProvider(provider2)
+
+	wants := rm.NetworkWants(t.Context())
+	if len(wants) != 2 {
+		t.Fatalf("expected exactly 2 NetworkWants, got %d", len(wants))
+	}
+
+	listeners := map[string]config.NetworkListener{
+		"otlp": {Protocols: config.NetworkProtocols{GRPC: &config.NetworkEndpoint{Endpoint: "127.0.0.1:4317"}}},
+	}
+
+	planned, warnings := PlanSharedNetworkListeners(listeners, wants)
+	if len(warnings) != 0 {
+		t.Fatalf("expected no warnings, got %v", warnings)
+	}
+
+	if len(planned) != 1 {
+		t.Fatalf("expected exactly 1 shared planned receiver, got %d", len(planned))
+	}
+
+	if err := planned[0].Sink.ConsumeLogs(t.Context(), makeLogs("network")); err != nil {
+		t.Fatal("ConsumeLogs returned an error:", err)
+	}
+
+	v1, ok1 := firstLogRecordTagValue(received1())
+	if !ok1 || v1 != "one" {
+		t.Fatalf("expected app1's own record to carry tag=one, got %q (found=%v)", v1, ok1)
+	}
+
+	v2, ok2 := firstLogRecordTagValue(received2())
+	if !ok2 || v2 != "two" {
+		t.Fatalf("expected app2's own record to carry tag=two, got %q (found=%v)", v2, ok2)
 	}
 }
 
