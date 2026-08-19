@@ -77,8 +77,11 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 	return gatherContext, false
 }
 
+// Clickhouse sometimes generates false negative metrics we can't fix (notably when tables are dropped and freed elsewhere).
+// The incorrect negative value is then cast from Int64 to Uint64, turning it into a massive number even more wrong.
+const wrappedNegativeThreshold = 1 << 63
+
 func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]any) map[string]float64 {
-	_ = currentContext
 	_ = originalFields
 
 	newFields := make(map[string]float64)
@@ -91,6 +94,11 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 	for metricName, value := range fields {
 		if metricName == "query_time_microseconds" || metricName == "mutation_total_milliseconds" {
 			// Not used by themselves but replaced below by actual average durations for queries and mutations.
+			continue
+		}
+
+		if currentContext.Measurement == "clickhouse_metrics" && value >= wrappedNegativeThreshold {
+			// Drop wrapped-negative incorrect values interpreted as near-2^64 numbers.
 			continue
 		}
 
