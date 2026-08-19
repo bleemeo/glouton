@@ -97,7 +97,10 @@ const (
 	TypeLogInputs
 )
 
-var errNullConfigValue = errors.New("config entry has a null value, ignoring it")
+var (
+	errNullConfigValue = errors.New("config entry has a null value, ignoring it")
+	errInvalidYAML     = errors.New("invalid YAML")
+)
 
 // Load config from a provider and add source information on config items.
 func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.Parser) prometheus.MultiError {
@@ -181,13 +184,13 @@ func addYAMLSyntaxHint(err error, path string) error {
 	if errors.As(goccyErr, &yamlErr) {
 		if tk := yamlErr.GetToken(); tk != nil && tk.Position != nil {
 			return fmt.Errorf(
-				"invalid YAML: line %d, column %d: %s",
-				tk.Position.Line, tk.Position.Column, yamlErr.GetMessage(),
+				"%w: line %d, column %d: %s",
+				errInvalidYAML, tk.Position.Line, tk.Position.Column, yamlErr.GetMessage(),
 			)
 		}
 	}
 
-	return fmt.Errorf("invalid YAML: %s", goccyyaml.FormatError(goccyErr, false, false))
+	return fmt.Errorf("%w: %s", errInvalidYAML, goccyyaml.FormatError(goccyErr, false, false))
 }
 
 // isNilAllowedFor returns whether the given key must escape the not-null-validation or not.
