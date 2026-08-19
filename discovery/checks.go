@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/bleemeo/glouton/check"
@@ -110,7 +111,7 @@ func (d *Discovery) createCheck(service Service) {
 
 	primaryIP, primaryPort := service.AddressPort()
 	if primaryIP != "" {
-		primaryAddress = fmt.Sprintf("%s:%d", primaryIP, primaryPort)
+		primaryAddress = net.JoinHostPort(primaryIP, strconv.Itoa(primaryPort))
 	}
 
 	tcpAddresses := make([]string, 0)

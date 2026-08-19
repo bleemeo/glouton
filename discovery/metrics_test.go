@@ -23,6 +23,28 @@ import (
 	"github.com/bleemeo/glouton/facts"
 )
 
+func TestApacheStatusURL(t *testing.T) {
+	cases := []struct {
+		name string
+		ip   string
+		port int
+		want string
+	}{
+		{name: "ipv4 default port", ip: "192.168.1.42", port: 80, want: "http://192.168.1.42/server-status?auto"},
+		{name: "ipv4 custom port", ip: "192.168.1.42", port: 8080, want: "http://192.168.1.42:8080/server-status?auto"},
+		{name: "ipv6 default port", ip: "2001:db8::1", port: 80, want: "http://[2001:db8::1]/server-status?auto"},
+		{name: "ipv6 custom port", ip: "2001:db8::1", port: 8080, want: "http://[2001:db8::1]:8080/server-status?auto"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := apacheStatusURL(c.ip, c.port); got != c.want {
+				t.Errorf("apacheStatusURL(%q, %d) = %q, want %q", c.ip, c.port, got, c.want)
+			}
+		})
+	}
+}
+
 func TestClickHouseAddress(t *testing.T) {
 	cases := []struct {
 		name     string

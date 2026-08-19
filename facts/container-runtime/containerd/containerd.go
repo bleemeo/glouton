@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net"
 	"os"
 	"regexp"
 	"strings"
@@ -849,6 +850,121 @@ func (c *Containerd) updateContainers(ctx context.Context) error {
 	return nil
 }
 
+// hasHostNetwork reports whether the container shares the host's network namespace,
+// i.e. was run with the OCI equivalent of Docker's "--net host": the OCI runtime spec
+// represents this as the absence of a "network" entry in the container's namespaces,
+// as opposed to Docker which exposes it as a network named "host" in NetworkSettings.
+func hasHostNetwork(spec *oci.Spec) bool {
+	if spec.Linux == nil {
+		return false
+	}
+
+	for _, ns := range spec.Linux.Namespaces {
+		if ns.Type == specs.NetworkNamespace {
+			return false
+		}
+	}
+
+	return true
+}
+
+// primaryAddressFromProc returns the first address assigned in the given PID's network
+// namespace (IPv4 preferred over IPv6, excluding loopback and link-local), read directly
+// from procfs. Since /proc/<pid> reflects whatever PID namespace this process shares with
+// pid (typically the host's, when Glouton runs with --pid=host), this only requires that
+// pid to be visible: /proc/<pid>/net/{fib_trie,if_inet6} are plain world-readable files,
+// unlike ptrace-gated entries such as /proc/<pid>/environ or /proc/<pid>/stack which need
+// CAP_SYS_PTRACE -- no subprocess needed.
+func primaryAddressFromProc(pid int) string {
+	if address := ipv4LocalAddressFromProc(pid); address != "" {
+		return address
+	}
+
+	return globalIPv6AddressFromProc(pid)
+}
+
+func ipv4LocalAddressFromProc(pid int) string {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/net/fib_trie", pid))
+	if err != nil {
+		return ""
+	}
+
+	return parseFIBTrieLocalAddress(string(data))
+}
+
+// parseFIBTrieLocalAddress extracts the first non-loopback IPv4 address marked
+// "host LOCAL" in a /proc/<pid>/net/fib_trie dump -- i.e. an address actually
+// assigned to an interface in that network namespace, as opposed to a route
+// destination or broadcast address.
+func parseFIBTrieLocalAddress(fibTrie string) string {
+	lines := strings.Split(fibTrie, "\n")
+
+	for i, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+
+		candidate := fields[len(fields)-1]
+
+		ip := net.ParseIP(candidate)
+		if ip == nil || ip.To4() == nil || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
+			continue
+		}
+
+		if i+1 < len(lines) && strings.Contains(lines[i+1], "host LOCAL") {
+			return candidate
+		}
+	}
+
+	return ""
+}
+
+func globalIPv6AddressFromProc(pid int) string {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/net/if_inet6", pid))
+	if err != nil {
+		return ""
+	}
+
+	return parseIfInet6GlobalAddress(string(data))
+}
+
+// parseIfInet6GlobalAddress extracts the first global-scope IPv6 address from a
+// /proc/<pid>/net/if_inet6 dump, excluding loopback and link-local addresses.
+// Each line has the format "<32 hex chars addr> <ifindex> <prefixlen> <scope> <flags> <ifname>".
+func parseIfInet6GlobalAddress(ifInet6 string) string {
+	const (
+		hexAddrLen  = 32
+		globalScope = "00"
+	)
+
+	for line := range strings.SplitSeq(ifInet6, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 4 {
+			continue
+		}
+
+		hexAddr, scope := fields[0], fields[3]
+		if scope != globalScope || len(hexAddr) != hexAddrLen {
+			continue
+		}
+
+		parts := make([]string, 0, 8)
+		for i := 0; i < len(hexAddr); i += 4 {
+			parts = append(parts, hexAddr[i:i+4])
+		}
+
+		ip := net.ParseIP(strings.Join(parts, ":"))
+		if ip == nil {
+			continue
+		}
+
+		return ip.String()
+	}
+
+	return ""
+}
+
 func convertToContainerObject(ctx context.Context, ns string, cont client.Container) (containerObject, error) {
 	info, err := cont.Info(ctx, client.WithoutRefreshedMetadata)
 	if err != nil {
@@ -897,6 +1013,15 @@ func convertToContainerObject(ctx context.Context, ns string, cont client.Contai
 	}
 
 	obj.pid = int(task.Pid())
+
+	if hasHostNetwork(&spec) {
+		// Consistent with the Docker runtime: on host networking, the container shares the
+		// host's network namespace and a service is generally only expected to be reachable
+		// through the loopback interface.
+		obj.primaryAddress = "127.0.0.1"
+	} else {
+		obj.primaryAddress = primaryAddressFromProc(obj.pid)
+	}
 
 	status, err := task.Status(ctx)
 	if err == nil {
@@ -1061,14 +1186,15 @@ func (cl realClient) Close() error {
 const expectedSpecType = "types.containerd.io/opencontainers/runtime-spec/1/Spec"
 
 type containerObject struct {
-	namespace string
-	info      ContainerOCISpec
-	pid       int
-	state     string
-	args      []string
-	startTime time.Time
-	exitTime  time.Time
-	imageID   string
+	namespace      string
+	info           ContainerOCISpec
+	pid            int
+	state          string
+	args           []string
+	startTime      time.Time
+	exitTime       time.Time
+	imageID        string
+	primaryAddress string
 }
 
 // ContainerOCISpec contains Info() & unmarshaled oci Spec.
@@ -1200,7 +1326,7 @@ func (c containerObject) PodNamespace() string {
 }
 
 func (c containerObject) PrimaryAddress() string {
-	return ""
+	return c.primaryAddress
 }
 
 func (c containerObject) StartedAt() time.Time {
