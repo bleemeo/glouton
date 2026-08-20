@@ -18,7 +18,6 @@ package api
 
 import (
 	"context"
-	"errors"
 
 	"github.com/bleemeo/glouton/store"
 	"github.com/bleemeo/glouton/types"
@@ -27,8 +26,6 @@ import (
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/annotations"
 )
-
-var errNotImplemented = errors.New("not implemented")
 
 type MetricQueryable interface {
 	storage.Queryable
@@ -116,14 +113,26 @@ type apiQuerier struct {
 // Select returns a set of series that matches the given label matchers.
 // A matcher is added to match only the main agent.
 func (q apiQuerier) Select(ctx context.Context, sortSeries bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
-	agentMatcher, err := labels.NewMatcher(labels.MatchEqual, types.LabelInstanceUUID, q.agentID)
+	matchers, err := q.withAgentMatcher(matchers)
 	if err != nil {
 		return storage.ErrSeriesSet(err)
 	}
 
-	matchers = append(matchers, agentMatcher)
-
 	return q.querier.Select(ctx, sortSeries, hints, matchers...)
+}
+
+// withAgentMatcher returns the given matchers plus one restricting the result to
+// the main agent. The input slice is left untouched.
+func (q apiQuerier) withAgentMatcher(matchers []*labels.Matcher) ([]*labels.Matcher, error) {
+	agentMatcher, err := labels.NewMatcher(labels.MatchEqual, types.LabelInstanceUUID, q.agentID)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*labels.Matcher, 0, len(matchers)+1)
+	result = append(result, matchers...)
+
+	return append(result, agentMatcher), nil
 }
 
 // Close releases the resources of the Querier.
@@ -137,19 +146,33 @@ func (q apiQuerier) Close() error {
 	return q.querier.Close()
 }
 
-// LabelValues is not implemented.
-func (q apiQuerier) LabelValues(_ context.Context, name string, hints *storage.LabelHints, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
-	_ = name
-	_ = hints
-	_ = matchers
+// LabelValues returns all potential values for a label name, restricted to the
+// main agent. The wrapped querier does the actual work: the in-memory store, and
+// the on-disk TSDB too when it is enabled.
+func (q apiQuerier) LabelValues(
+	ctx context.Context,
+	name string,
+	hints *storage.LabelHints,
+	matchers ...*labels.Matcher,
+) ([]string, annotations.Annotations, error) {
+	matchers, err := q.withAgentMatcher(matchers)
+	if err != nil {
+		return nil, nil, err
+	}
 
-	return nil, nil, errNotImplemented
+	return q.querier.LabelValues(ctx, name, hints, matchers...)
 }
 
-// LabelNames is not implemented.
-func (q apiQuerier) LabelNames(_ context.Context, hints *storage.LabelHints, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
-	_ = hints
-	_ = matchers
+// LabelNames returns all the unique label names of the main agent's metrics.
+func (q apiQuerier) LabelNames(
+	ctx context.Context,
+	hints *storage.LabelHints,
+	matchers ...*labels.Matcher,
+) ([]string, annotations.Annotations, error) {
+	matchers, err := q.withAgentMatcher(matchers)
+	if err != nil {
+		return nil, nil, err
+	}
 
-	return nil, nil, errNotImplemented
+	return q.querier.LabelNames(ctx, hints, matchers...)
 }
