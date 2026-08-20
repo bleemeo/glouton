@@ -151,3 +151,17 @@ export type PromQLResponse = {
   data: { resultType: "matrix"; result: PromQLSeries[] };
   error?: string;
 };
+
+// PromQL vector response, as returned by /api/v1/query. One value per
+// series instead of a list, which is why it needs its own accessor
+// rather than reusing the matrix helpers.
+export type PromQLSample = {
+  metric: Record<string, string>;
+  value: PromQLValue;
+};
+
+export type PromQLInstantResponse = {
+  status: "success" | "error";
+  data: { resultType: "vector"; result: PromQLSample[] };
+  error?: string;
+};
