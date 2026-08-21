@@ -295,8 +295,11 @@ func tryImproveRegisterError(err error, configItems []bleemeoTypes.GloutonConfig
 		errorItems := make([]string, 0, len(messages)/2) // guesstimate
 
 		for i, message := range messages {
-			if len(message.Value) != 0 {
+			if len(message.Value) != 0 && i < len(configItems) {
 				errMsg := fmt.Sprintf("- %s: %s", configItems[i].Key, strings.Join(message.Value, " / "))
+				errorItems = append(errorItems, errMsg)
+			} else if len(message.Value) != 0 {
+				errMsg := fmt.Sprintf("- <bad index %d>: %s", i, strings.Join(message.Value, " / "))
 				errorItems = append(errorItems, errMsg)
 			}
 		}
