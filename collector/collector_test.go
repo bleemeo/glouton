@@ -838,3 +838,73 @@ func TestErrorHandling(t *testing.T) {
 		}
 	}
 }
+
+// failingStartInput is a telegraf.ServiceInput whose Start() always fails. Its
+// Gather() mimics inputs that only work once started (e.g. the docker input,
+// which dereferences a client released by its own failed Start()).
+type failingStartInput struct {
+	startErr error
+
+	mu           sync.Mutex
+	gatherCalled bool
+	stopCalled   bool
+}
+
+func (f *failingStartInput) Start(telegraf.Accumulator) error { return f.startErr }
+
+func (f *failingStartInput) Stop() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	f.stopCalled = true
+}
+
+func (f *failingStartInput) Gather(telegraf.Accumulator) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	f.gatherCalled = true
+
+	return nil
+}
+
+func (f *failingStartInput) SampleConfig() string { return "" }
+
+// TestAddInputStartError ensures an input whose Start() failed is not kept by
+// the collector: gathering it could panic, as it was never started.
+func TestAddInputStartError(t *testing.T) {
+	t.Parallel()
+
+	expectedErr := errors.New("start failed") //nolint:err113
+	c := New(nil, gate.New(0))
+	input := &failingStartInput{startErr: expectedErr}
+
+	if _, err := c.AddInput(input, "svc"); !errors.Is(err, expectedErr) {
+		t.Fatalf("AddInput() error = %v, want %v", err, expectedErr)
+	}
+
+	if len(c.inputs) != 0 {
+		t.Errorf("len(c.inputs) == %v, want 0", len(c.inputs))
+	}
+
+	if len(c.gatherWG) != 0 {
+		t.Errorf("len(c.gatherWG) == %v, want 0", len(c.gatherWG))
+	}
+
+	if len(c.fieldCaches) != 0 {
+		t.Errorf("len(c.fieldCaches) == %v, want 0", len(c.fieldCaches))
+	}
+
+	_ = c.RunGather(t.Context(), time.Now())
+
+	input.mu.Lock()
+	defer input.mu.Unlock()
+
+	if input.gatherCalled {
+		t.Error("Gather() was called on an input whose Start() failed")
+	}
+
+	if input.stopCalled {
+		t.Error("Stop() was called on an input that was never started")
+	}
+}
