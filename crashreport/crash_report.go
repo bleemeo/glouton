@@ -344,8 +344,12 @@ func makeBundle(ctx context.Context, stateDir string, diagnosticFn diagnosticFun
 	defer crashReportArchive.Close()
 
 	zipWriter := zip.NewWriter(crashReportArchive)
+	// The zip is closed through diagnosticWriter and not zipWriter: the goroutine
+	// writing the diagnostic may outlive generateDiagnostic (on timeout), and
+	// writing to the zip once its central directory is written would corrupt it.
+	diagnosticWriter := archivewriter.NewSubDirZipWriter("diagnostic", zipWriter)
 
-	defer zipWriter.Close()
+	defer diagnosticWriter.Close()
 
 	stderrFile, err := os.Open(filepath.Join(stateDir, oldStderrFileName))
 	if err == nil { // Open stderr log file
@@ -413,12 +417,10 @@ func makeBundle(ctx context.Context, stateDir string, diagnosticFn diagnosticFun
 	}
 
 	if diagnosticFn != nil {
-		subDirZipWriter := archivewriter.NewSubDirZipWriter("diagnostic", zipWriter)
-
 		diagnosticCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 
-		err = generateDiagnostic(diagnosticCtx, subDirZipWriter, diagnosticFn)
+		err = generateDiagnostic(diagnosticCtx, diagnosticWriter, diagnosticFn)
 		if err != nil {
 			logger.V(1).Println("Failed to generate a diagnostic into the crash report archive:", err)
 		}
@@ -451,6 +453,9 @@ func markAsDone(stateDir string) (errs prometheus.MultiError) {
 // The given context must have defined a timeout if the generation
 // of the diagnostic should be limited in time.
 // When calling generateDiagnostic, the diagnostic callback must not be nil.
+// generateDiagnostic writes the diagnostic to writer, giving up when ctx expires.
+// When it gives up, the goroutine running diagnosticFn is left running and may
+// still write to writer: writer must support concurrent use.
 func generateDiagnostic(ctx context.Context, writer types.ArchiveWriter, diagnosticFn diagnosticFunc) error {
 	done := make(chan error, 1) // Buffered channel to avoid the goroutine being blocked on send
 
