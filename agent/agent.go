@@ -206,7 +206,25 @@ type taskInfo struct {
 	name     string
 }
 
-func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (ok bool) {
+// LoadedConfig is the Glouton configuration, once loaded from the config files
+// and the environment.
+type LoadedConfig struct {
+	config   config.Config
+	items    []config.Item
+	warnings prometheus.MultiError
+}
+
+// LoadConfig loads the configuration from the given files.
+// It is done outside of the agent initialization so that a reload can give up
+// on an invalid configuration while the agent using the previous one is still
+// running.
+func LoadConfig(configFiles []string) (LoadedConfig, error) {
+	cfg, items, warnings, err := config.Load(true, true, configFiles...)
+
+	return LoadedConfig{config: cfg, items: items, warnings: warnings}, err
+}
+
+func (a *agent) init(ctx context.Context, loadedConfig LoadedConfig, firstRun bool) (ok bool) {
 	a.l.Lock()
 	a.lastHealthCheck = time.Now()
 	a.l.Unlock()
@@ -214,21 +232,14 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	a.taskRegistry = task.NewRegistry(ctx)
 	a.taskIDs = make(map[string]int)
 
-	cfg, configItems, warnings, err := config.Load(true, true, configFiles...)
-	if warnings != nil {
-		a.addWarnings(warnings...)
+	if loadedConfig.warnings != nil {
+		a.addWarnings(loadedConfig.warnings...)
 	}
 
-	a.config = cfg
-	a.configItems = configItems
+	a.config = loadedConfig.config
+	a.configItems = loadedConfig.items
 
 	a.setupLogger()
-
-	if err != nil {
-		logger.Printf("Error while loading configuration: %v", err)
-
-		return false
-	}
 
 	watcherErr := a.reloadState.WatcherError()
 	if watcherErr != nil && !errors.Is(watcherErr, errWatcherDisabled) {
@@ -275,12 +286,14 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	cachePath := a.config.Agent.StateCacheFile
 	oldStatePath := a.config.Agent.DeprecatedStateFile
 
-	a.state, err = state.Load(statePath, cachePath)
+	agentState, err := state.Load(statePath, cachePath)
 	if err != nil {
 		logger.Printf("Error while loading state file: %v", err)
 
 		return false
 	}
+
+	a.state = agentState
 
 	if !a.state.IsEmpty() {
 		oldStatePath = ""
@@ -421,11 +434,14 @@ func (a *agent) setupLogger() {
 	logger.SetPkgLevels(a.config.Logging.PackageLevels)
 }
 
-// Run runs Glouton.
-func Run(ctx context.Context, reloadState ReloadState, configFiles []string, signalChan chan os.Signal, firstRun bool) {
+// Run runs Glouton with the given configuration.
+func Run(ctx context.Context, reloadState ReloadState, loadedConfig LoadedConfig, signalChan chan os.Signal, firstRun bool) {
 	agent := &agent{reloadState: reloadState}
 
-	if !agent.init(ctx, configFiles, firstRun) {
+	// The configuration is already loaded and valid at this point: any error
+	// here is not something a new configuration would fix, so we let the
+	// service manager restart Glouton.
+	if !agent.init(ctx, loadedConfig, firstRun) {
 		os.Exit(1)
 
 		return
@@ -2762,7 +2778,18 @@ func (a *agent) getWarnings() prometheus.MultiError {
 	a.l.Lock()
 	defer a.l.Unlock()
 
-	return a.configWarnings
+	reloadErr := a.reloadState.ReloadError()
+	if reloadErr == nil {
+		return a.configWarnings
+	}
+
+	// The agent runs with a configuration older than the files on disk: tell
+	// the user, this agent won't reload until the configuration changes again.
+	warnings := make(prometheus.MultiError, 0, len(a.configWarnings)+1)
+	warnings = append(warnings, a.configWarnings...)
+	warnings = append(warnings, reloadErr)
+
+	return warnings
 }
 
 func parseIPOutput(content []byte) string {

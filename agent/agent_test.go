@@ -17,6 +17,7 @@
 package agent
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -637,5 +638,54 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 				t.Fatalf("Got unexpected metric:\n %s", diff)
 			}
 		})
+	}
+}
+
+// reloadStateStub is a ReloadState that only knows about the last reload error.
+type reloadStateStub struct {
+	ReloadState
+
+	reloadError error
+}
+
+func (rs reloadStateStub) ReloadError() error {
+	return rs.reloadError
+}
+
+// TestGetWarningsWithReloadError checks that a failed reload is reported as a
+// config warning: it is the only thing the user sees, as the agent keeps
+// running with its previous configuration.
+//
+//nolint:err113
+func TestGetWarningsWithReloadError(t *testing.T) {
+	t.Parallel()
+
+	configWarning := errors.New("some config warning")
+	reloadError := errors.New("the configuration couldn't be loaded")
+
+	a := &agent{reloadState: reloadStateStub{}}
+	a.addWarnings(configWarning)
+
+	if got := a.getWarnings(); len(got) != 1 || !errors.Is(got[0], configWarning) {
+		t.Errorf("getWarnings() = %v, want only the config warning", got)
+	}
+
+	a.reloadState = reloadStateStub{reloadError: reloadError}
+
+	got := a.getWarnings()
+	if len(got) != 2 || !errors.Is(got[1], reloadError) {
+		t.Fatalf("getWarnings() = %v, want the config warning and the reload error", got)
+	}
+
+	// The reload error must not be kept in the config warnings, otherwise it
+	// would be duplicated on the next call and stay after a successful reload.
+	if got := a.getWarnings(); len(got) != 2 {
+		t.Errorf("getWarnings() = %v, want 2 warnings on the second call too", got)
+	}
+
+	a.reloadState = reloadStateStub{}
+
+	if got := a.getWarnings(); len(got) != 1 {
+		t.Errorf("getWarnings() = %v, want only the config warning once the reload succeeded", got)
 	}
 }

@@ -64,5 +64,8 @@ func main() {
 		*disableReload, _ = config.ParseBool(envDisableReload)
 	}
 
-	agent.StartReloadManager(strings.Split(*configFiles, ","), *disableReload)
+	err := agent.StartReloadManager(strings.Split(*configFiles, ","), *disableReload)
+	if err != nil {
+		os.Exit(1)
+	}
 }
