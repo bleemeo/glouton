@@ -2185,6 +2185,39 @@ func Test_loadWarnsEmptyContainerExcludeRule(t *testing.T) {
 	}
 }
 
+// Test_loadWarnsDuplicateMetricEntryInReceiver guards against a receiver's metrics: list containing
+// two verbatim-identical entries (same metric, conditions, and labels): since each metrics: entry gets
+// its own countconnector (see otel/logmetrics's buildConnectors), two identical entries would both
+// independently match and count every line, silently doubling the resulting series' value with no
+// warning at all.
+func Test_loadWarnsDuplicateMetricEntryInReceiver(t *testing.T) {
+	t.Parallel()
+
+	_, warnings, err := load(&configLoader{}, false, false, "testdata/log-metrics-duplicate-entry.conf")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if warnings == nil || !strings.Contains(warnings.Error(), errDuplicateMetricEntry.Error()) {
+		t.Fatalf("Expected a warning containing %q, got: %v", errDuplicateMetricEntry, warnings)
+	}
+}
+
+// Test_loadWarnsDuplicateMetricEntryInMetricsRules is Test_loadWarnsDuplicateMetricEntryInReceiver's
+// counterpart for a log.metrics_rules list, the other place a metrics: entry list can be declared.
+func Test_loadWarnsDuplicateMetricEntryInMetricsRules(t *testing.T) {
+	t.Parallel()
+
+	_, warnings, err := load(&configLoader{}, false, false, "testdata/log-metrics-rules-duplicate-entry.conf")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if warnings == nil || !strings.Contains(warnings.Error(), errDuplicateMetricEntry.Error()) {
+		t.Fatalf("Expected a warning containing %q, got: %v", errDuplicateMetricEntry, warnings)
+	}
+}
+
 // Test_migrateLoggingMigratesExplicitZero guards against a regression where migrateLogging used
 // "k.Int(oldKey) == 0" to decide whether to migrate, which can't distinguish "key absent" from
 // "explicitly set to 0" -- an explicit logging.buffer.tail_size/head_size: 0 was silently left unmigrated,

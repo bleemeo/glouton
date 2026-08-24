@@ -19,6 +19,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"reflect"
 
 	"github.com/go-viper/mapstructure/v2"
 )
@@ -28,6 +29,7 @@ var (
 	errContainerExcludeEmpty            = errors.New("log.opentelemetry.container_exclude entry has neither container_name nor selectors set")
 	errReceiverNetworkListenerUndefined = errors.New("network listener not defined in opentelemetry.listeners")
 	errReceiverMetricsRuleUndefined     = errors.New("metrics_rules entry not defined in log.metrics_rules")
+	errDuplicateMetricEntry             = errors.New("metrics entry duplicates an earlier one in the same list verbatim (same metric, conditions/regex, item, labels and attributes) -- would double-count every matching line")
 )
 
 // receiverSelectors is the subset of a raw LogReceiver's keys that decide
@@ -68,18 +70,10 @@ func LogReceiverSelectors(raw LogReceiver) (include []string, containerName stri
 // concern (resolveInlineMetric/asMetricEntry already warn on them at runtime), this helper only cares
 // about include references, the one thing that can be cross-checked against static config right now.
 func receiverMetricsIncludeNames(raw LogReceiver) []string {
-	rawMetrics, _ := raw["metrics"].([]any)
-
 	var names []string
 
-	for _, rawEntry := range rawMetrics {
-		entry, ok := rawEntry.(map[string]any)
-		if !ok {
-			continue
-		}
-
-		name, ok := entry["include"].(string)
-		if ok && name != "" {
+	for _, entry := range rawMetricEntries(raw) {
+		if name, ok := entry["include"].(string); ok && name != "" {
 			names = append(names, name)
 		}
 	}
@@ -87,11 +81,46 @@ func receiverMetricsIncludeNames(raw LogReceiver) []string {
 	return names
 }
 
+// rawMetricEntries returns raw's "metrics" list, keeping only the entries actually shaped like a
+// map (an inline definition or an {include: name} reference) -- anything else is malformed and left
+// for otel/logmetrics's own runtime warnings to catch, same as receiverMetricsIncludeNames.
+func rawMetricEntries(raw LogReceiver) []map[string]any {
+	rawMetrics, _ := raw["metrics"].([]any)
+
+	entries := make([]map[string]any, 0, len(rawMetrics))
+
+	for _, rawEntry := range rawMetrics {
+		if entry, ok := rawEntry.(map[string]any); ok {
+			entries = append(entries, entry)
+		}
+	}
+
+	return entries
+}
+
+// firstDuplicateMetricEntry returns the index of the first entry in entries that's a verbatim
+// duplicate of an earlier one in the same list, and the index of that earlier one. Each metrics:
+// entry gets its own countconnector (see otel/logmetrics's buildConnectors), so two byte-identical
+// entries -- same metric, conditions/regex, item, labels and attributes -- would both independently
+// match and count every line, silently doubling the resulting series' value.
+func firstDuplicateMetricEntry(entries []map[string]any) (dupIndex, origIndex int, found bool) {
+	for i := 1; i < len(entries); i++ {
+		for j := range i {
+			if reflect.DeepEqual(entries[i], entries[j]) {
+				return i, j, true
+			}
+		}
+	}
+
+	return 0, 0, false
+}
+
 // validateLogReceivers rejects any log.opentelemetry.receivers entry with no
 // source selector at all (include, container_name, container_selectors, or
 // from_listeners) -- almost certainly a typo/mistake, caught at load time instead
-// of silently doing nothing. It also rejects undefined from_listeners entries and metric includes
-// that don't exist.
+// of silently doing nothing. It also rejects undefined from_listeners entries, metric includes
+// that don't exist, and verbatim-duplicate metrics: entries (within a receiver's own list, or
+// within a log.metrics_rules list).
 func validateLogReceivers(cfg Config) error {
 	var errs []error
 
@@ -123,6 +152,22 @@ func validateLogReceivers(cfg Config) error {
 					errReceiverMetricsRuleUndefined, name, ruleName,
 				))
 			}
+		}
+
+		if dup, orig, found := firstDuplicateMetricEntry(rawMetricEntries(raw)); found {
+			errs = append(errs, fmt.Errorf(
+				"%w: log.opentelemetry.receivers.%s.metrics[%d] duplicates metrics[%d]",
+				errDuplicateMetricEntry, name, dup, orig,
+			))
+		}
+	}
+
+	for ruleName, entries := range cfg.Log.MetricsRules {
+		if dup, orig, found := firstDuplicateMetricEntry(entries); found {
+			errs = append(errs, fmt.Errorf(
+				"%w: log.metrics_rules.%s[%d] duplicates [%d]",
+				errDuplicateMetricEntry, ruleName, dup, orig,
+			))
 		}
 	}
 

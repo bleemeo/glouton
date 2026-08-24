@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/logger"
@@ -47,7 +49,19 @@ type resolvedMetric struct {
 	Item *string
 }
 
-// resolveReceiverMetrics expands rawMetrics (a receiver's "metrics:" list of inline entries or {include: name}) against metricsRules, warning and skipping invalid entries instead of failing.
+// resolveReceiverMetrics expands rawMetrics (a receiver's "metrics:" list of inline entries or
+// {include: name}) against metricsRules, warning and skipping invalid entries instead of failing. An
+// entry that resolves to the same effective metric as one already resolved (same metric name, item,
+// labels, attributes, and final match condition -- folding "regex:" sugar into its equivalent
+// IsMatch(body, ...) condition and treating the OR'ed condition list as an unordered set, so e.g.
+// regex: "X" and conditions: ['IsMatch(body, "X")'] count as the same condition) is dropped too,
+// whether the duplication comes from two such entries written inline, two inside one included
+// metrics_rules list, or an inline entry repeating one already pulled in by an include: each resolved
+// entry gets its own countconnector (see buildConnectors), so keeping both would count every matching
+// line twice into the same counter. config.validateLogReceivers already warns about the two
+// directly-visible, verbatim shapes of this at load time; this is the runtime side that actually
+// prevents the double-count, and it also catches the include-vs-inline case and the regex/conditions
+// equivalence that the config-time, raw-text check can't see.
 func resolveReceiverMetrics(rawMetrics []any, metricsRules map[string][]config.LogMetricEntry) []resolvedMetric {
 	var resolved []resolvedMetric
 
@@ -62,7 +76,7 @@ func resolveReceiverMetrics(rawMetrics []any, metricsRules map[string][]config.L
 		includeName, isInclude := entry["include"].(string)
 		if !isInclude || includeName == "" {
 			if rm, ok := resolveInlineMetric(entry); ok {
-				resolved = append(resolved, rm)
+				resolved = appendResolvedMetric(resolved, rm)
 			}
 
 			continue
@@ -77,12 +91,112 @@ func resolveReceiverMetrics(rawMetrics []any, metricsRules map[string][]config.L
 
 		for _, ruleRaw := range rules {
 			if rm, ok := resolveInlineMetric(ruleRaw); ok {
-				resolved = append(resolved, rm)
+				resolved = appendResolvedMetric(resolved, rm)
 			}
 		}
 	}
 
 	return resolved
+}
+
+// appendResolvedMetric appends rm to resolved, unless rm resolves to the same effective metric as an
+// entry already in resolved -- see resolveReceiverMetrics's doc comment. rm's own invalid config (if
+// any) is left for buildConnectors to report later: an entry that can't even be signed is never
+// treated as a duplicate here.
+func appendResolvedMetric(resolved []resolvedMetric, rm resolvedMetric) []resolvedMetric {
+	sig, ok := metricSignature(rm)
+	if !ok {
+		return append(resolved, rm)
+	}
+
+	for _, existing := range resolved {
+		if existingSig, ok := metricSignature(existing); ok && existingSig == sig {
+			logger.Printf("logmetrics: metric %q duplicates an earlier metrics entry (same condition, item, labels and attributes), ignoring the duplicate", rm.Metric)
+
+			return resolved
+		}
+	}
+
+	return append(resolved, rm)
+}
+
+// resolvedMetricSignature is what actually decides whether two entries would double-count the same
+// matching lines onto the same series: the same metric name, the same final match condition, item,
+// labels, and attributes -- not the same raw config. Two entries can be spelled completely
+// differently (e.g. one using regex:, the other an equivalent conditions:) and still resolve to the
+// same signature. itemSet/item are split out (rather than folding "unset" into item's zero value)
+// because item's presence is itself meaningful: an explicit item: "" is not the same as never setting
+// item at all (see extractItem's doc comment).
+type resolvedMetricSignature struct {
+	metric     string
+	itemSet    bool
+	item       string
+	labels     string
+	conditions string
+	attributes string
+}
+
+// metricSignature builds rm's resolvedMetricSignature, or ok=false if metricInfo can't even decode
+// rm's config -- buildConnectors will report that error on its own later, so an entry in that state is
+// simply never treated as a duplicate here.
+func metricSignature(rm resolvedMetric) (resolvedMetricSignature, bool) {
+	info, err := metricInfo(rm.Metric, rm.Raw)
+	if err != nil {
+		return resolvedMetricSignature{}, false
+	}
+
+	sig := resolvedMetricSignature{
+		metric:     rm.Metric,
+		labels:     encodeLabelSet(extractLabels(rm.Raw)),
+		conditions: encodeStringSet(info.Conditions),
+		attributes: encodeAttributeSet(info.Attributes),
+	}
+
+	if rm.Item != nil {
+		sig.itemSet = true
+		sig.item = *rm.Item
+	}
+
+	return sig, true
+}
+
+// encodeStringSet canonically encodes a set of strings (order-independent -- e.g. an OR'ed
+// conditions: list, where order never changes the result) into a deterministic string, mirroring
+// encodeLabelSet's %q-quoted, sorted approach in registry.go.
+func encodeStringSet(values []string) string {
+	if len(values) == 0 {
+		return ""
+	}
+
+	sorted := slices.Clone(values)
+	slices.Sort(sorted)
+
+	var sb strings.Builder
+
+	for _, v := range sorted {
+		fmt.Fprintf(&sb, "%q,", v)
+	}
+
+	return sb.String()
+}
+
+// encodeAttributeSet canonically encodes a countconnector attributes list, sorted by key so a purely
+// cosmetic reordering doesn't produce a different signature.
+func encodeAttributeSet(attrs []countconnector.AttributeConfig) string {
+	if len(attrs) == 0 {
+		return ""
+	}
+
+	sorted := slices.Clone(attrs)
+	slices.SortFunc(sorted, func(a, b countconnector.AttributeConfig) int { return strings.Compare(a.Key, b.Key) })
+
+	var sb strings.Builder
+
+	for _, a := range sorted {
+		fmt.Fprintf(&sb, "%q=%v,", a.Key, a.DefaultValue)
+	}
+
+	return sb.String()
 }
 
 // asMetricEntry narrows a raw "metrics:" list element down to a config.LogMetricEntry, rejecting a malformed one instead of panicking.

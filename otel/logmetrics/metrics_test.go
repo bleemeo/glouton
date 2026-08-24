@@ -183,6 +183,99 @@ func TestResolveReceiverMetricsMalformedEntry(t *testing.T) {
 	}
 }
 
+// TestResolveReceiverMetricsDropsVerbatimDuplicates guards against a metrics: entry appearing twice,
+// verbatim, from any of the three ways that can happen -- two identical inline entries, two identical
+// entries inside one included metrics_rules list, and an inline entry repeating one already pulled in
+// by an include -- each of which would otherwise get its own countconnector and double-count every
+// matching line into the same counter (same metric+item+labels key).
+func TestResolveReceiverMetricsDropsVerbatimDuplicates(t *testing.T) {
+	t.Parallel()
+
+	rules := map[string][]config.LogMetricEntry{
+		"dup_rule": {
+			{"metric": "rule_metric", "conditions": []any{`IsMatch(body, "x")`}},
+			{"metric": "rule_metric", "conditions": []any{`IsMatch(body, "x")`}},
+		},
+	}
+
+	rawMetrics := []any{
+		map[string]any{"metric": "inline_dup", "conditions": []any{`IsMatch(body, "y")`}},
+		map[string]any{"metric": "inline_dup", "conditions": []any{`IsMatch(body, "y")`}},
+		map[string]any{"include": "dup_rule"},
+		map[string]any{"metric": "rule_metric", "conditions": []any{`IsMatch(body, "x")`}},
+	}
+
+	resolved := resolveReceiverMetrics(rawMetrics, rules)
+
+	names := make([]string, 0, len(resolved))
+	for _, rm := range resolved {
+		names = append(names, rm.Metric)
+	}
+
+	slices.Sort(names)
+
+	want := []string{"inline_dup", "rule_metric"}
+	if diff := cmp.Diff(want, names); diff != "" {
+		t.Fatalf("Unexpected resolved metric names (-want +got), duplicates should have been dropped:\n%s", diff)
+	}
+}
+
+// TestResolveReceiverMetricsDropsRegexConditionsEquivalentDuplicate guards against a duplicate spelled
+// two different ways: "regex:" is documented sugar for a single IsMatch(body, ...) condition, so an
+// entry using regex: "X" and one using conditions: ['IsMatch(body, "X")'] resolve to the exact same
+// final condition and must be treated as the same duplicate, not two distinct entries.
+func TestResolveReceiverMetricsDropsRegexConditionsEquivalentDuplicate(t *testing.T) {
+	t.Parallel()
+
+	rawMetrics := []any{
+		map[string]any{"metric": "app_errors", "regex": "boom"},
+		map[string]any{"metric": "app_errors", "conditions": []any{`IsMatch(body, "boom")`}},
+	}
+
+	resolved := resolveReceiverMetrics(rawMetrics, nil)
+	if len(resolved) != 1 {
+		t.Fatalf("Expected the regex:/conditions: equivalent entry to be dropped as a duplicate, got %d resolved: %v", len(resolved), resolved)
+	}
+}
+
+// TestResolveReceiverMetricsDuplicateConditionOrderDoesNotMatter guards against two entries whose
+// conditions: list has the same elements in a different order being treated as distinct: OR'ed
+// conditions are commutative, so reordering them changes nothing about which lines match.
+func TestResolveReceiverMetricsDuplicateConditionOrderDoesNotMatter(t *testing.T) {
+	t.Parallel()
+
+	rawMetrics := []any{
+		map[string]any{"metric": "app_errors", "conditions": []any{`IsMatch(body, "a")`, `IsMatch(body, "b")`}},
+		map[string]any{"metric": "app_errors", "conditions": []any{`IsMatch(body, "b")`, `IsMatch(body, "a")`}},
+	}
+
+	resolved := resolveReceiverMetrics(rawMetrics, nil)
+	if len(resolved) != 1 {
+		t.Fatalf("Expected the reordered-conditions entry to be dropped as a duplicate, got %d resolved: %v", len(resolved), resolved)
+	}
+}
+
+// TestResolveReceiverMetricsKeepsEntriesThatActuallyDiffer is the flip side of the duplicate-detection
+// tests above: entries that differ in item, labels, attributes, or the actual condition must never be
+// folded together, since each legitimately produces its own distinct series.
+func TestResolveReceiverMetricsKeepsEntriesThatActuallyDiffer(t *testing.T) {
+	t.Parallel()
+
+	rawMetrics := []any{
+		map[string]any{"metric": "m", "conditions": []any{`IsMatch(body, "x")`}},
+		map[string]any{"metric": "m", "conditions": []any{`IsMatch(body, "x")`}, "item": "custom-item"},
+		map[string]any{"metric": "m", "conditions": []any{`IsMatch(body, "x")`}, "labels": map[string]any{"code": "2xx"}},
+		map[string]any{"metric": "m", "conditions": []any{`IsMatch(body, "x")`}, "labels": map[string]any{"code": "3xx"}},
+		map[string]any{"metric": "m", "conditions": []any{`IsMatch(body, "x")`}, "attributes": []any{map[string]any{"key": "status"}}},
+		map[string]any{"metric": "m", "conditions": []any{`IsMatch(body, "y")`}},
+	}
+
+	resolved := resolveReceiverMetrics(rawMetrics, nil)
+	if len(resolved) != len(rawMetrics) {
+		t.Fatalf("Expected all %d entries to be kept as distinct, got %d resolved: %v", len(rawMetrics), len(resolved), resolved)
+	}
+}
+
 // Test default-item grouping and explicit per-metric item overrides, including an override to "".
 func TestGroupResolvedMetricsByItem(t *testing.T) {
 	t.Parallel()
