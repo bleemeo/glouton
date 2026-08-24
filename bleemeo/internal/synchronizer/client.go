@@ -59,7 +59,7 @@ func (cl *wrapperClient) dupCheck(ctx context.Context) error {
 }
 
 func (cl *wrapperClient) ThrottleDeadline() time.Time {
-	if cl == nil {
+	if cl == nil || cl.client == nil {
 		return time.Time{}
 	}
 
