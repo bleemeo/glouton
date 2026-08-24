@@ -975,17 +975,6 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			Name: "config file from env",
-			Environment: map[string]string{
-				EnvGloutonConfigFiles: "testdata/simple.conf",
-			},
-			WantConfig: Config{
-				Web: Web{
-					StaticCDNURL: testSimplePath,
-				},
-			},
-		},
-		{
 			Name: "empty file",
 			Files: []string{
 				"testdata/empty.conf",
@@ -1266,6 +1255,31 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			}
 		})
 	}
+
+	// This subtest is apart because the config files from the environment are
+	// resolved by ResolvePaths, which load doesn't do.
+	t.Run("config file from env", func(t *testing.T) {
+		t.Setenv(EnvGloutonConfigFiles, "testdata/simple.conf")
+
+		wantConfig := Config{
+			Web: Web{
+				StaticCDNURL: testSimplePath,
+			},
+		}
+
+		config, warnings, err := load(&configLoader{}, false, true, ResolvePaths(true)...)
+		if err != nil {
+			t.Fatalf("load failed: %v", err)
+		}
+
+		if len(warnings) > 0 {
+			t.Errorf("Unexpected warnings: %v", warnings)
+		}
+
+		if diff := compareConfig(wantConfig, config, cmpopts.EquateEmpty()); diff != "" {
+			t.Errorf("Unexpected config (-want +got):\n%s", diff)
+		}
+	})
 
 	// This subtest is apart because it needs the default values to be loaded.
 	t.Run("invalid scalar from env keeps the default", func(t *testing.T) {
@@ -1987,6 +2001,56 @@ func Test_prometheusConfigToURLs(t *testing.T) {
 
 			if diff := cmp.Diff(tt.want, got, cmpopts.IgnoreUnexported(scrapper.Target{})); diff != "" {
 				t.Errorf("prometheusConfigToURLs() != want: %v", diff)
+			}
+		})
+	}
+}
+
+// TestResolvePaths checks the priority between the config files given with the
+// flags and the ones from the environment.
+func TestResolvePaths(t *testing.T) {
+	cases := []struct {
+		name  string
+		flags []string
+		env   string
+		want  []string
+	}{
+		{
+			name:  "flags only",
+			flags: []string{"/etc/from-flag.conf"},
+			want:  []string{"/etc/from-flag.conf"},
+		},
+		{
+			name: "env only",
+			env:  "/etc/from-env.conf,/etc/from-env.d",
+			want: []string{"/etc/from-env.conf", "/etc/from-env.d"},
+		},
+		{
+			// The env has priority, like when the config is loaded.
+			name:  "flags and env",
+			flags: []string{"/etc/from-flag.conf"},
+			env:   "/etc/from-env.conf",
+			want:  []string{"/etc/from-env.conf"},
+		},
+		{
+			name:  "no config given",
+			flags: []string{""},
+			want:  DefaultPaths(),
+		},
+		{
+			name:  "no config given at all",
+			flags: nil,
+			want:  DefaultPaths(),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(EnvGloutonConfigFiles, tc.env)
+
+			got := ResolvePaths(true, tc.flags...)
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("ResolvePaths() mismatch (-want +got)\n%s", diff)
 			}
 		})
 	}

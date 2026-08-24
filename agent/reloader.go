@@ -24,7 +24,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -336,19 +335,9 @@ func (a *agentReloader) watchConfig(ctx context.Context, reload chan struct{}) {
 		return
 	}
 
-	configPaths := a.configFilesFromFlag
-
-	// Get config files from env.
-	envFiles := os.Getenv(config.EnvGloutonConfigFiles)
-
-	if len(configPaths) == 0 || len(configPaths) == 1 && configPaths[0] == "" && envFiles != "" {
-		configPaths = strings.Split(envFiles, ",")
-	}
-
-	// If no config was given with flags or env variables, fallback on the default files.
-	if len(configPaths) == 0 || len(configPaths) == 1 && configPaths[0] == "" {
-		configPaths = config.DefaultPaths()
-	}
+	// Use the same resolution as the config loading, otherwise the agent could
+	// watch files it doesn't load.
+	configPaths := config.ResolvePaths(true, a.configFilesFromFlag...)
 
 	// Use a debouncer because fsnotify events are often duplicated.
 	reloadAgentTarget := func(ctx context.Context) {
