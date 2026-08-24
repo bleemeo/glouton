@@ -63,6 +63,35 @@ func New(url string, username string, password string) (i telegraf.Input, err er
 // publish broker events (one per destination, per connection, ...).
 const advisoryTopicPrefix = "ActiveMQ.Advisory."
 
+// subscriberVolatileTags are the tags of activemq_subscribers whose value changes as
+// clients come and go: connection_id is per TCP connection, so a client that reconnects
+// gets a new one, and active flips between "true" and "false". They are dropped like the
+// volatile chrony and ntpq tags are, and deliberately not used to build the item: the
+// item they would produce would change on every reconnect.
+//
+// selector is dropped too -- a filter expression describes how the subscription was
+// declared, not what the metric is about.
+//
+//nolint:gochecknoglobals
+var subscriberVolatileTags = []string{"connection_id", "active", "selector"}
+
+// subscriberItemTags are the tags identifying a subscriber, in the order they are joined
+// into its item. destination_name tells apart the subscriptions of one client, and
+// subscription_name the durable subscriptions of one client on one destination. Without
+// them, every subscription of one client would share a name and an item, and the whole
+// gather would be rejected as a duplicate series.
+//
+// It isn't airtight, and the missing piece is deliberate: subscription_name is empty on a
+// non-durable subscription, so several non-durable subscriptions of one client to one
+// destination -- a multi-threaded consumer, typically -- still share an item and still
+// collide. What would separate them is connection_id, which changes on every reconnect and
+// would churn a new series each time; between a collision on an unusual topology and churn
+// on a common one, the collision is the lesser evil. Durable subscriptions, the ones
+// activemq_subscribers_pending_queue_size is really about, are unambiguous.
+//
+//nolint:gochecknoglobals
+var subscriberItemTags = []string{"client_id", "destination_name", "subscription_name"}
+
 // renameGlobal drops the tags describing the ActiveMQ console we queried: they are
 // redundant with the labels already set on service metrics. The queue/topic/subscriber
 // tags are kept since they identify the item the metric is about.
@@ -86,11 +115,30 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 	// The item is what tells the destinations apart: without it every queue and topic
 	// would end up on the same metric.
 	if name == "" {
-		// Subscribers are named by the client that holds them.
-		name = gatherContext.Tags["client_id"]
+		// Subscribers have no name tag: they are identified by the client holding them,
+		// the destination and, for a durable one, the subscription name.
+		name = subscriberItem(gatherContext.Tags)
+	}
+
+	for _, tag := range subscriberVolatileTags {
+		delete(gatherContext.Tags, tag)
 	}
 
 	gatherContext.Tags[types.LabelItem] = name
 
 	return gatherContext, false
+}
+
+// subscriberItem builds the item of a subscriber by joining the tags identifying it,
+// skipping those the broker left empty.
+func subscriberItem(tags map[string]string) string {
+	parts := make([]string, 0, len(subscriberItemTags))
+
+	for _, tag := range subscriberItemTags {
+		if value := strings.TrimSpace(tags[tag]); value != "" {
+			parts = append(parts, value)
+		}
+	}
+
+	return strings.Join(parts, "_")
 }

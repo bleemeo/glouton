@@ -23,7 +23,33 @@ import (
 
 	"github.com/bleemeo/glouton/inputs/internal"
 	"github.com/google/go-cmp/cmp"
+	"github.com/influxdata/telegraf/plugins/inputs/bind"
 )
+
+// TestTimeoutSet checks the input is given a timeout. The plugin registers itself without
+// one, and its HTTP client is then built with no limit at all: a statistics-channel that
+// accepts the connection and never answers would block the gather for good, and with it
+// every later gather of that input, since they are serialized.
+func TestTimeoutSet(t *testing.T) {
+	input, err := New("http://127.0.0.1:8053/xml/v3")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	internalInput, ok := input.(*internal.Input)
+	if !ok {
+		t.Fatalf("New() returned a %T, want *internal.Input", input)
+	}
+
+	bindInput, ok := internalInput.Input.(*bind.Bind)
+	if !ok {
+		t.Fatalf("wrapped input is a %T, want *bind.Bind", internalInput.Input)
+	}
+
+	if bindInput.Timeout <= 0 {
+		t.Errorf("Timeout = %v, want a non-zero timeout", time.Duration(bindInput.Timeout))
+	}
+}
 
 // collectFinalMetrics replicates the measurement/field -> final metric name
 // convention applied downstream (inputs.Accumulator.addMetrics): the metric
@@ -84,6 +110,60 @@ func assertMetrics(t *testing.T, got map[string]float64, want map[string]float64
 
 		if math.Abs(gotValue-value) > 0.0001 {
 			t.Errorf("metric %q == %v, want %v", name, gotValue, value)
+		}
+	}
+}
+
+// TestResolverCountersDontCollide checks the counters of BIND's own resolver keep their own
+// names. The plugin puts every counter group in the bind_counter measurement with a "type"
+// tag, and NXDOMAIN, SERVFAIL, REFUSED and FormErr exist both in rcode (the answers BIND
+// sent) and in resstats (the answers its resolver received). The tag doesn't survive on a
+// service metric, so without a prefix the two would be the same metric and one would
+// silently win -- including bind_counter_nxdomain and bind_counter_servfail, which are
+// default metrics. The resolver groups are only read with GatherViews, which is off, so this
+// covers what happens the day it is turned on.
+func TestResolverCountersDontCollide(t *testing.T) {
+	store := &internal.StoreAccumulator{}
+	acc := newAccumulator(store)
+
+	t0 := time.Now()
+	t1 := t0.Add(10 * time.Second)
+
+	for i, ts := range []time.Time{t0, t1} {
+		if i == 1 {
+			// Discard the first gather: bind_counter fields are differentiated.
+			store.Measurement = nil
+		}
+
+		acc.PrepareGather()
+		// The queries BIND answered, in the rcode group.
+		acc.AddFields("bind_counter", map[string]any{
+			"NXDOMAIN": uint64(10),
+			"SERVFAIL": uint64(20),
+			"REFUSED":  uint64(30),
+		}, map[string]string{"type": "rcode"}, ts)
+		// What its resolver received, in the resstats group, same names.
+		acc.AddFields("bind_counter", map[string]any{
+			"NXDOMAIN": uint64(100),
+			"SERVFAIL": uint64(200),
+			"REFUSED":  uint64(300),
+		}, map[string]string{"type": "resstats"}, ts)
+		// A record type, which exists in both qtype and resqtype.
+		acc.AddFields("bind_counter", map[string]any{"A": uint64(40)}, map[string]string{"type": "qtype"}, ts)
+		acc.AddFields("bind_counter", map[string]any{"A": uint64(400)}, map[string]string{"type": "resqtype"}, ts)
+	}
+
+	got := collectFinalMetrics(store)
+
+	// Rates are 0 since the values didn't move between the two gathers: what matters here is
+	// that the six counters are six distinct metrics.
+	for _, name := range []string{
+		"bind_counter_nxdomain", "bind_counter_servfail", "bind_counter_refused", "bind_counter_a",
+		"bind_counter_res_nxdomain", "bind_counter_res_servfail", "bind_counter_res_refused",
+		"bind_counter_res_a",
+	} {
+		if _, ok := got[name]; !ok {
+			t.Errorf("metric %q not emitted, got: %v", name, got)
 		}
 	}
 }

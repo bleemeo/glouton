@@ -405,7 +405,17 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"bind_counter_nxdomain",
 			"bind_counter_qry_nxdomain",
 			"bind_counter_qry_success",
+			// bind_counter_qryfailure counts the queries answered with an error other than
+			// NXDOMAIN or SERVFAIL, bind_counter_recqryrej the recursive queries turned
+			// down by a server that doesn't recurse (a resolver pointed at the wrong
+			// server) and bind_counter_refused the queries refused by the ACLs.
+			"bind_counter_qryfailure",
 			"bind_counter_query",
+			"bind_counter_recqryrej",
+			"bind_counter_refused",
+			// bind_counter_response tells how many of the queries got an answer: against
+			// bind_counter_query it shows the ones that were dropped.
+			"bind_counter_response",
 			"bind_counter_servfail",
 			// bind_memory_total_use isn't collected: BIND 9.18+ replaced TotalUse by
 			// Malloced in its statistics, which the telegraf input doesn't read, so the
@@ -486,10 +496,18 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 		},
 
 		discovery.ConsulService: {
+			// consul_autopilot_failure_tolerance is how many servers can still be lost
+			// before the cluster loses quorum: 0 means the next failure breaks it.
+			"consul_autopilot_failure_tolerance",
 			"consul_autopilot_healthy",
 			"consul_kvs_apply_mean",
 			"consul_raft_apply_rate",
 			"consul_raft_committime_mean",
+			// consul_raft_leader_lastcontact_mean is how long the leader took to reach its
+			// followers, the usual raft health signal (Consul's own guidance alerts above
+			// 200ms). Only a leader reports it, and only when it has followers: a
+			// single-server cluster has none, and neither has a follower.
+			"consul_raft_leader_lastcontact_mean",
 			"consul_rpc_request_rate",
 			"consul_runtime_num_goroutines",
 		},
@@ -560,6 +578,10 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"influxdb_httpd_write_req",
 			"influxdb_httpd_write_req_bytes",
 			"influxdb_httpd_write_req_duration_seconds",
+			// influxdb_query_executor_duration_seconds is the average time a query took
+			// to execute, derived from queryDurationNs over queriesFinished. The httpd
+			// ones time the HTTP request instead, so a slow query only shows up here.
+			"influxdb_query_executor_duration_seconds",
 			"influxdb_query_executor_queries_active",
 			"influxdb_write_point_req",
 			"influxdb_write_write_drop",
@@ -900,7 +922,12 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 		discovery.TomcatService: {
 			"tomcat_connector_bytes_received",
 			"tomcat_connector_bytes_sent",
+			// tomcat_connector_current_threads_busy against tomcat_connector_max_threads is
+			// how saturated the connector's thread pool is: requests queue once every
+			// thread is busy, whatever the response times look like.
+			"tomcat_connector_current_threads_busy",
 			"tomcat_connector_error_count",
+			"tomcat_connector_max_threads",
 			"tomcat_connector_processing_time_seconds",
 			"tomcat_connector_request_count",
 			"tomcat_jvm_memory_free",

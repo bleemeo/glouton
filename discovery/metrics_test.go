@@ -17,6 +17,7 @@
 package discovery
 
 import (
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -124,10 +125,24 @@ func TestBindStatsURL(t *testing.T) {
 			want: "http://127.0.0.1:8053/xml/v3",
 		},
 		{
-			name: "statistics-channel not listening -> still attempted on the default port",
+			// The statistics-channel is disabled by default: creating an input for a BIND
+			// that doesn't have one would only report a connection error on every gather.
+			name: "statistics-channel not listening -> no input",
 			service: Service{
 				ServiceType:     BindService,
 				IPAddress:       testIP127001,
+				ListenAddresses: []facts.ListenAddress{{Address: testIP127001, Port: 53, NetworkFamily: udpProtocol}},
+			},
+			want: "",
+		},
+		{
+			// A container only publishes its DNS port as a rule, so its listen addresses
+			// say nothing about the statistics-channel and it is attempted anyway.
+			name: "containerized, statistics-channel not published -> still attempted",
+			service: Service{
+				ServiceType:     BindService,
+				IPAddress:       testIP127001,
+				ContainerID:     "1234",
 				ListenAddresses: []facts.ListenAddress{{Address: testIP127001, Port: 53, NetworkFamily: udpProtocol}},
 			},
 			want: "http://127.0.0.1:8053/xml/v3",
@@ -177,8 +192,34 @@ func TestDovecotStatsServer(t *testing.T) {
 			// The old_stats listener is unrelated to the IMAP port found by discovery.
 			name: "no config, old_stats listener on its default port",
 			service: Service{
+				ServiceType: DovecotService,
+				IPAddress:   testIP127001,
+				ListenAddresses: []facts.ListenAddress{
+					{Address: testIP127001, Port: 143, NetworkFamily: tcpProtocol},
+					{Address: testIP127001, Port: 24242, NetworkFamily: tcpProtocol},
+				},
+			},
+			want: "127.0.0.1:24242",
+		},
+		{
+			// old_stats is opt-in: without its listener, an input would only report
+			// connection errors.
+			name: "no old_stats listener -> no input",
+			service: Service{
 				ServiceType:     DovecotService,
 				IPAddress:       testIP127001,
+				ListenAddresses: []facts.ListenAddress{{Address: testIP127001, Port: 143, NetworkFamily: tcpProtocol}},
+			},
+			want: "",
+		},
+		{
+			// The listen addresses of a container are the ports it publishes, which say
+			// nothing about the old_stats listener, so it is attempted anyway.
+			name: "containerized, old_stats port not published -> still attempted",
+			service: Service{
+				ServiceType:     DovecotService,
+				IPAddress:       testIP127001,
+				ContainerID:     "1234",
 				ListenAddresses: []facts.ListenAddress{{Address: testIP127001, Port: 143, NetworkFamily: tcpProtocol}},
 			},
 			want: "127.0.0.1:24242",
@@ -197,9 +238,10 @@ func TestDovecotStatsServer(t *testing.T) {
 			// listener is used instead.
 			name: "unix socket not found -> fallback to TCP",
 			service: Service{
-				ServiceType: DovecotService,
-				IPAddress:   testIP127001,
-				Config:      config.Service{MetricsUnixSocket: "/nonexistent/dovecot-stats"},
+				ServiceType:     DovecotService,
+				IPAddress:       testIP127001,
+				ListenAddresses: []facts.ListenAddress{{Address: testIP127001, Port: 24242, NetworkFamily: tcpProtocol}},
+				Config:          config.Service{MetricsUnixSocket: "/nonexistent/dovecot-stats"},
 			},
 			want: "127.0.0.1:24242",
 		},
@@ -222,10 +264,33 @@ func TestDovecotStatsServer(t *testing.T) {
 // TestIsChronyDaemon checks the NTP daemon switch: chronyd and ntpd are the same
 // service but are queried with a different telegraf plugin.
 func TestIsChronyDaemon(t *testing.T) {
+	// A directory that can't be entered, standing in for /run/chrony.
+	unreadableDir := filepath.Join(t.TempDir(), "chrony")
+	if err := os.Mkdir(unreadableDir, 0o000); err != nil {
+		t.Fatal(err)
+	}
+
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses the directory permissions this checks")
+	}
+
+	// A socket that exists, standing in for the one chronyd listens on.
+	existingSocket := filepath.Join(t.TempDir(), "chronyd.sock")
+
+	var listenConfig net.ListenConfig
+
+	listener, err := listenConfig.Listen(t.Context(), unixProtocol, existingSocket)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer listener.Close()
+
 	cases := []struct {
-		name    string
-		service Service
-		want    bool
+		name       string
+		service    Service
+		socketPath string
+		want       bool
 	}{
 		{
 			name:    "chronyd",
@@ -238,16 +303,43 @@ func TestIsChronyDaemon(t *testing.T) {
 			want:    false,
 		},
 		{
-			// Happens for a service declared by the user: ntpd is assumed.
-			name:    "unknown executable",
-			service: Service{ServiceType: NTPService},
-			want:    false,
+			// Happens for a service declared by the user, or for a process Glouton
+			// couldn't read the details of: the control socket then decides, and finding
+			// it is what a chrony host looks like.
+			name:       "unknown executable, chronyd socket present",
+			service:    Service{ServiceType: NTPService},
+			socketPath: existingSocket,
+			want:       true,
+		},
+		{
+			// chronyd's socket sits in a directory only the chrony user may enter
+			// (/run/chrony is drwxr-x--- _chrony:_chrony on Debian), so the Glouton user is
+			// denied it rather than told it doesn't exist. That still means chrony is there,
+			// and the plugin doesn't need to read it: it falls back to the UDP command port.
+			name:       "unknown executable, chronyd socket present but not readable",
+			service:    Service{ServiceType: NTPService},
+			socketPath: filepath.Join(unreadableDir, "chronyd.sock"),
+			want:       true,
+		},
+		{
+			name:       "unknown executable, no chronyd socket -> ntpd assumed",
+			service:    Service{ServiceType: NTPService},
+			socketPath: filepath.Join(t.TempDir(), "nonexistent.sock"),
+			want:       false,
+		},
+		{
+			// The executable is what decides when it is known: an ntpd host that also
+			// happens to have chronyd's socket lying around is still queried with ntpq.
+			name:       "ntpd wins over a stray chronyd socket",
+			service:    Service{ServiceType: NTPService, ExePath: "/usr/sbin/ntpd"},
+			socketPath: existingSocket,
+			want:       false,
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := isChronyDaemon(tc.service); got != tc.want {
+			if got := isChronyDaemon(tc.service, tc.socketPath); got != tc.want {
 				t.Errorf("isChronyDaemon() = %v, want %v", got, tc.want)
 			}
 		})

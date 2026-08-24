@@ -62,6 +62,10 @@ func New(url string, username string, password string) (i telegraf.Input, err er
 						"writeError",
 						"writeDrop",
 						"writeTimeout",
+						// Needed by the query duration derived in transformMetrics.
+						"queryDurationNs",
+						"queriesExecuted",
+						"queriesFinished",
 					},
 				},
 				Name: "influxdb",
@@ -84,13 +88,41 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 	// The URL we queried is redundant with the labels already set on service metrics.
 	delete(gatherContext.Tags, "url")
 
-	// The item is what tells the databases apart: without it they would all end up on
-	// the same metric.
-	if database := gatherContext.Tags["database"]; database != "" {
-		gatherContext.Tags[types.LabelItem] = database
+	// The item is what tells apart the series of one measurement: without it they would all
+	// end up on the same metric.
+	if item := item(gatherContext.Tags); item != "" {
+		gatherContext.Tags[types.LabelItem] = item
 	}
 
 	return gatherContext, false
+}
+
+// itemTags are the tags identifying a series, in the order they are joined into the item.
+//
+// The database alone isn't enough: the storage-engine measurements (influxdb_shard,
+// influxdb_tsm1_cache, _engine, _filestore, _wal) are reported once per shard and
+// influxdb_measurement once per measurement, all of them repeating the same database. A real
+// 1.8 instance with only its own _internal database already reports 7 shards, so 7 series of
+// each would land on the same name and item and be rejected as duplicates, the way
+// rabbitmq_consumers is. The retention policy and shard id are what separate them.
+//
+// The remaining tags are deliberately left out of the item: engine and indexType are the same
+// on every shard of an instance, and path and walPath are filesystem paths that would make an
+// unreadable item out of what the id already identifies.
+//
+//nolint:gochecknoglobals
+var itemTags = []string{"database", "retentionPolicy", "measurement", "id"}
+
+func item(tags map[string]string) string {
+	parts := make([]string, 0, len(itemTags))
+
+	for _, tag := range itemTags {
+		if value := tags[tag]; value != "" {
+			parts = append(parts, value)
+		}
+	}
+
+	return strings.Join(parts, "_")
 }
 
 func avgDuration(fields map[string]float64, durationField string, countField string, outputName string) {
@@ -106,13 +138,18 @@ func avgDuration(fields map[string]float64, durationField string, countField str
 }
 
 func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {
-	if currentContext.Measurement != "influxdb_httpd" {
-		return fields
+	switch currentContext.Measurement {
+	case "influxdb_httpd":
+		avgDuration(fields, "reqDurationNs", "req", "req_duration_seconds")
+		avgDuration(fields, "queryReqDurationNs", "queryReq", "query_req_duration_seconds")
+		avgDuration(fields, "writeReqDurationNs", "writeReq", "write_req_duration_seconds")
+	case "influxdb_query_executor":
+		// How long a query took to run on average: queryDurationNs is the time spent
+		// executing queries and queriesFinished the number that completed. The httpd
+		// durations above measure the HTTP request instead, which a query run through any
+		// other path never goes through, so this is where a slow query shows up.
+		avgDuration(fields, "queryDurationNs", "queriesFinished", "duration_seconds")
 	}
-
-	avgDuration(fields, "reqDurationNs", "req", "req_duration_seconds")
-	avgDuration(fields, "queryReqDurationNs", "queryReq", "query_req_duration_seconds")
-	avgDuration(fields, "writeReqDurationNs", "writeReq", "write_req_duration_seconds")
 
 	return fields
 }
@@ -132,6 +169,8 @@ var fieldRenames = map[string]string{ //nolint:gochecknoglobals
 	"writeDrop":            "write_drop",
 	"writeTimeout":         "write_timeout",
 	"queriesActive":        "queries_active",
+	"queriesExecuted":      "queries_executed",
+	"queriesFinished":      "queries_finished",
 	"numSeries":            "num_series",
 	"numMeasurements":      "num_measurements",
 }

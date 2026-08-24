@@ -23,6 +23,9 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/types"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 // collectFinalMetrics replicates the measurement/field -> final metric name
@@ -166,6 +169,88 @@ func TestGaugeNodeNameStripped(t *testing.T) {
 
 	for name := range got {
 		if strings.Contains(name, "cbcf2176063c") {
+			t.Errorf("metric %q still carries the node name", name)
+		}
+	}
+}
+
+// TestLabelledMetricsGetTheirOwnItem checks the series of a metric Consul labels are told
+// apart by their item. Consul reports its memberlist and serf queues once per network, and
+// its state metrics once per datacenter and kind of config entry; a service metric keeps no
+// label but the item, so without it those series would share a name and an empty label set
+// and be rejected as duplicates.
+func TestLabelledMetricsGetTheirOwnItem(t *testing.T) {
+	store := &internal.StoreAccumulator{}
+	acc := newAccumulator(store)
+
+	acc.PrepareGather()
+	acc.AddCounter("consul.memberlist.gossip", map[string]any{"mean": 0.016}, map[string]string{"network": "lan"}, time.Now())
+	acc.AddCounter("consul.memberlist.gossip", map[string]any{"mean": 0.021}, map[string]string{"network": "wan"}, time.Now())
+	// Several labels: joined in a stable order, whatever order the map is walked in.
+	acc.AddGauge("consul.node1.state.config", map[string]any{"value": 3.0},
+		map[string]string{"datacenter": "dc1", "kind": "service-defaults"}, time.Now())
+	// A label Consul leaves empty adds nothing to the item.
+	acc.AddGauge("consul.node1.version", map[string]any{"value": 1.0},
+		map[string]string{"version": "1.20.6", "pre_release": ""}, time.Now())
+	// And an unlabelled metric keeps no item, so the service instance stays its item.
+	acc.AddGauge("consul.node1.autopilot.healthy", map[string]any{"value": 1.0}, nil, time.Now())
+
+	gotItems := make(map[string][]string)
+
+	for _, m := range store.Measurement {
+		for field := range m.Fields {
+			// Same naming convention as collectFinalMetrics: a gauge has its name moved
+			// into the field, the measurement being emptied by renameMetrics.
+			name := field
+			if m.Name != "" {
+				name = m.Name + "_" + field
+			}
+
+			gotItems[name] = append(gotItems[name], m.Tags[types.LabelItem])
+		}
+	}
+
+	wantItems := map[string][]string{
+		"consul_memberlist_gossip_mean": {"lan", "wan"},
+		"consul_state_config":           {"dc1_service-defaults"},
+		"consul_version":                {"1.20.6"},
+		"consul_autopilot_healthy":      {""},
+	}
+
+	if diff := cmp.Diff(wantItems, gotItems); diff != "" {
+		t.Errorf("items (-want +got):\n%s", diff)
+	}
+}
+
+// TestGaugeNodeNameWithDotsStripped checks a host name holding dots is stripped too.
+// What Consul inserts is the hostname (not its node_name) and it isn't sanitized, so
+// a host with an FQDN hostname reports "consul.web01.prod.example.com.runtime.x": treating
+// it as a single segment would leave it in the metric name, and the default metrics would
+// never match on such a host.
+func TestGaugeNodeNameWithDotsStripped(t *testing.T) {
+	store := &internal.StoreAccumulator{}
+	acc := newAccumulator(store)
+
+	acc.PrepareGather()
+	acc.AddGauge("consul.web01.prod.example.com.autopilot.healthy", map[string]any{"value": 1.0}, nil, time.Now())
+	acc.AddGauge("consul.web01.prod.example.com.runtime.num_goroutines", map[string]any{"value": 194.0}, nil, time.Now())
+	// A node name whose first segment is itself a subsystem name: the search starts after
+	// it, so "raft" is not mistaken for the subsystem.
+	acc.AddGauge("consul.raft.example.com.state.services", map[string]any{"value": 3.0}, nil, time.Now())
+	// A node named after a subsystem, the tightest case: only one of the two segments goes.
+	acc.AddGauge("consul.runtime.runtime.alloc_bytes", map[string]any{"value": 42.0}, nil, time.Now())
+
+	got := collectFinalMetrics(store)
+
+	assertMetrics(t, got, map[string]float64{
+		"consul_autopilot_healthy":      1,
+		"consul_runtime_num_goroutines": 194,
+		"consul_state_services":         3,
+		"consul_runtime_alloc_bytes":    42,
+	})
+
+	for name := range got {
+		if strings.Contains(name, "example") || strings.Contains(name, "web01") {
 			t.Errorf("metric %q still carries the node name", name)
 		}
 	}

@@ -40,6 +40,7 @@ import (
 )
 
 const (
+	activeMQDefaultUser         = "admin"
 	mariadbDefaultUser          = "root"
 	mysqlDefaultUser            = "root"
 	gloutonContainerLabelPrefix = "glouton."

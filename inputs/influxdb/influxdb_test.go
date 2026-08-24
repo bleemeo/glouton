@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/types"
+
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -74,6 +76,9 @@ func newAccumulator(store *internal.StoreAccumulator) internal.Accumulator {
 			"writeError",
 			"writeDrop",
 			"writeTimeout",
+			"queryDurationNs",
+			"queriesExecuted",
+			"queriesFinished",
 		},
 		Accumulator: store,
 	}
@@ -246,6 +251,94 @@ func TestRenamePipelineQueryExecutor(t *testing.T) {
 	assertMetrics(t, got, map[string]float64{
 		"influxdb_query_executor_queries_active": 7,
 	})
+}
+
+// TestShardItems checks the series of the storage-engine measurements are told apart. A 1.8
+// instance reports influxdb_shard and the influxdb_tsm1_* family once per shard, all with the
+// same database tag, so the database alone can't be the item: the series would share a name
+// and an item and be rejected as duplicates.
+func TestShardItems(t *testing.T) {
+	store := &internal.StoreAccumulator{}
+	acc := newAccumulator(store)
+
+	acc.PrepareGather()
+
+	for _, shard := range []struct{ id, retention string }{{"1", "monitor"}, {"2", "monitor"}, {"3", "autogen"}} {
+		acc.AddFields("influxdb_tsm1_cache", map[string]any{"diskBytes": 1024.0}, map[string]string{
+			"database": "_internal", "retentionPolicy": shard.retention, "id": shard.id,
+			// Left out of the item on purpose: the same on every shard, or a path.
+			"engine": "tsm1", "indexType": "inmem",
+			"path": "/var/lib/influxdb/data/_internal/" + shard.retention + "/" + shard.id,
+		}, time.Now())
+	}
+
+	// One measurement of one database, which has no shard id.
+	acc.AddFields("influxdb_measurement", map[string]any{"numSeries": 12.0},
+		map[string]string{"database": "_internal", "measurement": "httpd"}, time.Now())
+
+	gotItems := make([]string, 0, len(store.Measurement))
+	for _, m := range store.Measurement {
+		gotItems = append(gotItems, m.Tags[types.LabelItem])
+	}
+
+	wantItems := []string{
+		"_internal_monitor_1",
+		"_internal_monitor_2",
+		"_internal_autogen_3",
+		"_internal_httpd",
+	}
+
+	if diff := cmp.Diff(wantItems, gotItems); diff != "" {
+		t.Errorf("items (-want +got):\n%s", diff)
+	}
+}
+
+// TestQueryDuration checks the average execution time of a query, derived from the
+// cumulative queryDurationNs over the number of queries that finished. It is the only
+// duration covering a query itself: influxdb_httpd_query_req_duration_seconds times the
+// HTTP request that carried it.
+func TestQueryDuration(t *testing.T) {
+	store := &internal.StoreAccumulator{}
+	acc := newAccumulator(store)
+
+	t0 := time.Now()
+	t1 := t0.Add(10 * time.Second)
+
+	acc.PrepareGather()
+	acc.AddFields("influxdb_queryExecutor", map[string]any{
+		"queriesActive":   1.0,
+		"queriesExecuted": uint64(100),
+		"queriesFinished": uint64(100),
+		"queryDurationNs": uint64(1_000_000_000),
+	}, nil, t0)
+
+	// Discard the first gather: the two cumulative fields have no rate yet.
+	store.Measurement = nil
+
+	acc.PrepareGather()
+	acc.AddFields("influxdb_queryExecutor", map[string]any{
+		"queriesActive":   2.0,
+		"queriesExecuted": uint64(100 + 40),                    // rate = 4/s
+		"queriesFinished": uint64(100 + 20),                    // rate = 2/s
+		"queryDurationNs": uint64(1_000_000_000 + 600_000_000), // rate = 60 000 000 ns/s
+	}, nil, t1)
+
+	got := collectFinalMetrics(store)
+
+	// duration_seconds = queryDurationNsRate / queriesFinishedRate / 1e9
+	//                  = 60 000 000 / 2 / 1e9 = 0.03
+	assertMetrics(t, got, map[string]float64{
+		"influxdb_query_executor_duration_seconds": 0.03,
+		"influxdb_query_executor_queries_finished": 2,
+		"influxdb_query_executor_queries_executed": 4,
+		"influxdb_query_executor_queries_active":   2,
+	})
+
+	// The cumulative nanoseconds themselves must not be published: they were consumed by
+	// the average.
+	if _, ok := got["influxdb_query_executor_querydurationns"]; ok {
+		t.Error("influxdb_query_executor_querydurationns is still emitted")
+	}
 }
 
 // TestRenamePipelineDatabase checks the (gauge) numSeries/numMeasurements

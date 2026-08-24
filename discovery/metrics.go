@@ -19,6 +19,7 @@ package discovery
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"os"
 	"path/filepath"
@@ -91,6 +92,9 @@ const (
 	dovecotDefaultStatsPort = 24242
 	// postfixSpoolDirectory is where Postfix keeps its queues.
 	postfixSpoolDirectory = "/var/spool/postfix"
+	// chronySocket is the control socket chronyd listens on, and the one telegraf's chrony
+	// plugin tries first. It is used to recognize a chrony host, see isChronyDaemon.
+	chronySocket = "/run/chrony/chronyd.sock"
 )
 
 // postfixQueues are the queues telegraf's postfix input reports on, all of which it
@@ -326,7 +330,16 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		// The web console the metrics are read from always requires authentication
 		// (admin/admin on a default install), so without credentials every gather would
 		// only get a 401.
+		//
+		// A password on its own is enough to ask for the input, but not to authenticate:
+		// the plugin sends basic auth as soon as either credential is set, so an empty
+		// username would send ":<password>" and get that same 401. The broker's factory
+		// account is used instead, the way ClickHouse defaults to "default" below.
 		if ip, port := service.AddressPort(); ip != "" && service.Config.Password != "" {
+			if service.Config.Username == "" {
+				service.Config.Username = activeMQDefaultUser
+			}
+
 			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
 			input, err = activemq.New(url, service.Config.Username, service.Config.Password)
 		}
@@ -434,7 +447,11 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		// Pick the telegraf plugin matching whichever NTP daemon was actually
 		// detected: chrony has its own control-socket/UDP protocol, distinct
 		// from the ntpd one queried through the ntpq CLI tool.
-		if isChronyDaemon(service) {
+		//
+		// Both read the daemon of the machine Glouton runs on, so an NTP service in
+		// another container is reported with the metrics of the local daemon, or fails
+		// to gather when there is none. Same same-host requirement as Varnish.
+		if isChronyDaemon(service, chronySocket) {
 			input, err = chrony.New()
 		} else {
 			input, err = ntp.New()
@@ -460,9 +477,12 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		// (postfix_queue_size) is gathered on its own from "postqueue -p", which works
 		// without any extra permission (see agent.postfixQueueSize).
 		//
-		// The spool directory of a containerized Postfix isn't the host one, and reading
-		// the host one would report the metrics of another Postfix entirely.
-		if service.ContainerID == "" && postfixQueuesReadable(postfixSpoolDirectory) {
+		// The input walks the spool directory of the machine Glouton runs on, the same
+		// same-host requirement as Varnish and NTP: a Postfix in another container is
+		// reported with the queues of the local one. The probe is what decides whether
+		// there is anything to read at all -- on a machine with no Postfix of its own,
+		// there is no spool directory and no input is created.
+		if postfixQueuesReadable(postfixSpoolDirectory) {
 			input, err = postfix.New(postfixSpoolDirectory)
 		}
 	case PostgreSQLService:
@@ -522,9 +542,15 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		// The manager webapp the metrics are read from requires a user with the
 		// "manager-status" role, so without credentials every gather would only get a
 		// 401 (or a 404 when the webapp isn't even deployed).
-		if service.Config.StatsURL != "" && service.Config.Password != "" {
+		//
+		// Both credentials are required, not just the password: the plugin always sends
+		// basic auth, and Tomcat ships an empty tomcat-users.xml, so unlike ActiveMQ there
+		// is no factory account to fall back on -- a password alone could only ever 401.
+		hasCredentials := service.Config.Username != "" && service.Config.Password != ""
+
+		if service.Config.StatsURL != "" && hasCredentials {
 			input, err = tomcat.New(service.Config.StatsURL, service.Config.Username, service.Config.Password)
-		} else if ip, port := service.AddressPort(); ip != "" && service.Config.Password != "" {
+		} else if ip, port := service.AddressPort(); ip != "" && hasCredentials {
 			url := fmt.Sprintf("http://%s/manager/status/all?XML=true", net.JoinHostPort(ip, strconv.Itoa(port)))
 			input, err = tomcat.New(url, service.Config.Username, service.Config.Password)
 		}
@@ -552,6 +578,10 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			input, gathererOptions, err = uwsgi.New(url)
 		}
 	case VarnishService:
+		// The input runs "sudo varnishstat" on the machine Glouton runs on, so it reads
+		// the shared memory of the local Varnish whatever service this is: a Varnish in
+		// another container is reported with the numbers of the local one, or fails to
+		// gather when there is none.
 		input, gathererOptions, err = varnish.New()
 	case VaultService:
 		if service.Config.StatsURL != "" {
@@ -568,6 +598,16 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		return nil
 	default:
 		logger.V(1).Printf("service type %s don't support metrics", service.ServiceType)
+	}
+
+	// An input that says it is disabled isn't a failure to report on every discovery run:
+	// it is a plugin that doesn't exist on this platform (the Windows stubs of the inputs
+	// reading a local daemon, like inputs/varnish) or one Telegraf wasn't built with. There
+	// is simply no input for that service here.
+	if errors.Is(err, inputs.ErrDisabledInput) {
+		logger.V(1).Printf("No input for service %s on this platform: %v", service.Name, err)
+
+		return nil
 	}
 
 	if err != nil {
@@ -733,6 +773,15 @@ func getMetricsSocket(service Service) string {
 // DNS port used for discovery, so it's looked up on its own default port unless the
 // user configured one.
 //
+// On that default port the service must be seen listening on it, since a BIND without a
+// statistics-channel -- the default configuration -- would otherwise get an input failing
+// on every single gather. That only holds when the listen addresses are the ones netstat
+// reports for the process: those of a containerized service are the ports its container
+// publishes (see getDiscoveryInfo), where a statistics-channel is usually not among them,
+// so there the address is forced and the input is created anyway. Setting stats_port forces
+// it too, as it says the channel is there whether or not Glouton sees the port (the same
+// thing RabbitMQ does for its management port).
+//
 // Auto-discovery always assumes XML v3 (the only format on BIND 9.10+, and available
 // on 9.9+ with --enable-newstats), since the telegraf plugin picks its parser solely
 // from the URL path and can't auto-detect what the server actually speaks. Older BIND
@@ -747,11 +796,14 @@ func bindStatsURL(service Service) string {
 	}
 
 	port := bindDefaultStatsPort
+	force := service.ContainerID != ""
+
 	if service.Config.StatsPort != 0 {
 		port = service.Config.StatsPort
+		force = true
 	}
 
-	ip := service.AddressForPort(port, tcpProtocol, true)
+	ip := service.AddressForPort(port, tcpProtocol, force)
 	if ip == "" {
 		return ""
 	}
@@ -761,17 +813,28 @@ func bindStatsURL(service Service) string {
 
 // dovecotStatsServer returns the address of Dovecot's old_stats plugin listener, either
 // as a unix socket path or as a "host:port" TCP address, or "" when neither is known.
+//
+// old_stats is an opt-in plugin (and is gone from Dovecot 2.4), so like BIND's
+// statistics-channel its default port only counts when the service is seen listening on
+// it: a Dovecot without the plugin has no listener, and an input for it would only report
+// connection errors. Same reservation as bindStatsURL about a containerized service, whose
+// listen addresses are the ports its container publishes rather than what Dovecot listens
+// on: there the address is forced. Configuring stats_port or a metrics unix socket says the
+// listener is there too.
 func dovecotStatsServer(service Service) string {
 	if socket := getMetricsSocket(service); socket != "" {
 		return socket
 	}
 
 	port := dovecotDefaultStatsPort
+	force := service.ContainerID != ""
+
 	if service.Config.StatsPort != 0 {
 		port = service.Config.StatsPort
+		force = true
 	}
 
-	ip := service.AddressForPort(port, tcpProtocol, true)
+	ip := service.AddressForPort(port, tcpProtocol, force)
 	if ip == "" {
 		return ""
 	}
@@ -792,6 +855,15 @@ func postfixQueuesReadable(spoolDirectory string) bool {
 	for _, queue := range postfixQueues {
 		f, err := os.Open(filepath.Join(spoolDirectory, queue))
 		if err != nil {
+			// Logged because the two reasons to end up here look the same from the outside
+			// -- no Postfix on this machine, or a spool Glouton isn't allowed to read -- and
+			// only one of them is worth doing something about.
+			logger.V(1).Printf(
+				"Not gathering the Postfix queues: %v. Read access has to be granted to the "+
+					"user running Glouton, e.g. setfacl -Rm g:glouton:rX %s",
+				err, spoolDirectory,
+			)
+
 			return false
 		}
 
@@ -803,9 +875,28 @@ func postfixQueuesReadable(spoolDirectory string) bool {
 }
 
 // isChronyDaemon tells whether the NTP service found is chronyd rather than ntpd, the
-// two being queried with a different telegraf plugin. When the daemon can't be told
-// apart -- the executable path is unknown, as for a service declared by the user --
-// ntpd is assumed, since that's the historical behavior.
-func isChronyDaemon(service Service) bool {
-	return filepath.Base(service.ExePath) == "chronyd"
+// two being queried with a different telegraf plugin.
+//
+// The executable path is what tells them apart, but it isn't always known: a service
+// declared by the user has none, and neither has a process Glouton couldn't read the
+// details of (/proc/<pid>/exe of a root-owned process isn't readable by the glouton user).
+// The control socket chronyd listens on is then looked for, the same way getMetricsSocket
+// looks for Dovecot's: finding it is what a chrony host looks like, and the alternative is
+// running ntpq against a chronyd that doesn't speak its protocol -- and against a host that
+// may not even have ntpq installed.
+//
+// Being denied the socket counts as finding it. Its directory is only reachable by the
+// chrony user on a default install (/run/chrony is drwxr-x--- _chrony:_chrony on Debian), so
+// the glouton user gets a permission error there -- while a host running no chrony has no
+// such directory at all and gives a not-found one. Telegraf's plugin doesn't need to read
+// the socket either: it falls back to chronyd's UDP command port on localhost, which is open
+// by default.
+func isChronyDaemon(service Service, socketPath string) bool {
+	if exePath := service.ExePath; exePath != "" {
+		return filepath.Base(exePath) == "chronyd"
+	}
+
+	_, err := os.Stat(socketPath)
+
+	return err == nil || errors.Is(err, fs.ErrPermission)
 }

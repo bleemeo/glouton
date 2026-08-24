@@ -164,6 +164,62 @@ func TestTagsDropped(t *testing.T) {
 	assertTags(t, store, map[string]string{"name": "orders", "item": "orders"})
 }
 
+// TestSubscriberItem checks a subscriber, which has no name tag, gets an item built from
+// what identifies it durably. The volatile tags must not take part in it: connection_id
+// changes on every reconnect and active flips as the client comes and goes, so an item
+// holding them would change with them. Two subscriptions of one client must still get
+// their own item, or they would collide on the same name and item and the gather would be
+// rejected as a duplicate series.
+func TestSubscriberItem(t *testing.T) {
+	cases := []struct {
+		name string
+		tags map[string]string
+		want string
+	}{
+		{
+			name: "durable subscriber",
+			tags: map[string]string{
+				"client_id": "billing", "destination_name": "orders.events",
+				"subscription_name": "invoices", "connection_id": "ID:host-42-1", "active": "true",
+			},
+			want: "billing_orders.events_invoices",
+		},
+		{
+			name: "same client, same destination, other subscription",
+			tags: map[string]string{
+				"client_id": "billing", "destination_name": "orders.events",
+				"subscription_name": "receipts", "connection_id": "ID:host-42-2", "active": "true",
+			},
+			want: "billing_orders.events_receipts",
+		},
+		{
+			name: "non-durable subscriber has no subscription name",
+			tags: map[string]string{
+				"client_id": "billing", "destination_name": "orders.events",
+				"subscription_name": "", "connection_id": "ID:host-42-3", "active": "false",
+			},
+			want: "billing_orders.events",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &internal.StoreAccumulator{}
+			acc := newAccumulator(store)
+
+			acc.PrepareGather()
+			acc.AddFields("activemq_subscribers", map[string]any{
+				"pending_queue_size": uint64(2),
+			}, tc.tags, time.Now())
+
+			assertTags(t, store, map[string]string{
+				"client_id": "billing", "destination_name": "orders.events",
+				"subscription_name": tc.tags["subscription_name"], "item": tc.want,
+			})
+		})
+	}
+}
+
 // TestAdvisoryTopicsDropped checks the topics ActiveMQ creates for its own bookkeeping
 // are dropped -- a broker adds a few of them per destination and per connection -- and
 // that the trailing space the plugin leaves on topic names is trimmed.

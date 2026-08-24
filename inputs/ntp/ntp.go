@@ -30,6 +30,11 @@ import (
 // command-line tool (which must be present on the host/container running Glouton).
 // The tool is run by Telegraf itself and not through Glouton's command runner, so
 // an ntpd running in a container isn't reachable when Glouton runs on the host.
+//
+// The plugin runs ntpq with no timeout, and ntpq has no timeout flag either, so the only
+// thing bounding a gather is ntpq itself: it gives up on a peer that never answers after
+// about 10s (measured against a blackholed address), which is the worst case for a gather.
+// Only name resolution could last longer, which is what "-n" below is for.
 func New() (i telegraf.Input, err error) {
 	input, ok := telegraf_inputs.Inputs["ntpq"]
 	if ok {

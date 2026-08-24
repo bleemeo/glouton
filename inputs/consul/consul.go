@@ -17,10 +17,12 @@
 package consul
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -63,12 +65,59 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 	measurement = strings.ReplaceAll(measurement, ".", "_")
 	gatherContext.Measurement = strings.ToLower(measurement)
 
+	if item := labelItem(gatherContext.Tags); item != "" {
+		gatherContext.Tags[types.LabelItem] = item
+	}
+
 	return gatherContext, false
 }
 
+// labelItem builds the item of a metric Consul labelled, from its label values in a stable
+// order.
+//
+// Some Consul metrics come as one series per label set: one per network (lan and wan) for
+// the memberlist and serf queues, one per datacenter and kind of config entry for the state
+// ones. A service metric keeps no label but the item -- the registration uses
+// CompatibilityNameItem -- so without those values in the item, the series of one metric all
+// end up with the same name and the same (empty) label set, and are rejected: "collected
+// metric ... was collected before with the same name and label values". That is what happens
+// to rabbitmq_consumers today.
+//
+// Their mean is deliberately not taken instead: the aggregate that makes sense differs per
+// field -- summing is right for count and sum, taking the max for max, and nothing is right
+// for stddev -- and it would report a number Consul never measured.
+//
+// The labels Consul uses are dimensions of the thing measured, not of the event: network
+// (lan, wan), datacenter, kind of config entry, version, HTTP method and path, and peer_id
+// on the leader's raft replication metrics. The last one is the id of a server, so it does
+// change when a server is replaced, but like the others it is bounded by the size of the
+// cluster and can't grow one series per event.
+func labelItem(tags map[string]string) string {
+	keys := make([]string, 0, len(tags))
+
+	for key := range tags {
+		if key != types.LabelItem {
+			keys = append(keys, key)
+		}
+	}
+
+	sort.Strings(keys)
+
+	values := make([]string, 0, len(keys))
+
+	for _, key := range keys {
+		if value := tags[key]; value != "" {
+			values = append(values, value)
+		}
+	}
+
+	return strings.Join(values, "_")
+}
+
 // gaugeSubsystems are the Consul subsystems reporting gauges. They are the only place
-// a node name has to be stripped, see stripNodeName. A subsystem missing from this list
-// only means its gauges keep the node name, never that another metric gets renamed by
+// a node name has to be stripped, see stripNodeName, and they are what tells the node
+// name apart from the rest of the measurement. A subsystem missing from this list only
+// means its gauges keep the node name, never that another metric gets renamed by
 // mistake.
 //
 //nolint:gochecknoglobals
@@ -86,15 +135,31 @@ var gaugeSubsystems = map[string]bool{
 	"version":     true,
 }
 
-// stripNodeName removes the node name Consul inserts in the name of its gauges:
+// stripNodeName removes the host name Consul inserts in the name of its gauges:
 // "consul.<node>.runtime.num_goroutines" is reported as consul_runtime_num_goroutines,
-// like it already is when the agent runs with telemetry.disable_hostname. Keeping the
-// node name would make the metric name differ on every node, so it could neither be
-// listed in the default metrics nor be compared between nodes.
+// like it already is when the agent runs with telemetry.disable_hostname. The metrics are
+// deliberately those of the service as a whole, not of one node: keeping the node name
+// would make the metric name differ on every node, so it could neither be listed in the
+// default metrics nor be compared between nodes, and a large cluster would flood the user
+// with one series per node.
 //
-// Only gauges carry it -- counters and samples (consul.raft.apply, consul.kvs.apply,
-// ...) never do -- and the accumulator tells them apart by their single "value" field,
-// the shape the consul_agent plugin gives gauges.
+// That name is the hostname of the agent reporting the metrics, inserted by its go-metrics
+// sink (which does it for gauges only, and only while telemetry.disable_hostname is off).
+// It is the hostname and not Consul's node_name, and it is not sanitized, so it holds
+// however many dots the hostname does ("consul.web01.prod.example.com.runtime.x"). What is
+// looked for is therefore the subsystem, the first segment after it, and everything between
+// "consul" and that subsystem is dropped whatever its shape. The search starts after the
+// second segment, so a hostname whose first segment happens to be a subsystem name isn't
+// mistaken for one.
+//
+// It is always the reporting agent's own hostname -- never another node's, whatever the
+// size of the cluster -- so this merges no series: one dump holds one such name. What is
+// genuinely per-node in Consul (raft replication towards each follower) is reported by the
+// leader as counters and samples keyed by peer, which this never touches.
+//
+// Only gauges carry that name -- counters and samples (consul.raft.apply,
+// consul.kvs.apply, ...) never do -- and the accumulator tells them apart by their single
+// "value" field, the shape the consul_agent plugin gives gauges.
 func stripNodeName(gatherContext internal.GatherContext) string {
 	if len(gatherContext.OriginalFields) != 1 {
 		return gatherContext.Measurement
@@ -105,13 +170,16 @@ func stripNodeName(gatherContext internal.GatherContext) string {
 	}
 
 	parts := strings.Split(gatherContext.Measurement, ".")
-	// A node name is only there when a subsystem follows it, "consul.<node>.runtime.x"
-	// against "consul.runtime.x" without one.
-	if len(parts) < 4 || !gaugeSubsystems[parts[2]] {
-		return gatherContext.Measurement
+
+	for i := 2; i < len(parts); i++ {
+		if gaugeSubsystems[parts[i]] {
+			return strings.Join(append(parts[:1:1], parts[i:]...), ".")
+		}
 	}
 
-	return strings.Join(append(parts[:1:1], parts[2:]...), ".")
+	// Either the gauge has no node name at all ("consul.runtime.x", the
+	// telemetry.disable_hostname shape) or its subsystem isn't a known one.
+	return gatherContext.Measurement
 }
 
 func renameMetrics(currentContext internal.GatherContext, metricName string) (newMeasurement string, newMetricName string) {
