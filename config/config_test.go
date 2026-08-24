@@ -18,6 +18,7 @@ package config
 
 import (
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -678,8 +679,8 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "wrong type",
 			Files: []string{"testdata/bad_wrong_type.conf"},
 			WantWarnings: []string{
-				`'metric.softstatus_period_default' cannot parse value as 'int': strconv.ParseInt: invalid syntax`,
-				`'metric.softstatus_period[1][system_pending_security_updates]' cannot parse value as 'int': strconv.ParseInt: invalid syntax`,
+				`testdata/bad_wrong_type.conf: invalid config value for "metric.softstatus_period_default", ignoring it: cannot parse value as 'int': strconv.ParseInt: invalid syntax`,
+				`testdata/bad_wrong_type.conf: 'metric.softstatus_period[1][system_pending_security_updates]' cannot parse value as 'int': strconv.ParseInt: invalid syntax`,
 			},
 			WantConfig: Config{
 				Metric: Metric{
@@ -802,7 +803,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				"GLOUTON_METRIC_SOFTSTATUS_PERIOD": "cpu_used=10,disk_used",
 			},
 			WantWarnings: []string{
-				`'metric.softstatus_period' could not parse map from string: 'cpu_used=10,disk_used'`,
+				`invalid config value for "metric.softstatus_period", ignoring it: could not parse map from string: 'cpu_used=10,disk_used'`,
 			},
 		},
 		{
@@ -895,8 +896,8 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				},
 			},
 			WantWarnings: []string{
-				"'bleemeo' has invalid keys: unused_key",
-				"'service[0]' has invalid keys: another_key",
+				"testdata/unused.conf: 'bleemeo' has invalid keys: unused_key",
+				"testdata/unused.conf: 'service[0]' has invalid keys: another_key",
 			},
 		},
 		{
@@ -925,7 +926,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				"GLOUTON_ZABBIX_ENABLE": "Yes",
 			},
 			WantWarnings: []string{
-				`'mqtt.ssl_insecure' strconv.ParseBool: parsing "invalid": invalid syntax`,
+				`testdata/bool.conf: invalid config value for "mqtt.ssl_insecure", ignoring it: strconv.ParseBool: parsing "invalid": invalid syntax`,
 			},
 			WantConfig: Config{
 				Agent: Agent{
@@ -1265,6 +1266,44 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			}
 		})
 	}
+
+	// This subtest is apart because it needs the default values to be loaded.
+	t.Run("invalid scalar from env keeps the default", func(t *testing.T) {
+		t.Setenv("GLOUTON_WEB_LISTENER_PORT", "not-a-port")
+		t.Setenv("GLOUTON_BLEEMEO_MQTT_PORT", "1883")
+
+		config, items, warnings, err := Load(true, true, "")
+		if err != nil {
+			t.Fatalf("Load failed: %v", err)
+		}
+
+		if want := DefaultConfig().Web.Listener.Port; config.Web.Listener.Port != want {
+			t.Errorf("Web.Listener.Port = %d, want the default %d", config.Web.Listener.Port, want)
+		}
+
+		// Other keys from the environment are still applied.
+		if config.Bleemeo.MQTT.Port != 1883 {
+			t.Errorf("Bleemeo.MQTT.Port = %d, want 1883", config.Bleemeo.MQTT.Port)
+		}
+
+		for _, item := range items {
+			if item.Key == "web.listener.port" && item.Source == SourceEnv {
+				t.Errorf("web.listener.port from the environment should have been dropped, got %v", item.Value)
+			}
+		}
+
+		var found bool
+
+		for _, warning := range warnings {
+			if strings.Contains(warning.Error(), `invalid config value for "web.listener.port", ignoring it`) {
+				found = true
+			}
+		}
+
+		if !found {
+			t.Errorf("missing warning about the ignored value, got %v", warnings)
+		}
+	})
 
 	// This subtest is apart because needs a slightly different setup than the other cases.
 	t.Run("config contains null parts", func(t *testing.T) {

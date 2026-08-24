@@ -318,7 +318,14 @@ func convertTypes(
 	}
 
 	err := baseKoanf.UnmarshalWithConf("", &config, unmarshalConf)
-	warnings.Append(err)
+
+	// The errors about a single config key are reported below, once we know
+	// whether that key is used, so that the issue is only reported once.
+	failedKeys, otherErrors := splitDecodeErrors(err)
+
+	for _, otherError := range otherErrors {
+		warnings.Append(otherError)
+	}
 
 	// Convert the structured configuration back to a koanf.
 	typedKoanf := koanf.New(delimiter)
@@ -352,7 +359,69 @@ func convertTypes(
 		}
 	}
 
+	// Drop the keys that couldn't be decoded to their expected type: their
+	// typed value is the zero value, which would override the value from a
+	// lower priority provider (or the default value). This must be done after
+	// the keys from the base config were added back, as they hold the
+	// un-decodable value.
+	for key, decodeErr := range failedKeys {
+		if _, ok := typedKeys[key]; !ok {
+			// The error isn't about the value of a config key, but about the
+			// keys it contains (e.g. "'bleemeo' has invalid keys: unused_key"):
+			// report it as-is, there is nothing to drop.
+			warnings.Append(decodeErr)
+
+			continue
+		}
+
+		delete(typedKeys, key)
+
+		warnings.Append(fmt.Errorf("%w for %q, ignoring it: %s", ErrInvalidValue, key, decodeErr.Unwrap()))
+	}
+
 	return typedKeys, warnings
+}
+
+// splitDecodeErrors splits the error returned by the decoding of the config
+// between the errors that name a config key, indexed by that key, and the
+// remaining errors.
+// An error on a map entry (its name is like "metric.softstatus_period[cpu_used]")
+// belongs to the remaining errors: only the faulty entry is dropped by the
+// decoder, the other entries of the map are usable.
+func splitDecodeErrors(err error) (map[string]*mapstructure.DecodeError, []error) {
+	if err == nil {
+		return nil, nil
+	}
+
+	keyErrors := make(map[string]*mapstructure.DecodeError)
+
+	var otherErrors []error
+
+	var walk func(err error)
+
+	walk = func(err error) {
+		switch subErr := err.(type) {
+		case *mapstructure.DecodeError:
+			if strings.Contains(subErr.Name(), "[") {
+				otherErrors = append(otherErrors, subErr)
+			} else {
+				keyErrors[subErr.Name()] = subErr
+			}
+		case interface{ Unwrap() []error }:
+			for _, joinedErr := range subErr.Unwrap() {
+				walk(joinedErr)
+			}
+		case interface{ Unwrap() error }:
+			// mapstructure wraps the joined errors in a single error.
+			walk(subErr.Unwrap())
+		default:
+			otherErrors = append(otherErrors, err)
+		}
+	}
+
+	walk(err)
+
+	return keyErrors, otherErrors
 }
 
 // allKeys returns all keys from the koanf.
