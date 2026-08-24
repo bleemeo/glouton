@@ -65,7 +65,9 @@ func tryToGenerateDiagnostic(timeout time.Duration, stateDir string, diagnosticF
 
 	diagnosticPath := filepath.Join(stateDir, panicDiagnosticArchive)
 
-	diagnosticArchive, err := os.Create(diagnosticPath)
+	// The diagnostic contains stack traces, logs and facts: keep it readable
+	// by its owner only, like state.json.
+	diagnosticArchive, err := os.OpenFile(diagnosticPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Failed to create diagnostic archive:", err)
 

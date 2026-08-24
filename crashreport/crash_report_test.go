@@ -25,6 +25,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"testing"
 	"time"
@@ -134,6 +135,13 @@ func TestStderrRedirection(t *testing.T) {
 
 	if info.Size() != 0 {
 		t.Fatal("Stderr log file should be empty until someone writes to stderr")
+	}
+
+	// The stderr log may contain stack traces and the in-memory log buffer.
+	if runtime.GOOS != "windows" {
+		if perm := info.Mode().Perm(); perm != 0o600 {
+			t.Fatalf("Stderr log file has permissions %#o, want 0600", perm)
+		}
 	}
 
 	const logContent = "This is a message written on stderr."
