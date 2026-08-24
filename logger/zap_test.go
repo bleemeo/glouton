@@ -17,48 +17,77 @@
 package logger
 
 import (
-	"fmt"
+	"sync"
 	"testing"
 	"time"
+
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
-// TestZapWrapperDebounceCacheBounded reproduces (and guards against) the memory
-// leak diagnosed from on_demand_20260623-122247: the log de-duplication cache
-// (zapWrapper.m) is keyed by the full message, so a flood of *unique* messages
-// adds one entry per message and is only purged every 10 minutes. In production
-// a Postgres container logged faster than it could be parsed; each parse-error
-// carried a unique "entry.timestamp", so the cache grew to millions of entries
-// and retained gigabytes (it was 61% of the live heap in the profile).
-//
-// The cache must stay bounded regardless of how many unique messages arrive.
-func TestZapWrapperDebounceCacheBounded(t *testing.T) {
-	// The cache is populated independently of the log level; lower it only to
-	// keep the test from spamming the console.
-	cfg.l.Lock()
-	oldLevel := cfg.level
-	cfg.l.Unlock()
+// countingWriteSyncer counts how many times it is written to, standing in for
+// zapWrapper so the test can assert on sampling behavior without depending on
+// glouton's own V()-level output.
+type countingWriteSyncer struct {
+	mu sync.Mutex
+	n  int
+}
 
-	SetLevel(0)
+func (c *countingWriteSyncer) Write(p []byte) (int, error) {
+	c.mu.Lock()
+	c.n++
+	c.mu.Unlock()
 
-	defer SetLevel(oldLevel)
+	return len(p), nil
+}
 
-	z := &zapWrapper{lastPurge: time.Now(), m: make(map[string]time.Time)}
+func (c *countingWriteSyncer) Sync() error { return nil }
+
+func (c *countingWriteSyncer) count() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.n
+}
+
+// TestZapLoggerSamplesRepeatedMessageTemplate reproduces the incident from
+// on_demand_20260623-122247: a Postgres container logged parse errors faster
+// than they could be handled, each carrying a unique "entry.timestamp" field.
+// The old cache was keyed by the full rendered line, so it never deduped this
+// flood and grew without bound. zap's sampler keys on the message template
+// (the Entry's Message, before field substitution), so a flood of unique-field
+// lines sharing one template must stay bounded, however many lines are logged.
+func TestZapLoggerSamplesRepeatedMessageTemplate(t *testing.T) {
+	writer := &countingWriteSyncer{}
+
+	core := zapcore.NewCore(
+		zapcore.NewConsoleEncoder(zap.NewProductionEncoderConfig()),
+		writer,
+		zap.DebugLevel,
+	)
+
+	const (
+		tick       = 30 * time.Second
+		first      = 10
+		thereafter = 100
+	)
+
+	logger := zap.New(zapcore.NewSamplerWithOptions(core, tick, first, thereafter))
 
 	const flood = 50_000
 
 	for i := range flood {
-		// Unique per line, like the stanza parse-errors in the incident.
-		_, _ = z.Write(fmt.Appendf(nil, "error\tFailed to process entry\t{\"entry.timestamp\": %d}\n", i))
+		// Same message template, unique field per line — like the stanza
+		// parse-errors in the incident.
+		logger.Error("Failed to process entry", zap.Int("entry.timestamp", i))
 	}
 
-	z.l.Lock()
-	got := len(z.m)
-	z.l.Unlock()
+	got := writer.count()
 
-	// Before the fix the cache held one entry per unique message (== flood),
-	// i.e. it grew without bound. The cap must keep it at logDebounceMaxEntries.
-	if got > logDebounceMaxEntries {
-		t.Fatalf("debounce cache holds %d entries after %d unique messages; it must stay bounded "+
-			"(<= %d) — otherwise it retains GBs under a log flood", got, flood, logDebounceMaxEntries)
+	// Within one tick: first occurrences logged in full, then 1 in thereafter.
+	want := first + (flood-first)/thereafter
+	if got != want {
+		t.Fatalf("sampler wrote %d entries for %d identical-template messages, want %d; "+
+			"sampling must key on the message template so a flood of unique-field lines stays bounded", got, flood, want)
 	}
 }

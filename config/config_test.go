@@ -707,14 +707,14 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "invalid yaml",
 			Files: []string{"testdata/bad_yaml.conf"},
 			WantWarnings: []string{
-				"line 1: cannot unmarshal !!str `bad:bad` into map[string]interface {}",
+				"testdata/bad_yaml.conf: invalid YAML: line 1, column 1: string was used where mapping is expected",
 			},
 		},
 		{
 			Name:  "invalid yaml multiple files",
 			Files: []string{"testdata/invalid"},
 			WantWarnings: []string{
-				"testdata/invalid/10-invalid.conf: yaml: line 2: found character that cannot start any token",
+				"testdata/invalid/10-invalid.conf: invalid YAML: line 2, column 1: found character '\t' that cannot start any token",
 			},
 			WantConfig: Config{
 				Agent: Agent{
@@ -723,6 +723,13 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				Bleemeo: Bleemeo{
 					APIBase: "base",
 				},
+			},
+		},
+		{
+			Name:  "invalid yaml bad indentation",
+			Files: []string{"testdata/bad_indentation.conf"},
+			WantWarnings: []string{
+				"testdata/bad_indentation.conf: invalid YAML: line 3, column 5: value is not allowed in this context. map key-value is pre-defined",
 			},
 		},
 		{

@@ -347,7 +347,9 @@ func (p *pipelineContext) setupJournald(
 		return fmt.Errorf("building globally-defined operators: %w", err)
 	}
 
-	receiverTypedCfg.Operators = referencedOps
+	// Since contrib v0.159.0, JournaldConfig's BaseConfig is a named field (no
+	// more field promotion), unlike FileLogConfig which still embeds it.
+	receiverTypedCfg.BaseConfig.Operators = referencedOps
 
 	p.journaldCounter = new(atomic.Int64)
 	p.journaldThroughputMeter = logsource.NewRingCounter(throughputMeterResolutionSecs)

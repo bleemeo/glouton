@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"os"
 	"reflect"
 	"strings"
 	"time"
@@ -29,6 +30,7 @@ import (
 	"github.com/bleemeo/glouton/logger"
 
 	"github.com/go-viper/mapstructure/v2"
+	goccyyaml "github.com/goccy/go-yaml"
 	"github.com/knadh/koanf/providers/confmap"
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
@@ -95,7 +97,10 @@ const (
 	TypeLogInputs
 )
 
-var errNullConfigValue = errors.New("config entry has a null value, ignoring it")
+var (
+	errNullConfigValue = errors.New("config entry has a null value, ignoring it")
+	errInvalidYAML     = errors.New("invalid YAML")
+)
 
 // Load config from a provider and add source information on config items.
 func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.Parser) prometheus.MultiError {
@@ -108,6 +113,10 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 	k := koanf.New(delimiter)
 
 	err := k.Load(provider, parser)
+	if err != nil && path != "" {
+		err = addYAMLSyntaxHint(err, path)
+	}
+
 	warnings.Append(err)
 
 	// Migrate old configuration keys.
@@ -166,6 +175,34 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 	}
 
 	return warnings
+}
+
+// addYAMLSyntaxHint improves a YAML syntax error by re-parsing the same file with github.com/goccy/go-yaml.
+// Unlike yaml.v3, goccy/go-yaml's errors point at the exact line and column of the mistake.
+func addYAMLSyntaxHint(err error, path string) error {
+	data, readErr := os.ReadFile(path) //nolint:gosec
+	if readErr != nil {
+		return err
+	}
+
+	var out map[string]any
+
+	goccyErr := goccyyaml.Unmarshal(data, &out)
+	if goccyErr == nil {
+		return err
+	}
+
+	var yamlErr goccyyaml.Error
+	if errors.As(goccyErr, &yamlErr) {
+		if tk := yamlErr.GetToken(); tk != nil && tk.Position != nil {
+			return fmt.Errorf(
+				"%w: line %d, column %d: %s",
+				errInvalidYAML, tk.Position.Line, tk.Position.Column, yamlErr.GetMessage(),
+			)
+		}
+	}
+
+	return fmt.Errorf("%w: %s", errInvalidYAML, goccyyaml.FormatError(goccyErr, false, false))
 }
 
 // isNilAllowedFor returns whether the given key must escape the not-null-validation or not.

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/netip"
 	"reflect"
 	"sort"
 	"strings"
@@ -33,6 +34,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	containerTypes "github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/events"
+	"github.com/moby/moby/api/types/network"
 	docker "github.com/moby/moby/client"
 )
 
@@ -1228,6 +1230,82 @@ func TestContainer_ListenAddresses(t *testing.T) {
 				t.Errorf("Container.ListenAddresses() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestDocker_primaryAddress_IPv6(t *testing.T) {
+	tests := []struct {
+		name    string
+		network *network.EndpointSettings
+		want    string
+	}{
+		{
+			name: "ipv6-only",
+			network: &network.EndpointSettings{
+				GlobalIPv6Address: netip.MustParseAddr("2001:db8::5"),
+			},
+			want: "2001:db8::5",
+		},
+		{
+			name: "dual-stack-ipv4-preferred",
+			network: &network.EndpointSettings{
+				IPAddress:         netip.MustParseAddr("172.17.0.5"),
+				GlobalIPv6Address: netip.MustParseAddr("2001:db8::5"),
+			},
+			want: "172.17.0.5",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			inspect := containerTypes.InspectResponse{
+				ID: "abc123",
+				NetworkSettings: &containerTypes.NetworkSettings{
+					Networks: map[string]*network.EndpointSettings{
+						"ipv6net": tt.network,
+					},
+				},
+				Config: &containerTypes.Config{},
+			}
+
+			d := &Docker{}
+
+			if got := d.primaryAddress(inspect, nil, nil); got != tt.want {
+				t.Errorf("primaryAddress() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestDocker_primaryAddress_IPv4AlwaysWinsOverBridgeIPv6 guards against IPv4 from a
+// non-bridge network being discarded in favor of IPv6 from the bridge network, which
+// can happen if the bridge network's IPv6-only case returns early regardless of what
+// other networks (visited in an unspecified map iteration order) already found.
+func TestDocker_primaryAddress_IPv4AlwaysWinsOverBridgeIPv6(t *testing.T) {
+	inspect := containerTypes.InspectResponse{
+		ID: "abc123",
+		NetworkSettings: &containerTypes.NetworkSettings{
+			Networks: map[string]*network.EndpointSettings{
+				"custom": {
+					IPAddress: netip.MustParseAddr("10.0.0.5"),
+				},
+				"bridge": {
+					GlobalIPv6Address: netip.MustParseAddr("2001:db8::5"),
+				},
+			},
+		},
+		Config: &containerTypes.Config{},
+	}
+
+	d := &Docker{}
+	bridgeNetworks := map[string]any{"bridge": struct{}{}}
+
+	// Map iteration order is randomized per range call, so run many times to catch an
+	// order-dependent bug regardless of which network happens to be visited first.
+	for range 50 {
+		if got := d.primaryAddress(inspect, bridgeNetworks, nil); got != "10.0.0.5" {
+			t.Fatalf("primaryAddress() = %q, want %q (IPv4 must always win over the bridge network's IPv6)", got, "10.0.0.5")
+		}
 	}
 }
 
