@@ -25,9 +25,10 @@ import (
 	"github.com/bleemeo/glouton/types"
 )
 
-// setupLocalTSDB opens (once per process) the on-disk TSDB if the
-// resolved local_store policy says so. The handle is cached in the
-// reloadState so subsequent reloads reuse it without replaying the WAL.
+// setupLocalTSDB opens the on-disk TSDB if the resolved local_store policy
+// says so. The handle is cached in the reloadState so subsequent reloads reuse
+// it without replaying the WAL, unless the configuration changed: the store is
+// then closed, and re-opened with the new settings if it's still enabled.
 //
 // Resolution rule: an explicit agent.local_store.enable always wins;
 // when unset, the store is enabled iff bleemeo.enable is false (i.e.
@@ -40,22 +41,35 @@ func (a *agent) setupLocalTSDB() {
 		enabled = *cfg.Enable
 	}
 
-	if !enabled {
-		return
-	}
-
-	if a.reloadState.LocalStore() != nil {
-		return
-	}
-
 	path := cfg.Path
 	if path == "" {
 		path = filepath.Join(a.stateDir, "tsdb")
 	}
 
+	retention := cfg.Retention
+
+	// The previous store is only kept when its settings still match the
+	// configuration, otherwise a reload couldn't disable it nor change its
+	// path or its retention.
+	if previous := a.reloadState.LocalStore(); previous != nil {
+		if enabled && previous.Path() == path && (retention <= 0 || previous.Retention() == retention) {
+			return
+		}
+
+		a.reloadState.SetLocalStore(nil)
+
+		if err := previous.Close(); err != nil {
+			logger.V(1).Printf("Failed to close the local TSDB at %s: %v", previous.Path(), err)
+		}
+	}
+
+	if !enabled {
+		return
+	}
+
 	store, err := tsdb.Open(tsdb.Options{
 		Path:      path,
-		Retention: cfg.Retention,
+		Retention: retention,
 	})
 	if err != nil {
 		logger.Printf("Local TSDB unavailable, continuing without on-disk metric persistence: %v", err)
@@ -65,7 +79,7 @@ func (a *agent) setupLocalTSDB() {
 
 	a.reloadState.SetLocalStore(store)
 
-	logger.V(0).Printf("Local TSDB enabled at %s (retention %s)", path, cfg.Retention)
+	logger.V(0).Printf("Local TSDB enabled at %s (retention %s)", path, store.Retention())
 }
 
 // teePointPusher forwards every PushPoints call to two underlying
