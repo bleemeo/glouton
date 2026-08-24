@@ -49,7 +49,7 @@ func countsFor(man *Manager, metric string) map[string]int64 {
 
 	for key, c := range man.reg.counters {
 		if key.metric == metric {
-			counts[key.item] = int64(c.counter.Total())
+			counts[key.item] = int64(c.peekSum())
 		}
 	}
 
@@ -734,7 +734,7 @@ func TestWantSourceReceiverAttributesProduceDistinctLabeledSeries(t *testing.T) 
 		t.Fatal("Expected a base (attrs-less) counter declared for the metric")
 	}
 
-	if got := int64(base.counter.Total()); got != 0 {
+	if got := int64(base.peekSum()); got != 0 {
 		t.Errorf("Expected the base counter to stay at 0 (every match carries attributes), got %d", got)
 	}
 
@@ -748,11 +748,11 @@ func TestWantSourceReceiverAttributesProduceDistinctLabeledSeries(t *testing.T) 
 		}
 	}
 
-	if got := int64(byMethod["GET"].counter.Total()); got != 2 {
+	if got := int64(byMethod["GET"].peekSum()); got != 2 {
 		t.Errorf("Expected method=GET to total 2 (two matching lines), got %d", got)
 	}
 
-	if got := int64(byMethod["POST"].counter.Total()); got != 1 {
+	if got := int64(byMethod["POST"].peekSum()); got != 1 {
 		t.Errorf("Expected method=POST to total 1, got %d", got)
 	}
 

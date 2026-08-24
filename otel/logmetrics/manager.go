@@ -289,8 +289,8 @@ func (man *Manager) Shutdown(ctx context.Context) error {
 
 // EmitMetrics implements registry.AppenderFunc, reporting the current rate of
 // every configured log-to-metric counter.
-func (man *Manager) EmitMetrics(_ context.Context, _ registry.GatherState, app storage.Appender) error {
-	return man.reg.emit(app)
+func (man *Manager) EmitMetrics(_ context.Context, state registry.GatherState, app storage.Appender) error {
+	return man.reg.emit(app, state.Now())
 }
 
 // MetricNames returns the name of every declared log-to-metric counter.

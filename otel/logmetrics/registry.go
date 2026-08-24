@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/logger"
-	"github.com/bleemeo/glouton/otel/logsource"
 	"github.com/bleemeo/glouton/types"
 
 	"github.com/prometheus/prometheus/model/labels"
@@ -49,16 +48,57 @@ type metricSpec struct {
 	Labels map[string]string
 }
 
-// windowSecs is the sliding window, in seconds, for the "matches per second" rate.
-const windowSecs = 60
-
-// counter aggregates the delta counts for one metric over a sliding window.
+// counter aggregates delta counts for one metric (optionally per item/attrs), and derives a
+// matches/sec rate from them since the last emit -- the same differentiated-metric shape used
+// elsewhere in glouton for real counters (see inputs/internal/accumulator.go's rateAsFloat), so a
+// single log match shows as one sample's rate then returns to zero, instead of staying elevated for
+// a smoothed window.
 // item is "" for non-container sources, or the container name otherwise.
 type counter struct {
-	metric  string
-	item    string
-	counter *logsource.RingCounter
-	lbls    labels.Labels // precomputed once, never rebuilt
+	metric string
+	item   string
+	lbls   labels.Labels // precomputed once, never rebuilt
+
+	l          sync.Mutex
+	sum        int
+	lastEmitAt time.Time // set at creation; diffed against and reset on each successful rate() call
+}
+
+// add records delta matches for the current accumulation period.
+func (c *counter) add(delta int) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	c.sum += delta
+}
+
+// peekSum returns the currently accumulated (not yet emitted) delta, without resetting it. Exposed
+// for tests -- production code only needs rate().
+func (c *counter) peekSum() int {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	return c.sum
+}
+
+// rate returns the matches/sec rate since the last successful call (elapsed time diffed against
+// now), resetting the accumulated sum. ok is false only if now hasn't advanced past the last call
+// (a clock anomaly), in which case the accumulated sum is preserved for the next call instead of
+// being lost.
+func (c *counter) rate(now time.Time) (rate float64, delta int, ok bool) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	elapsed := now.Sub(c.lastEmitAt).Seconds()
+	if elapsed <= 0 {
+		return 0, 0, false
+	}
+
+	delta = c.sum
+	c.sum = 0
+	c.lastEmitAt = now
+
+	return float64(delta) / elapsed, delta, true
 }
 
 // counterKey identifies one aggregated series. item is part of the identity so the same metric name from
@@ -144,10 +184,10 @@ func (reg *metricsRegistry) resolve(specs []metricSpec, item string) []*counter 
 			}
 
 			c = &counter{
-				metric:  spec.Metric,
-				item:    item,
-				counter: logsource.NewRingCounter(windowSecs),
-				lbls:    labels.FromMap(lblMap),
+				metric:     spec.Metric,
+				item:       item,
+				lbls:       labels.FromMap(lblMap),
+				lastEmitAt: time.Now(),
 			}
 			reg.counters[key] = c
 		}
@@ -237,7 +277,7 @@ func (reg *metricsRegistry) metricNames() []string {
 // the full configured attribute set, see resolveAttrCounterLocked), so once a sibling exists, the base is
 // a permanent phantom that would otherwise emit a spurious always-zero {__name__, item} series with no
 // attribute labels forever, indistinguishable from a legitimately-idle metric.
-func (reg *metricsRegistry) emit(app storage.Appender) error {
+func (reg *metricsRegistry) emit(app storage.Appender, now time.Time) error {
 	reg.l.Lock()
 	counters := maps.Clone(reg.counters)
 	reg.l.Unlock()
@@ -251,13 +291,14 @@ func (reg *metricsRegistry) emit(app storage.Appender) error {
 	}
 
 	for key, c := range counters {
-		total := c.counter.Total()
-
-		if key.attrs == "" && total == 0 && hasAttrSibling[key] {
+		rate, delta, ok := c.rate(now)
+		if !ok {
 			continue
 		}
 
-		rate := float64(total) / float64(windowSecs)
+		if key.attrs == "" && delta == 0 && hasAttrSibling[key] {
+			continue
+		}
 
 		_, err := app.Append(
 			0,
@@ -327,12 +368,12 @@ func (reg *metricsRegistry) addSumDataPoints(m pmetric.Metric, item string) {
 
 		attrs := dp.Attributes()
 		if attrs.Len() == 0 {
-			base.counter.Add(int(dp.IntValue()))
+			base.add(int(dp.IntValue()))
 
 			continue
 		}
 
-		reg.resolveAttrCounterLocked(base, attrs).counter.Add(int(dp.IntValue()))
+		reg.resolveAttrCounterLocked(base, attrs).add(int(dp.IntValue()))
 	}
 }
 
@@ -389,10 +430,10 @@ func (reg *metricsRegistry) resolveAttrCounterLocked(base *counter, attrs pcommo
 	}
 
 	c = &counter{
-		metric:  base.metric,
-		item:    base.item,
-		counter: logsource.NewRingCounter(windowSecs),
-		lbls:    labels.FromMap(merged),
+		metric:     base.metric,
+		item:       base.item,
+		lbls:       labels.FromMap(merged),
+		lastEmitAt: time.Now(),
 	}
 	reg.counters[key] = c
 

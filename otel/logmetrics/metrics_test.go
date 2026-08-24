@@ -51,7 +51,7 @@ func testRegistry() (*metricsRegistry, func() map[counterKey]int64) {
 
 		totals := make(map[counterKey]int64, len(reg.counters))
 		for key, c := range reg.counters {
-			totals[key] += int64(c.counter.Total())
+			totals[key] += int64(c.peekSum())
 		}
 
 		return totals

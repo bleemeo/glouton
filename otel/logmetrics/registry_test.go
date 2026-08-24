@@ -69,14 +69,17 @@ func TestRegistryEmit(t *testing.T) {
 		{Metric: "apache_errors_count"},
 	}, "")
 
-	// 120 matches over the 60s window => 2/s.
+	// 120 matches over 60 (simulated) elapsed seconds => 2/s.
+	now := time.Now()
+	counters[0].lastEmitAt = now.Add(-60 * time.Second)
+
 	for range 120 {
-		counters[0].counter.Add(1)
+		counters[0].add(1)
 	}
 
 	app := glmodel.NewBufferAppender()
 
-	if err := reg.emit(app); err != nil {
+	if err := reg.emit(app, now); err != nil {
 		t.Fatalf("emit returned an error: %v", err)
 	}
 
@@ -147,11 +150,11 @@ func TestMetricsSink(t *testing.T) {
 
 	errorsCounter, requestsCounter := counters[0], counters[1]
 
-	if got := errorsCounter.counter.Total(); got != 5 {
+	if got := errorsCounter.peekSum(); got != 5 {
 		t.Errorf("Expected 5 total matches for apache_errors_count (2+3 across two batches), got %d", got)
 	}
 
-	if got := requestsCounter.counter.Total(); got != 0 {
+	if got := requestsCounter.peekSum(); got != 0 {
 		t.Errorf("Expected 0 matches for apache_requests_count, got %d", got)
 	}
 }
@@ -183,17 +186,19 @@ func TestRegistryItemDisambiguation(t *testing.T) {
 		t.Fatalf("ConsumeMetrics returned an error: %v", err)
 	}
 
-	if got := countersA[0].counter.Total(); got != 2 {
+	if got := countersA[0].peekSum(); got != 2 {
 		t.Errorf("Expected 2 matches for container-a, got %d", got)
 	}
 
-	if got := countersB[0].counter.Total(); got != 5 {
+	if got := countersB[0].peekSum(); got != 5 {
 		t.Errorf("Expected 5 matches for container-b, got %d", got)
 	}
 
 	app := glmodel.NewBufferAppender()
 
-	if err := reg.emit(app); err != nil {
+	// Safely past each counter's creation-time lastEmitAt, regardless of clock resolution -- this test
+	// only checks which series/labels are present, not the emitted rate value.
+	if err := reg.emit(app, time.Now().Add(time.Minute)); err != nil {
 		t.Fatalf("emit returned an error: %v", err)
 	}
 
@@ -250,7 +255,7 @@ func TestRegistryResolveCancelsPendingRelease(t *testing.T) {
 	reg := newMetricsRegistry(time.Hour) // long enough that the timer never fires during this test
 
 	before := reg.resolve([]metricSpec{{Metric: "app_errors_count"}}, "web-1")
-	before[0].counter.Add(3)
+	before[0].add(3)
 
 	reg.release("web-1")
 
@@ -268,7 +273,7 @@ func TestRegistryResolveCancelsPendingRelease(t *testing.T) {
 		t.Error("Expected resolve() to return the same counter (reused, not reset) after cancelling the pending release")
 	}
 
-	if got := after[0].counter.Total(); got != 3 {
+	if got := after[0].peekSum(); got != 3 {
 		t.Errorf("Expected the counter's prior total to survive (3), got %d", got)
 	}
 }
@@ -311,7 +316,7 @@ func TestRegistryForgetSkipsStaleEpochAfterReuse(t *testing.T) {
 	reg := newMetricsRegistry(time.Hour) // grace period irrelevant: forget() is invoked directly below
 
 	before := reg.resolve([]metricSpec{{Metric: "app_errors_count"}}, "web-1")
-	before[0].counter.Add(7)
+	before[0].add(7)
 
 	reg.release("web-1")
 
@@ -332,7 +337,7 @@ func TestRegistryForgetSkipsStaleEpochAfterReuse(t *testing.T) {
 		t.Fatal("Expected the reused counter to survive a stale forget() call racing a concurrent resolve()")
 	}
 
-	if got := after[0].counter.Total(); got != 7 {
+	if got := after[0].peekSum(); got != 7 {
 		t.Errorf("Expected the counter's prior total to survive (7), got %d", got)
 	}
 }
@@ -426,7 +431,7 @@ func TestRegistryAttributesCreateDistinctSeries(t *testing.T) {
 		t.Fatal("Expected the base counter to exist")
 	}
 
-	if got := base.counter.Total(); got != 0 {
+	if got := base.peekSum(); got != 0 {
 		t.Errorf("Expected the base (no-attrs) counter to stay untouched, got %d", got)
 	}
 
@@ -449,11 +454,11 @@ func TestRegistryAttributesCreateDistinctSeries(t *testing.T) {
 		t.Fatalf("Expected distinct counters for status=200 and status=500, got counters=%+v", reg.counters)
 	}
 
-	if got := status200.counter.Total(); got != 5 {
+	if got := status200.peekSum(); got != 5 {
 		t.Errorf("Expected status=200 total 5 (3+2 across two batches), got %d", got)
 	}
 
-	if got := status500.counter.Total(); got != 1 {
+	if got := status500.peekSum(); got != 1 {
 		t.Errorf("Expected status=500 total 1, got %d", got)
 	}
 }
@@ -478,7 +483,9 @@ func TestRegistryEmitSkipsPhantomBaseSeriesOnceAttributedSiblingExists(t *testin
 
 	app := glmodel.NewBufferAppender()
 
-	if err := reg.emit(app); err != nil {
+	// Safely past each counter's creation-time lastEmitAt; this test only checks which series survive,
+	// not the emitted rate value.
+	if err := reg.emit(app, time.Now().Add(time.Minute)); err != nil {
 		t.Fatalf("emit returned an error: %v", err)
 	}
 
@@ -549,7 +556,7 @@ func TestRegistryAttributesShadowedByItemAndLabels(t *testing.T) {
 		t.Errorf("Expected the unclaimed \"region\" attribute to surface as a label, got %q", got)
 	}
 
-	if got := realCounter.counter.Total(); got != 1 {
+	if got := realCounter.peekSum(); got != 1 {
 		t.Errorf("Expected 1 match, got %d", got)
 	}
 }
@@ -590,7 +597,7 @@ func TestRegistryAttributesWithSeparatorCharsDontCollide(t *testing.T) {
 	for _, key := range combos {
 		c := reg.counters[key]
 
-		if got := c.counter.Total(); got != 1 {
+		if got := c.peekSum(); got != 1 {
 			t.Errorf("Expected each distinct combo to total 1 (no cross-contamination), got %d for %+v", got, key)
 		}
 	}
