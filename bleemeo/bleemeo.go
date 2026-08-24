@@ -228,7 +228,10 @@ func (c *Connector) ApplyCachedConfiguration() {
 	}
 }
 
-func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint) {
+// initMQTT creates the MQTT client and stores it on the Connector.
+// It returns the created client: callers must use the returned value
+// instead of re-reading c.mqtt, which may already have been replaced.
+func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint) *mqtt.Client {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -260,6 +263,8 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint) {
 	if c.sync.IsMaintenance() {
 		c.mqtt.SuspendSending(true)
 	}
+
+	return c.mqtt
 }
 
 func (c *Connector) setMaintenance(ctx context.Context, maintenance bool) {
@@ -332,14 +337,14 @@ func (c *Connector) mqttRestarter(ctx context.Context) error {
 
 			c.l.Lock()
 
-			if c.mqtt != nil {
+			if previousClient := c.mqtt; previousClient != nil {
 				// Try to retrieve pending points
 				resultChan := make(chan []gloutonTypes.MetricPoint, 1)
 
 				go func() {
 					defer crashreport.ProcessPanic()
 
-					resultChan <- c.mqtt.PopPoints(true)
+					resultChan <- previousClient.PopPoints(true)
 				}()
 
 				select {
@@ -352,7 +357,7 @@ func (c *Connector) mqttRestarter(ctx context.Context) error {
 
 			c.l.Unlock()
 
-			c.initMQTT(previousPoints)
+			mqttClient := c.initMQTT(previousPoints)
 			previousPoints = nil
 
 			wg.Add(1)
@@ -361,7 +366,7 @@ func (c *Connector) mqttRestarter(ctx context.Context) error {
 				defer crashreport.ProcessPanic()
 				defer wg.Done()
 
-				err := c.mqtt.Run(subCtx)
+				err := mqttClient.Run(subCtx)
 
 				l.Lock()
 
@@ -778,7 +783,7 @@ func (c *Connector) DiagnosticPage() string {
 		if mqtt == nil {
 			mqttPage <- "MQTT connector is not (yet) initialized\n"
 		} else {
-			mqttPage <- c.mqtt.DiagnosticPage()
+			mqttPage <- mqtt.DiagnosticPage()
 		}
 	}()
 
@@ -1139,10 +1144,12 @@ func (c *Connector) clearDisable(reasonToClear types.DisableReason) {
 		c.disabledUntil = time.Now()
 	}
 
+	mqttClient := c.mqtt
+
 	c.l.Unlock()
 	c.sync.ClearDisable(reasonToClear, 0)
 
-	if mqtt := c.mqtt; mqtt != nil {
+	if mqtt := mqttClient; mqtt != nil {
 		var mqttDisableDelay time.Duration
 
 		switch reasonToClear { //nolint:exhaustive,nolintlint
