@@ -57,8 +57,8 @@ type ResolvedSource struct {
 	Container facts.Container
 
 	// SendLogs is the fully-resolved shipping decision: SourceReceiver's own send_logs if set, else
-	// OpenTelemetry.SendLogs; SourceContainerLabel's glouton.send_logs, else glouton.log_enable=true
-	// (back-compat), else OpenTelemetry.SendLogs.
+	// OpenTelemetry.ReceiversDefaultSendLogs; SourceContainerLabel's glouton.send_logs, else
+	// glouton.log_enable=true (back-compat), else OpenTelemetry.ReceiversDefaultSendLogs.
 	SendLogs bool
 
 	// LogMetricsRule is the glouton.log_metrics label's value, set only for SourceContainerLabel (""

@@ -85,8 +85,8 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 	defer jsonLogFile.Close()
 
 	cfg := config.OpenTelemetry{
-		SendLogs:        true, // none of the receivers below override this
-		KnownLogFormats: config.DefaultKnownLogFormats(),
+		ReceiversDefaultSendLogs: true, // none of the receivers below override this
+		KnownLogFormats:          config.DefaultKnownLogFormats(),
 		Receivers: map[string]config.LogReceiver{
 			"custom-receiver": {
 				"include": []string{customLogFile.Name()},

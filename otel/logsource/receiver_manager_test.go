@@ -730,7 +730,7 @@ func TestReceiverManagerLogEnableTrueImpliesSendLogs(t *testing.T) {
 		FakeLabels: map[string]string{ContainerLabelPrefix + "log_enable": "true"},
 	}
 
-	rm := newTestReceiverManager(t, config.OpenTelemetry{SendLogs: false})
+	rm := newTestReceiverManager(t, config.OpenTelemetry{ReceiversDefaultSendLogs: false})
 
 	provider := declineProvider()
 	rm.RegisterSinkProvider(provider)
@@ -759,7 +759,7 @@ func TestReceiverManagerExplicitSendLogsOverridesLogEnable(t *testing.T) {
 		},
 	}
 
-	rm := newTestReceiverManager(t, config.OpenTelemetry{SendLogs: true})
+	rm := newTestReceiverManager(t, config.OpenTelemetry{ReceiversDefaultSendLogs: true})
 
 	provider := declineProvider()
 	rm.RegisterSinkProvider(provider)
@@ -776,15 +776,15 @@ func TestReceiverManagerExplicitSendLogsOverridesLogEnable(t *testing.T) {
 	}
 }
 
-// TestReceiverManagerUnlabeledContainerFollowsAutoDiscovery tests that an unlabeled container's SendLogs follows auto_discovery.container_and_service_enable, not OpenTelemetry.SendLogs.
+// TestReceiverManagerUnlabeledContainerFollowsAutoDiscovery tests that an unlabeled container's SendLogs follows auto_discovery.container_and_service_enable, not OpenTelemetry.ReceiversDefaultSendLogs.
 func TestReceiverManagerUnlabeledContainerFollowsAutoDiscovery(t *testing.T) {
 	t.Parallel()
 
 	ctr := facts.FakeContainer{FakeID: "id-1", FakeContainerName: "app-1", FakeLogPath: "/fake/app.log"}
 
 	rm := newTestReceiverManager(t, config.OpenTelemetry{
-		SendLogs:      true,
-		AutoDiscovery: config.AutoDiscovery{ContainerAndServiceEnable: false},
+		ReceiversDefaultSendLogs: true,
+		AutoDiscovery:            config.AutoDiscovery{ContainerAndServiceEnable: false},
 	})
 
 	provider := declineProvider()

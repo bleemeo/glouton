@@ -322,8 +322,8 @@ func DefaultConfig() Config { //nolint:maintidx
 			HostRootPrefix: "/hostroot",
 			Inputs:         []LogInput{},
 			OpenTelemetry: OpenTelemetry{
-				ShippingEnable: true,
-				SendLogs:       true,
+				ShippingEnable:           true,
+				ReceiversDefaultSendLogs: true,
 				AutoDiscovery: AutoDiscovery{
 					AllEnable:                 false,
 					JournaldEnable:            false,

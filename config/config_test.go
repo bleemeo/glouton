@@ -216,8 +216,8 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 		Log: Log{
 			HostRootPrefix: "/hostroot",
 			OpenTelemetry: OpenTelemetry{
-				ShippingEnable: true,
-				SendLogs:       true,
+				ShippingEnable:           true,
+				ReceiversDefaultSendLogs: true,
 				AutoDiscovery: AutoDiscovery{
 					AllEnable:                 true,
 					JournaldEnable:            true,

@@ -130,12 +130,13 @@ type OpenTelemetry struct {
 	// receiver/metrics_rules/container label opts a source in, independent
 	// of shipping.
 	ShippingEnable bool `yaml:"shipping_enable"`
-	// SendLogs is the global default for whether a receiver ships its logs,
-	// applied unless the receiver overrides it with its own send_logs
-	// field. Irrelevant with zero configured receivers.
-	SendLogs        bool                      `yaml:"send_logs"`
-	AutoDiscovery   AutoDiscovery             `yaml:"auto_discovery"`
-	KnownLogFormats map[string][]OTELOperator `yaml:"known_log_formats"`
+	// ReceiversDefaultSendLogs is the global default for whether a receiver ships its logs, applied
+	// unless the receiver overrides it with its own send_logs field. Irrelevant with zero configured
+	// receivers. Named distinctly from ShippingEnable (the master shipping switch) and from a
+	// receiver's own send_logs (this default's per-receiver override) to keep the three apart.
+	ReceiversDefaultSendLogs bool                      `yaml:"receivers_default_send_logs"`
+	AutoDiscovery            AutoDiscovery             `yaml:"auto_discovery"`
+	KnownLogFormats          map[string][]OTELOperator `yaml:"known_log_formats"`
 	// Receivers are named log sources, for shipping and/or metrics (see
 	// LogReceiver's doc comment for its Glouton-specific keys).
 	Receivers map[string]LogReceiver `yaml:"receivers"`
@@ -178,8 +179,8 @@ type EnableListener struct {
 //     there's no implicit/default listener, so unrelated config elsewhere can never
 //     change what this receiver participates in (see PlanSharedNetworkListeners's
 //     errUndefinedNetworkListener for the typo/missing-entry case).
-//   - send_logs: override the global OpenTelemetry.SendLogs default for
-//     this receiver.
+//   - send_logs: override the global OpenTelemetry.ReceiversDefaultSendLogs
+//     default for this receiver.
 //   - log_format / operators: parse each line into attributes before
 //     shipping and before any metrics condition runs, applying to both.
 //   - filters: OTELFilters for SHIPPING only (drop/keep, not counting).

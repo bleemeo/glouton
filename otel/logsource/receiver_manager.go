@@ -308,7 +308,7 @@ func (rm *ReceiverManager) ensureReceiverSource(ctx context.Context, name string
 		return ms, fields, nil
 	}
 
-	sendLogs := rm.cfg.SendLogs
+	sendLogs := rm.cfg.ReceiversDefaultSendLogs
 	if fields.SendLogs != nil {
 		sendLogs = *fields.SendLogs
 	}
@@ -649,8 +649,9 @@ func (rm *ReceiverManager) updateLabelContainers(ctx context.Context, containers
 				ctr.ContainerName(), SourceContainerLabel,
 				append([]operator.Config{BuildContainerEnvelopeOperator()}, operators...), nil,
 			)
-			// Default here is auto_discovery.container_and_service_enable, not OpenTelemetry.SendLogs,
-			// since this container was never explicitly configured. Only affects SendLogs, not LogMetricsRule.
+			// Default here is auto_discovery.container_and_service_enable, not
+			// OpenTelemetry.ReceiversDefaultSendLogs, since this container was never explicitly
+			// configured. Only affects SendLogs, not LogMetricsRule.
 			ms.container = ctr
 			ms.labels = labels
 			ms.fanout = rm.askProviders(ctx, ResolvedSource{
