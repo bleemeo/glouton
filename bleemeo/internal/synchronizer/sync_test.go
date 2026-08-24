@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/discovery"
@@ -1953,5 +1954,46 @@ func Test_isDuplicatedUsingFacts(t *testing.T) { //nolint:maintidx
 				}
 			}
 		})
+	}
+}
+
+// throttleClientStub is a types.Client whose ThrottleDeadline is fixed.
+type throttleClientStub struct {
+	types.Client
+
+	deadline time.Time
+}
+
+func (cl throttleClientStub) ThrottleDeadline() time.Time {
+	return cl.deadline
+}
+
+// TestThrottleDeadline checks that the deadline used to disable the connector on
+// a 429 comes from the client of the given execution, and falls back on the
+// current client when the synchronization failed before creating an execution.
+func TestThrottleDeadline(t *testing.T) {
+	t.Parallel()
+
+	helper := newHelper(t)
+	defer helper.Close()
+
+	helper.initSynchronizer(t)
+
+	// Without an execution, the deadline of the current client is used: it is
+	// the client that did the throttled request.
+	if got, want := helper.s.throttleDeadline(nil), helper.Now(); !got.Equal(want) {
+		t.Errorf("throttleDeadline(nil) = %s, want %s", got, want)
+	}
+
+	// With an execution, the deadline of its client is used and not the one of
+	// a client created earlier.
+	want := helper.Now().Add(42 * time.Second)
+	execution := &Execution{
+		synchronizer: helper.s,
+		client:       throttleClientStub{Client: helper.wrapperClientMock, deadline: want},
+	}
+
+	if got := helper.s.throttleDeadline(execution); !got.Equal(want) {
+		t.Errorf("throttleDeadline(execution) = %s, want %s", got, want)
 	}
 }

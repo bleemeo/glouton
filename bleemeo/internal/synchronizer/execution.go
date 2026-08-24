@@ -82,7 +82,7 @@ func (s *Synchronizer) newExecution(onlyEssential bool, isNewAgent bool) *Execut
 
 	execution := &Execution{
 		synchronizer:        s,
-		client:              s.newClient(),
+		client:              s.getClient(),
 		initialRequestCount: s.requestCounter.Load(),
 		startedAt:           s.now(),
 		onlyEssential:       onlyEssential,
@@ -101,7 +101,7 @@ func (s *Synchronizer) newExecution(onlyEssential bool, isNewAgent bool) *Execut
 func (s *Synchronizer) newLimitedExecution(onlyEssential bool, entities map[types.EntityName]types.SyncType) *Execution {
 	execution := &Execution{
 		synchronizer:        s,
-		client:              s.newClient(),
+		client:              s.getClient(),
 		initialRequestCount: s.requestCounter.Load(),
 		startedAt:           s.now(),
 		onlyEssential:       onlyEssential,

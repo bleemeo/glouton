@@ -198,7 +198,11 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 	return s
 }
 
-func (s *Synchronizer) newClient() types.Client {
+// getClient returns the client used to talk to the Bleemeo API.
+// Only the wrapper is new: the underlying API client is shared, with its OAuth
+// token and its throttle deadline.
+// See the comment on realClient about the locking.
+func (s *Synchronizer) getClient() types.Client {
 	if s.option.ProvideClient != nil {
 		// Allows tests to inject mock clients
 		return s.option.ProvideClient()
@@ -321,14 +325,18 @@ func (s *Synchronizer) Run(ctx context.Context) error { //nolint:maintidx
 	// syncInfo early because MQTT connection will establish or not depending on it (maintenance & outdated agent).
 	// syncInfo also disable if time drift is too big. We don't do this disable now for a new agent, because
 	// we want it to perform registration and creation of agent_status in order to mark this agent as "bad time" on Bleemeo.
-	exec := s.newLimitedExecution(false, nil)
+	// The execution is scoped to this block: it must not be reused by the
+	// synchronization loop below, which has its own execution per run.
+	{
+		exec := s.newLimitedExecution(false, nil)
 
-	_, err = s.syncInfoReal(ctx, exec, !firstSync)
-	if err != nil {
-		logger.V(1).Printf("bleemeo: pre-run checks: couldn't sync the global config: %v", err)
+		_, err = s.syncInfoReal(ctx, exec, !firstSync)
+		if err != nil {
+			logger.V(1).Printf("bleemeo: pre-run checks: couldn't sync the global config: %v", err)
+		}
+
+		exec.executePostRunCalls()
 	}
-
-	exec.executePostRunCalls()
 
 	s.option.SetInitialized()
 
@@ -362,7 +370,7 @@ func (s *Synchronizer) Run(ctx context.Context) error { //nolint:maintidx
 			break
 		}
 
-		_, errSync := s.runOnce(ctx, firstSync)
+		execution, errSync := s.runOnce(ctx, firstSync)
 		if errSync != nil {
 			s.l.Lock()
 			s.successiveErrors++
@@ -403,7 +411,7 @@ func (s *Synchronizer) Run(ctx context.Context) error { //nolint:maintidx
 			}
 
 			if IsThrottleError(errSync) {
-				deadline := exec.client.ThrottleDeadline().Add(delay.JitterDelay(15*time.Second, 0.3))
+				deadline := s.throttleDeadline(execution).Add(delay.JitterDelay(15*time.Second, 0.3))
 				s.Disable(deadline, bleemeoTypes.DisableTooManyRequests)
 			} else {
 				s.l.Lock()
@@ -705,7 +713,7 @@ func (s *Synchronizer) UpdateAgent() {
 func (s *Synchronizer) SetMaintenance(ctx context.Context, maintenance bool) {
 	if s.IsMaintenance() && !maintenance {
 		// getting out of maintenance, let's check for a duplicated state.json file
-		err := s.checkDuplicated(ctx, s.newClient())
+		err := s.checkDuplicated(ctx, s.getClient())
 		if err != nil {
 			// it's not a critical error at all, we will perform this check again on the next synchronization pass
 			logger.V(2).Printf("Couldn't check for duplicated agent: %v", err)
@@ -1100,6 +1108,22 @@ func (s *Synchronizer) HealthCheck() bool {
 	return true
 }
 
+// throttleDeadline returns the retry deadline advertised by the API to the
+// client used by the given execution.
+// execution may be nil when the synchronization failed before it was created,
+// which happens when the registration fails; the deadline is then taken from
+// the current client, which is the one that did the throttled request.
+func (s *Synchronizer) throttleDeadline(execution *Execution) time.Time {
+	if execution != nil {
+		return execution.client.ThrottleDeadline()
+	}
+
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	return s.getClient().ThrottleDeadline()
+}
+
 func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (*Execution, error) {
 	var wasCreation bool
 
@@ -1287,7 +1311,7 @@ func (s *Synchronizer) register(ctx context.Context) error {
 		return err
 	}
 
-	agentID, err := s.newClient().RegisterSelf(ctx, accountID, password, s.option.Config.Bleemeo.InitialServerGroupName, name, fqdn, registrationKey)
+	agentID, err := s.getClient().RegisterSelf(ctx, accountID, password, s.option.Config.Bleemeo.InitialServerGroupName, name, fqdn, registrationKey)
 	if err != nil {
 		return err
 	}
