@@ -232,6 +232,48 @@ func TestRegistryItemDisambiguation(t *testing.T) {
 	}
 }
 
+// Test that resolving the same metric name under the same item, but with different static "labels:",
+// returns distinct counters instead of the second spec silently reusing the first's -- guards against a
+// regression where two metrics: entries sharing a name (e.g. one metric split by status-code range into
+// several conditions/labels combinations) collapsed onto a single series.
+func TestRegistryResolveSameMetricDifferentLabelsAreDistinctCounters(t *testing.T) {
+	t.Parallel()
+
+	reg := newMetricsRegistry(0)
+
+	counters2xx := reg.resolve([]metricSpec{
+		{Metric: "log_common_code", Labels: map[string]string{"code": "2xx"}},
+	}, "")
+
+	counters3xx := reg.resolve([]metricSpec{
+		{Metric: "log_common_code", Labels: map[string]string{"code": "3xx"}},
+	}, "")
+
+	if counters2xx[0] == counters3xx[0] {
+		t.Fatal("Expected distinct counters for the same metric/item with different static labels")
+	}
+
+	if got := counters2xx[0].lbls.Get("code"); got != "2xx" {
+		t.Errorf("Expected the first counter's code label to stay 2xx, got %q", got)
+	}
+
+	if got := counters3xx[0].lbls.Get("code"); got != "3xx" {
+		t.Errorf("Expected the second counter's code label to stay 3xx, got %q", got)
+	}
+
+	counters2xx[0].add(1)
+	counters3xx[0].add(1)
+	counters3xx[0].add(1)
+
+	if got := counters2xx[0].peekSum(); got != 1 {
+		t.Errorf("Expected 1 match for code=2xx, got %d", got)
+	}
+
+	if got := counters3xx[0].peekSum(); got != 2 {
+		t.Errorf("Expected 2 matches for code=3xx, got %d", got)
+	}
+}
+
 // Test that release() with a zero grace period drops the item's counters synchronously (the behavior
 // every other registry test relies on).
 func TestRegistryReleaseZeroGracePeriodIsSynchronous(t *testing.T) {
@@ -520,7 +562,7 @@ func TestRegistryAttributesShadowedByItemAndLabels(t *testing.T) {
 		{Metric: "web_requests_count", Labels: map[string]string{"env": "prod"}},
 	}, "web-1")
 
-	sink := reg.metricsSinkForItem("web-1")
+	sink := reg.metricsSinkForEntry("web-1", encodeLabelSet(map[string]string{"env": "prod"}))
 
 	if err := sink.ConsumeMetrics(t.Context(), makeSumMetricWithPoints("web_requests_count",
 		sumDataPoint{Attrs: map[string]string{

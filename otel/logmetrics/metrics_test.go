@@ -103,6 +103,22 @@ func TestExtractItem(t *testing.T) {
 	if got := extractItem(config.LogMetricEntry{"item": 5}); got != nil {
 		t.Errorf("Expected a non-string item to be ignored (nil), got %v", *got)
 	}
+
+	// labels: {item: ...} is an equally valid spelling of the same override when there's no top-level
+	// item: field.
+	got = extractItem(config.LogMetricEntry{"labels": map[string]any{"item": "from-labels"}})
+	if got == nil || *got != "from-labels" {
+		t.Fatalf("Expected labels: {item: ...} to be honored as an item override, got %v", got)
+	}
+
+	// A top-level item: wins over a labels: {item: ...} entry when both are set.
+	got = extractItem(config.LogMetricEntry{
+		"item":   "from-top-level",
+		"labels": map[string]any{"item": "from-labels"},
+	})
+	if got == nil || *got != "from-top-level" {
+		t.Fatalf("Expected the top-level item: to win over labels: {item: ...}, got %v", got)
+	}
 }
 
 func TestResolveInlineMetric(t *testing.T) {
@@ -363,6 +379,79 @@ func TestBuildGroupedConnectorsEndToEnd(t *testing.T) {
 	}
 }
 
+// Test that two metrics: entries sharing the same metric name, but with different conditions and static
+// labels, produce two independently-counted, distinctly-labeled series -- not one series whose condition
+// and label come from different entries (the reported bug: e.g. a single "log_common_code" split into
+// code=2xx/code=3xx variants by two same-named entries).
+func TestBuildGroupedConnectorsSameMetricNameDifferentLabelsStayDistinct(t *testing.T) {
+	t.Parallel()
+
+	entries := []resolvedMetric{
+		{Metric: "log_common_code", Raw: config.LogMetricEntry{
+			"conditions": []any{`IsMatch(body, "status=2")`},
+			"labels":     map[string]any{"code": "2xx"},
+		}},
+		{Metric: "log_common_code", Raw: config.LogMetricEntry{
+			"conditions": []any{`IsMatch(body, "status=3")`},
+			"labels":     map[string]any{"code": "3xx"},
+		}},
+	}
+
+	reg, _ := testRegistry()
+
+	conns, _, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), entries, "my-receiver", reg, "my-receiver")
+	if err != nil {
+		t.Fatal("buildGroupedConnectors returned an error:", err)
+	}
+
+	defer shutdownConns(t.Context(), conns) //nolint:errcheck
+
+	if len(conns) != 2 {
+		t.Fatalf("Expected 2 independent connectors (one per entry), got %d", len(conns))
+	}
+
+	sink := logsConsumerFor(conns)
+
+	lines := []string{"status=200 ok", "status=201 created", "status=301 moved", "status=302 found", "status=302 found"}
+
+	for _, line := range lines {
+		if err := sink.ConsumeLogs(t.Context(), logsWithBody(line)); err != nil {
+			t.Fatal("ConsumeLogs returned an error:", err)
+		}
+	}
+
+	var code2xx, code3xx *counter
+
+	reg.l.Lock()
+
+	for key, c := range reg.counters {
+		if key.metric != "log_common_code" {
+			continue
+		}
+
+		switch c.lbls.Get("code") {
+		case "2xx":
+			code2xx = c
+		case "3xx":
+			code3xx = c
+		}
+	}
+
+	reg.l.Unlock()
+
+	if code2xx == nil || code3xx == nil {
+		t.Fatalf("Expected distinct code=2xx and code=3xx counters, got counters=%+v", reg.counters)
+	}
+
+	if got := code2xx.peekSum(); got != 2 {
+		t.Errorf("Expected 2 matches for code=2xx (200, 201), got %d", got)
+	}
+
+	if got := code3xx.peekSum(); got != 3 {
+		t.Errorf("Expected 3 matches for code=3xx (301, 302, 302), got %d", got)
+	}
+}
+
 // Test that a metric overriding its own item is built as a distinct group from the receiver's default-item metrics.
 func TestBuildGroupedConnectorsExplicitItemSplitsGroup(t *testing.T) {
 	t.Parallel()
@@ -397,6 +486,58 @@ func TestBuildGroupedConnectorsExplicitItemSplitsGroup(t *testing.T) {
 
 	if got[counterKey{metric: "custom_item_metric", item: "custom-item"}] != 1 {
 		t.Errorf("Expected 1 match under item %q, got %v", "custom-item", got)
+	}
+}
+
+// Test that a metric overriding its item via labels: {item: ...} (no top-level item: field) is
+// grouped/counted under that item, exactly as if it had used the top-level item: field -- guards
+// against a regression where labels: {item: ...} was silently shadowed by the auto-derived item
+// instead of being honored as an equivalent override.
+func TestBuildGroupedConnectorsLabelsItemActsLikeTopLevelItem(t *testing.T) {
+	t.Parallel()
+
+	rm, ok := resolveInlineMetric(config.LogMetricEntry{
+		"metric":     "custom_item_metric",
+		"conditions": []any{`IsMatch(body, "a")`},
+		"labels":     map[string]any{"item": "custom-item"},
+	})
+	if !ok {
+		t.Fatal("resolveInlineMetric rejected a valid entry")
+	}
+
+	entries := []resolvedMetric{rm}
+
+	reg, totals := testRegistry()
+
+	conns, gotItems, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), entries, "recv", reg, "recv")
+	if err != nil {
+		t.Fatal("buildGroupedConnectors returned an error:", err)
+	}
+
+	defer shutdownConns(t.Context(), conns) //nolint:errcheck
+
+	if diff := cmp.Diff([]string{"custom-item"}, gotItems); diff != "" {
+		t.Fatalf("Unexpected grouped items:\n%s", diff)
+	}
+
+	sink := logsConsumerFor(conns)
+
+	if err := sink.ConsumeLogs(t.Context(), logsWithBody("a")); err != nil {
+		t.Fatal("ConsumeLogs returned an error:", err)
+	}
+
+	got := totals()
+
+	// The counter's key carries a non-empty "labels" component too: labels: {item: ...} is still a
+	// normal entry in the static labels map (extractLabels doesn't filter "item" out of it), it's just
+	// also honored as the item override -- see extractItem.
+	key := counterKey{metric: "custom_item_metric", item: "custom-item", labels: encodeLabelSet(map[string]string{"item": "custom-item"})}
+	if got[key] != 1 {
+		t.Errorf("Expected 1 match under item %q (from labels: {item: ...}), got %v", "custom-item", got)
+	}
+
+	if got[counterKey{metric: "custom_item_metric", item: "recv"}] != 0 {
+		t.Errorf("Expected no match under the receiver's own default item %q, got %v", "recv", got)
 	}
 }
 

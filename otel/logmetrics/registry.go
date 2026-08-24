@@ -57,7 +57,11 @@ type metricSpec struct {
 type counter struct {
 	metric string
 	item   string
-	lbls   labels.Labels // precomputed once, never rebuilt
+	// labelsKey is this counter's static "labels:" canonically encoded (see encodeLabelSet); "" if
+	// none. Immutable after creation; propagated to attrs-derived siblings by resolveAttrCounterLocked
+	// so they stay scoped to the same labels-variant as their base.
+	labelsKey string
+	lbls      labels.Labels // precomputed once, never rebuilt
 
 	l          sync.Mutex
 	sum        int
@@ -102,13 +106,42 @@ func (c *counter) rate(now time.Time) (rate float64, delta int, ok bool) {
 }
 
 // counterKey identifies one aggregated series. item is part of the identity so the same metric name from
-// different containers stays distinguishable. attrs disambiguates further by the exact combination of
-// dynamic "attributes:" values a log line produced (see resolveAttrCounterLocked); it's "" for the base
-// counter resolve() eagerly declares, since attribute values aren't known until a matching log line arrives.
+// different containers stays distinguishable. labels canonically encodes a metrics: entry's static
+// "labels:" (see encodeLabelSet), disambiguating multiple entries that share (metric, item) but declare
+// different static labels -- "" for the overwhelmingly common case of no static labels. attrs
+// disambiguates further by the exact combination of dynamic "attributes:" values a log line produced
+// (see resolveAttrCounterLocked); it's "" for the base counter resolve() eagerly declares, since
+// attribute values aren't known until a matching log line arrives.
 type counterKey struct {
 	metric string
 	item   string
+	labels string
 	attrs  string
+}
+
+// encodeLabelSet canonically encodes labels into a deterministic string, independent of map iteration
+// order, for use as a counterKey component. "" for an empty/nil map. Mirrors resolveAttrCounterLocked's
+// own attrsID encoding (%q quoting so a key/value containing '=', ',', or '"' can't make two distinct
+// label sets collide onto the same string).
+func encodeLabelSet(m map[string]string) string {
+	if len(m) == 0 {
+		return ""
+	}
+
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	var sb strings.Builder
+
+	for _, k := range keys {
+		fmt.Fprintf(&sb, "%q=%q,", k, m[k])
+	}
+
+	return sb.String()
 }
 
 // metricsRegistry holds one counter per (metric, item), shared across sources so matches aggregate.
@@ -167,7 +200,8 @@ func (reg *metricsRegistry) resolve(specs []metricSpec, item string) []*counter 
 	for _, spec := range specs {
 		reg.declaredNames[spec.Metric] = true
 
-		key := counterKey{metric: spec.Metric, item: item}
+		labelsKey := encodeLabelSet(spec.Labels)
+		key := counterKey{metric: spec.Metric, item: item, labels: labelsKey}
 
 		c, found := reg.counters[key]
 		if !found {
@@ -186,6 +220,7 @@ func (reg *metricsRegistry) resolve(specs []metricSpec, item string) []*counter 
 			c = &counter{
 				metric:     spec.Metric,
 				item:       item,
+				labelsKey:  labelsKey,
 				lbls:       labels.FromMap(lblMap),
 				lastEmitAt: time.Now(),
 			}
@@ -286,7 +321,7 @@ func (reg *metricsRegistry) emit(app storage.Appender, now time.Time) error {
 
 	for key := range counters {
 		if key.attrs != "" {
-			hasAttrSibling[counterKey{metric: key.metric, item: key.item}] = true
+			hasAttrSibling[counterKey{metric: key.metric, item: key.item, labels: key.labels}] = true
 		}
 	}
 
@@ -314,9 +349,19 @@ func (reg *metricsRegistry) emit(app storage.Appender, now time.Time) error {
 	return app.Commit()
 }
 
-// metricsSinkForItem returns the "next" consumer for one source's countconnector,
-// adding each Sum data point's delta into the matching (metric, item) counter.
+// metricsSinkForItem returns metricsSinkForEntry(item, ""), for a group whose entries declare no
+// static "labels:" -- the overwhelmingly common case.
 func (reg *metricsRegistry) metricsSinkForItem(item string) consumer.Metrics {
+	return reg.metricsSinkForEntry(item, "")
+}
+
+// metricsSinkForEntry returns the "next" consumer for one metrics: entry's countconnector, adding
+// each Sum data point's delta into the matching (metric, item, labelsKey) counter. labelsKey is this
+// entry's own static "labels:" canonically encoded (see encodeLabelSet), computed once by the caller
+// at connector-build time: the OTel wire data itself carries no signal distinguishing which entry
+// produced a same-named Sum metric when two metrics: entries share a name under one item (labels:
+// is glouton-only config, never passed to the vendored countconnector).
+func (reg *metricsRegistry) metricsSinkForEntry(item string, labelsKey string) consumer.Metrics {
 	sink, err := consumer.NewMetrics(func(_ context.Context, md pmetric.Metrics) error {
 		// reg.l must be held across the whole resolve+Add sequence, not just the resolve: release() and
 		// forgetLocked() take reg.l too, and an item they evict between the two steps would leave the
@@ -330,7 +375,7 @@ func (reg *metricsRegistry) metricsSinkForItem(item string) consumer.Metrics {
 			for j := range scopeMetrics.Len() {
 				metrics := scopeMetrics.At(j).Metrics()
 				for k := range metrics.Len() {
-					reg.addSumDataPoints(metrics.At(k), item)
+					reg.addSumDataPoints(metrics.At(k), item, labelsKey)
 				}
 			}
 		}
@@ -344,19 +389,19 @@ func (reg *metricsRegistry) metricsSinkForItem(item string) consumer.Metrics {
 	return sink
 }
 
-// addSumDataPoints adds m's data points to the matching (metric, item) counter(s). A data point with no
-// attributes (the common case: no "attributes:" configured, or the connector produced one attrs-less
-// point) goes straight to the base counter resolve() already declared. A data point carrying attributes
-// (from a metrics: entry's "attributes:" list) is routed to a sibling counter specific to that exact
-// combination of attribute values, created lazily since those values are only known once a log line
-// actually produces them -- see resolveAttrCounterLocked for how they're merged with item/labels.
-// Caller must hold reg.l.
-func (reg *metricsRegistry) addSumDataPoints(m pmetric.Metric, item string) {
+// addSumDataPoints adds m's data points to the matching (metric, item, labelsKey) counter(s). A data
+// point with no attributes (the common case: no "attributes:" configured, or the connector produced
+// one attrs-less point) goes straight to the base counter resolve() already declared. A data point
+// carrying attributes (from a metrics: entry's "attributes:" list) is routed to a sibling counter
+// specific to that exact combination of attribute values, created lazily since those values are only
+// known once a log line actually produces them -- see resolveAttrCounterLocked for how they're merged
+// with item/labels. Caller must hold reg.l.
+func (reg *metricsRegistry) addSumDataPoints(m pmetric.Metric, item string, labelsKey string) {
 	if m.Type() != pmetric.MetricTypeSum {
 		return
 	}
 
-	base, found := reg.counters[counterKey{metric: m.Name(), item: item}]
+	base, found := reg.counters[counterKey{metric: m.Name(), item: item, labels: labelsKey}]
 	if !found {
 		return
 	}
@@ -418,7 +463,7 @@ func (reg *metricsRegistry) resolveAttrCounterLocked(base *counter, attrs pcommo
 		fmt.Fprintf(&attrsID, "%q=%q,", k, merged[k])
 	}
 
-	key := counterKey{metric: base.metric, item: base.item, attrs: attrsID.String()}
+	key := counterKey{metric: base.metric, item: base.item, labels: base.labelsKey, attrs: attrsID.String()}
 
 	c, found := reg.counters[key]
 	if found {
@@ -432,6 +477,7 @@ func (reg *metricsRegistry) resolveAttrCounterLocked(base *counter, attrs pcommo
 	c = &counter{
 		metric:     base.metric,
 		item:       base.item,
+		labelsKey:  base.labelsKey,
 		lbls:       labels.FromMap(merged),
 		lastEmitAt: time.Now(),
 	}

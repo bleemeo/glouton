@@ -104,10 +104,28 @@ func resolveInlineMetric(raw config.LogMetricEntry) (resolvedMetric, bool) {
 	return resolvedMetric{Metric: metric, Raw: raw, Item: extractItem(raw)}, true
 }
 
-// extractItem reads raw's "item" field, presence-sensitively: nil means "unset, derive one", a non-nil pointer (even to "") means the config explicitly set it.
-// This lets legacy migration pin item="" without it being confused with "unset".
+// extractItem reads raw's item override, presence-sensitively: nil means "unset, derive one", a
+// non-nil pointer (even to "") means the config explicitly set it. The top-level "item" field takes
+// precedence; a labels: {item: ...} entry is honored as an equivalent override when the top-level
+// field is absent, so setting item that way isn't silently shadowed by the auto-derived item the way
+// every other labels: key would be (see resolve()'s reserved-key precedence in otel/logmetrics/
+// registry.go) -- it's just a second, equally valid spelling of the same override. This lets legacy
+// migration pin item="" without it being confused with "unset".
 func extractItem(raw config.LogMetricEntry) *string {
-	rawItem, present := raw["item"]
+	if item := itemField(raw); item != nil {
+		return item
+	}
+
+	if rawLabels, ok := raw["labels"].(map[string]any); ok {
+		return itemField(rawLabels)
+	}
+
+	return nil
+}
+
+// itemField reads m's "item" key, presence-sensitively -- see extractItem.
+func itemField(m map[string]any) *string {
+	rawItem, present := m["item"]
 	if !present {
 		return nil
 	}
@@ -165,9 +183,9 @@ func buildGroupedConnectors(
 		// is valid: resolving first would declare (permanent, zero-value) counters for an item that
 		// then never makes it into items below, so Manager.ReleaseSource would never release them --
 		// a leak for the process lifetime once the item's source (e.g. its container) is gone.
-		// metricsSinkForItem is safe to call before resolve(): it looks up reg.counters fresh on every
+		// metricsSinkForEntry is safe to call before resolve(): it looks up reg.counters fresh on every
 		// incoming data point and no-ops if the key isn't there yet.
-		groupConns, err := buildConnectors(ctx, connFactory, telemetry, groupEntries, reg.metricsSinkForItem(item))
+		groupConns, err := buildConnectors(ctx, connFactory, telemetry, groupEntries, reg, item)
 		if err != nil {
 			logger.Printf("logmetrics: source %q: item %q: %v", sourceName, item, err)
 
@@ -199,16 +217,20 @@ func specsForEntries(entries []resolvedMetric) []metricSpec {
 }
 
 // buildConnectors validates each entry's counter independently -- countconnector.Config.Validate() already checks
-// every Logs entry on its own, with no cross-entry state -- so a bad condition only disables its own metric, then
-// builds a single connector from the survivors instead of one connector per metric.
+// every Logs entry on its own, with no cross-entry state -- so a bad condition only disables its own metric. It
+// builds one connector per valid entry, not one shared connector for the whole group: two entries sharing the same
+// metric name (e.g. the same metric split into several conditions/labels combinations) would otherwise silently
+// collide into a single map entry, losing all but the last one's condition (see reg.metricsSinkForEntry's doc
+// comment for why the resulting per-entry sink also needs each entry's own static "labels:" threaded through).
 func buildConnectors(
 	ctx context.Context,
 	connFactory otelconnector.Factory,
 	telemetry component.TelemetrySettings,
 	entries []resolvedMetric,
-	sink consumer.Metrics,
+	reg *metricsRegistry,
+	item string,
 ) ([]otelconnector.Logs, error) {
-	infos := make(map[string]countconnector.MetricInfo, len(entries))
+	var conns []otelconnector.Logs
 
 	for _, entry := range entries {
 		info, err := metricInfo(entry.Metric, entry.Raw)
@@ -226,19 +248,23 @@ func buildConnectors(
 			continue
 		}
 
-		infos[entry.Metric] = info
+		labelsKey := encodeLabelSet(extractLabels(entry.Raw))
+
+		conn, err := createConnector(ctx, connFactory, telemetry, counterCfg, reg.metricsSinkForEntry(item, labelsKey))
+		if err != nil {
+			logger.Printf("logmetrics: metric %q disabled, failed to build connector: %v", entry.Metric, err)
+
+			continue
+		}
+
+		conns = append(conns, conn)
 	}
 
-	if len(infos) == 0 {
+	if len(conns) == 0 {
 		return nil, errNoValidCounter
 	}
 
-	conn, err := createConnector(ctx, connFactory, telemetry, &countconnector.Config{Logs: infos}, sink)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", errNoValidCounter, err)
-	}
-
-	return []otelconnector.Logs{conn}, nil
+	return conns, nil
 }
 
 // metricInfo builds the countconnector.MetricInfo for metric name from its raw config.LogMetricEntry.

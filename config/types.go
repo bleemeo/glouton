@@ -204,12 +204,15 @@ type LogReceiver = map[string]any
 //
 // item, labels and attributes can all three produce a value for the same label key (most notably
 // "item" itself, since nothing stops an attributes entry from using that key, or a labels entry from
-// setting "item"). Where they collide, precedence is item > labels > attributes: the auto-derived/
-// explicit item and every labels: entry are reserved-key-safe, static, and operator-declared, so they
-// always win; an attribute (extracted from the log line's own content at match time, so effectively
-// untrusted/dynamic) only fills in a label key nothing else has already claimed -- it is dropped, never
-// promoted, on collision. See otel/logmetrics/registry.go's resolve()/resolveAttrCounterLocked for the
-// implementation.
+// setting "item"). A top-level item: and a labels: {item: ...} entry are two equally valid spellings
+// of the same override -- item: wins if both are set, otherwise labels: {item: ...} is used exactly as
+// if it had been written as item: (see extractItem in otel/logmetrics/metrics.go). Every other
+// labels: key, and "item"/"__name__" set via attributes, follow the usual precedence: item > labels >
+// attributes -- the auto-derived/explicit item and every labels: entry are reserved-key-safe, static,
+// and operator-declared, so they always win; an attribute (extracted from the log line's own content
+// at match time, so effectively untrusted/dynamic) only fills in a label key nothing else has already
+// claimed -- it is dropped, never promoted, on collision. See otel/logmetrics/registry.go's
+// resolve()/resolveAttrCounterLocked for the implementation.
 //
 // Kept raw (not a struct) for the same verbatim-passthrough reason as
 // LogReceiver, and so "item" stays distinguishable as absent (derive it)
