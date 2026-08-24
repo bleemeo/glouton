@@ -255,13 +255,27 @@ func (s *State) saveCacheIfFileNotDeleted() {
 	s.triggerCacheWrite(false, true)
 }
 
+// createTempFile creates the temporary file used to write a state file before
+// renaming it.
+// Any pre-existing file is removed first: when it is a symlink, only the link
+// is removed and not its target. The file is then created exclusively, so a
+// symlink re-created in-between isn't followed either. Without this, a symlink
+// planted at that path would redirect the write of the agent credentials.
+func createTempFile(path string) (*os.File, error) {
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+
+	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+}
+
 func (s *State) savePersistent() error {
 	if s.isInMemory {
 		return nil
 	}
 
 	if s.persistent.dirty {
-		w, err := os.OpenFile(s.persistentPath+tmpExt, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+		w, err := createTempFile(s.persistentPath + tmpExt)
 		if err != nil {
 			return err
 		}
@@ -365,7 +379,7 @@ func (s *State) writeCache(onlyIfFileExists bool) error {
 
 	s.l.RUnlock()
 
-	w, err := os.OpenFile(tmpCachePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	w, err := createTempFile(tmpCachePath)
 	if err != nil {
 		return err
 	}
@@ -377,6 +391,9 @@ func (s *State) writeCache(onlyIfFileExists bool) error {
 		return err
 	}
 
+	// Unlike savePersistent, the cache is not fsync-ed on purpose: it is
+	// written often and losing it on a power cut only costs a full resync,
+	// which is the whole point of keeping it apart from state.json.
 	_ = w.Close()
 
 	err = os.Rename(tmpCachePath, cachePath)
