@@ -55,7 +55,9 @@ type MonitorUpdate struct {
 func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
 	if !s.option.Config.Blackbox.Enable {
 		// prevent a tiny memory leak
+		s.l.Lock()
 		s.pendingMonitorsUpdate = nil
+		s.l.Unlock()
 
 		return false, nil
 	}
