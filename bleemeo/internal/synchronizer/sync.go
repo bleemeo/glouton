@@ -81,7 +81,10 @@ type Synchronizer struct {
 	hasFeature    map[types.APIFeature]bool
 
 	requestCounter atomic.Uint32
-	realClient     *bleemeo.Client
+	// realClient and agentID are only written by the synchronization loop
+	// goroutine, while holding l. The synchronization loop may read them
+	// without the lock, any other goroutine must hold l to read them.
+	realClient *bleemeo.Client
 
 	// These fields should always be set in the reload state after being modified.
 	nextFullSync  time.Time
@@ -98,8 +101,9 @@ type Synchronizer struct {
 	warnAccountMismatchDone   bool
 	maintenanceMode           bool
 	suspendedMode             bool
-	agentID                   string
-	delayedContainer          map[string]time.Time
+	// See the comment on realClient about the locking of agentID.
+	agentID          string
+	delayedContainer map[string]time.Time
 
 	lastLogByKey map[string]time.Time
 
@@ -531,12 +535,15 @@ func (s *Synchronizer) DiagnosticPage() string {
 		port = 443
 	}
 
-	var apiClient *bleemeo.Client
-
 	s.l.Lock()
 
-	if s.realClient == nil {
-		err = s.setClient()
+	apiClient := s.realClient
+
+	if apiClient == nil {
+		// The client is only built for this diagnostic and not stored on the
+		// Synchronizer: DiagnosticPage runs on another goroutine and s.realClient
+		// is only written by the synchronization loop.
+		apiClient, err = s.buildClient()
 		if err != nil {
 			s.l.Unlock()
 
@@ -545,8 +552,6 @@ func (s *Synchronizer) DiagnosticPage() string {
 			return builder.String()
 		}
 	}
-
-	apiClient = s.realClient
 
 	s.l.Unlock()
 
@@ -939,17 +944,25 @@ func (s *Synchronizer) VerifyAndGetToken(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("%w: %s", ErrBleemeoDisabled, disableReason.String())
 	}
 
+	// This method is called by the MQTT client, so it doesn't run on the
+	// synchronization loop goroutine which owns realClient and agentID.
 	s.l.Lock()
 	hadSyncOnce := !s.lastSync.IsZero()
+	apiClient := s.realClient
+	agentID := s.agentID
 	s.l.Unlock()
 
 	if !hadSyncOnce && stateHasValue(agentAuthBrokenCacheKey, s.option.State) {
 		return "", fmt.Errorf("%w: not yet started", ErrBleemeoDisabled)
 	}
 
+	if apiClient == nil {
+		return "", errClientUninitialized
+	}
+
 	// Low-cost API endpoint, used to test the validity of our token.
 	// We rely on the client to renew the token if it has expired.
-	result, err := s.realClient.Get(ctx, bleemeo.ResourceAgent, s.agentID, "id")
+	result, err := apiClient.Get(ctx, bleemeo.ResourceAgent, agentID, "id")
 	if err != nil {
 		return "", err
 	}
@@ -963,11 +976,11 @@ func (s *Synchronizer) VerifyAndGetToken(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	if res.ID != s.agentID {
+	if res.ID != agentID {
 		return "", errInvalidAgentID
 	}
 
-	token, err := s.realClient.GetToken(ctx)
+	token, err := apiClient.GetToken(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -975,7 +988,22 @@ func (s *Synchronizer) VerifyAndGetToken(ctx context.Context) (string, error) {
 	return token.AccessToken, nil
 }
 
+// setClient creates the API client and stores it on the Synchronizer.
+// The caller must hold s.l.
 func (s *Synchronizer) setClient() error {
+	client, err := s.buildClient()
+	if err != nil {
+		return err
+	}
+
+	s.realClient = client
+
+	return nil
+}
+
+// buildClient creates a new API client without storing it.
+// The caller must hold s.l.
+func (s *Synchronizer) buildClient() (*bleemeo.Client, error) {
 	username := s.agentID + "@bleemeo.com"
 	_, password := s.option.State.BleemeoCredentials()
 
@@ -1021,7 +1049,7 @@ func (s *Synchronizer) setClient() error {
 		Transport: gloutonTypes.NewHTTPTransport(tlsConfig, transportOpts),
 	}
 
-	client, err := bleemeo.NewClient(
+	return bleemeo.NewClient(
 		bleemeo.WithCredentials(username, password),
 		bleemeo.WithOAuthClient(gloutonOAuthClientID, ""),
 		bleemeo.WithEndpoint(s.option.Config.Bleemeo.APIBase),
@@ -1029,13 +1057,6 @@ func (s *Synchronizer) setClient() error {
 		bleemeo.WithHTTPClient(cl),
 		initialRefreshTokenOpt,
 	)
-	if err != nil {
-		return err
-	}
-
-	s.realClient = client
-
-	return nil
 }
 
 // HealthCheck perform some health check and log any issue found.
@@ -1271,11 +1292,13 @@ func (s *Synchronizer) register(ctx context.Context) error {
 		return err
 	}
 
+	s.l.Lock()
 	s.agentID = agentID
+	s.l.Unlock()
 
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
 		scope.SetContext("agent", map[string]any{
-			"agent_id":         s.agentID,
+			"agent_id":         agentID,
 			factGloutonVersion: version.Version,
 		})
 	})
