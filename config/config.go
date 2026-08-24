@@ -338,7 +338,7 @@ func loadPaths(loader *configLoader, paths []string) (prometheus.MultiError, pro
 	var warnings, errors prometheus.MultiError
 
 	for _, path := range paths {
-		stat, err := os.Stat(path) //nolint:gosec // path comes from config, not user input
+		stat, err := os.Stat(path)
 		if err != nil && os.IsNotExist(err) {
 			logger.V(2).Printf("config file %s ignored because it does not exists", path)
 

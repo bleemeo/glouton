@@ -410,7 +410,7 @@ func (a *agentReloader) watchConfig(ctx context.Context, reload chan struct{}) {
 	}()
 
 	for _, dir := range configPaths {
-		fileInfo, err := os.Stat(dir) //nolint:gosec // path comes from config, not user input
+		fileInfo, err := os.Stat(dir)
 		if err != nil {
 			logger.V(2).Printf("Failed to stat file %v: %v", dir, err)
 

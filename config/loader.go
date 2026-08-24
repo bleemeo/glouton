@@ -168,7 +168,7 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 // addYAMLSyntaxHint improves a YAML syntax error by re-parsing the same file with github.com/goccy/go-yaml.
 // Unlike yaml.v3, goccy/go-yaml's errors point at the exact line and column of the mistake.
 func addYAMLSyntaxHint(err error, path string) error {
-	data, readErr := os.ReadFile(path) //nolint:gosec
+	data, readErr := os.ReadFile(path)
 	if readErr != nil {
 		return err
 	}
