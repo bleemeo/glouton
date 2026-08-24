@@ -58,7 +58,11 @@ var (
 )
 
 // reloadState implements the types.BleemeoReloadState interface.
+// It is used from multiple goroutines: the synchronizer, the MQTT client
+// (which refreshes the OAuth token through the API client) and the agent
+// during a reload. All fields are protected by l.
 type reloadState struct {
+	l             sync.Mutex
 	mqtt          types.MQTTReloadState
 	nextFullSync  time.Time
 	fullSyncCount int
@@ -70,40 +74,68 @@ func NewReloadState() types.BleemeoReloadState {
 }
 
 func (rs *reloadState) MQTTReloadState() types.MQTTReloadState {
+	rs.l.Lock()
+	defer rs.l.Unlock()
+
 	return rs.mqtt
 }
 
 func (rs *reloadState) SetMQTTReloadState(client types.MQTTReloadState) {
+	rs.l.Lock()
+	defer rs.l.Unlock()
+
 	rs.mqtt = client
 }
 
 func (rs *reloadState) NextFullSync() time.Time {
+	rs.l.Lock()
+	defer rs.l.Unlock()
+
 	return rs.nextFullSync
 }
 
 func (rs *reloadState) SetNextFullSync(t time.Time) {
+	rs.l.Lock()
+	defer rs.l.Unlock()
+
 	rs.nextFullSync = t
 }
 
 func (rs *reloadState) FullSyncCount() int {
+	rs.l.Lock()
+	defer rs.l.Unlock()
+
 	return rs.fullSyncCount
 }
 
 func (rs *reloadState) SetFullSyncCount(count int) {
+	rs.l.Lock()
+	defer rs.l.Unlock()
+
 	rs.fullSyncCount = count
 }
 
 func (rs *reloadState) Token() *oauth2.Token {
+	rs.l.Lock()
+	defer rs.l.Unlock()
+
 	return rs.token
 }
 
 func (rs *reloadState) SetToken(token *oauth2.Token) {
+	rs.l.Lock()
+	defer rs.l.Unlock()
+
 	rs.token = token
 }
 
 func (rs *reloadState) Close() {
-	if rs.mqtt != nil {
-		rs.mqtt.Close()
+	rs.l.Lock()
+	mqtt := rs.mqtt
+	rs.l.Unlock()
+
+	if mqtt != nil {
+		mqtt.Close()
 	}
 }
 
