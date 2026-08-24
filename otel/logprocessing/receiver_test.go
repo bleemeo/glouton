@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sync"
@@ -388,6 +389,31 @@ func TestFileLogReceiver(t *testing.T) {
 	}
 	if diff := cmp.Diff(expectedDiagnosticInfo, recv.diagnosticInfo(), sortFilesOpt); diff != "" {
 		t.Fatalf("Unexpected diagnostic information (-want, +got):\n%s", diff)
+	}
+}
+
+// TestLogReceiverSizesByFileSkipsOnlyTheFailingFile guards against a regression where one file's
+// non-ErrNotExist stat error aborted SizesByFile entirely, discarding every other file's
+// already-successfully-read size (same bug shape and fix as otel/logsource's managedSource.SizesByFile
+// and otel/logprocessing's containerReceiver.SizesByFile).
+func TestLogReceiverSizesByFileSkipsOnlyTheFailingFile(t *testing.T) {
+	t.Parallel()
+
+	recv := &logReceiver{
+		sizeFnByFile: map[string]func() (int64, error){
+			"good.log": func() (int64, error) { return 42, nil },
+			"bad.log":  func() (int64, error) { return 0, errors.New("permission denied") }, //nolint:err113
+			"gone.log": func() (int64, error) { return 0, fs.ErrNotExist },
+		},
+	}
+
+	sizes, err := recv.SizesByFile()
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if diff := cmp.Diff(map[string]int64{"good.log": 42}, sizes); diff != "" {
+		t.Fatalf("Unexpected sizes (-want +got):\n%s", diff)
 	}
 }
 

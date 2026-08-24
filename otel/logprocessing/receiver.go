@@ -310,13 +310,13 @@ func (r *logReceiver) SizesByFile() (map[string]int64, error) {
 	for logFile, sizeFn := range r.sizeFnByFile {
 		size, err := sizeFn()
 		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
+			if !errors.Is(err, fs.ErrNotExist) {
 				// We may not catch errors produced by the "sudo stat" cmd,
 				// but this would not really be convenient ...
-				continue
+				logger.V(1).Printf("Can't get size of file %q (ignoring it): %v", logFile, err)
 			}
 
-			return nil, err
+			continue
 		}
 
 		sizes[logFile] = size
