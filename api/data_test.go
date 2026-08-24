@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/threshold"
 	"github.com/bleemeo/glouton/types"
 )
@@ -226,3 +227,20 @@ type stubState struct{}
 
 func (stubState) Get(string, any) error { return nil }
 func (stubState) Set(string, any) error { return nil }
+
+// TestServicesNilDB checks that the Services handler doesn't dereference a nil
+// metric store, like the other handlers.
+func TestServicesNilDB(t *testing.T) {
+	t.Parallel()
+
+	d := Data{api: &API{Discovery: &discovery.Discovery{}, DB: nil}}
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/data/services", nil)
+	rec := httptest.NewRecorder()
+
+	d.Services(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("Services() status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
