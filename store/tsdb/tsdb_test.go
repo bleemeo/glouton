@@ -18,7 +18,9 @@ package tsdb
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -212,4 +214,58 @@ func nanFloat() float64 {
 	zero := 0.0
 
 	return zero / zero
+}
+
+// TestCloseDuringUse checks that closing the store while it is used doesn't
+// panic nor use the closed prometheus DB. It is mostly useful with -race.
+func TestCloseDuringUse(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	store, err := Open(Options{Path: dir, Retention: 24 * time.Hour})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	now := time.Now().Truncate(time.Second)
+	points := []types.MetricPoint{
+		{
+			Point:  types.Point{Time: now, Value: 1},
+			Labels: map[string]string{labelName: testCPUUsed, testInstance: testHost1},
+		},
+	}
+
+	var wg sync.WaitGroup
+
+	for range 4 {
+		wg.Go(func() {
+			for range 50 {
+				store.PushPoints(context.Background(), points)
+				store.OldestPointMs()
+
+				querier, err := store.Querier(now.UnixMilli()-1000, now.UnixMilli())
+				if err != nil {
+					if !errors.Is(err, errStoreClosed) {
+						t.Errorf("Querier: %v", err)
+					}
+
+					continue
+				}
+
+				_ = querier.Close()
+			}
+		})
+	}
+
+	if err := store.Close(); err != nil {
+		t.Errorf("Close: %v", err)
+	}
+
+	wg.Wait()
+
+	// Closing twice is a no-op.
+	if err := store.Close(); err != nil {
+		t.Errorf("second Close: %v", err)
+	}
 }
