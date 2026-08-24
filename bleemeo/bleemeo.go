@@ -1039,6 +1039,31 @@ func (c *Connector) HealthCheck() bool {
 
 	lastReport := c.LastReport()
 
+	ok, unhealthy := c.healthCheck(lastReport, ok)
+
+	if unhealthy {
+		logger.Printf("Restarting MQTT is not enough. Glouton seems unhealthy, killing myself")
+
+		// We don't know how big the buffer needs to be to collect
+		// all the goroutines. Use 2MB buffer which hopefully is enough
+		buffer := make([]byte, 1<<21)
+
+		n := runtime.Stack(buffer, true)
+		logger.Printf("%s", string(buffer[:n]))
+
+		// DiagnosticPage takes the connector lock, so it must be built once the
+		// lock is released: doing it while holding the lock would deadlock
+		// instead of restarting Glouton.
+		panic(fmt.Sprint("Glouton seems unhealthy (last report too old), killing myself\n", c.DiagnosticPage()))
+	}
+
+	return ok
+}
+
+// healthCheck does the part of the health check that needs the connector lock.
+// It returns whether the connector is healthy, and whether Glouton must be
+// killed because MQTT didn't report for too long.
+func (c *Connector) healthCheck(lastReport time.Time, ok bool) (bool, bool) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -1049,7 +1074,7 @@ func (c *Connector) HealthCheck() bool {
 
 		logger.Printf("Bleemeo connector is still disabled for %v due to '%v'", delay.Truncate(time.Second), c.disableReason)
 
-		return false
+		return false, false
 	}
 
 	if c.mqtt != nil {
@@ -1064,15 +1089,7 @@ func (c *Connector) HealthCheck() bool {
 				c.mqttReportConsecutiveError++
 
 				if c.mqttReportConsecutiveError >= 3 {
-					logger.Printf("Restarting MQTT is not enough. Glouton seems unhealthy, killing myself")
-
-					// We don't know how big the buffer needs to be to collect
-					// all the goroutines. Use 2MB buffer which hopefully is enough
-					buffer := make([]byte, 1<<21)
-
-					n := runtime.Stack(buffer, true)
-					logger.Printf("%s", string(buffer[:n]))
-					panic(fmt.Sprint("Glouton seems unhealthy (last report too old), killing myself\n", c.DiagnosticPage()))
+					return ok, true
 				}
 			}
 
@@ -1090,7 +1107,7 @@ func (c *Connector) HealthCheck() bool {
 		c.sync.SetMQTTConnected(false)
 	}
 
-	return ok
+	return ok, false
 }
 
 func (c *Connector) EmitInternalMetric(_ context.Context, state registry.GatherState, app storage.Appender) error {
