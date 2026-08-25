@@ -384,6 +384,51 @@ func TestRegistryForgetSkipsStaleEpochAfterReuse(t *testing.T) {
 	}
 }
 
+// TestRegistryStaleForgetDoesNotStealLivePendingRelease guards against a regression where forget()
+// unconditionally deleted reg.pendingRelease[item] before checking its epoch: a stale forget() call
+// (its timer already fired, but the goroutine only acquires reg.l after a newer release() cycle already
+// installed a fresh, live timer for the same item) would erase that live timer's only bookkeeping entry.
+// A later resolve() checking pendingRelease would then find nothing to cancel, so it wouldn't bump the
+// epoch or stop the still-armed live timer -- which would go on to fire and wrongly forgetLocked an item
+// back in active use. Complements TestRegistryForgetSkipsStaleEpochAfterReuse's "stale forget must not
+// delete the reused counters" invariant with the pendingRelease bookkeeping side of the same fix.
+func TestRegistryStaleForgetDoesNotStealLivePendingRelease(t *testing.T) {
+	t.Parallel()
+
+	reg := newMetricsRegistry(time.Hour) // grace period irrelevant: forget()/release() called directly below
+
+	reg.resolve([]metricSpec{{Metric: "app_errors_count"}}, "web-1")
+
+	reg.release("web-1") // schedules the first (soon-to-be-stale) pending release, epoch e0
+	staleEpoch := reg.releaseEpoch["web-1"]
+
+	// A same-named replacement reuses the item, cancelling the first pending release (bumps the epoch).
+	reg.resolve([]metricSpec{{Metric: "app_errors_count"}}, "web-1")
+
+	// The item is released again: a new, live pending release is installed under the bumped epoch.
+	reg.release("web-1")
+
+	liveTimer, pending := reg.pendingRelease["web-1"]
+	if !pending {
+		t.Fatal("Expected the second release() to install a live pending release")
+	}
+
+	// Simulate the first release()'s delayed forget() goroutine finally running now, with the epoch it
+	// captured before either of the above events invalidated it.
+	reg.forget("web-1", staleEpoch)
+
+	if got, pending := reg.pendingRelease["web-1"]; !pending || got != liveTimer {
+		t.Fatal("Expected the stale forget() call to leave the live pending release untouched")
+	}
+
+	// A resolve() now must still be able to see and cancel that live pending release.
+	reg.resolve([]metricSpec{{Metric: "app_errors_count"}}, "web-1")
+
+	if _, pending := reg.pendingRelease["web-1"]; pending {
+		t.Error("Expected resolve() to cancel the live pending release the stale forget() left behind")
+	}
+}
+
 // Test that custom static labels merge in but can never override the reserved __name__/item labels.
 func TestRegistryLabels(t *testing.T) {
 	t.Parallel()

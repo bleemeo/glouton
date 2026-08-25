@@ -229,9 +229,6 @@ func TestLoader(t *testing.T) {
 			Value: map[string]any{
 				testCPUUsed: map[string]any{
 					"high_critical": 90.0,
-					"high_warning":  nil,
-					"low_critical":  nil,
-					"low_warning":   nil,
 				},
 			},
 			Type:     TypeThresholds,

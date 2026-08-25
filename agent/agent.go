@@ -2119,24 +2119,32 @@ func (a *agent) updatedDiscovery(ctx context.Context, services []discovery.Servi
 	if a.logProcessManager != nil || a.receiverManager != nil {
 		containers, err := a.containerRuntime.Containers(ctx, time.Hour, false)
 		if err != nil {
+			// Must not fall through with containers == nil below: both UpdateContainers and
+			// HandleLogsFromDynamicSources treat an empty/nil list as "every previously-tracked
+			// container is gone", which forgets their persisted read offsets for good (see
+			// ReceiverManager.updateLabelContainers/stopUnwantedContainerTails and
+			// logprocessing.Manager.removeOldSources) -- on a transient error that's a real, permanent
+			// loss of file position (fileconsumer's StartAt defaults to "end", not "beginning"), not
+			// just a delayed update. Skip this cycle instead and retry on the next one, like the
+			// dynamicScrapper.Update call above already does.
 			logger.V(1).Printf("Failed to retrieve containers: %v", err)
-		}
-
-		// receiverManager resolves container_name/container_selectors matches and
-		// glouton.* label opt-ins itself, so it needs the full container list.
-		if a.receiverManager != nil {
-			a.receiverManager.UpdateContainers(ctx, containers)
-		}
-
-		if a.logProcessManager != nil {
-			// Per-service-type log format auto-detection still depends on
-			// auto_discovery.container_and_service_enable, as before.
-			var logServices []discovery.Service
-			if a.config.Log.OpenTelemetry.AutoDiscovery.ContainerAndServiceEnable {
-				logServices = services
+		} else {
+			// receiverManager resolves container_name/container_selectors matches and
+			// glouton.* label opt-ins itself, so it needs the full container list.
+			if a.receiverManager != nil {
+				a.receiverManager.UpdateContainers(ctx, containers)
 			}
 
-			a.logProcessManager.HandleLogsFromDynamicSources(ctx, logServices, containers)
+			if a.logProcessManager != nil {
+				// Per-service-type log format auto-detection still depends on
+				// auto_discovery.container_and_service_enable, as before.
+				var logServices []discovery.Service
+				if a.config.Log.OpenTelemetry.AutoDiscovery.ContainerAndServiceEnable {
+					logServices = services
+				}
+
+				a.logProcessManager.HandleLogsFromDynamicSources(ctx, logServices, containers)
+			}
 		}
 	}
 }

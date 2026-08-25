@@ -285,16 +285,22 @@ func (reg *metricsRegistry) forgetLocked(item string) {
 // is the value releaseEpoch[item] had when this release() call scheduled it; if a resolve() reused item
 // in the meantime, cancelPendingReleaseLocked already bumped releaseEpoch, so this call is stale and must
 // not delete the counters that resolve() just reused (see releaseEpoch's doc comment).
+//
+// The epoch check must run before touching pendingRelease, not after: a stale call reaching this point
+// (its timer already fired) doesn't own whatever is currently in pendingRelease[item] -- resolve()/
+// release() may already have installed a newer, still-live timer there for a later release() cycle.
+// Deleting it unconditionally would erase that live entry's only bookkeeping: a later resolve() checking
+// pendingRelease would find nothing to cancel, so it wouldn't bump the epoch or stop that live timer,
+// which would then fire and wrongly forgetLocked an item back in active use.
 func (reg *metricsRegistry) forget(item string, epoch uint64) {
 	reg.l.Lock()
 	defer reg.l.Unlock()
-
-	delete(reg.pendingRelease, item)
 
 	if reg.releaseEpoch[item] != epoch {
 		return
 	}
 
+	delete(reg.pendingRelease, item)
 	reg.forgetLocked(item)
 }
 

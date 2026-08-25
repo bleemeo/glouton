@@ -126,13 +126,17 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 	config, moreWarnings := convertTypes(k)
 	warnings = append(warnings, moreWarnings...)
 
-	// Computed once per Load() call (not once per key) since it's only needed for
-	// SourceEnv and is otherwise unused; both the pruning check below and priority()
-	// share this single map instead of each recomputing it per key.
-	var dynamicKeys map[string]bool
-	if providerType == SourceEnv {
-		dynamicKeys = dynamicEnvVarConfigKeys()
-	}
+	// Computed once per Load() call (not once per key): shared by the pruning check below and
+	// priority(). Not just a SourceEnv concern: convertTypes' Config-struct round trip (Unmarshal into
+	// the typed Config, then back out via structs.ProviderWithDelim) materializes every unset pointer
+	// field of these keys' struct types (NetworkListener/NetworkProtocols, Threshold) as an explicit
+	// nil, for every provider -- a file that only sets one sibling field (e.g. protocols.http, leaving
+	// protocols.grpc unset) round-trips with an explicit "grpc: null" exactly like a dynamic env var
+	// does. Without pruning that here too, merge() (loader.go) would treat that invented nil as this
+	// file intentionally overwriting a sibling field a different, earlier-loaded file set (e.g.
+	// protocols.grpc), silently dropping it. priority()'s SourceFile branch never consults
+	// dynamicEnvKeys, so passing it unconditionally doesn't change file merge-priority behavior.
+	dynamicKeys := dynamicEnvVarConfigKeys()
 
 	for key, value := range config {
 		if value == nil && !isNilAllowedFor(key) {
@@ -547,14 +551,14 @@ func merge(dst any, src any) (any, error) {
 	}
 }
 
-// pruneNilMapValues recursively removes nil-valued entries from a nested
-// map[string]any. Used only for dynamicEnvVarConfigKeys items sourced from the
-// environment (see resolveDynamicEnvKey): a dynamic env var only sets a single
-// leaf, but the Config-struct round trip in convertTypes fills in every other
-// sibling field (e.g. NetworkListener/NetworkProtocols, for the listener case)
-// as an explicit nil. Without pruning, merge() would treat those explicit nils
-// as the environment intentionally overwriting sibling fields (e.g. an
-// untouched HTTP endpoint) defined in a config file.
+// pruneNilMapValues recursively removes nil-valued entries from a nested map[string]any. Applied to
+// every dynamicEnvVarConfigKeys() item (see resolveDynamicEnvKey), from any provider (env, file,
+// default): setting only one leaf/sibling field of one of these keys' struct types
+// (NetworkListener/NetworkProtocols, Threshold) still round-trips through convertTypes' Config-struct
+// Unmarshal-then-re-encode, which fills in every other sibling field as an explicit nil. Without
+// pruning, merge() would treat those invented nils as this item intentionally overwriting a sibling
+// field (e.g. an untouched HTTP endpoint) that a different item -- a dynamic env var, or another
+// config file -- set.
 func pruneNilMapValues(value any) any {
 	m, ok := value.(map[string]any)
 	if !ok {

@@ -2354,6 +2354,39 @@ func Test_loadNetworkListenerSurvivesDefaultMerge(t *testing.T) {
 	}
 }
 
+// Test_loadNetworkListenerSplitAcrossFilesSurvivesMerge guards against a regression where splitting one
+// listener's protocols across two conf.d files (file A sets grpc, file B sets http) lost file A's
+// protocol: convertTypes' Config-struct round trip fills in file B's unset "grpc" field as an explicit
+// nil (same mechanism dynamicEnvVarConfigKeys/pruneNilMapValues already guards for dynamic env vars, but
+// pruning used to be gated on provider == SourceEnv), so merge()'s fallback case
+// (dst/src not both maps) treated that invented nil as file B intentionally overwriting file A's grpc
+// protocol -- dropping it, even though file B never mentioned grpc at all.
+func Test_loadNetworkListenerSplitAcrossFilesSurvivesMerge(t *testing.T) {
+	t.Parallel()
+
+	cfg, _, warnings, err := Load(true, false, "testdata/split-listener-grpc.conf", "testdata/split-listener-http.conf")
+	if err != nil {
+		t.Fatalf("Load returned an error: %v", err)
+	}
+
+	if warnings != nil {
+		t.Fatalf("Expected no warnings, got: %v", warnings)
+	}
+
+	listener, ok := cfg.OpenTelemetry.NetworkListeners["otlp/my_custom"]
+	if !ok {
+		t.Fatalf("Expected an %q network listener, got %v", "otlp/my_custom", cfg.OpenTelemetry.NetworkListeners)
+	}
+
+	if listener.Protocols.GRPC == nil || listener.Protocols.GRPC.Endpoint != "0.0.0.0:4317" {
+		t.Errorf("Expected the first file's GRPC endpoint to survive, got %+v", listener.Protocols)
+	}
+
+	if listener.Protocols.HTTP == nil || listener.Protocols.HTTP.Endpoint != "0.0.0.0:4318" {
+		t.Errorf("Expected the second file's HTTP endpoint to survive, got %+v", listener.Protocols)
+	}
+}
+
 // Test_loadDynamicListenerEnv guards resolveDynamicEnvKey and its interaction with the loader's
 // merge-priority logic: a GLOUTON_OPENTELEMETRY_LISTENERS_<name>_PROTOCOLS_GRPC/HTTP_ENDPOINT variable must
 // only overwrite that single leaf, not wholesale-replace the whole opentelemetry.listeners map (which
