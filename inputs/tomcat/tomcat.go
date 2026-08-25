@@ -81,15 +81,8 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 		return fields
 	}
 
-	processingTimeRate, hasProcessingTime := fields["processing_time"]
-	requestCountRate, hasRequestCount := fields["request_count"]
-
-	delete(fields, "processing_time")
-
-	// Protect from division by 0.
-	if hasProcessingTime && hasRequestCount && requestCountRate > 0 {
-		fields["processing_time_seconds"] = processingTimeRate / requestCountRate / 1000 // milliseconds -> seconds.
-	}
+	// processing_time counts milliseconds, as the manager webapp reports it.
+	internal.AvgDuration(fields, "processing_time", "request_count", "processing_time_seconds", internal.MsPerSecond)
 
 	return fields
 }

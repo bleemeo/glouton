@@ -1,0 +1,68 @@
+// Copyright 2015-2026 Bleemeo
+//
+// bleemeo.com an infrastructure monitoring solution in the Cloud
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package internal
+
+import "strings"
+
+// Units a cumulative duration counter can count in, as the number of them in one second.
+// They are what AvgDuration divides by to report seconds whatever the input reports.
+const (
+	NsPerSecond = 1e9
+	UsPerSecond = 1e6
+	MsPerSecond = 1e3
+)
+
+// AvgDuration replaces the rate of a cumulative duration counter by the average duration
+// of one operation, in seconds: the duration accumulated per second divided by the number
+// of operations completed per second. Both fields must already be rates -- the accumulator
+// differentiates them -- and the raw duration rate is dropped, being meaningless on its own.
+//
+// unitDivisor is how many of the duration's own units make a second: NsPerSecond when the
+// counter counts nanoseconds, MsPerSecond when it counts milliseconds.
+//
+// Nothing is written when either field is missing, or when no operation completed during
+// the period, which would otherwise be a division by zero.
+func AvgDuration(fields map[string]float64, durationField, countField, outputName string, unitDivisor float64) {
+	durationRate, hasDuration := fields[durationField]
+	countRate, hasCount := fields[countField]
+
+	delete(fields, durationField)
+
+	if hasDuration && hasCount && countRate > 0 {
+		fields[outputName] = durationRate / countRate / unitDivisor
+	}
+}
+
+// JoinNonEmptyTags joins the values of the given tags, in the order their keys are given,
+// into the item that tells the series of one measurement apart. Without it the series of a
+// measurement reported once per label set would all land on the same name with the same
+// (empty) label set, and be rejected as duplicates.
+//
+// Tags that are missing or empty are skipped, so that a label the service left unset
+// doesn't show up as a stray separator, and values are trimmed: some inputs read them from
+// a padded XML document.
+func JoinNonEmptyTags(tags map[string]string, keys []string) string {
+	values := make([]string, 0, len(keys))
+
+	for _, key := range keys {
+		if value := strings.TrimSpace(tags[key]); value != "" {
+			values = append(values, value)
+		}
+	}
+
+	return strings.Join(values, "_")
+}

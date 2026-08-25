@@ -121,6 +121,12 @@ func TestRenamePipelineStats(t *testing.T) {
 		"pgbouncer_sent_bytes":         50,
 		"pgbouncer_query_time_seconds": 0.1,
 	})
+
+	// The raw duration rate is meaningless by itself and must not be emitted alongside
+	// the average derived from it.
+	if value, ok := got["pgbouncer_total_query_time"]; ok {
+		t.Errorf("raw duration rate should have been dropped, got value %v", value)
+	}
 }
 
 // TestRenamePipelinePools exercises the "pgbouncer_pools" measurement (SHOW

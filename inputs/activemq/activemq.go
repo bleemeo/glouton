@@ -132,13 +132,5 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 // subscriberItem builds the item of a subscriber by joining the tags identifying it,
 // skipping those the broker left empty.
 func subscriberItem(tags map[string]string) string {
-	parts := make([]string, 0, len(subscriberItemTags))
-
-	for _, tag := range subscriberItemTags {
-		if value := strings.TrimSpace(tags[tag]); value != "" {
-			parts = append(parts, value)
-		}
-	}
-
-	return strings.Join(parts, "_")
+	return internal.JoinNonEmptyTags(tags, subscriberItemTags)
 }

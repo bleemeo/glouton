@@ -103,15 +103,7 @@ func labelItem(tags map[string]string) string {
 
 	sort.Strings(keys)
 
-	values := make([]string, 0, len(keys))
-
-	for _, key := range keys {
-		if value := tags[key]; value != "" {
-			values = append(values, value)
-		}
-	}
-
-	return strings.Join(values, "_")
+	return internal.JoinNonEmptyTags(tags, keys)
 }
 
 // gaugeSubsystems are the Consul subsystems reporting gauges. They are the only place

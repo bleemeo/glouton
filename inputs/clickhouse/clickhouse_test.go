@@ -142,6 +142,17 @@ func TestRenamePipelineEvents(t *testing.T) {
 		"clickhouse_events_query_time_seconds":    0.8,
 		"clickhouse_events_mutation_time_seconds": 3,
 	})
+
+	// The raw duration rates are meaningless by themselves and must not be emitted
+	// alongside the averages derived from them.
+	for _, name := range []string{
+		"clickhouse_events_query_time_microseconds",
+		"clickhouse_events_mutation_total_milliseconds",
+	} {
+		if value, ok := got[name]; ok {
+			t.Errorf("raw duration rate %q should have been dropped, got value %v", name, value)
+		}
+	}
 }
 
 // TestRenamePipelineMetrics exercises the "clickhouse_metrics" measurement,

@@ -1772,6 +1772,23 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
+			// Same as JIRA above: Confluence runs on Tomcat, so the plain Tomcat entry
+			// must not shadow the more specific one.
+			testName: "confluence-not-detected-as-tomcat",
+			cmdLine: []string{
+				"java", "-Dcatalina.base=/opt/atlassian/confluence", "-Dcatalina.home=/opt/atlassian/confluence",
+				"-classpath", "/opt/atlassian/confluence/bin/bootstrap.jar", "org.apache.catalina.startup.Bootstrap", testStart,
+			},
+			want: Service{
+				Name:            string(ConfluenceService),
+				ServiceType:     ConfluenceService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 8090}},
+				IPAddress:       testIP127001,
+				Active:          true,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
 			// The official ActiveMQ image starts the broker with "java -jar activemq.jar",
 			// so the main class never appears in the cmdline: we match on the
 			// activemq.home system property the launch script always sets.

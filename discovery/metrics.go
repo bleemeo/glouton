@@ -335,11 +335,19 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		// the plugin sends basic auth as soon as either credential is set, so an empty
 		// username would send ":<password>" and get that same 401. The broker's factory
 		// account is used instead, the way ClickHouse defaults to "default" below.
-		if ip, port := service.AddressPort(); ip != "" && service.Config.Password != "" {
-			if service.Config.Username == "" {
-				service.Config.Username = activeMQDefaultUser
-			}
+		//
+		// stats_url is the base URL of the console, not a full one: the plugin resolves
+		// its own /admin/xml/{queues,topics,subscribers}.jsp against it, dropping whatever
+		// path it was given.
+		hasCredentials := service.Config.Password != ""
 
+		if hasCredentials && service.Config.Username == "" {
+			service.Config.Username = activeMQDefaultUser
+		}
+
+		if service.Config.StatsURL != "" && hasCredentials {
+			input, err = activemq.New(service.Config.StatsURL, service.Config.Username, service.Config.Password)
+		} else if ip, port := service.AddressPort(); ip != "" && hasCredentials {
 			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
 			input, err = activemq.New(url, service.Config.Username, service.Config.Password)
 		}
@@ -768,19 +776,34 @@ func getMetricsSocket(service Service) string {
 	return socket
 }
 
+// statsListenerAddress resolves the address of a stats listener that runs on its own port,
+// separate from the one the service was discovered on, and that is opt-in. It returns an
+// empty IP when no address is known for that port.
+//
+// On its default port the service must be seen listening on it, since a service without
+// that listener -- the default configuration -- would otherwise get an input failing on
+// every single gather. That only holds when the listen addresses are the ones netstat
+// reports for the process: those of a containerized service are the ports its container
+// publishes (see getDiscoveryInfo), where such a listener is usually not among them, so
+// there the address is forced and the input is created anyway. Setting stats_port forces
+// it too, as it says the listener is there whether or not Glouton sees the port (the same
+// thing RabbitMQ does for its management port).
+func statsListenerAddress(service Service, defaultPort int) (ip string, port int) {
+	port = defaultPort
+	force := service.ContainerID != ""
+
+	if service.Config.StatsPort != 0 {
+		port = service.Config.StatsPort
+		force = true
+	}
+
+	return service.AddressForPort(port, tcpProtocol, force), port
+}
+
 // bindStatsURL returns the URL of BIND's statistics-channel, or "" when no address is
 // known for it. The statistics-channel is disabled by default and is unrelated to the
 // DNS port used for discovery, so it's looked up on its own default port unless the
-// user configured one.
-//
-// On that default port the service must be seen listening on it, since a BIND without a
-// statistics-channel -- the default configuration -- would otherwise get an input failing
-// on every single gather. That only holds when the listen addresses are the ones netstat
-// reports for the process: those of a containerized service are the ports its container
-// publishes (see getDiscoveryInfo), where a statistics-channel is usually not among them,
-// so there the address is forced and the input is created anyway. Setting stats_port forces
-// it too, as it says the channel is there whether or not Glouton sees the port (the same
-// thing RabbitMQ does for its management port).
+// user configured one -- see statsListenerAddress for how that port is resolved.
 //
 // Auto-discovery always assumes XML v3 (the only format on BIND 9.10+, and available
 // on 9.9+ with --enable-newstats), since the telegraf plugin picks its parser solely
@@ -795,15 +818,7 @@ func bindStatsURL(service Service) string {
 		return service.Config.StatsURL
 	}
 
-	port := bindDefaultStatsPort
-	force := service.ContainerID != ""
-
-	if service.Config.StatsPort != 0 {
-		port = service.Config.StatsPort
-		force = true
-	}
-
-	ip := service.AddressForPort(port, tcpProtocol, force)
+	ip, port := statsListenerAddress(service, bindDefaultStatsPort)
 	if ip == "" {
 		return ""
 	}
@@ -815,26 +830,16 @@ func bindStatsURL(service Service) string {
 // as a unix socket path or as a "host:port" TCP address, or "" when neither is known.
 //
 // old_stats is an opt-in plugin (and is gone from Dovecot 2.4), so like BIND's
-// statistics-channel its default port only counts when the service is seen listening on
-// it: a Dovecot without the plugin has no listener, and an input for it would only report
-// connection errors. Same reservation as bindStatsURL about a containerized service, whose
-// listen addresses are the ports its container publishes rather than what Dovecot listens
-// on: there the address is forced. Configuring stats_port or a metrics unix socket says the
-// listener is there too.
+// statistics-channel it is looked up on its own default port -- a Dovecot without the
+// plugin has no listener, and an input for it would only report connection errors. See
+// statsListenerAddress for how that port is resolved. Configuring a metrics unix socket
+// says the listener is there too.
 func dovecotStatsServer(service Service) string {
 	if socket := getMetricsSocket(service); socket != "" {
 		return socket
 	}
 
-	port := dovecotDefaultStatsPort
-	force := service.ContainerID != ""
-
-	if service.Config.StatsPort != 0 {
-		port = service.Config.StatsPort
-		force = true
-	}
-
-	ip := service.AddressForPort(port, tcpProtocol, force)
+	ip, port := statsListenerAddress(service, dovecotDefaultStatsPort)
 	if ip == "" {
 		return ""
 	}

@@ -113,7 +113,7 @@ func TestRenamePipelineConnector(t *testing.T) {
 		"error_count":          uint64(10),
 		"processing_time":      uint64(20000),
 		"request_count":        uint64(1000),
-		"current_thread_busy":  5.0,
+		"current_threads_busy": 5.0,
 		"current_thread_count": 20.0,
 		"max_threads":          200.0,
 		"max_time":             300.0,
@@ -133,7 +133,7 @@ func TestRenamePipelineConnector(t *testing.T) {
 		"error_count":          uint64(10 + 2),          // rate = 0.2/s
 		"processing_time":      uint64(20000 + 4000),    // rate = 400/s
 		"request_count":        uint64(1000 + 100),      // rate = 10/s
-		"current_thread_busy":  8.0,
+		"current_threads_busy": 8.0,
 		"current_thread_count": 20.0,
 		"max_threads":          200.0,
 		"max_time":             450.0,
@@ -152,8 +152,8 @@ func TestRenamePipelineConnector(t *testing.T) {
 		"tomcat_connector_request_count":           10,
 		"tomcat_connector_processing_time_seconds": 0.04,
 		// Gauges must pass through untouched, not differentiated.
-		"tomcat_connector_current_thread_busy": 8,
-		"tomcat_connector_max_time":            450,
+		"tomcat_connector_current_threads_busy": 8,
+		"tomcat_connector_max_time":             450,
 	})
 
 	if _, ok := got["tomcat_connector_processing_time"]; ok {

@@ -77,35 +77,11 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 	return gatherContext, false
 }
 
-func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]any) map[string]float64 {
-	_ = currentContext
-	_ = originalFields
+// transformMetrics replaces the query and mutation duration counters, which aren't usable
+// by themselves, by the average duration of one query and of one mutation.
+func transformMetrics(_ internal.GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {
+	internal.AvgDuration(fields, "query_time_microseconds", "query", "query_time_seconds", internal.UsPerSecond)
+	internal.AvgDuration(fields, "mutation_total_milliseconds", "mutation_total_parts", "mutation_time_seconds", internal.MsPerSecond)
 
-	newFields := make(map[string]float64)
-
-	queryTimeRate, hasQueryTime := fields["query_time_microseconds"]
-	queryCountRate, hasQueryCount := fields["query"]
-	mutationTimeRate, hasMutationTime := fields["mutation_total_milliseconds"]
-	mutationCountRate, hasMutationCount := fields["mutation_total_parts"]
-
-	for metricName, value := range fields {
-		if metricName == "query_time_microseconds" || metricName == "mutation_total_milliseconds" {
-			// Not used by themselves but replaced below by actual average durations for queries and mutations.
-			continue
-		}
-
-		newFields[metricName] = value
-	}
-
-	// Protect from division by 0.
-	if hasQueryTime && hasQueryCount && queryCountRate > 0 {
-		newFields["query_time_seconds"] = queryTimeRate / queryCountRate / 1000000 // microseconds -> seconds.
-	}
-
-	// Protect from division by 0.
-	if hasMutationTime && hasMutationCount && mutationCountRate > 0 {
-		newFields["mutation_time_seconds"] = mutationTimeRate / mutationCountRate / 1000 // milliseconds -> seconds.
-	}
-
-	return newFields
+	return fields
 }
