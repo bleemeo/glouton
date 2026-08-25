@@ -1044,8 +1044,13 @@ func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any, provid
 
 	receiverKey, listenerKey := legacyNetworkReceiverNames(providerPath)
 
-	legacyGRPC, hasGRPC := k.Get(path + ".grpc").(map[string]any)
-	legacyHTTP, hasHTTP := k.Get(path + ".http").(map[string]any)
+	// k.Exists/k.Get on the full leaf path (not k.Get(path+".grpc") for the whole submap): koanf only
+	// builds an intermediate "grpc"/"http" map node when the source YAML was itself written with real
+	// nesting -- a flat "log.opentelemetry.grpc.enable: true" key (just as valid, and the more common
+	// conf.d style) is stored as one opaque dotted key, so a parent-node k.Get would silently return nil
+	// and this whole migration would never fire for that equally valid spelling.
+	hasGRPC := k.Exists(path+".grpc.enable") || k.Exists(path+".grpc.address") || k.Exists(path+".grpc.port")
+	hasHTTP := k.Exists(path+".http.enable") || k.Exists(path+".http.address") || k.Exists(path+".http.port")
 
 	if !hasGRPC && !hasHTTP {
 		return nil
@@ -1066,20 +1071,20 @@ func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any, provid
 		errSettingsDeprecated, path,
 	))
 
-	endpointOf := func(legacy map[string]any, defaultPort int) string {
-		enable, _ := legacy["enable"].(bool)
+	endpointOf := func(sub string, defaultPort int) string {
+		enable, _ := k.Get(path + "." + sub + ".enable").(bool)
 		if !enable {
 			return ""
 		}
 
-		address, _ := legacy["address"].(string)
+		address, _ := k.Get(path + "." + sub + ".address").(string)
 		if address == "" {
 			address = DefaultLocalhost
 		}
 
 		port := defaultPort
 
-		switch p := legacy["port"].(type) {
+		switch p := k.Get(path + "." + sub + ".port").(type) {
 		case int:
 			port = p
 		case int64:
@@ -1093,11 +1098,11 @@ func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any, provid
 
 	var grpcEndpoint, httpEndpoint string
 	if hasGRPC {
-		grpcEndpoint = endpointOf(legacyGRPC, defaultGRPCPort)
+		grpcEndpoint = endpointOf("grpc", defaultGRPCPort)
 	}
 
 	if hasHTTP {
-		httpEndpoint = endpointOf(legacyHTTP, defaultHTTPPort)
+		httpEndpoint = endpointOf("http", defaultHTTPPort)
 	}
 
 	if grpcEndpoint == "" && httpEndpoint == "" {

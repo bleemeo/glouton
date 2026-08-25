@@ -2275,6 +2275,56 @@ func Test_migrateLegacyNetworkListenersNoInvalidKeysLeak(t *testing.T) {
 	}
 }
 
+// Test_migrateLegacyNetworkListenersFlatKeys guards against a regression where
+// migrateLegacyNetworkListeners detected the legacy grpc/http shape via k.Get(path+".grpc").(map[string]any)
+// -- a lookup for an intermediate tree node, which koanf only builds when the source YAML itself nests
+// "grpc"/"http" (as in legacy-opentelemetry-network.conf). The equally valid, and more common, conf.d
+// style of writing "log.opentelemetry.grpc.enable: true" as one flat, dot-joined key is stored by koanf
+// as a single opaque key: k.Get on the parent path silently returned nil, so the migration never fired at
+// all, and the legacy keys survived to trip the final decode's "invalid keys" warning with the listener
+// never migrated. Uses the real, public Load() so the final decoded Config is checked, not just warnings.
+func Test_migrateLegacyNetworkListenersFlatKeys(t *testing.T) {
+	t.Parallel()
+
+	cfg, _, warnings, err := Load(true, false, "testdata/legacy-opentelemetry-network-flat.conf")
+	if err != nil {
+		t.Fatalf("Load returned an error: %v", err)
+	}
+
+	if warnings == nil || !strings.Contains(warnings.Error(), errSettingsDeprecated.Error()) {
+		t.Fatalf("Expected the deprecation warning, got: %v", warnings)
+	}
+
+	if strings.Contains(warnings.Error(), "invalid keys") {
+		t.Fatalf("Expected no leaked \"invalid keys\" warning, got: %s", warnings.Error())
+	}
+
+	receiverKey, listenerKey := legacyNetworkReceiverNames("testdata/legacy-opentelemetry-network-flat.conf")
+
+	listener, ok := cfg.OpenTelemetry.NetworkListeners[listenerKey]
+	if !ok {
+		t.Fatalf("Expected a %q network listener, got %v", listenerKey, cfg.OpenTelemetry.NetworkListeners)
+	}
+
+	if listener.Protocols.GRPC == nil || listener.Protocols.GRPC.Endpoint != "192.168.1.10:5000" {
+		t.Errorf("Expected the flat grpc.address/grpc.port to survive as the GRPC endpoint, got %+v", listener.Protocols)
+	}
+
+	if listener.Protocols.HTTP != nil {
+		t.Errorf("Expected no HTTP protocol (http.enable: false), got %+v", listener.Protocols)
+	}
+
+	receiver, ok := cfg.Log.OpenTelemetry.Receivers[receiverKey]
+	if !ok {
+		t.Fatalf("Expected a %q log receiver, got %v", receiverKey, cfg.Log.OpenTelemetry.Receivers)
+	}
+
+	fromListeners, _ := receiver["from_listeners"].([]any)
+	if len(fromListeners) != 1 || fromListeners[0] != listenerKey {
+		t.Errorf("Expected from_listeners: [%q], got %v", listenerKey, receiver["from_listeners"])
+	}
+}
+
 // Test_loadNetworkListenerSurvivesDefaultMerge guards against a regression where
 // "opentelemetry.listeners" was missing from default.go's mapKeys(), so DefaultConfig()'s empty
 // map for that field and a real config file's nested entries landed as separate flat keys under the same
