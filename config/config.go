@@ -969,7 +969,7 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any, providerPath string
 	}
 
 	if !translated {
-		return nil
+		return warnings
 	}
 
 	// Every log.inputs entry has now been folded into metricsByName, so each metric's entry holds its

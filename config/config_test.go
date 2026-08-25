@@ -2754,6 +2754,25 @@ func Test_migrateLogInputs_multiFileNoCollision(t *testing.T) {
 	}
 }
 
+// Test_migrateLogInputs_warnsEvenWhenNoEntryTranslates guards against a regression where
+// migrateLogInputs discarded every warning already appended to its local slice (e.g. the
+// "filters but no path/container_name/container_selectors" one) by returning a hardcoded nil
+// whenever no log.inputs entry actually got converted into a receiver -- losing the warning
+// whenever the untranslatable entry was the only one, instead of only when there was nothing to warn
+// about at all.
+func Test_migrateLogInputs_warnsEvenWhenNoEntryTranslates(t *testing.T) {
+	t.Parallel()
+
+	_, warnings, err := load(&configLoader{}, false, false, "testdata/legacy-log-inputs-no-target.conf")
+	if err != nil {
+		t.Fatalf("Failed to load config: %s", err)
+	}
+
+	if warnings == nil || !strings.Contains(warnings.Error(), "log.inputs[0] has filters but no path/container_name/container_selectors") {
+		t.Fatalf("Expected a warning about the untranslatable log.inputs entry, got: %v", warnings)
+	}
+}
+
 // Test_migrateLegacyNetworkListeners_multiFileNoCollision guards against a regression where
 // migrateLegacyNetworkListeners always used the fixed names "legacy_network"/"legacy-network" with no
 // per-provider uniqueness (unlike migrateLogInputs, which deliberately namespaces its own generated

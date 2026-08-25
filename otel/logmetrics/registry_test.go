@@ -607,7 +607,7 @@ func TestRegistryAttributesShadowedByItemAndLabels(t *testing.T) {
 		{Metric: "web_requests_count", Labels: map[string]string{"env": "prod"}},
 	}, "web-1")
 
-	sink := reg.metricsSinkForEntry("web-1", encodeLabelSet(map[string]string{"env": "prod"}))
+	sink := reg.metricsSinkForEntry("web-1", types.LabelsToText(map[string]string{"env": "prod"}))
 
 	if err := sink.ConsumeMetrics(t.Context(), makeSumMetricWithPoints("web_requests_count",
 		sumDataPoint{Attrs: map[string]string{

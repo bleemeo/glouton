@@ -57,7 +57,7 @@ type metricSpec struct {
 type counter struct {
 	metric string
 	item   string
-	// labelsKey is this counter's static "labels:" canonically encoded (see encodeLabelSet); "" if
+	// labelsKey is this counter's static "labels:" canonically encoded (see types.LabelsToText); "" if
 	// none. Immutable after creation; propagated to attrs-derived siblings by resolveAttrCounterLocked
 	// so they stay scoped to the same labels-variant as their base.
 	labelsKey string
@@ -107,8 +107,8 @@ func (c *counter) rate(now time.Time) (rate float64, delta int, ok bool) {
 
 // counterKey identifies one aggregated series. item is part of the identity so the same metric name from
 // different containers stays distinguishable. labels canonically encodes a metrics: entry's static
-// "labels:" (see encodeLabelSet), disambiguating multiple entries that share (metric, item) but declare
-// different static labels -- "" for the overwhelmingly common case of no static labels. attrs
+// "labels:" (see types.LabelsToText), disambiguating multiple entries that share (metric, item) but
+// declare different static labels -- "" for the overwhelmingly common case of no static labels. attrs
 // disambiguates further by the exact combination of dynamic "attributes:" values a log line produced
 // (see resolveAttrCounterLocked); it's "" for the base counter resolve() eagerly declares, since
 // attribute values aren't known until a matching log line arrives.
@@ -117,31 +117,6 @@ type counterKey struct {
 	item   string
 	labels string
 	attrs  string
-}
-
-// encodeLabelSet canonically encodes labels into a deterministic string, independent of map iteration
-// order, for use as a counterKey component. "" for an empty/nil map. Mirrors resolveAttrCounterLocked's
-// own attrsID encoding (%q quoting so a key/value containing '=', ',', or '"' can't make two distinct
-// label sets collide onto the same string).
-func encodeLabelSet(m map[string]string) string {
-	if len(m) == 0 {
-		return ""
-	}
-
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-
-	sort.Strings(keys)
-
-	var sb strings.Builder
-
-	for _, k := range keys {
-		fmt.Fprintf(&sb, "%q=%q,", k, m[k])
-	}
-
-	return sb.String()
 }
 
 // metricsRegistry holds one counter per (metric, item), shared across sources so matches aggregate.
@@ -200,7 +175,7 @@ func (reg *metricsRegistry) resolve(specs []metricSpec, item string) []*counter 
 	for _, spec := range specs {
 		reg.declaredNames[spec.Metric] = true
 
-		labelsKey := encodeLabelSet(spec.Labels)
+		labelsKey := types.LabelsToText(spec.Labels)
 		key := counterKey{metric: spec.Metric, item: item, labels: labelsKey}
 
 		c, found := reg.counters[key]
@@ -363,7 +338,7 @@ func (reg *metricsRegistry) metricsSinkForItem(item string) consumer.Metrics {
 
 // metricsSinkForEntry returns the "next" consumer for one metrics: entry's countconnector, adding
 // each Sum data point's delta into the matching (metric, item, labelsKey) counter. labelsKey is this
-// entry's own static "labels:" canonically encoded (see encodeLabelSet), computed once by the caller
+// entry's own static "labels:" canonically encoded (see types.LabelsToText), computed once by the caller
 // at connector-build time: the OTel wire data itself carries no signal distinguishing which entry
 // produced a same-named Sum metric when two metrics: entries share a name under one item (labels:
 // is glouton-only config, never passed to the vendored countconnector).

@@ -26,6 +26,7 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/otel/logsource"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/google/uuid"
@@ -155,15 +156,15 @@ func metricSignature(rm resolvedMetric) (resolvedMetricSignature, bool) {
 
 	return resolvedMetricSignature{
 		metric:     rm.Metric,
-		labels:     encodeLabelSet(rm.Labels),
+		labels:     types.LabelsToText(rm.Labels),
 		conditions: encodeStringSet(info.Conditions),
 		attributes: encodeAttributeSet(info.Attributes),
 	}, true
 }
 
 // encodeStringSet canonically encodes a set of strings (order-independent -- e.g. an OR'ed
-// conditions: list, where order never changes the result) into a deterministic string, mirroring
-// encodeLabelSet's %q-quoted, sorted approach in registry.go.
+// conditions: list, where order never changes the result) into a deterministic string: sorted, then
+// %q-quoted so a value containing ',' or '"' can't make two distinct sets collide onto the same string.
 func encodeStringSet(values []string) string {
 	if len(values) == 0 {
 		return ""
@@ -376,7 +377,7 @@ func buildConnectors(
 			continue
 		}
 
-		labelsKey := encodeLabelSet(entry.Labels)
+		labelsKey := types.LabelsToText(entry.Labels)
 
 		conn, err := createConnector(ctx, connFactory, telemetry, counterCfg, reg.metricsSinkForEntry(item, labelsKey))
 		if err != nil {

@@ -23,6 +23,7 @@ import (
 
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp"
 	"go.opentelemetry.io/collector/component"
@@ -353,7 +354,7 @@ func mustResolveInline(t *testing.T, raw config.LogMetricEntry, defaultItem stri
 // itemLabelsKey encodes the counterKey.labels component for an entry whose only static label is its
 // own (non-empty) item -- see resolveLabels, which always folds item into the resolved label set.
 func itemLabelsKey(item string) string {
-	return encodeLabelSet(map[string]string{"item": item})
+	return types.LabelsToText(map[string]string{"item": item})
 }
 
 func namesOf(entries []resolvedMetric) []string {
