@@ -327,29 +327,8 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 
 	switch service.ServiceType { //nolint:exhaustive
 	case ActiveMQService:
-		// The web console the metrics are read from always requires authentication
-		// (admin/admin on a default install), so without credentials every gather would
-		// only get a 401.
-		//
-		// A password on its own is enough to ask for the input, but not to authenticate:
-		// the plugin sends basic auth as soon as either credential is set, so an empty
-		// username would send ":<password>" and get that same 401. The broker's factory
-		// account is used instead, the way ClickHouse defaults to "default" below.
-		//
-		// stats_url is the base URL of the console, not a full one: the plugin resolves
-		// its own /admin/xml/{queues,topics,subscribers}.jsp against it, dropping whatever
-		// path it was given.
-		hasCredentials := service.Config.Password != ""
-
-		if hasCredentials && service.Config.Username == "" {
-			service.Config.Username = activeMQDefaultUser
-		}
-
-		if service.Config.StatsURL != "" && hasCredentials {
-			input, err = activemq.New(service.Config.StatsURL, service.Config.Username, service.Config.Password)
-		} else if ip, port := service.AddressPort(); ip != "" && hasCredentials {
-			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
-			input, err = activemq.New(url, service.Config.Username, service.Config.Password)
+		if url, username, password := activeMQURL(service); url != "" {
+			input, err = activemq.New(url, username, password)
 		}
 	case ApacheService:
 		if ip, port := service.AddressPort(); ip != "" {
@@ -740,6 +719,32 @@ func urlForPHPFPM(service Service) string {
 	}
 
 	return ""
+}
+
+// activeMQURL returns the URL of the web console the ActiveMQ metrics are read from, and the
+// credentials to read it with, or an empty URL when no input should be created.
+//
+// The console always requires authentication (admin/admin on a default install), so without
+// credentials every gather would only get a 401.
+func activeMQURL(service Service) (url string, username string, password string) {
+	if service.Config.Password == "" {
+		return "", "", ""
+	}
+
+	username = service.Config.Username
+	if username == "" {
+		username = activeMQDefaultUser
+	}
+
+	if service.Config.StatsURL != "" {
+		return service.Config.StatsURL, username, service.Config.Password
+	}
+
+	if ip, port := service.AddressPort(); ip != "" {
+		return "http://" + net.JoinHostPort(ip, strconv.Itoa(port)), username, service.Config.Password
+	}
+
+	return "", "", ""
 }
 
 func clickHouseAddress(service Service) (ip string, port int) {

@@ -26,6 +26,116 @@ import (
 	"github.com/bleemeo/glouton/facts"
 )
 
+func TestActiveMQURL(t *testing.T) {
+	const activeMQPort = 8161
+
+	listening := []facts.ListenAddress{{Address: testIP127001, Port: activeMQPort, NetworkFamily: tcpProtocol}}
+
+	cases := []struct {
+		name         string
+		service      Service
+		wantURL      string
+		wantUsername string
+		wantPassword string
+	}{
+		{
+			// The console always requires authentication, so an input without credentials
+			// could only ever get a 401.
+			name: "no credentials -> no input",
+			service: Service{
+				ServiceType:     ActiveMQService,
+				IPAddress:       testIP127001,
+				ListenAddresses: listening,
+			},
+			wantURL: "",
+		},
+		{
+			// A password alone would send ":<password>" and get that same 401, so the
+			// broker's factory account is filled in.
+			name: "password without username -> the factory account",
+			service: Service{
+				ServiceType:     ActiveMQService,
+				IPAddress:       testIP127001,
+				ListenAddresses: listening,
+				Config:          config.Service{Password: "secret"},
+			},
+			wantURL:      "http://127.0.0.1:8161",
+			wantUsername: "admin",
+			wantPassword: "secret",
+		},
+		{
+			name: "explicit username is kept",
+			service: Service{
+				ServiceType:     ActiveMQService,
+				IPAddress:       testIP127001,
+				ListenAddresses: listening,
+				Config:          config.Service{Username: "bob", Password: "secret"},
+			},
+			wantURL:      "http://127.0.0.1:8161",
+			wantUsername: "bob",
+			wantPassword: "secret",
+		},
+		{
+			name: "user-set StatsURL wins over the discovered address",
+			service: Service{
+				ServiceType:     ActiveMQService,
+				IPAddress:       testIP127001,
+				ListenAddresses: listening,
+				Config:          config.Service{StatsURL: "http://activemq.example:8161", Password: "secret"},
+			},
+			wantURL:      "http://activemq.example:8161",
+			wantUsername: "admin",
+			wantPassword: "secret",
+		},
+		{
+			// A console reachable only at a configured URL, e.g. one behind TLS or on a
+			// port the container doesn't publish.
+			name: "StatsURL is used when no address is known",
+			service: Service{
+				ServiceType: ActiveMQService,
+				Config:      config.Service{StatsURL: "https://activemq.example", Password: "secret"},
+			},
+			wantURL:      "https://activemq.example",
+			wantUsername: "admin",
+			wantPassword: "secret",
+		},
+		{
+			name: "StatsURL without credentials -> no input",
+			service: Service{
+				ServiceType: ActiveMQService,
+				Config:      config.Service{StatsURL: "http://activemq.example:8161"},
+			},
+			wantURL: "",
+		},
+		{
+			name: "no address known and no StatsURL -> no input",
+			service: Service{
+				ServiceType: ActiveMQService,
+				Config:      config.Service{Password: "secret"},
+			},
+			wantURL: "",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			url, username, password := activeMQURL(tc.service)
+
+			if url != tc.wantURL {
+				t.Errorf("activeMQURL() url = %q, want %q", url, tc.wantURL)
+			}
+
+			if username != tc.wantUsername {
+				t.Errorf("activeMQURL() username = %q, want %q", username, tc.wantUsername)
+			}
+
+			if password != tc.wantPassword {
+				t.Errorf("activeMQURL() password = %q, want %q", password, tc.wantPassword)
+			}
+		})
+	}
+}
+
 func TestClickHouseAddress(t *testing.T) {
 	cases := []struct {
 		name     string

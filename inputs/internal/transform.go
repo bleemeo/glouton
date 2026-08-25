@@ -34,15 +34,18 @@ const (
 // unitDivisor is how many of the duration's own units make a second: NsPerSecond when the
 // counter counts nanoseconds, MsPerSecond when it counts milliseconds.
 //
-// Nothing is written when either field is missing, or when no operation completed during
-// the period, which would otherwise be a division by zero.
+// Nothing is written when either field is missing, when no operation completed during the
+// period (which would otherwise be a division by zero), or when either counter went
+// backwards: a counter that resets is reported as a *negative* rate (see rateAsFloat), and
+// the average of a negative duration is a number no service ever measured. The raw duration
+// is dropped in every one of those cases all the same, being meaningless on its own.
 func AvgDuration(fields map[string]float64, durationField, countField, outputName string, unitDivisor float64) {
 	durationRate, hasDuration := fields[durationField]
 	countRate, hasCount := fields[countField]
 
 	delete(fields, durationField)
 
-	if hasDuration && hasCount && countRate > 0 {
+	if hasDuration && hasCount && countRate > 0 && durationRate >= 0 {
 		fields[outputName] = durationRate / countRate / unitDivisor
 	}
 }
