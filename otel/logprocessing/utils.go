@@ -73,10 +73,8 @@ func validateContainerFilters(containerFilter map[string]string, filtersConfigs 
 
 // removeComponent returns components with target removed to avoid double-shutdown during pipeline teardown.
 func removeComponent(components []component.Component, target component.Component) []component.Component {
-	for i, c := range components {
-		if c == target {
-			return append(components[:i], components[i+1:]...)
-		}
+	if i := slices.Index(components, target); i >= 0 {
+		return slices.Delete(components, i, i+1)
 	}
 
 	return components

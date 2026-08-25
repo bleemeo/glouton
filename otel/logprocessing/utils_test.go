@@ -17,6 +17,8 @@
 package logprocessing
 
 import (
+	"context"
+	"slices"
 	"strconv"
 	"testing"
 
@@ -32,7 +34,16 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/parser/timeparser"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/transformer/add"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
+	"go.opentelemetry.io/collector/component"
 )
+
+// stubComponent is a minimal component.Component for exercising removeComponent's identity comparison.
+// Used as *stubComponent so distinct instances are never equal, mirroring real components (always
+// pointers), even when built with identical field values.
+type stubComponent struct{ name string }
+
+func (*stubComponent) Start(context.Context, component.Host) error { return nil }
+func (*stubComponent) Shutdown(context.Context) error              { return nil }
 
 func TestBuildLogFilterConfig(t *testing.T) {
 	t.Parallel()
@@ -439,5 +450,30 @@ func TestBuildOperators(t *testing.T) {
 
 	if diff := cmp.Diff(expectedOperators, operators, cmpopts.IgnoreUnexported(helper.TimeParser{})); diff != "" {
 		t.Fatalf("Unexpected operators (-want +got):\n%s", diff)
+	}
+}
+
+func TestRemoveComponent(t *testing.T) {
+	t.Parallel()
+
+	a := &stubComponent{name: "a"}
+	b := &stubComponent{name: "b"}
+	c := &stubComponent{name: "c"}
+
+	got := removeComponent([]component.Component{a, b, c}, b)
+
+	want := []component.Component{a, c}
+	if !slices.Equal(want, got) {
+		t.Fatalf("Unexpected result removing a middle component: want %v, got %v", want, got)
+	}
+
+	// A component not present in the slice leaves it untouched.
+	notPresent := &stubComponent{name: "not-present"}
+
+	got = removeComponent([]component.Component{a, b, c}, notPresent)
+
+	want = []component.Component{a, b, c}
+	if !slices.Equal(want, got) {
+		t.Fatalf("Unexpected result removing an absent component: want %v, got %v", want, got)
 	}
 }

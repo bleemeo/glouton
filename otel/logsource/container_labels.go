@@ -17,9 +17,6 @@
 package logsource
 
 import (
-	"strconv"
-	"strings"
-
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
@@ -69,7 +66,7 @@ func parseBoolLabel(ctr facts.Container, raw map[string]string, key string) *boo
 		return nil
 	}
 
-	v, err := strconv.ParseBool(strings.ToLower(str))
+	v, err := config.ParseBool(str)
 	if err != nil {
 		logger.V(1).Printf("logsource: container %s (%s): invalid boolean value %q for label %q: %v", ctr.ContainerName(), ctr.ID(), str, key, err)
 
