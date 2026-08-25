@@ -82,58 +82,86 @@ func logsWithBodyAndAttrs(body string, attrs map[string]string) plog.Logs {
 	return ld
 }
 
-func TestExtractItem(t *testing.T) {
+// TestResolveLabels exercises resolveLabels' full precedence: defaultItem seeded first, a labels:
+// {item: ...} entry overriding it, a top-level item: overriding that in turn, and any label -- item
+// included -- left with an empty string value dropped from the result entirely.
+func TestResolveLabels(t *testing.T) {
 	t.Parallel()
 
-	if got := extractItem(config.LogMetricEntry{}); got != nil {
-		t.Errorf("Expected nil (unset) for a missing item, got %v", *got)
+	// No override at all: falls back to defaultItem.
+	got := resolveLabels(config.LogMetricEntry{}, "recv")
+	if diff := cmp.Diff(map[string]string{"item": "recv"}, got); diff != "" {
+		t.Errorf("Unexpected labels with no override (-want +got):\n%s", diff)
 	}
 
-	got := extractItem(config.LogMetricEntry{"item": "custom"})
-	if got == nil || *got != "custom" {
-		t.Fatalf("Expected a pointer to %q, got %v", "custom", got)
+	// Top-level item: overrides defaultItem.
+	got = resolveLabels(config.LogMetricEntry{"item": "custom"}, "recv")
+	if diff := cmp.Diff(map[string]string{"item": "custom"}, got); diff != "" {
+		t.Errorf("Unexpected labels with a top-level item override (-want +got):\n%s", diff)
 	}
 
-	// item explicitly set to "" must stay distinguishable from "unset".
-	got = extractItem(config.LogMetricEntry{"item": ""})
-	if got == nil || *got != "" {
-		t.Fatalf(`Expected a non-nil pointer to "", got %v`, got)
+	// item explicitly set to "" (legacy migration's way of pinning "no item at all") drops the key
+	// entirely, rather than defaulting back to defaultItem or being kept as an empty value.
+	got = resolveLabels(config.LogMetricEntry{"item": ""}, "recv")
+	if diff := cmp.Diff(map[string]string(nil), got); diff != "" {
+		t.Errorf(`Unexpected labels with item: "" (-want +got):\n%s`, diff)
 	}
 
-	if got := extractItem(config.LogMetricEntry{"item": 5}); got != nil {
-		t.Errorf("Expected a non-string item to be ignored (nil), got %v", *got)
+	// A non-string item is ignored (falls back to whatever was already resolved -- defaultItem here).
+	got = resolveLabels(config.LogMetricEntry{"item": 5}, "recv")
+	if diff := cmp.Diff(map[string]string{"item": "recv"}, got); diff != "" {
+		t.Errorf("Unexpected labels with a non-string item (-want +got):\n%s", diff)
 	}
 
-	// labels: {item: ...} is an equally valid spelling of the same override when there's no top-level
-	// item: field.
-	got = extractItem(config.LogMetricEntry{"labels": map[string]any{"item": "from-labels"}})
-	if got == nil || *got != "from-labels" {
-		t.Fatalf("Expected labels: {item: ...} to be honored as an item override, got %v", got)
+	// labels: {item: ...} overrides defaultItem when there's no top-level item: field.
+	got = resolveLabels(config.LogMetricEntry{"labels": map[string]any{"item": "from-labels"}}, "recv")
+	if diff := cmp.Diff(map[string]string{"item": "from-labels"}, got); diff != "" {
+		t.Errorf("Unexpected labels with labels: {item: ...} (-want +got):\n%s", diff)
 	}
 
 	// A top-level item: wins over a labels: {item: ...} entry when both are set.
-	got = extractItem(config.LogMetricEntry{
+	got = resolveLabels(config.LogMetricEntry{
 		"item":   "from-top-level",
 		"labels": map[string]any{"item": "from-labels"},
-	})
-	if got == nil || *got != "from-top-level" {
-		t.Fatalf("Expected the top-level item: to win over labels: {item: ...}, got %v", got)
+	}, "recv")
+	if diff := cmp.Diff(map[string]string{"item": "from-top-level"}, got); diff != "" {
+		t.Errorf("Unexpected labels with both item: and labels: {item: ...} (-want +got):\n%s", diff)
+	}
+
+	// A regular label merges in alongside item, and a non-string one is dropped with a warning, not
+	// this call failing.
+	got = resolveLabels(config.LogMetricEntry{"labels": map[string]any{"env": "prod", "not_a_string": 5}}, "recv")
+	if diff := cmp.Diff(map[string]string{"item": "recv", "env": "prod"}, got); diff != "" {
+		t.Errorf("Unexpected labels with a regular label (-want +got):\n%s", diff)
+	}
+
+	// A regular label explicitly set to "" is dropped too, same as item: empty means unset for every
+	// label, not just item.
+	got = resolveLabels(config.LogMetricEntry{"labels": map[string]any{"env": ""}}, "recv")
+	if diff := cmp.Diff(map[string]string{"item": "recv"}, got); diff != "" {
+		t.Errorf(`Unexpected labels with env: "" (-want +got):\n%s`, diff)
+	}
+
+	// defaultItem itself can be "" (e.g. a legacy-migrated entry that never gets one): with no other
+	// override, the result has no item key at all, not item: "".
+	if got := resolveLabels(config.LogMetricEntry{}, ""); got != nil {
+		t.Errorf(`Expected nil labels with an empty defaultItem and no override, got %v`, got)
 	}
 }
 
 func TestResolveInlineMetric(t *testing.T) {
 	t.Parallel()
 
-	rm, ok := resolveInlineMetric(config.LogMetricEntry{"metric": "app_errors", "conditions": []any{`IsMatch(body, "x")`}})
+	rm, ok := resolveInlineMetric(config.LogMetricEntry{"metric": "app_errors", "conditions": []any{`IsMatch(body, "x")`}}, "recv")
 	if !ok || rm.Metric != "app_errors" {
 		t.Fatalf("Expected a resolved metric named app_errors, got %+v, ok=%v", rm, ok)
 	}
 
-	if rm.Item != nil {
-		t.Errorf("Expected a nil Item with no explicit override, got %v", *rm.Item)
+	if rm.Item != "recv" {
+		t.Errorf("Expected Item to fall back to defaultItem with no explicit override, got %q", rm.Item)
 	}
 
-	if _, ok := resolveInlineMetric(config.LogMetricEntry{"conditions": []any{`IsMatch(body, "x")`}}); ok {
+	if _, ok := resolveInlineMetric(config.LogMetricEntry{"conditions": []any{`IsMatch(body, "x")`}}, "recv"); ok {
 		t.Error("Expected an entry with no \"metric\" name to be rejected")
 	}
 }
@@ -159,7 +187,7 @@ func TestResolveReceiverMetrics(t *testing.T) {
 		map[string]any{"include": "does_not_exist"},
 	}
 
-	resolved := resolveReceiverMetrics(rawMetrics, rules)
+	resolved := resolveReceiverMetrics(rawMetrics, rules, "recv")
 
 	names := make([]string, 0, len(resolved))
 	for _, rm := range resolved {
@@ -177,7 +205,7 @@ func TestResolveReceiverMetrics(t *testing.T) {
 func TestResolveReceiverMetricsMalformedEntry(t *testing.T) {
 	t.Parallel()
 
-	resolved := resolveReceiverMetrics([]any{"not-a-map", 5}, nil)
+	resolved := resolveReceiverMetrics([]any{"not-a-map", 5}, nil, "recv")
 	if len(resolved) != 0 {
 		t.Errorf("Expected malformed entries to be ignored, got %v", resolved)
 	}
@@ -205,7 +233,7 @@ func TestResolveReceiverMetricsDropsVerbatimDuplicates(t *testing.T) {
 		map[string]any{"metric": "rule_metric", "conditions": []any{`IsMatch(body, "x")`}},
 	}
 
-	resolved := resolveReceiverMetrics(rawMetrics, rules)
+	resolved := resolveReceiverMetrics(rawMetrics, rules, "recv")
 
 	names := make([]string, 0, len(resolved))
 	for _, rm := range resolved {
@@ -232,7 +260,7 @@ func TestResolveReceiverMetricsDropsRegexConditionsEquivalentDuplicate(t *testin
 		map[string]any{"metric": "app_errors", "conditions": []any{`IsMatch(body, "boom")`}},
 	}
 
-	resolved := resolveReceiverMetrics(rawMetrics, nil)
+	resolved := resolveReceiverMetrics(rawMetrics, nil, "recv")
 	if len(resolved) != 1 {
 		t.Fatalf("Expected the regex:/conditions: equivalent entry to be dropped as a duplicate, got %d resolved: %v", len(resolved), resolved)
 	}
@@ -249,7 +277,7 @@ func TestResolveReceiverMetricsDuplicateConditionOrderDoesNotMatter(t *testing.T
 		map[string]any{"metric": "app_errors", "conditions": []any{`IsMatch(body, "b")`, `IsMatch(body, "a")`}},
 	}
 
-	resolved := resolveReceiverMetrics(rawMetrics, nil)
+	resolved := resolveReceiverMetrics(rawMetrics, nil, "recv")
 	if len(resolved) != 1 {
 		t.Fatalf("Expected the reordered-conditions entry to be dropped as a duplicate, got %d resolved: %v", len(resolved), resolved)
 	}
@@ -270,7 +298,7 @@ func TestResolveReceiverMetricsKeepsEntriesThatActuallyDiffer(t *testing.T) {
 		map[string]any{"metric": "m", "conditions": []any{`IsMatch(body, "y")`}},
 	}
 
-	resolved := resolveReceiverMetrics(rawMetrics, nil)
+	resolved := resolveReceiverMetrics(rawMetrics, nil, "recv")
 	if len(resolved) != len(rawMetrics) {
 		t.Fatalf("Expected all %d entries to be kept as distinct, got %d resolved: %v", len(rawMetrics), len(resolved), resolved)
 	}
@@ -280,17 +308,14 @@ func TestResolveReceiverMetricsKeepsEntriesThatActuallyDiffer(t *testing.T) {
 func TestGroupResolvedMetricsByItem(t *testing.T) {
 	t.Parallel()
 
-	explicit := "custom-item"
-	empty := ""
-
 	entries := []resolvedMetric{
-		{Metric: "default_a"},
-		{Metric: "default_b"},
-		{Metric: "overridden", Item: &explicit},
-		{Metric: "migrated_empty", Item: &empty},
+		{Metric: "default_a", Item: "recv"},
+		{Metric: "default_b", Item: "recv"},
+		{Metric: "overridden", Item: "custom-item"},
+		{Metric: "migrated_empty", Item: ""},
 	}
 
-	groups := groupResolvedMetricsByItem(entries, "recv")
+	groups := groupResolvedMetricsByItem(entries)
 
 	wantDefault := []string{"default_a", "default_b"}
 	gotDefault := namesOf(groups["recv"])
@@ -307,6 +332,28 @@ func TestGroupResolvedMetricsByItem(t *testing.T) {
 	if got := namesOf(groups[""]); len(got) != 1 || got[0] != "migrated_empty" {
 		t.Errorf(`Expected item:"" to be honored as its own group (not merged into "recv"), got %v`, got)
 	}
+}
+
+// mustResolveInline resolves raw (which must include a "metric" key) via resolveInlineMetric,
+// failing the test if it's rejected. Building []resolvedMetric fixtures this way, instead of hand-built
+// resolvedMetric{Raw: ...} literals, keeps them shaped exactly like the real pipeline would produce --
+// Item/Labels derived from Raw+defaultItem by resolveLabels -- instead of each test having to duplicate
+// that derivation (and risk it drifting out of sync with the real one).
+func mustResolveInline(t *testing.T, raw config.LogMetricEntry, defaultItem string) resolvedMetric {
+	t.Helper()
+
+	rm, ok := resolveInlineMetric(raw, defaultItem)
+	if !ok {
+		t.Fatalf("resolveInlineMetric rejected %v", raw)
+	}
+
+	return rm
+}
+
+// itemLabelsKey encodes the counterKey.labels component for an entry whose only static label is its
+// own (non-empty) item -- see resolveLabels, which always folds item into the resolved label set.
+func itemLabelsKey(item string) string {
+	return encodeLabelSet(map[string]string{"item": item})
 }
 
 func namesOf(entries []resolvedMetric) []string {
@@ -407,24 +454,60 @@ func TestMetricInfoDecodeError(t *testing.T) {
 	}
 }
 
-// Test extractLabels, the one field metricInfo's decode never sets.
-func TestExtractLabels(t *testing.T) {
+// TestAppendResolvedMetricDedupsItemSpellings guards against a regression where item: "home" and
+// labels: {item: "home"} -- documented as equivalent spellings of the same override -- escaped
+// duplicate detection: metricSignature's labels used to come from a raw, unresolved view of the
+// entry's own labels:, which still included "item" for the labels: {item: ...} spelling only, giving
+// the two entries different signatures despite resolving to the exact same final series. Now that
+// resolveLabels resolves item once, upfront, both spellings produce the exact same rm.Labels.
+func TestAppendResolvedMetricDedupsItemSpellings(t *testing.T) {
 	t.Parallel()
 
-	raw := config.LogMetricEntry{
-		"conditions": []any{`IsMatch(body, "error")`},
-		"labels":     map[string]any{"env": "prod", "not_a_string": 5},
+	resolved := resolveReceiverMetrics([]any{
+		map[string]any{
+			"metric":     "requests_total",
+			"conditions": []any{`IsMatch(body, "a")`},
+			"item":       "home",
+		},
+		map[string]any{
+			"metric":     "requests_total",
+			"conditions": []any{`IsMatch(body, "a")`},
+			"labels":     map[string]any{"item": "home"},
+		},
+	}, nil, "recv")
+
+	if len(resolved) != 1 {
+		t.Fatalf("Expected the labels: {item: ...} spelling to be deduped against item: \"home\", got %d entries: %v", len(resolved), resolved)
 	}
+}
 
-	got := extractLabels(raw)
+// TestAppendResolvedMetricNeverDedupsUnsetAgainstExplicitEmptyItem guards a case that used to need a
+// separate itemSet flag to get right: an entry that never sets item at all (falls back to this
+// receiver's own default item, "recv") must never be deduped against one that explicitly sets item: ""
+// (legacy migration's way of saying "no item label at all") -- they resolve to two different final
+// groups/counterKeys (one under "recv", the other under "") whenever the source's own default item
+// isn't itself "" (true in every real case), so treating them as the same signature would wrongly drop
+// one of two entries that are, in fact, going to produce two distinct series. Now that resolveLabels
+// resolves item eagerly against defaultItem, this falls out naturally: the two entries simply end up
+// with different rm.Item/rm.Labels["item"] values, no special-casing needed.
+func TestAppendResolvedMetricNeverDedupsUnsetAgainstExplicitEmptyItem(t *testing.T) {
+	t.Parallel()
 
-	want := map[string]string{"env": "prod"}
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Fatalf("Unexpected labels (-want +got):\n%s", diff)
-	}
+	resolved := resolveReceiverMetrics([]any{
+		map[string]any{
+			"metric":     "requests_total",
+			"conditions": []any{`IsMatch(body, "a")`},
+			// item left unset entirely: falls back to defaultItem ("recv").
+		},
+		map[string]any{
+			"metric":     "requests_total",
+			"conditions": []any{`IsMatch(body, "a")`},
+			"item":       "",
+		},
+	}, nil, "recv")
 
-	if got := extractLabels(nil); got != nil {
-		t.Errorf("Expected nil labels for an empty raw config, got %v", got)
+	if len(resolved) != 2 {
+		t.Fatalf("Expected the unset-item and explicit item:\"\" entries to stay distinct, got %d entries: %v", len(resolved), resolved)
 	}
 }
 
@@ -433,13 +516,13 @@ func TestBuildGroupedConnectorsEndToEnd(t *testing.T) {
 	t.Parallel()
 
 	entries := []resolvedMetric{
-		{Metric: "app_errors_count", Raw: config.LogMetricEntry{"conditions": []any{`IsMatch(body, "\\[error\\]")`}}},
-		{Metric: "app_requests_count", Raw: config.LogMetricEntry{"conditions": []any{`IsMatch(body, "GET /")`}}},
+		mustResolveInline(t, config.LogMetricEntry{"metric": "app_errors_count", "conditions": []any{`IsMatch(body, "\\[error\\]")`}}, "my-receiver"),
+		mustResolveInline(t, config.LogMetricEntry{"metric": "app_requests_count", "conditions": []any{`IsMatch(body, "GET /")`}}, "my-receiver"),
 	}
 
 	reg, totals := testRegistry()
 
-	conns, _, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), entries, "my-receiver", reg, "my-receiver")
+	conns, _, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), entries, reg, "my-receiver")
 	if err != nil {
 		t.Fatal("buildGroupedConnectors returned an error:", err)
 	}
@@ -463,12 +546,14 @@ func TestBuildGroupedConnectorsEndToEnd(t *testing.T) {
 
 	got := totals()
 
-	if got[counterKey{metric: "app_errors_count", item: "my-receiver"}] != 2 {
-		t.Errorf("Expected 2 matches for app_errors_count, got %d", got[counterKey{metric: "app_errors_count", item: "my-receiver"}])
+	errorsKey := counterKey{metric: "app_errors_count", item: "my-receiver", labels: itemLabelsKey("my-receiver")}
+	if got[errorsKey] != 2 {
+		t.Errorf("Expected 2 matches for app_errors_count, got %d", got[errorsKey])
 	}
 
-	if got[counterKey{metric: "app_requests_count", item: "my-receiver"}] != 2 {
-		t.Errorf("Expected 2 matches for app_requests_count, got %d", got[counterKey{metric: "app_requests_count", item: "my-receiver"}])
+	requestsKey := counterKey{metric: "app_requests_count", item: "my-receiver", labels: itemLabelsKey("my-receiver")}
+	if got[requestsKey] != 2 {
+		t.Errorf("Expected 2 matches for app_requests_count, got %d", got[requestsKey])
 	}
 }
 
@@ -480,19 +565,21 @@ func TestBuildGroupedConnectorsSameMetricNameDifferentLabelsStayDistinct(t *test
 	t.Parallel()
 
 	entries := []resolvedMetric{
-		{Metric: "log_common_code", Raw: config.LogMetricEntry{
+		mustResolveInline(t, config.LogMetricEntry{
+			"metric":     "log_common_code",
 			"conditions": []any{`IsMatch(body, "status=2")`},
 			"labels":     map[string]any{"code": "2xx"},
-		}},
-		{Metric: "log_common_code", Raw: config.LogMetricEntry{
+		}, "my-receiver"),
+		mustResolveInline(t, config.LogMetricEntry{
+			"metric":     "log_common_code",
 			"conditions": []any{`IsMatch(body, "status=3")`},
 			"labels":     map[string]any{"code": "3xx"},
-		}},
+		}, "my-receiver"),
 	}
 
 	reg, _ := testRegistry()
 
-	conns, _, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), entries, "my-receiver", reg, "my-receiver")
+	conns, _, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), entries, reg, "my-receiver")
 	if err != nil {
 		t.Fatal("buildGroupedConnectors returned an error:", err)
 	}
@@ -549,16 +636,14 @@ func TestBuildGroupedConnectorsSameMetricNameDifferentLabelsStayDistinct(t *test
 func TestBuildGroupedConnectorsExplicitItemSplitsGroup(t *testing.T) {
 	t.Parallel()
 
-	customItem := "custom-item"
-
 	entries := []resolvedMetric{
-		{Metric: "default_item_metric", Raw: config.LogMetricEntry{"conditions": []any{`IsMatch(body, "a")`}}},
-		{Metric: "custom_item_metric", Raw: config.LogMetricEntry{"conditions": []any{`IsMatch(body, "a")`}}, Item: &customItem},
+		mustResolveInline(t, config.LogMetricEntry{"metric": "default_item_metric", "conditions": []any{`IsMatch(body, "a")`}}, "recv"),
+		mustResolveInline(t, config.LogMetricEntry{"metric": "custom_item_metric", "conditions": []any{`IsMatch(body, "a")`}, "item": "custom-item"}, "recv"),
 	}
 
 	reg, totals := testRegistry()
 
-	conns, _, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), entries, "recv", reg, "recv")
+	conns, _, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), entries, reg, "recv")
 	if err != nil {
 		t.Fatal("buildGroupedConnectors returned an error:", err)
 	}
@@ -573,11 +658,11 @@ func TestBuildGroupedConnectorsExplicitItemSplitsGroup(t *testing.T) {
 
 	got := totals()
 
-	if got[counterKey{metric: "default_item_metric", item: "recv"}] != 1 {
+	if got[counterKey{metric: "default_item_metric", item: "recv", labels: itemLabelsKey("recv")}] != 1 {
 		t.Errorf("Expected 1 match under item %q, got %v", "recv", got)
 	}
 
-	if got[counterKey{metric: "custom_item_metric", item: "custom-item"}] != 1 {
+	if got[counterKey{metric: "custom_item_metric", item: "custom-item", labels: itemLabelsKey("custom-item")}] != 1 {
 		t.Errorf("Expected 1 match under item %q, got %v", "custom-item", got)
 	}
 }
@@ -593,7 +678,7 @@ func TestBuildGroupedConnectorsLabelsItemActsLikeTopLevelItem(t *testing.T) {
 		"metric":     "custom_item_metric",
 		"conditions": []any{`IsMatch(body, "a")`},
 		"labels":     map[string]any{"item": "custom-item"},
-	})
+	}, "recv")
 	if !ok {
 		t.Fatal("resolveInlineMetric rejected a valid entry")
 	}
@@ -602,7 +687,7 @@ func TestBuildGroupedConnectorsLabelsItemActsLikeTopLevelItem(t *testing.T) {
 
 	reg, totals := testRegistry()
 
-	conns, gotItems, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), entries, "recv", reg, "recv")
+	conns, gotItems, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), entries, reg, "recv")
 	if err != nil {
 		t.Fatal("buildGroupedConnectors returned an error:", err)
 	}
@@ -621,15 +706,15 @@ func TestBuildGroupedConnectorsLabelsItemActsLikeTopLevelItem(t *testing.T) {
 
 	got := totals()
 
-	// The counter's key carries a non-empty "labels" component too: labels: {item: ...} is still a
-	// normal entry in the static labels map (extractLabels doesn't filter "item" out of it), it's just
-	// also honored as the item override -- see extractItem.
-	key := counterKey{metric: "custom_item_metric", item: "custom-item", labels: encodeLabelSet(map[string]string{"item": "custom-item"})}
+	// The counter's key carries item baked into its "labels" component too (see resolveLabels: item is
+	// just another label), so labels: {item: ...} and a top-level item: field produce the exact same
+	// counterKey.
+	key := counterKey{metric: "custom_item_metric", item: "custom-item", labels: itemLabelsKey("custom-item")}
 	if got[key] != 1 {
 		t.Errorf("Expected 1 match under item %q (from labels: {item: ...}), got %v", "custom-item", got)
 	}
 
-	if got[counterKey{metric: "custom_item_metric", item: "recv"}] != 0 {
+	if got[counterKey{metric: "custom_item_metric", item: "recv", labels: itemLabelsKey("recv")}] != 0 {
 		t.Errorf("Expected no match under the receiver's own default item %q, got %v", "recv", got)
 	}
 }
@@ -639,13 +724,13 @@ func TestBuildGroupedConnectorsIsolatesInvalidCounter(t *testing.T) {
 	t.Parallel()
 
 	entries := []resolvedMetric{
-		{Metric: "app_errors_count", Raw: config.LogMetricEntry{"conditions": []any{`IsMatch(body, "\\[error\\]")`}}},
-		{Metric: "app_broken_count", Raw: config.LogMetricEntry{"conditions": []any{`IsMatch(body, "(")`}}},
+		mustResolveInline(t, config.LogMetricEntry{"metric": "app_errors_count", "conditions": []any{`IsMatch(body, "\\[error\\]")`}}, "recv"),
+		mustResolveInline(t, config.LogMetricEntry{"metric": "app_broken_count", "conditions": []any{`IsMatch(body, "(")`}}, "recv"),
 	}
 
 	reg, totals := testRegistry()
 
-	conns, _, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), entries, "recv", reg, "recv")
+	conns, _, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), entries, reg, "recv")
 	if err != nil {
 		t.Fatal("buildGroupedConnectors returned an error despite one valid counter:", err)
 	}
@@ -664,12 +749,12 @@ func TestBuildGroupedConnectorsIsolatesInvalidCounter(t *testing.T) {
 
 	got := totals()
 
-	if got[counterKey{metric: "app_errors_count", item: "recv"}] != 1 {
+	if got[counterKey{metric: "app_errors_count", item: "recv", labels: itemLabelsKey("recv")}] != 1 {
 		t.Errorf("Expected 1 match for app_errors_count, got %v", got)
 	}
 
 	// app_broken_count's counter may be pre-declared but must never be incremented.
-	if got[counterKey{metric: "app_broken_count", item: "recv"}] != 0 {
+	if got[counterKey{metric: "app_broken_count", item: "recv", labels: itemLabelsKey("recv")}] != 0 {
 		t.Errorf("app_broken_count should never receive any data, got %v", got)
 	}
 
@@ -683,7 +768,7 @@ func TestBuildGroupedConnectorsNoEntries(t *testing.T) {
 
 	reg, _ := testRegistry()
 
-	_, _, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), nil, "recv", reg, "recv")
+	_, _, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), nil, reg, "recv")
 	if !errors.Is(err, errNoApplicableMetric) {
 		t.Fatalf("Expected errNoApplicableMetric for an empty entry list, got %v", err)
 	}
@@ -693,12 +778,12 @@ func TestBuildGroupedConnectorsAllInvalid(t *testing.T) {
 	t.Parallel()
 
 	entries := []resolvedMetric{
-		{Metric: "bad", Raw: config.LogMetricEntry{"conditions": []any{`IsMatch(body, "(")`}}},
+		mustResolveInline(t, config.LogMetricEntry{"metric": "bad", "conditions": []any{`IsMatch(body, "(")`}}, "recv"),
 	}
 
 	reg, _ := testRegistry()
 
-	_, gotItems, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), entries, "recv", reg, "recv")
+	_, gotItems, err := buildGroupedConnectors(t.Context(), testTelemetrySettings(), entries, reg, "recv")
 	if !errors.Is(err, errNoValidCounter) {
 		t.Fatalf("Expected errNoValidCounter (a metric applied but failed to build), got %v", err)
 	}

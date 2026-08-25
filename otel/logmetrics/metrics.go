@@ -40,29 +40,38 @@ var (
 	errNoApplicableMetric = errors.New("no metrics entry applies to this source")
 )
 
-// resolvedMetric is one metrics: entry after expanding any {include: name} against log.metrics_rules.
-// Raw is kept as-is so metricInfo can decode it lazily, once grouped by item.
+// resolvedMetric is one metrics: entry after expanding any {include: name} against log.metrics_rules,
+// with its item/labels overrides already fully resolved against the source's own default item -- see
+// resolveLabels. Raw is kept too so metricInfo can decode its conditions/attributes/regex lazily.
 type resolvedMetric struct {
 	Metric string
 	Raw    config.LogMetricEntry
-	// Item is nil when the entry never set its own "item" (derive one from the source), non-nil when it did.
-	Item *string
+	// Item is the fully-resolved item this entry reports under ("" means no item label at all). Kept
+	// as its own field, redundant with Labels["item"] (which also carries it), purely for
+	// groupResolvedMetricsByItem's convenience -- see resolveLabels for how both are derived together.
+	Item string
+	// Labels is this entry's fully-resolved static label set, including "item" when it's non-empty --
+	// see resolveLabels. metricSignature/specsForEntries/buildConnectors all use this as-is; none of
+	// them need to special-case item separately from the rest of the labels.
+	Labels map[string]string
 }
 
 // resolveReceiverMetrics expands rawMetrics (a receiver's "metrics:" list of inline entries or
-// {include: name}) against metricsRules, warning and skipping invalid entries instead of failing. An
-// entry that resolves to the same effective metric as one already resolved (same metric name, item,
-// labels, attributes, and final match condition -- folding "regex:" sugar into its equivalent
-// IsMatch(body, ...) condition and treating the OR'ed condition list as an unordered set, so e.g.
-// regex: "X" and conditions: ['IsMatch(body, "X")'] count as the same condition) is dropped too,
-// whether the duplication comes from two such entries written inline, two inside one included
-// metrics_rules list, or an inline entry repeating one already pulled in by an include: each resolved
-// entry gets its own countconnector (see buildConnectors), so keeping both would count every matching
-// line twice into the same counter. config.validateLogReceivers already warns about the two
-// directly-visible, verbatim shapes of this at load time; this is the runtime side that actually
-// prevents the double-count, and it also catches the include-vs-inline case and the regex/conditions
-// equivalence that the config-time, raw-text check can't see.
-func resolveReceiverMetrics(rawMetrics []any, metricsRules map[string][]config.LogMetricEntry) []resolvedMetric {
+// {include: name}) against metricsRules, warning and skipping invalid entries instead of failing.
+// defaultItem is the source's own default item (e.g. the receiver's name), seeded into every entry's
+// resolved item/labels before its own overrides apply -- see resolveLabels. An entry that resolves to
+// the same effective metric as one already resolved (same metric name, item, labels, attributes, and
+// final match condition -- folding "regex:" sugar into its equivalent IsMatch(body, ...) condition and
+// treating the OR'ed condition list as an unordered set, so e.g. regex: "X" and conditions:
+// ['IsMatch(body, "X")'] count as the same condition) is dropped too, whether the duplication comes
+// from two such entries written inline, two inside one included metrics_rules list, or an inline entry
+// repeating one already pulled in by an include: each resolved entry gets its own countconnector (see
+// buildConnectors), so keeping both would count every matching line twice into the same counter.
+// config.validateLogReceivers already warns about the two directly-visible, verbatim shapes of this at
+// load time; this is the runtime side that actually prevents the double-count, and it also catches the
+// include-vs-inline case, the regex/conditions equivalence, and the item: / labels: {item: ...}
+// spelling equivalence that the config-time, raw-text check can't see.
+func resolveReceiverMetrics(rawMetrics []any, metricsRules map[string][]config.LogMetricEntry, defaultItem string) []resolvedMetric {
 	var resolved []resolvedMetric
 
 	for _, rawEntry := range rawMetrics {
@@ -75,7 +84,7 @@ func resolveReceiverMetrics(rawMetrics []any, metricsRules map[string][]config.L
 
 		includeName, isInclude := entry["include"].(string)
 		if !isInclude || includeName == "" {
-			if rm, ok := resolveInlineMetric(entry); ok {
+			if rm, ok := resolveInlineMetric(entry, defaultItem); ok {
 				resolved = appendResolvedMetric(resolved, rm)
 			}
 
@@ -90,7 +99,7 @@ func resolveReceiverMetrics(rawMetrics []any, metricsRules map[string][]config.L
 		}
 
 		for _, ruleRaw := range rules {
-			if rm, ok := resolveInlineMetric(ruleRaw); ok {
+			if rm, ok := resolveInlineMetric(ruleRaw, defaultItem); ok {
 				resolved = appendResolvedMetric(resolved, rm)
 			}
 		}
@@ -121,16 +130,15 @@ func appendResolvedMetric(resolved []resolvedMetric, rm resolvedMetric) []resolv
 }
 
 // resolvedMetricSignature is what actually decides whether two entries would double-count the same
-// matching lines onto the same series: the same metric name, the same final match condition, item,
-// labels, and attributes -- not the same raw config. Two entries can be spelled completely
-// differently (e.g. one using regex:, the other an equivalent conditions:) and still resolve to the
-// same signature. itemSet/item are split out (rather than folding "unset" into item's zero value)
-// because item's presence is itself meaningful: an explicit item: "" is not the same as never setting
-// item at all (see extractItem's doc comment).
+// matching lines onto the same series: the same metric name, the same final match condition, and the
+// same final label set (item included: it's just another label -- see resolveLabels) -- not the same
+// raw config. Two entries can be spelled completely differently (e.g. one using regex:, the other an
+// equivalent conditions:, or one using item: "home" and the other labels: {item: "home"}) and still
+// resolve to the same signature. There's no separate item/itemSet field: rm.Item/rm.Labels are already
+// fully resolved by the time this runs (defaultItem is known before resolveReceiverMetrics is ever
+// called -- see its doc comment), so there's no "still unknown" state left to represent.
 type resolvedMetricSignature struct {
 	metric     string
-	itemSet    bool
-	item       string
 	labels     string
 	conditions string
 	attributes string
@@ -145,19 +153,12 @@ func metricSignature(rm resolvedMetric) (resolvedMetricSignature, bool) {
 		return resolvedMetricSignature{}, false
 	}
 
-	sig := resolvedMetricSignature{
+	return resolvedMetricSignature{
 		metric:     rm.Metric,
-		labels:     encodeLabelSet(extractLabels(rm.Raw)),
+		labels:     encodeLabelSet(rm.Labels),
 		conditions: encodeStringSet(info.Conditions),
 		attributes: encodeAttributeSet(info.Attributes),
-	}
-
-	if rm.Item != nil {
-		sig.itemSet = true
-		sig.item = *rm.Item
-	}
-
-	return sig, true
+	}, true
 }
 
 // encodeStringSet canonically encodes a set of strings (order-independent -- e.g. an OR'ed
@@ -206,8 +207,9 @@ func asMetricEntry(v any) (config.LogMetricEntry, bool) {
 	return m, ok
 }
 
-// resolveInlineMetric reads a self-contained metrics: entry's "metric" name and item override, warning and returning ok=false if the name is missing.
-func resolveInlineMetric(raw config.LogMetricEntry) (resolvedMetric, bool) {
+// resolveInlineMetric reads a self-contained metrics: entry's "metric" name, warning and returning
+// ok=false if it's missing, and fully resolves its item/labels against defaultItem -- see resolveLabels.
+func resolveInlineMetric(raw config.LogMetricEntry, defaultItem string) (resolvedMetric, bool) {
 	metric, _ := raw["metric"].(string)
 	if metric == "" {
 		logger.Printf("logmetrics: metrics entry missing a \"metric\" name, ignoring: %v", raw)
@@ -215,56 +217,69 @@ func resolveInlineMetric(raw config.LogMetricEntry) (resolvedMetric, bool) {
 		return resolvedMetric{}, false
 	}
 
-	return resolvedMetric{Metric: metric, Raw: raw, Item: extractItem(raw)}, true
+	labels := resolveLabels(raw, defaultItem)
+
+	return resolvedMetric{Metric: metric, Raw: raw, Item: labels["item"], Labels: labels}, true
 }
 
-// extractItem reads raw's item override, presence-sensitively: nil means "unset, derive one", a
-// non-nil pointer (even to "") means the config explicitly set it. The top-level "item" field takes
-// precedence; a labels: {item: ...} entry is honored as an equivalent override when the top-level
-// field is absent, so setting item that way isn't silently shadowed by the auto-derived item the way
-// every other labels: key would be (see resolve()'s reserved-key precedence in otel/logmetrics/
-// registry.go) -- it's just a second, equally valid spelling of the same override. This lets legacy
-// migration pin item="" without it being confused with "unset".
-func extractItem(raw config.LogMetricEntry) *string {
-	if item := itemField(raw); item != nil {
-		return item
-	}
+// resolveLabels builds a metrics: entry's final, canonical label set: the same one resolve()/
+// counterKey end up rendering for it once grouped by item, computed eagerly here (instead of deferred)
+// since every caller already knows defaultItem before this runs -- so there's no "still unknown, derive
+// later" state left to track separately from a genuine value.
+//
+// Built by seeding "item" with defaultItem (every entry starts under its own source's default item),
+// merging in the entry's own labels: map -- an "item" key there overrides the seeded default, which is
+// labels: {item: ...}'s whole purpose -- then applying the top-level item: field if it's set (it wins
+// over labels: {item: ...}, the same precedence as before). Finally, any label left with an empty
+// string value -- "item" or otherwise -- is dropped entirely: an empty value means "unset" for every
+// label, generalizing resolve()'s historical "if item != \"\" {...}" special case for item to all of
+// them. So labels: {item: ""} or item: "" (legacy migration's way of pinning "no item at all",
+// overriding whatever default this source would otherwise seed) ends up with no item key at all, same
+// as if this source's own default item happened to be "" (never true in practice: a receiver/container
+// name is never empty).
+func resolveLabels(raw config.LogMetricEntry, defaultItem string) map[string]string {
+	merged := map[string]string{"item": defaultItem}
 
 	if rawLabels, ok := raw["labels"].(map[string]any); ok {
-		return itemField(rawLabels)
+		for k, v := range rawLabels {
+			s, ok := v.(string)
+			if !ok {
+				logger.Printf("logmetrics: label %q must be a string, got %v (%T), dropping it", k, v, v)
+
+				continue
+			}
+
+			merged[k] = s
+		}
 	}
 
-	return nil
-}
+	if rawItem, present := raw["item"]; present {
+		if s, ok := rawItem.(string); ok {
+			merged["item"] = s
+		} else {
+			logger.Printf("logmetrics: \"item\" must be a string, got %v (%T), deriving one instead", rawItem, rawItem)
+		}
+	}
 
-// itemField reads m's "item" key, presence-sensitively -- see extractItem.
-func itemField(m map[string]any) *string {
-	rawItem, present := m["item"]
-	if !present {
+	for k, v := range merged {
+		if v == "" {
+			delete(merged, k)
+		}
+	}
+
+	if len(merged) == 0 {
 		return nil
 	}
 
-	s, ok := rawItem.(string)
-	if !ok {
-		logger.Printf("logmetrics: \"item\" must be a string, got %v (%T), deriving one instead", rawItem, rawItem)
-
-		return nil
-	}
-
-	return &s
+	return merged
 }
 
-// groupResolvedMetricsByItem partitions entries by the item they should report under, falling back to defaultItem when an entry has no Item override.
-func groupResolvedMetricsByItem(entries []resolvedMetric, defaultItem string) map[string][]resolvedMetric {
+// groupResolvedMetricsByItem partitions entries by the item they resolved to (see resolveLabels).
+func groupResolvedMetricsByItem(entries []resolvedMetric) map[string][]resolvedMetric {
 	groups := make(map[string][]resolvedMetric)
 
 	for _, entry := range entries {
-		item := defaultItem
-		if entry.Item != nil {
-			item = *entry.Item
-		}
-
-		groups[item] = append(groups[item], entry)
+		groups[entry.Item] = append(groups[entry.Item], entry)
 	}
 
 	return groups
@@ -276,11 +291,10 @@ func buildGroupedConnectors(
 	ctx context.Context,
 	telemetry component.TelemetrySettings,
 	entries []resolvedMetric,
-	defaultItem string,
 	reg *metricsRegistry,
 	sourceName string,
 ) ([]otelconnector.Logs, []string, error) {
-	groups := groupResolvedMetricsByItem(entries, defaultItem)
+	groups := groupResolvedMetricsByItem(entries)
 	if len(groups) == 0 {
 		return nil, nil, errNoApplicableMetric
 	}
@@ -319,12 +333,12 @@ func buildGroupedConnectors(
 	return conns, items, nil
 }
 
-// specsForEntries reduces entries down to what the registry's declare/resolve need (name + static labels).
+// specsForEntries reduces entries down to what the registry's declare/resolve need (name + resolved labels).
 func specsForEntries(entries []resolvedMetric) []metricSpec {
 	specs := make([]metricSpec, 0, len(entries))
 
 	for _, entry := range entries {
-		specs = append(specs, metricSpec{Metric: entry.Metric, Labels: extractLabels(entry.Raw)})
+		specs = append(specs, metricSpec{Metric: entry.Metric, Labels: entry.Labels})
 	}
 
 	return specs
@@ -362,7 +376,7 @@ func buildConnectors(
 			continue
 		}
 
-		labelsKey := encodeLabelSet(extractLabels(entry.Raw))
+		labelsKey := encodeLabelSet(entry.Labels)
 
 		conn, err := createConnector(ctx, connFactory, telemetry, counterCfg, reg.metricsSinkForEntry(item, labelsKey))
 		if err != nil {
@@ -406,29 +420,6 @@ func metricInfo(name string, raw config.LogMetricEntry) (countconnector.MetricIn
 	}
 
 	return info, nil
-}
-
-// extractLabels reads the "labels" field out of a raw config.LogMetricEntry.
-func extractLabels(raw config.LogMetricEntry) map[string]string {
-	rawLabels, _ := raw["labels"].(map[string]any)
-	if len(rawLabels) == 0 {
-		return nil
-	}
-
-	labels := make(map[string]string, len(rawLabels))
-
-	for k, v := range rawLabels {
-		s, ok := v.(string)
-		if !ok {
-			logger.Printf("logmetrics: label %q must be a string, got %v (%T), dropping it", k, v, v)
-
-			continue
-		}
-
-		labels[k] = s
-	}
-
-	return labels
 }
 
 func createConnector(

@@ -120,14 +120,14 @@ func (man *Manager) wantReceiverSource(ctx context.Context, src logsource.Resolv
 		return nil, false
 	}
 
-	resolved := resolveReceiverMetrics(rawMetrics, man.metricsRules)
+	resolved := resolveReceiverMetrics(rawMetrics, man.metricsRules, src.Name)
 	if len(resolved) == 0 {
 		return nil, false
 	}
 
 	diag := sourceDiagnostic{Name: src.Name, Kind: "receiver", ReceiverName: src.ReceiverName}
 
-	return man.buildSink(ctx, resolved, src.Name, diag)
+	return man.buildSink(ctx, resolved, diag)
 }
 
 // wantContainerLabelSource resolves a SourceContainerLabel's glouton.log_metrics label against log.metrics_rules, defaulting its item to the container's runtime name (src.Name).
@@ -146,7 +146,7 @@ func (man *Manager) wantContainerLabelSource(ctx context.Context, src logsource.
 	resolved := make([]resolvedMetric, 0, len(rules))
 
 	for _, raw := range rules {
-		if rm, ok := resolveInlineMetric(raw); ok {
+		if rm, ok := resolveInlineMetric(raw, src.Name); ok {
 			resolved = append(resolved, rm)
 		}
 	}
@@ -161,12 +161,12 @@ func (man *Manager) wantContainerLabelSource(ctx context.Context, src logsource.
 		diag.ContainerID = src.Container.ID()
 	}
 
-	return man.buildSink(ctx, resolved, src.Name, diag)
+	return man.buildSink(ctx, resolved, diag)
 }
 
 // buildSink builds the countconnector chain for resolved, grouped by item, and remembers it for Shutdown/DiagnosticArchive.
-func (man *Manager) buildSink(ctx context.Context, resolved []resolvedMetric, defaultItem string, diag sourceDiagnostic) (consumer.Logs, bool) {
-	conns, items, err := buildGroupedConnectors(ctx, man.telemetry, resolved, defaultItem, man.reg, diag.Name)
+func (man *Manager) buildSink(ctx context.Context, resolved []resolvedMetric, diag sourceDiagnostic) (consumer.Logs, bool) {
+	conns, items, err := buildGroupedConnectors(ctx, man.telemetry, resolved, man.reg, diag.Name)
 	if err != nil {
 		logger.V(1).Printf("logmetrics: source %q: %v", diag.Name, err)
 
