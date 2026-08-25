@@ -23,6 +23,7 @@ import (
 	"maps"
 	"reflect"
 	"strings"
+	"sync"
 
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/logger"
@@ -288,6 +289,14 @@ func wrapWithOperators(operators []operator.Config, set component.TelemetrySetti
 // downstream DefaultOutput synchronously forwards the transformed result -- see wrapWithOperators), and
 // waits for every (ResourceLogs x ScopeLogs) pair's converted entries before returning, so a caller
 // relying on this call's completion (e.g. an OTLP gRPC/HTTP request handler) isn't racing the conversion.
+//
+// OutChannel() must be drained concurrently with Batch(), not after it: fromPdata's workerChan only
+// buffers workerCount (1, see wrapWithOperators) items, and its single worker blocks sending each
+// converted result on the unbuffered OutChannel() before picking up the next one. Calling Batch() to
+// completion first (as an earlier version of this function did) left nothing draining OutChannel() while
+// Batch() was still running, so the worker permanently blocked trying to send its first result once
+// Batch() tried to enqueue a 3rd (ResourceLogs x ScopeLogs) pair -- wedging this call, and every future
+// call through this same fromPdata/worker, forever.
 func runThroughOperators(ctx context.Context, fromPdata *adapter.FromPdataConverter, entryPoint operator.Operator, ld plog.Logs) error {
 	expected := 0
 	for _, rls := range ld.ResourceLogs().All() {
@@ -298,21 +307,30 @@ func runThroughOperators(ctx context.Context, fromPdata *adapter.FromPdataConver
 		return nil
 	}
 
-	if err := fromPdata.Batch(ld); err != nil {
-		return fmt.Errorf("converting batch for network operator pipeline: %w", err)
-	}
+	var (
+		errs error
+		wg   sync.WaitGroup
+	)
 
-	var errs error
+	wg.Go(func() {
+		for range expected {
+			entries, ok := <-fromPdata.OutChannel()
+			if !ok {
+				return
+			}
 
-	for range expected {
-		entries, ok := <-fromPdata.OutChannel()
-		if !ok {
-			break
+			if err := entryPoint.ProcessBatch(ctx, entries); err != nil {
+				errs = errors.Join(errs, err)
+			}
 		}
+	})
 
-		if err := entryPoint.ProcessBatch(ctx, entries); err != nil {
-			errs = errors.Join(errs, err)
-		}
+	batchErr := fromPdata.Batch(ld)
+
+	wg.Wait() // happens-after the goroutine's last write to errs, so reading it below is safe unsynchronized.
+
+	if batchErr != nil {
+		return fmt.Errorf("converting batch for network operator pipeline: %w", batchErr)
 	}
 
 	return errs

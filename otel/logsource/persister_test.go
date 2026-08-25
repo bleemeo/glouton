@@ -650,3 +650,41 @@ func TestPersistHostConcurrent(t *testing.T) {
 		h.SaveToState(stateMock{})
 	}
 }
+
+// TestPersistHostGetExtensionsSnapshotSafeUnderConcurrentMutation guards against a regression where
+// GetExtensions returned h.extensions itself instead of a clone: a caller (e.g. an OTel receiver
+// adapter's Start(), via adapter.GetStorageClient) ranges/indexes the returned map after this call
+// returns and h.l is released, racing NewPersistentExt/RemovePersistentExt(s) mutating that same map
+// from another goroutine -- exactly the shape this PersistHost is used in, shared between
+// ReceiverManager and logprocessing.Manager. Run with -race: the old code either panics with "concurrent
+// map iteration and map write" or gets flagged as a data race; the fix (a clone under the lock) can't.
+func TestPersistHostGetExtensionsSnapshotSafeUnderConcurrentMutation(t *testing.T) {
+	t.Parallel()
+
+	const numOps = 200
+
+	h, err := NewPersistHost(stateMock{}, touchedOnlyConfig())
+	if err != nil {
+		t.Fatal("Can't instantiate persist host:", err)
+	}
+
+	var wg sync.WaitGroup
+
+	wg.Go(func() {
+		for i := range numOps {
+			id := h.NewPersistentExt(fmt.Sprintf("ext%d", i%10))
+			h.RemovePersistentExt(id)
+		}
+	})
+
+	wg.Go(func() {
+		for range numOps {
+			for range h.GetExtensions() {
+				// Reading the snapshot (key iteration) must never race NewPersistentExt/
+				// RemovePersistentExt mutating h.extensions concurrently above.
+			}
+		}
+	})
+
+	wg.Wait()
+}

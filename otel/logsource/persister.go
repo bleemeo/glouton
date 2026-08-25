@@ -209,12 +209,15 @@ func (h *PersistHost) getAllMetadata() map[string]map[string][]byte {
 	return updatedData
 }
 
-// GetExtensions implements component.Host.
+// GetExtensions implements component.Host. Returns a clone, not h.extensions itself: callers (e.g. an
+// OTel receiver adapter's Start()) index the result after this call returns and the lock is released,
+// racing NewPersistentExt/RemovePersistentExt(s)/RemovePersistentExtsAndForget -- this PersistHost is
+// shared between ReceiverManager and logprocessing.Manager, which write it from independent goroutines.
 func (h *PersistHost) GetExtensions() map[component.ID]component.Component {
 	h.l.Lock()
 	defer h.l.Unlock()
 
-	return h.extensions
+	return maps.Clone(h.extensions)
 }
 
 // WriteToArchive writes the list of currently-registered extension IDs to ArchivePath in a diagnostic bundle.

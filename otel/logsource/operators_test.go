@@ -18,8 +18,11 @@ package logsource
 
 import (
 	"testing"
+	"time"
 
 	"github.com/bleemeo/glouton/config"
+
+	"go.opentelemetry.io/collector/pdata/plog"
 )
 
 // TestBuildOperatorsFromKnownFormat smoke-tests resolving a known_log_formats entry by name into operator.Config values.
@@ -113,5 +116,63 @@ func TestWrapWithOperatorsAppliesOperator(t *testing.T) {
 	got, ok := firstLogRecordTagValue(received())
 	if !ok || got != "net" {
 		t.Fatalf("expected the received record to carry tag=net, got %q (found=%v)", got, ok)
+	}
+}
+
+// makeMultiResourceLogs builds one plog.Logs with n distinct (ResourceLogs x ScopeLogs) pairs, one log
+// record each -- the unit runThroughOperators counts to know how many converted batches to wait for.
+func makeMultiResourceLogs(n int) plog.Logs {
+	ld := plog.NewLogs()
+
+	for range n {
+		rl := ld.ResourceLogs().AppendEmpty()
+		rl.Resource().Attributes().PutStr("marker", "network")
+		rl.ScopeLogs().AppendEmpty().LogRecords().AppendEmpty().Body().SetStr("line")
+	}
+
+	return ld
+}
+
+// TestWrapWithOperatorsManyResourceScopePairsDoesNotDeadlock guards against a regression where
+// runThroughOperators called fromPdata.Batch(ld) to completion before draining OutChannel(): with
+// wrapWithOperators' workerCount=1, Batch()'s buffer-1 workerChan plus the single worker blocking on the
+// unbuffered OutChannel() meant Batch() itself permanently blocked trying to enqueue a 3rd
+// (ResourceLogs x ScopeLogs) pair, since nothing was draining OutChannel() concurrently to unblock the
+// worker. That wedged not just this call but every future ConsumeLogs on the same wrapped consumer,
+// since the single worker goroutine never recovers. Uses a goroutine + timeout instead of calling
+// ConsumeLogs directly so a regression fails this test instead of hanging `go test` forever.
+func TestWrapWithOperatorsManyResourceScopePairsDoesNotDeadlock(t *testing.T) {
+	t.Parallel()
+
+	ops, err := BuildOperators([]config.OTELOperator{{"type": "add", "field": "attributes.tag", "value": "net"}})
+	if err != nil {
+		t.Fatal("BuildOperators returned an error:", err)
+	}
+
+	next, received := recordingLogsConsumer()
+
+	wrapped, cleanup := wrapWithOperators(ops, NewTelemetrySettings(), next)
+
+	defer cleanup()
+
+	const pairs = 10
+
+	done := make(chan error, 1)
+
+	go func() {
+		done <- wrapped.ConsumeLogs(t.Context(), makeMultiResourceLogs(pairs))
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal("ConsumeLogs returned an error:", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatalf("ConsumeLogs deadlocked on %d (ResourceLogs x ScopeLogs) pairs", pairs)
+	}
+
+	if got := len(received()); got != pairs {
+		t.Fatalf("expected %d converted batches to reach next, got %d", pairs, got)
 	}
 }
