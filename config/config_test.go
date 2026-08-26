@@ -1248,6 +1248,81 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				},
 			},
 		},
+		// Guards against a regression where splitting one listener's protocols across two conf.d
+		// files (file A sets grpc, file B sets http) lost file A's protocol: convertTypes' Config-struct
+		// round trip fills in file B's unset "grpc" field as an explicit nil (same mechanism
+		// dynamicEnvVarConfigKeys/pruneNilMapValues already guards for dynamic env vars, but pruning
+		// used to be gated on provider == SourceEnv), so merge()'s fallback case (dst/src not both maps)
+		// treated that invented nil as file B intentionally overwriting file A's grpc protocol --
+		// dropping it, even though file B never mentioned grpc at all.
+		{
+			Name:  "network listener split across files survives merge",
+			Files: []string{"testdata/split-listener-grpc.conf", "testdata/split-listener-http.conf"},
+			WantConfig: Config{
+				OpenTelemetry: OpenTelemetryConfig{
+					NetworkListeners: map[string]NetworkListener{
+						"otlp/my_custom": {
+							Protocols: NetworkProtocols{
+								GRPC: &NetworkEndpoint{Endpoint: "0.0.0.0:4317"},
+								HTTP: &NetworkEndpoint{Endpoint: "0.0.0.0:4318"},
+							},
+						},
+					},
+				},
+			},
+		},
+		// Guards against a regression where migrateLegacyNetworkListeners always used the fixed names
+		// "legacy_network"/"legacy-network" with no per-provider uniqueness: two files each still using
+		// the legacy log.opentelemetry.grpc shape (unlike the new opentelemetry.listeners shape, this one
+		// has no name of its own to key on) would otherwise produce identically-named
+		// receivers/listeners, and one would silently clobber the other at merge time. The fix
+		// (legacyNetworkReceiverNames) namespaces each by its own file path, so -- unlike a real merge --
+		// both survive as two independent, simultaneously active listeners rather than one silently
+		// overwriting the other (confirmed live: PRODUCT-3297-log-to-metrics-manual-test-plan.md
+		// section 17). This intentionally diverges from the legacy Fluent-Bit-era system, where this was
+		// a single global scalar setting and the last-loaded file would have silently won.
+		{
+			Name:  "legacy network listeners from two files stay independent, not merged",
+			Files: []string{"testdata/legacy-network-multifile-a.conf", "testdata/legacy-network-multifile-b.conf"},
+			WantWarnings: []string{
+				"testdata/legacy-network-multifile-a.conf: setting is deprecated: log.opentelemetry.grpc/http " +
+					"{enable, address, port}, use opentelemetry.listeners + a log.opentelemetry.receivers entry's " +
+					"from_listener field instead",
+				"testdata/legacy-network-multifile-b.conf: setting is deprecated: log.opentelemetry.grpc/http " +
+					"{enable, address, port}, use opentelemetry.listeners + a log.opentelemetry.receivers entry's " +
+					"from_listener field instead",
+			},
+			WantConfig: Config{
+				OpenTelemetry: OpenTelemetryConfig{
+					NetworkListeners: map[string]NetworkListener{
+						legacyNetworkListenerKey("testdata/legacy-network-multifile-a.conf"): {
+							Protocols: NetworkProtocols{
+								GRPC: &NetworkEndpoint{Endpoint: "10.0.0.1:5001"},
+							},
+						},
+						legacyNetworkListenerKey("testdata/legacy-network-multifile-b.conf"): {
+							Protocols: NetworkProtocols{
+								GRPC: &NetworkEndpoint{Endpoint: "10.0.0.2:5002"},
+							},
+						},
+					},
+				},
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
+							legacyNetworkReceiverKey("testdata/legacy-network-multifile-a.conf"): {
+								"from_listeners": []any{legacyNetworkListenerKey("testdata/legacy-network-multifile-a.conf")},
+								"send_logs":      true,
+							},
+							legacyNetworkReceiverKey("testdata/legacy-network-multifile-b.conf"): {
+								"from_listeners": []any{legacyNetworkListenerKey("testdata/legacy-network-multifile-b.conf")},
+								"send_logs":      true,
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -2371,39 +2446,6 @@ func Test_loadNetworkListenerSurvivesDefaultMerge(t *testing.T) {
 	}
 }
 
-// Test_loadNetworkListenerSplitAcrossFilesSurvivesMerge guards against a regression where splitting one
-// listener's protocols across two conf.d files (file A sets grpc, file B sets http) lost file A's
-// protocol: convertTypes' Config-struct round trip fills in file B's unset "grpc" field as an explicit
-// nil (same mechanism dynamicEnvVarConfigKeys/pruneNilMapValues already guards for dynamic env vars, but
-// pruning used to be gated on provider == SourceEnv), so merge()'s fallback case
-// (dst/src not both maps) treated that invented nil as file B intentionally overwriting file A's grpc
-// protocol -- dropping it, even though file B never mentioned grpc at all.
-func Test_loadNetworkListenerSplitAcrossFilesSurvivesMerge(t *testing.T) {
-	t.Parallel()
-
-	cfg, _, warnings, err := Load(true, false, "testdata/split-listener-grpc.conf", "testdata/split-listener-http.conf")
-	if err != nil {
-		t.Fatalf("Load returned an error: %v", err)
-	}
-
-	if warnings != nil {
-		t.Fatalf("Expected no warnings, got: %v", warnings)
-	}
-
-	listener, ok := cfg.OpenTelemetry.NetworkListeners["otlp/my_custom"]
-	if !ok {
-		t.Fatalf("Expected an %q network listener, got %v", "otlp/my_custom", cfg.OpenTelemetry.NetworkListeners)
-	}
-
-	if listener.Protocols.GRPC == nil || listener.Protocols.GRPC.Endpoint != "0.0.0.0:4317" {
-		t.Errorf("Expected the first file's GRPC endpoint to survive, got %+v", listener.Protocols)
-	}
-
-	if listener.Protocols.HTTP == nil || listener.Protocols.HTTP.Endpoint != "0.0.0.0:4318" {
-		t.Errorf("Expected the second file's HTTP endpoint to survive, got %+v", listener.Protocols)
-	}
-}
-
 // Test_loadDynamicListenerEnv guards resolveDynamicEnvKey and its interaction with the loader's
 // merge-priority logic: a GLOUTON_OPENTELEMETRY_LISTENERS_<name>_PROTOCOLS_GRPC/HTTP_ENDPOINT variable must
 // only overwrite that single leaf, not wholesale-replace the whole opentelemetry.listeners map (which
@@ -2787,64 +2829,6 @@ func Test_migrateLogInputs_warnsEvenWhenNoEntryTranslates(t *testing.T) {
 
 	if warnings == nil || !strings.Contains(warnings.Error(), "log.inputs[0] has filters but no path/container_name/container_selectors") {
 		t.Fatalf("Expected a warning about the untranslatable log.inputs entry, got: %v", warnings)
-	}
-}
-
-// Test_migrateLegacyNetworkListeners_multiFileNoCollision guards against a regression where
-// migrateLegacyNetworkListeners always used the fixed names "legacy_network"/"legacy-network" with no
-// per-provider uniqueness (unlike migrateLogInputs, which deliberately namespaces its own generated
-// names): two config files each still using the legacy log.opentelemetry.grpc shape would otherwise
-// produce identically-named receivers/listeners, and one would silently clobber the other at merge time.
-func Test_migrateLegacyNetworkListeners_multiFileNoCollision(t *testing.T) {
-	t.Parallel()
-
-	fileA := "testdata/legacy-network-multifile-a.conf"
-	fileB := "testdata/legacy-network-multifile-b.conf"
-
-	config, _, err := load(&configLoader{}, false, false, fileA, fileB)
-	if err != nil {
-		t.Fatalf("Failed to load config: %s", err)
-	}
-
-	if got := len(config.OpenTelemetry.NetworkListeners); got != 2 {
-		t.Fatalf("Expected 2 distinct network listeners (one per file), got %d: %v", got, config.OpenTelemetry.NetworkListeners)
-	}
-
-	if got := len(config.Log.OpenTelemetry.Receivers); got != 2 {
-		t.Fatalf("Expected 2 distinct receivers (one per file), got %d: %v", got, config.Log.OpenTelemetry.Receivers)
-	}
-
-	receiverA, listenerA := legacyNetworkReceiverNames(fileA)
-	receiverB, listenerB := legacyNetworkReceiverNames(fileB)
-
-	if listenerA == listenerB {
-		t.Fatalf("Expected distinct listener names for distinct files, both computed %q", listenerA)
-	}
-
-	listenerCfgA, ok := config.OpenTelemetry.NetworkListeners[listenerA]
-	if !ok {
-		t.Fatalf("Missing listener %q from %s", listenerA, fileA)
-	}
-
-	if got := listenerCfgA.Protocols.GRPC.Endpoint; got != "10.0.0.1:5001" {
-		t.Errorf("Expected listener %q to keep fileA's endpoint, got %q", listenerA, got)
-	}
-
-	listenerCfgB, ok := config.OpenTelemetry.NetworkListeners[listenerB]
-	if !ok {
-		t.Fatalf("Missing listener %q from %s", listenerB, fileB)
-	}
-
-	if got := listenerCfgB.Protocols.GRPC.Endpoint; got != "10.0.0.2:5002" {
-		t.Errorf("Expected listener %q to keep fileB's endpoint, got %q", listenerB, got)
-	}
-
-	if _, ok := config.Log.OpenTelemetry.Receivers[receiverA]; !ok {
-		t.Errorf("Missing receiver %q from %s", receiverA, fileA)
-	}
-
-	if _, ok := config.Log.OpenTelemetry.Receivers[receiverB]; !ok {
-		t.Errorf("Missing receiver %q from %s", receiverB, fileB)
 	}
 }
 
