@@ -60,9 +60,7 @@ type Config struct {
 }
 
 type Log struct {
-	HostRootPrefix string        `yaml:"hostroot_prefix"`
-	Inputs         []LogInput    `yaml:"inputs"`
-	OpenTelemetry  OpenTelemetry `yaml:"opentelemetry"`
+	OpenTelemetry OpenTelemetry `yaml:"opentelemetry"`
 	// MetricsRules are named, reusable libraries of metric definitions
 	// (same shape as a receiver's own inline metrics: entries). An entry
 	// does nothing on its own until a receiver includes it by name from its
@@ -91,22 +89,6 @@ type NetworkProtocols struct {
 // blank, otlpreceiver's factory default applies (localhost: gRPC port 4317, HTTP port 4318).
 type NetworkEndpoint struct {
 	Endpoint string `yaml:"endpoint"`
-}
-
-// LogInput is the legacy Fluent Bit-era log-to-metric source; migrateLogInputs
-// (config.go) translates it into OpenTelemetry.Receivers/Log.MetricsRules.
-type LogInput struct {
-	Path          string            `yaml:"path"`
-	ContainerName string            `yaml:"container_name"`
-	Selectors     map[string]string `yaml:"container_selectors"`
-	Filters       []LegacyLogFilter `yaml:"filters"`
-}
-
-// LegacyLogFilter is a regex whose match rate is reported as the named
-// metric, in the legacy log.inputs[].filters shape.
-type LegacyLogFilter struct {
-	Metric string `yaml:"metric"`
-	Regex  string `yaml:"regex"`
 }
 
 // ContainerExcludeRule matches a container by exact name and/or
@@ -157,12 +139,6 @@ type AutoDiscovery struct {
 	SyslogEnable              bool `yaml:"syslog_enable"`
 	AuditdEnable              bool `yaml:"auditd_enable"`
 	ContainerAndServiceEnable bool `yaml:"container_and_service_enable"`
-}
-
-type EnableListener struct {
-	Enable  bool   `yaml:"enable"`
-	Address string `yaml:"address"`
-	Port    int    `yaml:"port"`
 }
 
 // LogReceiver is raw YAML: real filelogreceiver/fileconsumer fields

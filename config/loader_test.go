@@ -236,21 +236,6 @@ func TestLoader(t *testing.T) {
 			Path:     path,
 			Priority: 1,
 		},
-		{
-			Key: "log.inputs",
-			Value: []any{
-				map[string]any{
-					"container_name":      "",
-					"container_selectors": map[string]any{"com.docker.compose.service": testCassandra},
-					"filters":             []any{},
-					"path":                "",
-				},
-			},
-			Type:     TypeLogInputs,
-			Source:   SourceFile,
-			Path:     path,
-			Priority: 1,
-		},
 	}
 
 	lessFunc := func(x Item, y Item) bool {

@@ -877,6 +877,9 @@ func mergeLegacyFilters(metricsByName map[string]any, filtersList []any) ([]stri
 // providerPath identifies the provider this call is migrating (e.g. a config file path); migrate() runs once per provider
 // with the loop index i restarting from 0 each time, so providerPath must be folded into the generated receiver name to
 // avoid two files each declaring one log.inputs entry from both producing "legacy_input_0" and overwriting one another.
+// Every original entry is consumed one way or another: translated into a receiver, or dropped with a warning (malformed,
+// no filters at all, or filters with no path/container_name/container_selectors to attach them to) -- none of them are
+// ever written back to log.inputs, so nothing downstream needs to keep reading that key once migration has run.
 func migrateLogInputs(k *koanf.Koanf, config map[string]any, providerPath string) prometheus.MultiError {
 	var warnings prometheus.MultiError
 
@@ -884,6 +887,10 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any, providerPath string
 	if !ok || len(inputs) == 0 {
 		return nil
 	}
+
+	// Every entry below is either translated into a receiver or dropped with a warning: none of them
+	// need to survive as log.inputs afterward.
+	delete(config, "log.inputs")
 
 	// Read from config, not k: migrateLegacyNetworkListeners may already have written a "legacy_network" receiver here.
 	receivers, _ := config["log.opentelemetry.receivers"].(map[string]any)
@@ -904,20 +911,20 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any, providerPath string
 	// before any receiver gets its copy.
 	receiverMetrics := map[string][]string{}
 
-	remainingInputs := make([]any, 0, len(inputs))
 	translated := false
 
 	for i, inputAny := range inputs {
 		inputMap, ok := inputAny.(map[string]any)
 		if !ok {
-			remainingInputs = append(remainingInputs, inputAny)
+			warnings.Append(fmt.Errorf("%w: log.inputs[%d] is not a valid entry, ignoring it", errSettingsDeprecated, i))
 
 			continue
 		}
 
 		filtersList, ok := inputMap["filters"].([]any)
 		if !ok || len(filtersList) == 0 {
-			remainingInputs = append(remainingInputs, inputAny) // no filters: this entry never did anything for log-to-metric
+			// No filters: this entry never did anything for log-to-metric even before this migration.
+			warnings.Append(fmt.Errorf("%w: log.inputs[%d] has no filters, it never produced a metric, ignoring it", errSettingsDeprecated, i))
 
 			continue
 		}
@@ -931,8 +938,6 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any, providerPath string
 
 		if path == "" && containerName == "" && len(selectors) == 0 {
 			warnings.Append(fmt.Errorf("%w: log.inputs[%d] has filters but no path/container_name/container_selectors set, filters were dropped", errSettingsDeprecated, i))
-
-			remainingInputs = append(remainingInputs, inputAny)
 
 			continue
 		}
@@ -986,7 +991,6 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any, providerPath string
 	}
 
 	config["log.opentelemetry.receivers"] = receivers
-	config["log.inputs"] = remainingInputs
 
 	return warnings
 }

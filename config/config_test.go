@@ -214,7 +214,6 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			KubeConfig:          "/config",
 		},
 		Log: Log{
-			HostRootPrefix: "/hostroot",
 			OpenTelemetry: OpenTelemetry{
 				ShippingEnable:           true,
 				ReceiversDefaultSendLogs: true,
@@ -1970,7 +1969,6 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 			ConfigFile: "testdata/legacy-log-inputs-unmatched.conf",
 			WantConfig: Config{
 				Log: Log{
-					Inputs: []LogInput{{}}, // the orphan entry is kept, but its filters are dropped
 					OpenTelemetry: OpenTelemetry{
 						Receivers: map[string]LogReceiver{
 							legacyInputReceiverName("testdata/legacy-log-inputs-unmatched.conf", 0): {
@@ -2095,6 +2093,25 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 				},
 			},
 			WantWarning: true,
+		},
+		{
+			// A malformed entry (not an object at all) is warned about and dropped, not kept around in
+			// Config.Log -- there's nowhere left to put it now that Log.Inputs/LogInput no longer exist,
+			// and nothing ever read that leftover data anyway.
+			Name:                "legacy-log-inputs-malformed-entry",
+			ConfigFile:          "testdata/legacy-log-inputs-malformed-entry.conf",
+			WantConfig:          Config{},
+			WantWarning:         true,
+			WantWarningContains: "log.inputs[0] is not a valid entry",
+		},
+		{
+			// An entry with no filters at all never did anything for log-to-metric, even before this
+			// migration existed: warned about and dropped, same as the malformed-entry case above.
+			Name:                "legacy-log-inputs-no-filters",
+			ConfigFile:          "testdata/legacy-log-inputs-no-filters.conf",
+			WantConfig:          Config{},
+			WantWarning:         true,
+			WantWarningContains: "log.inputs[0] has no filters",
 		},
 	}
 

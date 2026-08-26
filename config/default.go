@@ -319,8 +319,6 @@ func DefaultConfig() Config { //nolint:maintidx
 			KubeConfig:          "",
 		},
 		Log: Log{
-			HostRootPrefix: "/hostroot",
-			Inputs:         []LogInput{},
 			OpenTelemetry: OpenTelemetry{
 				ShippingEnable:           true,
 				ReceiversDefaultSendLogs: true,

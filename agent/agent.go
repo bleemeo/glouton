@@ -1196,17 +1196,15 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.addWarnings(listenerWarnings...)
 
 		for _, planned := range plannedListeners {
-			plannedCopy := planned
-
 			recv, err := logsource.SetupOTLPNetworkListener(
 				ctx,
 				logsource.NewTelemetrySettings(),
-				plannedCopy.Protocols,
-				plannedCopy.Sink,
-				"shared-otlp-receiver-"+plannedCopy.Name,
+				planned.Protocols,
+				planned.Sink,
+				"shared-otlp-receiver-"+planned.Name,
 			)
 			if err != nil {
-				a.addWarnings(fmt.Errorf("unable to start OpenTelemetry network receiver %q: %w", plannedCopy.Name, err))
+				a.addWarnings(fmt.Errorf("unable to start OpenTelemetry network receiver %q: %w", planned.Name, err))
 
 				continue
 			}
@@ -1217,7 +1215,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 					return recv.Shutdown(context.Background())
 				},
-				fmt.Sprintf("OpenTelemetry network receiver (%s)", plannedCopy.Name),
+				fmt.Sprintf("OpenTelemetry network receiver (%s)", planned.Name),
 			})
 		}
 
@@ -2425,11 +2423,12 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 
 	if a.logProcessManager != nil {
 		modules = append(modules, a.logProcessManager.DiagnosticArchive)
-	} else if a.receiverManager != nil {
-		// logProcessManager.DiagnosticArchive (above) already writes this same persister when it
-		// exists -- it shares receiverManager's *PersistHost, see logsource.ReceiverManager.Persister.
-		// Without either, log-to-metric's read-offset/extension state would be missing from the bundle
-		// entirely whenever log shipping/Bleemeo is disabled.
+	}
+
+	// receiverManager is shared between logProcessManager and logMetricsManager (neither owns it), so
+	// its own diagnostic (read-offset/extension state, via its *PersistHost) is always archived here
+	// directly, independent of whether either manager exists.
+	if a.receiverManager != nil {
 		modules = append(modules, a.receiverManager.DiagnosticArchive)
 	}
 
