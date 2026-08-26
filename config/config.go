@@ -591,7 +591,7 @@ func migrate(k *koanf.Koanf, path string) (*koanf.Koanf, prometheus.MultiError) 
 	warnings = append(warnings, migrateMetricsPrometheus(k, config)...)
 	warnings = append(warnings, migrateScrapperMetrics(k, config)...)
 	warnings = append(warnings, migrateServices(config)...)
-	warnings = append(warnings, migrateLegacyNetworkListeners(k, config, path)...)
+	warnings = append(warnings, migrateLegacyNetworkListeners(k, config)...)
 	warnings = append(warnings, migrateLogInputs(k, config, path)...)
 	warnings = append(warnings, migrateLogFluentBitURL(config)...)
 
@@ -1016,28 +1016,21 @@ func cloneMetricEntry(entryAny any) map[string]any {
 	return clone
 }
 
-// legacyNetworkReceiverNames builds a unique-per-provider pair of names for migrateLegacyNetworkListeners'
-// synthesized receiver (log.opentelemetry.receivers key) and network listener (opentelemetry.listeners
-// key), the same way legacyInputReceiverName namespaces migrateLogInputs' output: migrate() runs once per
-// provider (config file), so two files each still using the legacy grpc/http shape would otherwise both
-// produce the same fixed names and one would silently clobber the other's config at merge time.
-func legacyNetworkReceiverNames(providerPath string) (receiverKey, listenerKey string) {
-	if providerPath == "" {
-		return "legacy_network", "legacy-network"
-	}
-
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(providerPath))
-	suffix := fmt.Sprintf("%08x", h.Sum32())
-
-	return "legacy_network_" + suffix, "legacy-network-" + suffix
+// legacyNetworkReceiverNames returns the fixed names migrateLegacyNetworkListeners synthesizes for its
+// receiver (log.opentelemetry.receivers key) and network listener (opentelemetry.listeners key).
+// Unlike migrateLogInputs' entries, the legacy log.opentelemetry.grpc/http shape is a single flat
+// scalar setting with no name of its own to key on -- the legacy Fluent-Bit-era system only ever had
+// one such listener, and two files setting it both merge into that one listener (last file wins per
+// field, same as any other scalar setting), not two independent listeners. Using a fixed name here is
+// what makes that merge happen naturally, through the ordinary multi-file config merge.
+func legacyNetworkReceiverNames() (receiverKey, listenerKey string) {
+	return "legacy_network", "legacy-network"
 }
 
 // migrateLegacyNetworkListeners folds log.opentelemetry.grpc/http's old, pre-network-receivers {enable, address, port} shape into a
 // synthesized "legacy_network" receiver under opentelemetry.listeners, preserving the address/port and the unconditional
-// shipping behavior (send_logs: true). providerPath identifies the provider being migrated (e.g. a config file path); see
-// legacyNetworkReceiverNames for why it must be folded into the generated names.
-func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any, providerPath string) prometheus.MultiError {
+// shipping behavior (send_logs: true).
+func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any) prometheus.MultiError {
 	var warnings prometheus.MultiError
 
 	const (
@@ -1046,7 +1039,7 @@ func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any, provid
 		defaultHTTPPort = 4318
 	)
 
-	receiverKey, listenerKey := legacyNetworkReceiverNames(providerPath)
+	receiverKey, listenerKey := legacyNetworkReceiverNames()
 
 	// k.Exists/k.Get on the full leaf path (not k.Get(path+".grpc") for the whole submap): koanf only
 	// builds an intermediate "grpc"/"http" map node when the source YAML was itself written with real

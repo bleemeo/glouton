@@ -665,16 +665,16 @@ func TestEffectiveAllowedLabelOverrides(t *testing.T) {
 	}
 }
 
-// legacyNetworkReceiverKey and legacyNetworkListenerKey expose migrateLegacyNetworkListeners' per-provider
+// legacyNetworkReceiverKey and legacyNetworkListenerKey expose migrateLegacyNetworkListeners' fixed
 // generated names to test tables, mirroring legacyInputReceiverName's direct use elsewhere in this file.
-func legacyNetworkReceiverKey(providerPath string) string {
-	key, _ := legacyNetworkReceiverNames(providerPath)
+func legacyNetworkReceiverKey() string {
+	key, _ := legacyNetworkReceiverNames()
 
 	return key
 }
 
-func legacyNetworkListenerKey(providerPath string) string {
-	_, key := legacyNetworkReceiverNames(providerPath)
+func legacyNetworkListenerKey() string {
+	_, key := legacyNetworkReceiverNames()
 
 	return key
 }
@@ -1271,18 +1271,14 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				},
 			},
 		},
-		// Guards against a regression where migrateLegacyNetworkListeners always used the fixed names
-		// "legacy_network"/"legacy-network" with no per-provider uniqueness: two files each still using
-		// the legacy log.opentelemetry.grpc shape (unlike the new opentelemetry.listeners shape, this one
-		// has no name of its own to key on) would otherwise produce identically-named
-		// receivers/listeners, and one would silently clobber the other at merge time. The fix
-		// (legacyNetworkReceiverNames) namespaces each by its own file path, so -- unlike a real merge --
-		// both survive as two independent, simultaneously active listeners rather than one silently
-		// overwriting the other (confirmed live: PRODUCT-3297-log-to-metrics-manual-test-plan.md
-		// section 17). This intentionally diverges from the legacy Fluent-Bit-era system, where this was
-		// a single global scalar setting and the last-loaded file would have silently won.
+		// The legacy log.opentelemetry.grpc/http shape is a single flat scalar setting, just like in the
+		// Fluent-Bit-era system it came from: it has no name of its own to key on, so
+		// legacyNetworkReceiverNames always uses the same fixed names regardless of which file set it.
+		// Two files each still using this shape therefore merge into one listener via the ordinary
+		// multi-file config merge, last file wins per field -- there is no way, legacy or otherwise, to
+		// end up with two independent listeners from it.
 		{
-			Name:  "legacy network listeners from two files stay independent, not merged",
+			Name:  "legacy network listeners from two files merge into one, last file wins",
 			Files: []string{"testdata/legacy-network-multifile-a.conf", "testdata/legacy-network-multifile-b.conf"},
 			WantWarnings: []string{
 				"testdata/legacy-network-multifile-a.conf: setting is deprecated: log.opentelemetry.grpc/http " +
@@ -1295,12 +1291,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			WantConfig: Config{
 				OpenTelemetry: OpenTelemetryConfig{
 					NetworkListeners: map[string]NetworkListener{
-						legacyNetworkListenerKey("testdata/legacy-network-multifile-a.conf"): {
-							Protocols: NetworkProtocols{
-								GRPC: &NetworkEndpoint{Endpoint: "10.0.0.1:5001"},
-							},
-						},
-						legacyNetworkListenerKey("testdata/legacy-network-multifile-b.conf"): {
+						legacyNetworkListenerKey(): {
 							Protocols: NetworkProtocols{
 								GRPC: &NetworkEndpoint{Endpoint: "10.0.0.2:5002"},
 							},
@@ -1310,12 +1301,8 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				Log: Log{
 					OpenTelemetry: OpenTelemetry{
 						Receivers: map[string]LogReceiver{
-							legacyNetworkReceiverKey("testdata/legacy-network-multifile-a.conf"): {
-								"from_listeners": []any{legacyNetworkListenerKey("testdata/legacy-network-multifile-a.conf")},
-								"send_logs":      true,
-							},
-							legacyNetworkReceiverKey("testdata/legacy-network-multifile-b.conf"): {
-								"from_listeners": []any{legacyNetworkListenerKey("testdata/legacy-network-multifile-b.conf")},
+							legacyNetworkReceiverKey(): {
+								"from_listeners": []any{legacyNetworkListenerKey()},
 								"send_logs":      true,
 							},
 						},
@@ -2024,7 +2011,7 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 			WantConfig: Config{
 				OpenTelemetry: OpenTelemetryConfig{
 					NetworkListeners: map[string]NetworkListener{
-						legacyNetworkListenerKey("testdata/legacy-opentelemetry-network.conf"): {
+						legacyNetworkListenerKey(): {
 							Protocols: NetworkProtocols{
 								GRPC: &NetworkEndpoint{Endpoint: "192.168.1.10:5000"},
 							},
@@ -2034,8 +2021,8 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 				Log: Log{
 					OpenTelemetry: OpenTelemetry{
 						Receivers: map[string]LogReceiver{
-							legacyNetworkReceiverKey("testdata/legacy-opentelemetry-network.conf"): {
-								"from_listeners": []any{legacyNetworkListenerKey("testdata/legacy-opentelemetry-network.conf")},
+							legacyNetworkReceiverKey(): {
+								"from_listeners": []any{legacyNetworkListenerKey()},
 								"send_logs":      true,
 							},
 						},
@@ -2051,7 +2038,7 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 			WantConfig: Config{
 				OpenTelemetry: OpenTelemetryConfig{
 					NetworkListeners: map[string]NetworkListener{
-						legacyNetworkListenerKey("testdata/legacy-network-both-protocols.conf"): {
+						legacyNetworkListenerKey(): {
 							Protocols: NetworkProtocols{
 								GRPC: &NetworkEndpoint{Endpoint: "10.0.0.5:9000"},
 								HTTP: &NetworkEndpoint{Endpoint: "10.0.0.5:9001"},
@@ -2062,8 +2049,8 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 				Log: Log{
 					OpenTelemetry: OpenTelemetry{
 						Receivers: map[string]LogReceiver{
-							legacyNetworkReceiverKey("testdata/legacy-network-both-protocols.conf"): {
-								"from_listeners": []any{legacyNetworkListenerKey("testdata/legacy-network-both-protocols.conf")},
+							legacyNetworkReceiverKey(): {
+								"from_listeners": []any{legacyNetworkListenerKey()},
 								"send_logs":      true,
 							},
 						},
@@ -2430,7 +2417,7 @@ func Test_migrateLegacyNetworkListenersFlatKeys(t *testing.T) {
 		t.Fatalf("Expected no leaked \"invalid keys\" warning, got: %s", warnings.Error())
 	}
 
-	receiverKey, listenerKey := legacyNetworkReceiverNames("testdata/legacy-opentelemetry-network-flat.conf")
+	receiverKey, listenerKey := legacyNetworkReceiverNames()
 
 	listener, ok := cfg.OpenTelemetry.NetworkListeners[listenerKey]
 	if !ok {
