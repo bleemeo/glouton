@@ -1323,6 +1323,45 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				},
 			},
 		},
+		// "grpc: null" enables grpc with the default endpoint, never disables it -- matches upstream OTel
+		// collector's own otlpreceiver (see testdata/only_http_null.yaml). See
+		// networkProtocolsNullMeansDefaultHookFunc.
+		{
+			Name:  "network listener grpc: null still enables grpc with the default endpoint",
+			Files: []string{"testdata/network-listener-grpc-null-with-http.conf"},
+			WantConfig: Config{
+				OpenTelemetry: OpenTelemetryConfig{
+					NetworkListeners: map[string]NetworkListener{
+						"otlp/my_custom": {
+							Protocols: NetworkProtocols{
+								GRPC: &NetworkEndpoint{},
+								HTTP: &NetworkEndpoint{Endpoint: "0.0.0.0:4318"},
+							},
+						},
+					},
+				},
+			},
+		},
+		// Known gotcha: file A sets a real grpc endpoint, file B writes "grpc: null" for the same
+		// listener hoping to disable it. Since null never disables (see above), it just resets the
+		// endpoint to default via the ordinary last-file-wins merge rule -- grpc stays enabled. There's
+		// no way to actually disable a protocol from a later file today; documented, not fixed.
+		{
+			Name:  "network listener grpc: null in a later file resets, not disables, an earlier file's endpoint",
+			Files: []string{"testdata/network-listener-grpc-override-a.conf", "testdata/network-listener-grpc-override-b.conf"},
+			WantConfig: Config{
+				OpenTelemetry: OpenTelemetryConfig{
+					NetworkListeners: map[string]NetworkListener{
+						"otlp/my_custom": {
+							Protocols: NetworkProtocols{
+								GRPC: &NetworkEndpoint{},
+								HTTP: &NetworkEndpoint{Endpoint: "0.0.0.0:4318"},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, test := range tests {
