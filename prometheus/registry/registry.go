@@ -1696,6 +1696,27 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, loopCtx context.Context, 
 	// Don't drop the meta labels here, they are needed for relabeling.
 	points := gloutonModel.FamiliesToMetricPoints(t0, mfs, !reg.option.ApplyDynamicRelabel)
 
+	// gatherer-sourced points (e.g. from RegisterAppenderCallback) reach r.option.PushPoint further
+	// down without ever going through pushPoint()'s own fixLabels call, so an invalid label name
+	// (e.g. an OTel attribute-derived "http.response.status_code") would otherwise reach Bleemeo/MQTT
+	// registration unfixed even though it's already fixed by the time it's exposed on /metrics.
+	n := 0
+
+	for _, point := range points {
+		fixed, err := fixLabels(point.Labels)
+		if err != nil {
+			logger.V(2).Printf("Ignoring metric %v: %v", point.Labels, err)
+
+			continue
+		}
+
+		point.Labels = fixed
+		points[n] = point
+		n++
+	}
+
+	points = points[:n]
+
 	if (reg.annotations != types.MetricAnnotations{}) {
 		for i := range points {
 			points[i].Annotations = points[i].Annotations.Merge(reg.annotations)
@@ -2099,8 +2120,15 @@ func fixLabels(lbls map[string]string) (map[string]string, error) {
 					return nil, fmt.Errorf("%w: %v", errInvalidName, l)
 				}
 
+				// Two distinct label names (e.g. "http.status" and "http-status") could otherwise
+				// normalize to the same fixed name and silently clobber each other, non-deterministically
+				// depending on map iteration order.
+				if _, exists := lbls[newL]; exists {
+					return nil, fmt.Errorf("%w: %q would overwrite existing label %q", errInvalidName, l, newL)
+				}
+
 				delete(lbls, l)
-				lbls[l] = v
+				lbls[newL] = v
 			}
 		}
 	}

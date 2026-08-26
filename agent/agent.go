@@ -1080,9 +1080,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 		_, err = a.gathererRegistry.RegisterAppenderCallback(
 			registry.RegistrationOption{
-				Description:        "log-to-metric",
-				JitterSeed:         baseJitterPlus,
-				NoLabelsAlteration: true,
+				Description: "log-to-metric",
+				JitterSeed:  baseJitterPlus,
 			},
 			registry.AppenderFunc(a.logMetricsManager.EmitMetrics),
 		)
