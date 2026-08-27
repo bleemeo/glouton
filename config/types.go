@@ -153,8 +153,9 @@ type AutoDiscovery struct {
 //     opentelemetry.listeners entries by name ({from_listeners: [name,...]}).
 //     Every named entry must already exist under opentelemetry.listeners --
 //     there's no implicit/default listener, so unrelated config elsewhere can never
-//     change what this receiver participates in (see PlanSharedNetworkListeners's
-//     errUndefinedNetworkListener for the typo/missing-entry case).
+//     change what this receiver participates in. A typo/missing entry is reported at load
+//     time by validateLogReceivers (errReceiverNetworkListenerUndefined), and again at
+//     wiring time by PlanSharedNetworkListeners (errUndefinedNetworkListener).
 //   - send_logs: override the global OpenTelemetry.ReceiversDefaultSendLogs
 //     default for this receiver.
 //   - log_format / operators: parse each line into attributes before

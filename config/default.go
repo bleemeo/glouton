@@ -407,7 +407,7 @@ func DefaultConfig() Config { //nolint:maintidx
 			Timeout: 5,
 		},
 		// No network receiver is pre-declared; nothing binds until the user
-		// adds one under opentelemetry.NetworkListeners.
+		// adds one under the opentelemetry.listeners config key (this field's yaml name).
 		OpenTelemetry: OpenTelemetryConfig{
 			NetworkListeners: map[string]NetworkListener{},
 		},

@@ -580,6 +580,51 @@ func movedScalarKeys() map[string]string {
 // migrate upgrade the configuration when Glouton changes its settings.
 // path identifies the provider being migrated (e.g. a config file path); it's used to keep
 // generated keys unique when the same migration runs once per provider (see migrateLogInputs).
+// takeNestedMapFromFlatConfig pulls key's whole subtree out of config as one nested map, deleting the
+// flat leaves it absorbed. config is migrate()'s k.All(): a *flat* leaf map, so the user's own entries
+// under key live in it as dotted leaves ("log.opentelemetry.receivers.myrecv.include"), whether they were
+// written in the flat conf.d style or as nested YAML that got flattened on load.
+//
+// A migration synthesizing an entry must go through this before assigning config[key] back. Leaving the
+// parent key sitting next to those leaves makes migrate()'s final confmap load non-deterministic:
+// maps.Unflatten walks the map in Go's randomized order, so whichever of the two is applied last replaces
+// the other's subtree wholesale -- silently dropping either the user's own receivers or the synthesized
+// one, differently from one start to the next.
+func takeNestedMapFromFlatConfig(config map[string]any, key string) map[string]any {
+	nested, _ := config[key].(map[string]any)
+	if nested == nil {
+		nested = map[string]any{}
+	}
+
+	prefix := key + delimiter
+
+	for flatKey, value := range config {
+		relative, found := strings.CutPrefix(flatKey, prefix)
+		if !found {
+			continue
+		}
+
+		delete(config, flatKey)
+
+		parts := strings.Split(relative, delimiter)
+		node := nested
+
+		for _, part := range parts[:len(parts)-1] {
+			child, _ := node[part].(map[string]any)
+			if child == nil {
+				child = map[string]any{}
+				node[part] = child
+			}
+
+			node = child
+		}
+
+		node[parts[len(parts)-1]] = value
+	}
+
+	return nested
+}
+
 func migrate(k *koanf.Koanf, path string) (*koanf.Koanf, prometheus.MultiError) {
 	config := k.All()
 
@@ -892,15 +937,9 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any, providerPath string
 	// need to survive as log.inputs afterward.
 	delete(config, "log.inputs")
 
-	// Read from config, not k: migrateLegacyNetworkListeners may already have written a "legacy_network" receiver here.
-	receivers, _ := config["log.opentelemetry.receivers"].(map[string]any)
-	if receivers == nil {
-		receivers, _ = k.Get("log.opentelemetry.receivers").(map[string]any)
-	}
-
-	if receivers == nil {
-		receivers = map[string]any{}
-	}
+	// Read from config, not k: it holds everything k does, plus any "legacy_network" receiver
+	// migrateLegacyNetworkListeners already wrote here.
+	receivers := takeNestedMapFromFlatConfig(config, "log.opentelemetry.receivers")
 
 	// Shared across every mergeLegacyFilters call below -- see its doc comment.
 	metricsByName := map[string]any{}
@@ -928,9 +967,6 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any, providerPath string
 
 			continue
 		}
-
-		// Drop the consumed key so it doesn't trip the strict struct decode (errors on unknown keys).
-		delete(inputMap, "filters")
 
 		path, _ := inputMap["path"].(string)
 		containerName, _ := inputMap["container_name"].(string)
@@ -1115,18 +1151,12 @@ func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any) promet
 		protocols["http"] = map[string]any{"endpoint": httpEndpoint}
 	}
 
-	NetworkListeners, _ := k.Get("opentelemetry.listeners").(map[string]any)
-	if NetworkListeners == nil {
-		NetworkListeners = map[string]any{}
-	}
+	networkListeners := takeNestedMapFromFlatConfig(config, "opentelemetry.listeners")
 
-	NetworkListeners[listenerKey] = map[string]any{"protocols": protocols}
-	config["opentelemetry.listeners"] = NetworkListeners
+	networkListeners[listenerKey] = map[string]any{"protocols": protocols}
+	config["opentelemetry.listeners"] = networkListeners
 
-	receivers, _ := k.Get("log.opentelemetry.receivers").(map[string]any)
-	if receivers == nil {
-		receivers = map[string]any{}
-	}
+	receivers := takeNestedMapFromFlatConfig(config, "log.opentelemetry.receivers")
 
 	receivers[receiverKey] = map[string]any{
 		"from_listeners": []any{listenerKey},

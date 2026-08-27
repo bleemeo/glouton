@@ -115,12 +115,15 @@ func firstDuplicateMetricEntry(entries []map[string]any) (dupIndex, origIndex in
 	return 0, 0, false
 }
 
-// validateLogReceivers rejects any log.opentelemetry.receivers entry with no
+// validateLogReceivers warns about any log.opentelemetry.receivers entry with no
 // source selector at all (include, container_name, container_selectors, or
-// from_listeners) -- almost certainly a typo/mistake, caught at load time instead
-// of silently doing nothing. It also rejects undefined from_listeners entries, metric includes
+// from_listeners) -- almost certainly a typo/mistake, surfaced at load time instead
+// of silently doing nothing. It also warns about undefined from_listeners entries, metric includes
 // that don't exist, and verbatim-duplicate metrics: entries (within a receiver's own list, or
 // within a log.metrics_rules list).
+//
+// Every finding is a warning, not an error: load() appends these to its warnings and keeps going, so the
+// offending entry still takes effect (see the caller in config.go). Nothing here drops or corrects it.
 func validateLogReceivers(cfg Config) error {
 	var errs []error
 
@@ -174,10 +177,11 @@ func validateLogReceivers(cfg Config) error {
 	return errors.Join(errs...)
 }
 
-// validateContainerExcludeRules rejects any log.opentelemetry.container_exclude entry with neither
+// validateContainerExcludeRules warns about any log.opentelemetry.container_exclude entry with neither
 // container_name nor selectors set -- almost certainly a typo/mistake, since MatchesContainerRule treats
-// an unset field as a wildcard: such an entry would silently veto every container from both log shipping
+// an unset field as a wildcard: such an entry vetoes every container from both log shipping
 // auto_discovery and metrics container-label detection, instead of the one container it was meant to match.
+// Only a warning, so that veto does still apply -- the entry is reported, not dropped.
 func validateContainerExcludeRules(cfg Config) error {
 	var errs []error
 

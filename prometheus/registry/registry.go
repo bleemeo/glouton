@@ -91,6 +91,11 @@ var (
 	errSkippingScrapeDueToRelabelHook = errors.New("skipping scrape due to relabel hook")
 )
 
+// labelNameReplacer maps the characters Prometheus' legacy validation scheme rejects in a metric or label
+// name onto underscores. Package-level because fixLabels runs once per gathered point on the scrape path,
+// and a Replacer builds a matching trie on construction; it is safe for concurrent use.
+var labelNameReplacer = strings.NewReplacer(".", "_", "-", "_") //nolint:gochecknoglobals
+
 type diagnosticer interface {
 	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error
 }
@@ -2100,12 +2105,10 @@ func (r *Registry) minimalIntervalHook(labels map[string]string) (time.Duration,
 }
 
 func fixLabels(lbls map[string]string) (map[string]string, error) {
-	replacer := strings.NewReplacer(".", "_", "-", "_")
-
 	for l, v := range lbls {
 		if l == types.LabelName {
 			if !types.PrometheusValidationScheme.IsValidMetricName(v) {
-				v = replacer.Replace(v)
+				v = labelNameReplacer.Replace(v)
 
 				if !types.PrometheusValidationScheme.IsValidMetricName(v) {
 					return nil, fmt.Errorf("%w: %v", errInvalidName, v)
@@ -2115,7 +2118,7 @@ func fixLabels(lbls map[string]string) (map[string]string, error) {
 			}
 		} else {
 			if !types.PrometheusValidationScheme.IsValidLabelName(l) {
-				newL := replacer.Replace(l)
+				newL := labelNameReplacer.Replace(l)
 				if !types.PrometheusValidationScheme.IsValidLabelName(newL) {
 					return nil, fmt.Errorf("%w: %v", errInvalidName, l)
 				}

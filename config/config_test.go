@@ -2443,6 +2443,43 @@ func Test_migrateLegacyNetworkListenersFlatKeys(t *testing.T) {
 	}
 }
 
+// Test_migrateKeepsFlatSiblingsOfSynthesizedEntries guards against a regression where a migration wrote
+// its synthesized entry straight into config[parentKey] while the user's own entries for that same parent
+// were still sitting in migrate()'s flat map as dotted leaves. Both then reached the final confmap load,
+// whose maps.Unflatten walks the map in Go's randomized order: whichever landed last replaced the other's
+// whole subtree, so the user's receiver/listener vanished on roughly 4 starts out of 5 and came back on
+// the others. Loops because a single load could pass on map order alone.
+func Test_migrateKeepsFlatSiblingsOfSynthesizedEntries(t *testing.T) {
+	t.Parallel()
+
+	receiverKey, listenerKey := legacyNetworkReceiverNames()
+
+	for range 30 {
+		cfg, _, _, err := Load(true, false, "testdata/legacy-network-flat-sibling-receiver.conf")
+		if err != nil {
+			t.Fatalf("Load returned an error: %v", err)
+		}
+
+		// The user's own flat-spelled entries.
+		if _, ok := cfg.Log.OpenTelemetry.Receivers["myrecv"]; !ok {
+			t.Fatalf("the user's flat-spelled receiver was dropped, got %v", cfg.Log.OpenTelemetry.Receivers)
+		}
+
+		if _, ok := cfg.OpenTelemetry.NetworkListeners["mine"]; !ok {
+			t.Fatalf("the user's flat-spelled listener was dropped, got %v", cfg.OpenTelemetry.NetworkListeners)
+		}
+
+		// ... alongside, not instead of, what the migration synthesized.
+		if _, ok := cfg.Log.OpenTelemetry.Receivers[receiverKey]; !ok {
+			t.Fatalf("the synthesized receiver was dropped, got %v", cfg.Log.OpenTelemetry.Receivers)
+		}
+
+		if _, ok := cfg.OpenTelemetry.NetworkListeners[listenerKey]; !ok {
+			t.Fatalf("the synthesized listener was dropped, got %v", cfg.OpenTelemetry.NetworkListeners)
+		}
+	}
+}
+
 // Test_loadNetworkListenerSurvivesDefaultMerge guards against a regression where
 // "opentelemetry.listeners" was missing from default.go's mapKeys(), so DefaultConfig()'s empty
 // map for that field and a real config file's nested entries landed as separate flat keys under the same

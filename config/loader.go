@@ -542,6 +542,7 @@ func dedupeFromListeners(config map[string]any) {
 			}
 
 			seen[name] = true
+
 			deduped = append(deduped, rawName)
 		}
 

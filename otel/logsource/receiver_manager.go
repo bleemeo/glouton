@@ -167,9 +167,12 @@ type managedSource struct {
 	// fanout is nil if no SinkProvider wants this source.
 	fanout consumer.Logs
 	// networkFanout is fanout wrapped with operators for from_listeners delivery (see NetworkWants):
-	// nil whenever fanout itself is nil. Built once, lazily, by ensureReceiverSource -- the
-	// include/container-tail paths never read this field, only NetworkWants, since they already apply
-	// operators themselves via SetupLogReceiverFactories.
+	// nil whenever fanout itself is nil. Built once per source by ensureReceiverSource, for every
+	// receiver rather than only the from_listeners ones -- the include/container-tail paths never read
+	// this field, only NetworkWants, since they already apply operators themselves via
+	// SetupLogReceiverFactories. So a config of purely file/container receivers still starts one stanza
+	// operator pipeline per receiver here that nothing ever consumes; worth making conditional on the
+	// receiver actually having from_listeners if that ever shows up in a profile.
 	networkFanout consumer.Logs
 	// networkCleanup releases whatever background resource networkFanout's operator bridge started
 	// (see wrapWithOperators); always non-nil once networkFanout is set, a no-op if wrapping fell back
