@@ -161,7 +161,7 @@ func (r *logReceiver) update(ctx context.Context, pipeline *pipelineContext, add
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	resolvedFiles := logsource.ResolveIncludeGlobs(pipeline.hostroot, r.include, func(msg string) {
+	resolvedFiles, _ := logsource.ResolveIncludeGlobs(pipeline.hostroot, r.include, func(msg string) {
 		addWarnings(errorf("Log receiver %q: %s", r.name, msg))
 	})
 

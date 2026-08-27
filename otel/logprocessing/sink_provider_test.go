@@ -129,6 +129,23 @@ func TestWantSourceDeclinesWhenSendLogsFalse(t *testing.T) {
 	}
 }
 
+// TestWantSourceDeclinesContainerLabelSourceWithNilContainer guards against a regression where
+// WantSource dereferenced src.Container unconditionally for SourceContainerLabel (via
+// man.containerRecv.isTailing(src.Container.ID())), panicking the discovery goroutine (which calls this
+// with rm.l held) instead of declining, for any ResolvedSource whose Container field isn't set.
+func TestWantSourceDeclinesContainerLabelSourceWithNilContainer(t *testing.T) {
+	t.Parallel()
+
+	man := newSinkTestManager(t, config.OpenTelemetry{}, &logBuffer{})
+
+	sink, ok := man.WantSource(t.Context(), logsource.ResolvedSource{
+		Kind: logsource.SourceContainerLabel, SendLogs: true, Container: nil,
+	})
+	if ok || sink != nil {
+		t.Fatalf("expected WantSource to decline a nil-Container SourceContainerLabel source, got ok=%v sink=%v", ok, sink)
+	}
+}
+
 // Test that a receiver's own filters apply even with no file/container fields to resolve first.
 func TestWantSourceReceiverFilterAppliesUnconditionally(t *testing.T) {
 	t.Parallel()

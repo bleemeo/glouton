@@ -21,9 +21,11 @@ import (
 	"fmt"
 	"hash/fnv"
 	"maps"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/bleemeo/glouton/logger"
@@ -1063,6 +1065,22 @@ func legacyNetworkReceiverNames() (receiverKey, listenerKey string) {
 	return "legacy_network", "legacy-network"
 }
 
+// legacyNetworkListenerBool reads a legacy log.opentelemetry.grpc/http ".enable" leaf straight from koanf,
+// bypassing the mapstructure decode (and its stringToBoolHookFunc) that normally tolerates a string-typed
+// YAML value here (enable: "true"), so that spelling must be handled explicitly too.
+func legacyNetworkListenerBool(value any) bool {
+	switch v := value.(type) {
+	case bool:
+		return v
+	case string:
+		parsed, err := ParseBool(v)
+
+		return err == nil && parsed
+	default:
+		return false
+	}
+}
+
 // migrateLegacyNetworkListeners folds log.opentelemetry.grpc/http's old, pre-network-receivers {enable, address, port} shape into a
 // synthesized "legacy_network" receiver under opentelemetry.listeners, preserving the address/port and the unconditional
 // shipping behavior (send_logs: true).
@@ -1105,8 +1123,7 @@ func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any) promet
 	))
 
 	endpointOf := func(sub string, defaultPort int) string {
-		enable, _ := k.Get(path + "." + sub + ".enable").(bool)
-		if !enable {
+		if !legacyNetworkListenerBool(k.Get(path + "." + sub + ".enable")) {
 			return ""
 		}
 
@@ -1124,9 +1141,13 @@ func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any) promet
 			port = int(p)
 		case float64:
 			port = int(p)
+		case string:
+			if n, err := strconv.Atoi(p); err == nil {
+				port = n
+			}
 		}
 
-		return fmt.Sprintf("%s:%d", address, port)
+		return net.JoinHostPort(address, strconv.Itoa(port))
 	}
 
 	var grpcEndpoint, httpEndpoint string

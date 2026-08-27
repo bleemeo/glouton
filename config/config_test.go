@@ -2066,6 +2066,63 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 			WantWarning: true,
 		},
 		{
+			// A quoted (string-typed) enable/port must be tolerated exactly like the unquoted (bool/int)
+			// spelling every other test case here uses -- mapstructure's stringToBoolHookFunc handles this
+			// spelling everywhere else config is decoded, and this migration must not be an exception.
+			Name:       "legacy-network-string-typed-enable-port",
+			ConfigFile: "testdata/legacy-network-string-typed-enable-port.conf",
+			WantConfig: Config{
+				OpenTelemetry: OpenTelemetryConfig{
+					NetworkListeners: map[string]NetworkListener{
+						legacyNetworkListenerKey(): {
+							Protocols: NetworkProtocols{
+								GRPC: &NetworkEndpoint{Endpoint: "10.0.0.5:9000"},
+							},
+						},
+					},
+				},
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
+							legacyNetworkReceiverKey(): {
+								"from_listeners": []any{legacyNetworkListenerKey()},
+								"send_logs":      true,
+							},
+						},
+					},
+				},
+			},
+			WantWarning: true,
+		},
+		{
+			// An IPv6 literal address must produce a bindable "[::1]:9000" endpoint (net.JoinHostPort),
+			// not the "::1:9000" fmt.Sprintf("%s:%d", ...) would have produced.
+			Name:       "legacy-network-ipv6-address",
+			ConfigFile: "testdata/legacy-network-ipv6-address.conf",
+			WantConfig: Config{
+				OpenTelemetry: OpenTelemetryConfig{
+					NetworkListeners: map[string]NetworkListener{
+						legacyNetworkListenerKey(): {
+							Protocols: NetworkProtocols{
+								GRPC: &NetworkEndpoint{Endpoint: "[::1]:9000"},
+							},
+						},
+					},
+				},
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
+							legacyNetworkReceiverKey(): {
+								"from_listeners": []any{legacyNetworkListenerKey()},
+								"send_logs":      true,
+							},
+						},
+					},
+				},
+			},
+			WantWarning: true,
+		},
+		{
 			Name:       "legacy-log-inputs-unmatched",
 			ConfigFile: "testdata/legacy-log-inputs-unmatched.conf",
 			WantConfig: Config{

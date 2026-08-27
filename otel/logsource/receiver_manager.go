@@ -59,7 +59,12 @@ const (
 	saveThrottle = time.Minute
 )
 
-var errNoContainerLogFile = errors.New("no log file found for container")
+var (
+	errNoContainerLogFile = errors.New("no log file found for container")
+	// errReceiverManagerShutDown is returned by a network consumer's ConsumeLogs once ReceiverManager.Shutdown
+	// has torn down its operator bridge; see managedSource.stopNetwork.
+	errReceiverManagerShutDown = errors.New("logsource: receiver manager is shutting down")
+)
 
 // ReceiverManager owns log tails and fans records to registered SinkProviders. Use NewReceiverManager; all exported methods are thread-safe.
 type ReceiverManager struct {
@@ -80,6 +85,12 @@ type ReceiverManager struct {
 	receivers          map[string]*managedSource // by OpenTelemetry.Receivers key
 	byContainer        map[string]*managedSource // by container ID, SourceContainerLabel only
 	externalSizerFuncs []func() []FileSizer
+	// shuttingDown is set under l by Shutdown, and checked by every method that can start a new tail
+	// (RescanReceivers, UpdateContainers): Shutdown runs from one agent task while the discovery
+	// goroutine driving UpdateContainers can still be mid-call on the very same ctx.Done(), and without
+	// this guard it would start tails/register persistent extensions after SaveState has already run,
+	// which then never get stopped or saved.
+	shuttingDown bool
 }
 
 // NewReceiverManager builds a ReceiverManager for cfg. Register every SinkProvider first, then call
@@ -176,13 +187,21 @@ type managedSource struct {
 	networkFanout consumer.Logs
 	// networkCleanup releases whatever background resource networkFanout's operator bridge started
 	// (see wrapWithOperators); always non-nil once networkFanout is set, a no-op if wrapping fell back
-	// to raw fanout. Called from ReceiverManager.Shutdown.
+	// to raw fanout. Only ever called through stopNetwork below, never directly.
 	networkCleanup func()
 	// networkMu serializes ConsumeLogs calls into networkFanout: stanza's pipeline/operator instances
 	// aren't documented safe for concurrent Process/ProcessBatch on one instance, and the OTLP receiver
 	// may call this receiver's shared network consumer concurrently from several simultaneous
-	// gRPC/HTTP requests hitting the same listener.
+	// gRPC/HTTP requests hitting the same listener. It also orders every ConsumeLogs call against
+	// stopNetwork below, so shutdown can never race a call already past this point (see networkStopped).
 	networkMu sync.Mutex
+	// networkStopped is set by stopNetwork, under networkMu, once networkCleanup has run: the OTLP
+	// listener feeding networkFanout is a separate agent task that shuts down independently on the same
+	// ctx.Done(), so a push can otherwise still be in ConsumeLogs when networkCleanup closes the
+	// operator bridge's channels underneath it (stanza's FromPdataConverter.Stop closes workerChan,
+	// which panics a concurrent send). Checked before every call into networkFanout so a call that loses
+	// the race with shutdown is declined instead of reaching the torn-down pipe.
+	networkStopped bool
 	// fields is this receiver's config decoded once at creation, set only for a SourceReceiver
 	// managedSource. Cached because rm.cfg never changes for the manager's lifetime, so re-decoding it on
 	// every ensureReceiverSource cache hit was pure waste.
@@ -393,6 +412,10 @@ func (rm *ReceiverManager) RescanReceivers(ctx context.Context) error {
 	rm.l.Lock()
 	defer rm.l.Unlock()
 
+	if rm.shuttingDown {
+		return nil
+	}
+
 	var errs error
 
 	for name, raw := range rm.cfg.Receivers {
@@ -407,7 +430,7 @@ func (rm *ReceiverManager) RescanReceivers(ctx context.Context) error {
 			continue
 		}
 
-		files := rm.resolveIncludeGlobs(name, fields.Include)
+		files, complete := rm.resolveIncludeGlobs(name, fields.Include)
 
 		if err := rm.startIncludeFiles(ctx, ms, name, files); err != nil {
 			errs = errors.Join(errs, fmt.Errorf("receiver %q: %w", name, err))
@@ -418,7 +441,10 @@ func (rm *ReceiverManager) RescanReceivers(ctx context.Context) error {
 			wanted[f] = true
 		}
 
-		rm.stopUnwantedIncludeFiles(ctx, ms, wanted)
+		// Only forget a dropped-out file's offset when this cycle's glob resolution fully succeeded: an
+		// incomplete resolution (a transient permission/IO error on one pattern) must not be confused with
+		// that file genuinely no longer matching, or its read offset would be lost for good.
+		rm.stopUnwantedIncludeFiles(ctx, ms, wanted, complete)
 	}
 
 	return errs
@@ -426,7 +452,7 @@ func (rm *ReceiverManager) RescanReceivers(ctx context.Context) error {
 
 // resolveIncludeGlobs expands patterns into hostroot-stripped, symlink-resolved file paths (needed
 // for e.g. Kubernetes' /var/log/containers/* -> /var/log/pods/* symlinks).
-func (rm *ReceiverManager) resolveIncludeGlobs(name string, patterns []string) []string {
+func (rm *ReceiverManager) resolveIncludeGlobs(name string, patterns []string) (files []string, complete bool) {
 	return ResolveIncludeGlobs(rm.hostroot, patterns, func(msg string) {
 		logger.V(1).Printf("logsource: receiver %q: %s", name, msg)
 	})
@@ -487,11 +513,18 @@ func (rm *ReceiverManager) startIncludeFile(ctx context.Context, ms *managedSour
 }
 
 // stopUnwantedIncludeFiles stops every include-pattern tail under ms whose file isn't in wanted (e.g. it
-// stopped matching any include pattern, or was rotated/deleted away), forgetting its persisted offset too:
-// symmetric to stopUnwantedContainerTails.
-func (rm *ReceiverManager) stopUnwantedIncludeFiles(ctx context.Context, ms *managedSource, wanted map[string]bool) {
+// stopped matching any include pattern, or was rotated/deleted away): symmetric to
+// stopUnwantedContainerTails. forget is false for a graceful/resumable stop (this cycle's glob resolution
+// was incomplete, so a dropped-out file might just be a transient resolution failure, not a real
+// disappearance), true to also forget its persisted offset for good.
+func (rm *ReceiverManager) stopUnwantedIncludeFiles(ctx context.Context, ms *managedSource, wanted map[string]bool, forget bool) {
 	ms.l.Lock()
 	defer ms.l.Unlock()
+
+	removeExts := rm.persister.RemovePersistentExts
+	if forget {
+		removeExts = rm.persister.RemovePersistentExtsAndForget
+	}
 
 	for file, recvs := range ms.recvs {
 		if wanted[file] {
@@ -499,7 +532,7 @@ func (rm *ReceiverManager) stopUnwantedIncludeFiles(ctx context.Context, ms *man
 		}
 
 		shutdownReceivers(ctx, recvs)
-		rm.persister.RemovePersistentExtsAndForget(ms.extIDs[file])
+		removeExts(ms.extIDs[file])
 
 		delete(ms.recvs, file)
 		delete(ms.extIDs, file)
@@ -567,6 +600,10 @@ type containerMatcher struct {
 func (rm *ReceiverManager) UpdateContainers(ctx context.Context, containers []facts.Container, serviceTailed map[string]bool) {
 	rm.l.Lock()
 	defer rm.l.Unlock()
+
+	if rm.shuttingDown {
+		return
+	}
 
 	matchers := rm.containerMatchers()
 
@@ -761,7 +798,7 @@ func (rm *ReceiverManager) updateLabelContainers(
 
 		current[ctr.ID()] = true
 
-		if err := rm.startContainerTail(ctx, ms, ctr, ms.operators, ""); err != nil {
+		if err := rm.startContainerTail(ctx, ms, ctr, ms.operators, containerLabelPersistNamespace); err != nil {
 			logger.V(1).Printf("logsource: container %s (%s): %v", ctr.ContainerName(), ctr.ID(), err)
 		}
 	}
@@ -778,12 +815,21 @@ func (rm *ReceiverManager) updateLabelContainers(
 	}
 }
 
-// containerPersistName builds a persisted-offset identity; namespace is "" for label-detected, or a receiver name for independent offsets.
-func containerPersistName(namespace, containerID, logFile string) string {
-	if namespace == "" {
-		return "container/" + containerID + "/" + logFile
-	}
+// containerLabelPersistNamespace namespaces the container-label fallback's own tail (updateLabelContainers),
+// keeping it distinct from otel/logprocessing's containerReceiver, which persists a service-discovered
+// container's shipping tail under the literal "container/<id>/<file>" (no namespace concept there). The two
+// can be active on the very same container/file at once -- e.g. a service-discovered container also carries
+// glouton.log_metrics, so logprocessing declines it (already shipping it) while logmetrics still wants it,
+// and receiver_manager starts its own physical tail purely for that metric. Sharing one persisted-offset
+// identity between two simultaneously-live tails would let each one's save silently clobber the other's
+// (PersistHost.storeMetadata replaces the whole per-name entry on every save), corrupting or duplicating
+// whichever one resumes from the wrong offset after a restart.
+const containerLabelPersistNamespace = "label"
 
+// containerPersistName builds a persisted-offset identity: namespace disambiguates independent tailing
+// mechanisms for the same container/file (an explicit receiver's own name, or containerLabelPersistNamespace
+// for the label fallback) so they never collide.
+func containerPersistName(namespace, containerID, logFile string) string {
 	return "container/" + namespace + "/" + containerID + "/" + logFile
 }
 
@@ -982,17 +1028,21 @@ func (rm *ReceiverManager) shutdownSource(ctx context.Context, ms *managedSource
 	}
 }
 
-// Shutdown stops every physical tail this ReceiverManager owns, preserving every offset for the next restart.
+// Shutdown stops every physical tail this ReceiverManager owns, preserving every offset for the next
+// restart. Terminal: rm must not be used again afterwards, and RescanReceivers/UpdateContainers become
+// no-ops once this has run.
 func (rm *ReceiverManager) Shutdown(ctx context.Context) {
 	rm.l.Lock()
 	defer rm.l.Unlock()
 
+	// Terminal: makes a concurrent RescanReceivers/UpdateContainers call (the discovery goroutine can
+	// still be mid-call on the same ctx.Done() this method's caller reacted to) a no-op instead of
+	// starting a tail nothing will ever stop or save again.
+	rm.shuttingDown = true
+
 	for _, ms := range rm.receivers {
 		rm.shutdownSource(ctx, ms, false)
-
-		if ms.networkCleanup != nil {
-			ms.networkCleanup()
-		}
+		ms.stopNetwork()
 	}
 
 	for _, ms := range rm.byContainer {
@@ -1059,6 +1109,21 @@ func (rm *ReceiverManager) NetworkWants(ctx context.Context) []NetworkWant {
 	return wants
 }
 
+// stopNetwork tears down ms's network operator bridge, if any, ordered against every ConsumeLogs call
+// through networkMu: a call already past the lock finishes normally (networkCleanup waits for it via
+// stanza's own Stop()), and a call arriving after this point sees networkStopped and declines instead of
+// reaching the torn-down pipe. Safe to call on a managedSource with no network wiring (networkCleanup nil).
+func (ms *managedSource) stopNetwork() {
+	ms.networkMu.Lock()
+	defer ms.networkMu.Unlock()
+
+	ms.networkStopped = true
+
+	if ms.networkCleanup != nil {
+		ms.networkCleanup()
+	}
+}
+
 // serializedNetworkConsumer returns a consumer.Logs delegating to ms.networkFanout under ms.networkMu,
 // so concurrent OTLP requests hitting a listener shared with other receivers never call this receiver's
 // own operator pipeline concurrently (see managedSource.networkMu). Returns nil unchanged when
@@ -1072,6 +1137,10 @@ func (rm *ReceiverManager) serializedNetworkConsumer(ms *managedSource) consumer
 	wrapped, err := consumer.NewLogs(func(ctx context.Context, ld plog.Logs) error {
 		ms.networkMu.Lock()
 		defer ms.networkMu.Unlock()
+
+		if ms.networkStopped {
+			return errReceiverManagerShutDown
+		}
 
 		return ms.networkFanout.ConsumeLogs(ctx, ld)
 	})

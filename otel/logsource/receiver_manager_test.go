@@ -381,6 +381,77 @@ func TestReceiverManagerStopsIncludeFileWhenItDisappears(t *testing.T) {
 	}
 }
 
+// TestReceiverManagerStopUnwantedIncludeFilesKeepsOffsetWhenResolutionIncomplete tests that a file dropping
+// out of `wanted` during an incomplete glob resolution (e.g. a transient permission/IO error on one
+// pattern) stops the tail but keeps its persisted offset, instead of forgetting it like a genuine
+// disappearance would.
+func TestReceiverManagerStopUnwantedIncludeFilesKeepsOffsetWhenResolutionIncomplete(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	logFile, err := os.CreateTemp(dir, "app-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFile.Close()
+
+	cfg := config.OpenTelemetry{
+		Receivers: map[string]config.LogReceiver{
+			"app": {"include": []string{filepath.Join(dir, "*.log")}},
+		},
+	}
+
+	rm := newTestReceiverManager(t, cfg)
+
+	provider, _ := newRecordingProvider()
+	rm.RegisterSinkProvider(provider)
+
+	if err := rm.RescanReceivers(t.Context()); err != nil {
+		t.Fatal("RescanReceivers failed:", err)
+	}
+
+	rm.l.Lock()
+	ms := rm.receivers["app"]
+	rm.l.Unlock()
+
+	ms.l.Lock()
+	extIDs := ms.extIDs[logFile.Name()]
+	ms.l.Unlock()
+
+	if len(extIDs) == 0 {
+		t.Fatal("expected the file to have a registered persistent extension")
+	}
+
+	name := extIDs[0].Name()
+
+	// Seed some offset metadata for it, as if the tail had already read part of the file.
+	rm.persister.l.Lock()
+	rm.persister.metadataPerReceiver[name] = map[string][]byte{"offset": []byte("123")}
+	rm.persister.l.Unlock()
+
+	// Simulate this cycle's glob resolution having failed on some other pattern: the file drops out of
+	// wanted, but complete=false says not to trust that as a genuine disappearance.
+	rm.stopUnwantedIncludeFiles(t.Context(), ms, map[string]bool{}, false)
+
+	ms.l.Lock()
+	stillWatching := len(ms.watching)
+	ms.l.Unlock()
+
+	if stillWatching != 0 {
+		t.Errorf("expected the tail to stop regardless of forget, got %d still watched", stillWatching)
+	}
+
+	rm.persister.l.Lock()
+	_, stillKnown := rm.persister.metadataPerReceiver[name]
+	rm.persister.l.Unlock()
+
+	if !stillKnown {
+		t.Error("expected the offset to survive stopUnwantedIncludeFiles when the resolution was incomplete (forget=false)")
+	}
+}
+
 // fakeFileSizer is a FileSizer test double returning a fixed set of sizes.
 type fakeFileSizer map[string]int64
 
@@ -735,6 +806,65 @@ func TestReceiverManagerNoTailWhenEveryProviderDeclines(t *testing.T) {
 
 	if len(ms.containerLogFile) != 0 {
 		t.Fatalf("expected no tail to be started when every provider declines, got %+v", ms.containerLogFile)
+	}
+}
+
+// TestReceiverManagerContainerLabelTailDoesNotCollideWithLogprocessingContainerReceiver guards against a
+// regression where updateLabelContainers' own tail (persistNamespace == "") built the exact same
+// persisted-offset identity otel/logprocessing's containerReceiver uses for a service-discovered
+// container's shipping tail ("container/" + id + "/" + file -- see containers.go's makeStorageFn, not
+// importable here without a package cycle). The two tails can be simultaneously live: a
+// service-discovered container that also carries glouton.log_metrics has logprocessing decline it
+// (already shipping) while logmetrics still wants it, so receiver_manager starts its own physical tail
+// purely for the metric, alongside logprocessing's. Sharing one identity between two live tails lets each
+// one's save silently clobber the other's (PersistHost.storeMetadata replaces the whole per-name entry on
+// every save).
+func TestReceiverManagerContainerLabelTailDoesNotCollideWithLogprocessingContainerReceiver(t *testing.T) {
+	t.Parallel()
+
+	logFile, err := os.CreateTemp(t.TempDir(), "postgres-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFile.Close()
+
+	ctr := facts.FakeContainer{
+		FakeID: "id-1", FakeContainerName: "postgres-1", FakeLogPath: logFile.Name(),
+		FakeLabels: map[string]string{ContainerLabelPrefix + "send_logs": "true"},
+	}
+
+	rm := newTestReceiverManager(t, config.OpenTelemetry{})
+
+	provider, _ := newRecordingProvider()
+	rm.RegisterSinkProvider(provider)
+
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil)
+
+	ms, found := rm.byContainer["id-1"]
+	if !found {
+		t.Fatal("expected the container's source to be tracked in byContainer")
+	}
+
+	ms.l.Lock()
+	extIDs := ms.containerExtIDs["id-1"]
+	ms.l.Unlock()
+
+	if len(extIDs) == 0 {
+		t.Fatal("expected the container tail to have a registered persistent extension")
+	}
+
+	// Mirrors otel/logprocessing/containers.go's own construction for a service-discovered container's
+	// shipping tail: "container/" + ctr.Attributes.ID + metadataKeySeparator + logFile.
+	logprocessingName := "container/" + ctr.ID() + "/" + logFile.Name()
+
+	for _, id := range extIDs {
+		if id.Name() == logprocessingName {
+			t.Fatalf(
+				"container-label tail's persist name %q collides with logprocessing's containerReceiver name for the same container/file",
+				id.Name(),
+			)
+		}
 	}
 }
 
@@ -1286,5 +1416,55 @@ func TestManagedSourceSizesByFileSkipsOnlyTheFailingFile(t *testing.T) {
 
 	if diff := cmp.Diff(map[string]int64{"good.log": 42}, sizes); diff != "" {
 		t.Fatalf("Unexpected sizes (-want +got):\n%s", diff)
+	}
+}
+
+// TestReceiverManagerRescanAndUpdateContainersNoopAfterShutdown guards against a regression where
+// Shutdown left the ReceiverManager reusable: a discovery goroutine's RescanReceivers/UpdateContainers
+// call racing (or arriving after) Shutdown would start a new tail and register a persistent extension
+// that nothing would ever stop or save again, since SaveState/Shutdown already ran.
+func TestReceiverManagerRescanAndUpdateContainersNoopAfterShutdown(t *testing.T) {
+	t.Parallel()
+
+	logFile, err := os.CreateTemp(t.TempDir(), "app-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFile.Close()
+
+	cfg := config.OpenTelemetry{
+		Receivers: map[string]config.LogReceiver{
+			"app": {"include": []string{logFile.Name()}},
+		},
+	}
+
+	rm, err := NewReceiverManager(cfg, "/", newMemoryState(), nil)
+	if err != nil {
+		t.Fatal("NewReceiverManager failed:", err)
+	}
+
+	provider, _ := newRecordingProvider()
+	rm.RegisterSinkProvider(provider)
+
+	rm.Shutdown(t.Context())
+
+	if err := rm.RescanReceivers(t.Context()); err != nil {
+		t.Fatal("RescanReceivers failed:", err)
+	}
+
+	if got := len(rm.receivers); got != 0 {
+		t.Errorf("expected RescanReceivers to be a no-op after Shutdown, got %d receiver(s) started", got)
+	}
+
+	ctr := facts.FakeContainer{
+		FakeID: "id-1", FakeContainerName: "postgres-1", FakeLogPath: logFile.Name(),
+		FakeLabels: map[string]string{ContainerLabelPrefix + "send_logs": "true"},
+	}
+
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil)
+
+	if got := len(rm.byContainer); got != 0 {
+		t.Errorf("expected UpdateContainers to be a no-op after Shutdown, got %d container source(s) started", got)
 	}
 }

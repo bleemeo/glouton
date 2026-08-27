@@ -57,6 +57,10 @@ func (man *Manager) WantSource(ctx context.Context, src logsource.ResolvedSource
 
 		return man.wrapWithFilter(ctx, logsource.SourceReceiver, "recv-"+src.ReceiverName, filters)
 	case logsource.SourceContainerLabel:
+		if src.Container == nil {
+			return nil, false
+		}
+
 		// This container's logs are already shipped from the service path (containerRecv), so wanting
 		// them here too would ship every line twice. Only this provider's interest is declined, not the
 		// source itself: logmetrics resolves a container's glouton.log_metrics rule exclusively from

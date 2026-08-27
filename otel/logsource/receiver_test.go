@@ -19,6 +19,8 @@ package logsource
 import (
 	"errors"
 	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/bleemeo/glouton/otel/execlogreceiver"
@@ -57,6 +59,90 @@ func TestRetryConfigIsUpToDate(t *testing.T) {
 	if diff := cmp.Diff(retryCfgMap, consumerretryCfgMap); diff != "" {
 		t.Fatalf("Unexpected consumerretry config (-want, +got):\n%s", diff)
 	}
+}
+
+// TestResolveIncludeGlobsCompleteFlag guards ResolveIncludeGlobs' complete return value, which callers
+// rely on to tell a genuine "stopped matching" from a transient resolution failure (see
+// ReceiverManager.stopUnwantedIncludeFiles' forget parameter).
+func TestResolveIncludeGlobsCompleteFlag(t *testing.T) {
+	t.Parallel()
+
+	t.Run("every pattern resolves", func(t *testing.T) {
+		t.Parallel()
+
+		dir := t.TempDir()
+
+		logFile, err := os.CreateTemp(dir, "app-*.log")
+		if err != nil {
+			t.Fatal("Can't create log file:", err)
+		}
+
+		defer logFile.Close()
+
+		files, complete := ResolveIncludeGlobs("/", []string{filepath.Join(dir, "*.log")}, func(string) {})
+
+		if !complete {
+			t.Error("expected complete=true when every pattern resolves without error")
+		}
+
+		if len(files) != 1 {
+			t.Errorf("expected exactly 1 resolved file, got %v", files)
+		}
+	})
+
+	t.Run("malformed pattern is a config error, not a transient one", func(t *testing.T) {
+		t.Parallel()
+
+		files, complete := ResolveIncludeGlobs("/", []string{"["}, func(string) {})
+
+		if !complete {
+			t.Error("expected complete=true for a malformed pattern: it's a permanent config mistake, not a transient IO failure")
+		}
+
+		if len(files) != 0 {
+			t.Errorf("expected no resolved file for a malformed pattern, got %v", files)
+		}
+	})
+
+	t.Run("unreadable directory behind a wildcard pattern is transient", func(t *testing.T) {
+		t.Parallel()
+
+		if runtime.GOOS == "windows" {
+			t.Skip("permission bits behave differently on Windows")
+		}
+
+		if os.Geteuid() == 0 {
+			t.Skip("running as root: permission denied doesn't apply")
+		}
+
+		dir := t.TempDir()
+		sub := filepath.Join(dir, "unreadable")
+
+		if err := os.Mkdir(sub, 0o750); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := os.CreateTemp(sub, "app-*.log"); err != nil {
+			t.Fatal("Can't create log file:", err)
+		}
+
+		if err := os.Chmod(sub, 0o000); err != nil {
+			t.Fatal(err)
+		}
+
+		//nolint:errcheck,gosec // best-effort restore (0o750, not a sensitive file) so t.TempDir()'s cleanup can remove it
+		defer os.Chmod(sub, 0o750)
+
+		files, complete := ResolveIncludeGlobs("/", []string{filepath.Join(sub, "*.log")}, func(string) {})
+
+		if complete {
+			t.Error("expected complete=false when a wildcard pattern hits a permission error")
+		}
+
+		if len(files) != 0 {
+			t.Errorf("expected no resolved file behind the unreadable directory, got %v", files)
+		}
+	})
 }
 
 // errStatFailed stands in for whatever made a size probe fail (a lost race with logrotate, a sudo stat

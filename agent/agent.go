@@ -2108,11 +2108,6 @@ func (a *agent) updatedDiscovery(ctx context.Context, services []discovery.Servi
 		}
 	}
 
-	err := a.rebuildDynamicMetricAllowDenyList(services)
-	if err != nil {
-		logger.V(2).Printf("Error during dynamic Filter rebuild: %v", err)
-	}
-
 	if a.logProcessManager != nil || a.receiverManager != nil {
 		containers, err := a.containerRuntime.Containers(ctx, time.Hour, false)
 		if err != nil {
@@ -2152,6 +2147,15 @@ func (a *agent) updatedDiscovery(ctx context.Context, services []discovery.Servi
 				a.receiverManager.UpdateContainers(ctx, containers, serviceTailed)
 			}
 		}
+	}
+
+	// Rebuilt last, after HandleLogsFromDynamicSources/UpdateContainers above: those are what first
+	// declare a newly-discovered container-label log-metric's names into logMetricsManager, and this
+	// list gates every sample by name. Rebuilding before them would filter out a brand new
+	// glouton.log_metrics container's metrics under a restrictive metric.allow_metrics for one whole
+	// discovery cycle.
+	if err := a.rebuildDynamicMetricAllowDenyList(services); err != nil {
+		logger.V(2).Printf("Error during dynamic Filter rebuild: %v", err)
 	}
 }
 

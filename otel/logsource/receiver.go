@@ -104,12 +104,17 @@ var retryCfg = struct { //nolint:gochecknoglobals
 // (symlink resolution is needed for e.g. Kubernetes' /var/log/containers/* -> /var/log/pods/* symlinks).
 // warn is called, once per skipped pattern, with a ready-to-format message (no receiver name, no trailing
 // punctuation); callers decide where it's surfaced (a plain log line, or a warning visible in the UI).
-func ResolveIncludeGlobs(hostroot string, patterns []string, warn func(msg string)) []string {
+//
+// complete is false whenever a pattern was skipped because of a transient-looking IO error (permission
+// denied, or another glob-time IO failure) rather than the pattern itself being invalid: callers must not
+// treat a file that dropped out of the result during an incomplete resolution as genuinely gone, since a
+// permission flip/NFS hiccup/logrotate window can make a directory momentarily unreadable without any file
+// actually disappearing.
+func ResolveIncludeGlobs(hostroot string, patterns []string, warn func(msg string)) (files []string, complete bool) {
 	hasHostRoot := len(hostroot) > len(string(os.PathSeparator))
 
 	seen := make(map[string]bool)
-
-	var files []string
+	complete = true
 
 	for _, pattern := range patterns {
 		matching, err := doublestar.FilepathGlob(
@@ -129,6 +134,8 @@ func ResolveIncludeGlobs(hostroot string, patterns []string, warn func(msg strin
 					// We don't support execlogreceiver from a container.
 					warn(fmt.Sprintf("resolving file %q: %v (ignoring it)", pattern, err))
 
+					complete = false
+
 					continue
 				}
 
@@ -144,12 +151,16 @@ func ResolveIncludeGlobs(hostroot string, patterns []string, warn func(msg strin
 							"sudo tail, but only for an explicit path, not a glob pattern)", pattern, err,
 					))
 
+					complete = false
+
 					continue
 				}
 
 				matching = []string{pattern} // still a chance via sudo tail
 			} else {
 				warn(fmt.Sprintf("file %q: %v", pattern, err))
+
+				complete = false
 
 				continue
 			}
@@ -176,7 +187,7 @@ func ResolveIncludeGlobs(hostroot string, patterns []string, warn func(msg strin
 		}
 	}
 
-	return files
+	return files, complete
 }
 
 // SetupLogReceiverFactories builds receiver factories, falling back to sudo-tail for unreadable files. Missing files are ignored; extraRaw is merged with this function's fields taking priority.
