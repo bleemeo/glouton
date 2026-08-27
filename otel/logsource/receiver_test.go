@@ -17,6 +17,7 @@
 package logsource
 
 import (
+	"errors"
 	"os"
 	"testing"
 
@@ -55,6 +56,112 @@ func TestRetryConfigIsUpToDate(t *testing.T) {
 
 	if diff := cmp.Diff(retryCfgMap, consumerretryCfgMap); diff != "" {
 		t.Fatalf("Unexpected consumerretry config (-want, +got):\n%s", diff)
+	}
+}
+
+// errStatFailed stands in for whatever made a size probe fail (a lost race with logrotate, a sudo stat
+// timing out): the callers under test only branch on there being an error, never on which one.
+var errStatFailed = errors.New("stat failed")
+
+// TestSetupLogReceiverFactoriesDropsFileWhoseSizeProbeFails guards against a regression where a file
+// whose size probe failed (logrotate racing the stat, or sudoStatFile timing out under load) was still
+// returned in readableFiles/execFiles with no factory behind it, and had already had a persistent storage
+// extension registered for it. Callers read those lists to record what they are watching, so the file was
+// marked as tailed while nothing tailed it -- and never retried, since the next update() skips whatever is
+// already being watched: that log file was silently lost for the rest of the process's life.
+func TestSetupLogReceiverFactoriesDropsFileWhoseSizeProbeFails(t *testing.T) {
+	t.Parallel()
+
+	var storageCalls []string
+
+	failingStat := func(_ string, _ string, _ CommandRunner) (bool, bool, func() (int64, error)) {
+		return false, false, func() (int64, error) { return 0, errStatFailed }
+	}
+
+	factories, readable, exec, sizeFns, err := SetupLogReceiverFactories(
+		[]string{"/var/log/app.log"},
+		"",
+		nil,
+		nil,
+		nil,
+		func(logFile string) *component.ID {
+			storageCalls = append(storageCalls, logFile)
+
+			return nil
+		},
+		failingStat,
+		nil,
+		nil,
+	)
+	if err != nil {
+		t.Fatal("SetupLogReceiverFactories returned an error:", err)
+	}
+
+	if len(readable) != 0 || len(exec) != 0 {
+		t.Errorf("Expected the file to be dropped from both lists, got readable=%v exec=%v", readable, exec)
+	}
+
+	if len(factories) != 0 {
+		t.Errorf("Expected no factory, got %d", len(factories))
+	}
+
+	if len(sizeFns) != 0 {
+		t.Errorf("Expected no size function to be retained, got %v", sizeFns)
+	}
+
+	if len(storageCalls) != 0 {
+		t.Errorf("Expected no persistent extension to be registered, got %v", storageCalls)
+	}
+}
+
+// TestSetupLogReceiverFactoriesPrefixesExcludeWithHostroot guards against a regression where a receiver's
+// raw "exclude" was passed to fileconsumer verbatim while Include was hostroot-prefixed. fileconsumer
+// matches Exclude against the globbed (prefixed) paths, so every exclude pattern silently failed to match
+// in any containerized deployment and the excluded file was tailed anyway.
+func TestSetupLogReceiverFactoriesPrefixesExcludeWithHostroot(t *testing.T) {
+	t.Parallel()
+
+	tmpFile, err := os.CreateTemp(t.TempDir(), "app-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer tmpFile.Close()
+
+	factories, readable, exec, _, err := SetupLogReceiverFactories(
+		[]string{tmpFile.Name()},
+		"/hostroot",
+		nil,
+		nil,
+		nil,
+		func(string) *component.ID { return nil },
+		func(string, string, CommandRunner) (bool, bool, func() (int64, error)) {
+			return false, false, func() (int64, error) { return 0, nil }
+		},
+		nil,
+		map[string]any{"exclude": []string{"/var/log/app/debug.log"}},
+	)
+	if err != nil {
+		t.Fatal("SetupLogReceiverFactories returned an error:", err)
+	}
+
+	if len(readable) != 1 || len(exec) != 0 {
+		t.Fatalf("Expected the file to be directly readable, got readable=%v exec=%v", readable, exec)
+	}
+
+	var fileCfg *filelogreceiver.FileLogConfig
+
+	for _, cfg := range factories {
+		fileCfg, _ = cfg.(*filelogreceiver.FileLogConfig)
+	}
+
+	if fileCfg == nil {
+		t.Fatal("Expected a *filelogreceiver.FileLogConfig")
+	}
+
+	want := []string{"/hostroot/var/log/app/debug.log"}
+	if diff := cmp.Diff(want, fileCfg.InputConfig.Exclude); diff != "" {
+		t.Errorf("Expected exclude to be hostroot-prefixed like include (-want +got):\n%s", diff)
 	}
 }
 

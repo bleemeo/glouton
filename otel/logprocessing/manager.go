@@ -399,7 +399,7 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 				serviceID:   &key,
 				logFilePath: serviceLogProcessing.FilePath, // ignored if in a container
 				container:   ctr,                           // possibly nil if not in a container
-				operators:   append(operatorsForService(service), format...),
+				operators:   append(operatorsForServiceName(service.Name), format...),
 				filters:     filters,
 			}
 
@@ -481,12 +481,12 @@ func (man *Manager) setupProcessingForSource(ctx context.Context, logSource logS
 func (man *Manager) removeOldSources(ctx context.Context, services []discovery.Service, containers []facts.Container) {
 	watchedServices := slices.Collect(maps.Keys(man.watchedServices))
 	watchedContainers := slices.Collect(maps.Keys(man.watchedContainers))
-	latestServices := make(map[discovery.NameInstance]bool, len(services)) // map[service] -> is a container
-	latestContainers := make(map[string]struct{}, len(containers))         // map key: container ID
+	latestServices := make(map[discovery.NameInstance]struct{}, len(services))
+	latestContainers := make(map[string]struct{}, len(containers)) // map key: container ID
 
 	for _, service := range services {
 		if service.LogProcessing != nil {
-			latestServices[discovery.NameInstance{Name: service.Name, Instance: service.Instance}] = service.ContainerID != ""
+			latestServices[discovery.NameInstance{Name: service.Name, Instance: service.Instance}] = struct{}{}
 		}
 	}
 
@@ -501,11 +501,11 @@ func (man *Manager) removeOldSources(ctx context.Context, services []discovery.S
 		logger.V(2).Printf("Removing sources from log processing: services=%s / containers=%s", noLongerExistingServices, noLongerExistingContainers)
 	}
 
+	// Note this only stops serviceReceivers, i.e. the bare (non-container) services. A container-hosted
+	// service's tail lives in containerRecv and is torn down by the container branch below, which fires
+	// only once the container itself disappears -- so a service that stops being reported while its
+	// container keeps running leaves its tail in place.
 	for _, service := range noLongerExistingServices {
-		if latestServices[service] {
-			continue // containers will be handled below
-		}
-
 		receivers, found := man.serviceReceivers[service]
 		if found {
 			// The service is gone for good (not just a restart): forget its offset too.
@@ -610,16 +610,6 @@ func (man *Manager) DiagnosticArchive(_ context.Context, writer types.ArchiveWri
 	}
 
 	return diagnosticInfo.writeToArchive(writer)
-}
-
-func operatorsForService(service discovery.Service) []config.OTELOperator {
-	return []config.OTELOperator{
-		{
-			"type":  "add",
-			"field": "resource['service.name']",
-			"value": service.Name,
-		},
-	}
 }
 
 func operatorsForServiceName(serviceName string) []config.OTELOperator {

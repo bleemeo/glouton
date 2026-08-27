@@ -283,6 +283,48 @@ func TestWantSourceContainerLabelUnknownRule(t *testing.T) {
 	}
 }
 
+// TestWantSourceContainerLabelDropsEquivalentDuplicates guards against the container-label path
+// resolving a rule's metrics with a plain append while the receiver path deduped them: two entries
+// resolving to the same effective metric spelled differently each got their own countconnector, both
+// matched every line, and both added into the same counter -- reporting exactly double. config's
+// load-time check misses it too, since it only compares entries verbatim.
+func TestWantSourceContainerLabelDropsEquivalentDuplicates(t *testing.T) {
+	t.Parallel()
+
+	rules := map[string][]config.LogMetricEntry{
+		"just_count": {
+			{"metric": "nginx_errors", "regex": "error"},
+			{"metric": "nginx_errors", "conditions": []any{`IsMatch(body, "error")`}},
+		},
+	}
+
+	// Same rule reached through a receiver: the baseline this path has to match.
+	viaReceiver := resolveReceiverMetrics([]any{map[string]any{"include": "just_count"}}, rules, "my-app")
+	if len(viaReceiver) != 1 {
+		t.Fatalf("baseline: expected the receiver path to resolve 1 metric, got %d: %v", len(viaReceiver), viaReceiver)
+	}
+
+	man := newTestManager(t, config.OpenTelemetry{}, rules)
+
+	sink, ok := man.WantSource(t.Context(), logsource.ResolvedSource{
+		Kind: logsource.SourceContainerLabel, Name: "my-app",
+		Container: facts.FakeContainer{FakeContainerName: "my-app"}, LogMetricsRule: "just_count",
+	})
+	if !ok || sink == nil {
+		t.Fatal("Expected the container to be wanted with a non-nil sink")
+	}
+
+	if err := sink.ConsumeLogs(t.Context(), logsWithBody("error boom")); err != nil {
+		t.Fatal("ConsumeLogs returned an error:", err)
+	}
+
+	// Both duplicates resolve to the same counterKey, so counting counters can't see this: it takes one
+	// matching line, which a surviving duplicate connector counts twice into that single counter.
+	if got := countsFor(man, "nginx_errors"); got["my-app"] != 1 {
+		t.Errorf(`Expected the single line to be counted once under item "my-app", got %v`, got)
+	}
+}
+
 // Test a container opted in via glouton.log_metrics: its item must be the container's own name, not the rule set's name.
 func TestWantSourceContainerLabelValid(t *testing.T) {
 	t.Parallel()

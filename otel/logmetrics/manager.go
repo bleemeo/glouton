@@ -147,7 +147,12 @@ func (man *Manager) wantContainerLabelSource(ctx context.Context, src logsource.
 
 	for _, raw := range rules {
 		if rm, ok := resolveInlineMetric(raw, src.Name); ok {
-			resolved = append(resolved, rm)
+			// Same dedupe as the receiver path (resolveReceiverMetrics): a rule holding two entries that
+			// resolve to the same effective metric spelled differently would otherwise build one
+			// countconnector each, both matching every line and both adding into the same counter --
+			// reporting exactly double. config's load-time check can't catch it either, since it only
+			// compares entries verbatim.
+			resolved = appendResolvedMetric(resolved, rm)
 		}
 	}
 

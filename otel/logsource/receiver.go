@@ -203,6 +203,7 @@ func SetupLogReceiverFactories(
 	}
 
 	sizeFnByFile = make(map[string]func() (int64, error), len(logFiles))
+	sizeByFile := make(map[string]int64, len(logFiles))
 
 	for _, logFile := range logFiles {
 		ignore, needSudo, sizeFn := statFile(logFile, hostroot, commandRunner)
@@ -210,7 +211,22 @@ func SetupLogReceiverFactories(
 			continue
 		}
 
+		// Probed here, before the file is classified below, rather than inside the per-file factory loops
+		// further down. A probe failure (logrotate racing the stat, or sudoStatFile timing out under load)
+		// has to drop the file from readableFiles/execFiles entirely: callers read those lists to decide
+		// what they are now watching, so a file left in them with no factory behind it gets recorded as
+		// tailed while nothing tails it -- and never retried, since the next update() skips whatever is
+		// already being watched. Probing first also keeps makeStorageFn from registering a persistent
+		// extension for a file that turns out to be unusable.
+		size, err := sizeFn()
+		if err != nil {
+			logger.V(1).Printf("Error getting size of file %q (ignoring it): %v", logFile, err)
+
+			continue
+		}
+
 		sizeFnByFile[logFile] = sizeFn
+		sizeByFile[logFile] = size
 
 		if needSudo {
 			execFiles = append(execFiles, logFile)
@@ -237,6 +253,15 @@ func SetupLogReceiverFactories(
 		}
 
 		fileTypedCfg.InputConfig.Include = []string{filepath.Join(hostroot, logFile)}
+
+		// exclude comes straight from the receiver's raw config, so it is spelled the way the user thinks
+		// of the path -- but fileconsumer matches it against the globbed Include paths, which are
+		// hostroot-prefixed just above. Left as-is, every exclude pattern silently fails to match in any
+		// containerized deployment, so the file the user meant to leave out gets tailed anyway.
+		for i, exclude := range fileTypedCfg.InputConfig.Exclude {
+			fileTypedCfg.InputConfig.Exclude[i] = filepath.Join(hostroot, exclude)
+		}
+
 		fileTypedCfg.InputConfig.IncludeFileName = true
 		fileTypedCfg.InputConfig.IncludeFilePath = false // set manually
 		fileTypedCfg.InputConfig.Attributes = map[string]helper.ExprStringConfig{
@@ -247,13 +272,6 @@ func SetupLogReceiverFactories(
 
 		if extraAttributes != nil {
 			maps.Insert(fileTypedCfg.InputConfig.Attributes, maps.All(extraAttributes))
-		}
-
-		_, err := sizeFnByFile[logFile]()
-		if err != nil {
-			logger.V(1).Printf("Error getting size of file %q (ignoring it): %v", logFile, err)
-
-			continue
 		}
 
 		// Offset is stored separately; only new files need to start at the end.
@@ -284,12 +302,7 @@ func SetupLogReceiverFactories(
 			}
 		}
 
-		size, err := sizeFnByFile[logFile]()
-		if err != nil {
-			logger.V(1).Printf("Error getting size of file %q (ignoring it): %v", logFile, err)
-
-			continue
-		}
+		size := sizeByFile[logFile]
 
 		tailArgs := []string{"tail", tailFollowName}
 
