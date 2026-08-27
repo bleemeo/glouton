@@ -55,9 +55,15 @@ var (
 // Container represents a container whose logs are tailed directly by this
 // package, via Glouton's built-in per-service-type log format detection.
 type Container struct {
-	LogFilePath  string
-	ReceiverKind logsource.ReceiverKind
-	Attributes   logsource.ContainerAttributes
+	LogFilePath string
+	// RealLogFilePath is LogFilePath with hostroot symlinks resolved, i.e. the path actually tailed and
+	// the key this container's sizeFnByFile entries live under. Stored rather than re-resolved on demand:
+	// on Kubernetes/containerd the two differ (/var/log/containers/X -> /var/log/pods/X), and once the
+	// container is gone its symlink usually is too, so resolving at teardown time would no longer produce
+	// the key that was inserted -- leaving a dead entry to be re-stat'd by every SaveState, forever.
+	RealLogFilePath string
+	ReceiverKind    logsource.ReceiverKind
+	Attributes      logsource.ContainerAttributes
 
 	logCounter      *atomic.Int64
 	throughputMeter *logsource.RingCounter
@@ -153,6 +159,10 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 	if cr.pipeline.hostroot != "/" {
 		realLogFile = hostrootsymlink.EvalSymlinks(cr.pipeline.hostroot, realLogFile)
 	}
+
+	// Recorded on the Container stored below so teardown can purge sizeFnByFile by the very key inserted
+	// from it here, instead of re-resolving a symlink that's gone along with the container.
+	ctr.RealLogFilePath = realLogFile
 
 	factories, readFiles, execFiles, sizeFnByFile, err := logsource.SetupLogReceiverFactories(
 		[]string{realLogFile},
@@ -295,18 +305,19 @@ func (cr *containerReceiver) stopWatchingForContainers(ctx context.Context, ids 
 			logger.V(1).Printf("Can't stop log receiver for container %s: it doesn't have one ...", ctrID)
 		}
 
-		// Clean up unconditionally, even with no startedComponents entry above: a container whose setup
-		// failed part-way can still have registeredExtensions/containers/sizeFnByFile entries, and
-		// skipping this would leak them permanently since the container is gone for good.
+		// Cleaned up unconditionally, even with no startedComponents entry above. setupContainerLogReceiver
+		// writes all four maps together only once it has fully succeeded (rolling back its extensions on
+		// every earlier error), so a container whose setup failed has no entry in any of them and the
+		// deletes below are simply no-ops -- cheaper than checking, and safe if that ever stops holding.
 		// The container is gone for good (not just a restart): forget its offset too.
 		cr.pipeline.persister.RemovePersistentExtsAndForget(cr.registeredExtensions[ctrID])
 
-		logFilePath := cr.containers[ctrID].LogFilePath
+		realLogFilePath := cr.containers[ctrID].RealLogFilePath
 
 		delete(cr.startedComponents, ctrID)
 		delete(cr.registeredExtensions, ctrID)
 		delete(cr.containers, ctrID)
-		delete(cr.sizeFnByFile, logFilePath)
+		delete(cr.sizeFnByFile, realLogFilePath)
 	}
 }
 
@@ -317,22 +328,46 @@ func (cr *containerReceiver) diagnostic() map[string]containerDiagnosticInformat
 	infos := make(map[string]containerDiagnosticInformation, len(cr.containers))
 
 	for ctrID, ctr := range cr.containers {
-		realPath := ctr.LogFilePath
-		if cr.pipeline.hostroot != "/" {
-			realPath = hostrootsymlink.EvalSymlinks(cr.pipeline.hostroot, ctr.LogFilePath)
-		}
-
 		infos[ctrID] = containerDiagnosticInformation{
 			LogProcessedCount:      ctr.logCounter.Load(),
 			LogThroughputPerMinute: ctr.throughputMeter.Total(),
 			LogFilePath:            ctr.LogFilePath,
-			LogFileRealPath:        realPath,
+			LogFileRealPath:        ctr.RealLogFilePath,
 			ReceiverKind:           ctr.ReceiverKind,
 			Attributes:             ctr.Attributes,
 		}
 	}
 
 	return infos
+}
+
+// isTailing reports whether this receiver actually has a live tail for ctrID, i.e. whether its
+// setupContainerLogReceiver completed successfully. Deliberately not keyed off
+// Manager.watchedContainers: that map is diagnostic bookkeeping, recorded before setup runs and kept
+// (with SetupError set) even when it fails -- treating a failed setup as "already tailed" would make
+// WantSource decline the glouton.* label source for a container nothing is tailing, silently dropping
+// its logs entirely instead of merely duplicating them.
+func (cr *containerReceiver) isTailing(ctrID string) bool {
+	cr.l.Lock()
+	defer cr.l.Unlock()
+
+	_, found := cr.containers[ctrID]
+
+	return found
+}
+
+// tailedContainerIDs is the whole-set form of isTailing, with the same "live tail only" semantics.
+func (cr *containerReceiver) tailedContainerIDs() map[string]bool {
+	cr.l.Lock()
+	defer cr.l.Unlock()
+
+	ids := make(map[string]bool, len(cr.containers))
+
+	for ctrID := range cr.containers {
+		ids[ctrID] = true
+	}
+
+	return ids
 }
 
 func (cr *containerReceiver) StartedComponentKeys() []string {

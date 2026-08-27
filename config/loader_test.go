@@ -299,7 +299,7 @@ func TestMergeRecursesIntoNestedMaps(t *testing.T) {
 		"myrecv": map[string]any{"send_logs": false},
 	}
 
-	got, err := merge(dst, src, false)
+	got, err := merge(dst, src)
 	if err != nil {
 		t.Fatalf("merge returned an error: %v", err)
 	}
@@ -318,7 +318,8 @@ func TestMergeRecursesIntoNestedMaps(t *testing.T) {
 
 // TestMergeAppendsSlicesForSameSubKey guards against a regression where merge()'s map case let src's
 // slice replace dst's whole slice for a sub-key present on both sides (e.g. two files each contributing
-// entries to the same log.metrics_rules.<name> list), silently dropping whichever entries dst had.
+// entries to the same log.metrics_rules.<name> list, or globs to one receiver's include), silently
+// dropping whichever entries dst had. A nested leaf list merges the same way a top-level list key does.
 func TestMergeAppendsSlicesForSameSubKey(t *testing.T) {
 	t.Parallel()
 
@@ -329,7 +330,7 @@ func TestMergeAppendsSlicesForSameSubKey(t *testing.T) {
 		"apache_to_metrics": []any{map[string]any{"metric": "log_common_code"}},
 	}
 
-	got, err := merge(dst, src, true)
+	got, err := merge(dst, src)
 	if err != nil {
 		t.Fatalf("merge returned an error: %v", err)
 	}
@@ -343,6 +344,58 @@ func TestMergeAppendsSlicesForSameSubKey(t *testing.T) {
 
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("Unexpected merge result (-want +got):\n%s", diff)
+	}
+}
+
+// TestDedupeFromListeners tests that a receiver's from_listeners list drops repeated names -- appending
+// leaf lists across files can produce them, and naming one listener twice means nothing more than naming
+// it once -- while leaving distinct names, their order, and invalid non-string entries alone.
+func TestDedupeFromListeners(t *testing.T) {
+	t.Parallel()
+
+	config := map[string]any{
+		"log.opentelemetry.receivers": map[string]any{
+			"repeats":  map[string]any{"from_listeners": []any{"otlp", "otlp", "other", "otlp"}},
+			"distinct": map[string]any{"from_listeners": []any{"a", "b"}},
+			"invalid":  map[string]any{"from_listeners": []any{"a", map[string]any{"not": "a name"}, "a"}},
+			"none":     map[string]any{"container_name": "app"},
+		},
+	}
+
+	dedupeFromListeners(config)
+
+	receivers, ok := config["log.opentelemetry.receivers"].(map[string]any)
+	if !ok {
+		t.Fatal("receivers key lost its shape")
+	}
+
+	fromListeners := func(name string) any {
+		t.Helper()
+
+		receiver, ok := receivers[name].(map[string]any)
+		if !ok {
+			t.Fatalf("receiver %q lost its shape", name)
+		}
+
+		return receiver["from_listeners"]
+	}
+
+	if diff := cmp.Diff([]any{"otlp", "other"}, fromListeners("repeats")); diff != "" {
+		t.Errorf("Unexpected dedupe result (-want +got):\n%s", diff)
+	}
+
+	if diff := cmp.Diff([]any{"a", "b"}, fromListeners("distinct")); diff != "" {
+		t.Errorf("Distinct names must be left alone (-want +got):\n%s", diff)
+	}
+
+	// The non-string entry is invalid config, reported by validation later: it must be passed through
+	// rather than silently dropped here (and must never be used as a map key).
+	if diff := cmp.Diff([]any{"a", map[string]any{"not": "a name"}}, fromListeners("invalid")); diff != "" {
+		t.Errorf("Unexpected handling of a non-string entry (-want +got):\n%s", diff)
+	}
+
+	if got := fromListeners("none"); got != nil {
+		t.Errorf("a receiver without from_listeners must not gain one, got %v", got)
 	}
 }
 

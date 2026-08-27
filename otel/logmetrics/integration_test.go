@@ -122,7 +122,7 @@ func TestReceiverMatchedContainerCountsThroughRealReceiverManager(t *testing.T) 
 
 	rm.RegisterSinkProvider(man)
 
-	rm.UpdateContainers(t.Context(), []facts.Container{ctr})
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil)
 
 	time.Sleep(500 * time.Millisecond)
 

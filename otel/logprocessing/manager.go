@@ -178,6 +178,12 @@ ctxLoop:
 
 	// ctx has expired, shutting everything down
 
+	// man.serviceReceivers is guarded by man.l, which a concurrent discovery cycle writes to
+	// (removeOldSources deletes from it, setupProcessingForSource appends to it), so iterating it under
+	// man.pipeline.l alone is a data race. Both locks are taken in the man.l -> man.pipeline.l order used
+	// by every other path needing the pair (updateServiceReceivers, DiagnosticArchive,
+	// setupProcessingForSource); reversing it here would risk a deadlock against them.
+	man.l.Lock()
 	man.pipeline.l.Lock()
 
 	for _, receivers := range man.serviceReceivers {
@@ -189,8 +195,10 @@ ctxLoop:
 	man.pipeline.shutdownAll()
 
 	man.pipeline.l.Unlock()
+	man.l.Unlock()
 
-	// Must run outside man.pipeline.l: SaveState locks it via the external sizer, and sync.Mutex isn't reentrant.
+	// Must run outside both: SaveState locks man.pipeline.l via the external sizer, and takes
+	// ReceiverManager's lock, from under which WantSource takes man.l -- sync.Mutex isn't reentrant.
 	man.receiverManager.SaveState()
 }
 
@@ -217,13 +225,35 @@ func (man *Manager) updateServiceReceivers(ctx context.Context) error {
 	return errGrp.Wait()
 }
 
+// ServiceTailedContainerIDs returns the IDs of containers this package currently tails through a
+// discovered service's own log receiver. Passed to logsource.ReceiverManager.UpdateContainers so a
+// container's glouton.*-label source is rebuilt when that status changes, which re-asks WantSource --
+// see sink_provider.go for why the shipping decision itself has to stay there.
+//
+// containerRecv carries its own lock and is the authority on what's really tailed, so man.l is
+// deliberately not taken (see isTailing on why a failed setup must not count).
+func (man *Manager) ServiceTailedContainerIDs() map[string]bool {
+	return man.containerRecv.tailedContainerIDs()
+}
+
 func (man *Manager) HandleLogsFromDynamicSources(ctx context.Context, services []discovery.Service, containers []facts.Container) {
+	// Computed without holding man.l: receiverManager's askProviders (itself called under its own lock,
+	// from RescanReceivers/UpdateContainers) calls back into man.l via WantSource/wrapWithFilter. Calling
+	// ContainerIDsShippedByReceivers (which takes receiverManager's lock) while man.l is held would nest
+	// the two locks in the opposite order from that existing call path, on two different goroutines --
+	// a deadlock waiting to happen.
+	var shippedByReceivers map[string]bool
+
+	if man.receiverManager != nil {
+		shippedByReceivers = man.receiverManager.ContainerIDsShippedByReceivers(containers)
+	}
+
 	man.l.Lock()
 	defer man.l.Unlock()
 
 	man.removeOldSources(ctx, services, containers)
 
-	logSources := man.processLogSources(services, containers)
+	logSources := man.processLogSources(services, containers, shippedByReceivers)
 
 	// Every logSource comes from a discovered service now, so serviceID is always set below
 	// (label-only containers go through logsource.ReceiverManager/WantSource instead, see sink_provider.go).
@@ -258,7 +288,11 @@ func (man *Manager) HandleLogsFromDynamicSources(ctx context.Context, services [
 }
 
 // processLogSources resolves log sources for discovered services; everything else goes through logsource.ReceiverManager/WantSource.
-func (man *Manager) processLogSources(services []discovery.Service, containers []facts.Container) []logSource {
+// shippedByReceivers marks containers already matched by one of receiverManager's own
+// container_name/container_selectors receivers (see HandleLogsFromDynamicSources for why it's computed
+// by the caller instead of here): claiming one of them too would tail its log file twice. Explicit
+// config wins over service auto-discovery.
+func (man *Manager) processLogSources(services []discovery.Service, containers []facts.Container, shippedByReceivers map[string]bool) []logSource {
 	man.skippedSource = make([]sourceDiagnostic, 0, len(man.skippedSource))
 
 	containersByID := make(map[string]facts.Container, len(containers))
@@ -297,6 +331,20 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 
 				continue
 			}
+
+			if shippedByReceivers[service.ContainerID] {
+				logger.V(2).Printf("Ignoring logs of service %q, because its container is already matched by an explicit receiver", service.Name)
+
+				man.skippedSource = append(man.skippedSource, sourceDiagnostic{
+					IsFromService: true,
+					ServiceKey:    key,
+					ContainerID:   service.ContainerID,
+					ContainerName: service.ContainerName,
+					SkipReason:    "Container already matched by an explicit log.opentelemetry.receivers entry",
+				})
+
+				continue
+			}
 		}
 
 		var ctr facts.Container
@@ -329,12 +377,30 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 		}
 
 		for _, serviceLogProcessing := range service.LogProcessing {
+			format := man.knownLogFormats[serviceLogProcessing.Format]
+			filters := man.config.KnownLogFilters[serviceLogProcessing.Filter]
+
+			// A container's own glouton.log_format/glouton.log_filter (or its container_format/
+			// container_filter mapping) is explicit user config and outranks what auto-discovery inferred
+			// from the service type. This tail is the container's only one -- WantSource declines its
+			// glouton.*-label source precisely because this path already ships it -- so without honouring
+			// them here those labels would silently stop having any effect on a containerised service.
+			if ctr != nil {
+				if containerFormat := man.resolveContainerFormat(ctr); containerFormat != nil {
+					format = containerFormat
+				}
+
+				if containerFilters := man.resolveContainerFilter(ctr); containerFilters != nil {
+					filters = containerFilters
+				}
+			}
+
 			logSource := logSource{
 				serviceID:   &key,
 				logFilePath: serviceLogProcessing.FilePath, // ignored if in a container
 				container:   ctr,                           // possibly nil if not in a container
-				operators:   append(operatorsForService(service), man.knownLogFormats[serviceLogProcessing.Format]...),
-				filters:     man.config.KnownLogFilters[serviceLogProcessing.Filter],
+				operators:   append(operatorsForService(service), format...),
+				filters:     filters,
 			}
 
 			logSources = append(logSources, logSource)

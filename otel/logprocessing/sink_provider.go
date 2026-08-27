@@ -57,6 +57,16 @@ func (man *Manager) WantSource(ctx context.Context, src logsource.ResolvedSource
 
 		return man.wrapWithFilter(ctx, logsource.SourceReceiver, "recv-"+src.ReceiverName, filters)
 	case logsource.SourceContainerLabel:
+		// This container's logs are already shipped from the service path (containerRecv), so wanting
+		// them here too would ship every line twice. Only this provider's interest is declined, not the
+		// source itself: logmetrics resolves a container's glouton.log_metrics rule exclusively from
+		// SourceContainerLabel, so suppressing the whole source upstream would silently stop those
+		// metrics. When logmetrics declines too, ReceiverManager starts no tail at all (its fanout is
+		// nil), which is what actually removes the duplicate.
+		if man.containerRecv.isTailing(src.Container.ID()) {
+			return nil, false
+		}
+
 		filters := man.resolveContainerFilter(src.Container)
 
 		return man.wrapWithFilter(ctx, logsource.SourceContainerLabel, "ctr-"+src.Container.ID(), filters)
@@ -96,6 +106,27 @@ func (man *Manager) resolveContainerFilter(ctr facts.Container) config.OTELFilte
 
 	if name, found := man.containerFilter[containerName]; found {
 		return man.config.KnownLogFilters[name]
+	}
+
+	return nil
+}
+
+// resolveContainerFormat is resolveContainerFilter's counterpart for log formats: ctr's own
+// glouton.log_format label if it names a known format, else the OpenTelemetry.ContainerFormat
+// [containerName] fallback. nil when the container asks for neither.
+func (man *Manager) resolveContainerFormat(ctr facts.Container) []config.OTELOperator {
+	containerName := ctr.ContainerName()
+
+	if name, found := facts.LabelsAndAnnotations(ctr)[logsource.ContainerLabelPrefix+"log_format"]; found {
+		if operators, found := man.knownLogFormats[name]; found {
+			return operators
+		}
+
+		logger.V(1).Printf("Container %s (%s) requires an unknown log format: %q", containerName, ctr.ID(), name)
+	}
+
+	if name, found := man.config.ContainerFormat[containerName]; found {
+		return man.knownLogFormats[name]
 	}
 
 	return nil
@@ -148,7 +179,9 @@ func (man *Manager) wrapWithFilter(ctx context.Context, kind logsource.SourceKin
 	man.pipeline.startedComponents = append(man.pipeline.startedComponents, logFilter)
 	man.pipeline.l.Unlock()
 
-	// man.l is acquired separately, never nested with man.pipeline.l, in either order.
+	// Taken only after man.pipeline.l is released just above: this function never holds both at once.
+	// Where both are genuinely needed (handleProcessingLifecycle's shutdown, DiagnosticArchive), the
+	// order is always man.l first -- nesting them the other way around would deadlock against those.
 	man.l.Lock()
 	man.fanoutSinks[name] = &fanoutSink{kind: kind, comp: logFilter, logCounter: logCounter, throughputMeter: throughputMeter}
 	man.l.Unlock()

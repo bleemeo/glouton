@@ -256,7 +256,7 @@ func TestProcessLogSources(t *testing.T) {
 	}
 
 	for _, step := range executionSteps {
-		logSources := logMan.processLogSources(step.services, step.containers)
+		logSources := logMan.processLogSources(step.services, step.containers, nil)
 		if diff := cmp.Diff(step.expectedLogSources, logSources, cmp.Comparer(logSourceComparer)); diff != "" {
 			t.Fatalf("Unexpected log sources at step %q (-want +got):\n%s", step.name, diff)
 		}

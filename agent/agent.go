@@ -2126,11 +2126,13 @@ func (a *agent) updatedDiscovery(ctx context.Context, services []discovery.Servi
 			// dynamicScrapper.Update call above already does.
 			logger.V(1).Printf("Failed to retrieve containers: %v", err)
 		} else {
-			// receiverManager resolves container_name/container_selectors matches and
-			// glouton.* label opt-ins itself, so it needs the full container list.
-			if a.receiverManager != nil {
-				a.receiverManager.UpdateContainers(ctx, containers)
-			}
+			// logProcessManager must run first, so that by the time UpdateContainers below asks it
+			// (through WantSource) whether it wants a container's glouton.*-label log source, its own
+			// service-path tails for this cycle already exist and it can decline the ones it would
+			// otherwise ship twice. logprocessing.Manager separately consults
+			// receiverManager.ContainerIDsShippedByReceivers on the way in, so an explicit
+			// container_name/container_selectors receiver still wins over service auto-discovery.
+			var serviceTailed map[string]bool
 
 			if a.logProcessManager != nil {
 				// Per-service-type log format auto-detection still depends on
@@ -2141,6 +2143,13 @@ func (a *agent) updatedDiscovery(ctx context.Context, services []discovery.Servi
 				}
 
 				a.logProcessManager.HandleLogsFromDynamicSources(ctx, logServices, containers)
+				serviceTailed = a.logProcessManager.ServiceTailedContainerIDs()
+			}
+
+			// receiverManager resolves container_name/container_selectors matches and
+			// glouton.* label opt-ins itself, so it needs the full container list.
+			if a.receiverManager != nil {
+				a.receiverManager.UpdateContainers(ctx, containers, serviceTailed)
 			}
 		}
 	}

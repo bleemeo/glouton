@@ -108,6 +108,7 @@ func newSinkTestManager(t *testing.T, cfg config.OpenTelemetry, logBuf *logBuffe
 	return &Manager{
 		config:          cfg,
 		pipeline:        pipeline,
+		containerRecv:   newContainerReceiver(pipeline),
 		containerFilter: validateContainerFilters(cfg.ContainerFilter, cfg.KnownLogFilters),
 		fanoutSinks:     make(map[string]*fanoutSink),
 	}

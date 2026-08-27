@@ -133,11 +133,11 @@ func (rm *ReceiverManager) Persister() *PersistHost {
 }
 
 // DiagnosticArchive writes the persisted read-offset/registered-extension state to a diagnostic bundle.
-// otel/logprocessing's Manager shares this exact *PersistHost (see Persister()) and already writes it
-// through its own DiagnosticArchive when it exists -- agent.go only wires this one in when that manager
-// doesn't exist (log shipping/Bleemeo disabled), so the same file is never written twice into one archive.
-// Without either, a bundle taken while log-to-metric receivers are active would have no read-offset/
-// extension state at all, even though that state is exactly what's needed to debug a stuck tail.
+// This is the only writer of PersistHost.ArchivePath: otel/logprocessing's Manager shares this exact
+// *PersistHost (see Persister()) but its own DiagnosticArchive reports different state and never writes
+// that file, so agent.go wires this one in whenever a ReceiverManager exists. Otherwise a bundle taken
+// while log-to-metric receivers are active would have no read-offset/extension state at all, even though
+// that state is exactly what's needed to debug a stuck tail.
 func (rm *ReceiverManager) DiagnosticArchive(_ context.Context, writer types.ArchiveWriter) error {
 	return rm.persister.WriteToArchive(writer)
 }
@@ -187,6 +187,13 @@ type managedSource struct {
 	// SourceContainerLabel managedSource. Compared against each scan's freshly-parsed labels so a live
 	// label/annotation edit (e.g. glouton.log_metrics) triggers a rebuild instead of being silently ignored.
 	labels containerLabels
+	// serviceTailed records whether otel/logprocessing was already tailing this container via its own
+	// service path when fanout was last (re)built. Compared on every scan for the same reason as labels:
+	// a provider's answer to WantSource depends on it (log shipping declines a container it already
+	// ships), and that answer is only asked once per built fanout. Without this, whichever path happens
+	// to start first wins forever -- a container tailed by its labels before its service became active
+	// would keep shipping alongside the service tail, duplicating every line for good.
+	serviceTailed bool
 
 	// operators applies to every tail under this source, before fan-out. Callers prepend
 	// BuildContainerEnvelopeOperator() per container tail, since a mixed receiver only wants it there.
@@ -539,7 +546,10 @@ type containerMatcher struct {
 }
 
 // UpdateContainers matches containers to receivers by name/selectors, falling back to glouton.* labels.
-func (rm *ReceiverManager) UpdateContainers(ctx context.Context, containers []facts.Container) {
+// serviceTailed names the containers otel/logprocessing already tails through its own service path (see
+// logprocessing.Manager.ServiceTailedContainerIDs); it does not suppress anything here, it only lets a
+// container's label source be rebuilt when that status changes, so providers get asked again.
+func (rm *ReceiverManager) UpdateContainers(ctx context.Context, containers []facts.Container, serviceTailed map[string]bool) {
 	rm.l.Lock()
 	defer rm.l.Unlock()
 
@@ -558,8 +568,6 @@ func (rm *ReceiverManager) UpdateContainers(ctx context.Context, containers []fa
 				continue
 			}
 
-			claimed[ctr.ID()] = true
-
 			if currentByReceiver[m.name] == nil {
 				currentByReceiver[m.name] = make(map[string]bool)
 			}
@@ -573,6 +581,11 @@ func (rm *ReceiverManager) UpdateContainers(ctx context.Context, containers []fa
 				continue
 			}
 
+			// Claimed only once the receiver actually resolved: claiming on the config match alone would
+			// make updateLabelContainers skip a container that this broken receiver never tails either,
+			// silently dropping its logs instead of falling back to its glouton.* labels.
+			claimed[ctr.ID()] = true
+
 			operators := append([]operator.Config{BuildContainerEnvelopeOperator()}, ms.operators...)
 
 			if err := rm.startContainerTail(ctx, ms, ctr, operators, m.name); err != nil {
@@ -585,7 +598,55 @@ func (rm *ReceiverManager) UpdateContainers(ctx context.Context, containers []fa
 		rm.stopUnwantedContainerTails(ctx, ms, currentByReceiver[ms.name])
 	}
 
-	rm.updateLabelContainers(ctx, containers, claimed)
+	rm.updateLabelContainers(ctx, containers, claimed, serviceTailed)
+}
+
+// ContainerIDsShippedByReceivers returns the IDs of containers whose logs an explicit
+// container_name/container_selectors receiver already ships. It's a read-only, self-contained query
+// (unlike UpdateContainers, it starts and stops nothing), used by otel/logprocessing to skip service
+// auto-discovery for those containers so the same log file isn't tailed and shipped twice.
+//
+// Note this is a narrower question than UpdateContainers' own `claimed` set, which means "an explicit
+// receiver owns this container, so don't apply its glouton.* labels on top" and holds regardless of
+// send_logs. Here a receiver that doesn't ship (send_logs: false, e.g. a metrics-only receiver) must not
+// suppress the service path, or nothing would ship that container's logs at all. A receiver whose config
+// fails to decode is skipped for the same reason: it ships nothing either.
+func (rm *ReceiverManager) ContainerIDsShippedByReceivers(containers []facts.Container) map[string]bool {
+	rm.l.Lock()
+	defer rm.l.Unlock()
+
+	matchers := rm.containerMatchers()
+	shipped := make(map[string]bool, len(containers))
+
+	for _, ctr := range containers {
+		if ctr.LogPath() == "" || IsContainerConfigExcluded(rm.cfg, ctr) {
+			continue
+		}
+
+		for _, m := range matchers {
+			if !MatchesContainerRule(ctr, m.containerName, m.containerSelectors) {
+				continue
+			}
+
+			fields, err := decodeReceiverFields(m.raw)
+			if err != nil {
+				continue
+			}
+
+			sendLogs := rm.cfg.ReceiversDefaultSendLogs
+			if fields.SendLogs != nil {
+				sendLogs = *fields.SendLogs
+			}
+
+			if sendLogs {
+				shipped[ctr.ID()] = true
+
+				break
+			}
+		}
+	}
+
+	return shipped
 }
 
 // containerMatchers returns container-selection fields from all receivers. Callers must hold rm.l.
@@ -612,8 +673,16 @@ func (rm *ReceiverManager) containerMatchers() []containerMatcher {
 	return matchers
 }
 
-// updateLabelContainers resolves glouton.* label fallbacks for unclaimed containers. Callers must hold rm.l.
-func (rm *ReceiverManager) updateLabelContainers(ctx context.Context, containers []facts.Container, claimed map[string]bool) {
+// updateLabelContainers resolves glouton.* label fallbacks for unclaimed containers. serviceTailed marks
+// containers otel/logprocessing already tails through its service path; they are still resolved here (so
+// a glouton.log_metrics rule keeps working), it only feeds the rebuild check below, since it changes what
+// providers answer to WantSource. Callers must hold rm.l.
+func (rm *ReceiverManager) updateLabelContainers(
+	ctx context.Context,
+	containers []facts.Container,
+	claimed map[string]bool,
+	serviceTailed map[string]bool,
+) {
 	current := make(map[string]bool, len(containers))
 
 	for _, ctr := range containers {
@@ -622,12 +691,15 @@ func (rm *ReceiverManager) updateLabelContainers(ctx context.Context, containers
 		}
 
 		labels := parseContainerLabels(ctr)
+		nowServiceTailed := serviceTailed[ctr.ID()]
 
 		ms, found := rm.byContainer[ctr.ID()]
-		if found && !ms.labels.equal(labels) {
-			// The container's glouton.* labels/annotations changed since last scan (e.g. a live edit,
-			// not a recreation): tear down and rebuild so the new send_logs/log_metrics/log_format take
-			// effect, instead of silently keeping the stale fanout/operators forever.
+		if found && (!ms.labels.equal(labels) || ms.serviceTailed != nowServiceTailed) {
+			// Either the container's glouton.* labels/annotations changed since last scan (e.g. a live
+			// edit, not a recreation), or it started/stopped being tailed by the service path. Both change
+			// what the providers would answer, so tear down and rebuild to re-ask them, instead of
+			// silently keeping the stale fanout/operators forever. Offsets are kept (false): the container
+			// is still here, only who consumes its lines changed.
 			rm.shutdownSource(ctx, ms, false)
 			rm.releaseProviders(ctx, ms.container)
 			delete(rm.byContainer, ctr.ID())
@@ -654,6 +726,7 @@ func (rm *ReceiverManager) updateLabelContainers(ctx context.Context, containers
 			// configured. Only affects SendLogs, not LogMetricsRule.
 			ms.container = ctr
 			ms.labels = labels
+			ms.serviceTailed = nowServiceTailed
 			ms.fanout = rm.askProviders(ctx, ResolvedSource{
 				Kind:           SourceContainerLabel,
 				Name:           ctr.ContainerName(),

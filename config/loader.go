@@ -483,12 +483,7 @@ func (c *configLoader) Build() (*koanf.Koanf, prometheus.MultiError) {
 		case previousPriority == item.Priority:
 			var err error
 
-			// Only log.metrics_rules gets its leaf lists appended across files: each named entry (e.g.
-			// apache_to_metrics) is meant to accumulate metric definitions contributed by different
-			// conf.d snippets. Other map keys (e.g. log.opentelemetry.receivers) synthesize fixed-shape
-			// lists during migration (from_listeners) that must stay last-file-wins, or merging the same
-			// migration's output from two files would duplicate entries instead of collapsing them.
-			config[item.Key], err = merge(config[item.Key], item.Value, item.Key == "log.metrics_rules")
+			config[item.Key], err = merge(config[item.Key], item.Value)
 			warnings.Append(err)
 		// Previous item has higher priority, nothing to do.
 		case previousPriority > item.Priority:
@@ -496,6 +491,7 @@ func (c *configLoader) Build() (*koanf.Koanf, prometheus.MultiError) {
 	}
 
 	warnings.Append(mergeKnownLogFormats(config))
+	dedupeFromListeners(config)
 
 	k := koanf.New(delimiter)
 	err := k.Load(confmap.Provider(config, delimiter), nil)
@@ -504,13 +500,66 @@ func (c *configLoader) Build() (*koanf.Koanf, prometheus.MultiError) {
 	return k, warnings
 }
 
+// dedupeFromListeners drops repeated names from every receiver's from_listeners list. Merging appends
+// leaf lists across files, which is what you want for entries that carry values, but from_listeners holds
+// listener *names*: referencing one twice says nothing more than referencing it once, and deduplicating
+// them is cheap precisely because they're plain strings rather than maps (see merge). Two files each
+// still using the legacy log.opentelemetry.grpc/http shape produce exactly that repeat --
+// migrateLegacyNetworkListeners runs once per file and every run synthesizes the same fixed name.
+// Non-string entries are passed through untouched: they're invalid config, reported by validation later,
+// and must not be silently dropped here (nor used as a map key, which would panic if unhashable).
+func dedupeFromListeners(config map[string]any) {
+	receivers, ok := config["log.opentelemetry.receivers"].(map[string]any)
+	if !ok {
+		return
+	}
+
+	for _, rawReceiver := range receivers {
+		receiver, ok := rawReceiver.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		listeners, ok := receiver["from_listeners"].([]any)
+		if !ok {
+			continue
+		}
+
+		seen := make(map[string]bool, len(listeners))
+
+		deduped := make([]any, 0, len(listeners))
+
+		for _, rawName := range listeners {
+			name, isString := rawName.(string)
+			if !isString {
+				deduped = append(deduped, rawName)
+
+				continue
+			}
+
+			if seen[name] {
+				continue
+			}
+
+			seen[name] = true
+			deduped = append(deduped, rawName)
+		}
+
+		receiver["from_listeners"] = deduped
+	}
+}
+
 // Merge maps and append slices. A map merge recurses into any sub-key present as a map[string]any on both
 // sides (e.g. a receiver's or a threshold's own fields), instead of letting src's value replace dst's
 // wholesale -- otherwise splitting one named entry's fields across two config files/conf.d snippets (file
 // A sets a receiver's include, file B sets its send_logs) silently drops the earlier file's fields.
-// appendLists additionally makes a sub-key that's a []any on both sides get appended rather than replaced;
-// see Build()'s call site for why this is only enabled for log.metrics_rules.
-func merge(dst any, src any, appendLists bool) (any, error) {
+// A sub-key that's a []any on both sides is appended too, the same way a top-level list key already
+// merges across files: two conf.d snippets each contributing entries to one log.metrics_rules entry, or
+// globs to one receiver's include, end up with both files' entries rather than only the last file's.
+// Appending never deduplicates -- entries are often maps (services:), which are impractical to compare
+// and to document -- so a key whose entries are plain names, where a repeat is meaningless rather than
+// meaningful, gets its own normalization pass instead; see dedupeFromListeners.
+func merge(dst any, src any) (any, error) {
 	switch dstType := dst.(type) {
 	case []any:
 		srcSlice, ok := src.([]any)
@@ -537,7 +586,7 @@ func merge(dst any, src any, appendLists bool) (any, error) {
 			srcValMap, srcIsMap := srcVal.(map[string]any)
 
 			if dstIsMap && srcIsMap {
-				merged, err := merge(dstValMap, srcValMap, appendLists)
+				merged, err := merge(dstValMap, srcValMap)
 				if err != nil {
 					return nil, err
 				}
@@ -547,19 +596,17 @@ func merge(dst any, src any, appendLists bool) (any, error) {
 				continue
 			}
 
-			if appendLists {
-				dstValSlice, dstIsSlice := dstVal.([]any)
-				srcValSlice, srcIsSlice := srcVal.([]any)
+			dstValSlice, dstIsSlice := dstVal.([]any)
+			srcValSlice, srcIsSlice := srcVal.([]any)
 
-				if dstIsSlice && srcIsSlice {
-					dstType[key] = append(dstValSlice, srcValSlice...)
+			if dstIsSlice && srcIsSlice {
+				dstType[key] = append(dstValSlice, srcValSlice...)
 
-					continue
-				}
+				continue
 			}
 
-			// Not both maps (a scalar, a slice, or a type mismatch): the later-loaded source wins,
-			// matching the non-map/slice behavior in priority() (last file loaded takes precedence).
+			// Neither both maps nor both slices (a scalar, or a type mismatch): the later-loaded source
+			// wins, matching the scalar behavior in priority().
 			dstType[key] = srcVal
 		}
 

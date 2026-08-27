@@ -185,9 +185,10 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 	// Build a Manager around this pipeline directly (bypassing New(), which hardcodes slower pipelineOptions)
 	// and register it as a SinkProvider, mirroring agent.go's wiring.
 	man := &Manager{
-		config:      cfg,
-		pipeline:    pipeline,
-		fanoutSinks: make(map[string]*fanoutSink),
+		config:        cfg,
+		pipeline:      pipeline,
+		containerRecv: newContainerReceiver(pipeline),
+		fanoutSinks:   make(map[string]*fanoutSink),
 	}
 
 	receiverManager, err := logsource.NewReceiverManager(cfg, "/", st, noExecRunner(t))
