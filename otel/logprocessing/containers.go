@@ -128,6 +128,16 @@ func (cr *containerReceiver) handleContainerLogs(
 		return "", errContainerLogFileUnavailable
 	}
 
+	// Idempotent per container: setupContainerLogReceiver appends to startedComponents rather than
+	// replacing, so calling it twice for one container leaves two live tails on the same file, both
+	// shipping every line and both registering a persistent extension under the byte-identical name.
+	// Reachable whenever a service is re-detected while its container never went away -- removeOldSources
+	// drops the service from watchedServices but only stops a containerRecv tail once the *container*
+	// disappears, so the next processLogSources sees a service it isn't watching and sets it up again.
+	if _, alreadyTailing := cr.containers[ctr.ID()]; alreadyTailing {
+		return logFilePath, nil
+	}
+
 	logCtr := makeLogContainer(ctx, ctr, logFilePath)
 
 	err = cr.setupContainerLogReceiver(ctx, logCtr, operators, logFilterConfig)
@@ -286,7 +296,11 @@ func (cr *containerReceiver) SizesByFile() (map[string]int64, error) {
 	return sizes, nil
 }
 
-func (cr *containerReceiver) stopWatchingForContainers(ctx context.Context, ids []string) {
+// stopWatchingForContainers tears down each container's tail. forget also discards its persisted read
+// offset, for a container that is gone for good; pass false when the container is still running and only
+// the reason to tail it went away, so whoever picks it up next resumes where this tail stopped instead of
+// skipping to the end of the file.
+func (cr *containerReceiver) stopWatchingForContainers(ctx context.Context, ids []string, forget bool) {
 	cr.l.Lock()
 	defer cr.l.Unlock()
 
@@ -309,8 +323,11 @@ func (cr *containerReceiver) stopWatchingForContainers(ctx context.Context, ids 
 		// writes all four maps together only once it has fully succeeded (rolling back its extensions on
 		// every earlier error), so a container whose setup failed has no entry in any of them and the
 		// deletes below are simply no-ops -- cheaper than checking, and safe if that ever stops holding.
-		// The container is gone for good (not just a restart): forget its offset too.
-		cr.pipeline.persister.RemovePersistentExtsAndForget(cr.registeredExtensions[ctrID])
+		if forget {
+			cr.pipeline.persister.RemovePersistentExtsAndForget(cr.registeredExtensions[ctrID])
+		} else {
+			cr.pipeline.persister.RemovePersistentExts(cr.registeredExtensions[ctrID])
+		}
 
 		realLogFilePath := cr.containers[ctrID].RealLogFilePath
 

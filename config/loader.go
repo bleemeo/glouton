@@ -126,17 +126,18 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 	config, moreWarnings := convertTypes(k)
 	warnings = append(warnings, moreWarnings...)
 
-	// Computed once per Load() call (not once per key): shared by the pruning check below and
-	// priority(). Not just a SourceEnv concern: convertTypes' Config-struct round trip (Unmarshal into
-	// the typed Config, then back out via structs.ProviderWithDelim) materializes every unset pointer
-	// field of these keys' struct types (NetworkListener/NetworkProtocols, Threshold) as an explicit
-	// nil, for every provider -- a file that only sets one sibling field (e.g. protocols.http, leaving
-	// protocols.grpc unset) round-trips with an explicit "grpc: null" exactly like a dynamic env var
-	// does. Without pruning that here too, merge() (loader.go) would treat that invented nil as this
-	// file intentionally overwriting a sibling field a different, earlier-loaded file set (e.g.
-	// protocols.grpc), silently dropping it. priority()'s SourceFile branch never consults
-	// dynamicEnvKeys, so passing it unconditionally doesn't change file merge-priority behavior.
+	// Computed once per Load() call, not once per key. dynamicKeys is only about merge priority, so that
+	// an entry set by a dynamic per-listener/per-threshold environment variable merges into the file-defined
+	// map instead of replacing it wholesale; priority()'s SourceFile branch never consults it.
 	dynamicKeys := dynamicEnvVarConfigKeys()
+
+	// Pruning is a separate concern: convertTypes' Config-struct round trip (Unmarshal into the typed
+	// Config, then back out via structs.ProviderWithDelim) materializes every unset pointer field of a
+	// struct-valued map key as an explicit nil, for every provider -- a file setting only one sibling
+	// field (protocols.http, leaving protocols.grpc unset) round-trips with an explicit "grpc: null"
+	// exactly like a dynamic env var does. Left in, merge() would read that invented nil as this file
+	// deliberately overwriting a sibling an earlier-loaded file set, silently dropping it.
+	prunedKeys := nilPrunedConfigKeys()
 
 	for key, value := range config {
 		if value == nil && !isNilAllowedFor(key) {
@@ -149,7 +150,7 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 			continue
 		}
 
-		if dynamicKeys[key] {
+		if prunedKeys[key] {
 			value = pruneNilMapValues(value)
 		}
 
@@ -615,6 +616,79 @@ func merge(dst any, src any) (any, error) {
 	default:
 		return nil, fmt.Errorf("%w: unsupported type %T", errCannotMerge, dst)
 	}
+}
+
+// nilPrunedConfigKeys is the set of mapKeys() entries whose config type is a map of structs, i.e. exactly
+// the keys convertTypes' Config-struct round trip invents explicit nils inside. Derived from the Config
+// types rather than listed by hand, and deliberately not from dynamicEnvVarConfigKeys(): the two sets
+// happen to coincide today, but one is about environment variables while this one is about a struct's
+// unset pointer fields materializing as nil. Adding a struct-valued map key to mapKeys() without a
+// dynamic env var for it would otherwise quietly reintroduce the sibling-clobbering bug pruning exists to
+// prevent. A map of scalars, of slices, or of raw map[string]any (a LogReceiver) has no struct fields to
+// invent nils for, so it is left alone -- an explicit null there is the user's own and must survive.
+//
+// Called once per Load(), not once per key: mapKeys() is a handful of entries and the walk below is a
+// shallow type traversal, so there is nothing worth caching across calls.
+func nilPrunedConfigKeys() map[string]bool {
+	keys := make(map[string]bool, len(mapKeys()))
+
+	for _, key := range mapKeys() {
+		field, found := configFieldTypeByPath(key)
+		if !found {
+			continue
+		}
+
+		if field.Kind() != reflect.Map {
+			continue
+		}
+
+		elem := field.Elem()
+		for elem.Kind() == reflect.Pointer {
+			elem = elem.Elem()
+		}
+
+		if elem.Kind() == reflect.Struct {
+			keys[key] = true
+		}
+	}
+
+	return keys
+}
+
+// configFieldTypeByPath resolves a dotted config key (as written in mapKeys()) to the Go type of the
+// Config field it names, walking yaml tags at each segment.
+func configFieldTypeByPath(key string) (reflect.Type, bool) {
+	current := reflect.TypeFor[Config]()
+
+	for segment := range strings.SplitSeq(key, delimiter) {
+		for current.Kind() == reflect.Pointer {
+			current = current.Elem()
+		}
+
+		if current.Kind() != reflect.Struct {
+			return nil, false
+		}
+
+		field, found := structFieldByYAMLName(current, segment)
+		if !found {
+			return nil, false
+		}
+
+		current = field
+	}
+
+	return current, true
+}
+
+func structFieldByYAMLName(structType reflect.Type, name string) (reflect.Type, bool) {
+	for field := range structType.Fields() {
+		yamlName, _, _ := strings.Cut(field.Tag.Get("yaml"), ",")
+		if yamlName == name {
+			return field.Type, true
+		}
+	}
+
+	return nil, false
 }
 
 // pruneNilMapValues recursively removes nil-valued entries from a nested map[string]any. Applied to

@@ -198,6 +198,53 @@ func TestProcessLogSourcesVsReceiverShippedContainers(t *testing.T) {
 	}
 }
 
+// TestRemoveOldSourcesStopsVanishedServiceContainerTail checks the container-hosted half of service
+// teardown. Such a service has no serviceReceivers entry -- its tail lives in containerRecv -- and the
+// container branch only fires once the container itself disappears. So a service that stopped being
+// reported while its container kept running used to leave its tail in place, and the next time discovery
+// re-detected it, processLogSources (no longer finding it in watchedServices) set it up again: two live
+// tails on one file, both shipping every line, under the byte-identical persisted-offset name.
+func TestRemoveOldSourcesStopsVanishedServiceContainerTail(t *testing.T) {
+	t.Parallel()
+
+	const ctrID = "id-nginx-1"
+
+	pipeline := pipelineContext{persister: mustNewPersistHost(t)}
+
+	man := &Manager{
+		pipeline:          &pipeline,
+		persister:         pipeline.persister,
+		containerRecv:     newContainerReceiver(&pipeline),
+		watchedServices:   make(map[discovery.NameInstance]sourceDiagnostic),
+		watchedContainers: make(map[string]sourceDiagnostic),
+		serviceReceivers:  make(map[discovery.NameInstance][]*logReceiver),
+	}
+
+	serviceKey := discovery.NameInstance{Name: "nginx", Instance: ""}
+
+	// Stand in for a service-path tail already running for this container.
+	man.watchedServices[serviceKey] = sourceDiagnostic{IsFromService: true, ServiceKey: serviceKey, ContainerID: ctrID}
+	man.watchedContainers[ctrID] = sourceDiagnostic{IsFromService: true, ServiceKey: serviceKey, ContainerID: ctrID}
+	man.containerRecv.containers[ctrID] = Container{LogFilePath: "/var/log/nginx.log", RealLogFilePath: "/var/log/nginx.log"}
+
+	ctrNginx := ctr(ctrID, "nginx-1", nil)
+
+	// The service is no longer reported, but its container is still running.
+	man.removeOldSources(t.Context(), nil, []facts.Container{ctrNginx})
+
+	if man.containerRecv.isTailing(ctrID) {
+		t.Error("expected the vanished service's container tail to be stopped")
+	}
+
+	if _, watched := man.watchedContainers[ctrID]; watched {
+		t.Error("expected the container to stop being reported as watched")
+	}
+
+	if _, watched := man.watchedServices[serviceKey]; watched {
+		t.Error("expected the service to stop being reported as watched")
+	}
+}
+
 // TestProcessLogSourcesHonoursContainerFormatAndFilterLabels checks that a containerised service's tail
 // applies the container's own glouton.log_format/glouton.log_filter rather than what auto-discovery
 // inferred from the service type. This tail is the container's only one (WantSource declines its
@@ -226,7 +273,7 @@ func TestProcessLogSourcesHonoursContainerFormatAndFilterLabels(t *testing.T) {
 	ctrNginx := ctr(ctrID, "nginx-1", map[string]string{
 		logsource.ContainerLabelPrefix + "log_format": "label_format",
 		logsource.ContainerLabelPrefix + "log_filter": "label_filter",
-	}, nil)
+	})
 
 	logSources := man.processLogSources(
 		[]discovery.Service{svc("nginx", "", ctrID, true, time.Now(), discovery.ServiceLogReceiver{

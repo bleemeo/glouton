@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -62,6 +62,10 @@ type counter struct {
 	// so they stay scoped to the same labels-variant as their base.
 	labelsKey string
 	lbls      labels.Labels // precomputed once, never rebuilt
+	// claimedKeys is the set of label names lbls already carries, precomputed alongside it. Lets
+	// resolveAttrCounterLocked test each incoming attribute for shadowing without rebuilding lbls into a
+	// map on every single data point, under the registry lock.
+	claimedKeys map[string]struct{}
 
 	l          sync.Mutex
 	sum        int
@@ -193,11 +197,12 @@ func (reg *metricsRegistry) resolve(specs []metricSpec, item string) []*counter 
 			}
 
 			c = &counter{
-				metric:     spec.Metric,
-				item:       item,
-				labelsKey:  labelsKey,
-				lbls:       labels.FromMap(lblMap),
-				lastEmitAt: time.Now(),
+				metric:      spec.Metric,
+				item:        item,
+				labelsKey:   labelsKey,
+				lbls:        labels.FromMap(lblMap),
+				claimedKeys: claimedKeysOf(lblMap),
+				lastEmitAt:  time.Now(),
 			}
 			reg.counters[key] = c
 		}
@@ -410,38 +415,39 @@ func (reg *metricsRegistry) addSumDataPoints(m pmetric.Metric, item string, labe
 // "labels:" baked in (see resolve()), so an attribute whose key collides with one already claimed there
 // is dropped instead of overriding it. Caller must hold reg.l.
 func (reg *metricsRegistry) resolveAttrCounterLocked(base *counter, attrs pcommon.Map) *counter {
-	claimed := base.lbls.Map()
-
-	merged := make(map[string]string, len(claimed)+attrs.Len())
-	maps.Copy(merged, claimed)
-
-	extraKeys := make([]string, 0, attrs.Len())
+	// Runs for every attributed data point, with reg.l held throughout the caller's walk, so the
+	// cache-hit path deliberately builds nothing but the signature: no copy of base's labels, no merged
+	// map. Those are only needed to create a counter, which happens once per attribute combination.
+	extra := make([]attrPair, 0, attrs.Len())
 
 	var shadowed []string
 
 	attrs.Range(func(k string, v pcommon.Value) bool {
-		if _, exists := claimed[k]; exists {
+		if _, claimed := base.claimedKeys[k]; claimed {
 			shadowed = append(shadowed, k)
 
 			return true
 		}
 
-		merged[k] = v.AsString()
-		extraKeys = append(extraKeys, k)
+		extra = append(extra, attrPair{key: k, value: v.AsString()})
 
 		return true
 	})
 
-	sort.Strings(extraKeys) // deterministic key regardless of pcommon.Map iteration order
+	// Deterministic signature regardless of pcommon.Map iteration order.
+	slices.SortFunc(extra, func(a, b attrPair) int { return strings.Compare(a.key, b.key) })
 
 	var attrsID strings.Builder
 
-	for _, k := range extraKeys {
-		// %q (not %s) so a key or value containing '=', ',', or '"' can't make two distinct
+	for _, pair := range extra {
+		// Quoted (not raw) so a key or value containing '=', ',', or '"' can't make two distinct
 		// combinations collide on the same encoded key -- Go's quoting is injective and never
 		// leaves an unescaped '"' inside its own output, so concatenating quoted pairs keeps the
-		// whole sequence unambiguous.
-		fmt.Fprintf(&attrsID, "%q=%q,", k, merged[k])
+		// whole sequence unambiguous. strconv rather than fmt %q: same output, no reflection.
+		attrsID.WriteString(strconv.Quote(pair.key))
+		attrsID.WriteByte('=')
+		attrsID.WriteString(strconv.Quote(pair.value))
+		attrsID.WriteByte(',')
 	}
 
 	key := counterKey{metric: base.metric, item: base.item, labels: base.labelsKey, attrs: attrsID.String()}
@@ -455,14 +461,42 @@ func (reg *metricsRegistry) resolveAttrCounterLocked(base *counter, attrs pcommo
 		logger.V(2).Printf("logmetrics: metric %q: attribute(s) %v shadowed by item/labels, dropping their value(s)", base.metric, shadowed)
 	}
 
+	claimed := base.lbls.Map()
+
+	merged := make(map[string]string, len(claimed)+len(extra))
+	maps.Copy(merged, claimed)
+
+	for _, pair := range extra {
+		merged[pair.key] = pair.value
+	}
+
 	c = &counter{
-		metric:     base.metric,
-		item:       base.item,
-		labelsKey:  base.labelsKey,
-		lbls:       labels.FromMap(merged),
-		lastEmitAt: time.Now(),
+		metric:      base.metric,
+		item:        base.item,
+		labelsKey:   base.labelsKey,
+		lbls:        labels.FromMap(merged),
+		claimedKeys: claimedKeysOf(merged),
+		lastEmitAt:  time.Now(),
 	}
 	reg.counters[key] = c
 
 	return c
+}
+
+// attrPair is one attribute's key and stringified value, sorted by key to build a counter's attrs
+// signature.
+type attrPair struct {
+	key   string
+	value string
+}
+
+// claimedKeysOf returns the key set of a label map, for counter.claimedKeys.
+func claimedKeysOf(lblMap map[string]string) map[string]struct{} {
+	keys := make(map[string]struct{}, len(lblMap))
+
+	for key := range lblMap {
+		keys[key] = struct{}{}
+	}
+
+	return keys
 }

@@ -304,7 +304,7 @@ func TestStopWatchingForContainersCleansUpEvenWithoutStartedComponents(t *testin
 	containerRecv.containers[ctrID] = Container{LogFilePath: "some.log"}
 	// Deliberately no containerRecv.startedComponents[ctrID] entry.
 
-	containerRecv.stopWatchingForContainers(t.Context(), []string{ctrID})
+	containerRecv.stopWatchingForContainers(t.Context(), []string{ctrID}, true)
 
 	if _, found := pipeline.persister.GetExtensions()[extID]; found {
 		t.Error("Expected the orphaned container's extension to be removed from the persister")

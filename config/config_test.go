@@ -2789,6 +2789,36 @@ func Test_dynamicEnvVarConfigKeysCoversNewEntries(t *testing.T) {
 // default.go's mapKeys(): a prefix key missing from mapKeys() stays a set of flat "key.sub.field" entries
 // that dynamicEnvVarConfigKeys never matches, so its dynamic env vars stop merging correctly (the
 // whole-map-replacement bug the mechanism exists to prevent) without failing anything else.
+// Test_nilPrunedConfigKeys pins the set of map keys that get their invented nils pruned. It is derived
+// from the Config types (every mapKeys() entry that is a map of structs), rather than hand-listed or
+// borrowed from dynamicEnvVarConfigKeys(): the two coincide today, but one is about environment variables
+// and this one is about a struct's unset pointer fields round-tripping as explicit nils. A new
+// struct-valued map key must show up here on its own, or merge() would silently drop a sibling field an
+// earlier-loaded file set. A map of scalars/slices/raw map[string]any has no such fields and must stay
+// out, so an explicit null the user wrote there survives.
+func Test_nilPrunedConfigKeys(t *testing.T) {
+	t.Parallel()
+
+	want := map[string]bool{
+		keyThresholds:             true, // map[string]Threshold
+		"opentelemetry.listeners": true, // map[string]NetworkListener
+	}
+
+	if diff := cmp.Diff(want, nilPrunedConfigKeys()); diff != "" {
+		t.Errorf("Unexpected pruned key set (-want +got):\n%s\n"+
+			"If you added a struct-valued map key to mapKeys(), add it here too. If a key unexpectedly "+
+			"dropped out, pruning silently stopped protecting it.", diff)
+	}
+
+	// Every entry must resolve against the Config types, or it would be skipped silently.
+	for _, key := range mapKeys() {
+		if _, found := configFieldTypeByPath(key); !found {
+			t.Errorf("mapKeys() entry %q does not resolve to a Config field: a typo here disables both "+
+				"nil-pruning and any other Config-type-derived check for that key", key)
+		}
+	}
+}
+
 func Test_dynamicEnvVarListKeysAreInMapKeys(t *testing.T) {
 	t.Parallel()
 

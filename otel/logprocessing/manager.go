@@ -501,10 +501,6 @@ func (man *Manager) removeOldSources(ctx context.Context, services []discovery.S
 		logger.V(2).Printf("Removing sources from log processing: services=%s / containers=%s", noLongerExistingServices, noLongerExistingContainers)
 	}
 
-	// Note this only stops serviceReceivers, i.e. the bare (non-container) services. A container-hosted
-	// service's tail lives in containerRecv and is torn down by the container branch below, which fires
-	// only once the container itself disappears -- so a service that stops being reported while its
-	// container keeps running leaves its tail in place.
 	for _, service := range noLongerExistingServices {
 		receivers, found := man.serviceReceivers[service]
 		if found {
@@ -513,11 +509,23 @@ func (man *Manager) removeOldSources(ctx context.Context, services []discovery.S
 			delete(man.serviceReceivers, service)
 		}
 
+		// A container-hosted service has no serviceReceivers entry: its tail lives in containerRecv, and
+		// the container branch below only stops it once the *container* disappears. Left running, it keeps
+		// applying the vanished service's operators/filters forever, and it stops the container's
+		// glouton.*-label source from being reconsidered (ServiceTailedContainerIDs still reports it).
+		// The offset is kept, since the container itself is still there: this only drops the reason to
+		// tail it, so whoever picks it up next resumes rather than skipping to the end of the file.
+		if diag, watched := man.watchedServices[service]; watched && diag.ContainerID != "" {
+			man.containerRecv.stopWatchingForContainers(ctx, []string{diag.ContainerID}, false)
+			delete(man.watchedContainers, diag.ContainerID)
+		}
+
 		delete(man.watchedServices, service)
 	}
 
 	if len(noLongerExistingContainers) > 0 {
-		man.containerRecv.stopWatchingForContainers(ctx, noLongerExistingContainers)
+		// The containers themselves are gone for good (not just restarted): forget their offsets too.
+		man.containerRecv.stopWatchingForContainers(ctx, noLongerExistingContainers, true)
 
 		for _, ctrID := range noLongerExistingContainers {
 			delete(man.watchedContainers, ctrID)

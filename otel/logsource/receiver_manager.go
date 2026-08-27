@@ -183,6 +183,10 @@ type managedSource struct {
 	// may call this receiver's shared network consumer concurrently from several simultaneous
 	// gRPC/HTTP requests hitting the same listener.
 	networkMu sync.Mutex
+	// fields is this receiver's config decoded once at creation, set only for a SourceReceiver
+	// managedSource. Cached because rm.cfg never changes for the manager's lifetime, so re-decoding it on
+	// every ensureReceiverSource cache hit was pure waste.
+	fields receiverFields
 	// container is set only for a SourceContainerLabel managedSource, so a later removal can notify
 	// every provider via releaseProviders.
 	container facts.Container
@@ -309,13 +313,18 @@ func (rm *ReceiverManager) releaseProviders(ctx context.Context, container facts
 
 // ensureReceiverSource returns or resolves the managedSource for a receiver. Callers must hold rm.l.
 func (rm *ReceiverManager) ensureReceiverSource(ctx context.Context, name string, raw config.LogReceiver) (*managedSource, receiverFields, error) {
+	// Cache hit first, returning the fields decoded when the source was built. UpdateContainers calls this
+	// once per (container, matching receiver) on every discovery cycle, all while holding rm.l, so decoding
+	// up front meant building and running a fresh mapstructure decoder hundreds of times a cycle on a busy
+	// node just to throw the result away. rm.cfg is fixed for the manager's lifetime, so the cached decode
+	// can never go stale.
+	if ms, found := rm.receivers[name]; found {
+		return ms, ms.fields, nil
+	}
+
 	fields, err := decodeReceiverFields(raw)
 	if err != nil {
 		return nil, receiverFields{}, fmt.Errorf("decoding config: %w", err)
-	}
-
-	if ms, found := rm.receivers[name]; found {
-		return ms, fields, nil
 	}
 
 	sendLogs := rm.cfg.ReceiversDefaultSendLogs
@@ -326,6 +335,7 @@ func (rm *ReceiverManager) ensureReceiverSource(ctx context.Context, name string
 	operators := rm.buildReceiverOperators(name, fields)
 
 	ms := newManagedSource(name, SourceReceiver, operators, raw)
+	ms.fields = fields
 	ms.fanout = rm.askProviders(ctx, ResolvedSource{
 		Kind:         SourceReceiver,
 		Name:         name,
@@ -546,6 +556,8 @@ type containerMatcher struct {
 	raw                config.LogReceiver
 	containerName      string
 	containerSelectors map[string]string
+	// sendLogs is the receiver's effective send_logs, resolved against ReceiversDefaultSendLogs.
+	sendLogs bool
 }
 
 // UpdateContainers matches containers to receivers by name/selectors, falling back to glouton.* labels.
@@ -631,17 +643,7 @@ func (rm *ReceiverManager) ContainerIDsShippedByReceivers(containers []facts.Con
 				continue
 			}
 
-			fields, err := decodeReceiverFields(m.raw)
-			if err != nil {
-				continue
-			}
-
-			sendLogs := rm.cfg.ReceiversDefaultSendLogs
-			if fields.SendLogs != nil {
-				sendLogs = *fields.SendLogs
-			}
-
-			if sendLogs {
+			if m.sendLogs {
 				shipped[ctr.ID()] = true
 
 				break
@@ -668,8 +670,24 @@ func (rm *ReceiverManager) containerMatchers() []containerMatcher {
 			continue
 		}
 
+		// Decoded once per receiver here, rather than once per (container, matching receiver) by each
+		// caller: a node with a few hundred containers and a handful of selector receivers would otherwise
+		// run that many mapstructure decoders per discovery cycle, holding rm.l throughout.
+		fields, err := decodeReceiverFields(raw)
+		if err != nil {
+			logger.V(1).Printf("logsource: receiver %q: decoding config: %v", name, err)
+
+			continue
+		}
+
+		sendLogs := rm.cfg.ReceiversDefaultSendLogs
+		if fields.SendLogs != nil {
+			sendLogs = *fields.SendLogs
+		}
+
 		matchers = append(matchers, containerMatcher{
 			name: name, raw: raw, containerName: containerName, containerSelectors: containerSelectors,
+			sendLogs: sendLogs,
 		})
 	}
 

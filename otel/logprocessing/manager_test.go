@@ -47,12 +47,13 @@ func svc(
 	}
 }
 
-func ctr(id, name string, labels, annotations map[string]string) facts.Container {
+// ctr builds a fake container. Only labels are parameterised: glouton.* annotations resolve through the
+// same facts.LabelsAndAnnotations lookup as labels, so no test here needs to set them separately.
+func ctr(id, name string, labels map[string]string) facts.Container {
 	return facts.FakeContainer{
 		FakeID:            id,
 		FakeContainerName: name,
 		FakeLabels:        labels,
-		FakeAnnotations:   annotations,
 	}
 }
 
@@ -129,8 +130,8 @@ func TestProcessLogSources(t *testing.T) {
 
 	svcNginx := svc(testServiceNginx, testContainerNginx1, testContainerIDNgx1, true, time.Now(), discovery.ServiceLogReceiver{Format: "nginx_both", Filter: "drop_get"})
 
-	ctrNgx1 := ctr(testContainerIDNgx1, testContainerNginx1, nil, nil)
-	ctrDisabled := ctr("disabled", "Disabled", map[string]string{"glouton.log_enable": "False"}, nil)
+	ctrNgx1 := ctr(testContainerIDNgx1, testContainerNginx1, nil)
+	ctrDisabled := ctr("disabled", "Disabled", map[string]string{"glouton.log_enable": "False"})
 	svcDisabled := svc("disabled-svc", "", "disabled", true, time.Now(), discovery.ServiceLogReceiver{Format: "nginx_both"})
 
 	executionSteps := []struct {
