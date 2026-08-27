@@ -483,7 +483,12 @@ func (c *configLoader) Build() (*koanf.Koanf, prometheus.MultiError) {
 		case previousPriority == item.Priority:
 			var err error
 
-			config[item.Key], err = merge(config[item.Key], item.Value)
+			// Only log.metrics_rules gets its leaf lists appended across files: each named entry (e.g.
+			// apache_to_metrics) is meant to accumulate metric definitions contributed by different
+			// conf.d snippets. Other map keys (e.g. log.opentelemetry.receivers) synthesize fixed-shape
+			// lists during migration (from_listeners) that must stay last-file-wins, or merging the same
+			// migration's output from two files would duplicate entries instead of collapsing them.
+			config[item.Key], err = merge(config[item.Key], item.Value, item.Key == "log.metrics_rules")
 			warnings.Append(err)
 		// Previous item has higher priority, nothing to do.
 		case previousPriority > item.Priority:
@@ -503,7 +508,9 @@ func (c *configLoader) Build() (*koanf.Koanf, prometheus.MultiError) {
 // sides (e.g. a receiver's or a threshold's own fields), instead of letting src's value replace dst's
 // wholesale -- otherwise splitting one named entry's fields across two config files/conf.d snippets (file
 // A sets a receiver's include, file B sets its send_logs) silently drops the earlier file's fields.
-func merge(dst any, src any) (any, error) {
+// appendLists additionally makes a sub-key that's a []any on both sides get appended rather than replaced;
+// see Build()'s call site for why this is only enabled for log.metrics_rules.
+func merge(dst any, src any, appendLists bool) (any, error) {
 	switch dstType := dst.(type) {
 	case []any:
 		srcSlice, ok := src.([]any)
@@ -530,7 +537,7 @@ func merge(dst any, src any) (any, error) {
 			srcValMap, srcIsMap := srcVal.(map[string]any)
 
 			if dstIsMap && srcIsMap {
-				merged, err := merge(dstValMap, srcValMap)
+				merged, err := merge(dstValMap, srcValMap, appendLists)
 				if err != nil {
 					return nil, err
 				}
@@ -538,6 +545,17 @@ func merge(dst any, src any) (any, error) {
 				dstType[key] = merged
 
 				continue
+			}
+
+			if appendLists {
+				dstValSlice, dstIsSlice := dstVal.([]any)
+				srcValSlice, srcIsSlice := srcVal.([]any)
+
+				if dstIsSlice && srcIsSlice {
+					dstType[key] = append(dstValSlice, srcValSlice...)
+
+					continue
+				}
 			}
 
 			// Not both maps (a scalar, a slice, or a type mismatch): the later-loaded source wins,

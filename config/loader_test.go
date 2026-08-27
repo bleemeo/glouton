@@ -299,7 +299,7 @@ func TestMergeRecursesIntoNestedMaps(t *testing.T) {
 		"myrecv": map[string]any{"send_logs": false},
 	}
 
-	got, err := merge(dst, src)
+	got, err := merge(dst, src, false)
 	if err != nil {
 		t.Fatalf("merge returned an error: %v", err)
 	}
@@ -313,6 +313,66 @@ func TestMergeRecursesIntoNestedMaps(t *testing.T) {
 
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("Unexpected merge result (-want +got):\n%s", diff)
+	}
+}
+
+// TestMergeAppendsSlicesForSameSubKey guards against a regression where merge()'s map case let src's
+// slice replace dst's whole slice for a sub-key present on both sides (e.g. two files each contributing
+// entries to the same log.metrics_rules.<name> list), silently dropping whichever entries dst had.
+func TestMergeAppendsSlicesForSameSubKey(t *testing.T) {
+	t.Parallel()
+
+	dst := map[string]any{
+		"apache_to_metrics": []any{map[string]any{"metric": "log_common_total"}},
+	}
+	src := map[string]any{
+		"apache_to_metrics": []any{map[string]any{"metric": "log_common_code"}},
+	}
+
+	got, err := merge(dst, src, true)
+	if err != nil {
+		t.Fatalf("merge returned an error: %v", err)
+	}
+
+	want := map[string]any{
+		"apache_to_metrics": []any{
+			map[string]any{"metric": "log_common_total"},
+			map[string]any{"metric": "log_common_code"},
+		},
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("Unexpected merge result (-want +got):\n%s", diff)
+	}
+}
+
+// Test_loadMergesSplitMetricsRuleEntriesAcrossFiles is the end-to-end version of
+// TestMergeAppendsSlicesForSameSubKey: two conf.d-style files each contribute one entry to the same
+// log.metrics_rules.<name> list; both must survive instead of the second file's list silently replacing
+// the first's.
+func Test_loadMergesSplitMetricsRuleEntriesAcrossFiles(t *testing.T) {
+	t.Parallel()
+
+	config, _, err := load(&configLoader{}, false, false, "testdata/split-metrics-rule-a.conf", "testdata/split-metrics-rule-b.conf")
+	if err != nil {
+		t.Fatalf("Failed to load config: %s", err)
+	}
+
+	entries, ok := config.Log.MetricsRules["apache_to_metrics"]
+	if !ok {
+		t.Fatalf("Expected metrics_rules entry %q to exist, got %v", "apache_to_metrics", config.Log.MetricsRules)
+	}
+
+	if len(entries) != 2 {
+		t.Fatalf("Expected 2 entries in %q, got %d: %v", "apache_to_metrics", len(entries), entries)
+	}
+
+	if got := entries[0]["metric"]; got != "log_common_total" {
+		t.Errorf("Expected fileA's entry to survive, got metric=%v", got)
+	}
+
+	if got := entries[1]["metric"]; got != "log_common_code" {
+		t.Errorf("Expected fileB's entry to survive, got metric=%v", got)
 	}
 }
 
