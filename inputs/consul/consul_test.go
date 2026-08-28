@@ -234,16 +234,20 @@ func TestGaugeNodeNameWithDotsStripped(t *testing.T) {
 	acc.PrepareGather()
 	acc.AddGauge("consul.web01.prod.example.com.autopilot.healthy", map[string]any{"value": 1.0}, nil, time.Now())
 	acc.AddGauge("consul.web01.prod.example.com.runtime.num_goroutines", map[string]any{"value": 194.0}, nil, time.Now())
-	// A node name whose first segment is itself a subsystem name: the search starts after
-	// it, so "raft" is not mistaken for the subsystem.
+	// A node name whose first segment is itself a subsystem name: the search goes from the
+	// end backwards, so it finds the real subsystem "state" instead of "raft".
 	acc.AddGauge("consul.raft.example.com.state.services", map[string]any{"value": 3.0}, nil, time.Now())
 	// A node named after a subsystem, the tightest case: only one of the two segments goes.
 	acc.AddGauge("consul.runtime.runtime.alloc_bytes", map[string]any{"value": 42.0}, nil, time.Now())
+	// A subsystem name ("runtime") buried in the hostname, one segment short of the real
+	// subsystem ("autopilot"): a scan that stopped at the first match from either end
+	// would land on "runtime" instead.
+	acc.AddGauge("consul.foo.runtime.example.com.autopilot.healthy", map[string]any{"value": 5.0}, nil, time.Now())
 
 	got := collectFinalMetrics(store)
 
 	assertMetrics(t, got, map[string]float64{
-		"consul_autopilot_healthy":      1,
+		"consul_autopilot_healthy":      5,
 		"consul_runtime_num_goroutines": 194,
 		"consul_state_services":         3,
 		"consul_runtime_alloc_bytes":    42,

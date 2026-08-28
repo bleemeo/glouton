@@ -139,10 +139,11 @@ var gaugeSubsystems = map[string]bool{
 // sink (which does it for gauges only, and only while telemetry.disable_hostname is off).
 // It is the hostname and not Consul's node_name, and it is not sanitized, so it holds
 // however many dots the hostname does ("consul.web01.prod.example.com.runtime.x"). What is
-// looked for is therefore the subsystem, the first segment after it, and everything between
-// "consul" and that subsystem is dropped whatever its shape. The search starts after the
-// second segment, so a hostname whose first segment happens to be a subsystem name isn't
-// mistaken for one.
+// looked for is therefore the subsystem, and everything between "consul" and it is dropped
+// whatever its shape. The search goes from the end of the name backwards, so it finds the
+// subsystem itself rather than a hostname label that happens to share a subsystem's name:
+// the real subsystem is always the match closest to the field name, while a coincidental
+// one in the hostname can only be further from it.
 //
 // It is always the reporting agent's own hostname -- never another node's, whatever the
 // size of the cluster -- so this merges no series: one dump holds one such name. What is
@@ -163,7 +164,7 @@ func stripNodeName(gatherContext internal.GatherContext) string {
 
 	parts := strings.Split(gatherContext.Measurement, ".")
 
-	for i := 2; i < len(parts); i++ {
+	for i := len(parts) - 1; i >= 1; i-- {
 		if gaugeSubsystems[parts[i]] {
 			return strings.Join(append(parts[:1:1], parts[i:]...), ".")
 		}

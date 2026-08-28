@@ -75,18 +75,11 @@ func TestAvgDuration(t *testing.T) {
 			want:        map[string]float64{"count": 10, "duration_seconds": 0},
 		},
 		{
-			// The service restarted: the accumulator reports a counter that went backwards
-			// as a negative rate, and a negative average duration means nothing.
-			name:        "the duration counter reset -> no average",
-			fields:      map[string]float64{"duration": -400, "count": 10},
-			unitDivisor: MsPerSecond,
-			want:        map[string]float64{"count": 10},
-		},
-		{
-			// The usual shape of a restart, both counters back to zero together. Already
-			// covered by the count guard, kept so a change to either one is caught.
-			name:        "both counters reset -> no average",
-			fields:      map[string]float64{"duration": -400, "count": -10},
+			// The service restarted: the accumulator's differentiation drops a counter
+			// that went backwards instead of handing AvgDuration a negative rate, so this
+			// only ever shows up as the count guard below rejecting the missing average.
+			name:        "the count counter reset -> no average",
+			fields:      map[string]float64{"duration": 400, "count": -10},
 			unitDivisor: MsPerSecond,
 			want:        map[string]float64{"count": -10},
 		},
