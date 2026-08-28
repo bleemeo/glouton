@@ -47,6 +47,8 @@ func New(server string) (i telegraf.Input, err error) {
 						"mail_cache_hits",
 						"disk_input",
 						"disk_output",
+						"auth_successes",
+						"auth_failures",
 					},
 				},
 				Name: "dovecot",

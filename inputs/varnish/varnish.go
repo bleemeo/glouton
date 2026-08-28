@@ -47,14 +47,41 @@ func New() (telegraf.Input, registry.RegistrationOption, error) {
 	// The input uses "sudo varnishstat ..." to retrieve the metrics.
 	varnishInput.UseSudo = true
 
+	// The plugin only collects cache_hit/cache_miss/uptime by default. The backend and
+	// thread-pool counters below are cheap backend-health and saturation signals varnishstat
+	// already tracks, so ask for them too instead of leaving them out for lack of asking.
+	varnishInput.Stats = []string{
+		"MAIN.cache_hit",
+		"MAIN.cache_miss",
+		"MAIN.uptime",
+		"MAIN.backend_fail",
+		"MAIN.backend_unhealthy",
+		"MAIN.n_lru_nuked",
+		"MAIN.threads",
+		"MAIN.threads_limited",
+		"MAIN.sess_dropped",
+		"MAIN.sess_queued",
+	}
+
 	internalInput := &internal.Input{
 		Input: varnishInput,
 		Accumulator: internal.Accumulator{
 			RenameGlobal:     renameGlobal,
+			RenameMetrics:    renameMetrics,
 			TransformMetrics: transformMetrics,
 			DifferentiatedMetrics: []string{
 				"cache_hit",
 				"cache_miss",
+				// backend_fail/backend_unhealthy/n_lru_nuked/threads_limited/sess_dropped/
+				// sess_queued are lifetime counts since Varnish started, same shape as
+				// cache_hit/cache_miss. threads is deliberately not listed: it's the
+				// current thread count, not a running total.
+				"backend_fail",
+				"backend_unhealthy",
+				"n_lru_nuked",
+				"threads_limited",
+				"sess_dropped",
+				"sess_queued",
 			},
 		},
 		Name: "varnish",
@@ -74,6 +101,25 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 	delete(gatherContext.Tags, "section")
 
 	return gatherContext, false
+}
+
+var fieldRenames = map[string]string{ //nolint:gochecknoglobals
+	// varnishstat calls this a "nuke": an object forced out of cache to make room for a
+	// new one, as opposed to naturally expiring. "eviction" is the term users of any other
+	// cache already know, and reads next to cache_hit/cache_miss/cache_hit_ratio.
+	"n_lru_nuked": "cache_evictions",
+	// varnishstat abbreviates "sessions" to "sess"; spelled out here to match
+	// dovecot_num_connected_sessions and read on its own without varnishstat's docs open.
+	"sess_dropped": "sessions_dropped",
+	"sess_queued":  "sessions_queued",
+}
+
+func renameMetrics(currentContext internal.GatherContext, metricName string) (newMeasurement string, newMetricName string) {
+	if renamed, ok := fieldRenames[metricName]; ok {
+		return currentContext.Measurement, renamed
+	}
+
+	return currentContext.Measurement, metricName
 }
 
 // transformMetrics adds a cache_hit_ratio field computed from the

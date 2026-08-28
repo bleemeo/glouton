@@ -60,6 +60,8 @@ func newAccumulator(store *internal.StoreAccumulator) internal.Accumulator {
 			"mail_cache_hits",
 			"disk_input",
 			"disk_output",
+			"auth_successes",
+			"auth_failures",
 		},
 		Accumulator: store,
 	}
@@ -94,10 +96,11 @@ func assertTags(t *testing.T, store *internal.StoreAccumulator, want map[string]
 }
 
 // TestDifferentiation checks that num_logins/num_cmds/mail_cache_hits/
-// disk_input/disk_output (cumulative since reset_timestamp) are
-// differentiated into per-second rates, while num_connected_sessions (the
-// live count of currently open IMAP sessions, per Dovecot's own docs -- a
-// gauge, not a counter) passes through untouched.
+// disk_input/disk_output/auth_successes/auth_failures (cumulative since
+// reset_timestamp) are differentiated into per-second rates, while
+// num_connected_sessions (the live count of currently open IMAP sessions,
+// per Dovecot's own docs -- a gauge, not a counter) passes through
+// untouched.
 func TestDifferentiation(t *testing.T) {
 	store := &internal.StoreAccumulator{}
 	acc := newAccumulator(store)
@@ -113,6 +116,8 @@ func TestDifferentiation(t *testing.T) {
 		"mail_cache_hits":        uint64(68192209),
 		"disk_input":             uint64(6493168218112),
 		"disk_output":            uint64(17978638815232),
+		"auth_successes":         uint64(174000),
+		"auth_failures":          uint64(827),
 	}, map[string]string{"server": "127.0.0.1", "type": "global"}, t0)
 
 	// Discard the first gather: every differentiated field has no rate yet
@@ -127,6 +132,8 @@ func TestDifferentiation(t *testing.T) {
 		"mail_cache_hits":        uint64(68192209 + 2000),         // rate = 200/s
 		"disk_input":             uint64(6493168218112 + 100000),  // rate = 10000/s
 		"disk_output":            uint64(17978638815232 + 200000), // rate = 20000/s
+		"auth_successes":         uint64(174000 + 90),             // rate = 9/s
+		"auth_failures":          uint64(827 + 10),                // rate = 1/s
 	}, map[string]string{"server": "127.0.0.1", "type": "global"}, t1)
 
 	got := collectFinalMetrics(store)
@@ -138,6 +145,8 @@ func TestDifferentiation(t *testing.T) {
 		"dovecot_disk_input":             10000,
 		"dovecot_disk_output":            20000,
 		"dovecot_num_connected_sessions": 1300,
+		"dovecot_auth_successes":         9,
+		"dovecot_auth_failures":          1,
 	})
 
 	// The listener we queried is redundant with the labels already set on service

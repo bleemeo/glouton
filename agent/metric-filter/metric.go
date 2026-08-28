@@ -513,6 +513,8 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 		},
 
 		discovery.DovecotService: {
+			"dovecot_auth_failures",
+			"dovecot_auth_successes",
 			"dovecot_disk_input",
 			"dovecot_disk_output",
 			"dovecot_mail_cache_hits",
@@ -983,6 +985,25 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"varnish_cache_hit",
 			"varnish_cache_hit_ratio",
 			"varnish_cache_miss",
+			// varnish_backend_fail/backend_unhealthy are backend health signals: failed
+			// connection attempts and connections not even attempted because the backend
+			// was already marked unhealthy.
+			"varnish_backend_fail",
+			"varnish_backend_unhealthy",
+			// varnish_threads against varnish_threads_limited shows thread-pool
+			// saturation: the current thread count, and the rate of times a new one
+			// couldn't be created because the pool was already at its max.
+			"varnish_threads",
+			"varnish_threads_limited",
+			// varnish_sessions_dropped/sessions_queued: sessions dropped or queued waiting
+			// for a worker thread, another saturation signal.
+			"varnish_sessions_dropped",
+			"varnish_sessions_queued",
+			// varnish_cache_evictions: objects forced out of cache to make room for a new
+			// one (varnishstat's own name for it is the less obvious "n_lru_nuked"). A
+			// rising rate means the cache is undersized for its working set, distinct from
+			// cache_hit_ratio dropping because traffic patterns changed.
+			"varnish_cache_evictions",
 			"varnish_uptime",
 		},
 
