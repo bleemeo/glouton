@@ -501,6 +501,11 @@ func (man *Manager) removeOldSources(ctx context.Context, services []discovery.S
 		logger.V(2).Printf("Removing sources from log processing: services=%s / containers=%s", noLongerExistingServices, noLongerExistingContainers)
 	}
 
+	containerAlsoGone := make(map[string]bool, len(noLongerExistingContainers))
+	for _, ctrID := range noLongerExistingContainers {
+		containerAlsoGone[ctrID] = true
+	}
+
 	for _, service := range noLongerExistingServices {
 		receivers, found := man.serviceReceivers[service]
 		if found {
@@ -515,7 +520,13 @@ func (man *Manager) removeOldSources(ctx context.Context, services []discovery.S
 		// glouton.*-label source from being reconsidered (ServiceTailedContainerIDs still reports it).
 		// The offset is kept, since the container itself is still there: this only drops the reason to
 		// tail it, so whoever picks it up next resumes rather than skipping to the end of the file.
-		if diag, watched := man.watchedServices[service]; watched && diag.ContainerID != "" {
+		//
+		// containerAlsoGone is checked to skip this teardown entirely when the container itself is also
+		// disappearing this cycle (the ordinary "container removed" case): stopWatchingForContainers
+		// unconditionally clears its registeredExtensions/containers bookkeeping for ctrID regardless of
+		// forget, so a forget=false call here first would leave the forget=true call below (which runs the
+		// real, permanent offset-forget) nothing to forget from.
+		if diag, watched := man.watchedServices[service]; watched && diag.ContainerID != "" && !containerAlsoGone[diag.ContainerID] {
 			man.containerRecv.stopWatchingForContainers(ctx, []string{diag.ContainerID}, false)
 			delete(man.watchedContainers, diag.ContainerID)
 		}

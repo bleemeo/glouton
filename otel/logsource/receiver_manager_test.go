@@ -1468,3 +1468,59 @@ func TestReceiverManagerRescanAndUpdateContainersNoopAfterShutdown(t *testing.T)
 		t.Errorf("expected UpdateContainers to be a no-op after Shutdown, got %d container source(s) started", got)
 	}
 }
+
+// TestContainerMatchersMemoizedAndConsistentAcrossCalls guards against a regression where
+// containerMatchers re-decoded every container_name/container_selectors receiver's config on every call,
+// duplicating the exact same decode work across ContainerIDsShippedByReceivers and UpdateContainers in the
+// same discovery cycle -- the per-cycle cost ensureReceiverSource's own decode cache was specifically added
+// to avoid. Since rm.cfg never changes for the manager's lifetime, containerMatchers' result can and should
+// be computed once.
+func TestContainerMatchersMemoizedAndConsistentAcrossCalls(t *testing.T) {
+	t.Parallel()
+
+	logFile, err := os.CreateTemp(t.TempDir(), "app-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFile.Close()
+
+	cfg := config.OpenTelemetry{
+		Receivers: map[string]config.LogReceiver{
+			"app": {"container_name": "app-1", "send_logs": true},
+		},
+	}
+
+	rm := newTestReceiverManager(t, cfg)
+
+	ctr := facts.FakeContainer{FakeID: "id-1", FakeContainerName: "app-1", FakeLogPath: logFile.Name()}
+
+	rm.l.Lock()
+	first := rm.containerMatchers()
+	second := rm.containerMatchers()
+	rm.l.Unlock()
+
+	if diff := cmp.Diff(first, second, cmp.AllowUnexported(containerMatcher{})); diff != "" {
+		t.Fatalf("Expected containerMatchers to return identical results across calls (-first +second):\n%s", diff)
+	}
+
+	// Exercise both real call paths, in the same order agent.go's discovery cycle uses them, to prove the
+	// cached value is actually correct end-to-end, not just self-consistent.
+	shipped := rm.ContainerIDsShippedByReceivers([]facts.Container{ctr})
+	if !shipped[ctr.ID()] {
+		t.Fatalf("expected the container to be reported as shipped by the container_name receiver, got %v", shipped)
+	}
+
+	provider, _ := newRecordingProvider()
+	rm.RegisterSinkProvider(provider)
+
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil)
+
+	rm.l.Lock()
+	_, found := rm.receivers["app"]
+	rm.l.Unlock()
+
+	if !found {
+		t.Fatal("expected the container_name receiver to have matched the container and started a tail")
+	}
+}

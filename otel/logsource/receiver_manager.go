@@ -91,6 +91,13 @@ type ReceiverManager struct {
 	// this guard it would start tails/register persistent extensions after SaveState has already run,
 	// which then never get stopped or saved.
 	shuttingDown bool
+	// containerMatchersCache memoizes containerMatchers' result: rm.cfg never changes for the manager's
+	// lifetime (see ensureReceiverSource's fields cache above), so re-decoding every container_name/
+	// container_selectors receiver's config on every UpdateContainers/ContainerIDsShippedByReceivers
+	// call -- both run once per discovery cycle -- was pure duplicated waste. containerMatchersCached
+	// distinguishes "never computed" from "computed as empty" (no receiver uses container matching).
+	containerMatchersCache  []containerMatcher
+	containerMatchersCached bool
 }
 
 // NewReceiverManager builds a ReceiverManager for cfg. Register every SinkProvider first, then call
@@ -692,7 +699,12 @@ func (rm *ReceiverManager) ContainerIDsShippedByReceivers(containers []facts.Con
 }
 
 // containerMatchers returns container-selection fields from all receivers. Callers must hold rm.l.
+// Memoized in containerMatchersCache: see its doc comment.
 func (rm *ReceiverManager) containerMatchers() []containerMatcher {
+	if rm.containerMatchersCached {
+		return rm.containerMatchersCache
+	}
+
 	var matchers []containerMatcher
 
 	for name, raw := range rm.cfg.Receivers {
@@ -727,6 +739,9 @@ func (rm *ReceiverManager) containerMatchers() []containerMatcher {
 			sendLogs: sendLogs,
 		})
 	}
+
+	rm.containerMatchersCache = matchers
+	rm.containerMatchersCached = true
 
 	return matchers
 }

@@ -23,12 +23,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bleemeo/glouton/agent/state"
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/otel/logsource"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/extension/xextension/storage"
 )
 
 func svc(
@@ -277,5 +281,87 @@ func TestProcessLogSources(t *testing.T) {
 		if diff := cmp.Diff(expectedKeys2, gotKeys2, cmpopts.SortSlices(func(x, y string) bool { return x < y })); diff != "" {
 			t.Fatalf("Unexpected watched containers at step %q (-want +got):\n%s", step.name, diff)
 		}
+	}
+}
+
+// TestRemoveOldSourcesForgetsOffsetWhenContainerAndItsServiceBothVanish guards against a regression
+// where a container's persisted read-offset was never actually forgotten on the ordinary "container
+// removed" path: removeOldSources tears the container down twice in the same cycle -- once through the
+// vanished-service branch (forget=false, since the container itself might still be there) and once
+// through the vanished-container branch (forget=true, since it's gone for good) -- but
+// stopWatchingForContainers unconditionally clears cr.registeredExtensions[ctrID] on the first call
+// regardless of forget, so the second call had nothing left to forget from.
+func TestRemoveOldSourcesForgetsOffsetWhenContainerAndItsServiceBothVanish(t *testing.T) {
+	t.Parallel()
+
+	st, err := state.LoadReadOnly("not", "used")
+	if err != nil {
+		t.Fatal("Can't instantiate state:", err)
+	}
+
+	persister, err := logsource.NewPersistHost(st, logsource.PersistConfig{
+		StorageType:  logsource.PersistStorageType,
+		CacheKey:     logsource.LogFileMetadataCacheKey,
+		ArchivePath:  "log-processing/persister.json",
+		SaveThrottle: saveFileSizesToCachePeriod,
+	})
+	if err != nil {
+		t.Fatal("Can't instantiate persist host:", err)
+	}
+
+	pipeline := &pipelineContext{persister: persister}
+	containerRecv := newContainerReceiver(pipeline)
+
+	const (
+		ctrID    = "ctr-1"
+		persName = "container/" + ctrID + "/app.log"
+	)
+
+	extID := persister.NewPersistentExt(persName)
+
+	ext, ok := persister.GetExtensions()[extID].(storage.Extension)
+	if !ok {
+		t.Fatal("Expected the registered extension to implement storage.Extension")
+	}
+
+	client, err := ext.GetClient(t.Context(), component.KindReceiver, extID, "")
+	if err != nil {
+		t.Fatal("Failed to get storage client:", err)
+	}
+
+	if err := client.Set(t.Context(), "offset", []byte("42")); err != nil {
+		t.Fatal("Failed to set offset:", err)
+	}
+
+	// Simulates the receiver's own shutdown sequence saving its final offset before teardown.
+	if err := client.Close(t.Context()); err != nil {
+		t.Fatal("Failed to close client:", err)
+	}
+
+	containerRecv.registeredExtensions[ctrID] = []component.ID{extID}
+	containerRecv.containers[ctrID] = Container{LogFilePath: "app.log"}
+
+	svcKey := discovery.NameInstance{Name: "nginx", Instance: ctrID}
+
+	man := &Manager{
+		persister:         persister,
+		containerRecv:     containerRecv,
+		watchedServices:   map[discovery.NameInstance]sourceDiagnostic{svcKey: {ContainerID: ctrID}},
+		watchedContainers: map[string]sourceDiagnostic{ctrID: {ContainerID: ctrID}},
+		serviceReceivers:  map[discovery.NameInstance][]*logReceiver{},
+	}
+
+	// Both the service and the container it ran in disappear together: the ordinary container-removal case.
+	man.removeOldSources(t.Context(), nil, nil)
+
+	persister.SaveToState(st)
+
+	var saved map[string]map[string][]byte
+	if err := st.Get(logsource.LogFileMetadataCacheKey, &saved); err != nil {
+		t.Fatal("Failed to read back saved state:", err)
+	}
+
+	if _, found := saved[persName]; found {
+		t.Errorf("Expected the removed container's offset to be forgotten, got %v", saved)
 	}
 }
