@@ -2169,8 +2169,12 @@ func (a *agent) runReceiverManager(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			a.receiverManager.SaveState()
+			// Shutdown first, then save: each receiver's shutdown writes a final checkpoint into the
+			// shared PersistHost (fileconsumer's own Stop does a last checkpoint.Save), so saving before
+			// it would snapshot the state cache without those last offsets and re-ship those lines on the
+			// next start. otel/logprocessing's handleProcessingLifecycle orders it the same way.
 			a.receiverManager.Shutdown(context.Background())
+			a.receiverManager.SaveState()
 
 			return ctx.Err()
 		case <-ticker.C:

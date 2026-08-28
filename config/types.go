@@ -131,6 +131,32 @@ type OpenTelemetry struct {
 	// ContainerExclude vetoes a matching container from both shipping
 	// auto_discovery and metrics container-label detection at once.
 	ContainerExclude []ContainerExcludeRule `yaml:"container_exclude"`
+	// GRPC/HTTP are the deprecated pre-network-receivers listener shape, kept as real typed fields
+	// purely so they can be migrated (see synthesizeLegacyNetworkListener) rather than consumed by
+	// anything downstream: nothing outside that migration reads them, and it clears them once it has run.
+	//
+	// They must be real Config fields rather than raw keys deleted by a per-provider migration, for two
+	// reasons this shape gets wrong otherwise. First, the new shape fuses address+port into one
+	// "host:port" endpoint string, so a per-provider migration can only synthesize an endpoint from the
+	// halves that one file happens to set -- a second conf.d file overriding just "port" has no complete
+	// endpoint to contribute and its value was silently dropped. As plain sibling scalars these merge
+	// per-leaf across providers exactly like any other config, and the fusion then happens once on the
+	// merged result. Second, envToKeyFunc derives the accepted environment variables from this struct's
+	// keys, so without these fields GLOUTON_LOG_OPENTELEMETRY_GRPC_ENABLE resolved to no key at all and
+	// was dropped before any migration could see it -- silently, since the key never entered koanf.
+	//
+	// Deliberately absent from DefaultConfig(): the zero value is what "unset" has to look like here,
+	// and defaults for address/port are applied by the migration itself.
+	GRPC LegacyEnableListener `yaml:"grpc"`
+	HTTP LegacyEnableListener `yaml:"http"`
+}
+
+// LegacyEnableListener is the deprecated log.opentelemetry.grpc/http {enable, address, port} shape,
+// superseded by opentelemetry.listeners + a receiver's from_listeners. See OpenTelemetry.GRPC.
+type LegacyEnableListener struct {
+	Enable  bool   `yaml:"enable"`
+	Address string `yaml:"address"`
+	Port    int    `yaml:"port"`
 }
 
 type AutoDiscovery struct {

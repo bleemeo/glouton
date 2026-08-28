@@ -494,7 +494,7 @@ func (rm *ReceiverManager) startIncludeFile(ctx context.Context, ms *managedSour
 		operators:   ms.operators,
 		extraRaw:    ms.extraRaw,
 		fanout:      ms.fanout,
-		persistName: func(logFile string) string { return name + "/" + logFile },
+		persistName: func(logFile string) string { return includePersistName(name, logFile) },
 	})
 	if err != nil {
 		return err
@@ -840,6 +840,20 @@ func (rm *ReceiverManager) updateLabelContainers(
 // (PersistHost.storeMetadata replaces the whole per-name entry on every save), corrupting or duplicating
 // whichever one resumes from the wrong offset after a restart.
 const containerLabelPersistNamespace = "label"
+
+// includePersistName builds the persisted-offset identity for one of a receiver's include-pattern files.
+//
+// The "receiver/" prefix exists for the same reason containerLabelPersistNamespace does, on the other
+// tailing path: otel/logprocessing's logReceiver persists its own include files under the bare
+// "<name>/<file>" (receiver.go's r.name + metadataKeySeparator + logFile), and both packages share one
+// PersistHost. Unprefixed, a user receiver whose key happens to match one of logprocessing's own -- it
+// builds receivers named literally "syslog", "journald" and "auditd" for auto-discovery -- tailing the same
+// file would land on the identical component.ID: NewPersistentExt would replace the live extension, both
+// tails would write through to one metadataPerReceiver entry, and each save (which replaces that entry
+// wholesale) would clobber the other's offset.
+func includePersistName(receiverName, logFile string) string {
+	return "receiver/" + receiverName + "/" + logFile
+}
 
 // containerPersistName builds a persisted-offset identity: namespace disambiguates independent tailing
 // mechanisms for the same container/file (an explicit receiver's own name, or containerLabelPersistNamespace

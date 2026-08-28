@@ -627,7 +627,7 @@ func takeNestedMapFromFlatConfig(config map[string]any, key string) map[string]a
 	return nested
 }
 
-func migrate(k *koanf.Koanf, path string) (*koanf.Koanf, prometheus.MultiError) {
+func migrate(k *koanf.Koanf, path string, providerType ItemSource) (*koanf.Koanf, prometheus.MultiError) {
 	config := k.All()
 
 	warnings := make(prometheus.MultiError, 0, 7)
@@ -638,9 +638,9 @@ func migrate(k *koanf.Koanf, path string) (*koanf.Koanf, prometheus.MultiError) 
 	warnings = append(warnings, migrateMetricsPrometheus(k, config)...)
 	warnings = append(warnings, migrateScrapperMetrics(k, config)...)
 	warnings = append(warnings, migrateServices(config)...)
-	warnings = append(warnings, migrateLegacyNetworkListeners(k, config)...)
+	warnings = append(warnings, migrateLegacyNetworkListeners(k, providerType)...)
 	warnings = append(warnings, migrateLogInputs(k, config, path)...)
-	warnings = append(warnings, migrateLogFluentBitURL(config)...)
+	warnings = append(warnings, migrateRemovedLogKeys(config)...)
 
 	// We can't reuse the previous Koanf because it doesn't allow removing keys.
 	newConfig := koanf.New(delimiter)
@@ -856,8 +856,10 @@ func legacyInputReceiverName(path string, i int) string {
 	return fmt.Sprintf("legacy_input_%08x_%d", h.Sum32(), i)
 }
 
-// mergeLegacyFilters ORs legacy filter regex/exclude into countconnector conditions, coalescing metrics by name; returns touched metrics and warnings.
-func mergeLegacyFilters(metricsByName map[string]any, filtersList []any) ([]string, []error) {
+// mergeLegacyFilters ORs legacy filter regex/exclude into countconnector conditions, coalescing metrics by
+// name; returns touched metrics and warnings. inputIndex is the enclosing log.inputs entry's index, used
+// only to name the offending filter in a warning.
+func mergeLegacyFilters(metricsByName map[string]any, filtersList []any, inputIndex int) ([]string, []error) {
 	var (
 		touched  []string
 		warnings []error
@@ -865,9 +867,18 @@ func mergeLegacyFilters(metricsByName map[string]any, filtersList []any) ([]stri
 
 	touchedThisCall := make(map[string]bool)
 
-	for _, filterAny := range filtersList {
+	for j, filterAny := range filtersList {
+		// Every drop below is warned about rather than skipped silently: migrateLogInputs still reports
+		// the enclosing entry as successfully migrated and builds it a receiver, so a dropped filter would
+		// otherwise leave the user told the migration worked while their metric definition is gone -- and
+		// with a receiver that tails the file and persists offsets while neither shipping nor counting.
 		filterMap, ok := filterAny.(map[string]any)
 		if !ok {
+			warnings = append(warnings, fmt.Errorf(
+				"%w: log.inputs[%d].filters[%d] is not a valid filter, ignoring it",
+				errSettingsDeprecated, inputIndex, j,
+			))
+
 			continue
 		}
 
@@ -875,6 +886,11 @@ func mergeLegacyFilters(metricsByName map[string]any, filtersList []any) ([]stri
 		regex, _ := filterMap["regex"].(string)
 
 		if metric == "" || regex == "" {
+			warnings = append(warnings, fmt.Errorf(
+				"%w: log.inputs[%d].filters[%d] needs both 'metric' and 'regex' set (got metric=%q, regex=%q), ignoring it",
+				errSettingsDeprecated, inputIndex, j, metric, regex,
+			))
+
 			continue
 		}
 
@@ -980,7 +996,7 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any, providerPath string
 			continue
 		}
 
-		touchedMetrics, mergeWarnings := mergeLegacyFilters(metricsByName, filtersList)
+		touchedMetrics, mergeWarnings := mergeLegacyFilters(metricsByName, filtersList, i)
 		for _, w := range mergeWarnings {
 			warnings.Append(w)
 		}
@@ -1081,12 +1097,91 @@ func legacyNetworkListenerBool(value any) bool {
 	}
 }
 
-// migrateLegacyNetworkListeners folds log.opentelemetry.grpc/http's old, pre-network-receivers {enable, address, port} shape into a
-// synthesized "legacy_network" receiver under opentelemetry.listeners, preserving the address/port and the unconditional
-// shipping behavior (send_logs: true).
-func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any) prometheus.MultiError {
+// legacyNetworkListenerPort reads a legacy log.opentelemetry.grpc/http ".port" leaf, which arrives as
+// whatever its provider produced: an int from a YAML scalar, an int64/float64 from a JSON round trip, or
+// a string from an environment variable. set is false for an absent, zero or unparseable port, which
+// must fall back to the protocol's own default rather than to :0 -- the defaults provider materializes
+// this leaf as an explicit 0 on every load (see OpenTelemetry.GRPC), so 0 cannot mean anything else.
+func legacyNetworkListenerPort(value any) (port int, set bool) {
+	switch v := value.(type) {
+	case int:
+		port = v
+	case int64:
+		port = int(v)
+	case float64:
+		port = int(v)
+	case string:
+		parsed, err := strconv.Atoi(v)
+		if err != nil {
+			return 0, false
+		}
+
+		port = parsed
+	default:
+		return 0, false
+	}
+
+	return port, port != 0
+}
+
+// migrateLegacyNetworkListeners warns, once per provider, that this provider still uses the deprecated
+// log.opentelemetry.grpc/http {enable, address, port} shape. It deliberately does NOT translate it: the
+// keys are real Config fields (see OpenTelemetry.GRPC) so they survive the strict struct decode and merge
+// per-leaf across providers, and the actual translation runs once on the merged result, in
+// synthesizeLegacyNetworkListener. Only the warning stays per-provider, so it can name the file at fault.
+func migrateLegacyNetworkListeners(k *koanf.Koanf, providerType ItemSource) prometheus.MultiError {
 	var warnings prometheus.MultiError
 
+	const path = "log.opentelemetry"
+
+	// The defaults provider is a structs provider over Config{}, so it materializes all six legacy leaves
+	// as explicit zero values on every load (they're real Config fields now -- see OpenTelemetry.GRPC).
+	// Only files and environment variables carry what a user actually wrote, so only they can be
+	// deprecating anything; without this the warning would fire on every config that never mentions the
+	// legacy shape at all.
+	if providerType == SourceDefault {
+		return nil
+	}
+
+	// k.Exists on the full leaf path (not k.Exists(path+".grpc") for the whole submap): koanf only builds
+	// an intermediate "grpc"/"http" map node when the source YAML was itself written with real nesting --
+	// a flat "log.opentelemetry.grpc.enable: true" key (just as valid, and the more common conf.d style)
+	// is stored as one opaque dotted key, so a parent-node check would silently miss that spelling.
+	var found bool
+
+	for _, sub := range []string{".grpc", ".http"} {
+		for _, leaf := range []string{".enable", ".address", ".port"} {
+			if k.Exists(path + sub + leaf) {
+				found = true
+			}
+		}
+	}
+
+	if !found {
+		return nil
+	}
+
+	warnings.Append(fmt.Errorf(
+		"%w: %s.grpc/http {enable, address, port}, use opentelemetry.listeners + a log.opentelemetry.receivers entry's from_listener field instead",
+		errSettingsDeprecated, path,
+	))
+
+	return warnings
+}
+
+// synthesizeLegacyNetworkListener folds the deprecated log.opentelemetry.grpc/http {enable, address,
+// port} shape into a synthesized "legacy_network" receiver plus an opentelemetry.listeners entry,
+// preserving the address/port and the unconditional shipping behavior (send_logs: true).
+//
+// Runs on the fully merged config, unlike the per-provider migrations in migrate(): the new shape fuses
+// address and port into one "host:port" endpoint string, so translating per provider could only ever
+// build an endpoint out of the halves a single file happened to set, and a second conf.d file overriding
+// just "port" (or setting only "port" via an environment variable) contributed no complete endpoint and
+// was silently discarded. Deferring to here lets the three legacy leaves merge as ordinary sibling
+// scalars first -- last provider wins per leaf, exactly as pre-deprecation -- and fuses once, afterwards.
+//
+// config is the merged flat config map: top-level keys are dot-joined, values may be nested maps.
+func synthesizeLegacyNetworkListener(config map[string]any) {
 	const (
 		path            = "log.opentelemetry"
 		defaultGRPCPort = 4317
@@ -1095,72 +1190,37 @@ func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any) promet
 
 	receiverKey, listenerKey := legacyNetworkReceiverNames()
 
-	// k.Exists/k.Get on the full leaf path (not k.Get(path+".grpc") for the whole submap): koanf only
-	// builds an intermediate "grpc"/"http" map node when the source YAML was itself written with real
-	// nesting -- a flat "log.opentelemetry.grpc.enable: true" key (just as valid, and the more common
-	// conf.d style) is stored as one opaque dotted key, so a parent-node k.Get would silently return nil
-	// and this whole migration would never fire for that equally valid spelling.
-	hasGRPC := k.Exists(path+".grpc.enable") || k.Exists(path+".grpc.address") || k.Exists(path+".grpc.port")
-	hasHTTP := k.Exists(path+".http.enable") || k.Exists(path+".http.address") || k.Exists(path+".http.port")
+	endpointOf := func(sub string, defaultPort int) string {
+		if !legacyNetworkListenerBool(config[path+"."+sub+".enable"]) {
+			return ""
+		}
 
-	if !hasGRPC && !hasHTTP {
-		return nil
+		address, _ := config[path+"."+sub+".address"].(string)
+		if address == "" {
+			address = DefaultLocalhost
+		}
+
+		port := defaultPort
+		if p, set := legacyNetworkListenerPort(config[path+"."+sub+".port"]); set {
+			port = p
+		}
+
+		return net.JoinHostPort(address, strconv.Itoa(port))
 	}
 
-	// Drop the consumed keys so they don't trip the strict struct decode (errors on unknown keys). config
-	// is k.All()'s flat, dot-joined map, so path+".grpc" is never itself a key -- only its leaves
-	// (.enable, .address, .port) are; deleting that exact string is a no-op and leaks a confusing
-	// "invalid keys" warning on every use of this legacy shape.
+	grpcEndpoint := endpointOf("grpc", defaultGRPCPort)
+	httpEndpoint := endpointOf("http", defaultHTTPPort)
+
+	// Consumed either way, so the legacy keys never reach the final typed Config: nothing downstream
+	// reads OpenTelemetry.GRPC/HTTP, and leaving them set would show phantom settings in diagnostics.
 	for key := range config {
 		if strings.HasPrefix(key, path+".grpc.") || strings.HasPrefix(key, path+".http.") {
 			delete(config, key)
 		}
 	}
 
-	warnings.Append(fmt.Errorf(
-		"%w: %s.grpc/http {enable, address, port}, use opentelemetry.listeners + a log.opentelemetry.receivers entry's from_listener field instead",
-		errSettingsDeprecated, path,
-	))
-
-	endpointOf := func(sub string, defaultPort int) string {
-		if !legacyNetworkListenerBool(k.Get(path + "." + sub + ".enable")) {
-			return ""
-		}
-
-		address, _ := k.Get(path + "." + sub + ".address").(string)
-		if address == "" {
-			address = DefaultLocalhost
-		}
-
-		port := defaultPort
-
-		switch p := k.Get(path + "." + sub + ".port").(type) {
-		case int:
-			port = p
-		case int64:
-			port = int(p)
-		case float64:
-			port = int(p)
-		case string:
-			if n, err := strconv.Atoi(p); err == nil {
-				port = n
-			}
-		}
-
-		return net.JoinHostPort(address, strconv.Itoa(port))
-	}
-
-	var grpcEndpoint, httpEndpoint string
-	if hasGRPC {
-		grpcEndpoint = endpointOf("grpc", defaultGRPCPort)
-	}
-
-	if hasHTTP {
-		httpEndpoint = endpointOf("http", defaultHTTPPort)
-	}
-
 	if grpcEndpoint == "" && httpEndpoint == "" {
-		return warnings // both were disabled: no network participation to migrate
+		return // both were disabled (or never set): no network participation to migrate
 	}
 
 	protocols := map[string]any{}
@@ -1184,23 +1244,32 @@ func migrateLegacyNetworkListeners(k *koanf.Koanf, config map[string]any) promet
 		"send_logs":      true,
 	}
 	config["log.opentelemetry.receivers"] = receivers
-
-	return warnings
 }
 
-// migrateLogFluentBitURL drops the pre-OpenTelemetry log.fluentbit_url setting (once overridden by the
-// bleemeo-agent-logs package) with a deprecation warning, instead of letting it fail the strict struct
-// decode as an unknown key -- which otherwise looks like a config error on every upgrade instead of a no-op.
-func migrateLogFluentBitURL(config map[string]any) prometheus.MultiError {
-	if _, ok := config["log.fluentbit_url"]; !ok {
-		return nil
-	}
+// removedLogKeys are the pre-OpenTelemetry log settings that no longer exist in any form. Both are set
+// together by the conf.d snippet the bleemeo-agent-logs package ships ("bleemeo-agent-logs overrides the
+// URL and set an empty host root prefix"), so handling only one of them still leaves that snippet
+// reporting a config error on every start.
+var removedLogKeys = []string{ //nolint:gochecknoglobals
+	"log.fluentbit_url",
+	"log.hostroot_prefix",
+}
 
-	delete(config, "log.fluentbit_url")
-
+// migrateRemovedLogKeys drops every removedLogKeys entry with a deprecation warning, instead of letting
+// it fail the strict struct decode as an unknown key -- which otherwise looks like a config error on
+// every upgrade instead of a no-op.
+func migrateRemovedLogKeys(config map[string]any) prometheus.MultiError {
 	var warnings prometheus.MultiError
 
-	warnings.Append(fmt.Errorf("%w: log.fluentbit_url. This option does not exists anymore and has no effect", errSettingsDeprecated))
+	for _, key := range removedLogKeys {
+		if _, ok := config[key]; !ok {
+			continue
+		}
+
+		delete(config, key)
+
+		warnings.Append(fmt.Errorf("%w: %s. This option does not exists anymore and has no effect", errSettingsDeprecated, key))
+	}
 
 	return warnings
 }

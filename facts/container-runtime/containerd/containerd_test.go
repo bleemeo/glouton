@@ -19,8 +19,10 @@ package containerd
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -906,5 +908,45 @@ func TestHasHostNetwork(t *testing.T) {
 				t.Errorf("hasHostNetwork() = %v, want %v", got, c.want)
 			}
 		})
+	}
+}
+
+// TestPrimaryAddressFromProcHonorsHostProc guards against a regression where primaryAddressFromProc read a
+// hardcoded /proc/<pid>/net/..., ignoring the HOST_PROC indirection envsetup.SetupFromHostRoot establishes
+// for a containerized Glouton with the host's /proc bind-mounted under its hostroot. Reading a bare /proc
+// there resolves the PID in Glouton's own namespace instead of the host's -- at best failing, at worst
+// matching an unrelated process that happens to share the number and reporting its address as the
+// container's, which then flows into Service.IPAddress and every check/input target built from it.
+func TestPrimaryAddressFromProcHonorsHostProc(t *testing.T) {
+	const (
+		pid     = 4242
+		fibTrie = `Main:
+  +-- 172.17.0.0/16 2 0 2
+     |-- 172.17.0.9
+        /32 host LOCAL
+`
+	)
+
+	hostProc := t.TempDir()
+
+	netDir := filepath.Join(hostProc, strconv.Itoa(pid), "net")
+	if err := os.MkdirAll(netDir, 0o750); err != nil {
+		t.Fatal("Can't create fake procfs:", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(netDir, "fib_trie"), []byte(fibTrie), 0o600); err != nil {
+		t.Fatal("Can't write fake fib_trie:", err)
+	}
+
+	// Without HOST_PROC, the real /proc is read: PID 4242 almost certainly isn't ours to interpret, so
+	// this only asserts that the fake tree is NOT what gets picked up.
+	if got := primaryAddressFromProc(pid); got == "172.17.0.9" {
+		t.Fatal("Expected the fake procfs to be ignored while HOST_PROC is unset")
+	}
+
+	t.Setenv("HOST_PROC", hostProc)
+
+	if got, want := primaryAddressFromProc(pid), "172.17.0.9"; got != want {
+		t.Errorf("primaryAddressFromProc() with HOST_PROC set = %q, want %q", got, want)
 	}
 }

@@ -1863,14 +1863,16 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 			newLabels labels.Labels
 		)
 
-		point.Labels, err = fixLabels(point.Labels)
+		// Assigned through a temporary, not straight into point.Labels: fixLabels returns nil on error,
+		// so overwriting first would leave the log below unable to name the metric being dropped.
+		fixed, err := fixLabels(point.Labels)
 		if err != nil {
 			logger.V(2).Printf("Ignoring metric %v: %v", point.Labels, err)
 
 			continue
 		}
 
-		point.Labels = r.addMetaLabels(point.Labels, RegistrationOption{})
+		point.Labels = r.addMetaLabels(fixed, RegistrationOption{})
 
 		// Add annotation to meta-label, which allow relabel to work correctly.
 		gloutonModel.AnnotationToMetaLabels(labels.EmptyLabels(), point.Annotations).Range(func(l labels.Label) {

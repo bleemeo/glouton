@@ -1524,3 +1524,68 @@ func TestContainerMatchersMemoizedAndConsistentAcrossCalls(t *testing.T) {
 		t.Fatal("expected the container_name receiver to have matched the container and started a tail")
 	}
 }
+
+// TestIncludeTailDoesNotCollideWithLogprocessingReceiver guards against a regression where an
+// include-pattern tail's persisted-offset identity was the bare "<receiver>/<file>", byte-identical to
+// otel/logprocessing's logReceiver naming (r.name + metadataKeySeparator + logFile) -- and both packages
+// share one PersistHost. logprocessing builds receivers named literally "syslog"/"journald"/"auditd" for
+// auto-discovery, so a user receiver of the same name including the same file resolved to one
+// component.ID: both live tails wrote through to a single metadataPerReceiver entry, and each save
+// (which replaces that entry wholesale) clobbered the other's offset. Same hazard, and same namespacing
+// fix, as containerLabelPersistNamespace on the container path.
+func TestIncludeTailDoesNotCollideWithLogprocessingReceiver(t *testing.T) {
+	t.Parallel()
+
+	logFile, err := os.CreateTemp(t.TempDir(), "syslog-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFile.Close()
+
+	// "syslog" is one of the names otel/logprocessing uses for its own auto-discovery receivers.
+	const receiverName = "syslog"
+
+	cfg := config.OpenTelemetry{
+		Receivers: map[string]config.LogReceiver{
+			receiverName: {"include": []string{logFile.Name()}},
+		},
+	}
+
+	rm := newTestReceiverManager(t, cfg)
+
+	provider, _ := newRecordingProvider()
+	rm.RegisterSinkProvider(provider)
+
+	if err := rm.RescanReceivers(t.Context()); err != nil {
+		t.Fatal("RescanReceivers failed:", err)
+	}
+
+	rm.l.Lock()
+	ms, found := rm.receivers[receiverName]
+	rm.l.Unlock()
+
+	if !found {
+		t.Fatal("Expected a managedSource for the receiver")
+	}
+
+	ms.l.Lock()
+	extIDs := ms.extIDs[logFile.Name()]
+	ms.l.Unlock()
+
+	if len(extIDs) == 0 {
+		t.Fatal("Expected the include file to have registered a persistent extension")
+	}
+
+	// The exact literal otel/logprocessing's logReceiver.startFile would use for the same name/file.
+	collidingName := receiverName + "/" + logFile.Name()
+
+	for _, id := range extIDs {
+		if id.Name() == collidingName {
+			t.Errorf(
+				"include tail persists under %q, colliding with otel/logprocessing's identity for the same receiver name and file",
+				id.Name(),
+			)
+		}
+	}
+}

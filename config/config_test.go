@@ -1310,6 +1310,85 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				},
 			},
 		},
+		// Guards against a regression where a second conf.d file overriding only one half of the legacy
+		// listener shape had that half silently discarded. The new shape fuses address+port into one
+		// endpoint string, so while this was translated per provider, file B (setting just "port") could
+		// not build a complete endpoint of its own and contributed nothing -- yet its keys were consumed
+		// and it was still reported as migrated. The legacy leaves now merge as ordinary sibling scalars
+		// and are fused once afterwards, so file A's address combines with file B's port.
+		{
+			Name:  "legacy network listener half-overridden by a second file keeps both halves",
+			Files: []string{"testdata/legacy-network-partial-a.conf", "testdata/legacy-network-partial-b.conf"},
+			WantWarnings: []string{
+				"testdata/legacy-network-partial-a.conf: setting is deprecated: log.opentelemetry.grpc/http " +
+					"{enable, address, port}, use opentelemetry.listeners + a log.opentelemetry.receivers entry's " +
+					"from_listener field instead",
+				"testdata/legacy-network-partial-b.conf: setting is deprecated: log.opentelemetry.grpc/http " +
+					"{enable, address, port}, use opentelemetry.listeners + a log.opentelemetry.receivers entry's " +
+					"from_listener field instead",
+			},
+			WantConfig: Config{
+				OpenTelemetry: OpenTelemetryConfig{
+					NetworkListeners: map[string]NetworkListener{
+						legacyNetworkListenerKey(): {
+							Protocols: NetworkProtocols{
+								GRPC: &NetworkEndpoint{Endpoint: "10.0.0.1:4319"},
+							},
+						},
+					},
+				},
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
+							legacyNetworkReceiverKey(): {
+								"from_listeners": []any{legacyNetworkListenerKey()},
+								"send_logs":      true,
+							},
+						},
+					},
+				},
+			},
+		},
+		// Guards against a regression where the legacy listener shape was migrated for config files but
+		// dropped entirely, and completely silently, when set through environment variables: envToKeyFunc
+		// derives the accepted variables from Config{}'s own keys, so once the GRPC/HTTP fields were gone
+		// GLOUTON_LOG_OPENTELEMETRY_GRPC_ENABLE resolved to no key, koanf's env provider discarded it, and
+		// the migration's own existence checks never fired either -- no listener, and no warning of any
+		// kind. A Docker/Kubernetes deployment configuring OTLP purely through env vars simply stopped
+		// binding on upgrade.
+		{
+			Name: "legacy network listener set through environment variables is still migrated",
+			Environment: map[string]string{
+				"GLOUTON_LOG_OPENTELEMETRY_GRPC_ENABLE":  "true",
+				"GLOUTON_LOG_OPENTELEMETRY_GRPC_ADDRESS": "10.0.0.7",
+				"GLOUTON_LOG_OPENTELEMETRY_GRPC_PORT":    "4319",
+			},
+			WantWarnings: []string{
+				"setting is deprecated: log.opentelemetry.grpc/http {enable, address, port}, " +
+					"use opentelemetry.listeners + a log.opentelemetry.receivers entry's from_listener field instead",
+			},
+			WantConfig: Config{
+				OpenTelemetry: OpenTelemetryConfig{
+					NetworkListeners: map[string]NetworkListener{
+						legacyNetworkListenerKey(): {
+							Protocols: NetworkProtocols{
+								GRPC: &NetworkEndpoint{Endpoint: "10.0.0.7:4319"},
+							},
+						},
+					},
+				},
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
+							legacyNetworkReceiverKey(): {
+								"from_listeners": []any{legacyNetworkListenerKey()},
+								"send_logs":      true,
+							},
+						},
+					},
+				},
+			},
+		},
 		// "grpc: null" enables grpc with the default endpoint, never disables it -- matches upstream OTel
 		// collector's own otlpreceiver (see testdata/only_http_null.yaml). See
 		// networkProtocolsNullMeansDefaultHookFunc.
@@ -1791,7 +1870,7 @@ func TestMergeLegacyFiltersSameInputRepeatedMetric(t *testing.T) {
 		map[string]any{"metric": "app_errors", "regex": "two"},
 	}
 
-	touched, warnings := mergeLegacyFilters(metricsByName, filters)
+	touched, warnings := mergeLegacyFilters(metricsByName, filters, 0)
 	if len(warnings) != 0 {
 		t.Fatalf("Expected no warning for two filters of the same metric within one call, got %v", warnings)
 	}
@@ -1816,13 +1895,59 @@ func TestMergeLegacyFiltersSameInputRepeatedMetric(t *testing.T) {
 	}
 }
 
+// TestMergeLegacyFiltersWarnsOnDroppedFilter guards against a regression where a legacy log.inputs filter
+// missing either half of its metric/regex pair (or not a map at all) was skipped silently, while
+// migrateLogInputs still counted the enclosing entry as migrated and built it a receiver: the user lost
+// the metric definition, was told the migration succeeded, and was left with a receiver that tails the
+// file and persists offsets while neither shipping nor counting. Every sibling drop path in
+// migrateLogInputs warns explicitly, and these must too.
+func TestMergeLegacyFiltersWarnsOnDroppedFilter(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name   string
+		filter any
+	}{
+		{name: "metric without regex", filter: map[string]any{"metric": "app_errors"}},
+		{name: "regex without metric", filter: map[string]any{"regex": "boom"}},
+		{name: "empty filter", filter: map[string]any{}},
+		{name: "not a map at all", filter: "app_errors"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			metricsByName := map[string]any{}
+
+			touched, warnings := mergeLegacyFilters(metricsByName, []any{tc.filter}, 3)
+			if len(warnings) != 1 {
+				t.Fatalf("Expected exactly one warning for a dropped filter, got %v", warnings)
+			}
+
+			// Indexed like every sibling warning in migrateLogInputs, so the user can find the entry.
+			if !strings.Contains(warnings[0].Error(), "log.inputs[3].filters[0]") {
+				t.Errorf("Expected the warning to name log.inputs[3].filters[0], got %q", warnings[0])
+			}
+
+			if len(touched) != 0 {
+				t.Errorf("Expected no touched metrics for a dropped filter, got %v", touched)
+			}
+
+			if len(metricsByName) != 0 {
+				t.Errorf("Expected no metric entry built from a dropped filter, got %v", metricsByName)
+			}
+		})
+	}
+}
+
 // Test that two separate inputs sharing a metric name get merged into one entry, warning once.
 func TestMergeLegacyFiltersCrossInputCollisionMerges(t *testing.T) {
 	t.Parallel()
 
 	metricsByName := map[string]any{}
 
-	touchedA, warningsA := mergeLegacyFilters(metricsByName, []any{map[string]any{"metric": "shared", "regex": "a"}})
+	touchedA, warningsA := mergeLegacyFilters(metricsByName, []any{map[string]any{"metric": "shared", "regex": "a"}}, 0)
 	if len(warningsA) != 0 {
 		t.Fatalf("Expected no warning for the first call to create the entry, got %v", warningsA)
 	}
@@ -1831,7 +1956,7 @@ func TestMergeLegacyFiltersCrossInputCollisionMerges(t *testing.T) {
 		t.Errorf("Unexpected touched metrics (-want +got):\n%s", diff)
 	}
 
-	touchedB, warningsB := mergeLegacyFilters(metricsByName, []any{map[string]any{"metric": "shared", "regex": "b"}})
+	touchedB, warningsB := mergeLegacyFilters(metricsByName, []any{map[string]any{"metric": "shared", "regex": "b"}}, 1)
 	if len(warningsB) != 1 || !strings.Contains(warningsB[0].Error(), "merged into one shared") {
 		t.Fatalf("Expected exactly one 'merged into one shared' warning, got %v", warningsB)
 	}
@@ -2909,6 +3034,38 @@ func Test_migrateLogFluentBitURL(t *testing.T) {
 
 	if diff := compareConfig(Config{}, config, cmpopts.EquateEmpty()); diff != "" {
 		t.Fatalf("Expected fluentbit_url to be dropped with no other effect on config:\n%s", diff)
+	}
+}
+
+// Test_migrateRemovedLogKeys guards against a regression where only one of the two removed log settings
+// got a deprecation notice: log.hostroot_prefix was dropped from the config types alongside
+// log.fluentbit_url but never given a migration, so the conf.d snippet the bleemeo-agent-logs package
+// ships -- which sets both together -- produced a clean notice for one and an "invalid keys" config error
+// for the other, on every single start.
+func Test_migrateRemovedLogKeys(t *testing.T) {
+	t.Parallel()
+
+	config, warnings, err := load(&configLoader{}, false, false, "testdata/legacy-log-removed-keys.conf")
+	if err != nil {
+		t.Fatalf("Failed to load config: %s", err)
+	}
+
+	if warnings == nil {
+		t.Fatal("Expected deprecation warnings for both removed keys, got none")
+	}
+
+	for _, key := range removedLogKeys {
+		if !strings.Contains(warnings.Error(), key) {
+			t.Errorf("Expected a deprecation warning mentioning %s, got: %v", key, warnings)
+		}
+	}
+
+	if strings.Contains(warnings.Error(), "invalid keys") {
+		t.Errorf("Expected no 'invalid keys' error for a removed-but-migrated setting, got: %v", warnings)
+	}
+
+	if diff := compareConfig(Config{}, config, cmpopts.EquateEmpty()); diff != "" {
+		t.Fatalf("Expected both removed keys to be dropped with no other effect on config:\n%s", diff)
 	}
 }
 

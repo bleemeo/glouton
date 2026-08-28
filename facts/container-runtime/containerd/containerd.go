@@ -25,7 +25,9 @@ import (
 	"math"
 	"net"
 	"os"
+	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -868,12 +870,25 @@ func hasHostNetwork(spec *oci.Spec) bool {
 	return true
 }
 
+// hostProcPath returns the procfs mount point to read, honoring the HOST_PROC indirection
+// envsetup.SetupFromHostRoot establishes when Glouton runs containerized with the host's /proc bind-mounted
+// under its hostroot. Reading a bare /proc there would resolve PIDs in Glouton's own namespace rather than
+// the host's -- at best failing, at worst matching an unrelated process that happens to share the number.
+// Mirrors inputs/diskio's own HOST_PROC handling.
+func hostProcPath() string {
+	if hostProc := os.Getenv("HOST_PROC"); hostProc != "" {
+		return hostProc
+	}
+
+	return "/proc"
+}
+
 // primaryAddressFromProc returns the first address assigned in the given PID's network
 // namespace (IPv4 preferred over IPv6, excluding loopback and link-local), read directly
-// from procfs. Since /proc/<pid> reflects whatever PID namespace this process shares with
+// from procfs. Since <procfs>/<pid> reflects whatever PID namespace this process shares with
 // pid (typically the host's, when Glouton runs with --pid=host), this only requires that
-// pid to be visible: /proc/<pid>/net/{fib_trie,if_inet6} are plain world-readable files,
-// unlike ptrace-gated entries such as /proc/<pid>/environ or /proc/<pid>/stack which need
+// pid to be visible: <procfs>/<pid>/net/{fib_trie,if_inet6} are plain world-readable files,
+// unlike ptrace-gated entries such as <procfs>/<pid>/environ or <procfs>/<pid>/stack which need
 // CAP_SYS_PTRACE -- no subprocess needed.
 func primaryAddressFromProc(pid int) string {
 	if address := ipv4LocalAddressFromProc(pid); address != "" {
@@ -884,7 +899,7 @@ func primaryAddressFromProc(pid int) string {
 }
 
 func ipv4LocalAddressFromProc(pid int) string {
-	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/net/fib_trie", pid))
+	data, err := os.ReadFile(filepath.Join(hostProcPath(), strconv.Itoa(pid), "net", "fib_trie"))
 	if err != nil {
 		return ""
 	}
@@ -921,7 +936,7 @@ func parseFIBTrieLocalAddress(fibTrie string) string {
 }
 
 func globalIPv6AddressFromProc(pid int) string {
-	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/net/if_inet6", pid))
+	data, err := os.ReadFile(filepath.Join(hostProcPath(), strconv.Itoa(pid), "net", "if_inet6"))
 	if err != nil {
 		return ""
 	}
@@ -1014,19 +1029,28 @@ func convertToContainerObject(ctx context.Context, ns string, cont client.Contai
 
 	obj.pid = int(task.Pid())
 
-	if hasHostNetwork(&spec) {
+	status, statusErr := task.Status(ctx)
+	if statusErr == nil {
+		obj.state = string(status.Status)
+		obj.exitTime = status.ExitTime
+	}
+
+	// Resolved after the status above, and skipped once the task is known to have stopped: an exited
+	// task's Pid() still reports its old PID, which the host may already have recycled for an unrelated
+	// process -- reading that PID's network namespace would report a stranger's address as this
+	// container's. A status we couldn't read at all keeps the previous behavior of trying anyway, since
+	// the PID came from a task that did exist.
+	taskStopped := statusErr == nil && status.Status != client.Running
+
+	switch {
+	case taskStopped:
+	case hasHostNetwork(&spec):
 		// Consistent with the Docker runtime: on host networking, the container shares the
 		// host's network namespace and a service is generally only expected to be reachable
 		// through the loopback interface.
 		obj.primaryAddress = "127.0.0.1"
-	} else {
+	default:
 		obj.primaryAddress = primaryAddressFromProc(obj.pid)
-	}
-
-	status, err := task.Status(ctx)
-	if err == nil {
-		obj.state = string(status.Status)
-		obj.exitTime = status.ExitTime
 	}
 
 	proc, err := process.NewProcess(int32(obj.pid)) //nolint:gosec // PID fits in int32
