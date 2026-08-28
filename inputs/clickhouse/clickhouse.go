@@ -77,9 +77,24 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 	return gatherContext, false
 }
 
+// Clickhouse sometimes generates false negative metrics we can't fix (notably when tables
+// are dropped and freed elsewhere). The incorrect negative Int64 value is then cast to
+// Uint64 by Telegraf, turning it into a massive number even more wrong: see
+// https://github.com/ClickHouse/ClickHouse/issues/3143.
+const wrappedNegativeThreshold = 1 << 63
+
 // transformMetrics replaces the query and mutation duration counters, which aren't usable
-// by themselves, by the average duration of one query and of one mutation.
-func transformMetrics(_ internal.GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {
+// by themselves, by the average duration of one query and of one mutation, and drops
+// clickhouse_metrics values that wrapped around into a near-2^64 number.
+func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {
+	if currentContext.Measurement == "clickhouse_metrics" {
+		for metricName, value := range fields {
+			if value >= wrappedNegativeThreshold {
+				delete(fields, metricName)
+			}
+		}
+	}
+
 	internal.AvgDuration(fields, "query_time_microseconds", "query", "query_time_seconds", internal.UsPerSecond)
 	internal.AvgDuration(fields, "mutation_total_milliseconds", "mutation_total_parts", "mutation_time_seconds", internal.MsPerSecond)
 

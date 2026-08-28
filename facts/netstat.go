@@ -18,7 +18,6 @@ package facts
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"os"
 	"regexp"
@@ -157,7 +156,7 @@ func (l ListenAddress) String() string {
 		return l.Address
 	}
 
-	return fmt.Sprintf("%s:%d", l.Address, l.Port)
+	return net.JoinHostPort(l.Address, strconv.Itoa(l.Port))
 }
 
 func decodeNetstatFile(data string) map[int][]ListenAddress {
@@ -222,16 +221,20 @@ func addAddress(addresses []ListenAddress, newAddr ListenAddress) []ListenAddres
 
 	if newAddr.NetworkFamily != networkUnix {
 		if newAddr.NetworkFamily == networkTCP+"6" || newAddr.NetworkFamily == networkUDP+"6" {
+			// The IPv6 wildcard address is reported under both families (e.g. "tcp 0.0.0.0:111"
+			// and "tcp6 :::111") for the same dual-stack socket, so normalize it to merge below.
+			// ::1 is NOT normalized to 127.0.0.1: unlike the wildcard, a socket bound to the
+			// specific address ::1 does not also accept connections on 127.0.0.1 (no IPv4-mapped
+			// dual-stack behavior for non-wildcard binds), so it must be kept as its own address
+			// or an IPv6-only service listening on ::1 would be probed on 127.0.0.1.
 			if newAddr.Address == "::" {
 				newAddr.Address = addrAllInterfaces
 			}
 
-			if newAddr.Address == "::1" {
-				newAddr.Address = addrLocalhost
-			}
-
-			if strings.Contains(newAddr.Address, ":") {
-				// It's still an IPv6 address, we don't know how to convert it to IPv4
+			if ip := net.ParseIP(newAddr.Address); ip != nil && ip.IsLinkLocalUnicast() {
+				// A link-local address (fe80::/10) can't be connected to unless the zone
+				// (interface) is specified, which we have no way to determine here, so it's
+				// useless as a check/metrics target.
 				return addresses
 			}
 
@@ -259,8 +262,8 @@ func addAddress(addresses []ListenAddress, newAddr ListenAddress) []ListenAddres
 
 			if int(otherPort) == newAddr.Port {
 				duplicate = true
-				// We prefere 127.* address
-				if strings.HasPrefix(newAddr.Address, "127.") {
+
+				if shouldPreferAddress(newAddr.Address, v.Address) {
 					addresses[i] = newAddr
 				}
 
@@ -274,4 +277,30 @@ func addAddress(addresses []ListenAddress, newAddr ListenAddress) []ListenAddres
 	}
 
 	return addresses
+}
+
+// shouldPreferAddress reports whether candidate should replace current as the address kept
+// for a port shared by both: a local (loopback) address is preferred over a non-local one,
+// since a service's metrics might only be exposed for local connections; and when both are
+// local, IPv4 is preferred over IPv6 so the pick doesn't depend on discovery order (e.g.
+// whether the service's 127.0.0.1 or ::1 socket happened to be seen first).
+func shouldPreferAddress(candidate, current string) bool {
+	candidateLocal := isLocalAddress(candidate)
+	if candidateLocal != isLocalAddress(current) {
+		return candidateLocal
+	}
+
+	return candidateLocal && isIPv4(candidate) && !isIPv4(current)
+}
+
+func isLocalAddress(address string) bool {
+	ip := net.ParseIP(address)
+
+	return ip != nil && ip.IsLoopback()
+}
+
+func isIPv4(address string) bool {
+	ip := net.ParseIP(address)
+
+	return ip != nil && ip.To4() != nil
 }

@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/bleemeo/glouton/facts"
@@ -332,13 +333,7 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		}
 	case ApacheService:
 		if ip, port := service.AddressPort(); ip != "" {
-			statusURL := fmt.Sprintf("http://%s/server-status?auto", net.JoinHostPort(ip, strconv.Itoa(port)))
-
-			if port == 80 {
-				statusURL = fmt.Sprintf("http://%s/server-status?auto", ip)
-			}
-
-			input, err = apache.New(statusURL)
+			input, err = apache.New(apacheStatusURL(ip, port))
 		}
 	case BindService:
 		if url := bindStatsURL(service); url != "" {
@@ -397,7 +392,7 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		input, err = createMariaDBInput(service)
 	case MemcachedService:
 		if ip, port := service.AddressPort(); ip != "" {
-			input, err = memcached.New(fmt.Sprintf("%s:%d", ip, port))
+			input, err = memcached.New(net.JoinHostPort(ip, strconv.Itoa(port)))
 		}
 	case MongoDBService:
 		if ip, port := service.AddressPort(); ip != "" {
@@ -579,7 +574,7 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		}
 	case ZookeeperService:
 		if ip, port := service.AddressPort(); ip != "" {
-			input, err = zookeeper.New(fmt.Sprintf("%s:%d", ip, port))
+			input, err = zookeeper.New(net.JoinHostPort(ip, strconv.Itoa(port)))
 		}
 	case CustomService:
 		return nil
@@ -626,7 +621,7 @@ func createMySQLInput(service Service) (telegraf.Input, error) {
 			username = mysqlDefaultUser
 		}
 
-		return mysql.New(fmt.Sprintf("%s:%s@tcp(%s:%d)/", username, service.Config.Password, ip, port))
+		return mysql.New(fmt.Sprintf("%s:%s@tcp(%s)/", username, service.Config.Password, net.JoinHostPort(ip, strconv.Itoa(port))))
 	}
 
 	return nil, nil //nolint: nilnil
@@ -648,7 +643,7 @@ func createMariaDBInput(service Service) (telegraf.Input, error) {
 			username = mariadbDefaultUser
 		}
 
-		return mysql.NewMariaDB(fmt.Sprintf("%s:%s@tcp(%s:%d)/", username, service.Config.Password, ip, port))
+		return mysql.NewMariaDB(fmt.Sprintf("%s:%s@tcp(%s)/", username, service.Config.Password, net.JoinHostPort(ip, strconv.Itoa(port))))
 	}
 
 	return nil, nil //nolint: nilnil
@@ -745,6 +740,22 @@ func activeMQURL(service Service) (url string, username string, password string)
 	}
 
 	return "", "", ""
+}
+
+// apacheStatusURL builds the server-status URL for an Apache instance, omitting the port
+// from the URL when it's the HTTP default (80) -- an IPv6 address then still needs brackets
+// even without a port suffix.
+func apacheStatusURL(ip string, port int) string {
+	if port == 80 {
+		host := ip
+		if strings.Contains(host, ":") {
+			host = "[" + host + "]"
+		}
+
+		return fmt.Sprintf("http://%s/server-status?auto", host)
+	}
+
+	return fmt.Sprintf("http://%s/server-status?auto", net.JoinHostPort(ip, strconv.Itoa(port)))
 }
 
 func clickHouseAddress(service Service) (ip string, port int) {

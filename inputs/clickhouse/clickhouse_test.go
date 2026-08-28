@@ -180,3 +180,29 @@ func TestRenamePipelineMetrics(t *testing.T) {
 		t.Errorf("field %q should have been renamed to %q, got both", "clickhouse_metrics_query", "clickhouse_metrics_active_query")
 	}
 }
+
+// TestDropWrappedNegativeMetrics exercises the "clickhouse_metrics"
+// measurement when Clickhouse reports a negative Int64
+// (see https://github.com/ClickHouse/ClickHouse/issues/3143), which Telegraf
+// casts to Uint64 and turns into a huge near-2^64 value. Such values must be
+// dropped rather than emitted as-is.
+func TestDropWrappedNegativeMetrics(t *testing.T) {
+	store := &internal.StoreAccumulator{}
+	acc := newAccumulator(store)
+
+	acc.PrepareGather()
+	acc.AddFields("clickhouse_metrics", map[string]any{
+		"memory_tracking": uint64(18400000000000000000), // -46043709551616 wrapped to Uint64, ~18.4 EB.
+		"delayed_inserts": 3.0,
+	}, nil, time.Now())
+
+	got := collectFinalMetrics(store)
+
+	assertMetrics(t, got, map[string]float64{
+		"clickhouse_metrics_delayed_inserts": 3,
+	})
+
+	if _, ok := got["clickhouse_metrics_memory_tracking"]; ok {
+		t.Errorf("field %q should have been dropped as a wrapped-negative value, got %v", "clickhouse_metrics_memory_tracking", got["clickhouse_metrics_memory_tracking"])
+	}
+}
