@@ -928,9 +928,11 @@ func (s *Synchronizer) ClearDisable(reasonToClear bleemeoTypes.DisableReason, de
 	}
 }
 
-// VerifyAndGetToken is used to get a valid token.
+// GetToken returns a valid OAuth token, used as the MQTT password.
+// It does no API call: the Bleemeo client renews the token by itself once the expiration
+// date sent by the API is reached.
 // Should only be called after the synchronized had called SetInitialized and AgentID is filled in State.
-func (s *Synchronizer) VerifyAndGetToken(ctx context.Context) (string, error) {
+func (s *Synchronizer) GetToken(ctx context.Context) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
@@ -947,32 +949,49 @@ func (s *Synchronizer) VerifyAndGetToken(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("%w: not yet started", ErrBleemeoDisabled)
 	}
 
-	// Low-cost API endpoint, used to test the validity of our token.
-	// We rely on the client to renew the token if it has expired.
-	result, err := s.realClient.Get(ctx, bleemeo.ResourceAgent, s.agentID, "id")
-	if err != nil {
-		return "", err
-	}
-
-	var res struct {
-		ID string `json:"id"`
-	}
-
-	err = json.Unmarshal(result, &res)
-	if err != nil {
-		return "", err
-	}
-
-	if res.ID != s.agentID {
-		return "", errInvalidAgentID
-	}
-
 	token, err := s.realClient.GetToken(ctx)
 	if err != nil {
 		return "", err
 	}
 
 	return token.AccessToken, nil
+}
+
+// CheckToken validates our credentials against the Bleemeo API, using a low-cost endpoint.
+// It's meant to be called *after* MQTT refused our token, and not before every connection:
+// when many agents reconnect at the same time, one API request per agent per connection is
+// a significant load on the API for a check that nearly always succeeds.
+// The Bleemeo client fetches a new token when the API answers 401, so the next connection
+// attempt will use fresh credentials.
+func (s *Synchronizer) CheckToken(ctx context.Context) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	disabledUntil, disableReason := s.getDisabledUntil()
+	if disableReason == bleemeoTypes.DisableAuthenticationError && s.now().Before(disabledUntil) {
+		return
+	}
+
+	result, err := s.realClient.Get(ctx, bleemeo.ResourceAgent, s.agentID, "id")
+	if err != nil {
+		logger.V(1).Printf("Checking Bleemeo API credentials failed: %v", err)
+
+		return
+	}
+
+	var res struct {
+		ID string `json:"id"`
+	}
+
+	if err := json.Unmarshal(result, &res); err != nil {
+		logger.V(1).Printf("Checking Bleemeo API credentials failed: %v", err)
+
+		return
+	}
+
+	if res.ID != s.agentID {
+		logger.V(1).Printf("Checking Bleemeo API credentials failed: %v", errInvalidAgentID)
+	}
 }
 
 func (s *Synchronizer) setClient() error {

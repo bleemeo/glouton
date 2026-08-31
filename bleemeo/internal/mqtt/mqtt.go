@@ -86,6 +86,9 @@ type Option struct {
 	HandleDiagnosticRequest func(ctx context.Context, requestToken string)
 	// GetToken returns the token used to talk with the Bleemeo API.
 	GetToken func(ctx context.Context) (string, error)
+	// CheckToken validates the token used to talk with the Bleemeo API. It's called
+	// after the broker refused that token, so that a new one is fetched if needed.
+	CheckToken func(ctx context.Context)
 	// Return date of last metric activation / registration
 	LastMetricActivation func() time.Time
 
@@ -172,11 +175,12 @@ func New(opts Option) *Client {
 	}
 
 	c.mqtt = client.New(client.Options{
-		OptionsFunc:          c.pahoOptions,
-		ReloadState:          reloadState.ClientState(),
-		TooManyErrorsHandler: checkDuplicate,
-		ID:                   "Bleemeo",
-		PahoLastPingCheckAt:  opts.PahoLastPingCheckAt,
+		OptionsFunc:                c.pahoOptions,
+		ReloadState:                reloadState.ClientState(),
+		TooManyErrorsHandler:       checkDuplicate,
+		AuthenticationErrorHandler: opts.CheckToken,
+		ID:                         "Bleemeo",
+		PahoLastPingCheckAt:        opts.PahoLastPingCheckAt,
 	})
 
 	return c

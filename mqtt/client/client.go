@@ -31,6 +31,7 @@ import (
 	"github.com/bleemeo/glouton/types"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
+	"github.com/eclipse/paho.mqtt.golang/packets"
 )
 
 const (
@@ -72,6 +73,8 @@ type Options struct {
 	ReloadState types.MQTTReloadState
 	// Function called when too many errors happened.
 	TooManyErrorsHandler func(ctx context.Context)
+	// Function called when the broker refused our credentials.
+	AuthenticationErrorHandler func(ctx context.Context)
 	// A unique identifier for this client.
 	ID                  string
 	PahoLastPingCheckAt func() time.Time
@@ -211,6 +214,11 @@ func (c *Client) publish(topic string, payload []byte, retry bool) (types.Messag
 	return msg, true
 }
 
+// isAuthenticationError tells whether the broker refused the connection because of our credentials.
+func isAuthenticationError(err error) bool {
+	return errors.Is(err, packets.ErrorRefusedNotAuthorised) || errors.Is(err, packets.ErrorRefusedBadUsernameOrPassword)
+}
+
 func (c *Client) onConnectionLost(err error) {
 	logger.Printf("%s MQTT connection lost: %v", c.opts.ID, err)
 
@@ -318,6 +326,10 @@ mainLoop:
 					delay := currentConnectDelay - time.Since(lastConnectionTimes[len(lastConnectionTimes)-1])
 
 					logger.V(1).Printf("Unable to connect to %s MQTT (retry in %v): %v", c.opts.ID, delay, token.Error())
+
+					if isAuthenticationError(token.Error()) && c.opts.AuthenticationErrorHandler != nil {
+						c.opts.AuthenticationErrorHandler(ctx)
+					}
 
 					// we must disconnect to stop paho gorouting that otherwise will be
 					// started multiple time for each Connect()
