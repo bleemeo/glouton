@@ -543,9 +543,43 @@ func (rm *ReceiverManager) stopUnwantedIncludeFiles(ctx context.Context, ms *man
 
 		delete(ms.recvs, file)
 		delete(ms.extIDs, file)
-		delete(ms.watching, file)
-		delete(ms.sizeFnByFile, file)
+
+		// watching/sizeFnByFile are keyed by file and shared with the container path, so they may only be
+		// cleared once no container tail reads this file either -- see releaseFileBookkeeping.
+		ms.releaseFileBookkeeping(file)
 	}
+}
+
+// releaseFileBookkeeping drops file from the watching/sizeFnByFile maps, but only if neither tailing path
+// still reads it. Callers must hold ms.l, and must already have removed their own record of the tail
+// (ms.recvs for include files, ms.containerLogFile for container tails) so it isn't counted here.
+//
+// Both maps are keyed by file and shared between the two paths, which have independent lifecycles: an
+// include tail stops when its file stops matching, a container tail when its container disappears.
+// Deleting unconditionally let either teardown erase the other's entries while its receiver was still
+// running -- costing that file its size reporting, and dropping it out of ms.watching so the next rescan
+// started a *second* tail on it beside the first. Both then checkpointed under one persist name and
+// overwrote each other's read offset, and nothing ever stopped the leaked receiver.
+//
+// The ms.watching guards in startIncludeFiles and startContainerTail are what actually keep a file down to
+// one tail now, which makes the two checks below unreachable through those paths alone. They are kept as
+// the teardown-side half of that invariant: nothing but those guards stands between a third tailing path
+// (or a relaxed guard) and silently reintroducing the leak, and the cost here is one map lookup plus a walk
+// of the handful of container tails on this source. Exercised directly by
+// TestReleaseFileBookkeepingKeepsFileWithAnotherReader.
+func (ms *managedSource) releaseFileBookkeeping(file string) {
+	if _, stillIncluded := ms.recvs[file]; stillIncluded {
+		return
+	}
+
+	for _, containerFile := range ms.containerLogFile {
+		if containerFile == file {
+			return
+		}
+	}
+
+	delete(ms.watching, file)
+	delete(ms.sizeFnByFile, file)
 }
 
 func (rm *ReceiverManager) createAndStartReceivers(
@@ -898,6 +932,28 @@ func (rm *ReceiverManager) startContainerTail(
 		realFile = hostrootsymlink.EvalSymlinks(rm.hostroot, realFile)
 	}
 
+	// A receiver may legitimately carry both include patterns and a container matcher (validateLogReceivers
+	// only requires at least one selector), and a broad include glob -- /var/log/containers/*.log on
+	// Kubernetes, say -- routinely covers the very file this container's tail would open. ms.watching is
+	// the single record of "some tail already reads this file", so honoring it here is what keeps the two
+	// paths from each starting a filelogreceiver on it: two tails deliver every line twice, to shipping
+	// and to log-to-metric counters alike.
+	//
+	// The include tail wins because it is already the one that got there first: RescanReceivers resolves
+	// include patterns at startup, before the first UpdateContainers (see agent.go). Should the file only
+	// start matching later, the guard holds the other way round and the container tail keeps it -- whichever
+	// path owns it, the other takes over once it is released, since each teardown below now leaves a file
+	// the other still tails alone.
+	if kind, alreadyTailed := ms.watching[realFile]; alreadyTailed {
+		logger.V(2).Printf(
+			"logsource: container %s (%s): %q is already tailed by this receiver's include patterns (%s);"+
+				" not starting a second tail, so its records carry no container attributes",
+			ctr.ContainerName(), ctr.ID(), realFile, kind,
+		)
+
+		return nil
+	}
+
 	attributes := BuildContainerAttributes(ctx, ctr)
 
 	started, err := rm.setupAndStartReceiver(ctx, receiverSetup{
@@ -1033,11 +1089,15 @@ func (rm *ReceiverManager) stopUnwantedContainerTails(ctx context.Context, ms *m
 		removeExts(ms.containerExtIDs[id])
 
 		logFile := ms.containerLogFile[id]
-		delete(ms.watching, logFile)
-		delete(ms.sizeFnByFile, logFile)
+
 		delete(ms.containerRecvs, id)
 		delete(ms.containerExtIDs, id)
 		delete(ms.containerLogFile, id)
+
+		// After the deletes above, so this container's own entry no longer counts as a reader: the shared
+		// watching/sizeFnByFile keys survive only while the include path (or another container) still
+		// tails this file -- see releaseFileBookkeeping.
+		ms.releaseFileBookkeeping(logFile)
 	}
 }
 

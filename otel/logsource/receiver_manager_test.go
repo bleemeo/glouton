@@ -37,6 +37,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/pdata/plog"
+	"go.opentelemetry.io/collector/receiver"
 )
 
 // fakeSinkProvider is a SinkProvider test double recording asked sources and released containers.
@@ -1685,6 +1686,230 @@ func TestUpdateContainersKeepsOffsetWhenListIncomplete(t *testing.T) {
 
 			if !found || len(metadata) == 0 {
 				t.Errorf("expected %q to keep its persisted offset after an incomplete container list, got %v", name, metadata)
+			}
+		})
+	}
+}
+
+// TestReceiverWithIncludeAndContainerMatcherTailsFileOnce guards against a receiver that carries both
+// include patterns and a container matcher -- which validateLogReceivers permits, and which a broad glob
+// like /var/log/containers/*.log makes routine on Kubernetes -- starting two filelogreceivers on the same
+// file. startIncludeFiles dedupes by file through ms.watching, but startContainerTail used to check only
+// ms.containerLogFile[id] and never consult ms.watching, so both paths tailed it and every line was
+// delivered twice: double shipping, and double counting for log-to-metric.
+//
+// The teardown half was worse. Both paths write the file-keyed ms.watching/ms.sizeFnByFile, and each
+// teardown deleted those keys unconditionally, so losing the container erased the bookkeeping of the
+// still-running include tail: the file lost its size reporting, and the next RescanReceivers, seeing it
+// unwatched, started a *second* include tail beside the first. Both then checkpointed under the same
+// includePersistName and overwrote each other's read offset, and nothing ever stopped the leaked one --
+// one permanent duplicate per container-churn event.
+func TestReceiverWithIncludeAndContainerMatcherTailsFileOnce(t *testing.T) {
+	t.Parallel()
+
+	logFile, err := os.CreateTemp(t.TempDir(), "app-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFile.Close()
+
+	cfg := config.OpenTelemetry{
+		Receivers: map[string]config.LogReceiver{
+			"app": {
+				"include":        []string{logFile.Name()},
+				"container_name": "app-1",
+				"send_logs":      true,
+			},
+		},
+	}
+
+	rm := newTestReceiverManager(t, cfg)
+
+	provider, received := newRecordingProvider()
+	rm.RegisterSinkProvider(provider)
+
+	// Include patterns first, matching agent.go's startup order.
+	if err := rm.RescanReceivers(t.Context()); err != nil {
+		t.Fatal("RescanReceivers failed:", err)
+	}
+
+	ctr := facts.FakeContainer{FakeID: "id-1", FakeContainerName: "app-1", FakeLogPath: logFile.Name()}
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil, true)
+
+	rm.l.Lock()
+	ms := rm.receivers["app"]
+	rm.l.Unlock()
+
+	if ms == nil {
+		t.Fatal("expected a managedSource for the receiver")
+	}
+
+	ms.l.Lock()
+	containerTails := len(ms.containerRecvs)
+	ms.l.Unlock()
+
+	if containerTails != 0 {
+		t.Errorf("expected no container tail on a file the include patterns already cover, got %d", containerTails)
+	}
+
+	time.Sleep(600 * time.Millisecond)
+
+	if _, err := logFile.WriteString("one single line\n"); err != nil {
+		t.Fatal("Failed to write log line:", err)
+	}
+
+	if err := logFile.Sync(); err != nil {
+		t.Fatal("Failed to sync log file:", err)
+	}
+
+	time.Sleep(1200 * time.Millisecond)
+
+	if got := totalRecords(received()); got != 1 {
+		t.Errorf("expected the single written line to be delivered once, got %d deliveries", got)
+	}
+
+	// The container disappears while the include tail keeps running.
+	rm.UpdateContainers(t.Context(), nil, nil, true)
+
+	ms.l.Lock()
+	_, stillWatched := ms.watching[logFile.Name()]
+	_, stillSized := ms.sizeFnByFile[logFile.Name()]
+	ms.l.Unlock()
+
+	if !stillWatched || !stillSized {
+		t.Errorf(
+			"expected the live include tail to keep its bookkeeping after the container went away, got watching=%v sizeFn=%v",
+			stillWatched, stillSized,
+		)
+	}
+
+	if err := rm.RescanReceivers(t.Context()); err != nil {
+		t.Fatal("RescanReceivers failed:", err)
+	}
+
+	ms.l.Lock()
+	includeTails := len(ms.recvs[logFile.Name()])
+	ms.l.Unlock()
+
+	if includeTails != 1 {
+		t.Errorf("expected the file to still have exactly one include tail after a rescan, got %d", includeTails)
+	}
+}
+
+// TestContainerOnlyTailReleasesFileBookkeepingWhenGone is releaseFileBookkeeping's other half: with no
+// include pattern covering the file, the departing container is its last reader, so the shared
+// watching/sizeFnByFile entries must go. Retaining them would leave the file permanently marked as tailed
+// and block any later tail on it.
+func TestContainerOnlyTailReleasesFileBookkeepingWhenGone(t *testing.T) {
+	t.Parallel()
+
+	logFile, err := os.CreateTemp(t.TempDir(), "app-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFile.Close()
+
+	cfg := config.OpenTelemetry{
+		Receivers: map[string]config.LogReceiver{
+			"app": {"container_name": "app-1", "send_logs": true},
+		},
+	}
+
+	rm := newTestReceiverManager(t, cfg)
+
+	provider, _ := newRecordingProvider()
+	rm.RegisterSinkProvider(provider)
+
+	ctr := facts.FakeContainer{FakeID: "id-1", FakeContainerName: "app-1", FakeLogPath: logFile.Name()}
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil, true)
+
+	rm.l.Lock()
+	ms := rm.receivers["app"]
+	rm.l.Unlock()
+
+	if ms == nil {
+		t.Fatal("expected a managedSource for the receiver")
+	}
+
+	ms.l.Lock()
+	_, watched := ms.watching[logFile.Name()]
+	ms.l.Unlock()
+
+	if !watched {
+		t.Fatal("expected the container tail to mark its log file as watched")
+	}
+
+	rm.UpdateContainers(t.Context(), nil, nil, true)
+
+	ms.l.Lock()
+	_, stillWatched := ms.watching[logFile.Name()]
+	_, stillSized := ms.sizeFnByFile[logFile.Name()]
+	ms.l.Unlock()
+
+	if stillWatched || stillSized {
+		t.Errorf(
+			"expected the file's bookkeeping to be released once its only tail went away, got watching=%v sizeFn=%v",
+			stillWatched, stillSized,
+		)
+	}
+}
+
+// TestReleaseFileBookkeepingKeepsFileWithAnotherReader covers releaseFileBookkeeping directly, since the
+// ms.watching start guards mean the two teardown paths can no longer produce a file with two readers on
+// their own. It is the teardown-side half of the one-tail-per-file invariant: were a file ever to end up
+// read by both paths, whichever teardown ran first must not erase bookkeeping the other still needs.
+func TestReleaseFileBookkeepingKeepsFileWithAnotherReader(t *testing.T) {
+	t.Parallel()
+
+	const file = "/var/log/app.log"
+
+	testCases := []struct {
+		name       string
+		recvs      map[string][]receiver.Logs
+		ctrLogFile map[string]string
+		wantKept   bool
+	}{
+		{
+			name:     "no reader left",
+			wantKept: false,
+		},
+		{
+			name:     "an include tail still reads it",
+			recvs:    map[string][]receiver.Logs{file: nil},
+			wantKept: true,
+		},
+		{
+			name:       "a container tail still reads it",
+			ctrLogFile: map[string]string{"id-1": file},
+			wantKept:   true,
+		},
+		{
+			name:       "another file's container tail does not count",
+			ctrLogFile: map[string]string{"id-1": "/var/log/other.log"},
+			wantKept:   false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			ms := &managedSource{
+				watching:         map[string]ReceiverKind{file: ReceiverFileLog},
+				sizeFnByFile:     map[string]func() (int64, error){file: func() (int64, error) { return 0, nil }},
+				recvs:            tc.recvs,
+				containerLogFile: tc.ctrLogFile,
+			}
+
+			ms.releaseFileBookkeeping(file)
+
+			_, watched := ms.watching[file]
+			_, sized := ms.sizeFnByFile[file]
+
+			if watched != tc.wantKept || sized != tc.wantKept {
+				t.Errorf("after release: watching=%v sizeFn=%v, want both %v", watched, sized, tc.wantKept)
 			}
 		})
 	}
