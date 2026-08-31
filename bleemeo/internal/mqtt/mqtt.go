@@ -36,6 +36,7 @@ import (
 	"github.com/bleemeo/glouton/bleemeo/internal/filter"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/crashreport"
+	"github.com/bleemeo/glouton/delay"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/mqtt"
 	"github.com/bleemeo/glouton/mqtt/client"
@@ -60,6 +61,15 @@ const (
 
 	// messageTypeAck is the MQTT notification message type for acknowledgements.
 	messageTypeAck = "ack"
+
+	// Delays used to spread over time the synchronizations triggered by a *re*connection to MQTT.
+	// When every agent gets disconnected at once (e.g. a broker certificate renewal), they all
+	// reconnect at once, so without those delays every agent would also hit the API at once.
+	// Neither synchronization is urgent: they only catch up notifications we could have missed
+	// while being disconnected.
+	reconnectMaintenanceSyncDelay = 90 * time.Second
+	reconnectAgentSyncDelay       = 7*time.Minute + 30*time.Second
+	reconnectSyncDelayJitter      = 1. / 3.
 )
 
 var ErrNotConnected = errors.New("currently not connected to MQTT")
@@ -78,10 +88,12 @@ type Option struct {
 	UpdateMetrics func(metricUUID ...string)
 	// UpdateMonitor requests a sync of a monitor
 	UpdateMonitor func(op string, uuid string)
-	// UpdateMaintenance requests to check for the maintenance mode again
-	UpdateMaintenance func()
-	// UpdateAgent requests to check for that agent is still synchronized by bleemeo-api
-	UpdateAgent func()
+	// UpdateMaintenance requests to check for the maintenance mode again, within delay.
+	// A delay of zero requests the check as soon as possible.
+	UpdateMaintenance func(delay time.Duration)
+	// UpdateAgent requests to check for that agent is still synchronized by bleemeo-api,
+	// within delay. A delay of zero requests the check as soon as possible.
+	UpdateAgent func(delay time.Duration)
 	// HandleDiagnosticRequest requests the sending of a diagnostic to the API
 	HandleDiagnosticRequest func(ctx context.Context, requestToken string)
 	// GetToken returns the token used to talk with the Bleemeo API.
@@ -105,6 +117,9 @@ type Client struct {
 	failedPoints               failedPointsCache
 	lastRegisteredMetricsCount int
 	lastFailedPointsRetry      time.Time
+	// Whether MQTT connected at least once since this client started. Only used from onConnect,
+	// which runs exclusively from the receiveEvents() goroutine.
+	hadConnection bool
 	// Whether we should log that all failed points have
 	// been processed during the next health check.
 	shouldLogRecovery bool
@@ -829,13 +844,25 @@ func (c *Client) preparePoints(
 }
 
 func (c *Client) onConnect(mqttClient paho.Client) {
+	// On the very first connection those synchronizations are wanted right away: the agent may
+	// just have been created, and it has nothing to catch up on anyway. Only reconnections are
+	// spread over time.
+	var maintenanceSyncDelay, agentSyncDelay time.Duration
+
+	if c.hadConnection {
+		maintenanceSyncDelay = delay.JitterDelay(reconnectMaintenanceSyncDelay, reconnectSyncDelayJitter)
+		agentSyncDelay = delay.JitterDelay(reconnectAgentSyncDelay, reconnectSyncDelayJitter)
+	}
+
+	c.hadConnection = true
+
 	// refresh 'info' to check the maintenance mode (for which we normally are notified by MQTT message)
-	c.opts.UpdateMaintenance()
+	c.opts.UpdateMaintenance(maintenanceSyncDelay)
 
 	// Also refresh agent, it contains Kubernetes IsClusterLeader for which we are also notified by MQTT.
 	// So if Glouton is not yet connected when it get elected leader (which is possible during very first
 	// creation), it will miss the notification.
-	c.opts.UpdateAgent()
+	c.opts.UpdateAgent(agentSyncDelay)
 
 	if !c.IsSendingSuspended() {
 		// when in maintenance mode, we do not send messages to /connect
@@ -893,7 +920,7 @@ func (c *Client) onNotification(ctx context.Context, msg paho.Message) {
 	case "config-will-change":
 		c.opts.UpdateConfigCallback(false)
 	case "maintenance-toggle":
-		c.opts.UpdateMaintenance()
+		c.opts.UpdateMaintenance(0)
 	case "threshold-update":
 		c.opts.UpdateMetrics(payload.MetricUUID)
 	case "monitor-update":

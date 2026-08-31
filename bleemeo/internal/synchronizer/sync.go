@@ -106,7 +106,7 @@ type Synchronizer struct {
 	l                             sync.Mutex
 	disabledUntil                 time.Time
 	disableReason                 bleemeoTypes.DisableReason
-	forceSync                     map[types.EntityName]types.SyncType
+	forceSync                     map[types.EntityName]types.SyncRequest
 	pendingMetricsUpdate          []string
 	pendingMonitorsUpdate         []MonitorUpdate
 	thresholdOverrides            map[thresholdOverrideKey]threshold.Threshold
@@ -158,7 +158,7 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 		option: option,
 		now:    now,
 
-		forceSync:              make(map[types.EntityName]types.SyncType),
+		forceSync:              make(map[types.EntityName]types.SyncRequest),
 		nextFullSync:           nextFullSync,
 		fullSyncCount:          fullSyncCount,
 		retryableMetricFailure: make(map[bleemeoTypes.FailureKind]bool),
@@ -239,7 +239,7 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 		LastMaintenanceSync           time.Time
 		DisabledUntil                 time.Time
 		DisableReason                 string
-		ForceSync                     map[types.EntityName]types.SyncType
+		ForceSync                     map[types.EntityName]types.SyncRequest
 		PendingMetricsUpdateCount     int
 		PendingMonitorsUpdateCount    int
 		DelayedContainer              map[string]time.Time
@@ -679,20 +679,22 @@ func (s *Synchronizer) UpdateMonitors() {
 	s.requestSynchronizationLocked(types.EntityMonitor, true)
 }
 
-// UpdateMaintenance requests to check for the maintenance mode again.
-func (s *Synchronizer) UpdateMaintenance() {
+// UpdateMaintenance requests to check for the maintenance mode again, within delay.
+// A delay of zero requests the check on the next synchronization execution.
+func (s *Synchronizer) UpdateMaintenance(delay time.Duration) {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.requestSynchronizationLocked(types.EntityInfo, false)
+	s.requestLaterSynchronizationLocked(types.EntityInfo, false, delay)
 }
 
-// UpdateAgent requests to check for the agent synchronization.
-func (s *Synchronizer) UpdateAgent() {
+// UpdateAgent requests to check for the agent synchronization, within delay.
+// A delay of zero requests the check on the next synchronization execution.
+func (s *Synchronizer) UpdateAgent(delay time.Duration) {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.requestSynchronizationLocked(types.EntityAgent, false)
+	s.requestLaterSynchronizationLocked(types.EntityAgent, false, delay)
 }
 
 // SetMaintenance allows to trigger the maintenance mode for the synchronize.
@@ -1378,11 +1380,33 @@ func (s *Synchronizer) UpdateK8SAgentList() {
 // requestSynchronizationLocked request specified entity to be synchronized on next synchronization execution.
 // Caller must hold the lock s.l.
 func (s *Synchronizer) requestSynchronizationLocked(entityName types.EntityName, forceCacheRefresh bool) {
+	s.requestLaterSynchronizationLocked(entityName, forceCacheRefresh, 0)
+}
+
+// requestLaterSynchronizationLocked request specified entity to be synchronized within delay,
+// that is at the latest at now+delay. The synchronization might happen earlier, in which case
+// the request is fulfilled: see types.SyncRequest.Deadline.
+// A delay of zero requests the synchronization on the next synchronization execution.
+//
+// When a request already exists for that entity, the strongest sync type and the earliest
+// deadline win: asking again for a later synchronization never postpones a pending request.
+// Caller must hold the lock s.l.
+func (s *Synchronizer) requestLaterSynchronizationLocked(entityName types.EntityName, forceCacheRefresh bool, delay time.Duration) {
+	deadline := s.now().Add(delay)
+
+	request, ok := s.forceSync[entityName]
+
 	if forceCacheRefresh {
-		s.forceSync[entityName] = types.SyncTypeForceCacheRefresh
-	} else if s.forceSync[entityName] == types.SyncTypeNone {
-		s.forceSync[entityName] = types.SyncTypeNormal
+		request.Type = types.SyncTypeForceCacheRefresh
+	} else if request.Type == types.SyncTypeNone {
+		request.Type = types.SyncTypeNormal
 	}
+
+	if !ok || deadline.Before(request.Deadline) {
+		request.Deadline = deadline
+	}
+
+	s.forceSync[entityName] = request
 }
 
 func (s *Synchronizer) canUploadCrashReports() bool {
