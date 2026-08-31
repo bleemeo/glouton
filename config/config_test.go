@@ -2452,6 +2452,26 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 			WantWarning: true,
 		},
 		{
+			// An emptied-out list has nothing to translate, but the key must still be consumed: log.inputs
+			// is no longer a Config field, so the migration returning early used to leave it behind for the
+			// strict decode to report as "'log' has invalid keys: inputs" -- a config error on every start,
+			// with no deprecation notice, for a config that is merely out of date.
+			Name:                "legacy-log-inputs-empty",
+			ConfigFile:          "testdata/legacy-log-inputs-empty.conf",
+			WantConfig:          Config{},
+			WantWarning:         true,
+			WantWarningContains: "log.inputs is empty and can be removed",
+		},
+		{
+			// Same for a value that isn't a list at all: consumed with a warning that says so, rather than
+			// surfacing as an unknown key, which describes the wrong problem entirely.
+			Name:                "legacy-log-inputs-not-a-list",
+			ConfigFile:          "testdata/legacy-log-inputs-not-a-list.conf",
+			WantConfig:          Config{},
+			WantWarning:         true,
+			WantWarningContains: "log.inputs is not a list of entries",
+		},
+		{
 			// A malformed entry (not an object at all) is warned about and dropped, not kept around in
 			// Config.Log -- there's nowhere left to put it now that Log.Inputs/LogInput no longer exist,
 			// and nothing ever read that leftover data anyway.

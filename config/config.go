@@ -947,9 +947,23 @@ func mergeLegacyFilters(metricsByName map[string]any, filtersList []any, inputIn
 func migrateLogInputs(k *koanf.Koanf, config map[string]any, providerPath string) prometheus.MultiError {
 	var warnings prometheus.MultiError
 
-	inputs, ok := k.Get("log.inputs").([]any)
-	if !ok || len(inputs) == 0 {
-		return nil
+	inputs, isList := k.Get("log.inputs").([]any)
+
+	if !isList || len(inputs) == 0 {
+		if _, present := config["log.inputs"]; present {
+			delete(config, "log.inputs")
+
+			if isList {
+				warnings.Append(fmt.Errorf("%w: log.inputs is empty and can be removed", errSettingsDeprecated))
+			} else {
+				warnings.Append(fmt.Errorf(
+					"%w: log.inputs is not a list of entries, ignoring it -- use log.opentelemetry.receivers/log.metrics_rules instead",
+					errSettingsDeprecated,
+				))
+			}
+		}
+
+		return warnings
 	}
 
 	// Every entry below is either translated into a receiver or dropped with a warning: none of them
