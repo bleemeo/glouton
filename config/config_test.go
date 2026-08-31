@@ -665,7 +665,7 @@ func TestEffectiveAllowedLabelOverrides(t *testing.T) {
 	}
 }
 
-// legacyNetworkReceiverKey and legacyNetworkListenerKey expose migrateLegacyNetworkListeners' fixed
+// legacyNetworkReceiverKey and legacyNetworkListenerKey expose warnLegacyNetworkListeners' fixed
 // generated names to test tables, mirroring legacyInputReceiverName's direct use elsewhere in this file.
 func legacyNetworkReceiverKey() string {
 	key, _ := legacyNetworkReceiverNames()
@@ -2552,13 +2552,14 @@ func Test_migrateLoggingMigratesExplicitZero(t *testing.T) {
 	}
 }
 
-// Test_migrateLegacyNetworkListenersNoInvalidKeysLeak guards against a regression where
-// migrateLegacyNetworkListeners' delete() calls targeted "log.opentelemetry.grpc"/".http" -- keys that
-// never exist in k.All()'s flat, dot-joined map (only their leaves .enable/.address/.port do) -- making
-// the deletes no-ops. The leaked leaf keys then tripped the final decode's ErrorUnused check, producing a
-// confusing "invalid keys" warning on every single legitimate use of this legacy shape, alongside the
-// intended deprecation notice.
-func Test_migrateLegacyNetworkListenersNoInvalidKeysLeak(t *testing.T) {
+// Test_legacyNetworkListenersNoInvalidKeysLeak guards against a regression where the legacy grpc/http
+// leaves survived the migration and tripped the final decode's ErrorUnused check, producing a confusing
+// "invalid keys" warning on every single legitimate use of this legacy shape, alongside the intended
+// deprecation notice. Originally this was delete() calls targeting "log.opentelemetry.grpc"/".http" --
+// keys that never exist in the flat, dot-joined map (only their .enable/.address/.port leaves do), making
+// the deletes no-ops; the consuming delete now lives in synthesizeLegacyNetworkListener, so this asserts
+// the end result rather than any one function's behavior.
+func Test_legacyNetworkListenersNoInvalidKeysLeak(t *testing.T) {
 	t.Parallel()
 
 	_, warnings, err := load(&configLoader{}, false, false, "testdata/legacy-opentelemetry-network.conf")
@@ -2575,15 +2576,16 @@ func Test_migrateLegacyNetworkListenersNoInvalidKeysLeak(t *testing.T) {
 	}
 }
 
-// Test_migrateLegacyNetworkListenersFlatKeys guards against a regression where
-// migrateLegacyNetworkListeners detected the legacy grpc/http shape via k.Get(path+".grpc").(map[string]any)
-// -- a lookup for an intermediate tree node, which koanf only builds when the source YAML itself nests
-// "grpc"/"http" (as in legacy-opentelemetry-network.conf). The equally valid, and more common, conf.d
-// style of writing "log.opentelemetry.grpc.enable: true" as one flat, dot-joined key is stored by koanf
-// as a single opaque key: k.Get on the parent path silently returned nil, so the migration never fired at
-// all, and the legacy keys survived to trip the final decode's "invalid keys" warning with the listener
-// never migrated. Uses the real, public Load() so the final decoded Config is checked, not just warnings.
-func Test_migrateLegacyNetworkListenersFlatKeys(t *testing.T) {
+// Test_legacyNetworkListenersFlatKeys guards against a regression where the legacy grpc/http shape was
+// detected via k.Get(path+".grpc").(map[string]any) -- a lookup for an intermediate tree node, which koanf
+// only builds when the source YAML itself nests "grpc"/"http" (as in legacy-opentelemetry-network.conf).
+// The equally valid, and more common, conf.d style of writing "log.opentelemetry.grpc.enable: true" as one
+// flat, dot-joined key is stored by koanf as a single opaque key: k.Get on the parent path silently
+// returned nil, so the migration never fired at all, and the legacy keys survived to trip the final
+// decode's "invalid keys" warning with the listener never migrated. Both the per-provider deprecation
+// warning (warnLegacyNetworkListeners) and the synthesis (synthesizeLegacyNetworkListener) must handle
+// this spelling. Uses the real, public Load() so the final decoded Config is checked, not just warnings.
+func Test_legacyNetworkListenersFlatKeys(t *testing.T) {
 	t.Parallel()
 
 	cfg, _, warnings, err := Load(true, false, "testdata/legacy-opentelemetry-network-flat.conf")

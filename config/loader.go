@@ -492,7 +492,6 @@ func (c *configLoader) Build() (*koanf.Koanf, prometheus.MultiError) {
 	}
 
 	warnings.Append(mergeKnownLogFormats(config))
-	// Before dedupeFromListeners, which cleans up the from_listeners list this may append to.
 	synthesizeLegacyNetworkListener(config)
 	dedupeFromListeners(config)
 
@@ -507,8 +506,7 @@ func (c *configLoader) Build() (*koanf.Koanf, prometheus.MultiError) {
 // leaf lists across files, which is what you want for entries that carry values, but from_listeners holds
 // listener *names*: referencing one twice says nothing more than referencing it once, and deduplicating
 // them is cheap precisely because they're plain strings rather than maps (see merge). Two files each
-// still using the legacy log.opentelemetry.grpc/http shape produce exactly that repeat --
-// migrateLegacyNetworkListeners runs once per file and every run synthesizes the same fixed name.
+// naming the same listener on the same receiver produce exactly that repeat.
 // Non-string entries are passed through untouched: they're invalid config, reported by validation later,
 // and must not be silently dropped here (nor used as a map key, which would panic if unhashable).
 func dedupeFromListeners(config map[string]any) {

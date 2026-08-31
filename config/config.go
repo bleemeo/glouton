@@ -638,7 +638,7 @@ func migrate(k *koanf.Koanf, path string, providerType ItemSource) (*koanf.Koanf
 	warnings = append(warnings, migrateMetricsPrometheus(k, config)...)
 	warnings = append(warnings, migrateScrapperMetrics(k, config)...)
 	warnings = append(warnings, migrateServices(config)...)
-	warnings = append(warnings, migrateLegacyNetworkListeners(k, providerType)...)
+	warnings = append(warnings, warnLegacyNetworkListeners(k, providerType)...)
 	warnings = append(warnings, migrateLogInputs(k, config, path)...)
 	warnings = append(warnings, migrateRemovedLogKeys(config)...)
 
@@ -955,8 +955,6 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any, providerPath string
 	// need to survive as log.inputs afterward.
 	delete(config, "log.inputs")
 
-	// Read from config, not k: it holds everything k does, plus any "legacy_network" receiver
-	// migrateLegacyNetworkListeners already wrote here.
 	receivers := takeNestedMapFromFlatConfig(config, "log.opentelemetry.receivers")
 
 	// Shared across every mergeLegacyFilters call below -- see its doc comment.
@@ -1070,13 +1068,13 @@ func cloneMetricEntry(entryAny any) map[string]any {
 	return clone
 }
 
-// legacyNetworkReceiverNames returns the fixed names migrateLegacyNetworkListeners synthesizes for its
+// legacyNetworkReceiverNames returns the fixed names synthesizeLegacyNetworkListener uses for its
 // receiver (log.opentelemetry.receivers key) and network listener (opentelemetry.listeners key).
 // Unlike migrateLogInputs' entries, the legacy log.opentelemetry.grpc/http shape is a single flat
 // scalar setting with no name of its own to key on -- the legacy Fluent-Bit-era system only ever had
 // one such listener, and two files setting it both merge into that one listener (last file wins per
-// field, same as any other scalar setting), not two independent listeners. Using a fixed name here is
-// what makes that merge happen naturally, through the ordinary multi-file config merge.
+// field, same as any other scalar setting), not two independent listeners. Fixed names are what let the
+// synthesized entries land on that one listener no matter which providers contributed to it.
 func legacyNetworkReceiverNames() (receiverKey, listenerKey string) {
 	return "legacy_network", "legacy-network"
 }
@@ -1124,12 +1122,12 @@ func legacyNetworkListenerPort(value any) (port int, set bool) {
 	return port, port != 0
 }
 
-// migrateLegacyNetworkListeners warns, once per provider, that this provider still uses the deprecated
+// warnLegacyNetworkListeners warns, once per provider, that this provider still uses the deprecated
 // log.opentelemetry.grpc/http {enable, address, port} shape. It deliberately does NOT translate it: the
 // keys are real Config fields (see OpenTelemetry.GRPC) so they survive the strict struct decode and merge
 // per-leaf across providers, and the actual translation runs once on the merged result, in
 // synthesizeLegacyNetworkListener. Only the warning stays per-provider, so it can name the file at fault.
-func migrateLegacyNetworkListeners(k *koanf.Koanf, providerType ItemSource) prometheus.MultiError {
+func warnLegacyNetworkListeners(k *koanf.Koanf, providerType ItemSource) prometheus.MultiError {
 	var warnings prometheus.MultiError
 
 	const path = "log.opentelemetry"

@@ -272,15 +272,29 @@ func (d *Docker) CachedContainer(containerID string) (c facts.Container, found b
 
 // Containers return Docker containers.
 func (d *Docker) Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error) {
+	containers, _, err = d.EnumerateContainers(ctx, maxAge, includeIgnored)
+
+	return containers, err
+}
+
+// EnumerateContainers implements crTypes.RuntimeInterface.
+func (d *Docker) EnumerateContainers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, complete bool, err error) {
 	d.l.Lock()
 	defer d.l.Unlock()
 
 	container, err := d.getContainers(ctx, maxAge, includeIgnored)
+
+	// complete is derived before the swallow below, which is precisely what makes the error unavailable
+	// to callers. A cache hit (no refresh due this call) counts as complete -- the cache only ever holds
+	// a fully successful enumeration, since getContainers returns the error rather than a stale list
+	// when a refresh fails.
+	complete = err == nil
+
 	if err != nil && !d.workedOnce {
-		return nil, nil
+		return nil, complete, nil
 	}
 
-	return container, err
+	return container, complete, err
 }
 
 // getContainers return Docker containers.

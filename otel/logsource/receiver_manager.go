@@ -604,7 +604,8 @@ type containerMatcher struct {
 // serviceTailed names the containers otel/logprocessing already tails through its own service path (see
 // logprocessing.Manager.ServiceTailedContainerIDs); it does not suppress anything here, it only lets a
 // container's label source be rebuilt when that status changes, so providers get asked again.
-func (rm *ReceiverManager) UpdateContainers(ctx context.Context, containers []facts.Container, serviceTailed map[string]bool) {
+// complete says whether containers authoritatively enumerates every container that currently exists.
+func (rm *ReceiverManager) UpdateContainers(ctx context.Context, containers []facts.Container, serviceTailed map[string]bool, complete bool) {
 	rm.l.Lock()
 	defer rm.l.Unlock()
 
@@ -654,10 +655,10 @@ func (rm *ReceiverManager) UpdateContainers(ctx context.Context, containers []fa
 	}
 
 	for _, ms := range rm.receivers {
-		rm.stopUnwantedContainerTails(ctx, ms, currentByReceiver[ms.name])
+		rm.stopUnwantedContainerTails(ctx, ms, currentByReceiver[ms.name], complete)
 	}
 
-	rm.updateLabelContainers(ctx, containers, claimed, serviceTailed)
+	rm.updateLabelContainers(ctx, containers, claimed, serviceTailed, complete)
 }
 
 // ContainerIDsShippedByReceivers returns the IDs of containers whose logs an explicit
@@ -755,6 +756,7 @@ func (rm *ReceiverManager) updateLabelContainers(
 	containers []facts.Container,
 	claimed map[string]bool,
 	serviceTailed map[string]bool,
+	complete bool,
 ) {
 	current := make(map[string]bool, len(containers))
 
@@ -823,8 +825,11 @@ func (rm *ReceiverManager) updateLabelContainers(
 			continue
 		}
 
-		// The container is gone for good (not just a restart): forget its offset too.
-		rm.shutdownSource(ctx, ms, true)
+		// Forget the offset only when this cycle's container list was complete: then the container really
+		// is gone for good (not just a restart) and its offset is dead weight. Otherwise the container may
+		// well still exist and simply be missing from an incomplete enumeration, so the tail stops but the
+		// offset survives for whoever picks it up next. See UpdateContainers' complete parameter.
+		rm.shutdownSource(ctx, ms, complete)
 		rm.releaseProviders(ctx, ms.container)
 		delete(rm.byContainer, id)
 	}
@@ -847,10 +852,10 @@ const containerLabelPersistNamespace = "label"
 // tailing path: otel/logprocessing's logReceiver persists its own include files under the bare
 // "<name>/<file>" (receiver.go's r.name + metadataKeySeparator + logFile), and both packages share one
 // PersistHost. Unprefixed, a user receiver whose key happens to match one of logprocessing's own -- it
-// builds receivers named literally "syslog", "journald" and "auditd" for auto-discovery -- tailing the same
-// file would land on the identical component.ID: NewPersistentExt would replace the live extension, both
-// tails would write through to one metadataPerReceiver entry, and each save (which replaces that entry
-// wholesale) would clobber the other's offset.
+// builds receivers named literally "syslog", "syslog-auth" and "auditd" for auto-discovery, plus one per
+// discovered service -- tailing the same file would land on the identical component.ID: NewPersistentExt
+// would replace the live extension, both tails would write through to one metadataPerReceiver entry, and
+// each save (which replaces that entry wholesale) would clobber the other's offset.
 func includePersistName(receiverName, logFile string) string {
 	return "receiver/" + receiverName + "/" + logFile
 }
@@ -1007,11 +1012,17 @@ func (rm *ReceiverManager) setupAndStartReceiver(ctx context.Context, setup rece
 	}, nil
 }
 
-// stopUnwantedContainerTails stops every container tail under ms whose
-// container ID isn't in wanted.
-func (rm *ReceiverManager) stopUnwantedContainerTails(ctx context.Context, ms *managedSource, wanted map[string]bool) {
+// stopUnwantedContainerTails stops every container tail under ms whose container ID isn't in wanted.
+// forget permanently drops the removed containers' persisted read offsets, and must only be true when
+// wanted was derived from a complete container enumeration -- see UpdateContainers' complete parameter.
+func (rm *ReceiverManager) stopUnwantedContainerTails(ctx context.Context, ms *managedSource, wanted map[string]bool, forget bool) {
 	ms.l.Lock()
 	defer ms.l.Unlock()
+
+	removeExts := rm.persister.RemovePersistentExts
+	if forget {
+		removeExts = rm.persister.RemovePersistentExtsAndForget
+	}
 
 	for id, recvs := range ms.containerRecvs {
 		if wanted[id] {
@@ -1019,8 +1030,7 @@ func (rm *ReceiverManager) stopUnwantedContainerTails(ctx context.Context, ms *m
 		}
 
 		shutdownReceivers(ctx, recvs)
-		// The container is gone for good (not just a restart): forget its offset too.
-		rm.persister.RemovePersistentExtsAndForget(ms.containerExtIDs[id])
+		removeExts(ms.containerExtIDs[id])
 
 		logFile := ms.containerLogFile[id]
 		delete(ms.watching, logFile)

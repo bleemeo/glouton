@@ -1858,7 +1858,6 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 
 	for _, point := range points {
 		var (
-			err       error
 			skip      bool
 			newLabels labels.Labels
 		)

@@ -230,7 +230,7 @@ func TestRemoveOldSourcesStopsVanishedServiceContainerTail(t *testing.T) {
 	ctrNginx := ctr(ctrID, "nginx-1", nil)
 
 	// The service is no longer reported, but its container is still running.
-	man.removeOldSources(t.Context(), nil, []facts.Container{ctrNginx})
+	man.removeOldSources(t.Context(), nil, []facts.Container{ctrNginx}, true)
 
 	if man.containerRecv.isTailing(ctrID) {
 		t.Error("expected the vanished service's container tail to be stopped")
@@ -366,6 +366,7 @@ func TestWantSourceDeclinesContainerAlreadyTailedByService(t *testing.T) {
 		t.Context(),
 		[]discovery.Service{svc("postgres", "", "id-bad", true, time.Now(), discovery.ServiceLogReceiver{})},
 		[]facts.Container{ctrBad},
+		true,
 	)
 
 	if _, ok := man.WantSource(t.Context(), logsource.ResolvedSource{
@@ -390,6 +391,7 @@ func TestWantSourceDeclinesContainerAlreadyTailedByService(t *testing.T) {
 		t.Context(),
 		[]discovery.Service{svc("redis", "", "id-good", true, time.Now(), discovery.ServiceLogReceiver{})},
 		[]facts.Container{ctrGood},
+		true,
 	)
 
 	if _, ok := man.WantSource(t.Context(), logsource.ResolvedSource{

@@ -352,7 +352,7 @@ func TestRemoveOldSourcesForgetsOffsetWhenContainerAndItsServiceBothVanish(t *te
 	}
 
 	// Both the service and the container it ran in disappear together: the ordinary container-removal case.
-	man.removeOldSources(t.Context(), nil, nil)
+	man.removeOldSources(t.Context(), nil, nil, true)
 
 	persister.SaveToState(st)
 
@@ -363,5 +363,84 @@ func TestRemoveOldSourcesForgetsOffsetWhenContainerAndItsServiceBothVanish(t *te
 
 	if _, found := saved[persName]; found {
 		t.Errorf("Expected the removed container's offset to be forgotten, got %v", saved)
+	}
+}
+
+// TestRemoveOldSourcesKeepsOffsetWhenContainerListIncomplete is the counterpart to the test above: the
+// permanent offset-forget must be gated on the container list having been authoritative. agent.go's guard
+// only catches an explicit error from the runtime, but an empty list with no error is possible
+// (merge.Runtime.Containers returns (nil, nil) when no runtime yielded anything and none errored;
+// docker.Docker.Containers swallows its error outright until it has worked once, so the whole window around
+// a daemon restart looks like an empty host). Forgetting is permanent and fileconsumer's StartAt defaults
+// to "end", so treating that as "every container was removed" would skip every line written in the gap.
+func TestRemoveOldSourcesKeepsOffsetWhenContainerListIncomplete(t *testing.T) {
+	t.Parallel()
+
+	st, err := state.LoadReadOnly("not", "used")
+	if err != nil {
+		t.Fatal("Can't instantiate state:", err)
+	}
+
+	persister, err := logsource.NewPersistHost(st, logsource.PersistConfig{
+		StorageType:  logsource.PersistStorageType,
+		CacheKey:     logsource.LogFileMetadataCacheKey,
+		ArchivePath:  "log-processing/persister.json",
+		SaveThrottle: saveFileSizesToCachePeriod,
+	})
+	if err != nil {
+		t.Fatal("Can't instantiate persist host:", err)
+	}
+
+	pipeline := &pipelineContext{persister: persister}
+	containerRecv := newContainerReceiver(pipeline)
+
+	const (
+		ctrID    = "ctr-1"
+		persName = "container/" + ctrID + "/app.log"
+	)
+
+	extID := persister.NewPersistentExt(persName)
+
+	ext, ok := persister.GetExtensions()[extID].(storage.Extension)
+	if !ok {
+		t.Fatal("Expected the registered extension to implement storage.Extension")
+	}
+
+	client, err := ext.GetClient(t.Context(), component.KindReceiver, extID, "")
+	if err != nil {
+		t.Fatal("Failed to get storage client:", err)
+	}
+
+	if err := client.Set(t.Context(), "offset", []byte("42")); err != nil {
+		t.Fatal("Failed to set offset:", err)
+	}
+
+	if err := client.Close(t.Context()); err != nil {
+		t.Fatal("Failed to close client:", err)
+	}
+
+	containerRecv.registeredExtensions[ctrID] = []component.ID{extID}
+	containerRecv.containers[ctrID] = Container{LogFilePath: "app.log"}
+
+	man := &Manager{
+		persister:         persister,
+		containerRecv:     containerRecv,
+		watchedServices:   map[discovery.NameInstance]sourceDiagnostic{},
+		watchedContainers: map[string]sourceDiagnostic{ctrID: {ContainerID: ctrID}},
+		serviceReceivers:  map[discovery.NameInstance][]*logReceiver{},
+	}
+
+	// The runtime enumerated nothing, without reporting an error: not to be trusted as a removal.
+	man.removeOldSources(t.Context(), nil, nil, false)
+
+	persister.SaveToState(st)
+
+	var saved map[string]map[string][]byte
+	if err := st.Get(logsource.LogFileMetadataCacheKey, &saved); err != nil {
+		t.Fatal("Failed to read back saved state:", err)
+	}
+
+	if _, found := saved[persName]; !found {
+		t.Errorf("Expected the container's offset to survive an incomplete container list, got %v", saved)
 	}
 }

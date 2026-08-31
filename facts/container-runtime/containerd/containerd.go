@@ -394,17 +394,26 @@ func (c *Containerd) CachedContainer(containerID string) (cont facts.Container, 
 
 // Containers return ContainerD containers.
 func (c *Containerd) Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error) {
+	containers, _, err = c.EnumerateContainers(ctx, maxAge, includeIgnored)
+
+	return containers, err
+}
+
+// EnumerateContainers implements crTypes.RuntimeInterface.
+func (c *Containerd) EnumerateContainers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, complete bool, err error) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
 	if time.Since(c.lastUpdate) >= maxAge {
 		err = c.updateContainers(ctx)
 		if err != nil {
+			// complete stays false through the !workedOnce swallow below, which is what otherwise hides
+			// this failure from callers entirely.
 			if !c.workedOnce {
-				return nil, nil
+				return nil, false, nil
 			}
 
-			return nil, err
+			return nil, false, err
 		}
 	}
 
@@ -415,7 +424,9 @@ func (c *Containerd) Containers(ctx context.Context, maxAge time.Duration, inclu
 		}
 	}
 
-	return
+	// A cache hit (no refresh due this call) counts as complete too: the cache only ever holds a fully
+	// successful enumeration, since a failed refresh returns above rather than falling back to it.
+	return containers, true, nil
 }
 
 // IsRuntimeRunning returns whether or not Containerd is available
@@ -871,7 +882,7 @@ func hasHostNetwork(spec *oci.Spec) bool {
 }
 
 // hostProcPath returns the procfs mount point to read, honoring the HOST_PROC indirection
-// envsetup.SetupFromHostRoot establishes when Glouton runs containerized with the host's /proc bind-mounted
+// envsetup.SetupContainer establishes when Glouton runs containerized with the host's /proc bind-mounted
 // under its hostroot. Reading a bare /proc there would resolve PIDs in Glouton's own namespace rather than
 // the host's -- at best failing, at worst matching an unrelated process that happens to share the number.
 // Mirrors inputs/diskio's own HOST_PROC handling.
@@ -1035,21 +1046,24 @@ func convertToContainerObject(ctx context.Context, ns string, cont client.Contai
 		obj.exitTime = status.ExitTime
 	}
 
-	// Resolved after the status above, and skipped once the task is known to have stopped: an exited
-	// task's Pid() still reports its old PID, which the host may already have recycled for an unrelated
-	// process -- reading that PID's network namespace would report a stranger's address as this
-	// container's. A status we couldn't read at all keeps the previous behavior of trying anyway, since
-	// the PID came from a task that did exist.
-	taskStopped := statusErr == nil && status.Status != client.Running
+	// Only client.Stopped is excluded below, not everything short of Running: Created, Paused and Pausing
+	// all still have a live process behind Pid() whose network namespace is readable -- containerd's own
+	// process.Delete refuses those three alongside Running as "must be stopped first" -- so skipping them
+	// would drop the address of a merely paused container. Unknown, and a status we couldn't read at all,
+	// keep trying: the PID came from a task that did exist.
+	taskStopped := statusErr == nil && status.Status == client.Stopped
 
+	// Resolved after the status above so the check below can use it. Only the procfs read needs guarding:
+	// an exited task's Pid() still reports its old PID, which the host may already have recycled for an
+	// unrelated process, and reading that PID's network namespace would report a stranger's address as
+	// this container's. The host-network branch reads no procfs at all, so it is left unconditional.
 	switch {
-	case taskStopped:
 	case hasHostNetwork(&spec):
 		// Consistent with the Docker runtime: on host networking, the container shares the
 		// host's network namespace and a service is generally only expected to be reachable
 		// through the loopback interface.
 		obj.primaryAddress = "127.0.0.1"
-	default:
+	case !taskStopped:
 		obj.primaryAddress = primaryAddressFromProc(obj.pid)
 	}
 

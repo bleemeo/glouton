@@ -236,7 +236,16 @@ func (man *Manager) ServiceTailedContainerIDs() map[string]bool {
 	return man.containerRecv.tailedContainerIDs()
 }
 
-func (man *Manager) HandleLogsFromDynamicSources(ctx context.Context, services []discovery.Service, containers []facts.Container) {
+// HandleLogsFromDynamicSources reconciles this package's service-path tails against the current
+// discovery. containersComplete says whether containers authoritatively enumerates every container that
+// exists; when false, a container missing from it keeps its persisted read offset (see removeOldSources
+// and logsource.ReceiverManager.UpdateContainers' own complete parameter for why that matters).
+func (man *Manager) HandleLogsFromDynamicSources(
+	ctx context.Context,
+	services []discovery.Service,
+	containers []facts.Container,
+	containersComplete bool,
+) {
 	// Computed without holding man.l: receiverManager's askProviders (itself called under its own lock,
 	// from RescanReceivers/UpdateContainers) calls back into man.l via WantSource/wrapWithFilter. Calling
 	// ContainerIDsShippedByReceivers (which takes receiverManager's lock) while man.l is held would nest
@@ -251,7 +260,7 @@ func (man *Manager) HandleLogsFromDynamicSources(ctx context.Context, services [
 	man.l.Lock()
 	defer man.l.Unlock()
 
-	man.removeOldSources(ctx, services, containers)
+	man.removeOldSources(ctx, services, containers, containersComplete)
 
 	logSources := man.processLogSources(services, containers, shippedByReceivers)
 
@@ -478,7 +487,15 @@ func (man *Manager) setupProcessingForSource(ctx context.Context, logSource logS
 	return nil
 }
 
-func (man *Manager) removeOldSources(ctx context.Context, services []discovery.Service, containers []facts.Container) {
+// removeOldSources tears down the tails of services and containers that have disappeared.
+// containersComplete gates the permanent offset-forget on the container branch: see
+// HandleLogsFromDynamicSources.
+func (man *Manager) removeOldSources(
+	ctx context.Context,
+	services []discovery.Service,
+	containers []facts.Container,
+	containersComplete bool,
+) {
 	watchedServices := slices.Collect(maps.Keys(man.watchedServices))
 	watchedContainers := slices.Collect(maps.Keys(man.watchedContainers))
 	latestServices := make(map[discovery.NameInstance]struct{}, len(services))
@@ -535,8 +552,11 @@ func (man *Manager) removeOldSources(ctx context.Context, services []discovery.S
 	}
 
 	if len(noLongerExistingContainers) > 0 {
-		// The containers themselves are gone for good (not just restarted): forget their offsets too.
-		man.containerRecv.stopWatchingForContainers(ctx, noLongerExistingContainers, true)
+		// Offsets are forgotten only when this cycle's container list was complete: then the containers
+		// really are gone for good (not just restarted). Otherwise they may still exist and merely be
+		// absent from an incomplete enumeration, so their tails stop but their offsets survive -- a
+		// forget is permanent, and fileconsumer would then restart at end-of-file.
+		man.containerRecv.stopWatchingForContainers(ctx, noLongerExistingContainers, containersComplete)
 
 		for _, ctrID := range noLongerExistingContainers {
 			delete(man.watchedContainers, ctrID)

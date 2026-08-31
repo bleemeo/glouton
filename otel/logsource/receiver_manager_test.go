@@ -513,7 +513,7 @@ func TestReceiverManagerContainerSelectorMatch(t *testing.T) {
 	provider, received := newRecordingProvider()
 	rm.RegisterSinkProvider(provider)
 
-	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil)
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil, true)
 
 	time.Sleep(500 * time.Millisecond)
 
@@ -569,7 +569,7 @@ func TestReceiverManagerContainerMatchedByTwoReceiversBothTail(t *testing.T) {
 	provider := declineProvider()
 	rm.RegisterSinkProvider(provider)
 
-	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil)
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil, true)
 
 	asked := provider.askedSources()
 	if len(asked) != 2 {
@@ -598,7 +598,7 @@ func TestReceiverManagerContainerExcludeVetoesEverything(t *testing.T) {
 	provider := declineProvider()
 	rm.RegisterSinkProvider(provider)
 
-	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil)
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil, true)
 
 	if asked := provider.askedSources(); len(asked) != 0 {
 		t.Fatalf("expected the excluded container to never be resolved, got %+v", asked)
@@ -625,7 +625,7 @@ func TestReceiverManagerLogEnableFalseDoesNotVetoReceiverMatch(t *testing.T) {
 	provider := declineProvider()
 	rm.RegisterSinkProvider(provider)
 
-	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil)
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil, true)
 
 	if asked := provider.askedSources(); len(asked) != 1 {
 		t.Fatalf("expected the explicit receiver match to still be resolved despite glouton.log_enable=false, got %+v", asked)
@@ -655,7 +655,7 @@ func TestReceiverManagerContainerExcludeStillVetoesReceiverMatch(t *testing.T) {
 	provider := declineProvider()
 	rm.RegisterSinkProvider(provider)
 
-	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil)
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil, true)
 
 	if asked := provider.askedSources(); len(asked) != 0 {
 		t.Fatalf("expected container_exclude to still veto an explicit receiver match, got %+v", asked)
@@ -682,7 +682,7 @@ func TestReceiverManagerReceiverMatchSkipsLabelFallback(t *testing.T) {
 	provider := declineProvider()
 	rm.RegisterSinkProvider(provider)
 
-	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil)
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil, true)
 
 	asked := provider.askedSources()
 	if len(asked) != 1 || asked[0].Kind != SourceReceiver {
@@ -737,7 +737,7 @@ func TestReceiverManagerServiceTailedChangeRebuildsFanout(t *testing.T) {
 	}
 
 	// Cycle 1: the service path isn't tailing it, so the label source ships.
-	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil)
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil, true)
 
 	if !fanoutIsSet() {
 		t.Fatal("expected the label source to be wanted before the service path tails the container")
@@ -745,7 +745,7 @@ func TestReceiverManagerServiceTailedChangeRebuildsFanout(t *testing.T) {
 
 	// Cycle 2: the service path now tails it -- rebuild, so the provider is re-asked and declines.
 	serviceTailed.Store(true)
-	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, map[string]bool{"id-1": true})
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, map[string]bool{"id-1": true}, true)
 
 	if fanoutIsSet() {
 		t.Fatal("expected the rebuilt label source to be declined once the service path tails the container")
@@ -753,7 +753,7 @@ func TestReceiverManagerServiceTailedChangeRebuildsFanout(t *testing.T) {
 
 	// Cycle 3: the service tail is gone (e.g. its setup started failing) -- shipping must resume.
 	serviceTailed.Store(false)
-	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil)
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil, true)
 
 	if !fanoutIsSet() {
 		t.Fatal("expected the label source to be wanted again once the service path stopped tailing it")
@@ -789,7 +789,7 @@ func TestReceiverManagerNoTailWhenEveryProviderDeclines(t *testing.T) {
 	provider := declineProvider()
 	rm.RegisterSinkProvider(provider)
 
-	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil)
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil, true)
 
 	if asked := provider.askedSources(); len(asked) != 1 {
 		t.Fatalf("expected the source to still be offered to providers, got %+v", asked)
@@ -839,7 +839,7 @@ func TestReceiverManagerContainerLabelTailDoesNotCollideWithLogprocessingContain
 	provider, _ := newRecordingProvider()
 	rm.RegisterSinkProvider(provider)
 
-	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil)
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil, true)
 
 	ms, found := rm.byContainer["id-1"]
 	if !found {
@@ -882,7 +882,7 @@ func TestReceiverManagerContainerLabelFallbackSurfacesLogMetricsRule(t *testing.
 	provider := declineProvider()
 	rm.RegisterSinkProvider(provider)
 
-	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil)
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil, true)
 
 	asked := provider.askedSources()
 	if len(asked) != 1 {
@@ -911,7 +911,7 @@ func TestReceiverManagerContainerLabelChangeRebuildsFanout(t *testing.T) {
 		FakeLabels: map[string]string{ContainerLabelPrefix + "log_metrics": "rule_a"},
 	}
 
-	rm.UpdateContainers(t.Context(), []facts.Container{ctrBefore}, nil)
+	rm.UpdateContainers(t.Context(), []facts.Container{ctrBefore}, nil, true)
 
 	// Same container ID, but the glouton.log_metrics label changed (e.g. a live annotation edit).
 	ctrAfter := facts.FakeContainer{
@@ -919,7 +919,7 @@ func TestReceiverManagerContainerLabelChangeRebuildsFanout(t *testing.T) {
 		FakeLabels: map[string]string{ContainerLabelPrefix + "log_metrics": "rule_b"},
 	}
 
-	rm.UpdateContainers(t.Context(), []facts.Container{ctrAfter}, nil)
+	rm.UpdateContainers(t.Context(), []facts.Container{ctrAfter}, nil, true)
 
 	asked := provider.askedSources()
 	if len(asked) != 2 {
@@ -958,8 +958,8 @@ func TestReceiverManagerContainerLabelUnchangedDoesNotRebuild(t *testing.T) {
 		},
 	}
 
-	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil)
-	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil)
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil, true)
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil, true)
 
 	if released := provider.releasedSources(); len(released) != 0 {
 		t.Errorf("expected no release across scans with identical labels, got %+v", released)
@@ -985,7 +985,7 @@ func TestReceiverManagerLogEnableTrueImpliesSendLogs(t *testing.T) {
 	provider := declineProvider()
 	rm.RegisterSinkProvider(provider)
 
-	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil)
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil, true)
 
 	asked := provider.askedSources()
 	if len(asked) != 1 {
@@ -1014,7 +1014,7 @@ func TestReceiverManagerExplicitSendLogsOverridesLogEnable(t *testing.T) {
 	provider := declineProvider()
 	rm.RegisterSinkProvider(provider)
 
-	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil)
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil, true)
 
 	asked := provider.askedSources()
 	if len(asked) != 1 {
@@ -1040,7 +1040,7 @@ func TestReceiverManagerUnlabeledContainerFollowsAutoDiscovery(t *testing.T) {
 	provider := declineProvider()
 	rm.RegisterSinkProvider(provider)
 
-	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil)
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil, true)
 
 	asked := provider.askedSources()
 	if len(asked) != 1 {
@@ -1070,7 +1070,7 @@ func TestReceiverManagerUpdateContainersAddRemove(t *testing.T) {
 	provider, _ := newRecordingProvider()
 	rm.RegisterSinkProvider(provider)
 
-	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil)
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil, true)
 
 	rm.l.Lock()
 	ms, found := rm.byContainer[ctr.ID()]
@@ -1088,7 +1088,7 @@ func TestReceiverManagerUpdateContainersAddRemove(t *testing.T) {
 		t.Fatal("Expected the container's log file to be tailed")
 	}
 
-	rm.UpdateContainers(t.Context(), nil, nil)
+	rm.UpdateContainers(t.Context(), nil, nil, true)
 
 	rm.l.Lock()
 	_, stillPresent := rm.byContainer[ctr.ID()]
@@ -1117,13 +1117,13 @@ func TestReceiverManagerReleasesProvidersWhenContainerDisappears(t *testing.T) {
 	provider, _ := newRecordingProvider()
 	rm.RegisterSinkProvider(provider)
 
-	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil)
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil, true)
 
 	if released := provider.releasedSources(); len(released) != 0 {
 		t.Fatalf("expected nothing released while the container is still present, got %+v", released)
 	}
 
-	rm.UpdateContainers(t.Context(), nil, nil)
+	rm.UpdateContainers(t.Context(), nil, nil, true)
 
 	released := provider.releasedSources()
 	if len(released) != 1 {
@@ -1462,7 +1462,7 @@ func TestReceiverManagerRescanAndUpdateContainersNoopAfterShutdown(t *testing.T)
 		FakeLabels: map[string]string{ContainerLabelPrefix + "send_logs": "true"},
 	}
 
-	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil)
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil, true)
 
 	if got := len(rm.byContainer); got != 0 {
 		t.Errorf("expected UpdateContainers to be a no-op after Shutdown, got %d container source(s) started", got)
@@ -1514,7 +1514,7 @@ func TestContainerMatchersMemoizedAndConsistentAcrossCalls(t *testing.T) {
 	provider, _ := newRecordingProvider()
 	rm.RegisterSinkProvider(provider)
 
-	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil)
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil, true)
 
 	rm.l.Lock()
 	_, found := rm.receivers["app"]
@@ -1528,8 +1528,8 @@ func TestContainerMatchersMemoizedAndConsistentAcrossCalls(t *testing.T) {
 // TestIncludeTailDoesNotCollideWithLogprocessingReceiver guards against a regression where an
 // include-pattern tail's persisted-offset identity was the bare "<receiver>/<file>", byte-identical to
 // otel/logprocessing's logReceiver naming (r.name + metadataKeySeparator + logFile) -- and both packages
-// share one PersistHost. logprocessing builds receivers named literally "syslog"/"journald"/"auditd" for
-// auto-discovery, so a user receiver of the same name including the same file resolved to one
+// share one PersistHost. logprocessing builds receivers named literally "syslog"/"syslog-auth"/"auditd"
+// for auto-discovery, so a user receiver of the same name including the same file resolved to one
 // component.ID: both live tails wrote through to a single metadataPerReceiver entry, and each save
 // (which replaces that entry wholesale) clobbered the other's offset. Same hazard, and same namespacing
 // fix, as containerLabelPersistNamespace on the container path.
@@ -1587,5 +1587,105 @@ func TestIncludeTailDoesNotCollideWithLogprocessingReceiver(t *testing.T) {
 				id.Name(),
 			)
 		}
+	}
+}
+
+// TestUpdateContainersKeepsOffsetWhenListIncomplete guards against permanent offset loss on any cycle
+// whose container enumeration wasn't authoritative. Both container teardown paths used to forget
+// unconditionally, on the assumption that a container missing from the list is "gone for good" -- but
+// agent.go's guard only catches an explicit error, and a runtime can report an empty list with no error at
+// all (merge.Runtime.Containers returns (nil, nil) when no runtime yielded anything and none errored;
+// docker.Docker.Containers swallows its error outright until it has worked once, covering the whole window
+// around a daemon restart). Forgetting is permanent and fileconsumer's StartAt defaults to "end", so every
+// line written during the gap would be skipped for good.
+func TestUpdateContainersKeepsOffsetWhenListIncomplete(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name       string
+		cfg        config.OpenTelemetry
+		labels     map[string]string
+		sourceName string
+	}{
+		{
+			// The glouton.*-label fallback path, torn down via updateLabelContainers/shutdownSource.
+			name:       "label fallback tail",
+			cfg:        config.OpenTelemetry{},
+			labels:     map[string]string{ContainerLabelPrefix + "send_logs": "true"},
+			sourceName: "",
+		},
+		{
+			// The container_name receiver path, torn down via stopUnwantedContainerTails.
+			name: "receiver-matched tail",
+			cfg: config.OpenTelemetry{
+				Receivers: map[string]config.LogReceiver{
+					"app": {"container_name": "app-1", "send_logs": true},
+				},
+			},
+			sourceName: "app",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			logFile, err := os.CreateTemp(t.TempDir(), "ctr-*.log")
+			if err != nil {
+				t.Fatal("Can't create log file:", err)
+			}
+
+			defer logFile.Close()
+
+			ctr := facts.FakeContainer{
+				FakeID: "id-1", FakeContainerName: "app-1",
+				FakeLogPath: logFile.Name(), FakeLabels: tc.labels,
+			}
+
+			rm := newTestReceiverManager(t, tc.cfg)
+
+			provider, _ := newRecordingProvider()
+			rm.RegisterSinkProvider(provider)
+
+			rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil, true)
+
+			rm.l.Lock()
+
+			ms := rm.byContainer[ctr.ID()]
+			if tc.sourceName != "" {
+				ms = rm.receivers[tc.sourceName]
+			}
+
+			rm.l.Unlock()
+
+			if ms == nil {
+				t.Fatal("expected a managedSource for the container")
+			}
+
+			ms.l.Lock()
+			extIDs := ms.containerExtIDs[ctr.ID()]
+			ms.l.Unlock()
+
+			if len(extIDs) == 0 {
+				t.Fatal("expected the container tail to have a registered persistent extension")
+			}
+
+			name := extIDs[0].Name()
+
+			// Seed offset metadata, as if the tail had already read part of the file.
+			rm.persister.l.Lock()
+			rm.persister.metadataPerReceiver[name] = map[string][]byte{"offset": []byte("123")}
+			rm.persister.l.Unlock()
+
+			// The runtime enumerated nothing, without reporting an error: not to be trusted as
+			// "every container was removed".
+			rm.UpdateContainers(t.Context(), nil, nil, false)
+
+			rm.persister.l.Lock()
+			metadata, found := rm.persister.metadataPerReceiver[name]
+			rm.persister.l.Unlock()
+
+			if !found || len(metadata) == 0 {
+				t.Errorf("expected %q to keep its persisted offset after an incomplete container list, got %v", name, metadata)
+			}
+		})
 	}
 }

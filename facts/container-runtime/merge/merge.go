@@ -163,17 +163,40 @@ func (r *Runtime) Exec(ctx context.Context, containerID string, cmd []string) ([
 }
 
 // Containers call function on container runtimes.
-func (r *Runtime) Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, globalErr error) {
+func (r *Runtime) Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error) {
+	containers, _, err = r.EnumerateContainers(ctx, maxAge, includeIgnored)
+
+	return containers, err
+}
+
+// EnumerateContainers implements crTypes.RuntimeInterface. complete is true only if every configured
+// runtime fully enumerated its own containers: deliberately stricter than IsRuntimeRunning, which is true
+// as soon as any single runtime is reachable -- with Docker and containerd side by side, one of them
+// failing still yields a usable list, but not a list anything may treat as the complete set of what exists.
+func (r *Runtime) EnumerateContainers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, complete bool, globalErr error) {
 	var errs types.MultiErrors
 
 	containerID2Info := make(map[string]containerInfo)
 
+	// One runtime failing to enumerate makes the merged list incomplete, even though the runtimes that
+	// did work still contribute theirs -- so this is deliberately not the same thing as globalErr, which
+	// stays nil whenever at least one runtime returned something (callers that just display or enrich the
+	// list want that partial result).
+	complete = true
+
 	for i, cr := range r.Runtimes {
-		list, err := cr.Containers(ctx, maxAge, true)
+		// subComplete, not just err: a sub-runtime can report no error and still have enumerated nothing,
+		// since docker and containerd both swallow their error until they have worked once.
+		list, subComplete, err := cr.EnumerateContainers(ctx, maxAge, true)
 		if err != nil {
 			errs = append(errs, err)
+			complete = false
 
 			continue
+		}
+
+		if !subComplete {
+			complete = false
 		}
 
 		for _, c := range list {
@@ -190,10 +213,10 @@ func (r *Runtime) Containers(ctx context.Context, maxAge time.Duration, includeI
 
 	if len(containers) == 0 {
 		if errs != nil {
-			return nil, fixMultiError(errs)
+			return nil, complete, fixMultiError(errs)
 		}
 
-		return nil, nil
+		return nil, complete, nil
 	}
 
 	r.l.Lock()
@@ -219,7 +242,7 @@ func (r *Runtime) Containers(ctx context.Context, maxAge time.Duration, includeI
 
 	r.l.Unlock()
 
-	return containers, nil
+	return containers, complete, nil
 }
 
 // Events call function on container runtimes.

@@ -200,9 +200,16 @@ func (k *Kubernetes) Exec(ctx context.Context, containerID string, cmd []string)
 
 // Containers return all known container, with annotation added.
 func (k *Kubernetes) Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error) {
-	containers, err = k.Runtime.Containers(ctx, maxAge, includeIgnored)
+	containers, _, err = k.EnumerateContainers(ctx, maxAge, includeIgnored)
+
+	return containers, err
+}
+
+// EnumerateContainers implements crTypes.RuntimeInterface.
+func (k *Kubernetes) EnumerateContainers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, complete bool, err error) {
+	containers, complete, err = k.Runtime.EnumerateContainers(ctx, maxAge, includeIgnored)
 	if err != nil {
-		return nil, err
+		return nil, complete, err
 	}
 
 	k.l.Lock()
@@ -240,7 +247,10 @@ func (k *Kubernetes) Containers(ctx context.Context, maxAge time.Duration, inclu
 		response = append(response, c)
 	}
 
-	return response, nil
+	// complete comes straight from the wrapped runtime: that is what enumerates containers here. A failure
+	// to list PODs does not affect it, since it only costs the containers their POD annotations
+	// (updatePods' error is logged and the container kept) rather than dropping any of them.
+	return response, complete, nil
 }
 
 // Events return container events.

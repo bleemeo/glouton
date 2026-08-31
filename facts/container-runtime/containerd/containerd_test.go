@@ -37,6 +37,7 @@ import (
 	"github.com/containerd/containerd/protobuf"
 	"github.com/containerd/containerd/v2/client"
 	"github.com/containerd/containerd/v2/core/events"
+	"github.com/containerd/containerd/v2/pkg/namespaces"
 	"github.com/containerd/containerd/v2/pkg/oci"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -912,11 +913,13 @@ func TestHasHostNetwork(t *testing.T) {
 }
 
 // TestPrimaryAddressFromProcHonorsHostProc guards against a regression where primaryAddressFromProc read a
-// hardcoded /proc/<pid>/net/..., ignoring the HOST_PROC indirection envsetup.SetupFromHostRoot establishes
+// hardcoded /proc/<pid>/net/..., ignoring the HOST_PROC indirection envsetup.SetupContainer establishes
 // for a containerized Glouton with the host's /proc bind-mounted under its hostroot. Reading a bare /proc
 // there resolves the PID in Glouton's own namespace instead of the host's -- at best failing, at worst
 // matching an unrelated process that happens to share the number and reporting its address as the
 // container's, which then flows into Service.IPAddress and every check/input target built from it.
+//
+// Deliberately not parallel: t.Setenv below panics in a test that has called t.Parallel().
 func TestPrimaryAddressFromProcHonorsHostProc(t *testing.T) {
 	const (
 		pid     = 4242
@@ -948,5 +951,85 @@ func TestPrimaryAddressFromProcHonorsHostProc(t *testing.T) {
 
 	if got, want := primaryAddressFromProc(pid), "172.17.0.9"; got != want {
 		t.Errorf("primaryAddressFromProc() with HOST_PROC set = %q, want %q", got, want)
+	}
+}
+
+// TestConvertToContainerObjectPrimaryAddressByTaskStatus guards against a regression where the
+// primary-address lookup was skipped for every task status short of client.Running. Only an exited
+// (client.Stopped) task is a hazard -- its Pid() still reports a PID the host may have recycled for an
+// unrelated process, whose network namespace would then be reported as this container's address. Created,
+// Paused and Pausing all still have a live process behind that PID (containerd's own process.Delete refuses
+// those alongside Running as "must be stopped first"), so skipping them silently dropped a merely paused
+// container's address.
+//
+// Deliberately not parallel: t.Setenv below panics in a test that has called t.Parallel().
+func TestConvertToContainerObjectPrimaryAddressByTaskStatus(t *testing.T) {
+	const (
+		namespace = "default"
+		pid       = 5150
+		wantAddr  = "10.1.2.3"
+		fibTrie   = `Main:
+  +-- 10.1.2.0/24 2 0 2
+     |-- 10.1.2.3
+        /32 host LOCAL
+`
+	)
+
+	// A fake procfs for pid, so a resolved address is deterministic instead of depending on the host.
+	hostProc := t.TempDir()
+
+	netDir := filepath.Join(hostProc, strconv.Itoa(pid), "net")
+	if err := os.MkdirAll(netDir, 0o750); err != nil {
+		t.Fatal("Can't create fake procfs:", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(netDir, "fib_trie"), []byte(fibTrie), 0o600); err != nil {
+		t.Fatal("Can't write fake fib_trie:", err)
+	}
+
+	t.Setenv("HOST_PROC", hostProc)
+
+	testCases := []struct {
+		status   client.ProcessStatus
+		wantAddr string
+	}{
+		{status: client.Running, wantAddr: wantAddr},
+		{status: client.Paused, wantAddr: wantAddr},
+		{status: client.Pausing, wantAddr: wantAddr},
+		{status: client.Created, wantAddr: wantAddr},
+		{status: client.Unknown, wantAddr: wantAddr},
+		{status: client.Stopped, wantAddr: ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(string(tc.status), func(t *testing.T) {
+			ctr := MockContainer{
+				namespace: namespace,
+				MockInfo: ContainerOCISpec{
+					// A network namespace of its own, so this isn't the host-network branch.
+					Spec: &oci.Spec{
+						Linux: &specs.Linux{
+							Namespaces: []specs.LinuxNamespace{{Type: specs.NetworkNamespace}},
+						},
+					},
+				},
+				MockTask: MockTask{
+					MockID:     "task-1",
+					MockPID:    pid,
+					MockStatus: client.Status{Status: tc.status},
+				},
+			}
+
+			ctx := namespaces.WithNamespace(t.Context(), namespace)
+
+			obj, err := convertToContainerObject(ctx, namespace, ctr)
+			if err != nil {
+				t.Fatal("convertToContainerObject failed:", err)
+			}
+
+			if obj.primaryAddress != tc.wantAddr {
+				t.Errorf("status %q: primaryAddress = %q, want %q", tc.status, obj.primaryAddress, tc.wantAddr)
+			}
+		})
 	}
 }
