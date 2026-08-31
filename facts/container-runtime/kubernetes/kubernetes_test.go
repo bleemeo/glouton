@@ -1053,6 +1053,202 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 	}
 }
 
+// fakePodRuntime is a crTypes.RuntimeInterface stub returning one container, used to drive
+// Kubernetes.EnumerateContainers without a runtime mock. Only the methods it needs are implemented;
+// everything else panics so a future caller can't silently depend on unimplemented behavior.
+type fakePodRuntime struct {
+	container facts.Container
+}
+
+func (f fakePodRuntime) EnumerateContainers(context.Context, time.Duration, bool) ([]facts.Container, bool, error) {
+	return []facts.Container{f.container}, true, nil
+}
+
+func (f fakePodRuntime) Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) ([]facts.Container, error) {
+	containers, _, err := f.EnumerateContainers(ctx, maxAge, includeIgnored)
+
+	return containers, err
+}
+
+func (f fakePodRuntime) LastUpdate() time.Time                          { return time.Now() }
+func (f fakePodRuntime) CachedContainer(string) (facts.Container, bool) { panic("not implemented") }
+func (f fakePodRuntime) ContainerLastKill(string) time.Time             { panic("not implemented") }
+func (f fakePodRuntime) ContainerLastDelete(string) time.Time           { panic("not implemented") }
+func (f fakePodRuntime) ContainerByNameLastDelete(string) time.Time     { panic("not implemented") }
+func (f fakePodRuntime) ContainerTerminationGracePeriod(string) time.Duration {
+	panic("not implemented")
+}
+func (f fakePodRuntime) ContainerExists(string) bool           { panic("not implemented") }
+func (f fakePodRuntime) Events() <-chan facts.ContainerEvent   { panic("not implemented") }
+func (f fakePodRuntime) IsRuntimeRunning(context.Context) bool { panic("not implemented") }
+func (f fakePodRuntime) Run(context.Context) error             { panic("not implemented") }
+
+func (f fakePodRuntime) Exec(context.Context, string, []string) ([]byte, error) {
+	panic("not implemented")
+}
+
+func (f fakePodRuntime) ProcessWithCache() facts.ContainerRuntimeProcessQuerier {
+	panic("not implemented")
+}
+
+func (f fakePodRuntime) RuntimeFact(context.Context, map[string]string) map[string]string {
+	panic("not implemented")
+}
+
+func (f fakePodRuntime) Metrics(context.Context, time.Time) ([]types.MetricPoint, error) {
+	panic("not implemented")
+}
+
+func (f fakePodRuntime) MetricsMinute(context.Context, time.Time) ([]types.MetricPoint, error) {
+	panic("not implemented")
+}
+
+func (f fakePodRuntime) DiagnosticArchive(context.Context, types.ArchiveWriter) error {
+	panic("not implemented")
+}
+
+var errPODListFailed = errors.New("POD listing failed")
+
+// failingPODsClient is a kubeClient whose POD listing fails; everything else delegates to the embedded mock.
+type failingPODsClient struct {
+	kubeClient
+}
+
+func (failingPODsClient) GetPODs(context.Context, string) ([]corev1.Pod, error) {
+	return nil, errPODListFailed
+}
+
+// TestEnumerateContainersPODResolution checks when an unresolved POD reference makes the returned list
+// incomplete. It matters because the container is kept in the list, but its enable/ignore rules resolve
+// through the POD's annotations, so on an otherwise-disabled fleet gated by glouton.enable annotations it is
+// dropped from the list instead: absent from a list still claiming to be complete, it looks destroyed to
+// callers that act irreversibly on that, and they forget its persisted log read offset for good.
+//
+// Only a POD listing that actually failed counts. A listing that succeeded is authoritative, so a POD it
+// doesn't have really is gone, along with the container referencing it -- and those leftovers linger on a
+// node with POD churn, where calling them incomplete would keep the offset-forget path disabled for good.
+func TestEnumerateContainersPODResolution(t *testing.T) {
+	mockClient, err := newKubernetesMock("testdata/with-docker-v1.20.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pods, err := mockClient.GetPODs(t.Context(), "minikube")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(pods) == 0 {
+		t.Fatal("no POD in testdata, this test needs at least one")
+	}
+
+	knownPodUID := string(pods[0].UID)
+
+	const unknownPodUID = "5c2b8b1a-0000-0000-0000-nosuchpoduid"
+
+	testCases := []struct {
+		name         string
+		podUID       string
+		failPODs     bool
+		filter       facts.ContainerFilter
+		wantComplete bool
+		wantListed   bool
+	}{
+		{
+			name:         "POD resolves",
+			podUID:       knownPodUID,
+			wantComplete: true,
+			wantListed:   true,
+		},
+		{
+			// The POD listing worked and simply doesn't have this POD: it was deleted (a finished Job's,
+			// say) and the container referencing it is a leftover kubelet has yet to reclaim. Genuinely
+			// gone, so the list stays complete and callers may act on its absence.
+			name:         "POD deleted, listing succeeded",
+			podUID:       unknownPodUID,
+			wantComplete: true,
+			wantListed:   true,
+		},
+		{
+			// Same leftover, under annotation gating: it does leave the list, and that is correct here.
+			name:         "POD deleted, and enable comes from annotations",
+			podUID:       unknownPodUID,
+			filter:       facts.ContainerFilter{DisabledByDefault: true},
+			wantComplete: true,
+			wantListed:   false,
+		},
+		{
+			// The POD listing failed, so nothing can be concluded about this container's POD.
+			name:         "POD listing failed",
+			podUID:       unknownPodUID,
+			failPODs:     true,
+			wantComplete: false,
+			wantListed:   true,
+		},
+		{
+			// The reported failure mode: the listing failed, so the annotations that would enable this
+			// container are unavailable and it silently leaves the list. Must not read as complete.
+			name:         "POD listing failed, and enable comes from annotations",
+			podUID:       unknownPodUID,
+			failPODs:     true,
+			filter:       facts.ContainerFilter{DisabledByDefault: true},
+			wantComplete: false,
+			wantListed:   false,
+		},
+		{
+			// A container that never claimed a POD needs none to be classified, so its own absence from
+			// the POD listing says nothing about the list's completeness.
+			name:         "container has no POD",
+			podUID:       "",
+			wantComplete: true,
+			wantListed:   true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			labels := map[string]string{}
+			if tc.podUID != "" {
+				labels["io.kubernetes.pod.uid"] = tc.podUID
+			}
+
+			container := facts.FakeContainer{
+				FakeID:            "cid-1",
+				FakeContainerName: "k8s_app_some-pod_default",
+				FakeState:         facts.ContainerRunning,
+				FakeLabels:        labels,
+			}
+
+			var client kubeClient = mockClient
+			if tc.failPODs {
+				client = failingPODsClient{kubeClient: mockClient}
+			}
+
+			k := &Kubernetes{
+				Runtime:  fakePodRuntime{container: container},
+				NodeName: "minikube",
+				openConnection: func(_ context.Context, _ string, _ string) (kubeClient, error) {
+					return client, nil
+				},
+				IsContainerIgnored: tc.filter.ContainerIgnored,
+			}
+
+			containers, complete, err := k.EnumerateContainers(t.Context(), 0, false)
+			if err != nil {
+				t.Fatalf("EnumerateContainers() error = %v", err)
+			}
+
+			if complete != tc.wantComplete {
+				t.Errorf("EnumerateContainers() complete = %v, want %v", complete, tc.wantComplete)
+			}
+
+			if listed := len(containers) == 1; listed != tc.wantListed {
+				t.Errorf("EnumerateContainers() returned %d container(s), want listed = %v", len(containers), tc.wantListed)
+			}
+		})
+	}
+}
+
 // Test the container log path on Docker and ContainerD runtimes.
 func TestContainerLogPath(t *testing.T) {
 	containerWithContainerD := wrappedContainer{

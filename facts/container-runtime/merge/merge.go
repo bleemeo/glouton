@@ -169,10 +169,8 @@ func (r *Runtime) Containers(ctx context.Context, maxAge time.Duration, includeI
 	return containers, err
 }
 
-// EnumerateContainers implements crTypes.RuntimeInterface. complete is true only if every configured
-// runtime fully enumerated its own containers: deliberately stricter than IsRuntimeRunning, which is true
-// as soon as any single runtime is reachable -- with Docker and containerd side by side, one of them
-// failing still yields a usable list, but not a list anything may treat as the complete set of what exists.
+// EnumerateContainers implements crTypes.RuntimeInterface. complete is true only if every runtime that has
+// ever worked fully enumerated its own containers this time.
 func (r *Runtime) EnumerateContainers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, complete bool, globalErr error) {
 	var errs types.MultiErrors
 
@@ -184,18 +182,38 @@ func (r *Runtime) EnumerateContainers(ctx context.Context, maxAge time.Duration,
 	// list want that partial result).
 	complete = true
 
+	// Whether any runtime's answer actually bore on completeness. With every runtime skipped as
+	// never-worked complete would otherwise come back vacuously true alongside an empty list and no error.
+	anyRuntimeCounted := false
+
 	for i, cr := range r.Runtimes {
 		// subComplete, not just err: a sub-runtime can report no error and still have enumerated nothing,
 		// since docker and containerd both swallow their error until they have worked once.
 		list, subComplete, err := cr.EnumerateContainers(ctx, maxAge, true)
+
+		// Checked after the call, so a runtime that just succeeded for the first time counts as working.
+		// A zero LastUpdate means no enumeration has ever published a container list here (docker and
+		// containerd both set it as they publish the new map), which is the property that matters: see the
+		// note above for why a runtime that has published nothing cannot make the merged list incomplete.
+		// Its error is still collected into errs either way, which is about surfacing failures rather than
+		// about what callers may conclude from a container's absence -- though errs only ever reaches
+		// globalErr when no runtime returned anything at all, see the len(containers) check below.
+		neverWorked := cr.LastUpdate().IsZero()
+		if !neverWorked {
+			anyRuntimeCounted = true
+		}
+
 		if err != nil {
 			errs = append(errs, err)
-			complete = false
+
+			if !neverWorked {
+				complete = false
+			}
 
 			continue
 		}
 
-		if !subComplete {
+		if !subComplete && !neverWorked {
 			complete = false
 		}
 
@@ -209,6 +227,10 @@ func (r *Runtime) EnumerateContainers(ctx context.Context, maxAge time.Duration,
 				containers = append(containers, c)
 			}
 		}
+	}
+
+	if !anyRuntimeCounted {
+		complete = false
 	}
 
 	if len(containers) == 0 {

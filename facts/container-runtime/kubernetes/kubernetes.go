@@ -216,6 +216,7 @@ func (k *Kubernetes) EnumerateContainers(ctx context.Context, maxAge time.Durati
 	defer k.l.Unlock()
 
 	podsUpdated := false
+	podsUpdateFailed := false
 
 	response := make([]facts.Container, 0, len(containers))
 
@@ -230,9 +231,15 @@ func (k *Kubernetes) EnumerateContainers(ctx context.Context, maxAge time.Durati
 			err := k.updatePods(ctx)
 			if err != nil {
 				logger.V(2).Printf("Unable to list PODs: %v", err)
+
+				podsUpdateFailed = true
 			}
 
-			pod, _ = k.getPod(c)
+			pod, ok = k.getPod(c)
+		}
+
+		if !ok && uid != "" && podsUpdateFailed {
+			complete = false
 		}
 
 		c = wrappedContainer{
@@ -247,9 +254,7 @@ func (k *Kubernetes) EnumerateContainers(ctx context.Context, maxAge time.Durati
 		response = append(response, c)
 	}
 
-	// complete comes straight from the wrapped runtime: that is what enumerates containers here. A failure
-	// to list PODs does not affect it, since it only costs the containers their POD annotations
-	// (updatePods' error is logged and the container kept) rather than dropping any of them.
+	// complete otherwise comes straight from the wrapped runtime: that is what enumerates containers here.
 	return response, complete, nil
 }
 

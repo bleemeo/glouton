@@ -29,13 +29,15 @@ import (
 
 var errRuntimeDown = errors.New("runtime is down")
 
-// fakeRuntime is a crTypes.RuntimeInterface stub whose Containers()/LastEnumerationComplete() answers are
-// set per test. Only those two are exercised; everything else panics so a future caller can't silently
-// depend on unimplemented behavior.
+// fakeRuntime is a crTypes.RuntimeInterface stub whose Containers()/EnumerateContainers()/LastUpdate()
+// answers are set per test. Only those are exercised; everything else panics so a future caller can't
+// silently depend on unimplemented behavior.
 type fakeRuntime struct {
 	containers []facts.Container
 	err        error
 	complete   bool
+	// lastUpdate zero means "never successfully enumerated anything", as it does on the real runtimes.
+	lastUpdate time.Time
 }
 
 func (f *fakeRuntime) Containers(context.Context, time.Duration, bool) ([]facts.Container, error) {
@@ -54,7 +56,7 @@ func (f *fakeRuntime) ContainerTerminationGracePeriod(string) time.Duration { pa
 func (f *fakeRuntime) ContainerExists(string) bool                          { panic("not implemented") }
 func (f *fakeRuntime) Events() <-chan facts.ContainerEvent                  { panic("not implemented") }
 func (f *fakeRuntime) IsRuntimeRunning(context.Context) bool                { panic("not implemented") }
-func (f *fakeRuntime) LastUpdate() time.Time                                { panic("not implemented") }
+func (f *fakeRuntime) LastUpdate() time.Time                                { return f.lastUpdate }
 func (f *fakeRuntime) Run(context.Context) error                            { panic("not implemented") }
 
 func (f *fakeRuntime) Exec(context.Context, string, []string) ([]byte, error) {
@@ -92,6 +94,10 @@ func TestRuntimeEnumerateContainersCompleteness(t *testing.T) {
 	ctrA := facts.FakeContainer{FakeID: "a", FakeContainerName: "ctr-a"}
 	ctrB := facts.FakeContainer{FakeID: "b", FakeContainerName: "ctr-b"}
 
+	// A runtime that has worked at least once, as opposed to one left at the zero LastUpdate: the
+	// distinction is what tells "this runtime is failing right now" from "this runtime isn't on this host".
+	worked := time.Now().Add(-time.Minute)
+
 	testCases := []struct {
 		name         string
 		runtimes     []crTypes.RuntimeInterface
@@ -102,46 +108,97 @@ func TestRuntimeEnumerateContainersCompleteness(t *testing.T) {
 		{
 			name: "every runtime enumerated",
 			runtimes: []crTypes.RuntimeInterface{
-				&fakeRuntime{containers: []facts.Container{ctrA}, complete: true},
-				&fakeRuntime{containers: []facts.Container{ctrB}, complete: true},
+				&fakeRuntime{containers: []facts.Container{ctrA}, complete: true, lastUpdate: worked},
+				&fakeRuntime{containers: []facts.Container{ctrB}, complete: true, lastUpdate: worked},
 			},
 			wantComplete: true,
 			wantCount:    2,
 		},
 		{
-			// The reported failure mode: one runtime is down while the other works, so the list is
-			// non-empty and globalErr is nil, yet ctrB is missing from it.
-			name: "one runtime errored, the other returned containers",
+			// The reported failure mode: one runtime that used to work is down while the other works, so
+			// the list is non-empty and globalErr is nil, yet ctrB is missing from it.
+			name: "one working runtime errored, the other returned containers",
 			runtimes: []crTypes.RuntimeInterface{
-				&fakeRuntime{containers: []facts.Container{ctrA}, complete: true},
-				&fakeRuntime{err: errRuntimeDown},
+				&fakeRuntime{containers: []facts.Container{ctrA}, complete: true, lastUpdate: worked},
+				&fakeRuntime{err: errRuntimeDown, lastUpdate: worked},
 			},
 			wantComplete: false,
 			wantCount:    1,
 		},
 		{
-			// Worse: a runtime that swallowed its own error (docker/containerd do this until they have
-			// worked once) reports no error AND no containers, so nothing in the return values hints at it.
-			name: "one runtime swallowed its error, the other returned containers",
+			// Worse: a runtime can swallow its own error and report no error AND no containers, so nothing
+			// in the return values hints at it -- which is why subComplete is consulted at all.
+			name: "one working runtime swallowed its error, the other returned containers",
 			runtimes: []crTypes.RuntimeInterface{
-				&fakeRuntime{containers: []facts.Container{ctrA}, complete: true},
-				&fakeRuntime{complete: false},
+				&fakeRuntime{containers: []facts.Container{ctrA}, complete: true, lastUpdate: worked},
+				&fakeRuntime{complete: false, lastUpdate: worked},
 			},
 			wantComplete: false,
+			wantCount:    1,
+		},
+		{
+			// The other half of the contract, and the common case in production: agent.go always configures
+			// both Docker and containerd, so on a host running only one of them the other fails every
+			// single cycle. Counting it would make complete false for the process's whole life, which
+			// disables every offset-forget path downstream -- and it can hide nothing, having never
+			// enumerated a container for anyone to be tracking.
+			name: "the second runtime has never worked, the other returned containers",
+			runtimes: []crTypes.RuntimeInterface{
+				&fakeRuntime{containers: []facts.Container{ctrA}, complete: true, lastUpdate: worked},
+				&fakeRuntime{complete: false},
+			},
+			wantComplete: true,
+			wantCount:    1,
+		},
+		{
+			// Same, for a runtime that reports its failure instead of swallowing it: the error still
+			// surfaces (here globalErr stays nil only because the other runtime returned containers), it
+			// just doesn't hold the merged list back.
+			name: "the runtime that has never worked errored, the other returned containers",
+			runtimes: []crTypes.RuntimeInterface{
+				&fakeRuntime{containers: []facts.Container{ctrA}, complete: true, lastUpdate: worked},
+				&fakeRuntime{err: errRuntimeDown},
+			},
+			wantComplete: true,
 			wantCount:    1,
 		},
 		{
 			// A genuinely container-less host: complete, so a caller may drop what it was tracking.
 			name: "all runtimes enumerated nothing",
 			runtimes: []crTypes.RuntimeInterface{
-				&fakeRuntime{complete: true},
-				&fakeRuntime{complete: true},
+				&fakeRuntime{complete: true, lastUpdate: worked},
+				&fakeRuntime{complete: true, lastUpdate: worked},
 			},
 			wantComplete: true,
 			wantCount:    0,
 		},
 		{
-			name: "every runtime errored",
+			name: "every working runtime errored",
+			runtimes: []crTypes.RuntimeInterface{
+				&fakeRuntime{err: errRuntimeDown, lastUpdate: worked},
+				&fakeRuntime{err: errRuntimeDown, lastUpdate: worked},
+			},
+			wantComplete: false,
+			wantCount:    0,
+			wantErr:      true,
+		},
+		{
+			// The shape a host with no container runtime at all actually produces: docker and containerd
+			// both swallow their error until they have worked once, so nothing here reports a failure. With
+			// every runtime skipped as never-worked, complete would be vacuously true next to an empty list
+			// and a nil error -- which agent.go's call site would take as "authoritatively zero containers
+			// exist" -- so no runtime having ever worked is reported as incomplete instead.
+			name: "no runtime has ever worked, and each swallowed its error",
+			runtimes: []crTypes.RuntimeInterface{
+				&fakeRuntime{complete: false},
+				&fakeRuntime{complete: false},
+			},
+			wantComplete: false,
+			wantCount:    0,
+		},
+		{
+			// Same, for runtimes that do report their failure.
+			name: "no runtime has ever worked, and each errored",
 			runtimes: []crTypes.RuntimeInterface{
 				&fakeRuntime{err: errRuntimeDown},
 				&fakeRuntime{err: errRuntimeDown},
