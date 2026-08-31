@@ -891,9 +891,7 @@ func (c *Client) onNotification(ctx context.Context, msg paho.Message) {
 	case "maintenance-toggle":
 		c.opts.UpdateMaintenance()
 	case "mqtt-reconnect":
-		if c.mqtt != nil {
-			c.mqtt.ForceReconnect()
-		}
+		c.mqtt.ForceReconnect()
 	case "threshold-update":
 		c.opts.UpdateMetrics(payload.MetricUUID)
 	case "monitor-update":
