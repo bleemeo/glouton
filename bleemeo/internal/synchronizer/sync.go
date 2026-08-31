@@ -59,6 +59,13 @@ const (
 	agentDysfunctionalCacheKey       = "AgentDysfunctional"
 	disableCrashReportUploadCacheKey = "DisableCrashReportUploadUntil"
 	refreshTokenCacheKey             = "RefreshToken"
+
+	// duplicateCheckInterval is the delay between two duplicated agent checks, jittered.
+	// The check lists the agent facts registered on the API, which used to happen on every
+	// synchronization execution doing any API call. It only needs to detect a state file
+	// shared between two Glouton, which isn't urgent, and it's forced anyway before the
+	// agent facts get updated.
+	duplicateCheckInterval = 20 * time.Minute
 )
 
 var (
@@ -106,6 +113,8 @@ type Synchronizer struct {
 	l                             sync.Mutex
 	disabledUntil                 time.Time
 	disableReason                 bleemeoTypes.DisableReason
+	lastDuplicateCheck            time.Time
+	nextDuplicateCheck            time.Time
 	forceSync                     map[types.EntityName]types.SyncRequest
 	pendingMetricsUpdate          []string
 	pendingMonitorsUpdate         []MonitorUpdate
@@ -200,10 +209,7 @@ func (s *Synchronizer) newClient() types.Client {
 		return s.option.ProvideClient()
 	}
 
-	return &wrapperClient{
-		client:           s.realClient,
-		checkDuplicateFn: s.checkDuplicated,
-	}
+	return &wrapperClient{client: s.realClient}
 }
 
 func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes.ArchiveWriter) error {
@@ -239,6 +245,8 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 		LastMaintenanceSync           time.Time
 		DisabledUntil                 time.Time
 		DisableReason                 string
+		LastDuplicateCheck            time.Time
+		NextDuplicateCheck            time.Time
 		ForceSync                     map[types.EntityName]types.SyncRequest
 		PendingMetricsUpdateCount     int
 		PendingMonitorsUpdateCount    int
@@ -270,6 +278,8 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 		LastMaintenanceSync:           s.state.lastMaintenanceSync,
 		DisabledUntil:                 s.disabledUntil,
 		DisableReason:                 s.disableReason.String(),
+		LastDuplicateCheck:            s.lastDuplicateCheck,
+		NextDuplicateCheck:            s.nextDuplicateCheck,
 		ForceSync:                     s.forceSync,
 		PendingMetricsUpdateCount:     len(s.pendingMetricsUpdate),
 		PendingMonitorsUpdateCount:    len(s.pendingMonitorsUpdate),
@@ -702,7 +712,7 @@ func (s *Synchronizer) UpdateAgent(delay time.Duration) {
 func (s *Synchronizer) SetMaintenance(ctx context.Context, maintenance bool) {
 	if s.IsMaintenance() && !maintenance {
 		// getting out of maintenance, let's check for a duplicated state.json file
-		err := s.checkDuplicated(ctx, s.newClient())
+		err := s.checkDuplicatedIfNeeded(ctx, s.newClient(), s.now(), true)
 		if err != nil {
 			// it's not a critical error at all, we will perform this check again on the next synchronization pass
 			logger.V(2).Printf("Couldn't check for duplicated agent: %v", err)
@@ -1164,6 +1174,47 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (*Execut
 	s.l.Unlock()
 
 	return execution, err
+}
+
+// checkDuplicatedIfNeeded runs checkDuplicated, unless it already ran during the execution
+// started at executionStartedAt or, when force is false, ran recently enough.
+//
+// It must run *before* any agent fact is updated on the API: the check compares the facts
+// registered on the API with the ones this Glouton registered, so updating them first would
+// hide a duplication. Callers about to update facts must therefore force the check.
+func (s *Synchronizer) checkDuplicatedIfNeeded(
+	ctx context.Context, client types.Client, executionStartedAt time.Time, force bool,
+) error {
+	s.l.Lock()
+	shouldCheck := s.shouldCheckDuplicatedLocked(executionStartedAt, force)
+	s.l.Unlock()
+
+	if !shouldCheck {
+		return nil
+	}
+
+	if err := s.checkDuplicated(ctx, client); err != nil {
+		return err
+	}
+
+	s.l.Lock()
+	s.lastDuplicateCheck = s.now()
+	s.nextDuplicateCheck = s.lastDuplicateCheck.Add(delay.JitterDelay(duplicateCheckInterval, 0.25))
+	s.l.Unlock()
+
+	return nil
+}
+
+// shouldCheckDuplicatedLocked tells whether the duplicated agent check should run now.
+// It never runs twice during the same synchronization execution. Outside of that, force makes
+// it run regardless of when it last ran.
+// Caller must hold the lock s.l.
+func (s *Synchronizer) shouldCheckDuplicatedLocked(executionStartedAt time.Time, force bool) bool {
+	if !s.lastDuplicateCheck.Before(executionStartedAt) {
+		return false
+	}
+
+	return force || !s.now().Before(s.nextDuplicateCheck)
 }
 
 // checkDuplicated checks if another glouton is running with the same ID.

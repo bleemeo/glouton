@@ -31,7 +31,6 @@ import (
 	"time"
 
 	"github.com/bleemeo/bleemeo-go"
-	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 )
 
 const gloutonOAuthClientID = "5c31cbfc-254a-4fb9-822d-e55c681a3d4f"
@@ -42,20 +41,7 @@ var (
 )
 
 type wrapperClient struct {
-	client           *bleemeo.Client
-	checkDuplicateFn func(context.Context, types.Client) error
-
-	duplicateError   error
-	duplicateChecked bool
-}
-
-func (cl *wrapperClient) dupCheck(ctx context.Context) error {
-	if !cl.duplicateChecked {
-		cl.duplicateChecked = true
-		cl.duplicateError = cl.checkDuplicateFn(ctx, cl)
-	}
-
-	return cl.duplicateError
+	client *bleemeo.Client
 }
 
 func (cl *wrapperClient) ThrottleDeadline() time.Time {
@@ -71,10 +57,6 @@ func (cl *wrapperClient) Get(ctx context.Context, resource bleemeo.Resource, id 
 		return errClientUninitialized
 	}
 
-	if err := cl.dupCheck(ctx); err != nil {
-		return err
-	}
-
 	respBody, err := cl.client.Get(ctx, resource, id, strings.Split(fields, ",")...)
 	if err != nil {
 		return err
@@ -88,10 +70,6 @@ func (cl *wrapperClient) Count(ctx context.Context, resource bleemeo.Resource, p
 		return 0, errClientUninitialized
 	}
 
-	if err := cl.dupCheck(ctx); err != nil {
-		return 0, err
-	}
-
 	return cl.client.Count(ctx, resource, params)
 }
 
@@ -100,20 +78,12 @@ func (cl *wrapperClient) Iterator(ctx context.Context, resource bleemeo.Resource
 		return errorIterator{errClientUninitialized}
 	}
 
-	if err := cl.dupCheck(ctx); err != nil {
-		return errorIterator{err}
-	}
-
 	return cl.client.Iterator(resource, params)
 }
 
 func (cl *wrapperClient) Create(ctx context.Context, resource bleemeo.Resource, body any, fields string, result any) error {
 	if cl == nil {
 		return errClientUninitialized
-	}
-
-	if err := cl.dupCheck(ctx); err != nil {
-		return err
 	}
 
 	respBody, err := cl.client.Create(ctx, resource, body, strings.Split(fields, ",")...)
@@ -134,10 +104,6 @@ func (cl *wrapperClient) Update(ctx context.Context, resource bleemeo.Resource, 
 		return errClientUninitialized
 	}
 
-	if err := cl.dupCheck(ctx); err != nil {
-		return err
-	}
-
 	respBody, err := cl.client.Update(ctx, resource, id, body, strings.Split(fields, ",")...)
 	if err != nil {
 		return err
@@ -154,10 +120,6 @@ func (cl *wrapperClient) Update(ctx context.Context, resource bleemeo.Resource, 
 func (cl *wrapperClient) Delete(ctx context.Context, resource bleemeo.Resource, id string) error {
 	if cl == nil {
 		return errClientUninitialized
-	}
-
-	if err := cl.dupCheck(ctx); err != nil {
-		return err
 	}
 
 	return cl.client.Delete(ctx, resource, id)
@@ -180,10 +142,6 @@ func (cl *wrapperClient) Do(ctx context.Context, method, reqURI string, params u
 func (cl *wrapperClient) DoWithBody(ctx context.Context, reqURI string, contentType string, body io.Reader) (resp *http.Response, err error) {
 	if cl == nil {
 		return nil, errClientUninitialized
-	}
-
-	if err = cl.dupCheck(ctx); err != nil {
-		return nil, err
 	}
 
 	if !path.IsAbs(reqURI) {

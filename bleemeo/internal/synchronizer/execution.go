@@ -333,6 +333,21 @@ func (e *Execution) run(ctx context.Context) error {
 	e.dropFulfilledLaterRequests()
 	e.syncListStarted = true
 
+	if !e.isLimitedExecution && e.hadWork() {
+		// Piggyback the periodic duplicated agent check on an execution that is going to call
+		// the API anyway, so that it never costs a request on its own.
+		if err := e.synchronizer.checkDuplicatedIfNeeded(ctx, e.client, e.startedAt, false); err != nil {
+			// The check either found a duplicate, and disabled the connector, or failed to reach
+			// the API. Fail every requested entity, like the check did when it ran on the first
+			// API call, so that their synchronization is retried later.
+			for idx := range e.entities {
+				if e.entities[idx].syncType != types.SyncTypeNone && e.entities[idx].err == nil {
+					e.entities[idx].err = err
+				}
+			}
+		}
+	}
+
 	e.synchronizersCall(ctx, e.entities, func(ctx context.Context, ee EntityExecution) EntityExecution {
 		if ee.syncType == types.SyncTypeNone {
 			return ee
