@@ -2384,6 +2384,36 @@ func Test_migrate(t *testing.T) { //nolint:maintidx
 			WantWarning: true,
 		},
 		{
+			// Fluent Bit's inputLogPaths returned the configured path and nothing else whenever one was set
+			// ("The configured path has priority over the container name and selectors"), so an input
+			// carrying both only ever counted that file's lines. The migration used to write all three keys
+			// onto one receiver, and the receivers here treat include patterns and container matchers as
+			// independent sources feeding the same fan-out -- so the container's matching lines started
+			// being counted too and the metric jumped on upgrade. path must still win, and say so.
+			Name:       "legacy-log-inputs-path-and-container",
+			ConfigFile: "testdata/legacy-log-inputs-path-and-container.conf",
+			WantConfig: Config{
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
+							legacyInputReceiverName("testdata/legacy-log-inputs-path-and-container.conf", 0): {
+								"include":   []any{"/var/log/app.log"},
+								"send_logs": false,
+								"metrics": []any{
+									map[string]any{
+										"metric":     "app_errors_count",
+										"item":       "",
+										"conditions": []any{`IsMatch(body, "ERROR")`},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			WantWarning: true,
+		},
+		{
 			// A hand-written log.metrics_rules entry that happens to share the (otherwise unused)
 			// legacy-style name must be left untouched, and the migrated receiver must still get its
 			// own inline metric built from its own filter -- not the hand-written rule's conditions.

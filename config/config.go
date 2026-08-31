@@ -1005,16 +1005,33 @@ func migrateLogInputs(k *koanf.Koanf, config map[string]any, providerPath string
 			"send_logs": false,
 		}
 
-		if path != "" {
+		// path wins outright, as it did before: Fluent Bit's inputLogPaths returned the configured path and
+		// nothing else whenever one was set ("The configured path has priority over the container name and
+		// selectors"), so a legacy input carrying both only ever counted that file's lines. Writing all
+		// three onto one receiver instead would change what the metric counts on upgrade, since the
+		// receivers here treat include patterns and container matchers as independent sources feeding the
+		// same fan-out -- the container's matching lines would start being counted too and the series would
+		// jump. Warned about rather than dropped quietly, since the config keeps saying otherwise.
+		switch {
+		case path != "":
 			receiver["include"] = []any{path}
-		}
 
-		if containerName != "" {
-			receiver["container_name"] = containerName
-		}
+			if containerName != "" || len(selectors) > 0 {
+				warnings.Append(fmt.Errorf(
+					"%w: log.inputs[%d] sets path as well as container_name/container_selectors, which never had"+
+						" any effect alongside a path -- only %q is migrated; drop path to count the container's"+
+						" lines instead",
+					errSettingsDeprecated, i, path,
+				))
+			}
+		default:
+			if containerName != "" {
+				receiver["container_name"] = containerName
+			}
 
-		if len(selectors) > 0 {
-			receiver["container_selectors"] = selectors
+			if len(selectors) > 0 {
+				receiver["container_selectors"] = selectors
+			}
 		}
 
 		name := legacyInputReceiverName(providerPath, i)
