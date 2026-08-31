@@ -45,6 +45,13 @@ const (
 	// and we won't wait long to reconnect in case of a disconnection.
 	stableConnection    = 5 * time.Minute
 	maxDelayWithoutPing = 90 * time.Second
+	// After losing a stable connection, wait for a random duration in [0, maxReconnectSpread[
+	// before reconnecting.
+	// When every agent gets disconnected at the same time (e.g. a broker restart or a certificate
+	// renewal), they would otherwise all reconnect within the same instant, and each reconnection
+	// costs an authentication and a few authorizations on the server side.
+	// This must stay well below the delay after which a disconnected agent is reported as such.
+	maxReconnectSpread = 15 * time.Second
 )
 
 var ErrPayloadTooLarge = errors.New("payload is too large")
@@ -225,7 +232,7 @@ func (c *Client) onConnectionLost(err error) {
 	c.connectionLost <- nil
 }
 
-func (c *Client) connectionManager(ctx context.Context) {
+func (c *Client) connectionManager(ctx context.Context) { //nolint:maintidx
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
@@ -381,6 +388,16 @@ mainLoop:
 				logger.V(2).Printf("%s MQTT connection was stable, reset delay to %v", c.opts.ID, minimalDelayBetweenConnect)
 				currentConnectDelay = minimalDelayBetweenConnect
 				consecutiveError = 0
+
+				// The connection was stable, so the next iteration would reconnect at once.
+				// Wait a bit first, so that agents disconnected together don't reconnect together.
+				spread := delay.JitterMs(maxReconnectSpread/2, 1)
+				logger.V(2).Printf("Reconnecting to %s MQTT in %v", c.opts.ID, spread)
+
+				select {
+				case <-time.After(spread):
+				case <-ctx.Done():
+				}
 			} else if length > 0 {
 				delay := currentConnectDelay - time.Since(lastConnectionTimes[len(lastConnectionTimes)-1])
 				if delay > 0 {
