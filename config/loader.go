@@ -466,7 +466,7 @@ func isMapKey(key string) (bool, string) {
 
 // Build the configuration from the loaded items.
 func (c *configLoader) Build() (*koanf.Koanf, prometheus.MultiError) {
-	var warnings prometheus.MultiError
+	warnings := make(prometheus.MultiError, 0, 4)
 
 	config := make(map[string]any)
 	priorities := make(map[string]int)
@@ -492,7 +492,7 @@ func (c *configLoader) Build() (*koanf.Koanf, prometheus.MultiError) {
 	}
 
 	warnings.Append(mergeKnownLogFormats(config))
-	synthesizeLegacyNetworkListener(config)
+	warnings = append(warnings, synthesizeLegacyNetworkListener(config)...)
 	dedupeFromListeners(config)
 
 	k := koanf.New(delimiter)

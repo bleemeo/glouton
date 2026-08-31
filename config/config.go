@@ -66,14 +66,15 @@ const (
 )
 
 var (
-	errDeprecatedEnv         = errors.New("environment variable is deprecated")
-	errSettingsDeprecated    = errors.New("setting is deprecated")
-	errWrongMapFormat        = errors.New("could not parse map from string")
-	errUnsupportedProvider   = errors.New("provider not supported by config loader")
-	errCannotMerge           = errors.New("cannot merge")
-	errLegacyFilterNameClash = errors.New("legacy log.inputs filter shares a metric name with another log.inputs entry")
-	ErrInvalidValue          = errors.New("invalid config value")
-	ErrMissconfiguration     = errors.New("config issue")
+	errDeprecatedEnv          = errors.New("environment variable is deprecated")
+	errSettingsDeprecated     = errors.New("setting is deprecated")
+	errWrongMapFormat         = errors.New("could not parse map from string")
+	errUnsupportedProvider    = errors.New("provider not supported by config loader")
+	errCannotMerge            = errors.New("cannot merge")
+	errLegacyFilterNameClash  = errors.New("legacy log.inputs filter shares a metric name with another log.inputs entry")
+	errLegacyNetworkNameTaken = errors.New("your config already defines the name the legacy log.opentelemetry.grpc/http migration would synthesize")
+	ErrInvalidValue           = errors.New("invalid config value")
+	ErrMissconfiguration      = errors.New("config issue")
 )
 
 // Load loads the configuration from files and environment variables, returning the config, loaded items, warnings and an error.
@@ -1179,7 +1180,9 @@ func warnLegacyNetworkListeners(k *koanf.Koanf, providerType ItemSource) prometh
 // scalars first -- last provider wins per leaf, exactly as pre-deprecation -- and fuses once, afterwards.
 //
 // config is the merged flat config map: top-level keys are dot-joined, values may be nested maps.
-func synthesizeLegacyNetworkListener(config map[string]any) {
+func synthesizeLegacyNetworkListener(config map[string]any) prometheus.MultiError {
+	var warnings prometheus.MultiError
+
 	const (
 		path            = "log.opentelemetry"
 		defaultGRPCPort = 4317
@@ -1218,7 +1221,7 @@ func synthesizeLegacyNetworkListener(config map[string]any) {
 	}
 
 	if grpcEndpoint == "" && httpEndpoint == "" {
-		return // both were disabled (or never set): no network participation to migrate
+		return warnings // both were disabled (or never set): no network participation to migrate
 	}
 
 	protocols := map[string]any{}
@@ -1230,18 +1233,47 @@ func synthesizeLegacyNetworkListener(config map[string]any) {
 		protocols["http"] = map[string]any{"endpoint": httpEndpoint}
 	}
 
+	// Both entries below are only synthesized into a name the user hasn't taken. Assigning over it used to
+	// destroy their entry outright and silently: a receiver of that name lost its include patterns and its
+	// metrics, so their file stopped being tailed and their metric disappeared. That is reachable on the
+	// very migration path the deprecation warning sends people down -- copy the effective legacy listener
+	// out, correct its endpoint, forget to delete the old grpc/http keys -- where it silently reverted the
+	// correction. Theirs wins instead, and the warning says so.
+	//
+	// The two names are handled independently: keeping a user's listener while still synthesizing the
+	// receiver is exactly what makes that migration flow work (their endpoint, shipped by the legacy shim).
 	networkListeners := takeNestedMapFromFlatConfig(config, "opentelemetry.listeners")
 
-	networkListeners[listenerKey] = map[string]any{"protocols": protocols}
+	if _, taken := networkListeners[listenerKey]; taken {
+		warnings.Append(fmt.Errorf(
+			"%w: opentelemetry.listeners.%s -- keeping yours, so %s.grpc/http's address and port are ignored;"+
+				" delete those keys once you've checked the endpoint",
+			errLegacyNetworkNameTaken, listenerKey, path,
+		))
+	} else {
+		networkListeners[listenerKey] = map[string]any{"protocols": protocols}
+	}
+
 	config["opentelemetry.listeners"] = networkListeners
 
 	receivers := takeNestedMapFromFlatConfig(config, "log.opentelemetry.receivers")
 
-	receivers[receiverKey] = map[string]any{
-		"from_listeners": []any{listenerKey},
-		"send_logs":      true,
+	if _, taken := receivers[receiverKey]; taken {
+		warnings.Append(fmt.Errorf(
+			"%w: log.opentelemetry.receivers.%s -- keeping yours, so it must carry from_listeners: [%s]"+
+				" itself for %s.grpc/http to still ship anything",
+			errLegacyNetworkNameTaken, receiverKey, listenerKey, path,
+		))
+	} else {
+		receivers[receiverKey] = map[string]any{
+			"from_listeners": []any{listenerKey},
+			"send_logs":      true,
+		}
 	}
+
 	config["log.opentelemetry.receivers"] = receivers
+
+	return warnings
 }
 
 // removedLogKeys are the pre-OpenTelemetry log settings that no longer exist in any form. Both are set

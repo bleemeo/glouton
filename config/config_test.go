@@ -1310,6 +1310,50 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				},
 			},
 		},
+		// Guards against a regression where the legacy migration assigned over the synthesized names
+		// instead of leaving a user's own entries alone, destroying them outright and silently: the
+		// receiver lost its include patterns (and any metrics), so that file stopped being tailed and the
+		// metric vanished, and the listener lost its endpoint. Reachable on the migration path the
+		// deprecation warning itself sends people down -- copy the effective legacy-network listener out,
+		// correct its endpoint, forget to delete the old grpc/http keys -- where it silently reverted the
+		// correction. Both entries must survive, each with its own warning saying what was kept.
+		{
+			Name:  "legacy network migration keeps a user's own same-named entries",
+			Files: []string{"testdata/legacy-network-name-taken.conf"},
+			WantWarnings: []string{
+				"testdata/legacy-network-name-taken.conf: setting is deprecated: log.opentelemetry.grpc/http " +
+					"{enable, address, port}, use opentelemetry.listeners + a log.opentelemetry.receivers entry's " +
+					"from_listener field instead",
+				"your config already defines the name the legacy log.opentelemetry.grpc/http migration would " +
+					"synthesize: opentelemetry.listeners.legacy-network -- keeping yours, so " +
+					"log.opentelemetry.grpc/http's address and port are ignored; delete those keys once you've " +
+					"checked the endpoint",
+				"your config already defines the name the legacy log.opentelemetry.grpc/http migration would " +
+					"synthesize: log.opentelemetry.receivers.legacy_network -- keeping yours, so it must carry " +
+					"from_listeners: [legacy-network] itself for log.opentelemetry.grpc/http to still ship anything",
+			},
+			WantConfig: Config{
+				OpenTelemetry: OpenTelemetryConfig{
+					NetworkListeners: map[string]NetworkListener{
+						legacyNetworkListenerKey(): {
+							Protocols: NetworkProtocols{
+								HTTP: &NetworkEndpoint{Endpoint: "0.0.0.0:9999"},
+							},
+						},
+					},
+				},
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
+							legacyNetworkReceiverKey(): {
+								"include":   []any{"/var/log/mine.log"},
+								"send_logs": true,
+							},
+						},
+					},
+				},
+			},
+		},
 		// Guards against a regression where a second conf.d file overriding only one half of the legacy
 		// listener shape had that half silently discarded. The new shape fuses address+port into one
 		// endpoint string, so while this was translated per provider, file B (setting just "port") could
