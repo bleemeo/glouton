@@ -1914,3 +1914,114 @@ func TestReleaseFileBookkeepingKeepsFileWithAnotherReader(t *testing.T) {
 		})
 	}
 }
+
+// TestLabelContainerForgetsOffsetAfterTailTransition guards against a state-cache leak for every container
+// that stops being tailed before it disappears. updateLabelContainers' rebuild path tears the source down
+// keeping the offset -- correct, the container is still there -- and re-asks the providers. When none wants
+// it anymore (the ordinary outcome once the service path picks the container up and no glouton.log_metrics
+// rule keeps logmetrics interested) the rebuilt source starts no tail, so containerExtIDs stays empty and
+// the eventual "gone for good" teardown had nothing to forget from. The offset then sat in
+// metadataPerReceiver and was re-serialized into the state cache by every later save for the rest of the
+// process's life: one leaked entry per container, growing without bound on a churny node.
+func TestLabelContainerForgetsOffsetAfterTailTransition(t *testing.T) {
+	t.Parallel()
+
+	logFile, err := os.CreateTemp(t.TempDir(), "ctr-*.log")
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer logFile.Close()
+
+	rm := newTestReceiverManager(t, config.OpenTelemetry{})
+
+	// Wants the source at first, then declines -- exactly what logprocessing does once serviceTailed flips.
+	sink, _ := recordingLogsConsumer()
+	wanted := true
+
+	rm.RegisterSinkProvider(&fakeSinkProvider{
+		want: func(ResolvedSource) (consumer.Logs, bool) {
+			if !wanted {
+				return nil, false
+			}
+
+			return sink, true
+		},
+	})
+
+	ctr := facts.FakeContainer{
+		FakeID: "id-1", FakeContainerName: "app-1", FakeLogPath: logFile.Name(),
+		FakeLabels: map[string]string{ContainerLabelPrefix + "send_logs": "true"},
+	}
+
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil, true)
+
+	rm.l.Lock()
+	ms := rm.byContainer[ctr.ID()]
+	rm.l.Unlock()
+
+	if ms == nil {
+		t.Fatal("expected a label-fallback source for the container")
+	}
+
+	ms.l.Lock()
+	extIDs := ms.containerExtIDs[ctr.ID()]
+	ms.l.Unlock()
+
+	if len(extIDs) == 0 {
+		t.Fatal("expected the container tail to have registered a persistent extension")
+	}
+
+	name := extIDs[0].Name()
+
+	// Seed offset metadata, as a real tail would have.
+	rm.persister.l.Lock()
+	rm.persister.metadataPerReceiver[name] = map[string][]byte{"offset": []byte("42")}
+	rm.persister.updatedKeys[name] = struct{}{}
+	rm.persister.l.Unlock()
+
+	// The service path picks the container up and the provider declines: rebuilt with no tail at all.
+	wanted = false
+
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, map[string]bool{ctr.ID(): true}, true)
+
+	rm.l.Lock()
+	rebuilt := rm.byContainer[ctr.ID()]
+	rm.l.Unlock()
+
+	if rebuilt == nil || rebuilt.fanout != nil {
+		t.Fatalf("expected the container to be rebuilt with no fanout, got %+v", rebuilt)
+	}
+
+	// A second identical transition must not lose track of the offset either.
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, nil, true)
+	rm.UpdateContainers(t.Context(), []facts.Container{ctr}, map[string]bool{ctr.ID(): true}, true)
+
+	// The offset must still be there while the container is: it may yet be wanted again.
+	rm.persister.l.Lock()
+	_, keptWhilePresent := rm.persister.metadataPerReceiver[name]
+	rm.persister.l.Unlock()
+
+	if !keptWhilePresent {
+		t.Error("expected the offset to survive while the container is still present")
+	}
+
+	// Now it is gone for good, with a complete enumeration.
+	rm.UpdateContainers(t.Context(), nil, nil, true)
+
+	rm.persister.l.Lock()
+	_, leakedMetadata := rm.persister.metadataPerReceiver[name]
+	_, leakedUpdatedKey := rm.persister.updatedKeys[name]
+	rm.persister.l.Unlock()
+
+	if leakedMetadata || leakedUpdatedKey {
+		t.Errorf(
+			"expected %q to be forgotten once the container was removed, got metadata=%v updatedKeys=%v",
+			name, leakedMetadata, leakedUpdatedKey,
+		)
+	}
+
+	if got := rm.persister.getAllMetadata(); len(got) != 0 {
+		t.Errorf("expected nothing left to re-serialize into the state cache, got %v", got)
+	}
+}

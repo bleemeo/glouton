@@ -248,6 +248,20 @@ type managedSource struct {
 	containerRecvs   map[string][]receiver.Logs
 	containerExtIDs  map[string][]component.ID
 	containerLogFile map[string]string
+	// retiredExtIDs are persisted-offset identities this source once tailed under but no longer does, kept
+	// only so a later permanent teardown can still forget their metadata. A component.ID is just a
+	// type/name pair, and forgetting works off that name, so an ID stays usable after its extension has
+	// been un-registered.
+	//
+	// They arise from updateLabelContainers' rebuild path: it tears the source down keeping the offset
+	// (the container is still there, only who consumes its lines changed) and re-asks the providers. When
+	// none of them wants it anymore -- the ordinary outcome once the service path picks the container up
+	// and no glouton.log_metrics rule keeps logmetrics interested -- the rebuilt source starts no tail, so
+	// containerExtIDs stays empty. Without this, the eventual "container is gone for good" teardown had
+	// nothing left to forget from, and the offset stayed in PersistHost.metadataPerReceiver, re-serialized
+	// into the state cache by every later save for the rest of the process's life: one leaked entry per
+	// container that ever went through such a transition.
+	retiredExtIDs []component.ID
 }
 
 func newManagedSource(name string, kind SourceKind, operators []operator.Config, extraRaw map[string]any) *managedSource {
@@ -264,6 +278,26 @@ func newManagedSource(name string, kind SourceKind, operators []operator.Config,
 		containerExtIDs:  make(map[string][]component.ID),
 		containerLogFile: make(map[string]string),
 	}
+}
+
+// persistedExtIDs returns every persisted-offset identity this source is currently associated with,
+// whether or not a tail is still running under it. Used to carry them across a rebuild, so the rebuilt
+// source can still forget them if the container it stands for turns out to be gone for good.
+func (ms *managedSource) persistedExtIDs() []component.ID {
+	ms.l.Lock()
+	defer ms.l.Unlock()
+
+	ids := slices.Clone(ms.retiredExtIDs)
+
+	for _, extIDs := range ms.extIDs {
+		ids = append(ids, extIDs...)
+	}
+
+	for _, extIDs := range ms.containerExtIDs {
+		ids = append(ids, extIDs...)
+	}
+
+	return ids
 }
 
 // SizesByFile implements FileSizer, for the cross-restart file-size cache. A single file's stat error
@@ -802,6 +836,10 @@ func (rm *ReceiverManager) updateLabelContainers(
 		labels := parseContainerLabels(ctr)
 		nowServiceTailed := serviceTailed[ctr.ID()]
 
+		// Carried across the rebuild below, so the offsets kept by it can still be forgotten once the
+		// container is gone for good, even if the rebuilt source ends up tailing nothing at all.
+		var retiredExtIDs []component.ID
+
 		ms, found := rm.byContainer[ctr.ID()]
 		if found && (!ms.labels.equal(labels) || ms.serviceTailed != nowServiceTailed) {
 			// Either the container's glouton.* labels/annotations changed since last scan (e.g. a live
@@ -809,6 +847,8 @@ func (rm *ReceiverManager) updateLabelContainers(
 			// what the providers would answer, so tear down and rebuild to re-ask them, instead of
 			// silently keeping the stale fanout/operators forever. Offsets are kept (false): the container
 			// is still here, only who consumes its lines changed.
+			retiredExtIDs = ms.persistedExtIDs()
+
 			rm.shutdownSource(ctx, ms, false)
 			rm.releaseProviders(ctx, ms.container)
 			delete(rm.byContainer, ctr.ID())
@@ -836,6 +876,7 @@ func (rm *ReceiverManager) updateLabelContainers(
 			ms.container = ctr
 			ms.labels = labels
 			ms.serviceTailed = nowServiceTailed
+			ms.retiredExtIDs = retiredExtIDs
 			ms.fanout = rm.askProviders(ctx, ResolvedSource{
 				Kind:           SourceContainerLabel,
 				Name:           ctr.ContainerName(),
@@ -1124,6 +1165,16 @@ func (rm *ReceiverManager) shutdownSource(ctx context.Context, ms *managedSource
 	for id, recvs := range ms.containerRecvs {
 		shutdownReceivers(ctx, recvs)
 		removeExts(ms.containerExtIDs[id])
+	}
+
+	// Offsets this source used to tail under but no longer does: no receiver left to stop, only metadata a
+	// permanent teardown must not leave behind (see managedSource.retiredExtIDs -- a source rebuilt into
+	// tailing nothing otherwise had nothing to forget from, and leaked its offset for good). Their
+	// extensions are already un-registered, so a resumable shutdown has nothing to do here.
+	if forget && len(ms.retiredExtIDs) > 0 {
+		rm.persister.RemovePersistentExtsAndForget(ms.retiredExtIDs)
+
+		ms.retiredExtIDs = nil
 	}
 }
 
