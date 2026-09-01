@@ -102,9 +102,9 @@ func assertTags(t *testing.T, store *internal.StoreAccumulator, want map[string]
 
 // TestDifferentiationAndHitRatio checks that cache_hit/cache_miss (lifetime
 // totals since Varnish started) are differentiated into per-second rates,
-// that hit_ratio is computed from those rates, and that uptime (itself a
-// monotonically increasing counter meant to be read as-is) passes through
-// untouched.
+// that hit_percent is computed from those rates as a 0..100 percentage, and
+// that uptime (itself a monotonically increasing counter meant to be read
+// as-is) passes through untouched.
 func TestDifferentiationAndHitRatio(t *testing.T) {
 	store := &internal.StoreAccumulator{}
 	acc := newAccumulator(store)
@@ -146,11 +146,11 @@ func TestDifferentiationAndHitRatio(t *testing.T) {
 
 	got := collectFinalMetrics(store)
 
-	// hit_ratio = 90 / (90+10) = 0.9
+	// hit_percent = 90 / (90+10) * 100 = 90
 	assertMetrics(t, got, map[string]float64{
 		"varnish_cache_hit":         90,
 		"varnish_cache_miss":        10,
-		"varnish_cache_hit_ratio":   0.9,
+		"varnish_cache_hit_percent": 90,
 		"varnish_uptime":            3610,
 		"varnish_backend_fail":      2,
 		"varnish_backend_unhealthy": 1,

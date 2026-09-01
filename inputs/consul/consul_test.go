@@ -56,9 +56,10 @@ func collectFinalMetrics(store *internal.StoreAccumulator) map[string]float64 {
 
 func newAccumulator(store *internal.StoreAccumulator) internal.Accumulator {
 	return internal.Accumulator{
-		RenameGlobal:  renameGlobal,
-		RenameMetrics: renameMetrics,
-		Accumulator:   store,
+		RenameGlobal:     renameGlobal,
+		RenameMetrics:    renameMetrics,
+		TransformMetrics: transformMetrics,
+		Accumulator:      store,
 	}
 }
 
@@ -111,7 +112,9 @@ func TestGaugeRename(t *testing.T) {
 // TestCounterAndSampleFields checks the counters and samples, which the plugin reports
 // with one field per aggregation (rate, mean, ...). Those are already aggregated by
 // Consul over its own interval, so they must not be differentiated again -- only the
-// dotted measurement name is normalized, the fields keep their name.
+// dotted measurement name is normalized, the fields keep their name -- except the raft/kvs
+// timer means, which Consul reports in milliseconds and transformMetrics converts to
+// seconds (see TestTimerMeansConvertedToSeconds).
 func TestCounterAndSampleFields(t *testing.T) {
 	store := &internal.StoreAccumulator{}
 	acc := newAccumulator(store)
@@ -122,6 +125,23 @@ func TestCounterAndSampleFields(t *testing.T) {
 		"rate":  10.0,
 		"sum":   100.0,
 	}, nil, time.Now())
+
+	got := collectFinalMetrics(store)
+
+	assertMetrics(t, got, map[string]float64{
+		"consul_rpc_request_rate": 10,
+	})
+}
+
+// TestTimerMeansConvertedToSeconds checks that the kvs_apply/raft_committime/
+// raft_leader_lastcontact means -- reported by Consul's go-metrics sink in
+// milliseconds -- are converted to seconds and renamed accordingly, matching every
+// other duration metric in this codebase.
+func TestTimerMeansConvertedToSeconds(t *testing.T) {
+	store := &internal.StoreAccumulator{}
+	acc := newAccumulator(store)
+
+	acc.PrepareGather()
 	acc.AddCounter("consul.raft.commitTime", map[string]any{
 		"count": 42.0,
 		"mean":  1.5,
@@ -131,14 +151,27 @@ func TestCounterAndSampleFields(t *testing.T) {
 		"count": 12.0,
 		"mean":  2.5,
 	}, nil, time.Now())
+	acc.AddCounter("consul.raft.leader.lastContact", map[string]any{
+		"count": 5.0,
+		"mean":  42.25,
+	}, nil, time.Now())
 
 	got := collectFinalMetrics(store)
 
 	assertMetrics(t, got, map[string]float64{
-		"consul_rpc_request_rate":     10,
-		"consul_raft_committime_mean": 1.5,
-		"consul_kvs_apply_mean":       2.5,
+		"consul_raft_committime_mean_seconds":         0.0015,
+		"consul_kvs_apply_mean_seconds":               0.0025,
+		"consul_raft_leader_lastcontact_mean_seconds": 0.04225,
+		// max isn't in the default metrics and is left in Consul's own millisecond
+		// scale: only "mean" is converted.
+		"consul_raft_committime_max": 3,
 	})
+
+	for name := range got {
+		if name == "consul_raft_committime_mean" || name == "consul_kvs_apply_mean" || name == "consul_raft_leader_lastcontact_mean" {
+			t.Errorf("metric %q should have been renamed with a _seconds suffix, still present", name)
+		}
+	}
 }
 
 // TestGaugeNodeNameStripped checks the node name Consul inserts in the name of its

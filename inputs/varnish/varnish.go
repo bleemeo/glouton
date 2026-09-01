@@ -106,7 +106,7 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 var fieldRenames = map[string]string{ //nolint:gochecknoglobals
 	// varnishstat calls this a "nuke": an object forced out of cache to make room for a
 	// new one, as opposed to naturally expiring. "eviction" is the term users of any other
-	// cache already know, and reads next to cache_hit/cache_miss/cache_hit_ratio.
+	// cache already know, and reads next to cache_hit/cache_miss/cache_hit_percent.
 	"n_lru_nuked": "cache_evictions",
 	// varnishstat abbreviates "sessions" to "sess"; spelled out here to match
 	// dovecot_num_connected_sessions and read on its own without varnishstat's docs open.
@@ -122,15 +122,16 @@ func renameMetrics(currentContext internal.GatherContext, metricName string) (ne
 	return currentContext.Measurement, metricName
 }
 
-// transformMetrics adds a cache_hit_ratio field computed from the
-// already-differentiated cache_hit/cache_miss rates.
+// transformMetrics adds a cache_hit_percent field computed from the already-differentiated
+// cache_hit/cache_miss rates, scaled to 0..100 like every other percentage metric in this
+// codebase (e.g. cpu_used, mem_used_percent).
 func transformMetrics(_ internal.GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {
 	hitRate, hasHit := fields["cache_hit"]
 	missRate, hasMiss := fields["cache_miss"]
 
 	// Protect from division by 0.
 	if hasHit && hasMiss && hitRate+missRate > 0 {
-		fields["cache_hit_ratio"] = hitRate / (hitRate + missRate)
+		fields["cache_hit_percent"] = hitRate / (hitRate + missRate) * 100
 	}
 
 	return fields

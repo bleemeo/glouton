@@ -1491,7 +1491,6 @@ func Test_RebuildDefaultMetrics(t *testing.T) {
 
 	want := []string{
 		"bind_counter_nxdomain",
-		"bind_counter_qry_nxdomain",
 		"bind_counter_qry_success",
 		"bind_counter_qryfailure",
 		"bind_counter_query",
@@ -1501,7 +1500,6 @@ func Test_RebuildDefaultMetrics(t *testing.T) {
 		"bind_counter_servfail",
 		"bind_memory_in_use",
 		"postfix_queue_age_seconds",
-		"postfix_queue_bytes",
 		"postfix_queue_length",
 		"postfix_queue_size",
 	}

@@ -45,8 +45,9 @@ func New(url string, token string) (i telegraf.Input, err error) {
 			i = &internal.Input{
 				Input: consulInput,
 				Accumulator: internal.Accumulator{
-					RenameGlobal:  renameGlobal,
-					RenameMetrics: renameMetrics,
+					RenameGlobal:     renameGlobal,
+					RenameMetrics:    renameMetrics,
+					TransformMetrics: transformMetrics,
 				},
 				Name: "consul",
 			}
@@ -181,4 +182,28 @@ func renameMetrics(currentContext internal.GatherContext, metricName string) (ne
 	}
 
 	return currentContext.Measurement, metricName
+}
+
+// timerMeasurementsInMilliseconds are the samples/timers Consul's go-metrics sink reports
+// in milliseconds. transformMetrics converts their mean into seconds, matching every other
+// duration metric in this codebase, and renames the field so the unit is visible in the
+// name.
+//
+//nolint:gochecknoglobals
+var timerMeasurementsInMilliseconds = map[string]bool{
+	"consul_kvs_apply":               true,
+	"consul_raft_committime":         true,
+	"consul_raft_leader_lastcontact": true,
+}
+
+func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {
+	if timerMeasurementsInMilliseconds[currentContext.Measurement] {
+		if mean, ok := fields["mean"]; ok {
+			delete(fields, "mean")
+
+			fields["mean_seconds"] = mean / 1000
+		}
+	}
+
+	return fields
 }

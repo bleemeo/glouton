@@ -46,10 +46,19 @@ func New() (i telegraf.Input, err error) {
 			// which ntpq truncates anyway. "-p" is added by the plugin itself.
 			NTPInput.Options = "-n"
 
+			// ntpq prints "reach" in octal, and the plugin's default ("octal") mode just
+			// stores that raw text as a number: a fully reachable peer reports 377, a
+			// number that reads as badly out of range to anyone who doesn't know it's
+			// octal for "every one of the last 8 polls succeeded". "ratio" instead reports
+			// the fraction of the last 8 polls that succeeded, a plain 0..1 that
+			// transformMetrics below scales to a percentage.
+			NTPInput.ReachFormat = "ratio"
+
 			i = &internal.Input{
 				Input: NTPInput,
 				Accumulator: internal.Accumulator{
-					RenameGlobal: renameGlobal,
+					RenameGlobal:     renameGlobal,
+					TransformMetrics: transformMetrics,
 				},
 				Name: "NTP",
 			}
@@ -81,4 +90,28 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 	}
 
 	return gatherContext, false
+}
+
+// transformMetrics converts delay/jitter/offset from ntpq's own millisecond scale into
+// seconds, matching every other duration metric in this codebase, and renames each field
+// so the unit is visible in the name. It also converts reach from the plugin's 0..1 ratio
+// (see ReachFormat above) into a 0..100 percentage, matching every other percentage metric
+// in this codebase (e.g. cpu_used, mem_used_percent). poll/when (already durations telegraf
+// itself normalizes to seconds) are left untouched.
+func transformMetrics(_ internal.GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {
+	for _, name := range []string{"delay", "jitter", "offset"} {
+		if value, ok := fields[name]; ok {
+			delete(fields, name)
+
+			fields[name+"_seconds"] = value / 1000
+		}
+	}
+
+	if value, ok := fields["reach"]; ok {
+		delete(fields, "reach")
+
+		fields["reach_perc"] = value * 100
+	}
+
+	return fields
 }

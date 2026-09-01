@@ -30,8 +30,9 @@ import (
 func TestTagsDropped(t *testing.T) {
 	store := &internal.StoreAccumulator{}
 	acc := internal.Accumulator{
-		RenameGlobal: renameGlobal,
-		Accumulator:  store,
+		RenameGlobal:     renameGlobal,
+		TransformMetrics: transformMetrics,
+		Accumulator:      store,
 	}
 
 	acc.PrepareGather()
@@ -39,7 +40,7 @@ func TestTagsDropped(t *testing.T) {
 		"delay":  1.234,
 		"jitter": 0.567,
 		"offset": -0.089,
-		"reach":  int64(377),
+		"reach":  1.0,
 	}, map[string]string{
 		"remote":       "ntp1.example.com",
 		"refid":        "192.168.1.1",
@@ -57,9 +58,53 @@ func TestTagsDropped(t *testing.T) {
 		t.Errorf("tags of measurement %q (-want +got):\n%s", store.Measurement[0].Name, diff)
 	}
 
-	// The metrics themselves must pass through untouched: ntpq reports the current
-	// state of each peer, not cumulative counters.
-	if value, _ := store.Measurement[0].Fields["reach"].(float64); value != 377 {
-		t.Errorf("fields[reach] == %v, want 377", store.Measurement[0].Fields["reach"])
+	// reach (the fraction of the last 8 polls that succeeded, via the plugin's
+	// ReachFormat: "ratio") is converted to a percentage, like every other percentage
+	// metric in this codebase.
+	if value, _ := store.Measurement[0].Fields["reach_perc"].(float64); value != 100.0 {
+		t.Errorf("fields[reach_perc] == %v, want 100.0", store.Measurement[0].Fields["reach_perc"])
+	}
+}
+
+// TestDurationFieldsConvertedToSeconds checks that delay/jitter/offset -- reported by
+// ntpq in milliseconds -- are converted to seconds and renamed accordingly, matching
+// every other duration metric in this codebase, and that reach -- reported by the
+// plugin as a 0..1 ratio -- is converted to a 0..100 percentage.
+func TestDurationFieldsConvertedToSeconds(t *testing.T) {
+	store := &internal.StoreAccumulator{}
+	acc := internal.Accumulator{
+		RenameGlobal:     renameGlobal,
+		TransformMetrics: transformMetrics,
+		Accumulator:      store,
+	}
+
+	acc.PrepareGather()
+	acc.AddFields("ntpq", map[string]any{
+		"delay":  20.5,
+		"jitter": 13.2,
+		"offset": -4.8,
+		"reach":  0.75,
+	}, map[string]string{"remote": "ntp1.example.com"}, time.Now())
+
+	fields := store.Measurement[0].Fields
+
+	want := map[string]float64{
+		"delay_seconds":  0.0205,
+		"jitter_seconds": 0.0132,
+		"offset_seconds": -0.0048,
+		"reach_perc":     75.0,
+	}
+
+	for name, wantValue := range want {
+		got, _ := fields[name].(float64)
+		if got != wantValue {
+			t.Errorf("fields[%q] == %v, want %v", name, fields[name], wantValue)
+		}
+	}
+
+	for _, name := range []string{"delay", "jitter", "offset", "reach"} {
+		if _, ok := fields[name]; ok {
+			t.Errorf("raw field %q should have been renamed, still present", name)
+		}
 	}
 }

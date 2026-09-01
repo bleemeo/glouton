@@ -17,8 +17,11 @@
 package chrony
 
 import (
+	"math/bits"
+
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -34,10 +37,17 @@ func New() (i telegraf.Input, err error) {
 	if ok {
 		chronyInput, ok := input().(*chrony.Chrony)
 		if ok {
+			// tracking is the system-wide summary (last_offset, rms_offset). activity
+			// counts how many configured sources are actually reachable right now.
+			// sources gives per-source detail, mirroring what ntpq already reports
+			// per-peer for ntpd.
+			chronyInput.Metrics = []string{"tracking", "activity", "sources"}
+
 			i = &internal.Input{
 				Input: chronyInput,
 				Accumulator: internal.Accumulator{
-					RenameGlobal: renameGlobal,
+					RenameGlobal:     renameGlobal,
+					TransformMetrics: transformMetrics,
 				},
 				Name: "chrony",
 			}
@@ -61,5 +71,37 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 	delete(gatherContext.Tags, "stratum")
 	delete(gatherContext.Tags, "source")
 
+	// chrony_sources reports one point per configured time source, tagged with the
+	// resolved "peer" name. Sources coming from the same "pool" directive all
+	// resolve to that pool's name, so several distinct IPs would share the same
+	// peer and collapse into a single series; the IP address (always unique) is
+	// used as the item instead, the same choice made for ntpq's "remote" tag (see
+	// inputs/ntp) and for the same reason.
+	if ip, ok := gatherContext.OriginalFields["ip"].(string); ok && ip != "" {
+		gatherContext.Tags[types.LabelItem] = ip
+	}
+
 	return gatherContext, false
+}
+
+// transformMetrics converts chrony_sources' reachability from its raw 0..255 value
+// (the decimal form of the same 8-bit reach shift register ntpq reports in octal,
+// see inputs/ntp) into a 0..100 percentage of the last 8 polls that succeeded --
+// the count of bits set, not the register's numeric value -- and renames
+// latest_measurement (chrony_sources' per-source offset, already in seconds)
+// accordingly.
+func transformMetrics(_ internal.GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {
+	if value, ok := fields["reachability"]; ok {
+		delete(fields, "reachability")
+
+		fields["reachability_perc"] = float64(bits.OnesCount8(uint8(uint32(value)&0xFF))) / 8 * 100
+	}
+
+	if value, ok := fields["latest_measurement"]; ok {
+		delete(fields, "latest_measurement")
+
+		fields["latest_measurement_seconds"] = value
+	}
+
+	return fields
 }

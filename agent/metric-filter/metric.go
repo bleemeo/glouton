@@ -372,11 +372,9 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"activemq_queues_dequeue_count",
 			"activemq_queues_enqueue_count",
 			"activemq_queues_size",
-			"activemq_subscribers_pending_queue_size",
 			"activemq_topics_consumer_count",
 			"activemq_topics_dequeue_count",
 			"activemq_topics_enqueue_count",
-			"activemq_topics_size",
 		},
 
 		discovery.ApacheService: {
@@ -403,23 +401,13 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 
 		discovery.BindService: {
 			"bind_counter_nxdomain",
-			"bind_counter_qry_nxdomain",
 			"bind_counter_qry_success",
-			// bind_counter_qryfailure counts the queries answered with an error other than
-			// NXDOMAIN or SERVFAIL, bind_counter_recqryrej the recursive queries turned
-			// down by a server that doesn't recurse (a resolver pointed at the wrong
-			// server) and bind_counter_refused the queries refused by the ACLs.
 			"bind_counter_qryfailure",
 			"bind_counter_query",
 			"bind_counter_recqryrej",
 			"bind_counter_refused",
-			// bind_counter_response tells how many of the queries got an answer: against
-			// bind_counter_query it shows the ones that were dropped.
 			"bind_counter_response",
 			"bind_counter_servfail",
-			// bind_memory_total_use isn't collected: BIND 9.18+ replaced TotalUse by
-			// Malloced in its statistics, which the telegraf input doesn't read, so the
-			// metric would always be 0.
 			"bind_memory_in_use",
 		},
 
@@ -500,24 +488,13 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			// before the cluster loses quorum: 0 means the next failure breaks it.
 			"consul_autopilot_failure_tolerance",
 			"consul_autopilot_healthy",
-			"consul_kvs_apply_mean",
-			"consul_raft_apply_rate",
-			"consul_raft_committime_mean",
-			// consul_raft_leader_lastcontact_mean is how long the leader took to reach its
-			// followers, the usual raft health signal (Consul's own guidance alerts above
-			// 200ms). Only a leader reports it, and only when it has followers: a
-			// single-server cluster has none, and neither has a follower.
-			"consul_raft_leader_lastcontact_mean",
-			"consul_rpc_request_rate",
-			"consul_runtime_num_goroutines",
+			"consul_raft_committime_mean_seconds",
+			"consul_raft_leader_lastcontact_mean_seconds",
 		},
 
 		discovery.DovecotService: {
 			"dovecot_auth_failures",
 			"dovecot_auth_successes",
-			"dovecot_disk_input",
-			"dovecot_disk_output",
-			"dovecot_mail_cache_hits",
 			"dovecot_num_cmds",
 			"dovecot_num_connected_sessions",
 			"dovecot_num_logins",
@@ -565,7 +542,6 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 		},
 
 		discovery.InfluxDBService: {
-			"influxdb_database_num_measurements",
 			"influxdb_database_num_series",
 			"influxdb_httpd_auth_fail",
 			"influxdb_httpd_client_error",
@@ -578,12 +554,7 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"influxdb_httpd_req_duration_seconds",
 			"influxdb_httpd_server_error",
 			"influxdb_httpd_write_req",
-			"influxdb_httpd_write_req_bytes",
 			"influxdb_httpd_write_req_duration_seconds",
-			// influxdb_query_executor_duration_seconds is the average time a query took
-			// to execute, derived from queryDurationNs over queriesFinished. The httpd
-			// ones time the HTTP request instead, so a slow query only shows up here.
-			"influxdb_query_executor_duration_seconds",
 			"influxdb_query_executor_queries_active",
 			"influxdb_write_point_req",
 			"influxdb_write_write_drop",
@@ -784,20 +755,15 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 		},
 
 		discovery.NTPService: {
-			// chrony (queried through chronyd's control socket).
-			"chrony_frequency",
 			"chrony_last_offset",
 			"chrony_rms_offset",
-			"chrony_root_delay",
-			"chrony_root_dispersion",
-			"chrony_skew",
-			"chrony_system_time",
+			"chrony_activity_online",
+			"chrony_activity_offline",
+			"chrony_sources_reachability_perc",
+			"chrony_sources_latest_measurement_seconds",
 
-			// ntpq (queried through the ntpq CLI tool, used against ntpd).
-			"ntpq_delay",
-			"ntpq_jitter",
-			"ntpq_offset",
-			"ntpq_reach",
+			"ntpq_offset_seconds",
+			"ntpq_reach_perc",
 		},
 
 		discovery.OpenBaoService: { // OpenBao is a fork of Hashicorp Vault
@@ -840,11 +806,7 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 		},
 
 		discovery.PostfixService: {
-			// postfix_queue_size is the number of mails waiting in the whole queue,
-			// gathered from "postqueue -p". The others are per-queue and come from the
-			// telegraf input, which walks the spool directory.
 			"postfix_queue_age_seconds",
-			"postfix_queue_bytes",
 			"postfix_queue_length",
 			"postfix_queue_size",
 		},
@@ -922,11 +884,6 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 		},
 
 		discovery.TomcatService: {
-			"tomcat_connector_bytes_received",
-			"tomcat_connector_bytes_sent",
-			// tomcat_connector_current_threads_busy against tomcat_connector_max_threads is
-			// how saturated the connector's thread pool is: requests queue once every
-			// thread is busy, whatever the response times look like.
 			"tomcat_connector_current_threads_busy",
 			"tomcat_connector_error_count",
 			"tomcat_connector_max_threads",
@@ -934,7 +891,6 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"tomcat_connector_request_count",
 			"tomcat_jvm_memory_free",
 			"tomcat_jvm_memory_max",
-			"tomcat_jvm_memory_total",
 			"tomcat_jvm_memorypool_used",
 		},
 
@@ -983,26 +939,13 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 
 		discovery.VarnishService: {
 			"varnish_cache_hit",
-			"varnish_cache_hit_ratio",
+			"varnish_cache_hit_percent",
 			"varnish_cache_miss",
-			// varnish_backend_fail/backend_unhealthy are backend health signals: failed
-			// connection attempts and connections not even attempted because the backend
-			// was already marked unhealthy.
 			"varnish_backend_fail",
-			"varnish_backend_unhealthy",
-			// varnish_threads against varnish_threads_limited shows thread-pool
-			// saturation: the current thread count, and the rate of times a new one
-			// couldn't be created because the pool was already at its max.
 			"varnish_threads",
 			"varnish_threads_limited",
-			// varnish_sessions_dropped/sessions_queued: sessions dropped or queued waiting
-			// for a worker thread, another saturation signal.
 			"varnish_sessions_dropped",
 			"varnish_sessions_queued",
-			// varnish_cache_evictions: objects forced out of cache to make room for a new
-			// one (varnishstat's own name for it is the less obvious "n_lru_nuked"). A
-			// rising rate means the cache is undersized for its working set, distinct from
-			// cache_hit_ratio dropping because traffic patterns changed.
 			"varnish_cache_evictions",
 			"varnish_uptime",
 		},
