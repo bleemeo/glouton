@@ -1,6 +1,7 @@
 version: "2"
 run:
-  go: "1.25"
+  # The Go version is deliberately not set here: golangci-lint then reads it from go.mod,
+  # so the two can't drift apart (this said 1.25 while go.mod was already on 1.26).
   timeout: 5m
 
 linters:
