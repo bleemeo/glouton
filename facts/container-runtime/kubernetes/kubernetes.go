@@ -585,7 +585,9 @@ func (k *Kubernetes) getKubeletPoints(ctx context.Context, cl kubeClient, now ti
 	resultPoints := make([]types.MetricPoint, 0, 5) // expect 5 condition so 5 points
 
 	for _, cond := range node.Status.Conditions {
-		switch cond.Type {
+		// Only the conditions Glouton reports a metric for: Kubernetes keeps adding
+		// lifecycle ones (node shutdown, drain, maintenance) that we deliberately ignore.
+		switch cond.Type { //nolint:exhaustive
 		case corev1.NodeReady:
 			status := types.StatusDescription{
 				CurrentStatus:     types.StatusOk,

@@ -222,7 +222,7 @@ func readNRPEConfFile(confBytes []byte, nrpeConfMap map[string]string) (map[stri
 			splitLine := strings.SplitN(line, "=", 2)
 			command := splitLine[1]
 			command = strings.TrimRight(command, " ")
-			commandName := strings.Split(strings.Split(splitLine[0], "[")[1], "]")[0]
+			commandName, _, _ := strings.Cut(strings.Split(splitLine[0], "[")[1], "]")
 			nrpeConfMap[commandName] = command
 
 			if command == "" {

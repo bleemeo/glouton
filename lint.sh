@@ -2,7 +2,7 @@
 
 set -e
 
-LINTER_VERSION=v2.12.2
+LINTER_VERSION=v2.13.2
 
 USER_UID=$(id -u)
 

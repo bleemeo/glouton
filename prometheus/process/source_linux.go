@@ -310,7 +310,7 @@ func getProc(p proc.Proc) (proc.Proc, error) {
 
 	procValue := value.FieldByName("Proc")
 
-	result, ok := procValue.Interface().(proc.Proc)
+	result, ok := reflect.TypeAssert[proc.Proc](procValue)
 
 	if !ok {
 		return nil, expectedError("proc.Proc")

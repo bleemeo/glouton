@@ -783,7 +783,8 @@ func (c *Connector) DiagnosticArchive(ctx context.Context, archive gloutonTypes.
 		const maxSample = 100
 		if len(failed) > maxSample {
 			fmt.Fprintf(file, "%d metrics fail to register. The following is 50 randomly choose metrics that fail:\n", len(failed))
-			indices = rand.Perm(len(failed))[:maxSample]
+			// Sampling for a human-readable diagnostic, nothing security-sensitive.
+			indices = rand.Perm(len(failed))[:maxSample] //nolint:gosec
 		} else {
 			fmt.Fprintf(file, "%d metrics fail to register. The following is the fill list\n", len(failed))
 			sort.Slice(indices, func(i, j int) bool {

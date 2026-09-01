@@ -31,7 +31,7 @@ import (
 	"github.com/bleemeo/glouton/utils/metricutils"
 )
 
-type NullTime time.Time //nolint: recvcheck
+type NullTime time.Time
 
 // MarshalJSON marshall the time.Time as usual BUT zero time is sent as "null".
 func (t NullTime) MarshalJSON() ([]byte, error) {

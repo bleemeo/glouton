@@ -10,6 +10,7 @@ linters:
     - cyclop # We use maintidx to lint function complexity.
     - errorlint # Should be enabled, but it's difficult to test that we keep the same behavior with errors.As.
     - exhaustruct # This linter is meant to be used only for special cases. It is not recommended to use it for all files in a project.
+    - exhaustruct_v5 # Superseded exhaustruct, same reason (and v5.0.3 panics on inputs/vsphere).
     - funcorder # Would force us to reorganize hundreds of functions.
     - funlen
     - gocognit # We use maintidx to lint function complexity.

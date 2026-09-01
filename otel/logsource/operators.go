@@ -127,7 +127,7 @@ func unmarshalMapstructureHook(from reflect.Value, to reflect.Value) (any, error
 		return from.Interface(), nil // returning the data as-is
 	}
 
-	if yamlUnmarshaler, ok := to.Addr().Interface().(obsoleteUnmarshaler); ok {
+	if yamlUnmarshaler, ok := reflect.TypeAssert[obsoleteUnmarshaler](to.Addr()); ok {
 		err := yamlUnmarshaler.UnmarshalYAML(func(v any) error {
 			decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 				Result: v,
