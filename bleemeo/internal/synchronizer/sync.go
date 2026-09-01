@@ -672,6 +672,16 @@ func (s *Synchronizer) UpdateContainers() {
 	s.requestSynchronizationLocked(types.EntityContainer, false)
 }
 
+// UpdateFacts requests to update the agent facts, within delay. The facts synchronization
+// also checks whether another Glouton is using the same agent ID.
+// A delay of zero requests the update on the next synchronization execution.
+func (s *Synchronizer) UpdateFacts(delay time.Duration) {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	s.requestLaterSynchronizationLocked(types.EntityFact, false, delay)
+}
+
 // UpdateInfo request to update a info, which include the time_drift.
 func (s *Synchronizer) UpdateInfo() {
 	s.l.Lock()

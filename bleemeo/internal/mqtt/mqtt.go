@@ -70,6 +70,12 @@ const (
 	reconnectMaintenanceSyncDelay = 90 * time.Second
 	reconnectAgentSyncDelay       = 7*time.Minute + 30*time.Second
 	reconnectSyncDelayJitter      = 1. / 3.
+
+	// Delay before the facts synchronization requested when too many MQTT errors happened,
+	// which is how a duplicated agent gets detected. The facts are refreshed just before,
+	// and that refresh may change them: waiting a bit avoids synchronizing facts that are
+	// about to change, which would need a second synchronization.
+	duplicateCheckFactsSyncDelay = 15 * time.Second
 )
 
 var ErrNotConnected = errors.New("currently not connected to MQTT")
@@ -94,6 +100,9 @@ type Option struct {
 	// UpdateAgent requests to check for that agent is still synchronized by bleemeo-api,
 	// within delay. A delay of zero requests the check as soon as possible.
 	UpdateAgent func(delay time.Duration)
+	// UpdateFacts requests a synchronization of the agent facts within delay, which also
+	// checks whether another Glouton is using the same agent ID.
+	UpdateFacts func(delay time.Duration)
 	// HandleDiagnosticRequest requests the sending of a diagnostic to the API
 	HandleDiagnosticRequest func(ctx context.Context, requestToken string)
 	// GetToken returns the token used to talk with the Bleemeo API.
@@ -175,8 +184,11 @@ func New(opts Option) *Client {
 	}
 
 	checkDuplicate := func(ctx context.Context) {
-		// Trigger facts synchronization to check for duplicate agent.
+		// Refresh the local facts, then request their synchronization: the facts
+		// synchronization checks for a duplicated agent before updating them on the API.
 		_, _ = opts.Facts.Facts(ctx, 0)
+
+		opts.UpdateFacts(duplicateCheckFactsSyncDelay)
 	}
 
 	if reloadState == nil {
