@@ -45,6 +45,14 @@ const (
 	// and we won't wait long to reconnect in case of a disconnection.
 	stableConnection    = 5 * time.Minute
 	maxDelayWithoutPing = 90 * time.Second
+	// How long we wait for the CONNACK. paho defaults to 30 seconds, which is too
+	// short when every agent reconnects at once (e.g. a certificate rotation): the
+	// broker then takes longer to answer, we give up on a connection it has already
+	// accepted, and reconnecting doubles its load precisely when it is struggling.
+	connectTimeout = 90 * time.Second
+	// Backstop for a CONNECT token that never completes at all. connectTimeout is
+	// the one that should normally fire, so this must stay above it.
+	connectDeadline = 2 * time.Minute
 	// After losing a stable connection, wait for a random duration in [0, maxReconnectSpread[
 	// before reconnecting.
 	// When every agent gets disconnected at the same time (e.g. a broker restart or a certificate
@@ -144,6 +152,7 @@ func (c *Client) setupMQTT(ctx context.Context) (paho.Client, error) {
 	// with bad network connection.
 	opts.SetPingTimeout(20 * time.Second)
 	opts.SetKeepAlive(45 * time.Second)
+	opts.SetConnectTimeout(connectTimeout)
 
 	// We use our own automatic reconnection logic which is more reliable.
 	opts.SetAutoReconnect(false)
@@ -314,7 +323,7 @@ mainLoop:
 
 				var connectionTimeout bool
 
-				deadline := time.Now().Add(time.Minute)
+				deadline := time.Now().Add(connectDeadline)
 				token := mqtt.Connect()
 
 				for !token.WaitTimeout(1 * time.Second) {
