@@ -41,6 +41,9 @@ type RuntimeInterface interface {
 	ContainerTerminationGracePeriod(containerID string) time.Duration
 	Exec(ctx context.Context, containerID string, cmd []string) ([]byte, error)
 	Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error)
+	// EnumerateContainers is Containers, plus complete (every runtime enumerated everything this call) and
+	// mayForgetAbsent (a container missing from the list may be treated as permanently removed).
+	EnumerateContainers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, complete bool, mayForgetAbsent bool, err error)
 	Events() <-chan facts.ContainerEvent
 	IsRuntimeRunning(ctx context.Context) bool
 	ProcessWithCache() facts.ContainerRuntimeProcessQuerier

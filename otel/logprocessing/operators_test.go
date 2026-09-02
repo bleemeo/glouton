@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/otel/logsource"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -502,16 +503,16 @@ func TestKnownLogFormats(t *testing.T) { //nolint: maintidx
 
 			defer logFile.Close()
 
-			cfg := config.OTLPReceiver{
-				Include:   []string{logFile.Name()},
-				LogFormat: tc.logFormat,
+			cfg := config.LogReceiver{
+				"include":    []string{logFile.Name()},
+				"log_format": tc.logFormat,
 			}
 
 			logBuf := logBuffer{
 				buf: make([]plog.Logs, 0, len(tc.inputLogs)),
 			}
 
-			recv, warn, err := newLogReceiver("filelog/"+tc.name, cfg, false, makeBufferConsumer(t, &logBuf), knownLogFormats, statFileImpl)
+			recv, warn, err := newLogReceiver("filelog/"+tc.name, cfg, false, makeBufferConsumer(t, &logBuf), knownLogFormats, logsource.StatFile)
 			if err != nil {
 				t.Fatal("Failed to initialize log receiver:", err)
 			}

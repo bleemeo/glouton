@@ -807,7 +807,7 @@ func serviceByCommand(cmdLine []string) (serviceName ServiceName, found bool) {
 	name = strings.Split(name, " ")[0]
 	// To catch second (nginx and php-fpm), check if command starts with one word
 	// immediately followed by ":".
-	alteredName := strings.Split(cmdLine[0], " ")[0]
+	alteredName, _, _ := strings.Cut(cmdLine[0], " ")
 	if len(alteredName) > 0 && alteredName[len(alteredName)-1] == ':' {
 		if serviceName, ok := knownProcesses[alteredName[:len(alteredName)-1]]; ok {
 			return serviceName, ok

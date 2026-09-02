@@ -120,11 +120,24 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 	warnings.Append(err)
 
 	// Migrate old configuration keys.
-	k, moreWarnings := migrate(k)
+	k, moreWarnings := migrate(k, path, providerType)
 	warnings = append(warnings, moreWarnings...)
 
 	config, moreWarnings := convertTypes(k)
 	warnings = append(warnings, moreWarnings...)
+
+	// Computed once per Load() call, not once per key. dynamicKeys is only about merge priority, so that
+	// an entry set by a dynamic per-listener/per-threshold environment variable merges into the file-defined
+	// map instead of replacing it wholesale; priority()'s SourceFile branch never consults it.
+	dynamicKeys := dynamicEnvVarConfigKeys()
+
+	// Pruning is a separate concern: convertTypes' Config-struct round trip (Unmarshal into the typed
+	// Config, then back out via structs.ProviderWithDelim) materializes every unset pointer field of a
+	// struct-valued map key as an explicit nil, for every provider -- a file setting only one sibling
+	// field (protocols.http, leaving protocols.grpc unset) round-trips with an explicit "grpc: null"
+	// exactly like a dynamic env var does. Left in, merge() would read that invented nil as this file
+	// deliberately overwriting a sibling an earlier-loaded file set, silently dropping it.
+	prunedKeys := nilPrunedConfigKeys()
 
 	for key, value := range config {
 		if value == nil && !isNilAllowedFor(key) {
@@ -137,7 +150,11 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 			continue
 		}
 
-		priority := priority(providerType, key, value, c.loadCount)
+		if prunedKeys[key] {
+			value = pruneNilMapValues(value)
+		}
+
+		priority := priority(providerType, key, value, c.loadCount, dynamicKeys)
 
 		// Keep the real type of the value before it's converted to JSON.
 		valueType := itemTypeFromValue(key, value)
@@ -180,8 +197,7 @@ func addYAMLSyntaxHint(err error, path string) error {
 		return err
 	}
 
-	var yamlErr goccyyaml.Error
-	if errors.As(goccyErr, &yamlErr) {
+	if yamlErr, ok := errors.AsType[goccyyaml.Error](goccyErr); ok {
 		if tk := yamlErr.GetToken(); tk != nil && tk.Position != nil {
 			return fmt.Errorf(
 				"%w: line %d, column %d: %s",
@@ -308,6 +324,7 @@ func convertTypes(
 				stringToMapHookFunc(),
 				stringToBoolHookFunc(),
 				StringToIntSliceHookFunc(","),
+				networkProtocolsNullMeansDefaultHookFunc(),
 			),
 			Metadata:         nil,
 			ErrorUnused:      true,
@@ -446,8 +463,10 @@ func allKeys(k *koanf.Koanf) map[string]any {
 // When two items have the same key, the one with the highest priority is kept.
 // When the value is a map or an array, the items may have the same priority, in
 // this case the arrays are appended to each other, and the maps are merged.
+// dynamicEnvKeys is dynamicEnvVarConfigKeys(), computed once by the caller (only
+// meaningful for provider == SourceEnv; may be nil otherwise).
 // It panics on unknown providers.
-func priority(provider ItemSource, key string, value any, loadCount int) int {
+func priority(provider ItemSource, key string, value any, loadCount int, dynamicEnvKeys map[string]bool) int {
 	const (
 		priorityDefault         = -1
 		priorityMapAndArrayFile = 1
@@ -456,6 +475,13 @@ func priority(provider ItemSource, key string, value any, loadCount int) int {
 
 	switch provider {
 	case SourceEnv:
+		// Entries under a dynamicEnvVarList config key (e.g. opentelemetry.listeners, set by the dynamic
+		// per-listener environment variables -- see resolveDynamicEnvKey) must merge into file-defined
+		// entries instead of replacing the whole map.
+		if dynamicEnvKeys[key] {
+			return priorityMapAndArrayFile
+		}
+
 		return priorityEnv
 	case SourceFile:
 		// Slices in files all have the same priority because they are appended.
@@ -508,7 +534,7 @@ func isMapKey(key string) (bool, string) {
 
 // Build the configuration from the loaded items.
 func (c *configLoader) Build() (*koanf.Koanf, prometheus.MultiError) {
-	var warnings prometheus.MultiError
+	warnings := make(prometheus.MultiError, 0, 4)
 
 	config := make(map[string]any)
 	priorities := make(map[string]int)
@@ -534,6 +560,8 @@ func (c *configLoader) Build() (*koanf.Koanf, prometheus.MultiError) {
 	}
 
 	warnings.Append(mergeKnownLogFormats(config))
+	warnings = append(warnings, synthesizeLegacyNetworkListener(config)...)
+	dedupeFromListeners(config)
 
 	k := koanf.New(delimiter)
 	err := k.Load(confmap.Provider(config, delimiter), nil)
@@ -542,7 +570,65 @@ func (c *configLoader) Build() (*koanf.Koanf, prometheus.MultiError) {
 	return k, warnings
 }
 
-// Merge maps and append slices.
+// dedupeFromListeners drops repeated names from every receiver's from_listeners list. Merging appends
+// leaf lists across files, which is what you want for entries that carry values, but from_listeners holds
+// listener *names*: referencing one twice says nothing more than referencing it once, and deduplicating
+// them is cheap precisely because they're plain strings rather than maps (see merge). Two files each
+// naming the same listener on the same receiver produce exactly that repeat.
+// Non-string entries are passed through untouched: they're invalid config, reported by validation later,
+// and must not be silently dropped here (nor used as a map key, which would panic if unhashable).
+func dedupeFromListeners(config map[string]any) {
+	receivers, ok := config["log.opentelemetry.receivers"].(map[string]any)
+	if !ok {
+		return
+	}
+
+	for _, rawReceiver := range receivers {
+		receiver, ok := rawReceiver.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		listeners, ok := receiver["from_listeners"].([]any)
+		if !ok {
+			continue
+		}
+
+		seen := make(map[string]bool, len(listeners))
+
+		deduped := make([]any, 0, len(listeners))
+
+		for _, rawName := range listeners {
+			name, isString := rawName.(string)
+			if !isString {
+				deduped = append(deduped, rawName)
+
+				continue
+			}
+
+			if seen[name] {
+				continue
+			}
+
+			seen[name] = true
+
+			deduped = append(deduped, rawName)
+		}
+
+		receiver["from_listeners"] = deduped
+	}
+}
+
+// Merge maps and append slices. A map merge recurses into any sub-key present as a map[string]any on both
+// sides (e.g. a receiver's or a threshold's own fields), instead of letting src's value replace dst's
+// wholesale -- otherwise splitting one named entry's fields across two config files/conf.d snippets (file
+// A sets a receiver's include, file B sets its send_logs) silently drops the earlier file's fields.
+// A sub-key that's a []any on both sides is appended too, the same way a top-level list key already
+// merges across files: two conf.d snippets each contributing entries to one log.metrics_rules entry, or
+// globs to one receiver's include, end up with both files' entries rather than only the last file's.
+// Appending never deduplicates -- entries are often maps (services:), which are impractical to compare
+// and to document -- so a key whose entries are plain names, where a repeat is meaningless rather than
+// meaningful, gets its own normalization pass instead; see dedupeFromListeners.
 func merge(dst any, src any) (any, error) {
 	switch dstType := dst.(type) {
 	case []any:
@@ -558,12 +644,146 @@ func merge(dst any, src any) (any, error) {
 			return nil, fmt.Errorf("%w: map[string]interface{} with %T", errCannotMerge, src)
 		}
 
-		maps.Copy(dstType, srcMap)
+		for key, srcVal := range srcMap {
+			dstVal, exists := dstType[key]
+			if !exists {
+				dstType[key] = srcVal
+
+				continue
+			}
+
+			dstValMap, dstIsMap := dstVal.(map[string]any)
+			srcValMap, srcIsMap := srcVal.(map[string]any)
+
+			if dstIsMap && srcIsMap {
+				merged, err := merge(dstValMap, srcValMap)
+				if err != nil {
+					return nil, err
+				}
+
+				dstType[key] = merged
+
+				continue
+			}
+
+			dstValSlice, dstIsSlice := dstVal.([]any)
+			srcValSlice, srcIsSlice := srcVal.([]any)
+
+			if dstIsSlice && srcIsSlice {
+				dstType[key] = append(dstValSlice, srcValSlice...)
+
+				continue
+			}
+
+			// Neither both maps nor both slices (a scalar, or a type mismatch): the later-loaded source
+			// wins, matching the scalar behavior in priority().
+			dstType[key] = srcVal
+		}
 
 		return dstType, nil
 	default:
 		return nil, fmt.Errorf("%w: unsupported type %T", errCannotMerge, dst)
 	}
+}
+
+// nilPrunedConfigKeys is the set of mapKeys() entries whose config type is a map of structs, i.e. exactly
+// the keys convertTypes' Config-struct round trip invents explicit nils inside. Derived from the Config
+// types rather than listed by hand, and deliberately not from dynamicEnvVarConfigKeys(): the two sets
+// happen to coincide today, but one is about environment variables while this one is about a struct's
+// unset pointer fields materializing as nil. Adding a struct-valued map key to mapKeys() without a
+// dynamic env var for it would otherwise quietly reintroduce the sibling-clobbering bug pruning exists to
+// prevent. A map of scalars, of slices, or of raw map[string]any (a LogReceiver) has no struct fields to
+// invent nils for, so it is left alone -- an explicit null there is the user's own and must survive.
+//
+// Called once per Load(), not once per key: mapKeys() is a handful of entries and the walk below is a
+// shallow type traversal, so there is nothing worth caching across calls.
+func nilPrunedConfigKeys() map[string]bool {
+	keys := make(map[string]bool, len(mapKeys()))
+
+	for _, key := range mapKeys() {
+		field, found := configFieldTypeByPath(key)
+		if !found {
+			continue
+		}
+
+		if field.Kind() != reflect.Map {
+			continue
+		}
+
+		elem := field.Elem()
+		for elem.Kind() == reflect.Pointer {
+			elem = elem.Elem()
+		}
+
+		if elem.Kind() == reflect.Struct {
+			keys[key] = true
+		}
+	}
+
+	return keys
+}
+
+// configFieldTypeByPath resolves a dotted config key (as written in mapKeys()) to the Go type of the
+// Config field it names, walking yaml tags at each segment.
+func configFieldTypeByPath(key string) (reflect.Type, bool) {
+	current := reflect.TypeFor[Config]()
+
+	for segment := range strings.SplitSeq(key, delimiter) {
+		for current.Kind() == reflect.Pointer {
+			current = current.Elem()
+		}
+
+		if current.Kind() != reflect.Struct {
+			return nil, false
+		}
+
+		field, found := structFieldByYAMLName(current, segment)
+		if !found {
+			return nil, false
+		}
+
+		current = field
+	}
+
+	return current, true
+}
+
+func structFieldByYAMLName(structType reflect.Type, name string) (reflect.Type, bool) {
+	for field := range structType.Fields() {
+		yamlName, _, _ := strings.Cut(field.Tag.Get("yaml"), ",")
+		if yamlName == name {
+			return field.Type, true
+		}
+	}
+
+	return nil, false
+}
+
+// pruneNilMapValues recursively removes nil-valued entries from a nested map[string]any. Applied to
+// every dynamicEnvVarConfigKeys() item (see resolveDynamicEnvKey), from any provider (env, file,
+// default): setting only one leaf/sibling field of one of these keys' struct types
+// (NetworkListener/NetworkProtocols, Threshold) still round-trips through convertTypes' Config-struct
+// Unmarshal-then-re-encode, which fills in every other sibling field as an explicit nil. Without
+// pruning, merge() would treat those invented nils as this item intentionally overwriting a sibling
+// field (e.g. an untouched HTTP endpoint) that a different item -- a dynamic env var, or another
+// config file -- set.
+func pruneNilMapValues(value any) any {
+	m, ok := value.(map[string]any)
+	if !ok {
+		return value
+	}
+
+	for key, val := range m {
+		if val == nil {
+			delete(m, key)
+
+			continue
+		}
+
+		m[key] = pruneNilMapValues(val)
+	}
+
+	return m
 }
 
 // mergeKnownLogFormats seeks for all items like log.opentelemetry.known_log_formats.*,

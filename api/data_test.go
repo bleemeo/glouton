@@ -21,6 +21,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -218,6 +219,64 @@ func TestNullableValueWhenUpdated(t *testing.T) {
 
 	if got := nullableValueWhenUpdated(95, t0); got == nil || *got != 95 {
 		t.Errorf("nullableValueWhenUpdated(95, t0) = %v, want 95", got)
+	}
+}
+
+// TestPaginateInformation checks that untrusted offset/limit values (straight
+// from query parameters) never panic the slice, including negative and
+// overflowing values.
+func TestPaginateInformation(t *testing.T) {
+	t.Parallel()
+
+	makeList := func(n int) []*Container {
+		list := make([]*Container, n)
+		for i := range list {
+			list[i] = &Container{ID: strconv.Itoa(i)}
+		}
+
+		return list
+	}
+
+	cases := []struct {
+		name      string
+		length    int
+		offset    int
+		limit     int
+		wantLen   int
+		wantFirst string // ID of the first returned element, "" when empty
+	}{
+		{"no limit sentinel", 5, 0, -1, 5, "0"},
+		{"first two", 5, 0, 2, 2, "0"},
+		{"with offset", 5, 2, 2, 2, "2"},
+		{"limit beyond length", 5, 0, 100, 5, "0"},
+		{"offset beyond length", 5, 10, 2, 0, ""},
+		{"offset equals length", 5, 5, 2, 0, ""},
+		{"negative offset", 5, -1, 2, 2, "0"},
+		{"negative limit not sentinel", 5, 0, -5, 5, "0"},
+		{"negative offset and limit", 5, -1, -5, 5, "0"},
+		{"overflowing limit", 5, 1, math.MaxInt, 4, "1"},
+		{"empty list", 0, 0, -1, 0, ""},
+		{"empty list with offset", 0, 3, 2, 0, ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := paginateInformation(&Pagination{Offset: tc.offset, Limit: tc.limit}, makeList(tc.length))
+
+			if len(got) != tc.wantLen {
+				t.Fatalf("len = %d, want %d", len(got), tc.wantLen)
+			}
+
+			if tc.wantFirst != "" && got[0].ID != tc.wantFirst {
+				t.Errorf("first ID = %q, want %q", got[0].ID, tc.wantFirst)
+			}
+		})
+	}
+
+	if got := paginateInformation(nil, makeList(3)); len(got) != 3 {
+		t.Errorf("nil pagination: len = %d, want 3", len(got))
 	}
 }
 

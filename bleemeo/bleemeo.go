@@ -248,9 +248,11 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint) *mqtt.Cli
 			UpdateMaintenance:       c.sync.UpdateMaintenance,
 			UpdateAgent:             c.sync.UpdateAgent,
 			UpdateMonitor:           c.sync.UpdateMonitor,
+			UpdateFacts:             c.sync.UpdateFacts,
 			HandleDiagnosticRequest: c.HandleDiagnosticRequest,
 			InitialPoints:           previousPoint,
-			GetToken:                c.sync.VerifyAndGetToken,
+			GetToken:                c.sync.GetToken,
+			CheckToken:              c.sync.CheckToken,
 			LastMetricActivation:    c.sync.LastMetricActivation,
 		},
 	)
@@ -820,7 +822,8 @@ func (c *Connector) DiagnosticArchive(ctx context.Context, archive gloutonTypes.
 		const maxSample = 100
 		if len(failed) > maxSample {
 			fmt.Fprintf(file, "%d metrics fail to register. The following is 50 randomly choose metrics that fail:\n", len(failed))
-			indices = rand.Perm(len(failed))[:maxSample]
+			// Sampling for a human-readable diagnostic, nothing security-sensitive.
+			indices = rand.Perm(len(failed))[:maxSample] //nolint:gosec
 		} else {
 			fmt.Fprintf(file, "%d metrics fail to register. The following is the fill list\n", len(failed))
 			sort.Slice(indices, func(i, j int) bool {

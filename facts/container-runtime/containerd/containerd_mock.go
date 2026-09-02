@@ -271,6 +271,7 @@ func NewMockFromFile(filename string) (*MockClient, error) {
 func FakeContainerd(client *MockClient, isContainerIgnored func(facts.Container) bool) *Containerd {
 	return newWithOpenner(
 		[]string{"unused"},
+		"/",
 		nil,
 		isContainerIgnored,
 		func(_ context.Context, _ string) (cl containerdClient, err error) {

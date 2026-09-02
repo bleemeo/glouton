@@ -18,7 +18,6 @@ package logprocessing
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -32,29 +31,17 @@ import (
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/otel/logsource"
 	"github.com/bleemeo/glouton/utils/hostrootsymlink"
 
 	"github.com/google/uuid"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/helper"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator/parser/container"
 	stanzaErrors "github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/stanzaerrors"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/processor"
 	"go.opentelemetry.io/collector/receiver"
-)
-
-const (
-	attrContainerID        = "container.id"
-	attrContainerImageName = "container.image.name"
-	attrContainerImageTags = "container.image.tags"
-	attrContainerName      = "container.name"
-	attrContainerRuntime   = "container.runtime"
-
-	attrContainerNamespace = "k8s.namespace.name"
-	attrContainerPod       = "k8s.pod.name"
 )
 
 const containerFileSizePrefix = "container://"
@@ -65,54 +52,31 @@ var (
 	errWrongNumberOfLogs           = errors.New("container should have a single log file")
 )
 
+// Container represents a container whose logs are tailed directly by this
+// package, via Glouton's built-in per-service-type log format detection.
 type Container struct {
-	LogFilePath  string
-	ReceiverKind receiverKind
-	Attributes   ContainerAttributes
+	LogFilePath string
+	// RealLogFilePath is LogFilePath with hostroot symlinks resolved, i.e. the path actually tailed and
+	// the key this container's sizeFnByFile entries live under. Stored rather than re-resolved on demand:
+	// on Kubernetes/containerd the two differ (/var/log/containers/X -> /var/log/pods/X), and once the
+	// container is gone its symlink usually is too, so resolving at teardown time would no longer produce
+	// the key that was inserted -- leaving a dead entry to be re-stat'd by every SaveState, forever.
+	RealLogFilePath string
+	ReceiverKind    logsource.ReceiverKind
+	Attributes      logsource.ContainerAttributes
 
 	logCounter      *atomic.Int64
-	throughputMeter *ringCounter
+	throughputMeter *logsource.RingCounter
 }
 
-type ContainerAttributes struct {
-	Runtime   string
-	ID        string
-	Name      string
-	ImageName string
-	ImageTags string
-	Namespace string `json:",omitempty"`
-	Pod       string `json:",omitempty"`
-}
-
-func (ctrAttrs ContainerAttributes) asMap() map[string]helper.ExprStringConfig {
-	attrs := map[string]helper.ExprStringConfig{
-		attrContainerID:        helper.ExprStringConfig(ctrAttrs.ID),
-		attrContainerImageName: helper.ExprStringConfig(ctrAttrs.ImageName),
-		attrContainerName:      helper.ExprStringConfig(ctrAttrs.Name),
-		attrContainerRuntime:   helper.ExprStringConfig(ctrAttrs.Runtime),
-	}
-
-	if ctrAttrs.ImageTags != "" {
-		attrs[attrContainerImageTags] = helper.ExprStringConfig(ctrAttrs.ImageTags)
-	}
-
-	if ctrAttrs.Namespace != "" {
-		attrs[attrContainerNamespace] = helper.ExprStringConfig(ctrAttrs.Namespace)
-	}
-
-	if ctrAttrs.Pod != "" {
-		attrs[attrContainerPod] = helper.ExprStringConfig(ctrAttrs.Pod)
-	}
-
-	return attrs
-}
-
+// containerReceiver's tail lifecycle bookkeeping (startedComponents/registeredExtensions/sizeFnByFile)
+// independently parallels otel/logsource's managedSource (receiver_manager.go) and this package's own
+// logReceiver (receiver.go) -- each tracks a differently-shaped fan-out chain, so they haven't been
+// unified, but a fix to one's tail-start/stop or offset-forget logic likely applies to the others too.
 type containerReceiver struct {
-	pipeline           *pipelineContext
-	logConsumer        consumer.Logs
-	lastFileSizes      map[string]int64  // map key: log file path
-	containerOperators map[string]string // map key: container name
-	containerFilters   map[string]string // map key: container name
+	pipeline      *pipelineContext
+	logConsumer   consumer.Logs
+	lastFileSizes map[string]int64 // map key: log file path
 
 	l                    sync.Mutex
 	startedComponents    map[string][]component.Component // map key: container ID
@@ -121,13 +85,7 @@ type containerReceiver struct {
 	sizeFnByFile         map[string]func() (int64, error) // map key: log file path
 }
 
-func newContainerReceiver(
-	pipeline *pipelineContext,
-	containerOperators map[string]string,
-	knownOperators map[string][]config.OTELOperator,
-	containerFilter map[string]string,
-	knownFilters map[string]config.OTELFilters,
-) *containerReceiver {
+func newContainerReceiver(pipeline *pipelineContext) *containerReceiver {
 	lastFileSizes := make(map[string]int64)
 
 	for filePath, size := range pipeline.lastFileSizes {
@@ -140,8 +98,6 @@ func newContainerReceiver(
 		pipeline:             pipeline,
 		logConsumer:          pipeline.getInput(),
 		lastFileSizes:        lastFileSizes,
-		containerOperators:   validateContainerOperators(containerOperators, knownOperators),
-		containerFilters:     validateContainerFilters(containerFilter, knownFilters),
 		startedComponents:    make(map[string][]component.Component),
 		registeredExtensions: make(map[string][]component.ID),
 		containers:           make(map[string]Container),
@@ -172,6 +128,16 @@ func (cr *containerReceiver) handleContainerLogs(
 		return "", errContainerLogFileUnavailable
 	}
 
+	// Idempotent per container: setupContainerLogReceiver appends to startedComponents rather than
+	// replacing, so calling it twice for one container leaves two live tails on the same file, both
+	// shipping every line and both registering a persistent extension under the byte-identical name.
+	// Reachable whenever a service is re-detected while its container never went away -- removeOldSources
+	// drops the service from watchedServices but only stops a containerRecv tail once the *container*
+	// disappears, so the next processLogSources sees a service it isn't watching and sets it up again.
+	if _, alreadyTailing := cr.containers[ctr.ID()]; alreadyTailing {
+		return logFilePath, nil
+	}
+
 	logCtr := makeLogContainer(ctx, ctr, logFilePath)
 
 	err = cr.setupContainerLogReceiver(ctx, logCtr, operators, logFilterConfig)
@@ -183,53 +149,62 @@ func (cr *containerReceiver) handleContainerLogs(
 }
 
 func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr Container, operators []operator.Config, filtersCfg *filterprocessor.Config) error {
-	containerOpCfg := container.NewConfig()
-	containerOpCfg.AddMetadataFromFilePath = false
+	ops := append([]operator.Config{logsource.BuildContainerEnvelopeOperator()}, operators...)
 
-	ops := append([]operator.Config{{Builder: containerOpCfg}}, operators...)
+	// Accumulated locally (not written straight into cr.registeredExtensions) so any error below can roll
+	// these back with RemovePersistentExts instead of leaking them under a container whose setup never
+	// actually completed.
+	var newExtIDs []component.ID
+
 	makeStorageFn := func(logFile string) *component.ID {
-		id := cr.pipeline.persister.newPersistentExt("container/" + ctr.Attributes.ID + metadataKeySeparator + logFile)
+		id := cr.pipeline.persister.NewPersistentExt("container/" + ctr.Attributes.ID + metadataKeySeparator + logFile)
 
-		cr.registeredExtensions[ctr.Attributes.ID] = append(cr.registeredExtensions[ctr.Attributes.ID], id)
+		newExtIDs = append(newExtIDs, id)
 
 		return &id
 	}
 
 	realLogFile := ctr.LogFilePath
-	// If we are in a containers, resolve symlink taking hostroot in consideration.
-	// This is mandatory for file like "/var/log/containers/XXX" which are
-	// symlink to "/var/log/pods/XXX" with Kubernetes & containerd.
-	// If we don't, Glouton will try reading "/hostroot/var/log/containers/XXX". Glouton will follow
-	// the symlink (without take /hostroot in consideration) which result in Glouton trying to
-	// read "/var/log/pods/XXX" in its own mount namespace (it need to read "/hostroot/var/log/pods/XXX").
+	// Resolve symlinks relative to hostroot (Kubernetes/containerd's /var/log/containers/XXX -> /var/log/pods/XXX).
 	if cr.pipeline.hostroot != "/" {
 		realLogFile = hostrootsymlink.EvalSymlinks(cr.pipeline.hostroot, realLogFile)
 	}
 
-	factories, readFiles, execFiles, sizeFnByFile, err := setupLogReceiverFactories(
+	// Recorded on the Container stored below so teardown can purge sizeFnByFile by the very key inserted
+	// from it here, instead of re-resolving a symlink that's gone along with the container.
+	ctr.RealLogFilePath = realLogFile
+
+	factories, readFiles, execFiles, sizeFnByFile, err := logsource.SetupLogReceiverFactories(
 		[]string{realLogFile},
 		cr.pipeline.hostroot,
 		ops,
 		cr.lastFileSizes,
 		cr.pipeline.commandRunner,
 		makeStorageFn,
-		statFileImpl,
-		ctr.Attributes.asMap(),
+		logsource.StatFile,
+		ctr.Attributes.AsMap(),
+		nil, // containers have no named receiver entry to paste a raw config into
 	)
 	if err != nil {
+		cr.pipeline.persister.RemovePersistentExts(newExtIDs)
+
 		return fmt.Errorf("setting up receiver factories: %w", err)
 	}
 
 	if len(factories) != 1 {
+		cr.pipeline.persister.RemovePersistentExts(newExtIDs)
+
 		return fmt.Errorf("%w: is had %d logs", errWrongNumberOfLogs, len(factories))
 	}
 
 	switch {
 	case len(readFiles) == 1:
-		ctr.ReceiverKind = receiverFileLog
+		ctr.ReceiverKind = logsource.ReceiverFileLog
 	case len(execFiles) == 1:
-		ctr.ReceiverKind = receiverExecLog
+		ctr.ReceiverKind = logsource.ReceiverExecLog
 	default:
+		cr.pipeline.persister.RemovePersistentExts(newExtIDs)
+
 		return errNoLogFound
 	}
 
@@ -242,19 +217,21 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 			TelemetrySettings: withoutDebugLogs(cr.pipeline.telemetry),
 		},
 		filtersCfg,
-		wrapWithInstrumentation(cr.logConsumer, ctr.logCounter, ctr.throughputMeter),
+		logsource.WrapWithInstrumentation(cr.logConsumer, ctr.logCounter, ctr.throughputMeter),
 	)
 	if err != nil {
+		cr.pipeline.persister.RemovePersistentExts(newExtIDs)
+
 		return fmt.Errorf("setup log filter: %w", err)
 	}
 
 	if err = logFilter.Start(ctx, nil); err != nil {
+		cr.pipeline.persister.RemovePersistentExts(newExtIDs)
+
 		return fmt.Errorf("start log filter: %w", err)
 	}
 
-	cr.startedComponents[ctr.Attributes.ID] = append(cr.startedComponents[ctr.Attributes.ID], logFilter)
-	cr.containers[ctr.Attributes.ID] = ctr
-	maps.Insert(cr.sizeFnByFile, maps.All(sizeFnByFile))
+	startedComponents := []component.Component{logFilter}
 
 	for logReceiverFactory, logReceiverCfg := range factories {
 		settings := receiver.Settings{
@@ -264,6 +241,9 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 
 		logRcvr, err := logReceiverFactory.CreateLogs(ctx, settings, logReceiverCfg, logFilter)
 		if err != nil {
+			stopComponents(startedComponents)
+			cr.pipeline.persister.RemovePersistentExts(newExtIDs)
+
 			var agentErr stanzaErrors.AgentError
 			if errors.As(err, &agentErr) && agentErr.Suggestion != "" {
 				return fmt.Errorf("setup receiver: %w (%s)", err, agentErr.Suggestion)
@@ -273,16 +253,27 @@ func (cr *containerReceiver) setupContainerLogReceiver(ctx context.Context, ctr 
 		}
 
 		if err = logRcvr.Start(ctx, cr.pipeline.persister); err != nil {
+			stopComponents(startedComponents)
+			cr.pipeline.persister.RemovePersistentExts(newExtIDs)
+
 			return fmt.Errorf("start receiver: %w", err)
 		}
 
-		cr.startedComponents[ctr.Attributes.ID] = append(cr.startedComponents[ctr.Attributes.ID], logRcvr)
+		startedComponents = append(startedComponents, logRcvr)
 	}
+
+	cr.startedComponents[ctr.Attributes.ID] = append(cr.startedComponents[ctr.Attributes.ID], startedComponents...)
+	cr.registeredExtensions[ctr.Attributes.ID] = append(cr.registeredExtensions[ctr.Attributes.ID], newExtIDs...)
+	cr.containers[ctr.Attributes.ID] = ctr
+	maps.Insert(cr.sizeFnByFile, maps.All(sizeFnByFile))
 
 	return nil
 }
 
-func (cr *containerReceiver) sizesByFile() (map[string]int64, error) {
+// SizesByFile implements FileSizer. A single file's stat error only skips that file -- it must not
+// discard every other file's already-successfully-read size (see the equivalent fix and rationale on
+// otel/logsource's managedSource.SizesByFile).
+func (cr *containerReceiver) SizesByFile() (map[string]int64, error) {
 	cr.l.Lock()
 	defer cr.l.Unlock()
 
@@ -291,13 +282,12 @@ func (cr *containerReceiver) sizesByFile() (map[string]int64, error) {
 	for logFile, sizeFn := range cr.sizeFnByFile {
 		size, err := sizeFn()
 		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
-				// We may not catch errors produced by the "sudo stat" cmd,
-				// but this would not really be convenient ...
-				continue
+			if !errors.Is(err, fs.ErrNotExist) {
+				// May not catch errors from the "sudo stat" command.
+				logger.V(1).Printf("Can't get size of file %q (ignoring it): %v", logFile, err)
 			}
 
-			return nil, err
+			continue
 		}
 
 		sizes[containerFileSizePrefix+logFile] = size
@@ -306,7 +296,11 @@ func (cr *containerReceiver) sizesByFile() (map[string]int64, error) {
 	return sizes, nil
 }
 
-func (cr *containerReceiver) stopWatchingForContainers(ctx context.Context, ids []string) {
+// stopWatchingForContainers tears down each container's tail. forget also discards its persisted read
+// offset, for a container that is gone for good; pass false when the container is still running and only
+// the reason to tail it went away, so whoever picks it up next resumes where this tail stopped instead of
+// skipping to the end of the file.
+func (cr *containerReceiver) stopWatchingForContainers(ctx context.Context, ids []string, forget bool) {
 	cr.l.Lock()
 	defer cr.l.Unlock()
 
@@ -314,28 +308,33 @@ func (cr *containerReceiver) stopWatchingForContainers(ctx context.Context, ids 
 	defer cancel()
 
 	for _, ctrID := range ids {
-		recvComponents, ok := cr.startedComponents[ctrID]
-		if !ok {
-			logger.V(1).Printf("Can't stop log receiver for container %s: it doesn't have one ...", ctrID)
-
-			continue
-		}
-
-		for _, comp := range recvComponents {
-			err := comp.Shutdown(shutdownCtx)
-			if err != nil {
-				logger.V(1).Printf("Failed to stop log receiver component for container %s: %v", ctrID, err)
+		if recvComponents, ok := cr.startedComponents[ctrID]; ok {
+			for _, comp := range recvComponents {
+				err := comp.Shutdown(shutdownCtx)
+				if err != nil {
+					logger.V(1).Printf("Failed to stop log receiver component for container %s: %v", ctrID, err)
+				}
 			}
+		} else {
+			logger.V(1).Printf("Can't stop log receiver for container %s: it doesn't have one ...", ctrID)
 		}
 
-		cr.pipeline.persister.removePersistentExts(cr.registeredExtensions[ctrID])
+		// Cleaned up unconditionally, even with no startedComponents entry above. setupContainerLogReceiver
+		// writes all four maps together only once it has fully succeeded (rolling back its extensions on
+		// every earlier error), so a container whose setup failed has no entry in any of them and the
+		// deletes below are simply no-ops -- cheaper than checking, and safe if that ever stops holding.
+		if forget {
+			cr.pipeline.persister.RemovePersistentExtsAndForget(cr.registeredExtensions[ctrID])
+		} else {
+			cr.pipeline.persister.RemovePersistentExts(cr.registeredExtensions[ctrID])
+		}
 
-		logFilePath := cr.containers[ctrID].LogFilePath
+		realLogFilePath := cr.containers[ctrID].RealLogFilePath
 
 		delete(cr.startedComponents, ctrID)
 		delete(cr.registeredExtensions, ctrID)
 		delete(cr.containers, ctrID)
-		delete(cr.sizeFnByFile, logFilePath)
+		delete(cr.sizeFnByFile, realLogFilePath)
 	}
 }
 
@@ -346,22 +345,46 @@ func (cr *containerReceiver) diagnostic() map[string]containerDiagnosticInformat
 	infos := make(map[string]containerDiagnosticInformation, len(cr.containers))
 
 	for ctrID, ctr := range cr.containers {
-		realPath := ctr.LogFilePath
-		if cr.pipeline.hostroot != "/" {
-			realPath = hostrootsymlink.EvalSymlinks(cr.pipeline.hostroot, ctr.LogFilePath)
-		}
-
 		infos[ctrID] = containerDiagnosticInformation{
 			LogProcessedCount:      ctr.logCounter.Load(),
 			LogThroughputPerMinute: ctr.throughputMeter.Total(),
 			LogFilePath:            ctr.LogFilePath,
-			LogFileRealPath:        realPath,
+			LogFileRealPath:        ctr.RealLogFilePath,
 			ReceiverKind:           ctr.ReceiverKind,
 			Attributes:             ctr.Attributes,
 		}
 	}
 
 	return infos
+}
+
+// isTailing reports whether this receiver actually has a live tail for ctrID, i.e. whether its
+// setupContainerLogReceiver completed successfully. Deliberately not keyed off
+// Manager.watchedContainers: that map is diagnostic bookkeeping, recorded before setup runs and kept
+// (with SetupError set) even when it fails -- treating a failed setup as "already tailed" would make
+// WantSource decline the glouton.* label source for a container nothing is tailing, silently dropping
+// its logs entirely instead of merely duplicating them.
+func (cr *containerReceiver) isTailing(ctrID string) bool {
+	cr.l.Lock()
+	defer cr.l.Unlock()
+
+	_, found := cr.containers[ctrID]
+
+	return found
+}
+
+// tailedContainerIDs is the whole-set form of isTailing, with the same "live tail only" semantics.
+func (cr *containerReceiver) tailedContainerIDs() map[string]bool {
+	cr.l.Lock()
+	defer cr.l.Unlock()
+
+	ids := make(map[string]bool, len(cr.containers))
+
+	for ctrID := range cr.containers {
+		ids[ctrID] = true
+	}
+
+	return ids
 }
 
 func (cr *containerReceiver) StartedComponentKeys() []string {
@@ -380,8 +403,7 @@ func (cr *containerReceiver) stop() {
 	wg := new(sync.WaitGroup)
 	wg.Add(len(cr.startedComponents))
 
-	// Stopping all the container receivers in parallel,
-	// since they don't depend on each other.
+	// Stop all container receivers in parallel; they don't depend on each other.
 	for _, components := range cr.startedComponents {
 		go func() {
 			defer crashreport.ProcessPanic()
@@ -394,42 +416,17 @@ func (cr *containerReceiver) stop() {
 	wg.Wait()
 
 	for _, extIDs := range cr.registeredExtensions {
-		cr.pipeline.persister.removePersistentExts(extIDs)
+		cr.pipeline.persister.RemovePersistentExts(extIDs)
 	}
 }
 
+// makeLogContainer builds a Container, delegating attribute resolution to
+// logsource.BuildContainerAttributes so it matches other container-derived sources.
 func makeLogContainer(ctx context.Context, container facts.Container, logFilePath string) Container {
-	attributes := ContainerAttributes{
-		Runtime:   container.RuntimeName(),
-		ID:        container.ID(),
-		Name:      container.ContainerName(),
-		ImageName: strings.SplitN(container.ImageName(), ":", 2)[0],
-	}
-
-	imageTags, err := container.ImageTags(ctx)
-	if err != nil {
-		logWarnings(fmt.Errorf("can't get tags for image %q (%s): %w", container.ImageName(), container.ImageID(), err))
-	} else {
-		imageTagsJSON, err := json.Marshal(imageTags)
-		if err != nil {
-			logWarnings(fmt.Errorf("can't marshal tags for image %q (%s): %w", container.ImageName(), container.ImageID(), err))
-		} else {
-			attributes.ImageTags = string(imageTagsJSON)
-		}
-	}
-
-	namespace := container.PodNamespace()
-	pod := container.PodName()
-
-	if namespace != "" && pod != "" {
-		attributes.Namespace = namespace
-		attributes.Pod = pod
-	}
-
 	return Container{
 		LogFilePath:     logFilePath,
-		Attributes:      attributes,
+		Attributes:      logsource.BuildContainerAttributes(ctx, container),
 		logCounter:      new(atomic.Int64),
-		throughputMeter: newRingCounter(throughputMeterResolutionSecs),
+		throughputMeter: logsource.NewRingCounter(throughputMeterResolutionSecs),
 	}
 }

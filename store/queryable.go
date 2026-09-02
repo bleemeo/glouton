@@ -51,20 +51,15 @@ func (q querier) Select(_ context.Context, _ bool, _ *storage.SelectHints, match
 	q.store.lock.Lock()
 	defer q.store.lock.Unlock()
 
-	mint := time.Unix(0, q.mint*1e6)
-	maxt := time.Unix(0, q.maxt*1e6)
+	mint := time.UnixMilli(q.mint)
+	maxt := time.UnixMilli(q.maxt)
 
 	metrics := make([]metric, 0)
 
-outerLoop:
 	for _, metric := range q.store.metrics {
-		for _, matcher := range matchers {
-			if !matcher.Matches(metric.labels[matcher.Name]) {
-				continue outerLoop
-			}
+		if metricMatches(metric, matchers) {
+			metrics = append(metrics, metric)
 		}
-
-		metrics = append(metrics, metric)
 	}
 
 	// Currently the prometheus rule engine does not need to sort the results everytime. This is probably because
@@ -81,15 +76,112 @@ outerLoop:
 	return &seriesIter{store: q.store, metrics: metrics, mint: mint, maxt: maxt}
 }
 
-// LabelValues returns all potential values for a label name.
+// LabelValues returns all potential values for a label name, in sorted order and
+// without duplicate.
 // It is not safe to use the strings beyond the lifefime of the querier.
-func (q querier) LabelValues(context.Context, string, *storage.LabelHints, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
-	return nil, nil, errNotImplemented
+//
+// The hints' limit is ignored: truncating here would be indistinguishable from
+// the label simply not having those values. Callers that need a limit are
+// expected to truncate the result themselves and say so.
+func (q querier) LabelValues(
+	_ context.Context,
+	name string,
+	_ *storage.LabelHints,
+	matchers ...*labels.Matcher,
+) ([]string, annotations.Annotations, error) {
+	q.store.lock.Lock()
+	defer q.store.lock.Unlock()
+
+	values := make(map[string]struct{})
+
+	for _, metric := range q.matchingMetrics(matchers) {
+		if value := metric.labels[name]; value != "" {
+			values[value] = struct{}{}
+		}
+	}
+
+	return sortedKeys(values), nil, nil
 }
 
 // LabelNames returns all the unique label names present in the block in sorted order.
-func (q querier) LabelNames(context.Context, *storage.LabelHints, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
-	return nil, nil, errNotImplemented
+//
+// As for LabelValues, the hints' limit is ignored.
+func (q querier) LabelNames(
+	_ context.Context,
+	_ *storage.LabelHints,
+	matchers ...*labels.Matcher,
+) ([]string, annotations.Annotations, error) {
+	q.store.lock.Lock()
+	defer q.store.lock.Unlock()
+
+	names := make(map[string]struct{})
+
+	for _, metric := range q.matchingMetrics(matchers) {
+		for name, value := range metric.labels {
+			// A label with an empty value doesn't exist as far as Prometheus is
+			// concerned, and must not show up in the label names.
+			if value != "" {
+				names[name] = struct{}{}
+			}
+		}
+	}
+
+	return sortedKeys(names), nil, nil
+}
+
+// matchingMetrics returns the metrics satisfying every given matcher and holding
+// at least one point within the querier's time range. Metrics whose points have
+// all expired are skipped, because Select() wouldn't return them either.
+//
+// The store's lock must be held by the caller.
+func (q querier) matchingMetrics(matchers []*labels.Matcher) []metric {
+	result := make([]metric, 0, len(q.store.metrics))
+
+	for _, metric := range q.store.metrics {
+		if !metricMatches(metric, matchers) {
+			continue
+		}
+
+		data, ok := q.store.points.pointsPerMetric[metric.metricID]
+		if !ok {
+			continue
+		}
+
+		// Compare in milliseconds: q.mint and q.maxt may be the API's
+		// MinTime/MaxTime, which don't survive a conversion to nanoseconds.
+		oldest, youngest := data.timeBounds()
+		if youngest.UnixMilli() < q.mint || oldest.UnixMilli() > q.maxt {
+			continue
+		}
+
+		result = append(result, metric)
+	}
+
+	return result
+}
+
+// metricMatches returns true when the metric's labels satisfy every given matcher.
+func metricMatches(metric metric, matchers []*labels.Matcher) bool {
+	for _, matcher := range matchers {
+		if !matcher.Matches(metric.labels[matcher.Name]) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// sortedKeys returns the keys of the given set, sorted.
+func sortedKeys(set map[string]struct{}) []string {
+	result := make([]string, 0, len(set))
+
+	for key := range set {
+		result = append(result, key)
+	}
+
+	sort.Strings(result)
+
+	return result
 }
 
 // Close releases the resources of the Querier.

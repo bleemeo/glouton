@@ -75,6 +75,10 @@ func tryToGenerateDiagnostic(timeout time.Duration, stateDir string, diagnosticF
 	}
 
 	tarWriter := archivewriter.NewTarWriter(diagnosticArchive)
+	// On timeout, generateDiagnostic gives up but the goroutine writing the
+	// diagnostic is still running: Close() runs concurrently with it, which is
+	// only safe because TarArchive is. Writes done after this point are dropped,
+	// leaving a valid (but incomplete) archive.
 	defer tarWriter.Close()
 
 	err = generateDiagnostic(ctx, tarWriter, diagnosticFn)

@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"net"
 	"net/http"
 	"net/http/pprof"
 	"path"
@@ -43,7 +44,6 @@ import (
 	"github.com/bleemeo/glouton/utils/archivewriter"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/rs/cors"
 )
 
 //go:embed static
@@ -145,11 +145,12 @@ func (f *staticFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (api *API) init() {
 	router := chi.NewRouter()
-	router.Use(cors.New(cors.Options{
-		AllowedOrigins:   []string{"*"},
-		AllowCredentials: false,
-		Debug:            false,
-	}).Handler)
+
+	// No CORS headers: everything this API serves (host facts, merged
+	// configuration, logs, diagnostic archive) must stay unreadable by the
+	// websites the user visits, since we have no authentication. The local
+	// UI is served from this very API, so it needs none.
+	router.Use(browserGuard(api.Config.Web.Listener.AllowedHosts))
 
 	fallbackIndex := []byte("Error while initializing local UI. See Glouton logs")
 
@@ -364,14 +365,33 @@ func (api *API) diagnosticArchive(ctx context.Context, archive types.ArchiveWrit
 	return nil
 }
 
+// isLoopbackListener reports whether a listener only accepts connections
+// coming from this machine. The address is asked to the listener rather than
+// deduced from the configured one: when web.listener.address is a name, only
+// the resolver knows what it ended up bound to.
+func isLoopbackListener(addr net.Addr) bool {
+	tcpAddr, ok := addr.(*net.TCPAddr)
+	if !ok {
+		return false
+	}
+
+	return tcpAddr.IP.IsLoopback()
+}
+
 // Run starts our API.
 func (api *API) Run(ctx context.Context) error {
 	api.init()
 
 	srv := http.Server{
-		Addr:              api.BindAddress,
 		Handler:           api.router,
 		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	var listenConfig net.ListenConfig
+
+	listener, err := listenConfig.Listen(ctx, "tcp", api.BindAddress)
+	if err != nil {
+		return err
 	}
 
 	idleConnsClosed := make(chan struct{})
@@ -398,7 +418,18 @@ func (api *API) Run(ctx context.Context) error {
 		logger.Printf("To access the local panel connect to http://%s 🌐", api.BindAddress)
 	}
 
-	err := srv.ListenAndServe()
+	if !isLoopbackListener(listener.Addr()) {
+		logger.Printf(
+			"Warning: the API is not listening on loopback and has no authentication: "+
+				"anyone able to reach %s can read this machine's facts, its configuration, "+
+				"its logs and its whole diagnostic archive. Restrict the access to it. "+
+				"web.listener.allowed_hosts only limits what web browsers may do, it is not "+
+				"a protection against a direct client.",
+			api.BindAddress,
+		)
+	}
+
+	err = srv.Serve(listener)
 	if errors.Is(err, http.ErrServerClosed) {
 		<-idleConnsClosed
 

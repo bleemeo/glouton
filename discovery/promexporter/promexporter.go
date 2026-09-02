@@ -27,7 +27,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/registry"
@@ -124,7 +123,6 @@ type DynamicScrapper struct {
 	containersLabels map[string]map[string]string
 	DynamicJobName   string
 	Registry         *registry.Registry
-	FluentBitInputs  []config.LogInput
 }
 
 // Update updates the scrappers targets using new containers information.

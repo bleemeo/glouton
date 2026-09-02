@@ -35,6 +35,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/model/value"
 	"github.com/prometheus/prometheus/storage"
 	prom_tsdb "github.com/prometheus/prometheus/tsdb"
 )
@@ -153,7 +154,7 @@ func (s *Store) PushPoints(ctx context.Context, points []types.MetricPoint) {
 	app := s.db.Appender(ctx)
 
 	for _, p := range points {
-		if math.IsNaN(p.Value) {
+		if math.IsNaN(p.Value) && !value.IsStaleNaN(p.Value) {
 			continue
 		}
 

@@ -2,7 +2,7 @@
 
 set -e
 
-LINTER_VERSION=v2.12.2
+LINTER_VERSION=v2.13.2
 
 USER_UID=$(id -u)
 
@@ -29,6 +29,13 @@ esac
 if docker volume ls | grep -q glouton-buildcache; then
    GO_MOUNT_CACHE="-v glouton-buildcache:/go/pkg"
 fi
+
+# Cap the linter's heap. Loading and type-checking the whole dependency graph is what
+# dominates the memory used, and without this the Go runtime lets the heap grow until the
+# container gets OOM-killed (measured: >9 GiB, killed). Forcing the GC to work instead
+# brings the peak back to ~7.3 GiB and lets the run complete, at the cost of some CPU.
+# The linter set has almost no influence here: 87 linters peak at 7303 MiB, 29 at 7218 MiB.
+LINTER_MEMORY_LIMIT="-e GOMEMLIMIT=5GiB -e GOGC=50"
 
 if [ "${OPEN_SHELL}" = "1" ]; then
    docker run --rm -ti -v "$(pwd)":/app ${GO_MOUNT_CACHE} -e HOME=/go/pkg \
@@ -61,7 +68,7 @@ fi
 
 echo "Start lint Linux"
 
-docker run --rm -v "$(pwd)":/app ${GO_MOUNT_CACHE} -e HOME=/go/pkg \
+docker run --rm -v "$(pwd)":/app ${GO_MOUNT_CACHE} ${LINTER_MEMORY_LIMIT} -e HOME=/go/pkg \
    -e GOOS=linux -e GOARCH=amd64 --tmpfs /app/webui/node_modules:exec -w /app golangci/golangci-lint:${LINTER_VERSION} \
    bash -ec "
    mkdir -p /go/pkg
@@ -71,7 +78,7 @@ docker run --rm -v "$(pwd)":/app ${GO_MOUNT_CACHE} -e HOME=/go/pkg \
 
 echo "Start lint FreeBSD"
 
-docker run --rm -v "$(pwd)":/app ${GO_MOUNT_CACHE} -e HOME=/go/pkg \
+docker run --rm -v "$(pwd)":/app ${GO_MOUNT_CACHE} ${LINTER_MEMORY_LIMIT} -e HOME=/go/pkg \
    -e GOOS=freebsd -e GOARCH=amd64 --tmpfs /app/webui/node_modules:exec -w /app golangci/golangci-lint:${LINTER_VERSION} \
    bash -ec "
    mkdir -p /go/pkg
@@ -81,7 +88,7 @@ docker run --rm -v "$(pwd)":/app ${GO_MOUNT_CACHE} -e HOME=/go/pkg \
 
 echo "Start lint Windows"
 
-docker run --rm -v "$(pwd)":/app ${GO_MOUNT_CACHE} -e HOME=/go/pkg \
+docker run --rm -v "$(pwd)":/app ${GO_MOUNT_CACHE} ${LINTER_MEMORY_LIMIT} -e HOME=/go/pkg \
    -e GOOS=windows -e GOARCH=amd64 --tmpfs /app/webui/node_modules:exec -w /app golangci/golangci-lint:${LINTER_VERSION} \
    bash -ec "
    mkdir -p /go/pkg

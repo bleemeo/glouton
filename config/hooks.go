@@ -34,7 +34,7 @@ import (
 // so we need to unmarshal it to set the default values.
 func blackboxModuleHookFunc() mapstructure.DecodeHookFuncType {
 	return func(_ reflect.Type, target reflect.Type, data any) (any, error) {
-		module, ok := reflect.New(target).Interface().(*bbConf.Module)
+		module, ok := reflect.TypeAssert[*bbConf.Module](reflect.New(target))
 		if !ok {
 			return data, nil
 		}
@@ -143,6 +143,41 @@ func ParseBool(value string) (bool, error) {
 	}
 
 	return result, err
+}
+
+// networkProtocolsNullMeansDefaultHookFunc makes a bare "grpc:"/"http:" key (a YAML null value) under
+// opentelemetry.listeners.*.protocols behave exactly like an explicit "grpc: {}"/"http: {}": the
+// protocol is enabled with the factory-default endpoint. This matches how every upstream OTel collector
+// receiver's own "protocols:" block already works (see receivers.otlp in the OTel collector docs) --
+// listing a protocol at all, empty or not, enables it; only a protocol not listed is disabled. Without
+// this hook, mapstructure's default behavior treats "key present but null" identically to "key absent"
+// (both leave the destination *NetworkEndpoint field nil), which silently produces
+// errNetworkListenerNoProtocol at load time for what looks like the most natural way to write "enable
+// this with defaults" -- a bare key, the same shorthand used throughout the rest of glouton.conf for
+// enabling a section with its defaults.
+//
+// This only touches the "protocols:" map's own entries (data), not whether "protocols" itself is present:
+// an omitted protocols: block, or an omitted grpc/http key, is untouched and still decodes to a nil
+// *NetworkEndpoint (disabled), exactly as before.
+func networkProtocolsNullMeansDefaultHookFunc() mapstructure.DecodeHookFuncType {
+	return func(_ reflect.Type, target reflect.Type, data any) (any, error) {
+		if target != reflect.TypeFor[NetworkProtocols]() {
+			return data, nil
+		}
+
+		rawMap, ok := data.(map[string]any)
+		if !ok {
+			return data, nil
+		}
+
+		for _, key := range []string{"grpc", "http"} {
+			if v, present := rawMap[key]; present && v == nil {
+				rawMap[key] = map[string]any{}
+			}
+		}
+
+		return rawMap, nil
+	}
 }
 
 func StringToIntSliceHookFunc(sep string) mapstructure.DecodeHookFunc {

@@ -21,8 +21,6 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -32,6 +30,7 @@ import (
 	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/otel/logsource"
 	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/uuid"
@@ -52,10 +51,13 @@ type Manager struct {
 	knownLogFormats            map[string][]config.OTELOperator
 	state                      bleemeoTypes.State
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability
+	// containerFilter is cfg.ContainerFilter, pre-validated at New() (invalid entries stripped with a warning).
+	containerFilter map[string]string
 
-	persister     *persistHost
-	pipeline      *pipelineContext
-	containerRecv *containerReceiver
+	receiverManager *logsource.ReceiverManager
+	persister       *logsource.PersistHost
+	pipeline        *pipelineContext
+	containerRecv   *containerReceiver
 
 	l                 sync.Mutex
 	skippedSource     []sourceDiagnostic
@@ -63,8 +65,12 @@ type Manager struct {
 	watchedContainers map[string]sourceDiagnostic // map key: container ID
 	// serviceReceivers only contains services that don't run in a container
 	serviceReceivers map[discovery.NameInstance][]*logReceiver
+	// fanoutSinks tracks, for diagnostics only, sources opted into via WantSource; the tail itself is owned by logsource.
+	fanoutSinks map[string]*fanoutSink
 }
 
+// New builds the log-shipping pipeline and registers it as a logsource.SinkProvider on receiverManager,
+// which decides per-source whether to ship it via WantSource (see sink_provider.go).
 func New(
 	ctx context.Context,
 	cfg config.OpenTelemetry,
@@ -75,20 +81,18 @@ func New(
 	pushLogs func(context.Context, []byte) error,
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability,
 	addWarnings func(...error),
+	receiverManager *logsource.ReceiverManager,
 ) (*Manager, error) {
-	// Expanding known log formats, allowing one level of cross-referencing.
-	// Referenced formats must be defined above references to them.
-	knownLogFormats, err := expandLogFormats(cfg.KnownLogFormats)
+	// Expand known log formats, allowing one level of cross-referencing.
+	knownLogFormats, err := logsource.ExpandLogFormats(cfg.KnownLogFormats)
 	if err != nil {
 		addWarnings(err)
 
 		return nil, fmt.Errorf("can't expand known log formats: %w", err)
 	}
 
-	persister, err := newPersistHost(state)
-	if err != nil {
-		return nil, fmt.Errorf("can't create persist host: %w", err)
-	}
+	// Reuse receiverManager's own PersistHost; two separate instances would overwrite each other's saved offsets.
+	persister := receiverManager.Persister()
 
 	pipelineOpts := pipelineOptions{
 		batcherTimeout:           10 * time.Second,
@@ -106,27 +110,40 @@ func New(
 		persister,
 		addWarnings,
 		knownLogFormats,
-		getLastFileSizesFromCache(state),
+		logsource.GetLastFileSizesFromCache(state, logsource.LogFileSizesCacheKey),
 		pipelineOpts,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("building pipeline: %w", err)
 	}
 
-	containerRecv := newContainerReceiver(pipeline, cfg.ContainerFormat, knownLogFormats, cfg.ContainerFilter, cfg.KnownLogFilters)
+	containerRecv := newContainerReceiver(pipeline)
 
 	processingManager := &Manager{
 		config:                     cfg,
 		knownLogFormats:            knownLogFormats,
 		state:                      state,
 		streamAvailabilityStatusFn: streamAvailabilityStatusFn,
+		containerFilter:            validateContainerFilters(cfg.ContainerFilter, cfg.KnownLogFilters),
+		receiverManager:            receiverManager,
 		persister:                  persister,
 		pipeline:                   pipeline,
 		containerRecv:              containerRecv,
 		watchedServices:            make(map[discovery.NameInstance]sourceDiagnostic),
 		watchedContainers:          make(map[string]sourceDiagnostic),
 		serviceReceivers:           make(map[discovery.NameInstance][]*logReceiver),
+		fanoutSinks:                make(map[string]*fanoutSink),
 	}
+
+	receiverManager.RegisterSinkProvider(processingManager)
+
+	// Fold this package's file sizes into receiverManager's shared save instead of running an independent saver of the same state key.
+	receiverManager.RegisterExternalSizer(func() []logsource.FileSizer {
+		processingManager.pipeline.l.Lock()
+		defer processingManager.pipeline.l.Unlock()
+
+		return mergeLastFileSizes(processingManager.pipeline.receivers, processingManager.containerRecv)
+	})
 
 	go processingManager.handleProcessingLifecycle(ctx)
 
@@ -141,9 +158,7 @@ func (man *Manager) handleProcessingLifecycle(ctx context.Context) {
 	recvUpdateTicker := time.NewTicker(receiversUpdatePeriod)
 	defer recvUpdateTicker.Stop()
 
-	saveFileSizesTicker := time.NewTicker(saveFileSizesToCachePeriod)
-	defer saveFileSizesTicker.Stop()
-
+	// File sizes are saved via receiverManager's own periodic SaveState (see New's RegisterExternalSizer), not a ticker here.
 ctxLoop:
 	for ctx.Err() == nil {
 		select {
@@ -158,31 +173,33 @@ ctxLoop:
 			}
 
 			man.l.Unlock()
-		case <-saveFileSizesTicker.C:
-			man.pipeline.l.Lock()
-			fileSizers := mergeLastFileSizes(man.pipeline.receivers, man.containerRecv)
-			man.pipeline.l.Unlock()
-
-			saveLastFileSizesToCache(man.state, fileSizers)
-			man.persister.saveToState(man.state)
 		}
 	}
 
 	// ctx has expired, shutting everything down
 
+	// man.serviceReceivers is guarded by man.l, which a concurrent discovery cycle writes to
+	// (removeOldSources deletes from it, setupProcessingForSource appends to it), so iterating it under
+	// man.pipeline.l alone is a data race. Both locks are taken in the man.l -> man.pipeline.l order used
+	// by every other path needing the pair (updateServiceReceivers, DiagnosticArchive,
+	// setupProcessingForSource); reversing it here would risk a deadlock against them.
+	man.l.Lock()
 	man.pipeline.l.Lock()
-	defer man.pipeline.l.Unlock()
 
 	for _, receivers := range man.serviceReceivers {
-		stopReceivers(receivers, man.persister.removePersistentExts)
+		stopReceivers(receivers, man.persister.RemovePersistentExts)
 	}
 
 	man.containerRecv.stop()
 
 	man.pipeline.shutdownAll()
 
-	saveLastFileSizesToCache(man.state, mergeLastFileSizes(man.pipeline.receivers, man.containerRecv))
-	man.persister.saveToState(man.state)
+	man.pipeline.l.Unlock()
+	man.l.Unlock()
+
+	// Must run outside both: SaveState locks man.pipeline.l via the external sizer, and takes
+	// ReceiverManager's lock, from under which WantSource takes man.l -- sync.Mutex isn't reentrant.
+	man.receiverManager.SaveState()
 }
 
 func (man *Manager) updateServiceReceivers(ctx context.Context) error {
@@ -193,8 +210,7 @@ func (man *Manager) updateServiceReceivers(ctx context.Context) error {
 
 	for _, receivers := range man.serviceReceivers {
 		for _, recv := range receivers {
-			// We can run several logReceiver.update() in parallel without taking the pipeline lock in each,
-			// since they only do read-access to the lock-protected fields.
+			// update() can run in parallel here since it only reads the lock-protected fields.
 			errGrp.Go(func() error {
 				err := recv.update(ctx, man.pipeline, logWarnings)
 				if err != nil {
@@ -209,58 +225,83 @@ func (man *Manager) updateServiceReceivers(ctx context.Context) error {
 	return errGrp.Wait()
 }
 
-func (man *Manager) HandleLogsFromDynamicSources(ctx context.Context, services []discovery.Service, containers []facts.Container) {
+// ServiceTailedContainerIDs returns the IDs of containers this package currently tails through a
+// discovered service's own log receiver. Passed to logsource.ReceiverManager.UpdateContainers so a
+// container's glouton.*-label source is rebuilt when that status changes, which re-asks WantSource --
+// see sink_provider.go for why the shipping decision itself has to stay there.
+//
+// containerRecv carries its own lock and is the authority on what's really tailed, so man.l is
+// deliberately not taken (see isTailing on why a failed setup must not count).
+func (man *Manager) ServiceTailedContainerIDs() map[string]bool {
+	return man.containerRecv.tailedContainerIDs()
+}
+
+// HandleLogsFromDynamicSources reconciles this package's service-path tails against the current
+// discovery. containersMayForgetAbsent says whether a container missing from containers may be treated as
+// permanently removed; otherwise it keeps its persisted read offset (see removeOldSources).
+func (man *Manager) HandleLogsFromDynamicSources(
+	ctx context.Context,
+	services []discovery.Service,
+	containers []facts.Container,
+	containersMayForgetAbsent bool,
+) {
+	// Computed without holding man.l: receiverManager's askProviders (itself called under its own lock,
+	// from RescanReceivers/UpdateContainers) calls back into man.l via WantSource/wrapWithFilter. Calling
+	// ContainerIDsShippedByReceivers (which takes receiverManager's lock) while man.l is held would nest
+	// the two locks in the opposite order from that existing call path, on two different goroutines --
+	// a deadlock waiting to happen.
+	var shippedByReceivers map[string]bool
+
+	if man.receiverManager != nil {
+		shippedByReceivers = man.receiverManager.ContainerIDsShippedByReceivers(containers)
+	}
+
 	man.l.Lock()
 	defer man.l.Unlock()
 
-	man.removeOldSources(ctx, services, containers)
+	man.removeOldSources(ctx, services, containers, containersMayForgetAbsent)
 
-	logSources := man.processLogSources(services, containers)
+	logSources := man.processLogSources(services, containers, shippedByReceivers)
 
+	// Every logSource comes from a discovered service now, so serviceID is always set below
+	// (label-only containers go through logsource.ReceiverManager/WantSource instead, see sink_provider.go).
 	for _, logSource := range logSources {
 		err := man.setupProcessingForSource(ctx, logSource)
-		if err != nil {
-			if logSource.serviceID != nil {
-				if diag, found := man.watchedServices[*logSource.serviceID]; found {
-					diag.SetupError = err.Error()
-					man.watchedServices[*logSource.serviceID] = diag
-				}
+		if err == nil {
+			continue
+		}
 
-				if logSource.container != nil {
-					if diag, found := man.watchedContainers[logSource.container.ID()]; found {
-						diag.SetupError = err.Error()
-						man.watchedContainers[logSource.container.ID()] = diag
-					}
+		if diag, found := man.watchedServices[*logSource.serviceID]; found {
+			diag.SetupError = err.Error()
+			man.watchedServices[*logSource.serviceID] = diag
+		}
 
-					logger.V(1).Printf(
-						"Failed to set up log processing for service %q on container %s (%s): %v",
-						logSource.serviceID.Name, logSource.container.ContainerName(), logSource.container.ID(), err,
-					)
-				} else {
-					logger.V(1).Printf(
-						"Failed to set up log processing for service %q file %q: %v",
-						logSource.serviceID.Name, logSource.logFilePath, err,
-					)
-				}
-			} else {
-				if diag, found := man.watchedContainers[logSource.container.ID()]; found {
-					diag.SetupError = err.Error()
-					man.watchedContainers[logSource.container.ID()] = diag
-				}
-
-				logger.V(1).Printf(
-					"Failed to set up log processing for container %s (%s): %v",
-					logSource.container.ContainerName(), logSource.container.ID(), err,
-				)
+		if logSource.container != nil {
+			if diag, found := man.watchedContainers[logSource.container.ID()]; found {
+				diag.SetupError = err.Error()
+				man.watchedContainers[logSource.container.ID()] = diag
 			}
+
+			logger.V(1).Printf(
+				"Failed to set up log processing for service %q on container %s (%s): %v",
+				logSource.serviceID.Name, logSource.container.ContainerName(), logSource.container.ID(), err,
+			)
+		} else {
+			logger.V(1).Printf(
+				"Failed to set up log processing for service %q file %q: %v",
+				logSource.serviceID.Name, logSource.logFilePath, err,
+			)
 		}
 	}
 }
 
-func (man *Manager) processLogSources(services []discovery.Service, containers []facts.Container) []logSource {
+// processLogSources resolves log sources for discovered services; everything else goes through logsource.ReceiverManager/WantSource.
+// shippedByReceivers marks containers already matched by one of receiverManager's own
+// container_name/container_selectors receivers (see HandleLogsFromDynamicSources for why it's computed
+// by the caller instead of here): claiming one of them too would tail its log file twice. Explicit
+// config wins over service auto-discovery.
+func (man *Manager) processLogSources(services []discovery.Service, containers []facts.Container, shippedByReceivers map[string]bool) []logSource {
 	man.skippedSource = make([]sourceDiagnostic, 0, len(man.skippedSource))
-
-	const gloutonContainerLabelPrefix = "glouton."
 
 	containersByID := make(map[string]facts.Container, len(containers))
 
@@ -285,27 +326,48 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 		}
 
 		if service.ContainerID != "" {
-			ctr, found := containersByID[service.ContainerID]
-			if found {
-				logEnableStr, found := facts.LabelsAndAnnotations(ctr)[gloutonContainerLabelPrefix+"log_enable"]
-				if found {
-					logEnable, err := strconv.ParseBool(strings.ToLower(logEnableStr))
-					if err != nil {
-						logger.V(1).Printf("Failed to parse value of 'glouton.log_enable' for container %s (%s): %v", ctr.ContainerName(), ctr.ID(), err)
-					} else if !logEnable {
-						logger.V(2).Printf("Ignoring logs of service %q, because its container has 'glouton.log_enable' set to false", service.Name)
+			if ctr, found := containersByID[service.ContainerID]; found && logsource.IsContainerExcluded(man.config, ctr) {
+				logger.V(2).Printf("Ignoring logs of service %q, because its container is excluded", service.Name)
 
-						man.skippedSource = append(man.skippedSource, sourceDiagnostic{
-							IsFromService: true,
-							ServiceKey:    key,
-							ContainerID:   service.ContainerID,
-							ContainerName: service.ContainerName,
-							SkipReason:    "Label glouton.log_enable set to false",
-						})
+				man.skippedSource = append(man.skippedSource, sourceDiagnostic{
+					IsFromService: true,
+					ServiceKey:    key,
+					ContainerID:   service.ContainerID,
+					ContainerName: service.ContainerName,
+					SkipReason:    "Container excluded (glouton.log_enable=false or container_exclude)",
+				})
 
-						continue
-					}
-				}
+				continue
+			}
+
+			if shippedByReceivers[service.ContainerID] {
+				logger.V(2).Printf("Ignoring logs of service %q, because its container is already matched by an explicit receiver", service.Name)
+
+				man.skippedSource = append(man.skippedSource, sourceDiagnostic{
+					IsFromService: true,
+					ServiceKey:    key,
+					ContainerID:   service.ContainerID,
+					ContainerName: service.ContainerName,
+					SkipReason:    "Container already matched by an explicit log.opentelemetry.receivers entry",
+				})
+
+				continue
+			}
+
+			// fallbackDefault true: absent the label, a service-discovered container ships as before --
+			// this only adds an explicit glouton.send_logs=false as a new way to opt one out.
+			if ctr, found := containersByID[service.ContainerID]; found && !logsource.ContainerSendLogs(ctr, true) {
+				logger.V(2).Printf("Ignoring logs of service %q, because its container's glouton.send_logs is false", service.Name)
+
+				man.skippedSource = append(man.skippedSource, sourceDiagnostic{
+					IsFromService: true,
+					ServiceKey:    key,
+					ContainerID:   service.ContainerID,
+					ContainerName: service.ContainerName,
+					SkipReason:    "Container excluded (glouton.send_logs=false)",
+				})
+
+				continue
 			}
 		}
 
@@ -339,12 +401,30 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 		}
 
 		for _, serviceLogProcessing := range service.LogProcessing {
+			format := man.knownLogFormats[serviceLogProcessing.Format]
+			filters := man.config.KnownLogFilters[serviceLogProcessing.Filter]
+
+			// A container's own glouton.log_format/glouton.log_filter (or its container_format/
+			// container_filter mapping) is explicit user config and outranks what auto-discovery inferred
+			// from the service type. This tail is the container's only one -- WantSource declines its
+			// glouton.*-label source precisely because this path already ships it -- so without honouring
+			// them here those labels would silently stop having any effect on a containerised service.
+			if ctr != nil {
+				if containerFormat := man.resolveContainerFormat(ctr); containerFormat != nil {
+					format = containerFormat
+				}
+
+				if containerFilters := man.resolveContainerFilter(ctr); containerFilters != nil {
+					filters = containerFilters
+				}
+			}
+
 			logSource := logSource{
 				serviceID:   &key,
 				logFilePath: serviceLogProcessing.FilePath, // ignored if in a container
 				container:   ctr,                           // possibly nil if not in a container
-				operators:   append(operatorsForService(service), man.knownLogFormats[serviceLogProcessing.Format]...),
-				filters:     man.config.KnownLogFilters[serviceLogProcessing.Filter],
+				operators:   append(operatorsForServiceName(service.Name), format...),
+				filters:     filters,
 			}
 
 			logSources = append(logSources, logSource)
@@ -359,90 +439,16 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 		}
 	}
 
-	for ctrID, ctr := range containersByID {
-		if _, alreadyWatching := man.watchedContainers[ctrID]; alreadyWatching {
-			continue
-		}
-
-		ctrFacts := facts.LabelsAndAnnotations(ctr)
-
-		logEnableStr, found := ctrFacts[gloutonContainerLabelPrefix+"log_enable"]
-		if found {
-			logEnable, err := strconv.ParseBool(strings.ToLower(logEnableStr))
-			if err != nil {
-				logger.V(1).Printf("Failed to parse value of 'glouton.log_enable' for container %s (%s): %v", ctr.ContainerName(), ctr.ID(), err)
-			} else if !logEnable {
-				logger.V(2).Printf("Ignoring logs of container %s (%s), for which 'glouton.log_enable' is set to false", ctr.ContainerName(), ctr.ID())
-
-				man.skippedSource = append(man.skippedSource, sourceDiagnostic{
-					ContainerID:   ctr.ID(),
-					ContainerName: ctr.ContainerName(),
-					SkipReason:    "Label glouton.log_enable set to false",
-				})
-
-				continue
-			}
-		}
-
-		logSource := logSource{
-			container: ctr,
-		}
-		hasOpsFromFacts, hasFilterFromFacts := false, false
-
-		logFormat, found := ctrFacts[gloutonContainerLabelPrefix+"log_format"]
-		if found {
-			ops, found := man.knownLogFormats[logFormat]
-			if found {
-				logSource.operators = ops
-				hasOpsFromFacts = true
-			} else {
-				logger.V(1).Printf("Container %s (%s) requires an unknown log format: %q", ctr.ContainerName(), ctrID, logFormat)
-			}
-		}
-
-		if !hasOpsFromFacts {
-			ops, found := man.knownLogFormats[man.containerRecv.containerOperators[ctr.ContainerName()]]
-			if found {
-				logSource.operators = ops
-			}
-		}
-
-		logFilter, found := ctrFacts[gloutonContainerLabelPrefix+"log_filter"]
-		if found {
-			filters, found := man.config.KnownLogFilters[logFilter]
-			if found {
-				logSource.filters = filters
-				hasFilterFromFacts = true
-			} else {
-				logger.V(1).Printf("Container %s (%s) requires an unknown log filter: %q", ctr.ContainerName(), ctrID, logFilter)
-			}
-		}
-
-		if !hasFilterFromFacts {
-			filters, found := man.config.KnownLogFilters[man.containerRecv.containerFilters[ctr.ContainerName()]]
-			if found {
-				logSource.filters = filters
-			}
-		}
-
-		logSources = append(logSources, logSource)
-		man.watchedContainers[ctrID] = sourceDiagnostic{
-			ContainerName: ctr.ContainerName(),
-			ContainerID:   ctr.ID(),
-			IsFromService: false,
-		}
-	}
-
 	return logSources
 }
 
 func (man *Manager) setupProcessingForSource(ctx context.Context, logSource logSource) error {
-	rawOps, err := expandOperators(logSource.operators, man.knownLogFormats, false)
+	rawOps, err := logsource.ExpandOperators(logSource.operators, man.knownLogFormats, false)
 	if err != nil {
 		return fmt.Errorf("expanding operators: %w", err)
 	}
 
-	operators, err := buildOperators(rawOps)
+	operators, err := logsource.BuildOperators(rawOps)
 	if err != nil {
 		return fmt.Errorf("building operators: %w", err)
 	}
@@ -467,13 +473,13 @@ func (man *Manager) setupProcessingForSource(ctx context.Context, logSource logS
 		}
 	} else {
 		recvName := fmt.Sprintf("service_%s-%q_%s", logSource.serviceID.Name, logSource.serviceID.Instance, uuid.NewString())
-		recvConfig := config.OTLPReceiver{
-			Include:   []string{logSource.logFilePath},
-			Operators: logSource.operators,
-			Filters:   logSource.filters,
+		recvConfig := config.LogReceiver{
+			"include":   []string{logSource.logFilePath},
+			"operators": logSource.operators,
+			"filters":   logSource.filters,
 		}
 
-		recv, warn, err := newLogReceiver(recvName, recvConfig, true, man.pipeline.getInput(), nil, statFileImpl)
+		recv, warn, err := newLogReceiver(recvName, recvConfig, true, man.pipeline.getInput(), nil, logsource.StatFile)
 		if err != nil {
 			return err
 		}
@@ -496,15 +502,22 @@ func (man *Manager) setupProcessingForSource(ctx context.Context, logSource logS
 	return nil
 }
 
-func (man *Manager) removeOldSources(ctx context.Context, services []discovery.Service, containers []facts.Container) {
+// removeOldSources tears down the tails of services and containers that have disappeared.
+// containersMayForgetAbsent gates the permanent offset-forget on the container branch.
+func (man *Manager) removeOldSources(
+	ctx context.Context,
+	services []discovery.Service,
+	containers []facts.Container,
+	containersMayForgetAbsent bool,
+) {
 	watchedServices := slices.Collect(maps.Keys(man.watchedServices))
 	watchedContainers := slices.Collect(maps.Keys(man.watchedContainers))
-	latestServices := make(map[discovery.NameInstance]bool, len(services)) // map[service] -> is a container
-	latestContainers := make(map[string]struct{}, len(containers))         // map key: container ID
+	latestServices := make(map[discovery.NameInstance]struct{}, len(services))
+	latestContainers := make(map[string]struct{}, len(containers)) // map key: container ID
 
 	for _, service := range services {
 		if service.LogProcessing != nil {
-			latestServices[discovery.NameInstance{Name: service.Name, Instance: service.Instance}] = service.ContainerID != ""
+			latestServices[discovery.NameInstance{Name: service.Name, Instance: service.Instance}] = struct{}{}
 		}
 	}
 
@@ -519,22 +532,44 @@ func (man *Manager) removeOldSources(ctx context.Context, services []discovery.S
 		logger.V(2).Printf("Removing sources from log processing: services=%s / containers=%s", noLongerExistingServices, noLongerExistingContainers)
 	}
 
-	for _, service := range noLongerExistingServices {
-		if latestServices[service] {
-			continue // containers will be handled below
-		}
+	containerAlsoGone := make(map[string]bool, len(noLongerExistingContainers))
+	for _, ctrID := range noLongerExistingContainers {
+		containerAlsoGone[ctrID] = true
+	}
 
+	for _, service := range noLongerExistingServices {
 		receivers, found := man.serviceReceivers[service]
 		if found {
-			stopReceivers(receivers, man.persister.removePersistentExts)
+			// The service is gone for good (not just a restart): forget its offset too.
+			stopReceivers(receivers, man.persister.RemovePersistentExtsAndForget)
 			delete(man.serviceReceivers, service)
+		}
+
+		// A container-hosted service has no serviceReceivers entry: its tail lives in containerRecv, and
+		// the container branch below only stops it once the *container* disappears. Left running, it keeps
+		// applying the vanished service's operators/filters forever, and it stops the container's
+		// glouton.*-label source from being reconsidered (ServiceTailedContainerIDs still reports it).
+		// The offset is kept, since the container itself is still there: this only drops the reason to
+		// tail it, so whoever picks it up next resumes rather than skipping to the end of the file.
+		//
+		// containerAlsoGone is checked to skip this teardown entirely when the container itself is also
+		// disappearing this cycle (the ordinary "container removed" case): stopWatchingForContainers
+		// unconditionally clears its registeredExtensions/containers bookkeeping for ctrID regardless of
+		// forget, so a forget=false call here first would leave the forget=true call below (which runs the
+		// real, permanent offset-forget) nothing to forget from.
+		if diag, watched := man.watchedServices[service]; watched && diag.ContainerID != "" && !containerAlsoGone[diag.ContainerID] {
+			man.containerRecv.stopWatchingForContainers(ctx, []string{diag.ContainerID}, false)
+			delete(man.watchedContainers, diag.ContainerID)
 		}
 
 		delete(man.watchedServices, service)
 	}
 
 	if len(noLongerExistingContainers) > 0 {
-		man.containerRecv.stopWatchingForContainers(ctx, noLongerExistingContainers)
+		// Otherwise they may still exist and merely be absent from an incomplete enumeration, so their
+		// tails stop but their offsets survive -- a forget is permanent, and fileconsumer would then
+		// restart at end-of-file.
+		man.containerRecv.stopWatchingForContainers(ctx, noLongerExistingContainers, containersMayForgetAbsent)
 
 		for _, ctrID := range noLongerExistingContainers {
 			delete(man.watchedContainers, ctrID)
@@ -608,6 +643,7 @@ func (man *Manager) DiagnosticArchive(_ context.Context, writer types.ArchiveWri
 			Receivers:          receiversInfo,
 			ContainerReceivers: man.containerRecv.diagnostic(),
 			WatchedServices:    wServices,
+			FanoutSources:      man.fanoutSourceDiagnosticsLocked(),
 		},
 		receiversSetup: diagnosticReceiverSetup{
 			SkippedSource:     skippedSource,
@@ -618,15 +654,6 @@ func (man *Manager) DiagnosticArchive(_ context.Context, writer types.ArchiveWri
 		KnownLogFilters: man.config.KnownLogFilters,
 	}
 
-	if man.pipeline.otlpRecvCounter != nil {
-		diagnosticInfo.receivers.OTLPReceiver = &otlpReceiverDiagnosticInformation{
-			GRPCEnabled:            man.config.GRPC.Enable,
-			HTTPEnabled:            man.config.HTTP.Enable,
-			LogProcessedCount:      man.pipeline.otlpRecvCounter.Load(),
-			LogThroughputPerMinute: man.pipeline.otlpRecvThroughputMeter.Total(),
-		}
-	}
-
 	if man.pipeline.journaldCounter != nil {
 		diagnosticInfo.receivers.JournaldReceiver = &journaldReceiverDiagnosticInformation{
 			LogProcessedCount:      man.pipeline.journaldCounter.Load(),
@@ -634,25 +661,7 @@ func (man *Manager) DiagnosticArchive(_ context.Context, writer types.ArchiveWri
 		}
 	}
 
-	if err := diagnosticInfo.writeToArchive(writer); err != nil {
-		return err
-	}
-
-	if err := man.persister.writeToArchive(writer); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func operatorsForService(service discovery.Service) []config.OTELOperator {
-	return []config.OTELOperator{
-		{
-			"type":  "add",
-			"field": "resource['service.name']",
-			"value": service.Name,
-		},
-	}
+	return diagnosticInfo.writeToArchive(writer)
 }
 
 func operatorsForServiceName(serviceName string) []config.OTELOperator {

@@ -1997,3 +1997,75 @@ func TestThrottleDeadline(t *testing.T) {
 		t.Errorf("throttleDeadline(execution) = %s, want %s", got, want)
 	}
 }
+
+func Test_shouldCheckDuplicated(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name               string
+		lastDuplicateCheck time.Duration // relative to the execution start, zero meaning "never"
+		nextDuplicateCheck time.Duration
+		force              bool
+		want               bool
+	}{
+		{
+			name: "never ran",
+			want: true,
+		},
+		{
+			name:               "not ran recently",
+			lastDuplicateCheck: -time.Hour,
+			nextDuplicateCheck: -40 * time.Minute,
+			want:               true,
+		},
+		{
+			name:               "ran recently",
+			lastDuplicateCheck: -5 * time.Minute,
+			nextDuplicateCheck: 15 * time.Minute,
+			want:               false,
+		},
+		{
+			name:               "ran recently but forced",
+			lastDuplicateCheck: -5 * time.Minute,
+			nextDuplicateCheck: 15 * time.Minute,
+			force:              true,
+			want:               true,
+		},
+		{
+			name:               "already ran during this execution",
+			lastDuplicateCheck: time.Second,
+			nextDuplicateCheck: -time.Hour,
+			want:               false,
+		},
+		{
+			name:               "already ran during this execution, even forced",
+			lastDuplicateCheck: time.Second,
+			nextDuplicateCheck: -time.Hour,
+			force:              true,
+			want:               false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			executionStartedAt := time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC)
+			now := executionStartedAt.Add(time.Second)
+
+			s := &Synchronizer{now: func() time.Time { return now }}
+
+			if test.lastDuplicateCheck != 0 {
+				s.lastDuplicateCheck = executionStartedAt.Add(test.lastDuplicateCheck)
+			}
+
+			if test.nextDuplicateCheck != 0 {
+				s.nextDuplicateCheck = executionStartedAt.Add(test.nextDuplicateCheck)
+			}
+
+			if got := s.shouldCheckDuplicatedLocked(executionStartedAt, test.force); got != test.want {
+				t.Errorf("shouldCheckDuplicatedLocked() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}

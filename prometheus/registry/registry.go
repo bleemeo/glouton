@@ -91,6 +91,11 @@ var (
 	errSkippingScrapeDueToRelabelHook = errors.New("skipping scrape due to relabel hook")
 )
 
+// labelNameReplacer maps the characters Prometheus' legacy validation scheme rejects in a metric or label
+// name onto underscores. Package-level because fixLabels runs once per gathered point on the scrape path,
+// and a Replacer builds a matching trie on construction; it is safe for concurrent use.
+var labelNameReplacer = strings.NewReplacer(".", "_", "-", "_") //nolint:gochecknoglobals
+
 type diagnosticer interface {
 	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error
 }
@@ -103,9 +108,9 @@ func (f pushFunction) PushPoints(ctx context.Context, points []types.MetricPoint
 }
 
 type metricFilter interface {
-	FilterPoints(points []types.MetricPoint, allowNeededByRules bool) []types.MetricPoint
-	FilterFamilies(f []*dto.MetricFamily, allowNeededByRules bool) []*dto.MetricFamily
-	IsMetricAllowed(lbls labels.Labels, allowNeededByRules bool) bool
+	FilterPoints(points []types.MetricPoint) []types.MetricPoint
+	FilterFamilies(f []*dto.MetricFamily) []*dto.MetricFamily
+	IsMetricAllowed(lbls labels.Labels) bool
 }
 
 // Registry is a dynamic collection of metrics sources.
@@ -197,8 +202,7 @@ type RegistrationOption struct {
 	// When all 'essentials' gatherers are stuck, Glouton kills himself (see Registry.HealthCheck).
 	IsEssential bool
 	// AcceptAllowedMetricsOnly will only keep metrics allowed at ends of Gather(), so the
-	// metric not allowed by allow_list (or metric denied) will be dropped. Metrics that are
-	// needed by SimpleRule will still be allowed.
+	// metric not allowed by allow_list (or metric denied) will be dropped.
 	// Currently (until Registry.renamer is dropped), this shouldn't be activated on SNMP gatherer.
 	AcceptAllowedMetricsOnly bool
 	// HonorTimestamp indicate whether timestamp associated with each metric point is used or if a timestamp
@@ -1422,7 +1426,7 @@ func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*d
 	mfs = removeMetaLabels(mfs)
 
 	if !state.NoFilter && r.option.Filter != nil {
-		mfs = r.option.Filter.FilterFamilies(mfs, false)
+		mfs = r.option.Filter.FilterFamilies(mfs)
 	}
 
 	// Use prometheus.Gatherers because it will:
@@ -1499,7 +1503,7 @@ func gatherFromQueryable(ctx context.Context, queryable storage.Queryable, filte
 	}
 
 	if filter != nil {
-		result = filter.FilterFamilies(result, false)
+		result = filter.FilterFamilies(result)
 	}
 
 	return result, series.Err()
@@ -1626,7 +1630,7 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, loopCtx context.Context, 
 		reg.l.Unlock()
 
 		state.HintMetricFilter = func(lbls labels.Labels) bool {
-			return r.option.Filter.IsMetricAllowed(mergeLabels(lbls, extraLabels), true)
+			return r.option.Filter.IsMetricAllowed(mergeLabels(lbls, extraLabels))
 		}
 	}
 
@@ -1697,6 +1701,27 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, loopCtx context.Context, 
 	// Don't drop the meta labels here, they are needed for relabeling.
 	points := gloutonModel.FamiliesToMetricPoints(t0, mfs, !reg.option.ApplyDynamicRelabel)
 
+	// gatherer-sourced points (e.g. from RegisterAppenderCallback) reach r.option.PushPoint further
+	// down without ever going through pushPoint()'s own fixLabels call, so an invalid label name
+	// (e.g. an OTel attribute-derived "http.response.status_code") would otherwise reach Bleemeo/MQTT
+	// registration unfixed even though it's already fixed by the time it's exposed on /metrics.
+	n := 0
+
+	for _, point := range points {
+		fixed, err := fixLabels(point.Labels)
+		if err != nil {
+			logger.V(2).Printf("Ignoring metric %v: %v", point.Labels, err)
+
+			continue
+		}
+
+		point.Labels = fixed
+		points[n] = point
+		n++
+	}
+
+	points = points[:n]
+
 	if (reg.annotations != types.MetricAnnotations{}) {
 		for i := range points {
 			points[i].Annotations = points[i].Annotations.Merge(reg.annotations)
@@ -1716,7 +1741,7 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, loopCtx context.Context, 
 	}
 
 	if reg.option.AcceptAllowedMetricsOnly {
-		points = r.option.Filter.FilterPoints(points, true)
+		points = r.option.Filter.FilterPoints(points)
 	}
 
 	if len(points) > 0 && r.option.PushPoint != nil {
@@ -1833,19 +1858,20 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 
 	for _, point := range points {
 		var (
-			err       error
 			skip      bool
 			newLabels labels.Labels
 		)
 
-		point.Labels, err = fixLabels(point.Labels)
+		// Assigned through a temporary, not straight into point.Labels: fixLabels returns nil on error,
+		// so overwriting first would leave the log below unable to name the metric being dropped.
+		fixed, err := fixLabels(point.Labels)
 		if err != nil {
 			logger.V(2).Printf("Ignoring metric %v: %v", point.Labels, err)
 
 			continue
 		}
 
-		point.Labels = r.addMetaLabels(point.Labels, RegistrationOption{})
+		point.Labels = r.addMetaLabels(fixed, RegistrationOption{})
 
 		// Add annotation to meta-label, which allow relabel to work correctly.
 		gloutonModel.AnnotationToMetaLabels(labels.EmptyLabels(), point.Annotations).Range(func(l labels.Label) {
@@ -2080,12 +2106,10 @@ func (r *Registry) minimalIntervalHook(labels map[string]string) (time.Duration,
 }
 
 func fixLabels(lbls map[string]string) (map[string]string, error) {
-	replacer := strings.NewReplacer(".", "_", "-", "_")
-
 	for l, v := range lbls {
 		if l == types.LabelName {
 			if !types.PrometheusValidationScheme.IsValidMetricName(v) {
-				v = replacer.Replace(v)
+				v = labelNameReplacer.Replace(v)
 
 				if !types.PrometheusValidationScheme.IsValidMetricName(v) {
 					return nil, fmt.Errorf("%w: %v", errInvalidName, v)
@@ -2095,13 +2119,20 @@ func fixLabels(lbls map[string]string) (map[string]string, error) {
 			}
 		} else {
 			if !types.PrometheusValidationScheme.IsValidLabelName(l) {
-				newL := replacer.Replace(l)
+				newL := labelNameReplacer.Replace(l)
 				if !types.PrometheusValidationScheme.IsValidLabelName(newL) {
 					return nil, fmt.Errorf("%w: %v", errInvalidName, l)
 				}
 
+				// Two distinct label names (e.g. "http.status" and "http-status") could otherwise
+				// normalize to the same fixed name and silently clobber each other, non-deterministically
+				// depending on map iteration order.
+				if _, exists := lbls[newL]; exists {
+					return nil, fmt.Errorf("%w: %q would overwrite existing label %q", errInvalidName, l, newL)
+				}
+
 				delete(lbls, l)
-				lbls[l] = v
+				lbls[newL] = v
 			}
 		}
 	}

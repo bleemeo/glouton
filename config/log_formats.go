@@ -772,6 +772,9 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 						opOutput: idNginxError,
 					},
 				},
+				// A line matching neither pattern degrades through the access parser instead of being
+				// silently dropped, matching "haproxy"'s own default route.
+				"default": idNginxAccess,
 			},
 			// Start: nginx_access
 			OTELOperator{
@@ -850,6 +853,9 @@ func DefaultKnownLogFormats() map[string][]OTELOperator { //nolint:maintidx
 						opOutput: idApacheError,
 					},
 				},
+				// A line matching neither pattern degrades through the access parser instead of being
+				// silently dropped, matching "haproxy"'s own default route.
+				"default": idApacheAccess,
 			},
 			// Start: apache_access
 			OTELOperator{

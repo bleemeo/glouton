@@ -35,6 +35,12 @@ func Test_bufferSize(t *testing.T) {
 		maxLine  = 100000
 		headSize = 10000
 		tailSize = 20000
+		// The head and each of the tailsCount tail buffers only rotate once their target
+		// size is exceeded, so each of them can overshoot by a whole line. tailMaxSize
+		// being an integer division, the tails also sum to slightly less than tailSize.
+		// The lines written below are ~135 to 155 bytes long.
+		maxLineSize  = 200
+		maxOvershoot = (tailsCount + 1) * maxLineSize
 	)
 
 	b.SetCapacity(headSize, tailSize)
@@ -169,8 +175,8 @@ func Test_bufferSize(t *testing.T) {
 			}
 
 			// +6 is for the elipis marked and its newline
-			if len(content) > headSize+tailSize+6 {
-				t.Errorf("len(content) = %d, want < %d", len(content), headSize+tailSize+6)
+			if len(content) > headSize+tailSize+6+maxOvershoot {
+				t.Errorf("len(content) = %d, want < %d", len(content), headSize+tailSize+6+maxOvershoot)
 
 				hadError = true
 			}

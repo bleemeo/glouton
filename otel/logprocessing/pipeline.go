@@ -20,8 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -30,27 +28,20 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/otel/logsource"
 	"github.com/bleemeo/glouton/types"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver"
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/config/configgrpc"
-	"go.opentelemetry.io/collector/config/confighttp"
-	"go.opentelemetry.io/collector/config/confignet"
-	"go.opentelemetry.io/collector/config/configoptional"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
-	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/processor"
 	"go.opentelemetry.io/collector/processor/batchprocessor"
 	"go.opentelemetry.io/collector/processor/processorhelper"
 	"go.opentelemetry.io/collector/receiver"
-	"go.opentelemetry.io/collector/receiver/otlpreceiver"
-	noopM "go.opentelemetry.io/otel/metric/noop"
-	"go.opentelemetry.io/otel/trace/noop"
 )
 
 const (
@@ -67,23 +58,22 @@ type pipelineContext struct {
 	lastFileSizes map[string]int64
 	telemetry     component.TelemetrySettings
 	commandRunner CommandRunner
-	persister     *persistHost
+	persister     *logsource.PersistHost
 
 	l sync.Mutex
 	// startedComponents represents all the components that must be shut down at the end of the context's lifetime.
 	startedComponents []component.Component
 	receivers         []*logReceiver
 
+	// inputConsumer is the shared entry point every source feeds into: journald/syslog/auditd/bare-service
+	// receivers, the container path (containers.go), or a WantSource-built sink.
 	inputConsumer consumer.Logs
 
-	otlpRecvCounter         *atomic.Int64
-	otlpRecvThroughputMeter *ringCounter
-
 	journaldCounter         *atomic.Int64
-	journaldThroughputMeter *ringCounter
+	journaldThroughputMeter *logsource.RingCounter
 
 	logProcessedCount  atomic.Int64
-	logThroughputMeter *ringCounter
+	logThroughputMeter *logsource.RingCounter
 }
 
 type pipelineOptions struct {
@@ -99,7 +89,7 @@ func makePipeline(
 	facter Facter,
 	pushLogs func(context.Context, []byte) error,
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability,
-	persister *persistHost,
+	persister *logsource.PersistHost,
 	addWarnings func(...error),
 	knownLogFormats map[string][]config.OTELOperator,
 	lastFileSizes map[string]int64,
@@ -111,19 +101,14 @@ func makePipeline(
 	// Avoid using the return parameter 'pipelineCtx' because it will be set to <nil> when returning an error,
 	// and we won't be able to access its fields anymore, e.g., startedComponents in deferred function.
 	pipeline := &pipelineContext{
-		lastFileSizes: lastFileSizes,
-		hostroot:      hostroot,
-		telemetry: component.TelemetrySettings{
-			Logger:         logger.ZapLogger(),
-			TracerProvider: noop.NewTracerProvider(),
-			MeterProvider:  noopM.NewMeterProvider(),
-			Resource:       pcommon.NewResource(),
-		},
+		lastFileSizes:      lastFileSizes,
+		hostroot:           hostroot,
+		telemetry:          logsource.NewTelemetrySettings(),
 		commandRunner:      commandRunner,
 		persister:          persister,
 		startedComponents:  make([]component.Component, 0, 3), // 3 should be the minimum number of components
-		receivers:          make([]*logReceiver, 0, len(cfg.Receivers)),
-		logThroughputMeter: newRingCounter(throughputMeterResolutionSecs),
+		receivers:          make([]*logReceiver, 0, 3),        // syslog, syslog-auth, auditd
+		logThroughputMeter: logsource.NewRingCounter(throughputMeterResolutionSecs),
 	}
 
 	err := pipeline.init(ctx, cfg, facter, pushLogs, opts, streamAvailabilityStatusFn, addWarnings, knownLogFormats)
@@ -137,7 +122,7 @@ func makePipeline(
 }
 
 // init setups and start the pipeline components.
-func (p *pipelineContext) init( //nolint: maintidx
+func (p *pipelineContext) init(
 	ctx context.Context,
 	cfg config.OpenTelemetry,
 	facter Facter,
@@ -286,12 +271,6 @@ func (p *pipelineContext) init( //nolint: maintidx
 
 	p.inputConsumer = logResourceAttribute
 
-	if cfg.GRPC.Enable || cfg.HTTP.Enable {
-		if err := p.setupNetworkReceiver(ctx, cfg); err != nil {
-			logger.V(1).Printf("Unable to configure GRPC/HTTP receiver: %v", err)
-		}
-	}
-
 	if cfg.AutoDiscovery.JournaldEnable {
 		if err := p.setupJournald(ctx, knownLogFormats); err != nil {
 			logger.V(1).Printf("Unable to configure journald receiver: %v", err)
@@ -310,8 +289,6 @@ func (p *pipelineContext) init( //nolint: maintidx
 		}
 	}
 
-	p.setupConfigReceivers(ctx, cfg, addWarnings, knownLogFormats)
-
 	go func() {
 		defer crashreport.ProcessPanic()
 
@@ -324,9 +301,7 @@ func (p *pipelineContext) init( //nolint: maintidx
 				p.l.Lock()
 
 				for i, rcvr := range p.receivers {
-					// Here we use logWarnings instead of addWarnings,
-					// because that would make the description of
-					// agent_config_warning grow indefinitely.
+					// logWarnings, not addWarnings, so agent_config_warning's description doesn't grow indefinitely.
 					err := rcvr.update(ctx, p, logWarnings)
 					if err != nil {
 						logger.V(1).Printf("Failed to update log receiver n°%d: %v", i+1, err)
@@ -339,69 +314,6 @@ func (p *pipelineContext) init( //nolint: maintidx
 			}
 		}
 	}()
-
-	return nil
-}
-
-func (p *pipelineContext) setupNetworkReceiver(
-	ctx context.Context,
-	cfg config.OpenTelemetry,
-) error {
-	factoryReceiver := otlpreceiver.NewFactory()
-	receiverCfg := factoryReceiver.CreateDefaultConfig()
-
-	receiverTypedCfg, ok := receiverCfg.(*otlpreceiver.Config)
-	if !ok {
-		return fmt.Errorf("%w for receiver default config: %T", errUnexpectedConfig, receiverCfg)
-	}
-
-	if cfg.GRPC.Enable {
-		receiverTypedCfg.Protocols.GRPC = configoptional.Some(configgrpc.ServerConfig{
-			NetAddr: confignet.AddrConfig{Endpoint: net.JoinHostPort(cfg.GRPC.Address, strconv.Itoa(cfg.GRPC.Port))},
-		})
-	} else {
-		receiverTypedCfg.Protocols.GRPC = configoptional.None[configgrpc.ServerConfig]()
-	}
-
-	if cfg.HTTP.Enable {
-		netaddr := confignet.NewDefaultAddrConfig()
-		netaddr.Endpoint = net.JoinHostPort(cfg.GRPC.Address, strconv.Itoa(cfg.GRPC.Port))
-		netaddr.Transport = "ip"
-
-		receiverTypedCfg.Protocols.HTTP = configoptional.Some(otlpreceiver.HTTPConfig{
-			ServerConfig: confighttp.ServerConfig{
-				NetAddr: netaddr,
-			},
-		})
-	} else {
-		receiverTypedCfg.Protocols.HTTP = configoptional.None[otlpreceiver.HTTPConfig]()
-	}
-
-	p.otlpRecvCounter = new(atomic.Int64)
-	p.otlpRecvThroughputMeter = newRingCounter(throughputMeterResolutionSecs)
-
-	otlpLogReceiver, err := factoryReceiver.CreateLogs(
-		ctx,
-		receiver.Settings{
-			ID:                component.NewIDWithName(factoryReceiver.Type(), "otlp-receiver"),
-			TelemetrySettings: p.telemetry,
-		},
-		receiverTypedCfg,
-		wrapWithInstrumentation(p.inputConsumer, p.otlpRecvCounter, p.otlpRecvThroughputMeter),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to setup OTLP receiver: %w", err)
-	}
-
-	if err = otlpLogReceiver.Start(ctx, nil); err != nil {
-		if err := otlpLogReceiver.Shutdown(ctx); err != nil {
-			logger.V(1).Printf("Unable to stop otlpLogReceiver: %s", err.Error())
-		}
-
-		return fmt.Errorf("failed to start OTLP receiver: %w", err)
-	}
-
-	p.startedComponents = append(p.startedComponents, otlpLogReceiver)
 
 	return nil
 }
@@ -430,7 +342,7 @@ func (p *pipelineContext) setupJournald(
 	}
 
 	// Operators from known log formats have already been expanded.
-	referencedOps, err := buildOperators(append(operatorsForServiceName("journald"), opsGroup...))
+	referencedOps, err := logsource.BuildOperators(append(operatorsForServiceName("journald"), opsGroup...))
 	if err != nil {
 		return fmt.Errorf("building globally-defined operators: %w", err)
 	}
@@ -440,7 +352,7 @@ func (p *pipelineContext) setupJournald(
 	receiverTypedCfg.BaseConfig.Operators = referencedOps
 
 	p.journaldCounter = new(atomic.Int64)
-	p.journaldThroughputMeter = newRingCounter(throughputMeterResolutionSecs)
+	p.journaldThroughputMeter = logsource.NewRingCounter(throughputMeterResolutionSecs)
 
 	journaldReceiver, err := factoryReceiver.CreateLogs(
 		ctx,
@@ -449,7 +361,7 @@ func (p *pipelineContext) setupJournald(
 			TelemetrySettings: p.telemetry,
 		},
 		receiverTypedCfg,
-		wrapWithInstrumentation(p.inputConsumer, p.journaldCounter, p.journaldThroughputMeter),
+		logsource.WrapWithInstrumentation(p.inputConsumer, p.journaldCounter, p.journaldThroughputMeter),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to setup journald receiver: %w", err)
@@ -482,17 +394,17 @@ func (p *pipelineContext) setupSyslog(
 		return fmt.Errorf("%w missing log format %q", errUnexpectedConfig, "syslogAuth")
 	}
 
-	recvConfig := config.OTLPReceiver{
-		Include:   []string{"/var/log/syslog"},
-		Operators: append(operatorsForServiceName("syslog"), opsGroup...),
+	recvConfig := config.LogReceiver{
+		"include":   []string{"/var/log/syslog"},
+		"operators": append(operatorsForServiceName("syslog"), opsGroup...),
 	}
 
-	recvConfig2 := config.OTLPReceiver{
-		Include:   []string{"/var/log/auth.log"},
-		Operators: append(operatorsForServiceName("syslog"), opsGroup2...),
+	recvConfig2 := config.LogReceiver{
+		"include":   []string{"/var/log/auth.log"},
+		"operators": append(operatorsForServiceName("syslog"), opsGroup2...),
 	}
 
-	recv, warn, err := newLogReceiver("syslog", recvConfig, true, p.getInput(), nil, statFileImpl)
+	recv, warn, err := newLogReceiver("syslog", recvConfig, true, p.getInput(), nil, logsource.StatFile)
 	if err != nil {
 		return fmt.Errorf("failed to start Syslog receiver: %w", err)
 	}
@@ -501,7 +413,7 @@ func (p *pipelineContext) setupSyslog(
 		logWarnings(errorf("A warning occurred while setting up log receiver for syslog: %w", warn))
 	}
 
-	recv2, warn, err := newLogReceiver("syslog-auth", recvConfig2, true, p.getInput(), nil, statFileImpl)
+	recv2, warn, err := newLogReceiver("syslog-auth", recvConfig2, true, p.getInput(), nil, logsource.StatFile)
 	if err != nil {
 		return fmt.Errorf("failed to start Syslog receiver: %w", err)
 	}
@@ -536,12 +448,12 @@ func (p *pipelineContext) setupAuditD(
 		logger.V(1).Printf("auditd receiver requires the log format %q, which is not defined", "auditd")
 	}
 
-	recvConfig := config.OTLPReceiver{
-		Include:   []string{"/var/log/audit/audit.log"},
-		Operators: append(operatorsForServiceName("auditd"), opsGroup...),
+	recvConfig := config.LogReceiver{
+		"include":   []string{"/var/log/audit/audit.log"},
+		"operators": append(operatorsForServiceName("auditd"), opsGroup...),
 	}
 
-	recv, warn, err := newLogReceiver("auditd", recvConfig, true, p.getInput(), nil, statFileImpl)
+	recv, warn, err := newLogReceiver("auditd", recvConfig, true, p.getInput(), nil, logsource.StatFile)
 	if err != nil {
 		return fmt.Errorf("failed to start AuditD receiver: %w", err)
 	}
@@ -560,41 +472,11 @@ func (p *pipelineContext) setupAuditD(
 	return nil
 }
 
-func (p *pipelineContext) setupConfigReceivers(
-	ctx context.Context,
-	cfg config.OpenTelemetry,
-	addWarnings func(...error),
-	knownLogFormats map[string][]config.OTELOperator,
-) {
-	for name, rcvrCfg := range cfg.Receivers {
-		recv, warn, err := newLogReceiver(name, rcvrCfg, false, p.inputConsumer, knownLogFormats, statFileImpl)
-		if err != nil {
-			addWarnings(errorf("Failed to setup log receiver %q (ignoring it): %w", name, err))
-
-			continue
-		}
-
-		if warn != nil {
-			addWarnings(errorf("Warning while setting up log receiver %q: %w", name, warn))
-		}
-
-		err = recv.update(ctx, p, addWarnings)
-		if err != nil {
-			addWarnings(errorf("Failed to start log receiver %q (ignoring it): %w", name, err))
-
-			continue
-		}
-
-		p.receivers = append(p.receivers, recv)
-	}
-
-	if len(p.receivers) == 0 && len(cfg.Receivers) > 0 {
-		logger.V(1).Printf("None of the %d configured log receiver(s) are valid.", len(cfg.Receivers))
-	}
-}
-
 // shutdownAll shutdown all started components.
 func (p *pipelineContext) shutdownAll() {
+	// Receivers are upstream of startedComponents (the shared exporter/batcher/filter/resourceAttr
+	// chain): stop them first, matching stopComponents' own "stop the beginning of the chain first" order.
+	stopReceivers(p.receivers, p.persister.RemovePersistentExts)
 	stopComponents(p.startedComponents)
 }
 
@@ -607,13 +489,10 @@ func makeEnforceBackPressureFn(
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability,
 	logsAvailabilityCacheTTL time.Duration,
 ) processorhelper.ProcessLogsFunc { //nolint: wsl
-	// Since streamAvailabilityStatusFn needs to acquire both the connector and the MQTT client locks,
-	// we want to avoid calling it too frequently.
+	// Debounced since streamAvailabilityStatusFn acquires both the connector and MQTT client locks.
 	var (
 		l sync.Mutex
-		// Well ... we still need to prevent concurrent access to these variables,
-		// since the back-pressure function we return can be called
-		// simultaneously by multiple log emitters.
+		// Guards concurrent access: the returned function can be called simultaneously by multiple log emitters.
 		lastCacheValue  bleemeoTypes.LogsAvailability
 		lastCacheUpdate time.Time
 	)

@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/otel/logsource"
 )
 
 func TestQuietParserErrors(t *testing.T) {
@@ -34,7 +35,7 @@ func TestQuietParserErrors(t *testing.T) {
 		{"type": "add", "field": "body", "value": "x"},  // not a parser → untouched
 	}
 
-	out := quietParserErrors(in)
+	out := logsource.QuietParserErrors(in)
 
 	// Every parser type without an explicit on_error is defaulted to send_quiet.
 	for _, i := range []int{0, 1, 2, 3} {

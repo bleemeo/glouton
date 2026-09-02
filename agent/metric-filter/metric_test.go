@@ -338,7 +338,7 @@ func Test_basic_build_default(t *testing.T) {
 		sendPoints[i], sendPoints[j] = sendPoints[j], sendPoints[i]
 	})
 
-	gotPoints := filter.FilterPoints(sendPoints, false)
+	gotPoints := filter.FilterPoints(sendPoints)
 
 	if diff := types.DiffMetricPoints(allowedPoints, gotPoints, false); diff != "" {
 		t.Errorf("FilterPoints mismatch (-want +got)\n%s", diff)
@@ -401,7 +401,7 @@ func Test_Basic_FilterPoints(t *testing.T) {
 
 	points = append(points, want...)
 
-	newPoints := filter.FilterPoints(points, false)
+	newPoints := filter.FilterPoints(points)
 
 	if diff := cmp.Diff(want, newPoints); diff != "" {
 		t.Errorf("FilterPoints mismatch (-want +got)\n%s", diff)
@@ -551,7 +551,7 @@ func Test_Basic_FilterFamilies(t *testing.T) {
 		},
 	}
 
-	got := filter.FilterFamilies(fm, false)
+	got := filter.FilterFamilies(fm)
 
 	res := cmp.Diff(got, want,
 		cmpopts.IgnoreUnexported(dto.MetricFamily{}), cmpopts.IgnoreUnexported(dto.Metric{}),
@@ -736,8 +736,6 @@ func Test_New(t *testing.T) { //nolint:maintidx
 		configDeny           []string
 		configIncludeDefault bool
 		metrics              []labels.Labels
-		rulesMatchers        []matcher.Matchers
-		allowNeededByRules   bool
 		want                 []labels.Labels
 	}{
 		{
@@ -961,7 +959,7 @@ func Test_New(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name: "No allowNeededByRules",
+			name: "allow/deny with io metrics",
 			configAllow: []string{
 				`cpu_used`,
 				`disk_used{item="/home"}`,
@@ -973,22 +971,7 @@ func Test_New(t *testing.T) { //nolint:maintidx
 				`io_reads{item="/dev/sda"}`,
 			},
 			configIncludeDefault: false,
-			rulesMatchers: []matcher.Matchers{
-				{
-					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, metricIOWrites),
-				},
-				{
-					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, metricIOReads),
-				},
-				{
-					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, metricMemUsed),
-				},
-				{
-					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, testMetricIOTimes),
-					labels.MustNewMatcher(labels.MatchEqual, types.LabelItem, testItemDevSDB),
-				},
-			},
-			metrics: testDefaultMetrics,
+			metrics:              testDefaultMetrics,
 			want: []labels.Labels{
 				labels.FromMap(map[string]string{
 					types.LabelName: metricCPUUsed,
@@ -999,69 +982,6 @@ func Test_New(t *testing.T) { //nolint:maintidx
 				}),
 				labels.FromMap(map[string]string{
 					types.LabelName: metricIOReads,
-					types.LabelItem: testItemDevSDB,
-				}),
-			},
-		},
-		{
-			name: "With allowNeededByRules",
-			configAllow: []string{
-				`cpu_used`,
-				`disk_used{item="/home"}`,
-				`io_reads`,
-				testIOWrites,
-			},
-			configDeny: []string{
-				testIOWrites,
-				`io_reads{item="/dev/sda"}`,
-			},
-			configIncludeDefault: false,
-			allowNeededByRules:   true,
-			rulesMatchers: []matcher.Matchers{
-				{
-					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, metricIOWrites),
-				},
-				{
-					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, metricIOReads),
-				},
-				{
-					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, metricMemUsed),
-				},
-				{
-					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, testMetricIOTimes),
-					labels.MustNewMatcher(labels.MatchEqual, types.LabelItem, testItemDevSDB),
-				},
-			},
-			metrics: testDefaultMetrics,
-			want: []labels.Labels{
-				labels.FromMap(map[string]string{
-					types.LabelName: metricCPUUsed,
-				}),
-				labels.FromMap(map[string]string{
-					types.LabelName: metricMemUsed,
-				}),
-				labels.FromMap(map[string]string{
-					types.LabelName: metricDiskUsed,
-					types.LabelItem: testItemHome,
-				}),
-				labels.FromMap(map[string]string{
-					types.LabelName: metricIOReads,
-					types.LabelItem: testItemDevSDA,
-				}),
-				labels.FromMap(map[string]string{
-					types.LabelName: metricIOReads,
-					types.LabelItem: testItemDevSDB,
-				}),
-				labels.FromMap(map[string]string{
-					types.LabelName: metricIOWrites,
-					types.LabelItem: testItemDevSDA,
-				}),
-				labels.FromMap(map[string]string{
-					types.LabelName: metricIOWrites,
-					types.LabelItem: testItemDevSDB,
-				}),
-				labels.FromMap(map[string]string{
-					types.LabelName: testMetricIOTimes,
 					types.LabelItem: testItemDevSDB,
 				}),
 			},
@@ -1085,8 +1005,6 @@ func Test_New(t *testing.T) { //nolint:maintidx
 				return
 			}
 
-			filter.UpdateRulesMatchers(tt.rulesMatchers)
-
 			t0 := time.Now()
 			metrics := makeMetricsFromLabels(tt.metrics)
 			points := makePointsFromLabels(tt.metrics, t0)
@@ -1095,15 +1013,11 @@ func Test_New(t *testing.T) { //nolint:maintidx
 			wantPoints := makePointsFromLabels(tt.want, t0)
 			wantFamilies := makeFamiliesFromLabels(tt.want)
 			gotMetrics := filter.FilterMetrics(metrics)
-			gotPoints := filter.FilterPoints(points, tt.allowNeededByRules)
-			gotFamilies := filter.FilterFamilies(families, tt.allowNeededByRules)
+			gotPoints := filter.FilterPoints(points)
+			gotFamilies := filter.FilterFamilies(families)
 
-			if !tt.allowNeededByRules {
-				// filterMetrics only support allowNeededByRules == false, so only test result
-				// in that case.
-				if !reflect.DeepEqual(wantMetrics, gotMetrics) {
-					t.Errorf("FilterMetrics(): Expected :\n%v\ngot:\n%v", wantMetrics, gotMetrics)
-				}
+			if !reflect.DeepEqual(wantMetrics, gotMetrics) {
+				t.Errorf("FilterMetrics(): Expected :\n%v\ngot:\n%v", wantMetrics, gotMetrics)
 			}
 
 			if diff := cmp.Diff(wantPoints, gotPoints); diff != "" {
@@ -1255,7 +1169,7 @@ func Benchmark_filters_no_match(b *testing.B) {
 		for b.Loop() {
 			copy(cop, list1)
 
-			metricFilter.FilterPoints(cop, false)
+			metricFilter.FilterPoints(cop)
 		}
 	})
 
@@ -1267,7 +1181,7 @@ func Benchmark_filters_no_match(b *testing.B) {
 		for b.Loop() {
 			copy(cop, list10)
 
-			metricFilter.FilterPoints(cop, false)
+			metricFilter.FilterPoints(cop)
 		}
 	})
 
@@ -1279,7 +1193,7 @@ func Benchmark_filters_no_match(b *testing.B) {
 		for b.Loop() {
 			copy(cop, list100)
 
-			metricFilter.FilterPoints(cop, false)
+			metricFilter.FilterPoints(cop)
 		}
 	})
 }
@@ -1311,7 +1225,7 @@ func Benchmark_filters_one_match_first(b *testing.B) {
 		for b.Loop() {
 			copy(cop, list1)
 
-			metricFilter.FilterPoints(cop, false)
+			metricFilter.FilterPoints(cop)
 		}
 	})
 
@@ -1323,7 +1237,7 @@ func Benchmark_filters_one_match_first(b *testing.B) {
 		for b.Loop() {
 			copy(cop, list10)
 
-			metricFilter.FilterPoints(cop, false)
+			metricFilter.FilterPoints(cop)
 		}
 	})
 
@@ -1335,7 +1249,7 @@ func Benchmark_filters_one_match_first(b *testing.B) {
 		for b.Loop() {
 			copy(cop, list100)
 
-			metricFilter.FilterPoints(cop, false)
+			metricFilter.FilterPoints(cop)
 		}
 	})
 }
@@ -1369,7 +1283,7 @@ func Benchmark_filters_one_match_middle(b *testing.B) {
 		for b.Loop() {
 			copy(cop, list10)
 
-			metricFilter.FilterPoints(cop, false)
+			metricFilter.FilterPoints(cop)
 		}
 	})
 
@@ -1381,7 +1295,7 @@ func Benchmark_filters_one_match_middle(b *testing.B) {
 		for b.Loop() {
 			copy(cop, list100)
 
-			metricFilter.FilterPoints(cop, false)
+			metricFilter.FilterPoints(cop)
 		}
 	})
 }
@@ -1411,7 +1325,7 @@ func Benchmark_filters_one_match_last(b *testing.B) {
 		for b.Loop() {
 			copy(cop, list10)
 
-			metricFilter.FilterPoints(cop, false)
+			metricFilter.FilterPoints(cop)
 		}
 	})
 
@@ -1423,7 +1337,7 @@ func Benchmark_filters_one_match_last(b *testing.B) {
 		for b.Loop() {
 			copy(cop, list100)
 
-			metricFilter.FilterPoints(cop, false)
+			metricFilter.FilterPoints(cop)
 		}
 	})
 }
@@ -1445,7 +1359,7 @@ func Benchmark_filters_all(b *testing.B) {
 		for b.Loop() {
 			copy(cop, list10)
 
-			metricFilter.FilterPoints(cop, false)
+			metricFilter.FilterPoints(cop)
 		}
 	})
 
@@ -1457,7 +1371,7 @@ func Benchmark_filters_all(b *testing.B) {
 		for b.Loop() {
 			copy(cop, list100)
 
-			metricFilter.FilterPoints(cop, false)
+			metricFilter.FilterPoints(cop)
 		}
 	})
 }
@@ -1660,7 +1574,7 @@ func Benchmark_MultipleFilters(b *testing.B) {
 			var allowed int
 
 			for _, lbls := range metrics {
-				if mf1.IsMetricAllowed(lbls, false) || mf2.IsMetricAllowed(lbls, false) {
+				if mf1.IsMetricAllowed(lbls) || mf2.IsMetricAllowed(lbls) {
 					allowed++
 				}
 			}
@@ -1672,7 +1586,7 @@ func Benchmark_MultipleFilters(b *testing.B) {
 			var allowed int
 
 			for _, lbls := range metrics {
-				if mergedMF.IsMetricAllowed(lbls, false) {
+				if mergedMF.IsMetricAllowed(lbls) {
 					allowed++
 				}
 			}

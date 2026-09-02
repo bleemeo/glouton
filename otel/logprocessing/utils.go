@@ -21,103 +21,34 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"maps"
-	"reflect"
 	"slices"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
-	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/otel/logsource"
 	"github.com/bleemeo/glouton/types"
-	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	"github.com/go-viper/mapstructure/v2"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/consumer"
-	"go.opentelemetry.io/collector/pdata/plog"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-)
-
-const (
-	logFileSizesCacheKey    = "LogFileSizes"
-	logFileMetadataCacheKey = "LogFileMetadata"
 )
 
 var (
 	errUnexpectedType = errors.New("unexpected type")
 	errUnknownField   = errors.New("some unknown field(s) were found")
-	errIncludeNotStr  = errors.New("include value must be a string")
-	errIsUnknown      = errors.New("is unknown")
-	errIsRecursive    = errors.New("is recursive")
 )
 
-type fileSizer interface {
-	sizesByFile() (map[string]int64, error)
-}
-
-func getLastFileSizesFromCache(state bleemeoTypes.State) (lastFileSizes map[string]int64) {
-	err := state.Get(logFileSizesCacheKey, &lastFileSizes)
-	if err != nil {
-		logger.V(1).Printf("Can't find log file sizes in cache: %v", err)
-	}
-
-	return lastFileSizes
-}
-
-func saveLastFileSizesToCache[FS fileSizer](state bleemeoTypes.State, sizers []FS) {
-	lastFileSizes := make(map[string]int64)
-
-	for _, recv := range sizers {
-		sizesByFile, err := recv.sizesByFile()
-		if err != nil {
-			logger.V(1).Printf("Can't get log file sizes: %v", err)
-
-			continue
-		}
-
-		maps.Copy(lastFileSizes, sizesByFile)
-	}
-
-	err := state.Set(logFileSizesCacheKey, lastFileSizes)
-	if err != nil {
-		logger.V(1).Printf("Failed to save last log file sizes to cache: %v", err)
-	}
-}
-
-func getFileMetadataFromCache(state bleemeoTypes.State) (map[string]map[string][]byte, error) {
-	var metadataMap map[string]map[string][]byte
-
-	err := state.Get(logFileMetadataCacheKey, &metadataMap)
-	if err != nil {
-		return nil, err
-	}
-
-	if metadataMap == nil { // it may not exist in the state cache yet
-		metadataMap = make(map[string]map[string][]byte)
-	}
-
-	return metadataMap, nil
-}
-
-func saveFileMetadataToCache(state bleemeoTypes.State, metadata map[string]map[string][]byte) {
-	err := state.Set(logFileMetadataCacheKey, metadata)
-	if err != nil {
-		logger.V(1).Printf("Failed to save log file metadata to cache: %v", err)
-	}
-}
-
-func mergeLastFileSizes(receivers []*logReceiver, containerRecv *containerReceiver) []fileSizer {
-	sizers := make([]fileSizer, len(receivers)+1)
+// mergeLastFileSizes gathers every receiver's FileSizer for
+// logsource.SaveLastFileSizesToCache.
+func mergeLastFileSizes(receivers []*logReceiver, containerRecv *containerReceiver) []logsource.FileSizer {
+	sizers := make([]logsource.FileSizer, len(receivers)+1)
 
 	for i, recv := range receivers {
 		sizers[i] = recv
@@ -126,18 +57,6 @@ func mergeLastFileSizes(receivers []*logReceiver, containerRecv *containerReceiv
 	sizers[len(sizers)-1] = containerRecv
 
 	return sizers
-}
-
-func validateContainerOperators(containerOps map[string]string, opsConfigs map[string][]config.OTELOperator) map[string]string {
-	for ctrName, opName := range containerOps {
-		if opsConfigs[opName] == nil {
-			logger.V(1).Printf("Container %q requires the log processing operator %q, which is not defined", ctrName, opName)
-
-			delete(containerOps, ctrName)
-		}
-	}
-
-	return containerOps
 }
 
 func validateContainerFilters(containerFilter map[string]string, filtersConfigs map[string]config.OTELFilters) map[string]string {
@@ -150,6 +69,15 @@ func validateContainerFilters(containerFilter map[string]string, filtersConfigs 
 	}
 
 	return containerFilter
+}
+
+// removeComponent returns components with target removed to avoid double-shutdown during pipeline teardown.
+func removeComponent(components []component.Component, target component.Component) []component.Component {
+	if i := slices.Index(components, target); i >= 0 {
+		return slices.Delete(components, i, i+1)
+	}
+
+	return components
 }
 
 // stopComponents stops all the given components (in reverse order).
@@ -241,201 +169,6 @@ func buildLogFilterConfig(filtersCfg config.OTELFilters) (*filterprocessor.Confi
 	return filterProcCfg, warning, filterProcCfg.Validate()
 }
 
-// expandOperators replaces 'template' operators with the well-known format they reference.
-// These 'template' operators must define a single "include" key, like so:
-//
-//	{
-//		   "include": "some-format"
-//	}
-func expandOperators(ops []config.OTELOperator, knownIncludes map[string][]config.OTELOperator, denyRecursiveInclude bool) ([]config.OTELOperator, error) {
-	result := make([]config.OTELOperator, 0, len(ops))
-
-	for _, rawOp := range ops {
-		if include, ok := rawOp["include"]; ok && len(rawOp) == 1 {
-			includeStr, ok := include.(string)
-			if !ok {
-				return nil, fmt.Errorf("%w, not %T", errIncludeNotStr, include)
-			}
-
-			included, ok := knownIncludes[includeStr]
-			if !ok {
-				return nil, fmt.Errorf("include reference %q %w", includeStr, errIsUnknown)
-			}
-
-			if denyRecursiveInclude {
-				for _, op := range included {
-					if _, hasInclude := op["include"]; hasInclude {
-						return nil, fmt.Errorf("include reference %q %w", includeStr, errIsRecursive)
-					}
-				}
-			}
-
-			result = append(result, included...)
-		} else {
-			result = append(result, rawOp)
-		}
-	}
-
-	return result, nil
-}
-
-func expandLogFormats(formats map[string][]config.OTELOperator) (map[string][]config.OTELOperator, error) {
-	result := make(map[string][]config.OTELOperator, len(formats))
-
-	var err error
-
-	for format, ops := range formats {
-		result[format], err = expandOperators(ops, formats, true)
-		if err != nil {
-			return nil, fmt.Errorf("%q: %w", format, err)
-		}
-	}
-
-	return result, nil
-}
-
-func shouldUnmarshalYAMLToMapstructure(t reflect.Type) bool {
-	const otelPackagePrefix = "github.com/open-telemetry/opentelemetry-collector-contrib/"
-
-	for t.Kind() == reflect.Pointer || t.Kind() == reflect.Slice || t.Kind() == reflect.Array {
-		t = t.Elem()
-	}
-
-	switch pkgPath := t.PkgPath(); {
-	case strings.HasPrefix(pkgPath, otelPackagePrefix):
-		// We only want to apply this particular way of unmarshalling to types that come from OpenTelemetry...
-		return true
-	case pkgPath == "":
-		// ...but we also need to apply it to builtin types that may contain OpenTelemetry types.
-		return true
-	default:
-		return false
-	}
-}
-
-// obsoleteUnmarshaler is a copy of gopkg.in/yaml.v3.obsoleteUnmarshaler
-// and is implemented by types that bring their own unmarshalling logic,
-// like github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator.Config.
-type obsoleteUnmarshaler interface {
-	UnmarshalYAML(unmarshal func(any) error) error
-}
-
-func unmarshalMapstructureHook(from reflect.Value, to reflect.Value) (any, error) {
-	// The purpose of this mapstructure hook is to call the UnmarshalYAML() method
-	// on types that define it in order to construct themselves correctly,
-	// while being not unmarshalling YAML, but decoding a slice of maps to a slice of [operator.Config].
-	if !shouldUnmarshalYAMLToMapstructure(to.Type()) {
-		return from.Interface(), nil // returning the data as-is
-	}
-
-	if yamlUnmarshaler, ok := to.Addr().Interface().(obsoleteUnmarshaler); ok {
-		err := yamlUnmarshaler.UnmarshalYAML(func(v any) error {
-			decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
-				Result: v,
-				// We aim to align the decoding behavior with opentelemetry-collector:
-				// https://github.com/open-telemetry/opentelemetry-collector/blob/ac7c0f2f4cd8fa05ccc7def96e997eabc2c44f33/confmap/confmap.go#L226
-				DecodeHook: mapstructure.ComposeDecodeHookFunc(
-					mapstructure.StringToSliceHookFunc(","),
-					mapstructure.StringToTimeDurationHookFunc(),
-					unmarshalMapstructureHook,
-				),
-			})
-			if err != nil {
-				return fmt.Errorf("error creating decoder: %w", err)
-			}
-
-			return decoder.Decode(from.Interface())
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		return to.Interface(), nil
-	}
-
-	return from.Interface(), nil // return the data as-is
-}
-
-// quietParserErrors defaults parser operators to on_error="send_quiet" when they
-// don't set on_error explicitly. Stanza's default is "send", which logs one ERROR
-// per line that fails to parse. For a high-volume source whose lines don't all
-// match (e.g. multi-line Postgres logs), that floods the logs and the logger's
-// sampler (see logger/zap.go) — the root cause of the memory blow-up in
-// diagnostic on_demand_20260623-122247. "send_quiet" still forwards the entry;
-// it only moves the parse-failure log down to debug level.
-func quietParserErrors(ops []config.OTELOperator) []config.OTELOperator {
-	const (
-		typeKey      = "type"
-		onErrorKey   = "on_error"
-		sendQuiet    = "send_quiet"
-		parserSuffix = "_parser"
-	)
-
-	out := make([]config.OTELOperator, len(ops))
-
-	for i, op := range ops {
-		out[i] = op
-
-		// Every stanza parser (regex_parser, json_parser, time_parser,
-		// severity_parser, key_value_parser, ...) logs one error per line that
-		// fails to parse when on_error is left at the default "send".
-		if typ, _ := op[typeKey].(string); !strings.HasSuffix(typ, parserSuffix) {
-			continue
-		}
-
-		if _, set := op[onErrorKey]; set {
-			continue
-		}
-
-		// Clone so we never mutate the shared known-format definitions.
-		cloned := make(config.OTELOperator, len(op)+1)
-		maps.Copy(cloned, op)
-
-		cloned[onErrorKey] = sendQuiet
-		out[i] = cloned
-	}
-
-	return out
-}
-
-func buildOperators(rawOperators []config.OTELOperator) ([]operator.Config, error) {
-	rawOperators = quietParserErrors(rawOperators)
-
-	operators := make([]operator.Config, 0, len(rawOperators))
-
-	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
-		Result:     &operators,
-		DecodeHook: unmarshalMapstructureHook,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("creating decoder: %w", err)
-	}
-
-	err = decoder.Decode(rawOperators)
-	if err != nil {
-		return nil, err
-	}
-
-	return operators, nil
-}
-
-func wrapWithInstrumentation(next consumer.Logs, counter *atomic.Int64, throughputMeter *ringCounter) consumer.Logs {
-	logCounter, err := consumer.NewLogs(func(ctx context.Context, ld plog.Logs) error {
-		count := ld.LogRecordCount()
-		counter.Add(int64(count))
-		throughputMeter.Add(count)
-
-		return next.ConsumeLogs(ctx, ld)
-	})
-	if err != nil {
-		logger.V(1).Printf("Failed to wrap component with log counters: %v", err)
-
-		return next // give up wrapping it and just use it as is
-	}
-
-	return logCounter
-}
-
 // diffBetween returns the elements from s1 that are absent from m2.
 func diffBetween[K comparable, V any](s1 []K, m2 map[K]V) []K {
 	var diff []K
@@ -452,10 +185,9 @@ loop1:
 	return diff
 }
 
-type CommandRunner interface {
-	Run(ctx context.Context, option gloutonexec.Option, name string, arg ...string) ([]byte, error)
-	StartWithPipes(ctx context.Context, option gloutonexec.Option, name string, arg ...string) (stdoutPipe io.ReadCloser, stderrPipe io.ReadCloser, wait func() error, err error)
-}
+// CommandRunner is otel/logsource.CommandRunner, aliased here so existing call
+// sites in this package don't need to spell out the otel/logsource import.
+type CommandRunner = logsource.CommandRunner
 
 type Facter interface {
 	Facts(ctx context.Context, maxAge time.Duration) (facts map[string]string, err error)
@@ -472,9 +204,9 @@ type sourceDiagnostic struct {
 	SetupError       string
 }
 
-type otlpReceiverDiagnosticInformation struct {
-	GRPCEnabled            bool
-	HTTPEnabled            bool
+// fanoutSourceDiagnostic tracks a logsource.ReceiverManager-owned source that this package opted into via WantSource.
+type fanoutSourceDiagnostic struct {
+	Kind                   string
 	LogProcessedCount      int64
 	LogThroughputPerMinute int
 }
@@ -497,8 +229,8 @@ type containerDiagnosticInformation struct {
 	LogThroughputPerMinute int
 	LogFilePath            string
 	LogFileRealPath        string
-	ReceiverKind           receiverKind
-	Attributes             ContainerAttributes
+	ReceiverKind           logsource.ReceiverKind
+	Attributes             logsource.ContainerAttributes
 }
 
 type diagnosticSummary struct {
@@ -511,11 +243,12 @@ type diagnosticSummary struct {
 }
 
 type diagnosticReceiver struct {
-	OTLPReceiver       *otlpReceiverDiagnosticInformation
 	JournaldReceiver   *journaldReceiverDiagnosticInformation
 	Receivers          map[string]receiverDiagnosticInformation
 	ContainerReceivers map[string]containerDiagnosticInformation
 	WatchedServices    map[string][]receiverDiagnosticInformation
+	// FanoutSources tracks logsource.ReceiverManager-owned sources this package consumes via WantSource.
+	FanoutSources map[string]fanoutSourceDiagnostic
 }
 
 type diagnosticReceiverSetup struct {

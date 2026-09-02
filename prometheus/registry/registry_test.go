@@ -130,21 +130,16 @@ type fakeInput struct {
 	input []types.MetricPoint
 }
 
-func (f *fakeFilter) FilterPoints(points []types.MetricPoint, allowNeededByRules bool) []types.MetricPoint {
-	_ = allowNeededByRules
-
+func (f *fakeFilter) FilterPoints(points []types.MetricPoint) []types.MetricPoint {
 	return points
 }
 
-func (f *fakeFilter) FilterFamilies(families []*dto.MetricFamily, allowNeededByRules bool) []*dto.MetricFamily {
-	_ = allowNeededByRules
-
+func (f *fakeFilter) FilterFamilies(families []*dto.MetricFamily) []*dto.MetricFamily {
 	return families
 }
 
-func (f *fakeFilter) IsMetricAllowed(lbls labels.Labels, allowNeededByRules bool) bool {
+func (f *fakeFilter) IsMetricAllowed(lbls labels.Labels) bool {
 	_ = lbls
-	_ = allowNeededByRules
 
 	return true
 }
@@ -612,6 +607,106 @@ func TestRegistry_pushPoint(t *testing.T) {
 
 	if diff := types.DiffMetricFamilies(want, got, false, false); diff != "" {
 		t.Errorf("Gather() mismatch: (-want +got):\n%s", diff)
+	}
+}
+
+func TestScrapeFromLoop_FixesInvalidLabelNames(t *testing.T) {
+	now := time.Date(2021, 12, 7, 10, 11, 13, 0, time.UTC)
+
+	var got []types.MetricPoint
+
+	reg, err := New(Option{
+		Filter: &fakeFilter{},
+		PushPoint: pushFunction(func(_ context.Context, pts []types.MetricPoint) {
+			got = append(got, pts...)
+		}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	input := []types.MetricPoint{
+		{
+			Labels: map[string]string{
+				types.LabelName:             "http_requests_by_status",
+				"http.response.status_code": "503",
+				types.LabelItem:             "web-app",
+			},
+			Point: types.Point{Time: now, Value: 1},
+		},
+	}
+
+	err = registryRunOnce(t, now, reg, kindAppenderCallback, RegistrationOption{}, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(got) != 1 {
+		t.Fatalf("got %d points pushed, want 1: %v", len(got), got)
+	}
+
+	if _, ok := got[0].Labels["http.response.status_code"]; ok {
+		t.Errorf("pushed point kept the invalid dotted label name: %v", got[0].Labels)
+	}
+
+	if got[0].Labels["http_response_status_code"] != "503" {
+		t.Errorf("pushed point Labels == %v, want http_response_status_code=503", got[0].Labels)
+	}
+}
+
+func TestFixLabels(t *testing.T) {
+	tests := []struct {
+		name    string
+		lbls    map[string]string
+		want    map[string]string
+		wantErr bool
+	}{
+		{
+			name: "valid labels untouched",
+			lbls: map[string]string{types.LabelName: "metric_name", "item": "web-app"},
+			want: map[string]string{types.LabelName: "metric_name", "item": "web-app"},
+		},
+		{
+			name: "dotted label name gets renamed, not just its value",
+			lbls: map[string]string{types.LabelName: "metric_name", "http.response.status_code": "503"},
+			want: map[string]string{types.LabelName: "metric_name", "http_response_status_code": "503"},
+		},
+		{
+			name: "hyphenated label name gets renamed",
+			lbls: map[string]string{types.LabelName: "metric_name", "some-label": "value"},
+			want: map[string]string{types.LabelName: "metric_name", "some_label": "value"},
+		},
+		{
+			name:    "two distinct names normalizing to the same fixed name is rejected, not silently merged",
+			lbls:    map[string]string{types.LabelName: "metric_name", "http.status": "a", "http-status": "b"},
+			wantErr: true,
+		},
+		{
+			name:    "invalid name colliding with an already-valid label is rejected",
+			lbls:    map[string]string{types.LabelName: "metric_name", "http.status": "a", "http_status": "b"},
+			wantErr: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := fixLabels(test.lbls)
+			if test.wantErr {
+				if err == nil {
+					t.Fatalf("fixLabels() = %v, want an error", got)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(test.want, got); diff != "" {
+				t.Errorf("fixLabels() mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 

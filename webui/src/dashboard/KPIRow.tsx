@@ -1,9 +1,9 @@
 import { SimpleGrid } from "@chakra-ui/react";
 
-import { usePromQLRange } from "../api/hooks";
+import { usePromQLInstant } from "../api/hooks";
 import { formatBitsPerSec, formatNumber, formatPercent } from "./format";
 import { KPICard } from "./KPICard";
-import { lastValue } from "./promql";
+import { scalarValue } from "./promql";
 import {
   formatStatusTooltip,
   formatTimeSince,
@@ -13,9 +13,6 @@ import {
   type ThresholdBounds,
 } from "./thresholds";
 import type { ThresholdState } from "../api/types";
-
-const SHORT_RANGE = 60; // seconds — the "now" snapshot the cards summarise
-const SHORT_STEP = 10;
 
 // Pragmatic fallbacks applied when the user hasn't configured a
 // threshold for the standard percent KPIs — values mirror the
@@ -65,21 +62,23 @@ function statusHintFor(state: ThresholdState | undefined): string | undefined {
 }
 
 export function KPIRow({ cores }: { cores: number | undefined }) {
-  const cpu = usePromQLRange("cpu_used", SHORT_RANGE, SHORT_STEP);
-  const mem = usePromQLRange("mem_used_perc", SHORT_RANGE, SHORT_STEP);
-  const swap = usePromQLRange("swap_used_perc", SHORT_RANGE, SHORT_STEP);
-  const load = usePromQLRange("system_load1", SHORT_RANGE, SHORT_STEP);
-  const netIn = usePromQLRange("sum(net_bits_recv)", SHORT_RANGE, SHORT_STEP);
-  const netOut = usePromQLRange("sum(net_bits_sent)", SHORT_RANGE, SHORT_STEP);
+  // The cards show a single number each, so they use instant queries: a
+  // range query would fetch a whole window only to keep its last point.
+  const cpu = usePromQLInstant("cpu_used");
+  const mem = usePromQLInstant("mem_used_perc");
+  const swap = usePromQLInstant("swap_used_perc");
+  const load = usePromQLInstant("system_load1");
+  const netIn = usePromQLInstant("sum(net_bits_recv)");
+  const netOut = usePromQLInstant("sum(net_bits_sent)");
 
   const { byMetric, stateByMetric } = useThresholds();
 
-  const cpuV = lastValue(cpu.data);
-  const memV = lastValue(mem.data);
-  const swapV = lastValue(swap.data);
-  const loadV = lastValue(load.data);
-  const netInV = lastValue(netIn.data);
-  const netOutV = lastValue(netOut.data);
+  const cpuV = scalarValue(cpu.data);
+  const memV = scalarValue(mem.data);
+  const swapV = scalarValue(swap.data);
+  const loadV = scalarValue(load.data);
+  const netInV = scalarValue(netIn.data);
+  const netOutV = scalarValue(netOut.data);
 
   // Normalise load by core count so the warn/crit thresholds make sense
   // across different machines.

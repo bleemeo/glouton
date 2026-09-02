@@ -19,8 +19,10 @@ package containerd
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -35,6 +37,7 @@ import (
 	"github.com/containerd/containerd/protobuf"
 	"github.com/containerd/containerd/v2/client"
 	"github.com/containerd/containerd/v2/core/events"
+	"github.com/containerd/containerd/v2/pkg/namespaces"
 	"github.com/containerd/containerd/v2/pkg/oci"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -904,6 +907,137 @@ func TestHasHostNetwork(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			if got := hasHostNetwork(&c.spec); got != c.want {
 				t.Errorf("hasHostNetwork() = %v, want %v", got, c.want)
+			}
+		})
+	}
+}
+
+// TestPrimaryAddressFromProcHonorsHostRoot guards against a regression where primaryAddressFromProc read a
+// hardcoded /proc/<pid>/net/..., ignoring the hostroot under which a containerized Glouton sees the host's
+// procfs. Reading a bare /proc there resolves the PID in Glouton's own namespace instead of the host's --
+// at best failing, at worst matching an unrelated process that happens to share the number and reporting
+// its address as the container's, which then flows into Service.IPAddress and every check/input target
+// built from it.
+func TestPrimaryAddressFromProcHonorsHostRoot(t *testing.T) {
+	fibTrieFor := func(addr string) string {
+		return "Main:\n  +-- 172.17.0.0/16 2 0 2\n     |-- " + addr + "\n        /32 host LOCAL\n"
+	}
+
+	const pid = 4242
+
+	writeFakeProc := func(t *testing.T, procDir, addr string) {
+		t.Helper()
+
+		netDir := filepath.Join(procDir, strconv.Itoa(pid), "net")
+		if err := os.MkdirAll(netDir, 0o750); err != nil {
+			t.Fatal("Can't create fake procfs:", err)
+		}
+
+		if err := os.WriteFile(filepath.Join(netDir, "fib_trie"), []byte(fibTrieFor(addr)), 0o600); err != nil {
+			t.Fatal("Can't write fake fib_trie:", err)
+		}
+	}
+
+	hostRoot := t.TempDir()
+	writeFakeProc(t, filepath.Join(hostRoot, "proc"), "172.17.0.9")
+
+	// hostRoot "" must resolve exactly like "/", reading the real /proc -- not filepath.Join("", "proc"),
+	// which is the relative "proc" and would read whatever Glouton's working directory happens to contain.
+	// "" is reachable in production: agent.go leaves hostRootPath empty when Glouton runs containerized
+	// with GLOUTON_DF_HOST_MOUNT_POINT unset, which envsetup only warns about.
+	//
+	// A merely-missing fake tree wouldn't tell a relative resolution apart from the correct absolute one,
+	// since both would fail to find pid 4242 under a made-up hostRoot -- so this plants a decoy tree at the
+	// relative location instead, and asserts it is NOT what gets picked up.
+	decoyWD := t.TempDir()
+	writeFakeProc(t, filepath.Join(decoyWD, "proc"), "10.10.10.10")
+
+	t.Chdir(decoyWD)
+
+	if got := primaryAddressFromProc(pid, ""); got == "10.10.10.10" {
+		t.Fatal("primaryAddressFromProc(pid, \"\") read the relative ./proc decoy instead of the real /proc")
+	}
+
+	if got, want := primaryAddressFromProc(pid, hostRoot), "172.17.0.9"; got != want {
+		t.Errorf("primaryAddressFromProc() under hostRoot = %q, want %q", got, want)
+	}
+}
+
+// TestConvertToContainerObjectPrimaryAddressByTaskStatus guards against a regression where the
+// primary-address lookup was skipped for every task status short of client.Running. Only an exited
+// (client.Stopped) task is a hazard -- its Pid() still reports a PID the host may have recycled for an
+// unrelated process, whose network namespace would then be reported as this container's address. Created,
+// Paused and Pausing all still have a live process behind that PID (containerd's own process.Delete refuses
+// those alongside Running as "must be stopped first"), so skipping them silently dropped a merely paused
+// container's address.
+func TestConvertToContainerObjectPrimaryAddressByTaskStatus(t *testing.T) {
+	t.Parallel()
+
+	const (
+		namespace = "default"
+		pid       = 5150
+		wantAddr  = "10.1.2.3"
+		fibTrie   = `Main:
+  +-- 10.1.2.0/24 2 0 2
+     |-- 10.1.2.3
+        /32 host LOCAL
+`
+	)
+
+	// A fake procfs for pid, so a resolved address is deterministic instead of depending on the host.
+	hostRoot := t.TempDir()
+
+	netDir := filepath.Join(hostRoot, "proc", strconv.Itoa(pid), "net")
+	if err := os.MkdirAll(netDir, 0o750); err != nil {
+		t.Fatal("Can't create fake procfs:", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(netDir, "fib_trie"), []byte(fibTrie), 0o600); err != nil {
+		t.Fatal("Can't write fake fib_trie:", err)
+	}
+
+	testCases := []struct {
+		status   client.ProcessStatus
+		wantAddr string
+	}{
+		{status: client.Running, wantAddr: wantAddr},
+		{status: client.Paused, wantAddr: wantAddr},
+		{status: client.Pausing, wantAddr: wantAddr},
+		{status: client.Created, wantAddr: wantAddr},
+		{status: client.Unknown, wantAddr: wantAddr},
+		{status: client.Stopped, wantAddr: ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(string(tc.status), func(t *testing.T) {
+			t.Parallel()
+
+			ctr := MockContainer{
+				namespace: namespace,
+				MockInfo: ContainerOCISpec{
+					// A network namespace of its own, so this isn't the host-network branch.
+					Spec: &oci.Spec{
+						Linux: &specs.Linux{
+							Namespaces: []specs.LinuxNamespace{{Type: specs.NetworkNamespace}},
+						},
+					},
+				},
+				MockTask: MockTask{
+					MockID:     "task-1",
+					MockPID:    pid,
+					MockStatus: client.Status{Status: tc.status},
+				},
+			}
+
+			ctx := namespaces.WithNamespace(t.Context(), namespace)
+
+			obj, err := convertToContainerObject(ctx, namespace, ctr, hostRoot)
+			if err != nil {
+				t.Fatal("convertToContainerObject failed:", err)
+			}
+
+			if obj.primaryAddress != tc.wantAddr {
+				t.Errorf("status %q: primaryAddress = %q, want %q", tc.status, obj.primaryAddress, tc.wantAddr)
 			}
 		})
 	}

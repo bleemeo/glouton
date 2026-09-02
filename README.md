@@ -135,8 +135,9 @@ For a hardened setup (no host PID/net sharing, narrower bind mounts) follow the
   configurable, no extra process. Auto-enabled when running without Bleemeo so the
   panel's history works straight after `docker run`.
 - **Prometheus endpoint** at `/metrics` for any external scraper.
-- **PromQL-compatible HTTP API** at `/api/v1/query` and `/api/v1/query_range` — same
-  shape as a Prometheus server, so Grafana and friends connect with no glue.
+- **PromQL-compatible HTTP API**: `/api/v1/query`, `/api/v1/query_range`,
+  `/api/v1/labels`, `/api/v1/label/<name>/values` and `/api/v1/series` — same shape
+  as a Prometheus server, so Grafana and friends connect with no glue.
 
 ### Surface
 - **Local panel** at `localhost:8015` with KPI cards, discovered services row,

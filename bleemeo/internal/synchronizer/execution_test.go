@@ -424,7 +424,7 @@ func TestExecution_LinkedSynchronization(t *testing.T) { //nolint:maintidx
 					e.RequestSynchronization(request.name, request.requestFull)
 				}
 
-				gotSync = e.synchronizer.forceSync
+				gotSync = syncTypeByEntity(e.synchronizer.forceSync)
 				if diff := cmp.Diff(tt.wantPostSync, gotSync); diff != "" {
 					t.Errorf("synchronizer.forceSync mismatch (-want +got)\n%s", diff)
 				}
@@ -517,6 +517,17 @@ func newTestExecution(entityReplyToNeedSynchronization map[types.EntityName]bool
 	return execution
 }
 
+// syncTypeByEntity drops the deadline of each pending request, which those tests don't use.
+func syncTypeByEntity(forceSync map[types.EntityName]types.SyncRequest) map[types.EntityName]types.SyncType {
+	result := make(map[types.EntityName]types.SyncType, len(forceSync))
+
+	for entityName, request := range forceSync {
+		result[entityName] = request.Type
+	}
+
+	return result
+}
+
 func (e *Execution) syncRequested() map[types.EntityName]types.SyncType {
 	result := make(map[types.EntityName]types.SyncType, len(e.entities))
 
@@ -529,4 +540,164 @@ func (e *Execution) syncRequested() map[types.EntityName]types.SyncType {
 	}
 
 	return result
+}
+
+func Test_requestLaterSynchronization(t *testing.T) {
+	t.Parallel()
+
+	const delay = 5 * time.Minute
+
+	// Each sub-test owns its clock, so that it can move it forward without disturbing the others.
+	newSynchronizer := func(now *time.Time) *Synchronizer {
+		*now = time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC)
+
+		return newForTest(types.Option{Cache: &cache.Cache{}}, func() time.Time { return *now })
+	}
+
+	t.Run("not run before its time", func(t *testing.T) {
+		t.Parallel()
+
+		var now time.Time
+
+		s := newSynchronizer(&now)
+		s.requestLaterSynchronizationLocked(types.EntityAgent, false, delay)
+
+		execution := s.newExecution(false, false)
+		if got := execution.syncRequested(); len(got) != 0 {
+			t.Errorf("syncRequested() = %v, want no synchronization", got)
+		}
+
+		if _, ok := s.forceSync[types.EntityAgent]; !ok {
+			t.Error("the request was dropped, want it kept for a later execution")
+		}
+	})
+
+	t.Run("run once its time has come", func(t *testing.T) {
+		t.Parallel()
+
+		var now time.Time
+
+		s := newSynchronizer(&now)
+		s.requestLaterSynchronizationLocked(types.EntityAgent, false, delay)
+
+		now = now.Add(delay + time.Second)
+
+		execution := s.newExecution(false, false)
+
+		want := map[types.EntityName]types.SyncType{types.EntityAgent: types.SyncTypeNormal}
+		if diff := cmp.Diff(want, execution.syncRequested()); diff != "" {
+			t.Errorf("syncRequested mismatch (-want +got)\n%s", diff)
+		}
+
+		if len(s.forceSync) != 0 {
+			t.Errorf("synchronizer.forceSync = %v, want it emptied", s.forceSync)
+		}
+	})
+
+	t.Run("fulfilled by an earlier synchronization", func(t *testing.T) {
+		t.Parallel()
+
+		var now time.Time
+
+		s := newSynchronizer(&now)
+		s.requestLaterSynchronizationLocked(types.EntityAgent, false, delay)
+
+		execution := s.newExecution(false, false)
+
+		// The entity gets synchronized by this execution for another reason.
+		for idx, row := range execution.entities {
+			if row.entity.Name() == types.EntityAgent {
+				execution.entities[idx].syncType = types.SyncTypeNormal
+			}
+		}
+
+		execution.dropFulfilledLaterRequests()
+
+		if len(s.forceSync) != 0 {
+			t.Errorf("synchronizer.forceSync = %v, want the request fulfilled and dropped", s.forceSync)
+		}
+	})
+
+	t.Run("a cache refresh isn't fulfilled by a normal synchronization", func(t *testing.T) {
+		t.Parallel()
+
+		var now time.Time
+
+		s := newSynchronizer(&now)
+		s.requestLaterSynchronizationLocked(types.EntityAgent, true, delay)
+
+		execution := s.newExecution(false, false)
+
+		for idx, row := range execution.entities {
+			if row.entity.Name() == types.EntityAgent {
+				execution.entities[idx].syncType = types.SyncTypeNormal
+			}
+		}
+
+		execution.dropFulfilledLaterRequests()
+
+		if _, ok := s.forceSync[types.EntityAgent]; !ok {
+			t.Error("the request was dropped, want it kept until a cache refresh happens")
+		}
+	})
+
+	t.Run("an immediate request wins over a pending one", func(t *testing.T) {
+		t.Parallel()
+
+		var now time.Time
+
+		s := newSynchronizer(&now)
+		s.requestLaterSynchronizationLocked(types.EntityAgent, false, delay)
+		s.requestSynchronizationLocked(types.EntityAgent, false)
+
+		execution := s.newExecution(false, false)
+
+		want := map[types.EntityName]types.SyncType{types.EntityAgent: types.SyncTypeNormal}
+		if diff := cmp.Diff(want, execution.syncRequested()); diff != "" {
+			t.Errorf("syncRequested mismatch (-want +got)\n%s", diff)
+		}
+	})
+
+	t.Run("a later request never postpones a pending one", func(t *testing.T) {
+		t.Parallel()
+
+		var now time.Time
+
+		s := newSynchronizer(&now)
+		s.requestLaterSynchronizationLocked(types.EntityAgent, false, delay)
+		s.requestLaterSynchronizationLocked(types.EntityAgent, false, 2*delay)
+
+		if got := s.forceSync[types.EntityAgent].Deadline; !got.Equal(now.Add(delay)) {
+			t.Errorf("Deadline = %s, want %s", got, now.Add(delay))
+		}
+	})
+
+	t.Run("a request made since this execution started isn't fulfilled", func(t *testing.T) {
+		t.Parallel()
+
+		var now time.Time
+
+		s := newSynchronizer(&now)
+		s.requestLaterSynchronizationLocked(types.EntityAgent, false, delay)
+
+		execution := s.newExecution(false, false)
+
+		// Another goroutine asks for a synchronization while this execution is being set up.
+		// This execution isn't going to honor it, so it must survive.
+		now = now.Add(time.Second)
+
+		s.requestSynchronizationLocked(types.EntityAgent, false)
+
+		for idx, row := range execution.entities {
+			if row.entity.Name() == types.EntityAgent {
+				execution.entities[idx].syncType = types.SyncTypeNormal
+			}
+		}
+
+		execution.dropFulfilledLaterRequests()
+
+		if _, ok := s.forceSync[types.EntityAgent]; !ok {
+			t.Error("the request was dropped, want it kept for the next execution")
+		}
+	})
 }

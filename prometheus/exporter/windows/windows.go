@@ -83,7 +83,7 @@ func newCollector(ctx context.Context, enabledCollectors []string, options input
 	rfs := rfn.FieldByName("collectors") // rfs represents a `collector.Map`
 	rfs = reflect.NewAt(rfs.Type(), unsafe.Pointer(rfs.UnsafeAddr())).Elem()
 
-	if collectors, ok := rfs.Interface().(collector.Map); ok {
+	if collectors, ok := reflect.TypeAssert[collector.Map](rfs); ok {
 		logger.V(2).Printf("windows_exporter: the enabled collectors are %v", slices.Collect(maps.Keys(collectors)))
 	} else {
 		logger.V(0).Printf("Unexpected collectors type: %T", rfs.Interface())

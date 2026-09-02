@@ -548,7 +548,7 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 		t.Errorf("Unexpected metric families (-want +got):\n%s", diff)
 		// In case it still fails, we want to know for which offset it did so.
 		ts := time.UnixMilli(mfs[0].GetMetric()[0].GetTimestampMs())
-		t.Logf("Ts: %s / Offset: %d", ts, ((ts.Unix())/20)%100)
+		t.Logf("Ts: %s / Offset: %d", ts, (ts.Unix()/20)%100)
 	}
 }
 
@@ -1076,7 +1076,7 @@ func TestGatheringVcsim(t *testing.T) { //nolint:maintidx
 		t.Errorf("Unexpected metric families (-want +got):\n%s", diff)
 		// In case it still fails, we want to know for which offset it did so.
 		ts := time.UnixMilli(mfs[0].GetMetric()[0].GetTimestampMs())
-		t.Logf("Ts: %s / Offset: %d", ts, ((ts.Unix())/20)%100)
+		t.Logf("Ts: %s / Offset: %d", ts, (ts.Unix()/20)%100)
 	}
 }
 

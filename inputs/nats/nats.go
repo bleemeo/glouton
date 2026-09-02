@@ -88,7 +88,7 @@ func (n natsInputStopper) Stop() {
 	clf := nv.FieldByName("client")
 	clv := reflect.NewAt(clf.Type(), unsafe.Pointer(clf.UnsafeAddr())).Elem()
 
-	cl, ok := clv.Interface().(*http.Client)
+	cl, ok := reflect.TypeAssert[*http.Client](clv)
 	if !ok {
 		logger.V(1).Printf("Can't close NATS http client: unexpected type %T", clv.Interface())
 

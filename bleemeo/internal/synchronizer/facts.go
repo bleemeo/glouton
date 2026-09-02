@@ -126,7 +126,12 @@ func (s *Synchronizer) syncFacts(ctx context.Context, syncType types.SyncType, e
 
 	apiClient := execution.BleemeoAPIClient()
 
-	// s.factUpdateList() is already done by checkDuplicated
+	// The duplicated agent check must run before we touch the facts on the API, and it refreshes
+	// the facts list from the API, which the code below relies on. Hence the forced check.
+	if err := s.checkDuplicatedIfNeeded(ctx, apiClient, execution.StartedAt(), true); err != nil {
+		return false, err
+	}
+
 	// s.serviceDeleteFromRemote() is unneeded, API don't delete facts
 
 	// First delete duplicated facts but kept at least one facts for each key.

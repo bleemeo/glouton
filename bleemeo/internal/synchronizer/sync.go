@@ -59,6 +59,13 @@ const (
 	agentDysfunctionalCacheKey       = "AgentDysfunctional"
 	disableCrashReportUploadCacheKey = "DisableCrashReportUploadUntil"
 	refreshTokenCacheKey             = "RefreshToken"
+
+	// duplicateCheckInterval is the delay between two duplicated agent checks, jittered.
+	// The check lists the agent facts registered on the API, which used to happen on every
+	// synchronization execution doing any API call. It only needs to detect a state file
+	// shared between two Glouton, which isn't urgent, and it's forced anyway before the
+	// agent facts get updated.
+	duplicateCheckInterval = 20 * time.Minute
 )
 
 var (
@@ -110,7 +117,9 @@ type Synchronizer struct {
 	l                             sync.Mutex
 	disabledUntil                 time.Time
 	disableReason                 bleemeoTypes.DisableReason
-	forceSync                     map[types.EntityName]types.SyncType
+	lastDuplicateCheck            time.Time
+	nextDuplicateCheck            time.Time
+	forceSync                     map[types.EntityName]types.SyncRequest
 	pendingMetricsUpdate          []string
 	pendingMonitorsUpdate         []MonitorUpdate
 	thresholdOverrides            map[thresholdOverrideKey]threshold.Threshold
@@ -162,7 +171,7 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 		option: option,
 		now:    now,
 
-		forceSync:              make(map[types.EntityName]types.SyncType),
+		forceSync:              make(map[types.EntityName]types.SyncRequest),
 		nextFullSync:           nextFullSync,
 		fullSyncCount:          fullSyncCount,
 		retryableMetricFailure: make(map[bleemeoTypes.FailureKind]bool),
@@ -208,10 +217,7 @@ func (s *Synchronizer) getClient() types.Client {
 		return s.option.ProvideClient()
 	}
 
-	return &wrapperClient{
-		client:           s.realClient,
-		checkDuplicateFn: s.checkDuplicated,
-	}
+	return &wrapperClient{client: s.realClient}
 }
 
 func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes.ArchiveWriter) error {
@@ -247,7 +253,9 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 		LastMaintenanceSync           time.Time
 		DisabledUntil                 time.Time
 		DisableReason                 string
-		ForceSync                     map[types.EntityName]types.SyncType
+		LastDuplicateCheck            time.Time
+		NextDuplicateCheck            time.Time
+		ForceSync                     map[types.EntityName]types.SyncRequest
 		PendingMetricsUpdateCount     int
 		PendingMonitorsUpdateCount    int
 		DelayedContainer              map[string]time.Time
@@ -278,6 +286,8 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 		LastMaintenanceSync:           s.state.lastMaintenanceSync,
 		DisabledUntil:                 s.disabledUntil,
 		DisableReason:                 s.disableReason.String(),
+		LastDuplicateCheck:            s.lastDuplicateCheck,
+		NextDuplicateCheck:            s.nextDuplicateCheck,
 		ForceSync:                     s.forceSync,
 		PendingMetricsUpdateCount:     len(s.pendingMetricsUpdate),
 		PendingMonitorsUpdateCount:    len(s.pendingMonitorsUpdate),
@@ -675,6 +685,16 @@ func (s *Synchronizer) UpdateContainers() {
 	s.requestSynchronizationLocked(types.EntityContainer, false)
 }
 
+// UpdateFacts requests to update the agent facts, within delay. The facts synchronization
+// also checks whether another Glouton is using the same agent ID.
+// A delay of zero requests the update on the next synchronization execution.
+func (s *Synchronizer) UpdateFacts(delay time.Duration) {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	s.requestLaterSynchronizationLocked(types.EntityFact, false, delay)
+}
+
 // UpdateInfo request to update a info, which include the time_drift.
 func (s *Synchronizer) UpdateInfo() {
 	s.l.Lock()
@@ -692,20 +712,22 @@ func (s *Synchronizer) UpdateMonitors() {
 	s.requestSynchronizationLocked(types.EntityMonitor, true)
 }
 
-// UpdateMaintenance requests to check for the maintenance mode again.
-func (s *Synchronizer) UpdateMaintenance() {
+// UpdateMaintenance requests to check for the maintenance mode again, within delay.
+// A delay of zero requests the check on the next synchronization execution.
+func (s *Synchronizer) UpdateMaintenance(delay time.Duration) {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.requestSynchronizationLocked(types.EntityInfo, false)
+	s.requestLaterSynchronizationLocked(types.EntityInfo, false, delay)
 }
 
-// UpdateAgent requests to check for the agent synchronization.
-func (s *Synchronizer) UpdateAgent() {
+// UpdateAgent requests to check for the agent synchronization, within delay.
+// A delay of zero requests the check on the next synchronization execution.
+func (s *Synchronizer) UpdateAgent(delay time.Duration) {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.requestSynchronizationLocked(types.EntityAgent, false)
+	s.requestLaterSynchronizationLocked(types.EntityAgent, false, delay)
 }
 
 // SetMaintenance allows to trigger the maintenance mode for the synchronize.
@@ -713,7 +735,7 @@ func (s *Synchronizer) UpdateAgent() {
 func (s *Synchronizer) SetMaintenance(ctx context.Context, maintenance bool) {
 	if s.IsMaintenance() && !maintenance {
 		// getting out of maintenance, let's check for a duplicated state.json file
-		err := s.checkDuplicated(ctx, s.getClient())
+		err := s.checkDuplicatedIfNeeded(ctx, s.getClient(), s.now(), true)
 		if err != nil {
 			// it's not a critical error at all, we will perform this check again on the next synchronization pass
 			logger.V(2).Printf("Couldn't check for duplicated agent: %v", err)
@@ -941,9 +963,11 @@ func (s *Synchronizer) ClearDisable(reasonToClear bleemeoTypes.DisableReason, de
 	}
 }
 
-// VerifyAndGetToken is used to get a valid token.
+// GetToken returns a valid OAuth token, used as the MQTT password.
+// It does no API call: the Bleemeo client renews the token by itself once the expiration
+// date sent by the API is reached.
 // Should only be called after the synchronized had called SetInitialized and AgentID is filled in State.
-func (s *Synchronizer) VerifyAndGetToken(ctx context.Context) (string, error) {
+func (s *Synchronizer) GetToken(ctx context.Context) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
@@ -953,11 +977,10 @@ func (s *Synchronizer) VerifyAndGetToken(ctx context.Context) (string, error) {
 	}
 
 	// This method is called by the MQTT client, so it doesn't run on the
-	// synchronization loop goroutine which owns realClient and agentID.
+	// synchronization loop goroutine which owns realClient.
 	s.l.Lock()
 	hadSyncOnce := !s.lastSync.IsZero()
 	apiClient := s.realClient
-	agentID := s.agentID
 	s.l.Unlock()
 
 	if !hadSyncOnce && stateHasValue(agentAuthBrokenCacheKey, s.option.State) {
@@ -968,32 +991,62 @@ func (s *Synchronizer) VerifyAndGetToken(ctx context.Context) (string, error) {
 		return "", errClientUninitialized
 	}
 
-	// Low-cost API endpoint, used to test the validity of our token.
-	// We rely on the client to renew the token if it has expired.
-	result, err := apiClient.Get(ctx, bleemeo.ResourceAgent, agentID, "id")
-	if err != nil {
-		return "", err
-	}
-
-	var res struct {
-		ID string `json:"id"`
-	}
-
-	err = json.Unmarshal(result, &res)
-	if err != nil {
-		return "", err
-	}
-
-	if res.ID != agentID {
-		return "", errInvalidAgentID
-	}
-
 	token, err := apiClient.GetToken(ctx)
 	if err != nil {
 		return "", err
 	}
 
 	return token.AccessToken, nil
+}
+
+// CheckToken validates our credentials against the Bleemeo API, using a low-cost endpoint.
+// It's meant to be called *after* MQTT refused our token, and not before every connection:
+// when many agents reconnect at the same time, one API request per agent per connection is
+// a significant load on the API for a check that nearly always succeeds.
+// The Bleemeo client fetches a new token when the API answers 401, so the next connection
+// attempt will use fresh credentials.
+func (s *Synchronizer) CheckToken(ctx context.Context) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	disabledUntil, disableReason := s.getDisabledUntil()
+	if disableReason == bleemeoTypes.DisableAuthenticationError && s.now().Before(disabledUntil) {
+		return
+	}
+
+	// This method is called by the MQTT client, so it doesn't run on the
+	// synchronization loop goroutine which owns realClient and agentID.
+	s.l.Lock()
+	apiClient := s.realClient
+	agentID := s.agentID
+	s.l.Unlock()
+
+	if apiClient == nil {
+		logger.V(1).Printf("Checking Bleemeo API credentials failed: %v", errClientUninitialized)
+
+		return
+	}
+
+	result, err := apiClient.Get(ctx, bleemeo.ResourceAgent, agentID, "id")
+	if err != nil {
+		logger.V(1).Printf("Checking Bleemeo API credentials failed: %v", err)
+
+		return
+	}
+
+	var res struct {
+		ID string `json:"id"`
+	}
+
+	if err := json.Unmarshal(result, &res); err != nil {
+		logger.V(1).Printf("Checking Bleemeo API credentials failed: %v", err)
+
+		return
+	}
+
+	if res.ID != agentID {
+		logger.V(1).Printf("Checking Bleemeo API credentials failed: %v", errInvalidAgentID)
+	}
 }
 
 // setClient creates the API client and stores it on the Synchronizer.
@@ -1188,6 +1241,47 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (*Execut
 	s.l.Unlock()
 
 	return execution, err
+}
+
+// checkDuplicatedIfNeeded runs checkDuplicated, unless it already ran during the execution
+// started at executionStartedAt or, when force is false, ran recently enough.
+//
+// It must run *before* any agent fact is updated on the API: the check compares the facts
+// registered on the API with the ones this Glouton registered, so updating them first would
+// hide a duplication. Callers about to update facts must therefore force the check.
+func (s *Synchronizer) checkDuplicatedIfNeeded(
+	ctx context.Context, client types.Client, executionStartedAt time.Time, force bool,
+) error {
+	s.l.Lock()
+	shouldCheck := s.shouldCheckDuplicatedLocked(executionStartedAt, force)
+	s.l.Unlock()
+
+	if !shouldCheck {
+		return nil
+	}
+
+	if err := s.checkDuplicated(ctx, client); err != nil {
+		return err
+	}
+
+	s.l.Lock()
+	s.lastDuplicateCheck = s.now()
+	s.nextDuplicateCheck = s.lastDuplicateCheck.Add(delay.JitterDelay(duplicateCheckInterval, 0.25))
+	s.l.Unlock()
+
+	return nil
+}
+
+// shouldCheckDuplicatedLocked tells whether the duplicated agent check should run now.
+// It never runs twice during the same synchronization execution. Outside of that, force makes
+// it run regardless of when it last ran.
+// Caller must hold the lock s.l.
+func (s *Synchronizer) shouldCheckDuplicatedLocked(executionStartedAt time.Time, force bool) bool {
+	if !s.lastDuplicateCheck.Before(executionStartedAt) {
+		return false
+	}
+
+	return force || !s.now().Before(s.nextDuplicateCheck)
 }
 
 // checkDuplicated checks if another glouton is running with the same ID.
@@ -1406,11 +1500,33 @@ func (s *Synchronizer) UpdateK8SAgentList() {
 // requestSynchronizationLocked request specified entity to be synchronized on next synchronization execution.
 // Caller must hold the lock s.l.
 func (s *Synchronizer) requestSynchronizationLocked(entityName types.EntityName, forceCacheRefresh bool) {
+	s.requestLaterSynchronizationLocked(entityName, forceCacheRefresh, 0)
+}
+
+// requestLaterSynchronizationLocked request specified entity to be synchronized within delay,
+// that is at the latest at now+delay. The synchronization might happen earlier, in which case
+// the request is fulfilled: see types.SyncRequest.Deadline.
+// A delay of zero requests the synchronization on the next synchronization execution.
+//
+// When a request already exists for that entity, the strongest sync type and the earliest
+// deadline win: asking again for a later synchronization never postpones a pending request.
+// Caller must hold the lock s.l.
+func (s *Synchronizer) requestLaterSynchronizationLocked(entityName types.EntityName, forceCacheRefresh bool, delay time.Duration) {
+	deadline := s.now().Add(delay)
+
+	request, ok := s.forceSync[entityName]
+
 	if forceCacheRefresh {
-		s.forceSync[entityName] = types.SyncTypeForceCacheRefresh
-	} else if s.forceSync[entityName] == types.SyncTypeNone {
-		s.forceSync[entityName] = types.SyncTypeNormal
+		request.Type = types.SyncTypeForceCacheRefresh
+	} else if request.Type == types.SyncTypeNone {
+		request.Type = types.SyncTypeNormal
 	}
+
+	if !ok || deadline.Before(request.Deadline) {
+		request.Deadline = deadline
+	}
+
+	s.forceSync[entityName] = request
 }
 
 func (s *Synchronizer) canUploadCrashReports() bool {

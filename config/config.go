@@ -19,9 +19,13 @@ package config
 import (
 	"errors"
 	"fmt"
+	"hash/fnv"
+	"maps"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/bleemeo/glouton/logger"
@@ -40,9 +44,7 @@ import (
 )
 
 const (
-	// Tag used to unmarshal the config.
-	// We need to use the "yaml" tag instead of the default "koanf" tag because
-	// the config embeds the blackbox module config which uses YAML.
+	// Tag used to unmarshal the config; "yaml" instead of "koanf" because the config embeds the blackbox module config which uses YAML.
 	Tag                   = "yaml"
 	EnvGloutonConfigFiles = "GLOUTON_CONFIG_FILES"
 	envPrefix             = "GLOUTON_"
@@ -64,13 +66,15 @@ const (
 )
 
 var (
-	errDeprecatedEnv       = errors.New("environment variable is deprecated")
-	errSettingsDeprecated  = errors.New("setting is deprecated")
-	errWrongMapFormat      = errors.New("could not parse map from string")
-	errUnsupportedProvider = errors.New("provider not supported by config loader")
-	errCannotMerge         = errors.New("cannot merge")
-	ErrInvalidValue        = errors.New("invalid config value")
-	ErrMissconfiguration   = errors.New("config issue")
+	errDeprecatedEnv          = errors.New("environment variable is deprecated")
+	errSettingsDeprecated     = errors.New("setting is deprecated")
+	errWrongMapFormat         = errors.New("could not parse map from string")
+	errUnsupportedProvider    = errors.New("provider not supported by config loader")
+	errCannotMerge            = errors.New("cannot merge")
+	errLegacyFilterNameClash  = errors.New("legacy log.inputs filter shares a metric name with another log.inputs entry")
+	errLegacyNetworkNameTaken = errors.New("your config already defines the name the legacy log.opentelemetry.grpc/http migration would synthesize")
+	ErrInvalidValue           = errors.New("invalid config value")
+	ErrMissconfiguration      = errors.New("config issue")
 )
 
 // ResolvePaths returns the config files and directories to use, from the paths
@@ -103,8 +107,7 @@ func pathsFromEnv() []string {
 	return nil
 }
 
-// Load the configuration from files and environment variables.
-// It returns the config, the loaded items, warnings and an error.
+// Load loads the configuration from files and environment variables, returning the config, loaded items, warnings and an error.
 func Load(withDefault bool, loadEnviron bool, paths ...string) (Config, []Item, prometheus.MultiError, error) {
 	paths = ResolvePaths(loadEnviron, paths...)
 
@@ -207,8 +210,7 @@ func load(loader *configLoader, withDefault bool, loadEnviron bool, paths ...str
 	warnings, errors := loadPaths(loader, paths)
 
 	if loadEnviron {
-		// Load config from environment variables.
-		// The warnings are filled only after Load is called.
+		// Load config from environment variables; warnings filled after Load.
 		envToKey, envWarnings := envToKeyFunc()
 
 		moreWarnings := loader.Load("", env.Provider(deprecatedEnvPrefix, delimiter, envToKey), nil)
@@ -235,12 +237,10 @@ func load(loader *configLoader, withDefault bool, loadEnviron bool, paths ...str
 	// Unmarshal the config.
 	var config Config
 
-	// Here we ignore unused keys warnings and most decoder hooks
-	// because this processing was already done in the config loader.
+	// Most decoder hooks ignored here; already handled in config loader.
 	unmarshalConf := koanf.UnmarshalConf{
 		DecoderConfig: &mapstructure.DecoderConfig{
-			// Keep the blackbox hook to use its custom yaml
-			// marshaller that sets default values.
+			// Blackbox hook uses custom yaml marshaller for defaults.
 			DecodeHook: blackboxModuleHookFunc(),
 			Result:     &config,
 		},
@@ -255,11 +255,22 @@ func load(loader *configLoader, withDefault bool, loadEnviron bool, paths ...str
 
 	config = applyConfigTransformation(config)
 
+	if err := validateLogReceivers(config); err != nil {
+		warnings.Append(err)
+	}
+
+	if err := validateNetworkListeners(config); err != nil {
+		warnings.Append(err)
+	}
+
+	if err := validateContainerExcludeRules(config); err != nil {
+		warnings.Append(err)
+	}
+
 	return config, unwrapErrors(warnings), errors.MaybeUnwrap()
 }
 
-// envToKeyFunc returns a function that converts an environment variable to a configuration key
-// and a pointer to Warnings, the warnings are filled only after koanf.Load has been called.
+// envToKeyFunc returns a function converting an env variable to a config key, plus warnings filled only after koanf.Load has been called.
 // Panics if two config keys correspond to the same environment variable.
 func envToKeyFunc() (func(string) string, *prometheus.MultiError) {
 	// Get all config keys from an empty config.
@@ -309,10 +320,91 @@ func envToKeyFunc() (func(string) string, *prometheus.MultiError) {
 			s = newKey
 		}
 
-		return envToKey[s]
+		if key, ok := envToKey[s]; ok {
+			return key
+		}
+
+		if key, ok := resolveDynamicEnvKey(s); ok {
+			return key
+		}
+
+		return ""
 	}
 
 	return envFunc, &warnings
+}
+
+type dynamicEnvVar struct {
+	envPrefix    string
+	configPrefix string
+	suffixes     map[string]string
+}
+
+// dynamicEnvVarList entries only get the nil-pruning/merge-priority treatment (via
+// dynamicEnvVarConfigKeys, used by loader.go) once their configPrefix key is also listed in default.go's
+// mapKeys(), which is what collapses the key's dotted leaves into a single map. Keep both in sync when
+// adding an entry; Test_dynamicEnvVarListKeysAreInMapKeys enforces it.
+var dynamicEnvVarList = []dynamicEnvVar{ //nolint:gochecknoglobals
+	{
+		// OpenTelemetry Listener
+		envPrefix:    "GLOUTON_OPENTELEMETRY_LISTENERS_",
+		configPrefix: "opentelemetry.listeners.",
+		suffixes: map[string]string{
+			"_PROTOCOLS_GRPC_ENDPOINT": "protocols.grpc.endpoint",
+			"_PROTOCOLS_HTTP_ENDPOINT": "protocols.http.endpoint",
+		},
+	},
+	{
+		// Thresholds
+		envPrefix:    "GLOUTON_THRESHOLDS_",
+		configPrefix: "thresholds.",
+		suffixes: map[string]string{
+			"_LOW_WARNING":   "low_warning",
+			"_LOW_CRITICAL":  "low_critical",
+			"_HIGH_WARNING":  "high_warning",
+			"_HIGH_CRITICAL": "high_critical",
+		},
+	},
+}
+
+// resolveDynamicEnvKey resolves an environment variable of the form
+// VARIABLE_PREFIX_<name>_VARIABLE_SUFFIX to its config key,
+// e.g. "opentelemetry.listeners.<name>.protocols.grpc.endpoint".
+// <name> is recovered by trimming the fixed prefix and suffix, it may contain underscores.
+// This only handles opentelemetry.listeners and thresholds for now (add entries to dynamicEnvVarList for more).
+func resolveDynamicEnvKey(s string) (string, bool) {
+	for _, dynamicVar := range dynamicEnvVarList {
+		rest, ok := strings.CutPrefix(s, dynamicVar.envPrefix)
+		if !ok {
+			continue
+		}
+
+		for suffix, subKey := range dynamicVar.suffixes {
+			name, ok := strings.CutSuffix(rest, suffix)
+			if !ok || name == "" {
+				continue
+			}
+
+			return dynamicVar.configPrefix + strings.ToLower(name) + "." + subKey, true
+		}
+	}
+
+	return "", false
+}
+
+// dynamicEnvVarConfigKeys returns the set of top-level config keys that dynamicEnvVarList's entries set a
+// leaf under (e.g. "opentelemetry.listeners", derived from the listener entry's "opentelemetry.listeners."
+// configPrefix). loader.go uses this to know which map-shaped config keys need nil-pruning and
+// merge-priority treatment when set from the environment, without hardcoding each key by name -- so a
+// future dynamicEnvVarList entry targeting a different config key gets that treatment for free.
+func dynamicEnvVarConfigKeys() map[string]bool {
+	keys := make(map[string]bool, len(dynamicEnvVarList))
+
+	for _, dynamicVar := range dynamicEnvVarList {
+		keys[strings.TrimSuffix(dynamicVar.configPrefix, delimiter)] = true
+	}
+
+	return keys
 }
 
 // toEnvKey returns the environment variable corresponding to a configuration key.
@@ -324,8 +416,7 @@ func toEnvKey(key string) string {
 	return envKey
 }
 
-// toDeprecatedEnvKey returns the environment variable corresponding to a configuration key
-// with the deprecated prefix. For instance: toEnvKey("web.enable") -> BLEEMEO_AGENT_WEB_ENABLE.
+// toDeprecatedEnvKey returns the environment variable with the deprecated prefix (e.g. "web.enable" -> BLEEMEO_AGENT_WEB_ENABLE).
 func toDeprecatedEnvKey(key string) string {
 	envKey := strings.ToUpper(key)
 	envKey = deprecatedEnvPrefix + strings.ReplaceAll(envKey, ".", "_")
@@ -396,8 +487,7 @@ func loadDirectory(loader *configLoader, dirPath string) (prometheus.MultiError,
 }
 
 func loadFile(loader *configLoader, path string) prometheus.MultiError {
-	// Merge this file with the previous config.
-	// Overwrite values, merge maps and append slices.
+	// Merge this file with previous config, overwriting values, merging maps, appending slices.
 	warnings := loader.Load(path, file.Provider(path), yamlParser.Parser())
 
 	// Add path to errors.
@@ -418,8 +508,7 @@ func unwrapErrors(errs prometheus.MultiError) prometheus.MultiError {
 
 	for _, err := range errs {
 		for _, subErr := range unwrapRecurse(err) {
-			var yamlErr *yaml.TypeError
-			if errors.As(subErr, &yamlErr) {
+			if yamlErr, ok := errors.AsType[*yaml.TypeError](subErr); ok {
 				for _, wrappedErr := range yamlErr.Errors {
 					unwrapped.Append(errors.New(wrappedErr)) //nolint:err113
 				}
@@ -492,6 +581,7 @@ func movedKeys() map[string]string {
 		"log.opentelemetry.auto_discovery.enable_journalctl":            "log.opentelemetry.auto_discovery.journald_enable",
 		"log.opentelemetry.auto_discovery.journalctl_enable":            "log.opentelemetry.auto_discovery.journald_enable",
 		"log.opentelemetry.auto_discovery.enable_syslog":                "log.opentelemetry.auto_discovery.syslog_enable",
+		"log.opentelemetry.enable":                                      "log.opentelemetry.shipping_enable",
 		"network_interface_blacklist":                                   "network_interface_denylist",
 		"nrpe.enabled":                                                  "nrpe.enable",
 		"telegraf.docker_metrics_enabled":                               "telegraf.docker_metrics_enable",
@@ -513,10 +603,57 @@ func movedScalarKeys() map[string]string {
 }
 
 // migrate upgrade the configuration when Glouton changes its settings.
-func migrate(k *koanf.Koanf) (*koanf.Koanf, prometheus.MultiError) {
+// path identifies the provider being migrated (e.g. a config file path); it's used to keep
+// generated keys unique when the same migration runs once per provider (see migrateLogInputs).
+// takeNestedMapFromFlatConfig pulls key's whole subtree out of config as one nested map, deleting the
+// flat leaves it absorbed. config is migrate()'s k.All(): a *flat* leaf map, so the user's own entries
+// under key live in it as dotted leaves ("log.opentelemetry.receivers.myrecv.include"), whether they were
+// written in the flat conf.d style or as nested YAML that got flattened on load.
+//
+// A migration synthesizing an entry must go through this before assigning config[key] back. Leaving the
+// parent key sitting next to those leaves makes migrate()'s final confmap load non-deterministic:
+// maps.Unflatten walks the map in Go's randomized order, so whichever of the two is applied last replaces
+// the other's subtree wholesale -- silently dropping either the user's own receivers or the synthesized
+// one, differently from one start to the next.
+func takeNestedMapFromFlatConfig(config map[string]any, key string) map[string]any {
+	nested, _ := config[key].(map[string]any)
+	if nested == nil {
+		nested = map[string]any{}
+	}
+
+	prefix := key + delimiter
+
+	for flatKey, value := range config {
+		relative, found := strings.CutPrefix(flatKey, prefix)
+		if !found {
+			continue
+		}
+
+		delete(config, flatKey)
+
+		parts := strings.Split(relative, delimiter)
+		node := nested
+
+		for _, part := range parts[:len(parts)-1] {
+			child, _ := node[part].(map[string]any)
+			if child == nil {
+				child = map[string]any{}
+				node[part] = child
+			}
+
+			node = child
+		}
+
+		node[parts[len(parts)-1]] = value
+	}
+
+	return nested
+}
+
+func migrate(k *koanf.Koanf, path string, providerType ItemSource) (*koanf.Koanf, prometheus.MultiError) {
 	config := k.All()
 
-	warnings := make(prometheus.MultiError, 0, 6)
+	warnings := make(prometheus.MultiError, 0, 7)
 
 	warnings = append(warnings, migrateMovedScalarKeys(k, config)...)
 	warnings = append(warnings, migrateMovedKeys(k, config)...)
@@ -524,6 +661,9 @@ func migrate(k *koanf.Koanf) (*koanf.Koanf, prometheus.MultiError) {
 	warnings = append(warnings, migrateMetricsPrometheus(k, config)...)
 	warnings = append(warnings, migrateScrapperMetrics(k, config)...)
 	warnings = append(warnings, migrateServices(config)...)
+	warnings = append(warnings, warnLegacyNetworkListeners(k, providerType)...)
+	warnings = append(warnings, migrateLogInputs(k, config, path)...)
+	warnings = append(warnings, migrateRemovedLogKeys(config)...)
 
 	// We can't reuse the previous Koanf because it doesn't allow removing keys.
 	newConfig := koanf.New(delimiter)
@@ -543,9 +683,8 @@ func isScalar(val any) bool {
 	return false
 }
 
-// migrateMovedScalarKeys migrate the config settings of scalar (string, int, bool) that were simply moved.
-// Using a function in addition to migrateMovedKeys for case where we migrate the scalar into a sub-field under the same name
-// example: log.opentelemetry.auto_discovery -> log.opentelemetry.auto_discovery.enable
+// migrateMovedScalarKeys migrates scalar (string, int, bool) config settings that were simply moved into a sub-field under the same name,
+// e.g. log.opentelemetry.auto_discovery -> log.opentelemetry.auto_discovery.enable.
 func migrateMovedScalarKeys(k *koanf.Koanf, config map[string]any) prometheus.MultiError {
 	var warnings prometheus.MultiError
 
@@ -599,10 +738,15 @@ func migrateLogging(k *koanf.Koanf, config map[string]any) prometheus.MultiError
 		oldKey := "logging.buffer." + name
 		newKey := "logging.buffer." + name + "_bytes"
 
-		value := k.Int(oldKey)
-		if value == 0 {
+		// k.Exists, not "value == 0": k.Int returns 0 both when the key is absent and when the user
+		// explicitly wrote 0, and treating those the same left an explicit 0 unmigrated (the old key
+		// survived to trip the final decode's ErrorUnused check instead of getting a clean deprecation
+		// notice).
+		if !k.Exists(oldKey) {
 			continue
 		}
+
+		value := k.Int(oldKey)
 
 		config[newKey] = value * 100
 		delete(config, oldKey)
@@ -615,8 +759,7 @@ func migrateLogging(k *koanf.Koanf, config map[string]any) prometheus.MultiError
 
 // migrateMetricsPrometheus migrates Prometheus settings.
 func migrateMetricsPrometheus(k *koanf.Koanf, config map[string]any) prometheus.MultiError {
-	// metrics.prometheus was renamed metrics.prometheus.targets
-	// We guess that old path was used when metrics.prometheus.*.url exist and is a string
+	// metrics.prometheus was renamed metrics.prometheus.targets; the old path is detected when metrics.prometheus.*.url exists and is a string.
 	v := k.Get("metric.prometheus")
 	if v == nil {
 		return nil
@@ -722,6 +865,498 @@ func migrateScrapper(k *koanf.Koanf, config map[string]any, deprecatedPath strin
 	return warnings
 }
 
+// legacyInputReceiverName builds a receiver name for a migrated log.inputs[i] entry that's unique across every
+// provider (config file), not just within one: migrate() runs once per provider with i restarting from 0 each
+// time, so two files each declaring one log.inputs entry would otherwise both produce "legacy_input_0".
+func legacyInputReceiverName(path string, i int) string {
+	if path == "" {
+		return fmt.Sprintf("legacy_input_%d", i)
+	}
+
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(path))
+
+	return fmt.Sprintf("legacy_input_%08x_%d", h.Sum32(), i)
+}
+
+// mergeLegacyFilters ORs legacy filter regex/exclude into countconnector conditions, coalescing metrics by
+// name; returns touched metrics and warnings. inputIndex is the enclosing log.inputs entry's index, used
+// only to name the offending filter in a warning.
+func mergeLegacyFilters(metricsByName map[string]any, filtersList []any, inputIndex int) ([]string, []error) {
+	var (
+		touched  []string
+		warnings []error
+	)
+
+	touchedThisCall := make(map[string]bool)
+
+	for j, filterAny := range filtersList {
+		// Every drop below is warned about rather than skipped silently: migrateLogInputs still reports
+		// the enclosing entry as successfully migrated and builds it a receiver, so a dropped filter would
+		// otherwise leave the user told the migration worked while their metric definition is gone -- and
+		// with a receiver that tails the file and persists offsets while neither shipping nor counting.
+		filterMap, ok := filterAny.(map[string]any)
+		if !ok {
+			warnings = append(warnings, fmt.Errorf(
+				"%w: log.inputs[%d].filters[%d] is not a valid filter, ignoring it",
+				errSettingsDeprecated, inputIndex, j,
+			))
+
+			continue
+		}
+
+		metric, _ := filterMap["metric"].(string)
+		regex, _ := filterMap["regex"].(string)
+
+		if metric == "" || regex == "" {
+			warnings = append(warnings, fmt.Errorf(
+				"%w: log.inputs[%d].filters[%d] needs both 'metric' and 'regex' set (got metric=%q, regex=%q), ignoring it",
+				errSettingsDeprecated, inputIndex, j, metric, regex,
+			))
+
+			continue
+		}
+
+		exclude, _ := filterMap["exclude"].(string)
+
+		condition := fmt.Sprintf("IsMatch(body, %q)", regex)
+		if exclude != "" {
+			condition = fmt.Sprintf("%s and not IsMatch(body, %q)", condition, exclude)
+		}
+
+		entry, existed := metricsByName[metric].(map[string]any)
+		if !existed {
+			entry = map[string]any{"metric": metric, "item": ""}
+
+			if labels, ok := filterMap["labels"].(map[string]any); ok && len(labels) > 0 {
+				entry["labels"] = labels
+			}
+
+			metricsByName[metric] = entry
+		}
+
+		if !touchedThisCall[metric] {
+			touchedThisCall[metric] = true
+
+			touched = append(touched, metric)
+
+			if existed {
+				warnings = append(warnings, fmt.Errorf(
+					"%w: metric %q, conditions from multiple log.inputs entries are merged into one shared definition, applied to every receiver that touches it",
+					errLegacyFilterNameClash, metric,
+				))
+			}
+		}
+
+		conditions, _ := entry["conditions"].([]any)
+		entry["conditions"] = append(conditions, condition)
+	}
+
+	return touched, warnings
+}
+
+// migrateLogInputs folds the legacy log.inputs[].filters entries (the original, Fluent Bit-era log-to-metric source) into the
+// equivalent log.opentelemetry.receivers shape, each migrated metric embedded inline in its receiver's own metrics: list
+// (not routed through a shared/named log.metrics_rules entry, which could otherwise silently collide with -- and be
+// shadowed by -- a hand-written rule of the same auto-derived name). Every migrated metric gets item: "" unconditionally,
+// to avoid changing the identity of an already-existing metric series for currently-deployed users.
+// providerPath identifies the provider this call is migrating (e.g. a config file path); migrate() runs once per provider
+// with the loop index i restarting from 0 each time, so providerPath must be folded into the generated receiver name to
+// avoid two files each declaring one log.inputs entry from both producing "legacy_input_0" and overwriting one another.
+// Every original entry is consumed one way or another: translated into a receiver, or dropped with a warning (malformed,
+// no filters at all, or filters with no path/container_name/container_selectors to attach them to) -- none of them are
+// ever written back to log.inputs, so nothing downstream needs to keep reading that key once migration has run.
+func migrateLogInputs(k *koanf.Koanf, config map[string]any, providerPath string) prometheus.MultiError {
+	var warnings prometheus.MultiError
+
+	inputs, isList := k.Get("log.inputs").([]any)
+
+	if !isList || len(inputs) == 0 {
+		if _, present := config["log.inputs"]; present {
+			delete(config, "log.inputs")
+
+			if isList {
+				warnings.Append(fmt.Errorf("%w: log.inputs is empty and can be removed", errSettingsDeprecated))
+			} else {
+				warnings.Append(fmt.Errorf(
+					"%w: log.inputs is not a list of entries, ignoring it -- use log.opentelemetry.receivers/log.metrics_rules instead",
+					errSettingsDeprecated,
+				))
+			}
+		}
+
+		return warnings
+	}
+
+	// Every entry below is either translated into a receiver or dropped with a warning: none of them
+	// need to survive as log.inputs afterward.
+	delete(config, "log.inputs")
+
+	receivers := takeNestedMapFromFlatConfig(config, "log.opentelemetry.receivers")
+
+	// Shared across every mergeLegacyFilters call below -- see its doc comment.
+	metricsByName := map[string]any{}
+
+	// receiverMetrics tracks, per generated receiver name, which metric names it touches. The actual
+	// entries are embedded once every log.inputs entry has been processed, so a metric name shared by
+	// several log.inputs entries (and therefore several receivers) is fully merged in metricsByName
+	// before any receiver gets its copy.
+	receiverMetrics := map[string][]string{}
+
+	translated := false
+
+	for i, inputAny := range inputs {
+		inputMap, ok := inputAny.(map[string]any)
+		if !ok {
+			warnings.Append(fmt.Errorf("%w: log.inputs[%d] is not a valid entry, ignoring it", errSettingsDeprecated, i))
+
+			continue
+		}
+
+		filtersList, ok := inputMap["filters"].([]any)
+		if !ok || len(filtersList) == 0 {
+			// No filters: this entry never did anything for log-to-metric even before this migration.
+			warnings.Append(fmt.Errorf("%w: log.inputs[%d] has no filters, it never produced a metric, ignoring it", errSettingsDeprecated, i))
+
+			continue
+		}
+
+		path, _ := inputMap["path"].(string)
+		containerName, _ := inputMap["container_name"].(string)
+		selectors, _ := inputMap["container_selectors"].(map[string]any)
+
+		if path == "" && containerName == "" && len(selectors) == 0 {
+			warnings.Append(fmt.Errorf("%w: log.inputs[%d] has filters but no path/container_name/container_selectors set, filters were dropped", errSettingsDeprecated, i))
+
+			continue
+		}
+
+		touchedMetrics, mergeWarnings := mergeLegacyFilters(metricsByName, filtersList, i)
+		for _, w := range mergeWarnings {
+			warnings.Append(w)
+		}
+
+		// Legacy log.inputs was metrics-only, so the migrated receiver never ships logs either.
+		receiver := map[string]any{
+			"send_logs": false,
+		}
+
+		// path wins outright, as it did before: Fluent Bit's inputLogPaths returned the configured path and
+		// nothing else whenever one was set ("The configured path has priority over the container name and
+		// selectors"), so a legacy input carrying both only ever counted that file's lines. Writing all
+		// three onto one receiver instead would change what the metric counts on upgrade, since the
+		// receivers here treat include patterns and container matchers as independent sources feeding the
+		// same fan-out -- the container's matching lines would start being counted too and the series would
+		// jump. Warned about rather than dropped quietly, since the config keeps saying otherwise.
+		switch {
+		case path != "":
+			receiver["include"] = []any{path}
+
+			if containerName != "" || len(selectors) > 0 {
+				warnings.Append(fmt.Errorf(
+					"%w: log.inputs[%d] sets path as well as container_name/container_selectors, which never had"+
+						" any effect alongside a path -- only %q is migrated; drop path to count the container's"+
+						" lines instead",
+					errSettingsDeprecated, i, path,
+				))
+			}
+		default:
+			if containerName != "" {
+				receiver["container_name"] = containerName
+			}
+
+			if len(selectors) > 0 {
+				receiver["container_selectors"] = selectors
+			}
+		}
+
+		name := legacyInputReceiverName(providerPath, i)
+		receivers[name] = receiver
+		receiverMetrics[name] = touchedMetrics
+
+		warnings.Append(fmt.Errorf("%w: log.inputs[%d].filters, use log.opentelemetry.receivers/log.metrics_rules instead", errSettingsDeprecated, i))
+
+		translated = true
+	}
+
+	if !translated {
+		return warnings
+	}
+
+	// Every log.inputs entry has now been folded into metricsByName, so each metric's entry holds its
+	// final, fully-merged condition list: embed a copy directly into every receiver that touches it.
+	for name, metricNames := range receiverMetrics {
+		receiver, _ := receivers[name].(map[string]any)
+
+		metrics := make([]any, 0, len(metricNames))
+		for _, metric := range metricNames {
+			metrics = append(metrics, cloneMetricEntry(metricsByName[metric]))
+		}
+
+		receiver["metrics"] = metrics
+	}
+
+	config["log.opentelemetry.receivers"] = receivers
+
+	return warnings
+}
+
+// cloneMetricEntry copies a mergeLegacyFilters entry so embedding it into several receivers' own metrics:
+// list leaves each with its own map/slice instead of every receiver aliasing (and being able to mutate)
+// the exact same one.
+func cloneMetricEntry(entryAny any) map[string]any {
+	entry, _ := entryAny.(map[string]any)
+	clone := make(map[string]any, len(entry))
+
+	for k, v := range entry {
+		switch val := v.(type) {
+		case []any:
+			clone[k] = append([]any(nil), val...)
+		case map[string]any:
+			clone[k] = maps.Clone(val)
+		default:
+			clone[k] = v
+		}
+	}
+
+	return clone
+}
+
+// legacyNetworkReceiverNames returns the fixed names synthesizeLegacyNetworkListener uses for its
+// receiver (log.opentelemetry.receivers key) and network listener (opentelemetry.listeners key).
+// Unlike migrateLogInputs' entries, the legacy log.opentelemetry.grpc/http shape is a single flat
+// scalar setting with no name of its own to key on -- the legacy Fluent-Bit-era system only ever had
+// one such listener, and two files setting it both merge into that one listener (last file wins per
+// field, same as any other scalar setting), not two independent listeners. Fixed names are what let the
+// synthesized entries land on that one listener no matter which providers contributed to it.
+func legacyNetworkReceiverNames() (receiverKey, listenerKey string) {
+	return "legacy_network", "legacy-network"
+}
+
+// legacyNetworkListenerBool reads a legacy log.opentelemetry.grpc/http ".enable" leaf straight from koanf,
+// bypassing the mapstructure decode (and its stringToBoolHookFunc) that normally tolerates a string-typed
+// YAML value here (enable: "true"), so that spelling must be handled explicitly too.
+func legacyNetworkListenerBool(value any) bool {
+	switch v := value.(type) {
+	case bool:
+		return v
+	case string:
+		parsed, err := ParseBool(v)
+
+		return err == nil && parsed
+	default:
+		return false
+	}
+}
+
+// legacyNetworkListenerPort reads a legacy log.opentelemetry.grpc/http ".port" leaf, which arrives as
+// whatever its provider produced: an int from a YAML scalar, an int64/float64 from a JSON round trip, or
+// a string from an environment variable. set is false for an absent, zero or unparseable port, which
+// must fall back to the protocol's own default rather than to :0 -- the defaults provider materializes
+// this leaf as an explicit 0 on every load (see OpenTelemetry.GRPC), so 0 cannot mean anything else.
+func legacyNetworkListenerPort(value any) (port int, set bool) {
+	switch v := value.(type) {
+	case int:
+		port = v
+	case int64:
+		port = int(v)
+	case float64:
+		port = int(v)
+	case string:
+		parsed, err := strconv.Atoi(v)
+		if err != nil {
+			return 0, false
+		}
+
+		port = parsed
+	default:
+		return 0, false
+	}
+
+	return port, port != 0
+}
+
+// warnLegacyNetworkListeners warns, once per provider, that this provider still uses the deprecated
+// log.opentelemetry.grpc/http {enable, address, port} shape. It deliberately does NOT translate it: the
+// keys are real Config fields (see OpenTelemetry.GRPC) so they survive the strict struct decode and merge
+// per-leaf across providers, and the actual translation runs once on the merged result, in
+// synthesizeLegacyNetworkListener. Only the warning stays per-provider, so it can name the file at fault.
+func warnLegacyNetworkListeners(k *koanf.Koanf, providerType ItemSource) prometheus.MultiError {
+	var warnings prometheus.MultiError
+
+	const path = "log.opentelemetry"
+
+	// The defaults provider is a structs provider over Config{}, so it materializes all six legacy leaves
+	// as explicit zero values on every load (they're real Config fields now -- see OpenTelemetry.GRPC).
+	// Only files and environment variables carry what a user actually wrote, so only they can be
+	// deprecating anything; without this the warning would fire on every config that never mentions the
+	// legacy shape at all.
+	if providerType == SourceDefault {
+		return nil
+	}
+
+	// k.Exists on the full leaf path (not k.Exists(path+".grpc") for the whole submap): koanf only builds
+	// an intermediate "grpc"/"http" map node when the source YAML was itself written with real nesting --
+	// a flat "log.opentelemetry.grpc.enable: true" key (just as valid, and the more common conf.d style)
+	// is stored as one opaque dotted key, so a parent-node check would silently miss that spelling.
+	var found bool
+
+	for _, sub := range []string{".grpc", ".http"} {
+		for _, leaf := range []string{".enable", ".address", ".port"} {
+			if k.Exists(path + sub + leaf) {
+				found = true
+			}
+		}
+	}
+
+	if !found {
+		return nil
+	}
+
+	warnings.Append(fmt.Errorf(
+		"%w: %s.grpc/http {enable, address, port}, use opentelemetry.listeners + a log.opentelemetry.receivers entry's from_listener field instead",
+		errSettingsDeprecated, path,
+	))
+
+	return warnings
+}
+
+// synthesizeLegacyNetworkListener folds the deprecated log.opentelemetry.grpc/http {enable, address,
+// port} shape into a synthesized "legacy_network" receiver plus an opentelemetry.listeners entry,
+// preserving the address/port and the unconditional shipping behavior (send_logs: true).
+//
+// Runs on the fully merged config, unlike the per-provider migrations in migrate(): the new shape fuses
+// address and port into one "host:port" endpoint string, so translating per provider could only ever
+// build an endpoint out of the halves a single file happened to set, and a second conf.d file overriding
+// just "port" (or setting only "port" via an environment variable) contributed no complete endpoint and
+// was silently discarded. Deferring to here lets the three legacy leaves merge as ordinary sibling
+// scalars first -- last provider wins per leaf, exactly as pre-deprecation -- and fuses once, afterwards.
+//
+// config is the merged flat config map: top-level keys are dot-joined, values may be nested maps.
+func synthesizeLegacyNetworkListener(config map[string]any) prometheus.MultiError {
+	var warnings prometheus.MultiError
+
+	const (
+		path            = "log.opentelemetry"
+		defaultGRPCPort = 4317
+		defaultHTTPPort = 4318
+	)
+
+	receiverKey, listenerKey := legacyNetworkReceiverNames()
+
+	endpointOf := func(sub string, defaultPort int) string {
+		if !legacyNetworkListenerBool(config[path+"."+sub+".enable"]) {
+			return ""
+		}
+
+		address, _ := config[path+"."+sub+".address"].(string)
+		if address == "" {
+			address = DefaultLocalhost
+		}
+
+		port := defaultPort
+		if p, set := legacyNetworkListenerPort(config[path+"."+sub+".port"]); set {
+			port = p
+		}
+
+		return net.JoinHostPort(address, strconv.Itoa(port))
+	}
+
+	grpcEndpoint := endpointOf("grpc", defaultGRPCPort)
+	httpEndpoint := endpointOf("http", defaultHTTPPort)
+
+	// Consumed either way, so the legacy keys never reach the final typed Config: nothing downstream
+	// reads OpenTelemetry.GRPC/HTTP, and leaving them set would show phantom settings in diagnostics.
+	for key := range config {
+		if strings.HasPrefix(key, path+".grpc.") || strings.HasPrefix(key, path+".http.") {
+			delete(config, key)
+		}
+	}
+
+	if grpcEndpoint == "" && httpEndpoint == "" {
+		return warnings // both were disabled (or never set): no network participation to migrate
+	}
+
+	protocols := map[string]any{}
+	if grpcEndpoint != "" {
+		protocols["grpc"] = map[string]any{"endpoint": grpcEndpoint}
+	}
+
+	if httpEndpoint != "" {
+		protocols["http"] = map[string]any{"endpoint": httpEndpoint}
+	}
+
+	// Both entries below are only synthesized into a name the user hasn't taken. Assigning over it used to
+	// destroy their entry outright and silently: a receiver of that name lost its include patterns and its
+	// metrics, so their file stopped being tailed and their metric disappeared. That is reachable on the
+	// very migration path the deprecation warning sends people down -- copy the effective legacy listener
+	// out, correct its endpoint, forget to delete the old grpc/http keys -- where it silently reverted the
+	// correction. Theirs wins instead, and the warning says so.
+	//
+	// The two names are handled independently: keeping a user's listener while still synthesizing the
+	// receiver is exactly what makes that migration flow work (their endpoint, shipped by the legacy shim).
+	networkListeners := takeNestedMapFromFlatConfig(config, "opentelemetry.listeners")
+
+	if _, taken := networkListeners[listenerKey]; taken {
+		warnings.Append(fmt.Errorf(
+			"%w: opentelemetry.listeners.%s -- keeping yours, so %s.grpc/http's address and port are ignored;"+
+				" delete those keys once you've checked the endpoint",
+			errLegacyNetworkNameTaken, listenerKey, path,
+		))
+	} else {
+		networkListeners[listenerKey] = map[string]any{"protocols": protocols}
+	}
+
+	config["opentelemetry.listeners"] = networkListeners
+
+	receivers := takeNestedMapFromFlatConfig(config, "log.opentelemetry.receivers")
+
+	if _, taken := receivers[receiverKey]; taken {
+		warnings.Append(fmt.Errorf(
+			"%w: log.opentelemetry.receivers.%s -- keeping yours, so it must carry from_listeners: [%s]"+
+				" itself for %s.grpc/http to still ship anything",
+			errLegacyNetworkNameTaken, receiverKey, listenerKey, path,
+		))
+	} else {
+		receivers[receiverKey] = map[string]any{
+			"from_listeners": []any{listenerKey},
+			"send_logs":      true,
+		}
+	}
+
+	config["log.opentelemetry.receivers"] = receivers
+
+	return warnings
+}
+
+// removedLogKeys are the pre-OpenTelemetry log settings that no longer exist in any form. Both are set
+// together by the conf.d snippet the bleemeo-agent-logs package ships ("bleemeo-agent-logs overrides the
+// URL and set an empty host root prefix"), so handling only one of them still leaves that snippet
+// reporting a config error on every start.
+var removedLogKeys = []string{ //nolint:gochecknoglobals
+	"log.fluentbit_url",
+	"log.hostroot_prefix",
+}
+
+// migrateRemovedLogKeys drops every removedLogKeys entry with a deprecation warning, instead of letting
+// it fail the strict struct decode as an unknown key -- which otherwise looks like a config error on
+// every upgrade instead of a no-op.
+func migrateRemovedLogKeys(config map[string]any) prometheus.MultiError {
+	var warnings prometheus.MultiError
+
+	for _, key := range removedLogKeys {
+		if _, ok := config[key]; !ok {
+			continue
+		}
+
+		delete(config, key)
+
+		warnings.Append(fmt.Errorf("%w: %s. This option does not exists anymore and has no effect", errSettingsDeprecated, key))
+	}
+
+	return warnings
+}
+
 // migrateServices migrates deprecated service options.
 func migrateServices(config map[string]any) prometheus.MultiError {
 	migratedOptions := map[string]string{
@@ -777,8 +1412,7 @@ func migrateServices(config map[string]any) prometheus.MultiError {
 	return warnings
 }
 
-// Dump return a copy of the whole configuration, with secrets retracted.
-// secret is any key containing "key", "secret", "password" or "passwd".
+// Dump returns a copy of the whole configuration with secrets retracted (any key containing "key", "secret", "password" or "passwd").
 func Dump(config Config) map[string]any {
 	k := koanf.New(delimiter)
 	_ = k.Load(structs.Provider(config, Tag), nil)
@@ -796,8 +1430,7 @@ func dumpMap(root map[string]any) map[string]any {
 	return censored
 }
 
-// CensorSecretItem returns the censored item value with secrets
-// and password removed for safe external use.
+// CensorSecretItem returns the item value with secrets and passwords redacted for safe external use.
 func CensorSecretItem(key string, value any) any {
 	if isSecret(key) {
 		// Don't censor unset secrets.
@@ -814,8 +1447,7 @@ func CensorSecretItem(key string, value any) any {
 	case []any:
 		return dumpList(value)
 	case string:
-		// Redact credentials embedded in URL values (e.g. proxy_url=http://user:pass@host),
-		// which aren't caught by isSecret because the key itself isn't a secret.
+		// Redact credentials embedded in URL values (e.g. proxy_url=http://user:pass@host) not caught by isSecret.
 		return CensorURLCredentials(value)
 	default:
 		return value
@@ -833,10 +1465,8 @@ func isSecret(key string) bool {
 	return false
 }
 
-// CensorURLCredentials redacts the password embedded in the userinfo of an URL
-// value (e.g. "http://user:pass@host" becomes "http://user:*****@host"). Non-URL
-// strings and URLs without credentials are returned unchanged. It is used to make
-// URLs safe for logs, diagnostic archives and data sent to the Bleemeo API.
+// CensorURLCredentials redacts the password embedded in an URL's userinfo (e.g. "http://user:pass@host" becomes
+// "http://user:*****@host"). Non-URL strings and URLs without credentials are returned unchanged.
 func CensorURLCredentials(value string) string {
 	if !strings.Contains(value, "@") {
 		return value
@@ -851,9 +1481,7 @@ func CensorURLCredentials(value string) string {
 		return value
 	}
 
-	// Keep only the username (properly escaped) then splice the censored
-	// password back in. Going through url.UserPassword would percent-encode
-	// the placeholder (e.g. "%2A%2A..."), making the result unreadable.
+	// Keep only the username then splice the censored password back in; url.UserPassword would percent-encode the placeholder, making it unreadable.
 	u.User = url.User(u.User.Username())
 	censored := u.String()
 	at := strings.Index(censored, "@")
@@ -861,19 +1489,14 @@ func CensorURLCredentials(value string) string {
 	return censored[:at] + ":" + CensoredValue + censored[at:]
 }
 
-// CensorURLSecrets redacts, in an URL value, both the credentials embedded in the
-// userinfo (see CensorURLCredentials) and the values of query-string parameters
-// whose name looks like a secret (same keyword list as config secrets, see isSecret).
-// It is meant for diagnostic output (e.g. blackbox-targets.txt); metric labels keep
-// the original URL so the metric identity sent to the Bleemeo API is preserved.
+// CensorURLSecrets redacts an URL's userinfo credentials and secret-looking query parameters (see CensorURLCredentials, isSecret).
+// Meant for diagnostic output; metric labels keep the original URL to preserve metric identity.
 func CensorURLSecrets(value string) string {
 	return CensorURLCredentials(censorURLQuerySecrets(value))
 }
 
-// censorURLQuerySecrets redacts the values of query-string parameters whose name
-// looks like a secret (e.g. "?token=abc" becomes "?token=*****"). The order and
-// encoding of the other parameters are preserved. Non-URL strings and URLs without
-// a matching parameter are returned unchanged.
+// censorURLQuerySecrets redacts query-string parameter values whose name looks like a secret (e.g. "?token=abc" becomes
+// "?token=*****"), preserving the order and encoding of the rest.
 func censorURLQuerySecrets(value string) string {
 	u, err := url.Parse(value)
 	if err != nil || u.RawQuery == "" {
@@ -924,10 +1547,7 @@ func dumpList(root []any) []any {
 	return root
 }
 
-// PrometheusConfigToURLs convert metric.prometheus.targets config to a list of targets.
-// It returns the targets and some warnings.
-//
-// See tests for the expected config.
+// PrometheusConfigToURLs converts metric.prometheus.targets config to a list of targets, and returns some warnings.
 func PrometheusConfigToURLs(configTargets []PrometheusTarget) ([]*scrapper.Target, prometheus.MultiError) {
 	var warnings prometheus.MultiError
 
@@ -944,8 +1564,7 @@ func PrometheusConfigToURLs(configTargets []PrometheusTarget) ([]*scrapper.Targe
 		target := &scrapper.Target{
 			ExtraLabels: map[string]string{
 				types.LabelMetaScrapeJob: configTarget.Name,
-				// HostPort could be empty, but this ExtraLabels is used by Registry which
-				// correctly handles empty values (drop the label).
+				// HostPort could be empty; Registry correctly drops empty label values.
 				types.LabelMetaScrapeInstance: scrapper.HostPort(targetURL),
 			},
 			URL:       targetURL,
