@@ -50,6 +50,16 @@ const (
 	FactKubernetesCluster = "kubernetes_cluster_name"
 	FactUpdatedAt         = "fact_updated_at"
 
+	// factUpdatedAtMinInterval is the minimal delay between two changes of the fact_updated_at
+	// fact when no other fact changed.
+	// The Bleemeo API can't update a fact, so pushing a new value costs one DELETE and one POST.
+	// Refreshing fact_updated_at on every collection would pay that price for nothing, and would
+	// pay it at the worst possible moment: reconnecting to MQTT triggers a facts collection, so
+	// every agent reconnecting at the same time would also update its facts at the same time.
+	// The fact is still refreshed regularly, as the Bleemeo synchronizer relies on it to detect
+	// two Glouton sharing the same state file.
+	factUpdatedAtMinInterval = 30 * time.Minute
+
 	osReleaseName       = "NAME"
 	osReleaseVersionID  = "VERSION_ID"
 	osReleasePrettyName = "PRETTY_NAME"
@@ -188,8 +198,60 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 		return
 	}
 
+	newFacts[FactUpdatedAt] = f.factUpdatedAt(newFacts)
+
 	f.facts = newFacts
 	f.lastFactsUpdate = time.Now()
+}
+
+// factUpdatedAt returns the value to use for the fact_updated_at fact.
+// The previous value is kept when no other fact changed and it's still recent enough,
+// see factUpdatedAtMinInterval.
+//
+// Caller must hold f.l.
+func (f *FactProvider) factUpdatedAt(newFacts map[string]string) string {
+	previousValue, ok := f.facts[FactUpdatedAt]
+	if !ok {
+		return newFacts[FactUpdatedAt]
+	}
+
+	previousUpdatedAt, err := time.Parse(time.RFC3339, previousValue)
+	if err != nil || time.Since(previousUpdatedAt) >= factUpdatedAtMinInterval {
+		return newFacts[FactUpdatedAt]
+	}
+
+	if !factsEqualIgnoringUpdatedAt(f.facts, newFacts) {
+		return newFacts[FactUpdatedAt]
+	}
+
+	return previousValue
+}
+
+// factsEqualIgnoringUpdatedAt compares two facts maps, ignoring the fact_updated_at fact.
+func factsEqualIgnoringUpdatedAt(a, b map[string]string) bool {
+	if factsCountIgnoringUpdatedAt(a) != factsCountIgnoringUpdatedAt(b) {
+		return false
+	}
+
+	for key, valueA := range a {
+		if key == FactUpdatedAt {
+			continue
+		}
+
+		if valueB, ok := b[key]; !ok || valueA != valueB {
+			return false
+		}
+	}
+
+	return true
+}
+
+func factsCountIgnoringUpdatedAt(facts map[string]string) int {
+	if _, ok := facts[FactUpdatedAt]; ok {
+		return len(facts) - 1
+	}
+
+	return len(facts)
 }
 
 func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
