@@ -19,6 +19,7 @@ package facts
 import (
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestDecodeOsRelease(t *testing.T) {
@@ -309,6 +310,77 @@ func Test_tzFromSymlink(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tzFromSymlink(tt.symlinkTarget); got != tt.want {
 				t.Errorf("tzFromSymlink() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_factUpdatedAt(t *testing.T) {
+	t.Parallel()
+
+	const newValue = "2026-08-31T12:00:00Z"
+
+	recent := time.Now().UTC().Add(-time.Minute).Format(time.RFC3339)
+	old := time.Now().UTC().Add(-2 * factUpdatedAtMinInterval).Format(time.RFC3339)
+
+	tests := []struct {
+		name          string
+		previousFacts map[string]string
+		newFacts      map[string]string
+		want          string
+	}{
+		{
+			name:          "no previous facts",
+			previousFacts: nil,
+			newFacts:      map[string]string{"fqdn": "host", FactUpdatedAt: newValue},
+			want:          newValue,
+		},
+		{
+			name:          "nothing changed recently",
+			previousFacts: map[string]string{"fqdn": "host", FactUpdatedAt: recent},
+			newFacts:      map[string]string{"fqdn": "host", FactUpdatedAt: newValue},
+			want:          recent,
+		},
+		{
+			name:          "nothing changed but value is old",
+			previousFacts: map[string]string{"fqdn": "host", FactUpdatedAt: old},
+			newFacts:      map[string]string{"fqdn": "host", FactUpdatedAt: newValue},
+			want:          newValue,
+		},
+		{
+			name:          "a fact changed",
+			previousFacts: map[string]string{"fqdn": "host", FactUpdatedAt: recent},
+			newFacts:      map[string]string{"fqdn": "other-host", FactUpdatedAt: newValue},
+			want:          newValue,
+		},
+		{
+			name:          "a fact was added",
+			previousFacts: map[string]string{"fqdn": "host", FactUpdatedAt: recent},
+			newFacts:      map[string]string{"fqdn": "host", "kernel": "Linux", FactUpdatedAt: newValue},
+			want:          newValue,
+		},
+		{
+			name:          "a fact was removed",
+			previousFacts: map[string]string{"fqdn": "host", "kernel": "Linux", FactUpdatedAt: recent},
+			newFacts:      map[string]string{"fqdn": "host", FactUpdatedAt: newValue},
+			want:          newValue,
+		},
+		{
+			name:          "previous value is unparsable",
+			previousFacts: map[string]string{"fqdn": "host", FactUpdatedAt: "not-a-date"},
+			newFacts:      map[string]string{"fqdn": "host", FactUpdatedAt: newValue},
+			want:          newValue,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := &FactProvider{facts: test.previousFacts}
+
+			if got := f.factUpdatedAt(test.newFacts); got != test.want {
+				t.Errorf("factUpdatedAt() = %v, want %v", got, test.want)
 			}
 		})
 	}

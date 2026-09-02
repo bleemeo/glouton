@@ -115,6 +115,14 @@ func (c *Collector) AddInput(input telegraf.Input, shortName string) (int, error
 
 	if si, ok := input.(telegraf.ServiceInput); ok {
 		if err := si.Start(nil); err != nil {
+			// The input never started: drop it instead of gathering it forever.
+			// Some telegraf inputs panic when gathered after a failed Start()
+			// (e.g. docker, whose Start() releases its client on error).
+			// Stop() must not be called, since the input was never started.
+			delete(c.inputs, id)
+			delete(c.gatherWG, id)
+			delete(c.fieldCaches, id)
+
 			return 0, err
 		}
 	}

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -111,5 +112,76 @@ func TestSubDirZipWriter(t *testing.T) {
 		}
 
 		t.Fatalf("%d file%s have not been found in zip: %s", len(remaining), plural, strings.Join(remaining, ", "))
+	}
+}
+
+// TestSubDirZipWriterCloseDuringWrite ensures the zip stays valid when it is
+// closed (e.g. because the diagnostic timed out) while another goroutine is
+// still writing to it.
+func TestSubDirZipWriterCloseDuringWrite(t *testing.T) {
+	t.Parallel()
+
+	const (
+		fileCount = 100
+		content   = "the content of this file"
+	)
+
+	buf := new(bytes.Buffer)
+	zipWriter := zip.NewWriter(buf)
+	subDirWriter := NewSubDirZipWriter("diagnostic", zipWriter)
+	writing := make(chan struct{})
+
+	var wg sync.WaitGroup
+
+	wg.Go(func() {
+		for n := range fileCount {
+			writer, err := subDirWriter.Create(fmt.Sprintf("file%d.txt", n))
+			if err != nil {
+				return // The archive is closed, like a diagnostic module giving up.
+			}
+
+			if n == 0 {
+				close(writing)
+			}
+
+			if _, err := writer.Write([]byte(content)); err != nil {
+				return
+			}
+		}
+	})
+
+	<-writing
+
+	if err := subDirWriter.Close(); err != nil {
+		t.Fatal("Failed to close the archive:", err)
+	}
+
+	wg.Wait()
+
+	// Whatever the interleaving, the zip must be readable and no file may hold
+	// anything else than what was written to it.
+	bufReader := bytes.NewReader(buf.Bytes())
+
+	zipReader, err := zip.NewReader(bufReader, bufReader.Size())
+	if err != nil {
+		t.Fatal("Failed to open zip:", err)
+	}
+
+	for _, zipFile := range zipReader.File {
+		reader, err := zipFile.Open()
+		if err != nil {
+			t.Fatalf("Failed to read zip file %q: %v", zipFile.Name, err)
+		}
+
+		zipContent, err := io.ReadAll(reader)
+		if err != nil {
+			t.Fatalf("Failed to read zip file %q content: %v", zipFile.Name, err)
+		}
+
+		reader.Close() //nolint:gosec
+
+		if string(zipContent) != content && len(zipContent) != 0 {
+			t.Errorf("%s = %q, want %q or an empty content", zipFile.Name, zipContent, content)
+		}
 	}
 }

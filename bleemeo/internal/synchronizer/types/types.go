@@ -73,6 +73,19 @@ func (t SyncType) String() string {
 	}
 }
 
+// SyncRequest is a pending request to synchronize one entity.
+type SyncRequest struct {
+	Type SyncType
+	// Deadline is the date by which the entity must be synchronized: "synchronize this, at the
+	// latest, at this date". A deadline already reached asks for a synchronization on the next
+	// execution, which is what "as soon as possible" requests use.
+	//
+	// The synchronization may happen earlier, for any other reason, in which case the request
+	// is fulfilled and dropped. That's what makes a deadline usable to spread requests over
+	// time: it never adds an execution when one was going to happen anyway.
+	Deadline time.Time
+}
+
 type APIFeature int
 
 // There are currently no features in this list
