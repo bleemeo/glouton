@@ -154,7 +154,9 @@ func setupStderrRedirection(stateDir string) {
 		}
 	}
 
-	newStderrFile, err := os.Create(stderrFilePath)
+	// The stderr log holds stack traces and the in-memory log buffer, so it is
+	// created with the same restricted permissions as state.json.
+	newStderrFile, err := os.OpenFile(stderrFilePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		logger.V(1).Println("Failed to create a new stderr log file:", err)
 
@@ -315,7 +317,7 @@ func bundleCrashReportFiles(ctx context.Context, maxReportCount int, stateDir st
 // It returns the path to the created archive if everything went well, otherwise an empty string.
 func makeBundle(ctx context.Context, stateDir string, diagnosticFn diagnosticFunc) string {
 	// Create a file to flag that the crash report is not complete because we haven't generated a diagnostic yet.
-	f, err := os.Create(filepath.Join(stateDir, writeInProgressFlag))
+	f, err := os.OpenFile(filepath.Join(stateDir, writeInProgressFlag), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		logger.V(1).Println("Failed to create flag to mark crash report writing as in progress")
 
@@ -334,7 +336,7 @@ func makeBundle(ctx context.Context, stateDir string, diagnosticFn diagnosticFun
 
 	crashReportPath := filepath.Join(stateDir, time.Now().Format(crashReportArchiveFormat))
 
-	crashReportArchive, err := os.Create(crashReportPath)
+	crashReportArchive, err := os.OpenFile(crashReportPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		logger.V(1).Printf("Can't create crash report archive %q: %v", crashReportPath, err)
 

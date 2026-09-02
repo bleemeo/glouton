@@ -58,7 +58,11 @@ var (
 )
 
 // reloadState implements the types.BleemeoReloadState interface.
+// It is used from multiple goroutines: the synchronizer, the MQTT client
+// (which refreshes the OAuth token through the API client) and the agent
+// during a reload. All fields are protected by l.
 type reloadState struct {
+	l             sync.Mutex
 	mqtt          types.MQTTReloadState
 	nextFullSync  time.Time
 	fullSyncCount int
@@ -70,40 +74,68 @@ func NewReloadState() types.BleemeoReloadState {
 }
 
 func (rs *reloadState) MQTTReloadState() types.MQTTReloadState {
+	rs.l.Lock()
+	defer rs.l.Unlock()
+
 	return rs.mqtt
 }
 
 func (rs *reloadState) SetMQTTReloadState(client types.MQTTReloadState) {
+	rs.l.Lock()
+	defer rs.l.Unlock()
+
 	rs.mqtt = client
 }
 
 func (rs *reloadState) NextFullSync() time.Time {
+	rs.l.Lock()
+	defer rs.l.Unlock()
+
 	return rs.nextFullSync
 }
 
 func (rs *reloadState) SetNextFullSync(t time.Time) {
+	rs.l.Lock()
+	defer rs.l.Unlock()
+
 	rs.nextFullSync = t
 }
 
 func (rs *reloadState) FullSyncCount() int {
+	rs.l.Lock()
+	defer rs.l.Unlock()
+
 	return rs.fullSyncCount
 }
 
 func (rs *reloadState) SetFullSyncCount(count int) {
+	rs.l.Lock()
+	defer rs.l.Unlock()
+
 	rs.fullSyncCount = count
 }
 
 func (rs *reloadState) Token() *oauth2.Token {
+	rs.l.Lock()
+	defer rs.l.Unlock()
+
 	return rs.token
 }
 
 func (rs *reloadState) SetToken(token *oauth2.Token) {
+	rs.l.Lock()
+	defer rs.l.Unlock()
+
 	rs.token = token
 }
 
 func (rs *reloadState) Close() {
-	if rs.mqtt != nil {
-		rs.mqtt.Close()
+	rs.l.Lock()
+	mqtt := rs.mqtt
+	rs.l.Unlock()
+
+	if mqtt != nil {
+		mqtt.Close()
 	}
 }
 
@@ -196,7 +228,10 @@ func (c *Connector) ApplyCachedConfiguration() {
 	}
 }
 
-func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint) {
+// initMQTT creates the MQTT client and stores it on the Connector.
+// It returns the created client: callers must use the returned value
+// instead of re-reading c.mqtt, which may already have been replaced.
+func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint) *mqtt.Client {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -230,6 +265,8 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint) {
 	if c.sync.IsMaintenance() {
 		c.mqtt.SuspendSending(true)
 	}
+
+	return c.mqtt
 }
 
 func (c *Connector) setMaintenance(ctx context.Context, maintenance bool) {
@@ -302,14 +339,14 @@ func (c *Connector) mqttRestarter(ctx context.Context) error {
 
 			c.l.Lock()
 
-			if c.mqtt != nil {
+			if previousClient := c.mqtt; previousClient != nil {
 				// Try to retrieve pending points
 				resultChan := make(chan []gloutonTypes.MetricPoint, 1)
 
 				go func() {
 					defer crashreport.ProcessPanic()
 
-					resultChan <- c.mqtt.PopPoints(true)
+					resultChan <- previousClient.PopPoints(true)
 				}()
 
 				select {
@@ -322,7 +359,7 @@ func (c *Connector) mqttRestarter(ctx context.Context) error {
 
 			c.l.Unlock()
 
-			c.initMQTT(previousPoints)
+			mqttClient := c.initMQTT(previousPoints)
 			previousPoints = nil
 
 			wg.Add(1)
@@ -331,7 +368,7 @@ func (c *Connector) mqttRestarter(ctx context.Context) error {
 				defer crashreport.ProcessPanic()
 				defer wg.Done()
 
-				err := c.mqtt.Run(subCtx)
+				err := mqttClient.Run(subCtx)
 
 				l.Lock()
 
@@ -748,7 +785,7 @@ func (c *Connector) DiagnosticPage() string {
 		if mqtt == nil {
 			mqttPage <- "MQTT connector is not (yet) initialized\n"
 		} else {
-			mqttPage <- c.mqtt.DiagnosticPage()
+			mqttPage <- mqtt.DiagnosticPage()
 		}
 	}()
 
@@ -1005,6 +1042,31 @@ func (c *Connector) HealthCheck() bool {
 
 	lastReport := c.LastReport()
 
+	ok, unhealthy := c.healthCheck(lastReport, ok)
+
+	if unhealthy {
+		logger.Printf("Restarting MQTT is not enough. Glouton seems unhealthy, killing myself")
+
+		// We don't know how big the buffer needs to be to collect
+		// all the goroutines. Use 2MB buffer which hopefully is enough
+		buffer := make([]byte, 1<<21)
+
+		n := runtime.Stack(buffer, true)
+		logger.Printf("%s", string(buffer[:n]))
+
+		// DiagnosticPage takes the connector lock, so it must be built once the
+		// lock is released: doing it while holding the lock would deadlock
+		// instead of restarting Glouton.
+		panic(fmt.Sprint("Glouton seems unhealthy (last report too old), killing myself\n", c.DiagnosticPage()))
+	}
+
+	return ok
+}
+
+// healthCheck does the part of the health check that needs the connector lock.
+// It returns whether the connector is healthy, and whether Glouton must be
+// killed because MQTT didn't report for too long.
+func (c *Connector) healthCheck(lastReport time.Time, ok bool) (bool, bool) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -1015,7 +1077,7 @@ func (c *Connector) HealthCheck() bool {
 
 		logger.Printf("Bleemeo connector is still disabled for %v due to '%v'", delay.Truncate(time.Second), c.disableReason)
 
-		return false
+		return false, false
 	}
 
 	if c.mqtt != nil {
@@ -1030,15 +1092,7 @@ func (c *Connector) HealthCheck() bool {
 				c.mqttReportConsecutiveError++
 
 				if c.mqttReportConsecutiveError >= 3 {
-					logger.Printf("Restarting MQTT is not enough. Glouton seems unhealthy, killing myself")
-
-					// We don't know how big the buffer needs to be to collect
-					// all the goroutines. Use 2MB buffer which hopefully is enough
-					buffer := make([]byte, 1<<21)
-
-					n := runtime.Stack(buffer, true)
-					logger.Printf("%s", string(buffer[:n]))
-					panic(fmt.Sprint("Glouton seems unhealthy (last report too old), killing myself\n", c.DiagnosticPage()))
+					return ok, true
 				}
 			}
 
@@ -1056,7 +1110,7 @@ func (c *Connector) HealthCheck() bool {
 		c.sync.SetMQTTConnected(false)
 	}
 
-	return ok
+	return ok, false
 }
 
 func (c *Connector) EmitInternalMetric(_ context.Context, state registry.GatherState, app storage.Appender) error {
@@ -1110,10 +1164,12 @@ func (c *Connector) clearDisable(reasonToClear types.DisableReason) {
 		c.disabledUntil = time.Now()
 	}
 
+	mqttClient := c.mqtt
+
 	c.l.Unlock()
 	c.sync.ClearDisable(reasonToClear, 0)
 
-	if mqtt := c.mqtt; mqtt != nil {
+	if mqtt := mqttClient; mqtt != nil {
 		var mqttDisableDelay time.Duration
 
 		switch reasonToClear { //nolint:exhaustive,nolintlint

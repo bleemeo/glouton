@@ -390,7 +390,7 @@ func (d *Data) Services(w http.ResponseWriter, r *http.Request) {
 		isActive = isActiveParamValue
 	}
 
-	if d.api.Discovery == nil {
+	if d.api.Discovery == nil || d.api.DB == nil {
 		err := render.Render(w, r, ErrInternalServerError(errServices))
 		if err != nil {
 			logger.V(2).Printf("Can not render error: %v", err)

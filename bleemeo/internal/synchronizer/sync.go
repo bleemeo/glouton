@@ -88,7 +88,10 @@ type Synchronizer struct {
 	hasFeature    map[types.APIFeature]bool
 
 	requestCounter atomic.Uint32
-	realClient     *bleemeo.Client
+	// realClient and agentID are only written by the synchronization loop
+	// goroutine, while holding l. The synchronization loop may read them
+	// without the lock, any other goroutine must hold l to read them.
+	realClient *bleemeo.Client
 
 	// These fields should always be set in the reload state after being modified.
 	nextFullSync  time.Time
@@ -105,8 +108,9 @@ type Synchronizer struct {
 	warnAccountMismatchDone   bool
 	maintenanceMode           bool
 	suspendedMode             bool
-	agentID                   string
-	delayedContainer          map[string]time.Time
+	// See the comment on realClient about the locking of agentID.
+	agentID          string
+	delayedContainer map[string]time.Time
 
 	lastLogByKey map[string]time.Time
 
@@ -203,7 +207,11 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 	return s
 }
 
-func (s *Synchronizer) newClient() types.Client {
+// getClient returns the client used to talk to the Bleemeo API.
+// Only the wrapper is new: the underlying API client is shared, with its OAuth
+// token and its throttle deadline.
+// See the comment on realClient about the locking.
+func (s *Synchronizer) getClient() types.Client {
 	if s.option.ProvideClient != nil {
 		// Allows tests to inject mock clients
 		return s.option.ProvideClient()
@@ -327,14 +335,18 @@ func (s *Synchronizer) Run(ctx context.Context) error { //nolint:maintidx
 	// syncInfo early because MQTT connection will establish or not depending on it (maintenance & outdated agent).
 	// syncInfo also disable if time drift is too big. We don't do this disable now for a new agent, because
 	// we want it to perform registration and creation of agent_status in order to mark this agent as "bad time" on Bleemeo.
-	exec := s.newLimitedExecution(false, nil)
+	// The execution is scoped to this block: it must not be reused by the
+	// synchronization loop below, which has its own execution per run.
+	{
+		exec := s.newLimitedExecution(false, nil)
 
-	_, err = s.syncInfoReal(ctx, exec, !firstSync)
-	if err != nil {
-		logger.V(1).Printf("bleemeo: pre-run checks: couldn't sync the global config: %v", err)
+		_, err = s.syncInfoReal(ctx, exec, !firstSync)
+		if err != nil {
+			logger.V(1).Printf("bleemeo: pre-run checks: couldn't sync the global config: %v", err)
+		}
+
+		exec.executePostRunCalls()
 	}
-
-	exec.executePostRunCalls()
 
 	s.option.SetInitialized()
 
@@ -368,7 +380,7 @@ func (s *Synchronizer) Run(ctx context.Context) error { //nolint:maintidx
 			break
 		}
 
-		_, errSync := s.runOnce(ctx, firstSync)
+		execution, errSync := s.runOnce(ctx, firstSync)
 		if errSync != nil {
 			s.l.Lock()
 			s.successiveErrors++
@@ -409,7 +421,7 @@ func (s *Synchronizer) Run(ctx context.Context) error { //nolint:maintidx
 			}
 
 			if IsThrottleError(errSync) {
-				deadline := exec.client.ThrottleDeadline().Add(delay.JitterDelay(15*time.Second, 0.3))
+				deadline := s.throttleDeadline(execution).Add(delay.JitterDelay(15*time.Second, 0.3))
 				s.Disable(deadline, bleemeoTypes.DisableTooManyRequests)
 			} else {
 				s.l.Lock()
@@ -541,12 +553,15 @@ func (s *Synchronizer) DiagnosticPage() string {
 		port = 443
 	}
 
-	var apiClient *bleemeo.Client
-
 	s.l.Lock()
 
-	if s.realClient == nil {
-		err = s.setClient()
+	apiClient := s.realClient
+
+	if apiClient == nil {
+		// The client is only built for this diagnostic and not stored on the
+		// Synchronizer: DiagnosticPage runs on another goroutine and s.realClient
+		// is only written by the synchronization loop.
+		apiClient, err = s.buildClient()
 		if err != nil {
 			s.l.Unlock()
 
@@ -555,8 +570,6 @@ func (s *Synchronizer) DiagnosticPage() string {
 			return builder.String()
 		}
 	}
-
-	apiClient = s.realClient
 
 	s.l.Unlock()
 
@@ -722,7 +735,7 @@ func (s *Synchronizer) UpdateAgent(delay time.Duration) {
 func (s *Synchronizer) SetMaintenance(ctx context.Context, maintenance bool) {
 	if s.IsMaintenance() && !maintenance {
 		// getting out of maintenance, let's check for a duplicated state.json file
-		err := s.checkDuplicatedIfNeeded(ctx, s.newClient(), s.now(), true)
+		err := s.checkDuplicatedIfNeeded(ctx, s.getClient(), s.now(), true)
 		if err != nil {
 			// it's not a critical error at all, we will perform this check again on the next synchronization pass
 			logger.V(2).Printf("Couldn't check for duplicated agent: %v", err)
@@ -963,15 +976,22 @@ func (s *Synchronizer) GetToken(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("%w: %s", ErrBleemeoDisabled, disableReason.String())
 	}
 
+	// This method is called by the MQTT client, so it doesn't run on the
+	// synchronization loop goroutine which owns realClient.
 	s.l.Lock()
 	hadSyncOnce := !s.lastSync.IsZero()
+	apiClient := s.realClient
 	s.l.Unlock()
 
 	if !hadSyncOnce && stateHasValue(agentAuthBrokenCacheKey, s.option.State) {
 		return "", fmt.Errorf("%w: not yet started", ErrBleemeoDisabled)
 	}
 
-	token, err := s.realClient.GetToken(ctx)
+	if apiClient == nil {
+		return "", errClientUninitialized
+	}
+
+	token, err := apiClient.GetToken(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -994,7 +1014,20 @@ func (s *Synchronizer) CheckToken(ctx context.Context) {
 		return
 	}
 
-	result, err := s.realClient.Get(ctx, bleemeo.ResourceAgent, s.agentID, "id")
+	// This method is called by the MQTT client, so it doesn't run on the
+	// synchronization loop goroutine which owns realClient and agentID.
+	s.l.Lock()
+	apiClient := s.realClient
+	agentID := s.agentID
+	s.l.Unlock()
+
+	if apiClient == nil {
+		logger.V(1).Printf("Checking Bleemeo API credentials failed: %v", errClientUninitialized)
+
+		return
+	}
+
+	result, err := apiClient.Get(ctx, bleemeo.ResourceAgent, agentID, "id")
 	if err != nil {
 		logger.V(1).Printf("Checking Bleemeo API credentials failed: %v", err)
 
@@ -1011,12 +1044,27 @@ func (s *Synchronizer) CheckToken(ctx context.Context) {
 		return
 	}
 
-	if res.ID != s.agentID {
+	if res.ID != agentID {
 		logger.V(1).Printf("Checking Bleemeo API credentials failed: %v", errInvalidAgentID)
 	}
 }
 
+// setClient creates the API client and stores it on the Synchronizer.
+// The caller must hold s.l.
 func (s *Synchronizer) setClient() error {
+	client, err := s.buildClient()
+	if err != nil {
+		return err
+	}
+
+	s.realClient = client
+
+	return nil
+}
+
+// buildClient creates a new API client without storing it.
+// The caller must hold s.l.
+func (s *Synchronizer) buildClient() (*bleemeo.Client, error) {
 	username := s.agentID + "@bleemeo.com"
 	_, password := s.option.State.BleemeoCredentials()
 
@@ -1062,7 +1110,7 @@ func (s *Synchronizer) setClient() error {
 		Transport: gloutonTypes.NewHTTPTransport(tlsConfig, transportOpts),
 	}
 
-	client, err := bleemeo.NewClient(
+	return bleemeo.NewClient(
 		bleemeo.WithCredentials(username, password),
 		bleemeo.WithOAuthClient(gloutonOAuthClientID, ""),
 		bleemeo.WithEndpoint(s.option.Config.Bleemeo.APIBase),
@@ -1070,13 +1118,6 @@ func (s *Synchronizer) setClient() error {
 		bleemeo.WithHTTPClient(cl),
 		initialRefreshTokenOpt,
 	)
-	if err != nil {
-		return err
-	}
-
-	s.realClient = client
-
-	return nil
 }
 
 // HealthCheck perform some health check and log any issue found.
@@ -1118,6 +1159,22 @@ func (s *Synchronizer) HealthCheck() bool {
 	}
 
 	return true
+}
+
+// throttleDeadline returns the retry deadline advertised by the API to the
+// client used by the given execution.
+// execution may be nil when the synchronization failed before it was created,
+// which happens when the registration fails; the deadline is then taken from
+// the current client, which is the one that did the throttled request.
+func (s *Synchronizer) throttleDeadline(execution *Execution) time.Time {
+	if execution != nil {
+		return execution.client.ThrottleDeadline()
+	}
+
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	return s.getClient().ThrottleDeadline()
 }
 
 func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (*Execution, error) {
@@ -1348,16 +1405,18 @@ func (s *Synchronizer) register(ctx context.Context) error {
 		return err
 	}
 
-	agentID, err := s.newClient().RegisterSelf(ctx, accountID, password, s.option.Config.Bleemeo.InitialServerGroupName, name, fqdn, registrationKey)
+	agentID, err := s.getClient().RegisterSelf(ctx, accountID, password, s.option.Config.Bleemeo.InitialServerGroupName, name, fqdn, registrationKey)
 	if err != nil {
 		return err
 	}
 
+	s.l.Lock()
 	s.agentID = agentID
+	s.l.Unlock()
 
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
 		scope.SetContext("agent", map[string]any{
-			"agent_id":         s.agentID,
+			"agent_id":         agentID,
 			factGloutonVersion: version.Version,
 		})
 	})

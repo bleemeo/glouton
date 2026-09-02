@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -642,5 +643,83 @@ func TestSkipCacheWriteIfRemoved(t *testing.T) {
 
 	if _, err := os.Stat(cachePath); err == nil {
 		t.Fatalf("cache file IS created")
+	}
+}
+
+// TestSymlinkedTempFile checks that a symlink planted at the path of the
+// temporary file isn't followed when the state is written.
+func TestSymlinkedTempFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation requires privileges on Windows")
+	}
+
+	tmpdir := t.TempDir()
+
+	persistentPath := filepath.Join(tmpdir, testStateJSON)
+	cachePath := filepath.Join(tmpdir, testStateCacheJSON)
+	targetPath := filepath.Join(tmpdir, "attacker-target")
+
+	state, err := Load(persistentPath, cachePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := state.SaveTo(persistentPath, cachePath); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for the initial background write of the cache to be done, otherwise
+	// it could race with the creation of the symlink below.
+	deadline := time.Now().Add(10 * time.Second)
+
+	for {
+		if _, err := os.Stat(cachePath); err == nil {
+			if _, err := os.Stat(cachePath + tmpExt); errors.Is(err, os.ErrNotExist) {
+				break
+			}
+		}
+
+		if time.Now().After(deadline) {
+			t.Fatal("the cache file was not written")
+		}
+	}
+
+	for _, tmpPath := range []string{persistentPath + tmpExt, cachePath + tmpExt} {
+		if err := os.Symlink(targetPath, tmpPath); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := state.SetBleemeoCredentials("some-agent-id", "some-password"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := state.Set("key1", testCacheKeyString); err != nil {
+		t.Fatal(err)
+	}
+
+	// Close waits for the background write of the cache.
+	state.Close()
+
+	if _, err := os.Stat(targetPath); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the symlink target was written: os.Stat returned %v", err)
+	}
+
+	data, err := os.ReadFile(persistentPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Contains(data, []byte("some-password")) {
+		t.Errorf("the Bleemeo credentials were not written to %s", persistentPath)
+	}
+
+	cacheData, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Contains(cacheData, []byte(testCacheKeyString)) {
+		t.Errorf("the cache key was not written to %s", cachePath)
 	}
 }

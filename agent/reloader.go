@@ -24,7 +24,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -47,7 +46,10 @@ const (
 	reloadDebouncerPeriod = 30 * time.Second
 )
 
-var errWatcherDisabled = errors.New("reload disabled")
+var (
+	errWatcherDisabled = errors.New("reload disabled")
+	errStartupFailed   = errors.New("unable to start Glouton")
+)
 
 // ReloadState is used to keep some components alive during reloads.
 type ReloadState interface {
@@ -57,6 +59,7 @@ type ReloadState interface {
 	SetLocalStore(store *tsdb.Store)
 	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error
 	WatcherError() error
+	ReloadError() error
 	Close()
 }
 
@@ -67,6 +70,7 @@ type reloadState struct {
 
 	l             sync.Mutex
 	watcherError  error
+	reloadError   error
 	reloadCounter int
 	lastReload    time.Time
 }
@@ -97,6 +101,10 @@ func (rs *reloadState) DiagnosticArchive(_ context.Context, archive types.Archiv
 		fmt.Fprintf(file, "An error occurred with the file watcher: %v\n", err)
 	}
 
+	if err := rs.ReloadError(); err != nil {
+		fmt.Fprintf(file, "The last reload failed: %v\n", err)
+	}
+
 	if count := rs.reloadCount(); count == 0 {
 		fmt.Fprintln(file, "The agent has never been reloaded.")
 	} else {
@@ -123,6 +131,23 @@ func (rs *reloadState) setWatcherError(err error) {
 	defer rs.l.Unlock()
 
 	rs.watcherError = err
+}
+
+// ReloadError returns the error of the last reload attempt, or nil when the
+// last one succeeded. It is reported as a config warning by the running agent,
+// which still uses the previous configuration.
+func (rs *reloadState) ReloadError() error {
+	rs.l.Lock()
+	defer rs.l.Unlock()
+
+	return rs.reloadError
+}
+
+func (rs *reloadState) setReloadError(err error) {
+	rs.l.Lock()
+	defer rs.l.Unlock()
+
+	rs.reloadError = err
 }
 
 func (rs *reloadState) reloadCount() int {
@@ -196,7 +221,7 @@ type agentReloader struct {
 
 // StartReloadManager starts the agent with a config file watcher, the agent is
 // reloaded when a change is detected and the config is valid.
-func StartReloadManager(configFilesFromFlag []string, reloadDisabled bool) {
+func StartReloadManager(configFilesFromFlag []string, reloadDisabled bool) error {
 	var (
 		watcher *fsnotify.Watcher
 		err     error
@@ -226,10 +251,10 @@ func StartReloadManager(configFilesFromFlag []string, reloadDisabled bool) {
 
 	logger.SetLevel(0) // limit the verbosity until we load the level from the config
 
-	a.run()
+	return a.run()
 }
 
-func (a *agentReloader) run() {
+func (a *agentReloader) run() error {
 	// The sighup handler needs to be set up very early to catch the SIGHUP signal
 	// received from apt post-update hook.
 	sighupChan := make(chan os.Signal, 1)
@@ -267,6 +292,31 @@ out:
 	for {
 		select {
 		case <-reload:
+			// The configuration is loaded before stopping the running agent, so
+			// that an invalid configuration leaves it running with the previous
+			// one.
+			loadedConfig, err := LoadConfig(a.configFilesFromFlag)
+			if err != nil {
+				logger.Printf("Error while loading configuration: %v", err)
+
+				if firstRun {
+					return errStartupFailed //nolint:govet
+				}
+
+				logger.Printf("Keeping the previous configuration, the agent is left running")
+
+				// Make the failure visible to the user: the running agent
+				// reports it as a config warning.
+				a.reloadState.setReloadError(fmt.Errorf(
+					"the configuration was modified but couldn't be loaded, Glouton kept the previous configuration: %w",
+					err,
+				))
+
+				continue
+			}
+
+			a.reloadState.setReloadError(nil)
+
 			if !firstRun {
 				logger.V(0).Printf("The config files have been modified, reloading agent...")
 				a.reloadState.incrementReloadCount()
@@ -275,7 +325,7 @@ out:
 				cancel()
 				wg.Wait()
 
-				ctx, cancel = context.WithCancel(context.Background()) //nolint: fatcontext
+				ctx, cancel = context.WithCancel(context.Background()) //nolint: fatcontext,govet
 			}
 
 			a.l.Lock()
@@ -290,7 +340,7 @@ out:
 				defer crashreport.ProcessPanic()
 				defer wg.Done()
 
-				a.runAgent(ctx, sighupChan, first)
+				a.runAgent(ctx, loadedConfig, sighupChan, first)
 			}()
 
 			firstRun = false
@@ -319,10 +369,12 @@ out:
 	signal.Stop(stopChan)
 	close(stopChan)
 	a.reloadState.Close()
+
+	return nil
 }
 
-func (a *agentReloader) runAgent(ctx context.Context, signalChan chan os.Signal, firstRun bool) {
-	Run(ctx, a.reloadState, a.configFilesFromFlag, signalChan, firstRun)
+func (a *agentReloader) runAgent(ctx context.Context, loadedConfig LoadedConfig, signalChan chan os.Signal, firstRun bool) {
+	Run(ctx, a.reloadState, loadedConfig, signalChan, firstRun)
 
 	a.l.Lock()
 	a.agentIsRunning = false
@@ -336,29 +388,16 @@ func (a *agentReloader) watchConfig(ctx context.Context, reload chan struct{}) {
 		return
 	}
 
-	configPaths := a.configFilesFromFlag
-
-	// Get config files from env.
-	envFiles := os.Getenv(config.EnvGloutonConfigFiles)
-
-	if len(configPaths) == 0 || len(configPaths) == 1 && configPaths[0] == "" && envFiles != "" {
-		configPaths = strings.Split(envFiles, ",")
-	}
-
-	// If no config was given with flags or env variables, fallback on the default files.
-	if len(configPaths) == 0 || len(configPaths) == 1 && configPaths[0] == "" {
-		configPaths = config.DefaultPaths()
-	}
+	// Use the same resolution as the config loading, otherwise the agent could
+	// watch files it doesn't load.
+	configPaths := config.ResolvePaths(true, a.configFilesFromFlag...)
 
 	// Use a debouncer because fsnotify events are often duplicated.
+	// The config isn't validated here: the reload gives up on an invalid
+	// configuration without stopping the running agent.
 	reloadAgentTarget := func(ctx context.Context) {
 		if ctx.Err() == nil {
-			// Validate config before reloading.
-			if _, _, _, err := config.Load(true, true, configPaths...); err == nil {
-				reload <- struct{}{}
-			} else {
-				logger.Printf("Error while loading configuration, keeping previous configuration: %v", err)
-			}
+			reload <- struct{}{}
 		}
 	}
 
@@ -371,7 +410,7 @@ func (a *agentReloader) watchConfig(ctx context.Context, reload chan struct{}) {
 	}()
 
 	for _, dir := range configPaths {
-		fileInfo, err := os.Stat(dir) //nolint:gosec // path comes from config, not user input
+		fileInfo, err := os.Stat(dir)
 		if err != nil {
 			logger.V(2).Printf("Failed to stat file %v: %v", dir, err)
 

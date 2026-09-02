@@ -52,7 +52,10 @@ type Store struct {
 	path      string
 	retention time.Duration
 
-	l      sync.Mutex
+	// l guards db against a concurrent Close: readers and writers hold it
+	// for reading (prom_tsdb.DB is safe for concurrent use), Close holds it
+	// for writing so it waits for the in-flight calls.
+	l      sync.RWMutex
 	closed bool
 }
 
@@ -74,6 +77,9 @@ func Open(opts Options) (*Store, error) {
 		return nil, errPathRequired
 	}
 
+	// The permissions only apply when we create the directory: an existing
+	// directory is left untouched, as its permissions may be a deliberate
+	// choice from the administrator.
 	if err := os.MkdirAll(opts.Path, 0o750); err != nil {
 		return nil, fmt.Errorf("tsdb: create dir: %w", err)
 	}
@@ -107,11 +113,10 @@ func (s *Store) Retention() time.Duration { return s.retention }
 // first and falling back to the head block. Returns 0 if the store is
 // empty or closed.
 func (s *Store) OldestPointMs() int64 {
-	s.l.Lock()
-	closed := s.closed
-	s.l.Unlock()
+	s.l.RLock()
+	defer s.l.RUnlock()
 
-	if closed {
+	if s.closed {
 		return 0
 	}
 
@@ -139,8 +144,8 @@ func (s *Store) PushPoints(ctx context.Context, points []types.MetricPoint) {
 		return
 	}
 
-	s.l.Lock()
-	defer s.l.Unlock()
+	s.l.RLock()
+	defer s.l.RUnlock()
 
 	if s.closed {
 		return
@@ -160,18 +165,19 @@ func (s *Store) PushPoints(ctx context.Context, points []types.MetricPoint) {
 	}
 
 	if err := app.Commit(); err != nil {
-		logger.V(1).Printf("tsdb: commit: %v", err)
+		// A commit failure means the points are lost, and the usual cause is a
+		// full or read-only disk, so this must be visible without verbose logs.
+		logger.Printf("tsdb: failed to write points to disk: %v", err)
 	}
 }
 
 // Querier returns a storage.Querier for the [mint, maxt] window
 // (milliseconds since epoch).
 func (s *Store) Querier(mint, maxt int64) (storage.Querier, error) {
-	s.l.Lock()
-	closed := s.closed
-	s.l.Unlock()
+	s.l.RLock()
+	defer s.l.RUnlock()
 
-	if closed {
+	if s.closed {
 		return nil, errStoreClosed
 	}
 
@@ -185,14 +191,13 @@ func (s *Store) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter
 		return err
 	}
 
-	s.l.Lock()
-	closed := s.closed
-	s.l.Unlock()
+	s.l.RLock()
+	defer s.l.RUnlock()
 
 	fmt.Fprintf(file, "Path: %s\n", s.path)
-	fmt.Fprintf(file, "Closed: %v\n", closed)
+	fmt.Fprintf(file, "Closed: %v\n", s.closed)
 
-	if !closed {
+	if !s.closed {
 		head := s.db.Head()
 		minTime := time.UnixMilli(head.MinTime()).UTC()
 		maxTime := time.UnixMilli(head.MaxTime()).UTC()

@@ -77,12 +77,39 @@ var (
 	ErrMissconfiguration      = errors.New("config issue")
 )
 
+// ResolvePaths returns the config files and directories to use, from the paths
+// given with the command line flags.
+// The environment variable GLOUTON_CONFIG_FILES has priority over the flags,
+// and the default paths are used when neither is set.
+// It is used both to load the config and to know which files to watch for
+// changes, so that both always use the same files.
+func ResolvePaths(loadEnviron bool, paths ...string) []string {
+	if loadEnviron {
+		if envPaths := pathsFromEnv(); len(envPaths) > 0 {
+			return envPaths
+		}
+	}
+
+	if len(paths) == 0 || len(paths) == 1 && paths[0] == "" {
+		return DefaultPaths()
+	}
+
+	return paths
+}
+
+// pathsFromEnv returns the config paths from the environment variable
+// GLOUTON_CONFIG_FILES, or nil when it isn't set.
+func pathsFromEnv() []string {
+	if envFiles := os.Getenv(EnvGloutonConfigFiles); envFiles != "" {
+		return strings.Split(envFiles, ",")
+	}
+
+	return nil
+}
+
 // Load loads the configuration from files and environment variables, returning the config, loaded items, warnings and an error.
 func Load(withDefault bool, loadEnviron bool, paths ...string) (Config, []Item, prometheus.MultiError, error) {
-	// If no config was given with flags or env variables, fallback on the default files.
-	if len(paths) == 0 || len(paths) == 1 && paths[0] == "" {
-		paths = DefaultPaths()
-	}
+	paths = ResolvePaths(loadEnviron, paths...)
 
 	loader := &configLoader{}
 
@@ -177,13 +204,9 @@ func applyConfigTransformation(cfg Config) Config {
 	return cfg
 }
 
-// load the configuration from files and environment variables.
+// load the configuration from the given files and from environment variables.
+// The paths must already be resolved by ResolvePaths, which Load does.
 func load(loader *configLoader, withDefault bool, loadEnviron bool, paths ...string) (Config, prometheus.MultiError, error) {
-	// Override config files if the files were given from the env.
-	if envFiles := os.Getenv(EnvGloutonConfigFiles); loadEnviron && envFiles != "" {
-		paths = strings.Split(envFiles, ",")
-	}
-
 	warnings, errors := loadPaths(loader, paths)
 
 	if loadEnviron {
@@ -406,7 +429,7 @@ func loadPaths(loader *configLoader, paths []string) (prometheus.MultiError, pro
 	var warnings, errors prometheus.MultiError
 
 	for _, path := range paths {
-		stat, err := os.Stat(path) //nolint:gosec // path comes from config, not user input
+		stat, err := os.Stat(path)
 		if err != nil && os.IsNotExist(err) {
 			logger.V(2).Printf("config file %s ignored because it does not exists", path)
 

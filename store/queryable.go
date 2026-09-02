@@ -276,13 +276,19 @@ func (s *seriesSample) Next() chunkenc.ValueType {
 // Seek returns true, if such sample exists, false otherwise.
 // Iterator is exhausted when the Seek returns false.
 func (s *seriesSample) Seek(t int64) chunkenc.ValueType { //nolint: govet
+	// The iterator starts at offset -1, before the first sample: Seek may be
+	// called before any Next.
+	if s.offset < 0 {
+		s.offset = 0
+	}
+
 	for ; s.offset < len(s.data); s.offset++ {
 		if s.data[s.offset].Time.UnixMilli() >= t {
 			return chunkenc.ValFloat
 		}
 	}
 
-	s.offset = len(s.data) - 1
+	s.offset = max(len(s.data)-1, 0)
 
 	return chunkenc.ValNone
 }
