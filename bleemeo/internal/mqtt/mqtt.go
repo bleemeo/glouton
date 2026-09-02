@@ -352,7 +352,8 @@ func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWri
 		} else {
 			fmt.Fprintf(file, "Here is a sample of %d blocked metrics:\n", maxSample)
 
-			indices := rand.Perm(c.failedPoints.Len())
+			// Sampling for a human-readable diagnostic, nothing security-sensitive.
+			indices := rand.Perm(c.failedPoints.Len()) //nolint:gosec
 			failedPointsCopy := c.failedPoints.Copy()
 
 			for _, i := range indices[:maxSample] {

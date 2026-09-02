@@ -34,7 +34,7 @@ import (
 // so we need to unmarshal it to set the default values.
 func blackboxModuleHookFunc() mapstructure.DecodeHookFuncType {
 	return func(_ reflect.Type, target reflect.Type, data any) (any, error) {
-		module, ok := reflect.New(target).Interface().(*bbConf.Module)
+		module, ok := reflect.TypeAssert[*bbConf.Module](reflect.New(target))
 		if !ok {
 			return data, nil
 		}

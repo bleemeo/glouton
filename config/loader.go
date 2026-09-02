@@ -197,8 +197,7 @@ func addYAMLSyntaxHint(err error, path string) error {
 		return err
 	}
 
-	var yamlErr goccyyaml.Error
-	if errors.As(goccyErr, &yamlErr) {
+	if yamlErr, ok := errors.AsType[goccyyaml.Error](goccyErr); ok {
 		if tk := yamlErr.GetToken(); tk != nil && tk.Position != nil {
 			return fmt.Errorf(
 				"%w: line %d, column %d: %s",

@@ -1,6 +1,7 @@
 version: "2"
 run:
-  go: "1.25"
+  # The Go version is deliberately not set here: golangci-lint then reads it from go.mod,
+  # so the two can't drift apart (this said 1.25 while go.mod was already on 1.26).
   timeout: 5m
 
 linters:
@@ -10,6 +11,7 @@ linters:
     - cyclop # We use maintidx to lint function complexity.
     - errorlint # Should be enabled, but it's difficult to test that we keep the same behavior with errors.As.
     - exhaustruct # This linter is meant to be used only for special cases. It is not recommended to use it for all files in a project.
+    - exhaustruct_v5 # Superseded exhaustruct, same reason (and v5.0.3 panics on inputs/vsphere).
     - funcorder # Would force us to reorganize hundreds of functions.
     - funlen
     - gocognit # We use maintidx to lint function complexity.

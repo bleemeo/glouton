@@ -350,7 +350,7 @@ func compareLightProps[propsType any](t *testing.T, expected map[string]propsTyp
 
 	for dev := range cacheMap {
 		if _, found := expected[dev]; !found {
-			t.Errorf("Found extra device in %T map: %q", *(new(propsType)), dev)
+			t.Errorf("Found extra device in %T map: %q", *new(propsType), dev)
 		}
 	}
 

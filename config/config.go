@@ -485,8 +485,7 @@ func unwrapErrors(errs prometheus.MultiError) prometheus.MultiError {
 
 	for _, err := range errs {
 		for _, subErr := range unwrapRecurse(err) {
-			var yamlErr *yaml.TypeError
-			if errors.As(subErr, &yamlErr) {
+			if yamlErr, ok := errors.AsType[*yaml.TypeError](subErr); ok {
 				for _, wrappedErr := range yamlErr.Errors {
 					unwrapped.Append(errors.New(wrappedErr)) //nolint:err113
 				}

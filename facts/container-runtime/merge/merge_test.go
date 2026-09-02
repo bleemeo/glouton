@@ -48,16 +48,23 @@ func (f *fakeRuntime) EnumerateContainers(context.Context, time.Duration, bool) 
 	return f.containers, f.complete, f.complete, f.err
 }
 
-func (f *fakeRuntime) CachedContainer(string) (facts.Container, bool)       { panic("not implemented") }
-func (f *fakeRuntime) ContainerLastKill(string) time.Time                   { panic("not implemented") }
-func (f *fakeRuntime) ContainerLastDelete(string) time.Time                 { panic("not implemented") }
-func (f *fakeRuntime) ContainerByNameLastDelete(string) time.Time           { panic("not implemented") }
+func (f *fakeRuntime) CachedContainer(string) (facts.Container, bool) { panic("not implemented") }
+
+func (f *fakeRuntime) ContainerLastKill(string) time.Time { panic("not implemented") }
+
+func (f *fakeRuntime) ContainerLastDelete(string) time.Time { panic("not implemented") }
+
+func (f *fakeRuntime) ContainerByNameLastDelete(string) time.Time { panic("not implemented") }
+
 func (f *fakeRuntime) ContainerTerminationGracePeriod(string) time.Duration { panic("not implemented") }
-func (f *fakeRuntime) ContainerExists(string) bool                          { panic("not implemented") }
-func (f *fakeRuntime) Events() <-chan facts.ContainerEvent                  { panic("not implemented") }
-func (f *fakeRuntime) IsRuntimeRunning(context.Context) bool                { panic("not implemented") }
-func (f *fakeRuntime) LastUpdate() time.Time                                { return f.lastUpdate }
-func (f *fakeRuntime) Run(context.Context) error                            { panic("not implemented") }
+
+func (f *fakeRuntime) ContainerExists(string) bool { panic("not implemented") }
+
+func (f *fakeRuntime) Events() <-chan facts.ContainerEvent { panic("not implemented") }
+
+func (f *fakeRuntime) IsRuntimeRunning(context.Context) bool { panic("not implemented") }
+func (f *fakeRuntime) LastUpdate() time.Time                 { return f.lastUpdate }
+func (f *fakeRuntime) Run(context.Context) error             { panic("not implemented") }
 
 func (f *fakeRuntime) Exec(context.Context, string, []string) ([]byte, error) {
 	panic("not implemented")
