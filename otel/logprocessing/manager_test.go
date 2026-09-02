@@ -137,6 +137,10 @@ func TestProcessLogSources(t *testing.T) {
 	ctrNgx1 := ctr(testContainerIDNgx1, testContainerNginx1, nil)
 	ctrDisabled := ctr("disabled", "Disabled", map[string]string{"glouton.log_enable": "False"})
 	svcDisabled := svc("disabled-svc", "", "disabled", true, time.Now(), discovery.ServiceLogReceiver{Format: "nginx_both"})
+	// A service Glouton auto-discovers, opted out of shipping through the same label that would apply if
+	// it weren't recognized as a service -- see logprocessing's own glouton.send_logs check.
+	ctrSendLogsOff := ctr("sendlogsoff", "SendLogsOff", map[string]string{"glouton.send_logs": "false"})
+	svcSendLogsOff := svc("sendlogsoff-svc", "", "sendlogsoff", true, time.Now(), discovery.ServiceLogReceiver{Format: "nginx_both"})
 
 	executionSteps := []struct {
 		name                      string
@@ -147,14 +151,16 @@ func TestProcessLogSources(t *testing.T) {
 		expectedWatchedContainers map[string]struct{} // map key: container ID
 	}{
 		{
-			name: "an nginx service in a container, and a service in a log-disabled container",
+			name: "an nginx service in a container, a service in a log-disabled container, and one opted out of shipping",
 			containers: []facts.Container{
 				ctrNgx1,
 				ctrDisabled,
+				ctrSendLogsOff,
 			},
 			services: []discovery.Service{
 				svcNginx,
 				svcDisabled,
+				svcSendLogsOff,
 			},
 			expectedLogSources: []logSource{
 				{
@@ -175,8 +181,9 @@ func TestProcessLogSources(t *testing.T) {
 			},
 			expectedWatchedServices: map[discovery.NameInstance]struct{}{
 				{Name: testServiceNginx, Instance: testContainerNginx1}: {},
-				// disabled-svc is skipped entirely: glouton.log_enable=false
-				// on its container vetoes it before it's ever marked watched.
+				// disabled-svc and sendlogsoff-svc are both skipped entirely: glouton.log_enable=false and
+				// glouton.send_logs=false on their respective containers veto them before either is ever
+				// marked watched.
 			},
 			expectedWatchedContainers: map[string]struct{}{
 				testContainerIDNgx1: {},

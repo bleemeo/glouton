@@ -55,7 +55,6 @@ require (
 	github.com/prometheus/procfs v0.22.0
 	github.com/prometheus/prometheus v0.314.0
 	github.com/robfig/cron/v3 v3.0.1
-	github.com/rs/cors v1.11.1
 	github.com/shirou/gopsutil/v4 v4.26.8
 	github.com/vishvananda/netlink v1.3.1
 	github.com/vmware/govmomi v0.56.0
@@ -92,6 +91,8 @@ require (
 	k8s.io/client-go v0.37.0
 	sigs.k8s.io/yaml v1.6.0
 )
+
+require github.com/rs/cors v1.11.1 // indirect
 
 require (
 	cel.dev/expr v0.25.3 // indirect

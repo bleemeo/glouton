@@ -442,10 +442,14 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, syncType types.SyncType,
 	}
 
 	if syncType == types.SyncTypeForceCacheRefresh {
+		s.l.Lock()
+
 		s.retryableMetricFailure[bleemeoTypes.FailureUnknown] = true
 		s.retryableMetricFailure[bleemeoTypes.FailureAllowList] = true
 		s.retryableMetricFailure[bleemeoTypes.FailureTooManyCustomMetrics] = true
 		s.retryableMetricFailure[bleemeoTypes.FailureTooManyStandardMetrics] = true
+
+		s.l.Unlock()
 	}
 
 	pendingMetricsUpdate := s.popPendingMetricsUpdate()
@@ -1072,7 +1076,10 @@ func (mr *metricRegisterer) doOnePass(ctx context.Context, currentList []glouton
 				registration.LabelsText = key
 
 				mr.failedRegistrationByKey[key] = registration
+
+				mr.s.l.Lock()
 				mr.s.retryableMetricFailure[registration.LastFailKind] = false
+				mr.s.l.Unlock()
 
 				mr.registerFailCount++
 				// Normally retry for them is correctly handled by mr.s.retryableMetricFailure
@@ -1473,8 +1480,13 @@ func (s *Synchronizer) metricDeactivate(ctx context.Context, apiClient types.Met
 
 		v.DeactivatedAt = s.now()
 		registeredMetrics[k] = v
+
+		s.l.Lock()
+
 		s.retryableMetricFailure[bleemeoTypes.FailureTooManyCustomMetrics] = true
 		s.retryableMetricFailure[bleemeoTypes.FailureTooManyStandardMetrics] = true
+
+		s.l.Unlock()
 
 		if len(s.option.Cache.MetricRegistrationsFail()) > 0 {
 			s.state.l.Lock()

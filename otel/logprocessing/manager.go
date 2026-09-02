@@ -237,14 +237,13 @@ func (man *Manager) ServiceTailedContainerIDs() map[string]bool {
 }
 
 // HandleLogsFromDynamicSources reconciles this package's service-path tails against the current
-// discovery. containersComplete says whether containers authoritatively enumerates every container that
-// exists; when false, a container missing from it keeps its persisted read offset (see removeOldSources
-// and logsource.ReceiverManager.UpdateContainers' own complete parameter for why that matters).
+// discovery. containersMayForgetAbsent says whether a container missing from containers may be treated as
+// permanently removed; otherwise it keeps its persisted read offset (see removeOldSources).
 func (man *Manager) HandleLogsFromDynamicSources(
 	ctx context.Context,
 	services []discovery.Service,
 	containers []facts.Container,
-	containersComplete bool,
+	containersMayForgetAbsent bool,
 ) {
 	// Computed without holding man.l: receiverManager's askProviders (itself called under its own lock,
 	// from RescanReceivers/UpdateContainers) calls back into man.l via WantSource/wrapWithFilter. Calling
@@ -260,7 +259,7 @@ func (man *Manager) HandleLogsFromDynamicSources(
 	man.l.Lock()
 	defer man.l.Unlock()
 
-	man.removeOldSources(ctx, services, containers, containersComplete)
+	man.removeOldSources(ctx, services, containers, containersMayForgetAbsent)
 
 	logSources := man.processLogSources(services, containers, shippedByReceivers)
 
@@ -350,6 +349,22 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 					ContainerID:   service.ContainerID,
 					ContainerName: service.ContainerName,
 					SkipReason:    "Container already matched by an explicit log.opentelemetry.receivers entry",
+				})
+
+				continue
+			}
+
+			// fallbackDefault true: absent the label, a service-discovered container ships as before --
+			// this only adds an explicit glouton.send_logs=false as a new way to opt one out.
+			if ctr, found := containersByID[service.ContainerID]; found && !logsource.ContainerSendLogs(ctr, true) {
+				logger.V(2).Printf("Ignoring logs of service %q, because its container's glouton.send_logs is false", service.Name)
+
+				man.skippedSource = append(man.skippedSource, sourceDiagnostic{
+					IsFromService: true,
+					ServiceKey:    key,
+					ContainerID:   service.ContainerID,
+					ContainerName: service.ContainerName,
+					SkipReason:    "Container excluded (glouton.send_logs=false)",
 				})
 
 				continue
@@ -488,13 +503,12 @@ func (man *Manager) setupProcessingForSource(ctx context.Context, logSource logS
 }
 
 // removeOldSources tears down the tails of services and containers that have disappeared.
-// containersComplete gates the permanent offset-forget on the container branch: see
-// HandleLogsFromDynamicSources.
+// containersMayForgetAbsent gates the permanent offset-forget on the container branch.
 func (man *Manager) removeOldSources(
 	ctx context.Context,
 	services []discovery.Service,
 	containers []facts.Container,
-	containersComplete bool,
+	containersMayForgetAbsent bool,
 ) {
 	watchedServices := slices.Collect(maps.Keys(man.watchedServices))
 	watchedContainers := slices.Collect(maps.Keys(man.watchedContainers))
@@ -552,11 +566,10 @@ func (man *Manager) removeOldSources(
 	}
 
 	if len(noLongerExistingContainers) > 0 {
-		// Offsets are forgotten only when this cycle's container list was complete: then the containers
-		// really are gone for good (not just restarted). Otherwise they may still exist and merely be
-		// absent from an incomplete enumeration, so their tails stop but their offsets survive -- a
-		// forget is permanent, and fileconsumer would then restart at end-of-file.
-		man.containerRecv.stopWatchingForContainers(ctx, noLongerExistingContainers, containersComplete)
+		// Otherwise they may still exist and merely be absent from an incomplete enumeration, so their
+		// tails stop but their offsets survive -- a forget is permanent, and fileconsumer would then
+		// restart at end-of-file.
+		man.containerRecv.stopWatchingForContainers(ctx, noLongerExistingContainers, containersMayForgetAbsent)
 
 		for _, ctrID := range noLongerExistingContainers {
 			delete(man.watchedContainers, ctrID)

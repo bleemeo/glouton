@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 
@@ -41,6 +42,10 @@ type Execution struct {
 	synchronizer     *Synchronizer
 	syncListStarted  bool
 	entities         []EntityExecution
+	// Requests whose deadline wasn't reached when this execution started, as they were then.
+	// dropFulfilledLaterRequests uses it to tell them apart from a request made since by
+	// another goroutine, which this execution isn't going to honor.
+	deferredSync map[types.EntityName]types.SyncRequest
 }
 
 type EntityExecution struct {
@@ -80,17 +85,34 @@ func (s *Synchronizer) newExecution(onlyEssential bool, isNewAgent bool) *Execut
 	s.l.Lock()
 	defer s.l.Unlock()
 
+	startedAt := s.now()
+
+	// A request whose deadline isn't reached yet is kept for a subsequent execution.
+	// dropFulfilledLaterRequests drops it if this execution synchronizes its entity anyway.
+	dueSync := make(map[types.EntityName]types.SyncType, len(s.forceSync))
+	pendingSync := make(map[types.EntityName]types.SyncRequest, len(s.forceSync))
+
+	for entityName, request := range s.forceSync {
+		if request.Deadline.After(startedAt) {
+			pendingSync[entityName] = request
+		} else {
+			dueSync[entityName] = request.Type
+		}
+	}
+
 	execution := &Execution{
 		synchronizer:        s,
 		client:              s.newClient(),
 		initialRequestCount: s.requestCounter.Load(),
-		startedAt:           s.now(),
+		startedAt:           startedAt,
 		onlyEssential:       onlyEssential,
 		isNewAgent:          isNewAgent,
-		entities:            s.getEntityExecution(s.forceSync, false),
+		entities:            s.getEntityExecution(dueSync, false),
+		// A copy: s.forceSync keeps being updated by the other goroutines.
+		deferredSync: maps.Clone(pendingSync),
 	}
 
-	s.forceSync = make(map[types.EntityName]types.SyncType, len(s.forceSync))
+	s.forceSync = pendingSync
 
 	return execution
 }
@@ -308,7 +330,23 @@ func (e *Execution) run(ctx context.Context) error {
 	}
 
 	e.checkLinkedSynchronization()
+	e.dropFulfilledLaterRequests()
 	e.syncListStarted = true
+
+	if !e.isLimitedExecution && e.hadWork() {
+		// Piggyback the periodic duplicated agent check on an execution that is going to call
+		// the API anyway, so that it never costs a request on its own.
+		if err := e.synchronizer.checkDuplicatedIfNeeded(ctx, e.client, e.startedAt, false); err != nil {
+			// The check either found a duplicate, and disabled the connector, or failed to reach
+			// the API. Fail every requested entity, like the check did when it ran on the first
+			// API call, so that their synchronization is retried later.
+			for idx := range e.entities {
+				if e.entities[idx].syncType != types.SyncTypeNone && e.entities[idx].err == nil {
+					e.entities[idx].err = err
+				}
+			}
+		}
+	}
 
 	e.synchronizersCall(ctx, e.entities, func(ctx context.Context, ee EntityExecution) EntityExecution {
 		if ee.syncType == types.SyncTypeNone {
@@ -380,6 +418,40 @@ func (e *Execution) run(ctx context.Context) error {
 	e.executePostRunCalls()
 
 	return errors.Join(errs...)
+}
+
+// dropFulfilledLaterRequests drops the pending requests whose deadline isn't reached yet, but
+// whose entity this execution is going to synchronize anyway. Those requests ask for a
+// synchronization *at the latest* at their deadline, so an earlier one fulfills them.
+func (e *Execution) dropFulfilledLaterRequests() {
+	if e.isLimitedExecution {
+		// A limited execution only runs a hand-picked list of entity synchronizers,
+		// possibly in maintenance or suspended mode. Don't let it fulfill anything.
+		return
+	}
+
+	e.synchronizer.l.Lock()
+	defer e.synchronizer.l.Unlock()
+
+	for _, row := range e.entities {
+		if row.syncType == types.SyncTypeNone {
+			continue
+		}
+
+		deferred, ok := e.deferredSync[row.entity.Name()]
+
+		// The sync types are ordered, a cache refresh doesn't get fulfilled by a normal sync.
+		if !ok || row.syncType < deferred.Type {
+			continue
+		}
+
+		// Only drop the request we deferred: another goroutine may have asked for more since
+		// this execution started, and that asks for a synchronization we aren't doing here.
+		current, ok := e.synchronizer.forceSync[row.entity.Name()]
+		if ok && current.Type == deferred.Type && current.Deadline.Equal(deferred.Deadline) {
+			delete(e.synchronizer.forceSync, row.entity.Name())
+		}
+	}
 }
 
 // executePostRunCalls runs any RequestXXX called on Execution (like RequestUpdateThresholds).
@@ -531,7 +603,12 @@ func (e *Execution) allForcedCacheRefresh() bool {
 }
 
 func (e *Execution) synchronizersCall(ctx context.Context, synchronizersExecution []EntityExecution, f func(context.Context, EntityExecution) EntityExecution) {
-	for idx, ee := range synchronizersExecution {
+	for idx := range synchronizersExecution {
+		// Take a pointer so that errors set below are written back into the
+		// slice instead of a loop-local copy (the copy would only be persisted
+		// through the f() write-back, which is skipped on every continue path).
+		ee := &synchronizersExecution[idx]
+
 		if ctx.Err() != nil {
 			return
 		}
@@ -575,7 +652,7 @@ func (e *Execution) synchronizersCall(ctx context.Context, synchronizersExecutio
 		}
 
 		if ee.synchronizer != nil {
-			e.entities[idx] = f(ctx, ee)
+			synchronizersExecution[idx] = f(ctx, *ee)
 		}
 	}
 }

@@ -480,6 +480,10 @@ type LocalUI struct {
 type Listener struct {
 	Address string `yaml:"address"`
 	Port    int    `yaml:"port"`
+	// AllowedHosts are the names accepted in the Host header of a request
+	// made by a web browser. IP addresses are always accepted. See
+	// api.browserGuard.
+	AllowedHosts []string `yaml:"allowed_hosts"`
 }
 
 type Service struct {

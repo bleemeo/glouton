@@ -89,6 +89,12 @@ func (labels containerLabels) resolveSendLogs(fallbackDefault bool) bool {
 	return fallbackDefault
 }
 
+// ContainerSendLogs resolves ctr's own glouton.send_logs decision (see resolveSendLogs). Exported for
+// otel/logprocessing's service-discovered container tail, which otherwise never consults this label.
+func ContainerSendLogs(ctr facts.Container, fallbackDefault bool) bool {
+	return parseContainerLabels(ctr).resolveSendLogs(fallbackDefault)
+}
+
 // isExcluded reports this container's own veto: glouton.log_enable=false.
 func (labels containerLabels) isExcluded() bool {
 	return labels.LogEnable != nil && !*labels.LogEnable

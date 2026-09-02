@@ -44,8 +44,8 @@ func (f *fakeRuntime) Containers(context.Context, time.Duration, bool) ([]facts.
 	return f.containers, f.err
 }
 
-func (f *fakeRuntime) EnumerateContainers(context.Context, time.Duration, bool) ([]facts.Container, bool, error) {
-	return f.containers, f.complete, f.err
+func (f *fakeRuntime) EnumerateContainers(context.Context, time.Duration, bool) ([]facts.Container, bool, bool, error) {
+	return f.containers, f.complete, f.complete, f.err
 }
 
 func (f *fakeRuntime) CachedContainer(string) (facts.Container, bool) { panic("not implemented") }
@@ -106,11 +106,12 @@ func TestRuntimeEnumerateContainersCompleteness(t *testing.T) {
 	worked := time.Now().Add(-time.Minute)
 
 	testCases := []struct {
-		name         string
-		runtimes     []crTypes.RuntimeInterface
-		wantComplete bool
-		wantCount    int
-		wantErr      bool
+		name          string
+		runtimes      []crTypes.RuntimeInterface
+		wantComplete  bool
+		wantMayForget bool
+		wantCount     int
+		wantErr       bool
 	}{
 		{
 			name: "every runtime enumerated",
@@ -118,8 +119,9 @@ func TestRuntimeEnumerateContainersCompleteness(t *testing.T) {
 				&fakeRuntime{containers: []facts.Container{ctrA}, complete: true, lastUpdate: worked},
 				&fakeRuntime{containers: []facts.Container{ctrB}, complete: true, lastUpdate: worked},
 			},
-			wantComplete: true,
-			wantCount:    2,
+			wantComplete:  true,
+			wantMayForget: true,
+			wantCount:     2,
 		},
 		{
 			// The reported failure mode: one runtime that used to work is down while the other works, so
@@ -129,8 +131,9 @@ func TestRuntimeEnumerateContainersCompleteness(t *testing.T) {
 				&fakeRuntime{containers: []facts.Container{ctrA}, complete: true, lastUpdate: worked},
 				&fakeRuntime{err: errRuntimeDown, lastUpdate: worked},
 			},
-			wantComplete: false,
-			wantCount:    1,
+			wantComplete:  false,
+			wantMayForget: false,
+			wantCount:     1,
 		},
 		{
 			// Worse: a runtime can swallow its own error and report no error AND no containers, so nothing
@@ -140,34 +143,34 @@ func TestRuntimeEnumerateContainersCompleteness(t *testing.T) {
 				&fakeRuntime{containers: []facts.Container{ctrA}, complete: true, lastUpdate: worked},
 				&fakeRuntime{complete: false, lastUpdate: worked},
 			},
-			wantComplete: false,
-			wantCount:    1,
+			wantComplete:  false,
+			wantMayForget: false,
+			wantCount:     1,
 		},
 		{
-			// The other half of the contract, and the common case in production: agent.go always configures
-			// both Docker and containerd, so on a host running only one of them the other fails every
-			// single cycle. Counting it would make complete false for the process's whole life, which
-			// disables every offset-forget path downstream -- and it can hide nothing, having never
-			// enumerated a container for anyone to be tracking.
+			// The common case in production: agent.go always configures both Docker and containerd, so on
+			// a host running only one of them the other never enumerates. The list is genuinely incomplete
+			// -- but that runtime can hide nothing, having never enumerated a container for anyone to be
+			// tracking, so it's still safe to forget an absent one.
 			name: "the second runtime has never worked, the other returned containers",
 			runtimes: []crTypes.RuntimeInterface{
 				&fakeRuntime{containers: []facts.Container{ctrA}, complete: true, lastUpdate: worked},
 				&fakeRuntime{complete: false},
 			},
-			wantComplete: true,
-			wantCount:    1,
+			wantComplete:  false,
+			wantMayForget: true,
+			wantCount:     1,
 		},
 		{
-			// Same, for a runtime that reports its failure instead of swallowing it: the error still
-			// surfaces (here globalErr stays nil only because the other runtime returned containers), it
-			// just doesn't hold the merged list back.
+			// Same divergence, for a runtime that reports its failure instead of swallowing it.
 			name: "the runtime that has never worked errored, the other returned containers",
 			runtimes: []crTypes.RuntimeInterface{
 				&fakeRuntime{containers: []facts.Container{ctrA}, complete: true, lastUpdate: worked},
 				&fakeRuntime{err: errRuntimeDown},
 			},
-			wantComplete: true,
-			wantCount:    1,
+			wantComplete:  false,
+			wantMayForget: true,
+			wantCount:     1,
 		},
 		{
 			// A genuinely container-less host: complete, so a caller may drop what it was tracking.
@@ -176,8 +179,9 @@ func TestRuntimeEnumerateContainersCompleteness(t *testing.T) {
 				&fakeRuntime{complete: true, lastUpdate: worked},
 				&fakeRuntime{complete: true, lastUpdate: worked},
 			},
-			wantComplete: true,
-			wantCount:    0,
+			wantComplete:  true,
+			wantMayForget: true,
+			wantCount:     0,
 		},
 		{
 			name: "every working runtime errored",
@@ -185,23 +189,24 @@ func TestRuntimeEnumerateContainersCompleteness(t *testing.T) {
 				&fakeRuntime{err: errRuntimeDown, lastUpdate: worked},
 				&fakeRuntime{err: errRuntimeDown, lastUpdate: worked},
 			},
-			wantComplete: false,
-			wantCount:    0,
-			wantErr:      true,
+			wantComplete:  false,
+			wantMayForget: false,
+			wantCount:     0,
+			wantErr:       true,
 		},
 		{
 			// The shape a host with no container runtime at all actually produces: docker and containerd
 			// both swallow their error until they have worked once, so nothing here reports a failure. With
-			// every runtime skipped as never-worked, complete would be vacuously true next to an empty list
-			// and a nil error -- which agent.go's call site would take as "authoritatively zero containers
-			// exist" -- so no runtime having ever worked is reported as incomplete instead.
+			// every runtime skipped as never-worked, mayForgetAbsent would otherwise come back vacuously
+			// true next to an empty list and a nil error -- so it's false whenever nothing ever worked.
 			name: "no runtime has ever worked, and each swallowed its error",
 			runtimes: []crTypes.RuntimeInterface{
 				&fakeRuntime{complete: false},
 				&fakeRuntime{complete: false},
 			},
-			wantComplete: false,
-			wantCount:    0,
+			wantComplete:  false,
+			wantMayForget: false,
+			wantCount:     0,
 		},
 		{
 			// Same, for runtimes that do report their failure.
@@ -210,9 +215,10 @@ func TestRuntimeEnumerateContainersCompleteness(t *testing.T) {
 				&fakeRuntime{err: errRuntimeDown},
 				&fakeRuntime{err: errRuntimeDown},
 			},
-			wantComplete: false,
-			wantCount:    0,
-			wantErr:      true,
+			wantComplete:  false,
+			wantMayForget: false,
+			wantCount:     0,
+			wantErr:       true,
 		},
 	}
 
@@ -225,13 +231,17 @@ func TestRuntimeEnumerateContainersCompleteness(t *testing.T) {
 				ContainerIgnored: func(facts.Container) bool { return false },
 			}
 
-			containers, complete, err := runtime.EnumerateContainers(t.Context(), time.Minute, false)
+			containers, complete, mayForget, err := runtime.EnumerateContainers(t.Context(), time.Minute, false)
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("EnumerateContainers() error = %v, wantErr = %v", err, tc.wantErr)
 			}
 
 			if len(containers) != tc.wantCount {
 				t.Errorf("EnumerateContainers() returned %d container(s), want %d", len(containers), tc.wantCount)
+			}
+
+			if mayForget != tc.wantMayForget {
+				t.Errorf("EnumerateContainers() mayForgetAbsent = %v, want %v", mayForget, tc.wantMayForget)
 			}
 
 			if complete != tc.wantComplete {

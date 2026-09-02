@@ -1060,12 +1060,12 @@ type fakePodRuntime struct {
 	container facts.Container
 }
 
-func (f fakePodRuntime) EnumerateContainers(context.Context, time.Duration, bool) ([]facts.Container, bool, error) {
-	return []facts.Container{f.container}, true, nil
+func (f fakePodRuntime) EnumerateContainers(context.Context, time.Duration, bool) ([]facts.Container, bool, bool, error) {
+	return []facts.Container{f.container}, true, true, nil
 }
 
 func (f fakePodRuntime) Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) ([]facts.Container, error) {
-	containers, _, err := f.EnumerateContainers(ctx, maxAge, includeIgnored)
+	containers, _, _, err := f.EnumerateContainers(ctx, maxAge, includeIgnored)
 
 	return containers, err
 }
@@ -1118,15 +1118,15 @@ func (failingPODsClient) GetPODs(context.Context, string) ([]corev1.Pod, error) 
 	return nil, errPODListFailed
 }
 
-// TestEnumerateContainersPODResolution checks when an unresolved POD reference makes the returned list
-// incomplete. It matters because the container is kept in the list, but its enable/ignore rules resolve
-// through the POD's annotations, so on an otherwise-disabled fleet gated by glouton.enable annotations it is
-// dropped from the list instead: absent from a list still claiming to be complete, it looks destroyed to
-// callers that act irreversibly on that, and they forget its persisted log read offset for good.
+// TestEnumerateContainersPODResolution checks when an unresolved POD reference turns mayForgetAbsent false.
+// It matters because the container is kept in the list, but its enable/ignore rules resolve through the
+// POD's annotations, so on an otherwise-disabled fleet gated by glouton.enable annotations it is dropped
+// from the list instead: absent from a list still safe to forget from, it looks destroyed to callers that
+// act irreversibly on that, and they forget its persisted log read offset for good.
 //
 // Only a POD listing that actually failed counts. A listing that succeeded is authoritative, so a POD it
 // doesn't have really is gone, along with the container referencing it -- and those leftovers linger on a
-// node with POD churn, where calling them incomplete would keep the offset-forget path disabled for good.
+// node with POD churn, where treating them the same way would keep the offset-forget path disabled for good.
 func TestEnumerateContainersPODResolution(t *testing.T) {
 	mockClient, err := newKubernetesMock("testdata/with-docker-v1.20.0")
 	if err != nil {
@@ -1147,61 +1147,61 @@ func TestEnumerateContainersPODResolution(t *testing.T) {
 	const unknownPodUID = "5c2b8b1a-0000-0000-0000-nosuchpoduid"
 
 	testCases := []struct {
-		name         string
-		podUID       string
-		failPODs     bool
-		filter       facts.ContainerFilter
-		wantComplete bool
-		wantListed   bool
+		name          string
+		podUID        string
+		failPODs      bool
+		filter        facts.ContainerFilter
+		wantMayForget bool
+		wantListed    bool
 	}{
 		{
-			name:         "POD resolves",
-			podUID:       knownPodUID,
-			wantComplete: true,
-			wantListed:   true,
+			name:          "POD resolves",
+			podUID:        knownPodUID,
+			wantMayForget: true,
+			wantListed:    true,
 		},
 		{
 			// The POD listing worked and simply doesn't have this POD: it was deleted (a finished Job's,
 			// say) and the container referencing it is a leftover kubelet has yet to reclaim. Genuinely
-			// gone, so the list stays complete and callers may act on its absence.
-			name:         "POD deleted, listing succeeded",
-			podUID:       unknownPodUID,
-			wantComplete: true,
-			wantListed:   true,
+			// gone, so callers may act on its absence.
+			name:          "POD deleted, listing succeeded",
+			podUID:        unknownPodUID,
+			wantMayForget: true,
+			wantListed:    true,
 		},
 		{
 			// Same leftover, under annotation gating: it does leave the list, and that is correct here.
-			name:         "POD deleted, and enable comes from annotations",
-			podUID:       unknownPodUID,
-			filter:       facts.ContainerFilter{DisabledByDefault: true},
-			wantComplete: true,
-			wantListed:   false,
+			name:          "POD deleted, and enable comes from annotations",
+			podUID:        unknownPodUID,
+			filter:        facts.ContainerFilter{DisabledByDefault: true},
+			wantMayForget: true,
+			wantListed:    false,
 		},
 		{
 			// The POD listing failed, so nothing can be concluded about this container's POD.
-			name:         "POD listing failed",
-			podUID:       unknownPodUID,
-			failPODs:     true,
-			wantComplete: false,
-			wantListed:   true,
+			name:          "POD listing failed",
+			podUID:        unknownPodUID,
+			failPODs:      true,
+			wantMayForget: false,
+			wantListed:    true,
 		},
 		{
 			// The reported failure mode: the listing failed, so the annotations that would enable this
-			// container are unavailable and it silently leaves the list. Must not read as complete.
-			name:         "POD listing failed, and enable comes from annotations",
-			podUID:       unknownPodUID,
-			failPODs:     true,
-			filter:       facts.ContainerFilter{DisabledByDefault: true},
-			wantComplete: false,
-			wantListed:   false,
+			// container are unavailable and it silently leaves the list. Must not read as safe to forget.
+			name:          "POD listing failed, and enable comes from annotations",
+			podUID:        unknownPodUID,
+			failPODs:      true,
+			filter:        facts.ContainerFilter{DisabledByDefault: true},
+			wantMayForget: false,
+			wantListed:    false,
 		},
 		{
 			// A container that never claimed a POD needs none to be classified, so its own absence from
-			// the POD listing says nothing about the list's completeness.
-			name:         "container has no POD",
-			podUID:       "",
-			wantComplete: true,
-			wantListed:   true,
+			// the POD listing says nothing about whether an absent container may be forgotten.
+			name:          "container has no POD",
+			podUID:        "",
+			wantMayForget: true,
+			wantListed:    true,
 		},
 	}
 
@@ -1233,13 +1233,19 @@ func TestEnumerateContainersPODResolution(t *testing.T) {
 				IsContainerIgnored: tc.filter.ContainerIgnored,
 			}
 
-			containers, complete, err := k.EnumerateContainers(t.Context(), 0, false)
+			containers, complete, mayForget, err := k.EnumerateContainers(t.Context(), 0, false)
 			if err != nil {
 				t.Fatalf("EnumerateContainers() error = %v", err)
 			}
 
-			if complete != tc.wantComplete {
-				t.Errorf("EnumerateContainers() complete = %v, want %v", complete, tc.wantComplete)
+			// complete is a strict passthrough of the wrapped runtime's own value here (fakePodRuntime
+			// always returns true): a POD listing failure never makes the container list itself incomplete.
+			if !complete {
+				t.Error("EnumerateContainers() complete = false, want true")
+			}
+
+			if mayForget != tc.wantMayForget {
+				t.Errorf("EnumerateContainers() mayForgetAbsent = %v, want %v", mayForget, tc.wantMayForget)
 			}
 
 			if listed := len(containers) == 1; listed != tc.wantListed {

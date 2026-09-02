@@ -1,7 +1,12 @@
-// Helpers for digesting prom matrix responses into shapes that
-// Recharts and the KPI cards can consume directly.
+// Helpers for digesting prom responses into shapes that Recharts and
+// the KPI cards can consume directly — matrices for the charts,
+// vectors for the single-value cards.
 
-import type { PromQLResponse, PromQLSeries } from "../api/types";
+import type {
+  PromQLInstantResponse,
+  PromQLResponse,
+  PromQLSeries,
+} from "../api/types";
 
 export type Sample = { t: number; v: number };
 
@@ -84,6 +89,24 @@ export function lastValue(
   if (samples.length === 0) return null;
 
   return samples[samples.length - 1].v;
+}
+
+/**
+ * scalarValue reads the single number out of an instant-query
+ * response. Instant queries return a vector, one value per series, so
+ * the matrix-shaped helpers above don't apply — this is the vector
+ * counterpart of lastValue.
+ */
+export function scalarValue(
+  response: PromQLInstantResponse | null | undefined,
+): number | null {
+  const sample = response?.data?.result?.[0];
+
+  if (!sample) return null;
+
+  const v = parseFloat(sample.value[1]);
+
+  return isFinite(v) ? v : null;
 }
 
 /**

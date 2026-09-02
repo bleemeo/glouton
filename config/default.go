@@ -448,8 +448,9 @@ func DefaultConfig() Config { //nolint:maintidx
 				DebugEnable: false,
 			},
 			Listener: Listener{
-				Address: DefaultLoopback,
-				Port:    8015,
+				Address:      DefaultLoopback,
+				Port:         8015,
+				AllowedHosts: []string{"localhost"},
 			},
 			LocalUI: LocalUI{
 				Enable: true,
