@@ -60,16 +60,21 @@ func DefaultPaths() []string {
 	}
 }
 
-// mapKeys returns the config keys that hold map values.
-// This must be updated when a map value is added to the config.
+// mapKeys returns the config keys that hold map values, i.e. the keys allKeys/isMapKey (loader.go) must
+// treat as one nested map rather than as flat "key.sub.field" entries when merging file and default config.
+// This must be updated when a map value is added to the config, including for every prefix key used by
+// dynamicEnvVarList (config.go) -- see Test_dynamicEnvVarListKeysAreInMapKeys.
 func mapKeys() []string {
 	return []string{
 		keyThresholds,
 		"metric.softstatus_period",
+		"opentelemetry.listeners",
 		"log.opentelemetry.receivers",
 		"log.opentelemetry.global_filters",
 		"log.opentelemetry.known_log_filters",
 		"log.opentelemetry.container_filter",
+		"log.opentelemetry.container_format",
+		"log.metrics_rules",
 	}
 }
 
@@ -314,14 +319,9 @@ func DefaultConfig() Config { //nolint:maintidx
 			KubeConfig:          "",
 		},
 		Log: Log{
-			// bleemeo-agent-logs overrides the URL and set an empty host root prefix.
-			// We don't set an empty host root by default and change it in the Glouton docker image to
-			// support the case where Glouton is installed as a package and Fluent Bit is in a container.
-			FluentBitURL:   "",
-			HostRootPrefix: "/hostroot",
-			Inputs:         []LogInput{},
 			OpenTelemetry: OpenTelemetry{
-				Enable: true,
+				ShippingEnable:           true,
+				ReceiversDefaultSendLogs: true,
 				AutoDiscovery: AutoDiscovery{
 					AllEnable:                 false,
 					JournaldEnable:            false,
@@ -329,23 +329,15 @@ func DefaultConfig() Config { //nolint:maintidx
 					AuditdEnable:              false,
 					ContainerAndServiceEnable: false,
 				},
-				GRPC: EnableListener{
-					Enable:  false,
-					Address: DefaultLocalhost,
-					Port:    4317,
-				},
-				HTTP: EnableListener{
-					Enable:  false,
-					Address: DefaultLocalhost,
-					Port:    4318,
-				},
-				KnownLogFormats: DefaultKnownLogFormats(),
-				Receivers:       map[string]OTLPReceiver{},
-				ContainerFormat: map[string]string{},
-				GlobalFilters:   OTELFilters{},
-				KnownLogFilters: map[string]OTELFilters{},
-				ContainerFilter: map[string]string{},
+				KnownLogFormats:  DefaultKnownLogFormats(),
+				Receivers:        map[string]LogReceiver{},
+				ContainerFormat:  map[string]string{},
+				GlobalFilters:    OTELFilters{},
+				KnownLogFilters:  map[string]OTELFilters{},
+				ContainerFilter:  map[string]string{},
+				ContainerExclude: []ContainerExcludeRule{},
 			},
+			MetricsRules: map[string][]LogMetricEntry{},
 		},
 		Logging: Logging{
 			Buffer: LoggingBuffer{
@@ -413,6 +405,11 @@ func DefaultConfig() Config { //nolint:maintidx
 			Enable:  false,
 			BinPath: "/usr/bin/nvidia-smi",
 			Timeout: 5,
+		},
+		// No network receiver is pre-declared; nothing binds until the user
+		// adds one under the opentelemetry.listeners config key (this field's yaml name).
+		OpenTelemetry: OpenTelemetryConfig{
+			NetworkListeners: map[string]NetworkListener{},
 		},
 		ServiceAbsentDeactivationDelay: 7 * 24 * time.Hour,
 		ServiceIgnore:                  []NameInstance{},

@@ -55,7 +55,6 @@ const (
 	testContainerNginx1    = "Nginx-1"
 	testContainerIDNgx1    = "ngx-1"
 	testServiceApacheHTTPD = "apache"
-	testContainerApp1      = "app-1"
 
 	testResourceKey      = "resource.key"
 	testProp             = "prop"
@@ -75,8 +74,6 @@ const (
 	testAttrHostName     = "host.name"
 	testHostname         = "myhostname"
 	testKeyAttrValue     = "key attribute value"
-	testOpID1            = "op-1"
-	testOpID2            = "op-2"
 	testRegexParser      = "regex_parser"
 	testRegexTimePattern = `^(?P<time>\[.*?\])$`
 	testTimeParser       = "time_parser"
@@ -89,4 +86,13 @@ const (
 	testOnErrorSendQuiet = "send_quiet"
 	testFollowName       = "--follow=name"
 	testRegexp           = "regexp"
+
+	// Container attribute keys, matching logsource.ContainerAttributes.AsMap's output.
+	attrContainerID        = "container.id"
+	attrContainerImageName = "container.image.name"
+	attrContainerImageTags = "container.image.tags"
+	attrContainerName      = "container.name"
+	attrContainerRuntime   = "container.runtime"
+	attrContainerNamespace = "k8s.namespace.name"
+	attrContainerPod       = "k8s.pod.name"
 )

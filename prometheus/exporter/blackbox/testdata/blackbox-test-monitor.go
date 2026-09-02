@@ -75,7 +75,7 @@ func main() {
 			return
 		}
 
-		points = filter.FilterPoints(points, false)
+		points = filter.FilterPoints(points)
 	}
 
 	fmt.Println("")

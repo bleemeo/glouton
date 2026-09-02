@@ -55,7 +55,6 @@ import (
 	"github.com/bleemeo/glouton/facts/container-runtime/kubernetes"
 	"github.com/bleemeo/glouton/facts/container-runtime/merge"
 	"github.com/bleemeo/glouton/facts/container-runtime/veth"
-	"github.com/bleemeo/glouton/fluentbit"
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/disk"
 	"github.com/bleemeo/glouton/inputs/docker"
@@ -71,14 +70,15 @@ import (
 	"github.com/bleemeo/glouton/mqtt"
 	"github.com/bleemeo/glouton/mqtt/client"
 	"github.com/bleemeo/glouton/nrpe"
+	"github.com/bleemeo/glouton/otel/logmetrics"
 	"github.com/bleemeo/glouton/otel/logprocessing"
+	"github.com/bleemeo/glouton/otel/logsource"
 	"github.com/bleemeo/glouton/prometheus/exporter/blackbox"
 	"github.com/bleemeo/glouton/prometheus/exporter/ipmi"
 	"github.com/bleemeo/glouton/prometheus/exporter/snmp"
 	"github.com/bleemeo/glouton/prometheus/exporter/ssacli"
 	"github.com/bleemeo/glouton/prometheus/process"
 	"github.com/bleemeo/glouton/prometheus/registry"
-	"github.com/bleemeo/glouton/prometheus/rules"
 	"github.com/bleemeo/glouton/store"
 	"github.com/bleemeo/glouton/task"
 	"github.com/bleemeo/glouton/telemetry"
@@ -160,14 +160,14 @@ type agent struct {
 	promFilter             *metricfilter.Filter
 	mergeMetricFilter      *metricfilter.Filter
 	monitorManager         *blackbox.RegisterManager
-	rulesManager           *rules.Manager
 	reloadState            ReloadState
 	vethProvider           *veth.Provider
 	mqtt                   *mqtt.MQTT
 	pahoLogWrapper         *client.LogWrapper
-	fluentbitManager       *fluentbit.Manager
 	vSphereManager         *vsphere.Manager
 	logProcessManager      *logprocessing.Manager
+	logMetricsManager      *logmetrics.Manager
+	receiverManager        *logsource.ReceiverManager
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -645,14 +645,19 @@ func (a *agent) updateThresholds(thresholds map[string]threshold.Threshold, firs
 func (a *agent) rebuildDynamicMetricAllowDenyList(services []discovery.Service) error {
 	errs := make([]error, 0, 2)
 
+	var logMetricNames []string
+	if a.logMetricsManager != nil {
+		logMetricNames = a.logMetricsManager.MetricNames()
+	}
+
 	errs = append(
 		errs,
-		a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), a.rulesManager.MetricNames()),
+		a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), logMetricNames),
 	)
 
 	errs = append(
 		errs,
-		a.promFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), a.rulesManager.MetricNames()),
+		a.promFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), logMetricNames),
 	)
 
 	a.mergeMetricFilter.MergeInPlace(a.metricFilter, a.promFilter)
@@ -789,7 +794,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	bleemeoFilteredStore := store.NewFilteredStore(
 		a.store,
 		func(m []types.MetricPoint) []types.MetricPoint {
-			return bleemeoFilter.FilterPoints(m, false)
+			return bleemeoFilter.FilterPoints(m)
 		},
 		bleemeoFilter.FilterMetrics,
 	)
@@ -956,9 +961,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 
 	a.dynamicScrapper = &promexporter.DynamicScrapper{
-		Registry:        a.gathererRegistry,
-		DynamicJobName:  "discovered-exporters",
-		FluentBitInputs: a.config.Log.Inputs,
+		Registry:       a.gathererRegistry,
+		DynamicJobName: "discovered-exporters",
 	}
 
 	if a.config.Blackbox.Enable {
@@ -1055,12 +1059,36 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		tasks = append(tasks, taskInfo{a.jmx.Run, "jmxtrans"})
 	}
 
-	baseRules := fluentbit.PromQLRulesFromInputs(a.config.Log.Inputs)
-	a.rulesManager = rules.NewManager(ctx, a.store, baseRules)
-
 	a.vSphereManager = vsphere.NewManager()
 
-	a.metricFilter.UpdateRulesMatchers(a.rulesManager.InputMetricMatchers())
+	// receiverManager owns every log receiver (file, container, network) and fans
+	// records out to registered sinks. Sinks must call RegisterSinkProvider before
+	// the first RescanReceivers/UpdateContainers/NetworkWants call below.
+	a.receiverManager, err = logsource.NewReceiverManager(a.config.Log.OpenTelemetry, a.hostRootPath, a.state, a.commandRunner)
+	if err != nil {
+		logger.Printf("unable to setup log receivers: %v", err)
+	}
+
+	// Only set up when receiverManager exists: it's the sole source of the sources
+	// logMetricsManager would ever count, so without it the manager could run forever
+	// with nothing to do.
+	if a.receiverManager != nil {
+		a.logMetricsManager = logmetrics.New(a.config.Log.OpenTelemetry, a.config.Log.MetricsRules)
+		tasks = append(tasks, taskInfo{a.logMetricsManager.Run, "Log-to-metric manager"})
+
+		a.receiverManager.RegisterSinkProvider(a.logMetricsManager)
+
+		_, err = a.gathererRegistry.RegisterAppenderCallback(
+			registry.RegistrationOption{
+				Description: "log-to-metric",
+				JitterSeed:  baseJitterPlus,
+			},
+			registry.AppenderFunc(a.logMetricsManager.EmitMetrics),
+		)
+		if err != nil {
+			logger.Printf("unable to add log-to-metric metrics: %v", err)
+		}
+	}
 
 	if a.config.Bleemeo.Enable {
 		scaperName := a.config.Blackbox.ScraperName
@@ -1112,7 +1140,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.bleemeoConnector = connector
 		a.l.Unlock()
 
-		if a.config.Log.OpenTelemetry.Enable {
+		if a.config.Log.OpenTelemetry.ShippingEnable && a.receiverManager != nil {
 			a.checkSudoRSForLogs(ctx)
 
 			a.logProcessManager, err = logprocessing.New(
@@ -1125,6 +1153,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 				connector.PushLogs,
 				connector.ShouldApplyLogBackPressure,
 				a.addWarnings,
+				a.receiverManager,
 			)
 			if err != nil {
 				logger.Printf("unable to setup log processing: %v", err)
@@ -1149,6 +1178,47 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		if err != nil {
 			logger.Printf("unable to add bleemeo connector metrics: %v", err)
 		}
+	}
+
+	if a.receiverManager != nil {
+		// Resolve include-pattern (file) receivers now; container and network
+		// receivers get resolved by UpdateContainers below and on later discovery events.
+		if err := a.receiverManager.RescanReceivers(ctx); err != nil {
+			logger.V(1).Printf("failed to resolve some log receivers: %v", err)
+		}
+
+		// Log-shipping and log-to-metric share a single OTLP listener when they name
+		// the same opentelemetry.listeners entry (see logsource.PlanSharedNetworkListeners).
+		// Every name a receiver references must be defined there explicitly -- there's no
+		// implicit/default listener to fall back to.
+		plannedListeners, listenerWarnings := logsource.PlanSharedNetworkListeners(a.config.OpenTelemetry.NetworkListeners, a.receiverManager.NetworkWants(ctx))
+		a.addWarnings(listenerWarnings...)
+
+		for _, planned := range plannedListeners {
+			recv, err := logsource.SetupOTLPNetworkListener(
+				ctx,
+				logsource.NewTelemetrySettings(),
+				planned.Protocols,
+				planned.Sink,
+				"shared-otlp-receiver-"+planned.Name,
+			)
+			if err != nil {
+				a.addWarnings(fmt.Errorf("unable to start OpenTelemetry network receiver %q: %w", planned.Name, err))
+
+				continue
+			}
+
+			tasks = append(tasks, taskInfo{
+				func(ctx context.Context) error {
+					<-ctx.Done()
+
+					return recv.Shutdown(context.Background())
+				},
+				fmt.Sprintf("OpenTelemetry network receiver (%s)", planned.Name),
+			})
+		}
+
+		tasks = append(tasks, taskInfo{a.runReceiverManager, "Log receiver manager"})
 	}
 
 	a.FireTrigger(true, true, false, false, false)
@@ -1214,18 +1284,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		logger.Printf("unable to add miscAppenderMinute metrics: %v", err)
 	}
 
-	_, err = a.gathererRegistry.RegisterAppenderCallback(
-		registry.RegistrationOption{
-			Description:        "rulesManager",
-			JitterSeed:         baseJitterPlus,
-			NoLabelsAlteration: true,
-		},
-		a.rulesManager,
-	)
-	if err != nil {
-		logger.Printf("unable to add recording rules metrics: %v", err)
-	}
-
 	if a.config.Agent.ProcessExporter.Enable {
 		processSource.RegisterExporter(ctx, a.gathererRegistry, psFact.AllProcs, dynamicDiscovery, metricsIgnored, serviceIgnored)
 	}
@@ -1287,20 +1345,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	if !reflect.DeepEqual(a.config.DiskMonitor, config.DefaultConfig().DiskMonitor) && len(a.config.DiskIgnore) > 0 {
 		logger.Printf("Warning: both \"disk_monitor\" and \"disk_ignore\" are set. Only \"disk_ignore\" will be used")
-	}
-
-	if len(a.config.Log.Inputs) > 0 {
-		a.fluentbitManager, warnings = fluentbit.New(a.config.Log, a.gathererRegistry, a.containerRuntime, a.commandRunner)
-		if warnings != nil {
-			a.addWarnings(warnings...)
-		}
-
-		if a.fluentbitManager != nil {
-			tasks = append(tasks, taskInfo{
-				a.fluentbitManager.Run,
-				"Fluent Bit manager",
-			})
-		}
 	}
 
 	a.vethProvider = &veth.Provider{
@@ -1365,7 +1409,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		promFilteredStore := store.NewFilteredStore(
 			a.store,
 			func(m []types.MetricPoint) []types.MetricPoint {
-				return promFilter.FilterPoints(m, false)
+				return promFilter.FilterPoints(m)
 			},
 			promFilter.FilterMetrics,
 		)
@@ -2062,44 +2106,82 @@ func (a *agent) updatedDiscovery(ctx context.Context, services []discovery.Servi
 		}
 	}
 
-	err := a.rebuildDynamicMetricAllowDenyList(services)
-	if err != nil {
-		logger.V(2).Printf("Error during dynamic Filter rebuild: %v", err)
-	}
-
-	if a.logProcessManager != nil {
-		containers, err := a.containerRuntime.Containers(ctx, time.Hour, false)
+	if a.logProcessManager != nil || a.receiverManager != nil {
+		containers, _, containersMayForgetAbsent, err := a.containerRuntime.EnumerateContainers(ctx, time.Hour, false)
 		if err != nil {
+			// Must not fall through with containers == nil below: both UpdateContainers and
+			// HandleLogsFromDynamicSources treat an empty/nil list as "every previously-tracked
+			// container is gone", which forgets their persisted read offsets for good (see
+			// ReceiverManager.updateLabelContainers/stopUnwantedContainerTails and
+			// logprocessing.Manager.removeOldSources) -- on a transient error that's a real, permanent
+			// loss of file position (fileconsumer's StartAt defaults to "end", not "beginning"), not
+			// just a delayed update. Skip this cycle instead and retry on the next one, like the
+			// dynamicScrapper.Update call above already does.
 			logger.V(1).Printf("Failed to retrieve containers: %v", err)
-		}
-
-		var (
-			logServices   []discovery.Service
-			logContainers []facts.Container
-		)
-
-		if a.config.Log.OpenTelemetry.AutoDiscovery.ContainerAndServiceEnable {
-			logServices = services
-			logContainers = containers
 		} else {
-			for _, ctr := range containers {
-				logEnableStr, found := facts.LabelsAndAnnotations(ctr)["glouton.log_enable"]
-				if found {
-					logEnable, err := strconv.ParseBool(strings.ToLower(logEnableStr))
-					if err != nil {
-						logger.V(1).Printf("Failed to parse value of 'glouton.log_enable' for container %s (%s): %v", ctr.ContainerName(), ctr.ID(), err)
+			// logProcessManager must run first, so that by the time UpdateContainers below asks it
+			// (through WantSource) whether it wants a container's glouton.*-label log source, its own
+			// service-path tails for this cycle already exist and it can decline the ones it would
+			// otherwise ship twice. logprocessing.Manager separately consults
+			// receiverManager.ContainerIDsShippedByReceivers on the way in, so an explicit
+			// container_name/container_selectors receiver still wins over service auto-discovery.
+			var serviceTailed map[string]bool
 
-						continue
-					}
-
-					if logEnable {
-						logContainers = append(logContainers, ctr)
-					}
+			if a.logProcessManager != nil {
+				// Per-service-type log format auto-detection still depends on
+				// auto_discovery.container_and_service_enable, as before.
+				var logServices []discovery.Service
+				if a.config.Log.OpenTelemetry.AutoDiscovery.ContainerAndServiceEnable {
+					logServices = services
 				}
+
+				a.logProcessManager.HandleLogsFromDynamicSources(ctx, logServices, containers, containersMayForgetAbsent)
+				serviceTailed = a.logProcessManager.ServiceTailedContainerIDs()
+			}
+
+			// receiverManager resolves container_name/container_selectors matches and
+			// glouton.* label opt-ins itself, so it needs the full container list.
+			if a.receiverManager != nil {
+				a.receiverManager.UpdateContainers(ctx, containers, serviceTailed, containersMayForgetAbsent)
 			}
 		}
+	}
 
-		a.logProcessManager.HandleLogsFromDynamicSources(ctx, logServices, logContainers)
+	// Rebuilt last, after HandleLogsFromDynamicSources/UpdateContainers above: those are what first
+	// declare a newly-discovered container-label log-metric's names into logMetricsManager, and this
+	// list gates every sample by name. Rebuilding before them would filter out a brand new
+	// glouton.log_metrics container's metrics under a restrictive metric.allow_metrics for one whole
+	// discovery cycle.
+	if err := a.rebuildDynamicMetricAllowDenyList(services); err != nil {
+		logger.V(2).Printf("Error during dynamic Filter rebuild: %v", err)
+	}
+}
+
+// runReceiverManager periodically re-resolves file receivers and persists read offsets until ctx is done.
+func (a *agent) runReceiverManager(ctx context.Context) error {
+	const receiverManagerUpdatePeriod = time.Minute
+
+	ticker := time.NewTicker(receiverManagerUpdatePeriod)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			// Shutdown first, then save: each receiver's shutdown writes a final checkpoint into the
+			// shared PersistHost (fileconsumer's own Stop does a last checkpoint.Save), so saving before
+			// it would snapshot the state cache without those last offsets and re-ship those lines on the
+			// next start. otel/logprocessing's handleProcessingLifecycle orders it the same way.
+			a.receiverManager.Shutdown(context.Background())
+			a.receiverManager.SaveState()
+
+			return ctx.Err()
+		case <-ticker.C:
+			if err := a.receiverManager.RescanReceivers(ctx); err != nil {
+				logger.V(1).Printf("failed to resolve some log receivers: %v", err)
+			}
+
+			a.receiverManager.SaveState()
+		}
 	}
 }
 
@@ -2333,7 +2415,6 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		a.diagnosticVSphere,
 		a.metricFilter.DiagnosticArchive,
 		a.gathererRegistry.DiagnosticArchive,
-		a.rulesManager.DiagnosticArchive,
 		a.reloadState.DiagnosticArchive,
 		a.vethProvider.DiagnosticArchive,
 		a.threshold.DiagnosticThresholds,
@@ -2359,12 +2440,19 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		modules = append(modules, a.mqtt.DiagnosticArchive)
 	}
 
-	if a.fluentbitManager != nil {
-		modules = append(modules, a.fluentbitManager.DiagnosticArchive)
-	}
-
 	if a.logProcessManager != nil {
 		modules = append(modules, a.logProcessManager.DiagnosticArchive)
+	}
+
+	// receiverManager is shared between logProcessManager and logMetricsManager (neither owns it), so
+	// its own diagnostic (read-offset/extension state, via its *PersistHost) is always archived here
+	// directly, independent of whether either manager exists.
+	if a.receiverManager != nil {
+		modules = append(modules, a.receiverManager.DiagnosticArchive)
+	}
+
+	if a.logMetricsManager != nil {
+		modules = append(modules, a.logMetricsManager.DiagnosticArchive)
 	}
 
 	for _, f := range modules {
@@ -2690,7 +2778,7 @@ func (a *agent) checkSudoRSForLogs(ctx context.Context) {
 	// When logs discovery is enabled, they will required sudo and don't work with sudo-rs.
 	// Only journalctl works without sudo.
 	logsDiscovery := a.config.Log.OpenTelemetry.AutoDiscovery
-	if a.config.Log.OpenTelemetry.Enable && (logsDiscovery.ContainerAndServiceEnable || logsDiscovery.AuditdEnable || logsDiscovery.SyslogEnable) {
+	if a.config.Log.OpenTelemetry.ShippingEnable && (logsDiscovery.ContainerAndServiceEnable || logsDiscovery.AuditdEnable || logsDiscovery.SyslogEnable) {
 		if a.commandRunner.UseSudoRS(ctx) {
 			a.addWarnings(errSudoRSLogs)
 
@@ -2726,13 +2814,15 @@ func (a *agent) checkSudoRSForSSACLI(ctx context.Context) {
 
 // Add a warning for the configuration.
 func (a *agent) addWarnings(warnings ...error) {
-	var warningsStr strings.Builder
-	for _, w := range warnings {
-		warningsStr.WriteByte('\n')
-		warningsStr.WriteString(w.Error())
-	}
+	if len(warnings) > 0 {
+		var warningsStr strings.Builder
+		for _, w := range warnings {
+			warningsStr.WriteByte('\n')
+			warningsStr.WriteString(w.Error())
+		}
 
-	logger.Printf("Warning while loading configuration:%s", warningsStr.String())
+		logger.Printf("Warning while loading configuration:%s", warningsStr.String())
+	}
 
 	a.l.Lock()
 	defer a.l.Unlock()

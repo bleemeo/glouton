@@ -30,9 +30,11 @@ import (
 	"github.com/bleemeo/glouton/agent/state"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/otel/logsource"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/plog"
 )
 
@@ -42,10 +44,7 @@ var (
 	erasedTS = time.Date(2025, 4, 24, 17, 28, 37, 0, time.UTC)
 )
 
-// makeTimeEraserOpt provides a cmp.Option that makes logs comparison easier,
-// by erasing the timestamps from the logRecord objects. It works the following way:
-// - if the Timestamp field is defined (not zero or epoch), it is replaced by erasedTS (an arbitrarily chosen value)
-// - it replaces all the occurrences of patterns matching the given timeRe with the string "<time erased>".
+// makeTimeEraserOpt returns a cmp.Option that erases timestamps from logRecord objects for easier comparison.
 func makeTimeEraserOpt(timeRe string) cmp.Option {
 	eraseTimeRe := regexp.MustCompile(timeRe)
 
@@ -86,23 +85,24 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 	defer jsonLogFile.Close()
 
 	cfg := config.OpenTelemetry{
-		KnownLogFormats: config.DefaultKnownLogFormats(),
-		Receivers: map[string]config.OTLPReceiver{
+		ReceiversDefaultSendLogs: true, // none of the receivers below override this
+		KnownLogFormats:          config.DefaultKnownLogFormats(),
+		Receivers: map[string]config.LogReceiver{
 			"custom-receiver": {
-				Include: []string{customLogFile.Name()},
-				Operators: []config.OTELOperator{
+				"include": []string{customLogFile.Name()},
+				"operators": []config.OTELOperator{
 					{
 						testFieldName:  testRouteServiceName,
 						testFieldType:  testFieldAdd,
 						testFieldValue: testCustomSvc,
 					},
 				},
-				LogFormat: "custom-format",
+				"log_format": "custom-format",
 			},
 			"filelog/later": {
-				Include:   []string{jsonLogFile.Name()},
-				LogFormat: "json_golang_slog",
-				Filters: config.OTELFilters{
+				"include":    []string{jsonLogFile.Name()},
+				"log_format": "json_golang_slog",
+				"filters": config.OTELFilters{
 					testFilterExclude: map[string]any{
 						testFilterMatchType: "strict",
 						"record_attributes": []map[string]any{
@@ -129,13 +129,18 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 		t.Fatal("Can't instantiate state:", err)
 	}
 
-	persister, err := newPersistHost(st)
+	persister, err := logsource.NewPersistHost(st, logsource.PersistConfig{
+		StorageType:  logsource.PersistStorageType,
+		CacheKey:     logsource.LogFileMetadataCacheKey,
+		ArchivePath:  "log-processing/persister.json",
+		SaveThrottle: saveFileSizesToCachePeriod,
+	})
 	if err != nil {
 		t.Fatal("Can't instantiate persist host:", err)
 	}
 
 	logBuf := logBuffer{
-		buf: make([]plog.Logs, 0, 2), // we plan to write 2 log lines (at a time)
+		buf: make([]plog.Logs, 0, 2),
 	}
 
 	currentAvailability := new(atomic.Value)
@@ -165,7 +170,7 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 			t.Errorf("Warnings were reported: %v", errs)
 		},
 		cfg.KnownLogFormats, // nothing to expand
-		getLastFileSizesFromCache(st),
+		logsource.GetLastFileSizesFromCache(st, logsource.LogFileSizesCacheKey),
 		pipelineOptions{
 			batcherTimeout:           100 * time.Millisecond,
 			logsAvailabilityCacheTTL: 100 * time.Millisecond,
@@ -176,6 +181,26 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 	}
 
 	defer pipeline.shutdownAll()
+
+	// Build a Manager around this pipeline directly (bypassing New(), which hardcodes slower pipelineOptions)
+	// and register it as a SinkProvider, mirroring agent.go's wiring.
+	man := &Manager{
+		config:        cfg,
+		pipeline:      pipeline,
+		containerRecv: newContainerReceiver(pipeline),
+		fanoutSinks:   make(map[string]*fanoutSink),
+	}
+
+	receiverManager, err := logsource.NewReceiverManager(cfg, "/", st, noExecRunner(t))
+	if err != nil {
+		t.Fatal("Can't instantiate receiver manager:", err)
+	}
+
+	receiverManager.RegisterSinkProvider(man)
+
+	if err := receiverManager.RescanReceivers(t.Context()); err != nil {
+		t.Fatal("Failed to resolve configured receivers:", err)
+	}
 
 	t.Log("Setting up fileconsumers ...")
 	time.Sleep(time.Second)
@@ -334,5 +359,46 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 	}
 	if diff := cmp.Diff(expectedLogLines, logBuf.getAllRecords(), timeEraserOpt); diff != "" {
 		t.Fatalf("Unexpected logs (-want +got):\n%s", diff)
+	}
+}
+
+// fakeShutdownComponent is a minimal component.Component recording whether Shutdown was called, used to
+// verify shutdownAll actually reaches components started under a *logReceiver, not just p.startedComponents.
+type fakeShutdownComponent struct {
+	shutdownCalled atomic.Bool
+}
+
+func (c *fakeShutdownComponent) Start(context.Context, component.Host) error { return nil }
+
+func (c *fakeShutdownComponent) Shutdown(context.Context) error {
+	c.shutdownCalled.Store(true)
+
+	return nil
+}
+
+// TestShutdownAllStopsPipelineReceivers guards against a regression where shutdownAll only stopped
+// p.startedComponents, leaving journald/syslog/syslog-auth/auditd receivers (tracked in p.receivers,
+// populated by setupJournald/setupSyslog/setupAuditD) running forever after a config reload or agent
+// shutdown.
+func TestShutdownAllStopsPipelineReceivers(t *testing.T) {
+	t.Parallel()
+
+	pipeline := pipelineContext{
+		persister: mustNewPersistHost(t),
+	}
+
+	fake := &fakeShutdownComponent{}
+	recv := &logReceiver{
+		name:              "fake",
+		watching:          map[string]logsource.ReceiverKind{},
+		startedComponents: []component.Component{fake},
+	}
+
+	pipeline.receivers = append(pipeline.receivers, recv)
+
+	pipeline.shutdownAll()
+
+	if !fake.shutdownCalled.Load() {
+		t.Error("Expected shutdownAll to shut down the receiver's started components via p.receivers")
 	}
 }

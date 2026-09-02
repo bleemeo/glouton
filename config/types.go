@@ -43,6 +43,7 @@ type Config struct {
 	NetworkInterfaceDenylist       []string             `yaml:"network_interface_denylist"`
 	NRPE                           NRPE                 `yaml:"nrpe"`
 	NvidiaSMI                      NvidiaSMI            `yaml:"nvidia_smi"`
+	OpenTelemetry                  OpenTelemetryConfig  `yaml:"opentelemetry"`
 	Services                       []Service            `yaml:"service"`
 	ServiceAbsentDeactivationDelay time.Duration        `yaml:"service_absent_deactivation_delay"`
 	ServiceIgnore                  []NameInstance       `yaml:"service_ignore"`
@@ -59,45 +60,103 @@ type Config struct {
 }
 
 type Log struct {
-	FluentBitURL   string        `yaml:"fluentbit_url"`
-	HostRootPrefix string        `yaml:"hostroot_prefix"`
-	Inputs         []LogInput    `yaml:"inputs"`
-	OpenTelemetry  OpenTelemetry `yaml:"opentelemetry"`
+	OpenTelemetry OpenTelemetry `yaml:"opentelemetry"`
+	// MetricsRules are named, reusable libraries of metric definitions
+	// (same shape as a receiver's own inline metrics: entries). An entry
+	// does nothing on its own until a receiver includes it by name from its
+	// own metrics: list (see OpenTelemetry.Receivers/LogReceiver).
+	MetricsRules map[string][]LogMetricEntry `yaml:"metrics_rules"`
 }
 
-type LogInput struct {
-	Path          string            `yaml:"path"`
+// OpenTelemetryConfig holds OpenTelemetry-related settings that aren't specific to any one signal
+// (logs/metrics/traces), as opposed to Log.OpenTelemetry which is log-specific.
+type OpenTelemetryConfig struct {
+	NetworkListeners map[string]NetworkListener `yaml:"listeners"`
+}
+
+// NetworkListener mirrors otlpreceiver.Config: a protocol's presence enables
+// it, nil disables it, no separate enable flag.
+type NetworkListener struct {
+	Protocols NetworkProtocols `yaml:"protocols"`
+}
+
+type NetworkProtocols struct {
+	GRPC *NetworkEndpoint `yaml:"grpc"`
+	HTTP *NetworkEndpoint `yaml:"http"`
+}
+
+// NetworkEndpoint mirrors OTel's single "host:port" endpoint string. Left
+// blank, otlpreceiver's factory default applies (localhost: gRPC port 4317, HTTP port 4318).
+type NetworkEndpoint struct {
+	Endpoint string `yaml:"endpoint"`
+}
+
+// ContainerExcludeRule matches a container by exact name and/or
+// label/annotation selector, to veto it from BOTH log shipping
+// auto_discovery and metrics container-label detection (see
+// OpenTelemetry.ContainerExclude) -- one shared list for both concerns.
+type ContainerExcludeRule struct {
 	ContainerName string            `yaml:"container_name"`
-	Selectors     map[string]string `yaml:"container_selectors"`
-	Filters       []LogFilter       `yaml:"filters"`
+	Selectors     map[string]string `yaml:"selectors"`
 }
 
-type LogFilter struct {
-	Metric string `yaml:"metric"`
-	Regex  string `yaml:"regex"`
-}
-
-// OTELOperator represents an OpenTelemetry operator as plain YAML,
-// which is meant to be built to an operator.Config before use.
+// OTELOperator is raw YAML built into an operator.Config before use.
 type OTELOperator = map[string]any
 
-// OTELFilters represents an OpenTelemetry filter as plain YAML,
-// which is meant to be decoded to a filterprocessor.LogFilters before use.
+// OTELFilters is raw YAML decoded into a filterprocessor.LogFilters before use.
 type OTELFilters = map[string]any
 
 type OpenTelemetry struct {
-	Enable          bool                      `yaml:"enable"`
-	AutoDiscovery   AutoDiscovery             `yaml:"auto_discovery"`
-	GRPC            EnableListener            `yaml:"grpc"`
-	HTTP            EnableListener            `yaml:"http"`
-	KnownLogFormats map[string][]OTELOperator `yaml:"known_log_formats"`
-	Receivers       map[string]OTLPReceiver   `yaml:"receivers"`
+	// ShippingEnable is the master switch for log SHIPPING only (renamed
+	// from Enable): it no longer gates metrics, which run whenever a
+	// receiver/metrics_rules/container label opts a source in, independent
+	// of shipping.
+	ShippingEnable bool `yaml:"shipping_enable"`
+	// ReceiversDefaultSendLogs is the global default for whether a receiver ships its logs, applied
+	// unless the receiver overrides it with its own send_logs field. Irrelevant with zero configured
+	// receivers. Named distinctly from ShippingEnable (the master shipping switch) and from a
+	// receiver's own send_logs (this default's per-receiver override) to keep the three apart.
+	ReceiversDefaultSendLogs bool                      `yaml:"receivers_default_send_logs"`
+	AutoDiscovery            AutoDiscovery             `yaml:"auto_discovery"`
+	KnownLogFormats          map[string][]OTELOperator `yaml:"known_log_formats"`
+	// Receivers are named log sources, for shipping and/or metrics (see
+	// LogReceiver's doc comment for its Glouton-specific keys).
+	Receivers map[string]LogReceiver `yaml:"receivers"`
 	// map: container name -> format to apply
 	ContainerFormat map[string]string      `yaml:"container_format"`
 	GlobalFilters   OTELFilters            `yaml:"global_filters"`
 	KnownLogFilters map[string]OTELFilters `yaml:"known_log_filters"`
 	// map: container name -> filter to apply
 	ContainerFilter map[string]string `yaml:"container_filter"`
+	// ContainerExclude vetoes a matching container from both shipping
+	// auto_discovery and metrics container-label detection at once.
+	ContainerExclude []ContainerExcludeRule `yaml:"container_exclude"`
+	// GRPC/HTTP are the deprecated pre-network-receivers listener shape, kept as real typed fields
+	// purely so they can be migrated (see synthesizeLegacyNetworkListener) rather than consumed by
+	// anything downstream: nothing outside that migration reads them, and it clears them once it has run.
+	//
+	// They must be real Config fields rather than raw keys deleted by a per-provider migration, for two
+	// reasons this shape gets wrong otherwise. First, the new shape fuses address+port into one
+	// "host:port" endpoint string, so a per-provider migration can only synthesize an endpoint from the
+	// halves that one file happens to set -- a second conf.d file overriding just "port" has no complete
+	// endpoint to contribute and its value was silently dropped. As plain sibling scalars these merge
+	// per-leaf across providers exactly like any other config, and the fusion then happens once on the
+	// merged result. Second, envToKeyFunc derives the accepted environment variables from this struct's
+	// keys, so without these fields GLOUTON_LOG_OPENTELEMETRY_GRPC_ENABLE resolved to no key at all and
+	// was dropped before any migration could see it -- silently, since the key never entered koanf.
+	//
+	// Deliberately absent from DefaultConfig(): the zero value is what "unset" has to look like here,
+	// and defaults for address/port are applied by the migration itself.
+	GRPC LegacyEnableListener `yaml:"grpc"`
+	HTTP LegacyEnableListener `yaml:"http"`
+}
+
+// LegacyEnableListener is the deprecated log.opentelemetry.grpc/http {enable, address, port} shape,
+// superseded by opentelemetry.listeners + a receiver's from_listeners. See OpenTelemetry.GRPC.
+type LegacyEnableListener struct {
+	Enable  bool   `yaml:"enable"`
+	Address string `yaml:"address"`
+	Port    int    `yaml:"port"`
 }
 
 type AutoDiscovery struct {
@@ -108,18 +167,62 @@ type AutoDiscovery struct {
 	ContainerAndServiceEnable bool `yaml:"container_and_service_enable"`
 }
 
-type EnableListener struct {
-	Enable  bool   `yaml:"enable"`
-	Address string `yaml:"address"`
-	Port    int    `yaml:"port"`
-}
+// LogReceiver is raw YAML: real filelogreceiver/fileconsumer fields
+// (include, exclude, start_at, encoding, ...) paste in verbatim (see
+// logsource.SetupLogReceiverFactories), alongside Glouton's own additions:
+//
+//   - container_name / container_selectors: watch matching containers'
+//     logs, in addition to (or instead of) include. Both can be combined,
+//     and combined with include, on the same receiver -- every match feeds
+//     this one receiver's shipping/metrics as a single unit.
+//   - from_listeners: []string, pull logs from one or more
+//     opentelemetry.listeners entries by name ({from_listeners: [name,...]}).
+//     Every named entry must already exist under opentelemetry.listeners --
+//     there's no implicit/default listener, so unrelated config elsewhere can never
+//     change what this receiver participates in. A typo/missing entry is reported at load
+//     time by validateLogReceivers (errReceiverNetworkListenerUndefined), and again at
+//     wiring time by PlanSharedNetworkListeners (errUndefinedNetworkListener).
+//   - send_logs: override the global OpenTelemetry.ReceiversDefaultSendLogs
+//     default for this receiver.
+//   - log_format / operators: parse each line into attributes before
+//     shipping and before any metrics condition runs, applying to both.
+//   - filters: OTELFilters for SHIPPING only (drop/keep, not counting).
+//   - metrics: []LogMetricEntry, this receiver's log-to-metric definitions.
+//
+// A receiver needs at least one of include/container_name/
+// container_selectors/from_listeners -- enforced by validateLogReceivers.
+type LogReceiver = map[string]any
 
-type OTLPReceiver struct {
-	Include   []string       `yaml:"include"`
-	Operators []OTELOperator `yaml:"operators"`
-	LogFormat string         `yaml:"log_format"`
-	Filters   OTELFilters    `yaml:"filters"`
-}
+// LogMetricEntry is one item of a receiver's metrics: list, or of a
+// Log.MetricsRules[name] list. Either:
+//
+//   - {include: <metrics_rules-name>}, pulling in every metric defined
+//     under that Log.MetricsRules entry, or
+//   - an inline definition decoding into countconnector.MetricInfo
+//     (conditions, attributes), plus Glouton's own additions: regex
+//     (sugar for a single 'IsMatch(body, "...")' condition), labels (a
+//     static map[string]string stamped on every sample, zero cardinality
+//     risk -- distinct from attributes' dynamic per-value grouping), and
+//     item (explicit override of the auto-derived item -- see the item
+//     derivation rules in otel/logmetrics).
+//
+// item, labels and attributes can all three produce a value for the same label key (most notably
+// "item" itself, since nothing stops an attributes entry from using that key, or a labels entry from
+// setting "item"). A top-level item: and a labels: {item: ...} entry are two equally valid spellings
+// of the same override -- item: wins if both are set, otherwise labels: {item: ...} is used exactly as
+// if it had been written as item: (see extractItem in otel/logmetrics/metrics.go). Every other
+// labels: key, and "item"/"__name__" set via attributes, follow the usual precedence: item > labels >
+// attributes -- the auto-derived/explicit item and every labels: entry are reserved-key-safe, static,
+// and operator-declared, so they always win; an attribute (extracted from the log line's own content
+// at match time, so effectively untrusted/dynamic) only fills in a label key nothing else has already
+// claimed -- it is dropped, never promoted, on collision. See otel/logmetrics/registry.go's
+// resolve()/resolveAttrCounterLocked for the implementation.
+//
+// Kept raw (not a struct) for the same verbatim-passthrough reason as
+// LogReceiver, and so "item" stays distinguishable as absent (derive it)
+// vs. explicitly set to "" (used by legacy log.inputs migration to
+// preserve today's empty item on already-live metrics).
+type LogMetricEntry = map[string]any
 
 type Smart struct {
 	Enable         bool     `yaml:"enable"`

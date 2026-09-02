@@ -17,7 +17,9 @@
 package config
 
 import (
+	"math"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -212,55 +214,15 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			KubeConfig:          "/config",
 		},
 		Log: Log{
-			FluentBitURL:   "http://localhost:2020",
-			HostRootPrefix: "/hostroot",
-			Inputs: []LogInput{
-				{
-					Path: "/var/log/apache/access.log",
-					Filters: []LogFilter{
-						{
-							Metric: "apache_errors_count",
-							Regex:  "\\[error\\]",
-						},
-					},
-				},
-				{
-					ContainerName: testRedis,
-					Filters: []LogFilter{
-						{
-							Metric: "redis_errors_count",
-							Regex:  testERROR,
-						},
-					},
-				},
-				{
-					Selectors: map[string]string{"app": "postgres"},
-					Filters: []LogFilter{
-						{
-							Metric: "postgres_errors_count",
-							Regex:  "error",
-						},
-					},
-				},
-			},
 			OpenTelemetry: OpenTelemetry{
-				Enable: true,
+				ShippingEnable:           true,
+				ReceiversDefaultSendLogs: true,
 				AutoDiscovery: AutoDiscovery{
 					AllEnable:                 true,
 					JournaldEnable:            true,
 					SyslogEnable:              true,
 					AuditdEnable:              true,
 					ContainerAndServiceEnable: true,
-				},
-				GRPC: EnableListener{
-					Enable:  true,
-					Address: DefaultLocalhost,
-					Port:    4317,
-				},
-				HTTP: EnableListener{
-					Enable:  true,
-					Address: DefaultLocalhost,
-					Port:    4318,
 				},
 				KnownLogFormats: map[string][]OTELOperator{
 					"format-1": {
@@ -276,14 +238,42 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 						},
 					},
 				},
-				Receivers: map[string]OTLPReceiver{
+				Receivers: map[string]LogReceiver{
 					"filelog/recv": {
-						Include: []string{"/var/log/apache/access.log", "/var/log/apache/error.log"},
-						Operators: []OTELOperator{
-							{
+						"include": []any{"/var/log/apache/access.log", "/var/log/apache/error.log"},
+						"operators": []any{
+							map[string]any{
 								keyType: "add",
 								"field": "resource['service.name']",
 								"value": "apache_server",
+							},
+						},
+						"from_listeners": []any{"otlp"},
+					},
+					"apache_access": {
+						"include": []any{"/var/log/apache/access.log"},
+						"metrics": []any{
+							map[string]any{
+								"metric":     "apache_errors_count",
+								"conditions": []any{`IsMatch(body, "\\[error\\]")`},
+							},
+						},
+					},
+					"redis": {
+						"container_name": testRedis,
+						"metrics": []any{
+							map[string]any{
+								"metric":     "redis_errors_count",
+								"conditions": []any{`IsMatch(body, "` + testERROR + `")`},
+							},
+						},
+					},
+					"postgres": {
+						"container_selectors": map[string]any{"app": "postgres"},
+						"metrics": []any{
+							map[string]any{
+								"metric":     "postgres_errors_count",
+								"conditions": []any{`IsMatch(body, "error")`},
 							},
 						},
 					},
@@ -307,6 +297,16 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				},
 				ContainerFilter: map[string]string{
 					"ctr-1": testMinLevelInfo,
+				},
+			},
+		},
+		OpenTelemetry: OpenTelemetryConfig{
+			NetworkListeners: map[string]NetworkListener{
+				"otlp": {
+					Protocols: NetworkProtocols{
+						GRPC: &NetworkEndpoint{Endpoint: "localhost:4317"},
+						HTTP: &NetworkEndpoint{Endpoint: "localhost:4318"},
+					},
 				},
 			},
 		},
@@ -560,11 +560,7 @@ func TestOverrideDefault(t *testing.T) {
 	}
 }
 
-// TestMergeWithDefault tests that the config files and the environment variables
-// are correctly merge.
-// For files, basic types (string, int, ...) are overwritten, maps are merged and arrays are concatenated.
-// Files overwrite default values but merges maps with the defaults.
-// Environment variables always overwrite the existing config.
+// TestMergeWithDefault tests that config files and environment variables are correctly merged with defaults.
 func TestMergeWithDefault(t *testing.T) {
 	expectedConfig := DefaultConfig()
 	expectedConfig.Bleemeo.Enable = false
@@ -588,6 +584,11 @@ func TestMergeWithDefault(t *testing.T) {
 		},
 	}
 	expectedConfig.NetworkInterfaceDenylist = []string{testEth0, "eth1", "eth1", "eth2"}
+	// Regression test: log.metrics_rules must be registered in mapKeys(), or file values get wiped by the empty default map.
+	expectedConfig.Log.MetricsRules = map[string][]LogMetricEntry{
+		"rule_a": {{"metric": "metric_a", "regex": "a"}},
+		"rule_b": {{"metric": "metric_b", "regex": "b"}},
+	}
 
 	t.Setenv("GLOUTON_MQTT_HOSTS", "")
 	t.Setenv("GLOUTON_METRIC_DENY_METRICS", testCPUUsed)
@@ -665,7 +666,21 @@ func TestEffectiveAllowedLabelOverrides(t *testing.T) {
 	}
 }
 
-// Testload tests loading the config and the warnings and errors returned.
+// legacyNetworkReceiverKey and legacyNetworkListenerKey expose warnLegacyNetworkListeners' fixed
+// generated names to test tables, mirroring legacyInputReceiverName's direct use elsewhere in this file.
+func legacyNetworkReceiverKey() string {
+	key, _ := legacyNetworkReceiverNames()
+
+	return key
+}
+
+func legacyNetworkListenerKey() string {
+	_, key := legacyNetworkReceiverNames()
+
+	return key
+}
+
+// TestLoad tests loading the config and the warnings and errors returned.
 func TestLoad(t *testing.T) { //nolint:maintidx
 	tests := []struct {
 		Name         string
@@ -1234,6 +1249,230 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				},
 			},
 		},
+		// Guards against a regression where splitting one listener's protocols across two conf.d
+		// files (file A sets grpc, file B sets http) lost file A's protocol: convertTypes' Config-struct
+		// round trip fills in file B's unset "grpc" field as an explicit nil (same mechanism
+		// dynamicEnvVarConfigKeys/pruneNilMapValues already guards for dynamic env vars, but pruning
+		// used to be gated on provider == SourceEnv), so merge()'s fallback case (dst/src not both maps)
+		// treated that invented nil as file B intentionally overwriting file A's grpc protocol --
+		// dropping it, even though file B never mentioned grpc at all.
+		{
+			Name:  "network listener split across files survives merge",
+			Files: []string{"testdata/split-listener-grpc.conf", "testdata/split-listener-http.conf"},
+			WantConfig: Config{
+				OpenTelemetry: OpenTelemetryConfig{
+					NetworkListeners: map[string]NetworkListener{
+						"otlp/my_custom": {
+							Protocols: NetworkProtocols{
+								GRPC: &NetworkEndpoint{Endpoint: "0.0.0.0:4317"},
+								HTTP: &NetworkEndpoint{Endpoint: "0.0.0.0:4318"},
+							},
+						},
+					},
+				},
+			},
+		},
+		// The legacy log.opentelemetry.grpc/http shape is a single flat scalar setting, just like in the
+		// Fluent-Bit-era system it came from: it has no name of its own to key on, so
+		// legacyNetworkReceiverNames always uses the same fixed names regardless of which file set it.
+		// Two files each still using this shape therefore merge into one listener via the ordinary
+		// multi-file config merge, last file wins per field -- there is no way, legacy or otherwise, to
+		// end up with two independent listeners from it.
+		{
+			Name:  "legacy network listeners from two files merge into one, last file wins",
+			Files: []string{"testdata/legacy-network-multifile-a.conf", "testdata/legacy-network-multifile-b.conf"},
+			WantWarnings: []string{
+				"testdata/legacy-network-multifile-a.conf: setting is deprecated: log.opentelemetry.grpc/http " +
+					"{enable, address, port}, use opentelemetry.listeners + a log.opentelemetry.receivers entry's " +
+					"from_listener field instead",
+				"testdata/legacy-network-multifile-b.conf: setting is deprecated: log.opentelemetry.grpc/http " +
+					"{enable, address, port}, use opentelemetry.listeners + a log.opentelemetry.receivers entry's " +
+					"from_listener field instead",
+			},
+			WantConfig: Config{
+				OpenTelemetry: OpenTelemetryConfig{
+					NetworkListeners: map[string]NetworkListener{
+						legacyNetworkListenerKey(): {
+							Protocols: NetworkProtocols{
+								GRPC: &NetworkEndpoint{Endpoint: "10.0.0.2:5002"},
+							},
+						},
+					},
+				},
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
+							legacyNetworkReceiverKey(): {
+								"from_listeners": []any{legacyNetworkListenerKey()},
+								"send_logs":      true,
+							},
+						},
+					},
+				},
+			},
+		},
+		// Guards against a regression where the legacy migration assigned over the synthesized names
+		// instead of leaving a user's own entries alone, destroying them outright and silently: the
+		// receiver lost its include patterns (and any metrics), so that file stopped being tailed and the
+		// metric vanished, and the listener lost its endpoint. Reachable on the migration path the
+		// deprecation warning itself sends people down -- copy the effective legacy-network listener out,
+		// correct its endpoint, forget to delete the old grpc/http keys -- where it silently reverted the
+		// correction. Both entries must survive, each with its own warning saying what was kept.
+		{
+			Name:  "legacy network migration keeps a user's own same-named entries",
+			Files: []string{"testdata/legacy-network-name-taken.conf"},
+			WantWarnings: []string{
+				"testdata/legacy-network-name-taken.conf: setting is deprecated: log.opentelemetry.grpc/http " +
+					"{enable, address, port}, use opentelemetry.listeners + a log.opentelemetry.receivers entry's " +
+					"from_listener field instead",
+				"your config already defines the name the legacy log.opentelemetry.grpc/http migration would " +
+					"synthesize: opentelemetry.listeners.legacy-network -- keeping yours, so " +
+					"log.opentelemetry.grpc/http's address and port are ignored; delete those keys once you've " +
+					"checked the endpoint",
+				"your config already defines the name the legacy log.opentelemetry.grpc/http migration would " +
+					"synthesize: log.opentelemetry.receivers.legacy_network -- keeping yours, so it must carry " +
+					"from_listeners: [legacy-network] itself for log.opentelemetry.grpc/http to still ship anything",
+			},
+			WantConfig: Config{
+				OpenTelemetry: OpenTelemetryConfig{
+					NetworkListeners: map[string]NetworkListener{
+						legacyNetworkListenerKey(): {
+							Protocols: NetworkProtocols{
+								HTTP: &NetworkEndpoint{Endpoint: "0.0.0.0:9999"},
+							},
+						},
+					},
+				},
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
+							legacyNetworkReceiverKey(): {
+								"include":   []any{"/var/log/mine.log"},
+								"send_logs": true,
+							},
+						},
+					},
+				},
+			},
+		},
+		// Guards against a regression where a second conf.d file overriding only one half of the legacy
+		// listener shape had that half silently discarded. The new shape fuses address+port into one
+		// endpoint string, so while this was translated per provider, file B (setting just "port") could
+		// not build a complete endpoint of its own and contributed nothing -- yet its keys were consumed
+		// and it was still reported as migrated. The legacy leaves now merge as ordinary sibling scalars
+		// and are fused once afterwards, so file A's address combines with file B's port.
+		{
+			Name:  "legacy network listener half-overridden by a second file keeps both halves",
+			Files: []string{"testdata/legacy-network-partial-a.conf", "testdata/legacy-network-partial-b.conf"},
+			WantWarnings: []string{
+				"testdata/legacy-network-partial-a.conf: setting is deprecated: log.opentelemetry.grpc/http " +
+					"{enable, address, port}, use opentelemetry.listeners + a log.opentelemetry.receivers entry's " +
+					"from_listener field instead",
+				"testdata/legacy-network-partial-b.conf: setting is deprecated: log.opentelemetry.grpc/http " +
+					"{enable, address, port}, use opentelemetry.listeners + a log.opentelemetry.receivers entry's " +
+					"from_listener field instead",
+			},
+			WantConfig: Config{
+				OpenTelemetry: OpenTelemetryConfig{
+					NetworkListeners: map[string]NetworkListener{
+						legacyNetworkListenerKey(): {
+							Protocols: NetworkProtocols{
+								GRPC: &NetworkEndpoint{Endpoint: "10.0.0.1:4319"},
+							},
+						},
+					},
+				},
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
+							legacyNetworkReceiverKey(): {
+								"from_listeners": []any{legacyNetworkListenerKey()},
+								"send_logs":      true,
+							},
+						},
+					},
+				},
+			},
+		},
+		// Guards against a regression where the legacy listener shape was migrated for config files but
+		// dropped entirely, and completely silently, when set through environment variables: envToKeyFunc
+		// derives the accepted variables from Config{}'s own keys, so once the GRPC/HTTP fields were gone
+		// GLOUTON_LOG_OPENTELEMETRY_GRPC_ENABLE resolved to no key, koanf's env provider discarded it, and
+		// the migration's own existence checks never fired either -- no listener, and no warning of any
+		// kind. A Docker/Kubernetes deployment configuring OTLP purely through env vars simply stopped
+		// binding on upgrade.
+		{
+			Name: "legacy network listener set through environment variables is still migrated",
+			Environment: map[string]string{
+				"GLOUTON_LOG_OPENTELEMETRY_GRPC_ENABLE":  "true",
+				"GLOUTON_LOG_OPENTELEMETRY_GRPC_ADDRESS": "10.0.0.7",
+				"GLOUTON_LOG_OPENTELEMETRY_GRPC_PORT":    "4319",
+			},
+			WantWarnings: []string{
+				"setting is deprecated: log.opentelemetry.grpc/http {enable, address, port}, " +
+					"use opentelemetry.listeners + a log.opentelemetry.receivers entry's from_listener field instead",
+			},
+			WantConfig: Config{
+				OpenTelemetry: OpenTelemetryConfig{
+					NetworkListeners: map[string]NetworkListener{
+						legacyNetworkListenerKey(): {
+							Protocols: NetworkProtocols{
+								GRPC: &NetworkEndpoint{Endpoint: "10.0.0.7:4319"},
+							},
+						},
+					},
+				},
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
+							legacyNetworkReceiverKey(): {
+								"from_listeners": []any{legacyNetworkListenerKey()},
+								"send_logs":      true,
+							},
+						},
+					},
+				},
+			},
+		},
+		// "grpc: null" enables grpc with the default endpoint, never disables it -- matches upstream OTel
+		// collector's own otlpreceiver (see testdata/only_http_null.yaml). See
+		// networkProtocolsNullMeansDefaultHookFunc.
+		{
+			Name:  "network listener grpc: null still enables grpc with the default endpoint",
+			Files: []string{"testdata/network-listener-grpc-null-with-http.conf"},
+			WantConfig: Config{
+				OpenTelemetry: OpenTelemetryConfig{
+					NetworkListeners: map[string]NetworkListener{
+						"otlp/my_custom": {
+							Protocols: NetworkProtocols{
+								GRPC: &NetworkEndpoint{},
+								HTTP: &NetworkEndpoint{Endpoint: "0.0.0.0:4318"},
+							},
+						},
+					},
+				},
+			},
+		},
+		// Known gotcha: file A sets a real grpc endpoint, file B writes "grpc: null" for the same
+		// listener hoping to disable it. Since null never disables (see above), it just resets the
+		// endpoint to default via the ordinary last-file-wins merge rule -- grpc stays enabled. There's
+		// no way to actually disable a protocol from a later file today; documented, not fixed.
+		{
+			Name:  "network listener grpc: null in a later file resets, not disables, an earlier file's endpoint",
+			Files: []string{"testdata/network-listener-grpc-override-a.conf", "testdata/network-listener-grpc-override-b.conf"},
+			WantConfig: Config{
+				OpenTelemetry: OpenTelemetryConfig{
+					NetworkListeners: map[string]NetworkListener{
+						"otlp/my_custom": {
+							Protocols: NetworkProtocols{
+								GRPC: &NetworkEndpoint{},
+								HTTP: &NetworkEndpoint{Endpoint: "0.0.0.0:4318"},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -1267,7 +1506,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 		})
 	}
 
-	// This subtest is apart because needs a slightly different setup than the other cases.
+	// This subtest needs a slightly different setup than the other cases.
 	t.Run("config contains null parts", func(t *testing.T) {
 		config, warnings, err := load(&configLoader{}, true, false, "testdata/null-parts.conf")
 		if err != nil {
@@ -1283,8 +1522,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 		expectedConfig := DefaultConfig()
 		expectedConfig.Bleemeo.APIBase = "not/null"
 		expectedConfig.Bleemeo.ContainerRegistrationDelaySeconds = 0
-		// TODO: this should be true (or a warning should be raised).
-		// currently we silently ignore the value entered by user.
+		// TODO: this should be true, or a warning should be raised.
 		expectedConfig.Bleemeo.Enable = false
 		expectedConfig.Web.StaticCDNURL = testSimplePath
 
@@ -1345,8 +1583,7 @@ func TestStateLoading(t *testing.T) {
 				DeprecatedStateFile:    "/var/lib/bleemeo/state.json",
 			},
 		},
-		// Testing for Windows is impossible to do from a unix Go runtime,
-		// because path/filepath functions exclusively use / as the path separator.
+		// Windows can't be tested from a unix Go runtime since path/filepath always uses /.
 		/*{
 			Name:  "Glouton on Windows",
 			Files: []string{"testdata/state-windows.conf"},
@@ -1548,10 +1785,7 @@ func TestDump(t *testing.T) {
 	}
 }
 
-// TestCensorSecretItem checks the per-item censoring used on the config items
-// synchronized to the Bleemeo API, especially for blackbox module secrets whose
-// flattened keys (bearer_token, credentials) or URL-embedded credentials
-// (proxy_url) aren't named like a typical secret.
+// TestCensorSecretItem tests per-item secret censoring, including blackbox secrets not named like a typical secret.
 func TestCensorSecretItem(t *testing.T) {
 	t.Parallel()
 
@@ -1623,9 +1857,7 @@ func TestCensorSecretItem(t *testing.T) {
 	}
 }
 
-// TestCensorURLSecrets checks the diagnostic-only URL censoring: userinfo
-// credentials and secret-looking query parameters are redacted, while the rest
-// of the URL is preserved.
+// TestCensorURLSecrets tests that URL userinfo credentials and secret-looking query parameters are redacted.
 func TestCensorURLSecrets(t *testing.T) {
 	t.Parallel()
 
@@ -1672,11 +1904,135 @@ func TestCensorURLSecrets(t *testing.T) {
 	}
 }
 
-func Test_migrate(t *testing.T) {
+// Test that two filters for the same metric within a single input don't trigger a false collision warning.
+func TestMergeLegacyFiltersSameInputRepeatedMetric(t *testing.T) {
+	t.Parallel()
+
+	metricsByName := map[string]any{}
+
+	filters := []any{
+		map[string]any{"metric": "app_errors", "regex": "one"},
+		map[string]any{"metric": "app_errors", "regex": "two"},
+	}
+
+	touched, warnings := mergeLegacyFilters(metricsByName, filters, 0)
+	if len(warnings) != 0 {
+		t.Fatalf("Expected no warning for two filters of the same metric within one call, got %v", warnings)
+	}
+
+	if diff := cmp.Diff([]string{"app_errors"}, touched); diff != "" {
+		t.Errorf("Unexpected touched metrics (-want +got):\n%s", diff)
+	}
+
+	entry := metricsByName["app_errors"].(map[string]any) //nolint:forcetypeassert
+
+	wantConditions := []any{`IsMatch(body, "one")`, `IsMatch(body, "two")`}
+	if diff := cmp.Diff(wantConditions, entry["conditions"]); diff != "" {
+		t.Errorf("Unexpected conditions (-want +got):\n%s", diff)
+	}
+
+	if item, ok := entry["item"]; !ok || item != "" {
+		t.Errorf("Expected item to always be explicitly set to \"\", got %v (present=%v)", item, ok)
+	}
+
+	if _, hasSources := entry["sources"]; hasSources {
+		t.Errorf("Expected no \"sources\" key at all, got %v", entry["sources"])
+	}
+}
+
+// TestMergeLegacyFiltersWarnsOnDroppedFilter guards against a regression where a legacy log.inputs filter
+// missing either half of its metric/regex pair (or not a map at all) was skipped silently, while
+// migrateLogInputs still counted the enclosing entry as migrated and built it a receiver: the user lost
+// the metric definition, was told the migration succeeded, and was left with a receiver that tails the
+// file and persists offsets while neither shipping nor counting. Every sibling drop path in
+// migrateLogInputs warns explicitly, and these must too.
+func TestMergeLegacyFiltersWarnsOnDroppedFilter(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name   string
+		filter any
+	}{
+		{name: "metric without regex", filter: map[string]any{"metric": "app_errors"}},
+		{name: "regex without metric", filter: map[string]any{"regex": "boom"}},
+		{name: "empty filter", filter: map[string]any{}},
+		{name: "not a map at all", filter: "app_errors"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			metricsByName := map[string]any{}
+
+			touched, warnings := mergeLegacyFilters(metricsByName, []any{tc.filter}, 3)
+			if len(warnings) != 1 {
+				t.Fatalf("Expected exactly one warning for a dropped filter, got %v", warnings)
+			}
+
+			// Indexed like every sibling warning in migrateLogInputs, so the user can find the entry.
+			if !strings.Contains(warnings[0].Error(), "log.inputs[3].filters[0]") {
+				t.Errorf("Expected the warning to name log.inputs[3].filters[0], got %q", warnings[0])
+			}
+
+			if len(touched) != 0 {
+				t.Errorf("Expected no touched metrics for a dropped filter, got %v", touched)
+			}
+
+			if len(metricsByName) != 0 {
+				t.Errorf("Expected no metric entry built from a dropped filter, got %v", metricsByName)
+			}
+		})
+	}
+}
+
+// Test that two separate inputs sharing a metric name get merged into one entry, warning once.
+func TestMergeLegacyFiltersCrossInputCollisionMerges(t *testing.T) {
+	t.Parallel()
+
+	metricsByName := map[string]any{}
+
+	touchedA, warningsA := mergeLegacyFilters(metricsByName, []any{map[string]any{"metric": "shared", "regex": "a"}}, 0)
+	if len(warningsA) != 0 {
+		t.Fatalf("Expected no warning for the first call to create the entry, got %v", warningsA)
+	}
+
+	if diff := cmp.Diff([]string{"shared"}, touchedA); diff != "" {
+		t.Errorf("Unexpected touched metrics (-want +got):\n%s", diff)
+	}
+
+	touchedB, warningsB := mergeLegacyFilters(metricsByName, []any{map[string]any{"metric": "shared", "regex": "b"}}, 1)
+	if len(warningsB) != 1 || !strings.Contains(warningsB[0].Error(), "merged into one shared") {
+		t.Fatalf("Expected exactly one 'merged into one shared' warning, got %v", warningsB)
+	}
+
+	if diff := cmp.Diff([]string{"shared"}, touchedB); diff != "" {
+		t.Errorf("Unexpected touched metrics (-want +got):\n%s", diff)
+	}
+
+	entry := metricsByName["shared"].(map[string]any) //nolint:forcetypeassert
+
+	wantConditions := []any{`IsMatch(body, "a")`, `IsMatch(body, "b")`}
+	if diff := cmp.Diff(wantConditions, entry["conditions"]); diff != "" {
+		t.Errorf("Unexpected conditions (-want +got):\n%s", diff)
+	}
+
+	if item, ok := entry["item"]; !ok || item != "" {
+		t.Errorf("Expected item to always be explicitly set to \"\", got %v (present=%v)", item, ok)
+	}
+
+	if _, hasSources := entry["sources"]; hasSources {
+		t.Errorf("Expected no \"sources\" key at all, got %v", entry["sources"])
+	}
+}
+
+func Test_migrate(t *testing.T) { //nolint:maintidx
 	tests := []struct {
-		Name       string
-		ConfigFile string
-		WantConfig Config
+		Name                string
+		ConfigFile          string
+		WantConfig          Config
+		WantWarning         bool
+		WantWarningContains string
 	}{
 		{
 			Name:       "new-prometheus-targets",
@@ -1747,19 +2103,1136 @@ func Test_migrate(t *testing.T) {
 				},
 			},
 		},
+		{
+			Name:       "legacy-log-inputs-path",
+			ConfigFile: "testdata/legacy-log-inputs-path.conf",
+			WantConfig: Config{
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
+							legacyInputReceiverName("testdata/legacy-log-inputs-path.conf", 0): {
+								"include":   []any{"/var/log/apache/access.log"},
+								"send_logs": false,
+								"metrics": []any{
+									map[string]any{
+										"metric":     "apache_errors_count",
+										"item":       "",
+										"conditions": []any{`IsMatch(body, "\\[error\\]")`},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			WantWarning: true,
+		},
+		{
+			Name:       "legacy-log-inputs-container-name",
+			ConfigFile: "testdata/legacy-log-inputs-container-name.conf",
+			WantConfig: Config{
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
+							legacyInputReceiverName("testdata/legacy-log-inputs-container-name.conf", 0): {
+								"container_name": testRedis,
+								"send_logs":      false,
+								"metrics": []any{
+									map[string]any{
+										"metric":     "redis_errors_count",
+										"item":       "",
+										"conditions": []any{`IsMatch(body, "ERROR")`},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			WantWarning: true,
+		},
+		{
+			Name:       "legacy-log-inputs-selectors",
+			ConfigFile: "testdata/legacy-log-inputs-selectors.conf",
+			WantConfig: Config{
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
+							legacyInputReceiverName("testdata/legacy-log-inputs-selectors.conf", 0): {
+								"container_selectors": map[string]any{"app": "postgres"},
+								"send_logs":           false,
+								"metrics": []any{
+									map[string]any{
+										"metric":     "postgres_errors_count",
+										"item":       "",
+										"conditions": []any{`IsMatch(body, "error")`},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			WantWarning: true,
+		},
+		{
+			Name:       "legacy-opentelemetry-network",
+			ConfigFile: "testdata/legacy-opentelemetry-network.conf",
+			WantConfig: Config{
+				OpenTelemetry: OpenTelemetryConfig{
+					NetworkListeners: map[string]NetworkListener{
+						legacyNetworkListenerKey(): {
+							Protocols: NetworkProtocols{
+								GRPC: &NetworkEndpoint{Endpoint: "192.168.1.10:5000"},
+							},
+						},
+					},
+				},
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
+							legacyNetworkReceiverKey(): {
+								"from_listeners": []any{legacyNetworkListenerKey()},
+								"send_logs":      true,
+							},
+						},
+					},
+				},
+			},
+			WantWarning: true,
+		},
+		{
+			// Both protocols enabled at once, migrated into a single receiver.
+			Name:       "legacy-network-both-protocols",
+			ConfigFile: "testdata/legacy-network-both-protocols.conf",
+			WantConfig: Config{
+				OpenTelemetry: OpenTelemetryConfig{
+					NetworkListeners: map[string]NetworkListener{
+						legacyNetworkListenerKey(): {
+							Protocols: NetworkProtocols{
+								GRPC: &NetworkEndpoint{Endpoint: "10.0.0.5:9000"},
+								HTTP: &NetworkEndpoint{Endpoint: "10.0.0.5:9001"},
+							},
+						},
+					},
+				},
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
+							legacyNetworkReceiverKey(): {
+								"from_listeners": []any{legacyNetworkListenerKey()},
+								"send_logs":      true,
+							},
+						},
+					},
+				},
+			},
+			WantWarning: true,
+		},
+		{
+			Name:        "legacy-network-disabled",
+			ConfigFile:  "testdata/legacy-network-disabled.conf",
+			WantConfig:  Config{},
+			WantWarning: true,
+		},
+		{
+			// A quoted (string-typed) enable/port must be tolerated exactly like the unquoted (bool/int)
+			// spelling every other test case here uses -- mapstructure's stringToBoolHookFunc handles this
+			// spelling everywhere else config is decoded, and this migration must not be an exception.
+			Name:       "legacy-network-string-typed-enable-port",
+			ConfigFile: "testdata/legacy-network-string-typed-enable-port.conf",
+			WantConfig: Config{
+				OpenTelemetry: OpenTelemetryConfig{
+					NetworkListeners: map[string]NetworkListener{
+						legacyNetworkListenerKey(): {
+							Protocols: NetworkProtocols{
+								GRPC: &NetworkEndpoint{Endpoint: "10.0.0.5:9000"},
+							},
+						},
+					},
+				},
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
+							legacyNetworkReceiverKey(): {
+								"from_listeners": []any{legacyNetworkListenerKey()},
+								"send_logs":      true,
+							},
+						},
+					},
+				},
+			},
+			WantWarning: true,
+		},
+		{
+			// An IPv6 literal address must produce a bindable "[::1]:9000" endpoint (net.JoinHostPort),
+			// not the "::1:9000" fmt.Sprintf("%s:%d", ...) would have produced.
+			Name:       "legacy-network-ipv6-address",
+			ConfigFile: "testdata/legacy-network-ipv6-address.conf",
+			WantConfig: Config{
+				OpenTelemetry: OpenTelemetryConfig{
+					NetworkListeners: map[string]NetworkListener{
+						legacyNetworkListenerKey(): {
+							Protocols: NetworkProtocols{
+								GRPC: &NetworkEndpoint{Endpoint: "[::1]:9000"},
+							},
+						},
+					},
+				},
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
+							legacyNetworkReceiverKey(): {
+								"from_listeners": []any{legacyNetworkListenerKey()},
+								"send_logs":      true,
+							},
+						},
+					},
+				},
+			},
+			WantWarning: true,
+		},
+		{
+			Name:       "legacy-log-inputs-unmatched",
+			ConfigFile: "testdata/legacy-log-inputs-unmatched.conf",
+			WantConfig: Config{
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
+							legacyInputReceiverName("testdata/legacy-log-inputs-unmatched.conf", 0): {
+								"include":   []any{"/var/log/apache/access.log"},
+								"send_logs": false,
+								"metrics": []any{
+									map[string]any{
+										"metric":     "apache_errors_count",
+										"item":       "",
+										"conditions": []any{`IsMatch(body, "\\[error\\]")`},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			WantWarning:         true,
+			WantWarningContains: "has filters but no path/container_name/container_selectors",
+		},
+		{
+			Name:       "legacy-log-inputs-name-collision",
+			ConfigFile: "testdata/legacy-log-inputs-name-collision.conf",
+			WantConfig: Config{
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
+							legacyInputReceiverName("testdata/legacy-log-inputs-name-collision.conf", 0): {
+								"include":   []any{"/var/log/apache/access.log"},
+								"send_logs": false,
+								"metrics": []any{
+									map[string]any{
+										"metric": "shared_errors_count",
+										"item":   "",
+										"conditions": []any{
+											`IsMatch(body, "\\[error\\]")`,
+											`IsMatch(body, "ERROR")`,
+										},
+									},
+								},
+							},
+							legacyInputReceiverName("testdata/legacy-log-inputs-name-collision.conf", 1): {
+								"container_name": testRedis,
+								"send_logs":      false,
+								"metrics": []any{
+									map[string]any{
+										"metric": "shared_errors_count",
+										"item":   "",
+										"conditions": []any{
+											`IsMatch(body, "\\[error\\]")`,
+											`IsMatch(body, "ERROR")`,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			WantWarning:         true,
+			WantWarningContains: "merged into one shared",
+		},
+		{
+			Name:       "legacy-log-inputs-name-and-selectors",
+			ConfigFile: "testdata/legacy-log-inputs-name-and-selectors.conf",
+			WantConfig: Config{
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
+							legacyInputReceiverName("testdata/legacy-log-inputs-name-and-selectors.conf", 0): {
+								"container_name":      "postgres",
+								"container_selectors": map[string]any{"env": "prod"},
+								"send_logs":           false,
+								"metrics": []any{
+									map[string]any{
+										"metric":     "postgres_errors_count",
+										"item":       "",
+										"conditions": []any{`IsMatch(body, "error")`},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			WantWarning: true,
+		},
+		{
+			// Fluent Bit's inputLogPaths returned the configured path and nothing else whenever one was set
+			// ("The configured path has priority over the container name and selectors"), so an input
+			// carrying both only ever counted that file's lines. The migration used to write all three keys
+			// onto one receiver, and the receivers here treat include patterns and container matchers as
+			// independent sources feeding the same fan-out -- so the container's matching lines started
+			// being counted too and the metric jumped on upgrade. path must still win, and say so.
+			Name:       "legacy-log-inputs-path-and-container",
+			ConfigFile: "testdata/legacy-log-inputs-path-and-container.conf",
+			WantConfig: Config{
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
+							legacyInputReceiverName("testdata/legacy-log-inputs-path-and-container.conf", 0): {
+								"include":   []any{"/var/log/app.log"},
+								"send_logs": false,
+								"metrics": []any{
+									map[string]any{
+										"metric":     "app_errors_count",
+										"item":       "",
+										"conditions": []any{`IsMatch(body, "ERROR")`},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			WantWarning: true,
+		},
+		{
+			// A hand-written log.metrics_rules entry that happens to share the (otherwise unused)
+			// legacy-style name must be left untouched, and the migrated receiver must still get its
+			// own inline metric built from its own filter -- not the hand-written rule's conditions.
+			Name:       "legacy-log-inputs-metrics-rule-name-clash",
+			ConfigFile: "testdata/legacy-log-inputs-metrics-rule-name-clash.conf",
+			WantConfig: Config{
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						Receivers: map[string]LogReceiver{
+							legacyInputReceiverName("testdata/legacy-log-inputs-metrics-rule-name-clash.conf", 0): {
+								"include":   []any{"/var/log/apache/access.log"},
+								"send_logs": false,
+								"metrics": []any{
+									map[string]any{
+										"metric":     "apache_errors_count",
+										"item":       "",
+										"conditions": []any{`IsMatch(body, "\\[error\\]")`},
+									},
+								},
+							},
+						},
+					},
+					MetricsRules: map[string][]LogMetricEntry{
+						"legacy_log_inputs_metric_apache_errors_count": {
+							{
+								"metric": "apache_errors_count",
+								"item":   "",
+								"conditions": []any{
+									`IsMatch(body, "totally unrelated pattern")`,
+								},
+							},
+						},
+					},
+				},
+			},
+			WantWarning: true,
+		},
+		{
+			// An emptied-out list has nothing to translate, but the key must still be consumed: log.inputs
+			// is no longer a Config field, so the migration returning early used to leave it behind for the
+			// strict decode to report as "'log' has invalid keys: inputs" -- a config error on every start,
+			// with no deprecation notice, for a config that is merely out of date.
+			Name:                "legacy-log-inputs-empty",
+			ConfigFile:          "testdata/legacy-log-inputs-empty.conf",
+			WantConfig:          Config{},
+			WantWarning:         true,
+			WantWarningContains: "log.inputs is empty and can be removed",
+		},
+		{
+			// Same for a value that isn't a list at all: consumed with a warning that says so, rather than
+			// surfacing as an unknown key, which describes the wrong problem entirely.
+			Name:                "legacy-log-inputs-not-a-list",
+			ConfigFile:          "testdata/legacy-log-inputs-not-a-list.conf",
+			WantConfig:          Config{},
+			WantWarning:         true,
+			WantWarningContains: "log.inputs is not a list of entries",
+		},
+		{
+			// A malformed entry (not an object at all) is warned about and dropped, not kept around in
+			// Config.Log -- there's nowhere left to put it now that Log.Inputs/LogInput no longer exist,
+			// and nothing ever read that leftover data anyway.
+			Name:                "legacy-log-inputs-malformed-entry",
+			ConfigFile:          "testdata/legacy-log-inputs-malformed-entry.conf",
+			WantConfig:          Config{},
+			WantWarning:         true,
+			WantWarningContains: "log.inputs[0] is not a valid entry",
+		},
+		{
+			// An entry with no filters at all never did anything for log-to-metric, even before this
+			// migration existed: warned about and dropped, same as the malformed-entry case above.
+			Name:                "legacy-log-inputs-no-filters",
+			ConfigFile:          "testdata/legacy-log-inputs-no-filters.conf",
+			WantConfig:          Config{},
+			WantWarning:         true,
+			WantWarningContains: "log.inputs[0] has no filters",
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
-			config, _, err := load(&configLoader{}, false, false, test.ConfigFile)
+			config, warnings, err := load(&configLoader{}, false, false, test.ConfigFile)
 			if err != nil {
 				t.Fatalf("Failed to load config: %s", err)
 			}
 
-			if diff := compareConfig(test.WantConfig, config); diff != "" {
+			if test.WantWarning && warnings == nil {
+				t.Fatal("Expected a deprecation warning, got none")
+			}
+
+			if test.WantWarningContains != "" && !strings.Contains(warnings.Error(), test.WantWarningContains) {
+				t.Fatalf("Expected a warning containing %q, got: %s", test.WantWarningContains, warnings.Error())
+			}
+
+			if diff := compareConfig(test.WantConfig, config, cmpopts.EquateEmpty()); diff != "" {
 				t.Fatalf("Unexpected config:\n%s", diff)
 			}
 		})
+	}
+}
+
+// Test_loadWarnsNetworkListenerWithNoProtocol guards against an opentelemetry.listeners entry
+// with an explicit empty "protocols: {}" (neither grpc nor http present at all) silently doing nothing
+// once a receiver references it: Load() must warn about it up front, the same way it already warns about a
+// log receiver with no selector. This must be a warning rather than a load error: Glouton should keep
+// starting whenever possible, since misconfiguration is otherwise only visible from the Bleemeo panel. Note
+// this is distinct from a "protocols:" block that DOES list grpc/http but with nothing under them (a bare
+// key) -- see Test_loadBareProtocolKeyMeansEnabledWithDefaults: since networkProtocolsNullMeansDefaultHookFunc,
+// that shape is enabled with default endpoints, not rejected.
+func Test_loadWarnsNetworkListenerWithNoProtocol(t *testing.T) {
+	t.Parallel()
+
+	_, warnings, err := load(&configLoader{}, false, false, "testdata/network-listener-no-protocol.conf")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if warnings == nil || !strings.Contains(warnings.Error(), errNetworkListenerNoProtocol.Error()) {
+		t.Fatalf("Expected a warning containing %q, got: %v", errNetworkListenerNoProtocol, warnings)
+	}
+}
+
+// Test_loadBareProtocolKeyMeansEnabledWithDefaults guards networkProtocolsNullMeansDefaultHookFunc: a bare
+// "grpc:"/"http:" key (a YAML null value, the natural way to write "enable this with defaults" -- the same
+// shorthand used throughout the rest of glouton.conf) must be enabled with the factory-default endpoint,
+// matching how every upstream OTel collector receiver's own "protocols:" block already behaves. Without
+// the hook, mapstructure treats "key present but null" the same as "key absent", so this would otherwise
+// leave both *NetworkEndpoint fields nil and trip errNetworkListenerNoProtocol.
+func Test_loadBareProtocolKeyMeansEnabledWithDefaults(t *testing.T) {
+	t.Parallel()
+
+	cfg, _, err := load(&configLoader{}, false, false, "testdata/network-listener-bare-protocol-keys.conf")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	listener, ok := cfg.OpenTelemetry.NetworkListeners["otlp/my_custom"]
+	if !ok {
+		t.Fatal("Expected the otlp/my_custom listener to be present")
+	}
+
+	if listener.Protocols.GRPC == nil {
+		t.Error("Expected a bare \"grpc:\" key to enable gRPC with the default endpoint, got nil")
+	} else if listener.Protocols.GRPC.Endpoint != "" {
+		t.Errorf("Expected an empty endpoint (factory default), got %q", listener.Protocols.GRPC.Endpoint)
+	}
+
+	if listener.Protocols.HTTP == nil {
+		t.Error("Expected a bare \"http:\" key to enable HTTP with the default endpoint, got nil")
+	} else if listener.Protocols.HTTP.Endpoint != "" {
+		t.Errorf("Expected an empty endpoint (factory default), got %q", listener.Protocols.HTTP.Endpoint)
+	}
+}
+
+// Test_loadWarnsEmptyContainerExcludeRule guards against a log.opentelemetry.container_exclude entry
+// with neither container_name nor selectors set: MatchesContainerRule treats an unset field as a
+// wildcard, so such an entry would otherwise silently veto every container from both log shipping and
+// metrics container-label detection instead of the one container it was meant to match. This must be a
+// warning rather than a load error: Glouton should keep starting whenever possible, since misconfiguration
+// is otherwise only visible from the Bleemeo panel.
+func Test_loadWarnsEmptyContainerExcludeRule(t *testing.T) {
+	t.Parallel()
+
+	_, warnings, err := load(&configLoader{}, false, false, "testdata/container-exclude-empty.conf")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if warnings == nil || !strings.Contains(warnings.Error(), errContainerExcludeEmpty.Error()) {
+		t.Fatalf("Expected a warning containing %q, got: %v", errContainerExcludeEmpty, warnings)
+	}
+}
+
+// Test_loadWarnsDuplicateMetricEntryInReceiver guards against a receiver's metrics: list containing
+// two verbatim-identical entries (same metric, conditions, and labels): since each metrics: entry gets
+// its own countconnector (see otel/logmetrics's buildConnectors), two identical entries would both
+// independently match and count every line, silently doubling the resulting series' value with no
+// warning at all.
+func Test_loadWarnsDuplicateMetricEntryInReceiver(t *testing.T) {
+	t.Parallel()
+
+	_, warnings, err := load(&configLoader{}, false, false, "testdata/log-metrics-duplicate-entry.conf")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if warnings == nil || !strings.Contains(warnings.Error(), errDuplicateMetricEntry.Error()) {
+		t.Fatalf("Expected a warning containing %q, got: %v", errDuplicateMetricEntry, warnings)
+	}
+}
+
+// Test_loadWarnsDuplicateMetricEntryInMetricsRules is Test_loadWarnsDuplicateMetricEntryInReceiver's
+// counterpart for a log.metrics_rules list, the other place a metrics: entry list can be declared.
+func Test_loadWarnsDuplicateMetricEntryInMetricsRules(t *testing.T) {
+	t.Parallel()
+
+	_, warnings, err := load(&configLoader{}, false, false, "testdata/log-metrics-rules-duplicate-entry.conf")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if warnings == nil || !strings.Contains(warnings.Error(), errDuplicateMetricEntry.Error()) {
+		t.Fatalf("Expected a warning containing %q, got: %v", errDuplicateMetricEntry, warnings)
+	}
+}
+
+// Test_migrateLoggingMigratesExplicitZero guards against a regression where migrateLogging used
+// "k.Int(oldKey) == 0" to decide whether to migrate, which can't distinguish "key absent" from
+// "explicitly set to 0" -- an explicit logging.buffer.tail_size/head_size: 0 was silently left unmigrated,
+// leaking a confusing "invalid keys" warning instead of a clean deprecation notice, and never reaching
+// tail_size_bytes/head_size_bytes.
+func Test_migrateLoggingMigratesExplicitZero(t *testing.T) {
+	t.Parallel()
+
+	_, warnings, err := load(&configLoader{}, false, false, "testdata/old-logging-explicit-zero.conf")
+	if err != nil {
+		t.Fatalf("Failed to load config: %s", err)
+	}
+
+	if warnings == nil ||
+		!strings.Contains(warnings.Error(), "logging.buffer.tail_size") ||
+		!strings.Contains(warnings.Error(), "logging.buffer.head_size") {
+		t.Fatalf("Expected deprecation warnings mentioning both tail_size and head_size, got: %v", warnings)
+	}
+
+	// The real signal that the explicit 0 was actually migrated (not just coincidentally left at its
+	// zero value either way): the old key must be gone by the final decode, or ErrorUnused would leak an
+	// "invalid keys" warning here exactly like the delete()-no-op bug does for the legacy grpc/http shape.
+	if strings.Contains(warnings.Error(), "invalid keys") {
+		t.Fatalf("Expected no leaked \"invalid keys\" warning (old key left behind unmigrated), got: %s", warnings.Error())
+	}
+}
+
+// Test_legacyNetworkListenersNoInvalidKeysLeak guards against a regression where the legacy grpc/http
+// leaves survived the migration and tripped the final decode's ErrorUnused check, producing a confusing
+// "invalid keys" warning on every single legitimate use of this legacy shape, alongside the intended
+// deprecation notice. Originally this was delete() calls targeting "log.opentelemetry.grpc"/".http" --
+// keys that never exist in the flat, dot-joined map (only their .enable/.address/.port leaves do), making
+// the deletes no-ops; the consuming delete now lives in synthesizeLegacyNetworkListener, so this asserts
+// the end result rather than any one function's behavior.
+func Test_legacyNetworkListenersNoInvalidKeysLeak(t *testing.T) {
+	t.Parallel()
+
+	_, warnings, err := load(&configLoader{}, false, false, "testdata/legacy-opentelemetry-network.conf")
+	if err != nil {
+		t.Fatalf("Failed to load config: %s", err)
+	}
+
+	if warnings == nil {
+		t.Fatal("Expected the deprecation warning, got none")
+	}
+
+	if strings.Contains(warnings.Error(), "invalid keys") {
+		t.Fatalf("Expected no leaked \"invalid keys\" warning, got: %s", warnings.Error())
+	}
+}
+
+// Test_legacyNetworkListenersFlatKeys guards against a regression where the legacy grpc/http shape was
+// detected via k.Get(path+".grpc").(map[string]any) -- a lookup for an intermediate tree node, which koanf
+// only builds when the source YAML itself nests "grpc"/"http" (as in legacy-opentelemetry-network.conf).
+// The equally valid, and more common, conf.d style of writing "log.opentelemetry.grpc.enable: true" as one
+// flat, dot-joined key is stored by koanf as a single opaque key: k.Get on the parent path silently
+// returned nil, so the migration never fired at all, and the legacy keys survived to trip the final
+// decode's "invalid keys" warning with the listener never migrated. Both the per-provider deprecation
+// warning (warnLegacyNetworkListeners) and the synthesis (synthesizeLegacyNetworkListener) must handle
+// this spelling. Uses the real, public Load() so the final decoded Config is checked, not just warnings.
+func Test_legacyNetworkListenersFlatKeys(t *testing.T) {
+	t.Parallel()
+
+	cfg, _, warnings, err := Load(true, false, "testdata/legacy-opentelemetry-network-flat.conf")
+	if err != nil {
+		t.Fatalf("Load returned an error: %v", err)
+	}
+
+	if warnings == nil || !strings.Contains(warnings.Error(), errSettingsDeprecated.Error()) {
+		t.Fatalf("Expected the deprecation warning, got: %v", warnings)
+	}
+
+	if strings.Contains(warnings.Error(), "invalid keys") {
+		t.Fatalf("Expected no leaked \"invalid keys\" warning, got: %s", warnings.Error())
+	}
+
+	receiverKey, listenerKey := legacyNetworkReceiverNames()
+
+	listener, ok := cfg.OpenTelemetry.NetworkListeners[listenerKey]
+	if !ok {
+		t.Fatalf("Expected a %q network listener, got %v", listenerKey, cfg.OpenTelemetry.NetworkListeners)
+	}
+
+	if listener.Protocols.GRPC == nil || listener.Protocols.GRPC.Endpoint != "192.168.1.10:5000" {
+		t.Errorf("Expected the flat grpc.address/grpc.port to survive as the GRPC endpoint, got %+v", listener.Protocols)
+	}
+
+	if listener.Protocols.HTTP != nil {
+		t.Errorf("Expected no HTTP protocol (http.enable: false), got %+v", listener.Protocols)
+	}
+
+	receiver, ok := cfg.Log.OpenTelemetry.Receivers[receiverKey]
+	if !ok {
+		t.Fatalf("Expected a %q log receiver, got %v", receiverKey, cfg.Log.OpenTelemetry.Receivers)
+	}
+
+	fromListeners, _ := receiver["from_listeners"].([]any)
+	if len(fromListeners) != 1 || fromListeners[0] != listenerKey {
+		t.Errorf("Expected from_listeners: [%q], got %v", listenerKey, receiver["from_listeners"])
+	}
+}
+
+// Test_migrateKeepsFlatSiblingsOfSynthesizedEntries guards against a regression where a migration wrote
+// its synthesized entry straight into config[parentKey] while the user's own entries for that same parent
+// were still sitting in migrate()'s flat map as dotted leaves. Both then reached the final confmap load,
+// whose maps.Unflatten walks the map in Go's randomized order: whichever landed last replaced the other's
+// whole subtree, so the user's receiver/listener vanished on roughly 4 starts out of 5 and came back on
+// the others. Loops because a single load could pass on map order alone.
+func Test_migrateKeepsFlatSiblingsOfSynthesizedEntries(t *testing.T) {
+	t.Parallel()
+
+	receiverKey, listenerKey := legacyNetworkReceiverNames()
+
+	for range 30 {
+		cfg, _, _, err := Load(true, false, "testdata/legacy-network-flat-sibling-receiver.conf")
+		if err != nil {
+			t.Fatalf("Load returned an error: %v", err)
+		}
+
+		// The user's own flat-spelled entries.
+		if _, ok := cfg.Log.OpenTelemetry.Receivers["myrecv"]; !ok {
+			t.Fatalf("the user's flat-spelled receiver was dropped, got %v", cfg.Log.OpenTelemetry.Receivers)
+		}
+
+		if _, ok := cfg.OpenTelemetry.NetworkListeners["mine"]; !ok {
+			t.Fatalf("the user's flat-spelled listener was dropped, got %v", cfg.OpenTelemetry.NetworkListeners)
+		}
+
+		// ... alongside, not instead of, what the migration synthesized.
+		if _, ok := cfg.Log.OpenTelemetry.Receivers[receiverKey]; !ok {
+			t.Fatalf("the synthesized receiver was dropped, got %v", cfg.Log.OpenTelemetry.Receivers)
+		}
+
+		if _, ok := cfg.OpenTelemetry.NetworkListeners[listenerKey]; !ok {
+			t.Fatalf("the synthesized listener was dropped, got %v", cfg.OpenTelemetry.NetworkListeners)
+		}
+	}
+}
+
+// Test_loadNetworkListenerSurvivesDefaultMerge guards against a regression where
+// "opentelemetry.listeners" was missing from default.go's mapKeys(), so DefaultConfig()'s empty
+// map for that field and a real config file's nested entries landed as separate flat keys under the same
+// prefix -- and koanf's tree-building let the shorter (default, empty) key silently clobber the deeper
+// (file, populated) one once merged, wiping out any configured listeners entirely. Must use the
+// real, public Load() (withDefault=true) to reproduce: the internal load() with withDefault=false doesn't
+// merge in the default map at all, so it can't catch this class of bug.
+func Test_loadNetworkListenerSurvivesDefaultMerge(t *testing.T) {
+	t.Parallel()
+
+	cfg, _, warnings, err := Load(true, false, "testdata/network-listener-survives-defaults.conf")
+	if err != nil {
+		t.Fatalf("Load returned an error: %v", err)
+	}
+
+	if warnings != nil {
+		t.Fatalf("Expected no warnings, got: %v", warnings)
+	}
+
+	listener, ok := cfg.OpenTelemetry.NetworkListeners["otlp"]
+	if !ok {
+		t.Fatalf("Expected an %q network listener to survive loading with defaults, got %v", "otlp", cfg.OpenTelemetry.NetworkListeners)
+	}
+
+	if listener.Protocols.GRPC == nil || listener.Protocols.GRPC.Endpoint != "127.0.0.1:9999" {
+		t.Errorf("Expected the configured GRPC endpoint to survive, got %+v", listener.Protocols)
+	}
+}
+
+// Test_loadDynamicListenerEnv guards resolveDynamicEnvKey and its interaction with the loader's
+// merge-priority logic: a GLOUTON_OPENTELEMETRY_LISTENERS_<name>_PROTOCOLS_GRPC/HTTP_ENDPOINT variable must
+// only overwrite that single leaf, not wholesale-replace the whole opentelemetry.listeners map (which
+// would silently drop every other listener, and every other field of the targeted listener, loaded from a
+// config file), and must be able to create a listener that doesn't exist in any file.
+func Test_loadDynamicListenerEnv(t *testing.T) {
+	t.Setenv("GLOUTON_OPENTELEMETRY_LISTENERS_otlp_PROTOCOLS_GRPC_ENDPOINT", "0.0.0.0:1")
+	t.Setenv("GLOUTON_OPENTELEMETRY_LISTENERS_foo_bar_PROTOCOLS_HTTP_ENDPOINT", "0.0.0.0:2")
+
+	cfg, _, warnings, err := Load(true, true, "testdata/network-listener-dynamic-env.conf")
+	if err != nil {
+		t.Fatalf("Load returned an error: %v", err)
+	}
+
+	if warnings != nil {
+		t.Fatalf("Expected no warnings, got: %v", warnings)
+	}
+
+	otlp, ok := cfg.OpenTelemetry.NetworkListeners["otlp"]
+	if !ok {
+		t.Fatalf("Expected the %q listener to still exist, got %v", "otlp", cfg.OpenTelemetry.NetworkListeners)
+	}
+
+	if otlp.Protocols.GRPC == nil || otlp.Protocols.GRPC.Endpoint != "0.0.0.0:1" {
+		t.Errorf("Expected the environment variable to override otlp's GRPC endpoint, got %+v", otlp.Protocols)
+	}
+
+	if otlp.Protocols.HTTP == nil || otlp.Protocols.HTTP.Endpoint != "127.0.0.1:4318" {
+		t.Errorf("Expected otlp's file-configured HTTP endpoint to survive untouched, got %+v", otlp.Protocols)
+	}
+
+	other, ok := cfg.OpenTelemetry.NetworkListeners["other"]
+	if !ok {
+		t.Fatalf("Expected the %q listener (untouched by any environment variable) to survive, got %v", "other", cfg.OpenTelemetry.NetworkListeners)
+	}
+
+	if other.Protocols.GRPC == nil || other.Protocols.GRPC.Endpoint != "127.0.0.1:9999" {
+		t.Errorf("Expected other's file-configured GRPC endpoint to survive untouched, got %+v", other.Protocols)
+	}
+
+	fooBar, ok := cfg.OpenTelemetry.NetworkListeners["foo_bar"]
+	if !ok {
+		t.Fatalf("Expected a new %q listener to be created from the environment alone, got %v", "foo_bar", cfg.OpenTelemetry.NetworkListeners)
+	}
+
+	if fooBar.Protocols.GRPC != nil {
+		t.Errorf("Expected foo_bar's GRPC endpoint to remain unset, got %+v", fooBar.Protocols)
+	}
+
+	if fooBar.Protocols.HTTP == nil || fooBar.Protocols.HTTP.Endpoint != "0.0.0.0:2" {
+		t.Errorf("Expected the environment variable to set foo_bar's HTTP endpoint, got %+v", fooBar.Protocols)
+	}
+}
+
+// Test_loadDynamicListenerEnvIgnoresMalformed guards resolveDynamicEnvKey against two inputs that look
+// intentional (same GLOUTON_OPENTELEMETRY_LISTENERS_ prefix) but aren't valid: no listener name between the
+// prefix and the suffix, and a suffix that isn't one of the two known protocol endpoints. Both must be
+// silently ignored, consistent with how any other unrecognized GLOUTON_ variable is already treated.
+func Test_loadDynamicListenerEnvIgnoresMalformed(t *testing.T) {
+	t.Setenv("GLOUTON_OPENTELEMETRY_LISTENERS__PROTOCOLS_GRPC_ENDPOINT", "0.0.0.0:1")
+	t.Setenv("GLOUTON_OPENTELEMETRY_LISTENERS_otlp_PROTOCOLS_UDP_ENDPOINT", "0.0.0.0:2")
+
+	cfg, _, warnings, err := Load(true, true, "testdata/network-listener-survives-defaults.conf")
+	if err != nil {
+		t.Fatalf("Load returned an error: %v", err)
+	}
+
+	if warnings != nil {
+		t.Fatalf("Expected no warnings, got: %v", warnings)
+	}
+
+	if got := len(cfg.OpenTelemetry.NetworkListeners); got != 1 {
+		t.Fatalf("Expected only the file-configured listener to exist, got %d: %v", got, cfg.OpenTelemetry.NetworkListeners)
+	}
+
+	otlp := cfg.OpenTelemetry.NetworkListeners["otlp"]
+	if otlp.Protocols.GRPC == nil || otlp.Protocols.GRPC.Endpoint != "127.0.0.1:9999" {
+		t.Errorf("Expected the malformed environment variables to be ignored, got %+v", otlp.Protocols)
+	}
+}
+
+// Test_loadDynamicThresholdEnv is the thresholds counterpart of Test_loadDynamicListenerEnv: a
+// GLOUTON_THRESHOLDS_<metric>_LOW_WARNING/LOW_CRITICAL/HIGH_WARNING/HIGH_CRITICAL variable must only
+// overwrite that single leaf, not wholesale-replace the whole thresholds map or the other fields of the
+// targeted metric's entry, and must be able to create a threshold entry for a metric that doesn't exist in
+// any file.
+func Test_loadDynamicThresholdEnv(t *testing.T) {
+	t.Setenv("GLOUTON_THRESHOLDS_cpu_used_HIGH_CRITICAL", "95")
+	t.Setenv("GLOUTON_THRESHOLDS_mem_used_LOW_WARNING", "10")
+
+	cfg, _, warnings, err := Load(true, true, "testdata/threshold-dynamic-env.conf")
+	if err != nil {
+		t.Fatalf("Load returned an error: %v", err)
+	}
+
+	if warnings != nil {
+		t.Fatalf("Expected no warnings, got: %v", warnings)
+	}
+
+	cpuUsed, ok := cfg.Thresholds["cpu_used"]
+	if !ok {
+		t.Fatalf("Expected the %q threshold to still exist, got %v", "cpu_used", cfg.Thresholds)
+	}
+
+	if cpuUsed.HighCritical == nil || *cpuUsed.HighCritical != 95 {
+		t.Errorf("Expected the environment variable to override cpu_used's high_critical, got %+v", cpuUsed)
+	}
+
+	if cpuUsed.LowWarning == nil || *cpuUsed.LowWarning != 2 ||
+		cpuUsed.LowCritical == nil || *cpuUsed.LowCritical != 1.5 ||
+		cpuUsed.HighWarning == nil || *cpuUsed.HighWarning != 80.2 {
+		t.Errorf("Expected cpu_used's other file-configured fields to survive untouched, got %+v", cpuUsed)
+	}
+
+	diskUsed, ok := cfg.Thresholds["disk_used"]
+	if !ok {
+		t.Fatalf("Expected the %q threshold (untouched by any environment variable) to survive, got %v", "disk_used", cfg.Thresholds)
+	}
+
+	if diskUsed.LowCritical == nil || *diskUsed.LowCritical != 2 || diskUsed.HighWarning == nil || *diskUsed.HighWarning != 90.5 {
+		t.Errorf("Expected disk_used's file-configured fields to survive untouched, got %+v", diskUsed)
+	}
+
+	memUsed, ok := cfg.Thresholds["mem_used"]
+	if !ok {
+		t.Fatalf("Expected a new %q threshold to be created from the environment alone, got %v", "mem_used", cfg.Thresholds)
+	}
+
+	if memUsed.LowWarning == nil || *memUsed.LowWarning != 10 {
+		t.Errorf("Expected the environment variable to set mem_used's low_warning, got %+v", memUsed)
+	}
+
+	if memUsed.LowCritical != nil || memUsed.HighWarning != nil || memUsed.HighCritical != nil {
+		t.Errorf("Expected mem_used's other fields to remain unset, got %+v", memUsed)
+	}
+}
+
+// Test_loadDynamicThresholdEnvIgnoresMalformed is the thresholds counterpart of
+// Test_loadDynamicListenerEnvIgnoresMalformed: an empty metric name and an unrecognized suffix must both
+// be silently ignored.
+func Test_loadDynamicThresholdEnvIgnoresMalformed(t *testing.T) {
+	t.Setenv("GLOUTON_THRESHOLDS__HIGH_WARNING", "1")
+	t.Setenv("GLOUTON_THRESHOLDS_cpu_used_MEDIUM_WARNING", "2")
+
+	cfg, _, warnings, err := Load(true, true, "testdata/threshold-survives-defaults.conf")
+	if err != nil {
+		t.Fatalf("Load returned an error: %v", err)
+	}
+
+	if warnings != nil {
+		t.Fatalf("Expected no warnings, got: %v", warnings)
+	}
+
+	if got := len(cfg.Thresholds); got != 1 {
+		t.Fatalf("Expected only the file-configured threshold to exist, got %d: %v", got, cfg.Thresholds)
+	}
+
+	cpuUsed := cfg.Thresholds["cpu_used"]
+	if cpuUsed.HighCritical == nil || *cpuUsed.HighCritical != 90 {
+		t.Errorf("Expected the malformed environment variables to be ignored, got %+v", cpuUsed)
+	}
+
+	if cpuUsed.LowWarning != nil || cpuUsed.LowCritical != nil || cpuUsed.HighWarning != nil {
+		t.Errorf("Expected the malformed environment variables not to add any field, got %+v", cpuUsed)
+	}
+}
+
+// Test_resolveDynamicEnvKey unit-tests resolveDynamicEnvKey directly, without going through the whole
+// Load() pipeline: correct key construction for both known suffixes, a name containing underscores, and
+// rejection of an unrelated variable, an unknown suffix, and an empty listener name.
+func Test_resolveDynamicEnvKey(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		env     string
+		wantKey string
+		wantOK  bool
+	}{
+		{"grpc endpoint", "GLOUTON_OPENTELEMETRY_LISTENERS_otlp_PROTOCOLS_GRPC_ENDPOINT", "opentelemetry.listeners.otlp.protocols.grpc.endpoint", true},
+		{"http endpoint", "GLOUTON_OPENTELEMETRY_LISTENERS_otlp_PROTOCOLS_HTTP_ENDPOINT", "opentelemetry.listeners.otlp.protocols.http.endpoint", true},
+		{"name with underscores", "GLOUTON_OPENTELEMETRY_LISTENERS_foo_bar_PROTOCOLS_GRPC_ENDPOINT", "opentelemetry.listeners.foo_bar.protocols.grpc.endpoint", true},
+		{"unrelated variable", "GLOUTON_WEB_ENABLE", "", false},
+		{"unknown suffix", "GLOUTON_OPENTELEMETRY_LISTENERS_otlp_PROTOCOLS_UDP_ENDPOINT", "", false},
+		{"empty name", "GLOUTON_OPENTELEMETRY_LISTENERS__PROTOCOLS_GRPC_ENDPOINT", "", false},
+		{"threshold low_warning", "GLOUTON_THRESHOLDS_cpu_used_LOW_WARNING", "thresholds.cpu_used.low_warning", true},
+		{"threshold high_critical", "GLOUTON_THRESHOLDS_cpu_used_HIGH_CRITICAL", "thresholds.cpu_used.high_critical", true},
+		{"threshold unknown suffix", "GLOUTON_THRESHOLDS_cpu_used_MEDIUM_WARNING", "", false},
+		{"threshold empty name", "GLOUTON_THRESHOLDS__LOW_WARNING", "", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			key, ok := resolveDynamicEnvKey(tc.env)
+			if ok != tc.wantOK {
+				t.Fatalf("resolveDynamicEnvKey(%q) ok = %v, want %v", tc.env, ok, tc.wantOK)
+			}
+
+			if key != tc.wantKey {
+				t.Errorf("resolveDynamicEnvKey(%q) = %q, want %q", tc.env, key, tc.wantKey)
+			}
+		})
+	}
+}
+
+// Test_resolveDynamicEnvKeyTriesEveryEntry is a regression test for a bug introduced while generalizing
+// resolveDynamicEnvKey from a single hardcoded listener case into a loop over dynamicEnvVarList: the loop
+// used to `return "", false` as soon as ONE entry's prefix didn't match the input, instead of trying the
+// next entry, which made every dynamicEnvVar registered after the first one silently unreachable.
+// Temporarily appends a second, unrelated synthetic entry to dynamicEnvVarList and checks that a variable
+// matching only that second entry (and not the first) still resolves -- this must keep passing however
+// many entries dynamicEnvVarList grows to.
+func Test_resolveDynamicEnvKeyTriesEveryEntry(t *testing.T) {
+	original := dynamicEnvVarList
+	dynamicEnvVarList = append(append([]dynamicEnvVar{}, original...), dynamicEnvVar{
+		envPrefix:    "GLOUTON_SOME_OTHER_MAP_",
+		configPrefix: "some.other.map.",
+		suffixes: map[string]string{
+			"_VALUE": "value",
+		},
+	})
+
+	t.Cleanup(func() { dynamicEnvVarList = original })
+
+	key, ok := resolveDynamicEnvKey("GLOUTON_SOME_OTHER_MAP_myentry_VALUE")
+	if !ok {
+		t.Fatal("Expected a variable matching the second dynamicEnvVar entry to resolve, got ok=false -- " +
+			"the loop is probably bailing out on the first entry's prefix mismatch instead of trying the next one")
+	}
+
+	if want := "some.other.map.myentry.value"; key != want {
+		t.Errorf("resolveDynamicEnvKey = %q, want %q", key, want)
+	}
+}
+
+// Test_dynamicEnvVarConfigKeysCoversNewEntries guards the point of dynamicEnvVarConfigKeys existing at
+// all: loader.go's merge-priority and nil-pruning special cases must apply to ANY dynamicEnvVarList entry,
+// not just opentelemetry.listeners, without loader.go needing to be touched again when a new entry is
+// added. Appends a synthetic second entry and checks that priority() grants its config key the
+// map-merging priority (instead of the env-always-wins priority a plain scalar env var would get) purely
+// because it's present in dynamicEnvVarList.
+func Test_dynamicEnvVarConfigKeysCoversNewEntries(t *testing.T) {
+	original := dynamicEnvVarList
+	dynamicEnvVarList = append(append([]dynamicEnvVar{}, original...), dynamicEnvVar{
+		envPrefix:    "GLOUTON_SOME_OTHER_MAP_",
+		configPrefix: "some.other.map.",
+		suffixes: map[string]string{
+			"_VALUE": "value",
+		},
+	})
+
+	t.Cleanup(func() { dynamicEnvVarList = original })
+
+	dynamicKeys := dynamicEnvVarConfigKeys()
+	if !dynamicKeys["some.other.map"] {
+		t.Fatalf("Expected %q to be derived from the synthetic entry's configPrefix, got %v", "some.other.map", dynamicKeys)
+	}
+
+	// priorityMapAndArrayFile and priorityEnv are unexported consts local to priority() in loader.go
+	// (1 and math.MaxInt32 respectively); mirrored here since they aren't reachable from the test.
+	const priorityMapAndArrayFile = 1
+
+	got := priority(SourceEnv, "some.other.map", map[string]any{"myentry": map[string]any{"value": "x"}}, 0, dynamicKeys)
+	if got != priorityMapAndArrayFile {
+		t.Errorf("priority(SourceEnv, %q, ...) = %d, want %d (priorityMapAndArrayFile) -- a new dynamicEnvVarList "+
+			"entry's config key isn't getting the merge treatment automatically", "some.other.map", got, priorityMapAndArrayFile)
+	}
+
+	// A plain, unrelated env-sourced key must still get the ordinary env-always-wins priority.
+	if got := priority(SourceEnv, "web.enable", true, 0, dynamicKeys); got != math.MaxInt32 {
+		t.Errorf("priority(SourceEnv, %q, ...) = %d, want %d (priorityEnv)", "web.enable", got, math.MaxInt32)
+	}
+}
+
+// Test_dynamicEnvVarListKeysAreInMapKeys guards the link between dynamicEnvVarList (config.go) and
+// default.go's mapKeys(): a prefix key missing from mapKeys() stays a set of flat "key.sub.field" entries
+// that dynamicEnvVarConfigKeys never matches, so its dynamic env vars stop merging correctly (the
+// whole-map-replacement bug the mechanism exists to prevent) without failing anything else.
+// Test_nilPrunedConfigKeys pins the set of map keys that get their invented nils pruned. It is derived
+// from the Config types (every mapKeys() entry that is a map of structs), rather than hand-listed or
+// borrowed from dynamicEnvVarConfigKeys(): the two coincide today, but one is about environment variables
+// and this one is about a struct's unset pointer fields round-tripping as explicit nils. A new
+// struct-valued map key must show up here on its own, or merge() would silently drop a sibling field an
+// earlier-loaded file set. A map of scalars/slices/raw map[string]any has no such fields and must stay
+// out, so an explicit null the user wrote there survives.
+func Test_nilPrunedConfigKeys(t *testing.T) {
+	t.Parallel()
+
+	want := map[string]bool{
+		keyThresholds:             true, // map[string]Threshold
+		"opentelemetry.listeners": true, // map[string]NetworkListener
+	}
+
+	if diff := cmp.Diff(want, nilPrunedConfigKeys()); diff != "" {
+		t.Errorf("Unexpected pruned key set (-want +got):\n%s\n"+
+			"If you added a struct-valued map key to mapKeys(), add it here too. If a key unexpectedly "+
+			"dropped out, pruning silently stopped protecting it.", diff)
+	}
+
+	// Every entry must resolve against the Config types, or it would be skipped silently.
+	for _, key := range mapKeys() {
+		if _, found := configFieldTypeByPath(key); !found {
+			t.Errorf("mapKeys() entry %q does not resolve to a Config field: a typo here disables both "+
+				"nil-pruning and any other Config-type-derived check for that key", key)
+		}
+	}
+}
+
+func Test_dynamicEnvVarListKeysAreInMapKeys(t *testing.T) {
+	t.Parallel()
+
+	known := make(map[string]bool, len(mapKeys()))
+	for _, k := range mapKeys() {
+		known[k] = true
+	}
+
+	for key := range dynamicEnvVarConfigKeys() {
+		if !known[key] {
+			t.Errorf("dynamicEnvVarList has an entry for %q, but %q is missing from default.go's mapKeys() -- "+
+				"its dynamic env vars will silently fail to merge correctly", key, key)
+		}
+	}
+}
+
+// Test_migrateLogFluentBitURL guards against log.fluentbit_url (dropped by the OpenTelemetry log rewrite, but
+// still set by upgrading installs via the bleemeo-agent-logs package override) failing config load as an
+// unknown key instead of being silently deprecated like other removed settings.
+func Test_migrateLogFluentBitURL(t *testing.T) {
+	t.Parallel()
+
+	config, warnings, err := load(&configLoader{}, false, false, "testdata/legacy-log-fluentbit-url.conf")
+	if err != nil {
+		t.Fatalf("Failed to load config: %s", err)
+	}
+
+	if warnings == nil || !strings.Contains(warnings.Error(), "log.fluentbit_url") {
+		t.Fatalf("Expected a deprecation warning mentioning log.fluentbit_url, got: %v", warnings)
+	}
+
+	if diff := compareConfig(Config{}, config, cmpopts.EquateEmpty()); diff != "" {
+		t.Fatalf("Expected fluentbit_url to be dropped with no other effect on config:\n%s", diff)
+	}
+}
+
+// Test_migrateRemovedLogKeys guards against a regression where only one of the two removed log settings
+// got a deprecation notice: log.hostroot_prefix was dropped from the config types alongside
+// log.fluentbit_url but never given a migration, so the conf.d snippet the bleemeo-agent-logs package
+// ships -- which sets both together -- produced a clean notice for one and an "invalid keys" config error
+// for the other, on every single start.
+func Test_migrateRemovedLogKeys(t *testing.T) {
+	t.Parallel()
+
+	config, warnings, err := load(&configLoader{}, false, false, "testdata/legacy-log-removed-keys.conf")
+	if err != nil {
+		t.Fatalf("Failed to load config: %s", err)
+	}
+
+	if warnings == nil {
+		t.Fatal("Expected deprecation warnings for both removed keys, got none")
+	}
+
+	for _, key := range removedLogKeys {
+		if !strings.Contains(warnings.Error(), key) {
+			t.Errorf("Expected a deprecation warning mentioning %s, got: %v", key, warnings)
+		}
+	}
+
+	if strings.Contains(warnings.Error(), "invalid keys") {
+		t.Errorf("Expected no 'invalid keys' error for a removed-but-migrated setting, got: %v", warnings)
+	}
+
+	if diff := compareConfig(Config{}, config, cmpopts.EquateEmpty()); diff != "" {
+		t.Fatalf("Expected both removed keys to be dropped with no other effect on config:\n%s", diff)
+	}
+}
+
+// Test_migrateLogInputs_multiFileNoCollision guards against a regression where each config file's log.inputs
+// migration restarted its "legacy_input_%d" naming from 0, so two conf.d files each declaring one log.inputs
+// entry produced the same receiver key and the last-loaded one silently discarded the other's receiver.
+func Test_migrateLogInputs_multiFileNoCollision(t *testing.T) {
+	t.Parallel()
+
+	fileA := "testdata/legacy-log-inputs-multifile-a.conf"
+	fileB := "testdata/legacy-log-inputs-multifile-b.conf"
+
+	config, _, err := load(&configLoader{}, false, false, fileA, fileB)
+	if err != nil {
+		t.Fatalf("Failed to load config: %s", err)
+	}
+
+	if got := len(config.Log.OpenTelemetry.Receivers); got != 2 {
+		t.Fatalf("Expected 2 distinct receivers (one per file), got %d: %v", got, config.Log.OpenTelemetry.Receivers)
+	}
+
+	nameA := legacyInputReceiverName(fileA, 0)
+	nameB := legacyInputReceiverName(fileB, 0)
+
+	if nameA == nameB {
+		t.Fatalf("Expected distinct receiver names for distinct files, both computed %q", nameA)
+	}
+
+	if _, ok := config.Log.OpenTelemetry.Receivers[nameA]; !ok {
+		t.Errorf("Missing receiver %q from %s", nameA, fileA)
+	}
+
+	if _, ok := config.Log.OpenTelemetry.Receivers[nameB]; !ok {
+		t.Errorf("Missing receiver %q from %s", nameB, fileB)
+	}
+
+	for name, wantMetric := range map[string]string{nameA: "redis_errors_count", nameB: "nginx_errors_count"} {
+		receiver, ok := config.Log.OpenTelemetry.Receivers[name]
+		if !ok {
+			continue // already reported above
+		}
+
+		metrics, _ := receiver["metrics"].([]any)
+		if len(metrics) != 1 {
+			t.Fatalf("Expected exactly one inline metric for receiver %q, got %v", name, metrics)
+		}
+
+		entry, _ := metrics[0].(map[string]any)
+		if entry["metric"] != wantMetric {
+			t.Errorf("Expected receiver %q to define metric %q, got %v", name, wantMetric, entry)
+		}
+	}
+}
+
+// Test_migrateLogInputs_warnsEvenWhenNoEntryTranslates guards against a regression where
+// migrateLogInputs discarded every warning already appended to its local slice (e.g. the
+// "filters but no path/container_name/container_selectors" one) by returning a hardcoded nil
+// whenever no log.inputs entry actually got converted into a receiver -- losing the warning
+// whenever the untranslatable entry was the only one, instead of only when there was nothing to warn
+// about at all.
+func Test_migrateLogInputs_warnsEvenWhenNoEntryTranslates(t *testing.T) {
+	t.Parallel()
+
+	_, warnings, err := load(&configLoader{}, false, false, "testdata/legacy-log-inputs-no-target.conf")
+	if err != nil {
+		t.Fatalf("Failed to load config: %s", err)
+	}
+
+	if warnings == nil || !strings.Contains(warnings.Error(), "log.inputs[0] has filters but no path/container_name/container_selectors") {
+		t.Fatalf("Expected a warning about the untranslatable log.inputs entry, got: %v", warnings)
 	}
 }
 

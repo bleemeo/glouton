@@ -200,15 +200,25 @@ func (k *Kubernetes) Exec(ctx context.Context, containerID string, cmd []string)
 
 // Containers return all known container, with annotation added.
 func (k *Kubernetes) Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error) {
-	containers, err = k.Runtime.Containers(ctx, maxAge, includeIgnored)
+	containers, _, _, err = k.EnumerateContainers(ctx, maxAge, includeIgnored)
+
+	return containers, err
+}
+
+// EnumerateContainers implements crTypes.RuntimeInterface. mayForgetAbsent additionally turns false when a
+// container's POD couldn't be resolved because the POD listing itself failed: enable/ignore then resolves
+// without its annotations, and it may be wrongly dropped from the list below.
+func (k *Kubernetes) EnumerateContainers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, complete bool, mayForgetAbsent bool, err error) {
+	containers, complete, mayForgetAbsent, err = k.Runtime.EnumerateContainers(ctx, maxAge, includeIgnored)
 	if err != nil {
-		return nil, err
+		return nil, complete, mayForgetAbsent, err
 	}
 
 	k.l.Lock()
 	defer k.l.Unlock()
 
 	podsUpdated := false
+	podsUpdateFailed := false
 
 	response := make([]facts.Container, 0, len(containers))
 
@@ -223,9 +233,15 @@ func (k *Kubernetes) Containers(ctx context.Context, maxAge time.Duration, inclu
 			err := k.updatePods(ctx)
 			if err != nil {
 				logger.V(2).Printf("Unable to list PODs: %v", err)
+
+				podsUpdateFailed = true
 			}
 
-			pod, _ = k.getPod(c)
+			pod, ok = k.getPod(c)
+		}
+
+		if !ok && uid != "" && podsUpdateFailed {
+			mayForgetAbsent = false
 		}
 
 		c = wrappedContainer{
@@ -240,7 +256,7 @@ func (k *Kubernetes) Containers(ctx context.Context, maxAge time.Duration, inclu
 		response = append(response, c)
 	}
 
-	return response, nil
+	return response, complete, mayForgetAbsent, nil
 }
 
 // Events return container events.

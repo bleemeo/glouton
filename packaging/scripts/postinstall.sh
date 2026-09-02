@@ -101,10 +101,12 @@ EOF
 EOF
 fi
 
-# Create Fluent Bit directories and initial configuration.
-mkdir -p /var/lib/glouton/fluent-bit/db
-mkdir -p /var/lib/glouton/fluent-bit/config
-touch /var/lib/glouton/fluent-bit/config/fluent-bit.conf
+# Remove configuration file (Glouton's owned) and remove empty dirs related to FluentBit.
+# Hide & ignore any errors.
+rm -f /var/lib/glouton/fluent-bit/config/fluent-bit.conf
+rmdir /var/lib/glouton/fluent-bit/config 2>/dev/null || true
+rmdir /var/lib/glouton/fluent-bit/db 2>/dev/null || true
+rmdir /var/lib/glouton/fluent-bit 2>/dev/null || true
 
 chown glouton:glouton -R /var/lib/glouton
 

@@ -19,6 +19,8 @@ package logprocessing
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -27,6 +29,7 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts"
 	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
+	"github.com/bleemeo/glouton/otel/logsource"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/fileconsumer/attrs"
@@ -92,9 +95,6 @@ func TestHandleContainerLogs(t *testing.T) {
 		testContainerCtr1: testAttrKeyResAttr,
 	}
 
-	knownFilters := map[string]config.OTELFilters{}
-	containerFilter := map[string]string{}
-
 	logger, err := zap.NewDevelopment(zap.IncreaseLevel(zap.InfoLevel))
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
@@ -111,7 +111,7 @@ func TestHandleContainerLogs(t *testing.T) {
 	defer cancel()
 
 	logBuf := logBuffer{
-		buf: make([]plog.Logs, 0, 2), // we plan to write 2 log lines
+		buf: make([]plog.Logs, 0, 2),
 	}
 
 	pipeline := pipelineContext{
@@ -123,7 +123,7 @@ func TestHandleContainerLogs(t *testing.T) {
 		persister:     mustNewPersistHost(t),
 	}
 
-	containerRecv := newContainerReceiver(&pipeline, containerOperators, knownOperators, containerFilter, knownFilters)
+	containerRecv := newContainerReceiver(&pipeline)
 
 	defer containerRecv.stop()
 
@@ -146,17 +146,17 @@ func TestHandleContainerLogs(t *testing.T) {
 			FakeLogPath:       f2.Name(),
 			FakePodName:       "pod",
 			FakePodNamespace:  "ns",
-			FakeRuntimeName:   crTypes.ContainerDRuntime, // the runtime shouldn't have any impact on how we set up the processing
+			FakeRuntimeName:   crTypes.ContainerDRuntime, // runtime shouldn't affect processing setup
 		},
 	}
 
 	for _, ctr := range ctrs {
-		ops, err := buildOperators(knownOperators[containerOperators[ctr.ContainerName()]])
+		ops, err := logsource.BuildOperators(knownOperators[containerOperators[ctr.ContainerName()]])
 		if err != nil {
 			t.Fatalf("Failed to build operators for container %s: %v", ctr.ContainerName(), err)
 		}
 
-		_, err = containerRecv.handleContainerLogs(ctx, ctr, ops, knownFilters[containerFilter[ctr.ContainerName()]])
+		_, err = containerRecv.handleContainerLogs(ctx, ctr, ops, nil)
 		if err != nil {
 			t.Fatalf("Failed to handle logs for container %s: %v", ctr.ContainerName(), err)
 		}
@@ -217,5 +217,123 @@ func TestHandleContainerLogs(t *testing.T) {
 	}
 	if diff := cmp.Diff(expectedLogLines, logBuf.getAllRecords(), sortLogsOpt); diff != "" {
 		t.Fatalf("Unexpected log lines (-want, +got):\n%s", diff)
+	}
+}
+
+// TestSetupContainerLogReceiverRollsBackExtensionOnFilterFailure guards against a regression where
+// makeStorageFn registered a persistent extension before the log filter was built, but no error path
+// after that point removed it -- leaking a stale extension on every failed setup attempt (e.g. retried on
+// the next container scan). A malformed filter (a broken regex, decoded by buildLogFilterConfig but never
+// validated: it's fed straight to setupContainerLogReceiver, bypassing the normal handleContainerLogs
+// gate) makes CreateLogs fail on the log filter step, which is reached only after the receiver factories
+// -- and their persistent extension -- were already set up successfully.
+func TestSetupContainerLogReceiverRollsBackExtensionOnFilterFailure(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+
+	f, err := os.Create(filepath.Join(tmpDir, "ctr.log"))
+	if err != nil {
+		t.Fatal("Can't create log file:", err)
+	}
+
+	defer f.Close()
+
+	filtersCfg, _, _ := buildLogFilterConfig(config.OTELFilters{
+		testFieldInclude: map[string]any{
+			testFilterMatchType: testRegexp,
+			testFilterBodies:    []string{"[unclosed"},
+		},
+	})
+
+	logger, err := zap.NewDevelopment(zap.IncreaseLevel(zap.InfoLevel))
+	if err != nil {
+		t.Fatalf("Failed to create logger: %v", err)
+	}
+
+	pipeline := pipelineContext{
+		hostroot:      string(os.PathSeparator),
+		lastFileSizes: make(map[string]int64),
+		telemetry: component.TelemetrySettings{
+			Logger:         logger,
+			TracerProvider: noop.NewTracerProvider(),
+			MeterProvider:  noopM.NewMeterProvider(),
+			Resource:       pcommon.NewResource(),
+		},
+		commandRunner: noExecRunner(t),
+		persister:     mustNewPersistHost(t),
+	}
+
+	defer pipeline.shutdownAll()
+
+	containerRecv := newContainerReceiver(&pipeline)
+	defer containerRecv.stop()
+
+	ctr := facts.FakeContainer{FakeID: "id-1", FakeContainerName: testContainerCtr1, FakeLogPath: f.Name()}
+	logCtr := makeLogContainer(t.Context(), ctr, f.Name())
+
+	err = containerRecv.setupContainerLogReceiver(t.Context(), logCtr, nil, filtersCfg)
+	if err == nil {
+		t.Fatal("Expected setupContainerLogReceiver to fail on the malformed filter")
+	}
+
+	if got := len(containerRecv.registeredExtensions); got != 0 {
+		t.Errorf("Expected no leaked registeredExtensions entry after a failed setup, got %d: %v", got, containerRecv.registeredExtensions)
+	}
+
+	if got := len(containerRecv.startedComponents); got != 0 {
+		t.Errorf("Expected no leaked startedComponents entry after a failed setup, got %d: %v", got, containerRecv.startedComponents)
+	}
+}
+
+// TestStopWatchingForContainersCleansUpEvenWithoutStartedComponents guards against a regression where a
+// container with a registeredExtensions entry but no startedComponents entry (e.g. setup failed before
+// startedComponents was ever populated) had its extension permanently leaked: the old code's early
+// continue, taken whenever startedComponents[ctrID] was absent, skipped the RemovePersistentExtsAndForget
+// call and the map deletions entirely.
+func TestStopWatchingForContainersCleansUpEvenWithoutStartedComponents(t *testing.T) {
+	t.Parallel()
+
+	pipeline := pipelineContext{persister: mustNewPersistHost(t)}
+	containerRecv := newContainerReceiver(&pipeline)
+
+	const ctrID = "orphaned-id"
+
+	extID := pipeline.persister.NewPersistentExt("container/" + ctrID + "/some.log")
+	containerRecv.registeredExtensions[ctrID] = []component.ID{extID}
+	containerRecv.containers[ctrID] = Container{LogFilePath: "some.log"}
+	// Deliberately no containerRecv.startedComponents[ctrID] entry.
+
+	containerRecv.stopWatchingForContainers(t.Context(), []string{ctrID}, true)
+
+	if _, found := pipeline.persister.GetExtensions()[extID]; found {
+		t.Error("Expected the orphaned container's extension to be removed from the persister")
+	}
+
+	if _, found := containerRecv.registeredExtensions[ctrID]; found {
+		t.Error("Expected registeredExtensions to be cleaned up even without a startedComponents entry")
+	}
+}
+
+// TestContainerReceiverSizesByFileSkipsOnlyTheFailingFile guards against a regression where one file's
+// non-ErrNotExist stat error aborted SizesByFile entirely, discarding every other file's
+// already-successfully-read size (same bug shape and fix as otel/logsource's managedSource.SizesByFile).
+func TestContainerReceiverSizesByFileSkipsOnlyTheFailingFile(t *testing.T) {
+	t.Parallel()
+
+	pipeline := pipelineContext{persister: mustNewPersistHost(t)}
+	cr := newContainerReceiver(&pipeline)
+
+	cr.sizeFnByFile["good.log"] = func() (int64, error) { return 42, nil }
+	cr.sizeFnByFile["bad.log"] = func() (int64, error) { return 0, errors.New("permission denied") } //nolint:err113
+	cr.sizeFnByFile["gone.log"] = func() (int64, error) { return 0, fs.ErrNotExist }
+
+	sizes, err := cr.SizesByFile()
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if diff := cmp.Diff(map[string]int64{containerFileSizePrefix + "good.log": 42}, sizes); diff != "" {
+		t.Fatalf("Unexpected sizes (-want +got):\n%s", diff)
 	}
 }
