@@ -119,7 +119,7 @@ type PromQL struct {
 	// sem gates concurrent query evaluations to maxConcurrentQueries.
 	sem chan struct{}
 
-	parser      parser.Parser
+	parser parser.Parser
 }
 
 type apiFunc func(r *http.Request, st storage.Queryable) apiFuncResult
@@ -346,7 +346,6 @@ func (p *PromQL) query(r *http.Request, st storage.Queryable) (result apiFuncRes
 	}
 
 	qry, err := p.queryEngine.NewInstantQuery(ctx, st, nil, r.FormValue("query"), ts)
-
 	if err != nil {
 		return invalidParamResult(err, "query")
 	}
