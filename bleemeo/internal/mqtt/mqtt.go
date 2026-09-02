@@ -469,7 +469,10 @@ func (c *Client) pahoOptions(ctx context.Context) (*paho.ClientOptions, error) {
 // agent it already believed connected - no status transition, so neither the
 // disconnection nor the new connection date would be recorded anywhere.
 func (c *Client) requestReconnect() {
-	payload := disconnectCause{"reconnect-requested"}
+	// The backend maps this string to what the customer reads as the reason their
+	// agent disconnected, next to "Agent upgrade" and "Agent auto-upgrade". It has
+	// to name us: they did nothing, we asked.
+	payload := disconnectCause{"Bleemeo maintenance"}
 
 	if err := c.mqtt.PublishAsJSON(
 		fmt.Sprintf("v1/agent/%s/disconnect", c.opts.AgentID),
