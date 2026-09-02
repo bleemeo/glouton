@@ -1624,11 +1624,9 @@ func (a *agent) sendToTelemetry(ctx context.Context) error {
 			facts, err := a.factProvider.Facts(ctx, time.Hour)
 			if err != nil {
 				logger.V(2).Printf("error facts load %v", err)
-
-				continue
+			} else {
+				telemetry.PostInformation(ctx, telemetryID, a.config.Agent.Telemetry.Address, a.BleemeoAgentID(), facts)
 			}
-
-			telemetry.PostInformation(ctx, telemetryID, a.config.Agent.Telemetry.Address, a.BleemeoAgentID(), facts)
 
 			select {
 			case <-time.After(delay.JitterDelay(24*time.Hour, 0.05)):

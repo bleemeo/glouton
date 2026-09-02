@@ -61,12 +61,23 @@ type response struct {
 }
 
 const (
-	errorTimeout  errorType = "timeout"
-	errorCanceled errorType = "canceled"
-	errorExec     errorType = "execution"
-	errorBadData  errorType = "bad_data"
-	errorInternal errorType = "internal"
-	errorNotFound errorType = "not_found"
+	errorTimeout         errorType = "timeout"
+	errorCanceled        errorType = "canceled"
+	errorExec            errorType = "execution"
+	errorBadData         errorType = "bad_data"
+	errorInternal        errorType = "internal"
+	errorNotFound        errorType = "not_found"
+	errorTooManyRequests errorType = "too_many_requests"
+)
+
+// maxConcurrentQueries bounds the number of PromQL evaluations running at once
+// (the memory-heavy part). Excess queries wait up to queryQueueWait for a slot
+// before being rejected with 429, rather than all running concurrently and
+// risking memory exhaustion. The wait keeps the local UI working (it fires many
+// query_range in parallel) while capping the load under real overload.
+const (
+	maxConcurrentQueries = 6
+	queryQueueWait       = 10 * time.Second
 )
 
 var (
@@ -75,6 +86,7 @@ var (
 	errMaxStep          = errors.New("exceeded maximum resolution of 11,000 points per timeseries. Try decreasing the query resolution (?step=XX)")
 	errParseDuration    = errors.New("cannot parse to a valid duration")
 	errInvalidTimestamp = errors.New("cannot parse to a valid timestamp")
+	errServerBusy       = errors.New("too many concurrent queries, try again later")
 	errInvalidLabelName = errors.New("invalid label name")
 	errNoMatchers       = errors.New("no match[] parameter provided")
 	errEmptyMatcher     = errors.New("match[] must contain at least one non-empty matcher")
@@ -104,6 +116,9 @@ type PromQL struct {
 	CORSOrigin *regexp.Regexp
 
 	queryEngine *promql.Engine
+	// sem gates concurrent query evaluations to maxConcurrentQueries.
+	sem chan struct{}
+
 	parser      parser.Parser
 }
 
@@ -171,6 +186,7 @@ func (p *PromQL) init() {
 		LookbackDelta:      5 * time.Minute,
 	}
 	p.queryEngine = promql.NewEngine(opts)
+	p.sem = make(chan struct{}, maxConcurrentQueries)
 	p.parser = parser.NewParser(parser.Options{})
 }
 
@@ -312,7 +328,25 @@ func (p *PromQL) query(r *http.Request, st storage.Queryable) (result apiFuncRes
 		defer cancel()
 	}
 
+	// Gate concurrent evaluations to avoid memory exhaustion. Wait up to
+	// queryQueueWait for a slot (so the local UI's parallel queries succeed)
+	// before rejecting with 429. Done before NewRangeQuery so the wait does not
+	// eat into the engine's own query timeout.
+	acqCtx, cancelAcq := context.WithTimeout(ctx, queryQueueWait)
+
+	select {
+	case p.sem <- struct{}{}:
+		cancelAcq()
+
+		defer func() { <-p.sem }()
+	case <-acqCtx.Done():
+		cancelAcq()
+
+		return apiFuncResult{nil, &apiError{errorTooManyRequests, errServerBusy}, nil, nil}
+	}
+
 	qry, err := p.queryEngine.NewInstantQuery(ctx, st, nil, r.FormValue("query"), ts)
+
 	if err != nil {
 		return invalidParamResult(err, "query")
 	}
@@ -742,6 +776,8 @@ func (p *PromQL) respondError(w http.ResponseWriter, apiErr *apiError, data any)
 		code = 422
 	case errorCanceled, errorTimeout:
 		code = http.StatusServiceUnavailable
+	case errorTooManyRequests:
+		code = http.StatusTooManyRequests
 	case errorInternal:
 		code = http.StatusInternalServerError
 	case errorNotFound:

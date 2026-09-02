@@ -603,7 +603,12 @@ func (e *Execution) allForcedCacheRefresh() bool {
 }
 
 func (e *Execution) synchronizersCall(ctx context.Context, synchronizersExecution []EntityExecution, f func(context.Context, EntityExecution) EntityExecution) {
-	for idx, ee := range synchronizersExecution {
+	for idx := range synchronizersExecution {
+		// Take a pointer so that errors set below are written back into the
+		// slice instead of a loop-local copy (the copy would only be persisted
+		// through the f() write-back, which is skipped on every continue path).
+		ee := &synchronizersExecution[idx]
+
 		if ctx.Err() != nil {
 			return
 		}
@@ -647,7 +652,7 @@ func (e *Execution) synchronizersCall(ctx context.Context, synchronizersExecutio
 		}
 
 		if ee.synchronizer != nil {
-			e.entities[idx] = f(ctx, ee)
+			synchronizersExecution[idx] = f(ctx, *ee)
 		}
 	}
 }

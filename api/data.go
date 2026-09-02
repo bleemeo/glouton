@@ -161,10 +161,6 @@ func (d *Data) Containers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if limit == -1 {
-		limit = len(containersRes)
-	}
-
 	pagination := Pagination{
 		Offset: offset,
 		Limit:  limit,
@@ -179,17 +175,32 @@ func (d *Data) Containers(w http.ResponseWriter, r *http.Request) {
 }
 
 func paginateInformation(input *Pagination, containersRes []*Container) []*Container {
-	if input != nil {
-		if len(containersRes) > input.Offset {
-			to := min(len(containersRes), input.Offset+input.Limit)
-
-			containersRes = containersRes[input.Offset:to]
-		} else if len(containersRes) <= input.Offset {
-			containersRes = []*Container{}
-		}
+	if input == nil {
+		return containersRes
 	}
 
-	return containersRes
+	// Normalize untrusted offset/limit (they come straight from query
+	// parameters) so out-of-range or negative values cannot panic the slice.
+	offset := max(input.Offset, 0)
+
+	limit := input.Limit
+	if limit < 0 {
+		// Any negative limit (including the -1 "no limit" sentinel) means "all".
+		limit = len(containersRes)
+	}
+
+	if offset >= len(containersRes) {
+		return []*Container{}
+	}
+
+	to := offset + limit
+	// Clamp to the slice length; the `to < offset` check also catches an
+	// offset+limit overflow (e.g. limit=math.MaxInt), which would wrap negative.
+	if to > len(containersRes) || to < offset {
+		to = len(containersRes)
+	}
+
+	return containersRes[offset:to]
 }
 
 func (d *Data) containerInformation(container facts.Container, c *Container) (*Container, error) {
