@@ -615,6 +615,28 @@ func (c *Client) Disable(until time.Time) {
 	}
 }
 
+// ForceReconnect drops the current connection so that the client establishes a
+// new one. Used when the server certificate changed: the connection is still
+// usable, but it is pinned to the old certificate, and Envoy will close it for
+// us at the end of its drain period - every connection at the same moment.
+// Reconnecting on request lets that be spread out instead.
+//
+// The connection manager re-reads c.mqtt on every iteration, so clearing it here
+// is enough: the reconnection happens on the next tick.
+func (c *Client) ForceReconnect() {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	if c.mqtt == nil {
+		return
+	}
+
+	logger.V(1).Printf("%s MQTT reconnection requested", c.opts.ID)
+
+	c.mqtt.Disconnect(100)
+	c.mqtt = nil
+}
+
 func (c *Client) DisabledUntil() time.Time {
 	c.l.Lock()
 	defer c.l.Unlock()

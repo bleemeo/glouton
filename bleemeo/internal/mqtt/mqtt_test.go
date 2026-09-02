@@ -132,6 +132,8 @@ func (*mockMQTTClient) DiagnosticArchive(context.Context, types.ArchiveWriter) e
 func (*mockMQTTClient) LastReport() time.Time    { return time.Now() }
 func (*mockMQTTClient) Disable(time.Time)        {}
 func (*mockMQTTClient) DisabledUntil() time.Time { return time.Time{} }
+
+func (*mockMQTTClient) ForceReconnect()          {}
 func (*mockMQTTClient) Disconnect(time.Duration) {}
 
 const agentID = "test-agent"
