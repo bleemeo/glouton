@@ -460,6 +460,28 @@ func (c *Client) pahoOptions(ctx context.Context) (*paho.ClientOptions, error) {
 	return pahoOptions, nil
 }
 
+// requestReconnect re-establishes the MQTT connection, telling the backend why
+// before dropping it.
+//
+// The message matters as much as the reconnection: a clean MQTT disconnect fires
+// no last will, so without it nothing records that the session changed. The agent
+// would come back, publish on /connect, and the backend would see a connect for an
+// agent it already believed connected - no status transition, so neither the
+// disconnection nor the new connection date would be recorded anywhere.
+func (c *Client) requestReconnect() {
+	payload := disconnectCause{"reconnect-requested"}
+
+	if err := c.mqtt.PublishAsJSON(
+		fmt.Sprintf("v1/agent/%s/disconnect", c.opts.AgentID),
+		payload,
+		false,
+	); err != nil {
+		logger.V(1).Printf("Unable to publish on disconnect topic: %v", err)
+	}
+
+	c.mqtt.ForceReconnect()
+}
+
 func (c *Client) shutdownTimeDrift() {
 	deadline := time.Now().Add(5 * time.Second)
 
@@ -891,7 +913,7 @@ func (c *Client) onNotification(ctx context.Context, msg paho.Message) {
 	case "maintenance-toggle":
 		c.opts.UpdateMaintenance()
 	case "mqtt-reconnect":
-		c.mqtt.ForceReconnect()
+		c.requestReconnect()
 	case "threshold-update":
 		c.opts.UpdateMetrics(payload.MetricUUID)
 	case "monitor-update":
