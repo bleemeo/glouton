@@ -244,6 +244,7 @@ type MQTTClient interface {
 	Disable(until time.Time)
 	DisabledUntil() time.Time
 	Disconnect(timeout time.Duration)
+	ForceReconnect()
 }
 
 type VSphereDevice interface {

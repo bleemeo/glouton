@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -57,25 +58,25 @@ unix  2      [ ACC ]     SEQPACKET  LISTENING     18666    1/init               
 func getMockNetstat() []psutilNet.ConnectionStat {
 	// (partial) output of a psutil.Connections().
 	return []psutilNet.ConnectionStat{
-		{Fd: 6, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: addrAllInterfaces, Port: 4242}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 0}, Status: listenState, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 323668},
-		{Fd: 6, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: addrAllInterfaces, Port: 6379}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 0}, Status: listenState, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 323667},
-		{Fd: 33, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: testAddr192168140, Port: 47740}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 443}, Status: testStatusEstablished, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 3191},
-		{Fd: 66, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: testAddr192168140, Port: 43479}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 443}, Status: testStatusEstablished, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 4587},
-		{Fd: 196, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: testAddr192168140, Port: 50596}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 80}, Status: testStatusCloseW, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 3943},
-		{Fd: 30, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: testAddr192168140, Port: 46290}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 443}, Status: testStatusEstablished, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 94042},
-		{Fd: 32, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: testAddr192168140, Port: 40308}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 443}, Status: testStatusEstablished, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 1898},
-		{Fd: 25, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: testAddr192168140, Port: 49634}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 443}, Status: testStatusEstablished, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 1898},
-		{Fd: 49, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: testAddr192168140, Port: 51010}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 443}, Status: testStatusEstablished, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 3544},
-		{Fd: 170, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: testAddr192168140, Port: 33884}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 443}, Status: testStatusEstablished, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 3544},
-		{Fd: 11, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: testAddr192168140, Port: 54268}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 139}, Status: testStatusCloseW, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 4507},
-		{Fd: 34, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: testAddr192168140, Port: 42536}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 443}, Status: testStatusEstablished, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 3021},
-		{Fd: 0, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: testAddr192168140, Port: 57478}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 443}, Status: "TIME_WAIT", Uids: []int32{}, Pid: 0},
-		{Fd: 7, Family: 10, Type: 1, Laddr: psutilNet.Addr{IP: "::", Port: 6379}, Raddr: psutilNet.Addr{IP: "::", Port: 0}, Status: listenState, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 323667},
-		{Fd: 158, Family: 10, Type: 1, Laddr: psutilNet.Addr{IP: "2a01:cb19:820e:5b00:7fa:37be:7396:8d8e", Port: 36116}, Raddr: psutilNet.Addr{IP: "FE80:0000:0000:5EFE:0192.0168.0001.0123", Port: 443}, Status: testStatusCloseW, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 3943},
-		{Fd: 0, Family: 2, Type: 2, Laddr: psutilNet.Addr{IP: testAddr192168140, Port: 68}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 67}, Status: testStatusNone, Uids: []int32{}, Pid: 0},
-		{Fd: 76, Family: 10, Type: 2, Laddr: psutilNet.Addr{IP: "::", Port: 46429}, Raddr: psutilNet.Addr{IP: "::", Port: 0}, Status: testStatusNone, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 4587},
-		{Fd: 0, Family: 10, Type: 2, Laddr: psutilNet.Addr{IP: "fe80::92d0:93a3:f56:b588", Port: 546}, Raddr: psutilNet.Addr{IP: "FE80:0000:0000:5EFE:0192.0168.0001.0123", Port: 0}, Status: testStatusNone, Uids: []int32{}, Pid: 0},
-		{Fd: 38, Family: 10, Type: 2, Laddr: psutilNet.Addr{IP: "::", Port: 60918}, Raddr: psutilNet.Addr{IP: "::", Port: 0}, Status: testStatusNone, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 4587},
+		{Fd: 6, Family: syscall.AF_INET, Type: 1, Laddr: psutilNet.Addr{IP: addrAllInterfaces, Port: 4242}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 0}, Status: listenState, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 323668},
+		{Fd: 6, Family: syscall.AF_INET, Type: 1, Laddr: psutilNet.Addr{IP: addrAllInterfaces, Port: 6379}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 0}, Status: listenState, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 323667},
+		{Fd: 33, Family: syscall.AF_INET, Type: 1, Laddr: psutilNet.Addr{IP: testAddr192168140, Port: 47740}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 443}, Status: testStatusEstablished, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 3191},
+		{Fd: 66, Family: syscall.AF_INET, Type: 1, Laddr: psutilNet.Addr{IP: testAddr192168140, Port: 43479}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 443}, Status: testStatusEstablished, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 4587},
+		{Fd: 196, Family: syscall.AF_INET, Type: 1, Laddr: psutilNet.Addr{IP: testAddr192168140, Port: 50596}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 80}, Status: testStatusCloseW, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 3943},
+		{Fd: 30, Family: syscall.AF_INET, Type: 1, Laddr: psutilNet.Addr{IP: testAddr192168140, Port: 46290}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 443}, Status: testStatusEstablished, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 94042},
+		{Fd: 32, Family: syscall.AF_INET, Type: 1, Laddr: psutilNet.Addr{IP: testAddr192168140, Port: 40308}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 443}, Status: testStatusEstablished, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 1898},
+		{Fd: 25, Family: syscall.AF_INET, Type: 1, Laddr: psutilNet.Addr{IP: testAddr192168140, Port: 49634}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 443}, Status: testStatusEstablished, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 1898},
+		{Fd: 49, Family: syscall.AF_INET, Type: 1, Laddr: psutilNet.Addr{IP: testAddr192168140, Port: 51010}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 443}, Status: testStatusEstablished, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 3544},
+		{Fd: 170, Family: syscall.AF_INET, Type: 1, Laddr: psutilNet.Addr{IP: testAddr192168140, Port: 33884}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 443}, Status: testStatusEstablished, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 3544},
+		{Fd: 11, Family: syscall.AF_INET, Type: 1, Laddr: psutilNet.Addr{IP: testAddr192168140, Port: 54268}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 139}, Status: testStatusCloseW, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 4507},
+		{Fd: 34, Family: syscall.AF_INET, Type: 1, Laddr: psutilNet.Addr{IP: testAddr192168140, Port: 42536}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 443}, Status: testStatusEstablished, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 3021},
+		{Fd: 0, Family: syscall.AF_INET, Type: 1, Laddr: psutilNet.Addr{IP: testAddr192168140, Port: 57478}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 443}, Status: "TIME_WAIT", Uids: []int32{}, Pid: 0},
+		{Fd: 7, Family: syscall.AF_INET6, Type: 1, Laddr: psutilNet.Addr{IP: "::", Port: 6379}, Raddr: psutilNet.Addr{IP: "::", Port: 0}, Status: listenState, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 323667},
+		{Fd: 158, Family: syscall.AF_INET6, Type: 1, Laddr: psutilNet.Addr{IP: "2a01:cb19:820e:5b00:7fa:37be:7396:8d8e", Port: 36116}, Raddr: psutilNet.Addr{IP: "FE80:0000:0000:5EFE:0192.0168.0001.0123", Port: 443}, Status: testStatusCloseW, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 3943},
+		{Fd: 0, Family: syscall.AF_INET, Type: 2, Laddr: psutilNet.Addr{IP: testAddr192168140, Port: 68}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 67}, Status: testStatusNone, Uids: []int32{}, Pid: 0},
+		{Fd: 76, Family: syscall.AF_INET6, Type: 2, Laddr: psutilNet.Addr{IP: "::", Port: 46429}, Raddr: psutilNet.Addr{IP: "::", Port: 0}, Status: testStatusNone, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 4587},
+		{Fd: 0, Family: syscall.AF_INET6, Type: 2, Laddr: psutilNet.Addr{IP: "fe80::92d0:93a3:f56:b588", Port: 546}, Raddr: psutilNet.Addr{IP: "FE80:0000:0000:5EFE:0192.0168.0001.0123", Port: 0}, Status: testStatusNone, Uids: []int32{}, Pid: 0},
+		{Fd: 38, Family: syscall.AF_INET6, Type: 2, Laddr: psutilNet.Addr{IP: "::", Port: 60918}, Raddr: psutilNet.Addr{IP: "::", Port: 0}, Status: testStatusNone, Uids: []int32{1000, 1000, 1000, 1000}, Pid: 4587},
 	}
 }
 
@@ -111,6 +112,74 @@ func TestAddAddress(t *testing.T) {
 			adds: []ListenAddress{{NetworkFamily: networkUnix, Address: testUnixSocket}},
 			want: []ListenAddress{{NetworkFamily: networkUnix, Address: testUnixSocket}},
 		},
+		{
+			// A real (non-wildcard) IPv6 address must survive, with its family normalized to tcp.
+			adds: []ListenAddress{{NetworkFamily: networkTCP + "6", Address: "2001:db8::1", Port: 8080}},
+			want: []ListenAddress{{NetworkFamily: networkTCP, Address: "2001:db8::1", Port: 8080}},
+		},
+		{
+			// Two distinct, non-local addresses sharing a port are collapsed to one
+			// representative address (only one address is usable for checks/metrics anyway):
+			// whichever was seen first is kept, since neither is preferred over the other.
+			adds: []ListenAddress{
+				{NetworkFamily: networkTCP, Address: "172.17.0.1", Port: 8080},
+				{NetworkFamily: networkTCP + "6", Address: "2001:db8::5", Port: 8080},
+			},
+			want: []ListenAddress{
+				{NetworkFamily: networkTCP, Address: "172.17.0.1", Port: 8080},
+			},
+		},
+		{
+			// Same as above with a wildcard IPv4 bind (0.0.0.0) instead of a specific address:
+			// still collapsed to the first-seen entry since neither side is local.
+			adds: []ListenAddress{
+				{NetworkFamily: networkTCP, Address: addrAllInterfaces, Port: 8080},
+				{NetworkFamily: networkTCP + "6", Address: "2001:db8::5", Port: 8080},
+			},
+			want: []ListenAddress{
+				{NetworkFamily: networkTCP, Address: addrAllInterfaces, Port: 8080},
+			},
+		},
+		{
+			// ::1 must NOT be rewritten as 127.0.0.1 (unlike the wildcard address, binding to
+			// ::1 does not also accept connections on 127.0.0.1), but when both loopback
+			// addresses are present for the same port, IPv4 is preferred so the pick is
+			// consistent regardless of discovery order.
+			adds: []ListenAddress{
+				{NetworkFamily: networkTCP, Address: addrLocalhost, Port: 8080},
+				{NetworkFamily: networkTCP + "6", Address: "::1", Port: 8080},
+			},
+			want: []ListenAddress{
+				{NetworkFamily: networkTCP, Address: addrLocalhost, Port: 8080},
+			},
+		},
+		{
+			// The same loopback preference applies regardless of discovery order.
+			adds: []ListenAddress{
+				{NetworkFamily: networkTCP + "6", Address: "::1", Port: 8080},
+				{NetworkFamily: networkTCP, Address: addrLocalhost, Port: 8080},
+			},
+			want: []ListenAddress{
+				{NetworkFamily: networkTCP, Address: addrLocalhost, Port: 8080},
+			},
+		},
+		{
+			// A link-local IPv6 address can't be connected to without specifying a zone
+			// (interface), which we have no way to determine here, so it must be dropped
+			// entirely rather than kept as a useless listen address.
+			adds: []ListenAddress{{NetworkFamily: networkTCP + "6", Address: "fe80::1", Port: 8080}},
+			want: nil,
+		},
+		{
+			// A local address is preferred over a non-local one sharing the same port.
+			adds: []ListenAddress{
+				{NetworkFamily: networkTCP, Address: "172.17.0.1", Port: 8080},
+				{NetworkFamily: networkTCP, Address: addrLocalhost, Port: 8080},
+			},
+			want: []ListenAddress{
+				{NetworkFamily: networkTCP, Address: addrLocalhost, Port: 8080},
+			},
+		},
 	}
 
 	for i, c := range cases {
@@ -137,7 +206,7 @@ func TestDecodeNetstatFile(t *testing.T) {
 			{NetworkFamily: networkTCP, Address: "172.17.0.1", Port: 9100},
 		},
 		14250: {
-			{NetworkFamily: networkTCP, Address: addrLocalhost, Port: 631}, // tcp6 as assumed to be tcp6+4. We only work with tcp4 for now
+			{NetworkFamily: networkTCP, Address: "::1", Port: 631}, // tcp6 normalized to tcp, but ::1 is kept distinct from 127.0.0.1
 		},
 		1375: {
 			{NetworkFamily: networkUDP, Address: addrAllInterfaces, Port: 5353},
@@ -198,6 +267,23 @@ func TestMergeNetstats(t *testing.T) {
 
 	if data[0].Port != 4242 || data[0].Address != addrAllInterfaces {
 		t.Errorf("Unexpected created data in netstat results for port 32668. Got %s:%d, want %s:4242", data[0].Address, data[0].Port, addrAllInterfaces)
+	}
+}
+
+func TestListenAddressString(t *testing.T) {
+	cases := []struct {
+		addr ListenAddress
+		want string
+	}{
+		{addr: ListenAddress{NetworkFamily: networkTCP, Address: addrAllInterfaces, Port: 80}, want: "0.0.0.0:80"},
+		{addr: ListenAddress{NetworkFamily: networkTCP, Address: "2001:db8::1", Port: 8080}, want: "[2001:db8::1]:8080"},
+		{addr: ListenAddress{NetworkFamily: networkUnix, Address: testUnixSocket}, want: testUnixSocket},
+	}
+
+	for _, c := range cases {
+		if got := c.addr.String(); got != c.want {
+			t.Errorf("ListenAddress{%v}.String() == %q, want %q", c.addr, got, c.want)
+		}
 	}
 }
 

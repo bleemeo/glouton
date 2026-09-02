@@ -760,7 +760,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	_ = os.Remove(a.config.Agent.UpgradeFile)
 	_ = os.Remove(a.config.Agent.AutoUpgradeFile)
 
-	apiBindAddress := fmt.Sprintf("%s:%d", a.config.Web.Listener.Address, a.config.Web.Listener.Port)
+	apiBindAddress := net.JoinHostPort(a.config.Web.Listener.Address, strconv.Itoa(a.config.Web.Listener.Port))
 
 	var warnings prometheus.MultiError
 
@@ -1264,7 +1264,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		nrpeConfFile := a.config.NRPE.ConfPaths
 		nrperesponse := nrpe.NewResponse(a.config.Services, a.discovery, nrpeConfFile, a.commandRunner)
 		server := nrpe.New(
-			fmt.Sprintf("%s:%d", a.config.NRPE.Address, a.config.NRPE.Port),
+			net.JoinHostPort(a.config.NRPE.Address, strconv.Itoa(a.config.NRPE.Port)),
 			a.config.NRPE.SSL,
 			nrperesponse.Response,
 		)
@@ -1341,7 +1341,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	})
 
 	if a.config.Telegraf.StatsD.Enable {
-		input, err := statsd.New(fmt.Sprintf("%s:%d", a.config.Telegraf.StatsD.Address, a.config.Telegraf.StatsD.Port))
+		input, err := statsd.New(net.JoinHostPort(a.config.Telegraf.StatsD.Address, strconv.Itoa(a.config.Telegraf.StatsD.Port)))
 		if err != nil {
 			logger.Printf("Unable to create StatsD input: %v", err)
 
@@ -2116,8 +2116,13 @@ func (a *agent) handleTrigger(ctx context.Context) {
 			} else {
 				logger.V(2).Printf("Enable Docker metrics")
 
-				a.dockerInputID, _ = a.collector.AddInput(i, "docker")
-				a.dockerInputPresent = true
+				inputID, err := a.collector.AddInput(i, "docker")
+				if err != nil {
+					logger.V(1).Printf("error when starting Docker input: %v", err)
+				} else {
+					a.dockerInputID = inputID
+					a.dockerInputPresent = true
+				}
 			}
 		} else if !hasConnection && a.dockerInputPresent {
 			logger.V(2).Printf("Disable Docker metrics")

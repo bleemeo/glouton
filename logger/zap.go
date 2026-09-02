@@ -18,45 +18,33 @@ package logger
 
 import (
 	"strings"
-	"sync"
 	"time"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
-const (
-	logDebouncePeriod      = 30 * time.Second
-	logDebouncePurgePeriod = 10 * time.Minute
-	// logDebounceMaxEntries bounds the de-duplication cache. The periodic purge
-	// only drops entries older than logDebouncePeriod, so a flood of *unique*
-	// messages (which never dedupe — e.g. a high-volume log source failing to
-	// parse, each line carrying a unique field) would otherwise add one entry per
-	// message and retain gigabytes between purges.
-	logDebounceMaxEntries = 10000
-)
-
 func ZapLogger() *zap.Logger {
 	encoderConfig := zap.NewProductionEncoderConfig()
 	encoderConfig.EncodeTime = nil
 
-	return zap.New(
-		zapcore.NewCore(
-			zapcore.NewConsoleEncoder(encoderConfig),
-			&zapWrapper{
-				lastPurge: time.Now(),
-				m:         make(map[string]time.Time),
-			},
-			zap.DebugLevel,
-		),
+	core := zapcore.NewCore(
+		zapcore.NewConsoleEncoder(encoderConfig),
+		&zapWrapper{}, // routing only (debug→V(2), else V(1)); no dedup map
+		zap.DebugLevel,
 	)
+
+	// Sample per 30s tick (mirrors the previous debounce window): log the first
+	// 10 occurrences of a given message template in full, then only 1 in 100
+	// thereafter until the tick resets. Keeps some visibility into a storm
+	// instead of going fully silent, while staying bounded regardless of how
+	// many distinct field values (e.g. timestamps) the flooding messages carry.
+	return zap.New(zapcore.NewSamplerWithOptions(core, 30*time.Second, 10, 100))
 }
 
-type zapWrapper struct {
-	l         sync.Mutex
-	lastPurge time.Time
-	m         map[string]time.Time
-}
+// zapWrapper routes zap output to the glouton logger's verbosity levels.
+// Sampling/de-duplication is handled upstream by zapcore.NewSamplerWithOptions.
+type zapWrapper struct{}
 
 func (*zapWrapper) Sync() error {
 	return nil
@@ -65,32 +53,6 @@ func (*zapWrapper) Sync() error {
 func (z *zapWrapper) Write(buffer []byte) (int, error) {
 	msg := strings.TrimRight(string(buffer), "\n\r")
 
-	z.l.Lock()
-
-	if time.Since(z.lastPurge) >= logDebouncePurgePeriod {
-		z.purgeDebounceCache(time.Now())
-	}
-
-	lastPrint, found := z.m[msg]
-	if found && time.Since(lastPrint) < logDebouncePeriod {
-		z.l.Unlock()
-
-		return len(buffer), nil
-	}
-
-	// Keep the cache bounded: if a flood of unique messages has filled it (the
-	// periodic purge can't help when every entry is recent), reset it. Worst
-	// case a few duplicate lines slip through until it fills again.
-	if len(z.m) >= logDebounceMaxEntries {
-		clear(z.m)
-
-		z.lastPurge = time.Now()
-	}
-
-	z.m[msg] = time.Now()
-
-	z.l.Unlock()
-
 	if strings.HasPrefix(msg, "debug") {
 		V(2).Println(msg)
 	} else {
@@ -98,14 +60,4 @@ func (z *zapWrapper) Write(buffer []byte) (int, error) {
 	}
 
 	return len(buffer), nil
-}
-
-func (z *zapWrapper) purgeDebounceCache(now time.Time) {
-	z.lastPurge = now
-
-	for msg, ts := range z.m {
-		if now.Sub(ts) > logDebouncePeriod {
-			delete(z.m, msg)
-		}
-	}
 }
