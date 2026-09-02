@@ -164,40 +164,29 @@ func (r *Runtime) Exec(ctx context.Context, containerID string, cmd []string) ([
 
 // Containers call function on container runtimes.
 func (r *Runtime) Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error) {
-	containers, _, err = r.EnumerateContainers(ctx, maxAge, includeIgnored)
+	containers, _, _, err = r.EnumerateContainers(ctx, maxAge, includeIgnored)
 
 	return containers, err
 }
 
-// EnumerateContainers implements crTypes.RuntimeInterface. complete is true only if every runtime that has
-// ever worked fully enumerated its own containers this time.
-func (r *Runtime) EnumerateContainers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, complete bool, globalErr error) {
+// EnumerateContainers implements crTypes.RuntimeInterface. complete is true only if every runtime
+// enumerated successfully this call. mayForgetAbsent additionally exempts a runtime that has never
+// enumerated anything (zero LastUpdate): it cannot be hiding a container any caller is tracking.
+func (r *Runtime) EnumerateContainers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, complete bool, mayForgetAbsent bool, globalErr error) {
 	var errs types.MultiErrors
 
 	containerID2Info := make(map[string]containerInfo)
 
-	// One runtime failing to enumerate makes the merged list incomplete, even though the runtimes that
-	// did work still contribute theirs -- so this is deliberately not the same thing as globalErr, which
-	// stays nil whenever at least one runtime returned something (callers that just display or enrich the
-	// list want that partial result).
 	complete = true
+	mayForgetAbsent = true
 
-	// Whether any runtime's answer actually bore on completeness. With every runtime skipped as
-	// never-worked complete would otherwise come back vacuously true alongside an empty list and no error.
 	anyRuntimeCounted := false
 
 	for i, cr := range r.Runtimes {
 		// subComplete, not just err: a sub-runtime can report no error and still have enumerated nothing,
 		// since docker and containerd both swallow their error until they have worked once.
-		list, subComplete, err := cr.EnumerateContainers(ctx, maxAge, true)
+		list, subComplete, subMayForgetAbsent, err := cr.EnumerateContainers(ctx, maxAge, true)
 
-		// Checked after the call, so a runtime that just succeeded for the first time counts as working.
-		// A zero LastUpdate means no enumeration has ever published a container list here (docker and
-		// containerd both set it as they publish the new map), which is the property that matters: see the
-		// note above for why a runtime that has published nothing cannot make the merged list incomplete.
-		// Its error is still collected into errs either way, which is about surfacing failures rather than
-		// about what callers may conclude from a container's absence -- though errs only ever reaches
-		// globalErr when no runtime returned anything at all, see the len(containers) check below.
 		neverWorked := cr.LastUpdate().IsZero()
 		if !neverWorked {
 			anyRuntimeCounted = true
@@ -205,16 +194,21 @@ func (r *Runtime) EnumerateContainers(ctx context.Context, maxAge time.Duration,
 
 		if err != nil {
 			errs = append(errs, err)
+			complete = false
 
 			if !neverWorked {
-				complete = false
+				mayForgetAbsent = false
 			}
 
 			continue
 		}
 
-		if !subComplete && !neverWorked {
+		if !subComplete {
 			complete = false
+		}
+
+		if !subMayForgetAbsent && !neverWorked {
+			mayForgetAbsent = false
 		}
 
 		for _, c := range list {
@@ -230,15 +224,15 @@ func (r *Runtime) EnumerateContainers(ctx context.Context, maxAge time.Duration,
 	}
 
 	if !anyRuntimeCounted {
-		complete = false
+		mayForgetAbsent = false
 	}
 
 	if len(containers) == 0 {
 		if errs != nil {
-			return nil, complete, fixMultiError(errs)
+			return nil, complete, mayForgetAbsent, fixMultiError(errs)
 		}
 
-		return nil, complete, nil
+		return nil, complete, mayForgetAbsent, nil
 	}
 
 	r.l.Lock()
@@ -264,7 +258,7 @@ func (r *Runtime) EnumerateContainers(ctx context.Context, maxAge time.Duration,
 
 	r.l.Unlock()
 
-	return containers, complete, nil
+	return containers, complete, mayForgetAbsent, nil
 }
 
 // Events call function on container runtimes.

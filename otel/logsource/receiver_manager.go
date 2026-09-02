@@ -672,8 +672,8 @@ type containerMatcher struct {
 // serviceTailed names the containers otel/logprocessing already tails through its own service path (see
 // logprocessing.Manager.ServiceTailedContainerIDs); it does not suppress anything here, it only lets a
 // container's label source be rebuilt when that status changes, so providers get asked again.
-// complete says whether containers authoritatively enumerates every container that currently exists.
-func (rm *ReceiverManager) UpdateContainers(ctx context.Context, containers []facts.Container, serviceTailed map[string]bool, complete bool) {
+// mayForgetAbsent says whether a container missing from containers may be treated as permanently removed.
+func (rm *ReceiverManager) UpdateContainers(ctx context.Context, containers []facts.Container, serviceTailed map[string]bool, mayForgetAbsent bool) {
 	rm.l.Lock()
 	defer rm.l.Unlock()
 
@@ -723,10 +723,10 @@ func (rm *ReceiverManager) UpdateContainers(ctx context.Context, containers []fa
 	}
 
 	for _, ms := range rm.receivers {
-		rm.stopUnwantedContainerTails(ctx, ms, currentByReceiver[ms.name], complete)
+		rm.stopUnwantedContainerTails(ctx, ms, currentByReceiver[ms.name], mayForgetAbsent)
 	}
 
-	rm.updateLabelContainers(ctx, containers, claimed, serviceTailed, complete)
+	rm.updateLabelContainers(ctx, containers, claimed, serviceTailed, mayForgetAbsent)
 }
 
 // ContainerIDsShippedByReceivers returns the IDs of containers whose logs an explicit
@@ -824,7 +824,7 @@ func (rm *ReceiverManager) updateLabelContainers(
 	containers []facts.Container,
 	claimed map[string]bool,
 	serviceTailed map[string]bool,
-	complete bool,
+	mayForgetAbsent bool,
 ) {
 	current := make(map[string]bool, len(containers))
 
@@ -900,11 +900,9 @@ func (rm *ReceiverManager) updateLabelContainers(
 			continue
 		}
 
-		// Forget the offset only when this cycle's container list was complete: then the container really
-		// is gone for good (not just a restart) and its offset is dead weight. Otherwise the container may
-		// well still exist and simply be missing from an incomplete enumeration, so the tail stops but the
-		// offset survives for whoever picks it up next. See UpdateContainers' complete parameter.
-		rm.shutdownSource(ctx, ms, complete)
+		// Forget the offset only when mayForgetAbsent. Otherwise it may still exist and simply be missing from
+		// an incomplete enumeration, so the tail stops but the offset survives for whoever picks it up next.
+		rm.shutdownSource(ctx, ms, mayForgetAbsent)
 		rm.releaseProviders(ctx, ms.container)
 		delete(rm.byContainer, id)
 	}
@@ -1111,7 +1109,7 @@ func (rm *ReceiverManager) setupAndStartReceiver(ctx context.Context, setup rece
 
 // stopUnwantedContainerTails stops every container tail under ms whose container ID isn't in wanted.
 // forget permanently drops the removed containers' persisted read offsets, and must only be true when
-// wanted was derived from a complete container enumeration -- see UpdateContainers' complete parameter.
+// wanted was derived from UpdateContainers' mayForgetAbsent parameter being true.
 func (rm *ReceiverManager) stopUnwantedContainerTails(ctx context.Context, ms *managedSource, wanted map[string]bool, forget bool) {
 	ms.l.Lock()
 	defer ms.l.Unlock()

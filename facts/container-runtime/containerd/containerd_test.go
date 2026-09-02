@@ -912,45 +912,54 @@ func TestHasHostNetwork(t *testing.T) {
 	}
 }
 
-// TestPrimaryAddressFromProcHonorsHostProc guards against a regression where primaryAddressFromProc read a
-// hardcoded /proc/<pid>/net/..., ignoring the HOST_PROC indirection envsetup.SetupContainer establishes
-// for a containerized Glouton with the host's /proc bind-mounted under its hostroot. Reading a bare /proc
-// there resolves the PID in Glouton's own namespace instead of the host's -- at best failing, at worst
-// matching an unrelated process that happens to share the number and reporting its address as the
-// container's, which then flows into Service.IPAddress and every check/input target built from it.
-//
-// Deliberately not parallel: t.Setenv below panics in a test that has called t.Parallel().
-func TestPrimaryAddressFromProcHonorsHostProc(t *testing.T) {
-	const (
-		pid     = 4242
-		fibTrie = `Main:
-  +-- 172.17.0.0/16 2 0 2
-     |-- 172.17.0.9
-        /32 host LOCAL
-`
-	)
-
-	hostProc := t.TempDir()
-
-	netDir := filepath.Join(hostProc, strconv.Itoa(pid), "net")
-	if err := os.MkdirAll(netDir, 0o750); err != nil {
-		t.Fatal("Can't create fake procfs:", err)
+// TestPrimaryAddressFromProcHonorsHostRoot guards against a regression where primaryAddressFromProc read a
+// hardcoded /proc/<pid>/net/..., ignoring the hostroot under which a containerized Glouton sees the host's
+// procfs. Reading a bare /proc there resolves the PID in Glouton's own namespace instead of the host's --
+// at best failing, at worst matching an unrelated process that happens to share the number and reporting
+// its address as the container's, which then flows into Service.IPAddress and every check/input target
+// built from it.
+func TestPrimaryAddressFromProcHonorsHostRoot(t *testing.T) {
+	fibTrieFor := func(addr string) string {
+		return "Main:\n  +-- 172.17.0.0/16 2 0 2\n     |-- " + addr + "\n        /32 host LOCAL\n"
 	}
 
-	if err := os.WriteFile(filepath.Join(netDir, "fib_trie"), []byte(fibTrie), 0o600); err != nil {
-		t.Fatal("Can't write fake fib_trie:", err)
+	const pid = 4242
+
+	writeFakeProc := func(t *testing.T, procDir, addr string) {
+		t.Helper()
+
+		netDir := filepath.Join(procDir, strconv.Itoa(pid), "net")
+		if err := os.MkdirAll(netDir, 0o750); err != nil {
+			t.Fatal("Can't create fake procfs:", err)
+		}
+
+		if err := os.WriteFile(filepath.Join(netDir, "fib_trie"), []byte(fibTrieFor(addr)), 0o600); err != nil {
+			t.Fatal("Can't write fake fib_trie:", err)
+		}
 	}
 
-	// Without HOST_PROC, the real /proc is read: PID 4242 almost certainly isn't ours to interpret, so
-	// this only asserts that the fake tree is NOT what gets picked up.
-	if got := primaryAddressFromProc(pid); got == "172.17.0.9" {
-		t.Fatal("Expected the fake procfs to be ignored while HOST_PROC is unset")
+	hostRoot := t.TempDir()
+	writeFakeProc(t, filepath.Join(hostRoot, "proc"), "172.17.0.9")
+
+	// hostRoot "" must resolve exactly like "/", reading the real /proc -- not filepath.Join("", "proc"),
+	// which is the relative "proc" and would read whatever Glouton's working directory happens to contain.
+	// "" is reachable in production: agent.go leaves hostRootPath empty when Glouton runs containerized
+	// with GLOUTON_DF_HOST_MOUNT_POINT unset, which envsetup only warns about.
+	//
+	// A merely-missing fake tree wouldn't tell a relative resolution apart from the correct absolute one,
+	// since both would fail to find pid 4242 under a made-up hostRoot -- so this plants a decoy tree at the
+	// relative location instead, and asserts it is NOT what gets picked up.
+	decoyWD := t.TempDir()
+	writeFakeProc(t, filepath.Join(decoyWD, "proc"), "10.10.10.10")
+
+	t.Chdir(decoyWD)
+
+	if got := primaryAddressFromProc(pid, ""); got == "10.10.10.10" {
+		t.Fatal("primaryAddressFromProc(pid, \"\") read the relative ./proc decoy instead of the real /proc")
 	}
 
-	t.Setenv("HOST_PROC", hostProc)
-
-	if got, want := primaryAddressFromProc(pid), "172.17.0.9"; got != want {
-		t.Errorf("primaryAddressFromProc() with HOST_PROC set = %q, want %q", got, want)
+	if got, want := primaryAddressFromProc(pid, hostRoot), "172.17.0.9"; got != want {
+		t.Errorf("primaryAddressFromProc() under hostRoot = %q, want %q", got, want)
 	}
 }
 
@@ -961,9 +970,9 @@ func TestPrimaryAddressFromProcHonorsHostProc(t *testing.T) {
 // Paused and Pausing all still have a live process behind that PID (containerd's own process.Delete refuses
 // those alongside Running as "must be stopped first"), so skipping them silently dropped a merely paused
 // container's address.
-//
-// Deliberately not parallel: t.Setenv below panics in a test that has called t.Parallel().
 func TestConvertToContainerObjectPrimaryAddressByTaskStatus(t *testing.T) {
+	t.Parallel()
+
 	const (
 		namespace = "default"
 		pid       = 5150
@@ -976,9 +985,9 @@ func TestConvertToContainerObjectPrimaryAddressByTaskStatus(t *testing.T) {
 	)
 
 	// A fake procfs for pid, so a resolved address is deterministic instead of depending on the host.
-	hostProc := t.TempDir()
+	hostRoot := t.TempDir()
 
-	netDir := filepath.Join(hostProc, strconv.Itoa(pid), "net")
+	netDir := filepath.Join(hostRoot, "proc", strconv.Itoa(pid), "net")
 	if err := os.MkdirAll(netDir, 0o750); err != nil {
 		t.Fatal("Can't create fake procfs:", err)
 	}
@@ -986,8 +995,6 @@ func TestConvertToContainerObjectPrimaryAddressByTaskStatus(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(netDir, "fib_trie"), []byte(fibTrie), 0o600); err != nil {
 		t.Fatal("Can't write fake fib_trie:", err)
 	}
-
-	t.Setenv("HOST_PROC", hostProc)
 
 	testCases := []struct {
 		status   client.ProcessStatus
@@ -1003,6 +1010,8 @@ func TestConvertToContainerObjectPrimaryAddressByTaskStatus(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(string(tc.status), func(t *testing.T) {
+			t.Parallel()
+
 			ctr := MockContainer{
 				namespace: namespace,
 				MockInfo: ContainerOCISpec{
@@ -1022,7 +1031,7 @@ func TestConvertToContainerObjectPrimaryAddressByTaskStatus(t *testing.T) {
 
 			ctx := namespaces.WithNamespace(t.Context(), namespace)
 
-			obj, err := convertToContainerObject(ctx, namespace, ctr)
+			obj, err := convertToContainerObject(ctx, namespace, ctr, hostRoot)
 			if err != nil {
 				t.Fatal("convertToContainerObject failed:", err)
 			}

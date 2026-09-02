@@ -77,6 +77,8 @@ type Containerd struct {
 	DeletedContainersCallback func(containersID []string)
 	IsContainerIgnored        func(facts.Container) bool
 
+	hostRoot string
+
 	l                 sync.Mutex
 	workedOnce        bool
 	openConnection    func(ctx context.Context, address string) (cl containerdClient, err error)
@@ -104,6 +106,7 @@ func New(
 ) *Containerd {
 	return newWithOpenner(
 		containerTypes.ExpandRuntimeAddresses(runtime, hostRoot),
+		hostRoot,
 		deletedContainersCallback,
 		isContainerIgnored,
 		openConnection,
@@ -112,6 +115,7 @@ func New(
 
 func newWithOpenner(
 	addresses []string,
+	hostRoot string,
 	deletedContainersCallback func(containersID []string),
 	isContainerIgnored func(facts.Container) bool,
 	openConnection func(ctx context.Context, address string) (cl containerdClient, err error),
@@ -119,6 +123,7 @@ func newWithOpenner(
 	return &Containerd{
 		openConnection:            openConnection,
 		Addresses:                 addresses,
+		hostRoot:                  hostRoot,
 		DeletedContainersCallback: deletedContainersCallback,
 		IsContainerIgnored:        isContainerIgnored,
 		lastDelete:                make(map[string]time.Time),
@@ -394,26 +399,25 @@ func (c *Containerd) CachedContainer(containerID string) (cont facts.Container, 
 
 // Containers return ContainerD containers.
 func (c *Containerd) Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error) {
-	containers, _, err = c.EnumerateContainers(ctx, maxAge, includeIgnored)
+	containers, _, _, err = c.EnumerateContainers(ctx, maxAge, includeIgnored)
 
 	return containers, err
 }
 
-// EnumerateContainers implements crTypes.RuntimeInterface.
-func (c *Containerd) EnumerateContainers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, complete bool, err error) {
+// EnumerateContainers implements crTypes.RuntimeInterface. mayForgetAbsent always equals complete here: a
+// single runtime has no "some other runtime" to exempt.
+func (c *Containerd) EnumerateContainers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, complete bool, mayForgetAbsent bool, err error) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
 	if time.Since(c.lastUpdate) >= maxAge {
 		err = c.updateContainers(ctx)
 		if err != nil {
-			// complete stays false through the !workedOnce swallow below, which is what otherwise hides
-			// this failure from callers entirely.
 			if !c.workedOnce {
-				return nil, false, nil
+				return nil, false, false, nil
 			}
 
-			return nil, false, err
+			return nil, false, false, err
 		}
 	}
 
@@ -426,7 +430,7 @@ func (c *Containerd) EnumerateContainers(ctx context.Context, maxAge time.Durati
 
 	// A cache hit (no refresh due this call) counts as complete too: the cache only ever holds a fully
 	// successful enumeration, since a failed refresh returns above rather than falling back to it.
-	return containers, true, nil
+	return containers, true, true, nil
 }
 
 // IsRuntimeRunning returns whether or not Containerd is available
@@ -804,7 +808,7 @@ func (c *Containerd) updateContainer(ctx context.Context, gloutonID string) (con
 		return containerObject{}, err
 	}
 
-	return convertToContainerObject(ctx, ns, container)
+	return convertToContainerObject(ctx, ns, container, c.hostRoot)
 }
 
 func (c *Containerd) updateContainers(ctx context.Context) error {
@@ -881,19 +885,6 @@ func hasHostNetwork(spec *oci.Spec) bool {
 	return true
 }
 
-// hostProcPath returns the procfs mount point to read, honoring the HOST_PROC indirection
-// envsetup.SetupContainer establishes when Glouton runs containerized with the host's /proc bind-mounted
-// under its hostroot. Reading a bare /proc there would resolve PIDs in Glouton's own namespace rather than
-// the host's -- at best failing, at worst matching an unrelated process that happens to share the number.
-// Mirrors inputs/diskio's own HOST_PROC handling.
-func hostProcPath() string {
-	if hostProc := os.Getenv("HOST_PROC"); hostProc != "" {
-		return hostProc
-	}
-
-	return "/proc"
-}
-
 // primaryAddressFromProc returns the first address assigned in the given PID's network
 // namespace (IPv4 preferred over IPv6, excluding loopback and link-local), read directly
 // from procfs. Since <procfs>/<pid> reflects whatever PID namespace this process shares with
@@ -901,16 +892,26 @@ func hostProcPath() string {
 // pid to be visible: <procfs>/<pid>/net/{fib_trie,if_inet6} are plain world-readable files,
 // unlike ptrace-gated entries such as <procfs>/<pid>/environ or <procfs>/<pid>/stack which need
 // CAP_SYS_PTRACE -- no subprocess needed.
-func primaryAddressFromProc(pid int) string {
-	if address := ipv4LocalAddressFromProc(pid); address != "" {
+//
+// hostRoot is where the host's / is mounted when Glouton runs containerized (as in
+// prometheus/process/source_linux.go's own procPath); reading a bare /proc there would resolve pid in
+// Glouton's own namespace rather than the host's -- at best failing, at worst matching an unrelated
+// process that happens to share the number.
+func primaryAddressFromProc(pid int, hostRoot string) string {
+	procPath := filepath.Join(hostRoot, "proc")
+	if hostRoot == "" {
+		procPath = "/proc"
+	}
+
+	if address := ipv4LocalAddressFromProc(pid, procPath); address != "" {
 		return address
 	}
 
-	return globalIPv6AddressFromProc(pid)
+	return globalIPv6AddressFromProc(pid, procPath)
 }
 
-func ipv4LocalAddressFromProc(pid int) string {
-	data, err := os.ReadFile(filepath.Join(hostProcPath(), strconv.Itoa(pid), "net", "fib_trie"))
+func ipv4LocalAddressFromProc(pid int, procPath string) string {
+	data, err := os.ReadFile(filepath.Join(procPath, strconv.Itoa(pid), "net", "fib_trie"))
 	if err != nil {
 		return ""
 	}
@@ -946,8 +947,8 @@ func parseFIBTrieLocalAddress(fibTrie string) string {
 	return ""
 }
 
-func globalIPv6AddressFromProc(pid int) string {
-	data, err := os.ReadFile(filepath.Join(hostProcPath(), strconv.Itoa(pid), "net", "if_inet6"))
+func globalIPv6AddressFromProc(pid int, procPath string) string {
+	data, err := os.ReadFile(filepath.Join(procPath, strconv.Itoa(pid), "net", "if_inet6"))
 	if err != nil {
 		return ""
 	}
@@ -991,7 +992,7 @@ func parseIfInet6GlobalAddress(ifInet6 string) string {
 	return ""
 }
 
-func convertToContainerObject(ctx context.Context, ns string, cont client.Container) (containerObject, error) {
+func convertToContainerObject(ctx context.Context, ns string, cont client.Container, hostRoot string) (containerObject, error) {
 	info, err := cont.Info(ctx, client.WithoutRefreshedMetadata)
 	if err != nil {
 		return containerObject{}, fmt.Errorf("Info() on %s/%s failed: %w", ns, cont.ID(), err)
@@ -1064,7 +1065,7 @@ func convertToContainerObject(ctx context.Context, ns string, cont client.Contai
 		// through the loopback interface.
 		obj.primaryAddress = "127.0.0.1"
 	case !taskStopped:
-		obj.primaryAddress = primaryAddressFromProc(obj.pid)
+		obj.primaryAddress = primaryAddressFromProc(obj.pid, hostRoot)
 	}
 
 	proc, err := process.NewProcess(int32(obj.pid)) //nolint:gosec // PID fits in int32
@@ -1093,7 +1094,7 @@ func (c *Containerd) addContainersInfo(ctx context.Context, containers map[strin
 	}
 
 	for _, cont := range list {
-		obj, err := convertToContainerObject(ctx, ns, cont)
+		obj, err := convertToContainerObject(ctx, ns, cont, c.hostRoot)
 		if err != nil && !errors.Is(err, errIgnoredContainer) {
 			return err
 		} else if err != nil {

@@ -2109,7 +2109,7 @@ func (a *agent) updatedDiscovery(ctx context.Context, services []discovery.Servi
 	}
 
 	if a.logProcessManager != nil || a.receiverManager != nil {
-		containers, containersComplete, err := a.containerRuntime.EnumerateContainers(ctx, time.Hour, false)
+		containers, _, containersMayForgetAbsent, err := a.containerRuntime.EnumerateContainers(ctx, time.Hour, false)
 		if err != nil {
 			// Must not fall through with containers == nil below: both UpdateContainers and
 			// HandleLogsFromDynamicSources treat an empty/nil list as "every previously-tracked
@@ -2137,14 +2137,14 @@ func (a *agent) updatedDiscovery(ctx context.Context, services []discovery.Servi
 					logServices = services
 				}
 
-				a.logProcessManager.HandleLogsFromDynamicSources(ctx, logServices, containers, containersComplete)
+				a.logProcessManager.HandleLogsFromDynamicSources(ctx, logServices, containers, containersMayForgetAbsent)
 				serviceTailed = a.logProcessManager.ServiceTailedContainerIDs()
 			}
 
 			// receiverManager resolves container_name/container_selectors matches and
 			// glouton.* label opt-ins itself, so it needs the full container list.
 			if a.receiverManager != nil {
-				a.receiverManager.UpdateContainers(ctx, containers, serviceTailed, containersComplete)
+				a.receiverManager.UpdateContainers(ctx, containers, serviceTailed, containersMayForgetAbsent)
 			}
 		}
 	}

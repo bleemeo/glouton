@@ -200,16 +200,18 @@ func (k *Kubernetes) Exec(ctx context.Context, containerID string, cmd []string)
 
 // Containers return all known container, with annotation added.
 func (k *Kubernetes) Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error) {
-	containers, _, err = k.EnumerateContainers(ctx, maxAge, includeIgnored)
+	containers, _, _, err = k.EnumerateContainers(ctx, maxAge, includeIgnored)
 
 	return containers, err
 }
 
-// EnumerateContainers implements crTypes.RuntimeInterface.
-func (k *Kubernetes) EnumerateContainers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, complete bool, err error) {
-	containers, complete, err = k.Runtime.EnumerateContainers(ctx, maxAge, includeIgnored)
+// EnumerateContainers implements crTypes.RuntimeInterface. mayForgetAbsent additionally turns false when a
+// container's POD couldn't be resolved because the POD listing itself failed: enable/ignore then resolves
+// without its annotations, and it may be wrongly dropped from the list below.
+func (k *Kubernetes) EnumerateContainers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, complete bool, mayForgetAbsent bool, err error) {
+	containers, complete, mayForgetAbsent, err = k.Runtime.EnumerateContainers(ctx, maxAge, includeIgnored)
 	if err != nil {
-		return nil, complete, err
+		return nil, complete, mayForgetAbsent, err
 	}
 
 	k.l.Lock()
@@ -239,7 +241,7 @@ func (k *Kubernetes) EnumerateContainers(ctx context.Context, maxAge time.Durati
 		}
 
 		if !ok && uid != "" && podsUpdateFailed {
-			complete = false
+			mayForgetAbsent = false
 		}
 
 		c = wrappedContainer{
@@ -254,8 +256,7 @@ func (k *Kubernetes) EnumerateContainers(ctx context.Context, maxAge time.Durati
 		response = append(response, c)
 	}
 
-	// complete otherwise comes straight from the wrapped runtime: that is what enumerates containers here.
-	return response, complete, nil
+	return response, complete, mayForgetAbsent, nil
 }
 
 // Events return container events.
