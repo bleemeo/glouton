@@ -36,6 +36,7 @@ import (
 	"github.com/bleemeo/glouton/bleemeo/internal/filter"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/crashreport"
+	"github.com/bleemeo/glouton/delay"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/mqtt"
 	"github.com/bleemeo/glouton/mqtt/client"
@@ -60,6 +61,21 @@ const (
 
 	// messageTypeAck is the MQTT notification message type for acknowledgements.
 	messageTypeAck = "ack"
+
+	// Delays used to spread over time the synchronizations triggered by a *re*connection to MQTT.
+	// When every agent gets disconnected at once (e.g. a broker certificate renewal), they all
+	// reconnect at once, so without those delays every agent would also hit the API at once.
+	// Neither synchronization is urgent: they only catch up notifications we could have missed
+	// while being disconnected.
+	reconnectMaintenanceSyncDelay = 90 * time.Second
+	reconnectAgentSyncDelay       = 7*time.Minute + 30*time.Second
+	reconnectSyncDelayJitter      = 1. / 3.
+
+	// Delay before the facts synchronization requested when too many MQTT errors happened,
+	// which is how a duplicated agent gets detected. The facts are refreshed just before,
+	// and that refresh may change them: waiting a bit avoids synchronizing facts that are
+	// about to change, which would need a second synchronization.
+	duplicateCheckFactsSyncDelay = 15 * time.Second
 )
 
 var ErrNotConnected = errors.New("currently not connected to MQTT")
@@ -78,14 +94,22 @@ type Option struct {
 	UpdateMetrics func(metricUUID ...string)
 	// UpdateMonitor requests a sync of a monitor
 	UpdateMonitor func(op string, uuid string)
-	// UpdateMaintenance requests to check for the maintenance mode again
-	UpdateMaintenance func()
-	// UpdateAgent requests to check for that agent is still synchronized by bleemeo-api
-	UpdateAgent func()
+	// UpdateMaintenance requests to check for the maintenance mode again, within delay.
+	// A delay of zero requests the check as soon as possible.
+	UpdateMaintenance func(delay time.Duration)
+	// UpdateAgent requests to check for that agent is still synchronized by bleemeo-api,
+	// within delay. A delay of zero requests the check as soon as possible.
+	UpdateAgent func(delay time.Duration)
+	// UpdateFacts requests a synchronization of the agent facts within delay, which also
+	// checks whether another Glouton is using the same agent ID.
+	UpdateFacts func(delay time.Duration)
 	// HandleDiagnosticRequest requests the sending of a diagnostic to the API
 	HandleDiagnosticRequest func(ctx context.Context, requestToken string)
 	// GetToken returns the token used to talk with the Bleemeo API.
 	GetToken func(ctx context.Context) (string, error)
+	// CheckToken validates the token used to talk with the Bleemeo API. It's called
+	// after the broker refused that token, so that a new one is fetched if needed.
+	CheckToken func(ctx context.Context)
 	// Return date of last metric activation / registration
 	LastMetricActivation func() time.Time
 
@@ -102,6 +126,9 @@ type Client struct {
 	failedPoints               failedPointsCache
 	lastRegisteredMetricsCount int
 	lastFailedPointsRetry      time.Time
+	// Whether MQTT connected at least once since this client started. Only used from onConnect,
+	// which runs exclusively from the receiveEvents() goroutine.
+	hadConnection bool
 	// Whether we should log that all failed points have
 	// been processed during the next health check.
 	shouldLogRecovery bool
@@ -157,8 +184,11 @@ func New(opts Option) *Client {
 	}
 
 	checkDuplicate := func(ctx context.Context) {
-		// Trigger facts synchronization to check for duplicate agent.
+		// Refresh the local facts, then request their synchronization: the facts
+		// synchronization checks for a duplicated agent before updating them on the API.
 		_, _ = opts.Facts.Facts(ctx, 0)
+
+		opts.UpdateFacts(duplicateCheckFactsSyncDelay)
 	}
 
 	if reloadState == nil {
@@ -172,11 +202,12 @@ func New(opts Option) *Client {
 	}
 
 	c.mqtt = client.New(client.Options{
-		OptionsFunc:          c.pahoOptions,
-		ReloadState:          reloadState.ClientState(),
-		TooManyErrorsHandler: checkDuplicate,
-		ID:                   "Bleemeo",
-		PahoLastPingCheckAt:  opts.PahoLastPingCheckAt,
+		OptionsFunc:                c.pahoOptions,
+		ReloadState:                reloadState.ClientState(),
+		TooManyErrorsHandler:       checkDuplicate,
+		AuthenticationErrorHandler: opts.CheckToken,
+		ID:                         "Bleemeo",
+		PahoLastPingCheckAt:        opts.PahoLastPingCheckAt,
 	})
 
 	return c
@@ -825,13 +856,25 @@ func (c *Client) preparePoints(
 }
 
 func (c *Client) onConnect(mqttClient paho.Client) {
+	// On the very first connection those synchronizations are wanted right away: the agent may
+	// just have been created, and it has nothing to catch up on anyway. Only reconnections are
+	// spread over time.
+	var maintenanceSyncDelay, agentSyncDelay time.Duration
+
+	if c.hadConnection {
+		maintenanceSyncDelay = delay.JitterDelay(reconnectMaintenanceSyncDelay, reconnectSyncDelayJitter)
+		agentSyncDelay = delay.JitterDelay(reconnectAgentSyncDelay, reconnectSyncDelayJitter)
+	}
+
+	c.hadConnection = true
+
 	// refresh 'info' to check the maintenance mode (for which we normally are notified by MQTT message)
-	c.opts.UpdateMaintenance()
+	c.opts.UpdateMaintenance(maintenanceSyncDelay)
 
 	// Also refresh agent, it contains Kubernetes IsClusterLeader for which we are also notified by MQTT.
 	// So if Glouton is not yet connected when it get elected leader (which is possible during very first
 	// creation), it will miss the notification.
-	c.opts.UpdateAgent()
+	c.opts.UpdateAgent(agentSyncDelay)
 
 	if !c.IsSendingSuspended() {
 		// when in maintenance mode, we do not send messages to /connect
@@ -889,7 +932,7 @@ func (c *Client) onNotification(ctx context.Context, msg paho.Message) {
 	case "config-will-change":
 		c.opts.UpdateConfigCallback(false)
 	case "maintenance-toggle":
-		c.opts.UpdateMaintenance()
+		c.opts.UpdateMaintenance(0)
 	case "threshold-update":
 		c.opts.UpdateMetrics(payload.MetricUUID)
 	case "monitor-update":

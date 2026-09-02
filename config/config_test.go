@@ -501,8 +501,9 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				Enable: true,
 			},
 			Listener: Listener{
-				Address: "192.168.0.1",
-				Port:    8016,
+				Address:      "192.168.0.1",
+				Port:         8016,
+				AllowedHosts: []string{"glouton.example.com"},
 			},
 			StaticCDNURL: "/",
 		},

@@ -54,7 +54,6 @@ require (
 	github.com/prometheus/procfs v0.21.1
 	github.com/prometheus/prometheus v0.314.0
 	github.com/robfig/cron/v3 v3.0.1
-	github.com/rs/cors v1.11.1
 	github.com/shirou/gopsutil/v4 v4.26.7
 	github.com/vishvananda/netlink v1.3.1
 	github.com/vmware/govmomi v0.55.1
@@ -286,6 +285,7 @@ require (
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.61.0 // indirect
 	github.com/robbiet480/go.nut v0.0.0-20240622015809-60e196249c53 // indirect
+	github.com/rs/cors v1.11.1 // indirect
 	github.com/safchain/ethtool v0.7.0 // indirect
 	github.com/sirupsen/logrus v1.10.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { getJSON } from "./client";
 import { notifyFetched } from "./freshness";
-import type { PromQLResponse, StoreInfo } from "./types";
+import type { PromQLInstantResponse, PromQLResponse, StoreInfo } from "./types";
 
 type FetchState<T> = {
   data: T | null;
@@ -122,6 +122,25 @@ export function usePromQLRange(
       : `/api/v1/query_range?query=${encodeURIComponent(query)}&start=${start}&end=${now}&step=${stepSeconds}`;
 
   return useFetch<PromQLResponse>(url, 0);
+}
+
+/**
+ * usePromQLInstant runs an instant query against the local API and
+ * returns a vector — one value per series, evaluated "now".
+ *
+ * No `time` parameter is sent: the server defaults to its own clock,
+ * which keeps the URL stable across renders so useFetch can own the
+ * polling. The engine's lookback delta (5 minutes) means a metric that
+ * hasn't been collected in the last few seconds still has a value.
+ */
+export function usePromQLInstant(
+  query: string | null,
+  pollMs = 10_000,
+): FetchState<PromQLInstantResponse> {
+  const url =
+    query === null ? null : `/api/v1/query?query=${encodeURIComponent(query)}`;
+
+  return useFetch<PromQLInstantResponse>(url, pollMs);
 }
 
 /**

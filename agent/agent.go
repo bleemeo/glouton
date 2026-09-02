@@ -2118,8 +2118,13 @@ func (a *agent) handleTrigger(ctx context.Context) {
 			} else {
 				logger.V(2).Printf("Enable Docker metrics")
 
-				a.dockerInputID, _ = a.collector.AddInput(i, "docker")
-				a.dockerInputPresent = true
+				inputID, err := a.collector.AddInput(i, "docker")
+				if err != nil {
+					logger.V(1).Printf("error when starting Docker input: %v", err)
+				} else {
+					a.dockerInputID = inputID
+					a.dockerInputPresent = true
+				}
 			}
 		} else if !hasConnection && a.dockerInputPresent {
 			logger.V(2).Printf("Disable Docker metrics")

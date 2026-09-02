@@ -213,9 +213,11 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint) {
 			UpdateMaintenance:       c.sync.UpdateMaintenance,
 			UpdateAgent:             c.sync.UpdateAgent,
 			UpdateMonitor:           c.sync.UpdateMonitor,
+			UpdateFacts:             c.sync.UpdateFacts,
 			HandleDiagnosticRequest: c.HandleDiagnosticRequest,
 			InitialPoints:           previousPoint,
-			GetToken:                c.sync.VerifyAndGetToken,
+			GetToken:                c.sync.GetToken,
+			CheckToken:              c.sync.CheckToken,
 			LastMetricActivation:    c.sync.LastMetricActivation,
 		},
 	)

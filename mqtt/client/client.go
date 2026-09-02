@@ -31,6 +31,7 @@ import (
 	"github.com/bleemeo/glouton/types"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
+	"github.com/eclipse/paho.mqtt.golang/packets"
 )
 
 const (
@@ -52,6 +53,13 @@ const (
 	// Backstop for a CONNECT token that never completes at all. connectTimeout is
 	// the one that should normally fire, so this must stay above it.
 	connectDeadline = 2 * time.Minute
+	// After losing a stable connection, wait for a random duration in [0, maxReconnectSpread[
+	// before reconnecting.
+	// When every agent gets disconnected at the same time (e.g. a broker restart or a certificate
+	// renewal), they would otherwise all reconnect within the same instant, and each reconnection
+	// costs an authentication and a few authorizations on the server side.
+	// This must stay well below the delay after which a disconnected agent is reported as such.
+	maxReconnectSpread = 15 * time.Second
 )
 
 var ErrPayloadTooLarge = errors.New("payload is too large")
@@ -80,6 +88,8 @@ type Options struct {
 	ReloadState types.MQTTReloadState
 	// Function called when too many errors happened.
 	TooManyErrorsHandler func(ctx context.Context)
+	// Function called when the broker refused our credentials.
+	AuthenticationErrorHandler func(ctx context.Context)
 	// A unique identifier for this client.
 	ID                  string
 	PahoLastPingCheckAt func() time.Time
@@ -220,13 +230,18 @@ func (c *Client) publish(topic string, payload []byte, retry bool) (types.Messag
 	return msg, true
 }
 
+// isAuthenticationError tells whether the broker refused the connection because of our credentials.
+func isAuthenticationError(err error) bool {
+	return errors.Is(err, packets.ErrorRefusedNotAuthorised) || errors.Is(err, packets.ErrorRefusedBadUsernameOrPassword)
+}
+
 func (c *Client) onConnectionLost(err error) {
 	logger.Printf("%s MQTT connection lost: %v", c.opts.ID, err)
 
 	c.connectionLost <- nil
 }
 
-func (c *Client) connectionManager(ctx context.Context) {
+func (c *Client) connectionManager(ctx context.Context) { //nolint:maintidx
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
@@ -328,6 +343,10 @@ mainLoop:
 
 					logger.V(1).Printf("Unable to connect to %s MQTT (retry in %v): %v", c.opts.ID, delay, token.Error())
 
+					if isAuthenticationError(token.Error()) && c.opts.AuthenticationErrorHandler != nil {
+						c.opts.AuthenticationErrorHandler(ctx)
+					}
+
 					// we must disconnect to stop paho gorouting that otherwise will be
 					// started multiple time for each Connect()
 					mqtt.Disconnect(0)
@@ -378,6 +397,16 @@ mainLoop:
 				logger.V(2).Printf("%s MQTT connection was stable, reset delay to %v", c.opts.ID, minimalDelayBetweenConnect)
 				currentConnectDelay = minimalDelayBetweenConnect
 				consecutiveError = 0
+
+				// The connection was stable, so the next iteration would reconnect at once.
+				// Wait a bit first, so that agents disconnected together don't reconnect together.
+				spread := delay.JitterMs(maxReconnectSpread/2, 1)
+				logger.V(2).Printf("Reconnecting to %s MQTT in %v", c.opts.ID, spread)
+
+				select {
+				case <-time.After(spread):
+				case <-ctx.Done():
+				}
 			} else if length > 0 {
 				delay := currentConnectDelay - time.Since(lastConnectionTimes[len(lastConnectionTimes)-1])
 				if delay > 0 {
