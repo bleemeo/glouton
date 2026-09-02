@@ -353,6 +353,22 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 
 				continue
 			}
+
+			// fallbackDefault true: absent the label, a service-discovered container ships as before --
+			// this only adds an explicit glouton.send_logs=false as a new way to opt one out.
+			if ctr, found := containersByID[service.ContainerID]; found && !logsource.ContainerSendLogs(ctr, true) {
+				logger.V(2).Printf("Ignoring logs of service %q, because its container's glouton.send_logs is false", service.Name)
+
+				man.skippedSource = append(man.skippedSource, sourceDiagnostic{
+					IsFromService: true,
+					ServiceKey:    key,
+					ContainerID:   service.ContainerID,
+					ContainerName: service.ContainerName,
+					SkipReason:    "Container excluded (glouton.send_logs=false)",
+				})
+
+				continue
+			}
 		}
 
 		var ctr facts.Container
