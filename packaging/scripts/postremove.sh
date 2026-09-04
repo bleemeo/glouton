@@ -24,6 +24,9 @@ case "$1" in
         fi
         userdel --force glouton > /dev/null
         groupdel glouton > /dev/null 2> /dev/null
+        if [ -x "/usr/bin/deb-systemd-helper" ]; then
+            deb-systemd-helper purge 'glouton.service' >/dev/null || true
+        fi
         ;;
     0)
         # Remove on rpm-distribution
