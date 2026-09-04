@@ -94,12 +94,13 @@ func TestActivityPassesThrough(t *testing.T) {
 	}
 }
 
-// TestSourcesIPBecomesItemAndFieldsConverted checks that chrony_sources' "ip" field
-// becomes the item (so each source gets its own series), that reachability -- the raw
-// 0..255 value of the 8-bit reach shift register -- is converted into the percentage
-// of the last 8 polls that succeeded (a bit count, not the register's numeric value),
-// and that latest_measurement (already in seconds) is renamed accordingly.
-func TestSourcesIPBecomesItemAndFieldsConverted(t *testing.T) {
+// TestSourcesIPBecomesALabelAndFieldsConverted checks that chrony_sources' "ip" field
+// becomes a label of its own -- so each source gets its own series without the address
+// being buried in the item next to the container name -- that reachability, the raw
+// 0..255 value of the 8-bit reach shift register, is converted into the percentage of
+// the last 8 polls that succeeded (a bit count, not the register's numeric value), and
+// that latest_measurement (already in seconds) is renamed accordingly.
+func TestSourcesIPBecomesALabelAndFieldsConverted(t *testing.T) {
 	store := &internal.StoreAccumulator{}
 	acc := internal.Accumulator{
 		RenameGlobal:     renameGlobal,
@@ -118,7 +119,9 @@ func TestSourcesIPBecomesItemAndFieldsConverted(t *testing.T) {
 		"source": "/run/chrony/chronyd.sock",
 	}, time.Now())
 
-	wantTags := map[string]string{"peer": "time.apple.com", "item": "17.253.108.125"}
+	// No item: it is the service instance, set once for the whole input, and the peer
+	// name stays as chronyd reported it (several pool members share one).
+	wantTags := map[string]string{"peer": "time.apple.com", peerAddressTag: "17.253.108.125"}
 	if diff := cmp.Diff(wantTags, store.Measurement[0].Tags); diff != "" {
 		t.Errorf("tags of measurement %q (-want +got):\n%s", store.Measurement[0].Name, diff)
 	}
@@ -142,10 +145,10 @@ func TestSourcesIPBecomesItemAndFieldsConverted(t *testing.T) {
 	}
 }
 
-// TestSourcesFromSamePoolGetDistinctItems checks that two sources resolved from the
-// same "pool" directive -- which chronyd reports under the identical "peer" name --
-// still end up as two distinct series, keyed by their (always unique) IP.
-func TestSourcesFromSamePoolGetDistinctItems(t *testing.T) {
+// TestSourcesFromSamePoolGetDistinctAddresses checks that two sources resolved from the
+// same "pool" directive -- which chronyd reports under the identical "peer" name -- still
+// end up as two distinct series, told apart by their (always unique) address.
+func TestSourcesFromSamePoolGetDistinctAddresses(t *testing.T) {
 	store := &internal.StoreAccumulator{}
 	acc := internal.Accumulator{
 		RenameGlobal:     renameGlobal,
@@ -166,12 +169,12 @@ func TestSourcesFromSamePoolGetDistinctItems(t *testing.T) {
 		t.Fatalf("got %d measurements, want 2 (one per IP): %#v", len(store.Measurement), store.Measurement)
 	}
 
-	items := map[string]bool{}
+	addresses := map[string]bool{}
 	for _, m := range store.Measurement {
-		items[m.Tags["item"]] = true
+		addresses[m.Tags[peerAddressTag]] = true
 	}
 
-	if !items["17.253.108.125"] || !items["17.253.108.253"] {
-		t.Errorf("items == %v, want both pool IPs represented", items)
+	if !addresses["17.253.108.125"] || !addresses["17.253.108.253"] {
+		t.Errorf("%s labels == %v, want both pool IPs represented", peerAddressTag, addresses)
 	}
 }

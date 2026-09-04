@@ -17,6 +17,7 @@
 package discovery
 
 import (
+	"encoding/binary"
 	"net"
 	"os"
 	"path/filepath"
@@ -24,6 +25,8 @@ import (
 
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts"
+
+	fbchrony "github.com/facebook/time/ntp/chrony"
 )
 
 func TestActiveMQURL(t *testing.T) {
@@ -467,6 +470,38 @@ func TestIsChronyDaemon(t *testing.T) {
 			socketPath: existingSocket,
 			want:       false,
 		},
+		{
+			// The local socket only says what runs next to Glouton, so it must not
+			// decide for a daemon that is somewhere else: a Glouton host running chronyd
+			// itself (the default on RHEL and Ubuntu) would otherwise turn a declared
+			// remote ntpd into a chrony one, and query a port ntpd doesn't listen on.
+			name:       "declared remote address, chronyd socket present locally",
+			service:    Service{ServiceType: NTPService, Config: config.Service{Address: "10.0.0.1"}},
+			socketPath: existingSocket,
+			want:       false,
+		},
+		{
+			// Same for a container: its network namespace isn't the one the socket is in.
+			name:       "container with unknown executable, chronyd socket present locally",
+			service:    Service{ServiceType: NTPService, ContainerID: "1234"},
+			socketPath: existingSocket,
+			want:       false,
+		},
+		{
+			// A declared address pointing at the local host is the local daemon, so the
+			// socket does decide there.
+			name:       "declared loopback address, chronyd socket present",
+			service:    Service{ServiceType: NTPService, Config: config.Service{Address: "127.0.0.1"}},
+			socketPath: existingSocket,
+			want:       true,
+		},
+		{
+			// The executable still wins when it is known, container or not.
+			name:       "container running chronyd",
+			service:    Service{ServiceType: NTPService, ContainerID: "1234", ExePath: "/usr/sbin/chronyd"},
+			socketPath: filepath.Join(t.TempDir(), "nonexistent.sock"),
+			want:       true,
+		},
 	}
 
 	for _, tc := range cases {
@@ -475,6 +510,129 @@ func TestIsChronyDaemon(t *testing.T) {
 				t.Errorf("isChronyDaemon() = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestChronyAddress checks which address chronyd's command protocol is looked for on:
+// the local auto-detection of telegraf's plugin (its control socket, then
+// udp://127.0.0.1:323) works out of the box but only reaches a chronyd sharing Glouton's
+// network namespace, while any other address needs bindcmdaddress/cmdallow to have been
+// set for it -- so one is only used when the auto-detection cannot be what we want.
+func TestChronyAddress(t *testing.T) {
+	localCheckAddress := "127.0.0.1:323"
+
+	cases := []struct {
+		name          string
+		service       Service
+		wantCmd       string
+		wantCheckAddr string
+	}{
+		{
+			// The plain host case: chronyd next to Glouton, nothing declared.
+			name:          "local daemon",
+			service:       Service{ServiceType: NTPService, IPAddress: "127.0.0.1"},
+			wantCmd:       "",
+			wantCheckAddr: localCheckAddress,
+		},
+		{
+			// IPAddress comes from the NTP port's bind address, which says nothing about
+			// where the command port is: a host chronyd serving NTP on a specific address
+			// ("bindaddress 192.168.1.5") still has its command port on loopback only, and
+			// pointing the input at 192.168.1.5:323 would break what auto-detection handles.
+			name:          "local daemon serving NTP on a specific address",
+			service:       Service{ServiceType: NTPService, IPAddress: "192.168.1.5"},
+			wantCmd:       "",
+			wantCheckAddr: localCheckAddress,
+		},
+		{
+			// Glouton's loopback isn't the container's: auto-detection would report the
+			// numbers of whatever chronyd runs next to Glouton under this service's name.
+			name:          "container",
+			service:       Service{ServiceType: NTPService, ContainerID: "1234", IPAddress: "172.23.0.2"},
+			wantCmd:       "172.23.0.2:323",
+			wantCheckAddr: "172.23.0.2:323",
+		},
+		{
+			name:          "container with a non-default command port",
+			service:       Service{ServiceType: NTPService, ContainerID: "1234", IPAddress: "172.23.0.2", Config: config.Service{StatsPort: 3230}},
+			wantCmd:       "172.23.0.2:3230",
+			wantCheckAddr: "172.23.0.2:3230",
+		},
+		{
+			// A container Glouton has no address for: there is nothing better to try than
+			// the auto-detection, wrong as it may be.
+			name:          "container without an address",
+			service:       Service{ServiceType: NTPService, ContainerID: "1234"},
+			wantCmd:       "",
+			wantCheckAddr: localCheckAddress,
+		},
+		{
+			// How a chronyd reachable but not auto-detectable is monitored.
+			name:          "declared address",
+			service:       Service{ServiceType: NTPService, Config: config.Service{Address: "10.0.0.1"}, IPAddress: "10.0.0.1"},
+			wantCmd:       "10.0.0.1:323",
+			wantCheckAddr: "10.0.0.1:323",
+		},
+		{
+			// A local chronyd with "cmdport 3230": the port has to be spelled out for the
+			// input too, or it would go back to the default 323 and gather nothing while
+			// the check succeeds on the declared port.
+			name:          "local daemon with a non-default command port",
+			service:       Service{ServiceType: NTPService, IPAddress: "127.0.0.1", Config: config.Service{StatsPort: 3230}},
+			wantCmd:       "127.0.0.1:3230",
+			wantCheckAddr: "127.0.0.1:3230",
+		},
+		{
+			name:          "declared address and command port",
+			service:       Service{ServiceType: NTPService, Config: config.Service{Address: "10.0.0.1", StatsPort: 3230}, IPAddress: "10.0.0.1"},
+			wantCmd:       "10.0.0.1:3230",
+			wantCheckAddr: "10.0.0.1:3230",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := chronyCmdAddress(tc.service); got != tc.wantCmd {
+				t.Errorf("chronyCmdAddress() = %q, want %q", got, tc.wantCmd)
+			}
+
+			if got := chronyCheckAddress(tc.service); got != tc.wantCheckAddr {
+				t.Errorf("chronyCheckAddress() = %q, want %q", got, tc.wantCheckAddr)
+			}
+		})
+	}
+}
+
+// TestChronyProbePacket checks the payload the chrony status check sends: a request the
+// daemon really answers, since chrony's command protocol is hardened against
+// amplification abuse and may drop anything else without replying.
+func TestChronyProbePacket(t *testing.T) {
+	packet := chronyProbePacket()
+
+	// chrony pads its requests to the size of the largest reply it may send, so the
+	// request is fixed-size -- an empty or truncated one would never get a reply. The
+	// padding is an unexported field of the library's packet, which is exactly what a
+	// hand-rolled encoding of the header alone would have missed.
+	if want := binary.Size(fbchrony.NewTrackingPacket()); len(packet) != want {
+		t.Fatalf("chronyProbePacket() is %d bytes, want %d", len(packet), want)
+	}
+
+	// The header the daemon reads, in the order it reads it (chrony's protocol.h):
+	// version, packet type, 2 reserved bytes, command, attempt, sequence.
+	if got := packet[0]; got != 6 {
+		t.Errorf("chronyProbePacket() version = %d, want 6 (the current protocol version)", got)
+	}
+
+	if got := packet[1]; got != 1 {
+		t.Errorf("chronyProbePacket() packet type = %d, want 1 (a command request)", got)
+	}
+
+	if got := binary.BigEndian.Uint16(packet[4:6]); got != 33 {
+		t.Errorf("chronyProbePacket() command = %d, want 33 (REQ_TRACKING)", got)
+	}
+
+	if got := binary.BigEndian.Uint32(packet[8:12]); got != 1 {
+		t.Errorf("chronyProbePacket() sequence = %d, want 1 (the reply must be matchable to the request)", got)
 	}
 }
 

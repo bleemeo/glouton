@@ -291,6 +291,12 @@ func (bc *baseCheck) doCheck(ctx context.Context) types.StatusDescription {
 	}
 
 	if len(bc.tcpAddresses) == 0 {
+		if bc.mainCheck != nil {
+			// The main check is the whole check here (NTP, UDP): keep the description it
+			// built, it's the only thing that says what was actually probed.
+			return status
+		}
+
 		statusOK := types.StatusDescription{
 			CurrentStatus: types.StatusOk,
 		}

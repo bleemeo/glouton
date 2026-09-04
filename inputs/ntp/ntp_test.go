@@ -17,60 +17,256 @@
 package ntp
 
 import (
+	"bytes"
+	"encoding/binary"
+	"maps"
+	"math"
+	"net"
+	"slices"
 	"testing"
-	"time"
 
 	"github.com/bleemeo/glouton/inputs/internal"
-	"github.com/google/go-cmp/cmp"
+	"github.com/bleemeo/glouton/types"
+
+	"github.com/facebook/time/ntp/control"
 )
 
-// TestTagsDropped checks that only "remote" -- the peer the metrics are about -- is
-// kept. The other tags describe the current selection state, whose value changes
-// while ntpd runs, and each change would otherwise start a new metric series.
-func TestTagsDropped(t *testing.T) {
-	store := &internal.StoreAccumulator{}
-	acc := internal.Accumulator{
-		RenameGlobal:     renameGlobal,
-		TransformMetrics: transformMetrics,
-		Accumulator:      store,
+// fakeNTPD answers the NTP control protocol (mode 6) with the peer variables given, keyed
+// by association ID, and returns its address. The variable strings are the k=v payload a
+// real ntpd sends, so the whole request/response encoding is exercised, not just the
+// parsing of an already-decoded map.
+func fakeNTPD(t *testing.T, peers map[uint16]string) string {
+	t.Helper()
+
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	acc.PrepareGather()
-	acc.AddFields("ntpq", map[string]any{
-		"delay":  1.234,
-		"jitter": 0.567,
-		"offset": -0.089,
-		"reach":  1.0,
-	}, map[string]string{
-		"remote":       "ntp1.example.com",
-		"refid":        "192.168.1.1",
-		"stratum":      "2",
-		"type":         "u",
-		"state_prefix": "*",
-	}, time.Now())
+	done := make(chan struct{})
 
-	if len(store.Measurement) != 1 {
-		t.Fatalf("got %d measurements, want 1: %#v", len(store.Measurement), store.Measurement)
+	t.Cleanup(func() {
+		_ = conn.Close()
+
+		<-done
+	})
+
+	go func() {
+		defer close(done)
+
+		buffer := make([]byte, 1024)
+
+		for {
+			n, addr, err := conn.ReadFrom(buffer)
+			if err != nil {
+				return // closed by the cleanup
+			}
+
+			if n < 12 {
+				continue
+			}
+
+			var request control.NTPControlMsgHead
+
+			if err := binary.Read(bytes.NewReader(buffer[:12]), binary.BigEndian, &request); err != nil {
+				return
+			}
+
+			var data []byte
+
+			switch request.GetOperation() {
+			case control.OpReadStatus:
+				// The peer list: association ID and status word, 2 uint16 each.
+				for _, id := range slices.Sorted(maps.Keys(peers)) {
+					data = binary.BigEndian.AppendUint16(data, id)
+					data = binary.BigEndian.AppendUint16(data, 0) // the peer status word
+				}
+			case control.OpReadVariables:
+				data = []byte(peers[request.AssociationID])
+			}
+
+			reply := control.NTPControlMsgHead{
+				VnMode:        control.MakeVnMode(3, control.Mode),
+				REMOp:         control.MakeREMOp(true, false, false, int(request.GetOperation())),
+				Sequence:      request.Sequence,
+				AssociationID: request.AssociationID,
+				Count:         uint16(len(data)), //nolint:gosec // the test payloads are a few dozen bytes
+			}
+
+			var out bytes.Buffer
+
+			if err := binary.Write(&out, binary.BigEndian, reply); err != nil {
+				return
+			}
+
+			out.Write(data)
+
+			if _, err := conn.WriteTo(out.Bytes(), addr); err != nil {
+				return
+			}
+		}
+	}()
+
+	return conn.LocalAddr().String()
+}
+
+// TestGather checks the whole exchange against a daemon speaking the control protocol:
+// read status for the peer list, then read variables for each peer. The payloads are the
+// ones a real ntpsec 1.2.2 sent (reach as hex, delay/offset/jitter in milliseconds).
+func TestGather(t *testing.T) {
+	address := fakeNTPD(t, map[uint16]string{
+		0x4570: `srcadr=37.59.63.125, srcport=123, stratum=2, reach=0xff, delay=23.179829, offset=43.346313, jitter=8.005333`,
+		0x456d: `srcadr=54.38.114.34, srcport=123, stratum=4, reach=0xf0, delay=22.485940, offset=45.617717, jitter=3.749494`,
+		// A pool placeholder: ntpd keeps one per configured pool until it picks a source,
+		// with no address and no measurement. ntpq shows these as the ".POOL." rows.
+		0x4569: `srcadr=0.0.0.0, srcport=0, stratum=16, reach=0x0, delay=0.000000, offset=0.000000, jitter=0.000001`,
+	})
+
+	acc := &internal.StoreAccumulator{}
+
+	if err := (&controlInput{address: address}).Gather(acc); err != nil {
+		t.Fatalf("Gather() = %v", err)
 	}
 
-	want := map[string]string{"remote": "ntp1.example.com", "item": "ntp1.example.com"}
-	if diff := cmp.Diff(want, store.Measurement[0].Tags); diff != "" {
-		t.Errorf("tags of measurement %q (-want +got):\n%s", store.Measurement[0].Name, diff)
+	if len(acc.Errors) != 0 {
+		t.Errorf("Gather() errors = %v", acc.Errors)
 	}
 
-	// reach (the fraction of the last 8 polls that succeeded, via the plugin's
-	// ReachFormat: "ratio") is converted to a percentage, like every other percentage
-	// metric in this codebase.
-	if value, _ := store.Measurement[0].Fields["reach_perc"].(float64); value != 100.0 {
-		t.Errorf("fields[reach_perc] == %v, want 100.0", store.Measurement[0].Fields["reach_perc"])
+	if len(acc.Measurement) != 2 {
+		t.Fatalf("Gather() reported %d peers, want 2 (the placeholder must be dropped)", len(acc.Measurement))
+	}
+
+	byRemote := make(map[string]map[string]any, len(acc.Measurement))
+
+	for _, m := range acc.Measurement {
+		if m.Name != "ntpq" {
+			t.Errorf("measurement name = %q, want \"ntpq\"", m.Name)
+		}
+
+		byRemote[m.Tags["remote"]] = m.Fields
+	}
+
+	fields, ok := byRemote["37.59.63.125"]
+	if !ok {
+		t.Fatalf("no measurement for the sys.peer, got %v", slices.Sorted(maps.Keys(byRemote)))
+	}
+
+	// Milliseconds as ntpd reports them; transformMetrics is what turns them into seconds.
+	if got := fields["delay"]; got != 23.179829 {
+		t.Errorf("delay = %v, want 23.179829", got)
+	}
+
+	if got := fields["offset"]; got != 43.346313 {
+		t.Errorf("offset = %v, want 43.346313", got)
+	}
+
+	if got := fields["jitter"]; got != 8.005333 {
+		t.Errorf("jitter = %v, want 8.005333", got)
+	}
+
+	// 0xff: all 8 remembered polls answered.
+	if got := fields["reach"]; got != 1.0 {
+		t.Errorf("reach = %v, want 1 (a fully reachable peer)", got)
+	}
+
+	// 0xf0: 4 of the last 8 polls answered.
+	if got := byRemote["54.38.114.34"]["reach"]; got != 0.5 {
+		t.Errorf("reach = %v, want 0.5", got)
 	}
 }
 
-// TestDurationFieldsConvertedToSeconds checks that delay/jitter/offset -- reported by
-// ntpq in milliseconds -- are converted to seconds and renamed accordingly, matching
-// every other duration metric in this codebase, and that reach -- reported by the
-// plugin as a 0..1 ratio -- is converted to a 0..100 percentage.
-func TestDurationFieldsConvertedToSeconds(t *testing.T) {
+// TestGatherWithoutPeer checks a daemon that reports no usable peer is an error rather
+// than a silent success: ntpd always has at least its configured sources, so nothing to
+// report means the answer wasn't usable, and reporting Ok would hide that.
+func TestGatherWithoutPeer(t *testing.T) {
+	address := fakeNTPD(t, map[uint16]string{
+		0x4569: `srcadr=0.0.0.0, srcport=0, stratum=16, reach=0x0`,
+	})
+
+	acc := &internal.StoreAccumulator{}
+
+	if err := (&controlInput{address: address}).Gather(acc); err == nil {
+		t.Error("Gather() = nil, want an error")
+	}
+
+	if len(acc.Measurement) != 0 {
+		t.Errorf("Gather() reported %v, want nothing", acc.Measurement)
+	}
+}
+
+// TestGatherUnreachable checks the failure that matters in practice: a daemon that never
+// answers, either because nothing listens or because its "restrict" lines refuse mode-6
+// queries from us. The gather must fail rather than hang.
+func TestGatherUnreachable(t *testing.T) {
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	address := conn.LocalAddr().String()
+
+	if err := conn.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	acc := &internal.StoreAccumulator{}
+
+	if err := (&controlInput{address: address}).Gather(acc); err == nil {
+		t.Error("Gather() = nil, want an error")
+	}
+}
+
+// TestParseReach checks the "reach" shift register is read in the base the daemon sent it
+// in: ntpsec uses hex with a 0x prefix, while ntpq's display and older implementations
+// use octal, and misreading one as the other silently reports the wrong reachability.
+func TestParseReach(t *testing.T) {
+	cases := []struct {
+		value string
+		want  uint64
+		ok    bool
+	}{
+		{value: "0xff", want: 255, ok: true}, // what ntpsec 1.2.2 sends over the wire
+		{value: "0xf0", want: 240, ok: true},
+		{value: "0x0", want: 0, ok: true},
+		{value: "0377", want: 255, ok: true}, // octal with the prefix Go understands
+		{value: "377", want: 255, ok: true},  // bare octal, as ntpq prints it
+		{value: "0", want: 0, ok: true},      // an unreachable peer, same in every base
+		// Bare digits that fit in the register are ambiguous -- octal 17 is 15 -- and are
+		// read as decimal, the base Go's 0 assumes. Nothing distinguishes the two, and
+		// the modern implementations send a prefix (see the hex cases above).
+		{value: "17", want: 17, ok: true},
+		{value: "", want: 0, ok: false},      // the variable was missing
+		{value: "yes", want: 0, ok: false},   // not a number at all
+		{value: "0x1ff", want: 0, ok: false}, // more than the register can hold
+		{value: "-0x1", want: 0, ok: false},  // not unsigned
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.value, func(t *testing.T) {
+			got, ok := parseReach(tc.value)
+
+			if ok != tc.ok {
+				t.Fatalf("parseReach(%q) ok = %v, want %v", tc.value, ok, tc.ok)
+			}
+
+			if got != tc.want {
+				t.Errorf("parseReach(%q) = %d, want %d", tc.value, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestPeerAddressBecomesALabel checks where a peer's address ends up: on a label of its
+// own, not in the item. The item is the service instance, and modify.AddInstance prefixes
+// whatever the input put there with the container name -- which is how the address used
+// to end up as "test-ntp_37.59.63.125", hidden behind a name that is supposed to say
+// which instance the point is about.
+func TestPeerAddressBecomesALabel(t *testing.T) {
+	address := fakeNTPD(t, map[uint16]string{
+		0x4570: `srcadr=37.59.63.125, reach=0xff, delay=23.179829, offset=43.346313, jitter=8.005333`,
+		0x456d: `srcadr=54.38.114.34, reach=0xf0, delay=22.485940, offset=45.617717, jitter=3.749494`,
+	})
+
 	store := &internal.StoreAccumulator{}
 	acc := internal.Accumulator{
 		RenameGlobal:     renameGlobal,
@@ -79,32 +275,60 @@ func TestDurationFieldsConvertedToSeconds(t *testing.T) {
 	}
 
 	acc.PrepareGather()
-	acc.AddFields("ntpq", map[string]any{
-		"delay":  20.5,
-		"jitter": 13.2,
-		"offset": -4.8,
-		"reach":  0.75,
-	}, map[string]string{"remote": "ntp1.example.com"}, time.Now())
 
-	fields := store.Measurement[0].Fields
+	if err := (&controlInput{address: address}).Gather(&acc); err != nil {
+		t.Fatalf("Gather() = %v", err)
+	}
+
+	if len(store.Measurement) != 2 {
+		t.Fatalf("got %d measurements, want one per peer: %#v", len(store.Measurement), store.Measurement)
+	}
+
+	addresses := map[string]bool{}
+
+	for _, m := range store.Measurement {
+		if item := m.Tags[types.LabelItem]; item != "" {
+			t.Errorf("item == %q, want it left to the service instance", item)
+		}
+
+		if remote := m.Tags[remoteTag]; remote != "" {
+			t.Errorf("tag %q == %q, want it moved to %q", remoteTag, remote, peerAddressTag)
+		}
+
+		addresses[m.Tags[peerAddressTag]] = true
+	}
+
+	if !addresses["37.59.63.125"] || !addresses["54.38.114.34"] {
+		t.Errorf("%s labels == %v, want both peers represented", peerAddressTag, addresses)
+	}
+}
+
+// TestTransformMetrics checks the units the API sees: seconds for durations and a
+// percentage for reach, the same as the ntpq plugin this replaced produced.
+func TestTransformMetrics(t *testing.T) {
+	fields := transformMetrics(internal.GatherContext{}, map[string]float64{
+		"delay":  23.179829,
+		"offset": 43.346313,
+		"jitter": 8.005333,
+		"reach":  0.5,
+	}, nil)
 
 	want := map[string]float64{
-		"delay_seconds":  0.0205,
-		"jitter_seconds": 0.0132,
-		"offset_seconds": -0.0048,
-		"reach_perc":     75.0,
+		"delay_seconds":  0.023179829,
+		"offset_seconds": 0.043346313,
+		"jitter_seconds": 0.008005333,
+		"reach_perc":     50,
+	}
+
+	if len(fields) != len(want) {
+		t.Fatalf("transformMetrics() = %v, want %v", fields, want)
 	}
 
 	for name, wantValue := range want {
-		got, _ := fields[name].(float64)
-		if got != wantValue {
-			t.Errorf("fields[%q] == %v, want %v", name, fields[name], wantValue)
-		}
-	}
-
-	for _, name := range []string{"delay", "jitter", "offset", "reach"} {
-		if _, ok := fields[name]; ok {
-			t.Errorf("raw field %q should have been renamed, still present", name)
+		// Compared with a tolerance: dividing by 1000 isn't exact in binary floating
+		// point (23.179829 ms gives 0.023179829000000002 s).
+		if got := fields[name]; math.Abs(got-wantValue) > 1e-12 {
+			t.Errorf("transformMetrics()[%q] = %v, want %v", name, got, wantValue)
 		}
 	}
 }

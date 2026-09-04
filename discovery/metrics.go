@@ -17,6 +17,8 @@
 package discovery
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -81,6 +83,7 @@ import (
 	"github.com/bleemeo/glouton/utils/gloutonexec"
 	"github.com/bleemeo/glouton/version"
 
+	fbchrony "github.com/facebook/time/ntp/chrony"
 	"github.com/influxdata/telegraf"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -96,6 +99,10 @@ const (
 	// chronySocket is the control socket chronyd listens on, and the one telegraf's chrony
 	// plugin tries first. It is used to recognize a chrony host, see isChronyDaemon.
 	chronySocket = "/run/chrony/chronyd.sock"
+	// chronyDefaultCmdPort is the UDP port of chronyd's command protocol, distinct from
+	// NTPService's own ServicePort (123, the NTP protocol itself, used to detect an NTP
+	// service in the first place) -- see chronyCmdAddress.
+	chronyDefaultCmdPort = 323
 )
 
 // postfixQueues are the queues telegraf's postfix input reports on, all of which it
@@ -426,17 +433,21 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			input, err = nsq.New(url)
 		}
 	case NTPService:
-		// Pick the telegraf plugin matching whichever NTP daemon was actually
-		// detected: chrony has its own control-socket/UDP protocol, distinct
-		// from the ntpd one queried through the ntpq CLI tool.
+		// Pick the input matching whichever NTP daemon was actually detected: the two
+		// answer different protocols on different ports, chrony its own command
+		// protocol on 323 and ntpd the NTP control protocol (mode 6) on the NTP port.
 		//
-		// Both read the daemon of the machine Glouton runs on, so an NTP service in
-		// another container is reported with the metrics of the local daemon, or fails
-		// to gather when there is none. Same same-host requirement as Varnish.
+		// Both are plain UDP with no local command involved, so a daemon in another
+		// container is genuinely reachable, unlike Varnish -- see chronyCmdAddress and
+		// ntpdAddress for which address is used, and why it isn't always the one
+		// discovery found the service at.
+		// Both inputs bring their own registration options: their per-source metrics need
+		// the source in a label of its own, which the default compatibility naming would
+		// drop, and they read the daemon less often than the default 10 s.
 		if isChronyDaemon(service, chronySocket) {
-			input, err = chrony.New()
+			input, gathererOptions, err = chrony.New(chronyCmdAddress(service))
 		} else {
-			input, err = ntp.New()
+			input, gathererOptions, err = ntp.New(ntpdAddress(service))
 		}
 	case OpenBaoService:
 		if service.Config.StatsURL != "" {
@@ -912,12 +923,165 @@ func postfixQueuesReadable(spoolDirectory string) bool {
 // such directory at all and gives a not-found one. Telegraf's plugin doesn't need to read
 // the socket either: it falls back to chronyd's UDP command port on localhost, which is open
 // by default.
+//
+// That socket only says something about the daemon running next to Glouton, so it's only
+// looked for when the service is that daemon. A service somewhere else with an unknown
+// executable (a container Glouton can't read the process details of, or a user-declared
+// remote address) gets the ntpd answer it got before this probe existed: a Glouton host
+// that happens to run chronyd itself -- the default on RHEL and Ubuntu -- must not turn a
+// declared remote ntpd into a chrony one, which would query the chrony command protocol on
+// a port ntpd doesn't listen on.
 func isChronyDaemon(service Service, socketPath string) bool {
 	if exePath := service.ExePath; exePath != "" {
 		return filepath.Base(exePath) == "chronyd"
 	}
 
+	if serviceRunsElsewhere(service) {
+		return false
+	}
+
 	_, err := os.Stat(socketPath)
 
 	return err == nil || errors.Is(err, fs.ErrPermission)
+}
+
+// serviceRunsElsewhere reports whether the service is known to run somewhere other than
+// next to Glouton's own process: in a container of its own, or at an address the user
+// declared explicitly and that isn't the local host.
+func serviceRunsElsewhere(service Service) bool {
+	if service.ContainerID != "" {
+		return true
+	}
+
+	return service.Config.Address != "" && !isLoopbackAddress(service.Config.Address)
+}
+
+// isLoopbackAddress reports whether address (an IP, without a port) is a loopback one.
+// A hostname isn't resolved: it's not one Glouton can claim is local.
+func isLoopbackAddress(address string) bool {
+	ip := net.ParseIP(address)
+
+	return ip != nil && ip.IsLoopback()
+}
+
+// chronyCmdAddress returns the "host:port" to reach chronyd's command protocol on, or ""
+// to keep chrony.New()'s own auto-detection (its control socket, then
+// udp://127.0.0.1:323). Both of those only reach a chronyd sharing Glouton's network
+// namespace, but both also work out of the box, with no chrony.conf change -- unlike any
+// other address, which chronyd ignores until bindcmdaddress and cmdallow are set for it
+// (the command port is bound to 127.0.0.1 and ::1 only by default). So an address is only
+// returned when the local auto-detection cannot be what we want:
+//
+//   - the daemon runs in a container of its own, so Glouton's loopback isn't the
+//     container's, and auto-detection would silently report the numbers of whatever
+//     chronyd runs next to Glouton under the container service's name;
+//   - the user declared an address and/or a command port explicitly, which is also how a
+//     chronyd reachable but not auto-detectable (bindcmdaddress on the host's LAN address,
+//     a non-default cmdport) is monitored.
+//
+// A non-loopback service.IPAddress is deliberately NOT enough on its own: it is derived
+// from the NTP port (123) bind address, which says nothing about where the command port
+// is. A host chronyd serving NTP on a specific address ("bindaddress 192.168.1.5") has
+// that IPAddress while its command port stays on loopback, and pointing the input there
+// would break a setup the auto-detection handles.
+//
+// The container address comes from service.IPAddress rather than
+// AddressForPort(chronyDefaultCmdPort, ...): finding a specific port in ListenAddresses
+// needs a netstat scan to have actually found it there, which for a container requires
+// crossing into its own network namespace -- something gopsutil's connections scan can't
+// do (only the host's own namespace is visible, PID visibility from --pid host
+// notwithstanding). Lacking that, discovery falls back to a synthetic ListenAddresses
+// entry on NTPService's ServicePort (123) -- never chrony's command port, so searching for
+// it there would never find it. service.IPAddress doesn't have this problem: it's set from
+// the container's own address independently of any netstat result.
+func chronyCmdAddress(service Service) string {
+	address := service.Config.Address
+	port := service.Config.StatsPort
+
+	if address == "" && serviceRunsElsewhere(service) {
+		address = service.IPAddress
+	}
+
+	if address == "" && port == 0 {
+		return ""
+	}
+
+	if address == "" {
+		// Only the port was overridden: chrony.New() would go back to the default 323,
+		// so the loopback the auto-detection would have used is spelled out here.
+		address = localhostIP
+	}
+
+	if port == 0 {
+		port = chronyDefaultCmdPort
+	}
+
+	return net.JoinHostPort(address, strconv.Itoa(port))
+}
+
+// chronyCheckAddress returns the "host:port" the chrony status check should dial --
+// unlike chronyCmdAddress, it always returns a concrete address, including for a chronyd
+// left to auto-detection: a check has no local-socket fallback of its own, it just needs
+// something to send a packet to, and that is the same loopback command port the input
+// ends up on.
+func chronyCheckAddress(service Service) string {
+	if address := chronyCmdAddress(service); address != "" {
+		return address
+	}
+
+	return net.JoinHostPort(localhostIP, strconv.Itoa(chronyDefaultCmdPort))
+}
+
+// ntpdAddress returns the "host:port" to read ntpd's control protocol (NTP mode 6) on,
+// or "" to let the input use 127.0.0.1 and the NTP port.
+//
+// Mode 6 is served on the NTP port itself, so there is no separate port to configure --
+// a "port" override moves both. What an address can't change is the daemon's own
+// "restrict" policy, which is why one is only returned for a daemon Glouton's loopback
+// cannot be, the same rule chronyCmdAddress follows: the usual default is "restrict
+// default ... noquery" with only 127.0.0.1 and ::1 unrestricted, so querying a local
+// ntpd anywhere but on loopback would be refused where loopback works.
+func ntpdAddress(service Service) string {
+	if !serviceRunsElsewhere(service) {
+		return ""
+	}
+
+	address := service.Config.Address
+	if address == "" {
+		address = service.IPAddress
+	}
+
+	if address == "" {
+		return ""
+	}
+
+	port := servicesDiscoveryInfo[NTPService].ServicePort
+	if service.Config.Port != 0 {
+		port = service.Config.Port
+	}
+
+	return net.JoinHostPort(address, strconv.Itoa(port))
+}
+
+// chronyProbePacket returns the wire bytes of a real chrony "tracking" request -- the
+// same request inputs/chrony (and telegraf's plugin) already sends for the
+// chrony_last_offset/rms_offset metrics, known to get a real reply from any chronyd
+// that allows us in (cmdallow). This matters because chrony's command protocol is
+// deliberately hardened against amplification abuse: unlike more permissive protocols,
+// it doesn't reply to just anything, and there's no guarantee malformed/arbitrary bytes
+// would get a response at all rather than being silently dropped -- which would make a
+// UDP check built on a guessed payload report "down" for a perfectly healthy chronyd.
+// A real, valid request sidesteps that guesswork entirely.
+func chronyProbePacket() []byte {
+	packet := fbchrony.NewTrackingPacket()
+	packet.SetSequence(1)
+
+	var buf bytes.Buffer
+
+	// Matches (fbchrony.Client).Communicate's own encoding exactly -- RequestTracking
+	// is a fixed-size struct (a fixed-length byte array for its unused "data" padding),
+	// so binary.Write never fails on it; the error is only checked out of habit.
+	_ = binary.Write(&buf, binary.BigEndian, packet)
+
+	return buf.Bytes()
 }

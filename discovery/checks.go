@@ -143,19 +143,7 @@ func (d *Discovery) createCheck(service Service) {
 	case ApacheService, InfluxDBService, NginxService, SquidService:
 		d.createHTTPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
 	case NTPService:
-		if primaryAddress != "" {
-			check := check.NewNTP(
-				primaryAddress,
-				tcpAddresses,
-				!di.DisablePersistentConnection,
-				labels,
-				annotations,
-				d.containerInfo,
-			)
-			d.addCheck(check, service)
-		} else {
-			d.createTCPCheck(service, di, "", tcpAddresses, labels, annotations)
-		}
+		d.createNTPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
 	case PostfixService, EximService:
 		check := check.NewSMTP(
 			primaryAddress,
@@ -195,6 +183,86 @@ func createCheckType(commandRunner *gloutonexec.Runner, service Service, d *Disc
 	default:
 		logger.V(1).Printf("Unknown check type %#v on custom service %#v", service.Config.CheckType, service.Name)
 	}
+}
+
+// createNTPCheck adds the check of an NTP service: the NTP protocol itself when the daemon
+// really serves it, and chrony's command protocol for a chronyd that doesn't.
+//
+// A chrony that only syncs the local clock -- the default install on most distributions,
+// and what a chrony container usually runs -- never answers an NTP query, so check.NewNTP
+// would report a permanent "Connection timed out" on a perfectly healthy daemon. Its
+// command protocol is the only thing such a daemon answers, and unlike the ntpq CLI the
+// ntpd side is read with, it is a real network protocol that can be probed. A chronyd that
+// does serve NTP is checked with the NTP protocol like any other server: that is the
+// service being monitored, while the command port is only how its metrics are read.
+func (d *Discovery) createNTPCheck(service Service, di discoveryInfo, primaryAddress string, tcpAddresses []string, labels map[string]string, annotations types.MetricAnnotations) {
+	if useChronyCommandCheck(service, di, chronySocket) {
+		// createTCPCheck doesn't fit that protocol: the command port is UDP-only, and
+		// that check always dials TCP.
+		//
+		// A real "tracking" request (chronyProbePacket) is used as the UDP check's
+		// payload rather than arbitrary bytes: chrony's command protocol is hardened
+		// against amplification abuse and may just drop malformed input instead of
+		// replying, which would report "down" for a perfectly healthy chronyd. expect
+		// is left empty -- any reply at all to a request this specific is already a
+		// meaningful positive signal.
+		udpCheck := check.NewUDP(
+			chronyCheckAddress(service),
+			chronyProbePacket(),
+			nil,
+			labels,
+			annotations,
+			d.containerInfo,
+		)
+		d.addCheck(udpCheck, service)
+
+		return
+	}
+
+	if primaryAddress != "" {
+		ntpCheck := check.NewNTP(
+			primaryAddress,
+			tcpAddresses,
+			!di.DisablePersistentConnection,
+			labels,
+			annotations,
+			d.containerInfo,
+		)
+		d.addCheck(ntpCheck, service)
+	} else {
+		d.createTCPCheck(service, di, "", tcpAddresses, labels, annotations)
+	}
+}
+
+// useChronyCommandCheck reports whether the NTP service should be checked through
+// chrony's command protocol instead of the NTP protocol: only a chronyd that doesn't
+// serve NTP, which the NTP check would report as permanently down.
+func useChronyCommandCheck(service Service, di discoveryInfo, socketPath string) bool {
+	return isChronyDaemon(service, socketPath) && !servesNTPProtocol(service, di)
+}
+
+// servesNTPProtocol reports whether the daemon was really seen listening on the NTP port,
+// as opposed to discovery having assumed that port from the service type: with no netstat
+// information, updateListenAddresses adds a synthetic listen address on the type's default
+// port, which for NTPService is the NTP port itself -- so the listen addresses alone can't
+// tell a daemon serving NTP from one that was merely recognized as an NTP daemon.
+func servesNTPProtocol(service Service, di discoveryInfo) bool {
+	if !service.HasNetstatInfo {
+		return false
+	}
+
+	port := di.ServicePort
+	if service.Config.Port != 0 {
+		port = service.Config.Port
+	}
+
+	for _, address := range service.ListenAddresses {
+		if address.Network() == di.ServiceProtocol && address.Port == port {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryAddress string, tcpAddresses []string, labels map[string]string, annotations types.MetricAnnotations) {

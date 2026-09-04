@@ -38,6 +38,11 @@ const (
 	listenState       = "LISTEN"
 	addrAllInterfaces = "0.0.0.0"
 	addrLocalhost     = "127.0.0.1"
+	// firstEphemeralPort is the bottom of the range the kernel picks source ports from
+	// (net.ipv4.ip_local_port_range, 32768-60999 by default on Linux; macOS and Windows
+	// start higher still). Used to tell a UDP server's port from a client's, which UDP
+	// gives no other way to distinguish -- see mergeNetstats.
+	firstEphemeralPort = 32768
 )
 
 // NetstatProvider provide netstat information from both a file (output of netstat command) and using gopsutil
@@ -82,7 +87,35 @@ func (np NetstatProvider) mergeNetstats(netstat map[int][]ListenAddress, dynamic
 			continue
 		}
 
-		if c.Status != listenState {
+		// UDP has no connection states, so it has no listenState to filter on either:
+		// gopsutil reports every UDP socket as "NONE" on Linux, and filtering by
+		// listenState unconditionally silently dropped every UDP listener this
+		// discovers (a DNS or NTP server's own port), not just the ones that are
+		// genuinely not listening.
+		//
+		// Nothing marks a UDP socket as a server's, though, so what a server would
+		// never do is excluded instead: being connected to a peer (only a client
+		// does that), and being bound to an ephemeral port -- the range the kernel
+		// picks from for the unconnected sockets a resolver or a DNS server's own
+		// outgoing queries use, which would otherwise show up as listen addresses
+		// that change on every scan, and make the service look like it needs its
+		// checks and inputs recreated each time.
+		var protocol string
+
+		switch c.Type {
+		case syscall.SOCK_STREAM:
+			if c.Status != listenState {
+				continue
+			}
+
+			protocol = networkTCP
+		case syscall.SOCK_DGRAM:
+			if c.Raddr.Port != 0 || int(c.Laddr.Port) >= firstEphemeralPort {
+				continue
+			}
+
+			protocol = networkUDP
+		default:
 			continue
 		}
 
@@ -91,17 +124,6 @@ func (np NetstatProvider) mergeNetstats(netstat map[int][]ListenAddress, dynamic
 		// * address in MacOS corresponds to 0.0.0.0
 		if address == "*" {
 			address = addrAllInterfaces
-		}
-
-		var protocol string
-
-		switch c.Type {
-		case syscall.SOCK_STREAM:
-			protocol = networkTCP
-		case syscall.SOCK_DGRAM:
-			protocol = networkUDP
-		default:
-			continue
 		}
 
 		if c.Family == syscall.AF_INET6 {

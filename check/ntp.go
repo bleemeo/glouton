@@ -77,6 +77,19 @@ func (nt ntpTimestamp) Time() time.Time {
 	return time.Unix(int64(nt.Second-deltaEpoc), nanoFaction)
 }
 
+// kissCodes are the reference IDs a server sends with stratum 0 to refuse a request
+// (RFC 5905 section 7.4), rather than to report an unsynchronized clock. Only the ones a
+// client can actually receive are listed.
+//
+//nolint:gochecknoglobals
+var kissCodes = map[string]string{
+	"RATE": "we are querying it too often for its rate limit (Kiss-o'-Death)",
+	"DENY": "access denied",
+	"RSTR": "access denied by its restrictions",
+	"CRYP": "cryptographic authentication failed",
+	"AUTH": "authentication failed",
+}
+
 type ntpV3Packet struct {
 	LeapVersionMode uint8 // 2 bits (leap indicator) 3 bits (version) + 3 bits (mode)
 	Stratum         uint8
@@ -203,6 +216,21 @@ func (nc *NTPCheck) ntpMainCheck(ctx context.Context) types.StatusDescription {
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusUnknown,
 			StatusDescription: "Unknown response from NTP server",
+		}
+	}
+
+	// A Kiss-o'-Death is the server telling us to back off, not telling us anything about
+	// its clock: it carries stratum 0 like an unsynchronized server would, so without
+	// reading the reference ID it gets reported as one, and the real cause (a monitoring
+	// agent querying more often than the server's "restrict ... limited" allows) is
+	// nowhere to be seen. "RATE" is the code for rate limiting; the others are ntpd's
+	// authentication refusals, which are just as much about us as about the server.
+	if packet.Stratum == 0 {
+		if reason, ok := kissCodes[string(packet.ReferenceID[:])]; ok {
+			return types.StatusDescription{
+				CurrentStatus:     types.StatusCritical,
+				StatusDescription: "NTP server refused the request: " + reason,
+			}
 		}
 	}
 
