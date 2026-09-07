@@ -17,11 +17,17 @@
 package chrony
 
 import (
+	"bytes"
+	"encoding/binary"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/types"
 	"github.com/google/go-cmp/cmp"
+
+	fbchrony "github.com/facebook/time/ntp/chrony"
 )
 
 // TestTagsDropped checks that the tags describing the current synchronization state
@@ -121,7 +127,7 @@ func TestSourcesIPBecomesALabelAndFieldsConverted(t *testing.T) {
 
 	// No item: it is the service instance, set once for the whole input, and the peer
 	// name stays as chronyd reported it (several pool members share one).
-	wantTags := map[string]string{"peer": "time.apple.com", peerAddressTag: "17.253.108.125"}
+	wantTags := map[string]string{"peer": "time.apple.com", types.LabelPeerAddress: "17.253.108.125"}
 	if diff := cmp.Diff(wantTags, store.Measurement[0].Tags); diff != "" {
 		t.Errorf("tags of measurement %q (-want +got):\n%s", store.Measurement[0].Name, diff)
 	}
@@ -171,10 +177,122 @@ func TestSourcesFromSamePoolGetDistinctAddresses(t *testing.T) {
 
 	addresses := map[string]bool{}
 	for _, m := range store.Measurement {
-		addresses[m.Tags[peerAddressTag]] = true
+		addresses[m.Tags[types.LabelPeerAddress]] = true
 	}
 
 	if !addresses["17.253.108.125"] || !addresses["17.253.108.253"] {
-		t.Errorf("%s labels == %v, want both pool IPs represented", peerAddressTag, addresses)
+		t.Errorf("%s labels == %v, want both pool IPs represented", types.LabelPeerAddress, addresses)
+	}
+}
+
+// TestProbePacket checks the payload the status check sends: a request the daemon really
+// answers, since chrony's command protocol is hardened against amplification abuse and
+// may drop anything else without replying.
+func TestProbePacket(t *testing.T) {
+	packet := ProbePacket()
+
+	// chrony pads its requests to the size of the largest reply it may send, so the
+	// request is fixed-size -- an empty or truncated one would never get a reply. The
+	// padding is an unexported field of the library's packet, which is exactly what a
+	// hand-rolled encoding of the header alone would have missed.
+	if want := binary.Size(fbchrony.NewTrackingPacket()); len(packet) != want {
+		t.Fatalf("ProbePacket() is %d bytes, want %d", len(packet), want)
+	}
+
+	// The header the daemon reads, in the order it reads it (chrony's candm.h):
+	// version, packet type, 2 reserved bytes, command, attempt, sequence.
+	if got := packet[0]; got != 6 {
+		t.Errorf("ProbePacket() version = %d, want 6 (the current protocol version)", got)
+	}
+
+	if got := packet[1]; got != 1 {
+		t.Errorf("ProbePacket() packet type = %d, want 1 (a command request)", got)
+	}
+
+	if got := binary.BigEndian.Uint16(packet[4:6]); got != 33 {
+		t.Errorf("ProbePacket() command = %d, want 33 (REQ_TRACKING)", got)
+	}
+
+	if got := binary.BigEndian.Uint32(packet[8:12]); got != probeSequence {
+		t.Errorf("ProbePacket() sequence = %d, want %d (the reply must be matchable to the request)", got, probeSequence)
+	}
+}
+
+// TestValidateReply checks which replies count as a healthy chronyd. A reply arriving at
+// all is not enough: chronyd answers a request it refuses with a status reply instead of
+// dropping it, so the status is the difference between "the daemon is fine" and "it isn't
+// letting us ask" -- which is the same configuration mistake that leaves the metrics empty.
+func TestValidateReply(t *testing.T) {
+	reply := func(packetType uint8, command fbchrony.CommandType, replyType fbchrony.ReplyType, status fbchrony.ResponseStatusType) []byte {
+		head := fbchrony.ReplyHead{
+			Version: 6,
+			PKTType: fbchrony.PacketType(packetType),
+			Command: command,
+			Reply:   replyType,
+			Status:  status,
+		}
+
+		var buf bytes.Buffer
+
+		if err := binary.Write(&buf, binary.BigEndian, head); err != nil {
+			t.Fatal(err)
+		}
+
+		return buf.Bytes()
+	}
+
+	cases := []struct {
+		name    string
+		reply   []byte
+		wantErr error
+	}{
+		{
+			name:  "a tracking reply from a chronyd that let us in",
+			reply: reply(2, 33, fbchrony.RpyTracking, 0),
+		},
+		{
+			// STT_NOHOSTACCESS: the querying host isn't in cmdallow. chronyd says so
+			// rather than dropping the request, so this is a reply that must not pass.
+			name:    "refused for lack of host access",
+			reply:   reply(2, 33, fbchrony.RpyTracking, 10),
+			wantErr: errRequestRefused,
+		},
+		{
+			// STT_BADPKTVERSION: the protocol version we send is one it doesn't speak.
+			name:    "refused for the protocol version",
+			reply:   reply(2, 33, fbchrony.RpyTracking, 18),
+			wantErr: errRequestRefused,
+		},
+		{
+			// Whatever answered, it isn't chronyd's command protocol.
+			name:    "a request echoed back rather than a reply",
+			reply:   reply(1, 33, fbchrony.RpyTracking, 0),
+			wantErr: errBadReply,
+		},
+		{
+			name:    "an answer to another request",
+			reply:   reply(2, 33, fbchrony.RpyNSources, 0),
+			wantErr: errBadReply,
+		},
+		{
+			name:    "too short to be a reply header",
+			reply:   []byte{6, 2, 0},
+			wantErr: errBadReply,
+		},
+		{
+			name:    "nothing at all",
+			reply:   nil,
+			wantErr: errBadReply,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateReply(tc.reply)
+
+			if !errors.Is(err, tc.wantErr) {
+				t.Errorf("ValidateReply() = %v, want %v", err, tc.wantErr)
+			}
+		})
 	}
 }

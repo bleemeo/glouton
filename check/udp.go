@@ -44,18 +44,21 @@ type UDPCheck struct {
 
 	mainAddress string
 
-	send   []byte
-	expect []byte
+	send     []byte
+	expect   []byte
+	validate func(reply []byte) error
 }
 
 // NewUDP create a new UDP check.
 //
 // All addresses use the format "IP:port". send is written once the socket is open,
-// then glouton waits up to 10 seconds for any reply. If expect is non-empty, the
-// reply's leading bytes must match it; otherwise any non-empty reply counts as OK --
-// many UDP protocols validate a request and reply with an error rather than silently
-// dropping malformed input, so a plain "got some response" is already a meaningful
-// positive signal without the check needing to speak the target's protocol precisely.
+// then glouton waits up to 10 seconds for a reply.
+//
+// What counts as a good reply is up to the caller. expect, when non-empty, requires the
+// reply to start with those bytes. validate, when non-nil, is given the whole reply and
+// says what is wrong with it -- for a protocol that answers a request it refuses instead
+// of dropping it, which "got some response" would report as healthy. With neither, any
+// non-empty reply counts as OK.
 //
 // UDP has no persistent-connection concept the way TCP's baseCheck maintains one
 // (there is no long-lived stream whose breaking can be detected the same way), so
@@ -64,6 +67,7 @@ func NewUDP(
 	address string,
 	send []byte,
 	expect []byte,
+	validate func(reply []byte) error,
 	labels map[string]string,
 	annotations types.MetricAnnotations,
 	containerRuntime containerInfoProvider,
@@ -72,9 +76,12 @@ func NewUDP(
 		mainAddress: address,
 		send:        send,
 		expect:      expect,
+		validate:    validate,
 	}
 
 	uc.baseCheck = newBase("", nil, false, uc.udpMainCheck, labels, annotations, containerRuntime)
+	// The probe below is the whole check, and its description names the port it dialled.
+	uc.baseCheck.keepMainCheckDescription = true
 
 	return uc
 }
@@ -91,10 +98,12 @@ func (uc *UDPCheck) DiagnosticArchive(ctx context.Context, archive types.Archive
 		MainAddress string
 		Send        string
 		Expect      string
+		Validated   bool
 	}{
 		MainAddress: uc.mainAddress,
 		Send:        hex.EncodeToString(uc.send),
 		Expect:      hex.EncodeToString(uc.expect),
+		Validated:   uc.validate != nil,
 	}
 
 	enc := json.NewEncoder(file)
@@ -118,10 +127,10 @@ func (uc *UDPCheck) udpMainCheck(ctx context.Context) types.StatusDescription {
 		}
 	}
 
-	return checkUDP(ctx, uc.mainAddress, uc.send, uc.expect)
+	return checkUDP(ctx, uc.mainAddress, uc.send, uc.expect, uc.validate)
 }
 
-func checkUDP(ctx context.Context, address string, send []byte, expect []byte) types.StatusDescription {
+func checkUDP(ctx context.Context, address string, send []byte, expect []byte, validate func(reply []byte) error) types.StatusDescription {
 	_, portStr, err := net.SplitHostPort(address)
 	if err != nil {
 		return types.StatusDescription{
@@ -210,6 +219,15 @@ func checkUDP(ctx context.Context, address string, send []byte, expect []byte) t
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusCritical,
 			StatusDescription: fmt.Sprintf("UDP port %d, unexpected response %#v", port, string(buffer[:n])),
+		}
+	}
+
+	if validate != nil {
+		if err := validate(buffer[:n]); err != nil {
+			return types.StatusDescription{
+				CurrentStatus:     types.StatusCritical,
+				StatusDescription: fmt.Sprintf("UDP port %d, %v", port, err),
+			}
 		}
 	}
 

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net"
@@ -57,8 +58,36 @@ func NewNTP(
 	}
 
 	nc.baseCheck = newBase("", persistentAddresses, persistentConnection, nc.ntpMainCheck, labels, annotations, containerRuntime)
+	// The NTP exchange is the whole check when there is no TCP address besides, and its
+	// description is what tells a refusal from an unsynchronized clock.
+	nc.baseCheck.keepMainCheckDescription = true
 
 	return nc
+}
+
+// DiagnosticArchive add the address probed to the diagnostic, which baseCheck's version
+// can't know: it only records TCP addresses, and the NTP exchange is on UDP. A check
+// reporting a timeout is unreadable without knowing which host:port it dialled.
+func (nc *NTPCheck) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("check-ntp.json")
+	if err != nil {
+		return err
+	}
+
+	obj := struct {
+		MainAddress string
+	}{
+		MainAddress: nc.mainAddress,
+	}
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	if err := enc.Encode(obj); err != nil {
+		return err
+	}
+
+	return nc.baseCheck.DiagnosticArchive(ctx, archive)
 }
 
 type ntpTimestamp struct {

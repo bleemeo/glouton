@@ -38,11 +38,16 @@ const (
 	listenState       = "LISTEN"
 	addrAllInterfaces = "0.0.0.0"
 	addrLocalhost     = "127.0.0.1"
-	// firstEphemeralPort is the bottom of the range the kernel picks source ports from
-	// (net.ipv4.ip_local_port_range, 32768-60999 by default on Linux; macOS and Windows
-	// start higher still). Used to tell a UDP server's port from a client's, which UDP
-	// gives no other way to distinguish -- see mergeNetstats.
-	firstEphemeralPort = 32768
+	// defaultFirstEphemeralPort is the bottom of the range the kernel picks source ports
+	// from when it can't be read: Linux's own default (net.ipv4.ip_local_port_range is
+	// 32768-60999), and below where macOS and Windows start. Used to tell a UDP server's
+	// port from a client's, which UDP gives no other way to distinguish -- see
+	// mergeNetstats.
+	defaultFirstEphemeralPort = 32768
+	// portRangeFile is where Linux exposes that range, which is tunable: a host that
+	// lowered it would otherwise have its own services taken for clients, and one that
+	// raised it would have ephemeral sockets taken for listeners.
+	portRangeFile = "/proc/sys/net/ipv4/ip_local_port_range"
 )
 
 // NetstatProvider provide netstat information from both a file (output of netstat command) and using gopsutil
@@ -82,6 +87,8 @@ func (np NetstatProvider) Netstat(_ context.Context, processes map[int]Process) 
 }
 
 func (np NetstatProvider) mergeNetstats(netstat map[int][]ListenAddress, dynamicNetstat []psutilNet.ConnectionStat) {
+	firstEphemeralPort := firstEphemeralPort()
+
 	for _, c := range dynamicNetstat {
 		if c.Pid == 0 {
 			continue
@@ -99,7 +106,9 @@ func (np NetstatProvider) mergeNetstats(netstat map[int][]ListenAddress, dynamic
 		// picks from for the unconnected sockets a resolver or a DNS server's own
 		// outgoing queries use, which would otherwise show up as listen addresses
 		// that change on every scan, and make the service look like it needs its
-		// checks and inputs recreated each time.
+		// checks and inputs recreated each time. A UDP service listening inside that
+		// range is missed, which is the price of the kernel not saying which sockets
+		// are listening.
 		var protocol string
 
 		switch c.Type {
@@ -136,6 +145,33 @@ func (np NetstatProvider) mergeNetstats(netstat map[int][]ListenAddress, dynamic
 			Port:          int(c.Laddr.Port),
 		})
 	}
+}
+
+// firstEphemeralPort returns the lowest port the kernel picks for an outgoing connection,
+// read from the kernel itself where that is possible so the guess below only applies to
+// the platforms that don't expose it.
+//
+// Read on every call rather than cached: it is a sysctl an operator can change while
+// Glouton runs, and a file read from procfs costs nothing next to the connection scan it
+// is filtering.
+func firstEphemeralPort() int {
+	content, err := os.ReadFile(portRangeFile)
+	if err != nil {
+		return defaultFirstEphemeralPort
+	}
+
+	// "32768\t60999": the low end first, separated by whitespace.
+	fields := strings.Fields(string(content))
+	if len(fields) == 0 {
+		return defaultFirstEphemeralPort
+	}
+
+	low, err := strconv.Atoi(fields[0])
+	if err != nil || low <= 0 {
+		return defaultFirstEphemeralPort
+	}
+
+	return low
 }
 
 func (np NetstatProvider) cleanRecycledPIDs(netstat map[int][]ListenAddress, processes map[int]Process, modTime time.Time) {

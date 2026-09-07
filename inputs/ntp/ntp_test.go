@@ -19,6 +19,7 @@ package ntp
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"maps"
 	"math"
 	"net"
@@ -194,6 +195,144 @@ func TestGatherWithoutPeer(t *testing.T) {
 	}
 }
 
+// TestGatherMalformedReply checks that a reply cannot be talked into a slice bound.
+// control.NTPClient believes the reply's own Count field over the bytes it actually read,
+// so a datagram announcing more data than it carries panics there -- and a panic in a
+// gather takes the agent down, since crashreport.ProcessPanic re-panics after reporting.
+// Whatever answers at the address we are pointed at can send that datagram.
+func TestGatherMalformedReply(t *testing.T) {
+	cases := map[string]func(request control.NTPControlMsgHead) [][]byte{
+		"a header announcing more data than the datagram carries": func(request control.NTPControlMsgHead) [][]byte {
+			reply := control.NTPControlMsgHead{
+				VnMode:   control.MakeVnMode(3, control.Mode),
+				REMOp:    control.MakeREMOp(true, false, false, int(request.GetOperation())),
+				Sequence: request.Sequence,
+				Count:    2000, // the datagram below carries none
+			}
+
+			var out bytes.Buffer
+
+			_ = binary.Write(&out, binary.BigEndian, reply)
+
+			return [][]byte{out.Bytes()}
+		},
+		"a datagram shorter than a header": func(_ control.NTPControlMsgHead) [][]byte {
+			return [][]byte{{6, 2, 0}}
+		},
+		"a reply continued in more packets than it could ever need": func(request control.NTPControlMsgHead) [][]byte {
+			// Every packet keeps the More bit set, so the reply never ends: nothing in
+			// the protocol bounds this, which is why exchange caps the total.
+			const (
+				packets      = 400
+				dataPerPaket = 400
+			)
+
+			reply := control.NTPControlMsgHead{
+				VnMode:   control.MakeVnMode(3, control.Mode),
+				REMOp:    control.MakeREMOp(true, false, true, int(request.GetOperation())),
+				Sequence: request.Sequence,
+				Count:    dataPerPaket,
+			}
+
+			var out bytes.Buffer
+
+			_ = binary.Write(&out, binary.BigEndian, reply)
+			out.Write(make([]byte, dataPerPaket))
+
+			datagrams := make([][]byte, packets)
+			for i := range datagrams {
+				datagrams[i] = out.Bytes()
+			}
+
+			return datagrams
+		},
+	}
+
+	for name, reply := range cases {
+		t.Run(name, func(t *testing.T) {
+			address := rawNTPD(t, reply)
+
+			acc := &internal.StoreAccumulator{}
+
+			// Must be an error, and above all must not panic.
+			if err := (&controlInput{address: address}).Gather(acc); err == nil {
+				t.Error("Gather() = nil, want an error")
+			}
+		})
+	}
+}
+
+// TestGatherRefused checks that a daemon answering with the error bit set is reported as
+// having refused the request -- what a restrict policy does -- rather than as a daemon
+// with no peers, which sends whoever reads it to the wrong configuration file.
+func TestGatherRefused(t *testing.T) {
+	address := rawNTPD(t, func(request control.NTPControlMsgHead) [][]byte {
+		reply := control.NTPControlMsgHead{
+			VnMode:   control.MakeVnMode(3, control.Mode),
+			REMOp:    control.MakeREMOp(true, true, false, int(request.GetOperation())), // error bit
+			Sequence: request.Sequence,
+		}
+
+		var out bytes.Buffer
+
+		_ = binary.Write(&out, binary.BigEndian, reply)
+
+		return [][]byte{out.Bytes()}
+	})
+
+	err := (&controlInput{address: address}).Gather(&internal.StoreAccumulator{})
+
+	if !errors.Is(err, errRequestRefused) {
+		t.Errorf("Gather() = %v, want %v", err, errRequestRefused)
+	}
+}
+
+// rawNTPD answers each request with whatever datagrams reply returns, without going
+// through the protocol types, so a reply the protocol shouldn't produce can be sent.
+func rawNTPD(t *testing.T, reply func(request control.NTPControlMsgHead) [][]byte) string {
+	t.Helper()
+
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	done := make(chan struct{})
+
+	t.Cleanup(func() {
+		_ = conn.Close()
+
+		<-done
+	})
+
+	go func() {
+		defer close(done)
+
+		buffer := make([]byte, 1024)
+
+		for {
+			n, addr, err := conn.ReadFrom(buffer)
+			if err != nil {
+				return // closed by the cleanup
+			}
+
+			var request control.NTPControlMsgHead
+
+			if n >= 12 {
+				_ = binary.Read(bytes.NewReader(buffer[:12]), binary.BigEndian, &request)
+			}
+
+			for _, datagram := range reply(request) {
+				if _, err := conn.WriteTo(datagram, addr); err != nil {
+					return
+				}
+			}
+		}
+	}()
+
+	return conn.LocalAddr().String()
+}
+
 // TestGatherUnreachable checks the failure that matters in practice: a daemon that never
 // answers, either because nothing listens or because its "restrict" lines refuse mode-6
 // queries from us. The gather must fail rather than hang.
@@ -292,14 +431,14 @@ func TestPeerAddressBecomesALabel(t *testing.T) {
 		}
 
 		if remote := m.Tags[remoteTag]; remote != "" {
-			t.Errorf("tag %q == %q, want it moved to %q", remoteTag, remote, peerAddressTag)
+			t.Errorf("tag %q == %q, want it moved to %q", remoteTag, remote, types.LabelPeerAddress)
 		}
 
-		addresses[m.Tags[peerAddressTag]] = true
+		addresses[m.Tags[types.LabelPeerAddress]] = true
 	}
 
 	if !addresses["37.59.63.125"] || !addresses["54.38.114.34"] {
-		t.Errorf("%s labels == %v, want both peers represented", peerAddressTag, addresses)
+		t.Errorf("%s labels == %v, want both peers represented", types.LabelPeerAddress, addresses)
 	}
 }
 

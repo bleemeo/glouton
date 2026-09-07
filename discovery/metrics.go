@@ -17,8 +17,6 @@
 package discovery
 
 import (
-	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -83,7 +81,6 @@ import (
 	"github.com/bleemeo/glouton/utils/gloutonexec"
 	"github.com/bleemeo/glouton/version"
 
-	fbchrony "github.com/facebook/time/ntp/chrony"
 	"github.com/influxdata/telegraf"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -956,9 +953,18 @@ func serviceRunsElsewhere(service Service) bool {
 	return service.Config.Address != "" && !isLoopbackAddress(service.Config.Address)
 }
 
-// isLoopbackAddress reports whether address (an IP, without a port) is a loopback one.
-// A hostname isn't resolved: it's not one Glouton can claim is local.
+// isLoopbackAddress reports whether address (without a port) is a loopback one.
+//
+// "localhost" counts: it is how most people spell the local host in a config file, and
+// taking it for a remote address sends a local daemon down the path meant for one
+// somewhere else. No other name is resolved -- that would need DNS, and a name that
+// resolves to a loopback address today may not tomorrow.
 func isLoopbackAddress(address string) bool {
+	switch address {
+	case "localhost", "ip6-localhost", "localhost.localdomain":
+		return true
+	}
+
 	ip := net.ParseIP(address)
 
 	return ip != nil && ip.IsLoopback()
@@ -1029,6 +1035,15 @@ func chronyCheckAddress(service Service) string {
 		return address
 	}
 
+	if serviceRunsElsewhere(service) {
+		// The daemon is known not to be the one on Glouton's loopback, and no address
+		// was found for it (a container discovery has no address for). Probing 127.0.0.1
+		// would report on whatever chronyd runs next to Glouton -- Ok while this service
+		// is down on a host that runs one, critical while it is healthy on a host that
+		// doesn't. The check says it couldn't run instead.
+		return ""
+	}
+
 	return net.JoinHostPort(localhostIP, strconv.Itoa(chronyDefaultCmdPort))
 }
 
@@ -1042,46 +1057,28 @@ func chronyCheckAddress(service Service) string {
 // default ... noquery" with only 127.0.0.1 and ::1 unrestricted, so querying a local
 // ntpd anywhere but on loopback would be refused where loopback works.
 func ntpdAddress(service Service) string {
-	if !serviceRunsElsewhere(service) {
-		return ""
-	}
-
 	address := service.Config.Address
-	if address == "" {
+	port := service.Config.Port
+
+	if address == "" && serviceRunsElsewhere(service) {
 		address = service.IPAddress
 	}
 
-	if address == "" {
+	if address == "" && port == 0 {
 		return ""
 	}
 
-	port := servicesDiscoveryInfo[NTPService].ServicePort
-	if service.Config.Port != 0 {
-		port = service.Config.Port
+	if address == "" {
+		// Only the port was overridden: the input would go back to the default 123, so
+		// the loopback it would have used is spelled out here -- the same reason
+		// chronyCmdAddress does it, and the same disagreement between check and metrics
+		// avoided (the check reads the port from AddressPort, which does honour it).
+		address = localhostIP
+	}
+
+	if port == 0 {
+		port = servicesDiscoveryInfo[NTPService].ServicePort
 	}
 
 	return net.JoinHostPort(address, strconv.Itoa(port))
-}
-
-// chronyProbePacket returns the wire bytes of a real chrony "tracking" request -- the
-// same request inputs/chrony (and telegraf's plugin) already sends for the
-// chrony_last_offset/rms_offset metrics, known to get a real reply from any chronyd
-// that allows us in (cmdallow). This matters because chrony's command protocol is
-// deliberately hardened against amplification abuse: unlike more permissive protocols,
-// it doesn't reply to just anything, and there's no guarantee malformed/arbitrary bytes
-// would get a response at all rather than being silently dropped -- which would make a
-// UDP check built on a guessed payload report "down" for a perfectly healthy chronyd.
-// A real, valid request sidesteps that guesswork entirely.
-func chronyProbePacket() []byte {
-	packet := fbchrony.NewTrackingPacket()
-	packet.SetSequence(1)
-
-	var buf bytes.Buffer
-
-	// Matches (fbchrony.Client).Communicate's own encoding exactly -- RequestTracking
-	// is a fixed-size struct (a fixed-length byte array for its unused "data" padding),
-	// so binary.Write never fails on it; the error is only checked out of habit.
-	_ = binary.Write(&buf, binary.BigEndian, packet)
-
-	return buf.Bytes()
 }

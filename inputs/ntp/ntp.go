@@ -17,16 +17,20 @@
 package ntp
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/bits"
 	"net"
+	"os"
 	"strconv"
 	"time"
 
 	"github.com/bleemeo/glouton/inputs/internal"
 	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/facebook/time/ntp/control"
 	"github.com/influxdata/telegraf"
@@ -46,12 +50,23 @@ const (
 	// remoteTag is the tag addPeerFields reports a peer's address under, named after
 	// ntpq's own column so the measurement still looks like the ntpq plugin's.
 	remoteTag = "remote"
-	// peerAddressTag is the label that address ends up on, shared with inputs/chrony so
-	// a dashboard doesn't need to know which daemon answered.
-	peerAddressTag = "ip"
+	// controlHeaderSize is the fixed part of a control message, before its data
+	// (RFC1305 appendix B): version/mode, operation, sequence, status, association ID,
+	// offset and count, 2 bytes each but the first two.
+	controlHeaderSize = 12
+	// maxControlPacketSize is the read buffer for one reply datagram. ntpd keeps a reply's
+	// data under 468 bytes and continues in another packet, so this is roomy on purpose.
+	maxControlPacketSize = 4096
+	// maxControlReplySize bounds a reply spread over continuation packets, which nothing
+	// in the protocol bounds by itself -- see exchange.
+	maxControlReplySize = 64 * 1024
 )
 
-var errNoPeer = errors.New("ntpd reported no peer")
+var (
+	errNoPeer         = errors.New("ntpd reported no peer")
+	errMalformedReply = errors.New("malformed control reply from ntpd")
+	errRequestRefused = errors.New("ntpd refused the request, check its restrict lines")
+)
 
 // New initialise ntp.Input, which reads ntpd's peers over its control protocol (NTP
 // mode 6, RFC1305 appendix B) on the given "host:port", or on 127.0.0.1:123 when address
@@ -136,9 +151,9 @@ func (ci *controlInput) Gather(acc telegraf.Accumulator) error {
 		}
 	}
 
-	client := &control.NTPClient{Connection: conn}
+	sequence := uint16(0)
 
-	status, err := client.Communicate(readPacket(control.OpReadStatus, 0))
+	status, err := exchange(conn, readPacket(control.OpReadStatus, 0), &sequence)
 	if err != nil {
 		return fmt.Errorf("read status from ntpd on %s: %w", ci.address, err)
 	}
@@ -153,14 +168,23 @@ func (ci *controlInput) Gather(acc telegraf.Accumulator) error {
 	gathered := 0
 
 	for associationID := range associations {
-		peer, err := client.Communicate(readPacket(control.OpReadVariables, associationID))
+		peer, err := exchange(conn, readPacket(control.OpReadVariables, associationID), &sequence)
 		if err != nil {
-			return fmt.Errorf("read variables of peer %#x from ntpd on %s: %w", associationID, ci.address, err)
+			// One peer whose reply was dropped shouldn't cost us the others -- a daemon
+			// rate-limiting us drops individual replies. Once the deadline is gone
+			// though, every remaining read fails instantly, so there is nothing left to
+			// try: stop and let what was gathered stand.
+			acc.AddError(fmt.Errorf("read variables of peer %#x from ntpd on %s: %w", associationID, ci.address, err))
+
+			if errors.Is(err, os.ErrDeadlineExceeded) {
+				break
+			}
+
+			continue
 		}
 
 		peerVariables, err := peer.GetAssociationInfo()
 		if err != nil {
-			// One unreadable peer shouldn't cost us the others.
 			acc.AddError(fmt.Errorf("variables of peer %#x from ntpd on %s: %w", associationID, ci.address, err))
 
 			continue
@@ -175,11 +199,88 @@ func (ci *controlInput) Gather(acc telegraf.Accumulator) error {
 		// Reporting nothing without an error would look like a healthy daemon with no
 		// peers, which ntpd can't be: it always has at least the ones it is configured
 		// with. This is what a daemon that just started, or one whose peers are all
-		// placeholders, looks like.
+		// placeholders, looks like. A daemon that refused the request doesn't reach here
+		// -- exchange says so instead, which is the more precise answer.
 		return errNoPeer
 	}
 
 	return nil
+}
+
+// exchange sends one control request and returns the reply, bumping the sequence number
+// the reply is expected to carry back.
+//
+// The reply is read here rather than through control.NTPClient because that client
+// believes the reply's own Count field over the number of bytes it actually read: it
+// reads into a 1024-byte buffer, discards the read length, and then slices
+// buffer[12:12+Count] (ntp/control/client.go). A datagram claiming more data than it
+// carries makes that panic on a slice bound -- and a panic inside a gather takes the whole
+// agent down, since crashreport.ProcessPanic re-panics once it has reported. Whoever we
+// are pointed at gets to send that datagram, so its header cannot be taken on trust.
+func exchange(conn net.Conn, request *control.NTPControlMsgHead, sequence *uint16) (*control.NTPControlMsg, error) {
+	request.Sequence = *sequence
+	*sequence++
+
+	var out bytes.Buffer
+
+	if err := binary.Write(&out, binary.BigEndian, request); err != nil {
+		return nil, err
+	}
+
+	if _, err := conn.Write(out.Bytes()); err != nil {
+		return nil, err
+	}
+
+	var (
+		head control.NTPControlMsgHead
+		data []byte
+	)
+
+	// A reply too big for one datagram comes as several, each with the More bit set.
+	for {
+		buffer := make([]byte, maxControlPacketSize)
+
+		n, err := conn.Read(buffer)
+		if err != nil {
+			return nil, err
+		}
+
+		if n < controlHeaderSize {
+			return nil, fmt.Errorf("%w: %d bytes, less than a header", errMalformedReply, n)
+		}
+
+		if err := binary.Read(bytes.NewReader(buffer[:controlHeaderSize]), binary.BigEndian, &head); err != nil {
+			return nil, err
+		}
+
+		count := int(head.Count)
+		if count > n-controlHeaderSize {
+			return nil, fmt.Errorf("%w: header announces %d bytes of data, the datagram carries %d",
+				errMalformedReply, count, n-controlHeaderSize)
+		}
+
+		data = append(data, buffer[controlHeaderSize:controlHeaderSize+count]...)
+
+		if !head.HasMore() {
+			break
+		}
+
+		// Nothing in the protocol bounds how many continuation packets may be sent, and
+		// the More bit is the sender's to set: without a cap, a daemon (or whatever
+		// answers at its address) could keep this growing until the deadline.
+		if len(data) > maxControlReplySize {
+			return nil, fmt.Errorf("%w: more than %d bytes of data", errMalformedReply, maxControlReplySize)
+		}
+	}
+
+	if head.HasError() {
+		// The daemon answered, and its answer is a refusal -- an unsupported request, or
+		// one its access policy rejects. Saying so beats the "no peer" this used to
+		// become, which points at the daemon's peers instead of at its policy.
+		return nil, fmt.Errorf("%w (operation %d)", errRequestRefused, head.GetOperation())
+	}
+
+	return &control.NTPControlMsg{NTPControlMsgHead: head, Data: data}, nil
 }
 
 // readPacket builds a control request. Version 3 is what the protocol defines (mode 6 was
@@ -199,8 +300,10 @@ func addPeerFields(acc telegraf.Accumulator, peerVariables map[string]string) bo
 
 	// A pool line ntpd keeps as a placeholder for a source it hasn't picked yet has no
 	// address and no measurement: it would only add a permanently-zero series. ntpq shows
-	// those as the ".POOL." rows.
-	if remote == "" || remote == net.IPv4zero.String() {
+	// those as the ".POOL." rows. The address it reports is the unspecified one, which is
+	// "0.0.0.0" for an IPv4 pool and "::" for an IPv6 one -- both have to be recognized,
+	// or the IPv6 placeholder becomes exactly the series this drops the other for.
+	if ip := net.ParseIP(remote); remote == "" || ip == nil || ip.IsUnspecified() {
 		return false
 	}
 
@@ -261,8 +364,8 @@ func parseReach(value string) (uint64, bool) {
 	return 0, false
 }
 
-// renameGlobal moves the peer address to the label it shares with inputs/chrony, so both
-// daemons' per-source metrics are read the same way.
+// renameGlobal moves the peer address to types.LabelPeerAddress, the label it shares with
+// inputs/chrony, so both daemons' per-source metrics are read the same way.
 //
 // The item is deliberately left alone: it is the service instance (the container name),
 // and putting the address there too gave items like "test-ntp_37.59.63.125" -- the address
@@ -272,7 +375,7 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 	if remote := gatherContext.Tags[remoteTag]; remote != "" {
 		delete(gatherContext.Tags, remoteTag)
 
-		gatherContext.Tags[peerAddressTag] = remote
+		gatherContext.Tags[types.LabelPeerAddress] = remote
 	}
 
 	return gatherContext, false

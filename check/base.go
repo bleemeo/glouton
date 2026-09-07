@@ -62,6 +62,12 @@ type baseCheck struct {
 	mainTCPAddress   string
 	tcpAddresses     []string
 	mainCheck        func(ctx context.Context) types.StatusDescription
+	// keepMainCheckDescription reports the description the main check built rather than a
+	// bare Ok when there is no TCP address to check besides. Only for the checks whose
+	// main check IS the whole check and whose description says what was probed (NTP, UDP):
+	// a process check's description is the matched process's whole command line, which has
+	// no business being published as a service's status.
+	keepMainCheckDescription bool
 
 	dialer *net.Dialer
 	wg     sync.WaitGroup
@@ -291,9 +297,9 @@ func (bc *baseCheck) doCheck(ctx context.Context) types.StatusDescription {
 	}
 
 	if len(bc.tcpAddresses) == 0 {
-		if bc.mainCheck != nil {
-			// The main check is the whole check here (NTP, UDP): keep the description it
-			// built, it's the only thing that says what was actually probed.
+		if bc.mainCheck != nil && bc.keepMainCheckDescription {
+			// The main check is the whole check here: keep the description it built, it's
+			// the only thing that says what was actually probed.
 			return status
 		}
 

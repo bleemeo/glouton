@@ -26,6 +26,7 @@ import (
 
 	"github.com/bleemeo/glouton/check"
 	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/inputs/chrony"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/registry"
 	"github.com/bleemeo/glouton/types"
@@ -200,16 +201,18 @@ func (d *Discovery) createNTPCheck(service Service, di discoveryInfo, primaryAdd
 		// createTCPCheck doesn't fit that protocol: the command port is UDP-only, and
 		// that check always dials TCP.
 		//
-		// A real "tracking" request (chronyProbePacket) is used as the UDP check's
-		// payload rather than arbitrary bytes: chrony's command protocol is hardened
-		// against amplification abuse and may just drop malformed input instead of
-		// replying, which would report "down" for a perfectly healthy chronyd. expect
-		// is left empty -- any reply at all to a request this specific is already a
-		// meaningful positive signal.
+		// The payload and the reply check both come from inputs/chrony, which owns the
+		// protocol: a real "tracking" request rather than arbitrary bytes (chrony's
+		// command protocol is hardened against amplification abuse and may drop
+		// malformed input instead of replying, which would report "down" for a healthy
+		// chronyd), and a validated reply rather than any reply at all (chronyd answers
+		// a request it refuses -- a host missing from cmdallow -- with a status reply,
+		// which "got some response" would report as healthy while no metric arrives).
 		udpCheck := check.NewUDP(
 			chronyCheckAddress(service),
-			chronyProbePacket(),
+			chrony.ProbePacket(),
 			nil,
+			chrony.ValidateReply,
 			labels,
 			annotations,
 			d.containerInfo,

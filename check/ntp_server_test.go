@@ -19,7 +19,6 @@ package check
 import (
 	"bytes"
 	"encoding/binary"
-	"net"
 	"strings"
 	"testing"
 	"time"
@@ -32,51 +31,23 @@ import (
 func fakeNTPServer(t *testing.T, reply ntpV3Packet) string {
 	t.Helper()
 
-	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	done := make(chan struct{})
-
-	t.Cleanup(func() {
-		_ = conn.Close()
-
-		<-done
-	})
-
-	go func() {
-		defer close(done)
-
-		buffer := make([]byte, 48)
-
-		for {
-			_, addr, err := conn.ReadFrom(buffer)
-			if err != nil {
-				return // closed by the cleanup
-			}
-
-			// A Kiss-o'-Death carries no timestamps, and the check must not need them:
-			// they are only filled in when the server is answering for real.
-			if reply.Stratum != 0 {
-				now := timeToNTP(time.Now())
-				reply.ReceiveTS = now
-				reply.Transmit = now
-			}
-
-			var out bytes.Buffer
-
-			if err := binary.Write(&out, binary.BigEndian, reply); err != nil {
-				return
-			}
-
-			if _, err := conn.WriteTo(out.Bytes(), addr); err != nil {
-				return
-			}
+	return udpResponder(t, func([]byte) []byte {
+		// A Kiss-o'-Death carries no timestamps, and the check must not need them: they
+		// are only filled in when the server is answering for real.
+		if reply.Stratum != 0 {
+			now := timeToNTP(time.Now())
+			reply.ReceiveTS = now
+			reply.Transmit = now
 		}
-	}()
 
-	return conn.LocalAddr().String()
+		var out bytes.Buffer
+
+		if err := binary.Write(&out, binary.BigEndian, reply); err != nil {
+			return nil
+		}
+
+		return out.Bytes()
+	})
 }
 
 // serverLeapVersionMode is the first byte of a server's reply: the leap indicator, then

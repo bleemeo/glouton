@@ -26,10 +26,10 @@ import (
 	"github.com/bleemeo/glouton/types"
 )
 
-// udpResponder starts a UDP socket answering every datagram with reply (nothing at all
-// when reply is nil, like a port that drops what it doesn't understand), and returns its
-// address.
-func udpResponder(t *testing.T, reply []byte) string {
+// udpResponder starts a UDP socket answering each datagram with whatever reply returns --
+// nothing when that is nil, like a port that drops what it doesn't understand -- and
+// returns its address. Shared with the NTP check's own fake server.
+func udpResponder(t *testing.T, reply func(request []byte) []byte) string {
 	t.Helper()
 
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
@@ -51,15 +51,18 @@ func udpResponder(t *testing.T, reply []byte) string {
 		buffer := make([]byte, 4096)
 
 		for {
-			_, addr, err := conn.ReadFrom(buffer)
+			n, addr, err := conn.ReadFrom(buffer)
 			if err != nil {
 				return // the socket was closed by the cleanup
 			}
 
-			if reply != nil {
-				if _, err := conn.WriteTo(reply, addr); err != nil {
-					return
-				}
+			answer := reply(buffer[:n])
+			if answer == nil {
+				continue
+			}
+
+			if _, err := conn.WriteTo(answer, addr); err != nil {
+				return
 			}
 		}
 	}()
@@ -95,8 +98,8 @@ func TestCheckUDP(t *testing.T) {
 	// context given to it instead.
 	const shortTimeout = 500 * time.Millisecond
 
-	answering := udpResponder(t, []byte("PONG"))
-	silent := udpResponder(t, nil)
+	answering := udpResponder(t, func([]byte) []byte { return []byte("PONG") })
+	silent := udpResponder(t, func([]byte) []byte { return nil })
 	closed := closedUDPPort(t)
 
 	cases := []struct {
@@ -104,6 +107,7 @@ func TestCheckUDP(t *testing.T) {
 		address    string
 		send       []byte
 		expect     []byte
+		validate   func(reply []byte) error
 		want       types.Status
 		wantDetail string
 	}{
@@ -164,7 +168,7 @@ func TestCheckUDP(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), shortTimeout)
 			defer cancel()
 
-			got := checkUDP(ctx, tc.address, tc.send, tc.expect)
+			got := checkUDP(ctx, tc.address, tc.send, tc.expect, tc.validate)
 
 			if got.CurrentStatus != tc.want {
 				t.Errorf("checkUDP() = %v (%s), want %v", got.CurrentStatus, got.StatusDescription, tc.want)
@@ -185,9 +189,9 @@ func TestCheckUDP(t *testing.T) {
 // baseCheck, which has no TCP address to check here and used to return a bare Ok --
 // leaving the panel with a service that is up for no stated reason.
 func TestUDPCheckKeepsItsDescription(t *testing.T) {
-	address := udpResponder(t, []byte("PONG"))
+	address := udpResponder(t, func([]byte) []byte { return []byte("PONG") })
 
-	uc := NewUDP(address, []byte("PING"), []byte("PONG"), nil, types.MetricAnnotations{}, nil)
+	uc := NewUDP(address, []byte("PING"), []byte("PONG"), nil, nil, types.MetricAnnotations{}, nil)
 
 	got := uc.baseCheck.doCheck(t.Context())
 
@@ -203,7 +207,7 @@ func TestUDPCheckKeepsItsDescription(t *testing.T) {
 // TestUDPCheckWithoutAddress checks the check reports it couldn't run rather than an Ok
 // it never verified: unlike a TCP check, there are no secondary addresses to fall back on.
 func TestUDPCheckWithoutAddress(t *testing.T) {
-	uc := NewUDP("", []byte("PING"), nil, nil, types.MetricAnnotations{}, nil)
+	uc := NewUDP("", []byte("PING"), nil, nil, nil, types.MetricAnnotations{}, nil)
 
 	got := uc.baseCheck.doCheck(t.Context())
 
