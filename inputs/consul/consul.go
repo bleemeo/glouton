@@ -189,9 +189,11 @@ func renameMetrics(currentContext internal.GatherContext, metricName string) (ne
 // duration metric in this codebase, and renames the field so the unit is visible in the
 // name.
 //
+// Only the timers Glouton publishes are listed, so promoting another one to the default
+// metrics means adding it here too.
+//
 //nolint:gochecknoglobals
 var timerMeasurementsInMilliseconds = map[string]bool{
-	"consul_kvs_apply":               true,
 	"consul_raft_committime":         true,
 	"consul_raft_leader_lastcontact": true,
 }

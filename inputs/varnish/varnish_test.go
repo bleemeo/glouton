@@ -62,7 +62,6 @@ func newAccumulator(store *internal.StoreAccumulator) internal.Accumulator {
 			"cache_hit",
 			"cache_miss",
 			"backend_fail",
-			"backend_unhealthy",
 			"n_lru_nuked",
 			"threads_limited",
 			"sess_dropped",
@@ -102,7 +101,7 @@ func assertTags(t *testing.T, store *internal.StoreAccumulator, want map[string]
 
 // TestDifferentiationAndHitRatio checks that cache_hit/cache_miss (lifetime
 // totals since Varnish started) are differentiated into per-second rates,
-// that hit_percent is computed from those rates as a 0..100 percentage, and
+// that cache_hit_perc is computed from those rates as a 0..100 percentage, and
 // that uptime (itself a monotonically increasing counter meant to be read
 // as-is) passes through untouched.
 func TestDifferentiationAndHitRatio(t *testing.T) {
@@ -114,16 +113,15 @@ func TestDifferentiationAndHitRatio(t *testing.T) {
 
 	acc.PrepareGather()
 	acc.AddFields("varnish", map[string]any{
-		"cache_hit":         uint64(1000),
-		"cache_miss":        uint64(100),
-		"uptime":            uint64(3600),
-		"backend_fail":      uint64(5),
-		"backend_unhealthy": uint64(2),
-		"n_lru_nuked":       uint64(0),
-		"threads":           uint64(200),
-		"threads_limited":   uint64(0),
-		"sess_dropped":      uint64(0),
-		"sess_queued":       uint64(0),
+		"cache_hit":       uint64(1000),
+		"cache_miss":      uint64(100),
+		"uptime":          uint64(3600),
+		"backend_fail":    uint64(5),
+		"n_lru_nuked":     uint64(0),
+		"threads":         uint64(200),
+		"threads_limited": uint64(0),
+		"sess_dropped":    uint64(0),
+		"sess_queued":     uint64(0),
 	}, map[string]string{"section": "MAIN"}, t0)
 
 	// Discard the first gather: the differentiated fields have no rate yet (no
@@ -132,33 +130,31 @@ func TestDifferentiationAndHitRatio(t *testing.T) {
 
 	acc.PrepareGather()
 	acc.AddFields("varnish", map[string]any{
-		"cache_hit":         uint64(1000 + 900), // rate = 90/s
-		"cache_miss":        uint64(100 + 100),  // rate = 10/s
-		"uptime":            uint64(3610),
-		"backend_fail":      uint64(5 + 20), // rate = 2/s
-		"backend_unhealthy": uint64(2 + 10), // rate = 1/s
-		"n_lru_nuked":       uint64(0 + 30), // rate = 3/s
-		"threads":           uint64(210),    // current count, not differentiated
-		"threads_limited":   uint64(0 + 40), // rate = 4/s
-		"sess_dropped":      uint64(0 + 50), // rate = 5/s
-		"sess_queued":       uint64(0 + 60), // rate = 6/s
+		"cache_hit":       uint64(1000 + 900), // rate = 90/s
+		"cache_miss":      uint64(100 + 100),  // rate = 10/s
+		"uptime":          uint64(3610),
+		"backend_fail":    uint64(5 + 20), // rate = 2/s
+		"n_lru_nuked":     uint64(0 + 30), // rate = 3/s
+		"threads":         uint64(210),    // current count, not differentiated
+		"threads_limited": uint64(0 + 40), // rate = 4/s
+		"sess_dropped":    uint64(0 + 50), // rate = 5/s
+		"sess_queued":     uint64(0 + 60), // rate = 6/s
 	}, map[string]string{"section": "MAIN"}, t1)
 
 	got := collectFinalMetrics(store)
 
-	// hit_percent = 90 / (90+10) * 100 = 90
+	// cache_hit_perc = 90 / (90+10) * 100 = 90
 	assertMetrics(t, got, map[string]float64{
-		"varnish_cache_hit":         90,
-		"varnish_cache_miss":        10,
-		"varnish_cache_hit_percent": 90,
-		"varnish_uptime":            3610,
-		"varnish_backend_fail":      2,
-		"varnish_backend_unhealthy": 1,
-		"varnish_cache_evictions":   3,
-		"varnish_threads":           210,
-		"varnish_threads_limited":   4,
-		"varnish_sessions_dropped":  5,
-		"varnish_sessions_queued":   6,
+		"varnish_cache_hit":        90,
+		"varnish_cache_miss":       10,
+		"varnish_cache_hit_perc":   90,
+		"varnish_uptime":           3610,
+		"varnish_backend_fail":     2,
+		"varnish_cache_evictions":  3,
+		"varnish_threads":          210,
+		"varnish_threads_limited":  4,
+		"varnish_sessions_dropped": 5,
+		"varnish_sessions_queued":  6,
 	})
 
 	// All the metrics we gather come from the MAIN section, so the tag is dropped.

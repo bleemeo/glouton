@@ -44,6 +44,12 @@ func New(url string, username string, password string) (i telegraf.Input, err er
 					RenameGlobal:     renameGlobal,
 					TransformMetrics: transformMetrics,
 					RenameMetrics:    renameMetrics,
+					// The counters InfluxDB accumulates since it started, turned into
+					// per-second rates. Only the ones Glouton publishes, plus the
+					// *DurationNs fields transformMetrics needs a rate of to derive an
+					// average duration: writeReqBytes, queriesExecuted and queriesFinished
+					// are counters of the same shape, but aren't default metrics, so
+					// nothing would read their rate.
 					DifferentiatedMetrics: []string{
 						"req",
 						"reqDurationNs",
@@ -54,7 +60,6 @@ func New(url string, username string, password string) (i telegraf.Input, err er
 						"queryReqDurationNs",
 						"writeReq",
 						"writeReqDurationNs",
-						"writeReqBytes",
 						"pointsWrittenOK",
 						"pointsWrittenFail",
 						"pointsWrittenDropped",
@@ -62,10 +67,6 @@ func New(url string, username string, password string) (i telegraf.Input, err er
 						"writeError",
 						"writeDrop",
 						"writeTimeout",
-						// Needed by the query duration derived in transformMetrics.
-						"queryDurationNs",
-						"queriesExecuted",
-						"queriesFinished",
 					},
 				},
 				Name: "influxdb",
@@ -114,18 +115,13 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 var itemTags = []string{"database", "retentionPolicy", "measurement", "id"}
 
 func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {
-	switch currentContext.Measurement {
-	case "influxdb_httpd":
-		internal.AvgDuration(fields, "reqDurationNs", "req", "req_duration_seconds", internal.NsPerSecond)
-		internal.AvgDuration(fields, "queryReqDurationNs", "queryReq", "query_req_duration_seconds", internal.NsPerSecond)
-		internal.AvgDuration(fields, "writeReqDurationNs", "writeReq", "write_req_duration_seconds", internal.NsPerSecond)
-	case "influxdb_query_executor":
-		// How long a query took to run on average: queryDurationNs is the time spent
-		// executing queries and queriesFinished the number that completed. The httpd
-		// durations above measure the HTTP request instead, which a query run through any
-		// other path never goes through, so this is where a slow query shows up.
-		internal.AvgDuration(fields, "queryDurationNs", "queriesFinished", "duration_seconds", internal.NsPerSecond)
+	if currentContext.Measurement != "influxdb_httpd" {
+		return fields
 	}
+
+	internal.AvgDuration(fields, "reqDurationNs", "req", "req_duration_seconds", internal.NsPerSecond)
+	internal.AvgDuration(fields, "queryReqDurationNs", "queryReq", "query_req_duration_seconds", internal.NsPerSecond)
+	internal.AvgDuration(fields, "writeReqDurationNs", "writeReq", "write_req_duration_seconds", internal.NsPerSecond)
 
 	return fields
 }

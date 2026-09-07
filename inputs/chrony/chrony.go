@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math/bits"
+	"os/user"
 	"time"
 
 	"github.com/bleemeo/glouton/inputs"
@@ -71,17 +72,39 @@ func New(address string) (telegraf.Input, registry.RegistrationOption, error) {
 		chronyInput.Server = "udp://" + address
 	}
 
-	// tracking is the system-wide summary (last_offset, rms_offset). activity
-	// counts how many configured sources are actually reachable right now.
-	// sources gives per-source detail, mirroring what ntpq already reports
-	// per-peer for ntpd.
+	// tracking is the system-wide summary (last_offset, rms_offset, root_delay). activity
+	// counts how many configured sources are actually reachable right now. sources gives
+	// per-source detail, mirroring what ntpq already reports per-peer for ntpd.
+	//
+	// The plugin also offers "sourcestats", chronyc's table of how good each source's
+	// estimate is (stddev, offset_error, skew, span). Nothing published comes out of it and
+	// it costs a request per source, so it isn't asked for -- see
+	// PRODUCT-3300-ntp-metric-catalogue.md for what it holds.
 	chronyInput.Metrics = []string{"tracking", "activity", "sources"}
+
+	// serverstats says how much work this chronyd is doing *for clients*: packets served,
+	// dropped, refused. chronyd only answers it over its unix socket, where being able to
+	// connect at all is the authorisation -- over the command port it replies "not
+	// authorised" (verified with chronyc itself), which would be an error on every gather.
+	// The socket is what the plugin's own auto-detection uses when no address is given, so
+	// this asks for it in exactly the case it can be answered.
+	if address == "" {
+		chronyInput.Metrics = append(chronyInput.Metrics, "serverstats")
+
+		setSocketGroup(chronyInput)
+	}
 
 	internalInput := &internal.Input{
 		Input: chronyInput,
 		Accumulator: internal.Accumulator{
 			RenameGlobal:     renameGlobal,
 			TransformMetrics: transformMetrics,
+			// The serverstats counters chronyd accumulates since it started, turned into
+			// per-second rates like every other counter Glouton publishes: what a user
+			// watches is the rate of requests served and of requests dropped, not a total
+			// that only grows. The other fields of that group (and of every other one) are
+			// gauges and stay as chronyd reports them.
+			DifferentiatedMetrics: []string{"ntp_hits", "ntp_drops", "log_drops"},
 		},
 		Name: "chrony",
 	}
@@ -151,6 +174,36 @@ func ValidateReply(reply []byte) error {
 	}
 
 	return nil
+}
+
+// chronydSocketGroups are the names the group chronyd runs as goes by, most likely first:
+// "chrony" on RHEL, Fedora and SUSE, "_chrony" on Debian, Ubuntu and Alpine.
+//
+//nolint:gochecknoglobals
+var chronydSocketGroups = []string{"chrony", "_chrony"}
+
+// setSocketGroup points the plugin at the group chronyd actually runs as, so that it can
+// reach chronyd's unix socket at all.
+//
+// Dialing that socket means creating one of our own next to it and handing it to chronyd's
+// group, so chronyd can write the reply back -- and the plugin resolves that group through
+// the system's group database (its own dialUnix). Its default is the literal "chrony",
+// which does not exist on Debian, Ubuntu or Alpine, where the group is _chrony: the lookup
+// fails, dialing the socket fails with it, and the plugin quietly falls back to
+// udp://127.0.0.1:323. Every monitoring metric still arrives that way, which is why this
+// goes unnoticed, but serverstats does not -- the command port answers it "501 Not
+// authorised", so it would be an error on every gather.
+//
+// A name that resolves is all this checks. If none does, the plugin keeps its default and
+// behaves as it did before: the socket dial fails and the command port answers the rest.
+func setSocketGroup(input *chrony.Chrony) {
+	for _, name := range chronydSocketGroups {
+		if _, err := user.LookupGroup(name); err == nil {
+			input.SocketGroup = name
+
+			return
+		}
+	}
 }
 
 // renameGlobal drops the tags describing the current synchronization state

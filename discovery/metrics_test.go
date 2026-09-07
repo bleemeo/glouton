@@ -530,6 +530,7 @@ func TestChronyAddress(t *testing.T) {
 		name          string
 		service       Service
 		wantCmd       string
+		wantCmdOK     bool
 		wantCheckAddr string
 	}{
 		{
@@ -537,6 +538,7 @@ func TestChronyAddress(t *testing.T) {
 			name:          "local daemon",
 			service:       Service{ServiceType: NTPService, IPAddress: "127.0.0.1"},
 			wantCmd:       "",
+			wantCmdOK:     true,
 			wantCheckAddr: localCheckAddress,
 		},
 		{
@@ -547,6 +549,7 @@ func TestChronyAddress(t *testing.T) {
 			name:          "local daemon serving NTP on a specific address",
 			service:       Service{ServiceType: NTPService, IPAddress: "192.168.1.5"},
 			wantCmd:       "",
+			wantCmdOK:     true,
 			wantCheckAddr: localCheckAddress,
 		},
 		{
@@ -555,23 +558,37 @@ func TestChronyAddress(t *testing.T) {
 			name:          "container",
 			service:       Service{ServiceType: NTPService, ContainerID: "1234", IPAddress: "172.23.0.2"},
 			wantCmd:       "172.23.0.2:323",
+			wantCmdOK:     true,
 			wantCheckAddr: "172.23.0.2:323",
 		},
 		{
 			name:          "container with a non-default command port",
 			service:       Service{ServiceType: NTPService, ContainerID: "1234", IPAddress: "172.23.0.2", Config: config.Service{StatsPort: 3230}},
 			wantCmd:       "172.23.0.2:3230",
+			wantCmdOK:     true,
 			wantCheckAddr: "172.23.0.2:3230",
 		},
 		{
-			// A container Glouton has no address for. The input has nothing better to try
-			// than the auto-detection, wrong as it may be, but the check must not: probing
-			// our own loopback would report on whatever chronyd runs next to Glouton --
-			// Ok while this container is down, critical while it is healthy. An empty
-			// address makes the check say it couldn't run.
+			// A container the runtime reports no address for (network_mode: none, or
+			// container:<other>, both of which leave PrimaryAddress() empty). Neither half
+			// may fall back to our own loopback: it would report on whatever chronyd runs
+			// next to Glouton -- Ok while this container is down, critical while it is
+			// healthy, and metrics belonging to another daemon either way. Not ok means
+			// no input at all, and an empty address makes the check say it couldn't run.
 			name:          "container without an address",
 			service:       Service{ServiceType: NTPService, ContainerID: "1234"},
 			wantCmd:       "",
+			wantCmdOK:     false,
+			wantCheckAddr: "",
+		},
+		{
+			// Same, with a command port declared: the port says which port to use, never
+			// which host, so it cannot rescue a service whose host is unknown. Filling in
+			// the loopback here would read the local chronyd on a non-default port.
+			name:          "container without an address but a command port",
+			service:       Service{ServiceType: NTPService, ContainerID: "1234", Config: config.Service{StatsPort: 3230}},
+			wantCmd:       "",
+			wantCmdOK:     false,
 			wantCheckAddr: "",
 		},
 		{
@@ -579,6 +596,7 @@ func TestChronyAddress(t *testing.T) {
 			name:          "declared address",
 			service:       Service{ServiceType: NTPService, Config: config.Service{Address: "10.0.0.1"}, IPAddress: "10.0.0.1"},
 			wantCmd:       "10.0.0.1:323",
+			wantCmdOK:     true,
 			wantCheckAddr: "10.0.0.1:323",
 		},
 		{
@@ -588,20 +606,23 @@ func TestChronyAddress(t *testing.T) {
 			name:          "local daemon with a non-default command port",
 			service:       Service{ServiceType: NTPService, IPAddress: "127.0.0.1", Config: config.Service{StatsPort: 3230}},
 			wantCmd:       "127.0.0.1:3230",
+			wantCmdOK:     true,
 			wantCheckAddr: "127.0.0.1:3230",
 		},
 		{
 			name:          "declared address and command port",
 			service:       Service{ServiceType: NTPService, Config: config.Service{Address: "10.0.0.1", StatsPort: 3230}, IPAddress: "10.0.0.1"},
 			wantCmd:       "10.0.0.1:3230",
+			wantCmdOK:     true,
 			wantCheckAddr: "10.0.0.1:3230",
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := chronyCmdAddress(tc.service); got != tc.wantCmd {
-				t.Errorf("chronyCmdAddress() = %q, want %q", got, tc.wantCmd)
+			got, gotOK := chronyCmdAddress(tc.service)
+			if got != tc.wantCmd || gotOK != tc.wantCmdOK {
+				t.Errorf("chronyCmdAddress() = %q, %t, want %q, %t", got, gotOK, tc.wantCmd, tc.wantCmdOK)
 			}
 
 			if got := chronyCheckAddress(tc.service); got != tc.wantCheckAddr {
@@ -619,6 +640,7 @@ func TestNTPDAddress(t *testing.T) {
 		name    string
 		service Service
 		want    string
+		wantOK  bool
 	}{
 		{
 			// The plain host case: ntpd next to Glouton, nothing declared. The input
@@ -626,6 +648,7 @@ func TestNTPDAddress(t *testing.T) {
 			name:    "local daemon",
 			service: Service{ServiceType: NTPService, IPAddress: "127.0.0.1"},
 			want:    "",
+			wantOK:  true,
 		},
 		{
 			// Serving NTP on a specific address says nothing about what its restrict
@@ -633,11 +656,13 @@ func TestNTPDAddress(t *testing.T) {
 			name:    "local daemon serving NTP on a specific address",
 			service: Service{ServiceType: NTPService, IPAddress: "192.168.1.5"},
 			want:    "",
+			wantOK:  true,
 		},
 		{
 			name:    "container",
 			service: Service{ServiceType: NTPService, ContainerID: "1234", IPAddress: "172.23.0.2"},
 			want:    "172.23.0.2:123",
+			wantOK:  true,
 		},
 		{
 			// A declared port has to be honoured even for a local daemon: the check reads
@@ -646,28 +671,42 @@ func TestNTPDAddress(t *testing.T) {
 			name:    "local daemon on a declared port",
 			service: Service{ServiceType: NTPService, IPAddress: "127.0.0.1", Config: config.Service{Port: 1123}},
 			want:    "127.0.0.1:1123",
+			wantOK:  true,
 		},
 		{
 			name:    "declared address",
 			service: Service{ServiceType: NTPService, Config: config.Service{Address: "10.0.0.1"}, IPAddress: "10.0.0.1"},
 			want:    "10.0.0.1:123",
+			wantOK:  true,
 		},
 		{
 			name:    "declared address and port",
 			service: Service{ServiceType: NTPService, Config: config.Service{Address: "10.0.0.1", Port: 1123}, IPAddress: "10.0.0.1"},
 			want:    "10.0.0.1:1123",
+			wantOK:  true,
 		},
 		{
+			// Nothing locates this daemon, and 127.0.0.1:123 is another one: the ntpd next
+			// to Glouton, whose peers would be published under this container's name.
 			name:    "container without an address",
 			service: Service{ServiceType: NTPService, ContainerID: "1234"},
 			want:    "",
+			wantOK:  false,
+		},
+		{
+			// A port cannot rescue an unknown host, same as chrony's command port.
+			name:    "container without an address but a declared port",
+			service: Service{ServiceType: NTPService, ContainerID: "1234", Config: config.Service{Port: 1123}},
+			want:    "",
+			wantOK:  false,
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := ntpdAddress(tc.service); got != tc.want {
-				t.Errorf("ntpdAddress() = %q, want %q", got, tc.want)
+			got, gotOK := ntpdAddress(tc.service)
+			if got != tc.want || gotOK != tc.wantOK {
+				t.Errorf("ntpdAddress() = %q, %t, want %q, %t", got, gotOK, tc.want, tc.wantOK)
 			}
 		})
 	}

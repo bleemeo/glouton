@@ -19,14 +19,23 @@
 package varnish
 
 import (
+	"context"
+
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 
 	"github.com/influxdata/telegraf"
 )
 
+// Runner runs a command. Only declared so New keeps one signature across platforms;
+// nothing on Windows uses it.
+type Runner interface {
+	Run(ctx context.Context, option gloutonexec.Option, name string, arg ...string) ([]byte, error)
+}
+
 // New returns a Varnish input. Varnish isn't supported on Windows, telegraf's
 // own varnish plugin is a no-op stub on this platform.
-func New() (telegraf.Input, registry.RegistrationOption, error) {
+func New(_ Runner) (telegraf.Input, registry.RegistrationOption, error) {
 	return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
 }

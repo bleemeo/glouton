@@ -133,10 +133,14 @@ func TestCounterAndSampleFields(t *testing.T) {
 	})
 }
 
-// TestTimerMeansConvertedToSeconds checks that the kvs_apply/raft_committime/
+// TestTimerMeansConvertedToSeconds checks that the raft_committime and
 // raft_leader_lastcontact means -- reported by Consul's go-metrics sink in
 // milliseconds -- are converted to seconds and renamed accordingly, matching every
 // other duration metric in this codebase.
+//
+// It also checks the conversion stops at those two. Consul reports a dozen timers in
+// milliseconds and Glouton publishes exactly these, so converting another one produces a
+// field nothing reads (kvs.apply below is one such timer, left in Consul's own scale).
 func TestTimerMeansConvertedToSeconds(t *testing.T) {
 	store := &internal.StoreAccumulator{}
 	acc := newAccumulator(store)
@@ -160,16 +164,21 @@ func TestTimerMeansConvertedToSeconds(t *testing.T) {
 
 	assertMetrics(t, got, map[string]float64{
 		"consul_raft_committime_mean_seconds":         0.0015,
-		"consul_kvs_apply_mean_seconds":               0.0025,
 		"consul_raft_leader_lastcontact_mean_seconds": 0.04225,
 		// max isn't in the default metrics and is left in Consul's own millisecond
 		// scale: only "mean" is converted.
 		"consul_raft_committime_max": 3,
+		// Not a default metric either, so its mean keeps Consul's name and scale.
+		"consul_kvs_apply_mean": 2.5,
 	})
 
 	for name := range got {
-		if name == "consul_raft_committime_mean" || name == "consul_kvs_apply_mean" || name == "consul_raft_leader_lastcontact_mean" {
+		if name == "consul_raft_committime_mean" || name == "consul_raft_leader_lastcontact_mean" {
 			t.Errorf("metric %q should have been renamed with a _seconds suffix, still present", name)
+		}
+
+		if name == "consul_kvs_apply_mean_seconds" {
+			t.Errorf("metric %q was converted, though it isn't one Glouton publishes", name)
 		}
 	}
 }

@@ -25,7 +25,9 @@ import (
 	"math/bits"
 	"net"
 	"os"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/bleemeo/glouton/inputs/internal"
@@ -57,9 +59,17 @@ const (
 	// maxControlPacketSize is the read buffer for one reply datagram. ntpd keeps a reply's
 	// data under 468 bytes and continues in another packet, so this is roomy on purpose.
 	maxControlPacketSize = 4096
-	// maxControlReplySize bounds a reply spread over continuation packets, which nothing
-	// in the protocol bounds by itself -- see exchange.
-	maxControlReplySize = 64 * 1024
+	// maxControlDatagrams bounds how many datagrams one reply may be read from, which
+	// nothing in the protocol bounds by itself. It is ntpq's own bound: twice its
+	// MAXFRAGS of 32, because a datagram that turns out not to belong to this reply is
+	// discarded and still costs a read ("Discarding various invalid packets can cause us
+	// to loop more than MAXFRAGS times, but enforce a sane bound on how long we're
+	// willing to spend here" -- ntp/packet.py).
+	maxControlDatagrams = 2 * 32
+	// maxControlReplySize bounds the reassembled reply. ntpd sends at most 468 bytes of
+	// data per fragment, so ntpq's 32 of them come to 14976 bytes; the round number above
+	// that also keeps the reassembled Count within the uint16 it is stored in.
+	maxControlReplySize = 16 * 1024
 )
 
 var (
@@ -165,6 +175,19 @@ func (ci *controlInput) Gather(acc telegraf.Accumulator) error {
 		return fmt.Errorf("peer list from ntpd on %s: %w", ci.address, err)
 	}
 
+	// Association 0 is the daemon itself rather than a peer: its variables are what ntpd
+	// concluded about the local clock, including the offset it is actually correcting for.
+	// That is the number chrony reports as chrony_last_offset, and without it an ntpd host
+	// has only per-peer offsets and no answer to "how far off is this clock".
+	system, err := exchange(conn, readPacket(control.OpReadVariables, 0), &sequence)
+	if err != nil {
+		acc.AddError(fmt.Errorf("read system variables from ntpd on %s: %w", ci.address, err))
+	} else if systemVariables, err := system.GetAssociationInfo(); err != nil {
+		acc.AddError(fmt.Errorf("system variables from ntpd on %s: %w", ci.address, err))
+	} else {
+		addSystemFields(acc, systemVariables)
+	}
+
 	gathered := 0
 
 	for associationID := range associations {
@@ -217,6 +240,13 @@ func (ci *controlInput) Gather(acc telegraf.Accumulator) error {
 // carries makes that panic on a slice bound -- and a panic inside a gather takes the whole
 // agent down, since crashreport.ProcessPanic re-panics once it has reported. Whoever we
 // are pointed at gets to send that datagram, so its header cannot be taken on trust.
+//
+// That client also takes none of the other precautions ntpq takes, which real replies turn
+// out to need: measured against the ntpsec 1.2.2 in the test container, every peer's
+// variables come back as two fragments (468 bytes at offset 0, then 201 at offset 468), so
+// reassembling a reply is the normal path and not an exotic one. The checks here are the
+// ones ntpq's own mode-6 client makes in __validate_packet and its fragment collection
+// loop (ntp/packet.py), for the reasons its comments give.
 func exchange(conn net.Conn, request *control.NTPControlMsgHead, sequence *uint16) (*control.NTPControlMsg, error) {
 	request.Sequence = *sequence
 	*sequence++
@@ -232,12 +262,12 @@ func exchange(conn net.Conn, request *control.NTPControlMsgHead, sequence *uint1
 	}
 
 	var (
-		head control.NTPControlMsgHead
-		data []byte
+		fragments []replyFragment
+		lastHead  control.NTPControlMsgHead
+		seenLast  bool
 	)
 
-	// A reply too big for one datagram comes as several, each with the More bit set.
-	for {
+	for range maxControlDatagrams {
 		buffer := make([]byte, maxControlPacketSize)
 
 		n, err := conn.Read(buffer)
@@ -246,11 +276,24 @@ func exchange(conn net.Conn, request *control.NTPControlMsgHead, sequence *uint1
 		}
 
 		if n < controlHeaderSize {
-			return nil, fmt.Errorf("%w: %d bytes, less than a header", errMalformedReply, n)
+			continue
 		}
+
+		var head control.NTPControlMsgHead
 
 		if err := binary.Read(bytes.NewReader(buffer[:controlHeaderSize]), binary.BigEndian, &head); err != nil {
 			return nil, err
+		}
+
+		if !isReplyTo(head, request) {
+			continue
+		}
+
+		if head.HasError() {
+			// The daemon answered, and its answer is a refusal -- an unsupported request,
+			// or one its access policy rejects. Saying so beats the "no peer" this used to
+			// become, which points at the daemon's peers instead of at its policy.
+			return nil, fmt.Errorf("%w (operation %d)", errRequestRefused, head.GetOperation())
 		}
 
 		count := int(head.Count)
@@ -259,28 +302,114 @@ func exchange(conn net.Conn, request *control.NTPControlMsgHead, sequence *uint1
 				errMalformedReply, count, n-controlHeaderSize)
 		}
 
-		data = append(data, buffer[controlHeaderSize:controlHeaderSize+count]...)
+		if int(head.Offset)+count > maxControlReplySize {
+			return nil, fmt.Errorf("%w: a fragment ends past the %d bytes a reply may hold",
+				errMalformedReply, maxControlReplySize)
+		}
+
+		fragment := replyFragment{offset: int(head.Offset), data: buffer[controlHeaderSize : controlHeaderSize+count]}
+
+		// A fragment covering bytes another already covers is dropped rather than kept,
+		// as ntpq drops it: a duplicate is something UDP is entitled to deliver, and
+		// keeping it would leave the reply unassemblable for good.
+		if overlapsHeldFragment(fragments, fragment) {
+			continue
+		}
+
+		fragments = append(fragments, fragment)
 
 		if !head.HasMore() {
-			break
+			// The status of the reply as a whole is the last fragment's, which is the one
+			// GetPeerStatus and GetSystemStatus read.
+			seenLast = true
+			lastHead = head
 		}
 
-		// Nothing in the protocol bounds how many continuation packets may be sent, and
-		// the More bit is the sender's to set: without a cap, a daemon (or whatever
-		// answers at its address) could keep this growing until the deadline.
-		if len(data) > maxControlReplySize {
-			return nil, fmt.Errorf("%w: more than %d bytes of data", errMalformedReply, maxControlReplySize)
+		if !seenLast {
+			continue
 		}
+
+		data, complete := assembleReply(fragments)
+		if !complete {
+			continue // a fragment in the middle is still on its way
+		}
+
+		// Count has to describe the reassembled data rather than stay the last
+		// fragment's, or GetAssociations -- which walks Data by Count/4 -- would stop
+		// after the associations the final fragment happened to carry.
+		lastHead.Count = uint16(len(data)) //nolint:gosec // bounded by maxControlReplySize above
+
+		return &control.NTPControlMsg{NTPControlMsgHead: lastHead, Data: data}, nil
 	}
 
-	if head.HasError() {
-		// The daemon answered, and its answer is a refusal -- an unsupported request, or
-		// one its access policy rejects. Saying so beats the "no peer" this used to
-		// become, which points at the daemon's peers instead of at its policy.
-		return nil, fmt.Errorf("%w (operation %d)", errRequestRefused, head.GetOperation())
+	return nil, fmt.Errorf("%w: no complete reply in %d datagrams", errMalformedReply, maxControlDatagrams)
+}
+
+// replyFragment is the data one datagram of a reply carries, kept with the offset that
+// datagram claims for it inside the whole reply.
+type replyFragment struct {
+	offset int
+	data   []byte
+}
+
+// isReplyTo reports whether a datagram is the reply to this request rather than a stray
+// one: a late answer to an earlier request on the same socket, a duplicate, or something
+// else that happened to arrive. Without this, a reply left queued by a request that
+// errored out is read as the next peer's variables -- publishing one peer's numbers twice
+// and losing another peer entirely.
+//
+// A mismatched association ID is deliberately not part of this. ntpq only warns about one
+// instead of rejecting the datagram, and the sequence number already pins the datagram to
+// a request that named a single association.
+func isReplyTo(head control.NTPControlMsgHead, request *control.NTPControlMsgHead) bool {
+	switch {
+	case head.GetVersion() < 1 || head.GetVersion() > 4:
+		return false
+	case head.GetMode() != control.Mode:
+		return false
+	case !head.IsResponse():
+		return false
+	case head.Sequence != request.Sequence:
+		return false
+	case head.GetOperation() != request.GetOperation():
+		return false
+	default:
+		return true
+	}
+}
+
+// assembleReply puts a reply's fragments back together in the order their offsets say,
+// which is not necessarily the order they arrived in -- UDP is free to reorder them, and
+// a reply needing several datagrams is the common case here. It reports false while the
+// reply still has a hole in it, meaning a fragment is yet to arrive.
+//
+// Requiring each fragment to start exactly where the previous one ended is ntpq's test,
+// and it covers the first fragment being missing (nothing starts at 0) as well as any gap.
+func assembleReply(fragments []replyFragment) ([]byte, bool) {
+	sorted := slices.SortedFunc(slices.Values(fragments), func(a, b replyFragment) int {
+		return a.offset - b.offset
+	})
+
+	data := make([]byte, 0, maxControlPacketSize)
+
+	for _, fragment := range sorted {
+		if fragment.offset != len(data) {
+			return nil, false
+		}
+
+		data = append(data, fragment.data...)
 	}
 
-	return &control.NTPControlMsg{NTPControlMsgHead: head, Data: data}, nil
+	return data, true
+}
+
+// overlapsHeldFragment reports whether any fragment already held covers a byte the new one
+// also covers.
+func overlapsHeldFragment(held []replyFragment, fragment replyFragment) bool {
+	return slices.ContainsFunc(held, func(other replyFragment) bool {
+		return other.offset < fragment.offset+len(fragment.data) &&
+			fragment.offset < other.offset+len(other.data)
+	})
 }
 
 // readPacket builds a control request. Version 3 is what the protocol defines (mode 6 was
@@ -292,6 +421,29 @@ func readPacket(operation uint8, associationID uint16) *control.NTPControlMsgHea
 		REMOp:         operation,
 		AssociationID: associationID,
 	}
+}
+
+// systemMeasurement holds the daemon's own view of the local clock, kept apart from the
+// per-peer "ntpq" measurement: those points are identified by their peer, these have no
+// peer at all, and sharing a measurement would make one look like the other with a missing
+// label.
+const systemMeasurement = "ntpq_system"
+
+// addSystemFields reports what ntpd concluded about the local clock, from association 0.
+//
+// Only "offset" is read of the twenty variables association 0 answers with, because it is
+// the only one published: the daemon's own estimate of how far off this clock is, which is
+// what chrony reports as chrony_last_offset. The others (sys_jitter, clk_wander, stratum,
+// leap, rootdisp, frequency, precision, tc, ...) were left out on purpose -- see
+// PRODUCT-3300-ntp-metric-catalogue.md for what each holds, should one be wanted later.
+func addSystemFields(acc telegraf.Accumulator, systemVariables map[string]string) {
+	// Milliseconds, as everything ntpd reports; transformMetrics turns it into seconds.
+	offset, err := strconv.ParseFloat(systemVariables["offset"], 64)
+	if err != nil {
+		return
+	}
+
+	acc.AddFields(systemMeasurement, map[string]any{"offset": offset}, nil)
 }
 
 // addPeerFields reports one peer, and whether it was one worth reporting.
@@ -309,15 +461,28 @@ func addPeerFields(acc telegraf.Accumulator, peerVariables map[string]string) bo
 
 	fields := make(map[string]any, 4)
 
-	// delay/offset/jitter are the milliseconds ntpd reports; transformMetrics turns them
-	// into seconds, as the ntpq plugin's own values were.
-	for _, name := range []string{"delay", "offset", "jitter"} {
+	// delay and offset are the milliseconds ntpd reports; transformMetrics turns them into
+	// seconds, as the ntpq plugin's own values were. jitter, stratum and unreach are the
+	// other numbers a peer carries and are deliberately not read, being unpublished --
+	// PRODUCT-3300-ntp-metric-catalogue.md says what each is.
+	for _, name := range []string{"delay", "offset"} {
 		value, err := strconv.ParseFloat(peerVariables[name], 64)
 		if err != nil {
 			continue
 		}
 
 		fields[name] = value
+	}
+
+	// flash is the bit field of the sanity checks this peer failed: zero means ntpd is
+	// happy with it, and each bit is a reason it isn't (control.ReadFlashStatusWord names
+	// them, e.g. 0x400 peer_dist). Always read as hexadecimal, which is how ntpq prints it
+	// and what makes the bits line up with those names; ntpsec sends it prefixed ("0x0" on
+	// the wire, checked against 1.2.2) and older implementations bare, so the prefix is
+	// removed rather than relying on base detection -- a bare "400" is peer_dist, not 400.
+	flash := strings.TrimPrefix(strings.TrimPrefix(peerVariables["flash"], "0x"), "0X")
+	if value, err := strconv.ParseUint(flash, 16, 16); err == nil {
+		fields["flash"] = float64(value)
 	}
 
 	if reach, ok := parseReach(peerVariables["reach"]); ok {
@@ -381,12 +546,16 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 	return gatherContext, false
 }
 
-// transformMetrics converts delay/jitter/offset from ntpd's own millisecond scale into
-// seconds, matching every other duration metric in this codebase, and renames each field
-// so the unit is visible in the name. It also converts reach from the 0..1 ratio
-// addPeerFields reports into a 0..100 percentage, matching every other percentage metric
-// in this codebase (e.g. cpu_used, mem_used_percent).
+// transformMetrics converts the durations ntpd reports in milliseconds into seconds,
+// matching every other duration metric in this codebase, and renames each field so the unit
+// is visible in the name. It also converts reach from the 0..1 ratio addPeerFields reports
+// into a 0..100 percentage, matching every other percentage metric Glouton publishes.
+//
+// The two measurements carry different fields: the per-peer one reports the measurement
+// towards that peer, the system one what ntpd concluded from all of them.
 func transformMetrics(_ internal.GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {
+	// Both measurements report their durations in milliseconds and name them the same way,
+	// so one list covers the peer points (delay, offset) and the system one (offset).
 	for _, name := range []string{"delay", "jitter", "offset"} {
 		if value, ok := fields[name]; ok {
 			delete(fields, name)

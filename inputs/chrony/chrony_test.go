@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -68,6 +69,65 @@ func TestTagsDropped(t *testing.T) {
 	// The metrics themselves must pass through untouched: they are all gauges.
 	if value, _ := store.Measurement[0].Fields["skew"].(float64); value != 0.05 {
 		t.Errorf("fields[skew] == %v, want 0.05", store.Measurement[0].Fields["skew"])
+	}
+}
+
+// TestServerStatsCountersBecomeRates checks the serverstats counters -- what this chronyd
+// has served to clients -- are turned into per-second rates. chronyd accumulates them from
+// its start, so the raw value only ever grows; what a user watches is requests per second
+// and drops per second.
+//
+// This group is only asked for when chronyd is reached over its unix socket, since it
+// answers "not authorised" over the command port -- see New.
+func TestServerStatsCountersBecomeRates(t *testing.T) {
+	store := &internal.StoreAccumulator{}
+	acc := internal.Accumulator{ //nolint:exhaustruct
+		RenameGlobal:          renameGlobal,
+		TransformMetrics:      transformMetrics,
+		DifferentiatedMetrics: []string{"ntp_hits", "ntp_drops", "log_drops"},
+		Accumulator:           store,
+	}
+
+	t0 := time.Now()
+	t1 := t0.Add(10 * time.Second)
+
+	acc.PrepareGather()
+	acc.AddFields("chrony_serverstats", map[string]any{
+		"ntp_hits":         uint64(1000),
+		"ntp_drops":        uint64(10),
+		"log_drops":        uint64(0),
+		"ntp_span_seconds": uint64(600),
+	}, nil, t0)
+
+	// Discard the first gather: a differentiated counter has no rate without a previous
+	// point to compare against.
+	store.Measurement = nil
+
+	acc.PrepareGather()
+	acc.AddFields("chrony_serverstats", map[string]any{
+		"ntp_hits":         uint64(1000 + 500), // rate = 50/s
+		"ntp_drops":        uint64(10 + 20),    // rate = 2/s
+		"log_drops":        uint64(0 + 1),      // rate = 0.1/s
+		"ntp_span_seconds": uint64(610),        // a gauge, untouched
+	}, nil, t1)
+
+	if len(store.Measurement) != 1 {
+		t.Fatalf("got %d measurements, want 1: %#v", len(store.Measurement), store.Measurement)
+	}
+
+	fields := store.Measurement[0].Fields
+
+	for name, want := range map[string]float64{
+		"ntp_hits":  50,
+		"ntp_drops": 2,
+		"log_drops": 0.1,
+		// Seconds covered by the timestamps chronyd holds, not a counter.
+		"ntp_span_seconds": 610,
+	} {
+		got, _ := fields[name].(float64)
+		if math.Abs(got-want) > 0.0001 {
+			t.Errorf("fields[%s] = %v, want %v", name, fields[name], want)
+		}
 	}
 }
 

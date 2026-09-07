@@ -68,7 +68,6 @@ func newAccumulator(store *internal.StoreAccumulator) internal.Accumulator {
 			"queryReqDurationNs",
 			"writeReq",
 			"writeReqDurationNs",
-			"writeReqBytes",
 			"pointsWrittenOK",
 			"pointsWrittenFail",
 			"pointsWrittenDropped",
@@ -76,9 +75,6 @@ func newAccumulator(store *internal.StoreAccumulator) internal.Accumulator {
 			"writeError",
 			"writeDrop",
 			"writeTimeout",
-			"queryDurationNs",
-			"queriesExecuted",
-			"queriesFinished",
 		},
 		Accumulator: store,
 	}
@@ -141,8 +137,7 @@ func TestRenamePipelineHTTPD(t *testing.T) {
 		"pointsWrittenDropped": uint64(2),
 	}, nil, t0)
 
-	// Discard the first gather: every field is a differentiated counter, so
-	// it has no rate yet (no history).
+	// Discard the first gather: the differentiated counters have no rate yet (no history).
 	store.Measurement = nil
 
 	acc.PrepareGather()
@@ -156,7 +151,7 @@ func TestRenamePipelineHTTPD(t *testing.T) {
 		"clientError":          uint64(5 + 2),                       // rate = 0.2/s
 		"serverError":          uint64(1 + 1),                       // rate = 0.1/s
 		"authFail":             uint64(0 + 3),                       // rate = 0.3/s
-		"writeReqBytes":        uint64(100000 + 50000),              // rate = 5000/s
+		"writeReqBytes":        uint64(100000 + 50000),              // not differentiated
 		"pointsWrittenOK":      uint64(1000 + 400),                  // rate = 40/s
 		"pointsWrittenFail":    uint64(10 + 5),                      // rate = 0.5/s
 		"pointsWrittenDropped": uint64(2 + 1),                       // rate = 0.1/s
@@ -177,10 +172,12 @@ func TestRenamePipelineHTTPD(t *testing.T) {
 		"influxdb_httpd_client_error":               0.2,
 		"influxdb_httpd_server_error":               0.1,
 		"influxdb_httpd_auth_fail":                  0.3,
-		"influxdb_httpd_write_req_bytes":            5000,
-		"influxdb_httpd_points_written_ok":          40,
-		"influxdb_httpd_points_written_fail":        0.5,
-		"influxdb_httpd_points_written_dropped":     0.1,
+		// Not a default metric, so it isn't differentiated: what comes out is InfluxDB's
+		// own cumulative byte count, not a rate.
+		"influxdb_httpd_write_req_bytes":        150000,
+		"influxdb_httpd_points_written_ok":      40,
+		"influxdb_httpd_points_written_fail":    0.5,
+		"influxdb_httpd_points_written_dropped": 0.1,
 	})
 
 	// The raw nanosecond-duration counters are only used internally to
@@ -293,11 +290,13 @@ func TestShardItems(t *testing.T) {
 	}
 }
 
-// TestQueryDuration checks the average execution time of a query, derived from the
-// cumulative queryDurationNs over the number of queries that finished. It is the only
-// duration covering a query itself: influxdb_httpd_query_req_duration_seconds times the
-// HTTP request that carried it.
-func TestQueryDuration(t *testing.T) {
+// TestQueryExecutorNotDerived checks that nothing is derived from the queryExecutor
+// counters. An average execution time can be computed from them (queryDurationNs over
+// queriesFinished, the only duration covering a query itself rather than the HTTP request
+// that carried it), but influxdb_query_executor_duration_seconds isn't among the metrics
+// Glouton publishes, so deriving it would only differentiate two counters to feed a field
+// nothing reads. queriesActive, which is published, is a gauge and untouched either way.
+func TestQueryExecutorNotDerived(t *testing.T) {
 	store := &internal.StoreAccumulator{}
 	acc := newAccumulator(store)
 
@@ -312,32 +311,27 @@ func TestQueryDuration(t *testing.T) {
 		"queryDurationNs": uint64(1_000_000_000),
 	}, nil, t0)
 
-	// Discard the first gather: the two cumulative fields have no rate yet.
 	store.Measurement = nil
 
 	acc.PrepareGather()
 	acc.AddFields("influxdb_queryExecutor", map[string]any{
 		"queriesActive":   2.0,
-		"queriesExecuted": uint64(100 + 40),                    // rate = 4/s
-		"queriesFinished": uint64(100 + 20),                    // rate = 2/s
-		"queryDurationNs": uint64(1_000_000_000 + 600_000_000), // rate = 60 000 000 ns/s
+		"queriesExecuted": uint64(100 + 40),
+		"queriesFinished": uint64(100 + 20),
+		"queryDurationNs": uint64(1_000_000_000 + 600_000_000),
 	}, nil, t1)
 
 	got := collectFinalMetrics(store)
 
-	// duration_seconds = queryDurationNsRate / queriesFinishedRate / 1e9
-	//                  = 60 000 000 / 2 / 1e9 = 0.03
 	assertMetrics(t, got, map[string]float64{
-		"influxdb_query_executor_duration_seconds": 0.03,
-		"influxdb_query_executor_queries_finished": 2,
-		"influxdb_query_executor_queries_executed": 4,
-		"influxdb_query_executor_queries_active":   2,
+		"influxdb_query_executor_queries_active": 2,
+		// Cumulative as InfluxDB reports them, none of the three being a default metric.
+		"influxdb_query_executor_queries_executed": 140,
+		"influxdb_query_executor_queries_finished": 120,
 	})
 
-	// The cumulative nanoseconds themselves must not be published: they were consumed by
-	// the average.
-	if _, ok := got["influxdb_query_executor_querydurationns"]; ok {
-		t.Error("influxdb_query_executor_querydurationns is still emitted")
+	if _, ok := got["influxdb_query_executor_duration_seconds"]; ok {
+		t.Error("influxdb_query_executor_duration_seconds is derived, though it isn't a metric Glouton publishes")
 	}
 }
 

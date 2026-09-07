@@ -757,13 +757,24 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 		discovery.NTPService: {
 			"chrony_last_offset",
 			"chrony_rms_offset",
+			"chrony_root_delay",
 			"chrony_activity_online",
 			"chrony_activity_offline",
 			"chrony_sources_reachability_perc",
 			"chrony_sources_latest_measurement_seconds",
+			// Only a chronyd on this host reports these: they come from the command
+			// group chronyd answers over its unix socket alone (see inputs/chrony).
+			"chrony_serverstats_ntp_hits",
+			"chrony_serverstats_ntp_drops",
+			"chrony_serverstats_log_drops",
 
 			"ntpq_offset_seconds",
+			"ntpq_delay_seconds",
 			"ntpq_reach_perc",
+			"ntpq_flash",
+			// The daemon's own estimate of the local clock's error, rather than one
+			// peer's: the ntpd counterpart of chrony_last_offset.
+			"ntpq_system_offset_seconds",
 		},
 
 		discovery.OpenBaoService: { // OpenBao is a fork of Hashicorp Vault
@@ -884,6 +895,8 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 		},
 
 		discovery.TomcatService: {
+			"tomcat_connector_bytes_received",
+			"tomcat_connector_bytes_sent",
 			"tomcat_connector_current_threads_busy",
 			"tomcat_connector_error_count",
 			"tomcat_connector_max_threads",
@@ -939,7 +952,7 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 
 		discovery.VarnishService: {
 			"varnish_cache_hit",
-			"varnish_cache_hit_percent",
+			"varnish_cache_hit_perc",
 			"varnish_cache_miss",
 			"varnish_backend_fail",
 			"varnish_threads",

@@ -23,6 +23,7 @@ import (
 
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/registry"
 
 	"github.com/influxdata/telegraf"
@@ -30,10 +31,16 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/varnish"
 )
 
-// New returns a Varnish input. It reads the metrics with "sudo varnishstat", run by
-// Telegraf itself and not through Glouton's command runner, so a Varnish running in a
-// container isn't reachable when Glouton runs on the host (and the other way around).
-func New() (telegraf.Input, registry.RegistrationOption, error) {
+// New returns a Varnish input. It reads the metrics with "varnishstat", run through
+// Glouton's command runner so that the binary comes from the host rather than from the
+// agent's own filesystem -- see useGloutonRunner.
+//
+// varnishstat reads the shared memory of the Varnish running in the namespace it is run
+// in, so this still reports the *host's* Varnish for every discovered service: a Varnish
+// in a container of its own gets the host's numbers, and two of them get the same numbers
+// twice. Reaching into a container's instance needs the "-n" argument pointed at it, which
+// this doesn't do yet.
+func New(runner Runner) (telegraf.Input, registry.RegistrationOption, error) {
 	input, ok := telegraf_inputs.Inputs["varnish"]
 	if !ok {
 		return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
@@ -44,18 +51,27 @@ func New() (telegraf.Input, registry.RegistrationOption, error) {
 		return nil, registry.RegistrationOption{}, inputs.ErrUnexpectedType
 	}
 
-	// The input uses "sudo varnishstat ..." to retrieve the metrics.
+	if err := useGloutonRunner(varnishInput, runner); err != nil {
+		// Not fatal: the plugin keeps its own runner, which is what every Glouton did
+		// before this and still works wherever varnishstat sits next to the agent. Only
+		// the container case is lost, and it was already broken. The unit test is what
+		// makes a Telegraf upgrade renaming the field loud.
+		logger.V(1).Printf("Varnish metrics will be gathered without Glouton's command runner: %v", err)
+	}
+
+	// Asks the runner for root; it decides whether a sudo is actually needed.
 	varnishInput.UseSudo = true
 
 	// The plugin only collects cache_hit/cache_miss/uptime by default. The backend and
 	// thread-pool counters below are cheap backend-health and saturation signals varnishstat
 	// already tracks, so ask for them too instead of leaving them out for lack of asking.
+	// Nothing else: this is the list Glouton publishes, and asking varnishstat for a counter
+	// no metric comes out of only costs a wider parse on every gather.
 	varnishInput.Stats = []string{
 		"MAIN.cache_hit",
 		"MAIN.cache_miss",
 		"MAIN.uptime",
 		"MAIN.backend_fail",
-		"MAIN.backend_unhealthy",
 		"MAIN.n_lru_nuked",
 		"MAIN.threads",
 		"MAIN.threads_limited",
@@ -72,12 +88,7 @@ func New() (telegraf.Input, registry.RegistrationOption, error) {
 			DifferentiatedMetrics: []string{
 				"cache_hit",
 				"cache_miss",
-				// backend_fail/backend_unhealthy/n_lru_nuked/threads_limited/sess_dropped/
-				// sess_queued are lifetime counts since Varnish started, same shape as
-				// cache_hit/cache_miss. threads is deliberately not listed: it's the
-				// current thread count, not a running total.
 				"backend_fail",
-				"backend_unhealthy",
 				"n_lru_nuked",
 				"threads_limited",
 				"sess_dropped",
@@ -106,7 +117,7 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 var fieldRenames = map[string]string{ //nolint:gochecknoglobals
 	// varnishstat calls this a "nuke": an object forced out of cache to make room for a
 	// new one, as opposed to naturally expiring. "eviction" is the term users of any other
-	// cache already know, and reads next to cache_hit/cache_miss/cache_hit_percent.
+	// cache already know, and reads next to cache_hit/cache_miss/cache_hit_perc.
 	"n_lru_nuked": "cache_evictions",
 	// varnishstat abbreviates "sessions" to "sess"; spelled out here to match
 	// dovecot_num_connected_sessions and read on its own without varnishstat's docs open.
@@ -122,16 +133,16 @@ func renameMetrics(currentContext internal.GatherContext, metricName string) (ne
 	return currentContext.Measurement, metricName
 }
 
-// transformMetrics adds a cache_hit_percent field computed from the already-differentiated
-// cache_hit/cache_miss rates, scaled to 0..100 like every other percentage metric in this
-// codebase (e.g. cpu_used, mem_used_percent).
+// transformMetrics adds a cache_hit_perc field computed from the already-differentiated
+// cache_hit/cache_miss rates, scaled to 0..100 like every other percentage metric Glouton
+// publishes.
 func transformMetrics(_ internal.GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {
 	hitRate, hasHit := fields["cache_hit"]
 	missRate, hasMiss := fields["cache_miss"]
 
 	// Protect from division by 0.
 	if hasHit && hasMiss && hitRate+missRate > 0 {
-		fields["cache_hit_percent"] = hitRate / (hitRate + missRate) * 100
+		fields["cache_hit_perc"] = hitRate / (hitRate + missRate) * 100
 	}
 
 	return fields

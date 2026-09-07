@@ -57,9 +57,6 @@ func newAccumulator(store *internal.StoreAccumulator) internal.Accumulator {
 		DifferentiatedMetrics: []string{
 			"num_logins",
 			"num_cmds",
-			"mail_cache_hits",
-			"disk_input",
-			"disk_output",
 			"auth_successes",
 			"auth_failures",
 		},
@@ -95,12 +92,13 @@ func assertTags(t *testing.T, store *internal.StoreAccumulator, want map[string]
 	}
 }
 
-// TestDifferentiation checks that num_logins/num_cmds/mail_cache_hits/
-// disk_input/disk_output/auth_successes/auth_failures (cumulative since
-// reset_timestamp) are differentiated into per-second rates, while
-// num_connected_sessions (the live count of currently open IMAP sessions,
-// per Dovecot's own docs -- a gauge, not a counter) passes through
-// untouched.
+// TestDifferentiation checks that num_logins/num_cmds/auth_successes/auth_failures
+// (cumulative since reset_timestamp) are differentiated into per-second rates, while
+// num_connected_sessions (the live count of currently open IMAP sessions, per Dovecot's
+// own docs -- a gauge, not a counter) passes through untouched.
+//
+// mail_cache_hits and disk_input/disk_output are cumulative too, but aren't metrics
+// Glouton publishes, so they are left exactly as Dovecot reports them.
 func TestDifferentiation(t *testing.T) {
 	store := &internal.StoreAccumulator{}
 	acc := newAccumulator(store)
@@ -129,9 +127,9 @@ func TestDifferentiation(t *testing.T) {
 		"num_logins":             uint64(174827 + 100),            // rate = 10/s
 		"num_cmds":               uint64(917469 + 500),            // rate = 50/s
 		"num_connected_sessions": uint64(1300),                    // live gauge, new value
-		"mail_cache_hits":        uint64(68192209 + 2000),         // rate = 200/s
-		"disk_input":             uint64(6493168218112 + 100000),  // rate = 10000/s
-		"disk_output":            uint64(17978638815232 + 200000), // rate = 20000/s
+		"mail_cache_hits":        uint64(68192209 + 2000),         // not differentiated
+		"disk_input":             uint64(6493168218112 + 100000),  // not differentiated
+		"disk_output":            uint64(17978638815232 + 200000), // not differentiated
 		"auth_successes":         uint64(174000 + 90),             // rate = 9/s
 		"auth_failures":          uint64(827 + 10),                // rate = 1/s
 	}, map[string]string{"server": "127.0.0.1", "type": "global"}, t1)
@@ -139,11 +137,12 @@ func TestDifferentiation(t *testing.T) {
 	got := collectFinalMetrics(store)
 
 	assertMetrics(t, got, map[string]float64{
-		"dovecot_num_logins":             10,
-		"dovecot_num_cmds":               50,
-		"dovecot_mail_cache_hits":        200,
-		"dovecot_disk_input":             10000,
-		"dovecot_disk_output":            20000,
+		"dovecot_num_logins": 10,
+		"dovecot_num_cmds":   50,
+		// Cumulative as Dovecot reports them, none of the three being a default metric.
+		"dovecot_mail_cache_hits":        68194209,
+		"dovecot_disk_input":             6493168318112,
+		"dovecot_disk_output":            17978639015232,
 		"dovecot_num_connected_sessions": 1300,
 		"dovecot_auth_successes":         9,
 		"dovecot_auth_failures":          1,

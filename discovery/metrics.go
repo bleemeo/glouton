@@ -441,10 +441,27 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		// Both inputs bring their own registration options: their per-source metrics need
 		// the source in a label of its own, which the default compatibility naming would
 		// drop, and they read the daemon less often than the default 10 s.
-		if isChronyDaemon(service, chronySocket) {
-			input, gathererOptions, err = chrony.New(chronyCmdAddress(service))
-		} else {
-			input, gathererOptions, err = ntp.New(ntpdAddress(service))
+		chronyDaemon := isChronyDaemon(service, chronySocket)
+
+		address, addressKnown := ntpdAddress(service)
+		if chronyDaemon {
+			address, addressKnown = chronyCmdAddress(service)
+		}
+
+		switch {
+		case !addressKnown:
+			// No input rather than one reading the wrong daemon: given no address both
+			// inputs fall back to Glouton's own loopback, which for a service that runs
+			// elsewhere means publishing the numbers of whichever daemon happens to sit
+			// next to Glouton under this service's name. The check makes the same call.
+			logger.V(1).Printf(
+				"No address to read the NTP daemon of service '%s' on container '%s', not gathering its metrics",
+				service.Name, service.ContainerName,
+			)
+		case chronyDaemon:
+			input, gathererOptions, err = chrony.New(address)
+		default:
+			input, gathererOptions, err = ntp.New(address)
 		}
 	case OpenBaoService:
 		if service.Config.StatsURL != "" {
@@ -568,11 +585,12 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			input, gathererOptions, err = uwsgi.New(url)
 		}
 	case VarnishService:
-		// The input runs "sudo varnishstat" on the machine Glouton runs on, so it reads
-		// the shared memory of the local Varnish whatever service this is: a Varnish in
-		// another container is reported with the numbers of the local one, or fails to
-		// gather when there is none.
-		input, gathererOptions, err = varnish.New()
+		// The input runs "varnishstat" through the command runner, which for a Glouton in
+		// a container means the host's binary in the host's namespace -- the agent image
+		// has none. What it reads there is still the Varnish of that namespace whatever
+		// service this is: a Varnish in another container is reported with the host's
+		// numbers, or fails to gather when the host runs none.
+		input, gathererOptions, err = varnish.New(d.commandRunner)
 	case VaultService:
 		if service.Config.StatsURL != "" {
 			input, err = vault.New(service.Config.StatsURL, service.Config.Password)
@@ -1000,16 +1018,32 @@ func isLoopbackAddress(address string) bool {
 // entry on NTPService's ServicePort (123) -- never chrony's command port, so searching for
 // it there would never find it. service.IPAddress doesn't have this problem: it's set from
 // the container's own address independently of any netstat result.
-func chronyCmdAddress(service Service) string {
-	address := service.Config.Address
+// A false ok says the opposite of an empty address: not "the local auto-detection is
+// right", but "there is no telling where this daemon is". Both answers are "" today,
+// which is why they have to be told apart -- see the return below for what makes them
+// different.
+func chronyCmdAddress(service Service) (address string, ok bool) {
+	address = service.Config.Address
 	port := service.Config.StatsPort
 
 	if address == "" && serviceRunsElsewhere(service) {
 		address = service.IPAddress
+
+		if address == "" {
+			// The daemon is known not to be the one on Glouton's loopback, and nothing
+			// says where it is instead: a container whose address the runtime doesn't
+			// report (network_mode: none or container:<other>, both of which leave
+			// PrimaryAddress() empty). Neither of the two fallbacks below can be right
+			// here -- the auto-detection and the loopback substitution both read
+			// whatever chronyd runs next to Glouton, and would publish its numbers
+			// under this service's name and instance. Saying so is the only honest
+			// answer, and it is the one the check already gives.
+			return "", false
+		}
 	}
 
 	if address == "" && port == 0 {
-		return ""
+		return "", true
 	}
 
 	if address == "" {
@@ -1022,7 +1056,7 @@ func chronyCmdAddress(service Service) string {
 		port = chronyDefaultCmdPort
 	}
 
-	return net.JoinHostPort(address, strconv.Itoa(port))
+	return net.JoinHostPort(address, strconv.Itoa(port)), true
 }
 
 // chronyCheckAddress returns the "host:port" the chrony status check should dial --
@@ -1030,18 +1064,20 @@ func chronyCmdAddress(service Service) string {
 // left to auto-detection: a check has no local-socket fallback of its own, it just needs
 // something to send a packet to, and that is the same loopback command port the input
 // ends up on.
+//
+// It returns "" for the one case chronyCmdAddress has no address for either: the daemon
+// is known not to be the one on Glouton's loopback, and nothing says where it is.
+// Probing 127.0.0.1 there would report on whatever chronyd runs next to Glouton -- Ok
+// while this service is down on a host that runs one, critical while it is healthy on a
+// host that doesn't. The check says it couldn't run instead.
 func chronyCheckAddress(service Service) string {
-	if address := chronyCmdAddress(service); address != "" {
-		return address
+	address, ok := chronyCmdAddress(service)
+	if !ok {
+		return ""
 	}
 
-	if serviceRunsElsewhere(service) {
-		// The daemon is known not to be the one on Glouton's loopback, and no address
-		// was found for it (a container discovery has no address for). Probing 127.0.0.1
-		// would report on whatever chronyd runs next to Glouton -- Ok while this service
-		// is down on a host that runs one, critical while it is healthy on a host that
-		// doesn't. The check says it couldn't run instead.
-		return ""
+	if address != "" {
+		return address
 	}
 
 	return net.JoinHostPort(localhostIP, strconv.Itoa(chronyDefaultCmdPort))
@@ -1056,16 +1092,26 @@ func chronyCheckAddress(service Service) string {
 // cannot be, the same rule chronyCmdAddress follows: the usual default is "restrict
 // default ... noquery" with only 127.0.0.1 and ::1 unrestricted, so querying a local
 // ntpd anywhere but on loopback would be refused where loopback works.
-func ntpdAddress(service Service) string {
-	address := service.Config.Address
+//
+// ok has the same meaning as chronyCmdAddress's: false is "there is no telling where this
+// daemon is", which an empty address (meaning "the local default is right") cannot say.
+func ntpdAddress(service Service) (address string, ok bool) {
+	address = service.Config.Address
 	port := service.Config.Port
 
 	if address == "" && serviceRunsElsewhere(service) {
 		address = service.IPAddress
+
+		if address == "" {
+			// Same as chronyCmdAddress: a daemon somewhere else that nothing locates.
+			// ntp.New() would read the ntpd on Glouton's own loopback and publish its
+			// peers under this service's name.
+			return "", false
+		}
 	}
 
 	if address == "" && port == 0 {
-		return ""
+		return "", true
 	}
 
 	if address == "" {
@@ -1080,5 +1126,5 @@ func ntpdAddress(service Service) string {
 		port = servicesDiscoveryInfo[NTPService].ServicePort
 	}
 
-	return net.JoinHostPort(address, strconv.Itoa(port))
+	return net.JoinHostPort(address, strconv.Itoa(port)), true
 }

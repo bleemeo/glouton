@@ -41,12 +41,13 @@ func New(server string) (i telegraf.Input, err error) {
 				Input: dovecotInput,
 				Accumulator: internal.Accumulator{
 					RenameGlobal: renameGlobal,
+					// The counters Dovecot accumulates since its last stats reset, turned
+					// into per-second rates. Only the ones Glouton publishes:
+					// mail_cache_hits and disk_input/disk_output are counters of the same
+					// shape, but aren't default metrics, so nothing would read their rate.
 					DifferentiatedMetrics: []string{
 						"num_logins",
 						"num_cmds",
-						"mail_cache_hits",
-						"disk_input",
-						"disk_output",
 						"auth_successes",
 						"auth_failures",
 					},

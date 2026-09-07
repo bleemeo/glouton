@@ -83,7 +83,13 @@ func fakeNTPD(t *testing.T, peers map[uint16]string) string {
 					data = binary.BigEndian.AppendUint16(data, 0) // the peer status word
 				}
 			case control.OpReadVariables:
-				data = []byte(peers[request.AssociationID])
+				if request.AssociationID == 0 {
+					// Association 0 is the daemon itself. These are the variables a real
+					// ntpsec answers with, trimmed to the ones addSystemFields reads.
+					data = []byte(systemVariables)
+				} else {
+					data = []byte(peers[request.AssociationID])
+				}
 			}
 
 			reply := control.NTPControlMsgHead{
@@ -133,13 +139,15 @@ func TestGather(t *testing.T) {
 		t.Errorf("Gather() errors = %v", acc.Errors)
 	}
 
-	if len(acc.Measurement) != 2 {
-		t.Fatalf("Gather() reported %d peers, want 2 (the placeholder must be dropped)", len(acc.Measurement))
+	peers := peerMeasurements(acc.Measurement)
+
+	if len(peers) != 2 {
+		t.Fatalf("Gather() reported %d peers, want 2 (the placeholder must be dropped)", len(peers))
 	}
 
-	byRemote := make(map[string]map[string]any, len(acc.Measurement))
+	byRemote := make(map[string]map[string]any, len(peers))
 
-	for _, m := range acc.Measurement {
+	for _, m := range peers {
 		if m.Name != "ntpq" {
 			t.Errorf("measurement name = %q, want \"ntpq\"", m.Name)
 		}
@@ -161,8 +169,9 @@ func TestGather(t *testing.T) {
 		t.Errorf("offset = %v, want 43.346313", got)
 	}
 
-	if got := fields["jitter"]; got != 8.005333 {
-		t.Errorf("jitter = %v, want 8.005333", got)
+	// jitter is one of the peer variables deliberately not read, being unpublished.
+	if got, ok := fields["jitter"]; ok {
+		t.Errorf("jitter = %v, want it not gathered", got)
 	}
 
 	// 0xff: all 8 remembered polls answered.
@@ -173,6 +182,67 @@ func TestGather(t *testing.T) {
 	// 0xf0: 4 of the last 8 polls answered.
 	if got := byRemote["54.38.114.34"]["reach"]; got != 0.5 {
 		t.Errorf("reach = %v, want 0.5", got)
+	}
+}
+
+// TestGatherSystemVariables checks the daemon's own view of the local clock, read from
+// association 0. This is the number a user actually watches -- "how far off is this clock"
+// -- and the ntpd counterpart of chrony_last_offset, which per-peer offsets don't answer:
+// they say how far each source is, not which one ntpd chose to follow.
+func TestGatherSystemVariables(t *testing.T) {
+	address := fakeNTPD(t, map[uint16]string{
+		0x4570: `srcadr=37.59.63.125, srcport=123, stratum=2, reach=0xff, delay=23.179829, offset=43.346313, jitter=8.005333`,
+	})
+
+	// Through the same accumulator the input is registered with, so what is checked is the
+	// published shape -- transformMetrics has to convert this measurement's own duration
+	// fields, which are not the per-peer ones.
+	store := &internal.StoreAccumulator{}
+	acc := internal.Accumulator{ //nolint:exhaustruct
+		RenameGlobal:     renameGlobal,
+		TransformMetrics: transformMetrics,
+		Accumulator:      store,
+	}
+
+	acc.PrepareGather()
+
+	if err := (&controlInput{address: address}).Gather(&acc); err != nil {
+		t.Fatalf("Gather() = %v", err)
+	}
+
+	fields := systemFieldsGathered(store)
+	if fields == nil {
+		t.Fatalf("no %q measurement, got %v", systemMeasurement, store.Measurement)
+	}
+
+	// The milliseconds of systemVariables, in seconds. Kept apart from the per-peer offset
+	// of the same reply (43.346313 ms) so a mix-up between the two would show.
+	got, ok := fields["offset_seconds"].(float64)
+	if !ok {
+		t.Fatalf("offset_seconds is %v (%T), want a float", fields["offset_seconds"], fields["offset_seconds"])
+	}
+
+	if math.Abs(got-0.003420363) > 1e-9 {
+		t.Errorf("offset_seconds = %v, want 0.003420363", got)
+	}
+
+	// The offset is the only one of association 0's twenty variables that is published, so
+	// it should be the only one read. The rest are listed in
+	// PRODUCT-3300-ntp-metric-catalogue.md, and adding one back means adding it there too.
+	if len(fields) != 1 {
+		t.Errorf("system fields = %v, want only offset_seconds", fields)
+	}
+
+	// A peer point and the system point both carry an "offset": they must not be confused,
+	// so the peer's has to keep its own value and its own label.
+	for _, m := range peerMeasurements(store.Measurement) {
+		if m.Tags[types.LabelPeerAddress] == "" {
+			t.Errorf("peer point %v has no %s label", m.Fields, types.LabelPeerAddress)
+		}
+
+		if peerOffset, _ := m.Fields["offset_seconds"].(float64); math.Abs(peerOffset-0.043346313) > 1e-9 {
+			t.Errorf("peer offset_seconds = %v, want 0.043346313 (the peer's, not the system's)", peerOffset)
+		}
 	}
 }
 
@@ -190,8 +260,8 @@ func TestGatherWithoutPeer(t *testing.T) {
 		t.Error("Gather() = nil, want an error")
 	}
 
-	if len(acc.Measurement) != 0 {
-		t.Errorf("Gather() reported %v, want nothing", acc.Measurement)
+	if peers := peerMeasurements(acc.Measurement); len(peers) != 0 {
+		t.Errorf("Gather() reported %v, want no peer", peers)
 	}
 }
 
@@ -216,12 +286,10 @@ func TestGatherMalformedReply(t *testing.T) {
 
 			return [][]byte{out.Bytes()}
 		},
-		"a datagram shorter than a header": func(_ control.NTPControlMsgHead) [][]byte {
-			return [][]byte{{6, 2, 0}}
-		},
 		"a reply continued in more packets than it could ever need": func(request control.NTPControlMsgHead) [][]byte {
 			// Every packet keeps the More bit set, so the reply never ends: nothing in
-			// the protocol bounds this, which is why exchange caps the total.
+			// the protocol bounds this, which is why exchange caps how many datagrams
+			// it will read one reply from.
 			const (
 				packets      = 400
 				dataPerPaket = 400
@@ -333,6 +401,246 @@ func rawNTPD(t *testing.T, reply func(request control.NTPControlMsgHead) [][]byt
 	return conn.LocalAddr().String()
 }
 
+// controlDatagram builds one reply datagram: a header, then the data it announces.
+func controlDatagram(head control.NTPControlMsgHead, data []byte) []byte {
+	var out bytes.Buffer
+
+	_ = binary.Write(&out, binary.BigEndian, head)
+
+	out.Write(data)
+
+	return out.Bytes()
+}
+
+// replyHead builds the header of a well-formed reply to request, for count bytes of data
+// starting at offset in the whole reply, with the More bit set when another datagram
+// follows.
+func replyHead(request control.NTPControlMsgHead, offset int, count int, more bool) control.NTPControlMsgHead {
+	return control.NTPControlMsgHead{
+		VnMode:        control.MakeVnMode(3, control.Mode),
+		REMOp:         control.MakeREMOp(true, false, more, int(request.GetOperation())),
+		Sequence:      request.Sequence,
+		AssociationID: request.AssociationID,
+		Offset:        uint16(offset), //nolint:gosec // the test payloads are a few dozen bytes
+		Count:         uint16(count),  //nolint:gosec // the test payloads are a few dozen bytes
+	}
+}
+
+// peerListDatagram builds the reply to a read-status request: association ID and status
+// word, 2 uint16 each.
+func peerListDatagram(request control.NTPControlMsgHead, associations ...uint16) []byte {
+	var data []byte
+
+	for _, id := range associations {
+		data = binary.BigEndian.AppendUint16(data, id)
+		data = binary.BigEndian.AppendUint16(data, 0)
+	}
+
+	return controlDatagram(replyHead(request, 0, len(data), false), data)
+}
+
+// systemVariables is what association 0 answers with: ntpd's own view of the local clock.
+// Values from a real ntpsec, cut down to what addSystemFields reads.
+const systemVariables = `leap=00, stratum=2, precision=-24, rootdelay=26.352, ` +
+	`rootdisp=8.918, offset=3.420363, frequency=-11.234, sys_jitter=0.634474, ` +
+	`clk_jitter=0.421, clk_wander=0.503, tc=7, mintc=3`
+
+// remotesGathered returns the address each per-peer measurement is about, sorted. The
+// system measurement has no peer and is left out.
+func remotesGathered(acc *internal.StoreAccumulator) []string {
+	remotes := make([]string, 0, len(acc.Measurement))
+
+	for _, m := range acc.Measurement {
+		if m.Name == systemMeasurement {
+			continue
+		}
+
+		remotes = append(remotes, m.Tags["remote"])
+	}
+
+	return slices.Sorted(slices.Values(remotes))
+}
+
+// peerMeasurements returns only the per-peer points, leaving out the system one.
+func peerMeasurements(measurements []internal.Measurement) []internal.Measurement {
+	peers := make([]internal.Measurement, 0, len(measurements))
+
+	for _, m := range measurements {
+		if m.Name != systemMeasurement {
+			peers = append(peers, m)
+		}
+	}
+
+	return peers
+}
+
+// systemFieldsGathered returns the fields of the system measurement, or nil when there is
+// none.
+func systemFieldsGathered(acc *internal.StoreAccumulator) map[string]any {
+	for _, m := range acc.Measurement {
+		if m.Name == systemMeasurement {
+			return m.Fields
+		}
+	}
+
+	return nil
+}
+
+// TestGatherIgnoresDatagramsOfAnotherRequest checks that a datagram left over from an
+// earlier request is not read as the answer to the current one. All the peers are read
+// over one socket, so a reply that stayed queued -- a duplicate the network delivered
+// twice, or the rest of a reply that was abandoned halfway -- is waiting there when the
+// next peer's request goes out. Reading it as that peer's variables publishes the first
+// peer's numbers twice and drops a peer entirely, which no error would ever reveal.
+func TestGatherIgnoresDatagramsOfAnotherRequest(t *testing.T) {
+	peers := map[uint16]string{
+		0x4570: `srcadr=37.59.63.125, srcport=123, stratum=2, reach=0xff, delay=23.179829, offset=43.346313, jitter=8.005333`,
+		0x456d: `srcadr=54.38.114.34, srcport=123, stratum=4, reach=0xf0, delay=22.485940, offset=45.617717, jitter=3.749494`,
+	}
+
+	address := rawNTPD(t, func(request control.NTPControlMsgHead) [][]byte {
+		switch request.GetOperation() {
+		case control.OpReadStatus:
+			return [][]byte{peerListDatagram(request, slices.Sorted(maps.Keys(peers))...)}
+		case control.OpReadVariables:
+			data := []byte(peers[request.AssociationID])
+			datagram := controlDatagram(replyHead(request, 0, len(data), false), data)
+
+			// The reply, and then a second copy of it: the datagram still queued when
+			// the next peer's request goes out, carrying this request's sequence
+			// number rather than that one's.
+			return [][]byte{datagram, datagram}
+		default:
+			return nil
+		}
+	})
+
+	acc := &internal.StoreAccumulator{}
+
+	if err := (&controlInput{address: address}).Gather(acc); err != nil {
+		t.Fatalf("Gather() = %v", err)
+	}
+
+	want := []string{"37.59.63.125", "54.38.114.34"}
+
+	if got := remotesGathered(acc); !slices.Equal(got, want) {
+		t.Errorf("Gather() reported peers %v, want %v", got, want)
+	}
+}
+
+// TestGatherReassemblesFragments checks a reply spread over several datagrams is put back
+// together by the offsets they carry rather than the order they arrive in. This is the
+// common path, not an edge case: against the ntpsec 1.2.2 in the test container every
+// single peer's variables came back as two fragments (468 bytes at offset 0, then 201 at
+// offset 468). UDP may hand those to us either way round, and the split falls wherever
+// 468 bytes land -- inside a k=v pair -- so concatenating them in arrival order turns a
+// healthy peer's numbers into whatever the halves happen to spell.
+func TestGatherReassemblesFragments(t *testing.T) {
+	const (
+		association = 0x4570
+		// A split inside "delay=23.179829", so the two halves only parse in the right order.
+		split     = 60
+		variables = `srcadr=37.59.63.125, srcport=123, stratum=2, reach=0xff, delay=23.179829, offset=43.346313, jitter=8.005333`
+	)
+
+	address := rawNTPD(t, func(request control.NTPControlMsgHead) [][]byte {
+		switch request.GetOperation() {
+		case control.OpReadStatus:
+			return [][]byte{peerListDatagram(request, association)}
+		case control.OpReadVariables:
+			head, tail := []byte(variables[:split]), []byte(variables[split:])
+
+			// The final fragment first -- the one with the More bit clear, which is
+			// also where a real reply keeps the status of the whole.
+			return [][]byte{
+				controlDatagram(replyHead(request, split, len(tail), false), tail),
+				controlDatagram(replyHead(request, 0, len(head), true), head),
+			}
+		default:
+			return nil
+		}
+	})
+
+	acc := &internal.StoreAccumulator{}
+
+	if err := (&controlInput{address: address}).Gather(acc); err != nil {
+		t.Fatalf("Gather() = %v", err)
+	}
+
+	if got := remotesGathered(acc); !slices.Equal(got, []string{"37.59.63.125"}) {
+		t.Fatalf("Gather() reported peers %v, want [37.59.63.125]", got)
+	}
+
+	if got := peerMeasurements(acc.Measurement)[0].Fields["delay"]; got != 23.179829 {
+		t.Errorf("delay = %v, want 23.179829 (the value straddling the two fragments)", got)
+	}
+}
+
+// TestGatherIgnoresStrayDatagrams checks that a datagram which isn't an answer to the
+// request in hand is skipped and the real answer still read, rather than the gather being
+// lost to it. Anything at all can arrive on a UDP socket, and the reference client
+// (ntpq's __validate_packet) skips these for that reason.
+func TestGatherIgnoresStrayDatagrams(t *testing.T) {
+	const (
+		association = 0x4570
+		variables   = `srcadr=37.59.63.125, srcport=123, stratum=2, reach=0xff, delay=23.179829, offset=43.346313, jitter=8.005333`
+	)
+
+	cases := map[string]func(request control.NTPControlMsgHead) []byte{
+		"shorter than a header": func(_ control.NTPControlMsgHead) []byte {
+			return []byte{6, 2, 0}
+		},
+		"a request rather than a response": func(request control.NTPControlMsgHead) []byte {
+			head := replyHead(request, 0, 0, false)
+			head.REMOp = control.MakeREMOp(false, false, false, int(request.GetOperation()))
+
+			return controlDatagram(head, nil)
+		},
+		"an answer to another operation": func(request control.NTPControlMsgHead) []byte {
+			head := replyHead(request, 0, 0, false)
+			head.REMOp = control.MakeREMOp(true, false, false, control.OpReadStatus+control.OpReadVariables)
+
+			return controlDatagram(head, nil)
+		},
+		"an answer to a later sequence number": func(request control.NTPControlMsgHead) []byte {
+			head := replyHead(request, 0, 0, false)
+			head.Sequence = request.Sequence + 1
+
+			return controlDatagram(head, nil)
+		},
+	}
+
+	for name, stray := range cases {
+		t.Run(name, func(t *testing.T) {
+			address := rawNTPD(t, func(request control.NTPControlMsgHead) [][]byte {
+				var reply []byte
+
+				switch request.GetOperation() {
+				case control.OpReadStatus:
+					reply = peerListDatagram(request, association)
+				case control.OpReadVariables:
+					data := []byte(variables)
+					reply = controlDatagram(replyHead(request, 0, len(data), false), data)
+				default:
+					return nil
+				}
+
+				return [][]byte{stray(request), reply}
+			})
+
+			acc := &internal.StoreAccumulator{}
+
+			if err := (&controlInput{address: address}).Gather(acc); err != nil {
+				t.Fatalf("Gather() = %v", err)
+			}
+
+			if got := remotesGathered(acc); !slices.Equal(got, []string{"37.59.63.125"}) {
+				t.Errorf("Gather() reported peers %v, want [37.59.63.125]", got)
+			}
+		})
+	}
+}
+
 // TestGatherUnreachable checks the failure that matters in practice: a daemon that never
 // answers, either because nothing listens or because its "restrict" lines refuse mode-6
 // queries from us. The gather must fail rather than hang.
@@ -419,13 +727,15 @@ func TestPeerAddressBecomesALabel(t *testing.T) {
 		t.Fatalf("Gather() = %v", err)
 	}
 
-	if len(store.Measurement) != 2 {
-		t.Fatalf("got %d measurements, want one per peer: %#v", len(store.Measurement), store.Measurement)
+	peers := peerMeasurements(store.Measurement)
+
+	if len(peers) != 2 {
+		t.Fatalf("got %d measurements, want one per peer: %#v", len(peers), peers)
 	}
 
 	addresses := map[string]bool{}
 
-	for _, m := range store.Measurement {
+	for _, m := range peers {
 		if item := m.Tags[types.LabelItem]; item != "" {
 			t.Errorf("item == %q, want it left to the service instance", item)
 		}
