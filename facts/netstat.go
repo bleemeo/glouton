@@ -32,8 +32,11 @@ import (
 )
 
 const (
-	networkTCP        = "tcp"
-	networkUDP        = "udp"
+	networkTCP = "tcp"
+	networkUDP = "udp"
+	// ipv6Suffix is what the network name of an IPv6 socket carries on top of its
+	// protocol, the way netstat and /proc/net name them: "tcp6", "udp6".
+	ipv6Suffix        = "6"
 	networkUnix       = "unix"
 	listenState       = "LISTEN"
 	addrAllInterfaces = "0.0.0.0"
@@ -136,7 +139,7 @@ func (np NetstatProvider) mergeNetstats(netstat map[int][]ListenAddress, dynamic
 		}
 
 		if c.Family == syscall.AF_INET6 {
-			protocol += "6"
+			protocol += ipv6Suffix
 		}
 
 		netstat[int(c.Pid)] = addAddress(netstat[int(c.Pid)], ListenAddress{
@@ -207,6 +210,17 @@ type ListenAddress struct {
 // Network is the method from net.Addr.
 func (l ListenAddress) Network() string {
 	return l.NetworkFamily
+}
+
+// IsProtocol reports whether this address speaks the given protocol ("tcp", "udp"),
+// whichever IP family it is on.
+//
+// The family is part of the network name -- an IPv6 socket is "udp6", not "udp" -- so
+// comparing the name to a bare protocol silently misses every IPv6 listener. That is what
+// this exists to stop: a service whose only socket on its port is the IPv6 one is still
+// serving that protocol.
+func (l ListenAddress) IsProtocol(protocol string) bool {
+	return l.NetworkFamily == protocol || l.NetworkFamily == protocol+ipv6Suffix
 }
 
 func (l ListenAddress) String() string {

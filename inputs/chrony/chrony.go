@@ -22,7 +22,10 @@ import (
 	"errors"
 	"fmt"
 	"math/bits"
+	"os"
 	"os/user"
+	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/bleemeo/glouton/inputs"
@@ -82,16 +85,22 @@ func New(address string) (telegraf.Input, registry.RegistrationOption, error) {
 	// PRODUCT-3300-ntp-metric-catalogue.md for what it holds.
 	chronyInput.Metrics = []string{"tracking", "activity", "sources"}
 
-	// serverstats says how much work this chronyd is doing *for clients*: packets served,
-	// dropped, refused. chronyd only answers it over its unix socket, where being able to
-	// connect at all is the authorisation -- over the command port it replies "not
-	// authorised" (verified with chronyc itself), which would be an error on every gather.
-	// The socket is what the plugin's own auto-detection uses when no address is given, so
-	// this asks for it in exactly the case it can be answered.
 	if address == "" {
-		chronyInput.Metrics = append(chronyInput.Metrics, "serverstats")
+		// Pointing the plugin at the group chronyd runs as is what lets it use the socket
+		// at all, so it is done whether or not serverstats is asked for below: a chronyd
+		// with no command port ("cmdport 0", or a bindcmdaddress naming only the socket)
+		// has the socket as its single transport.
+		group := setSocketGroup(chronyInput)
 
-		setSocketGroup(chronyInput)
+		// serverstats says how much work this chronyd is doing *for clients*: packets
+		// served, dropped, refused. chronyd only answers it over that socket, where being
+		// able to connect at all is the authorisation -- over the command port it replies
+		// "not authorised" (verified with chronyc itself). So it is only asked for when the
+		// socket can really be reached, or every gather would carry that refusal as an
+		// error.
+		if canUseChronydSocket(chronydSocket, group) {
+			chronyInput.Metrics = append(chronyInput.Metrics, "serverstats")
+		}
 	}
 
 	internalInput := &internal.Input{
@@ -176,6 +185,10 @@ func ValidateReply(reply []byte) error {
 	return nil
 }
 
+// chronydSocket is where chronyd listens for its command protocol on a default install,
+// and the first thing the plugin's own auto-detection tries.
+const chronydSocket = "/run/chrony/chronyd.sock"
+
 // chronydSocketGroups are the names the group chronyd runs as goes by, most likely first:
 // "chrony" on RHEL, Fedora and SUSE, "_chrony" on Debian, Ubuntu and Alpine.
 //
@@ -183,27 +196,79 @@ func ValidateReply(reply []byte) error {
 var chronydSocketGroups = []string{"chrony", "_chrony"}
 
 // setSocketGroup points the plugin at the group chronyd actually runs as, so that it can
-// reach chronyd's unix socket at all.
+// reach chronyd's unix socket at all, and returns the name it settled on.
 //
-// Dialing that socket means creating one of our own next to it and handing it to chronyd's
-// group, so chronyd can write the reply back -- and the plugin resolves that group through
-// the system's group database (its own dialUnix). Its default is the literal "chrony",
-// which does not exist on Debian, Ubuntu or Alpine, where the group is _chrony: the lookup
-// fails, dialing the socket fails with it, and the plugin quietly falls back to
+// Dialing that socket means creating a socket of our own beside it and handing it to
+// chronyd's group, so chronyd can write the reply back -- and the plugin resolves that
+// group through the system's group database (its own dialUnix). Its default is the literal
+// "chrony", which does not exist on Debian, Ubuntu or Alpine, where the group is _chrony:
+// the lookup fails, dialing the socket fails with it, and the plugin quietly falls back to
 // udp://127.0.0.1:323. Every monitoring metric still arrives that way, which is why this
 // goes unnoticed, but serverstats does not -- the command port answers it "501 Not
-// authorised", so it would be an error on every gather.
+// authorised".
 //
 // A name that resolves is all this checks. If none does, the plugin keeps its default and
 // behaves as it did before: the socket dial fails and the command port answers the rest.
-func setSocketGroup(input *chrony.Chrony) {
+func setSocketGroup(input *chrony.Chrony) string {
 	for _, name := range chronydSocketGroups {
 		if _, err := user.LookupGroup(name); err == nil {
 			input.SocketGroup = name
 
-			return
+			return name
 		}
 	}
+
+	return ""
+}
+
+// canUseChronydSocket reports whether the plugin will manage to talk to chronyd over its
+// unix socket, the only transport that answers serverstats.
+//
+// Being root is not the question, and neither is belonging to chronyd's group: what the
+// plugin does is create a socket of its own *in chronyd's directory* and chown it to that
+// group. On a default Debian install that directory is drwxr-x--- _chrony:_chrony -- the
+// permissions isChronyDaemon relies on to detect chrony in the first place -- so it is not
+// writable by the "glouton" user the package runs as (packaging/common/glouton.service),
+// group member or not; and in the agent container the directory isn't mounted at all. Both
+// fall back to the command port, where serverstats is refused.
+//
+// So the only reliable answer is to try it, the way postfixQueuesReadable probes the
+// Postfix spool before its input is created -- and with the same caveat: access granted
+// afterwards is picked up when the service changes or Glouton restarts.
+func canUseChronydSocket(socket string, group string) bool {
+	if _, err := os.Stat(socket); err != nil {
+		return false
+	}
+
+	gid, err := groupID(group)
+	if err != nil {
+		return false
+	}
+
+	probe, err := os.CreateTemp(filepath.Dir(socket), "glouton-chrony-probe-")
+	if err != nil {
+		return false
+	}
+
+	defer os.Remove(probe.Name())
+
+	if err := probe.Close(); err != nil {
+		return false
+	}
+
+	// The chown the plugin does towards chronyd's group, which is what actually needs the
+	// privilege: owning the file is not enough to give it away.
+	return os.Chown(probe.Name(), os.Getuid(), gid) == nil
+}
+
+// groupID resolves a group name to its numeric id.
+func groupID(name string) (int, error) {
+	group, err := user.LookupGroup(name)
+	if err != nil {
+		return 0, err
+	}
+
+	return strconv.Atoi(group.Gid)
 }
 
 // renameGlobal drops the tags describing the current synchronization state

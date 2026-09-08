@@ -260,7 +260,11 @@ func servesNTPProtocol(service Service, di discoveryInfo) bool {
 	}
 
 	for _, address := range service.ListenAddresses {
-		if address.Network() == di.ServiceProtocol && address.Port == port {
+		// IsProtocol rather than comparing the network name: netstat records the IP family
+		// in it, so an IPv6-only daemon listens on "udp6" and would otherwise look like one
+		// that doesn't serve NTP at all -- and get chrony's command port probed as the
+		// service's own check.
+		if address.IsProtocol(di.ServiceProtocol) && address.Port == port {
 			return true
 		}
 	}

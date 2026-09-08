@@ -385,3 +385,37 @@ func TestCleanRecycledPIDs(t *testing.T) {
 		t.Errorf("Netstat PID 323667 was incorrectly removed")
 	}
 }
+
+// TestListenAddressIsProtocol checks that a listen address is recognized as its protocol
+// on either IP family. Netstat puts the family in the network name, so comparing that name
+// to a bare "tcp"/"udp" misses every IPv6 listener -- which is how an IPv6-only daemon came
+// to look like one not serving its own protocol at all.
+func TestListenAddressIsProtocol(t *testing.T) {
+	cases := []struct {
+		family   string
+		protocol string
+		want     bool
+	}{
+		{family: "udp", protocol: "udp", want: true},
+		{family: "udp6", protocol: "udp", want: true},
+		{family: "tcp", protocol: "tcp", want: true},
+		{family: "tcp6", protocol: "tcp", want: true},
+		{family: "tcp", protocol: "udp", want: false},
+		{family: "tcp6", protocol: "udp", want: false},
+		{family: "udp6", protocol: "tcp", want: false},
+		{family: "unix", protocol: "tcp", want: false},
+		// Not a real family, and must not match by prefix.
+		{family: "udp66", protocol: "udp", want: false},
+		{family: "", protocol: "udp", want: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.family+"/"+tc.protocol, func(t *testing.T) {
+			address := ListenAddress{NetworkFamily: tc.family} //nolint:exhaustruct
+
+			if got := address.IsProtocol(tc.protocol); got != tc.want {
+				t.Errorf("ListenAddress{%q}.IsProtocol(%q) = %t, want %t", tc.family, tc.protocol, got, tc.want)
+			}
+		})
+	}
+}

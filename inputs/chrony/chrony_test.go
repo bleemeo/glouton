@@ -21,6 +21,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"math"
+	"os"
+	"os/user"
+	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -355,4 +359,94 @@ func TestValidateReply(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestCanUseChronydSocket checks the gate on asking chronyd for serverstats. Getting it
+// wrong is not harmless in either direction: asking when the socket cannot be reached
+// means the command port refuses the request on every single gather, and not asking when
+// it can means three metrics that only exist there never arrive.
+func TestCanUseChronydSocket(t *testing.T) {
+	ownGroup, err := user.LookupGroupId(strconv.Itoa(os.Getgid()))
+	if err != nil {
+		t.Skipf("cannot resolve this process's own group: %v", err)
+	}
+
+	t.Run("no socket at all", func(t *testing.T) {
+		// What the agent container looks like: chronyd runs on the host and its directory
+		// isn't mounted, so the plugin falls back to the command port.
+		socket := filepath.Join(t.TempDir(), "chronyd.sock")
+
+		if canUseChronydSocket(socket, ownGroup.Name) {
+			t.Error("canUseChronydSocket() = true with no socket present")
+		}
+	})
+
+	t.Run("socket in a directory we can write", func(t *testing.T) {
+		dir := t.TempDir()
+		socket := filepath.Join(dir, "chronyd.sock")
+
+		if err := os.WriteFile(socket, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		if !canUseChronydSocket(socket, ownGroup.Name) {
+			t.Error("canUseChronydSocket() = false though the directory is ours")
+		}
+
+		// The probe must not leave anything next to chronyd's own socket.
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(entries) != 1 {
+			t.Errorf("the probe left %d files behind, want only the socket", len(entries)-1)
+		}
+	})
+
+	t.Run("group chronyd does not run as", func(t *testing.T) {
+		socket := filepath.Join(t.TempDir(), "chronyd.sock")
+
+		if err := os.WriteFile(socket, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		// setSocketGroup returns "" when neither chrony nor _chrony resolves, and the
+		// plugin cannot hand its socket to a group that doesn't exist.
+		if canUseChronydSocket(socket, "") {
+			t.Error("canUseChronydSocket() = true with no group to give the socket to")
+		}
+	})
+
+	t.Run("directory we cannot write", func(t *testing.T) {
+		if os.Getuid() == 0 {
+			t.Skip("root ignores the permissions this case is about")
+		}
+
+		// The packaged install: /run/chrony is drwxr-x--- _chrony:_chrony and Glouton runs
+		// as the "glouton" user, so the plugin cannot create its own socket beside chronyd's.
+		dir := filepath.Join(t.TempDir(), "chrony")
+		if err := os.Mkdir(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+
+		// chronyd's socket goes in while we still can, then the directory is closed to us
+		// the way the package leaves it: readable and traversable, not writable.
+		socket := filepath.Join(dir, "chronyd.sock")
+		if err := os.WriteFile(socket, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		// A directory keeps its execute bit or nothing can be reached inside it, which is
+		// also what the real /run/chrony looks like: r-x for the group, no w.
+		if err := os.Chmod(dir, 0o500); err != nil { //nolint:gosec
+			t.Fatal(err)
+		}
+
+		t.Cleanup(func() { _ = os.Chmod(dir, 0o700) }) //nolint:gosec
+
+		if canUseChronydSocket(socket, ownGroup.Name) {
+			t.Error("canUseChronydSocket() = true though the directory is not writable")
+		}
+	})
 }

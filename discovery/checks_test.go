@@ -73,6 +73,20 @@ func TestUseChronyCommandCheck(t *testing.T) {
 			want: false,
 		},
 		{
+			// The same daemon on an IPv6-only host, or with "bindaddress ::": netstat names
+			// the family in the network ("udp6"), and it is still a chronyd serving NTP.
+			name: "chronyd serving NTP over IPv6 only",
+			service: Service{
+				ServiceType: NTPService,
+				ExePath:     "/usr/sbin/chronyd",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: di.ServiceProtocol + "6", Address: "::", Port: di.ServicePort},
+				},
+				HasNetstatInfo: true,
+			},
+			want: false,
+		},
+		{
 			// Netstat found this daemon's ports, and the NTP one isn't among them.
 			name: "chronyd with netstat information but no NTP port",
 			service: Service{
