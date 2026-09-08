@@ -37,6 +37,7 @@ func New(address string) (i telegraf.Input, err error) {
 			i = &internal.Input{
 				Input: pgbouncerInput,
 				Accumulator: internal.Accumulator{
+					RenameGlobal:     renameGlobal,
 					TransformMetrics: transformMetrics,
 					DifferentiatedMetrics: []string{
 						"total_query_count",
@@ -55,6 +56,15 @@ func New(address string) (i telegraf.Input, err error) {
 	}
 
 	return
+}
+
+// renameGlobal drops the tags that don't identify a metric, keeping PgBouncer's own "db"
+// and "user" as labels.
+func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
+	delete(gatherContext.Tags, "server")
+	delete(gatherContext.Tags, "pool_mode")
+
+	return gatherContext, false
 }
 
 func transformMetrics(_ internal.GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {

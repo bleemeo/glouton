@@ -516,6 +516,8 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 				"host=%s port=%d user=%s password=%s dbname=pgbouncer sslmode=disable",
 				ip, port, username, service.Config.Password,
 			)
+			gathererOptions.CompatibilityNameItem = false
+
 			input, err = pgbouncer.New(address)
 		}
 	case RabbitMQService:
