@@ -9,7 +9,9 @@ verifies that they keep `deb-systemd-helper`'s bookkeeping consistent across
 install / upgrade / remove / purge. That bookkeeping is what
 [PRODUCT-3181](https://bleemeo.atlassian.net/browse/PRODUCT-3181) got wrong: a purge left
 `/var/lib/systemd/deb-systemd-helper-enabled/glouton.service.dsh-also` behind, and a later
-install then refused to start Glouton.
+install then refused to start Glouton. Two neighbouring leaks of the same kind — the
+`apt remove` route into the same dead state, and `glouton-auto-upgrade.timer` outliving its
+unit file — are covered here too.
 
 ## Running
 
@@ -51,15 +53,16 @@ Two packages are built and compared:
   would report failure forever. Point it at whatever baseline your change needs.
 - **new** — maintainer scripts from your working tree
 
-Both carry the *real* scripts and the *real* `packaging/common/glouton.service`; only the
+Both carry the *real* scripts and the *real* unit files from `packaging/common/`; only the
 Go binary is stubbed (`exec sleep infinity`). The bug lives entirely in the scripts and in
 `deb-systemd-helper`'s state machine, so the binary is irrelevant and stubbing it keeps
-each iteration to a couple of seconds.
+each iteration to a couple of seconds. All three units ship in the stub, including the
+timer — leave one out and its scenarios silently assert nothing.
 
-**The suite asserts that the old scripts fail.** `purge-clears-state` and
-`purge-reinstall` are expected to fail against the baseline — that is the reproduction. If
-they start passing, the bug is no longer being reproduced and the green results for the new
-scripts prove nothing, so `run.sh` reports that as an error rather than as success.
+**The suite asserts that the old scripts fail.** Every row marked **fail** below is
+expected to fail against the baseline — that is the reproduction. If one starts passing,
+the bug is no longer being reproduced and the green result for the new scripts proves
+nothing, so `run.sh` reports that as an error rather than as success.
 
 ## Scenarios
 
@@ -68,18 +71,61 @@ scripts prove nothing, so `run.sh` reports that as an error rather than as succe
 | `fresh-install` | install on a clean machine → running and enabled | pass | pass |
 | `upgrade` | install v1, then v2 → still running | pass | pass |
 | `upgrade-honors-disable` | install, `systemctl disable`, upgrade → must stay disabled | pass | pass |
+| `remove-honors-disable` | install, `systemctl disable`, `apt remove`, install → must stay disabled | pass | pass |
 | `purge-clears-state` | install, purge → no `deb-systemd-helper` state left | **fail** | pass |
 | `purge-reinstall` | install, purge, install → must be running | **fail** | pass |
+| `purge-removes-data` | install, write runtime files and a drop-in, purge → nothing left, nothing unowned | **fail** | pass |
+| `remove-reinstall` | install, `apt remove`, install → must be running | **fail** | pass |
+| `remove-then-purge` | install, `apt remove`, `apt purge` later → no state left | **fail** | pass |
+| `install-records-timer-state` | install → the timer's links are recorded, and it is *not* enabled | **fail** | pass |
+| `purge-clears-timer-state` | install, enable the timer, purge → no symlink and no failed unit | **fail** | pass |
+| `remove-stops-timer` | install, enable the timer, `apt remove` → timer inactive, not failed | **fail** | pass |
 
-The last two are PRODUCT-3181 itself: the leftover state file, and the "installed but
-doesn't start" that follows from it. The first three are there so the fix cannot buy those
-two at the cost of the ordinary paths — in particular `upgrade-honors-disable`, since a
-deliberate `systemctl disable glouton` must survive an upgrade.
+`purge-clears-state` and `purge-reinstall` are PRODUCT-3181 itself: the leftover state
+file, and the "installed but doesn't start" that follows from it. `remove-reinstall`
+reaches the same dead end through `apt remove`, which is worse because — unlike the purge
+route — nothing ever clears the state afterwards. `remove-then-purge` is there because
+prerm no longer runs `systemctl disable`, so the enable symlink now survives `remove` and
+it is the later purge that has to clean it up.
 
-Scope is deliberately narrow. Several neighbouring gaps were found while investigating
-this ticket — `apt remove` + reinstall, hosts already broken before the fix ships, and
-`glouton-auto-upgrade.timer` — and are written up for separate tickets rather than tested
-here.
+The three timer scenarios cover the other unit. The package never enables
+`glouton-auto-upgrade.timer`; the `get.bleemeo.com` installer does, with a plain
+`systemctl enable`, which records nothing in `deb-systemd-helper`. So the postinst records
+the links itself with `update-state`, and purge can then remove them.
+`install-records-timer-state` pins both halves of that: the state file must be written, or
+`purge-clears-timer-state` would be green for some unrelated reason, and the timer must
+*not* come out enabled, or every apt-repo host would silently gain unattended upgrades.
+
+`purge-removes-data` is the other half of "purge is incomplete" — the data rather than the
+systemd state. It plants the files the agent writes while running (`state.cache.json`,
+`stderr.log`, `tsdb/`) plus an operator drop-in under `/etc/glouton/conf.d`, none of which
+dpkg owns, then checks `find /var /etc -nouser` comes back empty: postrm frees the
+`glouton` uid, so anything it fails to delete is inherited by whichever system user is
+created next — including `state.json` and its credentials.
+
+`fresh-install`, `upgrade`, `upgrade-honors-disable` and `remove-honors-disable` are here
+so none of the above is bought at the cost of the ordinary paths. The two
+`*-honors-disable` pairs matter most: a deliberate `systemctl disable glouton` must survive
+both an upgrade and a remove/reinstall cycle.
+
+`remove-honors-disable` is also the guard on a tempting wrong turn. Every reference package
+keeps `deb-systemd-helper purge` strictly under `if [ "$1" = "purge" ]`, and the enable
+state is exactly what `remove` has to preserve so a reinstall restores whatever the admin
+chose. Extending the purge cleanup to the `remove` branch would delete the state file,
+`was-enabled` would fall back to its "no state file means enabled" default, and a
+deliberately disabled unit would come back on.
+
+One gap found while investigating is deliberately *not* covered: hosts already broken
+before the fix ships, which cannot self-heal on upgrade. It is written up for a separate
+ticket.
+
+## What "correct" is measured against
+
+The reference is debhelper's own autoscript templates —
+`/usr/share/debhelper/autoscripts/{postinst,prerm,postrm}-systemd*` in the `debhelper`
+package — and the scripts they generate in packages that ship both a service and a timer:
+`certbot`, `fwupd` and `logrotate`. When one of these scenarios asserts something
+non-obvious, that is where the expectation comes from.
 
 ## Notes on the container
 
@@ -98,4 +144,8 @@ here.
 ## Scope
 
 Debian/Ubuntu only. The RPM paths in the same scripts (the `0` / `1` / `2` argument
-branches) are not covered here.
+branches) are not covered here, and were left alone: `deb-systemd-helper` does not exist on
+RPM distributions, so none of these fixes transfers directly. RPM erase does leave the
+auto-upgrade timer's symlink behind for the same reason as `remove-stops-timer` — the
+matching `%preun` teardown is written up for a separate ticket rather than shipped
+untested.

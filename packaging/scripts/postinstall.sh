@@ -158,6 +158,14 @@ if [ "$1" = "configure" ] ; then
         if deb-systemd-helper --quiet was-enabled glouton.service; then
             deb-systemd-invoke restart glouton.service
         fi
+
+        # The auto-upgrade timer is enabled by the get.bleemeo.com installer with a plain
+        # `systemctl enable`, so deb-systemd-helper never records it and postrm has nothing
+        # to clean up on purge: the symlink outlives the unit file and systemd then reports
+        # the timer as not-found and failed. Record the links it would own so that purge
+        # removes them. update-state only rewrites the state file; unlike enable it never
+        # creates a symlink, so this does not turn auto-upgrade on for anyone.
+        deb-systemd-helper update-state 'glouton-auto-upgrade.timer' >/dev/null || true
     fi
 
 

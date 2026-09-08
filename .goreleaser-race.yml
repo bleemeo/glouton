@@ -146,6 +146,12 @@ nfpms:
       preremove: "packaging/scripts/preremove.sh"
       postremove: "packaging/scripts/postremove.sh"
     overrides:
+      deb:
+        # postinstall.sh and postremove.sh call deb-systemd-helper, which ships here. It is
+        # Priority: required so it is always installed in practice, but a debhelper-built
+        # package would still declare the dependency via ${misc:Depends}.
+        dependencies:
+          - init-system-helpers
       rpm:
         recommends:
           - sudo

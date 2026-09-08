@@ -6,9 +6,9 @@
 # remove / purge cycles against two builds of the package: one carrying the maintainer
 # scripts from --old-ref (the pre-fix baseline) and one carrying the working tree's.
 #
-# The suite asserts that the *old* scripts fail the two purge scenarios. If they stop
-# failing, the bug is no longer being reproduced and the passing results for the new
-# scripts mean nothing -- so that is reported as an error too.
+# The suite asserts that the *old* scripts fail the remove and purge scenarios. If one
+# stops failing, that bug is no longer being reproduced and the passing result for the new
+# scripts means nothing -- so that is reported as an error too.
 #
 # Everything runs inside throwaway containers, which are --privileged so that systemd can
 # run as PID 1. On macOS that privilege applies to the Docker Desktop VM rather than to
@@ -43,7 +43,11 @@ usage() { awk 'NR > 1 { if (!/^#/) exit; sub(/^# ?/, ""); print }' "$0"; }
 
 # Every scenario run.sh knows about. Used to reject a mistyped --scenario, which would
 # otherwise silently run nothing and exit 0.
-SCENARIOS="fresh-install upgrade upgrade-honors-disable purge-clears-state purge-reinstall"
+SCENARIOS="fresh-install upgrade
+           upgrade-honors-disable remove-honors-disable
+           purge-clears-state purge-reinstall purge-removes-data
+           remove-reinstall remove-then-purge
+           install-records-timer-state purge-clears-timer-state remove-stops-timer"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -142,7 +146,7 @@ run_scenario() {
         return 0
     fi
 
-    printf '\n=== %-26s [%s scripts]  expected: %s\n' "$scenario" "$variant" "$expected"
+    printf '\n=== %-28s [%s scripts]  expected: %s\n' "$scenario" "$variant" "$expected"
 
     docker rm -f "$cname" >/dev/null 2>&1 || true
     # Ubuntu 24.04 is cgroup-v2 only, so systemd as PID 1 needs no host cgroup bind mount
@@ -162,7 +166,7 @@ run_scenario() {
         running|degraded) ;;
         *) echo "    ERROR | systemd did not come up (is-system-running=${state:-none})"
            docker rm -f "$cname" >/dev/null 2>&1 || true
-           RESULTS+=$(printf '\n  %-26s %-5s  ERROR (no systemd)' "$scenario" "$variant")
+           RESULTS+=$(printf '\n  %-28s %-5s  ERROR (no systemd)' "$scenario" "$variant")
            UNEXPECTED=$((UNEXPECTED + 1))
            return 0 ;;
     esac
@@ -174,20 +178,20 @@ run_scenario() {
     if [ "$verdict" = "$expected" ]; then
         if [ "$expected" = fail ]; then
             echo "    => FAILED AS EXPECTED (bug reproduced)"
-            RESULTS+=$(printf '\n  %-26s %-5s  reproduced the bug (expected fail)' "$scenario" "$variant")
+            RESULTS+=$(printf '\n  %-28s %-5s  reproduced the bug (expected fail)' "$scenario" "$variant")
         else
             echo "    => PASS"
-            RESULTS+=$(printf '\n  %-26s %-5s  pass' "$scenario" "$variant")
+            RESULTS+=$(printf '\n  %-28s %-5s  pass' "$scenario" "$variant")
         fi
         PASS=$((PASS + 1))
     else
         if [ "$expected" = fail ]; then
             echo "    => UNEXPECTED PASS -- the bug did not reproduce, so this suite proves nothing"
-            RESULTS+=$(printf '\n  %-26s %-5s  UNEXPECTED PASS (bug did not reproduce)' "$scenario" "$variant")
+            RESULTS+=$(printf '\n  %-28s %-5s  UNEXPECTED PASS (bug did not reproduce)' "$scenario" "$variant")
             UNEXPECTED=$((UNEXPECTED + 1))
         else
             echo "    => UNEXPECTED FAILURE"
-            RESULTS+=$(printf '\n  %-26s %-5s  UNEXPECTED FAILURE' "$scenario" "$variant")
+            RESULTS+=$(printf '\n  %-28s %-5s  UNEXPECTED FAILURE' "$scenario" "$variant")
             FAILED=$((FAILED + 1))
         fi
     fi
@@ -201,28 +205,50 @@ run_scenario() {
 
 # ---------------------------------------------------------------- the matrix
 #
-# Against the pre-fix scripts, the two purge scenarios must fail -- that is the
-# reproduction. Everything else must pass for both, old and new alike.
+# Against the pre-fix scripts, every removal scenario must fail -- that is the
+# reproduction. The install and upgrade ones must pass for both, old and new alike: the
+# fixes cannot be bought at the cost of the ordinary paths.
 
-run_scenario old fresh-install             pass
-run_scenario old upgrade                   pass
-run_scenario old upgrade-honors-disable    pass
-run_scenario old purge-clears-state        fail
-run_scenario old purge-reinstall           fail
+run_scenario old fresh-install                pass
+run_scenario old upgrade                      pass
+run_scenario old upgrade-honors-disable       pass
+run_scenario old remove-honors-disable        pass
+run_scenario old purge-clears-state           fail
+run_scenario old purge-reinstall              fail
+run_scenario old purge-removes-data           fail
+run_scenario old remove-reinstall             fail
+run_scenario old remove-then-purge            fail
+run_scenario old install-records-timer-state  fail
+run_scenario old purge-clears-timer-state     fail
+run_scenario old remove-stops-timer           fail
 
-run_scenario new fresh-install             pass
-run_scenario new upgrade                   pass
-run_scenario new upgrade-honors-disable    pass
-run_scenario new purge-clears-state        pass
-run_scenario new purge-reinstall           pass
+run_scenario new fresh-install                pass
+run_scenario new upgrade                      pass
+run_scenario new upgrade-honors-disable       pass
+run_scenario new remove-honors-disable        pass
+run_scenario new purge-clears-state           pass
+run_scenario new purge-reinstall              pass
+run_scenario new purge-removes-data           pass
+run_scenario new remove-reinstall             pass
+run_scenario new remove-then-purge            pass
+run_scenario new install-records-timer-state  pass
+run_scenario new purge-clears-timer-state     pass
+run_scenario new remove-stops-timer           pass
 
 
 if [ -n "$REAL_DEB" ]; then
     echo
     echo "### real package: $(basename "$REAL_DEB")"
-    run_scenario real fresh-install      pass
-    run_scenario real purge-clears-state pass
-    run_scenario real purge-reinstall    pass
+    run_scenario real fresh-install                pass
+    run_scenario real remove-honors-disable        pass
+    run_scenario real purge-clears-state           pass
+    run_scenario real purge-reinstall              pass
+    run_scenario real purge-removes-data           pass
+    run_scenario real remove-reinstall             pass
+    run_scenario real remove-then-purge            pass
+    run_scenario real install-records-timer-state  pass
+    run_scenario real purge-clears-timer-state     pass
+    run_scenario real remove-stops-timer           pass
 fi
 
 # ---------------------------------------------------------------- summary
