@@ -166,6 +166,20 @@ func (rts roundTripTLSVerifyList) HadTLS() bool {
 	return false
 }
 
+// LastWithTLS returns the last round trip that actually saw a certificate.
+// The last round trip of the list may have no TLS at all (a redirect whose
+// connection failed), while an earlier one did serve a certificate we can
+// report on.
+func (rts roundTripTLSVerifyList) LastWithTLS() (roundTripTLSVerify, bool) {
+	for i := len(rts) - 1; i >= 0; i-- {
+		if rts[i].hadTLS {
+			return rts[i], true
+		}
+	}
+
+	return roundTripTLSVerify{}, false
+}
+
 func (rts roundTripTLSVerifyList) AllTrusted() bool {
 	for _, rt := range rts {
 		if !rt.hadTLS {
@@ -376,10 +390,10 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 			ch <- prometheus.MustNewConstMetric(probeTLSSuccess, prometheus.GaugeValue, 0, target.Name)
 		}
 
-		if roundTripsTLS[len(roundTripsTLS)-1].hadTLS {
-			ch <- prometheus.MustNewConstMetric(probeTLSExpiry, prometheus.GaugeValue, float64(roundTripsTLS[len(roundTripsTLS)-1].expiry.Unix()), target.Name)
+		if lastTLS, ok := roundTripsTLS.LastWithTLS(); ok {
+			ch <- prometheus.MustNewConstMetric(probeTLSExpiry, prometheus.GaugeValue, float64(lastTLS.expiry.Unix()), target.Name)
 
-			if lifespan := roundTripsTLS[len(roundTripsTLS)-1].leafLifespan; lifespan != 0 {
+			if lifespan := lastTLS.leafLifespan; lifespan != 0 {
 				ch <- prometheus.MustNewConstMetric(probeSSLCertificateLifespan, prometheus.GaugeValue, float64(lifespan.Seconds()), target.Name)
 			}
 		}
@@ -455,11 +469,17 @@ func verifyTLS(ctx context.Context, collector blackboxCollector, extLogger *slog
 			continue
 		}
 
-		if len(rt.TLSState.PeerCertificates) == 0 {
+		// httptrace calls TLSHandshakeDone even when the handshake failed, with a
+		// zero ConnectionState and a non-nil error. Such a round trip never saw a
+		// certificate, so it says nothing about the one the target serves. Reporting
+		// it as TLS would turn a connection reset during the handshake into an
+		// untrusted chain, and probe_ssl_last_chain_expiry_timestamp_seconds would be
+		// emitted with the zero time, which the API decodes as a missing intermediate
+		// certificate. probe_success already reports the failure.
+		if rt.TLSError != nil || len(rt.TLSState.PeerCertificates) == 0 {
 			result = append(result, roundTripTLSVerify{
-				hadTLS:     true,
-				trustedTLS: false,
-				err:        errNoCertificates,
+				hadTLS: false,
+				err:    errNoCertificates,
 			})
 
 			continue
