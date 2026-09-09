@@ -46,7 +46,7 @@ usage() { awk 'NR > 1 { if (!/^#/) exit; sub(/^# ?/, ""); print }' "$0"; }
 SCENARIOS="fresh-install upgrade
            upgrade-honors-disable remove-honors-disable
            purge-clears-state purge-reinstall purge-removes-data
-           remove-reinstall remove-then-purge
+           remove-reinstall remove-then-purge heals-stale-state
            install-records-timer-state purge-clears-timer-state remove-stops-timer"
 
 while [ $# -gt 0 ]; do
@@ -218,6 +218,7 @@ run_scenario old purge-reinstall              fail
 run_scenario old purge-removes-data           fail
 run_scenario old remove-reinstall             fail
 run_scenario old remove-then-purge            fail
+run_scenario old heals-stale-state           fail
 run_scenario old install-records-timer-state  fail
 run_scenario old purge-clears-timer-state     fail
 run_scenario old remove-stops-timer           fail
@@ -231,6 +232,7 @@ run_scenario new purge-reinstall              pass
 run_scenario new purge-removes-data           pass
 run_scenario new remove-reinstall             pass
 run_scenario new remove-then-purge            pass
+run_scenario new heals-stale-state           pass
 run_scenario new install-records-timer-state  pass
 run_scenario new purge-clears-timer-state     pass
 run_scenario new remove-stops-timer           pass

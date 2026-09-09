@@ -375,6 +375,22 @@ case "$SCENARIO" in
         assert_enabled
         ;;
 
+    heals-stale-state)
+        # A host purged before the purge cleanup shipped: the state file it left behind is
+        # still there when the fixed package arrives, and would make the fresh install come
+        # up disabled and stopped exactly as the ticket describes. Always purged with the
+        # pre-fix scripts, whichever variant is under test, so the two columns answer "does
+        # installing this package onto such a host recover it?"
+        install_deb "$(deb old "$OLD_V1")" || exit 1
+        assert_active
+        purge_pkg || exit 1
+        report_dsh_state
+        install_deb "$V1" || exit 1
+        report_dsh_state
+        assert_active
+        assert_enabled
+        ;;
+
     remove-reinstall)
         # The ticket's failure mode reached through `apt remove` instead of `apt purge`.
         # prerm used to run `systemctl disable`, which deletes the enable symlink without
