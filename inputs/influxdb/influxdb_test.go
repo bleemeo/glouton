@@ -250,11 +250,15 @@ func TestRenamePipelineQueryExecutor(t *testing.T) {
 	})
 }
 
-// TestShardItems checks the series of the storage-engine measurements are told apart. A 1.8
+// TestShardLabels checks the series of the storage-engine measurements are told apart. A 1.8
 // instance reports influxdb_shard and the influxdb_tsm1_* family once per shard, all with the
-// same database tag, so the database alone can't be the item: the series would share a name
-// and an item and be rejected as duplicates.
-func TestShardItems(t *testing.T) {
+// same database tag, so the database alone can't identify a series: they would share a name
+// and a label set and be rejected as duplicates.
+//
+// The identity is kept as labels of its own rather than joined into the item, which is left
+// to the service instance -- otherwise a containerised InfluxDB would report a shard as
+// "test-influxdb__internal_monitor_1".
+func TestShardLabels(t *testing.T) {
 	store := &internal.StoreAccumulator{}
 	acc := newAccumulator(store)
 
@@ -263,7 +267,7 @@ func TestShardItems(t *testing.T) {
 	for _, shard := range []struct{ id, retention string }{{"1", "monitor"}, {"2", "monitor"}, {"3", "autogen"}} {
 		acc.AddFields("influxdb_tsm1_cache", map[string]any{"diskBytes": 1024.0}, map[string]string{
 			"database": "_internal", "retentionPolicy": shard.retention, "id": shard.id,
-			// Left out of the item on purpose: the same on every shard, or a path.
+			// Dropped on purpose: the same on every shard, or a filesystem path.
 			"engine": "tsm1", "indexType": "inmem",
 			"path": "/var/lib/influxdb/data/_internal/" + shard.retention + "/" + shard.id,
 		}, time.Now())
@@ -273,20 +277,24 @@ func TestShardItems(t *testing.T) {
 	acc.AddFields("influxdb_measurement", map[string]any{"numSeries": 12.0},
 		map[string]string{"database": "_internal", "measurement": "httpd"}, time.Now())
 
-	gotItems := make([]string, 0, len(store.Measurement))
+	gotLabels := make([]map[string]string, 0, len(store.Measurement))
 	for _, m := range store.Measurement {
-		gotItems = append(gotItems, m.Tags[types.LabelItem])
+		gotLabels = append(gotLabels, m.Tags)
+
+		if item, ok := m.Tags[types.LabelItem]; ok {
+			t.Errorf("item should be left to the service instance, got %q", item)
+		}
 	}
 
-	wantItems := []string{
-		"_internal_monitor_1",
-		"_internal_monitor_2",
-		"_internal_autogen_3",
-		"_internal_httpd",
+	wantLabels := []map[string]string{
+		{"database": "_internal", "retentionPolicy": "monitor", "id": "1"},
+		{"database": "_internal", "retentionPolicy": "monitor", "id": "2"},
+		{"database": "_internal", "retentionPolicy": "autogen", "id": "3"},
+		{"database": "_internal", "measurement": "httpd"},
 	}
 
-	if diff := cmp.Diff(wantItems, gotItems); diff != "" {
-		t.Errorf("items (-want +got):\n%s", diff)
+	if diff := cmp.Diff(wantLabels, gotLabels); diff != "" {
+		t.Errorf("labels (-want +got):\n%s", diff)
 	}
 }
 
@@ -360,5 +368,5 @@ func TestRenamePipelineDatabase(t *testing.T) {
 
 	// The URL we queried is redundant with the labels already set on service
 	// metrics, while "database" tells which database this is about.
-	assertTags(t, store, map[string]string{"database": "telegraf", "item": "telegraf"})
+	assertTags(t, store, map[string]string{"database": "telegraf"})
 }

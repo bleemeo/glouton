@@ -376,6 +376,7 @@ func TestDiscoverySingle(t *testing.T) {
 			nil,
 			facts.ContainerFilter{}.ContainerIgnored,
 			nil,
+			nil,
 			time.Hour,
 			config.OpenTelemetry{},
 		)
@@ -967,7 +968,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 	}
 	state := mockState{}
 
-	disc, _ := New(mockDynamic, gloutonexec.New("/"), reg, state, nil, nil, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, nil, time.Hour, config.OpenTelemetry{})
+	disc, _ := New(mockDynamic, gloutonexec.New("/"), reg, state, nil, nil, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, nil, nil, time.Hour, config.OpenTelemetry{})
 	disc.containerInfo = docker
 
 	mockDynamic.result = []Service{

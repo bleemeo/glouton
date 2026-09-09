@@ -47,19 +47,18 @@ type Runner interface {
 // useGloutonRunner makes the plugin run varnishstat through Glouton's command runner
 // instead of exec-ing it itself.
 //
-// What this buys is the host's binary: RunOnHost runs the command in the host mount
-// namespace (chroot into the hostroot), and the agent image contains no varnishstat --
-// so a Glouton in a container currently fails every gather with "exec: sudo: executable
-// file not found in $PATH" for a Varnish running on the host. Run through the runner, it
-// reads the host's Varnish with the host's tools, which is what inputs/smart already does
-// for smartctl (see its run_cmd.go, which reaches the same private hook with go:linkname
-// because there the plugin keeps it in a package variable rather than a field).
+// What this buys is a varnishstat that exists at all, since the agent image contains
+// none: the runner chroots into the mount namespace holding one, the host's for a Varnish
+// installed on the machine and the container's own for a containerised one. This is what
+// inputs/smart already does for smartctl (see its run_cmd.go, which reaches the same
+// private hook with go:linkname because there the plugin keeps it in a package variable
+// rather than a field).
 //
 // Sudo is left to the runner: it only prepends one when Glouton isn't already root, which
 // is why the sudoers rule keeps matching for a host install (sudo -n /usr/bin/varnishstat
 // -1) while the containerized agent, running as root, needs no rule at all.
-func useGloutonRunner(input *varnish.Varnish, runner Runner) error {
-	replacement := reflect.ValueOf(runCmd(runner))
+func useGloutonRunner(input *varnish.Varnish, runner Runner, containerPID int) error {
+	replacement := reflect.ValueOf(runCmd(runner, containerPID))
 	value := reflect.ValueOf(input).Elem()
 
 	for _, name := range runnerFields {
@@ -83,7 +82,10 @@ func useGloutonRunner(input *varnish.Varnish, runner Runner) error {
 
 // runCmd returns the function the plugin calls in place of its own varnishRunner. Its
 // signature is the plugin's private "runner" type, which cannot be named here.
-func runCmd(runner Runner) func(string, bool, []string, config.Duration) (*bytes.Buffer, error) {
+//
+// containerPID, when non-zero, runs the varnishstat of that container rather than the
+// machine's -- see New.
+func runCmd(runner Runner, containerPID int) func(string, bool, []string, config.Duration) (*bytes.Buffer, error) {
 	return func(binary string, useSudo bool, args []string, timeout config.Duration) (*bytes.Buffer, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout))
 		defer cancel()
@@ -92,12 +94,16 @@ func runCmd(runner Runner) func(string, bool, []string, config.Duration) (*bytes
 		// agent container, or on a host where Glouton runs as root) skips sudo instead of
 		// needing it installed. GraceDelay matches inputs/smart: varnishstat gets a chance
 		// to exit on its own before being killed.
+		//
+		// The two namespace options are exclusive: RunOnHost only when there is no
+		// container to go into, since asking for both would be asking for opposite things.
 		output, err := runner.Run(
 			ctx,
 			gloutonexec.Option{ //nolint:exhaustruct
-				RunAsRoot:  useSudo,
-				RunOnHost:  true,
-				GraceDelay: 5 * time.Second,
+				RunAsRoot:      useSudo,
+				RunOnHost:      containerPID == 0,
+				InContainerPID: containerPID,
+				GraceDelay:     5 * time.Second,
 			},
 			binary,
 			args...,

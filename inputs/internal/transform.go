@@ -16,8 +16,6 @@
 
 package internal
 
-import "strings"
-
 // Units a cumulative duration counter can count in, as the number of them in one second.
 // They are what AvgDuration divides by to report seconds whatever the input reports.
 const (
@@ -49,24 +47,4 @@ func AvgDuration(fields map[string]float64, durationField, countField, outputNam
 	if hasDuration && hasCount && countRate > 0 {
 		fields[outputName] = durationRate / countRate / unitDivisor
 	}
-}
-
-// JoinNonEmptyTags joins the values of the given tags, in the order their keys are given,
-// into the item that tells the series of one measurement apart. Without it the series of a
-// measurement reported once per label set would all land on the same name with the same
-// (empty) label set, and be rejected as duplicates.
-//
-// Tags that are missing or empty are skipped, so that a label the service left unset
-// doesn't show up as a stray separator, and values are trimmed: some inputs read them from
-// a padded XML document.
-func JoinNonEmptyTags(tags map[string]string, keys []string) string {
-	values := make([]string, 0, len(keys))
-
-	for _, key := range keys {
-		if value := strings.TrimSpace(tags[key]); value != "" {
-			values = append(values, value)
-		}
-	}
-
-	return strings.Join(values, "_")
 }

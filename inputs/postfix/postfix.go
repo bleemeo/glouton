@@ -21,7 +21,6 @@ package postfix
 import (
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
-	"github.com/bleemeo/glouton/types"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -40,7 +39,6 @@ func New(queueDirectory string) (i telegraf.Input, err error) {
 			i = &internal.Input{
 				Input: postfixInput,
 				Accumulator: internal.Accumulator{
-					RenameGlobal:  renameGlobal,
 					RenameMetrics: renameMetrics,
 				},
 				Name: "postfix",
@@ -55,15 +53,15 @@ func New(queueDirectory string) (i telegraf.Input, err error) {
 	return i, err
 }
 
-// renameGlobal sets the item to the queue the metrics are about: without it the five
-// queues would all end up on the same metric.
-func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
-	if queue := gatherContext.Tags["queue"]; queue != "" {
-		gatherContext.Tags[types.LabelItem] = queue
-	}
-
-	return gatherContext, false
-}
+// The "queue" tag telegraf's plugin attaches is left alone, and kept as a label of its
+// own rather than written into the item: the five queues share their metric names, so
+// something has to tell them apart, and the item is the service instance -- for a
+// containerised Postfix the container name, which modify.AddInstance sets. Writing the
+// queue there too would glue the two together into "test-postfix_deferred".
+//
+// Keeping it needs CompatibilityNameItem to be off for this service, since the
+// compatibility naming keeps only the item and would drop the queue; see the Postfix case
+// of Discovery.createInput.
 
 var fieldRenames = map[string]string{ //nolint:gochecknoglobals
 	// "size" is the number of bytes held in the queue. It must not be named

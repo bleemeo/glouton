@@ -17,7 +17,6 @@
 package internal
 
 import (
-	"maps"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -111,95 +110,6 @@ func TestAvgDuration(t *testing.T) {
 
 			if diff := cmp.Diff(tc.want, tc.fields, cmpopts.EquateApprox(0, 1e-9)); diff != "" {
 				t.Errorf("AvgDuration() fields (-want +got):\n%s", diff)
-			}
-		})
-	}
-}
-
-func TestJoinNonEmptyTags(t *testing.T) {
-	cases := []struct {
-		name string
-		tags map[string]string
-		keys []string
-		want string
-	}{
-		{
-			// The order is the caller's, so that the item of a series is stable whatever
-			// order the map happens to iterate in.
-			name: "joined in the order of the keys, not of the map",
-			tags: map[string]string{"a": "1", "b": "2", "c": "3"},
-			keys: []string{"c", "a", "b"},
-			want: "3_1_2",
-		},
-		{
-			name: "a single key needs no separator",
-			tags: map[string]string{"a": "1"},
-			keys: []string{"a"},
-			want: "1",
-		},
-		{
-			// A label the service left unset must not show up as a stray separator.
-			name: "a missing tag is skipped",
-			tags: map[string]string{"a": "1", "c": "3"},
-			keys: []string{"a", "b", "c"},
-			want: "1_3",
-		},
-		{
-			name: "an empty value is skipped",
-			tags: map[string]string{"a": "1", "b": "", "c": "3"},
-			keys: []string{"a", "b", "c"},
-			want: "1_3",
-		},
-		{
-			// ActiveMQ reads its tags from an XML document that pads them.
-			name: "values are trimmed",
-			tags: map[string]string{"a": "  1 ", "b": "\t2\n"},
-			keys: []string{"a", "b"},
-			want: "1_2",
-		},
-		{
-			name: "a blank value is skipped, not joined as empty",
-			tags: map[string]string{"a": "1", "b": "   ", "c": "3"},
-			keys: []string{"a", "b", "c"},
-			want: "1_3",
-		},
-		{
-			name: "a tag that isn't asked for is ignored",
-			tags: map[string]string{"a": "1", "ignored": "2"},
-			keys: []string{"a"},
-			want: "1",
-		},
-		{
-			name: "no keys",
-			tags: map[string]string{"a": "1"},
-			keys: nil,
-			want: "",
-		},
-		{
-			name: "every value empty",
-			tags: map[string]string{"a": "", "b": "  "},
-			keys: []string{"a", "b"},
-			want: "",
-		},
-		{
-			name: "no tags at all",
-			tags: nil,
-			keys: []string{"a", "b"},
-			want: "",
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			before := maps.Clone(tc.tags)
-
-			if got := JoinNonEmptyTags(tc.tags, tc.keys); got != tc.want {
-				t.Errorf("JoinNonEmptyTags() = %q, want %q", got, tc.want)
-			}
-
-			// The tags are the gather context's own map, which the caller goes on using.
-			if diff := cmp.Diff(before, tc.tags, cmpopts.EquateEmpty()); diff != "" {
-				t.Errorf("JoinNonEmptyTags() modified its tags (-before +after):\n%s", diff)
 			}
 		})
 	}

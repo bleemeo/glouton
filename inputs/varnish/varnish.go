@@ -32,15 +32,23 @@ import (
 )
 
 // New returns a Varnish input. It reads the metrics with "varnishstat", run through
-// Glouton's command runner so that the binary comes from the host rather than from the
-// agent's own filesystem -- see useGloutonRunner.
+// Glouton's command runner so that the binary comes from a filesystem that has one rather
+// than from the agent's own, which does not -- see useGloutonRunner.
 //
-// varnishstat reads the shared memory of the Varnish running in the namespace it is run
-// in, so this still reports the *host's* Varnish for every discovered service: a Varnish
-// in a container of its own gets the host's numbers, and two of them get the same numbers
-// twice. Reaching into a container's instance needs the "-n" argument pointed at it, which
-// this doesn't do yet.
-func New(runner Runner) (telegraf.Input, registry.RegistrationOption, error) {
+// Two arguments say which Varnish is read, and normally only one of them is set. See
+// Discovery.varnishTarget for how they are chosen.
+//
+// containerPID runs the varnishstat of that container, in its own filesystem. That is the
+// way to read a containerised Varnish: the binary comes from the same image as the daemon,
+// and inside that filesystem varnishd's default working directory is simply the right one,
+// so no "-n" is needed.
+//
+// instanceDir is passed as varnishstat's "-n", naming an instance by the working directory
+// varnishd keeps its shared memory in. It is the fallback for a container carrying no
+// varnishstat of its own, read with the machine's binary through /proc. Empty means no
+// "-n" at all, which is right for a Varnish installed on the machine -- varnishstat then
+// finds the instance of the namespace it runs in.
+func New(runner Runner, containerPID int, instanceDir string) (telegraf.Input, registry.RegistrationOption, error) {
 	input, ok := telegraf_inputs.Inputs["varnish"]
 	if !ok {
 		return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
@@ -51,7 +59,7 @@ func New(runner Runner) (telegraf.Input, registry.RegistrationOption, error) {
 		return nil, registry.RegistrationOption{}, inputs.ErrUnexpectedType
 	}
 
-	if err := useGloutonRunner(varnishInput, runner); err != nil {
+	if err := useGloutonRunner(varnishInput, runner, containerPID); err != nil {
 		// Not fatal: the plugin keeps its own runner, which is what every Glouton did
 		// before this and still works wherever varnishstat sits next to the agent. Only
 		// the container case is lost, and it was already broken. The unit test is what
@@ -61,6 +69,10 @@ func New(runner Runner) (telegraf.Input, registry.RegistrationOption, error) {
 
 	// Asks the runner for root; it decides whether a sudo is actually needed.
 	varnishInput.UseSudo = true
+
+	// The plugin turns this into "-n <instanceDir>" and leaves it out when empty, which is
+	// exactly the distinction wanted, so it is assigned unconditionally.
+	varnishInput.InstanceName = instanceDir
 
 	// The plugin only collects cache_hit/cache_miss/uptime by default. The backend and
 	// thread-pool counters below are cheap backend-health and saturation signals varnishstat

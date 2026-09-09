@@ -17,12 +17,10 @@
 package consul
 
 import (
-	"sort"
 	"strings"
 
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
-	"github.com/bleemeo/glouton/types"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -61,50 +59,34 @@ func New(url string, token string) (i telegraf.Input, err error) {
 	return i, err
 }
 
-func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
-	measurement := stripNodeName(gatherContext)
-	measurement = strings.ReplaceAll(measurement, ".", "_")
-	gatherContext.Measurement = strings.ToLower(measurement)
-
-	if item := labelItem(gatherContext.Tags); item != "" {
-		gatherContext.Tags[types.LabelItem] = item
-	}
-
-	return gatherContext, false
-}
-
-// labelItem builds the item of a metric Consul labelled, from its label values in a stable
-// order.
+// renameGlobal normalises the measurement name and leaves Consul's own labels alone.
 //
-// Some Consul metrics come as one series per label set: one per network (lan and wan) for
-// the memberlist and serf queues, one per datacenter and kind of config entry for the state
-// ones. A service metric keeps no label but the item -- the registration uses
-// CompatibilityNameItem -- so without those values in the item, the series of one metric all
-// end up with the same name and the same (empty) label set, and are rejected: "collected
-// metric ... was collected before with the same name and label values". That is what happens
-// to rabbitmq_consumers today.
+// Those labels are what tells apart the series of one metric: some Consul metrics come as
+// one series per label set -- one per network (lan and wan) for the memberlist and serf
+// queues, one per datacenter and kind of config entry for the state ones. They used to be
+// joined into the item, because the compatibility naming keeps only the item and would
+// otherwise drop them, leaving every series of one metric with the same name and the same
+// empty label set: "collected metric ... was collected before with the same name and label
+// values", which is what still happens to rabbitmq_consumers. Turning that naming off for
+// this service (see the Consul case of Discovery.createInput) keeps them as labels
+// instead, and leaves the item to the service instance rather than gluing a network name
+// onto a container name.
 //
-// Their mean is deliberately not taken instead: the aggregate that makes sense differs per
-// field -- summing is right for count and sum, taking the max for max, and nothing is right
-// for stddev -- and it would report a number Consul never measured.
+// Taking their mean is deliberately not the answer either: the aggregate that makes sense
+// differs per field -- summing is right for count and sum, taking the max for max, and
+// nothing is right for stddev -- and it would report a number Consul never measured.
 //
 // The labels Consul uses are dimensions of the thing measured, not of the event: network
 // (lan, wan), datacenter, kind of config entry, version, HTTP method and path, and peer_id
 // on the leader's raft replication metrics. The last one is the id of a server, so it does
 // change when a server is replaced, but like the others it is bounded by the size of the
 // cluster and can't grow one series per event.
-func labelItem(tags map[string]string) string {
-	keys := make([]string, 0, len(tags))
+func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
+	measurement := stripNodeName(gatherContext)
+	measurement = strings.ReplaceAll(measurement, ".", "_")
+	gatherContext.Measurement = strings.ToLower(measurement)
 
-	for key := range tags {
-		if key != types.LabelItem {
-			keys = append(keys, key)
-		}
-	}
-
-	sort.Strings(keys)
-
-	return internal.JoinNonEmptyTags(tags, keys)
+	return gatherContext, false
 }
 
 // gaugeSubsystems are the Consul subsystems reporting gauges. They are the only place

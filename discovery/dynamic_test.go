@@ -146,6 +146,9 @@ func (mci mockContainerInfo) Containers(_ context.Context, maxAge time.Duration,
 
 type mockFileReader struct {
 	contents map[string]string
+	// dirs maps a directory to the entry names it holds. A directory absent from here
+	// fails to be listed, like one that does not exist.
+	dirs map[string][]string
 }
 
 func (mfr mockFileReader) ReadFile(_ context.Context, path string) ([]byte, error) {
@@ -155,6 +158,15 @@ func (mfr mockFileReader) ReadFile(_ context.Context, path string) ([]byte, erro
 	}
 
 	return []byte(content), nil
+}
+
+func (mfr mockFileReader) ReadDir(_ context.Context, path string) ([]string, error) {
+	names, ok := mfr.dirs[path]
+	if !ok {
+		return nil, os.ErrNotExist
+	}
+
+	return names, nil
 }
 
 func TestServiceByCommand(t *testing.T) {
@@ -308,6 +320,14 @@ func TestDynamicDiscoverySimple(t *testing.T) {
 // Less will show the NUL character used to split args.
 func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 	t0 := time.Now()
+
+	// The broker is launched with "java -jar activemq.jar", so what identifies it is the
+	// activemq.home system property rather than a main class. Shared by the cases below
+	// that only differ in their environment.
+	activeMQCmdLine := []string{
+		"java", "-Xms64M", "-Dactivemq.home=/opt/apache-activemq", "-Dactivemq.base=/opt/apache-activemq",
+		"-jar", "/opt/apache-activemq/bin/activemq.jar", testStart,
+	}
 
 	cases := []struct {
 		testName           string
@@ -1111,6 +1131,170 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				LastTimeSeen:    t0,
 			},
 		},
+		{
+			testName:    "influxdb-admin-credentials-from-env",
+			containerID: "influxdb1",
+			containerIP: testIP17217049,
+			cmdLine:     []string{"influxd"},
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8086},
+			},
+			containerEnv: map[string]string{
+				"INFLUXDB_HTTP_AUTH_ENABLED": "true",
+				"INFLUXDB_ADMIN_USER":        "admin",
+				"INFLUXDB_ADMIN_PASSWORD":    "adminpass",
+			},
+			want: Service{
+				Name:        string(InfluxDBService),
+				ServiceType: InfluxDBService,
+				ContainerID: "influxdb1",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8086},
+				},
+				IPAddress: testIP17217049,
+				Config: config.Service{
+					Username: "admin",
+					Password: "adminpass",
+				},
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// The non-admin user's password key is INFLUXDB_USER_PASSWORD. Getting this
+			// wrong is easy, because every other service here would spell it
+			// INFLUXDB_PASSWORD -- which the image does not read at all.
+			testName:    "influxdb-user-credentials-from-env",
+			containerID: "influxdb2",
+			containerIP: testIP17217049,
+			cmdLine:     []string{"influxd"},
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8086},
+			},
+			containerEnv: map[string]string{
+				"INFLUXDB_HTTP_AUTH_ENABLED": "true",
+				"INFLUXDB_USER":              "metrics",
+				"INFLUXDB_USER_PASSWORD":     testSecret,
+			},
+			want: Service{
+				Name:        string(InfluxDBService),
+				ServiceType: InfluxDBService,
+				ContainerID: "influxdb2",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8086},
+				},
+				IPAddress: testIP17217049,
+				Config: config.Service{
+					Username: "metrics",
+					Password: testSecret,
+				},
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// The admin wins: it is the account that exists whenever any user was created,
+			// and it can read the statistics whatever the other user was granted.
+			testName:    "influxdb-admin-credentials-priority",
+			containerID: "influxdb3",
+			containerIP: testIP17217049,
+			cmdLine:     []string{"influxd"},
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8086},
+			},
+			containerEnv: map[string]string{
+				"INFLUXDB_HTTP_AUTH_ENABLED": "true",
+				"INFLUXDB_USER":              "metrics",
+				"INFLUXDB_USER_PASSWORD":     testSecret,
+				"INFLUXDB_ADMIN_USER":        "admin",
+				"INFLUXDB_ADMIN_PASSWORD":    "adminpass",
+			},
+			want: Service{
+				Name:        string(InfluxDBService),
+				ServiceType: InfluxDBService,
+				ContainerID: "influxdb3",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8086},
+				},
+				IPAddress: testIP17217049,
+				Config: config.Service{
+					Username: "admin",
+					Password: "adminpass",
+				},
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// A user with no password does not fall back the way ClickHouse does: the image
+			// generates a random password for it and only prints it to its own log, so
+			// there is nothing here that would authenticate.
+			testName:    "influxdb-lone-user-ignored",
+			containerID: "influxdb4",
+			containerIP: testIP17217049,
+			cmdLine:     []string{"influxd"},
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8086},
+			},
+			containerEnv: map[string]string{
+				"INFLUXDB_HTTP_AUTH_ENABLED": "true",
+				"INFLUXDB_ADMIN_USER":        "admin",
+			},
+			want: Service{
+				Name:        string(InfluxDBService),
+				ServiceType: InfluxDBService,
+				ContainerID: "influxdb4",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8086},
+				},
+				IPAddress:       testIP17217049,
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// A password with no user is not a credential either: without the user variable
+			// the image creates no user at all. INFLUXDB_PASSWORD is in here as the key
+			// that looks right and is read by nothing.
+			testName:    "influxdb-lone-password-ignored",
+			containerID: "influxdb5",
+			containerIP: testIP17217049,
+			cmdLine:     []string{"influxd"},
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8086},
+			},
+			containerEnv: map[string]string{
+				"INFLUXDB_HTTP_AUTH_ENABLED": "true",
+				"INFLUXDB_ADMIN_PASSWORD":    "adminpass",
+				"INFLUXDB_PASSWORD":          testSecret,
+			},
+			want: Service{
+				Name:        string(InfluxDBService),
+				ServiceType: InfluxDBService,
+				ContainerID: "influxdb5",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8086},
+				},
+				IPAddress:       testIP17217049,
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+			},
+		},
 		// Service from Ubuntu 16.04, default config
 		{
 			testName: "mysql-ubuntu-14.04",
@@ -1803,6 +1987,130 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 8161}},
 				IPAddress:       testIP127001,
 				Active:          true,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// The credentials of the web console, which is where the metrics are read from.
+			testName:    "activemq-web-credentials-from-env",
+			containerID: "activemq1",
+			containerIP: testIP17217049,
+			cmdLine:     activeMQCmdLine,
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8161},
+			},
+			containerEnv: map[string]string{
+				"ACTIVEMQ_WEB_USER":     "console",
+				"ACTIVEMQ_WEB_PASSWORD": testSecret,
+			},
+			want: Service{
+				Name:        string(ActiveMQService),
+				ServiceType: ActiveMQService,
+				ContainerID: "activemq1",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8161},
+				},
+				IPAddress: testIP17217049,
+				Config: config.Service{
+					Username: "console",
+					Password: testSecret,
+				},
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// Unlike ClickHouse, a lone password must NOT be taken: the image only
+			// substitutes it into users.properties when the user variable is set too, so
+			// the console is still on the factory admin/admin here. Filling it in would
+			// build credentials that can only 401, where an empty config at least leaves
+			// the operator's own glouton.conf value in place.
+			testName:    "activemq-lone-web-password-ignored",
+			containerID: "activemq2",
+			containerIP: testIP17217049,
+			cmdLine:     activeMQCmdLine,
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8161},
+			},
+			containerEnv: map[string]string{
+				"ACTIVEMQ_WEB_PASSWORD": testSecret,
+			},
+			want: Service{
+				Name:        string(ActiveMQService),
+				ServiceType: ActiveMQService,
+				ContainerID: "activemq2",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8161},
+				},
+				IPAddress:       testIP17217049,
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// A user with no password is not a credential either: the console keeps the
+			// factory password, which is not in the environment to be read.
+			testName:    "activemq-lone-web-user-ignored",
+			containerID: "activemq3",
+			containerIP: testIP17217049,
+			cmdLine:     activeMQCmdLine,
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8161},
+			},
+			containerEnv: map[string]string{
+				"ACTIVEMQ_WEB_USER": "console",
+			},
+			want: Service{
+				Name:        string(ActiveMQService),
+				ServiceType: ActiveMQService,
+				ContainerID: "activemq3",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8161},
+				},
+				IPAddress:       testIP17217049,
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// The two other credential pairs the image understands guard the broker's
+			// transports and its JMX connector. Both are complete pairs and both look
+			// plausible, but neither opens the web console, so taking either would send
+			// the wrong credentials to it.
+			testName:    "activemq-connection-and-jmx-credentials-ignored",
+			containerID: "activemq4",
+			containerIP: testIP17217049,
+			cmdLine:     activeMQCmdLine,
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8161},
+			},
+			containerEnv: map[string]string{
+				"ACTIVEMQ_CONNECTION_USER":     "broker",
+				"ACTIVEMQ_CONNECTION_PASSWORD": "brokerpass",
+				"ACTIVEMQ_JMX_USER":            "jmx",
+				"ACTIVEMQ_JMX_PASSWORD":        "jmxpass",
+			},
+			want: Service{
+				Name:        string(ActiveMQService),
+				ServiceType: ActiveMQService,
+				ContainerID: "activemq4",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8161},
+				},
+				IPAddress:       testIP17217049,
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
 				LastTimeSeen:    t0,
 			},
 		},

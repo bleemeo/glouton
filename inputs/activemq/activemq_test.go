@@ -161,16 +161,20 @@ func TestTagsDropped(t *testing.T) {
 		"size": uint64(5),
 	}, map[string]string{"name": "orders", "source": "127.0.0.1", "port": "8161"}, time.Now())
 
-	assertTags(t, store, map[string]string{"name": "orders", "item": "orders"})
+	assertTags(t, store, map[string]string{"name": "orders"})
 }
 
-// TestSubscriberItem checks a subscriber, which has no name tag, gets an item built from
-// what identifies it durably. The volatile tags must not take part in it: connection_id
-// changes on every reconnect and active flips as the client comes and goes, so an item
-// holding them would change with them. Two subscriptions of one client must still get
-// their own item, or they would collide on the same name and item and the gather would be
-// rejected as a duplicate series.
-func TestSubscriberItem(t *testing.T) {
+// TestSubscriberLabels checks a subscriber, which has no name tag, keeps as labels what
+// identifies it durably, and nothing else. The volatile tags must not be among them:
+// connection_id changes on every reconnect and active flips as the client comes and goes,
+// so keeping either would start a new series with them. Two subscriptions of one client
+// must still differ, or they would collide on the same name and label set and the gather
+// would be rejected as a duplicate series.
+//
+// None of this goes into the item, which is the service instance: for a containerised
+// broker that is its container name, and a subscriber identity glued onto it would read
+// "test-activemq_billing_orders.events_invoices".
+func TestSubscriberLabels(t *testing.T) {
 	cases := []struct {
 		name string
 		tags map[string]string
@@ -182,7 +186,7 @@ func TestSubscriberItem(t *testing.T) {
 				"client_id": "billing", "destination_name": "orders.events",
 				"subscription_name": "invoices", "connection_id": "ID:host-42-1", "active": "true",
 			},
-			want: "billing_orders.events_invoices",
+			want: "invoices",
 		},
 		{
 			name: "same client, same destination, other subscription",
@@ -190,7 +194,7 @@ func TestSubscriberItem(t *testing.T) {
 				"client_id": "billing", "destination_name": "orders.events",
 				"subscription_name": "receipts", "connection_id": "ID:host-42-2", "active": "true",
 			},
-			want: "billing_orders.events_receipts",
+			want: "receipts",
 		},
 		{
 			name: "non-durable subscriber has no subscription name",
@@ -198,7 +202,7 @@ func TestSubscriberItem(t *testing.T) {
 				"client_id": "billing", "destination_name": "orders.events",
 				"subscription_name": "", "connection_id": "ID:host-42-3", "active": "false",
 			},
-			want: "billing_orders.events",
+			want: "",
 		},
 	}
 
@@ -214,10 +218,32 @@ func TestSubscriberItem(t *testing.T) {
 
 			assertTags(t, store, map[string]string{
 				"client_id": "billing", "destination_name": "orders.events",
-				"subscription_name": tc.tags["subscription_name"], "item": tc.want,
+				"subscription_name": tc.want,
 			})
 		})
 	}
+}
+
+// TestLabelsTrimmed checks the padding ActiveMQ leaves on its names is trimmed off every
+// tag kept as a label. The plugin only trims queue names, so a padded topic or subscriber
+// would otherwise carry the padding into the series identity and read as a destination of
+// its own -- which is what the item-building code used to trim on the way past.
+func TestLabelsTrimmed(t *testing.T) {
+	store := &internal.StoreAccumulator{}
+	acc := newAccumulator(store)
+
+	acc.PrepareGather()
+	acc.AddFields("activemq_subscribers", map[string]any{
+		"pending_queue_size": uint64(2),
+	}, map[string]string{
+		"client_id": " billing ", "destination_name": "\torders.events\n",
+		"subscription_name": "invoices  ",
+	}, time.Now())
+
+	assertTags(t, store, map[string]string{
+		"client_id": "billing", "destination_name": "orders.events",
+		"subscription_name": "invoices",
+	})
 }
 
 // TestAdvisoryTopicsDropped checks the topics ActiveMQ creates for its own bookkeeping
@@ -239,5 +265,5 @@ func TestAdvisoryTopicsDropped(t *testing.T) {
 		t.Fatalf("got %d measurements, want only the non-advisory one: %#v", len(store.Measurement), store.Measurement)
 	}
 
-	assertTags(t, store, map[string]string{"name": "orders.events", "item": "orders.events"})
+	assertTags(t, store, map[string]string{"name": "orders.events"})
 }

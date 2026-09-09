@@ -36,6 +36,6 @@ type Runner interface {
 
 // New returns a Varnish input. Varnish isn't supported on Windows, telegraf's
 // own varnish plugin is a no-op stub on this platform.
-func New(_ Runner) (telegraf.Input, registry.RegistrationOption, error) {
+func New(_ Runner, _ int, _ string) (telegraf.Input, registry.RegistrationOption, error) {
 	return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
 }

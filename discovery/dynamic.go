@@ -93,6 +93,11 @@ type containerInfoProvider interface {
 
 type fileReader interface {
 	ReadFile(ctx context.Context, filename string) ([]byte, error)
+	// ReadDir returns the names of the entries of a directory, without their directory
+	// part and in no particular order. Names only, rather than the os.DirEntry that
+	// os.ReadDir returns: the implementation may have to shell out to read a directory
+	// Glouton's own user cannot, and a name is all that survives that faithfully.
+	ReadDir(ctx context.Context, dirname string) ([]string, error)
 }
 
 // NewDynamic create a new dynamic service discovery which use information from
@@ -581,6 +586,19 @@ func firstCompletePair(env map[string]string, pairsByPriority ...credentialPair)
 
 // fillConfig fills the service config with information found inside the container.
 func (dd *DynamicDiscovery) fillConfig(ctx context.Context, service *Service) {
+	if service.ServiceType == ActiveMQService {
+		if service.container != nil {
+			env := service.container.Environment()
+
+			pair := credentialPair{userKey: "ACTIVEMQ_WEB_USER", passKey: "ACTIVEMQ_WEB_PASSWORD"} //nolint:gosec
+
+			if u, p, ok := firstCompletePair(env, pair); ok {
+				service.Config.Username = u
+				service.Config.Password = p
+			}
+		}
+	}
+
 	if service.ServiceType == ClickHouseService {
 		if service.container != nil {
 			env := service.container.Environment()
@@ -601,6 +619,22 @@ func (dd *DynamicDiscovery) fillConfig(ctx context.Context, service *Service) {
 				if v, ok := firstEnv(env, "CLICKHOUSE_ADMIN_USER", "CLICKHOUSE_USER"); ok {
 					service.Config.Username = v
 				}
+			}
+		}
+	}
+
+	if service.ServiceType == InfluxDBService {
+		if service.container != nil {
+			env := service.container.Environment()
+
+			pairs := []credentialPair{
+				{userKey: "INFLUXDB_ADMIN_USER", passKey: "INFLUXDB_ADMIN_PASSWORD"}, //nolint:gosec
+				{userKey: "INFLUXDB_USER", passKey: "INFLUXDB_USER_PASSWORD"},        //nolint:gosec
+			}
+
+			if u, p, ok := firstCompletePair(env, pairs...); ok {
+				service.Config.Username = u
+				service.Config.Password = p
 			}
 		}
 	}

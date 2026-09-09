@@ -216,28 +216,31 @@ func TestGaugeNodeNameStripped(t *testing.T) {
 	}
 }
 
-// TestLabelledMetricsGetTheirOwnItem checks the series of a metric Consul labels are told
-// apart by their item. Consul reports its memberlist and serf queues once per network, and
-// its state metrics once per datacenter and kind of config entry; a service metric keeps no
-// label but the item, so without it those series would share a name and an empty label set
-// and be rejected as duplicates.
-func TestLabelledMetricsGetTheirOwnItem(t *testing.T) {
+// TestConsulLabelsAreKept checks the labels telling apart the series of one metric survive
+// as labels of their own. Consul reports its memberlist and serf queues once per network,
+// and its state metrics once per datacenter and kind of config entry, so without them those
+// series would share a name and an empty label set and be rejected as duplicates.
+//
+// They used to be joined into the item because the compatibility naming dropped everything
+// but the item; that also glued them onto the service instance, so a containerised agent
+// reported "test-consul_lan". Nothing writes the item here any more.
+func TestConsulLabelsAreKept(t *testing.T) {
 	store := &internal.StoreAccumulator{}
 	acc := newAccumulator(store)
 
 	acc.PrepareGather()
 	acc.AddCounter("consul.memberlist.gossip", map[string]any{"mean": 0.016}, map[string]string{"network": "lan"}, time.Now())
 	acc.AddCounter("consul.memberlist.gossip", map[string]any{"mean": 0.021}, map[string]string{"network": "wan"}, time.Now())
-	// Several labels: joined in a stable order, whatever order the map is walked in.
+	// Several labels, each kept on its own.
 	acc.AddGauge("consul.node1.state.config", map[string]any{"value": 3.0},
 		map[string]string{"datacenter": "dc1", "kind": "service-defaults"}, time.Now())
-	// A label Consul leaves empty adds nothing to the item.
+	// A label Consul leaves empty is kept as the empty label it is.
 	acc.AddGauge("consul.node1.version", map[string]any{"value": 1.0},
 		map[string]string{"version": "1.20.6", "pre_release": ""}, time.Now())
-	// And an unlabelled metric keeps no item, so the service instance stays its item.
+	// And an unlabelled metric gets no label at all, leaving it the service instance alone.
 	acc.AddGauge("consul.node1.autopilot.healthy", map[string]any{"value": 1.0}, nil, time.Now())
 
-	gotItems := make(map[string][]string)
+	gotLabels := make(map[string][]map[string]string)
 
 	for _, m := range store.Measurement {
 		for field := range m.Fields {
@@ -248,19 +251,23 @@ func TestLabelledMetricsGetTheirOwnItem(t *testing.T) {
 				name = m.Name + "_" + field
 			}
 
-			gotItems[name] = append(gotItems[name], m.Tags[types.LabelItem])
+			gotLabels[name] = append(gotLabels[name], m.Tags)
+
+			if item, ok := m.Tags[types.LabelItem]; ok {
+				t.Errorf("%s: item should be left to the service instance, got %q", name, item)
+			}
 		}
 	}
 
-	wantItems := map[string][]string{
-		"consul_memberlist_gossip_mean": {"lan", "wan"},
-		"consul_state_config":           {"dc1_service-defaults"},
-		"consul_version":                {"1.20.6"},
-		"consul_autopilot_healthy":      {""},
+	wantLabels := map[string][]map[string]string{
+		"consul_memberlist_gossip_mean": {{"network": "lan"}, {"network": "wan"}},
+		"consul_state_config":           {{"datacenter": "dc1", "kind": "service-defaults"}},
+		"consul_version":                {{"version": "1.20.6", "pre_release": ""}},
+		"consul_autopilot_healthy":      {{}},
 	}
 
-	if diff := cmp.Diff(wantItems, gotItems); diff != "" {
-		t.Errorf("items (-want +got):\n%s", diff)
+	if diff := cmp.Diff(wantLabels, gotLabels); diff != "" {
+		t.Errorf("labels (-want +got):\n%s", diff)
 	}
 }
 

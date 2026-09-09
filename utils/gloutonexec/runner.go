@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -53,8 +54,20 @@ func New(hostRootPath string) *Runner {
 }
 
 type Option struct {
-	RunAsRoot       bool
-	RunOnHost       bool
+	RunAsRoot bool
+	RunOnHost bool
+	// InContainerPID runs the command inside the filesystem of the container whose init
+	// process has that PID, using that container's own binaries and libraries rather than
+	// the ones next to Glouton or on the host. Set it when what has to be read only exists
+	// in a container, like the varnishstat matching a containerised Varnish.
+	//
+	// It takes precedence over RunOnHost, which asks for the opposite namespace, and
+	// unlike RunOnHost it applies to a Glouton installed on the machine too: the container
+	// is never the namespace Glouton already runs in.
+	//
+	// Reaching the container needs /proc of the machine it runs on, which for a Glouton in
+	// a container means being started with the host's PID namespace.
+	InContainerPID  int
 	SkipInContainer bool
 	CombinedOutput  bool
 	// If GraceDelay is > 0, send TERM signal when Run() context expire and wait for GraceDelay before send KILL signal.
@@ -68,8 +81,11 @@ var (
 	ErrExecutionSkipped = errors.New("execution skipped when glouton run in a container")
 )
 
-// LookPath does the same as Golang exec.LookPath, but apply RunOnHost and SkipInContainer option:
+// LookPath does the same as Golang exec.LookPath, but apply RunOnHost, InContainerPID and
+// SkipInContainer option:
 //   - When SkipInContainer is set, always said that command isn't found if Glouton run in a container
+//   - When InContainerPID is set, the command is looked up in that container's mount namespace,
+//     the same one Runner.Run() will chroot into.
 //   - When RunOnHost is set, the command isn't looked up in the container mount namespace but in the host
 //     mount namespace (using /hostroot mount point).
 //     BUT the result will NOT include the /hostroot mount point part. It will be something like "/sbin/zpool"
@@ -80,6 +96,16 @@ var (
 func (r *Runner) LookPath(file string, option Option) (string, error) {
 	if r.hostRootPath != "/" && option.SkipInContainer {
 		return "", &exec.Error{Name: file, Err: exec.ErrNotFound}
+	}
+
+	if r.hostRootPath == "" && option.InContainerPID > 0 {
+		return "", &exec.Error{Name: file, Err: exec.ErrNotFound}
+	}
+
+	// Looked up under the chroot Run() would use, and returned without that prefix, for the
+	// same reason as the hostroot case below: Run() puts it back.
+	if chrootPath := r.chrootPath(option); chrootPath != "" && option.InContainerPID > 0 {
+		return lookPathUnder(chrootPath, file)
 	}
 
 	if r.hostRootPath == "" && option.RunOnHost {
@@ -114,9 +140,40 @@ func (r *Runner) LookPath(file string, option Option) (string, error) {
 	return "", &exec.Error{Name: file, Err: exec.ErrNotFound}
 }
 
+// lookPathUnder looks a command up inside root, and returns its path relative to root so
+// that a caller chrooting into root can use it as-is.
+func lookPathUnder(root string, file string) (string, error) {
+	rootWithoutLastSlash := strings.TrimSuffix(root, string(os.PathSeparator))
+
+	if strings.Contains(file, "/") {
+		if _, err := exec.LookPath(filepath.Join(root, file)); err != nil {
+			return "", err
+		}
+
+		return file, nil
+	}
+
+	for _, dir := range filepath.SplitList(os.Getenv("PATH")) {
+		fullPath, err := exec.LookPath(filepath.Join(root, dir, file))
+		if err == nil {
+			return strings.TrimPrefix(fullPath, rootWithoutLastSlash), nil
+		}
+	}
+
+	return "", &exec.Error{Name: file, Err: exec.ErrNotFound}
+}
+
 func (r *Runner) ResolvePath(file string, option Option) (string, error) {
 	if r.hostRootPath != "/" && option.SkipInContainer {
 		return "", &exec.Error{Name: file, Err: exec.ErrNotFound}
+	}
+
+	if r.hostRootPath == "" && option.InContainerPID > 0 {
+		return "", &exec.Error{Name: file, Err: exec.ErrNotFound}
+	}
+
+	if chrootPath := r.chrootPath(option); chrootPath != "" && option.InContainerPID > 0 {
+		return filepath.Join(chrootPath, file), nil
 	}
 
 	if r.hostRootPath == "" && option.RunOnHost {
@@ -167,18 +224,49 @@ func (r *Runner) getSudoCommand() string {
 	return "sudo"
 }
 
+// chrootPath returns the directory the command has to be chrooted into, or "" to run it
+// in Glouton's own mount namespace.
+func (r *Runner) chrootPath(option Option) string {
+	if option.InContainerPID > 0 {
+		// The container's filesystem, named from wherever Glouton can read /proc: a
+		// Glouton in a container reaches it through its hostroot mount, one installed on
+		// the machine reads /proc directly.
+		//
+		// An unset hostroot is neither of those -- it means Glouton cannot tell where the
+		// machine's filesystem is -- so no directory is named for it and the callers turn
+		// that into ErrUnknownHostroot rather than reading Glouton's own /proc.
+		if r.hostRootPath == "" {
+			return ""
+		}
+
+		procRoot := filepath.Join("/proc", strconv.Itoa(option.InContainerPID), "root")
+
+		if r.hostRootPath != "/" {
+			return filepath.Join(r.hostRootPath, procRoot)
+		}
+
+		return procRoot
+	}
+
+	if r.hostRootPath != "/" && option.RunOnHost {
+		return r.hostRootPath
+	}
+
+	return ""
+}
+
 func (r *Runner) makeCmd(ctx context.Context, option Option, name string, arg ...string) (*exec.Cmd, func(error) error, error) {
 	if r.hostRootPath != "/" && option.SkipInContainer {
 		return nil, nil, ErrExecutionSkipped
 	}
 
-	if r.hostRootPath == "" && option.RunOnHost {
+	if r.hostRootPath == "" && (option.RunOnHost || option.InContainerPID > 0) {
 		return nil, nil, ErrUnknownHostroot
 	}
 
-	if r.hostRootPath != "/" && option.RunOnHost {
-		// chroot is needed to run the command on host mount namespace
-		arg = append([]string{r.hostRootPath, name}, arg...)
+	if chrootPath := r.chrootPath(option); chrootPath != "" {
+		// chroot is needed to run the command in another mount namespace than Glouton's
+		arg = append([]string{chrootPath, name}, arg...)
 		name = "chroot"
 	}
 

@@ -17,6 +17,7 @@
 package discovery
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -24,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -93,6 +95,21 @@ const (
 	dovecotDefaultStatsPort = 24242
 	// postfixSpoolDirectory is where Postfix keeps its queues.
 	postfixSpoolDirectory = "/var/spool/postfix"
+	// varnishStateDirectory is where varnishd keeps one working directory per instance,
+	// the directory varnishstat's "-n" names.
+	varnishStateDirectory = "/var/lib/varnish"
+	// varnishPIDFile is the file varnishd writes in its working directory. Its presence is
+	// what tells a live instance from a leftover directory, and from the state directory
+	// holding them: the official Varnish image ships an empty directory named after the
+	// host that built it, so they cannot just be taken in order.
+	varnishPIDFile = "_.pid"
+	// varnishInstanceDirTimeout bounds looking for that directory. It is short because
+	// nothing is waiting on it: failing to find the instance only means no input for this
+	// Varnish, the same as before it was looked for at all.
+	varnishInstanceDirTimeout = 10 * time.Second
+	// varnishStatBinary is where telegraf's varnish plugin runs varnishstat from, and so
+	// the only place a container can carry one this input is able to use.
+	varnishStatBinary = "/usr/bin/varnishstat"
 	// chronySocket is the control socket chronyd listens on, and the one telegraf's chrony
 	// plugin tries first. It is used to recognize a chrony host, see isChronyDaemon.
 	chronySocket = "/run/chrony/chronyd.sock"
@@ -264,6 +281,16 @@ func (d *Discovery) configureMetricInputs(oldServices, services map[NameInstance
 	return err.MaybeUnwrap()
 }
 
+// containerPID is the PID of the service's container, or 0 when it has none. Nil-safe so
+// that it can be compared for any service.
+func containerPID(service Service) int {
+	if service.container == nil {
+		return 0
+	}
+
+	return service.container.PID()
+}
+
 func serviceNeedUpdate(oldService, service Service, oldServiceState facts.ContainerState, serviceState facts.ContainerState) bool {
 	switch {
 	case oldService.Name != service.Name,
@@ -276,7 +303,8 @@ func serviceNeedUpdate(oldService, service Service, oldServiceState facts.Contai
 		oldService.Active != service.Active,
 		oldService.CheckIgnored != service.CheckIgnored,
 		oldService.MetricsIgnored != service.MetricsIgnored,
-		oldServiceState != serviceState:
+		oldServiceState != serviceState,
+		containerPID(oldService) != containerPID(service):
 		return true
 	case !reflect.DeepEqual(oldService.Config, service.Config):
 		return true
@@ -333,6 +361,13 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 	switch service.ServiceType { //nolint:exhaustive
 	case ActiveMQService:
 		if url, username, password := activeMQURL(service); url != "" {
+			// One point per queue, topic and subscriber, all sharing their metric name, so
+			// what identifies a destination has to be a label of its own -- the
+			// compatibility naming keeps only the item and would collapse them onto one
+			// series. The item stays the service instance instead of being glued to a
+			// destination name; see the renameGlobal of inputs/activemq.
+			gathererOptions.CompatibilityNameItem = false
+
 			input, err = activemq.New(url, username, password)
 		}
 	case ApacheService:
@@ -359,6 +394,11 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			input, err = clickhouse.New(url, service.Config.Username, service.Config.Password)
 		}
 	case ConsulService:
+		// Some Consul metrics come as one series per label set, so those labels have to be
+		// kept rather than reduced to the item -- see the renameGlobal of inputs/consul for
+		// which ones and why they are safe to keep.
+		gathererOptions.CompatibilityNameItem = false
+
 		if service.Config.StatsURL != "" {
 			input, err = consul.New(service.Config.StatsURL, service.Config.Password)
 		} else if ip, port := service.AddressPort(); ip != "" {
@@ -382,6 +422,12 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 	case InfluxDBService:
 		// "/debug/vars" only exists on InfluxDB 1.x. InfluxDB 2.x exposes its metrics in
 		// the Prometheus format on "/metrics", which this input can't read.
+		//
+		// The storage-engine measurements come once per shard, all sharing their metric
+		// name, so what identifies a shard has to be kept as labels rather than joined
+		// into the item; see the renameGlobal of inputs/influxdb.
+		gathererOptions.CompatibilityNameItem = false
+
 		if service.Config.StatsURL != "" {
 			input, err = influxdb.New(service.Config.StatsURL, service.Config.Username, service.Config.Password)
 		} else if ip, port := service.AddressPort(); ip != "" {
@@ -481,16 +527,23 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		}
 	case PostfixService:
 		// This only adds the per-queue metrics: the total number of mails waiting
-		// (postfix_queue_size) is gathered on its own from "postqueue -p", which works
-		// without any extra permission (see agent.postfixQueueSize).
+		// (postfix_queue_size) is gathered on its own from "postqueue -p", which already
+		// reaches a container through the runtime's exec (see agent.postfixQueueSize).
 		//
-		// The input walks the spool directory of the machine Glouton runs on, the same
-		// same-host requirement as Varnish and NTP: a Postfix in another container is
-		// reported with the queues of the local one. The probe is what decides whether
-		// there is anything to read at all -- on a machine with no Postfix of its own,
-		// there is no spool directory and no input is created.
-		if postfixQueuesReadable(postfixSpoolDirectory) {
-			input, err = postfix.New(postfixSpoolDirectory)
+		// The input walks a spool directory instead of running a command, so unlike
+		// Varnish there is no namespace to enter -- see postfixSpool for how a
+		// containerised Postfix is read. The probe there is what decides whether there is
+		// anything to read at all: a machine with no Postfix of its own has no spool
+		// directory, and no input is created.
+		if spoolDirectory, ok := postfixSpool(service); ok {
+			// One point per queue, all sharing their metric name, so the queue has to be a
+			// label of its own: the compatibility naming keeps only the item, which would
+			// collapse the five queues onto one series. The item stays the service
+			// instance -- for a container its name, set by modify.AddInstance -- instead
+			// of being glued to the queue.
+			gathererOptions.CompatibilityNameItem = false
+
+			input, err = postfix.New(spoolDirectory)
 		}
 	case PostgreSQLService:
 		if ip, port := service.AddressPort(); ip != "" && service.Config.Password != "" {
@@ -557,6 +610,11 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		// is no factory account to fall back on -- a password alone could only ever 401.
 		hasCredentials := service.Config.Username != "" && service.Config.Password != ""
 
+		// One point per connector and per memory pool, all sharing their metric name, so
+		// the "name" telling them apart has to be a label of its own rather than the item,
+		// which is the service instance; see the renameGlobal of inputs/tomcat.
+		gathererOptions.CompatibilityNameItem = false
+
 		if service.Config.StatsURL != "" && hasCredentials {
 			input, err = tomcat.New(service.Config.StatsURL, service.Config.Username, service.Config.Password)
 		} else if ip, port := service.AddressPort(); ip != "" && hasCredentials {
@@ -587,12 +645,16 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			input, gathererOptions, err = uwsgi.New(url)
 		}
 	case VarnishService:
-		// The input runs "varnishstat" through the command runner, which for a Glouton in
-		// a container means the host's binary in the host's namespace -- the agent image
-		// has none. What it reads there is still the Varnish of that namespace whatever
-		// service this is: a Varnish in another container is reported with the host's
-		// numbers, or fails to gather when the host runs none.
-		input, gathererOptions, err = varnish.New(d.commandRunner)
+		// The input runs "varnishstat" through the command runner, since the agent image
+		// carries none. varnishTarget decides whose binary that is and which instance it
+		// reads -- see it for why a containerised Varnish needs both answered.
+		//
+		// Not being able to read it means no input, rather than an input reporting the
+		// wrong Varnish: that is what a gather aimed at the machine's namespace would do
+		// for a containerised service, and it would do it under the container's name.
+		if containerPID, instanceDir, ok := d.varnishTarget(service); ok {
+			input, gathererOptions, err = varnish.New(d.commandRunner, containerPID, instanceDir)
+		}
 	case VaultService:
 		if service.Config.StatsURL != "" {
 			input, err = vault.New(service.Config.StatsURL, service.Config.Password)
@@ -891,8 +953,84 @@ func dovecotStatsServer(service Service) string {
 	return net.JoinHostPort(ip, strconv.Itoa(port))
 }
 
-// postfixQueuesReadable tells whether every Postfix queue can be read in the given
-// spool directory.
+// postfixSpool returns the Postfix spool directory to walk for a service, and whether
+// every queue in it can actually be read.
+//
+// A containerised Postfix is read through its own spool, named with /proc. The input opens
+// files rather than running a command, so unlike Varnish nothing has to be executed in the
+// container's namespace -- the path only has to be one Glouton can open itself, which
+// /proc/<pid>/root is given the host PID namespace the agent already runs with.
+//
+// Anything else keeps the machine's own spool, which is all this could mean before. Note
+// that for a Glouton in a container that is the agent's own filesystem, which holds no
+// Postfix: reading the *host's* queues from a containerised agent would need its spool
+// mounted into the agent, and is not something this can do.
+func postfixSpool(service Service) (string, bool) {
+	directory, ok := postfixSpoolPath(service)
+	if !ok {
+		// A container between states has no PID, so there is no /proc entry to walk. The
+		// next discovery run sees it again.
+		logger.V(1).Printf(
+			"Not gathering the Postfix queues of %s: its runtime reports no PID for the container",
+			service.Instance,
+		)
+
+		return "", false
+	}
+
+	if err := postfixQueuesUnreadable(directory); err != nil {
+		// Logged because the reasons to end up here look the same from the outside -- no
+		// Postfix there, or a spool Glouton isn't allowed to read -- and only some of them
+		// are worth doing something about.
+		//
+		// The setfacl hint is only given for a Postfix on the machine, where the queues
+		// are the ones its own documentation is about. It is not that a container needs no
+		// permission: this is a plain filesystem read by whatever user Glouton runs as,
+		// and reading /proc/<pid>/root of another user's process needs privilege of its
+		// own -- see the note on packaged installs in postfixSpoolPath.
+		if service.container == nil {
+			logger.V(1).Printf(
+				"Not gathering the Postfix queues: %v. Read access has to be granted to the "+
+					"user running Glouton, e.g. setfacl -Rm g:glouton:rX %s",
+				err, directory,
+			)
+		} else {
+			logger.V(1).Printf("Not gathering the Postfix queues of %s: %v", service.Instance, err)
+		}
+
+		return "", false
+	}
+
+	return directory, true
+}
+
+// postfixSpoolPath names the spool directory of a service without reading anything, and
+// says whether it could be named at all -- which only fails for a container the runtime
+// reports no PID for.
+//
+// Two things the container form depends on, both deliberately left as they are because the
+// input walks that directory itself with no way to route the read through anything:
+//   - the host's PID namespace, since the path is not prefixed with the hostroot. Without
+//     it a containerised Glouton reads its own /proc and finds no Postfix, which is what
+//     it did before containers were handled at all.
+//   - enough privilege to read /proc/<pid>/root of the container's process. A Glouton
+//     running as root has it; a packaged one running as the glouton user does not, so
+//     there the per-queue metrics stay unavailable for a containerised Postfix.
+func postfixSpoolPath(service Service) (string, bool) {
+	if service.container == nil {
+		return postfixSpoolDirectory, true
+	}
+
+	pid := service.container.PID()
+	if pid == 0 {
+		return "", false
+	}
+
+	return containerRootPath(pid, postfixSpoolDirectory), true
+}
+
+// postfixQueuesUnreadable returns the error of the first queue that cannot be read in the
+// given spool directory, or nil when all of them can.
 //
 // The queues are only readable by the postfix user on a default install, while Glouton
 // runs as its own user: read access has to be granted first (see the permissions
@@ -900,27 +1038,156 @@ func dovecotStatsServer(service Service) string {
 // errors. Like the unix socket of getMetricsSocket, this is checked once when the
 // input is created, so granting the access later is only picked up when the service
 // changes or when Glouton restarts.
-func postfixQueuesReadable(spoolDirectory string) bool {
+func postfixQueuesUnreadable(spoolDirectory string) error {
 	for _, queue := range postfixQueues {
 		f, err := os.Open(filepath.Join(spoolDirectory, queue))
 		if err != nil {
-			// Logged because the two reasons to end up here look the same from the outside
-			// -- no Postfix on this machine, or a spool Glouton isn't allowed to read -- and
-			// only one of them is worth doing something about.
-			logger.V(1).Printf(
-				"Not gathering the Postfix queues: %v. Read access has to be granted to the "+
-					"user running Glouton, e.g. setfacl -Rm g:glouton:rX %s",
-				err, spoolDirectory,
-			)
-
-			return false
+			return err
 		}
 
 		// Only opening the queue matters here, so closing it can't fail in a way we care about.
 		_ = f.Close()
 	}
 
-	return true
+	return nil
+}
+
+// varnishTarget decides how a Varnish service is read: which container's varnishstat to
+// run, which instance to ask it for, and whether it can be read at all.
+//
+// Preferred is the container's own varnishstat, which needs nothing installed on the
+// machine and is always the version matching the daemon -- and inside that container's
+// filesystem varnishd's default working directory is the right one, so no "-n" is needed.
+// A container without one falls back to the machine's binary aimed at the container's
+// working directory through /proc, which is all that can be done when the image carries
+// only the daemon.
+//
+// Both zero with ok=true is a Varnish installed on the machine, read exactly as it was
+// before either of these existed.
+func (d *Discovery) varnishTarget(service Service) (containerPID int, instanceDir string, ok bool) {
+	if service.container == nil {
+		return 0, "", true
+	}
+
+	pid := service.container.PID()
+	if pid == 0 {
+		// A container between states has no PID, so there is nothing to look through yet.
+		// The next discovery run sees it again.
+		logger.V(1).Printf("Not gathering Varnish of %s: its runtime reports no PID for the container", service.Instance)
+
+		return 0, "", false
+	}
+
+	// Located before choosing between the two, and passed on both: relying on
+	// varnishstat's own default instead would depend on the image happening to leave it
+	// alone. An image that starts varnishd with its own "-n" -- pointing at the state
+	// directory itself, as some do -- would gather nothing, and finding that out only
+	// after picking the container's binary would skip the very fallback meant to cover it.
+	inContainer, found := d.varnishInstanceDir(service)
+	if !found {
+		return 0, "", false
+	}
+
+	if d.containerHasVarnishStat(service) {
+		// varnishstat runs chrooted into the container, so the directory has to be named
+		// from inside it. The /proc form used to find it does not resolve there.
+		return pid, inContainer, true
+	}
+
+	// The machine's binary stays in its own namespace and reaches the container's
+	// directory through /proc.
+	return 0, containerRootPath(pid, inContainer), true
+}
+
+// containerHasVarnishStat tells whether a container carries the varnishstat this input
+// would run. Checked rather than assumed because an image may well ship only varnishd,
+// and a chroot into it would then fail every gather with a command not found.
+func (d *Discovery) containerHasVarnishStat(service Service) bool {
+	if d.fileReader == nil || service.container.PID() == 0 {
+		return false
+	}
+
+	inContainer := containerRootPath(service.container.PID(), filepath.Dir(varnishStatBinary))
+
+	ctx, cancel := context.WithTimeout(context.Background(), varnishInstanceDirTimeout)
+	defer cancel()
+
+	names, err := d.fileReader.ReadDir(ctx, inContainer)
+	if err != nil {
+		logger.V(2).Printf("Varnish of %s: can't list %s: %v", service.Instance, inContainer, err)
+
+		return false
+	}
+
+	return slices.Contains(names, filepath.Base(varnishStatBinary))
+}
+
+// containerRootPath names a path inside a container's filesystem as seen from the machine
+// the container runs on. Both the fileReader and varnishstat resolve it, each in its own
+// mount namespace, so it is built the same way for both.
+func containerRootPath(pid int, path string) string {
+	return filepath.Join(fmt.Sprintf("/proc/%d/root", pid), path)
+}
+
+// varnishInstanceDir returns the working directory of the Varnish instance running in a
+// service's container, named as the container itself sees it, and whether one was found.
+//
+// The caller composes the two forms that path is needed in: as-is for a varnishstat
+// chrooted into the container, and through containerRootPath for one staying in the
+// machine's namespace. Only the second resolves outside the container, which is also the
+// form this looks through.
+//
+// The directory is recognised by the _.pid varnishd writes in it rather than by its name,
+// because the name is not something to rely on: the current default is the fixed
+// <state directory>/varnishd, older releases used the host name, and an image is free to
+// start varnishd with a "-n" of its own -- including the state directory itself, which is
+// why the state directory is a candidate before its subdirectories.
+//
+// found=false means no instance is running there and no input should be created. That is
+// better than gathering the machine's Varnish under the container's name, and the very
+// same numbers again for every other Varnish container.
+func (d *Discovery) varnishInstanceDir(service Service) (dir string, found bool) {
+	if d.fileReader == nil {
+		return "", false
+	}
+
+	pid := service.container.PID()
+
+	ctx, cancel := context.WithTimeout(context.Background(), varnishInstanceDirTimeout)
+	defer cancel()
+
+	holdsInstance := func(candidate string) bool {
+		_, err := d.fileReader.ReadFile(ctx, filepath.Join(containerRootPath(pid, candidate), varnishPIDFile))
+
+		return err == nil
+	}
+
+	if holdsInstance(varnishStateDirectory) {
+		return varnishStateDirectory, true
+	}
+
+	base := containerRootPath(pid, varnishStateDirectory)
+
+	names, err := d.fileReader.ReadDir(ctx, base)
+	if err != nil {
+		logger.V(1).Printf("Not gathering Varnish of %s: can't list %s: %v", service.Instance, base, err)
+
+		return "", false
+	}
+
+	for _, name := range names {
+		if candidate := filepath.Join(varnishStateDirectory, name); holdsInstance(candidate) {
+			return candidate, true
+		}
+	}
+
+	logger.V(1).Printf(
+		"Not gathering Varnish of %s: neither %s nor any of the %d entries in it holds a %s, "+
+			"so no instance is running there",
+		service.Instance, varnishStateDirectory, len(names), varnishPIDFile,
+	)
+
+	return "", false
 }
 
 // isChronyDaemon tells whether the NTP service found is chronyd rather than ntpd, the

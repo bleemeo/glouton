@@ -21,7 +21,6 @@ import (
 
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
-	"github.com/bleemeo/glouton/types"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -89,30 +88,33 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 	// The URL we queried is redundant with the labels already set on service metrics.
 	delete(gatherContext.Tags, "url")
 
-	// The item is what tells apart the series of one measurement: without it they would all
-	// end up on the same metric.
-	if item := internal.JoinNonEmptyTags(gatherContext.Tags, itemTags); item != "" {
-		gatherContext.Tags[types.LabelItem] = item
-	}
+	// What identifies a series is kept as labels of its own -- database,
+	// retentionPolicy, measurement and id -- rather than joined into the item.
+	//
+	// The database alone isn't enough: the storage-engine measurements (influxdb_shard,
+	// influxdb_tsm1_cache, _engine, _filestore, _wal) are reported once per shard and
+	// influxdb_measurement once per measurement, all of them repeating the same database.
+	// A real 1.8 instance with only its own _internal database already reports 7 shards,
+	// so 7 series of each would land on the same name and be rejected as duplicates, the
+	// way rabbitmq_consumers is. The retention policy and shard id are what separate them.
+	//
+	// Keeping them needs CompatibilityNameItem to be off for this service, since the
+	// compatibility naming keeps only the item and would drop all four; see the InfluxDB
+	// case of Discovery.createInput. The item is then left to the service instance, which
+	// for a containerised InfluxDB is its container name, instead of being glued to a
+	// shard id.
+	//
+	// The four below describe a shard rather than identify one, so they are dropped
+	// instead of becoming labels: engine and indexType hold the same value on every shard
+	// of an instance, and path and walPath would put the filesystem layout into a label
+	// for something the id already identifies.
+	delete(gatherContext.Tags, "engine")
+	delete(gatherContext.Tags, "indexType")
+	delete(gatherContext.Tags, "path")
+	delete(gatherContext.Tags, "walPath")
 
 	return gatherContext, false
 }
-
-// itemTags are the tags identifying a series, in the order they are joined into the item.
-//
-// The database alone isn't enough: the storage-engine measurements (influxdb_shard,
-// influxdb_tsm1_cache, _engine, _filestore, _wal) are reported once per shard and
-// influxdb_measurement once per measurement, all of them repeating the same database. A real
-// 1.8 instance with only its own _internal database already reports 7 shards, so 7 series of
-// each would land on the same name and item and be rejected as duplicates, the way
-// rabbitmq_consumers is. The retention policy and shard id are what separate them.
-//
-// The remaining tags are deliberately left out of the item: engine and indexType are the same
-// on every shard of an instance, and path and walPath are filesystem paths that would make an
-// unreadable item out of what the id already identifies.
-//
-//nolint:gochecknoglobals
-var itemTags = []string{"database", "retentionPolicy", "measurement", "id"}
 
 func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {
 	if currentContext.Measurement != "influxdb_httpd" {

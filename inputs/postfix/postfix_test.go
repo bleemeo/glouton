@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/types"
 )
 
 // collectFinalMetrics replicates the measurement/field -> final metric name
@@ -131,15 +132,17 @@ func TestEmptyQueue(t *testing.T) {
 	})
 }
 
-// TestItemIsTheQueue checks each queue gets its own item: the metrics of the five
-// queues share their name, so without it they would all end up on the same metric.
-func TestItemIsTheQueue(t *testing.T) {
+// TestQueueIsItsOwnLabel checks the queue stays a label of its own and is not written
+// into the item.
+//
+// The five queues share their metric names, so something has to tell them apart. Using
+// the item for it looks like the obvious answer and is wrong: the item is the service
+// instance, and modify.AddInstance glues the two together, so a containerised Postfix
+// ended up reporting item="test-postfix_deferred" instead of the container name with a
+// queue label beside it.
+func TestQueueIsItsOwnLabel(t *testing.T) {
 	store := &internal.StoreAccumulator{}
-	acc := internal.Accumulator{
-		RenameGlobal:  renameGlobal,
-		RenameMetrics: renameMetrics,
-		Accumulator:   store,
-	}
+	acc := newAccumulator(store)
 
 	acc.PrepareGather()
 
@@ -149,13 +152,17 @@ func TestItemIsTheQueue(t *testing.T) {
 		}, map[string]string{"queue": queue}, time.Now())
 	}
 
-	items := make(map[string]bool)
+	queues := make(map[string]bool)
 
 	for _, m := range store.Measurement {
-		items[m.Tags["item"]] = true
+		queues[m.Tags["queue"]] = true
+
+		if item, ok := m.Tags[types.LabelItem]; ok {
+			t.Errorf("item should be left to the service instance, got %q", item)
+		}
 	}
 
-	if !items["active"] || !items["deferred"] {
-		t.Errorf("items = %v, want one per queue", items)
+	if !queues["active"] || !queues["deferred"] {
+		t.Errorf("queue labels = %v, want one per queue", queues)
 	}
 }

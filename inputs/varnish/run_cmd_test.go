@@ -66,7 +66,7 @@ func TestPluginKeepsItsRunnerFields(t *testing.T) {
 		t.Fatalf("telegraf's varnish plugin is a %T", input())
 	}
 
-	if err := useGloutonRunner(varnishInput, &fakeRunner{}); err != nil { //nolint:exhaustruct
+	if err := useGloutonRunner(varnishInput, &fakeRunner{}, 0); err != nil { //nolint:exhaustruct
 		t.Errorf("useGloutonRunner() = %v\n"+
 			"Telegraf's varnish plugin changed: find what replaced %v in its Varnish struct "+
 			"(plugins/inputs/varnish/varnish.go) and update runnerFields, or varnishstat will "+
@@ -83,7 +83,7 @@ func TestNewUsesTheCommandRunner(t *testing.T) {
 		output: []byte("MAIN.cache_hit    1000    1.00 Cache hits\nMAIN.uptime    3600    1.00 Uptime\n"),
 	}
 
-	input, _, err := New(runner)
+	input, _, err := New(runner, 0, "")
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -131,6 +131,79 @@ func TestNewUsesTheCommandRunner(t *testing.T) {
 	}
 }
 
+// TestNewPassesTheInstanceDirectory checks the instance directory reaches varnishstat as
+// "-n". Without it varnishstat reads the Varnish of the namespace it runs in, which for a
+// containerised service is the host's -- the wrong numbers rather than none, which is why
+// this is worth pinning.
+//
+// The resulting command line is "varnishstat -1 -n <dir>", which the packaged sudoers
+// rule allows through its "varnishstat -1 *" pattern (packaging/common/glouton.sudoers).
+func TestNewPassesTheInstanceDirectory(t *testing.T) {
+	const instanceDir = "/proc/4242/root/var/lib/varnish/varnishd"
+
+	runner := &fakeRunner{ //nolint:exhaustruct
+		output: []byte("MAIN.cache_hit    1000    1.00 Cache hits\n"),
+	}
+
+	input, _, err := New(runner, 0, instanceDir)
+	if err != nil {
+		t.Fatalf("New() = %v", err)
+	}
+
+	gatherErr := input.Gather(&internal.StoreAccumulator{})
+
+	if len(runner.calls) == 0 {
+		t.Fatalf("the gather did not go through Glouton's command runner (Gather() = %v)", gatherErr)
+	}
+
+	if !cmp.Equal(runner.calls[0].args, []string{"-1", "-n", instanceDir}) {
+		t.Errorf("ran with %v, want [-1 -n %s]", runner.calls[0].args, instanceDir)
+	}
+}
+
+// TestNewRunsTheContainersVarnishStat checks the container's own varnishstat is what gets
+// run, which is the only way to read a containerised Varnish on a machine that has no
+// Varnish installed -- the common case, and where this input used to fail every gather
+// with "chroot: failed to run command '/usr/bin/varnishstat': No such file or directory".
+//
+// No "-n" goes with it on purpose: inside that container's filesystem varnishd's default
+// working directory is already the right one.
+func TestNewRunsTheContainersVarnishStat(t *testing.T) {
+	const containerPID = 4242
+
+	runner := &fakeRunner{ //nolint:exhaustruct
+		output: []byte("MAIN.cache_hit    1000    1.00 Cache hits\n"),
+	}
+
+	input, _, err := New(runner, containerPID, "")
+	if err != nil {
+		t.Fatalf("New() = %v", err)
+	}
+
+	gatherErr := input.Gather(&internal.StoreAccumulator{})
+
+	if len(runner.calls) == 0 {
+		t.Fatalf("the gather did not go through Glouton's command runner (Gather() = %v)", gatherErr)
+	}
+
+	call := runner.calls[0]
+
+	if call.option.InContainerPID != containerPID {
+		t.Errorf("InContainerPID = %d, want %d: the container's varnishstat won't be used",
+			call.option.InContainerPID, containerPID)
+	}
+
+	// The two ask for opposite namespaces, so wanting the container's filesystem means
+	// not wanting the host's.
+	if call.option.RunOnHost {
+		t.Error("RunOnHost is set alongside InContainerPID, which asks for two namespaces at once")
+	}
+
+	if !cmp.Equal(call.args, []string{"-1"}) {
+		t.Errorf("ran with %v, want [-1]: no -n is needed inside the container", call.args)
+	}
+}
+
 var errCommandNotFound = errors.New("exec: varnishstat: not found")
 
 // TestNewSurvivesARunnerError checks a failing varnishstat is reported as a gather error
@@ -138,7 +211,7 @@ var errCommandNotFound = errors.New("exec: varnishstat: not found")
 func TestNewSurvivesARunnerError(t *testing.T) {
 	runner := &fakeRunner{err: errCommandNotFound} //nolint:exhaustruct
 
-	input, _, err := New(runner)
+	input, _, err := New(runner, 0, "")
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}

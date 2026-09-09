@@ -712,10 +712,10 @@ func TestNTPDAddress(t *testing.T) {
 	}
 }
 
-// TestPostfixQueuesReadable checks the permission probe done before creating the
+// TestPostfixQueuesUnreadable checks the permission probe done before creating the
 // Postfix input: on a default install the spool directory is only readable by the
 // postfix user, and the input would only report errors.
-func TestPostfixQueuesReadable(t *testing.T) {
+func TestPostfixQueuesUnreadable(t *testing.T) {
 	newSpool := func(t *testing.T, queues []string) string {
 		t.Helper()
 
@@ -731,20 +731,20 @@ func TestPostfixQueuesReadable(t *testing.T) {
 	}
 
 	t.Run("every queue readable", func(t *testing.T) {
-		if !postfixQueuesReadable(newSpool(t, postfixQueues)) {
-			t.Error("postfixQueuesReadable() = false, want true")
+		if err := postfixQueuesUnreadable(newSpool(t, postfixQueues)); err != nil {
+			t.Errorf("postfixQueuesUnreadable() = %v, want nil", err)
 		}
 	})
 
 	t.Run("one queue missing", func(t *testing.T) {
-		if postfixQueuesReadable(newSpool(t, postfixQueues[1:])) {
-			t.Error("postfixQueuesReadable() = true, want false")
+		if err := postfixQueuesUnreadable(newSpool(t, postfixQueues[1:])); err == nil {
+			t.Error("postfixQueuesUnreadable() = nil, want an error")
 		}
 	})
 
 	t.Run("spool directory doesn't exist", func(t *testing.T) {
-		if postfixQueuesReadable(filepath.Join(t.TempDir(), "nonexistent")) {
-			t.Error("postfixQueuesReadable() = true, want false")
+		if err := postfixQueuesUnreadable(filepath.Join(t.TempDir(), "nonexistent")); err == nil {
+			t.Error("postfixQueuesUnreadable() = nil, want an error")
 		}
 	})
 
@@ -761,8 +761,8 @@ func TestPostfixQueuesReadable(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if postfixQueuesReadable(spool) {
-			t.Error("postfixQueuesReadable() = true, want false")
+		if err := postfixQueuesUnreadable(spool); err == nil {
+			t.Error("postfixQueuesUnreadable() = nil, want an error")
 		}
 	})
 }

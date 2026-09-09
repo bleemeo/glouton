@@ -19,7 +19,6 @@ package tomcat
 import (
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
-	"github.com/bleemeo/glouton/types"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -67,11 +66,14 @@ func New(url string, username string, password string) (i telegraf.Input, err er
 func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
 	delete(gatherContext.Tags, "source")
 
-	// The item is what tells the connectors and the memory pools apart: without it all
-	// of them would end up on the same metric.
-	if name := gatherContext.Tags["name"]; name != "" {
-		gatherContext.Tags[types.LabelItem] = name
-	}
+	// "name" is what tells the connectors and the memory pools apart, and it is kept as a
+	// label of its own rather than written into the item: the item is the service
+	// instance, so a containerised Tomcat would otherwise report the two glued together
+	// as "test-tomcat_http-nio-8080".
+	//
+	// Keeping it needs CompatibilityNameItem to be off for this service, since the
+	// compatibility naming keeps only the item and would drop it; see the Tomcat case of
+	// Discovery.createInput.
 
 	return gatherContext, false
 }

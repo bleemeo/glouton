@@ -162,5 +162,7 @@ func TestRenamePipelineConnector(t *testing.T) {
 
 	// The status URL is redundant with the labels already set on service metrics,
 	// while "name" tells which connector this is.
-	assertTags(t, store, map[string]string{"name": "http-nio-8080", "item": "http-nio-8080"})
+	// It is not written into the item too: the item is the service instance, so a
+	// containerised Tomcat would report the two glued as "test-tomcat_http-nio-8080".
+	assertTags(t, store, map[string]string{"name": "http-nio-8080"})
 }
