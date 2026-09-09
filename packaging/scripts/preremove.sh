@@ -15,17 +15,18 @@ case "$1" in
     remove)
 	test -e /lib/init/upstart-job && stop glouton
         # Stop every unit we ship and disable none of them, which is all a
-        # debhelper-generated prerm does here. `systemctl disable` used to run on this
-        # path: it deletes the enable symlink behind deb-systemd-helper's back, so its
-        # state file keeps listing a link that no longer exists, was-enabled reports the
-        # unit as disabled from then on, and the next install skips both the enable and
-        # the restart. postrm's `deb-systemd-helper purge` does the disabling instead,
-        # which is what keeps the symlinks and the state file in sync.
+        # debhelper-generated prerm does here. Remove keeps the enable state so that a
+        # reinstall restores whatever the admin chose, and disabling is postrm's job on
+        # purge, where `deb-systemd-helper purge` drops the symlinks and the state file
+        # listing them together. A `systemctl disable` here would delete the symlink behind
+        # deb-systemd-helper's back, leaving the state file pointing at a link that no longer
+        # exists: was-enabled then reports the unit as disabled and the next install skips
+        # both the enable and the restart.
         #
         # deb-systemd-invoke rather than systemctl, because it honours policy-rc.d; the
         # guards are debhelper's, and match on systemd actually running rather than on the
-        # systemctl binary merely existing. The timer needs stopping too, or dpkg pulls its
-        # unit file out from under a running unit and systemd reports it as failed.
+        # systemctl binary merely existing. The timer is stopped too, so dpkg does not pull
+        # its unit file out from under a running unit and leave systemd reporting it failed.
         if [ -z "${DPKG_ROOT:-}" ] && [ -d /run/systemd/system ]; then
             deb-systemd-invoke stop glouton.service glouton-auto-upgrade.timer >/dev/null || true
         fi

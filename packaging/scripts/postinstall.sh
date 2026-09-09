@@ -152,7 +152,15 @@ if [ "$1" = "configure" ] ; then
         systemctl daemon-reload
 
         if deb-systemd-helper --quiet was-enabled 'glouton.service'; then
+            # enable creates the symlinks and records them in the state file itself.
             deb-systemd-helper enable 'glouton.service' >/dev/null || true
+        else
+            # The unit is disabled, so enable is skipped and nothing refreshes the state
+            # file. update-state rewrites it from the current [Install] section, so purge
+            # removes the symlinks this version of the unit owns rather than the ones some
+            # earlier version did. It creates no symlink, so the unit stays disabled and
+            # was-enabled still reports false below.
+            deb-systemd-helper update-state 'glouton.service' >/dev/null || true
         fi
 
         if deb-systemd-helper --quiet was-enabled glouton.service; then
@@ -160,11 +168,11 @@ if [ "$1" = "configure" ] ; then
         fi
 
         # The auto-upgrade timer is enabled by the get.bleemeo.com installer with a plain
-        # `systemctl enable`, so deb-systemd-helper never records it and postrm has nothing
-        # to clean up on purge: the symlink outlives the unit file and systemd then reports
-        # the timer as not-found and failed. Record the links it would own so that purge
-        # removes them. update-state only rewrites the state file; unlike enable it never
-        # creates a symlink, so this does not turn auto-upgrade on for anyone.
+        # `systemctl enable`, which records nothing in deb-systemd-helper. update-state
+        # writes the state file for it, listing the symlinks the timer's [Install] section
+        # owns, which is what lets postrm remove them on purge rather than leave systemd with
+        # a link to a deleted unit file. Unlike enable, update-state never creates a symlink,
+        # so the timer stays off wherever it is off.
         deb-systemd-helper update-state 'glouton-auto-upgrade.timer' >/dev/null || true
     fi
 
