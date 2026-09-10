@@ -488,8 +488,26 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			// before the cluster loses quorum: 0 means the next failure breaks it.
 			"consul_autopilot_failure_tolerance",
 			"consul_autopilot_healthy",
+			// The RPC volume Consul itself reports as a per-second rate, so it needs no
+			// differentiating. rpc_request counts what the servers were asked, client_rpc
+			// what the agent's own client layer asked of them.
+			"consul_client_rpc_rate",
+			// The end-to-end latency of a KV write.
+			"consul_kvs_apply_mean_seconds",
+			// How large the cluster is, and whether this agent leads it. isLeader is 1 on
+			// exactly one server of a healthy cluster, which is also how a leadership
+			// change shows up.
+			"consul_members_clients",
+			"consul_members_servers",
 			"consul_raft_committime_mean_seconds",
 			"consul_raft_leader_lastcontact_mean_seconds",
+			"consul_rpc_request_rate",
+			"consul_server_isleader",
+			// What the catalog and the key/value store hold.
+			"consul_state_kv_entries",
+			"consul_state_nodes",
+			"consul_state_service_instances",
+			"consul_state_services",
 		},
 
 		discovery.DovecotService: {

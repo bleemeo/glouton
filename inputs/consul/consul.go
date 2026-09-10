@@ -178,6 +178,10 @@ func renameMetrics(currentContext internal.GatherContext, metricName string) (ne
 var timerMeasurementsInMilliseconds = map[string]bool{
 	"consul_raft_committime":         true,
 	"consul_raft_leader_lastcontact": true,
+	// The end-to-end latency of a KV write, and the only latency a single-server agent can
+	// report: the two raft timers above are log-replication timings that exist solely on a
+	// leader with followers to replicate to.
+	"consul_kvs_apply": true,
 }
 
 func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {

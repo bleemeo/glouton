@@ -159,17 +159,26 @@ func TestTimerMeansConvertedToSeconds(t *testing.T) {
 		"count": 5.0,
 		"mean":  42.25,
 	}, nil, time.Now())
+	// A timer Consul reports and Glouton does not publish: its mean has to keep Consul's
+	// own name and millisecond scale, so that only the published ones are converted.
+	acc.AddCounter("consul.fsm.kvs", map[string]any{
+		"count": 9.0,
+		"mean":  0.75,
+	}, nil, time.Now())
 
 	got := collectFinalMetrics(store)
 
 	assertMetrics(t, got, map[string]float64{
 		"consul_raft_committime_mean_seconds":         0.0015,
 		"consul_raft_leader_lastcontact_mean_seconds": 0.04225,
+		// The only write latency a single-server agent reports: the two raft timers
+		// above need a leader with followers.
+		"consul_kvs_apply_mean_seconds": 0.0025,
 		// max isn't in the default metrics and is left in Consul's own millisecond
 		// scale: only "mean" is converted.
 		"consul_raft_committime_max": 3,
-		// Not a default metric either, so its mean keeps Consul's name and scale.
-		"consul_kvs_apply_mean": 2.5,
+		// Not a default metric, so its mean keeps Consul's name and scale.
+		"consul_fsm_kvs_mean": 0.75,
 	})
 
 	for name := range got {
@@ -177,7 +186,11 @@ func TestTimerMeansConvertedToSeconds(t *testing.T) {
 			t.Errorf("metric %q should have been renamed with a _seconds suffix, still present", name)
 		}
 
-		if name == "consul_kvs_apply_mean_seconds" {
+		if name == "consul_kvs_apply_mean" {
+			t.Errorf("metric %q should have been renamed with a _seconds suffix, still present", name)
+		}
+
+		if name == "consul_fsm_kvs_mean_seconds" {
 			t.Errorf("metric %q was converted, though it isn't one Glouton publishes", name)
 		}
 	}
