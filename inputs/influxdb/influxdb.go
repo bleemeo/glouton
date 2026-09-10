@@ -16,143 +16,317 @@
 
 package influxdb
 
+// Package influxdb reads the metrics of an InfluxDB server, whichever of the three lines
+// it belongs to.
+//
+// The lines have nothing in common but the concepts. 1.x publishes InfluxDB-formatted JSON
+// on "/debug/vars" and is the only one to report series cardinality; 2.x and 3.x publish
+// Prometheus text on "/metrics" under names that overlap neither each other nor 1.x, and
+// 2.x reports no query metric at all. So the same handful of published names is built from
+// three different sources, chosen from the version the server reports (see version.go),
+// and a name a line does not have is simply absent for it.
+
 import (
-	"strings"
+	"context"
+	"errors"
+	"fmt"
+	"net/url"
+	"sync"
+	"time"
 
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/prometheus/scrapper"
 
 	"github.com/influxdata/telegraf"
-	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
-	"github.com/influxdata/telegraf/plugins/inputs/influxdb"
 )
 
-// New initialise influxdb.Input.
-func New(url string, username string, password string) (i telegraf.Input, err error) {
-	input, ok := telegraf_inputs.Inputs["influxdb"]
-	if ok {
-		influxdbInput, ok := input().(*influxdb.InfluxDB)
-		if ok {
-			influxdbInput.URLs = []string{url}
-			influxdbInput.Username = username
-			influxdbInput.Password = password
+const (
+	// measurement is the prefix of every metric name this input produces: the accumulator
+	// joins it to the field name, so the "requests" field becomes influxdb_requests.
+	measurement = "influxdb"
 
-			i = &internal.Input{
-				Input: influxdbInput,
-				Accumulator: internal.Accumulator{
-					RenameGlobal:     renameGlobal,
-					TransformMetrics: transformMetrics,
-					RenameMetrics:    renameMetrics,
-					// The counters InfluxDB accumulates since it started, turned into
-					// per-second rates. Only the ones Glouton publishes, plus the
-					// *DurationNs fields transformMetrics needs a rate of to derive an
-					// average duration: writeReqBytes, queriesExecuted and queriesFinished
-					// are counters of the same shape, but aren't default metrics, so
-					// nothing would read their rate.
-					DifferentiatedMetrics: []string{
-						"req",
-						"reqDurationNs",
-						"clientError",
-						"serverError",
-						"authFail",
-						"queryReq",
-						"queryReqDurationNs",
-						"writeReq",
-						"writeReqDurationNs",
-						"pointsWrittenOK",
-						"pointsWrittenFail",
-						"pointsWrittenDropped",
-						"pointReq",
-						"writeError",
-						"writeDrop",
-						"writeTimeout",
-					},
-				},
-				Name: "influxdb",
-			}
-		} else {
-			err = inputs.ErrUnexpectedType
-		}
-	} else {
-		err = inputs.ErrDisabledInput
-	}
+	gatherTimeout = 10 * time.Second
+)
 
-	return i, err
+// The published fields. The ones ending in Sum or Count are the halves of an average and
+// never reach the API: transformMetrics replaces them.
+const (
+	fieldRequests           = "requests"
+	fieldClientErrors       = "client_errors"
+	fieldServerErrors       = "server_errors"
+	fieldRequestDurationSum = "request_duration_sum"
+	fieldRequestCount       = "request_count"
+	fieldRequestDuration    = "request_duration_seconds"
+
+	fieldPointsWritten      = "points_written"
+	fieldPointsWriteFailed  = "points_write_failed"
+	fieldPointsWriteDropped = "points_write_dropped"
+	fieldWriteTimeouts      = "write_timeouts"
+
+	fieldQueries          = "queries"
+	fieldQueriesFailed    = "queries_failed"
+	fieldQueriesActive    = "queries_active"
+	fieldQueryDurationSum = "query_duration_sum"
+	fieldQueryCount       = "query_count"
+	fieldQueryDuration    = "query_duration_seconds"
+	fieldQueryOOMs        = "query_ooms"
+
+	fieldUptime       = "uptime"
+	fieldSeries       = "series"
+	fieldAuthFailures = "auth_failures"
+
+	fieldParquetCacheSize    = "parquet_cache_size_bytes"
+	fieldParquetCacheFiles   = "parquet_cache_files"
+	fieldParquetCacheAccess  = "parquet_cache_access"
+	fieldObjectStoreTransfer = "object_store_transfer_bytes"
+	fieldMemPool             = "mem_pool_bytes"
+	fieldMemory              = "memory_bytes"
+	fieldThreadPanics        = "thread_panics"
+)
+
+var (
+	// errUnauthorized is returned when the server refuses the scrape for lack of a token.
+	errUnauthorized = errors.New("unauthorized")
+	// errUnexpectedStatus is returned when an endpoint answers something that identifies
+	// nothing.
+	errUnexpectedStatus = errors.New("unexpected HTTP status")
+)
+
+// differentiatedFields are the cumulative counters, published as a rate. It is the union
+// over the three lines: a field a line does not report never reaches the accumulator, so
+// listing it costs nothing.
+//
+//nolint:gochecknoglobals
+var differentiatedFields = []string{
+	fieldRequests,
+	fieldClientErrors,
+	fieldServerErrors,
+	fieldAuthFailures,
+	fieldPointsWritten,
+	fieldPointsWriteFailed,
+	fieldPointsWriteDropped,
+	fieldWriteTimeouts,
+	fieldQueries,
+	fieldQueriesFailed,
+	fieldQueryOOMs,
+	fieldParquetCacheAccess,
+	fieldObjectStoreTransfer,
+	fieldThreadPanics,
+	// The halves of each average, differentiated so the average is the one of the period
+	// rather than since the server started. AvgDuration consumes them.
+	fieldRequestDurationSum,
+	fieldRequestCount,
+	fieldQueryDurationSum,
+	fieldQueryCount,
 }
 
-func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
-	if gatherContext.Measurement == "influxdb_queryExecutor" {
-		gatherContext.Measurement = "influxdb_query_executor"
+// New returns an input reading an InfluxDB server, whichever line it is.
+//
+// baseURL is the server's root: which endpoint holds the metrics depends on the version,
+// and that is not known until the server is asked.
+//
+// The token is only used by 3.x, which authenticates every route and answers 401 on
+// "/metrics", "/health" and "/ping" alike without one. The user and password are only used
+// by 1.x, which leaves "/debug/vars" open in practice but may sit behind something that
+// does not.
+func New(baseURL, username, password, token string) (telegraf.Input, registry.RegistrationOption, error) {
+	if baseURL == "" {
+		return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput //nolint:exhaustruct
 	}
 
-	// The URL we queried is redundant with the labels already set on service metrics.
-	delete(gatherContext.Tags, "url")
+	parsed, err := url.Parse(baseURL)
+	if err != nil {
+		return nil, registry.RegistrationOption{}, fmt.Errorf("%w: %s", inputs.ErrDisabledInput, err) //nolint:exhaustruct
+	}
 
-	// What identifies a series is kept as labels of its own -- database,
-	// retentionPolicy, measurement and id -- rather than joined into the item.
-	//
-	// The database alone isn't enough: the storage-engine measurements (influxdb_shard,
-	// influxdb_tsm1_cache, _engine, _filestore, _wal) are reported once per shard and
-	// influxdb_measurement once per measurement, all of them repeating the same database.
-	// A real 1.8 instance with only its own _internal database already reports 7 shards,
-	// so 7 series of each would land on the same name and be rejected as duplicates, the
-	// way rabbitmq_consumers is. The retention policy and shard id are what separate them.
-	//
-	// Keeping them needs CompatibilityNameItem to be off for this service, since the
-	// compatibility naming keeps only the item and would drop all four; see the InfluxDB
-	// case of Discovery.createInput. The item is then left to the service instance, which
-	// for a containerised InfluxDB is its container name, instead of being glued to a
-	// shard id.
-	//
-	// The four below describe a shard rather than identify one, so they are dropped
-	// instead of becoming labels: engine and indexType hold the same value on every shard
-	// of an instance, and path and walPath would put the filesystem layout into a label
-	// for something the id already identifies.
-	delete(gatherContext.Tags, "engine")
-	delete(gatherContext.Tags, "indexType")
-	delete(gatherContext.Tags, "path")
-	delete(gatherContext.Tags, "walPath")
+	withPath := func(path string) string {
+		u := *parsed
+		u.Path = path
 
-	return gatherContext, false
+		return u.String()
+	}
+
+	metricsURL, err := url.Parse(withPath("/metrics"))
+	if err != nil {
+		return nil, registry.RegistrationOption{}, fmt.Errorf("%w: %s", inputs.ErrDisabledInput, err) //nolint:exhaustruct
+	}
+
+	// The shared scrapper rather than a request and a parser of our own: it is what reads
+	// every other Prometheus endpoint Glouton knows about, and it splits a histogram into
+	// the "_sum" and "_count" families the averages are built from.
+	target := scrapper.New(metricsURL, nil)
+	target.BearerToken = token
+
+	input := &metricsInput{ //nolint:exhaustruct
+		target:       target,
+		pingURL:      withPath("/ping"),
+		debugVarsURL: withPath("/debug/vars"),
+		username:     username,
+		password:     password,
+		token:        token,
+		now:          time.Now,
+	}
+
+	internalInput := &internal.Input{
+		Input: input,
+		Accumulator: internal.Accumulator{ //nolint:exhaustruct
+			TransformMetrics:      transformMetrics,
+			DifferentiatedMetrics: differentiatedFields,
+		},
+		Name: "influxdb",
+	}
+
+	// Registered with its own options rather than the default compatibility naming, which
+	// keeps only the item: what tells these series apart is a label -- the state of the
+	// memory pool, the database a cardinality belongs to -- and the compatibility naming
+	// would drop every one of them and collapse the series onto a single name. The item is
+	// left to the service instance.
+	options := registry.RegistrationOption{ //nolint:exhaustruct
+		CompatibilityNameItem: false,
+	}
+
+	return internalInput, options, nil
 }
 
-func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {
-	if currentContext.Measurement != "influxdb_httpd" {
-		return fields
-	}
+// transformMetrics turns each cumulative duration into the average duration of one
+// operation. Every source divides its own units into seconds first -- 1.x counts
+// nanoseconds where the others count seconds -- so there is nothing left to scale here.
+//
+// The operation count is dropped afterwards: AvgDuration only removes the duration it
+// consumed, and the count says nothing the published counters don't already.
+func transformMetrics(_ internal.GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {
+	internal.AvgDuration(fields, fieldRequestDurationSum, fieldRequestCount, fieldRequestDuration, 1)
+	internal.AvgDuration(fields, fieldQueryDurationSum, fieldQueryCount, fieldQueryDuration, 1)
 
-	internal.AvgDuration(fields, "reqDurationNs", "req", "req_duration_seconds", internal.NsPerSecond)
-	internal.AvgDuration(fields, "queryReqDurationNs", "queryReq", "query_req_duration_seconds", internal.NsPerSecond)
-	internal.AvgDuration(fields, "writeReqDurationNs", "writeReq", "write_req_duration_seconds", internal.NsPerSecond)
+	delete(fields, fieldRequestCount)
+	delete(fields, fieldQueryCount)
 
 	return fields
 }
 
-var fieldRenames = map[string]string{ //nolint:gochecknoglobals
-	"queryReq":             "query_req",
-	"writeReq":             "write_req",
-	"clientError":          "client_error",
-	"serverError":          "server_error",
-	"writeError":           "write_error",
-	"pointReq":             "point_req",
-	"authFail":             "auth_fail",
-	"writeReqBytes":        "write_req_bytes",
-	"pointsWrittenOK":      "points_written_ok",
-	"pointsWrittenFail":    "points_written_fail",
-	"pointsWrittenDropped": "points_written_dropped",
-	"writeDrop":            "write_drop",
-	"writeTimeout":         "write_timeout",
-	"queriesActive":        "queries_active",
-	"queriesExecuted":      "queries_executed",
-	"queriesFinished":      "queries_finished",
-	"numSeries":            "num_series",
-	"numMeasurements":      "num_measurements",
+// metricsInput reads whichever endpoint the server's line publishes.
+type metricsInput struct {
+	target       *scrapper.Target
+	pingURL      string
+	debugVarsURL string
+	username     string
+	password     string
+	token        string
+
+	// now is time.Now, replaced in tests so an uptime can be asserted.
+	now func() time.Time
+
+	l sync.Mutex
+	// line is remembered once identified: finding out costs a request, and a server does
+	// not change major version between two gathers. A failure leaves it unknown so the
+	// next gather asks again.
+	line line
+	// databases holds the per-database entries of the last 1.x read.
+	databases []debugVarsEntry
+	// nothingKnownLogged keeps the "none of that line's metrics" message to once.
+	nothingKnownLogged bool
 }
 
-func renameMetrics(currentContext internal.GatherContext, metricName string) (newMeasurement string, newMetricName string) {
-	if renamed, ok := fieldRenames[metricName]; ok {
-		return currentContext.Measurement, renamed
+func (i *metricsInput) SampleConfig() string {
+	return "Read the metrics of an InfluxDB server"
+}
+
+func (i *metricsInput) Gather(acc telegraf.Accumulator) error {
+	ctx, cancel := context.WithTimeout(context.Background(), gatherTimeout)
+	defer cancel()
+
+	serverLine, err := i.currentLine(ctx)
+	if err != nil {
+		return err
 	}
 
-	return currentContext.Measurement, strings.ToLower(metricName)
+	switch serverLine {
+	case lineV1:
+		return i.gatherDebugVars(ctx, acc)
+	case lineV2:
+		return i.gatherAndCheck(ctx, acc, v2Source, serverLine)
+	case lineV3:
+		return i.gatherAndCheck(ctx, acc, v3Source, serverLine)
+	case lineUnknown:
+		return nil
+	default:
+		return nil
+	}
+}
+
+// gatherAndCheck reads a Prometheus source and explains a body that held nothing known,
+// which is the one failure that would otherwise be silent: every line answers its own
+// endpoint with a 200, so reading the wrong one produces no error and no metrics.
+func (i *metricsInput) gatherAndCheck(
+	ctx context.Context,
+	acc telegraf.Accumulator,
+	source promSource,
+	serverLine line,
+) error {
+	found, err := i.gatherPrometheus(ctx, acc, source)
+	if err != nil {
+		return err
+	}
+
+	if found == 0 {
+		i.warnNothingKnown(serverLine)
+	}
+
+	return nil
+}
+
+// currentLine returns the server's line, asking it the first time and after a failure.
+func (i *metricsInput) currentLine(ctx context.Context) (line, error) {
+	i.l.Lock()
+	known := i.line
+	i.l.Unlock()
+
+	if known != lineUnknown {
+		return known, nil
+	}
+
+	detected, reported, err := detectLine(ctx, i.pingURL, i.token)
+	if err != nil {
+		return lineUnknown, err
+	}
+
+	if detected == lineUnknown {
+		logger.V(1).Printf(
+			"Not gathering InfluxDB at %s: it reports the version %q, which is none of the lines Glouton reads",
+			i.target.URL, reported,
+		)
+
+		return lineUnknown, nil
+	}
+
+	i.l.Lock()
+	i.line = detected
+	i.l.Unlock()
+
+	logger.V(1).Printf("InfluxDB at %s is a %s server (version %q)", i.target.URL, detected, reported)
+
+	return detected, nil
+}
+
+// warnNothingKnown says once that the server answered but held none of the families its
+// line is supposed to publish, which means the version was identified wrongly or the
+// server renamed them.
+func (i *metricsInput) warnNothingKnown(serverLine line) {
+	i.l.Lock()
+	defer i.l.Unlock()
+
+	if i.nothingKnownLogged {
+		return
+	}
+
+	i.nothingKnownLogged = true
+
+	logger.Printf(
+		"InfluxDB at %s was read as a %s server but reports none of that line's metrics; "+
+			"no InfluxDB metric will be published",
+		i.target.URL, serverLine,
+	)
 }

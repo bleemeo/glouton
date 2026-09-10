@@ -420,19 +420,25 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			input, err = haproxy.New(service.Config.StatsURL)
 		}
 	case InfluxDBService:
-		// "/debug/vars" only exists on InfluxDB 1.x. InfluxDB 2.x exposes its metrics in
-		// the Prometheus format on "/metrics", which this input can't read.
+		// The server's root rather than an endpoint: the three lines publish their metrics
+		// in different places -- 1.x as JSON on "/debug/vars", 2.x and 3.x as Prometheus
+		// text on "/metrics" -- and which one to read is decided from the version the
+		// server reports. See inputs/influxdb.
 		//
-		// The storage-engine measurements come once per shard, all sharing their metric
-		// name, so what identifies a shard has to be kept as labels rather than joined
-		// into the item; see the renameGlobal of inputs/influxdb.
-		gathererOptions.CompatibilityNameItem = false
-
+		// The token is used by 3.x, which answers 401 everywhere without one; the user and
+		// password by 1.x.
 		if service.Config.StatsURL != "" {
-			input, err = influxdb.New(service.Config.StatsURL, service.Config.Username, service.Config.Password)
+			input, gathererOptions, err = influxdb.New(
+				service.Config.StatsURL, service.Config.Username, service.Config.Password, service.Config.Password,
+			)
 		} else if ip, port := service.AddressPort(); ip != "" {
-			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port)) + "/debug/vars"
-			input, err = influxdb.New(url, service.Config.Username, service.Config.Password)
+			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
+			// The password is offered as both: 1.x authenticates with a user and a
+			// password, 3.x with a bearer token, and there is one field for either. A
+			// server only ever reads the one its line uses.
+			input, gathererOptions, err = influxdb.New(
+				url, service.Config.Username, service.Config.Password, service.Config.Password,
+			)
 		}
 	case JenkinsService:
 		if service.Config.StatsURL != "" && service.Config.Password != "" {

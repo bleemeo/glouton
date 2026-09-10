@@ -1,0 +1,610 @@
+# HELP datafusion_mem_pool_bytes Number of bytes within the datafusion memory pool
+# TYPE datafusion_mem_pool_bytes gauge
+datafusion_mem_pool_bytes{state="limit"} 2505732915
+datafusion_mem_pool_bytes{state="reserved"} 0
+# HELP http_request_duration_seconds distribution of request latencies
+# TYPE http_request_duration_seconds histogram
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="client_error",le="0.001"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="client_error",le="0.0025"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="client_error",le="0.005"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="client_error",le="0.01"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="client_error",le="0.025"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="client_error",le="0.05"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="client_error",le="0.1"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="client_error",le="0.25"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="client_error",le="0.5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="client_error",le="1"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="client_error",le="2.5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="client_error",le="5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="client_error",le="10"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="client_error",le="inf"} 0
+http_request_duration_seconds_sum{method="GET",method_path="GET /health",path="/health",status="client_error"} 0
+http_request_duration_seconds_count{method="GET",method_path="GET /health",path="/health",status="client_error"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="ok",le="0.001"} 3
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="ok",le="0.0025"} 3
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="ok",le="0.005"} 3
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="ok",le="0.01"} 3
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="ok",le="0.025"} 3
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="ok",le="0.05"} 3
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="ok",le="0.1"} 3
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="ok",le="0.25"} 3
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="ok",le="0.5"} 3
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="ok",le="1"} 3
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="ok",le="2.5"} 3
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="ok",le="5"} 3
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="ok",le="10"} 3
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="ok",le="inf"} 3
+http_request_duration_seconds_sum{method="GET",method_path="GET /health",path="/health",status="ok"} 0.000576543
+http_request_duration_seconds_count{method="GET",method_path="GET /health",path="/health",status="ok"} 3
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="resource_exhausted",le="0.001"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="resource_exhausted",le="0.0025"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="resource_exhausted",le="0.005"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="resource_exhausted",le="0.01"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="resource_exhausted",le="0.025"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="resource_exhausted",le="0.05"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="resource_exhausted",le="0.1"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="resource_exhausted",le="0.25"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="resource_exhausted",le="0.5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="resource_exhausted",le="1"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="resource_exhausted",le="2.5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="resource_exhausted",le="5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="resource_exhausted",le="10"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="resource_exhausted",le="inf"} 0
+http_request_duration_seconds_sum{method="GET",method_path="GET /health",path="/health",status="resource_exhausted"} 0
+http_request_duration_seconds_count{method="GET",method_path="GET /health",path="/health",status="resource_exhausted"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="server_error",le="0.001"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="server_error",le="0.0025"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="server_error",le="0.005"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="server_error",le="0.01"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="server_error",le="0.025"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="server_error",le="0.05"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="server_error",le="0.1"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="server_error",le="0.25"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="server_error",le="0.5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="server_error",le="1"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="server_error",le="2.5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="server_error",le="5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="server_error",le="10"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="server_error",le="inf"} 0
+http_request_duration_seconds_sum{method="GET",method_path="GET /health",path="/health",status="server_error"} 0
+http_request_duration_seconds_count{method="GET",method_path="GET /health",path="/health",status="server_error"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="unexpected_response",le="0.001"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="unexpected_response",le="0.0025"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="unexpected_response",le="0.005"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="unexpected_response",le="0.01"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="unexpected_response",le="0.025"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="unexpected_response",le="0.05"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="unexpected_response",le="0.1"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="unexpected_response",le="0.25"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="unexpected_response",le="0.5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="unexpected_response",le="1"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="unexpected_response",le="2.5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="unexpected_response",le="5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="unexpected_response",le="10"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /health",path="/health",status="unexpected_response",le="inf"} 0
+http_request_duration_seconds_sum{method="GET",method_path="GET /health",path="/health",status="unexpected_response"} 0
+http_request_duration_seconds_count{method="GET",method_path="GET /health",path="/health",status="unexpected_response"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="client_error",le="0.001"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="client_error",le="0.0025"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="client_error",le="0.005"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="client_error",le="0.01"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="client_error",le="0.025"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="client_error",le="0.05"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="client_error",le="0.1"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="client_error",le="0.25"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="client_error",le="0.5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="client_error",le="1"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="client_error",le="2.5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="client_error",le="5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="client_error",le="10"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="client_error",le="inf"} 0
+http_request_duration_seconds_sum{method="GET",method_path="GET /metrics",path="/metrics",status="client_error"} 0
+http_request_duration_seconds_count{method="GET",method_path="GET /metrics",path="/metrics",status="client_error"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="ok",le="0.001"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="ok",le="0.0025"} 8
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="ok",le="0.005"} 14
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="ok",le="0.01"} 25
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="ok",le="0.025"} 26
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="ok",le="0.05"} 26
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="ok",le="0.1"} 26
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="ok",le="0.25"} 26
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="ok",le="0.5"} 26
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="ok",le="1"} 26
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="ok",le="2.5"} 26
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="ok",le="5"} 26
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="ok",le="10"} 26
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="ok",le="inf"} 26
+http_request_duration_seconds_sum{method="GET",method_path="GET /metrics",path="/metrics",status="ok"} 0.124220042
+http_request_duration_seconds_count{method="GET",method_path="GET /metrics",path="/metrics",status="ok"} 26
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="resource_exhausted",le="0.001"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="resource_exhausted",le="0.0025"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="resource_exhausted",le="0.005"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="resource_exhausted",le="0.01"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="resource_exhausted",le="0.025"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="resource_exhausted",le="0.05"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="resource_exhausted",le="0.1"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="resource_exhausted",le="0.25"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="resource_exhausted",le="0.5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="resource_exhausted",le="1"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="resource_exhausted",le="2.5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="resource_exhausted",le="5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="resource_exhausted",le="10"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="resource_exhausted",le="inf"} 0
+http_request_duration_seconds_sum{method="GET",method_path="GET /metrics",path="/metrics",status="resource_exhausted"} 0
+http_request_duration_seconds_count{method="GET",method_path="GET /metrics",path="/metrics",status="resource_exhausted"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="server_error",le="0.001"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="server_error",le="0.0025"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="server_error",le="0.005"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="server_error",le="0.01"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="server_error",le="0.025"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="server_error",le="0.05"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="server_error",le="0.1"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="server_error",le="0.25"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="server_error",le="0.5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="server_error",le="1"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="server_error",le="2.5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="server_error",le="5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="server_error",le="10"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="server_error",le="inf"} 0
+http_request_duration_seconds_sum{method="GET",method_path="GET /metrics",path="/metrics",status="server_error"} 0
+http_request_duration_seconds_count{method="GET",method_path="GET /metrics",path="/metrics",status="server_error"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="unexpected_response",le="0.001"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="unexpected_response",le="0.0025"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="unexpected_response",le="0.005"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="unexpected_response",le="0.01"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="unexpected_response",le="0.025"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="unexpected_response",le="0.05"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="unexpected_response",le="0.1"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="unexpected_response",le="0.25"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="unexpected_response",le="0.5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="unexpected_response",le="1"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="unexpected_response",le="2.5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="unexpected_response",le="5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="unexpected_response",le="10"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /metrics",path="/metrics",status="unexpected_response",le="inf"} 0
+http_request_duration_seconds_sum{method="GET",method_path="GET /metrics",path="/metrics",status="unexpected_response"} 0
+http_request_duration_seconds_count{method="GET",method_path="GET /metrics",path="/metrics",status="unexpected_response"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="client_error",le="0.001"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="client_error",le="0.0025"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="client_error",le="0.005"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="client_error",le="0.01"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="client_error",le="0.025"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="client_error",le="0.05"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="client_error",le="0.1"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="client_error",le="0.25"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="client_error",le="0.5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="client_error",le="1"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="client_error",le="2.5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="client_error",le="5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="client_error",le="10"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="client_error",le="inf"} 0
+http_request_duration_seconds_sum{method="GET",method_path="GET /ping",path="/ping",status="client_error"} 0
+http_request_duration_seconds_count{method="GET",method_path="GET /ping",path="/ping",status="client_error"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="ok",le="0.001"} 1
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="ok",le="0.0025"} 1
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="ok",le="0.005"} 1
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="ok",le="0.01"} 1
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="ok",le="0.025"} 1
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="ok",le="0.05"} 1
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="ok",le="0.1"} 1
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="ok",le="0.25"} 1
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="ok",le="0.5"} 1
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="ok",le="1"} 1
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="ok",le="2.5"} 1
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="ok",le="5"} 1
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="ok",le="10"} 1
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="ok",le="inf"} 1
+http_request_duration_seconds_sum{method="GET",method_path="GET /ping",path="/ping",status="ok"} 0.000617167
+http_request_duration_seconds_count{method="GET",method_path="GET /ping",path="/ping",status="ok"} 1
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="resource_exhausted",le="0.001"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="resource_exhausted",le="0.0025"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="resource_exhausted",le="0.005"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="resource_exhausted",le="0.01"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="resource_exhausted",le="0.025"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="resource_exhausted",le="0.05"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="resource_exhausted",le="0.1"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="resource_exhausted",le="0.25"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="resource_exhausted",le="0.5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="resource_exhausted",le="1"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="resource_exhausted",le="2.5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="resource_exhausted",le="5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="resource_exhausted",le="10"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="resource_exhausted",le="inf"} 0
+http_request_duration_seconds_sum{method="GET",method_path="GET /ping",path="/ping",status="resource_exhausted"} 0
+http_request_duration_seconds_count{method="GET",method_path="GET /ping",path="/ping",status="resource_exhausted"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="server_error",le="0.001"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="server_error",le="0.0025"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="server_error",le="0.005"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="server_error",le="0.01"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="server_error",le="0.025"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="server_error",le="0.05"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="server_error",le="0.1"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="server_error",le="0.25"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="server_error",le="0.5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="server_error",le="1"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="server_error",le="2.5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="server_error",le="5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="server_error",le="10"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="server_error",le="inf"} 0
+http_request_duration_seconds_sum{method="GET",method_path="GET /ping",path="/ping",status="server_error"} 0
+http_request_duration_seconds_count{method="GET",method_path="GET /ping",path="/ping",status="server_error"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="unexpected_response",le="0.001"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="unexpected_response",le="0.0025"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="unexpected_response",le="0.005"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="unexpected_response",le="0.01"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="unexpected_response",le="0.025"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="unexpected_response",le="0.05"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="unexpected_response",le="0.1"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="unexpected_response",le="0.25"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="unexpected_response",le="0.5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="unexpected_response",le="1"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="unexpected_response",le="2.5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="unexpected_response",le="5"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="unexpected_response",le="10"} 0
+http_request_duration_seconds_bucket{method="GET",method_path="GET /ping",path="/ping",status="unexpected_response",le="inf"} 0
+http_request_duration_seconds_sum{method="GET",method_path="GET /ping",path="/ping",status="unexpected_response"} 0
+http_request_duration_seconds_count{method="GET",method_path="GET /ping",path="/ping",status="unexpected_response"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="client_error",le="0.001"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="client_error",le="0.0025"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="client_error",le="0.005"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="client_error",le="0.01"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="client_error",le="0.025"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="client_error",le="0.05"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="client_error",le="0.1"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="client_error",le="0.25"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="client_error",le="0.5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="client_error",le="1"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="client_error",le="2.5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="client_error",le="5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="client_error",le="10"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="client_error",le="inf"} 0
+http_request_duration_seconds_sum{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="client_error"} 0
+http_request_duration_seconds_count{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="client_error"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="ok",le="0.001"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="ok",le="0.0025"} 1
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="ok",le="0.005"} 1
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="ok",le="0.01"} 1
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="ok",le="0.025"} 1
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="ok",le="0.05"} 1
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="ok",le="0.1"} 1
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="ok",le="0.25"} 1
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="ok",le="0.5"} 1
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="ok",le="1"} 1
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="ok",le="2.5"} 1
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="ok",le="5"} 1
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="ok",le="10"} 1
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="ok",le="inf"} 1
+http_request_duration_seconds_sum{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="ok"} 0.002314958
+http_request_duration_seconds_count{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="ok"} 1
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="resource_exhausted",le="0.001"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="resource_exhausted",le="0.0025"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="resource_exhausted",le="0.005"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="resource_exhausted",le="0.01"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="resource_exhausted",le="0.025"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="resource_exhausted",le="0.05"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="resource_exhausted",le="0.1"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="resource_exhausted",le="0.25"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="resource_exhausted",le="0.5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="resource_exhausted",le="1"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="resource_exhausted",le="2.5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="resource_exhausted",le="5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="resource_exhausted",le="10"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="resource_exhausted",le="inf"} 0
+http_request_duration_seconds_sum{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="resource_exhausted"} 0
+http_request_duration_seconds_count{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="resource_exhausted"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="server_error",le="0.001"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="server_error",le="0.0025"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="server_error",le="0.005"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="server_error",le="0.01"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="server_error",le="0.025"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="server_error",le="0.05"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="server_error",le="0.1"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="server_error",le="0.25"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="server_error",le="0.5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="server_error",le="1"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="server_error",le="2.5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="server_error",le="5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="server_error",le="10"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="server_error",le="inf"} 0
+http_request_duration_seconds_sum{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="server_error"} 0
+http_request_duration_seconds_count{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="server_error"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="unexpected_response",le="0.001"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="unexpected_response",le="0.0025"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="unexpected_response",le="0.005"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="unexpected_response",le="0.01"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="unexpected_response",le="0.025"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="unexpected_response",le="0.05"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="unexpected_response",le="0.1"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="unexpected_response",le="0.25"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="unexpected_response",le="0.5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="unexpected_response",le="1"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="unexpected_response",le="2.5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="unexpected_response",le="5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="unexpected_response",le="10"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="unexpected_response",le="inf"} 0
+http_request_duration_seconds_sum{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="unexpected_response"} 0
+http_request_duration_seconds_count{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="unexpected_response"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="client_error",le="0.001"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="client_error",le="0.0025"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="client_error",le="0.005"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="client_error",le="0.01"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="client_error",le="0.025"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="client_error",le="0.05"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="client_error",le="0.1"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="client_error",le="0.25"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="client_error",le="0.5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="client_error",le="1"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="client_error",le="2.5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="client_error",le="5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="client_error",le="10"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="client_error",le="inf"} 0
+http_request_duration_seconds_sum{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="client_error"} 0
+http_request_duration_seconds_count{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="client_error"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="ok",le="0.001"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="ok",le="0.0025"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="ok",le="0.005"} 3
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="ok",le="0.01"} 4
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="ok",le="0.025"} 8
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="ok",le="0.05"} 9
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="ok",le="0.1"} 9
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="ok",le="0.25"} 9
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="ok",le="0.5"} 9
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="ok",le="1"} 9
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="ok",le="2.5"} 9
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="ok",le="5"} 9
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="ok",le="10"} 9
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="ok",le="inf"} 9
+http_request_duration_seconds_sum{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="ok"} 0.136585541
+http_request_duration_seconds_count{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="ok"} 9
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="resource_exhausted",le="0.001"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="resource_exhausted",le="0.0025"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="resource_exhausted",le="0.005"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="resource_exhausted",le="0.01"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="resource_exhausted",le="0.025"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="resource_exhausted",le="0.05"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="resource_exhausted",le="0.1"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="resource_exhausted",le="0.25"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="resource_exhausted",le="0.5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="resource_exhausted",le="1"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="resource_exhausted",le="2.5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="resource_exhausted",le="5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="resource_exhausted",le="10"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="resource_exhausted",le="inf"} 0
+http_request_duration_seconds_sum{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="resource_exhausted"} 0
+http_request_duration_seconds_count{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="resource_exhausted"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="server_error",le="0.001"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="server_error",le="0.0025"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="server_error",le="0.005"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="server_error",le="0.01"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="server_error",le="0.025"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="server_error",le="0.05"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="server_error",le="0.1"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="server_error",le="0.25"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="server_error",le="0.5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="server_error",le="1"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="server_error",le="2.5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="server_error",le="5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="server_error",le="10"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="server_error",le="inf"} 0
+http_request_duration_seconds_sum{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="server_error"} 0
+http_request_duration_seconds_count{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="server_error"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="unexpected_response",le="0.001"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="unexpected_response",le="0.0025"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="unexpected_response",le="0.005"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="unexpected_response",le="0.01"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="unexpected_response",le="0.025"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="unexpected_response",le="0.05"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="unexpected_response",le="0.1"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="unexpected_response",le="0.25"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="unexpected_response",le="0.5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="unexpected_response",le="1"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="unexpected_response",le="2.5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="unexpected_response",le="5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="unexpected_response",le="10"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="unexpected_response",le="inf"} 0
+http_request_duration_seconds_sum{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="unexpected_response"} 0
+http_request_duration_seconds_count{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="unexpected_response"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="client_error",le="0.001"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="client_error",le="0.0025"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="client_error",le="0.005"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="client_error",le="0.01"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="client_error",le="0.025"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="client_error",le="0.05"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="client_error",le="0.1"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="client_error",le="0.25"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="client_error",le="0.5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="client_error",le="1"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="client_error",le="2.5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="client_error",le="5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="client_error",le="10"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="client_error",le="inf"} 0
+http_request_duration_seconds_sum{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="client_error"} 0
+http_request_duration_seconds_count{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="client_error"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="ok",le="0.001"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="ok",le="0.0025"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="ok",le="0.005"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="ok",le="0.01"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="ok",le="0.025"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="ok",le="0.05"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="ok",le="0.1"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="ok",le="0.25"} 1
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="ok",le="0.5"} 2
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="ok",le="1"} 11
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="ok",le="2.5"} 11
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="ok",le="5"} 11
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="ok",le="10"} 11
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="ok",le="inf"} 11
+http_request_duration_seconds_sum{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="ok"} 8.503761252
+http_request_duration_seconds_count{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="ok"} 11
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="resource_exhausted",le="0.001"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="resource_exhausted",le="0.0025"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="resource_exhausted",le="0.005"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="resource_exhausted",le="0.01"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="resource_exhausted",le="0.025"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="resource_exhausted",le="0.05"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="resource_exhausted",le="0.1"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="resource_exhausted",le="0.25"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="resource_exhausted",le="0.5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="resource_exhausted",le="1"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="resource_exhausted",le="2.5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="resource_exhausted",le="5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="resource_exhausted",le="10"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="resource_exhausted",le="inf"} 0
+http_request_duration_seconds_sum{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="resource_exhausted"} 0
+http_request_duration_seconds_count{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="resource_exhausted"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="server_error",le="0.001"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="server_error",le="0.0025"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="server_error",le="0.005"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="server_error",le="0.01"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="server_error",le="0.025"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="server_error",le="0.05"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="server_error",le="0.1"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="server_error",le="0.25"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="server_error",le="0.5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="server_error",le="1"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="server_error",le="2.5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="server_error",le="5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="server_error",le="10"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="server_error",le="inf"} 0
+http_request_duration_seconds_sum{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="server_error"} 0
+http_request_duration_seconds_count{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="server_error"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="unexpected_response",le="0.001"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="unexpected_response",le="0.0025"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="unexpected_response",le="0.005"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="unexpected_response",le="0.01"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="unexpected_response",le="0.025"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="unexpected_response",le="0.05"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="unexpected_response",le="0.1"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="unexpected_response",le="0.25"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="unexpected_response",le="0.5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="unexpected_response",le="1"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="unexpected_response",le="2.5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="unexpected_response",le="5"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="unexpected_response",le="10"} 0
+http_request_duration_seconds_bucket{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="unexpected_response",le="inf"} 0
+http_request_duration_seconds_sum{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="unexpected_response"} 0
+http_request_duration_seconds_count{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="unexpected_response"} 0
+# HELP http_requests_total accumulated total requests
+# TYPE http_requests_total counter
+http_requests_total{method="GET",method_path="GET /health",path="/health",status="aborted"} 0
+http_requests_total{method="GET",method_path="GET /health",path="/health",status="client_error"} 0
+http_requests_total{method="GET",method_path="GET /health",path="/health",status="ok"} 3
+http_requests_total{method="GET",method_path="GET /health",path="/health",status="resource_exhausted"} 0
+http_requests_total{method="GET",method_path="GET /health",path="/health",status="server_error"} 0
+http_requests_total{method="GET",method_path="GET /health",path="/health",status="unexpected_response"} 0
+http_requests_total{method="GET",method_path="GET /metrics",path="/metrics",status="aborted"} 0
+http_requests_total{method="GET",method_path="GET /metrics",path="/metrics",status="client_error"} 0
+http_requests_total{method="GET",method_path="GET /metrics",path="/metrics",status="ok"} 26
+http_requests_total{method="GET",method_path="GET /metrics",path="/metrics",status="resource_exhausted"} 0
+http_requests_total{method="GET",method_path="GET /metrics",path="/metrics",status="server_error"} 0
+http_requests_total{method="GET",method_path="GET /metrics",path="/metrics",status="unexpected_response"} 0
+http_requests_total{method="GET",method_path="GET /ping",path="/ping",status="aborted"} 0
+http_requests_total{method="GET",method_path="GET /ping",path="/ping",status="client_error"} 0
+http_requests_total{method="GET",method_path="GET /ping",path="/ping",status="ok"} 1
+http_requests_total{method="GET",method_path="GET /ping",path="/ping",status="resource_exhausted"} 0
+http_requests_total{method="GET",method_path="GET /ping",path="/ping",status="server_error"} 0
+http_requests_total{method="GET",method_path="GET /ping",path="/ping",status="unexpected_response"} 0
+http_requests_total{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="aborted"} 0
+http_requests_total{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="client_error"} 0
+http_requests_total{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="ok"} 1
+http_requests_total{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="resource_exhausted"} 0
+http_requests_total{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="server_error"} 0
+http_requests_total{method="POST",method_path="POST /api/v3/configure/database",path="/api/v3/configure/database",status="unexpected_response"} 0
+http_requests_total{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="aborted"} 0
+http_requests_total{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="client_error"} 0
+http_requests_total{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="ok"} 9
+http_requests_total{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="resource_exhausted"} 0
+http_requests_total{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="server_error"} 0
+http_requests_total{method="POST",method_path="POST /api/v3/query_sql",path="/api/v3/query_sql",status="unexpected_response"} 0
+http_requests_total{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="aborted"} 0
+http_requests_total{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="client_error"} 0
+http_requests_total{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="ok"} 11
+http_requests_total{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="resource_exhausted"} 0
+http_requests_total{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="server_error"} 0
+http_requests_total{method="POST",method_path="POST /api/v3/write_lp",path="/api/v3/write_lp",status="unexpected_response"} 0
+# HELP influxdb3_parquet_cache_access_total track accesses to the in-memory parquet cache
+# TYPE influxdb3_parquet_cache_access_total counter
+influxdb3_parquet_cache_access_total{status="cached"} 0
+influxdb3_parquet_cache_access_total{status="miss"} 4
+influxdb3_parquet_cache_access_total{status="miss_while_fetching"} 0
+# HELP influxdb3_parquet_cache_size_bytes track size of in-memory parquet cache
+# TYPE influxdb3_parquet_cache_size_bytes gauge
+influxdb3_parquet_cache_size_bytes 0
+# HELP influxdb3_parquet_cache_size_number_of_files track number of files in the in-memory parquet cache
+# TYPE influxdb3_parquet_cache_size_number_of_files gauge
+influxdb3_parquet_cache_size_number_of_files 0
+# HELP influxdb_iox_query_log_end2end_duration_seconds Duration from `issue_time` til the query ended somehow
+# TYPE influxdb_iox_query_log_end2end_duration_seconds histogram
+influxdb_iox_query_log_end2end_duration_seconds_sum 0.110028376
+influxdb_iox_query_log_end2end_duration_seconds_count 9
+# HELP influxdb_iox_query_log_phase_entered_total Number of queries that entered the given phase
+# TYPE influxdb_iox_query_log_phase_entered_total counter
+influxdb_iox_query_log_phase_entered_total{phase="cancel"} 0
+influxdb_iox_query_log_phase_entered_total{phase="fail"} 0
+influxdb_iox_query_log_phase_entered_total{phase="logically_planned"} 9
+influxdb_iox_query_log_phase_entered_total{phase="permit"} 9
+influxdb_iox_query_log_phase_entered_total{phase="planned"} 9
+influxdb_iox_query_log_phase_entered_total{phase="received"} 9
+influxdb_iox_query_log_phase_entered_total{phase="success"} 9
+# HELP jemalloc_memstats_bytes jemalloc metrics - http://jemalloc.net/jemalloc.3.html#stats.active
+# TYPE jemalloc_memstats_bytes gauge
+jemalloc_memstats_bytes{stat="active"} 11243520
+jemalloc_memstats_bytes{stat="alloc"} 8553304
+jemalloc_memstats_bytes{stat="metadata"} 9467760
+jemalloc_memstats_bytes{stat="mapped"} 85016576
+jemalloc_memstats_bytes{stat="resident"} 20303872
+jemalloc_memstats_bytes{stat="retained"} 68599808
+# HELP object_store_transfer_bytes_total cumulative count of file content bytes transferred to/from the object store
+# TYPE object_store_transfer_bytes_total counter
+object_store_transfer_bytes_total{op="get",result="canceled",store_type="main"} 0
+object_store_transfer_bytes_total{op="get",result="error",store_type="main"} 0
+object_store_transfer_bytes_total{op="get",result="success",store_type="main"} 0
+object_store_transfer_bytes_total{op="get_opts",result="canceled",store_type="main"} 0
+object_store_transfer_bytes_total{op="get_opts",result="error",store_type="main"} 0
+object_store_transfer_bytes_total{op="get_opts",result="success",store_type="main"} 0
+object_store_transfer_bytes_total{op="get_range",result="canceled",store_type="main"} 0
+object_store_transfer_bytes_total{op="get_range",result="error",store_type="main"} 0
+object_store_transfer_bytes_total{op="get_range",result="success",store_type="main"} 0
+object_store_transfer_bytes_total{op="get_ranges",result="canceled",store_type="main"} 0
+object_store_transfer_bytes_total{op="get_ranges",result="error",store_type="main"} 0
+object_store_transfer_bytes_total{op="get_ranges",result="success",store_type="main"} 0
+object_store_transfer_bytes_total{op="put",result="canceled",store_type="main"} 0
+object_store_transfer_bytes_total{op="put",result="error",store_type="main"} 0
+object_store_transfer_bytes_total{op="put",result="success",store_type="main"} 31
+object_store_transfer_bytes_total{op="put_multipart",result="canceled",store_type="main"} 0
+object_store_transfer_bytes_total{op="put_multipart",result="error",store_type="main"} 0
+object_store_transfer_bytes_total{op="put_multipart",result="success",store_type="main"} 0
+object_store_transfer_bytes_total{op="put_multipart_opts",result="canceled",store_type="main"} 0
+object_store_transfer_bytes_total{op="put_multipart_opts",result="error",store_type="main"} 0
+object_store_transfer_bytes_total{op="put_multipart_opts",result="success",store_type="main"} 0
+object_store_transfer_bytes_total{op="put_opts",result="canceled",store_type="main"} 0
+object_store_transfer_bytes_total{op="put_opts",result="error",store_type="main"} 0
+object_store_transfer_bytes_total{op="put_opts",result="success",store_type="main"} 2445
+# HELP process_start_time_seconds Start time of the process since unix epoch in seconds.
+# TYPE process_start_time_seconds gauge
+process_start_time_seconds{git_hash="3c2314a424a1a72d74c37ebaceb52b5fda36fe75",product_name="InfluxDB 3 Core",uuid="3b20142c-7e4b-4fb5-9e07-e56f1aaf648d",version="3.11.4"} 1789025499
+# HELP query_datafusion_query_execution_ooms_total Number of OOMs encountered by the query engine
+# TYPE query_datafusion_query_execution_ooms_total counter
+query_datafusion_query_execution_ooms_total 0
+# HELP thread_panic_count_total number of thread panics observed
+# TYPE thread_panic_count_total counter
+thread_panic_count_total{type="offset_overflow"} 0
+thread_panic_count_total{type="unknown"} 0
+# HELP tokio_worker_poll_count_total The number of tasks the given worker thread has polled.
+# TYPE tokio_worker_poll_count_total counter
+tokio_worker_poll_count_total{runtime="datafusion",worker="0"} 57
+tokio_worker_poll_count_total{runtime="datafusion",worker="1"} 1011
+tokio_worker_poll_count_total{runtime="datafusion",worker="2"} 857
+tokio_worker_poll_count_total{runtime="datafusion",worker="3"} 45
+tokio_worker_poll_count_total{runtime="datafusion",worker="4"} 127
+tokio_worker_poll_count_total{runtime="datafusion",worker="5"} 188
+tokio_worker_poll_count_total{runtime="datafusion",worker="6"} 3614
+tokio_worker_poll_count_total{runtime="datafusion",worker="7"} 3617
+tokio_worker_poll_count_total{runtime="main",worker="0"} 1152
+tokio_worker_poll_count_total{runtime="main",worker="1"} 0
+tokio_worker_poll_count_total{runtime="main",worker="2"} 0
+tokio_worker_poll_count_total{runtime="main",worker="3"} 0
+tokio_worker_poll_count_total{runtime="main",worker="4"} 0
+tokio_worker_poll_count_total{runtime="main",worker="5"} 2178
+tokio_worker_poll_count_total{runtime="main",worker="6"} 0
+tokio_worker_poll_count_total{runtime="main",worker="7"} 1253

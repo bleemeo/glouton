@@ -139,9 +139,15 @@ func (d *Discovery) createCheck(service Service) {
 	}
 
 	switch service.ServiceType { //nolint:exhaustive
-	case DovecotService, MemcachedService, RabbitMQService, RedisService, ValkeyService, ZookeeperService, NatsService:
+	// InfluxDB is checked over TCP rather than HTTP: InfluxDB 3 authenticates every route,
+	// answering 401 on "/ping" and "/health" as well as on "/metrics", and the check has
+	// no token to offer. A 401 would report a healthy server as failing, and accepting one
+	// as success would equally accept a server that has stopped serving anything else.
+	// Whether the token works is what the metrics say.
+	case DovecotService, InfluxDBService, MemcachedService, RabbitMQService, RedisService,
+		ValkeyService, ZookeeperService, NatsService:
 		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
-	case ApacheService, InfluxDBService, NginxService, SquidService:
+	case ApacheService, NginxService, SquidService:
 		d.createHTTPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
 	case NTPService:
 		d.createNTPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
@@ -254,7 +260,7 @@ func servesNTPProtocol(service Service, di discoveryInfo) bool {
 		return false
 	}
 
-	port := di.ServicePort
+	port := service.defaultPort(di)
 	if service.Config.Port != 0 {
 		port = service.Config.Port
 	}
@@ -341,10 +347,6 @@ func (d *Discovery) createHTTPCheck(
 		// Agent does a normal HTTP request, but squid expect a proxy. It expects
 		// squid to reply with a 400 - Bad request.
 		expectedStatusCode = 400
-	}
-
-	if service.ServiceType == InfluxDBService {
-		u.Path = "/ping"
 	}
 
 	if service.Config.HTTPPath != "" {

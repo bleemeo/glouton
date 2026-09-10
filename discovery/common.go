@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"time"
@@ -206,10 +207,23 @@ func (s Service) AddressForPort(port int, network string, force bool) string {
 	return ""
 }
 
+// defaultPort returns the port this service is expected to serve, before the listen
+// addresses are consulted. It is di.ServicePort for almost everything; a service whose
+// port depends on its version has it chosen from the executable instead.
+func (s Service) defaultPort(di discoveryInfo) int {
+	if len(di.ServicePortByExe) > 0 && s.ExePath != "" {
+		if port, ok := di.ServicePortByExe[filepath.Base(s.ExePath)]; ok {
+			return port
+		}
+	}
+
+	return di.ServicePort
+}
+
 // AddressPort return the IP address &port for the "main" service (e.g. for RabbitMQ the AMQP port, not the management port).
 func (s Service) AddressPort() (string, int) {
 	di := servicesDiscoveryInfo[s.ServiceType]
-	port := di.ServicePort
+	port := s.defaultPort(di)
 	force := false
 
 	if s.Config.Port != 0 {
@@ -218,6 +232,21 @@ func (s Service) AddressPort() (string, int) {
 
 	if port == 0 {
 		return "", 0
+	}
+
+	if address := s.AddressForPort(port, di.ServiceProtocol, force); address != "" {
+		return address, port
+	}
+
+	// Not listening on the expected port. For a service that serves different ports in
+	// different versions this is the case where the executable said nothing, so the
+	// version has to be read from where it is actually listening.
+	if s.Config.Port == 0 {
+		for _, alt := range di.AltServicePorts {
+			if address := s.AddressForPort(alt, di.ServiceProtocol, false); address != "" {
+				return address, alt
+			}
+		}
 	}
 
 	return s.AddressForPort(port, di.ServiceProtocol, force), port
@@ -354,8 +383,14 @@ var (
 			ServiceProtocol: tcpProtocol,
 		},
 		InfluxDBService: {
-			ServicePort:     8086,
-			ServiceProtocol: tcpProtocol,
+			// 3.x's port, which its own CLI defaults to, for the "influxdb3" binary and
+			// for anything unrecognised. 1.x and 2.x serve 8086 from "influxd", and are
+			// told apart from 3.x by that name alone -- their own command lines are
+			// identical to each other.
+			ServicePort:      8181,
+			ServicePortByExe: map[string]int{"influxd": 8086},
+			AltServicePorts:  []int{8086},
+			ServiceProtocol:  tcpProtocol,
 		},
 		JenkinsService: {
 			ServicePort:     8080,
@@ -487,7 +522,18 @@ var (
 )
 
 type discoveryInfo struct {
-	ServicePort                 int
+	ServicePort int
+	// ServicePortByExe overrides ServicePort when the service's executable has one of
+	// these base names, for a service whose port depends on which version is running.
+	// It is keyed on the executable because that is the one thing the command line does
+	// tell apart: InfluxDB 1.x and 2.x serve 8086 from a binary called "influxd", where
+	// 3.x serves 8181 from "influxdb3".
+	ServicePortByExe map[string]int
+	// AltServicePorts are other ports this service type is known to serve. They are tried
+	// when it is not listening on the one chosen above, which is what happens when the
+	// executable is unknown -- a manually configured service, or a container whose process
+	// Glouton cannot see -- and the version therefore cannot be told from it.
+	AltServicePorts             []int
 	ServiceProtocol             string // "tcp", "udp" or "unix"
 	IgnoreHighPort              bool
 	DisablePersistentConnection bool

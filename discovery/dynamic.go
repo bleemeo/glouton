@@ -168,17 +168,22 @@ func (dd *DynamicDiscovery) ProcessServiceInfo(cmdLine []string, pid int, create
 //nolint:gochecknoglobals
 var (
 	knownProcesses = map[string]ServiceName{
-		"apache2":                ApacheService,
-		string(AsteriskService):  AsteriskService,
-		"chronyd":                NTPService,
-		"clickhouse-server":      ClickHouseService,
-		"dovecot":                DovecotService,
-		"exim4":                  EximService,
-		"exim":                   EximService,
-		"freeradius":             FreeradiusService,
-		"haproxy":                HAProxyService,
-		"httpd":                  ApacheService,
+		"apache2":               ApacheService,
+		string(AsteriskService): AsteriskService,
+		"chronyd":               NTPService,
+		"clickhouse-server":     ClickHouseService,
+		"dovecot":               DovecotService,
+		"exim4":                 EximService,
+		"exim":                  EximService,
+		"freeradius":            FreeradiusService,
+		"haproxy":               HAProxyService,
+		"httpd":                 ApacheService,
+		// Both binaries: 1.x and 2.x are "influxd" and cannot be told apart from the
+		// command line at all, 3.x is "influxdb3". Which line a server is decides where
+		// its metrics are read from, and that is asked of the server itself -- see
+		// inputs/influxdb.
 		"influxd":                InfluxDBService,
+		"influxdb3":              InfluxDBService,
 		"libvirtd":               LibvirtService,
 		mariadbdProcess:          MariaDBService,
 		"master":                 PostfixService,
@@ -533,7 +538,7 @@ func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discovery
 			continue
 		}
 
-		if int(port) == di.ServicePort && a.Network() == di.ServiceProtocol && address != net.IPv4zero.String() {
+		if int(port) == service.defaultPort(di) && a.Network() == di.ServiceProtocol && address != net.IPv4zero.String() {
 			defaultAddress = address
 		}
 
@@ -545,9 +550,11 @@ func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discovery
 	service.ListenAddresses = newListenAddresses
 	service.IPAddress = defaultAddress
 
-	if len(service.ListenAddresses) == 0 && di.ServicePort != 0 {
-		// If netstat seems to have failed, always add the main service port
-		service.ListenAddresses = append(service.ListenAddresses, facts.ListenAddress{NetworkFamily: di.ServiceProtocol, Address: service.IPAddress, Port: di.ServicePort})
+	if port := service.defaultPort(di); len(service.ListenAddresses) == 0 && port != 0 {
+		// If netstat seems to have failed, always add the main service port. For a service
+		// whose port depends on its version that is the one its executable implies, which
+		// is all there is to go on with nothing listening to look at.
+		service.ListenAddresses = append(service.ListenAddresses, facts.ListenAddress{NetworkFamily: di.ServiceProtocol, Address: service.IPAddress, Port: port})
 	}
 }
 
@@ -627,6 +634,8 @@ func (dd *DynamicDiscovery) fillConfig(ctx context.Context, service *Service) {
 		if service.container != nil {
 			env := service.container.Environment()
 
+			// 1.x and 2.x authenticate with a user and a password. Pair-only: the image
+			// ignores a lone password, and generates a random one for a lone user.
 			pairs := []credentialPair{
 				{userKey: "INFLUXDB_ADMIN_USER", passKey: "INFLUXDB_ADMIN_PASSWORD"}, //nolint:gosec
 				{userKey: "INFLUXDB_USER", passKey: "INFLUXDB_USER_PASSWORD"},        //nolint:gosec
@@ -635,6 +644,18 @@ func (dd *DynamicDiscovery) fillConfig(ctx context.Context, service *Service) {
 			if u, p, ok := firstCompletePair(env, pairs...); ok {
 				service.Config.Username = u
 				service.Config.Password = p
+			}
+
+			// 3.x authenticates with a token instead, and needs one for "/metrics" as much
+			// as for a query: a server left at its default settings answers 401 there.
+			// INFLUXDB3_AUTH_TOKEN is the variable its own CLI reads, so a container given
+			// a token for anything else has already named the one to use. It wins over the
+			// pair above, which belongs to another line and cannot both be set in practice.
+			for k, v := range env {
+				if k == "INFLUXDB3_AUTH_TOKEN" {
+					service.Config.Username = ""
+					service.Config.Password = v
+				}
 			}
 		}
 	}

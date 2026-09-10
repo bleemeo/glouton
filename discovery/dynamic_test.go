@@ -1120,181 +1120,85 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
+			// A 1.x server, still discovered so it keeps its service check. The port is the
+			// 3.x default because that is the only line metrics come from and there is one
+			// default per service: it only applies when netstat found no listening address,
+			// as here, and a 1.x server on 8086 that netstat does see is unaffected.
 			testName: "influxdb.deb",
 			cmdLine:  []string{"/opt/influxdb/influxd", "-config", "/etc/opt/influxdb/influxdb.conf"},
 			want: Service{
 				Name:            "influxdb",
 				ServiceType:     InfluxDBService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 8086}},
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 8181}},
 				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
 		},
 		{
-			testName:    "influxdb-admin-credentials-from-env",
+			// InfluxDB 3 needs a token for /metrics as much as for a query, and
+			// INFLUXDB3_AUTH_TOKEN is the variable its own CLI reads, so a container given
+			// one has already named the token to use. It lands in Password: there is no
+			// user to go with it.
+			testName:    "influxdb3-token-from-env",
+			containerID: "influxdb1",
+			containerIP: testIP17217049,
+			cmdLine:     []string{"influxdb3", "serve", "--node-id", "node0"},
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8181},
+			},
+			containerEnv: map[string]string{
+				"INFLUXDB3_AUTH_TOKEN": testSecret,
+			},
+			want: Service{
+				Name:            "influxdb",
+				ServiceType:     InfluxDBService,
+				ContainerID:     "influxdb1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8181}},
+				IPAddress:       testIP17217049,
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+				Config: config.Service{ //nolint:exhaustruct
+					Password: testSecret,
+				},
+			},
+		},
+		{
+			// 1.x and 2.x authenticate with a user and a password rather than a token, and
+			// the pair is what a container of either line sets. It is kept as a pair: the
+			// image ignores a lone password and generates a random one for a lone user.
+			testName:    "influxdb-v1-credentials-from-env",
 			containerID: "influxdb1",
 			containerIP: testIP17217049,
 			cmdLine:     []string{"influxd"},
 			containerAddresses: []facts.ListenAddress{
-				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8086},
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8181},
 			},
 			containerEnv: map[string]string{
-				"INFLUXDB_HTTP_AUTH_ENABLED": "true",
-				"INFLUXDB_ADMIN_USER":        "admin",
-				"INFLUXDB_ADMIN_PASSWORD":    "adminpass",
+				"INFLUXDB_ADMIN_USER":     "admin",
+				"INFLUXDB_ADMIN_PASSWORD": "adminpass",
 			},
 			want: Service{
-				Name:        string(InfluxDBService),
-				ServiceType: InfluxDBService,
-				ContainerID: "influxdb1",
-				ListenAddresses: []facts.ListenAddress{
-					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8086},
-				},
-				IPAddress: testIP17217049,
-				Config: config.Service{
-					Username: "admin",
-					Password: "adminpass",
-				},
-				IgnoredPorts:    map[int]bool{},
-				Active:          true,
-				HasNetstatInfo:  true,
-				LastNetstatInfo: t0,
-				LastTimeSeen:    t0,
-			},
-		},
-		{
-			// The non-admin user's password key is INFLUXDB_USER_PASSWORD. Getting this
-			// wrong is easy, because every other service here would spell it
-			// INFLUXDB_PASSWORD -- which the image does not read at all.
-			testName:    "influxdb-user-credentials-from-env",
-			containerID: "influxdb2",
-			containerIP: testIP17217049,
-			cmdLine:     []string{"influxd"},
-			containerAddresses: []facts.ListenAddress{
-				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8086},
-			},
-			containerEnv: map[string]string{
-				"INFLUXDB_HTTP_AUTH_ENABLED": "true",
-				"INFLUXDB_USER":              "metrics",
-				"INFLUXDB_USER_PASSWORD":     testSecret,
-			},
-			want: Service{
-				Name:        string(InfluxDBService),
-				ServiceType: InfluxDBService,
-				ContainerID: "influxdb2",
-				ListenAddresses: []facts.ListenAddress{
-					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8086},
-				},
-				IPAddress: testIP17217049,
-				Config: config.Service{
-					Username: "metrics",
-					Password: testSecret,
-				},
-				IgnoredPorts:    map[int]bool{},
-				Active:          true,
-				HasNetstatInfo:  true,
-				LastNetstatInfo: t0,
-				LastTimeSeen:    t0,
-			},
-		},
-		{
-			// The admin wins: it is the account that exists whenever any user was created,
-			// and it can read the statistics whatever the other user was granted.
-			testName:    "influxdb-admin-credentials-priority",
-			containerID: "influxdb3",
-			containerIP: testIP17217049,
-			cmdLine:     []string{"influxd"},
-			containerAddresses: []facts.ListenAddress{
-				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8086},
-			},
-			containerEnv: map[string]string{
-				"INFLUXDB_HTTP_AUTH_ENABLED": "true",
-				"INFLUXDB_USER":              "metrics",
-				"INFLUXDB_USER_PASSWORD":     testSecret,
-				"INFLUXDB_ADMIN_USER":        "admin",
-				"INFLUXDB_ADMIN_PASSWORD":    "adminpass",
-			},
-			want: Service{
-				Name:        string(InfluxDBService),
-				ServiceType: InfluxDBService,
-				ContainerID: "influxdb3",
-				ListenAddresses: []facts.ListenAddress{
-					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8086},
-				},
-				IPAddress: testIP17217049,
-				Config: config.Service{
-					Username: "admin",
-					Password: "adminpass",
-				},
-				IgnoredPorts:    map[int]bool{},
-				Active:          true,
-				HasNetstatInfo:  true,
-				LastNetstatInfo: t0,
-				LastTimeSeen:    t0,
-			},
-		},
-		{
-			// A user with no password does not fall back the way ClickHouse does: the image
-			// generates a random password for it and only prints it to its own log, so
-			// there is nothing here that would authenticate.
-			testName:    "influxdb-lone-user-ignored",
-			containerID: "influxdb4",
-			containerIP: testIP17217049,
-			cmdLine:     []string{"influxd"},
-			containerAddresses: []facts.ListenAddress{
-				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8086},
-			},
-			containerEnv: map[string]string{
-				"INFLUXDB_HTTP_AUTH_ENABLED": "true",
-				"INFLUXDB_ADMIN_USER":        "admin",
-			},
-			want: Service{
-				Name:        string(InfluxDBService),
-				ServiceType: InfluxDBService,
-				ContainerID: "influxdb4",
-				ListenAddresses: []facts.ListenAddress{
-					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8086},
-				},
+				Name:            "influxdb",
+				ServiceType:     InfluxDBService,
+				ContainerID:     "influxdb1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8181}},
 				IPAddress:       testIP17217049,
 				IgnoredPorts:    map[int]bool{},
 				Active:          true,
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0,
 				LastTimeSeen:    t0,
-			},
-		},
-		{
-			// A password with no user is not a credential either: without the user variable
-			// the image creates no user at all. INFLUXDB_PASSWORD is in here as the key
-			// that looks right and is read by nothing.
-			testName:    "influxdb-lone-password-ignored",
-			containerID: "influxdb5",
-			containerIP: testIP17217049,
-			cmdLine:     []string{"influxd"},
-			containerAddresses: []facts.ListenAddress{
-				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8086},
-			},
-			containerEnv: map[string]string{
-				"INFLUXDB_HTTP_AUTH_ENABLED": "true",
-				"INFLUXDB_ADMIN_PASSWORD":    "adminpass",
-				"INFLUXDB_PASSWORD":          testSecret,
-			},
-			want: Service{
-				Name:        string(InfluxDBService),
-				ServiceType: InfluxDBService,
-				ContainerID: "influxdb5",
-				ListenAddresses: []facts.ListenAddress{
-					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8086},
+				Config: config.Service{ //nolint:exhaustruct
+					Username: "admin",
+					Password: "adminpass",
 				},
-				IPAddress:       testIP17217049,
-				IgnoredPorts:    map[int]bool{},
-				Active:          true,
-				HasNetstatInfo:  true,
-				LastNetstatInfo: t0,
-				LastTimeSeen:    t0,
 			},
 		},
+
 		// Service from Ubuntu 16.04, default config
 		{
 			testName: "mysql-ubuntu-14.04",
