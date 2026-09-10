@@ -200,22 +200,7 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || \
     fi
 fi
 
-
-if [ "$1" = "configure" ] ; then
-    # Glouton version before 20.09.14.12xxxx had the cron.hourly/glouton script not
-    # marked as executable. Fix it.
-    # We only need to fix on upgrade from older version, because fresh install use permission
-    # from package. It's only upgrade that kept permission from filesystem.
-    # (RPM based don't have this behavior and always use permission from package).
-    #
-    # configure alone, unlike the block above: $2 is the previously configured version only
-    # here. abort-upgrade passes the version that failed to install and abort-remove passes
-    # nothing at all, and dpkg reads an empty version as older than any other, so the
-    # comparison would come out true on a path it was never written for.
-    if dpkg --compare-versions "$2" lt 20.09.14.120000; then
-        chmod +x /etc/cron.hourly/glouton
-    fi
-elif [ "$1" = "1" ] ; then
+if [ "$1" = "1" ] ; then
     # Initial installation on rpm-like system
     test -x /usr/bin/systemctl -o -x /bin/systemctl && systemctl daemon-reload
     test -x /usr/bin/systemctl -o -x /bin/systemctl && systemctl enable --quiet glouton.service
