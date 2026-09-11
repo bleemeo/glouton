@@ -10,7 +10,9 @@ case "$1" in
     upgrade)
         # On Debian, we stop in pre-remove.
 	test -e /lib/init/upstart-job && stop glouton
-        test -x /usr/bin/systemctl -o -x /bin/systemctl && systemctl stop glouton.service
+        if [ -z "${DPKG_ROOT:-}" ] && [ -d /run/systemd/system ]; then
+            deb-systemd-invoke stop glouton.service >/dev/null || true
+        fi
         ;;
     remove)
 	test -e /lib/init/upstart-job && stop glouton
