@@ -1490,7 +1490,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			want: Service{
 				Name:            "varnish",
 				ServiceType:     VarnishService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 6082}},
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 80}},
 				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,

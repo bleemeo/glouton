@@ -504,7 +504,12 @@ var (
 			ServiceProtocol: tcpProtocol,
 		},
 		VarnishService: {
-			ServicePort:     6082,
+			// 80 first: a container publishing no port to the host.
+			// The official Docker image opens 80 itself by default ("-a http=:80").
+			// 6081 stays as the alternative for a real netstat-visible install: Debian's
+			// packaged unit runs "-a :6081".
+			ServicePort:     80,
+			AltServicePorts: []int{443, 6081},
 			ServiceProtocol: tcpProtocol,
 		},
 		VaultService: {

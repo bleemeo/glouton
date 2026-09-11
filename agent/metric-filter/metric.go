@@ -978,15 +978,15 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 		},
 
 		discovery.VarnishService: {
+			"varnish_backend_fail",
+			"varnish_cache_evictions",
 			"varnish_cache_hit",
 			"varnish_cache_hit_perc",
 			"varnish_cache_miss",
-			"varnish_backend_fail",
-			"varnish_threads",
-			"varnish_threads_limited",
 			"varnish_sessions_dropped",
 			"varnish_sessions_queued",
-			"varnish_cache_evictions",
+			"varnish_threads",
+			"varnish_threads_limited",
 			"varnish_uptime",
 		},
 
