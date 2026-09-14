@@ -89,15 +89,14 @@ type containerInfoProvider interface {
 	ContainerLastKill(containerID string) time.Time
 	ContainerLastDelete(containerID string) time.Time
 	ContainerTerminationGracePeriod(containerID string) time.Duration
+	// Exec runs a command inside a container, the way "docker exec" does. Used to read a
+	// containerised service with a binary only its own image carries, like the varnishstat
+	// matching a containerised Varnish.
+	Exec(ctx context.Context, containerID string, cmd []string) ([]byte, error)
 }
 
 type fileReader interface {
 	ReadFile(ctx context.Context, filename string) ([]byte, error)
-	// ReadDir returns the names of the entries of a directory, without their directory
-	// part and in no particular order. Names only, rather than the os.DirEntry that
-	// os.ReadDir returns: the implementation may have to shell out to read a directory
-	// Glouton's own user cannot, and a name is all that survives that faithfully.
-	ReadDir(ctx context.Context, dirname string) ([]string, error)
 }
 
 // NewDynamic create a new dynamic service discovery which use information from

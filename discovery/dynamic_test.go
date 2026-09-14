@@ -112,6 +112,17 @@ func (mn mockNetstat) Netstat(_ context.Context, processes map[int]facts.Process
 
 type mockContainerInfo struct {
 	containers map[string]facts.FakeContainer
+	// exec, when set, answers Exec. Left nil every command succeeds with no output, which
+	// is what a container carrying the binary being run looks like.
+	exec func(containerID string, cmd []string) ([]byte, error)
+}
+
+func (mci mockContainerInfo) Exec(_ context.Context, containerID string, cmd []string) ([]byte, error) {
+	if mci.exec == nil {
+		return nil, nil
+	}
+
+	return mci.exec(containerID, cmd)
 }
 
 func (mci mockContainerInfo) CachedContainer(containerID string) (container facts.Container, found bool) {
@@ -146,9 +157,6 @@ func (mci mockContainerInfo) Containers(_ context.Context, maxAge time.Duration,
 
 type mockFileReader struct {
 	contents map[string]string
-	// dirs maps a directory to the entry names it holds. A directory absent from here
-	// fails to be listed, like one that does not exist.
-	dirs map[string][]string
 }
 
 func (mfr mockFileReader) ReadFile(_ context.Context, path string) ([]byte, error) {
@@ -158,15 +166,6 @@ func (mfr mockFileReader) ReadFile(_ context.Context, path string) ([]byte, erro
 	}
 
 	return []byte(content), nil
-}
-
-func (mfr mockFileReader) ReadDir(_ context.Context, path string) ([]string, error) {
-	names, ok := mfr.dirs[path]
-	if !ok {
-		return nil, os.ErrNotExist
-	}
-
-	return names, nil
 }
 
 func TestServiceByCommand(t *testing.T) {

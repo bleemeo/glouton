@@ -25,7 +25,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -95,18 +94,10 @@ const (
 	dovecotDefaultStatsPort = 24242
 	// postfixSpoolDirectory is where Postfix keeps its queues.
 	postfixSpoolDirectory = "/var/spool/postfix"
-	// varnishStateDirectory is where varnishd keeps one working directory per instance,
-	// the directory varnishstat's "-n" names.
-	varnishStateDirectory = "/var/lib/varnish"
-	// varnishPIDFile is the file varnishd writes in its working directory. Its presence is
-	// what tells a live instance from a leftover directory, and from the state directory
-	// holding them: the official Varnish image ships an empty directory named after the
-	// host that built it, so they cannot just be taken in order.
-	varnishPIDFile = "_.pid"
-	// varnishInstanceDirTimeout bounds looking for that directory. It is short because
-	// nothing is waiting on it: failing to find the instance only means no input for this
-	// Varnish, the same as before it was looked for at all.
-	varnishInstanceDirTimeout = 10 * time.Second
+	// varnishProbeTimeout bounds the "varnishstat -V" that checks a container carries one.
+	// It is short because nothing is waiting on it: finding no varnishstat only means no
+	// input for this Varnish.
+	varnishProbeTimeout = 10 * time.Second
 	// varnishStatBinary is where telegraf's varnish plugin runs varnishstat from, and so
 	// the only place a container can carry one this input is able to use.
 	varnishStatBinary = "/usr/bin/varnishstat"
@@ -651,15 +642,16 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			input, gathererOptions, err = uwsgi.New(url)
 		}
 	case VarnishService:
-		// The input runs "varnishstat" through the command runner, since the agent image
-		// carries none. varnishTarget decides whose binary that is and which instance it
-		// reads -- see it for why a containerised Varnish needs both answered.
+		// The input runs "varnishstat" rather than reading a port, since that is the only
+		// way Varnish publishes its counters: they live in a shared memory segment the
+		// daemon maps, with no socket in front of them. The agent image carries no
+		// varnishstat, so it comes from wherever the daemon is -- the machine for a
+		// Varnish installed on it, the container's own image for a containerised one.
 		//
-		// Not being able to read it means no input, rather than an input reporting the
-		// wrong Varnish: that is what a gather aimed at the machine's namespace would do
-		// for a containerised service, and it would do it under the container's name.
-		if containerPID, instanceDir, ok := d.varnishTarget(service); ok {
-			input, gathererOptions, err = varnish.New(d.commandRunner, containerPID, instanceDir)
+		// Not being able to read it means no input, rather than an input failing on every
+		// gather under that container's name.
+		if d.canReadVarnish(service) {
+			input, gathererOptions, err = varnish.New(d.commandRunner, d.containerInfo, service.ContainerID)
 		}
 	case VaultService:
 		if service.Config.StatsURL != "" {
@@ -1035,6 +1027,12 @@ func postfixSpoolPath(service Service) (string, bool) {
 	return containerRootPath(pid, postfixSpoolDirectory), true
 }
 
+// containerRootPath names a path inside a container's filesystem as seen from the machine
+// the container runs on.
+func containerRootPath(pid int, path string) string {
+	return filepath.Join(fmt.Sprintf("/proc/%d/root", pid), path)
+}
+
 // postfixQueuesUnreadable returns the error of the first queue that cannot be read in the
 // given spool directory, or nil when all of them can.
 //
@@ -1058,142 +1056,40 @@ func postfixQueuesUnreadable(spoolDirectory string) error {
 	return nil
 }
 
-// varnishTarget decides how a Varnish service is read: which container's varnishstat to
-// run, which instance to ask it for, and whether it can be read at all.
+// canReadVarnish reports whether the varnishstat this input runs can be reached for a
+// service, and logs why when it cannot.
 //
-// Preferred is the container's own varnishstat, which needs nothing installed on the
-// machine and is always the version matching the daemon -- and inside that container's
-// filesystem varnishd's default working directory is the right one, so no "-n" is needed.
-// A container without one falls back to the machine's binary aimed at the container's
-// working directory through /proc, which is all that can be done when the image carries
-// only the daemon.
+// A Varnish installed on the machine is read with the machine's binary, exactly as it was
+// before any of this existed, so there is nothing to check.
 //
-// Both zero with ok=true is a Varnish installed on the machine, read exactly as it was
-// before either of these existed.
-func (d *Discovery) varnishTarget(service Service) (containerPID int, instanceDir string, ok bool) {
-	if service.container == nil {
-		return 0, "", true
+// A containerised one is read with the container's own varnishstat, which an image is free
+// not to ship -- plenty carry only the daemon. Running "varnishstat -V" is what answers
+// that: it prints the version and exits without needing a running instance, so it says
+// whether the binary is there and runnable without reading any statistics. Asking the
+// binary beats listing the directory it would live in, which needed a privileged read of
+// the container's filesystem through /proc to answer the same question.
+//
+// An image carrying no varnishstat gets no input rather than one failing on every gather.
+// It is not a case Glouton can do anything about: reading it would mean a varnishstat on
+// the machine, which nothing documents installing for a containerised Varnish.
+func (d *Discovery) canReadVarnish(service Service) bool {
+	if service.ContainerID == "" {
+		return true
 	}
 
-	pid := service.container.PID()
-	if pid == 0 {
-		// A container between states has no PID, so there is nothing to look through yet.
-		// The next discovery run sees it again.
-		logger.V(1).Printf("Not gathering Varnish of %s: its runtime reports no PID for the container", service.Instance)
-
-		return 0, "", false
-	}
-
-	// Located before choosing between the two, and passed on both: relying on
-	// varnishstat's own default instead would depend on the image happening to leave it
-	// alone. An image that starts varnishd with its own "-n" -- pointing at the state
-	// directory itself, as some do -- would gather nothing, and finding that out only
-	// after picking the container's binary would skip the very fallback meant to cover it.
-	inContainer, found := d.varnishInstanceDir(service)
-	if !found {
-		return 0, "", false
-	}
-
-	if d.containerHasVarnishStat(service) {
-		// varnishstat runs chrooted into the container, so the directory has to be named
-		// from inside it. The /proc form used to find it does not resolve there.
-		return pid, inContainer, true
-	}
-
-	// The machine's binary stays in its own namespace and reaches the container's
-	// directory through /proc.
-	return 0, containerRootPath(pid, inContainer), true
-}
-
-// containerHasVarnishStat tells whether a container carries the varnishstat this input
-// would run. Checked rather than assumed because an image may well ship only varnishd,
-// and a chroot into it would then fail every gather with a command not found.
-func (d *Discovery) containerHasVarnishStat(service Service) bool {
-	if d.fileReader == nil || service.container.PID() == 0 {
-		return false
-	}
-
-	inContainer := containerRootPath(service.container.PID(), filepath.Dir(varnishStatBinary))
-
-	ctx, cancel := context.WithTimeout(context.Background(), varnishInstanceDirTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), varnishProbeTimeout)
 	defer cancel()
 
-	names, err := d.fileReader.ReadDir(ctx, inContainer)
-	if err != nil {
-		logger.V(2).Printf("Varnish of %s: can't list %s: %v", service.Instance, inContainer, err)
+	if _, err := d.containerInfo.Exec(ctx, service.ContainerID, []string{varnishStatBinary, "-V"}); err != nil {
+		logger.V(1).Printf(
+			"Not gathering Varnish of %s: its container has no usable %s (%v)",
+			service.Instance, varnishStatBinary, err,
+		)
 
 		return false
 	}
 
-	return slices.Contains(names, filepath.Base(varnishStatBinary))
-}
-
-// containerRootPath names a path inside a container's filesystem as seen from the machine
-// the container runs on. Both the fileReader and varnishstat resolve it, each in its own
-// mount namespace, so it is built the same way for both.
-func containerRootPath(pid int, path string) string {
-	return filepath.Join(fmt.Sprintf("/proc/%d/root", pid), path)
-}
-
-// varnishInstanceDir returns the working directory of the Varnish instance running in a
-// service's container, named as the container itself sees it, and whether one was found.
-//
-// The caller composes the two forms that path is needed in: as-is for a varnishstat
-// chrooted into the container, and through containerRootPath for one staying in the
-// machine's namespace. Only the second resolves outside the container, which is also the
-// form this looks through.
-//
-// The directory is recognised by the _.pid varnishd writes in it rather than by its name,
-// because the name is not something to rely on: the current default is the fixed
-// <state directory>/varnishd, older releases used the host name, and an image is free to
-// start varnishd with a "-n" of its own -- including the state directory itself, which is
-// why the state directory is a candidate before its subdirectories.
-//
-// found=false means no instance is running there and no input should be created. That is
-// better than gathering the machine's Varnish under the container's name, and the very
-// same numbers again for every other Varnish container.
-func (d *Discovery) varnishInstanceDir(service Service) (dir string, found bool) {
-	if d.fileReader == nil {
-		return "", false
-	}
-
-	pid := service.container.PID()
-
-	ctx, cancel := context.WithTimeout(context.Background(), varnishInstanceDirTimeout)
-	defer cancel()
-
-	holdsInstance := func(candidate string) bool {
-		_, err := d.fileReader.ReadFile(ctx, filepath.Join(containerRootPath(pid, candidate), varnishPIDFile))
-
-		return err == nil
-	}
-
-	if holdsInstance(varnishStateDirectory) {
-		return varnishStateDirectory, true
-	}
-
-	base := containerRootPath(pid, varnishStateDirectory)
-
-	names, err := d.fileReader.ReadDir(ctx, base)
-	if err != nil {
-		logger.V(1).Printf("Not gathering Varnish of %s: can't list %s: %v", service.Instance, base, err)
-
-		return "", false
-	}
-
-	for _, name := range names {
-		if candidate := filepath.Join(varnishStateDirectory, name); holdsInstance(candidate) {
-			return candidate, true
-		}
-	}
-
-	logger.V(1).Printf(
-		"Not gathering Varnish of %s: neither %s nor any of the %d entries in it holds a %s, "+
-			"so no instance is running there",
-		service.Instance, varnishStateDirectory, len(names), varnishPIDFile,
-	)
-
-	return "", false
+	return true
 }
 
 // isChronyDaemon tells whether the NTP service found is chronyd rather than ntpd, the

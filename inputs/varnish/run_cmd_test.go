@@ -51,6 +51,25 @@ func (r *fakeRunner) Run(_ context.Context, option gloutonexec.Option, name stri
 	return r.output, r.err
 }
 
+// fakeExecuter records what it was asked to run inside a container, standing in for the
+// container runtime.
+type fakeExecuter struct {
+	calls  []fakeExecCall
+	output []byte
+	err    error
+}
+
+type fakeExecCall struct {
+	containerID string
+	cmd         []string
+}
+
+func (e *fakeExecuter) Exec(_ context.Context, containerID string, cmd []string) ([]byte, error) {
+	e.calls = append(e.calls, fakeExecCall{containerID: containerID, cmd: cmd})
+
+	return e.output, e.err
+}
+
 // TestPluginKeepsItsRunnerFields is the guard against a Telegraf upgrade renaming or
 // retyping the private fields useGloutonRunner writes to. Nothing else would notice:
 // New only logs when it can't find them, and the plugin then silently goes back to
@@ -66,7 +85,7 @@ func TestPluginKeepsItsRunnerFields(t *testing.T) {
 		t.Fatalf("telegraf's varnish plugin is a %T", input())
 	}
 
-	if err := useGloutonRunner(varnishInput, &fakeRunner{}, 0); err != nil { //nolint:exhaustruct
+	if err := useGloutonRunner(varnishInput, &fakeRunner{}, &fakeExecuter{}, ""); err != nil { //nolint:exhaustruct
 		t.Errorf("useGloutonRunner() = %v\n"+
 			"Telegraf's varnish plugin changed: find what replaced %v in its Varnish struct "+
 			"(plugins/inputs/varnish/varnish.go) and update runnerFields, or varnishstat will "+
@@ -83,7 +102,7 @@ func TestNewUsesTheCommandRunner(t *testing.T) {
 		output: []byte("MAIN.cache_hit    1000    1.00 Cache hits\nMAIN.uptime    3600    1.00 Uptime\n"),
 	}
 
-	input, _, err := New(runner, 0, "")
+	input, _, err := New(runner, &fakeExecuter{}, "") //nolint:exhaustruct
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -131,21 +150,16 @@ func TestNewUsesTheCommandRunner(t *testing.T) {
 	}
 }
 
-// TestNewPassesTheInstanceDirectory checks the instance directory reaches varnishstat as
-// "-n". Without it varnishstat reads the Varnish of the namespace it runs in, which for a
-// containerised service is the host's -- the wrong numbers rather than none, which is why
-// this is worth pinning.
-//
-// The resulting command line is "varnishstat -1 -n <dir>", which the packaged sudoers
-// rule allows through its "varnishstat -1 *" pattern (packaging/common/glouton.sudoers).
-func TestNewPassesTheInstanceDirectory(t *testing.T) {
-	const instanceDir = "/proc/4242/root/var/lib/varnish/varnishd"
-
+// TestNewPassesNoInstanceDirectory pins that no "-n" is given. varnishstat then looks for
+// the instance of the namespace it runs in, which is the right one both for a Varnish
+// installed on the machine and for one read inside its own container -- in each case
+// varnishstat runs beside the daemon it reads.
+func TestNewPassesNoInstanceDirectory(t *testing.T) {
 	runner := &fakeRunner{ //nolint:exhaustruct
 		output: []byte("MAIN.cache_hit    1000    1.00 Cache hits\n"),
 	}
 
-	input, _, err := New(runner, 0, instanceDir)
+	input, _, err := New(runner, &fakeExecuter{}, "") //nolint:exhaustruct
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -156,8 +170,8 @@ func TestNewPassesTheInstanceDirectory(t *testing.T) {
 		t.Fatalf("the gather did not go through Glouton's command runner (Gather() = %v)", gatherErr)
 	}
 
-	if !cmp.Equal(runner.calls[0].args, []string{"-1", "-n", instanceDir}) {
-		t.Errorf("ran with %v, want [-1 -n %s]", runner.calls[0].args, instanceDir)
+	if !cmp.Equal(runner.calls[0].args, []string{"-1"}) {
+		t.Errorf("ran with %v, want [-1]: no -n should be passed", runner.calls[0].args)
 	}
 }
 
@@ -166,41 +180,43 @@ func TestNewPassesTheInstanceDirectory(t *testing.T) {
 // Varnish installed -- the common case, and where this input used to fail every gather
 // with "chroot: failed to run command '/usr/bin/varnishstat': No such file or directory".
 //
-// No "-n" goes with it on purpose: inside that container's filesystem varnishd's default
-// working directory is already the right one.
+// It goes through the container runtime, the way "docker exec" does, rather than through
+// the command runner: that needs no privilege of Glouton's own, where running the
+// container's binary in Glouton's namespaces needed root -- which a package-installed
+// Glouton, running as its own user, does not have.
 func TestNewRunsTheContainersVarnishStat(t *testing.T) {
-	const containerPID = 4242
+	const containerID = "varnish1"
 
-	runner := &fakeRunner{ //nolint:exhaustruct
+	runner := &fakeRunner{}    //nolint:exhaustruct
+	executer := &fakeExecuter{ //nolint:exhaustruct
 		output: []byte("MAIN.cache_hit    1000    1.00 Cache hits\n"),
 	}
 
-	input, _, err := New(runner, containerPID, "")
+	input, _, err := New(runner, executer, containerID)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
 
 	gatherErr := input.Gather(&internal.StoreAccumulator{})
 
-	if len(runner.calls) == 0 {
-		t.Fatalf("the gather did not go through Glouton's command runner (Gather() = %v)", gatherErr)
+	if len(executer.calls) == 0 {
+		t.Fatalf("the gather did not go through the container runtime (Gather() = %v)", gatherErr)
 	}
 
-	call := runner.calls[0]
+	call := executer.calls[0]
 
-	if call.option.InContainerPID != containerPID {
-		t.Errorf("InContainerPID = %d, want %d: the container's varnishstat won't be used",
-			call.option.InContainerPID, containerPID)
+	if call.containerID != containerID {
+		t.Errorf("ran in container %q, want %q", call.containerID, containerID)
 	}
 
-	// The two ask for opposite namespaces, so wanting the container's filesystem means
-	// not wanting the host's.
-	if call.option.RunOnHost {
-		t.Error("RunOnHost is set alongside InContainerPID, which asks for two namespaces at once")
+	if want := []string{"/usr/bin/varnishstat", "-1"}; !cmp.Equal(call.cmd, want) {
+		t.Errorf("ran %v, want %v", call.cmd, want)
 	}
 
-	if !cmp.Equal(call.args, []string{"-1"}) {
-		t.Errorf("ran with %v, want [-1]: no -n is needed inside the container", call.args)
+	// The machine's binary must stay out of it: running both would read two different
+	// Varnishes under one name.
+	if len(runner.calls) != 0 {
+		t.Errorf("a containerised Varnish also ran the machine's binary: %v", runner.calls)
 	}
 }
 
@@ -211,7 +227,7 @@ var errCommandNotFound = errors.New("exec: varnishstat: not found")
 func TestNewSurvivesARunnerError(t *testing.T) {
 	runner := &fakeRunner{err: errCommandNotFound} //nolint:exhaustruct
 
-	input, _, err := New(runner, 0, "")
+	input, _, err := New(runner, &fakeExecuter{}, "") //nolint:exhaustruct
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}

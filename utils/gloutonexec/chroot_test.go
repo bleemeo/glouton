@@ -24,40 +24,39 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-// TestMakeCmdInContainer pins the command line a container-targeted run produces, which
-// is the one thing that has to be right: the same shape read a containerised Varnish's
-// counters by hand, and the shape without the chroot failed with "No such file or
-// directory" on any machine with no Varnish installed.
-func TestMakeCmdInContainer(t *testing.T) {
+// TestMakeCmdOnHost pins the command line a host-targeted run produces from inside the
+// agent's container: without the chroot it would run in the agent's own filesystem, which
+// carries none of the machine's binaries.
+func TestMakeCmdOnHost(t *testing.T) {
 	// As Glouton runs in its own container: hostroot mounted, and root inside it, so the
 	// runner adds no sudo.
 	r := &Runner{hostRootPath: "/hostroot", gloutonRunAsRoot: true}
 
 	cmd, _, err := r.makeCmd(
 		context.Background(),
-		Option{RunAsRoot: true, InContainerPID: 4242}, //nolint:exhaustruct
+		Option{RunAsRoot: true, RunOnHost: true}, //nolint:exhaustruct
 		"/usr/bin/varnishstat", "-1",
 	)
 	if err != nil {
 		t.Fatalf("makeCmd() = %v", err)
 	}
 
-	want := []string{"chroot", "/hostroot/proc/4242/root", "/usr/bin/varnishstat", "-1"}
+	want := []string{"chroot", "/hostroot", "/usr/bin/varnishstat", "-1"}
 
 	if !cmp.Equal(cmd.Args, want) {
 		t.Errorf("command = %v, want %v", cmd.Args, want)
 	}
 }
 
-// TestMakeCmdInContainerNeedsHostroot checks an unknown hostroot is refused rather than
-// answered with Glouton's own /proc, which would run the command against whatever
-// container that PID happens to be in the agent's namespace -- or nothing at all.
-func TestMakeCmdInContainerNeedsHostroot(t *testing.T) {
+// TestMakeCmdOnHostNeedsHostroot checks an unknown hostroot is refused rather than
+// answered with Glouton's own filesystem, which would silently run against the wrong
+// machine.
+func TestMakeCmdOnHostNeedsHostroot(t *testing.T) {
 	r := &Runner{hostRootPath: "", gloutonRunAsRoot: true}
 
 	_, _, err := r.makeCmd(
 		context.Background(),
-		Option{InContainerPID: 4242}, //nolint:exhaustruct
+		Option{RunOnHost: true}, //nolint:exhaustruct
 		"/usr/bin/varnishstat", "-1",
 	)
 
@@ -67,10 +66,6 @@ func TestMakeCmdInContainerNeedsHostroot(t *testing.T) {
 }
 
 // TestChrootPath covers which mount namespace a command is run in.
-//
-// The case worth protecting is InContainerPID with hostRootPath "/": a Glouton installed
-// on the machine chroots nowhere for RunOnHost, since it is already there, but a container
-// is never the namespace it runs in -- so that one still has to chroot.
 func TestChrootPath(t *testing.T) {
 	cases := []struct {
 		testName     string
@@ -98,40 +93,13 @@ func TestChrootPath(t *testing.T) {
 			want:         "",
 		},
 		{
-			testName:     "glouton in a container, run in a container",
-			hostRootPath: "/hostroot",
-			option:       Option{InContainerPID: 4242}, //nolint:exhaustruct
-			want:         "/hostroot/proc/4242/root",
-		},
-		{
-			// The container is a different namespace whether or not Glouton is in one.
-			testName:     "glouton on the machine, run in a container",
-			hostRootPath: "/",
-			option:       Option{InContainerPID: 4242}, //nolint:exhaustruct
-			want:         "/proc/4242/root",
-		},
-		{
-			// Asking for both is asking for opposite namespaces. The container wins, as
-			// the more specific of the two.
-			testName:     "a container beats run on host",
-			hostRootPath: "/hostroot",
-			option:       Option{RunOnHost: true, InContainerPID: 4242}, //nolint:exhaustruct
-			want:         "/hostroot/proc/4242/root",
-		},
-		{
 			// An unset hostroot means Glouton cannot tell where the machine's filesystem
-			// is, so no directory is named: reading its own /proc instead would silently
-			// answer about the wrong machine. makeCmd turns this into ErrUnknownHostroot.
-			testName:     "unknown hostroot, run in a container",
+			// is, so no directory is named: reading its own instead would silently answer
+			// about the wrong machine. makeCmd turns this into ErrUnknownHostroot.
+			testName:     "unknown hostroot, run on host",
 			hostRootPath: "",
-			option:       Option{InContainerPID: 4242}, //nolint:exhaustruct
+			option:       Option{RunOnHost: true}, //nolint:exhaustruct
 			want:         "",
-		},
-		{
-			testName:     "a zero pid is not a container",
-			hostRootPath: "/hostroot",
-			option:       Option{InContainerPID: 0, RunOnHost: true}, //nolint:exhaustruct
-			want:         "/hostroot",
 		},
 	}
 

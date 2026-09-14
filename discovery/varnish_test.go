@@ -17,10 +17,16 @@
 package discovery
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/bleemeo/glouton/facts"
+
+	"github.com/google/go-cmp/cmp"
 )
+
+// errNoSuchBinary is what a runtime answers for a container carrying no varnishstat.
+var errNoSuchBinary = errors.New("exec: \"varnishstat\": executable file not found in $PATH")
 
 // varnishInstanceService builds the containerised Varnish service the cases below differ
 // on, with pid as the container's init process.
@@ -34,233 +40,95 @@ func varnishInstanceService(pid int) Service {
 	}
 }
 
-// TestVarnishTarget covers the choice between the two ways of reading a Varnish: the
-// container's own varnishstat, or the machine's aimed at the container's instance.
+// TestCanReadVarnish covers whether a Varnish can be read at all, which for a
+// containerised one means asking its own varnishstat to run.
 //
-// The container's own comes first because it needs nothing installed on the machine, which
-// is the case that used to produce no metrics at all.
-func TestVarnishTarget(t *testing.T) {
+// "varnishstat -V" is the probe: it prints the version and exits without needing a running
+// instance, so it answers whether the binary is there and runnable without reading any
+// statistics. An image carrying only varnishd -- plenty do -- gets no input rather than one
+// failing on every gather.
+func TestCanReadVarnish(t *testing.T) {
 	const pid = 4242
 
-	// A container carrying both the daemon and the tools, as the official image does,
-	// with a running instance in the current default directory.
-	withVarnishStat := mockFileReader{
-		dirs: map[string][]string{
-			"/proc/4242/root/usr/bin":         {"varnishadm", "varnishd", "varnishstat"},
-			"/proc/4242/root/var/lib/varnish": {"varnishd"},
-		},
-		contents: map[string]string{
-			"/proc/4242/root/var/lib/varnish/varnishd/_.pid": "1\n",
-		},
-	}
-
-	// One carrying only the daemon, which has to be read the other way.
-	daemonOnly := map[string][]string{
-		"/proc/4242/root/usr/bin":         {"varnishd"},
-		"/proc/4242/root/var/lib/varnish": {"varnishd"},
-	}
-
 	cases := []struct {
-		testName     string
-		service      Service
-		reader       fileReader
-		wantPID      int
-		wantInstance string
-		wantOK       bool
+		testName string
+		service  Service
+		exec     func(containerID string, cmd []string) ([]byte, error)
+		want     bool
 	}{
 		{
-			testName: "host varnish is read as it always was",
+			// A Varnish installed on the machine is read with the machine's binary, so
+			// there is nothing to ask a container about.
+			testName: "host varnish needs no probe",
 			service: Service{ //nolint:exhaustruct
 				Name:        string(VarnishService),
 				ServiceType: VarnishService,
 			},
-			reader:       mockFileReader{contents: nil, dirs: nil},
-			wantPID:      0,
-			wantInstance: "",
-			wantOK:       true,
-		},
-		{
-			// Its own binary, and the directory named as the container sees it: the /proc
-			// form does not resolve inside the chroot varnishstat runs in.
-			testName:     "container with varnishstat runs its own",
-			service:      varnishInstanceService(pid),
-			reader:       withVarnishStat,
-			wantPID:      pid,
-			wantInstance: "/var/lib/varnish/varnishd",
-			wantOK:       true,
-		},
-		{
-			// The directory is located before choosing a binary, so a container carrying
-			// varnishstat but running no instance is not gathered -- rather than gathered
-			// forever against an instance directory that does not exist.
-			testName: "container with varnishstat but no running instance",
-			service:  varnishInstanceService(pid),
-			reader: mockFileReader{
-				contents: nil,
-				dirs: map[string][]string{
-					"/proc/4242/root/usr/bin":         {"varnishd", "varnishstat"},
-					"/proc/4242/root/var/lib/varnish": {"buildkitsandbox"},
-				},
+			exec: func(_ string, _ []string) ([]byte, error) {
+				t.Error("canReadVarnish() ran a command in a container for a host service")
+
+				return nil, nil
 			},
-			wantPID:      0,
-			wantInstance: "",
-			wantOK:       false,
+			want: true,
 		},
 		{
-			testName: "container without varnishstat falls back to -n",
+			testName: "container carrying varnishstat is read",
 			service:  varnishInstanceService(pid),
-			reader: mockFileReader{
-				dirs: daemonOnly,
-				contents: map[string]string{
-					"/proc/4242/root/var/lib/varnish/varnishd/_.pid": "1\n",
-				},
+			exec: func(_ string, _ []string) ([]byte, error) {
+				return []byte("varnishstat (varnish-7.1.1 revision abc)\n"), nil
 			},
-			wantPID:      0,
-			wantInstance: "/proc/4242/root/var/lib/varnish/varnishd",
-			wantOK:       true,
+			want: true,
 		},
 		{
-			// Neither way can work: no binary in the container, and no instance to aim
-			// the machine's binary at.
-			testName:     "container with neither is not gathered",
-			service:      varnishInstanceService(pid),
-			reader:       mockFileReader{contents: nil, dirs: daemonOnly},
-			wantPID:      0,
-			wantInstance: "",
-			wantOK:       false,
-		},
-		{
-			testName:     "container with no pid is not gathered",
-			service:      varnishInstanceService(0),
-			reader:       withVarnishStat,
-			wantPID:      0,
-			wantInstance: "",
-			wantOK:       false,
+			testName: "container carrying only the daemon is not gathered",
+			service:  varnishInstanceService(pid),
+			exec: func(_ string, _ []string) ([]byte, error) {
+				return nil, errNoSuchBinary
+			},
+			want: false,
 		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.testName, func(t *testing.T) {
-			d := &Discovery{fileReader: c.reader} //nolint:exhaustruct
-
-			gotPID, gotInstance, gotOK := d.varnishTarget(c.service)
-
-			if gotPID != c.wantPID {
-				t.Errorf("varnishTarget() pid = %d, want %d", gotPID, c.wantPID)
+			d := &Discovery{ //nolint:exhaustruct
+				containerInfo: mockContainerInfo{containers: nil, exec: c.exec},
 			}
 
-			if gotInstance != c.wantInstance {
-				t.Errorf("varnishTarget() instance = %q, want %q", gotInstance, c.wantInstance)
-			}
-
-			if gotOK != c.wantOK {
-				t.Errorf("varnishTarget() ok = %v, want %v", gotOK, c.wantOK)
+			if got := d.canReadVarnish(c.service); got != c.want {
+				t.Errorf("canReadVarnish() = %v, want %v", got, c.want)
 			}
 		})
 	}
 }
 
-// TestVarnishInstanceDir covers locating the working directory of a containerised
-// Varnish, named as the container itself sees it.
-//
-// It is recognised by the _.pid varnishd writes in it rather than by its name, so this
-// does not have to know which naming scheme the running version uses -- nor whether the
-// image started varnishd with a "-n" of its own.
-func TestVarnishInstanceDir(t *testing.T) {
-	const pid = 4242
+// TestCanReadVarnishProbesTheRightCommand pins what the probe actually runs. "-V" is the
+// flag that answers without a running instance; "-1" would report a container whose
+// varnishd is merely still starting as carrying no varnishstat at all.
+func TestCanReadVarnishProbesTheRightCommand(t *testing.T) {
+	var gotContainerID string
 
-	cases := []struct {
-		testName string
-		reader   fileReader
-		want     string
-		wantOK   bool
-	}{
-		{
-			// Where the current release puts it: a subdirectory named after the daemon.
-			testName: "instance in the default subdirectory",
-			reader: mockFileReader{
-				dirs: map[string][]string{
-					"/proc/4242/root/var/lib/varnish": {"varnishd"},
-				},
-				contents: map[string]string{
-					"/proc/4242/root/var/lib/varnish/varnishd/_.pid": "1\n",
-				},
+	var gotCmd []string
+
+	d := &Discovery{ //nolint:exhaustruct
+		containerInfo: mockContainerInfo{
+			containers: nil,
+			exec: func(containerID string, cmd []string) ([]byte, error) {
+				gotContainerID, gotCmd = containerID, cmd
+
+				return nil, nil
 			},
-			want:   "/var/lib/varnish/varnishd",
-			wantOK: true,
-		},
-		{
-			// An image that starts varnishd with "-n /var/lib/varnish": the state
-			// directory is the instance directory, and what is in it are the instance's
-			// own files rather than one directory per instance. Looking only one level
-			// down would find nothing here and gather nothing.
-			testName: "instance in the state directory itself",
-			reader: mockFileReader{
-				dirs: nil,
-				contents: map[string]string{
-					"/proc/4242/root/var/lib/varnish/_.pid": "1\n",
-				},
-			},
-			want:   "/var/lib/varnish",
-			wantOK: true,
-		},
-		{
-			// Two instances would be ambiguous; the state directory is the one varnishd
-			// was told to use, so it wins.
-			testName: "the state directory wins over a subdirectory",
-			reader: mockFileReader{
-				dirs: map[string][]string{
-					"/proc/4242/root/var/lib/varnish": {"varnishd"},
-				},
-				contents: map[string]string{
-					"/proc/4242/root/var/lib/varnish/_.pid":          "1\n",
-					"/proc/4242/root/var/lib/varnish/varnishd/_.pid": "2\n",
-				},
-			},
-			want:   "/var/lib/varnish",
-			wantOK: true,
-		},
-		{
-			// The official image ships a directory named after the host that built it,
-			// left over and empty. Taking directories in order would pick it.
-			testName: "a leftover directory is not an instance",
-			reader: mockFileReader{
-				contents: nil,
-				dirs: map[string][]string{
-					"/proc/4242/root/var/lib/varnish": {"buildkitsandbox"},
-				},
-			},
-			want:   "",
-			wantOK: false,
-		},
-		{
-			testName: "state directory that can't be listed",
-			reader:   mockFileReader{contents: nil, dirs: nil},
-			want:     "",
-			wantOK:   false,
-		},
-		{
-			testName: "no file reader",
-			reader:   nil,
-			want:     "",
-			wantOK:   false,
 		},
 	}
 
-	for _, c := range cases {
-		t.Run(c.testName, func(t *testing.T) {
-			d := &Discovery{fileReader: c.reader} //nolint:exhaustruct
+	d.canReadVarnish(varnishInstanceService(4242))
 
-			got, gotOK := d.varnishInstanceDir(varnishInstanceService(pid))
+	if gotContainerID != "varnish1" {
+		t.Errorf("probed container %q, want %q", gotContainerID, "varnish1")
+	}
 
-			if got != c.want {
-				t.Errorf("varnishInstanceDir() directory = %q, want %q", got, c.want)
-			}
-
-			if gotOK != c.wantOK {
-				t.Errorf("varnishInstanceDir() found = %v, want %v", gotOK, c.wantOK)
-			}
-		})
+	if want := []string{varnishStatBinary, "-V"}; !cmp.Equal(gotCmd, want) {
+		t.Errorf("probed with %v, want %v", gotCmd, want)
 	}
 }
 
@@ -270,8 +138,8 @@ func TestVarnishInstanceDir(t *testing.T) {
 // Nothing else in the comparison catches it: the container keeps its ID and its name, and
 // a compose network hands back the same IP, while the container-event debounce can
 // coalesce the stop and the start into one discovery that sees it running both times. Only
-// the PID changes -- and the Varnish and Postfix inputs hold a /proc/<pid> path, so missing
-// this leaves them reading a process that no longer exists.
+// the PID changes -- and the Postfix input holds a /proc/<pid> path, so missing
+// this leaves it reading a process that no longer exists.
 func TestServiceNeedUpdateOnContainerRestart(t *testing.T) {
 	withPID := func(pid int) Service {
 		service := varnishInstanceService(pid)

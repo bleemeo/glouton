@@ -34,8 +34,14 @@ type Runner interface {
 	Run(ctx context.Context, option gloutonexec.Option, name string, arg ...string) ([]byte, error)
 }
 
+// ContainerExecuter runs a command inside a container. Only declared so New keeps one
+// signature across platforms; nothing on Windows uses it.
+type ContainerExecuter interface {
+	Exec(ctx context.Context, containerID string, cmd []string) ([]byte, error)
+}
+
 // New returns a Varnish input. Varnish isn't supported on Windows, telegraf's
 // own varnish plugin is a no-op stub on this platform.
-func New(_ Runner, _ int, _ string) (telegraf.Input, registry.RegistrationOption, error) {
+func New(_ Runner, _ ContainerExecuter, _ string) (telegraf.Input, registry.RegistrationOption, error) {
 	return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
 }

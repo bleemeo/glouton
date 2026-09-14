@@ -11,8 +11,10 @@ glouton     ALL=(root) NOEXEC: NOPASSWD: /usr/bin/fail2ban-client status, /usr/b
 
 # Allow Glouton to read Varnish metrics via varnishstat.
 # Note: "-1" is the flag used by the Telegraf varnish input for its metric version 1,
-# the one Glouton uses. The trailing "*" allows the optional "-n <instance>" argument.
-glouton     ALL=(root) NOEXEC: NOPASSWD: /usr/bin/varnishstat -1, /usr/bin/varnishstat -1 *
+# the one Glouton uses. No other argument is ever passed: a Varnish installed on the
+# machine is read without "-n", and a containerised one is read through the container
+# runtime rather than through sudo.
+glouton     ALL=(root) NOEXEC: NOPASSWD: /usr/bin/varnishstat -1
 
 # Allow Glouton to get SMART metrics.
 glouton     ALL=(ALL) NOPASSWD: /usr/bin/smartctl, /usr/sbin/smartctl
