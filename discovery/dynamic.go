@@ -139,7 +139,7 @@ func (dd *DynamicDiscovery) Discovery(ctx context.Context) ([]Service, time.Time
 
 // ProcessServiceInfo return the service & container a process belong based on its command line + pid & start time.
 func (dd *DynamicDiscovery) ProcessServiceInfo(cmdLine []string, pid int, createTime time.Time) (serviceName ServiceName, containerName string) {
-	serviceType, ok := serviceByCommand(cmdLine)
+	serviceType, _, ok := serviceByCommand(cmdLine)
 	if !ok {
 		return "", ""
 	}
@@ -178,10 +178,11 @@ var (
 		"freeradius":            FreeradiusService,
 		"haproxy":               HAProxyService,
 		"httpd":                 ApacheService,
-		// Both binaries: 1.x and 2.x are "influxd" and cannot be told apart from the
-		// command line at all, 3.x is "influxdb3". Which line a server is decides where
-		// its metrics are read from, and that is asked of the server itself -- see
-		// inputs/influxdb.
+		// Both binaries, each carrying a ServiceVariant of its own (see knownVariants):
+		// 1.x and 2.x are "influxd" and cannot be told apart from the command line at
+		// all, 3.x is "influxdb3". The variant is what decides the port. Which of 1.x and
+		// 2.x a server is only matters for where its metrics are read from, and that is
+		// asked of the server itself -- see inputs/influxdb.
 		"influxd":                InfluxDBService,
 		"influxdb3":              InfluxDBService,
 		"libvirtd":               LibvirtService,
@@ -428,20 +429,21 @@ func (dd *DynamicDiscovery) serviceFromProcess(ctx context.Context, process fact
 		return Service{}, false
 	}
 
-	serviceType, ok := serviceByCommand(process.CmdLineList)
+	serviceType, variant, ok := serviceByCommand(process.CmdLineList)
 	if !ok {
 		return Service{}, false
 	}
 
 	service := Service{
-		ServiceType:   serviceType,
-		Name:          string(serviceType),
-		ContainerID:   process.ContainerID,
-		ContainerName: process.ContainerName,
-		Instance:      process.ContainerName,
-		ExePath:       process.Executable,
-		Active:        true,
-		LastTimeSeen:  dd.now(),
+		ServiceType:    serviceType,
+		ServiceVariant: variant,
+		Name:           string(serviceType),
+		ContainerID:    process.ContainerID,
+		ContainerName:  process.ContainerName,
+		Instance:       process.ContainerName,
+		ExePath:        process.Executable,
+		Active:         true,
+		LastTimeSeen:   dd.now(),
 	}
 
 	if service.ContainerID != "" {
@@ -871,9 +873,14 @@ func (dd *DynamicDiscovery) guessJMX(service *Service, cmdLine []string) {
 	}
 }
 
-func serviceByCommand(cmdLine []string) (serviceName ServiceName, found bool) {
+// serviceByCommand identifies the service a command line belongs to, and which
+// implementation of it is running when the type has more than one (see ServiceVariant).
+// The variant is empty for every service type that has only one implementation, and for
+// the command-line shapes that identify a service by something other than the process
+// name -- none of those belong to a type with variants.
+func serviceByCommand(cmdLine []string) (serviceName ServiceName, variant ServiceVariant, found bool) {
 	if len(cmdLine) == 0 {
-		return "", false
+		return "", VariantUnknown, false
 	}
 
 	name := filepath.Base(cmdLine[0])
@@ -884,7 +891,7 @@ func serviceByCommand(cmdLine []string) (serviceName ServiceName, found bool) {
 	}
 
 	if name == "" {
-		return "", false
+		return "", VariantUnknown, false
 	}
 
 	// Some process alter their name to add information. Redis, nginx or php-fpm do this.
@@ -898,27 +905,27 @@ func serviceByCommand(cmdLine []string) (serviceName ServiceName, found bool) {
 	alteredName := strings.Split(cmdLine[0], " ")[0]
 	if len(alteredName) > 0 && alteredName[len(alteredName)-1] == ':' {
 		if serviceName, ok := knownProcesses[alteredName[:len(alteredName)-1]]; ok {
-			return serviceName, ok
+			return serviceName, VariantUnknown, ok
 		}
 	}
 
 	serviceName, ok := serviceByInterpreter(name, cmdLine)
 
 	if ok {
-		return serviceName, ok
+		return serviceName, VariantUnknown, ok
 	}
 
 	if candidate, ok := serverSubCommands[name]; ok {
 		if len(cmdLine) > 1 && cmdLine[1] == candidate.SubCommand {
-			return candidate.ServiceName, true
+			return candidate.ServiceName, VariantUnknown, true
 		}
 
-		return "", false
+		return "", VariantUnknown, false
 	}
 
 	serviceName, ok = knownProcesses[name]
 
-	return serviceName, ok
+	return serviceName, knownVariants[name], ok
 }
 
 func serviceByInterpreter(name string, cmdLine []string) (serviceName ServiceName, found bool) {

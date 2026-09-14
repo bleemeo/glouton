@@ -1199,13 +1199,14 @@ func (d *Discovery) varnishInstanceDir(service Service) (dir string, found bool)
 // isChronyDaemon tells whether the NTP service found is chronyd rather than ntpd, the
 // two being queried with a different telegraf plugin.
 //
-// The executable path is what tells them apart, but it isn't always known: a service
-// declared by the user has none, and neither has a process Glouton couldn't read the
-// details of (/proc/<pid>/exe of a root-owned process isn't readable by the glouton user).
-// The control socket chronyd listens on is then looked for, the same way getMetricsSocket
-// looks for Dovecot's: finding it is what a chrony host looks like, and the alternative is
-// running ntpq against a chronyd that doesn't speak its protocol -- and against a host that
-// may not even have ntpq installed.
+// The variant is the answer whenever there is one, and auto-discovery always fills it from
+// the process name. It is left unknown only for a service the user declared, which names
+// its own variant or gets the probe below.
+//
+// The control socket chronyd listens on is what that probe looks for, the same way
+// getMetricsSocket looks for Dovecot's: finding it is what a chrony host looks like, and
+// the alternative is running ntpq against a chronyd that doesn't speak its protocol -- and
+// against a host that may not even have ntpq installed.
 //
 // Being denied the socket counts as finding it. Its directory is only reachable by the
 // chrony user on a default install (/run/chrony is drwxr-x--- _chrony:_chrony on Debian), so
@@ -1215,15 +1216,14 @@ func (d *Discovery) varnishInstanceDir(service Service) (dir string, found bool)
 // by default.
 //
 // That socket only says something about the daemon running next to Glouton, so it's only
-// looked for when the service is that daemon. A service somewhere else with an unknown
-// executable (a container Glouton can't read the process details of, or a user-declared
-// remote address) gets the ntpd answer it got before this probe existed: a Glouton host
-// that happens to run chronyd itself -- the default on RHEL and Ubuntu -- must not turn a
-// declared remote ntpd into a chrony one, which would query the chrony command protocol on
-// a port ntpd doesn't listen on.
+// looked for when the service is that daemon. A service declared at a remote address gets
+// the ntpd answer it got before this probe existed: a Glouton host that happens to run
+// chronyd itself -- the default on RHEL and Ubuntu -- must not turn a declared remote ntpd
+// into a chrony one, which would query the chrony command protocol on a port ntpd doesn't
+// listen on.
 func isChronyDaemon(service Service, socketPath string) bool {
-	if exePath := service.ExePath; exePath != "" {
-		return filepath.Base(exePath) == "chronyd"
+	if service.ServiceVariant != VariantUnknown {
+		return service.ServiceVariant == VariantChrony
 	}
 
 	if serviceRunsElsewhere(service) {

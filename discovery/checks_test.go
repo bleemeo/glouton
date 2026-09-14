@@ -53,7 +53,7 @@ func TestUseChronyCommandCheck(t *testing.T) {
 			name: "chronyd not serving NTP",
 			service: Service{
 				ServiceType:     NTPService,
-				ExePath:         "/usr/sbin/chronyd",
+				ServiceVariant:  VariantChrony,
 				ListenAddresses: []facts.ListenAddress{ntpPort},
 				HasNetstatInfo:  false,
 			},
@@ -66,7 +66,7 @@ func TestUseChronyCommandCheck(t *testing.T) {
 			name: "chronyd serving NTP",
 			service: Service{
 				ServiceType:     NTPService,
-				ExePath:         "/usr/sbin/chronyd",
+				ServiceVariant:  VariantChrony,
 				ListenAddresses: []facts.ListenAddress{ntpPort},
 				HasNetstatInfo:  true,
 			},
@@ -77,8 +77,8 @@ func TestUseChronyCommandCheck(t *testing.T) {
 			// the family in the network ("udp6"), and it is still a chronyd serving NTP.
 			name: "chronyd serving NTP over IPv6 only",
 			service: Service{
-				ServiceType: NTPService,
-				ExePath:     "/usr/sbin/chronyd",
+				ServiceType:    NTPService,
+				ServiceVariant: VariantChrony,
 				ListenAddresses: []facts.ListenAddress{
 					{NetworkFamily: di.ServiceProtocol + "6", Address: "::", Port: di.ServicePort},
 				},
@@ -91,7 +91,7 @@ func TestUseChronyCommandCheck(t *testing.T) {
 			name: "chronyd with netstat information but no NTP port",
 			service: Service{
 				ServiceType:     NTPService,
-				ExePath:         "/usr/sbin/chronyd",
+				ServiceVariant:  VariantChrony,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: udpProtocol, Address: "127.0.0.1", Port: chronyDefaultCmdPort}},
 				HasNetstatInfo:  true,
 			},
@@ -103,7 +103,7 @@ func TestUseChronyCommandCheck(t *testing.T) {
 			name: "ntpd",
 			service: Service{
 				ServiceType:     NTPService,
-				ExePath:         "/usr/sbin/ntpd",
+				ServiceVariant:  VariantNTPd,
 				ListenAddresses: []facts.ListenAddress{ntpPort},
 				HasNetstatInfo:  false,
 			},
@@ -114,7 +114,7 @@ func TestUseChronyCommandCheck(t *testing.T) {
 			name: "chronyd serving NTP on a declared port",
 			service: Service{
 				ServiceType:     NTPService,
-				ExePath:         "/usr/sbin/chronyd",
+				ServiceVariant:  VariantChrony,
 				Config:          config.Service{Port: 1123},
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: udpProtocol, Address: "192.168.1.5", Port: 1123}},
 				HasNetstatInfo:  true,
@@ -126,7 +126,7 @@ func TestUseChronyCommandCheck(t *testing.T) {
 			name: "chronyd with a TCP port 123",
 			service: Service{
 				ServiceType:     NTPService,
-				ExePath:         "/usr/sbin/chronyd",
+				ServiceVariant:  VariantChrony,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: "192.168.1.5", Port: di.ServicePort}},
 				HasNetstatInfo:  true,
 			},

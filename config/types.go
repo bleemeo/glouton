@@ -382,6 +382,15 @@ type Listener struct {
 type Service struct {
 	// The name of the service type, like "apache", "nginx". For custom service, it could be any value.
 	Type string `yaml:"type"`
+	// Variant names which implementation of the service type is running, for the few types
+	// that have more than one: "chrony" or "ntpd" for an "ntp" service, "influxd" (1.x and
+	// 2.x, which share a binary and a port) or "influxdb3" for an "influxdb" one.
+	//
+	// Only needed for a service declared here: auto-discovery reads it from the process.
+	// Leaving it out falls back to the service type's default port and daemon, which is
+	// right for some setups and wrong for others -- an "influxdb" override with no variant
+	// is assumed to be 3.x.
+	Variant string `yaml:"variant"`
 	// Instance of the service, used to differentiate between two same services (like two apaches)
 	Instance string `yaml:"instance"`
 	// The port the service is running on.

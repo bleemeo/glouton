@@ -426,19 +426,18 @@ func TestIsChronyDaemon(t *testing.T) {
 	}{
 		{
 			name:    "chronyd",
-			service: Service{ServiceType: NTPService, ExePath: "/usr/sbin/chronyd"},
+			service: Service{ServiceType: NTPService, ServiceVariant: VariantChrony},
 			want:    true,
 		},
 		{
 			name:    "ntpd",
-			service: Service{ServiceType: NTPService, ExePath: "/usr/sbin/ntpd"},
+			service: Service{ServiceType: NTPService, ServiceVariant: VariantNTPd},
 			want:    false,
 		},
 		{
-			// Happens for a service declared by the user, or for a process Glouton
-			// couldn't read the details of: the control socket then decides, and finding
-			// it is what a chrony host looks like.
-			name:       "unknown executable, chronyd socket present",
+			// Happens for a service declared by the user without naming a variant: the
+			// control socket then decides, and finding it is what a chrony host looks like.
+			name:       "unknown variant, chronyd socket present",
 			service:    Service{ServiceType: NTPService},
 			socketPath: existingSocket,
 			want:       true,
@@ -448,22 +447,22 @@ func TestIsChronyDaemon(t *testing.T) {
 			// (/run/chrony is drwxr-x--- _chrony:_chrony on Debian), so the Glouton user is
 			// denied it rather than told it doesn't exist. That still means chrony is there,
 			// and the plugin doesn't need to read it: it falls back to the UDP command port.
-			name:       "unknown executable, chronyd socket present but not readable",
+			name:       "unknown variant, chronyd socket present but not readable",
 			service:    Service{ServiceType: NTPService},
 			socketPath: filepath.Join(unreadableDir, "chronyd.sock"),
 			want:       true,
 		},
 		{
-			name:       "unknown executable, no chronyd socket -> ntpd assumed",
+			name:       "unknown variant, no chronyd socket -> ntpd assumed",
 			service:    Service{ServiceType: NTPService},
 			socketPath: filepath.Join(t.TempDir(), "nonexistent.sock"),
 			want:       false,
 		},
 		{
-			// The executable is what decides when it is known: an ntpd host that also
+			// The variant is what decides when there is one: an ntpd host that also
 			// happens to have chronyd's socket lying around is still queried with ntpq.
 			name:       "ntpd wins over a stray chronyd socket",
-			service:    Service{ServiceType: NTPService, ExePath: "/usr/sbin/ntpd"},
+			service:    Service{ServiceType: NTPService, ServiceVariant: VariantNTPd},
 			socketPath: existingSocket,
 			want:       false,
 		},
@@ -479,7 +478,7 @@ func TestIsChronyDaemon(t *testing.T) {
 		},
 		{
 			// Same for a container: its network namespace isn't the one the socket is in.
-			name:       "container with unknown executable, chronyd socket present locally",
+			name:       "container with unknown variant, chronyd socket present locally",
 			service:    Service{ServiceType: NTPService, ContainerID: "1234"},
 			socketPath: existingSocket,
 			want:       false,
@@ -501,9 +500,9 @@ func TestIsChronyDaemon(t *testing.T) {
 			want:       true,
 		},
 		{
-			// The executable still wins when it is known, container or not.
+			// The variant still wins when there is one, container or not.
 			name:       "container running chronyd",
-			service:    Service{ServiceType: NTPService, ContainerID: "1234", ExePath: "/usr/sbin/chronyd"},
+			service:    Service{ServiceType: NTPService, ContainerID: "1234", ServiceVariant: VariantChrony},
 			socketPath: filepath.Join(t.TempDir(), "nonexistent.sock"),
 			want:       true,
 		},

@@ -27,8 +27,8 @@ import (
 // same for every InfluxDB: 1.x and 2.x serve 8086, 3.x serves 8181. Getting it from one
 // fixed default reported a healthy 1.x as down and gave its input no address at all.
 //
-// The executable is what tells them apart -- "influxd" for 1.x and 2.x, "influxdb3" for
-// 3.x -- because their command lines are otherwise identical. Where netstat saw a port,
+// The variant is what tells them apart -- VariantInfluxd for 1.x and 2.x, VariantInfluxDB3
+// for 3.x -- since their command lines are otherwise identical. Where netstat saw a port,
 // that wins over any guess.
 func TestInfluxDBPort(t *testing.T) {
 	listening := func(ports ...int) []facts.ListenAddress {
@@ -44,57 +44,57 @@ func TestInfluxDBPort(t *testing.T) {
 
 	cases := []struct {
 		testName string
-		exePath  string
+		variant  ServiceVariant
 		listen   []facts.ListenAddress
 		config   config.Service
 		wantPort int
 	}{
 		{
 			testName: "3.x listening where it should",
-			exePath:  "/usr/bin/influxdb3",
+			variant:  VariantInfluxDB3,
 			listen:   listening(8181),
 			wantPort: 8181,
 		},
 		{
 			testName: "1.x or 2.x listening where it should",
-			exePath:  "/usr/bin/influxd",
+			variant:  VariantInfluxd,
 			listen:   listening(8086),
 			wantPort: 8086,
 		},
 		{
 			// The case that was broken: netstat saw 8086, the default said 8181, and
 			// AddressForPort matched neither so the service had no address.
-			testName: "the executable decides when both are listening",
-			exePath:  "/usr/bin/influxd",
+			testName: "the variant decides when both are listening",
+			variant:  VariantInfluxd,
 			listen:   listening(8086, 8181),
 			wantPort: 8086,
 		},
 		{
-			// No netstat information: the invented address is the one the executable
+			// No netstat information: the invented address is the one the variant
 			// implies, which is all there is to go on.
 			testName: "1.x with nothing listening",
-			exePath:  "/opt/influxdb/influxd",
+			variant:  VariantInfluxd,
 			listen:   listening(8086),
 			wantPort: 8086,
 		},
 		{
-			// A manually configured service, or a container whose process Glouton cannot
-			// see. The executable says nothing, so where it listens has to.
-			testName: "no executable, listening on the older port",
-			exePath:  "",
+			// A service the user declared without naming a variant. Nothing says which
+			// line it is, so where it listens has to.
+			testName: "no variant, listening on the older port",
+			variant:  VariantUnknown,
 			listen:   listening(8086),
 			wantPort: 8086,
 		},
 		{
-			testName: "no executable, listening on the 3.x port",
-			exePath:  "",
+			testName: "no variant, listening on the 3.x port",
+			variant:  VariantUnknown,
 			listen:   listening(8181),
 			wantPort: 8181,
 		},
 		{
 			// An explicit port in the configuration is the user's decision and beats both.
 			testName: "the configuration wins over everything",
-			exePath:  "/usr/bin/influxdb3",
+			variant:  VariantInfluxDB3,
 			listen:   listening(8086, 8181, 9999),
 			config:   config.Service{Port: 9999}, //nolint:exhaustruct
 			wantPort: 9999,
@@ -106,7 +106,7 @@ func TestInfluxDBPort(t *testing.T) {
 			service := Service{ //nolint:exhaustruct
 				Name:            string(InfluxDBService),
 				ServiceType:     InfluxDBService,
-				ExePath:         c.exePath,
+				ServiceVariant:  c.variant,
 				ListenAddresses: c.listen,
 				IPAddress:       "172.20.0.5",
 				Config:          c.config,
@@ -125,24 +125,47 @@ func TestInfluxDBPort(t *testing.T) {
 	}
 }
 
-// TestInfluxDBDefaultPortByExe pins the choice made before any listen address is known,
+// TestInfluxDBDefaultPortByVariant pins the choice made before any listen address is known,
 // which is what updateListenAddresses invents an address on when netstat found nothing.
-func TestInfluxDBDefaultPortByExe(t *testing.T) {
+//
+// The empty variant is a service the user declared without naming one; it falls back to the
+// service type's plain default, and an unrecognised value does the same rather than
+// inventing a port of its own.
+func TestInfluxDBDefaultPortByVariant(t *testing.T) {
 	di := servicesDiscoveryInfo[InfluxDBService]
 
-	cases := map[string]int{
-		"/usr/bin/influxd":      8086,
-		"/opt/influxdb/influxd": 8086,
-		"/usr/bin/influxdb3":    8181,
-		"":                      8181,
-		"/usr/bin/something":    8181,
+	cases := map[ServiceVariant]int{
+		VariantInfluxd:   8086,
+		VariantInfluxDB3: 8181,
+		VariantUnknown:   8181,
+		"something-else": 8181,
 	}
 
-	for exePath, want := range cases {
-		service := Service{ExePath: exePath} //nolint:exhaustruct
+	for variant, want := range cases {
+		service := Service{ServiceVariant: variant} //nolint:exhaustruct
 
 		if got := service.defaultPort(di); got != want {
-			t.Errorf("defaultPort(%q) = %d, want %d", exePath, got, want)
+			t.Errorf("defaultPort(%q) = %d, want %d", variant, got, want)
 		}
+	}
+}
+
+// TestInfluxDBPortSurvivesUnknownExePath is the regression this mechanism also fixes:
+// /proc/<pid>/exe briefly fails to resolve right after a container restart, and the port
+// used to be read from it. A 1.x server would then be probed on 3.x's 8181 for that window
+// -- and, since updateListenAddresses invents a matching listen address when netstat has
+// nothing, the wrong port looked confirmed rather than guessed.
+func TestInfluxDBPortSurvivesUnknownExePath(t *testing.T) {
+	di := servicesDiscoveryInfo[InfluxDBService]
+
+	service := Service{ //nolint:exhaustruct
+		Name:           string(InfluxDBService),
+		ServiceType:    InfluxDBService,
+		ServiceVariant: VariantInfluxd,
+		ExePath:        "",
+	}
+
+	if got := service.defaultPort(di); got != 8086 {
+		t.Errorf("defaultPort() with no ExePath = %d, want 8086", got)
 	}
 }

@@ -249,7 +249,7 @@ func TestServiceByCommand(t *testing.T) {
 	}
 
 	for i, c := range cases {
-		got, ok := serviceByCommand(c.in)
+		got, _, ok := serviceByCommand(c.in)
 		if c.want != "" && got != c.want {
 			t.Errorf("serviceByCommand(<case #%d>) == %#v, want %#v", i, got, c.want)
 		} else if c.want == "" && ok {
@@ -1120,16 +1120,16 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			// A 1.x server, still discovered so it keeps its service check. The port is the
-			// 3.x default because that is the only line metrics come from and there is one
-			// default per service: it only applies when netstat found no listening address,
-			// as here, and a 1.x server on 8086 that netstat does see is unaffected.
+			// A 1.x server with no netstat information at all, and no resolved executable
+			// either -- the variant comes from the command line, so it still lands on 8086
+			// rather than the 3.x default that applies when nothing says which line it is.
 			testName: "influxdb.deb",
 			cmdLine:  []string{"/opt/influxdb/influxd", "-config", "/etc/opt/influxdb/influxdb.conf"},
 			want: Service{
 				Name:            "influxdb",
 				ServiceType:     InfluxDBService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 8181}},
+				ServiceVariant:  VariantInfluxd,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 8086}},
 				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
@@ -1154,6 +1154,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				Name:            "influxdb",
 				ServiceType:     InfluxDBService,
 				ContainerID:     "influxdb1",
+				ServiceVariant:  VariantInfluxDB3,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8181}},
 				IPAddress:       testIP17217049,
 				IgnoredPorts:    map[int]bool{},
@@ -1185,6 +1186,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				Name:            "influxdb",
 				ServiceType:     InfluxDBService,
 				ContainerID:     "influxdb1",
+				ServiceVariant:  VariantInfluxd,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8181}},
 				IPAddress:       testIP17217049,
 				IgnoredPorts:    map[int]bool{},
@@ -1218,6 +1220,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			want: Service{
 				Name:            "ntp",
 				ServiceType:     NTPService,
+				ServiceVariant:  VariantNTPd,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: udpProtocol, Address: testIP127001, Port: 123}},
 				IPAddress:       testIP127001,
 				Active:          true,
@@ -1232,6 +1235,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			want: Service{
 				Name:            "ntp",
 				ServiceType:     NTPService,
+				ServiceVariant:  VariantChrony,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: udpProtocol, Address: testIP127001, Port: 123}},
 				IPAddress:       testIP127001,
 				Active:          true,

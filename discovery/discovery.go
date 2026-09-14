@@ -209,6 +209,28 @@ func validateServices(services []config.Service, logProcessingCfg config.OpenTel
 			srv.SSL = false
 		}
 
+		// The variant, when given, must be one the service type actually has. A typo would
+		// otherwise be indistinguishable from naming none, and silently take the type's
+		// default port -- 8181 for an "influxdb" meant to be a 1.x on 8086.
+		if srv.Variant != "" && !ServiceVariant(srv.Variant).IsValidFor(ServiceName(srv.Type)) {
+			known := variantsByService[ServiceName(srv.Type)]
+			if len(known) == 0 {
+				warnings.Append(fmt.Errorf(
+					"%w: service '%s' has no variant to choose from, but sets variant '%s'",
+					config.ErrInvalidValue, srv.Type, srv.Variant,
+				))
+			} else {
+				warnings.Append(fmt.Errorf(
+					"%w: service '%s' has an unsupported variant '%s', expected one of %v",
+					config.ErrInvalidValue, srv.Type, srv.Variant, known,
+				))
+			}
+
+			// Left empty rather than kept: the service falls back to its type's default,
+			// which is the same thing that happens when no variant is given at all.
+			srv.Variant = ""
+		}
+
 		// StatsProtocol must be "http" or "tcp".
 		switch srv.StatsProtocol {
 		case "", customCheckHTTP, customCheckTCP:
@@ -442,7 +464,7 @@ func (d *Discovery) DiagnosticArchive(_ context.Context, zipFile types.ArchiveWr
 		fmt.Fprintf(file, "\n# Processes (filteted to only show ones associated with a service)\n")
 
 		for _, p := range procs {
-			serviceType, ok := serviceByCommand(p.CmdLineList)
+			serviceType, _, ok := serviceByCommand(p.CmdLineList)
 			if !ok {
 				continue
 			}
@@ -801,6 +823,17 @@ func applyOverrideInPlace(
 			}
 
 			service.Active = true
+		}
+
+		// A variant named in the configuration wins over the discovered one: it is the
+		// user saying which implementation this is, the same way an explicit port wins
+		// over the discovered listen address. An override that names none leaves whatever
+		// discovery found alone, so adding an override to tune one field of an
+		// auto-discovered service doesn't silently reset it to the type's default.
+		//
+		// Set before the port is resolved just below, since the variant is what chooses it.
+		if service.Config.Variant != "" {
+			service.ServiceVariant = ServiceVariant(service.Config.Variant)
 		}
 
 		// If the address or the port is set explicitly in the config, override the listen address.

@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"time"
@@ -132,12 +131,15 @@ type Application struct {
 
 // Service is the information found about a given service.
 type Service struct {
-	Config          config.Service
-	Name            string
-	Instance        string
-	Tags            []string
-	Applications    []Application
-	ServiceType     ServiceName
+	Config       config.Service
+	Name         string
+	Instance     string
+	Tags         []string
+	Applications []Application
+	ServiceType  ServiceName
+	// ServiceVariant names which implementation of ServiceType this is, for the service
+	// types that have more than one. Empty for the types that don't. See ServiceVariant.
+	ServiceVariant  ServiceVariant
 	ContainerID     string
 	ContainerName   string // If ContainerName is set, Instance must be the same value.
 	IPAddress       string // IPAddress is the IPv4 address to reach service for metrics gathering. If empty, it means IP was not found
@@ -209,12 +211,10 @@ func (s Service) AddressForPort(port int, network string, force bool) string {
 
 // defaultPort returns the port this service is expected to serve, before the listen
 // addresses are consulted. It is di.ServicePort for almost everything; a service whose
-// port depends on its version has it chosen from the executable instead.
+// port depends on which implementation is running has it chosen from the variant instead.
 func (s Service) defaultPort(di discoveryInfo) int {
-	if len(di.ServicePortByExe) > 0 && s.ExePath != "" {
-		if port, ok := di.ServicePortByExe[filepath.Base(s.ExePath)]; ok {
-			return port
-		}
+	if port, ok := di.ServicePortByVariant[s.ServiceVariant]; ok {
+		return port
 	}
 
 	return di.ServicePort
@@ -383,14 +383,15 @@ var (
 			ServiceProtocol: tcpProtocol,
 		},
 		InfluxDBService: {
-			// 3.x's port, which its own CLI defaults to, for the "influxdb3" binary and
-			// for anything unrecognised. 1.x and 2.x serve 8086 from "influxd", and are
-			// told apart from 3.x by that name alone -- their own command lines are
-			// identical to each other.
-			ServicePort:      8181,
-			ServicePortByExe: map[string]int{"influxd": 8086},
-			AltServicePorts:  []int{8086},
-			ServiceProtocol:  tcpProtocol,
+			// 3.x's port, which its own CLI defaults to, is the fallback for a service
+			// whose variant nothing named. Auto-discovery always names one.
+			ServicePort: 8181,
+			ServicePortByVariant: map[ServiceVariant]int{
+				VariantInfluxd:   8086,
+				VariantInfluxDB3: 8181,
+			},
+			AltServicePorts: []int{8086},
+			ServiceProtocol: tcpProtocol,
 		},
 		JenkinsService: {
 			ServicePort:     8080,
@@ -509,7 +510,7 @@ var (
 			// 6081 stays as the alternative for a real netstat-visible install: Debian's
 			// packaged unit runs "-a :6081".
 			ServicePort:     80,
-			AltServicePorts: []int{443, 6081},
+			AltServicePorts: []int{6081},
 			ServiceProtocol: tcpProtocol,
 		},
 		VaultService: {
@@ -528,16 +529,16 @@ var (
 
 type discoveryInfo struct {
 	ServicePort int
-	// ServicePortByExe overrides ServicePort when the service's executable has one of
-	// these base names, for a service whose port depends on which version is running.
-	// It is keyed on the executable because that is the one thing the command line does
-	// tell apart: InfluxDB 1.x and 2.x serve 8086 from a binary called "influxd", where
-	// 3.x serves 8181 from "influxdb3".
-	ServicePortByExe map[string]int
+	// ServicePortByVariant overrides ServicePort for a service type whose port depends on
+	// which implementation is running: InfluxDB 1.x and 2.x serve 8086, where 3.x serves
+	// 8181. Auto-discovery always fills the variant for such a type, so this is what
+	// decides the port in practice; ServicePort is the fallback for a user-declared
+	// service that named no variant.
+	ServicePortByVariant map[ServiceVariant]int
 	// AltServicePorts are other ports this service type is known to serve. They are tried
 	// when it is not listening on the one chosen above, which is what happens when the
-	// executable is unknown -- a manually configured service, or a container whose process
-	// Glouton cannot see -- and the version therefore cannot be told from it.
+	// variant is unknown -- a manually configured service that named none -- and the
+	// implementation therefore cannot be told.
 	AltServicePorts             []int
 	ServiceProtocol             string // "tcp", "udp" or "unix"
 	IgnoreHighPort              bool
