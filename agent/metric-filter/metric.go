@@ -831,8 +831,10 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 		},
 
 		discovery.PostfixService: {
-			"postfix_queue_age_seconds",
-			"postfix_queue_length",
+			// The number of mails waiting in the whole queue, from "postqueue -p" (see
+			// agent.postfixQueueSize). The only Postfix metric: reading the spool
+			// directory to count them per queue needs access a packaged Glouton, running
+			// as its own user, does not have on the installs that are the vast majority.
 			"postfix_queue_size",
 		},
 

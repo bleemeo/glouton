@@ -1499,8 +1499,6 @@ func Test_RebuildDefaultMetrics(t *testing.T) {
 		"bind_counter_response",
 		"bind_counter_servfail",
 		"bind_memory_in_use",
-		"postfix_queue_age_seconds",
-		"postfix_queue_length",
 		"postfix_queue_size",
 	}
 

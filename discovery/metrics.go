@@ -23,7 +23,6 @@ import (
 	"io/fs"
 	"net"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -62,7 +61,6 @@ import (
 	"github.com/bleemeo/glouton/inputs/openldap"
 	"github.com/bleemeo/glouton/inputs/pgbouncer"
 	"github.com/bleemeo/glouton/inputs/phpfpm"
-	"github.com/bleemeo/glouton/inputs/postfix"
 	"github.com/bleemeo/glouton/inputs/postgresql"
 	"github.com/bleemeo/glouton/inputs/rabbitmq"
 	"github.com/bleemeo/glouton/inputs/redis"
@@ -92,8 +90,6 @@ const (
 	bindDefaultStatsPort = 8053
 	// dovecotDefaultStatsPort is the default port of Dovecot's old_stats plugin listener.
 	dovecotDefaultStatsPort = 24242
-	// postfixSpoolDirectory is where Postfix keeps its queues.
-	postfixSpoolDirectory = "/var/spool/postfix"
 	// varnishProbeTimeout bounds the "varnishstat -V" that checks a container carries one.
 	// It is short because nothing is waiting on it: finding no varnishstat only means no
 	// input for this Varnish.
@@ -109,12 +105,6 @@ const (
 	// service in the first place) -- see chronyCmdAddress.
 	chronyDefaultCmdPort = 323
 )
-
-// postfixQueues are the queues telegraf's postfix input reports on, all of which it
-// needs to read.
-//
-//nolint:gochecknoglobals
-var postfixQueues = []string{"active", "hold", "incoming", "maildrop", "deferred"}
 
 // AddDefaultInputs adds system inputs to a collector.
 func AddDefaultInputs(commandRunner *gloutonexec.Runner, metricRegistry GathererRegistry, inputsConfig inputs.CollectorConfig, vethProvider *veth.Provider, k8sResolver disk.KubernetesPodResolver) error {
@@ -521,26 +511,6 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		statsURL := urlForPHPFPM(service)
 		if statsURL != "" {
 			input, err = phpfpm.New(statsURL)
-		}
-	case PostfixService:
-		// This only adds the per-queue metrics: the total number of mails waiting
-		// (postfix_queue_size) is gathered on its own from "postqueue -p", which already
-		// reaches a container through the runtime's exec (see agent.postfixQueueSize).
-		//
-		// The input walks a spool directory instead of running a command, so unlike
-		// Varnish there is no namespace to enter -- see postfixSpool for how a
-		// containerised Postfix is read. The probe there is what decides whether there is
-		// anything to read at all: a machine with no Postfix of its own has no spool
-		// directory, and no input is created.
-		if spoolDirectory, ok := postfixSpool(service); ok {
-			// One point per queue, all sharing their metric name, so the queue has to be a
-			// label of its own: the compatibility naming keeps only the item, which would
-			// collapse the five queues onto one series. The item stays the service
-			// instance -- for a container its name, set by modify.AddInstance -- instead
-			// of being glued to the queue.
-			gathererOptions.CompatibilityNameItem = false
-
-			input, err = postfix.New(spoolDirectory)
 		}
 	case PostgreSQLService:
 		if ip, port := service.AddressPort(); ip != "" && service.Config.Password != "" {
@@ -949,111 +919,6 @@ func dovecotStatsServer(service Service) string {
 	}
 
 	return net.JoinHostPort(ip, strconv.Itoa(port))
-}
-
-// postfixSpool returns the Postfix spool directory to walk for a service, and whether
-// every queue in it can actually be read.
-//
-// A containerised Postfix is read through its own spool, named with /proc. The input opens
-// files rather than running a command, so unlike Varnish nothing has to be executed in the
-// container's namespace -- the path only has to be one Glouton can open itself, which
-// /proc/<pid>/root is given the host PID namespace the agent already runs with.
-//
-// Anything else keeps the machine's own spool, which is all this could mean before. Note
-// that for a Glouton in a container that is the agent's own filesystem, which holds no
-// Postfix: reading the *host's* queues from a containerised agent would need its spool
-// mounted into the agent, and is not something this can do.
-func postfixSpool(service Service) (string, bool) {
-	directory, ok := postfixSpoolPath(service)
-	if !ok {
-		// A container between states has no PID, so there is no /proc entry to walk. The
-		// next discovery run sees it again.
-		logger.V(1).Printf(
-			"Not gathering the Postfix queues of %s: its runtime reports no PID for the container",
-			service.Instance,
-		)
-
-		return "", false
-	}
-
-	if err := postfixQueuesUnreadable(directory); err != nil {
-		// Logged because the reasons to end up here look the same from the outside -- no
-		// Postfix there, or a spool Glouton isn't allowed to read -- and only some of them
-		// are worth doing something about.
-		//
-		// The setfacl hint is only given for a Postfix on the machine, where the queues
-		// are the ones its own documentation is about. It is not that a container needs no
-		// permission: this is a plain filesystem read by whatever user Glouton runs as,
-		// and reading /proc/<pid>/root of another user's process needs privilege of its
-		// own -- see the note on packaged installs in postfixSpoolPath.
-		if service.container == nil {
-			logger.V(1).Printf(
-				"Not gathering the Postfix queues: %v. Read access has to be granted to the "+
-					"user running Glouton, e.g. setfacl -Rm g:glouton:rX %s",
-				err, directory,
-			)
-		} else {
-			logger.V(1).Printf("Not gathering the Postfix queues of %s: %v", service.Instance, err)
-		}
-
-		return "", false
-	}
-
-	return directory, true
-}
-
-// postfixSpoolPath names the spool directory of a service without reading anything, and
-// says whether it could be named at all -- which only fails for a container the runtime
-// reports no PID for.
-//
-// Two things the container form depends on, both deliberately left as they are because the
-// input walks that directory itself with no way to route the read through anything:
-//   - the host's PID namespace, since the path is not prefixed with the hostroot. Without
-//     it a containerised Glouton reads its own /proc and finds no Postfix, which is what
-//     it did before containers were handled at all.
-//   - enough privilege to read /proc/<pid>/root of the container's process. A Glouton
-//     running as root has it; a packaged one running as the glouton user does not, so
-//     there the per-queue metrics stay unavailable for a containerised Postfix.
-func postfixSpoolPath(service Service) (string, bool) {
-	if service.container == nil {
-		return postfixSpoolDirectory, true
-	}
-
-	pid := service.container.PID()
-	if pid == 0 {
-		return "", false
-	}
-
-	return containerRootPath(pid, postfixSpoolDirectory), true
-}
-
-// containerRootPath names a path inside a container's filesystem as seen from the machine
-// the container runs on.
-func containerRootPath(pid int, path string) string {
-	return filepath.Join(fmt.Sprintf("/proc/%d/root", pid), path)
-}
-
-// postfixQueuesUnreadable returns the error of the first queue that cannot be read in the
-// given spool directory, or nil when all of them can.
-//
-// The queues are only readable by the postfix user on a default install, while Glouton
-// runs as its own user: read access has to be granted first (see the permissions
-// section of telegraf's postfix plugin doc), otherwise every gather would only report
-// errors. Like the unix socket of getMetricsSocket, this is checked once when the
-// input is created, so granting the access later is only picked up when the service
-// changes or when Glouton restarts.
-func postfixQueuesUnreadable(spoolDirectory string) error {
-	for _, queue := range postfixQueues {
-		f, err := os.Open(filepath.Join(spoolDirectory, queue))
-		if err != nil {
-			return err
-		}
-
-		// Only opening the queue matters here, so closing it can't fail in a way we care about.
-		_ = f.Close()
-	}
-
-	return nil
 }
 
 // canReadVarnish reports whether the varnishstat this input runs can be reached for a

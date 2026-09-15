@@ -138,8 +138,7 @@ func TestCanReadVarnishProbesTheRightCommand(t *testing.T) {
 // Nothing else in the comparison catches it: the container keeps its ID and its name, and
 // a compose network hands back the same IP, while the container-event debounce can
 // coalesce the stop and the start into one discovery that sees it running both times. Only
-// the PID changes -- and the Postfix input holds a /proc/<pid> path, so missing
-// this leaves it reading a process that no longer exists.
+// the PID changes, so it is the only thing that can tell the restart happened at all.
 func TestServiceNeedUpdateOnContainerRestart(t *testing.T) {
 	withPID := func(pid int) Service {
 		service := varnishInstanceService(pid)
