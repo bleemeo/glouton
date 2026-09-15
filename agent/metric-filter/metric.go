@@ -787,20 +787,13 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"chrony_root_delay",
 			"chrony_activity_online",
 			"chrony_activity_offline",
-			"chrony_sources_reachability_perc",
-			"chrony_sources_latest_measurement_seconds",
 			// Only a chronyd on this host reports these: they come from the command
 			// group chronyd answers over its unix socket alone (see inputs/chrony).
 			"chrony_serverstats_ntp_hits",
 			"chrony_serverstats_ntp_drops",
 			"chrony_serverstats_log_drops",
 
-			"ntpq_offset_seconds",
-			"ntpq_delay_seconds",
-			"ntpq_reach_perc",
-			"ntpq_flash",
-			// The daemon's own estimate of the local clock's error, rather than one
-			// peer's: the ntpd counterpart of chrony_last_offset.
+			// The daemon's own estimate of the local clock's error: the only ntpq metric that is not per-peer.
 			"ntpq_system_offset_seconds",
 		},
 
