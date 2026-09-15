@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"strconv"
 	"time"
@@ -139,15 +140,24 @@ func (d *Discovery) createCheck(service Service) {
 	}
 
 	switch service.ServiceType { //nolint:exhaustive
-	// InfluxDB is checked over TCP rather than HTTP: InfluxDB 3 authenticates every route,
-	// answering 401 on "/ping" and "/health" as well as on "/metrics", and the check has
-	// no token to offer. A 401 would report a healthy server as failing, and accepting one
-	// as success would equally accept a server that has stopped serving anything else.
-	// Whether the token works is what the metrics say.
-	case DovecotService, InfluxDBService, MemcachedService, RabbitMQService, RedisService,
+	case DovecotService, MemcachedService, RabbitMQService, RedisService,
 		ValkeyService, ZookeeperService, NatsService:
 		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
-	case ApacheService, NginxService, SquidService:
+	// Varnish is checked over HTTP rather than TCP because the three answers a cache can
+	// give are worth telling apart, and only HTTP tells them apart:
+	//   - 200: Varnish is up and its backend is reachable.
+	//   - 503: Varnish is up and cannot reach its backend. TCP calls this healthy, since
+	//     the port accepts the connection either way.
+	//   - refused: Varnish itself is down.
+	//
+	// What it costs is that the answer comes from the backend application rather than from
+	// Varnish, since Varnish relays it: the check asks for "/" and reports whatever the
+	// fronted app says there. An app with nothing at its root answers 404, a warning; a VCL
+	// that routes on req.http.host with no fallback answers 503 to the check's own Host
+	// header, a critical. Both are configured away with http_path and http_host on the
+	// service, which is what they are for. Redirects need nothing: the check does not
+	// follow them, and a 3xx is below the 400 that starts a warning.
+	case ApacheService, NginxService, SquidService, InfluxDBService, VarnishService:
 		d.createHTTPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
 	case NTPService:
 		d.createNTPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
@@ -343,10 +353,29 @@ func (d *Discovery) createHTTPCheck(
 
 	expectedStatusCode := 0
 
-	if service.ServiceType == SquidService {
+	var okStatusCodes []int
+
+	switch service.ServiceType { //nolint:exhaustive
+	case SquidService:
 		// Agent does a normal HTTP request, but squid expect a proxy. It expects
 		// squid to reply with a 400 - Bad request.
 		expectedStatusCode = 400
+	case InfluxDBService:
+		// "/ping" is the one route every line answers about itself, and answers cheaply:
+		// no query is run and 1.x and 2.x leave it open even with authentication enabled.
+		u.Path = "/ping"
+
+		// InfluxDB 3 authenticates every route, so it answers 401 there when the check
+		// holds no token -- which it never does. That 401 is the server saying it is up
+		// and asking who is calling, so it is an Ok rather than the warning the usual
+		// banding would give. It stays a narrow exception: anything else 4xx is still a
+		// warning, 5xx still critical, and a server that has stopped listening still
+		// fails to connect at all.
+		//
+		// Checking HTTP rather than TCP is what makes this worth doing: a TCP connect
+		// succeeds against the proxy "docker run -p" puts in front of a container whether
+		// or not the server behind it is alive, where speaking HTTP does not.
+		okStatusCodes = []int{http.StatusUnauthorized}
 	}
 
 	if service.Config.HTTPPath != "" {
@@ -368,6 +397,7 @@ func (d *Discovery) createHTTPCheck(
 		tcpAddresses,
 		!di.DisablePersistentConnection,
 		expectedStatusCode,
+		okStatusCodes,
 		labels,
 		annotations,
 		d.containerInfo,

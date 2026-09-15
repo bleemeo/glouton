@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"time"
 
 	"github.com/bleemeo/glouton/logger"
@@ -38,6 +39,7 @@ type HTTPCheck struct {
 	url                string
 	httpHost           string
 	expectedStatusCode int
+	okStatusCodes      []int
 	client             *http.Client
 }
 
@@ -48,12 +50,19 @@ type HTTPCheck struct {
 //
 // If expectedStatusCode is 0, StatusCode below 400 will generate Ok, between 400 and 499 => warning and above 500 => critical
 // If expectedStatusCode is not 0, StatusCode must match the value or result will be critical.
+//
+// okStatusCodes are answers to take for Ok that the banding above would not, for a server
+// that reports being healthy with something other than a success. It is for the codes a
+// service answers by design -- the 401 an InfluxDB 3 gives on every route when the check
+// holds no token -- rather than a way to silence a failing one. Ignored when
+// expectedStatusCode is set, which already says exactly what to accept.
 func NewHTTP(
 	urlValue string,
 	httpHost string,
 	persistentAddresses []string,
 	persistentConnection bool,
 	expectedStatusCode int,
+	okStatusCodes []int,
 	labels map[string]string,
 	annotations types.MetricAnnotations,
 	containerRuntime containerInfoProvider,
@@ -79,6 +88,7 @@ func NewHTTP(
 		url:                urlValue,
 		httpHost:           httpHost,
 		expectedStatusCode: expectedStatusCode,
+		okStatusCodes:      okStatusCodes,
 		client: &http.Client{
 			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 				return http.ErrUseLastResponse
@@ -106,10 +116,12 @@ func (hc *HTTPCheck) DiagnosticArchive(ctx context.Context, archive types.Archiv
 		URL                string
 		HTTPHost           string
 		ExpectedStatusCode int
+		OkStatusCodes      []int
 	}{
 		URL:                hc.url,
 		HTTPHost:           hc.httpHost,
 		ExpectedStatusCode: hc.expectedStatusCode,
+		OkStatusCodes:      hc.okStatusCodes,
 	}
 
 	enc := json.NewEncoder(file)
@@ -156,6 +168,13 @@ func (hc *HTTPCheck) httpMainCheck(ctx context.Context) types.StatusDescription 
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusCritical,
 			StatusDescription: fmt.Sprintf("HTTP CRITICAL - http_code=%d (expected %d)", resp.StatusCode, hc.expectedStatusCode),
+		}
+	}
+
+	if hc.expectedStatusCode == 0 && slices.Contains(hc.okStatusCodes, resp.StatusCode) {
+		return types.StatusDescription{
+			CurrentStatus:     types.StatusOk,
+			StatusDescription: fmt.Sprintf("HTTP OK - http_code=%d", resp.StatusCode),
 		}
 	}
 
