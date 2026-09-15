@@ -160,12 +160,18 @@ var (
 	promWindowsDefaultSystemMetrics = []string{
 		"glouton_gatherer_execution_seconds_count",
 		"glouton_gatherer_execution_seconds_sum",
+		// windows_cpu_time_global and windows_memory_standby_cache_bytes are not emitted
+		// by windows_exporter: they were recording rules (sum(windows_cpu_time_total)
+		// without(core), and the sum of the three standby cache metrics) removed along
+		// with the rules manager. Nothing produces them today, so these two entries match
+		// nothing until we decide whether to recreate the rules via
+		// RegistrationOption.Rules or to allow the raw metrics instead.
 		"windows_cpu_time_global",
-		"windows_cs_physical_memory_bytes",
+		"windows_memory_physical_total_bytes",
 		"windows_memory_available_bytes",
 		"windows_memory_standby_cache_bytes",
-		"windows_os_paging_free_bytes",
-		"windows_os_paging_limit_bytes",
+		"windows_pagefile_free_bytes",
+		"windows_pagefile_limit_bytes",
 		"windows_logical_disk_idle_seconds_total",
 		"windows_logical_disk_read_bytes_total",
 		"windows_logical_disk_write_bytes_total",
@@ -179,7 +185,7 @@ var (
 		"windows_net_packets_sent_total",
 		"windows_net_packets_received_errors",
 		"windows_net_packets_outbound_errors",
-		"windows_cs_hostname",
+		"windows_os_hostname",
 	}
 
 	bleemeoDefaultSystemMetrics = []string{
