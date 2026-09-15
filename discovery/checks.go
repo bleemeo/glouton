@@ -214,6 +214,17 @@ func createCheckType(commandRunner *gloutonexec.Runner, service Service, d *Disc
 // service being monitored, while the command port is only how its metrics are read.
 func (d *Discovery) createNTPCheck(service Service, di discoveryInfo, primaryAddress string, tcpAddresses []string, labels map[string]string, annotations types.MetricAnnotations) {
 	if useChronyCommandCheck(service, di, chronySocket) {
+		// The same address the input reads, so the check and the metrics can never
+		// disagree about which daemon they are talking to.
+		//
+		// A false ok leaves it empty on purpose rather than skipping the check: the UDP
+		// check turns an empty address into an explicit unknown ("No UDP address to
+		// check"), where creating no check at all would publish no status for this
+		// service -- which on the platform reads as an agent that stopped reporting.
+		// Substituting Glouton's own loopback is the one thing that must not happen: that
+		// reports on whatever chronyd runs next to it, under this service's name.
+		checkAddress, _ := chronyCmdAddress(service)
+
 		// createTCPCheck doesn't fit that protocol: the command port is UDP-only, and
 		// that check always dials TCP.
 		//
@@ -225,7 +236,7 @@ func (d *Discovery) createNTPCheck(service Service, di discoveryInfo, primaryAdd
 		// a request it refuses -- a host missing from cmdallow -- with a status reply,
 		// which "got some response" would report as healthy while no metric arrives).
 		udpCheck := check.NewUDP(
-			chronyCheckAddress(service),
+			checkAddress,
 			chrony.ProbePacket(),
 			nil,
 			chrony.ValidateReply,

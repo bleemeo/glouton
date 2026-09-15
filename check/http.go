@@ -134,10 +134,9 @@ func (hc *HTTPCheck) httpMainCheck(ctx context.Context) types.StatusDescription 
 	ctx2, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
+	// Checked before req is touched: a failure leaves it nil, and the panic that follows
+	// is re-raised by crashreport and takes the agent down.
 	req, err := http.NewRequestWithContext(ctx2, http.MethodGet, hc.url, nil)
-	req.Header.Add("User-Agent", version.UserAgent())
-	req.Host = hc.httpHost
-
 	if err != nil {
 		logger.V(2).Printf("Unable to create HTTP Request: %v", err)
 
@@ -146,6 +145,9 @@ func (hc *HTTPCheck) httpMainCheck(ctx context.Context) types.StatusDescription 
 			StatusDescription: "Checker error. Unable to create Request",
 		}
 	}
+
+	req.Header.Add("User-Agent", version.UserAgent())
+	req.Host = hc.httpHost
 
 	resp, err := hc.client.Do(req)
 	if urlErr, ok := err.(*url.Error); ok && urlErr.Timeout() {

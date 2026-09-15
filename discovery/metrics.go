@@ -1173,40 +1173,24 @@ func isLoopbackAddress(address string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-// chronyCmdAddress returns the "host:port" to reach chronyd's command protocol on, or ""
-// to keep chrony.New()'s own auto-detection (its control socket, then
-// udp://127.0.0.1:323). Both of those only reach a chronyd sharing Glouton's network
-// namespace, but both also work out of the box, with no chrony.conf change -- unlike any
-// other address, which chronyd ignores until bindcmdaddress and cmdallow are set for it
-// (the command port is bound to 127.0.0.1 and ::1 only by default). So an address is only
-// returned when the local auto-detection cannot be what we want:
+// chronyCmdAddress returns the "host:port" of chronyd's command protocol, which is UDP and
+// distinct from the NTP port the service was discovered on. The input reads it and the
+// check probes it -- one address, so the two cannot disagree about which daemon they mean.
+// That is why the local default is named here rather than left to the input, which can find
+// it on its own where the check, having to send a packet somewhere, cannot.
 //
-//   - the daemon runs in a container of its own, so Glouton's loopback isn't the
-//     container's, and auto-detection would silently report the numbers of whatever
-//     chronyd runs next to Glouton under the container service's name;
-//   - the user declared an address and/or a command port explicitly, which is also how a
-//     chronyd reachable but not auto-detectable (bindcmdaddress on the host's LAN address,
-//     a non-default cmdport) is monitored.
+// The address is Glouton's own loopback unless the daemon cannot be the one next to it: a
+// container of its own, or an address the user declared. A declared command port is not
+// enough on its own, a port never saying which host. Neither is a non-loopback
+// service.IPAddress, which comes from the NTP port's bind address: a chronyd with
+// "bindaddress 192.168.1.5" still keeps its command port on loopback. For a container that
+// same IPAddress IS used, because netstat cannot see into the container's network namespace
+// and so never reports the command port there, while the container's own address is known
+// independently of any netstat result.
 //
-// A non-loopback service.IPAddress is deliberately NOT enough on its own: it is derived
-// from the NTP port (123) bind address, which says nothing about where the command port
-// is. A host chronyd serving NTP on a specific address ("bindaddress 192.168.1.5") has
-// that IPAddress while its command port stays on loopback, and pointing the input there
-// would break a setup the auto-detection handles.
-//
-// The container address comes from service.IPAddress rather than
-// AddressForPort(chronyDefaultCmdPort, ...): finding a specific port in ListenAddresses
-// needs a netstat scan to have actually found it there, which for a container requires
-// crossing into its own network namespace -- something gopsutil's connections scan can't
-// do (only the host's own namespace is visible, PID visibility from --pid host
-// notwithstanding). Lacking that, discovery falls back to a synthetic ListenAddresses
-// entry on NTPService's ServicePort (123) -- never chrony's command port, so searching for
-// it there would never find it. service.IPAddress doesn't have this problem: it's set from
-// the container's own address independently of any netstat result.
-// A false ok says the opposite of an empty address: not "the local auto-detection is
-// right", but "there is no telling where this daemon is". Both answers are "" today,
-// which is why they have to be told apart -- see the return below for what makes them
-// different.
+// ok is false for a container the runtime reports no address for. Neither the input nor the
+// check runs then, rather than both falling back to Glouton's loopback and reporting on a
+// different daemon entirely.
 func chronyCmdAddress(service Service) (address string, ok bool) {
 	address = service.Config.Address
 	port := service.Config.StatsPort
@@ -1218,25 +1202,17 @@ func chronyCmdAddress(service Service) (address string, ok bool) {
 		address = service.IPAddress
 
 		if address == "" {
-			// The daemon is known not to be the one on Glouton's loopback, and nothing
-			// says where it is instead: a container whose address the runtime doesn't
-			// report (network_mode: none or container:<other>, both of which leave
-			// PrimaryAddress() empty). Neither of the two fallbacks below can be right
-			// here -- the auto-detection and the loopback substitution both read
-			// whatever chronyd runs next to Glouton, and would publish its numbers
-			// under this service's name and instance. Saying so is the only honest
-			// answer, and it is the one the check already gives.
+			// A container whose address the runtime doesn't report (network_mode: none
+			// or container:<other>, both of which leave PrimaryAddress() empty). The
+			// loopback below cannot stand in for it: that reads whatever chronyd runs
+			// next to Glouton, and would publish its numbers under this service's name.
 			return "", false
 		}
 	}
 
-	if address == "" && port == 0 {
-		return "", true
-	}
-
 	if address == "" {
-		// Only the port was overridden: chrony.New() would go back to the default 323,
-		// so the loopback the auto-detection would have used is spelled out here.
+		// The local daemon, named rather than left for the input to find, so that the
+		// check reads the same one.
 		address = localhostIP
 	}
 
@@ -1245,30 +1221,6 @@ func chronyCmdAddress(service Service) (address string, ok bool) {
 	}
 
 	return net.JoinHostPort(address, strconv.Itoa(port)), true
-}
-
-// chronyCheckAddress returns the "host:port" the chrony status check should dial --
-// unlike chronyCmdAddress, it always returns a concrete address, including for a chronyd
-// left to auto-detection: a check has no local-socket fallback of its own, it just needs
-// something to send a packet to, and that is the same loopback command port the input
-// ends up on.
-//
-// It returns "" for the one case chronyCmdAddress has no address for either: the daemon
-// is known not to be the one on Glouton's loopback, and nothing says where it is.
-// Probing 127.0.0.1 there would report on whatever chronyd runs next to Glouton -- Ok
-// while this service is down on a host that runs one, critical while it is healthy on a
-// host that doesn't. The check says it couldn't run instead.
-func chronyCheckAddress(service Service) string {
-	address, ok := chronyCmdAddress(service)
-	if !ok {
-		return ""
-	}
-
-	if address != "" {
-		return address
-	}
-
-	return net.JoinHostPort(localhostIP, strconv.Itoa(chronyDefaultCmdPort))
 }
 
 // ntpdAddress returns the "host:port" to read ntpd's control protocol (NTP mode 6) on,

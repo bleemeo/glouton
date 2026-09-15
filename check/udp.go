@@ -80,8 +80,6 @@ func NewUDP(
 	}
 
 	uc.baseCheck = newBase("", nil, false, uc.udpMainCheck, labels, annotations, containerRuntime)
-	// The probe below is the whole check, and its description names the port it dialled.
-	uc.baseCheck.keepMainCheckDescription = true
 
 	return uc
 }

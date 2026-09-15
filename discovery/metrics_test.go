@@ -523,49 +523,46 @@ func TestIsChronyDaemon(t *testing.T) {
 // network namespace, while any other address needs bindcmdaddress/cmdallow to have been
 // set for it -- so one is only used when the auto-detection cannot be what we want.
 func TestChronyAddress(t *testing.T) {
-	localCheckAddress := "127.0.0.1:323"
+	localCommandAddress := "127.0.0.1:323"
 
 	cases := []struct {
-		name          string
-		service       Service
-		wantCmd       string
-		wantCmdOK     bool
-		wantCheckAddr string
+		name      string
+		service   Service
+		wantCmd   string
+		wantCmdOK bool
 	}{
 		{
-			// The plain host case: chronyd next to Glouton, nothing declared.
-			name:          "local daemon",
-			service:       Service{ServiceType: NTPService, IPAddress: "127.0.0.1"},
-			wantCmd:       "",
-			wantCmdOK:     true,
-			wantCheckAddr: localCheckAddress,
+			// The plain host case: chronyd next to Glouton, nothing declared. The
+			// loopback command port is named rather than left for the input to find, so
+			// that the check reads the same daemon.
+			name:      "local daemon",
+			service:   Service{ServiceType: NTPService, IPAddress: "127.0.0.1"},
+			wantCmd:   localCommandAddress,
+			wantCmdOK: true,
 		},
 		{
 			// IPAddress comes from the NTP port's bind address, which says nothing about
 			// where the command port is: a host chronyd serving NTP on a specific address
 			// ("bindaddress 192.168.1.5") still has its command port on loopback only, and
 			// pointing the input at 192.168.1.5:323 would break what auto-detection handles.
-			name:          "local daemon serving NTP on a specific address",
-			service:       Service{ServiceType: NTPService, IPAddress: "192.168.1.5"},
-			wantCmd:       "",
-			wantCmdOK:     true,
-			wantCheckAddr: localCheckAddress,
+			name:      "local daemon serving NTP on a specific address",
+			service:   Service{ServiceType: NTPService, IPAddress: "192.168.1.5"},
+			wantCmd:   localCommandAddress,
+			wantCmdOK: true,
 		},
 		{
 			// Glouton's loopback isn't the container's: auto-detection would report the
 			// numbers of whatever chronyd runs next to Glouton under this service's name.
-			name:          "container",
-			service:       Service{ServiceType: NTPService, ContainerID: "1234", IPAddress: "172.23.0.2"},
-			wantCmd:       "172.23.0.2:323",
-			wantCmdOK:     true,
-			wantCheckAddr: "172.23.0.2:323",
+			name:      "container",
+			service:   Service{ServiceType: NTPService, ContainerID: "1234", IPAddress: "172.23.0.2"},
+			wantCmd:   "172.23.0.2:323",
+			wantCmdOK: true,
 		},
 		{
-			name:          "container with a non-default command port",
-			service:       Service{ServiceType: NTPService, ContainerID: "1234", IPAddress: "172.23.0.2", Config: config.Service{StatsPort: 3230}},
-			wantCmd:       "172.23.0.2:3230",
-			wantCmdOK:     true,
-			wantCheckAddr: "172.23.0.2:3230",
+			name:      "container with a non-default command port",
+			service:   Service{ServiceType: NTPService, ContainerID: "1234", IPAddress: "172.23.0.2", Config: config.Service{StatsPort: 3230}},
+			wantCmd:   "172.23.0.2:3230",
+			wantCmdOK: true,
 		},
 		{
 			// A container the runtime reports no address for (network_mode: none, or
@@ -574,46 +571,41 @@ func TestChronyAddress(t *testing.T) {
 			// next to Glouton -- Ok while this container is down, critical while it is
 			// healthy, and metrics belonging to another daemon either way. Not ok means
 			// no input at all, and an empty address makes the check say it couldn't run.
-			name:          "container without an address",
-			service:       Service{ServiceType: NTPService, ContainerID: "1234"},
-			wantCmd:       "",
-			wantCmdOK:     false,
-			wantCheckAddr: "",
+			name:      "container without an address",
+			service:   Service{ServiceType: NTPService, ContainerID: "1234"},
+			wantCmd:   "",
+			wantCmdOK: false,
 		},
 		{
 			// Same, with a command port declared: the port says which port to use, never
 			// which host, so it cannot rescue a service whose host is unknown. Filling in
 			// the loopback here would read the local chronyd on a non-default port.
-			name:          "container without an address but a command port",
-			service:       Service{ServiceType: NTPService, ContainerID: "1234", Config: config.Service{StatsPort: 3230}},
-			wantCmd:       "",
-			wantCmdOK:     false,
-			wantCheckAddr: "",
+			name:      "container without an address but a command port",
+			service:   Service{ServiceType: NTPService, ContainerID: "1234", Config: config.Service{StatsPort: 3230}},
+			wantCmd:   "",
+			wantCmdOK: false,
 		},
 		{
 			// How a chronyd reachable but not auto-detectable is monitored.
-			name:          "declared address",
-			service:       Service{ServiceType: NTPService, Config: config.Service{Address: "10.0.0.1"}, IPAddress: "10.0.0.1"},
-			wantCmd:       "10.0.0.1:323",
-			wantCmdOK:     true,
-			wantCheckAddr: "10.0.0.1:323",
+			name:      "declared address",
+			service:   Service{ServiceType: NTPService, Config: config.Service{Address: "10.0.0.1"}, IPAddress: "10.0.0.1"},
+			wantCmd:   "10.0.0.1:323",
+			wantCmdOK: true,
 		},
 		{
 			// A local chronyd with "cmdport 3230": the port has to be spelled out for the
 			// input too, or it would go back to the default 323 and gather nothing while
 			// the check succeeds on the declared port.
-			name:          "local daemon with a non-default command port",
-			service:       Service{ServiceType: NTPService, IPAddress: "127.0.0.1", Config: config.Service{StatsPort: 3230}},
-			wantCmd:       "127.0.0.1:3230",
-			wantCmdOK:     true,
-			wantCheckAddr: "127.0.0.1:3230",
+			name:      "local daemon with a non-default command port",
+			service:   Service{ServiceType: NTPService, IPAddress: "127.0.0.1", Config: config.Service{StatsPort: 3230}},
+			wantCmd:   "127.0.0.1:3230",
+			wantCmdOK: true,
 		},
 		{
-			name:          "declared address and command port",
-			service:       Service{ServiceType: NTPService, Config: config.Service{Address: "10.0.0.1", StatsPort: 3230}, IPAddress: "10.0.0.1"},
-			wantCmd:       "10.0.0.1:3230",
-			wantCmdOK:     true,
-			wantCheckAddr: "10.0.0.1:3230",
+			name:      "declared address and command port",
+			service:   Service{ServiceType: NTPService, Config: config.Service{Address: "10.0.0.1", StatsPort: 3230}, IPAddress: "10.0.0.1"},
+			wantCmd:   "10.0.0.1:3230",
+			wantCmdOK: true,
 		},
 	}
 
@@ -622,10 +614,6 @@ func TestChronyAddress(t *testing.T) {
 			got, gotOK := chronyCmdAddress(tc.service)
 			if got != tc.wantCmd || gotOK != tc.wantCmdOK {
 				t.Errorf("chronyCmdAddress() = %q, %t, want %q, %t", got, gotOK, tc.wantCmd, tc.wantCmdOK)
-			}
-
-			if got := chronyCheckAddress(tc.service); got != tc.wantCheckAddr {
-				t.Errorf("chronyCheckAddress() = %q, want %q", got, tc.wantCheckAddr)
 			}
 		})
 	}

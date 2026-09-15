@@ -58,9 +58,6 @@ func NewNTP(
 	}
 
 	nc.baseCheck = newBase("", persistentAddresses, persistentConnection, nc.ntpMainCheck, labels, annotations, containerRuntime)
-	// The NTP exchange is the whole check when there is no TCP address besides, and its
-	// description is what tells a refusal from an unsynchronized clock.
-	nc.baseCheck.keepMainCheckDescription = true
 
 	return nc
 }

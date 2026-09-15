@@ -163,7 +163,14 @@ func TestNTPServiceDiscoveryInfo(t *testing.T) {
 		t.Errorf("chrony's command port = %d, want it different from the NTP port", chronyDefaultCmdPort)
 	}
 
-	if _, _, err := net.SplitHostPort(chronyCheckAddress(Service{ServiceType: NTPService})); err != nil {
-		t.Errorf("chronyCheckAddress() isn't a host:port: %v", err)
+	// One address for the service, used by both the input and the check, so they cannot
+	// disagree about which daemon they are talking to.
+	addr, ok := chronyCmdAddress(Service{ServiceType: NTPService}) //nolint:exhaustruct
+	if !ok {
+		t.Fatal("chronyCmdAddress() could not name the local daemon")
+	}
+
+	if _, _, err := net.SplitHostPort(addr); err != nil {
+		t.Errorf("chronyCmdAddress() isn't a host:port: %v", err)
 	}
 }

@@ -62,12 +62,6 @@ type baseCheck struct {
 	mainTCPAddress   string
 	tcpAddresses     []string
 	mainCheck        func(ctx context.Context) types.StatusDescription
-	// keepMainCheckDescription reports the description the main check built rather than a
-	// bare Ok when there is no TCP address to check besides. Only for the checks whose
-	// main check IS the whole check and whose description says what was probed (NTP, UDP):
-	// a process check's description is the matched process's whole command line, which has
-	// no business being published as a service's status.
-	keepMainCheckDescription bool
 
 	dialer *net.Dialer
 	wg     sync.WaitGroup
@@ -297,17 +291,18 @@ func (bc *baseCheck) doCheck(ctx context.Context) types.StatusDescription {
 	}
 
 	if len(bc.tcpAddresses) == 0 {
-		if bc.mainCheck != nil && bc.keepMainCheckDescription {
-			// The main check is the whole check here: keep the description it built, it's
-			// the only thing that says what was actually probed.
+		if bc.mainCheck != nil {
+			// The main check is the whole check here, so its description is the only
+			// record of what was probed -- "NTP OK - 1.2ms response time" rather than a
+			// service that is up for no stated reason. It is what the panel shows next to
+			// the service, where the detail is the point.
 			return status
 		}
 
-		statusOK := types.StatusDescription{
-			CurrentStatus: types.StatusOk,
-		}
-
-		return statusOK
+		// No main check either: nothing was probed, so there is nothing to describe. The
+		// status is built rather than returned from above because the zero value of
+		// types.Status is StatusUnset, not StatusOk.
+		return types.StatusDescription{CurrentStatus: types.StatusOk}
 	}
 
 	for _, addr := range bc.tcpAddresses {

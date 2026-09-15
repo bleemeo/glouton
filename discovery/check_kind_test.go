@@ -236,3 +236,48 @@ func TestHTTPCheckHonoursServiceConfig(t *testing.T) {
 		}
 	})
 }
+
+// TestChronyCheckOnUnlocatableContainerReportsUnknown covers a chrony container the runtime
+// reports no address for (network_mode: none, or container:<other>).
+//
+// The check still has to exist and say it could not run. Creating none instead would publish
+// no service_status point at all, which on the platform reads as an agent that stopped
+// reporting rather than as a service nothing can locate -- and falling back to Glouton's own
+// loopback would be worse still, reporting on whatever chronyd runs next to it under this
+// service's name.
+func TestChronyCheckOnUnlocatableContainerReportsUnknown(t *testing.T) {
+	service := Service{ //nolint:exhaustruct
+		Name:           string(NTPService),
+		ServiceType:    NTPService,
+		ServiceVariant: VariantChrony,
+		ContainerID:    "1234",
+		Active:         true,
+	}
+
+	if _, ok := chronyCmdAddress(service); ok {
+		t.Fatal("chronyCmdAddress() located a container with no address")
+	}
+
+	d := &Discovery{ //nolint:exhaustruct
+		metricRegistry: &mockRegistry{ //nolint:exhaustruct
+			ExpectedAddedContains: []string{"check for " + string(NTPService)},
+		},
+		activeCheck: make(map[NameInstance]CheckDetails),
+	}
+
+	d.createCheck(service)
+
+	details, ok := d.activeCheck[NameInstance{Name: string(NTPService), Instance: ""}]
+	if !ok {
+		t.Fatal("no check was created: the service would publish no status at all")
+	}
+
+	status, err := details.check.CheckNow(t.Context())
+	if err != nil {
+		t.Fatalf("CheckNow() = %v", err)
+	}
+
+	if status.CurrentStatus != types.StatusUnknown {
+		t.Errorf("status = %v (%q), want unknown", status.CurrentStatus, status.StatusDescription)
+	}
+}
