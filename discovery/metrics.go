@@ -96,9 +96,10 @@ const (
 	// varnishStatBinary is where telegraf's varnish plugin runs varnishstat from, and so
 	// the only place a container can carry one this input is able to use.
 	varnishStatBinary = "/usr/bin/varnishstat"
-	// chronyDefaultCmdPort is the UDP port of chronyd's command protocol, distinct from
-	// NTPService's own ServicePort (123, the NTP protocol itself, used to detect an NTP
-	// service in the first place) -- see chronyCmdAddress.
+	// chronyDefaultCmdPort is the UDP port of chronyd's command protocol, which is how its
+	// metrics are read. Distinct from ChronyService's own ServicePort (123, the NTP
+	// protocol itself), which says whether the daemon serves NTP to clients at all -- see
+	// chronyCmdAddress and servesNTPProtocol.
 	chronyDefaultCmdPort = 323
 )
 

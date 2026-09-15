@@ -22,15 +22,19 @@ import "slices"
 // service types that have more than one and where the difference changes what Glouton has
 // to do: which port to reach it on, which input to build, which check to run.
 //
-// It exists so that the service keeps the name the panel should show. An NTP service
-// answered by chronyd is still "ntp" to a user, and an InfluxDB 3 server is still
-// "influxdb" -- naming them "chrony" and "influxdb3" instead would have to be translated
-// back at every place the name is displayed, and would collide with a user's own service
-// override, which is keyed by that name. The variant carries the implementation alongside
-// the name rather than inside it.
+// It exists so that the service keeps the name the panel should show. An InfluxDB 3 server
+// is still "influxdb" to a user -- naming it "influxdb3" instead would have to be
+// translated back at every place the name is displayed, and would collide with a user's own
+// service override, which is keyed by that name. The variant carries the implementation
+// alongside the name rather than inside it.
 //
-// Most service types have exactly one implementation and leave this empty: there is no
-// variant of Apache to distinguish.
+// It is only worth that when the honest name would be a bad name to show. Where it reads
+// fine, two service types are simpler: chrony and ntpd are told apart by being ChronyService
+// and NTPService, which needs no variant, no translation, and nothing to read the
+// implementation back afterwards.
+//
+// So InfluxDB is the only type with variants today, and most types have exactly one
+// implementation and leave this empty: there is no variant of Apache to distinguish.
 type ServiceVariant string
 
 const (
