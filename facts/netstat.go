@@ -90,7 +90,7 @@ func (np NetstatProvider) Netstat(_ context.Context, processes map[int]Process) 
 }
 
 func (np NetstatProvider) mergeNetstats(netstat map[int][]ListenAddress, dynamicNetstat []psutilNet.ConnectionStat) {
-	firstEphemeralPort := firstEphemeralPort()
+	firstEphemeralPort := FirstEphemeralPort()
 
 	for _, c := range dynamicNetstat {
 		if c.Pid == 0 {
@@ -150,14 +150,20 @@ func (np NetstatProvider) mergeNetstats(netstat map[int][]ListenAddress, dynamic
 	}
 }
 
-// firstEphemeralPort returns the lowest port the kernel picks for an outgoing connection,
+// FirstEphemeralPort returns the lowest port the kernel picks for an outgoing connection,
 // read from the kernel itself where that is possible so the guess below only applies to
 // the platforms that don't expose it.
+//
+// Exported because two places need the same boundary: this package tells a UDP server's
+// port from a client's with it (see mergeNetstats), and discovery uses it to drop the
+// random high port some services also listen on. They must agree -- a port one of them
+// calls ephemeral and the other calls a service's is a service that appears and disappears
+// depending on which answered.
 //
 // Read on every call rather than cached: it is a sysctl an operator can change while
 // Glouton runs, and a file read from procfs costs nothing next to the connection scan it
 // is filtering.
-func firstEphemeralPort() int {
+func FirstEphemeralPort() int {
 	content, err := os.ReadFile(portRangeFile)
 	if err != nil {
 		return defaultFirstEphemeralPort

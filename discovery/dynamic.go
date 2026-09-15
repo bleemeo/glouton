@@ -513,6 +513,8 @@ func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discovery
 		defaultAddress = service.container.PrimaryAddress()
 	}
 
+	firstEphemeralPort := int64(facts.FirstEphemeralPort())
+
 	newListenAddresses := service.ListenAddresses[:0]
 
 	for _, a := range service.ListenAddresses {
@@ -543,7 +545,7 @@ func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discovery
 			defaultAddress = address
 		}
 
-		if !di.IgnoreHighPort || port <= 32000 {
+		if !di.IgnoreHighPort || port < firstEphemeralPort {
 			newListenAddresses = append(newListenAddresses, a)
 		}
 	}
