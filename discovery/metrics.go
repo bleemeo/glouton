@@ -1134,6 +1134,20 @@ func isChronyDaemon(service Service, socketPath string) bool {
 // serviceRunsElsewhere reports whether the service is known to run somewhere other than
 // next to Glouton's own process: in a container of its own, or at an address the user
 // declared explicitly and that isn't the local host.
+//
+// The container is not the whole test, which is why this isn't simply ContainerID != "".
+// A user-declared remote address is the other way a service is not the daemon on this
+// host, and its only caller -- isChronyDaemon -- is deciding exactly that: whether the
+// chronyd socket lying next to Glouton says anything about this service. Dropping the
+// address half would let a host running chronyd itself, the default on RHEL and Ubuntu,
+// answer "chrony" for a declared remote ntpd and then query the chrony command protocol
+// against it.
+//
+// Known limitation: an address that is one of this host's own non-loopback addresses
+// (say the service is declared at 10.31.202.7 and that is this machine) reads as
+// elsewhere. Telling those apart means enumerating the local interfaces, a syscall and
+// its failure modes on every call, to correct a case that needs the user to spell their
+// own host's address where a loopback or nothing at all would do.
 func serviceRunsElsewhere(service Service) bool {
 	if service.ContainerID != "" {
 		return true
@@ -1197,7 +1211,10 @@ func chronyCmdAddress(service Service) (address string, ok bool) {
 	address = service.Config.Address
 	port := service.Config.StatsPort
 
-	if address == "" && serviceRunsElsewhere(service) {
+	// The container is the whole test here, unlike in isChronyDaemon: this branch is
+	// only reached with no address configured, and a configured address is the other
+	// half of running elsewhere -- so there is nothing left for it to answer.
+	if address == "" && service.ContainerID != "" {
 		address = service.IPAddress
 
 		if address == "" {
@@ -1270,7 +1287,9 @@ func ntpdAddress(service Service) (address string, ok bool) {
 	address = service.Config.Address
 	port := service.Config.Port
 
-	if address == "" && serviceRunsElsewhere(service) {
+	// Same as chronyCmdAddress: reached only with no address configured, so the
+	// container is all that is left to tell.
+	if address == "" && service.ContainerID != "" {
 		address = service.IPAddress
 
 		if address == "" {
