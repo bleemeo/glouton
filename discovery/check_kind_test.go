@@ -247,11 +247,10 @@ func TestHTTPCheckHonoursServiceConfig(t *testing.T) {
 // service's name.
 func TestChronyCheckOnUnlocatableContainerReportsUnknown(t *testing.T) {
 	service := Service{ //nolint:exhaustruct
-		Name:           string(NTPService),
-		ServiceType:    NTPService,
-		ServiceVariant: VariantChrony,
-		ContainerID:    "1234",
-		Active:         true,
+		Name:        string(ChronyService),
+		ServiceType: ChronyService,
+		ContainerID: "1234",
+		Active:      true,
 	}
 
 	if _, ok := chronyCmdAddress(service); ok {
@@ -260,14 +259,14 @@ func TestChronyCheckOnUnlocatableContainerReportsUnknown(t *testing.T) {
 
 	d := &Discovery{ //nolint:exhaustruct
 		metricRegistry: &mockRegistry{ //nolint:exhaustruct
-			ExpectedAddedContains: []string{"check for " + string(NTPService)},
+			ExpectedAddedContains: []string{"check for " + string(ChronyService)},
 		},
 		activeCheck: make(map[NameInstance]CheckDetails),
 	}
 
 	d.createCheck(service)
 
-	details, ok := d.activeCheck[NameInstance{Name: string(NTPService), Instance: ""}]
+	details, ok := d.activeCheck[NameInstance{Name: string(ChronyService), Instance: ""}]
 	if !ok {
 		t.Fatal("no check was created: the service would publish no status at all")
 	}

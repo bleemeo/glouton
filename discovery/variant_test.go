@@ -30,20 +30,19 @@ func TestServiceVariantIsValidFor(t *testing.T) {
 		serviceType ServiceName
 		want        bool
 	}{
-		{"chrony on ntp", VariantChrony, NTPService, true},
-		{"ntpd on ntp", VariantNTPd, NTPService, true},
 		{"influxd on influxdb", VariantInfluxd, InfluxDBService, true},
 		{"influxdb3 on influxdb", VariantInfluxDB3, InfluxDBService, true},
 		// The empty variant is what a service that named none carries, so it has to be
 		// valid everywhere -- including on the types that take no variant at all.
-		{"unknown on ntp", VariantUnknown, NTPService, true},
+		{"unknown on influxdb", VariantUnknown, InfluxDBService, true},
 		{"unknown on apache", VariantUnknown, ApacheService, true},
-		// A variant belonging to another service type is as wrong as a typo.
-		{"chrony on influxdb", VariantChrony, InfluxDBService, false},
+		// InfluxDB is the only type with variants: the two time daemons are told apart by
+		// being two service types, so "chrony" is not a variant of anything.
+		{"chrony is not a variant", "chrony", NTPService, false},
 		{"influxd on ntp", VariantInfluxd, NTPService, false},
 		// Apache has one implementation, so naming any variant for it is meaningless.
-		{"chrony on apache", VariantChrony, ApacheService, false},
-		{"typo", "chronyd", NTPService, false},
+		{"influxd on apache", VariantInfluxd, ApacheService, false},
+		{"typo", "influxdb1", InfluxDBService, false},
 	}
 
 	for _, tc := range cases {
@@ -93,10 +92,13 @@ func TestValidateServicesVariant(t *testing.T) {
 			wantVariant: "",
 		},
 		{
-			name:        "chrony on ntp is kept",
+			// chrony is a service type of its own, not a variant of ntp. Someone reaching
+			// for "variant: chrony" wants "type: chrony", and is told so rather than
+			// silently getting an ntpd.
+			name:        "chrony is not a variant of ntp",
 			service:     config.Service{Type: "ntp", Variant: "chrony"}, //nolint:exhaustruct
-			wantWarning: false,
-			wantVariant: "chrony",
+			wantWarning: true,
+			wantVariant: "",
 		},
 	}
 

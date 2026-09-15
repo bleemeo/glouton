@@ -40,13 +40,6 @@ const (
 	// have them. Callers fall back to the service type's plain default.
 	VariantUnknown ServiceVariant = ""
 
-	// VariantChrony and VariantNTPd are the two NTP daemons. They answer different
-	// protocols on different ports -- chrony its own command protocol on 323, ntpd the
-	// NTP control protocol on 123 -- so which one is running decides both the input and
-	// the address it reads.
-	VariantChrony ServiceVariant = "chrony"
-	VariantNTPd   ServiceVariant = "ntpd"
-
 	// VariantInfluxd covers InfluxDB 1.x and 2.x together, and VariantInfluxDB3 is 3.x.
 	//
 	// The split is by binary rather than by major version on purpose, because the binary
@@ -67,7 +60,6 @@ const (
 //
 //nolint:gochecknoglobals
 var variantsByService = map[ServiceName][]ServiceVariant{
-	NTPService:      {VariantChrony, VariantNTPd},
 	InfluxDBService: {VariantInfluxd, VariantInfluxDB3},
 }
 
@@ -82,8 +74,6 @@ var variantsByService = map[ServiceName][]ServiceVariant{
 //
 //nolint:gochecknoglobals
 var knownVariants = map[string]ServiceVariant{
-	"chronyd":   VariantChrony,
-	"ntpd":      VariantNTPd,
 	"influxd":   VariantInfluxd,
 	"influxdb3": VariantInfluxDB3,
 }

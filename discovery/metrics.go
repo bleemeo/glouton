@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"net"
 	"os"
 	"reflect"
@@ -97,9 +96,6 @@ const (
 	// varnishStatBinary is where telegraf's varnish plugin runs varnishstat from, and so
 	// the only place a container can carry one this input is able to use.
 	varnishStatBinary = "/usr/bin/varnishstat"
-	// chronySocket is the control socket chronyd listens on, and the one telegraf's chrony
-	// plugin tries first. It is used to recognize a chrony host, see isChronyDaemon.
-	chronySocket = "/run/chrony/chronyd.sock"
 	// chronyDefaultCmdPort is the UDP port of chronyd's command protocol, distinct from
 	// NTPService's own ServicePort (123, the NTP protocol itself, used to detect an NTP
 	// service in the first place) -- see chronyCmdAddress.
@@ -462,39 +458,39 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
 			input, err = nsq.New(url)
 		}
-	case NTPService:
-		// Pick the input matching whichever NTP daemon was actually detected: the two
-		// answer different protocols on different ports, chrony its own command
-		// protocol on 323 and ntpd the NTP control protocol (mode 6) on the NTP port.
-		//
-		// Both are plain UDP with no local command involved, so a daemon in another
-		// container is genuinely reachable, unlike Varnish -- see chronyCmdAddress and
-		// ntpdAddress for which address is used, and why it isn't always the one
-		// discovery found the service at.
-		// Both inputs bring their own registration options: their per-source metrics need
-		// the source in a label of its own, which the default compatibility naming would
-		// drop, and they read the daemon less often than the default 10 s.
-		chronyDaemon := isChronyDaemon(service, chronySocket)
-
-		address, addressKnown := ntpdAddress(service)
-		if chronyDaemon {
-			address, addressKnown = chronyCmdAddress(service)
+	// chrony and ntpd answer different protocols on different ports -- chrony its own
+	// command protocol on 323, ntpd the NTP control protocol (mode 6) on the NTP port --
+	// so each has its own input. Which daemon this is was settled when the process was
+	// recognised, so there is nothing to work out here.
+	//
+	// Both are plain UDP with no local command involved, so a daemon in another container
+	// is genuinely reachable, unlike Varnish -- see chronyCmdAddress and ntpdAddress for
+	// which address is used, and why it isn't always the one discovery found the service
+	// at. Both inputs bring their own registration options: their per-source metrics need
+	// the source in a label of its own, which the default compatibility naming would drop,
+	// and they read the daemon less often than the default 10 s.
+	//
+	// No address means no input, rather than one reading the wrong daemon: both inputs
+	// fall back to Glouton's own loopback, which for a service running elsewhere would
+	// publish the numbers of whichever daemon sits next to Glouton under this service's
+	// name. The check makes the same call.
+	case ChronyService:
+		if address, ok := chronyCmdAddress(service); ok {
+			input, gathererOptions, err = chrony.New(address)
+		} else {
+			logger.V(1).Printf(
+				"No address to read the chrony daemon of service '%s' on container '%s', not gathering its metrics",
+				service.Name, service.ContainerName,
+			)
 		}
-
-		switch {
-		case !addressKnown:
-			// No input rather than one reading the wrong daemon: given no address both
-			// inputs fall back to Glouton's own loopback, which for a service that runs
-			// elsewhere means publishing the numbers of whichever daemon happens to sit
-			// next to Glouton under this service's name. The check makes the same call.
+	case NTPService:
+		if address, ok := ntpdAddress(service); ok {
+			input, gathererOptions, err = ntp.New(address)
+		} else {
 			logger.V(1).Printf(
 				"No address to read the NTP daemon of service '%s' on container '%s', not gathering its metrics",
 				service.Name, service.ContainerName,
 			)
-		case chronyDaemon:
-			input, gathererOptions, err = chrony.New(address)
-		default:
-			input, gathererOptions, err = ntp.New(address)
 		}
 	case OpenBaoService:
 		if service.Config.StatsURL != "" {
@@ -957,87 +953,6 @@ func (d *Discovery) canReadVarnish(service Service) bool {
 	return true
 }
 
-// isChronyDaemon tells whether the NTP service found is chronyd rather than ntpd, the
-// two being queried with a different telegraf plugin.
-//
-// The variant is the answer whenever there is one, and auto-discovery always fills it from
-// the process name. It is left unknown only for a service the user declared, which names
-// its own variant or gets the probe below.
-//
-// The control socket chronyd listens on is what that probe looks for, the same way
-// getMetricsSocket looks for Dovecot's: finding it is what a chrony host looks like, and
-// the alternative is running ntpq against a chronyd that doesn't speak its protocol -- and
-// against a host that may not even have ntpq installed.
-//
-// Being denied the socket counts as finding it. Its directory is only reachable by the
-// chrony user on a default install (/run/chrony is drwxr-x--- _chrony:_chrony on Debian), so
-// the glouton user gets a permission error there -- while a host running no chrony has no
-// such directory at all and gives a not-found one. Telegraf's plugin doesn't need to read
-// the socket either: it falls back to chronyd's UDP command port on localhost, which is open
-// by default.
-//
-// That socket only says something about the daemon running next to Glouton, so it's only
-// looked for when the service is that daemon. A service declared at a remote address gets
-// the ntpd answer it got before this probe existed: a Glouton host that happens to run
-// chronyd itself -- the default on RHEL and Ubuntu -- must not turn a declared remote ntpd
-// into a chrony one, which would query the chrony command protocol on a port ntpd doesn't
-// listen on.
-func isChronyDaemon(service Service, socketPath string) bool {
-	if service.ServiceVariant != VariantUnknown {
-		return service.ServiceVariant == VariantChrony
-	}
-
-	if serviceRunsElsewhere(service) {
-		return false
-	}
-
-	_, err := os.Stat(socketPath)
-
-	return err == nil || errors.Is(err, fs.ErrPermission)
-}
-
-// serviceRunsElsewhere reports whether the service is known to run somewhere other than
-// next to Glouton's own process: in a container of its own, or at an address the user
-// declared explicitly and that isn't the local host.
-//
-// The container is not the whole test, which is why this isn't simply ContainerID != "".
-// A user-declared remote address is the other way a service is not the daemon on this
-// host, and its only caller -- isChronyDaemon -- is deciding exactly that: whether the
-// chronyd socket lying next to Glouton says anything about this service. Dropping the
-// address half would let a host running chronyd itself, the default on RHEL and Ubuntu,
-// answer "chrony" for a declared remote ntpd and then query the chrony command protocol
-// against it.
-//
-// Known limitation: an address that is one of this host's own non-loopback addresses
-// (say the service is declared at 10.31.202.7 and that is this machine) reads as
-// elsewhere. Telling those apart means enumerating the local interfaces, a syscall and
-// its failure modes on every call, to correct a case that needs the user to spell their
-// own host's address where a loopback or nothing at all would do.
-func serviceRunsElsewhere(service Service) bool {
-	if service.ContainerID != "" {
-		return true
-	}
-
-	return service.Config.Address != "" && !isLoopbackAddress(service.Config.Address)
-}
-
-// isLoopbackAddress reports whether address (without a port) is a loopback one.
-//
-// "localhost" counts: it is how most people spell the local host in a config file, and
-// taking it for a remote address sends a local daemon down the path meant for one
-// somewhere else. No other name is resolved -- that would need DNS, and a name that
-// resolves to a loopback address today may not tomorrow.
-func isLoopbackAddress(address string) bool {
-	switch address {
-	case "localhost", "ip6-localhost", "localhost.localdomain":
-		return true
-	}
-
-	ip := net.ParseIP(address)
-
-	return ip != nil && ip.IsLoopback()
-}
-
 // chronyCmdAddress returns the "host:port" of chronyd's command protocol, which is UDP and
 // distinct from the NTP port the service was discovered on. The input reads it and the
 // check probes it -- one address, so the two cannot disagree about which daemon they mean.
@@ -1060,9 +975,9 @@ func chronyCmdAddress(service Service) (address string, ok bool) {
 	address = service.Config.Address
 	port := service.Config.StatsPort
 
-	// The container is the whole test here, unlike in isChronyDaemon: this branch is
-	// only reached with no address configured, and a configured address is the other
-	// half of running elsewhere -- so there is nothing left for it to answer.
+	// A container of its own: Glouton's loopback is not the container's, so reading
+	// 127.0.0.1 would report the numbers of whatever chronyd runs next to Glouton under
+	// this container service's name.
 	if address == "" && service.ContainerID != "" {
 		address = service.IPAddress
 

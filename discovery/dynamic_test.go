@@ -1219,7 +1219,6 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			want: Service{
 				Name:            "ntp",
 				ServiceType:     NTPService,
-				ServiceVariant:  VariantNTPd,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: udpProtocol, Address: testIP127001, Port: 123}},
 				IPAddress:       testIP127001,
 				Active:          true,
@@ -1227,14 +1226,15 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			// chronyd is the other NTP daemon we support. It's the same service, only the
-			// input differs (see createInput).
+			// chronyd is a service of its own rather than an NTP one: the process name
+			// tells the two daemons apart for free, and everything downstream differs --
+			// a different input, different metric names, and a different check for a
+			// client-only daemon.
 			testName: "chrony-ubuntu-24.04",
 			cmdLine:  []string{"/usr/sbin/chronyd", "-F", "1"},
 			want: Service{
-				Name:            "ntp",
-				ServiceType:     NTPService,
-				ServiceVariant:  VariantChrony,
+				Name:            "chrony",
+				ServiceType:     ChronyService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: udpProtocol, Address: testIP127001, Port: 123}},
 				IPAddress:       testIP127001,
 				Active:          true,

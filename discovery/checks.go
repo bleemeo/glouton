@@ -159,7 +159,7 @@ func (d *Discovery) createCheck(service Service) {
 	// follow them, and a 3xx is below the 400 that starts a warning.
 	case ApacheService, NginxService, SquidService, InfluxDBService, VarnishService:
 		d.createHTTPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
-	case NTPService:
+	case ChronyService, NTPService:
 		d.createNTPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
 	case PostfixService, EximService:
 		check := check.NewSMTP(
@@ -202,8 +202,8 @@ func createCheckType(commandRunner *gloutonexec.Runner, service Service, d *Disc
 	}
 }
 
-// createNTPCheck adds the check of an NTP service: the NTP protocol itself when the daemon
-// really serves it, and chrony's command protocol for a chronyd that doesn't.
+// createNTPCheck adds the check of a chrony or ntpd service: the NTP protocol itself when
+// the daemon really serves it, and chrony's command protocol for a chronyd that doesn't.
 //
 // A chrony that only syncs the local clock -- the default install on most distributions,
 // and what a chrony container usually runs -- never answers an NTP query, so check.NewNTP
@@ -213,7 +213,7 @@ func createCheckType(commandRunner *gloutonexec.Runner, service Service, d *Disc
 // does serve NTP is checked with the NTP protocol like any other server: that is the
 // service being monitored, while the command port is only how its metrics are read.
 func (d *Discovery) createNTPCheck(service Service, di discoveryInfo, primaryAddress string, tcpAddresses []string, labels map[string]string, annotations types.MetricAnnotations) {
-	if useChronyCommandCheck(service, di, chronySocket) {
+	if service.ServiceType == ChronyService && !servesNTPProtocol(service, di) {
 		// The same address the input reads, so the check and the metrics can never
 		// disagree about which daemon they are talking to.
 		//
@@ -262,13 +262,6 @@ func (d *Discovery) createNTPCheck(service Service, di discoveryInfo, primaryAdd
 	} else {
 		d.createTCPCheck(service, di, "", tcpAddresses, labels, annotations)
 	}
-}
-
-// useChronyCommandCheck reports whether the NTP service should be checked through
-// chrony's command protocol instead of the NTP protocol: only a chronyd that doesn't
-// serve NTP, which the NTP check would report as permanently down.
-func useChronyCommandCheck(service Service, di discoveryInfo, socketPath string) bool {
-	return isChronyDaemon(service, socketPath) && !servesNTPProtocol(service, di)
 }
 
 // servesNTPProtocol reports whether the daemon was really seen listening on the NTP port,
