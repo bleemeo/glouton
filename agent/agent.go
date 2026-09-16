@@ -948,7 +948,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		metricsIgnored.IsServiceIgnored,
 		a.containerFilter.ContainerIgnored,
 		psFact,
-		discovery.SudoFileReader{HostRootPath: a.hostRootPath, Runner: a.commandRunner},
 		a.config.ServiceAbsentDeactivationDelay,
 		a.config.Log.OpenTelemetry,
 	)

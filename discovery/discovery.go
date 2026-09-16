@@ -79,11 +79,6 @@ type Discovery struct {
 	isInputIgnored        func(Service) bool
 	isContainerIgnored    func(facts.Container) bool
 	processFact           processFact
-	// fileReader reads files and directories of the machine Glouton runs on, which for a
-	// Glouton in a container means through its hostroot mount. Used when creating an input
-	// needs to know something only the filesystem can tell, like which of a container's
-	// Varnish working directories holds the live instance.
-	fileReader fileReader
 
 	absentServiceDeactivationDelay time.Duration
 	logProcessingCfg               config.OpenTelemetry
@@ -120,7 +115,6 @@ func New(
 	isInputIgnored func(Service) bool,
 	isContainerIgnored func(c facts.Container) bool,
 	processFact processFact,
-	fileReader fileReader,
 	absentServiceDeactivationDelay time.Duration,
 	logProcessingCfg config.OpenTelemetry,
 ) (*Discovery, prometheus.MultiError) {
@@ -153,7 +147,6 @@ func New(
 		isInputIgnored:                 isInputIgnored,
 		isContainerIgnored:             isContainerIgnored,
 		processFact:                    processFact,
-		fileReader:                     fileReader,
 		absentServiceDeactivationDelay: absentServiceDeactivationDelay,
 		logProcessingCfg:               logProcessingCfg,
 	}
