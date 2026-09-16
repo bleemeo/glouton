@@ -279,6 +279,21 @@ func servesNTPProtocol(service Service, di discoveryInfo) bool {
 		port = service.Config.Port
 	}
 
+	// A configured address or port replaces the listen addresses with a single entry that
+	// applyOverrideInPlace types tcp whatever protocol the service actually speaks. Matching
+	// the protocol on that entry would say "doesn't serve NTP" for every overridden chrony
+	// and probe its command port instead of the NTP it serves -- which a remote chronyd
+	// refuses by default, cmdallow being localhost-only, reporting a healthy server as down.
+	//
+	// The listen address carries nothing else worth testing either, since it was built from
+	// the configured port: what decides is whether that port is the NTP one. Overriding only
+	// the address leaves it the type's default, which is the NTP port; pointing the override
+	// at chrony's command port instead says this daemon is to be reached there, and the
+	// command probe below is then the right check.
+	if service.Config.Address != "" || service.Config.Port != 0 {
+		return port == di.ServicePort
+	}
+
 	for _, address := range service.ListenAddresses {
 		// IsProtocol rather than comparing the network name: netstat records the IP family
 		// in it, so an IPv6-only daemon listens on "udp6" and would otherwise look like one
