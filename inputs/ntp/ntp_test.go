@@ -77,8 +77,14 @@ func fakeNTPD(t *testing.T, peers map[uint16]string) string {
 
 			switch request.GetOperation() {
 			case control.OpReadStatus:
-				// The peer list: association ID and status word, 2 uint16 each.
+				// The peer list: association ID and status word, 2 uint16 each. Never
+				// association 0, which is the daemon itself rather than a peer -- a real
+				// ntpd doesn't list it here, and peers[0] only overrides its variables.
 				for _, id := range slices.Sorted(maps.Keys(peers)) {
+					if id == 0 {
+						continue
+					}
+
 					data = binary.BigEndian.AppendUint16(data, id)
 					data = binary.BigEndian.AppendUint16(data, 0) // the peer status word
 				}
@@ -86,7 +92,13 @@ func fakeNTPD(t *testing.T, peers map[uint16]string) string {
 				if request.AssociationID == 0 {
 					// Association 0 is the daemon itself. These are the variables a real
 					// ntpsec answers with, trimmed to the ones addSystemFields reads.
-					data = []byte(systemVariables)
+					// peers[0], when set, replaces them -- a daemon whose own variables
+					// are unusable.
+					if override, ok := peers[0]; ok {
+						data = []byte(override)
+					} else {
+						data = []byte(systemVariables)
+					}
 				} else {
 					data = []byte(peers[request.AssociationID])
 				}
@@ -246,22 +258,51 @@ func TestGatherSystemVariables(t *testing.T) {
 	}
 }
 
-// TestGatherWithoutPeer checks a daemon that reports no usable peer is an error rather
-// than a silent success: ntpd always has at least its configured sources, so nothing to
-// report means the answer wasn't usable, and reporting Ok would hide that.
+// TestGatherWithoutPeer covers a daemon that reports no usable peer, which is an error only
+// when its own variables were missed too.
+//
+// ntpd always has at least its configured sources, so no peer at all means the answer wasn't
+// usable and reporting Ok would hide that. But association 0 carries
+// ntpq_system_offset_seconds, the only NTP metric in the default set, and it is answered
+// before any peer is read: an ntpd pointed at a pool reports nothing but ".POOL."
+// placeholders until it selects peers, and erroring through those minutes would call a
+// gather failed while the one metric anyone receives was published normally.
 func TestGatherWithoutPeer(t *testing.T) {
-	address := fakeNTPD(t, map[uint16]string{
-		0x4569: `srcadr=0.0.0.0, srcport=0, stratum=16, reach=0x0`,
-	})
+	placeholder := `srcadr=0.0.0.0, srcport=0, stratum=16, reach=0x0`
 
-	acc := &internal.StoreAccumulator{}
-
-	if err := (&controlInput{address: address}).Gather(acc); err == nil {
-		t.Error("Gather() = nil, want an error")
+	cases := map[string]struct {
+		peers   map[uint16]string
+		wantErr bool
+	}{
+		"the system offset still published": {
+			peers:   map[uint16]string{0x4569: placeholder},
+			wantErr: false,
+		},
+		// peers[0] replaces the daemon's own variables: nothing usable anywhere.
+		"nothing usable at all": {
+			peers:   map[uint16]string{0: `leap=00, stratum=16`, 0x4569: placeholder},
+			wantErr: true,
+		},
 	}
 
-	if peers := peerMeasurements(acc.Measurement); len(peers) != 0 {
-		t.Errorf("Gather() reported %v, want no peer", peers)
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			acc := &internal.StoreAccumulator{}
+
+			err := (&controlInput{address: fakeNTPD(t, tc.peers)}).Gather(acc)
+			if tc.wantErr && err == nil {
+				t.Error("Gather() = nil, want an error")
+			}
+
+			if !tc.wantErr && err != nil {
+				t.Errorf("Gather() = %v, want nil: the system offset was published", err)
+			}
+
+			// No peer is reported either way: a placeholder is not a peer.
+			if peers := peerMeasurements(acc.Measurement); len(peers) != 0 {
+				t.Errorf("Gather() reported %v, want no peer", peers)
+			}
+		})
 	}
 }
 

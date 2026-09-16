@@ -179,13 +179,15 @@ func (ci *controlInput) Gather(acc telegraf.Accumulator) error {
 	// concluded about the local clock, including the offset it is actually correcting for.
 	// That is the number chrony reports as chrony_last_offset, and without it an ntpd host
 	// has only per-peer offsets and no answer to "how far off is this clock".
+	gotSystem := false
+
 	system, err := exchange(conn, readPacket(control.OpReadVariables, 0), &sequence)
 	if err != nil {
 		acc.AddError(fmt.Errorf("read system variables from ntpd on %s: %w", ci.address, err))
 	} else if systemVariables, err := system.GetAssociationInfo(); err != nil {
 		acc.AddError(fmt.Errorf("system variables from ntpd on %s: %w", ci.address, err))
 	} else {
-		addSystemFields(acc, systemVariables)
+		gotSystem = addSystemFields(acc, systemVariables)
 	}
 
 	gathered := 0
@@ -218,12 +220,18 @@ func (ci *controlInput) Gather(acc telegraf.Accumulator) error {
 		}
 	}
 
-	if gathered == 0 {
+	if gathered == 0 && !gotSystem {
 		// Reporting nothing without an error would look like a healthy daemon with no
 		// peers, which ntpd can't be: it always has at least the ones it is configured
 		// with. This is what a daemon that just started, or one whose peers are all
 		// placeholders, looks like. A daemon that refused the request doesn't reach here
 		// -- exchange says so instead, which is the more precise answer.
+		//
+		// Only when the system association was missed too, because that one carries
+		// ntpq_system_offset_seconds -- the sole NTP metric in the default set. An ntpd
+		// pointed at a pool has nothing but ".POOL." placeholders until it selects peers,
+		// which addPeerFields rightly drops; erroring through those minutes would report a
+		// failed gather while the only metric anyone receives was published normally.
 		return errNoPeer
 	}
 
@@ -436,14 +444,19 @@ const systemMeasurement = "ntpq_system"
 // what chrony reports as chrony_last_offset. The others (sys_jitter, clk_wander, stratum,
 // leap, rootdisp, frequency, precision, tc, ...) were left out on purpose -- see
 // PRODUCT-3300-ntp-metric-catalogue.md for what each holds, should one be wanted later.
-func addSystemFields(acc telegraf.Accumulator, systemVariables map[string]string) {
+// It reports whether the offset was published, which is what decides the gather is worth
+// something even with no usable peer: that one field is the whole of the default metric set
+// for an ntpd.
+func addSystemFields(acc telegraf.Accumulator, systemVariables map[string]string) bool {
 	// Milliseconds, as everything ntpd reports; transformMetrics turns it into seconds.
 	offset, err := strconv.ParseFloat(systemVariables["offset"], 64)
 	if err != nil {
-		return
+		return false
 	}
 
 	acc.AddFields(systemMeasurement, map[string]any{"offset": offset}, nil)
+
+	return true
 }
 
 // addPeerFields reports one peer, and whether it was one worth reporting.
