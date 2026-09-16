@@ -50,12 +50,17 @@ var (
 	errRequestRefused = errors.New("chronyd refused the request, check its cmdallow lines")
 )
 
-// New initialise chrony.Input. With no address, it queries the local chronyd through
-// its control socket (/run/chrony/chronyd.sock) or, failing that, over UDP on
-// localhost:323. Unlike Varnish/ntpq, chrony's control protocol is a plain UDP call
-// (see telegraf's chrony plugin, which never shells out to a binary), so a remote
-// chronyd genuinely is reachable: pass its "host:port" as address to query it instead
-// of the local one -- e.g. a chronyd running in a different container than Glouton.
+// New initialise chrony.Input, reading the chronyd at address -- a "host:port" -- over
+// chrony's command protocol. The address is always used and is always UDP.
+//
+// Unlike Varnish and ntpq, that protocol is a plain UDP call (see telegraf's chrony plugin,
+// which never shells out to a binary), so the daemon read does not have to be the local one:
+// a chronyd in a different container than Glouton is reached exactly the same way, at the
+// address discovery found it on.
+//
+// There is no unix-socket path. chronyd opens one, but it is 0700 _chrony and so unreachable
+// for a packaged Glouton running as its own user, and nothing asked for below needs it --
+// see the Metrics assignment and its note on "serverstats".
 func New(address string) (telegraf.Input, registry.RegistrationOption, error) {
 	input, ok := telegraf_inputs.Inputs["chrony"]
 	if !ok {

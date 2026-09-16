@@ -383,8 +383,12 @@ type Service struct {
 	// The name of the service type, like "apache", "nginx". For custom service, it could be any value.
 	Type string `yaml:"type"`
 	// Variant names which implementation of the service type is running, for the few types
-	// that have more than one: "chrony" or "ntpd" for an "ntp" service, "influxd" (1.x and
-	// 2.x, which share a binary and a port) or "influxdb3" for an "influxdb" one.
+	// that have more than one: "influxd" (1.x and 2.x, which share a binary and a port) or
+	// "influxdb3" for an "influxdb" service.
+	//
+	// InfluxDB is the only type with variants. The two time daemons are not one of them:
+	// they are two service types, "chrony" and "ntp", so a chronyd is declared with
+	// "type: chrony" rather than as a variant of an ntp service.
 	//
 	// Only needed for a service declared here: auto-discovery reads it from the process.
 	// Leaving it out falls back to the service type's default port and daemon, which is
