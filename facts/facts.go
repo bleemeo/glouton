@@ -91,6 +91,10 @@ type FactProvider struct {
 	manualFact map[string]string
 	callbacks  []FactCallback
 
+	// autoUpgrade is kept between updates because detecting a stuck APT/dpkg lock
+	// needs to remember for how long we've been seeing it held.
+	autoUpgrade *autoUpgradeChecker
+
 	facts           map[string]string
 	lastFactsUpdate time.Time
 }
@@ -101,7 +105,10 @@ type FactProvider struct {
 type FactCallback func(ctx context.Context, currentFact map[string]string) map[string]string
 
 type Options struct {
-	Runner           *gloutonexec.Runner
+	Runner *gloutonexec.Runner
+	// AutoUpgradeFile is the marker file the glouton-auto-upgrade script maintains while
+	// it runs. It's only used to notice a run that never finished.
+	AutoUpgradeFile  string
 	FactPath         string
 	HostRootPath     string
 	IPIndicatorURL   string
@@ -189,6 +196,17 @@ func (f *FactProvider) SetFact(key string, value string) {
 
 func (f *FactProvider) updateFacts(ctx context.Context) {
 	newFacts := f.fastUpdateFacts(ctx)
+
+	// Deliberately not in fastUpdateFacts: this one runs apt-cache and reads the whole
+	// dpkg database, which is too slow for the startup path FastFacts serves. Only
+	// whether auto-upgrade is supported matters, not whether it's enabled: a repository
+	// that vanished is worth reporting even when the timer is off, and the presence of
+	// factAutoUpgradeEnabled already excludes the systems that have no auto-upgrade.
+	if _, ok := newFacts[factAutoUpgradeEnabled]; ok {
+		if status := f.autoUpgradeStatus(ctx); status != "" {
+			newFacts[FactAutoUpgradeStatus] = status
+		}
+	}
 
 	collectCloudProvidersFacts(ctx, newFacts)
 
@@ -345,7 +363,7 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 			logger.V(1).Printf("Failed to check auto-upgrade status: %v", err)
 		}
 
-		newFacts["auto_upgrade_enabled"] = strconv.FormatBool(autoUpgradeEnabled)
+		newFacts[factAutoUpgradeEnabled] = strconv.FormatBool(autoUpgradeEnabled)
 	}
 
 	cpu, err := cpu.Info()
