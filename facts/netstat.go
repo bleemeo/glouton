@@ -98,10 +98,7 @@ func (np NetstatProvider) mergeNetstats(netstat map[int][]ListenAddress, dynamic
 		}
 
 		// UDP has no connection states, so it has no listenState to filter on either:
-		// gopsutil reports every UDP socket as "NONE" on Linux, and filtering by
-		// listenState unconditionally silently dropped every UDP listener this
-		// discovers (a DNS or NTP server's own port), not just the ones that are
-		// genuinely not listening.
+		// gopsutil reports every UDP socket as "NONE" on Linux.
 		//
 		// Nothing marks a UDP socket as a server's, though, so what a server would
 		// never do is excluded instead: being connected to a peer (only a client

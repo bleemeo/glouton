@@ -239,8 +239,7 @@ func TestGatherSystemVariables(t *testing.T) {
 	}
 
 	// The offset is the only one of association 0's twenty variables that is published, so
-	// it should be the only one read. The rest are listed in
-	// PRODUCT-3300-ntp-metric-catalogue.md, and adding one back means adding it there too.
+	// it should be the only one read.
 	if len(fields) != 1 {
 		t.Errorf("system fields = %v, want only offset_seconds", fields)
 	}

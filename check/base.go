@@ -292,10 +292,8 @@ func (bc *baseCheck) doCheck(ctx context.Context) types.StatusDescription {
 
 	if len(bc.tcpAddresses) == 0 {
 		if bc.mainCheck != nil {
-			// The main check is the whole check here, so its description is the only
-			// record of what was probed -- "NTP OK - 1.2ms response time" rather than a
-			// service that is up for no stated reason. It is what the panel shows next to
-			// the service, where the detail is the point.
+			// The main check is the whole check here, so keep its description: it is the
+			// only record of what was probed ("NTP OK - 1.2ms response time").
 			return status
 		}
 

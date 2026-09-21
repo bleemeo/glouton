@@ -52,15 +52,6 @@ var (
 
 // New initialise chrony.Input, reading the chronyd at address -- a "host:port" -- over
 // chrony's command protocol. The address is always used and is always UDP.
-//
-// Unlike Varnish and ntpq, that protocol is a plain UDP call (see telegraf's chrony plugin,
-// which never shells out to a binary), so the daemon read does not have to be the local one:
-// a chronyd in a different container than Glouton is reached exactly the same way, at the
-// address discovery found it on.
-//
-// There is no unix-socket path. chronyd opens one, but it is 0700 _chrony and so unreachable
-// for a packaged Glouton running as its own user, and nothing asked for below needs it --
-// see the Metrics assignment and its note on "serverstats".
 func New(address string) (telegraf.Input, registry.RegistrationOption, error) {
 	input, ok := telegraf_inputs.Inputs["chrony"]
 	if !ok {
@@ -76,19 +67,13 @@ func New(address string) (telegraf.Input, registry.RegistrationOption, error) {
 
 	// tracking is the system-wide summary (last_offset, rms_offset, root_delay). activity
 	// counts how many configured sources are actually reachable right now. sources gives
-	// per-source detail, mirroring what ntpq already reports per-peer for ntpd.
+	// per-source detail.
 	//
-	// The plugin also offers "sourcestats", chronyc's table of how good each source's
-	// estimate is (stddev, offset_error, skew, span). Nothing published comes out of it and
-	// it costs a request per source, so it isn't asked for -- see
-	// PRODUCT-3300-ntp-metric-catalogue.md for what it holds.
-	// "serverstats" is deliberately absent. chronyd only answers it over its unix socket
-	// -- over the command port it replies "not authorised" -- and that socket is
-	// unreachable for a packaged Glouton, which runs as its own user while /run/chrony is
-	// 0700 _chrony (RuntimeDirectoryMode=0700 in the unit). Asking for it would put a
-	// refusal in every gather of the installs that are the majority, to publish counters
-	// that are zero anyway on a chronyd with no "allow" directive -- a client, which is
-	// the default.
+	// The two the plugin also offers are left out: "sourcestats" (how good each source's
+	// estimate is) publishes no metric and costs a request per source, and "serverstats" is
+	// only answered over chronyd's unix socket -- the command port replies "not authorised"
+	// -- while that socket is 0700 _chrony, unreachable for a packaged Glouton running as
+	// its own user.
 	chronyInput.Metrics = []string{"tracking", "activity", "sources"}
 
 	internalInput := &internal.Input{
@@ -100,16 +85,14 @@ func New(address string) (telegraf.Input, registry.RegistrationOption, error) {
 		Name: "chrony",
 	}
 
-	// Registered with its own options rather than the default compatibility naming,
-	// which keeps only the item: chrony_sources reports one point per time source, and
-	// the source has to be part of the series identity or they all collapse into one.
-	// With labels kept it can be a label of its own (see renameGlobal) instead of being
-	// concatenated into the item behind the container name.
+	// Registered with its own options rather than the default compatibility naming, which
+	// keeps only the item: chrony_sources reports one point per time source, and the source
+	// has to stay a label of its own (see renameGlobal) or the sources all collapse into a
+	// single series.
 	//
-	// Reading the sources costs one request per source, and nothing chronyd reports here
-	// changes faster than its own poll interval (64 s to 1024 s), so the default 10 s
-	// would only buy request volume -- which for ntpd next door is enough to trip its
-	// rate limiting, see inputs/ntp.
+	// Gathering less often than the default 10 s because reading the sources costs one
+	// request per source, and nothing chronyd reports here changes faster than its own poll
+	// interval (64 s to 1024 s).
 	options := registry.RegistrationOption{ //nolint:exhaustruct
 		MinInterval: time.Minute,
 	}
@@ -117,13 +100,11 @@ func New(address string) (telegraf.Input, registry.RegistrationOption, error) {
 	return internalInput, options, nil
 }
 
-// ProbePacket returns the wire bytes of a real chrony "tracking" request -- the same
-// request this input sends for the chrony_last_offset/rms_offset metrics, known to get a
-// real reply from any chronyd that allows us in (cmdallow). It is what the status check
-// sends: chrony's command protocol is deliberately hardened against amplification abuse,
-// so it doesn't reply to just anything, and there is no guarantee malformed or arbitrary
-// bytes would get a response at all rather than being dropped -- which would make a check
-// built on a guessed payload report "down" for a perfectly healthy chronyd.
+// ProbePacket returns the wire bytes of a chrony "tracking" request, which is what the
+// status check sends. It is a real request -- the one this input sends for the
+// chrony_last_offset/rms_offset metrics -- because chrony's command protocol is hardened
+// against amplification abuse and may drop arbitrary bytes instead of replying, making a
+// check built on a guessed payload report "down" for a healthy chronyd.
 func ProbePacket() []byte {
 	packet := fbchrony.NewTrackingPacket()
 	packet.SetSequence(probeSequence)
@@ -139,10 +120,9 @@ func ProbePacket() []byte {
 // ValidateReply reports what is wrong with a reply to ProbePacket, or nil if it is the
 // answer of a chronyd that let us in.
 //
-// A reply arriving at all is not enough: chronyd answers a request it refuses with a
-// status reply rather than dropping it, so a chronyd that doesn't have the querying host
-// in its cmdallow -- exactly the configuration mistake worth reporting -- would otherwise
-// count as healthy while this input fails every gather.
+// A reply arriving at all is not enough: chronyd answers a request it refuses with a status
+// reply rather than dropping it, so a chronyd that doesn't have the querying host in its
+// cmdallow would otherwise count as healthy while this input fails every gather.
 func ValidateReply(reply []byte) error {
 	var head fbchrony.ReplyHead
 
@@ -177,17 +157,11 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 	delete(gatherContext.Tags, "stratum")
 	delete(gatherContext.Tags, "source")
 
-	// chrony_sources reports one point per configured time source, tagged with the
-	// "peer" name it was configured under. Sources coming from the same "pool"
-	// directive all share that pool's name, so the peer alone doesn't identify a
-	// source: the resolved address does, and chronyd reports it as a field. It is
-	// promoted to a label of its own here -- types.LabelPeerAddress, the one
-	// inputs/ntp puts ntpd's peers on, and the name chronyd itself uses for it.
-	//
-	// The item is deliberately left alone: it is the service instance (the container
-	// name), and putting the address there too gave items like
-	// "test-chrony_17.253.14.251" -- the address hidden behind a container name, in a
-	// label that is supposed to say which instance this is.
+	// chrony_sources reports one point per configured time source, tagged with the "peer"
+	// name it was configured under. Sources coming from the same "pool" directive all share
+	// that pool's name, so the peer alone doesn't identify a source: the resolved address
+	// does, and chronyd reports it as a field. Promote it to types.LabelPeerAddress, the
+	// label inputs/ntp puts ntpd's peers on.
 	if ip, ok := gatherContext.OriginalFields["ip"].(string); ok && ip != "" {
 		gatherContext.Tags[types.LabelPeerAddress] = ip
 	}
@@ -195,12 +169,10 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 	return gatherContext, false
 }
 
-// transformMetrics converts chrony_sources' reachability from its raw 0..255 value
-// (the decimal form of the same 8-bit reach shift register ntpq reports in octal,
-// see inputs/ntp) into a 0..100 percentage of the last 8 polls that succeeded --
-// the count of bits set, not the register's numeric value -- and renames
-// latest_measurement (chrony_sources' per-source offset, already in seconds)
-// accordingly.
+// transformMetrics converts chrony_sources' reachability from its raw 0..255 value (an
+// 8-bit shift register, one bit per poll) into a 0..100 percentage of the last 8 polls that
+// succeeded -- the count of bits set, not the register's numeric value -- and renames
+// latest_measurement (the per-source offset, already in seconds) accordingly.
 func transformMetrics(_ internal.GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {
 	if value, ok := fields["reachability"]; ok {
 		delete(fields, "reachability")

@@ -410,9 +410,7 @@ func (a *Accumulator) AddHistogram(measurement string, fields map[string]any, ta
 // RenameGlobal/differentiate/TransformMetrics/RenameMetrics pipeline as the
 // rest. Some telegraf plugins (e.g. bind's XML/JSON stats parsers) build
 // their points with metric.NewSeriesGrouper, which emits exclusively through
-// this method -- bypassing AddFields/AddGauge/... entirely. Previously this
-// was an unimplemented stub (AddError only), so any such plugin's data was
-// silently dropped.
+// this method -- bypassing AddFields/AddGauge/... entirely.
 func (a *Accumulator) AddMetric(m telegraf.Metric) {
 	switch m.Type() {
 	case telegraf.Counter:

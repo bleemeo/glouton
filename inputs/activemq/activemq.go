@@ -64,9 +64,9 @@ const advisoryTopicPrefix = "ActiveMQ.Advisory."
 
 // subscriberVolatileTags are the tags of activemq_subscribers whose value changes as
 // clients come and go: connection_id is per TCP connection, so a client that reconnects
-// gets a new one, and active flips between "true" and "false". They are dropped like the
-// volatile chrony and ntpq tags are, and deliberately not kept as labels: as part of the
-// series identity they would start a new series on every reconnect.
+// gets a new one, and active flips between "true" and "false". They are dropped rather than
+// kept as labels: as part of the series identity they would start a new series on every
+// reconnect.
 //
 // selector is dropped too -- a filter expression describes how the subscription was
 // declared, not what the metric is about.

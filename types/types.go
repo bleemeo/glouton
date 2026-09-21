@@ -132,9 +132,7 @@ const (
 
 // LabelPeerAddress is the address of the time source a point is about, on the per-source
 // metrics of both NTP daemons (inputs/ntp and inputs/chrony). It is one name for both so a
-// dashboard doesn't need to know which daemon answered, which only holds as long as they
-// share this constant. Declared apart from the block above so its comment doesn't reflow
-// the alignment of every label around it.
+// dashboard doesn't need to know which daemon answered.
 const LabelPeerAddress = "ip"
 
 const (

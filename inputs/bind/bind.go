@@ -98,11 +98,10 @@ var counterFieldRenames = map[string]string{ //nolint:gochecknoglobals
 // same fix as inputs/clickhouse renaming "query" to "active_query" where two of its
 // measurements share a field name.
 //
-// This is a trap being closed, not a bug being fixed: these groups sit in the per-view part
-// of the statistics, which the plugin only reads with GatherViews, and that is left off. Two
-// things are needed before turning it on: this prefix, and the view name in the item --
-// a server with several views repeats every counter group once per view, and "view" is
-// dropped just like "type" is.
+// These groups sit in the per-view part of the statistics, which the plugin only reads
+// with GatherViews, and that is left off. Two things are needed before turning it on:
+// this prefix, and the view name in the item -- a server with several views repeats
+// every counter group once per view, and "view" is dropped just like "type" is.
 //
 // The prefix is applied per group rather than per colliding name: BIND adds counters between
 // versions, and a new name in one of these groups must not start colliding silently.

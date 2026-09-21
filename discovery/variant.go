@@ -21,20 +21,7 @@ import "slices"
 // ServiceVariant names which implementation of a service type is running, for the few
 // service types that have more than one and where the difference changes what Glouton has
 // to do: which port to reach it on, which input to build, which check to run.
-//
-// It exists so that the service keeps the name the panel should show. An InfluxDB 3 server
-// is still "influxdb" to a user -- naming it "influxdb3" instead would have to be
-// translated back at every place the name is displayed, and would collide with a user's own
-// service override, which is keyed by that name. The variant carries the implementation
-// alongside the name rather than inside it.
-//
-// It is only worth that when the honest name would be a bad name to show. Where it reads
-// fine, two service types are simpler: chrony and ntpd are told apart by being ChronyService
-// and NTPService, which needs no variant, no translation, and nothing to read the
-// implementation back afterwards.
-//
-// So InfluxDB is the only type with variants today, and most types have exactly one
-// implementation and leave this empty: there is no variant of Apache to distinguish.
+// Most services will not have variants.
 type ServiceVariant string
 
 const (
@@ -45,16 +32,6 @@ const (
 	VariantUnknown ServiceVariant = ""
 
 	// VariantInfluxd covers InfluxDB 1.x and 2.x together, and VariantInfluxDB3 is 3.x.
-	//
-	// The split is by binary rather than by major version on purpose, because the binary
-	// is all a process can be told apart by: 1.x and 2.x are both "influxd" and their
-	// command lines are identical, where 3.x is "influxdb3". That is exactly the
-	// granularity discovery needs, since the two lines that share a binary also share
-	// port 8086 while 3.x serves 8181.
-	//
-	// Telling 1.x from 2.x needs the server itself to answer, which only matters for
-	// where the metrics are read from, and inputs/influxdb already asks it at gather
-	// time -- see detectLine there. Nothing at discovery level needs that answer.
 	VariantInfluxd   ServiceVariant = "influxd"
 	VariantInfluxDB3 ServiceVariant = "influxdb3"
 )

@@ -60,27 +60,6 @@ func New(url string, token string) (i telegraf.Input, err error) {
 }
 
 // renameGlobal normalises the measurement name and leaves Consul's own labels alone.
-//
-// Those labels are what tells apart the series of one metric: some Consul metrics come as
-// one series per label set -- one per network (lan and wan) for the memberlist and serf
-// queues, one per datacenter and kind of config entry for the state ones. They used to be
-// joined into the item, because the compatibility naming keeps only the item and would
-// otherwise drop them, leaving every series of one metric with the same name and the same
-// empty label set: "collected metric ... was collected before with the same name and label
-// values", which is what still happens to rabbitmq_consumers. Turning that naming off for
-// this service (see the Consul case of Discovery.createInput) keeps them as labels
-// instead, and leaves the item to the service instance rather than gluing a network name
-// onto a container name.
-//
-// Taking their mean is deliberately not the answer either: the aggregate that makes sense
-// differs per field -- summing is right for count and sum, taking the max for max, and
-// nothing is right for stddev -- and it would report a number Consul never measured.
-//
-// The labels Consul uses are dimensions of the thing measured, not of the event: network
-// (lan, wan), datacenter, kind of config entry, version, HTTP method and path, and peer_id
-// on the leader's raft replication metrics. The last one is the id of a server, so it does
-// change when a server is replaced, but like the others it is bounded by the size of the
-// cluster and can't grow one series per event.
 func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
 	measurement := stripNodeName(gatherContext)
 	measurement = strings.ReplaceAll(measurement, ".", "_")

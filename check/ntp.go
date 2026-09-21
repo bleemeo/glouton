@@ -63,8 +63,7 @@ func NewNTP(
 }
 
 // DiagnosticArchive add the address probed to the diagnostic, which baseCheck's version
-// can't know: it only records TCP addresses, and the NTP exchange is on UDP. A check
-// reporting a timeout is unreadable without knowing which host:port it dialled.
+// can't know: it only records TCP addresses, and the NTP exchange is on UDP.
 func (nc *NTPCheck) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
 	file, err := archive.Create("check-ntp.json")
 	if err != nil {
@@ -245,12 +244,9 @@ func (nc *NTPCheck) ntpMainCheck(ctx context.Context) types.StatusDescription {
 		}
 	}
 
-	// A Kiss-o'-Death is the server telling us to back off, not telling us anything about
-	// its clock: it carries stratum 0 like an unsynchronized server would, so without
-	// reading the reference ID it gets reported as one, and the real cause (a monitoring
-	// agent querying more often than the server's "restrict ... limited" allows) is
-	// nowhere to be seen. "RATE" is the code for rate limiting; the others are ntpd's
-	// authentication refusals, which are just as much about us as about the server.
+	// A Kiss-o'-Death is the server refusing the request, not telling us anything about its
+	// clock: it carries stratum 0 like an unsynchronized server would, so the reference ID
+	// has to be read to tell the two apart.
 	if packet.Stratum == 0 {
 		if reason, ok := kissCodes[string(packet.ReferenceID[:])]; ok {
 			return types.StatusDescription{

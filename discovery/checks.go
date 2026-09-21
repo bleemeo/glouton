@@ -205,36 +205,25 @@ func createCheckType(commandRunner *gloutonexec.Runner, service Service, d *Disc
 // createNTPCheck adds the check of a chrony or ntpd service: the NTP protocol itself when
 // the daemon really serves it, and chrony's command protocol for a chronyd that doesn't.
 //
-// A chrony that only syncs the local clock -- the default install on most distributions,
-// and what a chrony container usually runs -- never answers an NTP query, so check.NewNTP
-// would report a permanent "Connection timed out" on a perfectly healthy daemon. Its
-// command protocol is the only thing such a daemon answers, and unlike the ntpq CLI the
-// ntpd side is read with, it is a real network protocol that can be probed. A chronyd that
-// does serve NTP is checked with the NTP protocol like any other server: that is the
-// service being monitored, while the command port is only how its metrics are read.
+// A chrony that only syncs the local clock -- the default install on most distributions --
+// never answers an NTP query, so check.NewNTP would report a permanent "Connection timed
+// out" on a healthy daemon. Its command protocol is the only thing such a daemon answers.
 func (d *Discovery) createNTPCheck(service Service, di discoveryInfo, primaryAddress string, tcpAddresses []string, labels map[string]string, annotations types.MetricAnnotations) {
 	if service.ServiceType == ChronyService && !servesNTPProtocol(service, di) {
-		// The same address the input reads, so the check and the metrics can never
-		// disagree about which daemon they are talking to.
+		// The same address the input reads, so the check and the metrics can never disagree
+		// about which daemon they are talking to.
 		//
-		// A false ok leaves it empty on purpose rather than skipping the check: the UDP
-		// check turns an empty address into an explicit unknown ("No UDP address to
-		// check"), where creating no check at all would publish no status for this
-		// service -- which on the platform reads as an agent that stopped reporting.
-		// Substituting Glouton's own loopback is the one thing that must not happen: that
-		// reports on whatever chronyd runs next to it, under this service's name.
+		// An address that couldn't be resolved is left empty rather than skipping the
+		// check: the UDP check turns an empty address into an explicit unknown ("No UDP
+		// address to check"), where no check at all would publish no status for this
+		// service. What it must never fall back to is Glouton's own loopback, which reports
+		// on whatever chronyd runs next to it under this service's name.
 		checkAddress, _ := chronyCmdAddress(service)
 
-		// createTCPCheck doesn't fit that protocol: the command port is UDP-only, and
-		// that check always dials TCP.
-		//
-		// The payload and the reply check both come from inputs/chrony, which owns the
-		// protocol: a real "tracking" request rather than arbitrary bytes (chrony's
-		// command protocol is hardened against amplification abuse and may drop
-		// malformed input instead of replying, which would report "down" for a healthy
-		// chronyd), and a validated reply rather than any reply at all (chronyd answers
-		// a request it refuses -- a host missing from cmdallow -- with a status reply,
-		// which "got some response" would report as healthy while no metric arrives).
+		// A UDP check, the command port being UDP-only where createTCPCheck always dials
+		// TCP. The payload and the reply check come from inputs/chrony, which owns the
+		// protocol: see ProbePacket and ValidateReply for why neither arbitrary bytes nor
+		// any reply at all would do.
 		udpCheck := check.NewUDP(
 			checkAddress,
 			chrony.ProbePacket(),
@@ -280,16 +269,9 @@ func servesNTPProtocol(service Service, di discoveryInfo) bool {
 	}
 
 	// A configured address or port replaces the listen addresses with a single entry that
-	// applyOverrideInPlace types tcp whatever protocol the service actually speaks. Matching
-	// the protocol on that entry would say "doesn't serve NTP" for every overridden chrony
-	// and probe its command port instead of the NTP it serves -- which a remote chronyd
-	// refuses by default, cmdallow being localhost-only, reporting a healthy server as down.
-	//
-	// The listen address carries nothing else worth testing either, since it was built from
-	// the configured port: what decides is whether that port is the NTP one. Overriding only
-	// the address leaves it the type's default, which is the NTP port; pointing the override
-	// at chrony's command port instead says this daemon is to be reached there, and the
-	// command probe below is then the right check.
+	// applyOverrideInPlace types tcp whatever protocol the service actually speaks, so the
+	// protocol can't be matched on it. That entry was built from the configured port anyway:
+	// what decides is whether that port is the NTP one.
 	if service.Config.Address != "" || service.Config.Port != 0 {
 		return port == di.ServicePort
 	}
@@ -297,8 +279,7 @@ func servesNTPProtocol(service Service, di discoveryInfo) bool {
 	for _, address := range service.ListenAddresses {
 		// IsProtocol rather than comparing the network name: netstat records the IP family
 		// in it, so an IPv6-only daemon listens on "udp6" and would otherwise look like one
-		// that doesn't serve NTP at all -- and get chrony's command port probed as the
-		// service's own check.
+		// that doesn't serve NTP at all.
 		if address.IsProtocol(di.ServiceProtocol) && address.Port == port {
 			return true
 		}

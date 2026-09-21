@@ -31,20 +31,7 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/varnish"
 )
 
-// New returns a Varnish input. It reads the metrics with "varnishstat", run through
-// Glouton so that the binary comes from a filesystem that has one rather than from the
-// agent's own, which does not -- see useGloutonRunner.
-//
-// containerID says which Varnish is read. Empty is one installed on the machine, read with
-// the machine's binary. Set runs the varnishstat of that container instead, through the
-// container runtime: the binary then comes from the same image as the daemon.
-//
-// No "-n" is passed either way, so varnishstat looks for the instance of the namespace it
-// runs in -- which is the right one in both cases, since it runs beside the daemon it
-// reads. An image that starts varnishd with a "-n" of its own is not covered: varnishstat
-// would not find that instance without being given the same argument, and nothing here
-// knows it. Such a container reports the error on every gather rather than silently
-// reporting another Varnish's numbers.
+// New returns a Varnish input. It reads the metrics with "varnishstat".
 func New(runner Runner, executer ContainerExecuter, containerID string) (telegraf.Input, registry.RegistrationOption, error) {
 	input, ok := telegraf_inputs.Inputs["varnish"]
 	if !ok {
@@ -57,10 +44,6 @@ func New(runner Runner, executer ContainerExecuter, containerID string) (telegra
 	}
 
 	if err := useGloutonRunner(varnishInput, runner, executer, containerID); err != nil {
-		// Not fatal: the plugin keeps its own runner, which is what every Glouton did
-		// before this and still works wherever varnishstat sits next to the agent. Only
-		// the container case is lost, and it was already broken. The unit test is what
-		// makes a Telegraf upgrade renaming the field loud.
 		logger.V(1).Printf("Varnish metrics will be gathered without Glouton's command runner: %v", err)
 	}
 
@@ -71,8 +54,6 @@ func New(runner Runner, executer ContainerExecuter, containerID string) (telegra
 	// The plugin only collects cache_hit/cache_miss/uptime by default. The backend and
 	// thread-pool counters below are cheap backend-health and saturation signals varnishstat
 	// already tracks, so ask for them too instead of leaving them out for lack of asking.
-	// Nothing else: this is the list Glouton publishes, and asking varnishstat for a counter
-	// no metric comes out of only costs a wider parse on every gather.
 	varnishInput.Stats = []string{
 		"MAIN.cache_hit",
 		"MAIN.cache_miss",

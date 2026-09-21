@@ -57,9 +57,6 @@ type ContainerExecuter interface {
 // What this buys is a varnishstat that exists at all, since the agent image contains none:
 // a Varnish installed on the machine is read with the machine's binary through the command
 // runner, and a containerised one with the container's own binary through the runtime.
-// This is what inputs/smart already does for smartctl (see its run_cmd.go, which reaches
-// the same private hook with go:linkname because there the plugin keeps it in a package
-// variable rather than a field).
 //
 // Sudo is left to the runner: it only prepends one when Glouton isn't already root, which
 // is why the sudoers rule keeps matching for a host install (sudo -n /usr/bin/varnishstat

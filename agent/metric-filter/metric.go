@@ -781,17 +781,12 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"nsq_topic_messages",
 		},
 
-		// The two time daemons are two service types, and each reports its own metric
-		// family -- chrony_* against ntpq_*. Neither publishes its per-source metrics by
-		// default: what a user of a time daemon wants to know is whether this host's clock
-		// is right, and a host polling a pool would multiply every per-source name by
-		// however many sources it happens to have.
+		// Neither Chrony or NTP publishes its per-source metrics by default:
+		// what a user of a time daemon wants to know is whether this host's clock is right.
 		discovery.ChronyService: {
 			"chrony_last_offset",
 			"chrony_rms_offset",
 			"chrony_root_delay",
-			// Counts of sources rather than one metric per source, so they say how the
-			// daemon is doing overall without growing with the source list.
 			"chrony_activity_online",
 			"chrony_activity_offline",
 		},

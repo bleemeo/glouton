@@ -36,9 +36,9 @@ const udpCheckTimeout = 10 * time.Second
 // UDPCheck perform a UDP check.
 //
 // Unlike TCP, dialing UDP never fails on its own -- there is no handshake, so a
-// non-listening port looks identical to a listening one until data is actually
-// exchanged. send is therefore required, not optional like TCP's NewTCP: a bare
-// "can I open a UDP socket" check carries no information about reachability.
+// non-listening port looks identical to a listening one until data is actually exchanged.
+// send is therefore required: a bare "can I open a UDP socket" check carries no information
+// about reachability.
 type UDPCheck struct {
 	*baseCheck
 
@@ -55,14 +55,12 @@ type UDPCheck struct {
 // then glouton waits up to 10 seconds for a reply.
 //
 // What counts as a good reply is up to the caller. expect, when non-empty, requires the
-// reply to start with those bytes. validate, when non-nil, is given the whole reply and
-// says what is wrong with it -- for a protocol that answers a request it refuses instead
-// of dropping it, which "got some response" would report as healthy. With neither, any
-// non-empty reply counts as OK.
+// reply to start with those bytes. validate, when non-nil, is given the whole reply and says
+// what is wrong with it -- for a protocol that answers a request it refuses instead of
+// dropping it. With neither, any non-empty reply counts as OK.
 //
-// UDP has no persistent-connection concept the way TCP's baseCheck maintains one
-// (there is no long-lived stream whose breaking can be detected the same way), so
-// unlike NewTCP there is no secondary-addresses/persistentConnection parameter here.
+// There is no persistent connection to maintain over UDP, so no secondary addresses are
+// taken.
 func NewUDP(
 	address string,
 	send []byte,
@@ -116,9 +114,8 @@ func (uc *UDPCheck) DiagnosticArchive(ctx context.Context, archive types.Archive
 
 func (uc *UDPCheck) udpMainCheck(ctx context.Context) types.StatusDescription {
 	if uc.mainAddress == "" {
-		// Nothing to send a packet to, and unlike a TCP check there are no secondary
-		// addresses this could fall back to: reporting Ok would be reporting on a
-		// check that never ran.
+		// Nothing to send a packet to, and no secondary address to fall back to: reporting
+		// Ok would be reporting on a check that never ran.
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusUnknown,
 			StatusDescription: "No UDP address to check",

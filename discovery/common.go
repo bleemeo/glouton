@@ -442,12 +442,10 @@ var (
 			ServicePort:     4151,
 			ServiceProtocol: tcpProtocol,
 		},
-		// chrony and ntpd are two service types rather than one, because the process name
-		// tells them apart for free and everything downstream differs: a different input,
-		// different metric names, and a different check for a client-only daemon. Both
-		// carry the NTP port, which is what says whether the daemon serves NTP at all --
-		// see servesNTPProtocol.
 		ChronyService: {
+			// Use the NTP port for chrony even though a default installation doesn't listen
+			// on it (client-only NTP daemon). The discovery (createNTPCheck) takes care of
+			// falling back to its command port (323) if needed.
 			ServicePort:     123,
 			ServiceProtocol: udpProtocol,
 		},
@@ -545,10 +543,7 @@ type discoveryInfo struct {
 	// decides the port in practice; ServicePort is the fallback for a user-declared
 	// service that named no variant.
 	ServicePortByVariant map[ServiceVariant]int
-	// AltServicePorts are other ports this service type is known to serve. They are tried
-	// when it is not listening on the one chosen above, which is what happens when the
-	// variant is unknown -- a manually configured service that named none -- and the
-	// implementation therefore cannot be told.
+	// AltServicePorts are other ports this service type is known to serve.
 	AltServicePorts             []int
 	ServiceProtocol             string // "tcp", "udp" or "unix"
 	IgnoreHighPort              bool

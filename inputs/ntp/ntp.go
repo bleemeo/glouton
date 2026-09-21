@@ -41,9 +41,8 @@ import (
 const (
 	// ntpDefaultPort is the NTP port, which ntpd also answers its control protocol on.
 	ntpDefaultPort = 123
-	// dialTimeout and gatherTimeout bound a gather. The whole exchange is a handful of
-	// small UDP round trips (measured at 3 ms for 19 peers against an ntpd on the same
-	// Docker host), so these only matter for a daemon that stopped answering.
+	// dialTimeout and gatherTimeout bound a gather. The whole exchange is a handful of small
+	// UDP round trips, so these only matter for a daemon that stopped answering.
 	dialTimeout   = 5 * time.Second
 	gatherTimeout = 10 * time.Second
 	// maxPollsRemembered is the width of the "reach" shift register: ntpd remembers
@@ -60,15 +59,13 @@ const (
 	// data under 468 bytes and continues in another packet, so this is roomy on purpose.
 	maxControlPacketSize = 4096
 	// maxControlDatagrams bounds how many datagrams one reply may be read from, which
-	// nothing in the protocol bounds by itself. It is ntpq's own bound: twice its
-	// MAXFRAGS of 32, because a datagram that turns out not to belong to this reply is
-	// discarded and still costs a read ("Discarding various invalid packets can cause us
-	// to loop more than MAXFRAGS times, but enforce a sane bound on how long we're
-	// willing to spend here" -- ntp/packet.py).
+	// nothing in the protocol bounds by itself. It is ntpq's own bound: twice its MAXFRAGS
+	// of 32, since a datagram that turns out not to belong to this reply is discarded and
+	// still costs a read.
 	maxControlDatagrams = 2 * 32
-	// maxControlReplySize bounds the reassembled reply. ntpd sends at most 468 bytes of
-	// data per fragment, so ntpq's 32 of them come to 14976 bytes; the round number above
-	// that also keeps the reassembled Count within the uint16 it is stored in.
+	// maxControlReplySize bounds the reassembled reply. ntpd sends at most 468 bytes of data
+	// per fragment, so ntpq's 32 of them come to 14976 bytes; the round number above that
+	// also keeps the reassembled Count within the uint16 it is stored in.
 	maxControlReplySize = 16 * 1024
 )
 
@@ -80,21 +77,12 @@ var (
 
 // New initialise ntp.Input, which reads ntpd's peers over its control protocol (NTP
 // mode 6, RFC1305 appendix B) on the given "host:port", or on 127.0.0.1:123 when address
-// is empty.
+// is empty. The protocol is spoken directly, in Go, so that no ntpq CLI has to be installed
+// next to Glouton.
 //
-// The protocol is spoken directly, in Go, rather than through telegraf's ntpq plugin
-// which shells out to the ntpq CLI. That plugin can query a remote daemon (its Servers
-// option becomes ntpq's host argument), but it needs the tool installed next to Glouton,
-// and in ntpsec ntpq is a *Python* program: pulling it into the agent image costs a
-// Python runtime (Alpine's ntpsec package brings 28 packages and ~48 MiB for a 72 KB
-// script). An ntpd in a container of its own is the ordinary case here, so the query has
-// to work without that.
-//
-// What the daemon answers is unchanged either way, and remains the limiting factor: mode
-// 6 is only served to whoever the target's own "restrict" lines allow, which by default
-// (restrict default ... noquery, with 127.0.0.1 and ::1 unrestricted) is the local host
-// only. That is why an address is only used for a daemon Glouton's loopback cannot be --
-// see discovery's ntpdAddress.
+// Whichever daemon is read, mode 6 is only served to whoever its own "restrict" lines allow,
+// which by default (restrict default ... noquery, with 127.0.0.1 and ::1 unrestricted) is
+// the local host only.
 func New(address string) (telegraf.Input, registry.RegistrationOption, error) {
 	if address == "" {
 		address = net.JoinHostPort("127.0.0.1", strconv.Itoa(ntpDefaultPort))
@@ -109,19 +97,16 @@ func New(address string) (telegraf.Input, registry.RegistrationOption, error) {
 		Name: "NTP",
 	}
 
-	// Registered with its own options rather than the default compatibility naming,
-	// which keeps only the item: there is one point per peer, and the peer has to be
-	// part of the series identity or they all collapse into one. With labels kept it
-	// can be a label of its own (see renameGlobal) instead of being concatenated into
-	// the item behind the container name.
+	// Registered with its own options rather than the default compatibility naming, which
+	// keeps only the item: there is one point per peer, and the peer has to stay a label of
+	// its own (see renameGlobal) or the peers all collapse into a single series.
 	//
-	// The interval is well above the 10 s default because reading the peers costs one
-	// request per peer, the way "ntpq -p" does, and ntpd rate-limits per source address
-	// by default ("restrict default ... limited", wanting 8 s between packets on
-	// average). At 10 s a daemon with a dozen peers throttles us -- and answers the NTP
-	// check coming from the same address with a Kiss-o'-Death instead, reporting a
-	// healthy server as unsynchronized. Nothing here changes faster than the daemon's
-	// poll interval (64 s to 1024 s) anyway.
+	// Gathering less often than the default 10 s because reading the peers costs one request
+	// per peer, and ntpd rate-limits per source address by default ("restrict default ...
+	// limited", wanting 8 s between packets on average): at 10 s a daemon with a dozen peers
+	// throttles us, and answers the NTP check coming from the same address with a
+	// Kiss-o'-Death instead. Nothing here changes faster than the daemon's poll interval
+	// (64 s to 1024 s) anyway.
 	options := registry.RegistrationOption{ //nolint:exhaustruct
 		MinInterval: time.Minute,
 	}
@@ -130,7 +115,7 @@ func New(address string) (telegraf.Input, registry.RegistrationOption, error) {
 }
 
 // controlInput gathers one metric set per ntpd peer, with the measurement, tag and field
-// names telegraf's ntpq plugin used, so what reaches the API is the same as before.
+// names of telegraf's ntpq plugin.
 type controlInput struct {
 	address string
 }
@@ -177,8 +162,6 @@ func (ci *controlInput) Gather(acc telegraf.Accumulator) error {
 
 	// Association 0 is the daemon itself rather than a peer: its variables are what ntpd
 	// concluded about the local clock, including the offset it is actually correcting for.
-	// That is the number chrony reports as chrony_last_offset, and without it an ntpd host
-	// has only per-peer offsets and no answer to "how far off is this clock".
 	gotSystem := false
 
 	system, err := exchange(conn, readPacket(control.OpReadVariables, 0), &sequence)
@@ -222,16 +205,12 @@ func (ci *controlInput) Gather(acc telegraf.Accumulator) error {
 
 	if gathered == 0 && !gotSystem {
 		// Reporting nothing without an error would look like a healthy daemon with no
-		// peers, which ntpd can't be: it always has at least the ones it is configured
-		// with. This is what a daemon that just started, or one whose peers are all
-		// placeholders, looks like. A daemon that refused the request doesn't reach here
-		// -- exchange says so instead, which is the more precise answer.
+		// peers, which ntpd can't be: it always has at least the ones it is configured with.
 		//
-		// Only when the system association was missed too, because that one carries
-		// ntpq_system_offset_seconds -- the sole NTP metric in the default set. An ntpd
-		// pointed at a pool has nothing but ".POOL." placeholders until it selects peers,
-		// which addPeerFields rightly drops; erroring through those minutes would report a
-		// failed gather while the only metric anyone receives was published normally.
+		// Only when the system association was missed too: an ntpd pointed at a pool has
+		// nothing but the ".POOL." placeholders addPeerFields drops until it selects peers,
+		// and ntpq_system_offset_seconds -- the sole NTP metric in the default set -- is
+		// published normally all along.
 		return errNoPeer
 	}
 
@@ -241,20 +220,15 @@ func (ci *controlInput) Gather(acc telegraf.Accumulator) error {
 // exchange sends one control request and returns the reply, bumping the sequence number
 // the reply is expected to carry back.
 //
-// The reply is read here rather than through control.NTPClient because that client
-// believes the reply's own Count field over the number of bytes it actually read: it
-// reads into a 1024-byte buffer, discards the read length, and then slices
-// buffer[12:12+Count] (ntp/control/client.go). A datagram claiming more data than it
-// carries makes that panic on a slice bound -- and a panic inside a gather takes the whole
-// agent down, since crashreport.ProcessPanic re-panics once it has reported. Whoever we
-// are pointed at gets to send that datagram, so its header cannot be taken on trust.
+// The reply is read here rather than through control.NTPClient because that client believes
+// the reply's own Count field over the number of bytes it actually read: it reads into a
+// 1024-byte buffer, discards the read length, and then slices buffer[12:12+Count]
+// (ntp/control/client.go). A datagram claiming more data than it carries makes that panic on
+// a slice bound, and the header comes from whatever daemon we are pointed at.
 //
-// That client also takes none of the other precautions ntpq takes, which real replies turn
-// out to need: measured against the ntpsec 1.2.2 in the test container, every peer's
-// variables come back as two fragments (468 bytes at offset 0, then 201 at offset 468), so
-// reassembling a reply is the normal path and not an exotic one. The checks here are the
-// ones ntpq's own mode-6 client makes in __validate_packet and its fragment collection
-// loop (ntp/packet.py), for the reasons its comments give.
+// The validation and the fragment reassembly below are what ntpq's own mode-6 client does
+// (__validate_packet and its collection loop in ntp/packet.py). Reassembly is the normal
+// path, not an exotic one: a peer's variables come back as two fragments.
 func exchange(conn net.Conn, request *control.NTPControlMsgHead, sequence *uint16) (*control.NTPControlMsg, error) {
 	request.Sequence = *sequence
 	*sequence++
@@ -298,9 +272,6 @@ func exchange(conn net.Conn, request *control.NTPControlMsgHead, sequence *uint1
 		}
 
 		if head.HasError() {
-			// The daemon answered, and its answer is a refusal -- an unsupported request,
-			// or one its access policy rejects. Saying so beats the "no peer" this used to
-			// become, which points at the daemon's peers instead of at its policy.
 			return nil, fmt.Errorf("%w (operation %d)", errRequestRefused, head.GetOperation())
 		}
 
@@ -360,15 +331,13 @@ type replyFragment struct {
 	data   []byte
 }
 
-// isReplyTo reports whether a datagram is the reply to this request rather than a stray
-// one: a late answer to an earlier request on the same socket, a duplicate, or something
-// else that happened to arrive. Without this, a reply left queued by a request that
-// errored out is read as the next peer's variables -- publishing one peer's numbers twice
-// and losing another peer entirely.
+// isReplyTo reports whether a datagram is the reply to this request rather than a stray one:
+// a late answer to an earlier request on the same socket, a duplicate, or something else
+// that happened to arrive. A reply left queued by a request that errored out would otherwise
+// be read as the next peer's variables.
 //
-// A mismatched association ID is deliberately not part of this. ntpq only warns about one
-// instead of rejecting the datagram, and the sequence number already pins the datagram to
-// a request that named a single association.
+// A mismatched association ID is not tested, as ntpq doesn't either: the sequence number
+// already pins the datagram to a request that named a single association.
 func isReplyTo(head control.NTPControlMsgHead, request *control.NTPControlMsgHead) bool {
 	switch {
 	case head.GetVersion() < 1 || head.GetVersion() > 4:
@@ -432,21 +401,16 @@ func readPacket(operation uint8, associationID uint16) *control.NTPControlMsgHea
 }
 
 // systemMeasurement holds the daemon's own view of the local clock, kept apart from the
-// per-peer "ntpq" measurement: those points are identified by their peer, these have no
-// peer at all, and sharing a measurement would make one look like the other with a missing
-// label.
+// per-peer "ntpq" measurement: those points are identified by their peer, these have no peer
+// at all, and sharing a measurement would make one look like the other with a missing label.
 const systemMeasurement = "ntpq_system"
 
-// addSystemFields reports what ntpd concluded about the local clock, from association 0.
+// addSystemFields reports what ntpd concluded about the local clock, from association 0, and
+// whether that was published.
 //
-// Only "offset" is read of the twenty variables association 0 answers with, because it is
-// the only one published: the daemon's own estimate of how far off this clock is, which is
-// what chrony reports as chrony_last_offset. The others (sys_jitter, clk_wander, stratum,
-// leap, rootdisp, frequency, precision, tc, ...) were left out on purpose -- see
-// PRODUCT-3300-ntp-metric-catalogue.md for what each holds, should one be wanted later.
-// It reports whether the offset was published, which is what decides the gather is worth
-// something even with no usable peer: that one field is the whole of the default metric set
-// for an ntpd.
+// Only "offset" is read of the twenty variables association 0 answers with, the daemon's own
+// estimate of how far off this clock is: the others (sys_jitter, clk_wander, stratum, leap,
+// rootdisp, frequency, precision, tc, ...) are unpublished.
 func addSystemFields(acc telegraf.Accumulator, systemVariables map[string]string) bool {
 	// Milliseconds, as everything ntpd reports; transformMetrics turns it into seconds.
 	offset, err := strconv.ParseFloat(systemVariables["offset"], 64)
@@ -475,9 +439,8 @@ func addPeerFields(acc telegraf.Accumulator, peerVariables map[string]string) bo
 	fields := make(map[string]any, 4)
 
 	// delay and offset are the milliseconds ntpd reports; transformMetrics turns them into
-	// seconds, as the ntpq plugin's own values were. jitter, stratum and unreach are the
-	// other numbers a peer carries and are deliberately not read, being unpublished --
-	// PRODUCT-3300-ntp-metric-catalogue.md says what each is.
+	// seconds. jitter, stratum and unreach are the other numbers a peer carries and are not
+	// read, being unpublished.
 	for _, name := range []string{"delay", "offset"} {
 		value, err := strconv.ParseFloat(peerVariables[name], 64)
 		if err != nil {
@@ -487,21 +450,19 @@ func addPeerFields(acc telegraf.Accumulator, peerVariables map[string]string) bo
 		fields[name] = value
 	}
 
-	// flash is the bit field of the sanity checks this peer failed: zero means ntpd is
-	// happy with it, and each bit is a reason it isn't (control.ReadFlashStatusWord names
-	// them, e.g. 0x400 peer_dist). Always read as hexadecimal, which is how ntpq prints it
-	// and what makes the bits line up with those names; ntpsec sends it prefixed ("0x0" on
-	// the wire, checked against 1.2.2) and older implementations bare, so the prefix is
-	// removed rather than relying on base detection -- a bare "400" is peer_dist, not 400.
+	// flash is the bit field of the sanity checks this peer failed: zero means ntpd is happy
+	// with it, and each bit is a reason it isn't (control.ReadFlashStatusWord names them,
+	// e.g. 0x400 peer_dist). Always read as hexadecimal, which is how ntpq prints it; ntpsec
+	// sends it prefixed ("0x0") and older implementations bare, so the prefix is removed
+	// rather than relying on base detection -- a bare "400" is peer_dist, not 400.
 	flash := strings.TrimPrefix(strings.TrimPrefix(peerVariables["flash"], "0x"), "0X")
 	if value, err := strconv.ParseUint(flash, 16, 16); err == nil {
 		fields["flash"] = float64(value)
 	}
 
 	if reach, ok := parseReach(peerVariables["reach"]); ok {
-		// As a 0..1 ratio of the polls that were answered, which is what the ntpq
-		// plugin's "ratio" reach format produced and what transformMetrics scales to a
-		// percentage. The raw register is a bit field: as a number it reads as
+		// As a 0..1 ratio of the polls that were answered, which transformMetrics scales to
+		// a percentage. The raw register is a bit field: as a number it reads as
 		// nonsensically out of range (255, or 377 in the octal ntpq prints).
 		fields["reach"] = float64(bits.OnesCount64(reach)) / maxPollsRemembered
 	}
@@ -518,15 +479,14 @@ func addPeerFields(acc telegraf.Accumulator, peerVariables map[string]string) bo
 // parseReach reads ntpd's "reach" peer variable: the shift register recording which of
 // the last 8 polls the peer answered, one bit each.
 //
-// ntpsec sends it as hex with a 0x prefix ("0xff", checked against 1.2.2 over the wire),
-// while ntpq's own display and older implementations use octal, so it is read with Go's
-// base-detecting 0 first and re-read as octal when that doesn't fit the register -- a
-// bare "377" is 255 in octal, and no NTP implementation would print 377 decimal, a value
-// the register cannot hold. Bare digits that do fit stay ambiguous and are read as
-// decimal, which is the best that can be done without a prefix to go on.
+// ntpsec sends it as hex with a 0x prefix ("0xff") while ntpq's own display and older
+// implementations use octal, so it is read with Go's base-detecting 0 first and re-read as
+// octal when that doesn't fit the register -- a bare "377" is 255 in octal, a value the
+// register could not hold as decimal. Bare digits that do fit stay ambiguous and are read as
+// decimal, there being no prefix to go on.
 //
-// The value is returned as a uint64 to be counted with bits.OnesCount64: only how many
-// of its 8 bits are set is ever used, and that count is the same at any width.
+// The value is returned as a uint64 to be counted with bits.OnesCount64: only how many of
+// its 8 bits are set is ever used, and that count is the same at any width.
 func parseReach(value string) (uint64, bool) {
 	reach, err := strconv.ParseUint(value, 0, 8)
 	if err == nil {
@@ -544,11 +504,6 @@ func parseReach(value string) (uint64, bool) {
 
 // renameGlobal moves the peer address to types.LabelPeerAddress, the label it shares with
 // inputs/chrony, so both daemons' per-source metrics are read the same way.
-//
-// The item is deliberately left alone: it is the service instance (the container name),
-// and putting the address there too gave items like "test-ntp_37.59.63.125" -- the address
-// hidden behind a container name, in a label that is supposed to say which instance
-// this is.
 func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
 	if remote := gatherContext.Tags[remoteTag]; remote != "" {
 		delete(gatherContext.Tags, remoteTag)
@@ -563,9 +518,6 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 // matching every other duration metric in this codebase, and renames each field so the unit
 // is visible in the name. It also converts reach from the 0..1 ratio addPeerFields reports
 // into a 0..100 percentage, matching every other percentage metric Glouton publishes.
-//
-// The two measurements carry different fields: the per-peer one reports the measurement
-// towards that peer, the system one what ntpd concluded from all of them.
 func transformMetrics(_ internal.GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {
 	// Both measurements report their durations in milliseconds and name them the same way,
 	// so one list covers the peer points (delay, offset) and the system one (offset).

@@ -96,10 +96,7 @@ const (
 	// varnishStatBinary is where telegraf's varnish plugin runs varnishstat from, and so
 	// the only place a container can carry one this input is able to use.
 	varnishStatBinary = "/usr/bin/varnishstat"
-	// chronyDefaultCmdPort is the UDP port of chronyd's command protocol, which is how its
-	// metrics are read. Distinct from ChronyService's own ServicePort (123, the NTP
-	// protocol itself), which says whether the daemon serves NTP to clients at all -- see
-	// chronyCmdAddress and servesNTPProtocol.
+	// chronyDefaultCmdPort is the UDP port of chronyd's command protocol, which is how its metrics are read.
 	chronyDefaultCmdPort = 323
 )
 
@@ -459,22 +456,6 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
 			input, err = nsq.New(url)
 		}
-	// chrony and ntpd answer different protocols on different ports -- chrony its own
-	// command protocol on 323, ntpd the NTP control protocol (mode 6) on the NTP port --
-	// so each has its own input. Which daemon this is was settled when the process was
-	// recognised, so there is nothing to work out here.
-	//
-	// Both are plain UDP with no local command involved, so a daemon in another container
-	// is genuinely reachable, unlike Varnish -- see chronyCmdAddress and ntpdAddress for
-	// which address is used, and why it isn't always the one discovery found the service
-	// at. Both inputs bring their own registration options: their per-source metrics need
-	// the source in a label of its own, which the default compatibility naming would drop,
-	// and they read the daemon less often than the default 10 s.
-	//
-	// No address means no input, rather than one reading the wrong daemon: both inputs
-	// fall back to Glouton's own loopback, which for a service running elsewhere would
-	// publish the numbers of whichever daemon sits next to Glouton under this service's
-	// name. The check makes the same call.
 	case ChronyService:
 		if address, ok := chronyCmdAddress(service); ok {
 			input, gathererOptions, err = chrony.New(address)
@@ -921,8 +902,7 @@ func dovecotStatsServer(service Service) string {
 // canReadVarnish reports whether the varnishstat this input runs can be reached for a
 // service, and logs why when it cannot.
 //
-// A Varnish installed on the machine is read with the machine's binary, exactly as it was
-// before any of this existed, so there is nothing to check.
+// A Varnish installed on the machine is read with the machine's binary.
 //
 // A containerised one is read with the container's own varnishstat, which an image is free
 // not to ship -- plenty carry only the daemon. Running "varnishstat -V" is what answers
@@ -955,38 +935,29 @@ func (d *Discovery) canReadVarnish(service Service) bool {
 }
 
 // chronyCmdAddress returns the "host:port" of chronyd's command protocol, which is UDP and
-// distinct from the NTP port the service was discovered on. The input reads it and the
-// check probes it -- one address, so the two cannot disagree about which daemon they mean.
-// That is why the local default is named here rather than left to the input, which can find
-// it on its own where the check, having to send a packet somewhere, cannot.
+// distinct from the NTP port the service was discovered on. Both the input and the check use
+// it, so they cannot disagree about which daemon they read.
 //
 // The address is Glouton's own loopback unless the daemon cannot be the one next to it: a
-// container of its own, or an address the user declared. A declared command port is not
-// enough on its own, a port never saying which host. Neither is a non-loopback
-// service.IPAddress, which comes from the NTP port's bind address: a chronyd with
+// container of its own, or an address the user declared. A non-loopback service.IPAddress is
+// not enough on its own, since it comes from the NTP port's bind address: a chronyd with
 // "bindaddress 192.168.1.5" still keeps its command port on loopback. For a container that
-// same IPAddress IS used, because netstat cannot see into the container's network namespace
-// and so never reports the command port there, while the container's own address is known
-// independently of any netstat result.
+// same IPAddress IS used, netstat never reporting the command port from inside the
+// container's network namespace.
 //
-// ok is false for a container the runtime reports no address for. Neither the input nor the
-// check runs then, rather than both falling back to Glouton's loopback and reporting on a
-// different daemon entirely.
+// ok is false for a container the runtime reports no address for, so that neither the input
+// nor the check runs rather than both reporting on the chronyd next to Glouton.
 func chronyCmdAddress(service Service) (address string, ok bool) {
 	address = service.Config.Address
 	port := service.Config.StatsPort
 
-	// A container of its own: Glouton's loopback is not the container's, so reading
-	// 127.0.0.1 would report the numbers of whatever chronyd runs next to Glouton under
-	// this container service's name.
+	// A container of its own: Glouton's loopback is not the container's.
 	if address == "" && service.ContainerID != "" {
 		address = service.IPAddress
 
 		if address == "" {
-			// A container whose address the runtime doesn't report (network_mode: none
-			// or container:<other>, both of which leave PrimaryAddress() empty). The
-			// loopback below cannot stand in for it: that reads whatever chronyd runs
-			// next to Glouton, and would publish its numbers under this service's name.
+			// A container whose address the runtime doesn't report (network_mode: none or
+			// container:<other>, both of which leave PrimaryAddress() empty).
 			return "", false
 		}
 	}
@@ -1004,15 +975,13 @@ func chronyCmdAddress(service Service) (address string, ok bool) {
 	return net.JoinHostPort(address, strconv.Itoa(port)), true
 }
 
-// ntpdAddress returns the "host:port" to read ntpd's control protocol (NTP mode 6) on,
-// or "" to let the input use 127.0.0.1 and the NTP port.
+// ntpdAddress returns the "host:port" to read ntpd's control protocol (NTP mode 6) on, or ""
+// to let the input use 127.0.0.1 and the NTP port.
 //
-// Mode 6 is served on the NTP port itself, so there is no separate port to configure --
-// a "port" override moves both. What an address can't change is the daemon's own
-// "restrict" policy, which is why one is only returned for a daemon Glouton's loopback
-// cannot be, the same rule chronyCmdAddress follows: the usual default is "restrict
-// default ... noquery" with only 127.0.0.1 and ::1 unrestricted, so querying a local
-// ntpd anywhere but on loopback would be refused where loopback works.
+// Mode 6 is served on the NTP port itself, so there is no separate port to configure -- a
+// "port" override moves both. An address is only returned for a daemon Glouton's loopback
+// cannot be, the same rule chronyCmdAddress follows, since ntpd's usual "restrict default
+// ... noquery" only leaves 127.0.0.1 and ::1 unrestricted.
 //
 // ok has the same meaning as chronyCmdAddress's: false is "there is no telling where this
 // daemon is", which an empty address (meaning "the local default is right") cannot say.
@@ -1020,15 +989,12 @@ func ntpdAddress(service Service) (address string, ok bool) {
 	address = service.Config.Address
 	port := service.Config.Port
 
-	// Same as chronyCmdAddress: reached only with no address configured, so the
-	// container is all that is left to tell.
+	// Same as chronyCmdAddress: reached only with no address configured, so the container is
+	// all that is left to tell.
 	if address == "" && service.ContainerID != "" {
 		address = service.IPAddress
 
 		if address == "" {
-			// Same as chronyCmdAddress: a daemon somewhere else that nothing locates.
-			// ntp.New() would read the ntpd on Glouton's own loopback and publish its
-			// peers under this service's name.
 			return "", false
 		}
 	}
@@ -1038,10 +1004,8 @@ func ntpdAddress(service Service) (address string, ok bool) {
 	}
 
 	if address == "" {
-		// Only the port was overridden: the input would go back to the default 123, so
-		// the loopback it would have used is spelled out here -- the same reason
-		// chronyCmdAddress does it, and the same disagreement between check and metrics
-		// avoided (the check reads the port from AddressPort, which does honour it).
+		// Only the port was overridden: the input would go back to the default 123, so the
+		// loopback it would have used is spelled out here alongside the port.
 		address = localhostIP
 	}
 
