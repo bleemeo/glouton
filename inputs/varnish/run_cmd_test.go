@@ -71,9 +71,8 @@ func (e *fakeExecuter) Exec(_ context.Context, containerID string, cmd []string)
 }
 
 // TestPluginKeepsItsRunnerFields is the guard against a Telegraf upgrade renaming or
-// retyping the private fields useGloutonRunner writes to. Nothing else would notice:
-// New only logs when it can't find them, and the plugin then silently goes back to
-// exec-ing varnishstat inside the agent's own filesystem, where there is none.
+// retyping the private fields useGloutonRunner writes to. Without it the failure only
+// shows as every Varnish service losing its input.
 func TestPluginKeepsItsRunnerFields(t *testing.T) {
 	input, ok := telegraf_inputs.Inputs["varnish"]
 	if !ok {

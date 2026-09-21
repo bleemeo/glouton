@@ -23,7 +23,6 @@ import (
 
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
-	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/registry"
 
 	"github.com/influxdata/telegraf"
@@ -43,8 +42,11 @@ func New(runner Runner, executer ContainerExecuter, containerID string) (telegra
 		return nil, registry.RegistrationOption{}, inputs.ErrUnexpectedType
 	}
 
+	// No input rather than one running the plugin's own varnishstat: the agent's filesystem
+	// has none, and for a containerised Varnish it would read whichever varnishstat sits
+	// next to Glouton and publish that daemon's numbers under this service's name.
 	if err := useGloutonRunner(varnishInput, runner, executer, containerID); err != nil {
-		logger.V(1).Printf("Varnish metrics will be gathered without Glouton's command runner: %v", err)
+		return nil, registry.RegistrationOption{}, err
 	}
 
 	// Asks the runner for root; it decides whether a sudo is actually needed. Ignored on
