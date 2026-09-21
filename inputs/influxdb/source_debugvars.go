@@ -51,6 +51,13 @@ type debugVarsEntry struct {
 // that everything downstream, transformMetrics included, works in one unit whatever the
 // line.
 func (i *metricsInput) gatherDebugVars(ctx context.Context, acc telegraf.Accumulator) error {
+	// Held across the request, since i.databases is filled while the body is decoded and
+	// read again at the end of this function: a second gather resetting it in between would
+	// publish one read's databases for the other. The gather timeout bounds how long this
+	// can be held.
+	i.l.Lock()
+	defer i.l.Unlock()
+
 	entries, err := i.readDebugVars(ctx)
 	if err != nil {
 		return err
@@ -124,6 +131,8 @@ func (i *metricsInput) gatherDebugVars(ctx context.Context, acc telegraf.Accumul
 
 // readDebugVars fetches the endpoint and indexes the entries by measurement name, keeping
 // the per-database ones aside since there is more than one of them.
+//
+// Called with i.l held, which is what lets it write i.databases.
 func (i *metricsInput) readDebugVars(ctx context.Context) (map[string]map[string]float64, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, i.debugVarsURL, nil)
 	if err != nil {
