@@ -250,7 +250,7 @@ func (s Service) AddressPort() (string, int) {
 		}
 	}
 
-	return s.AddressForPort(port, di.ServiceProtocol, force), port
+	return "", port
 }
 
 // LabelsOfStatus returns the labels for the status metrics of this service.
