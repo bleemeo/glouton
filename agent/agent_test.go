@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/store"
 	"github.com/bleemeo/glouton/types"
 
@@ -687,5 +688,93 @@ func TestGetWarningsWithReloadError(t *testing.T) {
 
 	if got := a.getWarnings(); len(got) != 1 {
 		t.Errorf("getWarnings() = %v, want only the config warning once the reload succeeded", got)
+	}
+}
+
+// TestParseLogLevel checks the logging.level values documented for users:
+// "INFO", "VERBOSE" and "DEBUG". They must be accepted whatever their case,
+// since the documentation writes them in upper case while the switch compares
+// lower case ones.
+func TestParseLogLevel(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		level     string
+		wantLevel int
+		wantOK    bool
+	}{
+		{
+			name:      "INFO",
+			level:     "INFO",
+			wantLevel: 0,
+			wantOK:    true,
+		},
+		{
+			name:  "VERBOSE",
+			level: "VERBOSE",
+			// Documentation said that this level cover the gatherer errors: collection
+			// failures (vSphere, blackbox, node exporter, facts).
+			wantLevel: 1,
+			wantOK:    true,
+		},
+		{
+			name:      "DEBUG",
+			level:     "DEBUG",
+			wantLevel: 2,
+			wantOK:    true,
+		},
+		{
+			name:      "lower case info",
+			level:     "info",
+			wantLevel: 0,
+			wantOK:    true,
+		},
+		{
+			name:      "lower case verbose",
+			level:     "verbose",
+			wantLevel: 1,
+			wantOK:    true,
+		},
+		{
+			name:      "mixed case debug",
+			level:     "Debug",
+			wantLevel: 2,
+			wantOK:    true,
+		},
+		{
+			// The default of logging.level must be a value we accept, otherwise
+			// Glouton would warn about its own default on every start.
+			name:      "config default",
+			level:     config.DefaultLogLevel,
+			wantLevel: 0,
+			wantOK:    true,
+		},
+		{
+			name:      "unknown level",
+			level:     "TRACE",
+			wantLevel: 0,
+			wantOK:    false,
+		},
+		{
+			name:      "empty level",
+			level:     "",
+			wantLevel: 0,
+			wantOK:    false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			gotLevel, gotOK := parseLogLevel(test.level)
+			if gotLevel != test.wantLevel || gotOK != test.wantOK {
+				t.Errorf(
+					"parseLogLevel(%q) = (%d, %t), want (%d, %t)",
+					test.level, gotLevel, gotOK, test.wantLevel, test.wantOK,
+				)
+			}
+		})
 	}
 }
