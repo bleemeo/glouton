@@ -36,20 +36,23 @@ func TestActiveMQURL(t *testing.T) {
 		wantPassword string
 	}{
 		{
-			// The console always requires authentication, so an input without credentials
-			// could only ever get a 401.
-			name: "no credentials -> no input",
+			// The console always requires authentication, and a default install still
+			// answers to the factory account, so nothing configured is worth trying rather
+			// than skipping the service outright.
+			name: "no credentials -> the factory account",
 			service: Service{
 				ServiceType:     ActiveMQService,
 				IPAddress:       testIP127001,
 				ListenAddresses: listening,
 			},
-			wantURL: "",
+			wantURL:      "http://127.0.0.1:8161",
+			wantUsername: "admin",
+			wantPassword: "admin",
 		},
 		{
-			// A password alone would send ":<password>" and get that same 401, so the
-			// broker's factory account is filled in.
-			name: "password without username -> the factory account",
+			// A password alone would send ":<password>" and get a 401, so the factory user
+			// is filled in.
+			name: "password without username -> the factory user",
 			service: Service{
 				ServiceType:     ActiveMQService,
 				IPAddress:       testIP127001,
@@ -71,6 +74,20 @@ func TestActiveMQURL(t *testing.T) {
 			wantURL:      "http://127.0.0.1:8161",
 			wantUsername: "bob",
 			wantPassword: "secret",
+		},
+		{
+			// The other half of the same fallback: an install that renamed the user and
+			// kept the factory password is as plausible as the reverse.
+			name: "username without password -> the factory password",
+			service: Service{
+				ServiceType:     ActiveMQService,
+				IPAddress:       testIP127001,
+				ListenAddresses: listening,
+				Config:          config.Service{Username: "bob"},
+			},
+			wantURL:      "http://127.0.0.1:8161",
+			wantUsername: "bob",
+			wantPassword: "admin",
 		},
 		{
 			name: "user-set StatsURL wins over the discovered address",
@@ -97,14 +114,17 @@ func TestActiveMQURL(t *testing.T) {
 			wantPassword: "secret",
 		},
 		{
-			name: "StatsURL without credentials -> no input",
+			name: "StatsURL without credentials -> the factory account",
 			service: Service{
 				ServiceType: ActiveMQService,
 				Config:      config.Service{StatsURL: "http://activemq.example:8161"},
 			},
-			wantURL: "",
+			wantURL:      "http://activemq.example:8161",
+			wantUsername: "admin",
+			wantPassword: "admin",
 		},
 		{
+			// The one case left with no input: credentials say who to ask, never where.
 			name: "no address known and no StatsURL -> no input",
 			service: Service{
 				ServiceType: ActiveMQService,

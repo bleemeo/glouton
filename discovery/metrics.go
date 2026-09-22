@@ -554,6 +554,9 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		// basic auth, and Tomcat ships an empty tomcat-users.xml, so unlike ActiveMQ there
 		// is no factory account to fall back on -- a password alone could only ever 401.
 		hasCredentials := service.Config.Username != "" && service.Config.Password != ""
+		if !hasCredentials {
+			logger.V(1).Printf("No metrics for %s on instance %s: a username and a password are required", service.Name, service.Instance)
+		}
 
 		// One point per connector and per memory pool, all sharing their metric name, so
 		// the "name" telling them apart has to be a label of its own rather than the item,
@@ -753,26 +756,32 @@ func urlForPHPFPM(service Service) string {
 }
 
 // activeMQURL returns the URL of the web console the ActiveMQ metrics are read from, and the
-// credentials to read it with, or an empty URL when no input should be created.
+// credentials to read it with, or an empty URL when no address is known.
 //
-// The console always requires authentication (admin/admin on a default install), so without
-// credentials every gather would only get a 401.
+// The console always requires authentication, so a missing username or password falls back
+// to the broker's factory account (admin/admin), which a default install still answers to.
 func activeMQURL(service Service) (url string, username string, password string) {
-	if service.Config.Password == "" {
-		return "", "", ""
-	}
-
 	username = service.Config.Username
-	if username == "" {
-		username = activeMQDefaultUser
+	password = service.Config.Password
+
+	if username == "" || password == "" {
+		logger.V(1).Printf("No metrics for %s on instance %s: a username and a password are required, trying with default credentials", service.Name, service.Instance)
+
+		if username == "" {
+			username = activeMQDefaultUser
+		}
+
+		if password == "" {
+			password = activeMQDefaultUser
+		}
 	}
 
 	if service.Config.StatsURL != "" {
-		return service.Config.StatsURL, username, service.Config.Password
+		return service.Config.StatsURL, username, password
 	}
 
 	if ip, port := service.AddressPort(); ip != "" {
-		return "http://" + net.JoinHostPort(ip, strconv.Itoa(port)), username, service.Config.Password
+		return "http://" + net.JoinHostPort(ip, strconv.Itoa(port)), username, password
 	}
 
 	return "", "", ""
