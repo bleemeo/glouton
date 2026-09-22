@@ -158,30 +158,28 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 	}
 
 	s := newForTest(types.Option{
-		Cache:           helper.cache,
-		IsMqttConnected: func() bool { return false },
-		ProvideClient:   func() types.Client { return helper.wrapperClientMock },
-		GlobalOption: bleemeoTypes.GlobalOption{
-			Config:                     helper.cfg,
-			Facts:                      helper.facts,
-			State:                      helper.state,
-			Docker:                     docker,
-			Discovery:                  helper.discovery,
-			Store:                      helper.store,
-			MonitorManager:             mockMonitorManager{},
-			NotifyFirstRegistration:    func() {},
-			Process:                    mockProcessLister{},
-			SNMP:                       helper.SNMP,
-			SNMPOnlineTarget:           func() int { return len(helper.SNMP) },
-			NotifyHooksUpdate:          helper.NotifyLabelsUpdate,
-			VSphereDevices:             func(context.Context, time.Duration) []bleemeoTypes.VSphereDevice { return helper.devices },
-			LastVSphereChange:          func(_ context.Context) time.Time { return time.Time{} },
-			VSphereEndpointsInError:    func() map[string]bool { return map[string]bool{} },
-			IsContainerEnabled:         facts.ContainerFilter{}.ContainerEnabled,
-			IsMetricAllowed:            func(_ map[string]string) bool { return true },
-			BlackboxScraperName:        helper.cfg.Blackbox.ScraperName,
-			LastMetricAnnotationChange: func() time.Time { return time.Time{} },
-		},
+		Cache:                      helper.cache,
+		IsMqttConnected:            func() bool { return false },
+		ProvideClient:              func() types.Client { return helper.wrapperClientMock },
+		Config:                     helper.cfg,
+		Facts:                      helper.facts,
+		State:                      helper.state,
+		Docker:                     docker,
+		Discovery:                  helper.discovery,
+		Store:                      helper.store,
+		MonitorManager:             mockMonitorManager{},
+		NotifyFirstRegistration:    func() {},
+		Process:                    mockProcessLister{},
+		SNMP:                       helper.SNMP,
+		SNMPOnlineTarget:           func() int { return len(helper.SNMP) },
+		NotifyHooksUpdate:          helper.NotifyLabelsUpdate,
+		VSphereDevices:             func(context.Context, time.Duration) []bleemeoTypes.VSphereDevice { return helper.devices },
+		LastVSphereChange:          func(_ context.Context) time.Time { return time.Time{} },
+		VSphereEndpointsInError:    func() map[string]bool { return map[string]bool{} },
+		IsContainerEnabled:         facts.ContainerFilter{}.ContainerEnabled,
+		IsMetricAllowed:            func(_ map[string]string) bool { return true },
+		BlackboxScraperName:        helper.cfg.Blackbox.ScraperName,
+		LastMetricAnnotationChange: func() time.Time { return time.Time{} },
 	}, helper.Now)
 
 	helper.s = s
@@ -210,10 +208,8 @@ func (helper *syncTestHelper) pushPoints(t *testing.T, metrics []labels.Labels) 
 		mCopy = model.DropMetaLabels(mCopy)
 
 		points = append(points, gloutonTypes.MetricPoint{
-			Point: gloutonTypes.Point{
-				Time:  helper.Now(),
-				Value: 42.0,
-			},
+			Time:        helper.Now(),
+			Value:       42.0,
 			Labels:      mCopy.Map(),
 			Annotations: annotations,
 		})

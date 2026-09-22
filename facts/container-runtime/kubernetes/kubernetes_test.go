@@ -1416,11 +1416,9 @@ func TestGenericReplicas(t *testing.T) {
 		}
 
 		return corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: namespace,
-				OwnerReferences: []metav1.OwnerReference{
-					{APIVersion: apiVersion, Kind: kind, Name: ownerName},
-				},
+			Namespace: namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				{APIVersion: apiVersion, Kind: kind, Name: ownerName},
 			},
 			Status: corev1.PodStatus{
 				Conditions: []corev1.PodCondition{
@@ -1509,7 +1507,7 @@ func TestHPAMetrics(t *testing.T) {
 
 	makeHPA := func(name, targetKind, targetName string, minReplicas *int32, maxReplicas int32, conds ...autoscalingv2.HorizontalPodAutoscalerCondition) autoscalingv2.HorizontalPodAutoscaler {
 		return autoscalingv2.HorizontalPodAutoscaler{
-			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "prod"},
+			Name: name, Namespace: "prod",
 			Spec: autoscalingv2.HorizontalPodAutoscalerSpec{
 				ScaleTargetRef: autoscalingv2.CrossVersionObjectReference{Kind: targetKind, Name: targetName},
 				MinReplicas:    minReplicas,

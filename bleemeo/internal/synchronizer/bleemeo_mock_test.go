@@ -111,16 +111,13 @@ func (wcm *wrapperClientMock) GetGlobalInfo(context.Context) (bleemeoTypes.Globa
 
 func (wcm *wrapperClientMock) RegisterSelf(_ context.Context, accountID, password, initialServerGroupName, name, fqdn, _ string) (id string, err error) {
 	payload := bleemeoapi.AgentPayload{
-		Agent: bleemeoTypes.Agent{
-			AccountID:   accountID,
-			DisplayName: name,
-			FQDN:        fqdn,
-		},
+		AccountID:          accountID,
+		DisplayName:        name,
+		FQDN:               fqdn,
 		InitialPassword:    password,
 		InitialServerGroup: initialServerGroupName,
+		ID:                 wcm.resources.agents.incID(),
 	}
-
-	payload.ID = wcm.resources.agents.incID()
 	err = wcm.resources.agents.createResource(&payload, &wcm.errorsCount)
 
 	return payload.ID, err

@@ -450,10 +450,8 @@ func diskIntoToPoints(now time.Time, allRows ssacliDiskList) []types.MetricPoint
 	for _, row := range allRows {
 		status := row.ToStatusDescription()
 		result = append(result, types.MetricPoint{
-			Point: types.Point{
-				Time:  now,
-				Value: float64(status.CurrentStatus.NagiosCode()),
-			},
+			Time:  now,
+			Value: float64(status.CurrentStatus.NagiosCode()),
 			Labels: map[string]string{
 				types.LabelName:   metricSmartDeviceHealthStatus,
 				types.LabelDevice: row.ToDeviceLabel(allRows),

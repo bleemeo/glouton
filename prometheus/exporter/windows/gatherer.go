@@ -166,10 +166,8 @@ func buildSmartMetric(driveModel map[string]string, driveWorstStatus map[string]
 
 		if status.CurrentStatus != types.StatusUnset {
 			result = append(result, types.MetricPoint{
-				Point: types.Point{
-					Time:  driveTimestamp[name],
-					Value: float64(status.CurrentStatus.NagiosCode()),
-				},
+				Time:   driveTimestamp[name],
+				Value:  float64(status.CurrentStatus.NagiosCode()),
 				Labels: lbls,
 				Annotations: types.MetricAnnotations{
 					Status: status,

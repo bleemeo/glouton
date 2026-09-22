@@ -79,12 +79,10 @@ func TestCronJobMetrics(t *testing.T) {
 
 	cronJob := func(name, schedule string, mutate func(*batchv1.CronJob)) batchv1.CronJob {
 		cj := batchv1.CronJob{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:              name,
-				Namespace:         "default",
-				CreationTimestamp: metav1.NewTime(now.Add(-90 * time.Minute)),
-			},
-			Spec: batchv1.CronJobSpec{Schedule: schedule},
+			Name:              name,
+			Namespace:         "default",
+			CreationTimestamp: metav1.NewTime(now.Add(-90 * time.Minute)),
+			Spec:              batchv1.CronJobSpec{Schedule: schedule},
 		}
 		if mutate != nil {
 			mutate(&cj)
@@ -176,12 +174,10 @@ func TestJobMetrics(t *testing.T) {
 
 	job := func(name, uid, cronName string, created time.Time, mutate func(*batchv1.Job)) batchv1.Job {
 		j := batchv1.Job{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:              name,
-				Namespace:         "default",
-				UID:               k8stypes.UID(uid),
-				CreationTimestamp: metav1.NewTime(created),
-			},
+			Name:              name,
+			Namespace:         "default",
+			UID:               k8stypes.UID(uid),
+			CreationTimestamp: metav1.NewTime(created),
 		}
 
 		if cronName != "" {
@@ -213,11 +209,9 @@ func TestJobMetrics(t *testing.T) {
 		}
 
 		return corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace:       "default",
-				OwnerReferences: []metav1.OwnerReference{{Kind: "Job", UID: k8stypes.UID(jobUID)}},
-			},
-			Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{{State: state}}},
+			Namespace:       "default",
+			OwnerReferences: []metav1.OwnerReference{{Kind: "Job", UID: k8stypes.UID(jobUID)}},
+			Status:          corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{{State: state}}},
 		}
 	}
 

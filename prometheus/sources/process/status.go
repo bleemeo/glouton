@@ -95,19 +95,15 @@ func (s StatusSource) CollectWithState(_ context.Context, state registry.GatherS
 			Labels: map[string]string{
 				types.LabelName: "process_total",
 			},
-			Point: types.Point{
-				Time:  now,
-				Value: float64(total),
-			},
+			Time:  now,
+			Value: float64(total),
 		},
 		types.MetricPoint{
 			Labels: map[string]string{
 				types.LabelName: "process_total_threads",
 			},
-			Point: types.Point{
-				Time:  now,
-				Value: float64(totalThreads),
-			},
+			Time:  now,
+			Value: float64(totalThreads),
 		},
 	)
 
@@ -116,10 +112,8 @@ func (s StatusSource) CollectWithState(_ context.Context, state registry.GatherS
 			Labels: map[string]string{
 				types.LabelName: "process_status_" + name,
 			},
-			Point: types.Point{
-				Time:  now,
-				Value: float64(count),
-			},
+			Time:  now,
+			Value: float64(count),
 		})
 	}
 

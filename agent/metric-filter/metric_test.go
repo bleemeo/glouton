@@ -1036,10 +1036,8 @@ func makePointsFromLabels(input []labels.Labels, t0 time.Time) []types.MetricPoi
 
 	for _, lbls := range input {
 		points = append(points, types.MetricPoint{
-			Point: types.Point{
-				Time:  t0,
-				Value: 42,
-			},
+			Time:   t0,
+			Value:  42,
 			Labels: lbls.Map(),
 		})
 	}

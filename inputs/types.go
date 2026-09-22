@@ -205,7 +205,7 @@ func (a *Accumulator) addMetrics(measurement string, fields map[string]any, tags
 		}
 
 		points = append(points, types.MetricPoint{
-			Point:       types.Point{Time: ts, Value: value},
+			Time: ts, Value: value,
 			Labels:      labels,
 			Annotations: annotations,
 		})

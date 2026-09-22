@@ -481,21 +481,21 @@ func TestRegistry_pushPoint(t *testing.T) {
 		t.Context(),
 		[]types.MetricPoint{
 			{
-				Point: types.Point{Value: 1.0, Time: t0},
+				Value: 1.0, Time: t0,
 				Labels: map[string]string{
 					types.LabelName: testPoint1,
 					testDummy:       testLabelValue,
 				},
 			},
 			{
-				Point: types.Point{Value: 2.0, Time: t0},
+				Value: 2.0, Time: t0,
 				Labels: map[string]string{
 					types.LabelName: "unfixable-name#~",
 					testLabelItem:   "something",
 				},
 			},
 			{
-				Point: types.Point{Value: 3.0, Time: t0},
+				Value: 3.0, Time: t0,
 				Labels: map[string]string{
 					types.LabelName: "fixable-name.0",
 					"extra":         testLabel,
@@ -572,7 +572,7 @@ func TestRegistry_pushPoint(t *testing.T) {
 		t.Context(),
 		[]types.MetricPoint{
 			{
-				Point: types.Point{Value: 1.0, Time: t0},
+				Value: 1.0, Time: t0,
 				Labels: map[string]string{
 					types.LabelName: testPoint1,
 					testDummy:       testLabelValue,
@@ -632,7 +632,7 @@ func TestScrapeFromLoop_FixesInvalidLabelNames(t *testing.T) {
 				"http.response.status_code": "503",
 				types.LabelItem:             "web-app",
 			},
-			Point: types.Point{Time: now, Value: 1},
+			Time: now, Value: 1,
 		},
 	}
 
@@ -1243,7 +1243,7 @@ func TestRegistry_run(t *testing.T) {
 		l.Unlock()
 
 		reg.WithTTL(5*time.Minute).PushPoints(ctx, []types.MetricPoint{
-			{Point: types.Point{Time: t, Value: 42.0}, Labels: map[string]string{types.LabelName: "push", "something": testLabelValue, types.LabelItem: testMountHome}},
+			{Time: t, Value: 42.0, Labels: map[string]string{types.LabelName: "push", "something": testLabelValue, types.LabelItem: testMountHome}},
 		})
 
 		return nil
@@ -1273,9 +1273,9 @@ func TestRegistry_run(t *testing.T) {
 	}
 
 	want := []types.MetricPoint{
-		{Point: types.Point{Time: t0, Value: 42.0}, Labels: map[string]string{types.LabelName: "push", testLabelItem: testMountHome, testLabelInstance: testExampleEndpoint, testLabelInstanceUUID: testAgentID}},
-		{Point: types.Point{Time: t0, Value: 1.0}, Labels: map[string]string{types.LabelName: testName1, testLabelInstance: testExampleEndpoint, testLabelInstanceUUID: testAgentID}},
-		{Point: types.Point{Time: t0, Value: 1.0}, Labels: map[string]string{types.LabelName: testName2, testLabelInstance: testExampleEndpoint, testLabelInstanceUUID: testAgentID}},
+		{Time: t0, Value: 42.0, Labels: map[string]string{types.LabelName: "push", testLabelItem: testMountHome, testLabelInstance: testExampleEndpoint, testLabelInstanceUUID: testAgentID}},
+		{Time: t0, Value: 1.0, Labels: map[string]string{types.LabelName: testName1, testLabelInstance: testExampleEndpoint, testLabelInstanceUUID: testAgentID}},
+		{Time: t0, Value: 1.0, Labels: map[string]string{types.LabelName: testName2, testLabelInstance: testExampleEndpoint, testLabelInstanceUUID: testAgentID}},
 	}
 
 	pointLess := func(x, y types.MetricPoint) bool {
@@ -1405,30 +1405,24 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName: metricCPUUsed,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 12,
-					},
+					Time:  now,
+					Value: 12,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricDiskUsed,
 						types.LabelItem: testMountHome,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 0.1,
-					},
+					Time:  now,
+					Value: 0.1,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testDiskUsedPerc,
 						types.LabelItem: testMountSrv,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 1.2,
-					},
+					Time:  now,
+					Value: 1.2,
 				},
 			},
 			want: []metricPointTimeOverride{
@@ -1437,10 +1431,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName:     metricCPUUsed,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 12,
-					},
+					Time:         now,
+					Value:        12,
 					TimeOnGather: now,
 				},
 				{
@@ -1449,10 +1441,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testMountHome,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 0.1,
-					},
+					Time:         now,
+					Value:        0.1,
 					TimeOnGather: now,
 				},
 				{
@@ -1461,10 +1451,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testMountSrv,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 1.2,
-					},
+					Time:         now,
+					Value:        1.2,
 					TimeOnGather: now,
 				},
 			},
@@ -1480,30 +1468,24 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName: metricCPUUsed,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricDiskUsed,
 						types.LabelItem: testMountHome,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testDiskUsedPerc,
 						types.LabelItem: testMountSrv,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 			},
 			want: []metricPointTimeOverride{
@@ -1512,10 +1494,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName:     metricCPUUsed,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -1524,10 +1504,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testMountHome,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -1536,10 +1514,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testMountSrv,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 			},
@@ -1553,30 +1529,24 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: metricCPUUsed,
 						testAnyOther:    testLabel,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricDiskUsed,
 						types.LabelItem: testMountHome,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testDiskUsedPerc,
 						types.LabelItem: testMountSrv,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 			},
 			want: []metricPointTimeOverride{
@@ -1586,10 +1556,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						testAnyOther:        testLabel,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -1598,10 +1566,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testMountHome,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -1610,10 +1576,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testMountSrv,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 			},
@@ -1629,30 +1593,24 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName: metricCPUUsed,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricDiskUsed,
 						types.LabelItem: testMountHome,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testDiskUsedPerc,
 						types.LabelItem: testMountSrv,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 			},
 			want: []metricPointTimeOverride{
@@ -1661,10 +1619,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName:     metricCPUUsed,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -1673,10 +1629,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testMountHome,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -1685,10 +1639,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testMountSrv,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 			},
@@ -1705,30 +1657,24 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: metricCPUUsed,
 						testAnyOther:    testLabel,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricDiskUsed,
 						types.LabelItem: testMountHome,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testDiskUsedPerc,
 						types.LabelItem: testMountSrv,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 			},
 			want: []metricPointTimeOverride{
@@ -1738,10 +1684,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						testAnyOther:        testLabel,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -1750,10 +1694,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testMountHome,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -1762,10 +1704,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testMountSrv,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 			},
@@ -1787,10 +1727,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: "ifOutBytes",
 						"ifDesc":        "Some value",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 			},
 			want: []metricPointTimeOverride{
@@ -1805,10 +1743,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testSNMPTarget,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 			},
@@ -1830,50 +1766,40 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						"hrDeviceDescr": "CPU Pkg/ID/Node: 0/0/0 Intel Xeon E3-12xx v2 (Ivy Bridge, IBRS)",
 						"hrDeviceIndex": "1",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName:         testHRStorageUsed,
 						testLabelHRStorageDescr: testRealMemory,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 8,
-					},
+					Time:  now,
+					Value: 8,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName:         testHRStorageUsed,
 						testLabelHRStorageDescr: testUnrealMemory,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName:         testHRStorageAllocUnits,
 						testLabelHRStorageDescr: testRealMemory,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 1024,
-					},
+					Time:  now,
+					Value: 1024,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName:         testHRStorageAllocUnits,
 						testLabelHRStorageDescr: testUnrealMemory,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 1,
-					},
+					Time:  now,
+					Value: 1,
 				},
 			},
 			want: []metricPointTimeOverride{
@@ -1887,10 +1813,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{ // This metric will be dropped by the metric filter.
@@ -1901,11 +1825,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:   testBleemeoServer,
 						types.LabelSNMPTarget: testIPAddress,
 					},
-					Annotations: types.MetricAnnotations{SNMPTarget: testIPAddress},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Annotations:  types.MetricAnnotations{SNMPTarget: testIPAddress},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -1918,10 +1840,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 1024,
-					},
+					Time:         now,
+					Value:        1024,
 					TimeOnGather: now,
 				},
 				{
@@ -1934,10 +1854,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 1,
-					},
+					Time:         now,
+					Value:        1,
 					TimeOnGather: now,
 				},
 				{
@@ -1950,10 +1868,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 8,
-					},
+					Time:         now,
+					Value:        8,
 					TimeOnGather: now,
 				},
 				{
@@ -1966,10 +1882,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -1981,10 +1895,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 8192,
-					},
+					Time:         now,
+					Value:        8192,
 					TimeOnGather: now,
 				},
 			},
@@ -2005,30 +1917,24 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName:      "cpmCPUTotal1minRev",
 						testCpmCPUTotalIndex: "1",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName:      "cpmCPUMemoryUsed",
 						testCpmCPUTotalIndex: "42",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 145,
-					},
+					Time:  now,
+					Value: 145,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName:      testCpmCPUMemoryFree,
 						testCpmCPUTotalIndex: "42",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 7,
-					},
+					Time:  now,
+					Value: 7,
 				},
 			},
 			want: []metricPointTimeOverride{
@@ -2042,10 +1948,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -2058,10 +1962,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 145,
-					},
+					Time:         now,
+					Value:        145,
 					TimeOnGather: now,
 				},
 				{ // This metric will be dropped by the metric filter.
@@ -2071,11 +1973,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelInstance:   testBleemeoServer,
 						types.LabelSNMPTarget: testIPAddress,
 					},
-					Annotations: types.MetricAnnotations{SNMPTarget: testIPAddress},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Annotations:  types.MetricAnnotations{SNMPTarget: testIPAddress},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 
@@ -2089,10 +1989,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 7,
-					},
+					Time:         now,
+					Value:        7,
 					TimeOnGather: now,
 				},
 				{
@@ -2104,10 +2002,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 7168,
-					},
+					Time:         now,
+					Value:        7168,
 					TimeOnGather: now,
 				},
 				{
@@ -2119,10 +2015,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 148480,
-					},
+					Time:         now,
+					Value:        148480,
 					TimeOnGather: now,
 				},
 				{
@@ -2134,10 +2028,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 95.39,
-					},
+					Time:         now,
+					Value:        95.39,
 					TimeOnGather: now,
 				},
 			},
@@ -2159,10 +2051,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						testCiscoMemPoolName: testProcessorMemType,
 						testUniqueValue:      "1",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
@@ -2170,10 +2060,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						testCiscoMemPoolName: testProcessorMemType,
 						testUniqueValue:      "2",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 			},
 			want: []metricPointTimeOverride{
@@ -2185,11 +2073,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelSNMPTarget: testIPAddress,
 						testUniqueValue:       "1",
 					},
-					Annotations: types.MetricAnnotations{SNMPTarget: testIPAddress},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Annotations:  types.MetricAnnotations{SNMPTarget: testIPAddress},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{ // This metric will be dropped by the metric filter.
@@ -2200,11 +2086,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelSNMPTarget: testIPAddress,
 						testUniqueValue:       "2",
 					},
-					Annotations: types.MetricAnnotations{SNMPTarget: testIPAddress},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Annotations:  types.MetricAnnotations{SNMPTarget: testIPAddress},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -2217,10 +2101,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -2233,10 +2115,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 			},
@@ -2258,10 +2138,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						testCiscoMemPoolName: testSystemMemory,
 						testUniqueValue:      "1",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
@@ -2269,10 +2147,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						testCiscoMemPoolName: testSystemMemory,
 						testUniqueValue:      "1",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
@@ -2280,10 +2156,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						testCiscoMemPoolName: "Anything Else",
 						testUniqueValue:      "2",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
@@ -2291,10 +2165,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						testCiscoMemPoolName: testProcessorMemType,
 						testUniqueValue:      "3",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
@@ -2302,10 +2174,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						testCiscoMemPoolName: "anything else",
 						testUniqueValue:      "5",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
@@ -2313,10 +2183,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						testCpmCPUTotalIndex: "2021",
 						testUniqueValue:      "6",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 789,
-					},
+					Time:  now,
+					Value: 789,
 				},
 				{
 					Labels: map[string]string{
@@ -2324,20 +2192,16 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						"ciscoEnvMonTemperatureStatusDescr": testMemTypeCPU,
 						testUniqueValue:                     "7",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: metricRLCPUUtilDuringLastMinute,
 						testUniqueValue: "8",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
@@ -2345,10 +2209,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						"rlPhdUnitEnvParamStackUnit": "1",
 						testUniqueValue:              "9",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 			},
 			want: []metricPointTimeOverride{
@@ -2360,11 +2222,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelSNMPTarget:               testIPAddress,
 						testUniqueValue:                     "7",
 					},
-					Annotations: types.MetricAnnotations{SNMPTarget: testIPAddress},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Annotations:  types.MetricAnnotations{SNMPTarget: testIPAddress},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{ // This metric will be dropped by the metric filter.
@@ -2375,11 +2235,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelSNMPTarget: testIPAddress,
 						testUniqueValue:       "3",
 					},
-					Annotations: types.MetricAnnotations{SNMPTarget: testIPAddress},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Annotations:  types.MetricAnnotations{SNMPTarget: testIPAddress},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{ // This metric will be dropped by the metric filter.
@@ -2390,11 +2248,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelSNMPTarget: testIPAddress,
 						testUniqueValue:       "1",
 					},
-					Annotations: types.MetricAnnotations{SNMPTarget: testIPAddress},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Annotations:  types.MetricAnnotations{SNMPTarget: testIPAddress},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -2407,10 +2263,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -2423,10 +2277,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{ // This metric will be dropped by the metric filter.
@@ -2437,11 +2289,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelSNMPTarget: testIPAddress,
 						testUniqueValue:       "1",
 					},
-					Annotations: types.MetricAnnotations{SNMPTarget: testIPAddress},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Annotations:  types.MetricAnnotations{SNMPTarget: testIPAddress},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -2454,10 +2304,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 50,
-					},
+					Time:         now,
+					Value:        50,
 					TimeOnGather: now,
 				},
 				{
@@ -2471,10 +2319,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -2487,10 +2333,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{ // This metric will be dropped by the metric filter.
@@ -2500,11 +2344,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelSNMPTarget: testIPAddress,
 						testUniqueValue:       "8",
 					},
-					Annotations: types.MetricAnnotations{SNMPTarget: testIPAddress},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Annotations:  types.MetricAnnotations{SNMPTarget: testIPAddress},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{ // This metric will be dropped by the metric filter.
@@ -2515,11 +2357,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelSNMPTarget:        testIPAddress,
 						testUniqueValue:              "9",
 					},
-					Annotations: types.MetricAnnotations{SNMPTarget: testIPAddress},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Annotations:  types.MetricAnnotations{SNMPTarget: testIPAddress},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -2533,10 +2373,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -2550,10 +2388,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 789,
-					},
+					Time:         now,
+					Value:        789,
 					TimeOnGather: now,
 				},
 				{
@@ -2566,10 +2402,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 807936,
-					},
+					Time:         now,
+					Value:        807936,
 					TimeOnGather: now,
 				},
 				{
@@ -2583,10 +2417,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -2599,10 +2431,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -2616,10 +2446,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 			},
@@ -2641,10 +2469,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						testLabelHRStorageDescr: testRealMemory,
 						testHRStorageIndex:      "6",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 1.49028e+06,
-					},
+					Time:  now,
+					Value: 1.49028e+06,
 				},
 				{
 					Labels: map[string]string{
@@ -2652,10 +2478,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						testLabelHRStorageDescr: testRealMemory,
 						testHRStorageIndex:      "6",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 1024,
-					},
+					Time:  now,
+					Value: 1024,
 				},
 				{
 					Labels: map[string]string{
@@ -2663,10 +2487,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						testLabelHRStorageDescr: testRealMemory,
 						testHRStorageIndex:      "6",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 8.385008e+06,
-					},
+					Time:  now,
+					Value: 8.385008e+06,
 				},
 			},
 			want: []metricPointTimeOverride{
@@ -2681,10 +2503,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 1024.0,
-					},
+					Time:         now,
+					Value:        1024.0,
 					TimeOnGather: now,
 				},
 				{
@@ -2698,10 +2518,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 8.385008e+06,
-					},
+					Time:         now,
+					Value:        8.385008e+06,
 					TimeOnGather: now,
 				},
 				{
@@ -2715,10 +2533,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 1.49028e+06,
-					},
+					Time:         now,
+					Value:        1.49028e+06,
 					TimeOnGather: now,
 				},
 				{
@@ -2730,10 +2546,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 1526046720.0,
-					},
+					Time:         now,
+					Value:        1526046720.0,
 					TimeOnGather: now,
 				},
 				{
@@ -2745,10 +2559,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 17.77,
-					},
+					Time:         now,
+					Value:        17.77,
 					TimeOnGather: now,
 				},
 				{
@@ -2760,10 +2572,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: testIPAddress,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 7060201472.0,
-					},
+					Time:         now,
+					Value:        7060201472.0,
 					TimeOnGather: now,
 				},
 			},
@@ -2782,10 +2592,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelMetaBleemeoTargetAgent:     "test-agent",
 						types.LabelMetaBleemeoTargetAgentUUID: testUUID,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 1024.0,
-					},
+					Time:  now,
+					Value: 1024.0,
 				},
 			},
 			want: []metricPointTimeOverride{
@@ -2798,10 +2606,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: testUUID,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 1024.0,
-					},
+					Time:         now,
+					Value:        1024.0,
 					TimeOnGather: now,
 				},
 			},
@@ -2818,30 +2624,24 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName: metricCPUUsed,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricDiskUsed,
 						testLabelItem:   testMountHome,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: "io_utilization",
 						testLabelItem:   "sda",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
@@ -2852,10 +2652,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						ContainerID: testScrapeInstance1234,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 			},
 			want: []metricPointTimeOverride{
@@ -2864,10 +2662,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName:     metricCPUUsed,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -2876,10 +2672,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testMountHome,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -2888,10 +2682,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "sda",
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -2903,10 +2695,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						ContainerID: testScrapeInstance1234,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 			},
@@ -2923,10 +2713,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName: "containers_count",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				// containerd runtime
 				{
@@ -2938,10 +2726,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						ContainerID: testScrapeInstance1234,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 			},
 			want: []metricPointTimeOverride{
@@ -2950,10 +2736,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName:     "containers_count",
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -2965,10 +2749,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{
 						ContainerID: testScrapeInstance1234,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 			},
@@ -2987,10 +2769,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						"cpu":           "3",
 						"mode":          "iowait",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
@@ -3002,10 +2782,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						"sysname":       "Linux",
 						"version":       "#1 SMP PREEMPT Tue Sep 13 07:51:32 UTC 2022",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 			},
 			want: []metricPointTimeOverride{
@@ -3016,10 +2794,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						"mode":              "iowait",
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -3033,10 +2809,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						"version":           "#1 SMP PREEMPT Tue Sep 13 07:51:32 UTC 2022",
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 			},
@@ -3053,50 +2827,40 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimeZero,
 					},
-					Point: types.Point{
-						Time:  time.Time{},
-						Value: 42,
-					},
+					Time:  time.Time{},
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimeEpoc,
 					},
-					Point: types.Point{
-						Time:  time.UnixMilli(0),
-						Value: 42,
-					},
+					Time:  time.UnixMilli(0),
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimeNow,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimeFuture,
 					},
-					Point: types.Point{
-						Time:  now.Add(42 * time.Minute),
-						Value: 42,
-					},
+					Time:  now.Add(42 * time.Minute),
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimePast,
 					},
-					Point: types.Point{
-						Time:  now.Add(-42 * time.Minute),
-						Value: 42,
-					},
+					Time:  now.Add(-42 * time.Minute),
+					Value: 42,
 				},
 			},
 			want: []metricPointTimeOverride{
@@ -3106,10 +2870,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimeZero,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: time.Time{},
 				},
 				{
@@ -3118,10 +2880,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimeEpoc,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: time.Time{},
 				},
 				{
@@ -3130,10 +2890,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimeNow,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -3142,10 +2900,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimeFuture,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now.Add(42 * time.Minute),
-						Value: 42,
-					},
+					Time:         now.Add(42 * time.Minute),
+					Value:        42,
 					TimeOnGather: now.Add(42 * time.Minute),
 				},
 				{
@@ -3154,10 +2910,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimePast,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now.Add(-42 * time.Minute),
-						Value: 42,
-					},
+					Time:         now.Add(-42 * time.Minute),
+					Value:        42,
 					TimeOnGather: now.Add(-42 * time.Minute),
 				},
 			},
@@ -3174,50 +2928,40 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimeZero,
 					},
-					Point: types.Point{
-						Time:  time.Time{},
-						Value: 42,
-					},
+					Time:  time.Time{},
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimeEpoc,
 					},
-					Point: types.Point{
-						Time:  time.UnixMilli(0),
-						Value: 42,
-					},
+					Time:  time.UnixMilli(0),
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimeNow,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimeFuture,
 					},
-					Point: types.Point{
-						Time:  now.Add(42 * time.Minute),
-						Value: 42,
-					},
+					Time:  now.Add(42 * time.Minute),
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimePast,
 					},
-					Point: types.Point{
-						Time:  now.Add(-42 * time.Minute),
-						Value: 42,
-					},
+					Time:  now.Add(-42 * time.Minute),
+					Value: 42,
 				},
 			},
 			want: []metricPointTimeOverride{
@@ -3227,10 +2971,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimeZero,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: time.Time{},
 				},
 				{
@@ -3239,10 +2981,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimeEpoc,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: time.Time{},
 				},
 				{
@@ -3251,10 +2991,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimeNow,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -3263,10 +3001,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimeFuture,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now.Add(42 * time.Minute),
-						Value: 42,
-					},
+					Time:         now.Add(42 * time.Minute),
+					Value:        42,
 					TimeOnGather: now.Add(42 * time.Minute),
 				},
 				{
@@ -3275,10 +3011,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimePast,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now.Add(-42 * time.Minute),
-						Value: 42,
-					},
+					Time:         now.Add(-42 * time.Minute),
+					Value:        42,
 					TimeOnGather: now.Add(-42 * time.Minute),
 				},
 			},
@@ -3295,50 +3029,40 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimeZero,
 					},
-					Point: types.Point{
-						Time:  time.Time{},
-						Value: 42,
-					},
+					Time:  time.Time{},
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimeEpoc,
 					},
-					Point: types.Point{
-						Time:  time.UnixMilli(0),
-						Value: 42,
-					},
+					Time:  time.UnixMilli(0),
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimeNow,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimeFuture,
 					},
-					Point: types.Point{
-						Time:  now.Add(42 * time.Minute),
-						Value: 42,
-					},
+					Time:  now.Add(42 * time.Minute),
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimePast,
 					},
-					Point: types.Point{
-						Time:  now.Add(-42 * time.Minute),
-						Value: 42,
-					},
+					Time:  now.Add(-42 * time.Minute),
+					Value: 42,
 				},
 			},
 			want: []metricPointTimeOverride{
@@ -3348,10 +3072,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimeZero,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: time.Time{},
 				},
 				{
@@ -3360,10 +3082,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimeEpoc,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: time.Time{},
 				},
 				{
@@ -3372,10 +3092,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimeNow,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -3384,10 +3102,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimeFuture,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now.Add(42 * time.Minute),
-						Value: 42,
-					},
+					Time:         now.Add(42 * time.Minute),
+					Value:        42,
 					TimeOnGather: now.Add(42 * time.Minute),
 				},
 				{
@@ -3396,10 +3112,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimePast,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now.Add(-42 * time.Minute),
-						Value: 42,
-					},
+					Time:         now.Add(-42 * time.Minute),
+					Value:        42,
 					TimeOnGather: now.Add(-42 * time.Minute),
 				},
 			},
@@ -3416,50 +3130,40 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimeZero,
 					},
-					Point: types.Point{
-						Time:  time.Time{},
-						Value: 42,
-					},
+					Time:  time.Time{},
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimeEpoc,
 					},
-					Point: types.Point{
-						Time:  time.UnixMilli(0),
-						Value: 42,
-					},
+					Time:  time.UnixMilli(0),
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimeNow,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimeFuture,
 					},
-					Point: types.Point{
-						Time:  now.Add(42 * time.Minute),
-						Value: 42,
-					},
+					Time:  now.Add(42 * time.Minute),
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimePast,
 					},
-					Point: types.Point{
-						Time:  now.Add(-42 * time.Minute),
-						Value: 42,
-					},
+					Time:  now.Add(-42 * time.Minute),
+					Value: 42,
 				},
 			},
 			want: []metricPointTimeOverride{
@@ -3469,10 +3173,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimeZero,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now, // a timestamp is used, because CallForMetricsEndpoint isn't used
 				},
 				{
@@ -3481,10 +3183,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimeEpoc,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -3493,10 +3193,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimeNow,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -3505,10 +3203,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimeFuture,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 				{
@@ -3517,10 +3213,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimePast,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: now,
 				},
 			},
@@ -3537,50 +3231,40 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimeZero,
 					},
-					Point: types.Point{
-						Time:  time.Time{},
-						Value: 42,
-					},
+					Time:  time.Time{},
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimeEpoc,
 					},
-					Point: types.Point{
-						Time:  time.UnixMilli(0),
-						Value: 42,
-					},
+					Time:  time.UnixMilli(0),
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimeNow,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimeFuture,
 					},
-					Point: types.Point{
-						Time:  now.Add(42 * time.Minute),
-						Value: 42,
-					},
+					Time:  now.Add(42 * time.Minute),
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimePast,
 					},
-					Point: types.Point{
-						Time:  now.Add(-42 * time.Minute),
-						Value: 42,
-					},
+					Time:  now.Add(-42 * time.Minute),
+					Value: 42,
 				},
 			},
 			want: []metricPointTimeOverride{
@@ -3590,10 +3274,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimeZero,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: time.Time{},
 				},
 				{
@@ -3602,10 +3284,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimeEpoc,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: time.Time{},
 				},
 				{
@@ -3614,10 +3294,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimeNow,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: time.Time{},
 				},
 				{
@@ -3626,10 +3304,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimeFuture,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: time.Time{},
 				},
 				{
@@ -3638,10 +3314,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimePast,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: time.Time{},
 				},
 			},
@@ -3658,50 +3332,40 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimeZero,
 					},
-					Point: types.Point{
-						Time:  time.Time{},
-						Value: 42,
-					},
+					Time:  time.Time{},
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimeEpoc,
 					},
-					Point: types.Point{
-						Time:  time.UnixMilli(0),
-						Value: 42,
-					},
+					Time:  time.UnixMilli(0),
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimeNow,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:  now,
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimeFuture,
 					},
-					Point: types.Point{
-						Time:  now.Add(42 * time.Minute),
-						Value: 42,
-					},
+					Time:  now.Add(42 * time.Minute),
+					Value: 42,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: testMetricTime,
 						types.LabelItem: testTimePast,
 					},
-					Point: types.Point{
-						Time:  now.Add(-42 * time.Minute),
-						Value: 42,
-					},
+					Time:  now.Add(-42 * time.Minute),
+					Value: 42,
 				},
 			},
 			want: []metricPointTimeOverride{
@@ -3711,10 +3375,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimeZero,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: time.Time{},
 				},
 				{
@@ -3723,10 +3385,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimeEpoc,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: time.Time{},
 				},
 				{
@@ -3735,10 +3395,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimeNow,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: time.Time{},
 				},
 				{
@@ -3747,10 +3405,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimeFuture,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: time.Time{},
 				},
 				{
@@ -3759,10 +3415,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     testTimePast,
 						types.LabelInstance: testBleemeoServer,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 42,
-					},
+					Time:         now,
+					Value:        42,
 					TimeOnGather: time.Time{},
 				},
 			},

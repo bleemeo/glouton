@@ -149,12 +149,10 @@ func (s *Synchronizer) snmpRegisterAndUpdate(ctx context.Context, execution type
 		}
 
 		payload := bleemeoapi.AgentPayload{
-			Agent: bleemeoTypes.Agent{
-				FQDN:        fqdn,
-				DisplayName: name,
-				AgentType:   agentTypeID,
-				Tags:        []bleemeoTypes.Tag{},
-			},
+			FQDN:               fqdn,
+			DisplayName:        name,
+			AgentType:          agentTypeID,
+			Tags:               []bleemeoTypes.Tag{},
 			Abstracted:         true,
 			InitialPassword:    uuid.New().String(),
 			InitialServerGroup: serverGroup,

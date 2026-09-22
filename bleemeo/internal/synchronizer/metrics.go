@@ -1183,11 +1183,9 @@ func (s *Synchronizer) prepareMetricPayload(
 	key := s.metricKey(labels, annotations)
 
 	payload := bleemeoapi.MetricPayload{
-		Metric: bleemeoTypes.Metric{
-			LabelsText: key,
-			AgentID:    s.agentID,
-		},
-		Name: labels[gloutonTypes.LabelName],
+		LabelsText: key,
+		AgentID:    s.agentID,
+		Name:       labels[gloutonTypes.LabelName],
 	}
 
 	agentID := s.agentID

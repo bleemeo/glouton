@@ -44,19 +44,19 @@ func labelsTestStore(t *testing.T, ts time.Time) *Store {
 
 	db.PushPoints(context.Background(), []types.MetricPoint{
 		{
-			Point:  types.Point{Time: ts, Value: 42},
+			Time: ts, Value: 42,
 			Labels: map[string]string{types.LabelName: testCPUUsed, testLabelInstance: "host1"},
 		},
 		{
-			Point:  types.Point{Time: ts, Value: 10},
+			Time: ts, Value: 10,
 			Labels: map[string]string{types.LabelName: testDiskUsed, testLabelInstance: "host1", testLabelItem: testItemHome},
 		},
 		{
-			Point:  types.Point{Time: ts, Value: 20},
+			Time: ts, Value: 20,
 			Labels: map[string]string{types.LabelName: testDiskUsed, testLabelInstance: "host1", testLabelItem: testItemSrv},
 		},
 		{
-			Point:  types.Point{Time: ts, Value: 30},
+			Time: ts, Value: 30,
 			Labels: map[string]string{types.LabelName: testDiskUsed, testLabelInstance: "host2", testLabelItem: testItemHome},
 		},
 	})

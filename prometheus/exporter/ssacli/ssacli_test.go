@@ -69,10 +69,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "controller 0 array A box 2 bay 1",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -85,10 +83,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "controller 0 array A box 2 bay 2",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -101,10 +97,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "controller 0 array A box 2 bay 3",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -117,10 +111,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "controller 0 array A box 2 bay 4",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -133,10 +125,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "controller 0 array A box 2 bay 5",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -149,10 +139,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "controller 0 array A box 2 bay 6",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusCritical.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusCritical.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
@@ -165,10 +153,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "controller 0 array B box 2 bay 7",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -181,10 +167,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "controller 0 array B box 2 bay 8",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -197,10 +181,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "controller 3 box 0 bay 1",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -213,10 +195,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "controller 3 box 0 bay 2",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -229,10 +209,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "controller 3 box 0 bay 3",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -245,10 +223,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "controller 3 box 0 bay 4",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -268,10 +244,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: testDeviceBay1,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -284,10 +258,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: testDeviceBay2,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -307,10 +279,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: testDeviceBay1,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -323,10 +293,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: testDeviceBay2,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -339,10 +307,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "bay 3",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -355,10 +321,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "bay 4",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -371,10 +335,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "bay 5",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -387,10 +349,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "bay 6",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -403,10 +363,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "bay 7",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -419,10 +377,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "bay 8",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -445,10 +401,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: testDeviceBay1,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -461,10 +415,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: testDeviceBay2,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -477,10 +429,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "bay 3",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -493,10 +443,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "bay 4",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -509,10 +457,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "bay 5",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -525,10 +471,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "bay 6",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -541,10 +485,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "bay 7",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -557,10 +499,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "bay 8",
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -580,10 +520,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: testDeviceBay1,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -596,10 +534,8 @@ func TestGatherer_GatherWithState(t *testing.T) { //nolint:maintidx
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: testDeviceBay2,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,

@@ -92,7 +92,7 @@ func (ma miscAppender) CollectWithState(ctx context.Context, state registry.Gath
 
 	for status, count := range counts {
 		points = append(points, types.MetricPoint{
-			Point: types.Point{Time: state.T0, Value: float64(count)},
+			Time: state.T0, Value: float64(count),
 			Labels: map[string]string{
 				types.LabelName: "containers_count",
 				types.LabelItem: status,
@@ -153,10 +153,8 @@ func (ma miscAppenderMinute) CollectWithState(ctx context.Context, state registr
 			points = append(points, types.MetricPoint{
 				Labels:      labels,
 				Annotations: annotations,
-				Point: types.Point{
-					Time:  time.Now(),
-					Value: n,
-				},
+				Time:        time.Now(),
+				Value:       n,
 			})
 		case discovery.EximService:
 			n, err := eximQueueSize(ctx, srv, ma.runner, ma.containerRuntime)
@@ -180,10 +178,8 @@ func (ma miscAppenderMinute) CollectWithState(ctx context.Context, state registr
 			points = append(points, types.MetricPoint{
 				Labels:      labels,
 				Annotations: annotations,
-				Point: types.Point{
-					Time:  time.Now(),
-					Value: n,
-				},
+				Time:        time.Now(),
+				Value:       n,
 			})
 		}
 	}
@@ -197,10 +193,8 @@ func (ma miscAppenderMinute) CollectWithState(ctx context.Context, state registr
 	}
 
 	points = append(points, types.MetricPoint{
-		Point: types.Point{
-			Value: float64(status.NagiosCode()),
-			Time:  state.T0,
-		},
+		Value: float64(status.NagiosCode()),
+		Time:  state.T0,
 		Labels: map[string]string{
 			types.LabelName: "agent_config_warning",
 		},
@@ -285,10 +279,8 @@ func statusFromLastPoint(
 		maps.Copy(labelsCopy, targetMetric)
 
 		newPoints = append(newPoints, types.MetricPoint{
-			Point: types.Point{
-				Value: float64(annotations.Status.CurrentStatus.NagiosCode()),
-				Time:  now,
-			},
+			Value:       float64(annotations.Status.CurrentStatus.NagiosCode()),
+			Time:        now,
 			Labels:      labelsCopy,
 			Annotations: annotations,
 		})

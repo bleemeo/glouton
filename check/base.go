@@ -186,10 +186,8 @@ func (bc *baseCheck) Check(ctx context.Context, scheduleUpdate func(opts types.S
 	annotations.Status = status
 
 	point := types.MetricPoint{
-		Point: types.Point{
-			Time:  time.Now().Truncate(time.Second),
-			Value: float64(status.CurrentStatus.NagiosCode()),
-		},
+		Time:        time.Now().Truncate(time.Second),
+		Value:       float64(status.CurrentStatus.NagiosCode()),
 		Labels:      bc.labels,
 		Annotations: annotations,
 	}

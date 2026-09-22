@@ -2037,10 +2037,8 @@ func (a *agent) sendDockerContainerHealth(ctx context.Context, container facts.C
 				Status:      status,
 				ContainerID: container.ID(),
 			},
-			Point: types.Point{
-				Time:  time.Now(),
-				Value: float64(status.CurrentStatus.NagiosCode()),
-			},
+			Time:  time.Now(),
+			Value: float64(status.CurrentStatus.NagiosCode()),
 		},
 	})
 }
@@ -2267,10 +2265,8 @@ func systemUpdateMetric(ctx context.Context, a *agent) {
 			Labels: map[string]string{
 				types.LabelName: metricSystemPendingUpdates,
 			},
-			Point: types.Point{
-				Time:  time.Now(),
-				Value: float64(pendingUpdate),
-			},
+			Time:  time.Now(),
+			Value: float64(pendingUpdate),
 		})
 	}
 
@@ -2279,10 +2275,8 @@ func systemUpdateMetric(ctx context.Context, a *agent) {
 			Labels: map[string]string{
 				types.LabelName: metricSystemPendingSecurityUpdates,
 			},
-			Point: types.Point{
-				Time:  time.Now(),
-				Value: float64(pendingSecurityUpdate),
-			},
+			Time:  time.Now(),
+			Value: float64(pendingSecurityUpdate),
 		})
 	}
 

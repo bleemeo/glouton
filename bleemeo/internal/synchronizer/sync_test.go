@@ -133,18 +133,14 @@ func TestSync(t *testing.T) {
 		metricFromAPI(testAgentMetric2, time.Time{}),
 		metricFromAPI(testMonitorMetricPrivateProbe, time.Time{}),
 		metricFromAPI(bleemeoapi.MetricPayload{
-			Metric: bleemeoTypes.Metric{
-				ID:      "1",
-				AgentID: testAgent.ID,
-			},
-			Name: agentStatusName,
+			ID:      "1",
+			AgentID: testAgent.ID,
+			Name:    agentStatusName,
 		}, time.Time{}),
 		metricFromAPI(bleemeoapi.MetricPayload{
-			Metric: bleemeoTypes.Metric{
-				ID:      "2",
-				AgentID: testAgent.ID,
-			},
-			Name: metricCPUUsed,
+			ID:      "2",
+			AgentID: testAgent.ID,
+			Name:    metricCPUUsed,
 		}, time.Time{}),
 	}
 
@@ -200,26 +196,22 @@ func TestSyncWithSNMP(t *testing.T) {
 
 	wantAgents := []bleemeoapi.AgentPayload{
 		{
-			Agent: bleemeoTypes.Agent{
-				ID:          idAgentMain,
-				CreatedAt:   helper.Now(),
-				AccountID:   accountID,
-				AgentType:   agentTypeAgent.ID,
-				FQDN:        testAgentFQDN,
-				DisplayName: testAgentFQDN,
-			},
+			ID:              idAgentMain,
+			CreatedAt:       helper.Now(),
+			AccountID:       accountID,
+			AgentType:       agentTypeAgent.ID,
+			FQDN:            testAgentFQDN,
+			DisplayName:     testAgentFQDN,
 			Abstracted:      false,
 			InitialPassword: passwordAlreadySet,
 		},
 		{
-			Agent: bleemeoTypes.Agent{
-				ID:          idAgentSNMP,
-				CreatedAt:   helper.Now(),
-				AccountID:   accountID,
-				AgentType:   agentTypeSNMP.ID,
-				FQDN:        snmpAddress,
-				DisplayName: testInitialNameZ,
-			},
+			ID:              idAgentSNMP,
+			CreatedAt:       helper.Now(),
+			AccountID:       accountID,
+			AgentType:       agentTypeSNMP.ID,
+			FQDN:            snmpAddress,
+			DisplayName:     testInitialNameZ,
 			Abstracted:      true,
 			InitialPassword: passwordAlreadySet,
 		},
@@ -251,26 +243,20 @@ func TestSyncWithSNMP(t *testing.T) {
 
 	wantMetrics := []bleemeoapi.MetricPayload{
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:      "1",
-				AgentID: idAgentMain,
-			},
-			Name: agentStatusName,
+			ID:      "1",
+			AgentID: idAgentMain,
+			Name:    agentStatusName,
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:      "2",
-				AgentID: idAgentMain,
-			},
-			Name: metricCPUUsed,
+			ID:      "2",
+			AgentID: idAgentMain,
+			Name:    metricCPUUsed,
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:         "3",
-				AgentID:    idAgentSNMP,
-				LabelsText: fmt.Sprintf(`__name__="%s",snmp_target="%s"`, testMetricIfOutOctets, snmpAddress),
-			},
-			Name: testMetricIfOutOctets,
+			ID:         "3",
+			AgentID:    idAgentSNMP,
+			LabelsText: fmt.Sprintf(`__name__="%s",snmp_target="%s"`, testMetricIfOutOctets, snmpAddress),
+			Name:       testMetricIfOutOctets,
 		},
 	}
 
@@ -309,12 +295,10 @@ func TestSyncWithSNMP(t *testing.T) {
 	}
 
 	helper.wrapperClientMock.resources.metrics.add(bleemeoapi.MetricPayload{
-		Metric: bleemeoTypes.Metric{
-			ID:         "4",
-			AgentID:    idAgentSNMP,
-			LabelsText: fmt.Sprintf(`__name__="ifInOctets",snmp_target="%s"`, snmpAddress),
-		},
-		Name: "ifInOctets",
+		ID:         "4",
+		AgentID:    idAgentSNMP,
+		LabelsText: fmt.Sprintf(`__name__="ifInOctets",snmp_target="%s"`, snmpAddress),
+		Name:       "ifInOctets",
 	})
 
 	helper.AddTime(2 * time.Hour)
@@ -327,37 +311,29 @@ func TestSyncWithSNMP(t *testing.T) {
 
 	wantMetrics = []bleemeoapi.MetricPayload{
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:      "1",
-				AgentID: idAgentMain,
-			},
-			Name: agentStatusName,
+			ID:      "1",
+			AgentID: idAgentMain,
+			Name:    agentStatusName,
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:            "2",
-				AgentID:       idAgentMain,
-				DeactivatedAt: helper.Now(),
-			},
-			Name: metricCPUUsed,
+			ID:            "2",
+			AgentID:       idAgentMain,
+			DeactivatedAt: helper.Now(),
+			Name:          metricCPUUsed,
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:            "3",
-				AgentID:       idAgentSNMP,
-				LabelsText:    fmt.Sprintf(`__name__="%s",snmp_target="%s"`, testMetricIfOutOctets, snmpAddress),
-				DeactivatedAt: helper.Now(),
-			},
-			Name: testMetricIfOutOctets,
+			ID:            "3",
+			AgentID:       idAgentSNMP,
+			LabelsText:    fmt.Sprintf(`__name__="%s",snmp_target="%s"`, testMetricIfOutOctets, snmpAddress),
+			DeactivatedAt: helper.Now(),
+			Name:          testMetricIfOutOctets,
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:            "4",
-				AgentID:       idAgentSNMP,
-				LabelsText:    fmt.Sprintf(`__name__="ifInOctets",snmp_target="%s"`, snmpAddress),
-				DeactivatedAt: helper.Now(),
-			},
-			Name: "ifInOctets",
+			ID:            "4",
+			AgentID:       idAgentSNMP,
+			LabelsText:    fmt.Sprintf(`__name__="ifInOctets",snmp_target="%s"`, snmpAddress),
+			DeactivatedAt: helper.Now(),
+			Name:          "ifInOctets",
 		},
 	}
 
@@ -416,26 +392,22 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 
 	wantAgents := []bleemeoapi.AgentPayload{
 		{
-			Agent: bleemeoTypes.Agent{
-				ID:          idAgentMain,
-				CreatedAt:   helper.Now(),
-				AccountID:   accountID,
-				AgentType:   agentTypeAgent.ID,
-				FQDN:        testAgentFQDN,
-				DisplayName: testAgentFQDN,
-			},
+			ID:              idAgentMain,
+			CreatedAt:       helper.Now(),
+			AccountID:       accountID,
+			AgentType:       agentTypeAgent.ID,
+			FQDN:            testAgentFQDN,
+			DisplayName:     testAgentFQDN,
 			Abstracted:      false,
 			InitialPassword: passwordAlreadySet,
 		},
 		{
-			Agent: bleemeoTypes.Agent{
-				ID:          idAgentSNMP,
-				CreatedAt:   helper.Now(),
-				AccountID:   accountID,
-				AgentType:   agentTypeSNMP.ID,
-				FQDN:        snmpAddress,
-				DisplayName: testInitialNameZ,
-			},
+			ID:              idAgentSNMP,
+			CreatedAt:       helper.Now(),
+			AccountID:       accountID,
+			AgentType:       agentTypeSNMP.ID,
+			FQDN:            snmpAddress,
+			DisplayName:     testInitialNameZ,
 			Abstracted:      true,
 			InitialPassword: passwordAlreadySet,
 		},
@@ -467,26 +439,20 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 
 	wantMetrics := []bleemeoapi.MetricPayload{
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:      "1",
-				AgentID: idAgentMain,
-			},
-			Name: agentStatusName,
+			ID:      "1",
+			AgentID: idAgentMain,
+			Name:    agentStatusName,
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:      "2",
-				AgentID: idAgentMain,
-			},
-			Name: metricCPUUsed,
+			ID:      "2",
+			AgentID: idAgentMain,
+			Name:    metricCPUUsed,
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:         "3",
-				AgentID:    idAgentSNMP,
-				LabelsText: fmt.Sprintf(`__name__="%s",snmp_target="%s"`, testMetricIfOutOctets, snmpAddress),
-			},
-			Name: testMetricIfOutOctets,
+			ID:         "3",
+			AgentID:    idAgentSNMP,
+			LabelsText: fmt.Sprintf(`__name__="%s",snmp_target="%s"`, testMetricIfOutOctets, snmpAddress),
+			Name:       testMetricIfOutOctets,
 		},
 	}
 
@@ -526,14 +492,12 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 	wantAgents = []bleemeoapi.AgentPayload{
 		wantAgents[0],
 		{
-			Agent: bleemeoTypes.Agent{
-				ID:          idAgentSNMP,
-				CreatedAt:   helper.Now(),
-				AccountID:   accountID,
-				AgentType:   agentTypeSNMP.ID,
-				FQDN:        snmpAddress,
-				DisplayName: testInitialNameZ,
-			},
+			ID:              idAgentSNMP,
+			CreatedAt:       helper.Now(),
+			AccountID:       accountID,
+			AgentType:       agentTypeSNMP.ID,
+			FQDN:            snmpAddress,
+			DisplayName:     testInitialNameZ,
 			Abstracted:      true,
 			InitialPassword: passwordAlreadySet,
 		},
@@ -559,12 +523,10 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 	}
 
 	wantMetrics[2] = bleemeoapi.MetricPayload{
-		Metric: bleemeoTypes.Metric{
-			ID:         "4",
-			AgentID:    idAgentSNMP,
-			LabelsText: fmt.Sprintf(`__name__="%s",snmp_target="%s"`, testMetricIfOutOctets, snmpAddress),
-		},
-		Name: testMetricIfOutOctets,
+		ID:         "4",
+		AgentID:    idAgentSNMP,
+		LabelsText: fmt.Sprintf(`__name__="%s",snmp_target="%s"`, testMetricIfOutOctets, snmpAddress),
+		Name:       testMetricIfOutOctets,
 	}
 
 	metrics = helper.wrapperClientMock.resources.metrics.clone()
@@ -615,14 +577,12 @@ func TestContainerSync(t *testing.T) {
 
 	wantContainer := []bleemeoapi.ContainerPayload{
 		{
-			Container: bleemeoTypes.Container{
-				ID:          "1",
-				ContainerID: containerID,
-				Status:      testContainerStatusRun,
-				Runtime:     testContainerRuntimeFake,
-				Name:        testContainerMyRedis1,
-			},
-			Host: testAgent.ID,
+			ID:          "1",
+			ContainerID: containerID,
+			Status:      testContainerStatusRun,
+			Runtime:     testContainerRuntimeFake,
+			Name:        testContainerMyRedis1,
+			Host:        testAgent.ID,
 		},
 	}
 
@@ -636,22 +596,18 @@ func TestContainerSync(t *testing.T) {
 
 	wantMetrics := []bleemeoapi.MetricPayload{
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:         "1",
-				AgentID:    testAgent.ID,
-				LabelsText: "",
-			},
-			Name: agentStatusName,
+			ID:         "1",
+			AgentID:    testAgent.ID,
+			LabelsText: "",
+			Name:       agentStatusName,
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:          "2",
-				AgentID:     testAgent.ID,
-				LabelsText:  testServiceStatusRedisLabels,
-				ContainerID: "1",
-			},
-			Name: gloutonTypes.MetricServiceStatus,
-			Item: "",
+			ID:          "2",
+			AgentID:     testAgent.ID,
+			LabelsText:  testServiceStatusRedisLabels,
+			ContainerID: "1",
+			Name:        gloutonTypes.MetricServiceStatus,
+			Item:        "",
 		},
 	}
 
@@ -672,15 +628,13 @@ func TestContainerSync(t *testing.T) {
 
 	wantContainer = []bleemeoapi.ContainerPayload{
 		{
-			Container: bleemeoTypes.Container{
-				ID:          "1",
-				ContainerID: containerID,
-				Status:      testContainerStatusRun,
-				Runtime:     testContainerRuntimeFake,
-				Name:        testContainerMyRedis1,
-				DeletedAt:   bleemeoTypes.NullTime(helper.s.now()),
-			},
-			Host: testAgent.ID,
+			ID:          "1",
+			ContainerID: containerID,
+			Status:      testContainerStatusRun,
+			Runtime:     testContainerRuntimeFake,
+			Name:        testContainerMyRedis1,
+			DeletedAt:   bleemeoTypes.NullTime(helper.s.now()),
+			Host:        testAgent.ID,
 		},
 	}
 
@@ -692,23 +646,19 @@ func TestContainerSync(t *testing.T) {
 
 	wantMetrics = []bleemeoapi.MetricPayload{
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:         "1",
-				AgentID:    testAgent.ID,
-				LabelsText: "",
-			},
-			Name: agentStatusName,
+			ID:         "1",
+			AgentID:    testAgent.ID,
+			LabelsText: "",
+			Name:       agentStatusName,
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:            "2",
-				AgentID:       testAgent.ID,
-				LabelsText:    testServiceStatusRedisLabels,
-				ContainerID:   "1",
-				DeactivatedAt: helper.s.now(),
-			},
-			Name: gloutonTypes.MetricServiceStatus,
-			Item: "",
+			ID:            "2",
+			AgentID:       testAgent.ID,
+			LabelsText:    testServiceStatusRedisLabels,
+			ContainerID:   "1",
+			DeactivatedAt: helper.s.now(),
+			Name:          gloutonTypes.MetricServiceStatus,
+			Item:          "",
 		},
 	}
 
@@ -743,14 +693,12 @@ func TestContainerSync(t *testing.T) {
 
 	wantContainer = []bleemeoapi.ContainerPayload{
 		{
-			Container: bleemeoTypes.Container{
-				ID:          "1",
-				ContainerID: containerID2,
-				Status:      testContainerStatusRun,
-				Runtime:     testContainerRuntimeFake,
-				Name:        testContainerMyRedis1,
-			},
-			Host: testAgent.ID,
+			ID:          "1",
+			ContainerID: containerID2,
+			Status:      testContainerStatusRun,
+			Runtime:     testContainerRuntimeFake,
+			Name:        testContainerMyRedis1,
+			Host:        testAgent.ID,
 		},
 	}
 
@@ -762,22 +710,18 @@ func TestContainerSync(t *testing.T) {
 
 	wantMetrics = []bleemeoapi.MetricPayload{
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:         "1",
-				AgentID:    testAgent.ID,
-				LabelsText: "",
-			},
-			Name: agentStatusName,
+			ID:         "1",
+			AgentID:    testAgent.ID,
+			LabelsText: "",
+			Name:       agentStatusName,
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:          "2",
-				AgentID:     testAgent.ID,
-				LabelsText:  testServiceStatusRedisLabels,
-				ContainerID: "1",
-			},
-			Name: gloutonTypes.MetricServiceStatus,
-			Item: "",
+			ID:          "2",
+			AgentID:     testAgent.ID,
+			LabelsText:  testServiceStatusRedisLabels,
+			ContainerID: "1",
+			Name:        gloutonTypes.MetricServiceStatus,
+			Item:        "",
 		},
 	}
 
@@ -876,27 +820,23 @@ func TestSyncServerGroup(t *testing.T) {
 
 			wantAgents := []bleemeoapi.AgentPayload{
 				{
-					Agent: bleemeoTypes.Agent{
-						ID:          idAgentMain,
-						CreatedAt:   helper.Now(),
-						AccountID:   accountID,
-						AgentType:   agentTypeAgent.ID,
-						FQDN:        testAgentFQDN,
-						DisplayName: testAgentFQDN,
-					},
+					ID:                 idAgentMain,
+					CreatedAt:          helper.Now(),
+					AccountID:          accountID,
+					AgentType:          agentTypeAgent.ID,
+					FQDN:               testAgentFQDN,
+					DisplayName:        testAgentFQDN,
 					Abstracted:         false,
 					InitialPassword:    passwordAlreadySet,
 					InitialServerGroup: tt.wantGroupForMainAgent,
 				},
 				{
-					Agent: bleemeoTypes.Agent{
-						ID:          idAgentSNMP,
-						CreatedAt:   helper.Now(),
-						AccountID:   accountID,
-						AgentType:   agentTypeSNMP.ID,
-						FQDN:        snmpAddress,
-						DisplayName: testInitialNameZ,
-					},
+					ID:                 idAgentSNMP,
+					CreatedAt:          helper.Now(),
+					AccountID:          accountID,
+					AgentType:          agentTypeSNMP.ID,
+					FQDN:               snmpAddress,
+					DisplayName:        testInitialNameZ,
 					Abstracted:         true,
 					InitialPassword:    passwordAlreadySet,
 					InitialServerGroup: tt.wantGroupForSNMPAgent,
@@ -1075,14 +1015,12 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 
 			wantAgents := []bleemeoapi.AgentPayload{
 				{
-					Agent: bleemeoTypes.Agent{
-						ID:          idAgentMain,
-						CreatedAt:   helper.Now(),
-						AccountID:   accountID,
-						AgentType:   agentTypeAgent.ID,
-						FQDN:        testAgentFQDN,
-						DisplayName: testAgentFQDN,
-					},
+					ID:              idAgentMain,
+					CreatedAt:       helper.Now(),
+					AccountID:       accountID,
+					AgentType:       agentTypeAgent.ID,
+					FQDN:            testAgentFQDN,
+					DisplayName:     testAgentFQDN,
 					Abstracted:      false,
 					InitialPassword: passwordAlreadySet,
 				},
@@ -1090,14 +1028,12 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 
 			if tt.wantSNMP {
 				wantAgents = append(wantAgents, bleemeoapi.AgentPayload{
-					Agent: bleemeoTypes.Agent{
-						ID:          idAny,
-						CreatedAt:   helper.Now(),
-						AccountID:   accountID,
-						AgentType:   agentTypeSNMP.ID,
-						FQDN:        snmpAddress,
-						DisplayName: "The-Initial-Name",
-					},
+					ID:              idAny,
+					CreatedAt:       helper.Now(),
+					AccountID:       accountID,
+					AgentType:       agentTypeSNMP.ID,
+					FQDN:            snmpAddress,
+					DisplayName:     "The-Initial-Name",
 					Abstracted:      true,
 					InitialPassword: passwordAlreadySet,
 				})
@@ -1107,16 +1043,12 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 
 			helper.assertServicesInAPI(t, []bleemeoapi.ServicePayload{
 				{
-					Account: accountID,
-					Monitor: bleemeoTypes.Monitor{
-						Service: bleemeoTypes.Service{
-							ID:       idAny,
-							Label:    testServiceRedis,
-							Instance: testContainerShortRedis,
-							Active:   true,
-						},
-						AgentID: idAgentMain,
-					},
+					Account:  accountID,
+					ID:       idAny,
+					Label:    testServiceRedis,
+					Instance: testContainerShortRedis,
+					Active:   true,
+					AgentID:  idAgentMain,
 				},
 			})
 
@@ -1127,45 +1059,37 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 
 			wantMetrics := []bleemeoapi.MetricPayload{
 				{
-					Metric: bleemeoTypes.Metric{
-						ID:      idAny,
-						AgentID: idAgentMain,
-					},
-					Name: agentStatusName,
+					ID:      idAny,
+					AgentID: idAgentMain,
+					Name:    agentStatusName,
 				},
 				{
-					Metric: bleemeoTypes.Metric{
-						ID:      idAny,
-						AgentID: idAgentMain,
-					},
-					Name: metricCPUUsed,
+					ID:      idAny,
+					AgentID: idAgentMain,
+					Name:    metricCPUUsed,
 				},
 				{
-					Metric: bleemeoTypes.Metric{
-						ID:      idAny,
-						AgentID: newMonitor.AgentID,
-						LabelsText: fmt.Sprintf(
-							"__name__=\"probe_success\",instance=\"%s\",instance_uuid=\"%s\",scraper_uuid=\"%s\"",
-							newMonitor.URL,
-							newMonitor.AgentID,
-							idAgentMain,
-						),
-						ServiceID: newMonitor.ID,
-					},
-					Name: testMetricProbeSuccess,
+					ID:      idAny,
+					AgentID: newMonitor.AgentID,
+					LabelsText: fmt.Sprintf(
+						"__name__=\"probe_success\",instance=\"%s\",instance_uuid=\"%s\",scraper_uuid=\"%s\"",
+						newMonitor.URL,
+						newMonitor.AgentID,
+						idAgentMain,
+					),
+					ServiceID: newMonitor.ID,
+					Name:      testMetricProbeSuccess,
 				},
 			}
 
 			redisMetric := bleemeoapi.MetricPayload{
-				Metric: bleemeoTypes.Metric{
-					ID:          idAny,
-					AgentID:     idAgentMain,
-					LabelsText:  `__name__="service_status",service="redis",service_instance="short-redis-container-name"`,
-					ServiceID:   "1",
-					ContainerID: "",
-				},
-				Name: testMetricServiceStatus,
-				Item: "",
+				ID:          idAny,
+				AgentID:     idAgentMain,
+				LabelsText:  `__name__="service_status",service="redis",service_instance="short-redis-container-name"`,
+				ServiceID:   "1",
+				ContainerID: "",
+				Name:        testMetricServiceStatus,
+				Item:        "",
 			}
 
 			if tt.wantContainerFK {
@@ -1176,35 +1100,29 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 
 			if tt.wantContainerMetric {
 				wantMetrics = append(wantMetrics, bleemeoapi.MetricPayload{
-					Metric: bleemeoTypes.Metric{
-						ID:          idAny,
-						AgentID:     idAgentMain,
-						ServiceID:   "1",
-						ContainerID: "1",
-					},
-					Name: "redis_commands",
-					Item: testContainerShortRedis,
+					ID:          idAny,
+					AgentID:     idAgentMain,
+					ServiceID:   "1",
+					ContainerID: "1",
+					Name:        "redis_commands",
+					Item:        testContainerShortRedis,
 				})
 			}
 
 			if tt.wantCustomMetric {
 				wantMetrics = append(wantMetrics, bleemeoapi.MetricPayload{
-					Metric: bleemeoTypes.Metric{
-						ID:      idAny,
-						AgentID: idAgentMain,
-					},
-					Name: "custom_metric",
+					ID:      idAny,
+					AgentID: idAgentMain,
+					Name:    "custom_metric",
 				})
 			}
 
 			if tt.wantSNMP {
 				wantMetrics = append(wantMetrics, bleemeoapi.MetricPayload{
-					Metric: bleemeoTypes.Metric{
-						ID:         idAny,
-						AgentID:    idAgentSNMP,
-						LabelsText: fmt.Sprintf(`__name__="%s",snmp_target="%s"`, testMetricIfOutOctets, snmpAddress),
-					},
-					Name: testMetricIfOutOctets,
+					ID:         idAny,
+					AgentID:    idAgentSNMP,
+					LabelsText: fmt.Sprintf(`__name__="%s",snmp_target="%s"`, testMetricIfOutOctets, snmpAddress),
+					Name:       testMetricIfOutOctets,
 				})
 			}
 

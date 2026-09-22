@@ -47,10 +47,8 @@ func (a appender) Append(_ storage.SeriesRef, l labels.Labels, t int64, v float6
 	})
 
 	newPoint := types.MetricPoint{
-		Point: types.Point{
-			Time:  time.Unix(0, t*1e6),
-			Value: v,
-		},
+		Time:        time.Unix(0, t*1e6),
+		Value:       v,
 		Labels:      labelsMap,
 		Annotations: types.MetricAnnotations{},
 	}

@@ -486,13 +486,13 @@ func TestAccumulatorThreshold(t *testing.T) {
 			Labels: map[string]string{
 				"__name__": testCPUUsed,
 			},
-			Point: types.Point{Time: t0, Value: 88.0},
+			Time: t0, Value: 88.0,
 		},
 		{
 			Labels: map[string]string{
 				"__name__": "cpu_idle",
 			},
-			Point: types.Point{Time: t0, Value: 20.0},
+			Time: t0, Value: 20.0,
 		},
 	}
 
@@ -806,7 +806,7 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 
 			points = append(points, types.MetricPoint{
 				Labels: lbls,
-				Point:  types.Point{Time: currentTime, Value: value},
+				Time:   currentTime, Value: value,
 			})
 		}
 
@@ -1361,7 +1361,7 @@ func TestThresholdStatic(t *testing.T) { //nolint: maintidx
 
 				points = append(points, types.MetricPoint{
 					Labels: lbls,
-					Point:  types.Point{Time: t0, Value: value},
+					Time:   t0, Value: value,
 					Annotations: types.MetricAnnotations{
 						BleemeoAgentID: otherAgentID,
 					},
@@ -1412,31 +1412,25 @@ func TestThresholdRestart(t *testing.T) {
 	threshold := New(mockState{
 		jsonList: []jsonState{
 			{
-				statusState: statusState{
-					CurrentStatus: types.StatusOk,
-					CriticalSince: t0.Add(-30 * time.Second),
-					WarningSince:  t0.Add(-40 * time.Second),
-					LastUpdate:    t0.Add(-30 * time.Second),
-				},
-				LabelsText: NameCPUUsed,
+				CurrentStatus: types.StatusOk,
+				CriticalSince: t0.Add(-30 * time.Second),
+				WarningSince:  t0.Add(-40 * time.Second),
+				LastUpdate:    t0.Add(-30 * time.Second),
+				LabelsText:    NameCPUUsed,
 			},
 			{
-				statusState: statusState{
-					CurrentStatus: types.StatusWarning,
-					CriticalSince: t0.Add(-80 * time.Second),
-					WarningSince:  t0.Add(-90 * time.Second),
-					LastUpdate:    t0.Add(-80 * time.Second),
-				},
-				LabelsText: NameDiskUsedPerc,
+				CurrentStatus: types.StatusWarning,
+				CriticalSince: t0.Add(-80 * time.Second),
+				WarningSince:  t0.Add(-90 * time.Second),
+				LastUpdate:    t0.Add(-80 * time.Second),
+				LabelsText:    NameDiskUsedPerc,
 			},
 			{
-				statusState: statusState{
-					CurrentStatus: types.StatusWarning,
-					CriticalSince: t0.Add(-30 * time.Second),
-					WarningSince:  t0.Add(-70 * time.Second),
-					LastUpdate:    t0.Add(-30 * time.Second),
-				},
-				LabelsText: testLabelsMemUsed,
+				CurrentStatus: types.StatusWarning,
+				CriticalSince: t0.Add(-30 * time.Second),
+				WarningSince:  t0.Add(-70 * time.Second),
+				LastUpdate:    t0.Add(-30 * time.Second),
+				LabelsText:    testLabelsMemUsed,
 			},
 		},
 	})
@@ -1596,7 +1590,7 @@ func TestThresholdRestart(t *testing.T) {
 
 			points = append(points, types.MetricPoint{
 				Labels: lbls,
-				Point:  types.Point{Time: currentTime, Value: value},
+				Time:   currentTime, Value: value,
 			})
 		}
 

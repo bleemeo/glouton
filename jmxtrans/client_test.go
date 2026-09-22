@@ -134,8 +134,8 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 			},
 			want: []types.MetricPoint{
 				{
-					Labels:      map[string]string{types.LabelName: "cassandra_metric_name"},
-					Point:       types.Point{Time: time.Unix(1585818816, 0), Value: 42.0},
+					Labels: map[string]string{types.LabelName: "cassandra_metric_name"},
+					Time:   time.Unix(1585818816, 0), Value: 42.0,
 					Annotations: types.MetricAnnotations{ServiceName: testServiceCassandra},
 				},
 			},
@@ -164,7 +164,7 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 			want: []types.MetricPoint{
 				{
 					Labels: map[string]string{types.LabelName: "cassandra_metric_name", types.LabelItem: testInstanceSqCassandra},
-					Point:  types.Point{Time: time.Unix(1585818816, 0), Value: 42.0},
+					Time:   time.Unix(1585818816, 0), Value: 42.0,
 					Annotations: types.MetricAnnotations{
 						ServiceName:     testServiceCassandra,
 						ServiceInstance: testInstanceSqCassandra,
@@ -196,7 +196,7 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 			want: []types.MetricPoint{
 				{
 					Labels: map[string]string{types.LabelName: "cassandra_jvm_heap_used"},
-					Point:  types.Point{Time: time.Unix(1585818816, 0), Value: 83.2},
+					Time:   time.Unix(1585818816, 0), Value: 83.2,
 					Annotations: types.MetricAnnotations{
 						ServiceName: testServiceCassandra,
 					},
@@ -226,7 +226,7 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 			want: []types.MetricPoint{
 				{
 					Labels: map[string]string{types.LabelName: "cassandra_bloom_filter_false_ratio"},
-					Point:  types.Point{Time: time.Unix(1585819278, 0), Value: 28.109049740723024},
+					Time:   time.Unix(1585819278, 0), Value: 28.109049740723024,
 					Annotations: types.MetricAnnotations{
 						ServiceName: testServiceCassandra,
 					},
@@ -257,7 +257,7 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 			want: []types.MetricPoint{
 				{
 					Labels: map[string]string{types.LabelName: "bitbucket_pulls"},
-					Point:  types.Point{Time: time.Unix(1585810010, 0), Value: 0.8},
+					Time:   time.Unix(1585810010, 0), Value: 0.8,
 					Annotations: types.MetricAnnotations{
 						ServiceName: "bitbucket",
 					},
@@ -288,7 +288,7 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 			want: []types.MetricPoint{
 				{
 					Labels: map[string]string{types.LabelName: testMetricJvmJvmGC},
-					Point:  types.Point{Time: time.Unix(1585828618, 0), Value: 187},
+					Time:   time.Unix(1585828618, 0), Value: 187,
 					Annotations: types.MetricAnnotations{
 						ServiceName: testServiceJVM,
 					},
@@ -322,7 +322,7 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 			want: []types.MetricPoint{
 				{
 					Labels: map[string]string{types.LabelName: testMetricJvmJvmGC},
-					Point:  types.Point{Time: time.Unix(1585828010, 0), Value: 1.5},
+					Time:   time.Unix(1585828010, 0), Value: 1.5,
 					Annotations: types.MetricAnnotations{
 						ServiceName: testServiceJVM,
 					},
@@ -354,7 +354,7 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 			want: []types.MetricPoint{
 				{
 					Labels: map[string]string{types.LabelName: testMetricJvmJvmGC},
-					Point:  types.Point{Time: time.Unix(1585810010, 0), Value: 8},
+					Time:   time.Unix(1585810010, 0), Value: 8,
 					Annotations: types.MetricAnnotations{
 						ServiceName: testServiceJVM,
 					},
@@ -392,28 +392,28 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 			want: []types.MetricPoint{
 				{
 					Labels: map[string]string{types.LabelName: testMetricJiraRequests, types.LabelItem: "index"},
-					Point:  types.Point{Time: time.Unix(1585828000, 0), Value: 25},
+					Time:   time.Unix(1585828000, 0), Value: 25,
 					Annotations: types.MetricAnnotations{
 						ServiceName: testServiceJira,
 					},
 				},
 				{
 					Labels: map[string]string{types.LabelName: testMetricJiraRequests, types.LabelItem: "create"},
-					Point:  types.Point{Time: time.Unix(1585828000, 0), Value: 20},
+					Time:   time.Unix(1585828000, 0), Value: 20,
 					Annotations: types.MetricAnnotations{
 						ServiceName: testServiceJira,
 					},
 				},
 				{
 					Labels: map[string]string{types.LabelName: testMetricJiraReqTime, types.LabelItem: "index"},
-					Point:  types.Point{Time: time.Unix(1585828000, 0), Value: 2.1},
+					Time:   time.Unix(1585828000, 0), Value: 2.1,
 					Annotations: types.MetricAnnotations{
 						ServiceName: testServiceJira,
 					},
 				},
 				{
 					Labels: map[string]string{types.LabelName: testMetricJiraReqTime, types.LabelItem: "create"},
-					Point:  types.Point{Time: time.Unix(1585828000, 0), Value: 0.725},
+					Time:   time.Unix(1585828000, 0), Value: 0.725,
 					Annotations: types.MetricAnnotations{
 						ServiceName: testServiceJira,
 					},
@@ -453,14 +453,14 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 			want: []types.MetricPoint{
 				{
 					Labels: map[string]string{types.LabelName: testMetricJiraRequests},
-					Point:  types.Point{Time: time.Unix(1585828000, 0), Value: 45},
+					Time:   time.Unix(1585828000, 0), Value: 45,
 					Annotations: types.MetricAnnotations{
 						ServiceName: testServiceJira,
 					},
 				},
 				{
 					Labels: map[string]string{types.LabelName: testMetricJiraReqTime},
-					Point:  types.Point{Time: time.Unix(1585828000, 0), Value: 1.488888888888889},
+					Time:   time.Unix(1585828000, 0), Value: 1.488888888888889,
 					Annotations: types.MetricAnnotations{
 						ServiceName: testServiceJira,
 					},
@@ -506,14 +506,14 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 			want: []types.MetricPoint{
 				{
 					Labels: map[string]string{types.LabelName: testMetricJiraRequests},
-					Point:  types.Point{Time: time.Unix(1585828015, 0), Value: 1.3333333333333333},
+					Time:   time.Unix(1585828015, 0), Value: 1.3333333333333333,
 					Annotations: types.MetricAnnotations{
 						ServiceName: testServiceJira,
 					},
 				},
 				{
 					Labels: map[string]string{types.LabelName: testMetricJiraReqTime},
-					Point:  types.Point{Time: time.Unix(1585828015, 0), Value: 0.30000000000000004},
+					Time:   time.Unix(1585828015, 0), Value: 0.30000000000000004,
 					Annotations: types.MetricAnnotations{
 						ServiceName: testServiceJira,
 					},
@@ -570,112 +570,112 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 			want: []types.MetricPoint{
 				// timestamp 1585818816
 				{
-					Labels:      map[string]string{types.LabelName: testCassandraUnmodified, types.LabelItem: testItemOne},
-					Point:       types.Point{Time: time.Unix(1585818816, 0), Value: 1.0},
+					Labels: map[string]string{types.LabelName: testCassandraUnmodified, types.LabelItem: testItemOne},
+					Time:   time.Unix(1585818816, 0), Value: 1.0,
 					Annotations: types.MetricAnnotations{ServiceName: testServiceCassandra},
 				},
 				{
-					Labels:      map[string]string{types.LabelName: testCassandraUnmodified, types.LabelItem: testItemTwo},
-					Point:       types.Point{Time: time.Unix(1585818816, 0), Value: 2.0},
+					Labels: map[string]string{types.LabelName: testCassandraUnmodified, types.LabelItem: testItemTwo},
+					Time:   time.Unix(1585818816, 0), Value: 2.0,
 					Annotations: types.MetricAnnotations{ServiceName: testServiceCassandra},
 				},
 				{
-					Labels:      map[string]string{types.LabelName: testMetricCassUnmod2, types.LabelItem: testItemOne},
-					Point:       types.Point{Time: time.Unix(1585818816, 0), Value: 1.0},
+					Labels: map[string]string{types.LabelName: testMetricCassUnmod2, types.LabelItem: testItemOne},
+					Time:   time.Unix(1585818816, 0), Value: 1.0,
 					Annotations: types.MetricAnnotations{ServiceName: testServiceCassandra},
 				},
 				{
-					Labels:      map[string]string{types.LabelName: testMetricCassUnmod2, types.LabelItem: testItemTwo},
-					Point:       types.Point{Time: time.Unix(1585818816, 0), Value: 2.0},
+					Labels: map[string]string{types.LabelName: testMetricCassUnmod2, types.LabelItem: testItemTwo},
+					Time:   time.Unix(1585818816, 0), Value: 2.0,
 					Annotations: types.MetricAnnotations{ServiceName: testServiceCassandra},
 				},
 				{
-					Labels:      map[string]string{types.LabelName: testMetricCassScale, types.LabelItem: testItemOne},
-					Point:       types.Point{Time: time.Unix(1585818816, 0), Value: 2.0},
+					Labels: map[string]string{types.LabelName: testMetricCassScale, types.LabelItem: testItemOne},
+					Time:   time.Unix(1585818816, 0), Value: 2.0,
 					Annotations: types.MetricAnnotations{ServiceName: testServiceCassandra},
 				},
 				{
-					Labels:      map[string]string{types.LabelName: testMetricCassScale, types.LabelItem: testItemTwo},
-					Point:       types.Point{Time: time.Unix(1585818816, 0), Value: 4.0},
+					Labels: map[string]string{types.LabelName: testMetricCassScale, types.LabelItem: testItemTwo},
+					Time:   time.Unix(1585818816, 0), Value: 4.0,
 					Annotations: types.MetricAnnotations{ServiceName: testServiceCassandra},
 				},
 				{
-					Labels:      map[string]string{types.LabelName: testMetricCassScaleMore, types.LabelItem: testItemOne},
-					Point:       types.Point{Time: time.Unix(1585818816, 0), Value: 3.0},
+					Labels: map[string]string{types.LabelName: testMetricCassScaleMore, types.LabelItem: testItemOne},
+					Time:   time.Unix(1585818816, 0), Value: 3.0,
 					Annotations: types.MetricAnnotations{ServiceName: testServiceCassandra},
 				},
 				{
-					Labels:      map[string]string{types.LabelName: testMetricCassScaleMore, types.LabelItem: testItemTwo},
-					Point:       types.Point{Time: time.Unix(1585818816, 0), Value: 6.0},
+					Labels: map[string]string{types.LabelName: testMetricCassScaleMore, types.LabelItem: testItemTwo},
+					Time:   time.Unix(1585818816, 0), Value: 6.0,
 					Annotations: types.MetricAnnotations{ServiceName: testServiceCassandra},
 				},
 				{
-					Labels:      map[string]string{types.LabelName: "cassandra_sum"},
-					Point:       types.Point{Time: time.Unix(1585818816, 0), Value: 3.0},
+					Labels: map[string]string{types.LabelName: "cassandra_sum"},
+					Time:   time.Unix(1585818816, 0), Value: 3.0,
 					Annotations: types.MetricAnnotations{ServiceName: testServiceCassandra},
 				},
 
 				// timestamp 1585818826
 				{
-					Labels:      map[string]string{types.LabelName: testCassandraUnmodified, types.LabelItem: testItemOne},
-					Point:       types.Point{Time: time.Unix(1585818826, 0), Value: 1.5},
+					Labels: map[string]string{types.LabelName: testCassandraUnmodified, types.LabelItem: testItemOne},
+					Time:   time.Unix(1585818826, 0), Value: 1.5,
 					Annotations: types.MetricAnnotations{ServiceName: testServiceCassandra},
 				},
 				{
-					Labels:      map[string]string{types.LabelName: testCassandraUnmodified, types.LabelItem: testItemTwo},
-					Point:       types.Point{Time: time.Unix(1585818826, 0), Value: 2.8},
+					Labels: map[string]string{types.LabelName: testCassandraUnmodified, types.LabelItem: testItemTwo},
+					Time:   time.Unix(1585818826, 0), Value: 2.8,
 					Annotations: types.MetricAnnotations{ServiceName: testServiceCassandra},
 				},
 				{
-					Labels:      map[string]string{types.LabelName: testMetricCassUnmod2, types.LabelItem: testItemOne},
-					Point:       types.Point{Time: time.Unix(1585818826, 0), Value: 1.5},
+					Labels: map[string]string{types.LabelName: testMetricCassUnmod2, types.LabelItem: testItemOne},
+					Time:   time.Unix(1585818826, 0), Value: 1.5,
 					Annotations: types.MetricAnnotations{ServiceName: testServiceCassandra},
 				},
 				{
-					Labels:      map[string]string{types.LabelName: testMetricCassUnmod2, types.LabelItem: testItemTwo},
-					Point:       types.Point{Time: time.Unix(1585818826, 0), Value: 2.8},
+					Labels: map[string]string{types.LabelName: testMetricCassUnmod2, types.LabelItem: testItemTwo},
+					Time:   time.Unix(1585818826, 0), Value: 2.8,
 					Annotations: types.MetricAnnotations{ServiceName: testServiceCassandra},
 				},
 				{
-					Labels:      map[string]string{types.LabelName: testMetricCassScale, types.LabelItem: testItemOne},
-					Point:       types.Point{Time: time.Unix(1585818826, 0), Value: 3.0},
+					Labels: map[string]string{types.LabelName: testMetricCassScale, types.LabelItem: testItemOne},
+					Time:   time.Unix(1585818826, 0), Value: 3.0,
 					Annotations: types.MetricAnnotations{ServiceName: testServiceCassandra},
 				},
 				{
-					Labels:      map[string]string{types.LabelName: testMetricCassScale, types.LabelItem: testItemTwo},
-					Point:       types.Point{Time: time.Unix(1585818826, 0), Value: 5.6},
+					Labels: map[string]string{types.LabelName: testMetricCassScale, types.LabelItem: testItemTwo},
+					Time:   time.Unix(1585818826, 0), Value: 5.6,
 					Annotations: types.MetricAnnotations{ServiceName: testServiceCassandra},
 				},
 				{
-					Labels:      map[string]string{types.LabelName: testMetricCassScaleMore, types.LabelItem: testItemOne},
-					Point:       types.Point{Time: time.Unix(1585818826, 0), Value: 4.5},
+					Labels: map[string]string{types.LabelName: testMetricCassScaleMore, types.LabelItem: testItemOne},
+					Time:   time.Unix(1585818826, 0), Value: 4.5,
 					Annotations: types.MetricAnnotations{ServiceName: testServiceCassandra},
 				},
 				{
-					Labels:      map[string]string{types.LabelName: testMetricCassScaleMore, types.LabelItem: testItemTwo},
-					Point:       types.Point{Time: time.Unix(1585818826, 0), Value: 8.4},
+					Labels: map[string]string{types.LabelName: testMetricCassScaleMore, types.LabelItem: testItemTwo},
+					Time:   time.Unix(1585818826, 0), Value: 8.4,
 					Annotations: types.MetricAnnotations{ServiceName: testServiceCassandra},
 				},
 				{
-					Labels:      map[string]string{types.LabelName: "cassandra_sum"},
-					Point:       types.Point{Time: time.Unix(1585818826, 0), Value: 4.3},
+					Labels: map[string]string{types.LabelName: "cassandra_sum"},
+					Time:   time.Unix(1585818826, 0), Value: 4.3,
 					Annotations: types.MetricAnnotations{ServiceName: testServiceCassandra},
 				},
 
 				// derivated (timestamp 1585818826)
 				{
-					Labels:      map[string]string{types.LabelName: "cassandra_derive", types.LabelItem: testItemOne},
-					Point:       types.Point{Time: time.Unix(1585818826, 0), Value: 0.05},
+					Labels: map[string]string{types.LabelName: "cassandra_derive", types.LabelItem: testItemOne},
+					Time:   time.Unix(1585818826, 0), Value: 0.05,
 					Annotations: types.MetricAnnotations{ServiceName: testServiceCassandra},
 				},
 				{
-					Labels:      map[string]string{types.LabelName: "cassandra_derive", types.LabelItem: testItemTwo},
-					Point:       types.Point{Time: time.Unix(1585818826, 0), Value: 0.08},
+					Labels: map[string]string{types.LabelName: "cassandra_derive", types.LabelItem: testItemTwo},
+					Time:   time.Unix(1585818826, 0), Value: 0.08,
 					Annotations: types.MetricAnnotations{ServiceName: testServiceCassandra},
 				},
 				{
-					Labels:      map[string]string{types.LabelName: "cassandra_derive-sum-scale"},
-					Point:       types.Point{Time: time.Unix(1585818826, 0), Value: 0.65},
+					Labels: map[string]string{types.LabelName: "cassandra_derive-sum-scale"},
+					Time:   time.Unix(1585818826, 0), Value: 0.65,
 					Annotations: types.MetricAnnotations{ServiceName: testServiceCassandra},
 				},
 			},
@@ -719,28 +719,28 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 			want: []types.MetricPoint{
 				{
 					Labels: map[string]string{types.LabelName: "cassandra_jvm_gc_time"},
-					Point:  types.Point{Time: time.Unix(1585828010, 0), Value: 1.5},
+					Time:   time.Unix(1585828010, 0), Value: 1.5,
 					Annotations: types.MetricAnnotations{
 						ServiceName: testServiceCassandra,
 					},
 				},
 				{
 					Labels: map[string]string{types.LabelName: "cassandra_jvm_gc_utilization"},
-					Point:  types.Point{Time: time.Unix(1585828010, 0), Value: 0.15},
+					Time:   time.Unix(1585828010, 0), Value: 0.15,
 					Annotations: types.MetricAnnotations{
 						ServiceName: testServiceCassandra,
 					},
 				},
 				{
 					Labels: map[string]string{types.LabelName: "cassandra_jvm_gc_time"},
-					Point:  types.Point{Time: time.Unix(1585828020, 0), Value: 0},
+					Time:   time.Unix(1585828020, 0), Value: 0,
 					Annotations: types.MetricAnnotations{
 						ServiceName: testServiceCassandra,
 					},
 				},
 				{
 					Labels: map[string]string{types.LabelName: "cassandra_jvm_gc_utilization"},
-					Point:  types.Point{Time: time.Unix(1585828020, 0), Value: 0},
+					Time:   time.Unix(1585828020, 0), Value: 0,
 					Annotations: types.MetricAnnotations{
 						ServiceName: testServiceCassandra,
 					},

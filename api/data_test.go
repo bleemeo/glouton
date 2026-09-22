@@ -106,7 +106,7 @@ func TestThresholdsHandler(t *testing.T) {
 	reg.ApplyThresholds([]types.MetricPoint{
 		{
 			Labels: map[string]string{types.LabelName: testCPUUsed},
-			Point:  types.Point{Value: 95},
+			Value:  95,
 		},
 	})
 

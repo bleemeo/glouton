@@ -48,15 +48,15 @@ func TestRoundTrip(t *testing.T) {
 
 	points := []types.MetricPoint{
 		{
-			Point:  types.Point{Time: now.Add(-2 * time.Minute), Value: 1.5},
+			Time: now.Add(-2 * time.Minute), Value: 1.5,
 			Labels: map[string]string{labelName: testCPUUsed, testInstance: testHost1},
 		},
 		{
-			Point:  types.Point{Time: now.Add(-1 * time.Minute), Value: 2.5},
+			Time: now.Add(-1 * time.Minute), Value: 2.5,
 			Labels: map[string]string{labelName: testCPUUsed, testInstance: testHost1},
 		},
 		{
-			Point:  types.Point{Time: now, Value: 3.5},
+			Time: now, Value: 3.5,
 			Labels: map[string]string{labelName: testCPUUsed, testInstance: testHost1},
 		},
 	}
@@ -115,7 +115,7 @@ func TestPersistsAcrossReopen(t *testing.T) {
 
 	store.PushPoints(context.Background(), []types.MetricPoint{
 		{
-			Point:  types.Point{Time: now, Value: 42},
+			Time: now, Value: 42,
 			Labels: map[string]string{labelName: "x"},
 		},
 	})
@@ -190,7 +190,7 @@ func TestPushPointsSkipsNaN(t *testing.T) {
 
 	store.PushPoints(context.Background(), []types.MetricPoint{
 		{
-			Point:  types.Point{Time: now, Value: nanFloat()},
+			Time: now, Value: nanFloat(),
 			Labels: map[string]string{labelName: "y"},
 		},
 	})
@@ -231,7 +231,7 @@ func TestCloseDuringUse(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 	points := []types.MetricPoint{
 		{
-			Point:  types.Point{Time: now, Value: 1},
+			Time: now, Value: 1,
 			Labels: map[string]string{labelName: testCPUUsed, testInstance: testHost1},
 		},
 	}

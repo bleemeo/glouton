@@ -65,9 +65,7 @@ func Test_applyJitterToMonitorCreationDate_fixedProbe(t *testing.T) {
 
 				createDate := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).Add(time.Duration(rand.Int63n(int64(365 * 24 * time.Hour)))) //nolint:gosec
 				monitor := bleemeoTypes.Monitor{
-					Service: bleemeoTypes.Service{
-						CreationDate: createDate.Format(time.RFC3339),
-					},
+					CreationDate: createDate.Format(time.RFC3339),
 				}
 
 				for _, id := range tt.probeIDs {
@@ -107,14 +105,10 @@ func Test_applyJitterToMonitorCreationDate_fixedProbe(t *testing.T) {
 func Test_applyJitterToMonitorCreationDate_different(t *testing.T) {
 	// For one probe, not all monitor run at the same time
 	monitor1 := bleemeoTypes.Monitor{
-		Service: bleemeoTypes.Service{
-			CreationDate: time.Date(2020, 1, 1, 12, 54, 7, 4, time.UTC).Format(time.RFC3339),
-		},
+		CreationDate: time.Date(2020, 1, 1, 12, 54, 7, 4, time.UTC).Format(time.RFC3339),
 	}
 	monitor2 := bleemeoTypes.Monitor{
-		Service: bleemeoTypes.Service{
-			CreationDate: time.Date(2020, 1, 1, 12, 54, 30, 0, time.UTC).Format(time.RFC3339),
-		},
+		CreationDate: time.Date(2020, 1, 1, 12, 54, 30, 0, time.UTC).Format(time.RFC3339),
 	}
 	agentID := "0943c46b-c4e3-4234-b99d-a6548296056e"
 
@@ -143,9 +137,7 @@ func Test_applyJitterToMonitorCreationDate(t *testing.T) {
 	for range 10 {
 		createDate := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).Add(time.Duration(rand.Int63n(int64(365 * 24 * time.Hour)))) //nolint:gosec
 		monitor := bleemeoTypes.Monitor{
-			Service: bleemeoTypes.Service{
-				CreationDate: createDate.Format(time.RFC3339),
-			},
+			CreationDate: createDate.Format(time.RFC3339),
 		}
 
 		const runCount = 5000
@@ -231,9 +223,7 @@ func Test_applyJitterToMonitorCreationDate(t *testing.T) {
 func Test_applyJitterToMonitorCreationDateFixedValue(t *testing.T) {
 	createDate := time.Date(2024, 4, 30, 16, 32, 47, 123456, time.UTC)
 	monitor := bleemeoTypes.Monitor{
-		Service: bleemeoTypes.Service{
-			CreationDate: createDate.Format(time.RFC3339),
-		},
+		CreationDate: createDate.Format(time.RFC3339),
 	}
 
 	got, err := applyJitterToMonitorCreationDate(monitor, 42)

@@ -160,10 +160,8 @@ func Test_GatherWithState(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName: metricSystemPowerConsumptionName,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 65,
-					},
+					Time:  now,
+					Value: 65,
 				},
 			},
 		},
@@ -178,10 +176,8 @@ func Test_GatherWithState(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName: metricSystemPowerConsumptionName,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 56,
-					},
+					Time:  now,
+					Value: 56,
 				},
 			},
 		},
@@ -210,10 +206,8 @@ func Test_GatherWithState(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName: metricSystemPowerConsumptionName,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 391,
-					},
+					Time:  now,
+					Value: 391,
 				},
 			},
 		},
@@ -226,10 +220,8 @@ func Test_GatherWithState(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName: metricSystemPowerConsumptionName,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 170,
-					},
+					Time:  now,
+					Value: 170,
 				},
 			},
 		},
@@ -243,10 +235,8 @@ func Test_GatherWithState(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName: metricSystemPowerConsumptionName,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 170,
-					},
+					Time:  now,
+					Value: 170,
 				},
 			},
 		},
@@ -276,10 +266,8 @@ func Test_GatherWithState(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName: metricSystemPowerConsumptionName,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 98,
-					},
+					Time:  now,
+					Value: 98,
 				},
 			},
 		},
@@ -309,10 +297,8 @@ func Test_GatherWithState(t *testing.T) { //nolint:maintidx
 					Labels: map[string]string{
 						types.LabelName: metricSystemPowerConsumptionName,
 					},
-					Point: types.Point{
-						Time:  now,
-						Value: 62,
-					},
+					Time:  now,
+					Value: 62,
 				},
 			},
 		},
@@ -568,9 +554,7 @@ func Test_readingToPoints(t *testing.T) {
 					Labels: map[string]string{
 						types.LabelName: metricSystemPowerConsumptionName,
 					},
-					Point: types.Point{
-						Value: 123,
-					},
+					Value: 123,
 				},
 			},
 		},
@@ -599,9 +583,7 @@ func Test_readingToPoints(t *testing.T) {
 					Labels: map[string]string{
 						types.LabelName: metricSystemPowerConsumptionName,
 					},
-					Point: types.Point{
-						Value: 123,
-					},
+					Value: 123,
 				},
 			},
 		},
@@ -630,9 +612,7 @@ func Test_readingToPoints(t *testing.T) {
 					Labels: map[string]string{
 						types.LabelName: metricSystemPowerConsumptionName,
 					},
-					Point: types.Point{
-						Value: 456,
-					},
+					Value: 456,
 				},
 			},
 		},
@@ -661,9 +641,7 @@ func Test_readingToPoints(t *testing.T) {
 					Labels: map[string]string{
 						types.LabelName: metricSystemPowerConsumptionName,
 					},
-					Point: types.Point{
-						Value: 456,
-					},
+					Value: 456,
 				},
 			},
 		},
@@ -692,9 +670,7 @@ func Test_readingToPoints(t *testing.T) {
 					Labels: map[string]string{
 						types.LabelName: metricSystemPowerConsumptionName,
 					},
-					Point: types.Point{
-						Value: 567,
-					},
+					Value: 567,
 				},
 			},
 		},
@@ -715,9 +691,7 @@ func Test_readingToPoints(t *testing.T) {
 					Labels: map[string]string{
 						types.LabelName: metricSystemPowerConsumptionName,
 					},
-					Point: types.Point{
-						Value: 123,
-					},
+					Value: 123,
 				},
 			},
 		},
@@ -738,9 +712,7 @@ func Test_readingToPoints(t *testing.T) {
 					Labels: map[string]string{
 						types.LabelName: metricSystemPowerConsumptionName,
 					},
-					Point: types.Point{
-						Value: 123,
-					},
+					Value: 123,
 				},
 			},
 		},

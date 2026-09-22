@@ -1715,7 +1715,7 @@ func rateFromMetricValue(gloutonIDToName map[string]string, pastValues []metricV
 			}
 
 			points = append(points, types.MetricPoint{
-				Point: types.Point{Time: newV.Time, Value: floatValue},
+				Time: newV.Time, Value: floatValue,
 				Labels: map[string]string{
 					types.LabelName:            k,
 					types.LabelItem:            name,
@@ -1741,7 +1741,7 @@ func rateFromMetricValue(gloutonIDToName map[string]string, pastValues []metricV
 					}
 
 					points = append(points, types.MetricPoint{
-						Point: types.Point{Time: newV.Time, Value: floatValue},
+						Time: newV.Time, Value: floatValue,
 						Labels: map[string]string{
 							types.LabelName:            "container_mem_used_perc",
 							types.LabelItem:            name,
@@ -1767,7 +1767,7 @@ func rateFromMetricValue(gloutonIDToName map[string]string, pastValues []metricV
 			ratio := float64(newThrottled-pastThrottled) / float64(newPeriods-pastPeriods) * 100
 
 			points = append(points, types.MetricPoint{
-				Point: types.Point{Time: newV.Time, Value: ratio},
+				Time: newV.Time, Value: ratio,
 				Labels: map[string]string{
 					types.LabelName:            metricCPUThrottledPerc,
 					types.LabelItem:            name,

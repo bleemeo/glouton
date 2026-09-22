@@ -22,7 +22,6 @@ import (
 
 	"github.com/bleemeo/glouton/agent/state"
 	"github.com/bleemeo/glouton/bleemeo/types"
-	"github.com/bleemeo/glouton/threshold"
 
 	"github.com/google/go-cmp/cmp"
 )
@@ -143,34 +142,26 @@ func checkMetrics(t *testing.T, cache *Cache) {
 
 	wantMetrics := []types.Metric{
 		{
-			ID:         "8e930d86-8c51-4b3a-8601-cf6a2b1b4997",
-			AgentID:    "d5732833-fc1b-43c7-b253-565b56701651", // AgentID on metric was added in v5.
-			LabelsText: "__name__=\"agent_status\"",
-			Threshold: types.Threshold{
-				LowWarning:   nil,
-				LowCritical:  nil,
-				HighWarning:  nil,
-				HighCritical: floatToPointer(80),
-			},
-			Unit: threshold.Unit{
-				UnitType: 0,
-				UnitText: "No unit",
-			},
+			ID:           "8e930d86-8c51-4b3a-8601-cf6a2b1b4997",
+			AgentID:      "d5732833-fc1b-43c7-b253-565b56701651", // AgentID on metric was added in v5.
+			LabelsText:   "__name__=\"agent_status\"",
+			LowWarning:   nil,
+			LowCritical:  nil,
+			HighWarning:  nil,
+			HighCritical: floatToPointer(80),
+			UnitType:     0,
+			UnitText:     "No unit",
 		},
 		{
-			ID:         "1c412097-e83b-4afa-99a1-7503bc712b70",
-			AgentID:    "d5732833-fc1b-43c7-b253-565b56701651",
-			LabelsText: "__name__=\"agent_sent_message\",item=\"my_item\"", // _item was renamed to item in v4.
-			Threshold: types.Threshold{
-				LowWarning:   nil,
-				LowCritical:  floatToPointer(20),
-				HighWarning:  nil,
-				HighCritical: nil,
-			},
-			Unit: threshold.Unit{
-				UnitType: 0,
-				UnitText: "No unit",
-			},
+			ID:           "1c412097-e83b-4afa-99a1-7503bc712b70",
+			AgentID:      "d5732833-fc1b-43c7-b253-565b56701651",
+			LabelsText:   "__name__=\"agent_sent_message\",item=\"my_item\"", // _item was renamed to item in v4.
+			LowWarning:   nil,
+			LowCritical:  floatToPointer(20),
+			HighWarning:  nil,
+			HighCritical: nil,
+			UnitType:     0,
+			UnitText:     "No unit",
 		},
 	}
 

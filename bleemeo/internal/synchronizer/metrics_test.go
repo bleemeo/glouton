@@ -542,12 +542,10 @@ func TestMetricSimpleSync(t *testing.T) {
 	metrics := helper.MetricsFromAPI()
 	want := []bleemeoapi.MetricPayload{
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:         "1",
-				AgentID:    helper.s.agentID,
-				LabelsText: "",
-			},
-			Name: agentStatusName,
+			ID:         "1",
+			AgentID:    helper.s.agentID,
+			LabelsText: "",
+			Name:       agentStatusName,
 		},
 	}
 
@@ -573,20 +571,16 @@ func TestMetricSimpleSync(t *testing.T) {
 	metrics = helper.MetricsFromAPI()
 	want = []bleemeoapi.MetricPayload{
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:         "1",
-				AgentID:    idAgentMain,
-				LabelsText: "",
-			},
-			Name: agentStatusName,
+			ID:         "1",
+			AgentID:    idAgentMain,
+			LabelsText: "",
+			Name:       agentStatusName,
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:         "2",
-				AgentID:    idAgentMain,
-				LabelsText: "",
-			},
-			Name: metricCPUSystem,
+			ID:         "2",
+			AgentID:    idAgentMain,
+			LabelsText: "",
+			Name:       metricCPUSystem,
 		},
 	}
 
@@ -1473,25 +1467,21 @@ func TestWithSNMP(t *testing.T) {
 	agents := helper.AgentsFromAPI()
 	wantAgents := []bleemeoapi.AgentPayload{
 		{
-			Agent: bleemeoTypes.Agent{
-				ID:          idAgentMain,
-				AccountID:   accountID,
-				AgentType:   agentTypeAgent.ID,
-				FQDN:        testAgentFQDN,
-				DisplayName: testAgentFQDN,
-			},
+			ID:              idAgentMain,
+			AccountID:       accountID,
+			AgentType:       agentTypeAgent.ID,
+			FQDN:            testAgentFQDN,
+			DisplayName:     testAgentFQDN,
 			Abstracted:      false,
 			InitialPassword: "password already set",
 		},
 		{
-			Agent: bleemeoTypes.Agent{
-				ID:          idAgentSNMP,
-				CreatedAt:   helper.Now(),
-				AccountID:   accountID,
-				AgentType:   agentTypeSNMP.ID,
-				FQDN:        snmpAddress,
-				DisplayName: "Z-The-Initial-Name",
-			},
+			ID:              idAgentSNMP,
+			CreatedAt:       helper.Now(),
+			AccountID:       accountID,
+			AgentType:       agentTypeSNMP.ID,
+			FQDN:            snmpAddress,
+			DisplayName:     "Z-The-Initial-Name",
 			Abstracted:      true,
 			InitialPassword: "password already set",
 		},
@@ -1505,28 +1495,22 @@ func TestWithSNMP(t *testing.T) {
 	metrics := helper.MetricsFromAPI()
 	want := []bleemeoapi.MetricPayload{
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:         "1",
-				AgentID:    idAgentMain,
-				LabelsText: "",
-			},
-			Name: agentStatusName,
+			ID:         "1",
+			AgentID:    idAgentMain,
+			LabelsText: "",
+			Name:       agentStatusName,
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:         "2",
-				AgentID:    idAgentMain,
-				LabelsText: "",
-			},
-			Name: metricCPUSystem,
+			ID:         "2",
+			AgentID:    idAgentMain,
+			LabelsText: "",
+			Name:       metricCPUSystem,
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:         "3",
-				AgentID:    idAgentSNMP,
-				LabelsText: `__name__="ifOutOctets",snmp_target="127.0.0.1"`,
-			},
-			Name: "ifOutOctets",
+			ID:         "3",
+			AgentID:    idAgentSNMP,
+			LabelsText: `__name__="ifOutOctets",snmp_target="127.0.0.1"`,
+			Name:       "ifOutOctets",
 		},
 	}
 
@@ -1554,36 +1538,30 @@ func TestMonitorDeactivation(t *testing.T) {
 
 	initialMetrics := []bleemeoapi.MetricPayload{
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:      "90c6459c-851d-4bb4-957c-afbc695c2201",
-				AgentID: newMonitor.AgentID,
-				LabelsText: fmt.Sprintf(
-					"__name__=\"probe_success\",instance=\"http://localhost:8000/\",instance_uuid=\"%s\",scraper=\"paris\"",
-					newMonitor.AgentID,
-				),
-			},
+			ID:      "90c6459c-851d-4bb4-957c-afbc695c2201",
+			AgentID: newMonitor.AgentID,
+			LabelsText: fmt.Sprintf(
+				"__name__=\"probe_success\",instance=\"http://localhost:8000/\",instance_uuid=\"%s\",scraper=\"paris\"",
+				newMonitor.AgentID,
+			),
 			Name: "probe_success",
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:      "9149d491-3a6e-4f46-abf9-c1ea9b9f7227",
-				AgentID: newMonitor.AgentID,
-				LabelsText: fmt.Sprintf(
-					"__name__=\"probe_success\",instance=\"http://localhost:8000/\",instance_uuid=\"%s\",scraper=\"milan\"",
-					newMonitor.AgentID,
-				),
-			},
+			ID:      "9149d491-3a6e-4f46-abf9-c1ea9b9f7227",
+			AgentID: newMonitor.AgentID,
+			LabelsText: fmt.Sprintf(
+				"__name__=\"probe_success\",instance=\"http://localhost:8000/\",instance_uuid=\"%s\",scraper=\"milan\"",
+				newMonitor.AgentID,
+			),
 			Name: "probe_success",
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:      "92c0b336-6e5a-4960-94cc-b606db8a581f",
-				AgentID: newMonitor.AgentID,
-				LabelsText: fmt.Sprintf(
-					"__name__=\"probe_status\",instance=\"http://localhost:8000/\",instance_uuid=\"%s\"",
-					newMonitor.AgentID,
-				),
-			},
+			ID:      "92c0b336-6e5a-4960-94cc-b606db8a581f",
+			AgentID: newMonitor.AgentID,
+			LabelsText: fmt.Sprintf(
+				"__name__=\"probe_status\",instance=\"http://localhost:8000/\",instance_uuid=\"%s\"",
+				newMonitor.AgentID,
+			),
 			Name: "probe_status",
 		},
 	}
@@ -1616,24 +1594,20 @@ func TestMonitorDeactivation(t *testing.T) {
 	want := make([]bleemeoapi.MetricPayload, 0, 2+len(initialMetrics))
 	want = append(want,
 		bleemeoapi.MetricPayload{
-			Metric: bleemeoTypes.Metric{
-				ID:         "1",
-				AgentID:    idAgentMain,
-				LabelsText: "",
-			},
-			Name: agentStatusName,
+			ID:         "1",
+			AgentID:    idAgentMain,
+			LabelsText: "",
+			Name:       agentStatusName,
 		},
 		bleemeoapi.MetricPayload{
-			Metric: bleemeoTypes.Metric{
-				ID:      "2",
-				AgentID: newMonitor.AgentID,
-				LabelsText: fmt.Sprintf(
-					"__name__=\"probe_duration\",instance=\"http://localhost:8000/\",instance_uuid=\"%s\",scraper=\"paris\"",
-					newMonitor.AgentID,
-				),
-				ServiceID: newMonitor.ID,
-			},
-			Name: "probe_duration",
+			ID:      "2",
+			AgentID: newMonitor.AgentID,
+			LabelsText: fmt.Sprintf(
+				"__name__=\"probe_duration\",instance=\"http://localhost:8000/\",instance_uuid=\"%s\",scraper=\"paris\"",
+				newMonitor.AgentID,
+			),
+			ServiceID: newMonitor.ID,
+			Name:      "probe_duration",
 		},
 	)
 
@@ -1667,37 +1641,31 @@ func TestMonitorDeactivation(t *testing.T) {
 
 	want = []bleemeoapi.MetricPayload{
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:         "1",
-				AgentID:    idAgentMain,
-				LabelsText: "",
-			},
-			Name: agentStatusName,
+			ID:         "1",
+			AgentID:    idAgentMain,
+			LabelsText: "",
+			Name:       agentStatusName,
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:      "2",
-				AgentID: newMonitor.AgentID,
-				LabelsText: fmt.Sprintf(
-					"__name__=\"probe_duration\",instance=\"http://localhost:8000/\",instance_uuid=\"%s\",scraper=\"paris\"",
-					newMonitor.AgentID,
-				),
-				DeactivatedAt: helper.s.now(),
-				ServiceID:     newMonitor.ID,
-			},
-			Name: "probe_duration",
+			ID:      "2",
+			AgentID: newMonitor.AgentID,
+			LabelsText: fmt.Sprintf(
+				"__name__=\"probe_duration\",instance=\"http://localhost:8000/\",instance_uuid=\"%s\",scraper=\"paris\"",
+				newMonitor.AgentID,
+			),
+			DeactivatedAt: helper.s.now(),
+			ServiceID:     newMonitor.ID,
+			Name:          "probe_duration",
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:      "90c6459c-851d-4bb4-957c-afbc695c2201",
-				AgentID: newMonitor.AgentID,
-				LabelsText: fmt.Sprintf(
-					"__name__=\"probe_success\",instance=\"http://localhost:8000/\",instance_uuid=\"%s\",scraper=\"paris\"",
-					newMonitor.AgentID,
-				),
-				DeactivatedAt: helper.s.now(),
-			},
-			Name: "probe_success",
+			ID:      "90c6459c-851d-4bb4-957c-afbc695c2201",
+			AgentID: newMonitor.AgentID,
+			LabelsText: fmt.Sprintf(
+				"__name__=\"probe_success\",instance=\"http://localhost:8000/\",instance_uuid=\"%s\",scraper=\"paris\"",
+				newMonitor.AgentID,
+			),
+			DeactivatedAt: helper.s.now(),
+			Name:          "probe_success",
 		},
 		initialMetrics[1],
 		initialMetrics[2],
@@ -1775,31 +1743,25 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 
 			want1 := []bleemeoapi.MetricPayload{
 				{
-					Metric: bleemeoTypes.Metric{
-						ID:         "1",
-						AgentID:    testAgent.ID,
-						LabelsText: "",
-					},
-					Name: agentStatusName,
+					ID:         "1",
+					AgentID:    testAgent.ID,
+					LabelsText: "",
+					Name:       agentStatusName,
 				},
 				{
-					Metric: bleemeoTypes.Metric{
-						ID:         "2",
-						AgentID:    testAgent.ID,
-						LabelsText: "",
-						ServiceID:  srvApacheID,
-					},
-					Name: "apache_status",
+					ID:         "2",
+					AgentID:    testAgent.ID,
+					LabelsText: "",
+					ServiceID:  srvApacheID,
+					Name:       "apache_status",
 				},
 				{
-					Metric: bleemeoTypes.Metric{
-						ID:         "3",
-						AgentID:    testAgent.ID,
-						LabelsText: "",
-						ServiceID:  srvNginxID,
-					},
-					Name: "nginx_status",
-					Item: "container1",
+					ID:         "3",
+					AgentID:    testAgent.ID,
+					LabelsText: "",
+					ServiceID:  srvNginxID,
+					Name:       "nginx_status",
+					Item:       "container1",
 				},
 			}
 
@@ -1872,30 +1834,24 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 
 			want2 := []bleemeoapi.MetricPayload{
 				{
-					Metric: bleemeoTypes.Metric{
-						ID:         "1",
-						AgentID:    testAgent.ID,
-						LabelsText: "",
-					},
-					Name: agentStatusName,
+					ID:         "1",
+					AgentID:    testAgent.ID,
+					LabelsText: "",
+					Name:       agentStatusName,
 				},
 				{
-					Metric: bleemeoTypes.Metric{
-						ID:         "2",
-						AgentID:    testAgent.ID,
-						LabelsText: "",
-						ServiceID:  srvApacheID,
-					},
-					Name: "apache_status",
+					ID:         "2",
+					AgentID:    testAgent.ID,
+					LabelsText: "",
+					ServiceID:  srvApacheID,
+					Name:       "apache_status",
 				},
 				{
-					Metric: bleemeoTypes.Metric{
-						ID:         "3",
-						AgentID:    testAgent.ID,
-						LabelsText: `__name__="service_status",service="nginx",service_instance="container1"`,
-						ServiceID:  srvNginxID,
-					},
-					Name: "service_status",
+					ID:         "3",
+					AgentID:    testAgent.ID,
+					LabelsText: `__name__="service_status",service="nginx",service_instance="container1"`,
+					ServiceID:  srvNginxID,
+					Name:       "service_status",
 				},
 			}
 
@@ -1924,30 +1880,24 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 
 			want3 := []bleemeoapi.MetricPayload{
 				{
-					Metric: bleemeoTypes.Metric{
-						ID:         "1",
-						AgentID:    testAgent.ID,
-						LabelsText: "",
-					},
-					Name: agentStatusName,
+					ID:         "1",
+					AgentID:    testAgent.ID,
+					LabelsText: "",
+					Name:       agentStatusName,
 				},
 				{
-					Metric: bleemeoTypes.Metric{
-						ID:         "2",
-						AgentID:    testAgent.ID,
-						LabelsText: `__name__="service_status",service="apache"`,
-						ServiceID:  srvApacheID,
-					},
-					Name: "service_status",
+					ID:         "2",
+					AgentID:    testAgent.ID,
+					LabelsText: `__name__="service_status",service="apache"`,
+					ServiceID:  srvApacheID,
+					Name:       "service_status",
 				},
 				{
-					Metric: bleemeoTypes.Metric{
-						ID:         "3",
-						AgentID:    testAgent.ID,
-						LabelsText: `__name__="service_status",service="nginx",service_instance="container1"`,
-						ServiceID:  srvNginxID,
-					},
-					Name: "service_status",
+					ID:         "3",
+					AgentID:    testAgent.ID,
+					LabelsText: `__name__="service_status",service="nginx",service_instance="container1"`,
+					ServiceID:  srvNginxID,
+					Name:       "service_status",
 				},
 			}
 
@@ -1985,18 +1935,16 @@ func TestMonitorPrivate(t *testing.T) {
 	initialMetrics := []bleemeoapi.MetricPayload{
 		// Metric from other probe are NOT present in API, because glouton private probe aren't allow to view them.
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:      "9149d491-3a6e-4f46-abf9-c1ea9b9f7227",
-				AgentID: newMonitor.AgentID,
-				LabelsText: fmt.Sprintf(
-					"__name__=\"probe_success\",instance=\"%s\",instance_uuid=\"%s\",scraper_uuid=\"%s\"",
-					newMonitor.URL,
-					newMonitor.AgentID,
-					idAgentMain,
-				),
-				ServiceID: newMonitor.ID,
-			},
-			Name: "probe_success",
+			ID:      "9149d491-3a6e-4f46-abf9-c1ea9b9f7227",
+			AgentID: newMonitor.AgentID,
+			LabelsText: fmt.Sprintf(
+				"__name__=\"probe_success\",instance=\"%s\",instance_uuid=\"%s\",scraper_uuid=\"%s\"",
+				newMonitor.URL,
+				newMonitor.AgentID,
+				idAgentMain,
+			),
+			ServiceID: newMonitor.ID,
+			Name:      "probe_success",
 		},
 	}
 
@@ -2026,40 +1974,34 @@ func TestMonitorPrivate(t *testing.T) {
 
 	want := []bleemeoapi.MetricPayload{
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:         idAny,
-				AgentID:    idAgentMain,
-				LabelsText: "",
-			},
-			Name: agentStatusName,
+			ID:         idAny,
+			AgentID:    idAgentMain,
+			LabelsText: "",
+			Name:       agentStatusName,
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:      idAny,
-				AgentID: newMonitor.AgentID,
-				LabelsText: fmt.Sprintf(
-					"__name__=\"probe_success\",instance=\"%s\",instance_uuid=\"%s\",scraper_uuid=\"%s\"",
-					newMonitor.URL,
-					newMonitor.AgentID,
-					idAgentMain,
-				),
-				ServiceID: newMonitor.ID,
-			},
-			Name: "probe_success",
+			ID:      idAny,
+			AgentID: newMonitor.AgentID,
+			LabelsText: fmt.Sprintf(
+				"__name__=\"probe_success\",instance=\"%s\",instance_uuid=\"%s\",scraper_uuid=\"%s\"",
+				newMonitor.URL,
+				newMonitor.AgentID,
+				idAgentMain,
+			),
+			ServiceID: newMonitor.ID,
+			Name:      "probe_success",
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:      idAny,
-				AgentID: newMonitor.AgentID,
-				LabelsText: fmt.Sprintf(
-					"__name__=\"probe_duration\",instance=\"%s\",instance_uuid=\"%s\",scraper_uuid=\"%s\"",
-					newMonitor.URL,
-					newMonitor.AgentID,
-					idAgentMain,
-				),
-				ServiceID: newMonitor.ID,
-			},
-			Name: "probe_duration",
+			ID:      idAny,
+			AgentID: newMonitor.AgentID,
+			LabelsText: fmt.Sprintf(
+				"__name__=\"probe_duration\",instance=\"%s\",instance_uuid=\"%s\",scraper_uuid=\"%s\"",
+				newMonitor.URL,
+				newMonitor.AgentID,
+				idAgentMain,
+			),
+			ServiceID: newMonitor.ID,
+			Name:      "probe_duration",
 		},
 	}
 
@@ -2084,42 +2026,36 @@ func TestMonitorPrivate(t *testing.T) {
 
 	want = []bleemeoapi.MetricPayload{
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:         idAny,
-				AgentID:    idAgentMain,
-				LabelsText: "",
-			},
-			Name: agentStatusName,
+			ID:         idAny,
+			AgentID:    idAgentMain,
+			LabelsText: "",
+			Name:       agentStatusName,
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:      idAny,
-				AgentID: newMonitor.AgentID,
-				LabelsText: fmt.Sprintf(
-					"__name__=\"probe_success\",instance=\"%s\",instance_uuid=\"%s\",scraper_uuid=\"%s\"",
-					newMonitor.URL,
-					newMonitor.AgentID,
-					idAgentMain,
-				),
-				DeactivatedAt: helper.Now(),
-				ServiceID:     newMonitor.ID,
-			},
-			Name: "probe_success",
+			ID:      idAny,
+			AgentID: newMonitor.AgentID,
+			LabelsText: fmt.Sprintf(
+				"__name__=\"probe_success\",instance=\"%s\",instance_uuid=\"%s\",scraper_uuid=\"%s\"",
+				newMonitor.URL,
+				newMonitor.AgentID,
+				idAgentMain,
+			),
+			DeactivatedAt: helper.Now(),
+			ServiceID:     newMonitor.ID,
+			Name:          "probe_success",
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:      idAny,
-				AgentID: newMonitor.AgentID,
-				LabelsText: fmt.Sprintf(
-					"__name__=\"probe_duration\",instance=\"%s\",instance_uuid=\"%s\",scraper_uuid=\"%s\"",
-					newMonitor.URL,
-					newMonitor.AgentID,
-					idAgentMain,
-				),
-				DeactivatedAt: helper.Now(),
-				ServiceID:     newMonitor.ID,
-			},
-			Name: "probe_duration",
+			ID:      idAny,
+			AgentID: newMonitor.AgentID,
+			LabelsText: fmt.Sprintf(
+				"__name__=\"probe_duration\",instance=\"%s\",instance_uuid=\"%s\",scraper_uuid=\"%s\"",
+				newMonitor.URL,
+				newMonitor.AgentID,
+				idAgentMain,
+			),
+			DeactivatedAt: helper.Now(),
+			ServiceID:     newMonitor.ID,
+			Name:          "probe_duration",
 		},
 	}
 
@@ -2228,51 +2164,41 @@ func TestKubernetesMetrics(t *testing.T) {
 
 	want := []bleemeoapi.MetricPayload{
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:         idAny,
-				AgentID:    idAgentMain,
-				LabelsText: "",
-			},
-			Name: agentStatusName,
+			ID:         idAny,
+			AgentID:    idAgentMain,
+			LabelsText: "",
+			Name:       agentStatusName,
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:         idAny,
-				AgentID:    idAgentMain,
-				LabelsText: "",
-			},
-			Name: metricCPUUsed,
+			ID:         idAny,
+			AgentID:    idAgentMain,
+			LabelsText: "",
+			Name:       metricCPUUsed,
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:         idAny,
-				AgentID:    idAgentMain,
-				LabelsText: "",
-			},
-			Name: "kubernetes_kubelet_status",
+			ID:         idAny,
+			AgentID:    idAgentMain,
+			LabelsText: "",
+			Name:       "kubernetes_kubelet_status",
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:      idAny,
-				AgentID: testK8SAgent.ID,
-				LabelsText: fmt.Sprintf(
-					"__name__=\"kubernetes_cpu_limits\",instance=\"%s\",instance_uuid=\"%s\",namespace=\"default\",owner_kind=\"daemonset\",owner_name=\"glouton\"",
-					testK8SClusterName,
-					testK8SAgent.ID,
-				),
-			},
+			ID:      idAny,
+			AgentID: testK8SAgent.ID,
+			LabelsText: fmt.Sprintf(
+				"__name__=\"kubernetes_cpu_limits\",instance=\"%s\",instance_uuid=\"%s\",namespace=\"default\",owner_kind=\"daemonset\",owner_name=\"glouton\"",
+				testK8SClusterName,
+				testK8SAgent.ID,
+			),
 			Name: "kubernetes_cpu_limits",
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:      idAny,
-				AgentID: testK8SAgent.ID,
-				LabelsText: fmt.Sprintf(
-					"__name__=\"kubernetes_cpu_requests\",instance=\"%s\",instance_uuid=\"%s\",namespace=\"default\",owner_kind=\"daemonset\",owner_name=\"glouton\"",
-					testK8SClusterName,
-					testK8SAgent.ID,
-				),
-			},
+			ID:      idAny,
+			AgentID: testK8SAgent.ID,
+			LabelsText: fmt.Sprintf(
+				"__name__=\"kubernetes_cpu_requests\",instance=\"%s\",instance_uuid=\"%s\",namespace=\"default\",owner_kind=\"daemonset\",owner_name=\"glouton\"",
+				testK8SClusterName,
+				testK8SAgent.ID,
+			),
 			Name: "kubernetes_cpu_requests",
 		},
 	}
@@ -2427,32 +2353,24 @@ func Test_MergeFirstSeenAt(t *testing.T) {
 
 	metrics := []bleemeoapi.MetricPayload{
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:          "1",
-				LabelsText:  "2",
-				FirstSeenAt: now.Add(5 * time.Minute),
-			},
+			ID:          "1",
+			LabelsText:  "2",
+			FirstSeenAt: now.Add(5 * time.Minute),
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:          "2",
-				LabelsText:  "1",
-				FirstSeenAt: now.Add(4 * time.Minute),
-			},
+			ID:          "2",
+			LabelsText:  "1",
+			FirstSeenAt: now.Add(4 * time.Minute),
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:          "3",
-				LabelsText:  "4",
-				FirstSeenAt: now.Add(3 * time.Minute),
-			},
+			ID:          "3",
+			LabelsText:  "4",
+			FirstSeenAt: now.Add(3 * time.Minute),
 		},
 		{
-			Metric: bleemeoTypes.Metric{
-				ID:          "5",
-				LabelsText:  "6",
-				FirstSeenAt: now.Add(2 * time.Minute),
-			},
+			ID:          "5",
+			LabelsText:  "6",
+			FirstSeenAt: now.Add(2 * time.Minute),
 		},
 	}
 

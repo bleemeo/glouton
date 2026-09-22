@@ -200,7 +200,7 @@ func TestAllStates(t *testing.T) {
 	points := []types.MetricPoint{
 		{
 			Labels: map[string]string{types.LabelName: testCPUUsed},
-			Point:  types.Point{Time: t0, Value: 95},
+			Time:   t0, Value: 95,
 		},
 	}
 	reg.ApplyThresholds(points)

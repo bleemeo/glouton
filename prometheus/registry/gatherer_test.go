@@ -202,14 +202,14 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 			},
 			want: []types.MetricPoint{
 				{
-					Point: types.Point{Time: time.Unix(0, timestampMS*1e6), Value: floatValue1},
+					Time: time.Unix(0, timestampMS*1e6), Value: floatValue1,
 					Labels: map[string]string{
 						types.LabelName: "up",
 						strItem:         strHome,
 					},
 				},
 				{
-					Point:       types.Point{Time: time.Unix(0, timestampMS*1e6), Value: floatValue2},
+					Time: time.Unix(0, timestampMS*1e6), Value: floatValue2,
 					Annotations: types.MetricAnnotations{},
 					Labels: map[string]string{
 						types.LabelName: "up",
@@ -228,7 +228,7 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 			},
 			want: []types.MetricPoint{
 				{
-					Point: types.Point{Time: time.Unix(0, timestampMS*1e6), Value: floatValue1},
+					Time: time.Unix(0, timestampMS*1e6), Value: floatValue1,
 					Annotations: types.MetricAnnotations{
 						ServiceName: testServiceName,
 					},
@@ -239,7 +239,7 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 					},
 				},
 				{
-					Point: types.Point{Time: time.Unix(0, timestampMS*1e6), Value: floatValue2},
+					Time: time.Unix(0, timestampMS*1e6), Value: floatValue2,
 					Annotations: types.MetricAnnotations{
 						ServiceName: testServiceName,
 					},
@@ -261,7 +261,7 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 			},
 			want: []types.MetricPoint{
 				{
-					Point: types.Point{Time: time.Unix(0, timestampMS*1e6), Value: floatValue1},
+					Time: time.Unix(0, timestampMS*1e6), Value: floatValue1,
 					Annotations: types.MetricAnnotations{
 						ServiceName: testServiceName,
 					},
@@ -271,7 +271,7 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 					},
 				},
 				{
-					Point: types.Point{Time: time.Unix(0, timestampMS*1e6), Value: floatValue2},
+					Time: time.Unix(0, timestampMS*1e6), Value: floatValue2,
 					Annotations: types.MetricAnnotations{
 						ServiceName: testServiceName,
 					},

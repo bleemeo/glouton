@@ -69,7 +69,7 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 				{
 					appendPoints: []types.MetricPoint{
 						{
-							Point: types.Point{Time: t0, Value: 1.2},
+							Time: t0, Value: 1.2,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								types.LabelItem: "item",
@@ -79,7 +79,7 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 					doCommit: true,
 					wantPoints: []types.MetricPoint{
 						{
-							Point: types.Point{Time: t0, Value: 1.2},
+							Time: t0, Value: 1.2,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								types.LabelItem: "item",
@@ -95,21 +95,21 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 				{
 					appendPoints: []types.MetricPoint{
 						{
-							Point: types.Point{Time: t0, Value: 1.2},
+							Time: t0, Value: 1.2,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue1,
 							},
 						},
 						{
-							Point: types.Point{Time: t0, Value: 5},
+							Time: t0, Value: 5,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue2,
 							},
 						},
 						{
-							Point: types.Point{Time: t2, Value: 6},
+							Time: t2, Value: 6,
 							Labels: map[string]string{
 								types.LabelName: testMetricName2,
 							},
@@ -118,21 +118,21 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 					doCommit: true,
 					wantPoints: []types.MetricPoint{
 						{
-							Point: types.Point{Time: t0, Value: 1.2},
+							Time: t0, Value: 1.2,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue1,
 							},
 						},
 						{
-							Point: types.Point{Time: t0, Value: 5},
+							Time: t0, Value: 5,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue2,
 							},
 						},
 						{
-							Point: types.Point{Time: t2, Value: 6},
+							Time: t2, Value: 6,
 							Labels: map[string]string{
 								types.LabelName: testMetricName2,
 							},
@@ -147,7 +147,7 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 				{
 					appendPoints: []types.MetricPoint{
 						{
-							Point: types.Point{Time: t0, Value: 1.2},
+							Time: t0, Value: 1.2,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue1,
@@ -157,7 +157,7 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 					doCommit: true,
 					wantPoints: []types.MetricPoint{
 						{
-							Point: types.Point{Time: t0, Value: 1.2},
+							Time: t0, Value: 1.2,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue1,
@@ -168,7 +168,7 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 				{
 					appendPoints: []types.MetricPoint{
 						{
-							Point: types.Point{Time: t0, Value: 5},
+							Time: t0, Value: 5,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue2,
@@ -178,14 +178,14 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 					doCommit: true,
 					wantPoints: []types.MetricPoint{
 						{
-							Point: types.Point{Time: t0, Value: 1.2},
+							Time: t0, Value: 1.2,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue1,
 							},
 						},
 						{
-							Point: types.Point{Time: t0, Value: 5},
+							Time: t0, Value: 5,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue2,
@@ -196,7 +196,7 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 				{
 					appendPoints: []types.MetricPoint{
 						{
-							Point: types.Point{Time: t2, Value: 6},
+							Time: t2, Value: 6,
 							Labels: map[string]string{
 								types.LabelName: testMetricName2,
 							},
@@ -205,14 +205,14 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 					doRollback: true,
 					wantPoints: []types.MetricPoint{
 						{
-							Point: types.Point{Time: t0, Value: 1.2},
+							Time: t0, Value: 1.2,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue1,
 							},
 						},
 						{
-							Point: types.Point{Time: t0, Value: 5},
+							Time: t0, Value: 5,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue2,
@@ -228,21 +228,21 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 				{
 					appendPoints: []types.MetricPoint{
 						{
-							Point: types.Point{Time: t0, Value: 1.2},
+							Time: t0, Value: 1.2,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue1,
 							},
 						},
 						{
-							Point: types.Point{Time: t0, Value: 5},
+							Time: t0, Value: 5,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue2,
 							},
 						},
 						{
-							Point: types.Point{Time: t2, Value: 6},
+							Time: t2, Value: 6,
 							Labels: map[string]string{
 								types.LabelName: testMetricName2,
 							},
@@ -254,21 +254,21 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 					doCommit: true,
 					wantPoints: []types.MetricPoint{
 						{
-							Point: types.Point{Time: t0, Value: 1.2},
+							Time: t0, Value: 1.2,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue1,
 							},
 						},
 						{
-							Point: types.Point{Time: t0, Value: 5},
+							Time: t0, Value: 5,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue2,
 							},
 						},
 						{
-							Point: types.Point{Time: t2, Value: 6},
+							Time: t2, Value: 6,
 							Labels: map[string]string{
 								types.LabelName: testMetricName2,
 							},
@@ -283,21 +283,21 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 				{
 					appendPoints: []types.MetricPoint{
 						{
-							Point: types.Point{Time: t0, Value: 1.2},
+							Time: t0, Value: 1.2,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue1,
 							},
 						},
 						{
-							Point: types.Point{Time: t0, Value: 5},
+							Time: t0, Value: 5,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue2,
 							},
 						},
 						{
-							Point: types.Point{Time: t2, Value: 6},
+							Time: t2, Value: 6,
 							Labels: map[string]string{
 								types.LabelName: testMetricName2,
 							},
@@ -312,21 +312,21 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 					doCopy:   true,
 					wantPoints: []types.MetricPoint{
 						{
-							Point: types.Point{Time: t0, Value: 1.2},
+							Time: t0, Value: 1.2,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue1,
 							},
 						},
 						{
-							Point: types.Point{Time: t0, Value: 5},
+							Time: t0, Value: 5,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue2,
 							},
 						},
 						{
-							Point: types.Point{Time: t2, Value: 6},
+							Time: t2, Value: 6,
 							Labels: map[string]string{
 								types.LabelName: testMetricName2,
 							},
@@ -334,21 +334,21 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 					},
 					wantPointsInCopy: []types.MetricPoint{
 						{
-							Point: types.Point{Time: t0, Value: 1.2},
+							Time: t0, Value: 1.2,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue1,
 							},
 						},
 						{
-							Point: types.Point{Time: t0, Value: 5},
+							Time: t0, Value: 5,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue2,
 							},
 						},
 						{
-							Point: types.Point{Time: t2, Value: 6},
+							Time: t2, Value: 6,
 							Labels: map[string]string{
 								types.LabelName: testMetricName2,
 							},
@@ -363,21 +363,21 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 				{
 					appendPoints: []types.MetricPoint{
 						{
-							Point: types.Point{Time: t0, Value: 1.2},
+							Time: t0, Value: 1.2,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue1,
 							},
 						},
 						{
-							Point: types.Point{Time: t0, Value: 5},
+							Time: t0, Value: 5,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue2,
 							},
 						},
 						{
-							Point: types.Point{Time: t2, Value: 6},
+							Time: t2, Value: 6,
 							Labels: map[string]string{
 								types.LabelName: testMetricName2,
 							},
@@ -389,21 +389,21 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 					fixTime:   t1,
 					wantPoints: []types.MetricPoint{
 						{
-							Point: types.Point{Time: t1, Value: 1.2},
+							Time: t1, Value: 1.2,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue1,
 							},
 						},
 						{
-							Point: types.Point{Time: t1, Value: 5},
+							Time: t1, Value: 5,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue2,
 							},
 						},
 						{
-							Point: types.Point{Time: t1, Value: 6},
+							Time: t1, Value: 6,
 							Labels: map[string]string{
 								types.LabelName: testMetricName2,
 							},
@@ -411,21 +411,21 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 					},
 					wantPointsInCopy: []types.MetricPoint{
 						{
-							Point: types.Point{Time: t0, Value: 1.2},
+							Time: t0, Value: 1.2,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue1,
 							},
 						},
 						{
-							Point: types.Point{Time: t0, Value: 5},
+							Time: t0, Value: 5,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue2,
 							},
 						},
 						{
-							Point: types.Point{Time: t2, Value: 6},
+							Time: t2, Value: 6,
 							Labels: map[string]string{
 								types.LabelName: testMetricName2,
 							},
@@ -440,21 +440,21 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 				{
 					appendPoints: []types.MetricPoint{
 						{
-							Point: types.Point{Time: t0, Value: 1.2},
+							Time: t0, Value: 1.2,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue1,
 							},
 						},
 						{
-							Point: types.Point{Time: t0, Value: 5},
+							Time: t0, Value: 5,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue2,
 							},
 						},
 						{
-							Point: types.Point{Time: t2, Value: 6},
+							Time: t2, Value: 6,
 							Labels: map[string]string{
 								types.LabelName: testMetricName2,
 							},
@@ -465,21 +465,21 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 					wantPoints:  []types.MetricPoint{},
 					wantPointsInCopy: []types.MetricPoint{
 						{
-							Point: types.Point{Time: t0, Value: 1.2},
+							Time: t0, Value: 1.2,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue1,
 							},
 						},
 						{
-							Point: types.Point{Time: t0, Value: 5},
+							Time: t0, Value: 5,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue2,
 							},
 						},
 						{
-							Point: types.Point{Time: t2, Value: 6},
+							Time: t2, Value: 6,
 							Labels: map[string]string{
 								types.LabelName: testMetricName2,
 							},
@@ -494,21 +494,21 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 				{
 					appendPoints: []types.MetricPoint{
 						{
-							Point: types.Point{Time: t0, Value: 1.2},
+							Time: t0, Value: 1.2,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue1,
 							},
 						},
 						{
-							Point: types.Point{Time: t0, Value: 5},
+							Time: t0, Value: 5,
 							Labels: map[string]string{
 								types.LabelName: testMetricName,
 								testOtherLabel:  testValue2,
 							},
 						},
 						{
-							Point: types.Point{Time: t2, Value: 6},
+							Time: t2, Value: 6,
 							Labels: map[string]string{
 								types.LabelName: testMetricName2,
 							},

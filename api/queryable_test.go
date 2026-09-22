@@ -140,14 +140,14 @@ func TestApiQuerierLabelsAreAgentScoped(t *testing.T) {
 
 	memStore.PushPoints(context.Background(), []types.MetricPoint{
 		{
-			Point: types.Point{Time: now, Value: 42},
+			Time: now, Value: 42,
 			Labels: map[string]string{
 				types.LabelName:         "cpu_used",
 				types.LabelInstanceUUID: "agent-1",
 			},
 		},
 		{
-			Point: types.Point{Time: now, Value: 1},
+			Time: now, Value: 1,
 			Labels: map[string]string{
 				types.LabelName:         "snmp_metric",
 				types.LabelInstanceUUID: "agent-2",
