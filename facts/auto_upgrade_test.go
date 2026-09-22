@@ -390,3 +390,74 @@ func TestRunIsStuck(t *testing.T) {
 		})
 	}
 }
+
+func TestDecodeMountInfo(t *testing.T) {
+	// Captured on Ubuntu 24.04: an ext4 root, a btrfs filesystem with a subvolume
+	// mounted under it, and a mount point holding a space.
+	const mountInfo = `25 30 0:6 / /dev rw,nosuid,relatime shared:2 - devtmpfs udev rw
+30 1 253:1 / / rw,relatime shared:1 - ext4 /dev/vda1 rw
+443 32 0:53 / /mnt/btrfs rw,relatime shared:9 - btrfs /dev/loop0 rw,subvolid=5
+444 443 0:53 /sub /mnt/btrfs/sub rw,relatime shared:9 - btrfs /dev/loop0 rw,subvolid=256
+450 30 8:16 / /mnt/my\040disk rw,relatime shared:11 - ext4 /dev/sdb rw
+not a mountinfo line
+451 30 zz:1 / /mnt/bad rw - ext4 /dev/sdc rw
+`
+
+	want := []mountEntry{
+		{point: "/dev", major: 0, minor: 6},
+		{point: "/", major: 253, minor: 1},
+		{point: "/mnt/btrfs", major: 0, minor: 53},
+		{point: "/mnt/btrfs/sub", major: 0, minor: 53},
+		{point: "/mnt/my disk", major: 8, minor: 16},
+	}
+
+	if diff := cmp.Diff(want, decodeMountInfo([]byte(mountInfo)), cmp.AllowUnexported(mountEntry{})); diff != "" {
+		t.Errorf("decodeMountInfo mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestMountDeviceForPath(t *testing.T) {
+	mounts := []mountEntry{
+		{point: "/", major: 253, minor: 1},
+		{point: "/mnt/btrfs", major: 0, minor: 53},
+		{point: "/mnt/btrfs/sub", major: 0, minor: 99},
+		{point: "/mnt/my disk", major: 8, minor: 16},
+	}
+
+	cases := []struct {
+		name  string
+		path  string
+		major uint32
+		minor uint32
+		found bool
+	}{
+		// The usual case: the lock file is on the root filesystem.
+		{name: "root", path: "/var/lib/dpkg/lock-frontend", major: 253, minor: 1, found: true},
+		// The mount point itself, not something under it.
+		{name: "mount_point_itself", path: "/mnt/btrfs", major: 0, minor: 53, found: true},
+		{name: "under_a_mount", path: "/mnt/btrfs/var/lib/dpkg/lock", major: 0, minor: 53, found: true},
+		// The longest mount point wins, otherwise a nested filesystem would be read as
+		// its parent.
+		{name: "nested_mount_wins", path: "/mnt/btrfs/sub/lock", major: 0, minor: 99, found: true},
+		// "/mnt/btrfs-other" isn't under "/mnt/btrfs", a prefix match alone would say so.
+		{name: "sibling_is_not_nested", path: "/mnt/btrfs-other/lock", major: 253, minor: 1, found: true},
+		{name: "escaped_mount_point", path: "/mnt/my disk/lock", major: 8, minor: 16, found: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			major, minor, found := mountDeviceForPath(mounts, tc.path)
+
+			if found != tc.found || major != tc.major || minor != tc.minor {
+				t.Errorf(
+					"mountDeviceForPath(%q) = %d:%d, %v, want %d:%d, %v",
+					tc.path, major, minor, found, tc.major, tc.minor, tc.found,
+				)
+			}
+		})
+	}
+
+	if _, _, found := mountDeviceForPath(nil, "/var/lib/dpkg/lock"); found {
+		t.Error("mountDeviceForPath() with no mount table = found, want not found")
+	}
+}

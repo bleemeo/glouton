@@ -57,10 +57,19 @@ func requireScenario(t *testing.T, name string) {
 }
 
 func newVMChecker() *autoUpgradeChecker {
+	// GLOUTON_VM_HOSTROOT points the lock checks at a tree other than the real one, to
+	// run them against a filesystem the machine isn't installed on - btrfs, whose
+	// per-subvolume device ids are what lockFileID has to resolve through the mount
+	// table.
+	hostRoot := os.Getenv("GLOUTON_VM_HOSTROOT")
+	if hostRoot == "" {
+		hostRoot = "/"
+	}
+
 	return &autoUpgradeChecker{
 		Runner:          gloutonexec.New("/"),
 		AutoUpgradeFile: "/var/lib/glouton/auto_upgrade",
-		HostRootPath:    "/",
+		HostRootPath:    hostRoot,
 	}
 }
 

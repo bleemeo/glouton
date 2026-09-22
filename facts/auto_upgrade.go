@@ -81,6 +81,10 @@ const (
 	// (apt-daily, unattended-upgrades); holding it for an hour is not.
 	lockHeldMinDuration = time.Hour
 
+	// autoUpgradeMinInterval is how long an answer is kept before the checks run again,
+	// whatever the pace at which the facts themselves are refreshed.
+	autoUpgradeMinInterval = time.Hour
+
 	// autoUpgradeRunMaxDuration is how long after its start an auto-upgrade run is
 	// taken for stuck. systemd doesn't time out Type=oneshot units by default, so a
 	// glouton-auto-upgrade waiting on a dpkg prompt or a stalled mirror stays there
@@ -95,13 +99,11 @@ const (
 	dpkgJournalDir = "var/lib/dpkg/updates"
 	dpkgStatusPath = "var/lib/dpkg/status"
 
-	procLocksPath = "/proc/locks"
+	procLocksPath     = "/proc/locks"
+	procMountInfoPath = "/proc/self/mountinfo"
 )
 
-var (
-	errUnexpectedProcLocks = errors.New("unexpected /proc/locks format")
-	errNoAutoUpgradeFile   = errors.New("the auto-upgrade marker path is unknown")
-)
+var errUnexpectedProcLocks = errors.New("unexpected /proc/locks format")
 
 // gloutonPackageNames are the package names that may provide Glouton, current name first.
 var gloutonPackageNames = []string{"glouton", "bleemeo-agent"} //nolint:gochecknoglobals
@@ -162,29 +164,39 @@ type autoUpgradeChecker struct {
 
 // autoUpgradeStatus returns the value of the FactAutoUpgradeStatus fact,
 // or "" when the check doesn't apply to this system.
+//
+// Caller must hold f.l.
 func (f *FactProvider) autoUpgradeStatus(ctx context.Context) string {
 	if !version.IsLinux() || f.options.Runner == nil {
 		return ""
 	}
 
-	hostRootPath := f.options.HostRootPath
-	if hostRootPath == "" {
-		hostRootPath = "/"
+	// Anything but "/" means APT and dpkg belong to the host, not to us: /proc/locks
+	// isn't the host one and we have no apt-cache to run. An empty path is a container
+	// whose host root isn't mounted, which is the same answer. Saying nothing beats
+	// saying "ok".
+	if f.options.HostRootPath != "/" {
+		return ""
 	}
 
-	if hostRootPath != "/" {
-		// APT and dpkg belong to the host, not to our container: /proc/locks isn't the
-		// host one and we have no apt-cache to run. Saying nothing beats saying "ok".
-		return ""
+	// Computing this forks apt-cache and reads the whole dpkg database, about half a
+	// second. Some callers refresh the facts far more often than the fact is worth
+	// recomputing - mqtt.sendConnectMessage does it on every connect, and the duplicate
+	// check with no max age at all - so the answer is kept for a while.
+	if !f.autoUpgradeStatusAt.IsZero() && time.Since(f.autoUpgradeStatusAt) < autoUpgradeMinInterval {
+		return f.autoUpgradeStatusValue
 	}
 
 	checker := autoUpgradeChecker{
 		Runner:          f.options.Runner,
 		AutoUpgradeFile: f.options.AutoUpgradeFile,
-		HostRootPath:    hostRootPath,
+		HostRootPath:    f.options.HostRootPath,
 	}
 
-	return checker.status(ctx)
+	f.autoUpgradeStatusValue = checker.status(ctx)
+	f.autoUpgradeStatusAt = time.Now()
+
+	return f.autoUpgradeStatusValue
 }
 
 func (c *autoUpgradeChecker) status(ctx context.Context) string {
@@ -241,9 +253,16 @@ func (c *autoUpgradeChecker) status(ctx context.Context) string {
 	// would report a healthy upgrade as an interrupted one - the Glouton auto-upgrade
 	// included, since it runs apt-get itself. APT has the same rule: it checks the
 	// journal before taking the lock, never while holding it.
-	if err == nil && holder == nil {
+	switch {
+	case err != nil:
+		// The lock is unknown, so the dpkg state can't be read either.
+	case holder == nil:
 		interrupted, dpkgErr := c.dpkgIsInterrupted()
 		record(AutoUpgradeStatusDpkgInterrupted, interrupted, dpkgErr)
+	default:
+		// A package operation is running, so this check didn't run. Saying OK on its
+		// behalf would hide a dpkg that really does need repairing.
+		failed = true
 	}
 
 	stuck, err := c.runIsStuck()
@@ -473,7 +492,9 @@ func (c *autoUpgradeChecker) dpkgHasBrokenPackage() (bool, error) {
 // what a package operation waiting forever on a prompt or a stalled mirror looks like.
 func (c *autoUpgradeChecker) runIsStuck() (bool, error) {
 	if c.AutoUpgradeFile == "" {
-		return false, errNoAutoUpgradeFile
+		// Nothing to watch, which is not the same as a failure: an unset marker path
+		// must not suppress the checks that did run.
+		return false, nil
 	}
 
 	stat, err := os.Stat(c.AutoUpgradeFile)
@@ -545,10 +566,20 @@ func (c *autoUpgradeChecker) lockHolder(ctx context.Context) (*lockHolder, error
 
 	locks := decodeProcLocks(content)
 
+	var mounts []mountEntry
+
+	if mountInfo, err := os.ReadFile(procMountInfoPath); err != nil {
+		// Not fatal: statLockID still answers with the device stat(2) reports, which is
+		// the right one on every filesystem but btrfs.
+		logger.V(2).Printf("auto-upgrade: unable to read %s: %v", procMountInfoPath, err)
+	} else {
+		mounts = decodeMountInfo(mountInfo)
+	}
+
 	for _, relativePath := range packageManagerLockPaths {
 		path := filepath.Join(c.HostRootPath, relativePath)
 
-		id, err := statLockID(path)
+		id, err := lockFileID(path, mounts)
 		if err != nil {
 			continue // that lock file doesn't exist on this system
 		}
@@ -630,6 +661,150 @@ func isShortLivedPackageProcess(ctx context.Context, proc *process.Process, name
 	}
 
 	return false
+}
+
+// lockFileID identifies a lock file the way /proc/locks does.
+//
+// The inode comes from stat(2), but the device can't: /proc/locks names a file by the
+// device of its superblock, and btrfs gives every subvolume its own anonymous device, so
+// stat(2) and /proc/locks disagree on every btrfs filesystem, the default subvolume
+// included. Measured on Ubuntu 24.04 with a btrfs root, stat(2) answered 0:54 where
+// /proc/locks said 0:53, which silently made every lock unmatchable. The mount table
+// carries the superblock device, so it is the one to believe when the file is under a
+// known mount.
+func lockFileID(path string, mounts []mountEntry) (procLockID, error) {
+	id, err := statLockID(path)
+	if err != nil {
+		return procLockID{}, err
+	}
+
+	if major, minor, ok := mountDeviceForPath(mounts, path); ok {
+		id.major, id.minor = major, minor
+	}
+
+	return id, nil
+}
+
+// mountEntry is what one line of /proc/self/mountinfo tells us: where a filesystem is
+// mounted, and the device the kernel names it by.
+type mountEntry struct {
+	point string
+	major uint32
+	minor uint32
+}
+
+// decodeMountInfo parses /proc/self/mountinfo.
+//
+// A line looks like:
+//
+//	36 35 98:0 /mnt1 /mnt2 rw,noatime master:1 - ext3 /dev/root rw
+//
+// that is: mount ID, parent ID, MAJOR:MINOR, root within the filesystem, mount point,
+// then options. Unlike /proc/locks, MAJOR and MINOR are in decimal here. A mount point
+// holding a space, a tab, a newline or a backslash has it octal-escaped.
+func decodeMountInfo(content []byte) []mountEntry {
+	var entries []mountEntry
+
+	for line := range strings.SplitSeq(string(content), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 5 {
+			continue
+		}
+
+		major, minor, ok := decodeDecimalDeviceID(fields[2])
+		if !ok {
+			continue
+		}
+
+		entries = append(entries, mountEntry{
+			point: unescapeMountPoint(fields[4]),
+			major: major,
+			minor: minor,
+		})
+	}
+
+	return entries
+}
+
+func decodeDecimalDeviceID(field string) (major uint32, minor uint32, ok bool) {
+	rawMajor, rawMinor, found := strings.Cut(field, ":")
+	if !found {
+		return 0, 0, false
+	}
+
+	parsedMajor, err := strconv.ParseUint(rawMajor, 10, 32)
+	if err != nil {
+		return 0, 0, false
+	}
+
+	parsedMinor, err := strconv.ParseUint(rawMinor, 10, 32)
+	if err != nil {
+		return 0, 0, false
+	}
+
+	return uint32(parsedMajor), uint32(parsedMinor), true
+}
+
+// unescapeMountPoint undoes the octal escaping the kernel applies to the few characters
+// that would otherwise split a mountinfo field.
+func unescapeMountPoint(point string) string {
+	if !strings.Contains(point, `\`) {
+		return point
+	}
+
+	var out strings.Builder
+
+	for i := 0; i < len(point); i++ {
+		if point[i] == '\\' && i+3 < len(point) {
+			if value, err := strconv.ParseUint(point[i+1:i+4], 8, 8); err == nil {
+				out.WriteByte(byte(value))
+
+				i += 3
+
+				continue
+			}
+		}
+
+		out.WriteByte(point[i])
+	}
+
+	return out.String()
+}
+
+// mountDeviceForPath returns the device of the filesystem path lives on.
+func mountDeviceForPath(mounts []mountEntry, path string) (major uint32, minor uint32, ok bool) {
+	best := -1
+
+	for i, entry := range mounts {
+		if !pathIsUnder(path, entry.point) {
+			continue
+		}
+
+		// The longest mount point wins, and on equal length the last line does: that's
+		// the filesystem mounted on top of the other.
+		if best == -1 || len(entry.point) >= len(mounts[best].point) {
+			best = i
+		}
+	}
+
+	if best == -1 {
+		return 0, 0, false
+	}
+
+	return mounts[best].major, mounts[best].minor, true
+}
+
+// pathIsUnder tells whether path is a mount point itself or lives under it.
+func pathIsUnder(path string, mountPoint string) bool {
+	if path == mountPoint {
+		return true
+	}
+
+	if mountPoint == "/" {
+		return strings.HasPrefix(path, "/")
+	}
+
+	return strings.HasPrefix(path, mountPoint+"/")
 }
 
 // procLockID identifies the file a lock is held on. /proc/locks doesn't name that file,

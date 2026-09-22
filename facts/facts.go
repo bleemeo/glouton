@@ -93,6 +93,11 @@ type FactProvider struct {
 
 	facts           map[string]string
 	lastFactsUpdate time.Time
+
+	// autoUpgradeStatusValue is kept between refreshes because computing it is far more
+	// expensive than the rest, see autoUpgradeMinInterval.
+	autoUpgradeStatusValue string
+	autoUpgradeStatusAt    time.Time
 }
 
 // FactCallback is a function called on each update of facts that may return additional facts.
