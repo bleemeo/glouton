@@ -339,9 +339,11 @@ Status: install ok triggers-awaited
 func TestRunIsStuck(t *testing.T) {
 	cases := []struct {
 		name string
-		// age of the marker file, or -1 when there is no marker at all.
-		age  time.Duration
-		want bool
+		// age of the marker, or -1 when there is no marker at all.
+		age time.Duration
+		// directory creates the marker as a directory instead of a file.
+		directory bool
+		want      bool
 	}{
 		// The usual case: no auto-upgrade running.
 		{name: "no_marker", age: -1, want: false},
@@ -350,6 +352,10 @@ func TestRunIsStuck(t *testing.T) {
 		// The EXIT trap of glouton-auto-upgrade never fired and Glouton wasn't restarted:
 		// the run is stuck, most likely waiting on dpkg or on a mirror.
 		{name: "stuck_run", age: 6 * time.Hour, want: true},
+		// An empty agent.auto_upgrade_file resolves to the state directory itself, whose
+		// mtime is old enough to look like a run that never ended. Nothing the user could
+		// delete would clear it, so a directory never counts as a marker.
+		{name: "marker_is_a_directory", age: 6 * time.Hour, directory: true, want: false},
 	}
 
 	for _, tc := range cases {
@@ -357,7 +363,11 @@ func TestRunIsStuck(t *testing.T) {
 			marker := filepath.Join(t.TempDir(), "auto_upgrade")
 
 			if tc.age >= 0 {
-				if err := os.WriteFile(marker, nil, 0o600); err != nil {
+				if tc.directory {
+					if err := os.Mkdir(marker, 0o750); err != nil {
+						t.Fatal(err)
+					}
+				} else if err := os.WriteFile(marker, nil, 0o600); err != nil {
 					t.Fatal(err)
 				}
 

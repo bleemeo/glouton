@@ -117,13 +117,8 @@ func TestVMLockStuck(t *testing.T) {
 		)
 	}
 
-	stuck, err := checker.lockIsStuck(t.Context())
-	if err != nil {
-		t.Fatalf("lockIsStuck() error: %v", err)
-	}
-
-	if !stuck {
-		t.Error("lockIsStuck() = false, want true")
+	if !holderIsStuck(holder) {
+		t.Error("holderIsStuck() = false, want true")
 	}
 }
 
@@ -142,13 +137,8 @@ func TestVMLockFree(t *testing.T) {
 		t.Fatalf("a lock is held by pid %d (%s), the scenario didn't clean up", holder.pid, holder.name)
 	}
 
-	stuck, err := checker.lockIsStuck(t.Context())
-	if err != nil {
-		t.Fatalf("lockIsStuck() error: %v", err)
-	}
-
-	if stuck {
-		t.Error("lockIsStuck() = true, want false")
+	if holderIsStuck(holder) {
+		t.Error("holderIsStuck() = true, want false")
 	}
 }
 
@@ -242,10 +232,12 @@ func TestVMRepositoryCheckFails(t *testing.T) {
 
 	// Without this the test would pass for the wrong reason: it has to be the repository
 	// check alone that didn't run.
-	locked, err := checker.lockIsStuck(t.Context())
+	holder, err := checker.lockHolder(t.Context())
 	if err != nil {
-		t.Fatalf("lockIsStuck() error: %v", err)
+		t.Fatalf("lockHolder() error: %v", err)
 	}
+
+	locked := holderIsStuck(holder)
 
 	interrupted, err := checker.dpkgIsInterrupted()
 	if err != nil {

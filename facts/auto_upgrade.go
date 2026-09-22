@@ -151,26 +151,17 @@ var dpkgBrokenStates = map[string]bool{ //nolint:gochecknoglobals
 }
 
 // autoUpgradeChecker looks for the known reasons that make the Glouton auto-upgrade
-// silently stop working. It's stateful: see lockFirstSeen.
+// silently stop working.
 type autoUpgradeChecker struct {
 	Runner *gloutonexec.Runner
 	// AutoUpgradeFile is the marker the glouton-auto-upgrade script maintains while it
 	// runs. It's already an absolute path, HostRootPath doesn't apply to it.
 	AutoUpgradeFile string
 	HostRootPath    string
-
-	// lockFirstSeen is when we first saw lockFirstSeenBy holding one of the APT/dpkg
-	// locks. We need it because /proc/locks says who holds a lock but not since when,
-	// and using the holder start time alone would flag a long-running daemon that just
-	// took the lock.
-	lockFirstSeen   time.Time
-	lockFirstSeenBy int
 }
 
 // autoUpgradeStatus returns the value of the FactAutoUpgradeStatus fact,
 // or "" when the check doesn't apply to this system.
-//
-// Caller must hold f.l.
 func (f *FactProvider) autoUpgradeStatus(ctx context.Context) string {
 	if !version.IsLinux() || f.options.Runner == nil {
 		return ""
@@ -187,15 +178,13 @@ func (f *FactProvider) autoUpgradeStatus(ctx context.Context) string {
 		return ""
 	}
 
-	if f.autoUpgrade == nil {
-		f.autoUpgrade = &autoUpgradeChecker{
-			Runner:          f.options.Runner,
-			AutoUpgradeFile: f.options.AutoUpgradeFile,
-			HostRootPath:    hostRootPath,
-		}
+	checker := autoUpgradeChecker{
+		Runner:          f.options.Runner,
+		AutoUpgradeFile: f.options.AutoUpgradeFile,
+		HostRootPath:    hostRootPath,
 	}
 
-	return f.autoUpgrade.status(ctx)
+	return checker.status(ctx)
 }
 
 func (c *autoUpgradeChecker) status(ctx context.Context) string {
@@ -231,29 +220,34 @@ func (c *autoUpgradeChecker) status(ctx context.Context) string {
 	// The remaining reasons are independent from one another: a stuck lock and a dpkg
 	// left half-way are two different repairs, so we report all of them rather than
 	// stopping at the first.
-	checks := []struct {
-		problem string
-		run     func() (bool, error)
-	}{
-		{AutoUpgradeStatusLocked, func() (bool, error) { return c.lockIsStuck(ctx) }},
-		{AutoUpgradeStatusDpkgInterrupted, c.dpkgIsInterrupted},
-		{AutoUpgradeStatusRunNotFinished, c.runIsStuck},
-	}
-
-	for _, check := range checks {
-		found, err := check.run()
-		if err != nil {
-			logger.V(1).Printf("auto-upgrade: unable to check %s: %v", check.problem, err)
+	record := func(problem string, found bool, err error) {
+		switch {
+		case err != nil:
+			logger.V(1).Printf("auto-upgrade: unable to check %s: %v", problem, err)
 
 			failed = true
-
-			continue
-		}
-
-		if found {
-			problems = append(problems, check.problem)
+		case found:
+			problems = append(problems, problem)
 		}
 	}
+
+	holder, err := c.lockHolder(ctx)
+	record(AutoUpgradeStatusLocked, holderIsStuck(holder), err)
+
+	// Only when nothing holds the lock: dpkg fills its journal and leaves packages
+	// unpacked as it works, and tidies up only once the transaction ends. Measured on
+	// Ubuntu 24.04, a plain "apt-get install" that succeeds shows up to 34 journal
+	// entries and 6 half-configured packages while it runs, so looking mid-transaction
+	// would report a healthy upgrade as an interrupted one - the Glouton auto-upgrade
+	// included, since it runs apt-get itself. APT has the same rule: it checks the
+	// journal before taking the lock, never while holding it.
+	if err == nil && holder == nil {
+		interrupted, dpkgErr := c.dpkgIsInterrupted()
+		record(AutoUpgradeStatusDpkgInterrupted, interrupted, dpkgErr)
+	}
+
+	stuck, err := c.runIsStuck()
+	record(AutoUpgradeStatusRunNotFinished, stuck, err)
 
 	if len(problems) == 0 {
 		if failed {
@@ -363,12 +357,11 @@ func isAPTRepositorySource(source string) bool {
 	return strings.Contains(source, ":") || strings.HasPrefix(source, "/")
 }
 
-// lockIsStuck tells whether one of the APT/dpkg locks has been held long enough to be a
-// problem rather than an ordinary package operation in progress.
-func (c *autoUpgradeChecker) lockIsStuck(ctx context.Context) (bool, error) {
-	holder, err := c.lockHolder(ctx)
-	if err != nil || holder == nil {
-		return false, err
+// holderIsStuck tells whether the process holding one of the APT/dpkg locks is blocking
+// the upgrade rather than doing ordinary work. A nil holder means no lock is held.
+func holderIsStuck(holder *lockHolder) bool {
+	if holder == nil {
+		return false
 	}
 
 	switch {
@@ -387,10 +380,10 @@ func (c *autoUpgradeChecker) lockIsStuck(ctx context.Context) (bool, error) {
 			holder.path, holder.heldFor.Truncate(time.Minute), holder.pid, holder.name,
 		)
 	default:
-		return false, nil
+		return false
 	}
 
-	return true, nil
+	return true
 }
 
 // dpkgIsInterrupted tells whether dpkg is left in a state that needs a manual
@@ -492,6 +485,13 @@ func (c *autoUpgradeChecker) runIsStuck() (bool, error) {
 		return false, fmt.Errorf("unable to stat %s: %w", c.AutoUpgradeFile, err)
 	}
 
+	if !stat.Mode().IsRegular() {
+		// An empty agent.auto_upgrade_file resolves to the state directory itself, see
+		// config.Load(). Its mtime is days old, which would report a run that never
+		// ended, for ever and with nothing the user could delete to clear it.
+		return false, nil
+	}
+
 	startedAt := stat.ModTime()
 	if time.Since(startedAt) < autoUpgradeRunMaxDuration {
 		return false, nil
@@ -518,9 +518,12 @@ func isAllDigits(s string) bool {
 
 // lockHolder describes the process holding one of the APT/dpkg lock files.
 type lockHolder struct {
-	path    string
-	pid     int
-	name    string
+	path string
+	pid  int
+	name string
+	// heldFor is how long the lock has been held, which is only knowable for the
+	// processes of shortLivedPackageProcesses and shortLivedPackageScripts. It stays
+	// zero for every other holder, see describeHolder.
 	heldFor time.Duration
 	// stopped is set when the holder is in the stopped state (SIGSTOP, or held by a
 	// debugger). Such a holder is stuck whatever heldFor says.
@@ -558,35 +561,27 @@ func (c *autoUpgradeChecker) lockHolder(ctx context.Context) (*lockHolder, error
 		}
 
 		holder := &lockHolder{path: path, pid: pid}
-		c.describeHolder(ctx, holder)
+		describeHolder(ctx, holder)
 
 		return holder, nil
 	}
 
-	c.lockFirstSeen, c.lockFirstSeenBy = time.Time{}, 0
-
 	return nil, nil //nolint:nilnil
 }
 
-// describeHolder fills in what we know about the process holding the lock: its name, for
-// how long it has been holding, and whether it is stopped.
+// describeHolder fills in what we know about the process holding the lock: its name,
+// whether it is stopped, and for how long it has been holding.
 //
-// /proc/locks tells who holds a lock but not since when, so we track it ourselves across
-// calls. For the processes whose lifetime is a single package operation we can do better
-// and use their start time right away, which avoids waiting a whole lockHeldMinDuration
-// after a Glouton restart before an already-stuck upgrade is reported again.
+// /proc/locks says who holds a lock but not since when, and Glouton only looks when it
+// refreshes its facts, hours apart. Seeing the same process hold the lock on two
+// refreshes therefore proves nothing: a daemon that takes it for a second on each of
+// them would be indistinguishable from one that never let go. So heldFor is only filled
+// where it can be known, from the start time of a process whose whole life is one
+// package operation; for anything else it stays zero and only a stopped holder counts.
 //
-// Everything we can't read is left at its zero value: an unreadable /proc entry only
-// costs us the shortcuts, heldFor is always set.
-func (c *autoUpgradeChecker) describeHolder(ctx context.Context, holder *lockHolder) {
-	now := time.Now()
-
-	if c.lockFirstSeenBy != holder.pid || c.lockFirstSeen.IsZero() {
-		c.lockFirstSeen, c.lockFirstSeenBy = now, holder.pid
-	}
-
-	holder.heldFor = now.Sub(c.lockFirstSeen)
-
+// Everything we can't read is left at its zero value: an unreadable /proc entry costs us
+// the checks below, never a wrong answer.
+func describeHolder(ctx context.Context, holder *lockHolder) {
 	proc, err := process.NewProcessWithContext(ctx, int32(holder.pid)) //nolint:gosec
 	if err != nil {
 		return
@@ -610,7 +605,7 @@ func (c *autoUpgradeChecker) describeHolder(ctx context.Context, holder *lockHol
 		return
 	}
 
-	holder.heldFor = max(holder.heldFor, now.Sub(time.UnixMilli(createdAtMS)))
+	holder.heldFor = time.Since(time.UnixMilli(createdAtMS))
 }
 
 // isShortLivedPackageProcess tells whether the whole lifetime of a process is one package

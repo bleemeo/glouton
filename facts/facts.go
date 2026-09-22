@@ -91,10 +91,6 @@ type FactProvider struct {
 	manualFact map[string]string
 	callbacks  []FactCallback
 
-	// autoUpgrade is kept between updates because detecting a stuck APT/dpkg lock
-	// needs to remember for how long we've been seeing it held.
-	autoUpgrade *autoUpgradeChecker
-
 	facts           map[string]string
 	lastFactsUpdate time.Time
 }
