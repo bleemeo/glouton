@@ -605,7 +605,7 @@ func TestStore_run(t *testing.T) {
 		{
 			pushPoints: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: t0, Value: 5},
+					Time: t0, Value: 5,
 					Labels: map[string]string{types.LabelName: testMetric1},
 				},
 			},
@@ -620,15 +620,15 @@ func TestStore_run(t *testing.T) {
 		{
 			pushPoints: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: t0, Value: 5},
+					Time: t0, Value: 5,
 					Labels: map[string]string{types.LabelName: testMetric2},
 				},
 				{
-					Point:  types.Point{Time: t0.Add(time.Hour), Value: 6},
+					Time: t0.Add(time.Hour), Value: 6,
 					Labels: map[string]string{types.LabelName: testMetric2},
 				},
 				{
-					Point:  types.Point{Time: t0.Add(2 * time.Hour), Value: 7},
+					Time: t0.Add(2 * time.Hour), Value: 7,
 					Labels: map[string]string{types.LabelName: testMetric2},
 				},
 			},
@@ -651,15 +651,15 @@ func TestStore_run(t *testing.T) {
 		{
 			pushPoints: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: t0.Add(20 * time.Hour), Value: 5},
+					Time: t0.Add(20 * time.Hour), Value: 5,
 					Labels: map[string]string{types.LabelName: testMetric3},
 				},
 				{
-					Point:  types.Point{Time: t0.Add(21 * time.Hour), Value: 6},
+					Time: t0.Add(21 * time.Hour), Value: 6,
 					Labels: map[string]string{types.LabelName: testMetric3},
 				},
 				{
-					Point:  types.Point{Time: t0.Add(22 * time.Hour), Value: 7},
+					Time: t0.Add(22 * time.Hour), Value: 7,
 					Labels: map[string]string{types.LabelName: testMetric3},
 				},
 			},
@@ -689,15 +689,15 @@ func TestStore_run(t *testing.T) {
 		{
 			pushPoints: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: t0.Add(25 * time.Hour), Value: 50},
+					Time: t0.Add(25 * time.Hour), Value: 50,
 					Labels: map[string]string{types.LabelName: testMetric1},
 				},
 				{
-					Point:  types.Point{Time: t0.Add(25 * time.Hour), Value: 50},
+					Time: t0.Add(25 * time.Hour), Value: 50,
 					Labels: map[string]string{types.LabelName: testMetric2},
 				},
 				{
-					Point:  types.Point{Time: t0.Add(25 * time.Hour), Value: 50},
+					Time: t0.Add(25 * time.Hour), Value: 50,
 					Labels: map[string]string{types.LabelName: testMetric3},
 				},
 			},
@@ -735,7 +735,7 @@ func TestStore_run(t *testing.T) {
 		{
 			pushPoints: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: t0.Add(51 * time.Hour), Value: 5},
+					Time: t0.Add(51 * time.Hour), Value: 5,
 					Labels: map[string]string{types.LabelName: testMetric1},
 				},
 			},
@@ -750,7 +750,7 @@ func TestStore_run(t *testing.T) {
 		{
 			pushPoints: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: t0.Add(51 * time.Hour).Add(time.Second), Value: math.Float64frombits(value.StaleNaN)},
+					Time: t0.Add(51 * time.Hour).Add(time.Second), Value: math.Float64frombits(value.StaleNaN),
 					Labels: map[string]string{types.LabelName: testMetric1},
 				},
 			},

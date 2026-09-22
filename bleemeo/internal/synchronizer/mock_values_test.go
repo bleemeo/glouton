@@ -104,83 +104,69 @@ var (
 	}
 
 	testAgent = bleemeoapi.AgentPayload{
-		Agent: bleemeoTypes.Agent{
-			ID:          agentID,
-			AccountID:   accountID,
-			AgentType:   agentTypeAgent.ID,
-			FQDN:        testAgentFQDN,
-			DisplayName: testAgentFQDN,
-		},
+		ID:              agentID,
+		AccountID:       accountID,
+		AgentType:       agentTypeAgent.ID,
+		FQDN:            testAgentFQDN,
+		DisplayName:     testAgentFQDN,
 		Abstracted:      false,
 		InitialPassword: passwordAlreadySet,
 	}
 	newMonitorAgent = bleemeoapi.AgentPayload{
-		Agent: bleemeoTypes.Agent{
-			ID:          "6b0ba586-0111-4a72-9cc7-f19d4f6558b9",
-			AccountID:   accountID,
-			AgentType:   agentTypeMonitor.ID,
-			FQDN:        activeMonitorURL,
-			DisplayName: activeMonitorURL,
-		},
+		ID:              "6b0ba586-0111-4a72-9cc7-f19d4f6558b9",
+		AccountID:       accountID,
+		AgentType:       agentTypeMonitor.ID,
+		FQDN:            activeMonitorURL,
+		DisplayName:     activeMonitorURL,
 		Abstracted:      true,
 		InitialPassword: passwordAlreadySet,
 	}
 	testK8SAgent = bleemeoapi.AgentPayload{
-		Agent: bleemeoTypes.Agent{
-			ID:          "efb48b0a-b03d-4ba6-b643-534e81a0acaa",
-			AccountID:   accountID,
-			AgentType:   agentTypeKubernetes.ID,
-			FQDN:        testK8SClusterName,
-			DisplayName: testK8SClusterName,
-		},
+		ID:              "efb48b0a-b03d-4ba6-b643-534e81a0acaa",
+		AccountID:       accountID,
+		AgentType:       agentTypeKubernetes.ID,
+		FQDN:            testK8SClusterName,
+		DisplayName:     testK8SClusterName,
 		Abstracted:      false,
 		InitialPassword: passwordAlreadySet,
 	}
 
 	newMonitor = bleemeoapi.ServicePayload{
-		Monitor: bleemeoTypes.Monitor{
-			Service: bleemeoTypes.Service{
-				ID:           "fdd9d999-e2ff-45d3-af2b-6519cf8e3e70",
-				Active:       true,
-				Account:      accountID,
-				CreationDate: "2020-01-03T04:05:06Z",
-			},
-			URL:     activeMonitorURL,
-			AgentID: newMonitorAgent.ID,
+		Service: bleemeoTypes.Service{
+			ID:           "fdd9d999-e2ff-45d3-af2b-6519cf8e3e70",
+			Active:       true,
+			Account:      accountID,
+			CreationDate: "2020-01-03T04:05:06Z",
 		},
+		URL:       activeMonitorURL,
+		AgentID:   newMonitorAgent.ID,
 		IsMonitor: true,
 	}
 
 	testAgentMetric1 = bleemeoapi.MetricPayload{
-		Metric: bleemeoTypes.Metric{
-			ID:            "decce8cf-c2f7-43c3-b66e-10429debd994",
-			AgentID:       testAgent.ID,
-			LabelsText:    "__name__=\"some_metric_1\",label=\"value\"",
-			DeactivatedAt: time.Time{},
-			FirstSeenAt:   time.Unix(0, 0),
-		},
-		Name: "some_metric_1",
+		ID:            "decce8cf-c2f7-43c3-b66e-10429debd994",
+		AgentID:       testAgent.ID,
+		LabelsText:    "__name__=\"some_metric_1\",label=\"value\"",
+		DeactivatedAt: time.Time{},
+		FirstSeenAt:   time.Unix(0, 0),
+		Name:          "some_metric_1",
 	}
 	testAgentMetric2 = bleemeoapi.MetricPayload{
-		Metric: bleemeoTypes.Metric{
-			ID:          "055af752-5c01-4abc-9bb2-9d64032ef970",
-			AgentID:     testAgent.ID,
-			LabelsText:  "__name__=\"some_metric_2\",label=\"another_value !\"",
-			FirstSeenAt: time.Unix(0, 0),
-		},
-		Name: "some_metric_2",
+		ID:          "055af752-5c01-4abc-9bb2-9d64032ef970",
+		AgentID:     testAgent.ID,
+		LabelsText:  "__name__=\"some_metric_2\",label=\"another_value !\"",
+		FirstSeenAt: time.Unix(0, 0),
+		Name:        "some_metric_2",
 	}
 	testMonitorMetricPrivateProbe = bleemeoapi.MetricPayload{
-		Metric: bleemeoTypes.Metric{
-			ID:      "52b9c46e-00b9-4e80-a852-781426a3a193",
-			AgentID: newMonitor.AgentID,
-			LabelsText: fmt.Sprintf(
-				"__name__=\"probe_whatever\",instance=\"http://bleemeo.com\",scraper_uuid=\"%s\"",
-				testAgent.ID,
-			),
-			ServiceID:   newMonitor.ID,
-			FirstSeenAt: time.Unix(0, 0),
-		},
-		Name: "probe_whatever",
+		ID:      "52b9c46e-00b9-4e80-a852-781426a3a193",
+		AgentID: newMonitor.AgentID,
+		LabelsText: fmt.Sprintf(
+			"__name__=\"probe_whatever\",instance=\"http://bleemeo.com\",scraper_uuid=\"%s\"",
+			testAgent.ID,
+		),
+		ServiceID:   newMonitor.ID,
+		FirstSeenAt: time.Unix(0, 0),
+		Name:        "probe_whatever",
 	}
 )

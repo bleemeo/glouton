@@ -362,9 +362,7 @@ func sdrToPoints(sdr []sensorData) []types.MetricPoint {
 			Labels: map[string]string{
 				types.LabelName: metricSystemPowerConsumptionName,
 			},
-			Point: types.Point{
-				Value: systemConsumptionWattCandidates[0].Value,
-			},
+			Value: systemConsumptionWattCandidates[0].Value,
 		})
 	}
 
@@ -404,9 +402,7 @@ func readingToPoints(readings []powerReading) []types.MetricPoint {
 			Labels: map[string]string{
 				types.LabelName: metricSystemPowerConsumptionName,
 			},
-			Point: types.Point{
-				Value: powerValue,
-			},
+			Value: powerValue,
 		})
 	}
 

@@ -287,10 +287,8 @@ func (c *jmxtransClient) processLine(ctx context.Context, line string) {
 			c.EmitPoint(ctx, types.MetricPoint{
 				Labels:      labels,
 				Annotations: annotations,
-				Point: types.Point{
-					Time:  lineTime,
-					Value: finalValue,
-				},
+				Time:        lineTime,
+				Value:       finalValue,
 			})
 		}
 
@@ -360,10 +358,8 @@ func (c *jmxtransClient) flush(ctx context.Context) {
 		c.EmitPoint(ctx, types.MetricPoint{
 			Labels:      points[0].Labels,
 			Annotations: points[0].Annotations,
-			Point: types.Point{
-				Time:  points[0].Timestamp,
-				Value: sum,
-			},
+			Time:        points[0].Timestamp,
+			Value:       sum,
 		})
 
 		if points[0].UsedInRatio {
@@ -401,10 +397,8 @@ func (c *jmxtransClient) flush(ctx context.Context) {
 		c.EmitPoint(ctx, types.MetricPoint{
 			Labels:      point.Labels,
 			Annotations: point.Annotations,
-			Point: types.Point{
-				Time:  point.Timestamp,
-				Value: value,
-			},
+			Time:        point.Timestamp,
+			Value:       value,
 		})
 	}
 

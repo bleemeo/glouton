@@ -66,15 +66,15 @@ func newTestStore(t *testing.T, ts time.Time) *store.Store {
 
 	st.PushPoints(context.Background(), []types.MetricPoint{
 		{
-			Point:  types.Point{Time: ts, Value: 42},
+			Time: ts, Value: 42,
 			Labels: map[string]string{types.LabelName: testCPUUsed, testLabelInst: testInstance},
 		},
 		{
-			Point:  types.Point{Time: ts, Value: 10},
+			Time: ts, Value: 10,
 			Labels: map[string]string{types.LabelName: testDiskUsed, testLabelInst: testInstance, testLabelItem: testItemHome},
 		},
 		{
-			Point:  types.Point{Time: ts, Value: 20},
+			Time: ts, Value: 20,
 			Labels: map[string]string{types.LabelName: testDiskUsed, testLabelInst: testInstance, testLabelItem: testItemSrv},
 		},
 	})

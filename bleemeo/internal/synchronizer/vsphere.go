@@ -156,12 +156,10 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(ctx context.Context, apiClient t
 		}
 
 		payload := bleemeoapi.AgentPayload{
-			Agent: bleemeoTypes.Agent{
-				FQDN:        device.FQDN(),
-				DisplayName: device.Name(),
-				AgentType:   agentTypeID,
-				Tags:        []bleemeoTypes.Tag{},
-			},
+			FQDN:               device.FQDN(),
+			DisplayName:        device.Name(),
+			AgentType:          agentTypeID,
+			Tags:               []bleemeoTypes.Tag{},
 			Abstracted:         true,
 			InitialPassword:    uuid.New().String(),
 			InitialServerGroup: serverGroup,

@@ -374,15 +374,9 @@ func TestBuildOperators(t *testing.T) {
 	expectedOperators := []operator.Config{
 		{
 			Builder: &add.Config{
-				TransformerConfig: helper.TransformerConfig{
-					WriterConfig: helper.WriterConfig{
-						BasicConfig: helper.BasicConfig{
-							OperatorID:   testFieldAdd,
-							OperatorType: testFieldAdd,
-						},
-					},
-					OnError: testOnErrorSend,
-				},
+				OperatorID:   testFieldAdd,
+				OperatorType: testFieldAdd,
+				OnError:      testOnErrorSend,
 				Field: entry.Field{
 					FieldInterface: entry.ResourceField{
 						Keys: []string{testAttrServiceName},
@@ -393,26 +387,18 @@ func TestBuildOperators(t *testing.T) {
 		},
 		{
 			Builder: &regex.Config{
-				ParserConfig: helper.ParserConfig{
-					TransformerConfig: helper.TransformerConfig{
-						WriterConfig: helper.WriterConfig{
-							BasicConfig: helper.BasicConfig{
-								OperatorID:   testRegexParser,
-								OperatorType: testRegexParser,
-							},
-						},
-						OnError: testOnErrorSendQuiet,
+				OperatorID:   testRegexParser,
+				OperatorType: testRegexParser,
+				OnError:      testOnErrorSendQuiet,
+				ParseFrom: entry.Field{
+					FieldInterface: entry.BodyField{
+						Keys: []string{},
 					},
-					ParseFrom: entry.Field{
-						FieldInterface: entry.BodyField{
+				},
+				ParseTo: entry.RootableField{
+					Field: entry.Field{
+						FieldInterface: entry.AttributeField{
 							Keys: []string{},
-						},
-					},
-					ParseTo: entry.RootableField{
-						Field: entry.Field{
-							FieldInterface: entry.AttributeField{
-								Keys: []string{},
-							},
 						},
 					},
 				},
@@ -421,24 +407,16 @@ func TestBuildOperators(t *testing.T) {
 		},
 		{
 			Builder: &timeparser.Config{
-				TransformerConfig: helper.TransformerConfig{
-					WriterConfig: helper.WriterConfig{
-						BasicConfig: helper.BasicConfig{
-							OperatorID:   testTimeParser,
-							OperatorType: testTimeParser,
-						},
+				OperatorID:   testTimeParser,
+				OperatorType: testTimeParser,
+				OnError:      testOnErrorSendQuiet,
+				ParseFrom: &entry.Field{
+					FieldInterface: entry.AttributeField{
+						Keys: []string{"time"},
 					},
-					OnError: testOnErrorSendQuiet,
 				},
-				TimeParser: helper.TimeParser{
-					ParseFrom: &entry.Field{
-						FieldInterface: entry.AttributeField{
-							Keys: []string{"time"},
-						},
-					},
-					Layout:     testTimeFmtLayout,
-					LayoutType: "strptime",
-				},
+				Layout:     testTimeFmtLayout,
+				LayoutType: "strptime",
 			},
 		},
 	}

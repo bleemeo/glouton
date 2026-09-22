@@ -131,81 +131,63 @@ func TestPropsCaches(t *testing.T) { //nolint:maintidx
 					MemoryMB: 32,
 					Device: object.VirtualDeviceList{
 						&types.VirtualIDEController{
-							VirtualController: types.VirtualController{
-								VirtualDevice: types.VirtualDevice{Key: 200, DeviceInfo: &types.Description{
-									Label:   "IDE 0",
-									Summary: "IDE 0",
-								}},
-								BusNumber: 0,
+							Key: 200, DeviceInfo: &types.Description{
+								Label:   "IDE 0",
+								Summary: "IDE 0",
 							},
+							BusNumber: 0,
 						},
 						&types.VirtualIDEController{
-							VirtualController: types.VirtualController{
-								VirtualDevice: types.VirtualDevice{Key: 201, DeviceInfo: &types.Description{
-									Label:   "IDE 1",
-									Summary: "IDE 1",
-								}},
-								BusNumber: 1,
+							Key: 201, DeviceInfo: &types.Description{
+								Label:   "IDE 1",
+								Summary: "IDE 1",
 							},
+							BusNumber: 1,
 						},
 						&types.VirtualPS2Controller{
-							VirtualController: types.VirtualController{
-								VirtualDevice: types.VirtualDevice{Key: 300, DeviceInfo: &types.Description{
-									Label:   "PS2 controller 0",
-									Summary: "PS2 controller 0",
-								}},
-								Device:    []int32{600, 700},
-								BusNumber: 0,
+							Key: 300, DeviceInfo: &types.Description{
+								Label:   "PS2 controller 0",
+								Summary: "PS2 controller 0",
 							},
+							Device:    []int32{600, 700},
+							BusNumber: 0,
 						},
 						&types.VirtualPCIController{
-							VirtualController: types.VirtualController{
-								VirtualDevice: types.VirtualDevice{Key: 100, DeviceInfo: &types.Description{
-									Label:   "PCI controller 0",
-									Summary: "PCI controller 0",
-								}},
-								Device:    []int32{500, 12000},
-								BusNumber: 0,
+							Key: 100, DeviceInfo: &types.Description{
+								Label:   "PCI controller 0",
+								Summary: "PCI controller 0",
 							},
+							Device:    []int32{500, 12000},
+							BusNumber: 0,
 						},
 						&types.VirtualSIOController{
-							VirtualController: types.VirtualController{
-								VirtualDevice: types.VirtualDevice{Key: 400, DeviceInfo: &types.Description{
-									Label:   "SIO controller 0",
-									Summary: "SIO controller 0",
-								}},
-								BusNumber: 0,
+							Key: 400, DeviceInfo: &types.Description{
+								Label:   "SIO controller 0",
+								Summary: "SIO controller 0",
 							},
+							BusNumber: 0,
 						},
 						&types.VirtualKeyboard{
-							VirtualDevice: types.VirtualDevice{
-								Key:           600,
-								DeviceInfo:    &types.Description{Label: "Keyboard ", Summary: "Keyboard"},
-								ControllerKey: 300,
-								UnitNumber:    ptr[int32](0),
-							},
+							Key:           600,
+							DeviceInfo:    &types.Description{Label: "Keyboard ", Summary: "Keyboard"},
+							ControllerKey: 300,
+							UnitNumber:    ptr[int32](0),
 						},
 						&types.VirtualPointingDevice{
-							VirtualDevice: types.VirtualDevice{
-								Key:        700,
-								DeviceInfo: &types.Description{Label: "Pointing device", Summary: "Pointing device; Device"},
-								Backing: &types.VirtualPointingDeviceDeviceBackingInfo{
-									VirtualDeviceDeviceBackingInfo: types.VirtualDeviceDeviceBackingInfo{
-										UseAutoDetect: new(false),
-									},
-									HostPointingDevice: "autodetect",
-								},
-								ControllerKey: 300,
-								UnitNumber:    ptr[int32](1),
+							Key:        700,
+							DeviceInfo: &types.Description{Label: "Pointing device", Summary: "Pointing device; Device"},
+							Backing: &types.VirtualPointingDeviceDeviceBackingInfo{
+								UseAutoDetect:      new(false),
+								HostPointingDevice: "autodetect",
 							},
+							ControllerKey: 300,
+							UnitNumber:    ptr[int32](1),
 						},
 						&types.VirtualMachineVideoCard{
-							VirtualDevice: types.VirtualDevice{
-								Key:           500,
-								DeviceInfo:    &types.Description{Label: "Video card ", Summary: "Video card"},
-								ControllerKey: 100,
-								UnitNumber:    ptr[int32](0),
-							},
+							Key:                    500,
+							DeviceInfo:             &types.Description{Label: "Video card ", Summary: "Video card"},
+							ControllerKey:          100,
+							UnitNumber:             ptr[int32](0),
 							VideoRamSizeInKB:       4096,
 							NumDisplays:            1,
 							UseAutoDetect:          new(false),
@@ -214,110 +196,94 @@ func TestPropsCaches(t *testing.T) { //nolint:maintidx
 							GraphicsMemorySizeInKB: 262144,
 						},
 						&types.VirtualMachineVMCIDevice{
-							VirtualDevice: types.VirtualDevice{
-								Key: 12000,
-								DeviceInfo: &types.Description{
-									Label:   "VMCI device",
-									Summary: "Device on the virtual machine PCI bus that provides support for the virtual machine communication interface",
-								},
-								ControllerKey: 100,
-								UnitNumber:    ptr[int32](17),
+							Key: 12000,
+							DeviceInfo: &types.Description{
+								Label:   "VMCI device",
+								Summary: "Device on the virtual machine PCI bus that provides support for the virtual machine communication interface",
 							},
+							ControllerKey:                  100,
+							UnitNumber:                     ptr[int32](17),
 							Id:                             -1,
 							AllowUnrestrictedCommunication: new(false),
 							FilterEnable:                   new(true),
 						},
 						&types.ParaVirtualSCSIController{
-							VirtualSCSIController: types.VirtualSCSIController{
-								VirtualController: types.VirtualController{VirtualDevice: types.VirtualDevice{
-									Key: 202,
-									DeviceInfo: &types.Description{
-										Label:   "pvscsi-202",
-										Summary: "pvscsi-202",
-									},
-								}},
-								SharedBus:          "noSharing",
-								ScsiCtlrUnitNumber: 7,
+							Key: 202,
+							DeviceInfo: &types.Description{
+								Label:   "pvscsi-202",
+								Summary: "pvscsi-202",
 							},
+							SharedBus:          "noSharing",
+							ScsiCtlrUnitNumber: 7,
 						},
 						&types.VirtualCdrom{
-							VirtualDevice: types.VirtualDevice{
-								Key:        203,
-								DeviceInfo: &types.Description{Label: "cdrom-203", Summary: "cdrom-203"},
-								Backing: &types.VirtualCdromAtapiBackingInfo{VirtualDeviceDeviceBackingInfo: types.VirtualDeviceDeviceBackingInfo{
-									DeviceName:    "cdrom--201-824635603088",
-									UseAutoDetect: new(false),
-								}},
-								Connectable:   &types.VirtualDeviceConnectInfo{StartConnected: true, AllowGuestControl: true, Connected: true},
-								ControllerKey: 202,
-								UnitNumber:    ptr[int32](0),
+							Key:        203,
+							DeviceInfo: &types.Description{Label: "cdrom-203", Summary: "cdrom-203"},
+							Backing: &types.VirtualCdromAtapiBackingInfo{
+								DeviceName:    "cdrom--201-824635603088",
+								UseAutoDetect: new(false),
 							},
+							Connectable:   &types.VirtualDeviceConnectInfo{StartConnected: true, AllowGuestControl: true, Connected: true},
+							ControllerKey: 202,
+							UnitNumber:    ptr[int32](0),
 						},
 						&types.VirtualDisk{
-							VirtualDevice: types.VirtualDevice{
-								Key:        204,
-								DeviceInfo: &types.Description{Label: testDisk202_0, Summary: "10,485,760 KB"},
-								Backing: &types.VirtualDiskFlatVer2BackingInfo{
-									VirtualDeviceFileBackingInfo: types.VirtualDeviceFileBackingInfo{
-										FileName: "[LocalDS_0] DC0_C0_RP0_VM0/disk1.vmdk",
-										Datastore: &types.ManagedObjectReference{
-											Type:  "Datastore",
-											Value: testDatastore25,
-										},
-									},
-									DiskMode:        "persistent",
-									Split:           new(false),
-									WriteThrough:    new(false),
-									ThinProvisioned: new(true),
-									EagerlyScrub:    new(false),
-									Uuid:            "be8d2471-f32e-5c7e-a89b-22cb8e533890",
-									DigestEnabled:   new(false),
+							Key:        204,
+							DeviceInfo: &types.Description{Label: testDisk202_0, Summary: "10,485,760 KB"},
+							Backing: &types.VirtualDiskFlatVer2BackingInfo{
+								FileName: "[LocalDS_0] DC0_C0_RP0_VM0/disk1.vmdk",
+								Datastore: &types.ManagedObjectReference{
+									Type:  "Datastore",
+									Value: testDatastore25,
 								},
-								ControllerKey: 202,
-								UnitNumber:    ptr[int32](0),
+								DiskMode:        "persistent",
+								Split:           new(false),
+								WriteThrough:    new(false),
+								ThinProvisioned: new(true),
+								EagerlyScrub:    new(false),
+								Uuid:            "be8d2471-f32e-5c7e-a89b-22cb8e533890",
+								DigestEnabled:   new(false),
 							},
+							ControllerKey:       202,
+							UnitNumber:          ptr[int32](0),
 							CapacityInKB:        10485760,
 							CapacityInBytes:     10737418240,
 							StorageIOAllocation: &types.StorageIOAllocationInfo{Limit: ptr[int64](-1)},
 						},
 						&types.VirtualE1000{
-							VirtualEthernetCard: types.VirtualEthernetCard{
-								VirtualDevice: types.VirtualDevice{
-									Key: 4000,
-									DeviceInfo: &types.Description{
-										Label:   testEthernet0,
-										Summary: "DVSwitch: fea97929-4b2d-5972-b146-930c6d0b4014",
-									},
-									Backing: &types.VirtualEthernetCardDistributedVirtualPortBackingInfo{
-										Port: types.DistributedVirtualSwitchPortConnection{
-											SwitchUuid:       "fea97929-4b2d-5972-b146-930c6d0b4014",
-											PortgroupKey:     "dvportgroup-13",
-											PortKey:          "",
-											ConnectionCookie: 0,
-										},
-									},
-									Connectable: &types.VirtualDeviceConnectInfo{
-										MigrateConnect:    "",
-										StartConnected:    true,
-										AllowGuestControl: true,
-										Connected:         true,
-										Status:            "untried",
-									},
-									SlotInfo:      &types.VirtualDevicePciBusSlotInfo{PciSlotNumber: 32},
-									ControllerKey: 100,
-									UnitNumber:    ptr[int32](7),
+							Key: 4000,
+							DeviceInfo: &types.Description{
+								Label:   testEthernet0,
+								Summary: "DVSwitch: fea97929-4b2d-5972-b146-930c6d0b4014",
+							},
+							Backing: &types.VirtualEthernetCardDistributedVirtualPortBackingInfo{
+								Port: types.DistributedVirtualSwitchPortConnection{
+									SwitchUuid:       "fea97929-4b2d-5972-b146-930c6d0b4014",
+									PortgroupKey:     "dvportgroup-13",
+									PortKey:          "",
+									ConnectionCookie: 0,
 								},
-								AddressType:      "generated",
-								MacAddress:       "00:0c:29:33:34:38",
-								WakeOnLanEnabled: new(true),
-								ResourceAllocation: &types.VirtualEthernetCardResourceAllocation{
-									Reservation: ptr[int64](0),
-									Share: types.SharesInfo{
-										Shares: 50,
-										Level:  "normal",
-									},
-									Limit: new(int64(-1)),
+							},
+							Connectable: &types.VirtualDeviceConnectInfo{
+								MigrateConnect:    "",
+								StartConnected:    true,
+								AllowGuestControl: true,
+								Connected:         true,
+								Status:            "untried",
+							},
+							SlotInfo:         &types.VirtualDevicePciBusSlotInfo{PciSlotNumber: 32},
+							ControllerKey:    100,
+							UnitNumber:       ptr[int32](7),
+							AddressType:      "generated",
+							MacAddress:       "00:0c:29:33:34:38",
+							WakeOnLanEnabled: new(true),
+							ResourceAllocation: &types.VirtualEthernetCardResourceAllocation{
+								Reservation: ptr[int64](0),
+								Share: types.SharesInfo{
+									Shares: 50,
+									Level:  "normal",
 								},
+								Limit: new(int64(-1)),
 							},
 						},
 					},

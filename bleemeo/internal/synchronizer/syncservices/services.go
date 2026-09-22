@@ -143,19 +143,15 @@ func ServicePayloadFromDiscovery(service discovery.Service, listenAddresses stri
 	tags := getTagsFromLocal(service)
 
 	return bleemeoapi.ServicePayload{
-		Monitor: bleemeoTypes.Monitor{
-			Service: bleemeoTypes.Service{
-				ID:              serviceID,
-				Label:           service.Name,
-				Instance:        service.Instance,
-				ListenAddresses: listenAddresses,
-				ExePath:         service.ExePath,
-				Active:          service.Active,
-				Tags:            tags,
-			},
-			AgentID: agentID,
-		},
-		Account: accountID,
+		ID:              serviceID,
+		Label:           service.Name,
+		Instance:        service.Instance,
+		ListenAddresses: listenAddresses,
+		ExePath:         service.ExePath,
+		Active:          service.Active,
+		Tags:            tags,
+		AgentID:         agentID,
+		Account:         accountID,
 	}
 }
 

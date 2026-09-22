@@ -79,10 +79,8 @@ func FamiliesToMetricPoints(
 		result[i] = types.MetricPoint{
 			Labels:      lbls.Map(),
 			Annotations: annotations,
-			Point: types.Point{
-				Time:  ts,
-				Value: float64(sample.Value),
-			},
+			Time:        ts,
+			Value:       float64(sample.Value),
 		}
 	}
 

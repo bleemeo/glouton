@@ -252,18 +252,14 @@ func TestMQTTPointOrder(t *testing.T) {
 	// metric2 should be published.
 	points := []types.MetricPoint{
 		{
-			Point: types.Point{
-				Time: t0,
-			},
+			Time:   t0,
 			Labels: metric1Labels,
 			Annotations: types.MetricAnnotations{
 				BleemeoAgentID: agentID,
 			},
 		},
 		{
-			Point: types.Point{
-				Time: t0,
-			},
+			Time:   t0,
 			Labels: metric2Labels,
 			Annotations: types.MetricAnnotations{
 				BleemeoAgentID: agentID,
@@ -279,18 +275,14 @@ func TestMQTTPointOrder(t *testing.T) {
 	// metric2 should be published.
 	points = []types.MetricPoint{
 		{
-			Point: types.Point{
-				Time: t1,
-			},
+			Time:   t1,
 			Labels: metric1Labels,
 			Annotations: types.MetricAnnotations{
 				BleemeoAgentID: agentID,
 			},
 		},
 		{
-			Point: types.Point{
-				Time: t1,
-			},
+			Time:   t1,
 			Labels: metric2Labels,
 			Annotations: types.MetricAnnotations{
 				BleemeoAgentID: agentID,
@@ -322,18 +314,14 @@ func TestMQTTPointOrder(t *testing.T) {
 	// metric2 should be published.
 	points = []types.MetricPoint{
 		{
-			Point: types.Point{
-				Time: t2,
-			},
+			Time:   t2,
 			Labels: metric1Labels,
 			Annotations: types.MetricAnnotations{
 				BleemeoAgentID: agentID,
 			},
 		},
 		{
-			Point: types.Point{
-				Time: t2,
-			},
+			Time:   t2,
 			Labels: metric2Labels,
 			Annotations: types.MetricAnnotations{
 				BleemeoAgentID: agentID,
@@ -358,18 +346,14 @@ func TestMQTTPointOrder(t *testing.T) {
 	// metric2 should be published.
 	points = []types.MetricPoint{
 		{
-			Point: types.Point{
-				Time: t3,
-			},
+			Time:   t3,
 			Labels: metric1Labels,
 			Annotations: types.MetricAnnotations{
 				BleemeoAgentID: agentID,
 			},
 		},
 		{
-			Point: types.Point{
-				Time: t3,
-			},
+			Time:   t3,
 			Labels: metric2Labels,
 			Annotations: types.MetricAnnotations{
 				BleemeoAgentID: agentID,

@@ -33,19 +33,15 @@ import (
 
 func podWithVolume(uid, name, namespace, volumeName, claimName string, owner metav1.OwnerReference) corev1.Pod {
 	return corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			UID:             apitypes.UID(uid),
-			Name:            name,
-			Namespace:       namespace,
-			OwnerReferences: []metav1.OwnerReference{owner},
-		},
+		UID:             apitypes.UID(uid),
+		Name:            name,
+		Namespace:       namespace,
+		OwnerReferences: []metav1.OwnerReference{owner},
 		Spec: corev1.PodSpec{
 			Volumes: []corev1.Volume{
 				{
-					Name: volumeName,
-					VolumeSource: corev1.VolumeSource{
-						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: claimName},
-					},
+					Name:                  volumeName,
+					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: claimName},
 				},
 			},
 		},
@@ -136,16 +132,16 @@ func TestCSIVolumeLabels(t *testing.T) {
 
 	// A pod with a PVC-backed volume "data" and an inline (ephemeral) CSI volume "secrets".
 	pod := corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{UID: apitypes.UID(podUID), Name: "postgres-0", Namespace: "prod"},
+		UID: apitypes.UID(podUID), Name: "postgres-0", Namespace: "prod",
 		Spec: corev1.PodSpec{
 			Volumes: []corev1.Volume{
 				{
-					Name:         "data",
-					VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: "data-postgres-0"}},
+					Name:                  "data",
+					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: "data-postgres-0"},
 				},
 				{
-					Name:         "secrets",
-					VolumeSource: corev1.VolumeSource{CSI: &corev1.CSIVolumeSource{Driver: "secrets.csi"}},
+					Name: "secrets",
+					CSI:  &corev1.CSIVolumeSource{Driver: "secrets.csi"},
 				},
 			},
 		},

@@ -59,9 +59,7 @@ func (f ReceiverType) CreateDefaultConfig() component.Config {
 
 func createDefaultConfig() *ExecLogConfig {
 	c := &ExecLogConfig{
-		BaseConfig: adapter.BaseConfig{
-			Operators: []operator.Config{},
-		},
+		Operators:   []operator.Config{},
 		InputConfig: *execlog.NewConfig(),
 	}
 

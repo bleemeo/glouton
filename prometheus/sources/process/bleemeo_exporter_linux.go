@@ -146,10 +146,8 @@ func (b *bleemeoExporter) points(t0 time.Time) ([]types.MetricPoint, error) {
 						types.LabelName: "process_" + name,
 						types.LabelItem: gname,
 					},
-					Point: types.Point{
-						Time:  t0,
-						Value: value,
-					},
+					Time:  t0,
+					Value: value,
 				},
 			)
 		}

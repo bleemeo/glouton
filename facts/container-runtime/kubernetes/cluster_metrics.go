@@ -167,7 +167,7 @@ func namespacesCount(cache kubeCache, now time.Time) []types.MetricPoint {
 
 	for state, count := range nsCountByState {
 		points = append(points, types.MetricPoint{
-			Point: types.Point{Time: now, Value: float64(count)},
+			Time: now, Value: float64(count),
 			Labels: map[string]string{
 				types.LabelName:  "kubernetes_namespaces_count",
 				types.LabelState: state,
@@ -181,7 +181,7 @@ func namespacesCount(cache kubeCache, now time.Time) []types.MetricPoint {
 // nodesCount returns the metric kubernetes_nodes_count.
 func nodesCount(cache kubeCache, now time.Time) []types.MetricPoint {
 	points := []types.MetricPoint{{
-		Point: types.Point{Time: now, Value: float64(len(cache.nodes))},
+		Time: now, Value: float64(len(cache.nodes)),
 		Labels: map[string]string{
 			types.LabelName: "kubernetes_nodes_count",
 		},
@@ -230,7 +230,7 @@ func podsCount(cache kubeCache, now time.Time) []types.MetricPoint {
 		}
 
 		points = append(points, types.MetricPoint{
-			Point:  types.Point{Time: now, Value: float64(count)},
+			Time: now, Value: float64(count),
 			Labels: labels,
 		})
 	}
@@ -413,7 +413,7 @@ func requestsAndLimits(cache kubeCache, now time.Time) []types.MetricPoint {
 			}
 
 			points = append(points, types.MetricPoint{
-				Point:  types.Point{Time: now, Value: value},
+				Time: now, Value: value,
 				Labels: labels,
 			})
 		}
@@ -449,7 +449,7 @@ func podsRestartCount(cache kubeCache, now time.Time) []types.MetricPoint {
 		}
 
 		points = append(points, types.MetricPoint{
-			Point:  types.Point{Time: now, Value: float64(restartCount)},
+			Time: now, Value: float64(restartCount),
 			Labels: labels,
 		})
 	}
@@ -482,7 +482,7 @@ func workloadReplicas(cache kubeCache, now time.Time) []types.MetricPoint {
 
 		for metricName, value := range values {
 			points = append(points, types.MetricPoint{
-				Point: types.Point{Time: now, Value: value},
+				Time: now, Value: value,
 				Labels: map[string]string{
 					types.LabelName:      metricName,
 					types.LabelOwnerKind: kind,
@@ -567,22 +567,22 @@ func hpaMetrics(cache kubeCache, now time.Time) []types.MetricPoint {
 		points = append(
 			points,
 			types.MetricPoint{
-				Point:  types.Point{Time: now, Value: minReplicas},
+				Time: now, Value: minReplicas,
 				Labels: labels(metricNameHPAMinReplicas),
 			},
 			types.MetricPoint{
-				Point:  types.Point{Time: now, Value: float64(hpa.Spec.MaxReplicas)},
+				Time: now, Value: float64(hpa.Spec.MaxReplicas),
 				Labels: labels(metricNameHPAMaxReplicas),
 			},
 			types.MetricPoint{
-				Point:  types.Point{Time: now, Value: hpaScalingLimited(hpa)},
+				Time: now, Value: hpaScalingLimited(hpa),
 				Labels: labels(metricNameHPAScalingLimited),
 			},
 		)
 
 		status := hpaHealth(hpa, now)
 		points = append(points, types.MetricPoint{
-			Point:       types.Point{Time: now, Value: float64(status.CurrentStatus.NagiosCode())},
+			Time: now, Value: float64(status.CurrentStatus.NagiosCode()),
 			Labels:      labels(metricNameHPAStatus),
 			Annotations: types.MetricAnnotations{Status: status},
 		})
@@ -688,7 +688,7 @@ func cronJobMetrics(cache kubeCache, now time.Time) []types.MetricPoint {
 			base = cronJob.Status.LastSuccessfulTime.Time
 
 			points = append(points, types.MetricPoint{
-				Point:  types.Point{Time: now, Value: now.Sub(base).Seconds()},
+				Time: now, Value: now.Sub(base).Seconds(),
 				Labels: labels("kubernetes_cronjob_last_success_age_seconds"),
 			})
 		}
@@ -700,7 +700,7 @@ func cronJobMetrics(cache kubeCache, now time.Time) []types.MetricPoint {
 		}
 
 		points = append(points, types.MetricPoint{
-			Point:  types.Point{Time: now, Value: float64(missed)},
+			Time: now, Value: float64(missed),
 			Labels: labels("kubernetes_cronjob_missed_runs"),
 		})
 	}
@@ -822,7 +822,7 @@ func jobMetrics(cache kubeCache, now time.Time) []types.MetricPoint {
 
 	emit := func(name string, key ownerKey, value float64) {
 		points = append(points, types.MetricPoint{
-			Point: types.Point{Time: now, Value: value},
+			Time: now, Value: value,
 			Labels: map[string]string{
 				types.LabelName:      name,
 				types.LabelOwnerKind: key.kind,
@@ -1017,7 +1017,7 @@ func genericReplicas(ctx context.Context, cl kubeClient, cache kubeCache, now ti
 		}
 
 		points = append(points, types.MetricPoint{
-			Point:  types.Point{Time: now, Value: float64(ready)},
+			Time: now, Value: float64(ready),
 			Labels: labels(metricNameReplicasReady),
 		})
 
@@ -1048,7 +1048,7 @@ func genericReplicas(ctx context.Context, cl kubeClient, cache kubeCache, now ti
 		}
 
 		points = append(points, types.MetricPoint{
-			Point:  types.Point{Time: now, Value: float64(desired)},
+			Time: now, Value: float64(desired),
 			Labels: labels(metricNameReplicasDesired),
 		})
 	}

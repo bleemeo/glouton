@@ -374,7 +374,7 @@ func Test_Collect_DNS(t *testing.T) {
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -387,7 +387,7 @@ func Test_Collect_DNS(t *testing.T) {
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSRcode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -400,7 +400,7 @@ func Test_Collect_DNS(t *testing.T) {
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSAnswerRRS,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -413,7 +413,7 @@ func Test_Collect_DNS(t *testing.T) {
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -426,7 +426,7 @@ func Test_Collect_DNS(t *testing.T) {
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSQuerySucceeded,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -439,7 +439,7 @@ func Test_Collect_DNS(t *testing.T) {
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -463,7 +463,7 @@ func Test_Collect_DNS(t *testing.T) {
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -476,7 +476,7 @@ func Test_Collect_DNS(t *testing.T) {
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 5},
+					Time: t0, Value: 5,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSRcode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -489,7 +489,7 @@ func Test_Collect_DNS(t *testing.T) {
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSAnswerRRS,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -502,7 +502,7 @@ func Test_Collect_DNS(t *testing.T) {
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -515,7 +515,7 @@ func Test_Collect_DNS(t *testing.T) {
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSQuerySucceeded,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -528,7 +528,7 @@ func Test_Collect_DNS(t *testing.T) {
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -552,7 +552,7 @@ func Test_Collect_DNS(t *testing.T) {
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -565,7 +565,7 @@ func Test_Collect_DNS(t *testing.T) {
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 2},
+					Time: t0, Value: 2,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSRcode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -578,7 +578,7 @@ func Test_Collect_DNS(t *testing.T) {
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSAnswerRRS,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -591,7 +591,7 @@ func Test_Collect_DNS(t *testing.T) {
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -604,7 +604,7 @@ func Test_Collect_DNS(t *testing.T) {
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSQuerySucceeded,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -617,7 +617,7 @@ func Test_Collect_DNS(t *testing.T) {
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,

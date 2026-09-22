@@ -188,13 +188,11 @@ func decodeZpool(output string) []types.MetricPoint {
 		}
 
 		result = append(result, types.MetricPoint{
-			Point: types.Point{
-				// It's not a mistake to use zero value for time.
-				// Those points are only used with model.MetricPointsToFamilies and a zero
-				// time is converted to no timestamp specified.
-				Time:  time.Time{},
-				Value: float64(annotation.Status.CurrentStatus.NagiosCode()),
-			},
+			// It's not a mistake to use zero value for time.
+			// Those points are only used with model.MetricPointsToFamilies and a zero
+			// time is converted to no timestamp specified.
+			Time:  time.Time{},
+			Value: float64(annotation.Status.CurrentStatus.NagiosCode()),
 			Labels: map[string]string{
 				types.LabelName: metricZFSPoolHealthStatus,
 				types.LabelItem: poolName,
@@ -224,40 +222,32 @@ func decodeZpool(output string) []types.MetricPoint {
 		}
 
 		result = append(result, types.MetricPoint{
-			Point: types.Point{
-				Time:  time.Time{},
-				Value: float64(alloc),
-			},
+			Time:  time.Time{},
+			Value: float64(alloc),
 			Labels: map[string]string{
 				types.LabelName: metricDiskUsed,
 				types.LabelItem: poolName,
 			},
 		})
 		result = append(result, types.MetricPoint{
-			Point: types.Point{
-				Time:  time.Time{},
-				Value: float64(size),
-			},
+			Time:  time.Time{},
+			Value: float64(size),
 			Labels: map[string]string{
 				types.LabelName: metricDiskTotal,
 				types.LabelItem: poolName,
 			},
 		})
 		result = append(result, types.MetricPoint{
-			Point: types.Point{
-				Time:  time.Time{},
-				Value: float64(free),
-			},
+			Time:  time.Time{},
+			Value: float64(free),
 			Labels: map[string]string{
 				types.LabelName: metricDiskFree,
 				types.LabelItem: poolName,
 			},
 		})
 		result = append(result, types.MetricPoint{
-			Point: types.Point{
-				Time:  time.Time{},
-				Value: float64(alloc) / float64(size) * 100,
-			},
+			Time:  time.Time{},
+			Value: float64(alloc) / float64(size) * 100,
 			Labels: map[string]string{
 				types.LabelName: metricDiskUsedPerc,
 				types.LabelItem: poolName,

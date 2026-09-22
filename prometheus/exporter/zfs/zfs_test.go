@@ -14,7 +14,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//nolint:dupl
 package zfs
 
 import (
@@ -45,45 +44,35 @@ func Test_decodeZpool(t *testing.T) { //nolint:maintidx
 						types.LabelName: metricDiskUsed,
 						types.LabelItem: testPoolMypool,
 					},
-					Point: types.Point{
-						Value: 1259331584,
-					},
+					Value: 1259331584,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: metricDiskTotal,
 						types.LabelItem: testPoolMypool,
 					},
-					Point: types.Point{
-						Value: 4831838208,
-					},
+					Value: 4831838208,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: metricDiskFree,
 						types.LabelItem: testPoolMypool,
 					},
-					Point: types.Point{
-						Value: 3572506624,
-					},
+					Value: 3572506624,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: metricDiskUsedPerc,
 						types.LabelItem: testPoolMypool,
 					},
-					Point: types.Point{
-						Value: 26.06,
-					},
+					Value: 26.06,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: metricZFSPoolHealthStatus,
 						types.LabelItem: testPoolMypool,
 					},
-					Point: types.Point{
-						Value: 0,
-					},
+					Value: 0,
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -104,45 +93,35 @@ pool_001	ONLINE	9663676416	107520	9663568896
 						types.LabelName: metricDiskUsed,
 						types.LabelItem: testPoolMypool,
 					},
-					Point: types.Point{
-						Value: 102912,
-					},
+					Value: 102912,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: metricDiskTotal,
 						types.LabelItem: testPoolMypool,
 					},
-					Point: types.Point{
-						Value: 4831838208,
-					},
+					Value: 4831838208,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: metricDiskFree,
 						types.LabelItem: testPoolMypool,
 					},
-					Point: types.Point{
-						Value: 4831735296,
-					},
+					Value: 4831735296,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: metricDiskUsedPerc,
 						types.LabelItem: testPoolMypool,
 					},
-					Point: types.Point{
-						Value: 0.00213,
-					},
+					Value: 0.00213,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: metricZFSPoolHealthStatus,
 						types.LabelItem: testPoolMypool,
 					},
-					Point: types.Point{
-						Value: 0,
-					},
+					Value: 0,
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -155,45 +134,35 @@ pool_001	ONLINE	9663676416	107520	9663568896
 						types.LabelName: metricDiskUsed,
 						types.LabelItem: testPoolPool001,
 					},
-					Point: types.Point{
-						Value: 107520,
-					},
+					Value: 107520,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: metricDiskTotal,
 						types.LabelItem: testPoolPool001,
 					},
-					Point: types.Point{
-						Value: 9663676416,
-					},
+					Value: 9663676416,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: metricDiskFree,
 						types.LabelItem: testPoolPool001,
 					},
-					Point: types.Point{
-						Value: 9663568896,
-					},
+					Value: 9663568896,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: metricDiskUsedPerc,
 						types.LabelItem: testPoolPool001,
 					},
-					Point: types.Point{
-						Value: 0.001112,
-					},
+					Value: 0.001112,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: metricZFSPoolHealthStatus,
 						types.LabelItem: testPoolPool001,
 					},
-					Point: types.Point{
-						Value: 0,
-					},
+					Value: 0,
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
@@ -213,45 +182,35 @@ pool_001	ONLINE	9663676416	107520	9663568896
 						types.LabelName: metricDiskUsed,
 						types.LabelItem: testPoolMypool,
 					},
-					Point: types.Point{
-						Value: 102912,
-					},
+					Value: 102912,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: metricDiskTotal,
 						types.LabelItem: testPoolMypool,
 					},
-					Point: types.Point{
-						Value: 4831838208,
-					},
+					Value: 4831838208,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: metricDiskFree,
 						types.LabelItem: testPoolMypool,
 					},
-					Point: types.Point{
-						Value: 4831735296,
-					},
+					Value: 4831735296,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: metricDiskUsedPerc,
 						types.LabelItem: testPoolMypool,
 					},
-					Point: types.Point{
-						Value: 0.00213,
-					},
+					Value: 0.00213,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: metricZFSPoolHealthStatus,
 						types.LabelItem: testPoolMypool,
 					},
-					Point: types.Point{
-						Value: 2,
-					},
+					Value: 2,
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
@@ -271,45 +230,35 @@ pool_001	ONLINE	9663676416	107520	9663568896
 						types.LabelName: metricDiskUsed,
 						types.LabelItem: testPoolPool001,
 					},
-					Point: types.Point{
-						Value: 52667904,
-					},
+					Value: 52667904,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: metricDiskTotal,
 						types.LabelItem: testPoolPool001,
 					},
-					Point: types.Point{
-						Value: 4831838208,
-					},
+					Value: 4831838208,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: metricDiskFree,
 						types.LabelItem: testPoolPool001,
 					},
-					Point: types.Point{
-						Value: 4779170304,
-					},
+					Value: 4779170304,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: metricDiskUsedPerc,
 						types.LabelItem: testPoolPool001,
 					},
-					Point: types.Point{
-						Value: 1.09,
-					},
+					Value: 1.09,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: metricZFSPoolHealthStatus,
 						types.LabelItem: testPoolPool001,
 					},
-					Point: types.Point{
-						Value: 2,
-					},
+					Value: 2,
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
@@ -328,9 +277,7 @@ pool_001	ONLINE	9663676416	107520	9663568896
 						types.LabelName: metricZFSPoolHealthStatus,
 						types.LabelItem: testPoolPool001,
 					},
-					Point: types.Point{
-						Value: 2,
-					},
+					Value: 2,
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
@@ -349,9 +296,7 @@ pool_001	ONLINE	9663676416	107520	9663568896
 						types.LabelName: metricZFSPoolHealthStatus,
 						types.LabelItem: testPoolPool001,
 					},
-					Point: types.Point{
-						Value: 2,
-					},
+					Value: 2,
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
@@ -370,45 +315,35 @@ pool_001	ONLINE	9663676416	107520	9663568896
 						types.LabelName: metricDiskUsed,
 						types.LabelItem: testPoolPool001,
 					},
-					Point: types.Point{
-						Value: 52667904,
-					},
+					Value: 52667904,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: metricDiskTotal,
 						types.LabelItem: testPoolPool001,
 					},
-					Point: types.Point{
-						Value: 4831838208,
-					},
+					Value: 4831838208,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: metricDiskFree,
 						types.LabelItem: testPoolPool001,
 					},
-					Point: types.Point{
-						Value: 4779170304,
-					},
+					Value: 4779170304,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: metricDiskUsedPerc,
 						types.LabelItem: testPoolPool001,
 					},
-					Point: types.Point{
-						Value: 1.09,
-					},
+					Value: 1.09,
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName: metricZFSPoolHealthStatus,
 						types.LabelItem: testPoolPool001,
 					},
-					Point: types.Point{
-						Value: 2,
-					},
+					Value: 2,
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,

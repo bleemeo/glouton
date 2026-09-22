@@ -76,7 +76,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -89,7 +89,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 200},
+					Time: t0, Value: 200,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -102,7 +102,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -115,7 +115,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -129,7 +129,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -153,7 +153,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			absentPoints: []map[string]string{},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -166,7 +166,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 200},
+					Time: t0, Value: 200,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -179,7 +179,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -193,7 +193,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -206,7 +206,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -219,7 +219,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedOk.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -232,7 +232,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -245,7 +245,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedOk.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -258,7 +258,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -282,7 +282,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			absentPoints: []map[string]string{},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -295,7 +295,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 200},
+					Time: t0, Value: 200,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -308,7 +308,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -322,7 +322,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -335,7 +335,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -348,7 +348,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedOk.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -361,7 +361,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -374,7 +374,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedOk.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -387,7 +387,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -411,7 +411,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			absentPoints: []map[string]string{},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -424,7 +424,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 404},
+					Time: t0, Value: 404,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -437,7 +437,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -451,7 +451,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -464,7 +464,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -477,7 +477,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedOk.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -490,7 +490,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -503,7 +503,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedOk.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -516,7 +516,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -557,7 +557,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -570,7 +570,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -583,7 +583,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -597,7 +597,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -610,7 +610,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedOk.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -623,7 +623,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -636,7 +636,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -675,7 +675,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -688,7 +688,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -701,7 +701,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -715,7 +715,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -728,7 +728,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
+					Time: t0, Value: float64(time.Time{}.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -741,7 +741,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -754,7 +754,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -778,7 +778,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			absentPoints: []map[string]string{},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -791,7 +791,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 200},
+					Time: t0, Value: 200,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -804,7 +804,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -818,7 +818,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -831,7 +831,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -844,7 +844,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedCritical.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedCritical.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -857,7 +857,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -870,7 +870,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedCritical.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedCritical.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -883,7 +883,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -906,7 +906,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			absentPoints: []map[string]string{},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -919,7 +919,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 200},
+					Time: t0, Value: 200,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -932,7 +932,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -946,7 +946,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -959,7 +959,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -972,7 +972,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSShortLivedWarning.Unix())},
+					Time: t0, Value: float64(certs.TSShortLivedWarning.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -985,7 +985,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.ShortLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.ShortLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -998,7 +998,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSShortLivedWarning.Unix())},
+					Time: t0, Value: float64(certs.TSShortLivedWarning.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1011,7 +1011,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1034,7 +1034,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			absentPoints: []map[string]string{},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1047,7 +1047,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 200},
+					Time: t0, Value: 200,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1060,7 +1060,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1074,7 +1074,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1087,7 +1087,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1100,7 +1100,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSShortLivedCritical.Unix())},
+					Time: t0, Value: float64(certs.TSShortLivedCritical.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1113,7 +1113,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.ShortLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.ShortLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1126,7 +1126,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSShortLivedCritical.Unix())},
+					Time: t0, Value: float64(certs.TSShortLivedCritical.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1139,7 +1139,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1162,7 +1162,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			absentPoints: []map[string]string{},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1175,7 +1175,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 200},
+					Time: t0, Value: 200,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1188,7 +1188,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1202,7 +1202,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1215,7 +1215,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1228,7 +1228,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedOk.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1241,7 +1241,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1254,7 +1254,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedOk.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1267,7 +1267,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1290,7 +1290,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			absentPoints: []map[string]string{},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1303,7 +1303,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 200},
+					Time: t0, Value: 200,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1316,7 +1316,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1330,7 +1330,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1343,7 +1343,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1356,7 +1356,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSCACritical.Unix())},
+					Time: t0, Value: float64(certs.TSCACritical.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1369,7 +1369,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1382,7 +1382,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSCACritical.Unix())},
+					Time: t0, Value: float64(certs.TSCACritical.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1395,7 +1395,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1418,7 +1418,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			absentPoints: []map[string]string{},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1431,7 +1431,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 200},
+					Time: t0, Value: 200,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1444,7 +1444,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1458,7 +1458,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1471,7 +1471,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1484,7 +1484,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedOk.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1497,7 +1497,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1510,7 +1510,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSCAExpired.Unix())},
+					Time: t0, Value: float64(certs.TSCAExpired.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1523,7 +1523,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1546,7 +1546,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			absentPoints: []map[string]string{},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1559,7 +1559,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 200},
+					Time: t0, Value: 200,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1572,7 +1572,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1586,7 +1586,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1599,7 +1599,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1612,7 +1612,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSCACritical.Unix())},
+					Time: t0, Value: float64(certs.TSCACritical.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1625,7 +1625,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1638,7 +1638,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSCACritical.Unix())},
+					Time: t0, Value: float64(certs.TSCACritical.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1651,7 +1651,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1674,7 +1674,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			absentPoints: []map[string]string{},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1687,7 +1687,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 200},
+					Time: t0, Value: 200,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1700,7 +1700,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1714,7 +1714,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1727,7 +1727,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1740,7 +1740,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
+					Time: t0, Value: float64(time.Time{}.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1753,7 +1753,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1766,7 +1766,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedOk.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1779,7 +1779,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1802,7 +1802,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			absentPoints: []map[string]string{},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1815,7 +1815,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 200},
+					Time: t0, Value: 200,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1828,7 +1828,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1842,7 +1842,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1855,7 +1855,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1868,7 +1868,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
+					Time: t0, Value: float64(time.Time{}.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1881,7 +1881,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1894,7 +1894,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedOk.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1907,7 +1907,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1930,7 +1930,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			absentPoints: []map[string]string{},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1943,7 +1943,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 200},
+					Time: t0, Value: 200,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1956,7 +1956,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1970,7 +1970,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1983,7 +1983,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -1996,7 +1996,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
+					Time: t0, Value: float64(time.Time{}.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2009,7 +2009,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2022,7 +2022,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedWarning.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedWarning.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2035,7 +2035,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2058,7 +2058,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			absentPoints: []map[string]string{},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2071,7 +2071,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 200},
+					Time: t0, Value: 200,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2084,7 +2084,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2098,7 +2098,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2111,7 +2111,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2124,7 +2124,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
+					Time: t0, Value: float64(time.Time{}.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2137,7 +2137,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2150,7 +2150,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedExpired.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedExpired.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2163,7 +2163,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2186,7 +2186,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			absentPoints: []map[string]string{},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2199,7 +2199,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 200},
+					Time: t0, Value: 200,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2212,7 +2212,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2226,7 +2226,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2239,7 +2239,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2252,7 +2252,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
+					Time: t0, Value: float64(time.Time{}.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2265,7 +2265,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2278,7 +2278,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedExpired.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedExpired.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2291,7 +2291,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2314,7 +2314,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			absentPoints: []map[string]string{},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2327,7 +2327,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 200},
+					Time: t0, Value: 200,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2340,7 +2340,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2354,7 +2354,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2367,7 +2367,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2380,7 +2380,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedOk.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2393,7 +2393,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2406,7 +2406,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedOk.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2419,7 +2419,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2467,7 +2467,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2480,7 +2480,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2493,7 +2493,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
+					Time: t0, Value: float64(time.Time{}.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2506,7 +2506,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2519,7 +2519,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2533,7 +2533,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2589,7 +2589,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2602,7 +2602,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2615,7 +2615,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
+					Time: t0, Value: float64(time.Time{}.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2628,7 +2628,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2641,7 +2641,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2655,7 +2655,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2712,7 +2712,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2725,7 +2725,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2738,7 +2738,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2752,7 +2752,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2765,7 +2765,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2804,7 +2804,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2817,7 +2817,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2830,7 +2830,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2844,7 +2844,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2857,7 +2857,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2870,7 +2870,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
+					Time: t0, Value: float64(time.Time{}.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2883,7 +2883,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2915,7 +2915,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2928,7 +2928,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2941,7 +2941,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2955,7 +2955,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2968,7 +2968,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2981,7 +2981,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedOk.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -2994,7 +2994,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3007,7 +3007,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3046,7 +3046,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3059,7 +3059,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3072,7 +3072,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3086,7 +3086,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3099,7 +3099,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3112,7 +3112,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
+					Time: t0, Value: float64(time.Time{}.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3125,7 +3125,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3186,7 +3186,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3199,7 +3199,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3212,7 +3212,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3225,7 +3225,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3282,7 +3282,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3295,7 +3295,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3308,7 +3308,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3321,7 +3321,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3340,7 +3340,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			name: "https-502-after-10seconds",
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3353,7 +3353,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: http.StatusBadGateway},
+					Time: t0, Value: http.StatusBadGateway,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3366,7 +3366,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3380,7 +3380,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3393,7 +3393,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3406,7 +3406,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedOk.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3419,7 +3419,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3432,7 +3432,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedOk.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3445,7 +3445,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3472,7 +3472,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			absentPoints: []map[string]string{},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3485,7 +3485,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 200},
+					Time: t0, Value: 200,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3498,7 +3498,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3512,7 +3512,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3525,7 +3525,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3538,7 +3538,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedOk.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3551,7 +3551,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3564,7 +3564,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedOk.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3577,7 +3577,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3602,7 +3602,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			absentPoints: []map[string]string{},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3615,7 +3615,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 200},
+					Time: t0, Value: 200,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3628,7 +3628,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3642,7 +3642,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3655,7 +3655,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3668,7 +3668,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedOk.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3681,7 +3681,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3694,7 +3694,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedOk.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3707,7 +3707,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3733,7 +3733,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			absentPoints: []map[string]string{},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3746,7 +3746,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 200},
+					Time: t0, Value: 200,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3759,7 +3759,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3773,7 +3773,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3786,7 +3786,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3799,7 +3799,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSShortLivedCritical.Unix())},
+					Time: t0, Value: float64(certs.TSShortLivedCritical.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3812,7 +3812,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.ShortLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.ShortLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3825,7 +3825,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSShortLivedCritical.Unix())},
+					Time: t0, Value: float64(certs.TSShortLivedCritical.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3838,7 +3838,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3864,7 +3864,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			absentPoints: []map[string]string{},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3877,7 +3877,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 200},
+					Time: t0, Value: 200,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3890,7 +3890,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3904,7 +3904,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3917,7 +3917,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3930,7 +3930,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSShortLivedCritical.Unix())},
+					Time: t0, Value: float64(certs.TSShortLivedCritical.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3943,7 +3943,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.ShortLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.ShortLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3956,7 +3956,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSShortLivedCritical.Unix())},
+					Time: t0, Value: float64(certs.TSShortLivedCritical.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3969,7 +3969,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3995,7 +3995,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			absentPoints: []map[string]string{},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4008,7 +4008,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 200},
+					Time: t0, Value: 200,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPStatusCode,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4021,7 +4021,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeHTTPDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4035,7 +4035,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4048,7 +4048,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4061,7 +4061,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
+					Time: t0, Value: float64(time.Time{}.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4074,7 +4074,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4087,7 +4087,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedExpired.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedExpired.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4100,7 +4100,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4332,7 +4332,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4345,7 +4345,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4358,7 +4358,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4371,7 +4371,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedOk.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4384,7 +4384,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4397,7 +4397,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedOk.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4410,7 +4410,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4443,7 +4443,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4456,7 +4456,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4469,7 +4469,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4482,7 +4482,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedCritical.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedCritical.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4495,7 +4495,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4508,7 +4508,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedCritical.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedCritical.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4521,7 +4521,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4552,7 +4552,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4565,7 +4565,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4578,7 +4578,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4591,7 +4591,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedOk.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4604,7 +4604,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4617,7 +4617,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSCAExpired.Unix())},
+					Time: t0, Value: float64(certs.TSCAExpired.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4630,7 +4630,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4661,7 +4661,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4674,7 +4674,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4687,7 +4687,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4700,7 +4700,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
+					Time: t0, Value: float64(time.Time{}.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4713,7 +4713,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4726,7 +4726,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedOk.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedOk.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4739,7 +4739,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4770,7 +4770,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4783,7 +4783,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4796,7 +4796,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4809,7 +4809,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
+					Time: t0, Value: float64(time.Time{}.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4822,7 +4822,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4835,7 +4835,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedWarning.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedWarning.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4848,7 +4848,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4879,7 +4879,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4892,7 +4892,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4905,7 +4905,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4918,7 +4918,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
+					Time: t0, Value: float64(time.Time{}.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4931,7 +4931,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4944,7 +4944,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedExpired.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedExpired.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4957,7 +4957,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -4988,7 +4988,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5001,7 +5001,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5014,7 +5014,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5027,7 +5027,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
+					Time: t0, Value: float64(time.Time{}.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5040,7 +5040,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.LongLiveDuration.Seconds())},
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5053,7 +5053,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: float64(certs.TSLongLivedExpired.Unix())},
+					Time: t0, Value: float64(certs.TSLongLivedExpired.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLEarliestCertExpiry,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5066,7 +5066,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5118,7 +5118,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5131,7 +5131,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5144,7 +5144,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeFailedDueToTLSError,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5157,7 +5157,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5210,7 +5210,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5223,7 +5223,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5236,7 +5236,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeFailedDueToTLSError,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5249,7 +5249,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5295,7 +5295,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5308,7 +5308,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5321,7 +5321,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5334,7 +5334,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeFailedDueToTLSError,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5347,7 +5347,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5393,7 +5393,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5406,7 +5406,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5419,7 +5419,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5432,7 +5432,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5445,7 +5445,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeFailedDueToTLSError,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5491,7 +5491,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5504,7 +5504,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5517,7 +5517,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5530,7 +5530,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5543,7 +5543,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeFailedDueToTLSError,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5589,7 +5589,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5602,7 +5602,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5615,7 +5615,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5628,7 +5628,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeFailedDueToTLSError,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5641,7 +5641,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5669,7 +5669,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 1},
+					Time: t0, Value: 1,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5682,7 +5682,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5718,7 +5718,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5731,7 +5731,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5761,7 +5761,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: t0, Value: 0},
+					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5774,7 +5774,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDurationSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -5787,7 +5787,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
+					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
 						types.LabelInstance:     testTargetNotYetKnown,

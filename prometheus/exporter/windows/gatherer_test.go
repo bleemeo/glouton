@@ -60,7 +60,7 @@ func fileToMFS(filename string) ([]*dto.MetricFamily, error) {
 	return tmp, nil
 }
 
-func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
+func Test_getSmartStatus(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -73,9 +73,7 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 			metricFile: "disk-ok.metrics",
 			want: []types.MetricPoint{
 				{
-					Point: types.Point{
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Value: float64(types.StatusOk.NagiosCode()),
 					Labels: map[string]string{
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: testPhysicalDrive0,
@@ -95,9 +93,7 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 			metricFile: "disk-error.metrics",
 			want: []types.MetricPoint{
 				{
-					Point: types.Point{
-						Value: float64(types.StatusCritical.NagiosCode()),
-					},
+					Value: float64(types.StatusCritical.NagiosCode()),
 					Labels: map[string]string{
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: testPhysicalDrive0,
@@ -118,9 +114,7 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 			metricFile: "disk-multiple-status1.metrics",
 			want: []types.MetricPoint{
 				{
-					Point: types.Point{
-						Value: float64(types.StatusCritical.NagiosCode()),
-					},
+					Value: float64(types.StatusCritical.NagiosCode()),
 					Labels: map[string]string{
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: testPhysicalDrive0,
@@ -141,9 +135,7 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 			metricFile: "disk-multiple-status2.metrics",
 			want: []types.MetricPoint{
 				{
-					Point: types.Point{
-						Value: float64(types.StatusWarning.NagiosCode()),
-					},
+					Value: float64(types.StatusWarning.NagiosCode()),
 					Labels: map[string]string{
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: testPhysicalDrive0,
@@ -163,9 +155,7 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 			metricFile: "disks-all-status.metrics",
 			want: []types.MetricPoint{
 				{
-					Point: types.Point{
-						Value: float64(types.StatusWarning.NagiosCode()),
-					},
+					Value: float64(types.StatusWarning.NagiosCode()),
 					Labels: map[string]string{
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: testPhysicalDrive0,
@@ -179,9 +169,7 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{
-						Value: float64(types.StatusCritical.NagiosCode()),
-					},
+					Value: float64(types.StatusCritical.NagiosCode()),
 					Labels: map[string]string{
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "PHYSICALDRIVE1",
@@ -195,9 +183,7 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Value: float64(types.StatusOk.NagiosCode()),
 					Labels: map[string]string{
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "PHYSICALDRIVE10",
@@ -210,9 +196,7 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{
-						Value: float64(types.StatusCritical.NagiosCode()),
-					},
+					Value: float64(types.StatusCritical.NagiosCode()),
 					Labels: map[string]string{
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "PHYSICALDRIVE11",
@@ -225,9 +209,7 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{
-						Value: float64(types.StatusCritical.NagiosCode()),
-					},
+					Value: float64(types.StatusCritical.NagiosCode()),
 					Labels: map[string]string{
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "PHYSICALDRIVE2",
@@ -241,9 +223,7 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{
-						Value: float64(types.StatusCritical.NagiosCode()),
-					},
+					Value: float64(types.StatusCritical.NagiosCode()),
 					Labels: map[string]string{
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "PHYSICALDRIVE3",
@@ -257,9 +237,7 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{
-						Value: float64(types.StatusCritical.NagiosCode()),
-					},
+					Value: float64(types.StatusCritical.NagiosCode()),
 					Labels: map[string]string{
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "PHYSICALDRIVE4",
@@ -272,9 +250,7 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					Value: float64(types.StatusOk.NagiosCode()),
 					Labels: map[string]string{
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "PHYSICALDRIVE5",
@@ -287,9 +263,7 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{
-						Value: float64(types.StatusWarning.NagiosCode()),
-					},
+					Value: float64(types.StatusWarning.NagiosCode()),
 					Labels: map[string]string{
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "PHYSICALDRIVE6",
@@ -302,9 +276,7 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{
-						Value: float64(types.StatusCritical.NagiosCode()),
-					},
+					Value: float64(types.StatusCritical.NagiosCode()),
 					Labels: map[string]string{
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "PHYSICALDRIVE7",
@@ -317,9 +289,7 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{
-						Value: float64(types.StatusCritical.NagiosCode()),
-					},
+					Value: float64(types.StatusCritical.NagiosCode()),
 					Labels: map[string]string{
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "PHYSICALDRIVE8",
@@ -332,9 +302,7 @@ func Test_getSmartStatus(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Point: types.Point{
-						Value: float64(types.StatusCritical.NagiosCode()),
-					},
+					Value: float64(types.StatusCritical.NagiosCode()),
 					Labels: map[string]string{
 						types.LabelName:   metricSmartDeviceHealthStatus,
 						types.LabelDevice: "PHYSICALDRIVE9",

@@ -67,7 +67,7 @@ func TestConversionLoop(t *testing.T) {
 			defaultTS: now,
 			points: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: now, Value: 42.1},
+					Time: now, Value: 42.1,
 					Labels: map[string]string{types.LabelName: testCPUUsed},
 				},
 			},
@@ -77,7 +77,7 @@ func TestConversionLoop(t *testing.T) {
 			defaultTS: now,
 			points: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: now, Value: 0.42},
+					Time: now, Value: 0.42,
 					Labels: map[string]string{types.LabelName: testDiskUsed},
 					Annotations: types.MetricAnnotations{
 						ContainerID:     "a container id",
@@ -98,7 +98,7 @@ func TestConversionLoop(t *testing.T) {
 			defaultTS: now,
 			points: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: now, Value: 1.24},
+					Time: now, Value: 1.24,
 					Labels: map[string]string{types.LabelName: "used_used"},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
@@ -114,7 +114,7 @@ func TestConversionLoop(t *testing.T) {
 			defaultTS: now,
 			points: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: now, Value: 0},
+					Time: now, Value: 0,
 					Labels: map[string]string{types.LabelName: testDiskUsed, types.LabelItem: testMountHome},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
@@ -124,7 +124,7 @@ func TestConversionLoop(t *testing.T) {
 					},
 				},
 				{
-					Point:  types.Point{Time: now, Value: 12},
+					Time: now, Value: 12,
 					Labels: map[string]string{types.LabelName: testDiskUsed, types.LabelItem: testMountSrv},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
@@ -134,7 +134,7 @@ func TestConversionLoop(t *testing.T) {
 					},
 				},
 				{
-					Point:  types.Point{Time: now, Value: 110},
+					Time: now, Value: 110,
 					Labels: map[string]string{types.LabelName: testDiskUsed, types.LabelItem: "/"},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
@@ -144,7 +144,7 @@ func TestConversionLoop(t *testing.T) {
 					},
 				},
 				{
-					Point:  types.Point{Time: now, Value: 110},
+					Time: now, Value: 110,
 					Labels: map[string]string{types.LabelName: "another_name", "custom": "label"},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
@@ -154,7 +154,7 @@ func TestConversionLoop(t *testing.T) {
 					},
 				},
 				{
-					Point:  types.Point{Time: now, Value: 110},
+					Time: now, Value: 110,
 					Labels: map[string]string{types.LabelName: "unsorted_name", testDescription: "this one is between two another_name"},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
@@ -164,7 +164,7 @@ func TestConversionLoop(t *testing.T) {
 					},
 				},
 				{
-					Point:  types.Point{Time: now, Value: 110},
+					Time: now, Value: 110,
 					Labels: map[string]string{types.LabelName: "another_name", "other": "label"},
 					Annotations: types.MetricAnnotations{
 						ServiceName:     "ok",
@@ -178,7 +178,7 @@ func TestConversionLoop(t *testing.T) {
 			defaultTS: now,
 			points: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: time.Time{}, Value: 1},
+					Time: time.Time{}, Value: 1,
 					Labels: map[string]string{types.LabelName: "name"},
 				},
 			},
@@ -188,7 +188,7 @@ func TestConversionLoop(t *testing.T) {
 			defaultTS: now,
 			points: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: time.UnixMilli(0), Value: 1},
+					Time: time.UnixMilli(0), Value: 1,
 					Labels: map[string]string{types.LabelName: "name"},
 				},
 			},
@@ -284,7 +284,7 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			defaultTS: now,
 			input: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: now, Value: 42.1},
+					Time: now, Value: 42.1,
 					Labels: map[string]string{types.LabelName: testCPUUsed},
 				},
 			},
@@ -310,7 +310,7 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: now, Value: 42.1},
+					Time: now, Value: 42.1,
 					Labels: map[string]string{types.LabelName: testCPUUsed},
 				},
 			},
@@ -320,7 +320,7 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			defaultTS: now,
 			input: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: time.Time{}, Value: 42.1},
+					Time: time.Time{}, Value: 42.1,
 					Labels: map[string]string{types.LabelName: testCPUUsed},
 				},
 			},
@@ -345,7 +345,7 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: now, Value: 42.1},
+					Time: now, Value: 42.1,
 					Labels: map[string]string{types.LabelName: testCPUUsed},
 				},
 			},
@@ -355,7 +355,7 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			defaultTS: now,
 			input: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: time.UnixMilli(0), Value: 42.1},
+					Time: time.UnixMilli(0), Value: 42.1,
 					Labels: map[string]string{types.LabelName: testCPUUsed},
 				},
 			},
@@ -380,7 +380,7 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: now, Value: 42.1},
+					Time: now, Value: 42.1,
 					Labels: map[string]string{types.LabelName: testCPUUsed},
 				},
 			},
@@ -390,7 +390,7 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			defaultTS: time.Time{},
 			input: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: time.Time{}, Value: 42.1},
+					Time: time.Time{}, Value: 42.1,
 					Labels: map[string]string{types.LabelName: testCPUUsed},
 				},
 			},
@@ -415,7 +415,7 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: time.Time{}, Value: 42.1},
+					Time: time.Time{}, Value: 42.1,
 					Labels: map[string]string{types.LabelName: testCPUUsed},
 				},
 			},
@@ -425,7 +425,7 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			defaultTS: time.Time{},
 			input: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: time.UnixMilli(0), Value: 42.1},
+					Time: time.UnixMilli(0), Value: 42.1,
 					Labels: map[string]string{types.LabelName: testCPUUsed},
 				},
 			},
@@ -450,7 +450,7 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: time.Time{}, Value: 42.1},
+					Time: time.Time{}, Value: 42.1,
 					Labels: map[string]string{types.LabelName: testCPUUsed},
 				},
 			},
@@ -460,7 +460,7 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			defaultTS: time.UnixMilli(0),
 			input: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: time.Time{}, Value: 42.1},
+					Time: time.Time{}, Value: 42.1,
 					Labels: map[string]string{types.LabelName: testCPUUsed},
 				},
 			},
@@ -485,7 +485,7 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: time.UnixMilli(0), Value: 42.1},
+					Time: time.UnixMilli(0), Value: 42.1,
 					Labels: map[string]string{types.LabelName: testCPUUsed},
 				},
 			},
@@ -495,7 +495,7 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			defaultTS: time.UnixMilli(0),
 			input: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: time.UnixMilli(0), Value: 42.1},
+					Time: time.UnixMilli(0), Value: 42.1,
 					Labels: map[string]string{types.LabelName: testCPUUsed},
 				},
 			},
@@ -520,7 +520,7 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: time.UnixMilli(0), Value: 42.1},
+					Time: time.UnixMilli(0), Value: 42.1,
 					Labels: map[string]string{types.LabelName: testCPUUsed},
 				},
 			},
@@ -530,7 +530,7 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			defaultTS: now,
 			input: []types.MetricPoint{
 				{
-					Point: types.Point{Time: now, Value: 42.1},
+					Time: now, Value: 42.1,
 					Labels: map[string]string{
 						types.LabelName: testCPUUsed,
 						testALabel:      testLabelTest,
@@ -546,7 +546,7 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: now, Value: 42.1},
+					Time: now, Value: 42.1,
 					Labels: map[string]string{
 						types.LabelName: testCPUUsed,
 						testALabel:      testTest3,
@@ -618,7 +618,7 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: now, Value: 42.1},
+					Time: now, Value: 42.1,
 					Labels: map[string]string{
 						types.LabelName: testCPUUsed,
 						testALabel:      testLabelTest,
@@ -634,7 +634,7 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: now, Value: 42.1},
+					Time: now, Value: 42.1,
 					Labels: map[string]string{
 						types.LabelName: testCPUUsed,
 						testALabel:      testTest3,
@@ -655,7 +655,7 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			defaultTS: now,
 			input: []types.MetricPoint{
 				{
-					Point: types.Point{Time: now, Value: 42.1},
+					Time: now, Value: 42.1,
 					Labels: map[string]string{
 						types.LabelName:                   testCPUUsed,
 						testALabel:                        testLabelTest,
@@ -667,7 +667,7 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: now, Value: 42.1},
+					Time: now, Value: 42.1,
 					Labels: map[string]string{
 						types.LabelName:                   testCPUUsed,
 						testALabel:                        testTest3,
@@ -735,7 +735,7 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			},
 			wantPoints: []types.MetricPoint{
 				{
-					Point: types.Point{Time: now, Value: 42.1},
+					Time: now, Value: 42.1,
 					Labels: map[string]string{
 						types.LabelName: testCPUUsed,
 						testALabel:      testLabelTest,
@@ -751,7 +751,7 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 					},
 				},
 				{
-					Point: types.Point{Time: now, Value: 42.1},
+					Time: now, Value: 42.1,
 					Labels: map[string]string{
 						types.LabelName: testCPUUsed,
 						testALabel:      testTest3,
@@ -829,7 +829,7 @@ func TestFamiliesToCollector(t *testing.T) {
 			name: "one points",
 			points: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: time.Time{}, Value: 42.1},
+					Time: time.Time{}, Value: 42.1,
 					Labels: map[string]string{types.LabelName: testCPUUsed},
 				},
 			},
@@ -838,11 +838,11 @@ func TestFamiliesToCollector(t *testing.T) {
 			name: "more points",
 			points: []types.MetricPoint{
 				{
-					Point:  types.Point{Time: time.Time{}, Value: 42.1},
+					Time: time.Time{}, Value: 42.1,
 					Labels: map[string]string{types.LabelName: testCPUUsed},
 				},
 				{
-					Point: types.Point{Time: time.Time{}, Value: 42.1},
+					Time: time.Time{}, Value: 42.1,
 					Labels: map[string]string{
 						types.LabelName: testDiskUsed,
 						"not_item":      testMountHome,

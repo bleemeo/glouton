@@ -527,7 +527,7 @@ func (k *Kubernetes) getLocalAPIPoints(ctx context.Context, cl kubeClient, now t
 	points := make([]types.MetricPoint, 0, 3)
 
 	apiStatus := types.MetricPoint{
-		Point: types.Point{Time: now, Value: 0.0},
+		Time: now, Value: 0.0,
 		Labels: map[string]string{
 			types.LabelName: "kubernetes_api_status",
 		},
@@ -602,7 +602,7 @@ func (k *Kubernetes) getKubeletPoints(ctx context.Context, cl kubeClient, now ti
 			}
 
 			resultPoints = append(resultPoints, types.MetricPoint{
-				Point: types.Point{Time: now, Value: float64(status.CurrentStatus.NagiosCode())},
+				Time: now, Value: float64(status.CurrentStatus.NagiosCode()),
 				Labels: map[string]string{
 					types.LabelName:      kubeletConditionStatus,
 					types.LabelCondition: "ready",
@@ -636,7 +636,7 @@ func (k *Kubernetes) getKubeletPoints(ctx context.Context, cl kubeClient, now ti
 			}
 
 			resultPoints = append(resultPoints, types.MetricPoint{
-				Point: types.Point{Time: now, Value: float64(status.CurrentStatus.NagiosCode())},
+				Time: now, Value: float64(status.CurrentStatus.NagiosCode()),
 				Labels: map[string]string{
 					types.LabelName:      kubeletConditionStatus,
 					types.LabelCondition: conditionLabel,
@@ -658,7 +658,7 @@ func (k *Kubernetes) getKubeletPoints(ctx context.Context, cl kubeClient, now ti
 			}
 
 			resultPoints = append(resultPoints, types.MetricPoint{
-				Point: types.Point{Time: now, Value: float64(status.CurrentStatus.NagiosCode())},
+				Time: now, Value: float64(status.CurrentStatus.NagiosCode()),
 				Labels: map[string]string{
 					types.LabelName:      kubeletConditionStatus,
 					types.LabelCondition: "network_unavailable",
@@ -716,7 +716,7 @@ func nodeAllocatablePoints(node *corev1.Node, now time.Time) []types.MetricPoint
 
 	for name, value := range values {
 		points = append(points, types.MetricPoint{
-			Point: types.Point{Time: now, Value: value},
+			Time: now, Value: value,
 			Labels: map[string]string{
 				types.LabelName: name,
 			},
@@ -930,19 +930,15 @@ func createPointsCertificateDaysAndPerc(notBefore time.Time, notAfter time.Time,
 	}
 
 	pointDays := types.MetricPoint{
-		Point: types.Point{
-			Time:  now,
-			Value: remainingDays,
-		},
+		Time:        now,
+		Value:       remainingDays,
 		Labels:      labelsDays,
 		Annotations: types.MetricAnnotations{},
 	}
 
 	pointPerc := types.MetricPoint{
-		Point: types.Point{
-			Time:  now,
-			Value: remainingPerc,
-		},
+		Time:        now,
+		Value:       remainingPerc,
 		Labels:      labelsPerc,
 		Annotations: types.MetricAnnotations{},
 	}

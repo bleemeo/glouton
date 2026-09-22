@@ -892,7 +892,7 @@ func (r *Registry) addPointWithThreshold(
 	annotationsCopy.StatusOf = point.Labels[types.LabelName]
 
 	newStatusPoint := types.MetricPoint{
-		Point:       types.Point{Time: point.Time, Value: float64(status.CurrentStatus.NagiosCode())},
+		Time: point.Time, Value: float64(status.CurrentStatus.NagiosCode()),
 		Labels:      labelsCopy,
 		Annotations: annotationsCopy,
 	}
