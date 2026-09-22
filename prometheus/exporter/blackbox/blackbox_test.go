@@ -24,10 +24,13 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"errors"
+	"log/slog"
 	"maps"
 	"math"
 	"math/big"
 	"net"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -474,5 +477,168 @@ func BuildCertChain(t *testing.T, derList [][]byte, privateKey *rsa.PrivateKey) 
 		Certificate: derList,
 		Leaf:        MustParseCertificate(t, derList[0]),
 		PrivateKey:  privateKeyInterface,
+	}
+}
+
+// Test_verifyTLS_handshakeFailed checks what a failed TLS handshake reports. The
+// modules used by monitors set insecure_skip_verify, so the handshake only fails
+// on transport errors, but a module that verifies the certificate itself (the
+// default module used by blackbox.targets) fails the handshake on a certificate
+// error and must still report the chain as untrusted.
+func Test_verifyTLS_handshakeFailed(t *testing.T) {
+	t.Parallel()
+
+	t0 := time.Now().Truncate(time.Second)
+
+	certs, err := generateCerts(t, t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	selfSigned := MustParseCertificate(t, certs.CertLongLivedSelfSigned.Certificate[0])
+
+	cases := []struct {
+		name             string
+		state            *tls.ConnectionState
+		tlsErr           error
+		wantHadTLS       bool
+		wantLeafLifespan time.Duration
+	}{
+		{
+			name:  "certificate-rejected",
+			state: &tls.ConnectionState{},
+			tlsErr: &tls.CertificateVerificationError{
+				UnverifiedCertificates: []*x509.Certificate{selfSigned},
+				Err:                    x509.UnknownAuthorityError{Cert: selfSigned},
+			},
+			wantHadTLS:       true,
+			wantLeafLifespan: certs.LongLiveDuration,
+		},
+		{
+			name:       "handshake-timeout",
+			state:      &tls.ConnectionState{},
+			tlsErr:     os.ErrDeadlineExceeded,
+			wantHadTLS: false,
+		},
+		{
+			name:       "no-certificate",
+			state:      &tls.ConnectionState{},
+			tlsErr:     nil,
+			wantHadTLS: false,
+		},
+	}
+
+	module := defaultModule("Glouton unittest")
+	module.Prober = proberNameHTTP
+
+	collector := blackboxCollector{
+		Module: module,
+		Name:   "https://example.com",
+		URL:    "https://example.com",
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			roundTrips := []roundTrip{
+				{
+					HostPort: "example.com:443",
+					TLSState: tt.state,
+					TLSError: tt.tlsErr,
+				},
+			}
+
+			got := verifyTLS(t.Context(), collector, slog.New(slog.DiscardHandler), roundTrips)
+			if len(got) != 1 {
+				t.Fatalf("verifyTLS returned %d round trips, want 1", len(got))
+			}
+
+			if got[0].hadTLS != tt.wantHadTLS {
+				t.Errorf("hadTLS = %v, want %v", got[0].hadTLS, tt.wantHadTLS)
+			}
+
+			if got[0].trustedTLS {
+				t.Error("trustedTLS is true, want false")
+			}
+
+			if !got[0].expiry.IsZero() {
+				t.Errorf("expiry = %s, want the zero time", got[0].expiry)
+			}
+
+			if got[0].leafLifespan != tt.wantLeafLifespan {
+				t.Errorf("leafLifespan = %s, want %s", got[0].leafLifespan, tt.wantLeafLifespan)
+			}
+
+			if tt.tlsErr != nil && !errors.Is(got[0].err, tt.tlsErr) {
+				t.Errorf("err = %v, want %v", got[0].err, tt.tlsErr)
+			}
+		})
+	}
+}
+
+func Test_CertificateToReport(t *testing.T) {
+	t.Parallel()
+
+	expiry := time.Date(2026, 9, 9, 0, 0, 0, 0, time.UTC)
+
+	trusted := roundTripTLSVerify{hadTLS: true, trustedTLS: true, expiry: expiry}
+	untrusted := roundTripTLSVerify{hadTLS: true}
+	noTLS := roundTripTLSVerify{}
+
+	cases := []struct {
+		name string
+		list roundTripTLSVerifyList
+		want roundTripTLSVerify
+		ok   bool
+	}{
+		{
+			name: "empty",
+		},
+		{
+			name: "single-trusted",
+			list: roundTripTLSVerifyList{trusted},
+			want: trusted,
+			ok:   true,
+		},
+		{
+			// A single untrusted round trip is reported with the zero expiry, which
+			// is how a self-signed or expired certificate is signaled.
+			name: "single-untrusted",
+			list: roundTripTLSVerifyList{untrusted},
+			want: untrusted,
+			ok:   true,
+		},
+		{
+			name: "redirect-to-failed-hop",
+			list: roundTripTLSVerifyList{trusted, noTLS},
+			want: trusted,
+			ok:   true,
+		},
+		{
+			// The failing hop is the one we know nothing about, so the untrusted
+			// chain of an earlier hop isn't reported in its place.
+			name: "untrusted-then-failed-hop",
+			list: roundTripTLSVerifyList{untrusted, noTLS},
+		},
+		{
+			name: "no-tls-at-all",
+			list: roundTripTLSVerifyList{noTLS, noTLS},
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, ok := tt.list.CertificateToReport()
+			if ok != tt.ok {
+				t.Fatalf("ok = %v, want %v", ok, tt.ok)
+			}
+
+			if diff := cmp.Diff(tt.want, got, cmp.AllowUnexported(roundTripTLSVerify{})); diff != "" {
+				t.Errorf("round trip mismatch: (-want +got)\n%s", diff)
+			}
+		})
 	}
 }
