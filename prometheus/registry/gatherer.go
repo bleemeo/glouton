@@ -209,8 +209,9 @@ func (g *wrappedGatherer) Gather() ([]*dto.MetricFamily, error) {
 	return g.GatherWithState(ctx, GatherState{})
 }
 
-// GatherWithState implements GathererWithState.
-func (g *wrappedGatherer) GatherWithState(ctx context.Context, state GatherState) ([]*dto.MetricFamily, error) {
+// startGather waits for a concurrent gather to finish, then marks the gatherer as
+// running. It returns false when the gather must be skipped.
+func (g *wrappedGatherer) startGather(state GatherState) (bool, error) {
 	g.l.Lock()
 	defer g.l.Unlock()
 
@@ -223,7 +224,7 @@ func (g *wrappedGatherer) GatherWithState(ctx context.Context, state GatherState
 		// the condition, we need to make sure the other one get wake-up.
 		g.cond.Signal()
 
-		return nil, errGatherOnNilGatherer
+		return false, errGatherOnNilGatherer
 	}
 
 	// do not collect non-probes metrics when the user only wants probes
@@ -232,8 +233,30 @@ func (g *wrappedGatherer) GatherWithState(ctx context.Context, state GatherState
 		// the condition, we need to make sure the other one get wake-up.
 		g.cond.Signal()
 
-		return nil, nil
+		return false, nil
 	}
+
+	g.running = true
+
+	return true, nil
+}
+
+// endGather marks the gather as done and wakes up a gather waiting for it.
+func (g *wrappedGatherer) endGather() {
+	g.l.Lock()
+	defer g.l.Unlock()
+
+	g.running = false
+	g.cond.Signal()
+}
+
+// GatherWithState implements GathererWithState.
+func (g *wrappedGatherer) GatherWithState(ctx context.Context, state GatherState) ([]*dto.MetricFamily, error) {
+	if ok, err := g.startGather(state); !ok {
+		return nil, err
+	}
+
+	defer g.endGather()
 
 	var (
 		mfs []*dto.MetricFamily
@@ -246,18 +269,11 @@ func (g *wrappedGatherer) GatherWithState(ctx context.Context, state GatherState
 		now = state.T0
 	}
 
-	g.running = true
-	g.l.Unlock()
-
 	if cg, ok := g.source.(GathererWithState); ok {
 		mfs, err = cg.GatherWithState(ctx, state)
 	} else {
 		mfs, err = g.source.Gather()
 	}
-
-	g.l.Lock()
-	g.running = false
-	g.cond.Signal()
 
 	if g.ruler != nil {
 		mfs = g.ruler.ApplyRulesMFS(ctx, now, mfs)
