@@ -144,32 +144,65 @@ glouton-gather-facts 2> /dev/null
 glouton-netstat 2> /dev/null
 
 
-if [ "$1" = "configure" ] ; then
+# configure is the ordinary install and upgrade. The abort-* ones run when dpkg unwinds a
+# failed upgrade or a failed remove: prerm has already stopped Glouton by then and the
+# package stays installed, so the service has to be brought back up here or it stays down
+# until someone notices. These four are the guard debhelper puts on the same snippets.
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || \
+   [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
     # Installation or upgrade on Debian-like system
     test -e /lib/init/upstart-job && start --quiet glouton
 
     if [ -d /run/systemd/system ]; then
         systemctl daemon-reload
-
-        if deb-systemd-helper --quiet was-enabled 'glouton.service'; then
-            deb-systemd-helper enable 'glouton.service' >/dev/null || true
-        fi
-
-        if deb-systemd-helper --quiet was-enabled glouton.service; then
-            deb-systemd-invoke restart glouton.service
-        fi
     fi
 
-
-    # Glouton version before 20.09.14.12xxxx had the cron.hourly/glouton script not
-    # marked as executable. Fix it.
-    # We only need to fix on upgrade from older version, because fresh install use permission
-    # from package. It's only upgrade that kept permission from filesystem.
-    # (RPM based don't have this behavior and always use permission from package).
-    if dpkg --compare-versions "$2" lt 20.09.14.120000; then
-        chmod +x /etc/cron.hourly/glouton
+    # A first install must not inherit deb-systemd-helper state from an installation
+    # that is gone. dpkg leaves $2 unset in exactly two cases -- this machine never had
+    # Glouton, or it was purged -- and both are supposed to leave no state file behind,
+    # so one that survives here was left by a purge predating that cleanup. It lists an
+    # enable symlink that no longer exists, which makes was-enabled report the unit as
+    # disabled, so the enable and the restart below are both skipped and Glouton ends up
+    # installed but never started. Purging the stale entry puts the unit back on
+    # deb-systemd-helper's default path, which is to enable it.
+    #
+    # Deliberately not done on upgrade: $2 is set there, the state file describes the
+    # installation still on the machine, and an admin's `systemctl disable glouton`
+    # leaves disk state identical to this. A remove keeps the version too, so a
+    # remove/reinstall cycle still honours a disable.
+    if [ "$1" = "configure" ] && [ -z "$2" ] \
+            && ! deb-systemd-helper --quiet was-enabled 'glouton.service'; then
+        deb-systemd-helper purge 'glouton.service' >/dev/null || true
     fi
-elif [ "$1" = "1" ] ; then
+
+    if deb-systemd-helper --quiet was-enabled 'glouton.service'; then
+        # enable creates the symlinks and records them in the state file itself.
+        deb-systemd-helper enable 'glouton.service' >/dev/null || true
+    else
+        # The unit is disabled, so enable is skipped and nothing refreshes the state
+        # file. update-state rewrites it from the current [Install] section, so purge
+        # removes the symlinks this version of the unit owns rather than the ones some
+        # earlier version did. It creates no symlink, so the unit stays disabled and
+        # was-enabled still reports false below.
+        deb-systemd-helper update-state 'glouton.service' >/dev/null || true
+    fi
+
+    # Actually restarting the service does need a running systemd, unlike the state-file
+    # bookkeeping above.
+    if [ -z "${DPKG_ROOT:-}" ] && [ -d /run/systemd/system ] && deb-systemd-helper --quiet was-enabled glouton.service; then
+        deb-systemd-invoke restart glouton.service
+    fi
+
+    # The auto-upgrade timer is enabled by the get.bleemeo.com installer with a plain
+    # `systemctl enable`, which records nothing in deb-systemd-helper. update-state
+    # writes the state file for it, listing the symlinks the timer's [Install] section
+    # owns, which is what lets postrm remove them on purge rather than leave systemd with
+    # a link to a deleted unit file. Unlike enable, update-state never creates a symlink,
+    # so the timer stays off wherever it is off.
+    deb-systemd-helper update-state 'glouton-auto-upgrade.timer' >/dev/null || true
+fi
+
+if [ "$1" = "1" ] ; then
     # Initial installation on rpm-like system
     test -x /usr/bin/systemctl -o -x /bin/systemctl && systemctl daemon-reload
     test -x /usr/bin/systemctl -o -x /bin/systemctl && systemctl enable --quiet glouton.service
