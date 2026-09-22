@@ -26,6 +26,7 @@ import (
 	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/influxdata/telegraf/plugins/inputs/consul_agent"
 )
 
 // collectFinalMetrics replicates the measurement/field -> final metric name
@@ -319,5 +320,32 @@ func TestGaugeNodeNameWithDotsStripped(t *testing.T) {
 		if strings.Contains(name, "example") || strings.Contains(name, "web01") {
 			t.Errorf("metric %q still carries the node name", name)
 		}
+	}
+}
+
+// TestNewConfiguresThePlugin checks the agent URL and the token reach the plugin. An agent
+// with ACLs on answers /v1/agent/metrics with a 403 without one.
+func TestNewConfiguresThePlugin(t *testing.T) {
+	input, err := New("http://172.23.0.2:8500", "a-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	internalInput, ok := input.(*internal.Input)
+	if !ok {
+		t.Fatalf("New() returned a %T, want *internal.Input", input)
+	}
+
+	consulInput, ok := internalInput.Input.(*consul_agent.ConsulAgent)
+	if !ok {
+		t.Fatalf("wrapped input is a %T, want *consul_agent.ConsulAgent", internalInput.Input)
+	}
+
+	if consulInput.URL != "http://172.23.0.2:8500" {
+		t.Errorf("URL = %q, want %q", consulInput.URL, "http://172.23.0.2:8500")
+	}
+
+	if consulInput.Token != "a-token" {
+		t.Errorf("Token = %q, want %q", consulInput.Token, "a-token")
 	}
 }

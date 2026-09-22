@@ -80,6 +80,77 @@ func TestServersShareOnlyTheName(t *testing.T) {
 	}
 }
 
+// TestOneInputGatheredConcurrently reads a single input from several goroutines at once,
+// which is what the state metricsInput keeps between gathers has to survive. The registry
+// serializes the gathers of one registration today, but nothing in this package says so,
+// and a field touched without i.l is a race waiting for that to change.
+//
+// It reads a 1.x because that is the line whose gather keeps something: i.databases is
+// reset and filled while the body is decoded, then read back after. A gather that lost the
+// lock publishes the databases of another gather, or none at all, so this fails on the
+// count even without -race.
+func TestOneInputGatheredConcurrently(t *testing.T) {
+	server := serveLine(t, lineV1)
+
+	input, _, err := New(server.URL, "", "", "")
+	if err != nil {
+		t.Fatalf("New() = %v", err)
+	}
+
+	inner, ok := input.(*internal.Input)
+	if !ok {
+		t.Fatalf("New() returned %T, want *internal.Input", input)
+	}
+
+	raw, ok := inner.Input.(*metricsInput)
+	if !ok {
+		t.Fatalf("inner input is %T, want *metricsInput", inner.Input)
+	}
+
+	raw.now = func() time.Time { return fixedNow }
+
+	// The fixture holds two databases, so every gather publishes exactly two series points.
+	const (
+		wantDatabases = 2
+		goroutines    = 4
+		rounds        = 10
+	)
+
+	var wg sync.WaitGroup
+
+	for range goroutines {
+		wg.Go(func() {
+			for range rounds {
+				// One accumulator each: StoreAccumulator appends without a lock, so a
+				// shared one would report a race of the test's own making.
+				store := &internal.StoreAccumulator{}
+
+				if err := raw.Gather(store); err != nil {
+					t.Errorf("Gather() = %v", err)
+
+					return
+				}
+
+				databases := 0
+
+				for _, m := range store.Measurement {
+					if _, ok := m.Fields[fieldSeries]; ok {
+						databases++
+					}
+				}
+
+				if databases != wantDatabases {
+					t.Errorf("gather published %d databases, want %d", databases, wantDatabases)
+
+					return
+				}
+			}
+		})
+	}
+
+	wg.Wait()
+}
+
 // TestVersionIsPerServer checks the detected line is remembered on the input and not
 // anywhere shared: one server being a 1.x must not make the next one be read as one, which
 // would point it at an endpoint holding none of its metrics.

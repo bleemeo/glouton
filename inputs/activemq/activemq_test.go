@@ -23,6 +23,8 @@ import (
 
 	"github.com/bleemeo/glouton/inputs/internal"
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/influxdata/telegraf/plugins/inputs/activemq"
 )
 
 // collectFinalMetrics replicates the measurement/field -> final metric name
@@ -266,4 +268,32 @@ func TestAdvisoryTopicsDropped(t *testing.T) {
 	}
 
 	assertTags(t, store, map[string]string{"name": "orders.events"})
+}
+
+// TestNewConfiguresThePlugin checks the console URL and the credentials reach the plugin.
+// The web console always requires authentication (admin/admin on a default install), so an
+// input built without them only ever gets a 401.
+func TestNewConfiguresThePlugin(t *testing.T) {
+	input, err := New("http://172.23.0.2:8161", "glouton", "s3cret")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	internalInput, ok := input.(*internal.Input)
+	if !ok {
+		t.Fatalf("New() returned a %T, want *internal.Input", input)
+	}
+
+	activeMQInput, ok := internalInput.Input.(*activemq.ActiveMQ)
+	if !ok {
+		t.Fatalf("wrapped input is a %T, want *activemq.ActiveMQ", internalInput.Input)
+	}
+
+	if activeMQInput.URL != "http://172.23.0.2:8161" {
+		t.Errorf("URL = %q, want %q", activeMQInput.URL, "http://172.23.0.2:8161")
+	}
+
+	if activeMQInput.Username != "glouton" || activeMQInput.Password != "s3cret" {
+		t.Errorf("credentials = %q/%q, want glouton/s3cret", activeMQInput.Username, activeMQInput.Password)
+	}
 }

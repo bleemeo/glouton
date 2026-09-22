@@ -25,6 +25,7 @@ import (
 	"net"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/bleemeo/glouton/inputs/internal"
 	"github.com/bleemeo/glouton/types"
@@ -819,5 +820,59 @@ func TestTransformMetrics(t *testing.T) {
 		if got := fields[name]; math.Abs(got-wantValue) > 1e-12 {
 			t.Errorf("transformMetrics()[%q] = %v, want %v", name, got, wantValue)
 		}
+	}
+}
+
+// TestNewUsesTheAddressGiven pins which daemon the input reads. An address is only passed
+// for a daemon Glouton's own loopback cannot be -- a containerised ntpd, or one the user
+// declared -- so losing it would publish the peers of whichever ntpd sits next to Glouton
+// under that service's name.
+func TestNewUsesTheAddressGiven(t *testing.T) {
+	cases := []struct {
+		name    string
+		address string
+		want    string
+	}{
+		{name: "an address of its own", address: "172.23.0.2:123", want: "172.23.0.2:123"},
+		{name: "the local daemon", address: "", want: "127.0.0.1:123"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			input, _, err := New(tc.address)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			internalInput, ok := input.(*internal.Input)
+			if !ok {
+				t.Fatalf("New() returned a %T, want *internal.Input", input)
+			}
+
+			ci, ok := internalInput.Input.(*controlInput)
+			if !ok {
+				t.Fatalf("wrapped input is a %T, want *controlInput", internalInput.Input)
+			}
+
+			if ci.address != tc.want {
+				t.Errorf("address = %q, want %q", ci.address, tc.want)
+			}
+		})
+	}
+}
+
+// TestNewGathersSlowlyEnough pins the interval. Reading the peers costs one request per
+// peer, and ntpd rate-limits per source address by default ("restrict ... limited"): at the
+// registry's 10 s default a daemon with a dozen peers throttles us, and answers the NTP
+// check coming from the same address with a Kiss-o'-Death, reporting a healthy server as
+// unsynchronized.
+func TestNewGathersSlowlyEnough(t *testing.T) {
+	_, options, err := New("")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if options.MinInterval < time.Minute {
+		t.Errorf("MinInterval = %v, want at least a minute", options.MinInterval)
 	}
 }

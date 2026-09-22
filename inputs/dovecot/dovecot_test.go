@@ -23,6 +23,8 @@ import (
 
 	"github.com/bleemeo/glouton/inputs/internal"
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/influxdata/telegraf/plugins/inputs/dovecot"
 )
 
 // collectFinalMetrics replicates the measurement/field -> final metric name
@@ -179,5 +181,32 @@ func TestTimestampsDropped(t *testing.T) {
 		if _, ok := got[name]; ok {
 			t.Errorf("%q should have been dropped, got value %v", name, got[name])
 		}
+	}
+}
+
+// TestNewConfiguresThePlugin checks the listener address reaches the plugin, and that the
+// query type is the "global" one renameGlobal assumes when it drops the "type" tag.
+func TestNewConfiguresThePlugin(t *testing.T) {
+	input, err := New("/var/run/dovecot/old-stats")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	internalInput, ok := input.(*internal.Input)
+	if !ok {
+		t.Fatalf("New() returned a %T, want *internal.Input", input)
+	}
+
+	dovecotInput, ok := internalInput.Input.(*dovecot.Dovecot)
+	if !ok {
+		t.Fatalf("wrapped input is a %T, want *dovecot.Dovecot", internalInput.Input)
+	}
+
+	if diff := cmp.Diff([]string{"/var/run/dovecot/old-stats"}, dovecotInput.Servers); diff != "" {
+		t.Errorf("Servers mismatch (-want +got)\n%s", diff)
+	}
+
+	if dovecotInput.Type != "global" {
+		t.Errorf("Type = %q, want %q", dovecotInput.Type, "global")
 	}
 }

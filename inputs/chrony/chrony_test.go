@@ -28,6 +28,8 @@ import (
 	"github.com/bleemeo/glouton/types"
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/influxdata/telegraf/plugins/inputs/chrony"
+
 	fbchrony "github.com/facebook/time/ntp/chrony"
 )
 
@@ -354,5 +356,44 @@ func TestValidateReply(t *testing.T) {
 				t.Errorf("ValidateReply() = %v, want %v", err, tc.wantErr)
 			}
 		})
+	}
+}
+
+// TestNewConfiguresThePlugin pins what New asks chronyd for. The metric set is the whole
+// of it: "serverstats" is only answered over the unix socket a packaged Glouton cannot
+// reach, so asking for it would put a refusal in every gather, and "sourcestats" costs a
+// request per source for nothing published.
+func TestNewConfiguresThePlugin(t *testing.T) {
+	const address = "172.23.0.2:323"
+
+	input, options, err := New(address)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	internalInput, ok := input.(*internal.Input)
+	if !ok {
+		t.Fatalf("New() returned a %T, want *internal.Input", input)
+	}
+
+	chronyInput, ok := internalInput.Input.(*chrony.Chrony)
+	if !ok {
+		t.Fatalf("wrapped input is a %T, want *chrony.Chrony", internalInput.Input)
+	}
+
+	// The address discovery resolved, not the local default the plugin would fall back
+	// to: that one reads whichever chronyd runs next to Glouton.
+	if want := "udp://" + address; chronyInput.Server != want {
+		t.Errorf("Server = %q, want %q", chronyInput.Server, want)
+	}
+
+	if diff := cmp.Diff([]string{"tracking", "activity", "sources"}, chronyInput.Metrics); diff != "" {
+		t.Errorf("Metrics mismatch (-want +got)\n%s", diff)
+	}
+
+	// Reading the sources costs one request per source, and nothing chronyd reports
+	// changes faster than its poll interval, so the default 10 s would only buy volume.
+	if options.MinInterval < time.Minute {
+		t.Errorf("MinInterval = %v, want at least a minute", options.MinInterval)
 	}
 }

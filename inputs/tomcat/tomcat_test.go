@@ -23,6 +23,8 @@ import (
 
 	"github.com/bleemeo/glouton/inputs/internal"
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/influxdata/telegraf/plugins/inputs/tomcat"
 )
 
 // collectFinalMetrics replicates the measurement/field -> final metric name
@@ -165,4 +167,34 @@ func TestRenamePipelineConnector(t *testing.T) {
 	// It is not written into the item too: the item is the service instance, so a
 	// containerised Tomcat would report the two glued as "test-tomcat_http-nio-8080".
 	assertTags(t, store, map[string]string{"name": "http-nio-8080"})
+}
+
+// TestNewConfiguresThePlugin checks the status URL and the credentials reach the plugin.
+// The manager webapp the metrics come from needs a user with the "manager-status" role, so
+// without them every gather gets a 401.
+func TestNewConfiguresThePlugin(t *testing.T) {
+	const url = "http://172.23.0.2:8080/manager/status/all?XML=true"
+
+	input, err := New(url, "glouton", "s3cret")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	internalInput, ok := input.(*internal.Input)
+	if !ok {
+		t.Fatalf("New() returned a %T, want *internal.Input", input)
+	}
+
+	tomcatInput, ok := internalInput.Input.(*tomcat.Tomcat)
+	if !ok {
+		t.Fatalf("wrapped input is a %T, want *tomcat.Tomcat", internalInput.Input)
+	}
+
+	if tomcatInput.URL != url {
+		t.Errorf("URL = %q, want %q", tomcatInput.URL, url)
+	}
+
+	if tomcatInput.Username != "glouton" || tomcatInput.Password != "s3cret" {
+		t.Errorf("credentials = %q/%q, want glouton/s3cret", tomcatInput.Username, tomcatInput.Password)
+	}
 }
