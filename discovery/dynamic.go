@@ -41,6 +41,7 @@ import (
 
 const (
 	activeMQDefaultUser         = "admin"
+	activeMQDefaultPassword     = "admin"
 	mariadbDefaultUser          = "root"
 	mysqlDefaultUser            = "root"
 	gloutonContainerLabelPrefix = "glouton."

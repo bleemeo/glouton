@@ -772,7 +772,7 @@ func activeMQURL(service Service) (url string, username string, password string)
 		}
 
 		if password == "" {
-			password = activeMQDefaultUser
+			password = activeMQDefaultPassword
 		}
 	}
 
