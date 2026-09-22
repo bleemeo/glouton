@@ -7,23 +7,30 @@ case "$1" in
         rm -f /var/lib/jmxtrans/glouton-generated.json
         ;;
     purge)
-        rm -f /var/lib/glouton/state.json
-        rm -f /var/lib/glouton/facts.yaml
-        rm -f /var/lib/glouton/netstat.out
-        rm -f /var/lib/glouton/cloudimage_creation
+        # Both directories belong to the package, so purge takes them whole, the way nginx,
+        # chrony and collectd take theirs. It has to be the whole tree rather than a list of
+        # known files: state.cache.json, stderr.log and tsdb/ appear at runtime, and a conf.d
+        # drop-in an operator adds is not dpkg's either. Anything surviving here outlives the
+        # uid that userdel frees below, so the next system user created on the host inherits
+        # it -- including state.json and the credentials in it -- and a leftover drop-in
+        # comes back into effect on the next install.
+        rm -rf /var/lib/glouton
+        rm -rf /etc/glouton
+        # The directory is jmxtrans', so only the file we generated in it is ours to remove.
         rm -f /var/lib/jmxtrans/glouton-generated.json
-        rm -f /etc/glouton/conf.d/30-install.conf
-        if [ -d /var/lib/glouton ]; then
-            rmdir --ignore-fail-on-non-empty /var/lib/glouton
-        fi
-        if [ -d /etc/glouton/conf.d ]; then
-            rmdir --ignore-fail-on-non-empty /etc/glouton/conf.d
-        fi
-        if [ -d /etc/glouton ]; then
-            rmdir --ignore-fail-on-non-empty /etc/glouton
-        fi
         userdel --force glouton > /dev/null
         groupdel glouton > /dev/null 2> /dev/null
+        # Take away both the enable symlinks deb-systemd-helper recorded and the state file
+        # listing them, the way a debhelper-generated postrm does. Purge therefore leaves no
+        # bookkeeping behind, and the next install starts from deb-systemd-helper's default:
+        # no state file means was-enabled is true, so postinst enables Glouton and starts it.
+        # The timer's symlink goes at the same time as its unit file, so systemd is not left
+        # with a link to a unit that no longer exists. Neither call needs the unit files dpkg
+        # has already deleted.
+        if [ -x "/usr/bin/deb-systemd-helper" ]; then
+            deb-systemd-helper purge 'glouton.service' >/dev/null || true
+            deb-systemd-helper purge 'glouton-auto-upgrade.timer' >/dev/null || true
+        fi
         ;;
     0)
         # Remove on rpm-distribution

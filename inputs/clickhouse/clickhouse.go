@@ -77,43 +77,26 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 	return gatherContext, false
 }
 
-// Clickhouse sometimes generates false negative metrics we can't fix (notably when tables are dropped and freed elsewhere).
-// The incorrect negative value is then cast from Int64 to Uint64, turning it into a massive number even more wrong.
+// Clickhouse sometimes generates false negative metrics we can't fix (notably when tables
+// are dropped and freed elsewhere). The incorrect negative Int64 value is then cast to
+// Uint64 by Telegraf, turning it into a massive number even more wrong: see
+// https://github.com/ClickHouse/ClickHouse/issues/3143.
 const wrappedNegativeThreshold = 1 << 63
 
-func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]any) map[string]float64 {
-	_ = originalFields
-
-	newFields := make(map[string]float64)
-
-	queryTimeRate, hasQueryTime := fields["query_time_microseconds"]
-	queryCountRate, hasQueryCount := fields["query"]
-	mutationTimeRate, hasMutationTime := fields["mutation_total_milliseconds"]
-	mutationCountRate, hasMutationCount := fields["mutation_total_parts"]
-
-	for metricName, value := range fields {
-		if metricName == "query_time_microseconds" || metricName == "mutation_total_milliseconds" {
-			// Not used by themselves but replaced below by actual average durations for queries and mutations.
-			continue
+// transformMetrics replaces the query and mutation duration counters, which aren't usable
+// by themselves, by the average duration of one query and of one mutation, and drops
+// clickhouse_metrics values that wrapped around into a near-2^64 number.
+func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, _ map[string]any) map[string]float64 {
+	if currentContext.Measurement == "clickhouse_metrics" {
+		for metricName, value := range fields {
+			if value >= wrappedNegativeThreshold {
+				delete(fields, metricName)
+			}
 		}
-
-		if currentContext.Measurement == "clickhouse_metrics" && value >= wrappedNegativeThreshold {
-			// Drop wrapped-negative incorrect values interpreted as near-2^64 numbers.
-			continue
-		}
-
-		newFields[metricName] = value
 	}
 
-	// Protect from division by 0.
-	if hasQueryTime && hasQueryCount && queryCountRate > 0 {
-		newFields["query_time_seconds"] = queryTimeRate / queryCountRate / 1000000 // microseconds -> seconds.
-	}
+	internal.AvgDuration(fields, "query_time_microseconds", "query", "query_time_seconds", internal.UsPerSecond)
+	internal.AvgDuration(fields, "mutation_total_milliseconds", "mutation_total_parts", "mutation_time_seconds", internal.MsPerSecond)
 
-	// Protect from division by 0.
-	if hasMutationTime && hasMutationCount && mutationCountRate > 0 {
-		newFields["mutation_time_seconds"] = mutationTimeRate / mutationCountRate / 1000 // milliseconds -> seconds.
-	}
-
-	return newFields
+	return fields
 }

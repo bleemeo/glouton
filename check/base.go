@@ -289,11 +289,16 @@ func (bc *baseCheck) doCheck(ctx context.Context) types.StatusDescription {
 	}
 
 	if len(bc.tcpAddresses) == 0 {
-		statusOK := types.StatusDescription{
-			CurrentStatus: types.StatusOk,
+		if bc.mainCheck != nil {
+			// The main check is the whole check here, so keep its description: it is the
+			// only record of what was probed ("NTP OK - 1.2ms response time").
+			return status
 		}
 
-		return statusOK
+		// No main check either: nothing was probed, so there is nothing to describe. The
+		// status is built rather than returned from above because the zero value of
+		// types.Status is StatusUnset, not StatusOk.
+		return types.StatusDescription{CurrentStatus: types.StatusOk}
 	}
 
 	for _, addr := range bc.tcpAddresses {

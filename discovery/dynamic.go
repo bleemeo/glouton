@@ -40,6 +40,8 @@ import (
 )
 
 const (
+	activeMQDefaultUser         = "admin"
+	activeMQDefaultPassword     = "admin"
 	mariadbDefaultUser          = "root"
 	mysqlDefaultUser            = "root"
 	gloutonContainerLabelPrefix = "glouton."
@@ -88,6 +90,10 @@ type containerInfoProvider interface {
 	ContainerLastKill(containerID string) time.Time
 	ContainerLastDelete(containerID string) time.Time
 	ContainerTerminationGracePeriod(containerID string) time.Duration
+	// Exec runs a command inside a container, the way "docker exec" does. Used to read a
+	// containerised service with a binary only its own image carries, like the varnishstat
+	// matching a containerised Varnish.
+	Exec(ctx context.Context, containerID string, cmd []string) ([]byte, error)
 }
 
 type fileReader interface {
@@ -133,7 +139,7 @@ func (dd *DynamicDiscovery) Discovery(ctx context.Context) ([]Service, time.Time
 
 // ProcessServiceInfo return the service & container a process belong based on its command line + pid & start time.
 func (dd *DynamicDiscovery) ProcessServiceInfo(cmdLine []string, pid int, createTime time.Time) (serviceName ServiceName, containerName string) {
-	serviceType, ok := serviceByCommand(cmdLine)
+	serviceType, _, ok := serviceByCommand(cmdLine)
 	if !ok {
 		return "", ""
 	}
@@ -162,16 +168,23 @@ func (dd *DynamicDiscovery) ProcessServiceInfo(cmdLine []string, pid int, create
 //nolint:gochecknoglobals
 var (
 	knownProcesses = map[string]ServiceName{
-		"apache2":                ApacheService,
-		string(AsteriskService):  AsteriskService,
-		"clickhouse-server":      ClickHouseService,
-		"dovecot":                DovecotService,
-		"exim4":                  EximService,
-		"exim":                   EximService,
-		"freeradius":             FreeradiusService,
-		"haproxy":                HAProxyService,
-		"httpd":                  ApacheService,
+		"apache2":               ApacheService,
+		string(AsteriskService): AsteriskService,
+		"chronyd":               ChronyService,
+		"clickhouse-server":     ClickHouseService,
+		"dovecot":               DovecotService,
+		"exim4":                 EximService,
+		"exim":                  EximService,
+		"freeradius":            FreeradiusService,
+		"haproxy":               HAProxyService,
+		"httpd":                 ApacheService,
+		// Both binaries, each carrying a ServiceVariant of its own (see knownVariants):
+		// 1.x and 2.x are "influxd" and cannot be told apart from the command line at
+		// all, 3.x is "influxdb3". The variant is what decides the port. Which of 1.x and
+		// 2.x a server is only matters for where its metrics are read from, and that is
+		// asked of the server itself -- see inputs/influxdb.
 		"influxd":                InfluxDBService,
+		"influxdb3":              InfluxDBService,
 		"libvirtd":               LibvirtService,
 		mariadbdProcess:          MariaDBService,
 		"master":                 PostfixService,
@@ -198,6 +211,19 @@ var (
 		"uWSGI":                  UWSGIService,
 		"valkey-server":          ValkeyService,
 		"varnishd":               VarnishService,
+	}
+	// serverSubCommands lists the services whose binary is also their client CLI. They
+	// are only detected on the sub-command that starts the server ("vault server",
+	// "consul agent", ...), so that a client command ("vault status", "consul members",
+	// ...) isn't reported as the service itself.
+	serverSubCommands = map[string]struct {
+		SubCommand  string
+		ServiceName ServiceName
+	}{
+		"bao":                 {SubCommand: "server", ServiceName: OpenBaoService},
+		"clickhouse":          {SubCommand: "server", ServiceName: ClickHouseService},
+		string(ConsulService): {SubCommand: "agent", ServiceName: ConsulService},
+		"vault":               {SubCommand: "server", ServiceName: VaultService},
 	}
 	knownInterpretedProcess = []struct {
 		CmdLineMustContains []string
@@ -252,6 +278,24 @@ var (
 		{
 			CmdLineMustContains: []string{"org.apache.catalina.startup.Bootstrap", "confluence"},
 			ServiceName:         ConfluenceService,
+			Interpreter:         interpreterJava,
+		},
+		{
+			// This must come after the more specific JIRA/Confluence/BitBucket entries above,
+			// since those also run a plain Tomcat under the hood and would otherwise be
+			// shadowed by this less specific match.
+			CmdLineMustContains: []string{"org.apache.catalina.startup.Bootstrap"},
+			ServiceName:         TomcatService,
+			Interpreter:         interpreterJava,
+		},
+		{
+			// The main class (org.apache.activemq.console.Main) is read from the
+			// activemq.jar manifest and never appears as a literal cmdline
+			// argument when started the way the official Docker image does it
+			// (java -jar activemq.jar start), so match a system property that
+			// the launch script always sets instead.
+			CmdLineMustContains: []string{"-Dactivemq.home="},
+			ServiceName:         ActiveMQService,
 			Interpreter:         interpreterJava,
 		},
 		{
@@ -385,20 +429,21 @@ func (dd *DynamicDiscovery) serviceFromProcess(ctx context.Context, process fact
 		return Service{}, false
 	}
 
-	serviceType, ok := serviceByCommand(process.CmdLineList)
+	serviceType, variant, ok := serviceByCommand(process.CmdLineList)
 	if !ok {
 		return Service{}, false
 	}
 
 	service := Service{
-		ServiceType:   serviceType,
-		Name:          string(serviceType),
-		ContainerID:   process.ContainerID,
-		ContainerName: process.ContainerName,
-		Instance:      process.ContainerName,
-		ExePath:       process.Executable,
-		Active:        true,
-		LastTimeSeen:  dd.now(),
+		ServiceType:    serviceType,
+		ServiceVariant: variant,
+		Name:           string(serviceType),
+		ContainerID:    process.ContainerID,
+		ContainerName:  process.ContainerName,
+		Instance:       process.ContainerName,
+		ExePath:        process.Executable,
+		Active:         true,
+		LastTimeSeen:   dd.now(),
 	}
 
 	if service.ContainerID != "" {
@@ -469,6 +514,8 @@ func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discovery
 		defaultAddress = service.container.PrimaryAddress()
 	}
 
+	firstEphemeralPort := int64(facts.FirstEphemeralPort())
+
 	newListenAddresses := service.ListenAddresses[:0]
 
 	for _, a := range service.ListenAddresses {
@@ -495,11 +542,11 @@ func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discovery
 			continue
 		}
 
-		if int(port) == di.ServicePort && a.Network() == di.ServiceProtocol && address != net.IPv4zero.String() {
+		if int(port) == service.defaultPort(di) && a.Network() == di.ServiceProtocol && address != net.IPv4zero.String() {
 			defaultAddress = address
 		}
 
-		if !di.IgnoreHighPort || port <= 32000 {
+		if !di.IgnoreHighPort || port < firstEphemeralPort {
 			newListenAddresses = append(newListenAddresses, a)
 		}
 	}
@@ -507,9 +554,11 @@ func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discovery
 	service.ListenAddresses = newListenAddresses
 	service.IPAddress = defaultAddress
 
-	if len(service.ListenAddresses) == 0 && di.ServicePort != 0 {
-		// If netstat seems to have failed, always add the main service port
-		service.ListenAddresses = append(service.ListenAddresses, facts.ListenAddress{NetworkFamily: di.ServiceProtocol, Address: service.IPAddress, Port: di.ServicePort})
+	if port := service.defaultPort(di); len(service.ListenAddresses) == 0 && port != 0 {
+		// If netstat seems to have failed, always add the main service port. For a service
+		// whose port depends on its version that is the one its executable implies, which
+		// is all there is to go on with nothing listening to look at.
+		service.ListenAddresses = append(service.ListenAddresses, facts.ListenAddress{NetworkFamily: di.ServiceProtocol, Address: service.IPAddress, Port: port})
 	}
 }
 
@@ -548,6 +597,19 @@ func firstCompletePair(env map[string]string, pairsByPriority ...credentialPair)
 
 // fillConfig fills the service config with information found inside the container.
 func (dd *DynamicDiscovery) fillConfig(ctx context.Context, service *Service) {
+	if service.ServiceType == ActiveMQService {
+		if service.container != nil {
+			env := service.container.Environment()
+
+			pair := credentialPair{userKey: "ACTIVEMQ_WEB_USER", passKey: "ACTIVEMQ_WEB_PASSWORD"} //nolint:gosec
+
+			if u, p, ok := firstCompletePair(env, pair); ok {
+				service.Config.Username = u
+				service.Config.Password = p
+			}
+		}
+	}
+
 	if service.ServiceType == ClickHouseService {
 		if service.container != nil {
 			env := service.container.Environment()
@@ -567,6 +629,36 @@ func (dd *DynamicDiscovery) fillConfig(ctx context.Context, service *Service) {
 
 				if v, ok := firstEnv(env, "CLICKHOUSE_ADMIN_USER", "CLICKHOUSE_USER"); ok {
 					service.Config.Username = v
+				}
+			}
+		}
+	}
+
+	if service.ServiceType == InfluxDBService {
+		if service.container != nil {
+			env := service.container.Environment()
+
+			// 1.x and 2.x authenticate with a user and a password. Pair-only: the image
+			// ignores a lone password, and generates a random one for a lone user.
+			pairs := []credentialPair{
+				{userKey: "INFLUXDB_ADMIN_USER", passKey: "INFLUXDB_ADMIN_PASSWORD"}, //nolint:gosec
+				{userKey: "INFLUXDB_USER", passKey: "INFLUXDB_USER_PASSWORD"},        //nolint:gosec
+			}
+
+			if u, p, ok := firstCompletePair(env, pairs...); ok {
+				service.Config.Username = u
+				service.Config.Password = p
+			}
+
+			// 3.x authenticates with a token instead, and needs one for "/metrics" as much
+			// as for a query: a server left at its default settings answers 401 there.
+			// INFLUXDB3_AUTH_TOKEN is the variable its own CLI reads, so a container given
+			// a token for anything else has already named the one to use. It wins over the
+			// pair above, which belongs to another line and cannot both be set in practice.
+			for k, v := range env {
+				if k == "INFLUXDB3_AUTH_TOKEN" {
+					service.Config.Username = ""
+					service.Config.Password = v
 				}
 			}
 		}
@@ -783,9 +875,14 @@ func (dd *DynamicDiscovery) guessJMX(service *Service, cmdLine []string) {
 	}
 }
 
-func serviceByCommand(cmdLine []string) (serviceName ServiceName, found bool) {
+// serviceByCommand identifies the service a command line belongs to, and which
+// implementation of it is running when the type has more than one (see ServiceVariant).
+// The variant is empty for every service type that has only one implementation, and for
+// the command-line shapes that identify a service by something other than the process
+// name -- none of those belong to a type with variants.
+func serviceByCommand(cmdLine []string) (serviceName ServiceName, variant ServiceVariant, found bool) {
 	if len(cmdLine) == 0 {
-		return "", false
+		return "", VariantUnknown, false
 	}
 
 	name := filepath.Base(cmdLine[0])
@@ -796,7 +893,7 @@ func serviceByCommand(cmdLine []string) (serviceName ServiceName, found bool) {
 	}
 
 	if name == "" {
-		return "", false
+		return "", VariantUnknown, false
 	}
 
 	// Some process alter their name to add information. Redis, nginx or php-fpm do this.
@@ -810,34 +907,27 @@ func serviceByCommand(cmdLine []string) (serviceName ServiceName, found bool) {
 	alteredName, _, _ := strings.Cut(cmdLine[0], " ")
 	if len(alteredName) > 0 && alteredName[len(alteredName)-1] == ':' {
 		if serviceName, ok := knownProcesses[alteredName[:len(alteredName)-1]]; ok {
-			return serviceName, ok
+			return serviceName, VariantUnknown, ok
 		}
 	}
 
 	serviceName, ok := serviceByInterpreter(name, cmdLine)
 
 	if ok {
-		return serviceName, ok
+		return serviceName, VariantUnknown, ok
 	}
 
-	if name == "clickhouse" || name == "bao" || name == "vault" {
-		if len(cmdLine) > 1 && cmdLine[1] == "server" {
-			switch name {
-			case "clickhouse":
-				return ClickHouseService, true
-			case "bao":
-				return OpenBaoService, true
-			case "vault":
-				return VaultService, true
-			}
+	if candidate, ok := serverSubCommands[name]; ok {
+		if len(cmdLine) > 1 && cmdLine[1] == candidate.SubCommand {
+			return candidate.ServiceName, VariantUnknown, true
 		}
 
-		return "", false
+		return "", VariantUnknown, false
 	}
 
 	serviceName, ok = knownProcesses[name]
 
-	return serviceName, ok
+	return serviceName, knownVariants[name], ok
 }
 
 func serviceByInterpreter(name string, cmdLine []string) (serviceName ServiceName, found bool) {

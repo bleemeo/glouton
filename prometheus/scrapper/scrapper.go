@@ -69,10 +69,14 @@ func (e TargetError) Error() string {
 
 // Target is an URL to scrape.
 type Target struct {
-	URL             *url.URL
-	AllowList       []string
-	DenyList        []string
-	Rules           []types.SimpleRule
+	URL       *url.URL
+	AllowList []string
+	DenyList  []string
+	Rules     []types.SimpleRule
+	// BearerToken is sent as "Authorization: Bearer <token>" when set. Some exporters
+	// refuse an unauthenticated scrape: InfluxDB 3 answers 401 on /metrics, /health and
+	// /ping alike unless its server is started with --without-auth.
+	BearerToken     string
 	ExtraLabels     map[string]string
 	ContainerLabels map[string]string
 	mockResponse    []byte
@@ -144,6 +148,10 @@ func (t *Target) readAll(ctx context.Context) ([]byte, error) {
 
 	req.Header.Add("Accept", "text/plain;version=0.0.4")
 	req.Header.Set("User-Agent", version.UserAgent())
+
+	if t.BearerToken != "" {
+		req.Header.Set("Authorization", "Bearer "+t.BearerToken)
+	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

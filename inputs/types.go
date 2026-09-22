@@ -144,11 +144,19 @@ func ConvertToFloat(value any) (float64, error) {
 		return float64(value), nil
 	case int:
 		return float64(value), nil
+	case int8:
+		return float64(value), nil
+	case int16:
+		return float64(value), nil
 	case int32:
 		return float64(value), nil
 	case int64:
 		return float64(value), nil
 	case uint:
+		return float64(value), nil
+	case uint8:
+		return float64(value), nil
+	case uint16:
 		return float64(value), nil
 	case uint32:
 		return float64(value), nil

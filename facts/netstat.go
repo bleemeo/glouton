@@ -32,12 +32,25 @@ import (
 )
 
 const (
-	networkTCP        = "tcp"
-	networkUDP        = "udp"
+	networkTCP = "tcp"
+	networkUDP = "udp"
+	// ipv6Suffix is what the network name of an IPv6 socket carries on top of its
+	// protocol, the way netstat and /proc/net name them: "tcp6", "udp6".
+	ipv6Suffix        = "6"
 	networkUnix       = "unix"
 	listenState       = "LISTEN"
 	addrAllInterfaces = "0.0.0.0"
 	addrLocalhost     = "127.0.0.1"
+	// defaultFirstEphemeralPort is the bottom of the range the kernel picks source ports
+	// from when it can't be read: Linux's own default (net.ipv4.ip_local_port_range is
+	// 32768-60999), and below where macOS and Windows start. Used to tell a UDP server's
+	// port from a client's, which UDP gives no other way to distinguish -- see
+	// mergeNetstats.
+	defaultFirstEphemeralPort = 32768
+	// portRangeFile is where Linux exposes that range, which is tunable: a host that
+	// lowered it would otherwise have its own services taken for clients, and one that
+	// raised it would have ephemeral sockets taken for listeners.
+	portRangeFile = "/proc/sys/net/ipv4/ip_local_port_range"
 )
 
 // NetstatProvider provide netstat information from both a file (output of netstat command) and using gopsutil
@@ -77,12 +90,41 @@ func (np NetstatProvider) Netstat(_ context.Context, processes map[int]Process) 
 }
 
 func (np NetstatProvider) mergeNetstats(netstat map[int][]ListenAddress, dynamicNetstat []psutilNet.ConnectionStat) {
+	firstEphemeralPort := FirstEphemeralPort()
+
 	for _, c := range dynamicNetstat {
 		if c.Pid == 0 {
 			continue
 		}
 
-		if c.Status != listenState {
+		// UDP has no connection states, so it has no listenState to filter on either:
+		// gopsutil reports every UDP socket as "NONE" on Linux.
+		//
+		// Nothing marks a UDP socket as a server's, though, so what a server would
+		// never do is excluded instead: being connected to a peer (only a client
+		// does that), and being bound to an ephemeral port -- the range the kernel
+		// picks from for the unconnected sockets a resolver or a DNS server's own
+		// outgoing queries use, which would otherwise show up as listen addresses
+		// that change on every scan, and make the service look like it needs its
+		// checks and inputs recreated each time. A UDP service listening inside that
+		// range is missed, which is the price of the kernel not saying which sockets
+		// are listening.
+		var protocol string
+
+		switch c.Type {
+		case syscall.SOCK_STREAM:
+			if c.Status != listenState {
+				continue
+			}
+
+			protocol = networkTCP
+		case syscall.SOCK_DGRAM:
+			if c.Raddr.Port != 0 || int(c.Laddr.Port) >= firstEphemeralPort {
+				continue
+			}
+
+			protocol = networkUDP
+		default:
 			continue
 		}
 
@@ -93,19 +135,8 @@ func (np NetstatProvider) mergeNetstats(netstat map[int][]ListenAddress, dynamic
 			address = addrAllInterfaces
 		}
 
-		var protocol string
-
-		switch c.Type {
-		case syscall.SOCK_STREAM:
-			protocol = networkTCP
-		case syscall.SOCK_DGRAM:
-			protocol = networkUDP
-		default:
-			continue
-		}
-
 		if c.Family == syscall.AF_INET6 {
-			protocol += "6"
+			protocol += ipv6Suffix
 		}
 
 		netstat[int(c.Pid)] = addAddress(netstat[int(c.Pid)], ListenAddress{
@@ -114,6 +145,39 @@ func (np NetstatProvider) mergeNetstats(netstat map[int][]ListenAddress, dynamic
 			Port:          int(c.Laddr.Port),
 		})
 	}
+}
+
+// FirstEphemeralPort returns the lowest port the kernel picks for an outgoing connection,
+// read from the kernel itself where that is possible so the guess below only applies to
+// the platforms that don't expose it.
+//
+// Exported because two places need the same boundary: this package tells a UDP server's
+// port from a client's with it (see mergeNetstats), and discovery uses it to drop the
+// random high port some services also listen on. They must agree -- a port one of them
+// calls ephemeral and the other calls a service's is a service that appears and disappears
+// depending on which answered.
+//
+// Read on every call rather than cached: it is a sysctl an operator can change while
+// Glouton runs, and a file read from procfs costs nothing next to the connection scan it
+// is filtering.
+func FirstEphemeralPort() int {
+	content, err := os.ReadFile(portRangeFile)
+	if err != nil {
+		return defaultFirstEphemeralPort
+	}
+
+	// "32768\t60999": the low end first, separated by whitespace.
+	fields := strings.Fields(string(content))
+	if len(fields) == 0 {
+		return defaultFirstEphemeralPort
+	}
+
+	low, err := strconv.Atoi(fields[0])
+	if err != nil || low <= 0 {
+		return defaultFirstEphemeralPort
+	}
+
+	return low
 }
 
 func (np NetstatProvider) cleanRecycledPIDs(netstat map[int][]ListenAddress, processes map[int]Process, modTime time.Time) {
@@ -149,6 +213,17 @@ type ListenAddress struct {
 // Network is the method from net.Addr.
 func (l ListenAddress) Network() string {
 	return l.NetworkFamily
+}
+
+// IsProtocol reports whether this address speaks the given protocol ("tcp", "udp"),
+// whichever IP family it is on.
+//
+// The family is part of the network name -- an IPv6 socket is "udp6", not "udp" -- so
+// comparing the name to a bare protocol silently misses every IPv6 listener. That is what
+// this exists to stop: a service whose only socket on its port is the IPv6 one is still
+// serving that protocol.
+func (l ListenAddress) IsProtocol(protocol string) bool {
+	return l.NetworkFamily == protocol || l.NetworkFamily == protocol+ipv6Suffix
 }
 
 func (l ListenAddress) String() string {

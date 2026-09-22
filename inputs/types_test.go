@@ -52,6 +52,8 @@ func TestAccumulator(t *testing.T) {
 		"fieldFloat":  42.6,
 		"fieldInt":    -42,
 		"fieldUint64": uint64(42),
+		"fieldInt16":  int16(-42),
+		"fieldUint16": uint16(42),
 	}
 	tags := map[string]string{
 		"tag1": "value1",

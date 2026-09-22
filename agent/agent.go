@@ -419,19 +419,27 @@ func (a *agent) setupLogger() {
 		fmt.Printf("Unable to use logging backend '%s': %v\n", a.config.Logging.Output, err) //nolint:forbidigo
 	}
 
-	switch strings.ToLower(a.config.Logging.Level) {
-	case "0", "info", "warning", "error":
-		logger.SetLevel(0)
-	case "1", "verbose":
-		logger.SetLevel(1)
-	case "2", "debug":
-		logger.SetLevel(2)
-	default:
-		logger.SetLevel(0)
+	level, ok := parseLogLevel(a.config.Logging.Level)
+	if !ok {
 		a.addWarnings(fmt.Errorf(`%w: unknown logging.level "%s", using "INFO"`, config.ErrInvalidValue, a.config.Logging.Level))
 	}
 
+	logger.SetLevel(level)
 	logger.SetPkgLevels(a.config.Logging.PackageLevels)
+}
+
+// parseLogLevel converts the logging.level config value to a logger verbosity level.
+func parseLogLevel(level string) (int, bool) {
+	switch strings.ToLower(level) {
+	case "0", "info", "warning", "error":
+		return 0, true
+	case "1", "verbose":
+		return 1, true
+	case "2", "debug":
+		return 2, true
+	default:
+		return 0, false
+	}
 }
 
 // Run runs Glouton with the given configuration.

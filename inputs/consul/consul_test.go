@@ -1,0 +1,351 @@
+// Copyright 2015-2026 Bleemeo
+//
+// bleemeo.com an infrastructure monitoring solution in the Cloud
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package consul
+
+import (
+	"math"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/types"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/influxdata/telegraf/plugins/inputs/consul_agent"
+)
+
+// collectFinalMetrics replicates the measurement/field -> final metric name
+// convention applied downstream (inputs.Accumulator.addMetrics): the metric
+// name is the field name alone when the measurement was renamed to "", or
+// "<measurement>_<field>" otherwise.
+func collectFinalMetrics(store *internal.StoreAccumulator) map[string]float64 {
+	got := make(map[string]float64)
+
+	for _, m := range store.Measurement {
+		for field, value := range m.Fields {
+			name := field
+			if m.Name != "" {
+				name = m.Name + "_" + field
+			}
+
+			switch v := value.(type) {
+			case float64:
+				got[name] = v
+			case uint64:
+				got[name] = float64(v)
+			}
+		}
+	}
+
+	return got
+}
+
+func newAccumulator(store *internal.StoreAccumulator) internal.Accumulator {
+	return internal.Accumulator{
+		RenameGlobal:     renameGlobal,
+		RenameMetrics:    renameMetrics,
+		TransformMetrics: transformMetrics,
+		Accumulator:      store,
+	}
+}
+
+func assertMetrics(t *testing.T, got map[string]float64, want map[string]float64) {
+	t.Helper()
+
+	for name, value := range want {
+		gotValue, ok := got[name]
+		if !ok {
+			t.Errorf("metric %q not emitted, got metrics: %v", name, got)
+
+			continue
+		}
+
+		if math.Abs(gotValue-value) > 0.0001 {
+			t.Errorf("metric %q == %v, want %v", name, gotValue, value)
+		}
+	}
+}
+
+// TestGaugeRename checks that a gauge -- reported by the consul_agent plugin as a
+// single "value" field on a measurement named after the Consul metric -- ends up as
+// one metric named after that measurement, without a "_value" suffix.
+func TestGaugeRename(t *testing.T) {
+	store := &internal.StoreAccumulator{}
+	acc := newAccumulator(store)
+
+	acc.PrepareGather()
+	acc.AddGauge("consul.autopilot.healthy", map[string]any{
+		"value": 1.0,
+	}, nil, time.Now())
+	acc.AddGauge("consul.runtime.num_goroutines", map[string]any{
+		"value": 87.0,
+	}, nil, time.Now())
+
+	got := collectFinalMetrics(store)
+
+	assertMetrics(t, got, map[string]float64{
+		"consul_autopilot_healthy":      1,
+		"consul_runtime_num_goroutines": 87,
+	})
+
+	for name := range got {
+		if name == "consul_autopilot_healthy_value" || name == "consul_runtime_num_goroutines_value" {
+			t.Errorf("gauge %q should have been renamed to drop the \"value\" field name", name)
+		}
+	}
+}
+
+// TestCounterAndSampleFields checks the counters and samples, which the plugin reports
+// with one field per aggregation (rate, mean, ...). Those are already aggregated by
+// Consul over its own interval, so they must not be differentiated again -- only the
+// dotted measurement name is normalized, the fields keep their name -- except the raft/kvs
+// timer means, which Consul reports in milliseconds and transformMetrics converts to
+// seconds (see TestTimerMeansConvertedToSeconds).
+func TestCounterAndSampleFields(t *testing.T) {
+	store := &internal.StoreAccumulator{}
+	acc := newAccumulator(store)
+
+	acc.PrepareGather()
+	acc.AddCounter("consul.rpc.request", map[string]any{
+		"count": 100.0,
+		"rate":  10.0,
+		"sum":   100.0,
+	}, nil, time.Now())
+
+	got := collectFinalMetrics(store)
+
+	assertMetrics(t, got, map[string]float64{
+		"consul_rpc_request_rate": 10,
+	})
+}
+
+// TestTimerMeansConvertedToSeconds checks that the raft_committime and
+// raft_leader_lastcontact means -- reported by Consul's go-metrics sink in
+// milliseconds -- are converted to seconds and renamed accordingly, matching every
+// other duration metric in this codebase.
+//
+// It also checks the conversion stops at those two. Consul reports a dozen timers in
+// milliseconds and Glouton publishes exactly these, so converting another one produces a
+// field nothing reads (kvs.apply below is one such timer, left in Consul's own scale).
+func TestTimerMeansConvertedToSeconds(t *testing.T) {
+	store := &internal.StoreAccumulator{}
+	acc := newAccumulator(store)
+
+	acc.PrepareGather()
+	acc.AddCounter("consul.raft.commitTime", map[string]any{
+		"count": 42.0,
+		"mean":  1.5,
+		"max":   3.0,
+	}, nil, time.Now())
+	acc.AddCounter("consul.kvs.apply", map[string]any{
+		"count": 12.0,
+		"mean":  2.5,
+	}, nil, time.Now())
+	acc.AddCounter("consul.raft.leader.lastContact", map[string]any{
+		"count": 5.0,
+		"mean":  42.25,
+	}, nil, time.Now())
+	// A timer Consul reports and Glouton does not publish: its mean has to keep Consul's
+	// own name and millisecond scale, so that only the published ones are converted.
+	acc.AddCounter("consul.fsm.kvs", map[string]any{
+		"count": 9.0,
+		"mean":  0.75,
+	}, nil, time.Now())
+
+	got := collectFinalMetrics(store)
+
+	assertMetrics(t, got, map[string]float64{
+		"consul_raft_committime_mean_seconds":         0.0015,
+		"consul_raft_leader_lastcontact_mean_seconds": 0.04225,
+		// The only write latency a single-server agent reports: the two raft timers
+		// above need a leader with followers.
+		"consul_kvs_apply_mean_seconds": 0.0025,
+		// max isn't in the default metrics and is left in Consul's own millisecond
+		// scale: only "mean" is converted.
+		"consul_raft_committime_max": 3,
+		// Not a default metric, so its mean keeps Consul's name and scale.
+		"consul_fsm_kvs_mean": 0.75,
+	})
+
+	for name := range got {
+		if name == "consul_raft_committime_mean" || name == "consul_raft_leader_lastcontact_mean" {
+			t.Errorf("metric %q should have been renamed with a _seconds suffix, still present", name)
+		}
+
+		if name == "consul_kvs_apply_mean" {
+			t.Errorf("metric %q should have been renamed with a _seconds suffix, still present", name)
+		}
+
+		if name == "consul_fsm_kvs_mean_seconds" {
+			t.Errorf("metric %q was converted, though it isn't one Glouton publishes", name)
+		}
+	}
+}
+
+// TestGaugeNodeNameStripped checks the node name Consul inserts in the name of its
+// gauges is removed: "consul.<node>.autopilot.healthy" must be reported as
+// consul_autopilot_healthy, not consul_<node>_autopilot_healthy, which would differ on
+// every node and never match the default metrics.
+func TestGaugeNodeNameStripped(t *testing.T) {
+	store := &internal.StoreAccumulator{}
+	acc := newAccumulator(store)
+
+	acc.PrepareGather()
+	// A gauge, as reported by an agent with the default telemetry settings.
+	acc.AddGauge("consul.cbcf2176063c.autopilot.healthy", map[string]any{"value": 1.0}, nil, time.Now())
+	acc.AddGauge("consul.cbcf2176063c.runtime.num_goroutines", map[string]any{"value": 194.0}, nil, time.Now())
+	// The same gauge on an agent running with telemetry.disable_hostname.
+	acc.AddGauge("consul.state.services", map[string]any{"value": 3.0}, nil, time.Now())
+	// A counter: those never carry the node name, and their second segment must be kept.
+	acc.AddCounter("consul.raft.apply", map[string]any{"rate": 10.0}, nil, time.Now())
+
+	got := collectFinalMetrics(store)
+
+	assertMetrics(t, got, map[string]float64{
+		"consul_autopilot_healthy":      1,
+		"consul_runtime_num_goroutines": 194,
+		"consul_state_services":         3,
+		"consul_raft_apply_rate":        10,
+	})
+
+	for name := range got {
+		if strings.Contains(name, "cbcf2176063c") {
+			t.Errorf("metric %q still carries the node name", name)
+		}
+	}
+}
+
+// TestConsulLabelsAreKept checks the labels telling apart the series of one metric survive
+// as labels of their own. Consul reports its memberlist and serf queues once per network,
+// and its state metrics once per datacenter and kind of config entry, so without them those
+// series would share a name and an empty label set and be rejected as duplicates.
+//
+// They used to be joined into the item because the compatibility naming dropped everything
+// but the item; that also glued them onto the service instance, so a containerised agent
+// reported "test-consul_lan". Nothing writes the item here any more.
+func TestConsulLabelsAreKept(t *testing.T) {
+	store := &internal.StoreAccumulator{}
+	acc := newAccumulator(store)
+
+	acc.PrepareGather()
+	acc.AddCounter("consul.memberlist.gossip", map[string]any{"mean": 0.016}, map[string]string{"network": "lan"}, time.Now())
+	acc.AddCounter("consul.memberlist.gossip", map[string]any{"mean": 0.021}, map[string]string{"network": "wan"}, time.Now())
+	// Several labels, each kept on its own.
+	acc.AddGauge("consul.node1.state.config", map[string]any{"value": 3.0},
+		map[string]string{"datacenter": "dc1", "kind": "service-defaults"}, time.Now())
+	// A label Consul leaves empty is kept as the empty label it is.
+	acc.AddGauge("consul.node1.version", map[string]any{"value": 1.0},
+		map[string]string{"version": "1.20.6", "pre_release": ""}, time.Now())
+	// And an unlabelled metric gets no label at all, leaving it the service instance alone.
+	acc.AddGauge("consul.node1.autopilot.healthy", map[string]any{"value": 1.0}, nil, time.Now())
+
+	gotLabels := make(map[string][]map[string]string)
+
+	for _, m := range store.Measurement {
+		for field := range m.Fields {
+			// Same naming convention as collectFinalMetrics: a gauge has its name moved
+			// into the field, the measurement being emptied by renameMetrics.
+			name := field
+			if m.Name != "" {
+				name = m.Name + "_" + field
+			}
+
+			gotLabels[name] = append(gotLabels[name], m.Tags)
+
+			if item, ok := m.Tags[types.LabelItem]; ok {
+				t.Errorf("%s: item should be left to the service instance, got %q", name, item)
+			}
+		}
+	}
+
+	wantLabels := map[string][]map[string]string{
+		"consul_memberlist_gossip_mean": {{"network": "lan"}, {"network": "wan"}},
+		"consul_state_config":           {{"datacenter": "dc1", "kind": "service-defaults"}},
+		"consul_version":                {{"version": "1.20.6", "pre_release": ""}},
+		"consul_autopilot_healthy":      {{}},
+	}
+
+	if diff := cmp.Diff(wantLabels, gotLabels); diff != "" {
+		t.Errorf("labels (-want +got):\n%s", diff)
+	}
+}
+
+// TestGaugeNodeNameWithDotsStripped checks a host name holding dots is stripped too.
+// What Consul inserts is the hostname (not its node_name) and it isn't sanitized, so
+// a host with an FQDN hostname reports "consul.web01.prod.example.com.runtime.x": treating
+// it as a single segment would leave it in the metric name, and the default metrics would
+// never match on such a host.
+func TestGaugeNodeNameWithDotsStripped(t *testing.T) {
+	store := &internal.StoreAccumulator{}
+	acc := newAccumulator(store)
+
+	acc.PrepareGather()
+	acc.AddGauge("consul.web01.prod.example.com.autopilot.healthy", map[string]any{"value": 1.0}, nil, time.Now())
+	acc.AddGauge("consul.web01.prod.example.com.runtime.num_goroutines", map[string]any{"value": 194.0}, nil, time.Now())
+	// A node name whose first segment is itself a subsystem name: the search goes from the
+	// end backwards, so it finds the real subsystem "state" instead of "raft".
+	acc.AddGauge("consul.raft.example.com.state.services", map[string]any{"value": 3.0}, nil, time.Now())
+	// A node named after a subsystem, the tightest case: only one of the two segments goes.
+	acc.AddGauge("consul.runtime.runtime.alloc_bytes", map[string]any{"value": 42.0}, nil, time.Now())
+	// A subsystem name ("runtime") buried in the hostname, one segment short of the real
+	// subsystem ("autopilot"): a scan that stopped at the first match from either end
+	// would land on "runtime" instead.
+	acc.AddGauge("consul.foo.runtime.example.com.autopilot.healthy", map[string]any{"value": 5.0}, nil, time.Now())
+
+	got := collectFinalMetrics(store)
+
+	assertMetrics(t, got, map[string]float64{
+		"consul_autopilot_healthy":      5,
+		"consul_runtime_num_goroutines": 194,
+		"consul_state_services":         3,
+		"consul_runtime_alloc_bytes":    42,
+	})
+
+	for name := range got {
+		if strings.Contains(name, "example") || strings.Contains(name, "web01") {
+			t.Errorf("metric %q still carries the node name", name)
+		}
+	}
+}
+
+// TestNewConfiguresThePlugin checks the agent URL and the token reach the plugin. An agent
+// with ACLs on answers /v1/agent/metrics with a 403 without one.
+func TestNewConfiguresThePlugin(t *testing.T) {
+	input, err := New("http://172.23.0.2:8500", "a-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	internalInput, ok := input.(*internal.Input)
+	if !ok {
+		t.Fatalf("New() returned a %T, want *internal.Input", input)
+	}
+
+	consulInput, ok := internalInput.Input.(*consul_agent.ConsulAgent)
+	if !ok {
+		t.Fatalf("wrapped input is a %T, want *consul_agent.ConsulAgent", internalInput.Input)
+	}
+
+	if consulInput.URL != "http://172.23.0.2:8500" {
+		t.Errorf("URL = %q, want %q", consulInput.URL, "http://172.23.0.2:8500")
+	}
+
+	if consulInput.Token != "a-token" {
+		t.Errorf("Token = %q, want %q", consulInput.Token, "a-token")
+	}
+}

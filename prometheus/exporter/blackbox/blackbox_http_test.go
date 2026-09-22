@@ -2464,38 +2464,28 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
+				// The handshake never produced a certificate, so this scrape
+				// knows nothing about the certificate the target serves.
+				{
+					types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
+					types.LabelInstance:     testTargetNotYetKnown,
+					types.LabelInstanceUUID: testAgentID,
+					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
+				},
+				{
+					types.LabelName:         metricProbeSSLValidationSuccess,
+					types.LabelInstance:     testTargetNotYetKnown,
+					types.LabelInstanceUUID: testAgentID,
+					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
+				},
 			},
 			wantPoints: []types.MetricPoint{
 				{
 					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
-						types.LabelInstance:     testTargetNotYetKnown,
-						types.LabelInstanceUUID: testAgentID,
-						types.LabelScraper:      testAgentFQDN,
-						types.LabelServiceUUID:  testMonitorID,
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoAgentID: testAgentID,
-					},
-				},
-				{
-					Time: t0, Value: 0,
-					Labels: map[string]string{
-						types.LabelName:         metricProbeSSLValidationSuccess,
-						types.LabelInstance:     testTargetNotYetKnown,
-						types.LabelInstanceUUID: testAgentID,
-						types.LabelScraper:      testAgentFQDN,
-						types.LabelServiceUUID:  testMonitorID,
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoAgentID: testAgentID,
-					},
-				},
-				{
-					Time: t0, Value: float64(time.Time{}.Unix()),
-					Labels: map[string]string{
-						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2586,38 +2576,28 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
+				// The handshake never produced a certificate, so this scrape
+				// knows nothing about the certificate the target serves.
+				{
+					types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
+					types.LabelInstance:     testTargetNotYetKnown,
+					types.LabelInstanceUUID: testAgentID,
+					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
+				},
+				{
+					types.LabelName:         metricProbeSSLValidationSuccess,
+					types.LabelInstance:     testTargetNotYetKnown,
+					types.LabelInstanceUUID: testAgentID,
+					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
+				},
 			},
 			wantPoints: []types.MetricPoint{
 				{
 					Time: t0, Value: 0,
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSuccess,
-						types.LabelInstance:     testTargetNotYetKnown,
-						types.LabelInstanceUUID: testAgentID,
-						types.LabelScraper:      testAgentFQDN,
-						types.LabelServiceUUID:  testMonitorID,
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoAgentID: testAgentID,
-					},
-				},
-				{
-					Time: t0, Value: 0,
-					Labels: map[string]string{
-						types.LabelName:         metricProbeSSLValidationSuccess,
-						types.LabelInstance:     testTargetNotYetKnown,
-						types.LabelInstanceUUID: testAgentID,
-						types.LabelScraper:      testAgentFQDN,
-						types.LabelServiceUUID:  testMonitorID,
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoAgentID: testAgentID,
-					},
-				},
-				{
-					Time: t0, Value: float64(time.Time{}.Unix()),
-					Labels: map[string]string{
-						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -2801,6 +2781,22 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
+				// The handshake never produced a certificate, so this scrape
+				// knows nothing about the certificate the target serves.
+				{
+					types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
+					types.LabelInstance:     testTargetNotYetKnown,
+					types.LabelInstanceUUID: testAgentID,
+					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
+				},
+				{
+					types.LabelName:         metricProbeSSLValidationSuccess,
+					types.LabelInstance:     testTargetNotYetKnown,
+					types.LabelInstanceUUID: testAgentID,
+					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
+				},
 			},
 			wantPoints: []types.MetricPoint{
 				{
@@ -2860,32 +2856,6 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					Time: t0, Value: math.NaN(),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeDNSLookupTimeSeconds,
-						types.LabelInstance:     testTargetNotYetKnown,
-						types.LabelInstanceUUID: testAgentID,
-						types.LabelScraper:      testAgentFQDN,
-						types.LabelServiceUUID:  testMonitorID,
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoAgentID: testAgentID,
-					},
-				},
-				{
-					Time: t0, Value: float64(time.Time{}.Unix()),
-					Labels: map[string]string{
-						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
-						types.LabelInstance:     testTargetNotYetKnown,
-						types.LabelInstanceUUID: testAgentID,
-						types.LabelScraper:      testAgentFQDN,
-						types.LabelServiceUUID:  testMonitorID,
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoAgentID: testAgentID,
-					},
-				},
-				{
-					Time: t0, Value: 0,
-					Labels: map[string]string{
-						types.LabelName:         metricProbeSSLValidationSuccess,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3043,6 +3013,22 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					types.LabelScraper:      testAgentFQDN,
 					types.LabelServiceUUID:  testMonitorID,
 				},
+				// The handshake was reset before any certificate arrived, so this
+				// scrape knows nothing about the certificate the target serves.
+				{
+					types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
+					types.LabelInstance:     testTargetNotYetKnown,
+					types.LabelInstanceUUID: testAgentID,
+					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
+				},
+				{
+					types.LabelName:         metricProbeSSLValidationSuccess,
+					types.LabelInstance:     testTargetNotYetKnown,
+					types.LabelInstanceUUID: testAgentID,
+					types.LabelScraper:      testAgentFQDN,
+					types.LabelServiceUUID:  testMonitorID,
+				},
 			},
 			wantPoints: []types.MetricPoint{
 				{
@@ -3111,8 +3097,47 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 						BleemeoAgentID: testAgentID,
 					},
 				},
+			},
+			target: &httpTestTarget{
+				TLSCert:             certs.CertLongLivedOk,
+				RootCACerts:         []*x509.Certificate{certs.RootCA},
+				CloseInTLSHandshake: true,
+			},
+		},
+		{
+			// The first hop serves a valid certificate and redirects; the handshake
+			// of the second hop is reset. The certificate we did see is fine, so it
+			// is still reported: only probe_success tells about the failure.
+			name: "break-connection-in-tls-after-redirect",
+			wantPoints: []types.MetricPoint{
 				{
-					Time: t0, Value: float64(time.Time{}.Unix()),
+					Time: t0, Value: 0,
+					Labels: map[string]string{
+						types.LabelName:         metricProbeSuccess,
+						types.LabelInstance:     testTargetNotYetKnown,
+						types.LabelInstanceUUID: testAgentID,
+						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: testAgentID,
+					},
+				},
+				{
+					Time: t0, Value: 1,
+					Labels: map[string]string{
+						types.LabelName:         metricProbeSSLValidationSuccess,
+						types.LabelInstance:     testTargetNotYetKnown,
+						types.LabelInstanceUUID: testAgentID,
+						types.LabelScraper:      testAgentFQDN,
+						types.LabelServiceUUID:  testMonitorID,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: testAgentID,
+					},
+				},
+				{
+					Time: t0, Value: float64(certs.TSLongLivedOk.Unix()),
 					Labels: map[string]string{
 						types.LabelName:         metricProbeSSLLastChainExpiryTimestamp,
 						types.LabelInstance:     testTargetNotYetKnown,
@@ -3125,9 +3150,9 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 				{
-					Time: t0, Value: 0,
+					Time: t0, Value: float64(certs.LongLiveDuration.Seconds()),
 					Labels: map[string]string{
-						types.LabelName:         metricProbeSSLValidationSuccess,
+						types.LabelName:         metricProbeSSLLeafCertificateLifespan,
 						types.LabelInstance:     testTargetNotYetKnown,
 						types.LabelInstanceUUID: testAgentID,
 						types.LabelScraper:      testAgentFQDN,
@@ -3139,8 +3164,10 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 				},
 			},
 			target: &httpTestTarget{
+				FirstTLSCert:        certs.CertLongLivedOk,
 				TLSCert:             certs.CertLongLivedOk,
 				RootCACerts:         []*x509.Certificate{certs.RootCA},
+				UseHTTPRedirection:  true,
 				CloseInTLSHandshake: true,
 			},
 		},

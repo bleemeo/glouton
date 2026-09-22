@@ -188,6 +188,7 @@ func TestLoader(t *testing.T) {
 					"jmx_username":        "",
 					"key_file":            "",
 					"username":            "",
+					"variant":             "",
 					"log_files":           []any{},
 					"log_filter":          "",
 					"log_format":          "",

@@ -20,12 +20,14 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"strconv"
 	"time"
 
 	"github.com/bleemeo/glouton/check"
 	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/inputs/chrony"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/registry"
 	"github.com/bleemeo/glouton/types"
@@ -138,24 +140,27 @@ func (d *Discovery) createCheck(service Service) {
 	}
 
 	switch service.ServiceType { //nolint:exhaustive
-	case DovecotService, MemcachedService, RabbitMQService, RedisService, ValkeyService, ZookeeperService, NatsService:
+	case DovecotService, MemcachedService, RabbitMQService, RedisService,
+		ValkeyService, ZookeeperService, NatsService:
 		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
-	case ApacheService, InfluxDBService, NginxService, SquidService:
+	// Varnish is checked over HTTP rather than TCP because the three answers a cache can
+	// give are worth telling apart, and only HTTP tells them apart:
+	//   - 200: Varnish is up and its backend is reachable.
+	//   - 503: Varnish is up and cannot reach its backend. TCP calls this healthy, since
+	//     the port accepts the connection either way.
+	//   - refused: Varnish itself is down.
+	//
+	// What it costs is that the answer comes from the backend application rather than from
+	// Varnish, since Varnish relays it: the check asks for "/" and reports whatever the
+	// fronted app says there. An app with nothing at its root answers 404, a warning; a VCL
+	// that routes on req.http.host with no fallback answers 503 to the check's own Host
+	// header, a critical. Both are configured away with http_path and http_host on the
+	// service, which is what they are for. Redirects need nothing: the check does not
+	// follow them, and a 3xx is below the 400 that starts a warning.
+	case ApacheService, NginxService, SquidService, InfluxDBService, VarnishService:
 		d.createHTTPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
-	case NTPService:
-		if primaryAddress != "" {
-			check := check.NewNTP(
-				primaryAddress,
-				tcpAddresses,
-				!di.DisablePersistentConnection,
-				labels,
-				annotations,
-				d.containerInfo,
-			)
-			d.addCheck(check, service)
-		} else {
-			d.createTCPCheck(service, di, "", tcpAddresses, labels, annotations)
-		}
+	case ChronyService, NTPService:
+		d.createNTPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
 	case PostfixService, EximService:
 		check := check.NewSMTP(
 			primaryAddress,
@@ -195,6 +200,92 @@ func createCheckType(commandRunner *gloutonexec.Runner, service Service, d *Disc
 	default:
 		logger.V(1).Printf("Unknown check type %#v on custom service %#v", service.Config.CheckType, service.Name)
 	}
+}
+
+// createNTPCheck adds the check of a chrony or ntpd service: the NTP protocol itself when
+// the daemon really serves it, and chrony's command protocol for a chronyd that doesn't.
+//
+// A chrony that only syncs the local clock -- the default install on most distributions --
+// never answers an NTP query, so check.NewNTP would report a permanent "Connection timed
+// out" on a healthy daemon. Its command protocol is the only thing such a daemon answers.
+func (d *Discovery) createNTPCheck(service Service, di discoveryInfo, primaryAddress string, tcpAddresses []string, labels map[string]string, annotations types.MetricAnnotations) {
+	if service.ServiceType == ChronyService && !servesNTPProtocol(service, di) {
+		// The same address the input reads, so the check and the metrics can never disagree
+		// about which daemon they are talking to.
+		//
+		// An address that couldn't be resolved is left empty rather than skipping the
+		// check: the UDP check turns an empty address into an explicit unknown ("No UDP
+		// address to check"), where no check at all would publish no status for this
+		// service. What it must never fall back to is Glouton's own loopback, which reports
+		// on whatever chronyd runs next to it under this service's name.
+		checkAddress, _ := chronyCmdAddress(service)
+
+		// A UDP check, the command port being UDP-only where createTCPCheck always dials
+		// TCP. The payload and the reply check come from inputs/chrony, which owns the
+		// protocol: see ProbePacket and ValidateReply for why neither arbitrary bytes nor
+		// any reply at all would do.
+		udpCheck := check.NewUDP(
+			checkAddress,
+			chrony.ProbePacket(),
+			nil,
+			chrony.ValidateReply,
+			labels,
+			annotations,
+			d.containerInfo,
+		)
+		d.addCheck(udpCheck, service)
+
+		return
+	}
+
+	if primaryAddress != "" {
+		ntpCheck := check.NewNTP(
+			primaryAddress,
+			tcpAddresses,
+			!di.DisablePersistentConnection,
+			labels,
+			annotations,
+			d.containerInfo,
+		)
+		d.addCheck(ntpCheck, service)
+	} else {
+		d.createTCPCheck(service, di, "", tcpAddresses, labels, annotations)
+	}
+}
+
+// servesNTPProtocol reports whether the daemon was really seen listening on the NTP port,
+// as opposed to discovery having assumed that port from the service type: with no netstat
+// information, updateListenAddresses adds a synthetic listen address on the type's default
+// port, which for NTPService is the NTP port itself -- so the listen addresses alone can't
+// tell a daemon serving NTP from one that was merely recognized as an NTP daemon.
+func servesNTPProtocol(service Service, di discoveryInfo) bool {
+	if !service.HasNetstatInfo {
+		return false
+	}
+
+	port := service.defaultPort(di)
+	if service.Config.Port != 0 {
+		port = service.Config.Port
+	}
+
+	// A configured address or port replaces the listen addresses with a single entry that
+	// applyOverrideInPlace types tcp whatever protocol the service actually speaks, so the
+	// protocol can't be matched on it. That entry was built from the configured port anyway:
+	// what decides is whether that port is the NTP one.
+	if service.Config.Address != "" || service.Config.Port != 0 {
+		return port == di.ServicePort
+	}
+
+	for _, address := range service.ListenAddresses {
+		// IsProtocol rather than comparing the network name: netstat records the IP family
+		// in it, so an IPv6-only daemon listens on "udp6" and would otherwise look like one
+		// that doesn't serve NTP at all.
+		if address.IsProtocol(di.ServiceProtocol) && address.Port == port {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryAddress string, tcpAddresses []string, labels map[string]string, annotations types.MetricAnnotations) {
@@ -262,14 +353,29 @@ func (d *Discovery) createHTTPCheck(
 
 	expectedStatusCode := 0
 
-	if service.ServiceType == SquidService {
+	var okStatusCodes []int
+
+	switch service.ServiceType { //nolint:exhaustive
+	case SquidService:
 		// Agent does a normal HTTP request, but squid expect a proxy. It expects
 		// squid to reply with a 400 - Bad request.
 		expectedStatusCode = 400
-	}
-
-	if service.ServiceType == InfluxDBService {
+	case InfluxDBService:
+		// "/ping" is the one route every line answers about itself, and answers cheaply:
+		// no query is run and 1.x and 2.x leave it open even with authentication enabled.
 		u.Path = "/ping"
+
+		// InfluxDB 3 authenticates every route, so it answers 401 there when the check
+		// holds no token -- which it never does. That 401 is the server saying it is up
+		// and asking who is calling, so it is an Ok rather than the warning the usual
+		// banding would give. It stays a narrow exception: anything else 4xx is still a
+		// warning, 5xx still critical, and a server that has stopped listening still
+		// fails to connect at all.
+		//
+		// Checking HTTP rather than TCP is what makes this worth doing: a TCP connect
+		// succeeds against the proxy "docker run -p" puts in front of a container whether
+		// or not the server behind it is alive, where speaking HTTP does not.
+		okStatusCodes = []int{http.StatusUnauthorized}
 	}
 
 	if service.Config.HTTPPath != "" {
@@ -291,6 +397,7 @@ func (d *Discovery) createHTTPCheck(
 		tcpAddresses,
 		!di.DisablePersistentConnection,
 		expectedStatusCode,
+		okStatusCodes,
 		labels,
 		annotations,
 		d.containerInfo,

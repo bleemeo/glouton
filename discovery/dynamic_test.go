@@ -112,6 +112,17 @@ func (mn mockNetstat) Netstat(_ context.Context, processes map[int]facts.Process
 
 type mockContainerInfo struct {
 	containers map[string]facts.FakeContainer
+	// exec, when set, answers Exec. Left nil every command succeeds with no output, which
+	// is what a container carrying the binary being run looks like.
+	exec func(containerID string, cmd []string) ([]byte, error)
+}
+
+func (mci mockContainerInfo) Exec(_ context.Context, containerID string, cmd []string) ([]byte, error) {
+	if mci.exec == nil {
+		return nil, nil
+	}
+
+	return mci.exec(containerID, cmd)
 }
 
 func (mci mockContainerInfo) CachedContainer(containerID string) (container facts.Container, found bool) {
@@ -237,7 +248,7 @@ func TestServiceByCommand(t *testing.T) {
 	}
 
 	for i, c := range cases {
-		got, ok := serviceByCommand(c.in)
+		got, _, ok := serviceByCommand(c.in)
 		if c.want != "" && got != c.want {
 			t.Errorf("serviceByCommand(<case #%d>) == %#v, want %#v", i, got, c.want)
 		} else if c.want == "" && ok {
@@ -308,6 +319,14 @@ func TestDynamicDiscoverySimple(t *testing.T) {
 // Less will show the NUL character used to split args.
 func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 	t0 := time.Now()
+
+	// The broker is launched with "java -jar activemq.jar", so what identifies it is the
+	// activemq.home system property rather than a main class. Shared by the cases below
+	// that only differ in their environment.
+	activeMQCmdLine := []string{
+		"java", "-Xms64M", "-Dactivemq.home=/opt/apache-activemq", "-Dactivemq.base=/opt/apache-activemq",
+		"-jar", "/opt/apache-activemq/bin/activemq.jar", testStart,
+	}
 
 	cases := []struct {
 		testName           string
@@ -1023,6 +1042,25 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
+			testName: "base local consul",
+			cmdLine:  []string{"consul", "agent", "-server", "-data-dir=/tmp/consul"},
+			want: Service{
+				Name:            string(ConsulService),
+				ServiceType:     ConsulService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 8500}},
+				IPAddress:       testIP127001,
+				Active:          true,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// The consul binary is also its client CLI, only "consul agent" runs a Consul
+			// node. Client commands must not be reported as a Consul service.
+			testName: "consul-client-command",
+			cmdLine:  []string{"consul", "monitor", "-log-level=debug"},
+			noMatch:  true,
+		},
+		{
 			testName: "base local openbao",
 			cmdLine:  []string{"bao", "server"},
 			want: Service{
@@ -1081,17 +1119,87 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
+			// A 1.x server with no netstat information at all, and no resolved executable
+			// either -- the variant comes from the command line, so it still lands on 8086
+			// rather than the 3.x default that applies when nothing says which line it is.
 			testName: "influxdb.deb",
 			cmdLine:  []string{"/opt/influxdb/influxd", "-config", "/etc/opt/influxdb/influxdb.conf"},
 			want: Service{
 				Name:            "influxdb",
 				ServiceType:     InfluxDBService,
+				ServiceVariant:  VariantInfluxd,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 8086}},
 				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
 			},
 		},
+		{
+			// InfluxDB 3 needs a token for /metrics as much as for a query, and
+			// INFLUXDB3_AUTH_TOKEN is the variable its own CLI reads, so a container given
+			// one has already named the token to use. It lands in Password: there is no
+			// user to go with it.
+			testName:    "influxdb3-token-from-env",
+			containerID: "influxdb1",
+			containerIP: testIP17217049,
+			cmdLine:     []string{"influxdb3", "serve", "--node-id", "node0"},
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8181},
+			},
+			containerEnv: map[string]string{
+				"INFLUXDB3_AUTH_TOKEN": testSecret,
+			},
+			want: Service{
+				Name:            "influxdb",
+				ServiceType:     InfluxDBService,
+				ContainerID:     "influxdb1",
+				ServiceVariant:  VariantInfluxDB3,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8181}},
+				IPAddress:       testIP17217049,
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+				Config: config.Service{ //nolint:exhaustruct
+					Password: testSecret,
+				},
+			},
+		},
+		{
+			// 1.x and 2.x authenticate with a user and a password rather than a token, and
+			// the pair is what a container of either line sets. It is kept as a pair: the
+			// image ignores a lone password and generates a random one for a lone user.
+			testName:    "influxdb-v1-credentials-from-env",
+			containerID: "influxdb1",
+			containerIP: testIP17217049,
+			cmdLine:     []string{"influxd"},
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8181},
+			},
+			containerEnv: map[string]string{
+				"INFLUXDB_ADMIN_USER":     "admin",
+				"INFLUXDB_ADMIN_PASSWORD": "adminpass",
+			},
+			want: Service{
+				Name:            "influxdb",
+				ServiceType:     InfluxDBService,
+				ContainerID:     "influxdb1",
+				ServiceVariant:  VariantInfluxd,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8181}},
+				IPAddress:       testIP17217049,
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+				Config: config.Service{ //nolint:exhaustruct
+					Username: "admin",
+					Password: "adminpass",
+				},
+			},
+		},
+
 		// Service from Ubuntu 16.04, default config
 		{
 			testName: "mysql-ubuntu-14.04",
@@ -1111,6 +1219,22 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			want: Service{
 				Name:            "ntp",
 				ServiceType:     NTPService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: udpProtocol, Address: testIP127001, Port: 123}},
+				IPAddress:       testIP127001,
+				Active:          true,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// chronyd is a service of its own rather than an NTP one: the process name
+			// tells the two daemons apart for free, and everything downstream differs --
+			// a different input, different metric names, and a different check for a
+			// client-only daemon.
+			testName: "chrony-ubuntu-24.04",
+			cmdLine:  []string{"/usr/sbin/chronyd", "-F", "1"},
+			want: Service{
+				Name:            "chrony",
+				ServiceType:     ChronyService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: udpProtocol, Address: testIP127001, Port: 123}},
 				IPAddress:       testIP127001,
 				Active:          true,
@@ -1369,7 +1493,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			want: Service{
 				Name:            "varnish",
 				ServiceType:     VarnishService,
-				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 6082}},
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 80}},
 				IPAddress:       testIP127001,
 				Active:          true,
 				LastTimeSeen:    t0,
@@ -1702,6 +1826,198 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 8080}},
 				IPAddress:       testIP127001,
 				Active:          true,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			testName: "tomcat",
+			cmdLine: []string{
+				"java", "-Djava.util.logging.config.file=/usr/local/tomcat/conf/logging.properties",
+				"-Dcatalina.base=/usr/local/tomcat", "-Dcatalina.home=/usr/local/tomcat",
+				"-classpath", "/usr/local/tomcat/bin/bootstrap.jar", "org.apache.catalina.startup.Bootstrap", testStart,
+			},
+			want: Service{
+				Name:            string(TomcatService),
+				ServiceType:     TomcatService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 8080}},
+				IPAddress:       testIP127001,
+				Active:          true,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// JIRA (like Confluence and BitBucket) runs on Tomcat: the more specific
+			// entries must win over the plain Tomcat one.
+			testName: "jira-not-detected-as-tomcat",
+			cmdLine: []string{
+				"java", "-Dcatalina.base=/opt/atlassian/jira", "-Dcatalina.home=/opt/atlassian/jira",
+				"-classpath", "/opt/atlassian/jira/bin/bootstrap.jar", "org.apache.catalina.startup.Bootstrap", testStart,
+			},
+			want: Service{
+				Name:            string(JIRAService),
+				ServiceType:     JIRAService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 8080}},
+				IPAddress:       testIP127001,
+				Active:          true,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// Same as JIRA above: Confluence runs on Tomcat, so the plain Tomcat entry
+			// must not shadow the more specific one.
+			testName: "confluence-not-detected-as-tomcat",
+			cmdLine: []string{
+				"java", "-Dcatalina.base=/opt/atlassian/confluence", "-Dcatalina.home=/opt/atlassian/confluence",
+				"-classpath", "/opt/atlassian/confluence/bin/bootstrap.jar", "org.apache.catalina.startup.Bootstrap", testStart,
+			},
+			want: Service{
+				Name:            string(ConfluenceService),
+				ServiceType:     ConfluenceService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 8090}},
+				IPAddress:       testIP127001,
+				Active:          true,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// The official ActiveMQ image starts the broker with "java -jar activemq.jar",
+			// so the main class never appears in the cmdline: we match on the
+			// activemq.home system property the launch script always sets.
+			testName: "activemq",
+			cmdLine: []string{
+				"java", "-Xms64M", "-Dactivemq.home=/opt/activemq", "-Dactivemq.base=/opt/activemq",
+				"-jar", "/opt/activemq/bin/activemq.jar", testStart,
+			},
+			want: Service{
+				Name:            string(ActiveMQService),
+				ServiceType:     ActiveMQService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 8161}},
+				IPAddress:       testIP127001,
+				Active:          true,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// The credentials of the web console, which is where the metrics are read from.
+			testName:    "activemq-web-credentials-from-env",
+			containerID: "activemq1",
+			containerIP: testIP17217049,
+			cmdLine:     activeMQCmdLine,
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8161},
+			},
+			containerEnv: map[string]string{
+				"ACTIVEMQ_WEB_USER":     "console",
+				"ACTIVEMQ_WEB_PASSWORD": testSecret,
+			},
+			want: Service{
+				Name:        string(ActiveMQService),
+				ServiceType: ActiveMQService,
+				ContainerID: "activemq1",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8161},
+				},
+				IPAddress: testIP17217049,
+				Config: config.Service{
+					Username: "console",
+					Password: testSecret,
+				},
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// Unlike ClickHouse, a lone password must NOT be taken: the image only
+			// substitutes it into users.properties when the user variable is set too, so
+			// the console is still on the factory admin/admin here. Filling it in would
+			// build credentials that can only 401, where an empty config at least leaves
+			// the operator's own glouton.conf value in place.
+			testName:    "activemq-lone-web-password-ignored",
+			containerID: "activemq2",
+			containerIP: testIP17217049,
+			cmdLine:     activeMQCmdLine,
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8161},
+			},
+			containerEnv: map[string]string{
+				"ACTIVEMQ_WEB_PASSWORD": testSecret,
+			},
+			want: Service{
+				Name:        string(ActiveMQService),
+				ServiceType: ActiveMQService,
+				ContainerID: "activemq2",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8161},
+				},
+				IPAddress:       testIP17217049,
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// A user with no password is not a credential either: the console keeps the
+			// factory password, which is not in the environment to be read.
+			testName:    "activemq-lone-web-user-ignored",
+			containerID: "activemq3",
+			containerIP: testIP17217049,
+			cmdLine:     activeMQCmdLine,
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8161},
+			},
+			containerEnv: map[string]string{
+				"ACTIVEMQ_WEB_USER": "console",
+			},
+			want: Service{
+				Name:        string(ActiveMQService),
+				ServiceType: ActiveMQService,
+				ContainerID: "activemq3",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8161},
+				},
+				IPAddress:       testIP17217049,
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
+			},
+		},
+		{
+			// The two other credential pairs the image understands guard the broker's
+			// transports and its JMX connector. Both are complete pairs and both look
+			// plausible, but neither opens the web console, so taking either would send
+			// the wrong credentials to it.
+			testName:    "activemq-connection-and-jmx-credentials-ignored",
+			containerID: "activemq4",
+			containerIP: testIP17217049,
+			cmdLine:     activeMQCmdLine,
+			containerAddresses: []facts.ListenAddress{
+				{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8161},
+			},
+			containerEnv: map[string]string{
+				"ACTIVEMQ_CONNECTION_USER":     "broker",
+				"ACTIVEMQ_CONNECTION_PASSWORD": "brokerpass",
+				"ACTIVEMQ_JMX_USER":            "jmx",
+				"ACTIVEMQ_JMX_PASSWORD":        "jmxpass",
+			},
+			want: Service{
+				Name:        string(ActiveMQService),
+				ServiceType: ActiveMQService,
+				ContainerID: "activemq4",
+				ListenAddresses: []facts.ListenAddress{
+					{NetworkFamily: tcpProtocol, Address: testIP17217049, Port: 8161},
+				},
+				IPAddress:       testIP17217049,
+				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
 				LastTimeSeen:    t0,
 			},
 		},

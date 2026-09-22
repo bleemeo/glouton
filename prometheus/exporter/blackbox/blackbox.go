@@ -166,6 +166,30 @@ func (rts roundTripTLSVerifyList) HadTLS() bool {
 	return false
 }
 
+// CertificateToReport returns the round trip whose certificate is reported for
+// this probe. It is the last one when it saw a certificate. When it didn't (a
+// redirect to plain HTTP, or a connection that failed before the certificate),
+// we fall back to the last round trip that did see one, but only when its chain
+// verified: an unverified chain is reported as a zero expiry, and we can't
+// attribute a certificate problem to a hop that isn't the one that failed.
+func (rts roundTripTLSVerifyList) CertificateToReport() (roundTripTLSVerify, bool) {
+	if len(rts) == 0 {
+		return roundTripTLSVerify{}, false
+	}
+
+	if last := rts[len(rts)-1]; last.hadTLS {
+		return last, true
+	}
+
+	for i := len(rts) - 2; i >= 0; i-- {
+		if rts[i].hadTLS && !rts[i].expiry.IsZero() {
+			return rts[i], true
+		}
+	}
+
+	return roundTripTLSVerify{}, false
+}
+
 func (rts roundTripTLSVerifyList) AllTrusted() bool {
 	for _, rt := range rts {
 		if !rt.hadTLS {
@@ -376,10 +400,10 @@ func (target blackboxCollector) CollectWithContext(ctx context.Context, ch chan<
 			ch <- prometheus.MustNewConstMetric(probeTLSSuccess, prometheus.GaugeValue, 0, target.Name)
 		}
 
-		if roundTripsTLS[len(roundTripsTLS)-1].hadTLS {
-			ch <- prometheus.MustNewConstMetric(probeTLSExpiry, prometheus.GaugeValue, float64(roundTripsTLS[len(roundTripsTLS)-1].expiry.Unix()), target.Name)
+		if lastTLS, ok := roundTripsTLS.CertificateToReport(); ok {
+			ch <- prometheus.MustNewConstMetric(probeTLSExpiry, prometheus.GaugeValue, float64(lastTLS.expiry.Unix()), target.Name)
 
-			if lifespan := roundTripsTLS[len(roundTripsTLS)-1].leafLifespan; lifespan != 0 {
+			if lifespan := lastTLS.leafLifespan; lifespan != 0 {
 				ch <- prometheus.MustNewConstMetric(probeSSLCertificateLifespan, prometheus.GaugeValue, float64(lifespan.Seconds()), target.Name)
 			}
 		}
@@ -455,11 +479,55 @@ func verifyTLS(ctx context.Context, collector blackboxCollector, extLogger *slog
 			continue
 		}
 
-		if len(rt.TLSState.PeerCertificates) == 0 {
+		// httptrace calls TLSHandshakeDone even when the handshake failed, with a
+		// zero ConnectionState and a non-nil error.
+		if rt.TLSError != nil {
+			var verifyErr *tls.CertificateVerificationError
+
+			// When the handshake failed because the certificate didn't verify, the
+			// server did serve a certificate and Go kept it: the probe knows the
+			// chain is untrusted and must say so. This is the case of a module that
+			// doesn't set insecure_skip_verify, like the default module used by
+			// blackbox.targets, where the verification happens during the handshake
+			// instead of in this function.
+			if errors.As(rt.TLSError, &verifyErr) && len(verifyErr.UnverifiedCertificates) > 0 {
+				extLogger.InfoContext(ctx, "TLS handshake rejected the certificate: "+rt.TLSError.Error())
+
+				result = append(result, roundTripTLSVerify{
+					hadTLS:     true,
+					trustedTLS: false,
+					// expiry is left to the zero time: no chain verified.
+					leafLifespan: getLeafLifespan(&tls.ConnectionState{PeerCertificates: verifyErr.UnverifiedCertificates}),
+					err:          rt.TLSError,
+				})
+
+				continue
+			}
+
+			// The handshake failed before any certificate (reset, timeout, protocol
+			// error), so it says nothing about the one the target serves. Reporting it
+			// as TLS would turn a connection reset during the handshake into an
+			// untrusted chain, and probe_ssl_last_chain_expiry_timestamp_seconds would
+			// be emitted with the zero time, which the API decodes as a missing
+			// intermediate certificate. probe_success already reports the failure.
+			extLogger.InfoContext(ctx, "TLS handshake failed before any certificate: "+rt.TLSError.Error())
+
 			result = append(result, roundTripTLSVerify{
-				hadTLS:     true,
-				trustedTLS: false,
-				err:        errNoCertificates,
+				hadTLS: false,
+				err:    rt.TLSError,
+			})
+
+			continue
+		}
+
+		// The handshake succeeded but the server sent no certificate: nothing to
+		// report either.
+		if len(rt.TLSState.PeerCertificates) == 0 {
+			extLogger.InfoContext(ctx, "TLS handshake completed without any server certificate")
+
+			result = append(result, roundTripTLSVerify{
+				hadTLS: false,
+				err:    errNoCertificates,
 			})
 
 			continue

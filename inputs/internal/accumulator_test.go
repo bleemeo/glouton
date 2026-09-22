@@ -27,6 +27,8 @@ import (
 
 	"github.com/bleemeo/glouton/types"
 	"github.com/google/go-cmp/cmp"
+	"github.com/influxdata/telegraf"
+	tgmetric "github.com/influxdata/telegraf/metric"
 )
 
 // Test metric name constants.
@@ -836,5 +838,106 @@ func BenchmarkDeriveFunc(b *testing.B) {
 				)
 			}
 		})
+	}
+}
+
+// TestAddMetric exercises AddMetric, the method telegraf plugins built on
+// metric.NewSeriesGrouper (e.g. inputs/bind's XML/JSON stats parsers) use
+// exclusively, bypassing AddFields/AddGauge/... entirely. It used to be an
+// unimplemented stub (AddError(errNotImplemented) and nothing else), so any
+// such plugin's data was silently dropped -- this checks it now goes through
+// the same rename/differentiate pipeline as every other Add* method.
+func TestAddMetric(t *testing.T) {
+	store := &StoreAccumulator{}
+	acc := Accumulator{
+		DifferentiatedMetrics: []string{"QUERY"},
+		Accumulator:           store,
+	}
+
+	t0 := time.Now()
+	t1 := t0.Add(10 * time.Second)
+
+	acc.PrepareGather()
+	acc.AddMetric(tgmetric.New(
+		"bind_counter",
+		map[string]string{"type": "opcode"},
+		map[string]any{"QUERY": uint64(1000)},
+		t0,
+	))
+
+	// Discard the first gather: QUERY is a differentiated counter, so it has
+	// no rate yet (no history).
+	store.Measurement = nil
+
+	acc.PrepareGather()
+	acc.AddMetric(tgmetric.New(
+		"bind_counter",
+		map[string]string{"type": "opcode"},
+		map[string]any{"QUERY": uint64(1000 + 100)}, // rate = 10/s
+		t1,
+	))
+
+	if len(store.Measurement) != 1 {
+		t.Fatalf("got %d measurements, want 1: %#v", len(store.Measurement), store.Measurement)
+	}
+
+	got := store.Measurement[0]
+	if got.Name != "bind_counter" {
+		t.Errorf("measurement name = %q, want %q", got.Name, "bind_counter")
+	}
+
+	if value, _ := got.Fields["QUERY"].(float64); value != 10 {
+		t.Errorf("fields[QUERY] == %v, want 10", got.Fields["QUERY"])
+	}
+}
+
+// TestAddMetricUntypedDefaultsToFields checks that a metric with no explicit
+// ValueType (telegraf.Untyped, e.g. metric.New's default) is routed the same
+// way as AddFields, not silently dropped.
+func TestAddMetricUntypedDefaultsToFields(t *testing.T) {
+	store := &StoreAccumulator{}
+	acc := Accumulator{Accumulator: store}
+
+	acc.PrepareGather()
+	acc.AddMetric(tgmetric.New(
+		"bind_memory",
+		nil,
+		map[string]any{"total_use": uint64(16663252)},
+		time.Now(),
+		telegraf.Untyped,
+	))
+
+	if len(store.Measurement) != 1 {
+		t.Fatalf("got %d measurements, want 1: %#v", len(store.Measurement), store.Measurement)
+	}
+
+	if value, _ := store.Measurement[0].Fields["total_use"].(float64); value != 16663252 {
+		t.Errorf("fields[total_use] == %v, want 16663252", store.Measurement[0].Fields["total_use"])
+	}
+}
+
+// TestAddMetricUnknownTypeReportsError checks that a telegraf.ValueType
+// outside the known set (e.g. a future telegraf addition, or a non-standard
+// telegraf.Metric implementation) is reported via AddError instead of being
+// silently dropped.
+func TestAddMetricUnknownTypeReportsError(t *testing.T) {
+	store := &StoreAccumulator{}
+	acc := Accumulator{Accumulator: store}
+
+	acc.PrepareGather()
+	acc.AddMetric(tgmetric.New(
+		"bogus",
+		nil,
+		map[string]any{"value": 1.0},
+		time.Now(),
+		telegraf.ValueType(99),
+	))
+
+	if len(store.Measurement) != 0 {
+		t.Errorf("got %d measurements, want 0: %#v", len(store.Measurement), store.Measurement)
+	}
+
+	if len(store.Errors) != 1 {
+		t.Fatalf("got %d errors, want 1: %v", len(store.Errors), store.Errors)
 	}
 }
