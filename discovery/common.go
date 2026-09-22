@@ -64,13 +64,16 @@ type ServiceName string
 
 // List of known service names.
 const (
+	ActiveMQService      ServiceName = "activemq"
 	ApacheService        ServiceName = "apache"
 	AsteriskService      ServiceName = "asterisk"
 	BindService          ServiceName = "bind"
 	BitBucketService     ServiceName = "bitbucket"
 	CassandraService     ServiceName = "cassandra"
+	ChronyService        ServiceName = "chrony"
 	ClickHouseService    ServiceName = "clickhouse"
 	ConfluenceService    ServiceName = "confluence"
+	ConsulService        ServiceName = "consul"
 	DovecotService       ServiceName = "dovecot"
 	EjabberService       ServiceName = "ejabberd"
 	ElasticSearchService ServiceName = "elasticsearch"
@@ -104,6 +107,7 @@ const (
 	RedisService         ServiceName = "redis"
 	SaltMasterService    ServiceName = "salt_master"
 	SquidService         ServiceName = "squid"
+	TomcatService        ServiceName = "tomcat"
 	UWSGIService         ServiceName = "uwsgi"
 	ValkeyService        ServiceName = "valkey"
 	VarnishService       ServiceName = "varnish"
@@ -128,12 +132,15 @@ type Application struct {
 
 // Service is the information found about a given service.
 type Service struct {
-	Config          config.Service
-	Name            string
-	Instance        string
-	Tags            []string
-	Applications    []Application
-	ServiceType     ServiceName
+	Config       config.Service
+	Name         string
+	Instance     string
+	Tags         []string
+	Applications []Application
+	ServiceType  ServiceName
+	// ServiceVariant names which implementation of ServiceType this is, for the service
+	// types that have more than one. Empty for the types that don't. See ServiceVariant.
+	ServiceVariant  ServiceVariant
 	ContainerID     string
 	ContainerName   string // If ContainerName is set, Instance must be the same value.
 	IPAddress       string // IPAddress is the IPv4 address to reach service for metrics gathering. If empty, it means IP was not found
@@ -203,10 +210,21 @@ func (s Service) AddressForPort(port int, network string, force bool) string {
 	return ""
 }
 
+// defaultPort returns the port this service is expected to serve, before the listen
+// addresses are consulted. It is di.ServicePort for almost everything; a service whose
+// port depends on which implementation is running has it chosen from the variant instead.
+func (s Service) defaultPort(di discoveryInfo) int {
+	if port, ok := di.ServicePortByVariant[s.ServiceVariant]; ok {
+		return port
+	}
+
+	return di.ServicePort
+}
+
 // AddressPort return the IP address &port for the "main" service (e.g. for RabbitMQ the AMQP port, not the management port).
 func (s Service) AddressPort() (string, int) {
 	di := servicesDiscoveryInfo[s.ServiceType]
-	port := di.ServicePort
+	port := s.defaultPort(di)
 	force := false
 
 	if s.Config.Port != 0 {
@@ -217,7 +235,22 @@ func (s Service) AddressPort() (string, int) {
 		return "", 0
 	}
 
-	return s.AddressForPort(port, di.ServiceProtocol, force), port
+	if address := s.AddressForPort(port, di.ServiceProtocol, force); address != "" {
+		return address, port
+	}
+
+	// Not listening on the expected port. For a service that serves different ports in
+	// different versions this is the case where the executable said nothing, so the
+	// version has to be read from where it is actually listening.
+	if s.Config.Port == 0 {
+		for _, alt := range di.AltServicePorts {
+			if address := s.AddressForPort(alt, di.ServiceProtocol, false); address != "" {
+				return address, alt
+			}
+		}
+	}
+
+	return "", port
 }
 
 // LabelsOfStatus returns the labels for the status metrics of this service.
@@ -289,6 +322,10 @@ func (s Service) merge(update Service) Service {
 //nolint:gochecknoglobals
 var (
 	servicesDiscoveryInfo = map[ServiceName]discoveryInfo{
+		ActiveMQService: {
+			ServicePort:     8161,
+			ServiceProtocol: tcpProtocol,
+		},
 		ApacheService: {
 			ServicePort:     80,
 			ServiceProtocol: tcpProtocol,
@@ -319,6 +356,10 @@ var (
 			ServiceProtocol: tcpProtocol,
 			IgnoreHighPort:  true,
 		},
+		ConsulService: {
+			ServicePort:     8500,
+			ServiceProtocol: tcpProtocol,
+		},
 		DovecotService: {
 			ServicePort:     143,
 			ServiceProtocol: tcpProtocol,
@@ -343,7 +384,14 @@ var (
 			ServiceProtocol: tcpProtocol,
 		},
 		InfluxDBService: {
-			ServicePort:     8086,
+			// 3.x's port, which its own CLI defaults to, is the fallback for a service
+			// whose variant nothing named. Auto-discovery always names one.
+			ServicePort: 8181,
+			ServicePortByVariant: map[ServiceVariant]int{
+				VariantInfluxd:   8086,
+				VariantInfluxDB3: 8181,
+			},
+			AltServicePorts: []int{8086},
 			ServiceProtocol: tcpProtocol,
 		},
 		JenkinsService: {
@@ -394,6 +442,13 @@ var (
 			ServicePort:     4151,
 			ServiceProtocol: tcpProtocol,
 		},
+		ChronyService: {
+			// Use the NTP port for chrony even though a default installation doesn't listen
+			// on it (client-only NTP daemon). The discovery (createNTPCheck) takes care of
+			// falling back to its command port (323) if needed.
+			ServicePort:     123,
+			ServiceProtocol: udpProtocol,
+		},
 		NTPService: {
 			ServicePort:     123,
 			ServiceProtocol: udpProtocol,
@@ -441,6 +496,11 @@ var (
 			ServicePort:     3128,
 			ServiceProtocol: tcpProtocol,
 		},
+		TomcatService: {
+			ServicePort:     8080,
+			ServiceProtocol: tcpProtocol,
+			IgnoreHighPort:  true,
+		},
 		UPSDService: {
 			ServicePort:     3493,
 			ServiceProtocol: tcpProtocol,
@@ -453,7 +513,12 @@ var (
 			ServiceProtocol: tcpProtocol,
 		},
 		VarnishService: {
-			ServicePort:     6082,
+			// 80 first: a container publishing no port to the host.
+			// The official Docker image opens 80 itself by default ("-a http=:80").
+			// 6081 stays as the alternative for a real netstat-visible install: Debian's
+			// packaged unit runs "-a :6081".
+			ServicePort:     80,
+			AltServicePorts: []int{6081},
 			ServiceProtocol: tcpProtocol,
 		},
 		VaultService: {
@@ -471,7 +536,15 @@ var (
 )
 
 type discoveryInfo struct {
-	ServicePort                 int
+	ServicePort int
+	// ServicePortByVariant overrides ServicePort for a service type whose port depends on
+	// which implementation is running: InfluxDB 1.x and 2.x serve 8086, where 3.x serves
+	// 8181. Auto-discovery always fills the variant for such a type, so this is what
+	// decides the port in practice; ServicePort is the fallback for a user-declared
+	// service that named no variant.
+	ServicePortByVariant map[ServiceVariant]int
+	// AltServicePorts are other ports this service type is known to serve.
+	AltServicePorts             []int
 	ServiceProtocol             string // "tcp", "udp" or "unix"
 	IgnoreHighPort              bool
 	DisablePersistentConnection bool

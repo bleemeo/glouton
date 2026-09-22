@@ -1,0 +1,212 @@
+// Copyright 2015-2026 Bleemeo
+//
+// bleemeo.com an infrastructure monitoring solution in the Cloud
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package dovecot
+
+import (
+	"math"
+	"testing"
+	"time"
+
+	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/google/go-cmp/cmp"
+
+	"github.com/influxdata/telegraf/plugins/inputs/dovecot"
+)
+
+// collectFinalMetrics replicates the measurement/field -> final metric name
+// convention applied downstream (inputs.Accumulator.addMetrics): the metric
+// name is the field name alone when the measurement was renamed to "", or
+// "<measurement>_<field>" otherwise.
+func collectFinalMetrics(store *internal.StoreAccumulator) map[string]float64 {
+	got := make(map[string]float64)
+
+	for _, m := range store.Measurement {
+		for field, value := range m.Fields {
+			name := field
+			if m.Name != "" {
+				name = m.Name + "_" + field
+			}
+
+			switch v := value.(type) {
+			case float64:
+				got[name] = v
+			case uint64:
+				got[name] = float64(v)
+			}
+		}
+	}
+
+	return got
+}
+
+func newAccumulator(store *internal.StoreAccumulator) internal.Accumulator {
+	return internal.Accumulator{
+		RenameGlobal: renameGlobal,
+		DifferentiatedMetrics: []string{
+			"num_logins",
+			"num_cmds",
+			"auth_successes",
+			"auth_failures",
+		},
+		Accumulator: store,
+	}
+}
+
+func assertMetrics(t *testing.T, got map[string]float64, want map[string]float64) {
+	t.Helper()
+
+	for name, value := range want {
+		gotValue, ok := got[name]
+		if !ok {
+			t.Errorf("metric %q not emitted, got metrics: %v", name, got)
+
+			continue
+		}
+
+		if math.Abs(gotValue-value) > 0.0001 {
+			t.Errorf("metric %q == %v, want %v", name, gotValue, value)
+		}
+	}
+}
+
+// assertTags checks the tags kept on every emitted measurement.
+func assertTags(t *testing.T, store *internal.StoreAccumulator, want map[string]string) {
+	t.Helper()
+
+	for _, m := range store.Measurement {
+		if diff := cmp.Diff(want, m.Tags); diff != "" {
+			t.Errorf("tags of measurement %q (-want +got):\n%s", m.Name, diff)
+		}
+	}
+}
+
+// TestDifferentiation checks that num_logins/num_cmds/auth_successes/auth_failures
+// (cumulative since reset_timestamp) are differentiated into per-second rates, while
+// num_connected_sessions (the live count of currently open IMAP sessions, per Dovecot's
+// own docs -- a gauge, not a counter) passes through untouched.
+//
+// mail_cache_hits and disk_input/disk_output are cumulative too, but aren't metrics
+// Glouton publishes, so they are left exactly as Dovecot reports them.
+func TestDifferentiation(t *testing.T) {
+	store := &internal.StoreAccumulator{}
+	acc := newAccumulator(store)
+
+	t0 := time.Now()
+	t1 := t0.Add(10 * time.Second)
+
+	acc.PrepareGather()
+	acc.AddFields("dovecot", map[string]any{
+		"num_logins":             uint64(174827),
+		"num_cmds":               uint64(917469),
+		"num_connected_sessions": uint64(1204),
+		"mail_cache_hits":        uint64(68192209),
+		"disk_input":             uint64(6493168218112),
+		"disk_output":            uint64(17978638815232),
+		"auth_successes":         uint64(174000),
+		"auth_failures":          uint64(827),
+	}, map[string]string{"server": "127.0.0.1", "type": "global"}, t0)
+
+	// Discard the first gather: every differentiated field has no rate yet
+	// (no history).
+	store.Measurement = nil
+
+	acc.PrepareGather()
+	acc.AddFields("dovecot", map[string]any{
+		"num_logins":             uint64(174827 + 100),            // rate = 10/s
+		"num_cmds":               uint64(917469 + 500),            // rate = 50/s
+		"num_connected_sessions": uint64(1300),                    // live gauge, new value
+		"mail_cache_hits":        uint64(68192209 + 2000),         // not differentiated
+		"disk_input":             uint64(6493168218112 + 100000),  // not differentiated
+		"disk_output":            uint64(17978638815232 + 200000), // not differentiated
+		"auth_successes":         uint64(174000 + 90),             // rate = 9/s
+		"auth_failures":          uint64(827 + 10),                // rate = 1/s
+	}, map[string]string{"server": "127.0.0.1", "type": "global"}, t1)
+
+	got := collectFinalMetrics(store)
+
+	assertMetrics(t, got, map[string]float64{
+		"dovecot_num_logins": 10,
+		"dovecot_num_cmds":   50,
+		// Cumulative as Dovecot reports them, none of the three being a default metric.
+		"dovecot_mail_cache_hits":        68194209,
+		"dovecot_disk_input":             6493168318112,
+		"dovecot_disk_output":            17978639015232,
+		"dovecot_num_connected_sessions": 1300,
+		"dovecot_auth_successes":         9,
+		"dovecot_auth_failures":          1,
+	})
+
+	// The listener we queried is redundant with the labels already set on service
+	// metrics, and "type" is always "global" since that's the only query type we ask for.
+	assertTags(t, store, map[string]string{})
+}
+
+// TestTimestampsDropped checks the two timestamps Dovecot reports are dropped: they are
+// time.Time values, so they aren't metrics and would only add a conversion error to
+// every gather.
+func TestTimestampsDropped(t *testing.T) {
+	store := &internal.StoreAccumulator{}
+	acc := newAccumulator(store)
+
+	acc.PrepareGather()
+	acc.AddFields("dovecot", map[string]any{
+		"num_connected_sessions": uint64(12),
+		"last_update":            time.Now(),
+		"reset_timestamp":        time.Now(),
+	}, map[string]string{"server": "127.0.0.1", "type": "global"}, time.Now())
+
+	if len(store.Errors) != 0 {
+		t.Errorf("got %d errors, want none: %v", len(store.Errors), store.Errors)
+	}
+
+	got := collectFinalMetrics(store)
+
+	assertMetrics(t, got, map[string]float64{"dovecot_num_connected_sessions": 12})
+
+	for _, name := range []string{"dovecot_last_update", "dovecot_reset_timestamp"} {
+		if _, ok := got[name]; ok {
+			t.Errorf("%q should have been dropped, got value %v", name, got[name])
+		}
+	}
+}
+
+// TestNewConfiguresThePlugin checks the listener address reaches the plugin, and that the
+// query type is the "global" one renameGlobal assumes when it drops the "type" tag.
+func TestNewConfiguresThePlugin(t *testing.T) {
+	input, err := New("/var/run/dovecot/old-stats")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	internalInput, ok := input.(*internal.Input)
+	if !ok {
+		t.Fatalf("New() returned a %T, want *internal.Input", input)
+	}
+
+	dovecotInput, ok := internalInput.Input.(*dovecot.Dovecot)
+	if !ok {
+		t.Fatalf("wrapped input is a %T, want *dovecot.Dovecot", internalInput.Input)
+	}
+
+	if diff := cmp.Diff([]string{"/var/run/dovecot/old-stats"}, dovecotInput.Servers); diff != "" {
+		t.Errorf("Servers mismatch (-want +got)\n%s", diff)
+	}
+
+	if dovecotInput.Type != "global" {
+		t.Errorf("Type = %q, want %q", dovecotInput.Type, "global")
+	}
+}

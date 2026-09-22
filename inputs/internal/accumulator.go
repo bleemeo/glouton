@@ -405,9 +405,31 @@ func (a *Accumulator) AddHistogram(measurement string, fields map[string]any, ta
 	a.processMetrics(a.wrapAdd("histogram"), measurement, fields, tags, t...)
 }
 
-// AddMetric adds an metric to the accumulator.
-func (a *Accumulator) AddMetric(telegraf.Metric) {
-	a.AddError(errNotImplemented)
+// AddMetric adds a metric to the accumulator, dispatching to the Add* method
+// matching its type so it goes through the same
+// RenameGlobal/differentiate/TransformMetrics/RenameMetrics pipeline as the
+// rest. Some telegraf plugins (e.g. bind's XML/JSON stats parsers) build
+// their points with metric.NewSeriesGrouper, which emits exclusively through
+// this method -- bypassing AddFields/AddGauge/... entirely.
+func (a *Accumulator) AddMetric(m telegraf.Metric) {
+	switch m.Type() {
+	case telegraf.Counter:
+		a.AddCounter(m.Name(), m.Fields(), m.Tags(), m.Time())
+	case telegraf.Gauge:
+		a.AddGauge(m.Name(), m.Fields(), m.Tags(), m.Time())
+	case telegraf.Summary:
+		a.AddSummary(m.Name(), m.Fields(), m.Tags(), m.Time())
+	case telegraf.Histogram:
+		a.AddHistogram(m.Name(), m.Fields(), m.Tags(), m.Time())
+	case telegraf.Untyped:
+		// Default type for metric.New()/SeriesGrouper-built metrics.
+		a.AddFields(m.Name(), m.Fields(), m.Tags(), m.Time())
+	default:
+		// Guards against a future telegraf.ValueType addition or a
+		// non-standard telegraf.Metric implementation: report loudly
+		// instead of silently dropping the metric.
+		a.AddError(fmt.Errorf("%w: metric %q has unsupported type %v", errNotImplemented, m.Name(), m.Type()))
+	}
 }
 
 // AddError reports an error.

@@ -68,7 +68,8 @@ var (
 	ErrExecutionSkipped = errors.New("execution skipped when glouton run in a container")
 )
 
-// LookPath does the same as Golang exec.LookPath, but apply RunOnHost and SkipInContainer option:
+// LookPath does the same as Golang exec.LookPath, but apply RunOnHost and
+// SkipInContainer option:
 //   - When SkipInContainer is set, always said that command isn't found if Glouton run in a container
 //   - When RunOnHost is set, the command isn't looked up in the container mount namespace but in the host
 //     mount namespace (using /hostroot mount point).
@@ -167,6 +168,16 @@ func (r *Runner) getSudoCommand() string {
 	return "sudo"
 }
 
+// chrootPath returns the directory the command has to be chrooted into, or "" to run it
+// in Glouton's own mount namespace.
+func (r *Runner) chrootPath(option Option) string {
+	if r.hostRootPath != "/" && option.RunOnHost {
+		return r.hostRootPath
+	}
+
+	return ""
+}
+
 func (r *Runner) makeCmd(ctx context.Context, option Option, name string, arg ...string) (*exec.Cmd, func(error) error, error) {
 	if r.hostRootPath != "/" && option.SkipInContainer {
 		return nil, nil, ErrExecutionSkipped
@@ -176,9 +187,9 @@ func (r *Runner) makeCmd(ctx context.Context, option Option, name string, arg ..
 		return nil, nil, ErrUnknownHostroot
 	}
 
-	if r.hostRootPath != "/" && option.RunOnHost {
-		// chroot is needed to run the command on host mount namespace
-		arg = append([]string{r.hostRootPath, name}, arg...)
+	if chrootPath := r.chrootPath(option); chrootPath != "" {
+		// chroot is needed to run the command in another mount namespace than Glouton's
+		arg = append([]string{chrootPath, name}, arg...)
 		name = "chroot"
 	}
 

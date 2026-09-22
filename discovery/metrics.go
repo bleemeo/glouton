@@ -17,6 +17,7 @@
 package discovery
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -29,14 +30,20 @@ import (
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/facts/container-runtime/veth"
 	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/inputs/activemq"
 	"github.com/bleemeo/glouton/inputs/apache"
+	"github.com/bleemeo/glouton/inputs/bind"
+	"github.com/bleemeo/glouton/inputs/chrony"
 	"github.com/bleemeo/glouton/inputs/clickhouse"
+	"github.com/bleemeo/glouton/inputs/consul"
 	"github.com/bleemeo/glouton/inputs/cpu"
 	"github.com/bleemeo/glouton/inputs/disk"
 	"github.com/bleemeo/glouton/inputs/diskio"
+	"github.com/bleemeo/glouton/inputs/dovecot"
 	"github.com/bleemeo/glouton/inputs/elasticsearch"
 	"github.com/bleemeo/glouton/inputs/fail2ban"
 	"github.com/bleemeo/glouton/inputs/haproxy"
+	"github.com/bleemeo/glouton/inputs/influxdb"
 	"github.com/bleemeo/glouton/inputs/jenkins"
 	"github.com/bleemeo/glouton/inputs/mem"
 	"github.com/bleemeo/glouton/inputs/memcached"
@@ -48,6 +55,7 @@ import (
 	"github.com/bleemeo/glouton/inputs/nfs"
 	"github.com/bleemeo/glouton/inputs/nginx"
 	"github.com/bleemeo/glouton/inputs/nsq"
+	"github.com/bleemeo/glouton/inputs/ntp"
 	"github.com/bleemeo/glouton/inputs/openbao"
 	"github.com/bleemeo/glouton/inputs/openldap"
 	"github.com/bleemeo/glouton/inputs/pgbouncer"
@@ -57,8 +65,10 @@ import (
 	"github.com/bleemeo/glouton/inputs/redis"
 	"github.com/bleemeo/glouton/inputs/swap"
 	"github.com/bleemeo/glouton/inputs/system"
+	"github.com/bleemeo/glouton/inputs/tomcat"
 	"github.com/bleemeo/glouton/inputs/upsd"
 	"github.com/bleemeo/glouton/inputs/uwsgi"
+	"github.com/bleemeo/glouton/inputs/varnish"
 	"github.com/bleemeo/glouton/inputs/vault"
 	"github.com/bleemeo/glouton/inputs/winperfcounters"
 	"github.com/bleemeo/glouton/inputs/zookeeper"
@@ -71,6 +81,23 @@ import (
 
 	"github.com/influxdata/telegraf"
 	"github.com/prometheus/client_golang/prometheus"
+)
+
+const (
+	// bindDefaultStatsPort is the default port of BIND's statistics-channel, which is
+	// disabled by default and unrelated to the DNS port used for discovery.
+	bindDefaultStatsPort = 8053
+	// dovecotDefaultStatsPort is the default port of Dovecot's old_stats plugin listener.
+	dovecotDefaultStatsPort = 24242
+	// varnishProbeTimeout bounds the "varnishstat -V" that checks a container carries one.
+	// It is short because nothing is waiting on it: finding no varnishstat only means no
+	// input for this Varnish.
+	varnishProbeTimeout = 10 * time.Second
+	// varnishStatBinary is where telegraf's varnish plugin runs varnishstat from, and so
+	// the only place a container can carry one this input is able to use.
+	varnishStatBinary = "/usr/bin/varnishstat"
+	// chronyDefaultCmdPort is the UDP port of chronyd's command protocol, which is how its metrics are read.
+	chronyDefaultCmdPort = 323
 )
 
 // AddDefaultInputs adds system inputs to a collector.
@@ -229,6 +256,16 @@ func (d *Discovery) configureMetricInputs(oldServices, services map[NameInstance
 	return err.MaybeUnwrap()
 }
 
+// containerPID is the PID of the service's container, or 0 when it has none. Nil-safe so
+// that it can be compared for any service.
+func containerPID(service Service) int {
+	if service.container == nil {
+		return 0
+	}
+
+	return service.container.PID()
+}
+
 func serviceNeedUpdate(oldService, service Service, oldServiceState facts.ContainerState, serviceState facts.ContainerState) bool {
 	switch {
 	case oldService.Name != service.Name,
@@ -241,7 +278,8 @@ func serviceNeedUpdate(oldService, service Service, oldServiceState facts.Contai
 		oldService.Active != service.Active,
 		oldService.CheckIgnored != service.CheckIgnored,
 		oldService.MetricsIgnored != service.MetricsIgnored,
-		oldServiceState != serviceState:
+		oldServiceState != serviceState,
+		containerPID(oldService) != containerPID(service):
 		return true
 	case !reflect.DeepEqual(oldService.Config, service.Config):
 		return true
@@ -296,9 +334,24 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 	}
 
 	switch service.ServiceType { //nolint:exhaustive
+	case ActiveMQService:
+		if url, username, password := activeMQURL(service); url != "" {
+			// One point per queue, topic and subscriber, all sharing their metric name, so
+			// what identifies a destination has to be a label of its own -- the
+			// compatibility naming keeps only the item and would collapse them onto one
+			// series. The item stays the service instance instead of being glued to a
+			// destination name; see the renameGlobal of inputs/activemq.
+			gathererOptions.CompatibilityNameItem = false
+
+			input, err = activemq.New(url, username, password)
+		}
 	case ApacheService:
 		if ip, port := service.AddressPort(); ip != "" {
 			input, err = apache.New(apacheStatusURL(ip, port))
+		}
+	case BindService:
+		if url := bindStatsURL(service); url != "" {
+			input, err = bind.New(url)
 		}
 	case ClickHouseService:
 		if service.Config.StatsURL != "" {
@@ -315,6 +368,22 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
 			input, err = clickhouse.New(url, service.Config.Username, service.Config.Password)
 		}
+	case ConsulService:
+		// Some Consul metrics come as one series per label set, so those labels have to be
+		// kept rather than reduced to the item -- see the renameGlobal of inputs/consul for
+		// which ones and why they are safe to keep.
+		gathererOptions.CompatibilityNameItem = false
+
+		if service.Config.StatsURL != "" {
+			input, err = consul.New(service.Config.StatsURL, service.Config.Password)
+		} else if ip, port := service.AddressPort(); ip != "" {
+			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
+			input, err = consul.New(url, service.Config.Password)
+		}
+	case DovecotService:
+		if server := dovecotStatsServer(service); server != "" {
+			input, err = dovecot.New(server)
+		}
 	case ElasticSearchService:
 		if ip, port := service.AddressPort(); ip != "" {
 			input, err = elasticsearch.New("http://" + net.JoinHostPort(ip, strconv.Itoa(port)))
@@ -324,6 +393,27 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 	case HAProxyService:
 		if service.Config.StatsURL != "" {
 			input, err = haproxy.New(service.Config.StatsURL)
+		}
+	case InfluxDBService:
+		// The server's root rather than an endpoint: the three lines publish their metrics
+		// in different places -- 1.x as JSON on "/debug/vars", 2.x and 3.x as Prometheus
+		// text on "/metrics" -- and which one to read is decided from the version the
+		// server reports. See inputs/influxdb.
+		//
+		// The token is used by 3.x, which answers 401 everywhere without one; the user and
+		// password by 1.x.
+		if service.Config.StatsURL != "" {
+			input, gathererOptions, err = influxdb.New(
+				service.Config.StatsURL, service.Config.Username, service.Config.Password, service.Config.Password,
+			)
+		} else if ip, port := service.AddressPort(); ip != "" {
+			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
+			// The password is offered as both: 1.x authenticates with a user and a
+			// password, 3.x with a bearer token, and there is one field for either. A
+			// server only ever reads the one its line uses.
+			input, gathererOptions, err = influxdb.New(
+				url, service.Config.Username, service.Config.Password, service.Config.Password,
+			)
 		}
 	case JenkinsService:
 		if service.Config.StatsURL != "" && service.Config.Password != "" {
@@ -366,6 +456,24 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(port))
 			input, err = nsq.New(url)
 		}
+	case ChronyService:
+		if address, ok := chronyCmdAddress(service); ok {
+			input, gathererOptions, err = chrony.New(address)
+		} else {
+			logger.V(1).Printf(
+				"No address to read the chrony daemon of service '%s' on container '%s', not gathering its metrics",
+				service.Name, service.ContainerName,
+			)
+		}
+	case NTPService:
+		if address, ok := ntpdAddress(service); ok {
+			input, gathererOptions, err = ntp.New(address)
+		} else {
+			logger.V(1).Printf(
+				"No address to read the NTP daemon of service '%s' on container '%s', not gathering its metrics",
+				service.Name, service.ContainerName,
+			)
+		}
 	case OpenBaoService:
 		if service.Config.StatsURL != "" {
 			input, err = openbao.New(service.Config.StatsURL, service.Config.Password)
@@ -406,6 +514,8 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 				"host=%s port=%d user=%s password=%s dbname=pgbouncer sslmode=disable",
 				ip, port, username, service.Config.Password,
 			)
+			gathererOptions.CompatibilityNameItem = false
+
 			input, err = pgbouncer.New(address)
 		}
 	case RabbitMQService:
@@ -435,6 +545,30 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		if ip, port := service.AddressPort(); ip != "" {
 			input, err = redis.New("tcp://"+net.JoinHostPort(ip, strconv.Itoa(port)), service.Config.Password)
 		}
+	case TomcatService:
+		// The manager webapp the metrics are read from requires a user with the
+		// "manager-status" role, so without credentials every gather would only get a
+		// 401 (or a 404 when the webapp isn't even deployed).
+		//
+		// Both credentials are required, not just the password: the plugin always sends
+		// basic auth, and Tomcat ships an empty tomcat-users.xml, so unlike ActiveMQ there
+		// is no factory account to fall back on -- a password alone could only ever 401.
+		hasCredentials := service.Config.Username != "" && service.Config.Password != ""
+		if !hasCredentials {
+			logger.V(1).Printf("No metrics for %s on instance %s: a username and a password are required", service.Name, service.Instance)
+		}
+
+		// One point per connector and per memory pool, all sharing their metric name, so
+		// the "name" telling them apart has to be a label of its own rather than the item,
+		// which is the service instance; see the renameGlobal of inputs/tomcat.
+		gathererOptions.CompatibilityNameItem = false
+
+		if service.Config.StatsURL != "" && hasCredentials {
+			input, err = tomcat.New(service.Config.StatsURL, service.Config.Username, service.Config.Password)
+		} else if ip, port := service.AddressPort(); ip != "" && hasCredentials {
+			url := fmt.Sprintf("http://%s/manager/status/all?XML=true", net.JoinHostPort(ip, strconv.Itoa(port)))
+			input, err = tomcat.New(url, service.Config.Username, service.Config.Password)
+		}
 	case UPSDService:
 		if ip, port := service.AddressPort(); ip != "" {
 			input, gathererOptions, err = upsd.New(ip, port, service.Config.Username, service.Config.Password)
@@ -458,6 +592,18 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			url := fmt.Sprintf("%s://%s", protocol, net.JoinHostPort(ip, strconv.Itoa(port)))
 			input, gathererOptions, err = uwsgi.New(url)
 		}
+	case VarnishService:
+		// The input runs "varnishstat" rather than reading a port, since that is the only
+		// way Varnish publishes its counters: they live in a shared memory segment the
+		// daemon maps, with no socket in front of them. The agent image carries no
+		// varnishstat, so it comes from wherever the daemon is -- the machine for a
+		// Varnish installed on it, the container's own image for a containerised one.
+		//
+		// Not being able to read it means no input, rather than an input failing on every
+		// gather under that container's name.
+		if d.canReadVarnish(service) {
+			input, gathererOptions, err = varnish.New(d.commandRunner, d.containerInfo, service.ContainerID)
+		}
 	case VaultService:
 		if service.Config.StatsURL != "" {
 			input, err = vault.New(service.Config.StatsURL, service.Config.Password)
@@ -473,6 +619,16 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		return nil
 	default:
 		logger.V(1).Printf("service type %s don't support metrics", service.ServiceType)
+	}
+
+	// An input that says it is disabled isn't a failure to report on every discovery run:
+	// it is a plugin that doesn't exist on this platform (the Windows stubs of the inputs
+	// reading a local daemon, like inputs/varnish) or one Telegraf wasn't built with. There
+	// is simply no input for that service here.
+	if errors.Is(err, inputs.ErrDisabledInput) {
+		logger.V(1).Printf("No input for service %s on this platform: %v", service.Name, err)
+
+		return nil
 	}
 
 	if err != nil {
@@ -599,6 +755,38 @@ func urlForPHPFPM(service Service) string {
 	return ""
 }
 
+// activeMQURL returns the URL of the web console the ActiveMQ metrics are read from, and the
+// credentials to read it with, or an empty URL when no address is known.
+//
+// The console always requires authentication, so a missing username or password falls back
+// to the broker's factory account (admin/admin), which a default install still answers to.
+func activeMQURL(service Service) (url string, username string, password string) {
+	username = service.Config.Username
+	password = service.Config.Password
+
+	if username == "" || password == "" {
+		logger.V(1).Printf("No metrics for %s on instance %s: a username and a password are required, trying with default credentials", service.Name, service.Instance)
+
+		if username == "" {
+			username = activeMQDefaultUser
+		}
+
+		if password == "" {
+			password = activeMQDefaultPassword
+		}
+	}
+
+	if service.Config.StatsURL != "" {
+		return service.Config.StatsURL, username, password
+	}
+
+	if ip, port := service.AddressPort(); ip != "" {
+		return "http://" + net.JoinHostPort(ip, strconv.Itoa(port)), username, password
+	}
+
+	return "", "", ""
+}
+
 // apacheStatusURL builds the server-status URL for an Apache instance, omitting the port
 // from the URL when it's the HTTP default (80) -- an IPv6 address then still needs brackets
 // even without a port suffix.
@@ -647,4 +835,192 @@ func getMetricsSocket(service Service) string {
 	}
 
 	return socket
+}
+
+// statsListenerAddress resolves the address of a stats listener that runs on its own port,
+// separate from the one the service was discovered on, and that is opt-in. It returns an
+// empty IP when no address is known for that port.
+//
+// On its default port the service must be seen listening on it, since a service without
+// that listener -- the default configuration -- would otherwise get an input failing on
+// every single gather. That only holds when the listen addresses are the ones netstat
+// reports for the process: those of a containerized service are the ports its container
+// publishes (see getDiscoveryInfo), where such a listener is usually not among them, so
+// there the address is forced and the input is created anyway. Setting stats_port forces
+// it too, as it says the listener is there whether or not Glouton sees the port (the same
+// thing RabbitMQ does for its management port).
+func statsListenerAddress(service Service, defaultPort int) (ip string, port int) {
+	port = defaultPort
+	force := service.ContainerID != ""
+
+	if service.Config.StatsPort != 0 {
+		port = service.Config.StatsPort
+		force = true
+	}
+
+	return service.AddressForPort(port, tcpProtocol, force), port
+}
+
+// bindStatsURL returns the URL of BIND's statistics-channel, or "" when no address is
+// known for it. The statistics-channel is disabled by default and is unrelated to the
+// DNS port used for discovery, so it's looked up on its own default port unless the
+// user configured one -- see statsListenerAddress for how that port is resolved.
+//
+// Auto-discovery always assumes XML v3 (the only format on BIND 9.10+, and available
+// on 9.9+ with --enable-newstats), since the telegraf plugin picks its parser solely
+// from the URL path and can't auto-detect what the server actually speaks. Older BIND
+// (9.6-9.8, or 9.9 without newstats) only has XML v2, reachable at the same port with
+// no path suffix at all (9.6-9.8) or "/xml/v2" (9.9); some 9.10+ distros also expose
+// JSON v1 at "/json/v1". For any of those, set the service's stats_url config
+// explicitly to the right path -- see the URL table in telegraf's bind plugin doc.
+// We could maybe probe the endpoint to pick the right format automatically.
+func bindStatsURL(service Service) string {
+	if service.Config.StatsURL != "" {
+		return service.Config.StatsURL
+	}
+
+	ip, port := statsListenerAddress(service, bindDefaultStatsPort)
+	if ip == "" {
+		return ""
+	}
+
+	return fmt.Sprintf("http://%s/xml/v3", net.JoinHostPort(ip, strconv.Itoa(port)))
+}
+
+// dovecotStatsServer returns the address of Dovecot's old_stats plugin listener, either
+// as a unix socket path or as a "host:port" TCP address, or "" when neither is known.
+//
+// old_stats is an opt-in plugin (and is gone from Dovecot 2.4), so like BIND's
+// statistics-channel it is looked up on its own default port -- a Dovecot without the
+// plugin has no listener, and an input for it would only report connection errors. See
+// statsListenerAddress for how that port is resolved. Configuring a metrics unix socket
+// says the listener is there too.
+func dovecotStatsServer(service Service) string {
+	if socket := getMetricsSocket(service); socket != "" {
+		return socket
+	}
+
+	ip, port := statsListenerAddress(service, dovecotDefaultStatsPort)
+	if ip == "" {
+		return ""
+	}
+
+	return net.JoinHostPort(ip, strconv.Itoa(port))
+}
+
+// canReadVarnish reports whether the varnishstat this input runs can be reached for a
+// service, and logs why when it cannot.
+//
+// A Varnish installed on the machine is read with the machine's binary.
+//
+// A containerised one is read with the container's own varnishstat, which an image is free
+// not to ship -- plenty carry only the daemon. Running "varnishstat -V" is what answers
+// that: it prints the version and exits without needing a running instance, so it says
+// whether the binary is there and runnable without reading any statistics. Asking the
+// binary beats listing the directory it would live in, which needed a privileged read of
+// the container's filesystem through /proc to answer the same question.
+//
+// An image carrying no varnishstat gets no input rather than one failing on every gather.
+// It is not a case Glouton can do anything about: reading it would mean a varnishstat on
+// the machine, which nothing documents installing for a containerised Varnish.
+func (d *Discovery) canReadVarnish(service Service) bool {
+	if service.ContainerID == "" {
+		return true
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), varnishProbeTimeout)
+	defer cancel()
+
+	if _, err := d.containerInfo.Exec(ctx, service.ContainerID, []string{varnishStatBinary, "-V"}); err != nil {
+		logger.V(1).Printf(
+			"Not gathering Varnish of %s: its container has no usable %s (%v)",
+			service.Instance, varnishStatBinary, err,
+		)
+
+		return false
+	}
+
+	return true
+}
+
+// chronyCmdAddress returns the "host:port" of chronyd's command protocol, which is UDP and
+// distinct from the NTP port the service was discovered on. Both the input and the check use
+// it, so they cannot disagree about which daemon they read.
+//
+// The address is Glouton's own loopback unless the daemon cannot be the one next to it: a
+// container of its own, or an address the user declared. A non-loopback service.IPAddress is
+// not enough on its own, since it comes from the NTP port's bind address: a chronyd with
+// "bindaddress 192.168.1.5" still keeps its command port on loopback. For a container that
+// same IPAddress IS used, netstat never reporting the command port from inside the
+// container's network namespace.
+//
+// ok is false for a container the runtime reports no address for, so that neither the input
+// nor the check runs rather than both reporting on the chronyd next to Glouton.
+func chronyCmdAddress(service Service) (address string, ok bool) {
+	address = service.Config.Address
+	port := service.Config.StatsPort
+
+	// A container of its own: Glouton's loopback is not the container's.
+	if address == "" && service.ContainerID != "" {
+		address = service.IPAddress
+
+		if address == "" {
+			// A container whose address the runtime doesn't report (network_mode: none or
+			// container:<other>, both of which leave PrimaryAddress() empty).
+			return "", false
+		}
+	}
+
+	if address == "" {
+		// The local daemon, named rather than left for the input to find, so that the
+		// check reads the same one.
+		address = localhostIP
+	}
+
+	if port == 0 {
+		port = chronyDefaultCmdPort
+	}
+
+	return net.JoinHostPort(address, strconv.Itoa(port)), true
+}
+
+// ntpdAddress returns the "host:port" to read ntpd's control protocol (NTP mode 6) on, or ""
+// to let the input use 127.0.0.1 and the NTP port.
+//
+// Mode 6 is served on the NTP port itself, so there is no separate port to configure -- a
+// "port" override moves both. An address is only returned for a daemon Glouton's loopback
+// cannot be, the same rule chronyCmdAddress follows, since ntpd's usual "restrict default
+// ... noquery" only leaves 127.0.0.1 and ::1 unrestricted.
+//
+// ok has the same meaning as chronyCmdAddress's: false is "there is no telling where this
+// daemon is", which an empty address (meaning "the local default is right") cannot say.
+func ntpdAddress(service Service) (address string, ok bool) {
+	address = service.Config.Address
+	port := service.Config.Port
+
+	// Same as chronyCmdAddress: reached only with no address configured, so the container is
+	// all that is left to tell.
+	if address == "" && service.ContainerID != "" {
+		address = service.IPAddress
+
+		if address == "" {
+			return "", false
+		}
+	}
+
+	if address == "" && port == 0 {
+		return "", true
+	}
+
+	if address == "" {
+		// Only the port was overridden: the input would go back to the default 123, so the
+		// loopback it would have used is spelled out here alongside the port.
+		address = localhostIP
+	}
+
+	if port == 0 {
+		port = servicesDiscoveryInfo[NTPService].ServicePort
+	}
+
+	return net.JoinHostPort(address, strconv.Itoa(port)), true
 }

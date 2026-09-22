@@ -270,6 +270,48 @@ func TestMergeNetstats(t *testing.T) {
 	}
 }
 
+// TestMergeNetstatsUDP checks which UDP sockets count as a service's listen address.
+// UDP has no LISTEN state to filter on -- gopsutil reports every UDP socket as "NONE" --
+// and nothing marks a socket as a server's, so what a server would never do is excluded:
+// being connected to a peer, and sitting on an ephemeral port.
+func TestMergeNetstatsUDP(t *testing.T) {
+	const (
+		chronydPID  = 700
+		dhclientPID = 701
+		namedPID    = 702
+	)
+
+	mockNetstat := []psutilNet.ConnectionStat{
+		// chronyd's command port: a real UDP listener, and the reason UDP is read here
+		// at all.
+		{Fd: 3, Family: syscall.AF_INET, Type: syscall.SOCK_DGRAM, Laddr: psutilNet.Addr{IP: addrLocalhost, Port: 323}, Status: testStatusNone, Pid: chronydPID},
+		// A DHCP client: connected to a peer, so it isn't serving anything.
+		{Fd: 4, Family: syscall.AF_INET, Type: syscall.SOCK_DGRAM, Laddr: psutilNet.Addr{IP: testAddr192168140, Port: 68}, Raddr: psutilNet.Addr{IP: testAddr1234, Port: 67}, Status: testStatusNone, Pid: dhclientPID},
+		// A DNS server: its own port is a listen address, but the unconnected sockets it
+		// sends outgoing queries from are not -- the kernel picks a different ephemeral
+		// port for each, so they would otherwise make the service's listen addresses
+		// change on every scan and its checks and inputs be recreated each time.
+		{Fd: 5, Family: syscall.AF_INET, Type: syscall.SOCK_DGRAM, Laddr: psutilNet.Addr{IP: addrAllInterfaces, Port: 53}, Status: testStatusNone, Pid: namedPID},
+		{Fd: 6, Family: syscall.AF_INET, Type: syscall.SOCK_DGRAM, Laddr: psutilNet.Addr{IP: addrAllInterfaces, Port: 46429}, Status: testStatusNone, Pid: namedPID},
+		{Fd: 7, Family: syscall.AF_INET6, Type: syscall.SOCK_DGRAM, Laddr: psutilNet.Addr{IP: "::", Port: 60918}, Status: testStatusNone, Pid: namedPID},
+	}
+
+	want := map[int][]ListenAddress{
+		chronydPID:  {{NetworkFamily: networkUDP, Address: addrLocalhost, Port: 323}},
+		dhclientPID: nil,
+		namedPID:    {{NetworkFamily: networkUDP, Address: addrAllInterfaces, Port: 53}},
+	}
+
+	netstat := make(map[int][]ListenAddress)
+	np := &NetstatProvider{"null"}
+
+	np.mergeNetstats(netstat, mockNetstat)
+
+	for pid, wantAddresses := range want {
+		cmpAddresses(t, fmt.Sprintf("mergeNetstats(...)[%d]", pid), netstat[pid], wantAddresses)
+	}
+}
+
 func TestListenAddressString(t *testing.T) {
 	cases := []struct {
 		addr ListenAddress
@@ -341,5 +383,39 @@ func TestCleanRecycledPIDs(t *testing.T) {
 
 	if !ok {
 		t.Errorf("Netstat PID 323667 was incorrectly removed")
+	}
+}
+
+// TestListenAddressIsProtocol checks that a listen address is recognized as its protocol
+// on either IP family. Netstat puts the family in the network name, so comparing that name
+// to a bare "tcp"/"udp" misses every IPv6 listener -- which is how an IPv6-only daemon came
+// to look like one not serving its own protocol at all.
+func TestListenAddressIsProtocol(t *testing.T) {
+	cases := []struct {
+		family   string
+		protocol string
+		want     bool
+	}{
+		{family: "udp", protocol: "udp", want: true},
+		{family: "udp6", protocol: "udp", want: true},
+		{family: "tcp", protocol: "tcp", want: true},
+		{family: "tcp6", protocol: "tcp", want: true},
+		{family: "tcp", protocol: "udp", want: false},
+		{family: "tcp6", protocol: "udp", want: false},
+		{family: "udp6", protocol: "tcp", want: false},
+		{family: "unix", protocol: "tcp", want: false},
+		// Not a real family, and must not match by prefix.
+		{family: "udp66", protocol: "udp", want: false},
+		{family: "", protocol: "udp", want: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.family+"/"+tc.protocol, func(t *testing.T) {
+			address := ListenAddress{NetworkFamily: tc.family} //nolint:exhaustruct
+
+			if got := address.IsProtocol(tc.protocol); got != tc.want {
+				t.Errorf("ListenAddress{%q}.IsProtocol(%q) = %t, want %t", tc.family, tc.protocol, got, tc.want)
+			}
+		})
 	}
 }

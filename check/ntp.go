@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net"
@@ -61,6 +62,30 @@ func NewNTP(
 	return nc
 }
 
+// DiagnosticArchive add the address probed to the diagnostic, which baseCheck's version
+// can't know: it only records TCP addresses, and the NTP exchange is on UDP.
+func (nc *NTPCheck) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("check-ntp.json")
+	if err != nil {
+		return err
+	}
+
+	obj := struct {
+		MainAddress string
+	}{
+		MainAddress: nc.mainAddress,
+	}
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	if err := enc.Encode(obj); err != nil {
+		return err
+	}
+
+	return nc.baseCheck.DiagnosticArchive(ctx, archive)
+}
+
 type ntpTimestamp struct {
 	Second  uint32
 	Faction uint32
@@ -75,6 +100,19 @@ func (nt ntpTimestamp) Time() time.Time {
 	nanoFaction := int64(nt.Faction) / 1000 * 232
 
 	return time.Unix(int64(nt.Second-deltaEpoc), nanoFaction)
+}
+
+// kissCodes are the reference IDs a server sends with stratum 0 to refuse a request
+// (RFC 5905 section 7.4), rather than to report an unsynchronized clock. Only the ones a
+// client can actually receive are listed.
+//
+//nolint:gochecknoglobals
+var kissCodes = map[string]string{
+	"RATE": "we are querying it too often for its rate limit (Kiss-o'-Death)",
+	"DENY": "access denied",
+	"RSTR": "access denied by its restrictions",
+	"CRYP": "cryptographic authentication failed",
+	"AUTH": "authentication failed",
 }
 
 type ntpV3Packet struct {
@@ -203,6 +241,18 @@ func (nc *NTPCheck) ntpMainCheck(ctx context.Context) types.StatusDescription {
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusUnknown,
 			StatusDescription: "Unknown response from NTP server",
+		}
+	}
+
+	// A Kiss-o'-Death is the server refusing the request, not telling us anything about its
+	// clock: it carries stratum 0 like an unsynchronized server would, so the reference ID
+	// has to be read to tell the two apart.
+	if packet.Stratum == 0 {
+		if reason, ok := kissCodes[string(packet.ReferenceID[:])]; ok {
+			return types.StatusDescription{
+				CurrentStatus:     types.StatusCritical,
+				StatusDescription: "NTP server refused the request: " + reason,
+			}
 		}
 	}
 

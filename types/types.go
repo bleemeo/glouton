@@ -130,6 +130,11 @@ const (
 	LabelPV = "pv"
 )
 
+// LabelPeerAddress is the address of the time source a point is about, on the per-source
+// metrics of both NTP daemons (inputs/ntp and inputs/chrony). It is one name for both so a
+// dashboard doesn't need to know which daemon answered.
+const LabelPeerAddress = "ip"
+
 const (
 	MetricServiceStatus = "service_status"
 )

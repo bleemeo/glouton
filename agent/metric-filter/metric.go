@@ -366,6 +366,16 @@ type Filter struct {
 
 func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 	defaultServiceMetrics := map[discovery.ServiceName][]string{
+		discovery.ActiveMQService: {
+			"activemq_queues_consumer_count",
+			"activemq_queues_dequeue_count",
+			"activemq_queues_enqueue_count",
+			"activemq_queues_size",
+			"activemq_topics_consumer_count",
+			"activemq_topics_dequeue_count",
+			"activemq_topics_enqueue_count",
+		},
+
 		discovery.ApacheService: {
 			"apache_busy_workers",
 			"apache_busy_workers_perc",
@@ -386,6 +396,18 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"apache_scoreboard_finishing",
 			"apache_scoreboard_idle_cleanup",
 			"apache_scoreboard_open",
+		},
+
+		discovery.BindService: {
+			"bind_counter_nxdomain",
+			"bind_counter_qry_success",
+			"bind_counter_qryfailure",
+			"bind_counter_query",
+			"bind_counter_recqryrej",
+			"bind_counter_refused",
+			"bind_counter_response",
+			"bind_counter_servfail",
+			"bind_memory_in_use",
 		},
 
 		discovery.BitBucketService: {
@@ -460,6 +482,41 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"confluence_requests",
 		},
 
+		discovery.ConsulService: {
+			// consul_autopilot_failure_tolerance is how many servers can still be lost
+			// before the cluster loses quorum: 0 means the next failure breaks it.
+			"consul_autopilot_failure_tolerance",
+			"consul_autopilot_healthy",
+			// The RPC volume Consul itself reports as a per-second rate, so it needs no
+			// differentiating. rpc_request counts what the servers were asked, client_rpc
+			// what the agent's own client layer asked of them.
+			"consul_client_rpc_rate",
+			// The end-to-end latency of a KV write.
+			"consul_kvs_apply_mean_seconds",
+			// How large the cluster is, and whether this agent leads it. isLeader is 1 on
+			// exactly one server of a healthy cluster, which is also how a leadership
+			// change shows up.
+			"consul_members_clients",
+			"consul_members_servers",
+			"consul_raft_committime_mean_seconds",
+			"consul_raft_leader_lastcontact_mean_seconds",
+			"consul_rpc_request_rate",
+			"consul_server_isleader",
+			// What the catalog and the key/value store hold.
+			"consul_state_kv_entries",
+			"consul_state_nodes",
+			"consul_state_service_instances",
+			"consul_state_services",
+		},
+
+		discovery.DovecotService: {
+			"dovecot_auth_failures",
+			"dovecot_auth_successes",
+			"dovecot_num_cmds",
+			"dovecot_num_connected_sessions",
+			"dovecot_num_logins",
+		},
+
 		discovery.ElasticSearchService: {
 			"elasticsearch_docs_count",
 			"elasticsearch_jvm_gc",
@@ -500,6 +557,37 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"haproxy_stot",
 			"haproxy_ttime",
 		},
+
+		// InfluxDB, whichever of the three lines the server is. The set is their union:
+		// only 1.x reports series cardinality and authentication failures, only 2.x and 3.x
+		// an uptime, 2.x has no query metric at all and 3.x no points-written one, and the
+		// parquet cache and object store are the 3.x engine's own. See inputs/influxdb.
+		discovery.InfluxDBService: {
+			"influxdb_auth_failures",
+			"influxdb_client_errors",
+			"influxdb_mem_pool_bytes",
+			"influxdb_memory_bytes",
+			"influxdb_object_store_transfer_bytes",
+			"influxdb_parquet_cache_access",
+			"influxdb_parquet_cache_files",
+			"influxdb_parquet_cache_size_bytes",
+			"influxdb_points_write_dropped",
+			"influxdb_points_write_failed",
+			"influxdb_points_written",
+			"influxdb_queries",
+			"influxdb_queries_active",
+			"influxdb_queries_failed",
+			"influxdb_query_duration_seconds",
+			"influxdb_query_ooms",
+			"influxdb_request_duration_seconds",
+			"influxdb_requests",
+			"influxdb_series",
+			"influxdb_server_errors",
+			"influxdb_thread_panics",
+			"influxdb_uptime",
+			"influxdb_write_timeouts",
+		},
+
 		discovery.JenkinsService: {
 			"jenkins_busy_executors",
 			"jenkins_total_executors",
@@ -692,6 +780,21 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"nsq_topic_messages",
 		},
 
+		// Neither Chrony or NTP publishes its per-source metrics by default:
+		// what a user of a time daemon wants to know is whether this host's clock is right.
+		discovery.ChronyService: {
+			"chrony_last_offset",
+			"chrony_rms_offset",
+			"chrony_root_delay",
+			"chrony_activity_online",
+			"chrony_activity_offline",
+		},
+
+		discovery.NTPService: {
+			// The daemon's own estimate of the local clock's error: the only ntpq metric that is not per-peer.
+			"ntpq_system_offset_seconds",
+		},
+
 		discovery.OpenBaoService: { // OpenBao is a fork of Hashicorp Vault
 			"bao_core_active",
 			"bao_core_check_tokens",
@@ -732,6 +835,10 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 		},
 
 		discovery.PostfixService: {
+			// The number of mails waiting in the whole queue, from "postqueue -p" (see
+			// agent.postfixQueueSize). The only Postfix metric: reading the spool
+			// directory to count them per queue needs access a packaged Glouton, running
+			// as its own user, does not have on the installs that are the vast majority.
 			"postfix_queue_size",
 		},
 
@@ -807,6 +914,19 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"redis_volatile_changes",
 		},
 
+		discovery.TomcatService: {
+			"tomcat_connector_bytes_received",
+			"tomcat_connector_bytes_sent",
+			"tomcat_connector_current_threads_busy",
+			"tomcat_connector_error_count",
+			"tomcat_connector_max_threads",
+			"tomcat_connector_processing_time_seconds",
+			"tomcat_connector_request_count",
+			"tomcat_jvm_memory_free",
+			"tomcat_jvm_memory_max",
+			"tomcat_jvm_memorypool_used",
+		},
+
 		discovery.UPSDService: {
 			"upsd_battery_status",
 			"upsd_status_flags",
@@ -848,6 +968,19 @@ func getServicesMetrics() map[discovery.ServiceName][]string { //nolint:maintidx
 			"redis_total_operations",
 			"redis_uptime",
 			"redis_volatile_changes",
+		},
+
+		discovery.VarnishService: {
+			"varnish_backend_fail",
+			"varnish_cache_evictions",
+			"varnish_cache_hit",
+			"varnish_cache_hit_perc",
+			"varnish_cache_miss",
+			"varnish_sessions_dropped",
+			"varnish_sessions_queued",
+			"varnish_threads",
+			"varnish_threads_limited",
+			"varnish_uptime",
 		},
 
 		discovery.VaultService: {

@@ -18,10 +18,12 @@ package pgbouncer
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/types"
 )
 
 // collectFinalMetrics replicates the measurement/field -> final metric name
@@ -50,8 +52,15 @@ func collectFinalMetrics(store *internal.StoreAccumulator) map[string]float64 {
 	return got
 }
 
+// newStore returns an empty accumulator store. It exists so the zero value is written out
+// once rather than in every test, which also keeps exhaustruct quiet.
+func newStore() *internal.StoreAccumulator {
+	return &internal.StoreAccumulator{Measurement: nil, Errors: nil}
+}
+
 func newAccumulator(store *internal.StoreAccumulator) internal.Accumulator {
 	return internal.Accumulator{
+		RenameGlobal:     renameGlobal,
 		TransformMetrics: transformMetrics,
 		DifferentiatedMetrics: []string{
 			"total_query_count",
@@ -86,7 +95,7 @@ func assertMetrics(t *testing.T, got map[string]float64, want map[string]float64
 // total_sent -> sent_bytes) and total_query_time is combined with
 // total_query_count into an average query_time_seconds.
 func TestRenamePipelineStats(t *testing.T) {
-	store := &internal.StoreAccumulator{}
+	store := newStore()
 	acc := newAccumulator(store)
 
 	t0 := time.Now()
@@ -121,12 +130,18 @@ func TestRenamePipelineStats(t *testing.T) {
 		"pgbouncer_sent_bytes":         50,
 		"pgbouncer_query_time_seconds": 0.1,
 	})
+
+	// The raw duration rate is meaningless by itself and must not be emitted alongside
+	// the average derived from it.
+	if value, ok := got["pgbouncer_total_query_time"]; ok {
+		t.Errorf("raw duration rate should have been dropped, got value %v", value)
+	}
 }
 
 // TestRenamePipelinePools exercises the "pgbouncer_pools" measurement (SHOW
 // POOLS), which is untouched by transformMetrics: fields are emitted as-is.
 func TestRenamePipelinePools(t *testing.T) {
-	store := &internal.StoreAccumulator{}
+	store := newStore()
 	acc := newAccumulator(store)
 
 	acc.PrepareGather()
@@ -147,4 +162,158 @@ func TestRenamePipelinePools(t *testing.T) {
 		"pgbouncer_pools_sv_idle":    4,
 		"pgbouncer_pools_maxwait":    7,
 	})
+}
+
+// identitiesFor returns "db/user" for every stored row of a measurement, in the order they
+// were emitted. Those are kept as real labels, so this reads them back from the tags rather
+// than from the item.
+func identitiesFor(store *internal.StoreAccumulator, measurement string) []string {
+	ids := make([]string, 0, len(store.Measurement))
+
+	for _, m := range store.Measurement {
+		if m.Name == measurement {
+			ids = append(ids, m.Tags["db"]+"/"+m.Tags["user"])
+		}
+	}
+
+	return ids
+}
+
+// tagsFor returns the tags of the first stored row of a measurement.
+func tagsFor(store *internal.StoreAccumulator, measurement string) map[string]string {
+	for _, m := range store.Measurement {
+		if m.Name == measurement {
+			return m.Tags
+		}
+	}
+
+	return nil
+}
+
+// poolTags are the tags telegraf's pgbouncer plugin attaches to pgbouncer_pools: the base
+// {server, db} plus user and pool_mode.
+func poolTags(db, user, poolMode string) map[string]string {
+	return map[string]string{
+		"server":    "host=127.0.0.1 port=6432 user=pgbouncer dbname=pgbouncer",
+		"db":        db,
+		"user":      user,
+		"pool_mode": poolMode,
+	}
+}
+
+// TestLabelsSeparatePoolRows covers the collision that made 8 of the 9 published metrics
+// error on every /metrics scrape: SHOW POOLS returns one row per database and user, always
+// including PgBouncer's own admin pseudo-database, so without db and user in the series
+// identity both rows became the same series.
+func TestLabelsSeparatePoolRows(t *testing.T) {
+	store := newStore()
+	acc := newAccumulator(store)
+
+	acc.PrepareGather()
+	acc.AddFields("pgbouncer_pools", map[string]any{"sv_idle": int64(4)},
+		poolTags("bleemeo", "app", "session"), time.Now())
+	acc.AddFields("pgbouncer_pools", map[string]any{"sv_idle": int64(0)},
+		poolTags("pgbouncer", "pgbouncer", "statement"), time.Now())
+
+	got := identitiesFor(store, "pgbouncer_pools")
+	want := []string{"bleemeo/app", "pgbouncer/pgbouncer"}
+
+	if len(got) != len(want) {
+		t.Fatalf("got %d pool rows (%v), want %d", len(got), got, len(want))
+	}
+
+	for i, id := range want {
+		if got[i] != id {
+			t.Errorf("pool row %d db/user = %q, want %q", i, got[i], id)
+		}
+	}
+
+	// Two rows that differ must not share an identity, or one silently replaces the other.
+	if got[0] == got[1] {
+		t.Errorf("both pool rows got the same db/user %q, they would collide", got[0])
+	}
+}
+
+// TestLabelsSeparateStatsRows is the same for SHOW STATS, which is keyed on the database
+// alone: db must be kept, and no "user" label invented for a measurement that has none.
+func TestLabelsSeparateStatsRows(t *testing.T) {
+	store := newStore()
+	acc := newAccumulator(store)
+
+	t0 := time.Now()
+	t1 := t0.Add(10 * time.Second)
+	server := "host=127.0.0.1 port=6432 user=pgbouncer dbname=pgbouncer"
+
+	for i, at := range []time.Time{t0, t1} {
+		acc.PrepareGather()
+		acc.AddFields("pgbouncer", map[string]any{"total_query_count": int64(10)},
+			map[string]string{"server": server, "db": "bleemeo"}, at)
+		acc.AddFields("pgbouncer", map[string]any{"total_query_count": int64(20)},
+			map[string]string{"server": server, "db": "pgbouncer"}, at)
+
+		if i == 0 {
+			// Differentiated counters have no rate on the first gather.
+			store.Measurement = nil
+		}
+	}
+
+	got := identitiesFor(store, "pgbouncer")
+	// SHOW STATS carries no user tag, so the user half is empty rather than fabricated.
+	want := []string{"bleemeo/", "pgbouncer/"}
+
+	if len(got) != len(want) {
+		t.Fatalf("got %d stats rows (%v), want %d", len(got), got, len(want))
+	}
+
+	for i, id := range want {
+		if got[i] != id {
+			t.Errorf("stats row %d db/user = %q, want %q", i, got[i], id)
+		}
+	}
+}
+
+// TestDropsServerAndPoolModeTags pins which tags survive as labels. "server" is the same
+// connection string on every row and would put host, port and dbname into a label;
+// "pool_mode" describes a pool rather than identifying one, so keeping it would start a new
+// series whenever an operator changes a pool's mode. The item is left unset on purpose --
+// it is the service instance, not a place to concatenate a database and a user.
+func TestDropsServerAndPoolModeTags(t *testing.T) {
+	store := newStore()
+	acc := newAccumulator(store)
+
+	acc.PrepareGather()
+	acc.AddFields("pgbouncer_pools", map[string]any{"sv_idle": int64(1)}, map[string]string{
+		"server": "host=10.0.0.1 port=6432 dbname=secret", "db": "bleemeo",
+		"user": "app", "pool_mode": "transaction",
+	}, time.Now())
+
+	tags := tagsFor(store, "pgbouncer_pools")
+	if tags == nil {
+		t.Fatal("no pgbouncer_pools row stored")
+	}
+
+	for _, kept := range []string{"db", "user"} {
+		if tags[kept] == "" {
+			t.Errorf("label %q should have been kept, tags: %v", kept, tags)
+		}
+	}
+
+	for _, dropped := range []string{"server", "pool_mode"} {
+		if value, ok := tags[dropped]; ok {
+			t.Errorf("tag %q should have been dropped, got %q", dropped, value)
+		}
+	}
+
+	if item, ok := tags[types.LabelItem]; ok {
+		t.Errorf("item should be left to the service instance, got %q", item)
+	}
+
+	// Nothing from the connection string may leak into any label.
+	for key, value := range tags {
+		for _, secret := range []string{"10.0.0.1", "6432", "secret"} {
+			if strings.Contains(value, secret) {
+				t.Errorf("label %s=%q leaks %q from the connection string", key, value, secret)
+			}
+		}
+	}
 }

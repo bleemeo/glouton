@@ -1,0 +1,30 @@
+# HELP go_gc_duration_seconds A summary of the pause duration of garbage collection cycles.
+# TYPE go_gc_duration_seconds summary
+go_gc_duration_seconds{quantile="0"} 9.2874e-05
+go_gc_duration_seconds{quantile="0.25"} 9.2874e-05
+go_gc_duration_seconds{quantile="0.5"} 0.001258167
+go_gc_duration_seconds{quantile="0.75"} 0.001743749
+go_gc_duration_seconds{quantile="1"} 0.001743749
+go_gc_duration_seconds_sum 0.00309479
+go_gc_duration_seconds_count 3
+# HELP go_goroutines Number of goroutines that currently exist.
+# TYPE go_goroutines gauge
+go_goroutines 24
+# HELP go_info Information about the Go environment.
+# TYPE go_info gauge
+go_info{version="go1.24.13"} 1
+# HELP go_memstats_alloc_bytes Number of bytes allocated and still in use.
+# TYPE go_memstats_alloc_bytes gauge
+go_memstats_alloc_bytes 1.8153256e+07
+# HELP go_memstats_alloc_bytes_total Total number of bytes allocated, even if freed.
+# TYPE go_memstats_alloc_bytes_total counter
+go_memstats_alloc_bytes_total 2.0633448e+07
+# HELP go_memstats_buck_hash_sys_bytes Number of bytes used by the profiling bucket hash table.
+# TYPE go_memstats_buck_hash_sys_bytes gauge
+go_memstats_buck_hash_sys_bytes 1.462466e+06
+# HELP go_memstats_frees_total Total number of frees.
+# TYPE go_memstats_frees_total counter
+go_memstats_frees_total 21967
+# HELP go_memstats_gc_sys_bytes Number of bytes used for garbage collection system metadata.
+# TYPE go_memstats_gc_sys_bytes gauge
+go_memstats_gc_sys_bytes 3.455712e+06
