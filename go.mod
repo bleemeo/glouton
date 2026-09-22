@@ -11,7 +11,7 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.3
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/containerd/cgroups/v3 v3.1.3
-	github.com/containerd/containerd v1.7.34
+	github.com/containerd/containerd v1.7.35
 	github.com/containerd/containerd/api v1.12.0
 	github.com/containerd/containerd/v2 v2.4.0
 	github.com/containerd/errdefs v1.0.0
