@@ -225,8 +225,8 @@ func (f *FactProvider) autoUpgradeStatus(ctx context.Context) string {
 }
 
 // status returns the value of the fact, and whether the answer is worth recomputing
-// before autoUpgradeMinInterval. Only one thing makes it so: a package operation holding
-// the lock while the dpkg state was read, which clears by itself. A check that failed for
+// before autoUpgradeMinInterval. Only one thing makes it so: a package operation still
+// running while the dpkg state was read, which clears by itself. A check that failed for
 // any other reason may well keep failing, and retrying it every few minutes would fork
 // apt-cache for nothing.
 func (c *autoUpgradeChecker) status(ctx context.Context) (value string, retrySoon bool) {
@@ -295,14 +295,21 @@ func (c *autoUpgradeChecker) status(ctx context.Context) (value string, retrySoo
 
 	record(AutoUpgradeStatusLocked, holderIsStuck(locks.holder), lockErr)
 
+	// A lock file that couldn't be looked at leaves the check without an answer: the
+	// paths that were readable being free says nothing about the one that wasn't.
+	if locks.unknown {
+		failed = true
+	}
+
 	switch {
 	case dpkgErr != nil:
 		record(AutoUpgradeStatusDpkgInterrupted, false, dpkgErr)
 	case interrupted && locks.dpkgHeld:
 		// An operation holding a dpkg lock is running. It will end, and the journal
-		// entries and unpacked packages it is leaving behind will go with it.
+		// entries and unpacked packages it is leaving behind will go with it - unless
+		// it is the stuck one, which is going to hold the answer back for good.
 		failed = true
-		transient = true
+		transient = !locks.dpkgStuck
 	case interrupted && (lockErr != nil || locks.dpkgUnknown):
 		// We couldn't tell whether one is.
 		failed = true
@@ -599,9 +606,15 @@ type lockState struct {
 	// dpkg database is running. APT's download locks don't say that: "apt-get update"
 	// takes them without going near the dpkg database.
 	dpkgHeld bool
+	// dpkgStuck says the holder of one of dpkg's own locks is the stuck one. Such a
+	// holder is not going to finish, so what it makes ambiguous stays ambiguous.
+	dpkgStuck bool
 	// dpkgUnknown says one of dpkg's locks couldn't be looked at, leaving dpkgHeld
 	// unanswered either way.
 	dpkgUnknown bool
+	// unknown says any of the lock files couldn't be looked at, so the check as a whole
+	// has no answer: a lock may well be held on a path that was skipped.
+	unknown bool
 }
 
 // lockState reads who holds the APT/dpkg locks.
@@ -632,6 +645,7 @@ func (c *autoUpgradeChecker) lockState(ctx context.Context) (lockState, error) {
 			if !errors.Is(err, fs.ErrNotExist) {
 				logger.V(1).Printf("auto-upgrade: unable to stat %s: %v", path, err)
 
+				state.unknown = true
 				state.dpkgUnknown = state.dpkgUnknown || isDpkgLock
 			}
 
@@ -649,6 +663,8 @@ func (c *autoUpgradeChecker) lockState(ctx context.Context) (lockState, error) {
 
 		holder := &lockHolder{path: path, pid: pid}
 		describeHolder(ctx, holder)
+
+		state.dpkgStuck = state.dpkgStuck || (isDpkgLock && holderIsStuck(holder))
 
 		// Several of these are held at once during a transaction, by different
 		// processes: APT takes lock-frontend while dpkg takes lock. A stuck holder on
