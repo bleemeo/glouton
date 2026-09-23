@@ -64,9 +64,16 @@ func newVMChecker() *autoUpgradeChecker {
 		hostRoot = "/"
 	}
 
+	// GLOUTON_VM_AUTOUPGRADE_FILE stands in for a moved agent.state_directory, where the
+	// configured marker path is not the one the packaging script writes.
+	autoUpgradeFile := os.Getenv("GLOUTON_VM_AUTOUPGRADE_FILE")
+	if autoUpgradeFile == "" {
+		autoUpgradeFile = packagingAutoUpgradeFile
+	}
+
 	return &autoUpgradeChecker{
 		Runner:          gloutonexec.New("/"),
-		AutoUpgradeFile: "/var/lib/glouton/auto_upgrade",
+		AutoUpgradeFile: autoUpgradeFile,
 		HostRootPath:    hostRoot,
 	}
 }

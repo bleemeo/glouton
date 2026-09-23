@@ -47,6 +47,34 @@ func TestDecodeAPTCachePolicy(t *testing.T) {
 			hasRepository: true,
 		},
 		{
+			// The no-argument form of the output, which aptHasIndexedRepository reads to
+			// tell an empty /var/lib/apt/lists apart from a repository that is gone.
+			// Nothing is installed-marked there, only the sources matter.
+			name: "package_files_with_repository",
+			in: `Package files:
+ 100 /var/lib/dpkg/status
+     release a=now
+ 500 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 Packages
+     release v=24.04,o=Ubuntu,a=noble,n=noble,l=Ubuntu,c=main,b=arm64
+     origin ports.ubuntu.com
+Pinned packages:
+`,
+			installed:     false,
+			hasRepository: true,
+		},
+		{
+			// The same after "rm -rf /var/lib/apt/lists/*": APT has no index left, so no
+			// package can show a repository whatever the sources say.
+			name: "package_files_without_repository",
+			in: `Package files:
+ 100 /var/lib/dpkg/status
+     release a=now
+Pinned packages:
+`,
+			installed:     false,
+			hasRepository: false,
+		},
+		{
 			// What a do-release-upgrade leaves behind: the source is commented out, so
 			// the only version APT knows about is the installed one. "apt-get install
 			// glouton" still exits 0, saying the package is already the newest version.
@@ -380,7 +408,10 @@ func TestRunIsStuck(t *testing.T) {
 		age time.Duration
 		// directory creates the marker as a directory instead of a file.
 		directory bool
-		want      bool
+		// packagingPath writes the marker where the packaging script hardcodes it
+		// instead of at the configured path.
+		packagingPath bool
+		want          bool
 	}{
 		// The usual case: no auto-upgrade running.
 		{name: "no_marker", age: -1, want: false},
@@ -393,11 +424,27 @@ func TestRunIsStuck(t *testing.T) {
 		// mtime is old enough to look like a run that never ended, and which nothing the
 		// user deletes would clear. A directory is never a marker.
 		{name: "marker_is_a_directory", age: 6 * time.Hour, directory: true, want: false},
+		// A moved agent.state_directory: the script knows nothing about it, so the marker
+		// it leaves behind is at the path it hardcodes and not at the configured one.
+		{name: "stuck_run_at_the_packaging_path", age: 6 * time.Hour, packagingPath: true, want: true},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			marker := filepath.Join(t.TempDir(), "auto_upgrade")
+			dir := t.TempDir()
+			marker := filepath.Join(dir, "auto_upgrade")
+
+			// The real one must stay out of reach: this test would otherwise answer from
+			// whatever the machine it runs on has under /var/lib/glouton.
+			packagingMarker := filepath.Join(dir, "packaging_auto_upgrade")
+			restore := packagingAutoUpgradeFile
+			packagingAutoUpgradeFile = packagingMarker
+
+			t.Cleanup(func() { packagingAutoUpgradeFile = restore })
+
+			if tc.packagingPath {
+				marker = packagingMarker
+			}
 
 			if tc.age >= 0 {
 				if tc.directory {

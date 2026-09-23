@@ -115,6 +115,13 @@ const (
 
 var errUnexpectedProcLocks = errors.New("unexpected /proc/locks format")
 
+var errAPTHasNoIndex = errors.New("APT has no repository index, run apt-get update")
+
+// packagingAutoUpgradeFile is the marker path packaging/common/glouton-auto-upgrade
+// hardcodes, which is agent.auto_upgrade_file's default value. A variable so the tests can
+// point it at a directory of their own instead of the real one.
+var packagingAutoUpgradeFile = "/var/lib/glouton/auto_upgrade" //nolint:gochecknoglobals
+
 // gloutonPackageNames are the package names that may provide Glouton, current name first.
 var gloutonPackageNames = []string{"glouton", "bleemeo-agent"} //nolint:gochecknoglobals
 
@@ -371,6 +378,19 @@ func (c *autoUpgradeChecker) repositoryState(ctx context.Context) (repositorySta
 			return repositoryOK, nil
 		}
 
+		// A version table only holds what APT has indexed, so an empty
+		// /var/lib/apt/lists makes every package look repository-less. Images shipped
+		// with the lists cleaned out are in that state until the next "apt-get update",
+		// which glouton-auto-upgrade runs itself, so the upgrade would work.
+		indexed, err := c.aptHasIndexedRepository(ctx)
+		if err != nil {
+			return repositoryOK, err
+		}
+
+		if !indexed {
+			return repositoryOK, errAPTHasNoIndex
+		}
+
 		return repositoryMissing, nil
 	}
 
@@ -379,6 +399,25 @@ func (c *autoUpgradeChecker) repositoryState(ctx context.Context) (repositorySta
 	}
 
 	return repositoryUnknownPackage, nil
+}
+
+// aptHasIndexedRepository tells whether APT has at least one repository index.
+//
+// "apt-cache policy" without a package name prints the index files APT holds, which is
+// what every version table is built from: when the only one left is the local dpkg
+// database, no package can show a repository and the question this fact asks has no
+// answer.
+func (c *autoUpgradeChecker) aptHasIndexedRepository(ctx context.Context) (bool, error) {
+	output, err := c.Runner.Run(ctx, gloutonexec.Option{SkipInContainer: true}, "apt-cache", "policy")
+	if err != nil {
+		return false, fmt.Errorf("apt-cache policy: %w", err)
+	}
+
+	// The source lines have the same shape in both forms of the output, only the
+	// "***" installed marker is missing from this one.
+	_, hasRepository := decodeAPTCachePolicy(output)
+
+	return hasRepository, nil
 }
 
 // aptPolicySourceRe matches the source lines of an "apt-cache policy" version table,
@@ -534,23 +573,45 @@ func (c *autoUpgradeChecker) dpkgHasBrokenPackage() (bool, error) {
 
 // runIsStuck tells whether an auto-upgrade run started and never finished.
 //
-// glouton-auto-upgrade touches AutoUpgradeFile when it starts and removes it from an EXIT
-// trap, and Glouton removes it at startup. So the file still being there long after it was
+// glouton-auto-upgrade touches the marker when it starts and removes it from an EXIT trap,
+// and Glouton removes it at startup. So the file still being there long after it was
 // created means the run neither completed nor got as far as restarting Glouton, which is
 // what a package operation waiting forever on a prompt or a stalled mirror looks like.
+//
+// Both the configured path and the one the script hardcodes are looked at. They are the
+// same file on a default install, but the script reads no configuration, so a moved
+// agent.state_directory leaves the marker where the script put it and the configured path
+// would never appear at all.
 func (c *autoUpgradeChecker) runIsStuck() (bool, error) {
-	if c.AutoUpgradeFile == "" {
-		// The check doesn't apply, which isn't the same as having failed.
-		return false, nil
+	paths := []string{packagingAutoUpgradeFile}
+	if c.AutoUpgradeFile != "" && c.AutoUpgradeFile != packagingAutoUpgradeFile {
+		paths = append(paths, c.AutoUpgradeFile)
 	}
 
-	stat, err := os.Stat(c.AutoUpgradeFile)
+	for _, path := range paths {
+		stuck, err := markerIsStuck(path)
+		if err != nil {
+			return false, err
+		}
+
+		if stuck {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// markerIsStuck tells whether one marker file says a run started long enough ago to be
+// taken for stuck.
+func markerIsStuck(path string) (bool, error) {
+	stat, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return false, nil // no run in progress, the usual case
 		}
 
-		return false, fmt.Errorf("unable to stat %s: %w", c.AutoUpgradeFile, err)
+		return false, fmt.Errorf("unable to stat %s: %w", path, err)
 	}
 
 	if !stat.Mode().IsRegular() {
