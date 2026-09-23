@@ -158,35 +158,54 @@ func TestDecodeAPTCachePolicy(t *testing.T) {
 
 func TestDecodeProcLocks(t *testing.T) {
 	// Captured on Ubuntu 24.04 while two processes held /var/lib/dpkg/lock-frontend
-	// (inode 1425030) and /var/lib/dpkg/lock (inode 1425029) on device 0:47, plus a
-	// flock() on an unrelated file. The "->" line is a process blocked on the lock,
-	// and must not be taken for its holder.
+	// (inode 1425030) and /var/lib/dpkg/lock (inode 1425029), plus a flock() on an
+	// unrelated file. The "->" line is a process blocked on the lock, and must not be
+	// taken for its holder. The last two lines are the kinds of lock APT and dpkg never
+	// take: a read lock, and a byte-range lock of the sort SQLite uses.
 	const procLocks = `6: POSIX  ADVISORY  WRITE 8 00:47:1425029 0 EOF
 24: POSIX  ADVISORY  WRITE 7 00:47:1425030 0 EOF
 24: -> POSIX  ADVISORY  WRITE 9 00:47:1425030 0 EOF
 29: FLOCK  ADVISORY  WRITE 10 00:47:1379269 0 EOF
 30: OFDLCK ADVISORY  READ  -1 00:47:1379270 0 EOF
-31: POSIX  ADVISORY  READ  11 08:01:12345 1073741826 1073742335
+31: POSIX  ADVISORY  READ  11 08:01:12345 0 EOF
+32: POSIX  ADVISORY  WRITE 12 08:01:67890 1073741826 1073742335
 `
 
-	want := map[procLockID]int{
-		{major: 0, minor: 0x47, inode: 1425029}: 8,
-		{major: 0, minor: 0x47, inode: 1425030}: 7,
-		{major: 8, minor: 0x01, inode: 12345}:   11,
+	want := map[uint64]int{
+		1425029: 8,
+		1425030: 7,
 	}
 
-	if diff := cmp.Diff(want, decodeProcLocks([]byte(procLocks)), cmp.AllowUnexported(procLockID{})); diff != "" {
+	if diff := cmp.Diff(want, decodeProcLocks([]byte(procLocks))); diff != "" {
 		t.Errorf("decodeProcLocks mismatch (-want +got):\n%s", diff)
 	}
 }
 
+// TestDecodeProcLocksSharedInode pins down what keying on the inode alone gives up: two
+// locked files with the same inode on different filesystems become one entry. That is
+// accepted because the device /proc/locks prints is the superblock's, which stat(2) does
+// not return on btrfs, and because only the four APT/dpkg lock inodes are ever looked up.
+func TestDecodeProcLocksSharedInode(t *testing.T) {
+	const procLocks = `1: POSIX  ADVISORY  WRITE 42 00:47:900 0 EOF
+2: POSIX  ADVISORY  WRITE 43 08:01:900 0 EOF
+`
+
+	want := map[uint64]int{900: 42}
+
+	if diff := cmp.Diff(want, decodeProcLocks([]byte(procLocks))); diff != "" {
+		t.Errorf("decodeProcLocks mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// Only the shape of the MAJOR:MINOR:INODE field and the inode itself are validated: the
+// device is not parsed, so a malformed one alone doesn't reject a line.
 func TestDecodeProcLocksInvalid(t *testing.T) {
 	const procLocks = `
 not a lock line
 1: POSIX
 2: POSIX  ADVISORY  WRITE notapid 00:47:1425030 0 EOF
 3: POSIX  ADVISORY  WRITE 7 00:47 0 EOF
-4: POSIX  ADVISORY  WRITE 7 zz:47:1425030 0 EOF
+4: POSIX  ADVISORY  WRITE 7 00:47:notaninode 0 EOF
 `
 
 	if got := decodeProcLocks([]byte(procLocks)); len(got) != 0 {
@@ -204,12 +223,12 @@ func TestDpkgJournalIsDirty(t *testing.T) {
 	}{
 		// dpkg removes its journal once the transaction is complete.
 		{name: "empty", entries: nil, want: false},
-		// No journal directory means no journal, hence no interrupted transaction. This
-		// must not be an error: status() would then never answer AutoUpgradeStatusOK.
+		// No journal directory means no journal, hence no interrupted transaction. An
+		// error here would stop status() ever answering AutoUpgradeStatusOK.
 		{name: "no_journal_dir", noJournalDir: true, want: false},
 		// What an interrupted dpkg leaves behind. APT then refuses to do anything.
 		{name: "journal_entry", entries: []string{"0001"}, want: true},
-		// Verified on Ubuntu 24.04: an empty journal entry blocks APT just the same.
+		// An empty journal entry blocks APT just the same as a filled one.
 		{name: "single_digit", entries: []string{"0"}, want: true},
 		// dpkg's own temporary files aren't journal entries, APT ignores them.
 		{name: "temporary_file", entries: []string{"tmp.i"}, want: false},
@@ -290,10 +309,28 @@ Status: install ok unpacked
 			want: true,
 		},
 		{
+			// The error flag, not the state: dpkg wants this one reinstalled before
+			// anything else touches it, and apt-get refuses to install until it is.
+			name: "reinstreq_flag",
+			status: `Package: adduser
+Status: install reinstreq installed
+`,
+			want: true,
+		},
+		{
 			// A removed package keeping its configuration files is perfectly normal.
 			name: "config_files",
 			status: `Package: removed-package
 Status: deinstall ok config-files
+`,
+			want: false,
+		},
+		{
+			// A held package is flagged through "want", not the error flag, and is
+			// perfectly installable.
+			name: "hold_is_not_broken",
+			status: `Package: some-package
+Status: hold ok installed
 `,
 			want: false,
 		},
@@ -353,8 +390,8 @@ func TestRunIsStuck(t *testing.T) {
 		// the run is stuck, most likely waiting on dpkg or on a mirror.
 		{name: "stuck_run", age: 6 * time.Hour, want: true},
 		// An empty agent.auto_upgrade_file resolves to the state directory itself, whose
-		// mtime is old enough to look like a run that never ended. Nothing the user could
-		// delete would clear it, so a directory never counts as a marker.
+		// mtime is old enough to look like a run that never ended, and which nothing the
+		// user deletes would clear. A directory is never a marker.
 		{name: "marker_is_a_directory", age: 6 * time.Hour, directory: true, want: false},
 	}
 
@@ -388,76 +425,5 @@ func TestRunIsStuck(t *testing.T) {
 				t.Errorf("runIsStuck() = %v, want %v", got, tc.want)
 			}
 		})
-	}
-}
-
-func TestDecodeMountInfo(t *testing.T) {
-	// Captured on Ubuntu 24.04: an ext4 root, a btrfs filesystem with a subvolume
-	// mounted under it, and a mount point holding a space.
-	const mountInfo = `25 30 0:6 / /dev rw,nosuid,relatime shared:2 - devtmpfs udev rw
-30 1 253:1 / / rw,relatime shared:1 - ext4 /dev/vda1 rw
-443 32 0:53 / /mnt/btrfs rw,relatime shared:9 - btrfs /dev/loop0 rw,subvolid=5
-444 443 0:53 /sub /mnt/btrfs/sub rw,relatime shared:9 - btrfs /dev/loop0 rw,subvolid=256
-450 30 8:16 / /mnt/my\040disk rw,relatime shared:11 - ext4 /dev/sdb rw
-not a mountinfo line
-451 30 zz:1 / /mnt/bad rw - ext4 /dev/sdc rw
-`
-
-	want := []mountEntry{
-		{point: "/dev", major: 0, minor: 6},
-		{point: "/", major: 253, minor: 1},
-		{point: "/mnt/btrfs", major: 0, minor: 53},
-		{point: "/mnt/btrfs/sub", major: 0, minor: 53},
-		{point: "/mnt/my disk", major: 8, minor: 16},
-	}
-
-	if diff := cmp.Diff(want, decodeMountInfo([]byte(mountInfo)), cmp.AllowUnexported(mountEntry{})); diff != "" {
-		t.Errorf("decodeMountInfo mismatch (-want +got):\n%s", diff)
-	}
-}
-
-func TestMountDeviceForPath(t *testing.T) {
-	mounts := []mountEntry{
-		{point: "/", major: 253, minor: 1},
-		{point: "/mnt/btrfs", major: 0, minor: 53},
-		{point: "/mnt/btrfs/sub", major: 0, minor: 99},
-		{point: "/mnt/my disk", major: 8, minor: 16},
-	}
-
-	cases := []struct {
-		name  string
-		path  string
-		major uint32
-		minor uint32
-		found bool
-	}{
-		// The usual case: the lock file is on the root filesystem.
-		{name: "root", path: "/var/lib/dpkg/lock-frontend", major: 253, minor: 1, found: true},
-		// The mount point itself, not something under it.
-		{name: "mount_point_itself", path: "/mnt/btrfs", major: 0, minor: 53, found: true},
-		{name: "under_a_mount", path: "/mnt/btrfs/var/lib/dpkg/lock", major: 0, minor: 53, found: true},
-		// The longest mount point wins, otherwise a nested filesystem would be read as
-		// its parent.
-		{name: "nested_mount_wins", path: "/mnt/btrfs/sub/lock", major: 0, minor: 99, found: true},
-		// "/mnt/btrfs-other" isn't under "/mnt/btrfs", a prefix match alone would say so.
-		{name: "sibling_is_not_nested", path: "/mnt/btrfs-other/lock", major: 253, minor: 1, found: true},
-		{name: "escaped_mount_point", path: "/mnt/my disk/lock", major: 8, minor: 16, found: true},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			major, minor, found := mountDeviceForPath(mounts, tc.path)
-
-			if found != tc.found || major != tc.major || minor != tc.minor {
-				t.Errorf(
-					"mountDeviceForPath(%q) = %d:%d, %v, want %d:%d, %v",
-					tc.path, major, minor, found, tc.major, tc.minor, tc.found,
-				)
-			}
-		})
-	}
-
-	if _, _, found := mountDeviceForPath(nil, "/var/lib/dpkg/lock"); found {
-		t.Error("mountDeviceForPath() with no mount table = found, want not found")
 	}
 }

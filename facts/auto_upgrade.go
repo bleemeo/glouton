@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -41,13 +42,15 @@ const (
 	// from working.
 	//
 	// The value is either AutoUpgradeStatusOK or a comma-separated sorted list of the
-	// problems found. The fact is absent when Glouton can't run the check: non-Linux,
-	// running in a container, no APT, or Glouton not installed from a package. Absent
-	// therefore never means "everything is fine", only AutoUpgradeStatusOK does.
+	// problems found. It is absent when the checks don't apply - non-Linux, in a
+	// container, no APT, Glouton not installed from a package - and when nothing was
+	// found but a check couldn't run. Absent never means "everything is fine", only
+	// AutoUpgradeStatusOK does, and a list is what was found rather than necessarily
+	// everything there is.
 	FactAutoUpgradeStatus = "auto_upgrade_status"
 
 	// AutoUpgradeStatusOK means every check ran and none found a problem. A check that
-	// couldn't run is never reported as OK, see status().
+	// couldn't run, or whose answer can't be trusted, is never reported as OK.
 	AutoUpgradeStatusOK = "ok"
 
 	// AutoUpgradeStatusRepositoryMissing means no repository provides Glouton anymore.
@@ -56,9 +59,10 @@ const (
 	// Because that failure is silent, it can only be seen by looking at the sources.
 	AutoUpgradeStatusRepositoryMissing = "repository_missing"
 
-	// AutoUpgradeStatusLocked means one of the APT/dpkg lock files has been held for a
-	// long time by another process. APT doesn't wait for the lock by default, it fails
-	// right away with "Could not get lock /var/lib/dpkg/lock-frontend".
+	// AutoUpgradeStatusLocked means another process holds one of the APT/dpkg lock files
+	// and isn't going to release it: held for longer than lockHeldMinDuration, or held
+	// by a stopped process. APT doesn't wait for the lock by default, it fails right
+	// away with "Could not get lock /var/lib/dpkg/lock-frontend".
 	AutoUpgradeStatusLocked = "package_manager_locked"
 
 	// AutoUpgradeStatusDpkgInterrupted means dpkg was interrupted in the middle of a
@@ -69,21 +73,28 @@ const (
 	// never finished.
 	AutoUpgradeStatusRunNotFinished = "run_not_finished"
 
-	// factAutoUpgradeEnabled is set by fastUpdateFacts on every system where an
-	// auto-upgrade exists at all. Its presence is what gates FactAutoUpgradeStatus,
-	// which spares us running the same systemctl call twice.
+	// factAutoUpgradeEnabled is set on every system where an auto-upgrade exists at all.
+	// Its presence is what gates FactAutoUpgradeStatus.
 	factAutoUpgradeEnabled = "auto_upgrade_enabled"
 )
 
 const (
 	// lockHeldMinDuration is how long one of the APT/dpkg locks must have been held
-	// before we call it a problem. Holding it for a few minutes is perfectly normal
-	// (apt-daily, unattended-upgrades); holding it for an hour is not.
-	lockHeldMinDuration = time.Hour
+	// before we call it a problem, wherever that duration is knowable at all, see
+	// describeHolder. It only has to catch a holder that is running but wedged, since a
+	// stopped one is reported whatever its age, so it is set well past what a large
+	// upgrade over a slow mirror legitimately takes.
+	lockHeldMinDuration = 4 * time.Hour
 
 	// autoUpgradeMinInterval is how long an answer is kept before the checks run again,
 	// whatever the pace at which the facts themselves are refreshed.
 	autoUpgradeMinInterval = time.Hour
+
+	// autoUpgradeRetryInterval is the same for an answer held back by a package
+	// operation running while we looked. That ends on its own, unlike every other reason
+	// a check fails, which keep the full interval rather than forking apt-cache again
+	// every few minutes for an answer that won't have changed.
+	autoUpgradeRetryInterval = 5 * time.Minute
 
 	// autoUpgradeRunMaxDuration is how long after its start an auto-upgrade run is
 	// taken for stuck. systemd doesn't time out Type=oneshot units by default, so a
@@ -91,16 +102,15 @@ const (
 	// forever, while "apt-get update" plus one package install never takes that long.
 	autoUpgradeRunMaxDuration = 2 * time.Hour
 
-	// dpkgStatusSource is the pseudo-source apt-cache uses for the local dpkg database.
-	// It's the only entry of a version table that isn't a repository.
-	dpkgStatusSource = "/var/lib/dpkg/status"
-
 	// dpkgJournalDir and dpkgStatusPath are relative to the host root.
 	dpkgJournalDir = "var/lib/dpkg/updates"
 	dpkgStatusPath = "var/lib/dpkg/status"
 
-	procLocksPath     = "/proc/locks"
-	procMountInfoPath = "/proc/self/mountinfo"
+	// dpkgStatusSource is the pseudo-source apt-cache uses for the local dpkg database,
+	// the only entry of a version table that isn't a repository.
+	dpkgStatusSource = "/" + dpkgStatusPath
+
+	procLocksPath = "/proc/locks"
 )
 
 var errUnexpectedProcLocks = errors.New("unexpected /proc/locks format")
@@ -109,7 +119,8 @@ var errUnexpectedProcLocks = errors.New("unexpected /proc/locks format")
 var gloutonPackageNames = []string{"glouton", "bleemeo-agent"} //nolint:gochecknoglobals
 
 // packageManagerLockPaths are the lock files APT and dpkg take, relative to the host root
-// and in the order APT takes them.
+// and in the order APT takes them. The first dpkgLockPathCount are dpkg's own; the others
+// only guard APT's downloads.
 var packageManagerLockPaths = []string{ //nolint:gochecknoglobals
 	"var/lib/dpkg/lock-frontend",
 	"var/lib/dpkg/lock",
@@ -117,14 +128,17 @@ var packageManagerLockPaths = []string{ //nolint:gochecknoglobals
 	"var/cache/apt/archives/lock",
 }
 
-// shortLivedPackageProcesses are processes whose whole lifetime is one package operation.
-// For them the process start time is a good approximation of when the lock was taken, so
-// we don't have to wait to observe the lock ourselves for lockHeldMinDuration.
-// Daemons that take the lock from time to time (packagekitd, aptd) are deliberately absent.
+// dpkgLockPathCount is how many of packageManagerLockPaths are dpkg's own, and so say
+// whether an operation touching the dpkg database is running. That is what the dpkg
+// checks depend on; the APT download locks say nothing about it.
+const dpkgLockPathCount = 2
+
+// shortLivedPackageProcesses are processes whose whole lifetime is one package operation,
+// which makes their start time the time the lock was taken. Daemons that take the lock
+// from time to time (packagekitd, aptd) must stay out: their age says nothing about it.
 //
-// These are matched against the process name, which comes from /proc/<pid>/comm and is
-// capped by the kernel at 15 characters (TASK_COMM_LEN): an entry longer than that could
-// never match, and goes to shortLivedPackageScripts instead.
+// Matching is on the process name, which comes from /proc/<pid>/comm and is capped by the
+// kernel at 15 characters (TASK_COMM_LEN). Longer names go to shortLivedPackageScripts.
 var shortLivedPackageProcesses = map[string]bool{ //nolint:gochecknoglobals
 	"apt":      true,
 	"apt-get":  true,
@@ -133,11 +147,10 @@ var shortLivedPackageProcesses = map[string]bool{ //nolint:gochecknoglobals
 }
 
 // shortLivedPackageScripts are the same, for the ones whose name doesn't survive the
-// TASK_COMM_LEN cap. Verified on Ubuntu 24.04: /usr/bin/unattended-upgrade is a script
-// with a "#!/usr/bin/python3" shebang, and the kernel names such a process after the
-// script, truncated: "unattended-upgr". Only its command line carries the full name.
-// It's worth the extra look: python-apt takes /var/lib/dpkg/lock-frontend in that very
-// process, which makes it the lock holder we are the most likely to find on Ubuntu.
+// TASK_COMM_LEN cap. A script started through a shebang is named after the script,
+// truncated: /usr/bin/unattended-upgrade becomes "unattended-upgr", so the full name is
+// only in the command line. python-apt takes /var/lib/dpkg/lock-frontend in that very
+// process, which is what makes the extra lookup worth it.
 var shortLivedPackageScripts = map[string]bool{ //nolint:gochecknoglobals
 	"unattended-upgrade":  true,
 	"unattended-upgrades": true,
@@ -146,6 +159,7 @@ var shortLivedPackageScripts = map[string]bool{ //nolint:gochecknoglobals
 // dpkgBrokenStates are the package states an interrupted dpkg leaves behind. Installing
 // anything, Glouton included, then fails until they're repaired. triggers-awaited and
 // triggers-pending are deliberately absent: they're normal and APT resolves them itself.
+// The error flag of the same Status line is handled separately, see dpkgHasBrokenPackage.
 var dpkgBrokenStates = map[string]bool{ //nolint:gochecknoglobals
 	"half-installed":  true,
 	"half-configured": true,
@@ -172,18 +186,16 @@ func (f *FactProvider) autoUpgradeStatus(ctx context.Context) string {
 	}
 
 	// Anything but "/" means APT and dpkg belong to the host, not to us: /proc/locks
-	// isn't the host one and we have no apt-cache to run. An empty path is a container
-	// whose host root isn't mounted, which is the same answer. Saying nothing beats
-	// saying "ok".
+	// isn't the host one and there is no apt-cache to run. An empty path is a container
+	// whose host root isn't mounted, which is the same case.
 	if f.options.HostRootPath != "/" {
 		return ""
 	}
 
-	// Computing this forks apt-cache and reads the whole dpkg database, about half a
-	// second. Some callers refresh the facts far more often than the fact is worth
-	// recomputing - mqtt.sendConnectMessage does it on every connect, and the duplicate
-	// check with no max age at all - so the answer is kept for a while.
-	if !f.autoUpgradeStatusAt.IsZero() && time.Since(f.autoUpgradeStatusAt) < autoUpgradeMinInterval {
+	// Computing this forks apt-cache and reads the whole dpkg database. Callers refresh
+	// the facts far more often than that is worth redoing: mqtt.sendConnectMessage on
+	// every MQTT connect, and the duplicate check with no max age at all.
+	if time.Now().Before(f.autoUpgradeStatusExpiresAt) {
 		return f.autoUpgradeStatusValue
 	}
 
@@ -193,25 +205,45 @@ func (f *FactProvider) autoUpgradeStatus(ctx context.Context) string {
 		HostRootPath:    f.options.HostRootPath,
 	}
 
-	f.autoUpgradeStatusValue = checker.status(ctx)
-	f.autoUpgradeStatusAt = time.Now()
+	value, retrySoon := checker.status(ctx)
+
+	if ctx.Err() != nil {
+		// updateFacts discards the whole refresh. Caching what a cancelled run managed
+		// to compute would hide the fact for the interval that follows.
+		return ""
+	}
+
+	keepFor := autoUpgradeMinInterval
+	if retrySoon {
+		keepFor = autoUpgradeRetryInterval
+	}
+
+	f.autoUpgradeStatusValue = value
+	f.autoUpgradeStatusExpiresAt = time.Now().Add(keepFor)
 
 	return f.autoUpgradeStatusValue
 }
 
-func (c *autoUpgradeChecker) status(ctx context.Context) string {
-	// Only Debian-like systems are supported for now. dnf/yum would need their own
-	// repository check; until then we prefer no fact over a wrong "ok".
+// status returns the value of the fact, and whether the answer is worth recomputing
+// before autoUpgradeMinInterval. Only one thing makes it so: a package operation holding
+// the lock while the dpkg state was read, which clears by itself. A check that failed for
+// any other reason may well keep failing, and retrying it every few minutes would fork
+// apt-cache for nothing.
+func (c *autoUpgradeChecker) status(ctx context.Context) (value string, retrySoon bool) {
+	// Only Debian-like systems are supported: dnf/yum would need their own repository
+	// check.
 	if _, err := c.Runner.LookPath("apt-cache", gloutonexec.Option{SkipInContainer: true}); err != nil {
-		return ""
+		return "", false
 	}
 
 	var (
 		problems []string
-		// failed records that one of the checks couldn't run. We then never answer
-		// AutoUpgradeStatusOK: a check that didn't run tells nothing, and the repository
-		// one is precisely the case this fact exists for.
+		// failed records that a check couldn't run, or answered something that can't be
+		// trusted. AutoUpgradeStatusOK is then never answered: such a check vouches for
+		// nothing.
 		failed bool
+		// transient records the one cause of that which goes away on its own.
+		transient bool
 	)
 
 	repository, err := c.repositoryState(ctx)
@@ -224,14 +256,14 @@ func (c *autoUpgradeChecker) status(ctx context.Context) string {
 	case repository == repositoryUnknownPackage:
 		// APT doesn't know Glouton at all: it was installed from a tarball or by the
 		// installation script without the repository. There is no auto-upgrade to watch.
-		return ""
+		return "", false
 	case repository == repositoryMissing:
 		problems = append(problems, AutoUpgradeStatusRepositoryMissing)
 	}
 
-	// The remaining reasons are independent from one another: a stuck lock and a dpkg
-	// left half-way are two different repairs, so we report all of them rather than
-	// stopping at the first.
+	// These are separate repairs, so each is reported on its own rather than stopping at
+	// the first. The dpkg one is conditional, see below: it never appears next to a
+	// stuck lock.
 	record := func(problem string, found bool, err error) {
 		switch {
 		case err != nil:
@@ -243,44 +275,57 @@ func (c *autoUpgradeChecker) status(ctx context.Context) string {
 		}
 	}
 
-	holder, err := c.lockHolder(ctx)
-	record(AutoUpgradeStatusLocked, holderIsStuck(holder), err)
+	locks, lockErr := c.lockState(ctx)
 
-	// Only when nothing holds the lock: dpkg fills its journal and leaves packages
-	// unpacked as it works, and tidies up only once the transaction ends. Measured on
-	// Ubuntu 24.04, a plain "apt-get install" that succeeds shows up to 34 journal
-	// entries and 6 half-configured packages while it runs, so looking mid-transaction
-	// would report a healthy upgrade as an interrupted one - the Glouton auto-upgrade
-	// included, since it runs apt-get itself. APT has the same rule: it checks the
-	// journal before taking the lock, never while holding it.
-	switch {
-	case err != nil:
-		// The lock is unknown, so the dpkg state can't be read either.
-	case holder == nil:
-		interrupted, dpkgErr := c.dpkgIsInterrupted()
-		record(AutoUpgradeStatusDpkgInterrupted, interrupted, dpkgErr)
-	default:
-		// A package operation is running, so this check didn't run. Saying OK on its
-		// behalf would hide a dpkg that really does need repairing.
-		failed = true
+	// Only a positive answer needs dpkg to be idle. dpkg fills its journal and leaves
+	// packages unpacked as it works, tidying up when the transaction ends, so
+	// "interrupted" while one of its locks is held can't be told from a healthy run in
+	// progress - APT has the same rule, it checks the journal before taking the lock. A
+	// negative answer needs nothing: a dirty journal and a half-configured package both
+	// survive until they are repaired, so no operation in flight can hide one.
+	interrupted, dpkgErr := c.dpkgIsInterrupted()
+
+	// An operation could have started between the lock read and the dpkg one, which
+	// would make a positive answer mean nothing again. Reading the locks once more
+	// closes that window, and has to happen before the holder is judged so that one
+	// appearing in it is still reported.
+	if interrupted && lockErr == nil && !locks.dpkgHeld {
+		locks, lockErr = c.lockState(ctx)
 	}
 
-	stuck, err := c.runIsStuck()
-	record(AutoUpgradeStatusRunNotFinished, stuck, err)
+	record(AutoUpgradeStatusLocked, holderIsStuck(locks.holder), lockErr)
+
+	switch {
+	case dpkgErr != nil:
+		record(AutoUpgradeStatusDpkgInterrupted, false, dpkgErr)
+	case interrupted && locks.dpkgHeld:
+		// An operation holding a dpkg lock is running. It will end, and the journal
+		// entries and unpacked packages it is leaving behind will go with it.
+		failed = true
+		transient = true
+	case interrupted && (lockErr != nil || locks.dpkgUnknown):
+		// We couldn't tell whether one is.
+		failed = true
+	default:
+		record(AutoUpgradeStatusDpkgInterrupted, interrupted, nil)
+	}
+
+	stuck, runErr := c.runIsStuck()
+	record(AutoUpgradeStatusRunNotFinished, stuck, runErr)
 
 	if len(problems) == 0 {
 		if failed {
-			// Something we couldn't look at may well be broken. Reporting nothing beats
-			// reporting a health the checks that did run can't vouch for.
-			return ""
+			return "", transient
 		}
 
-		return AutoUpgradeStatusOK
+		return AutoUpgradeStatusOK, false
 	}
 
 	slices.Sort(problems)
 
-	return strings.Join(problems, ",")
+	// A withheld dpkg answer leaves the list short of what it could have held, so it is
+	// worth completing sooner than a full answer would be recomputed.
+	return strings.Join(problems, ","), transient
 }
 
 type repositoryState int
@@ -383,26 +428,9 @@ func holderIsStuck(holder *lockHolder) bool {
 		return false
 	}
 
-	switch {
-	case holder.stopped:
-		// A stopped process won't release the lock on its own, so there is nothing to
-		// wait for and lockHeldMinDuration doesn't apply. This is the state a
-		// "kill -STOP <pid>" on apt leaves behind, our closest reproduction of the
-		// stuck lock reported from the field.
-		logger.V(1).Printf(
-			"auto-upgrade: %s is locked by PID %d (%s), which is stopped",
-			holder.path, holder.pid, holder.name,
-		)
-	case holder.heldFor >= lockHeldMinDuration:
-		logger.V(1).Printf(
-			"auto-upgrade: %s has been locked for at least %v by PID %d (%s)",
-			holder.path, holder.heldFor.Truncate(time.Minute), holder.pid, holder.name,
-		)
-	default:
-		return false
-	}
-
-	return true
+	// A stopped process won't release the lock on its own, so lockHeldMinDuration
+	// doesn't apply to it.
+	return holder.stopped || holder.heldFor >= lockHeldMinDuration
 }
 
 // dpkgIsInterrupted tells whether dpkg is left in a state that needs a manual
@@ -421,10 +449,9 @@ func (c *autoUpgradeChecker) dpkgIsInterrupted() (bool, error) {
 // to do anything with "dpkg was interrupted, you must manually run 'dpkg --configure -a'".
 //
 // We mirror debSystem::CheckUpdates(): a journal entry is any file whose name is made of
-// digits only. Verified on Ubuntu 24.04, an empty one counts just as much as a filled one,
-// while a file with any other name is ignored. A missing journal directory means no
-// journal, so no interrupted transaction: APT itself returns false when its opendir()
-// fails, and we must not turn that into an error that would hold back the whole fact.
+// digits only, an empty one counting as much as a filled one, and any other name ignored.
+// A missing journal directory means no journal, hence no interrupted transaction, which
+// is also what APT concludes when its opendir() fails.
 func (c *autoUpgradeChecker) dpkgJournalIsDirty() (bool, error) {
 	entries, err := os.ReadDir(filepath.Join(c.HostRootPath, dpkgJournalDir))
 	if err != nil {
@@ -446,9 +473,10 @@ func (c *autoUpgradeChecker) dpkgJournalIsDirty() (bool, error) {
 	return false, nil
 }
 
-// dpkgHasBrokenPackage looks for packages an interrupted dpkg left half-way. APT reports
-// those separately from the journal, as unmet dependencies to repair with --fix-broken,
-// and they make "apt-get install glouton" fail just the same.
+// dpkgHasBrokenPackage looks for packages dpkg left needing repair, either half-way
+// through an operation or flagged for reinstallation. APT reports those separately from
+// the journal, as unmet dependencies to repair with --fix-broken, and they make
+// "apt-get install glouton" fail just the same.
 func (c *autoUpgradeChecker) dpkgHasBrokenPackage() (bool, error) {
 	file, err := os.Open(filepath.Join(c.HostRootPath, dpkgStatusPath))
 	if err != nil {
@@ -470,7 +498,20 @@ func (c *autoUpgradeChecker) dpkgHasBrokenPackage() (bool, error) {
 		}
 
 		fields := strings.Fields(status)
-		if len(fields) == 3 && dpkgBrokenStates[fields[2]] {
+		if len(fields) != 3 {
+			continue
+		}
+
+		// The flag is "ok" unless dpkg wants the package reinstalled before anything
+		// else happens to it. "apt-get install glouton" then exits 100 with "needs to be
+		// reinstalled, but I can't find an archive for it", whatever the state says.
+		if fields[1] != "ok" {
+			logger.V(1).Printf("auto-upgrade: at least one package is flagged %q", fields[1])
+
+			return true, nil
+		}
+
+		if dpkgBrokenStates[fields[2]] {
 			logger.V(1).Printf("auto-upgrade: at least one package is in state %q", fields[2])
 
 			return true, nil
@@ -492,8 +533,7 @@ func (c *autoUpgradeChecker) dpkgHasBrokenPackage() (bool, error) {
 // what a package operation waiting forever on a prompt or a stalled mirror looks like.
 func (c *autoUpgradeChecker) runIsStuck() (bool, error) {
 	if c.AutoUpgradeFile == "" {
-		// Nothing to watch, which is not the same as a failure: an unset marker path
-		// must not suppress the checks that did run.
+		// The check doesn't apply, which isn't the same as having failed.
 		return false, nil
 	}
 
@@ -507,9 +547,8 @@ func (c *autoUpgradeChecker) runIsStuck() (bool, error) {
 	}
 
 	if !stat.Mode().IsRegular() {
-		// An empty agent.auto_upgrade_file resolves to the state directory itself, see
-		// config.Load(). Its mtime is days old, which would report a run that never
-		// ended, for ever and with nothing the user could delete to clear it.
+		// An empty agent.auto_upgrade_file resolves to the state directory itself (see
+		// config.Load()), whose mtime is old enough to look like a run that never ended.
 		return false, nil
 	}
 
@@ -551,67 +590,93 @@ type lockHolder struct {
 	stopped bool
 }
 
-// lockHolder returns the process holding one of the APT/dpkg lock files, or nil when none
-// of them is held.
+// lockState is what /proc/locks says about the APT and dpkg lock files.
+type lockState struct {
+	// holder is the one worth reporting: the process that looks stuck if any does,
+	// otherwise the first lock found held. nil when none of them is.
+	holder *lockHolder
+	// dpkgHeld says one of dpkg's own locks is held, so an operation that touches the
+	// dpkg database is running. APT's download locks don't say that: "apt-get update"
+	// takes them without going near the dpkg database.
+	dpkgHeld bool
+	// dpkgUnknown says one of dpkg's locks couldn't be looked at, leaving dpkgHeld
+	// unanswered either way.
+	dpkgUnknown bool
+}
+
+// lockState reads who holds the APT/dpkg locks.
 //
-// We never take the lock ourselves: we only stat() the lock files and read /proc/locks, so
-// this check can't become the blocker it's looking for. It also matters that both work
-// without root privilege, because Glouton runs as the "glouton" user while the lock files
-// are 0640 root:root (/var/lib/dpkg is 0755, so stat() is enough).
-func (c *autoUpgradeChecker) lockHolder(ctx context.Context) (*lockHolder, error) {
+// The locks are never taken here: this only stats the lock files and reads /proc/locks,
+// so the check can't become the blocker it looks for. Both work unprivileged, which
+// matters because Glouton runs as the "glouton" user while the lock files are 0640
+// root:root (/var/lib/dpkg is 0755, so stat() is enough).
+func (c *autoUpgradeChecker) lockState(ctx context.Context) (lockState, error) {
 	content, err := os.ReadFile(procLocksPath)
 	if err != nil {
-		return nil, fmt.Errorf("unable to read %s: %w", procLocksPath, err)
+		return lockState{}, fmt.Errorf("unable to read %s: %w", procLocksPath, err)
 	}
 
 	locks := decodeProcLocks(content)
 
-	var mounts []mountEntry
+	var state lockState
 
-	if mountInfo, err := os.ReadFile(procMountInfoPath); err != nil {
-		// Not fatal: statLockID still answers with the device stat(2) reports, which is
-		// the right one on every filesystem but btrfs.
-		logger.V(2).Printf("auto-upgrade: unable to read %s: %v", procMountInfoPath, err)
-	} else {
-		mounts = decodeMountInfo(mountInfo)
-	}
-
-	for _, relativePath := range packageManagerLockPaths {
+	for i, relativePath := range packageManagerLockPaths {
 		path := filepath.Join(c.HostRootPath, relativePath)
+		isDpkgLock := i < dpkgLockPathCount
 
-		id, err := lockFileID(path, mounts)
+		inode, err := statLockInode(path)
 		if err != nil {
-			continue // that lock file doesn't exist on this system
-		}
+			// A missing lock file can't be held, so that path is answered. Any other
+			// error leaves it unknown: keep going, since the rest still have something
+			// to say.
+			if !errors.Is(err, fs.ErrNotExist) {
+				logger.V(1).Printf("auto-upgrade: unable to stat %s: %v", path, err)
 
-		pid, ok := locks[id]
-		if !ok || pid <= 0 {
-			// pid is -1 for open file description locks, whose holder can't be named.
-			// APT and dpkg use classic POSIX locks, so this isn't one of them.
+				state.dpkgUnknown = state.dpkgUnknown || isDpkgLock
+			}
+
 			continue
 		}
+
+		pid, ok := locks[inode]
+		if !ok || pid <= 0 {
+			// Only open file description locks report -1, and decodeProcLocks keeps
+			// POSIX lines alone, so the pid guard is just a safety net.
+			continue
+		}
+
+		state.dpkgHeld = state.dpkgHeld || isDpkgLock
 
 		holder := &lockHolder{path: path, pid: pid}
 		describeHolder(ctx, holder)
 
-		return holder, nil
+		// Several of these are held at once during a transaction, by different
+		// processes: APT takes lock-frontend while dpkg takes lock. A stuck holder on
+		// any of them is the answer, so a busy but healthy one must not stand in for it.
+		if state.holder == nil || (holderIsStuck(holder) && !holderIsStuck(state.holder)) {
+			state.holder = holder
+		}
 	}
 
-	return nil, nil //nolint:nilnil
+	if holderIsStuck(state.holder) {
+		logger.V(1).Printf(
+			"auto-upgrade: %s is locked by PID %d (%s), stopped=%t, held for %v",
+			state.holder.path, state.holder.pid, state.holder.name, state.holder.stopped,
+			state.holder.heldFor.Truncate(time.Second),
+		)
+	}
+
+	return state, nil
 }
 
-// describeHolder fills in what we know about the process holding the lock: its name,
-// whether it is stopped, and for how long it has been holding.
+// describeHolder fills in the holder's name, whether it is stopped, and how long it has
+// held the lock.
 //
-// /proc/locks says who holds a lock but not since when, and Glouton only looks when it
-// refreshes its facts, hours apart. Seeing the same process hold the lock on two
-// refreshes therefore proves nothing: a daemon that takes it for a second on each of
-// them would be indistinguishable from one that never let go. So heldFor is only filled
-// where it can be known, from the start time of a process whose whole life is one
-// package operation; for anything else it stays zero and only a stopped holder counts.
-//
-// Everything we can't read is left at its zero value: an unreadable /proc entry costs us
-// the checks below, never a wrong answer.
+// /proc/locks says who holds a lock but not since when, and these checks run hours apart,
+// so seeing the same holder twice proves nothing: a daemon taking the lock for a second
+// on each of two runs is indistinguishable from one that never let go. heldFor is
+// therefore filled only from the start time of a process whose whole life is one package
+// operation, and stays zero otherwise, where only the stopped state counts.
 func describeHolder(ctx context.Context, holder *lockHolder) {
 	proc, err := process.NewProcessWithContext(ctx, int32(holder.pid)) //nolint:gosec
 	if err != nil {
@@ -663,173 +728,29 @@ func isShortLivedPackageProcess(ctx context.Context, proc *process.Process, name
 	return false
 }
 
-// lockFileID identifies a lock file the way /proc/locks does.
-//
-// The inode comes from stat(2), but the device can't: /proc/locks names a file by the
-// device of its superblock, and btrfs gives every subvolume its own anonymous device, so
-// stat(2) and /proc/locks disagree on every btrfs filesystem, the default subvolume
-// included. Measured on Ubuntu 24.04 with a btrfs root, stat(2) answered 0:54 where
-// /proc/locks said 0:53, which silently made every lock unmatchable. The mount table
-// carries the superblock device, so it is the one to believe when the file is under a
-// known mount.
-func lockFileID(path string, mounts []mountEntry) (procLockID, error) {
-	id, err := statLockID(path)
-	if err != nil {
-		return procLockID{}, err
-	}
-
-	if major, minor, ok := mountDeviceForPath(mounts, path); ok {
-		id.major, id.minor = major, minor
-	}
-
-	return id, nil
-}
-
-// mountEntry is what one line of /proc/self/mountinfo tells us: where a filesystem is
-// mounted, and the device the kernel names it by.
-type mountEntry struct {
-	point string
-	major uint32
-	minor uint32
-}
-
-// decodeMountInfo parses /proc/self/mountinfo.
-//
-// A line looks like:
-//
-//	36 35 98:0 /mnt1 /mnt2 rw,noatime master:1 - ext3 /dev/root rw
-//
-// that is: mount ID, parent ID, MAJOR:MINOR, root within the filesystem, mount point,
-// then options. Unlike /proc/locks, MAJOR and MINOR are in decimal here. A mount point
-// holding a space, a tab, a newline or a backslash has it octal-escaped.
-func decodeMountInfo(content []byte) []mountEntry {
-	var entries []mountEntry
-
-	for line := range strings.SplitSeq(string(content), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) < 5 {
-			continue
-		}
-
-		major, minor, ok := decodeDecimalDeviceID(fields[2])
-		if !ok {
-			continue
-		}
-
-		entries = append(entries, mountEntry{
-			point: unescapeMountPoint(fields[4]),
-			major: major,
-			minor: minor,
-		})
-	}
-
-	return entries
-}
-
-func decodeDecimalDeviceID(field string) (major uint32, minor uint32, ok bool) {
-	rawMajor, rawMinor, found := strings.Cut(field, ":")
-	if !found {
-		return 0, 0, false
-	}
-
-	parsedMajor, err := strconv.ParseUint(rawMajor, 10, 32)
-	if err != nil {
-		return 0, 0, false
-	}
-
-	parsedMinor, err := strconv.ParseUint(rawMinor, 10, 32)
-	if err != nil {
-		return 0, 0, false
-	}
-
-	return uint32(parsedMajor), uint32(parsedMinor), true
-}
-
-// unescapeMountPoint undoes the octal escaping the kernel applies to the few characters
-// that would otherwise split a mountinfo field.
-func unescapeMountPoint(point string) string {
-	if !strings.Contains(point, `\`) {
-		return point
-	}
-
-	var out strings.Builder
-
-	for i := 0; i < len(point); i++ {
-		if point[i] == '\\' && i+3 < len(point) {
-			if value, err := strconv.ParseUint(point[i+1:i+4], 8, 8); err == nil {
-				out.WriteByte(byte(value))
-
-				i += 3
-
-				continue
-			}
-		}
-
-		out.WriteByte(point[i])
-	}
-
-	return out.String()
-}
-
-// mountDeviceForPath returns the device of the filesystem path lives on.
-func mountDeviceForPath(mounts []mountEntry, path string) (major uint32, minor uint32, ok bool) {
-	best := -1
-
-	for i, entry := range mounts {
-		if !pathIsUnder(path, entry.point) {
-			continue
-		}
-
-		// The longest mount point wins, and on equal length the last line does: that's
-		// the filesystem mounted on top of the other.
-		if best == -1 || len(entry.point) >= len(mounts[best].point) {
-			best = i
-		}
-	}
-
-	if best == -1 {
-		return 0, 0, false
-	}
-
-	return mounts[best].major, mounts[best].minor, true
-}
-
-// pathIsUnder tells whether path is a mount point itself or lives under it.
-func pathIsUnder(path string, mountPoint string) bool {
-	if path == mountPoint {
-		return true
-	}
-
-	if mountPoint == "/" {
-		return strings.HasPrefix(path, "/")
-	}
-
-	return strings.HasPrefix(path, mountPoint+"/")
-}
-
-// procLockID identifies the file a lock is held on. /proc/locks doesn't name that file,
-// it only gives the device and inode it lives on.
-type procLockID struct {
-	major uint32
-	minor uint32
-	inode uint64
-}
-
-// decodeProcLocks parses /proc/locks and returns the PID holding each locked file.
+// decodeProcLocks parses /proc/locks and returns the PID holding each locked file, keyed
+// by inode.
 //
 // A line looks like:
 //
 //	25: POSIX  ADVISORY  WRITE 7 00:47:1425030 0 EOF
 //
-// that is: index, type, mandatory/advisory, access, PID, MAJOR:MINOR:INODE, start, end,
-// with MAJOR and MINOR in hexadecimal. Processes waiting for a lock are listed too, with
-// an extra "->" after the index; only the holder interests us.
-func decodeProcLocks(content []byte) map[procLockID]int {
-	result := make(map[procLockID]int)
+// that is: index, type, mandatory/advisory, access, PID, MAJOR:MINOR:INODE, start, end.
+// Processes waiting for a lock are listed too, with an extra "->" after the index; only
+// the holder interests us.
+//
+// The device is left out of the key on purpose: /proc/locks prints the device of the
+// file's superblock, while stat(2) on btrfs reports a per-subvolume anonymous device, so
+// the two never agree there and no lock would ever match. The inode agrees everywhere.
+// What that gives up is telling apart two locked files sharing an inode number on
+// different filesystems, so only the lock APT and dpkg actually take is kept: a write
+// lock over the whole file, never a read or byte-range one of the sort SQLite uses.
+func decodeProcLocks(content []byte) map[uint64]int {
+	result := make(map[uint64]int)
 
 	for line := range strings.SplitSeq(string(content), "\n") {
 		fields := strings.Fields(line)
-		if len(fields) < 6 {
+		if len(fields) < 8 {
 			continue
 		}
 
@@ -839,7 +760,8 @@ func decodeProcLocks(content []byte) map[procLockID]int {
 			continue
 		}
 
-		if len(fields) < 5 || fields[0] != "POSIX" {
+		// type, access, then start and end of the range.
+		if fields[0] != "POSIX" || fields[2] != "WRITE" || fields[5] != "0" || fields[6] != "EOF" {
 			continue
 		}
 
@@ -848,41 +770,32 @@ func decodeProcLocks(content []byte) map[procLockID]int {
 			continue
 		}
 
-		id, err := decodeProcLocksFileID(fields[4])
+		inode, err := decodeProcLocksInode(fields[4])
 		if err != nil {
 			continue
 		}
 
-		// The first holder wins: a file can't have two conflicting POSIX locks, and a
-		// later line for the same file would be a waiter.
-		if _, ok := result[id]; !ok {
-			result[id] = pid
+		// The first holder wins. A file can't hold two conflicting POSIX locks and
+		// waiters are already filtered out, so a second line for the same inode is a
+		// different file on another filesystem: see TestDecodeProcLocksSharedInode.
+		if _, ok := result[inode]; !ok {
+			result[inode] = pid
 		}
 	}
 
 	return result
 }
 
-func decodeProcLocksFileID(field string) (procLockID, error) {
+func decodeProcLocksInode(field string) (uint64, error) {
 	parts := strings.Split(field, ":")
 	if len(parts) != 3 {
-		return procLockID{}, fmt.Errorf("%w: %q isn't a MAJOR:MINOR:INODE triplet", errUnexpectedProcLocks, field)
-	}
-
-	major, err := strconv.ParseUint(parts[0], 16, 32)
-	if err != nil {
-		return procLockID{}, fmt.Errorf("%w: %q: %w", errUnexpectedProcLocks, field, err)
-	}
-
-	minor, err := strconv.ParseUint(parts[1], 16, 32)
-	if err != nil {
-		return procLockID{}, fmt.Errorf("%w: %q: %w", errUnexpectedProcLocks, field, err)
+		return 0, fmt.Errorf("%w: %q isn't a MAJOR:MINOR:INODE triplet", errUnexpectedProcLocks, field)
 	}
 
 	inode, err := strconv.ParseUint(parts[2], 10, 64)
 	if err != nil {
-		return procLockID{}, fmt.Errorf("%w: %q: %w", errUnexpectedProcLocks, field, err)
+		return 0, fmt.Errorf("%w: %q: %w", errUnexpectedProcLocks, field, err)
 	}
 
-	return procLockID{major: uint32(major), minor: uint32(minor), inode: inode}, nil
+	return inode, nil
 }

@@ -22,7 +22,7 @@ import "errors"
 
 var errNotSupported = errors.New("lock detection is only supported on Linux")
 
-// statLockID is only implemented on Linux, the only system with /proc/locks and APT.
-func statLockID(string) (procLockID, error) {
-	return procLockID{}, errNotSupported
+// statLockInode is only implemented on Linux, the only system with /proc/locks and APT.
+func statLockInode(string) (uint64, error) {
+	return 0, errNotSupported
 }

@@ -26,7 +26,6 @@ package facts
 //	GLOUTON_VM_TEST=1 ./facts.test -test.v -test.run TestVM
 
 import (
-	"context"
 	"os"
 	"strconv"
 	"testing"
@@ -57,10 +56,9 @@ func requireScenario(t *testing.T, name string) {
 }
 
 func newVMChecker() *autoUpgradeChecker {
-	// GLOUTON_VM_HOSTROOT points the lock checks at a tree other than the real one, to
-	// run them against a filesystem the machine isn't installed on - btrfs, whose
-	// per-subvolume device ids are what lockFileID has to resolve through the mount
-	// table.
+	// GLOUTON_VM_HOSTROOT points the lock checks at a tree other than the real one, so
+	// they can run against a filesystem the machine isn't installed on: btrfs, where the
+	// device stat(2) reports differs from the one /proc/locks prints.
 	hostRoot := os.Getenv("GLOUTON_VM_HOSTROOT")
 	if hostRoot == "" {
 		hostRoot = "/"
@@ -83,27 +81,28 @@ func TestVMStatus(t *testing.T) {
 	state, err := checker.repositoryState(t.Context())
 	t.Logf("repositoryState = %d (0=ok 1=missing 2=unknown-package), err = %v", state, err)
 
-	got := checker.status(t.Context())
-	t.Logf("status = %q", got)
+	got, retrySoon := checker.status(t.Context())
+	t.Logf("status = %q, retrySoon = %t", got, retrySoon)
 
 	if want := os.Getenv("GLOUTON_VM_WANT_STATUS"); want != "" && got != want {
 		t.Errorf("status = %q, want %q", got, want)
 	}
 }
 
-// TestVMLockStuck is the ticket's own reproduction: a package process held by SIGSTOP.
-// It asserts that the stopped state is what makes it a finding, and that the one-hour
-// rule alone would still be waiting.
+// TestVMLockStuck reproduces a package process held by SIGSTOP. It asserts that the
+// stopped state is what makes it a finding, heldFor being well under lockHeldMinDuration.
 func TestVMLockStuck(t *testing.T) {
 	requireVM(t)
 	requireScenario(t, "lock-stuck")
 
 	checker := newVMChecker()
 
-	holder, err := checker.lockHolder(t.Context())
+	locks, err := checker.lockState(t.Context())
 	if err != nil {
-		t.Fatalf("lockHolder() error: %v", err)
+		t.Fatalf("lockState() error: %v", err)
 	}
+
+	holder := locks.holder
 
 	if holder == nil {
 		t.Fatal("no APT/dpkg lock is held, the scenario didn't set up the stuck process")
@@ -137,10 +136,12 @@ func TestVMLockFree(t *testing.T) {
 
 	checker := newVMChecker()
 
-	holder, err := checker.lockHolder(t.Context())
+	locks, err := checker.lockState(t.Context())
 	if err != nil {
-		t.Fatalf("lockHolder() error: %v", err)
+		t.Fatalf("lockState() error: %v", err)
 	}
+
+	holder := locks.holder
 
 	if holder != nil {
 		t.Fatalf("a lock is held by pid %d (%s), the scenario didn't clean up", holder.pid, holder.name)
@@ -151,9 +152,9 @@ func TestVMLockFree(t *testing.T) {
 	}
 }
 
-// TestVMShortLivedScript checks the premise of the shortLivedPackageScripts split against
-// a real interpreted process: its name is the interpreter's, so matching on the name alone
-// could never have recognised unattended-upgrades. GLOUTON_VM_PID holds its PID.
+// TestVMShortLivedScript checks shortLivedPackageScripts against a real interpreted
+// process: its name is the script's, truncated to TASK_COMM_LEN, so only the command line
+// carries the full one. GLOUTON_VM_PID holds its PID.
 func TestVMShortLivedScript(t *testing.T) {
 	requireVM(t)
 
@@ -198,8 +199,7 @@ func TestVMShortLivedScript(t *testing.T) {
 }
 
 // TestVMDpkgReadable checks that the dpkg-side reads work as the unprivileged user
-// Glouton runs as, which is the whole reason the checker stats the lock files instead
-// of opening them.
+// Glouton runs as, which is why the checker stats the lock files instead of opening them.
 func TestVMDpkgReadable(t *testing.T) {
 	requireVM(t)
 
@@ -221,14 +221,14 @@ func TestVMDpkgReadable(t *testing.T) {
 		t.Logf("dpkgHasBrokenPackage() = %v", broken)
 	}
 
-	if _, err := checker.lockHolder(context.Background()); err != nil {
-		t.Errorf("lockHolder() error: %v", err)
+	if _, err := checker.lockState(t.Context()); err != nil {
+		t.Errorf("lockState() error: %v", err)
 	}
 }
 
-// TestVMRepositoryCheckFails covers the case where apt-cache is present but fails. The
-// other checks still work, which is exactly what used to be enough to answer "ok" while
-// the repository — the reason this fact exists — had never been looked at.
+// TestVMRepositoryCheckFails covers apt-cache being present but failing. The other checks
+// still run, so without the failed flag the answer would be OK while the repository, the
+// reason this fact exists, was never looked at.
 func TestVMRepositoryCheckFails(t *testing.T) {
 	requireVM(t)
 	requireScenario(t, "apt-cache-broken")
@@ -241,10 +241,12 @@ func TestVMRepositoryCheckFails(t *testing.T) {
 
 	// Without this the test would pass for the wrong reason: it has to be the repository
 	// check alone that didn't run.
-	holder, err := checker.lockHolder(t.Context())
+	locks, err := checker.lockState(t.Context())
 	if err != nil {
-		t.Fatalf("lockHolder() error: %v", err)
+		t.Fatalf("lockState() error: %v", err)
 	}
+
+	holder := locks.holder
 
 	locked := holderIsStuck(holder)
 
@@ -265,8 +267,15 @@ func TestVMRepositoryCheckFails(t *testing.T) {
 		)
 	}
 
-	if got := checker.status(t.Context()); got != "" {
+	got, retrySoon := checker.status(t.Context())
+	if got != "" {
 		t.Errorf("status() = %q, want \"\": never OK when the repository check didn't run", got)
+	}
+
+	// A failing apt-cache may well keep failing, so it is not worth re-forking every few
+	// minutes. Only a package operation holding a dpkg lock earns that.
+	if retrySoon {
+		t.Error("status() retrySoon = true, want false for a check that may keep failing")
 	}
 }
 

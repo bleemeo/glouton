@@ -94,10 +94,11 @@ type FactProvider struct {
 	facts           map[string]string
 	lastFactsUpdate time.Time
 
-	// autoUpgradeStatusValue is kept between refreshes because computing it is far more
-	// expensive than the rest, see autoUpgradeMinInterval.
-	autoUpgradeStatusValue string
-	autoUpgradeStatusAt    time.Time
+	// autoUpgradeStatusValue is cached because computing it costs far more than the
+	// other facts. How long it is kept depends on the answer, see autoUpgradeMinInterval
+	// and autoUpgradeRetryInterval.
+	autoUpgradeStatusValue     string
+	autoUpgradeStatusExpiresAt time.Time
 }
 
 // FactCallback is a function called on each update of facts that may return additional facts.
@@ -198,11 +199,10 @@ func (f *FactProvider) SetFact(key string, value string) {
 func (f *FactProvider) updateFacts(ctx context.Context) {
 	newFacts := f.fastUpdateFacts(ctx)
 
-	// Deliberately not in fastUpdateFacts: this one runs apt-cache and reads the whole
-	// dpkg database, which is too slow for the startup path FastFacts serves. Only
-	// whether auto-upgrade is supported matters, not whether it's enabled: a repository
-	// that vanished is worth reporting even when the timer is off, and the presence of
-	// factAutoUpgradeEnabled already excludes the systems that have no auto-upgrade.
+	// Not in fastUpdateFacts: this forks apt-cache and reads the whole dpkg database,
+	// too slow for the startup path FastFacts serves. factAutoUpgradeEnabled being set
+	// is what says auto-upgrade exists here; whether it is enabled doesn't matter, since
+	// a repository that vanished is worth reporting even with the timer off.
 	if _, ok := newFacts[factAutoUpgradeEnabled]; ok {
 		if status := f.autoUpgradeStatus(ctx); status != "" {
 			newFacts[FactAutoUpgradeStatus] = status

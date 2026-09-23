@@ -24,23 +24,17 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// statLockID returns the device and inode of a lock file, which is how /proc/locks
-// designates the file a lock is held on.
+// statLockInode returns the inode of a lock file, which is how decodeProcLocks keys the
+// locks held on the system.
 //
 // It only needs to traverse the parent directory, not to open the file: /var/lib/dpkg
 // is 0755 while the lock files are 0640 root:root, so this works as the "glouton" user.
-func statLockID(path string) (procLockID, error) {
+func statLockInode(path string) (uint64, error) {
 	var stat unix.Stat_t
 
 	if err := unix.Stat(path, &stat); err != nil {
-		return procLockID{}, fmt.Errorf("stat %s: %w", path, err)
+		return 0, fmt.Errorf("stat %s: %w", path, err)
 	}
 
-	dev := uint64(stat.Dev) //nolint:unconvert,nolintlint // Dev isn't uint64 on every architecture.
-
-	return procLockID{
-		major: unix.Major(dev),
-		minor: unix.Minor(dev),
-		inode: stat.Ino,
-	}, nil
+	return stat.Ino, nil
 }
