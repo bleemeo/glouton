@@ -160,12 +160,6 @@ var (
 	promWindowsDefaultSystemMetrics = []string{
 		"glouton_gatherer_execution_seconds_count",
 		"glouton_gatherer_execution_seconds_sum",
-		// windows_cpu_time_global and windows_memory_standby_cache_bytes are not emitted
-		// by windows_exporter: they were recording rules (sum(windows_cpu_time_total)
-		// without(core), and the sum of the three standby cache metrics) removed along
-		// with the rules manager. Nothing produces them today, so these two entries match
-		// nothing until we decide whether to recreate the rules via
-		// RegistrationOption.Rules or to allow the raw metrics instead.
 		"windows_cpu_time_global",
 		"windows_memory_physical_total_bytes",
 		"windows_memory_available_bytes",

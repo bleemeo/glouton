@@ -145,10 +145,8 @@ func DefaultConfig() Config { //nolint:maintidx
 			},
 			WindowsExporter: NodeExporter{
 				Enable: true,
-				// Keep in sync with windows_exporter's collector list: it drops collectors
-				// between releases, and an unknown name here used to disable the exporter
-				// entirely. "cs" (split into cpu_info/memory/os) and "logon" were removed
-				// upstream; "pagefile" now owns the paging metrics "os" used to export.
+				// windows_exporter sometimes drops collectors between releases: these names are
+				// checked against its collector list by Test_defaultCollectorsExistUpstream.
 				Collectors: []string{collectorCPU, "logical_disk", "memory", "net", "os", "pagefile", "system", "tcp", "diskdrive"},
 			},
 			Telemetry: Telemetry{
