@@ -98,6 +98,12 @@ nfpms:
         dst: /usr/lib/glouton/glouton-auto-upgrade
       - src: bin/glouton-veths
         dst: /usr/lib/glouton/glouton-veths
+      - src: bin/glouton-sudo-logs
+        dst: /usr/lib/glouton/glouton-sudo-logs
+      - src: bin/glouton-sudo-ssacli
+        dst: /usr/lib/glouton/glouton-sudo-ssacli
+      - src: bin/glouton-sudoers-setup
+        dst: /usr/lib/glouton/glouton-sudoers-setup
       - src: bin/glouton-netstat
         dst: /usr/sbin/glouton-netstat
       - src: bin/glouton-gather-facts

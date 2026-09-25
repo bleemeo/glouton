@@ -1,0 +1,78 @@
+#!/bin/sh
+
+# This script is run through sudo by Glouton to read log files it can't open itself.
+# It takes the command Glouton would otherwise run through sudo, checks it and runs it:
+#   glouton-sudo-logs stat --printf=%s FILE
+#   glouton-sudo-logs tail --follow=name --bytes=OFFSET FILE
+#
+# The check is done here rather than in sudoers because sudo-rs forbids wildcards
+# in command arguments, so the allowed files can't be listed there in a syntax
+# both sudo.ws and sudo-rs accept.
+
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+
+refuse() {
+    echo "glouton-sudo-logs: $1" >&2
+    exit 1
+}
+
+# is_allowed_file tells whether the file is one Glouton may read. The path must be
+# written without "." or ".." components, so the patterns can't be escaped.
+is_allowed_file() {
+    case "$1" in
+        *//*|*/./*|*/.|*/../*|*/..)
+            return 1
+            ;;
+    esac
+
+    case "$1" in
+        # System logs.
+        /var/log/syslog|/var/log/auth.log|/var/log/message)
+            return 0
+            ;;
+        # Container logs, <container ID>/<container ID>-json.log.
+        /var/lib/docker/containers/*/*/*)
+            return 1
+            ;;
+        /var/lib/docker/containers/*/*-json.log)
+            return 0
+            ;;
+        # Application logs.
+        /var/log/*/*.log)
+            return 0
+            ;;
+    esac
+
+    return 1
+}
+
+case "$1" in
+    stat)
+        [ "$#" -eq 3 ] || refuse "stat: unexpected arguments"
+        [ "$2" = "--printf=%s" ] || refuse "stat: unexpected option $2"
+        is_allowed_file "$3" || refuse "file not allowed: $3"
+
+        exec /usr/bin/stat --printf=%s -- "$3"
+        ;;
+    tail)
+        [ "$#" -eq 4 ] || refuse "tail: unexpected arguments"
+        [ "$2" = "--follow=name" ] || refuse "tail: unexpected option $2"
+
+        # The offset is "0" (start at the end) or "+N" (resume from byte N).
+        offset="${3#--bytes=}"
+        [ "$offset" != "$3" ] || refuse "tail: unexpected option $3"
+
+        case "${offset#+}" in
+            ''|*[!0-9]*)
+                refuse "tail: invalid offset $offset"
+                ;;
+        esac
+
+        is_allowed_file "$4" || refuse "file not allowed: $4"
+
+        exec /usr/bin/tail --follow=name "--bytes=$offset" -- "$4"
+        ;;
+    *)
+        refuse "command not allowed: $1"
+        ;;
+esac
