@@ -18,9 +18,8 @@
 
 package facts
 
-// End-to-end checks for the auto-upgrade detection, meant for a throwaway Ubuntu VM.
-// They need a real APT, a real dpkg database and, for the lock ones, a process left
-// holding the dpkg lock on purpose, so they're skipped unless GLOUTON_VM_TEST=1.
+// End-to-end checks for the auto-upgrade detection, to run on a throwaway Ubuntu VM.
+// They are skipped unless GLOUTON_VM_TEST=1.
 //
 //	GOOS=linux GOARCH=arm64 go test -c ./facts -o facts.test
 //	GLOUTON_VM_TEST=1 ./facts.test -test.v -test.run TestVM
@@ -44,9 +43,8 @@ func requireVM(t *testing.T) {
 	}
 }
 
-// requireScenario gates the checks that need the machine put in a specific state first.
-// They're skipped until asked for by name, and then fail loudly rather than quietly pass
-// if the state isn't actually there.
+// requireScenario skips the test unless GLOUTON_VM_SCENARIO is name. The test fails if
+// the machine isn't in that state.
 func requireScenario(t *testing.T, name string) {
 	t.Helper()
 
@@ -56,16 +54,13 @@ func requireScenario(t *testing.T, name string) {
 }
 
 func newVMChecker() *autoUpgradeChecker {
-	// GLOUTON_VM_HOSTROOT points the lock checks at a tree other than the real one, so
-	// they can run against a filesystem the machine isn't installed on: btrfs, where the
-	// device stat(2) reports differs from the one /proc/locks prints.
+	// GLOUTON_VM_HOSTROOT overrides the host root, e.g. to test the lock files on btrfs.
 	hostRoot := os.Getenv("GLOUTON_VM_HOSTROOT")
 	if hostRoot == "" {
 		hostRoot = "/"
 	}
 
-	// GLOUTON_VM_AUTOUPGRADE_FILE stands in for a moved agent.state_directory, where the
-	// configured marker path is not the one the packaging script writes.
+	// GLOUTON_VM_AUTOUPGRADE_FILE overrides the configured marker path.
 	autoUpgradeFile := os.Getenv("GLOUTON_VM_AUTOUPGRADE_FILE")
 	if autoUpgradeFile == "" {
 		autoUpgradeFile = packagingAutoUpgradeFile
@@ -78,8 +73,7 @@ func newVMChecker() *autoUpgradeChecker {
 	}
 }
 
-// TestVMStatus reports what the checker sees on this machine. GLOUTON_VM_WANT_STATUS
-// makes it an assertion, so the scenario script can pin down the expected value.
+// TestVMStatus logs the status. If GLOUTON_VM_WANT_STATUS is set, it must match.
 func TestVMStatus(t *testing.T) {
 	requireVM(t)
 
@@ -96,8 +90,8 @@ func TestVMStatus(t *testing.T) {
 	}
 }
 
-// TestVMLockStuck reproduces a package process held by SIGSTOP. It asserts that the
-// stopped state is what makes it a finding, heldFor being well under lockHeldMinDuration.
+// TestVMLockStuck checks that a SIGSTOPped lock holder is stuck while heldFor is below
+// lockHeldMinDuration.
 func TestVMLockStuck(t *testing.T) {
 	requireVM(t)
 	requireScenario(t, "lock-stuck")
@@ -137,7 +131,7 @@ func TestVMLockStuck(t *testing.T) {
 	}
 }
 
-// TestVMLockFree asserts the opposite: nothing is reported while no lock is held.
+// TestVMLockFree checks that nothing is reported when no lock is held.
 func TestVMLockFree(t *testing.T) {
 	requireVM(t)
 
@@ -159,9 +153,8 @@ func TestVMLockFree(t *testing.T) {
 	}
 }
 
-// TestVMShortLivedScript checks shortLivedPackageScripts against a real interpreted
-// process: its name is the script's, truncated to TASK_COMM_LEN, so only the command line
-// carries the full one. GLOUTON_VM_PID holds its PID.
+// TestVMShortLivedScript checks that the interpreted process GLOUTON_VM_PID matches
+// shortLivedPackageScripts through its command line.
 func TestVMShortLivedScript(t *testing.T) {
 	requireVM(t)
 
@@ -205,8 +198,7 @@ func TestVMShortLivedScript(t *testing.T) {
 	}
 }
 
-// TestVMDpkgReadable checks that the dpkg-side reads work as the unprivileged user
-// Glouton runs as, which is why the checker stats the lock files instead of opening them.
+// TestVMDpkgReadable checks that the dpkg reads and lockState work as the current user.
 func TestVMDpkgReadable(t *testing.T) {
 	requireVM(t)
 
@@ -233,9 +225,8 @@ func TestVMDpkgReadable(t *testing.T) {
 	}
 }
 
-// TestVMRepositoryCheckFails covers apt-cache being present but failing. The other checks
-// still run, so without the failed flag the answer would be OK while the repository, the
-// reason this fact exists, was never looked at.
+// TestVMRepositoryCheckFails checks that status is not OK when apt-cache fails and the
+// other checks find nothing.
 func TestVMRepositoryCheckFails(t *testing.T) {
 	requireVM(t)
 	requireScenario(t, "apt-cache-broken")
@@ -246,8 +237,7 @@ func TestVMRepositoryCheckFails(t *testing.T) {
 		t.Fatal("repositoryState() succeeded, the scenario didn't break apt-cache")
 	}
 
-	// Without this the test would pass for the wrong reason: it has to be the repository
-	// check alone that didn't run.
+	// The other checks must find nothing.
 	locks, err := checker.lockState(t.Context())
 	if err != nil {
 		t.Fatalf("lockState() error: %v", err)
@@ -279,16 +269,12 @@ func TestVMRepositoryCheckFails(t *testing.T) {
 		t.Errorf("status() = %q, want \"\": never OK when the repository check didn't run", got)
 	}
 
-	// A failing apt-cache may well keep failing, so it is not worth re-forking every few
-	// minutes. Only a package operation holding a dpkg lock earns that.
 	if retrySoon {
 		t.Error("status() retrySoon = true, want false for a check that may keep failing")
 	}
 }
 
-// TestVMFactProvider goes through the real FactProvider: the status must reach the fact
-// map that gets synchronised, while staying out of FastFacts, which runs on the startup
-// path and must not pay for apt-cache and a full dpkg database scan.
+// TestVMFactProvider checks that the status is in Facts but not in FastFacts.
 func TestVMFactProvider(t *testing.T) {
 	requireVM(t)
 

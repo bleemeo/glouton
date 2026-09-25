@@ -25,9 +25,8 @@ import (
 	"testing"
 )
 
-// TestStatLockInodeMissing pins down the error lockHolder relies on to tell a lock file
-// that isn't there, which is benign, from one it couldn't stat, which isn't. statLockInode
-// wraps a raw errno, so the match has to survive that.
+// TestStatLockInodeMissing checks that a missing lock file gives an error matching
+// fs.ErrNotExist, which lockState relies on.
 func TestStatLockInodeMissing(t *testing.T) {
 	_, err := statLockInode(filepath.Join(t.TempDir(), "lock-frontend"))
 	if err == nil {

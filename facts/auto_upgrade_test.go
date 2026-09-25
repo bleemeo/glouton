@@ -18,11 +18,16 @@ package facts
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
+	"github.com/bleemeo/glouton/version"
+
 	"github.com/google/go-cmp/cmp"
+	"github.com/shirou/gopsutil/v4/process"
 )
 
 func TestDecodeAPTCachePolicy(t *testing.T) {
@@ -33,7 +38,7 @@ func TestDecodeAPTCachePolicy(t *testing.T) {
 		hasRepository bool
 	}{
 		{
-			// Nominal case: Glouton installed and the Bleemeo repository still configured.
+			// Glouton installed and the Bleemeo repository configured.
 			name: "installed_with_repository",
 			in: `glouton:
   Installed: 25.08.14.140000
@@ -47,9 +52,7 @@ func TestDecodeAPTCachePolicy(t *testing.T) {
 			hasRepository: true,
 		},
 		{
-			// The no-argument form of the output, which aptHasIndexedRepository reads to
-			// tell an empty /var/lib/apt/lists apart from a repository that is gone.
-			// Nothing is installed-marked there, only the sources matter.
+			// Output of "apt-cache policy" without a package.
 			name: "package_files_with_repository",
 			in: `Package files:
  100 /var/lib/dpkg/status
@@ -63,8 +66,7 @@ Pinned packages:
 			hasRepository: true,
 		},
 		{
-			// The same after "rm -rf /var/lib/apt/lists/*": APT has no index left, so no
-			// package can show a repository whatever the sources say.
+			// The same with an empty /var/lib/apt/lists.
 			name: "package_files_without_repository",
 			in: `Package files:
  100 /var/lib/dpkg/status
@@ -75,9 +77,7 @@ Pinned packages:
 			hasRepository: false,
 		},
 		{
-			// What a do-release-upgrade leaves behind: the source is commented out, so
-			// the only version APT knows about is the installed one. "apt-get install
-			// glouton" still exits 0, saying the package is already the newest version.
+			// After do-release-upgrade commented out the source.
 			name: "installed_without_repository",
 			in: `glouton:
   Installed: 25.08.14.140000
@@ -90,7 +90,7 @@ Pinned packages:
 			hasRepository: false,
 		},
 		{
-			// A newer version is available but not installed yet: still healthy.
+			// A newer version is available.
 			name: "installed_with_several_versions",
 			in: `glouton:
   Installed: 25.08.14.140000
@@ -118,16 +118,14 @@ Pinned packages:
 			hasRepository: true,
 		},
 		{
-			// apt-cache prints nothing at all (and still exits 0) for a package it
-			// doesn't know: Glouton wasn't installed from a .deb.
+			// apt-cache prints nothing for an unknown package.
 			name:          "unknown_package",
 			in:            "",
 			installed:     false,
 			hasRepository: false,
 		},
 		{
-			// Only the labels are translated, the version table isn't, which is why we
-			// parse the table instead of the "Installed:"/"Candidate:" lines.
+			// Labels are translated, source lines aren't.
 			name: "localized_output",
 			in: `glouton:
   Installé : 25.08.14.140000
@@ -141,7 +139,7 @@ Pinned packages:
 			hasRepository: true,
 		},
 		{
-			// A local mirror is a perfectly valid repository.
+			// A local mirror is a repository.
 			name: "local_mirror",
 			in: `glouton:
   Installed: 25.08.14.140000
@@ -185,11 +183,9 @@ Pinned packages:
 }
 
 func TestDecodeProcLocks(t *testing.T) {
-	// Captured on Ubuntu 24.04 while two processes held /var/lib/dpkg/lock-frontend
-	// (inode 1425030) and /var/lib/dpkg/lock (inode 1425029), plus a flock() on an
-	// unrelated file. The "->" line is a process blocked on the lock, and must not be
-	// taken for its holder. The last two lines are the kinds of lock APT and dpkg never
-	// take: a read lock, and a byte-range lock of the sort SQLite uses.
+	// Captured on Ubuntu 24.04 with lock-frontend (inode 1425030) and lock (inode
+	// 1425029) held. The "->" line is a waiter. The last two lines are a read lock and a
+	// byte-range lock, which are ignored.
 	const procLocks = `6: POSIX  ADVISORY  WRITE 8 00:47:1425029 0 EOF
 24: POSIX  ADVISORY  WRITE 7 00:47:1425030 0 EOF
 24: -> POSIX  ADVISORY  WRITE 9 00:47:1425030 0 EOF
@@ -209,10 +205,8 @@ func TestDecodeProcLocks(t *testing.T) {
 	}
 }
 
-// TestDecodeProcLocksSharedInode pins down what keying on the inode alone gives up: two
-// locked files with the same inode on different filesystems become one entry. That is
-// accepted because the device /proc/locks prints is the superblock's, which stat(2) does
-// not return on btrfs, and because only the four APT/dpkg lock inodes are ever looked up.
+// TestDecodeProcLocksSharedInode checks that two locks on the same inode on different
+// devices give a single entry, the first one.
 func TestDecodeProcLocksSharedInode(t *testing.T) {
 	const procLocks = `1: POSIX  ADVISORY  WRITE 42 00:47:900 0 EOF
 2: POSIX  ADVISORY  WRITE 43 08:01:900 0 EOF
@@ -225,8 +219,6 @@ func TestDecodeProcLocksSharedInode(t *testing.T) {
 	}
 }
 
-// Only the shape of the MAJOR:MINOR:INODE field and the inode itself are validated: the
-// device is not parsed, so a malformed one alone doesn't reject a line.
 func TestDecodeProcLocksInvalid(t *testing.T) {
 	const procLocks = `
 not a lock line
@@ -249,16 +241,11 @@ func TestDpkgJournalIsDirty(t *testing.T) {
 		noJournalDir bool
 		want         bool
 	}{
-		// dpkg removes its journal once the transaction is complete.
 		{name: "empty", entries: nil, want: false},
-		// No journal directory means no journal, hence no interrupted transaction. An
-		// error here would stop status() ever answering AutoUpgradeStatusOK.
 		{name: "no_journal_dir", noJournalDir: true, want: false},
-		// What an interrupted dpkg leaves behind. APT then refuses to do anything.
 		{name: "journal_entry", entries: []string{"0001"}, want: true},
-		// An empty journal entry blocks APT just the same as a filled one.
 		{name: "single_digit", entries: []string{"0"}, want: true},
-		// dpkg's own temporary files aren't journal entries, APT ignores them.
+		// Only all-digit names are journal entries.
 		{name: "temporary_file", entries: []string{"tmp.i"}, want: false},
 		{name: "mixed", entries: []string{"tmp.i", "0042"}, want: true},
 	}
@@ -312,7 +299,6 @@ Status: install ok installed
 			want: false,
 		},
 		{
-			// dpkg unpacked the package but was interrupted before configuring it.
 			name: "half_configured",
 			status: `Package: glouton
 Status: install ok installed
@@ -337,8 +323,7 @@ Status: install ok unpacked
 			want: true,
 		},
 		{
-			// The error flag, not the state: dpkg wants this one reinstalled before
-			// anything else touches it, and apt-get refuses to install until it is.
+			// Error flag set on an installed package.
 			name: "reinstreq_flag",
 			status: `Package: adduser
 Status: install reinstreq installed
@@ -346,7 +331,6 @@ Status: install reinstreq installed
 			want: true,
 		},
 		{
-			// A removed package keeping its configuration files is perfectly normal.
 			name: "config_files",
 			status: `Package: removed-package
 Status: deinstall ok config-files
@@ -354,8 +338,7 @@ Status: deinstall ok config-files
 			want: false,
 		},
 		{
-			// A held package is flagged through "want", not the error flag, and is
-			// perfectly installable.
+			// "hold" is the want field, not the error flag.
 			name: "hold_is_not_broken",
 			status: `Package: some-package
 Status: hold ok installed
@@ -363,7 +346,7 @@ Status: hold ok installed
 			want: false,
 		},
 		{
-			// Pending triggers are normal too, APT resolves them on its own.
+			// APT resolves pending triggers itself.
 			name: "triggers_pending",
 			status: `Package: man-db
 Status: install ok triggers-pending
@@ -401,31 +384,66 @@ Status: install ok triggers-awaited
 	}
 }
 
+// TestRunIsStuckPathError checks that a stat error on one marker path doesn't hide a
+// marker at the other. A file used as a directory gives a non-ENOENT error as any user.
+func TestRunIsStuckPathError(t *testing.T) {
+	dir := t.TempDir()
+
+	blocker := filepath.Join(dir, "blocker")
+	if err := os.WriteFile(blocker, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	setPackagingAutoUpgradeFile(t, filepath.Join(blocker, "auto_upgrade"))
+
+	marker := filepath.Join(dir, "auto_upgrade")
+	checker := &autoUpgradeChecker{AutoUpgradeFile: marker}
+
+	stuck, err := checker.runIsStuck()
+	if err == nil {
+		t.Error("runIsStuck() error = nil, want the stat error of the unreadable path")
+	}
+
+	if stuck {
+		t.Error("runIsStuck() = true, want false")
+	}
+
+	if err := os.WriteFile(marker, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	modTime := time.Now().Add(-6 * time.Hour)
+	if err := os.Chtimes(marker, modTime, modTime); err != nil {
+		t.Fatal(err)
+	}
+
+	stuck, err = checker.runIsStuck()
+	if err != nil {
+		t.Errorf("runIsStuck() error: %v", err)
+	}
+
+	if !stuck {
+		t.Error("runIsStuck() = false, want true: the marker at the configured path is stale")
+	}
+}
+
 func TestRunIsStuck(t *testing.T) {
 	cases := []struct {
 		name string
-		// age of the marker, or -1 when there is no marker at all.
+		// age of the marker, or -1 for no marker.
 		age time.Duration
-		// directory creates the marker as a directory instead of a file.
+		// directory creates the marker as a directory.
 		directory bool
-		// packagingPath writes the marker where the packaging script hardcodes it
-		// instead of at the configured path.
+		// packagingPath creates the marker at packagingAutoUpgradeFile.
 		packagingPath bool
 		want          bool
 	}{
-		// The usual case: no auto-upgrade running.
 		{name: "no_marker", age: -1, want: false},
-		// A run in progress, still within the time an upgrade legitimately takes.
 		{name: "run_in_progress", age: 5 * time.Minute, want: false},
-		// The EXIT trap of glouton-auto-upgrade never fired and Glouton wasn't restarted:
-		// the run is stuck, most likely waiting on dpkg or on a mirror.
 		{name: "stuck_run", age: 6 * time.Hour, want: true},
-		// An empty agent.auto_upgrade_file resolves to the state directory itself, whose
-		// mtime is old enough to look like a run that never ended, and which nothing the
-		// user deletes would clear. A directory is never a marker.
+		// An empty agent.auto_upgrade_file resolves to the state directory.
 		{name: "marker_is_a_directory", age: 6 * time.Hour, directory: true, want: false},
-		// A moved agent.state_directory: the script knows nothing about it, so the marker
-		// it leaves behind is at the path it hardcodes and not at the configured one.
+		// The configured path differs from the one the script writes.
 		{name: "stuck_run_at_the_packaging_path", age: 6 * time.Hour, packagingPath: true, want: true},
 	}
 
@@ -434,13 +452,8 @@ func TestRunIsStuck(t *testing.T) {
 			dir := t.TempDir()
 			marker := filepath.Join(dir, "auto_upgrade")
 
-			// The real one must stay out of reach: this test would otherwise answer from
-			// whatever the machine it runs on has under /var/lib/glouton.
 			packagingMarker := filepath.Join(dir, "packaging_auto_upgrade")
-			restore := packagingAutoUpgradeFile
-			packagingAutoUpgradeFile = packagingMarker
-
-			t.Cleanup(func() { packagingAutoUpgradeFile = restore })
+			setPackagingAutoUpgradeFile(t, packagingMarker)
 
 			if tc.packagingPath {
 				marker = packagingMarker
@@ -472,5 +485,178 @@ func TestRunIsStuck(t *testing.T) {
 				t.Errorf("runIsStuck() = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestIsShortLivedPackageProcessOverMatch checks that a directory named like a package
+// script in the command line, such as /var/log/unattended-upgrades, doesn't match.
+func TestIsShortLivedPackageProcessOverMatch(t *testing.T) {
+	if version.IsWindows() {
+		t.Skip("there is no /bin/sh to build a command line with")
+	}
+
+	logDir := filepath.Join(t.TempDir(), "unattended-upgrades")
+	if err := os.Mkdir(logDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	// The shell blocks on the builtin read until startAndInspect closes its stdin.
+	cmd := exec.CommandContext(t.Context(), "/bin/sh", "-c", "read -r _", "x", logDir)
+
+	proc, name, args := startAndInspect(t, cmd, logDir)
+
+	if isShortLivedPackageProcess(t.Context(), proc, name) {
+		t.Errorf("isShortLivedPackageProcess() = true for %q, want false", args)
+	}
+}
+
+// TestAutoUpgradeMarkerStat checks that only a regular file is a marker.
+func TestAutoUpgradeMarkerStat(t *testing.T) {
+	dir := t.TempDir()
+
+	marker := filepath.Join(dir, "auto_upgrade")
+	if err := os.WriteFile(marker, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		name    string
+		path    string
+		want    bool
+		wantErr bool
+	}{
+		{name: "regular_file", path: marker, want: true},
+		{name: "missing", path: filepath.Join(dir, "absent"), want: false},
+		// What config.Load() hands over when agent.auto_upgrade_file is empty.
+		{name: "state_directory", path: dir, want: false},
+		{name: "unreadable", path: filepath.Join(marker, "auto_upgrade"), want: false, wantErr: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, isMarker, err := autoUpgradeMarkerStat(tc.path)
+			if isMarker != tc.want {
+				t.Errorf("autoUpgradeMarkerStat(%s) is a marker = %v, want %v", tc.path, isMarker, tc.want)
+			}
+
+			if (err != nil) != tc.wantErr {
+				t.Errorf("autoUpgradeMarkerStat(%s) error = %v, wantErr %v", tc.path, err, tc.wantErr)
+			}
+		})
+	}
+}
+
+// TestAutoUpgradeMarkerPaths checks that each path is listed once.
+func TestAutoUpgradeMarkerPaths(t *testing.T) {
+	setPackagingAutoUpgradeFile(t, "/packaging/auto_upgrade")
+
+	cases := []struct {
+		name       string
+		configured string
+		want       []string
+	}{
+		{name: "moved", configured: "/moved/auto_upgrade", want: []string{"/packaging/auto_upgrade", "/moved/auto_upgrade"}},
+		{name: "default", configured: "/packaging/auto_upgrade", want: []string{"/packaging/auto_upgrade"}},
+		{name: "unset", configured: "", want: []string{"/packaging/auto_upgrade"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if diff := cmp.Diff(tc.want, autoUpgradeMarkerPaths(tc.configured)); diff != "" {
+				t.Errorf("autoUpgradeMarkerPaths() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// TestIsShortLivedPackageProcessScript checks that a script run through a shebang matches.
+func TestIsShortLivedPackageProcessScript(t *testing.T) {
+	if version.IsWindows() {
+		t.Skip("there is no shebang to run a script through")
+	}
+
+	script := filepath.Join(t.TempDir(), "unattended-upgrade")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nread -r _\n"), 0o700); err != nil { //nolint:gosec
+		t.Fatal(err)
+	}
+
+	proc, name, args := startAndInspect(t, exec.CommandContext(t.Context(), script), script)
+
+	if !isShortLivedPackageProcess(t.Context(), proc, name) {
+		t.Errorf("isShortLivedPackageProcess() = false for %q, want true", args)
+	}
+}
+
+// startAndInspect starts cmd with its stdin held open, kills it at the end of the test,
+// and returns the process with its name and command line. It fails the test if wantArg
+// isn't in the command line.
+func startAndInspect(t *testing.T, cmd *exec.Cmd, wantArg string) (*process.Process, string, []string) {
+	t.Helper()
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		_ = stdin.Close()
+		_ = cmd.Process.Kill()
+		_, _ = cmd.Process.Wait()
+	})
+
+	proc, err := process.NewProcessWithContext(t.Context(), int32(cmd.Process.Pid)) //nolint:gosec
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	name, err := proc.NameWithContext(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	args, err := proc.CmdlineSliceWithContext(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !slices.Contains(args, wantArg) {
+		status, _ := proc.StatusWithContext(t.Context())
+		t.Fatalf("command line is %q (status %v), want it to contain %s", args, status, wantArg)
+	}
+
+	return proc, name, args
+}
+
+// setPackagingAutoUpgradeFile overrides packagingAutoUpgradeFile for the test.
+func setPackagingAutoUpgradeFile(t *testing.T, path string) {
+	t.Helper()
+
+	restore := packagingAutoUpgradeFile
+	packagingAutoUpgradeFile = path
+
+	t.Cleanup(func() { packagingAutoUpgradeFile = restore })
+}
+
+func TestUnitIsRunning(t *testing.T) {
+	cases := []struct {
+		output string
+		want   bool
+	}{
+		{output: "ActiveState=activating\n", want: true},
+		{output: "ActiveState=active\n", want: true},
+		{output: "ActiveState=deactivating\n", want: true},
+		{output: "ActiveState=inactive\n", want: false},
+		{output: "ActiveState=failed\n", want: false},
+		{output: "", want: false},
+	}
+
+	for _, tc := range cases {
+		if got := unitIsRunning([]byte(tc.output)); got != tc.want {
+			t.Errorf("unitIsRunning(%q) = %v, want %v", tc.output, got, tc.want)
+		}
 	}
 }

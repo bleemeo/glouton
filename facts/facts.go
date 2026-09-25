@@ -94,9 +94,8 @@ type FactProvider struct {
 	facts           map[string]string
 	lastFactsUpdate time.Time
 
-	// autoUpgradeStatusValue is cached because computing it costs far more than the
-	// other facts. How long it is kept depends on the answer, see autoUpgradeMinInterval
-	// and autoUpgradeRetryInterval.
+	// autoUpgradeStatusValue is cached until autoUpgradeStatusExpiresAt, see
+	// autoUpgradeMinInterval and autoUpgradeRetryInterval.
 	autoUpgradeStatusValue     string
 	autoUpgradeStatusExpiresAt time.Time
 }
@@ -108,8 +107,7 @@ type FactCallback func(ctx context.Context, currentFact map[string]string) map[s
 
 type Options struct {
 	Runner *gloutonexec.Runner
-	// AutoUpgradeFile is the marker file the glouton-auto-upgrade script maintains while
-	// it runs. It's only used to notice a run that never finished.
+	// AutoUpgradeFile is the marker file that exists while an auto-upgrade runs.
 	AutoUpgradeFile  string
 	FactPath         string
 	HostRootPath     string
@@ -199,10 +197,8 @@ func (f *FactProvider) SetFact(key string, value string) {
 func (f *FactProvider) updateFacts(ctx context.Context) {
 	newFacts := f.fastUpdateFacts(ctx)
 
-	// Not in fastUpdateFacts: this forks apt-cache and reads the whole dpkg database,
-	// too slow for the startup path FastFacts serves. factAutoUpgradeEnabled being set
-	// is what says auto-upgrade exists here; whether it is enabled doesn't matter, since
-	// a repository that vanished is worth reporting even with the timer off.
+	// Not in fastUpdateFacts, as it is too slow for FastFacts. The status is reported
+	// whether or not the auto-upgrade timer is enabled.
 	if _, ok := newFacts[factAutoUpgradeEnabled]; ok {
 		if status := f.autoUpgradeStatus(ctx); status != "" {
 			newFacts[FactAutoUpgradeStatus] = status

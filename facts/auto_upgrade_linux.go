@@ -24,11 +24,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// statLockInode returns the inode of a lock file, which is how decodeProcLocks keys the
-// locks held on the system.
-//
-// It only needs to traverse the parent directory, not to open the file: /var/lib/dpkg
-// is 0755 while the lock files are 0640 root:root, so this works as the "glouton" user.
+// statLockInode returns the inode of a lock file. It doesn't open the file, so it works
+// as the "glouton" user on the 0640 root:root lock files.
 func statLockInode(path string) (uint64, error) {
 	var stat unix.Stat_t
 

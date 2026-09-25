@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/mqtt/client"
 
@@ -143,7 +144,11 @@ func (rs *reloadState) Close() {
 			cause = "Upgrade"
 		}
 
-		if _, err := os.Stat(rs.autoUpgradeFile); err == nil {
+		// Every path an auto-upgrade may have marked, not only the configured one: the
+		// scripts read no configuration, see facts.AutoUpgradeMarkers. A marker that
+		// can't be looked at is left out, this running on the way down with nowhere left
+		// to report it, and the startup path logs what it found.
+		if markers, _ := facts.AutoUpgradeMarkers(rs.autoUpgradeFile); len(markers) > 0 {
 			cause = "Auto upgrade"
 		}
 
