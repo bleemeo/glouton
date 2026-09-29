@@ -384,49 +384,6 @@ Status: install ok triggers-awaited
 	}
 }
 
-// TestRunIsStuckPathError checks that a stat error on one marker path doesn't hide a
-// marker at the other. A file used as a directory gives a non-ENOENT error as any user.
-func TestRunIsStuckPathError(t *testing.T) {
-	dir := t.TempDir()
-
-	blocker := filepath.Join(dir, "blocker")
-	if err := os.WriteFile(blocker, nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	setPackagingAutoUpgradeFile(t, filepath.Join(blocker, "auto_upgrade"))
-
-	marker := filepath.Join(dir, "auto_upgrade")
-	checker := &autoUpgradeChecker{AutoUpgradeFile: marker}
-
-	stuck, err := checker.runIsStuck()
-	if err == nil {
-		t.Error("runIsStuck() error = nil, want the stat error of the unreadable path")
-	}
-
-	if stuck {
-		t.Error("runIsStuck() = true, want false")
-	}
-
-	if err := os.WriteFile(marker, nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	modTime := time.Now().Add(-6 * time.Hour)
-	if err := os.Chtimes(marker, modTime, modTime); err != nil {
-		t.Fatal(err)
-	}
-
-	stuck, err = checker.runIsStuck()
-	if err != nil {
-		t.Errorf("runIsStuck() error: %v", err)
-	}
-
-	if !stuck {
-		t.Error("runIsStuck() = false, want true: the marker at the configured path is stale")
-	}
-}
-
 func TestRunIsStuck(t *testing.T) {
 	cases := []struct {
 		name string
@@ -434,17 +391,18 @@ func TestRunIsStuck(t *testing.T) {
 		age time.Duration
 		// directory creates the marker as a directory.
 		directory bool
-		// packagingPath creates the marker at packagingAutoUpgradeFile.
-		packagingPath bool
-		want          bool
+		// underAFile puts the marker under a regular file, which can't be stat'ed.
+		underAFile bool
+		want       bool
+		wantErr    bool
 	}{
 		{name: "no_marker", age: -1, want: false},
 		{name: "run_in_progress", age: 5 * time.Minute, want: false},
 		{name: "stuck_run", age: 6 * time.Hour, want: true},
 		// An empty agent.auto_upgrade_file resolves to the state directory.
 		{name: "marker_is_a_directory", age: 6 * time.Hour, directory: true, want: false},
-		// The configured path differs from the one the script writes.
-		{name: "stuck_run_at_the_packaging_path", age: 6 * time.Hour, packagingPath: true, want: true},
+		// A file used as a directory gives a non-ENOENT error as any user.
+		{name: "unreadable", age: -1, underAFile: true, wantErr: true},
 	}
 
 	for _, tc := range cases {
@@ -452,11 +410,13 @@ func TestRunIsStuck(t *testing.T) {
 			dir := t.TempDir()
 			marker := filepath.Join(dir, "auto_upgrade")
 
-			packagingMarker := filepath.Join(dir, "packaging_auto_upgrade")
-			setPackagingAutoUpgradeFile(t, packagingMarker)
+			if tc.underAFile {
+				blocker := filepath.Join(dir, "blocker")
+				if err := os.WriteFile(blocker, nil, 0o600); err != nil {
+					t.Fatal(err)
+				}
 
-			if tc.packagingPath {
-				marker = packagingMarker
+				marker = filepath.Join(blocker, "auto_upgrade")
 			}
 
 			if tc.age >= 0 {
@@ -477,8 +437,8 @@ func TestRunIsStuck(t *testing.T) {
 			checker := &autoUpgradeChecker{AutoUpgradeFile: marker}
 
 			got, err := checker.runIsStuck()
-			if err != nil {
-				t.Fatalf("runIsStuck() error: %v", err)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("runIsStuck() error = %v, wantErr %v", err, tc.wantErr)
 			}
 
 			if got != tc.want {
@@ -507,65 +467,6 @@ func TestIsShortLivedPackageProcessOverMatch(t *testing.T) {
 
 	if isShortLivedPackageProcess(t.Context(), proc, name) {
 		t.Errorf("isShortLivedPackageProcess() = true for %q, want false", args)
-	}
-}
-
-// TestAutoUpgradeMarkerStat checks that only a regular file is a marker.
-func TestAutoUpgradeMarkerStat(t *testing.T) {
-	dir := t.TempDir()
-
-	marker := filepath.Join(dir, "auto_upgrade")
-	if err := os.WriteFile(marker, nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	cases := []struct {
-		name    string
-		path    string
-		want    bool
-		wantErr bool
-	}{
-		{name: "regular_file", path: marker, want: true},
-		{name: "missing", path: filepath.Join(dir, "absent"), want: false},
-		// What config.Load() hands over when agent.auto_upgrade_file is empty.
-		{name: "state_directory", path: dir, want: false},
-		{name: "unreadable", path: filepath.Join(marker, "auto_upgrade"), want: false, wantErr: true},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			_, isMarker, err := autoUpgradeMarkerStat(tc.path)
-			if isMarker != tc.want {
-				t.Errorf("autoUpgradeMarkerStat(%s) is a marker = %v, want %v", tc.path, isMarker, tc.want)
-			}
-
-			if (err != nil) != tc.wantErr {
-				t.Errorf("autoUpgradeMarkerStat(%s) error = %v, wantErr %v", tc.path, err, tc.wantErr)
-			}
-		})
-	}
-}
-
-// TestAutoUpgradeMarkerPaths checks that each path is listed once.
-func TestAutoUpgradeMarkerPaths(t *testing.T) {
-	setPackagingAutoUpgradeFile(t, "/packaging/auto_upgrade")
-
-	cases := []struct {
-		name       string
-		configured string
-		want       []string
-	}{
-		{name: "moved", configured: "/moved/auto_upgrade", want: []string{"/packaging/auto_upgrade", "/moved/auto_upgrade"}},
-		{name: "default", configured: "/packaging/auto_upgrade", want: []string{"/packaging/auto_upgrade"}},
-		{name: "unset", configured: "", want: []string{"/packaging/auto_upgrade"}},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if diff := cmp.Diff(tc.want, autoUpgradeMarkerPaths(tc.configured)); diff != "" {
-				t.Errorf("autoUpgradeMarkerPaths() mismatch (-want +got):\n%s", diff)
-			}
-		})
 	}
 }
 
@@ -631,32 +532,76 @@ func startAndInspect(t *testing.T, cmd *exec.Cmd, wantArg string) (*process.Proc
 	return proc, name, args
 }
 
-// setPackagingAutoUpgradeFile overrides packagingAutoUpgradeFile for the test.
-func setPackagingAutoUpgradeFile(t *testing.T, path string) {
-	t.Helper()
+// TestDpkgIsInterrupted checks the age gate that tells an interrupted dpkg apart from an
+// operation in progress: both leave the same traces, only a stale dpkg database counts.
+func TestDpkgIsInterrupted(t *testing.T) {
+	const (
+		healthy = "Package: glouton\nStatus: install ok installed\n"
+		broken  = "Package: postfix\nStatus: install ok half-configured\n"
+	)
 
-	restore := packagingAutoUpgradeFile
-	packagingAutoUpgradeFile = path
-
-	t.Cleanup(func() { packagingAutoUpgradeFile = restore })
-}
-
-func TestUnitIsRunning(t *testing.T) {
 	cases := []struct {
-		output string
-		want   bool
+		name   string
+		status string
+		// statusAge is how long ago the dpkg database was last written.
+		statusAge time.Duration
+		// journalEntry adds an entry to the dpkg journal.
+		journalEntry bool
+		want         bool
 	}{
-		{output: "ActiveState=activating\n", want: true},
-		{output: "ActiveState=active\n", want: true},
-		{output: "ActiveState=deactivating\n", want: true},
-		{output: "ActiveState=inactive\n", want: false},
-		{output: "ActiveState=failed\n", want: false},
-		{output: "", want: false},
+		{name: "healthy", status: healthy, statusAge: 6 * time.Hour, want: false},
+		{name: "broken_and_stale", status: broken, statusAge: 6 * time.Hour, want: true},
+		// What a running apt looks like: the same broken state, freshly written.
+		{name: "broken_but_running", status: broken, statusAge: time.Minute, want: false},
+		{name: "journal_and_stale", status: healthy, statusAge: 6 * time.Hour, journalEntry: true, want: true},
+		{name: "journal_but_running", status: healthy, statusAge: time.Minute, journalEntry: true, want: false},
 	}
 
 	for _, tc := range cases {
-		if got := unitIsRunning([]byte(tc.output)); got != tc.want {
-			t.Errorf("unitIsRunning(%q) = %v, want %v", tc.output, got, tc.want)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			hostRoot := t.TempDir()
+
+			if err := os.MkdirAll(filepath.Join(hostRoot, dpkgJournalDir), 0o750); err != nil {
+				t.Fatal(err)
+			}
+
+			if tc.journalEntry {
+				entry := filepath.Join(hostRoot, dpkgJournalDir, "0001")
+				if err := os.WriteFile(entry, nil, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			status := filepath.Join(hostRoot, dpkgStatusPath)
+			if err := os.WriteFile(status, []byte(tc.status), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			modTime := time.Now().Add(-tc.statusAge)
+			if err := os.Chtimes(status, modTime, modTime); err != nil {
+				t.Fatal(err)
+			}
+
+			checker := &autoUpgradeChecker{HostRootPath: hostRoot}
+
+			got, err := checker.dpkgIsInterrupted()
+			if err != nil {
+				t.Fatalf("dpkgIsInterrupted() error: %v", err)
+			}
+
+			if got != tc.want {
+				t.Errorf("dpkgIsInterrupted() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestDpkgIsInterruptedNoDatabase checks that an unreadable dpkg database is an error,
+// never a quiet "not interrupted".
+func TestDpkgIsInterruptedNoDatabase(t *testing.T) {
+	checker := &autoUpgradeChecker{HostRootPath: t.TempDir()}
+
+	if _, err := checker.dpkgIsInterrupted(); err == nil {
+		t.Error("dpkgIsInterrupted() error = nil, want the stat error of the missing database")
 	}
 }

@@ -54,8 +54,8 @@ const (
 	// e.g. after do-release-upgrade commented out third-party sources.
 	AutoUpgradeStatusRepositoryMissing = "repository_missing"
 
-	// AutoUpgradeStatusLocked means an APT/dpkg lock is held by a stopped process, or for
-	// longer than lockHeldMinDuration.
+	// AutoUpgradeStatusLocked means an APT/dpkg lock is held by a package process that
+	// started more than lockHeldMinDuration ago.
 	AutoUpgradeStatusLocked = "package_manager_locked"
 
 	// AutoUpgradeStatusDpkgInterrupted means dpkg needs "dpkg --configure -a" before APT
@@ -66,22 +66,30 @@ const (
 	// autoUpgradeRunMaxDuration ago and hasn't finished.
 	AutoUpgradeStatusRunNotFinished = "run_not_finished"
 
-	// factAutoUpgradeEnabled is set wherever an auto-upgrade exists. Its presence gates
-	// FactAutoUpgradeStatus.
+	// factAutoUpgradeEnabled is set wherever an auto-upgrade exists, which is also what
+	// gates FactAutoUpgradeStatus. Both are slow facts: reading it runs a command.
 	factAutoUpgradeEnabled = "auto_upgrade_enabled"
 )
 
 const (
-	// lockHeldMinDuration is how long a lock must be held by a running process before
-	// it is reported. It is well above the duration of a large upgrade.
+	// lockHeldMinDuration is how old the process holding a lock must be before the lock
+	// is reported. Only processes that live for a single package operation are timed, so
+	// their age is an upper bound on how long they have held it. It is well above the
+	// duration of a large upgrade.
 	lockHeldMinDuration = 4 * time.Hour
 
 	// autoUpgradeMinInterval is how long a status is cached.
 	autoUpgradeMinInterval = time.Hour
 
-	// autoUpgradeRetryInterval is how long a status is cached when it was withheld
-	// because a package operation was running.
+	// autoUpgradeRetryInterval is how long a status is cached when the check was cut
+	// short by autoUpgradeCheckTimeout, which may well not happen again.
 	autoUpgradeRetryInterval = 5 * time.Minute
+
+	// dpkgInterruptedMinAge is how long the dpkg database must have been untouched
+	// before a broken state is called an interruption. dpkg rewrites it at every state
+	// change, so this only has to outlast the gap between two writes - but a maintainer
+	// script can block for a long time between them, so it matches lockHeldMinDuration.
+	dpkgInterruptedMinAge = 4 * time.Hour
 
 	// autoUpgradeRunMaxDuration is how long after its start an auto-upgrade run is
 	// considered stuck.
@@ -90,12 +98,6 @@ const (
 	// autoUpgradeCheckTimeout bounds the commands and process lookups. File reads are
 	// not bounded.
 	autoUpgradeCheckTimeout = 30 * time.Second
-
-	// autoUpgradeUnit is the systemd unit that runs glouton-auto-upgrade.
-	autoUpgradeUnit = "glouton-auto-upgrade.service"
-
-	// autoUpgradeUnitTimeout bounds the query of autoUpgradeUnit's state.
-	autoUpgradeUnitTimeout = 10 * time.Second
 
 	// dpkgJournalDir and dpkgStatusPath are relative to the host root.
 	dpkgJournalDir = "var/lib/dpkg/updates"
@@ -111,34 +113,16 @@ var errUnexpectedProcLocks = errors.New("unexpected /proc/locks format")
 
 var errAPTHasNoIndex = errors.New("APT has no repository index, run apt-get update")
 
-// packagingAutoUpgradeFile is the marker path hardcoded by the auto-upgrade scripts,
-// whatever agent.auto_upgrade_file says. It is a variable so tests can override it.
-var packagingAutoUpgradeFile = packagingAutoUpgradeFileForOS() //nolint:gochecknoglobals
-
-func packagingAutoUpgradeFileForOS() string {
-	switch {
-	case version.IsWindows():
-		return `C:\ProgramData\glouton\auto_upgrade`
-	case version.IsLinux(), version.IsFreeBSD():
-		return "/var/lib/glouton/auto_upgrade"
-	default:
-		return ""
-	}
-}
-
-// gloutonPackageNames are the package names that may provide Glouton, current name first.
-var gloutonPackageNames = []string{"glouton", "bleemeo-agent"} //nolint:gochecknoglobals
+// gloutonPackageName is the package that provides Glouton. bleemeo-agent only depends
+// on it.
+const gloutonPackageName = "glouton"
 
 // packageManagerLockPaths are the APT and dpkg lock files, relative to the host root.
-// dpkg is set for the locks that guard the dpkg database.
-var packageManagerLockPaths = []struct { //nolint:gochecknoglobals
-	path string
-	dpkg bool
-}{
-	{"var/lib/dpkg/lock-frontend", true},
-	{"var/lib/dpkg/lock", true},
-	{"var/lib/apt/lists/lock", false},
-	{"var/cache/apt/archives/lock", false},
+var packageManagerLockPaths = []string{ //nolint:gochecknoglobals
+	"var/lib/dpkg/lock-frontend",
+	"var/lib/dpkg/lock",
+	"var/lib/apt/lists/lock",
+	"var/cache/apt/archives/lock",
 }
 
 // shortLivedPackageProcesses are processes that live for a single package operation, so
@@ -201,19 +185,17 @@ func (f *FactProvider) autoUpgradeStatus(ctx context.Context) string {
 	checkCtx, cancel := context.WithTimeout(ctx, autoUpgradeCheckTimeout)
 	defer cancel()
 
-	value, retrySoon := checker.status(checkCtx)
+	value := checker.status(checkCtx)
 
 	// Don't cache the result of a check cancelled by the caller.
 	if ctx.Err() != nil {
 		return ""
 	}
 
-	if checkCtx.Err() != nil && value == "" {
-		retrySoon = true
-	}
-
 	keepFor := autoUpgradeMinInterval
-	if retrySoon {
+
+	// A check the timeout cut short may well answer next time.
+	if checkCtx.Err() != nil && value == "" {
 		keepFor = autoUpgradeRetryInterval
 	}
 
@@ -223,20 +205,17 @@ func (f *FactProvider) autoUpgradeStatus(ctx context.Context) string {
 	return f.autoUpgradeStatusValue
 }
 
-// status returns the value of the fact, and whether it should be recomputed before
-// autoUpgradeMinInterval because a package operation was running.
-func (c *autoUpgradeChecker) status(ctx context.Context) (value string, retrySoon bool) {
+// status returns the value of the fact.
+func (c *autoUpgradeChecker) status(ctx context.Context) string {
 	// Only APT-based systems are supported.
 	if _, err := c.Runner.LookPath("apt-cache", gloutonexec.Option{SkipInContainer: true}); err != nil {
-		return "", false
+		return ""
 	}
 
 	var (
 		problems []string
 		// failed is set when a check couldn't give an answer.
 		failed bool
-		// transient is set when that is because a package operation is running.
-		transient bool
 	)
 
 	repository, err := c.repositoryState(ctx)
@@ -248,7 +227,7 @@ func (c *autoUpgradeChecker) status(ctx context.Context) (value string, retrySoo
 		failed = true
 	case repository == repositoryUnknownPackage:
 		// Glouton wasn't installed from a package.
-		return "", false
+		return ""
 	case repository == repositoryMissing:
 		problems = append(problems, AutoUpgradeStatusRepositoryMissing)
 	}
@@ -266,65 +245,29 @@ func (c *autoUpgradeChecker) status(ctx context.Context) (value string, retrySoo
 
 	locks, lockErr := c.lockState(ctx)
 
-	// A dpkg operation in progress looks interrupted, so a positive answer only counts
-	// when no dpkg lock is held.
-	interrupted, dpkgErr := c.dpkgIsInterrupted()
-
-	// Confirm a positive answer: re-read the locks, then the dpkg state, to exclude an
-	// operation that started in between.
-	if interrupted && lockErr == nil && !locks.dpkgHeld() {
-		reread, err := c.lockState(ctx)
-		if err != nil {
-			logger.V(1).Printf("auto-upgrade: unable to read the locks a second time: %v", err)
-
-			locks.dpkgUnknown = true
-		} else {
-			locks = reread
-		}
-
-		if !locks.dpkgHeld() && !locks.dpkgUnknown {
-			recheck, err := c.dpkgIsInterrupted()
-			if err != nil {
-				logger.V(1).Printf("auto-upgrade: unable to read the dpkg state a second time: %v", err)
-			} else {
-				interrupted = recheck
-			}
-		}
-	}
-
 	record(AutoUpgradeStatusLocked, holderIsStuck(locks.holder), lockErr)
 
 	if locks.unknown {
 		failed = true
 	}
 
-	switch {
-	case dpkgErr != nil:
-		record(AutoUpgradeStatusDpkgInterrupted, false, dpkgErr)
-	case interrupted && locks.dpkgHeld():
-		// A dpkg operation is running. Retry soon unless its holder is stuck.
-		failed = true
-		transient = !locks.dpkgStuck()
-	case interrupted && (lockErr != nil || locks.dpkgUnknown):
-		failed = true
-	default:
-		record(AutoUpgradeStatusDpkgInterrupted, interrupted, nil)
-	}
+	interrupted, dpkgErr := c.dpkgIsInterrupted()
+	record(AutoUpgradeStatusDpkgInterrupted, interrupted, dpkgErr)
 
 	stuck, runErr := c.runIsStuck()
 	record(AutoUpgradeStatusRunNotFinished, stuck, runErr)
 
 	if len(problems) == 0 {
 		if failed {
-			return "", transient
+			return ""
 		}
 
-		return AutoUpgradeStatusOK, false
+		return AutoUpgradeStatusOK
 	}
 
 	slices.Sort(problems)
 
-	return strings.Join(problems, ","), transient
+	return strings.Join(problems, ",")
 }
 
 type repositoryState int
@@ -340,44 +283,34 @@ const (
 // APT is queried rather than /etc/apt/sources.list*, so any way of disabling the
 // repository is detected.
 func (c *autoUpgradeChecker) repositoryState(ctx context.Context) (repositoryState, error) {
-	var lastErr error
-
-	for _, pkg := range gloutonPackageNames {
-		// apt-cache doesn't take any lock.
-		output, err := c.Runner.Run(ctx, gloutonexec.Option{SkipInContainer: true}, "apt-cache", "policy", pkg)
-		if err != nil {
-			lastErr = fmt.Errorf("apt-cache policy %s: %w", pkg, err)
-
-			continue
-		}
-
-		installed, hasRepository := decodeAPTCachePolicy(output)
-		if !installed {
-			continue
-		}
-
-		if hasRepository {
-			return repositoryOK, nil
-		}
-
-		// Without any index in /var/lib/apt/lists, no package shows a repository.
-		indexed, err := c.aptHasIndexedRepository(ctx)
-		if err != nil {
-			return repositoryOK, err
-		}
-
-		if !indexed {
-			return repositoryOK, errAPTHasNoIndex
-		}
-
-		return repositoryMissing, nil
+	// apt-cache doesn't take any lock.
+	output, err := c.Runner.Run(
+		ctx, gloutonexec.Option{SkipInContainer: true}, "apt-cache", "policy", gloutonPackageName,
+	)
+	if err != nil {
+		return repositoryOK, fmt.Errorf("apt-cache policy %s: %w", gloutonPackageName, err)
 	}
 
-	if lastErr != nil {
-		return repositoryOK, lastErr
+	installed, hasRepository := decodeAPTCachePolicy(output)
+	if !installed {
+		return repositoryUnknownPackage, nil
 	}
 
-	return repositoryUnknownPackage, nil
+	if hasRepository {
+		return repositoryOK, nil
+	}
+
+	// Without any index in /var/lib/apt/lists, no package shows a repository.
+	indexed, err := c.aptHasIndexedRepository(ctx)
+	if err != nil {
+		return repositoryOK, err
+	}
+
+	if !indexed {
+		return repositoryOK, errAPTHasNoIndex
+	}
+
+	return repositoryMissing, nil
 }
 
 // aptHasIndexedRepository tells whether APT has at least one repository index.
@@ -439,12 +372,34 @@ func holderIsStuck(holder *lockHolder) bool {
 		return false
 	}
 
-	return holder.stopped || holder.heldFor >= lockHeldMinDuration
+	// A zero start time means the holder isn't a process that lives for a single package
+	// operation, so its age says nothing about how long the lock has been held.
+	if holder.holderStartTime.IsZero() {
+		return false
+	}
+
+	return time.Since(holder.holderStartTime) >= lockHeldMinDuration
 }
 
 // dpkgIsInterrupted tells whether dpkg needs "dpkg --configure -a" before anything can
 // be installed.
+//
+// An operation in progress leaves the same traces as an interrupted one, so the answer
+// only counts once the dpkg database has been untouched for dpkgInterruptedMinAge: dpkg
+// rewrites it at every state change, so a running operation keeps it fresh. That also
+// spares the scan below on any machine that installed something recently.
 func (c *autoUpgradeChecker) dpkgIsInterrupted() (bool, error) {
+	stat, err := os.Stat(filepath.Join(c.HostRootPath, dpkgStatusPath))
+	if err != nil {
+		return false, fmt.Errorf("unable to stat the dpkg database: %w", err)
+	}
+
+	if changedAgo := time.Since(stat.ModTime()); changedAgo < dpkgInterruptedMinAge {
+		logger.V(2).Printf("auto-upgrade: the dpkg database changed %v ago, too recent to judge", changedAgo.Truncate(time.Second))
+
+		return false, nil
+	}
+
 	dirty, err := c.dpkgJournalIsDirty()
 	if err != nil || dirty {
 		return dirty, err
@@ -527,119 +482,22 @@ func (c *autoUpgradeChecker) dpkgHasBrokenPackage() (bool, error) {
 // autoUpgradeRunMaxDuration ago and didn't finish.
 //
 // glouton-auto-upgrade creates the marker when it starts and removes it when it exits.
-// Glouton removes it at startup when no run is in progress.
+// Glouton removes it at startup, so a run killed before its EXIT trap doesn't leave one
+// behind forever.
 func (c *autoUpgradeChecker) runIsStuck() (bool, error) {
-	var lastErr error
-
-	for _, path := range autoUpgradeMarkerPaths(c.AutoUpgradeFile) {
-		stuck, err := markerIsStuck(path)
-		if err != nil {
-			lastErr = err
-
-			continue
-		}
-
-		if stuck {
-			return true, nil
-		}
-	}
-
-	return false, lastErr
-}
-
-// autoUpgradeMarkerPaths returns the paths where an auto-upgrade run may leave its
-// marker: the one hardcoded by the packaging and the configured one.
-func autoUpgradeMarkerPaths(configured string) []string {
-	paths := make([]string, 0, 2)
-
-	if packagingAutoUpgradeFile != "" {
-		paths = append(paths, packagingAutoUpgradeFile)
-	}
-
-	if configured != "" && !slices.Contains(paths, configured) {
-		paths = append(paths, configured)
-	}
-
-	return paths
-}
-
-// autoUpgradeMarkerStat stats a marker path. isMarker is false when the path doesn't
-// exist or isn't a regular file: an empty agent.auto_upgrade_file resolves to the state
-// directory.
-func autoUpgradeMarkerStat(path string) (stat fs.FileInfo, isMarker bool, err error) {
-	stat, err = os.Stat(path)
+	stat, err := os.Stat(c.AutoUpgradeFile)
 	if err != nil {
+		// No marker, no run in progress.
 		if os.IsNotExist(err) {
-			return nil, false, nil
+			return false, nil
 		}
 
-		return nil, false, fmt.Errorf("unable to stat %s: %w", path, err)
+		return false, fmt.Errorf("unable to stat %s: %w", c.AutoUpgradeFile, err)
 	}
 
-	return stat, stat.Mode().IsRegular(), nil
-}
-
-// AutoUpgradeMarkers returns the auto-upgrade marker files that exist, and the last
-// error met while looking for them.
-func AutoUpgradeMarkers(configured string) ([]string, error) {
-	var (
-		found   []string
-		lastErr error
-	)
-
-	for _, path := range autoUpgradeMarkerPaths(configured) {
-		_, isMarker, err := autoUpgradeMarkerStat(path)
-
-		switch {
-		case err != nil:
-			lastErr = err
-		case isMarker:
-			found = append(found, path)
-		}
-	}
-
-	return found, lastErr
-}
-
-// AutoUpgradeRunning tells whether glouton-auto-upgrade.service is running. It returns
-// false when this can't be determined.
-func AutoUpgradeRunning(ctx context.Context, runner *gloutonexec.Runner) bool {
-	if !version.IsLinux() || runner == nil {
-		return false
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, autoUpgradeUnitTimeout)
-	defer cancel()
-
-	// --value would need systemd 230, Ubuntu 16.04 has 229.
-	output, err := runner.Run(
-		ctx, gloutonexec.Option{SkipInContainer: true},
-		"systemctl", "show", "--property=ActiveState", autoUpgradeUnit,
-	)
-	if err != nil {
-		if !errors.Is(err, gloutonexec.ErrExecutionSkipped) {
-			logger.V(1).Printf("auto-upgrade: unable to get the state of %s: %v", autoUpgradeUnit, err)
-		}
-
-		return false
-	}
-
-	return unitIsRunning(output)
-}
-
-// unitIsRunning parses the output of "systemctl show --property=ActiveState". A oneshot
-// unit is "activating" while it runs, and an unknown unit is "inactive".
-func unitIsRunning(output []byte) bool {
-	state := strings.TrimPrefix(strings.TrimSpace(string(output)), "ActiveState=")
-
-	return state != "" && state != "inactive" && state != "failed"
-}
-
-// markerIsStuck tells whether a marker is older than autoUpgradeRunMaxDuration.
-func markerIsStuck(path string) (bool, error) {
-	stat, isMarker, err := autoUpgradeMarkerStat(path)
-	if err != nil || !isMarker {
-		return false, err
+	// An empty agent.auto_upgrade_file resolves to the state directory.
+	if !stat.Mode().IsRegular() {
+		return false, nil
 	}
 
 	startedAt := stat.ModTime()
@@ -671,29 +529,19 @@ type lockHolder struct {
 	path string
 	pid  int
 	name string
-	// heldFor is only set for shortLivedPackageProcesses and shortLivedPackageScripts.
-	heldFor time.Duration
-	// stopped is set when the process is stopped (SIGSTOP or a debugger).
-	stopped bool
+	// holderStartTime is when the process started. It is only set for
+	// shortLivedPackageProcesses and shortLivedPackageScripts, whose start time is when
+	// the lock was taken, and is zero otherwise.
+	holderStartTime time.Time
 }
 
 // lockState is what /proc/locks says about the APT and dpkg lock files.
 type lockState struct {
 	// holder is the holder to report among all held locks, nil when none is held.
 	holder *lockHolder
-	// dpkgHolder is the same among the dpkg locks.
-	dpkgHolder *lockHolder
-	// dpkgUnknown is set when a dpkg lock file couldn't be checked.
-	dpkgUnknown bool
-	// unknown is set when any lock file couldn't be checked.
+	// unknown is set when a lock file couldn't be checked.
 	unknown bool
 }
-
-// dpkgHeld tells whether a dpkg lock is held.
-func (s lockState) dpkgHeld() bool { return s.dpkgHolder != nil }
-
-// dpkgStuck tells whether the dpkg lock holder is stuck.
-func (s lockState) dpkgStuck() bool { return holderIsStuck(s.dpkgHolder) }
 
 // preferStuck returns candidate if it is stuck and current isn't, or if current is nil.
 func preferStuck(current, candidate *lockHolder) *lockHolder {
@@ -719,7 +567,7 @@ func (c *autoUpgradeChecker) lockState(ctx context.Context) (lockState, error) {
 	var state lockState
 
 	for _, lockPath := range packageManagerLockPaths {
-		path := filepath.Join(c.HostRootPath, lockPath.path)
+		path := filepath.Join(c.HostRootPath, lockPath)
 
 		inode, err := statLockInode(path)
 		if err != nil {
@@ -728,7 +576,6 @@ func (c *autoUpgradeChecker) lockState(ctx context.Context) (lockState, error) {
 				logger.V(1).Printf("auto-upgrade: unable to stat %s: %v", path, err)
 
 				state.unknown = true
-				state.dpkgUnknown = state.dpkgUnknown || lockPath.dpkg
 			}
 
 			continue
@@ -743,33 +590,25 @@ func (c *autoUpgradeChecker) lockState(ctx context.Context) (lockState, error) {
 		describeHolder(ctx, holder)
 
 		state.holder = preferStuck(state.holder, holder)
-
-		if lockPath.dpkg {
-			state.dpkgHolder = preferStuck(state.dpkgHolder, holder)
-		}
 	}
 
 	if holderIsStuck(state.holder) {
 		logger.V(1).Printf(
-			"auto-upgrade: %s is locked by PID %d (%s), stopped=%t, held for %v",
-			state.holder.path, state.holder.pid, state.holder.name, state.holder.stopped,
-			state.holder.heldFor.Truncate(time.Second),
+			"auto-upgrade: %s is locked by PID %d (%s), holder started at %s",
+			state.holder.path, state.holder.pid, state.holder.name,
+			state.holder.holderStartTime.Format(time.RFC3339),
 		)
 	}
 
 	return state, nil
 }
 
-// describeHolder fills in the holder's name, stopped state and, for a short-lived
-// package process, how long it has held the lock based on its start time.
+// describeHolder fills in the holder's name and, for a short-lived package process, the
+// start time that says how long it has held the lock.
 func describeHolder(ctx context.Context, holder *lockHolder) {
 	proc, err := process.NewProcessWithContext(ctx, int32(holder.pid)) //nolint:gosec
 	if err != nil {
 		return
-	}
-
-	if status, err := proc.StatusWithContext(ctx); err == nil {
-		holder.stopped = slices.Contains(status, process.Stop)
 	}
 
 	holder.name, err = proc.NameWithContext(ctx)
@@ -786,7 +625,7 @@ func describeHolder(ctx context.Context, holder *lockHolder) {
 		return
 	}
 
-	holder.heldFor = time.Since(time.UnixMilli(createdAtMS))
+	holder.holderStartTime = time.UnixMilli(createdAtMS)
 }
 
 // isShortLivedPackageProcess tells whether a process lives for a single package operation.
@@ -801,9 +640,11 @@ func isShortLivedPackageProcess(ctx context.Context, proc *process.Process, name
 	}
 
 	// The script can be at any position, e.g. "/usr/bin/python3 /usr/bin/unattended-upgrade".
-	// It must be an executable file: /var/log/unattended-upgrades is a directory.
+	// It must be an executable file: /var/log/unattended-upgrades is a directory. Only an
+	// absolute path is checked, a relative one is read against the holder's working
+	// directory rather than ours.
 	for _, arg := range args {
-		if shortLivedPackageScripts[filepath.Base(arg)] && isExecutableFile(arg) {
+		if shortLivedPackageScripts[filepath.Base(arg)] && filepath.IsAbs(arg) && isExecutableFile(arg) {
 			return true
 		}
 	}

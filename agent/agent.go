@@ -447,7 +447,7 @@ func Run(ctx context.Context, reloadState ReloadState, loadedConfig LoadedConfig
 		return
 	}
 
-	agent.run(ctx, signalChan, firstRun)
+	agent.run(ctx, signalChan)
 }
 
 // BleemeoAccountID returns the Account UUID of Bleemeo
@@ -682,8 +682,7 @@ func (a *agent) rebuildDynamicMetricAllowDenyList(services []discovery.Service) 
 }
 
 // Run will start the agent. It will terminate when sigquit/sigterm/sigint is received.
-// firstRun is false on a configuration reload.
-func (a *agent) run(ctx context.Context, sighupChan chan os.Signal, firstRun bool) { //nolint:maintidx
+func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:maintidx
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -781,21 +780,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal, firstRun boo
 	}
 
 	_ = os.Remove(a.config.Agent.UpgradeFile)
-
-	// Remove markers left by a run killed before its EXIT trap, unless a run is in progress.
-	// Not on reload, which an auto-upgrade in progress can trigger.
-	if firstRun && !facts.AutoUpgradeRunning(ctx, a.commandRunner) {
-		markers, err := facts.AutoUpgradeMarkers(a.config.Agent.AutoUpgradeFile)
-		if err != nil {
-			logger.V(1).Printf("unable to look at an auto-upgrade marker: %v", err)
-		}
-
-		for _, path := range markers {
-			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-				logger.V(1).Printf("unable to remove the auto-upgrade marker %s: %v", path, err)
-			}
-		}
-	}
+	_ = os.Remove(a.config.Agent.AutoUpgradeFile)
 
 	apiBindAddress := net.JoinHostPort(a.config.Web.Listener.Address, strconv.Itoa(a.config.Web.Listener.Port))
 

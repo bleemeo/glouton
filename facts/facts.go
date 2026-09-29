@@ -197,9 +197,17 @@ func (f *FactProvider) SetFact(key string, value string) {
 func (f *FactProvider) updateFacts(ctx context.Context) {
 	newFacts := f.fastUpdateFacts(ctx)
 
-	// Not in fastUpdateFacts, as it is too slow for FastFacts. The status is reported
-	// whether or not the auto-upgrade timer is enabled.
-	if _, ok := newFacts[factAutoUpgradeEnabled]; ok {
+	// Not in fastUpdateFacts: both of these run a command, and neither is needed early
+	// enough to justify that on the startup path.
+	autoUpgradeEnabled, err := autoUpgradeIsEnabled(ctx, f.options.Runner)
+	if !errors.Is(err, errAutoUpgradeNotSupported) {
+		if err != nil {
+			logger.V(1).Printf("Failed to check auto-upgrade status: %v", err)
+		}
+
+		newFacts[factAutoUpgradeEnabled] = strconv.FormatBool(autoUpgradeEnabled)
+
+		// The status is reported whether or not the auto-upgrade timer is enabled.
 		if status := f.autoUpgradeStatus(ctx); status != "" {
 			newFacts[FactAutoUpgradeStatus] = status
 		}
@@ -353,15 +361,6 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	newFacts["agent_version"] = version.Version
 	newFacts[FactUpdatedAt] = time.Now().UTC().Format(time.RFC3339)
 	newFacts["glouton_pid"] = strconv.FormatInt(int64(os.Getpid()), 10)
-
-	autoUpgradeEnabled, err := autoUpgradeIsEnabled(ctx, f.options.Runner)
-	if !errors.Is(err, errAutoUpgradeNotSupported) {
-		if err != nil {
-			logger.V(1).Printf("Failed to check auto-upgrade status: %v", err)
-		}
-
-		newFacts[factAutoUpgradeEnabled] = strconv.FormatBool(autoUpgradeEnabled)
-	}
 
 	cpu, err := cpu.Info()
 	if err == nil && len(cpu) > 0 {
