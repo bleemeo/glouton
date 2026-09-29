@@ -272,16 +272,22 @@ func (man *Manager) HandleLogsFromDynamicSources(
 		}
 
 		if diag, found := man.watchedServices[*logSource.serviceID]; found {
-			diag.SetupError = err.Error()
+			diag.SetupErrors = maps.Clone(diag.SetupErrors)
+			if diag.SetupErrors == nil {
+				diag.SetupErrors = make(map[string]string)
+			}
+
+			// logFilePath is ignored for a container tail, so "" keys it.
+			errKey := logSource.logFilePath
+			if logSource.container != nil {
+				errKey = ""
+			}
+
+			diag.SetupErrors[errKey] = err.Error()
 			man.watchedServices[*logSource.serviceID] = diag
 		}
 
 		if logSource.container != nil {
-			if diag, found := man.watchedContainers[logSource.container.ID()]; found {
-				diag.SetupError = err.Error()
-				man.watchedContainers[logSource.container.ID()] = diag
-			}
-
 			logger.V(1).Printf(
 				"Failed to set up log processing for service %q on container %s (%s): %v",
 				logSource.serviceID.Name, logSource.container.ContainerName(), logSource.container.ID(), err,
@@ -312,16 +318,43 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 	var logSources []logSource
 
 	for _, service := range services {
-		if service.LogProcessing == nil || !service.Active {
-			continue
-		}
-
 		key := discovery.NameInstance{
 			Name:     service.Name,
 			Instance: service.Instance,
 		}
 
-		if _, alreadyWatching := man.watchedServices[key]; alreadyWatching {
+		_, alreadyWatching := man.watchedServices[key]
+
+		if service.LogProcessing == nil || !service.Active {
+			if alreadyWatching {
+				continue
+			}
+
+			switch {
+			case service.LogProcessingError != "":
+				man.skippedSource = append(man.skippedSource, sourceDiagnostic{
+					IsFromService: true,
+					ServiceKey:    key,
+					ContainerID:   service.ContainerID,
+					ContainerName: service.ContainerName,
+					SkipStatus:    logsource.SourceFailed,
+					SkipReason:    service.LogProcessingError,
+				})
+			case service.LogProcessing != nil:
+				man.skippedSource = append(man.skippedSource, sourceDiagnostic{
+					IsFromService: true,
+					ServiceKey:    key,
+					ContainerID:   service.ContainerID,
+					ContainerName: service.ContainerName,
+					SkipStatus:    logsource.SourceWaiting,
+					SkipReason:    "service is not active",
+				})
+			}
+
+			continue
+		}
+
+		if alreadyWatching {
 			continue
 		}
 
@@ -334,7 +367,8 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 					ServiceKey:    key,
 					ContainerID:   service.ContainerID,
 					ContainerName: service.ContainerName,
-					SkipReason:    "Container excluded (glouton.log_enable=false or container_exclude)",
+					SkipStatus:    logsource.SourceExcluded,
+					SkipReason:    "container excluded (glouton.log_enable=false or container_exclude)",
 				})
 
 				continue
@@ -348,7 +382,8 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 					ServiceKey:    key,
 					ContainerID:   service.ContainerID,
 					ContainerName: service.ContainerName,
-					SkipReason:    "Container already matched by an explicit log.opentelemetry.receivers entry",
+					SkipStatus:    logsource.SourceExcluded,
+					SkipReason:    "container already shipped by an explicit log.opentelemetry.receivers entry",
 				})
 
 				continue
@@ -364,7 +399,8 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 					ServiceKey:    key,
 					ContainerID:   service.ContainerID,
 					ContainerName: service.ContainerName,
-					SkipReason:    "Container excluded (glouton.send_logs=false)",
+					SkipStatus:    logsource.SourceExcluded,
+					SkipReason:    "container excluded (glouton.send_logs=false)",
 				})
 
 				continue
@@ -385,7 +421,8 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 					ServiceKey:    key,
 					ContainerID:   service.ContainerID,
 					ContainerName: service.ContainerName,
-					SkipReason:    "Can't find container",
+					SkipStatus:    logsource.SourceFailed,
+					SkipReason:    "can't find the service's container",
 				})
 
 				continue
@@ -396,7 +433,6 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 				ServiceKey:    key,
 				ContainerID:   service.ContainerID,
 				ContainerName: service.ContainerName,
-				SkipReason:    "IsFromService, look at entry in WatchedServices",
 			}
 		}
 
@@ -431,11 +467,12 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 		}
 
 		man.watchedServices[key] = sourceDiagnostic{
-			IsFromService:   true,
-			ServiceKey:      key,
-			ServiceLogPaths: flattenLogPaths(service.LogProcessing),
-			ContainerID:     service.ContainerID,
-			ContainerName:   service.ContainerName,
+			IsFromService:      true,
+			ServiceKey:         key,
+			LogProcessing:      service.LogProcessing,
+			LogProcessingError: service.LogProcessingError,
+			ContainerID:        service.ContainerID,
+			ContainerName:      service.ContainerName,
 		}
 	}
 
@@ -583,35 +620,6 @@ func (man *Manager) DiagnosticArchive(_ context.Context, writer types.ArchiveWri
 
 	man.pipeline.l.Lock()
 
-	receiversInfo := make(map[string]receiverDiagnosticInformation, len(man.pipeline.receivers))
-
-	for _, rcvr := range man.pipeline.receivers {
-		receiversInfo[rcvr.name] = rcvr.diagnosticInfo()
-	}
-
-	wServices := make(map[string][]receiverDiagnosticInformation, len(man.watchedServices))
-
-	for serv := range man.watchedServices {
-		receivers, found := man.serviceReceivers[serv]
-		if found {
-			key := serv.Name + "/" + serv.Instance
-			wServices[key] = make([]receiverDiagnosticInformation, len(receivers))
-
-			for i, recv := range receivers {
-				wServices[key][i] = recv.diagnosticInfo()
-			}
-		}
-	}
-
-	skippedSource := slices.Clone(man.skippedSource)
-	watchedContainers := maps.Clone(man.watchedContainers)
-	watchedServices := make(map[string]sourceDiagnostic, len(man.watchedServices))
-
-	for serv, row := range man.watchedServices {
-		key := serv.Name + "/" + serv.Instance
-		watchedServices[key] = row
-	}
-
 	pipelineStartedComponentsCount := len(man.pipeline.startedComponents)
 	perServiceStartedComponentCount := make(map[string]int)
 
@@ -639,26 +647,8 @@ func (man *Manager) DiagnosticArchive(_ context.Context, writer types.ArchiveWri
 			PipelineStartedComponentsCount:  pipelineStartedComponentsCount,
 			PerServiceStartedComponentCount: perServiceStartedComponentCount,
 		},
-		receivers: diagnosticReceiver{
-			Receivers:          receiversInfo,
-			ContainerReceivers: man.containerRecv.diagnostic(),
-			WatchedServices:    wServices,
-			FanoutSources:      man.fanoutSourceDiagnosticsLocked(),
-		},
-		receiversSetup: diagnosticReceiverSetup{
-			SkippedSource:     skippedSource,
-			WatchedServices:   watchedServices,
-			WatchedContainers: watchedContainers,
-		},
 		KnownLogFormats: man.knownLogFormats,
 		KnownLogFilters: man.config.KnownLogFilters,
-	}
-
-	if man.pipeline.journaldCounter != nil {
-		diagnosticInfo.receivers.JournaldReceiver = &journaldReceiverDiagnosticInformation{
-			LogProcessedCount:      man.pipeline.journaldCounter.Load(),
-			LogThroughputPerMinute: man.pipeline.journaldThroughputMeter.Total(),
-		}
 	}
 
 	return diagnosticInfo.writeToArchive(writer)

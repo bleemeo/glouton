@@ -193,27 +193,20 @@ type Facter interface {
 	Facts(ctx context.Context, maxAge time.Duration) (facts map[string]string, err error)
 }
 
+// sourceDiagnostic is this package's bookkeeping about a discovered service's log source, for the diagnostic.
 type sourceDiagnostic struct {
-	ContainerName    string
-	ContainerID      string
-	ServiceKey       discovery.NameInstance
-	IsFromService    bool
-	SkipReason       string
-	ServiceLogPaths  []string
-	ContainerLogPath string
-	SetupError       string
-}
-
-// fanoutSourceDiagnostic tracks a logsource.ReceiverManager-owned source that this package opted into via WantSource.
-type fanoutSourceDiagnostic struct {
-	Kind                   string
-	LogProcessedCount      int64
-	LogThroughputPerMinute int
-}
-
-type journaldReceiverDiagnosticInformation struct {
-	LogProcessedCount      int64
-	LogThroughputPerMinute int
+	ContainerName string
+	ContainerID   string
+	ServiceKey    discovery.NameInstance
+	IsFromService bool
+	// SkipStatus/SkipReason are only set for a skipped source.
+	SkipStatus         logsource.SourceStatus
+	SkipReason         string
+	LogProcessing      []discovery.ServiceLogReceiver
+	LogProcessingError string
+	ContainerLogPath   string
+	// SetupErrors are keyed by log file path, "" for a container's tail.
+	SetupErrors map[string]string
 }
 
 type receiverDiagnosticInformation struct {
@@ -242,25 +235,8 @@ type diagnosticSummary struct {
 	PerServiceStartedComponentCount map[string]int
 }
 
-type diagnosticReceiver struct {
-	JournaldReceiver   *journaldReceiverDiagnosticInformation
-	Receivers          map[string]receiverDiagnosticInformation
-	ContainerReceivers map[string]containerDiagnosticInformation
-	WatchedServices    map[string][]receiverDiagnosticInformation
-	// FanoutSources tracks logsource.ReceiverManager-owned sources this package consumes via WantSource.
-	FanoutSources map[string]fanoutSourceDiagnostic
-}
-
-type diagnosticReceiverSetup struct {
-	SkippedSource     []sourceDiagnostic
-	WatchedServices   map[string]sourceDiagnostic
-	WatchedContainers map[string]sourceDiagnostic
-}
-
 type diagnosticInformation struct {
 	summary         diagnosticSummary
-	receivers       diagnosticReceiver
-	receiversSetup  diagnosticReceiverSetup
 	KnownLogFormats map[string][]config.OTELOperator
 	KnownLogFilters map[string]config.OTELFilters
 }
@@ -275,14 +251,6 @@ func (diagInfo diagnosticInformation) writeToArchive(writer types.ArchiveWriter)
 	enc.SetIndent("", "  ")
 
 	if err := enc.Encode(diagInfo.summary); err != nil {
-		return err
-	}
-
-	if err := diagInfo.receivers.writeToArchive(writer); err != nil {
-		return err
-	}
-
-	if err := diagInfo.receiversSetup.writeToArchive(writer); err != nil {
 		return err
 	}
 
@@ -306,43 +274,5 @@ func (diagInfo diagnosticInformation) writeToArchive(writer types.ArchiveWriter)
 	enc = json.NewEncoder(file)
 	enc.SetIndent("", "  ")
 
-	if err := enc.Encode(diagInfo.KnownLogFilters); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (receiverDiag diagnosticReceiver) writeToArchive(writer types.ArchiveWriter) error {
-	file, err := writer.Create("log-processing/receivers.json")
-	if err != nil {
-		return err
-	}
-
-	enc := json.NewEncoder(file)
-	enc.SetIndent("", "  ")
-
-	return enc.Encode(receiverDiag)
-}
-
-func (receiverDiag diagnosticReceiverSetup) writeToArchive(writer types.ArchiveWriter) error {
-	file, err := writer.Create("log-processing/receivers-setup.json")
-	if err != nil {
-		return err
-	}
-
-	enc := json.NewEncoder(file)
-	enc.SetIndent("", "  ")
-
-	return enc.Encode(receiverDiag)
-}
-
-func flattenLogPaths(data []discovery.ServiceLogReceiver) []string {
-	result := make([]string, 0, len(data))
-
-	for _, row := range data {
-		result = append(result, row.FilePath)
-	}
-
-	return result
+	return enc.Encode(diagInfo.KnownLogFilters)
 }

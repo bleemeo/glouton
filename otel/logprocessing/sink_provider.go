@@ -36,7 +36,7 @@ import (
 // fanoutSink backs a WantSource sink for a ReceiverManager-owned source: its own filter stage feeding the
 // shared pipeline. comp is kept so ReleaseSource can shut it down individually.
 type fanoutSink struct {
-	kind            logsource.SourceKind
+	key             logsource.SourceKey
 	comp            component.Component
 	logCounter      *atomic.Int64
 	throughputMeter *logsource.RingCounter
@@ -55,7 +55,7 @@ func (man *Manager) WantSource(ctx context.Context, src logsource.ResolvedSource
 			logWarnings(errorf("log receiver %q: decoding filters: %w", src.ReceiverName, err))
 		}
 
-		return man.wrapWithFilter(ctx, logsource.SourceReceiver, "recv-"+src.ReceiverName, filters)
+		return man.wrapWithFilter(ctx, logsource.ReceiverSourceKey(src.ReceiverName), "recv-"+src.ReceiverName, filters)
 	case logsource.SourceContainerLabel:
 		if src.Container == nil {
 			return nil, false
@@ -73,7 +73,7 @@ func (man *Manager) WantSource(ctx context.Context, src logsource.ResolvedSource
 
 		filters := man.resolveContainerFilter(src.Container)
 
-		return man.wrapWithFilter(ctx, logsource.SourceContainerLabel, "ctr-"+src.Container.ID(), filters)
+		return man.wrapWithFilter(ctx, logsource.ContainerLabelSourceKey(src.Container.ID()), "ctr-"+src.Container.ID(), filters)
 	default:
 		return nil, false
 	}
@@ -138,7 +138,7 @@ func (man *Manager) resolveContainerFormat(ctr facts.Container) []config.OTELOpe
 
 // wrapWithFilter builds name's filter processor and feeds it into the shared pipeline. A build/start
 // failure is logged and reported as "not interested" (WantSource has no error return of its own).
-func (man *Manager) wrapWithFilter(ctx context.Context, kind logsource.SourceKind, name string, filters config.OTELFilters) (consumer.Logs, bool) {
+func (man *Manager) wrapWithFilter(ctx context.Context, key logsource.SourceKey, name string, filters config.OTELFilters) (consumer.Logs, bool) {
 	filterCfg, warn, err := buildLogFilterConfig(filters)
 	if err != nil {
 		logWarnings(errorf("log source %q: building filters: %w", name, err))
@@ -187,7 +187,7 @@ func (man *Manager) wrapWithFilter(ctx context.Context, kind logsource.SourceKin
 	// Where both are genuinely needed (handleProcessingLifecycle's shutdown, DiagnosticArchive), the
 	// order is always man.l first -- nesting them the other way around would deadlock against those.
 	man.l.Lock()
-	man.fanoutSinks[name] = &fanoutSink{kind: kind, comp: logFilter, logCounter: logCounter, throughputMeter: throughputMeter}
+	man.fanoutSinks[name] = &fanoutSink{key: key, comp: logFilter, logCounter: logCounter, throughputMeter: throughputMeter}
 	man.l.Unlock()
 
 	return logFilter, true
@@ -223,20 +223,13 @@ func (man *Manager) ReleaseSource(ctx context.Context, container facts.Container
 	stopComponents([]component.Component{sink.comp})
 }
 
-// fanoutSourceDiagnosticsLocked snapshots every WantSource-built sink's
-// counters for DiagnosticArchive. Callers must hold man.l.
-func (man *Manager) fanoutSourceDiagnosticsLocked() map[string]fanoutSourceDiagnostic {
-	out := make(map[string]fanoutSourceDiagnostic, len(man.fanoutSinks))
+// fanoutShippingDiagnosticsLocked snapshots every WantSource-built sink's counters. Callers must hold man.l.
+func (man *Manager) fanoutShippingDiagnosticsLocked() map[logsource.SourceKey]logsource.ShippingDiagnostic {
+	out := make(map[logsource.SourceKey]logsource.ShippingDiagnostic, len(man.fanoutSinks))
 
-	for name, sink := range man.fanoutSinks {
-		kind := "receiver"
-		if sink.kind == logsource.SourceContainerLabel {
-			kind = "container_label"
-		}
-
-		out[name] = fanoutSourceDiagnostic{
-			Kind:                   kind,
-			LogProcessedCount:      sink.logCounter.Load(),
+	for _, sink := range man.fanoutSinks {
+		out[sink.key] = logsource.ShippingDiagnostic{
+			LogCount:               sink.logCounter.Load(),
 			LogThroughputPerMinute: sink.throughputMeter.Total(),
 		}
 	}

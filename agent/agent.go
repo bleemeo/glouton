@@ -2473,6 +2473,8 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		modules = append(modules, a.logMetricsManager.DiagnosticArchive)
 	}
 
+	modules = append(modules, a.logSourcesDiagnosticArchive)
+
 	for _, f := range modules {
 		if err = f(ctx, archive); err != nil {
 			return err
@@ -2790,6 +2792,50 @@ func (a *agent) diagnosticVSphere(ctx context.Context, archive types.ArchiveWrit
 	}
 
 	return a.vSphereManager.DiagnosticVSphere(ctx, archive, associationFn)
+}
+
+// logSourcesDiagnosticArchive writes every log source, whichever component owns it, and which features consume it.
+func (a *agent) logSourcesDiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
+	var (
+		sources      []logsource.SourceDiagnostic
+		shipping     map[logsource.SourceKey]logsource.ShippingDiagnostic
+		logToMetrics map[logsource.SourceKey]logsource.LogToMetricsDiagnostic
+	)
+
+	if a.receiverManager != nil {
+		sources = append(sources, a.receiverManager.DiagnosticSources()...)
+	}
+
+	if a.logMetricsManager != nil {
+		logToMetrics = a.logMetricsManager.DiagnosticSources()
+	}
+
+	var servicesExcludedReason string
+
+	switch {
+	case !a.config.Log.OpenTelemetry.ShippingEnable:
+		servicesExcludedReason = "log.opentelemetry.shipping_enable is false"
+	case !a.config.Bleemeo.Enable:
+		servicesExcludedReason = "log shipping requires the Bleemeo connector"
+	case a.logProcessManager == nil:
+		servicesExcludedReason = "log processing failed to start: see Glouton logs"
+	case !a.config.Log.OpenTelemetry.AutoDiscovery.ContainerAndServiceEnable:
+		servicesExcludedReason = "log.opentelemetry.auto_discovery.container_and_service_enable is false"
+	}
+
+	if a.logProcessManager != nil {
+		var processingSources []logsource.SourceDiagnostic
+
+		processingSources, shipping = a.logProcessManager.DiagnosticSources()
+		sources = append(sources, processingSources...)
+	}
+
+	if servicesExcludedReason != "" {
+		services, _ := a.discovery.GetLatestDiscovery()
+		sources = append(sources, logprocessing.ExcludedServiceSources(services, servicesExcludedReason)...)
+	}
+
+	return logsource.WriteSourcesDiagnostic(archive, sources, shipping, logToMetrics)
 }
 
 func (a *agent) checkSudoRSForLogs(ctx context.Context) {
