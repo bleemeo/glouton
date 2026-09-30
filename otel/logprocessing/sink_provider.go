@@ -184,7 +184,7 @@ func (man *Manager) wrapWithFilter(ctx context.Context, key logsource.SourceKey,
 	man.pipeline.l.Unlock()
 
 	// Taken only after man.pipeline.l is released just above: this function never holds both at once.
-	// Where both are genuinely needed (handleProcessingLifecycle's shutdown, DiagnosticArchive), the
+	// Where both are genuinely needed (handleProcessingLifecycle's shutdown, DiagnosticSources), the
 	// order is always man.l first -- nesting them the other way around would deadlock against those.
 	man.l.Lock()
 	man.fanoutSinks[name] = &fanoutSink{key: key, comp: logFilter, logCounter: logCounter, throughputMeter: throughputMeter}

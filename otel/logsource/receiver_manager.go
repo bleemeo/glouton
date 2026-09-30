@@ -30,7 +30,6 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
-	"github.com/bleemeo/glouton/types"
 	"github.com/bleemeo/glouton/utils/hostrootsymlink"
 
 	"github.com/go-viper/mapstructure/v2"
@@ -52,9 +51,6 @@ const (
 )
 
 const (
-	// persistArchivePath keeps otel/logprocessing's pre-rewrite name (see Persister()).
-	persistArchivePath = "log-processing/persister.json"
-
 	// saveThrottle limits how often a file's read offset is saved, matching otel/logprocessing's policy.
 	saveThrottle = time.Minute
 )
@@ -112,7 +108,6 @@ func NewReceiverManager(cfg config.OpenTelemetry, hostroot string, state bleemeo
 	persister, err := NewPersistHost(state, PersistConfig{
 		StorageType:  PersistStorageType,
 		CacheKey:     LogFileMetadataCacheKey,
-		ArchivePath:  persistArchivePath,
 		SaveThrottle: saveThrottle,
 	})
 	if err != nil {
@@ -149,16 +144,6 @@ func (rm *ReceiverManager) RegisterSinkProvider(p SinkProvider) {
 // and silently overwriting these offsets.
 func (rm *ReceiverManager) Persister() *PersistHost {
 	return rm.persister
-}
-
-// DiagnosticArchive writes the persisted read-offset/registered-extension state to a diagnostic bundle.
-// This is the only writer of PersistHost.ArchivePath: otel/logprocessing's Manager shares this exact
-// *PersistHost (see Persister()) but its own DiagnosticArchive reports different state and never writes
-// that file, so agent.go wires this one in whenever a ReceiverManager exists. Otherwise a bundle taken
-// while log-to-metric receivers are active would have no read-offset/extension state at all, even though
-// that state is exactly what's needed to debug a stuck tail.
-func (rm *ReceiverManager) DiagnosticArchive(_ context.Context, writer types.ArchiveWriter) error {
-	return rm.persister.WriteToArchive(writer)
 }
 
 // RegisterExternalSizer folds FileSizers that ReceiverManager doesn't own into SaveState's

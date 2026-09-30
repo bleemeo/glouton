@@ -25,7 +25,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -1372,33 +1371,6 @@ func (w *fakeArchiveWriter) Create(filename string) (io.Writer, error) {
 
 func (w *fakeArchiveWriter) CurrentFileName() string {
 	return ""
-}
-
-// Test that ReceiverManager.DiagnosticArchive writes the shared persister's registered-extension state,
-// closing the gap where a diagnostic bundle taken with log shipping/Bleemeo disabled (so
-// otel/logprocessing's Manager, which shares this exact persister, never runs) had no read-offset/
-// extension state at all, even though log-to-metric receivers using that persister were still active.
-func TestReceiverManagerDiagnosticArchiveWritesPersisterState(t *testing.T) {
-	t.Parallel()
-
-	rm := newTestReceiverManager(t, config.OpenTelemetry{})
-
-	id := rm.persister.NewPersistentExt("test-receiver")
-
-	writer := &fakeArchiveWriter{}
-
-	if err := rm.DiagnosticArchive(t.Context(), writer); err != nil {
-		t.Fatal("DiagnosticArchive returned an error:", err)
-	}
-
-	buf, found := writer.files[persistArchivePath]
-	if !found {
-		t.Fatalf("Expected a %q entry written to the archive, got %v", persistArchivePath, writer.files)
-	}
-
-	if !strings.Contains(buf.String(), id.String()) {
-		t.Errorf("Expected the archived state to mention the registered extension %q, got %s", id.String(), buf.String())
-	}
 }
 
 func TestManagedSourceSizesByFileSkipsOnlyTheFailingFile(t *testing.T) {

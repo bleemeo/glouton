@@ -179,7 +179,7 @@ ctxLoop:
 	// man.serviceReceivers is guarded by man.l, which a concurrent discovery cycle writes to
 	// (removeOldSources deletes from it, setupProcessingForSource appends to it), so iterating it under
 	// man.pipeline.l alone is a data race. Both locks are taken in the man.l -> man.pipeline.l order used
-	// by every other path needing the pair (updateServiceReceivers, DiagnosticArchive,
+	// by every other path needing the pair (updateServiceReceivers, DiagnosticSources,
 	// setupProcessingForSource); reversing it here would risk a deadlock against them.
 	man.l.Lock()
 	man.pipeline.l.Lock()

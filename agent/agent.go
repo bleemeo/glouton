@@ -2462,13 +2462,6 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		modules = append(modules, a.logProcessManager.DiagnosticArchive)
 	}
 
-	// receiverManager is shared between logProcessManager and logMetricsManager (neither owns it), so
-	// its own diagnostic (read-offset/extension state, via its *PersistHost) is always archived here
-	// directly, independent of whether either manager exists.
-	if a.receiverManager != nil {
-		modules = append(modules, a.receiverManager.DiagnosticArchive)
-	}
-
 	if a.logMetricsManager != nil {
 		modules = append(modules, a.logMetricsManager.DiagnosticArchive)
 	}

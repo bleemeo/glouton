@@ -184,7 +184,6 @@ func mustNewPersistHost(t *testing.T) *logsource.PersistHost {
 	host, err := logsource.NewPersistHost(st, logsource.PersistConfig{
 		StorageType:  logsource.PersistStorageType,
 		CacheKey:     logsource.LogFileMetadataCacheKey,
-		ArchivePath:  "log-processing/persister.json",
 		SaveThrottle: saveFileSizesToCachePeriod,
 	})
 	if err != nil {

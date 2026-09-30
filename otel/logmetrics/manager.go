@@ -333,7 +333,7 @@ func (man *Manager) DiagnosticSources() map[logsource.SourceKey]logsource.LogToM
 }
 
 func (man *Manager) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
-	file, err := archive.Create("log-to-metrics.json")
+	file, err := archive.Create("log-processing/log-to-metrics.json")
 	if err != nil {
 		return err
 	}
