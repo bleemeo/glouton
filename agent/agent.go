@@ -2473,7 +2473,7 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		modules = append(modules, a.logMetricsManager.DiagnosticArchive)
 	}
 
-	modules = append(modules, a.logSourcesDiagnosticArchive)
+	modules = append(modules, a.logDiagnosticArchive)
 
 	for _, f := range modules {
 		if err = f(ctx, archive); err != nil {
@@ -2794,8 +2794,9 @@ func (a *agent) diagnosticVSphere(ctx context.Context, archive types.ArchiveWrit
 	return a.vSphereManager.DiagnosticVSphere(ctx, archive, associationFn)
 }
 
-// logSourcesDiagnosticArchive writes every log source, whichever component owns it, and which features consume it.
-func (a *agent) logSourcesDiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
+// logDiagnosticArchive writes every log source, whichever component owns it, and which features consume it,
+// then the state of log shipping.
+func (a *agent) logDiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
 	var (
 		sources      []logsource.SourceDiagnostic
 		shipping     map[logsource.SourceKey]logsource.ShippingDiagnostic
@@ -2810,16 +2811,19 @@ func (a *agent) logSourcesDiagnosticArchive(_ context.Context, archive types.Arc
 		logToMetrics = a.logMetricsManager.DiagnosticSources()
 	}
 
-	var servicesExcludedReason string
+	var shippingDisabledReason string
 
 	switch {
 	case !a.config.Log.OpenTelemetry.ShippingEnable:
-		servicesExcludedReason = "log.opentelemetry.shipping_enable is false"
+		shippingDisabledReason = "log.opentelemetry.shipping_enable is false"
 	case !a.config.Bleemeo.Enable:
-		servicesExcludedReason = "log shipping requires the Bleemeo connector"
+		shippingDisabledReason = "log shipping requires the Bleemeo connector"
 	case a.logProcessManager == nil:
-		servicesExcludedReason = "log processing failed to start: see Glouton logs"
-	case !a.config.Log.OpenTelemetry.AutoDiscovery.ContainerAndServiceEnable:
+		shippingDisabledReason = "log processing failed to start: see Glouton logs"
+	}
+
+	servicesExcludedReason := shippingDisabledReason
+	if servicesExcludedReason == "" && !a.config.Log.OpenTelemetry.AutoDiscovery.ContainerAndServiceEnable {
 		servicesExcludedReason = "log.opentelemetry.auto_discovery.container_and_service_enable is false"
 	}
 
@@ -2835,7 +2839,18 @@ func (a *agent) logSourcesDiagnosticArchive(_ context.Context, archive types.Arc
 		sources = append(sources, logprocessing.ExcludedServiceSources(services, servicesExcludedReason)...)
 	}
 
-	return logsource.WriteSourcesDiagnostic(archive, sources, shipping, logToMetrics)
+	if err := logsource.WriteSourcesDiagnostic(archive, sources, shipping, logToMetrics); err != nil {
+		return err
+	}
+
+	var backPressure *bleemeoTypes.LogsBackPressureDiagnostic
+
+	if a.bleemeoConnector != nil && a.logProcessManager != nil {
+		diag := a.bleemeoConnector.LogsBackPressureDiagnostic()
+		backPressure = &diag
+	}
+
+	return logprocessing.WriteShippingDiagnostic(archive, a.logProcessManager, shippingDisabledReason, backPressure)
 }
 
 func (a *agent) checkSudoRSForLogs(ctx context.Context) {

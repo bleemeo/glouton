@@ -226,40 +226,18 @@ type containerDiagnosticInformation struct {
 	Attributes             logsource.ContainerAttributes
 }
 
-type diagnosticSummary struct {
-	LogProcessedCount               int64
-	LogThroughputPerMinute          int
-	ProcessingStatus                string
-	ContainerStartedComponents      []string
-	PipelineStartedComponentsCount  int
-	PerServiceStartedComponentCount map[string]int
-}
-
 type diagnosticInformation struct {
-	summary         diagnosticSummary
 	KnownLogFormats map[string][]config.OTELOperator
 	KnownLogFilters map[string]config.OTELFilters
 }
 
 func (diagInfo diagnosticInformation) writeToArchive(writer types.ArchiveWriter) error {
-	file, err := writer.Create("log-processing/summary.json")
+	file, err := writer.Create("log-processing/known_formats.json")
 	if err != nil {
 		return err
 	}
 
 	enc := json.NewEncoder(file)
-	enc.SetIndent("", "  ")
-
-	if err := enc.Encode(diagInfo.summary); err != nil {
-		return err
-	}
-
-	file, err = writer.Create("log-processing/known_formats.json")
-	if err != nil {
-		return err
-	}
-
-	enc = json.NewEncoder(file)
 	enc.SetIndent("", "  ")
 
 	if err := enc.Encode(diagInfo.KnownLogFormats); err != nil {

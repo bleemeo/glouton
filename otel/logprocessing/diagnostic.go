@@ -18,11 +18,75 @@ package logprocessing
 
 import (
 	"cmp"
+	"encoding/json"
 	"slices"
+	"time"
 
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/otel/logsource"
+	"github.com/bleemeo/glouton/types"
 )
+
+const shippingArchivePath = "log-processing/shipping.json"
+
+// shippingDiagnostic is the content of shippingArchivePath.
+type shippingDiagnostic struct {
+	Enabled bool
+	// Reason tells why shipping isn't enabled.
+	Reason       string                                   `json:",omitempty"`
+	BackPressure *bleemeoTypes.LogsBackPressureDiagnostic `json:",omitempty"`
+
+	ShippedLogCount               int64
+	ShippedLogThroughputPerMinute int
+	// BackPressureRefusedLogCount counts records refused while shipping buffers; their input retries
+	// them, so a record can be counted several times.
+	BackPressureRefusedLogCount   int64
+	BackPressureDiscardedLogCount int64
+	// ExportFailedLogCount counts records lost because their export failed.
+	ExportFailedLogCount int64
+	LastExportError      string     `json:",omitempty"`
+	LastExportErrorAt    *time.Time `json:",omitempty"`
+}
+
+// WriteShippingDiagnostic writes the state of log shipping. man is nil when shipping isn't running,
+// disabledReason then telling why.
+func WriteShippingDiagnostic(
+	archive types.ArchiveWriter,
+	man *Manager,
+	disabledReason string,
+	backPressure *bleemeoTypes.LogsBackPressureDiagnostic,
+) error {
+	diag := shippingDiagnostic{
+		Enabled:      man != nil,
+		BackPressure: backPressure,
+	}
+
+	if man == nil {
+		diag.Reason = disabledReason
+	} else {
+		diag.ShippedLogCount = man.pipeline.logProcessedCount.Load()
+		diag.ShippedLogThroughputPerMinute = man.pipeline.logThroughputMeter.Total()
+		diag.BackPressureRefusedLogCount = man.pipeline.backPressureRefusedCount.Load()
+		diag.BackPressureDiscardedLogCount = man.pipeline.backPressureDiscardedCount.Load()
+		diag.ExportFailedLogCount = man.pipeline.exportFailedCount.Load()
+
+		if lastErr := man.pipeline.lastExportErr.Load(); lastErr != nil {
+			diag.LastExportError = lastErr.Err
+			diag.LastExportErrorAt = &lastErr.At
+		}
+	}
+
+	file, err := archive.Create(shippingArchivePath)
+	if err != nil {
+		return err
+	}
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(diag)
+}
 
 // DiagnosticSources describes the sources this package reads itself (discovered services, journald,
 // syslog, auditd), and the shipping counters of the ReceiverManager-owned sources it ships.

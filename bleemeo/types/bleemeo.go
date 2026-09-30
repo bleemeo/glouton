@@ -374,6 +374,19 @@ const (
 	LogsAvailabilityShouldDiscard
 )
 
+// LogsBackPressureDiagnostic explains the LogsAvailability currently applied to log shipping.
+type LogsBackPressureDiagnostic struct {
+	// Status is LogsAvailability.String().
+	Status string
+	// Causes explains a Status other than "ok".
+	Causes          []string `json:",omitempty"`
+	MQTTConnected   bool
+	LastAck         time.Time
+	PendingMessages int
+	// APIStatus is the logs stream availability the Bleemeo API sent in its last ack.
+	APIStatus string
+}
+
 func (la LogsAvailability) String() string {
 	switch la {
 	case LogsAvailabilityOk:

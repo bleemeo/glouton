@@ -74,6 +74,20 @@ type pipelineContext struct {
 
 	logProcessedCount  atomic.Int64
 	logThroughputMeter *logsource.RingCounter
+
+	// backPressureRefusedCount counts records refused because shipping must buffer; their input retries
+	// them, so a record can be counted several times. backPressureDiscardedCount counts records dropped
+	// because shipping must discard.
+	backPressureRefusedCount   atomic.Int64
+	backPressureDiscardedCount atomic.Int64
+	// exportFailedCount counts records whose export failed: they are lost.
+	exportFailedCount atomic.Int64
+	lastExportErr     atomic.Pointer[exportError]
+}
+
+type exportError struct {
+	Err string
+	At  time.Time
 }
 
 type pipelineOptions struct {
@@ -145,13 +159,18 @@ func (p *pipelineContext) init(
 		exporter.Settings{TelemetrySettings: p.telemetry},
 		"unused",
 		func(ctx context.Context, ld plog.Logs) error {
+			count := ld.LogRecordCount()
+
 			if err := chunker.push(ctx, ld); err != nil {
 				logger.V(1).Printf("Failed to push logs: %v", err)
+
+				p.exportFailedCount.Add(int64(count))
+				p.lastExportErr.Store(&exportError{Err: err.Error(), At: time.Now()})
+
 				// returning error goes nowhere (not visible anywhere), that's why we log it here
 				return err
 			}
 
-			count := ld.LogRecordCount()
 			p.logProcessedCount.Add(int64(count))
 			p.logThroughputMeter.Add(count)
 
@@ -206,7 +225,7 @@ func (p *pipelineContext) init(
 		processor.Settings{TelemetrySettings: p.telemetry},
 		nil,
 		logBatcher,
-		makeEnforceBackPressureFn(streamAvailabilityStatusFn, opts.logsAvailabilityCacheTTL),
+		makeEnforceBackPressureFn(streamAvailabilityStatusFn, opts.logsAvailabilityCacheTTL, &p.backPressureRefusedCount, &p.backPressureDiscardedCount),
 	)
 	if err != nil {
 		return fmt.Errorf("setup log back-pressure enforcer: %w", err)
@@ -488,6 +507,7 @@ func (p *pipelineContext) getInput() consumer.Logs {
 func makeEnforceBackPressureFn(
 	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability,
 	logsAvailabilityCacheTTL time.Duration,
+	refusedCount, discardedCount *atomic.Int64,
 ) processorhelper.ProcessLogsFunc { //nolint: wsl
 	// Debounced since streamAvailabilityStatusFn acquires both the connector and MQTT client locks.
 	var (
@@ -519,8 +539,12 @@ func makeEnforceBackPressureFn(
 		case bleemeoTypes.LogsAvailabilityOk:
 			return logs, nil
 		case bleemeoTypes.LogsAvailabilityShouldBuffer:
+			refusedCount.Add(int64(logs.LogRecordCount()))
+
 			return logs, types.ErrBackPressureSignal
 		case bleemeoTypes.LogsAvailabilityShouldDiscard:
+			discardedCount.Add(int64(logs.LogRecordCount()))
+
 			return logs, processorhelper.ErrSkipProcessingData
 		default:
 			logger.V(1).Printf("Bad logs availability status: %s", status)

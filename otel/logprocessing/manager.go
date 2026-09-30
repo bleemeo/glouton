@@ -47,10 +47,9 @@ type logSource struct {
 }
 
 type Manager struct {
-	config                     config.OpenTelemetry
-	knownLogFormats            map[string][]config.OTELOperator
-	state                      bleemeoTypes.State
-	streamAvailabilityStatusFn func() bleemeoTypes.LogsAvailability
+	config          config.OpenTelemetry
+	knownLogFormats map[string][]config.OTELOperator
+	state           bleemeoTypes.State
 	// containerFilter is cfg.ContainerFilter, pre-validated at New() (invalid entries stripped with a warning).
 	containerFilter map[string]string
 
@@ -120,19 +119,18 @@ func New(
 	containerRecv := newContainerReceiver(pipeline)
 
 	processingManager := &Manager{
-		config:                     cfg,
-		knownLogFormats:            knownLogFormats,
-		state:                      state,
-		streamAvailabilityStatusFn: streamAvailabilityStatusFn,
-		containerFilter:            validateContainerFilters(cfg.ContainerFilter, cfg.KnownLogFilters),
-		receiverManager:            receiverManager,
-		persister:                  persister,
-		pipeline:                   pipeline,
-		containerRecv:              containerRecv,
-		watchedServices:            make(map[discovery.NameInstance]sourceDiagnostic),
-		watchedContainers:          make(map[string]sourceDiagnostic),
-		serviceReceivers:           make(map[discovery.NameInstance][]*logReceiver),
-		fanoutSinks:                make(map[string]*fanoutSink),
+		config:            cfg,
+		knownLogFormats:   knownLogFormats,
+		state:             state,
+		containerFilter:   validateContainerFilters(cfg.ContainerFilter, cfg.KnownLogFilters),
+		receiverManager:   receiverManager,
+		persister:         persister,
+		pipeline:          pipeline,
+		containerRecv:     containerRecv,
+		watchedServices:   make(map[discovery.NameInstance]sourceDiagnostic),
+		watchedContainers: make(map[string]sourceDiagnostic),
+		serviceReceivers:  make(map[discovery.NameInstance][]*logReceiver),
+		fanoutSinks:       make(map[string]*fanoutSink),
 	}
 
 	receiverManager.RegisterSinkProvider(processingManager)
@@ -615,38 +613,7 @@ func (man *Manager) removeOldSources(
 }
 
 func (man *Manager) DiagnosticArchive(_ context.Context, writer types.ArchiveWriter) error {
-	man.l.Lock()
-	defer man.l.Unlock()
-
-	man.pipeline.l.Lock()
-
-	pipelineStartedComponentsCount := len(man.pipeline.startedComponents)
-	perServiceStartedComponentCount := make(map[string]int)
-
-	for srvID, logsReceivers := range man.serviceReceivers {
-		key := srvID.Name + "/" + srvID.Instance
-		total := 0
-
-		for _, lr := range logsReceivers {
-			lr.l.Lock()
-			total += len(lr.startedComponents)
-			lr.l.Unlock()
-		}
-
-		perServiceStartedComponentCount[key] = total
-	}
-
-	man.pipeline.l.Unlock()
-
 	diagnosticInfo := diagnosticInformation{
-		summary: diagnosticSummary{
-			LogProcessedCount:               man.pipeline.logProcessedCount.Load(),
-			LogThroughputPerMinute:          man.pipeline.logThroughputMeter.Total(),
-			ProcessingStatus:                man.streamAvailabilityStatusFn().String(),
-			ContainerStartedComponents:      man.containerRecv.StartedComponentKeys(),
-			PipelineStartedComponentsCount:  pipelineStartedComponentsCount,
-			PerServiceStartedComponentCount: perServiceStartedComponentCount,
-		},
 		KnownLogFormats: man.knownLogFormats,
 		KnownLogFilters: man.config.KnownLogFilters,
 	}
