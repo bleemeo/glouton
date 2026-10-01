@@ -205,8 +205,9 @@ func addWarningsFn(t *testing.T) func(errs ...error) {
 
 //nolint:gochecknoglobals
 var (
-	sortLogsOpt  = cmpopts.SortSlices(func(x, y logRecord) bool { return x.Body < y.Body })
-	sortFilesOpt = cmpopts.SortSlices(func(x, y string) bool { return x < y })
+	sortLogsOpt   = cmpopts.SortSlices(func(x, y logRecord) bool { return x.Body < y.Body })
+	sortFilesOpt  = cmpopts.SortSlices(func(x, y string) bool { return x < y })
+	sortInputsOpt = cmpopts.SortSlices(func(x, y logsource.InputDiagnostic) bool { return x.Name < y.Name })
 )
 
 func TestFileLogReceiver(t *testing.T) {
@@ -376,18 +377,16 @@ func TestFileLogReceiver(t *testing.T) {
 		t.Fatalf("Unexpected file sizes (-want, +got):\n%s", diff)
 	}
 
-	expectedDiagnosticInfo := receiverDiagnosticInformation{
-		LogProcessedCount:      2,
-		LogThroughputPerMinute: 2,
-		FileLogReceiverPaths: []string{
-			f1.Name(),
-			f2.Name(),
-		},
-		ExecLogReceiverPaths: []string{},
-		IgnoredFilePaths:     []string{},
+	if count := recv.logCounter.Load(); count != 2 {
+		t.Fatalf("Expected 2 processed logs, got %d", count)
 	}
-	if diff := cmp.Diff(expectedDiagnosticInfo, recv.diagnosticInfo(), sortFilesOpt); diff != "" {
-		t.Fatalf("Unexpected diagnostic information (-want, +got):\n%s", diff)
+
+	expectedInputs := []logsource.InputDiagnostic{
+		{Kind: logsource.InputFile, Name: f1.Name(), Status: logsource.SourceActive, Mode: "direct"},
+		{Kind: logsource.InputFile, Name: f2.Name(), Status: logsource.SourceActive, Mode: "direct"},
+	}
+	if diff := cmp.Diff(expectedInputs, recv.inputs(), sortInputsOpt); diff != "" {
+		t.Fatalf("Unexpected inputs (-want, +got):\n%s", diff)
 	}
 }
 
@@ -721,15 +720,15 @@ func TestFileLogReceiverWithHostroot(t *testing.T) {
 		t.Fatal("Unexpected file sizes (-want, +got):", diff)
 	}
 
-	expectedDiagnosticInfo := receiverDiagnosticInformation{
-		LogProcessedCount:      1,
-		LogThroughputPerMinute: 1,
-		FileLogReceiverPaths:   []string{watchedFile},
-		ExecLogReceiverPaths:   []string{},
-		IgnoredFilePaths:       []string{},
+	if count := recv.logCounter.Load(); count != 1 {
+		t.Fatalf("Expected 1 processed log, got %d", count)
 	}
-	if diff := cmp.Diff(expectedDiagnosticInfo, recv.diagnosticInfo(), sortFilesOpt); diff != "" {
-		t.Fatalf("Unexpected diagnostic information (-want, +got):\n%s", diff)
+
+	expectedInputs := []logsource.InputDiagnostic{
+		{Kind: logsource.InputFile, Name: watchedFile, Status: logsource.SourceActive, Mode: "direct"},
+	}
+	if diff := cmp.Diff(expectedInputs, recv.inputs()); diff != "" {
+		t.Fatalf("Unexpected inputs (-want, +got):\n%s", diff)
 	}
 }
 

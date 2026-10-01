@@ -18,6 +18,7 @@ package logsource
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -28,16 +29,35 @@ import (
 	"github.com/bleemeo/glouton/facts"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"go.opentelemetry.io/collector/consumer"
 )
 
-// Test that ReceiverManager reports each configured receiver with the status matching what it reads.
+// summarizeInputs maps each source name to its status and one "kind status name" line per input.
+func summarizeInputs(sources []SourceDiagnostic) map[string][]string {
+	out := make(map[string][]string, len(sources))
+
+	for _, src := range sources {
+		lines := []string{"source " + string(src.Status)}
+
+		for _, input := range src.Inputs {
+			lines = append(lines, fmt.Sprintf("%s %s %s", input.Kind, input.Status, input.Name))
+		}
+
+		slices.Sort(lines[1:])
+		out[src.Name] = lines
+	}
+
+	return out
+}
+
+// Test that every configured file, listener and container match of a receiver shows up as an input with
+// its own status, whatever the status of the others.
 func TestReceiverManagerDiagnosticSources(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	existing := filepath.Join(dir, "app.log")
+	existing := filepath.Join(dir, "myapp.log")
+	missing := filepath.Join(dir, "myapp-err.log")
 
 	if err := os.WriteFile(existing, []byte("line\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -46,10 +66,19 @@ func TestReceiverManagerDiagnosticSources(t *testing.T) {
 	cfg := config.OpenTelemetry{
 		ReceiversDefaultSendLogs: true,
 		Receivers: map[string]config.LogReceiver{
-			"app":     {"include": []string{existing}},
-			"missing": {"include": []string{filepath.Join(dir, "missing.log")}},
-			"no-send": {"include": []string{existing}, "send_logs": false},
-			"bad-fmt": {"include": []string{filepath.Join(dir, "other.log")}, "log_format": "does-not-exist"},
+			"both":         {"include": []string{existing, missing}},
+			"none":         {"include": []string{existing, missing}, "send_logs": false},
+			"no-exists":    {"include": []string{missing, filepath.Join(dir, "*.missing")}},
+			"bad-fmt":      {"include": []string{existing}, "log_format": "does-not-exist"},
+			"net-ok":       {"from_listeners": []string{"otlp/ok"}},
+			"net-bad":      {"from_listeners": []string{"otlp/not_exist"}},
+			"net-conflict": {"from_listeners": []string{"otlp/conflict"}},
+			"net-partial":  {"from_listeners": []string{"otlp/not_exist", "otlp/ok"}},
+			"all-in-one": {
+				"include":        []string{existing, missing},
+				"from_listeners": []string{"otlp/not_exist", "otlp/ok"},
+				"container_name": "redis",
+			},
 		},
 	}
 
@@ -65,51 +94,76 @@ func TestReceiverManagerDiagnosticSources(t *testing.T) {
 		t.Fatal("RescanReceivers failed:", err)
 	}
 
-	want := []SourceDiagnostic{
-		{
-			Name:    "receiver:app",
-			Origin:  "receiver",
-			Status:  SourceActive,
-			Include: []string{existing},
-			Files:   []FileDiagnostic{{Path: existing, Input: "direct"}},
+	rm.UpdateContainers(t.Context(), nil, nil, true)
+	rm.SetNetworkListenerStates(map[string]string{
+		"otlp/ok":       "",
+		"otlp/conflict": "listen tcp 0.0.0.0:1236: bind: address already in use",
+	})
+
+	want := map[string][]string{
+		"receiver:both": {
+			"source active",
+			"file active " + existing,
+			"file waiting " + missing,
 		},
-		{
-			Name:      "receiver:bad-fmt",
-			Origin:    "receiver",
-			Status:    SourceWaiting,
-			Reason:    "no readable file matches include",
-			Errors:    []string{`unknown log format "does-not-exist"`},
-			Include:   []string{filepath.Join(dir, "other.log")},
-			LogFormat: "does-not-exist",
-			Files:     []FileDiagnostic{},
+		"receiver:none": {
+			"source unused",
+			"file unused " + missing,
+			"file unused " + existing,
 		},
-		{
-			Name:    "receiver:missing",
-			Origin:  "receiver",
-			Status:  SourceWaiting,
-			Reason:  "no readable file matches include",
-			Include: []string{filepath.Join(dir, "missing.log")},
-			Files:   []FileDiagnostic{},
+		"receiver:no-exists": {
+			"source waiting",
+			"file waiting " + filepath.Join(dir, "*.missing"),
+			"file waiting " + missing,
 		},
-		{
-			Name:    "receiver:no-send",
-			Origin:  "receiver",
-			Status:  SourceUnused,
-			Reason:  "send_logs is false and no metrics are configured",
-			Include: []string{existing},
-			Files:   []FileDiagnostic{},
+		"receiver:bad-fmt": {
+			"source active",
+			"file active " + existing,
+		},
+		"receiver:net-ok": {
+			"source active",
+			"listener active otlp/ok",
+		},
+		"receiver:net-bad": {
+			"source failed",
+			"listener failed otlp/not_exist",
+		},
+		"receiver:net-conflict": {
+			"source failed",
+			"listener failed otlp/conflict",
+		},
+		"receiver:net-partial": {
+			"source active",
+			"listener active otlp/ok",
+			"listener failed otlp/not_exist",
+		},
+		"receiver:all-in-one": {
+			"source active",
+			"container waiting name=redis",
+			"file active " + existing,
+			"file waiting " + missing,
+			"listener active otlp/ok",
+			"listener failed otlp/not_exist",
 		},
 	}
 
 	got := rm.DiagnosticSources()
 
-	opts := []cmp.Option{
-		cmpopts.IgnoreUnexported(SourceDiagnostic{}),
-		cmpopts.SortSlices(func(a, b SourceDiagnostic) bool { return a.Name < b.Name }),
+	if diff := cmp.Diff(want, summarizeInputs(got)); diff != "" {
+		t.Errorf("DiagnosticSources mismatch (-want +got):\n%s", diff)
 	}
 
-	if diff := cmp.Diff(want, got, opts...); diff != "" {
-		t.Errorf("DiagnosticSources mismatch (-want +got):\n%s", diff)
+	for _, src := range got {
+		switch src.Name {
+		case "receiver:bad-fmt":
+			if diff := cmp.Diff([]string{`unknown log format "does-not-exist"`}, src.Errors); diff != "" {
+				t.Errorf("Unexpected errors for %s (-want +got):\n%s", src.Name, diff)
+			}
+		case "receiver:net-conflict":
+			if want := "failed to start: listen tcp 0.0.0.0:1236: bind: address already in use"; src.Inputs[0].Reason != want {
+				t.Errorf("Unexpected reason for %s: got %q, want %q", src.Name, src.Inputs[0].Reason, want)
+			}
+		}
 	}
 }
 
@@ -167,7 +221,7 @@ func TestReceiverManagerDiagnosticContainerLabels(t *testing.T) {
 }
 
 // Test that WriteSourcesDiagnostic attaches the consumers' info to the right source, and that the text
-// file has one line per file read.
+// file has one line per input then one line per source.
 func TestWriteSourcesDiagnostic(t *testing.T) {
 	t.Parallel()
 
@@ -176,29 +230,32 @@ func TestWriteSourcesDiagnostic(t *testing.T) {
 			Name:   "receiver:app",
 			Origin: "receiver",
 			Status: SourceActive,
-			Files: []FileDiagnostic{
-				{Path: "/var/log/app/a.log", Input: "direct"},
-				{Path: "/var/log/app/b.log", Input: "sudo"},
+			Inputs: []InputDiagnostic{
+				{Kind: InputFile, Name: "/var/log/app/a.log", Status: SourceActive, Mode: "direct"},
+				{Kind: InputFile, Name: "/var/log/app/b.log", Status: SourceWaiting, Reason: "file doesn't exist or can't be read"},
 			},
 			key: ReceiverSourceKey("app"),
 		},
 		{
-			Name:    "service:myapp",
-			Origin:  "service",
-			Status:  SourceExcluded,
-			Reason:  "log.opentelemetry.auto_discovery.container_and_service_enable is false",
-			Include: []string{"/var/log/myapp/myapp.log"},
+			Name:   "service:myapp",
+			Origin: "service",
+			Status: SourceExcluded,
+			Reason: "container_and_service_enable is false",
+			Inputs: []InputDiagnostic{
+				{Kind: InputFile, Name: "/var/log/myapp/myapp.log", Status: SourceExcluded, Reason: "container_and_service_enable is false"},
+			},
 		},
 		{
-			Name:    "receiver:aaa",
-			Origin:  "receiver",
-			Status:  SourceWaiting,
-			Include: []string{"/var/log/aaa.log"},
+			Name:   "receiver:aaa",
+			Origin: "receiver",
+			Status: SourceFailed,
+			Errors: []string{"decoding config: boom"},
 		},
 		{
 			Name:   "receiver:zzz",
 			Origin: "receiver",
 			Status: SourceActive,
+			Inputs: []InputDiagnostic{{Kind: InputListener, Name: "otlp/ok", Status: SourceActive}},
 		},
 	}
 
@@ -239,28 +296,32 @@ func TestWriteSourcesDiagnostic(t *testing.T) {
 	}
 
 	if got[2].Shipping != nil {
-		t.Errorf("Expected service:myapp to not be shipped, got %+v", got[1].Shipping)
+		t.Errorf("Expected service:myapp to not be shipped, got %+v", got[2].Shipping)
 	}
 
-	text := writer.files[sourcesTextArchivePath].String()
+	var gotLines [][]string
 
-	for _, wantLine := range [][]string{
-		{"receiver:app", "active", "/var/log/app/a.log", "direct", "42", "7", "1"},
-		{"receiver:app", "active", "/var/log/app/b.log", "sudo", "42", "7", "1"},
-		{"service:myapp", "excluded", "/var/log/myapp/myapp.log", "-", "-", "-", "-", "log.opentelemetry.auto_discovery.container_and_service_enable", "is", "false"},
-	} {
-		found := false
-
-		for line := range strings.SplitSeq(text, "\n") {
-			if slices.Equal(strings.Fields(line), wantLine) {
-				found = true
-
-				break
-			}
+	for line := range strings.SplitSeq(writer.files[sourcesTextArchivePath].String(), "\n") {
+		if fields := strings.Fields(line); len(fields) > 0 && strings.Contains(fields[0], ":") && !strings.HasSuffix(fields[0], ":") {
+			gotLines = append(gotLines, fields)
 		}
+	}
 
-		if !found {
-			t.Errorf("Expected a line %v in sources.txt, got:\n%s", wantLine, text)
-		}
+	wantLines := [][]string{
+		// Inputs, sorted by status, source, then input.
+		{"receiver:app", "active", "file", "/var/log/app/a.log", "direct"},
+		{"receiver:zzz", "active", "listener", "otlp/ok", "-"},
+		{"service:myapp", "excluded", "file", "/var/log/myapp/myapp.log", "-", "container_and_service_enable", "is", "false"},
+		{"receiver:aaa", "failed", "-", "-", "-"},
+		{"receiver:app", "waiting", "file", "/var/log/app/b.log", "-", "file", "doesn't", "exist", "or", "can't", "be", "read"},
+		// Sources.
+		{"receiver:app", "active", "42", "7", "1"},
+		{"receiver:zzz", "active", "-", "-", "-"},
+		{"service:myapp", "excluded", "-", "-", "-", "container_and_service_enable", "is", "false"},
+		{"receiver:aaa", "failed", "-", "-", "-", "decoding", "config:", "boom"},
+	}
+
+	if diff := cmp.Diff(wantLines, gotLines); diff != "" {
+		t.Errorf("Unexpected sources.txt lines (-want +got):\n%s\n%s", diff, writer.files[sourcesTextArchivePath].String())
 	}
 }

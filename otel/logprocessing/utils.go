@@ -209,14 +209,6 @@ type sourceDiagnostic struct {
 	SetupErrors map[string]string
 }
 
-type receiverDiagnosticInformation struct {
-	LogProcessedCount      int64
-	LogThroughputPerMinute int
-	FileLogReceiverPaths   []string
-	ExecLogReceiverPaths   []string
-	IgnoredFilePaths       []string
-}
-
 type containerDiagnosticInformation struct {
 	LogProcessedCount      int64
 	LogThroughputPerMinute int

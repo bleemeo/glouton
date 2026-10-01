@@ -1218,6 +1218,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		plannedListeners, listenerWarnings := logsource.PlanSharedNetworkListeners(a.config.OpenTelemetry.NetworkListeners, a.receiverManager.NetworkWants(ctx))
 		a.addWarnings(listenerWarnings...)
 
+		listenerStates := make(map[string]string, len(plannedListeners))
+
 		for _, planned := range plannedListeners {
 			recv, err := logsource.SetupOTLPNetworkListener(
 				ctx,
@@ -1229,8 +1231,12 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			if err != nil {
 				a.addWarnings(fmt.Errorf("unable to start OpenTelemetry network receiver %q: %w", planned.Name, err))
 
+				listenerStates[planned.Name] = err.Error()
+
 				continue
 			}
+
+			listenerStates[planned.Name] = ""
 
 			tasks = append(tasks, taskInfo{
 				func(ctx context.Context) error {
@@ -1241,6 +1247,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 				fmt.Sprintf("OpenTelemetry network receiver (%s)", planned.Name),
 			})
 		}
+
+		a.receiverManager.SetNetworkListenerStates(listenerStates)
 
 		tasks = append(tasks, taskInfo{a.runReceiverManager, "Log receiver manager"})
 	}

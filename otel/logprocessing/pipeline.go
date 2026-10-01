@@ -51,6 +51,13 @@ const (
 	shutdownTimeout               = 5 * time.Second
 )
 
+// Files read by the auto_discovery syslog and auditd receivers.
+const (
+	syslogFilePath     = "/var/log/syslog"
+	syslogAuthFilePath = "/var/log/auth.log"
+	auditdFilePath     = "/var/log/audit/audit.log"
+)
+
 var errUnexpectedConfig = errors.New("unexpected config type")
 
 type pipelineContext struct {
@@ -414,12 +421,12 @@ func (p *pipelineContext) setupSyslog(
 	}
 
 	recvConfig := config.LogReceiver{
-		"include":   []string{"/var/log/syslog"},
+		"include":   []string{syslogFilePath},
 		"operators": append(operatorsForServiceName("syslog"), opsGroup...),
 	}
 
 	recvConfig2 := config.LogReceiver{
-		"include":   []string{"/var/log/auth.log"},
+		"include":   []string{syslogAuthFilePath},
 		"operators": append(operatorsForServiceName("syslog"), opsGroup2...),
 	}
 
@@ -468,7 +475,7 @@ func (p *pipelineContext) setupAuditD(
 	}
 
 	recvConfig := config.LogReceiver{
-		"include":   []string{"/var/log/audit/audit.log"},
+		"include":   []string{auditdFilePath},
 		"operators": append(operatorsForServiceName("auditd"), opsGroup...),
 	}
 

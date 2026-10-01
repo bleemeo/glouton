@@ -88,6 +88,8 @@ type ReceiverManager struct {
 	// this guard it would start tails/register persistent extensions after SaveState has already run,
 	// which then never get stopped or saved.
 	shuttingDown bool
+	// listenerStates is set once the network listeners are started, see SetNetworkListenerStates.
+	listenerStates map[string]string
 	// containerMatchersCache memoizes containerMatchers' result: rm.cfg never changes for the manager's
 	// lifetime (see ensureReceiverSource's fields cache above), so re-decoding every container_name/
 	// container_selectors receiver's config on every UpdateContainers/ContainerIDsShippedByReceivers
@@ -238,9 +240,9 @@ type managedSource struct {
 	containerRecvs   map[string][]receiver.Logs
 	containerExtIDs  map[string][]component.ID
 	containerLogFile map[string]string
-	// includeErr/containerErrs are the last setup errors, for the diagnostic: includeErr from the last
-	// RescanReceivers, containerErrs (by container ID) from the last UpdateContainers.
-	includeErr    string
+	// includeErrs (by file) and containerErrs (by container ID) are the last setup errors, for the
+	// diagnostic: from the last RescanReceivers and UpdateContainers respectively.
+	includeErrs   map[string]string
 	containerErrs map[string]string
 	// retiredExtIDs are persisted-offset identities this source once tailed under but no longer does, kept
 	// only so a later permanent teardown can still forget their metadata. A component.ID is just a
@@ -476,12 +478,9 @@ func (rm *ReceiverManager) RescanReceivers(ctx context.Context) error {
 
 		files, complete := rm.resolveIncludeGlobs(name, fields.Include)
 
-		err = rm.startIncludeFiles(ctx, ms, name, files)
-		if err != nil {
+		if err := rm.startIncludeFiles(ctx, ms, name, files); err != nil {
 			errs = errors.Join(errs, fmt.Errorf("receiver %q: %w", name, err))
 		}
-
-		ms.setIncludeErr(err)
 
 		wanted := make(map[string]bool, len(files))
 		for _, f := range files {
@@ -514,6 +513,8 @@ func (rm *ReceiverManager) startIncludeFiles(ctx context.Context, ms *managedSou
 
 	var errs error
 
+	ms.includeErrs = nil
+
 	for _, f := range files {
 		if _, ok := ms.watching[f]; ok {
 			continue
@@ -521,6 +522,12 @@ func (rm *ReceiverManager) startIncludeFiles(ctx context.Context, ms *managedSou
 
 		if err := rm.startIncludeFile(ctx, ms, name, f); err != nil {
 			errs = errors.Join(errs, fmt.Errorf("file %q: %w", f, err))
+
+			if ms.includeErrs == nil {
+				ms.includeErrs = make(map[string]string)
+			}
+
+			ms.includeErrs[f] = err.Error()
 		}
 	}
 

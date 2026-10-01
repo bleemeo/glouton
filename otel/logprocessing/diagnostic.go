@@ -17,7 +17,6 @@
 package logprocessing
 
 import (
-	"cmp"
 	"encoding/json"
 	"slices"
 	"time"
@@ -105,13 +104,27 @@ func (man *Manager) DiagnosticSources() ([]logsource.SourceDiagnostic, map[logso
 	}
 
 	for _, skipped := range man.skippedSource {
-		sources = append(sources, logsource.SourceDiagnostic{
+		src := logsource.SourceDiagnostic{
 			Name:      serviceSourceName(skipped.ServiceKey),
 			Origin:    "service",
 			Status:    skipped.SkipStatus,
 			Reason:    skipped.SkipReason,
 			Container: describeContainer(skipped.ContainerName, skipped.ContainerID),
-		})
+		}
+
+		if skipped.ContainerID != "" {
+			src.Inputs = []logsource.InputDiagnostic{{
+				Kind:        logsource.InputContainer,
+				Name:        skipped.ContainerName,
+				Status:      src.Status,
+				Reason:      src.Reason,
+				ContainerID: skipped.ContainerID,
+			}}
+		} else {
+			src.Inputs = logsource.ConfiguredInputs(logsource.InputFile, logFilePaths(skipped.LogProcessing), src.Status, src.Reason)
+		}
+
+		sources = append(sources, src)
 	}
 
 	sources = append(sources, man.autoDiscoveryDiagnostics()...)
@@ -132,36 +145,38 @@ func (man *Manager) watchedServiceDiagnostics(
 		Container: describeContainer(diag.ContainerName, diag.ContainerID),
 	}
 
-	var configErrs []string
-
 	if diag.LogProcessingError != "" {
-		configErrs = []string{diag.LogProcessingError}
+		base.Errors = []string{diag.LogProcessingError}
 	}
 
 	if diag.ContainerID != "" {
 		src := base
-		src.Errors = configErrs
 
 		if len(diag.LogProcessing) > 0 {
 			src.LogFormat = diag.LogProcessing[0].Format
 			src.LogFilter = diag.LogProcessing[0].Filter
 		}
 
+		input := logsource.InputDiagnostic{Kind: logsource.InputContainer, Name: diag.ContainerName, ContainerID: diag.ContainerID}
 		ctr, tailing := containers[diag.ContainerID]
 		setupErr, failed := diag.SetupErrors[""]
 
 		switch {
 		case tailing:
-			src.Status = logsource.SourceActive
-			src.Files = []logsource.FileDiagnostic{{Path: ctr.LogFileRealPath, Input: ctr.ReceiverKind.Input(), ContainerID: diag.ContainerID}}
+			input.Status = logsource.SourceActive
+			input.Name = ctr.LogFileRealPath
+			input.Mode = ctr.ReceiverKind.Mode()
 			src.Shipping = &logsource.ShippingDiagnostic{LogCount: ctr.LogProcessedCount, LogThroughputPerMinute: ctr.LogThroughputPerMinute}
 		case failed:
-			src.Status = logsource.SourceFailed
-			src.Errors = append(src.Errors, setupErr)
+			input.Status = logsource.SourceFailed
+			input.Reason = setupErr
 		default:
-			src.Status = logsource.SourceWaiting
-			src.Reason = "container has no log file yet"
+			input.Status = logsource.SourceWaiting
+			input.Reason = "container has no log file yet"
 		}
+
+		src.Inputs = []logsource.InputDiagnostic{input}
+		src.Status = input.Status
 
 		return []logsource.SourceDiagnostic{src}
 	}
@@ -169,7 +184,6 @@ func (man *Manager) watchedServiceDiagnostics(
 	if len(diag.LogProcessing) == 0 {
 		src := base
 		src.Status = logsource.SourceFailed
-		src.Errors = configErrs
 
 		return []logsource.SourceDiagnostic{src}
 	}
@@ -178,15 +192,15 @@ func (man *Manager) watchedServiceDiagnostics(
 
 	for _, logProcessing := range diag.LogProcessing {
 		src := base
-		src.Include = []string{logProcessing.FilePath}
 		src.LogFormat = logProcessing.Format
 		src.LogFilter = logProcessing.Filter
-		src.Errors = slices.Clone(configErrs)
+
+		include := []string{logProcessing.FilePath}
 
 		var recv *logReceiver
 
 		for _, r := range man.serviceReceivers[key] {
-			if slices.Equal(r.include, src.Include) {
+			if slices.Equal(r.include, include) {
 				recv = r
 
 				break
@@ -199,11 +213,11 @@ func (man *Manager) watchedServiceDiagnostics(
 		case recv != nil:
 			fillFromReceiver(&src, recv)
 		case failed:
+			src.Inputs = logsource.ConfiguredInputs(logsource.InputFile, include, logsource.SourceFailed, setupErr)
 			src.Status = logsource.SourceFailed
-			src.Errors = append(src.Errors, setupErr)
 		default:
+			src.Inputs = logsource.ConfiguredInputs(logsource.InputFile, include, logsource.SourceWaiting, "log receiver not set up yet")
 			src.Status = logsource.SourceWaiting
-			src.Reason = "log receiver not set up yet"
 		}
 
 		sources = append(sources, src)
@@ -233,6 +247,8 @@ func (man *Manager) autoDiscoveryDiagnostics() []logsource.SourceDiagnostic {
 		}
 	}
 
+	journald.Inputs = logsource.ConfiguredInputs(logsource.InputJournal, []string{"journald"}, journald.Status, journald.Reason)
+
 	sources := []logsource.SourceDiagnostic{journald}
 
 	receiversByName := make(map[string]*logReceiver, len(man.pipeline.receivers))
@@ -240,37 +256,37 @@ func (man *Manager) autoDiscoveryDiagnostics() []logsource.SourceDiagnostic {
 		receiversByName[r.name] = r
 	}
 
+	type receiverFile struct{ name, path string }
+
 	for _, feature := range []struct {
 		origin    string
 		enabled   bool
 		setting   string
-		receivers []string
+		receivers []receiverFile
 	}{
-		{"syslog", autoDiscovery.SyslogEnable, "syslog_enable", []string{"syslog", "syslog-auth"}},
-		{"auditd", autoDiscovery.AuditdEnable, "auditd_enable", []string{"auditd"}},
+		{"syslog", autoDiscovery.SyslogEnable, "syslog_enable", []receiverFile{{"syslog", syslogFilePath}, {"syslog-auth", syslogAuthFilePath}}},
+		{"auditd", autoDiscovery.AuditdEnable, "auditd_enable", []receiverFile{{"auditd", auditdFilePath}}},
 	} {
-		if !feature.enabled {
-			sources = append(sources, logsource.SourceDiagnostic{
-				Name:   feature.origin,
-				Origin: feature.origin,
-				Status: logsource.SourceExcluded,
-				Reason: "log.opentelemetry.auto_discovery." + feature.setting + " is false",
-			})
+		for _, rf := range feature.receivers {
+			src := logsource.SourceDiagnostic{Name: rf.name, Origin: feature.origin}
+			recv, found := receiversByName[rf.name]
 
-			continue
-		}
-
-		for _, name := range feature.receivers {
-			src := logsource.SourceDiagnostic{Name: name, Origin: feature.origin}
-
-			if recv, found := receiversByName[name]; found {
-				src.Include = recv.include
+			switch {
+			case !feature.enabled:
+				src.Status = logsource.SourceExcluded
+				src.Reason = "log.opentelemetry.auto_discovery." + feature.setting + " is false"
+			case found:
 				fillFromReceiver(&src, recv)
-			} else {
+
+				sources = append(sources, src)
+
+				continue
+			default:
 				src.Status = logsource.SourceFailed
 				src.Reason = feature.origin + " receiver failed to start: see Glouton logs"
 			}
 
+			src.Inputs = logsource.ConfiguredInputs(logsource.InputFile, []string{rf.path}, src.Status, src.Reason)
 			sources = append(sources, src)
 		}
 	}
@@ -278,27 +294,13 @@ func (man *Manager) autoDiscoveryDiagnostics() []logsource.SourceDiagnostic {
 	return sources
 }
 
-// fillFromReceiver sets the files, counters and status of src from recv, which ships its logs.
+// fillFromReceiver sets the inputs, counters and status of src from recv, which ships its logs.
 func fillFromReceiver(src *logsource.SourceDiagnostic, recv *logReceiver) {
-	info := recv.diagnosticInfo()
-
-	for _, path := range info.FileLogReceiverPaths {
-		src.Files = append(src.Files, logsource.FileDiagnostic{Path: path, Input: logsource.ReceiverFileLog.Input()})
-	}
-
-	for _, path := range info.ExecLogReceiverPaths {
-		src.Files = append(src.Files, logsource.FileDiagnostic{Path: path, Input: logsource.ReceiverExecLog.Input()})
-	}
-
-	slices.SortFunc(src.Files, func(a, b logsource.FileDiagnostic) int { return cmp.Compare(a.Path, b.Path) })
-
-	src.Shipping = &logsource.ShippingDiagnostic{LogCount: info.LogProcessedCount, LogThroughputPerMinute: info.LogThroughputPerMinute}
-
-	if len(src.Files) > 0 {
-		src.Status = logsource.SourceActive
-	} else {
-		src.Status = logsource.SourceWaiting
-		src.Reason = "no readable file matches include"
+	src.Inputs = recv.inputs()
+	src.Status = logsource.StatusFromInputs(src.Inputs)
+	src.Shipping = &logsource.ShippingDiagnostic{
+		LogCount:               recv.logCounter.Load(),
+		LogThroughputPerMinute: recv.throughputMeter.Total(),
 	}
 }
 
@@ -322,14 +324,49 @@ func ExcludedServiceSources(services []discovery.Service, reason string) []logso
 			LogFilter: service.Config.LogFilter,
 		}
 
-		for _, logFile := range service.Config.LogFiles {
-			src.Include = append(src.Include, logFile.FilePath)
+		if service.ContainerID != "" {
+			src.Inputs = []logsource.InputDiagnostic{{
+				Kind:        logsource.InputContainer,
+				Name:        service.ContainerName,
+				Status:      src.Status,
+				Reason:      reason,
+				ContainerID: service.ContainerID,
+			}}
+		} else {
+			src.Inputs = logsource.ConfiguredInputs(logsource.InputFile, logFilePaths(configuredLogFiles(service)), src.Status, reason)
 		}
 
 		sources = append(sources, src)
 	}
 
 	return sources
+}
+
+// configuredLogFiles is the log files of service: those log processing uses, else those of its config.
+func configuredLogFiles(service discovery.Service) []discovery.ServiceLogReceiver {
+	if service.LogProcessing != nil {
+		return service.LogProcessing
+	}
+
+	files := make([]discovery.ServiceLogReceiver, 0, len(service.Config.LogFiles))
+
+	for _, logFile := range service.Config.LogFiles {
+		files = append(files, discovery.ServiceLogReceiver{FilePath: logFile.FilePath, Format: logFile.LogFormat, Filter: logFile.LogFilter})
+	}
+
+	return files
+}
+
+func logFilePaths(logFiles []discovery.ServiceLogReceiver) []string {
+	paths := make([]string, 0, len(logFiles))
+
+	for _, logFile := range logFiles {
+		if logFile.FilePath != "" {
+			paths = append(paths, logFile.FilePath)
+		}
+	}
+
+	return paths
 }
 
 func serviceSourceName(key discovery.NameInstance) string {

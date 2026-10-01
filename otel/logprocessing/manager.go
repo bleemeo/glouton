@@ -337,6 +337,7 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 					ContainerName: service.ContainerName,
 					SkipStatus:    logsource.SourceFailed,
 					SkipReason:    service.LogProcessingError,
+					LogProcessing: configuredLogFiles(service),
 				})
 			case service.LogProcessing != nil:
 				man.skippedSource = append(man.skippedSource, sourceDiagnostic{
@@ -346,6 +347,7 @@ func (man *Manager) processLogSources(services []discovery.Service, containers [
 					ContainerName: service.ContainerName,
 					SkipStatus:    logsource.SourceWaiting,
 					SkipReason:    "service is not active",
+					LogProcessing: configuredLogFiles(service),
 				})
 			}
 

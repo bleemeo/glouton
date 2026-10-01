@@ -74,33 +74,38 @@ func TestManagerDiagnosticSources(t *testing.T) {
 
 	sources, _ := man.DiagnosticSources()
 
+	excluded := func(setting string) string { return "log.opentelemetry.auto_discovery." + setting + " is false" }
+	fileInputs := func(path string, status logsource.SourceStatus, reason string) []logsource.InputDiagnostic {
+		return []logsource.InputDiagnostic{{Kind: logsource.InputFile, Name: path, Status: status, Reason: reason}}
+	}
+
 	want := []logsource.SourceDiagnostic{
 		{
 			Name:   "auditd",
 			Origin: "auditd",
 			Status: logsource.SourceExcluded,
-			Reason: "log.opentelemetry.auto_discovery.auditd_enable is false",
+			Reason: excluded("auditd_enable"),
+			Inputs: fileInputs(auditdFilePath, logsource.SourceExcluded, excluded("auditd_enable")),
 		},
 		{
 			Name:   "journald",
 			Origin: "journald",
 			Status: logsource.SourceExcluded,
-			Reason: "log.opentelemetry.auto_discovery.journald_enable is false",
+			Reason: excluded("journald_enable"),
+			Inputs: []logsource.InputDiagnostic{{Kind: logsource.InputJournal, Name: "journald", Status: logsource.SourceExcluded, Reason: excluded("journald_enable")}},
 		},
 		{
 			Name:      "service:myapp",
 			Origin:    "service",
 			Status:    logsource.SourceFailed,
-			Errors:    []string{"setup receiver: boom"},
-			Include:   []string{"/var/log/myapp/broken.log"},
 			LogFormat: "fmt",
+			Inputs:    fileInputs("/var/log/myapp/broken.log", logsource.SourceFailed, "setup receiver: boom"),
 		},
 		{
-			Name:    "service:myapp",
-			Origin:  "service",
-			Status:  logsource.SourceWaiting,
-			Reason:  "log receiver not set up yet",
-			Include: []string{"/var/log/myapp/ok.log"},
+			Name:   "service:myapp",
+			Origin: "service",
+			Status: logsource.SourceWaiting,
+			Inputs: fileInputs("/var/log/myapp/ok.log", logsource.SourceWaiting, "log receiver not set up yet"),
 		},
 		{
 			Name:   "service:rejected",
@@ -113,12 +118,21 @@ func TestManagerDiagnosticSources(t *testing.T) {
 			Origin: "service",
 			Status: logsource.SourceWaiting,
 			Reason: "service is not active",
+			Inputs: fileInputs("/var/log/stopped.log", logsource.SourceWaiting, "service is not active"),
 		},
 		{
 			Name:   "syslog",
 			Origin: "syslog",
 			Status: logsource.SourceExcluded,
-			Reason: "log.opentelemetry.auto_discovery.syslog_enable is false",
+			Reason: excluded("syslog_enable"),
+			Inputs: fileInputs(syslogFilePath, logsource.SourceExcluded, excluded("syslog_enable")),
+		},
+		{
+			Name:   "syslog-auth",
+			Origin: "syslog",
+			Status: logsource.SourceExcluded,
+			Reason: excluded("syslog_enable"),
+			Inputs: fileInputs(syslogAuthFilePath, logsource.SourceExcluded, excluded("syslog_enable")),
 		},
 	}
 
@@ -152,11 +166,13 @@ func TestExcludedServiceSources(t *testing.T) {
 
 	want := []logsource.SourceDiagnostic{
 		{
-			Name:    "service:myapp",
-			Origin:  "service",
-			Status:  logsource.SourceExcluded,
-			Reason:  "some reason",
-			Include: []string{"/var/log/myapp/myapp.log"},
+			Name:   "service:myapp",
+			Origin: "service",
+			Status: logsource.SourceExcluded,
+			Reason: "some reason",
+			Inputs: []logsource.InputDiagnostic{
+				{Kind: logsource.InputFile, Name: "/var/log/myapp/myapp.log", Status: logsource.SourceExcluded, Reason: "some reason"},
+			},
 		},
 	}
 
