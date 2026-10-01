@@ -26,6 +26,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -692,19 +693,43 @@ func autoUpgradeIsEnabled(ctx context.Context, runner *gloutonexec.Runner) (bool
 		return false, errAutoUpgradeNotSupported
 	}
 
-	out, err := runner.Run(ctx, gloutonexec.Option{SkipInContainer: true}, "systemctl", "list-timers", "glouton-auto-upgrade.timer")
+	return linuxAutoUpgradeIsEnabled(ctx, runner.Run)
+}
+
+type runFunc func(ctx context.Context, option gloutonexec.Option, name string, arg ...string) ([]byte, error)
+
+// linuxAutoUpgradeIsEnabled returns errAutoUpgradeNotSupported when there is no auto-upgrade mechanism
+// (no systemctl, a container, or the glouton-auto-upgrade.timer unit isn't installed, e.g. Glouton isn't
+// installed from a package). It returns false when the unit exists but its timer isn't active.
+func linuxAutoUpgradeIsEnabled(ctx context.Context, run runFunc) (bool, error) {
+	opt := gloutonexec.Option{SkipInContainer: true}
+
+	// "list-timers" without --all doesn't list a disabled timer, so it can't tell "disabled" from "absent".
+	// "list-unit-files" exits with 1 when no unit matches.
+	out, err := run(ctx, opt, "systemctl", "list-unit-files", "--no-legend", "glouton-auto-upgrade.timer")
 	if err != nil {
 		// The auto upgrade is not supported on systems without systemctl (this includes containers).
 		if commandNotFoundRegex.MatchString(err.Error()) || errors.Is(err, gloutonexec.ErrExecutionSkipped) {
 			return false, errAutoUpgradeNotSupported
 		}
 
+		var exitErr *exec.ExitError
+
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 && !autoUpgradeTimerRegex.Match(out) {
+			return false, errAutoUpgradeNotSupported
+		}
+
+		return false, fmt.Errorf("systemctl list-unit-files: %w", err)
+	}
+
+	if !autoUpgradeTimerRegex.Match(out) {
+		return false, errAutoUpgradeNotSupported
+	}
+
+	out, err = run(ctx, opt, "systemctl", "list-timers", "glouton-auto-upgrade.timer")
+	if err != nil {
 		return false, fmt.Errorf("systemctl list-timers: %w", err)
 	}
 
-	if autoUpgradeTimerRegex.Match(out) {
-		return true, nil
-	}
-
-	return false, nil
+	return autoUpgradeTimerRegex.Match(out), nil
 }
