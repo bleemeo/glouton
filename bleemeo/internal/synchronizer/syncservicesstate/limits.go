@@ -25,13 +25,9 @@ import (
 	"github.com/bleemeo/glouton/logger"
 )
 
-// Limits of each list sent to Bleemeo.
-//
-// The API accepts the lists as they come: it validates neither their length nor their
-// size. The only ceiling is the request body limit of Django, 2.5 MB (bleemeo-api leaves
-// DATA_UPLOAD_MAX_MEMORY_SIZE to its default), and a body over it is refused whole, on
-// every collection. Each list therefore gets 1 MiB, which leaves room for the rest of the
-// request, and a number of rows no real agent should reach.
+// Limits of each list sent to Bleemeo. The API validates neither, and refuses a body over
+// Django's 2.5 MB DATA_UPLOAD_MAX_MEMORY_SIZE whole: each list gets 1 MiB, leaving room for
+// the rest of the request.
 const (
 	maxServices      = 1000
 	maxServicesBytes = 1 << 20
@@ -39,13 +35,9 @@ const (
 	maxMetricsBytes  = 1 << 20
 )
 
-// limitServices bounds the services list. It returns the services kept, their JSON
-// encoding, and how many services it left out.
-//
-// Services with a problem to report are kept first: telling a user why a service is not
-// monitored is what this list is for. A service whose metrics the user disabled has an
-// error too, but it only reports their choice, so it does not get that priority. The
-// services kept stay in the order they came in, which is sorted.
+// limitServices bounds the services list, keeping first the services with a problem (a
+// service disabled by configuration is not one). It returns the services kept, in their
+// order, their encoding, and how many it left out.
 func limitServices(states []ServiceState) ([]ServiceState, [][]byte, int) {
 	hasProblem := func(s ServiceState) bool { return s.Error != "" && !s.MetricsIgnored }
 
@@ -62,23 +54,18 @@ func limitServices(states []ServiceState) ([]ServiceState, [][]byte, int) {
 	})
 }
 
-// limitMetrics bounds the not-registered metrics list. It returns the rows kept, their JSON
-// encoding, and how many rows it left out.
-//
-// The rows covering the most metrics are kept first. The rows kept stay in the order they
-// came in, which is sorted.
+// limitMetrics bounds the not-registered metrics list, keeping first the rows covering the
+// most metrics. It returns the rows kept, in their order, their encoding, and how many it
+// left out.
 func limitMetrics(states []bleemeoTypes.MetricState) ([]bleemeoTypes.MetricState, [][]byte, int) {
 	return limit(states, maxMetrics, maxMetricsBytes, func(a, b bleemeoTypes.MetricState) int {
 		return cmp.Compare(b.Count, a.Count)
 	})
 }
 
-// limit keeps rows of list, in priority order, while they fit in maxRows rows and maxBytes
-// of JSON. It returns them in their original order with their encoding, which the caller
-// reuses rather than encoding them again, and how many rows it left out.
-//
-// priority must only order rows by importance: ties keep their original order (the sort is
-// stable), so the choice is deterministic for a given list.
+// limit keeps rows in priority order while they fit in maxRows rows and maxBytes of JSON,
+// and returns them in their original order with their encoding. The sort is stable, so the
+// cut is deterministic.
 func limit[T any](list []T, maxRows int, maxBytes int, priority func(a, b T) int) ([]T, [][]byte, int) {
 	order := make([]int, len(list))
 	for i := range order {
@@ -100,9 +87,7 @@ func limit[T any](list []T, maxRows int, maxBytes int, priority func(a, b T) int
 
 		row, err := json.Marshal(list[i])
 		if err != nil {
-			// Not reachable with the types used here, which hold only strings, numbers and
-			// booleans. Leaving the row out is still better than sending a list the API
-			// cannot parse.
+			// Not reachable with these types; leaving the row out still beats an unparsable list.
 			logger.V(1).Printf("Unable to encode a services state row: %v", err)
 
 			continue
@@ -138,10 +123,8 @@ func limit[T any](list []T, maxRows int, maxBytes int, priority func(a, b T) int
 	return result, rows, len(list) - kept
 }
 
-// minEncodedSize is a lower bound of the JSON size of any value of T.
-//
-// The zero value is the shortest encoding but for its booleans: "true" is one character
-// shorter than "false". The margin covers that for the few booleans these types have.
+// minEncodedSize is a lower bound of the JSON size of a T: its zero value, less a margin for
+// booleans, "true" being shorter than "false".
 func minEncodedSize[T any]() int {
 	var zero T
 

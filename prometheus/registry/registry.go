@@ -338,14 +338,11 @@ type registration struct {
 	lastErrorLogAt       time.Time
 }
 
-// LastScrapeState returns a snapshot of the most recent scrape of this registration.
+// LastScrapeState returns a snapshot of the most recent run of this registration, for
+// discovery's report of whether a service's input works.
 //
-// It implements the optional interface used by discovery to report, to Bleemeo, whether
-// a service's input works. A registration that never completed a scrape returns the zero
-// value, whose HasRun is false.
-//
-// Only reg.l is taken, never the registry's r.l: holding r.l while a registration is
-// stopped or restarted can deadlock (see restartScrapeLoop).
+// Only reg.l is taken, never r.l, which can deadlock while a registration is stopped or
+// restarted (see restartScrapeLoop).
 func (reg *registration) LastScrapeState() types.ScrapeState {
 	reg.l.Lock()
 	defer reg.l.Unlock()
@@ -356,17 +353,9 @@ func (reg *registration) LastScrapeState() types.ScrapeState {
 
 	last := reg.lastScrapes[len(reg.lastScrapes)-1]
 
-	// A run skipped by the relabel hook is recorded in lastScrapes with
-	// errSkippingScrapeDueToRelabelHook, but it is neither a scrape nor a failure: the
-	// relabel hook asked to retry later, as Bleemeo's does while it cannot yet resolve the
-	// agent a target's metrics belong to (SNMP, Kubernetes, ...). Report "not scraped"
-	// rather than that error, which would quote Glouton internals as if the input were
-	// broken.
-	//
-	// Only the most recent run is considered. Walking back to an older real scrape would
-	// present a result up to maxLastScrape intervals old as the current state, and would
-	// flip to "not scraped" by itself once the ring dropped that entry -- a reported change
-	// caused by the buffer rolling over rather than by anything happening to the service.
+	// A run skipped by the relabel hook is neither a scrape nor a failure, so it reads as
+	// "not scraped". Only the most recent run counts: walking back to an older scrape would
+	// report a stale result, which would then change by itself as the ring rolls over.
 	if errors.Is(last.Error, errSkippingScrapeDueToRelabelHook) {
 		return types.ScrapeState{}
 	}

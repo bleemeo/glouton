@@ -700,18 +700,14 @@ type ScheduleOption struct {
 	SkipIfRunBefore bool
 }
 
-// ScrapeState is a snapshot of the last scrape done for a registration.
-//
-// It deliberately carries no timestamp: it is reported to Bleemeo as part of the
-// services state, which must stay stable between two collections, so a timestamp
-// would make the reported value change on every scrape.
+// ScrapeState is a snapshot of a registration's last scrape. It has no timestamp: it is
+// reported to Bleemeo, where the value must stay stable.
 type ScrapeState struct {
-	// HasRun tells whether a scrape completed at least once. When false, the other
-	// fields are meaningless.
+	// HasRun tells whether the last run was a real scrape: false before the first one, or when
+	// the last run was skipped. When false, the other fields are meaningless.
 	HasRun bool
-	// FamiliesCount is the number of metric families produced by the last scrape.
-	// It counts families, not points: the registry stores len(mfs) in
-	// scrapeRun.ScrapedPointsCount, despite that field's name.
+	// FamiliesCount is the number of metric families of the last scrape: the registry stores
+	// len(mfs) in scrapeRun.ScrapedPointsCount, despite that field's name.
 	FamiliesCount int
 	// Error is the last scrape error, empty when the last scrape succeeded.
 	Error string

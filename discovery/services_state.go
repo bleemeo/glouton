@@ -31,20 +31,11 @@ import (
 	"github.com/bleemeo/glouton/types"
 )
 
-// inputSupportedServiceTypes lists the service types for which Glouton knows how to build
-// a metric input, that is the types handled by createInput.
+// inputSupportedServiceTypes lists the service types createInput builds an input for. See
+// ServiceState.InputSupported for why support is per type. CustomService is absent: a custom
+// check has no input, which is not the same as an unsupported type.
 //
-// This is a *static* property of the service type, not of the current run: a type stays
-// listed here even when the input could not be built on this agent (missing credentials,
-// unsupported platform, ...). Bleemeo uses it to tell "Glouton does not collect metrics
-// for this kind of service" apart from "Glouton could not collect them here", without
-// having to track which Glouton version introduced support for which service.
-//
-// CustomService is deliberately absent: a custom check never has a metric input, which is
-// not the same thing as a service type Glouton does not support.
-//
-// TestInputSupportedServiceTypesMatchesCreateInput keeps this list in sync with the
-// switch in createInput.
+// TestInputSupportedServiceTypesMatchesCreateInput keeps it in sync with createInput.
 var inputSupportedServiceTypes = map[ServiceName]bool{ //nolint:gochecknoglobals
 	ActiveMQService:      true,
 	ApacheService:        true,
@@ -83,12 +74,8 @@ var inputSupportedServiceTypes = map[ServiceName]bool{ //nolint:gochecknoglobals
 	ZookeeperService:     true,
 }
 
-// jmxServiceTypes lists the service types whose metrics Glouton collects only through
-// JMX, with jmxtrans, rather than with an input built by createInput. They are supported
-// too: a user enabling JMX and setting the service's jmx_port gets their metrics.
-//
-// TestJMXServiceTypesAreSupported, in jmxtrans, keeps this list in sync with the types
-// jmxtrans has metrics for.
+// jmxServiceTypes lists the service types whose metrics only jmxtrans collects.
+// TestJMXServiceTypesMatchDiscovery, in jmxtrans, keeps it in sync with jmxtrans.
 var jmxServiceTypes = map[ServiceName]bool{ //nolint:gochecknoglobals
 	BitBucketService:  true,
 	CassandraService:  true,
@@ -97,29 +84,22 @@ var jmxServiceTypes = map[ServiceName]bool{ //nolint:gochecknoglobals
 	KafkaService:      true,
 }
 
-// InputSupported tells whether Glouton knows how to collect metrics for this service
-// type, with an input or through JMX. See inputSupportedServiceTypes.
+// InputSupported tells whether Glouton can collect metrics for this service type, with an
+// input or through JMX.
 func InputSupported(serviceType ServiceName) bool {
 	return inputSupportedServiceTypes[serviceType] || jmxServiceTypes[serviceType]
 }
 
-// inputOutcome is what happened when Glouton tried to build a metric input for a service.
-//
-// It is recorded per service by configureMetricInputs, because createInput has several
-// paths that all end up with no input registered and which mean very different things to
-// a user: "this service type has no input at all" is not "I am missing your password".
+// inputOutcome is what configureMetricInputs could do for a service: the paths ending with no
+// input mean very different things to a user, such as an unsupported type or a missing
+// password.
 type inputOutcome int
 
 const (
-	// inputRegistered means an input was built and registered. Whether it actually
-	// produces metrics is only known from its scrape state.
+	// inputRegistered means an input was registered; its scrape state tells whether it works.
 	inputRegistered inputOutcome = iota
-	// inputInactive means the service is not currently running.
-	//
-	// It is recorded but never reported: ServicesState leaves inactive services out
-	// entirely, because Bleemeo learns a service stopped from its Service object being
-	// deactivated, and keeping them here would make the value change as they age out of
-	// discovery.
+	// inputInactive means the service is not Active, which is not "not running" (see
+	// ServicesState). It is never reported: ServicesState leaves inactive services out.
 	inputInactive
 	// inputContainerStopped means the service's container is stopped.
 	inputContainerStopped
@@ -142,10 +122,9 @@ const (
 	inputCreateFailed
 )
 
-// Messages reported as a service's error when Glouton has no input for it. They are fixed
-// strings, never the error text createInput returned: that text comes from Telegraf, may
-// quote the service configuration (a MySQL DSN holds the password) and is not meant for
-// a user anyway.
+// Messages reported as a service's error when nothing collects its metrics. They are fixed:
+// createInput's error text comes from Telegraf and may quote the configuration, such as a
+// MySQL DSN with its password.
 const (
 	msgCreateFailed        = "failed to create the input"
 	msgMissingInfo         = msgCreateFailed + ": missing credentials or address"
@@ -165,11 +144,8 @@ type inputResult struct {
 	message string
 }
 
-// newInputResult builds the inputResult of a createInput call.
-//
-// Outcomes that need no explanation get no message: the service type already tells a
-// custom check (CustomService) or an unsupported type (InputSupported), and Bleemeo knows
-// a container is stopped from the Container object.
+// newInputResult builds the inputResult of an outcome. Outcomes that the service type or the
+// Container object already explain get no message.
 func newInputResult(outcome inputOutcome, err error) inputResult {
 	result := inputResult{outcome: outcome}
 
@@ -196,20 +172,14 @@ func newInputResult(outcome inputOutcome, err error) inputResult {
 	return result
 }
 
-// scrapeStateProvider is implemented by registry registrations, which can tell how their
-// last scrape went.
-//
-// It is an optional interface, asserted at the call site, rather than a method added to
-// types.Registration: only the services state needs it, and this is how this code already
-// reaches for capabilities a gatherer may or may not have (see the diagnosticer assertion
-// in the registry, or inputs.SecretfulInput).
+// scrapeStateProvider is implemented by registry registrations. It is asserted at the call
+// site, like the registry's diagnosticer, rather than added to types.Registration.
 type scrapeStateProvider interface {
 	LastScrapeState() types.ScrapeState
 }
 
-// JMXStateProvider tells how the collection of a service's metrics through JMX goes. It is
-// implemented by jmxtrans, which collects them without any registry registration, so
-// that there is no scrape state to read otherwise.
+// JMXStateProvider tells how jmxtrans collects a service's metrics, which go through no
+// registry registration.
 type JMXStateProvider interface {
 	ServiceScrapeState(service NameInstance) types.ScrapeState
 }
@@ -233,15 +203,10 @@ func (s jmxScrapeState) LastScrapeState() types.ScrapeState {
 	return s.provider.ServiceScrapeState(s.service)
 }
 
-// ServiceState is what Glouton knows about one service, so that Bleemeo can tell a user
-// why a service is or is not monitored.
-//
-// It deliberately holds no Bleemeo identifier: discovery does not know them. The service
-// UUID is added later, by the Bleemeo synchronizer, which has the API cache.
+// ServiceState is what Glouton knows about one service, so that Bleemeo can tell a user why
+// it is or is not monitored. The synchronizer adds the service UUID, from its API cache.
 type ServiceState struct {
-	// Name identifies the service. It is not always redundant with ServiceType: every
-	// custom check shares ServiceType CustomService, and without the name two checks a
-	// user declared would be indistinguishable in the report.
+	// Name tells apart custom checks, which all share ServiceType CustomService.
 	Name          string      `json:"name"`
 	ServiceType   ServiceName `json:"type"`
 	Instance      string      `json:"instance"`
@@ -249,24 +214,17 @@ type ServiceState struct {
 	// Dynamic tells whether discovery found this service, as opposed to it being declared
 	// in the configuration.
 	Dynamic bool `json:"dynamic"`
-	// InputSupported tells whether Glouton has a metric input for this service type at
-	// all, its own or through JMX. It is a static property of the type, true even when the
-	// input could not be built here, so that Bleemeo does not need to track which Glouton
-	// version added support for which service.
+	// InputSupported tells whether Glouton can collect metrics for this service type at all. It
+	// is a property of the type, true even when collection failed here, so that Bleemeo need not
+	// know which Glouton version supports which service.
 	InputSupported bool `json:"input_supported"`
 	// Error is the last error reported by the input or, when Glouton has no input for
 	// this service, why: missing credentials, unsupported platform, ... It is empty when
 	// there is nothing to report.
 	Error string `json:"error,omitempty"`
-	// MetricFamiliesBucket is 0, 1, or 2 meaning "two or more".
-	//
-	// It counts metric *families*, that is distinct metric names, not series: an input
-	// producing one family of fifty series reports 1. That is the useful signal here,
-	// which is whether the input produces anything at all.
-	//
-	// The exact count is deliberately not reported: this value is kept synchronized with
-	// the API, so it must be stable, and an input does not always produce the same number
-	// of metrics.
+	// MetricFamiliesBucket is the number of metric families (names, not series) of the last
+	// scrape, as 0, 1 or 2 meaning "two or more": whether the input produces anything, kept
+	// coarse so that the value stays stable.
 	MetricFamiliesBucket int `json:"metrics"`
 	// MetricsIgnored tells whether the service's metrics are disabled by the configuration.
 	// Error then says so, but reports a choice the user made rather than a failure. Not
@@ -274,29 +232,15 @@ type ServiceState struct {
 	MetricsIgnored bool `json:"-"`
 }
 
-// ServicesState returns what Glouton knows about each service it currently sees.
+// ServicesState returns what Glouton knows about each active service, sorted so that the
+// result can be hashed. Services declared in the configuration are included.
 //
-// Inactive services are left out. Note what Service.Active actually means, because it is
-// not simply "the daemon is running" (see setServiceActiveAndContainer):
-//   - a containerised service is inactive once its container is gone, ignored or replaced;
-//   - a service with an ExePath is inactive only once that binary no longer exists, so a
-//     daemon that is merely stopped stays active and is reported, with the error from its
-//     input. That is wanted: "MySQL is installed but refuses connections" is precisely
-//     what a user needs to be told;
-//   - a service with neither is inactive after absentServiceDeactivationDelay.
-//
-// Services declared in the configuration are kept even when nothing was found for them,
-// as a user-declared service that never worked is exactly what this is for.
-//
-// The result is sorted, because it is hashed to decide whether the API needs updating and
-// map iteration order would otherwise make it differ on every call.
+// Active is not "running" (see setServiceActiveAndContainer): a stopped daemon whose binary
+// still exists stays active, and is reported with its input's error.
 func (d *Discovery) ServicesState() []ServiceState {
 	result, providers := d.servicesStateLocked()
 
-	// Queried outside d.l on purpose: LastScrapeState takes the registration's own lock,
-	// which the registry holds while a scrape finishes. Waiting for it with d.l held would
-	// block discovery itself -- GetLatestDiscovery, RemoveIfNonRunning, the next discovery
-	// pass -- behind a diagnostic read.
+	// Read outside d.l, so that discovery never waits on a registration's lock.
 	for i, pending := range providers {
 		if pending.provider == nil {
 			continue
@@ -316,8 +260,8 @@ type pendingScrape struct {
 	secrets  []string
 }
 
-// servicesStateLocked builds the report from discovery's own state, returning for each
-// entry the scrape state that still has to be read, whose provider is nil when it has none.
+// servicesStateLocked builds the report from discovery's own state, with the scrape state
+// each entry still has to read (a nil provider when none).
 func (d *Discovery) servicesStateLocked() ([]ServiceState, []pendingScrape) {
 	d.l.Lock()
 	defer d.l.Unlock()
@@ -341,8 +285,7 @@ func (d *Discovery) servicesStateLocked() ([]ServiceState, []pendingScrape) {
 			InputSupported: InputSupported(service.ServiceType),
 		}
 
-		// Without a result, configureMetricInputs has not run for this service yet, and
-		// there is nothing to report.
+		// No result: configureMetricInputs has not run for this service yet.
 		input, hasResult := d.inputResult[key]
 
 		var pending pendingScrape
@@ -355,11 +298,8 @@ func (d *Discovery) servicesStateLocked() ([]ServiceState, []pendingScrape) {
 				pending.secrets = serviceSecrets(service.Config)
 			}
 		case input.outcome == inputUnsupportedType || input.outcome == inputCheckOnly:
-			// No input does not mean no metrics: jmxtrans collects them, for any service
-			// with a jmx_port, without createInput being involved.
-			//
-			// InputSupported is left alone: it stays a property of the type, which
-			// already covers the types JMX collects (jmxServiceTypes).
+			// jmxtrans collects the metrics of any service with a jmx_port. InputSupported
+			// stays the type's: jmxServiceTypes covers the types only JMX collects.
 			switch {
 			case d.jmxState != nil && service.Config.JMXPort != 0 && service.IPAddress == "":
 				// jmxtrans skips a service it has no address for.
@@ -388,9 +328,8 @@ func (d *Discovery) servicesStateLocked() ([]ServiceState, []pendingScrape) {
 	return result, providers
 }
 
-// compareServiceState orders on every field that identifies a service. slices.SortFunc is
-// not stable and the input comes from map iteration, so ties would order randomly and
-// change the hash the synchronizer compares, re-sending an unchanged value every time.
+// compareServiceState orders on every identifying field: the input comes from map iteration,
+// and ties would make the hash differ between calls.
 func compareServiceState(a, b ServiceState) int {
 	if c := cmp.Compare(a.ServiceType, b.ServiceType); c != 0 {
 		return c
@@ -407,16 +346,11 @@ func compareServiceState(a, b ServiceState) int {
 	return cmp.Compare(a.ContainerName, b.ContainerName)
 }
 
-// maxErrorLength bounds the error reported per service.
-//
-// An input's error is not bounded by anything: a Prometheus MultiError concatenates one
-// message per offending metric, so a single misbehaving input could otherwise push the
-// whole payload past the 2.5 MB body limit of the API and have every collection rejected.
-// The head of the message is what identifies the problem.
+// maxErrorLength bounds the error reported per service: a Prometheus MultiError grows with
+// the number of offending metrics.
 const maxErrorLength = 500
 
-// truncateError bounds an error message, marking it when it was cut so that a reader is
-// not left wondering whether the message really ended there.
+// truncateError bounds an error message, saying so when it was cut.
 func truncateError(message string) string {
 	if len(message) <= maxErrorLength {
 		return message
@@ -432,20 +366,14 @@ func truncateError(message string) string {
 	return message[:cut] + "... (truncated)"
 }
 
-// localAddressRegex matches the local address of a network error, as net.OpError prints
-// it for an established connection: "read tcp 127.0.0.1:52431->127.0.0.1:3306: ...".
-// The network name anchors it, so that a "->" elsewhere in a message is left alone.
+// localAddressRegex matches the local address of a net.OpError, as in
+// "read tcp 127.0.0.1:52431->127.0.0.1:3306", anchored on the network name.
 var localAddressRegex = regexp.MustCompile(`\b((?:tcp|udp|ip|unix)(?:4|6|gram|packet)?) [^\s>]*->`)
 
-// stabilizeError removes from an input's error what changes on every scrape while the
-// problem stays the same, so that Bleemeo is not updated each time for nothing:
-//   - the local address of a network error, whose port is ephemeral, a new one for each
-//     connection. The remote address, which tells what Glouton failed to reach, is kept;
-//   - the order of the errors an input reported. They are joined one per line in the
-//     order the input added them, and an input gathering concurrently, such as RabbitMQ,
-//     adds them in a different order on every scrape. Lines are sorted, and duplicates
-//     dropped. This also reorders the lines of a single multi-line error, which loses
-//     nothing a user needs and keeps the value stable.
+// stabilizeError removes what changes between scrapes while the problem stays the same: the
+// local address of a network error, whose port is ephemeral, and the order of joined errors,
+// which concurrent inputs such as RabbitMQ add differently each time (lines are sorted and
+// deduplicated).
 func stabilizeError(message string) string {
 	message = localAddressRegex.ReplaceAllString(message, "$1 ")
 
@@ -455,23 +383,15 @@ func stabilizeError(message string) string {
 	return strings.Join(slices.Compact(lines), "\n")
 }
 
-// urlPasswordRegex matches the password of a URL quoted in an error: "://user:password@".
-// It stops at "/", quote and newline, which end a URL's authority in an error message, and
-// takes the last "@" before them, as URL parsing does.
+// urlPasswordRegex matches the password of a URL quoted in an error, "://user:password@", up
+// to the last "@" before a "/", a quote or a newline.
 var urlPasswordRegex = regexp.MustCompile(`(://[^/\s:@"]*):[^/"\n]*@`)
 
-// redactError hides the passwords an input's error may quote.
-//
-// A scrape error is reported as the input wrote it, and some quote their configured URL
-// with its credentials: Telegraf's HAProxy input does when the stats URL fails to parse,
-// as it does with a "%" or a space in the password.
-//
-// secrets are the service's own, from serviceSecrets, and are replaced wherever they
-// appear. The URL pattern alone is not enough: it cannot tell where a password holding a
-// "/" or a quote ends, and Go's URL parser quotes a password cut at its first "/", "?" or
-// "#" with no "@" after it, as in `invalid port ":pa" after host`. The pattern still
-// catches passwords that are not in the configuration, which it replaces the way net/url's
-// Redacted does.
+// redactError hides the passwords an input's error may quote, as Telegraf's HAProxy input
+// does with a stats URL that fails to parse. secrets, from serviceSecrets, are replaced
+// wherever they appear: the URL pattern cannot find a password holding a "/" or a quote, nor
+// the prefix Go's URL parser quotes as a port. The pattern covers passwords that are not in
+// the configuration.
 func redactError(message string, secrets []string) string {
 	for _, secret := range secrets {
 		message = strings.ReplaceAll(message, secret, "xxxxx")
@@ -480,14 +400,12 @@ func redactError(message string, secrets []string) string {
 	return urlPasswordRegex.ReplaceAllString(message, "$1:xxxxx@")
 }
 
-// minSecretLength is the shortest secret redactError replaces wherever it appears. A
-// shorter one would replace ordinary text too: a one-letter password would blank every
-// occurrence of that letter.
+// minSecretLength is the shortest secret redactError replaces: a shorter one would also
+// replace ordinary text.
 const minSecretLength = 3
 
-// serviceSecrets returns the secrets of a service's configuration, in every form its
-// input's error may quote them, longest first so that a secret is replaced before its
-// prefix is.
+// serviceSecrets returns the secrets of a service's configuration, in each form an error may
+// quote them, longest first so that a secret is replaced before its prefix.
 func serviceSecrets(cfg config.Service) []string {
 	var secrets []string
 
@@ -519,10 +437,9 @@ func serviceSecrets(cfg config.Service) []string {
 	return slices.Compact(secrets)
 }
 
-// urlSecrets returns the secrets of a URL: the password of "scheme://user:password@host...",
-// and the values of query parameters that look like one ("?password=", "&token=", ...),
-// both as written and decoded. It does not parse the URL: a URL quoted in an error is often
-// one that does not parse. The password runs to the last "@", as it does for net/url.
+// urlSecrets returns the password of "scheme://user:password@host" and the values of
+// secret-looking query parameters, also decoded. The URL is not parsed: one quoted in an
+// error often does not parse.
 func urlSecrets(rawURL string) []string {
 	_, rest, ok := strings.Cut(rawURL, "://")
 	if !ok {
@@ -582,9 +499,8 @@ func scrapeResult(provider scrapeStateProvider, secrets []string) (string, int) 
 		return "", 0
 	}
 
-	// Stabilized before redaction, which could otherwise replace a secret matching part of
-	// what stabilizeError looks for (a password "tcp" would hide the local address from it);
-	// and both before truncation, so that the cut lands at the same place every time.
+	// Stabilized first, as redacting could hide what stabilizeError looks for (a password
+	// "tcp"); truncated last, so that the cut is always at the same place.
 	return truncateError(redactError(stabilizeError(scrape.Error), secrets)), metricsBucket(scrape.FamiliesCount)
 }
 

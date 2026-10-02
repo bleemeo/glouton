@@ -24,10 +24,8 @@ import (
 	"github.com/bleemeo/glouton/types"
 )
 
-// stateWindow is how far back the collection state looks. It is the time-to-live of the
-// points jmxtrans sends, so a metric counts as collected while its points are still
-// there; and it is long enough, compared to jmxtrans' flush interval, that the state does
-// not change between two flushes.
+// stateWindow is how far back the collection state looks: the TTL of the points jmxtrans
+// sends, and many flush intervals, so that the state does not change between two flushes.
 const stateWindow = 5 * time.Minute
 
 const (
@@ -35,20 +33,19 @@ const (
 	errMsgNoMetrics    = "no metrics received through JMX"
 )
 
-// collectionState records what jmxtrans sent, per service, so that the services state
-// reported to Bleemeo can tell whether JMX works for each. Its zero value is ready to use.
+// collectionState records what jmxtrans sent, per service. Its zero value is ready to use.
 type collectionState struct {
 	l sync.Mutex
 	// now is time.Now when nil. Tests set it.
 	now func() time.Time
 
-	// configuredAt is when each service was first given to jmxtrans, to leave it the time
-	// of a window before reporting that nothing came.
+	// configuredAt is when each service was first given to jmxtrans, which gets a window
+	// before nothing received counts as an error.
 	configuredAt map[discovery.NameInstance]time.Time
 	// received is, per service, when each metric name was last received.
 	received map[discovery.NameInstance]map[string]time.Time
-	// connections is how many jmxtrans connections are open, and disconnectedAt when the
-	// last one closed.
+	// connections is how many jmxtrans connections are open, and disconnectedAt when one last
+	// closed.
 	connections    int
 	disconnectedAt time.Time
 }
@@ -132,12 +129,9 @@ func (s *collectionState) disconnected() {
 	s.disconnectedAt = s.clock()
 }
 
-// ServiceScrapeState implements discovery.JMXStateProvider.
-//
-// The count is of the metric names received in the last stateWindow. An error is only
-// reported once a service has been given to jmxtrans for a whole window with nothing
-// received, so that a service just configured, or a jmxtrans just started, does not read
-// as broken.
+// ServiceScrapeState implements discovery.JMXStateProvider: the number of metric names
+// received in the last stateWindow or, once a service was given to jmxtrans a whole window
+// ago with nothing received, why.
 func (s *collectionState) ServiceScrapeState(service discovery.NameInstance) types.ScrapeState {
 	s.l.Lock()
 	defer s.l.Unlock()

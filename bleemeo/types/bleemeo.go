@@ -255,14 +255,9 @@ func (kind FailureKind) String() string {
 	}
 }
 
-// MetricStateReason is why a metric Glouton knows about is not registered on Bleemeo.
-//
-// It unifies the vocabularies Glouton uses internally, which cover different stages and
-// were never meant to be shown together: FailureKind, for a registration that was
-// attempted and refused, DenyReason, for a metric dropped before registration was even
-// tried, and the dependency cases that had no name at all. Bleemeo needs one list of
-// reasons to explain to a user why a metric is missing, regardless of which stage
-// dropped it.
+// MetricStateReason is why a metric Glouton has is not registered on Bleemeo. It unifies
+// FailureKind (refused by the API), DenyReason (dropped before registration) and the
+// dependency waits, which had no name, so that Bleemeo gets one vocabulary.
 type MetricStateReason string
 
 // All possible values of MetricStateReason.
@@ -333,28 +328,23 @@ func (d DenyReason) MetricStateReason() MetricStateReason {
 	}
 }
 
-// MetricState is how many metrics sharing a name are not registered, and why.
-//
-// Name is the metric name only, without item or any other label: "disk_used_perc", not
-// "disk_used_perc{item=/home}". Keeping labels would make this list as large as the
-// metric list itself, which is what this is meant to avoid.
+// MetricState is how many metrics sharing a name are not registered, and why. Name is the
+// metric name only, such as "disk_used_perc", without item or labels.
 type MetricState struct {
 	Name   string            `json:"name"`
 	Reason MetricStateReason `json:"reason"`
 	Count  int               `json:"count"`
 }
 
-// ServicesStateSent is what Glouton remembers of the last services state it sent to
-// Bleemeo, to decide whether and when to send it again. It is kept in the cache, so that a
-// restart neither re-sends an unchanged value nor reads every service as new.
+// ServicesStateSent is what Glouton remembers of the last services state it sent, kept in the
+// cache so that a restart neither re-sends an unchanged value nor reads every service as new.
 type ServicesStateSent struct {
-	// AgentID is the agent the value was sent to. The cache can outlive the agent: it is
-	// kept in state.cache.json, which survives deleting state.json to register again.
+	// AgentID is the agent the value was sent to: the cache, in state.cache.json, survives
+	// deleting state.json to register again.
 	AgentID string
 	// Hash identifies the value last accepted by the API. Empty when none was.
 	Hash string
-	// Services are the services that value listed with a settled state, to tell a service
-	// newly worth sending. See syncservicesstate.NeedSend.
+	// Services are the services that value listed as settled. See syncservicesstate.NeedSend.
 	Services []discovery.NameInstance
 	// LastAttemptAt is when a send was last attempted, accepted or not.
 	LastAttemptAt time.Time

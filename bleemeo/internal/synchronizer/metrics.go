@@ -338,17 +338,15 @@ func (s *Synchronizer) metricKey(lbls map[string]string, annotations gloutonType
 	return metricutils.MetricKey(lbls, annotations, s.agentID)
 }
 
-// metricStateKey groups not-registered metrics by name and reason, dropping the item and
-// every other label: keeping them would make the reported list as large as the metric list
-// itself.
+// metricStateKey groups not-registered metrics by name and reason. The item and other labels
+// are dropped, or the list would be as large as the metrics themselves.
 type metricStateKey struct {
 	Name   string
 	Reason bleemeoTypes.MetricStateReason
 }
 
-// countNotRegistered records one metric that will not be registered.
-//
-// Must not be called with s.l held: it logs through logThrottle, which takes it.
+// countNotRegistered records one metric that will not be registered. Must not be called
+// with s.l held: logThrottle takes it.
 func (s *Synchronizer) countNotRegistered(
 	counts map[metricStateKey]int,
 	metric gloutonTypes.Metric,
@@ -356,9 +354,7 @@ func (s *Synchronizer) countNotRegistered(
 ) {
 	name := metric.Labels()[gloutonTypes.LabelName]
 	if name == "" {
-		// There is nothing to group this metric under, so it cannot appear in the report.
-		// Say so in the log rather than drop it in silence, which is the very thing this
-		// report exists to stop doing.
+		// Nothing to group it under: say so in the log rather than drop it silently.
 		s.logThrottle("metric-without-name", 1, fmt.Sprintf(
 			"A metric without a %s label was not registered (reason %s, labels %v). "+
 				"It cannot be reported to Bleemeo.",
@@ -371,12 +367,9 @@ func (s *Synchronizer) countNotRegistered(
 	counts[metricStateKey{Name: name, Reason: reason}]++
 }
 
-// filterMetrics only keeps the points that can be registered.
-//
-// It also records why it drops each metric. Those metrics are otherwise invisible to
-// Bleemeo: they never reach registration, so they appear neither in the registered metrics
-// nor in the registration failures, and a user asking "where is my metric?" would get no
-// answer at all.
+// filterMetrics only keeps the points that can be registered, and records why it drops the
+// others: they reach neither registration nor the registration failures, so nothing else
+// would tell Bleemeo about them.
 func (s *Synchronizer) filterMetrics(input []gloutonTypes.Metric) []gloutonTypes.Metric {
 	result := make([]gloutonTypes.Metric, 0)
 
@@ -384,10 +377,8 @@ func (s *Synchronizer) filterMetrics(input []gloutonTypes.Metric) []gloutonTypes
 
 	notRegistered := make(map[metricStateKey]int)
 
-	// Without the account configuration nothing can be registered, and every metric would
-	// otherwise be recorded as "error-occurred": NewFilter keeps a zero GloutonAccountConfig
-	// when the cache has none, so allowListForMetric fails for every metric. Report the
-	// real cause instead, and do not bother filtering.
+	// Without the account configuration nothing can be registered. NewFilter would then fail
+	// every metric as "error-occurred", so record the real cause instead.
 	cfg, ok := s.option.Cache.CurrentAccountConfig()
 	if !ok {
 		for _, m := range input {
@@ -431,8 +422,7 @@ func (s *Synchronizer) filterMetrics(input []gloutonTypes.Metric) []gloutonTypes
 
 	result = s.excludeUnregistrableMetrics(result, cfg, notRegistered)
 
-	// Staged, not published: publishMetricsState puts this and the pending counts live
-	// together, so the two halves of the report always come from the same synchronization.
+	// Staged: publishMetricsState publishes it with the registration half, from the same run.
 	s.l.Lock()
 	s.stagedNotRegistered = notRegistered
 	s.l.Unlock()
@@ -442,9 +432,7 @@ func (s *Synchronizer) filterMetrics(input []gloutonTypes.Metric) []gloutonTypes
 
 // excludeUnregistrableMetrics remove metrics that cannot be registered, due to either
 // a missing dependency (like a container that must be registered before) or an item too long.
-//
-// cfg is the account configuration filterMetrics already read: without one, nothing gets
-// this far.
+// cfg is the account configuration filterMetrics read.
 func (s *Synchronizer) excludeUnregistrableMetrics(
 	metrics []gloutonTypes.Metric,
 	cfg bleemeoTypes.GloutonAccountConfig,
@@ -501,12 +489,8 @@ func (s *Synchronizer) findUnregisteredMetrics(metrics []gloutonTypes.Metric) []
 	return result
 }
 
-// findUnregisteredMetricsWithKeys is findUnregisteredMetrics, also returning the metric key
-// it computed for each metric it returns.
-//
-// Building a key means building a labels-text string, so publishMetricsState, which needs
-// the keys, takes them from here rather than computing them a second time over every
-// metric. findUnregisteredMetrics does not, so it keeps its own loop.
+// findUnregisteredMetricsWithKeys is findUnregisteredMetrics also returning each metric's key,
+// so that publishMetricsState does not build the labels text again.
 func (s *Synchronizer) findUnregisteredMetricsWithKeys(metrics []gloutonTypes.Metric) ([]gloutonTypes.Metric, []string) {
 	registeredMetricsByKey := s.option.Cache.MetricLookupFromList()
 
@@ -526,15 +510,10 @@ func (s *Synchronizer) findUnregisteredMetricsWithKeys(metrics []gloutonTypes.Me
 	return result, keys
 }
 
-// publishMetricsState makes the report of this synchronization live: the metrics
-// filterMetrics dropped, which it staged, and the metrics that passed the filter but are
-// not registered, given here with their keys.
-//
-// Each unregistered metric is counted with its registration failure when it has one, and
-// as pending otherwise. Starting from the metrics Glouton has, rather than from the failure
-// cache, matters: that cache keeps an entry up to failedRegistrationExpiration after its
-// metric is gone, and also holds metrics the filter now drops, which filterMetrics already
-// counted under their own reason.
+// publishMetricsState makes this synchronization's report live: the metrics filterMetrics
+// staged, and the unregistered ones given here, each counted with its registration failure,
+// or as pending. It starts from the metrics Glouton has, not the failure cache, which keeps
+// entries for metrics long gone or now dropped by the filter.
 func (s *Synchronizer) publishMetricsState(unregistered []gloutonTypes.Metric, keys []string) {
 	failedByKey := s.option.Cache.MetricRegistrationsFailByKey()
 	registration := make(map[metricStateKey]int)
@@ -554,24 +533,16 @@ func (s *Synchronizer) publishMetricsState(unregistered []gloutonTypes.Metric, k
 		registration[metricStateKey{Name: name, Reason: reason}]++
 	}
 
-	// Both halves go live together. They are built at different points of a
-	// synchronization, so publishing them separately would let a run that failed in
-	// between leave the report with one fresh half and one from an older run.
+	// Both halves together, so that a run failing in between cannot mix two runs.
 	s.l.Lock()
 	s.notRegisteredMetrics = s.stagedNotRegistered
 	s.registrationMetrics = registration
 	s.l.Unlock()
 }
 
-// MetricsState returns the metrics Glouton knows about but has not registered on Bleemeo,
-// grouped by metric name and reason. Registered metrics are left out: Bleemeo has them.
-//
-// It merges the three stages a metric can be lost at, which each had their own vocabulary
-// and none of which was reported before: dropped by the filter, waiting for a dependency,
-// or refused by the API.
-//
-// The result is sorted, because this list is kept synchronized with the API: an unstable
-// order would cause an API call on every collection for no new information.
+// MetricsState returns the metrics Glouton has but did not register, grouped by name and
+// reason: dropped by the filter, waiting for the account configuration or a dependency,
+// pending, or refused by the API. It is sorted, as the list is kept synchronized with the API.
 func (s *Synchronizer) MetricsState() []bleemeoTypes.MetricState {
 	counts := make(map[metricStateKey]int)
 
@@ -579,8 +550,7 @@ func (s *Synchronizer) MetricsState() []bleemeoTypes.MetricState {
 
 	maps.Copy(counts, s.notRegisteredMetrics)
 
-	// The two never share a key: a metric the filter dropped is not in the unregistered
-	// list publishMetricsState classifies.
+	// The two never share a key: a metric the filter dropped is not classified again.
 	for key, count := range s.registrationMetrics {
 		counts[key] += count
 	}
@@ -695,9 +665,8 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, syncType types.SyncType,
 		return updateThresholds, nil
 	}
 
-	// Published after registerMetrics, which is what fills the registration-failure cache
-	// this relies on. Publishing earlier would count a metric that just failed as pending
-	// as well as with its failure reason, reporting it twice.
+	// After registerMetrics, which records the failures this relies on: a metric that just
+	// failed would otherwise be counted as pending too.
 	s.publishMetricsState(s.findUnregisteredMetricsWithKeys(filteredMetrics))
 
 	if err := s.metricDeleteIgnoredServices(ctx, apiClient); err != nil {

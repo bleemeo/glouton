@@ -27,18 +27,12 @@ import (
 )
 
 const (
-	// minSendInterval is how often, at most, a changed services state is sent, and how
-	// long to wait after a failed attempt before trying again.
-	//
-	// Both lists move often -- a metric count changes every time one metric appears or
-	// disappears -- and each change would otherwise be an API request. After a failure,
-	// waiting as long keeps a value the API keeps refusing from being re-sent on every
-	// synchronization.
+	// minSendInterval is how often, at most, a changed state is sent, and how long to wait after
+	// a failed attempt: counts change all the time, and a refused value must not be re-sent on
+	// every synchronization.
 	minSendInterval = 30 * time.Minute
-	// minNewServiceInterval is how often, at most, a newly settled service sends the state
-	// sooner than minSendInterval. Without it, a host starting short-lived containers would
-	// send on every container start: a containerised service is identified by its container
-	// name, so each new container is a new service.
+	// minNewServiceInterval spaces the sends a newly settled service triggers: each new
+	// container is a new service, so a host starting short-lived ones would send on each start.
 	minNewServiceInterval = time.Minute
 )
 
@@ -68,44 +62,34 @@ func NewPayload(services []ServiceState, metrics []bleemeoTypes.MetricState) Pay
 	}
 }
 
-// hashRows identifies a payload from the encoding of its rows, which limit already did:
-// encoding the whole payload again on every synchronization would double that work. It
-// depends on the rows and on how many were left out, so a nil list and an empty one are
-// the same value, while a list cut by one more row is not.
+// hashRows identifies a payload from the rows limit already encoded, and how many it left out.
+// A nil list and an empty one hash the same.
 func hashRows(services [][]byte, metrics [][]byte, servicesDropped int, metricsDropped int) string {
 	h := sha256.New()
 
 	for _, list := range [][][]byte{services, metrics} {
 		for _, row := range list {
-			// Rows are JSON objects, so a newline can only separate them, never be part
-			// of one: two different lists cannot run into the same bytes.
+			// A newline cannot be part of a JSON row, so it separates rows unambiguously.
 			_, _ = h.Write(row)
 			_, _ = h.Write([]byte{'\n'})
 		}
 
-		// Ends a list, so that a row moving from one list to the other changes the hash.
+		// Ends a list, so that a row moving to the other list changes the hash.
 		_, _ = h.Write([]byte{0})
 	}
 
-	// The rows left out are not sent, but how many are is part of the value: one more
-	// service past the cut changes nothing in the rows kept.
+	// Dropped rows are not sent, but their count is part of the value.
 	_, _ = fmt.Fprintf(h, "%d %d", servicesDropped, metricsDropped)
 
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// NeedSend tells whether payload must be sent, given what was last sent:
+// NeedSend tells whether payload must be sent, given what was last sent to agentID:
 //   - never when it is what the API last accepted;
-//   - right away when nothing was attempted yet;
-//   - after a failed attempt, once minSendInterval has passed since it;
-//   - when it lists a settled service the last accepted value did not, once
-//     minNewServiceInterval has passed since the last attempt;
-//   - otherwise, once minSendInterval has passed since the last attempt.
-//
-// A clock that went back before the last attempt counts as the interval having passed,
-// rather than holding every change until the clock catches up.
-//
-// What was sent to another agent counts as nothing sent: see forAgent.
+//   - right away when nothing was attempted yet, or the clock went back before the last attempt;
+//   - minSendInterval after a failed attempt;
+//   - minNewServiceInterval after the last attempt when it lists a newly settled service;
+//   - minSendInterval after the last attempt otherwise.
 func NeedSend(last bleemeoTypes.ServicesStateSent, payload Payload, agentID string, now time.Time) bool {
 	last = forAgent(last, agentID)
 
@@ -130,9 +114,8 @@ func NeedSend(last bleemeoTypes.ServicesStateSent, payload Payload, agentID stri
 	}
 }
 
-// MaySend tells whether any payload could be sent at now, from the time gates of NeedSend
-// alone. When it is false, NeedSend is false whatever the payload, so the caller can skip
-// building one: that means reading both lists, encoding and hashing them.
+// MaySend tells whether NeedSend could be true for any payload at now, so that the caller can
+// skip building one.
 func MaySend(last bleemeoTypes.ServicesStateSent, agentID string, now time.Time) bool {
 	last = forAgent(last, agentID)
 
@@ -146,9 +129,7 @@ func MaySend(last bleemeoTypes.ServicesStateSent, agentID string, now time.Time)
 	}
 }
 
-// forAgent returns what was sent to agentID: last when it was sent to that agent, nothing
-// otherwise. The cache outlives the agent when it registers again, and the new Agent
-// object has nothing, whatever the previous one was sent.
+// forAgent returns what was sent to agentID: nothing when last was sent to another agent.
 func forAgent(last bleemeoTypes.ServicesStateSent, agentID string) bleemeoTypes.ServicesStateSent {
 	if last.AgentID != agentID {
 		return bleemeoTypes.ServicesStateSent{AgentID: agentID}
@@ -180,12 +161,9 @@ func SendFailed(last bleemeoTypes.ServicesStateSent, agentID string, now time.Ti
 	return last
 }
 
-// settled tells whether a service's state is worth sending sooner than minSendInterval:
-// Bleemeo can link it to its Service object, and Glouton knows how its monitoring went --
-// it has an error to report, produces metrics, or has no input to wait for.
-//
-// A service that just appeared is neither: sending it at once would tell Bleemeo nothing,
-// and the state that matters, a minute later, would then wait the whole interval.
+// settled tells whether a service's state is worth sending sooner than minSendInterval: it
+// has a service UUID, and an error, metrics, or no input to wait for. A service that just
+// appeared has neither, and its state a minute later is the one that matters.
 func settled(service ServiceState) bool {
 	if service.ServiceUUID == "" {
 		return false

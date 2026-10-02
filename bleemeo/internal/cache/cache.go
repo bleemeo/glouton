@@ -61,9 +61,8 @@ type data struct {
 	Configs                 []bleemeoTypes.Config
 	Services                []bleemeoTypes.Service
 	Monitors                []bleemeoTypes.Monitor
-	// ServicesStateSent was added without bumping cacheVersion: an older cache simply has
-	// none, which only causes the services state to be sent once, and an older Glouton
-	// ignores the field, while a bump would make it discard the whole cache.
+	// ServicesStateSent was added without a cacheVersion bump: an older cache has none (one extra
+	// send), and an older Glouton ignores it, where a bump would discard its whole cache.
 	ServicesStateSent bleemeoTypes.ServicesStateSent
 }
 

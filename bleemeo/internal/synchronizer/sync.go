@@ -124,16 +124,13 @@ type Synchronizer struct {
 	pendingMonitorsUpdate  []MonitorUpdate
 	thresholdOverrides     map[thresholdOverrideKey]threshold.Threshold
 	retryableMetricFailure map[bleemeoTypes.FailureKind]bool
-	// notRegisteredMetrics counts the metrics Glouton has but did not register on
-	// Bleemeo, grouped by metric name and reason.
+	// notRegisteredMetrics counts, by name and reason, the metrics the filter dropped.
 	notRegisteredMetrics map[metricStateKey]int
-	// stagedNotRegistered is what filterMetrics computed during the synchronization in
-	// progress. It only becomes notRegisteredMetrics once that synchronization reaches
-	// publishMetricsState, so the two reported halves always come from the same run.
+	// stagedNotRegistered is filterMetrics' count for the run in progress, published by
+	// publishMetricsState.
 	stagedNotRegistered map[metricStateKey]int
-	// registrationMetrics counts the metrics that passed the filter but are not registered,
-	// grouped by metric name and reason: pending, or refused by the API. Published together
-	// with notRegisteredMetrics.
+	// registrationMetrics counts the metrics that passed the filter but are not registered:
+	// pending, or refused by the API.
 	registrationMetrics           map[metricStateKey]int
 	disableCrashReportUploadUntil time.Time
 	lastInfo                      bleemeoTypes.GlobalInfo

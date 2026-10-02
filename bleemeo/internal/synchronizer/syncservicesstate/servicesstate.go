@@ -29,21 +29,15 @@ import (
 type ServiceState struct {
 	discovery.ServiceState
 
-	// ServiceUUID is the ID of the Service object registered for this service, empty when
-	// there is none: registration is pending, failed, or the service cannot be registered
-	// at all (an instance too long for the API, for example). Such a service is reported
-	// anyway, as it is precisely one Bleemeo cannot see otherwise.
+	// ServiceUUID is the ID of the Service object registered for this service, empty when there
+	// is none: pending, failed, or impossible (an instance too long for the API). Such a service
+	// is still reported.
 	ServiceUUID string `json:"service_uuid"`
 }
 
-// WithServiceUUID adds to each service the ID of the Service object it is registered as.
-//
-// registered is the cache's ServiceLookupFromList, so a service is matched the way the
-// services synchronization matches it -- by name and instance, the youngest object winning
-// when there are duplicates -- and gets the UUID that synchronization updates.
-//
-// The order of states is kept: discovery sorts it, and the result is compared to decide
-// whether the API needs updating.
+// WithServiceUUID adds to each service the ID of its Service object, matched as the services
+// synchronization does (name and instance, in the cache's ServiceLookupFromList). The order
+// of states is kept.
 func WithServiceUUID(
 	states []discovery.ServiceState,
 	registered map[common.ServiceNameInstance]bleemeoTypes.Service,

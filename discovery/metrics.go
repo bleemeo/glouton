@@ -316,9 +316,8 @@ func (d *Discovery) removeInput(key NameInstance) {
 	}
 }
 
-// createInput builds and registers the metric input of a service. It returns what it
-// could do, so that the caller can tell apart the several ways this ends up with no
-// input registered -- they mean very different things when reported to a user.
+// createInput builds and registers the metric input of a service, and returns what it could
+// do: the ways of ending with no input mean different things to a user.
 func (d *Discovery) createInput(service Service) (inputOutcome, error) { //nolint:maintidx
 	if !service.Active {
 		return inputInactive, nil
@@ -629,8 +628,7 @@ func (d *Discovery) createInput(service Service) (inputOutcome, error) { //nolin
 			input, err = zookeeper.New(net.JoinHostPort(ip, strconv.Itoa(port)))
 		}
 	case CustomService:
-		// A custom check never has a metric input. This is not the same as a service
-		// type Glouton does not support.
+		// A custom check never has a metric input, which is not an unsupported type.
 		return inputCheckOnly, nil
 	default:
 		logger.V(1).Printf("service type %s don't support metrics", service.ServiceType)
@@ -652,10 +650,8 @@ func (d *Discovery) createInput(service Service) (inputOutcome, error) { //nolin
 		return inputCreateFailed, err
 	}
 
-	// The switch matched this service type but built no input and reported no error: it
-	// lacked credentials or a reachable address. See createMySQLInput, which returns
-	// (nil, nil) when it has no password. A branch with another reason for building nothing
-	// must return its own outcome, as Varnish does, or it would be reported as this.
+	// No input and no error: the branch lacked credentials or an address, as createMySQLInput
+	// does without a password. A branch with another reason must return its own outcome.
 	if input == nil {
 		return inputMissingInfo, nil
 	}

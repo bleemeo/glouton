@@ -69,8 +69,8 @@ type Discovery struct {
 	subscribers           []*subscriber
 	lastConfigservicesMap map[NameInstance]Service
 	activeCollector       map[NameInstance]collectorDetails
-	// inputResult records, per service, what createInput could do. Services with no
-	// registered input have an entry too: that is the point of it.
+	// inputResult records, per service, what configureMetricInputs could do, including when it
+	// registered no input.
 	inputResult map[NameInstance]inputResult
 	// jmxState is how JMX collection goes, nil when JMX is disabled.
 	jmxState           JMXStateProvider
