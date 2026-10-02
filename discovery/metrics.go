@@ -247,8 +247,14 @@ func (d *Discovery) configureMetricInputs(oldServices, services map[NameInstance
 		if !ok || serviceNeedUpdate(oldService, service, oldServiceState, serviceState) {
 			d.removeInput(key)
 
-			if serviceState != facts.ContainerStopped {
-				err.Append(d.createInput(service))
+			if serviceState == facts.ContainerStopped {
+				d.inputResult[key] = newInputResult(inputContainerStopped, nil)
+			} else {
+				outcome, createErr := d.createInput(service)
+
+				d.inputResult[key] = newInputResult(outcome, createErr)
+
+				err.Append(createErr)
 			}
 		}
 	}
@@ -300,6 +306,8 @@ func serviceNeedUpdate(oldService, service Service, oldServiceState facts.Contai
 }
 
 func (d *Discovery) removeInput(key NameInstance) {
+	delete(d.inputResult, key)
+
 	if collector, ok := d.activeCollector[key]; ok {
 		logger.V(2).Printf("Remove input for service %v on instance %s", key.Name, key.Instance)
 		delete(d.activeCollector, key)
@@ -308,15 +316,18 @@ func (d *Discovery) removeInput(key NameInstance) {
 	}
 }
 
-func (d *Discovery) createInput(service Service) error { //nolint:maintidx
+// createInput builds and registers the metric input of a service. It returns what it
+// could do, so that the caller can tell apart the several ways this ends up with no
+// input registered -- they mean very different things when reported to a user.
+func (d *Discovery) createInput(service Service) (inputOutcome, error) { //nolint:maintidx
 	if !service.Active {
-		return nil
+		return inputInactive, nil
 	}
 
 	if service.MetricsIgnored {
 		logger.V(2).Printf("The input associated to the service '%s' on container '%s' is ignored by the configuration", service.Name, service.ContainerID)
 
-		return nil
+		return inputIgnored, nil
 	}
 
 	var (
@@ -616,9 +627,13 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			input, err = zookeeper.New(net.JoinHostPort(ip, strconv.Itoa(port)))
 		}
 	case CustomService:
-		return nil
+		// A custom check never has a metric input. This is not the same as a service
+		// type Glouton does not support.
+		return inputCheckOnly, nil
 	default:
 		logger.V(1).Printf("service type %s don't support metrics", service.ServiceType)
+
+		return inputUnsupportedType, nil
 	}
 
 	// An input that says it is disabled isn't a failure to report on every discovery run:
@@ -628,20 +643,27 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 	if errors.Is(err, inputs.ErrDisabledInput) {
 		logger.V(1).Printf("No input for service %s on this platform: %v", service.Name, err)
 
-		return nil
+		return inputUnsupportedPlatform, nil
 	}
 
 	if err != nil {
-		return err
+		return inputCreateFailed, err
 	}
 
+	// The switch matched this service type but built no input and reported no error: it
+	// lacked something to build one, typically credentials or a reachable address. See
+	// createMySQLInput, which returns (nil, nil) when it has no password.
 	if input == nil {
-		return nil
+		return inputMissingInfo, nil
 	}
 
 	logger.V(2).Printf("Add input for service %v instance %s", service.Name, service.Instance)
 
-	return d.registerInput(input, gathererOptions, service)
+	if err := d.registerInput(input, gathererOptions, service); err != nil {
+		return inputCreateFailed, err
+	}
+
+	return inputRegistered, nil
 }
 
 func createMySQLInput(service Service) (telegraf.Input, error) {

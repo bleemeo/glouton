@@ -114,16 +114,26 @@ type Synchronizer struct {
 
 	lastLogByKey map[string]time.Time
 
-	l                             sync.Mutex
-	disabledUntil                 time.Time
-	disableReason                 bleemeoTypes.DisableReason
-	lastDuplicateCheck            time.Time
-	nextDuplicateCheck            time.Time
-	forceSync                     map[types.EntityName]types.SyncRequest
-	pendingMetricsUpdate          []string
-	pendingMonitorsUpdate         []MonitorUpdate
-	thresholdOverrides            map[thresholdOverrideKey]threshold.Threshold
-	retryableMetricFailure        map[bleemeoTypes.FailureKind]bool
+	l                      sync.Mutex
+	disabledUntil          time.Time
+	disableReason          bleemeoTypes.DisableReason
+	lastDuplicateCheck     time.Time
+	nextDuplicateCheck     time.Time
+	forceSync              map[types.EntityName]types.SyncRequest
+	pendingMetricsUpdate   []string
+	pendingMonitorsUpdate  []MonitorUpdate
+	thresholdOverrides     map[thresholdOverrideKey]threshold.Threshold
+	retryableMetricFailure map[bleemeoTypes.FailureKind]bool
+	// notRegisteredMetrics counts the metrics Glouton has but did not register on
+	// Bleemeo, grouped by metric name and reason.
+	notRegisteredMetrics map[metricStateKey]int
+	// stagedNotRegistered is what filterMetrics computed during the synchronization in
+	// progress. It only becomes notRegisteredMetrics once that synchronization reaches
+	// publishMetricsState, so the two reported halves always come from the same run.
+	stagedNotRegistered map[metricStateKey]int
+	// pendingMetrics counts, per metric name, the metrics that are simply waiting to be
+	// registered. Published together with notRegisteredMetrics.
+	pendingMetrics                map[string]int
 	disableCrashReportUploadUntil time.Time
 	lastInfo                      bleemeoTypes.GlobalInfo
 	// Whether the agent MQTT status should be synced. This is used to avoid syncing

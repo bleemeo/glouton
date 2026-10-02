@@ -69,16 +69,19 @@ type Discovery struct {
 	subscribers           []*subscriber
 	lastConfigservicesMap map[NameInstance]Service
 	activeCollector       map[NameInstance]collectorDetails
-	activeCheck           map[NameInstance]CheckDetails
-	metricRegistry        GathererRegistry
-	containerInfo         containerInfoProvider
-	state                 State
-	servicesOverride      map[NameInstance]config.Service
-	isServiceIgnored      func(Service) bool
-	isCheckIgnored        func(Service) bool
-	isInputIgnored        func(Service) bool
-	isContainerIgnored    func(facts.Container) bool
-	processFact           processFact
+	// inputResult records, per service, what createInput could do. Services with no
+	// registered input have an entry too: that is the point of it.
+	inputResult        map[NameInstance]inputResult
+	activeCheck        map[NameInstance]CheckDetails
+	metricRegistry     GathererRegistry
+	containerInfo      containerInfoProvider
+	state              State
+	servicesOverride   map[NameInstance]config.Service
+	isServiceIgnored   func(Service) bool
+	isCheckIgnored     func(Service) bool
+	isInputIgnored     func(Service) bool
+	isContainerIgnored func(facts.Container) bool
+	processFact        processFact
 
 	absentServiceDeactivationDelay time.Duration
 	logProcessingCfg               config.OpenTelemetry
@@ -138,6 +141,7 @@ func New(
 		metricRegistry:                 metricRegistry,
 		containerInfo:                  containerInfo,
 		activeCollector:                make(map[NameInstance]collectorDetails),
+		inputResult:                    make(map[NameInstance]inputResult),
 		activeCheck:                    make(map[NameInstance]CheckDetails),
 		triggerDiscovery:               make(chan any),
 		state:                          state,

@@ -220,7 +220,7 @@ func parserReader(data []byte, filter func(lbls labels.Labels) bool) ([]*dto.Met
 			seriesFloat float64
 		)
 
-		switch et { //nolint:exhaustive
+		switch et { //nolint:exhaustive,nolintlint
 		case textparse.EntryType:
 			tmp, metricType = p.Type()
 			metricName = string(tmp)
@@ -259,7 +259,7 @@ func parserReader(data []byte, filter func(lbls labels.Labels) bool) ([]*dto.Met
 
 		entry := result[idx]
 
-		switch et { //nolint:exhaustive
+		switch et { //nolint:exhaustive,nolintlint
 		case textparse.EntryType:
 			// Can only set type before receiving first sample and can't be updated
 			if entry.Metric != nil {

@@ -338,6 +338,50 @@ type registration struct {
 	lastErrorLogAt       time.Time
 }
 
+// LastScrapeState returns a snapshot of the most recent scrape of this registration.
+//
+// It implements the optional interface used by discovery to report, to Bleemeo, whether
+// a service's input works. A registration that never completed a scrape returns the zero
+// value, whose HasRun is false.
+//
+// Only reg.l is taken, never the registry's r.l: holding r.l while a registration is
+// stopped or restarted can deadlock (see restartScrapeLoop).
+func (reg *registration) LastScrapeState() types.ScrapeState {
+	reg.l.Lock()
+	defer reg.l.Unlock()
+
+	if len(reg.lastScrapes) == 0 {
+		return types.ScrapeState{}
+	}
+
+	last := reg.lastScrapes[len(reg.lastScrapes)-1]
+
+	// A run skipped by the relabel hook is recorded in lastScrapes with
+	// errSkippingScrapeDueToRelabelHook, but it is neither a scrape nor a failure: it
+	// happens routinely while a service or container waits to be registered on Bleemeo.
+	// Report "not scraped" rather than that error, which would tell a user their healthy
+	// service is broken, quoting Glouton internals.
+	//
+	// Only the most recent run is considered. Walking back to an older real scrape would
+	// present a result up to maxLastScrape intervals old as the current state, and would
+	// flip to "not scraped" by itself once the ring dropped that entry -- a reported change
+	// caused by the buffer rolling over rather than by anything happening to the service.
+	if errors.Is(last.Error, errSkippingScrapeDueToRelabelHook) {
+		return types.ScrapeState{}
+	}
+
+	state := types.ScrapeState{
+		HasRun:        true,
+		FamiliesCount: last.ScrapedPointsCount,
+	}
+
+	if last.Error != nil {
+		state.Error = last.Error.Error()
+	}
+
+	return state
+}
+
 // runNow will trigger a run of the scrapeLoop. If the registry isn't running,
 // the run will be delayed until the registry is started. In other case it will be run
 // as quickly as possible.

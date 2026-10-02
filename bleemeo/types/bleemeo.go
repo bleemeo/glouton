@@ -254,6 +254,120 @@ func (kind FailureKind) String() string {
 	}
 }
 
+// MetricStateReason is why a metric Glouton knows about is not registered on Bleemeo.
+//
+// It unifies the vocabularies Glouton uses internally, which cover different stages and
+// were never meant to be shown together: FailureKind, for a registration that was
+// attempted and refused, DenyReason, for a metric dropped before registration was even
+// tried, and the dependency cases that had no name at all. Bleemeo needs one list of
+// reasons to explain to a user why a metric is missing, regardless of which stage
+// dropped it.
+type MetricStateReason string
+
+// All possible values of MetricStateReason.
+const (
+	// ReasonPending means the metric is simply waiting to be registered. Nothing is wrong.
+	ReasonPending MetricStateReason = "pending"
+	// ReasonUnknown means the registration failed for a reason Glouton could not classify.
+	ReasonUnknown MetricStateReason = "unknown"
+
+	// ReasonNotAllowed and the two following come from FailureKind: registration was
+	// attempted by Glouton and refused by the API.
+	ReasonNotAllowed             MetricStateReason = "not-allowed"
+	ReasonTooManyStandardMetrics MetricStateReason = "too-many-standard-metrics"
+	ReasonTooManyCustomMetrics   MetricStateReason = "too-many-custom-metrics"
+
+	// ReasonNotAvailableInPlan and the four following come from DenyReason: the metric
+	// was dropped before registration was even attempted.
+	ReasonNotAvailableInPlan  MetricStateReason = "not-available-in-plan"
+	ReasonErrorOccurred       MetricStateReason = "error-occurred"
+	ReasonNoDockerIntegration MetricStateReason = "no-docker-integration"
+	ReasonItemTooLong         MetricStateReason = "item-too-long"
+	ReasonMissingContainerID  MetricStateReason = "missing-container-id"
+
+	// ReasonWaitingContainer and ReasonWaitingService mean the metric depends on an
+	// object that has to be registered first.
+	ReasonWaitingContainer MetricStateReason = "waiting-container"
+	ReasonWaitingService   MetricStateReason = "waiting-service"
+	// ReasonWaitingAccountConfig means Glouton has not yet received the account
+	// configuration, without which it cannot decide what to register.
+	ReasonWaitingAccountConfig MetricStateReason = "waiting-account-config"
+)
+
+// MetricStateReason converts a registration failure to the unified vocabulary.
+func (kind FailureKind) MetricStateReason() MetricStateReason {
+	switch kind {
+	case FailureAllowList:
+		return ReasonNotAllowed
+	case FailureTooManyStandardMetrics:
+		return ReasonTooManyStandardMetrics
+	case FailureTooManyCustomMetrics:
+		return ReasonTooManyCustomMetrics
+	case FailureUnknown:
+		return ReasonUnknown
+	default:
+		return ReasonUnknown
+	}
+}
+
+// MetricStateReason converts a deny reason to the unified vocabulary.
+//
+// NotDenied has no reason of its own: a metric that was not denied is not in the list.
+func (d DenyReason) MetricStateReason() MetricStateReason {
+	switch d {
+	case DenyNotAvailableInCurrentPlan:
+		return ReasonNotAvailableInPlan
+	case DenyErrorOccurred:
+		return ReasonErrorOccurred
+	case DenyNoDockerIntegration:
+		return ReasonNoDockerIntegration
+	case DenyItemTooLong:
+		return ReasonItemTooLong
+	case DenyMissingContainerID:
+		return ReasonMissingContainerID
+	case NotDenied:
+		return ReasonUnknown
+	default:
+		return ReasonUnknown
+	}
+}
+
+// MetricState is how many metrics sharing a name are not registered, and why.
+//
+// Name is the metric name only, without item or any other label: "disk_used_perc", not
+// "disk_used_perc{item=/home}". Keeping labels would make this list as large as the
+// metric list itself, which is what this is meant to avoid.
+type MetricState struct {
+	Name   string            `json:"name"`
+	Reason MetricStateReason `json:"reason"`
+	Count  int               `json:"count"`
+}
+
+// metricCountScale is the ladder RoundMetricCount rounds up to.
+var metricCountScale = []int{1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000} //nolint:gochecknoglobals
+
+// RoundMetricCount rounds a count up to the next value of a coarse scale.
+//
+// The exact count is deliberately not reported. This list is kept synchronized with the
+// API, so it must be stable, and an exact count would move by one every time a single
+// metric appears or disappears, causing an API call each time for no new information.
+func RoundMetricCount(count int) int {
+	if count <= 0 {
+		return 0
+	}
+
+	for _, step := range metricCountScale {
+		if count <= step {
+			return step
+		}
+	}
+
+	// Above the scale, round up to the next multiple of the largest step.
+	largest := metricCountScale[len(metricCountScale)-1]
+
+	return (count + largest - 1) / largest * largest
+}
+
 // RetryAfter return the time after which the retry of the registration may be retried.
 func (mr MetricRegistration) RetryAfter() time.Time {
 	factor := math.Pow(2, float64(mr.FailCounter))

@@ -145,7 +145,21 @@ func TestSync(t *testing.T) {
 	}
 
 	optMetricSort := cmpopts.SortSlices(func(x bleemeoTypes.Metric, y bleemeoTypes.Metric) bool { return x.ID < y.ID })
-	if diff := cmp.Diff(want, syncedMetrics, optMetricSort, cmpopts.IgnoreUnexported(bleemeoTypes.Metric{})); diff != "" {
+	// metricFromAPI fills FirstSeenAt with time.Now().Truncate(time.Second) when it is
+	// given a zero time, so want is stamped here while syncedMetrics was stamped during
+	// the synchronization above. Those two moments land in different seconds often enough
+	// to matter, which made this test fail roughly once every two hundred runs. Compare
+	// that one field approximately: what matters is that FirstSeenAt is about now, not
+	// which side of a second boundary it fell on.
+	//
+	// Scoped to FirstSeenAt on purpose. Applying the margin to every time.Time in Metric
+	// would let a real bug that sets any other timestamp up to two seconds wrong pass
+	// unnoticed.
+	optApproxTime := cmp.FilterPath(
+		func(p cmp.Path) bool { return p.Last().String() == ".FirstSeenAt" },
+		cmpopts.EquateApproxTime(2*time.Second),
+	)
+	if diff := cmp.Diff(want, syncedMetrics, optMetricSort, optApproxTime, cmpopts.IgnoreUnexported(bleemeoTypes.Metric{})); diff != "" {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 	}
 
