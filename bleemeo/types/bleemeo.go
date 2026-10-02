@@ -343,31 +343,6 @@ type MetricState struct {
 	Count  int               `json:"count"`
 }
 
-// metricCountScale is the ladder RoundMetricCount rounds up to.
-var metricCountScale = []int{1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000} //nolint:gochecknoglobals
-
-// RoundMetricCount rounds a count up to the next value of a coarse scale.
-//
-// The exact count is deliberately not reported. This list is kept synchronized with the
-// API, so it must be stable, and an exact count would move by one every time a single
-// metric appears or disappears, causing an API call each time for no new information.
-func RoundMetricCount(count int) int {
-	if count <= 0 {
-		return 0
-	}
-
-	for _, step := range metricCountScale {
-		if count <= step {
-			return step
-		}
-	}
-
-	// Above the scale, round up to the next multiple of the largest step.
-	largest := metricCountScale[len(metricCountScale)-1]
-
-	return (count + largest - 1) / largest * largest
-}
-
 // RetryAfter return the time after which the retry of the registration may be retried.
 func (mr MetricRegistration) RetryAfter() time.Time {
 	factor := math.Pow(2, float64(mr.FailCounter))

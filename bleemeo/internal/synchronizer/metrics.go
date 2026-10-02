@@ -558,9 +558,8 @@ func (s *Synchronizer) publishMetricsState(unregistered []gloutonTypes.Metric, k
 // and none of which was reported before: dropped by the filter, waiting for a dependency,
 // or refused by the API.
 //
-// Counts are rounded and the result is sorted, because this list is kept synchronized with
-// the API: an exact count or an unstable order would cause an API call on every collection
-// for no new information.
+// The result is sorted, because this list is kept synchronized with the API: an unstable
+// order would cause an API call on every collection for no new information.
 func (s *Synchronizer) MetricsState() []bleemeoTypes.MetricState {
 	counts := make(map[metricStateKey]int)
 
@@ -589,7 +588,7 @@ func (s *Synchronizer) MetricsState() []bleemeoTypes.MetricState {
 		result = append(result, bleemeoTypes.MetricState{
 			Name:   key.Name,
 			Reason: key.Reason,
-			Count:  bleemeoTypes.RoundMetricCount(count),
+			Count:  count,
 		})
 	}
 

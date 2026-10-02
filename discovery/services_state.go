@@ -19,6 +19,7 @@ package discovery
 import (
 	"cmp"
 	"errors"
+	"regexp"
 	"slices"
 
 	"github.com/bleemeo/glouton/inputs"
@@ -336,6 +337,22 @@ func truncateError(message string) string {
 	return message[:maxErrorLength] + "... (truncated)"
 }
 
+// localAddressRegex matches the local address of a network error, as net.OpError prints
+// it for an established connection: "read tcp 127.0.0.1:52431->127.0.0.1:3306: ...".
+// The network name anchors it, so that a "->" elsewhere in a message is left alone.
+var localAddressRegex = regexp.MustCompile(`\b((?:tcp|udp|ip|unix)(?:4|6|gram|packet)?) [^\s>]*->`)
+
+// stabilizeError removes from an input's error what changes on every scrape while the
+// problem stays the same.
+//
+// That is the local address of a network error: its port is ephemeral, a new one for each
+// connection, so "connection reset by peer" would read as a new error on every scrape and
+// Bleemeo would be updated each time for nothing. The remote address, which tells what
+// Glouton failed to reach, is kept.
+func stabilizeError(message string) string {
+	return localAddressRegex.ReplaceAllString(message, "$1 ")
+}
+
 // scrapeResult reads the error and metric bucket of a service whose input was registered.
 // An input that has not run yet reports neither.
 func scrapeResult(provider scrapeStateProvider) (string, int) {
@@ -344,7 +361,8 @@ func scrapeResult(provider scrapeStateProvider) (string, int) {
 		return "", 0
 	}
 
-	return truncateError(scrape.Error), metricsBucket(scrape.FamiliesCount)
+	// Stabilized before truncation, so that the cut lands at the same place every time.
+	return truncateError(stabilizeError(scrape.Error)), metricsBucket(scrape.FamiliesCount)
 }
 
 // metricsBucket reduces a count to 0, 1 or 2, where 2 means "two or more". See

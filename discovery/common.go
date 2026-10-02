@@ -49,6 +49,9 @@ type Discoverer interface {
 type PersistentDiscoverer interface {
 	GetLatestDiscovery() ([]Service, time.Time)
 	RemoveIfNonRunning(services []Service)
+	// ServicesState returns, for each service, whether Glouton monitors it and why not.
+	// See Discovery.ServicesState.
+	ServicesState() []ServiceState
 }
 
 // NameInstance contains the service and instance names.

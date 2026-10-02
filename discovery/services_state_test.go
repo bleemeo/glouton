@@ -695,3 +695,99 @@ func TestServicesStateOutcomeSurvivesDiscovery(t *testing.T) {
 		t.Errorf("a service discovered just now should have no error yet: got %q", byName["nginx"].Error)
 	}
 }
+
+// TestStabilizeError checks the local address of a network error is removed, and nothing
+// else. The inputs are real errors, from Go's net package.
+func TestStabilizeError(t *testing.T) {
+	cases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "tcp read",
+			input: "read tcp 127.0.0.1:58669->127.0.0.1:58668: read: connection reset by peer",
+			want:  "read tcp 127.0.0.1:58668: read: connection reset by peer",
+		},
+		{
+			name:  "tcp write",
+			input: "write tcp 127.0.0.1:58669->127.0.0.1:58668: write: broken pipe",
+			want:  "write tcp 127.0.0.1:58668: write: broken pipe",
+		},
+		{
+			name: "http client",
+			input: `Get "http://127.0.0.1:58668/server-status?auto": ` +
+				"read tcp 127.0.0.1:58671->127.0.0.1:58668: read: connection reset by peer",
+			want: `Get "http://127.0.0.1:58668/server-status?auto": ` +
+				"read tcp 127.0.0.1:58668: read: connection reset by peer",
+		},
+		{
+			name:  "read timeout",
+			input: "read tcp 127.0.0.1:58675->127.0.0.1:58673: i/o timeout",
+			want:  "read tcp 127.0.0.1:58673: i/o timeout",
+		},
+		{
+			name:  "udp",
+			input: "read udp 127.0.0.1:54876->127.0.0.1:55785: read: connection refused",
+			want:  "read udp 127.0.0.1:55785: read: connection refused",
+		},
+		{
+			name:  "ipv6",
+			input: "read tcp [::1]:58684->[::1]:58683: read: connection reset by peer",
+			want:  "read tcp [::1]:58683: read: connection reset by peer",
+		},
+		{
+			// An unnamed local socket prints as an empty address.
+			name:  "unix socket",
+			input: "write unix ->/run/mysqld/mysqld.sock: write: broken pipe",
+			want:  "write unix /run/mysqld/mysqld.sock: write: broken pipe",
+		},
+		{
+			// No local address on a failed dial: already stable.
+			name:  "dial",
+			input: "dial tcp 127.0.0.1:1: connect: connection refused",
+			want:  "dial tcp 127.0.0.1:1: connect: connection refused",
+		},
+		{
+			name:  "http timeout",
+			input: `Get "http://127.0.0.1:58673/": context deadline exceeded (Client.Timeout exceeded while awaiting headers)`,
+			want:  `Get "http://127.0.0.1:58673/": context deadline exceeded (Client.Timeout exceeded while awaiting headers)`,
+		},
+		{
+			name:  "arrow outside a network error",
+			input: "unexpected token -> in status page",
+			want:  "unexpected token -> in status page",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := stabilizeError(tc.input); got != tc.want {
+				t.Errorf("stabilizeError(%q)\n got %q\nwant %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestServicesStateErrorIsStable checks two scrapes failing the same way, on two
+// connections, report the same error: otherwise Bleemeo would be updated on every scrape.
+func TestServicesStateErrorIsStable(t *testing.T) {
+	report := func(scrapeError string) string {
+		d := newTestDiscovery()
+		d.inputResult[apacheKey()] = newInputResult(inputRegistered, nil)
+		d.activeCollector[apacheKey()] = collectorDetails{
+			gathererRegistration: fakeScrapeRegistration{
+				state: types.ScrapeState{HasRun: true, Error: scrapeError},
+			},
+		}
+
+		return d.ServicesState()[0].Error
+	}
+
+	first := report("read tcp 127.0.0.1:52431->127.0.0.1:3306: read: connection reset by peer")
+	second := report("read tcp 127.0.0.1:52987->127.0.0.1:3306: read: connection reset by peer")
+
+	if first != second {
+		t.Errorf("the same failure on two connections reports two errors:\n%q\n%q", first, second)
+	}
+}

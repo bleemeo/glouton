@@ -67,7 +67,7 @@ func TestMetricsStateMergesEveryStage(t *testing.T) {
 
 	want := []bleemeoTypes.MetricState{
 		{Name: "cpu_used", Reason: bleemeoTypes.ReasonTooManyCustomMetrics, Count: 1},
-		{Name: "disk_used_perc", Reason: bleemeoTypes.ReasonItemTooLong, Count: 5},
+		{Name: "disk_used_perc", Reason: bleemeoTypes.ReasonItemTooLong, Count: 3},
 		{Name: "mem_used", Reason: bleemeoTypes.ReasonPending, Count: 2},
 		{Name: "redis_commands", Reason: bleemeoTypes.ReasonWaitingService, Count: 1},
 	}
@@ -101,9 +101,8 @@ func TestMetricsStateGroupsByNameOnly(t *testing.T) {
 		t.Errorf("got %+v, want disk_used_perc / not-allowed", got[0])
 	}
 
-	// 40 metrics, rounded up the scale.
-	if got[0].Count != 50 {
-		t.Errorf("got count %d, want 50", got[0].Count)
+	if got[0].Count != 40 {
+		t.Errorf("got count %d, want 40", got[0].Count)
 	}
 }
 
