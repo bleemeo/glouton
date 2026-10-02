@@ -71,7 +71,9 @@ type Discovery struct {
 	activeCollector       map[NameInstance]collectorDetails
 	// inputResult records, per service, what createInput could do. Services with no
 	// registered input have an entry too: that is the point of it.
-	inputResult        map[NameInstance]inputResult
+	inputResult map[NameInstance]inputResult
+	// jmxState is how JMX collection goes, nil when JMX is disabled.
+	jmxState           JMXStateProvider
 	activeCheck        map[NameInstance]CheckDetails
 	metricRegistry     GathererRegistry
 	containerInfo      containerInfoProvider

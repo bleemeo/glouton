@@ -348,6 +348,9 @@ type MetricState struct {
 // Bleemeo, to decide whether and when to send it again. It is kept in the cache, so that a
 // restart neither re-sends an unchanged value nor reads every service as new.
 type ServicesStateSent struct {
+	// AgentID is the agent the value was sent to. The cache can outlive the agent: it is
+	// kept in state.cache.json, which survives deleting state.json to register again.
+	AgentID string
 	// Hash identifies the value last accepted by the API. Empty when none was.
 	Hash string
 	// Services are the services that value listed with a settled state, to tell a service

@@ -244,13 +244,10 @@ func TestLimitServicesDisabledIsNotAProblem(t *testing.T) {
 	// Sorted first, a working service; then the cap's worth of disabled ones.
 	states = append(states, service(0, ""))
 
-	disabled := discovery.ServiceState{Error: "metrics disabled by configuration"}
-	if !disabled.MetricsDisabled() {
-		t.Fatal("the test message no longer matches discovery's: update it")
-	}
-
 	for i := 1; i <= maxServices; i++ {
-		states = append(states, service(i, disabled.Error))
+		disabled := service(i, "metrics disabled by configuration")
+		disabled.MetricsIgnored = true
+		states = append(states, disabled)
 	}
 
 	got, _, dropped := limitServices(states)

@@ -47,7 +47,7 @@ const (
 // error too, but it only reports their choice, so it does not get that priority. The
 // services kept stay in the order they came in, which is sorted.
 func limitServices(states []ServiceState) ([]ServiceState, [][]byte, int) {
-	hasProblem := func(s ServiceState) bool { return s.Error != "" && !s.MetricsDisabled() }
+	hasProblem := func(s ServiceState) bool { return s.Error != "" && !s.MetricsIgnored }
 
 	return limit(states, maxServices, maxServicesBytes, func(a, b ServiceState) int {
 		// A problem first, then the order of the list.

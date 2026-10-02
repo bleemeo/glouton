@@ -1080,6 +1080,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			Pusher:                        a.gathererRegistry.WithTTL(5 * time.Minute),
 		}
 
+		a.discovery.SetJMXState(a.jmx)
+
 		tasks = append(tasks, taskInfo{a.jmx.Run, "jmxtrans"})
 	}
 

@@ -61,6 +61,15 @@ type JMX struct {
 	services            []discovery.Service
 	metricResolution    time.Duration
 	triggerConfigUpdate chan updateRequest
+
+	// state is what jmxtrans sent, per service.
+	state collectionState
+}
+
+// ServiceScrapeState implements discovery.JMXStateProvider: it tells how the collection of
+// a service's metrics goes.
+func (j *JMX) ServiceScrapeState(service discovery.NameInstance) types.ScrapeState {
+	return j.state.ServiceScrapeState(service)
 }
 
 type updateRequest struct {
@@ -69,6 +78,8 @@ type updateRequest struct {
 
 // UpdateConfig update the jmxtrans configuration.
 func (j *JMX) UpdateConfig(services []discovery.Service, metricResolution time.Duration) error {
+	j.state.setServices(services)
+
 	j.l.Lock()
 	j.services = services
 	j.metricResolution = metricResolution
@@ -254,9 +265,12 @@ func (j *JMX) runServer(ctx context.Context) error {
 
 		wg.Add(1)
 
+		j.state.connected()
+
 		go func() {
 			defer crashreport.ProcessPanic()
 			defer wg.Done()
+			defer j.state.disconnected()
 
 			client := jmxtransClient{
 				Connection: c,
@@ -309,6 +323,8 @@ func (j *JMX) writeConfig(content []byte) error {
 }
 
 func (j *JMX) emitPoint(ctx context.Context, point types.MetricPoint) {
+	j.state.pointReceived(point)
+
 	if j.Pusher == nil {
 		return
 	}

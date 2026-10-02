@@ -19,6 +19,7 @@ package syncservicesstate
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"time"
 
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
@@ -63,14 +64,15 @@ func NewPayload(services []ServiceState, metrics []bleemeoTypes.MetricState) Pay
 		Metrics:         keptMetrics,
 		ServicesDropped: servicesDropped,
 		MetricsDropped:  metricsDropped,
-		hash:            hashRows(servicesRows, metricsRows),
+		hash:            hashRows(servicesRows, metricsRows, servicesDropped, metricsDropped),
 	}
 }
 
 // hashRows identifies a payload from the encoding of its rows, which limit already did:
 // encoding the whole payload again on every synchronization would double that work. It
-// depends on the rows only, so a nil list and an empty one are the same value.
-func hashRows(services [][]byte, metrics [][]byte) string {
+// depends on the rows and on how many were left out, so a nil list and an empty one are
+// the same value, while a list cut by one more row is not.
+func hashRows(services [][]byte, metrics [][]byte, servicesDropped int, metricsDropped int) string {
 	h := sha256.New()
 
 	for _, list := range [][][]byte{services, metrics} {
@@ -85,6 +87,10 @@ func hashRows(services [][]byte, metrics [][]byte) string {
 		_, _ = h.Write([]byte{0})
 	}
 
+	// The rows left out are not sent, but how many are is part of the value: one more
+	// service past the cut changes nothing in the rows kept.
+	_, _ = fmt.Fprintf(h, "%d %d", servicesDropped, metricsDropped)
+
 	return hex.EncodeToString(h.Sum(nil))
 }
 
@@ -98,7 +104,11 @@ func hashRows(services [][]byte, metrics [][]byte) string {
 //
 // A clock that went back before the last attempt counts as the interval having passed,
 // rather than holding every change until the clock catches up.
-func NeedSend(last bleemeoTypes.ServicesStateSent, payload Payload, now time.Time) bool {
+//
+// What was sent to another agent counts as nothing sent: see forAgent.
+func NeedSend(last bleemeoTypes.ServicesStateSent, payload Payload, agentID string, now time.Time) bool {
+	last = forAgent(last, agentID)
+
 	switch {
 	case payload.hash == last.Hash:
 		return false
@@ -120,8 +130,35 @@ func NeedSend(last bleemeoTypes.ServicesStateSent, payload Payload, now time.Tim
 	}
 }
 
-// Sent is what to record once the API accepted payload, at now.
-func Sent(payload Payload, now time.Time) bleemeoTypes.ServicesStateSent {
+// MaySend tells whether any payload could be sent at now, from the time gates of NeedSend
+// alone. When it is false, NeedSend is false whatever the payload, so the caller can skip
+// building one: that means reading both lists, encoding and hashing them.
+func MaySend(last bleemeoTypes.ServicesStateSent, agentID string, now time.Time) bool {
+	last = forAgent(last, agentID)
+
+	switch {
+	case last.LastAttemptAt.IsZero(), now.Before(last.LastAttemptAt):
+		return true
+	case last.LastAttemptFailed:
+		return now.Sub(last.LastAttemptAt) >= minSendInterval
+	default:
+		return now.Sub(last.LastAttemptAt) >= minNewServiceInterval
+	}
+}
+
+// forAgent returns what was sent to agentID: last when it was sent to that agent, nothing
+// otherwise. The cache outlives the agent when it registers again, and the new Agent
+// object has nothing, whatever the previous one was sent.
+func forAgent(last bleemeoTypes.ServicesStateSent, agentID string) bleemeoTypes.ServicesStateSent {
+	if last.AgentID != agentID {
+		return bleemeoTypes.ServicesStateSent{AgentID: agentID}
+	}
+
+	return last
+}
+
+// Sent is what to record once the API accepted payload for agentID, at now.
+func Sent(payload Payload, agentID string, now time.Time) bleemeoTypes.ServicesStateSent {
 	services := make([]discovery.NameInstance, 0, len(payload.Services))
 
 	for _, service := range payload.Services {
@@ -130,12 +167,13 @@ func Sent(payload Payload, now time.Time) bleemeoTypes.ServicesStateSent {
 		}
 	}
 
-	return bleemeoTypes.ServicesStateSent{Hash: payload.hash, Services: services, LastAttemptAt: now}
+	return bleemeoTypes.ServicesStateSent{AgentID: agentID, Hash: payload.hash, Services: services, LastAttemptAt: now}
 }
 
-// SendFailed is what to record when sending failed or was refused, at now. What the API
-// last accepted is kept: it still is what the API has.
-func SendFailed(last bleemeoTypes.ServicesStateSent, now time.Time) bleemeoTypes.ServicesStateSent {
+// SendFailed is what to record when sending to agentID failed or was refused, at now. What
+// the API last accepted is kept: it still is what the API has.
+func SendFailed(last bleemeoTypes.ServicesStateSent, agentID string, now time.Time) bleemeoTypes.ServicesStateSent {
+	last = forAgent(last, agentID)
 	last.LastAttemptAt = now
 	last.LastAttemptFailed = true
 

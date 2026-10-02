@@ -27,6 +27,8 @@ import (
 
 var t0 = time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC) //nolint:gochecknoglobals
 
+const testAgent = "agent-uuid"
+
 // settledService is a registered service whose input produces metrics.
 func settledService(i int) ServiceState {
 	state := service(i, "")
@@ -54,7 +56,7 @@ func payloadOf(services ...ServiceState) Payload {
 // TestNeedSend covers when the services state is sent.
 func TestNeedSend(t *testing.T) {
 	base := payloadOf(settledService(1), settledService(2))
-	sentBase := Sent(base, t0)
+	sentBase := Sent(base, testAgent, t0)
 
 	changedCount := NewPayload(base.Services, []bleemeoTypes.MetricState{
 		{Name: "cpu_used", Reason: bleemeoTypes.ReasonPending, Count: 4},
@@ -88,7 +90,7 @@ func TestNeedSend(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := NeedSend(tc.last, tc.payload, tc.now); got != tc.want {
+			if got := NeedSend(tc.last, tc.payload, testAgent, tc.now); got != tc.want {
 				t.Errorf("NeedSend() = %v, want %v", got, tc.want)
 			}
 		})
@@ -102,13 +104,13 @@ func TestNeedSendAfterFailure(t *testing.T) {
 	payload := payloadOf(settledService(1), settledService(2))
 
 	// Never accepted: the very first attempt failed.
-	failed := SendFailed(bleemeoTypes.ServicesStateSent{}, t0)
+	failed := SendFailed(bleemeoTypes.ServicesStateSent{}, testAgent, t0)
 
-	if NeedSend(failed, payload, t0.Add(minNewServiceInterval)) {
+	if NeedSend(failed, payload, testAgent, t0.Add(minNewServiceInterval)) {
 		t.Error("retried a minute after a failure, with settled services the API never accepted")
 	}
 
-	if !NeedSend(failed, payload, t0.Add(minSendInterval)) {
+	if !NeedSend(failed, payload, testAgent, t0.Add(minSendInterval)) {
 		t.Error("not retried once the interval passed")
 	}
 }
@@ -117,15 +119,15 @@ func TestNeedSendAfterFailure(t *testing.T) {
 // before: that still is what it has, so an unchanged state must not be sent.
 func TestSendFailedKeepsAccepted(t *testing.T) {
 	payload := payloadOf(settledService(1))
-	accepted := Sent(payload, t0)
+	accepted := Sent(payload, testAgent, t0)
 
-	failed := SendFailed(accepted, t0.Add(time.Hour))
+	failed := SendFailed(accepted, testAgent, t0.Add(time.Hour))
 
 	if failed.Hash != accepted.Hash {
 		t.Errorf("SendFailed() changed the accepted hash")
 	}
 
-	if NeedSend(failed, payload, t0.Add(2*time.Hour)) {
+	if NeedSend(failed, payload, testAgent, t0.Add(2*time.Hour)) {
 		t.Error("the value the API accepted is sent again after an unrelated failure")
 	}
 }
@@ -133,9 +135,9 @@ func TestSendFailedKeepsAccepted(t *testing.T) {
 // TestSentThenSettledSends checks a service sent before it settled is sent again soon once
 // it does: the state that matters is its first result, not its first sighting.
 func TestSentThenSettledSends(t *testing.T) {
-	sent := Sent(payloadOf(settledService(1), freshService(2)), t0)
+	sent := Sent(payloadOf(settledService(1), freshService(2)), testAgent, t0)
 
-	if !NeedSend(sent, payloadOf(settledService(1), settledService(2)), t0.Add(minNewServiceInterval)) {
+	if !NeedSend(sent, payloadOf(settledService(1), settledService(2)), testAgent, t0.Add(minNewServiceInterval)) {
 		t.Error("a service that settled after it was first sent waits the whole interval")
 	}
 }
@@ -143,7 +145,7 @@ func TestSentThenSettledSends(t *testing.T) {
 // TestSentRecordsSettledServices checks only settled services are recorded, which is what
 // lets a later settling count as new.
 func TestSentRecordsSettledServices(t *testing.T) {
-	sent := Sent(payloadOf(settledService(1), freshService(2)), t0)
+	sent := Sent(payloadOf(settledService(1), freshService(2)), testAgent, t0)
 
 	want := []discovery.NameInstance{{Name: "svc00001"}}
 	if len(sent.Services) != 1 || sent.Services[0] != want[0] {
@@ -213,7 +215,87 @@ func TestHashSameValue(t *testing.T) {
 func TestHashSeparatesLists(t *testing.T) {
 	row := []byte(`{"x":1}`)
 
-	if hashRows([][]byte{row}, nil) == hashRows(nil, [][]byte{row}) {
+	if hashRows([][]byte{row}, nil, 0, 0) == hashRows(nil, [][]byte{row}, 0, 0) {
 		t.Error("a row in the services list hashes like the same row in the metrics list")
+	}
+}
+
+// TestHashCountsDroppedRows checks a list cut by one more row is a different value, even
+// when the rows kept are the same.
+func TestHashCountsDroppedRows(t *testing.T) {
+	services := make([]ServiceState, 0, maxServices+2)
+	for i := range maxServices + 2 {
+		services = append(services, settledService(i))
+	}
+
+	oneDropped := NewPayload(services[:maxServices+1], nil)
+	twoDropped := NewPayload(services, nil)
+
+	if oneDropped.ServicesDropped != 1 || twoDropped.ServicesDropped != 2 {
+		t.Fatalf("dropped %d and %d, want 1 and 2", oneDropped.ServicesDropped, twoDropped.ServicesDropped)
+	}
+
+	if oneDropped.hash == twoDropped.hash {
+		t.Error("a list cut by one more row hashes the same")
+	}
+}
+
+// TestNeedSendNewAgent checks what was sent to another agent counts as nothing sent: the
+// cache survives registering the host again, and the new Agent object has nothing.
+func TestNeedSendNewAgent(t *testing.T) {
+	payload := payloadOf(settledService(1))
+	sentToOld := Sent(payload, "old-agent", t0)
+
+	if !NeedSend(sentToOld, payload, testAgent, t0.Add(time.Minute)) {
+		t.Error("an unchanged state is not sent to a new agent")
+	}
+
+	// A failure for the new agent backs off, rather than looking like "never sent" forever.
+	failed := SendFailed(sentToOld, testAgent, t0.Add(time.Minute))
+	if failed.AgentID != testAgent || failed.Hash != "" {
+		t.Errorf("SendFailed() kept what the old agent accepted: %+v", failed)
+	}
+
+	if NeedSend(failed, payload, testAgent, t0.Add(2*time.Minute)) {
+		t.Error("retried right after a failure for the new agent")
+	}
+}
+
+// TestMaySend checks MaySend is false only when NeedSend is false whatever the payload.
+func TestMaySend(t *testing.T) {
+	sent := Sent(payloadOf(settledService(1)), testAgent, t0)
+	failed := SendFailed(sent, testAgent, t0)
+	newSettled := payloadOf(settledService(1), settledService(2))
+
+	cases := []struct {
+		name string
+		last bleemeoTypes.ServicesStateSent
+		now  time.Time
+		want bool
+	}{
+		{"nothing sent", bleemeoTypes.ServicesStateSent{}, t0, true},
+		{"right after a send", sent, t0.Add(time.Second), false},
+		{"a minute after a send", sent, t0.Add(minNewServiceInterval), true},
+		{"a minute after a failure", failed, t0.Add(minNewServiceInterval), false},
+		{"the interval after a failure", failed, t0.Add(minSendInterval), true},
+		{"another agent", sent, t0.Add(time.Second), true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			agentID := testAgent
+			if tc.name == "another agent" {
+				agentID = "new-agent"
+			}
+
+			got := MaySend(tc.last, agentID, tc.now)
+			if got != tc.want {
+				t.Errorf("MaySend() = %v, want %v", got, tc.want)
+			}
+
+			if !got && NeedSend(tc.last, newSettled, agentID, tc.now) {
+				t.Error("MaySend() is false while NeedSend() would send")
+			}
+		})
 	}
 }

@@ -23,6 +23,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"net/url"
 	"slices"
 	"sort"
 	"strconv"
@@ -31,6 +32,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/types"
 
@@ -864,7 +866,7 @@ func TestRedactError(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := redactError(tc.input); got != tc.want {
+			if got := redactError(tc.input, nil); got != tc.want {
 				t.Errorf("redactError(%q)\n got %q\nwant %q", tc.input, got, tc.want)
 			}
 		})
@@ -886,6 +888,44 @@ func TestServicesStateRedactsError(t *testing.T) {
 
 	if got := d.ServicesState()[0].Error; strings.Contains(got, "p%zz") {
 		t.Errorf("the password reached the report: %q", got)
+	}
+}
+
+// TestServicesStateRedactsConfiguredPassword checks a password from the service's
+// configuration is hidden in every form the HAProxy error quotes it, including those the
+// URL pattern cannot find: a "/" or a quote in the password, and the prefix Go's URL parser
+// reads as a port.
+func TestServicesStateRedactsConfiguredPassword(t *testing.T) {
+	for _, password := range []string{"hunter/22", `hunter"22`, "hunter#22", "hunter?22"} {
+		t.Run(password, func(t *testing.T) {
+			addr := "http://admin:" + password + "@127.0.0.1:8404/stats/;csv"
+
+			_, parseErr := url.Parse(addr)
+			if parseErr == nil {
+				t.Fatalf("%q parses, the test does not produce the error", addr)
+			}
+
+			d := newTestDiscovery()
+			service := d.servicesMap[apacheKey()]
+			service.Config.StatsURL = addr
+			d.servicesMap[apacheKey()] = service
+
+			d.inputResult[apacheKey()] = newInputResult(inputRegistered, nil)
+			d.activeCollector[apacheKey()] = collectorDetails{
+				gathererRegistration: fakeScrapeRegistration{
+					state: types.ScrapeState{
+						HasRun: true,
+						// What Telegraf's HAProxy input returns.
+						Error: fmt.Sprintf("unable parse server address %q: %v", addr, parseErr),
+					},
+				},
+			}
+
+			got := d.ServicesState()[0].Error
+			if strings.Contains(got, "hunter") {
+				t.Errorf("the password, or its start, reached the report: %q", got)
+			}
+		})
 	}
 }
 
@@ -929,5 +969,204 @@ func TestCreateInputVarnishWithoutVarnishstat(t *testing.T) {
 
 	if msg := newInputResult(got, nil).message; msg == msgMissingInfo {
 		t.Errorf("a missing varnishstat is reported as %q", msg)
+	}
+}
+
+// fakeJMXState is a JMX collection state returning the same state for every service.
+type fakeJMXState struct {
+	state types.ScrapeState
+}
+
+func (f fakeJMXState) ServiceScrapeState(NameInstance) types.ScrapeState { return f.state }
+
+// TestServicesStateJMX checks a service whose metrics only JMX collects is reported as
+// supported, with the JMX collection state when JMX is set up for it, and with why not
+// otherwise.
+func TestServicesStateJMX(t *testing.T) {
+	cassandra := func(jmxPort int, noAddress bool) *Discovery {
+		key := NameInstance{Name: "cassandra"}
+		service := Service{
+			Name:        "cassandra",
+			ServiceType: CassandraService,
+			Active:      true,
+			IPAddress:   "127.0.0.1",
+			Config:      config.Service{JMXPort: jmxPort},
+		}
+
+		if noAddress {
+			service.IPAddress = ""
+		}
+
+		d := newTestDiscovery()
+		d.servicesMap = map[NameInstance]Service{key: service}
+		d.discoveredServicesMap = map[NameInstance]Service{key: service}
+		d.inputResult[key] = newInputResult(inputUnsupportedType, nil)
+
+		return d
+	}
+
+	collected := fakeJMXState{state: types.ScrapeState{HasRun: true, FamiliesCount: 12}}
+
+	cases := []struct {
+		name      string
+		jmxPort   int
+		noAddress bool
+		jmxState  JMXStateProvider
+		wantError string
+		wantCount int
+	}{
+		{name: "collected", jmxPort: 7199, jmxState: collected, wantCount: 2},
+		{
+			name:      "nothing received",
+			jmxPort:   7199,
+			jmxState:  fakeJMXState{state: types.ScrapeState{HasRun: true, Error: "no metrics received through JMX"}},
+			wantError: "no metrics received through JMX",
+		},
+		{name: "no jmx_port", jmxState: collected, wantError: msgJMXNoPort},
+		{name: "no address", jmxPort: 7199, noAddress: true, jmxState: collected, wantError: msgJMXNoAddress},
+		{name: "JMX disabled", jmxPort: 7199, wantError: msgJMXDisabled},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := cassandra(tc.jmxPort, tc.noAddress)
+			if tc.jmxState != nil {
+				d.SetJMXState(tc.jmxState)
+			}
+
+			got := d.ServicesState()[0]
+
+			if !got.InputSupported {
+				t.Error("a service collected through JMX is reported as unsupported")
+			}
+
+			if got.Error != tc.wantError || got.MetricFamiliesBucket != tc.wantCount {
+				t.Errorf("got error %q and metrics %d, want %q and %d", got.Error, got.MetricFamiliesBucket, tc.wantError, tc.wantCount)
+			}
+		})
+	}
+}
+
+// TestServicesStateJMXOtherTypes checks a service type with no JMX metrics of its own is
+// left as it was without a jmx_port, and reads the JMX state with one, while its
+// input_supported stays a property of its type.
+func TestServicesStateJMXOtherTypes(t *testing.T) {
+	key := NameInstance{Name: "my-java-app"}
+	service := Service{Name: "my-java-app", ServiceType: CustomService, Active: true, IPAddress: "127.0.0.1"}
+
+	d := newTestDiscovery()
+	d.servicesMap = map[NameInstance]Service{key: service}
+	d.inputResult[key] = newInputResult(inputCheckOnly, nil)
+	d.SetJMXState(fakeJMXState{state: types.ScrapeState{HasRun: true, FamiliesCount: 1}})
+
+	if got := d.ServicesState()[0]; got.Error != "" || got.MetricFamiliesBucket != 0 {
+		t.Errorf("without a jmx_port, got %+v, want no error and no metrics", got)
+	}
+
+	service.Config.JMXPort = 7199
+	d.servicesMap[key] = service
+
+	got := d.ServicesState()[0]
+	if got.MetricFamiliesBucket != 1 {
+		t.Errorf("with a jmx_port, got %+v, want the JMX state", got)
+	}
+
+	if got.InputSupported {
+		t.Error("a custom check reports input_supported because one of them has a jmx_port")
+	}
+}
+
+// TestServicesStateErrorIsStableWithShortPassword checks a configured password matching the
+// network name does not stop the local address from being stripped: the error must not
+// change with the ephemeral port.
+func TestServicesStateErrorIsStableWithShortPassword(t *testing.T) {
+	report := func(localPort int) string {
+		d := newTestDiscovery()
+		service := d.servicesMap[apacheKey()]
+		service.Config.Password = "tcp"
+		d.servicesMap[apacheKey()] = service
+
+		d.inputResult[apacheKey()] = newInputResult(inputRegistered, nil)
+		d.activeCollector[apacheKey()] = collectorDetails{
+			gathererRegistration: fakeScrapeRegistration{
+				state: types.ScrapeState{
+					HasRun: true,
+					Error:  fmt.Sprintf("read tcp 127.0.0.1:%d->127.0.0.1:3306: read: connection reset by peer", localPort),
+				},
+			},
+		}
+
+		return d.ServicesState()[0].Error
+	}
+
+	if first, second := report(52431), report(52432); first != second {
+		t.Errorf("the error changes with the local port:\n%q\n%q", first, second)
+	}
+}
+
+// TestServicesStateRedactsURLQuerySecrets checks secrets passed in the stats URL's query
+// string are hidden too, as written and decoded, and that a password ending in a quote is
+// hidden whole in its quoted form.
+func TestServicesStateRedactsURLQuerySecrets(t *testing.T) {
+	cases := []struct {
+		name    string
+		config  config.Service
+		message string
+		secret  string
+	}{
+		{
+			name:    "password parameter",
+			config:  config.Service{StatsURL: "http://ch:8123/?user=u&password=hunter2x"},
+			message: `Get "http://ch:8123/?user=u&password=hunter2x": dial tcp 127.0.0.1:8123: connect: connection refused`,
+			secret:  "hunter2x",
+		},
+		{
+			name:    "encoded token",
+			config:  config.Service{StatsURL: "http://consul:8500/v1/agent/metrics?token=ab%2Fcd%3D"},
+			message: `token ab/cd= was refused`,
+			secret:  "ab/cd=",
+		},
+		{
+			name:    "InfluxDB 1.x password",
+			config:  config.Service{StatsURL: "http://influx:8086/debug/vars?u=admin&p=hunter2x"},
+			message: `Get "http://influx:8086/debug/vars?u=admin&p=hunter2x": EOF`,
+			secret:  "hunter2x",
+		},
+		{
+			name:    "password ending in a quote",
+			config:  config.Service{Password: `hunter2"`},
+			message: `parse "http://admin:hunter2\"@host/": net/url: invalid userinfo`,
+			secret:  `hunter2`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := redactError(tc.message, serviceSecrets(tc.config))
+			if strings.Contains(got, tc.secret) {
+				t.Errorf("the secret reached the report: %q", got)
+			}
+
+			if strings.Contains(got, `xxxxx"@`) && strings.Contains(tc.message, `\"@`) {
+				t.Errorf("the quote ending the password reached the report: %q", got)
+			}
+		})
+	}
+}
+
+// TestServicesStateMetricsIgnored checks a service whose metrics the configuration disables
+// is flagged as such, which the size limits rely on rather than on the message.
+func TestServicesStateMetricsIgnored(t *testing.T) {
+	d := newTestDiscovery()
+	d.inputResult[apacheKey()] = newInputResult(inputIgnored, nil)
+
+	if got := d.ServicesState()[0]; !got.MetricsIgnored || got.Error != msgIgnored {
+		t.Errorf("got %+v, want MetricsIgnored and the message", got)
+	}
+
+	d.inputResult[apacheKey()] = newInputResult(inputMissingInfo, nil)
+
+	if got := d.ServicesState()[0]; got.MetricsIgnored {
+		t.Errorf("a service missing credentials is flagged as disabled: %+v", got)
 	}
 }
