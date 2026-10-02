@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/bleemeo-go"
+	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/threshold"
 	"github.com/bleemeo/glouton/types"
 	"github.com/bleemeo/glouton/utils/metricutils"
@@ -341,6 +342,21 @@ type MetricState struct {
 	Name   string            `json:"name"`
 	Reason MetricStateReason `json:"reason"`
 	Count  int               `json:"count"`
+}
+
+// ServicesStateSent is what Glouton remembers of the last services state it sent to
+// Bleemeo, to decide whether and when to send it again. It is kept in the cache, so that a
+// restart neither re-sends an unchanged value nor reads every service as new.
+type ServicesStateSent struct {
+	// Hash identifies the value last accepted by the API. Empty when none was.
+	Hash string
+	// Services are the services that value listed with a settled state, to tell a service
+	// newly worth sending. See syncservicesstate.NeedSend.
+	Services []discovery.NameInstance
+	// LastAttemptAt is when a send was last attempted, accepted or not.
+	LastAttemptAt time.Time
+	// LastAttemptFailed tells whether that attempt was refused or failed.
+	LastAttemptFailed bool
 }
 
 // RetryAfter return the time after which the retry of the registration may be retried.

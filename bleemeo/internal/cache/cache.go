@@ -17,6 +17,7 @@
 package cache
 
 import (
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -60,6 +61,10 @@ type data struct {
 	Configs                 []bleemeoTypes.Config
 	Services                []bleemeoTypes.Service
 	Monitors                []bleemeoTypes.Monitor
+	// ServicesStateSent was added without bumping cacheVersion: an older cache simply has
+	// none, which only causes the services state to be sent once, and an older Glouton
+	// ignores the field, while a bump would make it discard the whole cache.
+	ServicesStateSent bleemeoTypes.ServicesStateSent
 }
 
 // SetAccountID update the AccountID.
@@ -68,6 +73,27 @@ func (c *Cache) SetAccountID(accountID string) {
 	defer c.l.Unlock()
 
 	c.data.AccountID = accountID
+	c.dirty = true
+}
+
+// ServicesStateSent returns what was last sent of the services state.
+func (c *Cache) ServicesStateSent() bleemeoTypes.ServicesStateSent {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	result := c.data.ServicesStateSent
+	result.Services = slices.Clone(result.Services)
+
+	return result
+}
+
+// SetServicesStateSent records what was last sent of the services state.
+func (c *Cache) SetServicesStateSent(sent bleemeoTypes.ServicesStateSent) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	sent.Services = slices.Clone(sent.Services)
+	c.data.ServicesStateSent = sent
 	c.dirty = true
 }
 

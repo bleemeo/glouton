@@ -19,9 +19,11 @@ package cache
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/bleemeo/glouton/agent/state"
 	"github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/discovery"
 
 	"github.com/google/go-cmp/cmp"
 )
@@ -196,4 +198,61 @@ func floatToPointer(f float64) *float64 {
 	*v = f
 
 	return v
+}
+
+// TestServicesStateSentPersists checks what was last sent of the services state survives a
+// save and a reload, so a restart does not re-send an unchanged value or read every
+// service as new.
+func TestServicesStateSentPersists(t *testing.T) {
+	st, err := state.LoadReadOnly("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := types.ServicesStateSent{
+		Hash:              "c0ffee",
+		Services:          []discovery.NameInstance{{Name: "apache"}, {Name: "redis", Instance: "cache"}},
+		LastAttemptAt:     time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC),
+		LastAttemptFailed: true,
+	}
+
+	cache := Load(st)
+	cache.SetServicesStateSent(want)
+	cache.Save()
+
+	got := Load(st).ServicesStateSent()
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("ServicesStateSent() after reload mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// TestServicesStateSentIsCopied checks the cache does not share its slice with callers.
+func TestServicesStateSentIsCopied(t *testing.T) {
+	cache := &Cache{}
+
+	sent := types.ServicesStateSent{Services: []discovery.NameInstance{{Name: "apache"}}}
+	cache.SetServicesStateSent(sent)
+
+	sent.Services[0].Name = "changed after set"
+
+	got := cache.ServicesStateSent()
+	got.Services[0].Name = "changed after get"
+
+	if name := cache.ServicesStateSent().Services[0].Name; name != "apache" {
+		t.Errorf("the cached value was changed from outside: %q", name)
+	}
+}
+
+// TestServicesStateSentFromOldCache checks a cache written before the field existed loads,
+// with nothing recorded as sent.
+func TestServicesStateSentFromOldCache(t *testing.T) {
+	st, err := state.Load("testdata/state-v6.json", "testdata/state-v6.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := Load(st).ServicesStateSent(); got.Hash != "" || len(got.Services) != 0 {
+		t.Errorf("got %+v from a cache without the field, want nothing sent", got)
+	}
 }

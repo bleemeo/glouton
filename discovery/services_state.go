@@ -224,6 +224,12 @@ type ServiceState struct {
 	MetricFamiliesBucket int `json:"metrics"`
 }
 
+// MetricsDisabled tells whether the service's metrics are disabled by the configuration.
+// Its Error then says so, but reports a choice the user made rather than a failure.
+func (s ServiceState) MetricsDisabled() bool {
+	return s.Error == msgIgnored
+}
+
 // ServicesState returns what Glouton knows about each service it currently sees.
 //
 // Inactive services are left out. Note what Service.Active actually means, because it is
