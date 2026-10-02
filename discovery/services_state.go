@@ -21,6 +21,8 @@ import (
 	"errors"
 	"regexp"
 	"slices"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/types"
@@ -114,8 +116,11 @@ const (
 	// on this platform or not in this build.
 	inputUnsupportedPlatform
 	// inputMissingInfo means Glouton has an input for this service type but lacks
-	// something to build it, typically credentials or a reachable address.
+	// credentials or a reachable address to build it.
 	inputMissingInfo
+	// inputMissingCommand means the input needs a command the service's container does not
+	// have, such as Varnish's varnishstat.
+	inputMissingCommand
 	// inputCreateFailed means building the input returned an error.
 	inputCreateFailed
 )
@@ -127,6 +132,7 @@ const (
 const (
 	msgCreateFailed        = "failed to create the input"
 	msgMissingInfo         = msgCreateFailed + ": missing credentials or address"
+	msgMissingCommand      = msgCreateFailed + ": required command not found in the container"
 	msgUnexpectedType      = msgCreateFailed + ": unexpected input type"
 	msgUnsupportedPlatform = "input not available on this platform"
 	msgIgnored             = "metrics disabled by configuration"
@@ -150,6 +156,8 @@ func newInputResult(outcome inputOutcome, err error) inputResult {
 	switch outcome {
 	case inputMissingInfo:
 		result.message = msgMissingInfo
+	case inputMissingCommand:
+		result.message = msgMissingCommand
 	case inputUnsupportedPlatform:
 		result.message = msgUnsupportedPlatform
 	case inputIgnored:
@@ -334,7 +342,14 @@ func truncateError(message string) string {
 		return message
 	}
 
-	return message[:maxErrorLength] + "... (truncated)"
+	// Cut on a character boundary: half a multi-byte character is invalid UTF-8, which the
+	// JSON encoding would turn into a replacement character.
+	cut := maxErrorLength
+	for cut > 0 && !utf8.RuneStart(message[cut]) {
+		cut--
+	}
+
+	return message[:cut] + "... (truncated)"
 }
 
 // localAddressRegex matches the local address of a network error, as net.OpError prints
@@ -343,14 +358,36 @@ func truncateError(message string) string {
 var localAddressRegex = regexp.MustCompile(`\b((?:tcp|udp|ip|unix)(?:4|6|gram|packet)?) [^\s>]*->`)
 
 // stabilizeError removes from an input's error what changes on every scrape while the
-// problem stays the same.
-//
-// That is the local address of a network error: its port is ephemeral, a new one for each
-// connection, so "connection reset by peer" would read as a new error on every scrape and
-// Bleemeo would be updated each time for nothing. The remote address, which tells what
-// Glouton failed to reach, is kept.
+// problem stays the same, so that Bleemeo is not updated each time for nothing:
+//   - the local address of a network error, whose port is ephemeral, a new one for each
+//     connection. The remote address, which tells what Glouton failed to reach, is kept;
+//   - the order of the errors an input reported. They are joined one per line in the
+//     order the input added them, and an input gathering concurrently, such as RabbitMQ,
+//     adds them in a different order on every scrape. Lines are sorted, and duplicates
+//     dropped. This also reorders the lines of a single multi-line error, which loses
+//     nothing a user needs and keeps the value stable.
 func stabilizeError(message string) string {
-	return localAddressRegex.ReplaceAllString(message, "$1 ")
+	message = localAddressRegex.ReplaceAllString(message, "$1 ")
+
+	lines := strings.Split(message, "\n")
+	slices.Sort(lines)
+
+	return strings.Join(slices.Compact(lines), "\n")
+}
+
+// urlPasswordRegex matches the password of a URL quoted in an error: "://user:password@".
+// It stops at "/", quote and newline, which end a URL's authority in an error message, and
+// takes the last "@" before them, as URL parsing does.
+var urlPasswordRegex = regexp.MustCompile(`(://[^/\s:@"]*):[^/"\n]*@`)
+
+// redactError hides the passwords an input's error may quote.
+//
+// A scrape error is reported as the input wrote it, and some quote their configured URL
+// with its credentials: Telegraf's HAProxy input does when the stats URL fails to parse,
+// as it does with a "%" or a space in the password. The password is replaced the way
+// net/url's Redacted does.
+func redactError(message string) string {
+	return urlPasswordRegex.ReplaceAllString(message, "$1:xxxxx@")
 }
 
 // scrapeResult reads the error and metric bucket of a service whose input was registered.
@@ -362,7 +399,7 @@ func scrapeResult(provider scrapeStateProvider) (string, int) {
 	}
 
 	// Stabilized before truncation, so that the cut lands at the same place every time.
-	return truncateError(stabilizeError(scrape.Error)), metricsBucket(scrape.FamiliesCount)
+	return truncateError(stabilizeError(redactError(scrape.Error))), metricsBucket(scrape.FamiliesCount)
 }
 
 // metricsBucket reduces a count to 0, 1 or 2, where 2 means "two or more". See

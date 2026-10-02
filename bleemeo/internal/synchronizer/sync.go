@@ -131,9 +131,10 @@ type Synchronizer struct {
 	// progress. It only becomes notRegisteredMetrics once that synchronization reaches
 	// publishMetricsState, so the two reported halves always come from the same run.
 	stagedNotRegistered map[metricStateKey]int
-	// pendingMetrics counts, per metric name, the metrics that are simply waiting to be
-	// registered. Published together with notRegisteredMetrics.
-	pendingMetrics                map[string]int
+	// registrationMetrics counts the metrics that passed the filter but are not registered,
+	// grouped by metric name and reason: pending, or refused by the API. Published together
+	// with notRegisteredMetrics.
+	registrationMetrics           map[metricStateKey]int
 	disableCrashReportUploadUntil time.Time
 	lastInfo                      bleemeoTypes.GlobalInfo
 	// Whether the agent MQTT status should be synced. This is used to avoid syncing

@@ -612,9 +612,11 @@ func (d *Discovery) createInput(service Service) (inputOutcome, error) { //nolin
 		//
 		// Not being able to read it means no input, rather than an input failing on every
 		// gather under that container's name.
-		if d.canReadVarnish(service) {
-			input, gathererOptions, err = varnish.New(d.commandRunner, d.containerInfo, service.ContainerID)
+		if !d.canReadVarnish(service) {
+			return inputMissingCommand, nil
 		}
+
+		input, gathererOptions, err = varnish.New(d.commandRunner, d.containerInfo, service.ContainerID)
 	case VaultService:
 		if service.Config.StatsURL != "" {
 			input, err = vault.New(service.Config.StatsURL, service.Config.Password)
@@ -651,8 +653,9 @@ func (d *Discovery) createInput(service Service) (inputOutcome, error) { //nolin
 	}
 
 	// The switch matched this service type but built no input and reported no error: it
-	// lacked something to build one, typically credentials or a reachable address. See
-	// createMySQLInput, which returns (nil, nil) when it has no password.
+	// lacked credentials or a reachable address. See createMySQLInput, which returns
+	// (nil, nil) when it has no password. A branch with another reason for building nothing
+	// must return its own outcome, as Varnish does, or it would be reported as this.
 	if input == nil {
 		return inputMissingInfo, nil
 	}

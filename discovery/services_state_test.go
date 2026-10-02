@@ -29,6 +29,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/types"
@@ -253,6 +254,7 @@ func outcomeMessages() map[inputOutcome]string {
 		inputUnsupportedType:     "",
 		inputUnsupportedPlatform: msgUnsupportedPlatform,
 		inputMissingInfo:         msgMissingInfo,
+		inputMissingCommand:      msgMissingCommand,
 		inputCreateFailed:        msgCreateFailed,
 	}
 }
@@ -789,5 +791,143 @@ func TestServicesStateErrorIsStable(t *testing.T) {
 
 	if first != second {
 		t.Errorf("the same failure on two connections reports two errors:\n%q\n%q", first, second)
+	}
+}
+
+// TestStabilizeErrorOrder checks errors an input reported in a different order on two
+// scrapes report the same value. RabbitMQ gathers its endpoints concurrently, so its
+// errors are joined in whatever order the goroutines finished.
+func TestStabilizeErrorOrder(t *testing.T) {
+	overview := `Get "http://127.0.0.1:15672/api/overview": dial tcp 127.0.0.1:15672: connect: connection refused`
+	nodes := `Get "http://127.0.0.1:15672/api/nodes": dial tcp 127.0.0.1:15672: connect: connection refused`
+	queues := `Get "http://127.0.0.1:15672/api/queues": dial tcp 127.0.0.1:15672: connect: connection refused`
+
+	first := stabilizeError(errors.Join(
+		errors.New(overview), errors.New(nodes), errors.New(queues), //nolint:err113
+	).Error())
+	second := stabilizeError(errors.Join(
+		errors.New(queues), errors.New(overview), errors.New(nodes), //nolint:err113
+	).Error())
+
+	if first != second {
+		t.Errorf("the same errors in another order report another value:\n%q\n%q", first, second)
+	}
+
+	if dup := stabilizeError(overview + "\n" + overview); dup != overview {
+		t.Errorf("a repeated error is reported twice: %q", dup)
+	}
+}
+
+// TestRedactError checks a password quoted in an error is hidden. The HAProxy messages are
+// what Telegraf's input returns when its stats URL fails to parse.
+func TestRedactError(t *testing.T) {
+	cases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name: "invalid escape in the password",
+			input: `unable parse server address "http://admin:p%zz@127.0.0.1:8404/stats/;csv": ` +
+				`parse "http://admin:p%zz@127.0.0.1:8404/stats/;csv": invalid URL escape "%zz"`,
+			want: `unable parse server address "http://admin:xxxxx@127.0.0.1:8404/stats/;csv": ` +
+				`parse "http://admin:xxxxx@127.0.0.1:8404/stats/;csv": invalid URL escape "%zz"`,
+		},
+		{
+			name: "space in the password",
+			input: `unable parse server address "http://admin:pa ss@127.0.0.1:8404/stats/;csv": ` +
+				`parse "http://admin:pa ss@127.0.0.1:8404/stats/;csv": net/url: invalid userinfo`,
+			want: `unable parse server address "http://admin:xxxxx@127.0.0.1:8404/stats/;csv": ` +
+				`parse "http://admin:xxxxx@127.0.0.1:8404/stats/;csv": net/url: invalid userinfo`,
+		},
+		{ //nolint:gosec // a fake password, to check it is redacted
+			name:  "at sign in the password",
+			input: `parse "http://admin:p@ss@127.0.0.1:8404/stats": failed`,
+			want:  `parse "http://admin:xxxxx@127.0.0.1:8404/stats": failed`,
+		},
+		{
+			name:  "no credentials",
+			input: `Get "http://127.0.0.1:8404/stats/;csv": dial tcp 127.0.0.1:8404: connect: connection refused`,
+			want:  `Get "http://127.0.0.1:8404/stats/;csv": dial tcp 127.0.0.1:8404: connect: connection refused`,
+		},
+		{
+			name:  "user without password",
+			input: `Get "http://admin@127.0.0.1:8404/stats": EOF`,
+			want:  `Get "http://admin@127.0.0.1:8404/stats": EOF`,
+		},
+		{
+			name:  "host and port",
+			input: `could not connect to 'tcp://127.0.0.1:9999': dial tcp 127.0.0.1:9999: connect: connection refused`,
+			want:  `could not connect to 'tcp://127.0.0.1:9999': dial tcp 127.0.0.1:9999: connect: connection refused`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := redactError(tc.input); got != tc.want {
+				t.Errorf("redactError(%q)\n got %q\nwant %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestServicesStateRedactsError checks the redaction is applied on the reported path.
+func TestServicesStateRedactsError(t *testing.T) {
+	d := newTestDiscovery()
+	d.inputResult[apacheKey()] = newInputResult(inputRegistered, nil)
+	d.activeCollector[apacheKey()] = collectorDetails{
+		gathererRegistration: fakeScrapeRegistration{
+			state: types.ScrapeState{ //nolint:gosec // a fake password, to check it is redacted
+				HasRun: true,
+				Error:  `unable parse server address "http://admin:p%zz@127.0.0.1:8404/stats/;csv": invalid URL escape "%zz"`,
+			},
+		},
+	}
+
+	if got := d.ServicesState()[0].Error; strings.Contains(got, "p%zz") {
+		t.Errorf("the password reached the report: %q", got)
+	}
+}
+
+// TestTruncateErrorKeepsUTF8 checks the cut does not split a multi-byte character.
+func TestTruncateErrorKeepsUTF8(t *testing.T) {
+	// "é" is two bytes: with one leading byte, byte maxErrorLength falls inside one.
+	message := "x" + strings.Repeat("é", maxErrorLength)
+
+	got := truncateError(message)
+	if !utf8.ValidString(got) {
+		t.Errorf("truncateError produced invalid UTF-8: %q", got[len(got)-20:])
+	}
+
+	if !strings.HasSuffix(got, "... (truncated)") {
+		t.Errorf("a truncated message must say so, got %q", got[len(got)-20:])
+	}
+}
+
+// TestCreateInputVarnishWithoutVarnishstat checks a containerised Varnish whose image has
+// no varnishstat is reported as such, not as missing credentials or an address.
+func TestCreateInputVarnishWithoutVarnishstat(t *testing.T) {
+	service := varnishInstanceService(4242)
+	service.Active = true
+
+	d := newTestDiscovery()
+	d.containerInfo = mockContainerInfo{
+		containers: nil,
+		exec: func(string, []string) ([]byte, error) {
+			return nil, errNoSuchBinary
+		},
+	}
+
+	got, err := d.createInput(service)
+	if err != nil {
+		t.Fatalf("createInput() returned an error: %v", err)
+	}
+
+	if got != inputMissingCommand {
+		t.Errorf("createInput() = %d, want inputMissingCommand (%d)", got, inputMissingCommand)
+	}
+
+	if msg := newInputResult(got, nil).message; msg == msgMissingInfo {
+		t.Errorf("a missing varnishstat is reported as %q", msg)
 	}
 }

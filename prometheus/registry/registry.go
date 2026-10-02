@@ -357,10 +357,11 @@ func (reg *registration) LastScrapeState() types.ScrapeState {
 	last := reg.lastScrapes[len(reg.lastScrapes)-1]
 
 	// A run skipped by the relabel hook is recorded in lastScrapes with
-	// errSkippingScrapeDueToRelabelHook, but it is neither a scrape nor a failure: it
-	// happens routinely while a service or container waits to be registered on Bleemeo.
-	// Report "not scraped" rather than that error, which would tell a user their healthy
-	// service is broken, quoting Glouton internals.
+	// errSkippingScrapeDueToRelabelHook, but it is neither a scrape nor a failure: the
+	// relabel hook asked to retry later, as Bleemeo's does while it cannot yet resolve the
+	// agent a target's metrics belong to (SNMP, Kubernetes, ...). Report "not scraped"
+	// rather than that error, which would quote Glouton internals as if the input were
+	// broken.
 	//
 	// Only the most recent run is considered. Walking back to an older real scrape would
 	// present a result up to maxLastScrape intervals old as the current state, and would

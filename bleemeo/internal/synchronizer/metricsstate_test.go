@@ -17,8 +17,9 @@
 package synchronizer
 
 import (
-	"maps"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
@@ -27,42 +28,85 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func labelsTextOf(name string, extra map[string]string) string {
-	lbls := map[string]string{gloutonTypes.LabelName: name}
-
-	maps.Copy(lbls, extra)
-
-	return gloutonTypes.LabelsToText(lbls)
+// labelsMetric is a metric with arbitrary labels, for tests that need more than a name.
+type labelsMetric struct {
+	lbls map[string]string
 }
 
-func newMetricsStateSync(
-	failures []bleemeoTypes.MetricRegistration,
-	notRegistered map[metricStateKey]int,
-	pending map[string]int,
-) *Synchronizer {
-	c := &cache.Cache{}
-	c.SetMetricRegistrationsFail(failures)
+func (m labelsMetric) Points(time.Time, time.Time) ([]gloutonTypes.Point, error) {
+	return nil, errNotImplemented
+}
 
+func (m labelsMetric) LastPointReceivedAt() time.Time { return time.Now() }
+
+func (m labelsMetric) Annotations() gloutonTypes.MetricAnnotations {
+	return gloutonTypes.MetricAnnotations{}
+}
+
+func (m labelsMetric) Labels() map[string]string { return m.lbls }
+
+func metricWithItem(name, item string) labelsMetric {
+	return labelsMetric{lbls: map[string]string{gloutonTypes.LabelName: name, gloutonTypes.LabelItem: item}}
+}
+
+func newMetricsStateSync(notRegistered map[metricStateKey]int) *Synchronizer {
 	return &Synchronizer{
-		option:               types.Option{Cache: c},
+		option:               types.Option{Cache: &cache.Cache{}},
 		notRegisteredMetrics: notRegistered,
-		pendingMetrics:       pending,
 	}
+}
+
+// failure is a registration failure to record in the cache, as registerMetrics would.
+type failure struct {
+	metric gloutonTypes.Metric
+	kind   bleemeoTypes.FailureKind
+}
+
+// publishUnregistered runs publishMetricsState on metrics, as the end of a synchronization
+// would: notRegistered is what filterMetrics staged, failures what registerMetrics left in
+// the cache.
+func publishUnregistered(
+	s *Synchronizer,
+	notRegistered map[metricStateKey]int,
+	failures []failure,
+	metrics ...gloutonTypes.Metric,
+) {
+	registrations := make([]bleemeoTypes.MetricRegistration, 0, len(failures))
+
+	for _, f := range failures {
+		registrations = append(registrations, bleemeoTypes.MetricRegistration{
+			LabelsText:   s.metricKey(f.metric.Labels(), f.metric.Annotations()),
+			LastFailKind: f.kind,
+		})
+	}
+
+	s.option.Cache.SetMetricRegistrationsFail(registrations)
+
+	keys := make([]string, 0, len(metrics))
+
+	for _, metric := range metrics {
+		keys = append(keys, s.metricKey(metric.Labels(), metric.Annotations()))
+	}
+
+	s.stagedNotRegistered = notRegistered
+	s.publishMetricsState(metrics, keys)
 }
 
 // TestMetricsStateMergesEveryStage checks the three stages a metric can be lost at all
 // reach the report. Before this, only the registration failures were recorded anywhere,
 // so a metric dropped by the filter was invisible.
 func TestMetricsStateMergesEveryStage(t *testing.T) {
-	s := newMetricsStateSync(
-		[]bleemeoTypes.MetricRegistration{
-			{LabelsText: labelsTextOf("cpu_used", nil), LastFailKind: bleemeoTypes.FailureTooManyCustomMetrics},
-		},
+	s := newMetricsStateSync(nil)
+	cpu := fakeMetric{label: "cpu_used"}
+
+	publishUnregistered(
+		s,
 		map[metricStateKey]int{
 			{Name: "disk_used_perc", Reason: bleemeoTypes.ReasonItemTooLong}:    3,
 			{Name: "redis_commands", Reason: bleemeoTypes.ReasonWaitingService}: 1,
 		},
-		map[string]int{"mem_used": 2},
+		[]failure{{metric: cpu, kind: bleemeoTypes.FailureTooManyCustomMetrics}},
+		cpu, metricWithItem("mem_used", "a"), metricWithItem("mem_used", "b"),
 	)
 
 	want := []bleemeoTypes.MetricState{
@@ -80,18 +124,19 @@ func TestMetricsStateMergesEveryStage(t *testing.T) {
 // TestMetricsStateGroupsByNameOnly checks the item and other labels are dropped, so that
 // one metric with many items is one row and not thousands.
 func TestMetricsStateGroupsByNameOnly(t *testing.T) {
-	failures := make([]bleemeoTypes.MetricRegistration, 0, 40)
+	failures := make([]failure, 0, 40)
+	metrics := make([]gloutonTypes.Metric, 0, 40)
 
-	for _, item := range []string{"/", "/home", "/var", "/tmp"} {
-		for range 10 {
-			failures = append(failures, bleemeoTypes.MetricRegistration{
-				LabelsText:   labelsTextOf("disk_used_perc", map[string]string{gloutonTypes.LabelItem: item}),
-				LastFailKind: bleemeoTypes.FailureAllowList,
-			})
-		}
+	for i := range 40 {
+		metric := metricWithItem("disk_used_perc", "/mnt/"+strconv.Itoa(i))
+		failures = append(failures, failure{metric: metric, kind: bleemeoTypes.FailureAllowList})
+		metrics = append(metrics, metric)
 	}
 
-	got := newMetricsStateSync(failures, nil, nil).MetricsState()
+	s := newMetricsStateSync(nil)
+	publishUnregistered(s, nil, failures, metrics...)
+
+	got := s.MetricsState()
 
 	if len(got) != 1 {
 		t.Fatalf("got %d rows, want 1: %+v", len(got), got)
@@ -106,6 +151,39 @@ func TestMetricsStateGroupsByNameOnly(t *testing.T) {
 	}
 }
 
+// TestMetricsStateCountsOnlyCurrentMetrics is a regression test: failures used to be
+// counted from the whole failure cache. That cache keeps an entry for up to
+// failedRegistrationExpiration after its metric is gone, and also holds metrics the filter
+// now drops, which were then reported under two reasons.
+func TestMetricsStateCountsOnlyCurrentMetrics(t *testing.T) {
+	present := fakeMetric{label: "cpu_used"}
+	gone := fakeMetric{label: "container_cpu_used"}
+	denied := fakeMetric{label: "mem_used"}
+
+	s := newMetricsStateSync(nil)
+
+	publishUnregistered(
+		s,
+		map[metricStateKey]int{{Name: "mem_used", Reason: bleemeoTypes.ReasonNotAvailableInPlan}: 1},
+		[]failure{
+			{metric: present, kind: bleemeoTypes.FailureTooManyCustomMetrics},
+			{metric: gone, kind: bleemeoTypes.FailureTooManyCustomMetrics},
+			{metric: denied, kind: bleemeoTypes.FailureAllowList},
+		},
+		// Only present passed the filter: gone no longer exists, denied was dropped.
+		present,
+	)
+
+	want := []bleemeoTypes.MetricState{
+		{Name: "cpu_used", Reason: bleemeoTypes.ReasonTooManyCustomMetrics, Count: 1},
+		{Name: "mem_used", Reason: bleemeoTypes.ReasonNotAvailableInPlan, Count: 1},
+	}
+
+	if diff := cmp.Diff(want, s.MetricsState()); diff != "" {
+		t.Errorf("MetricsState() mismatch (-want +got):\n%s", diff)
+	}
+}
+
 // TestMetricsStateIsSorted checks the result is deterministic: it is compared against what
 // the API already has, so an unstable order would re-send it on every collection.
 func TestMetricsStateIsSorted(t *testing.T) {
@@ -116,7 +194,7 @@ func TestMetricsStateIsSorted(t *testing.T) {
 		notRegistered[metricStateKey{Name: name, Reason: bleemeoTypes.ReasonNotAllowed}] = 1
 	}
 
-	s := newMetricsStateSync(nil, notRegistered, nil)
+	s := newMetricsStateSync(notRegistered)
 
 	first := s.MetricsState()
 
@@ -143,7 +221,7 @@ func TestMetricsStateIsSorted(t *testing.T) {
 // TestMetricsStateEmpty checks a healthy agent reports an empty list rather than nil
 // entries, so that "everything is fine" is a value the API can store.
 func TestMetricsStateEmpty(t *testing.T) {
-	got := newMetricsStateSync(nil, nil, nil).MetricsState()
+	got := newMetricsStateSync(nil).MetricsState()
 
 	if len(got) != 0 {
 		t.Errorf("got %+v, want no row", got)
@@ -157,27 +235,15 @@ func TestPublishMetricsStateExcludesFailuresFromPending(t *testing.T) {
 	failed := fakeMetric{label: "cpu_used"}
 	pending := fakeMetric{label: "mem_used"}
 
-	s := newMetricsStateSync(nil, nil, nil)
-
-	failedKey := s.metricKey(failed.Labels(), failed.Annotations())
-
-	s.option.Cache.SetMetricRegistrationsFail([]bleemeoTypes.MetricRegistration{
-		{LabelsText: failedKey, LastFailKind: bleemeoTypes.FailureAllowList},
-	})
-
-	unregistered := []gloutonTypes.Metric{failed, pending}
-	keys := []string{failedKey, s.metricKey(pending.Labels(), pending.Annotations())}
-
-	s.publishMetricsState(unregistered, keys)
-
-	got := s.MetricsState()
+	s := newMetricsStateSync(nil)
+	publishUnregistered(s, nil, []failure{{metric: failed, kind: bleemeoTypes.FailureAllowList}}, failed, pending)
 
 	want := []bleemeoTypes.MetricState{
 		{Name: "cpu_used", Reason: bleemeoTypes.ReasonNotAllowed, Count: 1},
 		{Name: "mem_used", Reason: bleemeoTypes.ReasonPending, Count: 1},
 	}
 
-	if diff := cmp.Diff(want, got); diff != "" {
+	if diff := cmp.Diff(want, s.MetricsState()); diff != "" {
 		t.Errorf("MetricsState() mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -192,7 +258,7 @@ func TestPublishMetricsStateExcludesFailuresFromPending(t *testing.T) {
 // through filterMetrics so this cannot be fooled again.
 func TestFilterMetricsRecordsMissingAccountConfig(t *testing.T) {
 	// An empty cache has no account configuration.
-	s := newMetricsStateSync(nil, nil, nil)
+	s := newMetricsStateSync(nil)
 
 	kept := s.filterMetrics(
 		[]gloutonTypes.Metric{fakeMetric{label: "cpu_used"}, fakeMetric{label: "mem_used"}},
@@ -222,7 +288,7 @@ func TestFilterMetricsRecordsMissingAccountConfig(t *testing.T) {
 // returns in between. When one of those is taken, the report must keep the previous, whole
 // value rather than mix a fresh half with a stale one.
 func TestPublishMetricsStateIsAtomic(t *testing.T) {
-	s := newMetricsStateSync(nil, nil, nil)
+	s := newMetricsStateSync(nil)
 
 	// A first synchronization completes.
 	s.stagedNotRegistered = map[metricStateKey]int{
