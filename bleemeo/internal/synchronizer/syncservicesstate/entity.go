@@ -19,11 +19,13 @@ package syncservicesstate
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/bleemeo/glouton/bleemeo/internal/filter"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/logger"
 	gloutonTypes "github.com/bleemeo/glouton/types"
 )
@@ -33,9 +35,16 @@ import (
 // all when the metrics synchronization keeps failing.
 const metricsStateWait = 10 * time.Minute
 
+// collectionWait is how long after discovery first ran the state is held back while a service's
+// collection has not run yet: its metrics would read as none, as after a restart. It covers
+// jmxtrans' window; past it, a collection that never runs does not block the others.
+const collectionWait = 5 * time.Minute
+
 // SyncServicesState sends the services state to the Agent's services_state field.
 type SyncServicesState struct {
 	metricsState func() ([]bleemeoTypes.MetricState, bool)
+	// now is the clock a send is recorded with.
+	now func() time.Time
 
 	// lastBuildAt is when NeedSynchronization last built a payload.
 	lastBuildAt time.Time
@@ -48,9 +57,9 @@ type SyncServicesState struct {
 }
 
 // New returns the entity, which reads the not-registered metrics from metricsState, along
-// with whether a synchronization published them yet.
-func New(metricsState func() ([]bleemeoTypes.MetricState, bool)) *SyncServicesState {
-	return &SyncServicesState{metricsState: metricsState}
+// with whether a synchronization published them yet. now is the synchronizer's clock.
+func New(metricsState func() ([]bleemeoTypes.MetricState, bool), now func() time.Time) *SyncServicesState {
+	return &SyncServicesState{metricsState: metricsState, now: now}
 }
 
 func (s *SyncServicesState) Name() types.EntityName {
@@ -138,7 +147,13 @@ func (s *SyncServicesState) NeedSynchronization(_ context.Context) (bool, error)
 	}
 
 	metricNames := ServiceMetricNames(storeMetrics, agentID, isAllowed, time.Now())
-	services := FromDiscovery(option.Discovery.ServicesState(), option.Cache.ServiceLookupFromList(), metricNames)
+	states := option.Discovery.ServicesState()
+
+	if now.Sub(s.discoveryReadyAt) < collectionWait && slices.ContainsFunc(states, isCollectionPending) {
+		return false, nil
+	}
+
+	services := FromDiscovery(states, option.Cache.ServiceLookupFromList(), metricNames)
 	payload := NewPayload(services, metrics, published)
 
 	if !NeedSend(last, payload, agentID, now) {
@@ -167,7 +182,9 @@ func (s *SyncServicesState) SyncRemoteAndLocal(ctx context.Context, _ types.Sync
 
 	option := s.currentExecution.Option()
 	agentID, _ := option.State.BleemeoCredentials()
-	now := s.currentExecution.StartedAt()
+	// When the send happens, not when the execution started: the delays before the next send
+	// run from it, and an execution can last long.
+	now := s.now()
 
 	stored, err := s.currentExecution.BleemeoAPIClient().UpdateAgentServicesState(ctx, agentID, s.payload)
 	if err != nil {
@@ -197,6 +214,10 @@ func (s *SyncServicesState) SyncRemoteAndLocal(ctx context.Context, _ types.Sync
 	option.Cache.SetServicesStateSent(Sent(*s.payload, agentID, now))
 
 	return nil
+}
+
+func isCollectionPending(state discovery.ServiceState) bool {
+	return state.CollectionPending
 }
 
 func (s *SyncServicesState) FinishExecution(_ context.Context) {

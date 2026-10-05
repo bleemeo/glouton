@@ -209,11 +209,14 @@ type ServiceState struct {
 	// Error is the last error reported by the input or, when Glouton has no input for
 	// this service, why: missing credentials, unsupported platform, ... It is empty when
 	// there is nothing to report.
-	Error string `json:"error,omitempty"`
+	Error string `json:"error"`
 	// MetricsIgnored tells whether the service's metrics are disabled by the configuration.
 	// Error then says so, but reports a choice the user made rather than a failure. Not
 	// sent: Error already tells Bleemeo.
 	MetricsIgnored bool `json:"-"`
+	// CollectionPending tells whether the service's metrics are collected but the collection
+	// has not run yet, as right after a start: its metrics are not received yet. Not sent.
+	CollectionPending bool `json:"-"`
 }
 
 // ServicesState returns what Glouton knows about each active service, sorted so that the
@@ -235,7 +238,7 @@ func (d *Discovery) ServicesState() []ServiceState {
 			continue
 		}
 
-		result[i].Error = scrapeResult(pending.provider, pending.secrets)
+		result[i].Error, result[i].CollectionPending = scrapeResult(pending.provider, pending.secrets)
 	}
 
 	return result
@@ -536,15 +539,15 @@ func isSecretParameter(key string) bool {
 	}
 }
 
-// scrapeResult reads the error of a service whose metrics are collected. A collection that has
-// not run yet reports none.
-func scrapeResult(provider scrapeStateProvider, secrets []string) string {
+// scrapeResult reads the error of a service whose metrics are collected, and whether the
+// collection has not run yet, in which case there is no error to report.
+func scrapeResult(provider scrapeStateProvider, secrets []string) (string, bool) {
 	scrape := provider.LastScrapeState()
 	if !scrape.HasRun {
-		return ""
+		return "", true
 	}
 
 	// Stabilized first, as redacting could hide what stabilizeError looks for (a password
 	// "tcp"); truncated last, so that the cut is always at the same place.
-	return truncateError(redactError(stabilizeError(scrape.Error), secrets))
+	return truncateError(redactError(stabilizeError(scrape.Error), secrets)), false
 }

@@ -304,7 +304,10 @@ func (d *Discovery) createInput(service Service) (inputOutcome, error) {
 
 	build, ok := inputBuilders[service.ServiceType]
 	if !ok {
-		logger.V(1).Printf("service type %s don't support metrics", service.ServiceType)
+		// The agent gathers the metrics of a few types itself: no input is not "no metrics".
+		if !d.agentGathererTypes[service.ServiceType] {
+			logger.V(1).Printf("service type %s don't support metrics", service.ServiceType)
+		}
 
 		return inputUnsupportedType, nil
 	}

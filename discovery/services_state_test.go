@@ -1130,3 +1130,39 @@ func TestServicesStateAgentGatherer(t *testing.T) {
 		t.Errorf("with metrics disabled, got %+v, want %q", got, msgIgnored)
 	}
 }
+
+// TestServicesStateCollectionPending checks a service whose collection has not run yet says so,
+// and stops once it ran, whether or not with an error.
+func TestServicesStateCollectionPending(t *testing.T) {
+	cases := []struct {
+		name  string
+		state types.ScrapeState
+		want  bool
+	}{
+		{name: "not run yet", state: types.ScrapeState{}, want: true},
+		{name: "ran", state: types.ScrapeState{HasRun: true}, want: false},
+		{name: "ran with an error", state: types.ScrapeState{HasRun: true, Error: "connection refused"}, want: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := newTestDiscovery()
+			d.inputResult[apacheKey()] = newInputResult(inputRegistered, nil)
+			d.activeCollector[apacheKey()] = collectorDetails{
+				gathererRegistration: fakeScrapeRegistration{state: tc.state},
+			}
+
+			if got := servicesStateOf(d)[0].CollectionPending; got != tc.want {
+				t.Errorf("CollectionPending = %v, want %v", got, tc.want)
+			}
+		})
+	}
+
+	// A service with nothing collecting it has nothing pending.
+	d := newTestDiscovery()
+	d.inputResult[apacheKey()] = newInputResult(inputMissingInfo, nil)
+
+	if servicesStateOf(d)[0].CollectionPending {
+		t.Error("a service without an input has a collection pending")
+	}
+}

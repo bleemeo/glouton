@@ -17,6 +17,8 @@
 package agent
 
 import (
+	"errors"
+	"os/exec"
 	"slices"
 	"testing"
 
@@ -61,4 +63,30 @@ func TestQueueSizeState(t *testing.T) {
 	var none *queueSizeState
 
 	none.set(nil)
+}
+
+// TestWithStderr checks a failed command's error says why, from its stderr, and other errors
+// are left alone.
+func TestWithStderr(t *testing.T) {
+	err := exec.CommandContext(t.Context(), "sh", "-c", "echo 'postqueue: fatal: mail system is down' >&2; echo more >&2; exit 69").Run()
+
+	exitErr := new(exec.ExitError)
+	if !errors.As(err, &exitErr) {
+		t.Fatalf("not an exit error: %v", err)
+	}
+
+	// Run does not capture stderr: set it as Output does.
+	exitErr.Stderr = []byte("postqueue: fatal: mail system is down\nmore\n")
+
+	if got, want := withStderr(err).Error(), "exit status 69: postqueue: fatal: mail system is down"; got != want {
+		t.Errorf("withStderr() = %q, want %q", got, want)
+	}
+
+	if !errors.Is(withStderr(err), err) {
+		t.Error("withStderr() does not wrap the original error")
+	}
+
+	if got := withStderr(errRunInContainer).Error(); got != errRunInContainer.Error() {
+		t.Errorf("withStderr() changed an error that is not a command's: %q", got)
+	}
 }

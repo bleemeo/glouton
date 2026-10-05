@@ -35,7 +35,7 @@ func settledService(i int) ServiceState {
 	state := service(i, "")
 	state.ServiceUUID = fmt.Sprintf("uuid-%d", i)
 	state.InputSupported = true
-	state.Metrics = 2
+	state.Metrics = MetricsSome
 
 	return state
 }
@@ -44,6 +44,7 @@ func settledService(i int) ServiceState {
 func freshService(i int) ServiceState {
 	state := service(i, "")
 	state.InputSupported = true
+	state.Metrics = MetricsZero
 
 	return state
 }

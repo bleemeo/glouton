@@ -19,7 +19,9 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
 	"maps"
+	"os/exec"
 	"regexp"
 	"slices"
 	"strconv"
@@ -114,7 +116,7 @@ func postfixQueueSize(ctx context.Context, srv discovery.Service, runner *glouto
 	if errors.Is(err, gloutonexec.ErrExecutionSkipped) {
 		return 0, errRunInContainer
 	} else if err != nil {
-		return 0, err
+		return 0, withStderr(err)
 	}
 
 	return parsePostfix(out)
@@ -147,8 +149,24 @@ func eximQueueSize(ctx context.Context, srv discovery.Service, runner *gloutonex
 	if errors.Is(err, gloutonexec.ErrExecutionSkipped) {
 		return 0, errRunInContainer
 	} else if err != nil {
-		return 0, err
+		return 0, withStderr(err)
 	}
 
 	return strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
+}
+
+// withStderr adds to a failed command's error the first line of what it wrote on stderr: the
+// exit status alone, such as "exit status 69", does not say why.
+func withStderr(err error) error {
+	exitErr := new(exec.ExitError)
+	if !errors.As(err, &exitErr) {
+		return err
+	}
+
+	line, _, _ := strings.Cut(strings.TrimSpace(string(exitErr.Stderr)), "\n")
+	if line == "" {
+		return err
+	}
+
+	return fmt.Errorf("%w: %s", err, line)
 }

@@ -156,8 +156,11 @@ func newEntityTest(agentID string) *entityTest {
 	test.execution.option.Discovery = test.discovery
 	test.execution.option.Store = test.store
 	test.execution.option.Cache = cache.Load(state)
-	setAllowlist(test.execution.option.Cache, "mysql_queries,mysql_threads,postfix_queue_size")
-	test.entity = New(func() ([]bleemeoTypes.MetricState, bool) { return test.metrics, !test.metricsUnpublished })
+	setAllowlist(test.execution.option.Cache, "mysql_queries,mysql_threads,postfix_queue_size,service_status")
+	test.entity = New(
+		func() ([]bleemeoTypes.MetricState, bool) { return test.metrics, !test.metricsUnpublished },
+		func() time.Time { return test.execution.now },
+	)
 
 	return test
 }
@@ -232,7 +235,7 @@ func TestEntityGoldenPayload(t *testing.T) {
 
 	want := `{"services":[{"name":"mysql","type":"mysql","instance":"","container_name":"",` +
 		`"dynamic_discovery":true,"input_supported":true,` +
-		`"error":"failed to create the input: missing credentials or address","service_uuid":"service-uuid","metrics":0}],` +
+		`"error":"failed to create the input: missing credentials or address","service_uuid":"service-uuid","metrics":"zero"}],` +
 		`"metrics":[{"name":"disk_used_perc","reason":"not-available-in-plan","count":3}]}`
 
 	if client.bodies[0] != want {
@@ -458,18 +461,23 @@ func TestEntityCountsServiceMetrics(t *testing.T) {
 	cases := []struct {
 		name    string
 		metrics []gloutonTypes.Metric
-		want    int
+		want    MetricsAmount
 	}{
-		{name: "none", want: 0},
+		{name: "none", want: MetricsZero},
 		{
 			name:    "two names, several series",
 			metrics: []gloutonTypes.Metric{serviceMetric("mysql_queries", "mysql"), serviceMetric("mysql_threads", "mysql"), serviceMetric("mysql_threads", "mysql")},
-			want:    2,
+			want:    MetricsSome,
 		},
 		{
 			name:    "one allowed, one not in the plan",
 			metrics: []gloutonTypes.Metric{serviceMetric("mysql_queries", "mysql"), serviceMetric("mysql_innodb_rows", "mysql")},
-			want:    1,
+			want:    MetricsOne,
+		},
+		{
+			name:    "the service check's status only",
+			metrics: []gloutonTypes.Metric{serviceMetric(gloutonTypes.MetricServiceStatus, "mysql")},
+			want:    MetricsZero,
 		},
 		{
 			name: "stale",
@@ -478,7 +486,7 @@ func TestEntityCountsServiceMetrics(t *testing.T) {
 				annotations: gloutonTypes.MetricAnnotations{ServiceName: "mysql"},
 				lastPoint:   time.Now().Add(-time.Hour),
 			}},
-			want: 0,
+			want: MetricsZero,
 		},
 		{
 			name: "another agent's",
@@ -487,12 +495,12 @@ func TestEntityCountsServiceMetrics(t *testing.T) {
 				annotations: gloutonTypes.MetricAnnotations{ServiceName: "mysql", BleemeoAgentID: "other-agent"},
 				lastPoint:   time.Now(),
 			}},
-			want: 0,
+			want: MetricsZero,
 		},
 		{
 			name:    "another service's",
 			metrics: []gloutonTypes.Metric{serviceMetric("mysql_queries", "mariadb")},
-			want:    0,
+			want:    MetricsZero,
 		},
 	}
 
@@ -515,7 +523,7 @@ func TestEntityCountsServiceMetrics(t *testing.T) {
 			}
 
 			if got := sent.Services[0].Metrics; got != tc.want {
-				t.Errorf("metrics = %d, want %d", got, tc.want)
+				t.Errorf("metrics = %q, want %q", got, tc.want)
 			}
 		})
 	}
@@ -545,5 +553,41 @@ func TestEntityMetricsUnknown(t *testing.T) {
 
 	if need, err := test.run(t, t0.Add(metricsStateWait+minSendInterval)); err != nil || !need {
 		t.Fatalf("once published: need = %v, err = %v; want true, nil", need, err)
+	}
+}
+
+// TestEntityWaitsForCollections checks nothing is sent while a service's collection has not run
+// yet, as right after a start, when its metrics would read as none; but not past collectionWait.
+func TestEntityWaitsForCollections(t *testing.T) {
+	test := newEntityTest(testAgent)
+	pending := mysqlMissingCredentials()
+	pending.Error = ""
+	pending.CollectionPending = true
+	test.discovery.States = []discovery.ServiceState{pending}
+
+	if need, _ := test.run(t, t0); need {
+		t.Fatal("sent while a collection has not run")
+	}
+
+	// Discovery was first seen ready at t0: past collectionWait, a collection that never runs
+	// no longer blocks.
+	if need, err := test.run(t, t0.Add(collectionWait)); err != nil || !need {
+		t.Fatalf("after collectionWait: need = %v, err = %v; want true, nil", need, err)
+	}
+}
+
+// TestEntityRecordsSendTime checks a send is recorded when it happens, not when the execution
+// started: the delays before the next send run from it.
+func TestEntityRecordsSendTime(t *testing.T) {
+	test := newEntityTest(testAgent)
+	sentAt := t0.Add(40 * time.Second)
+	test.entity.now = func() time.Time { return sentAt }
+
+	if _, err := test.run(t, t0); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := test.execution.option.Cache.ServicesStateSent().LastAttemptAt; !got.Equal(sentAt) {
+		t.Errorf("recorded the attempt at %v, want %v", got, sentAt)
 	}
 }

@@ -28,7 +28,8 @@ import (
 )
 
 // TestFromDiscovery checks each service gets the UUID of its own Service object, matched
-// on name and instance, and an unregistered one is kept with an empty UUID.
+// on name and instance, and an unregistered one is kept with an empty UUID; and its metrics,
+// as a word.
 func TestFromDiscovery(t *testing.T) {
 	states := []discovery.ServiceState{
 		{Name: "apache", ServiceType: discovery.ApacheService},
@@ -43,14 +44,19 @@ func TestFromDiscovery(t *testing.T) {
 		{ID: "uuid-redis-session", Label: "redis", Instance: "session"},
 	})
 
-	got := FromDiscovery(states, registered, nil)
+	metricNames := map[discovery.NameInstance]int{
+		{Name: "apache"}:                   1,
+		{Name: "redis", Instance: "cache"}: 12,
+	}
+
+	got := FromDiscovery(states, registered, metricNames)
 
 	want := []ServiceState{
-		{ServiceState: states[0], ServiceUUID: "uuid-apache"},
-		{ServiceState: states[1], ServiceUUID: "uuid-redis-cache"},
-		{ServiceState: states[2], ServiceUUID: "uuid-redis-session"},
+		{ServiceState: states[0], ServiceUUID: "uuid-apache", Metrics: MetricsOne},
+		{ServiceState: states[1], ServiceUUID: "uuid-redis-cache", Metrics: MetricsSome},
+		{ServiceState: states[2], ServiceUUID: "uuid-redis-session", Metrics: MetricsZero},
 		// Not registered: still reported, so Bleemeo learns about it.
-		{ServiceState: states[3], ServiceUUID: ""},
+		{ServiceState: states[3], ServiceUUID: "", Metrics: MetricsZero},
 	}
 
 	if diff := cmp.Diff(want, got); diff != "" {
@@ -75,13 +81,14 @@ func TestFromDiscoveryDuplicates(t *testing.T) {
 }
 
 // TestServiceStateJSON checks the payload is flat, as the API expects one object per
-// service, and that service_uuid is always present, even when empty.
+// service, and that service_uuid and error are always present, even when empty.
 func TestServiceStateJSON(t *testing.T) {
 	state := ServiceState{
 		Name:           "mysql",
 		ServiceType:    discovery.MySQLService,
 		Dynamic:        true,
 		InputSupported: true,
+		Metrics:        MetricsZero,
 	}
 
 	data, err := json.Marshal(state)
@@ -101,7 +108,8 @@ func TestServiceStateJSON(t *testing.T) {
 		"container_name":    "",
 		"dynamic_discovery": true,
 		"input_supported":   true,
-		"metrics":           float64(0),
+		"error":             "",
+		"metrics":           "zero",
 		"service_uuid":      "",
 	}
 

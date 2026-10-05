@@ -41,10 +41,33 @@ type ServiceState struct {
 	// is none: pending, failed, or impossible (an instance too long for the API). Such a service
 	// is still reported.
 	ServiceUUID string `json:"service_uuid"`
-	// Metrics is how many metric names of the service are meant to reach Bleemeo: received
-	// lately, and dropped by neither Glouton's metric filter nor Bleemeo's. It is 0, 1 or 2
-	// meaning "two or more", kept coarse so that the value stays stable.
-	Metrics int `json:"metrics"`
+	// Metrics is roughly how many metric names of the service are meant to reach Bleemeo:
+	// received lately, and dropped by neither Glouton's metric filter nor Bleemeo's. The
+	// service check's status does not count: it is no metric of the service. A word rather
+	// than a number, so that it is not taken for an exact count, kept coarse so that the value
+	// stays stable.
+	Metrics MetricsAmount `json:"metrics"`
+}
+
+// MetricsAmount is roughly how many metrics a service has.
+type MetricsAmount string
+
+const (
+	MetricsZero MetricsAmount = "zero"
+	MetricsOne  MetricsAmount = "one"
+	MetricsSome MetricsAmount = "some"
+)
+
+// metricsAmount is the MetricsAmount of count metric names.
+func metricsAmount(count int) MetricsAmount {
+	switch {
+	case count <= 0:
+		return MetricsZero
+	case count == 1:
+		return MetricsOne
+	default:
+		return MetricsSome
+	}
 }
 
 // FromDiscovery adds to each service the ID of its Service object, matched as the services
@@ -63,7 +86,7 @@ func FromDiscovery(
 		result = append(result, ServiceState{
 			ServiceState: state,
 			ServiceUUID:  registered[key].ID,
-			Metrics:      min(metricNames[discovery.NameInstance{Name: state.Name, Instance: state.Instance}], 2),
+			Metrics:      metricsAmount(metricNames[discovery.NameInstance{Name: state.Name, Instance: state.Instance}]),
 		})
 	}
 
@@ -71,8 +94,8 @@ func FromDiscovery(
 }
 
 // ServiceMetricNames counts, per service, the names of the metrics of agentID that are meant to
-// reach Bleemeo. metrics are those the synchronizer reads, already through Glouton's metric
-// filter; isAllowed is Bleemeo's.
+// reach Bleemeo, the service check's status left out. metrics are those the synchronizer reads,
+// already through Glouton's metric filter; isAllowed is Bleemeo's.
 func ServiceMetricNames(
 	metrics []gloutonTypes.Metric,
 	agentID string,
@@ -84,7 +107,11 @@ func ServiceMetricNames(
 	for _, metric := range metrics {
 		annotations := metric.Annotations()
 
-		if annotations.ServiceName == "" {
+		name := metric.Labels()[gloutonTypes.LabelName]
+
+		// The status of the service check is no metric of the service: a service with no
+		// input at all has one.
+		if annotations.ServiceName == "" || name == gloutonTypes.MetricServiceStatus {
 			continue
 		}
 
@@ -101,7 +128,7 @@ func ServiceMetricNames(
 			names[key] = make(map[string]bool)
 		}
 
-		names[key][metric.Labels()[gloutonTypes.LabelName]] = true
+		names[key][name] = true
 	}
 
 	counts := make(map[discovery.NameInstance]int, len(names))

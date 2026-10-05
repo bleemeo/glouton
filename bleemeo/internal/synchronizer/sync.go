@@ -201,7 +201,7 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 		syncservices.New(),
 		&CompatibilityWrapper{state: state, name: types.EntityMonitor, method: s.syncMonitors, skipOnlyEssential: true},
 		&CompatibilityWrapper{state: state, name: types.EntityMetric, method: s.syncMetrics},
-		syncservicesstate.New(s.publishedMetricsState),
+		syncservicesstate.New(s.publishedMetricsState, s.now),
 		&CompatibilityWrapper{state: state, name: types.EntityGloutonConfig, method: s.syncGloutonConfig},
 		&CompatibilityWrapper{state: state, name: types.EntityDiagnostics, method: s.syncDiagnostics},
 	}

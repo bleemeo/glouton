@@ -189,7 +189,9 @@ func settled(service ServiceState) bool {
 		return false
 	}
 
-	return service.Error != "" || service.Metrics > 0 || !service.InputSupported
+	hasMetrics := service.Metrics == MetricsOne || service.Metrics == MetricsSome
+
+	return service.Error != "" || hasMetrics || !service.InputSupported
 }
 
 // hasNewSettledService tells whether services holds a settled one that previous, the
