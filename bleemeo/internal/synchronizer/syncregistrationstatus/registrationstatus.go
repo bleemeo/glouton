@@ -14,9 +14,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package syncservicesstate builds the services state Glouton reports on its Agent object,
+// Package syncregistrationstatus builds the registration status Glouton reports on its Agent object,
 // so that Bleemeo can tell a user why a service is or is not monitored.
-package syncservicesstate
+package syncregistrationstatus
 
 import (
 	"time"

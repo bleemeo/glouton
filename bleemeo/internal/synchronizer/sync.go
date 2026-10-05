@@ -39,8 +39,8 @@ import (
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncapplications"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncconfig"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncregistrationstatus"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncservices"
-	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncservicesstate"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/crashreport"
@@ -201,7 +201,7 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 		syncservices.New(),
 		&CompatibilityWrapper{state: state, name: types.EntityMonitor, method: s.syncMonitors, skipOnlyEssential: true},
 		&CompatibilityWrapper{state: state, name: types.EntityMetric, method: s.syncMetrics},
-		syncservicesstate.New(s.publishedMetricsState, s.now),
+		syncregistrationstatus.New(s.publishedMetricsState, s.now),
 		&CompatibilityWrapper{state: state, name: types.EntityGloutonConfig, method: s.syncGloutonConfig},
 		&CompatibilityWrapper{state: state, name: types.EntityDiagnostics, method: s.syncDiagnostics},
 	}

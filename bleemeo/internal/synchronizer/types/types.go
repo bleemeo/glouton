@@ -225,9 +225,9 @@ type ConfigClient interface {
 type AgentClient interface {
 	ListAgents(ctx context.Context) ([]bleemeoTypes.Agent, error)
 	UpdateAgent(ctx context.Context, id string, data any) (bleemeoTypes.Agent, error)
-	// UpdateAgentServicesState sets the Agent's services_state and tells whether the API stored
+	// UpdateAgentRegistrationStatus sets the Agent's registration_status and tells whether the API stored
 	// it: an API without that field ignores it and still accepts the request.
-	UpdateAgentServicesState(ctx context.Context, id string, state any) (stored bool, err error)
+	UpdateAgentRegistrationStatus(ctx context.Context, id string, state any) (stored bool, err error)
 	UpdateAgentLastDuplicationDate(ctx context.Context, agentID string, lastDuplicationDate time.Time) error
 }
 

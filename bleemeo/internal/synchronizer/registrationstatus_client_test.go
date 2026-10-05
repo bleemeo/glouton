@@ -60,7 +60,7 @@ func (api *servicesStateAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	response := map[string]json.RawMessage{"id": json.RawMessage(`"agent-id"`)}
 	if api.hasField {
-		response["services_state"] = api.body["services_state"]
+		response["registration_status"] = api.body["registration_status"]
 	}
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
@@ -68,9 +68,9 @@ func (api *servicesStateAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// TestUpdateAgentServicesState checks the request sent, and that a value is reported as stored
+// TestUpdateAgentRegistrationStatus checks the request sent, and that a value is reported as stored
 // only when the API returns it.
-func TestUpdateAgentServicesState(t *testing.T) {
+func TestUpdateAgentRegistrationStatus(t *testing.T) {
 	for _, hasField := range []bool{true, false} {
 		api := &servicesStateAPI{hasField: hasField}
 
@@ -88,7 +88,7 @@ func TestUpdateAgentServicesState(t *testing.T) {
 
 		cl := &wrapperClient{client: client}
 
-		stored, err := cl.UpdateAgentServicesState(t.Context(), "agent-id", map[string][]int{"services": {}})
+		stored, err := cl.UpdateAgentRegistrationStatus(t.Context(), "agent-id", map[string][]int{"services": {}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -97,8 +97,8 @@ func TestUpdateAgentServicesState(t *testing.T) {
 			t.Errorf("API with the field = %v: stored = %v", hasField, stored)
 		}
 
-		if got := string(api.body["services_state"]); got != `{"services":[]}` {
-			t.Errorf("services_state sent = %s, want {\"services\":[]}", got)
+		if got := string(api.body["registration_status"]); got != `{"services":[]}` {
+			t.Errorf("registration_status sent = %s, want {\"services\":[]}", got)
 		}
 
 		if api.fields != "id" {

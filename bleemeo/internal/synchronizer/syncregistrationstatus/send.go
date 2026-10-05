@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package syncservicesstate
+package syncregistrationstatus
 
 import (
 	"crypto/sha256"
@@ -37,7 +37,7 @@ const (
 )
 
 // Payload is the services state as sent to Bleemeo: both lists, limited in size. It is the
-// value of the Agent's services_state field.
+// value of the Agent's registration_status field.
 type Payload struct {
 	Services []ServiceState `json:"services"`
 	// Metrics is null when the metrics state is not known yet: see NewPayload.

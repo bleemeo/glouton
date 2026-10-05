@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package syncservicesstate
+package syncregistrationstatus
 
 import (
 	"context"
@@ -40,7 +40,7 @@ const metricsStateWait = 10 * time.Minute
 // jmxtrans' window; past it, a collection that never runs does not block the others.
 const collectionWait = 5 * time.Minute
 
-// SyncServicesState sends the services state to the Agent's services_state field.
+// SyncServicesState sends the services state to the Agent's registration_status field.
 type SyncServicesState struct {
 	metricsState func() ([]bleemeoTypes.MetricState, bool)
 	// now is the clock a send is recorded with.
@@ -186,7 +186,7 @@ func (s *SyncServicesState) SyncRemoteAndLocal(ctx context.Context, _ types.Sync
 	// run from it, and an execution can last long.
 	now := s.now()
 
-	stored, err := s.currentExecution.BleemeoAPIClient().UpdateAgentServicesState(ctx, agentID, s.payload)
+	stored, err := s.currentExecution.BleemeoAPIClient().UpdateAgentRegistrationStatus(ctx, agentID, s.payload)
 	if err != nil {
 		option.Cache.SetServicesStateSent(SendFailed(option.Cache.ServicesStateSent(), agentID, now))
 

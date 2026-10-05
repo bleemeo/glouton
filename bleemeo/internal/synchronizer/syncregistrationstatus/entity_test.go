@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package syncservicesstate
+package syncregistrationstatus
 
 import (
 	"context"
@@ -88,11 +88,11 @@ type fakeClient struct {
 	ids    []string
 	bodies []string
 	err    error
-	// notStored acts as an API without the services_state field.
+	// notStored acts as an API without the registration_status field.
 	notStored bool
 }
 
-func (c *fakeClient) UpdateAgentServicesState(_ context.Context, id string, state any) (bool, error) {
+func (c *fakeClient) UpdateAgentRegistrationStatus(_ context.Context, id string, state any) (bool, error) {
 	body, err := json.Marshal(state)
 	if err != nil {
 		return false, err
@@ -216,8 +216,8 @@ func mysqlMissingCredentials() discovery.ServiceState {
 	}
 }
 
-// TestEntityGoldenPayload pins the services_state value sent to Bleemeo, the only guard on the format:
-// the API does not validate what is inside services_state.
+// TestEntityGoldenPayload pins the registration_status value sent to Bleemeo, the only guard on the format:
+// the API does not validate what is inside registration_status.
 func TestEntityGoldenPayload(t *testing.T) {
 	test := newEntityTest(testAgent)
 	test.discovery.States = []discovery.ServiceState{mysqlMissingCredentials()}

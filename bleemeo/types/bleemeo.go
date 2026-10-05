@@ -344,7 +344,7 @@ type ServicesStateSent struct {
 	AgentID string
 	// Hash identifies the value last accepted by the API. Empty when none was.
 	Hash string
-	// Services are the services that value listed as settled. See syncservicesstate.NeedSend.
+	// Services are the services that value listed as settled. See syncregistrationstatus.NeedSend.
 	Services []discovery.NameInstance
 	// LastAttemptAt is when a send was last attempted, accepted or not.
 	LastAttemptAt time.Time
