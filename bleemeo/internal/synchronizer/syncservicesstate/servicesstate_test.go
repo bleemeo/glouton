@@ -27,9 +27,9 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-// TestWithServiceUUID checks each service gets the UUID of its own Service object, matched
+// TestFromDiscovery checks each service gets the UUID of its own Service object, matched
 // on name and instance, and an unregistered one is kept with an empty UUID.
-func TestWithServiceUUID(t *testing.T) {
+func TestFromDiscovery(t *testing.T) {
 	states := []discovery.ServiceState{
 		{Name: "apache", ServiceType: discovery.ApacheService},
 		{Name: "redis", ServiceType: discovery.RedisService, Instance: "cache"},
@@ -43,7 +43,7 @@ func TestWithServiceUUID(t *testing.T) {
 		{ID: "uuid-redis-session", Label: "redis", Instance: "session"},
 	})
 
-	got := WithServiceUUID(states, registered)
+	got := FromDiscovery(states, registered, nil)
 
 	want := []ServiceState{
 		{ServiceState: states[0], ServiceUUID: "uuid-apache"},
@@ -54,13 +54,13 @@ func TestWithServiceUUID(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("WithServiceUUID() mismatch (-want +got):\n%s", diff)
+		t.Errorf("FromDiscovery() mismatch (-want +got):\n%s", diff)
 	}
 }
 
-// TestWithServiceUUIDDuplicates checks that when the API holds two Service objects for one
+// TestFromDiscoveryDuplicates checks that when the API holds two Service objects for one
 // service, the UUID reported is the one the services synchronization keeps: the youngest.
-func TestWithServiceUUIDDuplicates(t *testing.T) {
+func TestFromDiscoveryDuplicates(t *testing.T) {
 	states := []discovery.ServiceState{{Name: "apache", ServiceType: discovery.ApacheService}}
 
 	registered := common.ServiceLookupFromList([]bleemeoTypes.Service{
@@ -68,7 +68,7 @@ func TestWithServiceUUIDDuplicates(t *testing.T) {
 		{ID: "uuid-old", Label: "apache", CreationDate: "2026-09-01T10:00:00Z"},
 	})
 
-	got := WithServiceUUID(states, registered)
+	got := FromDiscovery(states, registered, nil)
 	if got[0].ServiceUUID != "uuid-new" {
 		t.Errorf("got UUID %q, want the youngest Service object %q", got[0].ServiceUUID, "uuid-new")
 	}

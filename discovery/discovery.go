@@ -74,6 +74,9 @@ type Discovery struct {
 	inputResult map[NameInstance]inputResult
 	// jmxState is how JMX collection goes, nil when JMX is disabled.
 	jmxState JMXStateProvider
+	// agentGathererState is how the agent's own gatherers go, for agentGathererTypes.
+	agentGathererState AgentGathererStateProvider
+	agentGathererTypes map[ServiceName]bool
 	// servicesStateL guards servicesStateSnapshot, apart from d.l: see ServicesState.
 	servicesStateL        sync.Mutex
 	servicesStateSnapshot servicesStateSnapshot

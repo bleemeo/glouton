@@ -35,7 +35,7 @@ func settledService(i int) ServiceState {
 	state := service(i, "")
 	state.ServiceUUID = fmt.Sprintf("uuid-%d", i)
 	state.InputSupported = true
-	state.MetricFamiliesBucket = 2
+	state.Metrics = 2
 
 	return state
 }
@@ -51,7 +51,7 @@ func freshService(i int) ServiceState {
 func payloadOf(services ...ServiceState) Payload {
 	return NewPayload(services, []bleemeoTypes.MetricState{
 		{Name: "cpu_used", Reason: bleemeoTypes.ReasonPending, Count: 3},
-	})
+	}, true)
 }
 
 // TestNeedSend covers when the services state is sent.
@@ -61,7 +61,7 @@ func TestNeedSend(t *testing.T) {
 
 	changedCount := NewPayload(base.Services, []bleemeoTypes.MetricState{
 		{Name: "cpu_used", Reason: bleemeoTypes.ReasonPending, Count: 4},
-	})
+	}, true)
 	newSettled := payloadOf(settledService(1), settledService(2), settledService(3))
 	newFresh := payloadOf(settledService(1), settledService(2), freshService(3))
 	removed := payloadOf(settledService(1))
@@ -197,7 +197,7 @@ func TestSettled(t *testing.T) {
 // TestHashSameValue checks the hash depends on content only: a nil list and an empty one
 // are the same value, and two payloads built apart from the same state are equal.
 func TestHashSameValue(t *testing.T) {
-	if NewPayload(nil, nil).hash != NewPayload([]ServiceState{}, []bleemeoTypes.MetricState{}).hash {
+	if NewPayload(nil, nil, true).hash != NewPayload([]ServiceState{}, []bleemeoTypes.MetricState{}, true).hash {
 		t.Error("a nil list and an empty one hash differently")
 	}
 
@@ -216,7 +216,7 @@ func TestHashSameValue(t *testing.T) {
 func TestHashSeparatesLists(t *testing.T) {
 	row := []byte(`{"x":1}`)
 
-	if hashRows([][]byte{row}, nil) == hashRows(nil, [][]byte{row}) {
+	if hashRows([][]byte{row}, nil, true) == hashRows(nil, [][]byte{row}, true) {
 		t.Error("a row in the services list hashes like the same row in the metrics list")
 	}
 }
@@ -229,8 +229,8 @@ func TestHashIgnoresDroppedRows(t *testing.T) {
 		services = append(services, settledService(i))
 	}
 
-	oneDropped := NewPayload(services[:maxServices+1], nil)
-	twoDropped := NewPayload(services, nil)
+	oneDropped := NewPayload(services[:maxServices+1], nil, true)
+	twoDropped := NewPayload(services, nil, true)
 
 	if oneDropped.servicesDropped != 1 || twoDropped.servicesDropped != 2 {
 		t.Fatalf("dropped %d and %d, want 1 and 2", oneDropped.servicesDropped, twoDropped.servicesDropped)

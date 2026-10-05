@@ -39,8 +39,9 @@ const (
 // Payload is the services state as sent to Bleemeo: both lists, limited in size. It is the
 // value of the Agent's services_state field.
 type Payload struct {
-	Services []ServiceState             `json:"services"`
-	Metrics  []bleemeoTypes.MetricState `json:"metrics"`
+	Services []ServiceState `json:"services"`
+	// Metrics is null when the metrics state is not known yet: see NewPayload.
+	Metrics []bleemeoTypes.MetricState `json:"metrics"`
 
 	// servicesDropped and metricsDropped are how many rows the limits left out. They are not
 	// sent, only logged by Sent.
@@ -50,25 +51,36 @@ type Payload struct {
 }
 
 // NewPayload builds the payload of the given lists, which must come sorted, as
-// Discovery.ServicesState and Synchronizer.MetricsState return them.
-func NewPayload(services []ServiceState, metrics []bleemeoTypes.MetricState) Payload {
+// Discovery.ServicesState and Synchronizer.MetricsState return them. metricsKnown is false
+// while no synchronization published the metrics state: Metrics is then null rather than an
+// empty list, which would claim that every metric is registered.
+func NewPayload(services []ServiceState, metrics []bleemeoTypes.MetricState, metricsKnown bool) Payload {
 	keptServices, servicesRows, servicesDropped := limitServices(services)
-	keptMetrics, metricsRows, metricsDropped := limitMetrics(metrics)
-
-	return Payload{
+	payload := Payload{
 		Services:        keptServices,
-		Metrics:         keptMetrics,
 		servicesDropped: servicesDropped,
-		metricsDropped:  metricsDropped,
-		hash:            hashRows(servicesRows, metricsRows),
 	}
+
+	var metricsRows [][]byte
+
+	if metricsKnown {
+		payload.Metrics, metricsRows, payload.metricsDropped = limitMetrics(metrics)
+	}
+
+	payload.hash = hashRows(servicesRows, metricsRows, metricsKnown)
+
+	return payload
 }
 
 // hashRows identifies a payload from the rows limit already encoded. The rows left out are not
 // part of it: they are not sent, so a value that differs only by them is the same value to the
-// API. A nil list and an empty one hash the same.
-func hashRows(services [][]byte, metrics [][]byte) string {
+// API. A nil list and an empty one hash the same; unknown metrics do not.
+func hashRows(services [][]byte, metrics [][]byte, metricsKnown bool) string {
 	h := sha256.New()
+
+	if !metricsKnown {
+		_, _ = h.Write([]byte("metrics unknown\x00"))
+	}
 
 	for _, list := range [][][]byte{services, metrics} {
 		for _, row := range list {
@@ -177,7 +189,7 @@ func settled(service ServiceState) bool {
 		return false
 	}
 
-	return service.Error != "" || service.MetricFamiliesBucket > 0 || !service.InputSupported
+	return service.Error != "" || service.Metrics > 0 || !service.InputSupported
 }
 
 // hasNewSettledService tells whether services holds a settled one that previous, the

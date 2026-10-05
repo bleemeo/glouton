@@ -19,11 +19,15 @@ package agent
 import (
 	"context"
 	"errors"
+	"maps"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/bleemeo/glouton/discovery"
+	"github.com/bleemeo/glouton/types"
 	"github.com/bleemeo/glouton/utils/gloutonexec"
 )
 
@@ -43,6 +47,57 @@ var (
 
 type dockerExecuter interface {
 	Exec(ctx context.Context, containerID string, cmd []string) ([]byte, error)
+}
+
+// queueSizeGatherer gathers the size of a mail server's queue, the one metric the agent
+// collects itself for that service type, as no input does.
+type queueSizeGatherer struct {
+	metric string
+	gather func(ctx context.Context, srv discovery.Service, runner *gloutonexec.Runner, docker dockerExecuter) (float64, error)
+}
+
+// queueSizeGatherers are the service types whose metric the agent gathers itself.
+var queueSizeGatherers = map[discovery.ServiceName]queueSizeGatherer{ //nolint:gochecknoglobals
+	discovery.PostfixService: {metric: "postfix_queue_size", gather: postfixQueueSize},
+	discovery.EximService:    {metric: "exim_queue_size", gather: eximQueueSize},
+}
+
+// queueSizeState records how the last gather of each service's queue size went, so that
+// discovery reports these services as supported, with their error. It implements
+// discovery.AgentGathererStateProvider.
+type queueSizeState struct {
+	l sync.Mutex
+	// errors is the error of each service's last gather, empty when it succeeded. A service
+	// not gathered yet is absent.
+	errors map[discovery.NameInstance]string
+}
+
+func (s *queueSizeState) ServiceTypes() []discovery.ServiceName {
+	return slices.Sorted(maps.Keys(queueSizeGatherers))
+}
+
+func (s *queueSizeState) ServiceScrapeState(service discovery.NameInstance) types.ScrapeState {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	message, ok := s.errors[service]
+	if !ok {
+		return types.ScrapeState{}
+	}
+
+	return types.ScrapeState{HasRun: true, Error: message}
+}
+
+// set records the services gathered in one run, forgetting the others.
+func (s *queueSizeState) set(errors map[discovery.NameInstance]string) {
+	if s == nil {
+		return
+	}
+
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	s.errors = errors
 }
 
 func postfixQueueSize(ctx context.Context, srv discovery.Service, runner *gloutonexec.Runner, docker dockerExecuter) (float64, error) {

@@ -21,10 +21,17 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/bleemeo/glouton/bleemeo/internal/filter"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
+	gloutonTypes "github.com/bleemeo/glouton/types"
 )
+
+// metricsStateWait is how long after discovery first ran the services are held back waiting
+// for the metrics state. Past it, they are sent with the metrics unknown, rather than not at
+// all when the metrics synchronization keeps failing.
+const metricsStateWait = 10 * time.Minute
 
 // SyncServicesState sends the services state to the Agent's services_state field.
 type SyncServicesState struct {
@@ -32,6 +39,8 @@ type SyncServicesState struct {
 
 	// lastBuildAt is when NeedSynchronization last built a payload.
 	lastBuildAt time.Time
+	// discoveryReadyAt is when NeedSynchronization first saw a completed discovery.
+	discoveryReadyAt time.Time
 
 	currentExecution types.SynchronizationExecution
 	// payload is what NeedSynchronization decided to send, nil when nothing is to be sent.
@@ -96,8 +105,12 @@ func (s *SyncServicesState) NeedSynchronization(_ context.Context) (bool, error)
 		return false, nil
 	}
 
+	if s.discoveryReadyAt.IsZero() {
+		s.discoveryReadyAt = now
+	}
+
 	metrics, published := s.metricsState()
-	if !published {
+	if !published && now.Sub(s.discoveryReadyAt) < metricsStateWait {
 		return false, nil
 	}
 
@@ -110,8 +123,23 @@ func (s *SyncServicesState) NeedSynchronization(_ context.Context) (bool, error)
 
 	s.lastBuildAt = now
 
-	services := WithServiceUUID(option.Discovery.ServicesState(), option.Cache.ServiceLookupFromList())
-	payload := NewPayload(services, metrics)
+	storeMetrics, err := option.Store.Metrics(nil)
+	if err != nil {
+		logger.V(1).Printf("Unable to read the metrics for the services state: %v", err)
+
+		return false, nil
+	}
+
+	bleemeoFilter := filter.NewFilter(option.Cache)
+	isAllowed := func(metric gloutonTypes.Metric) bool {
+		allowed, _, err := bleemeoFilter.IsAllowed(metric.Labels(), metric.Annotations())
+
+		return err == nil && allowed
+	}
+
+	metricNames := ServiceMetricNames(storeMetrics, agentID, isAllowed, time.Now())
+	services := FromDiscovery(option.Discovery.ServicesState(), option.Cache.ServiceLookupFromList(), metricNames)
+	payload := NewPayload(services, metrics, published)
 
 	if !NeedSend(last, payload, agentID, now) {
 		return false, nil

@@ -31,49 +31,6 @@ import (
 	"github.com/bleemeo/glouton/types"
 )
 
-// inputSupportedServiceTypes lists the service types createInput builds an input for. See
-// ServiceState.InputSupported for why support is per type. CustomService is absent: a custom
-// check has no input, which is not the same as an unsupported type.
-//
-// TestInputSupportedServiceTypesMatchesCreateInput keeps it in sync with createInput.
-var inputSupportedServiceTypes = map[ServiceName]bool{ //nolint:gochecknoglobals
-	ActiveMQService:      true,
-	ApacheService:        true,
-	BindService:          true,
-	ChronyService:        true,
-	ClickHouseService:    true,
-	ConsulService:        true,
-	DovecotService:       true,
-	ElasticSearchService: true,
-	Fail2banService:      true,
-	HAProxyService:       true,
-	InfluxDBService:      true,
-	JenkinsService:       true,
-	MariaDBService:       true,
-	MemcachedService:     true,
-	MongoDBService:       true,
-	MySQLService:         true,
-	NSQService:           true,
-	NatsService:          true,
-	NfsService:           true,
-	NginxService:         true,
-	NTPService:           true,
-	OpenBaoService:       true,
-	OpenLDAPService:      true,
-	PHPFPMService:        true,
-	PgBouncerService:     true,
-	PostgreSQLService:    true,
-	RabbitMQService:      true,
-	RedisService:         true,
-	TomcatService:        true,
-	UPSDService:          true,
-	UWSGIService:         true,
-	ValkeyService:        true,
-	VarnishService:       true,
-	VaultService:         true,
-	ZookeeperService:     true,
-}
-
 // jmxServiceTypes lists the service types whose metrics only jmxtrans collects.
 // TestJMXServiceTypesMatchDiscovery, in jmxtrans, keeps it in sync with jmxtrans.
 var jmxServiceTypes = map[ServiceName]bool{ //nolint:gochecknoglobals
@@ -85,9 +42,13 @@ var jmxServiceTypes = map[ServiceName]bool{ //nolint:gochecknoglobals
 }
 
 // InputSupported tells whether Glouton can collect metrics for this service type, with an
-// input or through JMX.
+// input or through JMX. CustomService has no builder: a custom check has no input, which is
+// not the same as an unsupported type. The agent's own gatherers support a few more types,
+// see SetAgentGathererState.
 func InputSupported(serviceType ServiceName) bool {
-	return inputSupportedServiceTypes[serviceType] || jmxServiceTypes[serviceType]
+	_, hasBuilder := inputBuilders[serviceType]
+
+	return hasBuilder || jmxServiceTypes[serviceType]
 }
 
 // inputOutcome is what configureMetricInputs could do for a service: the paths ending with no
@@ -194,13 +155,39 @@ func (d *Discovery) SetJMXState(provider JMXStateProvider) {
 	d.publishServicesState()
 }
 
-// jmxScrapeState is the scrape state of one service collected through JMX.
-type jmxScrapeState struct {
-	provider JMXStateProvider
-	service  NameInstance
+// AgentGathererStateProvider tells how the agent's own gatherers, rather than an input,
+// collect the metrics of the service types they handle, such as Postfix's queue size.
+type AgentGathererStateProvider interface {
+	ServiceTypes() []ServiceName
+	ServiceScrapeState(service NameInstance) types.ScrapeState
 }
 
-func (s jmxScrapeState) LastScrapeState() types.ScrapeState {
+// SetAgentGathererState gives the state of the agent's own gatherers, whose service types are
+// then supported.
+func (d *Discovery) SetAgentGathererState(provider AgentGathererStateProvider) {
+	d.l.Lock()
+	defer d.l.Unlock()
+
+	d.agentGathererState = provider
+	d.agentGathererTypes = make(map[ServiceName]bool)
+
+	for _, serviceType := range provider.ServiceTypes() {
+		d.agentGathererTypes[serviceType] = true
+	}
+
+	d.publishServicesState()
+}
+
+// serviceScrapeState is the scrape state of one service collected outside the registry, by
+// jmxtrans or by the agent's own gatherers.
+type serviceScrapeState struct {
+	provider interface {
+		ServiceScrapeState(service NameInstance) types.ScrapeState
+	}
+	service NameInstance
+}
+
+func (s serviceScrapeState) LastScrapeState() types.ScrapeState {
 	return s.provider.ServiceScrapeState(s.service)
 }
 
@@ -223,10 +210,6 @@ type ServiceState struct {
 	// this service, why: missing credentials, unsupported platform, ... It is empty when
 	// there is nothing to report.
 	Error string `json:"error,omitempty"`
-	// MetricFamiliesBucket is the number of metric families (names, not series) of the last
-	// scrape, as 0, 1 or 2 meaning "two or more": whether the input produces anything, kept
-	// coarse so that the value stays stable.
-	MetricFamiliesBucket int `json:"metrics"`
 	// MetricsIgnored tells whether the service's metrics are disabled by the configuration.
 	// Error then says so, but reports a choice the user made rather than a failure. Not
 	// sent: Error already tells Bleemeo.
@@ -252,7 +235,7 @@ func (d *Discovery) ServicesState() []ServiceState {
 			continue
 		}
 
-		result[i].Error, result[i].MetricFamiliesBucket = scrapeResult(pending.provider, pending.secrets)
+		result[i].Error = scrapeResult(pending.provider, pending.secrets)
 	}
 
 	return result
@@ -320,7 +303,7 @@ func (d *Discovery) buildServicesState() ([]ServiceState, []pendingScrape) {
 			Instance:       service.Instance,
 			ContainerName:  service.ContainerName,
 			Dynamic:        dynamic,
-			InputSupported: InputSupported(service.ServiceType),
+			InputSupported: InputSupported(service.ServiceType) || d.agentGathererTypes[service.ServiceType],
 		}
 
 		// No result: configureMetricInputs has not run for this service yet.
@@ -339,11 +322,17 @@ func (d *Discovery) buildServicesState() ([]ServiceState, []pendingScrape) {
 			// jmxtrans collects the metrics of any service with a jmx_port. InputSupported
 			// stays the type's: jmxServiceTypes covers the types only JMX collects.
 			switch {
+			case d.agentGathererTypes[service.ServiceType]:
+				pending.provider = serviceScrapeState{
+					provider: d.agentGathererState,
+					service:  NameInstance{Name: service.Name, Instance: service.Instance},
+				}
+				pending.secrets = serviceSecrets(service.Config)
 			case d.jmxState != nil && service.Config.JMXPort != 0 && service.IPAddress == "":
 				// jmxtrans skips a service it has no address for.
 				state.Error = msgJMXNoAddress
 			case d.jmxState != nil && service.Config.JMXPort != 0:
-				pending.provider = jmxScrapeState{
+				pending.provider = serviceScrapeState{
 					provider: d.jmxState,
 					service:  NameInstance{Name: service.Name, Instance: service.Instance},
 				}
@@ -547,25 +536,15 @@ func isSecretParameter(key string) bool {
 	}
 }
 
-// scrapeResult reads the error and metric bucket of a service whose input was registered.
-// An input that has not run yet reports neither.
-func scrapeResult(provider scrapeStateProvider, secrets []string) (string, int) {
+// scrapeResult reads the error of a service whose metrics are collected. A collection that has
+// not run yet reports none.
+func scrapeResult(provider scrapeStateProvider, secrets []string) string {
 	scrape := provider.LastScrapeState()
 	if !scrape.HasRun {
-		return "", 0
+		return ""
 	}
 
 	// Stabilized first, as redacting could hide what stabilizeError looks for (a password
 	// "tcp"); truncated last, so that the cut is always at the same place.
-	return truncateError(redactError(stabilizeError(scrape.Error), secrets)), metricsBucket(scrape.FamiliesCount)
-}
-
-// metricsBucket reduces a count to 0, 1 or 2, where 2 means "two or more". See
-// ServiceState.MetricFamiliesBucket for what is counted and why it is not exact.
-func metricsBucket(count int) int {
-	if count <= 0 {
-		return 0
-	}
-
-	return min(count, 2)
+	return truncateError(redactError(stabilizeError(scrape.Error), secrets))
 }

@@ -41,8 +41,8 @@ func TestLastScrapeStateNeverScraped(t *testing.T) {
 	}
 }
 
-// TestLastScrapeStateUsesRecentRuns checks the last scrapeStateRuns runs are reported:
-// their most recent error and their largest family count, while older runs are not.
+// TestLastScrapeStateUsesRecentRuns checks the last scrapeStateRuns runs are reported, with
+// their most recent error, while older runs are not.
 func TestLastScrapeStateUsesRecentRuns(t *testing.T) {
 	reg := &registration{
 		lastScrapes: []scrapeRun{
@@ -55,7 +55,7 @@ func TestLastScrapeStateUsesRecentRuns(t *testing.T) {
 
 	got := reg.LastScrapeState()
 
-	want := types.ScrapeState{HasRun: true, FamiliesCount: 12, Error: errScrapeFailed.Error()}
+	want := types.ScrapeState{HasRun: true, Error: errScrapeFailed.Error()}
 
 	if got != want {
 		t.Errorf("LastScrapeState() = %+v, want %+v", got, want)
@@ -76,8 +76,8 @@ func TestLastScrapeStateIntermittentError(t *testing.T) {
 	}
 }
 
-// TestLastScrapeStateSuccess checks runs without error report no error and the number of
-// metric families they produced.
+// TestLastScrapeStateSuccess checks runs without error report no error, once an older error
+// is out of the recent runs.
 func TestLastScrapeStateSuccess(t *testing.T) {
 	reg := &registration{
 		lastScrapes: []scrapeRun{
@@ -90,56 +90,52 @@ func TestLastScrapeStateSuccess(t *testing.T) {
 
 	got := reg.LastScrapeState()
 
-	want := types.ScrapeState{HasRun: true, FamiliesCount: 5}
+	want := types.ScrapeState{HasRun: true}
 
 	if got != want {
 		t.Errorf("LastScrapeState() = %+v, want %+v", got, want)
 	}
 }
 
-// TestLastScrapeStateStuck checks a scrape loop whose run never returns is reported as
-// stuck, rather than with the last run that did complete.
+// TestLastScrapeStateStuck checks a run that never returns is reported as stuck, rather than
+// with the last run that did complete, once it lasted scrapeStuckIntervals intervals.
 func TestLastScrapeStateStuck(t *testing.T) {
 	t0 := time.Now()
 	reg := &registration{
-		loop:        &scrapeLoop{interval: 10 * time.Second},
-		lastScrapes: []scrapeRun{{ScrapeAt: t0, ScrapedPointsCount: 5}},
+		interval:    10 * time.Second,
+		lastScrapes: []scrapeRun{{ScrapeAt: t0}},
 	}
 
-	if got := reg.lastScrapeState(t0.Add(20 * time.Second)); got.Error != "" {
-		t.Errorf("a scrape two intervals ago is reported as %+v, want it as it was", got)
+	runID := reg.startRun(t0.Add(10 * time.Second))
+
+	if got := reg.lastScrapeState(t0.Add(30 * time.Second)); got.Error != "" {
+		t.Errorf("a run started two intervals ago is reported as %+v, want the last run", got)
 	}
 
 	got := reg.lastScrapeState(t0.Add(time.Minute))
 	if got != (types.ScrapeState{HasRun: true, Error: errScrapeStuck.Error()}) {
-		t.Errorf("a loop with no run for six intervals is reported as %+v, want stuck", got)
+		t.Errorf("a run started five intervals ago is reported as %+v, want stuck", got)
 	}
 
-	// A stopped loop records nothing, without being stuck.
-	reg.loop = nil
+	reg.endRun(runID)
 
 	if got := reg.lastScrapeState(t0.Add(time.Minute)); got.Error != "" {
-		t.Errorf("a stopped registration is reported as %+v, want its last run", got)
+		t.Errorf("once the run returned, reported as %+v, want the last run", got)
 	}
 }
 
-// TestLastScrapeStateRestartedLoop checks a loop restarted with a shorter interval is not
-// reported as stuck before its first run: the last run is from the previous, slower loop.
-func TestLastScrapeStateRestartedLoop(t *testing.T) {
+// TestLastScrapeStateStuckAcrossRestart checks a hung run stays reported as stuck when its loop
+// is restarted and the new loop starts a run of its own: the old run is still not returned.
+func TestLastScrapeStateStuckAcrossRestart(t *testing.T) {
 	t0 := time.Now()
-	reg := &registration{
-		// Restarted at t0+60s, from 60s to 10s, right after a run of the previous loop.
-		loop:          &scrapeLoop{interval: 10 * time.Second},
-		loopStartedAt: t0.Add(60 * time.Second),
-		lastScrapes:   []scrapeRun{{ScrapeAt: t0, ScrapedPointsCount: 5}},
-	}
+	reg := &registration{interval: 10 * time.Second}
 
-	if got := reg.lastScrapeState(t0.Add(70 * time.Second)); got.Error != "" {
-		t.Errorf("a loop started 10s ago is reported as %+v, want the last run", got)
-	}
+	reg.startRun(t0)
+	// The loop is restarted at t0+60s, and its first run starts.
+	reg.startRun(t0.Add(60 * time.Second))
 
-	if got := reg.lastScrapeState(t0.Add(2 * time.Minute)); got.Error != errScrapeStuck.Error() {
-		t.Errorf("a loop with no run for six intervals since its start is reported as %+v, want stuck", got)
+	if got := reg.lastScrapeState(t0.Add(65 * time.Second)); got.Error != errScrapeStuck.Error() {
+		t.Errorf("a run hung since six intervals is reported as %+v after a restart, want stuck", got)
 	}
 }
 

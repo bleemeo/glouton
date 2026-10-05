@@ -327,7 +327,8 @@ type registration struct {
 	restartInProgress    bool
 	runOnStart           bool
 	loop                 *scrapeLoop
-	loopStartedAt        time.Time // when loop started; its first run may be an interval later
+	runsInFlight         map[uint64]time.Time // when each run not yet returned started
+	nextRunID            uint64
 	lastScrapes          []scrapeRun
 	gatherer             *wrappedGatherer
 	annotations          types.MetricAnnotations
@@ -343,16 +344,16 @@ type registration struct {
 // failing one scrape in two reads as failing rather than alternating on every scrape.
 const scrapeStateRuns = 3
 
-// scrapeStuckIntervals is how many intervals without a completed run make a scrape count as
-// stuck: Telegraf inputs ignore the context's deadline, and the loop waits on them.
+// scrapeStuckIntervals is how many intervals a run may last before it counts as stuck:
+// Telegraf inputs ignore the context's deadline, and the loop waits on them.
 const scrapeStuckIntervals = 3
 
-// errScrapeStuck is reported when the scrape loop is running but no run completed lately.
+// errScrapeStuck is reported when a run has not returned for scrapeStuckIntervals intervals.
 var errScrapeStuck = errors.New("the last scrape did not complete")
 
 // LastScrapeState returns a snapshot of the recent runs of this registration, for
 // discovery's report of whether a service's input works: the most recent error of the last
-// scrapeStateRuns runs, and the most metric families any of them produced.
+// scrapeStateRuns runs.
 //
 // Only reg.l is taken, never r.l, which can deadlock while a registration is stopped or
 // restarted (see restartScrapeLoop).
@@ -365,16 +366,14 @@ func (reg *registration) lastScrapeState(now time.Time) types.ScrapeState {
 	defer reg.l.Unlock()
 
 	// A run that never returns is never recorded: without this, the last completed one
-	// would be reported for as long as the input hangs.
-	// Counted from the loop's start when later: a loop restarted with a shorter interval has
-	// not run yet, and the last run is from the previous loop.
-	lastRunAt := reg.lastRunAt()
-	if reg.loopStartedAt.After(lastRunAt) {
-		lastRunAt = reg.loopStartedAt
-	}
-
-	if reg.loop != nil && reg.loop.interval > 0 && now.Sub(lastRunAt) > scrapeStuckIntervals*reg.loop.interval {
-		return types.ScrapeState{HasRun: true, Error: errScrapeStuck.Error()}
+	// would be reported for as long as the input hangs. The run itself is followed, rather
+	// than the time since the last record, so that a loop restarted meanwhile does not hide it.
+	if reg.interval > 0 {
+		for _, startedAt := range reg.runsInFlight {
+			if now.Sub(startedAt) > scrapeStuckIntervals*reg.interval {
+				return types.ScrapeState{HasRun: true, Error: errScrapeStuck.Error()}
+			}
+		}
 	}
 
 	if len(reg.lastScrapes) == 0 {
@@ -397,14 +396,35 @@ func (reg *registration) lastScrapeState(now time.Time) types.ScrapeState {
 			continue
 		}
 
-		state.FamiliesCount = max(state.FamiliesCount, run.ScrapedPointsCount)
-
 		if run.Error != nil {
 			state.Error = run.Error.Error()
 		}
 	}
 
 	return state
+}
+
+// startRun records a run starting at now, and returns its ID for endRun.
+func (reg *registration) startRun(now time.Time) uint64 {
+	reg.l.Lock()
+	defer reg.l.Unlock()
+
+	if reg.runsInFlight == nil {
+		reg.runsInFlight = make(map[uint64]time.Time)
+	}
+
+	reg.nextRunID++
+	reg.runsInFlight[reg.nextRunID] = now
+
+	return reg.nextRunID
+}
+
+// endRun records that a run returned.
+func (reg *registration) endRun(id uint64) {
+	reg.l.Lock()
+	defer reg.l.Unlock()
+
+	delete(reg.runsInFlight, id)
 }
 
 // lastRunAt is when the last run happened, or when the registration was added if it has not
@@ -1221,7 +1241,6 @@ func (r *Registry) restartScrapeLoop(reg *registration) {
 		timeout = reg.option.Timeout
 	}
 
-	reg.loopStartedAt = time.Now()
 	reg.loop = startScrapeLoop(
 		reg.interval,
 		timeout,
@@ -1718,9 +1737,13 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, loopCtx context.Context, 
 		err      error
 	)
 
+	runID := reg.startRun(time.Now())
+
 	go func() {
 		defer crashreport.ProcessPanic()
 		defer close(goroutingFinished)
+		// Ended when the gather returns, even after the loop gave up waiting on it.
+		defer reg.endRun(runID)
 
 		mfs, duration, err = r.scrape(ctx, state, reg)
 	}()
@@ -1904,7 +1927,6 @@ func (r *Registry) restartLoop(reg *registration) {
 		timeout = reg.option.Timeout
 	}
 
-	reg.loopStartedAt = time.Now()
 	reg.loop = startScrapeLoop(
 		reg.interval,
 		timeout,

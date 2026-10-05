@@ -704,11 +704,8 @@ type ScheduleOption struct {
 // reported to Bleemeo, where the value must stay stable.
 type ScrapeState struct {
 	// HasRun tells whether the last run was a real scrape: false before the first one, or when
-	// the last run was skipped. When false, the other fields are meaningless.
+	// the last run was skipped. When false, Error is meaningless.
 	HasRun bool
-	// FamiliesCount is the number of metric families of the last scrape: the registry stores
-	// len(mfs) in scrapeRun.ScrapedPointsCount, despite that field's name.
-	FamiliesCount int
 	// Error is the last scrape error, empty when the last scrape succeeded.
 	Error string
 }

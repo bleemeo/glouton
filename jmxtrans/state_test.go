@@ -76,8 +76,8 @@ func TestCollectionState(t *testing.T) {
 	state.pointReceived(jmxPoint("cassandra_write_requests"))
 	state.pointReceived(jmxPoint("cassandra_write_requests"))
 
-	if got := state.ServiceScrapeState(key); got != (types.ScrapeState{HasRun: true, FamiliesCount: 2}) {
-		t.Errorf("after two metrics, got %+v", got)
+	if got := state.ServiceScrapeState(key); got != (types.ScrapeState{HasRun: true}) {
+		t.Errorf("after points, got %+v, want a run without error", got)
 	}
 
 	// Nothing for a whole window, jmxtrans still connected.
@@ -110,8 +110,8 @@ func TestCollectionStateIgnoresUnknownServices(t *testing.T) {
 	state := &collectionState{}
 	state.pointReceived(jmxPoint("cassandra_read_requests"))
 
-	if len(state.received) != 0 {
-		t.Errorf("a point for an unknown service was recorded: %v", state.received)
+	if len(state.receivedAt) != 0 {
+		t.Errorf("a point for an unknown service was recorded: %v", state.receivedAt)
 	}
 }
 
@@ -185,8 +185,8 @@ func TestJMXFeedsCollectionState(t *testing.T) {
 
 	j.emitPoint(t.Context(), jmxPoint("cassandra_read_requests"))
 
-	if got := j.ServiceScrapeState(key); got.FamiliesCount != 1 {
-		t.Errorf("after a point, got %+v, want one metric", got)
+	if got := j.ServiceScrapeState(key); got != (types.ScrapeState{HasRun: true}) {
+		t.Errorf("after a point, got %+v, want a run without error", got)
 	}
 
 	ctx, cancel := context.WithCancel(t.Context())

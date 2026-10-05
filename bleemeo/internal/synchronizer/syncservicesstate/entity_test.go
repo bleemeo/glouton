@@ -29,6 +29,7 @@ import (
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/discovery"
+	gloutonTypes "github.com/bleemeo/glouton/types"
 )
 
 var errTestAPI = errors.New("test API error")
@@ -44,6 +45,41 @@ func (fakeState) GetByPrefix(string, any) (map[string]any, error) { return map[s
 func (fakeState) Delete(string) error                             { return nil }
 func (s fakeState) BleemeoCredentials() (string, string)          { return s.agentID, "password" }
 func (fakeState) SetBleemeoCredentials(string, string) error      { return nil }
+
+// fakeStore holds the metrics the synchronizer reads. Any other call panics.
+type fakeStore struct {
+	bleemeoTypes.Store
+
+	metrics []gloutonTypes.Metric
+}
+
+func (s *fakeStore) Metrics(map[string]string) ([]gloutonTypes.Metric, error) { return s.metrics, nil }
+
+// storeMetric is a metric of the store, with its last point at lastPoint.
+type storeMetric struct {
+	name        string
+	annotations gloutonTypes.MetricAnnotations
+	lastPoint   time.Time
+}
+
+func (m storeMetric) Labels() map[string]string {
+	return map[string]string{gloutonTypes.LabelName: m.name}
+}
+
+func (m storeMetric) Annotations() gloutonTypes.MetricAnnotations { return m.annotations }
+
+func (m storeMetric) Points(time.Time, time.Time) ([]gloutonTypes.Point, error) { return nil, nil }
+
+func (m storeMetric) LastPointReceivedAt() time.Time { return m.lastPoint }
+
+// serviceMetric is a metric of service received just now.
+func serviceMetric(name string, service string) storeMetric {
+	return storeMetric{
+		name:        name,
+		annotations: gloutonTypes.MetricAnnotations{ServiceName: service},
+		lastPoint:   time.Now(),
+	}
+}
 
 // fakeClient records each services state sent. Any other call panics.
 type fakeClient struct {
@@ -100,6 +136,7 @@ type entityTest struct {
 	entity    *SyncServicesState
 	execution *fakeExecution
 	discovery *countingDiscoverer
+	store     *fakeStore
 	metrics   []bleemeoTypes.MetricState
 	// metricsUnpublished acts as a synchronizer that did not publish the metrics state yet.
 	metricsUnpublished bool
@@ -112,14 +149,31 @@ func newEntityTest(agentID string) *entityTest {
 	test := &entityTest{
 		discovery: &countingDiscoverer{MockDiscoverer: &discovery.MockDiscoverer{UpdatedAt: t0.Add(-time.Minute)}},
 		execution: &fakeExecution{client: &fakeClient{}, now: t0},
+		store:     &fakeStore{},
 	}
 
 	test.execution.option.State = state
 	test.execution.option.Discovery = test.discovery
+	test.execution.option.Store = test.store
 	test.execution.option.Cache = cache.Load(state)
+	setAllowlist(test.execution.option.Cache, "mysql_queries,mysql_threads,postfix_queue_size")
 	test.entity = New(func() ([]bleemeoTypes.MetricState, bool) { return test.metrics, !test.metricsUnpublished })
 
 	return test
+}
+
+// setAllowlist gives the cache an account configuration whose agent metrics allow-list is
+// allowlist, as Bleemeo's filter reads it.
+func setAllowlist(c *cache.Cache, allowlist string) {
+	c.SetAccountID("account-id")
+	c.SetAgentTypes([]bleemeoTypes.AgentType{{ID: "agent-type-id", Name: bleemeo.AgentType_Agent}})
+	c.SetConfigs([]bleemeoTypes.Config{{
+		ID:        "allowlist-id",
+		Type:      bleemeoTypes.ConfigTypeAgentMetricsAllowlist,
+		Account:   "account-id",
+		AgentType: "agent-type-id",
+		Value:     allowlist,
+	}})
 }
 
 // run does what Execution.run does with one entity, at now. It returns whether the entity
@@ -178,7 +232,7 @@ func TestEntityGoldenPayload(t *testing.T) {
 
 	want := `{"services":[{"name":"mysql","type":"mysql","instance":"","container_name":"",` +
 		`"dynamic_discovery":true,"input_supported":true,` +
-		`"error":"failed to create the input: missing credentials or address","metrics":0,"service_uuid":"service-uuid"}],` +
+		`"error":"failed to create the input: missing credentials or address","service_uuid":"service-uuid","metrics":0}],` +
 		`"metrics":[{"name":"disk_used_perc","reason":"not-available-in-plan","count":3}]}`
 
 	if client.bodies[0] != want {
@@ -395,4 +449,101 @@ func TestEntitySkips(t *testing.T) {
 			t.Errorf("sent %d times, want none", sent)
 		}
 	})
+}
+
+// TestEntityCountsServiceMetrics checks a service's metrics count only those meant to reach
+// Bleemeo: received lately, of this agent, and allowed by Bleemeo's filter. Glouton's own
+// metric filter already applied to the store the synchronizer reads.
+func TestEntityCountsServiceMetrics(t *testing.T) {
+	cases := []struct {
+		name    string
+		metrics []gloutonTypes.Metric
+		want    int
+	}{
+		{name: "none", want: 0},
+		{
+			name:    "two names, several series",
+			metrics: []gloutonTypes.Metric{serviceMetric("mysql_queries", "mysql"), serviceMetric("mysql_threads", "mysql"), serviceMetric("mysql_threads", "mysql")},
+			want:    2,
+		},
+		{
+			name:    "one allowed, one not in the plan",
+			metrics: []gloutonTypes.Metric{serviceMetric("mysql_queries", "mysql"), serviceMetric("mysql_innodb_rows", "mysql")},
+			want:    1,
+		},
+		{
+			name: "stale",
+			metrics: []gloutonTypes.Metric{storeMetric{
+				name:        "mysql_queries",
+				annotations: gloutonTypes.MetricAnnotations{ServiceName: "mysql"},
+				lastPoint:   time.Now().Add(-time.Hour),
+			}},
+			want: 0,
+		},
+		{
+			name: "another agent's",
+			metrics: []gloutonTypes.Metric{storeMetric{
+				name:        "mysql_queries",
+				annotations: gloutonTypes.MetricAnnotations{ServiceName: "mysql", BleemeoAgentID: "other-agent"},
+				lastPoint:   time.Now(),
+			}},
+			want: 0,
+		},
+		{
+			name:    "another service's",
+			metrics: []gloutonTypes.Metric{serviceMetric("mysql_queries", "mariadb")},
+			want:    0,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			test := newEntityTest(testAgent)
+			test.discovery.States = []discovery.ServiceState{mysqlMissingCredentials()}
+			test.store.metrics = tc.metrics
+
+			if _, err := test.run(t, t0); err != nil {
+				t.Fatal(err)
+			}
+
+			var sent struct {
+				Services []ServiceState `json:"services"`
+			}
+
+			if err := json.Unmarshal([]byte(test.execution.client.bodies[0]), &sent); err != nil {
+				t.Fatal(err)
+			}
+
+			if got := sent.Services[0].Metrics; got != tc.want {
+				t.Errorf("metrics = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestEntityMetricsUnknown checks the services are not held back forever when no metrics state
+// is published: past metricsStateWait, they are sent with the metrics null, not empty.
+func TestEntityMetricsUnknown(t *testing.T) {
+	test := newEntityTest(testAgent)
+	test.metricsUnpublished = true
+
+	if need, _ := test.run(t, t0); need {
+		t.Fatal("sent right away without the metrics state")
+	}
+
+	if need, err := test.run(t, t0.Add(metricsStateWait)); err != nil || !need {
+		t.Fatalf("after metricsStateWait: need = %v, err = %v; want true, nil", need, err)
+	}
+
+	want := `{"services":[],"metrics":null}`
+	if bodies := test.execution.client.bodies; len(bodies) != 1 || bodies[0] != want {
+		t.Errorf("bodies = %q, want [%q]", bodies, want)
+	}
+
+	// Once published, the known state is a different value, sent as such.
+	test.metricsUnpublished = false
+
+	if need, err := test.run(t, t0.Add(metricsStateWait+minSendInterval)); err != nil || !need {
+		t.Fatalf("once published: need = %v, err = %v; want true, nil", need, err)
+	}
 }

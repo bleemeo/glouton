@@ -20,13 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"net/url"
 	"slices"
-	"sort"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -38,154 +33,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 )
-
-// serviceNameConstants parses the ServiceName constants, returning identifier name -> value.
-// inputSupportedServiceTypes is keyed by value, while the AST gives us identifier names.
-func serviceNameConstants(t *testing.T) map[string]ServiceName {
-	t.Helper()
-
-	file, err := parser.ParseFile(token.NewFileSet(), "common.go", nil, 0)
-	if err != nil {
-		t.Fatalf("parsing common.go: %v", err)
-	}
-
-	result := make(map[string]ServiceName)
-
-	for _, decl := range file.Decls {
-		genDecl, ok := decl.(*ast.GenDecl)
-		if !ok || genDecl.Tok != token.CONST {
-			continue
-		}
-
-		for _, spec := range genDecl.Specs {
-			valueSpec, ok := spec.(*ast.ValueSpec)
-			if !ok || len(valueSpec.Names) != 1 || len(valueSpec.Values) != 1 {
-				continue
-			}
-
-			if ident, ok := valueSpec.Type.(*ast.Ident); !ok || ident.Name != "ServiceName" {
-				continue
-			}
-
-			lit, ok := valueSpec.Values[0].(*ast.BasicLit)
-			if !ok || lit.Kind != token.STRING {
-				continue
-			}
-
-			value, err := strconv.Unquote(lit.Value)
-			if err != nil {
-				t.Fatalf("unquoting %s: %v", lit.Value, err)
-			}
-
-			result[valueSpec.Names[0].Name] = ServiceName(value)
-		}
-	}
-
-	if len(result) == 0 {
-		t.Fatal("no ServiceName constant found in common.go")
-	}
-
-	return result
-}
-
-// createInputCaseNames returns the identifier names used as cases of the
-// "switch service.ServiceType" in createInput.
-func createInputCaseNames(t *testing.T) []string {
-	t.Helper()
-
-	file, err := parser.ParseFile(token.NewFileSet(), "metrics.go", nil, 0)
-	if err != nil {
-		t.Fatalf("parsing metrics.go: %v", err)
-	}
-
-	var names []string
-
-	found := false
-
-	ast.Inspect(file, func(node ast.Node) bool {
-		funcDecl, ok := node.(*ast.FuncDecl)
-		if !ok || funcDecl.Name.Name != "createInput" {
-			return true
-		}
-
-		ast.Inspect(funcDecl, func(inner ast.Node) bool {
-			switchStmt, ok := inner.(*ast.SwitchStmt)
-			if !ok {
-				return true
-			}
-
-			selector, ok := switchStmt.Tag.(*ast.SelectorExpr)
-			if !ok || selector.Sel.Name != "ServiceType" {
-				return true
-			}
-
-			found = true
-
-			for _, stmt := range switchStmt.Body.List {
-				caseClause, ok := stmt.(*ast.CaseClause)
-				if !ok {
-					continue
-				}
-
-				// A nil List is the default clause.
-				for _, expr := range caseClause.List {
-					if ident, ok := expr.(*ast.Ident); ok {
-						names = append(names, ident.Name)
-					}
-				}
-			}
-
-			return false
-		})
-
-		return false
-	})
-
-	if !found {
-		t.Fatal(`no "switch service.ServiceType" found in createInput`)
-	}
-
-	return names
-}
-
-// TestInputSupportedServiceTypesMatchesCreateInput makes sure inputSupportedServiceTypes
-// stays in sync with the switch in createInput. Bleemeo relies on that list to tell an
-// unsupported service type apart from one that simply failed here, so a service type
-// added to createInput without being added to the list would be reported to our users as
-// "Glouton does not support this service".
-func TestInputSupportedServiceTypesMatchesCreateInput(t *testing.T) {
-	constants := serviceNameConstants(t)
-
-	var want []string
-
-	for _, name := range createInputCaseNames(t) {
-		// CustomService is a check, it never has a metric input. It is deliberately
-		// excluded from inputSupportedServiceTypes.
-		if name == "CustomService" {
-			continue
-		}
-
-		value, ok := constants[name]
-		if !ok {
-			t.Fatalf("case %s of createInput is not a known ServiceName constant", name)
-		}
-
-		want = append(want, string(value))
-	}
-
-	got := make([]string, 0, len(inputSupportedServiceTypes))
-
-	for serviceType := range inputSupportedServiceTypes {
-		got = append(got, string(serviceType))
-	}
-
-	sort.Strings(want)
-	sort.Strings(got)
-
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("inputSupportedServiceTypes is out of sync with createInput (-createInput +list):\n%s", diff)
-	}
-}
 
 // TestInputSupportedExcludesCustomService documents that a custom check is not an
 // unsupported service type.
@@ -395,24 +242,17 @@ func TestServicesStateDistinguishesCustomChecks(t *testing.T) {
 // registered input.
 func TestServicesStateScrapeState(t *testing.T) {
 	cases := []struct {
-		name       string
-		state      types.ScrapeState
-		wantErr    string
-		wantBucket int
+		name    string
+		state   types.ScrapeState
+		wantErr string
 	}{
 		{
 			name:  "not scraped yet",
 			state: types.ScrapeState{HasRun: false},
 		},
 		{
-			name:       "working",
-			state:      types.ScrapeState{HasRun: true, FamiliesCount: 7},
-			wantBucket: 2,
-		},
-		{
-			name:       "working with a single metric",
-			state:      types.ScrapeState{HasRun: true, FamiliesCount: 1},
-			wantBucket: 1,
+			name:  "working",
+			state: types.ScrapeState{HasRun: true},
 		},
 		{
 			name:    "mod_status not enabled",
@@ -437,17 +277,12 @@ func TestServicesStateScrapeState(t *testing.T) {
 			if got[0].Error != tc.wantErr {
 				t.Errorf("error: got %q, want %q", got[0].Error, tc.wantErr)
 			}
-
-			if got[0].MetricFamiliesBucket != tc.wantBucket {
-				t.Errorf("bucket: got %d, want %d", got[0].MetricFamiliesBucket, tc.wantBucket)
-			}
 		})
 	}
 }
 
 // TestServicesStateWithoutScrapeState pins the fallback of the optional interface: a
-// registration that cannot report its scrape state is still reported, with no error and
-// no metric.
+// registration that cannot report its scrape state is still reported, with no error.
 func TestServicesStateWithoutScrapeState(t *testing.T) {
 	d := newTestDiscovery()
 	d.inputResult[apacheKey()] = newInputResult(inputRegistered, nil)
@@ -458,8 +293,8 @@ func TestServicesStateWithoutScrapeState(t *testing.T) {
 		t.Fatalf("got %d services, want 1", len(got))
 	}
 
-	if got[0].Error != "" || got[0].MetricFamiliesBucket != 0 {
-		t.Errorf("got error %q and bucket %d, want neither", got[0].Error, got[0].MetricFamiliesBucket)
+	if got[0].Error != "" {
+		t.Errorf("got error %q, want none", got[0].Error)
 	}
 }
 
@@ -512,16 +347,6 @@ func TestServicesStateIsSorted(t *testing.T) {
 		return strings.Compare(a.Instance, b.Instance)
 	}) {
 		t.Error("result is not sorted")
-	}
-}
-
-func TestMetricFamiliesBucket(t *testing.T) {
-	cases := map[int]int{-1: 0, 0: 0, 1: 1, 2: 2, 3: 2, 500: 2}
-
-	for input, want := range cases {
-		if got := metricsBucket(input); got != want {
-			t.Errorf("metricsBucket(%d) = %d, want %d", input, got, want)
-		}
 	}
 }
 
@@ -1005,7 +830,7 @@ func TestServicesStateJMX(t *testing.T) {
 		return d
 	}
 
-	collected := fakeJMXState{state: types.ScrapeState{HasRun: true, FamiliesCount: 12}}
+	collected := fakeJMXState{state: types.ScrapeState{HasRun: true}}
 
 	cases := []struct {
 		name      string
@@ -1013,9 +838,8 @@ func TestServicesStateJMX(t *testing.T) {
 		noAddress bool
 		jmxState  JMXStateProvider
 		wantError string
-		wantCount int
 	}{
-		{name: "collected", jmxPort: 7199, jmxState: collected, wantCount: 2},
+		{name: "collected", jmxPort: 7199, jmxState: collected},
 		{
 			name:      "nothing received",
 			jmxPort:   7199,
@@ -1040,12 +864,14 @@ func TestServicesStateJMX(t *testing.T) {
 				t.Error("a service collected through JMX is reported as unsupported")
 			}
 
-			if got.Error != tc.wantError || got.MetricFamiliesBucket != tc.wantCount {
-				t.Errorf("got error %q and metrics %d, want %q and %d", got.Error, got.MetricFamiliesBucket, tc.wantError, tc.wantCount)
+			if got.Error != tc.wantError {
+				t.Errorf("got error %q, want %q", got.Error, tc.wantError)
 			}
 		})
 	}
 }
+
+const errMsgFromJMX = "no metrics received through JMX"
 
 // TestServicesStateJMXOtherTypes checks a service type with no JMX metrics of its own is
 // left as it was without a jmx_port, and reads the JMX state with one, while its
@@ -1057,18 +883,18 @@ func TestServicesStateJMXOtherTypes(t *testing.T) {
 	d := newTestDiscovery()
 	d.servicesMap = map[NameInstance]Service{key: service}
 	d.inputResult[key] = newInputResult(inputCheckOnly, nil)
-	d.SetJMXState(fakeJMXState{state: types.ScrapeState{HasRun: true, FamiliesCount: 1}})
+	d.SetJMXState(fakeJMXState{state: types.ScrapeState{HasRun: true, Error: errMsgFromJMX}})
 
-	if got := servicesStateOf(d)[0]; got.Error != "" || got.MetricFamiliesBucket != 0 {
-		t.Errorf("without a jmx_port, got %+v, want no error and no metrics", got)
+	if got := servicesStateOf(d)[0]; got.Error != "" {
+		t.Errorf("without a jmx_port, got %+v, want no error", got)
 	}
 
 	service.Config.JMXPort = 7199
 	d.servicesMap[key] = service
 
 	got := servicesStateOf(d)[0]
-	if got.MetricFamiliesBucket != 1 {
-		t.Errorf("with a jmx_port, got %+v, want the JMX state", got)
+	if got.Error != errMsgFromJMX {
+		t.Errorf("with a jmx_port, got %+v, want the JMX state's error", got)
 	}
 
 	if got.InputSupported {
@@ -1186,7 +1012,7 @@ func servicesStateOf(d *Discovery) []ServiceState {
 func TestServicesStateConcurrent(t *testing.T) {
 	d := newTestDiscovery()
 	d.activeCollector[apacheKey()] = collectorDetails{
-		gathererRegistration: fakeScrapeRegistration{state: types.ScrapeState{HasRun: true, FamiliesCount: 3}},
+		gathererRegistration: fakeScrapeRegistration{state: types.ScrapeState{HasRun: true}},
 	}
 
 	done := make(chan struct{})
@@ -1261,5 +1087,46 @@ func TestServiceSecretsDeduplicated(t *testing.T) {
 
 	if want := []string{"abc", "xyz"}; !slices.Equal(got, want) {
 		t.Errorf("serviceSecrets() = %q, want %q", got, want)
+	}
+}
+
+// fakeGathererState is the state of the agent's own gatherers, for Postfix.
+type fakeGathererState struct {
+	state types.ScrapeState
+}
+
+func (f fakeGathererState) ServiceTypes() []ServiceName { return []ServiceName{PostfixService} }
+
+func (f fakeGathererState) ServiceScrapeState(NameInstance) types.ScrapeState { return f.state }
+
+// TestServicesStateAgentGatherer checks a service type whose metric the agent gathers itself,
+// as Postfix's queue size, is reported as supported, with the gather's error.
+func TestServicesStateAgentGatherer(t *testing.T) {
+	key := NameInstance{Name: "postfix"}
+	service := Service{Name: "postfix", ServiceType: PostfixService, Active: true}
+
+	d := newTestDiscovery()
+	d.servicesMap = map[NameInstance]Service{key: service}
+	d.inputResult[key] = newInputResult(inputUnsupportedType, nil)
+
+	if got := servicesStateOf(d)[0]; got.InputSupported {
+		t.Errorf("without the agent's gatherers, got %+v, want unsupported", got)
+	}
+
+	d.SetAgentGathererState(fakeGathererState{state: types.ScrapeState{HasRun: true, Error: "mailq: not found"}})
+
+	got := servicesStateOf(d)[0]
+	if !got.InputSupported || got.Error != "mailq: not found" {
+		t.Errorf("with the agent's gatherers, got %+v, want supported with the gather's error", got)
+	}
+
+	// Disabled by configuration: the agent does not gather it either.
+	d.l.Lock()
+	d.inputResult[key] = newInputResult(inputIgnored, nil)
+	d.publishServicesState()
+	d.l.Unlock()
+
+	if got := servicesStateOf(d)[0]; got.Error != msgIgnored {
+		t.Errorf("with metrics disabled, got %+v, want %q", got, msgIgnored)
 	}
 }

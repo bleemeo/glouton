@@ -42,8 +42,8 @@ type collectionState struct {
 	// configuredAt is when each service was first given to jmxtrans, which gets a window
 	// before nothing received counts as an error.
 	configuredAt map[discovery.NameInstance]time.Time
-	// received is, per service, when each metric name was last received.
-	received map[discovery.NameInstance]map[string]time.Time
+	// receivedAt is, per service, when a point was last received.
+	receivedAt map[discovery.NameInstance]time.Time
 	// connections is how many jmxtrans connections are open, and disconnectedAt when one last
 	// closed.
 	connections    int
@@ -66,7 +66,7 @@ func (s *collectionState) setServices(services []discovery.Service) {
 
 	if s.configuredAt == nil {
 		s.configuredAt = make(map[discovery.NameInstance]time.Time)
-		s.received = make(map[discovery.NameInstance]map[string]time.Time)
+		s.receivedAt = make(map[discovery.NameInstance]time.Time)
 	}
 
 	now := s.clock()
@@ -88,7 +88,7 @@ func (s *collectionState) setServices(services []discovery.Service) {
 	for key := range s.configuredAt {
 		if !current[key] {
 			delete(s.configuredAt, key)
-			delete(s.received, key)
+			delete(s.receivedAt, key)
 		}
 	}
 }
@@ -96,7 +96,6 @@ func (s *collectionState) setServices(services []discovery.Service) {
 // pointReceived records a point jmxtrans sent.
 func (s *collectionState) pointReceived(point types.MetricPoint) {
 	key := discovery.NameInstance{Name: point.Annotations.ServiceName, Instance: point.Annotations.ServiceInstance}
-	name := point.Labels[types.LabelName]
 	now := s.clock()
 
 	s.l.Lock()
@@ -106,13 +105,7 @@ func (s *collectionState) pointReceived(point types.MetricPoint) {
 		return
 	}
 
-	names, ok := s.received[key]
-	if !ok {
-		names = make(map[string]time.Time)
-		s.received[key] = names
-	}
-
-	names[name] = now
+	s.receivedAt[key] = now
 }
 
 func (s *collectionState) connected() {
@@ -130,8 +123,8 @@ func (s *collectionState) disconnected() {
 	s.disconnectedAt = s.clock()
 }
 
-// ServiceScrapeState implements discovery.JMXStateProvider: the number of metric names
-// received in the last stateWindow or, once a service was given to jmxtrans a whole window
+// ServiceScrapeState implements discovery.JMXStateProvider: a run without error when metrics
+// were received in the last stateWindow or, once a service was given to jmxtrans a whole window
 // ago with nothing received, why.
 func (s *collectionState) ServiceScrapeState(service discovery.NameInstance) types.ScrapeState {
 	s.l.Lock()
@@ -144,18 +137,8 @@ func (s *collectionState) ServiceScrapeState(service discovery.NameInstance) typ
 		return types.ScrapeState{}
 	}
 
-	count := 0
-
-	for name, receivedAt := range s.received[service] {
-		if now.Sub(receivedAt) < stateWindow {
-			count++
-		} else {
-			delete(s.received[service], name)
-		}
-	}
-
-	if count > 0 {
-		return types.ScrapeState{HasRun: true, FamiliesCount: count}
+	if receivedAt, ok := s.receivedAt[service]; ok && now.Sub(receivedAt) < stateWindow {
+		return types.ScrapeState{HasRun: true}
 	}
 
 	if now.Sub(configuredAt) < stateWindow {

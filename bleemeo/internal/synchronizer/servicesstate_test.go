@@ -32,11 +32,10 @@ func TestSyncSendsServicesState(t *testing.T) {
 
 	helper.preregisterAgent(t)
 	helper.discovery.States = []discovery.ServiceState{{
-		Name:                 "apache",
-		ServiceType:          discovery.ApacheService,
-		Dynamic:              true,
-		InputSupported:       true,
-		MetricFamiliesBucket: 2,
+		Name:           "apache",
+		ServiceType:    discovery.ApacheService,
+		Dynamic:        true,
+		InputSupported: true,
 	}}
 
 	helper.initSynchronizer(t)
