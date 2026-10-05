@@ -29,10 +29,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-// djangoBodyLimit is Django's default DATA_UPLOAD_MAX_MEMORY_SIZE, which bleemeo-api does
-// not override: a request body over it is refused.
-const djangoBodyLimit = 2621440
-
 func service(i int, errorText string) ServiceState {
 	return ServiceState{
 		Name:        fmt.Sprintf("svc%05d", i),
@@ -50,14 +46,6 @@ func encodedSize(t *testing.T, v any) int {
 	}
 
 	return len(data)
-}
-
-// TestLimitsFitTheAPIBody checks both lists together, at their limits, leave room under
-// the API's body limit for the rest of the request.
-func TestLimitsFitTheAPIBody(t *testing.T) {
-	if total := maxServicesBytes + maxMetricsBytes; total > djangoBodyLimit*9/10 {
-		t.Errorf("the two lists may take %d bytes, too close to the %d bytes body limit", total, djangoBodyLimit)
-	}
 }
 
 // TestLimitServicesUnderTheLimits checks a list within the limits is left as it is.

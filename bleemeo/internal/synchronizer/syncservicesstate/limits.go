@@ -25,9 +25,9 @@ import (
 	"github.com/bleemeo/glouton/logger"
 )
 
-// Limits of each list sent to Bleemeo. The API validates neither, and refuses a body over
-// Django's 2.5 MB DATA_UPLOAD_MAX_MEMORY_SIZE whole: each list gets 1 MiB, leaving room for
-// the rest of the request.
+// Limits of each list sent to Bleemeo, so that the value stays small whatever the host: the API
+// bounds neither. Django's DATA_UPLOAD_MAX_MEMORY_SIZE does not apply either: Django REST
+// framework reads a JSON body as a stream, and Django only checks the size of request.body.
 const (
 	maxServices      = 1000
 	maxServicesBytes = 1 << 20

@@ -23,6 +23,7 @@ import (
 
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/discovery"
+	"github.com/google/go-cmp/cmp"
 )
 
 var t0 = time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC) //nolint:gochecknoglobals
@@ -215,14 +216,14 @@ func TestHashSameValue(t *testing.T) {
 func TestHashSeparatesLists(t *testing.T) {
 	row := []byte(`{"x":1}`)
 
-	if hashRows([][]byte{row}, nil, 0, 0) == hashRows(nil, [][]byte{row}, 0, 0) {
+	if hashRows([][]byte{row}, nil) == hashRows(nil, [][]byte{row}) {
 		t.Error("a row in the services list hashes like the same row in the metrics list")
 	}
 }
 
-// TestHashCountsDroppedRows checks a list cut by one more row is a different value, even
-// when the rows kept are the same.
-func TestHashCountsDroppedRows(t *testing.T) {
+// TestHashIgnoresDroppedRows checks a list cut by one more row is the same value when the rows
+// kept are the same: the rows left out are not sent, so sending it would PATCH the same body.
+func TestHashIgnoresDroppedRows(t *testing.T) {
 	services := make([]ServiceState, 0, maxServices+2)
 	for i := range maxServices + 2 {
 		services = append(services, settledService(i))
@@ -231,12 +232,16 @@ func TestHashCountsDroppedRows(t *testing.T) {
 	oneDropped := NewPayload(services[:maxServices+1], nil)
 	twoDropped := NewPayload(services, nil)
 
-	if oneDropped.ServicesDropped != 1 || twoDropped.ServicesDropped != 2 {
-		t.Fatalf("dropped %d and %d, want 1 and 2", oneDropped.ServicesDropped, twoDropped.ServicesDropped)
+	if oneDropped.servicesDropped != 1 || twoDropped.servicesDropped != 2 {
+		t.Fatalf("dropped %d and %d, want 1 and 2", oneDropped.servicesDropped, twoDropped.servicesDropped)
 	}
 
-	if oneDropped.hash == twoDropped.hash {
-		t.Error("a list cut by one more row hashes the same")
+	if diff := cmp.Diff(oneDropped.Services, twoDropped.Services); diff != "" {
+		t.Fatalf("the rows kept differ (-one +two):\n%s", diff)
+	}
+
+	if oneDropped.hash != twoDropped.hash {
+		t.Error("a list cut by one more row, keeping the same rows, hashes differently")
 	}
 }
 

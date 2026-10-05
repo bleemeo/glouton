@@ -214,7 +214,7 @@ type ServiceState struct {
 	ContainerName string      `json:"container_name"`
 	// Dynamic tells whether discovery found this service, as opposed to it being declared
 	// in the configuration.
-	Dynamic bool `json:"dynamic"`
+	Dynamic bool `json:"dynamic_discovery"`
 	// InputSupported tells whether Glouton can collect metrics for this service type at all. It
 	// is a property of the type, true even when collection failed here, so that Bleemeo need not
 	// know which Glouton version supports which service.

@@ -19,11 +19,11 @@ package syncservicesstate
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"time"
 
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/discovery"
+	"github.com/bleemeo/glouton/logger"
 )
 
 const (
@@ -40,11 +40,12 @@ const (
 type Payload struct {
 	Services []ServiceState
 	Metrics  []bleemeoTypes.MetricState
-	// ServicesDropped and MetricsDropped are how many rows the limits left out.
-	ServicesDropped int
-	MetricsDropped  int
 
-	hash string
+	// servicesDropped and metricsDropped are how many rows the limits left out. They are not
+	// sent, only logged by Sent.
+	servicesDropped int
+	metricsDropped  int
+	hash            string
 }
 
 // NewPayload builds the payload of the given lists, which must come sorted, as
@@ -56,15 +57,16 @@ func NewPayload(services []ServiceState, metrics []bleemeoTypes.MetricState) Pay
 	return Payload{
 		Services:        keptServices,
 		Metrics:         keptMetrics,
-		ServicesDropped: servicesDropped,
-		MetricsDropped:  metricsDropped,
-		hash:            hashRows(servicesRows, metricsRows, servicesDropped, metricsDropped),
+		servicesDropped: servicesDropped,
+		metricsDropped:  metricsDropped,
+		hash:            hashRows(servicesRows, metricsRows),
 	}
 }
 
-// hashRows identifies a payload from the rows limit already encoded, and how many it left out.
-// A nil list and an empty one hash the same.
-func hashRows(services [][]byte, metrics [][]byte, servicesDropped int, metricsDropped int) string {
+// hashRows identifies a payload from the rows limit already encoded. The rows left out are not
+// part of it: they are not sent, so a value that differs only by them is the same value to the
+// API. A nil list and an empty one hash the same.
+func hashRows(services [][]byte, metrics [][]byte) string {
 	h := sha256.New()
 
 	for _, list := range [][][]byte{services, metrics} {
@@ -77,9 +79,6 @@ func hashRows(services [][]byte, metrics [][]byte, servicesDropped int, metricsD
 		// Ends a list, so that a row moving to the other list changes the hash.
 		_, _ = h.Write([]byte{0})
 	}
-
-	// Dropped rows are not sent, but their count is part of the value.
-	_, _ = fmt.Fprintf(h, "%d %d", servicesDropped, metricsDropped)
 
 	return hex.EncodeToString(h.Sum(nil))
 }
@@ -140,6 +139,14 @@ func forAgent(last bleemeoTypes.ServicesStateSent, agentID string) bleemeoTypes.
 
 // Sent is what to record once the API accepted payload for agentID, at now.
 func Sent(payload Payload, agentID string, now time.Time) bleemeoTypes.ServicesStateSent {
+	// Logged here rather than in NewPayload, which runs on every synchronization.
+	if payload.servicesDropped > 0 || payload.metricsDropped > 0 {
+		logger.V(1).Printf(
+			"The services state sent to Bleemeo left out %d services and %d metrics: the lists exceed their size limits",
+			payload.servicesDropped, payload.metricsDropped,
+		)
+	}
+
 	services := make([]discovery.NameInstance, 0, len(payload.Services))
 
 	for _, service := range payload.Services {

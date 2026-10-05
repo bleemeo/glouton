@@ -95,14 +95,14 @@ func TestServiceStateJSON(t *testing.T) {
 	}
 
 	want := map[string]any{
-		"name":            "mysql",
-		"type":            "mysql",
-		"instance":        "",
-		"container_name":  "",
-		"dynamic":         true,
-		"input_supported": true,
-		"metrics":         float64(0),
-		"service_uuid":    "",
+		"name":              "mysql",
+		"type":              "mysql",
+		"instance":          "",
+		"container_name":    "",
+		"dynamic_discovery": true,
+		"input_supported":   true,
+		"metrics":           float64(0),
+		"service_uuid":      "",
 	}
 
 	if diff := cmp.Diff(want, got); diff != "" {
