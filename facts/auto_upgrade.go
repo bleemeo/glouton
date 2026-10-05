@@ -86,9 +86,9 @@ const (
 	autoUpgradeRetryInterval = 5 * time.Minute
 
 	// dpkgInterruptedMinAge is how long the dpkg database must have been untouched
-	// before a broken state is called an interruption. dpkg rewrites it at every state
-	// change, so this only has to outlast the gap between two writes - but a maintainer
-	// script can block for a long time between them, so it matches lockHeldMinDuration.
+	// before a broken state is called an interruption. dpkg only rewrites it at the end of
+	// an operation, so this doesn't protect an operation in progress: the lock check does,
+	// see dpkgIsInterrupted.
 	dpkgInterruptedMinAge = 4 * time.Hour
 
 	// autoUpgradeRunMaxDuration is how long after its start an auto-upgrade run is
@@ -251,8 +251,16 @@ func (c *autoUpgradeChecker) status(ctx context.Context) string {
 		failed = true
 	}
 
-	interrupted, dpkgErr := c.dpkgIsInterrupted()
-	record(AutoUpgradeStatusDpkgInterrupted, interrupted, dpkgErr)
+	// Only when no lock is known to be held: a running dpkg writes each state change to its
+	// journal and only folds it back into the status file once the operation ends, so it
+	// looks exactly like an interrupted one until then. A successful "apt-get install" on
+	// Ubuntu 24.04 shows up to 34 journal entries while it runs. The Glouton auto-upgrade
+	// is the worst case: its postinst restarts Glouton while dpkg still runs. When the
+	// locks couldn't be checked, failed is already set.
+	if lockErr == nil && !locks.unknown && locks.holder == nil {
+		interrupted, dpkgErr := c.dpkgIsInterrupted()
+		record(AutoUpgradeStatusDpkgInterrupted, interrupted, dpkgErr)
+	}
 
 	stuck, runErr := c.runIsStuck()
 	record(AutoUpgradeStatusRunNotFinished, stuck, runErr)
@@ -384,10 +392,12 @@ func holderIsStuck(holder *lockHolder) bool {
 // dpkgIsInterrupted tells whether dpkg needs "dpkg --configure -a" before anything can
 // be installed.
 //
-// An operation in progress leaves the same traces as an interrupted one, so the answer
-// only counts once the dpkg database has been untouched for dpkgInterruptedMinAge: dpkg
-// rewrites it at every state change, so a running operation keeps it fresh. That also
-// spares the scan below on any machine that installed something recently.
+// An operation in progress leaves the same traces as an interrupted one, so this must
+// only be called when no APT/dpkg lock is held. The status file says nothing about an
+// operation in progress: dpkg only rewrites it once the operation ends, so it keeps the
+// date of the previous one meanwhile. The answer also only counts once the dpkg
+// database has been untouched for dpkgInterruptedMinAge, which spares the scan below on
+// any machine that installed something recently.
 func (c *autoUpgradeChecker) dpkgIsInterrupted() (bool, error) {
 	stat, err := os.Stat(filepath.Join(c.HostRootPath, dpkgStatusPath))
 	if err != nil {

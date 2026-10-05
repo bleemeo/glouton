@@ -532,8 +532,8 @@ func startAndInspect(t *testing.T, cmd *exec.Cmd, wantArg string) (*process.Proc
 	return proc, name, args
 }
 
-// TestDpkgIsInterrupted checks the age gate that tells an interrupted dpkg apart from an
-// operation in progress: both leave the same traces, only a stale dpkg database counts.
+// TestDpkgIsInterrupted checks the age gate: a broken state only counts once the dpkg
+// database is stale. An operation in progress is excluded by the lock check, not here.
 func TestDpkgIsInterrupted(t *testing.T) {
 	const (
 		healthy = "Package: glouton\nStatus: install ok installed\n"
@@ -551,10 +551,9 @@ func TestDpkgIsInterrupted(t *testing.T) {
 	}{
 		{name: "healthy", status: healthy, statusAge: 6 * time.Hour, want: false},
 		{name: "broken_and_stale", status: broken, statusAge: 6 * time.Hour, want: true},
-		// What a running apt looks like: the same broken state, freshly written.
-		{name: "broken_but_running", status: broken, statusAge: time.Minute, want: false},
+		{name: "broken_but_recent", status: broken, statusAge: time.Minute, want: false},
 		{name: "journal_and_stale", status: healthy, statusAge: 6 * time.Hour, journalEntry: true, want: true},
-		{name: "journal_but_running", status: healthy, statusAge: time.Minute, journalEntry: true, want: false},
+		{name: "journal_but_recent", status: healthy, statusAge: time.Minute, journalEntry: true, want: false},
 	}
 
 	for _, tc := range cases {
