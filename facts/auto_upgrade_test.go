@@ -532,8 +532,8 @@ func startAndInspect(t *testing.T, cmd *exec.Cmd, wantArg string) (*process.Proc
 	return proc, name, args
 }
 
-// TestDpkgIsInterrupted checks the age gate: a broken state only counts once the dpkg
-// database is stale. An operation in progress is excluded by the lock check, not here.
+// TestDpkgIsInterrupted checks that either trace of an interrupted dpkg is reported,
+// however recently the dpkg database was written.
 func TestDpkgIsInterrupted(t *testing.T) {
 	const (
 		healthy = "Package: glouton\nStatus: install ok installed\n"
@@ -543,17 +543,13 @@ func TestDpkgIsInterrupted(t *testing.T) {
 	cases := []struct {
 		name   string
 		status string
-		// statusAge is how long ago the dpkg database was last written.
-		statusAge time.Duration
 		// journalEntry adds an entry to the dpkg journal.
 		journalEntry bool
 		want         bool
 	}{
-		{name: "healthy", status: healthy, statusAge: 6 * time.Hour, want: false},
-		{name: "broken_and_stale", status: broken, statusAge: 6 * time.Hour, want: true},
-		{name: "broken_but_recent", status: broken, statusAge: time.Minute, want: false},
-		{name: "journal_and_stale", status: healthy, statusAge: 6 * time.Hour, journalEntry: true, want: true},
-		{name: "journal_but_recent", status: healthy, statusAge: time.Minute, journalEntry: true, want: false},
+		{name: "healthy", status: healthy, want: false},
+		{name: "broken", status: broken, want: true},
+		{name: "journal", status: healthy, journalEntry: true, want: true},
 	}
 
 	for _, tc := range cases {
@@ -571,13 +567,7 @@ func TestDpkgIsInterrupted(t *testing.T) {
 				}
 			}
 
-			status := filepath.Join(hostRoot, dpkgStatusPath)
-			if err := os.WriteFile(status, []byte(tc.status), 0o600); err != nil {
-				t.Fatal(err)
-			}
-
-			modTime := time.Now().Add(-tc.statusAge)
-			if err := os.Chtimes(status, modTime, modTime); err != nil {
+			if err := os.WriteFile(filepath.Join(hostRoot, dpkgStatusPath), []byte(tc.status), 0o600); err != nil {
 				t.Fatal(err)
 			}
 
@@ -601,6 +591,82 @@ func TestDpkgIsInterruptedNoDatabase(t *testing.T) {
 	checker := &autoUpgradeChecker{HostRootPath: t.TempDir()}
 
 	if _, err := checker.dpkgIsInterrupted(); err == nil {
-		t.Error("dpkgIsInterrupted() error = nil, want the stat error of the missing database")
+		t.Error("dpkgIsInterrupted() error = nil, want the read error of the missing database")
 	}
+}
+
+// TestKnownProblems checks what is reported when the checks couldn't answer: problems
+// already known are kept, an "ok" isn't.
+func TestKnownProblems(t *testing.T) {
+	cases := map[string]string{
+		"":                                    "",
+		AutoUpgradeStatusOK:                   "",
+		AutoUpgradeStatusRepositoryMissing:    AutoUpgradeStatusRepositoryMissing,
+		"dpkg_interrupted,repository_missing": "dpkg_interrupted,repository_missing",
+	}
+
+	for previous, want := range cases {
+		if got := knownProblems(previous); got != want {
+			t.Errorf("knownProblems(%q) = %q, want %q", previous, got, want)
+		}
+	}
+}
+
+// TestRefreshAutoUpgradeFacts checks that the hourly refresh recomputes the auto-upgrade
+// facts, keeps the others, and only moves fact_updated_at when something changed. Without
+// a Runner there is no auto-upgrade, so the facts must go.
+func TestRefreshAutoUpgradeFacts(t *testing.T) {
+	if version.IsWindows() || version.IsFreeBSD() {
+		t.Skip("the auto-upgrade is detected without a Runner on this OS")
+	}
+
+	const oldUpdatedAt = "2026-01-01T00:00:00Z"
+
+	t.Run("recomputed", func(t *testing.T) {
+		f := NewFacter(Options{})
+		f.lastFactsUpdate = time.Now()
+		f.facts = map[string]string{
+			"hostname":             "server",
+			factAutoUpgradeEnabled: "true",
+			FactAutoUpgradeStatus:  AutoUpgradeStatusDpkgInterrupted,
+			FactUpdatedAt:          oldUpdatedAt,
+		}
+
+		f.RefreshAutoUpgradeFacts(t.Context())
+
+		if _, ok := f.facts[FactAutoUpgradeStatus]; ok {
+			t.Errorf("%s = %q, want it recomputed and gone", FactAutoUpgradeStatus, f.facts[FactAutoUpgradeStatus])
+		}
+
+		if f.facts["hostname"] != "server" {
+			t.Errorf("hostname = %q, want the other facts kept", f.facts["hostname"])
+		}
+
+		if f.facts[FactUpdatedAt] == oldUpdatedAt {
+			t.Errorf("%s wasn't updated although a fact changed", FactUpdatedAt)
+		}
+	})
+
+	t.Run("unchanged", func(t *testing.T) {
+		f := NewFacter(Options{})
+		f.lastFactsUpdate = time.Now()
+		f.facts = map[string]string{"hostname": "server", FactUpdatedAt: oldUpdatedAt}
+
+		f.RefreshAutoUpgradeFacts(t.Context())
+
+		if f.facts[FactUpdatedAt] != oldUpdatedAt {
+			t.Errorf("%s = %q, want %q since nothing changed", FactUpdatedAt, f.facts[FactUpdatedAt], oldUpdatedAt)
+		}
+	})
+
+	t.Run("before_first_refresh", func(t *testing.T) {
+		f := NewFacter(Options{})
+		f.facts = map[string]string{FactAutoUpgradeStatus: AutoUpgradeStatusDpkgInterrupted}
+
+		f.RefreshAutoUpgradeFacts(t.Context())
+
+		if f.facts[FactAutoUpgradeStatus] != AutoUpgradeStatusDpkgInterrupted {
+			t.Error("the facts were touched before the first full refresh")
+		}
+	})
 }

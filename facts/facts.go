@@ -94,11 +94,6 @@ type FactProvider struct {
 
 	facts           map[string]string
 	lastFactsUpdate time.Time
-
-	// autoUpgradeStatusValue is cached until autoUpgradeStatusExpiresAt, see
-	// autoUpgradeMinInterval and autoUpgradeRetryInterval.
-	autoUpgradeStatusValue     string
-	autoUpgradeStatusExpiresAt time.Time
 }
 
 // FactCallback is a function called on each update of facts that may return additional facts.
@@ -195,24 +190,70 @@ func (f *FactProvider) SetFact(key string, value string) {
 	f.facts = newFacts
 }
 
+// RefreshAutoUpgradeFacts runs the auto-upgrade checks again without refreshing the
+// other facts. The full refresh is daily, too slow to notice a problem that appeared or a
+// repair made without APT, such as "dpkg --configure -a": only APT reloads Glouton after
+// a package operation.
+//
+// fact_updated_at only changes when an auto-upgrade fact does.
+func (f *FactProvider) RefreshAutoUpgradeFacts(ctx context.Context) {
+	f.l.Lock()
+	defer f.l.Unlock()
+
+	// Before the first full refresh there is nothing to update.
+	if f.lastFactsUpdate.IsZero() {
+		return
+	}
+
+	newFacts := maps.Clone(f.facts)
+	f.setAutoUpgradeFacts(ctx, newFacts)
+
+	if ctx.Err() != nil || factsEqualIgnoringUpdatedAt(f.facts, newFacts) {
+		return
+	}
+
+	newFacts[FactUpdatedAt] = time.Now().UTC().Format(time.RFC3339)
+	f.facts = newFacts
+}
+
+// setAutoUpgradeFacts sets factAutoUpgradeEnabled and FactAutoUpgradeStatus in newFacts,
+// or removes them when there is no auto-upgrade. They run commands, which is why they
+// aren't in fastUpdateFacts: neither is needed early enough to justify that on the
+// startup path.
+//
+// Caller must hold f.l.
+func (f *FactProvider) setAutoUpgradeFacts(ctx context.Context, newFacts map[string]string) {
+	delete(newFacts, factAutoUpgradeEnabled)
+	delete(newFacts, FactAutoUpgradeStatus)
+
+	autoUpgradeEnabled, err := autoUpgradeIsEnabled(ctx, f.options.Runner)
+	if errors.Is(err, errAutoUpgradeNotSupported) {
+		return
+	}
+
+	if err != nil {
+		logger.V(1).Printf("Failed to check auto-upgrade status: %v", err)
+	}
+
+	newFacts[factAutoUpgradeEnabled] = strconv.FormatBool(autoUpgradeEnabled)
+
+	// The status is reported whether or not the auto-upgrade timer is enabled.
+	status, err := f.autoUpgradeStatus(ctx)
+	if err != nil {
+		// Dropping the fact would delete it on the API, which takes a missing status for
+		// a healthy one: a problem found earlier is kept until a check answers again.
+		status = knownProblems(f.facts[FactAutoUpgradeStatus])
+	}
+
+	if status != "" {
+		newFacts[FactAutoUpgradeStatus] = status
+	}
+}
+
 func (f *FactProvider) updateFacts(ctx context.Context) {
 	newFacts := f.fastUpdateFacts(ctx)
 
-	// Not in fastUpdateFacts: both of these run a command, and neither is needed early
-	// enough to justify that on the startup path.
-	autoUpgradeEnabled, err := autoUpgradeIsEnabled(ctx, f.options.Runner)
-	if !errors.Is(err, errAutoUpgradeNotSupported) {
-		if err != nil {
-			logger.V(1).Printf("Failed to check auto-upgrade status: %v", err)
-		}
-
-		newFacts[factAutoUpgradeEnabled] = strconv.FormatBool(autoUpgradeEnabled)
-
-		// The status is reported whether or not the auto-upgrade timer is enabled.
-		if status := f.autoUpgradeStatus(ctx); status != "" {
-			newFacts[FactAutoUpgradeStatus] = status
-		}
-	}
+	f.setAutoUpgradeFacts(ctx, newFacts)
 
 	collectCloudProvidersFacts(ctx, newFacts)
 
@@ -689,7 +730,7 @@ func autoUpgradeIsEnabled(ctx context.Context, runner *gloutonexec.Runner) (bool
 		return false, err
 	}
 
-	if !version.IsLinux() {
+	if !version.IsLinux() || runner == nil {
 		return false, errAutoUpgradeNotSupported
 	}
 

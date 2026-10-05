@@ -43,7 +43,8 @@ const (
 	//
 	// The value is AutoUpgradeStatusOK or a sorted, comma-separated list of the problems
 	// found. The fact is absent when the checks don't apply (non-Linux, container, no APT,
-	// Glouton not installed from a package) or when a check failed and nothing was found.
+	// Glouton not installed from a package), or when a check failed, nothing was found and
+	// no problem was known from the previous refresh.
 	FactAutoUpgradeStatus = "auto_upgrade_status"
 
 	// AutoUpgradeStatusOK means every check ran and none found a problem. A check that
@@ -78,19 +79,6 @@ const (
 	// duration of a large upgrade.
 	lockHeldMinDuration = 4 * time.Hour
 
-	// autoUpgradeMinInterval is how long a status is cached.
-	autoUpgradeMinInterval = time.Hour
-
-	// autoUpgradeRetryInterval is how long a status is cached when the check was cut
-	// short by autoUpgradeCheckTimeout, which may well not happen again.
-	autoUpgradeRetryInterval = 5 * time.Minute
-
-	// dpkgInterruptedMinAge is how long the dpkg database must have been untouched
-	// before a broken state is called an interruption. dpkg only rewrites it at the end of
-	// an operation, so this doesn't protect an operation in progress: the lock check does,
-	// see dpkgIsInterrupted.
-	dpkgInterruptedMinAge = 4 * time.Hour
-
 	// autoUpgradeRunMaxDuration is how long after its start an auto-upgrade run is
 	// considered stuck.
 	autoUpgradeRunMaxDuration = 2 * time.Hour
@@ -112,6 +100,10 @@ const (
 var errUnexpectedProcLocks = errors.New("unexpected /proc/locks format")
 
 var errAPTHasNoIndex = errors.New("APT has no repository index, run apt-get update")
+
+// errAutoUpgradeCheckFailed is returned when a check couldn't give an answer and no other
+// check found a problem.
+var errAutoUpgradeCheckFailed = errors.New("an auto-upgrade check couldn't give an answer")
 
 // gloutonPackageName is the package that provides Glouton. bleemeo-agent only depends
 // on it.
@@ -158,22 +150,12 @@ type autoUpgradeChecker struct {
 	HostRootPath    string
 }
 
-// autoUpgradeStatus returns the value of the FactAutoUpgradeStatus fact,
-// or "" when the check doesn't apply to this system.
-//
-// Caller must hold f.l.
-func (f *FactProvider) autoUpgradeStatus(ctx context.Context) string {
-	if !version.IsLinux() || f.options.Runner == nil {
-		return ""
-	}
-
-	// APT and dpkg are only checked when Glouton runs on the host itself.
-	if f.options.HostRootPath != "/" {
-		return ""
-	}
-
-	if time.Now().Before(f.autoUpgradeStatusExpiresAt) {
-		return f.autoUpgradeStatusValue
+// autoUpgradeStatus returns the value of the FactAutoUpgradeStatus fact, or "" when the
+// check doesn't apply to this system. It must only be called when autoUpgradeIsEnabled
+// found an auto-upgrade: that excludes a container and a nil Runner.
+func (f *FactProvider) autoUpgradeStatus(ctx context.Context) (string, error) {
+	if !version.IsLinux() {
+		return "", nil
 	}
 
 	checker := autoUpgradeChecker{
@@ -182,34 +164,29 @@ func (f *FactProvider) autoUpgradeStatus(ctx context.Context) string {
 		HostRootPath:    f.options.HostRootPath,
 	}
 
-	checkCtx, cancel := context.WithTimeout(ctx, autoUpgradeCheckTimeout)
+	ctx, cancel := context.WithTimeout(ctx, autoUpgradeCheckTimeout)
 	defer cancel()
 
-	value := checker.status(checkCtx)
-
-	// Don't cache the result of a check cancelled by the caller.
-	if ctx.Err() != nil {
-		return ""
-	}
-
-	keepFor := autoUpgradeMinInterval
-
-	// A check the timeout cut short may well answer next time.
-	if checkCtx.Err() != nil && value == "" {
-		keepFor = autoUpgradeRetryInterval
-	}
-
-	f.autoUpgradeStatusValue = value
-	f.autoUpgradeStatusExpiresAt = time.Now().Add(keepFor)
-
-	return f.autoUpgradeStatusValue
+	return checker.status(ctx)
 }
 
-// status returns the value of the fact.
-func (c *autoUpgradeChecker) status(ctx context.Context) string {
+// knownProblems returns what to report when the checks couldn't give an answer: the
+// problems of the previous refresh, which nothing showed to be fixed. A previous "ok" is
+// not kept, a check that couldn't run is never reported as OK.
+func knownProblems(previous string) string {
+	if previous == AutoUpgradeStatusOK {
+		return ""
+	}
+
+	return previous
+}
+
+// status returns the value of the fact, or errAutoUpgradeCheckFailed when a check
+// couldn't give an answer and no other check found a problem.
+func (c *autoUpgradeChecker) status(ctx context.Context) (string, error) {
 	// Only APT-based systems are supported.
 	if _, err := c.Runner.LookPath("apt-cache", gloutonexec.Option{SkipInContainer: true}); err != nil {
-		return ""
+		return "", nil //nolint:nilerr // Not an APT system, the check doesn't apply.
 	}
 
 	var (
@@ -227,7 +204,7 @@ func (c *autoUpgradeChecker) status(ctx context.Context) string {
 		failed = true
 	case repository == repositoryUnknownPackage:
 		// Glouton wasn't installed from a package.
-		return ""
+		return "", nil
 	case repository == repositoryMissing:
 		problems = append(problems, AutoUpgradeStatusRepositoryMissing)
 	}
@@ -267,15 +244,15 @@ func (c *autoUpgradeChecker) status(ctx context.Context) string {
 
 	if len(problems) == 0 {
 		if failed {
-			return ""
+			return "", errAutoUpgradeCheckFailed
 		}
 
-		return AutoUpgradeStatusOK
+		return AutoUpgradeStatusOK, nil
 	}
 
 	slices.Sort(problems)
 
-	return strings.Join(problems, ",")
+	return strings.Join(problems, ","), nil
 }
 
 type repositoryState int
@@ -393,23 +370,10 @@ func holderIsStuck(holder *lockHolder) bool {
 // be installed.
 //
 // An operation in progress leaves the same traces as an interrupted one, so this must
-// only be called when no APT/dpkg lock is held. The status file says nothing about an
-// operation in progress: dpkg only rewrites it once the operation ends, so it keeps the
-// date of the previous one meanwhile. The answer also only counts once the dpkg
-// database has been untouched for dpkgInterruptedMinAge, which spares the scan below on
-// any machine that installed something recently.
+// only be called when no APT/dpkg lock is held. The age of the status file can't tell
+// them apart: dpkg only rewrites it once the operation ends, so it keeps the date of the
+// previous one meanwhile.
 func (c *autoUpgradeChecker) dpkgIsInterrupted() (bool, error) {
-	stat, err := os.Stat(filepath.Join(c.HostRootPath, dpkgStatusPath))
-	if err != nil {
-		return false, fmt.Errorf("unable to stat the dpkg database: %w", err)
-	}
-
-	if changedAgo := time.Since(stat.ModTime()); changedAgo < dpkgInterruptedMinAge {
-		logger.V(2).Printf("auto-upgrade: the dpkg database changed %v ago, too recent to judge", changedAgo.Truncate(time.Second))
-
-		return false, nil
-	}
-
 	dirty, err := c.dpkgJournalIsDirty()
 	if err != nil || dirty {
 		return dirty, err
