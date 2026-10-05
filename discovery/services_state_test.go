@@ -1227,3 +1227,39 @@ func TestURLSecretsOnlyKnownParameters(t *testing.T) {
 		t.Errorf("urlSecrets() = %q, want only the apikey value", got)
 	}
 }
+
+// TestURLSecretsUserinfo checks the userinfo password is found when it holds an "@", and that
+// an "@" in a query value, such as an e-mail address, is not taken for the end of a userinfo:
+// the host, port and path would then be replaced in every error.
+func TestURLSecretsUserinfo(t *testing.T) {
+	cases := []struct {
+		url  string
+		want []string
+	}{
+		{url: "http://admin:hunter2x@haproxy:8080/stats", want: []string{"hunter2x"}}, //nolint:gosec // a fake password, to check it is found
+		{url: "http://admin:p@ss@haproxy:8080/stats", want: []string{"p@ss"}},
+		{url: "http://admin:pa?ss@haproxy:8080/stats", want: []string{"pa?ss"}},
+		{url: "http://10.0.0.5:8080/status?user=ops@example.com", want: nil},
+		{url: "http://admin:hunter2x@haproxy:8080/status?user=ops@example.com", want: []string{"hunter2x"}}, //nolint:gosec // a fake password, to check it is found
+	}
+
+	for _, c := range cases {
+		if got := urlSecrets(c.url); !slices.Equal(got, c.want) {
+			t.Errorf("urlSecrets(%q) = %q, want %q", c.url, got, c.want)
+		}
+	}
+}
+
+// TestServiceSecretsDeduplicated checks a secret given twice is listed once, even with another
+// of the same length between them once sorted by length.
+func TestServiceSecretsDeduplicated(t *testing.T) {
+	got := serviceSecrets(config.Service{ //nolint:gosec // fake passwords, to check they are deduplicated
+		Password:    "abc",
+		JMXPassword: "xyz",
+		StatsURL:    "http://user:abc@host/",
+	})
+
+	if want := []string{"abc", "xyz"}; !slices.Equal(got, want) {
+		t.Errorf("serviceSecrets() = %q, want %q", got, want)
+	}
+}

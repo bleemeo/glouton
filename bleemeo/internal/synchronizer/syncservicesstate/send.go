@@ -36,10 +36,11 @@ const (
 	minNewServiceInterval = time.Minute
 )
 
-// Payload is the services state as sent to Bleemeo: both lists, limited in size.
+// Payload is the services state as sent to Bleemeo: both lists, limited in size. It is the
+// value of the Agent's services_state field.
 type Payload struct {
-	Services []ServiceState
-	Metrics  []bleemeoTypes.MetricState
+	Services []ServiceState             `json:"services"`
+	Metrics  []bleemeoTypes.MetricState `json:"metrics"`
 
 	// servicesDropped and metricsDropped are how many rows the limits left out. They are not
 	// sent, only logged by Sent.

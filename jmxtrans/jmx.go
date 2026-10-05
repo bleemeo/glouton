@@ -272,6 +272,22 @@ func (j *JMX) serve(ctx context.Context, serverSocket *net.TCPListener) error {
 			break
 		}
 
+		// Another error, such as too many open files, leaves no connection to serve. Retried
+		// after a while rather than at once, which would spin; the listener is not restarted
+		// if serve returns.
+		if err != nil {
+			logger.V(1).Printf("unable to accept a jmxtrans connection: %v", err)
+
+			select {
+			case <-ctx.Done():
+			case <-time.After(time.Second):
+			}
+
+			err = nil
+
+			continue
+		}
+
 		wg.Add(1)
 
 		j.state.connected()

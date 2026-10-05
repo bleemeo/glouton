@@ -327,6 +327,7 @@ type registration struct {
 	restartInProgress    bool
 	runOnStart           bool
 	loop                 *scrapeLoop
+	loopStartedAt        time.Time // when loop started; its first run may be an interval later
 	lastScrapes          []scrapeRun
 	gatherer             *wrappedGatherer
 	annotations          types.MetricAnnotations
@@ -365,7 +366,14 @@ func (reg *registration) lastScrapeState(now time.Time) types.ScrapeState {
 
 	// A run that never returns is never recorded: without this, the last completed one
 	// would be reported for as long as the input hangs.
-	if reg.loop != nil && reg.loop.interval > 0 && now.Sub(reg.lastRunAt()) > scrapeStuckIntervals*reg.loop.interval {
+	// Counted from the loop's start when later: a loop restarted with a shorter interval has
+	// not run yet, and the last run is from the previous loop.
+	lastRunAt := reg.lastRunAt()
+	if reg.loopStartedAt.After(lastRunAt) {
+		lastRunAt = reg.loopStartedAt
+	}
+
+	if reg.loop != nil && reg.loop.interval > 0 && now.Sub(lastRunAt) > scrapeStuckIntervals*reg.loop.interval {
 		return types.ScrapeState{HasRun: true, Error: errScrapeStuck.Error()}
 	}
 
@@ -1213,6 +1221,7 @@ func (r *Registry) restartScrapeLoop(reg *registration) {
 		timeout = reg.option.Timeout
 	}
 
+	reg.loopStartedAt = time.Now()
 	reg.loop = startScrapeLoop(
 		reg.interval,
 		timeout,
@@ -1895,6 +1904,7 @@ func (r *Registry) restartLoop(reg *registration) {
 		timeout = reg.option.Timeout
 	}
 
+	reg.loopStartedAt = time.Now()
 	reg.loop = startScrapeLoop(
 		reg.interval,
 		timeout,

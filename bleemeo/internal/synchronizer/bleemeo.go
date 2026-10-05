@@ -257,6 +257,21 @@ func (cl *wrapperClient) UpdateAgent(ctx context.Context, id string, data any) (
 	return agent, err
 }
 
+func (cl *wrapperClient) UpdateAgentServicesState(ctx context.Context, id string, state any) (bool, error) {
+	var agent struct {
+		ServicesState json.RawMessage `json:"services_state"`
+	}
+
+	// The API returns the fields a request sets on top of those asked for, so the response is
+	// the id and, when the API has the field, the value it stored.
+	err := cl.Update(ctx, bleemeo.ResourceAgent, id, map[string]any{"services_state": state}, "id", &agent)
+	if err != nil {
+		return false, err
+	}
+
+	return len(agent.ServicesState) > 0 && string(agent.ServicesState) != "null", nil
+}
+
 func (cl *wrapperClient) DeleteAgent(ctx context.Context, id string) error {
 	return cl.Delete(ctx, bleemeo.ResourceAgent, id)
 }

@@ -30,7 +30,8 @@ import (
 
 // labelsMetric is a metric with arbitrary labels, for tests that need more than a name.
 type labelsMetric struct {
-	lbls map[string]string
+	lbls        map[string]string
+	annotations gloutonTypes.MetricAnnotations
 }
 
 func (m labelsMetric) Points(time.Time, time.Time) ([]gloutonTypes.Point, error) {
@@ -40,7 +41,7 @@ func (m labelsMetric) Points(time.Time, time.Time) ([]gloutonTypes.Point, error)
 func (m labelsMetric) LastPointReceivedAt() time.Time { return time.Now() }
 
 func (m labelsMetric) Annotations() gloutonTypes.MetricAnnotations {
-	return gloutonTypes.MetricAnnotations{}
+	return m.annotations
 }
 
 func (m labelsMetric) Labels() map[string]string { return m.lbls }
@@ -341,4 +342,37 @@ func TestMetricsStateConcurrent(t *testing.T) {
 	}
 
 	<-done
+}
+
+// TestMetricsStateOnlyOwnMetrics checks the metrics of other agents, such as an SNMP device or
+// a monitor, are left out at every stage: the state is reported on this Agent by name only.
+func TestMetricsStateOnlyOwnMetrics(t *testing.T) {
+	s := newMetricsStateSync(nil)
+	s.agentID = "main-agent"
+
+	own := labelsMetric{lbls: map[string]string{gloutonTypes.LabelName: "cpu_used"}}
+	ownWithID := labelsMetric{
+		lbls:        map[string]string{gloutonTypes.LabelName: "mem_used"},
+		annotations: gloutonTypes.MetricAnnotations{BleemeoAgentID: "main-agent"},
+	}
+	other := labelsMetric{
+		lbls:        map[string]string{gloutonTypes.LabelName: "ifInOctets"},
+		annotations: gloutonTypes.MetricAnnotations{BleemeoAgentID: "snmp-agent"},
+	}
+
+	notRegistered := make(map[metricStateKey]int)
+	for _, metric := range []gloutonTypes.Metric{own, other} {
+		s.countNotRegistered(notRegistered, metric, bleemeoTypes.ReasonNotAvailableInPlan)
+	}
+
+	publishUnregistered(s, notRegistered, nil, ownWithID, other)
+
+	want := []bleemeoTypes.MetricState{
+		{Name: "cpu_used", Reason: bleemeoTypes.ReasonNotAvailableInPlan, Count: 1},
+		{Name: "mem_used", Reason: bleemeoTypes.ReasonPending, Count: 1},
+	}
+
+	if diff := cmp.Diff(want, s.MetricsState()); diff != "" {
+		t.Errorf("MetricsState() mismatch (-want +got):\n%s", diff)
+	}
 }

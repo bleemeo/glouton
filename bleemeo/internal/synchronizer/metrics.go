@@ -352,6 +352,10 @@ func (s *Synchronizer) countNotRegistered(
 	metric gloutonTypes.Metric,
 	reason bleemeoTypes.MetricStateReason,
 ) {
+	if !s.isOwnMetric(metric) {
+		return
+	}
+
 	name := metric.Labels()[gloutonTypes.LabelName]
 	if name == "" {
 		// Nothing to group it under: say so in the log rather than drop it silently.
@@ -365,6 +369,15 @@ func (s *Synchronizer) countNotRegistered(
 	}
 
 	counts[metricStateKey{Name: name, Reason: reason}]++
+}
+
+// isOwnMetric tells whether a metric belongs to this agent rather than to another one, such as
+// a monitor, an SNMP device or a vSphere host. The metrics state is reported on this Agent by
+// name only, so another agent's would read as this one's.
+func (s *Synchronizer) isOwnMetric(metric gloutonTypes.Metric) bool {
+	agentID := metric.Annotations().BleemeoAgentID
+
+	return agentID == "" || agentID == s.agentID
 }
 
 // filterMetrics only keeps the points that can be registered, and records why it drops the
@@ -522,7 +535,7 @@ func (s *Synchronizer) publishMetricsState(unregistered []gloutonTypes.Metric, k
 
 	for i, metric := range unregistered {
 		name := metric.Labels()[gloutonTypes.LabelName]
-		if name == "" {
+		if name == "" || !s.isOwnMetric(metric) {
 			continue
 		}
 
@@ -539,11 +552,22 @@ func (s *Synchronizer) publishMetricsState(unregistered []gloutonTypes.Metric, k
 	s.l.Lock()
 	s.notRegisteredMetrics = s.stagedNotRegistered
 	s.registrationMetrics = registration
+	s.metricsStatePublished = true
 	s.l.Unlock()
 }
 
-// MetricsState returns the metrics Glouton has but did not register, grouped by name and
-// reason: dropped by the filter, waiting for the account configuration or a dependency,
+// publishedMetricsState is MetricsState, and whether a synchronization published it yet: until
+// one does, the state is empty for lack of a run, not because every metric is registered.
+func (s *Synchronizer) publishedMetricsState() ([]bleemeoTypes.MetricState, bool) {
+	s.l.Lock()
+	published := s.metricsStatePublished
+	s.l.Unlock()
+
+	return s.MetricsState(), published
+}
+
+// MetricsState returns the metrics of this agent that Glouton has but did not register, grouped
+// by name and reason: dropped by the filter, waiting for the account configuration or a dependency,
 // pending, or refused by the API. It is sorted, as the list is kept synchronized with the API.
 func (s *Synchronizer) MetricsState() []bleemeoTypes.MetricState {
 	counts := make(map[metricStateKey]int)
@@ -1233,7 +1257,7 @@ func (mr *metricRegisterer) doOnePass(ctx context.Context, currentList []glouton
 				return err
 			}
 
-			if IsBadRequest(err) {
+			if types.IsBadRequest(err) {
 				content := APIErrorContent(err)
 				registration.LastFailKind = httpResponseToMetricFailureKind(content)
 				registration.LastFailAt = mr.s.now()

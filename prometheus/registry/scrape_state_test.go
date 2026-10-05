@@ -123,6 +123,26 @@ func TestLastScrapeStateStuck(t *testing.T) {
 	}
 }
 
+// TestLastScrapeStateRestartedLoop checks a loop restarted with a shorter interval is not
+// reported as stuck before its first run: the last run is from the previous, slower loop.
+func TestLastScrapeStateRestartedLoop(t *testing.T) {
+	t0 := time.Now()
+	reg := &registration{
+		// Restarted at t0+60s, from 60s to 10s, right after a run of the previous loop.
+		loop:          &scrapeLoop{interval: 10 * time.Second},
+		loopStartedAt: t0.Add(60 * time.Second),
+		lastScrapes:   []scrapeRun{{ScrapeAt: t0, ScrapedPointsCount: 5}},
+	}
+
+	if got := reg.lastScrapeState(t0.Add(70 * time.Second)); got.Error != "" {
+		t.Errorf("a loop started 10s ago is reported as %+v, want the last run", got)
+	}
+
+	if got := reg.lastScrapeState(t0.Add(2 * time.Minute)); got.Error != errScrapeStuck.Error() {
+		t.Errorf("a loop with no run for six intervals since its start is reported as %+v, want stuck", got)
+	}
+}
+
 // TestRegistrationImplementsScrapeStateProvider pins the optional interface discovery
 // asserts on. Discovery falls back to an "unknown" status when the assertion fails, so
 // breaking this would silently degrade the reported state rather than fail to build.

@@ -40,6 +40,7 @@ import (
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncapplications"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncconfig"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncservices"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncservicesstate"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/crashreport"
@@ -131,7 +132,9 @@ type Synchronizer struct {
 	stagedNotRegistered map[metricStateKey]int
 	// registrationMetrics counts the metrics that passed the filter but are not registered:
 	// pending, or refused by the API.
-	registrationMetrics           map[metricStateKey]int
+	registrationMetrics map[metricStateKey]int
+	// metricsStatePublished tells whether a synchronization published the metrics state yet.
+	metricsStatePublished         bool
 	disableCrashReportUploadUntil time.Time
 	lastInfo                      bleemeoTypes.GlobalInfo
 	// Whether the agent MQTT status should be synced. This is used to avoid syncing
@@ -198,6 +201,7 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 		syncservices.New(),
 		&CompatibilityWrapper{state: state, name: types.EntityMonitor, method: s.syncMonitors, skipOnlyEssential: true},
 		&CompatibilityWrapper{state: state, name: types.EntityMetric, method: s.syncMetrics},
+		syncservicesstate.New(s.publishedMetricsState),
 		&CompatibilityWrapper{state: state, name: types.EntityGloutonConfig, method: s.syncGloutonConfig},
 		&CompatibilityWrapper{state: state, name: types.EntityDiagnostics, method: s.syncDiagnostics},
 	}

@@ -20,12 +20,14 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/http"
 	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
@@ -48,6 +50,7 @@ const (
 	EntityMetric        EntityName = "metric"
 	EntityMonitor       EntityName = "monitor"
 	EntityService       EntityName = "service"
+	EntityServicesState EntityName = "servicesstate"
 	EntitySNMP          EntityName = "snmp"
 	EntityVSphere       EntityName = "vsphere"
 )
@@ -98,6 +101,15 @@ func (t APIFeature) String() string {
 }
 
 var ErrUnexpectedWorkflow = errors.New("unexpected synchronization workflow")
+
+// IsBadRequest returns true if the error is an APIError due to 400.
+func IsBadRequest(err error) bool {
+	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
+		return apiError.StatusCode == http.StatusBadRequest
+	}
+
+	return false
+}
 
 type EntitySynchronizer interface {
 	Name() EntityName
@@ -213,6 +225,9 @@ type ConfigClient interface {
 type AgentClient interface {
 	ListAgents(ctx context.Context) ([]bleemeoTypes.Agent, error)
 	UpdateAgent(ctx context.Context, id string, data any) (bleemeoTypes.Agent, error)
+	// UpdateAgentServicesState sets the Agent's services_state and tells whether the API stored
+	// it: an API without that field ignores it and still accepts the request.
+	UpdateAgentServicesState(ctx context.Context, id string, state any) (stored bool, err error)
 	UpdateAgentLastDuplicationDate(ctx context.Context, agentID string, lastDuplicationDate time.Time) error
 }
 

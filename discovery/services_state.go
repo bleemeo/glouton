@@ -470,7 +470,14 @@ func serviceSecrets(cfg config.Service) []string {
 		}
 	}
 
-	slices.SortFunc(secrets, func(a, b string) int { return cmp.Compare(len(b), len(a)) })
+	// Equal secrets must end up next to each other for Compact to drop them.
+	slices.SortFunc(secrets, func(a, b string) int {
+		if c := cmp.Compare(len(b), len(a)); c != 0 {
+			return c
+		}
+
+		return strings.Compare(a, b)
+	})
 
 	return slices.Compact(secrets)
 }
@@ -486,10 +493,8 @@ func urlSecrets(rawURL string) []string {
 
 	var secrets []string
 
-	if userinfo, _, ok := strings.CutLast(rest, "@"); ok {
-		if _, password, ok := strings.Cut(userinfo, ":"); ok {
-			secrets = append(secrets, password)
-		}
+	if password, ok := userinfoPassword(rest); ok {
+		secrets = append(secrets, password)
 	}
 
 	_, query, _ := strings.Cut(rest, "?")
@@ -509,6 +514,25 @@ func urlSecrets(rawURL string) []string {
 	}
 
 	return secrets
+}
+
+// userinfoPassword returns the password of "user:password@host...", the URL after its scheme.
+// The userinfo ends at the last "@", as a password may hold one, unless that "@" is in a query
+// value such as an e-mail address: after a "?" and an "=", which a password rarely holds both.
+func userinfoPassword(rest string) (string, bool) {
+	at := strings.LastIndex(rest, "@")
+
+	if q := strings.Index(rest[:max(at, 0)], "?"); q >= 0 && strings.Contains(rest[q:at], "=") {
+		at = strings.LastIndex(rest[:q], "@")
+	}
+
+	if at < 0 {
+		return "", false
+	}
+
+	_, password, ok := strings.Cut(rest[:at], ":")
+
+	return password, ok
 }
 
 // isSecretParameter tells whether a URL query parameter is known to hold a secret. Whole

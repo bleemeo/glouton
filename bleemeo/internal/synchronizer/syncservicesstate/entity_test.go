@@ -1,0 +1,398 @@
+// Copyright 2015-2026 Bleemeo
+//
+// bleemeo.com an infrastructure monitoring solution in the Cloud
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package syncservicesstate
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"testing"
+	"time"
+
+	"github.com/bleemeo/bleemeo-go"
+	"github.com/bleemeo/glouton/bleemeo/internal/cache"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/discovery"
+)
+
+var errTestAPI = errors.New("test API error")
+
+// fakeState is a State holding nothing but the agent's credentials.
+type fakeState struct {
+	agentID string
+}
+
+func (fakeState) Set(string, any) error                           { return nil }
+func (fakeState) Get(string, any) error                           { return nil }
+func (fakeState) GetByPrefix(string, any) (map[string]any, error) { return map[string]any{}, nil }
+func (fakeState) Delete(string) error                             { return nil }
+func (s fakeState) BleemeoCredentials() (string, string)          { return s.agentID, "password" }
+func (fakeState) SetBleemeoCredentials(string, string) error      { return nil }
+
+// fakeClient records each services state sent. Any other call panics.
+type fakeClient struct {
+	types.Client
+
+	ids    []string
+	bodies []string
+	err    error
+	// notStored acts as an API without the services_state field.
+	notStored bool
+}
+
+func (c *fakeClient) UpdateAgentServicesState(_ context.Context, id string, state any) (bool, error) {
+	body, err := json.Marshal(state)
+	if err != nil {
+		return false, err
+	}
+
+	c.ids = append(c.ids, id)
+	c.bodies = append(c.bodies, string(body))
+
+	return c.err == nil && !c.notStored, c.err
+}
+
+// fakeExecution is an execution started at now. Any call it does not define panics.
+type fakeExecution struct {
+	types.SynchronizationExecution
+
+	option        types.Option
+	client        *fakeClient
+	now           time.Time
+	onlyEssential bool
+}
+
+func (e *fakeExecution) BleemeoAPIClient() types.Client { return e.client }
+func (e *fakeExecution) IsOnlyEssential() bool          { return e.onlyEssential }
+func (e *fakeExecution) Option() types.Option           { return e.option }
+func (e *fakeExecution) StartedAt() time.Time           { return e.now }
+
+// countingDiscoverer counts the calls to ServicesState, one per payload built.
+type countingDiscoverer struct {
+	*discovery.MockDiscoverer
+
+	builds int
+}
+
+func (d *countingDiscoverer) ServicesState() []discovery.ServiceState {
+	d.builds++
+
+	return d.MockDiscoverer.ServicesState()
+}
+
+type entityTest struct {
+	entity    *SyncServicesState
+	execution *fakeExecution
+	discovery *countingDiscoverer
+	metrics   []bleemeoTypes.MetricState
+	// metricsUnpublished acts as a synchronizer that did not publish the metrics state yet.
+	metricsUnpublished bool
+}
+
+// newEntityTest returns an entity for agentID, whose discovery ran and whose metrics state
+// was published.
+func newEntityTest(agentID string) *entityTest {
+	state := fakeState{agentID: agentID}
+	test := &entityTest{
+		discovery: &countingDiscoverer{MockDiscoverer: &discovery.MockDiscoverer{UpdatedAt: t0.Add(-time.Minute)}},
+		execution: &fakeExecution{client: &fakeClient{}, now: t0},
+	}
+
+	test.execution.option.State = state
+	test.execution.option.Discovery = test.discovery
+	test.execution.option.Cache = cache.Load(state)
+	test.entity = New(func() ([]bleemeoTypes.MetricState, bool) { return test.metrics, !test.metricsUnpublished })
+
+	return test
+}
+
+// run does what Execution.run does with one entity, at now. It returns whether the entity
+// asked for a synchronization.
+func (e *entityTest) run(t *testing.T, now time.Time) (bool, error) {
+	t.Helper()
+
+	e.execution.now = now
+	ctx := t.Context()
+
+	execution, err := e.entity.PrepareExecution(ctx, e.execution)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer execution.FinishExecution(ctx)
+
+	need, err := execution.NeedSynchronization(ctx)
+	if err != nil || !need {
+		return need, err
+	}
+
+	if err := execution.RefreshCache(ctx, types.SyncTypeNormal); err != nil {
+		return need, err
+	}
+
+	return need, execution.SyncRemoteAndLocal(ctx, types.SyncTypeNormal)
+}
+
+func mysqlMissingCredentials() discovery.ServiceState {
+	return discovery.ServiceState{
+		Name:           "mysql",
+		ServiceType:    discovery.MySQLService,
+		Dynamic:        true,
+		InputSupported: true,
+		Error:          "failed to create the input: missing credentials or address",
+	}
+}
+
+// TestEntityGoldenPayload pins the services_state value sent to Bleemeo, the only guard on the format:
+// the API does not validate what is inside services_state.
+func TestEntityGoldenPayload(t *testing.T) {
+	test := newEntityTest(testAgent)
+	test.discovery.States = []discovery.ServiceState{mysqlMissingCredentials()}
+	test.metrics = []bleemeoTypes.MetricState{{Name: "disk_used_perc", Reason: bleemeoTypes.ReasonNotAvailableInPlan, Count: 3}}
+	test.execution.option.Cache.SetServices([]bleemeoTypes.Service{{ID: "service-uuid", Label: "mysql", Active: true}})
+
+	if _, err := test.run(t, t0); err != nil {
+		t.Fatal(err)
+	}
+
+	client := test.execution.client
+	if len(client.bodies) != 1 {
+		t.Fatalf("sent %d times, want once", len(client.bodies))
+	}
+
+	want := `{"services":[{"name":"mysql","type":"mysql","instance":"","container_name":"",` +
+		`"dynamic_discovery":true,"input_supported":true,` +
+		`"error":"failed to create the input: missing credentials or address","metrics":0,"service_uuid":"service-uuid"}],` +
+		`"metrics":[{"name":"disk_used_perc","reason":"not-available-in-plan","count":3}]}`
+
+	if client.bodies[0] != want {
+		t.Errorf("body:\n%s\nwant:\n%s", client.bodies[0], want)
+	}
+
+	if client.ids[0] != testAgent {
+		t.Errorf("sent to agent %q, want %q", client.ids[0], testAgent)
+	}
+}
+
+// TestEntityEmptyLists checks an agent with nothing to report sends empty lists, not null.
+func TestEntityEmptyLists(t *testing.T) {
+	test := newEntityTest(testAgent)
+
+	if _, err := test.run(t, t0); err != nil {
+		t.Fatal(err)
+	}
+
+	want := `{"services":[],"metrics":[]}`
+	if bodies := test.execution.client.bodies; len(bodies) != 1 || bodies[0] != want {
+		t.Errorf("bodies = %q, want [%q]", bodies, want)
+	}
+}
+
+// TestEntityDoesNotResendSameValue checks an unchanged value is not sent again, however long
+// after, and a changed one is once the interval has passed.
+func TestEntityDoesNotResendSameValue(t *testing.T) {
+	test := newEntityTest(testAgent)
+	test.discovery.States = []discovery.ServiceState{mysqlMissingCredentials()}
+
+	if _, err := test.run(t, t0); err != nil {
+		t.Fatal(err)
+	}
+
+	need, err := test.run(t, t0.Add(2*time.Hour))
+	if err != nil || need {
+		t.Fatalf("unchanged value: need = %v, err = %v; want false, nil", need, err)
+	}
+
+	test.metrics = []bleemeoTypes.MetricState{{Name: "mysql_queries", Reason: bleemeoTypes.ReasonPending, Count: 1}}
+
+	// A minute later, as the payload was just built.
+	if need, err := test.run(t, t0.Add(2*time.Hour+minNewServiceInterval)); err != nil || !need {
+		t.Fatalf("changed value: need = %v, err = %v; want true, nil", need, err)
+	}
+
+	if sent := len(test.execution.client.bodies); sent != 2 {
+		t.Errorf("sent %d times, want 2", sent)
+	}
+}
+
+// TestEntityBadRequest checks a refused value does not fail the synchronization, and is
+// retried only after minSendInterval.
+func TestEntityBadRequest(t *testing.T) {
+	test := newEntityTest(testAgent)
+	test.execution.client.err = &bleemeo.APIError{StatusCode: http.StatusBadRequest, Err: errTestAPI}
+
+	if _, err := test.run(t, t0); err != nil {
+		t.Fatalf("a refused value failed the synchronization: %v", err)
+	}
+
+	sent := test.execution.option.Cache.ServicesStateSent()
+	if !sent.LastAttemptFailed || sent.Hash != "" {
+		t.Errorf("recorded %+v, want a failed attempt and no accepted value", sent)
+	}
+
+	if need, _ := test.run(t, t0.Add(minNewServiceInterval)); need {
+		t.Error("retried before minSendInterval")
+	}
+
+	test.execution.client.err = nil
+
+	if need, err := test.run(t, t0.Add(minSendInterval)); err != nil || !need {
+		t.Fatalf("after minSendInterval: need = %v, err = %v; want true, nil", need, err)
+	}
+
+	if sent := test.execution.option.Cache.ServicesStateSent(); sent.LastAttemptFailed || sent.Hash == "" {
+		t.Errorf("recorded %+v, want an accepted value", sent)
+	}
+}
+
+// TestEntityOtherErrorFails checks an error other than a refusal fails the synchronization,
+// as it does for other entities, and is recorded as a failed attempt.
+func TestEntityOtherErrorFails(t *testing.T) {
+	test := newEntityTest(testAgent)
+	test.execution.client.err = &bleemeo.APIError{StatusCode: http.StatusInternalServerError, Err: errTestAPI}
+
+	if _, err := test.run(t, t0); !errors.Is(err, errTestAPI) {
+		t.Errorf("err = %v, want %v", err, errTestAPI)
+	}
+
+	if sent := test.execution.option.Cache.ServicesStateSent(); !sent.LastAttemptFailed {
+		t.Errorf("recorded %+v, want a failed attempt", sent)
+	}
+}
+
+// TestEntityNotStored checks a value the API did not store, as one without the field, is not
+// recorded as sent: once the API has the field, the same value is sent again.
+func TestEntityNotStored(t *testing.T) {
+	test := newEntityTest(testAgent)
+	test.execution.client.notStored = true
+
+	if _, err := test.run(t, t0); err != nil {
+		t.Fatalf("a value not stored failed the synchronization: %v", err)
+	}
+
+	if sent := test.execution.option.Cache.ServicesStateSent(); !sent.LastAttemptFailed || sent.Hash != "" {
+		t.Errorf("recorded %+v, want a failed attempt and no accepted value", sent)
+	}
+
+	test.execution.client.notStored = false
+
+	if need, err := test.run(t, t0.Add(minSendInterval)); err != nil || !need {
+		t.Fatalf("the same value once the API stores it: need = %v, err = %v; want true, nil", need, err)
+	}
+
+	if sent := test.execution.option.Cache.ServicesStateSent(); sent.LastAttemptFailed || sent.Hash == "" {
+		t.Errorf("recorded %+v, want an accepted value", sent)
+	}
+}
+
+// TestEntityWaitsForFirstRuns checks nothing is sent before discovery ran and the metrics state
+// was published: both lists would be empty for lack of a run, as after a restart.
+func TestEntityWaitsForFirstRuns(t *testing.T) {
+	t.Run("discovery not run", func(t *testing.T) {
+		test := newEntityTest(testAgent)
+		test.discovery.UpdatedAt = time.Time{}
+
+		if need, err := test.run(t, t0); err != nil || need {
+			t.Errorf("need = %v, err = %v; want false, nil", need, err)
+		}
+	})
+
+	t.Run("metrics state not published", func(t *testing.T) {
+		test := newEntityTest(testAgent)
+		test.metricsUnpublished = true
+
+		if need, err := test.run(t, t0); err != nil || need {
+			t.Errorf("need = %v, err = %v; want false, nil", need, err)
+		}
+
+		test.metricsUnpublished = false
+
+		if need, err := test.run(t, t0); err != nil || !need {
+			t.Errorf("once published: need = %v, err = %v; want true, nil", need, err)
+		}
+	})
+}
+
+// TestEntityBuildsAtMostOncePerInterval checks the payload is not built on every execution,
+// which happen every 15 seconds, but at most once per minNewServiceInterval.
+func TestEntityBuildsAtMostOncePerInterval(t *testing.T) {
+	test := newEntityTest(testAgent)
+
+	if _, err := test.run(t, t0); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, at := range []time.Duration{2 * time.Hour, 2*time.Hour + 15*time.Second, 2*time.Hour + 45*time.Second} {
+		if _, err := test.run(t, t0.Add(at)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if test.discovery.builds != 2 {
+		t.Errorf("built %d times, want 2: once to send, once in the following minute", test.discovery.builds)
+	}
+
+	if _, err := test.run(t, t0.Add(2*time.Hour+minNewServiceInterval)); err != nil {
+		t.Fatal(err)
+	}
+
+	if test.discovery.builds != 3 {
+		t.Errorf("built %d times, want 3 once minNewServiceInterval passed", test.discovery.builds)
+	}
+}
+
+// TestEntitySkips checks the cases where nothing is sent.
+func TestEntitySkips(t *testing.T) {
+	t.Run("only essential", func(t *testing.T) {
+		test := newEntityTest(testAgent)
+		test.execution.onlyEssential = true
+
+		if need, err := test.run(t, t0); err != nil || need {
+			t.Errorf("need = %v, err = %v; want false, nil", need, err)
+		}
+	})
+
+	t.Run("not registered", func(t *testing.T) {
+		test := newEntityTest("")
+
+		if need, err := test.run(t, t0); err != nil || need {
+			t.Errorf("need = %v, err = %v; want false, nil", need, err)
+		}
+	})
+
+	t.Run("requested without need", func(t *testing.T) {
+		test := newEntityTest(testAgent)
+		ctx := t.Context()
+
+		execution, err := test.entity.PrepareExecution(ctx, test.execution)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if err := execution.SyncRemoteAndLocal(ctx, types.SyncTypeForceCacheRefresh); err != nil {
+			t.Fatal(err)
+		}
+
+		execution.FinishExecution(ctx)
+
+		if sent := len(test.execution.client.bodies); sent != 0 {
+			t.Errorf("sent %d times, want none", sent)
+		}
+	})
+}

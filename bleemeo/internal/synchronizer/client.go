@@ -210,15 +210,6 @@ func IsNotFound(err error) bool {
 	return false
 }
 
-// IsBadRequest returns true if the error is an APIError due to 400.
-func IsBadRequest(err error) bool {
-	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
-		return apiError.StatusCode == http.StatusBadRequest
-	}
-
-	return false
-}
-
 // IsServerError returns true if the error is an APIError due to 5xx.
 func IsServerError(err error) bool {
 	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
