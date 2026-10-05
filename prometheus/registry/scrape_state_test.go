@@ -24,7 +24,10 @@ import (
 	"github.com/bleemeo/glouton/types"
 )
 
-var errScrapeFailed = errors.New("mod_status is not enabled")
+var (
+	errScrapeFailed = errors.New("mod_status is not enabled")
+	errOld          = errors.New("an error from long ago")
+)
 
 // TestLastScrapeStateNeverScraped checks a registration that never ran reports HasRun
 // false, so that discovery can report it as pending rather than as working with no metric.
@@ -38,35 +41,49 @@ func TestLastScrapeStateNeverScraped(t *testing.T) {
 	}
 }
 
-// TestLastScrapeStateUsesLastRun checks the most recent run is reported, not the first
-// one: the registry keeps several runs and an old success must not hide a current error.
-func TestLastScrapeStateUsesLastRun(t *testing.T) {
+// TestLastScrapeStateUsesRecentRuns checks the last scrapeStateRuns runs are reported:
+// their most recent error and their largest family count, while older runs are not.
+func TestLastScrapeStateUsesRecentRuns(t *testing.T) {
 	reg := &registration{
 		lastScrapes: []scrapeRun{
+			{ScrapeAt: time.Now(), Error: errOld},
 			{ScrapeAt: time.Now(), ScrapedPointsCount: 12},
-			{ScrapeAt: time.Now(), ScrapedPointsCount: 0, Error: errScrapeFailed},
+			{ScrapeAt: time.Now(), Error: errScrapeFailed},
+			{ScrapeAt: time.Now(), ScrapedPointsCount: 3},
 		},
 	}
 
 	got := reg.LastScrapeState()
 
-	want := types.ScrapeState{
-		HasRun:        true,
-		FamiliesCount: 0,
-		Error:         errScrapeFailed.Error(),
-	}
+	want := types.ScrapeState{HasRun: true, FamiliesCount: 12, Error: errScrapeFailed.Error()}
 
 	if got != want {
 		t.Errorf("LastScrapeState() = %+v, want %+v", got, want)
 	}
 }
 
-// TestLastScrapeStateSuccess checks a successful run reports no error and the number of
-// metric families it produced.
+// TestLastScrapeStateIntermittentError checks an input failing one scrape in two reports
+// the same state whichever scrape came last.
+func TestLastScrapeStateIntermittentError(t *testing.T) {
+	ok := scrapeRun{ScrapeAt: time.Now(), ScrapedPointsCount: 5}
+	failed := scrapeRun{ScrapeAt: time.Now(), Error: errScrapeFailed}
+
+	afterFailure := (&registration{lastScrapes: []scrapeRun{ok, failed, ok, failed}}).LastScrapeState()
+	afterSuccess := (&registration{lastScrapes: []scrapeRun{failed, ok, failed, ok}}).LastScrapeState()
+
+	if afterFailure != afterSuccess {
+		t.Errorf("the state alternates: %+v then %+v", afterFailure, afterSuccess)
+	}
+}
+
+// TestLastScrapeStateSuccess checks runs without error report no error and the number of
+// metric families they produced.
 func TestLastScrapeStateSuccess(t *testing.T) {
 	reg := &registration{
 		lastScrapes: []scrapeRun{
 			{ScrapeAt: time.Now(), ScrapedPointsCount: 0, Error: errScrapeFailed},
+			{ScrapeAt: time.Now(), ScrapedPointsCount: 5},
+			{ScrapeAt: time.Now(), ScrapedPointsCount: 5},
 			{ScrapeAt: time.Now(), ScrapedPointsCount: 5},
 		},
 	}
@@ -77,6 +94,32 @@ func TestLastScrapeStateSuccess(t *testing.T) {
 
 	if got != want {
 		t.Errorf("LastScrapeState() = %+v, want %+v", got, want)
+	}
+}
+
+// TestLastScrapeStateStuck checks a scrape loop whose run never returns is reported as
+// stuck, rather than with the last run that did complete.
+func TestLastScrapeStateStuck(t *testing.T) {
+	t0 := time.Now()
+	reg := &registration{
+		loop:        &scrapeLoop{interval: 10 * time.Second},
+		lastScrapes: []scrapeRun{{ScrapeAt: t0, ScrapedPointsCount: 5}},
+	}
+
+	if got := reg.lastScrapeState(t0.Add(20 * time.Second)); got.Error != "" {
+		t.Errorf("a scrape two intervals ago is reported as %+v, want it as it was", got)
+	}
+
+	got := reg.lastScrapeState(t0.Add(time.Minute))
+	if got != (types.ScrapeState{HasRun: true, Error: errScrapeStuck.Error()}) {
+		t.Errorf("a loop with no run for six intervals is reported as %+v, want stuck", got)
+	}
+
+	// A stopped loop records nothing, without being stuck.
+	reg.loop = nil
+
+	if got := reg.lastScrapeState(t0.Add(time.Minute)); got.Error != "" {
+		t.Errorf("a stopped registration is reported as %+v, want its last run", got)
 	}
 }
 

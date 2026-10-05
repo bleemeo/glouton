@@ -50,7 +50,7 @@ type collectionState struct {
 	disconnectedAt time.Time
 }
 
-// clock returns the current time. Must be called with s.l held.
+// clock returns the current time. now is only set before first use, so it needs no lock.
 func (s *collectionState) clock() time.Time {
 	if s.now == nil {
 		return time.Now()
@@ -73,7 +73,7 @@ func (s *collectionState) setServices(services []discovery.Service) {
 	current := make(map[discovery.NameInstance]bool, len(services))
 
 	for _, service := range services {
-		if len(GetJMXMetrics(service)) == 0 {
+		if !isCollected(service) {
 			continue
 		}
 
@@ -97,6 +97,7 @@ func (s *collectionState) setServices(services []discovery.Service) {
 func (s *collectionState) pointReceived(point types.MetricPoint) {
 	key := discovery.NameInstance{Name: point.Annotations.ServiceName, Instance: point.Annotations.ServiceInstance}
 	name := point.Labels[types.LabelName]
+	now := s.clock()
 
 	s.l.Lock()
 	defer s.l.Unlock()
@@ -111,7 +112,7 @@ func (s *collectionState) pointReceived(point types.MetricPoint) {
 		s.received[key] = names
 	}
 
-	names[name] = s.clock()
+	names[name] = now
 }
 
 func (s *collectionState) connected() {

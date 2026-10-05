@@ -336,7 +336,7 @@ func TestServicesStateReportsOutcome(t *testing.T) {
 		d := newTestDiscovery()
 		d.inputResult[apacheKey()] = newInputResult(outcome, nil)
 
-		got := d.ServicesState()
+		got := servicesStateOf(d)
 		if len(got) != 1 {
 			t.Fatalf("outcome %d: got %d services, want 1", outcome, len(got))
 		}
@@ -358,7 +358,7 @@ func TestServicesStateInactiveIsNotReported(t *testing.T) {
 	d.servicesMap[key] = service
 	d.inputResult[key] = newInputResult(inputInactive, nil)
 
-	if got := d.ServicesState(); len(got) != 0 {
+	if got := servicesStateOf(d); len(got) != 0 {
 		t.Errorf("got %+v, want no service", got)
 	}
 }
@@ -376,7 +376,7 @@ func TestServicesStateDistinguishesCustomChecks(t *testing.T) {
 		d.inputResult[key] = newInputResult(inputCheckOnly, nil)
 	}
 
-	got := d.ServicesState()
+	got := servicesStateOf(d)
 	if len(got) != 2 {
 		t.Fatalf("got %d services, want 2", len(got))
 	}
@@ -429,7 +429,7 @@ func TestServicesStateScrapeState(t *testing.T) {
 				gathererRegistration: fakeScrapeRegistration{state: tc.state},
 			}
 
-			got := d.ServicesState()
+			got := servicesStateOf(d)
 			if len(got) != 1 {
 				t.Fatalf("got %d services, want 1", len(got))
 			}
@@ -453,7 +453,7 @@ func TestServicesStateWithoutScrapeState(t *testing.T) {
 	d.inputResult[apacheKey()] = newInputResult(inputRegistered, nil)
 	d.activeCollector[apacheKey()] = collectorDetails{gathererRegistration: bareRegistration{}}
 
-	got := d.ServicesState()
+	got := servicesStateOf(d)
 	if len(got) != 1 {
 		t.Fatalf("got %d services, want 1", len(got))
 	}
@@ -473,7 +473,7 @@ func TestServicesStateSkipsInactive(t *testing.T) {
 	service.Active = false
 	d.servicesMap[key] = service
 
-	if got := d.ServicesState(); len(got) != 0 {
+	if got := servicesStateOf(d); len(got) != 0 {
 		t.Errorf("got %d services, want none", len(got))
 	}
 }
@@ -495,7 +495,7 @@ func TestServicesStateIsSorted(t *testing.T) {
 	var previous []ServiceState
 
 	for range 20 {
-		got := d.ServicesState()
+		got := servicesStateOf(d)
 
 		if previous != nil && !cmp.Equal(previous, got) {
 			t.Fatalf("ServicesState() is not deterministic:\n%s", cmp.Diff(previous, got))
@@ -647,7 +647,7 @@ func TestServicesStateTruncatesError(t *testing.T) {
 		},
 	}
 
-	got := d.ServicesState()
+	got := servicesStateOf(d)
 	if len(got) != 1 {
 		t.Fatalf("got %d services, want 1", len(got))
 	}
@@ -678,7 +678,7 @@ func TestServicesStateOutcomeSurvivesDiscovery(t *testing.T) {
 	}
 	d.discoveredServicesMap = d.servicesMap
 
-	got := d.ServicesState()
+	got := servicesStateOf(d)
 	if len(got) != 2 {
 		t.Fatalf("got %d services, want 2", len(got))
 	}
@@ -785,7 +785,7 @@ func TestServicesStateErrorIsStable(t *testing.T) {
 			},
 		}
 
-		return d.ServicesState()[0].Error
+		return servicesStateOf(d)[0].Error
 	}
 
 	first := report("read tcp 127.0.0.1:52431->127.0.0.1:3306: read: connection reset by peer")
@@ -886,7 +886,7 @@ func TestServicesStateRedactsError(t *testing.T) {
 		},
 	}
 
-	if got := d.ServicesState()[0].Error; strings.Contains(got, "p%zz") {
+	if got := servicesStateOf(d)[0].Error; strings.Contains(got, "p%zz") {
 		t.Errorf("the password reached the report: %q", got)
 	}
 }
@@ -921,7 +921,7 @@ func TestServicesStateRedactsConfiguredPassword(t *testing.T) {
 				},
 			}
 
-			got := d.ServicesState()[0].Error
+			got := servicesStateOf(d)[0].Error
 			if strings.Contains(got, "hunter") {
 				t.Errorf("the password, or its start, reached the report: %q", got)
 			}
@@ -1034,7 +1034,7 @@ func TestServicesStateJMX(t *testing.T) {
 				d.SetJMXState(tc.jmxState)
 			}
 
-			got := d.ServicesState()[0]
+			got := servicesStateOf(d)[0]
 
 			if !got.InputSupported {
 				t.Error("a service collected through JMX is reported as unsupported")
@@ -1059,14 +1059,14 @@ func TestServicesStateJMXOtherTypes(t *testing.T) {
 	d.inputResult[key] = newInputResult(inputCheckOnly, nil)
 	d.SetJMXState(fakeJMXState{state: types.ScrapeState{HasRun: true, FamiliesCount: 1}})
 
-	if got := d.ServicesState()[0]; got.Error != "" || got.MetricFamiliesBucket != 0 {
+	if got := servicesStateOf(d)[0]; got.Error != "" || got.MetricFamiliesBucket != 0 {
 		t.Errorf("without a jmx_port, got %+v, want no error and no metrics", got)
 	}
 
 	service.Config.JMXPort = 7199
 	d.servicesMap[key] = service
 
-	got := d.ServicesState()[0]
+	got := servicesStateOf(d)[0]
 	if got.MetricFamiliesBucket != 1 {
 		t.Errorf("with a jmx_port, got %+v, want the JMX state", got)
 	}
@@ -1096,7 +1096,7 @@ func TestServicesStateErrorIsStableWithShortPassword(t *testing.T) {
 			},
 		}
 
-		return d.ServicesState()[0].Error
+		return servicesStateOf(d)[0].Error
 	}
 
 	if first, second := report(52431), report(52432); first != second {
@@ -1160,13 +1160,70 @@ func TestServicesStateMetricsIgnored(t *testing.T) {
 	d := newTestDiscovery()
 	d.inputResult[apacheKey()] = newInputResult(inputIgnored, nil)
 
-	if got := d.ServicesState()[0]; !got.MetricsIgnored || got.Error != msgIgnored {
+	if got := servicesStateOf(d)[0]; !got.MetricsIgnored || got.Error != msgIgnored {
 		t.Errorf("got %+v, want MetricsIgnored and the message", got)
 	}
 
 	d.inputResult[apacheKey()] = newInputResult(inputMissingInfo, nil)
 
-	if got := d.ServicesState()[0]; got.MetricsIgnored {
+	if got := servicesStateOf(d)[0]; got.MetricsIgnored {
 		t.Errorf("a service missing credentials is flagged as disabled: %+v", got)
+	}
+}
+
+// servicesStateOf is ServicesState after publishing the state the test set directly, as
+// discovery does after each change.
+func servicesStateOf(d *Discovery) []ServiceState {
+	d.l.Lock()
+	d.publishServicesState()
+	d.l.Unlock()
+
+	return d.ServicesState()
+}
+
+// TestServicesStateConcurrent reads the report while discovery changes its state and
+// publishes it, for the race detector.
+func TestServicesStateConcurrent(t *testing.T) {
+	d := newTestDiscovery()
+	d.activeCollector[apacheKey()] = collectorDetails{
+		gathererRegistration: fakeScrapeRegistration{state: types.ScrapeState{HasRun: true, FamiliesCount: 3}},
+	}
+
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+
+		for i := range 200 {
+			d.l.Lock()
+
+			outcome := inputRegistered
+			if i%2 == 0 {
+				outcome = inputMissingInfo
+			}
+
+			d.inputResult[apacheKey()] = newInputResult(outcome, nil)
+			d.publishServicesState()
+			d.l.Unlock()
+		}
+	}()
+
+	for range 200 {
+		for _, state := range d.ServicesState() {
+			_ = state.Error
+		}
+	}
+
+	<-done
+}
+
+// TestURLSecretsOnlyKnownParameters checks ordinary query parameters whose names merely
+// contain "key" or "pass" are not taken for secrets, which would blank their values
+// everywhere in the error.
+func TestURLSecretsOnlyKnownParameters(t *testing.T) {
+	got := urlSecrets("http://cassandra:8080/stats?keyspace=system&bypass_cache=true&apikey=hunter2x")
+
+	if !slices.Equal(got, []string{"hunter2x"}) {
+		t.Errorf("urlSecrets() = %q, want only the apikey value", got)
 	}
 }

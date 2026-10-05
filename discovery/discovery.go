@@ -73,17 +73,20 @@ type Discovery struct {
 	// registered no input.
 	inputResult map[NameInstance]inputResult
 	// jmxState is how JMX collection goes, nil when JMX is disabled.
-	jmxState           JMXStateProvider
-	activeCheck        map[NameInstance]CheckDetails
-	metricRegistry     GathererRegistry
-	containerInfo      containerInfoProvider
-	state              State
-	servicesOverride   map[NameInstance]config.Service
-	isServiceIgnored   func(Service) bool
-	isCheckIgnored     func(Service) bool
-	isInputIgnored     func(Service) bool
-	isContainerIgnored func(facts.Container) bool
-	processFact        processFact
+	jmxState JMXStateProvider
+	// servicesStateL guards servicesStateSnapshot, apart from d.l: see ServicesState.
+	servicesStateL        sync.Mutex
+	servicesStateSnapshot servicesStateSnapshot
+	activeCheck           map[NameInstance]CheckDetails
+	metricRegistry        GathererRegistry
+	containerInfo         containerInfoProvider
+	state                 State
+	servicesOverride      map[NameInstance]config.Service
+	isServiceIgnored      func(Service) bool
+	isCheckIgnored        func(Service) bool
+	isInputIgnored        func(Service) bool
+	isContainerIgnored    func(facts.Container) bool
+	processFact           processFact
 
 	absentServiceDeactivationDelay time.Duration
 	logProcessingCfg               config.OpenTelemetry
@@ -288,6 +291,7 @@ func (d *Discovery) Close() {
 	}
 
 	d.configureChecks(d.servicesMap, nil)
+	d.publishServicesState()
 }
 
 // GetLatestDiscovery return list of services detected on the system with date of latest update.
@@ -614,6 +618,7 @@ func (d *Discovery) RemoveIfNonRunning(services []Service) {
 	}
 
 	if deleted {
+		d.publishServicesState()
 		d.TriggerUpdate()
 	}
 }
@@ -627,6 +632,8 @@ func (d *Discovery) reconfigure() {
 	d.configureChecks(d.lastConfigservicesMap, d.servicesMap)
 
 	d.lastConfigservicesMap = d.servicesMap
+
+	d.publishServicesState()
 }
 
 // Only one updateDiscovery should be running at a time (since discovery is called for Run gorouting the

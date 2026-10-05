@@ -39,6 +39,12 @@ type Filter struct {
 func NewFilter(cache *cache.Cache) *Filter {
 	currentConfig, _ := cache.CurrentAccountConfig()
 
+	return NewFilterWithConfig(cache, currentConfig)
+}
+
+// NewFilterWithConfig is NewFilter with an account configuration the caller already read,
+// so that the filter decides from the same one as its caller.
+func NewFilterWithConfig(cache *cache.Cache, currentConfig bleemeoTypes.GloutonAccountConfig) *Filter {
 	return &Filter{
 		currentAccountConfig: currentConfig,
 		probeConfigs:         cache.ProbeConfigByAccountID(),

@@ -23,7 +23,7 @@ import (
 	"go/token"
 	"net"
 	"slices"
-	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -176,20 +176,7 @@ func mapKeys(t *testing.T, path string, variable string) []string {
 // TestJMXFeedsCollectionState checks the JMX hooks feed the collection state: services
 // given to jmxtrans, points it sends, and its connections.
 func TestJMXFeedsCollectionState(t *testing.T) {
-	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	addr, ok := listener.Addr().(*net.TCPAddr)
-	if !ok {
-		t.Fatalf("unexpected listener address %v", listener.Addr())
-	}
-
-	port := addr.Port
-	_ = listener.Close()
-
-	j := &JMX{ContactPort: port}
+	j := &JMX{}
 	key := discovery.NameInstance{Name: "cassandra"}
 
 	if err := j.UpdateConfig([]discovery.Service{jmxService()}, 10*time.Second); err != nil {
@@ -205,19 +192,27 @@ func TestJMXFeedsCollectionState(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
+	// The test holds the listener, on a port the system picked.
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer listener.Close()
+
+	tcpListener, ok := listener.(*net.TCPListener)
+	if !ok {
+		t.Fatalf("unexpected listener %T", listener)
+	}
+
+	addr := listener.Addr()
 	serverDone := make(chan error, 1)
 
-	go func() { serverDone <- j.runServer(ctx) }()
+	go func() { serverDone <- j.serve(ctx, tcpListener) }()
 
-	var conn net.Conn
-
-	for deadline := time.Now().Add(5 * time.Second); conn == nil; {
-		conn, err = (&net.Dialer{}).DialContext(ctx, "tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
-		if err != nil && time.Now().After(deadline) {
-			t.Fatal(err)
-		}
-
-		time.Sleep(10 * time.Millisecond)
+	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr.String())
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	waitFor(t, func() bool { return connections(j) == 1 }, "the connection to be counted")
@@ -247,4 +242,31 @@ func waitFor(t *testing.T, condition func() bool, what string) {
 
 		time.Sleep(10 * time.Millisecond)
 	}
+}
+
+// TestCollectionStateConcurrent feeds and reads the collection state at once, as jmxtrans'
+// connections, the agent and discovery do, for the race detector.
+func TestCollectionStateConcurrent(t *testing.T) {
+	j := &JMX{}
+	key := discovery.NameInstance{Name: "cassandra"}
+
+	var wg sync.WaitGroup
+
+	wg.Go(func() {
+		for range 200 {
+			_ = j.UpdateConfig([]discovery.Service{jmxService()}, 10*time.Second)
+		}
+	})
+
+	wg.Go(func() {
+		for range 200 {
+			j.emitPoint(t.Context(), jmxPoint("cassandra_read_requests"))
+		}
+	})
+
+	for range 200 {
+		_ = j.ServiceScrapeState(key)
+	}
+
+	wg.Wait()
 }

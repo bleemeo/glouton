@@ -318,3 +318,27 @@ func TestPublishMetricsStateIsAtomic(t *testing.T) {
 		t.Errorf("MetricsState() mismatch (-want +got):\n%s", diff)
 	}
 }
+
+// TestMetricsStateConcurrent runs the report's writers and its reader at once, for the race
+// detector: a synchronization stages and publishes while another goroutine reads.
+func TestMetricsStateConcurrent(t *testing.T) {
+	s := newMetricsStateSync(nil)
+	metrics := []gloutonTypes.Metric{fakeMetric{label: "cpu_used"}, fakeMetric{label: "mem_used"}}
+
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+
+		for range 200 {
+			s.filterMetrics(metrics)
+			s.publishMetricsState(s.findUnregisteredMetricsWithKeys(metrics))
+		}
+	}()
+
+	for range 200 {
+		_ = s.MetricsState()
+	}
+
+	<-done
+}

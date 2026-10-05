@@ -191,6 +191,7 @@ func (d *Discovery) SetJMXState(provider JMXStateProvider) {
 	defer d.l.Unlock()
 
 	d.jmxState = provider
+	d.publishServicesState()
 }
 
 // jmxScrapeState is the scrape state of one service collected through JMX.
@@ -238,7 +239,12 @@ type ServiceState struct {
 // Active is not "running" (see setServiceActiveAndContainer): a stopped daemon whose binary
 // still exists stays active, and is reported with its input's error.
 func (d *Discovery) ServicesState() []ServiceState {
-	result, providers := d.servicesStateLocked()
+	// From the snapshot, not under d.l: a discovery run holds d.l while it builds inputs,
+	// which can take seconds.
+	d.servicesStateL.Lock()
+	result := slices.Clone(d.servicesStateSnapshot.states)
+	providers := d.servicesStateSnapshot.pending
+	d.servicesStateL.Unlock()
 
 	// Read outside d.l, so that discovery never waits on a registration's lock.
 	for i, pending := range providers {
@@ -249,8 +255,6 @@ func (d *Discovery) ServicesState() []ServiceState {
 		result[i].Error, result[i].MetricFamiliesBucket = scrapeResult(pending.provider, pending.secrets)
 	}
 
-	slices.SortFunc(result, compareServiceState)
-
 	return result
 }
 
@@ -260,12 +264,46 @@ type pendingScrape struct {
 	secrets  []string
 }
 
-// servicesStateLocked builds the report from discovery's own state, with the scrape state
-// each entry still has to read (a nil provider when none).
-func (d *Discovery) servicesStateLocked() ([]ServiceState, []pendingScrape) {
-	d.l.Lock()
-	defer d.l.Unlock()
+// servicesStateSnapshot is the report as of the last change to discovery's state, with the
+// scrape state each entry still has to read.
+type servicesStateSnapshot struct {
+	states  []ServiceState
+	pending []pendingScrape
+}
 
+// publishServicesState updates the snapshot ServicesState reads. Must be called with d.l
+// held, after any change to the services, their inputs or the JMX state.
+//
+// The snapshot is sorted here rather than on each read: the order only depends on the
+// identifying fields, which reading the scrape states leaves alone.
+func (d *Discovery) publishServicesState() {
+	states, pending := d.buildServicesState()
+
+	order := make([]int, len(states))
+	for i := range order {
+		order[i] = i
+	}
+
+	slices.SortFunc(order, func(a, b int) int { return compareServiceState(states[a], states[b]) })
+
+	snapshot := servicesStateSnapshot{
+		states:  make([]ServiceState, 0, len(order)),
+		pending: make([]pendingScrape, 0, len(order)),
+	}
+
+	for _, i := range order {
+		snapshot.states = append(snapshot.states, states[i])
+		snapshot.pending = append(snapshot.pending, pending[i])
+	}
+
+	d.servicesStateL.Lock()
+	d.servicesStateSnapshot = snapshot
+	d.servicesStateL.Unlock()
+}
+
+// buildServicesState builds the report from discovery's own state, with the scrape state
+// each entry still has to read (a nil provider when none). Must be called with d.l held.
+func (d *Discovery) buildServicesState() ([]ServiceState, []pendingScrape) {
 	result := make([]ServiceState, 0, len(d.servicesMap))
 	providers := make([]pendingScrape, 0, len(d.servicesMap))
 
@@ -473,22 +511,16 @@ func urlSecrets(rawURL string) []string {
 	return secrets
 }
 
-// isSecretParameter tells whether a URL query parameter likely holds a secret: a password
-// (InfluxDB 1.x takes it as "p"), a token or a key.
+// isSecretParameter tells whether a URL query parameter is known to hold a secret. Whole
+// names only, so that ordinary ones such as "keyspace" or "bypass" are left out. InfluxDB
+// 1.x takes its password as "p".
 func isSecretParameter(key string) bool {
-	key = strings.ToLower(key)
-
-	if key == "p" {
+	switch strings.ToLower(key) {
+	case "access_token", "api_key", "apikey", "auth", "key", "p", "pass", "passwd", "password", "pwd", "secret", "token":
 		return true
+	default:
+		return false
 	}
-
-	for _, word := range []string{"pass", "pwd", "token", "secret", "key"} {
-		if strings.Contains(key, word) {
-			return true
-		}
-	}
-
-	return false
 }
 
 // scrapeResult reads the error and metric bucket of a service whose input was registered.

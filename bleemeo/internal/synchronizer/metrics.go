@@ -373,12 +373,10 @@ func (s *Synchronizer) countNotRegistered(
 func (s *Synchronizer) filterMetrics(input []gloutonTypes.Metric) []gloutonTypes.Metric {
 	result := make([]gloutonTypes.Metric, 0)
 
-	f := filter.NewFilter(s.option.Cache)
-
 	notRegistered := make(map[metricStateKey]int)
 
-	// Without the account configuration nothing can be registered. NewFilter would then fail
-	// every metric as "error-occurred", so record the real cause instead.
+	// Without the account configuration nothing can be registered. The filter would then
+	// fail every metric as "error-occurred", so record the real cause instead.
 	cfg, ok := s.option.Cache.CurrentAccountConfig()
 	if !ok {
 		for _, m := range input {
@@ -391,6 +389,10 @@ func (s *Synchronizer) filterMetrics(input []gloutonTypes.Metric) []gloutonTypes
 
 		return nil
 	}
+
+	// Built from the configuration read above: reading it again could get another one, and
+	// the filter would decide from a configuration the check above did not see.
+	f := filter.NewFilterWithConfig(s.option.Cache, cfg)
 
 	for _, m := range input {
 		allow, denyReason, err := f.IsAllowed(m.Labels(), m.Annotations())

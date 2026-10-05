@@ -338,14 +338,36 @@ type registration struct {
 	lastErrorLogAt       time.Time
 }
 
-// LastScrapeState returns a snapshot of the most recent run of this registration, for
-// discovery's report of whether a service's input works.
+// scrapeStateRuns is how many recent runs LastScrapeState considers, so that an input
+// failing one scrape in two reads as failing rather than alternating on every scrape.
+const scrapeStateRuns = 3
+
+// scrapeStuckIntervals is how many intervals without a completed run make a scrape count as
+// stuck: Telegraf inputs ignore the context's deadline, and the loop waits on them.
+const scrapeStuckIntervals = 3
+
+// errScrapeStuck is reported when the scrape loop is running but no run completed lately.
+var errScrapeStuck = errors.New("the last scrape did not complete")
+
+// LastScrapeState returns a snapshot of the recent runs of this registration, for
+// discovery's report of whether a service's input works: the most recent error of the last
+// scrapeStateRuns runs, and the most metric families any of them produced.
 //
 // Only reg.l is taken, never r.l, which can deadlock while a registration is stopped or
 // restarted (see restartScrapeLoop).
 func (reg *registration) LastScrapeState() types.ScrapeState {
+	return reg.lastScrapeState(time.Now())
+}
+
+func (reg *registration) lastScrapeState(now time.Time) types.ScrapeState {
 	reg.l.Lock()
 	defer reg.l.Unlock()
+
+	// A run that never returns is never recorded: without this, the last completed one
+	// would be reported for as long as the input hangs.
+	if reg.loop != nil && reg.loop.interval > 0 && now.Sub(reg.lastRunAt()) > scrapeStuckIntervals*reg.loop.interval {
+		return types.ScrapeState{HasRun: true, Error: errScrapeStuck.Error()}
+	}
 
 	if len(reg.lastScrapes) == 0 {
 		return types.ScrapeState{}
@@ -354,22 +376,37 @@ func (reg *registration) LastScrapeState() types.ScrapeState {
 	last := reg.lastScrapes[len(reg.lastScrapes)-1]
 
 	// A run skipped by the relabel hook is neither a scrape nor a failure, so it reads as
-	// "not scraped". Only the most recent run counts: walking back to an older scrape would
-	// report a stale result, which would then change by itself as the ring rolls over.
+	// "not scraped". Only the last few runs count: walking further back would report a stale
+	// result, which would then change by itself as the ring rolls over.
 	if errors.Is(last.Error, errSkippingScrapeDueToRelabelHook) {
 		return types.ScrapeState{}
 	}
 
-	state := types.ScrapeState{
-		HasRun:        true,
-		FamiliesCount: last.ScrapedPointsCount,
-	}
+	state := types.ScrapeState{HasRun: true}
 
-	if last.Error != nil {
-		state.Error = last.Error.Error()
+	for _, run := range reg.lastScrapes[max(0, len(reg.lastScrapes)-scrapeStateRuns):] {
+		if errors.Is(run.Error, errSkippingScrapeDueToRelabelHook) {
+			continue
+		}
+
+		state.FamiliesCount = max(state.FamiliesCount, run.ScrapedPointsCount)
+
+		if run.Error != nil {
+			state.Error = run.Error.Error()
+		}
 	}
 
 	return state
+}
+
+// lastRunAt is when the last run happened, or when the registration was added if it has not
+// run yet. Must be called with reg.l held.
+func (reg *registration) lastRunAt() time.Time {
+	if len(reg.lastScrapes) == 0 {
+		return reg.addedAt
+	}
+
+	return reg.lastScrapes[len(reg.lastScrapes)-1].ScrapeAt
 }
 
 // runNow will trigger a run of the scrapeLoop. If the registry isn't running,
@@ -921,11 +958,7 @@ func (r *Registry) HealthCheck() {
 		reg.l.Lock()
 
 		if reg.loop != nil {
-			lastScrape := reg.addedAt
-
-			if len(reg.lastScrapes) > 0 {
-				lastScrape = reg.lastScrapes[len(reg.lastScrapes)-1].ScrapeAt
-			}
+			lastScrape := reg.lastRunAt()
 
 			if time.Since(lastScrape) > 5*reg.loop.interval {
 				logger.Printf("Metrics collections is too slow for collector %s. Last run at %s and should run every %s",

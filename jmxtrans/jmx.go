@@ -78,9 +78,10 @@ type updateRequest struct {
 
 // UpdateConfig update the jmxtrans configuration.
 func (j *JMX) UpdateConfig(services []discovery.Service, metricResolution time.Duration) error {
-	j.state.setServices(services)
-
 	j.l.Lock()
+	// Under j.l, so that the state follows the services jmxtrans is configured with even
+	// when two callers race.
+	j.state.setServices(services)
 	j.services = services
 	j.metricResolution = metricResolution
 
@@ -240,7 +241,15 @@ func (j *JMX) runServer(ctx context.Context) error {
 
 	defer serverSocket.Close()
 
-	var wg sync.WaitGroup
+	return j.serve(ctx, serverSocket)
+}
+
+// serve accepts jmxtrans connections on serverSocket until ctx is done.
+func (j *JMX) serve(ctx context.Context, serverSocket *net.TCPListener) error {
+	var (
+		wg  sync.WaitGroup
+		err error
+	)
 
 	subContext, cancel := context.WithCancel(ctx)
 
