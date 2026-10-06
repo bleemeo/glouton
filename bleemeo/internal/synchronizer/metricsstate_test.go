@@ -117,8 +117,8 @@ func TestMetricsStateMergesEveryStage(t *testing.T) {
 		{Name: "redis_commands", Reason: bleemeoTypes.ReasonWaitingService, Count: 1},
 	}
 
-	if diff := cmp.Diff(want, s.MetricsState()); diff != "" {
-		t.Errorf("MetricsState() mismatch (-want +got):\n%s", diff)
+	if diff := cmp.Diff(want, metricsStateOf(s)); diff != "" {
+		t.Errorf("metricsState() mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -137,7 +137,7 @@ func TestMetricsStateGroupsByNameOnly(t *testing.T) {
 	s := newMetricsStateSync(nil)
 	publishUnregistered(s, nil, failures, metrics...)
 
-	got := s.MetricsState()
+	got := metricsStateOf(s)
 
 	if len(got) != 1 {
 		t.Fatalf("got %d rows, want 1: %+v", len(got), got)
@@ -180,8 +180,8 @@ func TestMetricsStateCountsOnlyCurrentMetrics(t *testing.T) {
 		{Name: "mem_used", Reason: bleemeoTypes.ReasonNotAvailableInPlan, Count: 1},
 	}
 
-	if diff := cmp.Diff(want, s.MetricsState()); diff != "" {
-		t.Errorf("MetricsState() mismatch (-want +got):\n%s", diff)
+	if diff := cmp.Diff(want, metricsStateOf(s)); diff != "" {
+		t.Errorf("metricsState() mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -197,11 +197,11 @@ func TestMetricsStateIsSorted(t *testing.T) {
 
 	s := newMetricsStateSync(notRegistered)
 
-	first := s.MetricsState()
+	first := metricsStateOf(s)
 
 	for range 20 {
-		if diff := cmp.Diff(first, s.MetricsState()); diff != "" {
-			t.Fatalf("MetricsState() is not deterministic:\n%s", diff)
+		if diff := cmp.Diff(first, metricsStateOf(s)); diff != "" {
+			t.Fatalf("metricsState() is not deterministic:\n%s", diff)
 		}
 	}
 
@@ -222,7 +222,7 @@ func TestMetricsStateIsSorted(t *testing.T) {
 // TestMetricsStateEmpty checks a healthy agent reports an empty list rather than nil
 // entries, so that "everything is fine" is a value the API can store.
 func TestMetricsStateEmpty(t *testing.T) {
-	got := newMetricsStateSync(nil).MetricsState()
+	got := metricsStateOf(newMetricsStateSync(nil))
 
 	if len(got) != 0 {
 		t.Errorf("got %+v, want no row", got)
@@ -244,8 +244,8 @@ func TestPublishMetricsStateExcludesFailuresFromPending(t *testing.T) {
 		{Name: "mem_used", Reason: bleemeoTypes.ReasonPending, Count: 1},
 	}
 
-	if diff := cmp.Diff(want, s.MetricsState()); diff != "" {
-		t.Errorf("MetricsState() mismatch (-want +got):\n%s", diff)
+	if diff := cmp.Diff(want, metricsStateOf(s)); diff != "" {
+		t.Errorf("metricsState() mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -277,7 +277,7 @@ func TestFilterMetricsRecordsMissingAccountConfig(t *testing.T) {
 		{Name: "mem_used", Reason: bleemeoTypes.ReasonWaitingAccountConfig, Count: 1},
 	}
 
-	if diff := cmp.Diff(want, s.MetricsState()); diff != "" {
+	if diff := cmp.Diff(want, metricsStateOf(s)); diff != "" {
 		t.Errorf("dropped metrics were not reported (-want +got):\n%s", diff)
 	}
 }
@@ -297,14 +297,14 @@ func TestPublishMetricsStateIsAtomic(t *testing.T) {
 	}
 	s.publishMetricsState([]gloutonTypes.Metric{fakeMetric{label: "old_pending"}}, []string{"old_pending_key"})
 
-	before := s.MetricsState()
+	before := metricsStateOf(s)
 
 	// A second one stages new counts, then fails before publishing.
 	s.stagedNotRegistered = map[metricStateKey]int{
 		{Name: "new_metric", Reason: bleemeoTypes.ReasonNotAllowed}: 1,
 	}
 
-	if diff := cmp.Diff(before, s.MetricsState()); diff != "" {
+	if diff := cmp.Diff(before, metricsStateOf(s)); diff != "" {
 		t.Errorf("a synchronization that did not finish changed the report (-before +after):\n%s", diff)
 	}
 
@@ -315,8 +315,8 @@ func TestPublishMetricsStateIsAtomic(t *testing.T) {
 		{Name: "new_metric", Reason: bleemeoTypes.ReasonNotAllowed, Count: 1},
 	}
 
-	if diff := cmp.Diff(want, s.MetricsState()); diff != "" {
-		t.Errorf("MetricsState() mismatch (-want +got):\n%s", diff)
+	if diff := cmp.Diff(want, metricsStateOf(s)); diff != "" {
+		t.Errorf("metricsState() mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -338,7 +338,7 @@ func TestMetricsStateConcurrent(t *testing.T) {
 	}()
 
 	for range 200 {
-		_ = s.MetricsState()
+		_ = metricsStateOf(s)
 	}
 
 	<-done
@@ -372,7 +372,14 @@ func TestMetricsStateOnlyOwnMetrics(t *testing.T) {
 		{Name: "mem_used", Reason: bleemeoTypes.ReasonPending, Count: 1},
 	}
 
-	if diff := cmp.Diff(want, s.MetricsState()); diff != "" {
-		t.Errorf("MetricsState() mismatch (-want +got):\n%s", diff)
+	if diff := cmp.Diff(want, metricsStateOf(s)); diff != "" {
+		t.Errorf("metricsState() mismatch (-want +got):\n%s", diff)
 	}
+}
+
+// metricsStateOf returns the rows of s.metricsState.
+func metricsStateOf(s *Synchronizer) []bleemeoTypes.MetricState {
+	rows, _ := s.metricsState()
+
+	return rows
 }

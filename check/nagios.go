@@ -18,6 +18,7 @@ package check
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 
@@ -86,7 +87,7 @@ func (nc *NagiosCheck) nagiosMainCheck(ctx context.Context) types.StatusDescript
 		StatusDescription: string(output),
 	}
 
-	if exitError, ok := err.(*exec.ExitError); ok {
+	if exitError := new(exec.ExitError); errors.As(err, &exitError) {
 		result.CurrentStatus = types.FromNagios(exitError.ExitCode())
 	} else if err != nil {
 		result.CurrentStatus = types.StatusUnknown

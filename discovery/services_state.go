@@ -41,14 +41,14 @@ var jmxServiceTypes = map[ServiceName]bool{ //nolint:gochecknoglobals
 	KafkaService:      true,
 }
 
-// InputSupported tells whether Glouton can collect metrics for this service type, with an
-// input or through JMX. CustomService has no builder: a custom check has no input, which is
-// not the same as an unsupported type. The agent's own gatherers support a few more types,
-// see SetAgentGathererState.
-func InputSupported(serviceType ServiceName) bool {
+// inputSupported tells whether Glouton can collect metrics for this service type: with an
+// input, through JMX, or with the agent's own gatherers (see SetAgentGathererState).
+// CustomService has no builder: a custom check has no input, which is not the same as an
+// unsupported type. Must be called with d.l held.
+func (d *Discovery) inputSupported(serviceType ServiceName) bool {
 	_, hasBuilder := inputBuilders[serviceType]
 
-	return hasBuilder || jmxServiceTypes[serviceType]
+	return hasBuilder || jmxServiceTypes[serviceType] || d.agentGathererTypes[serviceType]
 }
 
 // inputOutcome is what configureMetricInputs could do for a service: the paths ending with no
@@ -217,6 +217,10 @@ type ServiceState struct {
 	// CollectionPending tells whether the service's metrics are collected but the collection
 	// has not run yet, as right after a start: its metrics are not received yet. Not sent.
 	CollectionPending bool `json:"-"`
+	// CollectionSkipped tells whether the registry skips the service's input, as it does until
+	// the service is registered on Bleemeo. Discovery cannot tell why; the synchronizer, which
+	// knows the registration, reports it. Not sent.
+	CollectionSkipped bool `json:"-"`
 }
 
 // ServicesState returns what Glouton knows about each active service, sorted so that the
@@ -238,7 +242,7 @@ func (d *Discovery) ServicesState() []ServiceState {
 			continue
 		}
 
-		result[i].Error, result[i].CollectionPending = scrapeResult(pending.provider, pending.secrets)
+		applyScrapeState(&result[i], pending.provider, pending.secrets)
 	}
 
 	return result
@@ -306,7 +310,7 @@ func (d *Discovery) buildServicesState() ([]ServiceState, []pendingScrape) {
 			Instance:       service.Instance,
 			ContainerName:  service.ContainerName,
 			Dynamic:        dynamic,
-			InputSupported: InputSupported(service.ServiceType) || d.agentGathererTypes[service.ServiceType],
+			InputSupported: d.inputSupported(service.ServiceType),
 		}
 
 		// No result: configureMetricInputs has not run for this service yet.
@@ -361,19 +365,12 @@ func (d *Discovery) buildServicesState() ([]ServiceState, []pendingScrape) {
 // compareServiceState orders on every identifying field: the input comes from map iteration,
 // and ties would make the hash differ between calls.
 func compareServiceState(a, b ServiceState) int {
-	if c := cmp.Compare(a.ServiceType, b.ServiceType); c != 0 {
-		return c
-	}
-
-	if c := cmp.Compare(a.Name, b.Name); c != 0 {
-		return c
-	}
-
-	if c := cmp.Compare(a.Instance, b.Instance); c != 0 {
-		return c
-	}
-
-	return cmp.Compare(a.ContainerName, b.ContainerName)
+	return cmp.Or(
+		cmp.Compare(a.ServiceType, b.ServiceType),
+		cmp.Compare(a.Name, b.Name),
+		cmp.Compare(a.Instance, b.Instance),
+		cmp.Compare(a.ContainerName, b.ContainerName),
+	)
 }
 
 // maxErrorLength bounds the error reported per service: a Prometheus MultiError grows with
@@ -464,11 +461,7 @@ func serviceSecrets(cfg config.Service) []string {
 
 	// Equal secrets must end up next to each other for Compact to drop them.
 	slices.SortFunc(secrets, func(a, b string) int {
-		if c := cmp.Compare(len(b), len(a)); c != 0 {
-			return c
-		}
-
-		return strings.Compare(a, b)
+		return cmp.Or(cmp.Compare(len(b), len(a)), strings.Compare(a, b))
 	})
 
 	return slices.Compact(secrets)
@@ -539,15 +532,19 @@ func isSecretParameter(key string) bool {
 	}
 }
 
-// scrapeResult reads the error of a service whose metrics are collected, and whether the
-// collection has not run yet, in which case there is no error to report.
-func scrapeResult(provider scrapeStateProvider, secrets []string) (string, bool) {
+// applyScrapeState sets the error of a service whose metrics are collected, or whether the
+// collection is skipped or has not run yet, in which case there is no error to report.
+func applyScrapeState(state *ServiceState, provider scrapeStateProvider, secrets []string) {
 	scrape := provider.LastScrapeState()
-	if !scrape.HasRun {
-		return "", true
-	}
 
-	// Stabilized first, as redacting could hide what stabilizeError looks for (a password
-	// "tcp"); truncated last, so that the cut is always at the same place.
-	return truncateError(redactError(stabilizeError(scrape.Error), secrets)), false
+	switch scrape.Status {
+	case types.ScrapeSkipped:
+		state.CollectionSkipped = true
+	case types.ScrapeNotRun:
+		state.CollectionPending = true
+	case types.ScrapeRan:
+		// Stabilized first, as redacting could hide what stabilizeError looks for (a password
+		// "tcp"); truncated last, so that the cut is always at the same place.
+		state.Error = truncateError(redactError(stabilizeError(scrape.Error), secrets))
+	}
 }

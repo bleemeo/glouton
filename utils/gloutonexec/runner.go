@@ -266,7 +266,24 @@ func (r *Runner) Run(ctx context.Context, option Option, name string, arg ...str
 
 	err = handleError(err)
 
-	return out, err
+	return out, withStderr(err)
+}
+
+// withStderr adds to a failed command's error the first line of what it wrote on stderr: the
+// exit status alone, such as "exit status 69", does not say why. With CombinedOutput, stderr is
+// in the output and the error is left alone.
+func withStderr(err error) error {
+	exitErr := new(exec.ExitError)
+	if !errors.As(err, &exitErr) {
+		return err
+	}
+
+	line, _, _ := strings.Cut(strings.TrimSpace(string(exitErr.Stderr)), "\n")
+	if line == "" {
+		return err
+	}
+
+	return fmt.Errorf("%w: %s", err, line)
 }
 
 func (r *Runner) StartWithPipes(ctx context.Context, option Option, name string, arg ...string) (

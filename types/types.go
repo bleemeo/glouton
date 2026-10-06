@@ -700,13 +700,26 @@ type ScheduleOption struct {
 	SkipIfRunBefore bool
 }
 
-// ScrapeState is a snapshot of a registration's last scrape. It has no timestamp: it is
+// ScrapeStatus is how a registration's last run went.
+type ScrapeStatus int
+
+const (
+	// ScrapeNotRun means there was no run yet. It is the zero value.
+	ScrapeNotRun ScrapeStatus = iota
+	// ScrapeSkipped means the last run was skipped because the relabel hook asked to retry
+	// later, as it does for a service's input until the service is registered on Bleemeo.
+	ScrapeSkipped
+	// ScrapeRan means the last run was a real scrape: Error tells how the recent ones went.
+	ScrapeRan
+)
+
+// ScrapeState is a snapshot of a registration's recent scrapes. It has no timestamp: it is
 // reported to Bleemeo, where the value must stay stable.
 type ScrapeState struct {
-	// HasRun tells whether the last run was a real scrape: false before the first one, or when
-	// the last run was skipped. When false, Error is meaningless.
-	HasRun bool
-	// Error is the last scrape error, empty when the last scrape succeeded.
+	Status ScrapeStatus
+	// Error is the most recent error of the last few scrapes, so that an input failing one
+	// scrape in two reads as failing; empty when none of them failed. The registry also
+	// reports a scrape that did not complete. Only meaningful when Status is ScrapeRan.
 	Error string
 }
 

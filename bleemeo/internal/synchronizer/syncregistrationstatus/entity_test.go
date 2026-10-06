@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -81,7 +82,7 @@ func serviceMetric(name string, service string) storeMetric {
 	}
 }
 
-// fakeClient records each services state sent. Any other call panics.
+// fakeClient records each registration status sent. Any other call panics.
 type fakeClient struct {
 	types.Client
 
@@ -133,7 +134,7 @@ func (d *countingDiscoverer) ServicesState() []discovery.ServiceState {
 }
 
 type entityTest struct {
-	entity    *SyncServicesState
+	entity    *SyncRegistrationStatus
 	execution *fakeExecution
 	discovery *countingDiscoverer
 	store     *fakeStore
@@ -157,12 +158,20 @@ func newEntityTest(agentID string) *entityTest {
 	test.execution.option.Store = test.store
 	test.execution.option.Cache = cache.Load(state)
 	setAllowlist(test.execution.option.Cache, "mysql_queries,mysql_threads,postfix_queue_size,service_status")
+	setFeatures(test.execution.option.Cache, bleemeoTypes.GloutonFeatures{bleemeoTypes.FeatureSendRegistrationStatus: true})
 	test.entity = New(
 		func() ([]bleemeoTypes.MetricState, bool) { return test.metrics, !test.metricsUnpublished },
 		func() time.Time { return test.execution.now },
 	)
 
 	return test
+}
+
+// setFeatures gives the cache an Agent with these glouton_features.
+func setFeatures(c *cache.Cache, features bleemeoTypes.GloutonFeatures) {
+	agent := c.Agent()
+	agent.GloutonFeatures = features
+	c.SetAgent(agent)
 }
 
 // setAllowlist gives the cache an account configuration whose agent metrics allow-list is
@@ -233,10 +242,11 @@ func TestEntityGoldenPayload(t *testing.T) {
 		t.Fatalf("sent %d times, want once", len(client.bodies))
 	}
 
-	want := `{"services":[{"name":"mysql","type":"mysql","instance":"","container_name":"",` +
+	want := `{"glouton_version":"0.1","services":[{"name":"mysql","type":"mysql","instance":"","container_name":"",` +
 		`"dynamic_discovery":true,"input_supported":true,` +
 		`"error":"failed to create the input: missing credentials or address","service_uuid":"service-uuid","metrics":"zero"}],` +
-		`"metrics":[{"name":"disk_used_perc","reason":"not-available-in-plan","count":3}]}`
+		`"services_total":1,` +
+		`"metrics":[{"name":"disk_used_perc","reason":"not-available-in-plan","count":3}],"metrics_total":1}`
 
 	if client.bodies[0] != want {
 		t.Errorf("body:\n%s\nwant:\n%s", client.bodies[0], want)
@@ -255,7 +265,7 @@ func TestEntityEmptyLists(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := `{"services":[],"metrics":[]}`
+	want := `{"glouton_version":"0.1","services":[],"services_total":0,"metrics":[],"metrics_total":0}`
 	if bodies := test.execution.client.bodies; len(bodies) != 1 || bodies[0] != want {
 		t.Errorf("bodies = %q, want [%q]", bodies, want)
 	}
@@ -298,7 +308,7 @@ func TestEntityBadRequest(t *testing.T) {
 		t.Fatalf("a refused value failed the synchronization: %v", err)
 	}
 
-	sent := test.execution.option.Cache.ServicesStateSent()
+	sent := test.execution.option.Cache.RegistrationStatusSent()
 	if !sent.LastAttemptFailed || sent.Hash != "" {
 		t.Errorf("recorded %+v, want a failed attempt and no accepted value", sent)
 	}
@@ -313,23 +323,47 @@ func TestEntityBadRequest(t *testing.T) {
 		t.Fatalf("after minSendInterval: need = %v, err = %v; want true, nil", need, err)
 	}
 
-	if sent := test.execution.option.Cache.ServicesStateSent(); sent.LastAttemptFailed || sent.Hash == "" {
+	if sent := test.execution.option.Cache.RegistrationStatusSent(); sent.LastAttemptFailed || sent.Hash == "" {
 		t.Errorf("recorded %+v, want an accepted value", sent)
 	}
 }
 
-// TestEntityOtherErrorFails checks an error other than a refusal fails the synchronization,
-// as it does for other entities, and is recorded as a failed attempt.
-func TestEntityOtherErrorFails(t *testing.T) {
-	test := newEntityTest(testAgent)
-	test.execution.client.err = &bleemeo.APIError{StatusCode: http.StatusInternalServerError, Err: errTestAPI}
+// TestEntityRefusedValues checks every refusal of the value itself, including a proxy's 413 for
+// a body too large, is recorded as a failed attempt without failing the synchronization.
+func TestEntityRefusedValues(t *testing.T) {
+	for _, status := range []int{http.StatusBadRequest, http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			test := newEntityTest(testAgent)
+			test.execution.client.err = &bleemeo.APIError{StatusCode: status, Err: errTestAPI}
 
-	if _, err := test.run(t, t0); !errors.Is(err, errTestAPI) {
-		t.Errorf("err = %v, want %v", err, errTestAPI)
+			if _, err := test.run(t, t0); err != nil {
+				t.Errorf("a refused value failed the synchronization: %v", err)
+			}
+
+			if sent := test.execution.option.Cache.RegistrationStatusSent(); !sent.LastAttemptFailed {
+				t.Errorf("recorded %+v, want a failed attempt", sent)
+			}
+		})
 	}
+}
 
-	if sent := test.execution.option.Cache.ServicesStateSent(); !sent.LastAttemptFailed {
-		t.Errorf("recorded %+v, want a failed attempt", sent)
+// TestEntityOtherErrorFails checks an error other than a refusal fails the synchronization,
+// as it does for other entities, and is recorded as a failed attempt. The synchronizer reacts
+// to some of them: an authentication error, throttling.
+func TestEntityOtherErrorFails(t *testing.T) {
+	for _, status := range []int{http.StatusUnauthorized, http.StatusTooManyRequests, http.StatusInternalServerError} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			test := newEntityTest(testAgent)
+			test.execution.client.err = &bleemeo.APIError{StatusCode: status, Err: errTestAPI}
+
+			if _, err := test.run(t, t0); !errors.Is(err, errTestAPI) {
+				t.Errorf("err = %v, want %v", err, errTestAPI)
+			}
+
+			if sent := test.execution.option.Cache.RegistrationStatusSent(); !sent.LastAttemptFailed {
+				t.Errorf("recorded %+v, want a failed attempt", sent)
+			}
+		})
 	}
 }
 
@@ -343,7 +377,7 @@ func TestEntityNotStored(t *testing.T) {
 		t.Fatalf("a value not stored failed the synchronization: %v", err)
 	}
 
-	if sent := test.execution.option.Cache.ServicesStateSent(); !sent.LastAttemptFailed || sent.Hash != "" {
+	if sent := test.execution.option.Cache.RegistrationStatusSent(); !sent.LastAttemptFailed || sent.Hash != "" {
 		t.Errorf("recorded %+v, want a failed attempt and no accepted value", sent)
 	}
 
@@ -353,7 +387,7 @@ func TestEntityNotStored(t *testing.T) {
 		t.Fatalf("the same value once the API stores it: need = %v, err = %v; want true, nil", need, err)
 	}
 
-	if sent := test.execution.option.Cache.ServicesStateSent(); sent.LastAttemptFailed || sent.Hash == "" {
+	if sent := test.execution.option.Cache.RegistrationStatusSent(); sent.LastAttemptFailed || sent.Hash == "" {
 		t.Errorf("recorded %+v, want an accepted value", sent)
 	}
 }
@@ -543,7 +577,7 @@ func TestEntityMetricsUnknown(t *testing.T) {
 		t.Fatalf("after metricsStateWait: need = %v, err = %v; want true, nil", need, err)
 	}
 
-	want := `{"services":[],"metrics":null}`
+	want := `{"glouton_version":"0.1","services":[],"services_total":0,"metrics":null,"metrics_total":null}`
 	if bodies := test.execution.client.bodies; len(bodies) != 1 || bodies[0] != want {
 		t.Errorf("bodies = %q, want [%q]", bodies, want)
 	}
@@ -576,6 +610,70 @@ func TestEntityWaitsForCollections(t *testing.T) {
 	}
 }
 
+// TestEntityFeatureFlag checks the registration status is sent only while the Agent's
+// glouton_features enables it: Bleemeo can turn it off, and an Agent without the flag, or with
+// a value Glouton does not know, is off.
+func TestEntityFeatureFlag(t *testing.T) {
+	cases := []struct {
+		name     string
+		features bleemeoTypes.GloutonFeatures
+		want     bool
+	}{
+		{name: "enabled", features: bleemeoTypes.GloutonFeatures{bleemeoTypes.FeatureSendRegistrationStatus: true}, want: true},
+		{name: "disabled", features: bleemeoTypes.GloutonFeatures{bleemeoTypes.FeatureSendRegistrationStatus: false}, want: false},
+		{name: "absent", features: bleemeoTypes.GloutonFeatures{"another_feature": true}, want: false},
+		{name: "no features", features: nil, want: false},
+		{name: "unknown value", features: bleemeoTypes.GloutonFeatures{bleemeoTypes.FeatureSendRegistrationStatus: "partial"}, want: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			test := newEntityTest(testAgent)
+			setFeatures(test.execution.option.Cache, tc.features)
+
+			if need, err := test.run(t, t0); err != nil || need != tc.want {
+				t.Errorf("need = %v, err = %v; want %v, nil", need, err, tc.want)
+			}
+
+			if sent := len(test.execution.client.bodies) > 0; sent != tc.want {
+				t.Errorf("sent = %v, want %v", sent, tc.want)
+			}
+		})
+	}
+}
+
+// TestEntitySkippedCollection checks a service whose input the registry skips: once registered
+// it holds the send like a pending collection, as the skip is retried within minutes; without a
+// Service object it does not, and is sent with why its metrics are not gathered.
+func TestEntitySkippedCollection(t *testing.T) {
+	skipped := mysqlMissingCredentials()
+	skipped.Error = ""
+	skipped.CollectionSkipped = true
+
+	t.Run("registered", func(t *testing.T) {
+		test := newEntityTest(testAgent)
+		test.discovery.States = []discovery.ServiceState{skipped}
+		test.execution.option.Cache.SetServices([]bleemeoTypes.Service{{ID: "service-uuid", Label: "mysql", Active: true}})
+
+		if need, _ := test.run(t, t0); need {
+			t.Error("sent while the registered service's collection is skipped")
+		}
+	})
+
+	t.Run("not registered", func(t *testing.T) {
+		test := newEntityTest(testAgent)
+		test.discovery.States = []discovery.ServiceState{skipped}
+
+		if need, err := test.run(t, t0); err != nil || !need {
+			t.Fatalf("need = %v, err = %v; want true, nil", need, err)
+		}
+
+		if body := test.execution.client.bodies[0]; !strings.Contains(body, msgNotRegistered) {
+			t.Errorf("body %s does not say why the metrics are not gathered", body)
+		}
+	})
+}
+
 // TestEntityRecordsSendTime checks a send is recorded when it happens, not when the execution
 // started: the delays before the next send run from it.
 func TestEntityRecordsSendTime(t *testing.T) {
@@ -587,7 +685,7 @@ func TestEntityRecordsSendTime(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got := test.execution.option.Cache.ServicesStateSent().LastAttemptAt; !got.Equal(sentAt) {
+	if got := test.execution.option.Cache.RegistrationStatusSent().LastAttemptAt; !got.Equal(sentAt) {
 		t.Errorf("recorded the attempt at %v, want %v", got, sentAt)
 	}
 }

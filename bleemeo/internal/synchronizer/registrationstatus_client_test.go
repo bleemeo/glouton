@@ -26,16 +26,16 @@ import (
 	"github.com/bleemeo/bleemeo-go"
 )
 
-// servicesStateAPI is a Bleemeo API answering the agent PATCH as bleemeo-api does: with the
+// registrationStatusAPI is a Bleemeo API answering the agent PATCH as bleemeo-api does: with the
 // fields asked for plus those the request sets, the latter only when it has the field.
-type servicesStateAPI struct {
+type registrationStatusAPI struct {
 	hasField bool
 
 	body   map[string]json.RawMessage
 	fields string
 }
 
-func (api *servicesStateAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (api *registrationStatusAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	if r.URL.Path == "/o/token/" {
@@ -72,7 +72,7 @@ func (api *servicesStateAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // only when the API returns it.
 func TestUpdateAgentRegistrationStatus(t *testing.T) {
 	for _, hasField := range []bool{true, false} {
-		api := &servicesStateAPI{hasField: hasField}
+		api := &registrationStatusAPI{hasField: hasField}
 
 		server := httptest.NewServer(api)
 		defer server.Close()

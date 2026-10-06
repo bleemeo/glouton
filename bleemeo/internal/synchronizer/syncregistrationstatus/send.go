@@ -19,11 +19,13 @@ package syncregistrationstatus
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"time"
 
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/version"
 )
 
 const (
@@ -36,28 +38,38 @@ const (
 	minNewServiceInterval = time.Minute
 )
 
-// Payload is the services state as sent to Bleemeo: both lists, limited in size. It is the
-// value of the Agent's registration_status field.
+// Payload is the registration status as sent to Bleemeo: both lists, limited in size, and how
+// many rows each had before the limits. It is the value of the Agent's registration_status field.
 type Payload struct {
+	// GloutonVersion is the version of the Glouton that built the value, so that Bleemeo knows
+	// which format it reads, sure that both come from the same Glouton.
+	GloutonVersion string `json:"glouton_version"`
+
 	Services []ServiceState `json:"services"`
+	// ServicesTotal is how many services there are, those the limits left out included, so that
+	// Bleemeo sees how far beyond the limits a host goes.
+	ServicesTotal int `json:"services_total"`
 	// Metrics is null when the metrics state is not known yet: see NewPayload.
 	Metrics []bleemeoTypes.MetricState `json:"metrics"`
+	// MetricsTotal is how many rows Metrics had before the limits, null with Metrics.
+	MetricsTotal *int `json:"metrics_total"`
 
-	// servicesDropped and metricsDropped are how many rows the limits left out. They are not
-	// sent, only logged by Sent.
+	// servicesDropped and metricsDropped are how many rows the limits left out, logged by Sent.
 	servicesDropped int
 	metricsDropped  int
 	hash            string
 }
 
 // NewPayload builds the payload of the given lists, which must come sorted, as
-// Discovery.ServicesState and Synchronizer.MetricsState return them. metricsKnown is false
+// Discovery.ServicesState and Synchronizer.metricsState return them. metricsKnown is false
 // while no synchronization published the metrics state: Metrics is then null rather than an
 // empty list, which would claim that every metric is registered.
 func NewPayload(services []ServiceState, metrics []bleemeoTypes.MetricState, metricsKnown bool) Payload {
 	keptServices, servicesRows, servicesDropped := limitServices(services)
 	payload := Payload{
+		GloutonVersion:  version.Version,
 		Services:        keptServices,
+		ServicesTotal:   len(services),
 		servicesDropped: servicesDropped,
 	}
 
@@ -65,21 +77,35 @@ func NewPayload(services []ServiceState, metrics []bleemeoTypes.MetricState, met
 
 	if metricsKnown {
 		payload.Metrics, metricsRows, payload.metricsDropped = limitMetrics(metrics)
+		payload.MetricsTotal = new(len(metrics))
 	}
 
-	payload.hash = hashRows(servicesRows, metricsRows, metricsKnown)
+	payload.hash = hashRows(payload.GloutonVersion, servicesRows, metricsRows, len(services), len(metrics), metricsKnown)
 
 	return payload
 }
 
-// hashRows identifies a payload from the rows limit already encoded. The rows left out are not
-// part of it: they are not sent, so a value that differs only by them is the same value to the
-// API. A nil list and an empty one hash the same; unknown metrics do not.
-func hashRows(services [][]byte, metrics [][]byte, metricsKnown bool) string {
+// hashRows identifies a payload from the version, the rows limit already encoded and the totals
+// sent with them: an upgraded Glouton sends its value again, in the format it knows. The rows
+// left out are not part of it: they are not sent, only counted in the totals. A nil list and an
+// empty one hash the same; unknown metrics do not.
+func hashRows(
+	gloutonVersion string,
+	services [][]byte,
+	metrics [][]byte,
+	servicesTotal int,
+	metricsTotal int,
+	metricsKnown bool,
+) string {
 	h := sha256.New()
 
-	if !metricsKnown {
-		_, _ = h.Write([]byte("metrics unknown\x00"))
+	// %q, so that the version cannot be confused with what follows.
+	_, _ = fmt.Fprintf(h, "version %q\x00", gloutonVersion)
+
+	if metricsKnown {
+		_, _ = fmt.Fprintf(h, "totals %d %d\x00", servicesTotal, metricsTotal)
+	} else {
+		_, _ = fmt.Fprintf(h, "totals %d\x00metrics unknown\x00", servicesTotal)
 	}
 
 	for _, list := range [][][]byte{services, metrics} {
@@ -102,7 +128,7 @@ func hashRows(services [][]byte, metrics [][]byte, metricsKnown bool) string {
 //   - minSendInterval after a failed attempt;
 //   - minNewServiceInterval after the last attempt when it lists a newly settled service;
 //   - minSendInterval after the last attempt otherwise.
-func NeedSend(last bleemeoTypes.ServicesStateSent, payload Payload, agentID string, now time.Time) bool {
+func NeedSend(last bleemeoTypes.RegistrationStatusSent, payload Payload, agentID string, now time.Time) bool {
 	last = forAgent(last, agentID)
 
 	switch {
@@ -128,7 +154,7 @@ func NeedSend(last bleemeoTypes.ServicesStateSent, payload Payload, agentID stri
 
 // MaySend tells whether NeedSend could be true for any payload at now, so that the caller can
 // skip building one.
-func MaySend(last bleemeoTypes.ServicesStateSent, agentID string, now time.Time) bool {
+func MaySend(last bleemeoTypes.RegistrationStatusSent, agentID string, now time.Time) bool {
 	last = forAgent(last, agentID)
 
 	switch {
@@ -142,20 +168,20 @@ func MaySend(last bleemeoTypes.ServicesStateSent, agentID string, now time.Time)
 }
 
 // forAgent returns what was sent to agentID: nothing when last was sent to another agent.
-func forAgent(last bleemeoTypes.ServicesStateSent, agentID string) bleemeoTypes.ServicesStateSent {
+func forAgent(last bleemeoTypes.RegistrationStatusSent, agentID string) bleemeoTypes.RegistrationStatusSent {
 	if last.AgentID != agentID {
-		return bleemeoTypes.ServicesStateSent{AgentID: agentID}
+		return bleemeoTypes.RegistrationStatusSent{AgentID: agentID}
 	}
 
 	return last
 }
 
 // Sent is what to record once the API accepted payload for agentID, at now.
-func Sent(payload Payload, agentID string, now time.Time) bleemeoTypes.ServicesStateSent {
+func Sent(payload Payload, agentID string, now time.Time) bleemeoTypes.RegistrationStatusSent {
 	// Logged here rather than in NewPayload, which runs on every synchronization.
 	if payload.servicesDropped > 0 || payload.metricsDropped > 0 {
 		logger.V(1).Printf(
-			"The services state sent to Bleemeo left out %d services and %d metrics: the lists exceed their size limits",
+			"The registration status sent to Bleemeo left out %d services and %d metrics: the lists exceed their size limits",
 			payload.servicesDropped, payload.metricsDropped,
 		)
 	}
@@ -168,12 +194,12 @@ func Sent(payload Payload, agentID string, now time.Time) bleemeoTypes.ServicesS
 		}
 	}
 
-	return bleemeoTypes.ServicesStateSent{AgentID: agentID, Hash: payload.hash, Services: services, LastAttemptAt: now}
+	return bleemeoTypes.RegistrationStatusSent{AgentID: agentID, Hash: payload.hash, Services: services, LastAttemptAt: now}
 }
 
 // SendFailed is what to record when sending to agentID failed or was refused, at now. What
 // the API last accepted is kept: it still is what the API has.
-func SendFailed(last bleemeoTypes.ServicesStateSent, agentID string, now time.Time) bleemeoTypes.ServicesStateSent {
+func SendFailed(last bleemeoTypes.RegistrationStatusSent, agentID string, now time.Time) bleemeoTypes.RegistrationStatusSent {
 	last = forAgent(last, agentID)
 	last.LastAttemptAt = now
 	last.LastAttemptFailed = true

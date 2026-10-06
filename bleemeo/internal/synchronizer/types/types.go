@@ -39,20 +39,20 @@ import (
 type EntityName string
 
 const (
-	EntityConfig        EntityName = "config"
-	EntityAgent         EntityName = "agent"
-	EntityApplication   EntityName = "application"
-	EntityGloutonConfig EntityName = "gloutonconfig"
-	EntityContainer     EntityName = "container"
-	EntityDiagnostics   EntityName = "diagnostics"
-	EntityFact          EntityName = "facts"
-	EntityInfo          EntityName = "info"
-	EntityMetric        EntityName = "metric"
-	EntityMonitor       EntityName = "monitor"
-	EntityService       EntityName = "service"
-	EntityServicesState EntityName = "servicesstate"
-	EntitySNMP          EntityName = "snmp"
-	EntityVSphere       EntityName = "vsphere"
+	EntityConfig             EntityName = "config"
+	EntityAgent              EntityName = "agent"
+	EntityApplication        EntityName = "application"
+	EntityGloutonConfig      EntityName = "gloutonconfig"
+	EntityContainer          EntityName = "container"
+	EntityDiagnostics        EntityName = "diagnostics"
+	EntityFact               EntityName = "facts"
+	EntityInfo               EntityName = "info"
+	EntityMetric             EntityName = "metric"
+	EntityMonitor            EntityName = "monitor"
+	EntityService            EntityName = "service"
+	EntityRegistrationStatus EntityName = "registrationstatus"
+	EntitySNMP               EntityName = "snmp"
+	EntityVSphere            EntityName = "vsphere"
 )
 
 type SyncType int
@@ -106,6 +106,20 @@ var ErrUnexpectedWorkflow = errors.New("unexpected synchronization workflow")
 func IsBadRequest(err error) bool {
 	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
 		return apiError.StatusCode == http.StatusBadRequest
+	}
+
+	return false
+}
+
+// IsRefusedValue tells whether the API, or a proxy in front of it, refused the value sent itself:
+// invalid (400, 422) or too large (413). Other errors, such as an authentication error or
+// throttling, are the synchronizer's to handle.
+func IsRefusedValue(err error) bool {
+	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
+		switch apiError.StatusCode {
+		case http.StatusBadRequest, http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity:
+			return true
+		}
 	}
 
 	return false

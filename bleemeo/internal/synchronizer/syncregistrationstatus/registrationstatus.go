@@ -14,8 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package syncregistrationstatus builds the registration status Glouton reports on its Agent object,
-// so that Bleemeo can tell a user why a service is or is not monitored.
+// Package syncregistrationstatus builds the registration status Glouton reports on its Agent
+// object, so that Bleemeo can tell a user why a service is or is not monitored.
 package syncregistrationstatus
 
 import (
@@ -70,9 +70,17 @@ func metricsAmount(count int) MetricsAmount {
 	}
 }
 
+// msgNotRegistered is a service's error while the registry skips its input because the service
+// has no Service object: its metrics are labelled with the service's UUID, so they are not
+// gathered without one (see Connector.RelabelHook). It states the fact rather than a wait: the
+// registration may be pending, failing, or impossible, such as for an instance too long.
+const msgNotRegistered = "metrics are not gathered: the service is not registered on Bleemeo"
+
 // FromDiscovery adds to each service the ID of its Service object, matched as the services
 // synchronization does (name and instance, in the cache's ServiceLookupFromList), and its
-// metrics, from metricNames. The order of states is kept.
+// metrics, from metricNames. A skipped collection gets msgNotRegistered when the service has
+// no Service object, and is pending otherwise: the registry retries the skip within minutes.
+// The order of states is kept.
 func FromDiscovery(
 	states []discovery.ServiceState,
 	registered map[common.ServiceNameInstance]bleemeoTypes.Service,
@@ -82,10 +90,19 @@ func FromDiscovery(
 
 	for _, state := range states {
 		key := common.ServiceNameInstance{Name: state.Name, Instance: state.Instance}
+		serviceUUID := registered[key].ID
+
+		if state.CollectionSkipped {
+			if serviceUUID == "" {
+				state.Error = msgNotRegistered
+			} else {
+				state.CollectionPending = true
+			}
+		}
 
 		result = append(result, ServiceState{
 			ServiceState: state,
-			ServiceUUID:  registered[key].ID,
+			ServiceUUID:  serviceUUID,
 			Metrics:      metricsAmount(metricNames[discovery.NameInstance{Name: state.Name, Instance: state.Instance}]),
 		})
 	}
@@ -115,7 +132,7 @@ func ServiceMetricNames(
 			continue
 		}
 
-		if annotations.BleemeoAgentID != "" && annotations.BleemeoAgentID != agentID {
+		if !common.IsOwnMetric(annotations, agentID) {
 			continue
 		}
 

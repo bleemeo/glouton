@@ -64,6 +64,35 @@ func TestFromDiscovery(t *testing.T) {
 	}
 }
 
+// TestFromDiscoverySkippedCollection checks a service whose input the registry skips: without
+// a Service object it is told why, as the skip lasts until the service is registered; with
+// one it is pending, as the registry retries the skip within minutes.
+func TestFromDiscoverySkippedCollection(t *testing.T) {
+	states := []discovery.ServiceState{
+		{Name: "apache", ServiceType: discovery.ApacheService, InputSupported: true, CollectionSkipped: true},
+		{Name: "mysql", ServiceType: discovery.MySQLService, InputSupported: true, CollectionSkipped: true},
+	}
+
+	registered := common.ServiceLookupFromList([]bleemeoTypes.Service{{ID: "uuid-apache", Label: "apache"}})
+
+	got := FromDiscovery(states, registered, nil)
+
+	registeredState := states[0]
+	registeredState.CollectionPending = true
+
+	unregisteredState := states[1]
+	unregisteredState.Error = msgNotRegistered
+
+	want := []ServiceState{
+		{ServiceState: registeredState, ServiceUUID: "uuid-apache", Metrics: MetricsZero},
+		{ServiceState: unregisteredState, Metrics: MetricsZero},
+	}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("FromDiscovery() mismatch (-want +got):\n%s", diff)
+	}
+}
+
 // TestFromDiscoveryDuplicates checks that when the API holds two Service objects for one
 // service, the UUID reported is the one the services synchronization keeps: the youngest.
 func TestFromDiscoveryDuplicates(t *testing.T) {

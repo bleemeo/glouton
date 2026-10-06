@@ -150,12 +150,7 @@ func (p *Provider) updateCache() error {
 	// Get the container interface indexes.
 	stdout, err := p.Runner.Run(ctx, gloutonexec.Option{RunAsRoot: true}, "/usr/lib/glouton/glouton-veths", pids...)
 	if err != nil {
-		stderr := ""
-		if exitErr := &(exec.ExitError{}); errors.As(err, &exitErr) {
-			stderr = string(exitErr.Stderr)
-		}
-
-		return fmt.Errorf("%w: %s", err, stderr)
+		return withOtherStderrLines(err)
 	}
 
 	interfaceIndexByPID := parseOutput(string(stdout))
@@ -241,4 +236,20 @@ func (p *Provider) DiagnosticArchive(_ context.Context, archive types.ArchiveWri
 	fmt.Fprintln(file, string(cacheIndent))
 
 	return nil
+}
+
+// withOtherStderrLines adds to an error of glouton-veths the lines of its stderr after the first,
+// which the runner already added: the script writes one per container it could not read.
+func withOtherStderrLines(err error) error {
+	exitErr := new(exec.ExitError)
+	if !errors.As(err, &exitErr) {
+		return err
+	}
+
+	_, others, found := strings.Cut(strings.TrimSpace(string(exitErr.Stderr)), "\n")
+	if !found {
+		return err
+	}
+
+	return fmt.Errorf("%w\n%s", err, others)
 }

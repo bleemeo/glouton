@@ -55,7 +55,7 @@ func payloadOf(services ...ServiceState) Payload {
 	}, true)
 }
 
-// TestNeedSend covers when the services state is sent.
+// TestNeedSend covers when the registration status is sent.
 func TestNeedSend(t *testing.T) {
 	base := payloadOf(settledService(1), settledService(2))
 	sentBase := Sent(base, testAgent, t0)
@@ -69,12 +69,12 @@ func TestNeedSend(t *testing.T) {
 
 	cases := []struct {
 		name    string
-		last    bleemeoTypes.ServicesStateSent
+		last    bleemeoTypes.RegistrationStatusSent
 		payload Payload
 		now     time.Time
 		want    bool
 	}{
-		{"nothing attempted yet", bleemeoTypes.ServicesStateSent{}, base, t0, true},
+		{"nothing attempted yet", bleemeoTypes.RegistrationStatusSent{}, base, t0, true},
 		{"unchanged, soon after", sentBase, base, t0.Add(time.Minute), false},
 		// Unchanged is never sent, however long ago the last send was.
 		{"unchanged, long after", sentBase, base, t0.Add(24 * time.Hour), false},
@@ -106,7 +106,7 @@ func TestNeedSendAfterFailure(t *testing.T) {
 	payload := payloadOf(settledService(1), settledService(2))
 
 	// Never accepted: the very first attempt failed.
-	failed := SendFailed(bleemeoTypes.ServicesStateSent{}, testAgent, t0)
+	failed := SendFailed(bleemeoTypes.RegistrationStatusSent{}, testAgent, t0)
 
 	if NeedSend(failed, payload, testAgent, t0.Add(minNewServiceInterval)) {
 		t.Error("retried a minute after a failure, with settled services the API never accepted")
@@ -217,14 +217,24 @@ func TestHashSameValue(t *testing.T) {
 func TestHashSeparatesLists(t *testing.T) {
 	row := []byte(`{"x":1}`)
 
-	if hashRows([][]byte{row}, nil, true) == hashRows(nil, [][]byte{row}, true) {
+	if hashRows("1.0", [][]byte{row}, nil, 1, 1, true) == hashRows("1.0", nil, [][]byte{row}, 1, 1, true) {
 		t.Error("a row in the services list hashes like the same row in the metrics list")
 	}
 }
 
-// TestHashIgnoresDroppedRows checks a list cut by one more row is the same value when the rows
-// kept are the same: the rows left out are not sent, so sending it would PATCH the same body.
-func TestHashIgnoresDroppedRows(t *testing.T) {
+// TestHashCountsVersion checks the same lists from another Glouton version are another value:
+// an upgraded Glouton sends again, in the format it knows.
+func TestHashCountsVersion(t *testing.T) {
+	row := []byte(`{"x":1}`)
+
+	if hashRows("1.0", [][]byte{row}, nil, 1, 0, true) == hashRows("1.1", [][]byte{row}, nil, 1, 0, true) {
+		t.Error("two versions hash the same")
+	}
+}
+
+// TestHashCountsTotals checks a list cut by one more row is another value, although the rows
+// kept are the same: the totals sent with them differ.
+func TestHashCountsTotals(t *testing.T) {
 	services := make([]ServiceState, 0, maxServices+2)
 	for i := range maxServices + 2 {
 		services = append(services, settledService(i))
@@ -241,8 +251,17 @@ func TestHashIgnoresDroppedRows(t *testing.T) {
 		t.Fatalf("the rows kept differ (-one +two):\n%s", diff)
 	}
 
-	if oneDropped.hash != twoDropped.hash {
-		t.Error("a list cut by one more row, keeping the same rows, hashes differently")
+	if oneDropped.ServicesTotal != maxServices+1 || twoDropped.ServicesTotal != maxServices+2 {
+		t.Errorf("totals %d and %d, want %d and %d", oneDropped.ServicesTotal, twoDropped.ServicesTotal, maxServices+1, maxServices+2)
+	}
+
+	if oneDropped.hash == twoDropped.hash {
+		t.Error("two values sending different totals hash the same")
+	}
+
+	metrics := []bleemeoTypes.MetricState{{Name: "cpu_used", Reason: bleemeoTypes.ReasonPending, Count: 1}}
+	if NewPayload(nil, metrics, true).hash == NewPayload(nil, append(metrics, metrics...), true).hash {
+		t.Error("two metrics totals hash the same")
 	}
 }
 
@@ -275,11 +294,11 @@ func TestMaySend(t *testing.T) {
 
 	cases := []struct {
 		name string
-		last bleemeoTypes.ServicesStateSent
+		last bleemeoTypes.RegistrationStatusSent
 		now  time.Time
 		want bool
 	}{
-		{"nothing sent", bleemeoTypes.ServicesStateSent{}, t0, true},
+		{"nothing sent", bleemeoTypes.RegistrationStatusSent{}, t0, true},
 		{"right after a send", sent, t0.Add(time.Second), false},
 		{"a minute after a send", sent, t0.Add(minNewServiceInterval), true},
 		{"a minute after a failure", failed, t0.Add(minNewServiceInterval), false},

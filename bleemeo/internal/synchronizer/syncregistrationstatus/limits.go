@@ -25,13 +25,20 @@ import (
 	"github.com/bleemeo/glouton/logger"
 )
 
-// Limits of each list sent to Bleemeo, so that the value stays small whatever the host: the API
-// bounds neither. Django's DATA_UPLOAD_MAX_MEMORY_SIZE does not apply either: Django REST
-// framework reads a JSON body as a stream, and Django only checks the size of request.body.
+// Limits of each list sent to Bleemeo, so that a host far beyond what was foreseen, or a bug,
+// does not load the API with a large value, likely also updated often. They are well above what
+// a host usually has; the totals sent with the lists tell how far beyond them a host goes. 500
+// services with 25-character names and every error at its longest take about 370 KiB; with long
+// container names, a row passes 1 KiB and the byte limit cuts before the row limit.
+//
+// The row limits come first. The byte limits are a backstop for rows of unforeseen size, under
+// the API's request limits, which Glouton does not compress: Django refuses a body over 2.5 MiB
+// with a 400 (DATA_UPLOAD_MAX_MEMORY_SIZE, checked as the OAuth authentication reads the body),
+// and uWSGI closes the connection on one over 5 MiB (limit-post), which reads as a network error.
 const (
-	maxServices      = 1000
-	maxServicesBytes = 1 << 20
-	maxMetrics       = 1000
+	maxServices      = 500
+	maxServicesBytes = 512 << 10
+	maxMetrics       = 5000
 	maxMetricsBytes  = 1 << 20
 )
 
@@ -88,7 +95,7 @@ func limit[T any](list []T, maxRows int, maxBytes int, priority func(a, b T) int
 		row, err := json.Marshal(list[i])
 		if err != nil {
 			// Not reachable with these types; leaving the row out still beats an unparsable list.
-			logger.V(1).Printf("Unable to encode a services state row: %v", err)
+			logger.V(1).Printf("Unable to encode a registration status row: %v", err)
 
 			continue
 		}

@@ -20,13 +20,14 @@ import (
 	"testing"
 	"time"
 
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/discovery"
 )
 
-// TestSyncSendsServicesState checks the services state entity is part of the synchronization:
-// not sent before a synchronization published the metrics state, then sent once, then not
-// again while unchanged.
-func TestSyncSendsServicesState(t *testing.T) {
+// TestSyncSendsRegistrationStatus checks the registration status entity is part of the
+// synchronization: not sent before a synchronization published the metrics state, then sent
+// once, then not again while unchanged.
+func TestSyncSendsRegistrationStatus(t *testing.T) {
 	helper := newHelper(t)
 	defer helper.Close()
 
@@ -45,7 +46,7 @@ func TestSyncSendsServicesState(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if sent := helper.s.option.Cache.ServicesStateSent(); !sent.LastAttemptAt.IsZero() {
+	if sent := helper.s.option.Cache.RegistrationStatusSent(); !sent.LastAttemptAt.IsZero() {
 		t.Errorf("sent before the metrics state was published: %+v", sent)
 	}
 
@@ -55,7 +56,13 @@ func TestSyncSendsServicesState(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sent := helper.s.option.Cache.ServicesStateSent()
+	// The mock API does not send glouton_features, as an API without the field: the synchronizer
+	// sets the default ones on the cached Agent.
+	if !helper.s.option.Cache.Agent().GloutonFeatures.Enabled(bleemeoTypes.FeatureSendRegistrationStatus) {
+		t.Error("the cached Agent does not allow sending the registration status")
+	}
+
+	sent := helper.s.option.Cache.RegistrationStatusSent()
 	if sent.AgentID != testAgent.ID || sent.Hash == "" || sent.LastAttemptFailed {
 		t.Errorf("recorded %+v, want a value accepted for agent %s", sent, testAgent.ID)
 	}
@@ -68,7 +75,42 @@ func TestSyncSendsServicesState(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if again := helper.s.option.Cache.ServicesStateSent(); !again.LastAttemptAt.Equal(sent.LastAttemptAt) {
-		t.Errorf("an unchanged services state was sent again, at %v", again.LastAttemptAt)
+	if again := helper.s.option.Cache.RegistrationStatusSent(); !again.LastAttemptAt.Equal(sent.LastAttemptAt) {
+		t.Errorf("an unchanged registration status was sent again, at %v", again.LastAttemptAt)
+	}
+}
+
+// TestSyncObeysAPIFeatures checks an API that has glouton_features decides alone: when it does
+// not allow the feature, nothing is sent, even an empty object overriding the default ones.
+func TestSyncObeysAPIFeatures(t *testing.T) {
+	for _, features := range []bleemeoTypes.GloutonFeatures{
+		{},
+		{bleemeoTypes.FeatureSendRegistrationStatus: false},
+	} {
+		helper := newHelper(t)
+
+		helper.preregisterAgent(t)
+		helper.wrapperClientMock.resources.agents.elems[0].GloutonFeatures = features
+		helper.discovery.States = []discovery.ServiceState{{Name: "apache", ServiceType: discovery.ApacheService, InputSupported: true}}
+
+		helper.initSynchronizer(t)
+
+		for range 2 {
+			if err := helper.runOnce(t); err != nil {
+				t.Fatal(err)
+			}
+
+			helper.AddTime(time.Minute)
+		}
+
+		if cached := helper.s.option.Cache.Agent().GloutonFeatures; cached.Enabled(bleemeoTypes.FeatureSendRegistrationStatus) {
+			t.Errorf("with %v from the API, the cached Agent allows the feature: %v", features, cached)
+		}
+
+		if sent := helper.s.option.Cache.RegistrationStatusSent(); !sent.LastAttemptAt.IsZero() {
+			t.Errorf("with %v from the API, the registration status was sent: %+v", features, sent)
+		}
+
+		helper.Close()
 	}
 }

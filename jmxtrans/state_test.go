@@ -59,7 +59,7 @@ func TestCollectionState(t *testing.T) {
 	state := &collectionState{}
 	state.now = func() time.Time { return now }
 
-	if got := state.ServiceScrapeState(key); got.HasRun {
+	if got := state.ServiceScrapeState(key); got.Status != types.ScrapeNotRun {
 		t.Errorf("a service not given to jmxtrans has a state: %+v", got)
 	}
 
@@ -67,7 +67,7 @@ func TestCollectionState(t *testing.T) {
 
 	now = now.Add(time.Minute)
 
-	if got := state.ServiceScrapeState(key); got.HasRun {
+	if got := state.ServiceScrapeState(key); got.Status != types.ScrapeNotRun {
 		t.Errorf("a service configured a minute ago reports %+v, want nothing yet", got)
 	}
 
@@ -76,7 +76,7 @@ func TestCollectionState(t *testing.T) {
 	state.pointReceived(jmxPoint("cassandra_write_requests"))
 	state.pointReceived(jmxPoint("cassandra_write_requests"))
 
-	if got := state.ServiceScrapeState(key); got != (types.ScrapeState{HasRun: true}) {
+	if got := state.ServiceScrapeState(key); got != (types.ScrapeState{Status: types.ScrapeRan}) {
 		t.Errorf("after points, got %+v, want a run without error", got)
 	}
 
@@ -99,7 +99,7 @@ func TestCollectionState(t *testing.T) {
 	// A service no longer given to jmxtrans is forgotten.
 	state.setServices(nil)
 
-	if got := state.ServiceScrapeState(key); got.HasRun {
+	if got := state.ServiceScrapeState(key); got.Status != types.ScrapeNotRun {
 		t.Errorf("a service removed from jmxtrans still has a state: %+v", got)
 	}
 }
@@ -112,6 +112,27 @@ func TestCollectionStateIgnoresUnknownServices(t *testing.T) {
 
 	if len(state.receivedAt) != 0 {
 		t.Errorf("a point for an unknown service was recorded: %v", state.receivedAt)
+	}
+}
+
+// TestMetricsIgnoredNotCollected checks a service whose metrics are disabled by the
+// configuration gets no JMX metrics, so jmxtrans is not configured for it, and is not followed
+// by the collection state.
+func TestMetricsIgnoredNotCollected(t *testing.T) {
+	service := jmxService()
+	service.MetricsIgnored = true
+
+	if metrics := GetJMXMetrics(service); len(metrics) != 0 {
+		t.Errorf("GetJMXMetrics() returned %d metrics for a service with metrics disabled", len(metrics))
+	}
+
+	var state collectionState
+
+	state.setServices([]discovery.Service{service})
+	state.pointReceived(jmxPoint("cassandra_read_requests"))
+
+	if got := state.ServiceScrapeState(discovery.NameInstance{Name: service.Name, Instance: service.Instance}); got != (types.ScrapeState{}) {
+		t.Errorf("ServiceScrapeState() = %+v, want nothing followed", got)
 	}
 }
 
@@ -185,7 +206,7 @@ func TestJMXFeedsCollectionState(t *testing.T) {
 
 	j.emitPoint(t.Context(), jmxPoint("cassandra_read_requests"))
 
-	if got := j.ServiceScrapeState(key); got != (types.ScrapeState{HasRun: true}) {
+	if got := j.ServiceScrapeState(key); got != (types.ScrapeState{Status: types.ScrapeRan}) {
 		t.Errorf("after a point, got %+v, want a run without error", got)
 	}
 

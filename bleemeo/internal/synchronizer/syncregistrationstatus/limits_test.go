@@ -104,10 +104,13 @@ func TestLimitServicesKeepsErrorsFirst(t *testing.T) {
 // TestLimitServicesBytes checks the encoded list fits its byte budget when every row is
 // large.
 func TestLimitServicesBytes(t *testing.T) {
-	long := strings.Repeat("i", 4000)
-	states := make([]ServiceState, 0, 500)
+	// Fewer rows than maxServices, each large enough for all of them to exceed the budget: the
+	// byte limit cuts, not the row limit.
+	rows := maxServices * 4 / 5
+	long := strings.Repeat("i", 2*maxServicesBytes/rows)
+	states := make([]ServiceState, 0, rows)
 
-	for i := range 500 {
+	for i := range rows {
 		state := service(i, "")
 		state.Instance = long
 		states = append(states, state)
@@ -179,11 +182,13 @@ func TestLimitMetricsKeepsLargestCounts(t *testing.T) {
 // TestLimitMetricsBytes checks the byte budget holds for rows with very long metric names,
 // which a Prometheus target can produce.
 func TestLimitMetricsBytes(t *testing.T) {
-	states := make([]bleemeoTypes.MetricState, 0, 900)
+	// Fewer rows than maxMetrics, each large enough for all of them to exceed the budget.
+	rows := maxMetrics * 4 / 5
+	states := make([]bleemeoTypes.MetricState, 0, rows)
 
-	for i := range 900 {
+	for i := range rows {
 		states = append(states, bleemeoTypes.MetricState{
-			Name:   fmt.Sprintf("%05d_%s", i, strings.Repeat("n", 2000)),
+			Name:   fmt.Sprintf("%05d_%s", i, strings.Repeat("n", 2*maxMetricsBytes/rows)),
 			Reason: bleemeoTypes.ReasonNotAvailableInPlan,
 			Count:  1,
 		})
@@ -280,5 +285,18 @@ func TestMinEncodedSizeIsALowerBound(t *testing.T) {
 
 	if size := encodedSize(t, bleemeoTypes.MetricState{}); size < minEncodedSize[bleemeoTypes.MetricState]() {
 		t.Errorf("a metric row encodes in %d bytes, under the %d lower bound", size, minEncodedSize[bleemeoTypes.MetricState]())
+	}
+}
+
+// TestLimitsFitTheAPI checks both lists together, with their totals, stay well under the API's
+// smallest request limit: Django's DATA_UPLOAD_MAX_MEMORY_SIZE, 2.5 MiB by default, which
+// bleemeo-api keeps.
+func TestLimitsFitTheAPI(t *testing.T) {
+	const apiLimit = 2621440
+
+	envelope := len(`{"registration_status":{"services":,"services_total":1000000,"metrics":,"metrics_total":1000000}}`)
+
+	if size := maxServicesBytes + maxMetricsBytes + envelope; size > apiLimit*3/4 {
+		t.Errorf("the limits allow a %d bytes body, too close to the API's %d", size, apiLimit)
 	}
 }

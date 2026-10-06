@@ -61,9 +61,9 @@ type data struct {
 	Configs                 []bleemeoTypes.Config
 	Services                []bleemeoTypes.Service
 	Monitors                []bleemeoTypes.Monitor
-	// ServicesStateSent was added without a cacheVersion bump: an older cache has none (one extra
+	// RegistrationStatusSent was added without a cacheVersion bump: an older cache has none (one extra
 	// send), and an older Glouton ignores it, where a bump would discard its whole cache.
-	ServicesStateSent bleemeoTypes.ServicesStateSent
+	RegistrationStatusSent bleemeoTypes.RegistrationStatusSent
 }
 
 // SetAccountID update the AccountID.
@@ -75,24 +75,24 @@ func (c *Cache) SetAccountID(accountID string) {
 	c.dirty = true
 }
 
-// ServicesStateSent returns what was last sent of the services state.
-func (c *Cache) ServicesStateSent() bleemeoTypes.ServicesStateSent {
+// RegistrationStatusSent returns what was last sent of the registration status.
+func (c *Cache) RegistrationStatusSent() bleemeoTypes.RegistrationStatusSent {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	result := c.data.ServicesStateSent
+	result := c.data.RegistrationStatusSent
 	result.Services = slices.Clone(result.Services)
 
 	return result
 }
 
-// SetServicesStateSent records what was last sent of the services state.
-func (c *Cache) SetServicesStateSent(sent bleemeoTypes.ServicesStateSent) {
+// SetRegistrationStatusSent records what was last sent of the registration status.
+func (c *Cache) SetRegistrationStatusSent(sent bleemeoTypes.RegistrationStatusSent) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
 	sent.Services = slices.Clone(sent.Services)
-	c.data.ServicesStateSent = sent
+	c.data.RegistrationStatusSent = sent
 	c.dirty = true
 }
 

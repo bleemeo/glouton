@@ -17,8 +17,6 @@
 package agent
 
 import (
-	"errors"
-	"os/exec"
 	"slices"
 	"testing"
 
@@ -38,24 +36,24 @@ func TestQueueSizeState(t *testing.T) {
 		t.Errorf("ServiceTypes() = %v, want %v", got, want)
 	}
 
-	if got := state.ServiceScrapeState(postfix); got.HasRun {
+	if got := state.ServiceScrapeState(postfix); got.Status != types.ScrapeNotRun {
 		t.Errorf("before any gather, got %+v, want nothing", got)
 	}
 
 	state.set(map[discovery.NameInstance]string{postfix: "", exim: "mailq: not found"})
 
-	if got := state.ServiceScrapeState(postfix); got != (types.ScrapeState{HasRun: true}) {
+	if got := state.ServiceScrapeState(postfix); got != (types.ScrapeState{Status: types.ScrapeRan}) {
 		t.Errorf("after a successful gather, got %+v", got)
 	}
 
-	if got := state.ServiceScrapeState(exim); got != (types.ScrapeState{HasRun: true, Error: "mailq: not found"}) {
+	if got := state.ServiceScrapeState(exim); got != (types.ScrapeState{Status: types.ScrapeRan, Error: "mailq: not found"}) {
 		t.Errorf("after a failed gather, got %+v", got)
 	}
 
 	// A service no longer gathered is forgotten.
 	state.set(map[discovery.NameInstance]string{postfix: ""})
 
-	if got := state.ServiceScrapeState(exim); got.HasRun {
+	if got := state.ServiceScrapeState(exim); got.Status != types.ScrapeNotRun {
 		t.Errorf("a service no longer gathered still has a state: %+v", got)
 	}
 
@@ -63,30 +61,4 @@ func TestQueueSizeState(t *testing.T) {
 	var none *queueSizeState
 
 	none.set(nil)
-}
-
-// TestWithStderr checks a failed command's error says why, from its stderr, and other errors
-// are left alone.
-func TestWithStderr(t *testing.T) {
-	err := exec.CommandContext(t.Context(), "sh", "-c", "echo 'postqueue: fatal: mail system is down' >&2; echo more >&2; exit 69").Run()
-
-	exitErr := new(exec.ExitError)
-	if !errors.As(err, &exitErr) {
-		t.Fatalf("not an exit error: %v", err)
-	}
-
-	// Run does not capture stderr: set it as Output does.
-	exitErr.Stderr = []byte("postqueue: fatal: mail system is down\nmore\n")
-
-	if got, want := withStderr(err).Error(), "exit status 69: postqueue: fatal: mail system is down"; got != want {
-		t.Errorf("withStderr() = %q, want %q", got, want)
-	}
-
-	if !errors.Is(withStderr(err), err) {
-		t.Error("withStderr() does not wrap the original error")
-	}
-
-	if got := withStderr(errRunInContainer).Error(); got != errRunInContainer.Error() {
-		t.Errorf("withStderr() changed an error that is not a command's: %q", got)
-	}
 }

@@ -371,7 +371,7 @@ func (reg *registration) lastScrapeState(now time.Time) types.ScrapeState {
 	if reg.interval > 0 {
 		for _, startedAt := range reg.runsInFlight {
 			if now.Sub(startedAt) > scrapeStuckIntervals*reg.interval {
-				return types.ScrapeState{HasRun: true, Error: errScrapeStuck.Error()}
+				return types.ScrapeState{Status: types.ScrapeRan, Error: errScrapeStuck.Error()}
 			}
 		}
 	}
@@ -382,14 +382,15 @@ func (reg *registration) lastScrapeState(now time.Time) types.ScrapeState {
 
 	last := reg.lastScrapes[len(reg.lastScrapes)-1]
 
-	// A run skipped by the relabel hook is neither a scrape nor a failure, so it reads as
-	// "not scraped". Only the last few runs count: walking further back would report a stale
-	// result, which would then change by itself as the ring rolls over.
+	// A run skipped by the relabel hook is neither a scrape nor a failure: the hook skips a
+	// service's input until the service is registered on Bleemeo. Only the last few runs
+	// count: walking further back would report a stale result, which would then change by
+	// itself as the ring rolls over.
 	if errors.Is(last.Error, errSkippingScrapeDueToRelabelHook) {
-		return types.ScrapeState{}
+		return types.ScrapeState{Status: types.ScrapeSkipped}
 	}
 
-	state := types.ScrapeState{HasRun: true}
+	state := types.ScrapeState{Status: types.ScrapeRan}
 
 	for _, run := range reg.lastScrapes[max(0, len(reg.lastScrapes)-scrapeStateRuns):] {
 		if errors.Is(run.Error, errSkippingScrapeDueToRelabelHook) {

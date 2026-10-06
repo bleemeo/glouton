@@ -29,8 +29,8 @@ var (
 	errOld          = errors.New("an error from long ago")
 )
 
-// TestLastScrapeStateNeverScraped checks a registration that never ran reports HasRun
-// false, so that discovery can report it as pending rather than as working with no metric.
+// TestLastScrapeStateNeverScraped checks a registration that never ran reports ScrapeNotRun, so
+// that discovery can report it as pending rather than as working with no metric.
 func TestLastScrapeStateNeverScraped(t *testing.T) {
 	reg := &registration{}
 
@@ -55,7 +55,7 @@ func TestLastScrapeStateUsesRecentRuns(t *testing.T) {
 
 	got := reg.LastScrapeState()
 
-	want := types.ScrapeState{HasRun: true, Error: errScrapeFailed.Error()}
+	want := types.ScrapeState{Status: types.ScrapeRan, Error: errScrapeFailed.Error()}
 
 	if got != want {
 		t.Errorf("LastScrapeState() = %+v, want %+v", got, want)
@@ -90,7 +90,7 @@ func TestLastScrapeStateSuccess(t *testing.T) {
 
 	got := reg.LastScrapeState()
 
-	want := types.ScrapeState{HasRun: true}
+	want := types.ScrapeState{Status: types.ScrapeRan}
 
 	if got != want {
 		t.Errorf("LastScrapeState() = %+v, want %+v", got, want)
@@ -113,7 +113,7 @@ func TestLastScrapeStateStuck(t *testing.T) {
 	}
 
 	got := reg.lastScrapeState(t0.Add(time.Minute))
-	if got != (types.ScrapeState{HasRun: true, Error: errScrapeStuck.Error()}) {
+	if got != (types.ScrapeState{Status: types.ScrapeRan, Error: errScrapeStuck.Error()}) {
 		t.Errorf("a run started five intervals ago is reported as %+v, want stuck", got)
 	}
 
@@ -147,7 +147,7 @@ func TestRegistrationImplementsScrapeStateProvider(t *testing.T) {
 		LastScrapeState() types.ScrapeState
 	} = &registration{}
 
-	if provider.LastScrapeState().HasRun {
+	if provider.LastScrapeState().Status != types.ScrapeNotRun {
 		t.Error("a fresh registration must not report a scrape")
 	}
 }
@@ -156,9 +156,9 @@ func TestRegistrationImplementsScrapeStateProvider(t *testing.T) {
 //
 // A scrape skipped by the relabel hook is recorded in lastScrapes with a sentinel error,
 // but it is not a scrape and not a failure: it happens routinely while a service or
-// container waits to be registered on Bleemeo. Reporting it would tell a user their
-// healthy service is broken, quoting an error about Glouton internals -- exactly the
-// misinformation the services state exists to prevent.
+// container waits to be registered on Bleemeo. Reporting it as an error would tell a user
+// their healthy service is broken, quoting an error about Glouton internals; it is
+// reported as Skipped instead, for the caller to explain.
 func TestLastScrapeStateIgnoresRelabelHookSkip(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -166,23 +166,23 @@ func TestLastScrapeStateIgnoresRelabelHookSkip(t *testing.T) {
 		want    types.ScrapeState
 	}{
 		{
-			name: "only skips looks like it never ran",
+			name: "only skips reads as skipped",
 			scrapes: []scrapeRun{
 				{Error: errSkippingScrapeDueToRelabelHook},
 				{Error: errSkippingScrapeDueToRelabelHook},
 			},
-			want: types.ScrapeState{},
+			want: types.ScrapeState{Status: types.ScrapeSkipped},
 		},
 		{
 			// Only the most recent run counts. Reporting the older real scrape instead
 			// would present a stale result as current and would change on its own once
 			// the ring buffer dropped it.
-			name: "currently skipped reads as not scraped, whatever came before",
+			name: "currently skipped reads as skipped, whatever came before",
 			scrapes: []scrapeRun{
 				{ScrapedPointsCount: 4},
 				{Error: errSkippingScrapeDueToRelabelHook},
 			},
-			want: types.ScrapeState{},
+			want: types.ScrapeState{Status: types.ScrapeSkipped},
 		},
 		{
 			name: "a real scrape after a skip is reported",
@@ -190,7 +190,7 @@ func TestLastScrapeStateIgnoresRelabelHookSkip(t *testing.T) {
 				{Error: errSkippingScrapeDueToRelabelHook},
 				{Error: errScrapeFailed},
 			},
-			want: types.ScrapeState{HasRun: true, Error: errScrapeFailed.Error()},
+			want: types.ScrapeState{Status: types.ScrapeRan, Error: errScrapeFailed.Error()},
 		},
 	}
 
@@ -234,8 +234,8 @@ func TestLastScrapeStateDoesNotChangeOnRingRollover(t *testing.T) {
 			reg.lastScrapes = reg.lastScrapes[len(reg.lastScrapes)-maxLastScrape:]
 		}
 
-		if got := reg.LastScrapeState(); got != (types.ScrapeState{}) {
-			t.Fatalf("after %d skips: LastScrapeState() = %+v, want the zero value", len(reg.lastScrapes), got)
+		if got := reg.LastScrapeState(); got != (types.ScrapeState{Status: types.ScrapeSkipped}) {
+			t.Fatalf("after %d skips: LastScrapeState() = %+v, want skipped", len(reg.lastScrapes), got)
 		}
 	}
 }

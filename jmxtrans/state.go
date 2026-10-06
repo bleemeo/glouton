@@ -138,7 +138,7 @@ func (s *collectionState) ServiceScrapeState(service discovery.NameInstance) typ
 	}
 
 	if receivedAt, ok := s.receivedAt[service]; ok && now.Sub(receivedAt) < stateWindow {
-		return types.ScrapeState{HasRun: true}
+		return types.ScrapeState{Status: types.ScrapeRan}
 	}
 
 	if now.Sub(configuredAt) < stateWindow {
@@ -146,8 +146,8 @@ func (s *collectionState) ServiceScrapeState(service discovery.NameInstance) typ
 	}
 
 	if s.connections == 0 && now.Sub(s.disconnectedAt) >= stateWindow {
-		return types.ScrapeState{HasRun: true, Error: errMsgNotConnected}
+		return types.ScrapeState{Status: types.ScrapeRan, Error: errMsgNotConnected}
 	}
 
-	return types.ScrapeState{HasRun: true, Error: errMsgNoMetrics}
+	return types.ScrapeState{Status: types.ScrapeRan, Error: errMsgNoMetrics}
 }

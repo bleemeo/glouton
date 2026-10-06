@@ -20,6 +20,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/prometheus/registry"
 	"github.com/bleemeo/glouton/types"
@@ -193,5 +194,54 @@ func TestCreateInputBuilderWithoutReason(t *testing.T) {
 	outcome, err := newTestDiscovery().createInput(Service{Name: "apache", ServiceType: ApacheService, Active: true})
 	if outcome != inputCreateFailed || !errors.Is(err, errNoInputBuilt) {
 		t.Errorf("createInput() = %d, %v; want a failure with errNoInputBuilt", outcome, err)
+	}
+}
+
+// TestNATSMonitoringURL checks the monitoring server is read on the address listening on its
+// port, as for uWSGI, rather than always on the service's address.
+func TestNATSMonitoringURL(t *testing.T) {
+	cases := []struct {
+		name    string
+		service Service
+		want    string
+	}{
+		{
+			name: "listening on loopback only",
+			service: Service{
+				IPAddress:       "192.168.1.2",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 8222}},
+			},
+			want: "http://127.0.0.1:8222",
+		},
+		{
+			name: "listening on every address",
+			service: Service{
+				IPAddress:       "192.168.1.2",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "0.0.0.0", Port: 8222}},
+			},
+			want: "http://192.168.1.2:8222",
+		},
+		{
+			name:    "configured address and port",
+			service: Service{IPAddress: "192.168.1.2", Config: config.Service{Address: "10.0.0.5", StatsPort: 9000}},
+			want:    "http://10.0.0.5:9000",
+		},
+		{
+			name:    "port not seen listening",
+			service: Service{IPAddress: "192.168.1.2"},
+			want:    "http://192.168.1.2:8222",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got, ok := natsMonitoringURL(tc.service); !ok || got != tc.want {
+				t.Errorf("natsMonitoringURL() = %q, %v; want %q", got, ok, tc.want)
+			}
+		})
+	}
+
+	if _, ok := natsMonitoringURL(Service{}); ok {
+		t.Error("natsMonitoringURL() found a URL for a service without an address")
 	}
 }

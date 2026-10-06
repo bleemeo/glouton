@@ -37,16 +37,34 @@ import (
 // TestInputSupportedExcludesCustomService documents that a custom check is not an
 // unsupported service type.
 func TestInputSupportedExcludesCustomService(t *testing.T) {
-	if InputSupported(CustomService) {
+	d := newTestDiscovery()
+
+	if d.inputSupported(CustomService) {
 		t.Error("CustomService must not be reported as having a metric input")
 	}
 
-	if InputSupported(ServiceName("definitely-not-a-service")) {
+	if d.inputSupported(ServiceName("definitely-not-a-service")) {
 		t.Error("an unknown service type must not be reported as supported")
 	}
 
-	if !InputSupported(ApacheService) {
+	if !d.inputSupported(ApacheService) {
 		t.Error("ApacheService must be reported as having a metric input")
+	}
+}
+
+// TestInputSupportedAgentGatherer checks a type the agent gathers itself, as Postfix, is
+// supported once the agent's gatherers are known: one answer for every caller.
+func TestInputSupportedAgentGatherer(t *testing.T) {
+	d := newTestDiscovery()
+
+	if d.inputSupported(PostfixService) {
+		t.Error("Postfix supported before the agent's gatherers are known")
+	}
+
+	d.SetAgentGathererState(fakeGathererState{})
+
+	if !d.inputSupported(PostfixService) {
+		t.Error("Postfix not supported although the agent gathers its queue size")
 	}
 }
 
@@ -248,15 +266,15 @@ func TestServicesStateScrapeState(t *testing.T) {
 	}{
 		{
 			name:  "not scraped yet",
-			state: types.ScrapeState{HasRun: false},
+			state: types.ScrapeState{Status: types.ScrapeNotRun},
 		},
 		{
 			name:  "working",
-			state: types.ScrapeState{HasRun: true},
+			state: types.ScrapeState{Status: types.ScrapeRan},
 		},
 		{
 			name:    "mod_status not enabled",
-			state:   types.ScrapeState{HasRun: true, Error: "connection refused"},
+			state:   types.ScrapeState{Status: types.ScrapeRan, Error: "connection refused"},
 			wantErr: "connection refused",
 		},
 	}
@@ -426,11 +444,11 @@ func TestCreateInputMissingInfoIsNotUnsupported(t *testing.T) {
 		t.Error("a service missing credentials and an unsupported service type are reported the same way")
 	}
 
-	if !InputSupported(MySQLService) {
+	if !newTestDiscovery().inputSupported(MySQLService) {
 		t.Error("MySQL must still be reported as a supported service type")
 	}
 
-	if InputSupported(AsteriskService) {
+	if newTestDiscovery().inputSupported(AsteriskService) {
 		t.Error("Asterisk must not be reported as a supported service type")
 	}
 }
@@ -468,7 +486,7 @@ func TestServicesStateTruncatesError(t *testing.T) {
 	d.inputResult[apacheKey()] = newInputResult(inputRegistered, nil)
 	d.activeCollector[apacheKey()] = collectorDetails{
 		gathererRegistration: fakeScrapeRegistration{
-			state: types.ScrapeState{HasRun: true, Error: strings.Repeat("z", 10000)},
+			state: types.ScrapeState{Status: types.ScrapeRan, Error: strings.Repeat("z", 10000)},
 		},
 	}
 
@@ -606,7 +624,7 @@ func TestServicesStateErrorIsStable(t *testing.T) {
 		d.inputResult[apacheKey()] = newInputResult(inputRegistered, nil)
 		d.activeCollector[apacheKey()] = collectorDetails{
 			gathererRegistration: fakeScrapeRegistration{
-				state: types.ScrapeState{HasRun: true, Error: scrapeError},
+				state: types.ScrapeState{Status: types.ScrapeRan, Error: scrapeError},
 			},
 		}
 
@@ -705,7 +723,7 @@ func TestServicesStateRedactsError(t *testing.T) {
 	d.activeCollector[apacheKey()] = collectorDetails{
 		gathererRegistration: fakeScrapeRegistration{
 			state: types.ScrapeState{ //nolint:gosec // a fake password, to check it is redacted
-				HasRun: true,
+				Status: types.ScrapeRan,
 				Error:  `unable parse server address "http://admin:p%zz@127.0.0.1:8404/stats/;csv": invalid URL escape "%zz"`,
 			},
 		},
@@ -739,7 +757,7 @@ func TestServicesStateRedactsConfiguredPassword(t *testing.T) {
 			d.activeCollector[apacheKey()] = collectorDetails{
 				gathererRegistration: fakeScrapeRegistration{
 					state: types.ScrapeState{
-						HasRun: true,
+						Status: types.ScrapeRan,
 						// What Telegraf's HAProxy input returns.
 						Error: fmt.Sprintf("unable parse server address %q: %v", addr, parseErr),
 					},
@@ -830,7 +848,7 @@ func TestServicesStateJMX(t *testing.T) {
 		return d
 	}
 
-	collected := fakeJMXState{state: types.ScrapeState{HasRun: true}}
+	collected := fakeJMXState{state: types.ScrapeState{Status: types.ScrapeRan}}
 
 	cases := []struct {
 		name      string
@@ -843,7 +861,7 @@ func TestServicesStateJMX(t *testing.T) {
 		{
 			name:      "nothing received",
 			jmxPort:   7199,
-			jmxState:  fakeJMXState{state: types.ScrapeState{HasRun: true, Error: "no metrics received through JMX"}},
+			jmxState:  fakeJMXState{state: types.ScrapeState{Status: types.ScrapeRan, Error: "no metrics received through JMX"}},
 			wantError: "no metrics received through JMX",
 		},
 		{name: "no jmx_port", jmxState: collected, wantError: msgJMXNoPort},
@@ -883,7 +901,7 @@ func TestServicesStateJMXOtherTypes(t *testing.T) {
 	d := newTestDiscovery()
 	d.servicesMap = map[NameInstance]Service{key: service}
 	d.inputResult[key] = newInputResult(inputCheckOnly, nil)
-	d.SetJMXState(fakeJMXState{state: types.ScrapeState{HasRun: true, Error: errMsgFromJMX}})
+	d.SetJMXState(fakeJMXState{state: types.ScrapeState{Status: types.ScrapeRan, Error: errMsgFromJMX}})
 
 	if got := servicesStateOf(d)[0]; got.Error != "" {
 		t.Errorf("without a jmx_port, got %+v, want no error", got)
@@ -916,7 +934,7 @@ func TestServicesStateErrorIsStableWithShortPassword(t *testing.T) {
 		d.activeCollector[apacheKey()] = collectorDetails{
 			gathererRegistration: fakeScrapeRegistration{
 				state: types.ScrapeState{
-					HasRun: true,
+					Status: types.ScrapeRan,
 					Error:  fmt.Sprintf("read tcp 127.0.0.1:%d->127.0.0.1:3306: read: connection reset by peer", localPort),
 				},
 			},
@@ -1012,7 +1030,7 @@ func servicesStateOf(d *Discovery) []ServiceState {
 func TestServicesStateConcurrent(t *testing.T) {
 	d := newTestDiscovery()
 	d.activeCollector[apacheKey()] = collectorDetails{
-		gathererRegistration: fakeScrapeRegistration{state: types.ScrapeState{HasRun: true}},
+		gathererRegistration: fakeScrapeRegistration{state: types.ScrapeState{Status: types.ScrapeRan}},
 	}
 
 	done := make(chan struct{})
@@ -1113,7 +1131,7 @@ func TestServicesStateAgentGatherer(t *testing.T) {
 		t.Errorf("without the agent's gatherers, got %+v, want unsupported", got)
 	}
 
-	d.SetAgentGathererState(fakeGathererState{state: types.ScrapeState{HasRun: true, Error: "mailq: not found"}})
+	d.SetAgentGathererState(fakeGathererState{state: types.ScrapeState{Status: types.ScrapeRan, Error: "mailq: not found"}})
 
 	got := servicesStateOf(d)[0]
 	if !got.InputSupported || got.Error != "mailq: not found" {
@@ -1132,16 +1150,19 @@ func TestServicesStateAgentGatherer(t *testing.T) {
 }
 
 // TestServicesStateCollectionPending checks a service whose collection has not run yet says so,
-// and stops once it ran, whether or not with an error.
+// and stops once it ran, whether or not with an error. A skipped collection is not pending:
+// the skip lasts until the service is registered, which the synchronizer tells.
 func TestServicesStateCollectionPending(t *testing.T) {
 	cases := []struct {
-		name  string
-		state types.ScrapeState
-		want  bool
+		name        string
+		state       types.ScrapeState
+		want        bool
+		wantSkipped bool
 	}{
 		{name: "not run yet", state: types.ScrapeState{}, want: true},
-		{name: "ran", state: types.ScrapeState{HasRun: true}, want: false},
-		{name: "ran with an error", state: types.ScrapeState{HasRun: true, Error: "connection refused"}, want: false},
+		{name: "ran", state: types.ScrapeState{Status: types.ScrapeRan}, want: false},
+		{name: "ran with an error", state: types.ScrapeState{Status: types.ScrapeRan, Error: "connection refused"}, want: false},
+		{name: "skipped", state: types.ScrapeState{Status: types.ScrapeSkipped}, want: false, wantSkipped: true},
 	}
 
 	for _, tc := range cases {
@@ -1152,8 +1173,9 @@ func TestServicesStateCollectionPending(t *testing.T) {
 				gathererRegistration: fakeScrapeRegistration{state: tc.state},
 			}
 
-			if got := servicesStateOf(d)[0].CollectionPending; got != tc.want {
-				t.Errorf("CollectionPending = %v, want %v", got, tc.want)
+			got := servicesStateOf(d)[0]
+			if got.CollectionPending != tc.want || got.CollectionSkipped != tc.wantSkipped {
+				t.Errorf("got %+v, want CollectionPending %v and CollectionSkipped %v", got, tc.want, tc.wantSkipped)
 			}
 		})
 	}

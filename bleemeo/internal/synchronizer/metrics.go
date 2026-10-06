@@ -17,6 +17,7 @@
 package synchronizer
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -371,13 +372,10 @@ func (s *Synchronizer) countNotRegistered(
 	counts[metricStateKey{Name: name, Reason: reason}]++
 }
 
-// isOwnMetric tells whether a metric belongs to this agent rather than to another one, such as
-// a monitor, an SNMP device or a vSphere host. The metrics state is reported on this Agent by
-// name only, so another agent's would read as this one's.
+// isOwnMetric tells whether a metric belongs to this agent. The metrics state is reported on
+// this Agent by name only, so another agent's would read as this one's.
 func (s *Synchronizer) isOwnMetric(metric gloutonTypes.Metric) bool {
-	agentID := metric.Annotations().BleemeoAgentID
-
-	return agentID == "" || agentID == s.agentID
+	return common.IsOwnMetric(metric.Annotations(), s.agentID)
 }
 
 // filterMetrics only keeps the points that can be registered, and records why it drops the
@@ -556,27 +554,21 @@ func (s *Synchronizer) publishMetricsState(unregistered []gloutonTypes.Metric, k
 	s.l.Unlock()
 }
 
-// publishedMetricsState is MetricsState, and whether a synchronization published it yet: until
-// one does, the state is empty for lack of a run, not because every metric is registered.
-func (s *Synchronizer) publishedMetricsState() ([]bleemeoTypes.MetricState, bool) {
-	s.l.Lock()
-	published := s.metricsStatePublished
-	s.l.Unlock()
-
-	return s.MetricsState(), published
-}
-
-// MetricsState returns the metrics of this agent that Glouton has but did not register, grouped
-// by name and reason: dropped by the filter, waiting for the account configuration or a dependency,
-// pending, or refused by the API. It is sorted, as the list is kept synchronized with the API.
-func (s *Synchronizer) MetricsState() []bleemeoTypes.MetricState {
+// metricsState returns the metrics of this agent that Glouton has but did not register, grouped
+// by name and reason: dropped by the filter, waiting for the account configuration or a
+// dependency, pending, or refused by the API. It is sorted, as the list is kept synchronized
+// with the API. It also tells whether a synchronization published the state yet: until one
+// does, it is empty for lack of a run, not because every metric is registered.
+func (s *Synchronizer) metricsState() ([]bleemeoTypes.MetricState, bool) {
 	counts := make(map[metricStateKey]int)
 
 	s.l.Lock()
 
+	published := s.metricsStatePublished
+
 	maps.Copy(counts, s.notRegisteredMetrics)
 
-	// The two never share a key: a metric the filter dropped is not classified again.
+	// Added rather than set: both may hold a reason such as "unknown" for the same name.
 	for key, count := range s.registrationMetrics {
 		counts[key] += count
 	}
@@ -594,14 +586,10 @@ func (s *Synchronizer) MetricsState() []bleemeoTypes.MetricState {
 	}
 
 	slices.SortFunc(result, func(a, b bleemeoTypes.MetricState) int {
-		if c := strings.Compare(a.Name, b.Name); c != 0 {
-			return c
-		}
-
-		return strings.Compare(string(a.Reason), string(b.Reason))
+		return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(a.Reason, b.Reason))
 	})
 
-	return result
+	return result, published
 }
 
 func (s *Synchronizer) syncMetrics(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
