@@ -715,7 +715,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	a.factProvider = facts.NewFacter(facts.Options{
 		Runner:           a.commandRunner,
-		AutoUpgradeFile:  a.config.Agent.AutoUpgradeFile,
 		FactPath:         a.config.Agent.FactsFile,
 		HostRootPath:     a.hostRootPath,
 		IPIndicatorURL:   a.config.Agent.PublicIPIndicator,

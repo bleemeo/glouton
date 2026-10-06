@@ -17,6 +17,8 @@
 package facts
 
 import (
+	"errors"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -384,65 +386,43 @@ Status: install ok triggers-awaited
 	}
 }
 
-func TestRunIsStuck(t *testing.T) {
+func TestDecodeRunDuration(t *testing.T) {
+	const now = 10 * time.Hour
+
 	cases := []struct {
-		name string
-		// age of the marker, or -1 for no marker.
-		age time.Duration
-		// directory creates the marker as a directory.
-		directory bool
-		// underAFile puts the marker under a regular file, which can't be stat'ed.
-		underAFile bool
-		want       bool
-		wantErr    bool
+		name    string
+		output  string
+		want    time.Duration
+		wantErr bool
 	}{
-		{name: "no_marker", age: -1, want: false},
-		{name: "run_in_progress", age: 5 * time.Minute, want: false},
-		{name: "stuck_run", age: 6 * time.Hour, want: true},
-		// An empty agent.auto_upgrade_file resolves to the state directory.
-		{name: "marker_is_a_directory", age: 6 * time.Hour, directory: true, want: false},
-		// A file used as a directory gives a non-ENOENT error as any user.
-		{name: "unreadable", age: -1, underAFile: true, wantErr: true},
+		{
+			name:   "running",
+			output: "ActiveState=activating\nInactiveExitTimestampMonotonic=7200000000\n",
+			want:   8 * time.Hour,
+		},
+		{
+			name:   "just_started",
+			output: "InactiveExitTimestampMonotonic=35999000000\nActiveState=activating\n",
+			want:   time.Second,
+		},
+		// The last run's start time is kept once the unit is inactive again.
+		{name: "finished", output: "ActiveState=inactive\nInactiveExitTimestampMonotonic=7200000000\n"},
+		{name: "never_ran", output: "ActiveState=inactive\nInactiveExitTimestampMonotonic=0\n"},
+		{name: "failed", output: "ActiveState=failed\nInactiveExitTimestampMonotonic=7200000000\n"},
+		{name: "no_state", output: "", wantErr: true},
+		{name: "running_without_start", output: "ActiveState=activating\nInactiveExitTimestampMonotonic=0\n", wantErr: true},
+		{name: "running_bad_start", output: "ActiveState=activating\nInactiveExitTimestampMonotonic=n/a\n", wantErr: true},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			dir := t.TempDir()
-			marker := filepath.Join(dir, "auto_upgrade")
-
-			if tc.underAFile {
-				blocker := filepath.Join(dir, "blocker")
-				if err := os.WriteFile(blocker, nil, 0o600); err != nil {
-					t.Fatal(err)
-				}
-
-				marker = filepath.Join(blocker, "auto_upgrade")
-			}
-
-			if tc.age >= 0 {
-				if tc.directory {
-					if err := os.Mkdir(marker, 0o750); err != nil {
-						t.Fatal(err)
-					}
-				} else if err := os.WriteFile(marker, nil, 0o600); err != nil {
-					t.Fatal(err)
-				}
-
-				modTime := time.Now().Add(-tc.age)
-				if err := os.Chtimes(marker, modTime, modTime); err != nil {
-					t.Fatal(err)
-				}
-			}
-
-			checker := &autoUpgradeChecker{AutoUpgradeFile: marker}
-
-			got, err := checker.runIsStuck()
+			got, err := decodeRunDuration([]byte(tc.output), now)
 			if (err != nil) != tc.wantErr {
-				t.Fatalf("runIsStuck() error = %v, wantErr %v", err, tc.wantErr)
+				t.Fatalf("decodeRunDuration() error = %v, wantErr %v", err, tc.wantErr)
 			}
 
 			if got != tc.want {
-				t.Errorf("runIsStuck() = %v, want %v", got, tc.want)
+				t.Errorf("decodeRunDuration() = %v, want %v", got, tc.want)
 			}
 		})
 	}
@@ -514,12 +494,23 @@ func startAndInspect(t *testing.T, cmd *exec.Cmd, wantArg string) (*process.Proc
 		t.Fatal(err)
 	}
 
-	name, err := proc.NameWithContext(t.Context())
-	if err != nil {
-		t.Fatal(err)
+	// cmd.Start returns while the child is still in execve: the kernel resumes the parent
+	// before it has set up the new program's arguments, and /proc/<pid>/cmdline reads as
+	// empty until then. The name changes during execve too, so it's read afterwards.
+	var args []string
+
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		args, err = proc.CmdlineSliceWithContext(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if slices.Contains(args, wantArg) || time.Now().After(deadline) {
+			break
+		}
 	}
 
-	args, err := proc.CmdlineSliceWithContext(t.Context())
+	name, err := proc.NameWithContext(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -595,20 +586,81 @@ func TestDpkgIsInterruptedNoDatabase(t *testing.T) {
 	}
 }
 
-// TestKnownProblems checks what is reported when the checks couldn't answer: problems
-// already known are kept, an "ok" isn't.
-func TestKnownProblems(t *testing.T) {
-	cases := map[string]string{
-		"":                                    "",
-		AutoUpgradeStatusOK:                   "",
-		AutoUpgradeStatusRepositoryMissing:    AutoUpgradeStatusRepositoryMissing,
-		"dpkg_interrupted,repository_missing": "dpkg_interrupted,repository_missing",
+// TestCombineVerdicts checks that a check that couldn't answer keeps its previous answer,
+// and is never reported as OK without one.
+func TestCombineVerdicts(t *testing.T) {
+	const (
+		repository = autoUpgradeStatusRepositoryMissing
+		dpkg       = autoUpgradeStatusDpkgInterrupted
+		run        = autoUpgradeStatusRunNotFinished
+	)
+
+	cases := []struct {
+		name     string
+		verdicts map[string]checkVerdict
+		previous string
+		want     string
+		wantErr  bool
+	}{
+		{
+			name:     "all_ok",
+			verdicts: map[string]checkVerdict{repository: verdictOK, dpkg: verdictOK, run: verdictOK},
+			want:     autoUpgradeStatusOK,
+		},
+		{
+			name:     "problems_sorted",
+			verdicts: map[string]checkVerdict{run: verdictProblem, repository: verdictProblem, dpkg: verdictOK},
+			want:     "repository_missing,run_not_finished",
+		},
+		{
+			name:     "unknown_without_previous",
+			verdicts: map[string]checkVerdict{repository: verdictOK, dpkg: verdictUnknown},
+			wantErr:  true,
+		},
+		{
+			name:     "unknown_without_previous_but_problem",
+			verdicts: map[string]checkVerdict{repository: verdictProblem, dpkg: verdictUnknown},
+			want:     repository,
+		},
+		// The dpkg check is skipped while unattended-upgrades holds a lock.
+		{
+			name:     "unknown_keeps_previous_ok",
+			verdicts: map[string]checkVerdict{repository: verdictOK, dpkg: verdictUnknown},
+			previous: autoUpgradeStatusOK,
+			want:     autoUpgradeStatusOK,
+		},
+		{
+			name:     "unknown_keeps_previous_problem",
+			verdicts: map[string]checkVerdict{repository: verdictOK, dpkg: verdictUnknown},
+			previous: dpkg,
+			want:     dpkg,
+		},
+		{
+			name:     "unknown_keeps_previous_problem_next_to_a_new_one",
+			verdicts: map[string]checkVerdict{repository: verdictOK, dpkg: verdictUnknown, run: verdictProblem},
+			previous: "dpkg_interrupted,repository_missing",
+			want:     "dpkg_interrupted,run_not_finished",
+		},
+		// A check that answers drops its previous problem, whatever the others do.
+		{
+			name:     "answer_overrides_previous",
+			verdicts: map[string]checkVerdict{repository: verdictUnknown, run: verdictOK},
+			previous: run,
+			want:     autoUpgradeStatusOK,
+		},
 	}
 
-	for previous, want := range cases {
-		if got := knownProblems(previous); got != want {
-			t.Errorf("knownProblems(%q) = %q, want %q", previous, got, want)
-		}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := combineVerdicts(tc.verdicts, tc.previous)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("combineVerdicts() error = %v, wantErr %v", err, tc.wantErr)
+			}
+
+			if got != tc.want {
+				t.Errorf("combineVerdicts() = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 
@@ -628,14 +680,14 @@ func TestRefreshAutoUpgradeFacts(t *testing.T) {
 		f.facts = map[string]string{
 			"hostname":             "server",
 			factAutoUpgradeEnabled: "true",
-			FactAutoUpgradeStatus:  AutoUpgradeStatusDpkgInterrupted,
+			factAutoUpgradeStatus:  autoUpgradeStatusDpkgInterrupted,
 			FactUpdatedAt:          oldUpdatedAt,
 		}
 
 		f.RefreshAutoUpgradeFacts(t.Context())
 
-		if _, ok := f.facts[FactAutoUpgradeStatus]; ok {
-			t.Errorf("%s = %q, want it recomputed and gone", FactAutoUpgradeStatus, f.facts[FactAutoUpgradeStatus])
+		if _, ok := f.facts[factAutoUpgradeStatus]; ok {
+			t.Errorf("%s = %q, want it recomputed and gone", factAutoUpgradeStatus, f.facts[factAutoUpgradeStatus])
 		}
 
 		if f.facts["hostname"] != "server" {
@@ -661,12 +713,118 @@ func TestRefreshAutoUpgradeFacts(t *testing.T) {
 
 	t.Run("before_first_refresh", func(t *testing.T) {
 		f := NewFacter(Options{})
-		f.facts = map[string]string{FactAutoUpgradeStatus: AutoUpgradeStatusDpkgInterrupted}
+		f.facts = map[string]string{factAutoUpgradeStatus: autoUpgradeStatusDpkgInterrupted}
 
 		f.RefreshAutoUpgradeFacts(t.Context())
 
-		if f.facts[FactAutoUpgradeStatus] != AutoUpgradeStatusDpkgInterrupted {
+		if f.facts[factAutoUpgradeStatus] != autoUpgradeStatusDpkgInterrupted {
 			t.Error("the facts were touched before the first full refresh")
 		}
 	})
+}
+
+// TestMergeAutoUpgradeFacts checks that the hourly result is dropped when a full refresh
+// ran while it was computed, and otherwise only replaces the auto-upgrade facts.
+func TestMergeAutoUpgradeFacts(t *testing.T) {
+	const oldUpdatedAt = "2026-01-01T00:00:00Z"
+
+	refreshedAt := time.Now()
+	newProvider := func() *FactProvider {
+		f := NewFacter(Options{})
+		f.lastFactsUpdate = refreshedAt
+		f.facts = map[string]string{
+			"hostname":             "server",
+			factAutoUpgradeEnabled: "true",
+			factAutoUpgradeStatus:  autoUpgradeStatusOK,
+			FactUpdatedAt:          oldUpdatedAt,
+		}
+
+		return f
+	}
+	stuck := map[string]string{
+		factAutoUpgradeEnabled: "true",
+		factAutoUpgradeStatus:  autoUpgradeStatusRunNotFinished,
+	}
+
+	t.Run("merged", func(t *testing.T) {
+		f := newProvider()
+		// Set while the checks ran, after their result was computed.
+		f.SetFact("manual", "kept")
+
+		f.mergeAutoUpgradeFacts(stuck, refreshedAt)
+
+		want := map[string]string{
+			"hostname":             "server",
+			"manual":               "kept",
+			factAutoUpgradeEnabled: "true",
+			factAutoUpgradeStatus:  autoUpgradeStatusRunNotFinished,
+		}
+		got := maps.Clone(f.facts)
+		delete(got, FactUpdatedAt)
+
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("facts mismatch (-want +got):\n%s", diff)
+		}
+
+		if f.facts[FactUpdatedAt] == oldUpdatedAt {
+			t.Errorf("%s wasn't updated although a fact changed", FactUpdatedAt)
+		}
+	})
+
+	t.Run("full_refresh_meanwhile", func(t *testing.T) {
+		f := newProvider()
+		before := f.facts
+		// What the hourly refresh started from.
+		startedFrom := refreshedAt.Add(-time.Hour)
+
+		f.mergeAutoUpgradeFacts(stuck, startedFrom)
+
+		if diff := cmp.Diff(before, f.facts); diff != "" {
+			t.Errorf("the full refresh's facts were overwritten (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("dropped_facts", func(t *testing.T) {
+		f := newProvider()
+
+		f.mergeAutoUpgradeFacts(nil, refreshedAt)
+
+		if _, ok := f.facts[factAutoUpgradeEnabled]; ok {
+			t.Errorf("%s kept, want it removed", factAutoUpgradeEnabled)
+		}
+
+		if _, ok := f.facts[factAutoUpgradeStatus]; ok {
+			t.Errorf("%s kept, want it removed", factAutoUpgradeStatus)
+		}
+	})
+}
+
+// TestAutoUpgradeEnabledValue checks that a failing systemctl doesn't report the
+// auto-upgrade as disabled.
+func TestAutoUpgradeEnabledValue(t *testing.T) {
+	errSystemctl := errors.New("Failed to connect to bus") //nolint:err113
+
+	cases := []struct {
+		name     string
+		enabled  bool
+		err      error
+		previous map[string]string
+		want     string
+		wantOK   bool
+	}{
+		{name: "enabled", enabled: true, want: "true", wantOK: true},
+		{name: "disabled", enabled: false, want: "false", wantOK: true},
+		{name: "error_keeps_previous", err: errSystemctl, previous: map[string]string{factAutoUpgradeEnabled: "true"}, want: "true", wantOK: true},
+		{name: "error_without_previous", err: errSystemctl, previous: map[string]string{"hostname": "server"}},
+		{name: "error_before_first_refresh", err: errSystemctl},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := autoUpgradeEnabledValue(tc.enabled, tc.err, tc.previous)
+			if got != tc.want || ok != tc.wantOK {
+				t.Errorf("autoUpgradeEnabledValue() = %q, %v, want %q, %v", got, ok, tc.want, tc.wantOK)
+			}
+		})
+	}
 }

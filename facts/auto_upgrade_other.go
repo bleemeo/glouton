@@ -18,11 +18,19 @@
 
 package facts
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
-var errNotSupported = errors.New("lock detection is only supported on Linux")
+var errNotSupported = errors.New("the auto-upgrade checks are only supported on Linux")
 
 // statLockInode is only implemented on Linux, the only system with /proc/locks and APT.
 func statLockInode(string) (uint64, error) {
+	return 0, errNotSupported
+}
+
+// monotonicNow is only implemented on Linux, the only system with systemd.
+func monotonicNow() (time.Duration, error) {
 	return 0, errNotSupported
 }

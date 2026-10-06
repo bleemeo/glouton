@@ -38,38 +38,45 @@ import (
 )
 
 const (
-	// FactAutoUpgradeStatus tells whether something prevents the Glouton auto-upgrade
+	// factAutoUpgradeStatus tells whether something prevents the Glouton auto-upgrade
 	// from working.
 	//
-	// The value is AutoUpgradeStatusOK or a sorted, comma-separated list of the problems
-	// found. The fact is absent when the checks don't apply (non-Linux, container, no APT,
-	// Glouton not installed from a package), or when a check failed, nothing was found and
-	// no problem was known from the previous refresh.
-	FactAutoUpgradeStatus = "auto_upgrade_status"
+	// The value is autoUpgradeStatusOK or a sorted, comma-separated list of the problems
+	// found. A check that can't answer keeps the answer it gave on the previous refresh.
+	// The fact is absent when the checks don't apply (non-Linux, container, no APT,
+	// Glouton not installed from a package), or when a check couldn't answer, nothing was
+	// found and there is no previous refresh to take its answer from.
+	factAutoUpgradeStatus = "auto_upgrade_status"
 
-	// AutoUpgradeStatusOK means every check ran and none found a problem. A check that
-	// couldn't run, or whose answer can't be trusted, is never reported as OK.
-	AutoUpgradeStatusOK = "ok"
+	// autoUpgradeStatusOK means no check found a problem. A check that couldn't answer
+	// only counts as OK when it was OK on the previous refresh.
+	autoUpgradeStatusOK = "ok"
 
-	// AutoUpgradeStatusRepositoryMissing means no configured repository provides Glouton,
+	// autoUpgradeStatusRepositoryMissing means no configured repository provides Glouton,
 	// e.g. after do-release-upgrade commented out third-party sources.
-	AutoUpgradeStatusRepositoryMissing = "repository_missing"
+	autoUpgradeStatusRepositoryMissing = "repository_missing"
 
-	// AutoUpgradeStatusLocked means an APT/dpkg lock is held by a package process that
+	// autoUpgradeStatusLocked means an APT/dpkg lock is held by a package process that
 	// started more than lockHeldMinDuration ago.
-	AutoUpgradeStatusLocked = "package_manager_locked"
+	autoUpgradeStatusLocked = "package_manager_locked"
 
-	// AutoUpgradeStatusDpkgInterrupted means dpkg needs "dpkg --configure -a" before APT
+	// autoUpgradeStatusDpkgInterrupted means dpkg needs "dpkg --configure -a" before APT
 	// can install anything.
-	AutoUpgradeStatusDpkgInterrupted = "dpkg_interrupted"
+	autoUpgradeStatusDpkgInterrupted = "dpkg_interrupted"
 
-	// AutoUpgradeStatusRunNotFinished means an auto-upgrade run started more than
-	// autoUpgradeRunMaxDuration ago and hasn't finished.
-	AutoUpgradeStatusRunNotFinished = "run_not_finished"
+	// autoUpgradeStatusRunNotFinished means the glouton-auto-upgrade service started more
+	// than autoUpgradeRunMaxDuration ago and hasn't finished. Until it does, the timer
+	// starts no other run.
+	autoUpgradeStatusRunNotFinished = "run_not_finished"
 
-	// factAutoUpgradeEnabled is set wherever an auto-upgrade exists, which is also what
-	// gates FactAutoUpgradeStatus. Both are slow facts: reading it runs a command.
+	// factAutoUpgradeEnabled is set wherever the glouton-auto-upgrade timer unit is
+	// installed, which is also what gates factAutoUpgradeStatus. A manual install has no
+	// auto-upgrade to enable, reporting false would ask the user to enable it. Both are
+	// slow facts: reading them runs commands.
 	factAutoUpgradeEnabled = "auto_upgrade_enabled"
+
+	// autoUpgradeServiceUnit is the unit the glouton-auto-upgrade timer starts.
+	autoUpgradeServiceUnit = "glouton-auto-upgrade.service"
 )
 
 const (
@@ -83,8 +90,8 @@ const (
 	// considered stuck.
 	autoUpgradeRunMaxDuration = 2 * time.Hour
 
-	// autoUpgradeCheckTimeout bounds the commands and process lookups. File reads are
-	// not bounded.
+	// autoUpgradeCheckTimeout bounds the commands and process lookups of each of
+	// autoUpgradeIsEnabled and autoUpgradeStatus. File reads are not bounded.
 	autoUpgradeCheckTimeout = 30 * time.Second
 
 	// dpkgJournalDir and dpkgStatusPath are relative to the host root.
@@ -99,10 +106,12 @@ const (
 
 var errUnexpectedProcLocks = errors.New("unexpected /proc/locks format")
 
+var errUnexpectedSystemctlShow = errors.New("unexpected systemctl show output")
+
 var errAPTHasNoIndex = errors.New("APT has no repository index, run apt-get update")
 
-// errAutoUpgradeCheckFailed is returned when a check couldn't give an answer and no other
-// check found a problem.
+// errAutoUpgradeCheckFailed is returned when a check couldn't give an answer, no other
+// check found a problem and there is no previous answer to fall back on.
 var errAutoUpgradeCheckFailed = errors.New("an auto-upgrade check couldn't give an answer")
 
 // gloutonPackageName is the package that provides Glouton. bleemeo-agent only depends
@@ -144,110 +153,154 @@ var dpkgBrokenStates = map[string]bool{ //nolint:gochecknoglobals
 // autoUpgradeChecker looks for the known reasons that prevent the Glouton auto-upgrade
 // from working.
 type autoUpgradeChecker struct {
-	Runner *gloutonexec.Runner
-	// AutoUpgradeFile is an absolute path, HostRootPath doesn't apply to it.
-	AutoUpgradeFile string
-	HostRootPath    string
+	HostRootPath string
+
+	// How the checker reaches the system, replaced in tests. See newAutoUpgradeChecker.
+	run           runFunc
+	lookPath      func(file string, option gloutonexec.Option) (string, error)
+	procLocksPath string
+	monotonicNow  func() (time.Duration, error)
 }
 
-// autoUpgradeStatus returns the value of the FactAutoUpgradeStatus fact, or "" when the
-// check doesn't apply to this system. It must only be called when autoUpgradeIsEnabled
-// found an auto-upgrade: that excludes a container and a nil Runner.
-func (f *FactProvider) autoUpgradeStatus(ctx context.Context) (string, error) {
+func newAutoUpgradeChecker(runner *gloutonexec.Runner, hostRootPath string) *autoUpgradeChecker {
+	return &autoUpgradeChecker{
+		HostRootPath:  hostRootPath,
+		run:           runner.Run,
+		lookPath:      runner.LookPath,
+		procLocksPath: procLocksPath,
+		monotonicNow:  monotonicNow,
+	}
+}
+
+// autoUpgradeStatus returns the value of the factAutoUpgradeStatus fact, or "" when the
+// check doesn't apply to this system. previous is the value of the previous refresh, ""
+// when there is none. It must only be called when autoUpgradeIsEnabled found the
+// auto-upgrade timer unit: that excludes a container and a nil Runner.
+func (f *FactProvider) autoUpgradeStatus(ctx context.Context, previous string) (string, error) {
 	if !version.IsLinux() {
 		return "", nil
 	}
 
-	checker := autoUpgradeChecker{
-		Runner:          f.options.Runner,
-		AutoUpgradeFile: f.options.AutoUpgradeFile,
-		HostRootPath:    f.options.HostRootPath,
-	}
+	checker := newAutoUpgradeChecker(f.options.Runner, f.options.HostRootPath)
 
 	ctx, cancel := context.WithTimeout(ctx, autoUpgradeCheckTimeout)
 	defer cancel()
 
-	return checker.status(ctx)
+	return checker.status(ctx, previous)
 }
 
-// knownProblems returns what to report when the checks couldn't give an answer: the
-// problems of the previous refresh, which nothing showed to be fixed. A previous "ok" is
-// not kept, a check that couldn't run is never reported as OK.
-func knownProblems(previous string) string {
-	if previous == AutoUpgradeStatusOK {
-		return ""
-	}
+// checkVerdict is the answer of one check.
+type checkVerdict int
 
-	return previous
-}
+const (
+	// verdictUnknown means the check couldn't give an answer.
+	verdictUnknown checkVerdict = iota
+	verdictOK
+	verdictProblem
+)
 
-// status returns the value of the fact, or errAutoUpgradeCheckFailed when a check
-// couldn't give an answer and no other check found a problem.
-func (c *autoUpgradeChecker) status(ctx context.Context) (string, error) {
+// status returns the value of the fact, or errAutoUpgradeCheckFailed when no answer can
+// be given, see combineVerdicts.
+func (c *autoUpgradeChecker) status(ctx context.Context, previous string) (string, error) {
 	// Only APT-based systems are supported.
-	if _, err := c.Runner.LookPath("apt-cache", gloutonexec.Option{SkipInContainer: true}); err != nil {
+	if _, err := c.lookPath("apt-cache", gloutonexec.Option{SkipInContainer: true}); err != nil {
 		return "", nil //nolint:nilerr // Not an APT system, the check doesn't apply.
 	}
 
-	var (
-		problems []string
-		// failed is set when a check couldn't give an answer.
-		failed bool
-	)
-
-	repository, err := c.repositoryState(ctx)
-
-	switch {
-	case err != nil:
-		logger.V(1).Printf("auto-upgrade: unable to check the Glouton repository: %v", err)
-
-		failed = true
-	case repository == repositoryUnknownPackage:
-		// Glouton wasn't installed from a package.
-		return "", nil
-	case repository == repositoryMissing:
-		problems = append(problems, AutoUpgradeStatusRepositoryMissing)
-	}
+	verdicts := make(map[string]checkVerdict, 4)
 
 	record := func(problem string, found bool, err error) {
 		switch {
 		case err != nil:
 			logger.V(1).Printf("auto-upgrade: unable to check %s: %v", problem, err)
 
-			failed = true
+			verdicts[problem] = verdictUnknown
 		case found:
-			problems = append(problems, problem)
+			verdicts[problem] = verdictProblem
+		default:
+			verdicts[problem] = verdictOK
 		}
 	}
 
-	locks, lockErr := c.lockState(ctx)
+	repository, err := c.repositoryState(ctx)
+	if err == nil && repository == repositoryUnknownPackage {
+		// Glouton wasn't installed from a package.
+		return "", nil
+	}
 
-	record(AutoUpgradeStatusLocked, holderIsStuck(locks.holder), lockErr)
+	record(autoUpgradeStatusRepositoryMissing, repository == repositoryMissing, err)
 
-	if locks.unknown {
-		failed = true
+	locks, err := c.lockState(ctx)
+
+	if err == nil && locks.unknown && !holderIsStuck(locks.holder) {
+		// lockState already logged which lock file it couldn't check.
+		verdicts[autoUpgradeStatusLocked] = verdictUnknown
+	} else {
+		record(autoUpgradeStatusLocked, holderIsStuck(locks.holder), err)
 	}
 
 	// Only when no lock is known to be held: a running dpkg writes each state change to its
 	// journal and only folds it back into the status file once the operation ends, so it
 	// looks exactly like an interrupted one until then. A successful "apt-get install" on
 	// Ubuntu 24.04 shows up to 34 journal entries while it runs. The Glouton auto-upgrade
-	// is the worst case: its postinst restarts Glouton while dpkg still runs. When the
-	// locks couldn't be checked, failed is already set.
-	if lockErr == nil && !locks.unknown && locks.holder == nil {
-		interrupted, dpkgErr := c.dpkgIsInterrupted()
-		record(AutoUpgradeStatusDpkgInterrupted, interrupted, dpkgErr)
+	// is the worst case: its postinst restarts Glouton while dpkg still runs.
+	if err == nil && !locks.unknown && locks.holder == nil {
+		interrupted, err := c.dpkgIsInterrupted()
+		record(autoUpgradeStatusDpkgInterrupted, interrupted, err)
+	} else {
+		// Routine, e.g. while unattended-upgrades runs: not worth more than a debug line.
+		logger.V(2).Printf("auto-upgrade: dpkg check skipped, an APT/dpkg lock is held or couldn't be checked")
+
+		verdicts[autoUpgradeStatusDpkgInterrupted] = verdictUnknown
 	}
 
-	stuck, runErr := c.runIsStuck()
-	record(AutoUpgradeStatusRunNotFinished, stuck, runErr)
+	stuck, err := c.runIsStuck(ctx)
+	record(autoUpgradeStatusRunNotFinished, stuck, err)
+
+	return combineVerdicts(verdicts, previous)
+}
+
+// combineVerdicts returns the value of the fact from the verdict of each check, keyed by
+// the problem it looks for.
+//
+// A check that couldn't answer keeps the answer it gave in previous, the value of the
+// previous refresh: dropping a problem would tell the API it's fixed, and reporting one
+// would be a guess. A check is routinely unable to answer, e.g. the dpkg check while
+// unattended-upgrades holds a lock. With no previous value, a check that couldn't answer
+// is never reported as OK: errAutoUpgradeCheckFailed is returned when no other check
+// found a problem.
+func combineVerdicts(verdicts map[string]checkVerdict, previous string) (string, error) {
+	var previousProblems []string
+
+	if previous != "" && previous != autoUpgradeStatusOK {
+		previousProblems = strings.Split(previous, ",")
+	}
+
+	var (
+		problems   []string
+		unanswered bool
+	)
+
+	for problem, verdict := range verdicts {
+		switch verdict {
+		case verdictProblem:
+			problems = append(problems, problem)
+		case verdictUnknown:
+			if previous == "" {
+				unanswered = true
+			} else if slices.Contains(previousProblems, problem) {
+				problems = append(problems, problem)
+			}
+		case verdictOK:
+		}
+	}
 
 	if len(problems) == 0 {
-		if failed {
+		if unanswered {
 			return "", errAutoUpgradeCheckFailed
 		}
 
-		return AutoUpgradeStatusOK, nil
+		return autoUpgradeStatusOK, nil
 	}
 
 	slices.Sort(problems)
@@ -269,7 +322,7 @@ const (
 // repository is detected.
 func (c *autoUpgradeChecker) repositoryState(ctx context.Context) (repositoryState, error) {
 	// apt-cache doesn't take any lock.
-	output, err := c.Runner.Run(
+	output, err := c.run(
 		ctx, gloutonexec.Option{SkipInContainer: true}, "apt-cache", "policy", gloutonPackageName,
 	)
 	if err != nil {
@@ -300,7 +353,7 @@ func (c *autoUpgradeChecker) repositoryState(ctx context.Context) (repositorySta
 
 // aptHasIndexedRepository tells whether APT has at least one repository index.
 func (c *autoUpgradeChecker) aptHasIndexedRepository(ctx context.Context) (bool, error) {
-	output, err := c.Runner.Run(ctx, gloutonexec.Option{SkipInContainer: true}, "apt-cache", "policy")
+	output, err := c.run(ctx, gloutonexec.Option{SkipInContainer: true}, "apt-cache", "policy")
 	if err != nil {
 		return false, fmt.Errorf("apt-cache policy: %w", err)
 	}
@@ -452,36 +505,74 @@ func (c *autoUpgradeChecker) dpkgHasBrokenPackage() (bool, error) {
 	return false, nil
 }
 
-// runIsStuck tells whether an auto-upgrade run started more than
+// runIsStuck tells whether the glouton-auto-upgrade service started more than
 // autoUpgradeRunMaxDuration ago and didn't finish.
 //
-// glouton-auto-upgrade creates the marker when it starts and removes it when it exits.
-// Glouton removes it at startup, so a run killed before its EXIT trap doesn't leave one
-// behind forever.
-func (c *autoUpgradeChecker) runIsStuck() (bool, error) {
-	stat, err := os.Stat(c.AutoUpgradeFile)
+// systemd is asked rather than relying on the marker file the script writes. Glouton
+// removes that marker at startup, which the upgrade itself causes mid-run. dash skips the
+// script's EXIT trap when a signal kills it, which leaves the marker behind. And the script
+// hardcodes its path while Glouton's is configurable. The service is a oneshot without a
+// start timeout, so a run that hangs keeps it "activating" for as long as it hangs.
+func (c *autoUpgradeChecker) runIsStuck(ctx context.Context) (bool, error) {
+	output, err := c.run(
+		ctx,
+		gloutonexec.Option{SkipInContainer: true},
+		"systemctl", "show", "--property=ActiveState,InactiveExitTimestampMonotonic", autoUpgradeServiceUnit,
+	)
 	if err != nil {
-		// No marker, no run in progress.
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-
-		return false, fmt.Errorf("unable to stat %s: %w", c.AutoUpgradeFile, err)
+		return false, fmt.Errorf("systemctl show %s: %w", autoUpgradeServiceUnit, err)
 	}
 
-	// An empty agent.auto_upgrade_file resolves to the state directory.
-	if !stat.Mode().IsRegular() {
+	now, err := c.monotonicNow()
+	if err != nil {
+		return false, err
+	}
+
+	runningFor, err := decodeRunDuration(output, now)
+	if err != nil {
+		return false, err
+	}
+
+	if runningFor < autoUpgradeRunMaxDuration {
 		return false, nil
 	}
 
-	startedAt := stat.ModTime()
-	if time.Since(startedAt) < autoUpgradeRunMaxDuration {
-		return false, nil
-	}
-
-	logger.V(1).Printf("auto-upgrade: the run started at %s never finished", startedAt.Format(time.RFC3339))
+	logger.V(1).Printf("auto-upgrade: %s has been running for %s", autoUpgradeServiceUnit, runningFor.Truncate(time.Second))
 
 	return true, nil
+}
+
+// decodeRunDuration parses the output of "systemctl show
+// --property=ActiveState,InactiveExitTimestampMonotonic" and returns how long the unit has
+// been starting, 0 when it isn't. now is the CLOCK_MONOTONIC time, which is the clock of
+// the *Monotonic timestamps.
+//
+// A oneshot service stays "activating" while its command runs, and InactiveExitTimestamp
+// is when it left "inactive". An unknown unit is "inactive".
+func decodeRunDuration(output []byte, now time.Duration) (time.Duration, error) {
+	properties := make(map[string]string, 2)
+
+	for line := range strings.SplitSeq(string(output), "\n") {
+		if key, value, found := strings.Cut(line, "="); found {
+			properties[key] = strings.TrimSpace(value)
+		}
+	}
+
+	activeState, ok := properties["ActiveState"]
+	if !ok {
+		return 0, fmt.Errorf("%w: no ActiveState in %q", errUnexpectedSystemctlShow, output)
+	}
+
+	if activeState != "activating" {
+		return 0, nil
+	}
+
+	startedAtUS, err := strconv.ParseUint(properties["InactiveExitTimestampMonotonic"], 10, 63)
+	if err != nil || startedAtUS == 0 {
+		return 0, fmt.Errorf("%w: no start time in %q", errUnexpectedSystemctlShow, output)
+	}
+
+	return max(now-time.Duration(startedAtUS)*time.Microsecond, 0), nil
 }
 
 func isAllDigits(s string) bool {
@@ -531,9 +622,9 @@ func preferStuck(current, candidate *lockHolder) *lockHolder {
 // The lock files are stat'ed, not opened: they are 0640 root:root and Glouton runs as
 // the "glouton" user.
 func (c *autoUpgradeChecker) lockState(ctx context.Context) (lockState, error) {
-	content, err := os.ReadFile(procLocksPath)
+	content, err := os.ReadFile(c.procLocksPath)
 	if err != nil {
-		return lockState{}, fmt.Errorf("unable to read %s: %w", procLocksPath, err)
+		return lockState{}, fmt.Errorf("unable to read %s: %w", c.procLocksPath, err)
 	}
 
 	locks := decodeProcLocks(content)

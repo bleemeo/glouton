@@ -102,9 +102,7 @@ type FactProvider struct {
 type FactCallback func(ctx context.Context, currentFact map[string]string) map[string]string
 
 type Options struct {
-	Runner *gloutonexec.Runner
-	// AutoUpgradeFile is the marker file that exists while an auto-upgrade runs.
-	AutoUpgradeFile  string
+	Runner           *gloutonexec.Runner
 	FactPath         string
 	HostRootPath     string
 	IPIndicatorURL   string
@@ -139,12 +137,27 @@ func (f *FactProvider) AddCallback(cb FactCallback) {
 // Facts returns the list of facts for this system.
 func (f *FactProvider) Facts(ctx context.Context, maxAge time.Duration) (facts map[string]string, err error) {
 	f.l.Lock()
+	previous := f.facts
+	stale := time.Since(f.lastFactsUpdate) >= maxAge
+	f.l.Unlock()
+
+	if !stale {
+		return previous, ctx.Err()
+	}
+
+	// The auto-upgrade checks run commands for up to a minute. They run before taking f.l,
+	// so they don't block the callers that only read the facts. previous is safe to read
+	// without f.l: f.facts is replaced, never modified.
+	autoUpgradeFacts := f.autoUpgradeFacts(ctx, previous)
+
+	f.l.Lock()
 	defer f.l.Unlock()
 
+	// Another caller may have refreshed the facts meanwhile.
 	if time.Since(f.lastFactsUpdate) >= maxAge {
 		t := time.Now()
 
-		f.updateFacts(ctx)
+		f.updateFacts(ctx, autoUpgradeFacts)
 
 		logger.V(2).Printf("facts: updateFacts() took %v", time.Since(t))
 	}
@@ -195,20 +208,46 @@ func (f *FactProvider) SetFact(key string, value string) {
 // repair made without APT, such as "dpkg --configure -a": only APT reloads Glouton after
 // a package operation.
 //
-// fact_updated_at only changes when an auto-upgrade fact does.
+// fact_updated_at only changes when an auto-upgrade fact does. The checks run without
+// holding f.l, so they don't block readers of the facts.
 func (f *FactProvider) RefreshAutoUpgradeFacts(ctx context.Context) {
+	f.l.Lock()
+	lastFactsUpdate := f.lastFactsUpdate
+	previous := f.facts
+	f.l.Unlock()
+
+	// Before the first full refresh there is nothing to update.
+	if lastFactsUpdate.IsZero() {
+		return
+	}
+
+	autoUpgradeFacts := f.autoUpgradeFacts(ctx, previous)
+
+	if ctx.Err() != nil {
+		return
+	}
+
+	f.mergeAutoUpgradeFacts(autoUpgradeFacts, lastFactsUpdate)
+}
+
+// mergeAutoUpgradeFacts replaces the auto-upgrade facts with autoUpgradeFacts, computed
+// from the facts of the full refresh made at lastFactsUpdate. Other facts, including
+// those set by SetFact meanwhile, are kept.
+func (f *FactProvider) mergeAutoUpgradeFacts(autoUpgradeFacts map[string]string, lastFactsUpdate time.Time) {
 	f.l.Lock()
 	defer f.l.Unlock()
 
-	// Before the first full refresh there is nothing to update.
-	if f.lastFactsUpdate.IsZero() {
+	// A full refresh ran meanwhile: its values are at least as recent as ours.
+	if !f.lastFactsUpdate.Equal(lastFactsUpdate) {
 		return
 	}
 
 	newFacts := maps.Clone(f.facts)
-	f.setAutoUpgradeFacts(ctx, newFacts)
+	delete(newFacts, factAutoUpgradeEnabled)
+	delete(newFacts, factAutoUpgradeStatus)
+	maps.Copy(newFacts, autoUpgradeFacts)
 
-	if ctx.Err() != nil || factsEqualIgnoringUpdatedAt(f.facts, newFacts) {
+	if factsEqualIgnoringUpdatedAt(f.facts, newFacts) {
 		return
 	}
 
@@ -216,44 +255,64 @@ func (f *FactProvider) RefreshAutoUpgradeFacts(ctx context.Context) {
 	f.facts = newFacts
 }
 
-// setAutoUpgradeFacts sets factAutoUpgradeEnabled and FactAutoUpgradeStatus in newFacts,
-// or removes them when there is no auto-upgrade. They run commands, which is why they
-// aren't in fastUpdateFacts: neither is needed early enough to justify that on the
-// startup path.
+// autoUpgradeFacts returns factAutoUpgradeEnabled and factAutoUpgradeStatus, or none of
+// them when there is no auto-upgrade. previous is the facts of the previous refresh, nil
+// when there is none. They run commands, which is why they aren't in fastUpdateFacts:
+// neither is needed early enough to justify that on the startup path.
 //
-// Caller must hold f.l.
-func (f *FactProvider) setAutoUpgradeFacts(ctx context.Context, newFacts map[string]string) {
-	delete(newFacts, factAutoUpgradeEnabled)
-	delete(newFacts, FactAutoUpgradeStatus)
+// It doesn't need f.l.
+func (f *FactProvider) autoUpgradeFacts(ctx context.Context, previous map[string]string) map[string]string {
+	enabledCtx, cancel := context.WithTimeout(ctx, autoUpgradeCheckTimeout)
+	autoUpgradeEnabled, err := autoUpgradeIsEnabled(enabledCtx, f.options.Runner)
 
-	autoUpgradeEnabled, err := autoUpgradeIsEnabled(ctx, f.options.Runner)
+	cancel()
+
 	if errors.Is(err, errAutoUpgradeNotSupported) {
-		return
+		return nil
 	}
 
 	if err != nil {
-		logger.V(1).Printf("Failed to check auto-upgrade status: %v", err)
+		logger.V(1).Printf("Failed to check whether the auto-upgrade is enabled: %v", err)
 	}
 
-	newFacts[factAutoUpgradeEnabled] = strconv.FormatBool(autoUpgradeEnabled)
+	result := make(map[string]string, 2)
 
-	// The status is reported whether or not the auto-upgrade timer is enabled.
-	status, err := f.autoUpgradeStatus(ctx)
-	if err != nil {
-		// Dropping the fact would delete it on the API, which takes a missing status for
-		// a healthy one: a problem found earlier is kept until a check answers again.
-		status = knownProblems(f.facts[FactAutoUpgradeStatus])
+	if value, ok := autoUpgradeEnabledValue(autoUpgradeEnabled, err, previous); ok {
+		result[factAutoUpgradeEnabled] = value
 	}
 
-	if status != "" {
-		newFacts[FactAutoUpgradeStatus] = status
+	// The status is reported whether or not the auto-upgrade timer is enabled. On an
+	// error the fact is left out, see combineVerdicts.
+	status, err := f.autoUpgradeStatus(ctx, previous[factAutoUpgradeStatus])
+	if err == nil && status != "" {
+		result[factAutoUpgradeStatus] = status
 	}
+
+	return result
 }
 
-func (f *FactProvider) updateFacts(ctx context.Context) {
+// autoUpgradeEnabledValue returns the value of factAutoUpgradeEnabled from the result of
+// autoUpgradeIsEnabled, and false when there is none to report. On an error, false would
+// tell the API the auto-upgrade is off, which a failing systemctl doesn't show: the
+// previous value is kept instead.
+func autoUpgradeEnabledValue(enabled bool, err error, previous map[string]string) (string, bool) {
+	if err == nil {
+		return strconv.FormatBool(enabled), true
+	}
+
+	value, ok := previous[factAutoUpgradeEnabled]
+
+	return value, ok
+}
+
+// updateFacts refreshes every fact. autoUpgradeFacts is the result of autoUpgradeFacts,
+// which the caller computes without holding f.l.
+//
+// Caller must hold f.l.
+func (f *FactProvider) updateFacts(ctx context.Context, autoUpgradeFacts map[string]string) {
 	newFacts := f.fastUpdateFacts(ctx)
 
-	f.setAutoUpgradeFacts(ctx, newFacts)
+	maps.Copy(newFacts, autoUpgradeFacts)
 
 	collectCloudProvidersFacts(ctx, newFacts)
 

@@ -20,6 +20,7 @@ package facts
 
 import (
 	"fmt"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -34,4 +35,16 @@ func statLockInode(path string) (uint64, error) {
 	}
 
 	return stat.Ino, nil
+}
+
+// monotonicNow returns the CLOCK_MONOTONIC time, the clock of systemd's *Monotonic
+// timestamps.
+func monotonicNow() (time.Duration, error) {
+	var ts unix.Timespec
+
+	if err := unix.ClockGettime(unix.CLOCK_MONOTONIC, &ts); err != nil {
+		return 0, fmt.Errorf("clock_gettime(CLOCK_MONOTONIC): %w", err)
+	}
+
+	return time.Duration(ts.Nano()), nil
 }
