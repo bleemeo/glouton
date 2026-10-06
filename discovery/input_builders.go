@@ -303,17 +303,6 @@ func mySQLInput(_ *Discovery, service Service, _ *registry.RegistrationOption) (
 }
 
 func natsInput(_ *Discovery, service Service, opts *registry.RegistrationOption) (telegraf.Input, error) {
-	url, ok := natsMonitoringURL(service)
-	if !ok {
-		return nil, errMissingInfo
-	}
-
-	return withOptions(opts)(nats.New(url))
-}
-
-// natsMonitoringURL is the URL of the service's monitoring server: the address listening on its
-// port, the configured one, or else the service's.
-func natsMonitoringURL(service Service) (string, bool) {
 	// The default port of the monitoring server is 8222.
 	port := 8222
 
@@ -321,12 +310,13 @@ func natsMonitoringURL(service Service) (string, bool) {
 		port = service.Config.StatsPort
 	}
 
-	ip := service.AddressForPort(port, tcpProtocol, true)
-	if ip == "" {
-		return "", false
+	if ip := service.AddressForPort(port, tcpProtocol, true); ip == "" {
+		return nil, errMissingInfo
 	}
 
-	return "http://" + net.JoinHostPort(ip, strconv.Itoa(port)), true
+	url := "http://" + net.JoinHostPort(service.IPAddress, strconv.Itoa(port))
+
+	return withOptions(opts)(nats.New(url))
 }
 
 func nfsInput(_ *Discovery, _ Service, opts *registry.RegistrationOption) (telegraf.Input, error) {
