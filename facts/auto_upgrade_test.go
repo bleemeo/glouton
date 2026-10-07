@@ -17,15 +17,18 @@
 package facts
 
 import (
+	"context"
 	"errors"
 	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/bleemeo/glouton/utils/gloutonexec"
 	"github.com/bleemeo/glouton/version"
 
 	"github.com/google/go-cmp/cmp"
@@ -723,15 +726,14 @@ func TestRefreshAutoUpgradeFacts(t *testing.T) {
 	})
 }
 
-// TestMergeAutoUpgradeFacts checks that the hourly result is dropped when a full refresh
-// ran while it was computed, and otherwise only replaces the auto-upgrade facts.
+// TestMergeAutoUpgradeFacts checks that the hourly result only replaces the auto-upgrade
+// facts, and only moves fact_updated_at when one of them changed.
 func TestMergeAutoUpgradeFacts(t *testing.T) {
 	const oldUpdatedAt = "2026-01-01T00:00:00Z"
 
-	refreshedAt := time.Now()
 	newProvider := func() *FactProvider {
 		f := NewFacter(Options{})
-		f.lastFactsUpdate = refreshedAt
+		f.lastFactsUpdate = time.Now()
 		f.facts = map[string]string{
 			"hostname":             "server",
 			factAutoUpgradeEnabled: "true",
@@ -751,7 +753,7 @@ func TestMergeAutoUpgradeFacts(t *testing.T) {
 		// Set while the checks ran, after their result was computed.
 		f.SetFact("manual", "kept")
 
-		f.mergeAutoUpgradeFacts(stuck, refreshedAt)
+		f.mergeAutoUpgradeFacts(stuck)
 
 		want := map[string]string{
 			"hostname":             "server",
@@ -771,23 +773,24 @@ func TestMergeAutoUpgradeFacts(t *testing.T) {
 		}
 	})
 
-	t.Run("full_refresh_meanwhile", func(t *testing.T) {
+	t.Run("unchanged", func(t *testing.T) {
 		f := newProvider()
 		before := f.facts
-		// What the hourly refresh started from.
-		startedFrom := refreshedAt.Add(-time.Hour)
 
-		f.mergeAutoUpgradeFacts(stuck, startedFrom)
+		f.mergeAutoUpgradeFacts(map[string]string{
+			factAutoUpgradeEnabled: "true",
+			factAutoUpgradeStatus:  autoUpgradeStatusOK,
+		})
 
 		if diff := cmp.Diff(before, f.facts); diff != "" {
-			t.Errorf("the full refresh's facts were overwritten (-want +got):\n%s", diff)
+			t.Errorf("facts changed although no auto-upgrade fact did (-want +got):\n%s", diff)
 		}
 	})
 
 	t.Run("dropped_facts", func(t *testing.T) {
 		f := newProvider()
 
-		f.mergeAutoUpgradeFacts(nil, refreshedAt)
+		f.mergeAutoUpgradeFacts(nil)
 
 		if _, ok := f.facts[factAutoUpgradeEnabled]; ok {
 			t.Errorf("%s kept, want it removed", factAutoUpgradeEnabled)
@@ -826,5 +829,59 @@ func TestAutoUpgradeEnabledValue(t *testing.T) {
 				t.Errorf("autoUpgradeEnabledValue() = %q, %v, want %q, %v", got, ok, tc.want, tc.wantOK)
 			}
 		})
+	}
+}
+
+// TestFactsRefreshesOnce checks that concurrent callers needing a refresh wait for a
+// single one instead of each running the checks.
+func TestFactsRefreshesOnce(t *testing.T) {
+	// A host root other than "/" keeps the refresh off this machine's commands, such as
+	// the auto-upgrade checks.
+	hostRoot := t.TempDir()
+	f := NewFacter(Options{Runner: gloutonexec.New(hostRoot), HostRootPath: hostRoot})
+
+	var (
+		l         sync.Mutex
+		refreshes int
+	)
+
+	f.AddCallback(func(context.Context, map[string]string) map[string]string {
+		l.Lock()
+		refreshes++
+		l.Unlock()
+
+		return nil
+	})
+
+	var wg sync.WaitGroup
+
+	for range 8 {
+		wg.Go(func() {
+			if _, err := f.Facts(t.Context(), time.Hour); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+
+	wg.Wait()
+
+	if refreshes != 1 {
+		t.Errorf("%d refreshes, want 1", refreshes)
+	}
+
+	// A refresh cut short isn't stored, so the next caller refreshes again.
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	f.l.Lock()
+	refreshedAt := f.lastFactsUpdate
+	f.l.Unlock()
+
+	if _, err := f.Facts(ctx, 0); err == nil {
+		t.Error("Facts() with a cancelled context returned no error")
+	}
+
+	if !f.lastFactsUpdate.Equal(refreshedAt) {
+		t.Error("a refresh with a cancelled context was stored")
 	}
 }

@@ -86,6 +86,10 @@ var (
 // There is one special fact named "fact_updated_at" which contains the last update of the facts.
 type FactProvider struct {
 	l sync.Mutex
+	// refreshL serializes the refreshes, so concurrent callers wait for a single one
+	// instead of each running the checks. It is taken before l, and is never held by
+	// a caller that only reads the facts.
+	refreshL sync.Mutex
 
 	options Options
 
@@ -136,12 +140,16 @@ func (f *FactProvider) AddCallback(cb FactCallback) {
 
 // Facts returns the list of facts for this system.
 func (f *FactProvider) Facts(ctx context.Context, maxAge time.Duration) (facts map[string]string, err error) {
-	f.l.Lock()
-	previous := f.facts
-	stale := time.Since(f.lastFactsUpdate) >= maxAge
-	f.l.Unlock()
+	if current, fresh := f.currentFacts(maxAge); fresh {
+		return current, ctx.Err()
+	}
 
-	if !stale {
+	f.refreshL.Lock()
+	defer f.refreshL.Unlock()
+
+	// Another caller may have refreshed the facts while this one waited.
+	previous, fresh := f.currentFacts(maxAge)
+	if fresh {
 		return previous, ctx.Err()
 	}
 
@@ -153,16 +161,21 @@ func (f *FactProvider) Facts(ctx context.Context, maxAge time.Duration) (facts m
 	f.l.Lock()
 	defer f.l.Unlock()
 
-	// Another caller may have refreshed the facts meanwhile.
-	if time.Since(f.lastFactsUpdate) >= maxAge {
-		t := time.Now()
+	t := time.Now()
 
-		f.updateFacts(ctx, autoUpgradeFacts)
+	f.updateFacts(ctx, autoUpgradeFacts)
 
-		logger.V(2).Printf("facts: updateFacts() took %v", time.Since(t))
-	}
+	logger.V(2).Printf("facts: updateFacts() took %v", time.Since(t))
 
 	return f.facts, ctx.Err()
+}
+
+// currentFacts returns the facts and whether they are at most maxAge old.
+func (f *FactProvider) currentFacts(maxAge time.Duration) (map[string]string, bool) {
+	f.l.Lock()
+	defer f.l.Unlock()
+
+	return f.facts, time.Since(f.lastFactsUpdate) < maxAge
 }
 
 // FastFacts returns an incomplete list of facts for this system. The slowest facts
@@ -209,15 +222,20 @@ func (f *FactProvider) SetFact(key string, value string) {
 // a package operation.
 //
 // fact_updated_at only changes when an auto-upgrade fact does. The checks run without
-// holding f.l, so they don't block readers of the facts.
+// holding f.l, so they don't block readers of the facts. Like a full refresh, it holds
+// f.refreshL: a full refresh can't start from facts older than this result, nor
+// overwrite it with a value computed before it.
 func (f *FactProvider) RefreshAutoUpgradeFacts(ctx context.Context) {
+	f.refreshL.Lock()
+	defer f.refreshL.Unlock()
+
 	f.l.Lock()
-	lastFactsUpdate := f.lastFactsUpdate
+	refreshed := !f.lastFactsUpdate.IsZero()
 	previous := f.facts
 	f.l.Unlock()
 
 	// Before the first full refresh there is nothing to update.
-	if lastFactsUpdate.IsZero() {
+	if !refreshed {
 		return
 	}
 
@@ -227,20 +245,14 @@ func (f *FactProvider) RefreshAutoUpgradeFacts(ctx context.Context) {
 		return
 	}
 
-	f.mergeAutoUpgradeFacts(autoUpgradeFacts, lastFactsUpdate)
+	f.mergeAutoUpgradeFacts(autoUpgradeFacts)
 }
 
-// mergeAutoUpgradeFacts replaces the auto-upgrade facts with autoUpgradeFacts, computed
-// from the facts of the full refresh made at lastFactsUpdate. Other facts, including
-// those set by SetFact meanwhile, are kept.
-func (f *FactProvider) mergeAutoUpgradeFacts(autoUpgradeFacts map[string]string, lastFactsUpdate time.Time) {
+// mergeAutoUpgradeFacts replaces the auto-upgrade facts with autoUpgradeFacts. Other
+// facts, including those set by SetFact meanwhile, are kept.
+func (f *FactProvider) mergeAutoUpgradeFacts(autoUpgradeFacts map[string]string) {
 	f.l.Lock()
 	defer f.l.Unlock()
-
-	// A full refresh ran meanwhile: its values are at least as recent as ours.
-	if !f.lastFactsUpdate.Equal(lastFactsUpdate) {
-		return
-	}
 
 	newFacts := maps.Clone(f.facts)
 	delete(newFacts, factAutoUpgradeEnabled)
@@ -308,7 +320,7 @@ func autoUpgradeEnabledValue(enabled bool, err error, previous map[string]string
 // updateFacts refreshes every fact. autoUpgradeFacts is the result of autoUpgradeFacts,
 // which the caller computes without holding f.l.
 //
-// Caller must hold f.l.
+// Caller must hold f.refreshL and f.l.
 func (f *FactProvider) updateFacts(ctx context.Context, autoUpgradeFacts map[string]string) {
 	newFacts := f.fastUpdateFacts(ctx)
 

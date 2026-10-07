@@ -104,8 +104,6 @@ const (
 	procLocksPath = "/proc/locks"
 )
 
-var errUnexpectedProcLocks = errors.New("unexpected /proc/locks format")
-
 var errUnexpectedSystemctlShow = errors.New("unexpected systemctl show output")
 
 var errAPTHasNoIndex = errors.New("APT has no repository index, run apt-get update")
@@ -760,8 +758,8 @@ func decodeProcLocks(content []byte) map[uint64]int {
 			continue
 		}
 
-		inode, err := decodeProcLocksInode(fields[4])
-		if err != nil {
+		inode, ok := decodeProcLocksInode(fields[4])
+		if !ok {
 			continue
 		}
 
@@ -774,16 +772,15 @@ func decodeProcLocks(content []byte) map[uint64]int {
 	return result
 }
 
-func decodeProcLocksInode(field string) (uint64, error) {
+// decodeProcLocksInode returns the inode of a MAJOR:MINOR:INODE field, false when the
+// field isn't one.
+func decodeProcLocksInode(field string) (uint64, bool) {
 	parts := strings.Split(field, ":")
 	if len(parts) != 3 {
-		return 0, fmt.Errorf("%w: %q isn't a MAJOR:MINOR:INODE triplet", errUnexpectedProcLocks, field)
+		return 0, false
 	}
 
 	inode, err := strconv.ParseUint(parts[2], 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("%w: %q: %w", errUnexpectedProcLocks, field, err)
-	}
 
-	return inode, nil
+	return inode, err == nil
 }
