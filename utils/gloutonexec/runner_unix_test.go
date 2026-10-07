@@ -175,3 +175,22 @@ func TestRunErrorHasStderr(t *testing.T) {
 		t.Errorf("Run() without stderr error = %q, want the exit status alone", err)
 	}
 }
+
+// TestRunErrorHasFullStderr checks FullStderr keeps every line a failed command wrote on stderr,
+// for a command writing one per failed item.
+func TestRunErrorHasFullStderr(t *testing.T) {
+	t.Parallel()
+
+	runner := New("/")
+	script := "echo 'cannot open /proc/12/ns/net' >&2; echo 'cannot open /proc/34/ns/net' >&2; exit 1"
+
+	_, err := runner.Run(t.Context(), Option{FullStderr: true}, "sh", "-c", script)
+
+	if got, want := fmt.Sprint(err), "exit status 1: cannot open /proc/12/ns/net\ncannot open /proc/34/ns/net"; got != want {
+		t.Errorf("Run() error = %q, want %q", got, want)
+	}
+
+	if exitErr := new(exec.ExitError); !errors.As(err, &exitErr) {
+		t.Errorf("Run() error %v does not wrap the exit error", err)
+	}
+}

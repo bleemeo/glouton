@@ -19,9 +19,7 @@ package veth
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
@@ -148,9 +146,10 @@ func (p *Provider) updateCache() error {
 	}
 
 	// Get the container interface indexes.
-	stdout, err := p.Runner.Run(ctx, gloutonexec.Option{RunAsRoot: true}, "/usr/lib/glouton/glouton-veths", pids...)
+	// The script writes one line on stderr per container it could not read: keep them all.
+	stdout, err := p.Runner.Run(ctx, gloutonexec.Option{RunAsRoot: true, FullStderr: true}, "/usr/lib/glouton/glouton-veths", pids...)
 	if err != nil {
-		return withOtherStderrLines(err)
+		return err
 	}
 
 	interfaceIndexByPID := parseOutput(string(stdout))
@@ -236,20 +235,4 @@ func (p *Provider) DiagnosticArchive(_ context.Context, archive types.ArchiveWri
 	fmt.Fprintln(file, string(cacheIndent))
 
 	return nil
-}
-
-// withOtherStderrLines adds to an error of glouton-veths the lines of its stderr after the first,
-// which the runner already added: the script writes one per container it could not read.
-func withOtherStderrLines(err error) error {
-	exitErr := new(exec.ExitError)
-	if !errors.As(err, &exitErr) {
-		return err
-	}
-
-	_, others, found := strings.Cut(strings.TrimSpace(string(exitErr.Stderr)), "\n")
-	if !found {
-		return err
-	}
-
-	return fmt.Errorf("%w\n%s", err, others)
 }

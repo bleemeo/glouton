@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -712,6 +713,19 @@ const (
 	// ScrapeRan means the last run was a real scrape: Error tells how the recent ones went.
 	ScrapeRan
 )
+
+func (s ScrapeStatus) String() string {
+	switch s {
+	case ScrapeNotRun:
+		return "not run"
+	case ScrapeSkipped:
+		return "skipped"
+	case ScrapeRan:
+		return "ran"
+	default:
+		return "ScrapeStatus(" + strconv.Itoa(int(s)) + ")"
+	}
+}
 
 // ScrapeState is a snapshot of a registration's recent scrapes. It has no timestamp: it is
 // reported to Bleemeo, where the value must stay stable.

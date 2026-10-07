@@ -61,6 +61,9 @@ type Option struct {
 	// When GraceDelay is == 0, KILL signal is sent as soon as context expire.
 	GraceDelay time.Duration
 	Environ    []string
+	// FullStderr makes a failed command's error end with all it wrote on stderr rather than the
+	// first line, for a command writing one line per failed item. See withStderr.
+	FullStderr bool
 }
 
 var (
@@ -266,24 +269,28 @@ func (r *Runner) Run(ctx context.Context, option Option, name string, arg ...str
 
 	err = handleError(err)
 
-	return out, withStderr(err)
+	return out, withStderr(err, option.FullStderr)
 }
 
-// withStderr adds to a failed command's error the first line of what it wrote on stderr: the
-// exit status alone, such as "exit status 69", does not say why. With CombinedOutput, stderr is
-// in the output and the error is left alone.
-func withStderr(err error) error {
+// withStderr adds to a failed command's error the first line of what it wrote on stderr, or all
+// of it with full: the exit status alone, such as "exit status 69", does not say why. With
+// CombinedOutput, stderr is in the output and the error is left alone.
+func withStderr(err error, full bool) error {
 	exitErr := new(exec.ExitError)
 	if !errors.As(err, &exitErr) {
 		return err
 	}
 
-	line, _, _ := strings.Cut(strings.TrimSpace(string(exitErr.Stderr)), "\n")
-	if line == "" {
+	stderr := strings.TrimSpace(string(exitErr.Stderr))
+	if !full {
+		stderr, _, _ = strings.Cut(stderr, "\n")
+	}
+
+	if stderr == "" {
 		return err
 	}
 
-	return fmt.Errorf("%w: %s", err, line)
+	return fmt.Errorf("%w: %s", err, stderr)
 }
 
 func (r *Runner) StartWithPipes(ctx context.Context, option Option, name string, arg ...string) (

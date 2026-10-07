@@ -111,22 +111,23 @@ func (s *SyncRegistrationStatus) NeedSynchronization(_ context.Context) (bool, e
 		return false, nil
 	}
 
+	// Built at most once per minNewServiceInterval, the shortest delay before a send, rather
+	// than on each execution: building reads discovery and both lists, encodes and hashes them.
+	// A clock that went back builds at once.
+	if !s.lastBuildAt.IsZero() && !now.Before(s.lastBuildAt) && now.Sub(s.lastBuildAt) < minNewServiceInterval {
+		return false, nil
+	}
+
 	// Until discovery ran and a synchronization published the metrics state, both lists are
 	// empty for lack of a run: sent, they would replace a value that still holds after a
-	// restart, and the next change may not be sent before minSendInterval.
+	// restart, and the next change may not be sent before minSendInterval. Checked once the
+	// build is due: it copies every service, under discovery's lock.
 	if _, lastDiscovery := option.Discovery.GetLatestDiscovery(); lastDiscovery.IsZero() {
 		return false, nil
 	}
 
 	if s.discoveryReadyAt.IsZero() {
 		s.discoveryReadyAt = now
-	}
-
-	// Built at most once per minNewServiceInterval, the shortest delay before a send, rather
-	// than on each execution: building reads both lists, encodes and hashes them. A clock that
-	// went back builds at once.
-	if !s.lastBuildAt.IsZero() && !now.Before(s.lastBuildAt) && now.Sub(s.lastBuildAt) < minNewServiceInterval {
-		return false, nil
 	}
 
 	// Waiting for the metrics state does not count as a build: it is retried on the next

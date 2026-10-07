@@ -83,34 +83,40 @@ func TestSyncSendsRegistrationStatus(t *testing.T) {
 // TestSyncObeysAPIFeatures checks an API that has glouton_features decides alone: when it does
 // not allow the feature, nothing is sent, even an empty object overriding the default ones.
 func TestSyncObeysAPIFeatures(t *testing.T) {
-	for _, features := range []bleemeoTypes.GloutonFeatures{
-		{},
-		{bleemeoTypes.FeatureSendRegistrationStatus: false},
-	} {
-		helper := newHelper(t)
+	cases := []struct {
+		name     string
+		features bleemeoTypes.GloutonFeatures
+	}{
+		{name: "empty", features: bleemeoTypes.GloutonFeatures{}},
+		{name: "disabled", features: bleemeoTypes.GloutonFeatures{bleemeoTypes.FeatureSendRegistrationStatus: false}},
+	}
 
-		helper.preregisterAgent(t)
-		helper.wrapperClientMock.resources.agents.elems[0].GloutonFeatures = features
-		helper.discovery.States = []discovery.ServiceState{{Name: "apache", ServiceType: discovery.ApacheService, InputSupported: true}}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			helper := newHelper(t)
+			defer helper.Close()
 
-		helper.initSynchronizer(t)
+			helper.preregisterAgent(t)
+			helper.wrapperClientMock.resources.agents.elems[0].GloutonFeatures = tc.features
+			helper.discovery.States = []discovery.ServiceState{{Name: "apache", ServiceType: discovery.ApacheService, InputSupported: true}}
 
-		for range 2 {
-			if err := helper.runOnce(t); err != nil {
-				t.Fatal(err)
+			helper.initSynchronizer(t)
+
+			for range 2 {
+				if err := helper.runOnce(t); err != nil {
+					t.Fatal(err)
+				}
+
+				helper.AddTime(time.Minute)
 			}
 
-			helper.AddTime(time.Minute)
-		}
+			if cached := helper.s.option.Cache.Agent().GloutonFeatures; cached.Enabled(bleemeoTypes.FeatureSendRegistrationStatus) {
+				t.Errorf("the cached Agent allows the feature: %v", cached)
+			}
 
-		if cached := helper.s.option.Cache.Agent().GloutonFeatures; cached.Enabled(bleemeoTypes.FeatureSendRegistrationStatus) {
-			t.Errorf("with %v from the API, the cached Agent allows the feature: %v", features, cached)
-		}
-
-		if sent := helper.s.option.Cache.RegistrationStatusSent(); !sent.LastAttemptAt.IsZero() {
-			t.Errorf("with %v from the API, the registration status was sent: %+v", features, sent)
-		}
-
-		helper.Close()
+			if sent := helper.s.option.Cache.RegistrationStatusSent(); !sent.LastAttemptAt.IsZero() {
+				t.Errorf("the registration status was sent: %+v", sent)
+			}
+		})
 	}
 }

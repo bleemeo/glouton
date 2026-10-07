@@ -120,17 +120,25 @@ func (e *fakeExecution) IsOnlyEssential() bool          { return e.onlyEssential
 func (e *fakeExecution) Option() types.Option           { return e.option }
 func (e *fakeExecution) StartedAt() time.Time           { return e.now }
 
-// countingDiscoverer counts the calls to ServicesState, one per payload built.
+// countingDiscoverer counts the calls to ServicesState, one per payload built, and to
+// GetLatestDiscovery, which copies every service.
 type countingDiscoverer struct {
 	*discovery.MockDiscoverer
 
-	builds int
+	builds  int
+	latests int
 }
 
 func (d *countingDiscoverer) ServicesState() []discovery.ServiceState {
 	d.builds++
 
 	return d.MockDiscoverer.ServicesState()
+}
+
+func (d *countingDiscoverer) GetLatestDiscovery() ([]discovery.Service, time.Time) {
+	d.latests++
+
+	return d.MockDiscoverer.GetLatestDiscovery()
 }
 
 type entityTest struct {
@@ -437,6 +445,11 @@ func TestEntityBuildsAtMostOncePerInterval(t *testing.T) {
 
 	if test.discovery.builds != 2 {
 		t.Errorf("built %d times, want 2: once to send, once in the following minute", test.discovery.builds)
+	}
+
+	// Discovery is read only when a build is due, not on every execution.
+	if test.discovery.latests != test.discovery.builds {
+		t.Errorf("read discovery %d times for %d builds", test.discovery.latests, test.discovery.builds)
 	}
 
 	if _, err := test.run(t, t0.Add(2*time.Hour+minNewServiceInterval)); err != nil {

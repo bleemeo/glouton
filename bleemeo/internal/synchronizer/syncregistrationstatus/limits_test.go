@@ -289,10 +289,9 @@ func TestMinEncodedSizeIsALowerBound(t *testing.T) {
 }
 
 // TestLimitsFitTheAPI checks both lists together, with their totals, stay well under the API's
-// smallest request limit: Django's DATA_UPLOAD_MAX_MEMORY_SIZE, 2.5 MiB by default, which
-// bleemeo-api keeps.
+// request size limit.
 func TestLimitsFitTheAPI(t *testing.T) {
-	const apiLimit = 2621440
+	const apiLimit = 5 << 19 // 2.5 MiB
 
 	envelope := len(`{"registration_status":{"services":,"services_total":1000000,"metrics":,"metrics_total":1000000}}`)
 

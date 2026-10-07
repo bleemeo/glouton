@@ -31,10 +31,8 @@ import (
 // services with 25-character names and every error at its longest take about 370 KiB; with long
 // container names, a row passes 1 KiB and the byte limit cuts before the row limit.
 //
-// The row limits come first. The byte limits are a backstop for rows of unforeseen size, under
-// the API's request limits, which Glouton does not compress: Django refuses a body over 2.5 MiB
-// with a 400 (DATA_UPLOAD_MAX_MEMORY_SIZE, checked as the OAuth authentication reads the body),
-// and uWSGI closes the connection on one over 5 MiB (limit-post), which reads as a network error.
+// The row limits come first. The byte limits are a backstop for rows of unforeseen size, well
+// under the API's request size limit: Glouton does not compress requests.
 const (
 	maxServices      = 500
 	maxServicesBytes = 512 << 10
