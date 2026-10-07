@@ -80,12 +80,12 @@ type Agent struct {
 	// Only the cluster leader gather global metrics for the cluster.
 	IsClusterLeader bool `json:"is_cluster_leader"`
 	// GloutonFeatures are the features Bleemeo allows this agent to use, nil when the API does
-	// not have the field. See GloutonFeatures. Omitted when nil: the Agent is also the payload
-	// that registers SNMP and vSphere agents, which must not send a null.
+	// not have the field, which enables none. See GloutonFeatures. Omitted when nil: the Agent is
+	// also the payload that registers SNMP and vSphere agents, which must not send a null.
 	GloutonFeatures GloutonFeatures `json:"glouton_features,omitempty"`
 }
 
-// Features Bleemeo can turn on or off per agent, in Agent.GloutonFeatures.
+// Features Bleemeo can turn on or off, in Agent.GloutonFeatures.
 const (
 	// FeatureSendRegistrationStatus allows sending the Agent's registration_status.
 	FeatureSendRegistrationStatus = "send_registration_status"

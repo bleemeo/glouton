@@ -257,19 +257,8 @@ func (cl *wrapperClient) UpdateAgent(ctx context.Context, id string, data any) (
 	return agent, err
 }
 
-func (cl *wrapperClient) UpdateAgentRegistrationStatus(ctx context.Context, id string, state any) (bool, error) {
-	var agent struct {
-		RegistrationStatus json.RawMessage `json:"registration_status"`
-	}
-
-	// The API returns the fields a request sets on top of those asked for, so the response is
-	// the id and, when the API has the field, the value it stored.
-	err := cl.Update(ctx, bleemeo.ResourceAgent, id, map[string]any{"registration_status": state}, "id", &agent)
-	if err != nil {
-		return false, err
-	}
-
-	return len(agent.RegistrationStatus) > 0 && string(agent.RegistrationStatus) != "null", nil
+func (cl *wrapperClient) UpdateAgentRegistrationStatus(ctx context.Context, id string, state any) error {
+	return cl.Update(ctx, bleemeo.ResourceAgent, id, map[string]any{"registration_status": state}, "id", nil)
 }
 
 func (cl *wrapperClient) DeleteAgent(ctx context.Context, id string) error {

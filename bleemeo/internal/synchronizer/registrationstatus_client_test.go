@@ -27,10 +27,8 @@ import (
 )
 
 // registrationStatusAPI is a Bleemeo API answering the agent PATCH as bleemeo-api does: with the
-// fields asked for plus those the request sets, the latter only when it has the field.
+// fields asked for plus those the request sets.
 type registrationStatusAPI struct {
-	hasField bool
-
 	body   map[string]json.RawMessage
 	fields string
 }
@@ -58,9 +56,9 @@ func (api *registrationStatusAPI) ServeHTTP(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	response := map[string]json.RawMessage{"id": json.RawMessage(`"agent-id"`)}
-	if api.hasField {
-		response["registration_status"] = api.body["registration_status"]
+	response := map[string]json.RawMessage{
+		"id":                  json.RawMessage(`"agent-id"`),
+		"registration_status": api.body["registration_status"],
 	}
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
@@ -68,41 +66,33 @@ func (api *registrationStatusAPI) ServeHTTP(w http.ResponseWriter, r *http.Reque
 	}
 }
 
-// TestUpdateAgentRegistrationStatus checks the request sent, and that a value is reported as stored
-// only when the API returns it.
+// TestUpdateAgentRegistrationStatus checks the request sent.
 func TestUpdateAgentRegistrationStatus(t *testing.T) {
-	for _, hasField := range []bool{true, false} {
-		api := &registrationStatusAPI{hasField: hasField}
+	api := &registrationStatusAPI{}
 
-		server := httptest.NewServer(api)
-		defer server.Close()
+	server := httptest.NewServer(api)
+	defer server.Close()
 
-		client, err := bleemeo.NewClient(
-			bleemeo.WithCredentials("user", "password"),
-			bleemeo.WithOAuthClient(gloutonOAuthClientID, ""),
-			bleemeo.WithEndpoint(server.URL),
-		)
-		if err != nil {
-			t.Fatal(err)
-		}
+	client, err := bleemeo.NewClient(
+		bleemeo.WithCredentials("user", "password"),
+		bleemeo.WithOAuthClient(gloutonOAuthClientID, ""),
+		bleemeo.WithEndpoint(server.URL),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-		cl := &wrapperClient{client: client}
+	cl := &wrapperClient{client: client}
 
-		stored, err := cl.UpdateAgentRegistrationStatus(t.Context(), "agent-id", map[string][]int{"services": {}})
-		if err != nil {
-			t.Fatal(err)
-		}
+	if err := cl.UpdateAgentRegistrationStatus(t.Context(), "agent-id", map[string][]int{"services": {}}); err != nil {
+		t.Fatal(err)
+	}
 
-		if stored != hasField {
-			t.Errorf("API with the field = %v: stored = %v", hasField, stored)
-		}
+	if got := string(api.body["registration_status"]); got != `{"services":[]}` {
+		t.Errorf("registration_status sent = %s, want {\"services\":[]}", got)
+	}
 
-		if got := string(api.body["registration_status"]); got != `{"services":[]}` {
-			t.Errorf("registration_status sent = %s, want {\"services\":[]}", got)
-		}
-
-		if api.fields != "id" {
-			t.Errorf("fields = %q, want id", api.fields)
-		}
+	if api.fields != "id" {
+		t.Errorf("fields = %q, want id", api.fields)
 	}
 }

@@ -58,24 +58,9 @@ func TestGloutonFeaturesFromAPI(t *testing.T) {
 	}
 }
 
-// TestGloutonFeaturesAbsentOrEmpty checks the distinction the synchronizer relies on: an API
-// without the field leaves the features nil, one with it gives a map, empty or not. And a nil
-// value is not sent: the Agent is also the payload registering SNMP and vSphere agents.
-func TestGloutonFeaturesAbsentOrEmpty(t *testing.T) {
-	var absent, empty Agent
-
-	if err := json.Unmarshal([]byte(`{"id": "agent-id"}`), &absent); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := json.Unmarshal([]byte(`{"id": "agent-id", "glouton_features": {}}`), &empty); err != nil {
-		t.Fatal(err)
-	}
-
-	if absent.GloutonFeatures != nil || empty.GloutonFeatures == nil {
-		t.Errorf("absent = %#v, empty = %#v; want nil and an empty map", absent.GloutonFeatures, empty.GloutonFeatures)
-	}
-
+// TestGloutonFeaturesNotSent checks an Agent without features is sent without the field: the
+// Agent is also the payload registering SNMP and vSphere agents, which must not send a null.
+func TestGloutonFeaturesNotSent(t *testing.T) {
 	body, err := json.Marshal(Agent{ID: "agent-id"})
 	if err != nil {
 		t.Fatal(err)

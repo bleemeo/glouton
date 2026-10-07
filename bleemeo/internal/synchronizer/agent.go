@@ -63,12 +63,6 @@ func (s *Synchronizer) syncMainAgent(ctx context.Context, apiClient types.AgentC
 		return err
 	}
 
-	// Only while the API does not have the field: once it does, it always returns it, at least
-	// empty, and decides alone.
-	if agent.GloutonFeatures == nil {
-		agent.GloutonFeatures = defaultGloutonFeatures()
-	}
-
 	s.option.Cache.SetAgent(agent)
 
 	s.option.Cache.SetAccountID(agent.AccountID)
@@ -114,13 +108,4 @@ func (s *Synchronizer) agentsUpdateList(ctx context.Context, execution types.Syn
 	}
 
 	return nil
-}
-
-// defaultGloutonFeatures stands in for the Agent's glouton_features while the API does not have
-// the field. Once it has, an older Glouton reading it obeys the API rather than this. A feature
-// absent from it is disabled, as it is when the API omits it.
-func defaultGloutonFeatures() bleemeoTypes.GloutonFeatures {
-	return bleemeoTypes.GloutonFeatures{
-		bleemeoTypes.FeatureSendRegistrationStatus: true,
-	}
 }

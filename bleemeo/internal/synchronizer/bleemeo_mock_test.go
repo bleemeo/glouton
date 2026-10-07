@@ -191,19 +191,18 @@ func (wcm *wrapperClientMock) UpdateAgent(_ context.Context, id string, data any
 	return agent.Agent, wcm.resources.agents.applyPatchHook(agent, &wcm.errorsCount)
 }
 
-// UpdateAgentRegistrationStatus acts as an API that has the registration_status field.
-func (wcm *wrapperClientMock) UpdateAgentRegistrationStatus(_ context.Context, id string, _ any) (bool, error) {
+func (wcm *wrapperClientMock) UpdateAgentRegistrationStatus(_ context.Context, id string, _ any) error {
 	wcm.requestCounts[mockAPIResourceAgent]++
 
 	agent := wcm.resources.agents.findResource(func(a bleemeoapi.AgentPayload) bool { return a.ID == id })
 	if agent == nil {
-		return false, &bleemeo.APIError{
+		return &bleemeo.APIError{
 			StatusCode: http.StatusNotFound,
 			Err:        fmt.Errorf("%w: agent id with %q", bleemeo.ErrResourceNotFound, id),
 		}
 	}
 
-	return true, nil
+	return nil
 }
 
 func (wcm *wrapperClientMock) DeleteAgent(_ context.Context, id string) error {

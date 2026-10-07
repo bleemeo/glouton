@@ -32,6 +32,9 @@ func TestSyncSendsRegistrationStatus(t *testing.T) {
 	defer helper.Close()
 
 	helper.preregisterAgent(t)
+	helper.wrapperClientMock.resources.agents.elems[0].GloutonFeatures = bleemeoTypes.GloutonFeatures{
+		bleemeoTypes.FeatureSendRegistrationStatus: true,
+	}
 	helper.discovery.States = []discovery.ServiceState{{
 		Name:           "apache",
 		ServiceType:    discovery.ApacheService,
@@ -56,8 +59,6 @@ func TestSyncSendsRegistrationStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The mock API does not send glouton_features, as an API without the field: the synchronizer
-	// sets the default ones on the cached Agent.
 	if !helper.s.option.Cache.Agent().GloutonFeatures.Enabled(bleemeoTypes.FeatureSendRegistrationStatus) {
 		t.Error("the cached Agent does not allow sending the registration status")
 	}
@@ -80,13 +81,14 @@ func TestSyncSendsRegistrationStatus(t *testing.T) {
 	}
 }
 
-// TestSyncObeysAPIFeatures checks an API that has glouton_features decides alone: when it does
-// not allow the feature, nothing is sent, even an empty object overriding the default ones.
+// TestSyncObeysAPIFeatures checks nothing is sent when the API does not allow the feature: it
+// turns it off, leaves it out, or does not have glouton_features at all.
 func TestSyncObeysAPIFeatures(t *testing.T) {
 	cases := []struct {
 		name     string
 		features bleemeoTypes.GloutonFeatures
 	}{
+		{name: "absent field", features: nil},
 		{name: "empty", features: bleemeoTypes.GloutonFeatures{}},
 		{name: "disabled", features: bleemeoTypes.GloutonFeatures{bleemeoTypes.FeatureSendRegistrationStatus: false}},
 	}

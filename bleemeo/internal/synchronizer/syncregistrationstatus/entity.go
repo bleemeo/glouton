@@ -99,7 +99,7 @@ func (s *SyncRegistrationStatus) NeedSynchronization(_ context.Context) (bool, e
 		return false, nil
 	}
 
-	// Bleemeo can turn the feature off per agent, as on a Glouton version that misbehaves.
+	// Bleemeo can turn the feature off without an upgrade, as on a Glouton version that misbehaves.
 	if !option.Cache.Agent().GloutonFeatures.Enabled(bleemeoTypes.FeatureSendRegistrationStatus) {
 		return false, nil
 	}
@@ -192,7 +192,7 @@ func (s *SyncRegistrationStatus) SyncRemoteAndLocal(ctx context.Context, _ types
 	// run from it, and an execution can last long.
 	now := s.now()
 
-	stored, err := s.currentExecution.BleemeoAPIClient().UpdateAgentRegistrationStatus(ctx, agentID, s.payload)
+	err := s.currentExecution.BleemeoAPIClient().UpdateAgentRegistrationStatus(ctx, agentID, s.payload)
 	if err != nil {
 		option.Cache.SetRegistrationStatusSent(SendFailed(option.Cache.RegistrationStatusSent(), agentID, now))
 
@@ -206,15 +206,6 @@ func (s *SyncRegistrationStatus) SyncRemoteAndLocal(ctx context.Context, _ types
 		}
 
 		return err
-	}
-
-	// Recorded as sent, the value would not be sent again once the API has the field, for as
-	// long as it does not change.
-	if !stored {
-		option.Cache.SetRegistrationStatusSent(SendFailed(option.Cache.RegistrationStatusSent(), agentID, now))
-		logger.V(1).Printf("Bleemeo did not store the registration status: the API does not support it yet")
-
-		return nil
 	}
 
 	option.Cache.SetRegistrationStatusSent(Sent(*s.payload, agentID, now))

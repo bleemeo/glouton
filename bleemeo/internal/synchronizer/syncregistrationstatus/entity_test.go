@@ -89,20 +89,18 @@ type fakeClient struct {
 	ids    []string
 	bodies []string
 	err    error
-	// notStored acts as an API without the registration_status field.
-	notStored bool
 }
 
-func (c *fakeClient) UpdateAgentRegistrationStatus(_ context.Context, id string, state any) (bool, error) {
+func (c *fakeClient) UpdateAgentRegistrationStatus(_ context.Context, id string, state any) error {
 	body, err := json.Marshal(state)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	c.ids = append(c.ids, id)
 	c.bodies = append(c.bodies, string(body))
 
-	return c.err == nil && !c.notStored, c.err
+	return c.err
 }
 
 // fakeExecution is an execution started at now. Any call it does not define panics.
@@ -372,31 +370,6 @@ func TestEntityOtherErrorFails(t *testing.T) {
 				t.Errorf("recorded %+v, want a failed attempt", sent)
 			}
 		})
-	}
-}
-
-// TestEntityNotStored checks a value the API did not store, as one without the field, is not
-// recorded as sent: once the API has the field, the same value is sent again.
-func TestEntityNotStored(t *testing.T) {
-	test := newEntityTest(testAgent)
-	test.execution.client.notStored = true
-
-	if _, err := test.run(t, t0); err != nil {
-		t.Fatalf("a value not stored failed the synchronization: %v", err)
-	}
-
-	if sent := test.execution.option.Cache.RegistrationStatusSent(); !sent.LastAttemptFailed || sent.Hash != "" {
-		t.Errorf("recorded %+v, want a failed attempt and no accepted value", sent)
-	}
-
-	test.execution.client.notStored = false
-
-	if need, err := test.run(t, t0.Add(minSendInterval)); err != nil || !need {
-		t.Fatalf("the same value once the API stores it: need = %v, err = %v; want true, nil", need, err)
-	}
-
-	if sent := test.execution.option.Cache.RegistrationStatusSent(); sent.LastAttemptFailed || sent.Hash == "" {
-		t.Errorf("recorded %+v, want an accepted value", sent)
 	}
 }
 
