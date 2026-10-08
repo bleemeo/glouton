@@ -139,6 +139,31 @@ func TestLastScrapeStateStuckAcrossRestart(t *testing.T) {
 	}
 }
 
+// TestLastScrapeStateRecoveredAfterRestart checks a hung run is no longer reported once a run
+// started after it completed: the restarted loop collects again while the old run hangs.
+func TestLastScrapeStateRecoveredAfterRestart(t *testing.T) {
+	t0 := time.Now()
+	reg := &registration{interval: 10 * time.Second}
+
+	reg.startRun(t0)
+	// The loop is restarted at t0+60s, and its first run completes, as scrapeFromLoop records it.
+	runID := reg.startRun(t0.Add(60 * time.Second))
+	reg.endRun(runID)
+	reg.lastScrapes = append(reg.lastScrapes, scrapeRun{ScrapeAt: t0.Add(60 * time.Second), ScrapedPointsCount: 5})
+	reg.lastRecordedRunID = runID
+
+	if got := reg.lastScrapeState(t0.Add(65 * time.Second)); got != (types.ScrapeState{Status: types.ScrapeRan}) {
+		t.Errorf("a run hung before the last recorded one is reported as %+v, want the last run", got)
+	}
+
+	// The next run hangs in turn: that one is stuck.
+	reg.startRun(t0.Add(70 * time.Second))
+
+	if got := reg.lastScrapeState(t0.Add(2 * time.Minute)); got.Error != errScrapeStuck.Error() {
+		t.Errorf("a run hung after the last recorded one is reported as %+v, want stuck", got)
+	}
+}
+
 // TestRegistrationImplementsScrapeStateProvider pins the optional interface discovery
 // asserts on. Discovery falls back to an "unknown" status when the assertion fails, so
 // breaking this would silently degrade the reported state rather than fail to build.

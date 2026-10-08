@@ -329,6 +329,7 @@ type registration struct {
 	loop                 *scrapeLoop
 	runsInFlight         map[uint64]time.Time // when each run not yet returned started
 	nextRunID            uint64
+	lastRecordedRunID    uint64 // the most recent run recorded in lastScrapes
 	lastScrapes          []scrapeRun
 	gatherer             *wrappedGatherer
 	annotations          types.MetricAnnotations
@@ -368,9 +369,10 @@ func (reg *registration) lastScrapeState(now time.Time) types.ScrapeState {
 	// A run that never returns is never recorded: without this, the last completed one
 	// would be reported for as long as the input hangs. The run itself is followed, rather
 	// than the time since the last record, so that a loop restarted meanwhile does not hide it.
+	// A run older than the last recorded one no longer counts: collection resumed after it.
 	if reg.interval > 0 {
-		for _, startedAt := range reg.runsInFlight {
-			if now.Sub(startedAt) > scrapeStuckIntervals*reg.interval {
+		for id, startedAt := range reg.runsInFlight {
+			if id > reg.lastRecordedRunID && now.Sub(startedAt) > scrapeStuckIntervals*reg.interval {
 				return types.ScrapeState{Status: types.ScrapeRan, Error: errScrapeStuck.Error()}
 			}
 		}
@@ -1769,6 +1771,7 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, loopCtx context.Context, 
 	reg.l.Lock()
 
 	reg.lastScrapes = append(reg.lastScrapes, scrapeRun{ScrapeAt: t0, ScrapeDuration: duration, ScrapedPointsCount: len(mfs), Error: err})
+	reg.lastRecordedRunID = runID
 
 	if errors.Is(err, errSkippingScrapeDueToRelabelHook) {
 		// We don't log skipping due to relabel hook, but we still store the error in reg.lastScrapes
