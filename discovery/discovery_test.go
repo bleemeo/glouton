@@ -24,6 +24,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1641,5 +1642,74 @@ func TestFailedDiscoveryKeepServices(t *testing.T) {
 		if row.unregisterWasCalled {
 			t.Errorf("%s was unregistered after a failed discovery", row.opt.Description)
 		}
+	}
+}
+
+type hangingDiscoverer struct {
+	hang    atomic.Bool
+	release chan struct{}
+}
+
+func (h *hangingDiscoverer) Discovery(ctx context.Context) ([]Service, time.Time, error) {
+	if h.hang.Load() {
+		select {
+		case <-h.release:
+		case <-ctx.Done():
+		}
+
+		return nil, time.Time{}, context.DeadlineExceeded
+	}
+
+	return []Service{{Name: testMemcached, ServiceType: MemcachedService, IPAddress: testIP127001}}, time.Time{}, nil
+}
+
+// TestRemoveIfNonRunningDuringDiscovery ensures RemoveIfNonRunning doesn't deadlock with a running discovery.
+func TestRemoveIfNonRunningDuringDiscovery(t *testing.T) {
+	dd := &hangingDiscoverer{release: make(chan struct{})}
+	disc, _ := New(
+		dd,
+		gloutonexec.New("/"),
+		nil,
+		mockState{},
+		mockContainerInfo{},
+		nil,
+		nil,
+		nil,
+		nil,
+		facts.ContainerFilter{}.ContainerIgnored,
+		nil,
+		time.Hour,
+		config.OpenTelemetry{},
+	)
+
+	if _, _, err := disc.discovery(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	go func() {
+		_ = disc.Run(ctx)
+	}()
+
+	dd.hang.Store(true)
+
+	// Run is now in a discovery that hangs until release is closed.
+	disc.triggerDiscovery <- nil
+
+	time.AfterFunc(200*time.Millisecond, func() { close(dd.release) })
+
+	done := make(chan struct{})
+
+	go func() {
+		disc.RemoveIfNonRunning([]Service{{Name: testMemcached}})
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("RemoveIfNonRunning is still blocked after the discovery ended")
 	}
 }

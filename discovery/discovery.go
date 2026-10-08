@@ -642,7 +642,6 @@ func (d *Discovery) discovery(ctx context.Context) ([]Service, time.Time, error)
 // next discovery will be run asynchroniously if from entry were deleted.
 func (d *Discovery) RemoveIfNonRunning(services []Service) {
 	d.l.Lock()
-	defer d.l.Unlock()
 
 	deleted := false
 
@@ -656,6 +655,10 @@ func (d *Discovery) RemoveIfNonRunning(services []Service) {
 		delete(d.discoveredServicesMap, key)
 	}
 
+	d.l.Unlock()
+
+	// TriggerUpdate blocks until Run receives it, and Run needs the lock to finish a running
+	// discovery, so it must be called without holding the lock.
 	if deleted {
 		d.TriggerUpdate()
 	}
