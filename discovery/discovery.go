@@ -30,6 +30,7 @@ import (
 
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/crashreport"
+	"github.com/bleemeo/glouton/delay"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/registry"
@@ -47,8 +48,14 @@ var errNoCheckAssociated = errors.New("there is no check associated with the con
 
 const localhostIP = "127.0.0.1"
 
-// discoveryTimeout is the time limit for a discovery.
-const discoveryTimeout = time.Minute
+const (
+	// discoveryTimeout is the time limit for a discovery.
+	discoveryTimeout = time.Minute
+	// failedDiscoveryMinRetryDelay and failedDiscoveryMaxRetryDelay bound the delay
+	// before a failed discovery is retried. The delay doubles on each consecutive failure.
+	failedDiscoveryMinRetryDelay = 30 * time.Second
+	failedDiscoveryMaxRetryDelay = 10 * time.Minute
+)
 
 // Discovery implements the full discovery mechanism.
 // It will take information from both the dynamic discovery
@@ -369,25 +376,65 @@ func (d *Discovery) Run(ctx context.Context) error {
 	var (
 		wantedNextUpdate            time.Time
 		consecutiveNonTriggerUpdate int
+		retryAt                     time.Time
+		consecutiveFailure          int
 	)
 
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
+
+	// onResult schedules a retry when the discovery failed.
+	onResult := func(err error) {
+		if err == nil {
+			retryAt = time.Time{}
+			consecutiveFailure = 0
+
+			return
+		}
+
+		consecutiveFailure++
+		retryAt = time.Now().Add(delay.Exponential(failedDiscoveryMinRetryDelay, 2, consecutiveFailure, failedDiscoveryMaxRetryDelay))
+
+		// The retry replaces any update wanted by the failed discovery.
+		wantedNextUpdate = time.Time{}
+
+		logger.V(1).Printf("discovery failed %d time(s) in a row, will retry at %s", consecutiveFailure, retryAt.Format(time.RFC3339))
+	}
 
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-d.triggerDiscovery:
-			wantedNextUpdate = d.discoveryAndNotify(ctx, "trigger")
+			var err error
+
+			wantedNextUpdate, err = d.discoveryAndNotify(ctx, "trigger")
 			consecutiveNonTriggerUpdate = 0
+
+			onResult(err)
 		case <-ticker.C:
+			if !retryAt.IsZero() && !time.Now().Before(retryAt) {
+				// The failed discovery is still pending, retry it as if it was triggered.
+				var err error
+
+				wantedNextUpdate, err = d.discoveryAndNotify(ctx, "retry of a failed discovery")
+				consecutiveNonTriggerUpdate = 0
+
+				onResult(err)
+
+				continue
+			}
+
 			if wantedNextUpdate.IsZero() || time.Now().Before(wantedNextUpdate) {
 				continue
 			}
 
-			wantedNextUpdate = d.discoveryAndNotify(ctx, "re-update for processes & container")
+			var err error
+
+			wantedNextUpdate, err = d.discoveryAndNotify(ctx, "re-update for processes & container")
 			consecutiveNonTriggerUpdate++
+
+			onResult(err)
 
 			if wantedNextUpdate.IsZero() {
 				continue
@@ -510,7 +557,9 @@ func (d *Discovery) DiagnosticArchive(_ context.Context, zipFile types.ArchiveWr
 	return nil
 }
 
-func (d *Discovery) discoveryAndNotify(ctx context.Context, updateReason string) time.Time {
+// discoveryAndNotify runs a discovery and sends its result to subscribers.
+// When the discovery fails, subscribers receive the services from the last successful discovery.
+func (d *Discovery) discoveryAndNotify(ctx context.Context, updateReason string) (time.Time, error) {
 	startedAt := time.Now()
 
 	services, nextUpdate, err := d.discovery(ctx)
@@ -554,7 +603,7 @@ func (d *Discovery) discoveryAndNotify(ctx context.Context, updateReason string)
 		extraMessage,
 	)
 
-	return nextUpdate
+	return nextUpdate, err
 }
 
 func (d *Discovery) discovery(ctx context.Context) ([]Service, time.Time, error) {
@@ -566,11 +615,11 @@ func (d *Discovery) discovery(ctx context.Context) ([]Service, time.Time, error)
 	d.l.Lock()
 	defer d.l.Unlock()
 
-	if err != nil {
-		return nil, nextUpdate, err
+	if err == nil {
+		err = ctx.Err()
 	}
 
-	if ctx.Err() == nil {
+	if err == nil {
 		saveState(d.state, d.discoveredServicesMap)
 		d.reconfigure()
 
@@ -583,7 +632,7 @@ func (d *Discovery) discovery(ctx context.Context) ([]Service, time.Time, error)
 		services = append(services, v)
 	}
 
-	return services, nextUpdate, ctx.Err()
+	return services, nextUpdate, err
 }
 
 // RemoveIfNonRunning remove a service if the service is not running.
