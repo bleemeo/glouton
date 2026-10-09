@@ -17,6 +17,7 @@
 package blackbox
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -463,7 +464,13 @@ func (m *RegisterManager) DiagnosticArchive(_ context.Context, archive types.Arc
 			labels[k] = config.CensorURLSecrets(v)
 		}
 
-		fmt.Fprintf(file, "url=%s labels=%v\n", config.CensorURLSecrets(t.URL), labels)
+		// The HTTP method shows whether a monitor with use_head is probed with HEAD.
+		method := ""
+		if t.Module.Prober == proberNameHTTP {
+			method = " method=" + cmp.Or(t.Module.HTTP.Method, http.MethodGet)
+		}
+
+		fmt.Fprintf(file, "url=%s%s labels=%v\n", config.CensorURLSecrets(t.URL), method, labels)
 	}
 
 	return nil

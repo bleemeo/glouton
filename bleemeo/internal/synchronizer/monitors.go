@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
@@ -35,6 +36,9 @@ var (
 	errMissingAccountConf = errors.New("missing account configuration")
 	errCannotParse        = errors.New("couldn't parse monitor")
 )
+
+// monitorsUpdateRetryDelay is the delay before retrying the monitor updates which failed.
+const monitorsUpdateRetryDelay = time.Minute
 
 type monitorOperation int
 
@@ -88,6 +92,8 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 	if syncType == types.SyncTypeForceCacheRefresh {
 		monitors, err = apiClient.ListMonitors(ctx)
 		if err != nil {
+			s.retryMonitorsUpdate(pendingMonitorsUpdate)
+
 			return false, err
 		}
 
@@ -95,6 +101,8 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 	} else {
 		monitors, err = s.getListOfMonitorsFromAPI(ctx, execution, pendingMonitorsUpdate)
 		if err != nil {
+			s.retryMonitorsUpdate(pendingMonitorsUpdate)
+
 			return false, err
 		}
 	}
@@ -117,6 +125,21 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 	}
 
 	return false, s.ApplyMonitorUpdate()
+}
+
+// retryMonitorsUpdate puts back the monitor updates which couldn't be applied, before the ones
+// received meanwhile, and retries them later. Without it, they would be lost until the next full
+// synchronization, which can be hours later.
+func (s *Synchronizer) retryMonitorsUpdate(updates []MonitorUpdate) {
+	if len(updates) == 0 {
+		return
+	}
+
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	s.pendingMonitorsUpdate = append(slices.Clone(updates), s.pendingMonitorsUpdate...)
+	s.requestLaterSynchronizationLocked(types.EntityMonitor, false, monitorsUpdateRetryDelay)
 }
 
 func hashAgentID(agentID string) uint64 {

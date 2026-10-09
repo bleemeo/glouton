@@ -17,8 +17,12 @@
 package blackbox
 
 import (
+	"bytes"
+	"io"
+	"maps"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -380,5 +384,75 @@ func TestUpdateDynamicTargetsHeadFallback(t *testing.T) {
 
 	if len(bbManager.loggedHeadFallbacks) != 0 {
 		t.Errorf("loggedHeadFallbacks = %v, want empty", bbManager.loggedHeadFallbacks)
+	}
+}
+
+// memoryArchive is an in-memory types.ArchiveWriter.
+type memoryArchive struct {
+	files   map[string]*bytes.Buffer
+	current string
+}
+
+func (a *memoryArchive) Create(filename string) (io.Writer, error) {
+	buf := &bytes.Buffer{}
+	a.files[filename] = buf
+	a.current = filename
+
+	return buf, nil
+}
+
+func (a *memoryArchive) CurrentFileName() string {
+	return a.current
+}
+
+// TestDiagnosticArchiveHTTPMethod ensures the diagnostic shows the HTTP method of the HTTP probes,
+// to know whether a monitor with use_head is probed with HEAD.
+func TestDiagnosticArchiveHTTPMethod(t *testing.T) {
+	t.Parallel()
+
+	reg, err := registry.New(registry.Option{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bbManager, err := New(reg, config.Blackbox{}, func(...error) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	monitors := []types.Monitor{
+		{ID: "1", BleemeoAgentID: "agent-1", URL: "https://example.com/head", UseHead: true},
+		{ID: "2", BleemeoAgentID: "agent-2", URL: "https://example.com/get"},
+		{ID: "3", BleemeoAgentID: "agent-3", URL: "https://example.com/content", UseHead: true, ExpectedContent: "welcome"},
+		{ID: "4", BleemeoAgentID: "agent-4", URL: "tcp://example.com:1234", UseHead: true},
+	}
+
+	if err := bbManager.UpdateDynamicTargets(monitors); err != nil {
+		t.Fatal(err)
+	}
+
+	archive := &memoryArchive{files: make(map[string]*bytes.Buffer)}
+
+	if err := bbManager.DiagnosticArchive(t.Context(), archive); err != nil {
+		t.Fatal(err)
+	}
+
+	targets, ok := archive.files["blackbox-targets.txt"]
+	if !ok {
+		t.Fatalf("blackbox-targets.txt not in the archive, files: %v", slices.Collect(maps.Keys(archive.files)))
+	}
+
+	wantPrefixes := []string{
+		"url=https://example.com/head method=HEAD labels=",
+		"url=https://example.com/get method=GET labels=",
+		"url=https://example.com/content method=GET labels=",
+		"url=example.com:1234 labels=",
+	}
+
+	lines := strings.Split(strings.TrimSpace(targets.String()), "\n")
+	for _, want := range wantPrefixes {
+		if !slices.ContainsFunc(lines, func(line string) bool { return strings.HasPrefix(line, want) }) {
+			t.Errorf("no line starting with %q in:\n%s", want, targets.String())
+		}
 	}
 }

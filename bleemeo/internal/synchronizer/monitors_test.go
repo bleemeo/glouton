@@ -17,6 +17,7 @@
 package synchronizer
 
 import (
+	"errors"
 	"math/rand"
 	"reflect"
 	"slices"
@@ -396,6 +397,70 @@ func TestSyncMonitorUseHeadAPIError(t *testing.T) {
 	}
 
 	checkUseHead(t, map[string]bool{monitorA.ID: false, monitorB.ID: true, monitorC.ID: true})
+}
+
+// TestSyncMonitorUpdateRetry ensures a monitor update which failed is retried later,
+// instead of being lost until the next full synchronization.
+func TestSyncMonitorUpdateRetry(t *testing.T) {
+	monitor := bleemeoTypes.Monitor{
+		ID:           "4d2cd2c7-1d8e-4f99-9b6b-5d0a7a8c3e01",
+		Account:      accountID,
+		Active:       true,
+		CreationDate: "2020-01-03T04:05:06Z",
+		URL:          "https://example.com/retry",
+		AgentID:      "9c2e3b3a-3f4d-4f99-9b6b-5d0a7a8c3e01",
+		UseHead:      true,
+	}
+
+	helper := newHelper(t)
+	defer helper.Close()
+
+	helper.preregisterAgent(t)
+	helper.initSynchronizer(t)
+
+	if err := helper.runOnce(t); err != nil {
+		t.Fatal(err)
+	}
+
+	monitorIDs := func() []string {
+		ids := make([]string, 0, len(helper.monitorManager.Monitors()))
+		for _, m := range helper.monitorManager.Monitors() {
+			ids = append(ids, m.ID)
+		}
+
+		return ids
+	}
+
+	helper.wrapperClientMock.resources.monitors.add(monitor)
+	helper.wrapperClientMock.getMonitorErr = errClientError
+	helper.s.UpdateMonitor("change", monitor.ID)
+	helper.AddTime(time.Minute)
+
+	if result := helper.runOnceWithResult(t); !errors.Is(result.err, errClientError) {
+		t.Fatalf("runOnce error = %v, want %v", result.err, errClientError)
+	}
+
+	if ids := monitorIDs(); slices.Contains(ids, monitor.ID) {
+		t.Fatalf("monitor %s added while the API failed: %v", monitor.ID, ids)
+	}
+
+	// Without a new notification, the update is retried once the retry delay has passed.
+	helper.wrapperClientMock.getMonitorErr = nil
+	helper.AddTime(2 * monitorsUpdateRetryDelay)
+
+	if err := helper.runOnce(t); err != nil {
+		t.Fatal(err)
+	}
+
+	if ids := monitorIDs(); !slices.Contains(ids, monitor.ID) {
+		t.Fatalf("monitor %s not added after the retry: %v", monitor.ID, ids)
+	}
+
+	for _, m := range helper.monitorManager.Monitors() {
+		if m.ID == monitor.ID && !m.UseHead {
+			t.Errorf("monitor %s: UseHead = false, want true", monitor.ID)
+		}
+	}
 }
 
 // TestMonitorFieldsMatchTypes ensures the HTTP options of the services and the fields of the Monitor
