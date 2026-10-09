@@ -122,6 +122,7 @@ type Synchronizer struct {
 	forceSync                     map[types.EntityName]types.SyncRequest
 	pendingMetricsUpdate          []string
 	pendingMonitorsUpdate         []MonitorUpdate
+	monitorsFullSyncFailures      int
 	thresholdOverrides            map[thresholdOverrideKey]threshold.Threshold
 	retryableMetricFailure        map[bleemeoTypes.FailureKind]bool
 	disableCrashReportUploadUntil time.Time

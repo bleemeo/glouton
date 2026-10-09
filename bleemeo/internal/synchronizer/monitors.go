@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"time"
 
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
@@ -37,8 +36,15 @@ var (
 	errCannotParse        = errors.New("couldn't parse monitor")
 )
 
-// monitorsUpdateRetryDelay is the delay before retrying the monitor updates which failed.
-const monitorsUpdateRetryDelay = time.Minute
+const (
+	// monitorsRetryDelay is the delay before the first retry of a monitor synchronization which failed.
+	// It doubles on each new failure, up to monitorsMaxRetryDelay.
+	monitorsRetryDelay    = time.Minute
+	monitorsMaxRetryDelay = 15 * time.Minute
+	// monitorUpdateMaxAttempts is the number of attempts of a monitor update before giving up on it,
+	// so a permanent error doesn't retry it forever. The next full synchronization applies it anyway.
+	monitorUpdateMaxAttempts = 5
+)
 
 type monitorOperation int
 
@@ -53,6 +59,8 @@ const (
 type MonitorUpdate struct {
 	op   monitorOperation
 	uuid string
+	// attempts is the number of attempts which failed.
+	attempts int
 }
 
 // syncMonitors updates the list of monitors accessible to the agent.
@@ -89,22 +97,31 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 
 	apiClient := execution.BleemeoAPIClient()
 
+	// updatesErr is returned once the monitors which could be updated are applied.
+	var updatesErr error
+
 	if syncType == types.SyncTypeForceCacheRefresh {
 		monitors, err = apiClient.ListMonitors(ctx)
 		if err != nil {
-			s.retryMonitorsUpdate(pendingMonitorsUpdate)
+			// The pending updates aren't kept, the full synchronization retried covers them.
+			s.retryMonitorsFullSync()
 
 			return false, err
 		}
 
-		applyMonitorObjectsFromAPI(ctx, apiClient, "", monitors, s.option.Cache.Monitors())
+		// The monitors are still applied, with their previous options.
+		if err := applyMonitorObjectsFromAPI(ctx, apiClient, "", monitors, s.option.Cache.Monitors()); err != nil {
+			s.retryMonitorsFullSync()
+		} else {
+			s.l.Lock()
+			s.monitorsFullSyncFailures = 0
+			s.l.Unlock()
+		}
 	} else {
-		monitors, err = s.getListOfMonitorsFromAPI(ctx, execution, pendingMonitorsUpdate)
-		if err != nil {
-			s.retryMonitorsUpdate(pendingMonitorsUpdate)
+		var failedUpdates []MonitorUpdate
 
-			return false, err
-		}
+		monitors, failedUpdates, updatesErr = s.getListOfMonitorsFromAPI(ctx, execution, pendingMonitorsUpdate)
+		s.retryMonitorsUpdate(failedUpdates)
 	}
 
 	s.option.Cache.SetMonitors(monitors)
@@ -124,22 +141,66 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 		execution.RequestSynchronization(types.EntityConfig, true)
 	}
 
-	return false, s.ApplyMonitorUpdate()
+	return false, errors.Join(updatesErr, s.ApplyMonitorUpdate())
+}
+
+// monitorsRetryDelayAfter returns the delay before retrying after the given number of failed attempts.
+func monitorsRetryDelayAfter(attempts int) time.Duration {
+	delay := monitorsRetryDelay
+
+	for range attempts - 1 {
+		delay *= 2
+		if delay >= monitorsMaxRetryDelay {
+			return monitorsMaxRetryDelay
+		}
+	}
+
+	return delay
 }
 
 // retryMonitorsUpdate puts back the monitor updates which couldn't be applied, before the ones
 // received meanwhile, and retries them later. Without it, they would be lost until the next full
-// synchronization, which can be hours later.
+// synchronization, which can be hours later. An update is given up after monitorUpdateMaxAttempts.
 func (s *Synchronizer) retryMonitorsUpdate(updates []MonitorUpdate) {
-	if len(updates) == 0 {
+	retries := make([]MonitorUpdate, 0, len(updates))
+	maxAttempts := 0
+
+	for _, update := range updates {
+		update.attempts++
+
+		if update.attempts >= monitorUpdateMaxAttempts {
+			logger.V(1).Printf(
+				"Giving up the update of the monitor %s after %d attempts, the next full synchronization will apply it",
+				update.uuid, update.attempts,
+			)
+
+			continue
+		}
+
+		retries = append(retries, update)
+		maxAttempts = max(maxAttempts, update.attempts)
+	}
+
+	if len(retries) == 0 {
 		return
 	}
 
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.pendingMonitorsUpdate = append(slices.Clone(updates), s.pendingMonitorsUpdate...)
-	s.requestLaterSynchronizationLocked(types.EntityMonitor, false, monitorsUpdateRetryDelay)
+	s.pendingMonitorsUpdate = append(retries, s.pendingMonitorsUpdate...)
+	s.requestLaterSynchronizationLocked(types.EntityMonitor, false, monitorsRetryDelayAfter(maxAttempts))
+}
+
+// retryMonitorsFullSync retries a full synchronization of the monitors which failed, even when no update
+// is pending, so the monitors changes which aren't notified (e.g. their settings) aren't delayed until the
+// next scheduled full synchronization.
+func (s *Synchronizer) retryMonitorsFullSync() {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	s.monitorsFullSyncFailures++
+	s.requestLaterSynchronizationLocked(types.EntityMonitor, true, monitorsRetryDelayAfter(s.monitorsFullSyncFailures))
 }
 
 func hashAgentID(agentID string) uint64 {
@@ -215,8 +276,15 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 	return nil
 }
 
-// should we try to modify as much monitors as possible, and return a list of errors, instead of failing early ?
-func (s *Synchronizer) getListOfMonitorsFromAPI(ctx context.Context, execution types.SynchronizationExecution, pendingMonitorsUpdate []MonitorUpdate) ([]bleemeoTypes.Monitor, error) {
+// getListOfMonitorsFromAPI applies the pending updates on the current monitors. An update which fails
+// doesn't prevent applying the other ones: it's returned in failedUpdates, with its error in err.
+func (s *Synchronizer) getListOfMonitorsFromAPI(
+	ctx context.Context,
+	execution types.SynchronizationExecution,
+	pendingMonitorsUpdate []MonitorUpdate,
+) (monitors []bleemeoTypes.Monitor, failedUpdates []MonitorUpdate, err error) {
+	var errs []error
+
 	currentMonitors := s.option.Cache.Monitors()
 	forceSync := execution.IsSynchronizationRequested(types.EntityMetric)
 	apiClient := execution.BleemeoAPIClient()
@@ -238,13 +306,22 @@ OuterBreak:
 				continue
 			}
 
-			return nil, err
+			failedUpdates = append(failedUpdates, m)
+			errs = append(errs, err)
+
+			continue
 		}
 
 		// An empty agent would list all the Monitor objects.
 		if result.AgentID != "" {
 			updated := []bleemeoTypes.Monitor{result}
-			applyMonitorObjectsFromAPI(ctx, apiClient, result.AgentID, updated, currentMonitors)
+
+			// The monitor is still updated, with its previous options, and the update is retried for its options.
+			if err := applyMonitorObjectsFromAPI(ctx, apiClient, result.AgentID, updated, currentMonitors); err != nil {
+				failedUpdates = append(failedUpdates, m)
+				errs = append(errs, err)
+			}
+
 			result = updated[0]
 		}
 
@@ -273,20 +350,20 @@ OuterBreak:
 		}
 	}
 
-	return currentMonitors, nil
+	return currentMonitors, failedUpdates, errors.Join(errs...)
 }
 
 // applyMonitorObjectsFromAPI reads the Monitor objects of the given agent (all the active ones when agentID
 // is empty) and applies their options on the monitors. These options aren't worth failing the monitors
-// synchronization, which would delay the other changes until the next full synchronization: on error,
-// the monitors keep their options from the previous monitors (with the same ID).
+// synchronization, which would delay the other changes: on error, the monitors keep their options from the
+// previous monitors (with the same ID), and the error is returned so the caller retries later.
 func applyMonitorObjectsFromAPI(
 	ctx context.Context,
 	apiClient types.MonitorClient,
 	agentID string,
 	monitors []bleemeoTypes.Monitor,
 	previousMonitors []bleemeoTypes.Monitor,
-) {
+) error {
 	objects, err := apiClient.ListMonitorObjects(ctx, agentID)
 	if err != nil {
 		logger.V(1).Printf("Unable to read the Monitor objects, the monitors keep their previous options: %v", err)
@@ -300,10 +377,12 @@ func applyMonitorObjectsFromAPI(
 			monitors[i].UseHead = previousByID[monitors[i].ID].UseHead
 		}
 
-		return
+		return err
 	}
 
 	applyMonitorObjects(monitors, objects)
+
+	return nil
 }
 
 // applyMonitorObjects sets on the monitors, read from their service, the options which are only
