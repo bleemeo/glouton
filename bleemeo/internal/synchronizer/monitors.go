@@ -91,12 +91,7 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 			return false, err
 		}
 
-		objects, err := apiClient.ListMonitorObjects(ctx, "")
-		if err != nil {
-			return false, err
-		}
-
-		applyMonitorObjects(monitors, objects)
+		applyMonitorObjectsFromAPI(ctx, apiClient, "", monitors, s.option.Cache.Monitors())
 	} else {
 		monitors, err = s.getListOfMonitorsFromAPI(ctx, execution, pendingMonitorsUpdate)
 		if err != nil {
@@ -223,14 +218,10 @@ OuterBreak:
 			return nil, err
 		}
 
+		// An empty agent would list all the Monitor objects.
 		if result.AgentID != "" {
-			objects, err := apiClient.ListMonitorObjects(ctx, result.AgentID)
-			if err != nil {
-				return nil, err
-			}
-
 			updated := []bleemeoTypes.Monitor{result}
-			applyMonitorObjects(updated, objects)
+			applyMonitorObjectsFromAPI(ctx, apiClient, result.AgentID, updated, currentMonitors)
 			result = updated[0]
 		}
 
@@ -262,8 +253,39 @@ OuterBreak:
 	return currentMonitors, nil
 }
 
+// applyMonitorObjectsFromAPI reads the Monitor objects of the given agent (all the active ones when agentID
+// is empty) and applies their options on the monitors. These options aren't worth failing the monitors
+// synchronization, which would delay the other changes until the next full synchronization: on error,
+// the monitors keep their options from the previous monitors (with the same ID).
+func applyMonitorObjectsFromAPI(
+	ctx context.Context,
+	apiClient types.MonitorClient,
+	agentID string,
+	monitors []bleemeoTypes.Monitor,
+	previousMonitors []bleemeoTypes.Monitor,
+) {
+	objects, err := apiClient.ListMonitorObjects(ctx, agentID)
+	if err != nil {
+		logger.V(1).Printf("Unable to read the Monitor objects, the monitors keep their previous options: %v", err)
+
+		previousByID := make(map[string]bleemeoTypes.Monitor, len(previousMonitors))
+		for _, monitor := range previousMonitors {
+			previousByID[monitor.ID] = monitor
+		}
+
+		for i := range monitors {
+			monitors[i].UseHead = previousByID[monitors[i].ID].UseHead
+		}
+
+		return
+	}
+
+	applyMonitorObjects(monitors, objects)
+}
+
 // applyMonitorObjects sets on the monitors, read from their service, the options which are only
 // exposed on the Monitor objects. A monitor and its Monitor object have the same agent.
+// A monitor without a Monitor object gets the default options (use_head false).
 func applyMonitorObjects(monitors []bleemeoTypes.Monitor, objects []bleemeoTypes.MonitorObject) {
 	objectByAgent := make(map[string]bleemeoTypes.MonitorObject, len(objects))
 	for _, object := range objects {

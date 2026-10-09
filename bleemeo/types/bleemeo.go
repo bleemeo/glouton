@@ -170,7 +170,8 @@ type Monitor struct {
 	URL     string `json:"monitor_url"`
 	AgentID string `json:"agent"`
 	// UseHead isn't exposed on the service, it comes from the MonitorObject with the same agent.
-	// The JSON tag is only used by the cache.
+	// Its JSON tag is used by the cache, but also when decoding and encoding the service, so a
+	// use_head returned by the service would be read before being replaced by the MonitorObject's.
 	UseHead bool `json:"use_head,omitempty"`
 }
 

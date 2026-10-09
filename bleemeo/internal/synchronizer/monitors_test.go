@@ -24,7 +24,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/google/go-cmp/cmp"
 )
 
 func Test_applyJitterToMonitorCreationDate_fixedProbe(t *testing.T) {
@@ -314,7 +316,90 @@ func TestSyncMonitorUseHead(t *testing.T) {
 	checkUseHead(t, map[string]bool{monitorUseHead.ID: true, monitorGet.ID: true})
 }
 
-// TestMonitorFieldsMatchTypes ensures every field read from the API is requested.
+// TestSyncMonitorUseHeadAPIError ensures an error reading the Monitor objects doesn't fail the monitors
+// synchronization: the monitors are still added, updated and deleted, and keep their previous use_head.
+func TestSyncMonitorUseHeadAPIError(t *testing.T) {
+	newTestMonitor := func(id string, agentID string, useHead bool) bleemeoTypes.Monitor {
+		return bleemeoTypes.Monitor{
+			ID:           id,
+			Account:      accountID,
+			Active:       true,
+			CreationDate: "2020-01-03T04:05:06Z",
+			URL:          "https://example.com/" + id,
+			AgentID:      agentID,
+			UseHead:      useHead,
+		}
+	}
+
+	monitorA := newTestMonitor("3c1bc1b6-0c7d-4e88-8a5a-4c9f6f7b2d01", "8b1d2a2f-2e3c-4e88-8a5a-4c9f6f7b2d01", true)
+	monitorB := newTestMonitor("3c1bc1b6-0c7d-4e88-8a5a-4c9f6f7b2d02", "8b1d2a2f-2e3c-4e88-8a5a-4c9f6f7b2d02", true)
+	monitorC := newTestMonitor("3c1bc1b6-0c7d-4e88-8a5a-4c9f6f7b2d03", "8b1d2a2f-2e3c-4e88-8a5a-4c9f6f7b2d03", true)
+
+	helper := newHelper(t)
+	defer helper.Close()
+
+	helper.preregisterAgent(t)
+	helper.wrapperClientMock.resources.monitors.add(monitorA)
+	helper.initSynchronizer(t)
+
+	checkUseHead := func(t *testing.T, wantUseHead map[string]bool) {
+		t.Helper()
+
+		gotUseHead := make(map[string]bool)
+		for _, monitor := range helper.monitorManager.Monitors() {
+			gotUseHead[monitor.ID] = monitor.UseHead
+		}
+
+		if diff := cmp.Diff(wantUseHead, gotUseHead); diff != "" {
+			t.Errorf("use_head of the monitors mismatch (-want +got)\n%s", diff)
+		}
+	}
+
+	if err := helper.runOnce(t); err != nil {
+		t.Fatal(err)
+	}
+
+	checkUseHead(t, map[string]bool{monitorA.ID: true})
+
+	helper.wrapperClientMock.monitorObjectsErr = errClientError
+	helper.wrapperClientMock.resources.monitors.elems[0].UseHead = false
+
+	// A notified monitor is still added. Without a previous value, it doesn't use HEAD.
+	helper.wrapperClientMock.resources.monitors.add(monitorB)
+	helper.s.UpdateMonitor("change", monitorB.ID)
+	helper.AddTime(time.Minute)
+
+	if err := helper.runOnce(t); err != nil {
+		t.Fatal(err)
+	}
+
+	checkUseHead(t, map[string]bool{monitorA.ID: true, monitorB.ID: false})
+
+	// A full synchronization still applies the monitors changes, the existing monitors keep their use_head.
+	helper.wrapperClientMock.resources.monitors.add(monitorC)
+	helper.s.requestSynchronizationLocked(types.EntityMonitor, true)
+	helper.AddTime(time.Minute)
+
+	if err := helper.runOnce(t); err != nil {
+		t.Fatal(err)
+	}
+
+	checkUseHead(t, map[string]bool{monitorA.ID: true, monitorB.ID: false, monitorC.ID: false})
+
+	// Once the Monitor objects are readable again, the next full synchronization uses their values.
+	helper.wrapperClientMock.monitorObjectsErr = nil
+	helper.s.requestSynchronizationLocked(types.EntityMonitor, true)
+	helper.AddTime(time.Minute)
+
+	if err := helper.runOnce(t); err != nil {
+		t.Fatal(err)
+	}
+
+	checkUseHead(t, map[string]bool{monitorA.ID: false, monitorB.ID: true, monitorC.ID: true})
+}
+
+// TestMonitorFieldsMatchTypes ensures the HTTP options of the services and the fields of the Monitor
+// objects are requested. The other fields of Monitor (URL, agent, service fields) aren't checked.
 // The API mock doesn't use the fields, so a missing field would only be noticed on a real API.
 func TestMonitorFieldsMatchTypes(t *testing.T) {
 	t.Parallel()

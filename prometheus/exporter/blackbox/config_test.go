@@ -327,7 +327,8 @@ func TestDynamicTargetUseHead(t *testing.T) {
 				t.Errorf("module = %+v, want %+v", collector.Module, wantModule)
 			}
 
-			// Changing the method must recreate the collector, and nothing else must.
+			// Only a change of method makes the collector different, so that it's recreated.
+			// When use_head is false, monitorWithoutHead is the same monitor, so this case is trivial.
 			wantEqual := tc.wantMethod == ""
 			if gotEqual := collector.Equal(collectorWithoutHead); gotEqual != wantEqual {
 				t.Errorf("collector.Equal(collectorWithoutHead) = %v, want %v", gotEqual, wantEqual)

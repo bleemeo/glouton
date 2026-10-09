@@ -523,7 +523,6 @@ func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
 
 	m.l.Lock()
 	m.targets = newTargets
-	// Only keep the current monitors, so the message is logged again if the fallback comes back later.
 	m.loggedHeadFallbacks = headFallbacks
 	m.l.Unlock()
 

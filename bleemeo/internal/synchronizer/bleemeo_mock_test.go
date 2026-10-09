@@ -39,6 +39,8 @@ type wrapperClientMock struct {
 	resources     resourcesSet
 	requestCounts map[string]int
 	errorsCount   int
+	// monitorObjectsErr is returned by ListMonitorObjects when set.
+	monitorObjectsErr error
 
 	username, password string
 }
@@ -520,6 +522,10 @@ func (wcm *wrapperClientMock) GetMonitorByID(_ context.Context, id string) (blee
 
 func (wcm *wrapperClientMock) ListMonitorObjects(_ context.Context, agentID string) ([]bleemeoTypes.MonitorObject, error) {
 	wcm.requestCounts[mockAPIResourceMonitor]++
+
+	if wcm.monitorObjectsErr != nil {
+		return nil, wcm.monitorObjectsErr
+	}
 
 	var objects []bleemeoTypes.MonitorObject
 
