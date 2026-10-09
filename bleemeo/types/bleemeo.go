@@ -169,6 +169,18 @@ type Monitor struct {
 
 	URL     string `json:"monitor_url"`
 	AgentID string `json:"agent"`
+	// UseHead isn't exposed on the service, it comes from the MonitorObject with the same agent.
+	// The JSON tag is only used by the cache.
+	UseHead bool `json:"use_head,omitempty"`
+}
+
+// MonitorObject is a Monitor object on Bleemeo API (v1/monitor/).
+// The monitors are read from their service (see Monitor), only the options which
+// aren't exposed on the service are read from this object. Both have the same agent.
+type MonitorObject struct {
+	ID      string `json:"id"`
+	AgentID string `json:"agent"`
+	UseHead bool   `json:"use_head"`
 }
 
 // MonitorHTTPOptions groups all the possible options when the probe is targeting an HTTP or HTTPS service.

@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"maps"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"regexp/syntax"
@@ -132,6 +133,13 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string, help
 
 		maps.Copy(mod.HTTP.Headers, monitor.Headers)
 
+		// A HEAD request avoids downloading the body, which reduces the data transfer on large pages.
+		// Content checks need the body, so we keep the default GET method when one is configured.
+		// The method is left empty when HEAD isn't used, to keep the module unchanged for existing monitors.
+		if monitor.UseHead && !hasContentCheck(monitor) {
+			mod.HTTP.Method = http.MethodHead
+		}
+
 		uri, mod = preprocessHTTPTarget(url, mod)
 	case proberNameDNS:
 		// Default
@@ -224,6 +232,11 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string, help
 		},
 		CommonHelpers: helpers,
 	}, nil
+}
+
+// hasContentCheck returns whether the monitor checks the content of the response.
+func hasContentCheck(monitor types.Monitor) bool {
+	return monitor.ExpectedContent != "" || monitor.ForbiddenContent != ""
 }
 
 // processRegexp returns a regexp matching the given string
@@ -470,6 +483,13 @@ func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
 		}
 	}
 
+	// The map is replaced, never modified, so it's safe to read it without the lock after this.
+	m.l.Lock()
+	loggedHeadFallbacks := m.loggedHeadFallbacks
+	m.l.Unlock()
+
+	headFallbacks := make(map[string]bool)
+
 	for _, monitor := range monitors {
 		collector, err := genCollectorFromDynamicTarget(monitor, m.userAgent, m)
 		if err != nil {
@@ -481,6 +501,18 @@ func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
 		collector.IsPublicProbe = monitor.IsPublicProbe
 
 		newTargets = append(newTargets, collector)
+
+		if monitor.UseHead && collector.Module.Prober == proberNameHTTP && hasContentCheck(monitor) {
+			key := monitor.ID + " " + monitor.URL
+			headFallbacks[key] = true
+
+			if !loggedHeadFallbacks[key] {
+				logger.V(1).Printf(
+					"Monitor %s uses HEAD requests but has a content check, a GET request will be used instead",
+					config.CensorURLSecrets(monitor.URL),
+				)
+			}
+		}
 	}
 
 	if m.scraperName != "" {
@@ -491,6 +523,8 @@ func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
 
 	m.l.Lock()
 	m.targets = newTargets
+	// Only keep the current monitors, so the message is logged again if the fallback comes back later.
+	m.loggedHeadFallbacks = headFallbacks
 	m.l.Unlock()
 
 	logger.V(2).Println("blackbox_exporter: Internal configuration successfully updated.")

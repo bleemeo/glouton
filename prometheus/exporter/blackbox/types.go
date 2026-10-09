@@ -88,6 +88,9 @@ type RegisterManager struct {
 	systemDNSResolver              string
 	systemDNSLastUpdate            time.Time
 	notifiedNeedForDefaultResolver bool
-	addWarnings                    func(...error)
-	l                              sync.Mutex
+	// loggedHeadFallbacks contains the monitors (by ID and URL) for which we already logged
+	// that a GET request is used despite use_head, to log it only once.
+	loggedHeadFallbacks map[string]bool
+	addWarnings         func(...error)
+	l                   sync.Mutex
 }

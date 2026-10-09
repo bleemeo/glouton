@@ -18,6 +18,9 @@ package synchronizer
 
 import (
 	"math/rand"
+	"reflect"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -238,5 +241,105 @@ func Test_applyJitterToMonitorCreationDateFixedValue(t *testing.T) {
 
 	if !got.Equal(want) {
 		t.Errorf("applyJitterToMonitorCreationDate() = %s, want %s", got, want)
+	}
+}
+
+// TestSyncMonitorUseHead ensures use_head, which is only exposed on the Monitor objects (v1/monitor/),
+// is given to the monitor manager for the monitors read from their service (v1/service/),
+// both on a full synchronization and on a monitor update notification.
+func TestSyncMonitorUseHead(t *testing.T) {
+	newTestMonitor := func(id string, agentID string, useHead bool) bleemeoTypes.Monitor {
+		return bleemeoTypes.Monitor{
+			ID:           id,
+			Account:      accountID,
+			Active:       true,
+			CreationDate: "2020-01-03T04:05:06Z",
+			URL:          "https://example.com/" + id,
+			AgentID:      agentID,
+			UseHead:      useHead,
+		}
+	}
+
+	monitorUseHead := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e01", "7a0c1f1e-1d2b-4d77-9a4f-3b8f5e6a1c01", true)
+	monitorGet := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e02", "7a0c1f1e-1d2b-4d77-9a4f-3b8f5e6a1c02", false)
+
+	helper := newHelper(t)
+	defer helper.Close()
+
+	helper.preregisterAgent(t)
+	helper.wrapperClientMock.resources.monitors.add(monitorUseHead, monitorGet)
+	helper.initSynchronizer(t)
+
+	checkUseHead := func(t *testing.T, wantUseHead map[string]bool) {
+		t.Helper()
+
+		gotMonitors := helper.monitorManager.Monitors()
+		if len(gotMonitors) != len(wantUseHead) {
+			t.Fatalf("got %d monitors, want %d: %+v", len(gotMonitors), len(wantUseHead), gotMonitors)
+		}
+
+		for _, monitor := range gotMonitors {
+			want, ok := wantUseHead[monitor.ID]
+			if !ok {
+				t.Errorf("unexpected monitor %s", monitor.ID)
+
+				continue
+			}
+
+			if monitor.UseHead != want {
+				t.Errorf("monitor %s: UseHead = %v, want %v", monitor.URL, monitor.UseHead, want)
+			}
+		}
+	}
+
+	if err := helper.runOnce(t); err != nil {
+		t.Fatal(err)
+	}
+
+	checkUseHead(t, map[string]bool{monitorUseHead.ID: true, monitorGet.ID: false})
+
+	// Swap use_head on the API, and notify only the change of the second monitor.
+	for i, m := range helper.wrapperClientMock.resources.monitors.elems {
+		helper.wrapperClientMock.resources.monitors.elems[i].UseHead = !m.UseHead
+	}
+
+	helper.s.UpdateMonitor("change", monitorGet.ID)
+	helper.AddTime(time.Minute)
+
+	if err := helper.runOnce(t); err != nil {
+		t.Fatal(err)
+	}
+
+	// The first monitor wasn't notified, so it keeps the value from the previous synchronization.
+	checkUseHead(t, map[string]bool{monitorUseHead.ID: true, monitorGet.ID: true})
+}
+
+// TestMonitorFieldsMatchTypes ensures every field read from the API is requested.
+// The API mock doesn't use the fields, so a missing field would only be noticed on a real API.
+func TestMonitorFieldsMatchTypes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		fields string
+		typ    reflect.Type
+	}{
+		{name: "service HTTP options", fields: monitorFields, typ: reflect.TypeFor[bleemeoTypes.MonitorHTTPOptions]()},
+		{name: "monitor object", fields: monitorObjectFields, typ: reflect.TypeFor[bleemeoTypes.MonitorObject]()},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			fields := strings.Split(tt.fields, ",")
+
+			for field := range tt.typ.Fields() {
+				name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+				if !slices.Contains(fields, name) {
+					t.Errorf("fields %q don't contain %q (field %s)", tt.fields, name, field.Name)
+				}
+			}
+		})
 	}
 }

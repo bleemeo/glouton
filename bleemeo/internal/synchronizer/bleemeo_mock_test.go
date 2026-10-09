@@ -485,16 +485,57 @@ func (wcm *wrapperClientMock) SetMetricActive(_ context.Context, id string, acti
 	return nil
 }
 
+// monitorFromService returns the monitor as read from its service, which doesn't expose
+// the options of the Monitor object.
+func monitorFromService(monitor bleemeoTypes.Monitor) bleemeoTypes.Monitor {
+	monitor.UseHead = false
+
+	return monitor
+}
+
 func (wcm *wrapperClientMock) ListMonitors(context.Context) ([]bleemeoTypes.Monitor, error) {
 	wcm.requestCounts[mockAPIResourceService]++
 
-	return wcm.resources.monitors.clone(), nil
+	monitors := wcm.resources.monitors.clone()
+	for i := range monitors {
+		monitors[i] = monitorFromService(monitors[i])
+	}
+
+	return monitors, nil
 }
 
-func (wcm *wrapperClientMock) GetMonitorByID(ctx context.Context, id string) (bleemeoTypes.Monitor, error) {
+func (wcm *wrapperClientMock) GetMonitorByID(_ context.Context, id string) (bleemeoTypes.Monitor, error) {
 	wcm.requestCounts[mockAPIResourceService]++
 
-	panic("implement me")
+	monitor := wcm.resources.monitors.findResource(func(m bleemeoTypes.Monitor) bool { return m.ID == id })
+	if monitor == nil {
+		return bleemeoTypes.Monitor{}, &bleemeo.APIError{
+			StatusCode: http.StatusNotFound,
+			Err:        fmt.Errorf("%w: service id with %q", bleemeo.ErrResourceNotFound, id),
+		}
+	}
+
+	return monitorFromService(*monitor), nil
+}
+
+func (wcm *wrapperClientMock) ListMonitorObjects(_ context.Context, agentID string) ([]bleemeoTypes.MonitorObject, error) {
+	wcm.requestCounts[mockAPIResourceMonitor]++
+
+	var objects []bleemeoTypes.MonitorObject
+
+	for _, m := range wcm.resources.monitors.clone() {
+		if agentID != "" && m.AgentID != agentID {
+			continue
+		}
+
+		objects = append(objects, bleemeoTypes.MonitorObject{
+			ID:      "object-of-" + m.ID,
+			AgentID: m.AgentID,
+			UseHead: m.UseHead,
+		})
+	}
+
+	return objects, nil
 }
 
 func (wcm *wrapperClientMock) ListServices(_ context.Context, agentID string, _ string) ([]bleemeoTypes.Service, error) {

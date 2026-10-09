@@ -17,6 +17,7 @@
 package blackbox
 
 import (
+	"net/http"
 	"reflect"
 	"strings"
 	"testing"
@@ -240,5 +241,143 @@ func TestProcessRegexp(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestDynamicTargetUseHead ensures use_head switches HTTP probes to HEAD requests,
+// unless a content check needs the body, and that it doesn't change other probes.
+func TestDynamicTargetUseHead(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name       string
+		monitor    types.Monitor
+		wantMethod string
+	}{
+		{
+			name:       "http-use-head-false",
+			monitor:    types.Monitor{URL: "http://example.com/path"},
+			wantMethod: "",
+		},
+		{
+			name:       "http-use-head",
+			monitor:    types.Monitor{URL: "http://example.com/path", UseHead: true},
+			wantMethod: http.MethodHead,
+		},
+		{
+			name:       "https-use-head",
+			monitor:    types.Monitor{URL: "https://example.com/path", UseHead: true, ExpectedResponseCode: 204},
+			wantMethod: http.MethodHead,
+		},
+		{
+			name:       "https-use-head-expected-content",
+			monitor:    types.Monitor{URL: "https://example.com/path", UseHead: true, ExpectedContent: "welcome"},
+			wantMethod: "",
+		},
+		{
+			name:       "https-use-head-forbidden-content",
+			monitor:    types.Monitor{URL: "https://example.com/path", UseHead: true, ForbiddenContent: "maintenance"},
+			wantMethod: "",
+		},
+		{
+			name:    "tcp-use-head",
+			monitor: types.Monitor{URL: "tcp://example.com:1234", UseHead: true},
+		},
+		{
+			name:    "icmp-use-head",
+			monitor: types.Monitor{URL: "icmp://example.com", UseHead: true},
+		},
+		{
+			name:    "dns-use-head",
+			monitor: types.Monitor{URL: "dns://8.8.8.8/example.com?type=AAAA", UseHead: true},
+		},
+		{
+			name:    "ssl-use-head",
+			monitor: types.Monitor{URL: "ssl://example.com:443", UseHead: true},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			collector, err := genCollectorFromDynamicTarget(tc.monitor, "dummy-user-agent", mockHelpers{})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if collector.Module.HTTP.Method != tc.wantMethod {
+				t.Errorf("HTTP method = %q, want %q", collector.Module.HTTP.Method, tc.wantMethod)
+			}
+
+			// Apart from the method, the module must be the same as without use_head.
+			monitorWithoutHead := tc.monitor
+			monitorWithoutHead.UseHead = false
+
+			collectorWithoutHead, err := genCollectorFromDynamicTarget(monitorWithoutHead, "dummy-user-agent", mockHelpers{})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			wantModule := collectorWithoutHead.Module
+			wantModule.HTTP.Method = tc.wantMethod
+
+			// Use reflect.DeepEqual like blackboxCollector.Equal, cmp can't compare the unexported regexp fields.
+			if !reflect.DeepEqual(wantModule, collector.Module) {
+				t.Errorf("module = %+v, want %+v", collector.Module, wantModule)
+			}
+
+			// Changing the method must recreate the collector, and nothing else must.
+			wantEqual := tc.wantMethod == ""
+			if gotEqual := collector.Equal(collectorWithoutHead); gotEqual != wantEqual {
+				t.Errorf("collector.Equal(collectorWithoutHead) = %v, want %v", gotEqual, wantEqual)
+			}
+		})
+	}
+}
+
+// TestUpdateDynamicTargetsHeadFallback ensures the GET fallback of use_head monitors with a content check
+// is remembered, so it's logged only once, and forgotten when the fallback no longer applies.
+func TestUpdateDynamicTargetsHeadFallback(t *testing.T) {
+	t.Parallel()
+
+	reg, err := registry.New(registry.Option{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bbManager, err := New(reg, config.Blackbox{}, func(...error) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	monitor := types.Monitor{
+		ID:              "1cb119d1-df61-41c7-ae6a-5b4e54442e00",
+		BleemeoAgentID:  "60ed127d-b3d3-4c82-89e2-df74a80a9e9e",
+		URL:             "https://example.com/",
+		UseHead:         true,
+		ExpectedContent: "welcome",
+	}
+	wantKey := monitor.ID + " " + monitor.URL
+
+	// Calling twice must keep the monitor marked as logged.
+	for range 2 {
+		if err := bbManager.UpdateDynamicTargets([]types.Monitor{monitor}); err != nil {
+			t.Fatal(err)
+		}
+
+		if !bbManager.loggedHeadFallbacks[wantKey] {
+			t.Fatalf("loggedHeadFallbacks = %v, want %q", bbManager.loggedHeadFallbacks, wantKey)
+		}
+	}
+
+	monitor.ExpectedContent = ""
+
+	if err := bbManager.UpdateDynamicTargets([]types.Monitor{monitor}); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(bbManager.loggedHeadFallbacks) != 0 {
+		t.Errorf("loggedHeadFallbacks = %v, want empty", bbManager.loggedHeadFallbacks)
 	}
 }

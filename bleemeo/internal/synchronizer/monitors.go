@@ -90,6 +90,13 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 		if err != nil {
 			return false, err
 		}
+
+		objects, err := apiClient.ListMonitorObjects(ctx, "")
+		if err != nil {
+			return false, err
+		}
+
+		applyMonitorObjects(monitors, objects)
 	} else {
 		monitors, err = s.getListOfMonitorsFromAPI(ctx, execution, pendingMonitorsUpdate)
 		if err != nil {
@@ -175,6 +182,7 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 			ForbiddenContent:        monitor.ForbiddenContent,
 			CAFile:                  monitor.CAFile,
 			Headers:                 monitor.Headers,
+			UseHead:                 monitor.UseHead,
 			IsPublicProbe:           monitor.Account != s.option.Cache.AccountID(),
 		})
 	}
@@ -215,6 +223,17 @@ OuterBreak:
 			return nil, err
 		}
 
+		if result.AgentID != "" {
+			objects, err := apiClient.ListMonitorObjects(ctx, result.AgentID)
+			if err != nil {
+				return nil, err
+			}
+
+			updated := []bleemeoTypes.Monitor{result}
+			applyMonitorObjects(updated, objects)
+			result = updated[0]
+		}
+
 		if m.op == Change {
 			for k, v := range currentMonitors {
 				if v.ID == m.uuid {
@@ -241,6 +260,19 @@ OuterBreak:
 	}
 
 	return currentMonitors, nil
+}
+
+// applyMonitorObjects sets on the monitors, read from their service, the options which are only
+// exposed on the Monitor objects. A monitor and its Monitor object have the same agent.
+func applyMonitorObjects(monitors []bleemeoTypes.Monitor, objects []bleemeoTypes.MonitorObject) {
+	objectByAgent := make(map[string]bleemeoTypes.MonitorObject, len(objects))
+	for _, object := range objects {
+		objectByAgent[object.AgentID] = object
+	}
+
+	for i := range monitors {
+		monitors[i].UseHead = objectByAgent[monitors[i].AgentID].UseHead
+	}
 }
 
 func deleteMonitorByUUID(monitors []bleemeoTypes.Monitor, uuid string) []bleemeoTypes.Monitor {

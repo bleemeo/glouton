@@ -26,6 +26,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/http/httptrace"
+	"slices"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -4332,6 +4337,271 @@ func (t *httpTestTarget) RequestContext(ctx context.Context) context.Context {
 			}
 		},
 	})
+}
+
+// countingListener counts the bytes the server writes on its connections.
+type countingListener struct {
+	net.Listener
+
+	written *atomic.Int64
+}
+
+func (l countingListener) Accept() (net.Conn, error) {
+	conn, err := l.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+
+	return countingConn{Conn: conn, written: l.written}, nil
+}
+
+type countingConn struct {
+	net.Conn
+
+	written *atomic.Int64
+}
+
+func (c countingConn) Write(b []byte) (int, error) {
+	n, err := c.Conn.Write(b)
+	c.written.Add(int64(n))
+
+	return n, err
+}
+
+// methodRecorder records the HTTP methods received by a test server.
+type methodRecorder struct {
+	l       sync.Mutex
+	methods []string
+}
+
+func (r *methodRecorder) record(method string) {
+	r.l.Lock()
+	defer r.l.Unlock()
+
+	r.methods = append(r.methods, method)
+}
+
+func (r *methodRecorder) Methods() []string {
+	r.l.Lock()
+	defer r.l.Unlock()
+
+	return slices.Clone(r.methods)
+}
+
+// Test_Collect_HTTPUseHead ensures monitors with use_head send HEAD requests, which don't transfer the body,
+// while keeping the status code checks, the TLS checks and the redirections.
+// Content checks need the body, so they keep using GET.
+func Test_Collect_HTTPUseHead(t *testing.T) {
+	t.Parallel()
+
+	const (
+		bodySize = 1 << 20
+		// The response headers and the TLS handshake are a few kilobytes at most.
+		maxBytesWithoutBody = bodySize / 64
+	)
+
+	tests := []struct {
+		name                 string
+		useHead              bool
+		useTLS               bool
+		useRedirect          bool
+		expectedContent      string
+		expectedResponseCode int
+		serverStatusCode     int
+		wantMethod           string
+		wantSuccess          float64
+		wantStatusCode       float64
+		wantBodyTransferred  bool
+	}{
+		{
+			name:                "get",
+			wantMethod:          http.MethodGet,
+			wantSuccess:         1,
+			wantStatusCode:      http.StatusOK,
+			wantBodyTransferred: true,
+		},
+		{
+			name:           "head",
+			useHead:        true,
+			wantMethod:     http.MethodHead,
+			wantSuccess:    1,
+			wantStatusCode: http.StatusOK,
+		},
+		{
+			name:             "head-server-error",
+			useHead:          true,
+			serverStatusCode: http.StatusInternalServerError,
+			wantMethod:       http.MethodHead,
+			wantSuccess:      0,
+			wantStatusCode:   http.StatusInternalServerError,
+		},
+		{
+			name:                 "head-expected-response-code",
+			useHead:              true,
+			expectedResponseCode: http.StatusNotFound,
+			serverStatusCode:     http.StatusNotFound,
+			wantMethod:           http.MethodHead,
+			wantSuccess:          1,
+			wantStatusCode:       http.StatusNotFound,
+		},
+		{
+			name:                 "head-unexpected-response-code",
+			useHead:              true,
+			expectedResponseCode: http.StatusNotFound,
+			wantMethod:           http.MethodHead,
+			wantSuccess:          0,
+			wantStatusCode:       http.StatusOK,
+		},
+		{
+			name:                "head-with-expected-content-uses-get",
+			useHead:             true,
+			expectedContent:     "end-of-page",
+			wantMethod:          http.MethodGet,
+			wantSuccess:         1,
+			wantStatusCode:      http.StatusOK,
+			wantBodyTransferred: true,
+		},
+		{
+			name:           "head-https",
+			useHead:        true,
+			useTLS:         true,
+			wantMethod:     http.MethodHead,
+			wantSuccess:    1,
+			wantStatusCode: http.StatusOK,
+		},
+		{
+			name:           "head-redirect",
+			useHead:        true,
+			useRedirect:    true,
+			wantMethod:     http.MethodHead,
+			wantSuccess:    1,
+			wantStatusCode: http.StatusOK,
+		},
+		{
+			name:           "head-https-redirect",
+			useHead:        true,
+			useTLS:         true,
+			useRedirect:    true,
+			wantMethod:     http.MethodHead,
+			wantSuccess:    1,
+			wantStatusCode: http.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var (
+				written         atomic.Int64
+				methods         methodRecorder
+				redirectMethods methodRecorder
+			)
+
+			body := strings.Repeat("a", bodySize-len("end-of-page")) + "end-of-page"
+
+			srv := httptest.NewUnstartedServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+				methods.record(r.Method)
+
+				rw.Header().Set("Content-Length", strconv.Itoa(len(body)))
+
+				if tt.serverStatusCode != 0 {
+					rw.WriteHeader(tt.serverStatusCode)
+				}
+
+				_, _ = rw.Write([]byte(body))
+			}))
+			srv.Listener = countingListener{Listener: srv.Listener, written: &written}
+
+			if tt.useTLS {
+				srv.StartTLS()
+			} else {
+				srv.Start()
+			}
+
+			defer srv.Close()
+
+			targetURL := srv.URL
+
+			if tt.useRedirect {
+				redirectSrv := httptest.NewUnstartedServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+					redirectMethods.record(r.Method)
+
+					http.Redirect(rw, r, srv.URL, http.StatusFound)
+				}))
+
+				if tt.useTLS {
+					redirectSrv.StartTLS()
+				} else {
+					redirectSrv.Start()
+				}
+
+				defer redirectSrv.Close()
+
+				targetURL = redirectSrv.URL
+			}
+
+			monitor := types.Monitor{
+				ID:                   testMonitorID,
+				BleemeoAgentID:       testAgentID,
+				URL:                  targetURL,
+				UseHead:              tt.useHead,
+				ExpectedContent:      tt.expectedContent,
+				ExpectedResponseCode: tt.expectedResponseCode,
+			}
+
+			var rootCAs []*x509.Certificate
+			if tt.useTLS {
+				// All httptest servers use the same certificate.
+				rootCAs = []*x509.Certificate{srv.Certificate()}
+			}
+
+			points, err := InternalRunProbe(t.Context(), monitor, time.Time{}, rootCAs, errorResolverSentinel)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Close waits for the handlers to finish, so all the bytes written are counted.
+			srv.Close()
+
+			valueByName := make(map[string]float64, len(points))
+			for _, p := range points {
+				valueByName[p.Labels[types.LabelName]] = p.Value
+			}
+
+			if got, ok := valueByName[metricProbeSuccess]; !ok || got != tt.wantSuccess {
+				t.Errorf("%s = %v (present=%v), want %v", metricProbeSuccess, got, ok, tt.wantSuccess)
+			}
+
+			if got, ok := valueByName[metricProbeHTTPStatusCode]; !ok || got != tt.wantStatusCode {
+				t.Errorf("%s = %v (present=%v), want %v", metricProbeHTTPStatusCode, got, ok, tt.wantStatusCode)
+			}
+
+			_, hasSSLMetric := valueByName[metricProbeSSLLastChainExpiryTimestamp]
+			if hasSSLMetric != tt.useTLS {
+				t.Errorf("%s present = %v, want %v", metricProbeSSLLastChainExpiryTimestamp, hasSSLMetric, tt.useTLS)
+			}
+
+			if got := methods.Methods(); len(got) != 1 || got[0] != tt.wantMethod {
+				t.Errorf("server received methods %v, want [%s]", got, tt.wantMethod)
+			}
+
+			if tt.useRedirect {
+				if got := redirectMethods.Methods(); len(got) != 1 || got[0] != tt.wantMethod {
+					t.Errorf("redirect server received methods %v, want [%s]", got, tt.wantMethod)
+				}
+			}
+
+			gotWritten := written.Load()
+			if tt.wantBodyTransferred && gotWritten < bodySize {
+				t.Errorf("server wrote %d bytes, want at least %d", gotWritten, bodySize)
+			}
+
+			if !tt.wantBodyTransferred && gotWritten > maxBytesWithoutBody {
+				t.Errorf("server wrote %d bytes, want no body (at most %d bytes)", gotWritten, maxBytesWithoutBody)
+			}
+		})
+	}
 }
 
 // Test_Collect_TCP tests tcp:// and ssl:// probes.
