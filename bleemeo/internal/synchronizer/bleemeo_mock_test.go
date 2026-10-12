@@ -39,14 +39,6 @@ type wrapperClientMock struct {
 	resources     resourcesSet
 	requestCounts map[string]int
 	errorsCount   int
-	// monitorObjectsErr is returned by ListMonitorObjects when set.
-	monitorObjectsErr error
-	// getMonitorErr returns the error of GetMonitorByID for a monitor, when set.
-	getMonitorErr func(id string) error
-	// getMonitorCalls counts the calls to GetMonitorByID by monitor.
-	getMonitorCalls map[string]int
-	// listMonitorsErr is returned by ListMonitors when set.
-	listMonitorsErr error
 
 	username, password string
 }
@@ -493,43 +485,14 @@ func (wcm *wrapperClientMock) SetMetricActive(_ context.Context, id string, acti
 	return nil
 }
 
-// monitorFromService returns the monitor as read from its service, which doesn't expose
-// the options of the Monitor object.
-func monitorFromService(monitor bleemeoTypes.Monitor) bleemeoTypes.Monitor {
-	monitor.UseHead = false
-
-	return monitor
-}
-
 func (wcm *wrapperClientMock) ListMonitors(context.Context) ([]bleemeoTypes.Monitor, error) {
 	wcm.requestCounts[mockAPIResourceService]++
 
-	if wcm.listMonitorsErr != nil {
-		return nil, wcm.listMonitorsErr
-	}
-
-	monitors := wcm.resources.monitors.clone()
-	for i := range monitors {
-		monitors[i] = monitorFromService(monitors[i])
-	}
-
-	return monitors, nil
+	return wcm.resources.monitors.clone(), nil
 }
 
 func (wcm *wrapperClientMock) GetMonitorByID(_ context.Context, id string) (bleemeoTypes.Monitor, error) {
 	wcm.requestCounts[mockAPIResourceService]++
-
-	if wcm.getMonitorCalls == nil {
-		wcm.getMonitorCalls = make(map[string]int)
-	}
-
-	wcm.getMonitorCalls[id]++
-
-	if wcm.getMonitorErr != nil {
-		if err := wcm.getMonitorErr(id); err != nil {
-			return bleemeoTypes.Monitor{}, err
-		}
-	}
 
 	monitor := wcm.resources.monitors.findResource(func(m bleemeoTypes.Monitor) bool { return m.ID == id })
 	if monitor == nil {
@@ -539,31 +502,7 @@ func (wcm *wrapperClientMock) GetMonitorByID(_ context.Context, id string) (blee
 		}
 	}
 
-	return monitorFromService(*monitor), nil
-}
-
-func (wcm *wrapperClientMock) ListMonitorObjects(_ context.Context, agentID string) ([]bleemeoTypes.MonitorObject, error) {
-	wcm.requestCounts[mockAPIResourceMonitor]++
-
-	if wcm.monitorObjectsErr != nil {
-		return nil, wcm.monitorObjectsErr
-	}
-
-	var objects []bleemeoTypes.MonitorObject
-
-	for _, m := range wcm.resources.monitors.clone() {
-		if agentID != "" && m.AgentID != agentID {
-			continue
-		}
-
-		objects = append(objects, bleemeoTypes.MonitorObject{
-			ID:      "object-of-" + m.ID,
-			AgentID: m.AgentID,
-			UseHead: m.UseHead,
-		})
-	}
-
-	return objects, nil
+	return *monitor, nil
 }
 
 func (wcm *wrapperClientMock) ListServices(_ context.Context, agentID string, _ string) ([]bleemeoTypes.Service, error) {

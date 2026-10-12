@@ -42,10 +42,8 @@ const (
 	configFields      = "id,type,account,agent_type,value"
 	configItemFields  = "id,agent,key,value,priority,source,path,type"
 	diagnosticFields  = "name"
-	monitorFields     = "id,account,agent,created_at,monitor_url,monitor_expected_content,monitor_expected_response_code,monitor_unexpected_content,monitor_ca_file,monitor_headers"
-	// monitorObjectFields are the fields of the Monitor objects, for the options not exposed on the services.
-	monitorObjectFields = "id,agent,use_head"
-	serviceFields       = "id,account_config,label,instance,listen_addresses,exe_path,tags,active,created_at"
+	monitorFields     = "id,account,agent,created_at,monitor_url,monitor_expected_content,monitor_expected_response_code,monitor_unexpected_content,monitor_ca_file,monitor_headers,monitor_use_head"
+	serviceFields     = "id,account_config,label,instance,listen_addresses,exe_path,tags,active,created_at"
 
 	// queryTrue is used as a URL query parameter value for boolean true.
 	queryTrue = "true"
@@ -58,10 +56,6 @@ const (
 
 	// paramActive is the URL query parameter name for filtering by active status.
 	paramActive = "active"
-
-	// resourceMonitor isn't defined by the Bleemeo SDK. The monitors are read from their service
-	// (bleemeo.ResourceService), this resource is only used for the options not exposed on the services.
-	resourceMonitor bleemeo.Resource = "v1/monitor/"
 )
 
 func (cl *wrapperClient) GetGlobalInfo(ctx context.Context) (bleemeoTypes.GlobalInfo, error) {
@@ -543,35 +537,6 @@ func (cl *wrapperClient) ListMonitors(ctx context.Context) ([]bleemeoTypes.Monit
 	}
 
 	return monitors, iter.Err()
-}
-
-// ListMonitorObjects returns the Monitor objects of the given agent, or all the active
-// Monitor objects when agentID is empty.
-func (cl *wrapperClient) ListMonitorObjects(ctx context.Context, agentID string) ([]bleemeoTypes.MonitorObject, error) {
-	params := url.Values{
-		paramFields: {monitorObjectFields},
-	}
-
-	if agentID == "" {
-		params.Set(paramActive, queryTrue)
-	} else {
-		params.Set(paramAgent, agentID)
-	}
-
-	var objects []bleemeoTypes.MonitorObject
-
-	iter := cl.Iterator(ctx, resourceMonitor, params)
-	for iter.Next(ctx) {
-		var object bleemeoTypes.MonitorObject
-
-		if err := json.Unmarshal(iter.At(), &object); err != nil {
-			return nil, fmt.Errorf("%w %v", errCannotParse, string(iter.At()))
-		}
-
-		objects = append(objects, object)
-	}
-
-	return objects, iter.Err()
 }
 
 func (cl *wrapperClient) GetMonitorByID(ctx context.Context, id string) (bleemeoTypes.Monitor, error) {

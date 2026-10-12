@@ -17,7 +17,6 @@
 package synchronizer
 
 import (
-	"errors"
 	"math/rand"
 	"reflect"
 	"slices"
@@ -25,10 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
-	gloutonTypes "github.com/bleemeo/glouton/types"
-	"github.com/google/go-cmp/cmp"
 )
 
 func Test_applyJitterToMonitorCreationDate_fixedProbe(t *testing.T) {
@@ -248,24 +244,22 @@ func Test_applyJitterToMonitorCreationDateFixedValue(t *testing.T) {
 	}
 }
 
-// TestSyncMonitorUseHead ensures use_head, which is only exposed on the Monitor objects (v1/monitor/),
-// is given to the monitor manager for the monitors read from their service (v1/service/),
-// both on a full synchronization and on a monitor update notification.
+// TestSyncMonitorUseHead ensures monitor_use_head is given to the monitor manager, both on a full
+// synchronization and on a monitor update notification.
 func TestSyncMonitorUseHead(t *testing.T) {
-	newTestMonitor := func(id string, agentID string, useHead bool) bleemeoTypes.Monitor {
+	newTestMonitor := func(id string, useHead bool) bleemeoTypes.Monitor {
 		return bleemeoTypes.Monitor{
 			ID:           id,
 			Account:      accountID,
 			Active:       true,
 			CreationDate: "2020-01-03T04:05:06Z",
 			URL:          "https://example.com/" + id,
-			AgentID:      agentID,
 			UseHead:      useHead,
 		}
 	}
 
-	monitorUseHead := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e01", "7a0c1f1e-1d2b-4d77-9a4f-3b8f5e6a1c01", true)
-	monitorGet := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e02", "7a0c1f1e-1d2b-4d77-9a4f-3b8f5e6a1c02", false)
+	monitorUseHead := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e01", true)
+	monitorGet := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e02", false)
 
 	helper := newHelper(t)
 	defer helper.Close()
@@ -318,352 +312,17 @@ func TestSyncMonitorUseHead(t *testing.T) {
 	checkUseHead(t, map[string]bool{monitorUseHead.ID: true, monitorGet.ID: true})
 }
 
-// TestSyncMonitorUseHeadAPIError ensures an error reading the Monitor objects doesn't fail the monitors
-// synchronization: the monitors are still added, updated and deleted, and keep their previous use_head.
-func TestSyncMonitorUseHeadAPIError(t *testing.T) {
-	newTestMonitor := func(id string, agentID string, useHead bool) bleemeoTypes.Monitor {
-		return bleemeoTypes.Monitor{
-			ID:           id,
-			Account:      accountID,
-			Active:       true,
-			CreationDate: "2020-01-03T04:05:06Z",
-			URL:          "https://example.com/" + id,
-			AgentID:      agentID,
-			UseHead:      useHead,
-		}
-	}
-
-	monitorA := newTestMonitor("3c1bc1b6-0c7d-4e88-8a5a-4c9f6f7b2d01", "8b1d2a2f-2e3c-4e88-8a5a-4c9f6f7b2d01", true)
-	monitorB := newTestMonitor("3c1bc1b6-0c7d-4e88-8a5a-4c9f6f7b2d02", "8b1d2a2f-2e3c-4e88-8a5a-4c9f6f7b2d02", true)
-	monitorC := newTestMonitor("3c1bc1b6-0c7d-4e88-8a5a-4c9f6f7b2d03", "8b1d2a2f-2e3c-4e88-8a5a-4c9f6f7b2d03", true)
-
-	helper := newHelper(t)
-	defer helper.Close()
-
-	helper.preregisterAgent(t)
-	helper.wrapperClientMock.resources.monitors.add(monitorA)
-	helper.initSynchronizer(t)
-
-	checkUseHead := func(t *testing.T, wantUseHead map[string]bool) {
-		t.Helper()
-
-		gotUseHead := make(map[string]bool)
-		for _, monitor := range helper.monitorManager.Monitors() {
-			gotUseHead[monitor.ID] = monitor.UseHead
-		}
-
-		if diff := cmp.Diff(wantUseHead, gotUseHead); diff != "" {
-			t.Errorf("use_head of the monitors mismatch (-want +got)\n%s", diff)
-		}
-	}
-
-	if err := helper.runOnce(t); err != nil {
-		t.Fatal(err)
-	}
-
-	checkUseHead(t, map[string]bool{monitorA.ID: true})
-
-	helper.wrapperClientMock.monitorObjectsErr = errClientError
-	helper.wrapperClientMock.resources.monitors.elems[0].UseHead = false
-
-	// A notified monitor is still added. Without a previous value, it doesn't use HEAD.
-	// The error is reported, as the update is retried for its options.
-	helper.wrapperClientMock.resources.monitors.add(monitorB)
-	helper.s.UpdateMonitor("change", monitorB.ID)
-	helper.AddTime(time.Minute)
-
-	if result := helper.runOnceWithResult(t); !errors.Is(result.err, errClientError) {
-		t.Fatalf("runOnce error = %v, want %v", result.err, errClientError)
-	}
-
-	checkUseHead(t, map[string]bool{monitorA.ID: true, monitorB.ID: false})
-
-	// A full synchronization still applies the monitors changes, the existing monitors keep their use_head.
-	helper.wrapperClientMock.resources.monitors.add(monitorC)
-	helper.s.requestSynchronizationLocked(types.EntityMonitor, true)
-	helper.AddTime(time.Minute)
-
-	if err := helper.runOnce(t); err != nil {
-		t.Fatal(err)
-	}
-
-	checkUseHead(t, map[string]bool{monitorA.ID: true, monitorB.ID: false, monitorC.ID: false})
-
-	// Once the Monitor objects are readable again, the next full synchronization uses their values.
-	helper.wrapperClientMock.monitorObjectsErr = nil
-	helper.s.requestSynchronizationLocked(types.EntityMonitor, true)
-	helper.AddTime(time.Minute)
-
-	if err := helper.runOnce(t); err != nil {
-		t.Fatal(err)
-	}
-
-	checkUseHead(t, map[string]bool{monitorA.ID: false, monitorB.ID: true, monitorC.ID: true})
-}
-
-// newRetryTestMonitor returns a monitor for the retry tests.
-func newRetryTestMonitor(suffix string, useHead bool) bleemeoTypes.Monitor {
-	return bleemeoTypes.Monitor{
-		ID:           "4d2cd2c7-1d8e-4f99-9b6b-5d0a7a8c3e" + suffix,
-		Account:      accountID,
-		Active:       true,
-		CreationDate: "2020-01-03T04:05:06Z",
-		URL:          "https://example.com/retry-" + suffix,
-		AgentID:      "9c2e3b3a-3f4d-4f99-9b6b-5d0a7a8c3e" + suffix,
-		UseHead:      useHead,
-	}
-}
-
-// managerMonitors returns the monitors given to the monitor manager, by ID.
-func managerMonitors(helper *syncTestHelper) map[string]gloutonTypes.Monitor {
-	monitors := make(map[string]gloutonTypes.Monitor)
-	for _, m := range helper.monitorManager.Monitors() {
-		monitors[m.ID] = m
-	}
-
-	return monitors
-}
-
-// runOnceWantErr runs a synchronization which must fail with wantErr.
-func runOnceWantErr(t *testing.T, helper *syncTestHelper, wantErr error) {
-	t.Helper()
-
-	if result := helper.runOnceWithResult(t); !errors.Is(result.err, wantErr) {
-		t.Fatalf("runOnce error = %v, want %v", result.err, wantErr)
-	}
-}
-
-// TestSyncMonitorUpdateRetry ensures a monitor update which failed is retried after the retry delay,
-// instead of being lost until the next full synchronization.
-func TestSyncMonitorUpdateRetry(t *testing.T) {
-	monitor := newRetryTestMonitor("01", true)
-
-	helper := newHelper(t)
-	defer helper.Close()
-
-	helper.preregisterAgent(t)
-	helper.initSynchronizer(t)
-
-	if err := helper.runOnce(t); err != nil {
-		t.Fatal(err)
-	}
-
-	helper.wrapperClientMock.resources.monitors.add(monitor)
-	helper.wrapperClientMock.getMonitorErr = func(string) error { return errClientError }
-	helper.s.UpdateMonitor("change", monitor.ID)
-	helper.AddTime(time.Minute)
-
-	runOnceWantErr(t, helper, errClientError)
-
-	if _, ok := managerMonitors(helper)[monitor.ID]; ok {
-		t.Fatalf("monitor %s added while the API failed", monitor.ID)
-	}
-
-	helper.wrapperClientMock.getMonitorErr = nil
-
-	// Not retried before the retry delay.
-	helper.AddTime(monitorsRetryDelay - time.Second)
-
-	if err := helper.runOnce(t); err != nil {
-		t.Fatal(err)
-	}
-
-	if calls := helper.wrapperClientMock.getMonitorCalls[monitor.ID]; calls != 1 {
-		t.Fatalf("GetMonitorByID called %d times before the retry delay, want 1", calls)
-	}
-
-	// Without a new notification, the update is retried once the retry delay has passed.
-	helper.AddTime(2 * time.Second)
-
-	if err := helper.runOnce(t); err != nil {
-		t.Fatal(err)
-	}
-
-	got, ok := managerMonitors(helper)[monitor.ID]
-	if !ok {
-		t.Fatalf("monitor %s not added after the retry", monitor.ID)
-	}
-
-	if !got.UseHead {
-		t.Errorf("monitor %s: UseHead = false, want true", monitor.ID)
-	}
-}
-
-// TestSyncMonitorUpdateGiveUp ensures a monitor update which always fails doesn't block the other updates,
-// and is retried with a growing delay, then given up.
-func TestSyncMonitorUpdateGiveUp(t *testing.T) {
-	failing := newRetryTestMonitor("02", false)
-	working := newRetryTestMonitor("03", false)
-
-	helper := newHelper(t)
-	defer helper.Close()
-
-	helper.preregisterAgent(t)
-	helper.initSynchronizer(t)
-
-	if err := helper.runOnce(t); err != nil {
-		t.Fatal(err)
-	}
-
-	helper.wrapperClientMock.resources.monitors.add(failing, working)
-	helper.wrapperClientMock.getMonitorErr = func(id string) error {
-		if id == failing.ID {
-			return errClientError
-		}
-
-		return nil
-	}
-
-	// The failing update is notified first, it must not block the next one.
-	helper.s.UpdateMonitor("change", failing.ID)
-	helper.s.UpdateMonitor("change", working.ID)
-	helper.AddTime(time.Minute)
-
-	runOnceWantErr(t, helper, errClientError)
-
-	if _, ok := managerMonitors(helper)[working.ID]; !ok {
-		t.Fatalf("monitor %s not added, blocked by the failing update", working.ID)
-	}
-
-	// Retried after 1, 2, 4 and 8 minutes, so monitorUpdateMaxAttempts attempts in total.
-	for attempt := 2; attempt <= monitorUpdateMaxAttempts; attempt++ {
-		helper.AddTime(monitorsRetryDelayAfter(attempt-1) + time.Second)
-
-		runOnceWantErr(t, helper, errClientError)
-
-		if calls := helper.wrapperClientMock.getMonitorCalls[failing.ID]; calls != attempt {
-			t.Fatalf("GetMonitorByID called %d times after attempt %d, want %d", calls, attempt, attempt)
-		}
-	}
-
-	// Given up: no more attempts.
-	for range 4 {
-		helper.AddTime(monitorsMaxRetryDelay)
-
-		if err := helper.runOnce(t); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	if calls := helper.wrapperClientMock.getMonitorCalls[failing.ID]; calls != monitorUpdateMaxAttempts {
-		t.Errorf("GetMonitorByID called %d times, want %d (given up)", calls, monitorUpdateMaxAttempts)
-	}
-
-	if calls := helper.wrapperClientMock.getMonitorCalls[working.ID]; calls != 1 {
-		t.Errorf("GetMonitorByID called %d times for the working monitor, want 1", calls)
-	}
-}
-
-// TestSyncMonitorFullSyncRetry ensures a full synchronization of the monitors which failed is retried
-// as a full synchronization, even without pending update.
-func TestSyncMonitorFullSyncRetry(t *testing.T) {
-	monitor := newRetryTestMonitor("04", true)
-
-	helper := newHelper(t)
-	defer helper.Close()
-
-	helper.preregisterAgent(t)
-	helper.initSynchronizer(t)
-
-	if err := helper.runOnce(t); err != nil {
-		t.Fatal(err)
-	}
-
-	// The monitor isn't notified, only a full synchronization finds it.
-	helper.wrapperClientMock.resources.monitors.add(monitor)
-	helper.wrapperClientMock.listMonitorsErr = errClientError
-	helper.s.requestSynchronizationLocked(types.EntityMonitor, true)
-	helper.AddTime(time.Minute)
-
-	runOnceWantErr(t, helper, errClientError)
-
-	helper.wrapperClientMock.listMonitorsErr = nil
-	helper.AddTime(monitorsRetryDelay + time.Second)
-
-	if err := helper.runOnce(t); err != nil {
-		t.Fatal(err)
-	}
-
-	got, ok := managerMonitors(helper)[monitor.ID]
-	if !ok {
-		t.Fatalf("monitor %s not added, the full synchronization wasn't retried", monitor.ID)
-	}
-
-	if !got.UseHead {
-		t.Errorf("monitor %s: UseHead = false, want true", monitor.ID)
-	}
-}
-
-// TestSyncMonitorObjectsRetry ensures that when the Monitor object of a notified monitor can't be read,
-// the monitor is still added, and its use_head is applied when the update is retried.
-func TestSyncMonitorObjectsRetry(t *testing.T) {
-	monitor := newRetryTestMonitor("05", true)
-
-	helper := newHelper(t)
-	defer helper.Close()
-
-	helper.preregisterAgent(t)
-	helper.initSynchronizer(t)
-
-	if err := helper.runOnce(t); err != nil {
-		t.Fatal(err)
-	}
-
-	helper.wrapperClientMock.resources.monitors.add(monitor)
-	helper.wrapperClientMock.monitorObjectsErr = errClientError
-	helper.s.UpdateMonitor("change", monitor.ID)
-	helper.AddTime(time.Minute)
-
-	runOnceWantErr(t, helper, errClientError)
-
-	got, ok := managerMonitors(helper)[monitor.ID]
-	if !ok {
-		t.Fatalf("monitor %s not added while only its Monitor object failed", monitor.ID)
-	}
-
-	if got.UseHead {
-		t.Errorf("monitor %s: UseHead = true before its Monitor object was read", monitor.ID)
-	}
-
-	helper.wrapperClientMock.monitorObjectsErr = nil
-	helper.AddTime(monitorsRetryDelay + time.Second)
-
-	if err := helper.runOnce(t); err != nil {
-		t.Fatal(err)
-	}
-
-	if got := managerMonitors(helper)[monitor.ID]; !got.UseHead {
-		t.Errorf("monitor %s: UseHead = false after the retry, want true", monitor.ID)
-	}
-}
-
-// TestMonitorFieldsMatchTypes ensures the HTTP options of the services and the fields of the Monitor
-// objects are requested. The other fields of Monitor (URL, agent, service fields) aren't checked.
+// TestMonitorFieldsMatchTypes ensures the HTTP options of the monitors are requested.
 // The API mock doesn't use the fields, so a missing field would only be noticed on a real API.
 func TestMonitorFieldsMatchTypes(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name   string
-		fields string
-		typ    reflect.Type
-	}{
-		{name: "service HTTP options", fields: monitorFields, typ: reflect.TypeFor[bleemeoTypes.MonitorHTTPOptions]()},
-		{name: "monitor object", fields: monitorObjectFields, typ: reflect.TypeFor[bleemeoTypes.MonitorObject]()},
-	}
+	fields := strings.Split(monitorFields, ",")
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			fields := strings.Split(tt.fields, ",")
-
-			for field := range tt.typ.Fields() {
-				name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
-				if !slices.Contains(fields, name) {
-					t.Errorf("fields %q don't contain %q (field %s)", tt.fields, name, field.Name)
-				}
-			}
-		})
+	for field := range reflect.TypeFor[bleemeoTypes.MonitorHTTPOptions]().Fields() {
+		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+		if !slices.Contains(fields, name) {
+			t.Errorf("fields %q don't contain %q (field %s)", monitorFields, name, field.Name)
+		}
 	}
 }

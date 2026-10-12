@@ -42,7 +42,6 @@ const (
 	mockAPIResourceAgentType   = "agenttype"
 	mockAPIResourceContainer   = "container"
 	mockAPIResourceMetric      = "metric"
-	mockAPIResourceMonitor     = "monitor"
 	mockAPIResourceConfig      = "config"
 	mockAPIResourceApplication = "application"
 	mockAPIResourceService     = "service"

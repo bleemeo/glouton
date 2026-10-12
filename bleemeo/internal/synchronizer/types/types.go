@@ -254,7 +254,6 @@ type MetricClient interface {
 type MonitorClient interface {
 	ListMonitors(ctx context.Context) ([]bleemeoTypes.Monitor, error)
 	GetMonitorByID(ctx context.Context, id string) (bleemeoTypes.Monitor, error)
-	ListMonitorObjects(ctx context.Context, agentID string) ([]bleemeoTypes.MonitorObject, error)
 }
 
 type ServiceClient interface {

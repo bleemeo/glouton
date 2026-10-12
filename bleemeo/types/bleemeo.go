@@ -169,19 +169,6 @@ type Monitor struct {
 
 	URL     string `json:"monitor_url"`
 	AgentID string `json:"agent"`
-	// UseHead isn't exposed on the service, it comes from the MonitorObject with the same agent.
-	// Its JSON tag is used by the cache, but also when decoding and encoding the service, so a
-	// use_head returned by the service would be read before being replaced by the MonitorObject's.
-	UseHead bool `json:"use_head,omitempty"`
-}
-
-// MonitorObject is a Monitor object on Bleemeo API (v1/monitor/).
-// The monitors are read from their service (see Monitor), only the options which
-// aren't exposed on the service are read from this object. Both have the same agent.
-type MonitorObject struct {
-	ID      string `json:"id"`
-	AgentID string `json:"agent"`
-	UseHead bool   `json:"use_head"`
 }
 
 // MonitorHTTPOptions groups all the possible options when the probe is targeting an HTTP or HTTPS service.
@@ -191,6 +178,7 @@ type MonitorHTTPOptions struct {
 	ForbiddenContent     string            `json:"monitor_unexpected_content,omitempty"`
 	CAFile               string            `json:"monitor_ca_file,omitempty"`
 	Headers              map[string]string `json:"monitor_headers,omitempty"`
+	UseHead              bool              `json:"monitor_use_head,omitempty"`
 }
 
 // Metric is a Metric object on Bleemeo API.
