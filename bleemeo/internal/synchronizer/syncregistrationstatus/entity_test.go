@@ -248,7 +248,8 @@ func TestEntityGoldenPayload(t *testing.T) {
 		t.Fatalf("sent %d times, want once", len(client.bodies))
 	}
 
-	want := `{"glouton_version":"0.1","services":[{"name":"mysql","type":"mysql","instance":"","container_name":"",` +
+	want := `{"glouton_version":"0.1","generated_at":"2026-10-02T12:00:00Z","last_discovery_at":"2026-10-02T11:59:00Z",` +
+		`"services":[{"name":"mysql","type":"mysql","instance":"","container_name":"",` +
 		`"dynamic_discovery":true,"input_supported":true,` +
 		`"error":"failed to create the input: missing credentials or address","service_uuid":"service-uuid","metrics":"zero"}],` +
 		`"services_total":1,` +
@@ -271,14 +272,15 @@ func TestEntityEmptyLists(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := `{"glouton_version":"0.1","services":[],"services_total":0,"metrics":[],"metrics_total":0}`
+	want := `{"glouton_version":"0.1","generated_at":"2026-10-02T12:00:00Z","last_discovery_at":"2026-10-02T11:59:00Z",` +
+		`"services":[],"services_total":0,"metrics":[],"metrics_total":0}`
 	if bodies := test.execution.client.bodies; len(bodies) != 1 || bodies[0] != want {
 		t.Errorf("bodies = %q, want [%q]", bodies, want)
 	}
 }
 
 // TestEntityDoesNotResendSameValue checks an unchanged value is not sent again, however long
-// after, and a changed one is once the interval has passed.
+// after and however many discovery runs since, and a changed one is once the interval has passed.
 func TestEntityDoesNotResendSameValue(t *testing.T) {
 	test := newEntityTest(testAgent)
 	test.discovery.States = []discovery.ServiceState{mysqlMissingCredentials()}
@@ -286,6 +288,8 @@ func TestEntityDoesNotResendSameValue(t *testing.T) {
 	if _, err := test.run(t, t0); err != nil {
 		t.Fatal(err)
 	}
+
+	test.discovery.UpdatedAt = t0.Add(time.Hour)
 
 	need, err := test.run(t, t0.Add(2*time.Hour))
 	if err != nil || need {
@@ -563,7 +567,8 @@ func TestEntityMetricsUnknown(t *testing.T) {
 		t.Fatalf("after metricsStateWait: need = %v, err = %v; want true, nil", need, err)
 	}
 
-	want := `{"glouton_version":"0.1","services":[],"services_total":0,"metrics":null,"metrics_total":null}`
+	want := `{"glouton_version":"0.1","generated_at":"2026-10-02T12:10:00Z","last_discovery_at":"2026-10-02T11:59:00Z",` +
+		`"services":[],"services_total":0,"metrics":null,"metrics_total":null}`
 	if bodies := test.execution.client.bodies; len(bodies) != 1 || bodies[0] != want {
 		t.Errorf("bodies = %q, want [%q]", bodies, want)
 	}

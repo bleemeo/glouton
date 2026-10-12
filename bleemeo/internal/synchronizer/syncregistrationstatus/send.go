@@ -44,6 +44,12 @@ type Payload struct {
 	// GloutonVersion is the version of the Glouton that built the value, so that Bleemeo knows
 	// which format it reads, sure that both come from the same Glouton.
 	GloutonVersion string `json:"glouton_version"`
+	// GeneratedAt is when the value was built, and LastDiscoveryAt when discovery last
+	// completed before it, the services listed being at least that recent. Neither is part of
+	// the hash, or each build would differ: since an unchanged value is not sent again,
+	// GeneratedAt is when the value last changed, not when Glouton last checked it.
+	GeneratedAt     time.Time `json:"generated_at"`
+	LastDiscoveryAt time.Time `json:"last_discovery_at"`
 
 	Services []ServiceState `json:"services"`
 	// ServicesTotal is how many services there are, those the limits left out included, so that

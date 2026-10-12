@@ -122,7 +122,8 @@ func (s *SyncRegistrationStatus) NeedSynchronization(_ context.Context) (bool, e
 	// empty for lack of a run: sent, they would replace a value that still holds after a
 	// restart, and the next change may not be sent before minSendInterval. Checked once the
 	// build is due: it copies every service, under discovery's lock.
-	if _, lastDiscovery := option.Discovery.GetLatestDiscovery(); lastDiscovery.IsZero() {
+	_, lastDiscovery := option.Discovery.GetLatestDiscovery()
+	if lastDiscovery.IsZero() {
 		return false, nil
 	}
 
@@ -161,6 +162,9 @@ func (s *SyncRegistrationStatus) NeedSynchronization(_ context.Context) (bool, e
 	}
 
 	payload := NewPayload(services, metrics, published)
+	// In UTC and to the second, as read when troubleshooting.
+	payload.GeneratedAt = now.UTC().Truncate(time.Second)
+	payload.LastDiscoveryAt = lastDiscovery.UTC().Truncate(time.Second)
 
 	if !NeedSend(last, payload, agentID, now) {
 		return false, nil
