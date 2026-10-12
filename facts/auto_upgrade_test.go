@@ -885,3 +885,61 @@ func TestFactsRefreshesOnce(t *testing.T) {
 		t.Error("a refresh with a cancelled context was stored")
 	}
 }
+
+// TestFactsAcceptsConcurrentRefresh checks that a caller asking for facts with a maxAge
+// of 0 accepts a refresh that another caller started after it arrived, instead of
+// running a second one.
+func TestFactsAcceptsConcurrentRefresh(t *testing.T) {
+	hostRoot := t.TempDir()
+	f := NewFacter(Options{Runner: gloutonexec.New(hostRoot), HostRootPath: hostRoot})
+
+	var (
+		l         sync.Mutex
+		refreshes int
+	)
+
+	f.AddCallback(func(context.Context, map[string]string) map[string]string {
+		l.Lock()
+		refreshes++
+		l.Unlock()
+
+		return nil
+	})
+
+	// The test plays the other caller: it holds refreshL while the caller arrives, then
+	// refreshes the facts before letting it through.
+	f.refreshL.Lock()
+
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+
+		if _, err := f.Facts(t.Context(), 0); err != nil {
+			t.Error(err)
+		}
+	}()
+
+	// Leave the caller time to compute its freshness cutoff and wait on refreshL.
+	time.Sleep(100 * time.Millisecond)
+
+	f.l.Lock()
+	f.updateFacts(t.Context(), nil)
+	f.l.Unlock()
+
+	f.refreshL.Unlock()
+	<-done
+
+	if refreshes != 1 {
+		t.Errorf("%d refreshes, want 1", refreshes)
+	}
+
+	// A caller arriving after a refresh started doesn't accept it.
+	if _, err := f.Facts(t.Context(), 0); err != nil {
+		t.Error(err)
+	}
+
+	if refreshes != 2 {
+		t.Errorf("%d refreshes, want 2", refreshes)
+	}
+}

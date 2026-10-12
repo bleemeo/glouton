@@ -140,7 +140,11 @@ func (f *FactProvider) AddCallback(cb FactCallback) {
 
 // Facts returns the list of facts for this system.
 func (f *FactProvider) Facts(ctx context.Context, maxAge time.Duration) (facts map[string]string, err error) {
-	if current, fresh := f.currentFacts(maxAge); fresh {
+	// The cutoff is computed once, so a refresh started by another caller after this one
+	// arrived is accepted, even with a maxAge of 0.
+	freshnessCutoff := time.Now().Add(-maxAge)
+
+	if current, fresh := f.currentFacts(freshnessCutoff); fresh {
 		return current, ctx.Err()
 	}
 
@@ -148,7 +152,7 @@ func (f *FactProvider) Facts(ctx context.Context, maxAge time.Duration) (facts m
 	defer f.refreshL.Unlock()
 
 	// Another caller may have refreshed the facts while this one waited.
-	previous, fresh := f.currentFacts(maxAge)
+	previous, fresh := f.currentFacts(freshnessCutoff)
 	if fresh {
 		return previous, ctx.Err()
 	}
@@ -170,12 +174,12 @@ func (f *FactProvider) Facts(ctx context.Context, maxAge time.Duration) (facts m
 	return f.facts, ctx.Err()
 }
 
-// currentFacts returns the facts and whether they are at most maxAge old.
-func (f *FactProvider) currentFacts(maxAge time.Duration) (map[string]string, bool) {
+// currentFacts returns the facts and whether their refresh started at or after cutoff.
+func (f *FactProvider) currentFacts(cutoff time.Time) (map[string]string, bool) {
 	f.l.Lock()
 	defer f.l.Unlock()
 
-	return f.facts, time.Since(f.lastFactsUpdate) < maxAge
+	return f.facts, !f.lastFactsUpdate.IsZero() && !f.lastFactsUpdate.Before(cutoff)
 }
 
 // FastFacts returns an incomplete list of facts for this system. The slowest facts
@@ -318,10 +322,14 @@ func autoUpgradeEnabledValue(enabled bool, err error, previous map[string]string
 }
 
 // updateFacts refreshes every fact. autoUpgradeFacts is the result of autoUpgradeFacts,
-// which the caller computes without holding f.l.
+// which the caller computes without holding f.l. lastFactsUpdate records when this
+// function started, not when it finished: a fact computed early in the refresh is only
+// as recent as that.
 //
 // Caller must hold f.refreshL and f.l.
 func (f *FactProvider) updateFacts(ctx context.Context, autoUpgradeFacts map[string]string) {
+	now := time.Now()
+
 	newFacts := f.fastUpdateFacts(ctx)
 
 	maps.Copy(newFacts, autoUpgradeFacts)
@@ -337,7 +345,7 @@ func (f *FactProvider) updateFacts(ctx context.Context, autoUpgradeFacts map[str
 	newFacts[FactUpdatedAt] = f.factUpdatedAt(newFacts)
 
 	f.facts = newFacts
-	f.lastFactsUpdate = time.Now()
+	f.lastFactsUpdate = now
 }
 
 // factUpdatedAt returns the value to use for the fact_updated_at fact.
