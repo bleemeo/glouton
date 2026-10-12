@@ -590,7 +590,7 @@ func TestDpkgIsInterruptedNoDatabase(t *testing.T) {
 }
 
 // TestCombineVerdicts checks that a check that couldn't answer keeps its previous answer,
-// and is never reported as OK without one.
+// and is never reported as OK without one, while a busy check is.
 func TestCombineVerdicts(t *testing.T) {
 	const (
 		repository = autoUpgradeStatusRepositoryMissing
@@ -625,7 +625,7 @@ func TestCombineVerdicts(t *testing.T) {
 			verdicts: map[string]checkVerdict{repository: verdictProblem, dpkg: verdictUnknown},
 			want:     repository,
 		},
-		// The dpkg check is skipped while unattended-upgrades holds a lock.
+		// The dpkg check is skipped when the locks couldn't be checked.
 		{
 			name:     "unknown_keeps_previous_ok",
 			verdicts: map[string]checkVerdict{repository: verdictOK, dpkg: verdictUnknown},
@@ -643,6 +643,24 @@ func TestCombineVerdicts(t *testing.T) {
 			verdicts: map[string]checkVerdict{repository: verdictOK, dpkg: verdictUnknown, run: verdictProblem},
 			previous: "dpkg_interrupted,repository_missing",
 			want:     "dpkg_interrupted,run_not_finished",
+		},
+		// The dpkg check is skipped while a package operation runs, e.g. the APT that
+		// installs Glouton: unlike an unknown check, it is OK without a previous refresh.
+		{
+			name:     "busy_without_previous",
+			verdicts: map[string]checkVerdict{repository: verdictOK, dpkg: verdictBusy},
+			want:     autoUpgradeStatusOK,
+		},
+		{
+			name:     "busy_without_previous_next_to_an_unknown",
+			verdicts: map[string]checkVerdict{repository: verdictUnknown, dpkg: verdictBusy},
+			wantErr:  true,
+		},
+		{
+			name:     "busy_keeps_previous_problem",
+			verdicts: map[string]checkVerdict{repository: verdictOK, dpkg: verdictBusy},
+			previous: "dpkg_interrupted,repository_missing",
+			want:     dpkg,
 		},
 		// A check that answers drops its previous problem, whatever the others do.
 		{

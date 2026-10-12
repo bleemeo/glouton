@@ -197,8 +197,9 @@ func TestAutoUpgradeCheckerStatus(t *testing.T) {
 			want:   "repository_missing,run_not_finished",
 		},
 		// A lock that isn't stuck isn't a problem, but the dpkg check doesn't run under it:
-		// the journal entry is what a running dpkg leaves.
-		{name: "lock_held_without_previous", system: func(s *fakeSystem) { s.lockHeld, s.journal = true, true }, wantErr: true},
+		// the journal entry is what a running dpkg leaves. Without a previous refresh, e.g.
+		// while APT installs Glouton, the status is still reported.
+		{name: "lock_held_without_previous", system: func(s *fakeSystem) { s.lockHeld, s.journal = true, true }, want: autoUpgradeStatusOK},
 		{name: "lock_held_previous_ok", system: func(s *fakeSystem) { s.lockHeld, s.journal = true, true }, previous: autoUpgradeStatusOK, want: autoUpgradeStatusOK},
 		{
 			name:     "lock_held_previous_problem",

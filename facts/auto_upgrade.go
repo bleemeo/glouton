@@ -45,7 +45,9 @@ const (
 	// found. A check that can't answer keeps the answer it gave on the previous refresh.
 	// The fact is absent when the checks don't apply (non-Linux, container, no APT,
 	// Glouton not installed from a package), or when a check couldn't answer, nothing was
-	// found and there is no previous refresh to take its answer from.
+	// found and there is no previous refresh to take its answer from. A dpkg check skipped
+	// because a package operation is running isn't a check that couldn't answer, see
+	// verdictBusy.
 	factAutoUpgradeStatus = "auto_upgrade_status"
 
 	// autoUpgradeStatusOK means no check found a problem. A check that couldn't answer
@@ -195,6 +197,11 @@ const (
 	verdictUnknown checkVerdict = iota
 	verdictOK
 	verdictProblem
+	// verdictBusy means the check didn't run because a package operation is in progress.
+	// The operation is no problem as long as it isn't stuck, which the lock check reports.
+	// What it leaves behind is checked once it ends. It keeps a problem the previous
+	// refresh found and is OK otherwise.
+	verdictBusy
 )
 
 // status returns the value of the fact, or errAutoUpgradeCheckFailed when no answer can
@@ -242,14 +249,23 @@ func (c *autoUpgradeChecker) status(ctx context.Context, previous string) (strin
 	// looks exactly like an interrupted one until then. A successful "apt-get install" on
 	// Ubuntu 24.04 shows up to 34 journal entries while it runs. The Glouton auto-upgrade
 	// is the worst case: its postinst restarts Glouton while dpkg still runs.
-	if err == nil && !locks.unknown && locks.holder == nil {
-		interrupted, err := c.dpkgIsInterrupted()
-		record(autoUpgradeStatusDpkgInterrupted, interrupted, err)
-	} else {
-		// Routine, e.g. while unattended-upgrades runs: not worth more than a debug line.
-		logger.V(2).Printf("auto-upgrade: dpkg check skipped, an APT/dpkg lock is held or couldn't be checked")
+	//
+	// A held lock isn't a reason to leave the fact out: it is held on the first refresh
+	// after Glouton is installed, by the APT that installs it. An APT frontend only keeps
+	// the dpkg locks when the journal was empty as it took them (debSystem::Lock).
+	switch {
+	case err != nil || locks.unknown:
+		logger.V(2).Printf("auto-upgrade: dpkg check skipped, the APT/dpkg locks couldn't be checked")
 
 		verdicts[autoUpgradeStatusDpkgInterrupted] = verdictUnknown
+	case locks.holder != nil:
+		// Routine, e.g. while unattended-upgrades runs: not worth more than a debug line.
+		logger.V(2).Printf("auto-upgrade: dpkg check skipped, %s is locked by PID %d", locks.holder.path, locks.holder.pid)
+
+		verdicts[autoUpgradeStatusDpkgInterrupted] = verdictBusy
+	default:
+		interrupted, err := c.dpkgIsInterrupted()
+		record(autoUpgradeStatusDpkgInterrupted, interrupted, err)
 	}
 
 	stuck, err := c.runIsStuck(ctx)
@@ -263,10 +279,12 @@ func (c *autoUpgradeChecker) status(ctx context.Context, previous string) (strin
 //
 // A check that couldn't answer keeps the answer it gave in previous, the value of the
 // previous refresh: dropping a problem would tell the API it's fixed, and reporting one
-// would be a guess. A check is routinely unable to answer, e.g. the dpkg check while
-// unattended-upgrades holds a lock. With no previous value, a check that couldn't answer
-// is never reported as OK: errAutoUpgradeCheckFailed is returned when no other check
-// found a problem.
+// would be a guess. With no previous value, a check that couldn't answer is never
+// reported as OK: errAutoUpgradeCheckFailed is returned when no other check found a
+// problem.
+//
+// A busy check, e.g. the dpkg check while unattended-upgrades holds a lock, also keeps a
+// previous problem, but is OK without one.
 func combineVerdicts(verdicts map[string]checkVerdict, previous string) (string, error) {
 	var previousProblems []string
 
@@ -287,6 +305,10 @@ func combineVerdicts(verdicts map[string]checkVerdict, previous string) (string,
 			if previous == "" {
 				unanswered = true
 			} else if slices.Contains(previousProblems, problem) {
+				problems = append(problems, problem)
+			}
+		case verdictBusy:
+			if slices.Contains(previousProblems, problem) {
 				problems = append(problems, problem)
 			}
 		case verdictOK:
