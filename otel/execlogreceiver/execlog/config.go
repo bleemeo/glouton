@@ -74,6 +74,7 @@ type BaseConfig struct {
 	MaxLogSize    int          `mapstructure:"max_log_size"`
 	CommandRunner Runner       `mapstructure:"command_runner"`
 	RunAsRoot     bool         `mapstructure:"run_as_root"`
+	SudoWrapper   string       `mapstructure:"sudo_wrapper"`
 }
 
 // Build will build a exec input operator.
@@ -102,6 +103,7 @@ func (c *Config) Build(set component.TelemetrySettings) (operator.Operator, erro
 
 		commandRunner: c.CommandRunner,
 		runAsRoot:     c.RunAsRoot,
+		sudoWrapper:   c.SudoWrapper,
 		buffer:        make([]byte, c.BaseConfig.MaxLogSize),
 		argv:          c.Argv,
 		splitFunc:     splitFunc,

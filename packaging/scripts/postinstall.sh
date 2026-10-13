@@ -133,6 +133,9 @@ if [ -e /etc/sudoers.d/glouton ]; then
    chmod 0440 /etc/sudoers.d/glouton
 fi
 
+# Settings only sudo.ws understands, installed when sudo.ws is the active sudo.
+/usr/lib/glouton/glouton-sudoers-setup || true
+
 if [ -e /etc/glouton/conf.d/30-install.conf ]; then
     chown glouton:glouton /etc/glouton/conf.d/30-install.conf
     chmod 0640 /etc/glouton/conf.d/30-install.conf

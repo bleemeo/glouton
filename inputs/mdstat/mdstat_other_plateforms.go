@@ -28,5 +28,5 @@ import (
 )
 
 func New(config.Mdstat, *gloutonexec.Runner) (telegraf.Input, registry.RegistrationOption, error) {
-	return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
+	return nil, registry.RegistrationOption{}, inputs.ErrUnsupportedPlatform
 }

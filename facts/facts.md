@@ -4,6 +4,7 @@ agent_version
 architecture
 asn
 auto_upgrade_enabled
+auto_upgrade_status
 aws_ami_id
 aws_instance_id
 aws_instance_type

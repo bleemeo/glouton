@@ -1,4 +1,11 @@
-Defaults:glouton !logfile, !syslog, !pam_session
+# This file must only use the syntax both sudo.ws and sudo-rs (the default sudo since
+# Ubuntu 26.04) understand: sudo-rs prints an error on every sudo call, whoever runs it,
+# for each line it doesn't. In particular sudo-rs forbids wildcards in arguments (except
+# a final "*" meaning any arguments) and regular expressions, so commands whose arguments
+# need such restrictions go through a /usr/lib/glouton/glouton-sudo-* wrapper that checks
+# them. The settings only sudo.ws knows are in /etc/sudoers.d/glouton-sudo-ws, installed
+# by /usr/lib/glouton/glouton-sudoers-setup when sudo.ws is the active sudo.
+# Check both with "visudo.ws -c -f FILE" and "visudo -c -f FILE" (sudo-rs's visudo).
 
 # Allow Glouton to read the MySQL user credentials needed to access the metrics.
 glouton     ALL=(root) NOPASSWD: /bin/cat /etc/mysql/debian.cnf
@@ -23,27 +30,13 @@ glouton     ALL=(ALL) NOPASSWD: /usr/bin/smartctl, /usr/sbin/smartctl
 glouton     ALL=(ALL) NOPASSWD: /usr/sbin/ipmi-sensors -W discretereading --sdr-cache-recreate, /usr/sbin/ipmi-dcmi --get-enhanced-system-power-statistics, /usr/sbin/ipmi-dcmi --get-system-power-statistics, /usr/bin/ipmitool dcmi power reading
 
 # Allow Glouton to read ssacli output.
-# Note: it's important to use the regexp and not shell-glob for the variable controller slot.
-# It's important to be sure ";" isn't allowed in ssacli arguments as ssacli would interpret it as multiple commands
-# (so mostly if ";" is allowed, it could allow command injection and this sudo line would allow *write* access to ssacli)
-glouton     ALL=(ALL) NOPASSWD: /usr/sbin/ssacli controller all show
-glouton     ALL=(ALL) NOPASSWD: /usr/sbin/ssacli ^controller slot=[0-9]+ physicaldrive all show$
+# The wrapper only allows read-only commands. Never allow ssacli with free-form arguments:
+# it interprets ";" as a command separator, which would give *write* access to the controllers.
+glouton     ALL=(ALL) NOPASSWD: /usr/lib/glouton/glouton-sudo-ssacli *
 
 # Allow Glouton to get details about multi-disks arrays.
 glouton     ALL=(ALL) NOPASSWD: /sbin/mdadm --detail *, /usr/sbin/mdadm --detail *
 
-# Allow Glouton to read container logs
-glouton     ALL=(ALL) NOPASSWD: /usr/bin/tail --follow=name --bytes=* /var/lib/docker/containers/*/*-json.log
-glouton     ALL=(ALL) NOPASSWD: /usr/bin/stat --printf=%s /var/lib/docker/containers/*/*-json.log
-
-# Allow Glouton to read application logs
-glouton     ALL=(ALL) NOPASSWD: /usr/bin/tail --follow=name --bytes=* /var/log/*/*.log
-glouton     ALL=(ALL) NOPASSWD: /usr/bin/stat --printf=%s /var/log/*/*.log
-
-# Allow Glouton to read system logs
-glouton     ALL=(ALL) NOPASSWD: /usr/bin/tail --follow=name --bytes=* /var/log/syslog
-glouton     ALL=(ALL) NOPASSWD: /usr/bin/stat --printf=%s /var/log/syslog
-glouton     ALL=(ALL) NOPASSWD: /usr/bin/tail --follow=name --bytes=* /var/log/auth.log
-glouton     ALL=(ALL) NOPASSWD: /usr/bin/stat --printf=%s /var/log/auth.log
-glouton     ALL=(ALL) NOPASSWD: /usr/bin/tail --follow=name --bytes=* /var/log/message
-glouton     ALL=(ALL) NOPASSWD: /usr/bin/stat --printf=%s /var/log/message
+# Allow Glouton to read container, application and system logs.
+# The wrapper only allows stat and tail on the files Glouton may read.
+glouton     ALL=(ALL) NOPASSWD: /usr/lib/glouton/glouton-sudo-logs *

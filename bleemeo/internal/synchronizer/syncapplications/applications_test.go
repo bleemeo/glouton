@@ -18,6 +18,8 @@ package syncapplications
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"strconv"
 	"testing"
 
@@ -233,10 +235,96 @@ func Test_syncRemoteAndLocal(t *testing.T) {
 	}
 }
 
+func Test_syncRemoteAndLocal_createError(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name            string
+		createErr       error
+		wantNotAllowed  bool
+		wantErrReturned bool
+	}{
+		{
+			name: "not-allowed-in-plan",
+			createErr: &bleemeo.APIError{
+				StatusCode: http.StatusBadRequest,
+				Response:   []byte(`["Don't allow to create an application in this current plan"]`),
+			},
+			wantNotAllowed:  true,
+			wantErrReturned: true,
+		},
+		{
+			name: "not-allowed-in-plan2",
+			createErr: &bleemeo.APIError{
+				StatusCode: http.StatusBadRequest,
+				Response:   []byte(`"Don't allow to create an application in this current plan"`),
+			},
+			wantNotAllowed:  true,
+			wantErrReturned: true,
+		},
+		{
+			name: "other-bad-request",
+			createErr: &bleemeo.APIError{
+				StatusCode: http.StatusBadRequest,
+				Response:   []byte(`{"name": ["Ensure this field has no more than 100 characters."]}`),
+			},
+			wantNotAllowed:  false,
+			wantErrReturned: true,
+		},
+		{
+			name: "server-error",
+			createErr: &bleemeo.APIError{
+				StatusCode: http.StatusInternalServerError,
+				Response:   []byte(`Some error reason`),
+			},
+			wantNotAllowed:  false,
+			wantErrReturned: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cache := &cache.Cache{}
+			apiClient := &mockAPI{CreateErr: tt.createErr}
+			localServices := []discovery.Service{
+				{
+					Name:   testServiceRedis,
+					Active: true,
+					Applications: []discovery.Application{
+						{Name: testComposeName, Type: discovery.ApplicationDockerCompose},
+						{Name: "other-compose", Type: discovery.ApplicationDockerCompose},
+					},
+				},
+			}
+
+			err := syncRemoteAndLocal(t.Context(), localServices, apiClient, cache)
+			if (err != nil) != tt.wantErrReturned {
+				t.Fatalf("syncRemoteAndLocal() error = %v, want error = %v", err, tt.wantErrReturned)
+			}
+
+			if got := errors.Is(err, errApplicationNotAllowed); got != tt.wantNotAllowed {
+				t.Errorf("errors.Is(err, errApplicationNotAllowed) = %v, want %v", got, tt.wantNotAllowed)
+			}
+
+			if apiClient.CreateCalls != 1 {
+				t.Errorf("CreateApplication called %d times, want 1", apiClient.CreateCalls)
+			}
+
+			if len(cache.Applications()) != 0 {
+				t.Errorf("cache.Applications() = %v, want empty", cache.Applications())
+			}
+		})
+	}
+}
+
 type mockAPI struct {
 	lastID              int
 	ListResponse        []bleemeoTypes.Application
 	CreatedApplications []bleemeoTypes.Application
+	CreateErr           error
+	CreateCalls         int
 }
 
 func (api *mockAPI) ListApplications(ctx context.Context) ([]bleemeoTypes.Application, error) {
@@ -247,6 +335,12 @@ func (api *mockAPI) ListApplications(ctx context.Context) ([]bleemeoTypes.Applic
 
 func (api *mockAPI) CreateApplication(ctx context.Context, app bleemeoTypes.Application) (bleemeoTypes.Application, error) {
 	_ = ctx
+
+	api.CreateCalls++
+
+	if api.CreateErr != nil {
+		return bleemeoTypes.Application{}, api.CreateErr
+	}
 
 	api.CreatedApplications = append(api.CreatedApplications, app)
 

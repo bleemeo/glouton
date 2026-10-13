@@ -214,7 +214,7 @@ func (pp *ProcessProvider) AllProcs() gloutonTypes.ProcIter {
 // It could also return a suggested time for next update, because processes listing could be incompleted for processes that
 // could belong to a containers.
 func (pp *ProcessProvider) UpdateProcesses(ctx context.Context) (processes map[int]Process, wantedNextUpdate time.Time, err error) {
-	replyChan := make(chan error)
+	replyChan := make(chan error, 1)
 
 	select {
 	case pp.triggerChan <- replyChan:

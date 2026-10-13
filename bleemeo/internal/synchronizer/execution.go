@@ -376,7 +376,7 @@ func (e *Execution) run(ctx context.Context) error {
 		}
 
 		if ee.err != nil && !errors.Is(ee.err, errSkippedExecution) {
-			errs = append(errs, ee.err)
+			errs = append(errs, fmt.Errorf("%s: %w", ee.entity.Name(), ee.err))
 		}
 
 		if ee.syncType == types.SyncTypeNone {

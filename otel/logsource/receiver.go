@@ -57,6 +57,9 @@ const (
 	ReceiverExecLog ReceiverKind = "execlogreceiver"
 
 	tailFollowName = "--follow=name"
+
+	// sudoLogsWrapper checks the stat/tail commands run through sudo, see bin/glouton-sudo-logs.
+	sudoLogsWrapper = "/usr/lib/glouton/glouton-sudo-logs"
 )
 
 var errUnexpectedType = errors.New("unexpected type")
@@ -330,6 +333,7 @@ func SetupLogReceiverFactories(
 		execTypedCfg.InputConfig.Argv = append(tailArgs, filepath.Join(hostroot, logFile)) //nolint: gocritic
 		execTypedCfg.InputConfig.CommandRunner = commandRunner
 		execTypedCfg.InputConfig.RunAsRoot = true
+		execTypedCfg.InputConfig.SudoWrapper = sudoLogsWrapper
 		execTypedCfg.InputConfig.Attributes = map[string]helper.ExprStringConfig{
 			attrs.LogFileName: helper.ExprStringConfig(filepath.Base(logFile)),
 			attrs.LogFilePath: helper.ExprStringConfig(logFile),
@@ -420,6 +424,7 @@ func sudoStatFile(logFile string, commandRunner CommandRunner) ([]byte, error) {
 
 	runOpt := gloutonexec.Option{
 		RunAsRoot:      true,
+		SudoWrapper:    sudoLogsWrapper,
 		CombinedOutput: true,
 	}
 

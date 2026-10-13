@@ -106,6 +106,7 @@ type Config struct {
 }
 
 const (
+	ConfigTypeApplicationIntegration = 1003
 	ConfigTypeDockerIntegration      = 1010
 	ConfigTypeSNMPIntegration        = 1030
 	ConfigTypeVSphereIntegration     = 1040
