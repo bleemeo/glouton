@@ -15,7 +15,9 @@ fi
 if [ "${LINT}" != "1" ]; then
    echo "-- Run tests"
    go test ./...
-   go test -race ./... -short
+   # -race require CGO_ENABLED, ensure it's not set and default is used.
+   echo "-- Run tests with -race"
+   CGO_ENABLED= go test -race ./... -short
 fi
 
 echo "Start lint Linux"
