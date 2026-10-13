@@ -52,12 +52,12 @@ docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=0 \
    -e GO_CACHE_PERSISTED=$GO_CACHE_PERSISTED \
    -e GOOS -e GOARCH \
    -w /src \
-   --tmpfs /app/webui/node_modules:exec \
+   --tmpfs /src/webui/node_modules:exec \
    ${LINTER_MEMORY_LIMIT} ${DOCKER_RUN_EXTRA_OPTION} \
    golangci/golangci-lint:${LINTER_VERSION} \
    sh -euc "
       mkdir -p /go/pkg
-      git config --global --add safe.directory /app
+      git config --global --add safe.directory /src
       if [ \"${OPEN_SHELL}\" = \"1\" ]; then
          exec bash
       fi
