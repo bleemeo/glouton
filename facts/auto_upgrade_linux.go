@@ -1,0 +1,50 @@
+// Copyright 2015-2026 Bleemeo
+//
+// bleemeo.com an infrastructure monitoring solution in the Cloud
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//go:build linux
+
+package facts
+
+import (
+	"fmt"
+	"time"
+
+	"golang.org/x/sys/unix"
+)
+
+// statLockInode returns the inode of a lock file. It doesn't open the file, so it works
+// as the "glouton" user on the 0640 root:root lock files.
+func statLockInode(path string) (uint64, error) {
+	var stat unix.Stat_t
+
+	if err := unix.Stat(path, &stat); err != nil {
+		return 0, fmt.Errorf("stat %s: %w", path, err)
+	}
+
+	return stat.Ino, nil
+}
+
+// monotonicNow returns the CLOCK_MONOTONIC time, the clock of systemd's *Monotonic
+// timestamps.
+func monotonicNow() (time.Duration, error) {
+	var ts unix.Timespec
+
+	if err := unix.ClockGettime(unix.CLOCK_MONOTONIC, &ts); err != nil {
+		return 0, fmt.Errorf("clock_gettime(CLOCK_MONOTONIC): %w", err)
+	}
+
+	return time.Duration(ts.Nano()), nil
+}

@@ -1900,6 +1900,7 @@ func (a *agent) hourlyDiscovery(ctx context.Context) error {
 			return nil
 		case <-time.After(delay.JitterDelay(time.Hour, 0.1)):
 			a.FireTrigger(true, false, true, false, false)
+			a.factProvider.RefreshAutoUpgradeFacts(ctx)
 		}
 	}
 }
