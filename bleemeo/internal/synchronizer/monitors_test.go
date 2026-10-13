@@ -244,48 +244,48 @@ func Test_applyJitterToMonitorCreationDateFixedValue(t *testing.T) {
 	}
 }
 
-// TestSyncMonitorUseHead ensures monitor_use_head is given to the monitor manager, both on a full
+// TestSyncMonitorHeadRequest ensures monitor_head_request is given to the monitor manager, both on a full
 // synchronization and on a monitor update notification.
-func TestSyncMonitorUseHead(t *testing.T) {
-	newTestMonitor := func(id string, useHead bool) bleemeoTypes.Monitor {
+func TestSyncMonitorHeadRequest(t *testing.T) {
+	newTestMonitor := func(id string, headRequest bool) bleemeoTypes.Monitor {
 		return bleemeoTypes.Monitor{
 			ID:           id,
 			Account:      accountID,
 			Active:       true,
 			CreationDate: "2020-01-03T04:05:06Z",
 			URL:          "https://example.com/" + id,
-			UseHead:      useHead,
+			HeadRequest:  headRequest,
 		}
 	}
 
-	monitorUseHead := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e01", true)
+	monitorHeadRequest := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e01", true)
 	monitorGet := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e02", false)
 
 	helper := newHelper(t)
 	defer helper.Close()
 
 	helper.preregisterAgent(t)
-	helper.wrapperClientMock.resources.monitors.add(monitorUseHead, monitorGet)
+	helper.wrapperClientMock.resources.monitors.add(monitorHeadRequest, monitorGet)
 	helper.initSynchronizer(t)
 
-	checkUseHead := func(t *testing.T, wantUseHead map[string]bool) {
+	checkHeadRequest := func(t *testing.T, wantHeadRequest map[string]bool) {
 		t.Helper()
 
 		gotMonitors := helper.monitorManager.Monitors()
-		if len(gotMonitors) != len(wantUseHead) {
-			t.Fatalf("got %d monitors, want %d: %+v", len(gotMonitors), len(wantUseHead), gotMonitors)
+		if len(gotMonitors) != len(wantHeadRequest) {
+			t.Fatalf("got %d monitors, want %d: %+v", len(gotMonitors), len(wantHeadRequest), gotMonitors)
 		}
 
 		for _, monitor := range gotMonitors {
-			want, ok := wantUseHead[monitor.ID]
+			want, ok := wantHeadRequest[monitor.ID]
 			if !ok {
 				t.Errorf("unexpected monitor %s", monitor.ID)
 
 				continue
 			}
 
-			if monitor.UseHead != want {
-				t.Errorf("monitor %s: UseHead = %v, want %v", monitor.URL, monitor.UseHead, want)
+			if monitor.HeadRequest != want {
+				t.Errorf("monitor %s: HeadRequest = %v, want %v", monitor.URL, monitor.HeadRequest, want)
 			}
 		}
 	}
@@ -294,11 +294,11 @@ func TestSyncMonitorUseHead(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	checkUseHead(t, map[string]bool{monitorUseHead.ID: true, monitorGet.ID: false})
+	checkHeadRequest(t, map[string]bool{monitorHeadRequest.ID: true, monitorGet.ID: false})
 
-	// Swap use_head on the API, and notify only the change of the second monitor.
+	// Swap head_request on the API, and notify only the change of the second monitor.
 	for i, m := range helper.wrapperClientMock.resources.monitors.elems {
-		helper.wrapperClientMock.resources.monitors.elems[i].UseHead = !m.UseHead
+		helper.wrapperClientMock.resources.monitors.elems[i].HeadRequest = !m.HeadRequest
 	}
 
 	helper.s.UpdateMonitor("change", monitorGet.ID)
@@ -309,7 +309,7 @@ func TestSyncMonitorUseHead(t *testing.T) {
 	}
 
 	// The first monitor wasn't notified, so it keeps the value from the previous synchronization.
-	checkUseHead(t, map[string]bool{monitorUseHead.ID: true, monitorGet.ID: true})
+	checkHeadRequest(t, map[string]bool{monitorHeadRequest.ID: true, monitorGet.ID: true})
 }
 
 // TestMonitorFieldsMatchTypes ensures the HTTP options of the monitors are requested.

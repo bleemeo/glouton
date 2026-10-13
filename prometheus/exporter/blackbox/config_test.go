@@ -248,9 +248,9 @@ func TestProcessRegexp(t *testing.T) {
 	}
 }
 
-// TestDynamicTargetUseHead ensures use_head switches HTTP probes to HEAD requests,
+// TestDynamicTargetHeadRequest ensures head_request switches HTTP probes to HEAD requests,
 // unless a content check needs the body, and that it doesn't change other probes.
-func TestDynamicTargetUseHead(t *testing.T) {
+func TestDynamicTargetHeadRequest(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
@@ -259,45 +259,45 @@ func TestDynamicTargetUseHead(t *testing.T) {
 		wantMethod string
 	}{
 		{
-			name:       "http-use-head-false",
+			name:       "http-head-request-false",
 			monitor:    types.Monitor{URL: "http://example.com/path"},
 			wantMethod: "",
 		},
 		{
-			name:       "http-use-head",
-			monitor:    types.Monitor{URL: "http://example.com/path", UseHead: true},
+			name:       "http-head-request",
+			monitor:    types.Monitor{URL: "http://example.com/path", HeadRequest: true},
 			wantMethod: http.MethodHead,
 		},
 		{
-			name:       "https-use-head",
-			monitor:    types.Monitor{URL: "https://example.com/path", UseHead: true, ExpectedResponseCode: 204},
+			name:       "https-head-request",
+			monitor:    types.Monitor{URL: "https://example.com/path", HeadRequest: true, ExpectedResponseCode: 204},
 			wantMethod: http.MethodHead,
 		},
 		{
-			name:       "https-use-head-expected-content",
-			monitor:    types.Monitor{URL: "https://example.com/path", UseHead: true, ExpectedContent: "welcome"},
+			name:       "https-head-request-expected-content",
+			monitor:    types.Monitor{URL: "https://example.com/path", HeadRequest: true, ExpectedContent: "welcome"},
 			wantMethod: "",
 		},
 		{
-			name:       "https-use-head-forbidden-content",
-			monitor:    types.Monitor{URL: "https://example.com/path", UseHead: true, ForbiddenContent: "maintenance"},
+			name:       "https-head-request-forbidden-content",
+			monitor:    types.Monitor{URL: "https://example.com/path", HeadRequest: true, ForbiddenContent: "maintenance"},
 			wantMethod: "",
 		},
 		{
-			name:    "tcp-use-head",
-			monitor: types.Monitor{URL: "tcp://example.com:1234", UseHead: true},
+			name:    "tcp-head-request",
+			monitor: types.Monitor{URL: "tcp://example.com:1234", HeadRequest: true},
 		},
 		{
-			name:    "icmp-use-head",
-			monitor: types.Monitor{URL: "icmp://example.com", UseHead: true},
+			name:    "icmp-head-request",
+			monitor: types.Monitor{URL: "icmp://example.com", HeadRequest: true},
 		},
 		{
-			name:    "dns-use-head",
-			monitor: types.Monitor{URL: "dns://8.8.8.8/example.com?type=AAAA", UseHead: true},
+			name:    "dns-head-request",
+			monitor: types.Monitor{URL: "dns://8.8.8.8/example.com?type=AAAA", HeadRequest: true},
 		},
 		{
-			name:    "ssl-use-head",
-			monitor: types.Monitor{URL: "ssl://example.com:443", UseHead: true},
+			name:    "ssl-head-request",
+			monitor: types.Monitor{URL: "ssl://example.com:443", HeadRequest: true},
 		},
 	}
 
@@ -314,9 +314,9 @@ func TestDynamicTargetUseHead(t *testing.T) {
 				t.Errorf("HTTP method = %q, want %q", collector.Module.HTTP.Method, tc.wantMethod)
 			}
 
-			// Apart from the method, the module must be the same as without use_head.
+			// Apart from the method, the module must be the same as without head_request.
 			monitorWithoutHead := tc.monitor
-			monitorWithoutHead.UseHead = false
+			monitorWithoutHead.HeadRequest = false
 
 			collectorWithoutHead, err := genCollectorFromDynamicTarget(monitorWithoutHead, "dummy-user-agent", mockHelpers{})
 			if err != nil {
@@ -332,7 +332,7 @@ func TestDynamicTargetUseHead(t *testing.T) {
 			}
 
 			// Only a change of method makes the collector different, so that it's recreated.
-			// When use_head is false, monitorWithoutHead is the same monitor, so this case is trivial.
+			// When head_request is false, monitorWithoutHead is the same monitor, so this case is trivial.
 			wantEqual := tc.wantMethod == ""
 			if gotEqual := collector.Equal(collectorWithoutHead); gotEqual != wantEqual {
 				t.Errorf("collector.Equal(collectorWithoutHead) = %v, want %v", gotEqual, wantEqual)
@@ -341,7 +341,7 @@ func TestDynamicTargetUseHead(t *testing.T) {
 	}
 }
 
-// TestUpdateDynamicTargetsHeadFallback ensures the GET fallback of use_head monitors with a content check
+// TestUpdateDynamicTargetsHeadFallback ensures the GET fallback of head_request monitors with a content check
 // is remembered, so it's logged only once, and forgotten when the fallback no longer applies.
 func TestUpdateDynamicTargetsHeadFallback(t *testing.T) {
 	t.Parallel()
@@ -360,7 +360,7 @@ func TestUpdateDynamicTargetsHeadFallback(t *testing.T) {
 		ID:              "1cb119d1-df61-41c7-ae6a-5b4e54442e00",
 		BleemeoAgentID:  "60ed127d-b3d3-4c82-89e2-df74a80a9e9e",
 		URL:             "https://example.com/",
-		UseHead:         true,
+		HeadRequest:     true,
 		ExpectedContent: "welcome",
 	}
 	wantKey := monitor.ID + " " + monitor.URL
@@ -406,7 +406,7 @@ func (a *memoryArchive) CurrentFileName() string {
 }
 
 // TestDiagnosticArchiveHTTPMethod ensures the diagnostic shows the HTTP method of the HTTP probes,
-// to know whether a monitor with use_head is probed with HEAD.
+// to know whether a monitor with head_request is probed with HEAD.
 func TestDiagnosticArchiveHTTPMethod(t *testing.T) {
 	t.Parallel()
 
@@ -421,10 +421,10 @@ func TestDiagnosticArchiveHTTPMethod(t *testing.T) {
 	}
 
 	monitors := []types.Monitor{
-		{ID: "1", BleemeoAgentID: "agent-1", URL: "https://example.com/head", UseHead: true},
+		{ID: "1", BleemeoAgentID: "agent-1", URL: "https://example.com/head", HeadRequest: true},
 		{ID: "2", BleemeoAgentID: "agent-2", URL: "https://example.com/get"},
-		{ID: "3", BleemeoAgentID: "agent-3", URL: "https://example.com/content", UseHead: true, ExpectedContent: "welcome"},
-		{ID: "4", BleemeoAgentID: "agent-4", URL: "tcp://example.com:1234", UseHead: true},
+		{ID: "3", BleemeoAgentID: "agent-3", URL: "https://example.com/content", HeadRequest: true, ExpectedContent: "welcome"},
+		{ID: "4", BleemeoAgentID: "agent-4", URL: "tcp://example.com:1234", HeadRequest: true},
 	}
 
 	if err := bbManager.UpdateDynamicTargets(monitors); err != nil {

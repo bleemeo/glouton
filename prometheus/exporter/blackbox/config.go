@@ -137,7 +137,7 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string, help
 		// A HEAD request avoids downloading the body, which reduces the data transfer on large pages.
 		// Content checks need the body, so we keep the default GET method when one is configured.
 		// The method is left empty when HEAD isn't used, to keep the module unchanged for existing monitors.
-		if monitor.UseHead && !hasContentCheck(monitor) {
+		if monitor.HeadRequest && !hasContentCheck(monitor) {
 			mod.HTTP.Method = http.MethodHead
 		}
 
@@ -464,7 +464,7 @@ func (m *RegisterManager) DiagnosticArchive(_ context.Context, archive types.Arc
 			labels[k] = config.CensorURLSecrets(v)
 		}
 
-		// The HTTP method shows whether a monitor with use_head is probed with HEAD.
+		// The HTTP method shows whether a monitor with head_request is probed with HEAD.
 		method := ""
 		if t.Module.Prober == proberNameHTTP {
 			method = " method=" + cmp.Or(t.Module.HTTP.Method, http.MethodGet)
@@ -509,7 +509,7 @@ func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
 
 		newTargets = append(newTargets, collector)
 
-		if monitor.UseHead && collector.Module.Prober == proberNameHTTP && hasContentCheck(monitor) {
+		if monitor.HeadRequest && collector.Module.Prober == proberNameHTTP && hasContentCheck(monitor) {
 			key := monitor.ID + " " + monitor.URL
 			headFallbacks[key] = true
 

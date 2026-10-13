@@ -4388,10 +4388,10 @@ func (r *methodRecorder) Methods() []string {
 	return slices.Clone(r.methods)
 }
 
-// Test_Collect_HTTPUseHead ensures monitors with use_head send HEAD requests, which don't transfer the body,
+// Test_Collect_HTTPHeadRequest ensures monitors with head_request send HEAD requests, which don't transfer the body,
 // while keeping the status code checks, the TLS checks and the redirections.
 // Content checks need the body, so they keep using GET.
-func Test_Collect_HTTPUseHead(t *testing.T) {
+func Test_Collect_HTTPHeadRequest(t *testing.T) {
 	t.Parallel()
 
 	const (
@@ -4402,7 +4402,7 @@ func Test_Collect_HTTPUseHead(t *testing.T) {
 
 	tests := []struct {
 		name                 string
-		useHead              bool
+		headRequest          bool
 		useTLS               bool
 		useRedirect          bool
 		expectedContent      string
@@ -4422,14 +4422,14 @@ func Test_Collect_HTTPUseHead(t *testing.T) {
 		},
 		{
 			name:           "head",
-			useHead:        true,
+			headRequest:    true,
 			wantMethod:     http.MethodHead,
 			wantSuccess:    1,
 			wantStatusCode: http.StatusOK,
 		},
 		{
 			name:             "head-server-error",
-			useHead:          true,
+			headRequest:      true,
 			serverStatusCode: http.StatusInternalServerError,
 			wantMethod:       http.MethodHead,
 			wantSuccess:      0,
@@ -4437,7 +4437,7 @@ func Test_Collect_HTTPUseHead(t *testing.T) {
 		},
 		{
 			name:                 "head-expected-response-code",
-			useHead:              true,
+			headRequest:          true,
 			expectedResponseCode: http.StatusNotFound,
 			serverStatusCode:     http.StatusNotFound,
 			wantMethod:           http.MethodHead,
@@ -4446,7 +4446,7 @@ func Test_Collect_HTTPUseHead(t *testing.T) {
 		},
 		{
 			name:                 "head-unexpected-response-code",
-			useHead:              true,
+			headRequest:          true,
 			expectedResponseCode: http.StatusNotFound,
 			wantMethod:           http.MethodHead,
 			wantSuccess:          0,
@@ -4454,7 +4454,7 @@ func Test_Collect_HTTPUseHead(t *testing.T) {
 		},
 		{
 			name:                "head-with-expected-content-uses-get",
-			useHead:             true,
+			headRequest:         true,
 			expectedContent:     "end-of-page",
 			wantMethod:          http.MethodGet,
 			wantSuccess:         1,
@@ -4463,7 +4463,7 @@ func Test_Collect_HTTPUseHead(t *testing.T) {
 		},
 		{
 			name:           "head-https",
-			useHead:        true,
+			headRequest:    true,
 			useTLS:         true,
 			wantMethod:     http.MethodHead,
 			wantSuccess:    1,
@@ -4471,7 +4471,7 @@ func Test_Collect_HTTPUseHead(t *testing.T) {
 		},
 		{
 			name:           "head-redirect",
-			useHead:        true,
+			headRequest:    true,
 			useRedirect:    true,
 			wantMethod:     http.MethodHead,
 			wantSuccess:    1,
@@ -4479,7 +4479,7 @@ func Test_Collect_HTTPUseHead(t *testing.T) {
 		},
 		{
 			name:           "head-https-redirect",
-			useHead:        true,
+			headRequest:    true,
 			useTLS:         true,
 			useRedirect:    true,
 			wantMethod:     http.MethodHead,
@@ -4545,7 +4545,7 @@ func Test_Collect_HTTPUseHead(t *testing.T) {
 				ID:                   testMonitorID,
 				BleemeoAgentID:       testAgentID,
 				URL:                  targetURL,
-				UseHead:              tt.useHead,
+				HeadRequest:          tt.headRequest,
 				ExpectedContent:      tt.expectedContent,
 				ExpectedResponseCode: tt.expectedResponseCode,
 			}

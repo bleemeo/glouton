@@ -89,7 +89,7 @@ type RegisterManager struct {
 	systemDNSLastUpdate            time.Time
 	notifiedNeedForDefaultResolver bool
 	// loggedHeadFallbacks contains the monitors (by ID and URL) for which we logged that a GET
-	// request is used despite use_head, to not log it on each update. It's replaced on each update
+	// request is used despite head_request, to not log it on each update. It's replaced on each update
 	// to only keep the current monitors, so the message is logged again if the fallback comes back.
 	loggedHeadFallbacks map[string]bool
 	addWarnings         func(...error)
