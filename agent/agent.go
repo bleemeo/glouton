@@ -1225,6 +1225,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		plannedListeners, listenerWarnings := logsource.PlanSharedNetworkListeners(a.config.OpenTelemetry.NetworkListeners, a.receiverManager.NetworkWants(ctx))
 		a.addWarnings(listenerWarnings...)
 
+		listenerStates := make(map[string]string, len(plannedListeners))
+
 		for _, planned := range plannedListeners {
 			recv, err := logsource.SetupOTLPNetworkListener(
 				ctx,
@@ -1236,8 +1238,12 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			if err != nil {
 				a.addWarnings(fmt.Errorf("unable to start OpenTelemetry network receiver %q: %w", planned.Name, err))
 
+				listenerStates[planned.Name] = err.Error()
+
 				continue
 			}
+
+			listenerStates[planned.Name] = ""
 
 			tasks = append(tasks, taskInfo{
 				func(ctx context.Context) error {
@@ -1248,6 +1254,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 				fmt.Sprintf("OpenTelemetry network receiver (%s)", planned.Name),
 			})
 		}
+
+		a.receiverManager.SetNetworkListenerStates(listenerStates)
 
 		tasks = append(tasks, taskInfo{a.runReceiverManager, "Log receiver manager"})
 	}
@@ -2467,16 +2475,11 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		modules = append(modules, a.logProcessManager.DiagnosticArchive)
 	}
 
-	// receiverManager is shared between logProcessManager and logMetricsManager (neither owns it), so
-	// its own diagnostic (read-offset/extension state, via its *PersistHost) is always archived here
-	// directly, independent of whether either manager exists.
-	if a.receiverManager != nil {
-		modules = append(modules, a.receiverManager.DiagnosticArchive)
-	}
-
 	if a.logMetricsManager != nil {
 		modules = append(modules, a.logMetricsManager.DiagnosticArchive)
 	}
+
+	modules = append(modules, a.logDiagnosticArchive)
 
 	for _, f := range modules {
 		if err = f(ctx, archive); err != nil {
@@ -2795,6 +2798,65 @@ func (a *agent) diagnosticVSphere(ctx context.Context, archive types.ArchiveWrit
 	}
 
 	return a.vSphereManager.DiagnosticVSphere(ctx, archive, associationFn)
+}
+
+// logDiagnosticArchive writes every log source, whichever component owns it, and which features consume it,
+// then the state of log shipping.
+func (a *agent) logDiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
+	var (
+		sources      []logsource.SourceDiagnostic
+		shipping     map[logsource.SourceKey]logsource.ShippingDiagnostic
+		logToMetrics map[logsource.SourceKey]logsource.LogToMetricsDiagnostic
+	)
+
+	if a.receiverManager != nil {
+		sources = append(sources, a.receiverManager.DiagnosticSources()...)
+	}
+
+	if a.logMetricsManager != nil {
+		logToMetrics = a.logMetricsManager.DiagnosticSources()
+	}
+
+	var shippingDisabledReason string
+
+	switch {
+	case !a.config.Log.OpenTelemetry.ShippingEnable:
+		shippingDisabledReason = "log.opentelemetry.shipping_enable is false"
+	case !a.config.Bleemeo.Enable:
+		shippingDisabledReason = "log shipping requires the Bleemeo connector"
+	case a.logProcessManager == nil:
+		shippingDisabledReason = "log processing failed to start: see Glouton logs"
+	}
+
+	servicesExcludedReason := shippingDisabledReason
+	if servicesExcludedReason == "" && !a.config.Log.OpenTelemetry.AutoDiscovery.ContainerAndServiceEnable {
+		servicesExcludedReason = "log.opentelemetry.auto_discovery.container_and_service_enable is false"
+	}
+
+	if a.logProcessManager != nil {
+		var processingSources []logsource.SourceDiagnostic
+
+		processingSources, shipping = a.logProcessManager.DiagnosticSources()
+		sources = append(sources, processingSources...)
+	}
+
+	if servicesExcludedReason != "" {
+		services, _ := a.discovery.GetLatestDiscovery()
+		sources = append(sources, logprocessing.ExcludedServiceSources(services, servicesExcludedReason)...)
+	}
+
+	if err := logsource.WriteSourcesDiagnostic(archive, sources, shipping, logToMetrics); err != nil {
+		return err
+	}
+
+	var backPressure *bleemeoTypes.LogsBackPressureDiagnostic
+
+	if a.bleemeoConnector != nil && a.logProcessManager != nil {
+		diag := a.bleemeoConnector.LogsBackPressureDiagnostic()
+		backPressure = &diag
+	}
+
+	return logprocessing.WriteShippingDiagnostic(archive, a.logProcessManager, shippingDisabledReason, backPressure)
 }
 
 // checkSudoersForSudoRS warns when sudo-rs is the active sudo while the sudoers file meant

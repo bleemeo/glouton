@@ -132,7 +132,6 @@ func TestPipeline(t *testing.T) { //nolint: maintidx
 	persister, err := logsource.NewPersistHost(st, logsource.PersistConfig{
 		StorageType:  logsource.PersistStorageType,
 		CacheKey:     logsource.LogFileMetadataCacheKey,
-		ArchivePath:  "log-processing/persister.json",
 		SaveThrottle: saveFileSizesToCachePeriod,
 	})
 	if err != nil {

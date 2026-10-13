@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
-	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -385,15 +384,6 @@ func (cr *containerReceiver) tailedContainerIDs() map[string]bool {
 	}
 
 	return ids
-}
-
-func (cr *containerReceiver) StartedComponentKeys() []string {
-	cr.l.Lock()
-	defer cr.l.Unlock()
-
-	startedComponentKeys := slices.Collect(maps.Keys(cr.startedComponents))
-
-	return startedComponentKeys
 }
 
 func (cr *containerReceiver) stop() {

@@ -313,8 +313,27 @@ type sourceDiagnostic struct {
 	MetricNames    []string
 }
 
+// DiagnosticSources returns the log-to-metric counters of every source that has some.
+func (man *Manager) DiagnosticSources() map[logsource.SourceKey]logsource.LogToMetricsDiagnostic {
+	man.l.Lock()
+	defer man.l.Unlock()
+
+	out := make(map[logsource.SourceKey]logsource.LogToMetricsDiagnostic, len(man.built))
+
+	for _, b := range man.built {
+		key := logsource.ReceiverSourceKey(b.diag.ReceiverName)
+		if b.diag.Kind == "container_label" {
+			key = logsource.ContainerLabelSourceKey(b.diag.ContainerID)
+		}
+
+		out[key] = logsource.LogToMetricsDiagnostic{Rule: b.diag.LogMetricsRule, Metrics: b.diag.MetricNames}
+	}
+
+	return out
+}
+
 func (man *Manager) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
-	file, err := archive.Create("log-to-metrics.json")
+	file, err := archive.Create("log-processing/log-to-metrics.json")
 	if err != nil {
 		return err
 	}

@@ -24,7 +24,6 @@ import (
 	"maps"
 	"regexp"
 	"slices"
-	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -32,7 +31,6 @@ import (
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/otel/logsource"
 
-	"github.com/bmatcuk/doublestar/v4"
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/google/uuid"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/stanza/operator"
@@ -360,48 +358,10 @@ func (r *logReceiver) setupFilters(ctx context.Context, pipeline *pipelineContex
 	return nil
 }
 
-func (r *logReceiver) diagnosticInfo() receiverDiagnosticInformation {
-	info := receiverDiagnosticInformation{
-		LogProcessedCount:      r.logCounter.Load(),
-		LogThroughputPerMinute: r.throughputMeter.Total(),
-		FileLogReceiverPaths:   []string{},
-		ExecLogReceiverPaths:   []string{},
-		IgnoredFilePaths:       []string{},
-	}
-
+// inputs describes the files of r, read or not.
+func (r *logReceiver) inputs() []logsource.InputDiagnostic {
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	for logFile, kind := range r.watching {
-		switch kind {
-		case logsource.ReceiverFileLog:
-			info.FileLogReceiverPaths = append(info.FileLogReceiverPaths, logFile)
-		case logsource.ReceiverExecLog:
-			info.ExecLogReceiverPaths = append(info.ExecLogReceiverPaths, logFile)
-		default:
-			logger.V(1).Printf("Unknown log receiver kind %q for file %q", kind, logFile)
-		}
-	}
-
-FilesFromConfig:
-	for _, logFilePattern := range r.include {
-		if strings.ContainsRune(logFilePattern, '*') {
-			for watching := range r.watching {
-				// Since the pattern is known to be valid, we can safely ignore this error.
-				if matches, _ := doublestar.PathMatch(logFilePattern, watching); matches {
-					// We're currently watching a file that matches this pattern, so it isn't ignored.
-					continue FilesFromConfig
-				}
-			}
-
-			// The pattern matched no file being watched; it is thus unused.
-			info.IgnoredFilePaths = append(info.IgnoredFilePaths, logFilePattern)
-		} else {
-			if _, found := r.watching[logFilePattern]; !found {
-				info.IgnoredFilePaths = append(info.IgnoredFilePaths, logFilePattern)
-			}
-		}
-	}
-
-	return info
+	return logsource.IncludeInputs(r.include, r.watching, nil)
 }

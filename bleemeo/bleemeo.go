@@ -1267,6 +1267,22 @@ func (c *Connector) PushLogs(ctx context.Context, payload []byte) error {
 	return nil
 }
 
+// LogsBackPressureDiagnostic returns ShouldApplyLogBackPressure along with what caused it.
+func (c *Connector) LogsBackPressureDiagnostic() types.LogsBackPressureDiagnostic {
+	c.l.Lock()
+	mqttClient := c.mqtt
+	c.l.Unlock()
+
+	if mqttClient != nil {
+		return mqttClient.LogsBackPressureDiagnostic()
+	}
+
+	return types.LogsBackPressureDiagnostic{
+		Status: types.LogsAvailabilityShouldBuffer.String(),
+		Causes: []string{"MQTT client not started yet"},
+	}
+}
+
 func (c *Connector) ShouldApplyLogBackPressure() types.LogsAvailability {
 	c.l.Lock()
 	mqttClient := c.mqtt

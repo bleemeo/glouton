@@ -19,17 +19,14 @@ package logsource
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
-	"slices"
 	"sync"
 	"time"
 
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
-	"github.com/bleemeo/glouton/types"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/extension/xextension/storage"
@@ -44,8 +41,6 @@ type PersistConfig struct {
 	StorageType string
 	// CacheKey is the bleemeoTypes.State key this host's data is stored under.
 	CacheKey string
-	// ArchivePath is the file created by WriteToArchive in a diagnostic bundle.
-	ArchivePath string
 	// FullSnapshot, if true, persists every receiver's metadata on every SaveToState call, even untouched ones; if false, only
 	// touched receivers are persisted.
 	FullSnapshot bool
@@ -218,23 +213,6 @@ func (h *PersistHost) GetExtensions() map[component.ID]component.Component {
 	defer h.l.Unlock()
 
 	return maps.Clone(h.extensions)
-}
-
-// WriteToArchive writes the list of currently-registered extension IDs to ArchivePath in a diagnostic bundle.
-func (h *PersistHost) WriteToArchive(writer types.ArchiveWriter) error {
-	h.l.Lock()
-	extensionIDs := slices.Collect(maps.Keys(h.extensions))
-	h.l.Unlock()
-
-	file, err := writer.Create(h.cfg.ArchivePath)
-	if err != nil {
-		return err
-	}
-
-	enc := json.NewEncoder(file)
-	enc.SetIndent("", "  ")
-
-	return enc.Encode(extensionIDs)
 }
 
 type persistExtension struct {

@@ -688,11 +688,75 @@ func (c *Client) LogsBackPressureStatus() bleemeoTypes.LogsAvailability {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	if !c.connected() || !c.canSendLogs() {
-		return bleemeoTypes.LogsAvailabilityShouldBuffer
+	status, _ := c.logsBackPressureLocked()
+
+	return status
+}
+
+// LogsBackPressureDiagnostic returns LogsBackPressureStatus along with what caused it.
+func (c *Client) LogsBackPressureDiagnostic() bleemeoTypes.LogsBackPressureDiagnostic {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	status, causes := c.logsBackPressureLocked()
+
+	return bleemeoTypes.LogsBackPressureDiagnostic{
+		Status:          status.String(),
+		Causes:          causes,
+		MQTTConnected:   c.connected(),
+		LastAck:         c.lastAck,
+		PendingMessages: c.opts.ReloadState.MQTTReloadState().ClientState().PendingMessagesCount(),
+		APIStatus:       c.logsStreamAvailability.String(),
+	}
+}
+
+// logsBackPressureLocked returns the logs availability with the reasons for it not being ok. Callers must hold c.l.
+func (c *Client) logsBackPressureLocked() (bleemeoTypes.LogsAvailability, []string) {
+	return logsBackPressure(
+		c.connected(),
+		time.Since(c.lastAck),
+		c.lastAck.IsZero(),
+		c.opts.ReloadState.MQTTReloadState().ClientState().PendingMessagesCount(),
+		c.logsStreamAvailability,
+	)
+}
+
+// logsBackPressure checks the same conditions as PushLogs' connected() and canSendLogs(), then what the
+// Bleemeo API asked in its last ack, and returns the resulting availability along with every reason for it
+// not being ok.
+func logsBackPressure(
+	connected bool,
+	sinceLastAck time.Duration,
+	neverAcked bool,
+	pendingMessages int,
+	apiStatus bleemeoTypes.LogsAvailability,
+) (bleemeoTypes.LogsAvailability, []string) {
+	var causes []string
+
+	if !connected {
+		causes = append(causes, "MQTT is not connected")
 	}
 
-	return c.logsStreamAvailability
+	switch {
+	case neverAcked:
+		causes = append(causes, "no MQTT ack received yet")
+	case sinceLastAck > logsAckBackPressureDelay:
+		causes = append(causes, fmt.Sprintf("no MQTT ack for %s (more than %s)", sinceLastAck.Round(time.Second), logsAckBackPressureDelay))
+	}
+
+	if pendingMessages > maxMQTTPendingMessagesToAllowLogsThreshold {
+		causes = append(causes, fmt.Sprintf("%d MQTT messages pending (more than %d)", pendingMessages, maxMQTTPendingMessagesToAllowLogsThreshold))
+	}
+
+	if len(causes) > 0 {
+		return bleemeoTypes.LogsAvailabilityShouldBuffer, causes
+	}
+
+	if apiStatus != bleemeoTypes.LogsAvailabilityOk {
+		causes = append(causes, "the Bleemeo API sets the logs stream availability to "+apiStatus.String())
+	}
+
+	return apiStatus, causes
 }
 
 func (c *Client) sendPoints() {

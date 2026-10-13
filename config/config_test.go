@@ -1039,6 +1039,26 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
+			Name:  "log-service-without-auto-discovery",
+			Files: []string{"testdata/log-service-without-auto-discovery.conf"},
+			WantWarnings: []string{
+				`config issue: the log_files/log_format of service "myapp" are ignored while log.opentelemetry.auto_discovery.container_and_service_enable is false`,
+			},
+			WantConfig: Config{
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						ShippingEnable: true,
+					},
+				},
+				Services: []Service{
+					{
+						Type:     "myapp",
+						LogFiles: []ServiceLogFile{{FilePath: "/var/log/myapp/myapp.log"}},
+					},
+				},
+			},
+		},
+		{
 			Name:  "deprecated cassandra_detailed_tables",
 			Files: []string{"testdata/deprecated_cassandra.conf"},
 			WantWarnings: []string{

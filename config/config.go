@@ -172,6 +172,20 @@ func checkForConfigMistake(cfg Config, items []Item) prometheus.MultiError {
 		warnings.Append(fmt.Errorf("%w: OpenSource MQTT is enable but with an empty hosts list", ErrMissconfiguration))
 	}
 
+	autoDiscovery := cfg.Log.OpenTelemetry.AutoDiscovery
+	if cfg.Log.OpenTelemetry.ShippingEnable && !autoDiscovery.AllEnable && !autoDiscovery.ContainerAndServiceEnable {
+		for _, srv := range cfg.Services {
+			if len(srv.LogFiles) == 0 && srv.LogFormat == "" {
+				continue
+			}
+
+			warnings.Append(fmt.Errorf(
+				"%w: the log_files/log_format of service %q are ignored while log.opentelemetry.auto_discovery.container_and_service_enable is false",
+				ErrMissconfiguration, serviceDisplayName(srv),
+			))
+		}
+	}
+
 	if cfg.Log.OpenTelemetry.AutoDiscovery.AllEnable {
 		if !cfg.Log.OpenTelemetry.AutoDiscovery.AuditdEnable && isUserSet(items, "log.opentelemetry.auto_discovery.auditd_enable") {
 			warnings.Append(fmt.Errorf("%w: log.opentelemetry.auto_discovery.auditd_enable can't disable when all_enable is active", ErrMissconfiguration))
@@ -191,6 +205,14 @@ func checkForConfigMistake(cfg Config, items []Item) prometheus.MultiError {
 	}
 
 	return warnings
+}
+
+func serviceDisplayName(srv Service) string {
+	if srv.Instance == "" {
+		return srv.Type
+	}
+
+	return srv.Type + "/" + srv.Instance
 }
 
 func applyConfigTransformation(cfg Config) Config {
