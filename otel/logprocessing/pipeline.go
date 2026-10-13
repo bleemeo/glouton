@@ -528,7 +528,8 @@ func makeEnforceBackPressureFn(
 		l.Lock()
 		defer l.Unlock()
 
-		if time.Since(lastCacheUpdate) > logsAvailabilityCacheTTL {
+		// >= so that a zero TTL disables the cache: the clock may not advance between two calls.
+		if time.Since(lastCacheUpdate) >= logsAvailabilityCacheTTL {
 			newState := streamAvailabilityStatusFn()
 			if newState != lastCacheValue {
 				logger.V(2).Printf("Logs stream availability status is now %[1]d (policy: %[1]s)", newState)
