@@ -144,8 +144,10 @@ func DefaultConfig() Config { //nolint:maintidx
 				Collectors: []string{collectorCPU, "diskstats", "filesystem", "loadavg", "meminfo", "netdev", "pressure", "stat", "time", "uname"},
 			},
 			WindowsExporter: NodeExporter{
-				Enable:     true,
-				Collectors: []string{collectorCPU, "cs", "logical_disk", "logon", "memory", "net", "os", "system", "tcp", "diskdrive"},
+				Enable: true,
+				// windows_exporter sometimes drops collectors between releases: these names are
+				// checked against its collector list by Test_defaultCollectorsExistUpstream.
+				Collectors: []string{collectorCPU, "logical_disk", "memory", "net", "os", "pagefile", "system", "tcp", "diskdrive"},
 			},
 			Telemetry: Telemetry{
 				Enable:  true,

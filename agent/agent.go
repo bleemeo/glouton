@@ -1565,9 +1565,14 @@ func (a *agent) registerInputs(ctx context.Context) {
 // Register a single input.
 func (a *agent) registerInput(name string, input telegraf.Input, opts registry.RegistrationOption, err error) {
 	if err != nil {
-		if errors.Is(err, inputs.ErrMissingCommand) {
+		switch {
+		case errors.Is(err, inputs.ErrUnsupportedPlatform):
+			// Expected on any OS the input doesn't apply to (e.g. mdstat or PSI
+			// outside of Linux). Not worth showing in the UI log.
+			logger.V(2).Printf("input %s: %v", name, err)
+		case errors.Is(err, inputs.ErrMissingCommand):
 			logger.V(1).Printf("input %s: %v", name, err)
-		} else {
+		default:
 			logger.Printf("Failed to create input %s: %v", name, err)
 		}
 
