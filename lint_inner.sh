@@ -10,6 +10,7 @@ if [ "${COVERAGE}" = "1" ]; then
    echo "-- Run tests coverage"
    go test ./... --coverprofile=coverage.out --covermode=count
    go tool cover -html=coverage.out -o coverage.html
+   exit 0
 fi
 
 if [ "${LINT}" != "1" ]; then
