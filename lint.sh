@@ -45,55 +45,14 @@ if [ "${OPEN_SHELL}" = "1" ]; then
    exit
 fi
 
-if [ "${COVERAGE}" = "1" ]; then
-   docker run --rm -v "$(pwd)":/app ${GO_MOUNT_CACHE} -e HOME=/go/pkg \
-      -w /app golangci/golangci-lint:${LINTER_VERSION} \
-      sh -exc "
-      trap 'chown $USER_UID coverage.out coverage.html' EXIT
-      go test ./... --coverprofile=coverage.out --covermode=count
-      go tool cover -html=coverage.out -o coverage.html
-      "
-
-   exit
-fi
-
-if [ "${LINT}" != "1" ]; then
-   docker run --rm -v "$(pwd)":/app ${GO_MOUNT_CACHE} -e HOME=/go/pkg \
-      -w /app golangci/golangci-lint:${LINTER_VERSION} \
-      sh -exc "
-      go test ./...
-      go test -race ./... -short
-      "
-fi
-
-echo "Start lint Linux"
-
 docker run --rm -v "$(pwd)":/app ${GO_MOUNT_CACHE} ${LINTER_MEMORY_LIMIT} -e HOME=/go/pkg \
-   -e GOOS=linux -e GOARCH=amd64 --tmpfs /app/webui/node_modules:exec -w /app golangci/golangci-lint:${LINTER_VERSION} \
-   bash -ec "
-   mkdir -p /go/pkg
-   git config --global --add safe.directory /app
-   golangci-lint run
+   -e LINT=$LINT -e COVERAGE=$COVERAGE \
+   -w /app \
+   golangci/golangci-lint:${LINTER_VERSION} \
+   sh -euc "
+      if [ \"${COVERAGE}\" = \"1\" ]; then
+         trap 'chown $USER_UID coverage.out coverage.html' EXIT
+      fi
+      sh lint_inner.sh
    "
 
-echo "Start lint FreeBSD"
-
-docker run --rm -v "$(pwd)":/app ${GO_MOUNT_CACHE} ${LINTER_MEMORY_LIMIT} -e HOME=/go/pkg \
-   -e GOOS=freebsd -e GOARCH=amd64 --tmpfs /app/webui/node_modules:exec -w /app golangci/golangci-lint:${LINTER_VERSION} \
-   bash -ec "
-   mkdir -p /go/pkg
-   git config --global --add safe.directory /app
-   golangci-lint run --build-tags noexec,nomeminfo,nozfs,nonetdev,nonetisr
-   "
-
-echo "Start lint Windows"
-
-docker run --rm -v "$(pwd)":/app ${GO_MOUNT_CACHE} ${LINTER_MEMORY_LIMIT} -e HOME=/go/pkg \
-   -e GOOS=windows -e GOARCH=amd64 --tmpfs /app/webui/node_modules:exec -w /app golangci/golangci-lint:${LINTER_VERSION} \
-   bash -ec "
-   mkdir -p /go/pkg
-   git config --global --add safe.directory /app
-   golangci-lint run
-   "
-
-echo "Success"
