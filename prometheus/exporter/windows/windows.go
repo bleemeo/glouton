@@ -20,6 +20,7 @@ package windows
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"reflect"
@@ -36,6 +37,30 @@ import (
 )
 
 const maxScrapeDuration = 9500 * time.Millisecond
+
+var errNoKnownCollector = errors.New("none of the requested collectors exist in this windows_exporter")
+
+// splitKnownCollectors sorts the requested collector names into those this build of
+// windows_exporter actually provides and those it doesn't.
+//
+// windows_exporter removes collectors between releases, and Collection.Enable rejects
+// the whole list as soon as one name is unknown. Dropping the unknown ones keeps the
+// remaining collectors running instead of silently leaving Windows without any metric.
+func splitKnownCollectors(requested []string) (known, unknown []string) {
+	available := collector.Available()
+
+	known = make([]string, 0, len(requested))
+
+	for _, name := range requested {
+		if slices.Contains(available, name) {
+			known = append(known, name)
+		} else {
+			unknown = append(unknown, name)
+		}
+	}
+
+	return known, unknown
+}
 
 func makeColConfig(options inputs.CollectorConfig) collector.Config {
 	var colConfig collector.Config
@@ -57,6 +82,18 @@ func NewCollector(ctx context.Context, enabledCollectors []string, options input
 
 func newCollector(ctx context.Context, enabledCollectors []string, options inputs.CollectorConfig) (*collector.Handler, error) {
 	collection := collector.NewWithConfig(makeColConfig(options))
+
+	enabledCollectors, unknownCollectors := splitKnownCollectors(enabledCollectors)
+	if len(unknownCollectors) > 0 {
+		logger.V(0).Printf(
+			"windows_exporter: ignoring unknown collector(s) %v. Available collectors are %v",
+			unknownCollectors, collector.Available(),
+		)
+	}
+
+	if len(enabledCollectors) == 0 {
+		return nil, errNoKnownCollector
+	}
 
 	err := collection.Enable(enabledCollectors)
 	if err != nil {

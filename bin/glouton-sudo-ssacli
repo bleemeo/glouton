@@ -1,0 +1,40 @@
+#!/bin/sh
+
+# This script is run through sudo by Glouton to read HP Smart Storage Administrator
+# status. It takes the command Glouton would otherwise run through sudo, checks it
+# only reads the status and runs it:
+#   glouton-sudo-ssacli /usr/sbin/ssacli controller all show
+#   glouton-sudo-ssacli /usr/sbin/ssacli controller slot=N physicaldrive all show
+#
+# The check is done here rather than in sudoers because sudo-rs forbids regular
+# expressions in command arguments, so the controller slot can't be restricted
+# to a number there. It matters: ssacli treats ";" as a command separator, so a
+# free-form argument would give write access to the controllers.
+
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+
+refuse() {
+    echo "glouton-sudo-ssacli: $1" >&2
+    exit 1
+}
+
+[ "$1" = "/usr/sbin/ssacli" ] || refuse "command not allowed: $1"
+shift
+
+if [ "$#" -eq 3 ] && [ "$1 $2 $3" = "controller all show" ]; then
+    exec /usr/sbin/ssacli controller all show
+fi
+
+if [ "$#" -eq 5 ] && [ "$1" = "controller" ] && [ "$3 $4 $5" = "physicaldrive all show" ]; then
+    slot="${2#slot=}"
+
+    case "$slot" in
+        "$2"|''|*[!0-9]*)
+            refuse "invalid controller slot: $2"
+            ;;
+    esac
+
+    exec /usr/sbin/ssacli controller "slot=$slot" physicaldrive all show
+fi
+
+refuse "arguments not allowed: $*"

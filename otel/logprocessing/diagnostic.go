@@ -1,0 +1,386 @@
+// Copyright 2015-2026 Bleemeo
+//
+// bleemeo.com an infrastructure monitoring solution in the Cloud
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package logprocessing
+
+import (
+	"encoding/json"
+	"slices"
+	"time"
+
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/discovery"
+	"github.com/bleemeo/glouton/otel/logsource"
+	"github.com/bleemeo/glouton/types"
+)
+
+const shippingArchivePath = "log-processing/shipping.json"
+
+// shippingDiagnostic is the content of shippingArchivePath.
+type shippingDiagnostic struct {
+	Enabled bool
+	// Reason tells why shipping isn't enabled.
+	Reason       string                                   `json:",omitempty"`
+	BackPressure *bleemeoTypes.LogsBackPressureDiagnostic `json:",omitempty"`
+
+	ShippedLogCount               int64
+	ShippedLogThroughputPerMinute int
+	// BackPressureRefusedLogCount counts records refused while shipping buffers; their input retries
+	// them, so a record can be counted several times.
+	BackPressureRefusedLogCount   int64
+	BackPressureDiscardedLogCount int64
+	// ExportFailedLogCount counts records lost because their export failed.
+	ExportFailedLogCount int64
+	LastExportError      string     `json:",omitempty"`
+	LastExportErrorAt    *time.Time `json:",omitempty"`
+}
+
+// WriteShippingDiagnostic writes the state of log shipping. man is nil when shipping isn't running,
+// disabledReason then telling why.
+func WriteShippingDiagnostic(
+	archive types.ArchiveWriter,
+	man *Manager,
+	disabledReason string,
+	backPressure *bleemeoTypes.LogsBackPressureDiagnostic,
+) error {
+	diag := shippingDiagnostic{
+		Enabled:      man != nil,
+		BackPressure: backPressure,
+	}
+
+	if man == nil {
+		diag.Reason = disabledReason
+	} else {
+		diag.ShippedLogCount = man.pipeline.logProcessedCount.Load()
+		diag.ShippedLogThroughputPerMinute = man.pipeline.logThroughputMeter.Total()
+		diag.BackPressureRefusedLogCount = man.pipeline.backPressureRefusedCount.Load()
+		diag.BackPressureDiscardedLogCount = man.pipeline.backPressureDiscardedCount.Load()
+		diag.ExportFailedLogCount = man.pipeline.exportFailedCount.Load()
+
+		if lastErr := man.pipeline.lastExportErr.Load(); lastErr != nil {
+			diag.LastExportError = lastErr.Err
+			diag.LastExportErrorAt = &lastErr.At
+		}
+	}
+
+	file, err := archive.Create(shippingArchivePath)
+	if err != nil {
+		return err
+	}
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(diag)
+}
+
+// DiagnosticSources describes the sources this package reads itself (discovered services, journald,
+// syslog, auditd), and the shipping counters of the ReceiverManager-owned sources it ships.
+func (man *Manager) DiagnosticSources() ([]logsource.SourceDiagnostic, map[logsource.SourceKey]logsource.ShippingDiagnostic) {
+	man.l.Lock()
+	defer man.l.Unlock()
+
+	man.pipeline.l.Lock()
+	defer man.pipeline.l.Unlock()
+
+	containers := man.containerRecv.diagnostic()
+	sources := make([]logsource.SourceDiagnostic, 0, len(man.watchedServices)+len(man.skippedSource)+4)
+
+	for key, diag := range man.watchedServices {
+		sources = append(sources, man.watchedServiceDiagnostics(key, diag, containers)...)
+	}
+
+	for _, skipped := range man.skippedSource {
+		src := logsource.SourceDiagnostic{
+			Name:      serviceSourceName(skipped.ServiceKey),
+			Origin:    "service",
+			Status:    skipped.SkipStatus,
+			Reason:    skipped.SkipReason,
+			Container: describeContainer(skipped.ContainerName, skipped.ContainerID),
+		}
+
+		if skipped.ContainerID != "" {
+			src.Inputs = []logsource.InputDiagnostic{{
+				Kind:        logsource.InputContainer,
+				Name:        skipped.ContainerName,
+				Status:      src.Status,
+				Reason:      src.Reason,
+				ContainerID: skipped.ContainerID,
+			}}
+		} else {
+			src.Inputs = logsource.ConfiguredInputs(logsource.InputFile, logFilePaths(skipped.LogProcessing), src.Status, src.Reason)
+		}
+
+		sources = append(sources, src)
+	}
+
+	sources = append(sources, man.autoDiscoveryDiagnostics()...)
+
+	return sources, man.fanoutShippingDiagnosticsLocked()
+}
+
+// watchedServiceDiagnostics describes a watched service: one source per log file, or a single one when
+// it runs in a container. Callers must hold man.l and man.pipeline.l.
+func (man *Manager) watchedServiceDiagnostics(
+	key discovery.NameInstance,
+	diag sourceDiagnostic,
+	containers map[string]containerDiagnosticInformation,
+) []logsource.SourceDiagnostic {
+	base := logsource.SourceDiagnostic{
+		Name:      serviceSourceName(key),
+		Origin:    "service",
+		Container: describeContainer(diag.ContainerName, diag.ContainerID),
+	}
+
+	if diag.LogProcessingError != "" {
+		base.Errors = []string{diag.LogProcessingError}
+	}
+
+	if diag.ContainerID != "" {
+		src := base
+
+		if len(diag.LogProcessing) > 0 {
+			src.LogFormat = diag.LogProcessing[0].Format
+			src.LogFilter = diag.LogProcessing[0].Filter
+		}
+
+		input := logsource.InputDiagnostic{Kind: logsource.InputContainer, Name: diag.ContainerName, ContainerID: diag.ContainerID}
+		ctr, tailing := containers[diag.ContainerID]
+		setupErr, failed := diag.SetupErrors[""]
+
+		switch {
+		case tailing:
+			input.Status = logsource.SourceActive
+			input.Name = ctr.LogFileRealPath
+			input.Mode = ctr.ReceiverKind.Mode()
+			src.Shipping = &logsource.ShippingDiagnostic{LogCount: ctr.LogProcessedCount, LogThroughputPerMinute: ctr.LogThroughputPerMinute}
+		case failed:
+			input.Status = logsource.SourceFailed
+			input.Reason = setupErr
+		default:
+			input.Status = logsource.SourceWaiting
+			input.Reason = "container has no log file yet"
+		}
+
+		src.Inputs = []logsource.InputDiagnostic{input}
+		src.Status = input.Status
+
+		return []logsource.SourceDiagnostic{src}
+	}
+
+	if len(diag.LogProcessing) == 0 {
+		src := base
+		src.Status = logsource.SourceFailed
+
+		return []logsource.SourceDiagnostic{src}
+	}
+
+	sources := make([]logsource.SourceDiagnostic, 0, len(diag.LogProcessing))
+
+	for _, logProcessing := range diag.LogProcessing {
+		src := base
+		src.LogFormat = logProcessing.Format
+		src.LogFilter = logProcessing.Filter
+
+		include := []string{logProcessing.FilePath}
+
+		var recv *logReceiver
+
+		for _, r := range man.serviceReceivers[key] {
+			if slices.Equal(r.include, include) {
+				recv = r
+
+				break
+			}
+		}
+
+		setupErr, failed := diag.SetupErrors[logProcessing.FilePath]
+
+		switch {
+		case recv != nil:
+			fillFromReceiver(&src, recv)
+		case failed:
+			src.Inputs = logsource.ConfiguredInputs(logsource.InputFile, include, logsource.SourceFailed, setupErr)
+			src.Status = logsource.SourceFailed
+		default:
+			src.Inputs = logsource.ConfiguredInputs(logsource.InputFile, include, logsource.SourceWaiting, "log receiver not set up yet")
+			src.Status = logsource.SourceWaiting
+		}
+
+		sources = append(sources, src)
+	}
+
+	return sources
+}
+
+// autoDiscoveryDiagnostics describes journald, syslog and auditd. Callers must hold man.pipeline.l.
+func (man *Manager) autoDiscoveryDiagnostics() []logsource.SourceDiagnostic {
+	autoDiscovery := man.config.AutoDiscovery
+
+	journald := logsource.SourceDiagnostic{Name: "journald", Origin: "journald"}
+
+	switch {
+	case !autoDiscovery.JournaldEnable:
+		journald.Status = logsource.SourceExcluded
+		journald.Reason = "log.opentelemetry.auto_discovery.journald_enable is false"
+	case man.pipeline.journaldCounter == nil:
+		journald.Status = logsource.SourceFailed
+		journald.Reason = "journald receiver failed to start: see Glouton logs"
+	default:
+		journald.Status = logsource.SourceActive
+		journald.Shipping = &logsource.ShippingDiagnostic{
+			LogCount:               man.pipeline.journaldCounter.Load(),
+			LogThroughputPerMinute: man.pipeline.journaldThroughputMeter.Total(),
+		}
+	}
+
+	journald.Inputs = logsource.ConfiguredInputs(logsource.InputJournal, []string{"journald"}, journald.Status, journald.Reason)
+
+	sources := []logsource.SourceDiagnostic{journald}
+
+	receiversByName := make(map[string]*logReceiver, len(man.pipeline.receivers))
+	for _, r := range man.pipeline.receivers {
+		receiversByName[r.name] = r
+	}
+
+	type receiverFile struct{ name, path string }
+
+	for _, feature := range []struct {
+		origin    string
+		enabled   bool
+		setting   string
+		receivers []receiverFile
+	}{
+		{"syslog", autoDiscovery.SyslogEnable, "syslog_enable", []receiverFile{{"syslog", syslogFilePath}, {"syslog-auth", syslogAuthFilePath}}},
+		{"auditd", autoDiscovery.AuditdEnable, "auditd_enable", []receiverFile{{"auditd", auditdFilePath}}},
+	} {
+		for _, rf := range feature.receivers {
+			src := logsource.SourceDiagnostic{Name: rf.name, Origin: feature.origin}
+			recv, found := receiversByName[rf.name]
+
+			switch {
+			case !feature.enabled:
+				src.Status = logsource.SourceExcluded
+				src.Reason = "log.opentelemetry.auto_discovery." + feature.setting + " is false"
+			case found:
+				fillFromReceiver(&src, recv)
+
+				sources = append(sources, src)
+
+				continue
+			default:
+				src.Status = logsource.SourceFailed
+				src.Reason = feature.origin + " receiver failed to start: see Glouton logs"
+			}
+
+			src.Inputs = logsource.ConfiguredInputs(logsource.InputFile, []string{rf.path}, src.Status, src.Reason)
+			sources = append(sources, src)
+		}
+	}
+
+	return sources
+}
+
+// fillFromReceiver sets the inputs, counters and status of src from recv, which ships its logs.
+func fillFromReceiver(src *logsource.SourceDiagnostic, recv *logReceiver) {
+	src.Inputs = recv.inputs()
+	src.Status = logsource.StatusFromInputs(src.Inputs)
+	src.Shipping = &logsource.ShippingDiagnostic{
+		LogCount:               recv.logCounter.Load(),
+		LogThroughputPerMinute: recv.throughputMeter.Total(),
+	}
+}
+
+// ExcludedServiceSources describes the services with an explicit log config (log_files or log_format)
+// while the discovered services' logs aren't read at all, reason telling why.
+func ExcludedServiceSources(services []discovery.Service, reason string) []logsource.SourceDiagnostic {
+	var sources []logsource.SourceDiagnostic
+
+	for _, service := range services {
+		if len(service.Config.LogFiles) == 0 && service.Config.LogFormat == "" {
+			continue
+		}
+
+		src := logsource.SourceDiagnostic{
+			Name:      serviceSourceName(discovery.NameInstance{Name: service.Name, Instance: service.Instance}),
+			Origin:    "service",
+			Status:    logsource.SourceExcluded,
+			Reason:    reason,
+			Container: describeContainer(service.ContainerName, service.ContainerID),
+			LogFormat: service.Config.LogFormat,
+			LogFilter: service.Config.LogFilter,
+		}
+
+		if service.ContainerID != "" {
+			src.Inputs = []logsource.InputDiagnostic{{
+				Kind:        logsource.InputContainer,
+				Name:        service.ContainerName,
+				Status:      src.Status,
+				Reason:      reason,
+				ContainerID: service.ContainerID,
+			}}
+		} else {
+			src.Inputs = logsource.ConfiguredInputs(logsource.InputFile, logFilePaths(configuredLogFiles(service)), src.Status, reason)
+		}
+
+		sources = append(sources, src)
+	}
+
+	return sources
+}
+
+// configuredLogFiles is the log files of service: those log processing uses, else those of its config.
+func configuredLogFiles(service discovery.Service) []discovery.ServiceLogReceiver {
+	if service.LogProcessing != nil {
+		return service.LogProcessing
+	}
+
+	files := make([]discovery.ServiceLogReceiver, 0, len(service.Config.LogFiles))
+
+	for _, logFile := range service.Config.LogFiles {
+		files = append(files, discovery.ServiceLogReceiver{FilePath: logFile.FilePath, Format: logFile.LogFormat, Filter: logFile.LogFilter})
+	}
+
+	return files
+}
+
+func logFilePaths(logFiles []discovery.ServiceLogReceiver) []string {
+	paths := make([]string, 0, len(logFiles))
+
+	for _, logFile := range logFiles {
+		if logFile.FilePath != "" {
+			paths = append(paths, logFile.FilePath)
+		}
+	}
+
+	return paths
+}
+
+func serviceSourceName(key discovery.NameInstance) string {
+	if key.Instance == "" {
+		return "service:" + key.Name
+	}
+
+	return "service:" + key.Name + "/" + key.Instance
+}
+
+func describeContainer(name, id string) string {
+	if id == "" {
+		return name
+	}
+
+	return name + " (" + id + ")"
+}

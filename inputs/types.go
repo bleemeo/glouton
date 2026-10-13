@@ -300,5 +300,7 @@ func (a FixedTimeAccumulator) AddFieldsWithAnnotations(measurement string, field
 var (
 	ErrUnexpectedType = errors.New("input does not have the expected type")
 	ErrDisabledInput  = errors.New("input is not enabled in service Telegraf")
-	ErrMissingCommand = errors.New("missing command for input")
+	// ErrUnsupportedPlatform is returned by inputs that have no meaning on the current OS.
+	ErrUnsupportedPlatform = errors.New("input is not supported on this platform")
+	ErrMissingCommand      = errors.New("missing command for input")
 )

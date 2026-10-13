@@ -36,7 +36,6 @@ import (
 // Runner allows to run command and do LookupPath.
 // It's mostly a wrapper around Golang os/exec that known:
 // * sudo: it could add sudo for command that needs root privilege
-// * sudo.ws: if available, prefer sudo.wg rather than sudo-rs due to missing features.
 // * hostroot path: when running in a container and you want to run a command on the host.
 type Runner struct {
 	hostRootPath     string
@@ -64,6 +63,13 @@ type Option struct {
 	// FullStderr makes a failed command's error end with all it wrote on stderr rather than the
 	// first line, for a command writing one line per failed item. See withStderr.
 	FullStderr bool
+	// SudoWrapper is the path of a helper run through sudo in place of the command. It gets the
+	// command and its arguments, checks them and runs the command. It's used for commands whose
+	// allowed arguments can't be described in sudoers in a syntax that both sudo.ws and sudo-rs
+	// accept (sudo-rs refuses wildcards and regular expressions in arguments).
+	// It's only used when sudo is actually needed: the command is run directly when Glouton is
+	// already root, and the wrapper is skipped when the command must be chrooted into the host root.
+	SudoWrapper string
 }
 
 var (
@@ -135,7 +141,7 @@ func (r *Runner) ResolvePath(file string, option Option) (string, error) {
 }
 
 // UseSudoRS tells whether command that need root privilege will be
-// executed using sudo-rs. This runner try to prefer sudo-ws when available.
+// executed using sudo-rs.
 // This function also return false when no sudo is needed at all, because
 // Glouton is already root for example.
 func (r *Runner) UseSudoRS(ctx context.Context) bool {
@@ -143,14 +149,7 @@ func (r *Runner) UseSudoRS(ctx context.Context) bool {
 		return false
 	}
 
-	name := r.getSudoCommand()
-
-	if name != "sudo" {
-		// A alternative sudo was found, it's not sudo-rs
-		return false
-	}
-
-	cmd := exec.CommandContext(ctx, name, "--version")
+	cmd := exec.CommandContext(ctx, "sudo", "--version")
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -159,16 +158,6 @@ func (r *Runner) UseSudoRS(ctx context.Context) bool {
 	}
 
 	return bytes.Contains(out, []byte("sudo-rs"))
-}
-
-// getSudoCommand returns the command to do a sudo. Default to "sudo" but
-// use "sudo.ws" if present.
-func (r *Runner) getSudoCommand() string {
-	if _, err := os.Stat("/usr/bin/sudo.ws"); err == nil {
-		return "sudo.ws"
-	}
-
-	return "sudo"
 }
 
 // chrootPath returns the directory the command has to be chrooted into, or "" to run it
@@ -190,15 +179,21 @@ func (r *Runner) makeCmd(ctx context.Context, option Option, name string, arg ..
 		return nil, nil, ErrUnknownHostroot
 	}
 
-	if chrootPath := r.chrootPath(option); chrootPath != "" {
+	chrootPath := r.chrootPath(option)
+	if chrootPath != "" {
 		// chroot is needed to run the command in another mount namespace than Glouton's
 		arg = append([]string{chrootPath, name}, arg...)
 		name = "chroot"
 	}
 
 	if option.RunAsRoot && !r.gloutonRunAsRoot {
+		if option.SudoWrapper != "" && chrootPath == "" {
+			arg = append([]string{name}, arg...)
+			name = option.SudoWrapper
+		}
+
 		arg = append([]string{"-n", name}, arg...)
-		name = r.getSudoCommand()
+		name = "sudo"
 	}
 
 	fullCommand := name + " " + strings.Join(arg, " ")

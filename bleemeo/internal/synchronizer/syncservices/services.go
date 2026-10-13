@@ -242,8 +242,17 @@ func (s *syncServicesExecution) serviceRegisterAndUpdate(ctx context.Context, ex
 	delayedContainer, _ := execution.GlobalState().DelayedContainers()
 	apiClient := execution.BleemeoAPIClient()
 	agentID, _ := execution.Option().State.BleemeoCredentials()
+	cfg, ok := execution.Option().Cache.CurrentAccountConfig()
+	applicationIntegration := ok && cfg.ApplicationIntegration
 
 	for _, srv := range localServices {
+		if !applicationIntegration {
+			// Don't add the application tag while applications aren't available. Otherwise, once they
+			// become available, the tag would make syncapplications believe the user deleted the
+			// application, and it would never be created.
+			srv.Applications = nil
+		}
+
 		if _, ok := delayedContainer[srv.ContainerID]; ok {
 			logger.V(2).Printf("Skip service %v due to delayedContainer", srv)
 

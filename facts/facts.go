@@ -26,6 +26,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -85,6 +86,10 @@ var (
 // There is one special fact named "fact_updated_at" which contains the last update of the facts.
 type FactProvider struct {
 	l sync.Mutex
+	// refreshL serializes the refreshes, so concurrent callers wait for a single one
+	// instead of each running the checks. It is taken before l, and is never held by
+	// a caller that only reads the facts.
+	refreshL sync.Mutex
 
 	options Options
 
@@ -135,18 +140,46 @@ func (f *FactProvider) AddCallback(cb FactCallback) {
 
 // Facts returns the list of facts for this system.
 func (f *FactProvider) Facts(ctx context.Context, maxAge time.Duration) (facts map[string]string, err error) {
+	// The cutoff is computed once, so a refresh started by another caller after this one
+	// arrived is accepted, even with a maxAge of 0.
+	freshnessCutoff := time.Now().Add(-maxAge)
+
+	if current, fresh := f.currentFacts(freshnessCutoff); fresh {
+		return current, ctx.Err()
+	}
+
+	f.refreshL.Lock()
+	defer f.refreshL.Unlock()
+
+	// Another caller may have refreshed the facts while this one waited.
+	previous, fresh := f.currentFacts(freshnessCutoff)
+	if fresh {
+		return previous, ctx.Err()
+	}
+
+	// The auto-upgrade checks run commands for up to a minute. They run before taking f.l,
+	// so they don't block the callers that only read the facts. previous is safe to read
+	// without f.l: f.facts is replaced, never modified.
+	autoUpgradeFacts := f.autoUpgradeFacts(ctx, previous)
+
 	f.l.Lock()
 	defer f.l.Unlock()
 
-	if time.Since(f.lastFactsUpdate) >= maxAge {
-		t := time.Now()
+	t := time.Now()
 
-		f.updateFacts(ctx)
+	f.updateFacts(ctx, autoUpgradeFacts)
 
-		logger.V(2).Printf("facts: updateFacts() took %v", time.Since(t))
-	}
+	logger.V(2).Printf("facts: updateFacts() took %v", time.Since(t))
 
 	return f.facts, ctx.Err()
+}
+
+// currentFacts returns the facts and whether their refresh started at or after cutoff.
+func (f *FactProvider) currentFacts(cutoff time.Time) (map[string]string, bool) {
+	f.l.Lock()
+	defer f.l.Unlock()
+
+	return f.facts, !f.lastFactsUpdate.IsZero() && !f.lastFactsUpdate.Before(cutoff)
 }
 
 // FastFacts returns an incomplete list of facts for this system. The slowest facts
@@ -187,8 +220,119 @@ func (f *FactProvider) SetFact(key string, value string) {
 	f.facts = newFacts
 }
 
-func (f *FactProvider) updateFacts(ctx context.Context) {
+// RefreshAutoUpgradeFacts runs the auto-upgrade checks again without refreshing the
+// other facts. The full refresh is daily, too slow to notice a problem that appeared or a
+// repair made without APT, such as "dpkg --configure -a": only APT reloads Glouton after
+// a package operation.
+//
+// fact_updated_at only changes when an auto-upgrade fact does. The checks run without
+// holding f.l, so they don't block readers of the facts. Like a full refresh, it holds
+// f.refreshL: a full refresh can't start from facts older than this result, nor
+// overwrite it with a value computed before it.
+func (f *FactProvider) RefreshAutoUpgradeFacts(ctx context.Context) {
+	f.refreshL.Lock()
+	defer f.refreshL.Unlock()
+
+	f.l.Lock()
+	refreshed := !f.lastFactsUpdate.IsZero()
+	previous := f.facts
+	f.l.Unlock()
+
+	// Before the first full refresh there is nothing to update.
+	if !refreshed {
+		return
+	}
+
+	autoUpgradeFacts := f.autoUpgradeFacts(ctx, previous)
+
+	if ctx.Err() != nil {
+		return
+	}
+
+	f.mergeAutoUpgradeFacts(autoUpgradeFacts)
+}
+
+// mergeAutoUpgradeFacts replaces the auto-upgrade facts with autoUpgradeFacts. Other
+// facts, including those set by SetFact meanwhile, are kept.
+func (f *FactProvider) mergeAutoUpgradeFacts(autoUpgradeFacts map[string]string) {
+	f.l.Lock()
+	defer f.l.Unlock()
+
+	newFacts := maps.Clone(f.facts)
+	delete(newFacts, factAutoUpgradeEnabled)
+	delete(newFacts, factAutoUpgradeStatus)
+	maps.Copy(newFacts, autoUpgradeFacts)
+
+	if factsEqualIgnoringUpdatedAt(f.facts, newFacts) {
+		return
+	}
+
+	newFacts[FactUpdatedAt] = time.Now().UTC().Format(time.RFC3339)
+	f.facts = newFacts
+}
+
+// autoUpgradeFacts returns factAutoUpgradeEnabled and factAutoUpgradeStatus, or none of
+// them when there is no auto-upgrade. previous is the facts of the previous refresh, nil
+// when there is none. They run commands, which is why they aren't in fastUpdateFacts:
+// neither is needed early enough to justify that on the startup path.
+//
+// It doesn't need f.l.
+func (f *FactProvider) autoUpgradeFacts(ctx context.Context, previous map[string]string) map[string]string {
+	enabledCtx, cancel := context.WithTimeout(ctx, autoUpgradeCheckTimeout)
+	autoUpgradeEnabled, err := autoUpgradeIsEnabled(enabledCtx, f.options.Runner)
+
+	cancel()
+
+	if errors.Is(err, errAutoUpgradeNotSupported) {
+		return nil
+	}
+
+	if err != nil {
+		logger.V(1).Printf("Failed to check whether the auto-upgrade is enabled: %v", err)
+	}
+
+	result := make(map[string]string, 2)
+
+	if value, ok := autoUpgradeEnabledValue(autoUpgradeEnabled, err, previous); ok {
+		result[factAutoUpgradeEnabled] = value
+	}
+
+	// The status is reported whether or not the auto-upgrade timer is enabled. On an
+	// error the fact is left out, see combineVerdicts.
+	status, err := f.autoUpgradeStatus(ctx, previous[factAutoUpgradeStatus])
+	if err == nil && status != "" {
+		result[factAutoUpgradeStatus] = status
+	}
+
+	return result
+}
+
+// autoUpgradeEnabledValue returns the value of factAutoUpgradeEnabled from the result of
+// autoUpgradeIsEnabled, and false when there is none to report. On an error, false would
+// tell the API the auto-upgrade is off, which a failing systemctl doesn't show: the
+// previous value is kept instead.
+func autoUpgradeEnabledValue(enabled bool, err error, previous map[string]string) (string, bool) {
+	if err == nil {
+		return strconv.FormatBool(enabled), true
+	}
+
+	value, ok := previous[factAutoUpgradeEnabled]
+
+	return value, ok
+}
+
+// updateFacts refreshes every fact. autoUpgradeFacts is the result of autoUpgradeFacts,
+// which the caller computes without holding f.l. lastFactsUpdate records when this
+// function started, not when it finished: a fact computed early in the refresh is only
+// as recent as that.
+//
+// Caller must hold f.refreshL and f.l.
+func (f *FactProvider) updateFacts(ctx context.Context, autoUpgradeFacts map[string]string) {
+	now := time.Now()
+
 	newFacts := f.fastUpdateFacts(ctx)
+
+	maps.Copy(newFacts, autoUpgradeFacts)
 
 	collectCloudProvidersFacts(ctx, newFacts)
 
@@ -201,7 +345,7 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 	newFacts[FactUpdatedAt] = f.factUpdatedAt(newFacts)
 
 	f.facts = newFacts
-	f.lastFactsUpdate = time.Now()
+	f.lastFactsUpdate = now
 }
 
 // factUpdatedAt returns the value to use for the fact_updated_at fact.
@@ -338,15 +482,6 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	newFacts["agent_version"] = version.Version
 	newFacts[FactUpdatedAt] = time.Now().UTC().Format(time.RFC3339)
 	newFacts["glouton_pid"] = strconv.FormatInt(int64(os.Getpid()), 10)
-
-	autoUpgradeEnabled, err := autoUpgradeIsEnabled(ctx, f.options.Runner)
-	if !errors.Is(err, errAutoUpgradeNotSupported) {
-		if err != nil {
-			logger.V(1).Printf("Failed to check auto-upgrade status: %v", err)
-		}
-
-		newFacts["auto_upgrade_enabled"] = strconv.FormatBool(autoUpgradeEnabled)
-	}
 
 	cpu, err := cpu.Info()
 	if err == nil && len(cpu) > 0 {
@@ -674,23 +809,47 @@ func autoUpgradeIsEnabled(ctx context.Context, runner *gloutonexec.Runner) (bool
 		return false, err
 	}
 
-	if !version.IsLinux() {
+	if !version.IsLinux() || runner == nil {
 		return false, errAutoUpgradeNotSupported
 	}
 
-	out, err := runner.Run(ctx, gloutonexec.Option{SkipInContainer: true}, "systemctl", "list-timers", "glouton-auto-upgrade.timer")
+	return linuxAutoUpgradeIsEnabled(ctx, runner.Run)
+}
+
+type runFunc func(ctx context.Context, option gloutonexec.Option, name string, arg ...string) ([]byte, error)
+
+// linuxAutoUpgradeIsEnabled returns errAutoUpgradeNotSupported when there is no auto-upgrade mechanism
+// (no systemctl, a container, or the glouton-auto-upgrade.timer unit isn't installed, e.g. Glouton isn't
+// installed from a package). It returns false when the unit exists but its timer isn't active.
+func linuxAutoUpgradeIsEnabled(ctx context.Context, run runFunc) (bool, error) {
+	opt := gloutonexec.Option{SkipInContainer: true}
+
+	// "list-timers" without --all doesn't list a disabled timer, so it can't tell "disabled" from "absent".
+	// "list-unit-files" exits with 1 when no unit matches.
+	out, err := run(ctx, opt, "systemctl", "list-unit-files", "--no-legend", "glouton-auto-upgrade.timer")
 	if err != nil {
 		// The auto upgrade is not supported on systems without systemctl (this includes containers).
 		if commandNotFoundRegex.MatchString(err.Error()) || errors.Is(err, gloutonexec.ErrExecutionSkipped) {
 			return false, errAutoUpgradeNotSupported
 		}
 
+		var exitErr *exec.ExitError
+
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 && !autoUpgradeTimerRegex.Match(out) {
+			return false, errAutoUpgradeNotSupported
+		}
+
+		return false, fmt.Errorf("systemctl list-unit-files: %w", err)
+	}
+
+	if !autoUpgradeTimerRegex.Match(out) {
+		return false, errAutoUpgradeNotSupported
+	}
+
+	out, err = run(ctx, opt, "systemctl", "list-timers", "glouton-auto-upgrade.timer")
+	if err != nil {
 		return false, fmt.Errorf("systemctl list-timers: %w", err)
 	}
 
-	if autoUpgradeTimerRegex.Match(out) {
-		return true, nil
-	}
-
-	return false, nil
+	return autoUpgradeTimerRegex.Match(out), nil
 }

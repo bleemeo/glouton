@@ -130,6 +130,7 @@ type Config struct {
 }
 
 const (
+	ConfigTypeApplicationIntegration = 1003
 	ConfigTypeDockerIntegration      = 1010
 	ConfigTypeSNMPIntegration        = 1030
 	ConfigTypeVSphereIntegration     = 1040
@@ -495,6 +496,19 @@ const (
 	LogsAvailabilityShouldBuffer
 	LogsAvailabilityShouldDiscard
 )
+
+// LogsBackPressureDiagnostic explains the LogsAvailability currently applied to log shipping.
+type LogsBackPressureDiagnostic struct {
+	// Status is LogsAvailability.String().
+	Status string
+	// Causes explains a Status other than "ok".
+	Causes          []string `json:",omitempty"`
+	MQTTConnected   bool
+	LastAck         time.Time
+	PendingMessages int
+	// APIStatus is the logs stream availability the Bleemeo API sent in its last ack.
+	APIStatus string
+}
 
 func (la LogsAvailability) String() string {
 	switch la {

@@ -89,9 +89,10 @@ var (
 	}
 
 	// defaultAccountConfigs is the default set of Config objects used by the test mock.
-	// It corresponds to an account with SNMP and Docker integration enabled,
+	// It corresponds to an account with application, SNMP and Docker integration enabled,
 	// with per-agent-type metric resolutions.
 	defaultAccountConfigs = []bleemeoTypes.Config{
+		{ID: "cfg-application-int", Type: bleemeoTypes.ConfigTypeApplicationIntegration, Account: accountID, Value: true},
 		{ID: cfgIDDocker, Type: bleemeoTypes.ConfigTypeDockerIntegration, Account: accountID, Value: true},
 		{ID: cfgIDSNMPInt, Type: bleemeoTypes.ConfigTypeSNMPIntegration, Account: accountID, Value: true},
 		{ID: cfgIDAgentRes, Type: bleemeoTypes.ConfigTypeAgentMetricsResolution, Account: accountID, AgentType: agentTypeAgent.ID, Value: float64(10)},

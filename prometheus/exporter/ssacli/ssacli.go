@@ -57,6 +57,9 @@ var (
 	reArray         = regexp.MustCompile(`^\s*(SmartCache)? (A|a)rray (?P<arrayName>.*)$`)
 )
 
+// sudoWrapper checks the ssacli commands run through sudo, see bin/glouton-sudo-ssacli.
+const sudoWrapper = "/usr/lib/glouton/glouton-sudo-ssacli"
+
 type runFunction func(ctx context.Context) ([]byte, error)
 
 type runFunctionArg func(ctx context.Context, arg string) ([]byte, error)
@@ -78,7 +81,6 @@ type Gatherer struct {
 	usedMethod              ssaMethod
 	runListController       runFunction
 	runListDrive            runFunctionArg
-	initDoneCallback        func()
 }
 
 type diskInfo struct {
@@ -97,8 +99,7 @@ type ssacliDiskList []diskInfo
 // New returns a new Smart Storage Administrator (ssa) gatherer.
 // The Gatherer will probe for ssacli availability on first call and if unavailable will
 // do nothing on subsequent calls. Only ssacli is supported.
-// `initDoneCallback` is invoked after first call.
-func New(cfg config.SSACLI, runner *gloutonexec.Runner, initDoneCallback func()) *Gatherer {
+func New(cfg config.SSACLI, runner *gloutonexec.Runner) *Gatherer {
 	return newGatherer(
 		cfg,
 		func(ctx context.Context) ([]byte, error) {
@@ -107,7 +108,6 @@ func New(cfg config.SSACLI, runner *gloutonexec.Runner, initDoneCallback func())
 		func(ctx context.Context, slot string) ([]byte, error) {
 			return runCmdWithRunner(ctx, runner, cfg, []string{"ssacli", "controller", "slot=" + slot, "physicaldrive", "all", "show"})
 		},
-		initDoneCallback,
 	)
 }
 
@@ -136,8 +136,6 @@ func (g *Gatherer) GatherWithState(ctx context.Context, state registry.GatherSta
 
 		points, err := g.gatherWithMethod(ctx, state.T0, methodSSACli, true)
 
-		g.initDoneCallback()
-
 		switch {
 		case err != nil:
 			logger.V(2).Printf("ssacli call failed: %v", err)
@@ -164,8 +162,7 @@ func (g *Gatherer) GatherWithState(ctx context.Context, state registry.GatherSta
 	return model.MetricPointsToFamilies(points), err
 }
 
-// WantListDrives tells whether the gatherer tried to list drives,
-// command which require regexp in sudoers to ensure glouton could only do read-only ssacli calls.
+// WantListDrives tells whether the gatherer tried to list drives.
 func (g *Gatherer) WantListDrives() bool {
 	g.l.Lock()
 	defer g.l.Unlock()
@@ -293,7 +290,7 @@ func methodName(method ssaMethod) string {
 	}
 }
 
-func newGatherer(cfg config.SSACLI, runListController runFunction, runListDrive runFunctionArg, initDoneCallback func()) *Gatherer {
+func newGatherer(cfg config.SSACLI, runListController runFunction, runListDrive runFunctionArg) *Gatherer {
 	// we never use sudo if we already are root
 	if os.Getuid() == 0 {
 		cfg.UseSudo = false
@@ -308,7 +305,6 @@ func newGatherer(cfg config.SSACLI, runListController runFunction, runListDrive 
 		runListController: runListController,
 		runListDrive:      runListDrive,
 		usedMethod:        methodNotInitialized,
-		initDoneCallback:  initDoneCallback,
 	}
 }
 
@@ -334,7 +330,13 @@ func runCmdWithRunner(ctx context.Context, runner *gloutonexec.Runner, cfg confi
 	newEnv = append(newEnv, "LANG=C")
 	newEnv = append(newEnv, "TZ=UTC")
 
-	runOption := gloutonexec.Option{RunAsRoot: useSudo, Environ: newEnv, CombinedOutput: true, RunOnHost: true}
+	runOption := gloutonexec.Option{
+		RunAsRoot:      useSudo,
+		SudoWrapper:    sudoWrapper,
+		Environ:        newEnv,
+		CombinedOutput: true,
+		RunOnHost:      true,
+	}
 
 	fullPath, err := runner.LookPath(args[0], runOption)
 	if err != nil {

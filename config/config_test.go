@@ -139,10 +139,11 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 						IPProtocolFallback: true,
 						HTTPClientConfig:   config.DefaultHTTPClientConfig,
 					},
-					TCP:  bbConf.DefaultTCPProbe,
-					ICMP: bbConf.DefaultICMPProbe,
-					DNS:  bbConf.DefaultModule.DNS,
-					GRPC: bbConf.DefaultModule.GRPC,
+					TCP:       bbConf.DefaultTCPProbe,
+					ICMP:      bbConf.DefaultICMPProbe,
+					DNS:       bbConf.DefaultModule.DNS,
+					GRPC:      bbConf.DefaultModule.GRPC,
+					Websocket: bbConf.DefaultModule.Websocket,
 				},
 			},
 			UserAgent: "my-user-agent",
@@ -1034,6 +1035,26 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 							AuditdEnable:              true,
 							ContainerAndServiceEnable: true,
 						},
+					},
+				},
+			},
+		},
+		{
+			Name:  "log-service-without-auto-discovery",
+			Files: []string{"testdata/log-service-without-auto-discovery.conf"},
+			WantWarnings: []string{
+				`config issue: the log_files/log_format of service "myapp" are ignored while log.opentelemetry.auto_discovery.container_and_service_enable is false`,
+			},
+			WantConfig: Config{
+				Log: Log{
+					OpenTelemetry: OpenTelemetry{
+						ShippingEnable: true,
+					},
+				},
+				Services: []Service{
+					{
+						Type:     "myapp",
+						LogFiles: []ServiceLogFile{{FilePath: "/var/log/myapp/myapp.log"}},
 					},
 				},
 			},

@@ -120,12 +120,21 @@ const (
 	metricTimeDrift                    = "time_drift"
 )
 
+// The sudoers file installed by glouton-sudoers-setup when sudo.ws is the active sudo.
+// Its settings are unknown to sudo-rs, which prints an error for them on every sudo call.
+const (
+	sudoWSOnlySudoersFile = "/etc/sudoers.d/glouton-sudo-ws"
+	sudoersSetupCommand   = "/usr/lib/glouton/glouton-sudoers-setup"
+)
+
 var (
 	// We want to reply with capitalized U to match output from a Zabbix agent.
 	errUnsupportedKey     = errors.New("Unsupported item key") //nolint:staticcheck
 	errFeatureUnavailable = errors.New("some features are unavailable")
-	errSudoRSLogs         = errors.New("logs processing don't work with sudo-rs, please install sudo-ws")
-	errSudoRSssacli       = errors.New("HP ssacli don't work with sudo-rs, please install sudo-ws and restart Glouton")
+	errSudoWSOnlySudoers  = errors.New(
+		"sudo-rs is used but " + sudoWSOnlySudoersFile + " holds settings only sudo.ws understands, " +
+			"so every sudo call prints errors. Run " + sudoersSetupCommand + " as root to fix it",
+	)
 )
 
 type agent struct {
@@ -1167,8 +1176,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.l.Unlock()
 
 		if a.config.Log.OpenTelemetry.ShippingEnable && a.receiverManager != nil {
-			a.checkSudoRSForLogs(ctx)
-
 			a.logProcessManager, err = logprocessing.New(
 				ctx,
 				a.config.Log.OpenTelemetry,
@@ -1220,6 +1227,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		plannedListeners, listenerWarnings := logsource.PlanSharedNetworkListeners(a.config.OpenTelemetry.NetworkListeners, a.receiverManager.NetworkWants(ctx))
 		a.addWarnings(listenerWarnings...)
 
+		listenerStates := make(map[string]string, len(plannedListeners))
+
 		for _, planned := range plannedListeners {
 			recv, err := logsource.SetupOTLPNetworkListener(
 				ctx,
@@ -1231,8 +1240,12 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			if err != nil {
 				a.addWarnings(fmt.Errorf("unable to start OpenTelemetry network receiver %q: %w", planned.Name, err))
 
+				listenerStates[planned.Name] = err.Error()
+
 				continue
 			}
+
+			listenerStates[planned.Name] = ""
 
 			tasks = append(tasks, taskInfo{
 				func(ctx context.Context) error {
@@ -1243,6 +1256,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 				fmt.Sprintf("OpenTelemetry network receiver (%s)", planned.Name),
 			})
 		}
+
+		a.receiverManager.SetNetworkListenerStates(listenerStates)
 
 		tasks = append(tasks, taskInfo{a.runReceiverManager, "Log receiver manager"})
 	}
@@ -1461,6 +1476,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 
 	inputs.CheckLockedMemory()
+	a.checkSudoersForSudoRS(ctx)
 
 	// Handle sighup signals only after the agent is completely initialized
 	// to make sure an early signal won't access uninitialized fields.
@@ -1537,15 +1553,7 @@ func (a *agent) registerInputs(ctx context.Context) {
 
 	if a.config.SSACLI.Enable {
 		a.l.Lock()
-		a.ssacliGatherer = ssacli.New(a.config.SSACLI, a.commandRunner, func() {
-			// use dedicated gorouting, because the callback shouldn't block for long
-			// and checkSudoRSForSSACLI will use method of ssacliGatherer.
-			go func() {
-				defer crashreport.ProcessPanic()
-
-				a.checkSudoRSForSSACLI(ctx)
-			}()
-		})
+		a.ssacliGatherer = ssacli.New(a.config.SSACLI, a.commandRunner)
 		a.l.Unlock()
 
 		_, err := a.gathererRegistry.RegisterGatherer(
@@ -1573,9 +1581,14 @@ func (a *agent) registerInputs(ctx context.Context) {
 // Register a single input.
 func (a *agent) registerInput(name string, input telegraf.Input, opts registry.RegistrationOption, err error) {
 	if err != nil {
-		if errors.Is(err, inputs.ErrMissingCommand) {
+		switch {
+		case errors.Is(err, inputs.ErrUnsupportedPlatform):
+			// Expected on any OS the input doesn't apply to (e.g. mdstat or PSI
+			// outside of Linux). Not worth showing in the UI log.
+			logger.V(2).Printf("input %s: %v", name, err)
+		case errors.Is(err, inputs.ErrMissingCommand):
 			logger.V(1).Printf("input %s: %v", name, err)
-		} else {
+		default:
 			logger.Printf("Failed to create input %s: %v", name, err)
 		}
 
@@ -1640,9 +1653,8 @@ func (a *agent) handleSighup(ctx context.Context, sighupChan chan os.Signal) {
 // processSighup is called after a SIGHUP is received. It not directly called from handleSighup
 // but through triggerHandler to apply a debounce.
 func (a *agent) processSighup(ctx context.Context) {
-	// SIGHUP could be the result of installation of sudo-ws
-	a.checkSudoRSForLogs(ctx)
-	a.checkSudoRSForSSACLI(ctx)
+	// SIGHUP could be the result of the admin switching between sudo.ws and sudo-rs.
+	a.checkSudoersForSudoRS(ctx)
 }
 
 // Wait for the pending system updates to be refreshed and update the system metrics.
@@ -1904,6 +1916,7 @@ func (a *agent) hourlyDiscovery(ctx context.Context) error {
 			return nil
 		case <-time.After(delay.JitterDelay(time.Hour, 0.1)):
 			a.FireTrigger(true, false, true, false, false)
+			a.factProvider.RefreshAutoUpgradeFacts(ctx)
 		}
 	}
 }
@@ -2470,16 +2483,11 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		modules = append(modules, a.logProcessManager.DiagnosticArchive)
 	}
 
-	// receiverManager is shared between logProcessManager and logMetricsManager (neither owns it), so
-	// its own diagnostic (read-offset/extension state, via its *PersistHost) is always archived here
-	// directly, independent of whether either manager exists.
-	if a.receiverManager != nil {
-		modules = append(modules, a.receiverManager.DiagnosticArchive)
-	}
-
 	if a.logMetricsManager != nil {
 		modules = append(modules, a.logMetricsManager.DiagnosticArchive)
 	}
+
+	modules = append(modules, a.logDiagnosticArchive)
 
 	for _, f := range modules {
 		if err = f(ctx, archive); err != nil {
@@ -2800,42 +2808,78 @@ func (a *agent) diagnosticVSphere(ctx context.Context, archive types.ArchiveWrit
 	return a.vSphereManager.DiagnosticVSphere(ctx, archive, associationFn)
 }
 
-func (a *agent) checkSudoRSForLogs(ctx context.Context) {
-	// When logs discovery is enabled, they will required sudo and don't work with sudo-rs.
-	// Only journalctl works without sudo.
-	logsDiscovery := a.config.Log.OpenTelemetry.AutoDiscovery
-	if a.config.Log.OpenTelemetry.ShippingEnable && (logsDiscovery.ContainerAndServiceEnable || logsDiscovery.AuditdEnable || logsDiscovery.SyslogEnable) {
-		if a.commandRunner.UseSudoRS(ctx) {
-			a.addWarnings(errSudoRSLogs)
+// logDiagnosticArchive writes every log source, whichever component owns it, and which features consume it,
+// then the state of log shipping.
+func (a *agent) logDiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
+	var (
+		sources      []logsource.SourceDiagnostic
+		shipping     map[logsource.SourceKey]logsource.ShippingDiagnostic
+		logToMetrics map[logsource.SourceKey]logsource.LogToMetricsDiagnostic
+	)
 
-			return
-		}
+	if a.receiverManager != nil {
+		sources = append(sources, a.receiverManager.DiagnosticSources()...)
 	}
 
-	// If we reach this point, is means sudo-rs is not used because either sudo-ws is present or logs isn't enabled. Ensure
-	// the warning is removed.
-	a.removeWarning(errSudoRSLogs)
+	if a.logMetricsManager != nil {
+		logToMetrics = a.logMetricsManager.DiagnosticSources()
+	}
+
+	var shippingDisabledReason string
+
+	switch {
+	case !a.config.Log.OpenTelemetry.ShippingEnable:
+		shippingDisabledReason = "log.opentelemetry.shipping_enable is false"
+	case !a.config.Bleemeo.Enable:
+		shippingDisabledReason = "log shipping requires the Bleemeo connector"
+	case a.logProcessManager == nil:
+		shippingDisabledReason = "log processing failed to start: see Glouton logs"
+	}
+
+	servicesExcludedReason := shippingDisabledReason
+	if servicesExcludedReason == "" && !a.config.Log.OpenTelemetry.AutoDiscovery.ContainerAndServiceEnable {
+		servicesExcludedReason = "log.opentelemetry.auto_discovery.container_and_service_enable is false"
+	}
+
+	if a.logProcessManager != nil {
+		var processingSources []logsource.SourceDiagnostic
+
+		processingSources, shipping = a.logProcessManager.DiagnosticSources()
+		sources = append(sources, processingSources...)
+	}
+
+	if servicesExcludedReason != "" {
+		services, _ := a.discovery.GetLatestDiscovery()
+		sources = append(sources, logprocessing.ExcludedServiceSources(services, servicesExcludedReason)...)
+	}
+
+	if err := logsource.WriteSourcesDiagnostic(archive, sources, shipping, logToMetrics); err != nil {
+		return err
+	}
+
+	var backPressure *bleemeoTypes.LogsBackPressureDiagnostic
+
+	if a.bleemeoConnector != nil && a.logProcessManager != nil {
+		diag := a.bleemeoConnector.LogsBackPressureDiagnostic()
+		backPressure = &diag
+	}
+
+	return logprocessing.WriteShippingDiagnostic(archive, a.logProcessManager, shippingDisabledReason, backPressure)
 }
 
-func (a *agent) checkSudoRSForSSACLI(ctx context.Context) {
-	tryListDrive := false
+// checkSudoersForSudoRS warns when sudo-rs is the active sudo while the sudoers file meant
+// for sudo.ws only is installed. The file is installed by the package when sudo.ws is the
+// active sudo, so this happens when the admin switched to sudo-rs afterward.
+func (a *agent) checkSudoersForSudoRS(ctx context.Context) {
+	a.removeWarning(errSudoWSOnlySudoers)
 
-	a.l.Lock()
-
-	if a.ssacliGatherer != nil {
-		tryListDrive = a.ssacliGatherer.WantListDrives()
-	}
-
-	a.l.Unlock()
-
-	// HP ssacli is enabled and want to list drives (which don't work with sudo-rs)
-	if tryListDrive && a.commandRunner.UseSudoRS(ctx) {
-		a.addWarnings(errSudoRSssacli)
-
+	if _, err := os.Stat(sudoWSOnlySudoersFile); err != nil {
 		return
 	}
-	// Unlike checkSudoRSForLogs, we don't remove the warning, because Glouton must be restarted
-	// to take change in account.
+
+	if a.commandRunner.UseSudoRS(ctx) {
+		a.addWarnings(errSudoWSOnlySudoers)
+	}
 }
 
 // Add a warning for the configuration.

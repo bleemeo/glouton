@@ -348,6 +348,8 @@ func buildGloutonAccountConfig(configs []bleemeoTypes.Config, agentTypes []bleem
 		}
 
 		switch cfg.Type {
+		case bleemeoTypes.ConfigTypeApplicationIntegration:
+			result.ApplicationIntegration = configBool(cfg.Value)
 		case bleemeoTypes.ConfigTypeDockerIntegration:
 			result.DockerIntegration = configBool(cfg.Value)
 		case bleemeoTypes.ConfigTypeSNMPIntegration:

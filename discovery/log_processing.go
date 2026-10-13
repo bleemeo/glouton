@@ -148,6 +148,8 @@ func inferLogProcessingConfig(service Service, knownLogFormats map[string][]conf
 		if service.container != nil {
 			logger.V(1).Printf("Can't watch specific log files on service %q: it runs in a container", service.Name)
 
+			service.LogProcessingError = "log_files are ignored: the service runs in a container"
+
 			return service
 		}
 
@@ -156,6 +158,8 @@ func inferLogProcessingConfig(service Service, knownLogFormats map[string][]conf
 		for i, logFile := range service.Config.LogFiles {
 			if logFile.FilePath == "" {
 				logger.V(1).Printf("No path provided for log file n°%d on service %q", i+1, service.Name)
+
+				service.LogProcessingError = fmt.Sprintf("no path provided for log file n°%d", i+1)
 
 				continue
 			}
@@ -169,6 +173,8 @@ func inferLogProcessingConfig(service Service, knownLogFormats map[string][]conf
 				_, ok := knownLogFormats[logFormat]
 				if !ok {
 					logger.V(1).Printf("Service %q requires an unknown log format: %q", service.Name, logFormat)
+
+					service.LogProcessingError = fmt.Sprintf("unknown log format %q", logFormat)
 
 					return service
 				}
@@ -186,6 +192,8 @@ func inferLogProcessingConfig(service Service, knownLogFormats map[string][]conf
 				if !ok {
 					logger.V(1).Printf("Service %q requires an unknown log filter: %q", service.Name, logFilter)
 
+					service.LogProcessingError = fmt.Sprintf("unknown log filter %q", logFilter)
+
 					return service
 				}
 			}
@@ -200,12 +208,16 @@ func inferLogProcessingConfig(service Service, knownLogFormats map[string][]conf
 		if service.container == nil {
 			logger.V(1).Printf("Service %q only provides a log format but doesn't run in a container", service.Name)
 
+			service.LogProcessingError = "log_format without log_files only applies to a service running in a container"
+
 			return service
 		}
 
 		_, ok := knownLogFormats[service.Config.LogFormat]
 		if !ok {
 			logger.V(1).Printf("Service %q requires an unknown log format: %q", service.Name, service.Config.LogFormat)
+
+			service.LogProcessingError = fmt.Sprintf("unknown log format %q", service.Config.LogFormat)
 
 			return service
 		}
@@ -214,6 +226,8 @@ func inferLogProcessingConfig(service Service, knownLogFormats map[string][]conf
 			_, ok = knownLogFilters[service.Config.LogFilter]
 			if !ok {
 				logger.V(1).Printf("Service %q requires an unknown log filter: %q", service.Name, service.Config.LogFilter)
+
+				service.LogProcessingError = fmt.Sprintf("unknown log filter %q", service.Config.LogFilter)
 
 				return service
 			}

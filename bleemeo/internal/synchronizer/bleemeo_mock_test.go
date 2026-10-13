@@ -134,7 +134,7 @@ func (wcm *wrapperClientMock) CreateApplication(_ context.Context, payload bleem
 
 	var app bleemeoTypes.Application
 
-	err := newMapstructJSONDecoder(app, nil).Decode(payload)
+	err := newMapstructJSONDecoder(&app, nil).Decode(payload)
 	if err != nil {
 		return bleemeoTypes.Application{}, err
 	}

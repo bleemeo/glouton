@@ -30,6 +30,24 @@ import (
 	"github.com/prometheus-community/windows_exporter/pkg/collector"
 )
 
+// Test_defaultCollectorsAreAvailable ensures the default collector list we ship only
+// names collectors that this build of windows_exporter provides.
+//
+// windows_exporter drops collectors between releases: "cs" and "logon" stayed in the
+// default config for more than a year after upstream removed them, and because
+// Collection.Enable rejects the whole list on the first unknown name, windows_exporter
+// never started on Windows.
+func Test_defaultCollectorsAreAvailable(t *testing.T) {
+	defaultCollectors := config.DefaultConfig().Agent.WindowsExporter.Collectors
+
+	if _, unknown := splitKnownCollectors(defaultCollectors); len(unknown) > 0 {
+		t.Errorf(
+			"default windows_exporter collectors %v don't exist, available collectors are %v",
+			unknown, collector.Available(),
+		)
+	}
+}
+
 func compareRE(t *testing.T, gotRE *regexp.Regexp, wantRE *regexp.Regexp, values []string) {
 	t.Helper()
 

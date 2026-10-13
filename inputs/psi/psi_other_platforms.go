@@ -26,5 +26,5 @@ import (
 )
 
 func New() (telegraf.Input, registry.RegistrationOption, error) {
-	return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
+	return nil, registry.RegistrationOption{}, inputs.ErrUnsupportedPlatform
 }

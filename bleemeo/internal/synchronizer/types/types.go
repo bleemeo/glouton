@@ -350,7 +350,7 @@ type Option struct {
 func AutomaticApplicationName(localApp discovery.Application) (string, string) {
 	var name string
 
-	switch localApp.Type { //nolint:exhaustive
+	switch localApp.Type { //nolint:exhaustive,nolintlint
 	case discovery.ApplicationDockerCompose:
 		name = "Docker compose " + localApp.Name
 	default:

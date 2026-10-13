@@ -157,6 +157,8 @@ type Service struct {
 	Interval time.Duration
 	// May be nil if no log processing should be applied.
 	LogProcessing []ServiceLogReceiver
+	// LogProcessingError tells why (part of) the service's log config was rejected; empty if it wasn't.
+	LogProcessingError string
 
 	HasNetstatInfo  bool
 	LastNetstatInfo time.Time

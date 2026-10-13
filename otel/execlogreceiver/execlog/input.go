@@ -39,6 +39,7 @@ type Input struct {
 
 	commandRunner Runner
 	runAsRoot     bool
+	sudoWrapper   string
 	buffer        []byte
 	argv          []string
 	splitFunc     bufio.SplitFunc
@@ -90,8 +91,9 @@ func (i *Input) startProcess(ctx context.Context) error {
 	defer i.l.Unlock()
 
 	runOpts := gloutonexec.Option{
-		RunAsRoot:  i.runAsRoot,
-		GraceDelay: 1 * time.Second,
+		RunAsRoot:   i.runAsRoot,
+		SudoWrapper: i.sudoWrapper,
+		GraceDelay:  1 * time.Second,
 	}
 
 	i.Logger().Debug("starting command", zap.Strings("argv", i.argv))

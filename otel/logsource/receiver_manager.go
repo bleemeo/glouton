@@ -30,7 +30,6 @@ import (
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
-	"github.com/bleemeo/glouton/types"
 	"github.com/bleemeo/glouton/utils/hostrootsymlink"
 
 	"github.com/go-viper/mapstructure/v2"
@@ -52,15 +51,13 @@ const (
 )
 
 const (
-	// persistArchivePath keeps otel/logprocessing's pre-rewrite name (see Persister()).
-	persistArchivePath = "log-processing/persister.json"
-
 	// saveThrottle limits how often a file's read offset is saved, matching otel/logprocessing's policy.
 	saveThrottle = time.Minute
 )
 
 var (
 	errNoContainerLogFile = errors.New("no log file found for container")
+	errUnknownLogFormat   = errors.New("unknown log format")
 	// errReceiverManagerShutDown is returned by a network consumer's ConsumeLogs once ReceiverManager.Shutdown
 	// has torn down its operator bridge; see managedSource.stopNetwork.
 	errReceiverManagerShutDown = errors.New("logsource: receiver manager is shutting down")
@@ -91,6 +88,8 @@ type ReceiverManager struct {
 	// this guard it would start tails/register persistent extensions after SaveState has already run,
 	// which then never get stopped or saved.
 	shuttingDown bool
+	// listenerStates is set once the network listeners are started, see SetNetworkListenerStates.
+	listenerStates map[string]string
 	// containerMatchersCache memoizes containerMatchers' result: rm.cfg never changes for the manager's
 	// lifetime (see ensureReceiverSource's fields cache above), so re-decoding every container_name/
 	// container_selectors receiver's config on every UpdateContainers/ContainerIDsShippedByReceivers
@@ -111,7 +110,6 @@ func NewReceiverManager(cfg config.OpenTelemetry, hostroot string, state bleemeo
 	persister, err := NewPersistHost(state, PersistConfig{
 		StorageType:  PersistStorageType,
 		CacheKey:     LogFileMetadataCacheKey,
-		ArchivePath:  persistArchivePath,
 		SaveThrottle: saveThrottle,
 	})
 	if err != nil {
@@ -148,16 +146,6 @@ func (rm *ReceiverManager) RegisterSinkProvider(p SinkProvider) {
 // and silently overwriting these offsets.
 func (rm *ReceiverManager) Persister() *PersistHost {
 	return rm.persister
-}
-
-// DiagnosticArchive writes the persisted read-offset/registered-extension state to a diagnostic bundle.
-// This is the only writer of PersistHost.ArchivePath: otel/logprocessing's Manager shares this exact
-// *PersistHost (see Persister()) but its own DiagnosticArchive reports different state and never writes
-// that file, so agent.go wires this one in whenever a ReceiverManager exists. Otherwise a bundle taken
-// while log-to-metric receivers are active would have no read-offset/extension state at all, even though
-// that state is exactly what's needed to debug a stuck tail.
-func (rm *ReceiverManager) DiagnosticArchive(_ context.Context, writer types.ArchiveWriter) error {
-	return rm.persister.WriteToArchive(writer)
 }
 
 // RegisterExternalSizer folds FileSizers that ReceiverManager doesn't own into SaveState's
@@ -228,6 +216,10 @@ type managedSource struct {
 	// would keep shipping alongside the service tail, duplicating every line for good.
 	serviceTailed bool
 
+	// configErr is a problem found while resolving this source's config (e.g. an unknown log_format): the
+	// source still runs, without the part that failed.
+	configErr string
+
 	// operators applies to every tail under this source, before fan-out. Callers prepend
 	// BuildContainerEnvelopeOperator() per container tail, since a mixed receiver only wants it there.
 	operators []operator.Config
@@ -248,6 +240,10 @@ type managedSource struct {
 	containerRecvs   map[string][]receiver.Logs
 	containerExtIDs  map[string][]component.ID
 	containerLogFile map[string]string
+	// includeErrs (by file) and containerErrs (by container ID) are the last setup errors, for the
+	// diagnostic: from the last RescanReceivers and UpdateContainers respectively.
+	includeErrs   map[string]string
+	containerErrs map[string]string
 	// retiredExtIDs are persisted-offset identities this source once tailed under but no longer does, kept
 	// only so a later permanent teardown can still forget their metadata. A component.ID is just a
 	// type/name pair, and forgetting works off that name, so an ID stays usable after its extension has
@@ -392,10 +388,15 @@ func (rm *ReceiverManager) ensureReceiverSource(ctx context.Context, name string
 		sendLogs = *fields.SendLogs
 	}
 
-	operators := rm.buildReceiverOperators(name, fields)
+	operators, configErr := rm.buildReceiverOperators(name, fields)
 
 	ms := newManagedSource(name, SourceReceiver, operators, raw)
 	ms.fields = fields
+
+	if configErr != nil {
+		ms.configErr = configErr.Error()
+	}
+
 	ms.fanout = rm.askProviders(ctx, ResolvedSource{
 		Kind:         SourceReceiver,
 		Name:         name,
@@ -410,13 +411,16 @@ func (rm *ReceiverManager) ensureReceiverSource(ctx context.Context, name string
 	return ms, fields, nil
 }
 
-// buildReceiverOperators resolves a receiver's operators/log_format into stanza operator.Config,
-// warning (not failing) on error.
-func (rm *ReceiverManager) buildReceiverOperators(name string, fields receiverFields) []operator.Config {
+// buildReceiverOperators resolves a receiver's operators/log_format into stanza operator.Config.
+// An error doesn't fail the receiver: it runs without the part that failed, and the error is only reported.
+func (rm *ReceiverManager) buildReceiverOperators(name string, fields receiverFields) ([]operator.Config, error) {
+	var errs error
+
 	rawOps, err := ExpandOperators(fields.Operators, rm.knownLogFormats, false)
 	if err != nil {
 		logger.V(1).Printf("logsource: receiver %q: failed to expand operators: %v", name, err)
 
+		errs = errors.Join(errs, fmt.Errorf("expanding operators: %w", err))
 		rawOps = nil
 	}
 
@@ -424,28 +428,29 @@ func (rm *ReceiverManager) buildReceiverOperators(name string, fields receiverFi
 	if err != nil {
 		logger.V(1).Printf("logsource: receiver %q: failed to build operators: %v", name, err)
 
+		errs = errors.Join(errs, fmt.Errorf("building operators: %w", err))
 		operators = nil
 	}
 
 	if fields.LogFormat == "" {
-		return operators
+		return operators, errs
 	}
 
 	formatRawOps, found := rm.knownLogFormats[fields.LogFormat]
 	if !found {
 		logger.V(1).Printf("logsource: receiver %q requires an unknown log format %q", name, fields.LogFormat)
 
-		return operators
+		return operators, errors.Join(errs, fmt.Errorf("%w %q", errUnknownLogFormat, fields.LogFormat))
 	}
 
 	formatOps, err := BuildOperators(formatRawOps)
 	if err != nil {
 		logger.V(1).Printf("logsource: receiver %q: failed to build log format %q: %v", name, fields.LogFormat, err)
 
-		return operators
+		return operators, errors.Join(errs, fmt.Errorf("building log format %q: %w", fields.LogFormat, err))
 	}
 
-	return append(operators, formatOps...)
+	return append(operators, formatOps...), errs
 }
 
 // RescanReceivers resolves receivers and starts tails for new include patterns; idempotent.
@@ -508,6 +513,8 @@ func (rm *ReceiverManager) startIncludeFiles(ctx context.Context, ms *managedSou
 
 	var errs error
 
+	ms.includeErrs = nil
+
 	for _, f := range files {
 		if _, ok := ms.watching[f]; ok {
 			continue
@@ -515,6 +522,12 @@ func (rm *ReceiverManager) startIncludeFiles(ctx context.Context, ms *managedSou
 
 		if err := rm.startIncludeFile(ctx, ms, name, f); err != nil {
 			errs = errors.Join(errs, fmt.Errorf("file %q: %w", f, err))
+
+			if ms.includeErrs == nil {
+				ms.includeErrs = make(map[string]string)
+			}
+
+			ms.includeErrs[f] = err.Error()
 		}
 	}
 
@@ -686,6 +699,10 @@ func (rm *ReceiverManager) UpdateContainers(ctx context.Context, containers []fa
 	currentByReceiver := make(map[string]map[string]bool, len(matchers))
 	claimed := make(map[string]bool, len(containers))
 
+	for _, ms := range rm.receivers {
+		ms.resetContainerErrs()
+	}
+
 	for _, ctr := range containers {
 		if ctr.LogPath() == "" || IsContainerConfigExcluded(rm.cfg, ctr) {
 			continue
@@ -718,6 +735,8 @@ func (rm *ReceiverManager) UpdateContainers(ctx context.Context, containers []fa
 
 			if err := rm.startContainerTail(ctx, ms, ctr, operators, m.name); err != nil {
 				logger.V(1).Printf("logsource: receiver %q: container %s (%s): %v", m.name, ctr.ContainerName(), ctr.ID(), err)
+
+				ms.setContainerErr(ctr, err)
 			}
 		}
 	}
@@ -870,6 +889,10 @@ func (rm *ReceiverManager) updateLabelContainers(
 				ctr.ContainerName(), SourceContainerLabel,
 				append([]operator.Config{BuildContainerEnvelopeOperator()}, operators...), nil,
 			)
+
+			if err != nil {
+				ms.configErr = fmt.Sprintf("building log format operators: %v", err)
+			}
 			// Default here is auto_discovery.container_and_service_enable, not
 			// OpenTelemetry.ReceiversDefaultSendLogs, since this container was never explicitly
 			// configured. Only affects SendLogs, not LogMetricsRule.
@@ -890,8 +913,12 @@ func (rm *ReceiverManager) updateLabelContainers(
 
 		current[ctr.ID()] = true
 
+		ms.resetContainerErrs()
+
 		if err := rm.startContainerTail(ctx, ms, ctr, ms.operators, containerLabelPersistNamespace); err != nil {
 			logger.V(1).Printf("logsource: container %s (%s): %v", ctr.ContainerName(), ctr.ID(), err)
+
+			ms.setContainerErr(ctr, err)
 		}
 	}
 

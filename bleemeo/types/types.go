@@ -186,15 +186,16 @@ func (d DenyReason) String() string {
 }
 
 type GloutonAccountConfig struct {
-	LiveProcessResolution time.Duration
-	LiveProcess           bool
-	DockerIntegration     bool
-	SNMPIntegration       bool
-	VSphereIntegration    bool
-	Suspended             bool
-	AgentConfigByName     map[bleemeo.AgentType]GloutonAgentConfig
-	AgentConfigByID       map[string]GloutonAgentConfig
-	MaxCustomMetrics      int
+	LiveProcessResolution  time.Duration
+	LiveProcess            bool
+	ApplicationIntegration bool
+	DockerIntegration      bool
+	SNMPIntegration        bool
+	VSphereIntegration     bool
+	Suspended              bool
+	AgentConfigByName      map[bleemeo.AgentType]GloutonAgentConfig
+	AgentConfigByID        map[string]GloutonAgentConfig
+	MaxCustomMetrics       int
 }
 
 type GloutonAgentConfig struct {
