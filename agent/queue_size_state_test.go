@@ -25,7 +25,7 @@ import (
 )
 
 // TestQueueSizeState checks the state discovery reads for the service types whose metric the
-// agent gathers itself: their types, then each service's last gather.
+// agent gathers itself: their types, then each service's recent gathers.
 func TestQueueSizeState(t *testing.T) {
 	state := &queueSizeState{}
 	postfix := discovery.NameInstance{Name: "postfix"}
@@ -55,6 +55,26 @@ func TestQueueSizeState(t *testing.T) {
 
 	if got := state.ServiceScrapeState(exim); got.Status != types.ScrapeNotRun {
 		t.Errorf("a service no longer gathered still has a state: %+v", got)
+	}
+
+	// A gather failing one minute in two reads the same whichever came last, until the
+	// failure is out of the last queueStateRuns gathers.
+	failed := types.ScrapeState{Status: types.ScrapeRan, Error: "postqueue: lock busy"}
+
+	for i, message := range []string{"postqueue: lock busy", "", "postqueue: lock busy", ""} {
+		state.set(map[discovery.NameInstance]string{postfix: message})
+
+		if got := state.ServiceScrapeState(postfix); got != failed {
+			t.Errorf("after gather %d, got %+v, want %+v", i+1, got, failed)
+		}
+	}
+
+	for range queueStateRuns - 1 {
+		state.set(map[discovery.NameInstance]string{postfix: ""})
+	}
+
+	if got := state.ServiceScrapeState(postfix); got != (types.ScrapeState{Status: types.ScrapeRan}) {
+		t.Errorf("after %d successful gathers, got %+v, want no error", queueStateRuns, got)
 	}
 
 	// The appender may have no state, in tests.

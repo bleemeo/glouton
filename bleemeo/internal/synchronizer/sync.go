@@ -87,6 +87,8 @@ type Synchronizer struct {
 	synchronizers []types.EntitySynchronizer
 	state         *synchronizerState
 	hasFeature    map[types.APIFeature]bool
+	// registrationStatus is also in synchronizers, kept for the diagnostic archive.
+	registrationStatus *syncregistrationstatus.SyncRegistrationStatus
 
 	requestCounter atomic.Uint32
 	// realClient and agentID are only written by the synchronization loop
@@ -189,6 +191,8 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 		state:                  state,
 	}
 
+	s.registrationStatus = syncregistrationstatus.New(s.metricsState, s.now)
+
 	s.synchronizers = []types.EntitySynchronizer{
 		&CompatibilityWrapper{state: state, name: types.EntityInfo, method: s.syncInfo, enabledInMaintenance: true, skipOnlyEssential: true},
 		&CompatibilityWrapper{state: state, name: types.EntityAgent, method: s.syncAgent, enabledInSuspendedMode: true, skipOnlyEssential: true},
@@ -201,7 +205,7 @@ func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 		syncservices.New(),
 		&CompatibilityWrapper{state: state, name: types.EntityMonitor, method: s.syncMonitors, skipOnlyEssential: true},
 		&CompatibilityWrapper{state: state, name: types.EntityMetric, method: s.syncMetrics},
-		syncregistrationstatus.New(s.metricsState, s.now),
+		s.registrationStatus,
 		&CompatibilityWrapper{state: state, name: types.EntityGloutonConfig, method: s.syncGloutonConfig},
 		&CompatibilityWrapper{state: state, name: types.EntityDiagnostics, method: s.syncDiagnostics},
 	}
@@ -233,6 +237,15 @@ func (s *Synchronizer) getClient() types.Client {
 }
 
 func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes.ArchiveWriter) error {
+	// The sync state first: the registration status must not keep it out of the archive.
+	if err := s.diagnosticSyncState(archive); err != nil {
+		return err
+	}
+
+	return s.registrationStatus.DiagnosticArchive(archive, s.option.Cache.RegistrationStatusSent())
+}
+
+func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) error {
 	file, err := archive.Create("bleemeo-sync-state.json")
 	if err != nil {
 		return err

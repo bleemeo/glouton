@@ -18,8 +18,10 @@ package syncregistrationstatus
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/bleemeo/glouton/bleemeo/internal/filter"
@@ -53,6 +55,11 @@ type SyncRegistrationStatus struct {
 	currentExecution types.SynchronizationExecution
 	// payload is what NeedSynchronization decided to send, nil when nothing is to be sent.
 	payload *Payload
+
+	// l guards lastBuilt, which the diagnostic archive reads from another goroutine.
+	l sync.Mutex
+	// lastBuilt is the payload NeedSynchronization last built, sent or not.
+	lastBuilt *Payload
 }
 
 // New returns the entity, which reads the not-registered metrics from metricsState, along
@@ -166,6 +173,10 @@ func (s *SyncRegistrationStatus) NeedSynchronization(_ context.Context) (bool, e
 	payload.GeneratedAt = now.UTC().Truncate(time.Second)
 	payload.LastDiscoveryAt = lastDiscovery.UTC().Truncate(time.Second)
 
+	s.l.Lock()
+	s.lastBuilt = &payload
+	s.l.Unlock()
+
 	if !NeedSend(last, payload, agentID, now) {
 		return false, nil
 	}
@@ -215,6 +226,39 @@ func (s *SyncRegistrationStatus) SyncRemoteAndLocal(ctx context.Context, _ types
 	option.Cache.SetRegistrationStatusSent(Sent(*s.payload, agentID, now))
 
 	return nil
+}
+
+// DiagnosticArchive writes the payload last built, whether it was sent or not: NeedSend may hold
+// a changed value back for up to minSendInterval, while the archive's other files are current.
+// last is what the cache remembers of the last send.
+func (s *SyncRegistrationStatus) DiagnosticArchive(archive gloutonTypes.ArchiveWriter, last bleemeoTypes.RegistrationStatusSent) error {
+	s.l.Lock()
+	lastBuilt := s.lastBuilt
+	s.l.Unlock()
+
+	file, err := archive.Create("bleemeo-registration-status.json")
+	if err != nil {
+		return err
+	}
+
+	obj := struct {
+		// LastBuilt is null when no payload was built since Glouton started.
+		LastBuilt *Payload `json:"last_built"`
+		// LastBuiltAccepted tells whether LastBuilt is the value the API last accepted.
+		LastBuiltAccepted bool      `json:"last_built_accepted"`
+		LastAttemptAt     time.Time `json:"last_attempt_at"`
+		LastAttemptFailed bool      `json:"last_attempt_failed"`
+	}{
+		LastBuilt:         lastBuilt,
+		LastBuiltAccepted: lastBuilt != nil && last.Hash != "" && lastBuilt.hash == last.Hash,
+		LastAttemptAt:     last.LastAttemptAt,
+		LastAttemptFailed: last.LastAttemptFailed,
+	}
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(obj)
 }
 
 func isCollectionPending(state ServiceState) bool {

@@ -17,10 +17,13 @@
 package syncregistrationstatus
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -678,5 +681,81 @@ func TestEntityRecordsSendTime(t *testing.T) {
 
 	if got := test.execution.option.Cache.RegistrationStatusSent().LastAttemptAt; !got.Equal(sentAt) {
 		t.Errorf("recorded the attempt at %v, want %v", got, sentAt)
+	}
+}
+
+// fakeArchive records the files written to a diagnostic archive.
+type fakeArchive struct {
+	files   map[string]*bytes.Buffer
+	current string
+}
+
+func (a *fakeArchive) Create(filename string) (io.Writer, error) {
+	if a.files == nil {
+		a.files = make(map[string]*bytes.Buffer)
+	}
+
+	a.files[filename] = &bytes.Buffer{}
+	a.current = filename
+
+	return a.files[filename], nil
+}
+
+func (a *fakeArchive) CurrentFileName() string { return a.current }
+
+// archivedStatus is the part of the archived file the test reads.
+type archivedStatus struct {
+	LastBuilt *struct {
+		Metrics []bleemeoTypes.MetricState `json:"metrics"`
+	} `json:"last_built"`
+	LastBuiltAccepted bool `json:"last_built_accepted"`
+}
+
+func (e *entityTest) archive(t *testing.T) archivedStatus {
+	t.Helper()
+
+	archive := &fakeArchive{}
+
+	if err := e.entity.DiagnosticArchive(archive, e.execution.option.Cache.RegistrationStatusSent()); err != nil {
+		t.Fatal(err)
+	}
+
+	var got archivedStatus
+
+	if err := json.Unmarshal(archive.files["bleemeo-registration-status.json"].Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+
+	return got
+}
+
+// TestEntityDiagnosticArchive checks the archive holds the payload last built even when NeedSend
+// holds it back, so that a changed value can be read without waiting for minSendInterval.
+func TestEntityDiagnosticArchive(t *testing.T) {
+	test := newEntityTest(testAgent)
+
+	if got := test.archive(t); got.LastBuilt != nil {
+		t.Errorf("before any build, archived %+v, want no payload", got)
+	}
+
+	if _, err := test.run(t, t0); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := test.archive(t); got.LastBuilt == nil || !got.LastBuiltAccepted {
+		t.Errorf("after a send, archived %+v, want the payload sent, accepted", got)
+	}
+
+	// A changed value, built a minute later and held back until minSendInterval.
+	pending := []bleemeoTypes.MetricState{{Name: "mysql_queries", Reason: bleemeoTypes.ReasonPending, Count: 1}}
+	test.metrics = pending
+
+	if need, err := test.run(t, t0.Add(minNewServiceInterval)); err != nil || need {
+		t.Fatalf("changed value: need = %v, err = %v; want false, nil", need, err)
+	}
+
+	got := test.archive(t)
+	if got.LastBuilt == nil || got.LastBuiltAccepted || !reflect.DeepEqual(got.LastBuilt.Metrics, pending) {
+		t.Errorf("a value held back is archived as %+v, want it with metrics %v, not accepted", got, pending)
 	}
 }

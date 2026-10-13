@@ -327,9 +327,6 @@ type registration struct {
 	restartInProgress    bool
 	runOnStart           bool
 	loop                 *scrapeLoop
-	runsInFlight         map[uint64]time.Time // when each run not yet returned started
-	nextRunID            uint64
-	lastRecordedRunID    uint64 // the most recent run recorded in lastScrapes
 	lastScrapes          []scrapeRun
 	gatherer             *wrappedGatherer
 	annotations          types.MetricAnnotations
@@ -341,42 +338,28 @@ type registration struct {
 	lastErrorLogAt       time.Time
 }
 
-// scrapeStateRuns is how many recent runs LastScrapeState considers, so that an input
-// failing one scrape in two reads as failing rather than alternating on every scrape.
+// scrapeStateRuns is how many recent records LastScrapeState considers, so that an input
+// failing one scrape in two reads as failing rather than alternating on every scrape. A run
+// recorded as stuck that then returns has two records.
 const scrapeStateRuns = 3
 
-// scrapeStuckIntervals is how many intervals a run may last before it counts as stuck:
-// Telegraf inputs ignore the context's deadline, and the loop waits on them.
+// scrapeStuckIntervals is how many intervals a run may last before it counts as stuck: Telegraf
+// inputs ignore the context's deadline, and the loop waits on them. More than one, so that a run
+// occasionally slower than its interval does not put the service in error.
 const scrapeStuckIntervals = 3
 
-// errScrapeStuck is reported when a run has not returned for scrapeStuckIntervals intervals.
-var errScrapeStuck = errors.New("the last scrape did not complete")
+// errScrapeStuck is recorded for a run that has not returned after scrapeStuckIntervals intervals.
+var errScrapeStuck = errors.New("the scrape did not complete in time")
 
 // LastScrapeState returns a snapshot of the recent runs of this registration, for
 // discovery's report of whether a service's input works: the most recent error of the last
-// scrapeStateRuns runs.
+// scrapeStateRuns records.
 //
 // Only reg.l is taken, never r.l, which can deadlock while a registration is stopped or
 // restarted (see restartScrapeLoop).
 func (reg *registration) LastScrapeState() types.ScrapeState {
-	return reg.lastScrapeState(time.Now())
-}
-
-func (reg *registration) lastScrapeState(now time.Time) types.ScrapeState {
 	reg.l.Lock()
 	defer reg.l.Unlock()
-
-	// A run that never returns is never recorded: without this, the last completed one
-	// would be reported for as long as the input hangs. The run itself is followed, rather
-	// than the time since the last record, so that a loop restarted meanwhile does not hide it.
-	// A run older than the last recorded one no longer counts: collection resumed after it.
-	if reg.interval > 0 {
-		for id, startedAt := range reg.runsInFlight {
-			if id > reg.lastRecordedRunID && now.Sub(startedAt) > scrapeStuckIntervals*reg.interval {
-				return types.ScrapeState{Status: types.ScrapeRan, Error: errScrapeStuck.Error()}
-			}
-		}
-	}
 
 	if len(reg.lastScrapes) == 0 {
 		return types.ScrapeState{}
@@ -407,27 +390,14 @@ func (reg *registration) lastScrapeState(now time.Time) types.ScrapeState {
 	return state
 }
 
-// startRun records a run starting at now, and returns its ID for endRun.
-func (reg *registration) startRun(now time.Time) uint64 {
-	reg.l.Lock()
-	defer reg.l.Unlock()
+// addScrapeRun records a run in lastScrapes, keeping the last maxLastScrape.
+// Must be called with reg.l held.
+func (reg *registration) addScrapeRun(run scrapeRun) {
+	reg.lastScrapes = append(reg.lastScrapes, run)
 
-	if reg.runsInFlight == nil {
-		reg.runsInFlight = make(map[uint64]time.Time)
+	if len(reg.lastScrapes) > maxLastScrape {
+		reg.lastScrapes = reg.lastScrapes[len(reg.lastScrapes)-maxLastScrape:]
 	}
-
-	reg.nextRunID++
-	reg.runsInFlight[reg.nextRunID] = now
-
-	return reg.nextRunID
-}
-
-// endRun records that a run returned.
-func (reg *registration) endRun(id uint64) {
-	reg.l.Lock()
-	defer reg.l.Unlock()
-
-	delete(reg.runsInFlight, id)
 }
 
 // lastRunAt is when the last run happened, or when the registration was added if it has not
@@ -1244,12 +1214,14 @@ func (r *Registry) restartScrapeLoop(reg *registration) {
 		timeout = reg.option.Timeout
 	}
 
+	interval := reg.interval
+
 	reg.loop = startScrapeLoop(
-		reg.interval,
+		interval,
 		timeout,
 		reg.option.JitterSeed,
 		func(ctx context.Context, loopCtx context.Context, t0 time.Time) {
-			r.scrapeFromLoop(ctx, loopCtx, t0, reg)
+			r.scrapeFromLoop(ctx, loopCtx, t0, interval, reg)
 		},
 		reg.option.Description,
 		reg.runOnStart,
@@ -1696,10 +1668,14 @@ func (r *Registry) WithTTL(ttl time.Duration) types.PointPusher {
 // Points gatherer are processed at if a periodic gather occurred.
 // This should only be used in test.
 func (reg *registration) InternalRunScrape(ctx context.Context, loopCtx context.Context, t0 time.Time) {
-	reg.registry.internalRunScrape(ctx, loopCtx, t0, reg)
+	reg.l.Lock()
+	interval := reg.interval
+	reg.l.Unlock()
+
+	reg.registry.internalRunScrape(ctx, loopCtx, t0, interval, reg)
 }
 
-func (r *Registry) internalRunScrape(ctx context.Context, loopCtx context.Context, t0 time.Time, reg *registration) {
+func (r *Registry) internalRunScrape(ctx context.Context, loopCtx context.Context, t0 time.Time, interval time.Duration, reg *registration) {
 	r.l.Lock()
 
 	_, ok := r.getRegistrationID(reg)
@@ -1707,13 +1683,14 @@ func (r *Registry) internalRunScrape(ctx context.Context, loopCtx context.Contex
 	r.l.Unlock()
 
 	if ok {
-		r.scrapeFromLoop(ctx, loopCtx, t0, reg)
+		r.scrapeFromLoop(ctx, loopCtx, t0, interval, reg)
 	}
 }
 
 // ctx must be a sub-context of loopCtx. If the gatherer method don't finished within ShutdownDeadline after
-// loopCtx expired, we abandon it behind and finish anyway.
-func (r *Registry) scrapeFromLoop(ctx context.Context, loopCtx context.Context, t0 time.Time, reg *registration) {
+// loopCtx expired, we abandon it behind and finish anyway. interval is the running loop's, which
+// reg.interval may no longer be until the loop restarts.
+func (r *Registry) scrapeFromLoop(ctx context.Context, loopCtx context.Context, t0 time.Time, interval time.Duration, reg *registration) {
 	state := GatherState{QueryType: All, FromScrapeLoop: true, T0: t0}
 
 	// Never use HintMetricFilter when GatherModifier is present, because this will be source of
@@ -1740,38 +1717,61 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, loopCtx context.Context, 
 		err      error
 	)
 
-	runID := reg.startRun(time.Now())
+	startedAt := time.Now()
 
 	go func() {
 		defer crashreport.ProcessPanic()
 		defer close(goroutingFinished)
-		// Ended when the gather returns, even after the loop gave up waiting on it.
-		defer reg.endRun(runID)
 
 		mfs, duration, err = r.scrape(ctx, state, reg)
 	}()
 
+	// A gatherer ignoring its context (most Telegraf inputs) keeps the loop waiting on it. A run
+	// still going after scrapeStuckIntervals intervals is recorded as not completed, so that
+	// LastScrapeState reports it while it hangs; its own result is recorded as well if it returns.
+	// Intervals rather than the timeout, which is shorter, leave a gatherer honoring its context
+	// the time to return.
+	var stuck <-chan time.Time
+
+	if interval > 0 {
+		stuckTimer := time.NewTimer(scrapeStuckIntervals * interval)
+		defer stuckTimer.Stop()
+
+		stuck = stuckTimer.C
+	}
+
 	// We use a gorouting and not a WaitGroup because we want to wait with a maximum deadline.
 	// If the gorouting don't want to finish (e.g. don't honor context), we left it behind.
-	select {
-	case <-goroutingFinished:
-	case <-loopCtx.Done():
-		deadlineTimer := time.NewTimer(r.option.ShutdownDeadline)
-		defer deadlineTimer.Stop()
-
+wait:
+	for {
 		select {
-		case <-deadlineTimer.C:
-			logger.V(2).Printf("%s didn't finished on time, abandon the gorouting", reg.option.Description)
-
-			return
 		case <-goroutingFinished:
+			break wait
+		case <-stuck:
+			stuck = nil
+
+			reg.l.Lock()
+			reg.addScrapeRun(scrapeRun{ScrapeAt: t0, ScrapeDuration: time.Since(startedAt), Error: errScrapeStuck})
+			reg.l.Unlock()
+		case <-loopCtx.Done():
+			deadlineTimer := time.NewTimer(r.option.ShutdownDeadline)
+			defer deadlineTimer.Stop()
+
+			select {
+			case <-deadlineTimer.C:
+				logger.V(2).Printf("%s didn't finished on time, abandon the gorouting", reg.option.Description)
+
+				return
+			case <-goroutingFinished:
+			}
+
+			break wait
 		}
 	}
 
 	reg.l.Lock()
 
-	reg.lastScrapes = append(reg.lastScrapes, scrapeRun{ScrapeAt: t0, ScrapeDuration: duration, ScrapedPointsCount: len(mfs), Error: err})
-	reg.lastRecordedRunID = runID
+	reg.addScrapeRun(scrapeRun{ScrapeAt: t0, ScrapeDuration: duration, ScrapedPointsCount: len(mfs), Error: err})
 
 	if errors.Is(err, errSkippingScrapeDueToRelabelHook) {
 		// We don't log skipping due to relabel hook, but we still store the error in reg.lastScrapes
@@ -1793,10 +1793,6 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, loopCtx context.Context, 
 			// fail on some setup. Also, node_exporter may send "node_rapl_package_joules_total" duplicated.
 			logger.V(logLvl).Printf("Gather of metrics failed on %s, some metrics may be missing: %v", reg.option.Description, err)
 		}
-	}
-
-	if len(reg.lastScrapes) > maxLastScrape {
-		reg.lastScrapes = reg.lastScrapes[len(reg.lastScrapes)-maxLastScrape:]
 	}
 
 	reg.l.Unlock()
@@ -1931,12 +1927,14 @@ func (r *Registry) restartLoop(reg *registration) {
 		timeout = reg.option.Timeout
 	}
 
+	interval := reg.interval
+
 	reg.loop = startScrapeLoop(
-		reg.interval,
+		interval,
 		timeout,
 		reg.option.JitterSeed,
 		func(ctx context.Context, loopCtx context.Context, t0 time.Time) {
-			r.scrapeFromLoop(ctx, loopCtx, t0, reg)
+			r.scrapeFromLoop(ctx, loopCtx, t0, interval, reg)
 		},
 		reg.option.Description,
 		reg.runOnStart,

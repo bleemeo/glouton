@@ -62,30 +62,44 @@ var queueSizeGatherers = map[discovery.ServiceName]queueSizeGatherer{ //nolint:g
 	discovery.EximService:    {metric: "exim_queue_size", gather: eximQueueSize},
 }
 
-// queueSizeState records how the last gather of each service's queue size went, so that
+// queueStateRuns is how many recent gathers of a service queueSizeState considers, as the
+// registry does for an input: a gather failing one minute in two reads as failing rather than
+// alternating.
+const queueStateRuns = 3
+
+// queueSizeState records how the recent gathers of each service's queue size went, so that
 // discovery reports these services as supported, with their error. It implements
 // discovery.AgentGathererStateProvider.
 type queueSizeState struct {
 	l sync.Mutex
-	// errors is the error of each service's last gather, empty when it succeeded. A service
-	// not gathered yet is absent.
-	errors map[discovery.NameInstance]string
+	// errors are the errors of each service's last queueStateRuns gathers, oldest first, empty
+	// for a gather that succeeded. A service not gathered yet is absent.
+	errors map[discovery.NameInstance][]string
 }
 
 func (s *queueSizeState) ServiceTypes() []discovery.ServiceName {
 	return slices.Sorted(maps.Keys(queueSizeGatherers))
 }
 
+// ServiceScrapeState returns the most recent error of the service's last queueStateRuns gathers.
 func (s *queueSizeState) ServiceScrapeState(service discovery.NameInstance) types.ScrapeState {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	message, ok := s.errors[service]
+	runs, ok := s.errors[service]
 	if !ok {
 		return types.ScrapeState{}
 	}
 
-	return types.ScrapeState{Status: types.ScrapeRan, Error: message}
+	state := types.ScrapeState{Status: types.ScrapeRan}
+
+	for _, message := range runs {
+		if message != "" {
+			state.Error = message
+		}
+	}
+
+	return state
 }
 
 // set records the services gathered in one run, forgetting the others.
@@ -97,7 +111,14 @@ func (s *queueSizeState) set(errors map[discovery.NameInstance]string) {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.errors = errors
+	recent := make(map[discovery.NameInstance][]string, len(errors))
+
+	for service, message := range errors {
+		runs := append(slices.Clone(s.errors[service]), message)
+		recent[service] = runs[max(0, len(runs)-queueStateRuns):]
+	}
+
+	s.errors = recent
 }
 
 func postfixQueueSize(ctx context.Context, srv discovery.Service, runner *gloutonexec.Runner, docker dockerExecuter) (float64, error) {
