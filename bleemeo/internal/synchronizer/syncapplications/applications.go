@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"strings"
 
 	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
@@ -31,6 +33,8 @@ import (
 )
 
 var ErrApplicationFirst = errors.New("application need to be created before service")
+
+var errApplicationNotAllowed = errors.New("applications aren't allowed in the current plan")
 
 type SyncApplications struct {
 	currentExecution types.SynchronizationExecution
@@ -91,9 +95,22 @@ func (s *SyncApplications) SyncRemoteAndLocal(ctx context.Context, syncType type
 		return fmt.Errorf("%w: currentExecution is nil", types.ErrUnexpectedWorkflow)
 	}
 
+	cache := s.currentExecution.Option().Cache
+	if cfg, ok := cache.CurrentAccountConfig(); !ok || !cfg.ApplicationIntegration {
+		return nil
+	}
+
 	localServices, _ := s.currentExecution.Option().Discovery.GetLatestDiscovery()
 
-	err := syncRemoteAndLocal(ctx, localServices, s.currentExecution.BleemeoAPIClient(), s.currentExecution.Option().Cache)
+	err := syncRemoteAndLocal(ctx, localServices, s.currentExecution.BleemeoAPIClient(), cache)
+	if errors.Is(err, errApplicationNotAllowed) {
+		// Our account config is outdated, refresh it so we stop trying to create applications.
+		logger.V(1).Printf("Skip creation of applications: %v", err)
+		s.currentExecution.RequestSynchronization(types.EntityConfig, true)
+
+		return nil
+	}
+
 	if err != nil {
 		s.currentExecution.FailOtherEntity(types.EntityService, ErrApplicationFirst)
 
@@ -186,6 +203,10 @@ func syncRemoteAndLocal(ctx context.Context, localServices []discovery.Service, 
 			// Kept any application that we already had created.
 			cache.SetApplications(applications)
 
+			if isApplicationNotAllowed(err) {
+				return fmt.Errorf("%w: %w", errApplicationNotAllowed, err)
+			}
+
 			return err
 		}
 
@@ -197,4 +218,15 @@ func syncRemoteAndLocal(ctx context.Context, localServices []discovery.Service, 
 	cache.SetApplications(applications)
 
 	return nil
+}
+
+// isApplicationNotAllowed returns true if the API refused to create an application
+// because applications aren't available in the account's plan.
+func isApplicationNotAllowed(err error) bool {
+	apiErr := new(bleemeo.APIError)
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusBadRequest {
+		return false
+	}
+
+	return strings.Contains(string(apiErr.Response), "Don't allow to create an application in this current plan")
 }
