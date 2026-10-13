@@ -65,6 +65,7 @@ func TestCollectionState(t *testing.T) {
 
 	state.setServices([]discovery.Service{jmxService()})
 
+	configuredAt := now
 	now = now.Add(time.Minute)
 
 	if got := state.ServiceScrapeState(key); got.Status != types.ScrapeNotRun {
@@ -76,7 +77,7 @@ func TestCollectionState(t *testing.T) {
 	state.pointReceived(jmxPoint("cassandra_write_requests"))
 	state.pointReceived(jmxPoint("cassandra_write_requests"))
 
-	if got := state.ServiceScrapeState(key); got != (types.ScrapeState{Status: types.ScrapeRan}) {
+	if got := state.ServiceScrapeState(key); got != (types.ScrapeState{Status: types.ScrapeRan, RegisteredAt: configuredAt}) {
 		t.Errorf("after points, got %+v, want a run without error", got)
 	}
 
@@ -101,6 +102,50 @@ func TestCollectionState(t *testing.T) {
 
 	if got := state.ServiceScrapeState(key); got.Status != types.ScrapeNotRun {
 		t.Errorf("a service removed from jmxtrans still has a state: %+v", got)
+	}
+}
+
+// TestCollectionStateNewTarget checks a service given to jmxtrans with another target, as when
+// its address changed, starts over: what was received came from the previous target, and its
+// metrics in the store are older than the new RegisteredAt.
+func TestCollectionStateNewTarget(t *testing.T) {
+	now := time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
+	key := discovery.NameInstance{Name: "cassandra"}
+
+	state := &collectionState{}
+	state.now = func() time.Time { return now }
+
+	state.setServices([]discovery.Service{jmxService()})
+	state.connected()
+	state.pointReceived(jmxPoint("cassandra_read_requests"))
+
+	// The same target again changes nothing.
+	now = now.Add(time.Minute)
+
+	state.setServices([]discovery.Service{jmxService()})
+
+	if got := state.ServiceScrapeState(key); got.Status != types.ScrapeRan || got.Error != "" {
+		t.Fatalf("with the same target, got %+v, want a run without error", got)
+	}
+
+	moved := jmxService()
+	moved.IPAddress = "127.0.0.2"
+
+	now = now.Add(time.Minute)
+
+	state.setServices([]discovery.Service{moved})
+
+	movedAt := now
+
+	if got := state.ServiceScrapeState(key); got.Status != types.ScrapeNotRun {
+		t.Errorf("right after the target changed, got %+v, want nothing yet", got)
+	}
+
+	now = now.Add(stateWindow)
+
+	want := types.ScrapeState{Status: types.ScrapeRan, Error: errMsgNoMetrics, RegisteredAt: movedAt}
+	if got := state.ServiceScrapeState(key); got != want {
+		t.Errorf("with nothing from the new target for a window, got %+v, want %+v", got, want)
 	}
 }
 
@@ -206,7 +251,7 @@ func TestJMXFeedsCollectionState(t *testing.T) {
 
 	j.emitPoint(t.Context(), jmxPoint("cassandra_read_requests"))
 
-	if got := j.ServiceScrapeState(key); got != (types.ScrapeState{Status: types.ScrapeRan}) {
+	if got := j.ServiceScrapeState(key); got.Status != types.ScrapeRan || got.Error != "" {
 		t.Errorf("after a point, got %+v, want a run without error", got)
 	}
 

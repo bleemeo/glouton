@@ -39,9 +39,11 @@ type collectionState struct {
 	// now is time.Now when nil. Tests set it.
 	now func() time.Time
 
-	// configuredAt is when each service was first given to jmxtrans, which gets a window
-	// before nothing received counts as an error.
+	// configuredAt is when each service was given to jmxtrans with its current target, which
+	// gets a window before nothing received counts as an error.
 	configuredAt map[discovery.NameInstance]time.Time
+	// targets is what jmxtrans connects to for each service.
+	targets map[discovery.NameInstance]jmxTarget
 	// receivedAt is, per service, when a point was last received.
 	receivedAt map[discovery.NameInstance]time.Time
 	// connections is how many jmxtrans connections are open, and disconnectedAt when one last
@@ -67,6 +69,7 @@ func (s *collectionState) setServices(services []discovery.Service) {
 	if s.configuredAt == nil {
 		s.configuredAt = make(map[discovery.NameInstance]time.Time)
 		s.receivedAt = make(map[discovery.NameInstance]time.Time)
+		s.targets = make(map[discovery.NameInstance]jmxTarget)
 	}
 
 	now := s.clock()
@@ -80,8 +83,14 @@ func (s *collectionState) setServices(services []discovery.Service) {
 		key := discovery.NameInstance{Name: service.Name, Instance: service.Instance}
 		current[key] = true
 
-		if _, ok := s.configuredAt[key]; !ok {
+		// A new target, as when the service's address changed, starts over: what was received
+		// came from the previous one.
+		target := targetOf(service)
+		if _, ok := s.configuredAt[key]; !ok || s.targets[key] != target {
 			s.configuredAt[key] = now
+			s.targets[key] = target
+
+			delete(s.receivedAt, key)
 		}
 	}
 
@@ -89,7 +98,25 @@ func (s *collectionState) setServices(services []discovery.Service) {
 		if !current[key] {
 			delete(s.configuredAt, key)
 			delete(s.receivedAt, key)
+			delete(s.targets, key)
 		}
+	}
+}
+
+// jmxTarget is what jmxtrans connects to for a service, as written in its configuration.
+type jmxTarget struct {
+	host     string
+	port     int
+	username string
+	password string
+}
+
+func targetOf(service discovery.Service) jmxTarget {
+	return jmxTarget{
+		host:     service.IPAddress,
+		port:     service.Config.JMXPort,
+		username: service.Config.JMXUsername,
+		password: service.Config.JMXPassword,
 	}
 }
 
@@ -138,7 +165,7 @@ func (s *collectionState) ServiceScrapeState(service discovery.NameInstance) typ
 	}
 
 	if receivedAt, ok := s.receivedAt[service]; ok && now.Sub(receivedAt) < stateWindow {
-		return types.ScrapeState{Status: types.ScrapeRan}
+		return types.ScrapeState{Status: types.ScrapeRan, RegisteredAt: configuredAt}
 	}
 
 	if now.Sub(configuredAt) < stateWindow {
@@ -146,8 +173,8 @@ func (s *collectionState) ServiceScrapeState(service discovery.NameInstance) typ
 	}
 
 	if s.connections == 0 && now.Sub(s.disconnectedAt) >= stateWindow {
-		return types.ScrapeState{Status: types.ScrapeRan, Error: errMsgNotConnected}
+		return types.ScrapeState{Status: types.ScrapeRan, Error: errMsgNotConnected, RegisteredAt: configuredAt}
 	}
 
-	return types.ScrapeState{Status: types.ScrapeRan, Error: errMsgNoMetrics}
+	return types.ScrapeState{Status: types.ScrapeRan, Error: errMsgNoMetrics, RegisteredAt: configuredAt}
 }

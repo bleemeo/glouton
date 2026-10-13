@@ -24,6 +24,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/bleemeo/glouton/config"
@@ -98,11 +99,60 @@ const (
 	msgJMXNoAddress        = "metrics are collected through JMX: no address found for this service"
 )
 
-// inputResult is what configureMetricInputs records per service: the outcome, and the
-// message to report when that outcome left the service without an input.
+// InputStatus tells Bleemeo how a service's metrics collection goes, so that it does not have
+// to match the error text: a value per reason for having no input, and for a collection that
+// runs, whether it works, and when it fails whether the service answered.
+type InputStatus string
+
+const (
+	// InputStatusOK means the collection runs without error.
+	InputStatusOK InputStatus = "ok"
+	// InputStatusPending means the collection has not run yet, or Glouton has not decided
+	// how to collect the service yet.
+	InputStatusPending InputStatus = "pending"
+	// InputStatusUnknown means the collection's state cannot be read.
+	InputStatusUnknown InputStatus = "unknown"
+	// InputStatusIgnored means metrics are disabled by the configuration: a user's choice.
+	InputStatusIgnored InputStatus = "ignored"
+	// InputStatusUnsupportedType means Glouton collects no metrics for this service type.
+	InputStatusUnsupportedType InputStatus = "unsupported_type"
+	// InputStatusCheckOnly means the service is a custom check, which has no metrics.
+	InputStatusCheckOnly InputStatus = "check_only"
+	// InputStatusContainerStopped means the service's container is stopped.
+	InputStatusContainerStopped InputStatus = "container_stopped"
+	// InputStatusUnsupportedPlatform means the input is not available on this platform or build.
+	InputStatusUnsupportedPlatform InputStatus = "unsupported_platform"
+	// InputStatusMissingInfo means credentials or an address the input needs are missing.
+	InputStatusMissingInfo InputStatus = "missing_info"
+	// InputStatusMissingCommand means the input needs a command the container does not have.
+	InputStatusMissingCommand InputStatus = "missing_command"
+	// InputStatusCreateFailed means building the input failed.
+	InputStatusCreateFailed InputStatus = "create_failed"
+	// InputStatusJMXDisabled, InputStatusJMXNoPort and InputStatusJMXNoAddress are why a service
+	// whose metrics only JMX collects is not collected.
+	InputStatusJMXDisabled  InputStatus = "jmx_disabled"
+	InputStatusJMXNoPort    InputStatus = "jmx_no_port"
+	InputStatusJMXNoAddress InputStatus = "jmx_no_address"
+	// InputStatusUnreachable means the collection fails because the service did not answer:
+	// connection refused or cut, timeout, or a scrape that did not complete.
+	InputStatusUnreachable InputStatus = "unreachable"
+	// InputStatusAnsweredError means the collection fails although the service answered, such as
+	// a refused authentication. Not reported for inputsWithoutNetwork, nor for JMX and the agent's
+	// own gatherers, whose errors cannot tell.
+	InputStatusAnsweredError InputStatus = "answered_error"
+	// InputStatusError means the collection fails, without telling whether the service answered.
+	InputStatusError InputStatus = "error"
+	// InputStatusNotRegistered means the collection is skipped until the service is registered
+	// on Bleemeo. Discovery cannot tell it: the synchronizer sets it.
+	InputStatusNotRegistered InputStatus = "not_registered"
+)
+
+// inputResult is what configureMetricInputs records per service: the outcome, the message to
+// report when that outcome left the service without an input, and its InputStatus.
 type inputResult struct {
 	outcome inputOutcome
 	message string
+	status  InputStatus
 }
 
 // newInputResult builds the inputResult of an outcome. Outcomes that the service type or the
@@ -113,21 +163,37 @@ func newInputResult(outcome inputOutcome, err error) inputResult {
 	switch outcome {
 	case inputMissingInfo:
 		result.message = msgMissingInfo
+		result.status = InputStatusMissingInfo
 	case inputMissingCommand:
 		result.message = msgMissingCommand
+		result.status = InputStatusMissingCommand
 	case inputUnsupportedPlatform:
 		result.message = msgUnsupportedPlatform
+		result.status = InputStatusUnsupportedPlatform
 	case inputIgnored:
 		result.message = msgIgnored
+		result.status = InputStatusIgnored
 	case inputCreateFailed:
 		result.message = msgCreateFailed
+		result.status = InputStatusCreateFailed
 
 		// Only causes that can be identified reliably get a suffix. Others would need
 		// matching on Telegraf's error text.
 		if errors.Is(err, inputs.ErrUnexpectedType) {
 			result.message = msgUnexpectedType
 		}
-	case inputRegistered, inputInactive, inputContainerStopped, inputCheckOnly, inputUnsupportedType:
+	case inputContainerStopped:
+		result.status = InputStatusContainerStopped
+	case inputCheckOnly:
+		result.status = InputStatusCheckOnly
+	case inputUnsupportedType:
+		result.status = InputStatusUnsupportedType
+	case inputRegistered:
+		// Set from the scrape state.
+		result.status = InputStatusPending
+	case inputInactive:
+		// Never reported.
+		result.status = InputStatusUnknown
 	}
 
 	return result
@@ -210,6 +276,8 @@ type ServiceState struct {
 	// this service, why: missing credentials, unsupported platform, ... It is empty when
 	// there is nothing to report.
 	Error string `json:"error"`
+	// InputStatus tells how the metrics collection goes, so that Bleemeo need not read Error.
+	InputStatus InputStatus `json:"input_status"`
 	// MetricsIgnored tells whether the service's metrics are disabled by the configuration.
 	// Error then says so, but reports a choice the user made rather than a failure. Not
 	// sent: Error already tells Bleemeo.
@@ -221,6 +289,11 @@ type ServiceState struct {
 	// the service is registered on Bleemeo. Discovery cannot tell why; the synchronizer, which
 	// knows the registration, reports it. Not sent.
 	CollectionSkipped bool `json:"-"`
+	// StaleMetricsBefore is, while the collection fails, when its input was registered: the
+	// service's metrics last received before it came from an earlier input, such as one on an
+	// address that changed, and would read as collected. Zero while the collection works, as a
+	// new input's first run lacks the metrics derived from two runs. Not sent.
+	StaleMetricsBefore time.Time `json:"-"`
 }
 
 // ServicesState returns what Glouton knows about each active service, sorted so that the
@@ -242,16 +315,19 @@ func (d *Discovery) ServicesState() []ServiceState {
 			continue
 		}
 
-		applyScrapeState(&result[i], pending.provider, pending.secrets)
+		applyScrapeState(&result[i], pending)
 	}
 
 	return result
 }
 
-// pendingScrape is a scrape state still to read, with the secrets its error may quote.
+// pendingScrape is a scrape state still to read, with the secrets its error may quote, and
+// whether an error without a network error means the service answered (see
+// inputsWithoutNetwork).
 type pendingScrape struct {
-	provider scrapeStateProvider
-	secrets  []string
+	provider   scrapeStateProvider
+	secrets    []string
+	classified bool
 }
 
 // servicesStateSnapshot is the report as of the last change to discovery's state, with the
@@ -316,6 +392,11 @@ func (d *Discovery) buildServicesState() ([]ServiceState, []pendingScrape) {
 		// No result: configureMetricInputs has not run for this service yet.
 		input, hasResult := d.inputResult[key]
 
+		state.InputStatus = InputStatusPending
+		if hasResult {
+			state.InputStatus = input.status
+		}
+
 		var pending pendingScrape
 
 		switch {
@@ -324,6 +405,11 @@ func (d *Discovery) buildServicesState() ([]ServiceState, []pendingScrape) {
 			if collector, ok := d.activeCollector[key]; ok {
 				pending.provider, _ = collector.gathererRegistration.(scrapeStateProvider)
 				pending.secrets = serviceSecrets(service.Config)
+				pending.classified = !inputsWithoutNetwork[service.ServiceType]
+			}
+
+			if pending.provider == nil {
+				state.InputStatus = InputStatusUnknown
 			}
 		case input.outcome == inputUnsupportedType || input.outcome == inputCheckOnly:
 			// jmxtrans collects the metrics of any service with a jmx_port. InputSupported
@@ -338,6 +424,7 @@ func (d *Discovery) buildServicesState() ([]ServiceState, []pendingScrape) {
 			case d.jmxState != nil && service.Config.JMXPort != 0 && service.IPAddress == "":
 				// jmxtrans skips a service it has no address for.
 				state.Error = msgJMXNoAddress
+				state.InputStatus = InputStatusJMXNoAddress
 			case d.jmxState != nil && service.Config.JMXPort != 0:
 				pending.provider = serviceScrapeState{
 					provider: d.jmxState,
@@ -347,8 +434,10 @@ func (d *Discovery) buildServicesState() ([]ServiceState, []pendingScrape) {
 			case !jmxServiceTypes[service.ServiceType]:
 			case d.jmxState == nil:
 				state.Error = msgJMXDisabled
+				state.InputStatus = InputStatusJMXDisabled
 			default:
 				state.Error = msgJMXNoPort
+				state.InputStatus = InputStatusJMXNoPort
 			}
 		default:
 			state.Error = input.message
@@ -532,19 +621,43 @@ func isSecretParameter(key string) bool {
 	}
 }
 
-// applyScrapeState sets the error of a service whose metrics are collected, or whether the
-// collection is skipped or has not run yet, in which case there is no error to report.
-func applyScrapeState(state *ServiceState, provider scrapeStateProvider, secrets []string) {
-	scrape := provider.LastScrapeState()
+// applyScrapeState sets the error and InputStatus of a service whose metrics are collected, or
+// whether the collection is skipped or has not run yet, in which case there is no error to
+// report.
+func applyScrapeState(state *ServiceState, pending pendingScrape) {
+	scrape := pending.provider.LastScrapeState()
 
 	switch scrape.Status {
 	case types.ScrapeSkipped:
 		state.CollectionSkipped = true
+		state.InputStatus = InputStatusPending
 	case types.ScrapeNotRun:
 		state.CollectionPending = true
+		state.InputStatus = InputStatusPending
 	case types.ScrapeRan:
 		// Stabilized first, as redacting could hide what stabilizeError looks for (a password
 		// "tcp"); truncated last, so that the cut is always at the same place.
-		state.Error = truncateError(redactError(stabilizeError(scrape.Error), secrets))
+		state.Error = truncateError(redactError(stabilizeError(scrape.Error), pending.secrets))
+		state.InputStatus = scrapeInputStatus(scrape, pending.classified)
+
+		if scrape.Error != "" {
+			state.StaleMetricsBefore = scrape.RegisteredAt
+		}
+	}
+}
+
+// scrapeInputStatus is the InputStatus of a collection that ran. A gatherer's error without a
+// network error only means the service answered for a classified input: one that talks to the
+// service over the network.
+func scrapeInputStatus(scrape types.ScrapeState, classified bool) InputStatus {
+	switch {
+	case scrape.Error == "":
+		return InputStatusOK
+	case scrape.ErrorKind == types.ScrapeErrorUnreachable:
+		return InputStatusUnreachable
+	case scrape.ErrorKind == types.ScrapeErrorGatherer && classified:
+		return InputStatusAnsweredError
+	default:
+		return InputStatusError
 	}
 }

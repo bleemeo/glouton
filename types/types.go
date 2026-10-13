@@ -735,7 +735,33 @@ type ScrapeState struct {
 	// scrape in two reads as failing; empty when none of them failed. The registry also
 	// reports a scrape that did not complete. Only meaningful when Status is ScrapeRan.
 	Error string
+	// ErrorKind tells where Error comes from, read on the error values rather than their text.
+	// ScrapeErrorNone when the provider does not classify its errors: Error tells whether there
+	// is one.
+	ErrorKind ScrapeErrorKind
+	// RegisteredAt is when the input was registered: points received before it came from an
+	// earlier input of the service, such as one on an address that changed. Set when Status is
+	// ScrapeRan.
+	RegisteredAt time.Time
 }
+
+// ScrapeErrorKind tells where a scrape error comes from.
+type ScrapeErrorKind int
+
+const (
+	// ScrapeErrorNone means the error is not classified: there is none, or the provider does not
+	// classify its errors, as jmxtrans and the agent's gatherers.
+	ScrapeErrorNone ScrapeErrorKind = iota
+	// ScrapeErrorUnreachable means the service did not answer: no connection, a connection cut
+	// or timed out, an unknown host, or a scrape that did not complete.
+	ScrapeErrorUnreachable
+	// ScrapeErrorGatherer means the gatherer returned an error with no network error in it, as a
+	// value or as Go's text for one: the service answered.
+	ScrapeErrorGatherer
+	// ScrapeErrorInternal means Glouton failed before reaching the service, such as while
+	// waiting for its turn to read secrets.
+	ScrapeErrorInternal
+)
 
 type Registration interface {
 	ScheduleRun(opts ScheduleOption)

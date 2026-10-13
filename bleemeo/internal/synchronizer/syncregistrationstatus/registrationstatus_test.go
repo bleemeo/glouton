@@ -82,6 +82,7 @@ func TestFromDiscoverySkippedCollection(t *testing.T) {
 
 	unregisteredState := states[1]
 	unregisteredState.Error = msgNotRegistered
+	unregisteredState.InputStatus = discovery.InputStatusNotRegistered
 
 	want := []ServiceState{
 		{ServiceState: registeredState, ServiceUUID: "uuid-apache", Metrics: MetricsZero},
@@ -117,6 +118,7 @@ func TestServiceStateJSON(t *testing.T) {
 		ServiceType:    discovery.MySQLService,
 		Dynamic:        true,
 		InputSupported: true,
+		InputStatus:    discovery.InputStatusOK,
 		Metrics:        MetricsZero,
 	}
 
@@ -138,6 +140,7 @@ func TestServiceStateJSON(t *testing.T) {
 		"dynamic_discovery": true,
 		"input_supported":   true,
 		"error":             "",
+		"input_status":      "ok",
 		"metrics":           "zero",
 		"service_uuid":      "",
 	}

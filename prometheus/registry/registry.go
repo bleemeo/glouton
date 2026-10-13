@@ -27,7 +27,10 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"net"
 	"net/http"
+	"os"
+	"regexp"
 	"runtime"
 	"slices"
 	"sort"
@@ -375,7 +378,7 @@ func (reg *registration) LastScrapeState() types.ScrapeState {
 		return types.ScrapeState{Status: types.ScrapeSkipped}
 	}
 
-	state := types.ScrapeState{Status: types.ScrapeRan}
+	state := types.ScrapeState{Status: types.ScrapeRan, RegisteredAt: reg.addedAt}
 
 	for _, run := range reg.lastScrapes[max(0, len(reg.lastScrapes)-scrapeStateRuns):] {
 		if errors.Is(run.Error, errSkippingScrapeDueToRelabelHook) {
@@ -384,10 +387,81 @@ func (reg *registration) LastScrapeState() types.ScrapeState {
 
 		if run.Error != nil {
 			state.Error = run.Error.Error()
+			state.ErrorKind = scrapeErrorKind(run.Error)
+
+			// A run that gathered points reached the service, though part of it did not
+			// answer: one endpoint of several timing out.
+			if state.ErrorKind == types.ScrapeErrorUnreachable && run.ScrapedPointsCount > 0 {
+				state.ErrorKind = types.ScrapeErrorGatherer
+			}
 		}
 	}
 
 	return state
+}
+
+// notGatheredError marks an error of the registry itself, before the gatherer ran: the
+// service was not reached. Its message is the wrapped error's.
+type notGatheredError struct {
+	error
+}
+
+func (e notGatheredError) Unwrap() error {
+	return e.error
+}
+
+// netErrorTextRegex matches the text of Go's network errors, for an input that rebuilt its error
+// from the text and lost its type, as Elasticsearch's does: "dial tcp 127.0.0.1:9200: connect:
+// connection refused", "read udp 127.0.0.1:123: i/o timeout", "dial tcp: lookup db on
+// 127.0.0.53:53: no such host", a context's deadline or "net/http: TLS handshake timeout". Only
+// where Go's HTTP client puts its error, after `Get "url": `, or at the start of a line, as joined
+// errors are: a message from the service quoting Go's wording, about a backend of its own, is
+// not the service failing to answer.
+var netErrorTextRegex = regexp.MustCompile(
+	`(?:^|\n|": )(?:(?:dial|read|write) (?:tcp|udp|ip|unix)(?:4|6|gram|packet)? \S+: |(?:dial (?:tcp|udp|ip)(?:4|6)?: )?lookup \S+(?: on \S+)?: no such host\b|context deadline exceeded\b|net/http: TLS handshake timeout\b)`,
+)
+
+// scrapeErrorKind tells where a scrape error comes from. A service did not answer when a
+// connection could not be made or was cut, a name did not resolve, it timed out, or the run did
+// not complete. It reads the error values, which inputs mostly keep wrapped or joined, and only
+// when none tells, the text of Go's network errors. A network operation other than dial, read
+// or write, such as a TLS alert ("remote error"), comes from a service that answered. A canceled
+// run is Glouton's doing: its loop stopped, as when it restarts.
+func scrapeErrorKind(err error) types.ScrapeErrorKind {
+	switch {
+	case err == nil:
+		return types.ScrapeErrorNone
+	case errors.Is(err, errScrapeStuck):
+		return types.ScrapeErrorUnreachable
+	case errors.As(err, new(notGatheredError)):
+		// Before the deadline check: waiting for the secrets gate ends with the context's error.
+		return types.ScrapeErrorInternal
+	case errors.Is(err, context.Canceled):
+		// Before the network checks: a dial canceled is an OpError too.
+		return types.ScrapeErrorInternal
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, os.ErrDeadlineExceeded):
+		return types.ScrapeErrorUnreachable
+	case errors.As(err, new(*net.DNSError)):
+		return types.ScrapeErrorUnreachable
+	}
+
+	// Timeouts of other kinds, such as net/http's TLS handshake timeout.
+	if timeoutErr := (interface{ Timeout() bool })(nil); errors.As(err, &timeoutErr) && timeoutErr.Timeout() {
+		return types.ScrapeErrorUnreachable
+	}
+
+	if opErr := new(net.OpError); errors.As(err, &opErr) {
+		switch opErr.Op {
+		case "dial", "read", "write":
+			return types.ScrapeErrorUnreachable
+		}
+	}
+
+	if netErrorTextRegex.MatchString(err.Error()) {
+		return types.ScrapeErrorUnreachable
+	}
+
+	return types.ScrapeErrorGatherer
 }
 
 // addScrapeRun records a run in lastScrapes, keeping the last maxLastScrape.
@@ -1880,12 +1954,12 @@ func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registrat
 
 	if hasSecrets && secretInput.SecretCount() > 0 {
 		if r.option.SecretInputsGate == nil {
-			return nil, 0, fmt.Errorf("%w: no secretInputsGate but input had SecretCount()", ErrBadArgument)
+			return nil, 0, notGatheredError{fmt.Errorf("%w: no secretInputsGate but input had SecretCount()", ErrBadArgument)}
 		}
 
 		releaseGate, err := WaitForSecrets(ctx, r.option.SecretInputsGate, secretInput.SecretCount())
 		if err != nil {
-			return nil, 0, err // The context expired
+			return nil, 0, notGatheredError{err} // The context expired
 		}
 
 		defer releaseGate()

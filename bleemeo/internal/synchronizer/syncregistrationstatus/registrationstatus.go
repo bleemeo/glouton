@@ -78,9 +78,9 @@ const msgNotRegistered = "metrics are not gathered: the service is not registere
 
 // FromDiscovery adds to each service the ID of its Service object, matched as the services
 // synchronization does (name and instance, in the cache's ServiceLookupFromList), and its
-// metrics, from metricNames. A skipped collection gets msgNotRegistered when the service has
-// no Service object, and is pending otherwise: the registry retries the skip within minutes.
-// The order of states is kept.
+// metrics, from metricNames. A skipped collection gets msgNotRegistered and
+// InputStatusNotRegistered when the service has no Service object, and is pending otherwise:
+// the registry retries the skip within minutes. The order of states is kept.
 func FromDiscovery(
 	states []discovery.ServiceState,
 	registered map[common.ServiceNameInstance]bleemeoTypes.Service,
@@ -95,6 +95,7 @@ func FromDiscovery(
 		if state.CollectionSkipped {
 			if serviceUUID == "" {
 				state.Error = msgNotRegistered
+				state.InputStatus = discovery.InputStatusNotRegistered
 			} else {
 				state.CollectionPending = true
 			}
@@ -112,13 +113,24 @@ func FromDiscovery(
 
 // ServiceMetricNames counts, per service, the names of the metrics of agentID that are meant to
 // reach Bleemeo, the service check's status left out. metrics are those the synchronizer reads,
-// already through Glouton's metric filter; isAllowed is Bleemeo's.
+// already through Glouton's metric filter; isAllowed is Bleemeo's. A metric last received before
+// the service's StaleMetricsBefore in states is left out: it came from an earlier input, and
+// would read as collected while the current one fails.
 func ServiceMetricNames(
 	metrics []gloutonTypes.Metric,
+	states []discovery.ServiceState,
 	agentID string,
 	isAllowed func(gloutonTypes.Metric) bool,
 	now time.Time,
 ) map[discovery.NameInstance]int {
+	staleBefore := make(map[discovery.NameInstance]time.Time, len(states))
+
+	for _, state := range states {
+		if !state.StaleMetricsBefore.IsZero() {
+			staleBefore[discovery.NameInstance{Name: state.Name, Instance: state.Instance}] = state.StaleMetricsBefore
+		}
+	}
+
 	names := make(map[discovery.NameInstance]map[string]bool)
 
 	for _, metric := range metrics {
@@ -136,11 +148,13 @@ func ServiceMetricNames(
 			continue
 		}
 
-		if now.Sub(metric.LastPointReceivedAt()) > metricsFreshness || !isAllowed(metric) {
+		key := discovery.NameInstance{Name: annotations.ServiceName, Instance: annotations.ServiceInstance}
+		lastPoint := metric.LastPointReceivedAt()
+
+		if now.Sub(lastPoint) > metricsFreshness || lastPoint.Before(staleBefore[key]) || !isAllowed(metric) {
 			continue
 		}
 
-		key := discovery.NameInstance{Name: annotations.ServiceName, Instance: annotations.ServiceInstance}
 		if names[key] == nil {
 			names[key] = make(map[string]bool)
 		}

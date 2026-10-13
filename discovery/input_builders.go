@@ -117,6 +117,16 @@ var inputBuilders = map[ServiceName]inputBuilder{ //nolint:gochecknoglobals
 	ZookeeperService:     zookeeperInput,
 }
 
+// inputsWithoutNetwork lists the service types whose input runs a command or reads a file rather
+// than talking to the service: their error cannot tell whether the service answered, so it is
+// never reported as answered_error. Every other input reports a service that did not answer as
+// unreachable, which TestUnreachableDetected proves by collecting from a closed port.
+var inputsWithoutNetwork = map[ServiceName]bool{ //nolint:gochecknoglobals
+	Fail2banService: true,
+	NfsService:      true,
+	VarnishService:  true,
+}
+
 // serviceHostPort is "ip:port" of the service's address, false when it has none.
 func serviceHostPort(service Service) (string, bool) {
 	ip, port := service.AddressPort()

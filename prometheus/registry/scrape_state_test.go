@@ -19,7 +19,11 @@ package registry
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net"
+	"net/url"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -29,7 +33,28 @@ import (
 var (
 	errScrapeFailed = errors.New("mod_status is not enabled")
 	errOld          = errors.New("an error from long ago")
+	errAnother      = errors.New("another error")
+	errTLSAlert     = errors.New("tls: bad certificate")
+	errNoAuth       = errors.New("NOAUTH authentication required")
+	errTextOnly     = errors.New("dial tcp 127.0.0.1:9200: connect: connection refused")
+	// As Elasticsearch's input leaves them, the type lost; capitalized as Go's HTTP client words them.
+	errDNSText        = errors.New(`Get "http://es:9200/": dial tcp: lookup es on 127.0.0.53:53: no such host`) //nolint:staticcheck
+	errTimeoutText    = errors.New(`Get "http://127.0.0.1:9200/": context deadline exceeded`)                   //nolint:staticcheck
+	errTLSAlertText   = errors.New(`Get "https://127.0.0.1:9200/": remote error: tls: bad certificate`)         //nolint:staticcheck
+	errHTTPStatusText = errors.New("elasticsearch: API responded with status-code 401, expected 200")
+	errTLSTimeoutText = errors.New(`Get "https://127.0.0.1:9200/": net/http: TLS handshake timeout`) //nolint:staticcheck
+	errJoinedText     = errors.New("status 401\ndial tcp 127.0.0.1:9200: connect: connection refused")
+	// A service's own message about a backend of its own, quoting Go's wording.
+	errServiceQuotesDial    = errors.New("ERR backend: dial tcp 10.0.0.5:5432: connect: connection refused")
+	errServiceQuotesTimeout = errors.New("query failed: context deadline exceeded")
 )
+
+// otherTimeoutError is a timeout of no other kind, as net/http's TLS handshake timeout, worded so
+// that only its type tells.
+type otherTimeoutError struct{}
+
+func (otherTimeoutError) Error() string { return "the handshake timed out" }
+func (otherTimeoutError) Timeout() bool { return true }
 
 // TestLastScrapeStateNeverScraped checks a registration that never ran reports ScrapeNotRun, so
 // that discovery can report it as pending rather than as working with no metric.
@@ -57,7 +82,7 @@ func TestLastScrapeStateUsesRecentRuns(t *testing.T) {
 
 	got := reg.LastScrapeState()
 
-	want := types.ScrapeState{Status: types.ScrapeRan, Error: errScrapeFailed.Error()}
+	want := types.ScrapeState{Status: types.ScrapeRan, Error: errScrapeFailed.Error(), ErrorKind: types.ScrapeErrorGatherer}
 
 	if got != want {
 		t.Errorf("LastScrapeState() = %+v, want %+v", got, want)
@@ -157,7 +182,7 @@ func TestLastScrapeStateStuck(t *testing.T) {
 		reg.InternalRunScrape(ctx, t.Context(), time.Now())
 	}()
 
-	stuck := types.ScrapeState{Status: types.ScrapeRan, Error: errScrapeStuck.Error()}
+	stuck := types.ScrapeState{Status: types.ScrapeRan, Error: errScrapeStuck.Error(), ErrorKind: types.ScrapeErrorUnreachable, RegisteredAt: reg.addedAt}
 
 	for deadline := time.Now().Add(5 * time.Second); reg.LastScrapeState() != stuck; {
 		if time.Now().After(deadline) {
@@ -185,7 +210,7 @@ func TestLastScrapeStateStuck(t *testing.T) {
 		reg.InternalRunScrape(t.Context(), t.Context(), time.Now())
 	}
 
-	if got := reg.LastScrapeState(); got != (types.ScrapeState{Status: types.ScrapeRan}) {
+	if got := reg.LastScrapeState(); got != (types.ScrapeState{Status: types.ScrapeRan, RegisteredAt: reg.addedAt}) {
 		t.Errorf("after %d successful runs, reported as %+v, want no error", scrapeStateRuns, got)
 	}
 }
@@ -202,7 +227,7 @@ func TestLastScrapeStateSlowRunsDoNotFlap(t *testing.T) {
 		return nil
 	})
 
-	stuck := types.ScrapeState{Status: types.ScrapeRan, Error: errScrapeStuck.Error()}
+	stuck := types.ScrapeState{Status: types.ScrapeRan, Error: errScrapeStuck.Error(), ErrorKind: types.ScrapeErrorUnreachable, RegisteredAt: reg.addedAt}
 
 	for i := range 4 {
 		reg.InternalRunScrape(t.Context(), t.Context(), time.Now())
@@ -226,7 +251,7 @@ func TestLastScrapeStateOccasionallySlowNotStuck(t *testing.T) {
 
 	reg.InternalRunScrape(t.Context(), t.Context(), time.Now())
 
-	if got := reg.LastScrapeState(); got != (types.ScrapeState{Status: types.ScrapeRan}) {
+	if got := reg.LastScrapeState(); got != (types.ScrapeState{Status: types.ScrapeRan, RegisteredAt: reg.addedAt}) {
 		t.Errorf("a run 1.5 intervals long is reported as %+v, want no error", got)
 	}
 }
@@ -242,8 +267,31 @@ func TestScrapeStuckUsesLoopInterval(t *testing.T) {
 
 	reg.registry.scrapeFromLoop(t.Context(), t.Context(), time.Now(), time.Minute, reg)
 
-	if got := reg.LastScrapeState(); got != (types.ScrapeState{Status: types.ScrapeRan}) {
+	if got := reg.LastScrapeState(); got != (types.ScrapeState{Status: types.ScrapeRan, RegisteredAt: reg.addedAt}) {
 		t.Errorf("a 100 ms run of a one-minute loop is reported as %+v, want no error", got)
+	}
+}
+
+// TestLastScrapeStateRegisteredAt checks a state that ran tells when the input was registered,
+// so that the metrics an earlier input of the service left in the store are not counted as its.
+func TestLastScrapeStateRegisteredAt(t *testing.T) {
+	before := time.Now()
+
+	reg := newStuckTestRegistration(t, time.Minute, func(context.Context, time.Time) error {
+		return nil
+	})
+
+	after := time.Now()
+
+	if got := reg.LastScrapeState(); !got.RegisteredAt.IsZero() {
+		t.Errorf("before any run, RegisteredAt = %v, want zero", got.RegisteredAt)
+	}
+
+	reg.InternalRunScrape(t.Context(), t.Context(), time.Now())
+
+	got := reg.LastScrapeState().RegisteredAt
+	if got.Before(before) || got.After(after) {
+		t.Errorf("RegisteredAt = %v, want between %v and %v", got, before, after)
 	}
 }
 
@@ -346,7 +394,7 @@ func TestLastScrapeStateIgnoresRelabelHookSkip(t *testing.T) {
 				{Error: errSkippingScrapeDueToRelabelHook},
 				{Error: errScrapeFailed},
 			},
-			want: types.ScrapeState{Status: types.ScrapeRan, Error: errScrapeFailed.Error()},
+			want: types.ScrapeState{Status: types.ScrapeRan, Error: errScrapeFailed.Error(), ErrorKind: types.ScrapeErrorGatherer},
 		},
 	}
 
@@ -393,5 +441,94 @@ func TestLastScrapeStateDoesNotChangeOnRingRollover(t *testing.T) {
 		if got := reg.LastScrapeState(); got != (types.ScrapeState{Status: types.ScrapeSkipped}) {
 			t.Fatalf("after %d skips: LastScrapeState() = %+v, want skipped", len(reg.lastScrapes), got)
 		}
+	}
+}
+
+// TestScrapeErrorKind checks where a scrape error comes from is read on its values, however
+// inputs wrap or join them: a service that did not answer, one that answered (or an input that
+// lost its error's type), and Glouton failing before reaching the service.
+func TestScrapeErrorKind(t *testing.T) {
+	refused := &net.OpError{Op: "dial", Net: "tcp", Err: syscall.ECONNREFUSED}
+
+	cases := []struct {
+		name string
+		err  error
+		want types.ScrapeErrorKind
+	}{
+		{name: "no error", err: nil, want: types.ScrapeErrorNone},
+		{name: "connection refused", err: refused, want: types.ScrapeErrorUnreachable},
+		{name: "wrapped", err: fmt.Errorf("error on request to %q: %w", "http://127.0.0.1/", refused), want: types.ScrapeErrorUnreachable},
+		{name: "in an HTTP client error", err: &url.Error{Op: "Get", URL: "http://127.0.0.1/", Err: refused}, want: types.ScrapeErrorUnreachable},
+		{name: "joined", err: errors.Join(errAnother, refused), want: types.ScrapeErrorUnreachable},
+		{name: "connection reset", err: &net.OpError{Op: "read", Net: "tcp", Err: syscall.ECONNRESET}, want: types.ScrapeErrorUnreachable},
+		{name: "unknown host", err: &net.DNSError{Err: "no such host", Name: "db"}, want: types.ScrapeErrorUnreachable},
+		{name: "context timeout", err: fmt.Errorf("query: %w", context.DeadlineExceeded), want: types.ScrapeErrorUnreachable},
+		{name: "stuck run", err: errScrapeStuck, want: types.ScrapeErrorUnreachable},
+		{name: "TLS alert from the service", err: &net.OpError{Op: "remote error", Net: "tcp", Err: errTLSAlert}, want: types.ScrapeErrorGatherer},
+		{name: "refused by the service", err: errNoAuth, want: types.ScrapeErrorGatherer},
+		{name: "type lost, Go's text", err: errTextOnly, want: types.ScrapeErrorUnreachable},
+		{name: "type lost, Go's DNS text", err: errDNSText, want: types.ScrapeErrorUnreachable},
+		{name: "type lost, Go's timeout text", err: errTimeoutText, want: types.ScrapeErrorUnreachable},
+		{name: "TLS alert, text only", err: errTLSAlertText, want: types.ScrapeErrorGatherer},
+		{name: "HTTP status, text only", err: errHTTPStatusText, want: types.ScrapeErrorGatherer},
+		{name: "timeout of another kind", err: &url.Error{Op: "Get", URL: "https://127.0.0.1/", Err: otherTimeoutError{}}, want: types.ScrapeErrorUnreachable},
+		{name: "TLS handshake timeout, text only", err: errTLSTimeoutText, want: types.ScrapeErrorUnreachable},
+		{name: "joined, text only", err: errJoinedText, want: types.ScrapeErrorUnreachable},
+		{name: "service quoting a dial error", err: errServiceQuotesDial, want: types.ScrapeErrorGatherer},
+		{name: "service quoting a timeout", err: errServiceQuotesTimeout, want: types.ScrapeErrorGatherer},
+		{name: "canceled", err: fmt.Errorf("query: %w", context.Canceled), want: types.ScrapeErrorInternal},
+		{name: "dial canceled", err: &net.OpError{Op: "dial", Net: "tcp", Err: context.Canceled}, want: types.ScrapeErrorInternal},
+		{name: "no secrets gate", err: notGatheredError{ErrBadArgument}, want: types.ScrapeErrorInternal},
+		{name: "secrets gate timeout", err: notGatheredError{context.DeadlineExceeded}, want: types.ScrapeErrorInternal},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := scrapeErrorKind(tc.err); got != tc.want {
+				t.Errorf("scrapeErrorKind(%v) = %v, want %v", tc.err, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestLastScrapeStateErrorKind checks ErrorKind follows the error reported, the most recent of
+// the last runs.
+func TestLastScrapeStateErrorKind(t *testing.T) {
+	refused := &net.OpError{Op: "dial", Net: "tcp", Err: syscall.ECONNREFUSED}
+
+	reg := &registration{lastScrapes: []scrapeRun{{Error: refused}, {Error: errScrapeFailed}}}
+	if got := reg.LastScrapeState(); got.ErrorKind != types.ScrapeErrorGatherer || got.Error != errScrapeFailed.Error() {
+		t.Errorf("after an error from the service, got %+v, want it from the gatherer", got)
+	}
+
+	reg.lastScrapes = append(reg.lastScrapes, scrapeRun{Error: refused})
+	if got := reg.LastScrapeState(); got.ErrorKind != types.ScrapeErrorUnreachable {
+		t.Errorf("after a refused connection, got %+v, want unreachable", got)
+	}
+}
+
+// TestLastScrapeStatePartlyUnreachable checks a run that gathered points, with a network error
+// for part of it, is not reported as a service that did not answer.
+func TestLastScrapeStatePartlyUnreachable(t *testing.T) {
+	timeout := fmt.Errorf("GET /api/nodes: %w", context.DeadlineExceeded)
+
+	reg := &registration{lastScrapes: []scrapeRun{{Error: timeout, ScrapedPointsCount: 12}}}
+	if got := reg.LastScrapeState(); got.ErrorKind != types.ScrapeErrorGatherer {
+		t.Errorf("with points gathered, got %+v, want the service to have answered", got)
+	}
+
+	reg.lastScrapes = append(reg.lastScrapes, scrapeRun{Error: timeout})
+	if got := reg.LastScrapeState(); got.ErrorKind != types.ScrapeErrorUnreachable {
+		t.Errorf("with nothing gathered, got %+v, want unreachable", got)
+	}
+}
+
+// TestScrapeWithoutSecretsGateIsInternal checks the registry's own failure before gathering is
+// marked as such, keeping its message: the service was not reached.
+func TestScrapeWithoutSecretsGateIsInternal(t *testing.T) {
+	err := notGatheredError{fmt.Errorf("%w: no secretInputsGate but input had SecretCount()", ErrBadArgument)}
+
+	if !errors.Is(err, ErrBadArgument) || err.Error() != ErrBadArgument.Error()+": no secretInputsGate but input had SecretCount()" {
+		t.Errorf("the wrapper changed the error: %v", err)
 	}
 }

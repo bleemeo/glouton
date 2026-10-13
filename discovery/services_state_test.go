@@ -299,6 +299,43 @@ func TestServicesStateScrapeState(t *testing.T) {
 	}
 }
 
+// TestServicesStateStaleMetricsBefore checks a service whose input fails tells when the input was
+// registered, so that the synchronizer leaves out the metrics an earlier input left in the store,
+// and that one whose input works does not: a new input's first run lacks the derived metrics.
+func TestServicesStateStaleMetricsBefore(t *testing.T) {
+	registeredAt := time.Date(2026, 10, 13, 6, 31, 18, 0, time.UTC)
+
+	cases := []struct {
+		name  string
+		error string
+		want  time.Time
+	}{
+		{name: "failing", error: "connection refused", want: registeredAt},
+		{name: "working"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := newTestDiscovery()
+			d.inputResult[apacheKey()] = newInputResult(inputRegistered, nil)
+			d.activeCollector[apacheKey()] = collectorDetails{
+				gathererRegistration: fakeScrapeRegistration{
+					state: types.ScrapeState{Status: types.ScrapeRan, Error: tc.error, RegisteredAt: registeredAt},
+				},
+			}
+
+			got := servicesStateOf(d)
+			if len(got) != 1 {
+				t.Fatalf("got %d services, want 1", len(got))
+			}
+
+			if !got[0].StaleMetricsBefore.Equal(tc.want) {
+				t.Errorf("StaleMetricsBefore = %v, want %v", got[0].StaleMetricsBefore, tc.want)
+			}
+		})
+	}
+}
+
 // TestServicesStateWithoutScrapeState pins the fallback of the optional interface: a
 // registration that cannot report its scrape state is still reported, with no error.
 func TestServicesStateWithoutScrapeState(t *testing.T) {

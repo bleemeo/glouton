@@ -28,8 +28,9 @@ import (
 // Limits of each list sent to Bleemeo, so that a host far beyond what was foreseen, or a bug,
 // does not load the API with a large value, likely also updated often. They are well above what
 // a host usually has; the totals sent with the lists tell how far beyond them a host goes. 500
-// services with 25-character names and every error at its longest take about 370 KiB; with long
-// container names, a row passes 1 KiB and the byte limit cuts before the row limit.
+// services with 25-character names, instances and container names, and every error at its
+// longest take about 400 KiB; with long container names, a row passes 1 KiB and the byte limit
+// cuts before the row limit.
 //
 // The row limits come first. The byte limits are a backstop for rows of unforeseen size, well
 // under the API's request size limit: Glouton does not compress requests.

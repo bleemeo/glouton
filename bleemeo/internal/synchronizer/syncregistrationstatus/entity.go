@@ -161,8 +161,9 @@ func (s *SyncRegistrationStatus) NeedSynchronization(_ context.Context) (bool, e
 		return err == nil && allowed
 	}
 
-	metricNames := ServiceMetricNames(storeMetrics, agentID, isAllowed, time.Now())
-	services := FromDiscovery(option.Discovery.ServicesState(), option.Cache.ServiceLookupFromList(), metricNames)
+	states := option.Discovery.ServicesState()
+	metricNames := ServiceMetricNames(storeMetrics, states, agentID, isAllowed, time.Now())
+	services := FromDiscovery(states, option.Cache.ServiceLookupFromList(), metricNames)
 
 	if now.Sub(s.discoveryReadyAt) < collectionWait && slices.ContainsFunc(services, isCollectionPending) {
 		return false, nil

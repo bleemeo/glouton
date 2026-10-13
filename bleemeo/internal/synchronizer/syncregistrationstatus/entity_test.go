@@ -231,6 +231,7 @@ func mysqlMissingCredentials() discovery.ServiceState {
 		Dynamic:        true,
 		InputSupported: true,
 		Error:          "failed to create the input: missing credentials or address",
+		InputStatus:    discovery.InputStatusMissingInfo,
 	}
 }
 
@@ -254,7 +255,8 @@ func TestEntityGoldenPayload(t *testing.T) {
 	want := `{"glouton_version":"0.1","generated_at":"2026-10-02T12:00:00Z","last_discovery_at":"2026-10-02T11:59:00Z",` +
 		`"services":[{"name":"mysql","type":"mysql","instance":"","container_name":"",` +
 		`"dynamic_discovery":true,"input_supported":true,` +
-		`"error":"failed to create the input: missing credentials or address","service_uuid":"service-uuid","metrics":"zero"}],` +
+		`"error":"failed to create the input: missing credentials or address","input_status":"missing_info",` +
+		`"service_uuid":"service-uuid","metrics":"zero"}],` +
 		`"services_total":1,` +
 		`"metrics":[{"name":"disk_used_perc","reason":"not-available-in-plan","count":3}],"metrics_total":1}`
 
@@ -488,7 +490,9 @@ func TestEntityCountsServiceMetrics(t *testing.T) {
 	cases := []struct {
 		name    string
 		metrics []gloutonTypes.Metric
-		want    MetricsAmount
+		// staleBefore is the service's StaleMetricsBefore.
+		staleBefore time.Time
+		want        MetricsAmount
 	}{
 		{name: "none", want: MetricsZero},
 		{
@@ -529,12 +533,32 @@ func TestEntityCountsServiceMetrics(t *testing.T) {
 			metrics: []gloutonTypes.Metric{serviceMetric("mysql_queries", "mariadb")},
 			want:    MetricsZero,
 		},
+		{
+			// As when the service moved to another address: the earlier input's metrics are
+			// still fresh, while the current one gathers nothing.
+			name: "from an earlier input",
+			metrics: []gloutonTypes.Metric{storeMetric{
+				name:        "mysql_queries",
+				annotations: gloutonTypes.MetricAnnotations{ServiceName: "mysql"},
+				lastPoint:   time.Now().Add(-5 * time.Minute),
+			}},
+			staleBefore: time.Now().Add(-time.Minute),
+			want:        MetricsZero,
+		},
+		{
+			name:        "from the current input",
+			metrics:     []gloutonTypes.Metric{serviceMetric("mysql_queries", "mysql")},
+			staleBefore: time.Now().Add(-time.Minute),
+			want:        MetricsOne,
+		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			test := newEntityTest(testAgent)
-			test.discovery.States = []discovery.ServiceState{mysqlMissingCredentials()}
+			state := mysqlMissingCredentials()
+			state.StaleMetricsBefore = tc.staleBefore
+			test.discovery.States = []discovery.ServiceState{state}
 			test.store.metrics = tc.metrics
 
 			if _, err := test.run(t, t0); err != nil {
