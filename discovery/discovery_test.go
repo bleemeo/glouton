@@ -24,6 +24,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1564,5 +1565,151 @@ func Test_servicesFromState(t *testing.T) {
 				t.Errorf("servicesFromState(saveState()) mismatch (-want +got)\n%s", diff)
 			}
 		})
+	}
+}
+
+// TestFailedDiscoveryKeepServices ensures that a failed discovery sends the services from the
+// last successful discovery to subscribers, not an empty list which would make them drop every service.
+func TestFailedDiscoveryKeepServices(t *testing.T) {
+	reg := &mockRegistry{
+		ExpectedAddedContains: []string{"Service input memcached", "check for memcached"},
+	}
+	mockDynamic := &MockDiscoverer{}
+	disc, _ := New(
+		mockDynamic,
+		gloutonexec.New("/"),
+		reg,
+		mockState{},
+		mockContainerInfo{},
+		nil,
+		nil,
+		nil,
+		nil,
+		facts.ContainerFilter{}.ContainerIgnored,
+		nil,
+		time.Hour,
+		config.OpenTelemetry{},
+	)
+
+	ctx := t.Context()
+
+	mockDynamic.SetResult(
+		[]Service{
+			{
+				Name:            testMemcached,
+				ServiceType:     MemcachedService,
+				Active:          true,
+				IPAddress:       testIP127001,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: tcpProtocol, Address: testIP127001, Port: 11211}},
+			},
+		},
+		nil,
+	)
+
+	if _, _, err := disc.discovery(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := reg.ExpectationFulfilled(); err != nil {
+		t.Fatal(err)
+	}
+
+	// A discovery already ran, so Subscribe sends the current services first.
+	subChannel := disc.Subscribe(ctx)
+	if services := <-subChannel; len(services) != 1 {
+		t.Fatalf("Subscribe sent %d services, want 1", len(services))
+	}
+
+	mockDynamic.SetResult(nil, context.DeadlineExceeded)
+
+	done := make(chan error, 1)
+
+	go func() {
+		_, err := disc.discoveryAndNotify(ctx, "test")
+		done <- err
+	}()
+
+	services := <-subChannel
+	if len(services) != 1 || services[0].Name != testMemcached {
+		t.Errorf("subscriber received %v after a failed discovery, want the services from the last successful discovery", services)
+	}
+
+	if err := <-done; !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("err = %v, want %v", err, context.DeadlineExceeded)
+	}
+
+	for _, row := range reg.GetAllRegistrations() {
+		if row.unregisterWasCalled {
+			t.Errorf("%s was unregistered after a failed discovery", row.opt.Description)
+		}
+	}
+}
+
+type hangingDiscoverer struct {
+	hang    atomic.Bool
+	release chan struct{}
+}
+
+func (h *hangingDiscoverer) Discovery(ctx context.Context) ([]Service, time.Time, error) {
+	if h.hang.Load() {
+		select {
+		case <-h.release:
+		case <-ctx.Done():
+		}
+
+		return nil, time.Time{}, context.DeadlineExceeded
+	}
+
+	return []Service{{Name: testMemcached, ServiceType: MemcachedService, IPAddress: testIP127001}}, time.Time{}, nil
+}
+
+// TestRemoveIfNonRunningDuringDiscovery ensures RemoveIfNonRunning doesn't deadlock with a running discovery.
+func TestRemoveIfNonRunningDuringDiscovery(t *testing.T) {
+	dd := &hangingDiscoverer{release: make(chan struct{})}
+	disc, _ := New(
+		dd,
+		gloutonexec.New("/"),
+		nil,
+		mockState{},
+		mockContainerInfo{},
+		nil,
+		nil,
+		nil,
+		nil,
+		facts.ContainerFilter{}.ContainerIgnored,
+		nil,
+		time.Hour,
+		config.OpenTelemetry{},
+	)
+
+	if _, _, err := disc.discovery(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	go func() {
+		_ = disc.Run(ctx)
+	}()
+
+	dd.hang.Store(true)
+
+	// Run is now in a discovery that hangs until release is closed.
+	disc.triggerDiscovery <- nil
+
+	time.AfterFunc(200*time.Millisecond, func() { close(dd.release) })
+
+	done := make(chan struct{})
+
+	go func() {
+		disc.RemoveIfNonRunning([]Service{{Name: testMemcached}})
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("RemoveIfNonRunning is still blocked after the discovery ended")
 	}
 }
