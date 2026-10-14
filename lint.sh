@@ -28,6 +28,9 @@ esac
 
 if docker volume ls | grep -q glouton-buildcache; then
    GO_MOUNT_CACHE="-v glouton-buildcache:/go/pkg"
+   GO_CACHE_PERSISTED=1
+else
+   GO_CACHE_PERSISTED=0
 fi
 
 # Cap the linter's heap. Loading and type-checking the whole dependency graph is what
@@ -37,63 +40,30 @@ fi
 # The linter set has almost no influence here: 87 linters peak at 7303 MiB, 29 at 7218 MiB.
 LINTER_MEMORY_LIMIT="-e GOMEMLIMIT=5GiB -e GOGC=50"
 
+DOCKER_RUN_EXTRA_OPTION=""
 if [ "${OPEN_SHELL}" = "1" ]; then
-   docker run --rm -ti -v "$(pwd)":/app ${GO_MOUNT_CACHE} -e HOME=/go/pkg \
-      -w /app golangci/golangci-lint:${LINTER_VERSION} \
-      bash
-
-   exit
+   DOCKER_RUN_EXTRA_OPTION="-it"
 fi
 
-if [ "${COVERAGE}" = "1" ]; then
-   docker run --rm -v "$(pwd)":/app ${GO_MOUNT_CACHE} -e HOME=/go/pkg \
-      -w /app golangci/golangci-lint:${LINTER_VERSION} \
-      sh -exc "
-      trap 'chown $USER_UID coverage.out coverage.html' EXIT
-      go test ./... --coverprofile=coverage.out --covermode=count
-      go tool cover -html=coverage.out -o coverage.html
-      "
-
-   exit
-fi
-
-if [ "${LINT}" != "1" ]; then
-   docker run --rm -v "$(pwd)":/app ${GO_MOUNT_CACHE} -e HOME=/go/pkg \
-      -w /app golangci/golangci-lint:${LINTER_VERSION} \
-      sh -exc "
-      go test ./...
-      go test -race ./... -short
-      "
-fi
-
-echo "Start lint Linux"
-
-docker run --rm -v "$(pwd)":/app ${GO_MOUNT_CACHE} ${LINTER_MEMORY_LIMIT} -e HOME=/go/pkg \
-   -e GOOS=linux -e GOARCH=amd64 --tmpfs /app/webui/node_modules:exec -w /app golangci/golangci-lint:${LINTER_VERSION} \
-   bash -ec "
-   mkdir -p /go/pkg
-   git config --global --add safe.directory /app
-   golangci-lint run
+docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=0 \
+   -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
+   --entrypoint '' \
+   -e LINT=$LINT -e COVERAGE=$COVERAGE -e OPEN_SHELL=$OPEN_SHELL \
+   -e GO_CACHE_PERSISTED=$GO_CACHE_PERSISTED \
+   -e GOOS -e GOARCH \
+   -w /src \
+   --tmpfs /src/webui/node_modules:exec \
+   ${LINTER_MEMORY_LIMIT} ${DOCKER_RUN_EXTRA_OPTION} \
+   golangci/golangci-lint:${LINTER_VERSION} \
+   sh -euc "
+      mkdir -p /go/pkg
+      git config --global --add safe.directory /src
+      if [ \"${OPEN_SHELL}\" = \"1\" ]; then
+         exec bash
+      fi
+      if [ \"${COVERAGE}\" = \"1\" ]; then
+         trap 'chown $USER_UID coverage.out coverage.html' EXIT
+      fi
+      sh lint_inner.sh
    "
 
-echo "Start lint FreeBSD"
-
-docker run --rm -v "$(pwd)":/app ${GO_MOUNT_CACHE} ${LINTER_MEMORY_LIMIT} -e HOME=/go/pkg \
-   -e GOOS=freebsd -e GOARCH=amd64 --tmpfs /app/webui/node_modules:exec -w /app golangci/golangci-lint:${LINTER_VERSION} \
-   bash -ec "
-   mkdir -p /go/pkg
-   git config --global --add safe.directory /app
-   golangci-lint run --build-tags noexec,nomeminfo,nozfs,nonetdev,nonetisr
-   "
-
-echo "Start lint Windows"
-
-docker run --rm -v "$(pwd)":/app ${GO_MOUNT_CACHE} ${LINTER_MEMORY_LIMIT} -e HOME=/go/pkg \
-   -e GOOS=windows -e GOARCH=amd64 --tmpfs /app/webui/node_modules:exec -w /app golangci/golangci-lint:${LINTER_VERSION} \
-   bash -ec "
-   mkdir -p /go/pkg
-   git config --global --add safe.directory /app
-   golangci-lint run
-   "
-
-echo "Success"

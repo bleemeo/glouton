@@ -241,12 +241,12 @@ func moduleDir(t *testing.T, module string) string {
 
 	output, err := exec.CommandContext(t.Context(), "go", "list", "-m", "-f", "{{.Dir}}", module).Output()
 	if err != nil {
-		t.Fatalf("can't locate the source of %s: %v", module, err)
+		t.Skipf("can't locate the source of %s: %v", module, err)
 	}
 
 	dir := strings.TrimSpace(string(output))
 	if dir == "" {
-		t.Fatalf("the source of %s isn't in the module cache", module)
+		t.Skipf("the source of %s isn't in the module cache", module)
 	}
 
 	return dir
