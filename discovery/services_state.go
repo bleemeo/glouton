@@ -142,6 +142,9 @@ const (
 	InputStatusAnsweredError InputStatus = "answered_error"
 	// InputStatusError means the collection fails, without telling whether the service answered.
 	InputStatusError InputStatus = "error"
+	// InputStatusInternalError means the collection fails because of Glouton, before reaching the
+	// service, such as a run stopped with its loop: it says nothing of the service.
+	InputStatusInternalError InputStatus = "internal_error"
 	// InputStatusNotRegistered means the collection is skipped until the service is registered
 	// on Bleemeo. Discovery cannot tell it: the synchronizer sets it.
 	InputStatusNotRegistered InputStatus = "not_registered"
@@ -668,6 +671,8 @@ func scrapeInputStatus(scrape types.ScrapeState, classified bool) InputStatus {
 		return InputStatusOK
 	case scrape.ErrorKind == types.ScrapeErrorUnreachable:
 		return InputStatusUnreachable
+	case scrape.ErrorKind == types.ScrapeErrorInternal:
+		return InputStatusInternalError
 	case scrape.ErrorKind == types.ScrapeErrorGatherer && classified:
 		return InputStatusAnsweredError
 	default:

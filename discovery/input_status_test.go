@@ -230,7 +230,8 @@ func TestScrapeInputStatus(t *testing.T) {
 		{name: "did not answer, classified", scrape: ran("refused", types.ScrapeErrorUnreachable), classified: true, want: InputStatusUnreachable},
 		{name: "answered, classified", scrape: ran("NOAUTH", types.ScrapeErrorGatherer), classified: true, want: InputStatusAnsweredError},
 		{name: "answered, unclassified", scrape: ran("NOAUTH", types.ScrapeErrorGatherer), want: InputStatusError},
-		{name: "Glouton failed, classified", scrape: ran("no secrets gate", types.ScrapeErrorInternal), classified: true, want: InputStatusError},
+		{name: "Glouton failed", scrape: ran("no secrets gate", types.ScrapeErrorInternal), want: InputStatusInternalError},
+		{name: "Glouton failed, classified", scrape: ran("no secrets gate", types.ScrapeErrorInternal), classified: true, want: InputStatusInternalError},
 	}
 
 	for _, tc := range cases {
@@ -424,11 +425,12 @@ func TestServicesStateInputStatus(t *testing.T) {
 }
 
 // TestInternalErrorNotAnswered checks Glouton failing before it reaches the service, here for
-// want of a secrets gate, does not read as the service having answered: its input is classified.
+// want of a secrets gate, reads as Glouton's failure, not as the service having answered (its
+// input is classified) nor as an error the service may be the cause of.
 func TestInternalErrorNotAnswered(t *testing.T) {
 	got := collectWith(t, registry.Option{}, MySQLService, closedPort(t), "password")
 
-	if got.Error == "" || got.InputStatus != InputStatusError {
-		t.Errorf("got %+v, want an error with input status %q", got, InputStatusError)
+	if got.Error == "" || got.InputStatus != InputStatusInternalError {
+		t.Errorf("got %+v, want an error with input status %q", got, InputStatusInternalError)
 	}
 }
