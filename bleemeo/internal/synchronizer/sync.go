@@ -242,7 +242,7 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 		return err
 	}
 
-	return s.registrationStatus.DiagnosticArchive(archive, s.option.Cache.RegistrationStatusSent())
+	return s.registrationStatus.DiagnosticArchive(archive, s.option)
 }
 
 func (s *Synchronizer) diagnosticSyncState(archive gloutonTypes.ArchiveWriter) error {

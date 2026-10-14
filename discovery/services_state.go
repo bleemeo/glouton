@@ -321,6 +321,16 @@ func (d *Discovery) ServicesState() []ServiceState {
 	return result
 }
 
+// LastDiscoveryAt returns when discovery last completed, zero before it did. Read from the
+// snapshot: unlike GetLatestDiscovery, it neither takes d.l, held by a discovery run while it
+// builds inputs, nor copies every service.
+func (d *Discovery) LastDiscoveryAt() time.Time {
+	d.servicesStateL.Lock()
+	defer d.servicesStateL.Unlock()
+
+	return d.servicesStateSnapshot.discoveredAt
+}
+
 // pendingScrape is a scrape state still to read, with the secrets its error may quote, and
 // whether an error without a network error means the service answered (see
 // inputsWithoutNetwork).
@@ -335,6 +345,8 @@ type pendingScrape struct {
 type servicesStateSnapshot struct {
 	states  []ServiceState
 	pending []pendingScrape
+	// discoveredAt is when discovery last completed, zero before it did.
+	discoveredAt time.Time
 }
 
 // publishServicesState updates the snapshot ServicesState reads. Must be called with d.l
@@ -353,8 +365,9 @@ func (d *Discovery) publishServicesState() {
 	slices.SortFunc(order, func(a, b int) int { return compareServiceState(states[a], states[b]) })
 
 	snapshot := servicesStateSnapshot{
-		states:  make([]ServiceState, 0, len(order)),
-		pending: make([]pendingScrape, 0, len(order)),
+		states:       make([]ServiceState, 0, len(order)),
+		pending:      make([]pendingScrape, 0, len(order)),
+		discoveredAt: d.lastDiscoveryUpdate,
 	}
 
 	for _, i := range order {

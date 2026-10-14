@@ -637,6 +637,11 @@ func (d *Discovery) discovery(ctx context.Context) ([]Service, time.Time, error)
 		d.reconfigure()
 
 		d.lastDiscoveryUpdate = time.Now()
+
+		// reconfigure published the snapshot before this time was known.
+		d.servicesStateL.Lock()
+		d.servicesStateSnapshot.discoveredAt = d.lastDiscoveryUpdate
+		d.servicesStateL.Unlock()
 	}
 
 	services := make([]Service, 0, len(d.servicesMap))

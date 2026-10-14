@@ -362,6 +362,8 @@ func buildGloutonAccountConfig(configs []bleemeoTypes.Config, agentTypes []bleem
 			result.LiveProcessResolution = time.Duration(configInt(cfg.Value)) * time.Second
 		case bleemeoTypes.ConfigTypeCustomMetrics:
 			result.MaxCustomMetrics = configInt(cfg.Value)
+		case bleemeoTypes.ConfigTypeGloutonSendRegistrationStatus:
+			result.SendRegistrationStatus = configBool(cfg.Value)
 		case bleemeoTypes.ConfigTypeSuspended:
 			result.Suspended = configBool(cfg.Value)
 		case bleemeoTypes.ConfigTypeAgentMetricsResolution:

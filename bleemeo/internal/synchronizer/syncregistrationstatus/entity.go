@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
-	"sync"
 	"time"
 
 	"github.com/bleemeo/glouton/bleemeo/internal/filter"
@@ -55,11 +54,6 @@ type SyncRegistrationStatus struct {
 	currentExecution types.SynchronizationExecution
 	// payload is what NeedSynchronization decided to send, nil when nothing is to be sent.
 	payload *Payload
-
-	// l guards lastBuilt, which the diagnostic archive reads from another goroutine.
-	l sync.Mutex
-	// lastBuilt is the payload NeedSynchronization last built, sent or not.
-	lastBuilt *Payload
 }
 
 // New returns the entity, which reads the not-registered metrics from metricsState, along
@@ -106,8 +100,7 @@ func (s *SyncRegistrationStatus) NeedSynchronization(_ context.Context) (bool, e
 		return false, nil
 	}
 
-	// Bleemeo can turn the feature off without an upgrade, as on a Glouton version that misbehaves.
-	if !option.Cache.Agent().GloutonFeatures.Enabled(bleemeoTypes.FeatureSendRegistrationStatus) {
+	if !sendEnabled(option) {
 		return false, nil
 	}
 
@@ -127,9 +120,8 @@ func (s *SyncRegistrationStatus) NeedSynchronization(_ context.Context) (bool, e
 
 	// Until discovery ran and a synchronization published the metrics state, both lists are
 	// empty for lack of a run: sent, they would replace a value that still holds after a
-	// restart, and the next change may not be sent before minSendInterval. Checked once the
-	// build is due: it copies every service, under discovery's lock.
-	_, lastDiscovery := option.Discovery.GetLatestDiscovery()
+	// restart, and the next change may not be sent before minSendInterval.
+	lastDiscovery := option.Discovery.LastDiscoveryAt()
 	if lastDiscovery.IsZero() {
 		return false, nil
 	}
@@ -147,36 +139,18 @@ func (s *SyncRegistrationStatus) NeedSynchronization(_ context.Context) (bool, e
 
 	s.lastBuildAt = now
 
-	storeMetrics, err := option.Store.Metrics(nil)
+	services, err := buildServices(option, agentID)
 	if err != nil {
 		logger.V(1).Printf("Unable to read the metrics for the registration status: %v", err)
 
 		return false, nil
 	}
 
-	bleemeoFilter := filter.NewFilter(option.Cache)
-	isAllowed := func(metric gloutonTypes.Metric) bool {
-		allowed, _, err := bleemeoFilter.IsAllowed(metric.Labels(), metric.Annotations())
-
-		return err == nil && allowed
-	}
-
-	states := option.Discovery.ServicesState()
-	metricNames := ServiceMetricNames(storeMetrics, states, agentID, isAllowed, time.Now())
-	services := FromDiscovery(states, option.Cache.ServiceLookupFromList(), metricNames)
-
 	if now.Sub(s.discoveryReadyAt) < collectionWait && slices.ContainsFunc(services, isCollectionPending) {
 		return false, nil
 	}
 
-	payload := NewPayload(services, metrics, published)
-	// In UTC and to the second, as read when troubleshooting.
-	payload.GeneratedAt = now.UTC().Truncate(time.Second)
-	payload.LastDiscoveryAt = lastDiscovery.UTC().Truncate(time.Second)
-
-	s.l.Lock()
-	s.lastBuilt = &payload
-	s.l.Unlock()
+	payload := stampedPayload(services, metrics, published, now, lastDiscovery)
 
 	if !NeedSend(last, payload, agentID, now) {
 		return false, nil
@@ -229,37 +203,95 @@ func (s *SyncRegistrationStatus) SyncRemoteAndLocal(ctx context.Context, _ types
 	return nil
 }
 
-// DiagnosticArchive writes the payload last built, whether it was sent or not: NeedSend may hold
-// a changed value back for up to minSendInterval, while the archive's other files are current.
-// last is what the cache remembers of the last send.
-func (s *SyncRegistrationStatus) DiagnosticArchive(archive gloutonTypes.ArchiveWriter, last bleemeoTypes.RegistrationStatusSent) error {
-	s.l.Lock()
-	lastBuilt := s.lastBuilt
-	s.l.Unlock()
-
+// DiagnosticArchive writes the payload built from the current state, as the archive's other
+// files are: the gates that hold a send back are ignored, and the payload last built may be a
+// synchronization behind. Not before registration, as the agent's own metrics cannot be told
+// apart, nor before the account configuration is known: Bleemeo's filter would then refuse
+// every metric, and each service would read as sending none.
+func (s *SyncRegistrationStatus) DiagnosticArchive(archive gloutonTypes.ArchiveWriter, option types.Option) error {
 	file, err := archive.Create("bleemeo-registration-status.json")
 	if err != nil {
 		return err
 	}
 
+	agentID, _ := option.State.BleemeoCredentials()
+	last := option.Cache.RegistrationStatusSent()
+
 	obj := struct {
-		// LastBuilt is null when no payload was built since Glouton started.
+		// LastBuilt is null before registration and the account configuration, or when the
+		// store could not be read.
 		LastBuilt *Payload `json:"last_built"`
 		// LastBuiltAccepted tells whether LastBuilt is the value the API last accepted.
 		LastBuiltAccepted bool      `json:"last_built_accepted"`
 		LastAttemptAt     time.Time `json:"last_attempt_at"`
 		LastAttemptFailed bool      `json:"last_attempt_failed"`
 	}{
-		LastBuilt:         lastBuilt,
-		LastBuiltAccepted: lastBuilt != nil && last.Hash != "" && lastBuilt.hash == last.Hash,
 		LastAttemptAt:     last.LastAttemptAt,
 		LastAttemptFailed: last.LastAttemptFailed,
+	}
+
+	if _, configKnown := option.Cache.CurrentAccountConfig(); agentID != "" && configKnown {
+		services, err := buildServices(option, agentID)
+		if err != nil {
+			logger.V(1).Printf("Unable to read the metrics for the registration status: %v", err)
+		} else {
+			metrics, published := s.metricsState()
+			payload := stampedPayload(services, metrics, published, s.now(), option.Discovery.LastDiscoveryAt())
+
+			obj.LastBuilt = &payload
+			obj.LastBuiltAccepted = last.Hash != "" && payload.hash == last.Hash
+		}
 	}
 
 	enc := json.NewEncoder(file)
 	enc.SetIndent("", "  ")
 
 	return enc.Encode(obj)
+}
+
+// sendEnabled tells whether Bleemeo allows sending the registration status. It can turn the
+// feature off without an upgrade, as on a Glouton version that misbehaves.
+func sendEnabled(option types.Option) bool {
+	cfg, ok := option.Cache.CurrentAccountConfig()
+
+	return ok && cfg.SendRegistrationStatus
+}
+
+// buildServices reads the services' state, with the metrics of each that reach Bleemeo. It only
+// reads option: the diagnostic archive calls it from another goroutine than the synchronization.
+func buildServices(option types.Option, agentID string) ([]ServiceState, error) {
+	storeMetrics, err := option.Store.Metrics(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	bleemeoFilter := filter.NewFilter(option.Cache)
+	isAllowed := func(metric gloutonTypes.Metric) bool {
+		allowed, _, err := bleemeoFilter.IsAllowed(metric.Labels(), metric.Annotations())
+
+		return err == nil && allowed
+	}
+
+	states := option.Discovery.ServicesState()
+	metricNames := ServiceMetricNames(storeMetrics, states, agentID, isAllowed, time.Now())
+
+	return FromDiscovery(states, option.Cache.ServiceLookupFromList(), metricNames), nil
+}
+
+// stampedPayload is the payload of these lists, built at now, after the discovery of lastDiscovery.
+func stampedPayload(
+	services []ServiceState,
+	metrics []bleemeoTypes.MetricState,
+	published bool,
+	now time.Time,
+	lastDiscovery time.Time,
+) Payload {
+	payload := NewPayload(services, metrics, published)
+	// In UTC and to the second, as read when troubleshooting.
+	payload.GeneratedAt = now.UTC().Truncate(time.Second)
+	payload.LastDiscoveryAt = lastDiscovery.UTC().Truncate(time.Second)
+
+	return payload
 }
 
 func isCollectionPending(state ServiceState) bool {

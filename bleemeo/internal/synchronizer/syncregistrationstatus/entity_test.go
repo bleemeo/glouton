@@ -24,6 +24,7 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -55,9 +56,12 @@ type fakeStore struct {
 	bleemeoTypes.Store
 
 	metrics []gloutonTypes.Metric
+	err     error
 }
 
-func (s *fakeStore) Metrics(map[string]string) ([]gloutonTypes.Metric, error) { return s.metrics, nil }
+func (s *fakeStore) Metrics(map[string]string) ([]gloutonTypes.Metric, error) {
+	return s.metrics, s.err
+}
 
 // storeMetric is a metric of the store, with its last point at lastPoint.
 type storeMetric struct {
@@ -122,7 +126,7 @@ func (e *fakeExecution) Option() types.Option           { return e.option }
 func (e *fakeExecution) StartedAt() time.Time           { return e.now }
 
 // countingDiscoverer counts the calls to ServicesState, one per payload built, and to
-// GetLatestDiscovery, which copies every service.
+// LastDiscoveryAt.
 type countingDiscoverer struct {
 	*discovery.MockDiscoverer
 
@@ -136,10 +140,10 @@ func (d *countingDiscoverer) ServicesState() []discovery.ServiceState {
 	return d.MockDiscoverer.ServicesState()
 }
 
-func (d *countingDiscoverer) GetLatestDiscovery() ([]discovery.Service, time.Time) {
+func (d *countingDiscoverer) LastDiscoveryAt() time.Time {
 	d.latests++
 
-	return d.MockDiscoverer.GetLatestDiscovery()
+	return d.MockDiscoverer.LastDiscoveryAt()
 }
 
 type entityTest struct {
@@ -167,7 +171,7 @@ func newEntityTest(agentID string) *entityTest {
 	test.execution.option.Store = test.store
 	test.execution.option.Cache = cache.Load(state)
 	setAllowlist(test.execution.option.Cache, "mysql_queries,mysql_threads,postfix_queue_size,service_status")
-	setFeatures(test.execution.option.Cache, bleemeoTypes.GloutonFeatures{bleemeoTypes.FeatureSendRegistrationStatus: true})
+	setSendRegistrationStatus(test.execution.option.Cache, true)
 	test.entity = New(
 		func() ([]bleemeoTypes.MetricState, bool) { return test.metrics, !test.metricsUnpublished },
 		func() time.Time { return test.execution.now },
@@ -176,11 +180,23 @@ func newEntityTest(agentID string) *entityTest {
 	return test
 }
 
-// setFeatures gives the cache an Agent with these glouton_features.
-func setFeatures(c *cache.Cache, features bleemeoTypes.GloutonFeatures) {
-	agent := c.Agent()
-	agent.GloutonFeatures = features
-	c.SetAgent(agent)
+// setSendRegistrationStatus sets the account's GLOUTON_SEND_REGISTRATION_STATUS config to value,
+// or removes it when value is nil.
+func setSendRegistrationStatus(c *cache.Cache, value any) {
+	configs := slices.DeleteFunc(c.Configs(), func(cfg bleemeoTypes.Config) bool {
+		return cfg.Type == bleemeoTypes.ConfigTypeGloutonSendRegistrationStatus
+	})
+
+	if value != nil {
+		configs = append(configs, bleemeoTypes.Config{
+			ID:      "send-registration-status-id",
+			Type:    bleemeoTypes.ConfigTypeGloutonSendRegistrationStatus,
+			Account: "account-id",
+			Value:   value,
+		})
+	}
+
+	c.SetConfigs(configs)
 }
 
 // setAllowlist gives the cache an account configuration whose agent metrics allow-list is
@@ -628,26 +644,34 @@ func TestEntityWaitsForCollections(t *testing.T) {
 	}
 }
 
-// TestEntityFeatureFlag checks the registration status is sent only while the Agent's
-// glouton_features enables it: Bleemeo can turn it off, and an Agent without the flag, or with
-// a value Glouton does not know, is off.
+// TestEntityFeatureFlag checks the registration status is sent only while the account's
+// GLOUTON_SEND_REGISTRATION_STATUS config is true: Bleemeo can turn it off, and an account
+// without the config, or with a value Glouton does not know, is off. So is one whose
+// configuration is not known yet.
 func TestEntityFeatureFlag(t *testing.T) {
 	cases := []struct {
-		name     string
-		features bleemeoTypes.GloutonFeatures
-		want     bool
+		name  string
+		value any
+		// configUnknown leaves the account configuration incomplete: no agent metrics allow-list.
+		configUnknown bool
+		want          bool
 	}{
-		{name: "enabled", features: bleemeoTypes.GloutonFeatures{bleemeoTypes.FeatureSendRegistrationStatus: true}, want: true},
-		{name: "disabled", features: bleemeoTypes.GloutonFeatures{bleemeoTypes.FeatureSendRegistrationStatus: false}, want: false},
-		{name: "absent", features: bleemeoTypes.GloutonFeatures{"another_feature": true}, want: false},
-		{name: "no features", features: nil, want: false},
-		{name: "unknown value", features: bleemeoTypes.GloutonFeatures{bleemeoTypes.FeatureSendRegistrationStatus: "partial"}, want: false},
+		{name: "enabled", value: true, want: true},
+		{name: "disabled", value: false, want: false},
+		{name: "absent", value: nil, want: false},
+		{name: "unknown value", value: "partial", want: false},
+		{name: "account configuration not known", value: true, configUnknown: true, want: false},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			test := newEntityTest(testAgent)
-			setFeatures(test.execution.option.Cache, tc.features)
+
+			if tc.configUnknown {
+				test.execution.option.Cache.SetConfigs(nil)
+			}
+
+			setSendRegistrationStatus(test.execution.option.Cache, tc.value)
 
 			if need, err := test.run(t, t0); err != nil || need != tc.want {
 				t.Errorf("need = %v, err = %v; want %v, nil", need, err, tc.want)
@@ -730,7 +754,8 @@ func (a *fakeArchive) CurrentFileName() string { return a.current }
 // archivedStatus is the part of the archived file the test reads.
 type archivedStatus struct {
 	LastBuilt *struct {
-		Metrics []bleemeoTypes.MetricState `json:"metrics"`
+		GeneratedAt time.Time                  `json:"generated_at"`
+		Metrics     []bleemeoTypes.MetricState `json:"metrics"`
 	} `json:"last_built"`
 	LastBuiltAccepted bool `json:"last_built_accepted"`
 }
@@ -740,7 +765,7 @@ func (e *entityTest) archive(t *testing.T) archivedStatus {
 
 	archive := &fakeArchive{}
 
-	if err := e.entity.DiagnosticArchive(archive, e.execution.option.Cache.RegistrationStatusSent()); err != nil {
+	if err := e.entity.DiagnosticArchive(archive, e.execution.option); err != nil {
 		t.Fatal(err)
 	}
 
@@ -753,14 +778,11 @@ func (e *entityTest) archive(t *testing.T) archivedStatus {
 	return got
 }
 
-// TestEntityDiagnosticArchive checks the archive holds the payload last built even when NeedSend
-// holds it back, so that a changed value can be read without waiting for minSendInterval.
+// TestEntityDiagnosticArchive checks the archive holds a payload built from the current state,
+// even while the send delays allow no build: a metric that failed to register since the last
+// send is in the archive, not only in the next payload built.
 func TestEntityDiagnosticArchive(t *testing.T) {
 	test := newEntityTest(testAgent)
-
-	if got := test.archive(t); got.LastBuilt != nil {
-		t.Errorf("before any build, archived %+v, want no payload", got)
-	}
 
 	if _, err := test.run(t, t0); err != nil {
 		t.Fatal(err)
@@ -770,16 +792,72 @@ func TestEntityDiagnosticArchive(t *testing.T) {
 		t.Errorf("after a send, archived %+v, want the payload sent, accepted", got)
 	}
 
-	// A changed value, built a minute later and held back until minSendInterval.
-	pending := []bleemeoTypes.MetricState{{Name: "mysql_queries", Reason: bleemeoTypes.ReasonPending, Count: 1}}
-	test.metrics = pending
+	// The metrics synchronization of the same execution records a failure. The next execution,
+	// within minNewServiceInterval of the send, builds nothing.
+	failed := []bleemeoTypes.MetricState{{Name: "mysql_queries", Reason: bleemeoTypes.ReasonTooManyCustomMetrics, Count: 1}}
+	test.metrics = failed
+	archivedAt := t0.Add(minNewServiceInterval / 2)
 
-	if need, err := test.run(t, t0.Add(minNewServiceInterval)); err != nil || need {
-		t.Fatalf("changed value: need = %v, err = %v; want false, nil", need, err)
+	if need, err := test.run(t, archivedAt); err != nil || need {
+		t.Fatalf("within the delay: need = %v, err = %v; want false, nil", need, err)
 	}
 
 	got := test.archive(t)
-	if got.LastBuilt == nil || got.LastBuiltAccepted || !reflect.DeepEqual(got.LastBuilt.Metrics, pending) {
-		t.Errorf("a value held back is archived as %+v, want it with metrics %v, not accepted", got, pending)
+	if got.LastBuilt == nil || got.LastBuiltAccepted || !reflect.DeepEqual(got.LastBuilt.Metrics, failed) {
+		t.Errorf("a value no send built yet is archived as %+v, want it with metrics %v, not accepted", got, failed)
 	}
+
+	if got.LastBuilt != nil && !got.LastBuilt.GeneratedAt.Equal(archivedAt) {
+		t.Errorf("generated_at = %v, want the archive's time %v", got.LastBuilt.GeneratedAt, archivedAt)
+	}
+}
+
+// TestEntityDiagnosticArchiveIgnoresGates checks the archive builds a payload whatever holds a
+// send back, and none when it cannot.
+func TestEntityDiagnosticArchiveIgnoresGates(t *testing.T) {
+	t.Run("before any run", func(t *testing.T) {
+		test := newEntityTest(testAgent)
+		test.discovery.UpdatedAt = time.Time{}
+		test.metricsUnpublished = true
+
+		got := test.archive(t)
+		if got.LastBuilt == nil || got.LastBuiltAccepted || got.LastBuilt.Metrics != nil {
+			t.Errorf("archived %+v, want a payload with metrics unknown, not accepted", got)
+		}
+	})
+
+	t.Run("feature off", func(t *testing.T) {
+		test := newEntityTest(testAgent)
+		setSendRegistrationStatus(test.execution.option.Cache, false)
+
+		if got := test.archive(t); got.LastBuilt == nil {
+			t.Errorf("archived %+v, want a payload", got)
+		}
+	})
+
+	t.Run("not registered", func(t *testing.T) {
+		test := newEntityTest("")
+
+		if got := test.archive(t); got.LastBuilt != nil {
+			t.Errorf("archived %+v, want no payload", got)
+		}
+	})
+
+	t.Run("account configuration not known", func(t *testing.T) {
+		test := newEntityTest(testAgent)
+		test.execution.option.Cache.SetConfigs(nil)
+
+		if got := test.archive(t); got.LastBuilt != nil {
+			t.Errorf("archived %+v, want no payload: every service would read as sending no metric", got)
+		}
+	})
+
+	t.Run("store error", func(t *testing.T) {
+		test := newEntityTest(testAgent)
+		test.store.err = errTestAPI
+
+		if got := test.archive(t); got.LastBuilt != nil {
+			t.Errorf("archived %+v, want no payload", got)
+		}
+	})
 }

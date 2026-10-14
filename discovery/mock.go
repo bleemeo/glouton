@@ -46,6 +46,11 @@ func (md *MockDiscoverer) GetLatestDiscovery() ([]Service, time.Time) {
 	return md.result, md.UpdatedAt
 }
 
+// LastDiscoveryAt implements PersistentDiscoverer.
+func (md *MockDiscoverer) LastDiscoveryAt() time.Time {
+	return md.UpdatedAt
+}
+
 // RemoveIfNonRunning implements PersistentDiscoverer.
 func (md *MockDiscoverer) RemoveIfNonRunning([]Service) {}
 

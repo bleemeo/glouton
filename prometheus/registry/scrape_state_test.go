@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -147,128 +146,187 @@ func newStuckTestRegistration(t *testing.T, interval time.Duration, gather pushG
 	return reg
 }
 
-// TestLastScrapeStateStuck checks a run that does not return within scrapeStuckIntervals
-// intervals is reported as stuck while it hangs, rather than with the last run that did complete, and that the state
-// recovers only once the stuck run is out of the recent runs.
-func TestLastScrapeStateStuck(t *testing.T) {
-	const interval = 50 * time.Millisecond
+// stuckTestRegistration is a registration whose loop runs every minute, with a run in progress
+// since runningSince (none when zero) and these runs recorded.
+func stuckTestRegistration(runningSince time.Time, runs ...scrapeRun) *registration {
+	return &registration{
+		loop:         &scrapeLoop{interval: time.Minute},
+		runningSince: runningSince,
+		lastScrapes:  runs,
+	}
+}
 
-	var (
-		hang    atomic.Bool
-		release = make(chan struct{})
-	)
+// TestLastScrapeStateStuck checks an input is reported stuck once its run in progress has lasted
+// scrapeStuckIntervals intervals, as when a run hangs, whatever the runs before it reported.
+func TestLastScrapeStateStuck(t *testing.T) {
+	now := time.Now()
+	stuck := types.ScrapeState{Status: types.ScrapeRan, Error: errScrapeStuck.Error(), ErrorKind: types.ScrapeErrorUnreachable}
+	quick := scrapeRun{ScrapeAt: now.Add(-5 * time.Minute), ScrapeDuration: time.Second}
+
+	cases := []struct {
+		name string
+		reg  *registration
+		want types.ScrapeState
+	}{
+		{
+			name: "running for 4 intervals",
+			reg:  stuckTestRegistration(now.Add(-4*time.Minute), quick),
+			want: stuck,
+		},
+		{
+			name: "running for 2 intervals",
+			reg:  stuckTestRegistration(now.Add(-2*time.Minute), quick),
+			want: types.ScrapeState{Status: types.ScrapeRan},
+		},
+		{
+			name: "hung after an error",
+			reg:  stuckTestRegistration(now.Add(-4*time.Minute), scrapeRun{ScrapeAt: now.Add(-5 * time.Minute), Error: errScrapeFailed}),
+			want: stuck,
+		},
+		{
+			name: "hung after a relabel hook skip",
+			reg:  stuckTestRegistration(now.Add(-4*time.Minute), scrapeRun{ScrapeAt: now.Add(-5 * time.Minute), Error: errSkippingScrapeDueToRelabelHook}),
+			want: stuck,
+		},
+		{
+			name: "first run hung",
+			reg:  stuckTestRegistration(now.Add(-4 * time.Minute)),
+			want: stuck,
+		},
+		{
+			name: "first run in progress",
+			reg:  stuckTestRegistration(now.Add(-time.Minute)),
+			want: types.ScrapeState{},
+		},
+		{
+			// Between two runs, however long ago the last one ended: nothing is running late.
+			name: "no run in progress",
+			reg:  stuckTestRegistration(time.Time{}, quick),
+			want: types.ScrapeState{Status: types.ScrapeRan},
+		},
+		{
+			// The registry stopped: nothing is late.
+			name: "no running loop",
+			reg:  &registration{runningSince: now.Add(-time.Hour), lastScrapes: []scrapeRun{quick}},
+			want: types.ScrapeState{Status: types.ScrapeRan},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.reg.LastScrapeState(); got != tc.want {
+				t.Errorf("LastScrapeState() = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestLastScrapeStateSlowRunsDoNotFlap checks an input whose runs each last more than
+// scrapeStuckIntervals intervals, though they return, is reported stuck between two runs as
+// well as during one: it would otherwise read as working part of the time.
+func TestLastScrapeStateSlowRunsDoNotFlap(t *testing.T) {
+	now := time.Now()
+	slow := func(endedAgo time.Duration) scrapeRun {
+		return scrapeRun{ScrapeAt: now.Add(-endedAgo - 4*time.Minute), ScrapeDuration: 4 * time.Minute}
+	}
+	quick := func(endedAgo time.Duration) scrapeRun {
+		return scrapeRun{ScrapeAt: now.Add(-endedAgo - time.Second), ScrapeDuration: time.Second}
+	}
+
+	for _, runs := range [][]scrapeRun{
+		{slow(8 * time.Minute), slow(4 * time.Minute), slow(0)},
+		{slow(time.Minute), quick(0)},
+		{slow(2 * time.Minute), quick(time.Minute), quick(0)},
+	} {
+		reg := stuckTestRegistration(time.Time{}, runs...)
+
+		if got := reg.LastScrapeState(); got.Error != errScrapeStuck.Error() {
+			t.Errorf("with a slow run among the last %d, reported as %+v, want stuck", scrapeStateRuns, got)
+		}
+	}
+
+	// Once the slow run is out of the recent runs, the input is not stuck.
+	reg := stuckTestRegistration(time.Time{}, slow(3*time.Minute), quick(2*time.Minute), quick(time.Minute), quick(0))
+
+	if got := reg.LastScrapeState(); got != (types.ScrapeState{Status: types.ScrapeRan}) {
+		t.Errorf("after %d quick runs, reported as %+v, want no error", scrapeStateRuns, got)
+	}
+}
+
+// TestLastScrapeStateOccasionallySlowNotStuck checks a run slower than its interval, but not by
+// scrapeStuckIntervals intervals, puts the input in error neither while it runs nor after. What
+// counts is how long the run lasts, not how long ago the previous one ended: here the previous
+// run ended an interval before this one started, which would make it four.
+func TestLastScrapeStateOccasionallySlowNotStuck(t *testing.T) {
+	now := time.Now()
+	quick := scrapeRun{ScrapeAt: now.Add(-3*time.Minute - 30*time.Second - time.Second), ScrapeDuration: time.Second}
+
+	running := stuckTestRegistration(now.Add(-2*time.Minute-30*time.Second), quick)
+	if got := running.LastScrapeState(); got != (types.ScrapeState{Status: types.ScrapeRan}) {
+		t.Errorf("while a run lasts 2.5 intervals, reported as %+v, want no error", got)
+	}
+
+	ended := stuckTestRegistration(time.Time{}, quick, scrapeRun{ScrapeAt: now.Add(-2*time.Minute - 30*time.Second), ScrapeDuration: 2*time.Minute + 30*time.Second})
+	if got := ended.LastScrapeState(); got != (types.ScrapeState{Status: types.ScrapeRan}) {
+		t.Errorf("after a run 2.5 intervals long, reported as %+v, want no error", got)
+	}
+}
+
+// TestLastScrapeStateUsesLoopInterval checks the limit follows the interval of the running loop,
+// not reg.interval, which changes before the loop restarts with it.
+func TestLastScrapeStateUsesLoopInterval(t *testing.T) {
+	now := time.Now()
+	reg := stuckTestRegistration(now.Add(-2*time.Minute), scrapeRun{ScrapeAt: now.Add(-5 * time.Minute), ScrapeDuration: 2 * time.Minute})
+	reg.interval = 10 * time.Second
+
+	if got := reg.LastScrapeState(); got != (types.ScrapeState{Status: types.ScrapeRan}) {
+		t.Errorf("runs of 2 intervals of the running loop are reported as %+v, want no error", got)
+	}
+}
+
+// TestScrapeRunningSince checks a run is followed while in progress, so that a hung one reads as
+// stuck, and no longer once it returns.
+func TestScrapeRunningSince(t *testing.T) {
+	const interval = 10 * time.Millisecond
+
+	release := make(chan struct{})
 
 	// The gather ignores its context, as Telegraf inputs do.
 	reg := newStuckTestRegistration(t, interval, func(context.Context, time.Time) error {
-		if hang.Load() {
-			<-release
-		}
+		<-release
 
 		return nil
 	})
 
-	reg.InternalRunScrape(t.Context(), t.Context(), time.Now())
-
-	hang.Store(true)
+	reg.l.Lock()
+	reg.loop = &scrapeLoop{interval: interval}
+	reg.l.Unlock()
 
 	done := make(chan struct{})
 
 	go func() {
 		defer close(done)
 
-		ctx, cancel := context.WithTimeout(t.Context(), interval*8/10)
-		defer cancel()
-
-		reg.InternalRunScrape(ctx, t.Context(), time.Now())
+		reg.InternalRunScrape(t.Context(), t.Context(), time.Now())
 	}()
 
-	stuck := types.ScrapeState{Status: types.ScrapeRan, Error: errScrapeStuck.Error(), ErrorKind: types.ScrapeErrorUnreachable, RegisteredAt: reg.addedAt}
-
-	for deadline := time.Now().Add(5 * time.Second); reg.LastScrapeState() != stuck; {
+	for deadline := time.Now().Add(5 * time.Second); reg.LastScrapeState().Error != errScrapeStuck.Error(); {
 		if time.Now().After(deadline) {
 			t.Fatalf("a hung run is reported as %+v, want stuck", reg.LastScrapeState())
 		}
 
-		time.Sleep(interval / 10)
+		time.Sleep(interval)
 	}
 
-	// The run returns: it is recorded after the stuck entry, which still counts.
-	hang.Store(false)
 	close(release)
 	<-done
 
-	if got := reg.LastScrapeState(); got != stuck {
-		t.Errorf("once the hung run returned, reported as %+v, want stuck", got)
-	}
-
-	// The next runs are quick, but a slow machine could make one last the short interval above.
 	reg.l.Lock()
-	reg.interval = time.Minute
+	running := reg.runningSince
 	reg.l.Unlock()
 
-	for range scrapeStateRuns - 1 {
-		reg.InternalRunScrape(t.Context(), t.Context(), time.Now())
-	}
-
-	if got := reg.LastScrapeState(); got != (types.ScrapeState{Status: types.ScrapeRan, RegisteredAt: reg.addedAt}) {
-		t.Errorf("after %d successful runs, reported as %+v, want no error", scrapeStateRuns, got)
-	}
-}
-
-// TestLastScrapeStateSlowRunsDoNotFlap checks a run lasting more than scrapeStuckIntervals
-// intervals each time, though it does return, is reported as stuck whether the last record is its stuck entry or
-// its result: one would otherwise read as working most of the time and failing in between.
-func TestLastScrapeStateSlowRunsDoNotFlap(t *testing.T) {
-	const interval = 20 * time.Millisecond
-
-	reg := newStuckTestRegistration(t, interval, func(context.Context, time.Time) error {
-		time.Sleep(interval * scrapeStuckIntervals * 2)
-
-		return nil
-	})
-
-	stuck := types.ScrapeState{Status: types.ScrapeRan, Error: errScrapeStuck.Error(), ErrorKind: types.ScrapeErrorUnreachable, RegisteredAt: reg.addedAt}
-
-	for i := range 4 {
-		reg.InternalRunScrape(t.Context(), t.Context(), time.Now())
-
-		if got := reg.LastScrapeState(); got != stuck {
-			t.Errorf("after slow run %d, reported as %+v, want stuck", i+1, got)
-		}
-	}
-}
-
-// TestLastScrapeStateOccasionallySlowNotStuck checks a run slower than its interval, but not by
-// scrapeStuckIntervals intervals, is recorded with its own result only.
-func TestLastScrapeStateOccasionallySlowNotStuck(t *testing.T) {
-	const interval = 50 * time.Millisecond
-
-	reg := newStuckTestRegistration(t, interval, func(context.Context, time.Time) error {
-		time.Sleep(interval * 3 / 2)
-
-		return nil
-	})
-
-	reg.InternalRunScrape(t.Context(), t.Context(), time.Now())
-
-	if got := reg.LastScrapeState(); got != (types.ScrapeState{Status: types.ScrapeRan, RegisteredAt: reg.addedAt}) {
-		t.Errorf("a run 1.5 intervals long is reported as %+v, want no error", got)
-	}
-}
-
-// TestScrapeStuckUsesLoopInterval checks the stuck threshold follows the interval of the loop
-// running the scrape, not reg.interval, which changes before the loop is restarted.
-func TestScrapeStuckUsesLoopInterval(t *testing.T) {
-	reg := newStuckTestRegistration(t, 10*time.Millisecond, func(context.Context, time.Time) error {
-		time.Sleep(100 * time.Millisecond)
-
-		return nil
-	})
-
-	reg.registry.scrapeFromLoop(t.Context(), t.Context(), time.Now(), time.Minute, reg)
-
-	if got := reg.LastScrapeState(); got != (types.ScrapeState{Status: types.ScrapeRan, RegisteredAt: reg.addedAt}) {
-		t.Errorf("a 100 ms run of a one-minute loop is reported as %+v, want no error", got)
+	if !running.IsZero() {
+		t.Errorf("runningSince = %v once the run returned, want zero", running)
 	}
 }
 
@@ -295,31 +353,6 @@ func TestLastScrapeStateRegisteredAt(t *testing.T) {
 	}
 }
 
-// TestScrapeHonoringContextNotStuck checks a gather that returns on its context's deadline is
-// recorded once, with its own error: the timeout is shorter than the interval.
-func TestScrapeHonoringContextNotStuck(t *testing.T) {
-	// Wide margins between the timeout and the stuck threshold, for a slow machine.
-	const interval = 200 * time.Millisecond
-
-	reg := newStuckTestRegistration(t, interval, func(ctx context.Context, _ time.Time) error {
-		<-ctx.Done()
-
-		return ctx.Err()
-	})
-
-	ctx, cancel := context.WithTimeout(t.Context(), interval*8/10)
-	defer cancel()
-
-	reg.InternalRunScrape(ctx, t.Context(), time.Now())
-
-	reg.l.Lock()
-	defer reg.l.Unlock()
-
-	if len(reg.lastScrapes) != 1 || !errors.Is(reg.lastScrapes[0].Error, context.DeadlineExceeded) {
-		t.Errorf("lastScrapes = %+v, want the gather's own error only", reg.lastScrapes)
-	}
-}
-
 // TestScrapeAbandonedOnStopNotStuck checks a run abandoned because its loop stopped, as on a
 // restart, records nothing: the restarted loop's runs report the input.
 func TestScrapeAbandonedOnStopNotStuck(t *testing.T) {
@@ -340,6 +373,14 @@ func TestScrapeAbandonedOnStopNotStuck(t *testing.T) {
 
 	if got := reg.LastScrapeState(); got != (types.ScrapeState{}) {
 		t.Errorf("a run abandoned on stop is reported as %+v, want nothing recorded", got)
+	}
+
+	reg.l.Lock()
+	running := reg.runningSince
+	reg.l.Unlock()
+
+	if !running.IsZero() {
+		t.Errorf("runningSince = %v after the run was abandoned, want zero", running)
 	}
 }
 

@@ -1713,3 +1713,25 @@ func TestRemoveIfNonRunningDuringDiscovery(t *testing.T) {
 		t.Fatal("RemoveIfNonRunning is still blocked after the discovery ended")
 	}
 }
+
+// TestLastDiscoveryAt checks LastDiscoveryAt follows GetLatestDiscovery's time from the first
+// discovery on, though reconfigure publishes the snapshot before that time is known.
+func TestLastDiscoveryAt(t *testing.T) {
+	mockDynamic := &MockDiscoverer{}
+	disc, _ := New(mockDynamic, gloutonexec.New("/"), &mockRegistry{}, mockState{}, nil, nil, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, nil, time.Hour, config.OpenTelemetry{})
+	disc.containerInfo = mockContainerInfo{}
+
+	if got := disc.LastDiscoveryAt(); !got.IsZero() {
+		t.Errorf("before any discovery, LastDiscoveryAt() = %v, want zero", got)
+	}
+
+	if _, _, err := disc.discovery(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	_, want := disc.GetLatestDiscovery()
+
+	if got := disc.LastDiscoveryAt(); want.IsZero() || !got.Equal(want) {
+		t.Errorf("LastDiscoveryAt() = %v, want %v", got, want)
+	}
+}

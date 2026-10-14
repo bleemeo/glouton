@@ -17,6 +17,7 @@
 package synchronizer
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -32,9 +33,7 @@ func TestSyncSendsRegistrationStatus(t *testing.T) {
 	defer helper.Close()
 
 	helper.preregisterAgent(t)
-	helper.wrapperClientMock.resources.agents.elems[0].GloutonFeatures = bleemeoTypes.GloutonFeatures{
-		bleemeoTypes.FeatureSendRegistrationStatus: true,
-	}
+	helper.SetAPIConfigs(withSendRegistrationStatus(true))
 	helper.discovery.States = []discovery.ServiceState{{
 		Name:           "apache",
 		ServiceType:    discovery.ApacheService,
@@ -59,8 +58,8 @@ func TestSyncSendsRegistrationStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !helper.s.option.Cache.Agent().GloutonFeatures.Enabled(bleemeoTypes.FeatureSendRegistrationStatus) {
-		t.Error("the cached Agent does not allow sending the registration status")
+	if cfg, _ := helper.s.option.Cache.CurrentAccountConfig(); !cfg.SendRegistrationStatus {
+		t.Error("the cached account configuration does not allow sending the registration status")
 	}
 
 	sent := helper.s.option.Cache.RegistrationStatusSent()
@@ -81,16 +80,16 @@ func TestSyncSendsRegistrationStatus(t *testing.T) {
 	}
 }
 
-// TestSyncObeysAPIFeatures checks nothing is sent when the API does not allow the feature: it
-// turns it off, leaves it out, or does not have glouton_features at all.
+// TestSyncObeysAPIFeatures checks nothing is sent when the account's
+// GLOUTON_SEND_REGISTRATION_STATUS config does not allow it: off, or absent, as on every account
+// until the API creates it.
 func TestSyncObeysAPIFeatures(t *testing.T) {
 	cases := []struct {
-		name     string
-		features bleemeoTypes.GloutonFeatures
+		name    string
+		configs []bleemeoTypes.Config
 	}{
-		{name: "absent field", features: nil},
-		{name: "empty", features: bleemeoTypes.GloutonFeatures{}},
-		{name: "disabled", features: bleemeoTypes.GloutonFeatures{bleemeoTypes.FeatureSendRegistrationStatus: false}},
+		{name: "absent", configs: defaultAccountConfigs},
+		{name: "disabled", configs: withSendRegistrationStatus(false)},
 	}
 
 	for _, tc := range cases {
@@ -99,7 +98,7 @@ func TestSyncObeysAPIFeatures(t *testing.T) {
 			defer helper.Close()
 
 			helper.preregisterAgent(t)
-			helper.wrapperClientMock.resources.agents.elems[0].GloutonFeatures = tc.features
+			helper.SetAPIConfigs(tc.configs)
 			helper.discovery.States = []discovery.ServiceState{{Name: "apache", ServiceType: discovery.ApacheService, InputSupported: true}}
 
 			helper.initSynchronizer(t)
@@ -112,8 +111,8 @@ func TestSyncObeysAPIFeatures(t *testing.T) {
 				helper.AddTime(time.Minute)
 			}
 
-			if cached := helper.s.option.Cache.Agent().GloutonFeatures; cached.Enabled(bleemeoTypes.FeatureSendRegistrationStatus) {
-				t.Errorf("the cached Agent allows the feature: %v", cached)
+			if cfg, _ := helper.s.option.Cache.CurrentAccountConfig(); cfg.SendRegistrationStatus {
+				t.Error("the cached account configuration allows the feature")
 			}
 
 			if sent := helper.s.option.Cache.RegistrationStatusSent(); !sent.LastAttemptAt.IsZero() {
@@ -121,4 +120,15 @@ func TestSyncObeysAPIFeatures(t *testing.T) {
 			}
 		})
 	}
+}
+
+// withSendRegistrationStatus is the default account configs with GLOUTON_SEND_REGISTRATION_STATUS
+// set to value.
+func withSendRegistrationStatus(value bool) []bleemeoTypes.Config {
+	return append(slices.Clone(defaultAccountConfigs), bleemeoTypes.Config{
+		ID:      "cfg-send-registration-status",
+		Type:    bleemeoTypes.ConfigTypeGloutonSendRegistrationStatus,
+		Account: accountID,
+		Value:   value,
+	})
 }

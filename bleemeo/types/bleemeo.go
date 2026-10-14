@@ -79,29 +79,6 @@ type Agent struct {
 	// If the agent is running in Kubernetes, is he the current cluster leader?
 	// Only the cluster leader gather global metrics for the cluster.
 	IsClusterLeader bool `json:"is_cluster_leader"`
-	// GloutonFeatures are the features Bleemeo allows this agent to use, nil when the API does
-	// not have the field, which enables none. See GloutonFeatures. Omitted when nil: the Agent is
-	// also the payload that registers SNMP and vSphere agents, which must not send a null.
-	GloutonFeatures GloutonFeatures `json:"glouton_features,omitempty"`
-}
-
-// Features Bleemeo can turn on or off, in Agent.GloutonFeatures.
-const (
-	// FeatureSendRegistrationStatus allows sending the Agent's registration_status.
-	FeatureSendRegistrationStatus = "send_registration_status"
-)
-
-// GloutonFeatures tells which features Bleemeo allows an agent to use, so that it can turn one
-// off, for instance on a Glouton version whose implementation misbehaves, without upgrading it.
-// A value is any JSON so that the API can give a feature more states than on and off without
-// an older Glouton failing to read its Agent: only true enables a feature.
-type GloutonFeatures map[string]any
-
-// Enabled tells whether feature is allowed: false when absent, false, or of another value.
-func (f GloutonFeatures) Enabled(feature string) bool {
-	enabled, _ := f[feature].(bool)
-
-	return enabled
 }
 
 // AgentType is an AgentType object on Bleemeo API.
@@ -137,9 +114,12 @@ const (
 	ConfigTypeLiveProcess            = 1070
 	ConfigTypeLiveProcessResolution  = 1071
 	ConfigTypeCustomMetrics          = 1400
-	ConfigTypeAgentMetricsAllowlist  = 10000
-	ConfigTypeAgentMetricsResolution = 11000
-	ConfigTypeSuspended              = 100000
+	// ConfigTypeGloutonSendRegistrationStatus allows sending the Agent's registration_status. It
+	// lets Bleemeo turn the feature off, as on a Glouton version that misbehaves, without an upgrade.
+	ConfigTypeGloutonSendRegistrationStatus = 2001
+	ConfigTypeAgentMetricsAllowlist         = 10000
+	ConfigTypeAgentMetricsResolution        = 11000
+	ConfigTypeSuspended                     = 100000
 )
 
 // Application is a group of services.
