@@ -36,6 +36,10 @@ const (
 	// minNewServiceInterval spaces the sends a newly settled service triggers: each new
 	// container is a new service, so a host starting short-lived ones would send on each start.
 	minNewServiceInterval = time.Minute
+	// unchangedSendInterval is how often an unchanged value is sent again, so that its
+	// generated_at tells Bleemeo the value is still current, and an old one that this Glouton
+	// stopped sending.
+	unchangedSendInterval = 24 * time.Hour
 )
 
 // Payload is the registration status as sent to Bleemeo: both lists, limited in size, and how
@@ -46,8 +50,8 @@ type Payload struct {
 	GloutonVersion string `json:"glouton_version"`
 	// GeneratedAt is when the value was built, and LastDiscoveryAt when discovery last
 	// completed before it, the services listed being at least that recent. Neither is part of
-	// the hash, or each build would differ: since an unchanged value is not sent again,
-	// GeneratedAt is when the value last changed, not when Glouton last checked it.
+	// the hash, or each build would differ: since an unchanged value is only sent again after
+	// unchangedSendInterval, GeneratedAt is at most that old while Glouton keeps sending.
 	GeneratedAt     time.Time `json:"generated_at"`
 	LastDiscoveryAt time.Time `json:"last_discovery_at"`
 
@@ -129,7 +133,7 @@ func hashRows(
 }
 
 // NeedSend tells whether payload must be sent, given what was last sent to agentID:
-//   - never when it is what the API last accepted;
+//   - unchangedSendInterval after the last attempt when it is what the API last accepted;
 //   - right away when nothing was attempted yet, or the clock went back before the last attempt;
 //   - minSendInterval after a failed attempt;
 //   - minNewServiceInterval after the last attempt when it lists a newly settled service;
@@ -138,8 +142,6 @@ func NeedSend(last bleemeoTypes.RegistrationStatusSent, payload Payload, agentID
 	last = forAgent(last, agentID)
 
 	switch {
-	case payload.hash == last.Hash:
-		return false
 	case last.LastAttemptAt.IsZero():
 		return true
 	case now.Before(last.LastAttemptAt):
@@ -149,6 +151,10 @@ func NeedSend(last bleemeoTypes.RegistrationStatusSent, payload Payload, agentID
 	since := now.Sub(last.LastAttemptAt)
 
 	switch {
+	case payload.hash == last.Hash:
+		// Whether the last attempt failed or not: it may have been for another value, the API
+		// still having this one.
+		return since >= unchangedSendInterval
 	case last.LastAttemptFailed:
 		return since >= minSendInterval
 	case hasNewSettledService(last.Services, payload.Services):

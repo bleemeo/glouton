@@ -300,8 +300,8 @@ func TestEntityEmptyLists(t *testing.T) {
 	}
 }
 
-// TestEntityDoesNotResendSameValue checks an unchanged value is not sent again, however long
-// after and however many discovery runs since, and a changed one is once the interval has passed.
+// TestEntityDoesNotResendSameValue checks an unchanged value is not sent again within a day,
+// however many discovery runs since, and a changed one is once the interval has passed.
 func TestEntityDoesNotResendSameValue(t *testing.T) {
 	test := newEntityTest(testAgent)
 	test.discovery.States = []discovery.ServiceState{mysqlMissingCredentials()}
@@ -326,6 +326,34 @@ func TestEntityDoesNotResendSameValue(t *testing.T) {
 
 	if sent := len(test.execution.client.bodies); sent != 2 {
 		t.Errorf("sent %d times, want 2", sent)
+	}
+}
+
+// TestEntityResendsUnchangedDaily checks an unchanged value is sent again a day after, with its
+// generated_at of then: Bleemeo tells from it that the value is still current.
+func TestEntityResendsUnchangedDaily(t *testing.T) {
+	test := newEntityTest(testAgent)
+	test.discovery.States = []discovery.ServiceState{mysqlMissingCredentials()}
+
+	if _, err := test.run(t, t0); err != nil {
+		t.Fatal(err)
+	}
+
+	if need, err := test.run(t, t0.Add(unchangedSendInterval-time.Minute)); err != nil || need {
+		t.Fatalf("unchanged, before a day: need = %v, err = %v; want false, nil", need, err)
+	}
+
+	if need, err := test.run(t, t0.Add(unchangedSendInterval)); err != nil || !need {
+		t.Fatalf("unchanged, a day after: need = %v, err = %v; want true, nil", need, err)
+	}
+
+	bodies := test.execution.client.bodies
+	if len(bodies) != 2 {
+		t.Fatalf("sent %d times, want 2", len(bodies))
+	}
+
+	if want := `"generated_at":"2026-10-03T12:00:00Z"`; !strings.Contains(bodies[1], want) {
+		t.Errorf("resent body %s, want %s", bodies[1], want)
 	}
 }
 

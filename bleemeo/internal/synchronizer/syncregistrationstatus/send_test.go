@@ -76,8 +76,10 @@ func TestNeedSend(t *testing.T) {
 	}{
 		{"nothing attempted yet", bleemeoTypes.RegistrationStatusSent{}, base, t0, true},
 		{"unchanged, soon after", sentBase, base, t0.Add(time.Minute), false},
-		// Unchanged is never sent, however long ago the last send was.
-		{"unchanged, long after", sentBase, base, t0.Add(24 * time.Hour), false},
+		// Unchanged is sent again only once a day, so that generated_at tells it is current.
+		{"unchanged, just before a day", sentBase, base, t0.Add(unchangedSendInterval - time.Second), false},
+		{"unchanged, a day after", sentBase, base, t0.Add(unchangedSendInterval), true},
+		{"unchanged, clock went back", sentBase, base, t0.Add(-time.Hour), true},
 		{"changed count, soon after", sentBase, changedCount, t0.Add(10 * time.Minute), false},
 		{"changed count, once the interval passed", sentBase, changedCount, t0.Add(minSendInterval), true},
 		{"new settled service, a minute after", sentBase, newSettled, t0.Add(minNewServiceInterval), true},

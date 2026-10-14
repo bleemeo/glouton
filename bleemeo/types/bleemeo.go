@@ -341,8 +341,8 @@ type MetricState struct {
 }
 
 // RegistrationStatusSent is what Glouton remembers of the last registration status it sent,
-// kept in the cache so that a restart neither re-sends an unchanged value nor reads every
-// service as new.
+// kept in the cache so that a restart neither re-sends an unchanged value before its day nor
+// reads every service as new.
 type RegistrationStatusSent struct {
 	// AgentID is the agent the value was sent to: the cache, in state.cache.json, survives
 	// deleting state.json to register again.
