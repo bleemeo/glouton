@@ -673,12 +673,15 @@ func (d *Discovery) RemoveIfNonRunning(services []Service) {
 		delete(d.discoveredServicesMap, key)
 	}
 
+	if deleted {
+		d.publishServicesState()
+	}
+
 	d.l.Unlock()
 
 	// TriggerUpdate blocks until Run receives it, and Run needs the lock to finish a running
 	// discovery, so it must be called without holding the lock.
 	if deleted {
-		d.publishServicesState()
 		d.TriggerUpdate()
 	}
 }

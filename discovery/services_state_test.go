@@ -1098,6 +1098,52 @@ func TestServicesStateConcurrent(t *testing.T) {
 	<-done
 }
 
+// TestRemoveIfNonRunningPublishesUnderLock removes a service while discovery changes the
+// services, as the synchronizer does, for the race detector: RemoveIfNonRunning publishes
+// the state, which reads the services, so it must do so before releasing the lock.
+func TestRemoveIfNonRunningPublishesUnderLock(t *testing.T) {
+	d := newTestDiscovery()
+	d.triggerDiscovery = make(chan any)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	// Stands for Run, which RemoveIfNonRunning triggers after a removal.
+	go func() {
+		for {
+			select {
+			case <-d.triggerDiscovery:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+
+		for i := range 200 {
+			d.l.Lock()
+			d.servicesMap[NameInstance{Name: fmt.Sprintf("service-%d", i)}] = Service{Name: "redis", ServiceType: RedisService, Active: true}
+			d.l.Unlock()
+		}
+	}()
+
+	apache := Service{Name: "apache", ServiceType: ApacheService, Active: true}
+
+	for range 200 {
+		d.l.Lock()
+		d.servicesMap[apacheKey()] = apache
+		d.l.Unlock()
+
+		d.RemoveIfNonRunning([]Service{apache})
+	}
+
+	<-done
+}
+
 // TestURLSecretsOnlyKnownParameters checks ordinary query parameters whose names merely
 // contain "key" or "pass" are not taken for secrets, which would blank their values
 // everywhere in the error.
