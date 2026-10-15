@@ -212,6 +212,7 @@ func TestRegistrationStatusSentPersists(t *testing.T) {
 	want := types.RegistrationStatusSent{
 		Hash:              "c0ffee",
 		Services:          []discovery.NameInstance{{Name: "apache"}, {Name: "redis", Instance: "cache"}},
+		AcceptedAt:        time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC),
 		LastAttemptAt:     time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC),
 		LastAttemptFailed: true,
 	}

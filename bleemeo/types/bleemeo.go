@@ -351,6 +351,8 @@ type RegistrationStatusSent struct {
 	Hash string
 	// Services are the services that value listed as settled. See syncregistrationstatus.NeedSend.
 	Services []discovery.NameInstance
+	// AcceptedAt is when the API accepted that value, the generated_at it holds.
+	AcceptedAt time.Time
 	// LastAttemptAt is when a send was last attempted, accepted or not.
 	LastAttemptAt time.Time
 	// LastAttemptFailed tells whether that attempt was refused or failed.

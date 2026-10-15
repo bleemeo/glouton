@@ -50,8 +50,9 @@ type Payload struct {
 	GloutonVersion string `json:"glouton_version"`
 	// GeneratedAt is when the value was built, and LastDiscoveryAt when discovery last
 	// completed before it, the services listed being at least that recent. Neither is part of
-	// the hash, or each build would differ: since an unchanged value is only sent again after
-	// unchangedSendInterval, GeneratedAt is at most that old while Glouton keeps sending.
+	// the hash, or each build would differ: since an unchanged value is only sent again
+	// unchangedSendInterval after the API accepted it, GeneratedAt is about that old at most
+	// while Glouton keeps sending, plus minSendInterval per failed attempt.
 	GeneratedAt     time.Time `json:"generated_at"`
 	LastDiscoveryAt time.Time `json:"last_discovery_at"`
 
@@ -133,8 +134,9 @@ func hashRows(
 }
 
 // NeedSend tells whether payload must be sent, given what was last sent to agentID:
-//   - unchangedSendInterval after the last attempt when it is what the API last accepted;
 //   - right away when nothing was attempted yet, or the clock went back before the last attempt;
+//   - when it is what the API last accepted, unchangedSendInterval after the API accepted it,
+//     and minSendInterval after a failed attempt;
 //   - minSendInterval after a failed attempt;
 //   - minNewServiceInterval after the last attempt when it lists a newly settled service;
 //   - minSendInterval after the last attempt otherwise.
@@ -152,9 +154,13 @@ func NeedSend(last bleemeoTypes.RegistrationStatusSent, payload Payload, agentID
 
 	switch {
 	case payload.hash == last.Hash:
-		// Whether the last attempt failed or not: it may have been for another value, the API
-		// still having this one.
-		return since >= unchangedSendInterval
+		// From the acceptance, the generated_at the API holds: failed attempts, of this value or
+		// another, must not put it off.
+		if last.LastAttemptFailed && since < minSendInterval {
+			return false
+		}
+
+		return now.Sub(last.AcceptedAt) >= unchangedSendInterval
 	case last.LastAttemptFailed:
 		return since >= minSendInterval
 	case hasNewSettledService(last.Services, payload.Services):
@@ -206,7 +212,13 @@ func Sent(payload Payload, agentID string, now time.Time) bleemeoTypes.Registrat
 		}
 	}
 
-	return bleemeoTypes.RegistrationStatusSent{AgentID: agentID, Hash: payload.hash, Services: services, LastAttemptAt: now}
+	return bleemeoTypes.RegistrationStatusSent{
+		AgentID:       agentID,
+		Hash:          payload.hash,
+		Services:      services,
+		AcceptedAt:    now,
+		LastAttemptAt: now,
+	}
 }
 
 // SendFailed is what to record when sending to agentID failed or was refused, at now. What

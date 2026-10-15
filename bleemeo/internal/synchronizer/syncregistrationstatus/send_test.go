@@ -120,19 +120,56 @@ func TestNeedSendAfterFailure(t *testing.T) {
 }
 
 // TestSendFailedKeepsAccepted checks a failure does not forget what the API accepted
-// before: that still is what it has, so an unchanged state must not be sent.
+// before: that still is what it has, so an unchanged state is not sent before its day, and
+// the day still counts from the acceptance.
 func TestSendFailedKeepsAccepted(t *testing.T) {
 	payload := payloadOf(settledService(1))
 	accepted := Sent(payload, testAgent, t0)
 
 	failed := SendFailed(accepted, testAgent, t0.Add(time.Hour))
 
-	if failed.Hash != accepted.Hash {
-		t.Errorf("SendFailed() changed the accepted hash")
+	if failed.Hash != accepted.Hash || !failed.AcceptedAt.Equal(t0) {
+		t.Errorf("SendFailed() changed what the API accepted: %+v", failed)
 	}
 
 	if NeedSend(failed, payload, testAgent, t0.Add(2*time.Hour)) {
 		t.Error("the value the API accepted is sent again after an unrelated failure")
+	}
+
+	if !NeedSend(failed, payload, testAgent, t0.Add(unchangedSendInterval)) {
+		t.Error("an unrelated failure put off the daily send of the value the API accepted")
+	}
+}
+
+// TestNeedSendAcceptedValueRefusedOther checks a value the API keeps refusing, alternating with
+// the one it accepted, does not keep the accepted one from its daily send.
+func TestNeedSendAcceptedValueRefusedOther(t *testing.T) {
+	payload := payloadOf(settledService(1))
+	last := Sent(payload, testAgent, t0)
+
+	// Another value refused every minSendInterval, for more than a day.
+	for at := t0.Add(time.Hour); at.Before(t0.Add(unchangedSendInterval + 2*time.Hour)); at = at.Add(minSendInterval) {
+		last = SendFailed(last, testAgent, at)
+	}
+
+	now := last.LastAttemptAt.Add(minSendInterval)
+	if !NeedSend(last, payload, testAgent, now) {
+		t.Errorf("the accepted value, sent a day ago, is not sent again at %v", now.Sub(t0))
+	}
+}
+
+// TestNeedSendDailyFailed checks a daily send that failed is retried after minSendInterval, not
+// a day later: the value the API holds is already a day old.
+func TestNeedSendDailyFailed(t *testing.T) {
+	payload := payloadOf(settledService(1))
+	failed := SendFailed(Sent(payload, testAgent, t0), testAgent, t0.Add(unchangedSendInterval))
+
+	if NeedSend(failed, payload, testAgent, t0.Add(unchangedSendInterval+minNewServiceInterval)) {
+		t.Error("retried a minute after the failure")
+	}
+
+	if !NeedSend(failed, payload, testAgent, t0.Add(unchangedSendInterval+minSendInterval)) {
+		t.Error("not retried once minSendInterval passed")
 	}
 }
 
@@ -156,8 +193,8 @@ func TestSentRecordsSettledServices(t *testing.T) {
 		t.Errorf("Sent() recorded services %+v, want %+v", sent.Services, want)
 	}
 
-	if sent.Hash == "" || !sent.LastAttemptAt.Equal(t0) || sent.LastAttemptFailed {
-		t.Errorf("Sent() recorded %+v, want a hash, the attempt time and no failure", sent)
+	if sent.Hash == "" || !sent.AcceptedAt.Equal(t0) || !sent.LastAttemptAt.Equal(t0) || sent.LastAttemptFailed {
+		t.Errorf("Sent() recorded %+v, want a hash, the acceptance and attempt time and no failure", sent)
 	}
 }
 
