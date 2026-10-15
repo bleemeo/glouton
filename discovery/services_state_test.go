@@ -1102,23 +1102,8 @@ func TestServicesStateConcurrent(t *testing.T) {
 // services, as the synchronizer does, for the race detector: RemoveIfNonRunning publishes
 // the state, which reads the services, so it must do so before releasing the lock.
 func TestRemoveIfNonRunningPublishesUnderLock(t *testing.T) {
+	// Without Run: the trigger RemoveIfNonRunning sends after a removal does not block.
 	d := newTestDiscovery()
-	d.triggerDiscovery = make(chan any)
-
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-
-	// Stands for Run, which RemoveIfNonRunning triggers after a removal.
-	go func() {
-		for {
-			select {
-			case <-d.triggerDiscovery:
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
 	done := make(chan struct{})
 
 	go func() {

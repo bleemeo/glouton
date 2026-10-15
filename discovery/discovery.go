@@ -72,8 +72,12 @@ type Discovery struct {
 	servicesMap           map[NameInstance]Service
 	lastDiscoveryUpdate   time.Time
 
-	triggerDiscovery      chan any
-	subscribers           []*subscriber
+	// triggerDiscovery holds at most one pending trigger: see TriggerUpdate.
+	triggerDiscovery chan any
+	subscribers      []*subscriber
+	// removedDuringUpdate is what RemoveIfNonRunning removed while updateDiscovery works on its
+	// copy of discoveredServicesMap, nil outside of that.
+	removedDuringUpdate   map[NameInstance]bool
 	lastConfigservicesMap map[NameInstance]Service
 	activeCollector       map[NameInstance]collectorDetails
 	// inputResult records, per service, what configureMetricInputs could do, including when it
@@ -158,7 +162,7 @@ func New(
 		activeCollector:                make(map[NameInstance]collectorDetails),
 		inputResult:                    make(map[NameInstance]inputResult),
 		activeCheck:                    make(map[NameInstance]CheckDetails),
-		triggerDiscovery:               make(chan any),
+		triggerDiscovery:               make(chan any, 1),
 		state:                          state,
 		servicesOverride:               servicesOverrideMap,
 		isServiceIgnored:               isServiceIgnored,
@@ -379,9 +383,15 @@ func (d *Discovery) Subscribe(ctx context.Context) <-chan []Service {
 // TriggerUpdate ask for a new discovery to be run. This function as asynchronous
 // and the discovery might not have finished when TriggerUpdate return.
 //
+// It never blocks, as Run may have stopped: a trigger already pending runs a discovery that
+// covers this one.
+//
 // Use Subscribe to get notified after every change in discovery.
 func (d *Discovery) TriggerUpdate() {
-	d.triggerDiscovery <- nil
+	select {
+	case d.triggerDiscovery <- nil:
+	default:
+	}
 }
 
 // Run execute the discovery thread that will update the discovery when needed.
@@ -660,6 +670,7 @@ func (d *Discovery) discovery(ctx context.Context) ([]Service, time.Time, error)
 // next discovery will be run asynchroniously if from entry were deleted.
 func (d *Discovery) RemoveIfNonRunning(services []Service) {
 	d.l.Lock()
+	defer d.l.Unlock()
 
 	deleted := false
 
@@ -671,17 +682,14 @@ func (d *Discovery) RemoveIfNonRunning(services []Service) {
 
 		delete(d.servicesMap, key)
 		delete(d.discoveredServicesMap, key)
+
+		if d.removedDuringUpdate != nil {
+			d.removedDuringUpdate[key] = true
+		}
 	}
 
 	if deleted {
 		d.publishServicesState()
-	}
-
-	d.l.Unlock()
-
-	// TriggerUpdate blocks until Run receives it, and Run needs the lock to finish a running
-	// discovery, so it must be called without holding the lock.
-	if deleted {
 		d.TriggerUpdate()
 	}
 }
@@ -694,7 +702,9 @@ func (d *Discovery) reconfigure() {
 
 	d.configureChecks(d.lastConfigservicesMap, d.servicesMap)
 
-	d.lastConfigservicesMap = d.servicesMap
+	// A copy: RemoveIfNonRunning deletes from servicesMap, and the next reconfigure must still
+	// see the removed services here to remove their input and check.
+	d.lastConfigservicesMap = maps.Clone(d.servicesMap)
 
 	d.publishServicesState()
 }
@@ -728,7 +738,12 @@ func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) (time.Ti
 
 			servicesMap[key] = service
 		}
+
+		d.removedDuringUpdate = make(map[NameInstance]bool)
 	}()
+
+	// The services the dynamic discovery found running: a removal does not apply to them.
+	running := make(map[NameInstance]bool, len(r))
 
 	for _, service := range r {
 		if d.isServiceIgnored != nil && d.isServiceIgnored(service) {
@@ -752,6 +767,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) (time.Ti
 		}
 
 		servicesMap[key] = service
+		running[key] = true
 	}
 
 	if ctx.Err() != nil {
@@ -761,6 +777,14 @@ func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) (time.Ti
 	d.l.Lock()
 	defer d.l.Unlock()
 
+	// servicesMap was copied before these removals: they would come back with it.
+	for key := range d.removedDuringUpdate {
+		if !running[key] {
+			delete(servicesMap, key)
+		}
+	}
+
+	d.removedDuringUpdate = nil
 	d.lastDynamicService = r
 	d.discoveredServicesMap = servicesMap
 	serviceMapWithOverride := copyAndMergeServiceWithOverride(servicesMap, d.servicesOverride)
