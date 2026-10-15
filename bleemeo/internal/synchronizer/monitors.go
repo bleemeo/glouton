@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
@@ -77,6 +78,12 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 		execution.RequestSynchronization(types.EntityMetric, false)
 	}
 
+	// Monitors converted from an older cache have no Monitor ID, so notifications can't match them:
+	// only a full synchronization replaces them.
+	if slices.ContainsFunc(s.option.Cache.Monitors(), func(m bleemeoTypes.Monitor) bool { return m.ID == "" }) {
+		syncType = types.SyncTypeForceCacheRefresh
+	}
+
 	if syncType != types.SyncTypeForceCacheRefresh && len(pendingMonitorsUpdate) == 0 {
 		return false, nil
 	}
@@ -87,14 +94,12 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 
 	if syncType == types.SyncTypeForceCacheRefresh {
 		monitors, err = apiClient.ListMonitors(ctx)
-		if err != nil {
-			return false, err
-		}
 	} else {
 		monitors, err = s.getListOfMonitorsFromAPI(ctx, execution, pendingMonitorsUpdate)
-		if err != nil {
-			return false, err
-		}
+	}
+
+	if err != nil {
+		return false, err
 	}
 
 	s.option.Cache.SetMonitors(monitors)
@@ -221,6 +226,14 @@ OuterBreak:
 			}
 
 			return nil, err
+		}
+
+		// The API notifies a deactivation as a change, and returns inactive monitors by ID:
+		// stop probing it like a full synchronization would (it only lists active monitors).
+		if !result.Active {
+			currentMonitors = deleteMonitorByUUID(currentMonitors, m.uuid)
+
+			continue
 		}
 
 		if m.op == Change {

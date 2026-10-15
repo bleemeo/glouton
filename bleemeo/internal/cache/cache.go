@@ -860,10 +860,52 @@ func upgradeV7(_ bleemeoTypes.State, newData data) data {
 	return newData
 }
 
-func upgradeV8(_ bleemeoTypes.State, newData data) data {
-	// Version 9 reads monitors from /v1/monitor/ instead of /v1/service/: their ID and fields changed.
-	// Drop old monitors; they will be re-fetched from the API.
+// monitorV8 is a monitor read from /v1/service/, as cached until version 8.
+type monitorV8 struct {
+	ID                   string            `json:"id"`
+	Account              string            `json:"account"`
+	Active               bool              `json:"active"`
+	CreationDate         string            `json:"created_at"`
+	AgentID              string            `json:"agent"`
+	URL                  string            `json:"monitor_url"`
+	ExpectedContent      string            `json:"monitor_expected_content"`
+	ExpectedResponseCode int               `json:"monitor_expected_response_code"`
+	ForbiddenContent     string            `json:"monitor_unexpected_content"`
+	CAFile               string            `json:"monitor_ca_file"`
+	Headers              map[string]string `json:"monitor_headers"`
+}
+
+func upgradeV8(state bleemeoTypes.State, newData data) data {
+	// Version 9 reads monitors from /v1/monitor/ instead of /v1/service/: the cached monitors
+	// were Services, with the monitor options in monitor_* fields. Convert them to keep probing
+	// from the cache until the next synchronization. Their Monitor ID is unknown until then,
+	// the synchronizer does a full monitor synchronization while a monitor has no ID.
+	var oldData struct {
+		Monitors []monitorV8
+	}
+
 	newData.Monitors = nil
+
+	if err := state.Get(cacheKey, &oldData); err != nil {
+		logger.V(1).Printf("Unable to read the monitors of the Bleemeo connector cache: %v", err)
+	}
+
+	for _, m := range oldData.Monitors {
+		newData.Monitors = append(newData.Monitors, bleemeoTypes.Monitor{
+			Account:              m.Account,
+			AgentID:              m.AgentID,
+			ServiceID:            m.ID,
+			URL:                  m.URL,
+			CreationDate:         m.CreationDate,
+			Active:               m.Active,
+			ExpectedContent:      m.ExpectedContent,
+			ExpectedResponseCode: m.ExpectedResponseCode,
+			ForbiddenContent:     m.ForbiddenContent,
+			CAFile:               m.CAFile,
+			Headers:              m.Headers,
+		})
+	}
+
 	newData.Version = 9
 
 	return newData

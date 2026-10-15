@@ -1,0 +1,27 @@
+{
+    "CacheBleemeoConnector": {
+        "Version": 8,
+        "AccountID": "ca60bcac-4c49-436e-a0b8-ffdbf1f8eaf2",
+        "Monitors": [
+            {
+                "id": "fdd9d999-e2ff-45d3-af2b-6519cf8e3e70",
+                "account": "ca60bcac-4c49-436e-a0b8-ffdbf1f8eaf2",
+                "account_config": "",
+                "label": "",
+                "instance": "",
+                "listen_addresses": "",
+                "exe_path": "",
+                "tags": null,
+                "active": true,
+                "created_at": "2020-01-03T04:05:06Z",
+                "monitor_expected_content": "welcome",
+                "monitor_expected_response_code": 200,
+                "monitor_unexpected_content": "maintenance",
+                "monitor_ca_file": "/etc/ssl/ca.pem",
+                "monitor_headers": {"X-Test": "value"},
+                "monitor_url": "https://example.com",
+                "agent": "6b0ba586-0111-4a72-9cc7-f19d4b6558ed"
+            }
+        ]
+    }
+}

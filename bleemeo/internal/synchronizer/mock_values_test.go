@@ -138,6 +138,7 @@ var (
 		CreationDate: "2020-01-03T04:05:06Z",
 		URL:          activeMonitorURL,
 		AgentID:      newMonitorAgent.ID,
+		Active:       true,
 	}
 
 	testAgentMetric1 = bleemeoapi.MetricPayload{

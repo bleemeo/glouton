@@ -174,6 +174,7 @@ type Monitor struct {
 	ServiceID    string `json:"service"`
 	URL          string `json:"url"`
 	CreationDate string `json:"created_at"`
+	Active       bool   `json:"active"`
 }
 
 // MonitorHTTPOptions groups all the possible options when the probe is targeting an HTTP or HTTPS service.

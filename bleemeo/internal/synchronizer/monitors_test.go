@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/bleemeo-go"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/google/go-cmp/cmp"
 )
@@ -260,6 +261,7 @@ func TestSyncMonitorHeadRequest(t *testing.T) {
 			ServiceID:    serviceID,
 			Account:      accountID,
 			CreationDate: "2020-01-03T04:05:06Z",
+			Active:       true,
 			URL:          "https://example.com/" + id,
 			HeadRequest:  headRequest,
 		}
@@ -328,12 +330,14 @@ func TestSyncMonitorWithoutService(t *testing.T) {
 		ServiceID:    "7d1c2b3a-4e5f-4a6b-8c7d-9e0f1a2b3c01",
 		Account:      accountID,
 		CreationDate: "2020-01-03T04:05:06Z",
+		Active:       true,
 		URL:          "https://example.com/with-service",
 	}
 	monitorWithoutService := bleemeoTypes.Monitor{
 		ID:           "2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e02",
 		Account:      accountID,
 		CreationDate: "2020-01-03T04:05:06Z",
+		Active:       true,
 		URL:          "https://example.com/without-service",
 	}
 
@@ -365,6 +369,7 @@ func TestUpdateMonitorWithoutID(t *testing.T) {
 		ServiceID:    "7d1c2b3a-4e5f-4a6b-8c7d-9e0f1a2b3c01",
 		Account:      accountID,
 		CreationDate: "2020-01-03T04:05:06Z",
+		Active:       true,
 		URL:          "https://example.com/",
 	}
 
@@ -384,6 +389,16 @@ func TestUpdateMonitorWithoutID(t *testing.T) {
 
 	helper.wrapperClientMock.resources.monitors.add(monitor)
 	helper.s.UpdateMonitor("change", "")
+
+	// A new monitor comes with a new agent: the agents are reloaded too.
+	helper.s.l.Lock()
+	for _, entity := range []types.EntityName{types.EntityAgent, types.EntityMonitor} {
+		if got := helper.s.forceSync[entity].Type; got != types.SyncTypeForceCacheRefresh {
+			t.Errorf("%s synchronization type = %v, want %v", entity, got, types.SyncTypeForceCacheRefresh)
+		}
+	}
+	helper.s.l.Unlock()
+
 	helper.AddTime(time.Minute)
 
 	if err := helper.runOnce(t); err != nil {
@@ -392,6 +407,130 @@ func TestUpdateMonitorWithoutID(t *testing.T) {
 
 	if got := helper.monitorManager.Monitors(); len(got) != 1 || got[0].ID != monitor.ServiceID {
 		t.Fatalf("got monitors %+v, want the monitor with ID %s", got, monitor.ServiceID)
+	}
+}
+
+// TestMonitorNotificationRemovesMonitor ensures a notified monitor stops being probed when it's deleted,
+// no longer found or deactivated, matching it by its Monitor ID (not its Service ID).
+func TestMonitorNotificationRemovesMonitor(t *testing.T) {
+	newTestMonitor := func(id string, serviceID string) bleemeoTypes.Monitor {
+		return bleemeoTypes.Monitor{
+			ID:           id,
+			ServiceID:    serviceID,
+			Account:      accountID,
+			CreationDate: "2020-01-03T04:05:06Z",
+			Active:       true,
+			URL:          "https://example.com/" + id,
+		}
+	}
+
+	monitorRemoved := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e01", "7d1c2b3a-4e5f-4a6b-8c7d-9e0f1a2b3c01")
+	monitorKept := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e02", "7d1c2b3a-4e5f-4a6b-8c7d-9e0f1a2b3c02")
+
+	tests := []struct {
+		name string
+		op   string
+		// updateAPI changes the removed monitor on the API before the notification.
+		updateAPI func(helper *syncTestHelper)
+	}{
+		{
+			name:      "delete",
+			op:        "delete",
+			updateAPI: func(helper *syncTestHelper) { helper.wrapperClientMock.resources.monitors.dropByID(monitorRemoved.ID) },
+		},
+		{
+			name:      "not found",
+			op:        "change",
+			updateAPI: func(helper *syncTestHelper) { helper.wrapperClientMock.resources.monitors.dropByID(monitorRemoved.ID) },
+		},
+		{
+			name: "deactivated",
+			op:   "change",
+			updateAPI: func(helper *syncTestHelper) {
+				monitor := helper.wrapperClientMock.resources.monitors.findResource(func(m bleemeoTypes.Monitor) bool {
+					return m.ID == monitorRemoved.ID
+				})
+				monitor.Active = false
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			helper := newHelper(t)
+			defer helper.Close()
+
+			helper.preregisterAgent(t)
+			helper.wrapperClientMock.resources.monitors.add(monitorRemoved, monitorKept)
+			helper.initSynchronizer(t)
+
+			if err := helper.runOnce(t); err != nil {
+				t.Fatal(err)
+			}
+
+			if got := helper.monitorManager.Monitors(); len(got) != 2 {
+				t.Fatalf("got %d monitors, want 2: %+v", len(got), got)
+			}
+
+			tt.updateAPI(helper)
+			helper.s.UpdateMonitor(tt.op, monitorRemoved.ID)
+			helper.AddTime(time.Minute)
+
+			if err := helper.runOnce(t); err != nil {
+				t.Fatal(err)
+			}
+
+			gotMonitors := helper.monitorManager.Monitors()
+			if len(gotMonitors) != 1 || gotMonitors[0].ID != monitorKept.ServiceID {
+				t.Errorf("got monitors %+v, want only the monitor with ID %s", gotMonitors, monitorKept.ServiceID)
+			}
+
+			if diff := cmp.Diff([]bleemeoTypes.Monitor{monitorKept}, helper.s.option.Cache.Monitors()); diff != "" {
+				t.Errorf("cached monitors mismatch (-want +got)\n%s", diff)
+			}
+		})
+	}
+}
+
+// TestSyncMonitorWithoutMonitorID ensures the monitors converted from an older cache, which have no
+// Monitor ID, are replaced by a full synchronization even when only a notified monitor is updated.
+func TestSyncMonitorWithoutMonitorID(t *testing.T) {
+	monitor := bleemeoTypes.Monitor{
+		ID:           "2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e01",
+		ServiceID:    "7d1c2b3a-4e5f-4a6b-8c7d-9e0f1a2b3c01",
+		Account:      accountID,
+		CreationDate: "2020-01-03T04:05:06Z",
+		Active:       true,
+		URL:          "https://example.com/",
+	}
+
+	// The same monitor, as converted from a cache read from /v1/service/.
+	convertedMonitor := monitor
+	convertedMonitor.ID = ""
+
+	helper := newHelper(t)
+	defer helper.Close()
+
+	helper.preregisterAgent(t)
+	helper.wrapperClientMock.resources.monitors.add(monitor)
+	helper.initSynchronizer(t)
+
+	if err := helper.runOnce(t); err != nil {
+		t.Fatal(err)
+	}
+
+	// Simulate the converted monitor still in the cache, then notify a change of the monitor.
+	helper.s.option.Cache.SetMonitors([]bleemeoTypes.Monitor{convertedMonitor})
+	helper.s.UpdateMonitor("change", monitor.ID)
+	helper.AddTime(time.Minute)
+
+	if err := helper.runOnce(t); err != nil {
+		t.Fatal(err)
+	}
+
+	// Without the full synchronization, the converted monitor would be kept next to the notified one.
+	if diff := cmp.Diff([]bleemeoTypes.Monitor{monitor}, helper.s.option.Cache.Monitors()); diff != "" {
+		t.Errorf("cached monitors mismatch (-want +got)\n%s", diff)
 	}
 }
 
@@ -431,6 +570,7 @@ func TestWrapperClientMonitors(t *testing.T) {
 		"account": "9da59f53-1d90-4441-ae58-42c661cc1b9f",
 		"agent": "6b0ba586-0111-4a72-9cc7-f19d4b6558ed",
 		"created_at": "2020-01-03T04:05:06Z",
+		"active": true,
 		"service": "fdd9d999-e2ff-45d3-af2b-6519cf8e3e70",
 		"url": "https://example.com",
 		"expected_content": "welcome",
@@ -441,6 +581,33 @@ func TestWrapperClientMonitors(t *testing.T) {
 		"head_request": true
 	}`
 
+	// The API returns a null service when the monitor's agent has no Service in its account.
+	const monitorNoServiceJSON = `{
+		"id": "5c4d3e2f-1a0b-4c9d-8e7f-6a5b4c3d2e1f",
+		"account": "9da59f53-1d90-4441-ae58-42c661cc1b9f",
+		"agent": "7a1b2c3d-4e5f-4a6b-9c8d-7e6f5a4b3c2d",
+		"created_at": "2020-01-03T04:05:06Z",
+		"active": true,
+		"service": null,
+		"url": "https://no-service.example.com",
+		"expected_content": "",
+		"expected_response_code": null,
+		"unexpected_content": "",
+		"ca_file": "",
+		"headers": {},
+		"head_request": false
+	}`
+
+	wantNoService := bleemeoTypes.Monitor{
+		ID:           "5c4d3e2f-1a0b-4c9d-8e7f-6a5b4c3d2e1f",
+		Account:      "9da59f53-1d90-4441-ae58-42c661cc1b9f",
+		AgentID:      "7a1b2c3d-4e5f-4a6b-9c8d-7e6f5a4b3c2d",
+		URL:          "https://no-service.example.com",
+		CreationDate: "2020-01-03T04:05:06Z",
+		Active:       true,
+		Headers:      map[string]string{},
+	}
+
 	want := bleemeoTypes.Monitor{
 		ID:                   "3b2e1f3a-8c0d-4f6e-9a57-1d2c3b4a5e6f",
 		Account:              "9da59f53-1d90-4441-ae58-42c661cc1b9f",
@@ -448,6 +615,7 @@ func TestWrapperClientMonitors(t *testing.T) {
 		ServiceID:            "fdd9d999-e2ff-45d3-af2b-6519cf8e3e70",
 		URL:                  "https://example.com",
 		CreationDate:         "2020-01-03T04:05:06Z",
+		Active:               true,
 		ExpectedContent:      "welcome",
 		ExpectedResponseCode: 200,
 		ForbiddenContent:     "maintenance",
@@ -474,7 +642,7 @@ func TestWrapperClientMonitors(t *testing.T) {
 
 			l.Unlock()
 
-			fmt.Fprintf(w, `{"next": null, "results": [%s]}`, monitorJSON)
+			fmt.Fprintf(w, `{"next": null, "results": [%s, %s]}`, monitorJSON, monitorNoServiceJSON)
 		case "/v1/monitor/" + want.ID + "/":
 			if got := r.URL.Query().Get(paramFields); got != monitorFields {
 				t.Errorf("GET %s: fields = %q, want %q", r.URL.Path, got, monitorFields)
@@ -503,7 +671,7 @@ func TestWrapperClientMonitors(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if diff := cmp.Diff([]bleemeoTypes.Monitor{want}, monitors); diff != "" {
+	if diff := cmp.Diff([]bleemeoTypes.Monitor{want, wantNoService}, monitors); diff != "" {
 		t.Errorf("ListMonitors() mismatch (-want +got)\n%s", diff)
 	}
 
