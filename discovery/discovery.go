@@ -1047,7 +1047,10 @@ type CheckNow func(ctx context.Context) (types.StatusDescription, error)
 
 // GetCheckNow returns the GetCheckNow function associated to a NameInstance.
 func (d *Discovery) GetCheckNow(nameInstance NameInstance) (CheckNow, error) {
+	d.l.Lock()
 	checkDetails, ok := d.activeCheck[nameInstance]
+	d.l.Unlock()
+
 	if !ok {
 		return nil, fmt.Errorf("%w %s", errNoCheckAssociated, nameInstance.Name)
 	}
