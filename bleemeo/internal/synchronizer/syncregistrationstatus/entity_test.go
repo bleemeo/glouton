@@ -527,9 +527,10 @@ func TestEntitySkips(t *testing.T) {
 	})
 }
 
-// TestEntityCountsServiceMetrics checks a service's metrics count only those meant to reach
-// Bleemeo: received lately, of this agent, and allowed by Bleemeo's filter. Glouton's own
-// metric filter already applied to the store the synchronizer reads.
+// TestEntityCountsServiceMetrics checks a service's metrics count those Glouton collects:
+// received lately and of this agent, Glouton's own metric filter already applied to the store
+// the synchronizer reads. Bleemeo's filter does not apply: a metric the plan refuses is still
+// collected, and the metrics list tells why it is not registered.
 func TestEntityCountsServiceMetrics(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -547,7 +548,13 @@ func TestEntityCountsServiceMetrics(t *testing.T) {
 		{
 			name:    "one allowed, one not in the plan",
 			metrics: []gloutonTypes.Metric{serviceMetric("mysql_queries", "mysql"), serviceMetric("mysql_innodb_rows", "mysql")},
-			want:    MetricsOne,
+			want:    MetricsSome,
+		},
+		{
+			// As on a plan whose allow-list has no service metrics.
+			name:    "none in the plan",
+			metrics: []gloutonTypes.Metric{serviceMetric("mysql_innodb_rows", "mysql"), serviceMetric("mysql_slow_queries", "mysql")},
+			want:    MetricsSome,
 		},
 		{
 			name:    "the service check's status only",
@@ -783,6 +790,7 @@ func (a *fakeArchive) CurrentFileName() string { return a.current }
 type archivedStatus struct {
 	LastBuilt *struct {
 		GeneratedAt time.Time                  `json:"generated_at"`
+		Services    []ServiceState             `json:"services"`
 		Metrics     []bleemeoTypes.MetricState `json:"metrics"`
 	} `json:"last_built"`
 	LastBuiltAccepted bool `json:"last_built_accepted"`
@@ -871,12 +879,16 @@ func TestEntityDiagnosticArchiveIgnoresGates(t *testing.T) {
 		}
 	})
 
+	// The services' metrics do not depend on Bleemeo's filter, which needs the configuration.
 	t.Run("account configuration not known", func(t *testing.T) {
 		test := newEntityTest(testAgent)
+		test.discovery.States = []discovery.ServiceState{mysqlMissingCredentials()}
+		test.store.metrics = []gloutonTypes.Metric{serviceMetric("mysql_queries", "mysql")}
 		test.execution.option.Cache.SetConfigs(nil)
 
-		if got := test.archive(t); got.LastBuilt != nil {
-			t.Errorf("archived %+v, want no payload: every service would read as sending no metric", got)
+		got := test.archive(t)
+		if got.LastBuilt == nil || len(got.LastBuilt.Services) != 1 || got.LastBuilt.Services[0].Metrics != MetricsOne {
+			t.Errorf("archived %+v, want the service with its metric", got.LastBuilt)
 		}
 	})
 

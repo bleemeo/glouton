@@ -23,7 +23,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/bleemeo/glouton/bleemeo/internal/filter"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
@@ -206,8 +205,7 @@ func (s *SyncRegistrationStatus) SyncRemoteAndLocal(ctx context.Context, _ types
 // DiagnosticArchive writes the payload built from the current state, as the archive's other
 // files are: the gates that hold a send back are ignored, and the payload last built may be a
 // synchronization behind. Not before registration, as the agent's own metrics cannot be told
-// apart, nor before the account configuration is known: Bleemeo's filter would then refuse
-// every metric, and each service would read as sending none.
+// apart.
 func (s *SyncRegistrationStatus) DiagnosticArchive(archive gloutonTypes.ArchiveWriter, option types.Option) error {
 	file, err := archive.Create("bleemeo-registration-status.json")
 	if err != nil {
@@ -218,8 +216,7 @@ func (s *SyncRegistrationStatus) DiagnosticArchive(archive gloutonTypes.ArchiveW
 	last := option.Cache.RegistrationStatusSent()
 
 	obj := struct {
-		// LastBuilt is null before registration and the account configuration, or when the
-		// store could not be read.
+		// LastBuilt is null before registration, or when the store could not be read.
 		LastBuilt *Payload `json:"last_built"`
 		// LastBuiltAccepted tells whether LastBuilt is the value the API last accepted.
 		LastBuiltAccepted bool      `json:"last_built_accepted"`
@@ -230,7 +227,7 @@ func (s *SyncRegistrationStatus) DiagnosticArchive(archive gloutonTypes.ArchiveW
 		LastAttemptFailed: last.LastAttemptFailed,
 	}
 
-	if _, configKnown := option.Cache.CurrentAccountConfig(); agentID != "" && configKnown {
+	if agentID != "" {
 		services, err := buildServices(option, agentID)
 		if err != nil {
 			logger.V(1).Printf("Unable to read the metrics for the registration status: %v", err)
@@ -257,7 +254,7 @@ func sendEnabled(option types.Option) bool {
 	return ok && cfg.SendRegistrationStatus
 }
 
-// buildServices reads the services' state, with the metrics of each that reach Bleemeo. It only
+// buildServices reads the services' state, with the metrics Glouton collects for each. It only
 // reads option: the diagnostic archive calls it from another goroutine than the synchronization.
 func buildServices(option types.Option, agentID string) ([]ServiceState, error) {
 	storeMetrics, err := option.Store.Metrics(nil)
@@ -265,15 +262,8 @@ func buildServices(option types.Option, agentID string) ([]ServiceState, error) 
 		return nil, err
 	}
 
-	bleemeoFilter := filter.NewFilter(option.Cache)
-	isAllowed := func(metric gloutonTypes.Metric) bool {
-		allowed, _, err := bleemeoFilter.IsAllowed(metric.Labels(), metric.Annotations())
-
-		return err == nil && allowed
-	}
-
 	states := option.Discovery.ServicesState()
-	metricNames := ServiceMetricNames(storeMetrics, states, agentID, isAllowed, time.Now())
+	metricNames := ServiceMetricNames(storeMetrics, states, agentID, time.Now())
 
 	return FromDiscovery(states, option.Cache.ServiceLookupFromList(), metricNames), nil
 }

@@ -41,9 +41,10 @@ type ServiceState struct {
 	// is none: pending, failed, or impossible (an instance too long for the API). Such a service
 	// is still reported.
 	ServiceUUID string `json:"service_uuid"`
-	// Metrics is roughly how many metric names of the service are meant to reach Bleemeo:
-	// received lately, and dropped by neither Glouton's metric filter nor Bleemeo's. The
-	// service check's status does not count: it is no metric of the service. A word rather
+	// Metrics is roughly how many metric names Glouton collects for the service: received
+	// lately, and not dropped by Glouton's metric filter. Bleemeo's filter does not apply: a
+	// metric the plan refuses is still collected, and the metrics list tells why it is not
+	// registered. The service check's status does not count: it is no metric of the service. A word rather
 	// than a number, so that it is not taken for an exact count, kept coarse so that the value
 	// stays stable.
 	Metrics MetricsAmount `json:"metrics"`
@@ -111,16 +112,15 @@ func FromDiscovery(
 	return result
 }
 
-// ServiceMetricNames counts, per service, the names of the metrics of agentID that are meant to
-// reach Bleemeo, the service check's status left out. metrics are those the synchronizer reads,
-// already through Glouton's metric filter; isAllowed is Bleemeo's. A metric last received before
-// the service's StaleMetricsBefore in states is left out: it came from an earlier input, and
-// would read as collected while the current one fails.
+// ServiceMetricNames counts, per service, the names of the metrics of agentID that Glouton
+// collects, the service check's status left out. metrics are those the synchronizer reads,
+// already through Glouton's metric filter. A metric last received before the service's
+// StaleMetricsBefore in states is left out: it came from an earlier input, and would read as
+// collected while the current one fails.
 func ServiceMetricNames(
 	metrics []gloutonTypes.Metric,
 	states []discovery.ServiceState,
 	agentID string,
-	isAllowed func(gloutonTypes.Metric) bool,
 	now time.Time,
 ) map[discovery.NameInstance]int {
 	staleBefore := make(map[discovery.NameInstance]time.Time, len(states))
@@ -151,7 +151,7 @@ func ServiceMetricNames(
 		key := discovery.NameInstance{Name: annotations.ServiceName, Instance: annotations.ServiceInstance}
 		lastPoint := metric.LastPointReceivedAt()
 
-		if now.Sub(lastPoint) > metricsFreshness || lastPoint.Before(staleBefore[key]) || !isAllowed(metric) {
+		if now.Sub(lastPoint) > metricsFreshness || lastPoint.Before(staleBefore[key]) {
 			continue
 		}
 
