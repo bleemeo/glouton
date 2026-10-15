@@ -438,7 +438,8 @@ var netErrorTextRegex = regexp.MustCompile(
 // not complete. It reads the error values, which inputs mostly keep wrapped or joined, and only
 // when none tells, the text of Go's network errors. A network operation other than dial, read
 // or write, such as a TLS alert ("remote error"), comes from a service that answered. A canceled
-// run is Glouton's doing: its loop stopped, as when it restarts.
+// run is Glouton's doing: its loop stopped, as when it restarts. Joined with other errors, the
+// cancellation tells nothing: they do.
 func scrapeErrorKind(err error) types.ScrapeErrorKind {
 	switch {
 	case err == nil:
@@ -450,6 +451,10 @@ func scrapeErrorKind(err error) types.ScrapeErrorKind {
 		return types.ScrapeErrorInternal
 	case errors.Is(err, context.Canceled):
 		// Before the network checks: a dial canceled is an OpError too.
+		if others := withoutCanceled(err); others != nil {
+			return scrapeErrorKind(others)
+		}
+
 		return types.ScrapeErrorInternal
 	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, os.ErrDeadlineExceeded):
 		return types.ScrapeErrorUnreachable
@@ -474,6 +479,31 @@ func scrapeErrorKind(err error) types.ScrapeErrorKind {
 	}
 
 	return types.ScrapeErrorGatherer
+}
+
+// withoutCanceled returns the errors joined in err that are not a cancellation, nil when there
+// are none. What wraps a cancellation is dropped with it.
+func withoutCanceled(err error) error {
+	if !errors.Is(err, context.Canceled) {
+		return err
+	}
+
+	switch wrapped := err.(type) { //nolint:errorlint // Walks the tree errors.Is walks.
+	case interface{ Unwrap() []error }:
+		var others []error
+
+		for _, member := range wrapped.Unwrap() {
+			if other := withoutCanceled(member); other != nil {
+				others = append(others, other)
+			}
+		}
+
+		return errors.Join(others...)
+	case interface{ Unwrap() error }:
+		return withoutCanceled(wrapped.Unwrap())
+	}
+
+	return nil
 }
 
 // addScrapeRun records a run in lastScrapes, keeping the last maxLastScrape.

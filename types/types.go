@@ -758,8 +758,8 @@ const (
 	// ScrapeErrorGatherer means the gatherer returned an error with no network error in it, as a
 	// value or as Go's text for one: the service answered.
 	ScrapeErrorGatherer
-	// ScrapeErrorInternal means Glouton failed before reaching the service, such as while
-	// waiting for its turn to read secrets.
+	// ScrapeErrorInternal means Glouton alone failed, such as while waiting for its turn to read
+	// secrets, or by canceling the run.
 	ScrapeErrorInternal
 )
 

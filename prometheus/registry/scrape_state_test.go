@@ -519,6 +519,9 @@ func TestScrapeErrorKind(t *testing.T) {
 		{name: "service quoting a timeout", err: errServiceQuotesTimeout, want: types.ScrapeErrorGatherer},
 		{name: "canceled", err: fmt.Errorf("query: %w", context.Canceled), want: types.ScrapeErrorInternal},
 		{name: "dial canceled", err: &net.OpError{Op: "dial", Net: "tcp", Err: context.Canceled}, want: types.ScrapeErrorInternal},
+		{name: "canceled, joined", err: errors.Join(context.Canceled, fmt.Errorf("query: %w", context.Canceled)), want: types.ScrapeErrorInternal},
+		{name: "canceled beside an answer", err: errors.Join(errNoAuth, context.Canceled), want: types.ScrapeErrorGatherer},
+		{name: "canceled beside a refused connection", err: fmt.Errorf("gather: %w", errors.Join(&net.OpError{Op: "dial", Net: "tcp", Err: context.Canceled}, refused)), want: types.ScrapeErrorUnreachable},
 		{name: "no secrets gate", err: notGatheredError{ErrBadArgument}, want: types.ScrapeErrorInternal},
 		{name: "secrets gate timeout", err: notGatheredError{context.DeadlineExceeded}, want: types.ScrapeErrorInternal},
 	}
