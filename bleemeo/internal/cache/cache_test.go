@@ -181,13 +181,9 @@ func checkMetrics(t *testing.T, cache *Cache) {
 func checkMonitors(t *testing.T, cache *Cache) {
 	t.Helper()
 
-	gotMonitors := cache.Monitors()
-	if len(gotMonitors) != 1 {
-		t.Errorf("want 1 monitor, got %d", len(gotMonitors))
-	}
-
-	if gotMonitors[0].URL != "example.com" {
-		t.Errorf("want monitor url 'example.com', got '%s'", gotMonitors[0].URL)
+	// Monitors read from /v1/service/ are dropped in v9, they will be re-fetched from /v1/monitor/.
+	if gotMonitors := cache.Monitors(); len(gotMonitors) != 0 {
+		t.Errorf("want no monitor, got %+v", gotMonitors)
 	}
 }
 

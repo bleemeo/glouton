@@ -1260,7 +1260,7 @@ func (s *Synchronizer) prepareMetricPayloadOtherAgent(payload *bleemeoapi.Metric
 	for _, monitor := range monitors {
 		if monitor.AgentID == agentID {
 			payload.AgentID = monitor.AgentID
-			payload.ServiceID = monitor.ID
+			payload.ServiceID = monitor.ServiceID
 
 			return nil
 		}

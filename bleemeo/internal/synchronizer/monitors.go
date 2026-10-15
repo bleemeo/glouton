@@ -157,6 +157,13 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 			return fmt.Errorf("%w for account '%s' of probe '%s'", errMissingAccountConf, monitor.Account, monitor.URL)
 		}
 
+		// The metrics of the monitor are attached to its Service, we can't send them without it.
+		if monitor.ServiceID == "" {
+			logger.V(1).Printf("Ignore monitor %s (id=%s): it has no service", monitor.URL, monitor.ID)
+
+			continue
+		}
+
 		jitterCreationDate, err := applyJitterToMonitorCreationDate(monitor, agentIDHash)
 		if err != nil {
 			logger.V(1).Printf("Ignore monitor %s (id=%s): %s", monitor.URL, monitor.ID, err)
@@ -165,7 +172,7 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 		}
 
 		processedMonitors = append(processedMonitors, gloutonTypes.Monitor{
-			ID:                      monitor.ID,
+			ID:                      monitor.ServiceID,
 			MetricMonitorResolution: conf.MetricResolution,
 			CreationDate:            jitterCreationDate,
 			URL:                     monitor.URL,

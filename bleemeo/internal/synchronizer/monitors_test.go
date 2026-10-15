@@ -17,14 +17,21 @@
 package synchronizer
 
 import (
+	"fmt"
 	"math/rand"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/google/go-cmp/cmp"
 )
 
 func Test_applyJitterToMonitorCreationDate_fixedProbe(t *testing.T) {
@@ -244,22 +251,22 @@ func Test_applyJitterToMonitorCreationDateFixedValue(t *testing.T) {
 	}
 }
 
-// TestSyncMonitorHeadRequest ensures monitor_head_request is given to the monitor manager, both on a full
+// TestSyncMonitorHeadRequest ensures head_request is given to the monitor manager, both on a full
 // synchronization and on a monitor update notification.
 func TestSyncMonitorHeadRequest(t *testing.T) {
-	newTestMonitor := func(id string, headRequest bool) bleemeoTypes.Monitor {
+	newTestMonitor := func(id string, serviceID string, headRequest bool) bleemeoTypes.Monitor {
 		return bleemeoTypes.Monitor{
 			ID:           id,
+			ServiceID:    serviceID,
 			Account:      accountID,
-			Active:       true,
 			CreationDate: "2020-01-03T04:05:06Z",
 			URL:          "https://example.com/" + id,
 			HeadRequest:  headRequest,
 		}
 	}
 
-	monitorHeadRequest := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e01", true)
-	monitorGet := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e02", false)
+	monitorHeadRequest := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e01", "7d1c2b3a-4e5f-4a6b-8c7d-9e0f1a2b3c01", true)
+	monitorGet := newTestMonitor("2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e02", "7d1c2b3a-4e5f-4a6b-8c7d-9e0f1a2b3c02", false)
 
 	helper := newHelper(t)
 	defer helper.Close()
@@ -294,7 +301,8 @@ func TestSyncMonitorHeadRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	checkHeadRequest(t, map[string]bool{monitorHeadRequest.ID: true, monitorGet.ID: false})
+	// The monitor manager identifies the monitors by their Service ID.
+	checkHeadRequest(t, map[string]bool{monitorHeadRequest.ServiceID: true, monitorGet.ServiceID: false})
 
 	// Swap head_request on the API, and notify only the change of the second monitor.
 	for i, m := range helper.wrapperClientMock.resources.monitors.elems {
@@ -309,20 +317,220 @@ func TestSyncMonitorHeadRequest(t *testing.T) {
 	}
 
 	// The first monitor wasn't notified, so it keeps the value from the previous synchronization.
-	checkHeadRequest(t, map[string]bool{monitorHeadRequest.ID: true, monitorGet.ID: true})
+	checkHeadRequest(t, map[string]bool{monitorHeadRequest.ServiceID: true, monitorGet.ServiceID: true})
 }
 
-// TestMonitorFieldsMatchTypes ensures the HTTP options of the monitors are requested.
+// TestSyncMonitorWithoutService ensures a monitor without Service isn't given to the monitor manager,
+// as its metrics couldn't be attached to it.
+func TestSyncMonitorWithoutService(t *testing.T) {
+	monitorWithService := bleemeoTypes.Monitor{
+		ID:           "2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e01",
+		ServiceID:    "7d1c2b3a-4e5f-4a6b-8c7d-9e0f1a2b3c01",
+		Account:      accountID,
+		CreationDate: "2020-01-03T04:05:06Z",
+		URL:          "https://example.com/with-service",
+	}
+	monitorWithoutService := bleemeoTypes.Monitor{
+		ID:           "2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e02",
+		Account:      accountID,
+		CreationDate: "2020-01-03T04:05:06Z",
+		URL:          "https://example.com/without-service",
+	}
+
+	helper := newHelper(t)
+	defer helper.Close()
+
+	helper.preregisterAgent(t)
+	helper.wrapperClientMock.resources.monitors.add(monitorWithService, monitorWithoutService)
+	helper.initSynchronizer(t)
+
+	if err := helper.runOnce(t); err != nil {
+		t.Fatal(err)
+	}
+
+	gotMonitors := helper.monitorManager.Monitors()
+	if len(gotMonitors) != 1 {
+		t.Fatalf("got %d monitors, want 1: %+v", len(gotMonitors), gotMonitors)
+	}
+
+	if gotMonitors[0].ID != monitorWithService.ServiceID || gotMonitors[0].URL != monitorWithService.URL {
+		t.Errorf("got monitor ID=%s URL=%s, want ID=%s URL=%s", gotMonitors[0].ID, gotMonitors[0].URL, monitorWithService.ServiceID, monitorWithService.URL)
+	}
+}
+
+// TestUpdateMonitorWithoutID ensures a monitor notification without monitor ID reloads all the monitors.
+func TestUpdateMonitorWithoutID(t *testing.T) {
+	monitor := bleemeoTypes.Monitor{
+		ID:           "2b0ab0a5-9b6c-4a1a-8a3c-5c8b0d6f1e01",
+		ServiceID:    "7d1c2b3a-4e5f-4a6b-8c7d-9e0f1a2b3c01",
+		Account:      accountID,
+		CreationDate: "2020-01-03T04:05:06Z",
+		URL:          "https://example.com/",
+	}
+
+	helper := newHelper(t)
+	defer helper.Close()
+
+	helper.preregisterAgent(t)
+	helper.initSynchronizer(t)
+
+	if err := helper.runOnce(t); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := helper.monitorManager.Monitors(); len(got) != 0 {
+		t.Fatalf("got %d monitors, want 0", len(got))
+	}
+
+	helper.wrapperClientMock.resources.monitors.add(monitor)
+	helper.s.UpdateMonitor("change", "")
+	helper.AddTime(time.Minute)
+
+	if err := helper.runOnce(t); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := helper.monitorManager.Monitors(); len(got) != 1 || got[0].ID != monitor.ServiceID {
+		t.Fatalf("got monitors %+v, want the monitor with ID %s", got, monitor.ServiceID)
+	}
+}
+
+// TestMonitorFieldsMatchTypes ensures all the fields of the monitors are requested.
 // The API mock doesn't use the fields, so a missing field would only be noticed on a real API.
 func TestMonitorFieldsMatchTypes(t *testing.T) {
 	t.Parallel()
 
 	fields := strings.Split(monitorFields, ",")
 
-	for field := range reflect.TypeFor[bleemeoTypes.MonitorHTTPOptions]().Fields() {
-		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
-		if !slices.Contains(fields, name) {
-			t.Errorf("fields %q don't contain %q (field %s)", monitorFields, name, field.Name)
+	var checkType func(typ reflect.Type)
+
+	checkType = func(typ reflect.Type) {
+		for field := range typ.Fields() {
+			if field.Anonymous {
+				checkType(field.Type)
+
+				continue
+			}
+
+			name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+			if !slices.Contains(fields, name) {
+				t.Errorf("fields %q don't contain %q (field %s)", monitorFields, name, field.Name)
+			}
 		}
+	}
+
+	checkType(reflect.TypeFor[bleemeoTypes.Monitor]())
+}
+
+// TestWrapperClientMonitors ensures the monitors are read from /v1/monitor/ and decoded from its fields.
+func TestWrapperClientMonitors(t *testing.T) {
+	t.Parallel()
+
+	const monitorJSON = `{
+		"id": "3b2e1f3a-8c0d-4f6e-9a57-1d2c3b4a5e6f",
+		"account": "9da59f53-1d90-4441-ae58-42c661cc1b9f",
+		"agent": "6b0ba586-0111-4a72-9cc7-f19d4b6558ed",
+		"created_at": "2020-01-03T04:05:06Z",
+		"service": "fdd9d999-e2ff-45d3-af2b-6519cf8e3e70",
+		"url": "https://example.com",
+		"expected_content": "welcome",
+		"expected_response_code": 200,
+		"unexpected_content": "maintenance",
+		"ca_file": "/etc/ssl/ca.pem",
+		"headers": {"X-Test": "value"},
+		"head_request": true
+	}`
+
+	want := bleemeoTypes.Monitor{
+		ID:                   "3b2e1f3a-8c0d-4f6e-9a57-1d2c3b4a5e6f",
+		Account:              "9da59f53-1d90-4441-ae58-42c661cc1b9f",
+		AgentID:              "6b0ba586-0111-4a72-9cc7-f19d4b6558ed",
+		ServiceID:            "fdd9d999-e2ff-45d3-af2b-6519cf8e3e70",
+		URL:                  "https://example.com",
+		CreationDate:         "2020-01-03T04:05:06Z",
+		ExpectedContent:      "welcome",
+		ExpectedResponseCode: 200,
+		ForbiddenContent:     "maintenance",
+		CAFile:               "/etc/ssl/ca.pem",
+		Headers:              map[string]string{"X-Test": "value"},
+		HeadRequest:          true,
+	}
+
+	var (
+		l           sync.Mutex
+		listQueries []url.Values
+	)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		switch r.URL.Path {
+		case "/o/token/":
+			fmt.Fprint(w, `{"access_token": "token", "token_type": "Bearer", "expires_in": 3600, "refresh_token": "refresh"}`)
+		case "/v1/monitor/":
+			l.Lock()
+
+			listQueries = append(listQueries, r.URL.Query())
+
+			l.Unlock()
+
+			fmt.Fprintf(w, `{"next": null, "results": [%s]}`, monitorJSON)
+		case "/v1/monitor/" + want.ID + "/":
+			if got := r.URL.Query().Get(paramFields); got != monitorFields {
+				t.Errorf("GET %s: fields = %q, want %q", r.URL.Path, got, monitorFields)
+			}
+
+			fmt.Fprint(w, monitorJSON)
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL)
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	client, err := bleemeo.NewClient(
+		bleemeo.WithCredentials("user", "password"),
+		bleemeo.WithEndpoint(srv.URL),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cl := &wrapperClient{client: client}
+
+	monitors, err := cl.ListMonitors(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if diff := cmp.Diff([]bleemeoTypes.Monitor{want}, monitors); diff != "" {
+		t.Errorf("ListMonitors() mismatch (-want +got)\n%s", diff)
+	}
+
+	l.Lock()
+	if len(listQueries) != 1 {
+		t.Fatalf("got %d list requests, want 1", len(listQueries))
+	}
+
+	if got := listQueries[0].Get(paramActive); got != queryTrue {
+		t.Errorf("list request: active = %q, want %q", got, queryTrue)
+	}
+
+	if got := listQueries[0].Get(paramFields); got != monitorFields {
+		t.Errorf("list request: fields = %q, want %q", got, monitorFields)
+	}
+
+	if listQueries[0].Has("monitor") {
+		t.Errorf("list request has the deprecated monitor parameter: %v", listQueries[0])
+	}
+	l.Unlock()
+
+	monitor, err := cl.GetMonitorByID(t.Context(), want.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if diff := cmp.Diff(want, monitor); diff != "" {
+		t.Errorf("GetMonitorByID() mismatch (-want +got)\n%s", diff)
 	}
 }

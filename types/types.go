@@ -491,6 +491,7 @@ func consumeQuotedValueEscaped(text string, escapeAt int) (value, remaining stri
 
 // Monitor represents a monitor instance.
 type Monitor struct {
+	// ID is the UUID of the Service linked to the monitor, it's used as the service_uuid label.
 	ID                      string
 	MetricMonitorResolution time.Duration
 	CreationDate            time.Time

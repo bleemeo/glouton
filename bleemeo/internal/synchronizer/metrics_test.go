@@ -1606,7 +1606,7 @@ func TestMonitorDeactivation(t *testing.T) {
 				"__name__=\"probe_duration\",instance=\"http://localhost:8000/\",instance_uuid=\"%s\",scraper=\"paris\"",
 				newMonitor.AgentID,
 			),
-			ServiceID: newMonitor.ID,
+			ServiceID: newMonitor.ServiceID,
 			Name:      "probe_duration",
 		},
 	)
@@ -1654,7 +1654,7 @@ func TestMonitorDeactivation(t *testing.T) {
 				newMonitor.AgentID,
 			),
 			DeactivatedAt: helper.s.now(),
-			ServiceID:     newMonitor.ID,
+			ServiceID:     newMonitor.ServiceID,
 			Name:          "probe_duration",
 		},
 		{
@@ -1943,7 +1943,7 @@ func TestMonitorPrivate(t *testing.T) {
 				newMonitor.AgentID,
 				idAgentMain,
 			),
-			ServiceID: newMonitor.ID,
+			ServiceID: newMonitor.ServiceID,
 			Name:      "probe_success",
 		},
 	}
@@ -1988,7 +1988,7 @@ func TestMonitorPrivate(t *testing.T) {
 				newMonitor.AgentID,
 				idAgentMain,
 			),
-			ServiceID: newMonitor.ID,
+			ServiceID: newMonitor.ServiceID,
 			Name:      "probe_success",
 		},
 		{
@@ -2000,7 +2000,7 @@ func TestMonitorPrivate(t *testing.T) {
 				newMonitor.AgentID,
 				idAgentMain,
 			),
-			ServiceID: newMonitor.ID,
+			ServiceID: newMonitor.ServiceID,
 			Name:      "probe_duration",
 		},
 	}
@@ -2041,7 +2041,7 @@ func TestMonitorPrivate(t *testing.T) {
 				idAgentMain,
 			),
 			DeactivatedAt: helper.Now(),
-			ServiceID:     newMonitor.ID,
+			ServiceID:     newMonitor.ServiceID,
 			Name:          "probe_success",
 		},
 		{
@@ -2054,7 +2054,7 @@ func TestMonitorPrivate(t *testing.T) {
 				idAgentMain,
 			),
 			DeactivatedAt: helper.Now(),
-			ServiceID:     newMonitor.ID,
+			ServiceID:     newMonitor.ServiceID,
 			Name:          "probe_duration",
 		},
 	}
