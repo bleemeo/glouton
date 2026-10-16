@@ -258,7 +258,7 @@ func (cl *wrapperClient) UpdateAgent(ctx context.Context, id string, data any) (
 }
 
 func (cl *wrapperClient) UpdateAgentRegistrationStatus(ctx context.Context, id string, state any) error {
-	return cl.Update(ctx, bleemeo.ResourceAgent, id, map[string]any{"registration_status": state}, "id", nil)
+	return cl.Update(ctx, bleemeo.ResourceAgent, id, map[string]any{"registration_status": state}, "registration_status", nil)
 }
 
 func (cl *wrapperClient) DeleteAgent(ctx context.Context, id string) error {

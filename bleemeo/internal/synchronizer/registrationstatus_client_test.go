@@ -57,7 +57,6 @@ func (api *registrationStatusAPI) ServeHTTP(w http.ResponseWriter, r *http.Reque
 	}
 
 	response := map[string]json.RawMessage{
-		"id":                  json.RawMessage(`"agent-id"`),
 		"registration_status": api.body["registration_status"],
 	}
 
@@ -92,7 +91,7 @@ func TestUpdateAgentRegistrationStatus(t *testing.T) {
 		t.Errorf("registration_status sent = %s, want {\"services\":[]}", got)
 	}
 
-	if api.fields != "id" {
-		t.Errorf("fields = %q, want id", api.fields)
+	if api.fields != "registration_status" {
+		t.Errorf("fields = %q, want registration_status", api.fields)
 	}
 }
