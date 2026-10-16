@@ -135,7 +135,8 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string, help
 		maps.Copy(mod.HTTP.Headers, monitor.Headers)
 
 		// A HEAD request avoids downloading the body, which reduces the data transfer on large pages.
-		// Content checks need the body, so we keep the default GET method when one is configured.
+		// Content checks need the body, so we keep the default GET method when one is configured
+		// (the API refuses head_request with a content check, this is only a safety net).
 		// The method is left empty when HEAD isn't used, to keep the module unchanged for existing monitors.
 		if monitor.HeadRequest && !hasContentCheck(monitor) {
 			mod.HTTP.Method = http.MethodHead
@@ -228,7 +229,7 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string, help
 			// Censor credentials embedded in the URL: this label is relabeled into the
 			// 'instance' label sent to the Bleemeo API and dumped in diagnostics.
 			types.LabelMetaBleemeoTargetAgent:     config.CensorURLCredentials(monitor.URL),
-			types.LabelMetaProbeServiceUUID:       monitor.ID,
+			types.LabelMetaProbeMonitorID:         monitor.ID,
 			types.LabelMetaBleemeoTargetAgentUUID: monitor.BleemeoAgentID,
 		},
 		CommonHelpers: helpers,
@@ -490,13 +491,6 @@ func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
 		}
 	}
 
-	// The map is replaced, never modified, so it's safe to read it without the lock after this.
-	m.l.Lock()
-	loggedHeadFallbacks := m.loggedHeadFallbacks
-	m.l.Unlock()
-
-	headFallbacks := make(map[string]bool)
-
 	for _, monitor := range monitors {
 		collector, err := genCollectorFromDynamicTarget(monitor, m.userAgent, m)
 		if err != nil {
@@ -510,15 +504,10 @@ func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
 		newTargets = append(newTargets, collector)
 
 		if monitor.HeadRequest && collector.Module.Prober == proberNameHTTP && hasContentCheck(monitor) {
-			key := monitor.ID + " " + monitor.URL
-			headFallbacks[key] = true
-
-			if !loggedHeadFallbacks[key] {
-				logger.V(1).Printf(
-					"Monitor %s uses HEAD requests but has a content check, a GET request will be used instead",
-					config.CensorURLSecrets(monitor.URL),
-				)
-			}
+			logger.V(2).Printf(
+				"Monitor %s uses HEAD requests but has a content check, a GET request will be used instead",
+				config.CensorURLSecrets(monitor.URL),
+			)
 		}
 	}
 
@@ -530,7 +519,6 @@ func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
 
 	m.l.Lock()
 	m.targets = newTargets
-	m.loggedHeadFallbacks = headFallbacks
 	m.l.Unlock()
 
 	logger.V(2).Println("blackbox_exporter: Internal configuration successfully updated.")

@@ -37,6 +37,9 @@ var (
 	errCannotParse        = errors.New("couldn't parse monitor")
 )
 
+// monitorsSyncRetryDelay is the delay before retrying a monitor synchronization which failed.
+const monitorsSyncRetryDelay = time.Minute
+
 type monitorOperation int
 
 const (
@@ -99,6 +102,8 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 	}
 
 	if err != nil {
+		s.retryMonitorsSync(syncType, pendingMonitorsUpdate)
+
 		return false, err
 	}
 
@@ -120,6 +125,17 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 	}
 
 	return false, s.ApplyMonitorUpdate()
+}
+
+// retryMonitorsSync puts back the monitor updates which couldn't be applied, before the ones
+// received meanwhile, and retries the synchronization later. Failed synchronizations aren't
+// retried otherwise: the updates would be lost until the next full synchronization, hours later.
+func (s *Synchronizer) retryMonitorsSync(syncType types.SyncType, updates []MonitorUpdate) {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	s.pendingMonitorsUpdate = append(slices.Clone(updates), s.pendingMonitorsUpdate...)
+	s.requestLaterSynchronizationLocked(types.EntityMonitor, syncType == types.SyncTypeForceCacheRefresh, monitorsSyncRetryDelay)
 }
 
 func hashAgentID(agentID string) uint64 {
@@ -156,17 +172,19 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 	agentIDHash := hashAgentID(s.agentID)
 
 	for _, monitor := range monitors {
+		// A monitor converted from an older cache has no ID until the full synchronization
+		// replaces it, and its metrics are labeled with that ID: skip it until then, before
+		// looking for its account configuration, which it doesn't need.
+		if monitor.ID == "" {
+			logger.V(2).Printf("Ignore monitor %s until it's synchronized: it has no ID", monitor.URL)
+
+			continue
+		}
+
 		// try to retrieve the probe config associated with this monitor's account
 		conf, present := probeConfigs[monitor.Account]
 		if !present {
 			return fmt.Errorf("%w for account '%s' of probe '%s'", errMissingAccountConf, monitor.Account, monitor.URL)
-		}
-
-		// The metrics of the monitor are attached to its Service, we can't send them without it.
-		if monitor.ServiceID == "" {
-			logger.V(1).Printf("Ignore monitor %s (id=%s): it has no service", monitor.URL, monitor.ID)
-
-			continue
 		}
 
 		jitterCreationDate, err := applyJitterToMonitorCreationDate(monitor, agentIDHash)
@@ -177,7 +195,7 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 		}
 
 		processedMonitors = append(processedMonitors, gloutonTypes.Monitor{
-			ID:                      monitor.ServiceID,
+			ID:                      monitor.ID,
 			MetricMonitorResolution: conf.MetricResolution,
 			CreationDate:            jitterCreationDate,
 			URL:                     monitor.URL,
